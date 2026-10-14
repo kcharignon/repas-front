@@ -69,3 +69,28 @@ jobs:
       # Les dépendances qui partent en production : un avis haut ou critique fait échouer la CI.
       # Les outils de développement (lint, tests) sont listés par `npm audit` mais ne bloquent pas.
       - run: npm audit --omit=dev --audit-level=high
+
+  docker-lint:
+    name: Docker Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hadolint/hadolint-action@v3.5.0
+        with:
+          dockerfile: Dockerfile
+
+  docker:
+    name: Image Docker (build et fumée)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construire l'image de production
+        run: docker build --target prod -t repas-front-prod .
+      - name: Fumée (le front est servi, repli SPA, en-têtes de sécurité)
+        run: |
+          docker run -d --name front -p 8081:80 repas-front-prod
+          for i in $(seq 1 20); do curl -sf http://localhost:8081/ >/dev/null && break; sleep 1; done
+          curl -sf http://localhost:8081/ | grep -q '<div id="app">'
+          curl -sf http://localhost:8081/design | grep -q '<div id="app">'
+          curl -sI http://localhost:8081/ | grep -qi 'content-security-policy'
+          docker logs front
