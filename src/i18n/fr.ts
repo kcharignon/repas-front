@@ -4,6 +4,46 @@ export default {
     name: 'Repas',
     tagline: 'Recettes, ingrédients et listes de courses.',
   },
+  nav: {
+    label: 'Navigation principale',
+    home: 'Accueil',
+    account: 'Moi',
+  },
+  home: {
+    welcome: 'Bonjour {email}',
+  },
+  account: {
+    title: 'Mon compte',
+    logout: 'Se déconnecter',
+  },
+  auth: {
+    pitch: 'Vos recettes, vos courses, sans oublier le basilic.',
+  },
+  login: {
+    title: 'Se connecter',
+    email: 'Adresse e-mail',
+    password: 'Mot de passe',
+    submit: 'Se connecter',
+    invalid: 'Identifiants invalides.',
+    tooMany:
+      'Trop de tentatives. Réessayez dans {minutes} minute | Trop de tentatives. Réessayez dans {minutes} minutes',
+    noAccount: 'Pas encore de compte ?',
+    createAccount: 'Créer un compte',
+  },
+  register: {
+    title: 'Créer un compte',
+    submit: 'Créer mon compte',
+    passwordHint: '8 caractères au moins.',
+    serving: 'Nombre de personnes par défaut',
+    servingHint: 'Proposé pour chaque recette, modifiable ensuite.',
+    emailTaken: 'Cette adresse e-mail est déjà utilisée.',
+    tooMany: "Trop d'inscriptions depuis cette adresse. Réessayez plus tard.",
+    haveAccount: 'Déjà un compte ?',
+    signIn: 'Se connecter',
+  },
+  errors: {
+    unreachable: 'Le serveur est injoignable. Réessayez dans un instant.',
+  },
   theme: {
     label: 'Thème',
     system: 'Système',

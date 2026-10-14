@@ -1,17 +1,20 @@
-import { describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
 
 import App from '@/App.vue'
-import { i18n } from '@/i18n'
-import router from '@/router'
+import { appContext } from '@/__tests__/helpers'
 
 describe('App', () => {
-  it("affiche l'accueil à la racine", async () => {
-    await router.push('/')
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('affiche la page de la route courante', async () => {
+    const { router, plugins } = appContext()
+    await router.push('/connexion')
     await router.isReady()
 
-    const wrapper = mount(App, { global: { plugins: [router, i18n] } })
+    const wrapper = mount(App, { global: { plugins } })
+    await flushPromises()
 
-    expect(wrapper.find('h1').text()).toBe('Repas')
+    expect(wrapper.find('h1').text()).toBe('Se connecter')
   })
 })

@@ -1,14 +1,42 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import type { RouteRecordRaw } from 'vue-router'
 
-import HomeView from '@/views/HomeView.vue'
+import { sessionGuard } from '@/session/guard'
 
-const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
-  routes: [
-    { path: '/', name: 'home', component: HomeView },
-    // Catalogue du design système : à retirer du build de production à la bascule (ADR 0003).
-    { path: '/design', name: 'design', component: () => import('@/views/DesignView.vue') },
-  ],
-})
+export const routes: RouteRecordRaw[] = [
+  {
+    path: '/connexion',
+    name: 'login',
+    component: () => import('@/views/LoginView.vue'),
+    meta: { guestOnly: true },
+  },
+  {
+    path: '/inscription',
+    name: 'register',
+    component: () => import('@/views/RegisterView.vue'),
+    meta: { guestOnly: true },
+  },
+  // Catalogue du design système : à retirer du build de production à la bascule (ADR 0003).
+  {
+    path: '/design',
+    name: 'design',
+    component: () => import('@/views/DesignView.vue'),
+    meta: { public: true },
+  },
+  {
+    path: '/',
+    component: () => import('@/app/AppShell.vue'),
+    children: [
+      { path: '', name: 'home', component: () => import('@/views/HomeView.vue') },
+      { path: 'moi', name: 'account', component: () => import('@/views/AccountView.vue') },
+    ],
+  },
+]
 
-export default router
+/** Le routeur de l'application (avec la garde de session) ; les tests construisent le leur avec `routes`. */
+export function createAppRouter() {
+  const router = createRouter({ history: createWebHistory(import.meta.env.BASE_URL), routes })
+  router.beforeEach(sessionGuard)
+
+  return router
+}
