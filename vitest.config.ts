@@ -1,0 +1,23 @@
+import { fileURLToPath } from 'node:url'
+import { mergeConfig, defineConfig, configDefaults } from 'vitest/config'
+import viteConfig from './vite.config.ts'
+
+export default mergeConfig(
+  viteConfig,
+  defineConfig({
+    test: {
+      environment: 'jsdom',
+      exclude: [...configDefaults.exclude, 'e2e/**'],
+      root: fileURLToPath(new URL('./', import.meta.url)),
+      setupFiles: ['./src/__tests__/setup.ts'],
+      coverage: {
+        provider: 'v8',
+        include: ['src/**/*.{ts,vue}'],
+        exclude: ['src/main.ts', 'src/**/__tests__/**', 'src/api/schema.d.ts'],
+        reporter: ['text-summary', 'lcov'],
+        // Le seuil ne baisse jamais ; on le remonte quand la mesure le permet (cliquet, comme côté back).
+        thresholds: { lines: 80, functions: 80, branches: 80, statements: 80 },
+      },
+    },
+  }),
+)
