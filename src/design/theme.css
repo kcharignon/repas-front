@@ -1,0 +1,97 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/figtree';
+@import '@fontsource-variable/bricolage-grotesque';
+
+/*
+ * Jetons de design « Basilic & safran » (proposition validée dans la maquette du design, ADR 0003).
+ * Clair par défaut, sombre suivant le système ; `data-theme="light|dark"` sur <html> force un choix.
+ * Contrastes AA : texte et muted sur fond et surface, texte sur primary, accent, danger.
+ */
+:root {
+  --bg: #f4f6f3;
+  --surface: #ffffff;
+  --ink: #16221c;
+  --muted: #55645c;
+  --line: #c9d3cc;
+  --soft: #e6ece7;
+  --primary: #1e6b4c;
+  --on-primary: #ffffff;
+  --accent: #f4b73f;
+  --on-accent: #2a1c00;
+  --danger: #c2412d;
+  --on-danger: #ffffff;
+  --danger-soft: #fbe4de;
+  --on-danger-soft: #7a2314;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0f1713;
+    --surface: #17221c;
+    --ink: #eaf1ec;
+    --muted: #9db0a5;
+    --line: #34443a;
+    --soft: #1b2a22;
+    --primary: #4fb58a;
+    --on-primary: #0b1a13;
+    --danger: #f0705a;
+    --on-danger: #2a0c06;
+    --danger-soft: #3a1a14;
+    --on-danger-soft: #f6b8ab;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #0f1713;
+  --surface: #17221c;
+  --ink: #eaf1ec;
+  --muted: #9db0a5;
+  --line: #34443a;
+  --soft: #1b2a22;
+  --primary: #4fb58a;
+  --on-primary: #0b1a13;
+  --danger: #f0705a;
+  --on-danger: #2a0c06;
+  --danger-soft: #3a1a14;
+  --on-danger-soft: #f6b8ab;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-soft: var(--soft);
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-danger: var(--danger);
+  --color-on-danger: var(--on-danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-on-danger-soft: var(--on-danger-soft);
+  --font-sans: 'Figtree Variable', system-ui, sans-serif;
+  --font-display: 'Bricolage Grotesque Variable', 'Figtree Variable', system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+  }
+
+  /* Mouvement discret : rien ne bouge pour qui le demande. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
