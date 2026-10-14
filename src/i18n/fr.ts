@@ -1,0 +1,36 @@
+// Tous les textes de l'interface, en français (aucune chaîne en dur dans les composants).
+export default {
+  app: {
+    name: 'Repas',
+    tagline: 'Recettes, ingrédients et listes de courses.',
+  },
+  theme: {
+    label: 'Thème',
+    system: 'Système',
+    light: 'Clair',
+    dark: 'Sombre',
+  },
+  design: {
+    title: 'Catalogue de composants',
+    intro: 'Les composants du design système « Basilic & safran », dans les deux thèmes.',
+    buttons: 'Boutons',
+    fields: 'Champs',
+    choices: 'Choix',
+    progress: 'Progression',
+    save: 'Enregistrer',
+    addToList: 'Ajouter à la liste',
+    newRecipe: 'Nouvelle recette',
+    cancel: 'Annuler',
+    remove: 'Supprimer',
+    ingredient: 'Ingrédient',
+    ingredientSample: 'Courgettes',
+    quantity: 'Quantité',
+    quantityError: 'Entrez une quantité supérieure à zéro.',
+    quantityHint: 'En grammes, kilos ou unités.',
+    toTake: 'À prendre',
+    inBasket: 'Dans le panier',
+    dish: 'Plat',
+    dessert: 'Dessert',
+    progressLabel: '{done} sur {total} articles dans le panier',
+  },
+}

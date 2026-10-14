@@ -27,6 +27,7 @@ Node 24 (`.nvmrc`) : `nvm use`.
 ## Règles
 
 - **Pas de bruit** : un `console.warn` / `console.error` pendant un test fait échouer le test (`src/__tests__/setup.ts`).
+- **Design** : composants dans `src/design/` (préfixe `Ui`), jetons dans `src/design/theme.css`, catalogue sur `/design` ([ADR 0003](docs/adr/0003-design-system-basilic-et-safran.md)) ; toute couleur passe par un jeton, jamais un hexadécimal dans un composant.
 - **Pas de chaîne en dur** dans un composant : textes dans `vue-i18n` (français seul).
 - **Pas de logique métier** dans les composants : elle reste dans le back. Le front affiche, saisit, appelle l'API et relit l'état.
 - **Types de l'API générés, jamais écrits à la main** : un changement de contrat doit casser la compilation, pas la production.
