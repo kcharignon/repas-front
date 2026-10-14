@@ -1,0 +1,84 @@
+name: repas-front
+
+# Le front se branche sur le back de développement (dépôt `repas`, `docker compose up`) en rejoignant son réseau Docker :
+# le service `php` du back répond en HTTP sur `http://php` (ADR 0004). Autre back : REPAS_API_URL et REPAS_BACK_NETWORK.
+services:
+  front:
+    build:
+      context: .
+      target: dev
+    init: true
+    ports:
+      - "${FRONT_PORT:-5173}:5173"
+    environment:
+      REPAS_API_URL: ${REPAS_API_URL:-http://php}
+      VITE_USE_POLLING: ${VITE_USE_POLLING:-false}
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    networks: [default, back]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5173/').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  # Tests de bout en bout (Chromium dans le conteneur) contre le serveur de développement ET le vrai back.
+  # `make e2e` ; les rapports, captures, vidéos et traces tombent dans playwright-report/ et test-results/.
+  e2e:
+    profiles: [e2e]
+    build:
+      context: .
+      target: dev
+    init: true
+    depends_on:
+      front:
+        condition: service_healthy
+    # Même pile réseau que le front : l'application est sur `localhost`, contexte sûr pour le navigateur (cookies `Secure`).
+    network_mode: service:front
+    environment:
+      E2E_BASE_URL: http://localhost:5173
+      E2E_WITH_BACK: "1"
+      E2E_EMAIL: ${E2E_EMAIL:-}
+      E2E_PASSWORD: ${E2E_PASSWORD:-}
+      E2E_VISUAL: ${E2E_VISUAL:-}
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    command: ["npx", "playwright", "test"]
+
+  # Rapport HTML de Playwright : http://localhost:9323 (captures, vidéos, traces).
+  e2e-report:
+    profiles: [report]
+    build:
+      context: .
+      target: dev
+    init: true
+    ports:
+      - "9323:9323"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    command: ["npx", "playwright", "show-report", "--host", "0.0.0.0", "--port", "9323"]
+
+  # Image de production (statique + relais vers le back) : http://localhost:8081, pour essayer le build comme en production.
+  prod:
+    profiles: [prod]
+    build:
+      context: .
+      target: prod
+    init: true
+    ports:
+      - "${PROD_PORT:-8081}:80"
+    environment:
+      REPAS_API_URL: ${REPAS_API_URL:-http://php}
+    networks: [default, back]
+
+volumes:
+  node_modules:
+
+networks:
+  back:
+    name: ${REPAS_BACK_NETWORK:-repas_default}
+    external: true
