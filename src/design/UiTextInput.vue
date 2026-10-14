@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { cn } from './cn'
 
-const model = defineModel<string>({ default: '' })
+const model = defineModel<string | number>({ default: '' })
 
 defineProps<{ invalid?: boolean }>()
 </script>
