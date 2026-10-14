@@ -1,12 +1,13 @@
-# Front Repas : développement et tests (`dev`), build (`build`), image de production (`prod`).
 # syntax=docker/dockerfile:1
+# Front Repas : développement et tests (`dev`), build (`build`), image de production (`prod`).
 
 ARG NODE_VERSION=24
 
 FROM node:${NODE_VERSION}-bookworm-slim AS deps
 WORKDIR /app
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN chown node:node /app
-USER node
+USER 1000
 COPY --chown=node:node package.json package-lock.json ./
 RUN npm ci \
     && sha256sum package-lock.json | cut -d' ' -f1 > node_modules/.lock-hash
@@ -14,14 +15,14 @@ RUN npm ci \
 # Développement : serveur Vite avec rechargement à chaud, tests unitaires et Playwright (Chromium) dans le même conteneur.
 # Le code source est monté par compose ; node_modules vit dans un volume, renouvelé par l'entrypoint quand le lock change.
 FROM deps AS dev
-USER root
+USER 0
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN mkdir /ms-playwright && chown node:node /ms-playwright \
     && npx playwright install-deps chromium \
     && rm -rf /var/lib/apt/lists/*
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint
 RUN chmod +x /usr/local/bin/entrypoint
-USER node
+USER 1000
 RUN npx playwright install chromium
 EXPOSE 5173
 ENTRYPOINT ["entrypoint"]
