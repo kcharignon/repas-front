@@ -7,7 +7,7 @@ basculer la production avec l'utilisateur. Le Twig du back ne se supprime **qu'a
 ## Source de vérité
 
 - `docs/adr/` : décisions d'architecture du front (index dans `docs/adr/README.md`). Changer une convention = ADR + ce fichier dans le même commit.
-- Contrat de l'API : `docs/api/openapi.json` du dépôt back, figé à un commit précis (`api/contract.json`), types générés dans `src/api/`.
+- Contrat de l'API : `docs/api/openapi.json` du dépôt back, figé à un commit précis (`api/contract.json`), types générés dans `src/api/schema.d.ts` ([ADR 0002](docs/adr/0002-sdk-genere-depuis-le-contrat-openapi.md)). Mettre le contrat à jour : `npm run api:update`, relire le diff.
 - Plan, inventaire de parité, design, bascule : `docs/front-vuejs-plan.md` du dépôt back.
 
 ## Stack
@@ -20,6 +20,7 @@ Node 24 (`.nvmrc`) : `nvm use`.
 
 - `npm run dev` : serveur de développement ; `npm run build`.
 - `npm run check` : lint (oxlint + ESLint), format (Prettier), types (`vue-tsc`), tests. **À passer avant chaque commit.**
+- `npm run api:update [-- <ref>]` : figer le contrat sur un commit du back et régénérer les types ; `api:check` (dans `check`) et `api:verify` (CI) le contrôlent.
 - `npm run test:coverage` : couverture (seuil dans `vitest.config.ts`, il ne baisse jamais) ; `npm run test:e2e` : Playwright.
 - `npm run audit:prod` : avis de sécurité des dépendances de production.
 

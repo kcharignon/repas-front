@@ -12,7 +12,7 @@ Les décisions du front sont dans [`docs/adr/`](docs/adr/README.md), les convent
 ```bash
 nvm use            # Node 24 (.nvmrc)
 npm ci
-npm run dev        # http://localhost:5173
+npm run dev        # http://localhost:5173, `/api` et `/images` relayés vers le back (REPAS_API_URL, par défaut https://localhost:8443)
 ```
 
 ## Qualité
@@ -20,6 +20,7 @@ npm run dev        # http://localhost:5173
 | Commande | Rôle |
 |---|---|
 | `npm run check` | lint (oxlint + ESLint), format (Prettier), types (`vue-tsc`), tests : à passer avant chaque commit |
+| `npm run api:update` | figer le contrat de l'API sur un commit du back et régénérer les types (`src/api/schema.d.ts`) |
 | `npm run test:coverage` | tests unitaires avec seuil de couverture |
 | `npm run test:e2e` | Playwright (bureau et mobile) |
 | `npm run audit:prod` | avis de sécurité des dépendances de production |

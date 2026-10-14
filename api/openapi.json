@@ -1,0 +1,3169 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Repas API",
+        "description": "API JSON de l'application Repas (recettes, ingr\u00e9dients, listes de courses). Voir docs/adr/0007-api-rest-v1.md.",
+        "version": "1.0.0"
+    },
+    "paths": {
+        "/api/login_check": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Obtenir un token JWT",
+                "operationId": "api_post_login_check",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "email",
+                                    "password"
+                                ],
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "alexiane.sichi@gmail.com"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "format": "password"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Token JWT (dur\u00e9e de vie 3600 s). Pose aussi le cookie `repas_refresh` (HttpOnly, SameSite=Strict, `Path=/api/auth`), \u00e0 \u00e9changer contre un nouveau JWT par `POST /api/auth/refresh` (ADR 0015)",
+                        "headers": {
+                            "Set-Cookie": {
+                                "description": "Refresh token, `HttpOnly; Secure; SameSite=Strict; Path=/api/auth`",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "token": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Identifiants invalides ou compte d\u00e9sactiv\u00e9",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "properties": {
+                                                "message": {
+                                                    "type": "string",
+                                                    "example": "Invalid credentials."
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/api/v1/health": {
+            "get": {
+                "tags": [
+                    "Health"
+                ],
+                "summary": "\u00c9tat de l'API",
+                "operationId": "get_api_get_health",
+                "responses": {
+                    "200": {
+                        "description": "L'API r\u00e9pond",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "ok"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/shopping-lists/{id}/activate": {
+            "post": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "R\u00e9active une liste de courses : l'\u00e9ventuelle liste active de l'utilisateur passe en pause",
+                "operationId": "post_api_activate_shopping_list",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Liste r\u00e9activ\u00e9e"
+                    },
+                    "403": {
+                        "description": "La ressource appartient \u00e0 un autre utilisateur"
+                    },
+                    "404": {
+                        "description": "Ressource inconnue"
+                    }
+                }
+            }
+        },
+        "/api/v1/shopping-lists/active/ingredients/{slug}/increase": {
+            "post": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "Ajoute 1 \u00e0 la quantit\u00e9 d'un ingr\u00e9dient dans la liste active de l'utilisateur",
+                "operationId": "post_api_increase_ingredient",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Quantit\u00e9 augment\u00e9e"
+                    },
+                    "404": {
+                        "description": "Ressource inconnue"
+                    }
+                }
+            }
+        },
+        "/api/v1/recipes/{id}/copy": {
+            "post": {
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Copie une recette dans celles de l'utilisateur connect\u00e9, avec les ingr\u00e9dients personnalis\u00e9s et leurs conversions",
+                "operationId": "post_api_copy_recipe",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Copie cr\u00e9\u00e9e",
+                        "headers": {
+                            "Location": {
+                                "description": "URL de la copie",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Recette inconnue"
+                    }
+                }
+            }
+        },
+        "/api/v1/conversions": {
+            "get": {
+                "tags": [
+                    "Conversions"
+                ],
+                "summary": "Conversions entre unit\u00e9s (administrateur), tri\u00e9es par ingr\u00e9dient puis par unit\u00e9 de d\u00e9part",
+                "operationId": "get_api_list_conversions",
+                "responses": {
+                    "200": {
+                        "description": "Liste des conversions",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "member": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/ConversionDTO"
+                                            }
+                                        },
+                                        "totalItems": {
+                                            "type": "integer",
+                                            "example": 67
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "R\u00e9serv\u00e9 aux administrateurs"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Conversions"
+                ],
+                "summary": "Cr\u00e9e une conversion entre deux unit\u00e9s (administrateur), propre \u00e0 un ingr\u00e9dient ou commune \u00e0 tous",
+                "operationId": "post_api_create_conversion",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ConversionPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Conversion cr\u00e9\u00e9e",
+                        "headers": {
+                            "Location": {
+                                "description": "URL de la conversion cr\u00e9\u00e9e",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "R\u00e9serv\u00e9 aux administrateurs"
+                    },
+                    "404": {
+                        "description": "Unit\u00e9 ou ingr\u00e9dient inconnu"
+                    },
+                    "422": {
+                        "description": "Corps de la requ\u00eate invalide"
+                    }
+                }
+            }
+        },
+        "/api/v1/departments": {
+            "get": {
+                "tags": [
+                    "Departments"
+                ],
+                "summary": "Liste des rayons, tri\u00e9s par slug",
+                "operationId": "get_api_list_departments",
+                "responses": {
+                    "200": {
+                        "description": "Liste des rayons",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "member": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/DepartmentDTO"
+                                            }
+                                        },
+                                        "totalItems": {
+                                            "type": "integer",
+                                            "example": 21
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Departments"
+                ],
+                "summary": "Cr\u00e9e un rayon (administrateur)",
+                "operationId": "post_api_create_department",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DepartmentPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Cr\u00e9\u00e9",
+                        "headers": {
+                            "Location": {
+                                "description": "URL de la ressource cr\u00e9\u00e9e",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "R\u00e9serv\u00e9 aux administrateurs"
+                    },
+                    "409": {
+                        "description": "Un \u00e9l\u00e9ment de m\u00eame slug existe d\u00e9j\u00e0 (le slug d\u00e9rive du nom)"
+                    },
+                    "422": {
+                        "description": "Corps de la requ\u00eate invalide"
+                    }
+                }
+            }
+        },
+        "/api/v1/ingredients": {
+            "get": {
+                "tags": [
+                    "Ingredients"
+                ],
+                "summary": "Ingr\u00e9dients que l'utilisateur authentifi\u00e9 peut utiliser (communs et les siens), tri\u00e9s par nom : choix des recettes",
+                "operationId": "get_api_list_available_ingredients",
+                "parameters": [
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "description": "Ne garde que les ingr\u00e9dients dont le nom contient ce texte (sans tenir compte de la casse ni des accents), 100 caract\u00e8res au plus",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 100
+                        },
+                        "example": "cre"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Ingr\u00e9dients utilisables",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "member": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/IngredientOptionDTO"
+                                            }
+                                        },
+                                        "totalItems": {
+                                            "type": "integer",
+                                            "example": 42
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Param\u00e8tre `q` invalide (trop long)"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Ingredients"
+                ],
+                "summary": "Cr\u00e9e un ingr\u00e9dient : personnalis\u00e9 pour un utilisateur, commun \u00e0 tous pour un administrateur",
+                "operationId": "post_api_create_ingredient",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/IngredientPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Ingr\u00e9dient cr\u00e9\u00e9",
+                        "headers": {
+                            "Location": {
+                                "description": "URL de l'ingr\u00e9dient cr\u00e9\u00e9",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Rayon ou unit\u00e9 inconnu"
+                    },
+                    "409": {
+                        "description": "Un ingr\u00e9dient de ce nom existe d\u00e9j\u00e0"
+                    },
+                    "422": {
+                        "description": "Corps invalide, ou coefficient manquant alors que les unit\u00e9s diff\u00e8rent sans conversion connue"
+                    }
+                }
+            }
+        },
+        "/api/v1/recipes": {
+            "post": {
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Cr\u00e9e une recette de l'utilisateur connect\u00e9",
+                "operationId": "post_api_create_recipe",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RecipePayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Recette cr\u00e9\u00e9e",
+                        "headers": {
+                            "Location": {
+                                "description": "URL de la recette cr\u00e9\u00e9e",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Type de recette, ingr\u00e9dient ou unit\u00e9 inconnu (un ingr\u00e9dient personnalis\u00e9 d'un autre utilisateur l'est aussi)"
+                    },
+                    "422": {
+                        "description": "Corps de la requ\u00eate invalide"
+                    }
+                }
+            }
+        },
+        "/api/v1/recipe-types": {
+            "get": {
+                "tags": [
+                    "Recipe types"
+                ],
+                "summary": "Liste des types de recette, dans l'ordre d'affichage",
+                "operationId": "get_api_list_recipe_types",
+                "responses": {
+                    "200": {
+                        "description": "Liste des types de recette",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "member": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/RecipeTypeDTO"
+                                            }
+                                        },
+                                        "totalItems": {
+                                            "type": "integer",
+                                            "example": 4
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Recipe types"
+                ],
+                "summary": "Cr\u00e9e un type de recette (administrateur)",
+                "operationId": "post_api_create_recipe_type",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RecipeTypePayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Cr\u00e9\u00e9",
+                        "headers": {
+                            "Location": {
+                                "description": "URL de la ressource cr\u00e9\u00e9e",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "R\u00e9serv\u00e9 aux administrateurs"
+                    },
+                    "409": {
+                        "description": "Un \u00e9l\u00e9ment de m\u00eame slug existe d\u00e9j\u00e0 (le slug d\u00e9rive du nom)"
+                    },
+                    "422": {
+                        "description": "Corps de la requ\u00eate invalide"
+                    }
+                }
+            }
+        },
+        "/api/v1/shopping-lists": {
+            "get": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "Listes de courses de l'utilisateur authentifi\u00e9, de la plus r\u00e9cente \u00e0 la plus ancienne",
+                "operationId": "get_api_list_shopping_lists",
+                "responses": {
+                    "200": {
+                        "description": "Listes de courses",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "member": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/ShoppingListDTO"
+                                            }
+                                        },
+                                        "totalItems": {
+                                            "type": "integer",
+                                            "example": 3
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "Cr\u00e9e une nouvelle liste active ; l'\u00e9ventuelle liste active passe en pause et les listes termin\u00e9es sont supprim\u00e9es",
+                "operationId": "post_api_create_shopping_list",
+                "responses": {
+                    "201": {
+                        "description": "Liste cr\u00e9\u00e9e",
+                        "headers": {
+                            "Location": {
+                                "description": "URL de la liste cr\u00e9\u00e9e",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/units": {
+            "get": {
+                "tags": [
+                    "Units"
+                ],
+                "summary": "Liste des unit\u00e9s, tri\u00e9es par slug",
+                "operationId": "get_api_list_units",
+                "responses": {
+                    "200": {
+                        "description": "Liste des unit\u00e9s",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "member": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/UnitDTO"
+                                            }
+                                        },
+                                        "totalItems": {
+                                            "type": "integer",
+                                            "example": 12
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Units"
+                ],
+                "summary": "Cr\u00e9e une unit\u00e9 (administrateur)",
+                "operationId": "post_api_create_unit",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UnitPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Cr\u00e9\u00e9",
+                        "headers": {
+                            "Location": {
+                                "description": "URL de la ressource cr\u00e9\u00e9e",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "R\u00e9serv\u00e9 aux administrateurs"
+                    },
+                    "409": {
+                        "description": "Un \u00e9l\u00e9ment de m\u00eame slug existe d\u00e9j\u00e0 (le slug d\u00e9rive du nom)"
+                    },
+                    "422": {
+                        "description": "Corps de la requ\u00eate invalide"
+                    }
+                }
+            }
+        },
+        "/api/v1/shopping-lists/active": {
+            "put": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "S'assure que l'utilisateur a une liste active : en cr\u00e9e une si besoin (sans effet sinon)",
+                "operationId": "put_api_ensure_active_shopping_list",
+                "responses": {
+                    "204": {
+                        "description": "Liste active assur\u00e9e"
+                    }
+                }
+            }
+        },
+        "/api/v1/shopping-lists/active/summary": {
+            "get": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "Contenu de la liste active de l'utilisateur authentifi\u00e9 : quantit\u00e9 par ingr\u00e9dient et recettes planifi\u00e9es",
+                "operationId": "get_api_get_active_shopping_list_summary",
+                "responses": {
+                    "200": {
+                        "description": "R\u00e9sum\u00e9 de la liste active ; sans liste active, `shoppingListId` est null et les deux collections sont vides",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ActiveShoppingListSummaryDTO"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/conversions/{id}": {
+            "get": {
+                "tags": [
+                    "Conversions"
+                ],
+                "summary": "D\u00e9tail d'une conversion entre unit\u00e9s (administrateur)",
+                "operationId": "get_api_get_conversion",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Une conversion",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ConversionDTO"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "R\u00e9serv\u00e9 aux administrateurs"
+                    },
+                    "404": {
+                        "description": "Conversion inconnue"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Conversions"
+                ],
+                "summary": "Remplace une conversion entre unit\u00e9s (administrateur)",
+                "operationId": "put_api_update_conversion",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ConversionPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Conversion modifi\u00e9e"
+                    },
+                    "403": {
+                        "description": "R\u00e9serv\u00e9 aux administrateurs"
+                    },
+                    "404": {
+                        "description": "Conversion, unit\u00e9 ou ingr\u00e9dient inconnu"
+                    },
+                    "422": {
+                        "description": "Corps de la requ\u00eate invalide"
+                    }
+                }
+            }
+        },
+        "/api/v1/departments/{slug}": {
+            "get": {
+                "tags": [
+                    "Departments"
+                ],
+                "summary": "D\u00e9tail d'un rayon",
+                "operationId": "get_api_get_department",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Un rayon",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DepartmentDTO"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Inconnu"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Departments"
+                ],
+                "summary": "Remplace le rayon (administrateur) ; son slug ne change pas",
+                "operationId": "put_api_update_department",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DepartmentPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Modifi\u00e9"
+                    },
+                    "403": {
+                        "description": "R\u00e9serv\u00e9 aux administrateurs"
+                    },
+                    "404": {
+                        "description": "Inconnu"
+                    },
+                    "422": {
+                        "description": "Corps de la requ\u00eate invalide"
+                    }
+                }
+            }
+        },
+        "/api/v1/ingredients/{slug}": {
+            "get": {
+                "tags": [
+                    "Ingredients"
+                ],
+                "summary": "D\u00e9tail d'un ingr\u00e9dient commun ou cr\u00e9\u00e9 par l'utilisateur (un administrateur voit tous les ingr\u00e9dients)",
+                "operationId": "get_api_get_ingredient",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "D\u00e9tail de l'ingr\u00e9dient",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IngredientDTO"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Ingr\u00e9dient inconnu, ou cr\u00e9\u00e9 par un autre utilisateur"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Ingredients"
+                ],
+                "summary": "Remplace un ingr\u00e9dient de l'utilisateur (un ingr\u00e9dient commun n'est modifiable que par un administrateur) ; son image est conserv\u00e9e",
+                "operationId": "put_api_update_ingredient",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/IngredientPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Ingr\u00e9dient modifi\u00e9"
+                    },
+                    "403": {
+                        "description": "L'ingr\u00e9dient appartient \u00e0 un autre utilisateur, ou il est commun"
+                    },
+                    "404": {
+                        "description": "Ingr\u00e9dient, rayon ou unit\u00e9 inconnu"
+                    },
+                    "422": {
+                        "description": "Corps invalide, ou coefficient manquant alors que les unit\u00e9s diff\u00e8rent"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Ingredients"
+                ],
+                "summary": "Supprime un ingr\u00e9dient de l'utilisateur, avec ses conversions (un ingr\u00e9dient commun n'est supprimable que par un administrateur)",
+                "operationId": "delete_api_remove_ingredient",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Ingr\u00e9dient supprim\u00e9"
+                    },
+                    "403": {
+                        "description": "L'ingr\u00e9dient appartient \u00e0 un autre utilisateur, ou il est commun"
+                    },
+                    "404": {
+                        "description": "Ingr\u00e9dient inconnu"
+                    },
+                    "409": {
+                        "description": "Ingr\u00e9dient pr\u00e9sent dans une recette ou une liste de courses"
+                    }
+                }
+            }
+        },
+        "/api/v1/recipes/{id}": {
+            "get": {
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "D\u00e9tail d'une recette et de ses ingr\u00e9dients (lisible par tout utilisateur authentifi\u00e9, comme sur le site)",
+                "operationId": "get_api_get_recipe",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "pattern": "[0-9a-fA-F-]{36}"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "D\u00e9tail de la recette",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RecipeDTO"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Recette inconnue"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Remplace une recette de l'utilisateur : nom, personnes, type et lignes (les lignes absentes du corps sont supprim\u00e9es)",
+                "operationId": "put_api_update_recipe",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RecipePayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Recette modifi\u00e9e"
+                    },
+                    "403": {
+                        "description": "La recette appartient \u00e0 un autre utilisateur"
+                    },
+                    "404": {
+                        "description": "Recette, type, ingr\u00e9dient ou unit\u00e9 inconnu (un ingr\u00e9dient personnalis\u00e9 d'un autre utilisateur l'est aussi)"
+                    },
+                    "422": {
+                        "description": "Corps de la requ\u00eate invalide"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Supprime une recette de l'utilisateur, avec ses lignes",
+                "operationId": "delete_api_remove_recipe",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Recette supprim\u00e9e"
+                    },
+                    "403": {
+                        "description": "La recette appartient \u00e0 un autre utilisateur"
+                    },
+                    "404": {
+                        "description": "Recette inconnue"
+                    },
+                    "409": {
+                        "description": "La recette est pr\u00e9sente dans une liste de courses"
+                    }
+                }
+            }
+        },
+        "/api/v1/recipe-types/{slug}": {
+            "get": {
+                "tags": [
+                    "Recipe types"
+                ],
+                "summary": "D\u00e9tail d'un type de recette",
+                "operationId": "get_api_get_recipe_type",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Un type de recette",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RecipeTypeDTO"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Inconnu"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Recipe types"
+                ],
+                "summary": "Remplace le type de recette (administrateur) ; son slug ne change pas",
+                "operationId": "put_api_update_recipe_type",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RecipeTypePayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Modifi\u00e9"
+                    },
+                    "403": {
+                        "description": "R\u00e9serv\u00e9 aux administrateurs"
+                    },
+                    "404": {
+                        "description": "Inconnu"
+                    },
+                    "422": {
+                        "description": "Corps de la requ\u00eate invalide"
+                    }
+                }
+            }
+        },
+        "/api/v1/shopping-lists/{id}": {
+            "get": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "D\u00e9tail d'une liste de courses de l'utilisateur : ingr\u00e9dients par rayon, recettes par type",
+                "operationId": "get_api_get_shopping_list",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "D\u00e9tail de la liste",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShoppingListDetailDTO"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "La liste appartient \u00e0 un autre utilisateur"
+                    },
+                    "404": {
+                        "description": "Liste inconnue"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "Supprime une liste de courses",
+                "operationId": "delete_api_remove_shopping_list",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Liste supprim\u00e9e"
+                    },
+                    "403": {
+                        "description": "La ressource appartient \u00e0 un autre utilisateur"
+                    },
+                    "404": {
+                        "description": "Ressource inconnue"
+                    }
+                }
+            },
+            "patch": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "Renomme une liste de courses ; `name` absent ou null r\u00e9tablit le nom par d\u00e9faut (la date)",
+                "operationId": "patch_api_update_shopping_list",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateShoppingListPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Liste renomm\u00e9e"
+                    },
+                    "403": {
+                        "description": "La ressource appartient \u00e0 un autre utilisateur"
+                    },
+                    "404": {
+                        "description": "Ressource inconnue"
+                    },
+                    "422": {
+                        "description": "Corps de la requ\u00eate invalide"
+                    }
+                }
+            }
+        },
+        "/api/v1/units/{slug}": {
+            "get": {
+                "tags": [
+                    "Units"
+                ],
+                "summary": "D\u00e9tail d'une unit\u00e9",
+                "operationId": "get_api_get_unit",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Une unit\u00e9",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UnitDTO"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Inconnu"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Units"
+                ],
+                "summary": "Remplace l'unit\u00e9 (administrateur) ; son slug ne change pas",
+                "operationId": "put_api_update_unit",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UnitPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Modifi\u00e9"
+                    },
+                    "403": {
+                        "description": "R\u00e9serv\u00e9 aux administrateurs"
+                    },
+                    "404": {
+                        "description": "Inconnu"
+                    },
+                    "422": {
+                        "description": "Corps de la requ\u00eate invalide"
+                    }
+                }
+            }
+        },
+        "/api/v1/ingredients/{slug}/units": {
+            "get": {
+                "tags": [
+                    "Ingredients"
+                ],
+                "summary": "Unit\u00e9s compatibles d'un ingr\u00e9dient, dans l'ordre o\u00f9 elles sont enregistr\u00e9es",
+                "operationId": "get_api_list_compatible_units",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Unit\u00e9s compatibles",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "member": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/CompatibleUnitDTO"
+                                            }
+                                        },
+                                        "totalItems": {
+                                            "type": "integer",
+                                            "example": 3
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Ingr\u00e9dient inconnu"
+                    }
+                }
+            }
+        },
+        "/api/v1/departments/{slug}/ingredients": {
+            "get": {
+                "tags": [
+                    "Ingredients"
+                ],
+                "summary": "Ingr\u00e9dients communs et ingr\u00e9dients de l'utilisateur authentifi\u00e9 dans un rayon, tri\u00e9s par nom",
+                "operationId": "get_api_list_ingredients_by_department",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Le rayon et ses ingr\u00e9dients (collection `member`) ; `canEdit` indique si l'utilisateur peut modifier l'ingr\u00e9dient",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "department": {
+                                            "$ref": "#/components/schemas/DepartmentDTO"
+                                        },
+                                        "member": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/IngredientRowDTO"
+                                            }
+                                        },
+                                        "totalItems": {
+                                            "type": "integer",
+                                            "example": 8
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Rayon inconnu"
+                    }
+                }
+            }
+        },
+        "/api/v1/recipes/other-people": {
+            "get": {
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Recettes des autres utilisateurs que l'utilisateur authentifi\u00e9 n'a pas encore copi\u00e9es, tri\u00e9es par slug",
+                "operationId": "get_api_list_other_people_recipes",
+                "responses": {
+                    "200": {
+                        "description": "Recettes des autres",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "member": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/OtherPeopleRecipeDTO"
+                                            }
+                                        },
+                                        "totalItems": {
+                                            "type": "integer",
+                                            "example": 12
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/recipe-types/{slug}/recipes": {
+            "get": {
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Recettes de l'utilisateur authentifi\u00e9 pour un type de recette, tri\u00e9es par slug",
+                "operationId": "get_api_list_recipes_by_type",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Le type de recette et ses recettes (collection `member`)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "recipeType": {
+                                            "$ref": "#/components/schemas/RecipeTypeDTO"
+                                        },
+                                        "member": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/RecipeSummaryDTO"
+                                            }
+                                        },
+                                        "totalItems": {
+                                            "type": "integer",
+                                            "example": 4
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Type de recette inconnu"
+                    }
+                }
+            }
+        },
+        "/api/v1/shopping-lists/{id}/pause": {
+            "post": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "Met une liste de courses en pause",
+                "operationId": "post_api_pause_shopping_list",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Liste mise en pause"
+                    },
+                    "403": {
+                        "description": "La ressource appartient \u00e0 un autre utilisateur"
+                    },
+                    "404": {
+                        "description": "Ressource inconnue"
+                    }
+                }
+            }
+        },
+        "/api/v1/shopping-lists/active/recipes/{recipeId}": {
+            "put": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "Planifie une recette dans la liste active de l'utilisateur et ajoute ses ingr\u00e9dients (404 si aucune liste n'est active)",
+                "operationId": "put_api_plan_recipe",
+                "parameters": [
+                    {
+                        "name": "recipeId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Recette planifi\u00e9e"
+                    },
+                    "404": {
+                        "description": "Ressource inconnue"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "Retire une recette de la liste active de l'utilisateur et d\u00e9duit ses ingr\u00e9dients",
+                "operationId": "delete_api_unplan_recipe",
+                "parameters": [
+                    {
+                        "name": "recipeId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Recette retir\u00e9e"
+                    },
+                    "404": {
+                        "description": "Ressource inconnue"
+                    }
+                }
+            }
+        },
+        "/api/v1/shopping-lists/active/ingredients/{slug}/decrease": {
+            "post": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "Retire 1 \u00e0 la quantit\u00e9 d'un ingr\u00e9dient dans la liste active de l'utilisateur (la ligne dispara\u00eet \u00e0 z\u00e9ro)",
+                "operationId": "post_api_decrease_ingredient",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Quantit\u00e9 diminu\u00e9e"
+                    },
+                    "404": {
+                        "description": "Ressource inconnue"
+                    }
+                }
+            }
+        },
+        "/api/v1/shopping-lists/{id}/complete": {
+            "post": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "Termine une liste de courses (ses statistiques sont ajout\u00e9es \u00e0 celles de l'utilisateur)",
+                "operationId": "post_api_complete_shopping_list",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Liste termin\u00e9e"
+                    },
+                    "403": {
+                        "description": "La ressource appartient \u00e0 un autre utilisateur"
+                    },
+                    "404": {
+                        "description": "Ressource inconnue"
+                    }
+                }
+            }
+        },
+        "/api/v1/shopping-list-rows/{id}/tick": {
+            "post": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "Coche une ligne de courses ; cocher la derni\u00e8re ligne termine la liste",
+                "operationId": "post_api_tick_shopping_list_row",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Ligne coch\u00e9e"
+                    },
+                    "403": {
+                        "description": "La ressource appartient \u00e0 un autre utilisateur"
+                    },
+                    "404": {
+                        "description": "Ressource inconnue"
+                    }
+                }
+            }
+        },
+        "/api/v1/shopping-list-rows/{id}/uncheck": {
+            "post": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "D\u00e9coche une ligne de courses ; une liste termin\u00e9e redevient active",
+                "operationId": "post_api_uncheck_shopping_list_row",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Ligne d\u00e9coch\u00e9e"
+                    },
+                    "403": {
+                        "description": "La ressource appartient \u00e0 un autre utilisateur"
+                    },
+                    "404": {
+                        "description": "Ressource inconnue"
+                    }
+                }
+            }
+        },
+        "/api/v1/meals/{id}/serving": {
+            "put": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "Change le nombre de personnes d'un repas ; les quantit\u00e9s de la liste sont recalcul\u00e9es",
+                "operationId": "put_api_update_meal_serving",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateServingMealPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Portions modifi\u00e9es"
+                    },
+                    "403": {
+                        "description": "La ressource appartient \u00e0 un autre utilisateur"
+                    },
+                    "404": {
+                        "description": "Ressource inconnue"
+                    },
+                    "422": {
+                        "description": "Corps de la requ\u00eate invalide"
+                    }
+                }
+            }
+        },
+        "/api/v1/me": {
+            "get": {
+                "tags": [
+                    "Current user"
+                ],
+                "summary": "Utilisateur authentifi\u00e9 par le token JWT",
+                "operationId": "get_api_get_current_user",
+                "responses": {
+                    "200": {
+                        "description": "Identit\u00e9 et pr\u00e9f\u00e9rences de l'utilisateur connect\u00e9",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CurrentUserDTO"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/users/{id}": {
+            "get": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Un utilisateur (lui-m\u00eame, ou un administrateur) ; c'est le `Location` de l'inscription",
+                "operationId": "get_api_get_user",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Identit\u00e9 et pr\u00e9f\u00e9rences de l'utilisateur",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CurrentUserDTO"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Ni lui-m\u00eame ni administrateur"
+                    },
+                    "404": {
+                        "description": "Inconnu"
+                    }
+                }
+            }
+        },
+        "/api/v1/users": {
+            "get": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Utilisateurs et leurs statistiques (administrateur), tri\u00e9s par email",
+                "operationId": "get_api_list_users",
+                "responses": {
+                    "200": {
+                        "description": "Liste des utilisateurs",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "member": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/UserSummaryDTO"
+                                            }
+                                        },
+                                        "totalItems": {
+                                            "type": "integer",
+                                            "example": 3
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "R\u00e9serv\u00e9 aux administrateurs"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Inscrit un utilisateur (route publique) ; il se connecte ensuite par /api/login_check",
+                "operationId": "post_api_register_new_user",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RegisterNewUserPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Cr\u00e9\u00e9",
+                        "headers": {
+                            "Location": {
+                                "description": "URL du compte cr\u00e9\u00e9 (lisible par lui-m\u00eame une fois connect\u00e9)",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Cette adresse email est d\u00e9j\u00e0 utilis\u00e9e"
+                    },
+                    "422": {
+                        "description": "Corps de la requ\u00eate invalide"
+                    }
+                },
+                "security": []
+            }
+        },
+        "/api/auth/logout": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Se d\u00e9connecter : r\u00e9voquer la connexion du cookie de rafra\u00eechissement",
+                "description": "Supprime toute la famille du refresh token pr\u00e9sent\u00e9 et efface le cookie. Idempotent : sans cookie ou avec un cookie inconnu, la r\u00e9ponse est la m\u00eame. Les JWT d\u00e9j\u00e0 \u00e9mis restent valables jusqu'\u00e0 leur expiration (1 h) : le client doit les oublier (ADR 0015).",
+                "operationId": "post_api_auth_logout",
+                "responses": {
+                    "204": {
+                        "description": "Connexion r\u00e9voqu\u00e9e, cookie `repas_refresh` effac\u00e9",
+                        "headers": {
+                            "Set-Cookie": {
+                                "description": "Cookie vide expir\u00e9",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/api/auth/refresh": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Obtenir un nouveau JWT avec le cookie de rafra\u00eechissement",
+                "description": "Public : le JWT est expir\u00e9, l'identit\u00e9 vient du seul cookie `repas_refresh` (HttpOnly, SameSite=Strict, `Path=/api/auth`), pos\u00e9 \u00e0 la connexion. Le jeton est \u00e0 usage unique : la r\u00e9ponse en pose un nouveau (rotation). Pr\u00e9senter un jeton d\u00e9j\u00e0 utilis\u00e9 r\u00e9voque toute la connexion (ADR 0015).",
+                "operationId": "post_api_auth_refresh",
+                "responses": {
+                    "200": {
+                        "description": "Nouveau JWT (dur\u00e9e de vie 3600 s) ; le cookie `repas_refresh` est remplac\u00e9",
+                        "headers": {
+                            "Set-Cookie": {
+                                "description": "Nouveau refresh token, `HttpOnly; Secure; SameSite=Strict; Path=/api/auth`",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "token": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Cookie absent, inconnu, expir\u00e9, d\u00e9j\u00e0 utilis\u00e9, compte d\u00e9sactiv\u00e9 ou mot de passe chang\u00e9 depuis : sans pr\u00e9cision. Le cookie est effac\u00e9 ; le client r\u00e9essaie une fois (course entre onglets) avant de renvoyer \u00e0 la connexion"
+                    },
+                    "429": {
+                        "description": "Trop de rafra\u00eechissements depuis cette adresse (60 par 10 minutes)"
+                    }
+                },
+                "security": []
+            }
+        },
+        "/api/v1/me/settings": {
+            "put": {
+                "tags": [
+                    "Current user"
+                ],
+                "summary": "Remplace les r\u00e9glages de l'utilisateur connect\u00e9 (nombre de personnes, mot de passe)",
+                "operationId": "put_api_update_user_settings",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserSettingsPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Modifi\u00e9"
+                    },
+                    "422": {
+                        "description": "Corps invalide, ou mot de passe actuel absent ou erron\u00e9 avec un nouveau mot de passe"
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "ConversionPayload": {
+                "required": [
+                    "startUnitSlug",
+                    "endUnitSlug",
+                    "coefficient"
+                ],
+                "properties": {
+                    "startUnitSlug": {
+                        "description": "Slug de l'unit\u00e9 de d\u00e9part",
+                        "type": "string",
+                        "example": "plaquette"
+                    },
+                    "endUnitSlug": {
+                        "description": "Slug de l'unit\u00e9 d'arriv\u00e9e",
+                        "type": "string",
+                        "example": "gramme"
+                    },
+                    "coefficient": {
+                        "description": "Une unit\u00e9 de d\u00e9part vaut ce nombre d'unit\u00e9s d'arriv\u00e9e",
+                        "type": "number",
+                        "format": "float",
+                        "minimum": 0,
+                        "exclusiveMinimum": true,
+                        "example": 250
+                    },
+                    "ingredientSlug": {
+                        "description": "Slug de l'ingr\u00e9dient concern\u00e9 ; absent ou null : conversion commune \u00e0 tous les ingr\u00e9dients",
+                        "type": "string",
+                        "default": null,
+                        "example": "beurre",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "DepartmentPayload": {
+                "required": [
+                    "name",
+                    "image"
+                ],
+                "properties": {
+                    "name": {
+                        "description": "Nom du rayon (son slug en d\u00e9rive et ne change plus)",
+                        "type": "string",
+                        "maxLength": 255,
+                        "example": "Surgel\u00e9s"
+                    },
+                    "image": {
+                        "description": "URL https ou chemin relatif (images/\u2026) de l'image",
+                        "type": "string",
+                        "maxLength": 255,
+                        "pattern": ".*(^(https://[^\\s]+|images/[A-Za-z0-9_\\-./]+)$).*",
+                        "example": "images/frozen.svg"
+                    }
+                },
+                "type": "object"
+            },
+            "IngredientPayload": {
+                "required": [
+                    "name",
+                    "departmentSlug",
+                    "defaultCookingUnitSlug",
+                    "defaultPurchaseUnitSlug"
+                ],
+                "properties": {
+                    "name": {
+                        "description": "Nom de l'ingr\u00e9dient",
+                        "type": "string",
+                        "maxLength": 255,
+                        "example": "Pralin\u00e9"
+                    },
+                    "departmentSlug": {
+                        "description": "Slug du rayon",
+                        "type": "string",
+                        "example": "fruit-et-legume"
+                    },
+                    "defaultCookingUnitSlug": {
+                        "description": "Slug de l'unit\u00e9 utilis\u00e9e dans les recettes",
+                        "type": "string",
+                        "example": "gramme"
+                    },
+                    "defaultPurchaseUnitSlug": {
+                        "description": "Slug de l'unit\u00e9 d'achat",
+                        "type": "string",
+                        "example": "kilo"
+                    },
+                    "coefficient": {
+                        "description": "Une unit\u00e9 d'achat vaut ce nombre d'unit\u00e9s de recette ; obligatoire quand les deux unit\u00e9s diff\u00e8rent et qu'aucune conversion ne les relie d\u00e9j\u00e0",
+                        "type": "number",
+                        "format": "float",
+                        "default": null,
+                        "minimum": 0,
+                        "exclusiveMinimum": true,
+                        "example": 1000,
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "RecipeRowPayload": {
+                "required": [
+                    "ingredientSlug",
+                    "unitSlug",
+                    "quantity"
+                ],
+                "properties": {
+                    "ingredientSlug": {
+                        "description": "Slug de l'ingr\u00e9dient (commun, ou personnalis\u00e9 par l'auteur de la recette)",
+                        "type": "string",
+                        "example": "pate"
+                    },
+                    "unitSlug": {
+                        "description": "Slug de l'unit\u00e9 de la quantit\u00e9",
+                        "type": "string",
+                        "example": "gramme"
+                    },
+                    "quantity": {
+                        "description": "Quantit\u00e9, dans cette unit\u00e9, pour le nombre de personnes de la recette",
+                        "type": "number",
+                        "format": "float",
+                        "minimum": 0,
+                        "exclusiveMinimum": true,
+                        "example": 500
+                    }
+                },
+                "type": "object"
+            },
+            "RecipePayload": {
+                "required": [
+                    "name",
+                    "serving",
+                    "typeSlug",
+                    "rows"
+                ],
+                "properties": {
+                    "name": {
+                        "description": "Nom de la recette",
+                        "type": "string",
+                        "maxLength": 255,
+                        "example": "P\u00e2tes carbonara"
+                    },
+                    "serving": {
+                        "description": "Nombre de personnes",
+                        "type": "integer",
+                        "maximum": 100,
+                        "minimum": 1,
+                        "example": 4
+                    },
+                    "typeSlug": {
+                        "description": "Slug du type de recette",
+                        "type": "string",
+                        "example": "plat"
+                    },
+                    "rows": {
+                        "description": "Lignes de la recette, au moins une",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RecipeRowPayload"
+                        },
+                        "minItems": 1
+                    }
+                },
+                "type": "object"
+            },
+            "RecipeTypePayload": {
+                "required": [
+                    "name",
+                    "image",
+                    "order"
+                ],
+                "properties": {
+                    "name": {
+                        "description": "Nom du type (son slug en d\u00e9rive et ne change plus)",
+                        "type": "string",
+                        "maxLength": 255,
+                        "example": "Ap\u00e9ritif"
+                    },
+                    "image": {
+                        "description": "URL https ou chemin relatif (images/\u2026) de l'image",
+                        "type": "string",
+                        "maxLength": 255,
+                        "pattern": ".*(^(https://[^\\s]+|images/[A-Za-z0-9_\\-./]+)$).*",
+                        "example": "images/aperitif.svg"
+                    },
+                    "order": {
+                        "description": "Rang d'affichage, du plus petit au plus grand",
+                        "type": "integer",
+                        "maximum": 1000,
+                        "minimum": 0,
+                        "example": 4
+                    }
+                },
+                "type": "object"
+            },
+            "UnitPayload": {
+                "required": [
+                    "name",
+                    "symbol"
+                ],
+                "properties": {
+                    "name": {
+                        "description": "Nom de l'unit\u00e9 (son slug en d\u00e9rive et ne change plus)",
+                        "type": "string",
+                        "maxLength": 255,
+                        "example": "Pinc\u00e9e"
+                    },
+                    "symbol": {
+                        "description": "Symbole affich\u00e9",
+                        "type": "string",
+                        "maxLength": 50,
+                        "example": "pin"
+                    }
+                },
+                "type": "object"
+            },
+            "ListAvailableIngredientsRequestQuery": {
+                "properties": {
+                    "q": {
+                        "type": "string",
+                        "default": null,
+                        "maxLength": 100,
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "UpdateServingMealPayload": {
+                "required": [
+                    "serving"
+                ],
+                "properties": {
+                    "serving": {
+                        "description": "Nombre de personnes du repas",
+                        "type": "integer",
+                        "maximum": 100,
+                        "minimum": 1,
+                        "example": 6
+                    }
+                },
+                "type": "object"
+            },
+            "UpdateShoppingListPayload": {
+                "properties": {
+                    "name": {
+                        "description": "Nouveau nom ; absent ou null : nom par d\u00e9faut (la date de cr\u00e9ation)",
+                        "type": "string",
+                        "default": null,
+                        "maxLength": 255,
+                        "example": "Courses du week-end",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "RegisterNewUserPayload": {
+                "required": [
+                    "email",
+                    "password",
+                    "defaultServing"
+                ],
+                "properties": {
+                    "email": {
+                        "description": "Adresse email, unique : sert d'identifiant de connexion",
+                        "type": "string",
+                        "maxLength": 255,
+                        "example": "alexiane@example.com"
+                    },
+                    "password": {
+                        "description": "Mot de passe en clair (8 caract\u00e8res au moins)",
+                        "type": "string",
+                        "maxLength": 4096,
+                        "minLength": 8,
+                        "example": "un-mot-de-passe"
+                    },
+                    "defaultServing": {
+                        "description": "Nombre de personnes propos\u00e9 par d\u00e9faut pour une recette",
+                        "type": "integer",
+                        "maximum": 100,
+                        "minimum": 1,
+                        "example": 4
+                    }
+                },
+                "type": "object"
+            },
+            "UserSettingsPayload": {
+                "required": [
+                    "defaultServing"
+                ],
+                "properties": {
+                    "defaultServing": {
+                        "description": "Nombre de personnes propos\u00e9 par d\u00e9faut pour une recette",
+                        "type": "integer",
+                        "maximum": 100,
+                        "minimum": 1,
+                        "example": 4
+                    },
+                    "newPassword": {
+                        "description": "Nouveau mot de passe (8 caract\u00e8res au moins) ; omis, le mot de passe ne change pas",
+                        "type": "string",
+                        "default": null,
+                        "maxLength": 4096,
+                        "minLength": 8,
+                        "example": "un-nouveau-mot-de-passe",
+                        "nullable": true
+                    },
+                    "actualPassword": {
+                        "description": "Mot de passe actuel, obligatoire avec `newPassword`",
+                        "type": "string",
+                        "default": null,
+                        "maxLength": 4096,
+                        "example": "un-mot-de-passe",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "ConversionDTO": {
+                "required": [
+                    "id",
+                    "startUnitSlug",
+                    "startUnitName",
+                    "endUnitSlug",
+                    "endUnitName",
+                    "coefficient"
+                ],
+                "properties": {
+                    "id": {
+                        "description": "Identifiant de la conversion",
+                        "type": "string",
+                        "example": "9967014a-7c8b-423f-9b96-04fc13943a05"
+                    },
+                    "ingredientSlug": {
+                        "description": "Identifiant de l'ingr\u00e9dient (slug), null pour une conversion commune \u00e0 tous",
+                        "type": "string",
+                        "example": "beurre",
+                        "nullable": true
+                    },
+                    "ingredientName": {
+                        "type": "string",
+                        "example": "beurre",
+                        "nullable": true
+                    },
+                    "creatorEmail": {
+                        "description": "Email du cr\u00e9ateur de l'ingr\u00e9dient, null pour un ingr\u00e9dient commun ou une conversion commune",
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "startUnitSlug": {
+                        "description": "Identifiant de l'unit\u00e9 de d\u00e9part (slug)",
+                        "type": "string",
+                        "example": "plaquette"
+                    },
+                    "startUnitName": {
+                        "type": "string",
+                        "example": "plaquette"
+                    },
+                    "endUnitSlug": {
+                        "description": "Identifiant de l'unit\u00e9 d'arriv\u00e9e (slug)",
+                        "type": "string",
+                        "example": "gramme"
+                    },
+                    "endUnitName": {
+                        "type": "string",
+                        "example": "gramme"
+                    },
+                    "coefficient": {
+                        "description": "Une unit\u00e9 de d\u00e9part vaut ce nombre d'unit\u00e9s d'arriv\u00e9e",
+                        "type": "number",
+                        "format": "float",
+                        "example": 250
+                    }
+                },
+                "type": "object"
+            },
+            "DepartmentDTO": {
+                "required": [
+                    "slug",
+                    "name",
+                    "image"
+                ],
+                "properties": {
+                    "slug": {
+                        "description": "Identifiant du rayon (slug)",
+                        "type": "string",
+                        "example": "fruits-et-legumes"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Fruits et l\u00e9gumes"
+                    },
+                    "image": {
+                        "description": "Chemin ou URL de l'image du rayon",
+                        "type": "string",
+                        "example": "images/department/fruits.png"
+                    }
+                },
+                "type": "object"
+            },
+            "IngredientOptionDTO": {
+                "required": [
+                    "slug",
+                    "name"
+                ],
+                "properties": {
+                    "slug": {
+                        "description": "Identifiant de l'ingr\u00e9dient (slug)",
+                        "type": "string",
+                        "example": "oeuf"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "\u0153uf"
+                    }
+                },
+                "type": "object"
+            },
+            "RecipeTypeDTO": {
+                "required": [
+                    "slug",
+                    "name",
+                    "image",
+                    "order"
+                ],
+                "properties": {
+                    "slug": {
+                        "description": "Identifiant du type de recette (slug)",
+                        "type": "string",
+                        "example": "plat"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "plat"
+                    },
+                    "image": {
+                        "description": "Chemin ou URL de l'image du type",
+                        "type": "string",
+                        "example": "images/recipe/type/meal.svg"
+                    },
+                    "order": {
+                        "description": "Position d'affichage (croissante)",
+                        "type": "integer",
+                        "example": 2
+                    }
+                },
+                "type": "object"
+            },
+            "ShoppingListDTO": {
+                "required": [
+                    "id",
+                    "displayName",
+                    "status",
+                    "isActive",
+                    "isPaused",
+                    "isCompleted",
+                    "createdAt"
+                ],
+                "properties": {
+                    "id": {
+                        "description": "Identifiant de la liste",
+                        "type": "string",
+                        "example": "0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10"
+                    },
+                    "displayName": {
+                        "description": "Nom saisi par l'utilisateur, ou \u00e0 d\u00e9faut la date de cr\u00e9ation en fran\u00e7ais",
+                        "type": "string",
+                        "example": "Courses du week-end"
+                    },
+                    "status": {
+                        "description": "Statut de la liste",
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "PAUSED",
+                            "COMPLETED"
+                        ],
+                        "example": "ACTIVE"
+                    },
+                    "isActive": {
+                        "description": "La liste est en cours (au plus une par utilisateur)",
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "isPaused": {
+                        "description": "La liste est en pause",
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "isCompleted": {
+                        "description": "La liste est termin\u00e9e",
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "createdAt": {
+                        "description": "Date de cr\u00e9ation (ATOM)",
+                        "type": "string",
+                        "example": "2026-10-12T10:00:00+02:00"
+                    }
+                },
+                "type": "object"
+            },
+            "UnitDTO": {
+                "required": [
+                    "slug",
+                    "name",
+                    "symbol"
+                ],
+                "properties": {
+                    "slug": {
+                        "description": "Identifiant de l'unit\u00e9 (slug)",
+                        "type": "string",
+                        "example": "gramme"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "gramme"
+                    },
+                    "symbol": {
+                        "description": "Symbole affich\u00e9 \u00e0 c\u00f4t\u00e9 d'une quantit\u00e9 (peut \u00eatre vide)",
+                        "type": "string",
+                        "example": "g"
+                    }
+                },
+                "type": "object"
+            },
+            "ActiveShoppingListSummaryDTO": {
+                "required": [
+                    "quantityByIngredientSlug",
+                    "plannedRecipeIds"
+                ],
+                "properties": {
+                    "shoppingListId": {
+                        "description": "Identifiant de la liste active, null si l'utilisateur n'en a pas",
+                        "type": "string",
+                        "example": "0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10",
+                        "nullable": true
+                    },
+                    "quantityByIngredientSlug": {
+                        "description": "Quantit\u00e9 de chaque ingr\u00e9dient de la liste, dans son unit\u00e9 d'achat, index\u00e9e par slug d'ingr\u00e9dient",
+                        "type": "object",
+                        "example": {
+                            "oeuf": 6,
+                            "farine": 0.5
+                        },
+                        "additionalProperties": {
+                            "type": "number"
+                        }
+                    },
+                    "plannedRecipeIds": {
+                        "description": "Identifiants des recettes planifi\u00e9es dans la liste",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "example": [
+                            "3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34"
+                        ]
+                    }
+                },
+                "type": "object"
+            },
+            "IngredientDTO": {
+                "required": [
+                    "slug",
+                    "name",
+                    "image",
+                    "departmentSlug",
+                    "departmentName",
+                    "cookingUnitSlug",
+                    "cookingUnitName",
+                    "purchaseUnitSlug",
+                    "purchaseUnitName",
+                    "purchaseUnitSymbol",
+                    "hasSameUnit",
+                    "canEdit"
+                ],
+                "properties": {
+                    "slug": {
+                        "description": "Identifiant de l'ingr\u00e9dient (slug)",
+                        "type": "string",
+                        "example": "oeuf"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "\u0153uf"
+                    },
+                    "image": {
+                        "description": "Chemin ou URL de l'image (peut \u00eatre vide)",
+                        "type": "string",
+                        "example": "images/ingredient/egg.png"
+                    },
+                    "departmentSlug": {
+                        "description": "Identifiant du rayon (slug)",
+                        "type": "string",
+                        "example": "divers"
+                    },
+                    "departmentName": {
+                        "type": "string",
+                        "example": "divers"
+                    },
+                    "cookingUnitSlug": {
+                        "description": "Identifiant de l'unit\u00e9 des recettes (slug)",
+                        "type": "string",
+                        "example": "unite"
+                    },
+                    "cookingUnitName": {
+                        "type": "string",
+                        "example": "unit\u00e9"
+                    },
+                    "purchaseUnitSlug": {
+                        "description": "Identifiant de l'unit\u00e9 d'achat (slug)",
+                        "type": "string",
+                        "example": "unite"
+                    },
+                    "purchaseUnitName": {
+                        "type": "string",
+                        "example": "unit\u00e9"
+                    },
+                    "purchaseUnitSymbol": {
+                        "description": "Symbole de l'unit\u00e9 d'achat (peut \u00eatre vide)",
+                        "type": "string",
+                        "example": ""
+                    },
+                    "hasSameUnit": {
+                        "description": "Les unit\u00e9s des recettes et d'achat sont les m\u00eames (aucune conversion)",
+                        "type": "boolean"
+                    },
+                    "coefficient": {
+                        "description": "Combien d'unit\u00e9s des recettes contient une unit\u00e9 d'achat ; null si les unit\u00e9s sont les m\u00eames ou sans conversion connue",
+                        "type": "number",
+                        "format": "float",
+                        "example": 250,
+                        "nullable": true
+                    },
+                    "creatorId": {
+                        "description": "Identifiant du cr\u00e9ateur, null pour un ingr\u00e9dient commun",
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "canEdit": {
+                        "description": "L'utilisateur peut modifier cet ingr\u00e9dient : le sien, ou un ingr\u00e9dient commun s'il est administrateur",
+                        "type": "boolean"
+                    }
+                },
+                "type": "object"
+            },
+            "RecipeRowDTO": {
+                "required": [
+                    "ingredientSlug",
+                    "ingredientName",
+                    "ingredientImage",
+                    "quantity",
+                    "unitSlug",
+                    "unitSymbol"
+                ],
+                "properties": {
+                    "ingredientSlug": {
+                        "description": "Identifiant de l'ingr\u00e9dient (slug)",
+                        "type": "string",
+                        "example": "oeuf"
+                    },
+                    "ingredientName": {
+                        "type": "string",
+                        "example": "\u0153uf"
+                    },
+                    "ingredientImage": {
+                        "description": "Chemin ou URL de l'image de l'ingr\u00e9dient (peut \u00eatre vide)",
+                        "type": "string",
+                        "example": "images/ingredient/egg.png"
+                    },
+                    "quantity": {
+                        "description": "Quantit\u00e9 pour le nombre de personnes de la recette",
+                        "type": "number",
+                        "format": "float",
+                        "example": 4
+                    },
+                    "unitSlug": {
+                        "description": "Identifiant de l'unit\u00e9 (slug)",
+                        "type": "string",
+                        "example": "unite"
+                    },
+                    "unitSymbol": {
+                        "description": "Symbole de l'unit\u00e9 (peut \u00eatre vide)",
+                        "type": "string",
+                        "example": "g"
+                    }
+                },
+                "type": "object"
+            },
+            "RecipeDTO": {
+                "required": [
+                    "id",
+                    "name",
+                    "serving",
+                    "typeSlug",
+                    "typeName",
+                    "rows"
+                ],
+                "properties": {
+                    "id": {
+                        "description": "Identifiant de la recette",
+                        "type": "string",
+                        "example": "3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "p\u00e2tes carbonara"
+                    },
+                    "serving": {
+                        "description": "Nombre de personnes",
+                        "type": "integer",
+                        "example": 4
+                    },
+                    "typeSlug": {
+                        "description": "Identifiant du type de recette (slug)",
+                        "type": "string",
+                        "example": "plat"
+                    },
+                    "typeName": {
+                        "type": "string",
+                        "example": "plat"
+                    },
+                    "rows": {
+                        "description": "Ingr\u00e9dients de la recette, dans l'ordre de la recette (celui de la saisie)",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RecipeRowDTO"
+                        }
+                    }
+                },
+                "type": "object"
+            },
+            "ShoppingListRowDTO": {
+                "required": [
+                    "id",
+                    "ingredientName",
+                    "quantity",
+                    "unitSymbol",
+                    "checked"
+                ],
+                "properties": {
+                    "id": {
+                        "description": "Identifiant de la ligne",
+                        "type": "string",
+                        "example": "b2d1c0aa-52e4-4c8f-9d0e-0a6f0c5d7e11"
+                    },
+                    "ingredientName": {
+                        "type": "string",
+                        "example": "\u0153uf"
+                    },
+                    "quantity": {
+                        "description": "Quantit\u00e9 \u00e0 acheter, dans l'unit\u00e9 d'achat de l'ingr\u00e9dient",
+                        "type": "number",
+                        "format": "float",
+                        "example": 6
+                    },
+                    "unitSymbol": {
+                        "description": "Symbole de l'unit\u00e9 (peut \u00eatre vide)",
+                        "type": "string",
+                        "example": "g"
+                    },
+                    "checked": {
+                        "description": "La ligne est coch\u00e9e (d\u00e9j\u00e0 dans le caddie)",
+                        "type": "boolean"
+                    }
+                },
+                "type": "object"
+            },
+            "ShoppingListDepartmentDTO": {
+                "required": [
+                    "slug",
+                    "name",
+                    "image",
+                    "rows"
+                ],
+                "properties": {
+                    "slug": {
+                        "description": "Identifiant du rayon (slug)",
+                        "type": "string",
+                        "example": "fruit-et-legume"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Fruit & l\u00e9gume"
+                    },
+                    "image": {
+                        "description": "Chemin de l'image du rayon",
+                        "type": "string"
+                    },
+                    "rows": {
+                        "description": "Lignes de ce rayon, tri\u00e9es par slug d'ingr\u00e9dient",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ShoppingListRowDTO"
+                        }
+                    }
+                },
+                "type": "object"
+            },
+            "ShoppingListMealDTO": {
+                "required": [
+                    "id",
+                    "recipeId",
+                    "recipeName",
+                    "serving"
+                ],
+                "properties": {
+                    "id": {
+                        "description": "Identifiant du repas planifi\u00e9",
+                        "type": "string",
+                        "example": "5c1e7d0a-91b2-4a64-8e0f-3b7a6d2c9f20"
+                    },
+                    "recipeId": {
+                        "description": "Identifiant de la recette",
+                        "type": "string",
+                        "example": "3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34"
+                    },
+                    "recipeName": {
+                        "type": "string",
+                        "example": "p\u00e2tes carbonara"
+                    },
+                    "serving": {
+                        "description": "Nombre de personnes",
+                        "type": "integer",
+                        "example": 4
+                    }
+                },
+                "type": "object"
+            },
+            "ShoppingListRecipeTypeDTO": {
+                "required": [
+                    "slug",
+                    "name",
+                    "image",
+                    "meals"
+                ],
+                "properties": {
+                    "slug": {
+                        "description": "Identifiant du type de recette (slug)",
+                        "type": "string",
+                        "example": "plat"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "plat"
+                    },
+                    "image": {
+                        "description": "Chemin de l'image du type",
+                        "type": "string"
+                    },
+                    "meals": {
+                        "description": "Repas planifi\u00e9s de ce type, tri\u00e9s par nom de recette",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ShoppingListMealDTO"
+                        }
+                    }
+                },
+                "type": "object"
+            },
+            "ShoppingListDetailDTO": {
+                "required": [
+                    "id",
+                    "displayName",
+                    "dateLabel",
+                    "createdAt",
+                    "status",
+                    "isActive",
+                    "isPaused",
+                    "isCompleted",
+                    "rowCount",
+                    "recipeCount",
+                    "departments",
+                    "recipeTypes"
+                ],
+                "properties": {
+                    "id": {
+                        "description": "Identifiant de la liste",
+                        "type": "string",
+                        "example": "0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10"
+                    },
+                    "name": {
+                        "description": "Nom saisi par l'utilisateur, null s'il n'en a pas donn\u00e9",
+                        "type": "string",
+                        "example": "Courses du week-end",
+                        "nullable": true
+                    },
+                    "displayName": {
+                        "description": "Nom saisi, sinon \u00ab Liste du \u00bb suivi de la date de cr\u00e9ation en fran\u00e7ais",
+                        "type": "string",
+                        "example": "Liste du 12 octobre 2026"
+                    },
+                    "dateLabel": {
+                        "description": "Date de cr\u00e9ation en fran\u00e7ais",
+                        "type": "string",
+                        "example": "12 octobre 2026"
+                    },
+                    "createdAt": {
+                        "description": "Date de cr\u00e9ation (ATOM)",
+                        "type": "string",
+                        "example": "2026-10-12T10:00:00+02:00"
+                    },
+                    "status": {
+                        "description": "Statut de la liste",
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "PAUSED",
+                            "COMPLETED"
+                        ],
+                        "example": "ACTIVE"
+                    },
+                    "isActive": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "isPaused": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "isCompleted": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "rowCount": {
+                        "description": "Nombre de lignes d'ingr\u00e9dient",
+                        "type": "integer",
+                        "example": 12
+                    },
+                    "recipeCount": {
+                        "description": "Nombre de recettes planifi\u00e9es",
+                        "type": "integer",
+                        "example": 3
+                    },
+                    "departments": {
+                        "description": "Ingr\u00e9dients group\u00e9s par rayon (tri\u00e9s par slug)",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ShoppingListDepartmentDTO"
+                        }
+                    },
+                    "recipeTypes": {
+                        "description": "Recettes planifi\u00e9es group\u00e9es par type (tri\u00e9es par ordre d'affichage)",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ShoppingListRecipeTypeDTO"
+                        }
+                    }
+                },
+                "type": "object"
+            },
+            "CompatibleUnitDTO": {
+                "required": [
+                    "slug",
+                    "name"
+                ],
+                "properties": {
+                    "slug": {
+                        "description": "Identifiant de l'unit\u00e9 (slug)",
+                        "type": "string",
+                        "example": "gramme"
+                    },
+                    "name": {
+                        "description": "Nom de l'unit\u00e9, premi\u00e8re lettre en majuscule",
+                        "type": "string",
+                        "example": "Gramme"
+                    }
+                },
+                "type": "object"
+            },
+            "IngredientRowDTO": {
+                "required": [
+                    "slug",
+                    "name",
+                    "purchaseUnitSymbol",
+                    "canEdit"
+                ],
+                "properties": {
+                    "slug": {
+                        "description": "Identifiant de l'ingr\u00e9dient (slug)",
+                        "type": "string",
+                        "example": "oeuf"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "\u0153uf"
+                    },
+                    "purchaseUnitSymbol": {
+                        "description": "Symbole de l'unit\u00e9 d'achat (peut \u00eatre vide)",
+                        "type": "string",
+                        "example": "g"
+                    },
+                    "canEdit": {
+                        "description": "L'utilisateur peut modifier cet ingr\u00e9dient : le sien, ou un ingr\u00e9dient commun s'il est administrateur",
+                        "type": "boolean"
+                    }
+                },
+                "type": "object"
+            },
+            "OtherPeopleRecipeDTO": {
+                "required": [
+                    "id",
+                    "name",
+                    "typeName"
+                ],
+                "properties": {
+                    "id": {
+                        "description": "Identifiant de la recette",
+                        "type": "string",
+                        "example": "3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "p\u00e2tes carbonara"
+                    },
+                    "typeName": {
+                        "description": "Nom du type de recette",
+                        "type": "string",
+                        "example": "plat"
+                    }
+                },
+                "type": "object"
+            },
+            "RecipeSummaryDTO": {
+                "required": [
+                    "id",
+                    "name"
+                ],
+                "properties": {
+                    "id": {
+                        "description": "Identifiant de la recette",
+                        "type": "string",
+                        "example": "3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "p\u00e2tes carbonara"
+                    }
+                },
+                "type": "object"
+            },
+            "CurrentUserDTO": {
+                "required": [
+                    "id",
+                    "email",
+                    "roles",
+                    "isAdmin",
+                    "defaultServing"
+                ],
+                "properties": {
+                    "id": {
+                        "description": "Identifiant de l'utilisateur (UUID)",
+                        "type": "string",
+                        "example": "0b7a6f0e-5c1d-4c52-9f0e-3f3c1d8b2a11"
+                    },
+                    "email": {
+                        "type": "string",
+                        "example": "alexiane.sichi@gmail.com"
+                    },
+                    "roles": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "example": [
+                            "ROLE_USER"
+                        ]
+                    },
+                    "isAdmin": {
+                        "description": "Vrai si l'utilisateur a le r\u00f4le ROLE_ADMIN",
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "defaultServing": {
+                        "description": "Nombre de personnes propos\u00e9 par d\u00e9faut pour une recette",
+                        "type": "integer",
+                        "example": 4
+                    }
+                },
+                "type": "object"
+            },
+            "UserSummaryDTO": {
+                "required": [
+                    "id",
+                    "email",
+                    "defaultServing",
+                    "recipeCount",
+                    "ingredientCount",
+                    "shoppingListCount",
+                    "createdAt",
+                    "isDisabled",
+                    "isAdmin"
+                ],
+                "properties": {
+                    "id": {
+                        "description": "Identifiant de l'utilisateur",
+                        "type": "string",
+                        "example": "396c20ff-eda7-472f-9555-3e247824b0b6"
+                    },
+                    "email": {
+                        "type": "string",
+                        "example": "prenom.nom@example.com"
+                    },
+                    "defaultServing": {
+                        "description": "Nombre de personnes habituel",
+                        "type": "integer",
+                        "example": 4
+                    },
+                    "recipeCount": {
+                        "description": "Nombre de recettes cr\u00e9\u00e9es",
+                        "type": "integer",
+                        "example": 73
+                    },
+                    "ingredientCount": {
+                        "description": "Nombre d'ingr\u00e9dients cr\u00e9\u00e9s",
+                        "type": "integer",
+                        "example": 15
+                    },
+                    "shoppingListCount": {
+                        "description": "Nombre de listes de courses suivies",
+                        "type": "integer",
+                        "example": 3
+                    },
+                    "createdAt": {
+                        "description": "Date d'inscription (ATOM), vide si inconnue",
+                        "type": "string",
+                        "example": "2026-10-13T08:56:40+02:00"
+                    },
+                    "isDisabled": {
+                        "description": "Le compte est d\u00e9sactiv\u00e9",
+                        "type": "boolean"
+                    },
+                    "isAdmin": {
+                        "description": "L'utilisateur est administrateur",
+                        "type": "boolean"
+                    }
+                },
+                "type": "object"
+            }
+        },
+        "securitySchemes": {
+            "Bearer": {
+                "type": "http",
+                "bearerFormat": "JWT",
+                "scheme": "bearer"
+            }
+        }
+    },
+    "security": [
+        {
+            "Bearer": []
+        }
+    ],
+    "tags": [
+        {
+            "name": "Health"
+        },
+        {
+            "name": "Shopping lists"
+        },
+        {
+            "name": "Recipes"
+        },
+        {
+            "name": "Conversions"
+        },
+        {
+            "name": "Departments"
+        },
+        {
+            "name": "Ingredients"
+        },
+        {
+            "name": "Recipe types"
+        },
+        {
+            "name": "Units"
+        },
+        {
+            "name": "Current user"
+        },
+        {
+            "name": "Users"
+        },
+        {
+            "name": "Auth"
+        }
+    ]
+}
