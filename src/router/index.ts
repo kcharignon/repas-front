@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 
 import { sessionGuard } from '@/session/guard'
+import { legacyRoutes } from './legacy'
 
 // Catalogue du design système : un outil de développement (ADR 0003). Il n'existe pas dans le build de production, sauf demande
 // explicite (`VITE_DESIGN_CATALOG=true` : la CI le garde pour son test d'accessibilité).
@@ -31,6 +32,7 @@ export const routes: RouteRecordRaw[] = [
     meta: { guestOnly: true },
   },
   ...catalog,
+  ...legacyRoutes,
   {
     path: '/',
     component: () => import('@/app/AppShell.vue'),
@@ -134,6 +136,12 @@ export const routes: RouteRecordRaw[] = [
       },
       { path: 'moi', name: 'account', component: () => import('@/views/AccountView.vue') },
     ],
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    component: () => import('@/views/NotFoundView.vue'),
+    meta: { public: true },
   },
 ]
 

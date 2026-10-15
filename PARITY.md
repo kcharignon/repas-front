@@ -84,6 +84,10 @@ avec axe (WCAG AA, clair et sombre) pour les pages. État : ✅ fait et testé �
 | Magasin sans réseau | liste en cours lisible hors-ligne, modifications refusées clairement (hors parité Twig : nouveauté) | U, E `offline` |
 | Plafonds de débit (connexion, inscription, refresh) | message avec le délai (`Retry-After`) | U |
 
+## Anciennes adresses Twig
+
+Chaque adresse de l'interface Twig mène à son équivalent (`src/router/legacy.ts`, table du plan du front, section 10 : signets et liens reçus survivent à la bascule). Les formulaires de création et de modification de l'administration (`/admin/unit/create`, `/admin/unit/{slug}/update`…) retombent sur la liste, qui les ouvre en fenêtre. Une adresse inconnue affiche une page « Page introuvable » (U `legacy`, E `not-found` avec axe).
+
 ## Mesures (image de production, `make lighthouse`)
 
 Mobile simulé (réseau lent, CPU x4), compte de démonstration : performance 94 à 100, accessibilité 100, bonnes pratiques 100, SEO 100 sur la connexion, la liste, mes listes, les recettes et les rayons. Budgets tenus par le script : performance ≥ 90, accessibilité et bonnes pratiques 100, SEO ≥ 90.
