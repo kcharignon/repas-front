@@ -1,5 +1,6 @@
-import { QueryClient } from '@tanstack/vue-query'
+import { MutationCache, QueryClient } from '@tanstack/vue-query'
 
+import { isStale, notifyFailure } from '@/notifications/failures'
 import { ApiError } from './errors'
 
 /**
@@ -7,7 +8,15 @@ import { ApiError } from './errors'
  * relit à la reprise de focus (le téléphone revient de la poche, la liste a pu changer ailleurs).
  */
 export function createQueryClient(): QueryClient {
-  return new QueryClient({
+  const client: QueryClient = new QueryClient({
+    // Un échec d'écriture se dit toujours à l'utilisateur ; si la ressource a changé ailleurs (412, 409) on relit tout.
+    mutationCache: new MutationCache({
+      onError: (error, _variables, _context, mutation) => {
+        if (mutation.meta?.silent === true) return
+        notifyFailure(error)
+        if (isStale(error)) void client.invalidateQueries()
+      },
+    }),
     defaultOptions: {
       queries: {
         staleTime: 15_000,
@@ -17,4 +26,6 @@ export function createQueryClient(): QueryClient {
       },
     },
   })
+
+  return client
 }

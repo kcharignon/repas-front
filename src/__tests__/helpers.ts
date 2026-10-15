@@ -2,8 +2,9 @@ import { vi } from 'vitest'
 import type { Plugin } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
-import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
+import { VueQueryPlugin } from '@tanstack/vue-query'
 
+import { createQueryClient } from '@/api/query'
 import { i18n } from '@/i18n'
 import { routes } from '@/router'
 
@@ -43,7 +44,9 @@ export function appContext() {
   const pinia = createPinia()
   setActivePinia(pinia)
   const router = createRouter({ history: createMemoryHistory(), routes })
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  // Le vrai client (avec ses retours d'erreur d'écriture), sans réessai pour ne pas attendre dans les tests
+  const queryClient = createQueryClient()
+  queryClient.setDefaultOptions({ queries: { retry: false } })
 
   const plugins: (Plugin | [Plugin, ...unknown[]])[] = [
     pinia,

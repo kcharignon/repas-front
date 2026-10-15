@@ -11,6 +11,7 @@ export default {
   },
   common: {
     loading: 'Chargement…',
+    close: 'Fermer',
   },
   shoppingList: {
     current: 'Liste en cours',
@@ -65,6 +66,15 @@ export default {
   },
   errors: {
     unreachable: 'Le serveur est injoignable. Réessayez dans un instant.',
+    generic: 'Une erreur est survenue. Réessayez.',
+    sessionExpired: 'Votre session a expiré : reconnectez-vous.',
+    forbidden: "Vous n'avez pas le droit de faire cela.",
+    notFound: "Cet élément n'existe plus.",
+    conflict: 'Une autre modification est en cours. Réessayez dans un instant.',
+    outdated:
+      "Modifié ailleurs entre-temps : la page vient d'être rechargée, refaites votre action.",
+    tooMany:
+      'Trop de requêtes. Réessayez dans {minutes} minute | Trop de requêtes. Réessayez dans {minutes} minutes',
   },
   theme: {
     label: 'Thème',

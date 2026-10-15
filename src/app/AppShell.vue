@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { ShoppingBasket, User } from 'lucide-vue-next'
 
 import logo from '@/assets/logo.png'
+import AppToasts from '@/app/AppToasts.vue'
 import { cn } from '@/design/cn'
 
 const { t } = useI18n()
@@ -41,6 +42,8 @@ const link =
         </RouterLink>
       </nav>
     </aside>
+
+    <AppToasts />
 
     <div class="min-w-0 flex-1 pb-20 md:pb-0">
       <RouterView />
