@@ -135,6 +135,23 @@ export default {
   },
   account: {
     title: 'Mon compte',
+    saved: 'Réglages enregistrés.',
+    servingTitle: 'Nombre de personnes',
+    serving: 'Nombre de personnes par défaut',
+    servingHint: 'Proposé pour chaque recette que vous planifiez.',
+    passwordTitle: 'Mot de passe',
+    actualPassword: 'Mot de passe actuel',
+    newPassword: 'Nouveau mot de passe',
+    confirmPassword: 'Confirmer le nouveau mot de passe',
+    changePassword: 'Changer le mot de passe',
+    passwordChanged: 'Mot de passe modifié : reconnectez-vous avec le nouveau.',
+    errors: {
+      serving: 'Au moins une personne.',
+      actual: 'Entrez votre mot de passe actuel.',
+      wrongPassword: 'Le mot de passe actuel est incorrect.',
+      short: '8 caractères au moins.',
+      mismatch: 'Les deux mots de passe ne correspondent pas.',
+    },
     logout: 'Se déconnecter',
   },
   auth: {
