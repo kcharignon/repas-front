@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import UiButton from '@/design/UiButton.vue'
 import UiChip from '@/design/UiChip.vue'
 import { useThemeStore } from '@/design/theme'
+import SettingsForms from '@/features/account/SettingsForms.vue'
 import { useSessionStore } from '@/session/session'
 
 const { t } = useI18n()
@@ -24,6 +25,8 @@ async function logout() {
       <h1 class="font-display text-4xl leading-tight font-bold">{{ t('account.title') }}</h1>
       <p class="mt-1 text-muted">{{ session.user?.email }}</p>
     </header>
+
+    <SettingsForms />
 
     <section class="flex flex-col gap-3">
       <h2 class="font-display text-2xl font-bold">{{ t('theme.label') }}</h2>

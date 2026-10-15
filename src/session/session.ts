@@ -84,6 +84,11 @@ export const useSessionStore = defineStore('session', () => {
     user.value = await unwrap(api.GET('/api/v1/me'))
   }
 
+  /** Relit l'utilisateur (après un changement de réglages). */
+  async function reloadUser() {
+    await loadUser()
+  }
+
   /** Au démarrage de l'application : retrouve la session grâce au cookie de rafraîchissement, une seule fois. */
   async function restore() {
     if (restored.value) return
@@ -132,6 +137,7 @@ export const useSessionStore = defineStore('session', () => {
     isAuthenticated: computed(() => user.value !== null),
     isAdmin: computed(() => user.value?.isAdmin === true),
     restore,
+    reloadUser,
     login,
     register,
     logout,
