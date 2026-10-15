@@ -49,6 +49,11 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/features/recipes/RecipesView.vue'),
       },
       {
+        path: 'recettes/nouvelle',
+        name: 'recipe-new',
+        component: () => import('@/features/recipes/RecipeEditorView.vue'),
+      },
+      {
         path: 'recettes/autres',
         name: 'recipes-others',
         component: () => import('@/features/recipes/OtherRecipesView.vue'),
@@ -57,6 +62,11 @@ export const routes: RouteRecordRaw[] = [
         path: 'recettes/:id',
         name: 'recipe',
         component: () => import('@/features/recipes/RecipeDetailView.vue'),
+      },
+      {
+        path: 'recettes/:id/modifier',
+        name: 'recipe-edit',
+        component: () => import('@/features/recipes/RecipeEditorView.vue'),
       },
       { path: 'moi', name: 'account', component: () => import('@/views/AccountView.vue') },
     ],

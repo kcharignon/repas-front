@@ -6,6 +6,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api'
 import UiButton from '@/design/UiButton.vue'
 import UiConfirmDialog from '@/design/UiConfirmDialog.vue'
+import UiLinkButton from '@/design/UiLinkButton.vue'
 import { formatQuantity, imageUrl } from '@/features/shopping-lists/format'
 import PlanButton from './PlanButton.vue'
 import { useDeleteRecipe, useRecipe, useRecipesByType } from './queries'
@@ -59,6 +60,13 @@ function confirmDelete() {
 
       <div class="flex flex-wrap gap-2">
         <PlanButton :recipe-id="recipe.data.value.id" :name="recipe.data.value.name" />
+        <UiLinkButton
+          v-if="isMine"
+          variant="secondary"
+          :to="{ name: 'recipe-edit', params: { id: recipe.data.value.id } }"
+        >
+          {{ t('recipes.edit') }}
+        </UiLinkButton>
         <UiButton v-if="isMine" variant="ghost" @click="deleting = true">{{
           t('common.delete')
         }}</UiButton>

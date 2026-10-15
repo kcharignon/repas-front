@@ -1,7 +1,7 @@
 import { computed } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
-import { ApiError, unwrap } from '@/api'
+import { ApiError, ifMatch, unwrap } from '@/api'
 import { shoppingListKeys } from '@/features/shopping-lists/queries'
 import { useSessionStore } from '@/session/session'
 
@@ -113,5 +113,74 @@ export function usePlanRecipe() {
       return unwrap(api.PUT('/api/v1/shopping-lists/active/recipes/{recipeId}', params))
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: shoppingListKeys.all }),
+  })
+}
+
+/** Les ingrédients que l'utilisateur peut mettre dans une recette (les communs et les siens), triés par nom. */
+export function useIngredientOptions() {
+  const { api } = useSessionStore()
+
+  return useQuery({
+    queryKey: ['ingredients', 'options'] as const,
+    queryFn: () => unwrap(api.GET('/api/v1/ingredients')),
+    staleTime: 5 * 60_000,
+  })
+}
+
+/** Les unités qu'on peut choisir pour un ingrédient, dans l'ordre où le back les connaît. */
+export function useCompatibleUnits(slug: () => string) {
+  const { api } = useSessionStore()
+
+  return useQuery({
+    queryKey: computed(() => ['ingredients', 'units', slug()] as const),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/ingredients/{slug}/units', { params: { path: { slug: slug() } } })),
+    enabled: computed(() => slug() !== ''),
+    staleTime: 5 * 60_000,
+  })
+}
+
+export interface RecipeForm {
+  name: string
+  serving: number
+  typeSlug: string
+  rows: { ingredientSlug: string; unitSlug: string; quantity: number }[]
+}
+
+/**
+ * Crée une recette (rend l'identifiant de la nouvelle, en-tête `Location`) ou remplace une recette existante : la version
+ * lue part en `If-Match`, une recette modifiée ailleurs entre-temps répond 412. Les erreurs s'affichent dans le formulaire.
+ */
+export function useSaveRecipe() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    meta: { silent: true },
+    mutationFn: async ({
+      id,
+      version,
+      form,
+    }: {
+      id: string | null
+      version: number | null
+      form: RecipeForm
+    }): Promise<string> => {
+      if (id === null) {
+        const { response, error } = await api.POST('/api/v1/recipes', { body: form })
+        if (!response.ok) throw ApiError.fromResponse(response, error)
+
+        return response.headers.get('Location')?.split('/').pop() ?? ''
+      }
+      await unwrap(
+        api.PUT('/api/v1/recipes/{id}', {
+          params: { path: { id }, header: ifMatch(version) },
+          body: form,
+        }),
+      )
+
+      return id
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: recipeKeys.all }),
   })
 }

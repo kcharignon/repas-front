@@ -5,6 +5,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Search } from 'lucide-vue-next'
 
 import UiChip from '@/design/UiChip.vue'
+import UiLinkButton from '@/design/UiLinkButton.vue'
 import PlanButton from './PlanButton.vue'
 import { useRecipeTypes, useRecipesByType } from './queries'
 
@@ -43,9 +44,12 @@ function choose(slug: string) {
       <h1 class="font-display text-3xl leading-tight font-bold md:text-4xl">
         {{ t('recipes.title') }}
       </h1>
-      <RouterLink :to="{ name: 'recipes-others' }" class="font-bold text-primary underline">
-        {{ t('recipes.others') }}
-      </RouterLink>
+      <div class="flex flex-wrap items-center gap-3">
+        <RouterLink :to="{ name: 'recipes-others' }" class="font-bold text-primary underline">
+          {{ t('recipes.others') }}
+        </RouterLink>
+        <UiLinkButton :to="{ name: 'recipe-new' }">{{ t('recipes.new') }}</UiLinkButton>
+      </div>
     </header>
 
     <label
