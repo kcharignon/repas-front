@@ -26,7 +26,7 @@ redessiner sans lutter contre un kit imposé.
    couleur seule (case cochée, texte barré), focus visible, `prefers-reduced-motion`, contrastes AA vérifiés par **axe** dans Playwright
    (catalogue, clair et sombre, bureau et mobile).
 5. **Textes dans `vue-i18n`** (`src/i18n/fr.ts`), pas dans les composants.
-6. **Catalogue** : la route `/design` montre tous les composants dans les deux thèmes (outil de développement et cible des tests axe).
+6. **Catalogue** : la route `/design` montre tous les composants dans les deux thèmes (outil de développement et cible des tests axe). Elle n'existe pas dans le build de production (`import.meta.env.DEV`), sauf `VITE_DESIGN_CATALOG=true`, que la CI pose pour son test d'accessibilité.
    Elle sera retirée du build de production à la bascule.
 
 ## Conséquences

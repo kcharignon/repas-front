@@ -49,7 +49,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      # Le catalogue du design n'est pas dans le build de production : la CI le demande pour son test d'accessibilité
       - run: npm run build-only
+        env:
+          VITE_DESIGN_CATALOG: 'true'
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v7
         if: failure()

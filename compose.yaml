@@ -72,6 +72,29 @@ services:
       - node_modules:/app/node_modules
     command: ["npx", "playwright", "test"]
 
+  # Budgets Lighthouse sur l'image de production : `make lighthouse` (compte de démonstration, `make fixtures`).
+  lighthouse:
+    profiles: [lighthouse]
+    build:
+      context: .
+      target: dev
+    init: true
+    depends_on:
+      prod:
+        condition: service_healthy
+    network_mode: service:prod
+    environment:
+      LH_URL: http://localhost
+      LH_EMAIL: ${LH_EMAIL:-user@repas.fr}
+      LH_PASSWORD: ${LH_PASSWORD:-M0t 2 p@sse}
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    command:
+      - sh
+      - -c
+      - npm install --prefix /tmp/lighthouse --no-save --no-audit --no-fund lighthouse@13.5.0 > /dev/null && LIGHTHOUSE_MODULE=/tmp/lighthouse/node_modules/lighthouse/core/index.js node scripts/lighthouse.mjs
+
   # Rapport HTML de Playwright : http://localhost:9323 (captures, vidéos, traces).
   e2e-report:
     profiles: [report]
