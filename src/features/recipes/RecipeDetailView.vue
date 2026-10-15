@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { ApiError } from '@/api'
+import { notifyDeleteFailure } from '@/notifications/failures'
 import UiButton from '@/design/UiButton.vue'
 import UiConfirmDialog from '@/design/UiConfirmDialog.vue'
 import UiLinkButton from '@/design/UiLinkButton.vue'
@@ -33,6 +34,10 @@ function confirmDelete() {
       onSuccess: async () => {
         deleting.value = false
         await router.push({ name: 'recipes', query: { type: recipe.data.value?.typeSlug } })
+      },
+      onError: (error) => {
+        deleting.value = false
+        notifyDeleteFailure(error, t('recipes.inUse'))
       },
     },
   )

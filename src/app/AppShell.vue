@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { BookOpen, ShoppingBasket, User } from 'lucide-vue-next'
+import { BookOpen, LayoutGrid, ShoppingBasket, User } from 'lucide-vue-next'
 
 import logo from '@/assets/logo.png'
 import AppToasts from '@/app/AppToasts.vue'
@@ -13,6 +13,7 @@ const { t } = useI18n()
 const nav = [
   { name: 'shopping-list', label: 'nav.shoppingList', icon: ShoppingBasket },
   { name: 'recipes', label: 'nav.recipes', icon: BookOpen },
+  { name: 'departments', label: 'nav.departments', icon: LayoutGrid },
   { name: 'account', label: 'nav.account', icon: User },
 ] as const
 

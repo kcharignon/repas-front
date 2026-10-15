@@ -68,6 +68,26 @@ export const routes: RouteRecordRaw[] = [
         name: 'recipe-edit',
         component: () => import('@/features/recipes/RecipeEditorView.vue'),
       },
+      {
+        path: 'rayons',
+        name: 'departments',
+        component: () => import('@/features/ingredients/DepartmentsView.vue'),
+      },
+      {
+        path: 'rayons/:slug',
+        name: 'department',
+        component: () => import('@/features/ingredients/DepartmentView.vue'),
+      },
+      {
+        path: 'ingredients/nouveau',
+        name: 'ingredient-new',
+        component: () => import('@/features/ingredients/IngredientEditorView.vue'),
+      },
+      {
+        path: 'ingredients/:slug/modifier',
+        name: 'ingredient-edit',
+        component: () => import('@/features/ingredients/IngredientEditorView.vue'),
+      },
       { path: 'moi', name: 'account', component: () => import('@/views/AccountView.vue') },
     ],
   },

@@ -41,3 +41,13 @@ export const isStale = (error: unknown): boolean =>
 export function notifyFailure(error: unknown) {
   useNotificationsStore().push('error', messageForFailure(error))
 }
+
+/**
+ * Un refus de suppression est un 409 (la chose est encore utilisée) : on dit pourquoi, avec le texte de l'écran, au lieu
+ * du « autre modification en cours » des conflits d'écriture.
+ */
+export function notifyDeleteFailure(error: unknown, usedMessage: string) {
+  if (error instanceof ApiError && error.status === 409)
+    useNotificationsStore().push('error', usedMessage)
+  else notifyFailure(error)
+}

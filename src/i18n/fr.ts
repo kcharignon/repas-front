@@ -8,6 +8,7 @@ export default {
     label: 'Navigation principale',
     shoppingList: 'Liste',
     recipes: 'Recettes',
+    departments: 'Rayons',
     account: 'Moi',
   },
   common: {
@@ -16,6 +17,36 @@ export default {
     cancel: 'Annuler',
     save: 'Enregistrer',
     delete: 'Supprimer',
+  },
+  departments: {
+    title: 'Rayons',
+    help: 'Ajoutez des ingrédients à votre liste de courses, rayon par rayon.',
+    none: 'Aucun rayon pour le moment.',
+  },
+  ingredients: {
+    new: 'Nouvel ingrédient',
+    none: 'Aucun ingrédient dans ce rayon.',
+    edit: 'Modifier',
+    less: 'Un de moins : {name}',
+    more: 'Un de plus : {name}',
+    newTitle: 'Nouvel ingrédient',
+    editTitle: "Modifier l'ingrédient",
+    name: "Nom de l'ingrédient",
+    department: 'Rayon',
+    cookingUnit: 'Unité des recettes',
+    cookingUnitHint: 'Celle dans laquelle vos recettes le comptent.',
+    purchaseUnit: "Unité d'achat",
+    purchaseUnitHint: 'Celle de la liste de courses.',
+    coefficient: 'Une unité d’achat vaut combien d’unités de recette ?',
+    coefficientHint:
+      'Par exemple 1000 pour un kilo en grammes. Laissez vide si la conversion existe déjà.',
+    deleteTitle: "Supprimer l'ingrédient ?",
+    deleteHelp: '« {name} » sera supprimé avec ses conversions.',
+    inUse: 'Impossible : cet ingrédient est utilisé dans une recette ou une liste de courses.',
+    errors: {
+      name: "Donnez un nom à l'ingrédient.",
+      coefficient: 'Entrez un nombre supérieur à zéro.',
+    },
   },
   recipes: {
     title: 'Recettes',
@@ -32,6 +63,8 @@ export default {
     forPeople: 'Pour {count} personne | Pour {count} personnes',
     new: 'Nouvelle recette',
     edit: 'Modifier',
+    inUse:
+      'Impossible : cette recette est dans une liste de courses. Retirez-la de la liste d’abord.',
     deleteTitle: 'Supprimer la recette ?',
     deleteHelp:
       "« {name} » sera supprimée avec ses ingrédients. Impossible tant qu'elle est dans une liste de courses.",
