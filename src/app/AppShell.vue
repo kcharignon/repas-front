@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { House, User } from 'lucide-vue-next'
+import { ShoppingBasket, User } from 'lucide-vue-next'
 
 import logo from '@/assets/logo.png'
 import { cn } from '@/design/cn'
@@ -10,7 +10,7 @@ const { t } = useI18n()
 
 // Les entrées de navigation s'ajoutent avec les écrans : liste de courses, recettes, rayons.
 const nav = [
-  { name: 'home', label: 'nav.home', icon: House },
+  { name: 'shopping-list', label: 'nav.shoppingList', icon: ShoppingBasket },
   { name: 'account', label: 'nav.account', icon: User },
 ] as const
 

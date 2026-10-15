@@ -12,8 +12,9 @@
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
-		# Pas de script en ligne ; les styles en attribut viennent de Vue (`:style`).
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		# Pas de script en ligne ; les styles en attribut viennent de Vue (`:style`). Les icônes de rayons des données actuelles
+		# sont hébergées sur flaticon (img-src) : à rapatrier sous /images, puis retirer cette entrée.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data: https://cdn-icons-png.flaticon.com; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 	}
 
 	handle /api/* {

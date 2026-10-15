@@ -1,6 +1,8 @@
 import { vi } from 'vitest'
+import type { Plugin } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
+import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 
 import { i18n } from '@/i18n'
 import { routes } from '@/router'
@@ -36,13 +38,21 @@ export const calls = (fetchMock: ReturnType<typeof stubApi>) =>
     return `${request.method} ${new URL(request.url).pathname}`
   })
 
-/** Pinia, routeur en mémoire (sans garde de session) et i18n : de quoi monter une vue. */
+/** Pinia, routeur en mémoire (sans garde de session), données serveur sans réessai et i18n : de quoi monter une vue. */
 export function appContext() {
   const pinia = createPinia()
   setActivePinia(pinia)
   const router = createRouter({ history: createMemoryHistory(), routes })
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 
-  return { pinia, router, plugins: [pinia, i18n, router] }
+  const plugins: (Plugin | [Plugin, ...unknown[]])[] = [
+    pinia,
+    i18n,
+    router,
+    [VueQueryPlugin, { queryClient }],
+  ]
+
+  return { pinia, router, queryClient, plugins }
 }
 
 export const me = {

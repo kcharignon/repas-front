@@ -6,11 +6,33 @@ export default {
   },
   nav: {
     label: 'Navigation principale',
-    home: 'Accueil',
+    shoppingList: 'Liste',
     account: 'Moi',
   },
-  home: {
-    welcome: 'Bonjour {email}',
+  common: {
+    loading: 'Chargement…',
+  },
+  shoppingList: {
+    current: 'Liste en cours',
+    dateLabel: 'Liste du {date}',
+    noneTitle: 'Aucune liste en cours',
+    noneHelp: 'Créez une liste pour y planifier des recettes et noter vos courses.',
+    create: 'Créer ma liste',
+    completedTitle: 'Courses terminées',
+    completedHelp:
+      'Tout est dans le panier. Décochez un article pour reprendre la liste, ou commencez-en une nouvelle.',
+    startNew: 'Nouvelle liste',
+    progress: '{done} sur {total} articles dans le panier',
+    sections: 'Contenu de la liste',
+    ingredientsTab: 'Ingrédients · {count}',
+    recipesTab: 'Recettes · {count}',
+    emptyIngredients:
+      "Rien à acheter pour l'instant : planifiez une recette ou ajoutez des ingrédients.",
+    emptyRecipes: 'Aucune recette planifiée : choisissez-en une dans vos recettes.',
+    serving: 'Nombre de personnes',
+    fewer: 'Une personne de moins pour {name}',
+    more: 'Une personne de plus pour {name}',
+    unplan: 'Retirer {name} de la liste',
   },
   account: {
     title: 'Mon compte',

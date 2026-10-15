@@ -14,7 +14,9 @@ export default defineConfig({
   expect: { timeout: 5000 },
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // Les tests contre le vrai back partagent un seul compte : un test à la fois (deux écritures simultanées sur la même
+  // liste de courses s'écraseraient, ce que le contrôle de version du back, ADR 0016, empêchera une fois fusionné).
+  workers: process.env.CI || external ? 1 : undefined,
   reporter: [process.env.CI ? ['github'] : ['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: external ?? (process.env.CI ? 'http://localhost:4173' : 'http://localhost:5173'),

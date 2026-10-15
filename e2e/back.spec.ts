@@ -41,7 +41,10 @@ test.describe('avec le back', () => {
       expect(((await refresh.json()) as { token: string }).token).toBeTruthy()
     })
 
-    test('un mauvais mot de passe est refusé sans rien révéler', async ({ request }) => {
+    test('un mauvais mot de passe est refusé sans rien révéler', async ({ request }, testInfo) => {
+      // Le back plafonne les échecs de connexion (5 par 15 minutes) : un seul projet joue ce refus, il ne dépend pas de l'écran.
+      // eslint-disable-next-line playwright/no-skipped-test
+      test.skip(testInfo.project.name !== 'chromium', 'jouer le refus une fois suffit')
       const login = await request.post('/api/login_check', {
         data: { email: process.env.E2E_EMAIL, password: 'pas-le-bon-mot-de-passe' },
       })

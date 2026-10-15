@@ -39,12 +39,12 @@ describe('LoginView', () => {
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('account'))
   })
 
-  it('va à l’accueil sans page demandée', async () => {
+  it('va à la liste de courses sans page demandée', async () => {
     stubApi(loggedIn)
     const { wrapper, router } = await mountView(LoginView, '/connexion')
 
     await wrapper.find('form').trigger('submit')
-    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('home'))
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('shopping-list'))
   })
 
   it('dit « Identifiants invalides. » sur un 401 et reste sur la page', async () => {
@@ -105,7 +105,7 @@ describe('LoginView', () => {
 describe('RegisterView', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it("inscrit avec le nombre de personnes choisi, connecte et va à l'accueil", async () => {
+  it('inscrit avec le nombre de personnes choisi, connecte et va à la liste de courses', async () => {
     const fetchMock = stubApi({
       'POST /api/v1/users': () => new Response(null, { status: 201 }),
       ...loggedIn,
@@ -126,7 +126,7 @@ describe('RegisterView', () => {
       password: 'un-mot-de-passe',
       defaultServing: 2,
     })
-    expect(router.currentRoute.value.name).toBe('home')
+    expect(router.currentRoute.value.name).toBe('shopping-list')
   })
 
   it('explique un e-mail déjà pris (409)', async () => {

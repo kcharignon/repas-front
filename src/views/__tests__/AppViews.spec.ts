@@ -5,7 +5,6 @@ import { appContext, calls, json, me, stubApi } from '@/__tests__/helpers'
 import App from '@/App.vue'
 import { useSessionStore } from '@/session/session'
 import AccountView from '@/views/AccountView.vue'
-import HomeView from '@/views/HomeView.vue'
 
 const signedIn = {
   'POST /api/login_check': () => json({ token: 'jeton' }),
@@ -15,16 +14,6 @@ const signedIn = {
 
 describe('vues de l’application connectée', () => {
   afterEach(() => vi.unstubAllGlobals())
-
-  it("l'accueil salue l'utilisateur", async () => {
-    stubApi(signedIn)
-    const { plugins } = appContext()
-    await useSessionStore().login('alexiane@example.com', 'x')
-
-    const wrapper = mount(HomeView, { global: { plugins } })
-
-    expect(wrapper.find('h1').text()).toBe('Bonjour alexiane@example.com')
-  })
 
   it('le compte déconnecte et renvoie à la connexion', async () => {
     const fetchMock = stubApi(signedIn)

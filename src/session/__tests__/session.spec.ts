@@ -6,7 +6,10 @@ import { calls, json, me, stubApi } from '@/__tests__/helpers'
 import { useSessionStore } from '@/session/session'
 
 describe('session', () => {
-  beforeEach(() => setActivePinia(createPinia()))
+  beforeEach(() => {
+    localStorage.clear()
+    setActivePinia(createPinia())
+  })
   afterEach(() => vi.unstubAllGlobals())
 
   describe('login', () => {
@@ -21,6 +24,7 @@ describe('session', () => {
 
       expect(session.isAuthenticated).toBe(true)
       expect(session.user).toEqual(me)
+      expect(localStorage.getItem('repas.session')).toBe('1')
       expect(calls(fetchMock)).toEqual(['POST /api/login_check', 'GET /api/v1/me'])
       const meRequest = fetchMock.mock.calls[1]?.[0] as Request
       expect(meRequest.headers.get('Authorization')).toBe('Bearer jeton')
@@ -43,6 +47,21 @@ describe('session', () => {
   })
 
   describe('restore', () => {
+    // Une session a existé sur ce navigateur (posé par la connexion précédente)
+    beforeEach(() => localStorage.setItem('repas.session', '1'))
+
+    it("ne sollicite pas le back pour un visiteur qui ne s'est jamais connecté", async () => {
+      localStorage.clear()
+      const fetchMock = stubApi({})
+      const session = useSessionStore()
+
+      await session.restore()
+
+      expect(session.isAuthenticated).toBe(false)
+      expect(session.restored).toBe(true)
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
     it('retrouve la session par le cookie de rafraîchissement, une seule fois', async () => {
       const fetchMock = stubApi({
         'POST /api/auth/refresh': () => json({ token: 'neuf' }),
@@ -71,6 +90,7 @@ describe('session', () => {
 
       expect(session.isAuthenticated).toBe(false)
       expect(session.restored).toBe(true)
+      expect(localStorage.getItem('repas.session')).toBeNull()
       expect(calls(fetchMock)).toEqual(['POST /api/auth/refresh', 'POST /api/auth/refresh'])
     })
 
@@ -160,6 +180,7 @@ describe('session', () => {
       await session.logout()
 
       expect(session.isAuthenticated).toBe(false)
+      expect(localStorage.getItem('repas.session')).toBeNull()
       expect(calls(fetchMock)).toContain('POST /api/auth/logout')
     })
 
