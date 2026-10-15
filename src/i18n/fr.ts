@@ -7,6 +7,7 @@ export default {
   nav: {
     label: 'Navigation principale',
     shoppingList: 'Liste',
+    recipes: 'Recettes',
     account: 'Moi',
   },
   common: {
@@ -15,6 +16,28 @@ export default {
     cancel: 'Annuler',
     save: 'Enregistrer',
     delete: 'Supprimer',
+  },
+  recipes: {
+    title: 'Recettes',
+    others: 'Recettes des autres',
+    search: 'Rechercher une recette',
+    types: 'Types de recette',
+    none: "Vous n'avez pas encore de recette de ce type.",
+    noMatch: 'Aucune recette ne correspond.',
+    addToList: 'Ajouter à la liste',
+    inList: 'Dans la liste',
+    planNamed: 'Ajouter {name} à la liste de courses',
+    unplanNamed: 'Retirer {name} de la liste de courses',
+    ingredients: 'Ingrédients',
+    forPeople: 'Pour {count} personne | Pour {count} personnes',
+    deleteTitle: 'Supprimer la recette ?',
+    deleteHelp:
+      "« {name} » sera supprimée avec ses ingrédients. Impossible tant qu'elle est dans une liste de courses.",
+    othersTitle: 'Recettes des autres',
+    othersHelp: 'Copiez une recette dans les vôtres pour la planifier et la modifier.',
+    othersNone: 'Rien de nouveau à copier pour le moment.',
+    copy: 'Copier',
+    copyNamed: 'Copier {name} dans mes recettes',
   },
   shoppingList: {
     status: { active: 'En cours', paused: 'En pause', completed: 'Terminée' },
