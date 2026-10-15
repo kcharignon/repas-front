@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
+import { hasFailed } from '@/api/query'
 import { ApiError } from '@/api'
 import { notifyDeleteFailure } from '@/notifications/failures'
 import UiButton from '@/design/UiButton.vue'
@@ -111,7 +112,7 @@ function confirmDelete() {
     </template>
 
     <p
-      v-else-if="recipe.isError.value"
+      v-else-if="hasFailed(recipe)"
       role="alert"
       class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
     >

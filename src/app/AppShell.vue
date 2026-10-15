@@ -3,6 +3,7 @@ import { RouterLink, RouterView } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { BookOpen, LayoutGrid, ShoppingBasket, User } from 'lucide-vue-next'
 
+import OfflineBanner from '@/app/OfflineBanner.vue'
 import logo from '@/assets/logo.png'
 import { cn } from '@/design/cn'
 
@@ -45,6 +46,7 @@ const link =
     </aside>
 
     <div class="min-w-0 flex-1 pb-20 md:pb-0">
+      <OfflineBanner />
       <RouterView />
     </div>
 

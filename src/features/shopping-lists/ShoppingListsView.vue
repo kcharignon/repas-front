@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
 
+import { hasFailed } from '@/api/query'
 import UiButton from '@/design/UiButton.vue'
 import { useCreateShoppingList, useShoppingLists } from './queries'
 
@@ -39,7 +40,7 @@ const label = { ACTIVE: 'active', PAUSED: 'paused', COMPLETED: 'completed' } as 
 
     <p v-if="lists.isPending.value" class="text-muted" role="status">{{ t('common.loading') }}</p>
     <p
-      v-else-if="lists.isError.value"
+      v-else-if="hasFailed(lists)"
       role="alert"
       class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
     >

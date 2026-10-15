@@ -23,6 +23,31 @@ const hasHint = (): boolean => {
   }
 }
 
+/**
+ * Copie de l'utilisateur courant, pour retrouver la session quand le réseau manque au démarrage (liste lue hors-ligne). Pas de
+ * jeton ici, seulement ce que `GET /api/v1/me` rend ; effacée avec la session.
+ */
+const SNAPSHOT = 'repas.user'
+
+const readSnapshot = (): CurrentUser | null => {
+  try {
+    const raw = localStorage.getItem(SNAPSHOT)
+
+    return raw ? (JSON.parse(raw) as CurrentUser) : null
+  } catch {
+    return null
+  }
+}
+
+const writeSnapshot = (user: CurrentUser | null) => {
+  try {
+    if (user) localStorage.setItem(SNAPSHOT, JSON.stringify(user))
+    else localStorage.removeItem(SNAPSHOT)
+  } catch {
+    // Stockage indisponible : pas de reprise hors-ligne, la connexion fonctionne comme avant.
+  }
+}
+
 const setHint = (present: boolean) => {
   try {
     if (present) localStorage.setItem(HINT, '1')
@@ -41,6 +66,8 @@ export const useSessionStore = defineStore('session', () => {
   const user = ref<CurrentUser | null>(null)
   const restored = ref(false)
   let refreshing: Promise<string | null> | null = null
+  /** Le dernier rafraîchissement a échoué faute de réseau (et non parce que la session est perdue). */
+  let unreachable = false
 
   /** Un seul rafraîchissement à la fois : dix requêtes en 401 n'en déclenchent qu'un. */
   function refresh(): Promise<string | null> {
@@ -52,6 +79,7 @@ export const useSessionStore = defineStore('session', () => {
   }
 
   async function requestToken(): Promise<string | null> {
+    unreachable = false
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const { data, response } = await api.POST('/api/auth/refresh')
@@ -63,7 +91,10 @@ export const useSessionStore = defineStore('session', () => {
         }
         if (response.status !== 401) break
       } catch {
-        break
+        // Pas de réseau : la session n'est pas perdue pour autant, on la garde pour le retour de la connexion.
+        unreachable = true
+
+        return null
       }
       if (attempt === 0) await sleep(RETRY_DELAY_MS)
     }
@@ -78,10 +109,17 @@ export const useSessionStore = defineStore('session', () => {
     token.value = null
     user.value = null
     setHint(false)
+    writeSnapshot(null)
   }
 
   async function loadUser() {
     user.value = await unwrap(api.GET('/api/v1/me'))
+    writeSnapshot(user.value)
+  }
+
+  /** Sans réseau au démarrage : l'utilisateur de la dernière session, pour lire ce qui a été gardé hors-ligne. */
+  function resumeOffline() {
+    user.value = readSnapshot()
   }
 
   /** Relit l'utilisateur (après un changement de réglages). */
@@ -99,8 +137,10 @@ export const useSessionStore = defineStore('session', () => {
     }
     try {
       if ((await refresh()) !== null) await loadUser()
-    } catch {
-      clear()
+      else if (unreachable) resumeOffline()
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 0) resumeOffline()
+      else clear()
     } finally {
       restored.value = true
     }

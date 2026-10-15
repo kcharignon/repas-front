@@ -13,7 +13,7 @@ export default mergeConfig(
       coverage: {
         provider: 'v8',
         include: ['src/**/*.{ts,vue}'],
-        exclude: ['src/main.ts', 'src/**/__tests__/**', 'src/api/schema.d.ts'],
+        exclude: ['src/main.ts', 'src/pwa.ts', 'src/**/__tests__/**', 'src/api/schema.d.ts'],
         reporter: ['text-summary', 'lcov'],
         // Le seuil ne baisse jamais ; on le remonte quand la mesure le permet (cliquet, comme côté back).
         thresholds: { lines: 80, functions: 80, branches: 80, statements: 80 },

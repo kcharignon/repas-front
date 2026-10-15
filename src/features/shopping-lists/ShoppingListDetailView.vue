@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
+import { hasFailed } from '@/api/query'
 import { ApiError } from '@/api'
 import ShoppingListContent from './ShoppingListContent.vue'
 import ShoppingListHeader from './ShoppingListHeader.vue'
@@ -38,7 +39,7 @@ function startNew() {
     </template>
 
     <p
-      v-else-if="list.isError.value"
+      v-else-if="hasFailed(list)"
       role="alert"
       class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
     >

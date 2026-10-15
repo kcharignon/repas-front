@@ -200,4 +200,90 @@ describe('session', () => {
       expect(session.isAuthenticated).toBe(false)
     })
   })
+
+  describe('sans réseau au démarrage', () => {
+    const offline = () => {
+      throw new TypeError('Failed to fetch')
+    }
+
+    beforeEach(() => localStorage.setItem('repas.session', '1'))
+
+    it("reprend l'utilisateur de la dernière session et garde l'indice de session", async () => {
+      localStorage.setItem('repas.user', JSON.stringify(me))
+      const fetchMock = stubApi({ 'POST /api/auth/refresh': offline })
+      const session = useSessionStore()
+
+      await session.restore()
+
+      expect(session.user).toEqual(me)
+      expect(session.isAuthenticated).toBe(true)
+      expect(localStorage.getItem('repas.session')).toBe('1')
+      expect(calls(fetchMock)).toEqual(['POST /api/auth/refresh'])
+    })
+
+    it("reste anonyme sans copie de l'utilisateur, mais n'oublie pas la session", async () => {
+      stubApi({ 'POST /api/auth/refresh': offline })
+      const session = useSessionStore()
+
+      await session.restore()
+
+      expect(session.isAuthenticated).toBe(false)
+      expect(localStorage.getItem('repas.session')).toBe('1')
+    })
+
+    it("reprend l'utilisateur quand le réseau tombe entre le jeton et sa lecture", async () => {
+      localStorage.setItem('repas.user', JSON.stringify(me))
+      stubApi({
+        'POST /api/auth/refresh': () => json({ token: 'jeton' }),
+        'GET /api/v1/me': offline,
+      })
+      const session = useSessionStore()
+
+      await session.restore()
+
+      expect(session.user).toEqual(me)
+    })
+
+    it('ignore une copie illisible', async () => {
+      localStorage.setItem('repas.user', '{pas du json')
+      stubApi({ 'POST /api/auth/refresh': offline })
+      const session = useSessionStore()
+
+      await session.restore()
+
+      expect(session.isAuthenticated).toBe(false)
+    })
+
+    it("une session refusée (401) efface l'indice et la copie de l'utilisateur", async () => {
+      localStorage.setItem('repas.user', JSON.stringify(me))
+      stubApi({
+        'POST /api/auth/refresh': () => json({ error: { message: 'x' } }, { status: 401 }),
+      })
+      const session = useSessionStore()
+
+      await session.restore()
+
+      expect(session.isAuthenticated).toBe(false)
+      expect(localStorage.getItem('repas.session')).toBeNull()
+      expect(localStorage.getItem('repas.user')).toBeNull()
+    })
+  })
+
+  it("garde une copie de l'utilisateur (sans jeton) et l'efface à la déconnexion", async () => {
+    stubApi({
+      'POST /api/login_check': () => json({ token: 'jeton-secret' }),
+      'GET /api/v1/me': () => json(me),
+      'POST /api/auth/logout': () => new Response(null, { status: 204 }),
+    })
+    const session = useSessionStore()
+
+    await session.login('a@b.fr', 'x')
+
+    expect(JSON.parse(localStorage.getItem('repas.user') ?? 'null')).toEqual(me)
+    expect(JSON.stringify(localStorage)).not.toContain('jeton-secret')
+
+    await session.logout()
+
+    expect(localStorage.getItem('repas.user')).toBeNull()
+  })
 })

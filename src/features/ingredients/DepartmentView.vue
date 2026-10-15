@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 import { Minus, Plus } from 'lucide-vue-next'
 
+import { hasFailed } from '@/api/query'
 import UiLinkButton from '@/design/UiLinkButton.vue'
 import { useActiveSummary } from '@/features/shopping-lists/queries'
 import { formatQuantity } from '@/features/shopping-lists/format'
@@ -46,7 +47,7 @@ const stepClass =
     </header>
 
     <p
-      v-if="ingredients.isError.value"
+      v-if="hasFailed(ingredients)"
       role="alert"
       class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
     >

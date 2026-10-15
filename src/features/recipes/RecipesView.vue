@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Search } from 'lucide-vue-next'
 
+import { hasFailed } from '@/api/query'
 import UiChip from '@/design/UiChip.vue'
 import UiLinkButton from '@/design/UiLinkButton.vue'
 import PlanButton from './PlanButton.vue'
@@ -82,7 +83,7 @@ function choose(slug: string) {
     </div>
 
     <p
-      v-if="types.isError.value || recipes.isError.value"
+      v-if="hasFailed(types) || hasFailed(recipes)"
       role="alert"
       class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
     >

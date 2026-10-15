@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import { ref } from 'vue'
 
 import { ApiError } from '@/api'
-import { createQueryClient } from '@/api/query'
+import { createQueryClient, hasFailed } from '@/api/query'
 import { useNotificationsStore } from '@/notifications/store'
 
 describe('createQueryClient', () => {
@@ -64,5 +65,31 @@ describe('createQueryClient', () => {
     expect(retry(0, new ApiError(404, 'x'))).toBe(false)
     expect(retry(0, new ApiError(500, 'x'))).toBe(true)
     expect(retry(2, new ApiError(500, 'x'))).toBe(false)
+  })
+
+  it('ne rejoue pas une lecture sans réseau : elle échoue tout de suite', () => {
+    const retry = createQueryClient().getDefaultOptions().queries?.retry as (
+      count: number,
+      error: Error,
+    ) => boolean
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+
+    expect(retry(0, new ApiError(0, 'réseau'))).toBe(false)
+    onLine.mockRestore()
+  })
+
+  it("n'attend pas le réseau en silence : lectures et écritures partent toujours", () => {
+    const options = createQueryClient().getDefaultOptions()
+
+    expect(options.queries?.networkMode).toBe('always')
+    expect(options.mutations?.networkMode).toBe('always')
+  })
+
+  describe('hasFailed', () => {
+    it("n'affiche l'échec que s'il n'y a rien à montrer", () => {
+      expect(hasFailed({ isError: ref(true), data: ref(undefined) })).toBe(true)
+      expect(hasFailed({ isError: ref(true), data: ref({ liste: 1 }) })).toBe(false)
+      expect(hasFailed({ isError: ref(false), data: ref(undefined) })).toBe(false)
+    })
   })
 })

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { hasFailed } from '@/api/query'
 import UiButton from '@/design/UiButton.vue'
 import UiCombobox from '@/design/UiCombobox.vue'
 import UiField from '@/design/UiField.vue'
@@ -86,7 +87,7 @@ function submit() {
   <AdminPage
     :title="t('admin.conversions')"
     :loading="conversions.isPending.value"
-    :failed="conversions.isError.value"
+    :failed="hasFailed(conversions)"
     :create-label="t('admin.newConversion')"
     @create="openCreate"
   >
