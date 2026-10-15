@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { hasFailed } from '@/api/query'
 import UiButton from '@/design/UiButton.vue'
 import UiField from '@/design/UiField.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
@@ -45,7 +46,7 @@ function submit() {
   <AdminPage
     :title="t('admin.units')"
     :loading="units.isPending.value"
-    :failed="units.isError.value"
+    :failed="hasFailed(units)"
     :create-label="t('admin.newUnit')"
     @create="dialog.create"
   >

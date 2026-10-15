@@ -65,8 +65,11 @@ const backWith = (extra: Parameters<typeof stubApi>[0] = {}, list = detail()) =>
     ...extra,
   })
 
+let queryClient: ReturnType<typeof appContext>['queryClient']
+
 async function mountList() {
   const context = appContext()
+  queryClient = context.queryClient
   await useSessionStore().restore()
   const wrapper = mount(ShoppingListView, { global: { plugins: context.plugins } })
   await vi.waitFor(() => expect(wrapper.text()).not.toContain('Chargement'))
@@ -346,6 +349,30 @@ describe('ShoppingListView', () => {
           calls(fetchMock).filter((call) => call === 'GET /api/v1/shopping-lists/list-1').length,
         ).toBeGreaterThan(1),
       )
+    })
+  })
+
+  describe('hors connexion', () => {
+    it("garde la liste à l'écran quand une relecture échoue, avec l'heure de sa dernière copie", async () => {
+      let up = true
+      const fetchMock = backWith({
+        'GET /api/v1/shopping-lists/list-1': () =>
+          up ? json(detail()) : Promise.reject(new TypeError('Failed to fetch')),
+      })
+      const wrapper = await mountList()
+      expect(wrapper.text()).toContain('Courgettes')
+
+      up = false
+      window.dispatchEvent(new Event('offline'))
+      await queryClient.invalidateQueries()
+
+      await vi.waitFor(() => expect(wrapper.text()).toContain('Liste enregistrée le'))
+      expect(wrapper.text()).toContain('Courgettes')
+      expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+      expect(
+        calls(fetchMock).filter((call) => call === 'GET /api/v1/shopping-lists/list-1').length,
+      ).toBeGreaterThan(1)
+      window.dispatchEvent(new Event('online'))
     })
   })
 })

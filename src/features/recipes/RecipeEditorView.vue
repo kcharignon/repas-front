@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Plus } from 'lucide-vue-next'
 
+import { hasFailed } from '@/api/query'
 import UiButton from '@/design/UiButton.vue'
 import UiField from '@/design/UiField.vue'
 import UiSelect from '@/design/UiSelect.vue'
@@ -156,7 +157,7 @@ function submit() {
       {{ t('common.loading') }}
     </p>
     <p
-      v-else-if="editing && existing.isError.value"
+      v-else-if="editing && hasFailed(existing)"
       role="alert"
       class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
     >

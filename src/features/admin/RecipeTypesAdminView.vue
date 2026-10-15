@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { hasFailed } from '@/api/query'
 import UiButton from '@/design/UiButton.vue'
 import UiField from '@/design/UiField.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
@@ -54,7 +55,7 @@ function submit() {
   <AdminPage
     :title="t('admin.recipeTypes')"
     :loading="types.isPending.value"
-    :failed="types.isError.value"
+    :failed="hasFailed(types)"
     :create-label="t('admin.newRecipeType')"
     @create="dialog.create"
   >

@@ -81,11 +81,12 @@ avec axe (WCAG AA, clair et sombre) pour les pages. État : ✅ fait et testé �
 | Supprimer une recette ou un ingrédient encore utilisé est refusé | message qui dit pourquoi (409) | U |
 | Deux onglets modifient la même liste ou recette | `ETag` / `If-Match`, 412 → message et relecture | U |
 | Changer son mot de passe coupe les sessions | déconnexion et retour à la connexion | U |
+| Magasin sans réseau | liste en cours lisible hors-ligne, modifications refusées clairement (hors parité Twig : nouveauté) | U, E `offline` |
 | Plafonds de débit (connexion, inscription, refresh) | message avec le délai (`Retry-After`) | U |
 
 ## Pas encore repris (hors des routes Twig)
 
 - Pagination et recherche des listes qui grossissent (côté back aussi : roadmap).
 - Vérification d'e-mail à l'inscription (décision produit).
-- PWA et lecture hors-ligne de la liste en cours (phase 5), budgets Lighthouse.
+- Budgets Lighthouse (la PWA et la lecture hors-ligne de la liste en cours sont faites : ADR 0006).
 - Suppression de la page de catalogue `/design` du build de production (à la bascule).

@@ -7,7 +7,12 @@ export const i18n = createI18n({
   locale: 'fr',
   fallbackLocale: 'fr',
   messages: { fr },
-  datetimeFormats: { fr: { long: { day: 'numeric', month: 'long', year: 'numeric' } } },
+  datetimeFormats: {
+    fr: {
+      long: { day: 'numeric', month: 'long', year: 'numeric' },
+      short: { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' },
+    },
+  },
   // Un texte manquant doit se voir en test : on ne le tait pas.
   missingWarn: true,
   fallbackWarn: true,

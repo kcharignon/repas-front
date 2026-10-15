@@ -18,6 +18,11 @@ export default {
     save: 'Enregistrer',
     delete: 'Supprimer',
   },
+  offline: {
+    banner:
+      'Hors connexion : vous voyez la dernière version enregistrée. Les modifications sont impossibles tant que le réseau n’est pas revenu.',
+    savedAt: 'Liste enregistrée le {date}.',
+  },
   admin: {
     title: 'Administration',
     help: 'Les référentiels de l’application : unités, rayons, types de recette, conversions, utilisateurs.',

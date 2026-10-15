@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
+import { hasFailed } from '@/api/query'
 import { imageUrl } from '@/features/shopping-lists/format'
 import { useDepartments } from './queries'
 
@@ -22,7 +23,7 @@ const items = computed(() => departments.data.value?.member ?? [])
     </header>
 
     <p
-      v-if="departments.isError.value"
+      v-if="hasFailed(departments)"
       role="alert"
       class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
     >

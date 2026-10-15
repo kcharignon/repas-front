@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
 import { Copy } from 'lucide-vue-next'
 
+import { hasFailed } from '@/api/query'
 import UiButton from '@/design/UiButton.vue'
 import { useCopyRecipe, useOtherPeopleRecipes } from './queries'
 
@@ -37,7 +38,7 @@ function copyRecipe(id: string) {
 
     <p v-if="others.isPending.value" class="text-muted" role="status">{{ t('common.loading') }}</p>
     <p
-      v-else-if="others.isError.value"
+      v-else-if="hasFailed(others)"
       role="alert"
       class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
     >

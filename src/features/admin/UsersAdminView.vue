@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import AdminPage from './AdminPage.vue'
 import { useUsers } from './queries'
+import { hasFailed } from '@/api/query'
 
 const { t, d } = useI18n()
 
@@ -12,11 +13,7 @@ const items = computed(() => users.data.value?.member ?? [])
 </script>
 
 <template>
-  <AdminPage
-    :title="t('admin.users')"
-    :loading="users.isPending.value"
-    :failed="users.isError.value"
-  >
+  <AdminPage :title="t('admin.users')" :loading="users.isPending.value" :failed="hasFailed(users)">
     <p v-if="items.length === 0" class="text-muted">{{ t('admin.none') }}</p>
     <ul v-else class="flex flex-col gap-3">
       <li

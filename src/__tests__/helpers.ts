@@ -46,7 +46,8 @@ export function appContext() {
   const router = createRouter({ history: createMemoryHistory(), routes })
   // Le vrai client (avec ses retours d'erreur d'écriture), sans réessai pour ne pas attendre dans les tests
   const queryClient = createQueryClient()
-  queryClient.setDefaultOptions({ queries: { retry: false } })
+  const defaults = queryClient.getDefaultOptions()
+  queryClient.setDefaultOptions({ ...defaults, queries: { ...defaults.queries, retry: false } })
 
   const plugins: (Plugin | [Plugin, ...unknown[]])[] = [
     pinia,

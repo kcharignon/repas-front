@@ -2,12 +2,15 @@
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
+import { hasFailed } from '@/api/query'
 import UiButton from '@/design/UiButton.vue'
+import { useOnline } from '@/offline/useOnline'
 import ShoppingListContent from './ShoppingListContent.vue'
 import ShoppingListHeader from './ShoppingListHeader.vue'
 import { useActiveShoppingList, useEnsureActiveShoppingList } from './queries'
 
-const { t } = useI18n()
+const { t, d } = useI18n()
+const online = useOnline()
 
 const { summary, id, detail, forget } = useActiveShoppingList()
 const ensure = useEnsureActiveShoppingList()
@@ -22,7 +25,7 @@ function createList() {
     <p v-if="summary.isPending.value" class="text-muted" role="status">{{ t('common.loading') }}</p>
 
     <p
-      v-else-if="summary.isError.value"
+      v-else-if="hasFailed(summary)"
       role="alert"
       class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
     >
@@ -48,6 +51,9 @@ function createList() {
     </section>
 
     <template v-else-if="detail.data.value">
+      <p v-if="!online" class="-mb-2 text-sm text-muted">
+        {{ t('offline.savedAt', { date: d(new Date(detail.dataUpdatedAt.value), 'short') }) }}
+      </p>
       <ShoppingListHeader :list="detail.data.value" />
       <ShoppingListContent
         :list="detail.data.value"
@@ -63,7 +69,7 @@ function createList() {
     </template>
 
     <p
-      v-else-if="detail.isError.value"
+      v-else-if="hasFailed(detail)"
       role="alert"
       class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
     >

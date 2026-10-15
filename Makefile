@@ -80,11 +80,15 @@ outdated: ## List the dependencies with a newer version, majors included
 quality: check audit api-verify ## Run everything the CI runs except the browsers
 
 ## —— End to end 🎭 ——————————————————————————————————————————————————————————
-.PHONY: e2e e2e-visual e2e-report
+.PHONY: e2e e2e-offline e2e-visual e2e-report
 
 e2e: ## Run Playwright (Chromium) in Docker against the front and the real back
 	@$(BACK_CHECK)
 	@$(DOCKER_COMPOSE) --profile e2e run --rm e2e
+
+e2e-offline: ## Run the offline reading scenario (service worker) against the production image and the real back
+	@$(BACK_CHECK)
+	@$(DOCKER_COMPOSE) --profile prod --profile offline run --rm e2e-offline
 
 e2e-visual: ## Same, with a screenshot, video and trace of every test, then the report on http://localhost:9323
 	@$(BACK_CHECK)
