@@ -7,6 +7,7 @@ import { useSessionStore } from '@/session/session'
 
 export const shoppingListKeys = {
   all: ['shopping-lists'] as const,
+  collection: ['shopping-lists', 'collection'] as const,
   activeSummary: ['shopping-lists', 'active', 'summary'] as const,
   detail: (id: string) => ['shopping-lists', 'detail', id] as const,
 }
@@ -132,6 +133,90 @@ export function useUnplanRecipe() {
           params: { path: { recipeId }, header: ifMatch(version) },
         }),
       ),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: shoppingListKeys.all }),
+  })
+}
+
+/** Les listes de l'utilisateur, de la plus récente à la plus ancienne. */
+export function useShoppingLists() {
+  const { api } = useSessionStore()
+
+  return useQuery({
+    queryKey: shoppingListKeys.collection,
+    queryFn: () => unwrap(api.GET('/api/v1/shopping-lists')),
+  })
+}
+
+/** Le détail d'une liste précise (pas seulement l'active). */
+export function useShoppingList(id: () => string) {
+  const { api } = useSessionStore()
+
+  return useQuery({
+    queryKey: computed(() => shoppingListKeys.detail(id())),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/shopping-lists/{id}', { params: { path: { id: id() } } })),
+  })
+}
+
+/** Nouvelle liste active : l'éventuelle liste active passe en pause, les listes terminées sont supprimées par le back. */
+export function useCreateShoppingList() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => unwrap(api.POST('/api/v1/shopping-lists')),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: shoppingListKeys.all }),
+  })
+}
+
+type Lifecycle = 'activate' | 'pause' | 'complete'
+
+/** Activer, mettre en pause ou terminer une liste (transitions d'état, ADR 0007 §11 du back). */
+export function useChangeListStatus() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, action }: { id: string; action: Lifecycle }) => {
+      const params = { params: { path: { id } } }
+
+      switch (action) {
+        case 'activate':
+          return unwrap(api.POST('/api/v1/shopping-lists/{id}/activate', params))
+        case 'pause':
+          return unwrap(api.POST('/api/v1/shopping-lists/{id}/pause', params))
+        case 'complete':
+          return unwrap(api.POST('/api/v1/shopping-lists/{id}/complete', params))
+      }
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: shoppingListKeys.all }),
+  })
+}
+
+/** Renomme une liste ; un nom vide rétablit le nom par défaut (la date). */
+export function useRenameShoppingList() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, name, version }: { id: string; name: string; version: number }) =>
+      unwrap(
+        api.PATCH('/api/v1/shopping-lists/{id}', {
+          params: { path: { id }, header: ifMatch(version) },
+          body: { name: name.trim() === '' ? null : name.trim() },
+        }),
+      ),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: shoppingListKeys.all }),
+  })
+}
+
+export function useDeleteShoppingList() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.DELETE('/api/v1/shopping-lists/{id}', { params: { path: { id } } })),
     onSettled: () => queryClient.invalidateQueries({ queryKey: shoppingListKeys.all }),
   })
 }
