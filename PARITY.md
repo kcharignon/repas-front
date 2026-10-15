@@ -84,9 +84,11 @@ avec axe (WCAG AA, clair et sombre) pour les pages. État : ✅ fait et testé �
 | Magasin sans réseau | liste en cours lisible hors-ligne, modifications refusées clairement (hors parité Twig : nouveauté) | U, E `offline` |
 | Plafonds de débit (connexion, inscription, refresh) | message avec le délai (`Retry-After`) | U |
 
+## Mesures (image de production, `make lighthouse`)
+
+Mobile simulé (réseau lent, CPU x4), compte de démonstration : performance 94 à 100, accessibilité 100, bonnes pratiques 100, SEO 100 sur la connexion, la liste, mes listes, les recettes et les rayons. Budgets tenus par le script : performance ≥ 90, accessibilité et bonnes pratiques 100, SEO ≥ 90.
+
 ## Pas encore repris (hors des routes Twig)
 
 - Pagination et recherche des listes qui grossissent (côté back aussi : roadmap).
 - Vérification d'e-mail à l'inscription (décision produit).
-- Budgets Lighthouse (la PWA et la lecture hors-ligne de la liste en cours sont faites : ADR 0006).
-- Suppression de la page de catalogue `/design` du build de production (à la bascule).

@@ -3,6 +3,20 @@ import type { RouteRecordRaw } from 'vue-router'
 
 import { sessionGuard } from '@/session/guard'
 
+// Catalogue du design système : un outil de développement (ADR 0003). Il n'existe pas dans le build de production, sauf demande
+// explicite (`VITE_DESIGN_CATALOG=true` : la CI le garde pour son test d'accessibilité).
+const catalog: RouteRecordRaw[] =
+  import.meta.env.DEV || import.meta.env.VITE_DESIGN_CATALOG === 'true'
+    ? [
+        {
+          path: '/design',
+          name: 'design',
+          component: () => import('@/views/DesignView.vue'),
+          meta: { public: true },
+        },
+      ]
+    : []
+
 export const routes: RouteRecordRaw[] = [
   {
     path: '/connexion',
@@ -16,13 +30,7 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/views/RegisterView.vue'),
     meta: { guestOnly: true },
   },
-  // Catalogue du design système : à retirer du build de production à la bascule (ADR 0003).
-  {
-    path: '/design',
-    name: 'design',
-    component: () => import('@/views/DesignView.vue'),
-    meta: { public: true },
-  },
+  ...catalog,
   {
     path: '/',
     component: () => import('@/app/AppShell.vue'),
