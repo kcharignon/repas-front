@@ -18,6 +18,11 @@ export default {
     save: 'Enregistrer',
     delete: 'Supprimer',
   },
+  notFound: {
+    title: 'Page introuvable',
+    help: 'Cette adresse n’existe pas ou plus.',
+    back: 'Retour à la liste',
+  },
   offline: {
     banner:
       'Hors connexion : vous voyez la dernière version enregistrée. Les modifications sont impossibles tant que le réseau n’est pas revenu.',
