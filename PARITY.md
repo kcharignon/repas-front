@@ -88,6 +88,15 @@ avec axe (WCAG AA, clair et sombre) pour les pages. État : ✅ fait et testé �
 
 Chaque adresse de l'interface Twig mène à son équivalent (`src/router/legacy.ts`, table du plan du front, section 10 : signets et liens reçus survivent à la bascule). Les formulaires de création et de modification de l'administration (`/admin/unit/create`, `/admin/unit/{slug}/update`…) retombent sur la liste, qui les ouvre en fenêtre. Une adresse inconnue affiche une page « Page introuvable » (U `legacy`, E `not-found` avec axe).
 
+## Écarts connus avec Twig (relecture template par template, scripts `ajax.js` / `mobile.js` compris)
+
+Tout le reste est repris à l'identique ou mieux ; ces deux écarts sont à trancher pendant le dogfooding.
+
+| Twig | Front | À décider |
+|---|---|---|
+| Quantités de la liste arrondies à l'**entier supérieur** (`round(0, 'ceil')`), une décimale dans la page d'un rayon | quantité exacte, deux décimales au plus (« 1,6 kg ») : c'est la maquette validée | garder, ou arrondir à l'entier supérieur à l'affichage (un seul endroit : `formatQuantity`, `src/features/shopping-lists/format.ts`) |
+| « Se souvenir de moi » : sans la case, la session s'arrête à la fermeture du navigateur (`always_remember_me: false`) | pas de case : le cookie de rafraîchissement dure toujours 30 jours glissants (ADR back 0015) | sur un poste partagé on ne peut pas refuser d'être retenu ; l'ajout demande le back (cookie de session et famille de jetons non persistante), donc une PR back que l'humain merge |
+
 ## Mesures (image de production, `make lighthouse`)
 
 Mobile simulé (réseau lent, CPU x4), compte de démonstration : performance 94 à 100, accessibilité 100, bonnes pratiques 100, SEO 100 sur la connexion, la liste, mes listes, les recettes et les rayons. Budgets tenus par le script : performance ≥ 90, accessibilité et bonnes pratiques 100, SEO ≥ 90.
