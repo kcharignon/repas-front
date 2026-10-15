@@ -27,7 +27,10 @@ describe('safeRedirect', () => {
 })
 
 describe('sessionGuard', () => {
-  beforeEach(() => setActivePinia(createPinia()))
+  beforeEach(() => {
+    localStorage.clear()
+    setActivePinia(createPinia())
+  })
   afterEach(() => vi.unstubAllGlobals())
 
   const router = () => {
@@ -37,12 +40,20 @@ describe('sessionGuard', () => {
     return instance
   }
 
-  const anonymous = () => stubApi({ 'POST /api/auth/refresh': () => json({}, { status: 401 }) })
-  const authenticated = () =>
-    stubApi({
+  // Un ancien visiteur (une session a existé) dont le cookie ne vaut plus rien
+  const anonymous = () => {
+    localStorage.setItem('repas.session', '1')
+
+    return stubApi({ 'POST /api/auth/refresh': () => json({}, { status: 401 }) })
+  }
+  const authenticated = () => {
+    localStorage.setItem('repas.session', '1')
+
+    return stubApi({
       'POST /api/auth/refresh': () => json({ token: 'jeton' }),
       'GET /api/v1/me': () => json(me),
     })
+  }
 
   it('renvoie un anonyme vers la connexion en gardant la page voulue', async () => {
     vi.useFakeTimers()
@@ -82,7 +93,7 @@ describe('sessionGuard', () => {
 
     await app.push('/connexion?redirect=//autre-site.fr')
 
-    expect(app.currentRoute.value.name).toBe('home')
+    expect(app.currentRoute.value.name).toBe('shopping-list')
   })
 
   it('laisse le catalogue du design à tout le monde', async () => {

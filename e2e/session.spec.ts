@@ -62,7 +62,10 @@ test.describe('avec le back', () => {
     await expect(page).toHaveURL(/\/connexion/)
   })
 
-  test('un mauvais mot de passe est expliqué sans rien révéler', async ({ page }) => {
+  test('un mauvais mot de passe est expliqué sans rien révéler', async ({ page }, testInfo) => {
+    // Le back plafonne les échecs de connexion (5 par 15 minutes) : un seul projet joue ce refus.
+    // eslint-disable-next-line playwright/no-skipped-test
+    test.skip(testInfo.project.name !== 'chromium', 'jouer le refus une fois suffit')
     await page.goto('/connexion')
 
     await page.getByLabel('Adresse e-mail').fill(email)

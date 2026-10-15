@@ -27,7 +27,12 @@ export const routes: RouteRecordRaw[] = [
     path: '/',
     component: () => import('@/app/AppShell.vue'),
     children: [
-      { path: '', name: 'home', component: () => import('@/views/HomeView.vue') },
+      { path: '', name: 'home', redirect: { name: 'shopping-list' } },
+      {
+        path: 'liste',
+        name: 'shopping-list',
+        component: () => import('@/features/shopping-lists/ShoppingListView.vue'),
+      },
       { path: 'moi', name: 'account', component: () => import('@/views/AccountView.vue') },
     ],
   },

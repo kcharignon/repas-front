@@ -10,6 +10,29 @@ const RETRY_DELAY_MS = 300
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 /**
+ * Indice « une session a existé sur ce navigateur » (pas un secret, aucun jeton) : sans lui, un visiteur qui ne s'est jamais
+ * connecté ne sollicite pas `POST /api/auth/refresh` à chaque page (le back plafonne cette route par adresse IP).
+ */
+const HINT = 'repas.session'
+
+const hasHint = (): boolean => {
+  try {
+    return localStorage.getItem(HINT) === '1'
+  } catch {
+    return false
+  }
+}
+
+const setHint = (present: boolean) => {
+  try {
+    if (present) localStorage.setItem(HINT, '1')
+    else localStorage.removeItem(HINT)
+  } catch {
+    // Stockage indisponible : la session se retrouvera simplement par la connexion.
+  }
+}
+
+/**
  * Session de l'utilisateur : le jeton d'accès vit **en mémoire seulement** (jamais `localStorage`) ; au rechargement de la
  * page, le cookie `HttpOnly` de rafraîchissement en fournit un nouveau (ADR 0015 du back, ADR 0005 du front).
  */
@@ -34,6 +57,7 @@ export const useSessionStore = defineStore('session', () => {
         const { data, response } = await api.POST('/api/auth/refresh')
         if (response.ok && data?.token) {
           token.value = data.token
+          setHint(true)
 
           return token.value
         }
@@ -53,6 +77,7 @@ export const useSessionStore = defineStore('session', () => {
   function clear() {
     token.value = null
     user.value = null
+    setHint(false)
   }
 
   async function loadUser() {
@@ -62,6 +87,11 @@ export const useSessionStore = defineStore('session', () => {
   /** Au démarrage de l'application : retrouve la session grâce au cookie de rafraîchissement, une seule fois. */
   async function restore() {
     if (restored.value) return
+    if (!hasHint()) {
+      restored.value = true
+
+      return
+    }
     try {
       if ((await refresh()) !== null) await loadUser()
     } catch {
@@ -75,6 +105,7 @@ export const useSessionStore = defineStore('session', () => {
     const data = await unwrap(api.POST('/api/login_check', { body: { email, password } }))
     token.value = data.token ?? null
     await loadUser()
+    setHint(true)
     restored.value = true
   }
 
