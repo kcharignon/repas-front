@@ -14,32 +14,31 @@ Le front tourne dans Docker et se branche sur le back de développement. Pré-re
 (`repas_default`) et lui parle sur `http://php`.
 
 ```bash
-make up            # http://localhost:5173 (rechargement à chaud), /api et /images relayés vers le back
-make logs          # logs du front
-make down
+make start         # http://localhost:5173 (rechargement à chaud), /api et /images relayés vers le back
+make fixtures      # comptes et données de démonstration dans la base du back (dev seulement)
 ```
+
+Puis connexion avec **`admin@repas.fr`** (administrateur) ou **`user@repas.fr`** (8 recettes, une liste en cours et une en pause),
+mot de passe **`M0t 2 p@sse`**. `make fixtures` ne vide rien et peut être relancé ; il demande le back à jour (`make fixtures-demo` côté back).
+
+`make help` liste toutes les commandes, regroupées comme dans le back :
 
 | Commande | Rôle |
 |---|---|
-| `make check` | lint (oxlint + ESLint), format (Prettier), types (`vue-tsc`), tests : à passer avant chaque commit |
-| `make test` | tests unitaires avec seuil de couverture |
-| `make e2e` | Playwright (Chromium bureau et mobile) dans le conteneur, contre le front **et le vrai back** |
+| `make start` / `stop` / `restart` / `logs` / `status` | le front dans Docker et son lien avec le back |
+| `make check` | lint (oxlint + ESLint), format (Prettier), types (`vue-tsc`), types de l'API, tests : à passer avant chaque commit |
+| `make test` / `test-coverage` / `audit` / `outdated` / `quality` | tests, seuil de couverture, avis de sécurité, dépendances en retard, tout ce que la CI joue hors navigateurs |
+| `make e2e` | Playwright (Chromium bureau et mobile) dans le conteneur, contre le front **et le vrai back** (compte `admin@repas.fr` par défaut) |
 | `make e2e-visual` | idem avec capture, vidéo et trace de chaque test, puis rapport sur http://localhost:9323 |
 | `make prod` | image de production (Caddy : statique + relais vers le back) sur http://localhost:8081 |
-| `make api-update` | figer le contrat de l'API sur le dernier commit du back et régénérer les types (`src/api/schema.d.ts`) |
+| `make api-update` | figer le contrat de l'API sur le dernier commit du back (`ref=<sha>` pour un autre) et régénérer les types |
+| `make sh` / `make npm c="run lint"` | un shell ou une commande npm dans le conteneur |
 
-Les tests qui ouvrent une session lisent `E2E_EMAIL` et `E2E_PASSWORD` dans l'environnement (jamais dans le dépôt) :
-`E2E_EMAIL=… E2E_PASSWORD=… make e2e`. Un autre back : `REPAS_API_URL` (et `REPAS_BACK_NETWORK` pour son réseau Docker).
+Un autre compte pour les e2e : `E2E_EMAIL=… E2E_PASSWORD=… make e2e`. Un autre back : `REPAS_API_URL` (et `BACK_NETWORK` pour son réseau Docker).
 
 Sans Docker (Node 24, `.nvmrc`) : `npm ci`, `npm run dev`, `npm run check` ; le proxy vise alors `https://localhost:8443`.
 
 ## Qualité
 
-| Commande | Rôle |
-|---|---|
-| `npm run check` | (ou `make check`) lint, format, types, tests |
-| `npm run test:coverage` | tests unitaires avec seuil de couverture |
-| `npm run test:e2e` | Playwright (bureau et mobile) |
-| `npm run audit:prod` | avis de sécurité des dépendances de production |
 
 La CI (`.github/workflows/ci.yml`) rejoue tout cela ; Dependabot propose chaque lundi les mises à jour.
