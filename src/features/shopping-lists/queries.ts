@@ -220,3 +220,13 @@ export function useDeleteShoppingList() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: shoppingListKeys.all }),
   })
 }
+
+/** Le résumé de la liste active : son identifiant et les recettes qu'elle planifie (pour les boutons « Ajouter à la liste »). */
+export function useActiveSummary() {
+  const { api } = useSessionStore()
+
+  return useQuery({
+    queryKey: shoppingListKeys.activeSummary,
+    queryFn: () => unwrap(api.GET('/api/v1/shopping-lists/active/summary')),
+  })
+}

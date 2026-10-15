@@ -43,6 +43,21 @@ export const routes: RouteRecordRaw[] = [
         name: 'shopping-list-detail',
         component: () => import('@/features/shopping-lists/ShoppingListDetailView.vue'),
       },
+      {
+        path: 'recettes',
+        name: 'recipes',
+        component: () => import('@/features/recipes/RecipesView.vue'),
+      },
+      {
+        path: 'recettes/autres',
+        name: 'recipes-others',
+        component: () => import('@/features/recipes/OtherRecipesView.vue'),
+      },
+      {
+        path: 'recettes/:id',
+        name: 'recipe',
+        component: () => import('@/features/recipes/RecipeDetailView.vue'),
+      },
       { path: 'moi', name: 'account', component: () => import('@/views/AccountView.vue') },
     ],
   },
