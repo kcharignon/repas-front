@@ -18,11 +18,14 @@ OpenAPI généré (`openapi-typescript` + `openapi-fetch`), Tailwind CSS + compo
 
 ## Commandes
 
-- `make up` / `make down` / `make logs` : le front dans Docker (http://localhost:5173), relais `/api` et `/images` vers le back (`http://php`, réseau `repas_default` : le back de développement doit tourner).
-- `make check` : lint (oxlint + ESLint), format (Prettier), types (`vue-tsc`), tests. **À passer avant chaque commit.**
-- `make test` : couverture (seuil dans `vitest.config.ts`, il ne baisse jamais) ; `make e2e` : Playwright dans le conteneur contre le vrai back (`E2E_EMAIL`, `E2E_PASSWORD` pour les tests de session) ; `make e2e-visual` : captures, vidéos, rapport sur http://localhost:9323.
-- `make prod` : l'image de production (Caddy) sur http://localhost:8081 ; `make api-update [-- <ref>]` : figer le contrat sur un commit du back et régénérer les types (`api:check` dans `check`, `api:verify` en CI).
-- Sans Docker : `npm run check`, `npm run test:e2e`, `npm run audit:prod` (avis de sécurité de production).
+`make help` les liste toutes (mêmes sections que le back). Les principales :
+
+- `make start` / `stop` / `restart` / `logs` / `status` : le front dans Docker (http://localhost:5173), relais `/api` et `/images` vers le back (`http://php`, réseau `repas_default` : le back de développement doit tourner).
+- `make fixtures` : comptes et données de démonstration dans la base du back (`admin@repas.fr` administrateur, `user@repas.fr`, mot de passe `M0t 2 p@sse`), dev seulement, sans rien vider.
+- `make check` : lint (oxlint + ESLint), format (Prettier), types (`vue-tsc`), types de l'API, tests. **À passer avant chaque commit.** `make quality` ajoute l'audit et la vérification du contrat.
+- `make test-coverage` : seuil dans `vitest.config.ts`, il ne baisse jamais ; `make e2e` : Playwright dans le conteneur contre le vrai back (compte `admin@repas.fr` par défaut, `E2E_EMAIL` / `E2E_PASSWORD` pour un autre) ; `make e2e-visual` : captures, vidéos, rapport sur http://localhost:9323.
+- `make prod` : l'image de production (Caddy) sur http://localhost:8081 ; `make api-update` (`ref=<sha>`) : figer le contrat sur un commit du back et régénérer les types.
+- Sans Docker : `npm run check`, `npm run test:e2e`, `npm run audit:prod`.
 
 ## Règles
 

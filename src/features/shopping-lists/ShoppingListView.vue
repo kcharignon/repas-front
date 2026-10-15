@@ -70,7 +70,7 @@ const stepClass =
         <h1 class="font-display text-3xl leading-tight font-bold md:text-4xl">
           {{ detail.data.value.displayName }}
         </h1>
-        <p class="mt-1 text-muted">
+        <p v-if="detail.data.value.name" class="mt-1 text-muted">
           {{ t('shoppingList.dateLabel', { date: detail.data.value.dateLabel }) }}
         </p>
       </header>

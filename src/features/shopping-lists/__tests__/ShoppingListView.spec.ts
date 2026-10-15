@@ -86,6 +86,8 @@ describe('ShoppingListView', () => {
     const wrapper = await mountList()
 
     expect(wrapper.find('h1').text()).toBe('Liste du 14 octobre 2026')
+    // Sans nom saisi, le titre est déjà la date : pas de seconde ligne qui la répète
+    expect(wrapper.text().match(/Liste du 14 octobre 2026/g)).toHaveLength(1)
     expect(wrapper.find('h2').text()).toBe('Fruits et légumes')
     expect(wrapper.text()).toContain('Courgettes')
     expect(wrapper.text().replace(/\s/g, ' ')).toContain('1,6 kg')
