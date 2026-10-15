@@ -8,6 +8,8 @@ declare module 'vue-router' {
     public?: boolean
     /** Réservée aux visiteurs : un utilisateur connecté est renvoyé à l'accueil. */
     guestOnly?: boolean
+    /** Réservée aux administrateurs : les autres sont renvoyés à la liste de courses (le back refuse aussi, 403). */
+    admin?: boolean
   }
 }
 
@@ -24,6 +26,8 @@ export async function sessionGuard(to: RouteLocationNormalized): Promise<true | 
   if (!to.meta.public && !to.meta.guestOnly && !session.isAuthenticated) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
+
+  if (to.meta.admin && !session.isAdmin) return { name: 'shopping-list' }
 
   return true
 }

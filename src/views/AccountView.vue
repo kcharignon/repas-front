@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 
 import UiButton from '@/design/UiButton.vue'
 import UiChip from '@/design/UiChip.vue'
@@ -41,6 +41,14 @@ async function logout() {
         </UiChip>
       </div>
     </section>
+
+    <RouterLink
+      v-if="session.isAdmin"
+      :to="{ name: 'admin' }"
+      class="flex min-h-14 items-center rounded-2xl border border-line bg-surface px-4 text-lg font-bold hover:border-primary focus-visible:outline-2 focus-visible:outline-primary"
+    >
+      {{ t('account.administration') }}
+    </RouterLink>
 
     <div>
       <UiButton variant="secondary" @click="logout">{{ t('account.logout') }}</UiButton>
