@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 
 import { appContext, calls, json, me, stubApi } from '@/__tests__/helpers'
 import ShoppingListView from '@/features/shopping-lists/ShoppingListView.vue'
+import { useNotificationsStore } from '@/notifications/store'
 import { useSessionStore } from '@/session/session'
 
 type Row = {
@@ -30,6 +31,7 @@ const detail = (
   dateLabel: '14 octobre 2026',
   createdAt: '2026-10-14T10:00:00+02:00',
   status: 'ACTIVE',
+  version: 3,
   isActive: true,
   isPaused: false,
   isCompleted: false,
@@ -281,6 +283,11 @@ describe('ShoppingListView', () => {
           .map((request) => request.json()),
       )
       expect(bodies).toEqual([{ serving: 5 }, { serving: 3 }])
+      // La version lue (ETag) protège l'écriture contre le travail d'un autre onglet
+      const puts = fetchMock.mock.calls
+        .map(([input]) => input as Request)
+        .filter((request) => request.method === 'PUT' && request.url.endsWith('/meals/m1/serving'))
+      expect(puts.map((request) => request.headers.get('If-Match'))).toEqual(['"3"', '"3"'])
     })
 
     it('ne descend pas sous une personne', async () => {
@@ -311,6 +318,34 @@ describe('ShoppingListView', () => {
       await flushPromises()
 
       expect(calls(fetchMock)).toContain('DELETE /api/v1/shopping-lists/active/recipes/rec1')
+      const [request] = fetchMock.mock.calls
+        .map(([input]) => input as Request)
+        .filter((r) => r.method === 'DELETE')
+      expect(request?.headers.get('If-Match')).toBe('"3"')
+    })
+
+    it('dit que la liste a changé ailleurs (412) et la relit', async () => {
+      const fetchMock = backWith({
+        'PUT /api/v1/meals/m1/serving': () =>
+          json({ error: { message: 'outdated' } }, { status: 412 }),
+      })
+      const wrapper = await mountList()
+      await openRecipes(wrapper)
+
+      await wrapper
+        .find('button[aria-label="Une personne de plus pour Gratin de courgettes"]')
+        .trigger('click')
+
+      await vi.waitFor(() =>
+        expect(useNotificationsStore().items.map((item) => item.text)).toEqual([
+          "Modifié ailleurs entre-temps : la page vient d'être rechargée, refaites votre action.",
+        ]),
+      )
+      await vi.waitFor(() =>
+        expect(
+          calls(fetchMock).filter((call) => call === 'GET /api/v1/shopping-lists/list-1').length,
+        ).toBeGreaterThan(1),
+      )
     })
   })
 })

@@ -153,6 +153,9 @@
                 "operationId": "post_api_increase_ingredient",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/IfMatch"
+                    },
+                    {
                         "name": "slug",
                         "in": "path",
                         "required": true,
@@ -167,6 +170,9 @@
                     },
                     "404": {
                         "description": "Ressource inconnue"
+                    },
+                    "412": {
+                        "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
                     }
                 }
             }
@@ -991,6 +997,15 @@
                 "responses": {
                     "200": {
                         "description": "D\u00e9tail de la recette",
+                        "headers": {
+                            "ETag": {
+                                "description": "Version de la recette entre guillemets : \u00e0 renvoyer dans `If-Match` pour la modifier (ADR 0016)",
+                                "schema": {
+                                    "type": "string",
+                                    "example": "\"3\""
+                                }
+                            }
+                        },
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1011,6 +1026,9 @@
                 "summary": "Remplace une recette de l'utilisateur : nom, personnes, type et lignes (les lignes absentes du corps sont supprim\u00e9es)",
                 "operationId": "put_api_update_recipe",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/IfMatch"
+                    },
                     {
                         "name": "id",
                         "in": "path",
@@ -1042,6 +1060,9 @@
                     },
                     "422": {
                         "description": "Corps de la requ\u00eate invalide"
+                    },
+                    "412": {
+                        "description": "La version de la recette n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
                     }
                 }
             },
@@ -1052,6 +1073,9 @@
                 "summary": "Supprime une recette de l'utilisateur, avec ses lignes",
                 "operationId": "delete_api_remove_recipe",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/IfMatch"
+                    },
                     {
                         "name": "id",
                         "in": "path",
@@ -1073,6 +1097,9 @@
                     },
                     "409": {
                         "description": "La recette est pr\u00e9sente dans une liste de courses"
+                    },
+                    "412": {
+                        "description": "La version de la recette n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
                     }
                 }
             }
@@ -1172,6 +1199,15 @@
                 "responses": {
                     "200": {
                         "description": "D\u00e9tail de la liste",
+                        "headers": {
+                            "ETag": {
+                                "description": "Version de la liste entre guillemets : \u00e0 renvoyer dans `If-Match` pour la modifier (ADR 0016)",
+                                "schema": {
+                                    "type": "string",
+                                    "example": "\"3\""
+                                }
+                            }
+                        },
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1224,6 +1260,9 @@
                 "operationId": "patch_api_update_shopping_list",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/IfMatch"
+                    },
+                    {
                         "name": "id",
                         "in": "path",
                         "required": true,
@@ -1254,6 +1293,9 @@
                     },
                     "422": {
                         "description": "Corps de la requ\u00eate invalide"
+                    },
+                    "412": {
+                        "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
                     }
                 }
             }
@@ -1549,6 +1591,9 @@
                 "operationId": "put_api_plan_recipe",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/IfMatch"
+                    },
+                    {
                         "name": "recipeId",
                         "in": "path",
                         "required": true,
@@ -1563,6 +1608,9 @@
                     },
                     "404": {
                         "description": "Ressource inconnue"
+                    },
+                    "412": {
+                        "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
                     }
                 }
             },
@@ -1573,6 +1621,9 @@
                 "summary": "Retire une recette de la liste active de l'utilisateur et d\u00e9duit ses ingr\u00e9dients",
                 "operationId": "delete_api_unplan_recipe",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/IfMatch"
+                    },
                     {
                         "name": "recipeId",
                         "in": "path",
@@ -1588,6 +1639,9 @@
                     },
                     "404": {
                         "description": "Ressource inconnue"
+                    },
+                    "412": {
+                        "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
                     }
                 }
             }
@@ -1600,6 +1654,9 @@
                 "summary": "Retire 1 \u00e0 la quantit\u00e9 d'un ingr\u00e9dient dans la liste active de l'utilisateur (la ligne dispara\u00eet \u00e0 z\u00e9ro)",
                 "operationId": "post_api_decrease_ingredient",
                 "parameters": [
+                    {
+                        "$ref": "#/components/parameters/IfMatch"
+                    },
                     {
                         "name": "slug",
                         "in": "path",
@@ -1615,6 +1672,9 @@
                     },
                     "404": {
                         "description": "Ressource inconnue"
+                    },
+                    "412": {
+                        "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
                     }
                 }
             }
@@ -1718,6 +1778,9 @@
                 "operationId": "put_api_update_meal_serving",
                 "parameters": [
                     {
+                        "$ref": "#/components/parameters/IfMatch"
+                    },
+                    {
                         "name": "id",
                         "in": "path",
                         "required": true,
@@ -1748,6 +1811,9 @@
                     },
                     "422": {
                         "description": "Corps de la requ\u00eate invalide"
+                    },
+                    "412": {
+                        "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
                     }
                 }
             }
@@ -2674,7 +2740,8 @@
                     "serving",
                     "typeSlug",
                     "typeName",
-                    "rows"
+                    "rows",
+                    "version"
                 ],
                 "properties": {
                     "id": {
@@ -2706,6 +2773,11 @@
                         "items": {
                             "$ref": "#/components/schemas/RecipeRowDTO"
                         }
+                    },
+                    "version": {
+                        "description": "Version de la recette, aussi renvoy\u00e9e dans l'en-t\u00eate `ETag` : \u00e0 renvoyer dans `If-Match` pour modifier ou supprimer sans \u00e9craser le travail d'un autre",
+                        "type": "integer",
+                        "example": 3
                     }
                 },
                 "type": "object"
@@ -2851,7 +2923,8 @@
                     "rowCount",
                     "recipeCount",
                     "departments",
-                    "recipeTypes"
+                    "recipeTypes",
+                    "version"
                 ],
                 "properties": {
                     "id": {
@@ -2925,6 +2998,11 @@
                         "items": {
                             "$ref": "#/components/schemas/ShoppingListRecipeTypeDTO"
                         }
+                    },
+                    "version": {
+                        "description": "Version de la liste, aussi renvoy\u00e9e dans l'en-t\u00eate `ETag` : \u00e0 renvoyer dans `If-Match` pour modifier la liste sans \u00e9craser le travail d'un autre (cocher une ligne ne la change pas)",
+                        "type": "integer",
+                        "example": 3
                     }
                 },
                 "type": "object"
@@ -3116,6 +3194,18 @@
                     }
                 },
                 "type": "object"
+            }
+        },
+        "parameters": {
+            "IfMatch": {
+                "name": "If-Match",
+                "in": "header",
+                "description": "Version (ETag) de la ressource lue par le client, entre guillemets. Absent : pas de contr\u00f4le (la derni\u00e8re \u00e9criture gagne). Une autre version r\u00e9pond 412 (la ressource a \u00e9t\u00e9 modifi\u00e9e depuis la lecture) ; une modification simultan\u00e9e d\u00e9tect\u00e9e \u00e0 l'enregistrement r\u00e9pond 409. ADR 0016.",
+                "required": false,
+                "schema": {
+                    "type": "string",
+                    "example": "\"3\""
+                }
             }
         },
         "securitySchemes": {

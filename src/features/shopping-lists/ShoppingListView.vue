@@ -34,6 +34,7 @@ const rows = computed(
   () => detail.data.value?.departments.flatMap((department) => department.rows) ?? [],
 )
 const done = computed(() => rows.value.filter((row) => row.checked).length)
+const version = computed(() => detail.data.value?.version ?? 0)
 const meals = computed(() => detail.data.value?.recipeTypes.flatMap((type) => type.meals) ?? [])
 
 const tabClass =
@@ -170,7 +171,7 @@ const stepClass =
                     type="button"
                     :aria-label="t('shoppingList.unplan', { name: meal.recipeName })"
                     :class="stepClass"
-                    @click="unplan.mutate(meal.recipeId)"
+                    @click="unplan.mutate({ recipeId: meal.recipeId, version })"
                   >
                     <Trash2 class="size-5" aria-hidden="true" />
                   </button>
@@ -185,7 +186,13 @@ const stepClass =
                       :aria-label="t('shoppingList.fewer', { name: meal.recipeName })"
                       :disabled="meal.serving <= 1"
                       :class="stepClass"
-                      @click="changeServing.mutate({ mealId: meal.id, serving: meal.serving - 1 })"
+                      @click="
+                        changeServing.mutate({
+                          mealId: meal.id,
+                          serving: meal.serving - 1,
+                          version,
+                        })
+                      "
                     >
                       <Minus class="size-5" aria-hidden="true" />
                     </button>
@@ -196,7 +203,13 @@ const stepClass =
                       type="button"
                       :aria-label="t('shoppingList.more', { name: meal.recipeName })"
                       :class="stepClass"
-                      @click="changeServing.mutate({ mealId: meal.id, serving: meal.serving + 1 })"
+                      @click="
+                        changeServing.mutate({
+                          mealId: meal.id,
+                          serving: meal.serving + 1,
+                          version,
+                        })
+                      "
                     >
                       <Plus class="size-5" aria-hidden="true" />
                     </button>

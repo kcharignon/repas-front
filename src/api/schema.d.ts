@@ -1122,6 +1122,11 @@ export interface components {
             typeName: string;
             /** @description Ingrédients de la recette, dans l'ordre de la recette (celui de la saisie) */
             rows: components["schemas"]["RecipeRowDTO"][];
+            /**
+             * @description Version de la recette, aussi renvoyée dans l'en-tête `ETag` : à renvoyer dans `If-Match` pour modifier ou supprimer sans écraser le travail d'un autre
+             * @example 3
+             */
+            version: number;
         };
         ShoppingListRowDTO: {
             /**
@@ -1242,6 +1247,11 @@ export interface components {
             departments: components["schemas"]["ShoppingListDepartmentDTO"][];
             /** @description Recettes planifiées groupées par type (triées par ordre d'affichage) */
             recipeTypes: components["schemas"]["ShoppingListRecipeTypeDTO"][];
+            /**
+             * @description Version de la liste, aussi renvoyée dans l'en-tête `ETag` : à renvoyer dans `If-Match` pour modifier la liste sans écraser le travail d'un autre (cocher une ligne ne la change pas)
+             * @example 3
+             */
+            version: number;
         };
         CompatibleUnitDTO: {
             /**
@@ -1359,7 +1369,10 @@ export interface components {
         };
     };
     responses: never;
-    parameters: never;
+    parameters: {
+        /** @description Version (ETag) de la ressource lue par le client, entre guillemets. Absent : pas de contrôle (la dernière écriture gagne). Une autre version répond 412 (la ressource a été modifiée depuis la lecture) ; une modification simultanée détectée à l'enregistrement répond 409. ADR 0016. */
+        IfMatch: string;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -1476,7 +1489,10 @@ export interface operations {
     post_api_increase_ingredient: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Version (ETag) de la ressource lue par le client, entre guillemets. Absent : pas de contrôle (la dernière écriture gagne). Une autre version répond 412 (la ressource a été modifiée depuis la lecture) ; une modification simultanée détectée à l'enregistrement répond 409. ADR 0016. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 slug: string;
             };
@@ -1493,6 +1509,13 @@ export interface operations {
             };
             /** @description Ressource inconnue */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La version de la liste n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
+            412: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2298,6 +2321,8 @@ export interface operations {
             /** @description Détail de la recette */
             200: {
                 headers: {
+                    /** @description Version de la recette entre guillemets : à renvoyer dans `If-Match` pour la modifier (ADR 0016) */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2316,7 +2341,10 @@ export interface operations {
     put_api_update_recipe: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Version (ETag) de la ressource lue par le client, entre guillemets. Absent : pas de contrôle (la dernière écriture gagne). Une autre version répond 412 (la ressource a été modifiée depuis la lecture) ; une modification simultanée détectée à l'enregistrement répond 409. ADR 0016. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 id: string;
             };
@@ -2349,6 +2377,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description La version de la recette n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Corps de la requête invalide */
             422: {
                 headers: {
@@ -2361,7 +2396,10 @@ export interface operations {
     delete_api_remove_recipe: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Version (ETag) de la ressource lue par le client, entre guillemets. Absent : pas de contrôle (la dernière écriture gagne). Une autre version répond 412 (la ressource a été modifiée depuis la lecture) ; une modification simultanée détectée à l'enregistrement répond 409. ADR 0016. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 id: string;
             };
@@ -2392,6 +2430,13 @@ export interface operations {
             };
             /** @description La recette est présente dans une liste de courses */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La version de la recette n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
+            412: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2487,6 +2532,8 @@ export interface operations {
             /** @description Détail de la liste */
             200: {
                 headers: {
+                    /** @description Version de la liste entre guillemets : à renvoyer dans `If-Match` pour la modifier (ADR 0016) */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2546,7 +2593,10 @@ export interface operations {
     patch_api_update_shopping_list: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Version (ETag) de la ressource lue par le client, entre guillemets. Absent : pas de contrôle (la dernière écriture gagne). Une autre version répond 412 (la ressource a été modifiée depuis la lecture) ; une modification simultanée détectée à l'enregistrement répond 409. ADR 0016. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 id: string;
             };
@@ -2574,6 +2624,13 @@ export interface operations {
             };
             /** @description Ressource inconnue */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La version de la liste n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
+            412: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2824,7 +2881,10 @@ export interface operations {
     put_api_plan_recipe: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Version (ETag) de la ressource lue par le client, entre guillemets. Absent : pas de contrôle (la dernière écriture gagne). Une autre version répond 412 (la ressource a été modifiée depuis la lecture) ; une modification simultanée détectée à l'enregistrement répond 409. ADR 0016. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 recipeId: string;
             };
@@ -2846,12 +2906,22 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description La version de la liste n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     delete_api_unplan_recipe: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Version (ETag) de la ressource lue par le client, entre guillemets. Absent : pas de contrôle (la dernière écriture gagne). Une autre version répond 412 (la ressource a été modifiée depuis la lecture) ; une modification simultanée détectée à l'enregistrement répond 409. ADR 0016. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 recipeId: string;
             };
@@ -2873,12 +2943,22 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description La version de la liste n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     post_api_decrease_ingredient: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Version (ETag) de la ressource lue par le client, entre guillemets. Absent : pas de contrôle (la dernière écriture gagne). Une autre version répond 412 (la ressource a été modifiée depuis la lecture) ; une modification simultanée détectée à l'enregistrement répond 409. ADR 0016. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 slug: string;
             };
@@ -2895,6 +2975,13 @@ export interface operations {
             };
             /** @description Ressource inconnue */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La version de la liste n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
+            412: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3007,7 +3094,10 @@ export interface operations {
     put_api_update_meal_serving: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Version (ETag) de la ressource lue par le client, entre guillemets. Absent : pas de contrôle (la dernière écriture gagne). Une autre version répond 412 (la ressource a été modifiée depuis la lecture) ; une modification simultanée détectée à l'enregistrement répond 409. ADR 0016. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 id: string;
             };
@@ -3035,6 +3125,13 @@ export interface operations {
             };
             /** @description Ressource inconnue */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La version de la liste n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
+            412: {
                 headers: {
                     [name: string]: unknown;
                 };

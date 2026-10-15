@@ -1,7 +1,7 @@
 import { computed, ref, watchEffect } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
-import { unwrap } from '@/api'
+import { ifMatch, unwrap } from '@/api'
 import type { ShoppingList } from '@/api'
 import { useSessionStore } from '@/session/session'
 
@@ -100,10 +100,19 @@ export function useChangeServing() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ mealId, serving }: { mealId: string; serving: number }) =>
+    // `version` : celle de la liste affichée (ETag) ; si elle a changé ailleurs, le back répond 412 et l'écran se relit.
+    mutationFn: ({
+      mealId,
+      serving,
+      version,
+    }: {
+      mealId: string
+      serving: number
+      version: number
+    }) =>
       unwrap(
         api.PUT('/api/v1/meals/{id}/serving', {
-          params: { path: { id: mealId } },
+          params: { path: { id: mealId }, header: ifMatch(version) },
           body: { serving },
         }),
       ),
@@ -117,10 +126,10 @@ export function useUnplanRecipe() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (recipeId: string) =>
+    mutationFn: ({ recipeId, version }: { recipeId: string; version: number }) =>
       unwrap(
         api.DELETE('/api/v1/shopping-lists/active/recipes/{recipeId}', {
-          params: { path: { recipeId } },
+          params: { path: { recipeId }, header: ifMatch(version) },
         }),
       ),
     onSettled: () => queryClient.invalidateQueries({ queryKey: shoppingListKeys.all }),
