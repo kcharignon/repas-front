@@ -2,12 +2,11 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
-import { Minus, Plus } from 'lucide-vue-next'
 
 import { hasFailed } from '@/api/query'
 import UiLinkButton from '@/design/UiLinkButton.vue'
 import { useActiveSummary } from '@/features/shopping-lists/queries'
-import { formatQuantity } from '@/features/shopping-lists/format'
+import IngredientStepper from './IngredientStepper.vue'
 import { useChangeIngredientQuantity, useDepartmentIngredients, useDepartments } from './queries'
 
 const { t } = useI18n()
@@ -26,9 +25,6 @@ const items = computed(() => ingredients.data.value?.member ?? [])
 const hasActiveList = computed(() => summary.data.value?.shoppingListId != null)
 const quantityOf = (ingredientSlug: string) =>
   summary.data.value?.quantityByIngredientSlug[ingredientSlug] ?? 0
-
-const stepClass =
-  'flex size-11 cursor-pointer items-center justify-center rounded-xl text-ink hover:bg-soft focus-visible:outline-2 focus-visible:outline-primary disabled:pointer-events-none disabled:opacity-40'
 </script>
 
 <template>
@@ -75,29 +71,14 @@ const stepClass =
         >
           {{ t('ingredients.edit') }}<span class="sr-only"> {{ ingredient.name }}</span>
         </RouterLink>
-        <span class="inline-flex items-center rounded-2xl border-[1.5px] border-line">
-          <button
-            type="button"
-            :aria-label="t('ingredients.less', { name: ingredient.name })"
-            :disabled="quantityOf(ingredient.slug) <= 0 || change.isPending.value"
-            :class="stepClass"
-            @click="change.mutate({ slug: ingredient.slug, delta: -1, hasActiveList })"
-          >
-            <Minus class="size-5" aria-hidden="true" />
-          </button>
-          <span class="min-w-14 text-center text-base font-bold" aria-live="polite">{{
-            formatQuantity(quantityOf(ingredient.slug), ingredient.purchaseUnitSymbol)
-          }}</span>
-          <button
-            type="button"
-            :aria-label="t('ingredients.more', { name: ingredient.name })"
-            :disabled="change.isPending.value"
-            :class="stepClass"
-            @click="change.mutate({ slug: ingredient.slug, delta: 1, hasActiveList })"
-          >
-            <Plus class="size-5" aria-hidden="true" />
-          </button>
-        </span>
+        <IngredientStepper
+          :name="ingredient.name"
+          :quantity="quantityOf(ingredient.slug)"
+          :unit-symbol="ingredient.purchaseUnitSymbol"
+          :busy="change.isPending.value"
+          @less="change.mutate({ slug: ingredient.slug, delta: -1, hasActiveList })"
+          @more="change.mutate({ slug: ingredient.slug, delta: 1, hasActiveList })"
+        />
       </li>
     </ul>
   </main>

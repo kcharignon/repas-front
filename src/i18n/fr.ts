@@ -79,6 +79,11 @@ export default {
     title: 'Rayons',
     help: 'Ajoutez des ingrédients à votre liste de courses, rayon par rayon.',
     none: 'Aucun rayon pour le moment.',
+    search: 'Rechercher un ingrédient',
+    results: "Résultats de la recherche d'ingrédient",
+    count: '{count} résultat | {count} résultats',
+    noMatch: 'Aucun ingrédient ne ressemble à « {search} ».',
+    goTo: 'Aller au rayon {name}',
   },
   ingredients: {
     new: 'Nouvel ingrédient',

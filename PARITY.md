@@ -103,5 +103,5 @@ Mobile simulé (réseau lent, CPU x4), compte de démonstration : performance 94
 
 ## Pas encore repris (hors des routes Twig)
 
-- Pagination et recherche des listes qui grossissent (côté back aussi : roadmap).
+- Pagination des listes qui grossissent (côté back aussi : roadmap). La recherche d'ingrédient par pertinence (ADR back 0019) est faite : champ de la page des rayons, résultats avec l'icône du rayon.
 - Vérification d'e-mail à l'inscription (décision produit).
