@@ -323,6 +323,8 @@ export default {
     inBasket: 'Dans le panier',
     dish: 'Plat',
     dessert: 'Dessert',
+    starter: 'Entrée',
+    tiles: 'Types de recette',
     progressLabel: '{done} sur {total} articles dans le panier',
   },
 }

@@ -99,6 +99,28 @@ describe('RecipesView', () => {
     ).toEqual(['Entrée'])
   })
 
+  it("montre l'image de chaque type et l'écrit avec une majuscule", async () => {
+    const { wrapper } = await open({
+      'GET /api/v1/recipe-types': () =>
+        json({
+          member: [
+            { slug: 'plat', name: 'plat', image: 'images/recipe/type/meal.svg', order: 1 },
+            { slug: 'boisson', name: 'Boisson', image: 'https://exemple.test/drink.png', order: 2 },
+          ],
+          totalItems: 2,
+        }),
+    })
+    await vi.waitFor(() => expect(wrapper.findAll('[aria-pressed]').length).toBeGreaterThan(1))
+
+    const tiles = wrapper.findAll('[role="group"] button')
+
+    expect(tiles.map((tile) => tile.text())).toEqual(['Plat', 'Boisson'])
+    expect(tiles.map((tile) => tile.find('img').attributes('src'))).toEqual([
+      '/images/recipe/type/meal.svg',
+      'https://exemple.test/drink.png',
+    ])
+  })
+
   it("garde le type dans l'adresse et change de type au clic", async () => {
     const { wrapper, context } = await open({}, '/recettes?type=plat')
     await vi.waitFor(() => expect(wrapper.text()).toContain('Gratin de courgettes'))

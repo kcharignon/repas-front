@@ -5,8 +5,9 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Search } from 'lucide-vue-next'
 
 import { hasFailed } from '@/api/query'
-import UiChip from '@/design/UiChip.vue'
 import UiLinkButton from '@/design/UiLinkButton.vue'
+import UiTile from '@/design/UiTile.vue'
+import { imageUrl } from '@/features/shopping-lists/format'
 import PlanButton from './PlanButton.vue'
 import { useRecipeTypes, useRecipesByType } from './queries'
 
@@ -33,6 +34,11 @@ const shown = computed(() => {
     recipe.name.toLowerCase().includes(needle),
   )
 })
+
+// Les noms de types sont saisis librement (« plat », « Boisson ») : on les affiche tous avec une majuscule.
+function capitalized(name: string): string {
+  return name.charAt(0).toUpperCase() + name.slice(1)
+}
 
 function choose(slug: string) {
   void router.replace({ query: { ...route.query, type: slug } })
@@ -66,20 +72,24 @@ function choose(slug: string) {
       />
     </label>
 
+    <!-- Une grille et non un défilement : tous les types sont visibles, un type de plus passe à la ligne tout seul. -->
     <div
       v-if="types.data.value"
       role="group"
       :aria-label="t('recipes.types')"
-      class="flex gap-2 overflow-x-auto pb-1"
+      class="grid grid-cols-[repeat(auto-fit,minmax(3.5rem,1fr))] gap-1.5 md:grid-cols-[repeat(auto-fit,minmax(5.5rem,6.5rem))]"
     >
-      <UiChip
+      <UiTile
         v-for="type in types.data.value.member"
         :key="type.slug"
         :pressed="type.slug === current"
         @update:pressed="choose(type.slug)"
       >
-        {{ type.name }}
-      </UiChip>
+        <template #icon>
+          <img :src="imageUrl(type.image)" alt="" class="size-8 object-contain" />
+        </template>
+        {{ capitalized(type.name) }}
+      </UiTile>
     </div>
 
     <p
