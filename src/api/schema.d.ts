@@ -582,16 +582,19 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/me": {
+    "/api/v1/users/{id}/status": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Utilisateur authentifié par le token JWT */
-        get: operations["get_api_get_current_user"];
-        put?: never;
+        get?: never;
+        /**
+         * Fixe le statut d'un compte (administrateur), quel que soit l'ancien
+         * @description Un compte désactivé ne peut plus se connecter ni rien obtenir ; un compte désactivé ou en attente perd ses connexions ouvertes. Fixer le statut qu'a déjà le compte est sans effet. Le compte protégé est intouchable : seul le statut ACTIVE lui est permis (ADR 0021).
+         */
+        put: operations["put_api_change_user_status"];
         post?: never;
         delete?: never;
         options?: never;
@@ -608,6 +611,24 @@ export interface paths {
         };
         /** Un utilisateur (lui-même, ou un administrateur) ; c'est le `Location` de l'inscription */
         get: operations["get_api_get_user"];
+        put?: never;
+        post?: never;
+        /** Supprime un compte comme s'il n'avait jamais existé (administrateur) : ses listes de courses, recettes et ingrédients personnalisés sont effacés, les recettes qu'un autre en a copiées restent comme des originales. Irréversible. */
+        delete: operations["delete_api_delete_user"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Utilisateur authentifié par le token JWT */
+        get: operations["get_api_get_current_user"];
         put?: never;
         post?: never;
         delete?: never;
@@ -887,6 +908,14 @@ export interface components {
              * @example Courses du week-end
              */
             name: string | null;
+        };
+        ChangeUserStatusPayload: {
+            /**
+             * @description Nouveau statut : `PENDING` (adresse email à confirmer), `ACTIVE` ou `DISABLED`
+             * @example ACTIVE
+             * @enum {string}
+             */
+            status: "PENDING" | "ACTIVE" | "DISABLED";
         };
         RegisterNewUserPayload: {
             /**
@@ -1471,6 +1500,12 @@ export interface components {
             isDisabled: boolean;
             /** @description L'utilisateur est administrateur */
             isAdmin: boolean;
+            /**
+             * @description État du compte : `PENDING` (adresse email pas encore confirmée), `ACTIVE` ou `DISABLED`
+             * @example ACTIVE
+             * @enum {string}
+             */
+            status: "PENDING" | "ACTIVE" | "DISABLED";
         };
     };
     responses: never;
@@ -1649,7 +1684,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Ressource inconnue */
+            /** @description Aucune liste active, ou ingrédient inconnu ou personnalisé d'un autre utilisateur */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3041,7 +3076,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Ressource inconnue */
+            /** @description Aucune liste active, recette inconnue ou recette d'un autre utilisateur */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3288,23 +3323,48 @@ export interface operations {
             };
         };
     };
-    get_api_get_current_user: {
+    put_api_change_user_status: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeUserStatusPayload"];
+            };
+        };
         responses: {
-            /** @description Identité et préférences de l'utilisateur connecté */
-            200: {
+            /** @description Statut modifié */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["CurrentUserDTO"];
+                content?: never;
+            };
+            /** @description Réservé aux administrateurs */
+            403: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Utilisateur inconnu */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide, ou compte protégé (`PROTECTED_ACCOUNT`) : seul le statut `ACTIVE` lui est permis */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -3341,6 +3401,67 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    delete_api_delete_user: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Compte et données supprimés */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Réservé aux administrateurs */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Utilisateur inconnu */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description L'administrateur ne supprime pas son propre compte (`CANNOT_DELETE_OWN_ACCOUNT`), ni le compte protégé (`PROTECTED_ACCOUNT`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_api_get_current_user: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Identité et préférences de l'utilisateur connecté */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentUserDTO"];
+                };
             };
         };
     };

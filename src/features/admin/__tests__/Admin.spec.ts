@@ -2,12 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import { appContext, calls, json, me, stubApi } from '@/__tests__/helpers'
+import { appContext, bodyOf, calls, json, me, stubApi } from '@/__tests__/helpers'
 import ConversionsAdminView from '@/features/admin/ConversionsAdminView.vue'
 import DepartmentsAdminView from '@/features/admin/DepartmentsAdminView.vue'
 import RecipeTypesAdminView from '@/features/admin/RecipeTypesAdminView.vue'
 import UnitsAdminView from '@/features/admin/UnitsAdminView.vue'
 import UsersAdminView from '@/features/admin/UsersAdminView.vue'
+import { useNotificationsStore } from '@/notifications/store'
 import { routes } from '@/router'
 import { sessionGuard } from '@/session/guard'
 import { useSessionStore } from '@/session/session'
@@ -69,6 +70,7 @@ const users = {
       shoppingListCount: 1,
       createdAt: '2026-10-01T10:00:00+02:00',
       isDisabled: false,
+      status: 'ACTIVE',
       isAdmin: true,
     },
     {
@@ -80,6 +82,7 @@ const users = {
       shoppingListCount: 0,
       createdAt: '2026-09-01T10:00:00+02:00',
       isDisabled: true,
+      status: 'DISABLED',
       isAdmin: false,
     },
   ],
@@ -361,6 +364,12 @@ describe('conversions', () => {
 })
 
 describe('utilisateurs', () => {
+  const rowOf = (wrapper: ReturnType<typeof mount>, email: string) =>
+    wrapper.findAll('li').find((item) => item.text().includes(email))!
+  const statusButton = (row: ReturnType<typeof rowOf>, label: string) =>
+    row.findAll('button').find((candidate) => candidate.text() === label)!
+  const notifications = () => useNotificationsStore().items.map((item) => item.text)
+
   it('liste les utilisateurs avec leur rôle, leur état et leurs chiffres', async () => {
     const { wrapper } = await open(UsersAdminView)
     await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
@@ -372,6 +381,136 @@ describe('utilisateurs', () => {
     expect(first).toContain('2 recettes, 0 ingrédients, 1 listes')
     expect(first).toContain('inscrit le 1 octobre 2026')
     expect(second).toContain('Désactivé')
+  })
+
+  it('montre le statut de chaque compte et laisse choisir parmi les trois', async () => {
+    const { wrapper } = await open(UsersAdminView)
+    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+
+    const active = rowOf(wrapper, 'admin@repas.fr')
+    const disabled = rowOf(wrapper, 'gone@repas.fr')
+
+    expect(active.findAll('[aria-pressed]').map((button) => button.text())).toEqual([
+      'En attente',
+      'Actif',
+      'Désactivé',
+    ])
+    expect(statusButton(active, 'Actif').attributes('aria-pressed')).toBe('true')
+    expect(statusButton(active, 'Désactivé').attributes('aria-pressed')).toBe('false')
+    expect(statusButton(disabled, 'Désactivé').attributes('aria-pressed')).toBe('true')
+  })
+
+  it('fixe le statut choisi, relit la liste et le dit', async () => {
+    const { wrapper, fetchMock } = await open(UsersAdminView, {
+      'PUT /api/v1/users/u2/status': () => new Response(null, { status: 204 }),
+    })
+    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+
+    await statusButton(rowOf(wrapper, 'gone@repas.fr'), 'Actif').trigger('click')
+    await flushPromises()
+
+    const index = calls(fetchMock).indexOf('PUT /api/v1/users/u2/status')
+    expect(index).toBeGreaterThan(-1)
+    expect(await bodyOf(fetchMock, index)).toEqual({ status: 'ACTIVE' })
+    expect(calls(fetchMock).filter((call) => call === 'GET /api/v1/users')).toHaveLength(2)
+    expect(notifications()).toContain('Statut de gone@repas.fr modifié.')
+  })
+
+  it("n'appelle rien quand on choisit le statut que le compte a déjà", async () => {
+    const { wrapper, fetchMock } = await open(UsersAdminView)
+    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+
+    await statusButton(rowOf(wrapper, 'gone@repas.fr'), 'Désactivé').trigger('click')
+    await flushPromises()
+
+    expect(calls(fetchMock).filter((call) => call.startsWith('PUT'))).toEqual([])
+  })
+
+  it('explique le refus du compte protégé sans changer son statut', async () => {
+    const { wrapper } = await open(UsersAdminView, {
+      'PUT /api/v1/users/u2/status': () =>
+        json({ error: { message: 'PROTECTED_ACCOUNT' } }, { status: 422 }),
+    })
+    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+
+    await statusButton(rowOf(wrapper, 'gone@repas.fr'), 'En attente').trigger('click')
+    await flushPromises()
+
+    expect(notifications()).toContain(
+      'Ce compte est protégé : il reste actif et ne se supprime pas.',
+    )
+    expect(
+      statusButton(rowOf(wrapper, 'gone@repas.fr'), 'Désactivé').attributes('aria-pressed'),
+    ).toBe('true')
+  })
+
+  it('ne propose pas de supprimer son propre compte', async () => {
+    const { wrapper } = await open(UsersAdminView)
+    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+
+    const own = rowOf(wrapper, 'admin@repas.fr').find('button[aria-label^="Supprimer"]')
+    const other = rowOf(wrapper, 'gone@repas.fr').find('button[aria-label^="Supprimer"]')
+
+    expect(own.attributes('disabled')).toBeDefined()
+    expect(other.attributes('disabled')).toBeUndefined()
+  })
+
+  it('demande confirmation avant de supprimer, puis relit la liste', async () => {
+    const { wrapper, fetchMock } = await open(UsersAdminView, {
+      'DELETE /api/v1/users/u2': () => new Response(null, { status: 204 }),
+    })
+    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+
+    await rowOf(wrapper, 'gone@repas.fr').find('button[aria-label^="Supprimer"]').trigger('click')
+    await flushPromises()
+
+    // Rien n'est supprimé tant qu'on n'a pas confirmé, et le texte dit ce qui disparaît
+    expect(calls(fetchMock).filter((call) => call.startsWith('DELETE'))).toEqual([])
+    const dialog = document.body.querySelector('[role="dialog"]')!
+    expect(dialog.textContent).toContain('gone@repas.fr')
+    expect(dialog.textContent).toContain('irréversible')
+
+    ;[...dialog.querySelectorAll<HTMLButtonElement>('button')]
+      .find((candidate) => candidate.textContent.trim() === 'Supprimer')
+      ?.click()
+    await flushPromises()
+
+    expect(calls(fetchMock)).toContain('DELETE /api/v1/users/u2')
+    expect(calls(fetchMock).filter((call) => call === 'GET /api/v1/users')).toHaveLength(2)
+    expect(notifications()).toContain('gone@repas.fr supprimé.')
+  })
+
+  it('annuler la confirmation ne supprime rien', async () => {
+    const { wrapper, fetchMock } = await open(UsersAdminView)
+    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+
+    await rowOf(wrapper, 'gone@repas.fr').find('button[aria-label^="Supprimer"]').trigger('click')
+    await flushPromises()
+    ;[...document.body.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')]
+      .find((candidate) => candidate.textContent.trim() === 'Annuler')
+      ?.click()
+    await flushPromises()
+
+    expect(calls(fetchMock).filter((call) => call.startsWith('DELETE'))).toEqual([])
+  })
+
+  it('explique le refus de supprimer le compte protégé', async () => {
+    const { wrapper } = await open(UsersAdminView, {
+      'DELETE /api/v1/users/u2': () =>
+        json({ error: { message: 'PROTECTED_ACCOUNT' } }, { status: 422 }),
+    })
+    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+
+    await rowOf(wrapper, 'gone@repas.fr').find('button[aria-label^="Supprimer"]').trigger('click')
+    await flushPromises()
+    ;[...document.body.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')]
+      .find((candidate) => candidate.textContent.trim() === 'Supprimer')
+      ?.click()
+    await flushPromises()
+
+    expect(notifications()).toContain(
+      'Ce compte est protégé : il reste actif et ne se supprime pas.',
+    )
   })
 
   it('signale un back injoignable', async () => {

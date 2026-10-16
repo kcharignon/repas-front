@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { ApiError, unwrap } from '@/api'
+import type { UserStatus } from '@/api'
 import { ingredientKeys } from '@/features/ingredients/queries'
 import { recipeKeys } from '@/features/recipes/queries'
 import { useSessionStore } from '@/session/session'
@@ -150,5 +151,31 @@ export function useUsers() {
   return useQuery({
     queryKey: adminKeys.users,
     queryFn: () => unwrap(api.GET('/api/v1/users')),
+  })
+}
+
+/** Le statut d'un compte (administrateur) : n'importe lequel vers n'importe lequel, sauf le compte protégé (ADR 0021 du back). */
+export function useChangeUserStatus() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    meta: { silent: true },
+    mutationFn: ({ id, status }: { id: string; status: UserStatus }) =>
+      unwrap(api.PUT('/api/v1/users/{id}/status', { params: { path: { id } }, body: { status } })),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: adminKeys.users }),
+  })
+}
+
+/** Supprime un compte et tout ce qu'il possède : irréversible, le back refuse son propre compte et le compte protégé. */
+export function useDeleteUser() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    meta: { silent: true },
+    mutationFn: (id: string) =>
+      unwrap(api.DELETE('/api/v1/users/{id}', { params: { path: { id } } })),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: adminKeys.users }),
   })
 }
