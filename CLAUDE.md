@@ -30,7 +30,7 @@ OpenAPI généré (`openapi-typescript` + `openapi-fetch`), Tailwind CSS + compo
 ## Déploiement
 
 - Publier une release GitHub (`gh release create vX.Y.Z --target main --generate-notes`) construit l'image, la publie sur GHCR et lance `./deploy.sh front vX.Y.Z` sur le serveur ([ADR 0007](docs/adr/0007-deploiement-par-release.md), ADR 0017 du back). L'infrastructure (`deploy/`, bordure, sauvegardes, retour arrière) est dans le dépôt back, skill `/repas-ops`.
-- L'image de production ne contient ni nom de domaine ni secret ; ne jamais en ajouter. La politique de contenu (`docker/Caddyfile`) autorise encore `cdn-icons-png.flaticon.com` tant que les icônes locales (PR back #54) ne sont pas déployées.
+- L'image de production ne contient ni nom de domaine ni secret ; ne jamais en ajouter. La politique de contenu (`docker/Caddyfile`) n'autorise aucune image externe : toutes viennent de `/images` (icônes de rayons rapatriées, PR back #54).
 
 ## Règles
 
