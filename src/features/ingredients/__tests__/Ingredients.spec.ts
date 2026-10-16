@@ -22,6 +22,29 @@ const ingredients = {
   ],
   totalItems: 2,
 }
+const found = {
+  member: [
+    {
+      slug: 'tomate',
+      name: 'tomate',
+      purchaseUnitSymbol: 'kg',
+      canEdit: false,
+      departmentSlug: 'legumes',
+      departmentName: 'Fruits et légumes',
+      departmentImage: 'images/legumes.png',
+    },
+    {
+      slug: 'sauce-tomate',
+      name: 'sauce tomate',
+      purchaseUnitSymbol: 'g',
+      canEdit: true,
+      departmentSlug: 'epicerie',
+      departmentName: 'Épicerie',
+      departmentImage: 'https://cdn.example.com/epicerie.png',
+    },
+  ],
+  totalItems: 2,
+}
 const units = {
   member: [
     { slug: 'gramme', name: 'Gramme', symbol: 'g' },
@@ -81,6 +104,146 @@ describe('DepartmentsView', () => {
       'GET /api/v1/departments': () => json({ error: { message: 'x' } }, { status: 500 }),
     })
     const wrapper = mount(DepartmentsView, { global: { plugins: context.plugins } })
+
+    await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
+  })
+})
+
+describe('DepartmentsView : recherche', () => {
+  const search = async (handlers: Parameters<typeof stubApi>[0] = {}) => {
+    const { context, fetchMock } = await open('/rayons', {
+      'GET /api/v1/ingredients/search': () => json(found),
+      ...handlers,
+    })
+    const wrapper = mount(DepartmentsView, { global: { plugins: context.plugins } })
+    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+
+    return { wrapper, fetchMock }
+  }
+  const type = async (wrapper: Awaited<ReturnType<typeof search>>['wrapper'], text: string) => {
+    await wrapper.find('input[type="search"]').setValue(text)
+  }
+  const searchRequests = (fetchMock: ReturnType<typeof stubApi>) =>
+    fetchMock.mock.calls
+      .map(([input]) => new URL((input as Request).url))
+      .filter((url) => url.pathname === '/api/v1/ingredients/search')
+      .map((url) => url.searchParams.get('q'))
+
+  it("montre les ingrédients trouvés dans l'ordre du back, avec l'icône et le nom de leur rayon", async () => {
+    const { wrapper } = await search()
+
+    await type(wrapper, 'tomtae')
+    await vi.waitFor(() => expect(wrapper.text()).toContain('sauce tomate'))
+
+    expect(wrapper.findAll('li .font-medium').map((name) => name.text())).toEqual([
+      'tomate',
+      'sauce tomate',
+    ])
+    expect(wrapper.findAll('li img').map((image) => image.attributes('src'))).toEqual([
+      '/images/legumes.png',
+      'https://cdn.example.com/epicerie.png',
+    ])
+    expect(wrapper.findAll('li a').map((link) => link.attributes('href'))).toEqual([
+      '/rayons/legumes',
+      '/rayons/epicerie',
+    ])
+    expect(wrapper.find('a[aria-label="Aller au rayon Épicerie"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Fruits et légumes')
+    // Les rayons laissent la place aux résultats
+    expect(wrapper.find('a[href="/rayons/boucherie"]').exists()).toBe(false)
+  })
+
+  it('attend une pause dans la frappe et deux lettres avant de chercher', async () => {
+    vi.useFakeTimers()
+    try {
+      const { wrapper, fetchMock } = await search()
+
+      await type(wrapper, 't')
+      await type(wrapper, 'to')
+      await type(wrapper, 'tom')
+      await vi.advanceTimersByTimeAsync(300)
+      await flushPromises()
+
+      expect(searchRequests(fetchMock)).toEqual(['tom'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ne cherche pas avec une seule lettre et garde les rayons', async () => {
+    const { wrapper, fetchMock } = await search()
+
+    await type(wrapper, ' t ')
+    await new Promise((resolve) => setTimeout(resolve, 350))
+
+    expect(searchRequests(fetchMock)).toEqual([])
+    expect(wrapper.findAll('li a').map((link) => link.attributes('href'))).toEqual([
+      '/rayons/legumes',
+      '/rayons/boucherie',
+    ])
+  })
+
+  it('rend les rayons quand on efface la recherche', async () => {
+    const { wrapper } = await search()
+    await type(wrapper, 'tomate')
+    await vi.waitFor(() => expect(wrapper.text()).toContain('sauce tomate'))
+
+    await type(wrapper, '')
+
+    expect(wrapper.find('a[href="/rayons/boucherie"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('sauce tomate')
+  })
+
+  it('ajoute un ingrédient trouvé à la liste, comme depuis son rayon', async () => {
+    const { wrapper, fetchMock } = await search({
+      'POST /api/v1/shopping-lists/active/ingredients/tomate/increase': () =>
+        new Response(null, { status: 204 }),
+    })
+    await type(wrapper, 'tomate')
+    await vi.waitFor(() => expect(wrapper.text()).toContain('sauce tomate'))
+
+    await wrapper.find('button[aria-label="Un de plus : tomate"]').trigger('click')
+    await flushPromises()
+
+    expect(
+      calls(fetchMock).filter((call) => call.startsWith('POST /api/v1/shopping-lists')),
+    ).toEqual(['POST /api/v1/shopping-lists/active/ingredients/tomate/increase'])
+  })
+
+  it('montre la quantité déjà dans la liste', async () => {
+    const { wrapper } = await search({
+      'GET /api/v1/shopping-lists/active/summary': () => json(summary({ 'sauce-tomate': 3 })),
+    })
+    await type(wrapper, 'tomate')
+    await vi.waitFor(() => expect(wrapper.text()).toContain('sauce tomate'))
+
+    await vi.waitFor(() =>
+      expect(
+        wrapper
+          .findAll('[aria-live="polite"]')
+          .map((quantity) => quantity.text().replace(/\s/g, ' ')),
+      ).toEqual(['0 kg', '3 g']),
+    )
+  })
+
+  it("dit qu'aucun ingrédient ne ressemble à la recherche", async () => {
+    const { wrapper } = await search({
+      'GET /api/v1/ingredients/search': () => json({ member: [], totalItems: 0 }),
+    })
+
+    await type(wrapper, 'zzzz')
+
+    await vi.waitFor(() =>
+      expect(wrapper.text()).toContain('Aucun ingrédient ne ressemble à « zzzz ».'),
+    )
+  })
+
+  it('signale un back injoignable', async () => {
+    const { wrapper } = await search({
+      'GET /api/v1/ingredients/search': () => json({ error: { message: 'x' } }, { status: 500 }),
+    })
+
+    await type(wrapper, 'tomate')
 
     await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
   })

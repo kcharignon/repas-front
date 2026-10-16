@@ -61,6 +61,24 @@ test.describe('rayons et ingrédients', () => {
     await expect(page.getByRole('button', { name: 'Un de moins : sel' })).toBeDisabled()
   })
 
+  test("chercher un ingrédient, l'ajouter depuis le résultat, puis aller à son rayon", async ({
+    page,
+  }) => {
+    await signIn(page, '/rayons')
+    await page.getByRole('searchbox', { name: 'Rechercher un ingrédient' }).fill('sel')
+
+    const result = page
+      .getByRole('listitem')
+      .filter({ has: page.getByRole('button', { name: 'Un de plus : sel' }) })
+    await expect(result.getByText('Divers')).toBeVisible()
+    await result.getByRole('button', { name: 'Un de plus : sel' }).click()
+    await expect(page.getByRole('button', { name: 'Un de moins : sel' })).toBeEnabled()
+
+    await result.getByRole('link', { name: 'Aller au rayon Divers' }).click()
+    await expect(page.getByRole('heading', { level: 1, name: 'Divers' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Un de moins : sel' })).toBeEnabled()
+  })
+
   test('créer, modifier puis supprimer un ingrédient', async ({ page }) => {
     await signIn(page, '/rayons')
     await page.getByRole('link', { name: 'Divers' }).click()

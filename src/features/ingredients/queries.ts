@@ -1,5 +1,5 @@
 import { computed } from 'vue'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { ApiError, unwrap } from '@/api'
 import { shoppingListKeys } from '@/features/shopping-lists/queries'
@@ -10,6 +10,7 @@ export const ingredientKeys = {
   departments: ['departments'] as const,
   inDepartment: (slug: string) => ['departments', slug, 'ingredients'] as const,
   detail: (slug: string) => ['ingredients', 'detail', slug] as const,
+  search: (search: string) => ['ingredients', 'search', search] as const,
   units: ['units'] as const,
 }
 
@@ -32,6 +33,24 @@ export function useDepartmentIngredients(slug: () => string) {
       unwrap(
         api.GET('/api/v1/departments/{slug}/ingredients', { params: { path: { slug: slug() } } }),
       ),
+  })
+}
+
+/** En dessous, une recherche ramène trop de noms pour aider : on attend la deuxième lettre. */
+export const MIN_SEARCH_LENGTH = 2
+
+/** Ingrédients dont le nom ressemble à `search`, le plus pertinent d'abord (le back classe, fautes de frappe tolérées). */
+export function useSearchIngredients(search: () => string) {
+  const { api } = useSessionStore()
+
+  return useQuery({
+    queryKey: computed(() => ingredientKeys.search(search())),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/ingredients/search', { params: { query: { q: search() } } })),
+    enabled: computed(() => search().length >= MIN_SEARCH_LENGTH),
+    // Pendant la frappe, les résultats précédents restent affichés jusqu'à l'arrivée des suivants
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
   })
 }
 
