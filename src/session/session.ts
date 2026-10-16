@@ -154,9 +154,19 @@ export const useSessionStore = defineStore('session', () => {
     restored.value = true
   }
 
+  /** Crée le compte, en attente : le back envoie un lien de confirmation, la connexion n'est possible qu'après (ADR 0020 du back). */
   async function register(email: string, password: string, defaultServing: number) {
     await unwrap(api.POST('/api/v1/users', { body: { email, password, defaultServing } }))
-    await login(email, password)
+  }
+
+  /** Renvoie le lien de confirmation ; le back répond 204 sans dire si l'adresse a un compte en attente. */
+  async function sendEmailVerification(email: string) {
+    await unwrap(api.POST('/api/v1/users/email-verification/send', { body: { email } }))
+  }
+
+  /** Confirme l'adresse avec le secret du lien reçu : 422 si le lien est inconnu, déjà utilisé ou expiré. */
+  async function confirmEmail(token: string) {
+    await unwrap(api.POST('/api/v1/users/email-verification/confirm', { body: { token } }))
   }
 
   /** Révoque la connexion côté back (cookie compris) ; l'utilisateur est déconnecté même si le back est injoignable. */
@@ -180,6 +190,8 @@ export const useSessionStore = defineStore('session', () => {
     reloadUser,
     login,
     register,
+    sendEmailVerification,
+    confirmEmail,
     logout,
   }
 })

@@ -61,6 +61,39 @@ describe('LoginView', () => {
     expect(router.currentRoute.value.name).toBe('login')
   })
 
+  it('explique une adresse pas encore confirmée (403) et propose de renvoyer le lien', async () => {
+    stubApi({
+      'POST /api/login_check': () =>
+        json({ error: { message: 'EMAIL_NOT_VERIFIED' } }, { status: 403 }),
+    })
+    const { wrapper, router } = await mountView(LoginView, '/connexion')
+
+    await fill(wrapper, { 'input[type=email]': 'alexiane@example.com' })
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('[role="alert"]').text()).toBe(
+      "Votre adresse e-mail n'est pas encore confirmée. Ouvrez le lien reçu par e-mail pour activer votre compte.",
+    )
+    const resend = wrapper.find('a[href^="/verification-email"]')
+    expect(resend.text()).toBe('Renvoyer le lien de confirmation')
+    expect(resend.attributes('href')).toBe('/verification-email?email=alexiane@example.com')
+    expect(router.currentRoute.value.name).toBe('login')
+  })
+
+  it('ne propose pas de renvoyer le lien pour un mauvais mot de passe', async () => {
+    stubApi({
+      'POST /api/login_check': () =>
+        json({ error: { message: 'Invalid credentials.' } }, { status: 401 }),
+    })
+    const { wrapper } = await mountView(LoginView, '/connexion')
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('a[href^="/verification-email"]').exists()).toBe(false)
+  })
+
   it.each([
     [60, 'Trop de tentatives. Réessayez dans 1 minute'],
     [600, 'Trop de tentatives. Réessayez dans 10 minutes'],
@@ -105,10 +138,9 @@ describe('LoginView', () => {
 describe('RegisterView', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('inscrit avec le nombre de personnes choisi, connecte et va à la liste de courses', async () => {
+  it('inscrit avec le nombre de personnes choisi et mène à la vérification de la boîte mail', async () => {
     const fetchMock = stubApi({
       'POST /api/v1/users': () => new Response(null, { status: 201 }),
-      ...loggedIn,
     })
     const { wrapper, router } = await mountView(RegisterView, '/inscription')
 
@@ -126,7 +158,11 @@ describe('RegisterView', () => {
       password: 'un-mot-de-passe',
       defaultServing: 2,
     })
-    expect(router.currentRoute.value.name).toBe('shopping-list')
+    // Pas de connexion : le compte attend la confirmation de l'adresse
+    expect(calls(fetchMock)).toEqual(['POST /api/v1/users'])
+    // Les routes sont chargées en différé : on attend l'arrivée
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('check-email'))
+    expect(router.currentRoute.value.query.email).toBe('alexiane@example.com')
   })
 
   it('explique un e-mail déjà pris (409)', async () => {

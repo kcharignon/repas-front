@@ -1,7 +1,12 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
-for (const path of ['/connexion', '/inscription']) {
+for (const path of [
+  '/connexion',
+  '/inscription',
+  '/verification-email?email=a%40example.com',
+  '/confirmation-email',
+]) {
   for (const colorScheme of ['light', 'dark'] as const) {
     test(`${path} est accessible (WCAG AA), thème ${colorScheme}`, async ({ page }) => {
       await page.emulateMedia({ colorScheme })

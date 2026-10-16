@@ -31,6 +31,18 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/views/RegisterView.vue'),
     meta: { guestOnly: true },
   },
+  {
+    path: '/verification-email',
+    name: 'check-email',
+    component: () => import('@/views/CheckEmailView.vue'),
+    meta: { guestOnly: true },
+  },
+  {
+    path: '/confirmation-email',
+    name: 'confirm-email',
+    component: () => import('@/views/ConfirmEmailView.vue'),
+    meta: { public: true },
+  },
   ...catalog,
   ...legacyRoutes,
   {
