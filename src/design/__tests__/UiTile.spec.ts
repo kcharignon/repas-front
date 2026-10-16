@@ -22,13 +22,12 @@ describe('UiTile', () => {
     expect(wrapper.text()).toBe('Plat')
   })
 
-  it('une tuile activée se distingue autrement que par sa couleur : coche, bordure et graisse', () => {
+  it('une tuile activée se distingue autrement que par sa couleur : le nom passe en gras', () => {
     const off = mount(UiTile, { props: { pressed: false }, slots: { default: 'Plat' } })
     const on = mount(UiTile, { props: { pressed: true }, slots: { default: 'Plat' } })
 
-    expect(off.find('svg').exists()).toBe(false)
-    expect(on.find('svg').exists()).toBe(true)
-    expect(on.classes()).toContain('border-primary')
+    expect(off.classes()).toContain('font-semibold')
     expect(on.classes()).toContain('font-bold')
+    expect(on.classes()).toContain('border-primary')
   })
 })
