@@ -66,7 +66,7 @@ avec axe (WCAG AA, clair et sombre) pour les pages. État : ✅ fait et testé �
 | `/admin/department`, `/create`, `/{slug}/update` | `/admin/rayons` | U | ✅ |
 | `/admin/recipe-type`, `/create`, `/{id}/update` | `/admin/types-de-recette` | U | ✅ |
 | `/admin/conversion`, `/create`, `/{id}/update` | `/admin/conversions` | U, E (axe) | ✅ |
-| `GET /admin/user` | `/admin/utilisateurs` | U, E | ✅ |
+| `GET /admin/user` | `/admin/utilisateurs` : liste, statut libre (en attente, actif, désactivé), suppression avec confirmation (nouveauté, ADR 0021 du back) | U, E | ✅ |
 
 `POST /unit` (`view_unit_add`) est un contrôleur vide (`TODO`) dans le Twig : rien à reprendre.
 

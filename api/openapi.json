@@ -218,7 +218,7 @@
                         "description": "Quantit\u00e9 augment\u00e9e"
                     },
                     "404": {
-                        "description": "Ressource inconnue"
+                        "description": "Aucune liste active, ou ingr\u00e9dient inconnu ou personnalis\u00e9 d'un autre utilisateur"
                     },
                     "412": {
                         "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
@@ -1656,7 +1656,7 @@
                         "description": "Recette planifi\u00e9e"
                     },
                     "404": {
-                        "description": "Ressource inconnue"
+                        "description": "Aucune liste active, recette inconnue ou recette d'un autre utilisateur"
                     },
                     "412": {
                         "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
@@ -1867,23 +1867,46 @@
                 }
             }
         },
-        "/api/v1/me": {
-            "get": {
+        "/api/v1/users/{id}/status": {
+            "put": {
                 "tags": [
-                    "Current user"
+                    "Users"
                 ],
-                "summary": "Utilisateur authentifi\u00e9 par le token JWT",
-                "operationId": "get_api_get_current_user",
-                "responses": {
-                    "200": {
-                        "description": "Identit\u00e9 et pr\u00e9f\u00e9rences de l'utilisateur connect\u00e9",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/CurrentUserDTO"
-                                }
+                "summary": "Fixe le statut d'un compte (administrateur), quel que soit l'ancien",
+                "description": "Un compte d\u00e9sactiv\u00e9 ne peut plus se connecter ni rien obtenir ; un compte d\u00e9sactiv\u00e9 ou en attente perd ses connexions ouvertes. Fixer le statut qu'a d\u00e9j\u00e0 le compte est sans effet. Le compte prot\u00e9g\u00e9 est intouchable : seul le statut ACTIVE lui est permis (ADR 0021).",
+                "operationId": "put_api_change_user_status",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ChangeUserStatusPayload"
                             }
                         }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Statut modifi\u00e9"
+                    },
+                    "403": {
+                        "description": "R\u00e9serv\u00e9 aux administrateurs"
+                    },
+                    "404": {
+                        "description": "Utilisateur inconnu"
+                    },
+                    "422": {
+                        "description": "Corps invalide, ou compte prot\u00e9g\u00e9 (`PROTECTED_ACCOUNT`) : seul le statut `ACTIVE` lui est permis"
                     }
                 }
             }
@@ -1921,6 +1944,58 @@
                     },
                     "404": {
                         "description": "Inconnu"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Supprime un compte comme s'il n'avait jamais exist\u00e9 (administrateur) : ses listes de courses, recettes et ingr\u00e9dients personnalis\u00e9s sont effac\u00e9s, les recettes qu'un autre en a copi\u00e9es restent comme des originales. Irr\u00e9versible.",
+                "operationId": "delete_api_delete_user",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Compte et donn\u00e9es supprim\u00e9s"
+                    },
+                    "403": {
+                        "description": "R\u00e9serv\u00e9 aux administrateurs"
+                    },
+                    "404": {
+                        "description": "Utilisateur inconnu"
+                    },
+                    "422": {
+                        "description": "L'administrateur ne supprime pas son propre compte (`CANNOT_DELETE_OWN_ACCOUNT`), ni le compte prot\u00e9g\u00e9 (`PROTECTED_ACCOUNT`)"
+                    }
+                }
+            }
+        },
+        "/api/v1/me": {
+            "get": {
+                "tags": [
+                    "Current user"
+                ],
+                "summary": "Utilisateur authentifi\u00e9 par le token JWT",
+                "operationId": "get_api_get_current_user",
+                "responses": {
+                    "200": {
+                        "description": "Identit\u00e9 et pr\u00e9f\u00e9rences de l'utilisateur connect\u00e9",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CurrentUserDTO"
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -2420,6 +2495,24 @@
                         "maxLength": 255,
                         "example": "Courses du week-end",
                         "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "ChangeUserStatusPayload": {
+                "required": [
+                    "status"
+                ],
+                "properties": {
+                    "status": {
+                        "description": "Nouveau statut : `PENDING` (adresse email \u00e0 confirmer), `ACTIVE` ou `DISABLED`",
+                        "type": "string",
+                        "enum": [
+                            "PENDING",
+                            "ACTIVE",
+                            "DISABLED"
+                        ],
+                        "example": "ACTIVE"
                     }
                 },
                 "type": "object"
@@ -3347,7 +3440,8 @@
                     "shoppingListCount",
                     "createdAt",
                     "isDisabled",
-                    "isAdmin"
+                    "isAdmin",
+                    "status"
                 ],
                 "properties": {
                     "id": {
@@ -3391,6 +3485,16 @@
                     "isAdmin": {
                         "description": "L'utilisateur est administrateur",
                         "type": "boolean"
+                    },
+                    "status": {
+                        "description": "\u00c9tat du compte : `PENDING` (adresse email pas encore confirm\u00e9e), `ACTIVE` ou `DISABLED`",
+                        "type": "string",
+                        "enum": [
+                            "PENDING",
+                            "ACTIVE",
+                            "DISABLED"
+                        ],
+                        "example": "ACTIVE"
                     }
                 },
                 "type": "object"
@@ -3447,10 +3551,10 @@
             "name": "Units"
         },
         {
-            "name": "Current user"
+            "name": "Users"
         },
         {
-            "name": "Users"
+            "name": "Current user"
         },
         {
             "name": "Auth"

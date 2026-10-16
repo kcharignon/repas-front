@@ -64,7 +64,18 @@ export default {
     allIngredients: 'Tous les ingrédients',
     conversionLine: '1 {start} = {coefficient} {end}',
     administrator: 'Administrateur',
-    disabled: 'Désactivé',
+    status: {
+      PENDING: 'En attente',
+      ACTIVE: 'Actif',
+      DISABLED: 'Désactivé',
+    },
+    statusOf: 'Statut de {email}',
+    statusChanged: 'Statut de {email} modifié.',
+    userDeleted: '{email} supprimé.',
+    deleteNamed: 'Supprimer {email}',
+    deleteUserTitle: 'Supprimer ce compte ?',
+    deleteUserHelp:
+      'Le compte {email} disparaît avec ses listes de courses, ses recettes et ses ingrédients personnalisés, comme s’il n’avait jamais existé. Les recettes qu’un autre utilisateur en a copiées restent. Cette action est irréversible.',
     userStats: '{recipes} recettes, {ingredients} ingrédients, {lists} listes',
     since: 'inscrit le {date}',
     errors: {
@@ -73,6 +84,8 @@ export default {
       order: 'Indiquez un ordre.',
       sameUnit: 'Choisissez deux unités différentes.',
       coefficient: 'Entrez un nombre supérieur à zéro.',
+      protectedAccount: 'Ce compte est protégé : il reste actif et ne se supprime pas.',
+      ownAccount: 'Vous ne pouvez pas supprimer votre propre compte.',
     },
   },
   departments: {
@@ -108,6 +121,8 @@ export default {
     errors: {
       name: "Donnez un nom à l'ingrédient.",
       coefficient: 'Entrez un nombre supérieur à zéro.',
+      protectedAccount: 'Ce compte est protégé : il reste actif et ne se supprime pas.',
+      ownAccount: 'Vous ne pouvez pas supprimer votre propre compte.',
     },
   },
   recipes: {

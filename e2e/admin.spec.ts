@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from '@playwright/test'
+import { expect, test, type APIRequestContext } from '@playwright/test'
 
-import { apiToken, hasSession, signIn } from './support/session'
+import { apiToken, email, hasSession, signIn } from './support/session'
 
 // Administration (réservée aux administrateurs) contre le VRAI back. Les unités, rayons et types ne se suppriment pas :
 // le test modifie une unité existante puis la remet dans son état de départ, il n'en crée pas.
@@ -59,6 +59,50 @@ test.describe('administration', () => {
     await expect(page.getByText('user@repas.fr', { exact: true })).toBeVisible()
   })
 
+  test("l'administrateur désactive puis réactive un compte, et la suppression demande confirmation", async ({
+    page,
+    request,
+  }) => {
+    const demo = 'user@repas.fr'
+    const row = () => page.getByRole('listitem').filter({ hasText: demo })
+    const status = (label: string) => row().getByRole('button', { name: label, exact: true })
+    try {
+      await signIn(page, '/admin/utilisateurs')
+      await expect(row()).toBeVisible()
+      await expect(status('Actif')).toHaveAttribute('aria-pressed', 'true')
+
+      await status('Désactivé').click()
+
+      await expect(status('Désactivé')).toHaveAttribute('aria-pressed', 'true')
+      await expect(row().getByText('Désactivé', { exact: true })).toHaveCount(2)
+      await expect(
+        page.getByRole('status').filter({ hasText: `Statut de ${demo} modifié.` }),
+      ).toBeVisible()
+
+      await status('Actif').click()
+
+      await expect(status('Actif')).toHaveAttribute('aria-pressed', 'true')
+
+      // La suppression est irréversible : on voit la confirmation, on annule, rien n'est supprimé
+      await row()
+        .getByRole('button', { name: `Supprimer ${demo}` })
+        .click()
+      await expect(page.getByRole('dialog')).toContainText('irréversible')
+      await page.getByRole('button', { name: 'Annuler' }).click()
+      await expect(page.getByRole('dialog')).toHaveCount(0)
+      await expect(row()).toBeVisible()
+    } finally {
+      // Le compte de démonstration doit rester actif pour les autres scénarios
+      await activateAccount(request, token, demo)
+    }
+  })
+
+  test("l'administrateur ne peut pas supprimer son propre compte", async ({ page }) => {
+    await signIn(page, '/admin/utilisateurs')
+
+    await expect(page.getByRole('button', { name: `Supprimer ${email}` })).toBeDisabled()
+  })
+
   test("un utilisateur ordinaire n'accède pas à l'administration", async ({ page }) => {
     // Compte de démonstration ordinaire (`make fixtures`)
     await page.goto('/connexion')
@@ -94,3 +138,17 @@ test.describe('administration', () => {
     })
   }
 })
+
+/** Remet un compte au statut actif par l'API (nettoyage : le test, lui, passe par l'interface). */
+async function activateAccount(request: APIRequestContext, token: string, accountEmail: string) {
+  const headers = { Authorization: `Bearer ${token}` }
+  const users = (await (await request.get('/api/v1/users', { headers })).json()) as {
+    member: { id: string; email: string }[]
+  }
+  const account = users.member.find((candidate) => candidate.email === accountEmail)
+  if (account !== undefined)
+    await request.put(`/api/v1/users/${account.id}/status`, {
+      headers,
+      data: { status: 'ACTIVE' },
+    })
+}
