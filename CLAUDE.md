@@ -27,6 +27,11 @@ OpenAPI généré (`openapi-typescript` + `openapi-fetch`), Tailwind CSS + compo
 - `make prod` : l'image de production (Caddy) sur http://localhost:8081 ; `make api-update` (`ref=<sha>`) : figer le contrat sur un commit du back et régénérer les types.
 - Sans Docker : `npm run check`, `npm run test:e2e`, `npm run audit:prod`.
 
+## Déploiement
+
+- Publier une release GitHub (`gh release create vX.Y.Z --target main --generate-notes`) construit l'image, la publie sur GHCR et lance `./deploy.sh front vX.Y.Z` sur le serveur ([ADR 0007](docs/adr/0007-deploiement-par-release.md), ADR 0017 du back). L'infrastructure (`deploy/`, bordure, sauvegardes, retour arrière) est dans le dépôt back, skill `/repas-ops`.
+- L'image de production ne contient ni nom de domaine ni secret ; ne jamais en ajouter. La politique de contenu (`docker/Caddyfile`) autorise encore `cdn-icons-png.flaticon.com` tant que les icônes locales (PR back #54) ne sont pas déployées.
+
 ## Règles
 
 - **Pas de bruit** : un `console.warn` / `console.error` pendant un test fait échouer le test (`src/__tests__/setup.ts`).
