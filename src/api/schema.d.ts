@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingredients/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recherche d'ingrédients par nom, du plus pertinent au moins pertinent, avec leur rayon : communs et ceux de l'utilisateur authentifié */
+        get: operations["get_api_search_ingredients"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -678,6 +695,9 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        SearchIngredientsRequestQuery: {
+            q: string;
+        };
         ConversionPayload: {
             /**
              * @description Slug de l'unité de départ
@@ -863,6 +883,37 @@ export interface components {
              * @example un-mot-de-passe
              */
             actualPassword: string | null;
+        };
+        IngredientSearchResultDTO: {
+            /**
+             * @description Identifiant de l'ingrédient (slug)
+             * @example oeuf
+             */
+            slug: string;
+            /** @example œuf */
+            name: string;
+            /**
+             * @description Symbole de l'unité d'achat (peut être vide)
+             * @example g
+             */
+            purchaseUnitSymbol: string;
+            /** @description L'utilisateur peut modifier cet ingrédient : le sien, ou un ingrédient commun s'il est administrateur */
+            canEdit: boolean;
+            /**
+             * @description Identifiant du rayon de l'ingrédient (slug)
+             * @example cremerie
+             */
+            departmentSlug: string;
+            /**
+             * @description Nom du rayon de l'ingrédient
+             * @example Crèmerie
+             */
+            departmentName: string;
+            /**
+             * @description Chemin ou URL de l'image du rayon de l'ingrédient
+             * @example images/department/cremerie.png
+             */
+            departmentImage: string;
         };
         ConversionDTO: {
             /**
@@ -1426,6 +1477,43 @@ export interface operations {
                         };
                     };
                 };
+            };
+        };
+    };
+    get_api_search_ingredients: {
+        parameters: {
+            query: {
+                /**
+                 * @description Texte recherché, 100 caractères au plus ; ni la casse ni les accents ne comptent et une faute de frappe est tolérée (Jaro-Winkler)
+                 * @example tomtae
+                 */
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ingrédients trouvés (30 au plus), le plus pertinent d'abord */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        member?: components["schemas"]["IngredientSearchResultDTO"][];
+                        /** @example 3 */
+                        totalItems?: number;
+                    };
+                };
+            };
+            /** @description Paramètre `q` absent, vide ou trop long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

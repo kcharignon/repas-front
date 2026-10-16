@@ -87,6 +87,55 @@
                 "security": []
             }
         },
+        "/api/v1/ingredients/search": {
+            "get": {
+                "tags": [
+                    "Ingredients"
+                ],
+                "summary": "Recherche d'ingr\u00e9dients par nom, du plus pertinent au moins pertinent, avec leur rayon : communs et ceux de l'utilisateur authentifi\u00e9",
+                "operationId": "get_api_search_ingredients",
+                "parameters": [
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "description": "Texte recherch\u00e9, 100 caract\u00e8res au plus ; ni la casse ni les accents ne comptent et une faute de frappe est tol\u00e9r\u00e9e (Jaro-Winkler)",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 100
+                        },
+                        "example": "tomtae"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Ingr\u00e9dients trouv\u00e9s (30 au plus), le plus pertinent d'abord",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "member": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/IngredientSearchResultDTO"
+                                            }
+                                        },
+                                        "totalItems": {
+                                            "type": "integer",
+                                            "example": 3
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Param\u00e8tre `q` absent, vide ou trop long"
+                    }
+                }
+            }
+        },
         "/api/v1/health": {
             "get": {
                 "tags": [
@@ -2045,6 +2094,18 @@
     },
     "components": {
         "schemas": {
+            "SearchIngredientsRequestQuery": {
+                "required": [
+                    "q"
+                ],
+                "properties": {
+                    "q": {
+                        "type": "string",
+                        "maxLength": 100
+                    }
+                },
+                "type": "object"
+            },
             "ConversionPayload": {
                 "required": [
                     "startUnitSlug",
@@ -2357,6 +2418,53 @@
                         "maxLength": 4096,
                         "example": "un-mot-de-passe",
                         "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "IngredientSearchResultDTO": {
+                "required": [
+                    "slug",
+                    "name",
+                    "purchaseUnitSymbol",
+                    "canEdit",
+                    "departmentSlug",
+                    "departmentName",
+                    "departmentImage"
+                ],
+                "properties": {
+                    "slug": {
+                        "description": "Identifiant de l'ingr\u00e9dient (slug)",
+                        "type": "string",
+                        "example": "oeuf"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "\u0153uf"
+                    },
+                    "purchaseUnitSymbol": {
+                        "description": "Symbole de l'unit\u00e9 d'achat (peut \u00eatre vide)",
+                        "type": "string",
+                        "example": "g"
+                    },
+                    "canEdit": {
+                        "description": "L'utilisateur peut modifier cet ingr\u00e9dient : le sien, ou un ingr\u00e9dient commun s'il est administrateur",
+                        "type": "boolean"
+                    },
+                    "departmentSlug": {
+                        "description": "Identifiant du rayon de l'ingr\u00e9dient (slug)",
+                        "type": "string",
+                        "example": "cremerie"
+                    },
+                    "departmentName": {
+                        "description": "Nom du rayon de l'ingr\u00e9dient",
+                        "type": "string",
+                        "example": "Cr\u00e8merie"
+                    },
+                    "departmentImage": {
+                        "description": "Chemin ou URL de l'image du rayon de l'ingr\u00e9dient",
+                        "type": "string",
+                        "example": "images/department/cremerie.png"
                     }
                 },
                 "type": "object"
@@ -3223,6 +3331,9 @@
     ],
     "tags": [
         {
+            "name": "Ingredients"
+        },
+        {
             "name": "Health"
         },
         {
@@ -3236,9 +3347,6 @@
         },
         {
             "name": "Departments"
-        },
-        {
-            "name": "Ingredients"
         },
         {
             "name": "Recipe types"
