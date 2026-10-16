@@ -46,6 +46,11 @@ export default defineConfig({
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/images\//],
         cleanupOutdatedCaches: true,
+        // Une nouvelle version s'active tout de suite et prend la main sur les pages ouvertes, puis l'application se recharge
+        // (`registerType: 'autoUpdate'`). Sans cela elle attendait que l'application soit fermée : le téléphone la garde ouverte
+        // en arrière-plan et montrait l'ancienne version. Le plugin ne les règle seul qu'avec `injectRegister` à `auto` ou `null`.
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/images/'),

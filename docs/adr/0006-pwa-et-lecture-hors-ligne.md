@@ -34,6 +34,13 @@ résolution de conflits avec `If-Match`) est un autre chantier, hors périmètre
    (`hasFailed`). Vrai aussi en ligne (back en panne au retour de focus).
 7. **Tests** : unitaires (persistance, session sans réseau, bandeau, client de requêtes) ; `make e2e-offline` joue le scénario réel (coupure du
    réseau avec Chromium) contre **l'image de production**, seule où le service worker existe ; les autres e2e bloquent les service workers.
+8. **Une nouvelle version recharge l'application seule** (2026-10-16) : `skipWaiting` et `clientsClaim` sont réglés à la main dans
+   `vite.config.ts` (`vite-plugin-pwa` ne les règle pas seul avec `injectRegister: false`) : sans eux, la nouvelle version attendait que
+   toutes les fenêtres soient fermées, et un téléphone qui garde l'application ouverte en arrière-plan restait sur l'ancienne. Le
+   navigateur ne cherche une version qu'à l'ouverture d'une page : `src/pwaUpdate.ts` la cherche aussi au retour au premier plan (au
+   plus une fois par minute) et toutes les heures. Une version trouvée s'active, prend la main et la page se recharge une fois
+   (`registerType: 'autoUpdate'`). Un formulaire en cours de saisie à ce moment-là est perdu : les versions sont rares (quelques-unes
+   par semaine) ; le rechargement automatique est une demande de l'utilisateur.
 
 ## Conséquences
 
