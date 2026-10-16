@@ -13,12 +13,12 @@
 3. **Un seul rafraîchissement à la fois** : dix requêtes en `401` simultanées n'en déclenchent qu'un, puis sont rejouées une fois
    (`createAuthFetch`, ADR 0002). Un refresh en `401` est retenté **une fois** après 300 ms (course entre onglets, ADR 0015 §5 du back),
    puis la session est perdue.
-4. **Connexion, inscription, déconnexion** : `login` (`POST /api/login_check`), `register` (`POST /api/v1/users` puis `login`), `logout`
+4. **Connexion, inscription, déconnexion** : `login` (`POST /api/login_check`), `register` (`POST /api/v1/users` seul : le compte attend la confirmation de son adresse, pas de session), `sendEmailVerification` et `confirmEmail` (routes publiques de confirmation d'adresse, ADR 0020 du back), `logout`
    (`POST /api/auth/logout`, le jeton est oublié même si le back est injoignable).
 5. **Garde de routes** (`sessionGuard`) : une route est protégée par défaut ; `meta.public` l'ouvre à tous (catalogue du design),
    `meta.guestOnly` la réserve aux visiteurs (connexion, inscription). Un anonyme est renvoyé à `/connexion?redirect=<page voulue>` ; la
    redirection n'accepte qu'un chemin du site (`safeRedirect` refuse `//autre-site`, `https://…`).
-6. **Messages d'erreur** : `401` « Identifiants invalides. » (le back ne dit pas pourquoi), `429` avec le délai de `Retry-After`, `409`
+6. **Messages d'erreur** : `401` « Identifiants invalides. » (le back ne dit pas pourquoi), `403 EMAIL_NOT_VERIFIED` « adresse pas encore confirmée » avec un lien vers `/verification-email`, `429` avec le délai de `Retry-After`, `409`
    e-mail déjà pris, `422` le message de validation du back tel quel, réseau « Le serveur est injoignable ».
 7. **Tests** : un faux back (`stubApi`) remplace `fetch`, un appel non prévu fait échouer le test ; la suite de bout en bout joue la vraie
    connexion contre le vrai back (`make e2e`, identifiants par l'environnement).

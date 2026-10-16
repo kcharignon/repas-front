@@ -20,8 +20,14 @@ const email = ref('')
 const password = ref('')
 const error = ref<string | null>(null)
 const pending = ref(false)
+/** Mot de passe bon, adresse pas encore confirmée : le back répond 403 `EMAIL_NOT_VERIFIED` (ADR 0020 du back). */
+const unverified = ref(false)
+
+const isUnverified = (failure: unknown): boolean =>
+  failure instanceof ApiError && failure.status === 403 && failure.message === 'EMAIL_NOT_VERIFIED'
 
 function messageFor(failure: unknown): string {
+  if (isUnverified(failure)) return t('login.emailNotVerified')
   if (failure instanceof ApiError && failure.status === 401) return t('login.invalid')
   if (failure instanceof ApiError && failure.status === 429) {
     const minutes = Math.max(1, Math.ceil((failure.retryAfter ?? 60) / 60))
@@ -34,11 +40,13 @@ function messageFor(failure: unknown): string {
 
 async function submit() {
   error.value = null
+  unverified.value = false
   pending.value = true
   try {
     await session.login(email.value, password.value)
     await router.push(safeRedirect(route.query.redirect))
   } catch (failure) {
+    unverified.value = isUnverified(failure)
     error.value = messageFor(failure)
   } finally {
     pending.value = false
@@ -68,6 +76,12 @@ async function submit() {
       >
         {{ error }}
       </p>
+      <RouterLink
+        v-if="unverified"
+        :to="{ name: 'check-email', query: { email } }"
+        class="font-bold text-primary underline"
+        >{{ t('login.resendLink') }}</RouterLink
+      >
       <UiButton type="submit" size="lg" :disabled="pending">{{ t('login.submit') }}</UiButton>
     </form>
     <p class="text-center text-muted">

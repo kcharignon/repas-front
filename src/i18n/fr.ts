@@ -230,6 +230,33 @@ export default {
       'Trop de tentatives. Réessayez dans {minutes} minute | Trop de tentatives. Réessayez dans {minutes} minutes',
     noAccount: 'Pas encore de compte ?',
     createAccount: 'Créer un compte',
+    emailNotVerified:
+      "Votre adresse e-mail n'est pas encore confirmée. Ouvrez le lien reçu par e-mail pour activer votre compte.",
+    resendLink: 'Renvoyer le lien de confirmation',
+  },
+  checkEmail: {
+    title: 'Vérifiez votre boîte mail',
+    sent: 'Un lien de confirmation a été envoyé à {email}. Ouvrez-le pour activer votre compte.',
+    askAddress:
+      "Saisissez l'adresse de votre compte pour recevoir un nouveau lien de confirmation.",
+    spam: 'Rien reçu ? Regardez dans vos courriers indésirables, puis demandez un nouveau lien.',
+    resend: 'Renvoyer le lien',
+    resendIn: 'Renvoyer le lien dans {seconds} s',
+    resent: "Si un compte attend cette adresse, un nouveau lien vient d'être envoyé.",
+    tooMany: 'Trop de demandes. Réessayez plus tard.',
+    invalidEmail: "Cette adresse e-mail n'est pas valide.",
+    signIn: 'Retour à la connexion',
+  },
+  confirmEmail: {
+    title: "Confirmation de l'adresse",
+    confirming: 'Confirmation en cours…',
+    done: 'Votre adresse est confirmée : votre compte est activé.',
+    signIn: 'Se connecter',
+    invalid: "Ce lien n'est plus valable : il a déjà servi ou il a expiré.",
+    invalidHelp:
+      'Si votre adresse est déjà confirmée, connectez-vous. Sinon, demandez un nouveau lien.',
+    newLink: 'Recevoir un nouveau lien',
+    retry: 'Réessayer',
   },
   register: {
     title: 'Créer un compte',

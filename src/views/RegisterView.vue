@@ -34,7 +34,8 @@ async function submit() {
   pending.value = true
   try {
     await session.register(email.value, password.value, Number(serving.value))
-    await router.push({ name: 'home' })
+    // Le compte attend la confirmation de l'adresse : le back vient d'envoyer le lien (ADR 0020 du back)
+    await router.push({ name: 'check-email', query: { email: email.value } })
   } catch (failure) {
     error.value = messageFor(failure)
   } finally {

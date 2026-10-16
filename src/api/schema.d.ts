@@ -674,6 +674,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/email-verification/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Renvoie le lien de confirmation d'adresse email d'un compte en attente (route publique)
+         * @description Répond 204 que l'adresse ait un compte en attente ou non (compte inconnu, déjà confirmé, désactivé, ou lien envoyé il y a moins d'une minute) : la réponse ne révèle pas quelles adresses sont inscrites (ADR 0020).
+         */
+        post: operations["post_api_send_email_verification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/settings": {
         parameters: {
             query?: never;
@@ -685,6 +705,26 @@ export interface paths {
         /** Remplace les réglages de l'utilisateur connecté (nombre de personnes, mot de passe) */
         put: operations["put_api_update_user_settings"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/email-verification/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirme l'adresse email d'un compte par le lien reçu : le compte devient actif (route publique)
+         * @description Le lien est à usage unique et valable 24 heures. Le compte peut ensuite se connecter par /api/login_check (ADR 0020).
+         */
+        post: operations["post_api_verify_email"];
         delete?: never;
         options?: never;
         head?: never;
@@ -865,6 +905,13 @@ export interface components {
              */
             defaultServing: number;
         };
+        SendEmailVerificationPayload: {
+            /**
+             * @description Adresse email du compte en attente
+             * @example alexiane@example.com
+             */
+            email: string;
+        };
         UserSettingsPayload: {
             /**
              * @description Nombre de personnes proposé par défaut pour une recette
@@ -883,6 +930,13 @@ export interface components {
              * @example un-mot-de-passe
              */
             actualPassword: string | null;
+        };
+        VerifyEmailPayload: {
+            /**
+             * @description Secret du lien reçu par email (paramètre `token` de l'adresse du lien)
+             * @example 3f9c0a5e7d1b4c6a8e2f0b9d7c5a3e1f3f9c0a5e7d1b4c6a8e2f0b9d7c5a3e1f
+             */
+            token: string;
         };
         IngredientSearchResultDTO: {
             /**
@@ -3417,6 +3471,42 @@ export interface operations {
             };
         };
     };
+    post_api_send_email_verification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendEmailVerificationPayload"];
+            };
+        };
+        responses: {
+            /** @description Demande prise en compte */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps de la requête invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Trop de demandes depuis cette adresse IP */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     put_api_update_user_settings: {
         parameters: {
             query?: never;
@@ -3439,6 +3529,42 @@ export interface operations {
             };
             /** @description Corps invalide, ou mot de passe actuel absent ou erroné avec un nouveau mot de passe */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    post_api_verify_email: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyEmailPayload"];
+            };
+        };
+        responses: {
+            /** @description Adresse confirmée, compte actif */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide, ou lien inconnu, déjà utilisé ou expiré (message `INVALID_EMAIL_VERIFICATION_TOKEN`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Trop de demandes depuis cette adresse IP */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

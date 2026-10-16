@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { ApiError } from '@/api'
-import { calls, json, me, stubApi } from '@/__tests__/helpers'
+import { bodyOf, calls, json, me, stubApi } from '@/__tests__/helpers'
 import { useSessionStore } from '@/session/session'
 
 describe('session', () => {
@@ -135,22 +135,16 @@ describe('session', () => {
   })
 
   describe('register', () => {
-    it("inscrit puis connecte l'utilisateur", async () => {
+    it("inscrit sans connecter : le compte attend la confirmation de l'adresse", async () => {
       const fetchMock = stubApi({
         'POST /api/v1/users': () => new Response(null, { status: 201 }),
-        'POST /api/login_check': () => json({ token: 'jeton' }),
-        'GET /api/v1/me': () => json(me),
       })
       const session = useSessionStore()
 
       await session.register('alexiane@example.com', 'un-mot-de-passe', 4)
 
-      expect(calls(fetchMock)).toEqual([
-        'POST /api/v1/users',
-        'POST /api/login_check',
-        'GET /api/v1/me',
-      ])
-      expect(session.isAuthenticated).toBe(true)
+      expect(calls(fetchMock)).toEqual(['POST /api/v1/users'])
+      expect(session.isAuthenticated).toBe(false)
     })
 
     it("n'ouvre pas de session quand l'inscription est refusée (409)", async () => {
@@ -164,6 +158,41 @@ describe('session', () => {
         status: 409,
       })
       expect(session.isAuthenticated).toBe(false)
+    })
+  })
+
+  describe("confirmation de l'adresse", () => {
+    it('demande un nouveau lien pour une adresse', async () => {
+      const fetchMock = stubApi({
+        'POST /api/v1/users/email-verification/send': () => new Response(null, { status: 204 }),
+      })
+      const session = useSessionStore()
+
+      await session.sendEmailVerification('alexiane@example.com')
+
+      expect(calls(fetchMock)).toEqual(['POST /api/v1/users/email-verification/send'])
+      expect(await bodyOf(fetchMock, 0)).toEqual({ email: 'alexiane@example.com' })
+    })
+
+    it('confirme avec le secret du lien', async () => {
+      const fetchMock = stubApi({
+        'POST /api/v1/users/email-verification/confirm': () => new Response(null, { status: 204 }),
+      })
+      const session = useSessionStore()
+
+      await session.confirmEmail('le-secret')
+
+      expect(await bodyOf(fetchMock, 0)).toEqual({ token: 'le-secret' })
+    })
+
+    it('refuse un lien périmé ou déjà utilisé (422)', async () => {
+      stubApi({
+        'POST /api/v1/users/email-verification/confirm': () =>
+          json({ error: { message: 'INVALID_EMAIL_VERIFICATION_TOKEN' } }, { status: 422 }),
+      })
+      const session = useSessionStore()
+
+      await expect(session.confirmEmail('vieux')).rejects.toMatchObject({ status: 422 })
     })
   })
 

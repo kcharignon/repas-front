@@ -2064,6 +2064,38 @@
                 "security": []
             }
         },
+        "/api/v1/users/email-verification/send": {
+            "post": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Renvoie le lien de confirmation d'adresse email d'un compte en attente (route publique)",
+                "description": "R\u00e9pond 204 que l'adresse ait un compte en attente ou non (compte inconnu, d\u00e9j\u00e0 confirm\u00e9, d\u00e9sactiv\u00e9, ou lien envoy\u00e9 il y a moins d'une minute) : la r\u00e9ponse ne r\u00e9v\u00e8le pas quelles adresses sont inscrites (ADR 0020).",
+                "operationId": "post_api_send_email_verification",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SendEmailVerificationPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Demande prise en compte"
+                    },
+                    "422": {
+                        "description": "Corps de la requ\u00eate invalide"
+                    },
+                    "429": {
+                        "description": "Trop de demandes depuis cette adresse IP"
+                    }
+                },
+                "security": []
+            }
+        },
         "/api/v1/me/settings": {
             "put": {
                 "tags": [
@@ -2089,6 +2121,38 @@
                         "description": "Corps invalide, ou mot de passe actuel absent ou erron\u00e9 avec un nouveau mot de passe"
                     }
                 }
+            }
+        },
+        "/api/v1/users/email-verification/confirm": {
+            "post": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Confirme l'adresse email d'un compte par le lien re\u00e7u : le compte devient actif (route publique)",
+                "description": "Le lien est \u00e0 usage unique et valable 24 heures. Le compte peut ensuite se connecter par /api/login_check (ADR 0020).",
+                "operationId": "post_api_verify_email",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/VerifyEmailPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Adresse confirm\u00e9e, compte actif"
+                    },
+                    "422": {
+                        "description": "Corps invalide, ou lien inconnu, d\u00e9j\u00e0 utilis\u00e9 ou expir\u00e9 (message `INVALID_EMAIL_VERIFICATION_TOKEN`)"
+                    },
+                    "429": {
+                        "description": "Trop de demandes depuis cette adresse IP"
+                    }
+                },
+                "security": []
             }
         }
     },
@@ -2390,6 +2454,20 @@
                 },
                 "type": "object"
             },
+            "SendEmailVerificationPayload": {
+                "required": [
+                    "email"
+                ],
+                "properties": {
+                    "email": {
+                        "description": "Adresse email du compte en attente",
+                        "type": "string",
+                        "maxLength": 255,
+                        "example": "alexiane@example.com"
+                    }
+                },
+                "type": "object"
+            },
             "UserSettingsPayload": {
                 "required": [
                     "defaultServing"
@@ -2418,6 +2496,20 @@
                         "maxLength": 4096,
                         "example": "un-mot-de-passe",
                         "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "VerifyEmailPayload": {
+                "required": [
+                    "token"
+                ],
+                "properties": {
+                    "token": {
+                        "description": "Secret du lien re\u00e7u par email (param\u00e8tre `token` de l'adresse du lien)",
+                        "type": "string",
+                        "maxLength": 256,
+                        "example": "3f9c0a5e7d1b4c6a8e2f0b9d7c5a3e1f3f9c0a5e7d1b4c6a8e2f0b9d7c5a3e1f"
                     }
                 },
                 "type": "object"
