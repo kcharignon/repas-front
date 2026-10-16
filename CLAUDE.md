@@ -1,8 +1,7 @@
 # CLAUDE.md
 
 Guide pour travailler sur `repas-front`, le front Vue.js de l'application Repas (back : `kcharignon/repas`, Symfony / PHP).
-Objectif : couvrir **toutes** les pages Twig du back (inventaire de parité dans `docs/front-vuejs-plan.md` du dépôt back), puis
-basculer la production avec l'utilisateur. Le Twig du back ne se supprime **qu'avec l'accord explicite de l'utilisateur**.
+État (2026-10-16) : le front couvre toutes les pages de l'ancien Twig (inventaire de parité : `PARITY.md`) et **est l'interface de production** sur `kantin.eu` ; Twig est supprimé du back (ADR 0018 du dépôt back), qui ne sert plus que l'API.
 
 ## Source de vérité
 
@@ -27,10 +26,17 @@ OpenAPI généré (`openapi-typescript` + `openapi-fetch`), Tailwind CSS + compo
 - `make prod` : l'image de production (Caddy) sur http://localhost:8081 ; `make api-update` (`ref=<sha>`) : figer le contrat sur un commit du back et régénérer les types.
 - Sans Docker : `npm run check`, `npm run test:e2e`, `npm run audit:prod`.
 
-## Déploiement
+## Livrer en production
 
-- Publier une release GitHub (`gh release create vX.Y.Z --target main --generate-notes`) construit l'image, la publie sur GHCR et lance `./deploy.sh front vX.Y.Z` sur le serveur ([ADR 0007](docs/adr/0007-deploiement-par-release.md), ADR 0017 du back). L'infrastructure (`deploy/`, bordure, sauvegardes, retour arrière) est dans le dépôt back, skill `/repas-ops`.
-- L'image de production ne contient ni nom de domaine ni secret ; ne jamais en ajouter. La politique de contenu (`docker/Caddyfile`) n'autorise aucune image externe : toutes viennent de `/images` (icônes de rayons rapatriées, PR back #54).
+L'infrastructure (serveur, bordure Caddy, `deploy.sh`, sauvegardes) est dans le dépôt back `kcharignon/repas` : skill `/repas-ops` (`/home/kantin/Projet/Repas/.claude/skills/repas-ops/`, recette `references/release.md`), ADR 0017 et 0018 ; ici, [ADR 0007](docs/adr/0007-deploiement-par-release.md). **L'utilisateur n'est pas devops : une étape à la fois, le but expliqué, jamais de secret dans le chat.**
+
+1. PR, CI verte, je fusionne (squash) : seul dépôt où j'ai le droit de fusionner.
+2. Quand l'utilisateur veut livrer : `gh release create vX.Y.Z --target main --generate-notes` (`gh release list --limit 3` pour la version suivante ; `--prerelease` pour un essai). Un changement d'API cassant : le back sort d'abord, compatible avec l'ancien front.
+3. La CI teste, construit `ghcr.io/kcharignon/repas-front:vX.Y.Z`, puis **le job « Déploiement en production » attend l'utilisateur** : page du run (`gh run list --workflow Release`) → *Review deployments* → production → *Approve and deploy*. Je ne peux pas approuver ; je donne le lien du run et je surveille (`gh run view <id>`).
+4. `deploy.sh front` (serveur) déploie, vérifie que le SPA répond et **revient seul à la version précédente** en cas d'échec. Je vérifie ensuite : `https://kantin.eu/` (200, `<div id="app">`), `/api/v1/health`, et en lecture seule `ssh -i ~/.ssh/repas_deploy deploy@64.227.124.100 'cd /opt/repas && cat state/ok-front && docker compose --profile front ps'`.
+5. Mes écritures sur le serveur sont bloquées par le système : un script écrit dans le scratchpad, que l'utilisateur lance avec `! ssh … 'bash -s' < script` (toute commande `docker compose exec -T` y porte `< /dev/null`).
+
+L'image de production ne contient ni nom de domaine ni secret ; ne jamais en ajouter. La politique de contenu (`docker/Caddyfile`) n'autorise aucune image externe : toutes viennent de `/images`, servi par le back.
 
 ## Règles
 
