@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { CookingPot, IceCreamCone, Salad } from 'lucide-vue-next'
 
 import UiButton from '@/design/UiButton.vue'
 import UiCheckbox from '@/design/UiCheckbox.vue'
@@ -8,6 +9,7 @@ import UiChip from '@/design/UiChip.vue'
 import UiField from '@/design/UiField.vue'
 import UiProgressBar from '@/design/UiProgressBar.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
+import UiTile from '@/design/UiTile.vue'
 import { useThemeStore } from '@/design/theme'
 
 const { t } = useI18n()
@@ -19,6 +21,7 @@ const toTake = ref(false)
 const inBasket = ref(true)
 const dish = ref(true)
 const dessert = ref(false)
+const tile = ref('dish')
 </script>
 
 <template>
@@ -81,6 +84,20 @@ const dessert = ref(false)
       <div class="flex flex-wrap gap-2">
         <UiChip v-model:pressed="dish">{{ t('design.dish') }}</UiChip>
         <UiChip v-model:pressed="dessert">{{ t('design.dessert') }}</UiChip>
+      </div>
+      <div role="group" :aria-label="t('design.tiles')" class="grid max-w-sm grid-cols-3 gap-1.5">
+        <UiTile :pressed="tile === 'starter'" @update:pressed="tile = 'starter'">
+          <template #icon><Salad class="size-8 text-primary" aria-hidden="true" /></template>
+          {{ t('design.starter') }}
+        </UiTile>
+        <UiTile :pressed="tile === 'dish'" @update:pressed="tile = 'dish'">
+          <template #icon><CookingPot class="size-8 text-primary" aria-hidden="true" /></template>
+          {{ t('design.dish') }}
+        </UiTile>
+        <UiTile :pressed="tile === 'dessert'" @update:pressed="tile = 'dessert'">
+          <template #icon><IceCreamCone class="size-8 text-primary" aria-hidden="true" /></template>
+          {{ t('design.dessert') }}
+        </UiTile>
       </div>
       <div class="rounded-2xl border border-line bg-surface px-4">
         <UiCheckbox v-model="toTake">{{ t('design.toTake') }}</UiCheckbox>
