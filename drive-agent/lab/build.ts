@@ -12,6 +12,7 @@ import { build } from 'vite'
 import type { Rolldown } from 'vite'
 
 import { toBookmarklet } from './bookmarklet.ts'
+import { PUBLISHED_FILE } from './published.ts'
 import { BOOKMARKLET_LIMIT, LAB_NOTICE } from './src/config.ts'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -61,6 +62,14 @@ async function main(): Promise<void> {
   const dist = join(here, 'dist')
   mkdirSync(dist, { recursive: true })
   writeFileSync(join(dist, 'lab.js'), code)
+  if (process.argv.includes('--publish')) {
+    // Le fichier que jsDelivr servira (adresse figée sur un commit) et que le chargeur vérifie par son empreinte.
+    mkdirSync(join(here, 'published'), { recursive: true })
+    writeFileSync(join(here, PUBLISHED_FILE), code)
+    console.log(
+      `Code publié : drive-agent/lab/${PUBLISHED_FILE} (${Buffer.byteLength(code)} octets)`,
+    )
+  }
   // Sans retour à la ligne final : la chaîne est copiée telle quelle dans un favori.
   writeFileSync(join(dist, 'lab-bookmarklet.txt'), bookmarklet)
 

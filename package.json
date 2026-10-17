@@ -20,6 +20,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "lab:build": "node drive-agent/lab/build.ts",
+    "lab:loader": "node drive-agent/lab/loader.ts",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
     "check": "run-s lint format:check api:check type-check test",
     "api:update": "node scripts/api.mjs update",
