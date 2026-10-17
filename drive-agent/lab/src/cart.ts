@@ -2,6 +2,7 @@
 // Panier du magasin : construction de la requête, lecture d'une requête interceptée, résumé de la réponse
 // (recherche.md § 2 : `POST panier.aspx?op=1`, champ de formulaire `d` contenant du JSON).
 import { EXCERPT_CHARS } from './config'
+import { isChallengeText } from './http'
 import { isSensitiveKey, maskEmails, shorten } from './redact'
 
 export interface CartRequest {
@@ -267,7 +268,7 @@ export function summarizeCartResponse(
   status: number,
   productId: string,
 ): CartSummary {
-  const blocked = status === 403 || status === 429 || /captcha-delivery|datadome/i.test(text)
+  const blocked = status === 403 || status === 429 || isChallengeText(text)
   const lines: string[] = []
   const parsed = parseJson(text.trim())
   const events = parsed === undefined ? null : eventsOf(parsed)

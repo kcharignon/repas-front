@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { checkBeforeAdd } from '../essais/cartFlow'
 import type { Product } from '../parse'
-import { FLOUR, MILK, SUGAR, searchPage } from './fixtures'
+import { ERROR_PAGE, FLOUR, MILK, SUGAR, searchPage } from './fixtures'
 import {
   button,
   cartCall,
@@ -389,6 +389,64 @@ describe('essai 3 : réponses du panier', () => {
     )
     expect(text).not.toContain('Blocage probable')
     expect(button(harness.root, 'Retirer ce produit')).toBeTruthy()
+  })
+
+  it('présente de même la page d’erreur 404 qui contient le mot datadome', async () => {
+    const harness = mount({
+      route: (url) =>
+        url.includes('panier.aspx') ? html(ERROR_PAGE, 404) : html(searchPage([FLOUR])),
+    })
+    await searched(harness)
+    openEssai(harness, 3)
+    pick(harness, FLOUR_ID)
+
+    click(harness.root, 'Préparer l’ajout')
+    click(harness.root, 'Oui, ajouter 1 au panier')
+    const text = await untilOutput(harness.root, 'pas été comprise')
+
+    expect(text).toContain("(HTTP 404). Ce n'est pas un blocage de l'anti-robot.")
+    expect(text).not.toContain('Blocage probable')
+  })
+
+  it('envoie les en-têtes du site et en montre les noms et le Content-Length, sans valeurs', async () => {
+    const harness = mount()
+    await searched(harness)
+    openEssai(harness, 3)
+    pick(harness, FLOUR_ID)
+
+    click(harness.root, 'Préparer l’ajout')
+    click(harness.root, 'Oui, ajouter 1 au panier')
+    const text = await untilOutput(harness.root, 'Content-Length')
+
+    const sent = posts(harness)[0] as { body: unknown }
+    expect(harness.fetch.mock.calls.at(-1)?.[1]?.headers).toEqual({
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      Accept: '*/*',
+      'X-Requested-With': 'XMLHttpRequest',
+    })
+    expect(text).toContain(
+      `En-têtes posés par le banc : Content-Type, Accept, X-Requested-With (+ ceux du navigateur) ; Content-Length du corps : ${String(sent.body).length}`,
+    )
+    expect(text).not.toContain('XMLHttpRequest\n')
+    expect(text).not.toContain('urlencoded')
+    expect(text).not.toContain('*/*')
+  })
+
+  it('montre aussi le Content-Length du retrait', async () => {
+    const harness = mount()
+    await searched(harness)
+    openEssai(harness, 3)
+    pick(harness, FLOUR_ID)
+    click(harness.root, 'Préparer l’ajout')
+    click(harness.root, 'Oui, ajouter 1 au panier')
+    await untilOutput(harness.root, 'Réponse JSON')
+
+    click(harness.root, 'Retirer ce produit du panier')
+    click(harness.root, 'Oui, retirer du panier')
+    const text = await untilOutput(harness.root, 'Retrait demandé')
+
+    const removal = posts(harness)[1] as { body: unknown }
+    expect(text).toContain(`Content-Length du corps : ${String(removal.body).length}`)
   })
 
   it('garde le message de blocage pour un 429', async () => {

@@ -240,7 +240,7 @@ export interface FrameReport {
   products: Product[]
 }
 
-const BLOCK_WORDS = /captcha|datadome|access denied|acc[eè]s refus[eé]|forbidden/i
+const BLOCK_WORDS = /captcha|access denied|acc[eè]s refus[eé]|forbidden/i
 
 /** Ce que l'on peut dire d'un cadre qui vient de se charger : lisible, vide, redirigé, bloqué, produits visibles. */
 export function inspectFrame(

@@ -19,6 +19,14 @@ export function isBlockStatus(status: number): boolean {
   return status === 403 || status === 429
 }
 
+/**
+ * Page ou réponse de défi de l'anti-robot : elle renvoie vers `captcha-delivery.com`. Le simple mot « datadome » ne suffit pas,
+ * il figure aussi dans la page d'erreur 404 de Leclerc.
+ */
+export function isChallengeText(text: string): boolean {
+  return /captcha-delivery\.com/i.test(text)
+}
+
 /** Délai avant la requête suivante : 800 ms plus une gigue de 0 à 700 ms. */
 export function pauseBetweenRequests(random: () => number): number {
   return CADENCE_BASE_MS + Math.floor(random() * (CADENCE_JITTER_MS + 1))
@@ -44,7 +52,7 @@ async function send(
       ms: now() - started,
       contentType: response.headers.get('content-type'),
       error: null,
-      blocked: isBlockStatus(response.status),
+      blocked: isBlockStatus(response.status) || isChallengeText(text),
     }
   } catch (error) {
     return {
@@ -68,6 +76,13 @@ export function getPage(fetchFn: FetchFn, url: string, now: () => number): Promi
   )
 }
 
+/** En-têtes de l'ajout au panier : ceux que le site envoie lui-même (relevé DRV-008). Le navigateur ajoute les siens. */
+export const FORM_HEADERS: Readonly<Record<string, string>> = {
+  'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+  Accept: '*/*',
+  'X-Requested-With': 'XMLHttpRequest',
+}
+
 /** Envoi d'un formulaire à l'hôte courant (panier). */
 export function postForm(
   fetchFn: FetchFn,
@@ -75,20 +90,7 @@ export function postForm(
   body: string,
   now: () => number,
 ): Promise<Reply> {
-  return send(
-    fetchFn,
-    url,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        Accept: 'application/json, text/javascript, */*; q=0.01',
-        'X-Requested-With': 'XMLHttpRequest',
-      },
-      body,
-    },
-    now,
-  )
+  return send(fetchFn, url, { method: 'POST', headers: FORM_HEADERS, body }, now)
 }
 
 export interface SeriesStep<R> {

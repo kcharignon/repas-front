@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { ERROR_PAGE } from './fixtures'
 import {
+  FORM_HEADERS,
   getPage,
   isBlockStatus,
+  isChallengeText,
   pauseBetweenRequests,
   postForm,
   runSeries,
@@ -34,6 +37,22 @@ describe('isBlockStatus et pauseBetweenRequests', () => {
     expect(pauseBetweenRequests(() => 0)).toBe(800)
     expect(pauseBetweenRequests(() => 0.5)).toBe(1150)
     expect(pauseBetweenRequests(() => 0.999999)).toBe(1500)
+  })
+})
+
+describe('isChallengeText', () => {
+  it('reconnaît un renvoi vers la page de défi, en HTML comme en JSON', () => {
+    expect(isChallengeText('<script src="https://geo.captcha-delivery.com/c.js"></script>')).toBe(
+      true,
+    )
+    expect(isChallengeText('{"url":"https://geo.captcha-delivery.com/captcha/?cid=abc"}')).toBe(
+      true,
+    )
+  })
+
+  it('ne prend pas le simple mot datadome pour un défi', () => {
+    expect(isChallengeText(ERROR_PAGE)).toBe(false)
+    expect(isChallengeText('')).toBe(false)
   })
 })
 
@@ -70,6 +89,34 @@ describe('getPage et postForm', () => {
     expect(result).toMatchObject({ status: 403, blocked: true })
   })
 
+  it('ne signale pas un blocage pour une page d’erreur 404 qui contient le mot datadome', async () => {
+    const result = await getPage(
+      vi.fn<FetchFn>().mockResolvedValue(reply(404, ERROR_PAGE)),
+      'https://h.example',
+      clock(),
+    )
+
+    expect(result).toMatchObject({ status: 404, blocked: false })
+  })
+
+  it('signale un blocage pour une page de défi servie avec un code 200', async () => {
+    const result = await getPage(
+      vi
+        .fn<FetchFn>()
+        .mockResolvedValue(
+          reply(
+            200,
+            '{"url":"https://geo.captcha-delivery.com/captcha/?cid=abc"}',
+            'application/json',
+          ),
+        ),
+      'https://h.example',
+      clock(),
+    )
+
+    expect(result).toMatchObject({ status: 200, blocked: true })
+  })
+
   it('transforme un échec réseau en réponse sans code', async () => {
     const result = await getPage(
       vi.fn<FetchFn>().mockRejectedValue(new TypeError('Failed to fetch')),
@@ -100,6 +147,29 @@ describe('getPage et postForm', () => {
     expect(init).toMatchObject({ method: 'POST', body: 'd=%7B%7D', credentials: 'same-origin' })
     expect(init?.headers).toMatchObject({
       'Content-Type': expect.stringContaining('x-www-form-urlencoded'),
+    })
+  })
+
+  it('envoie exactement les en-têtes du site pour le panier : Accept */*, rien d’autre en plus', async () => {
+    const fetchFn = vi.fn<FetchFn>().mockResolvedValue(reply(200, '[]', 'application/json'))
+
+    await postForm(fetchFn, 'https://h.example/panier.aspx?op=1', 'd=%7B%7D', clock())
+
+    expect(fetchFn.mock.calls[0]?.[1]?.headers).toEqual({
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      Accept: '*/*',
+      'X-Requested-With': 'XMLHttpRequest',
+    })
+    expect(Object.keys(FORM_HEADERS)).toEqual(['Content-Type', 'Accept', 'X-Requested-With'])
+  })
+
+  it('n’envoie pas d’en-tête d’accept de la lecture de pages au panier, ni l’inverse', async () => {
+    const fetchFn = vi.fn<FetchFn>().mockResolvedValue(reply(200, '<html></html>'))
+
+    await getPage(fetchFn, 'https://h.example/a', clock())
+
+    expect(fetchFn.mock.calls[0]?.[1]?.headers).toEqual({
+      Accept: 'text/html,application/xhtml+xml',
     })
   })
 })
