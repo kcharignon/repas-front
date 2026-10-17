@@ -1,5 +1,14 @@
 package eu.kantin.repas.drive
 
+/**
+ * Ce que l'application donne à la WebView pour paraître un navigateur de bureau (DRV-312).
+ *
+ * @property userAgent l'agent utilisateur à utiliser
+ * @property clientHints vrai si les indications client (plateforme Linux, mobile faux) doivent être posées en plus
+ * @property note une phrase pour le journal de l'application quand le mode ordinateur est incomplet, sinon `null`
+ */
+data class DesktopIdentity(val userAgent: String, val clientHints: Boolean, val note: String?)
+
 /** Une marque annoncée par les indications client (`Sec-CH-UA`) : son nom et ses versions. */
 data class Brand(val name: String, val majorVersion: String, val fullVersion: String) {
     fun label(): String = "$name $majorVersion"
@@ -23,6 +32,17 @@ object UserAgents {
      * on ne devine rien : l'agent de la WebView reste en place.
      */
     fun resolve(webViewDefault: String): String = chromeMajorOf(webViewDefault)?.let(::desktop) ?: webViewDefault
+
+    /**
+     * L'identité complète du mode ordinateur. Chaque faiblesse est notée (jamais d'adresse ni de contenu) et l'application continue :
+     * sans indications client, elle garde l'agent utilisateur seul ; sans version de Chrome lisible, elle laisse la WebView telle quelle.
+     */
+    fun identity(webViewDefault: String, clientHintsSupported: Boolean): DesktopIdentity {
+        val major = chromeMajorOf(webViewDefault)
+            ?: return DesktopIdentity(webViewDefault, clientHints = false, note = "Version de Chrome illisible : l'identité de la WebView reste en place.")
+        val note = if (clientHintsSupported) null else "Indications client indisponibles : agent utilisateur seul."
+        return DesktopIdentity(desktop(major), clientHints = clientHintsSupported, note = note)
+    }
 
     /** Le numéro de version majeur de Chrome écrit dans un agent utilisateur (`Chrome/155.0.7000.1` donne 155). */
     fun chromeMajorOf(userAgent: String): Int? = CHROME_MAJOR.find(userAgent)?.groupValues?.get(1)?.toIntOrNull()

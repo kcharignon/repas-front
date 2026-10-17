@@ -1,5 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Repas Drive</string>
-    <string name="skeleton_message">Cette application enverra ta liste de courses de Repas au drive. L’affichage du drive arrive dans une prochaine version.</string>
+
+    <string name="menu_button">Menu</string>
+    <string name="menu_about">Version et mode d’emploi</string>
+    <string name="menu_logout">Se déconnecter et effacer les données</string>
+    <string name="menu_browser">Ouvrir dans le navigateur</string>
+
+    <string name="about_manual">Repas Drive affiche le site du drive Leclerc comme sur un ordinateur. Connecte-toi toi-même sur le site : l’application ne lit jamais ton mot de passe ni tes cookies, et ne parle qu’à leclercdrive.fr.\n\n• Le bouton retour du téléphone revient à la page précédente.\n• Un lien vers un autre site s’ouvre dans le navigateur du téléphone.\n• Pour changer de compte ou tout effacer : menu, « Se déconnecter et effacer les données ».</string>
+
+    <string name="clear_message">Tu seras déconnecté du drive : cookies, données du site et historique seront effacés de cette application.</string>
+    <string name="clear_confirm">Effacer</string>
+
+    <string name="retry">Réessayer</string>
+    <string name="close">Fermer</string>
+    <string name="cancel">Annuler</string>
+    <string name="ok">OK</string>
+
+    <string name="problem_offline">Pas de connexion à Internet. Vérifie le Wi-Fi ou les données mobiles, puis touche « Réessayer ».</string>
+    <string name="problem_unavailable">Le site du drive ne répond pas pour le moment. Attends un peu, puis touche « Réessayer ».</string>
+    <string name="problem_certificate">La connexion au site du drive n’est pas sûre (certificat refusé). Vérifie la date et l’heure du téléphone, évite le Wi-Fi public, puis touche « Réessayer ».</string>
+    <string name="problem_other">La page n’a pas pu s’afficher. Touche « Réessayer ».</string>
+
+    <string name="render_process_gone">L’affichage a été interrompu par Android. La page se recharge.</string>
+    <string name="no_browser">Aucun navigateur n’est installé sur le téléphone.</string>
 </resources>
