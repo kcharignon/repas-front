@@ -9,6 +9,9 @@
     <string name="user_agent_title">Agent utilisateur (appliqué à la page suivante)</string>
     <string name="user_agent_webview">Celui de la WebView (avec « wv »)</string>
     <string name="user_agent_without_wv">Le même, sans le marqueur « wv »</string>
+    <string name="user_agent_desktop">Ordinateur (comme « version pour ordinateur » de Chrome)</string>
+    <string name="switch_to_desktop">→ Ordinateur</string>
+    <string name="switch_to_mobile">→ Mobile</string>
     <string name="copy">Copier le diagnostic</string>
     <string name="copied">Diagnostic copié.</string>
     <string name="reload">Recharger la page</string>

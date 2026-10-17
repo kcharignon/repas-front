@@ -39,6 +39,9 @@ import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.webkit.UserAgentMetadata
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.Base64
@@ -56,7 +59,15 @@ class MainActivity : Activity() {
     private lateinit var diagnosticPanel: View
     private lateinit var diagnosticText: TextView
     private lateinit var userAgentGroup: RadioGroup
+    private lateinit var identityButton: Button
     private val choiceByRadioId = mutableMapOf<Int, UserAgentChoice>()
+
+    // Les réglages d'origine de la WebView, lus avant toute modification pour pouvoir les remettre en quittant le mode ordinateur.
+    private var defaultMetadata: UserAgentMetadata? = null
+    private var defaultWideViewPort = false
+    private var defaultOverviewMode = false
+    private var clientHints = ClientHintsStatus.NOT_REQUESTED
+    private var clientHintsBrands: List<String> = emptyList()
 
     /** La fenêtre vide qui reçoit un `window.open` avant que son adresse soit confiée à la WebView principale. */
     private var popup: WebView? = null
@@ -134,7 +145,7 @@ class MainActivity : Activity() {
             setSupportMultipleWindows(true)
             javaScriptCanOpenWindowsAutomatically = true
         }
-        applyUserAgent(view)
+        applyIdentity(view)
         CookieManager.getInstance().apply {
             setAcceptCookie(true)
             // Leclerc charge des éléments d'autres sites (anti-robot, mesure) qui posent leurs propres cookies.
@@ -147,8 +158,105 @@ class MainActivity : Activity() {
 
     private fun currentChoice(): UserAgentChoice = UserAgentChoice.fromKey(prefs.getString(KEY_USER_AGENT, null))
 
-    private fun applyUserAgent(view: WebView = webView) {
-        view.settings.userAgentString = UserAgents.resolve(currentChoice(), WebSettings.getDefaultUserAgent(this))
+    /**
+     * Donne à la WebView l'identité du choix actif : agent utilisateur, indications client (client hints) et mise en page.
+     * Le changement s'applique à la page suivante (rechargement). Les cookies ne sont jamais touchés.
+     */
+    private fun applyIdentity(view: WebView) {
+        val settings = view.settings
+        val choice = currentChoice()
+        val desktop = choice == UserAgentChoice.DESKTOP
+        val webViewDefault = WebSettings.getDefaultUserAgent(this)
+        if (defaultMetadata == null) {
+            // Première fois seulement, avant de changer quoi que ce soit.
+            defaultWideViewPort = settings.useWideViewPort
+            defaultOverviewMode = settings.loadWithOverviewMode
+            defaultMetadata = readWebViewMetadata(settings)
+        }
+        settings.userAgentString = UserAgents.resolve(choice, webViewDefault)
+        // Le mode ordinateur demande une mise en page large que l'on peut agrandir au pincement ; les autres gardent celle de la WebView.
+        settings.useWideViewPort = if (desktop) true else defaultWideViewPort
+        settings.loadWithOverviewMode = if (desktop) true else defaultOverviewMode
+        settings.setSupportZoom(true)
+        settings.builtInZoomControls = desktop
+        settings.displayZoomControls = false
+        applyClientHints(settings, choice, UserAgents.chromeMajorOf(webViewDefault))
+    }
+
+    private fun metadataSupported(): Boolean = WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)
+
+    private fun readWebViewMetadata(settings: WebSettings): UserAgentMetadata? =
+        if (!metadataSupported()) null else try {
+            WebSettingsCompat.getUserAgentMetadata(settings)
+        } catch (_: RuntimeException) {
+            null
+        }
+
+    /**
+     * Mode ordinateur : plateforme Linux, pas mobile, modèle vide, mêmes versions de marque que la WebView. Les autres choix
+     * remettent les valeurs d'origine. Une WebView qui ne sait pas changer les indications garde les siennes : le diagnostic le dit.
+     */
+    private fun applyClientHints(settings: WebSettings, choice: UserAgentChoice, chromeMajor: Int?) {
+        val desktop = choice == UserAgentChoice.DESKTOP
+        val original = defaultMetadata
+        clientHintsBrands = emptyList()
+        if (original == null || (desktop && chromeMajor == null)) {
+            clientHints = if (desktop) ClientHintsStatus.UNAVAILABLE else ClientHintsStatus.NOT_REQUESTED
+            return
+        }
+        try {
+            if (!desktop) {
+                WebSettingsCompat.setUserAgentMetadata(settings, original)
+                clientHints = ClientHintsStatus.NOT_REQUESTED
+                return
+            }
+            val brands = UserAgents.desktopBrands(
+                original.brandVersionList.map { Brand(it.brand, it.majorVersion, it.fullVersion) },
+                chromeMajor,
+            )
+            val builder = UserAgentMetadata.Builder(original)
+                .setBrandVersionList(
+                    brands.map {
+                        UserAgentMetadata.BrandVersion.Builder()
+                            .setBrand(it.name)
+                            .setMajorVersion(it.majorVersion)
+                            .setFullVersion(it.fullVersion)
+                            .build()
+                    },
+                )
+                .setPlatform("Linux")
+                .setPlatformVersion("")
+                .setModel("")
+                .setMobile(false)
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA_FORM_FACTORS)) {
+                builder.setFormFactors(listOf(UserAgentMetadata.FORM_FACTOR_DESKTOP))
+            }
+            WebSettingsCompat.setUserAgentMetadata(settings, builder.build())
+            clientHints = ClientHintsStatus.APPLIED
+            clientHintsBrands = brands.map { it.label() }
+        } catch (_: RuntimeException) {
+            clientHints = if (desktop) ClientHintsStatus.UNAVAILABLE else ClientHintsStatus.NOT_REQUESTED
+        }
+    }
+
+    /** Change d'agent utilisateur et recharge la page courante, sans effacer les cookies. */
+    private fun selectChoice(choice: UserAgentChoice) {
+        if (choice == currentChoice()) return
+        prefs.edit().putString(KEY_USER_AGENT, choice.key).apply()
+        applyIdentity(webView)
+        syncChoiceViews()
+        webView.reload()
+        refreshDiagnostic()
+    }
+
+    /** Le raccourci bascule entre le premier choix (WebView) et le troisième (ordinateur). */
+    private fun toggleDesktop() {
+        selectChoice(if (currentChoice() == UserAgentChoice.DESKTOP) UserAgentChoice.WEBVIEW_DEFAULT else UserAgentChoice.DESKTOP)
+    }
+
+    private fun syncChoiceViews() {
+        identityButton.setText(if (currentChoice() == UserAgentChoice.DESKTOP) R.string.switch_to_mobile else R.string.switch_to_desktop)
+        choiceByRadioId.entries.firstOrNull { it.value == currentChoice() }?.let { userAgentGroup.check(it.key) }
     }
 
     /** Applique la règle de navigation à une adresse demandée hors de la page (fenêtre `window.open`). */
@@ -291,6 +399,8 @@ class MainActivity : Activity() {
             roundedButton(R.string.diagnostic_button, filled = false) { showDiagnostic() },
             LinearLayout.LayoutParams(WRAP, WRAP).apply { topMargin = dp(8) },
         )
+        identityButton = roundedButton(R.string.switch_to_desktop, filled = false) { toggleDesktop() }
+        addView(identityButton, LinearLayout.LayoutParams(WRAP, WRAP).apply { topMargin = dp(8) })
     }
 
     private fun roundedButton(label: Int, filled: Boolean, onClick: () -> Unit): Button = Button(this).apply {
@@ -321,14 +431,10 @@ class MainActivity : Activity() {
         userAgentGroup = RadioGroup(this)
         addChoice(R.string.user_agent_webview, UserAgentChoice.WEBVIEW_DEFAULT)
         addChoice(R.string.user_agent_without_wv, UserAgentChoice.WITHOUT_WV)
-        userAgentGroup.check(choiceByRadioId.entries.first { it.value == currentChoice() }.key)
+        addChoice(R.string.user_agent_desktop, UserAgentChoice.DESKTOP)
+        syncChoiceViews()
         userAgentGroup.setOnCheckedChangeListener { _, id ->
-            val choice = choiceByRadioId[id] ?: return@setOnCheckedChangeListener
-            if (choice == currentChoice()) return@setOnCheckedChangeListener
-            prefs.edit().putString(KEY_USER_AGENT, choice.key).apply()
-            applyUserAgent()
-            webView.reload()
-            refreshDiagnostic()
+            choiceByRadioId[id]?.let { selectChoice(it) }
         }
         column.addView(userAgentGroup)
 
@@ -407,6 +513,9 @@ class MainActivity : Activity() {
             webViewVersion = webViewPackage?.versionName,
             choice = currentChoice(),
             userAgent = webView.settings.userAgentString,
+            clientHints = clientHints,
+            clientHintsBrands = clientHintsBrands,
+            currentSite = NavigationPolicy.httpsHostOf(webView.url),
             labDigest = labDigest(),
             externalSites = externalSites.toList(),
         )
