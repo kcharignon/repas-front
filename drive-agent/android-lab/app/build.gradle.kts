@@ -113,5 +113,7 @@ androidComponents {
 }
 
 dependencies {
+    // Seule bibliothèque ajoutée : les indications client (client hints) de la WebView, pour le mode ordinateur.
+    implementation("androidx.webkit:webkit:1.17.1")
     testImplementation("junit:junit:4.13.2")
 }

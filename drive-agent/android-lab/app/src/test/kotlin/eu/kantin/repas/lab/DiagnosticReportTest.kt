@@ -17,6 +17,9 @@ class DiagnosticReportTest {
         webViewVersion = "120.0.0.0",
         choice = UserAgentChoice.WITHOUT_WV,
         userAgent = "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36",
+        clientHints = ClientHintsStatus.NOT_REQUESTED,
+        clientHintsBrands = emptyList(),
+        currentSite = "m-courses.exemple.invalid",
         labDigest = "sha384-AAAA",
         externalSites = listOf("https://www.exemple.org", "tel"),
     )
@@ -30,6 +33,9 @@ class DiagnosticReportTest {
         assertTrue(text.contains("WebView : com.exemple.webview 120.0.0.0"))
         assertTrue(text.contains("Agent utilisateur choisi : sans le marqueur « wv »"))
         assertTrue(text.contains("Agent utilisateur utilisé : Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36"))
+        assertTrue(text.contains("Indications client (client hints) : non (valeurs d'origine de la WebView)"))
+        assertTrue(text.contains("Mise en page : celle de la WebView"))
+        assertTrue(text.contains("Site affiché (nom seulement) : m-courses.exemple.invalid"))
         assertTrue(text.contains("Banc embarqué : sha384-AAAA"))
         assertTrue(text.contains("Sites envoyés au navigateur du téléphone : https://www.exemple.org, tel"))
     }
@@ -37,10 +43,18 @@ class DiagnosticReportTest {
     @Test
     fun `sans information, le texte le dit`() {
         val text = DiagnosticReport.render(
-            info.copy(webViewPackage = null, webViewVersion = null, labDigest = null, externalSites = emptyList(), debuggable = false),
+            info.copy(
+                webViewPackage = null,
+                webViewVersion = null,
+                labDigest = null,
+                currentSite = null,
+                externalSites = emptyList(),
+                debuggable = false,
+            ),
         )
 
         assertTrue(text.contains("WebView : inconnue"))
+        assertTrue(text.contains("Site affiché (nom seulement) : aucun"))
         assertTrue(text.contains("Banc embarqué : introuvable"))
         assertTrue(text.endsWith("Sites envoyés au navigateur du téléphone : aucun"))
         assertEquals(false, text.contains("version de débogage"))
@@ -52,5 +66,37 @@ class DiagnosticReportTest {
 
         assertEquals(false, text.contains("cookie"))
         assertEquals(false, text.contains("leclercdrive"))
+    }
+
+    @Test
+    fun `en mode ordinateur, le texte dit que les indications client sont appliquees, avec les marques`() {
+        val text = DiagnosticReport.render(
+            info.copy(
+                choice = UserAgentChoice.DESKTOP,
+                clientHints = ClientHintsStatus.APPLIED,
+                clientHintsBrands = listOf("Chromium 155", "Google Chrome 155"),
+            ),
+        )
+
+        assertTrue(text.contains("Agent utilisateur choisi : ordinateur (Linux, sans « wv », sans « Mobile »)"))
+        assertTrue(
+            text.contains(
+                "Indications client (client hints) : oui (plateforme Linux, mobile = non, marques : Chromium 155, Google Chrome 155)",
+            ),
+        )
+        assertTrue(text.contains("Mise en page : ordinateur (fenêtre large)"))
+    }
+
+    @Test
+    fun `si la WebView ne permet pas de changer les indications client, le texte le dit`() {
+        val text = DiagnosticReport.render(
+            info.copy(choice = UserAgentChoice.DESKTOP, clientHints = ClientHintsStatus.UNAVAILABLE),
+        )
+
+        assertTrue(
+            text.contains(
+                "Indications client (client hints) : non disponible (cette WebView ne le permet pas : seule la chaîne est appliquée)",
+            ),
+        )
     }
 }
