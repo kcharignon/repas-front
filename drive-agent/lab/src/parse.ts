@@ -4,6 +4,18 @@
 import { EXCERPT_CHARS } from './config'
 import { maskEmails } from './redact'
 
+/** Contenu net structuré que le site joint à un produit (relevé DRV-007) ; chaque champ est `null` s'il manque. */
+export interface StructuredContent {
+  /** `sUniteMesure` (« KG »). */
+  unitMeasure: string | null
+  /** `nrContenanceUnitaire`. */
+  unitContent: number | null
+  /** `nrContenanceTotale`. */
+  totalContent: number | null
+  /** `sUniteMesureTotale` (« kg »). */
+  totalUnit: string | null
+}
+
 export interface Product {
   id: string
   label1: string | null
@@ -17,6 +29,8 @@ export interface Product {
   stock: number | null
   /** `iQuantitePanier` : quantité déjà au panier. */
   inCart: number | null
+  /** Contenu net structuré, présent seulement si au moins un de ses champs est lu (essai 10). */
+  structured?: StructuredContent
 }
 
 export interface ParseResult {
@@ -173,6 +187,13 @@ function buildProduct(id: string, slices: string[]): Product {
     firstOf(slices, (slice) => parseLooseNumber(readField(slice, name)))
   const unitPriceText = text('sPrixUnitaire')
   const measurePriceText = text('sPrixParUniteDeMesure')
+  const structured: StructuredContent = {
+    unitMeasure: text('sUniteMesure'),
+    unitContent: number('nrContenanceUnitaire'),
+    totalContent: number('nrContenanceTotale'),
+    totalUnit: text('sUniteMesureTotale'),
+  }
+  const hasStructured = Object.values(structured).some((value) => value !== null)
   return {
     id,
     label1: text('sLibelleLigne1'),
@@ -184,6 +205,7 @@ function buildProduct(id: string, slices: string[]): Product {
     measurePriceText,
     stock: number('iQteDisponible'),
     inCart: number('iQuantitePanier'),
+    ...(hasStructured ? { structured } : {}),
   }
 }
 

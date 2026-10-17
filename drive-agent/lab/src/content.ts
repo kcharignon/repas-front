@@ -2,7 +2,9 @@
 // Contenu net d'un produit, déduit de deux façons pour les comparer (essai 10) :
 //   1. le libellé de seconde ligne (« 1 kg », « 6 x 33 cl »…) ;
 //   2. le prix unitaire divisé par le prix par unité de mesure (1,29 € ÷ 2,58 €/kg = 0,5 kg).
+// Et, quand le site les donne, 3. les champs structurés `sUniteMesure`, `nrContenanceUnitaire`, `nrContenanceTotale`.
 // Résultats ramenés à une unité de base : g (masse), ml (volume) ou u (pièces).
+import type { StructuredContent } from './parse'
 
 export type ContentUnit = 'g' | 'ml' | 'u'
 
@@ -116,6 +118,45 @@ export function compareContents(byLabel: Content | null, byPrices: Content | nul
   if (byLabel.unit !== byPrices.unit) return 'écart'
   const gap = Math.abs(byLabel.value - byPrices.value)
   return gap <= Math.max(byLabel.value, byPrices.value) * 0.05 ? 'accord' : 'écart'
+}
+
+const PIECE_UNITS = new Set([
+  'u',
+  'p',
+  'pc',
+  'pce',
+  'piece',
+  'pieces',
+  'pièce',
+  'pièces',
+  'unite',
+  'unité',
+  'unites',
+  'unités',
+])
+
+function fromAmount(amount: number | null, unit: string | null): Content | null {
+  if (amount === null || unit === null) return null
+  const key = unit.trim().toLowerCase()
+  if (PIECE_UNITS.has(key)) return { value: round(amount), unit: 'u' }
+  return convert(amount, key)
+}
+
+export interface StructuredReading {
+  /** `nrContenanceUnitaire` dans l'unité `sUniteMesure`. */
+  unit: Content | null
+  /** `nrContenanceTotale` dans l'unité `sUniteMesureTotale` (à défaut `sUniteMesure`). */
+  total: Content | null
+  /** Le contenu net retenu pour la comparaison : le total, à défaut l'unitaire. */
+  best: Content | null
+}
+
+/** Contenu net lu dans les champs structurés du produit ; `null` partout si le produit n'en porte pas. */
+export function contentFromStructured(fields: StructuredContent | undefined): StructuredReading {
+  if (!fields) return { unit: null, total: null, best: null }
+  const unit = fromAmount(fields.unitContent, fields.unitMeasure ?? fields.totalUnit)
+  const total = fromAmount(fields.totalContent, fields.totalUnit ?? fields.unitMeasure)
+  return { unit, total, best: total ?? unit }
 }
 
 export function formatContent(content: Content | null): string {
