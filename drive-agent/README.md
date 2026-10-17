@@ -4,7 +4,7 @@ L'**agent** est le petit programme JavaScript qui tourne dans la page de l'ensei
 
 Contexte et protocole : `docs/drive/` du dépôt back (`kcharignon/repas`), en particulier `architecture.md` § 8 et le ticket `DRV-301`.
 
-État : **squelette** (DRV-301), **protocole v1** (DRV-302) et **adaptateur Leclerc** (DRV-303). La construction, ses garde-fous et ses règles de code sont en place, et le protocole (messages, codec, validateurs, transports) est écrit ; l'agent lui-même ne fait encore rien (il reste silencieux sur la page) : l'interface (DRV-304) et l'orchestrateur (DRV-305) s'y ajoutent et branchent le tout.
+État : **squelette** (DRV-301), **protocole v1** (DRV-302), **adaptateur Leclerc** (DRV-303) et **interface superposée** (DRV-304). La construction, ses garde-fous et ses règles de code sont en place, et le protocole (messages, codec, validateurs, transports) est écrit ; l'agent lui-même ne fait encore rien (il reste silencieux sur la page) : l'orchestrateur (DRV-305) s'y ajoute et branche le tout.
 
 > `lab/` (banc d'essai du favori) et `android-lab/` (application de test) sont des outils jetables du spike. Ils restent en place jusqu'à la fin du jalon M3b et ne font pas partie de l'agent.
 
@@ -30,9 +30,11 @@ drive-agent/
     version.ts        AGENT_VERSION (semver)
     transport/        comment le message arrive et repart : `fragmentTransport` (fragment d'adresse) et `bridgeTransport` (pont de l'application)
     leclerc/          tout ce qui est propre à E.Leclerc Drive, derrière `RetailerAdapter` : magasin, recherche, panier, erreurs, cadence (voir plus bas)
-    ui/ flow/ diagnostic/    à venir : DRV-304, 305-306, 308
+    ui/               l'interface superposée en Shadow DOM : écrans, textes (`strings.ts`), styles, `ui.show(écran, props)` (voir plus bas)
+    flow/ diagnostic/    à venir : DRV-305-306, 308
   protocol/           le protocole v1, partagé avec le front (alias `@drive-protocol`) : schémas JSON, types, codec, validateurs, exemples
   test/               tests Vitest de l'agent et du protocole, et entries/ : points d'entrée d'essai pour la chaîne de construction
+  demo/               page de démonstration de l'interface (hors production) : chaque écran avec des données inventées
   fixtures/           données SYNTHÉTIQUES inventées (voir son README)
   scripts/build.mjs   la construction
   dist/               sorties de la construction (ignoré par Git)
@@ -54,6 +56,19 @@ Seul contrat supporté : le site PC `fdN-courses.leclercdrive.fr` (faits mesuré
 | `errors.ts`    | `LeclercError` : `NOT_LOGGED_IN`, `BLOCKED`, `CONTRACT_CHANGED`, `NETWORK`, `UNSUPPORTED_PAGE` (messages fixes : jamais de cookie ni de page)                 |
 
 Un 404 n'est **pas** un blocage (requête mal formée : `CONTRACT_CHANGED`) ; seuls 403, 429 et une page de défi (`captcha-delivery.com`) sont `BLOCKED`. Les fixtures (`fixtures/leclerc/`) sont inventées.
+
+## L'interface superposée (`src/ui/`)
+
+L'agent affiche ses écrans par-dessus la page de l'enseigne, dans un **Shadow DOM fermé** attaché à un conteneur plein écran (`position: fixed`, `z-index` maximal, épinglé par des déclarations en ligne `!important` : une règle de la page ne peut ni le cacher ni le déplacer). Rien n'est créé tant qu'aucun écran n'est affiché. Tout s'affiche par `createElement` et `textContent` (`h()` et `text()` de `dom.ts`) : un libellé de produit qui contient du HTML s'affiche tel quel.
+
+| Fichier      | Rôle                                                                                                                                                                                                 |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `types.ts`   | `ScreenMap` (les écrans, leurs `props` et leur réponse) et `Ui` : `show(écran, props)` rend une promesse résolue par l'action de l'utilisateur, `update(patch)` met à jour la progression, `close()` |
+| `screens.ts` | les écrans : accueil, récapitulatif, reprise, progression, quantité, choix de produit (hôte), erreurs, fin                                                                                           |
+| `strings.ts` | **tous** les textes (français simple, tutoiement) et les conseils de chaque code d'erreur                                                                                                            |
+| `ui.ts`      | `createUi({ win?, mode? })` : conteneur, feuille de style, focus (premier bouton, piège de focus) ; `mode: 'open'` seulement pour les tests d'accessibilité                                          |
+
+Un écran remplacé par un autre ne résout plus sa promesse. **Point d'extension de la phase B (DRV-306)** : `ui.show('chooser', { ingredient, position, total, mount })` affiche la barre du haut (« Passer cette fois », « J'en ai toujours », « Annuler le passage ») et appelle `mount(zone, answer)` une fois la zone dans la page ; `answer(valeur)` conclut l'écran avec `{ kind: 'content', valeur }`. La démonstration s'ouvre sur http://localhost:5173/drive-agent/demo/index.html?screen=summary (`make start`) ; `e2e/agent-ui.spec.ts` y passe axe (WCAG AA, clair et sombre), les 360×640 et la page hôte hostile.
 
 ## Construction
 
