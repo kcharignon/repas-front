@@ -2,8 +2,12 @@ name: Android
 
 # Application Android « Repas Drive » (DRV-311, android/). Séparé de ci.yml : `make check` ne construit pas l'application.
 #   - « debug » joue les tests Kotlin puis construit l'APK de débogage, avec les mêmes commandes que `make android-test` et `make android` ;
+#   - « prerelease » (déclenchement à la main sur main seulement, `gh workflow run android.yml --ref main`) publie l'APK de débogage dans une
+#     pré-version GitHub `android-dev-<date>` (DRV-313) : jamais une release de production (release.yml ne s'occupe que des tags vX.Y.Z) ;
 #   - « release » prouve que la publication refuse de se construire sans clé de signature et réussit avec une clé jetable créée dans le
 #     job (`make android-release-selftest`). Aucune vraie clé n'est utilisée ici : la publication signée est celle de DRV-315.
+# L'agent du drive (drive-agent/dist/agent.js) est un actif de l'application : chaque job le construit d'abord avec Node (`npm run agent:build`),
+# puis les commandes make reçoivent ANDROID_AGENT= pour ne pas le reconstruire dans Docker. Son empreinte attendue est android/agent.js.sha384.
 # L'image de construction (JDK, Gradle, SDK Android) est lourde : ses couches sont gardées dans le cache de GitHub Actions.
 on:
   workflow_dispatch:
@@ -11,12 +15,22 @@ on:
     branches: [main]
     paths:
       - android/**
+      - drive-agent/src/**
+      - drive-agent/protocol/**
+      - drive-agent/scripts/**
+      - package.json
+      - package-lock.json
       - .github/workflows/android.yml
       - compose.yaml
       - Makefile
   pull_request:
     paths:
       - android/**
+      - drive-agent/src/**
+      - drive-agent/protocol/**
+      - drive-agent/scripts/**
+      - package.json
+      - package-lock.json
       - .github/workflows/android.yml
       - compose.yaml
       - Makefile
@@ -32,8 +46,17 @@ jobs:
   debug:
     name: Tests Kotlin et APK de débogage (Docker)
     runs-on: ubuntu-latest
+    outputs:
+      sha256: ${{ steps.apk.outputs.sha256 }}
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Agent du drive (actif de l'application)
+        run: npm run agent:build
       - uses: docker/setup-buildx-action@v4.4.1
       # Le nom de l'image est celui que compose lui donne (projet « repas-front », service « android ») : `make` la trouve déjà construite.
       - uses: docker/build-push-action@v7.4.0
@@ -44,18 +67,21 @@ jobs:
           cache-from: type=gha,scope=android
           cache-to: type=gha,scope=android,mode=max
       - name: Tests Kotlin
-        run: make android-test
+        run: make android-test ANDROID_AGENT=
       - name: APK de débogage
         env:
           # Le numéro monte à chaque exécution ; sans étiquette, la version est « 0.0.0-dev ».
           ANDROID_VERSION_CODE: ${{ github.run_number }}
           ANDROID_COMMIT: ${{ github.sha }}
-        run: make android
+        run: make android ANDROID_AGENT=
       - name: Taille et empreinte
+        id: apk
         run: |
           set -euo pipefail
           apk=android/dist/repas-drive-debug.apk
-          echo "APK de débogage : $(stat -c %s "$apk") octets, SHA-256 $(sha256sum "$apk" | cut -d' ' -f1)" >> "$GITHUB_STEP_SUMMARY"
+          sha256=$(sha256sum "$apk" | cut -d' ' -f1)
+          echo "sha256=$sha256" >> "$GITHUB_OUTPUT"
+          echo "APK de débogage : $(stat -c %s "$apk") octets, SHA-256 $sha256" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
         with:
           name: repas-drive-debug
@@ -68,6 +94,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Agent du drive (actif de l'application)
+        run: npm run agent:build
       - uses: docker/setup-buildx-action@v4.4.1
       - uses: docker/build-push-action@v7.4.0
         with:
@@ -77,4 +110,52 @@ jobs:
           cache-from: type=gha,scope=android
           cache-to: type=gha,scope=android,mode=max
       - name: Essai de la publication
-        run: make android-release-selftest
+        run: make android-release-selftest ANDROID_AGENT=
+
+  prerelease:
+    name: Pré-version GitHub de l'APK de débogage
+    needs: debug
+    # À la main (workflow_dispatch) et seulement depuis main : une pré-version n'est jamais une release de production, et son étiquette
+    # (android-dev-<date>) n'est ni vX.Y.Z ni android-vX.Y.Z.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: repas-drive-debug
+      - name: Publier la pré-version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA256: ${{ needs.debug.outputs.sha256 }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          # Le fichier téléchargé est bien celui que le job précédent a construit.
+          echo "${SHA256}  repas-drive-debug.apk" | sha256sum -c -
+          date=$(date -u +%Y-%m-%d)
+          tag="android-dev-${date}"
+          n=1
+          while gh release view "$tag" > /dev/null 2>&1; do
+            n=$((n + 1))
+            tag="android-dev-${date}-${n}"
+          done
+          cat > notes.md <<NOTES
+          APK de débogage de « Repas Drive » (DRV-313), pour essayer l'agent sur un téléphone sans Repas. Ce n'est pas une release de production.
+
+          - Empreinte SHA-256 de \`repas-drive-debug.apk\` : \`${SHA256}\`
+          - Empreinte SHA-384 de l'agent embarqué : \`$(cat android/agent.js.sha384)\`
+          - Construit depuis le commit \`${GITHUB_SHA}\` (numéro de version de l'application : ${RUN_NUMBER})
+          - Mode d'emploi pas à pas : https://github.com/${GH_REPO}/blob/${GITHUB_SHA}/android/PROCEDURE.md
+
+          L'APK est signé avec la clé de débogage publique du dépôt (mot de passe \`android\`) : elle ne protège rien. Il s'installe à côté de l'application de test \`eu.kantin.repas.lab\`.
+          NOTES
+          gh release create "$tag" repas-drive-debug.apk \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Repas Drive, essai de débogage ${date}" \
+            --notes-file notes.md
+          echo "Pré-version : https://github.com/${GH_REPO}/releases/tag/${tag}" >> "$GITHUB_STEP_SUMMARY"

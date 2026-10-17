@@ -129,6 +129,8 @@ services:
       - ANDROID_KEY_PASSWORD
     volumes:
       - ./android:/work/android
+      # L'agent construit par `make agent-build`, embarqué dans l'APK (DRV-313) : lecture seule.
+      - ./drive-agent/dist:/work/drive-agent/dist:ro
       - android-gradle:/gradle
 
   # Application Android jetable du chantier drive (DRV-011, drive-agent/android-lab) : `make android-lab`.

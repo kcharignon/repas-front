@@ -6,6 +6,8 @@
     <string name="menu_about">Version et mode d’emploi</string>
     <string name="menu_logout">Se déconnecter et effacer les données</string>
     <string name="menu_browser">Ouvrir dans le navigateur</string>
+    <string name="menu_diagnostic">Diagnostic de l’agent</string>
+    <string name="menu_debug_plan">Plan d’essai (débogage)</string>
 
     <string name="about_manual">Repas Drive affiche le site du drive Leclerc comme sur un ordinateur. Connecte-toi toi-même sur le site : l’application ne lit jamais ton mot de passe ni tes cookies, et ne parle qu’à leclercdrive.fr.\n\n• Le bouton retour du téléphone revient à la page précédente.\n• Un lien vers un autre site s’ouvre dans le navigateur du téléphone.\n• Pour changer de compte ou tout effacer : menu, « Se déconnecter et effacer les données ».</string>
 
@@ -24,4 +26,15 @@
 
     <string name="render_process_gone">L’affichage a été interrompu par Android. La page se recharge.</string>
     <string name="no_browser">Aucun navigateur n’est installé sur le téléphone.</string>
+
+    <string name="agent_ready">Agent : version %1$s, empreinte %2$s…</string>
+    <string name="agent_missing">Agent : absent de l’application. Réinstalle l’application.</string>
+    <string name="agent_corrupt">Agent : empreinte inattendue, il n’est pas utilisé. Réinstalle l’application.</string>
+    <string name="agent_webview_too_old">Ta WebView est trop ancienne pour l’agent. Mets à jour « Android System WebView » dans le Play Store.</string>
+    <string name="agent_not_ready">L’agent n’est pas prêt sur cette page. Attends la fin du chargement d’une page du drive, puis réessaie.</string>
+    <string name="agent_broken">L’agent embarqué est absent ou altéré : réinstalle l’application.</string>
+
+    <string name="result_title">Résultat de l’essai</string>
+    <string name="copy">Copier</string>
+    <string name="copied">Copié.</string>
 </resources>

@@ -1,0 +1,5 @@
+{
+  "path": "type",
+  "why": "Ce n’est pas une commande.",
+  "message": { "v": 1, "type": "plan", "command": "diagnostic" }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Commande de l'application vers l'agent du drive (protocole v1)",
+  "description": "Source de vérité documentaire (architecture.md § 8 du dépôt back). Les validateurs de drive-agent/protocol font foi à l'exécution ; un test vérifie qu'ils donnent le même verdict que ce schéma. Une commande n'a ni plan, ni magasin, ni chemin de retour : l'agent n'en renvoie rien à Repas.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "type", "command"],
+  "properties": {
+    "v": { "const": 1 },
+    "type": { "const": "command" },
+    "command": {
+      "description": "diagnostic : ouvre l'écran de diagnostic de l'agent (auto-test et rapport copiable, DRV-308).",
+      "enum": ["diagnostic"]
+    }
+  }
+}

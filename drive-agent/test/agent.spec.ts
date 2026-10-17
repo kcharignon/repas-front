@@ -1,7 +1,7 @@
 // @vitest-environment-options {"url": "https://fd0-courses.leclercdrive.fr/magasin-000123-000123-Ville-Test/recherche.aspx"}
 // L'agent (DRV-301, DRV-305) : silencieux sans plan ; avec un plan reçu par un transport, il déroule le passage. La page est celle d'un
 // magasin inventé, l'interface est simulée (la vraie est fermée à la page, donc aux tests), aucun réseau.
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   decodeMessage,
@@ -328,5 +328,120 @@ describe('avec le fragment de l’adresse', () => {
     run(window, { origin: ORIGIN, navigate, flow: { ui: fakeUi().ui } })
 
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledOnce())
+  })
+})
+
+describe('la commande de diagnostic de l’application', () => {
+  const COMMAND = { v: 1, type: 'command', command: 'diagnostic' }
+
+  // Le diagnostic lance une vraie recherche (chemin relatif, à l’hôte de la page) : aucun réseau dans les tests.
+  const fetchSpy = vi
+    .fn<typeof fetch>()
+    .mockRejectedValue(new Error('pas de réseau dans les tests'))
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchSpy)
+  })
+
+  function withBridge() {
+    let listener: (event: { data: unknown }) => void = () => undefined
+    const bridge = {
+      postMessage: vi.fn<(text: string) => void>(),
+      addEventListener: (_type: 'message', handler: typeof listener) => {
+        listener = handler
+      },
+    }
+    Object.assign(window, { repasHost: bridge })
+    return { bridge, receive: (message: unknown) => listener({ data: JSON.stringify(message) }) }
+  }
+
+  /** Un diagnostic que le test referme à la main. */
+  function diagnosticUi() {
+    const close: (() => void)[] = []
+    const screens = fakeUi({
+      diagnostic: (props) =>
+        new Promise<'close'>((resolve) => {
+          close.push(() => resolve('close'))
+          props.start({ update: () => undefined, finish: () => undefined })
+        }),
+    })
+    return { screens, closeDiagnostic: () => close.at(-1)?.() }
+  }
+
+  it('ouvre le diagnostic aussitôt, sans écran d’accueil, et ne renvoie rien à l’application', async () => {
+    // Given
+    const { bridge, receive } = withBridge()
+    const searches: string[] = []
+    const adapter = {
+      ...fakeAdapter().adapter,
+      searchProducts: (query: string) => {
+        searches.push(query)
+        return Promise.resolve([])
+      },
+    }
+    const { screens, closeDiagnostic } = diagnosticUi()
+    run(window, { flow: { ui: screens.ui, adapter } })
+
+    // When
+    receive(COMMAND)
+    await vi.waitFor(() => expect(searches).toEqual(['sel']))
+    closeDiagnostic()
+
+    // Then
+    await vi.waitFor(() => expect(screens.closed.count).toBe(1))
+    expect(screens.screens()).toEqual(['diagnostic'])
+    expect(bridge.postMessage).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['une commande inconnue', { ...COMMAND, command: 'supprimer' }],
+    ['une clé en trop', { ...COMMAND, plan: [] }],
+  ])('%s montre « liste illisible » et n’ouvre pas le diagnostic', async (_name, message) => {
+    const { receive } = withBridge()
+    const screens = fakeUi()
+    run(window, { flow: { ui: screens.ui } })
+
+    receive(message)
+
+    await vi.waitFor(() =>
+      expect(screens.propsOf('error')).toEqual([{ code: 'INVALID_MESSAGE', canReturn: false }]),
+    )
+    expect(screens.screens()).toEqual(['error'])
+  })
+
+  it('est ignorée pendant un passage ; le passage, lui, n’est pas touché', async () => {
+    // Given : un passage arrêté sur son récapitulatif
+    const { receive } = withBridge()
+    const screens = fakeUi({ summary: () => new Promise<'start'>(() => undefined) })
+    run(window, { flow: { ui: screens.ui } })
+    receive(PLAN)
+    await vi.waitFor(() => expect(screens.screens()).toEqual(['summary']))
+
+    // When
+    receive(COMMAND)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    // Then
+    expect(screens.screens()).toEqual(['summary'])
+  })
+
+  it('un passage est ignoré pendant le diagnostic, puis repart une fois celui-ci fermé', async () => {
+    // Given : le diagnostic ouvert
+    const { bridge, receive } = withBridge()
+    const { screens, closeDiagnostic } = diagnosticUi()
+    run(window, { flow: { ui: screens.ui } })
+    receive(COMMAND)
+    await vi.waitFor(() => expect(screens.screens()).toEqual(['diagnostic']))
+
+    // When : un plan arrive pendant le diagnostic, puis un second après sa fermeture
+    receive(PLAN)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(screens.screens()).toEqual(['diagnostic'])
+    closeDiagnostic()
+    await vi.waitFor(() => expect(screens.closed.count).toBe(1))
+    receive(PLAN)
+
+    // Then
+    await vi.waitFor(() => expect(bridge.postMessage).toHaveBeenCalledOnce())
+    expect(screens.screens()).toEqual(['diagnostic', 'summary', 'progress', 'end'])
   })
 })

@@ -5,6 +5,7 @@ import Ajv from 'ajv'
 import { describe, expect, it } from 'vitest'
 
 import {
+  COMMANDS,
   CONTENT_UNITS,
   ERROR_CODES,
   LIMITS,
@@ -14,6 +15,7 @@ import {
   OUTCOMES,
   PACKS_STATUSES,
   PLACEMENTS,
+  validateCommand,
   validatePlan,
   validateResult,
 } from '../protocol'
@@ -34,6 +36,7 @@ function accepts(validator: (message: unknown) => unknown, message: unknown): bo
 describe.each([
   ['plan', validatePlan],
   ['result', validateResult],
+  ['command', validateCommand],
 ] as const)('schéma %s.schema.json', (kind, validator) => {
   const validate = ajv.compile(schema(kind))
 
@@ -53,8 +56,8 @@ describe.each([
     },
   )
 
-  it('a au moins 6 exemples valides et 6 invalides', () => {
-    expect(validExamples(kind).length).toBeGreaterThanOrEqual(6)
+  it('a au moins 6 exemples invalides et 6 valides (1 pour les commandes, qui n’ont qu’une valeur)', () => {
+    expect(validExamples(kind).length).toBeGreaterThanOrEqual(kind === 'command' ? 1 : 6)
     expect(invalidExamples(kind).length).toBeGreaterThanOrEqual(6)
   })
 })
@@ -70,12 +73,13 @@ describe('les schémas et le module disent la même chose', () => {
     }
     return found
   }
-  const both = JSON.stringify([schema('plan'), schema('result')])
+  const both = JSON.stringify([schema('plan'), schema('result'), schema('command')])
 
   it.each([
     ['statuts de ligne', LINE_STATUSES],
     ['états des quantités', [...PACKS_STATUSES, null]],
     ['codes d’erreur', ERROR_CODES],
+    ['commandes', COMMANDS],
     ['issues globales', OUTCOMES],
     ['placements', PLACEMENTS],
     ['unités de contenu', CONTENT_UNITS],

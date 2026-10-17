@@ -36,18 +36,22 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import java.util.UUID
 
 /**
  * L'hôte WebView de « Repas Drive » (DRV-312) : le drive Leclerc en plein écran, en mode ordinateur permanent.
  *
  * L'utilisateur se connecte lui-même ; ses cookies restent dans la WebView, que l'application ne lit ni ne journalise jamais (ni
  * cookie, ni contenu de page, ni adresse complète). Navigation limitée à `https` et `*.leclercdrive.fr` ([NavigationPolicy]) : tout
- * autre lien s'ouvre dans le navigateur du téléphone. Aucun objet natif n'est exposé aux pages.
+ * autre lien s'ouvre dans le navigateur du téléphone. Aucun objet natif n'est exposé aux pages ; l'agent y est injecté par [AgentHost] (DRV-313).
  */
 class MainActivity : Activity() {
     private lateinit var webView: WebView
     private lateinit var problemPanel: View
     private lateinit var problemText: TextView
+    private lateinit var resultPanel: TextPanel
+    private lateinit var agent: AgentHost
+    private lateinit var debugRun: DebugRun
 
     /** La fenêtre vide qui reçoit un `window.open` avant que son adresse soit confiée à la WebView principale. */
     private var popup: WebView? = null
@@ -60,6 +64,17 @@ class MainActivity : Activity() {
         // Le débogage à distance de la WebView n'existe que dans la version de débogage.
         if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) WebView.setWebContentsDebuggingEnabled(true)
 
+        resultPanel = TextPanel(this)
+        debugRun = DebugRun(
+            template = { AgentHost.readAsset(this, DebugPlan.TEMPLATE_FILE)?.toString(Charsets.UTF_8) },
+            send = { agent.send(it) },
+            show = { resultPanel.show(it) },
+            newRunId = { UUID.randomUUID().toString() },
+        )
+        agent = AgentHost.create(this) { message ->
+            // La variante de débogage montre le résultat de l'essai ; le passage du plan et son retour vers Repas arrivent avec DRV-314.
+            if (BuildConfig.DEBUG) debugRun.onAgentMessage(message.type, message.text)
+        }
         webView = createWebView()
         problemPanel = problemPanel()
         val root = FrameLayout(this).apply {
@@ -70,6 +85,7 @@ class MainActivity : Activity() {
                 menuButton(),
                 FrameLayout.LayoutParams(dp(48), dp(48), Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(12), dp(24)) },
             )
+            addView(resultPanel, FrameLayout.LayoutParams(MATCH, MATCH))
         }
         keepClearOfSystemBars(root)
         setContentView(root)
@@ -104,9 +120,13 @@ class MainActivity : Activity() {
     // ---------------------------------------------------------------------------------------------------------------
     // Retour arrière et marges
 
-    /** Retour arrière dans la WebView, puis sortie de l'application. */
+    /** Retour arrière : ferme l'écran de résultat, puis revient en arrière dans la WebView, puis quitte l'application. */
     private fun goBackOrExit() {
-        if (webView.canGoBack()) webView.goBack() else finish()
+        when {
+            resultPanel.isShowing -> resultPanel.hide()
+            webView.canGoBack() -> webView.goBack()
+            else -> finish()
+        }
     }
 
     /** `targetSdk` 36 : le geste « retour » passe par un rappel (la méthode `onBackPressed` n'est plus appelée depuis Android 13). */
@@ -153,6 +173,8 @@ class MainActivity : Activity() {
             javaScriptCanOpenWindowsAutomatically = true
         }
         DesktopMode.apply(this, view.settings)
+        // Le canal et l'injection de l'agent (DRV-313) : avant le premier chargement, réservés aux pages *.leclercdrive.fr.
+        agent.attach(view)
         CookieManager.getInstance().apply {
             setAcceptCookie(true)
             // Leclerc charge des éléments d'autres sites (anti-robot, mesure) qui posent leurs propres cookies.
@@ -196,6 +218,7 @@ class MainActivity : Activity() {
 
         override fun onPageFinished(view: WebView, url: String?) {
             if (!loadFailed) problemPanel.visibility = View.GONE
+            agent.onPageFinished(view, url)
         }
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -331,16 +354,18 @@ class MainActivity : Activity() {
             .show()
     }
 
-    private fun menuEntries(): List<Pair<Int, () -> Unit>> = listOf(
-        R.string.menu_about to ::showAbout,
-        R.string.menu_logout to ::confirmClearData,
-        R.string.menu_browser to ::openCurrentPageInBrowser,
-    )
+    private fun menuEntries(): List<Pair<Int, () -> Unit>> = buildList {
+        add(R.string.menu_about to ::showAbout)
+        add(R.string.menu_logout to ::confirmClearData)
+        add(R.string.menu_browser to ::openCurrentPageInBrowser)
+        add(R.string.menu_diagnostic to ::openAgentDiagnostic)
+        if (BuildConfig.DEBUG) add(R.string.menu_debug_plan to ::startDebugPlan)
+    }
 
     private fun showAbout() {
         AlertDialog.Builder(this)
             .setTitle(R.string.app_name)
-            .setMessage(versionLine() + "\n\n" + getString(R.string.about_manual))
+            .setMessage(versionLine() + "\n" + agent.describe(this) + "\n\n" + getString(R.string.about_manual))
             .setPositiveButton(R.string.close, null)
             .show()
     }
@@ -379,5 +404,15 @@ class MainActivity : Activity() {
         openInPhoneBrowser(webView.url?.takeIf { NavigationPolicy.isAllowed(it) } ?: NavigationPolicy.START_URL)
     }
 
-    private fun toast(message: Int) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    /** Le diagnostic de l'agent : une commande sur le pont, jamais un fragment d'adresse (un fragment trop long fait échouer le site). */
+    private fun openAgentDiagnostic() {
+        if (!agent.openDiagnostic()) toast(agent.unavailableMessage())
+    }
+
+    /** Variante de débogage seulement : l'agent lit le magasin de la page, puis reçoit un plan synthétique de quatre ingrédients. */
+    private fun startDebugPlan() {
+        if (!debugRun.start(NavigationPolicy.httpsHostOf(webView.url))) toast(agent.unavailableMessage())
+    }
+
+    private fun toast(message: Int) =Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 }

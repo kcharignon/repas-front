@@ -5,6 +5,8 @@
   "exclude": ["drive-agent/lab/dist/**", "drive-agent/android-lab/dist/**", "android/dist/**"],
   "compilerOptions": {
     "types": ["node"],
+    // Les tests de android/ importent l'outil de construction de l'agent (drive-agent/scripts/build.mjs, JavaScript typé par JSDoc).
+    "allowJs": true,
     // Le favori tourne dans une page web : DOM complet, y compris les cadres.
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.lab.tsbuildinfo"
   }

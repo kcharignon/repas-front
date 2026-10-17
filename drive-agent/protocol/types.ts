@@ -232,3 +232,14 @@ export interface SetupResultMessage {
   agentVersion: string
   store: { id: string; host: string; baseUrl: string; label: string | null }
 }
+
+export const COMMANDS = ['diagnostic'] as const
+/** Une demande de l'application à l'agent, sans plan : `diagnostic` ouvre l'écran de diagnostic (DRV-308). */
+export type Command = (typeof COMMANDS)[number]
+
+/** Application vers l'agent : une commande (pas de plan, pas de magasin, pas de retour vers Repas). */
+export interface CommandMessage {
+  v: typeof PROTOCOL_VERSION
+  type: 'command'
+  command: Command
+}

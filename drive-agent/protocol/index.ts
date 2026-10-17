@@ -3,6 +3,7 @@
 export { decodeMessage, encodeMessage } from './codec'
 export { HOST as STORE_HOST } from './check'
 export { ProtocolError } from './error'
+export { validateCommand } from './command'
 export { validatePlan } from './plan'
 export { validateResult } from './result'
 export * from './types'
