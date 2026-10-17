@@ -39,6 +39,8 @@ jobs:
         run: npm run test:coverage
       - name: Build
         run: npm run build-only
+      - name: Banc d'essai du favori (construction et taille de la chaîne)
+        run: npm run lab:build
 
   e2e:
     name: Bout en bout (Playwright)

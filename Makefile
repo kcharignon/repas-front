@@ -123,6 +123,12 @@ fixtures: ## Create the demo accounts and data in the back dev database: admin@r
 	@docker exec $(BACK_PHP) bin/console doctrine:fixtures:load --env=dev --group=demo --append -n
 	@echo "✅ Connecte-toi sur http://localhost:$(FRONT_PORT) avec admin@repas.fr (administrateur) ou user@repas.fr, mot de passe : M0t 2 p@sse"
 
+## —— Drive Leclerc 🛒 ————————————————————————————————————————————————————
+.PHONY: lab
+
+lab: ## Build the throwaway drive test bookmarklet (drive-agent/lab) into drive-agent/lab/dist/lab-bookmarklet.txt and print its size
+	@$(RUN) npm run --silent lab:build
+
 ## —— Production image 📦 ————————————————————————————————————————————————————
 .PHONY: prod prod-stop
 
