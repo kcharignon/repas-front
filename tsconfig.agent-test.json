@@ -5,6 +5,7 @@
     "drive-agent/src/**/*.ts",
     "drive-agent/protocol/**/*.ts",
     "drive-agent/test/**/*.ts",
+    "drive-agent/demo/**/*.ts",
     "drive-agent/scripts/**/*.mjs"
   ],
   "compilerOptions": {
