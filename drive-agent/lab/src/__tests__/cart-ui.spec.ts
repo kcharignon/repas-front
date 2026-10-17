@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { checkBeforeAdd } from '../essais/cartFlow'
 import type { Product } from '../parse'
@@ -423,13 +423,61 @@ describe('essai 3 : réponses du panier', () => {
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
       Accept: '*/*',
       'X-Requested-With': 'XMLHttpRequest',
+      zcwb: 'ajax-manager',
     })
+    expect(text).toContain('Adresse du panier : sans suffixe de ville')
     expect(text).toContain(
-      `En-têtes posés par le banc : Content-Type, Accept, X-Requested-With (+ ceux du navigateur) ; Content-Length du corps : ${String(sent.body).length}`,
+      `En-têtes posés par le banc : Content-Type, Accept, X-Requested-With, zcwb (+ ceux du navigateur) ; Content-Length du corps : ${String(sent.body).length}`,
     )
+    expect(text).not.toContain('ajax-manager')
     expect(text).not.toContain('XMLHttpRequest\n')
     expect(text).not.toContain('urlencoded')
     expect(text).not.toContain('*/*')
+  })
+
+  it('poste sur l’adresse du panier sans nom de ville et garde la ville pour la recherche', async () => {
+    // Given : une page de recherche dont l’adresse porte un nom de ville INVENTÉ
+    const harness = mount({ path: '/magasin-123456-123456-Ville-Test/recherche.aspx' })
+    await searched(harness)
+    openEssai(harness, 3)
+    pick(harness, FLOUR_ID)
+
+    // When
+    click(harness.root, 'Préparer l’ajout')
+    click(harness.root, 'Oui, ajouter 1 au panier')
+    const text = await untilOutput(harness.root, 'Adresse du panier')
+
+    // Then : la recherche garde le suffixe, le panier non
+    const calls = harness.fetch.mock.calls.map(([url]) => url)
+    expect(calls[0]).toBe(
+      `${window.location.origin}/magasin-123456-123456-Ville-Test/recherche.aspx?TexteRecherche=farine`,
+    )
+    expect(posts(harness)).toHaveLength(1)
+    expect(posts(harness)[0]?.url).toBe(
+      `${window.location.origin}/magasin-123456-123456/panier.aspx?op=1`,
+    )
+    expect(text).toContain('Adresse du panier : sans suffixe de ville')
+
+    // And : le texte copié ne contient ni la ville ni le numéro du magasin
+    click(harness.root, 'Copier le résultat')
+    await vi.waitFor(() => expect(harness.copied).toHaveLength(1))
+    expect(harness.copied[0]).not.toMatch(/Ville-Test|123456/i)
+  })
+
+  it('dit quand la forme de l’adresse est inattendue et garde le segment complet', async () => {
+    const harness = mount({ path: '/magasin-123456-Ville-Test/recherche.aspx' })
+    await searched(harness)
+    openEssai(harness, 3)
+    pick(harness, FLOUR_ID)
+
+    click(harness.root, 'Préparer l’ajout')
+    click(harness.root, 'Oui, ajouter 1 au panier')
+    const text = await untilOutput(harness.root, 'Adresse du panier')
+
+    expect(posts(harness)[0]?.url).toBe(
+      `${window.location.origin}/magasin-123456-Ville-Test/panier.aspx?op=1`,
+    )
+    expect(text).toContain('Adresse du panier : segment complet (forme inattendue)')
   })
 
   it('montre aussi le Content-Length du retrait', async () => {

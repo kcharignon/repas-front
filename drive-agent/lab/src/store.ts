@@ -11,6 +11,12 @@ export interface StoreInfo {
   second: string
   /** `/magasin-<id>-<id>` : début commun à toutes les pages du magasin. */
   basePath: string
+  /** Deuxième identifiant, quand le segment est « deux nombres » suivis, ou non, d'un nom de ville ; sinon `null`. */
+  secondId: string | null
+  /** Le nom de ville qui suit les deux nombres dans l'adresse de la page (jamais dans celle du panier), s'il y en a un. */
+  city: string | null
+  /** Début d'adresse du panier : `/magasin-<id>-<id>` sans le nom de ville, comme le site ; le segment complet si la forme est inattendue. */
+  cartPath: string
 }
 
 export interface LocationLike {
@@ -26,15 +32,35 @@ export function parseStore(location: LocationLike): StoreInfo | null {
   if (!found) return null
   const [, segment, id, second] = found
   if (segment === undefined || id === undefined || second === undefined) return null
-  return { host: location.host, origin: location.origin, id, second, basePath: `/${segment}` }
+  const shape = /^(\d+)(?:-(.+))?$/.exec(second)
+  const secondId = shape?.[1] ?? null
+  const basePath = `/${segment}`
+  return {
+    host: location.host,
+    origin: location.origin,
+    id,
+    second,
+    basePath,
+    secondId,
+    city: shape?.[2] ?? null,
+    cartPath: secondId === null ? basePath : `/magasin-${id}-${secondId}`,
+  }
 }
 
 export function searchUrl(store: StoreInfo, query: string): string {
   return `${store.origin}${store.basePath}/recherche.aspx?TexteRecherche=${encodeURIComponent(query)}`
 }
 
+/** Le panier, comme le site : `/magasin-<id>-<id>/panier.aspx?op=1`, sans le nom de ville des pages. */
 export function cartUrl(store: StoreInfo): string {
-  return `${store.origin}${store.basePath}/panier.aspx?op=1`
+  return `${store.origin}${store.cartPath}/panier.aspx?op=1`
+}
+
+/** Diagnostic : l'adresse du panier a-t-elle perdu le suffixe de ville ? Aucune valeur n'est affichée. */
+export function cartAddressNote(store: StoreInfo): string {
+  return store.secondId === null
+    ? 'Adresse du panier : segment complet (forme inattendue)'
+    : 'Adresse du panier : sans suffixe de ville'
 }
 
 /** Adresse d'une page du magasin avec un fragment : sert à l'essai « fragment vers Leclerc ». */

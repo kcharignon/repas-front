@@ -30,6 +30,22 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+/** Le nom de ville de l'adresse, brut ou décodé, où qu'il apparaisse. */
+function maskCity(text: string, city: string | null): string {
+  if (city === null) return text
+  const names = new Set([city])
+  try {
+    names.add(decodeURIComponent(city))
+  } catch {
+    // Séquence d'échappement invalide : on garde la version brute.
+  }
+  let masked = text
+  for (const name of names) {
+    if (name.length >= 3) masked = masked.replace(new RegExp(escapeRegExp(name), 'gi'), '[ville]')
+  }
+  return masked
+}
+
 /**
  * Remplace le magasin (numéro, début d'adresse `magasin-…`) par des repères neutres.
  * Appliqué au texte copié : le dépôt est public et le magasin de l'utilisateur est une donnée personnelle.
@@ -44,10 +60,13 @@ export function maskStore(text: string, store: StoreInfo | null): string {
   } catch {
     // Séquence d'échappement invalide : on garde la version brute.
   }
+  variants.add(store.cartPath.slice(1))
   for (const variant of variants) {
     masked = masked.replace(new RegExp(escapeRegExp(variant), 'gi'), 'magasin-[masqué]')
   }
+  masked = maskCity(masked, store.city)
   const ids = new Set([store.id])
+  if (store.secondId !== null) ids.add(store.secondId)
   if (/^\d+$/.test(store.second)) ids.add(store.second)
   for (const id of ids) {
     masked = masked.replace(new RegExp(`(?<!\\d)${escapeRegExp(id)}(?!\\d)`, 'g'), '[n° magasin]')

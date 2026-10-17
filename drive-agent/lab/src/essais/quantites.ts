@@ -205,6 +205,7 @@ export const quantites: Essai = {
         show([
           describeReply(call.reply),
           ...(call.reply.error === null ? [pointLine(call.pointFrom)] : []),
+          ...call.request,
           ...(call.summary?.lines ?? []),
           ...call.verdict,
         ])

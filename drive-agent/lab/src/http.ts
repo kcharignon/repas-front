@@ -76,11 +76,12 @@ export function getPage(fetchFn: FetchFn, url: string, now: () => number): Promi
   )
 }
 
-/** En-têtes de l'ajout au panier : ceux que le site envoie lui-même (relevé DRV-008). Le navigateur ajoute les siens. */
+/** En-têtes de l'écriture au panier : ceux que le site envoie lui-même (relevé DRV-008). Le navigateur ajoute les siens. */
 export const FORM_HEADERS: Readonly<Record<string, string>> = {
   'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
   Accept: '*/*',
   'X-Requested-With': 'XMLHttpRequest',
+  zcwb: 'ajax-manager',
 }
 
 /** Envoi d'un formulaire à l'hôte courant (panier). */

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { hasCookie, isSensitiveKey, maskEmails, maskStore, shorten } from '../redact'
 import {
+  cartAddressNote,
   cartUrl,
   findDeliveryPoint,
   fragmentTargetUrl,
@@ -10,6 +11,8 @@ import {
   searchUrl,
   type StoreInfo,
 } from '../store'
+
+const CITY_PATH = '/magasin-123456-123456-Ville-Test/recherche.aspx'
 
 const LOCATION = {
   origin: 'https://fd9-courses.example',
@@ -83,7 +86,64 @@ describe('parseStore et adresses', () => {
       id: '999111',
       second: '999111',
       basePath: '/magasin-999111-999111',
+      secondId: '999111',
+      city: null,
+      cartPath: '/magasin-999111-999111',
     })
+  })
+
+  it('sépare le nom de ville du panier : deux nombres, puis un suffixe facultatif', () => {
+    const store = parseStore({ ...LOCATION, pathname: CITY_PATH }) as StoreInfo
+
+    expect(store).toMatchObject({
+      id: '123456',
+      second: '123456-Ville-Test',
+      secondId: '123456',
+      city: 'Ville-Test',
+      basePath: '/magasin-123456-123456-Ville-Test',
+      cartPath: '/magasin-123456-123456',
+    })
+    expect(cartUrl(store)).toBe(
+      'https://fd9-courses.example/magasin-123456-123456/panier.aspx?op=1',
+    )
+    expect(cartAddressNote(store)).toBe('Adresse du panier : sans suffixe de ville')
+  })
+
+  it('garde l’adresse des pages de recherche avec le nom de ville', () => {
+    const store = parseStore({ ...LOCATION, pathname: CITY_PATH }) as StoreInfo
+
+    expect(searchUrl(store, 'farine')).toBe(
+      'https://fd9-courses.example/magasin-123456-123456-Ville-Test/recherche.aspx?TexteRecherche=farine',
+    )
+  })
+
+  it('garde deux identifiants différents dans l’adresse du panier', () => {
+    const store = parseStore({
+      ...LOCATION,
+      pathname: '/magasin-123456-654321-Ville-Test/recherche.aspx',
+    }) as StoreInfo
+
+    expect(store.secondId).toBe('654321')
+    expect(cartUrl(store)).toContain('/magasin-123456-654321/panier.aspx?op=1')
+  })
+
+  it('n’invente rien quand la page n’a pas de nom de ville', () => {
+    const store = parseStore({ ...LOCATION, pathname: '/magasin-123456-123456/recherche.aspx' })
+
+    expect(store).toMatchObject({ city: null, cartPath: '/magasin-123456-123456' })
+  })
+
+  it('garde le segment complet et le dit quand la forme n’est pas « deux nombres »', () => {
+    const store = parseStore({
+      ...LOCATION,
+      pathname: '/magasin-123456-Ville-Test/recherche.aspx',
+    }) as StoreInfo
+
+    expect(store).toMatchObject({ secondId: null, city: null })
+    expect(cartUrl(store)).toBe(
+      'https://fd9-courses.example/magasin-123456-Ville-Test/panier.aspx?op=1',
+    )
+    expect(cartAddressNote(store)).toBe('Adresse du panier : segment complet (forme inattendue)')
   })
 
   it('accepte un nom de ville décoratif à la place du second identifiant', () => {
@@ -151,12 +211,54 @@ describe('maskStore', () => {
   it('masque aussi un nom de ville de l’adresse, brut ou décodé', () => {
     const withCity = parseStore({
       ...LOCATION,
-      pathname: '/magasin-999111-Rez%C3%A9/accueil.aspx',
+      pathname: '/magasin-999111-Vil%C3%A9/accueil.aspx',
     }) as StoreInfo
 
     expect(
-      maskStore('/magasin-999111-Rez%C3%A9/accueil.aspx et magasin-999111-Rezé', withCity),
+      maskStore('/magasin-999111-Vil%C3%A9/accueil.aspx et magasin-999111-Vilé', withCity),
     ).toBe('/magasin-[masqué]/accueil.aspx et magasin-[masqué]')
+  })
+
+  it('masque le segment complet, le segment court du panier et le nom de ville seul', () => {
+    const withCity = parseStore({ ...LOCATION, pathname: CITY_PATH }) as StoreInfo
+    const text = [
+      'Chemin : /magasin-123456-123456-Ville-Test/recherche.aspx',
+      'Panier : /magasin-123456-123456/panier.aspx?op=1',
+      'Ville : Ville-Test, ville-test',
+      'Point : 123456',
+    ].join('\n')
+
+    const masked = maskStore(text, withCity)
+
+    expect(masked).toBe(
+      [
+        'Chemin : /magasin-[masqué]/recherche.aspx',
+        'Panier : /magasin-[masqué]/panier.aspx?op=1',
+        'Ville : [ville], [ville]',
+        'Point : [n° magasin]',
+      ].join('\n'),
+    )
+    expect(masked).not.toMatch(/Ville-Test|123456/i)
+  })
+
+  it('masque le nom de ville encodé, et un second identifiant différent du premier', () => {
+    const withCity = parseStore({
+      ...LOCATION,
+      pathname: '/magasin-123456-654321-Vil%C3%A9/recherche.aspx',
+    }) as StoreInfo
+
+    expect(maskStore('Vilé et Vil%C3%A9, magasin 654321 et 123456', withCity)).toBe(
+      '[ville] et [ville], magasin [n° magasin] et [n° magasin]',
+    )
+  })
+
+  it('ne masque pas seul un nom de ville de moins de trois lettres', () => {
+    const tiny = parseStore({
+      ...LOCATION,
+      pathname: '/magasin-123456-123456-Ab/recherche.aspx',
+    }) as StoreInfo
+
+    expect(maskStore('Ab /magasin-123456-123456-Ab/x', tiny)).toBe('Ab /magasin-[masqué]/x')
   })
 
   it('masque les adresses e-mail même sans magasin', () => {
