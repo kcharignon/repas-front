@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Repas Drive</string>
+    <string name="skeleton_message">Cette application enverra ta liste de courses de Repas au drive. L’affichage du drive arrive dans une prochaine version.</string>
+</resources>

@@ -14,3 +14,9 @@ test-results
 drive-agent/android-lab/.gradle
 drive-agent/android-lab/.kotlin
 drive-agent/android-lab/app/build
+android/.gradle
+android/.kotlin
+android/app/build
+android/buildSrc/.gradle
+android/buildSrc/build
+android/dist

@@ -1,8 +1,8 @@
 {
   "extends": "./tsconfig.app.json",
   // Banc d'essai du favori (outil jetable, drive-agent/lab) : le code du favori, ses tests et son outil de construction.
-  "include": ["drive-agent/lab/**/*.ts", "drive-agent/android-lab/**/*.ts", "env.d.ts"],
-  "exclude": ["drive-agent/lab/dist/**", "drive-agent/android-lab/dist/**"],
+  "include": ["drive-agent/lab/**/*.ts", "drive-agent/android-lab/**/*.ts", "android/**/*.ts", "env.d.ts"],
+  "exclude": ["drive-agent/lab/dist/**", "drive-agent/android-lab/dist/**", "android/dist/**"],
   "compilerOptions": {
     "types": ["node"],
     // Le favori tourne dans une page web : DOM complet, y compris les cadres.
