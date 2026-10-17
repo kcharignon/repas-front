@@ -1,0 +1,24 @@
+[
+  {
+    "eTypeEvenement": 104,
+    "sIdUnique": "Produit1000001",
+    "iQuantitePanier": 2,
+    "iQteDisponible": 12
+  },
+  {
+    "eTypeEvenement": 1,
+    "sIdUnique": "Panier123456",
+    "iQuantitePanier": 2,
+    "sTotalAPayer": "2,58 €",
+    "iNbProduitIndisponible": 0,
+    "lstProduitsLight": [
+      {
+        "iIdProduit": "1000001",
+        "iQtePanier": "2",
+        "iQteDisponible": 12,
+        "fQuantiteMax": 12,
+        "rTotalAPayer": 2.58
+      }
+    ]
+  }
+]

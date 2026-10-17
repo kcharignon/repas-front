@@ -1,0 +1,39 @@
+[
+  {
+    "eTypeEvenement": 101,
+    "sIdUnique": "Produit1000001",
+    "iQuantitePanier": 3,
+    "iQteDisponible": 12
+  },
+  {
+    "eTypeEvenement": 501,
+    "sIdUnique": "Rayon12"
+  },
+  {
+    "eTypeEvenement": 1,
+    "sIdUnique": "Panier123456",
+    "iQuantitePanier": 5,
+    "sTotalAPayer": "9,47 €",
+    "iNbProduitIndisponible": 0,
+    "lstProduitsLight": [
+      {
+        "iIdProduit": 1000001,
+        "iQtePanier": 3,
+        "iQteDisponible": 12,
+        "fQuantiteMax": 12,
+        "rTotalAPayer": 3.87
+      },
+      {
+        "iIdProduit": 1000003,
+        "iQtePanier": 2,
+        "iQteDisponible": 5,
+        "fQuantiteMax": 5,
+        "rTotalAPayer": 2.58
+      }
+    ]
+  },
+  {
+    "eTypeEvenement": 4,
+    "sIdUnique": "PaniersComplets"
+  }
+]

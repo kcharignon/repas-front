@@ -1,0 +1,20 @@
+[
+  {
+    "eTypeEvenement": 102,
+    "sIdUnique": "Produit1000001",
+    "iQuantitePanier": 0,
+    "iQteDisponible": 12
+  },
+  {
+    "eTypeEvenement": 502,
+    "sIdUnique": "Rayon12"
+  },
+  {
+    "eTypeEvenement": 1,
+    "sIdUnique": "Panier123456",
+    "iQuantitePanier": 0,
+    "sTotalAPayer": "0,00 €",
+    "iNbProduitIndisponible": 0,
+    "lstProduitsLight": []
+  }
+]
