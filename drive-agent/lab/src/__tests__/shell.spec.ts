@@ -25,7 +25,7 @@ function textOf(harness: Harness): string {
 }
 
 describe('menu et lancement', () => {
-  it('affiche le menu des 12 essais et la mention d’outil jetable', () => {
+  it('affiche le menu des 12 essais et du 3b, et la mention d’outil jetable', () => {
     // Given / When
     const harness = mount()
 
@@ -33,11 +33,12 @@ describe('menu et lancement', () => {
     const items = Array.from(harness.root.querySelectorAll('.menu button')).map(
       (item) => item.querySelector('strong')?.textContent,
     )
-    expect(items).toHaveLength(12)
+    expect(items).toHaveLength(13)
     expect(items[0]).toBe("Sonde d'environnement")
+    expect(items[3]).toBe('Quantités')
     expect(
       Array.from(harness.root.querySelectorAll('.menu .num')).map((item) => item.textContent),
-    ).toEqual(Array.from({ length: 12 }, (_, i) => `${i + 1}.`))
+    ).toEqual(['1.', '2.', '3.', '3b.', ...Array.from({ length: 9 }, (_, i) => `${i + 4}.`)])
     expect(textOf(harness)).toContain(LAB_NOTICE)
     expect(harness.lab.host.id).toBe(HOST_ID)
     expect(document.getElementById(HOST_ID)).toBe(harness.lab.host)
@@ -53,7 +54,7 @@ describe('menu et lancement', () => {
     expect(second).toBeNull()
     expect(document.querySelectorAll(`#${HOST_ID}`)).toHaveLength(1)
     expect(harness.root.querySelector<HTMLElement>('.overlay')?.hidden).toBe(false)
-    expect(harness.root.querySelectorAll('.menu button')).toHaveLength(12)
+    expect(harness.root.querySelectorAll('.menu button')).toHaveLength(13)
   })
 
   it('lance un banc neuf quand il n’y en a pas', () => {
@@ -72,7 +73,7 @@ describe('menu et lancement', () => {
     click(harness.root, 'Sonde')
     expect(harness.root.querySelector('h1')?.textContent).toBe("1. Sonde d'environnement")
     click(harness.root, '← Menu')
-    expect(harness.root.querySelectorAll('.menu button')).toHaveLength(12)
+    expect(harness.root.querySelectorAll('.menu button')).toHaveLength(13)
     harness.root
       .querySelector('.overlay')
       ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
@@ -85,7 +86,7 @@ describe('menu et lancement', () => {
 
     harness.lab.showEssai(99)
 
-    expect(harness.root.querySelectorAll('.menu button')).toHaveLength(12)
+    expect(harness.root.querySelectorAll('.menu button')).toHaveLength(13)
   })
 
   it('met la feuille de style dans le Shadow DOM sans balise style quand le navigateur sait la construire', () => {
@@ -452,6 +453,87 @@ describe('essai 10 : contenu net', () => {
       'libellé (ligne 2) : 1000 g · prix : 1000 g (1,29 € ÷ 1,29 € / kg) → accord',
     )
     expect(text).toContain('libellé (ligne 2) : 6000 ml · prix : 6000 ml')
+  })
+
+  it('écrit que les champs structurés sont absents quand les produits n’en portent pas', async () => {
+    const harness = mount()
+    openEssai(harness, 10)
+
+    click(harness.root, 'Comparer')
+    const text = await untilOutput(harness.root, 'Contenu net de 3 produit(s)')
+
+    expect(text).toContain(
+      'Champs structurés (sUniteMesure, nrContenanceUnitaire, nrContenanceTotale) : absents des produits de cette recherche.',
+    )
+    expect(text).not.toContain('structuré :')
+  })
+
+  it('affiche les champs structurés à côté des deux méthodes et dit s’ils s’accordent', async () => {
+    // Given : trois produits INVENTÉS ; la farine et le sucre portent le contenu net structuré, le sucre se trompe
+    const structured = [
+      {
+        ...FLOUR,
+        extra: {
+          sUniteMesure: 'KG',
+          nrContenanceUnitaire: 1,
+          nrContenanceTotale: 1,
+          sUniteMesureTotale: 'kg',
+        },
+      },
+      {
+        ...SUGAR,
+        extra: {
+          sUniteMesure: 'KG',
+          nrContenanceUnitaire: 2,
+          nrContenanceTotale: 2,
+          sUniteMesureTotale: 'kg',
+        },
+      },
+      MILK,
+    ]
+    const harness = mount({ route: () => html(searchPage(structured)) })
+    openEssai(harness, 10)
+
+    // When
+    click(harness.root, 'Comparer')
+    const text = await untilOutput(harness.root, 'Contenu net de 3 produit(s)')
+
+    // Then
+    expect(text).toContain(
+      'Champs structurés (sUniteMesure, nrContenanceUnitaire, nrContenanceTotale) : présents sur 2 produit(s) sur 3.',
+    )
+    expect(text).toContain(
+      "Structuré contre libellé : d'accord 1 sur 2 comparable(s) ; structuré contre prix : d'accord 1 sur 2 comparable(s)",
+    )
+    expect(text).toContain(
+      '   structuré : sUniteMesure=KG · nrContenanceUnitaire=1 · nrContenanceTotale=1 · sUniteMesureTotale=kg → 1000 g (libellé : accord · prix : accord)',
+    )
+    expect(text).toContain(
+      '   structuré : sUniteMesure=KG · nrContenanceUnitaire=2 · nrContenanceTotale=2 · sUniteMesureTotale=kg → 2000 g (libellé : écart · prix : écart)',
+    )
+    expect(text.split('\n').filter((line) => line.includes('   structuré :'))).toHaveLength(2)
+  })
+
+  it('dit « non comparable » quand le produit structuré n’a ni libellé ni prix lisibles', async () => {
+    const odd = [
+      {
+        ...FLOUR,
+        line2: 'Marque X',
+        line1: 'Farine Y',
+        measureText: 'prix variable',
+        extra: { sUniteMesureTotale: 'kg', nrContenanceTotale: 1 },
+      },
+    ]
+    const harness = mount({ route: () => html(searchPage(odd)) })
+    openEssai(harness, 10)
+
+    click(harness.root, 'Comparer')
+    const text = await untilOutput(harness.root, 'Contenu net de 1 produit(s)')
+
+    expect(text).toContain('→ 1000 g (libellé : non comparable · prix : non comparable)')
+    expect(text).toContain(
+      "Structuré contre libellé : d'accord 0 sur 0 comparable(s) ; structuré contre prix : d'accord 0 sur 0 comparable(s)",
+    )
   })
 
   it('lance d’abord une recherche s’il n’y en a pas encore', async () => {

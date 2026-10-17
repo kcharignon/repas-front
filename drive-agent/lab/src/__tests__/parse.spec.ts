@@ -40,6 +40,51 @@ describe('extractProducts', () => {
     })
   })
 
+  it.each<PageStyle>(['json', 'entities', 'escaped', 'literal'])(
+    'lit le contenu net structuré du produit dans une page de forme « %s »',
+    (style) => {
+      // Given : des champs structurés INVENTÉS, de la forme relevée sur le site (DRV-007)
+      const flour = {
+        ...FLOUR,
+        extra: {
+          sUniteMesure: 'KG',
+          nrContenanceUnitaire: 1.5,
+          nrContenanceTotale: 3,
+          sUniteMesureTotale: 'kg',
+        },
+      }
+
+      // When
+      const result = extractProducts(searchPage([flour, SUGAR], style))
+
+      // Then : le produit qui les porte les a, l'autre n'a aucune clé `structured`
+      expect(result.products[0]?.structured).toEqual({
+        unitMeasure: 'KG',
+        unitContent: 1.5,
+        totalContent: 3,
+        totalUnit: 'kg',
+      })
+      expect(result.products[1]).not.toHaveProperty('structured')
+    },
+  )
+
+  it('lit un contenu net structuré partiel ou donné en texte', () => {
+    const page = `<script>{"iIdProduit":5,"sLibelleLigne1":"Lait","nrContenanceTotale":"6,0","sUniteMesureTotale":"L"}</script>`
+
+    expect(extractProducts(page).products[0]?.structured).toEqual({
+      unitMeasure: null,
+      unitContent: null,
+      totalContent: 6,
+      totalUnit: 'L',
+    })
+  })
+
+  it('ne confond pas sUniteMesure et sUniteMesureTotale', () => {
+    const page = `<script>{"iIdProduit":5,"sLibelleLigne1":"Lait","sUniteMesureTotale":"L"}</script>`
+
+    expect(extractProducts(page).products[0]?.structured?.unitMeasure).toBeNull()
+  })
+
   it('lit le prix promo, le stock à zéro et la quantité déjà au panier', () => {
     const result = extractProducts(searchPage(PRODUCTS))
 

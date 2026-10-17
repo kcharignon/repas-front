@@ -20,7 +20,7 @@ export function maskEmails(text: string): string {
 
 /** Clés d'une réponse du site dont la valeur n'est jamais affichée. */
 const SENSITIVE_KEY =
-  /cookie|token|jeton|mail|mdp|passw|motdepasse|session|secret|iban|carte|telephone|portable|adresse|prenom|nomclient|^s?nom$|datadome/i
+  /cookie|token|jeton|mail|mdp|passw|motdepasse|session|secret|iban|carte|telephone|portable|adresse|prenom|nomclient|^s?nom$|datadome|pointlivraison/i
 
 export function isSensitiveKey(key: string): boolean {
   return SENSITIVE_KEY.test(key)

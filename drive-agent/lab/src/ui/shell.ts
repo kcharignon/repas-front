@@ -1,5 +1,5 @@
 // Outil de test jetable, à supprimer après la décision G1 (DRV-005).
-// Coquille du banc : superposition en Shadow DOM, menu des 12 essais, cadre plein écran.
+// Coquille du banc : superposition en Shadow DOM, menu des essais (les 12 du ticket, plus le 3b), cadre plein écran.
 import { LAB_NOTICE } from '../config'
 import type { LabEnv } from '../env'
 import { ESSAIS } from '../essais'
@@ -19,7 +19,7 @@ export interface Lab {
   open(): void
   close(): void
   showMenu(): void
-  showEssai(id: number): void
+  showEssai(id: number | string): void
 }
 
 /** Feuille de style sans `<style>` (une politique de sécurité de la page pourrait l'interdire) ; à défaut, un élément `<style>`. */
@@ -159,7 +159,7 @@ export function createLab(env: LabEnv): Lab {
     )
   }
 
-  function showEssai(id: number): void {
+  function showEssai(id: number | string): void {
     const essai: Essai | undefined = ESSAIS.find((item) => item.id === id)
     if (!essai) return
     screen(`${essai.id}. ${essai.title}`, true)

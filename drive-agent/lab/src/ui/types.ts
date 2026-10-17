@@ -40,7 +40,8 @@ export interface ScreenContext {
 }
 
 export interface Essai {
-  id: number
+  /** Numéro affiché dans le menu : « 3 », « 3b »… */
+  id: number | string
   title: string
   /** Une phrase qui dit à quoi sert l'essai. */
   summary: string

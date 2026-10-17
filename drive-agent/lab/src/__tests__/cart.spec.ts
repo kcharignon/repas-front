@@ -4,36 +4,96 @@ import { cartBody, cartPayload, parseCartBody, summarizeCartResponse } from '../
 
 const ADD = { action: 1, productId: '1000001', quantity: 1, deliveryPoint: '123456' } as const
 
+/** L'ajout relevé sur le site (DRV-007), avec un point de livraison INVENTÉ. */
+const SITE_ADD = {
+  action: 1,
+  productId: '1955',
+  quantity: 1,
+  deliveryPoint: '123456',
+  searchText: 'farine',
+} as const
+
+const SITE_ADD_JSON =
+  '{"eTypeAction":1,"iIdProduit":"1955","iQuantite":1,"sNoPointLivraison":"123456","objContexteProvenanceArticle":{"eOrigine":4,"eTypePage":3,"sTexteRecherche":"farine","eVue":0,"sInformationsComplementaires":"uni-2"}}'
+
+const SITE_REMOVE_JSON =
+  '{"eTypeAction":2,"iIdProduit":"1955","iQuantite":0,"sNoPointLivraison":"123456"}'
+
 describe('cartPayload et cartBody', () => {
-  it('construit la requête d’ajout décrite dans la recherche', () => {
-    expect(JSON.parse(cartPayload(ADD))).toEqual({
+  it('reproduit champ par champ l’ajout du site : identifiant en texte, contexte joint, mêmes clés dans le même ordre', () => {
+    // When
+    const payload = cartPayload(SITE_ADD)
+
+    // Then
+    expect(payload).toBe(SITE_ADD_JSON)
+    const decoded = JSON.parse(payload) as Record<string, unknown>
+    expect(Object.keys(decoded)).toEqual([
+      'eTypeAction',
+      'iIdProduit',
+      'iQuantite',
+      'sNoPointLivraison',
+      'objContexteProvenanceArticle',
+    ])
+    expect(decoded.iIdProduit).toBe('1955')
+    expect(decoded.objContexteProvenanceArticle).toEqual({
+      eOrigine: 4,
+      eTypePage: 3,
+      sTexteRecherche: 'farine',
+      eVue: 0,
+      sInformationsComplementaires: 'uni-2',
+    })
+  })
+
+  it('reproduit le retrait du site : identifiant en texte, quantité 0, sans contexte', () => {
+    const payload = cartPayload({ ...SITE_ADD, action: 2, quantity: 0 })
+
+    expect(payload).toBe(SITE_REMOVE_JSON)
+    expect(JSON.parse(payload)).not.toHaveProperty('objContexteProvenanceArticle')
+  })
+
+  it('donne les tailles de corps relevées sur le site : 317 octets à l’ajout, 124 au retrait', () => {
+    expect(cartBody(SITE_ADD)).toHaveLength(317)
+    expect(cartBody({ ...SITE_ADD, action: 2, quantity: 0 })).toHaveLength(124)
+  })
+
+  it('joint un texte de recherche vide quand rien n’a été cherché', () => {
+    const { searchText: _unused, ...withoutSearch } = SITE_ADD
+
+    expect(JSON.parse(cartPayload(withoutSearch)).objContexteProvenanceArticle).toMatchObject({
+      sTexteRecherche: '',
+    })
+    expect(
+      JSON.parse(cartPayload({ ...SITE_ADD, searchText: null })).objContexteProvenanceArticle,
+    ).toMatchObject({ sTexteRecherche: '' })
+  })
+
+  it('n’envoie le contexte qu’à l’ajout (action 1), même pour une quantité de 2', () => {
+    expect(JSON.parse(cartPayload({ ...SITE_ADD, quantity: 2 }))).toHaveProperty(
+      'objContexteProvenanceArticle',
+    )
+    expect(JSON.parse(cartPayload({ ...SITE_ADD, action: 2, quantity: 2 }))).not.toHaveProperty(
+      'objContexteProvenanceArticle',
+    )
+  })
+
+  it('omet le contexte dans la variante de diagnostic', () => {
+    expect(JSON.parse(cartPayload({ ...SITE_ADD, withoutContext: true }))).toEqual({
       eTypeAction: 1,
-      iIdProduit: 1000001,
+      iIdProduit: '1955',
       iQuantite: 1,
       sNoPointLivraison: '123456',
     })
   })
 
-  it('construit le retrait : action 2, quantité 0', () => {
-    expect(JSON.parse(cartPayload({ ...ADD, action: 2, quantity: 0 }))).toMatchObject({
-      eTypeAction: 2,
-      iQuantite: 0,
-    })
-  })
-
-  it('joint l’objet d’analytique vide seulement sur demande', () => {
-    expect(JSON.parse(cartPayload(ADD))).not.toHaveProperty('objContexteProvenanceArticle')
-    expect(JSON.parse(cartPayload({ ...ADD, withContext: true }))).toHaveProperty(
-      'objContexteProvenanceArticle',
-      {},
-    )
-  })
-
-  it('place le JSON encodé dans le champ de formulaire d', () => {
-    const body = cartBody(ADD)
+  it('place le JSON encodé dans le champ de formulaire d, avec des guillemets et des accents bien encodés', () => {
+    const body = cartBody({ ...SITE_ADD, searchText: 'crème "fraîche"' })
 
     expect(body.startsWith('d=')).toBe(true)
-    expect(new URLSearchParams(body).get('d')).toBe(cartPayload(ADD))
+    expect(body).not.toContain('"')
+    expect(new URLSearchParams(body).get('d')).toBe(
+      cartPayload({ ...SITE_ADD, searchText: 'crème "fraîche"' }),
+    )
+    expect(new URLSearchParams(cartBody(SITE_ADD)).get('d')).toBe(SITE_ADD_JSON)
   })
 })
 
@@ -91,10 +151,10 @@ describe('summarizeCartResponse', () => {
     // Then
     expect(summary.blocked).toBe(false)
     expect(summary.lines[0]).toBe('Réponse JSON : 2 évènement(s).')
-    expect(summary.lines[1]).toBe(
+    expect(summary.lines).toContain(
       '- évènement 1 (type 1, panier) : eTypeEvenement=1 ; sNomEvenement=Panier123456 ; nrTotal=12.5 ; iNbArticles=3',
     )
-    expect(summary.lines[2]).toContain('type 4')
+    expect(summary.lines.some((line) => line.startsWith('- évènement 2 (type 4'))).toBe(true)
   })
 
   it('lit l’enveloppe d des services .NET, y compris en texte', () => {
@@ -190,5 +250,199 @@ describe('summarizeCartResponse', () => {
     expect(summarizeCartResponse(deep, 200, '1').lines[0]).toBe(
       `Réponse non JSON (${deep.length} caractères).`,
     )
+  })
+})
+
+/** Réponse d'écriture INVENTÉE, de la forme relevée (DRV-007) : produit, rayon, panier, paniers complets. */
+function writeResponse(cartLines: unknown, extra: Record<string, unknown> = {}): string {
+  return JSON.stringify([
+    { eTypeEvenement: 101, sIdUnique: 'Produit1955', iIdProduit: '1955', iQuantitePanier: 2 },
+    { eTypeEvenement: 501, sIdUnique: 'Rayon7' },
+    {
+      eTypeEvenement: 1,
+      sIdUnique: 'Panier000000',
+      lstProduitsLight: cartLines,
+      iQuantitePanier: 5,
+      sTotalAPayer: '12,34 €',
+      iNbProduitIndisponible: 0,
+      ...extra,
+    },
+    { eTypeEvenement: 4, sIdUnique: 'PaniersComplets' },
+  ])
+}
+
+const IN_CART = [
+  { iIdProduit: '2002', iQtePanier: 3, iQteDisponible: 8, fQuantiteMax: 10, rTotalAPayer: 3 },
+  { iIdProduit: '1955', iQtePanier: 2, iQteDisponible: 12, fQuantiteMax: 20, rTotalAPayer: 2.58 },
+]
+
+describe('summarizeCartResponse : la quantité obtenue', () => {
+  it('lit la quantité du produit testé, son stock, son maximum, le nombre d’articles et le total', () => {
+    // When
+    const summary = summarizeCartResponse(writeResponse(IN_CART), 200, '1955')
+
+    // Then
+    expect(summary.obtained).toBe(2)
+    expect(summary.obtainedByAbsence).toBe(false)
+    expect(summary.lines).toContain(
+      'Quantité obtenue du produit 1955 (iQtePanier) : 2 ; iQteDisponible 12 ; fQuantiteMax 20',
+    )
+    expect(summary.lines).toContain('Panier : iQuantitePanier 5 ; sTotalAPayer 12,34 €')
+    expect(summary.blocked).toBe(false)
+    expect(summary.rejected).toBe(false)
+  })
+
+  it('compare les identifiants en texte et en nombre', () => {
+    const asNumbers = IN_CART.map((line) => ({ ...line, iIdProduit: Number(line.iIdProduit) }))
+
+    expect(summarizeCartResponse(writeResponse(asNumbers), 200, '1955').obtained).toBe(2)
+    expect(summarizeCartResponse(writeResponse(IN_CART), 200, '2002').obtained).toBe(3)
+  })
+
+  it('compte 0 un produit absent de la liste du panier, et le dit', () => {
+    const summary = summarizeCartResponse(writeResponse(IN_CART.slice(0, 1)), 200, '1955')
+
+    expect(summary.obtained).toBe(0)
+    expect(summary.obtainedByAbsence).toBe(true)
+    expect(summary.lines).toContain(
+      'Produit 1955 absent de lstProduitsLight (1 au panier) : quantité obtenue 0',
+    )
+  })
+
+  it('trouve la liste et les totaux même rangés plus profond dans l’évènement', () => {
+    const response = JSON.stringify([
+      {
+        eTypeEvenement: 1,
+        sIdUnique: 'Panier000000',
+        objPanier: {
+          lstProduitsLight: IN_CART,
+          iQuantitePanier: 5,
+          sTotalAPayer: '12,34 €',
+        },
+      },
+    ])
+
+    const summary = summarizeCartResponse(response, 200, '1955')
+
+    expect(summary.obtained).toBe(2)
+    expect(summary.lines).toContain('Panier : iQuantitePanier 5 ; sTotalAPayer 12,34 €')
+  })
+
+  it('prend l’évènement Panier même quand un autre évènement de type 1 le précède', () => {
+    const response = JSON.stringify([
+      {
+        eTypeEvenement: 1,
+        sIdUnique: 'Autre',
+        lstProduitsLight: [{ iIdProduit: '1955', iQtePanier: 9 }],
+      },
+      { eTypeEvenement: 1, sIdUnique: 'Panier000000', lstProduitsLight: IN_CART },
+    ])
+
+    expect(summarizeCartResponse(response, 200, '1955').obtained).toBe(2)
+  })
+
+  it('à défaut de sIdUnique « Panier… », prend l’évènement de type 1 qui porte la liste', () => {
+    const response = JSON.stringify([{ eTypeEvenement: 1, lstProduitsLight: IN_CART }])
+
+    expect(summarizeCartResponse(response, 200, '1955').obtained).toBe(2)
+  })
+
+  it('ne lit pas la quantité de l’évènement produit pour celle du panier', () => {
+    const response = JSON.stringify([
+      { eTypeEvenement: 101, iIdProduit: '1955', iQuantitePanier: 2 },
+    ])
+
+    const summary = summarizeCartResponse(response, 200, '1955')
+
+    expect(summary.obtained).toBeNull()
+    expect(summary.lines).toContain(
+      "Panier : pas d'évènement « Panier… », quantité obtenue non lue.",
+    )
+  })
+
+  it('dit quand la liste du panier manque dans l’évènement', () => {
+    const response = JSON.stringify([{ eTypeEvenement: 1, sIdUnique: 'Panier000000' }])
+
+    const summary = summarizeCartResponse(response, 200, '1955')
+
+    expect(summary.obtained).toBeNull()
+    expect(summary.lines).toContain(
+      'Panier : lstProduitsLight introuvable, quantité obtenue non lue.',
+    )
+    expect(summary.lines).toContain('Panier : iQuantitePanier ? ; sTotalAPayer ?')
+  })
+
+  it('dit « non lue » quand le produit est dans la liste sans quantité', () => {
+    const summary = summarizeCartResponse(writeResponse([{ iIdProduit: '1955' }]), 200, '1955')
+
+    expect(summary.obtained).toBeNull()
+    expect(summary.lines).toContain(
+      'Quantité obtenue du produit 1955 (iQtePanier) : non lue ; iQteDisponible ? ; fQuantiteMax ?',
+    )
+  })
+
+  it('lit des quantités données en texte', () => {
+    const summary = summarizeCartResponse(
+      writeResponse([{ iIdProduit: '1955', iQtePanier: '3', iQteDisponible: '4,5' }]),
+      200,
+      '1955',
+    )
+
+    expect(summary.obtained).toBe(3)
+    expect(summary.lines.join('\n')).toContain('iQteDisponible 4.5')
+  })
+
+  it('ne recopie jamais le point de livraison que la réponse répéterait', () => {
+    const response = writeResponse(IN_CART, { sNoPointLivraison: '123456' })
+
+    const text = summarizeCartResponse(response, 200, '1955').lines.join('\n')
+
+    expect(text).toContain('sNoPointLivraison=[masqué]')
+    expect(text).not.toContain('123456')
+  })
+})
+
+describe('summarizeCartResponse : blocage ou requête non comprise', () => {
+  const html404 = '<html><body><h1>Ce service est momentanément indisponible</h1></body></html>'
+
+  it('classe un 404 HTML en requête non comprise, pas en blocage', () => {
+    const summary = summarizeCartResponse(html404, 404, '1955')
+
+    expect(summary.blocked).toBe(false)
+    expect(summary.rejected).toBe(true)
+    expect(summary.obtained).toBeNull()
+  })
+
+  it('classe un 403 et un 429 en blocage, pas en requête non comprise', () => {
+    for (const status of [403, 429]) {
+      const summary = summarizeCartResponse(html404, status, '1955')
+      expect(summary.blocked).toBe(true)
+      expect(summary.rejected).toBe(false)
+    }
+  })
+
+  it('classe en blocage la page de contrôle de l’anti-robot, même avec un code 200', () => {
+    const summary = summarizeCartResponse(
+      '<script src="https://x.captcha-delivery.com/c.js">',
+      200,
+      '1',
+    )
+
+    expect(summary.blocked).toBe(true)
+    expect(summary.rejected).toBe(false)
+  })
+
+  it('classe en requête non comprise toute réponse qui n’est pas du JSON, même avec un code 200', () => {
+    expect(summarizeCartResponse('<html>accueil</html>', 200, '1').rejected).toBe(true)
+    expect(summarizeCartResponse('', 200, '1').rejected).toBe(true)
+  })
+
+  it('classe en requête non comprise un code hors 2xx, même avec du JSON', () => {
+    expect(summarizeCartResponse('[]', 500, '1').rejected).toBe(true)
+    expect(summarizeCartResponse('[]', 404, '1').rejected).toBe(true)
+  })
+
+  it('ne classe pas en requête non comprise une réponse JSON en 200', () => {
+    expect(summarizeCartResponse('[]', 200, '1').rejected).toBe(false)
   })
 })

@@ -5,9 +5,11 @@ import {
   compareContents,
   contentFromLabel,
   contentFromPrices,
+  contentFromStructured,
   formatContent,
   type Agreement,
   type Content,
+  type StructuredReading,
 } from '../content'
 import type { Product } from '../parse'
 import { append, h } from '../ui/dom'
@@ -20,6 +22,18 @@ export interface ContentRow {
   labelLine: 1 | 2 | null
   byPrices: Content | null
   agreement: Agreement
+  /** Champs structurés du site (`sUniteMesure`, `nrContenanceUnitaire`, `nrContenanceTotale`), lus et ramenés à une unité. */
+  structured: StructuredReading
+  hasStructured: boolean
+}
+
+/** « accord » ou « écart » entre deux contenus, « non comparable » si l'un des deux manque. */
+export function versus(
+  left: Content | null,
+  right: Content | null,
+): 'accord' | 'écart' | 'non comparable' {
+  if (!left || !right) return 'non comparable'
+  return compareContents(left, right) === 'accord' ? 'accord' : 'écart'
 }
 
 /** Les deux méthodes pour un produit : libellé de seconde ligne (à défaut, de première ligne), puis prix. */
@@ -37,6 +51,8 @@ export function compareProduct(product: Product): ContentRow {
     labelLine: second ? 2 : first ? 1 : null,
     byPrices,
     agreement: compareContents(byLabel, byPrices),
+    structured: contentFromStructured(product.structured),
+    hasStructured: product.structured !== undefined,
   }
 }
 
@@ -50,6 +66,7 @@ export function contentReport(products: readonly Product[]): string[] {
     `Trouvé par les prix : ${count((r) => r.byPrices !== null)}`,
     `Les deux méthodes d'accord : ${count((r) => r.agreement === 'accord')} ; en désaccord : ${count((r) => r.agreement === 'écart')}`,
     `Au moins une méthode : ${count((r) => r.byLabel !== null || r.byPrices !== null)} ; aucune : ${count((r) => r.agreement === 'aucune')}`,
+    ...structuredSummary(rows.map(({ row }) => row)),
     '',
   ]
   rows.forEach(({ product, row }, i) => {
@@ -58,8 +75,39 @@ export function contentReport(products: readonly Product[]): string[] {
       `${i + 1}. id ${product.id} — ${product.label1 ?? '?'} | ${product.label2 ?? '—'}`,
       `   libellé${source} : ${formatContent(row.byLabel)} · prix : ${formatContent(row.byPrices)} (${product.unitPriceText ?? '?'} ÷ ${product.measurePriceText ?? '?'}) → ${row.agreement}`,
     )
+    if (product.structured) lines.push(structuredLine(product, row))
   })
   return lines
+}
+
+/** Les trois champs structurés tels que lus, puis leur valeur ramenée à une unité et leur accord avec les deux méthodes. */
+function structuredLine(product: Product, row: ContentRow): string {
+  const fields = product.structured
+  const raw = [
+    `sUniteMesure=${fields?.unitMeasure ?? '—'}`,
+    `nrContenanceUnitaire=${fields?.unitContent ?? '—'}`,
+    `nrContenanceTotale=${fields?.totalContent ?? '—'}`,
+    `sUniteMesureTotale=${fields?.totalUnit ?? '—'}`,
+  ].join(' · ')
+  return `   structuré : ${raw} → ${formatContent(row.structured.best)} (libellé : ${versus(row.structured.best, row.byLabel)} · prix : ${versus(row.structured.best, row.byPrices)})`
+}
+
+/** Les champs structurés s'accordent-ils avec le libellé et avec les prix ? Ou bien le site n'en donne pas. */
+function structuredSummary(rows: readonly ContentRow[]): string[] {
+  const present = rows.filter((row) => row.hasStructured)
+  const names = 'sUniteMesure, nrContenanceUnitaire, nrContenanceTotale'
+  if (present.length === 0) {
+    return [`Champs structurés (${names}) : absents des produits de cette recherche.`]
+  }
+  const tally = (other: (row: ContentRow) => Content | null) => {
+    const verdicts = present.map((row) => versus(row.structured.best, other(row)))
+    const comparable = verdicts.filter((verdict) => verdict !== 'non comparable').length
+    return `d'accord ${verdicts.filter((verdict) => verdict === 'accord').length} sur ${comparable} comparable(s)`
+  }
+  return [
+    `Champs structurés (${names}) : présents sur ${present.length} produit(s) sur ${rows.length}.`,
+    `Structuré contre libellé : ${tally((row) => row.byLabel)} ; structuré contre prix : ${tally((row) => row.byPrices)}`,
+  ]
 }
 
 export const contenu: Essai = {

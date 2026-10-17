@@ -40,7 +40,7 @@ const SUGAR_ID = String(SUGAR.id)
 const MILK_ID = String(MILK.id)
 
 describe('essai 3 : ajouter puis retirer un produit', () => {
-  it('n’écrit rien tant que l’utilisateur n’a pas confirmé, puis ajoute un seul produit en quantité 1', async () => {
+  it('n’écrit rien tant que l’utilisateur n’a pas confirmé, puis ajoute un seul produit en quantité 1, comme le site', async () => {
     // Given
     const harness = mount()
     await searched(harness)
@@ -62,22 +62,30 @@ describe('essai 3 : ajouter puis retirer un produit', () => {
     click(harness.root, 'Oui, ajouter 1 au panier')
     const text = await untilOutput(harness.root, 'Réponse JSON')
 
-    // Then : un seul POST, action 1, quantité 1, sur l’hôte courant
+    // Then : un seul POST, action 1, quantité 1, sur l’hôte courant, de la forme relevée sur le site
     const writes = posts(harness)
     expect(writes).toHaveLength(1)
     expect(writes[0]?.url).toBe(`${window.location.origin}/magasin-999111-999111/panier.aspx?op=1`)
     expect(cartCall(writes[0] as { body: unknown })).toEqual({
       eTypeAction: 1,
-      iIdProduit: 1000001,
+      iIdProduit: FLOUR_ID,
       iQuantite: 1,
       sNoPointLivraison: '999111',
+      objContexteProvenanceArticle: {
+        eOrigine: 4,
+        eTypePage: 3,
+        sTexteRecherche: 'farine',
+        eVue: 0,
+        sInformationsComplementaires: 'uni-2',
+      },
     })
     expect(harness.fetch.mock.calls.at(-1)?.[1]?.headers).toMatchObject({
       'X-Requested-With': 'XMLHttpRequest',
     })
     expect(text).toContain(
-      'Ajout du produit 1000001 « Farine de blé T55 Moulin Imaginaire » : action 1, quantité visée 1',
+      'Ajout du produit 1000001 « Farine de blé T55 Moulin Imaginaire » : action 1, quantité visée 1, contexte de recherche « farine »',
     )
+    expect(text).toContain("Point de livraison : absent de la page, repris de l'adresse")
     expect(text).toContain('HTTP 200 · application/json')
     expect(text).toContain('(type 1, panier)')
     expect(text).toContain('nrTotal=2.5')
@@ -109,10 +117,11 @@ describe('essai 3 : ajouter puis retirer un produit', () => {
     // Then : action 2, quantité 0
     const writes = posts(harness)
     expect(writes).toHaveLength(2)
-    expect(cartCall(writes[1] as { body: unknown })).toMatchObject({
+    expect(cartCall(writes[1] as { body: unknown })).toEqual({
       eTypeAction: 2,
-      iIdProduit: 1000001,
+      iIdProduit: FLOUR_ID,
       iQuantite: 0,
+      sNoPointLivraison: '999111',
     })
     expect(text).toContain('Retrait du produit 1000001')
     expect(text).toContain('Vérifie sur le site que le panier est revenu comme avant.')
@@ -178,7 +187,7 @@ describe('essai 3 : ajouter puis retirer un produit', () => {
     expect(output(harness.root)).toContain("Cette page n'est pas une page de magasin")
   })
 
-  it('joint l’objet d’analytique vide seulement si la case est cochée', async () => {
+  it('n’envoie pas l’objet de contexte seulement si la variante de diagnostic est cochée', async () => {
     const harness = mount()
     await searched(harness)
     openEssai(harness, 3)
@@ -189,11 +198,11 @@ describe('essai 3 : ajouter puis retirer un produit', () => {
     click(harness.root, 'Oui, ajouter 1 au panier')
     const text = await untilOutput(harness.root, 'Réponse JSON')
 
-    expect(cartCall(posts(harness)[0] as { body: unknown })).toHaveProperty(
+    expect(cartCall(posts(harness)[0] as { body: unknown })).not.toHaveProperty(
       'objContexteProvenanceArticle',
-      {},
     )
-    expect(text).toContain("avec objet d'analytique vide")
+    expect(cartCall(posts(harness)[0] as { body: unknown }).iIdProduit).toBe(FLOUR_ID)
+    expect(text).toContain('sans contexte (diagnostic)')
   })
 
   it('s’arrête sur un blocage 403 et ne propose pas de retrait', async () => {
@@ -303,6 +312,164 @@ describe('essai 3 : ajouter puis retirer un produit', () => {
     openEssai(harness, 3)
 
     expect(harness.root.querySelector('select')).toBeNull()
+  })
+})
+
+/** Réponse d'écriture inventée : le produit FLOUR est au panier en quantité `quantity`. */
+function cartReply(quantity: number): Response {
+  return json([
+    { eTypeEvenement: 101, sIdUnique: `Produit${FLOUR_ID}`, iIdProduit: FLOUR_ID },
+    {
+      eTypeEvenement: 1,
+      sIdUnique: 'Panier000000',
+      lstProduitsLight:
+        quantity > 0
+          ? [{ iIdProduit: FLOUR_ID, iQtePanier: quantity, iQteDisponible: 12, fQuantiteMax: 20 }]
+          : [],
+      iQuantitePanier: quantity,
+      sTotalAPayer: '1,29 €',
+    },
+  ])
+}
+
+describe('essai 3 : réponses du panier', () => {
+  it('affiche la quantité obtenue lue dans lstProduitsLight, avec le total', async () => {
+    const harness = mount({
+      route: (url) => (url.includes('panier.aspx') ? cartReply(1) : html(searchPage([FLOUR]))),
+    })
+    await searched(harness)
+    openEssai(harness, 3)
+    pick(harness, FLOUR_ID)
+
+    click(harness.root, 'Préparer l’ajout')
+    click(harness.root, 'Oui, ajouter 1 au panier')
+    const text = await untilOutput(harness.root, 'Quantité obtenue')
+
+    expect(text).toContain(
+      `Quantité obtenue du produit ${FLOUR_ID} (iQtePanier) : 1 ; iQteDisponible 12 ; fQuantiteMax 20`,
+    )
+    expect(text).toContain('Panier : iQuantitePanier 1 ; sTotalAPayer 1,29 €')
+  })
+
+  it('joint un texte de recherche vide quand aucune recherche n’a été faite', async () => {
+    const harness = mount()
+    openEssai(harness, 3)
+    type(field(harness.root, 'Identifiant du produit'), '4242')
+
+    click(harness.root, 'Préparer l’ajout')
+    click(harness.root, 'Oui, ajouter 1 au panier')
+    await untilOutput(harness.root, 'Réponse JSON')
+
+    const call = cartCall(posts(harness)[0] as { body: unknown })
+    expect(call.iIdProduit).toBe('4242')
+    expect(call.objContexteProvenanceArticle).toMatchObject({ sTexteRecherche: '' })
+  })
+
+  it('présente un 404 comme une requête non comprise, pas comme un blocage', async () => {
+    // Given : la page d’erreur HTML que Leclerc a renvoyée au premier essai du banc
+    const harness = mount({
+      route: (url) =>
+        url.includes('panier.aspx')
+          ? html('<html><body>Ce service est momentanément indisponible</body></html>', 404)
+          : html(searchPage([FLOUR])),
+    })
+    await searched(harness)
+    openEssai(harness, 3)
+    pick(harness, FLOUR_ID)
+
+    // When
+    click(harness.root, 'Préparer l’ajout')
+    click(harness.root, 'Oui, ajouter 1 au panier')
+    const text = await untilOutput(harness.root, 'Réponse non JSON')
+
+    // Then
+    expect(text).toContain('HTTP 404')
+    expect(text).toContain(
+      "La requête n'a pas été comprise par Leclerc (HTTP 404). Ce n'est pas un blocage de l'anti-robot.",
+    )
+    expect(text).not.toContain('Blocage probable')
+    expect(button(harness.root, 'Retirer ce produit')).toBeTruthy()
+  })
+
+  it('garde le message de blocage pour un 429', async () => {
+    const harness = mount({
+      route: (url) => (url.includes('panier.aspx') ? html('', 429) : html(searchPage([FLOUR]))),
+    })
+    await searched(harness)
+    openEssai(harness, 3)
+    pick(harness, FLOUR_ID)
+
+    click(harness.root, 'Préparer l’ajout')
+    click(harness.root, 'Oui, ajouter 1 au panier')
+    const text = await untilOutput(harness.root, 'Blocage probable')
+
+    expect(text).not.toContain('pas été comprise')
+    expect(() => button(harness.root, 'Retirer ce produit')).toThrow('introuvable')
+  })
+
+  it('s’arrête aussi sur la page de contrôle de l’anti-robot servie avec un code 200', async () => {
+    const harness = mount({
+      route: (url) =>
+        url.includes('panier.aspx')
+          ? html('<script src="https://geo.captcha-delivery.com/c.js"></script>')
+          : html(searchPage([FLOUR])),
+    })
+    await searched(harness)
+    openEssai(harness, 3)
+    pick(harness, FLOUR_ID)
+
+    click(harness.root, 'Préparer l’ajout')
+    click(harness.root, 'Oui, ajouter 1 au panier')
+
+    expect(await untilOutput(harness.root, 'Blocage probable')).toContain('Blocage probable')
+    expect(() => button(harness.root, 'Retirer ce produit')).toThrow('introuvable')
+  })
+
+  it('dit après le retrait que la requête n’a pas été comprise, sans annoncer un retrait réussi', async () => {
+    let writes = 0
+    const harness = mount({
+      route: (url) => {
+        if (!url.includes('panier.aspx')) return html(searchPage([FLOUR]))
+        return ++writes === 1 ? cartReply(1) : html('introuvable', 404)
+      },
+    })
+    await searched(harness)
+    openEssai(harness, 3)
+    pick(harness, FLOUR_ID)
+    click(harness.root, 'Préparer l’ajout')
+    click(harness.root, 'Oui, ajouter 1 au panier')
+    await untilOutput(harness.root, 'Quantité obtenue')
+
+    click(harness.root, 'Retirer ce produit du panier')
+    click(harness.root, 'Oui, retirer du panier')
+    const text = await untilOutput(harness.root, 'pas été comprise')
+
+    expect(text).not.toContain('Retrait demandé')
+    expect(text).not.toContain('Blocage probable')
+  })
+
+  it('lit la quantité 0 après le retrait', async () => {
+    let writes = 0
+    const harness = mount({
+      route: (url) => {
+        if (!url.includes('panier.aspx')) return html(searchPage([FLOUR]))
+        return ++writes === 1 ? cartReply(1) : cartReply(0)
+      },
+    })
+    await searched(harness)
+    openEssai(harness, 3)
+    pick(harness, FLOUR_ID)
+    click(harness.root, 'Préparer l’ajout')
+    click(harness.root, 'Oui, ajouter 1 au panier')
+    await untilOutput(harness.root, 'Quantité obtenue')
+
+    click(harness.root, 'Retirer ce produit du panier')
+    click(harness.root, 'Oui, retirer du panier')
+    const text = await untilOutput(harness.root, 'Retrait demandé')
+
+    expect(text).toContain(
+      `Produit ${FLOUR_ID} absent de lstProduitsLight (0 au panier) : quantité obtenue 0`,
+    )
   })
 })
 

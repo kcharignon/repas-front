@@ -4,6 +4,7 @@ import {
   compareContents,
   contentFromLabel,
   contentFromPrices,
+  contentFromStructured,
   formatContent,
   measureReference,
 } from '../content'
@@ -85,6 +86,64 @@ describe('contentFromPrices', () => {
     [1, 2, null],
   ])('renonce quand une donnée manque (%j, %j, %j)', (unit, measure, text) => {
     expect(contentFromPrices(unit, measure, text)).toBeNull()
+  })
+})
+
+describe('contentFromStructured', () => {
+  it('lit le total dans son unité et l’unitaire dans la sienne', () => {
+    const reading = contentFromStructured({
+      unitMeasure: 'KG',
+      unitContent: 1,
+      totalContent: 6,
+      totalUnit: 'kg',
+    })
+
+    expect(reading).toEqual({
+      unit: { value: 1000, unit: 'g' },
+      total: { value: 6000, unit: 'g' },
+      best: { value: 6000, unit: 'g' },
+    })
+  })
+
+  it('retient l’unitaire quand il n’y a pas de total, et prête à chacun l’unité de l’autre', () => {
+    expect(
+      contentFromStructured({
+        unitMeasure: 'L',
+        unitContent: 0.5,
+        totalContent: null,
+        totalUnit: null,
+      }),
+    ).toMatchObject({
+      unit: { value: 500, unit: 'ml' },
+      total: null,
+      best: { value: 500, unit: 'ml' },
+    })
+    expect(
+      contentFromStructured({ unitMeasure: null, unitContent: 2, totalContent: 4, totalUnit: 'g' }),
+    ).toMatchObject({ unit: { value: 2, unit: 'g' }, total: { value: 4, unit: 'g' } })
+  })
+
+  it('compte des pièces', () => {
+    expect(
+      contentFromStructured({ unitMeasure: 'U', unitContent: 1, totalContent: 12, totalUnit: 'U' })
+        .best,
+    ).toEqual({ value: 12, unit: 'u' })
+  })
+
+  it('ne devine pas une unité inconnue ou absente', () => {
+    expect(
+      contentFromStructured({
+        unitMeasure: 'FOO',
+        unitContent: 1,
+        totalContent: 2,
+        totalUnit: 'BAR',
+      }),
+    ).toEqual({ unit: null, total: null, best: null })
+    expect(
+      contentFromStructured({ unitMeasure: null, unitContent: 1, totalContent: 2, totalUnit: null })
+        .best,
+    ).toBeNull()
+    expect(contentFromStructured(undefined)).toEqual({ unit: null, total: null, best: null })
   })
 })
 
