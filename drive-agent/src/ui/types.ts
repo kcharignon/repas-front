@@ -67,6 +67,13 @@ export interface PlacementProps {
   productLabel: string
 }
 
+/** Le magasin lu dans la page, avant de le donner à Repas (mode configuration, DRV-307). */
+export interface StoreProps {
+  id: string
+  /** Le libellé lu dans la page, `null` s'il n'y en a pas : l'écran montre alors le numéro. */
+  label: string | null
+}
+
 export interface ErrorProps {
   code: ErrorCode
   /** Vrai : un résultat peut repartir vers Repas (bouton « Retourner dans Repas »), sinon l'écran se ferme seulement. */
@@ -94,6 +101,7 @@ export interface ScreenMap {
   /** Le nombre choisi, ou `null` pour « Passer ». */
   quantity: { props: QuantityProps; answer: number | null }
   chooser: { props: ChooserProps; answer: ChooserAnswer }
+  store: { props: StoreProps; answer: 'save' | 'cancel' }
   /** Le rôle choisi, ou `null` pour revenir à la liste de produits. */
   placement: { props: PlacementProps; answer: Placement | null }
   error: { props: ErrorProps; answer: 'return' | 'close' }

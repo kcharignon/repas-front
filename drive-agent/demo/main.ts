@@ -151,6 +151,8 @@ const SCREENS: Record<string, () => unknown> = {
     }),
   chooser: () => ui.show('chooser', CHOOSER),
   'chooser-gone': () => ui.show('chooser', CHOOSER_GONE),
+  store: () => ui.show('store', { id: '123456', label: null }),
+  'store-label': () => ui.show('store', { id: '123456', label: 'Magasin de test, Ville-Test' }),
   placement: () =>
     ui.show('placement', {
       ingredient: 'Farine de blé',

@@ -389,6 +389,39 @@ describe('choix de produit (hôte)', () => {
   })
 })
 
+describe('enregistrer le magasin (mode configuration)', () => {
+  it('montre le numéro quand la page ne donne pas de libellé, et prend « Enregistrer » pour premier bouton', () => {
+    const handle = open()
+    void handle.show('store', { id: '123456', label: null })
+
+    expect(shadow().querySelector('h1')?.textContent).toBe('Enregistrer ce magasin dans Repas ?')
+    expect(shadow().textContent).toContain('magasin n° 123456')
+    expect(labels()).toEqual(['Enregistrer', 'Annuler'])
+    expect(shadow().activeElement?.textContent).toBe('Enregistrer')
+  })
+
+  it('montre le libellé quand il y en a un, tel quel même s’il contient du HTML', () => {
+    const handle = open()
+    void handle.show('store', { id: '123456', label: HOSTILE })
+
+    expect(shadow().textContent).toContain(HOSTILE)
+    expect(shadow().textContent).not.toContain('n° 123456')
+    expect(shadow().querySelector('img, script')).toBeNull()
+  })
+
+  it.each([
+    ['Enregistrer', 'save'],
+    ['Annuler', 'cancel'],
+  ])('« %s » rend %s', async (label, expected) => {
+    const handle = open()
+    const answer = handle.show('store', { id: '123456', label: null })
+
+    press(label)
+
+    await expect(answer).resolves.toBe(expected)
+  })
+})
+
 describe('rôle du produit choisi', () => {
   const props = { ingredient: 'Farine', productLabel: 'Farine de test 1 kg' }
 

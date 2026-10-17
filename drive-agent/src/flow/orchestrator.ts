@@ -122,10 +122,10 @@ export class Flow {
       if (error instanceof ProtocolError) return this.showError('INVALID_MESSAGE', null)
       throw error
     }
-    if (message.type === 'setup') return void (await deps.onSetup?.(message))
     this.enter('VALIDATED')
-    // Pas de retour possible vers Repas : on refuse avant de toucher au panier.
+    // Pas de retour possible vers Repas : on refuse avant de toucher au panier (ou de lire le magasin).
     if (!deps.canReturn) return this.showError('UNSUPPORTED_PAGE', null)
+    if (message.type === 'setup') return void (await deps.onSetup?.(message))
     const problem = this.storeProblem(message)
     if (problem) return this.showError(problem, message)
 

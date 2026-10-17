@@ -3,7 +3,13 @@
 // magasin inventé, l'interface est simulée (la vraie est fermée à la page, donc aux tests), aucun réseau.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { decodeMessage, encodeMessage, validateResult, type ResultMessage } from '../protocol'
+import {
+  decodeMessage,
+  encodeMessage,
+  validateResult,
+  type ResultMessage,
+  type SetupResultMessage,
+} from '../protocol'
 import { run } from '../src/agent'
 import { fakeUi, home, plan, skip } from './flow-helpers'
 
@@ -110,6 +116,79 @@ describe('avec le pont de l’application', () => {
     await vi.waitFor(() =>
       expect(screens.propsOf('error')).toEqual([{ code: 'INVALID_MESSAGE', canReturn: false }]),
     )
+  })
+})
+
+describe('le mode configuration', () => {
+  const { lines: _lines, type: _type, ...head } = PLAN
+  const SETUP = { ...head, type: 'setup' as const }
+
+  it('par le fragment : lit le magasin de la page et le rend à Repas, au chemin de retour autorisé', async () => {
+    // Given
+    window.history.replaceState(null, '', `#repas=${encodeMessage(SETUP)}`)
+    const navigate = vi.fn<(url: string) => void>()
+    const screens = fakeUi({ store: () => 'save' })
+
+    // When
+    run(window, { origin: ORIGIN, navigate, flow: { ui: screens.ui } })
+
+    // Then
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledOnce())
+    const url = navigate.mock.calls[0]?.[0] ?? ''
+    expect(url.startsWith(`${ORIGIN}/drive/retour#result=`)).toBe(true)
+    const result = validateResult(
+      decodeMessage(url.slice(url.indexOf('#result=') + '#result='.length)),
+    ) as SetupResultMessage
+    expect(result).toEqual({
+      v: 1,
+      type: 'setup-result',
+      runId: PLAN.runId,
+      agentVersion: expect.stringMatching(/^\d+\.\d+\.\d+$/),
+      store: {
+        id: '000123',
+        host: 'fd0-courses.leclercdrive.fr',
+        baseUrl: 'https://fd0-courses.leclercdrive.fr/magasin-000123-000123',
+        label: null,
+      },
+    })
+    expect(screens.screens()).toEqual(['store'])
+  })
+
+  it('par le pont de l’application : rend le magasin à l’application, en JSON', async () => {
+    let receive: (event: { data: unknown }) => void = () => undefined
+    const bridge = {
+      postMessage: vi.fn<(text: string) => void>(),
+      addEventListener: (_type: 'message', listener: typeof receive) => {
+        receive = listener
+      },
+    }
+    Object.assign(window, { repasHost: bridge })
+    const screens = fakeUi({ store: () => 'save' })
+    run(window, { flow: { ui: screens.ui } })
+
+    receive({ data: JSON.stringify(SETUP) })
+
+    await vi.waitFor(() => expect(bridge.postMessage).toHaveBeenCalledOnce())
+    expect(validateResult(JSON.parse(bridge.postMessage.mock.calls[0]?.[0] ?? ''))).toMatchObject({
+      type: 'setup-result',
+      store: { id: '000123' },
+    })
+  })
+
+  it('annulé : rend « aborted » ; la page n’est pas touchée par une requête', async () => {
+    window.history.replaceState(null, '', `#repas=${encodeMessage(SETUP)}`)
+    const navigate = vi.fn<(url: string) => void>()
+    const fetchSpy = vi.fn<typeof fetch>()
+    vi.stubGlobal('fetch', fetchSpy)
+
+    run(window, { origin: ORIGIN, navigate, flow: { ui: fakeUi({ store: () => 'cancel' }).ui } })
+
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledOnce())
+    const url = navigate.mock.calls[0]?.[0] ?? ''
+    expect(
+      validateResult(decodeMessage(url.slice(url.indexOf('#result=') + '#result='.length))),
+    ).toMatchObject({ type: 'result', outcome: 'aborted', lines: [] })
+    expect(fetchSpy).not.toHaveBeenCalled()
   })
 })
 

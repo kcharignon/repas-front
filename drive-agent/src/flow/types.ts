@@ -1,5 +1,12 @@
 // Ce que l'orchestrateur reçoit (ses dépendances, toutes injectées) et ce qu'il offre à la phase B (DRV-306).
-import type { PlanLine, PlanProduct, ResultLine, ResultMessage, SetupMessage } from '../../protocol'
+import type {
+  PlanLine,
+  PlanProduct,
+  ResultLine,
+  ResultMessage,
+  SetupMessage,
+  SetupResultMessage,
+} from '../../protocol'
 import type { RetailerAdapter } from '../leclerc'
 import type { Ui } from '../ui'
 
@@ -49,8 +56,8 @@ export type PhaseB = (context: PhaseBContext) => Promise<'done' | 'cancelled'>
 export interface FlowDeps {
   adapter: RetailerAdapter
   ui: Ui
-  /** Renvoie le résultat à Repas (`Transport.send`). */
-  send: (message: ResultMessage) => void
+  /** Renvoie le résultat (ou, en mode configuration, le magasin lu) à Repas (`Transport.send`). */
+  send: (message: ResultMessage | SetupResultMessage) => void
   /** `sessionStorage`, ou `null` s'il est inaccessible : la reprise est alors impossible. */
   storage: StorageLike | null
   /** `navigator.wakeLock`, ou `null` s'il n'existe pas. */
