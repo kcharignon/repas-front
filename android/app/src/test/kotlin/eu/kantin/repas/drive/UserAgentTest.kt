@@ -97,4 +97,41 @@ class UserAgentTest {
         val brands = listOf(Brand("Chromium", "155", "155.0.1.2"), Brand("Google Chrome", "155", "155.0.1.2"))
         assertEquals(brands, UserAgents.desktopBrands(brands, 155))
     }
+
+    @Test
+    fun `l'identite complete pose l'agent de bureau et les indications client quand la WebView sait le faire`() {
+        val identity = UserAgents.identity(recentWebView, clientHintsSupported = true)
+
+        assertEquals(UserAgents.desktop(155), identity.userAgent)
+        assertTrue(identity.clientHints)
+        assertNull(identity.note)
+    }
+
+    @Test
+    fun `sans indications client, l'application garde l'agent utilisateur seul et le note`() {
+        val identity = UserAgents.identity(webView, clientHintsSupported = false)
+
+        assertEquals(UserAgents.desktop(120), identity.userAgent)
+        assertFalse(identity.clientHints)
+        assertTrue(identity.note!!.contains("Indications client indisponibles"))
+    }
+
+    @Test
+    fun `sans version de Chrome lisible, rien n'est change et la raison est notee`() {
+        val odd = "Mozilla/5.0 (Linux; Android 14; K; wv) AppleWebKit/537.36"
+        val identity = UserAgents.identity(odd, clientHintsSupported = true)
+
+        assertEquals(odd, identity.userAgent)
+        assertFalse(identity.clientHints)
+        assertTrue(identity.note!!.contains("Version de Chrome illisible"))
+    }
+
+    @Test
+    fun `l'identite ne contient ni numero de serie ni adresse`() {
+        listOf(webView, recentWebView).forEach {
+            val result = UserAgents.identity(it, true).userAgent
+            assertFalse(result.contains("Build/"))
+            assertFalse(result.contains("http"))
+        }
+    }
 }

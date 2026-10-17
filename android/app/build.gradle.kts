@@ -129,6 +129,7 @@ tasks.configureEach {
 }
 
 dependencies {
-    // Aucune bibliothèque à l'exécution pour l'instant (l'hôte WebView ajoutera `androidx.webkit`, DRV-312).
+    // Seule bibliothèque à l'exécution : les indications client (client hints) de la WebView, pour le mode ordinateur.
+    implementation("androidx.webkit:webkit:1.17.1")
     testImplementation("junit:junit:4.13.2")
 }
