@@ -20,6 +20,10 @@ export const LIMITS = {
   packsMax: 99,
   /** Libellés, noms et requêtes (en caractères). */
   label: 255,
+  /** Symbole de l'unité d'une quantité demandée (« g », « paquet »), en caractères. */
+  unitSymbol: 32,
+  /** Quantité demandée (et facteur d'unité), dans l'unité de la ligne. */
+  quantity: 1_000_000,
   /** Message d'une erreur (en caractères). */
   errorMessage: 200,
   /** Prix, en centimes (un million d'euros). */
@@ -54,6 +58,10 @@ export type LineStatus = (typeof LINE_STATUSES)[number]
 
 export const PACKS_STATUSES = ['COMPUTED', 'TO_CHECK'] as const
 export type PacksStatus = (typeof PACKS_STATUSES)[number]
+
+export const DIMENSIONS = ['WEIGHT', 'VOLUME', 'COUNT', 'PACKAGE'] as const
+/** La dimension d'une unité de la liste : un poids, un volume, un nombre de pièces ou un nombre de produits (« 2 paquets »). */
+export type Dimension = (typeof DIMENSIONS)[number]
 
 export const PLACEMENTS = ['PRIMARY', 'FALLBACK', 'ONCE'] as const
 export type Placement = (typeof PLACEMENTS)[number]
@@ -90,6 +98,18 @@ export interface PlanProduct extends ProductRef {
   packsStatus?: PacksStatus | null
 }
 
+/**
+ * Ce que la liste demande pour un ingrédient, dans l'unité de la ligne (« 800 g »). `dimension` et `baseFactor` (le facteur de l'unité
+ * vers l'unité de base : 1 pour le gramme, 1000 pour le kilo) permettent à l'agent de calculer le nombre de produits d'un produit qu'il
+ * ne connaissait pas (phase B, même formule que `PackCalculator` du dépôt back) ; absents, il demande la quantité à l'utilisateur.
+ */
+export interface NeededQuantity {
+  quantity: number
+  unitSymbol: string
+  dimension?: Dimension | null
+  baseFactor?: number | null
+}
+
 export interface PlanLine {
   ingredientSlug: string
   name: string
@@ -98,6 +118,7 @@ export interface PlanLine {
   rejected?: ProductRef[]
   searchQuery?: string
   replaces?: ProductRef
+  needed?: NeededQuantity
 }
 
 export interface StoreRef {

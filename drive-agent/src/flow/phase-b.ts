@@ -1,0 +1,278 @@
+// Phase B (DRV-306, variante P2 retenue à G1) : pour chaque ligne à choisir, l'agent cherche le nom de l'ingrédient, affiche les produits
+// dans l'écran de choix, et l'utilisateur en choisit un. L'agent ne choisit jamais seul : l'ajout au panier vient d'un bouton « Choisir ».
+//   ligne -> recherche -> liste (choisir | chercher autre chose | passer | j'en ai toujours | annuler)
+//         -> [quantité à vérifier] -> [rôle du produit] -> panier -> issue `CHOSEN`
+// Jamais un produit refusé (grisé, non sélectionnable), jamais plus que le stock (l'adaptateur plafonne), requêtes en série.
+import {
+  LIMITS,
+  type ChosenLine,
+  type Placement,
+  type PlanLine,
+  type PlanProduct,
+  type RejectedProduct,
+} from '../../protocol'
+import { LeclercError, type Candidate, type RetailerAdapter } from '../leclerc'
+import {
+  formatContent,
+  formatMeasure,
+  formatNumber,
+  formatPrice,
+  renderPicker,
+  S,
+  type PickerItem,
+} from '../ui'
+import { packsFor } from './packs'
+import { priceOf } from './phase-a'
+import type { PendingLine, PhaseB, PhaseBContext } from './types'
+
+/** Le nombre de produits affichés. */
+export const MAX_CANDIDATES = 8
+
+/** La recherche en cours d'une ligne : ce que la liste montre. */
+interface Search {
+  query: string
+  candidates: Candidate[]
+  /** Un message à montrer une fois (le site ne répond pas, le panier a refusé…). */
+  notice: string | null
+}
+
+/** Ce que la liste de produits rend à l'écran de choix. */
+type Picked = { type: 'choose'; id: string } | { type: 'failure'; error: unknown }
+
+const isPicked = (value: unknown): value is Picked => {
+  const type = (value as { type?: unknown } | null)?.type
+  return type === 'choose' || type === 'failure'
+}
+
+const clean = (text: string): string => text.replace(/\s+/g, ' ').trim()
+
+const cut = (text: string): string => {
+  const chars = Array.from(text)
+  return chars.length > LIMITS.label ? chars.slice(0, LIMITS.label).join('') : text
+}
+
+/** Le libellé d'un produit pour Repas : les deux lignes de l'enseigne, de 1 à 255 caractères. */
+export function labelOf(candidate: Candidate): string {
+  const first = clean(candidate.label)
+  const second = clean(candidate.label2 ?? '')
+  const joined = second !== '' && !first.toLowerCase().includes(second.toLowerCase())
+  return cut((joined ? `${first} ${second}` : first) || S.picker.noLabel(candidate.id))
+}
+
+const refusedOf = (product: PlanProduct): RejectedProduct => ({
+  id: product.id,
+  label: product.label,
+  ...(product.content && { content: product.content }),
+})
+
+/** Le produit tel qu'il part vers Repas : le contenu n'y figure que s'il est plausible (strictement positif). */
+function chosenProduct(candidate: Candidate): ChosenLine['product'] {
+  const price = priceOf(candidate)
+  const { content } = candidate
+  return {
+    id: candidate.id,
+    label: labelOf(candidate),
+    ...(content && content.value > 0 && Number.isFinite(content.value) && { content }),
+    ...(price && { price }),
+  }
+}
+
+/** « 800 g demandés, 500 g par produit : 2 », ou, quand le calcul est impossible, ce qui reste à faire. */
+function explain(line: PlanLine, candidate: Candidate): string {
+  const { needed } = line
+  const { packs, status } = packsFor(needed, candidate.content)
+  if (!needed || packs === null || status !== 'COMPUTED') return S.picker.unknownContent
+  const per =
+    needed.dimension === 'PACKAGE' || !candidate.content
+      ? null
+      : formatContent(candidate.content.value, candidate.content.unit)
+  const asked = `${formatNumber(needed.quantity)} ${needed.unitSymbol}`
+  const measure = needed.dimension === 'WEIGHT' || needed.dimension === 'VOLUME'
+  return S.picker.pack(asked, measure, needed.quantity >= 2, per, packs)
+}
+
+function itemOf(line: PlanLine, candidate: Candidate, refused: ReadonlySet<string>): PickerItem {
+  const { content, price, pricePerMeasure, promo } = candidate
+  const details = [
+    content ? formatContent(content.value, content.unit) : null,
+    price === null ? null : formatPrice(price),
+    pricePerMeasure ? formatMeasure(pricePerMeasure.cents, pricePerMeasure.unit) : null,
+  ].filter((detail): detail is string => detail !== null)
+  const second = clean(candidate.label2 ?? '')
+  return {
+    id: candidate.id,
+    name: clean(candidate.label) || S.picker.noLabel(candidate.id),
+    label2: second === '' ? null : second,
+    details,
+    promo: promo === null ? null : S.picker.promo(formatPrice(promo)),
+    explain: explain(line, candidate),
+    state: refused.has(candidate.id) ? 'refused' : candidate.stock === 0 ? 'out' : 'ok',
+  }
+}
+
+/**
+ * Cherche `query` ; une erreur réseau (déjà retentée une fois par l'adaptateur) n'abîme pas la ligne : elle devient un message et
+ * l'utilisateur peut réessayer ou passer. Toute autre erreur remonte et arrête le passage.
+ */
+async function load(search: Search, adapter: RetailerAdapter, query: string): Promise<void> {
+  search.query = query
+  try {
+    search.candidates = (await adapter.searchProducts(query)).slice(0, MAX_CANDIDATES)
+    search.notice = null
+  } catch (error) {
+    if (!(error instanceof LeclercError) || error.code !== 'NETWORK') throw error
+    search.notice = S.picker.network
+  }
+}
+
+/** Une ligne : la liste de produits, jusqu'à un produit choisi, un « passer », un « j'en ai toujours » ou une annulation. */
+async function settleLine(
+  { line, unavailable }: PendingLine,
+  position: number,
+  total: number,
+  context: PhaseBContext,
+): Promise<'done' | 'cancelled'> {
+  const { adapter, ui, record } = context
+  const slug = line.ingredientSlug
+  const refused = new Set((line.rejected ?? []).map((product) => product.id))
+  const never = new Set<string>()
+  const search: Search = { query: '', candidates: [], notice: null }
+  const items = () => search.candidates.map((candidate) => itemOf(line, candidate, refused))
+  /** Les produits indisponibles dont l'utilisateur ne veut plus jamais : ils partent avec l'issue de la ligne, quelle qu'elle soit. */
+  const rejected = () => {
+    const list = unavailable.filter((product) => never.has(product.id)).map(refusedOf)
+    return list.length > 0 ? { rejected: list } : {}
+  }
+
+  ui.update({ current: line.name })
+  await load(search, adapter, line.searchQuery ?? line.name)
+
+  for (;;) {
+    const notice = search.notice
+    search.notice = null
+    const answer = await ui.show('chooser', {
+      ingredient: line.name,
+      position,
+      total,
+      mount: (zone, conclude) => {
+        let live = true
+        const picker = renderPicker(
+          zone,
+          {
+            need: line.needed
+              ? `${formatNumber(line.needed.quantity)} ${line.needed.unitSymbol}`
+              : null,
+            replaces: line.replaces?.label ?? null,
+            gone: unavailable,
+            checked: never,
+            query: search.query,
+            items: items(),
+            notice,
+          },
+          {
+            choose: (id) => conclude({ type: 'choose', id } satisfies Picked),
+            never: (id, on) => void (on ? never.add(id) : never.delete(id)),
+            search: (query) => {
+              picker.busy(S.picker.searching)
+              load(search, adapter, query).then(
+                () => {
+                  if (!live) return
+                  picker.results(search.query, items(), search.notice)
+                  picker.busy(null)
+                },
+                (error: unknown) => {
+                  if (live) conclude({ type: 'failure', error } satisfies Picked)
+                },
+              )
+            },
+          },
+        )
+        return () => {
+          live = false
+        }
+      },
+    })
+
+    if (answer.kind === 'cancel') return 'cancelled'
+    if (answer.kind === 'skip') {
+      record({ ingredientSlug: slug, outcome: 'SKIPPED', ...rejected() })
+      return 'done'
+    }
+    if (answer.kind === 'have') {
+      record({ ingredientSlug: slug, outcome: 'HAVE_AT_HOME', ...rejected() })
+      return 'done'
+    }
+    if (!isPicked(answer.value)) continue
+    if (answer.value.type === 'failure') throw answer.value.error
+
+    const id = answer.value.id
+    const candidate = search.candidates.find((found) => found.id === id)
+    // Défense en profondeur : la liste ne propose pas ces produits, un message ne doit pas pouvoir les imposer.
+    if (!candidate || refused.has(id) || candidate.stock === 0) {
+      search.notice = S.picker.cartRefused
+      continue
+    }
+
+    const computed = packsFor(line.needed, candidate.content)
+    let packs = computed.status === 'COMPUTED' ? computed.packs : null
+    if (packs === null) {
+      packs = await ui.show('quantity', {
+        ingredient: line.name,
+        productLabel: labelOf(candidate),
+        packs: computed.packs,
+      })
+      if (packs === null) continue
+    }
+
+    // Un ingrédient qui n'avait aucun produit mémorisé : le produit devient le préféré, sans question.
+    let placement: Placement = 'PRIMARY'
+    if (unavailable.length > 0 || line.replaces) {
+      const role = await ui.show('placement', {
+        ingredient: line.name,
+        productLabel: labelOf(candidate),
+      })
+      if (role === null) continue
+      placement = role
+    }
+
+    context.showProgress()
+    let cart
+    try {
+      cart = await adapter.setCartQuantity(candidate.id, packs)
+    } catch (error) {
+      if (!(error instanceof LeclercError) || error.code !== 'NETWORK') throw error
+      record({ ingredientSlug: slug, outcome: 'FAILED', error: 'NETWORK', ...rejected() })
+      return 'done'
+    }
+    if (cart.obtained < 1) {
+      search.notice = S.picker.cartRefused
+      continue
+    }
+    record({
+      ingredientSlug: slug,
+      outcome: 'CHOSEN',
+      product: chosenProduct(candidate),
+      quantity: Math.min(cart.obtained, LIMITS.packsMax),
+      placement,
+      ...(unavailable.length > 0 && {
+        unavailableIds: unavailable.map((product) => product.id).slice(0, LIMITS.products),
+      }),
+      ...rejected(),
+    })
+    return 'done'
+  }
+}
+
+/** La phase B de l'agent : les lignes à choisir, une à la fois, dans l'ordre du plan. */
+export const guidedChoice: PhaseB = async (context) => {
+  const { pending } = context
+  for (const [index, item] of pending.entries()) {
+    if (context.stopRequested()) return 'cancelled'
+    if ((await settleLine(item, index + 1, pending.length, context)) === 'cancelled') {
+      return 'cancelled'
+    }
+    // L'écran de progression pendant la recherche de la ligne suivante.
+    if (index < pending.length - 1) context.showProgress()
+  }
+  return 'done'
+}

@@ -250,8 +250,12 @@ export class Flow {
       })
       if (outcome === 'cancelled') run.stopped = true
     } catch (error) {
-      // Les lignes qui attendaient encore un choix restent « indisponibles » au résultat.
       run.halted = codeOf(error)
+      // Leclerc bloque : les lignes qui attendaient encore un choix échouent (`BLOCKED`), comme en phase A. Pour les autres erreurs
+      // elles restent « indisponibles » au résultat.
+      if (run.halted === 'BLOCKED') {
+        for (const { line } of this.pending(run)) this.record(run, failed(line, run.halted))
+      }
     }
   }
 

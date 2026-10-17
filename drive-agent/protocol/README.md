@@ -31,6 +31,7 @@ try {
 
 - `setup` a les mêmes champs qu'un `plan`, sans `lines` (interdit). Le magasin y est obligatoire.
 - `packs` et `packsStatus` d'un produit du plan sont facultatifs, ou `null`. `content` est facultatif.
+- `needed` (DRV-306, facultatif, sur toute ligne) : ce que la liste demande, `{quantity, unitSymbol, dimension?, baseFactor?}`. `quantity` est un nombre de 0 (exclu) à 1 000 000 dans l'unité de la ligne (« 800 » `g`), `dimension` parmi `WEIGHT`, `VOLUME`, `COUNT`, `PACKAGE` (ou `null`), `baseFactor` le facteur de l'unité vers l'unité de base (1 pour le gramme, 1000 pour le kilo). L'agent s'en sert, pour une ligne à choisir (phase B), à calculer le nombre de produits du produit choisi (règles de `architecture.md` § 6) ; sans `needed` ou sans dimension, il demande la quantité à l'utilisateur.
 - Un `result` d'issue `error` porte son `error` `{code, message}` ; les autres issues peuvent en porter un (`partial` avec `BLOCKED`).
 - Une ligne `FAILED` porte le code d'erreur dans `error` (une chaîne, pas un objet).
 - `unavailableIds` : 4 au plus pour `ADDED` (le produit mis au panier n'en fait pas partie), 5 sinon.

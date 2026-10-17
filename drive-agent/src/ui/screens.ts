@@ -5,6 +5,7 @@ import type {
   ChooserProps,
   EndProps,
   ErrorProps,
+  PlacementProps,
   ProgressPatch,
   ProgressProps,
   QuantityProps,
@@ -242,6 +243,42 @@ const chooser: Renderer<'chooser'> = (props: ChooserProps, answer) => {
   }
 }
 
+/** Un choix à trois issues : un gros bouton avec, dessous, ce qu'il veut dire (le texte du bouton est l'intitulé seul). */
+function choice(label: string, hint: string, id: string, onClick: () => void, kind = 'plain') {
+  return h(
+    'div',
+    { class: 'choice' },
+    h('button', {
+      text: label,
+      class: kind === 'plain' ? '' : kind,
+      attrs: { type: 'button', 'aria-describedby': id },
+      on: { click: onClick },
+    }),
+    h('p', { class: 'hint', text: hint, attrs: { id } }),
+  )
+}
+
+const placement: Renderer<'placement'> = (props: PlacementProps, answer) => {
+  return {
+    el: screen(
+      title(S.placement.title(props.productLabel)),
+      h('p', { text: S.placement.text(props.ingredient) }),
+      choice(
+        S.placement.primary,
+        S.placement.primaryHint,
+        'aide-prefere',
+        () => answer('PRIMARY'),
+        'primary',
+      ),
+      choice(S.placement.fallback, S.placement.fallbackHint, 'aide-secours', () =>
+        answer('FALLBACK'),
+      ),
+      choice(S.placement.once, S.placement.onceHint, 'aide-une-fois', () => answer('ONCE')),
+      actions(button(S.placement.back, () => answer(null))),
+    ),
+  }
+}
+
 const error: Renderer<'error'> = (props: ErrorProps, answer) => {
   const close = button(S.error.close, () => answer('close'), props.canReturn ? 'plain' : 'primary')
   const back = button(S.error.back, () => answer('return'), 'primary')
@@ -289,6 +326,7 @@ export const RENDERERS: { [K in ScreenName]: Renderer<K> } = {
   progress,
   quantity,
   chooser,
+  placement,
   error,
   end,
 }

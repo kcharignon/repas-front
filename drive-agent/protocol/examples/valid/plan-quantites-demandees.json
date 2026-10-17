@@ -1,0 +1,49 @@
+{
+  "v": 1,
+  "type": "plan",
+  "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+  "retailer": "leclerc",
+  "store": { "id": "000000", "host": "courses-test.leclercdrive.fr" },
+  "returnPath": "/drive/retour",
+  "lines": [
+    {
+      "ingredientSlug": "farine",
+      "name": "Farine",
+      "status": "NEW",
+      "products": [],
+      "rejected": [],
+      "searchQuery": "farine",
+      "needed": { "quantity": 800, "unitSymbol": "g", "dimension": "WEIGHT", "baseFactor": 1 }
+    },
+    {
+      "ingredientSlug": "lait",
+      "name": "Lait",
+      "status": "NEW",
+      "needed": { "quantity": 1.5, "unitSymbol": "l", "dimension": "VOLUME", "baseFactor": 1000 }
+    },
+    {
+      "ingredientSlug": "oeufs",
+      "name": "Oeufs",
+      "status": "NEW",
+      "needed": { "quantity": 6, "unitSymbol": "unité", "dimension": "COUNT", "baseFactor": 1 }
+    },
+    {
+      "ingredientSlug": "levure",
+      "name": "Levure",
+      "status": "NEW",
+      "needed": { "quantity": 2, "unitSymbol": "sachet", "dimension": "PACKAGE", "baseFactor": 1 }
+    },
+    {
+      "ingredientSlug": "thym",
+      "name": "Thym",
+      "status": "NEW",
+      "needed": { "quantity": 1, "unitSymbol": "branche", "dimension": null, "baseFactor": null }
+    },
+    {
+      "ingredientSlug": "cumin",
+      "name": "Cumin",
+      "status": "NEW",
+      "needed": { "quantity": 3, "unitSymbol": "cuillère à café" }
+    }
+  ]
+}

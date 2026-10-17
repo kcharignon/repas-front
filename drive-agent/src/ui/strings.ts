@@ -6,6 +6,28 @@ export function count(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`
 }
 
+/** Un nombre à la française : virgule décimale, deux décimales au plus (« 1,5 »). */
+export function formatNumber(value: number): string {
+  return String(Math.round(value * 100) / 100).replace('.', ',')
+}
+
+/** Un prix en centimes : « 2,58 € ». */
+export function formatPrice(cents: number): string {
+  return `${(cents / 100).toFixed(2).replace('.', ',')} €`
+}
+
+/** Un contenu net en unités de base : « 500 g », « 1,5 kg », « 1 L », « 6 pièces ». */
+export function formatContent(value: number, unit: 'g' | 'ml' | 'piece'): string {
+  if (unit === 'piece') return `${formatNumber(value)} ${value < 2 ? 'pièce' : 'pièces'}`
+  if (value >= 1000) return `${formatNumber(value / 1000)} ${unit === 'g' ? 'kg' : 'L'}`
+  return `${formatNumber(value)} ${unit}`
+}
+
+/** Le prix à l'unité de mesure : « 5,16 € / kg ». */
+export function formatMeasure(cents: number, unit: 'kg' | 'l' | 'piece'): string {
+  return `${formatPrice(cents)} / ${unit === 'l' ? 'L' : unit === 'piece' ? 'pièce' : 'kg'}`
+}
+
 export const S = {
   dialog: 'Repas : envoi de ta liste au drive',
   welcome: {
@@ -66,6 +88,46 @@ export const S = {
     skip: 'Passer cette fois',
     haveAtHome: 'J’en ai toujours',
     cancel: 'Annuler le passage',
+  },
+  /** La liste de produits que l'agent affiche dans l'écran de choix (DRV-306). */
+  picker: {
+    list: 'Produits proposés',
+    need: (asked: string) => `Il te faut : ${asked}.`,
+    replaces: (product: string) => `Tu remplaces : ${product}.`,
+    gone: (labels: string) => `Ces produits ne sont plus disponibles : ${labels}.`,
+    never: (product: string) => `Ne plus jamais prendre ${product}`,
+    searchLabel: 'Chercher autre chose',
+    searchButton: 'Chercher',
+    searching: 'Recherche en cours…',
+    adding: 'Ajout au panier…',
+    results: (query: string) => `Résultats pour « ${query} »`,
+    none: (query: string) => `Aucun produit trouvé pour « ${query} ». Essaie un autre mot.`,
+    network: 'Le site ne répond pas. Réessaie dans un instant.',
+    choose: 'Choisir',
+    out: 'Indisponible',
+    refused: 'Produit refusé',
+    refusedHint: 'Tu as refusé ce produit : Repas ne le prend jamais.',
+    outHint: 'Plus en stock.',
+    promo: (price: string) => `En promotion : ${price}`,
+    unknownContent: 'Contenu inconnu : tu choisiras la quantité.',
+    noLabel: (id: string) => `Produit ${id}`,
+    /** « 800 g demandés, 500 g par produit : 2 » pour un poids ou un volume ; sinon « Demandé : 2 paquet. À mettre au panier : 2. » */
+    pack: (asked: string, measure: boolean, plural: boolean, per: string | null, packs: number) =>
+      measure
+        ? `${asked} ${plural ? 'demandés' : 'demandé'}, ${per ?? '?'} par produit : ${packs}`
+        : `Demandé : ${asked}${per === null ? '' : `, ${per} par produit`}. À mettre au panier : ${packs}.`,
+    cartRefused: 'Leclerc n’a pas pu mettre ce produit au panier. Choisis-en un autre.',
+  },
+  placement: {
+    title: (product: string) => `Que fais-tu de « ${product} » ?`,
+    text: (ingredient: string) => `C’est un autre produit pour ${ingredient}.`,
+    primary: 'Mon nouveau produit préféré',
+    primaryHint: 'Repas le prendra en premier ; les autres restent en secours.',
+    fallback: 'Produit de secours',
+    fallbackHint: 'Repas le prendra après les autres, s’ils ne sont pas disponibles.',
+    once: 'Seulement cette fois',
+    onceHint: 'Repas ne le retient pas.',
+    back: 'Revenir à la liste',
   },
   end: {
     title: {

@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { h } from '../src/ui/dom'
-import { createUi, ERROR_TEXTS, type UiHandle } from '../src/ui'
+import { createUi, ERROR_TEXTS, renderPicker, type UiHandle } from '../src/ui'
 import type { ChooserProps, EndProps, SummaryProps } from '../src/ui'
 import { ERROR_CODES } from '../protocol'
 
@@ -386,6 +386,131 @@ describe('choix de produit (hôte)', () => {
     void handle.show('chooser', { ...base, mount: () => second })
     handle.close()
     expect(second).toHaveBeenCalledOnce()
+  })
+})
+
+describe('rôle du produit choisi', () => {
+  const props = { ingredient: 'Farine', productLabel: 'Farine de test 1 kg' }
+
+  it('pose la question avec le produit dans le titre, et les trois choix expliqués', () => {
+    const handle = open()
+    void handle.show('placement', props)
+
+    expect(shadow().querySelector('h1')?.textContent).toBe(
+      'Que fais-tu de « Farine de test 1 kg » ?',
+    )
+    expect(labels()).toEqual([
+      'Mon nouveau produit préféré',
+      'Produit de secours',
+      'Seulement cette fois',
+      'Revenir à la liste',
+    ])
+    for (const button of buttons().slice(0, 3)) {
+      const hint = shadow().getElementById(button.getAttribute('aria-describedby') ?? '')
+      expect(hint?.textContent?.length).toBeGreaterThan(10)
+    }
+    expect(shadow().activeElement?.textContent).toBe('Mon nouveau produit préféré')
+  })
+
+  it.each([
+    ['Mon nouveau produit préféré', 'PRIMARY'],
+    ['Produit de secours', 'FALLBACK'],
+    ['Seulement cette fois', 'ONCE'],
+    ['Revenir à la liste', null],
+  ])('« %s » rend %s', async (label, expected) => {
+    const handle = open()
+    const answer = handle.show('placement', props)
+
+    press(label)
+
+    await expect(answer).resolves.toBe(expected)
+  })
+
+  it('affiche tel quel un libellé qui contient du HTML', () => {
+    const handle = open()
+    void handle.show('placement', { ingredient: HOSTILE, productLabel: HOSTILE })
+
+    expect(shadow().querySelector('h1')?.textContent).toContain(HOSTILE)
+    expect(shadow().querySelector('img, script')).toBeNull()
+  })
+})
+
+describe('liste de produits dans l’écran de choix', () => {
+  const items = [
+    {
+      id: '111',
+      name: HOSTILE,
+      label2: '500 g',
+      details: ['500 g', '2,58 €'],
+      promo: null,
+      explain: '800 g demandés, 500 g par produit : 2',
+      state: 'ok' as const,
+    },
+    {
+      id: '222',
+      name: 'Produit refusé de test',
+      label2: null,
+      details: [],
+      promo: null,
+      explain: '',
+      state: 'refused' as const,
+    },
+  ]
+  const props = {
+    need: '800 g',
+    replaces: null,
+    gone: [],
+    checked: new Set<string>(),
+    query: 'poivre',
+    items,
+    notice: null,
+  }
+  const mountPicker = (zone: HTMLElement, done: (value: unknown) => void) =>
+    void renderPicker(zone, props, {
+      choose: (id) => done(id),
+      search: (query) => done({ query }),
+      never: () => undefined,
+    })
+
+  it('affiche des cibles d’au moins 44 px et des libellés hostiles comme du texte, dans le vrai Shadow DOM', async () => {
+    const handle = open()
+    const answer = handle.show('chooser', {
+      ingredient: 'Poivre',
+      position: 1,
+      total: 1,
+      mount: mountPicker,
+    })
+
+    expect(shadow().querySelector('.candidate .name')?.textContent).toBe(HOSTILE)
+    expect(shadow().querySelector('.picker img, .picker script')).toBeNull()
+    expect(
+      [...shadow().querySelectorAll<HTMLButtonElement>('.candidate button')].map((b) => [
+        b.textContent,
+        b.disabled,
+      ]),
+    ).toEqual([
+      ['Choisir', false],
+      ['Produit refusé', true],
+    ])
+    press('Choisir')
+
+    await expect(answer).resolves.toEqual({ kind: 'content', value: '111' })
+  })
+
+  it('le champ de recherche rend le mot cherché, sans espaces autour', async () => {
+    const handle = open()
+    const answer = handle.show('chooser', {
+      ingredient: 'Poivre',
+      position: 1,
+      total: 1,
+      mount: mountPicker,
+    })
+    const input = shadow().querySelector<HTMLInputElement>('#chercher')
+    if (input) input.value = '  sel gris '
+
+    shadow().querySelector('form')?.requestSubmit()
+
+    await expect(answer).resolves.toEqual({ kind: 'content', value: { query: 'sel gris' } })
   })
 })
 

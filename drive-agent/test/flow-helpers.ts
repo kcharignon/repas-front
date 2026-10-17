@@ -9,7 +9,13 @@ import {
   type ResultMessage,
 } from '../protocol'
 import { Flow, type FlowDeps, type StorageLike } from '../src/flow'
-import type { Candidate, CartResult, PricePerMeasure, RetailerAdapter } from '../src/leclerc'
+import type {
+  Candidate,
+  CartResult,
+  Content,
+  PricePerMeasure,
+  RetailerAdapter,
+} from '../src/leclerc'
 import type { ProgressPatch, ScreenAnswer, ScreenName, ScreenProps, Ui } from '../src/ui'
 
 export const RUN_ID = '8f14e45f-ceea-467a-9575-8e6b8c0a1b2c'
@@ -126,6 +132,10 @@ export interface ShelfItem {
   stock?: number | null
   price?: number | null
   perMeasure?: PricePerMeasure | null
+  label?: string
+  label2?: string | null
+  content?: Content | null
+  promo?: number | null
   /** Ce que le panier garde d'une demande de `quantity` (par défaut tout). */
   obtained?: (quantity: number) => number
 }
@@ -133,16 +143,16 @@ export interface ShelfItem {
 export function candidate(id: string, item: ShelfItem = {}): Candidate {
   return {
     id,
-    label: `Produit de test ${id}`,
-    label2: null,
+    label: item.label ?? `Produit de test ${id}`,
+    label2: item.label2 ?? null,
     price: item.price ?? null,
     pricePerMeasure: item.perMeasure ?? null,
-    promo: null,
+    promo: item.promo ?? null,
     stock: item.stock === undefined ? 10 : item.stock,
     inCart: null,
     thumbnailUrl: null,
-    content: null,
-    contentSource: null,
+    content: item.content ?? null,
+    contentSource: item.content ? 'label' : null,
   }
 }
 
@@ -153,8 +163,11 @@ export function candidate(id: string, item: ShelfItem = {}): Candidate {
 export function fakeAdapter(
   shelf: Record<string, ShelfItem> = {},
   options: {
+    /** Appelé avant chaque requête : `search <id>`, `find <mot>`, `cart <id> <quantité>`. */
     before?: (call: string) => void | Promise<void>
     store?: () => ReturnType<RetailerAdapter['readStore']>
+    /** Ce que la recherche d'un mot rend : des identifiants du rayon, dans l'ordre. Un mot absent ne trouve rien. */
+    found?: Record<string, string[]>
   } = {},
 ) {
   const calls: string[] = []
@@ -169,7 +182,11 @@ export function fakeAdapter(
         baseUrl: `https://${STORE.host}/magasin-${STORE.id}-${STORE.id}`,
         label: null,
       })),
-    searchProducts: () => Promise.resolve([]),
+    async searchProducts(query) {
+      calls.push(`find ${query}`)
+      await options.before?.(`find ${query}`)
+      return (options.found?.[query] ?? []).map((id) => candidate(id, shelf[id]))
+    },
     async readProductFromSearch(_query, id) {
       calls.push(`search ${id}`)
       await options.before?.(`search ${id}`)

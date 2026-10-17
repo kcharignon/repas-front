@@ -1,30 +1,112 @@
 // Page de démonstration de l'interface (DRV-304), hors production : chaque écran avec des données inventées. Servie par le serveur de
 // développement (`make start`, /drive-agent/demo/index.html?screen=summary) et éprouvée par `e2e/agent-ui.spec.ts` (accessibilité, 360×640).
 import { ERROR_CODES } from '../protocol'
-import { createUi, h, type ChooserProps } from '../src/ui'
+import {
+  createUi,
+  renderPicker,
+  type ChooserProps,
+  type PickerItem,
+  type PickerProps,
+} from '../src/ui'
 
 const HOSTILE = '<img src=x onerror="window.pwned=1"> <script>window.pwned=1</script>'
 
 // Ouvert pour que les outils de test lisent l'interface ; l'agent, lui, la ferme.
 const ui = createUi({ mode: 'open' })
 
-function mountCandidates(zone: HTMLElement, answer: (value: unknown) => void): void {
-  const items = ['Poivre noir moulu de test 50 g', HOSTILE, 'Poivre blanc de test 100 g'].map(
-    (label) =>
-      h(
-        'li',
-        {},
-        h('button', { text: label, attrs: { type: 'button' }, on: { click: () => answer(label) } }),
-      ),
-  )
-  zone.appendChild(h('ul', { attrs: { 'aria-label': 'Produits proposés' } }, ...items))
+const CANDIDATES: PickerItem[] = [
+  {
+    id: '1000001',
+    name: 'Poivre noir moulu de test',
+    label2: '50 g',
+    details: ['50 g', '2,58 €', '51,60 € / kg'],
+    promo: null,
+    explain: '100 g demandés, 50 g par produit : 2',
+    state: 'ok',
+  },
+  {
+    id: '1000002',
+    name: HOSTILE,
+    label2: HOSTILE,
+    details: ['100 g', '3,99 €', '39,90 € / kg'],
+    promo: 'En promotion : 3,50 €',
+    explain: '100 g demandés, 100 g par produit : 1',
+    state: 'ok',
+  },
+  {
+    id: '1000003',
+    name: 'Poivre blanc de test',
+    label2: '100 g',
+    details: ['100 g', '4,20 €'],
+    promo: null,
+    explain: '',
+    state: 'refused',
+  },
+  {
+    id: '1000004',
+    name: 'Poivre en grains de test',
+    label2: '250 g',
+    details: ['250 g', '6,10 €'],
+    promo: null,
+    explain: '',
+    state: 'out',
+  },
+  {
+    id: '1000005',
+    name: 'Mélange baies de test',
+    label2: null,
+    details: [],
+    promo: null,
+    explain: 'Contenu inconnu : tu choisiras la quantité.',
+    state: 'ok',
+  },
+]
+
+const PICKER: PickerProps = {
+  need: '100 g',
+  replaces: null,
+  gone: [],
+  checked: new Set(),
+  query: 'poivre',
+  items: CANDIDATES,
+  notice: null,
+}
+
+function mounting(props: PickerProps): ChooserProps['mount'] {
+  return (zone, answer) => {
+    renderPicker(zone, props, {
+      choose: (id) => answer({ type: 'choose', id }),
+      search: (query) => answer({ query }),
+      never: () => undefined,
+    })
+  }
 }
 
 const CHOOSER: ChooserProps = {
   ingredient: 'Poivre',
   position: 2,
   total: 5,
-  mount: mountCandidates,
+  mount: mounting(PICKER),
+}
+
+// Un ingrédient dont le produit habituel n'est plus disponible : bandeau, cases « Ne plus jamais prendre », message du site.
+const CHOOSER_GONE: ChooserProps = {
+  ingredient: 'Farine de blé',
+  position: 1,
+  total: 3,
+  mount: mounting({
+    ...PICKER,
+    need: '800 g',
+    replaces: 'Farine de blé T55 de test 1 kg',
+    gone: [
+      { id: '2000001', label: 'Farine de blé T55 de test 1 kg' },
+      { id: '2000002', label: 'Farine de blé T45 de test 1 kg' },
+    ],
+    checked: new Set(['2000002']),
+    query: 'farine',
+    items: CANDIDATES.slice(0, 2),
+    notice: 'Leclerc n’a pas pu mettre ce produit au panier. Choisis-en un autre.',
+  }),
 }
 
 const SCREENS: Record<string, () => unknown> = {
@@ -68,6 +150,12 @@ const SCREENS: Record<string, () => unknown> = {
       packs: 2,
     }),
   chooser: () => ui.show('chooser', CHOOSER),
+  'chooser-gone': () => ui.show('chooser', CHOOSER_GONE),
+  placement: () =>
+    ui.show('placement', {
+      ingredient: 'Farine de blé',
+      productLabel: 'Farine de blé T45 de test 1 kg',
+    }),
   hostile: () => ui.show('quantity', { ingredient: HOSTILE, productLabel: HOSTILE, packs: 1 }),
   'end-completed': () =>
     ui.show('end', {

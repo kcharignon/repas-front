@@ -1,0 +1,21 @@
+{
+  "path": "lines[0].needed.quantity",
+  "why": "Une quantité demandée est strictement positive.",
+  "message": {
+    "v": 1,
+    "type": "plan",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "retailer": "leclerc",
+    "store": { "id": "000000", "host": "courses-test.leclercdrive.fr" },
+    "returnPath": "/drive/retour",
+    "lines": [
+      {
+        "ingredientSlug": "farine",
+        "name": "Farine",
+        "status": "NEW",
+        "searchQuery": "farine",
+        "needed": { "quantity": 0, "unitSymbol": "g", "dimension": "WEIGHT", "baseFactor": 1 }
+      }
+    ]
+  }
+}
