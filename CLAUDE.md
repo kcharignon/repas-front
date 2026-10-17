@@ -8,6 +8,7 @@ Guide pour travailler sur `repas-front`, le front Vue.js de l'application Repas 
 - `docs/adr/` : décisions d'architecture du front (index dans `docs/adr/README.md`). Changer une convention = ADR + ce fichier dans le même commit.
 - Contrat de l'API : `docs/api/openapi.json` du dépôt back, figé à un commit précis (`api/contract.json`), types générés dans `src/api/schema.d.ts` ([ADR 0002](docs/adr/0002-sdk-genere-depuis-le-contrat-openapi.md)). Mettre le contrat à jour : `npm run api:update`, relire le diff.
 - Plan, inventaire de parité, design, bascule : `docs/front-vuejs-plan.md` du dépôt back.
+- **Chantier en cours : envoi de la liste au drive Leclerc** (agent dans `drive-agent/`, écrans dans `src/features/drive/`) : lire `docs/drive/README.md` du dépôt back (`kcharignon/repas`) avant de toucher aux listes de courses ou à ce chantier ; les tickets `DRV-3xx` et `DRV-4xx` sont dans `docs/drive/tickets/` de ce dépôt. Règles : jamais de code distant dans l'agent, jamais d'identifiant ni de cookie d'enseigne, jamais de HTML brut de Leclerc dans le dépôt (public).
 
 ## Stack
 
