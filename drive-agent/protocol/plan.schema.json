@@ -66,6 +66,18 @@
         "packsStatus": { "enum": ["COMPUTED", "TO_CHECK", null] }
       }
     },
+    "needed": {
+      "description": "Ce que la liste demande pour l'ingrédient, dans l'unité de la ligne. dimension et baseFactor permettent à l'agent de calculer le nombre de produits d'un produit qu'il ne connaissait pas.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["quantity", "unitSymbol"],
+      "properties": {
+        "quantity": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
+        "unitSymbol": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "dimension": { "enum": ["WEIGHT", "VOLUME", "COUNT", "PACKAGE", null] },
+        "baseFactor": { "type": ["number", "null"], "exclusiveMinimum": 0, "maximum": 1000000 }
+      }
+    },
     "line": {
       "type": "object",
       "additionalProperties": false,
@@ -87,7 +99,8 @@
           "items": { "$ref": "#/definitions/productRef" }
         },
         "searchQuery": { "$ref": "#/definitions/label" },
-        "replaces": { "$ref": "#/definitions/productRef" }
+        "replaces": { "$ref": "#/definitions/productRef" },
+        "needed": { "$ref": "#/definitions/needed" }
       },
       "allOf": [
         {

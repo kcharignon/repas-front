@@ -2,10 +2,10 @@
  * Ce que l'agent fait quand l'application l'injecte dans une page de l'enseigne.
  *
  * Il écoute un plan de Repas (le pont de l'application, ou le fragment `#repas=` de l'adresse) et, dès qu'il en reçoit un, déroule le
- * passage : récapitulatif et confirmation, phase A, résultat (`flow/`, DRV-305). Tant qu'aucun plan n'est reçu, l'agent reste
+ * passage : récapitulatif et confirmation, phase A, phase B (choix guidé), résultat (`flow/`, DRV-305 et DRV-306). Tant qu'aucun plan n'est reçu, l'agent reste
  * silencieux sur la page : aucune bannière, aucune variable globale, aucune requête.
  */
-import { Flow, type FlowDeps, type StorageLike } from './flow'
+import { Flow, guidedChoice, type FlowDeps, type StorageLike } from './flow'
 import { browserDeps, LeclercAdapter } from './leclerc'
 import { bridgeTransport, type Bridge } from './transport/bridge'
 import { fragmentTransport } from './transport/fragment'
@@ -63,6 +63,7 @@ export function run(win: Window & typeof globalThis = window, options: AgentOpti
     now: () => Date.now(),
     agentVersion: AGENT_VERSION,
     canReturn: bridge !== undefined || ORIGIN_SHAPE.test(origin),
+    phaseB: guidedChoice,
     ...options.flow,
   })
   transport.listen(

@@ -1,5 +1,5 @@
 // Les écrans de l'interface et ce que chacun reçoit (`props`) et rend (`answer`, la réponse de l'utilisateur).
-import type { ErrorCode, LineStatus, Outcome } from '../../protocol'
+import type { ErrorCode, LineStatus, Outcome, Placement } from '../../protocol'
 
 export interface SummaryLine {
   name: string
@@ -61,6 +61,12 @@ export interface ChooserProps {
   mount: (zone: HTMLElement, answer: (value: unknown) => void) => (() => void) | void
 }
 
+/** « Que fais-tu de ce produit ? » : le rôle du produit choisi quand l'ingrédient en avait déjà (phase B, DRV-306). */
+export interface PlacementProps {
+  ingredient: string
+  productLabel: string
+}
+
 export interface ErrorProps {
   code: ErrorCode
   /** Vrai : un résultat peut repartir vers Repas (bouton « Retourner dans Repas »), sinon l'écran se ferme seulement. */
@@ -88,6 +94,8 @@ export interface ScreenMap {
   /** Le nombre choisi, ou `null` pour « Passer ». */
   quantity: { props: QuantityProps; answer: number | null }
   chooser: { props: ChooserProps; answer: ChooserAnswer }
+  /** Le rôle choisi, ou `null` pour revenir à la liste de produits. */
+  placement: { props: PlacementProps; answer: Placement | null }
   error: { props: ErrorProps; answer: 'return' | 'close' }
   end: { props: EndProps; answer: 'return' }
 }

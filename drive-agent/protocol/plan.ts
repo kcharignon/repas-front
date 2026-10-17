@@ -20,6 +20,7 @@ import {
   type Check,
 } from './check'
 import {
+  DIMENSIONS,
   LIMITS,
   LINE_STATUSES,
   PACKS_STATUSES,
@@ -49,6 +50,25 @@ const planProduct: Check = (list, index) => {
   )
 }
 
+/** Un nombre strictement positif, fini, d'au plus `LIMITS.quantity`. */
+const positive: Check = (scope, key) => {
+  const value = scope.v[key]
+  if (typeof value !== 'number' || !(value > 0) || !Number.isFinite(value)) fail(at(scope.p, key))
+  if (value > LIMITS.quantity) fail(at(scope.p, key))
+}
+
+const needed: Check = (scope, key) => {
+  const own = object(scope, key, ['quantity', 'unitSymbol', 'dimension', 'baseFactor'])
+  positive(own, 'quantity')
+  text(own, 'unitSymbol', undefined, LIMITS.unitSymbol)
+  optional(
+    own,
+    'dimension',
+    orNull((parent, name) => oneOf(parent, name, DIMENSIONS)),
+  )
+  optional(own, 'baseFactor', orNull(positive))
+}
+
 const planLine: Check = (list, index) => {
   const line = object(list, index, [
     'ingredientSlug',
@@ -58,6 +78,7 @@ const planLine: Check = (list, index) => {
     'rejected',
     'searchQuery',
     'replaces',
+    'needed',
   ])
   text(line, 'ingredientSlug', SLUG)
   text(line, 'name')
@@ -74,6 +95,7 @@ const planLine: Check = (list, index) => {
   })
   optional(line, 'searchQuery', text)
   optional(line, 'replaces', productRef)
+  optional(line, 'needed', needed)
 }
 
 /**

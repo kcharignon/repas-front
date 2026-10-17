@@ -40,5 +40,23 @@ progress{width:100%;height:16px;accent-color:var(--accent)}
 .bar .actions{margin:0;padding:0}
 .bar .actions>button{flex:1 1 7em;padding:6px 10px;font-size:.95rem}
 .zone{flex:1;min-height:0;overflow:auto}
+.choice{margin:12px 0}
+.choice>button{display:block;width:100%;text-align:left}
+.choice .hint{margin:4px 0 0}
+.picker{padding:12px;overflow-wrap:anywhere}
+.picker form{margin:12px 0}
+.search{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+.search label{flex:1 0 100%;margin:0}
+.search input{flex:1 1 10em;width:auto}
+.gone{margin:12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+.gone p{margin:0 0 4px}
+.check{display:flex;align-items:center;gap:10px;min-height:44px;margin:0;font-weight:400}
+.check input{flex:none;width:44px;height:44px;accent-color:var(--accent)}
+.candidates{margin:8px 0;padding:0;list-style:none}
+.candidate{margin:8px 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+.candidate p{margin:2px 0}
+.candidate .name{font-weight:600}
+.candidate.off .name{color:var(--muted)}
+.candidate>button{width:100%;margin-top:8px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 `
