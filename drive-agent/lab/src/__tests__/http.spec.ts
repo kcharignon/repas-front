@@ -150,7 +150,7 @@ describe('getPage et postForm', () => {
     })
   })
 
-  it('envoie exactement les en-têtes du site pour le panier : Accept */*, rien d’autre en plus', async () => {
+  it('envoie exactement les en-têtes du site pour le panier, y compris zcwb', async () => {
     const fetchFn = vi.fn<FetchFn>().mockResolvedValue(reply(200, '[]', 'application/json'))
 
     await postForm(fetchFn, 'https://h.example/panier.aspx?op=1', 'd=%7B%7D', clock())
@@ -159,11 +159,17 @@ describe('getPage et postForm', () => {
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
       Accept: '*/*',
       'X-Requested-With': 'XMLHttpRequest',
+      zcwb: 'ajax-manager',
     })
-    expect(Object.keys(FORM_HEADERS)).toEqual(['Content-Type', 'Accept', 'X-Requested-With'])
+    expect(Object.keys(FORM_HEADERS)).toEqual([
+      'Content-Type',
+      'Accept',
+      'X-Requested-With',
+      'zcwb',
+    ])
   })
 
-  it('n’envoie pas d’en-tête d’accept de la lecture de pages au panier, ni l’inverse', async () => {
+  it('n’ajoute ni zcwb ni les en-têtes du panier à la lecture d’une page', async () => {
     const fetchFn = vi.fn<FetchFn>().mockResolvedValue(reply(200, '<html></html>'))
 
     await getPage(fetchFn, 'https://h.example/a', clock())

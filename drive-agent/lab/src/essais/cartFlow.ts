@@ -1,7 +1,7 @@
 // Outil de test jetable, à supprimer après la décision G1 (DRV-005).
 // Écriture au panier des essais 3, 3b et 12 : un seul produit, confirmation avant chaque écriture, aucune boucle.
 import { cartBody, summarizeCartResponse, type CartSummary } from '../cart'
-import { cartUrl, findDeliveryPoint, type StoreInfo } from '../store'
+import { cartAddressNote, cartUrl, findDeliveryPoint, type StoreInfo } from '../store'
 import { FORM_HEADERS, postForm, type Reply } from '../http'
 import type { Product } from '../parse'
 import { append, clear, h } from '../ui/dom'
@@ -66,13 +66,16 @@ export interface CartCall {
   verdict: string[]
   /** D'où vient le point de livraison envoyé (sa valeur n'est jamais affichée). */
   pointFrom: 'page' | 'adresse'
-  /** Diagnostic : noms des en-têtes envoyés (sans valeurs) et longueur du corps. */
-  request: string
+  /** Diagnostic : adresse du panier, noms des en-têtes envoyés (sans valeurs) et longueur du corps. */
+  request: string[]
 }
 
-/** Les noms des en-têtes posés par le banc (le navigateur en ajoute d'autres) et le Content-Length : le corps est en ASCII. */
-export function requestLine(body: string): string {
-  return `En-têtes posés par le banc : ${Object.keys(FORM_HEADERS).join(', ')} (+ ceux du navigateur) ; Content-Length du corps : ${body.length}`
+/** Adresse du panier, noms des en-têtes posés par le banc (le navigateur en ajoute d'autres) et Content-Length : le corps est en ASCII. */
+export function requestLines(body: string, store: StoreInfo): string[] {
+  return [
+    cartAddressNote(store),
+    `En-têtes posés par le banc : ${Object.keys(FORM_HEADERS).join(', ')} (+ ceux du navigateur) ; Content-Length du corps : ${body.length}`,
+  ]
 }
 
 export interface CartWrite {
@@ -98,7 +101,7 @@ export async function sendCart(
     searchText: ctx.state.lastQuery,
     withoutContext: write.withoutContext,
   })
-  const request = requestLine(body)
+  const request = requestLines(body, store)
   const reply = await postForm(ctx.env.fetch, cartUrl(store), body, ctx.env.now)
   if (reply.error !== null) {
     return { reply, summary: null, blocked: false, verdict: [], pointFrom: point.from, request }
@@ -268,7 +271,7 @@ async function writeOnce(
     `Ajout du produit ${id}${labelOf(offer.label)} : action 1, quantité visée 1, ${contextText(ctx.state.lastQuery, withoutContext)}`,
     describeReply(call.reply),
     pointLine(call.pointFrom),
-    call.request,
+    ...call.request,
   ]
   if (call.summary === null) {
     panel.set(lines)
@@ -347,7 +350,7 @@ async function removeOnce(
 ): Promise<void> {
   panel.add('', `Retrait du produit ${id}${labelOf(label)} : action 2, quantité 0…`)
   const call = await sendCart(ctx, store, { productId: id, action: 2, quantity: 0 })
-  const lines = [describeReply(call.reply), call.request]
+  const lines = [describeReply(call.reply), ...call.request]
   if (call.summary !== null) {
     lines.push(...call.summary.lines, ...call.verdict)
     if (call.verdict.length === 0) {

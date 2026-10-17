@@ -155,6 +155,28 @@ describe('essai 3b : quantités', () => {
     expect(() => button(harness.root, 'Étape 2')).toThrow('introuvable')
   })
 
+  it('poste comme le site : adresse du panier sans ville, en-têtes dont zcwb', async () => {
+    const cart = fakeCart('absolue')
+    const harness = mount({
+      route: cart.route,
+      path: '/magasin-123456-123456-Ville-Test/recherche.aspx',
+    })
+    await ready(harness)
+    click(harness.root, "Préparer l'étape 1")
+
+    const text = await confirm(harness, 'Oui, fixer à 3', 1)
+
+    expect(posts(harness)[0]?.url).toBe(
+      `${window.location.origin}/magasin-123456-123456/panier.aspx?op=1`,
+    )
+    expect(harness.fetch.mock.calls.at(-1)?.[1]?.headers).toMatchObject({
+      Accept: '*/*',
+      zcwb: 'ajax-manager',
+    })
+    expect(text).toContain('Adresse du panier : sans suffixe de ville')
+    expect(text).toContain('Content-Type, Accept, X-Requested-With, zcwb')
+  })
+
   it('envoie les corps du site : identifiant en texte, contexte à l’ajout seulement', async () => {
     const cart = fakeCart('absolue')
     const harness = mount({ route: cart.route })
