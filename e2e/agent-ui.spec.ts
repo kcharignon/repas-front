@@ -37,6 +37,8 @@ const SCREENS = [
   'placement',
   'store',
   'store-label',
+  'diagnostic',
+  'diagnostic-running',
   'hostile',
   'end-completed',
   'end-partial',
@@ -90,10 +92,13 @@ test('chaque écran tient dans 360×640 sans défilement horizontal, avec des ci
       const root = (document.documentElement.lastElementChild as HTMLElement)
         .shadowRoot as ShadowRoot
       const screen = root.querySelector('.screen') as HTMLElement
-      const small = [...root.querySelectorAll('button, input, summary')].filter((element) => {
-        const box = element.getBoundingClientRect()
-        return box.width < 43.5 || box.height < 43.5
-      })
+      // Un élément caché (le rapport du diagnostic, tant que les contrôles tournent) n'a pas de cible à toucher.
+      const small = [...root.querySelectorAll('button, input, summary')]
+        .filter((element) => !element.closest('[hidden]'))
+        .filter((element) => {
+          const box = element.getBoundingClientRect()
+          return box.width < 43.5 || box.height < 43.5
+        })
       return {
         overflow: screen.scrollWidth - screen.clientWidth,
         page: document.documentElement.scrollWidth - window.innerWidth,

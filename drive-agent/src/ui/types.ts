@@ -67,6 +67,29 @@ export interface PlacementProps {
   productLabel: string
 }
 
+/** Une ligne du diagnostic : le contrôle, son résultat en texte (le résultat n'est jamais dit par la seule couleur) et son détail. */
+export interface DiagnosticRow {
+  label: string
+  /** « OK », « KO BLOCKED », « NON TESTÉ », ou « … » tant que le contrôle n'est pas fait. */
+  badge: string
+  detail: string | null
+  tone: 'wait' | 'ok' | 'ko' | 'skip'
+}
+
+/** Ce que le diagnostic fait de l'écran une fois affiché : mettre les lignes à jour, puis donner le rapport. */
+export interface DiagnosticView {
+  update: (rows: readonly DiagnosticRow[]) => void
+  /** Les contrôles sont finis : montre le résumé et le rapport copiable. */
+  finish: (summary: string, report: string) => void
+}
+
+export interface DiagnosticProps {
+  /** Appelé une fois l'écran dans la page ; lance les contrôles. */
+  start: (view: DiagnosticView) => void
+  /** Copie le rapport dans le presse-papiers ; `false` si le navigateur refuse. */
+  copy: (text: string) => Promise<boolean>
+}
+
 /** Le magasin lu dans la page, avant de le donner à Repas (mode configuration, DRV-307). */
 export interface StoreProps {
   id: string
@@ -102,6 +125,7 @@ export interface ScreenMap {
   quantity: { props: QuantityProps; answer: number | null }
   chooser: { props: ChooserProps; answer: ChooserAnswer }
   store: { props: StoreProps; answer: 'save' | 'cancel' }
+  diagnostic: { props: DiagnosticProps; answer: 'close' }
   /** Le rôle choisi, ou `null` pour revenir à la liste de produits. */
   placement: { props: PlacementProps; answer: Placement | null }
   error: { props: ErrorProps; answer: 'return' | 'close' }

@@ -36,6 +36,64 @@ export const S = {
     diagnostic: 'Diagnostic',
     close: 'Fermer',
   },
+  /** Le diagnostic (DRV-308) : l'écran et le rapport texte copiable. Le rapport ne contient jamais de donnée personnelle. */
+  diagnostic: {
+    title: 'Diagnostic',
+    intro: 'Je vérifie que le site répond comme prévu. Rien n’est écrit dans ton panier.',
+    running: 'Contrôles en cours…',
+    finished: (ok: number, ko: number, skipped: number) =>
+      `Contrôles terminés : ${ok} réussi${ok > 1 ? 's' : ''}, ${ko} en échec, ${skipped} non testé${skipped > 1 ? 's' : ''}.`,
+    list: 'Contrôles',
+    report: 'Rapport à copier',
+    privacy:
+      'Ce rapport ne contient ni cookie, ni identifiant de compte, ni adresse, ni nom, ni numéro de magasin complet.',
+    copy: 'Copier le rapport',
+    copied: 'Rapport copié.',
+    copyFailed: 'Copie impossible : sélectionne le texte du rapport et copie-le.',
+    close: 'Fermer',
+    badge: { OK: 'OK', KO: 'KO', NOT_TESTED: 'NON TESTÉ', wait: '…' },
+    check: {
+      agent: 'Version de l’agent',
+      page: 'Page prise en charge',
+      origin: 'Origine de Repas dans l’agent',
+      session: 'Stockage de session',
+      wakeLock: 'Écran allumé (Wake Lock)',
+      search: 'Recherche d’un mot courant',
+      content: 'Contenu net des produits',
+      frame: 'Cadre de même origine',
+    },
+    detail: {
+      version: (version: string) => `version ${version}`,
+      page: (host: string, store: string) => `hôte ${host}, magasin ${store}`,
+      hostOther: 'autre hôte leclercdrive.fr',
+      originOk: 'origine écrite dans l’agent',
+      originMissing: 'origine non remplacée dans l’agent',
+      originBridge: 'pont de l’application : pas d’origine à vérifier',
+      sessionOk: 'lecture et écriture possibles',
+      sessionKo: 'stockage de session inaccessible : pas de reprise possible',
+      wakeLockOk: 'disponible',
+      wakeLockKo: 'absent (toléré : l’écran peut s’éteindre)',
+      pageSkipped: 'page non prise en charge',
+      searchOk: (term: string, read: number, complete: number) =>
+        `« ${term} » : ${read} produits lus, ${complete} avec tous les champs attendus (identifiant, libellé, prix, stock)`,
+      searchEmpty: (term: string) => `« ${term} » : aucun produit lu`,
+      searchIncomplete: (term: string, read: number, complete: number) =>
+        `« ${term} » : ${read} produits lus, seulement ${complete} avec tous les champs attendus`,
+      searchFailed: 'recherche impossible, contenu non analysé',
+      contentOk: (known: number, read: number) => `${known} produits sur ${read}`,
+      contentKo: (known: number, read: number) => `seulement ${known} produits sur ${read}`,
+      frameSkipped: 'non utilisé : l’agent affiche lui-même la liste de produits',
+    },
+    /** Les lignes du rapport copiable. */
+    text: {
+      title: 'Repas Drive : diagnostic',
+      agent: (version: string) => `Agent : ${version}`,
+      date: (date: string) => `Date : ${date}`,
+      host: (host: string) => `Hôte : ${host}`,
+      store: (store: string) => `Magasin : ${store}`,
+      noWrite: 'Aucune écriture au panier.',
+    },
+  },
   /** Le mode configuration (DRV-307) : lire le magasin de la page et le donner à Repas. */
   store: {
     title: 'Enregistrer ce magasin dans Repas ?',

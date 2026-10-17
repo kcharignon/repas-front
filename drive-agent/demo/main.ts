@@ -5,6 +5,7 @@ import {
   createUi,
   renderPicker,
   type ChooserProps,
+  type DiagnosticRow,
   type PickerItem,
   type PickerProps,
 } from '../src/ui'
@@ -109,6 +110,38 @@ const CHOOSER_GONE: ChooserProps = {
   }),
 }
 
+const DIAGNOSTIC_ROWS: DiagnosticRow[] = [
+  { label: 'Version de l’agent', badge: 'OK', detail: 'version 0.5.0', tone: 'ok' },
+  { label: 'Page prise en charge', badge: 'OK', detail: 'hôte fd9, magasin …456', tone: 'ok' },
+  {
+    label: 'Origine de Repas dans l’agent',
+    badge: 'NON TESTÉ',
+    detail: 'pont de l’application : pas d’origine à vérifier',
+    tone: 'skip',
+  },
+  {
+    label: 'Stockage de session',
+    badge: 'OK',
+    detail: 'lecture et écriture possibles',
+    tone: 'ok',
+  },
+  {
+    label: 'Écran allumé (Wake Lock)',
+    badge: 'KO',
+    detail: 'absent (toléré : l’écran peut s’éteindre)',
+    tone: 'ko',
+  },
+  { label: 'Recherche d’un mot courant', badge: 'KO BLOCKED', detail: null, tone: 'ko' },
+  {
+    label: 'Contenu net des produits',
+    badge: 'NON TESTÉ',
+    detail: 'recherche impossible, contenu non analysé',
+    tone: 'skip',
+  },
+  { label: 'Cadre de même origine', badge: 'OK', detail: HOSTILE, tone: 'ok' },
+]
+const WAITING: DiagnosticRow = { label: 'En attente', badge: '…', detail: null, tone: 'wait' }
+
 const SCREENS: Record<string, () => unknown> = {
   welcome: () => ui.show('welcome', {}),
   summary: () =>
@@ -151,6 +184,23 @@ const SCREENS: Record<string, () => unknown> = {
     }),
   chooser: () => ui.show('chooser', CHOOSER),
   'chooser-gone': () => ui.show('chooser', CHOOSER_GONE),
+  diagnostic: () =>
+    ui.show('diagnostic', {
+      copy: () => Promise.resolve(true),
+      start: (view) => {
+        view.update(DIAGNOSTIC_ROWS)
+        view.finish(
+          'Contrôles terminés : 3 réussis, 3 en échec, 2 non testés.',
+          'Repas Drive : diagnostic\nAgent : 0.5.0\nDate : 2026-10-18 14:03 UTC\nHôte : fd9\nMagasin : …456\n\n[OK] Version de l’agent : version 0.5.0\n[KO BLOCKED] Recherche d’un mot courant\n\nAucune écriture au panier.',
+        )
+      },
+    }),
+  'diagnostic-running': () =>
+    ui.show('diagnostic', {
+      copy: () => Promise.resolve(false),
+      start: (view) =>
+        view.update(DIAGNOSTIC_ROWS.map((row, index) => (index < 3 ? row : WAITING))),
+    }),
   store: () => ui.show('store', { id: '123456', label: null }),
   'store-label': () => ui.show('store', { id: '123456', label: 'Magasin de test, Ville-Test' }),
   placement: () =>
