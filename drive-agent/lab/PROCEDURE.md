@@ -128,7 +128,7 @@ Le banc envoie maintenant la même requête que le site (DRV-007) : identifiant 
 
 20. Touche l'essai 3. Dans la liste, choisis un produit **peu cher** (vu à l'essai 2) qui n'est pas dans ton panier. Touche **Préparer l'ajout…**. Une case « Diagnostic : sans l'objet de contexte » apparaît avec la boîte de confirmation : laisse-la **décochée** pour l'instant.
 
-21. Une boîte rouge te demande de confirmer. **Rien n'est envoyé avant.** Touche **Oui, ajouter 1 au panier**. Note le code HTTP (le dernier essai avait donné 404) et la ligne « Quantité obtenue du produit … (iQtePanier) » : elle doit dire 1.
+21. Une boîte rouge te demande de confirmer. **Rien n'est envoyé avant.** Touche **Oui, ajouter 1 au panier**. Note le code HTTP (le dernier essai avait donné 404) et la ligne « Quantité obtenue du produit … (iQtePanier) » : elle doit dire 1. Note aussi la ligne « En-têtes posés par le banc … Content-Length du corps » (les noms des en-têtes, jamais leurs valeurs) : elle aide à comparer avec la requête du site.
 
     - **Si tu lis « La requête n'a pas été comprise par Leclerc (HTTP 404) »** : ce n'est pas un blocage du site, c'est la forme de la requête. Copie le résultat. Puis recommence les étapes 20 et 21 en **cochant** la case « Diagnostic : sans l'objet de contexte » avant de confirmer. Copie ce second résultat aussi : l'agent compare les deux.
     - **Si tu lis « Blocage probable (403/429) »** : le banc s'est arrêté. Va à la partie G.
