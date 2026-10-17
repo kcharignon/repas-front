@@ -1,0 +1,352 @@
+// L'orchestrateur du passage (DRV-305) : une machine d'états sans réseau ni DOM propres, tout vient de `FlowDeps`.
+//   START → VALIDATED → CONFIRMED → PHASE_A → PHASE_B → DONE      (+ ABORTED : l'utilisateur arrête ; ERROR : le passage s'interrompt)
+// Rien n'est envoyé au site avant le « Commencer ». Un seul passage à la fois.
+import {
+  ProtocolError,
+  validatePlan,
+  type ErrorCode,
+  type PlanLine,
+  type PlanMessage,
+  type ResultLine,
+} from '../../protocol'
+import { LeclercError } from '../leclerc'
+import { S, type SummaryProps } from '../ui'
+import { settleKnownLine } from './phase-a'
+import { buildResult, endProps, endingOf, resultLines } from './result'
+import { emptyState, RunStore, type RunState } from './run-state'
+import type { FlowDeps, PendingLine, Step } from './types'
+import { keepAwake } from './wake-lock'
+
+/** Un passage en cours. */
+interface Run {
+  plan: PlanMessage
+  state: RunState
+  names: Map<string, string>
+  /** Les dernières actions affichées. */
+  log: string[]
+  /** L'ingrédient en cours. */
+  current: string
+  /** L'utilisateur a arrêté (ou annulé) : finir proprement. */
+  stopped: boolean
+  /** Le code qui a interrompu le passage (`BLOCKED`, `NOT_LOGGED_IN`…). */
+  halted: ErrorCode | null
+  release: () => Promise<void>
+}
+
+const LOG_SIZE = 5
+
+/** Une erreur de l'adaptateur a son code ; tout autre incident est un site qui ne répond plus comme prévu (jamais son message). */
+function codeOf(error: unknown): ErrorCode {
+  return error instanceof LeclercError ? error.code : 'CONTRACT_CHANGED'
+}
+
+/** Les lignes sans action sur le site : « j'en ai toujours » et « passer cette fois ». */
+function staticOutcome(line: PlanLine): ResultLine | null {
+  if (line.status === 'HAVE_AT_HOME')
+    return { ingredientSlug: line.ingredientSlug, outcome: 'HAVE_AT_HOME' }
+  if (line.status === 'SKIP') return { ingredientSlug: line.ingredientSlug, outcome: 'SKIPPED' }
+  return null
+}
+
+const failed = (line: PlanLine, error: ErrorCode): ResultLine => ({
+  ingredientSlug: line.ingredientSlug,
+  outcome: 'FAILED',
+  error,
+})
+
+function summaryOf(plan: PlanMessage): SummaryProps {
+  const count = (status: PlanLine['status']) =>
+    plan.lines.filter((line) => line.status === status).length
+  return {
+    known: count('KNOWN'),
+    new: count('NEW'),
+    haveAtHome: count('HAVE_AT_HOME'),
+    skipped: count('SKIP'),
+    lines: plan.lines.map((line) => {
+      const preferred = line.status === 'KNOWN' ? line.products?.[0]?.label : undefined
+      return { name: line.name, status: line.status, ...(preferred && { detail: preferred }) }
+    }),
+  }
+}
+
+export class Flow {
+  /** Les états traversés par le dernier message reçu, dans l'ordre. */
+  readonly history: Step[] = []
+  private readonly deps: FlowDeps
+  private readonly runs: RunStore
+  private busy = false
+
+  constructor(deps: FlowDeps) {
+    this.deps = deps
+    this.runs = new RunStore(deps.storage)
+  }
+
+  /** Un message de Repas, décodé et pas encore validé. Un seul passage à la fois : pendant l'un, les autres messages sont ignorés. */
+  async start(raw: unknown): Promise<void> {
+    if (this.busy) return
+    this.busy = true
+    this.history.length = 0
+    this.enter('START')
+    try {
+      await this.execute(raw)
+    } catch {
+      await this.showError('CONTRACT_CHANGED', null)
+    } finally {
+      this.busy = false
+    }
+  }
+
+  /** Un message de Repas illisible (trop gros, ni base64url ni JSON). */
+  async invalid(): Promise<void> {
+    if (this.busy) return
+    this.busy = true
+    this.history.length = 0
+    this.enter('START')
+    try {
+      await this.showError('INVALID_MESSAGE', null)
+    } finally {
+      this.busy = false
+    }
+  }
+
+  private enter(step: Step): void {
+    this.history.push(step)
+  }
+
+  private async execute(raw: unknown): Promise<void> {
+    const { deps } = this
+    let message
+    try {
+      message = validatePlan(raw)
+    } catch (error) {
+      if (error instanceof ProtocolError) return this.showError('INVALID_MESSAGE', null)
+      throw error
+    }
+    if (message.type === 'setup') return void (await deps.onSetup?.(message))
+    this.enter('VALIDATED')
+    // Pas de retour possible vers Repas : on refuse avant de toucher au panier.
+    if (!deps.canReturn) return this.showError('UNSUPPORTED_PAGE', null)
+    const problem = this.storeProblem(message)
+    if (problem) return this.showError(problem, message)
+
+    const { state, proceed } = await this.confirm(message)
+    const run: Run = {
+      plan: message,
+      state,
+      names: new Map(message.lines.map((line) => [line.ingredientSlug, line.name])),
+      log: [],
+      current: '',
+      stopped: !proceed,
+      halted: null,
+      release: () => Promise.resolve(),
+    }
+    if (proceed) {
+      this.enter('CONFIRMED')
+      this.runs.save(state)
+      run.release = await keepAwake(deps.wakeLock)
+      try {
+        this.showProgress(run)
+        this.enter('PHASE_A')
+        await this.phaseA(run)
+        if (!run.stopped && run.halted === null && this.pending(run).length > 0 && deps.phaseB) {
+          this.enter('PHASE_B')
+          await this.phaseB(run, deps.phaseB)
+        }
+      } finally {
+        await run.release()
+      }
+    }
+    await this.finish(run)
+  }
+
+  /** Le magasin de la page doit être celui du message. */
+  private storeProblem(plan: PlanMessage): ErrorCode | null {
+    try {
+      const store = this.deps.adapter.readStore()
+      return store.id === plan.store.id && store.host === plan.store.host ? null : 'STORE_MISMATCH'
+    } catch (error) {
+      return codeOf(error)
+    }
+  }
+
+  /** Reprise éventuelle, puis récapitulatif : rien ne part avant « Commencer » (ou « Reprendre », déjà confirmé). */
+  private async confirm(plan: PlanMessage): Promise<{ state: RunState; proceed: boolean }> {
+    const { ui, now } = this.deps
+    const saved = this.runs.load(plan.runId)
+    this.runs.removeOthers(plan.runId)
+    if (saved) {
+      const processed = Object.keys(saved.done).length + Object.keys(saved.waiting).length
+      if (processed > 0) {
+        const answer = await ui.show('resume', { done: processed, total: plan.lines.length })
+        if (answer === 'resume') return { state: saved, proceed: true }
+        if (answer === 'cancel') return { state: saved, proceed: false }
+      }
+      this.runs.remove(plan.runId)
+    }
+    const answer = await ui.show('summary', summaryOf(plan))
+    return { state: emptyState(plan.runId, now()), proceed: answer === 'start' }
+  }
+
+  private async phaseA(run: Run): Promise<void> {
+    for (const line of run.plan.lines) {
+      if (run.stopped || run.halted !== null) return
+      if (this.isProcessed(run, line)) continue
+      run.current = line.name
+      this.deps.ui.update({ current: line.name })
+      try {
+        await this.settle(run, line)
+      } catch (error) {
+        this.absorb(run, line, codeOf(error))
+      }
+    }
+  }
+
+  private async settle(run: Run, line: PlanLine): Promise<void> {
+    const fixed = staticOutcome(line)
+    if (fixed) return this.record(run, fixed)
+    if (line.status === 'NEW') return this.wait(run, line, [])
+    const verdict = await settleKnownLine(line, {
+      adapter: this.deps.adapter,
+      askQuantity: async (asked, product) => {
+        const answer = await this.deps.ui.show('quantity', {
+          ingredient: asked.name,
+          productLabel: product.label,
+          packs: product.packs ?? null,
+        })
+        this.showProgress(run)
+        return answer
+      },
+    })
+    if (verdict.kind === 'waiting') this.wait(run, line, verdict.unavailable)
+    else this.record(run, verdict.line)
+  }
+
+  /** Une erreur pendant une ligne : une erreur réseau n'abîme que la ligne (l'adaptateur a déjà retenté), les autres arrêtent le passage. */
+  private absorb(run: Run, line: PlanLine, code: ErrorCode): void {
+    if (code === 'NETWORK') return this.record(run, failed(line, code))
+    run.halted = code
+    if (code === 'BLOCKED') this.failRemaining(run, code)
+    else if (code !== 'NOT_LOGGED_IN') this.record(run, failed(line, code))
+  }
+
+  /** Leclerc bloque les requêtes : les lignes qui restent échouent (`BLOCKED`), sans en tenter une de plus. */
+  private failRemaining(run: Run, code: ErrorCode): void {
+    for (const line of run.plan.lines) {
+      if (!this.isProcessed(run, line)) this.record(run, staticOutcome(line) ?? failed(line, code))
+    }
+  }
+
+  private async phaseB(run: Run, phaseB: NonNullable<FlowDeps['phaseB']>): Promise<void> {
+    run.state.phase = 'PHASE_B'
+    this.runs.save(run.state)
+    try {
+      const outcome = await phaseB({
+        pending: this.pending(run),
+        adapter: this.deps.adapter,
+        ui: this.deps.ui,
+        record: (line) => this.record(run, line),
+        stopRequested: () => run.stopped,
+        showProgress: () => this.showProgress(run),
+      })
+      if (outcome === 'cancelled') run.stopped = true
+    } catch (error) {
+      // Les lignes qui attendaient encore un choix restent « indisponibles » au résultat.
+      run.halted = codeOf(error)
+    }
+  }
+
+  private async finish(run: Run): Promise<void> {
+    const { ui, send, agentVersion } = this.deps
+    const lines = resultLines(run.plan, run.state)
+    const ending = endingOf(lines, run.stopped, run.halted)
+    this.enter(
+      ending.outcome === 'aborted' ? 'ABORTED' : ending.outcome === 'error' ? 'ERROR' : 'DONE',
+    )
+    const result = buildResult(run.plan, lines, ending, agentVersion)
+    await ui.show('end', endProps(lines, ending))
+    this.runs.remove(run.plan.runId)
+    send(result)
+    ui.close()
+  }
+
+  private async showError(code: ErrorCode, plan: PlanMessage | null): Promise<void> {
+    const { ui, send, agentVersion } = this.deps
+    this.enter('ERROR')
+    const answer = await ui.show('error', { code, canReturn: plan !== null })
+    if (answer === 'return' && plan) {
+      send(buildResult(plan, [], { outcome: 'error', code }, agentVersion))
+    }
+    ui.close()
+  }
+
+  private isProcessed(run: Run, line: PlanLine): boolean {
+    return line.ingredientSlug in run.state.done || line.ingredientSlug in run.state.waiting
+  }
+
+  /** Les lignes qui attendent un choix, avec leurs produits connus indisponibles (dans l'ordre de priorité). */
+  private pending(run: Run): PendingLine[] {
+    return run.plan.lines.flatMap((line) => {
+      const ids = run.state.waiting[line.ingredientSlug]
+      if (!ids) return []
+      return [
+        { line, unavailable: (line.products ?? []).filter((product) => ids.includes(product.id)) },
+      ]
+    })
+  }
+
+  /** Une issue finale : sauvegardée pour la reprise, ajoutée au journal, la progression avance. */
+  private record(run: Run, line: ResultLine): void {
+    const { slug, entry } = this.describe(run, line)
+    run.state.done[slug] = line
+    delete run.state.waiting[slug]
+    this.touch(run)
+    run.log.push(entry)
+    this.deps.ui.update({ done: Object.keys(run.state.done).length, entry })
+  }
+
+  /** Une ligne qui attend la phase B. */
+  private wait(run: Run, line: PlanLine, unavailable: string[]): void {
+    const name = line.name
+    run.state.waiting[line.ingredientSlug] = unavailable
+    this.touch(run)
+    const entry = unavailable.length > 0 ? S.log.unavailable(name) : S.log.toChoose(name)
+    run.log.push(entry)
+    this.deps.ui.update({ entry })
+  }
+
+  private touch(run: Run): void {
+    run.state.updatedAt = this.deps.now()
+    this.runs.save(run.state)
+  }
+
+  private describe(run: Run, line: ResultLine): { slug: string; entry: string } {
+    const slug = line.ingredientSlug
+    const name = run.names.get(slug) ?? slug
+    switch (line.outcome) {
+      case 'ADDED':
+        return { slug, entry: line.usedRank > 1 ? S.log.addedBackup(name) : S.log.added(name) }
+      case 'CHOSEN':
+        return { slug, entry: S.log.added(name) }
+      case 'HAVE_AT_HOME':
+        return { slug, entry: S.log.haveAtHome(name) }
+      case 'SKIPPED':
+        return { slug, entry: S.log.skipped(name) }
+      default:
+        return { slug, entry: S.log.failed(name) }
+    }
+  }
+
+  /** L'écran de progression, avec un « Arrêter » qui demande au passage de finir proprement après la ligne en cours. */
+  private showProgress(run: Run): void {
+    void this.deps.ui
+      .show('progress', {
+        total: run.plan.lines.length,
+        done: Object.keys(run.state.done).length,
+        current: run.current,
+        log: run.log.slice(-LOG_SIZE),
+      })
+      .then(() => {
+        run.stopped = true
+      })
+  }
+}

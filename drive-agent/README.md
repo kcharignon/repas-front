@@ -4,7 +4,7 @@ L'**agent** est le petit programme JavaScript qui tourne dans la page de l'ensei
 
 Contexte et protocole : `docs/drive/` du dépôt back (`kcharignon/repas`), en particulier `architecture.md` § 8 et le ticket `DRV-301`.
 
-État : **squelette** (DRV-301), **protocole v1** (DRV-302), **adaptateur Leclerc** (DRV-303) et **interface superposée** (DRV-304). La construction, ses garde-fous et ses règles de code sont en place, et le protocole (messages, codec, validateurs, transports) est écrit ; l'agent lui-même ne fait encore rien (il reste silencieux sur la page) : l'orchestrateur (DRV-305) s'y ajoute et branche le tout.
+État : **squelette** (DRV-301), **protocole v1** (DRV-302), **adaptateur Leclerc** (DRV-303), **interface superposée** (DRV-304) et **orchestrateur de la phase A** (DRV-305). Un plan reçu par un transport (pont de l'application, ou fragment `#repas=`) fait démarrer le passage : récapitulatif et confirmation, produits connus mis au panier, résultat. Sans plan, l'agent reste silencieux sur la page. Restent la phase B (DRV-306), le mode configuration (DRV-307) et le diagnostic (DRV-308).
 
 > `lab/` (banc d'essai du favori) et `android-lab/` (application de test) sont des outils jetables du spike. Ils restent en place jusqu'à la fin du jalon M3b et ne font pas partie de l'agent.
 
@@ -31,7 +31,8 @@ drive-agent/
     transport/        comment le message arrive et repart : `fragmentTransport` (fragment d'adresse) et `bridgeTransport` (pont de l'application)
     leclerc/          tout ce qui est propre à E.Leclerc Drive, derrière `RetailerAdapter` : magasin, recherche, panier, erreurs, cadence (voir plus bas)
     ui/               l'interface superposée en Shadow DOM : écrans, textes (`strings.ts`), styles, `ui.show(écran, props)` (voir plus bas)
-    flow/ diagnostic/    à venir : DRV-305-306, 308
+    flow/             l'orchestrateur du passage (machine d'états, phase A, état de reprise, résultat) (voir plus bas)
+    diagnostic/       à venir : DRV-308
   protocol/           le protocole v1, partagé avec le front (alias `@drive-protocol`) : schémas JSON, types, codec, validateurs, exemples
   test/               tests Vitest de l'agent et du protocole, et entries/ : points d'entrée d'essai pour la chaîne de construction
   demo/               page de démonstration de l'interface (hors production) : chaque écran avec des données inventées
@@ -69,6 +70,20 @@ L'agent affiche ses écrans par-dessus la page de l'enseigne, dans un **Shadow D
 | `ui.ts`      | `createUi({ win?, mode? })` : conteneur, feuille de style, focus (premier bouton, piège de focus) ; `mode: 'open'` seulement pour les tests d'accessibilité                                          |
 
 Un écran remplacé par un autre ne résout plus sa promesse. **Point d'extension de la phase B (DRV-306)** : `ui.show('chooser', { ingredient, position, total, mount })` affiche la barre du haut (« Passer cette fois », « J'en ai toujours », « Annuler le passage ») et appelle `mount(zone, answer)` une fois la zone dans la page ; `answer(valeur)` conclut l'écran avec `{ kind: 'content', valeur }`. La démonstration s'ouvre sur http://localhost:5173/drive-agent/demo/index.html?screen=summary (`make start`) ; `e2e/agent-ui.spec.ts` y passe axe (WCAG AA, clair et sombre), les 360×640 et la page hôte hostile.
+
+## L'orchestrateur (`src/flow/`)
+
+La machine d'états `START → VALIDATED → CONFIRMED → PHASE_A → PHASE_B → DONE` (+ `ABORTED`, `ERROR`) de la classe `Flow` (`orchestrator.ts`) n'a aucun réseau ni DOM propres : `FlowDeps` injecte l'adaptateur, l'interface (`Ui`), `send` (le transport), `sessionStorage`, le Wake Lock et l'horloge. `agent.ts` les branche (`run(win, options)`).
+
+| Fichier           | Rôle                                                                                                                                                                                                                                                                       |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `orchestrator.ts` | `Flow.start(message)` (validation, magasin, reprise, récapitulatif, phases, fin), `Flow.invalid()`, `Flow.history` ; un seul passage à la fois                                                                                                                             |
+| `phase-a.ts`      | `settleKnownLine` : les produits dans l'ordre de priorité, le premier disponible (stock lu dans la recherche par libellé) est mis au panier avec ses `packs`, vérifié par la réponse du panier ; jamais un produit refusé ni absent de la liste ; `priceOf` (prix lu, D22) |
+| `run-state.ts`    | l'état de reprise `repas:run:<runId>` (issues par ligne, phase), sans donnée personnelle ; un autre passage est oublié                                                                                                                                                     |
+| `result.ts`       | `resultLines`, `endingOf` (`completed`, `partial`, `aborted`, `error`), `buildResult`, `endProps`                                                                                                                                                                          |
+| `wake-lock.ts`    | `keepAwake` : verrou d'écran, refus et absence tolérés                                                                                                                                                                                                                     |
+
+Erreurs : `BLOCKED` (deux réponses de suite, vu par le `Pacer`) arrête le passage, `partial`, les lignes restantes `FAILED` ; `NOT_LOGGED_IN` arrête aussitôt (`error`) ; `NETWORK` (déjà retenté une fois) n'abîme que la ligne ; `CONTRACT_CHANGED` (et tout incident imprévu, jamais son message) arrête le passage. **Point d'extension de la phase B (DRV-306)** : `FlowDeps.phaseB(context)` reçoit `pending` (les lignes `NEW` et les lignes dont aucun produit connu n'est disponible, avec ces produits indisponibles), `record(ligne)` (sauvegarde pour la reprise, la progression avance), `stopRequested()`, `showProgress()`, `adapter` et `ui` ; une ligne qu'elle n'enregistre pas devient `UNAVAILABLE` au résultat. Le message `setup` est passé à `FlowDeps.onSetup` (DRV-307).
 
 ## Construction
 

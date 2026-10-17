@@ -87,9 +87,11 @@ const resultLine: Check = (list, index) => {
     'rejected',
     ...Object.keys(required),
     ...(withUnavailable ? ['unavailableIds'] : []),
+    ...(outcome === 'ADDED' ? ['price'] : []),
   ])
   text(line, 'ingredientSlug', SLUG)
   for (const [key, check] of Object.entries(required)) check(line, key)
+  optional(line, 'price', price)
   const max = outcome === 'ADDED' ? LIMITS.unavailableAdded : LIMITS.products
   optional(line, 'unavailableIds', (parent, name) => {
     distinct(each(parent, name, max, (ids, rank) => text(ids, rank as never, ID)))

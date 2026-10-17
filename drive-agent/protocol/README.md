@@ -34,7 +34,7 @@ try {
 - Un `result` d'issue `error` porte son `error` `{code, message}` ; les autres issues peuvent en porter un (`partial` avec `BLOCKED`).
 - Une ligne `FAILED` porte le code d'erreur dans `error` (une chaîne, pas un objet).
 - `unavailableIds` : 4 au plus pour `ADDED` (le produit mis au panier n'en fait pas partie), 5 sinon.
-- `price` d'un produit choisi (décision D22) : `{cents, perMeasure?: {cents, unit}}`, centimes entiers de 0 à 100 000 000, `unit` parmi `kg`, `l`, `piece`.
+- `price` d'un produit choisi **ou d'une ligne `ADDED`** (décision D22 : Repas rafraîchit le prix mémorisé du produit connu) : `{cents, perMeasure?: {cents, unit}}`, centimes entiers de 0 à 100 000 000, `unit` parmi `kg`, `l`, `piece`.
 - Les libellés, noms et requêtes ont de 1 à 255 caractères (comptés en caractères Unicode).
 - `setup-result` : `baseUrl` est `https://<host>/magasin-<id>-<second identifiant>`, avec l'hôte et l'identifiant du magasin.
 
