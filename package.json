@@ -22,6 +22,7 @@
     "lab:build": "node drive-agent/lab/build.ts",
     "lab:loader": "node drive-agent/lab/loader.ts",
     "lab:android-hash": "node drive-agent/android-lab/lab-digest.ts",
+    "android:agent-hash": "node android/agent-digest.ts",
     "agent:build": "node drive-agent/scripts/build.mjs",
     "agent:verify": "node drive-agent/scripts/build.mjs --twice",
     "agent:test": "vitest run drive-agent/test",

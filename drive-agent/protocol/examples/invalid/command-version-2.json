@@ -1,0 +1,5 @@
+{
+  "path": "v",
+  "why": "Seule la version 1 existe.",
+  "message": { "v": 2, "type": "command", "command": "diagnostic" }
+}

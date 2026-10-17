@@ -1,0 +1,5 @@
+{
+  "path": "plan",
+  "why": "Aucune clé hors v, type et command.",
+  "message": { "v": 1, "type": "command", "command": "diagnostic", "plan": [] }
+}

@@ -1,0 +1,5 @@
+{
+  "path": "command",
+  "why": "La commande est obligatoire.",
+  "message": { "v": 1, "type": "command" }
+}

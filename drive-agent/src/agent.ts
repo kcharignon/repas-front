@@ -4,9 +4,11 @@
  * Il écoute un plan de Repas (le pont de l'application, ou le fragment `#repas=` de l'adresse) et, dès qu'il en reçoit un, déroule le
  * passage : récapitulatif et confirmation, phase A, phase B (choix guidé), résultat (`flow/`, DRV-305 et DRV-306) ; un message `setup`
  * lit le magasin de la page (DRV-307). Tant qu'aucun plan n'est reçu, l'agent reste silencieux sur la page : aucune bannière, aucune
- * variable globale, aucune requête. Seule exception : l'adresse de la page se termine par `#repas-diagnostic` (l'application « Repas
- * Drive » l'ouvre depuis son menu) : l'écran d'accueil s'affiche, d'où l'on lance le diagnostic (DRV-308).
+ * variable globale, aucune requête. Deux exceptions, toutes deux pour le diagnostic (DRV-308) : une commande `diagnostic` de l'application
+ * (le menu de « Repas Drive » ; le diagnostic s'ouvre aussitôt) ou, pour le favori de bureau, une adresse de page qui se termine par
+ * `#repas-diagnostic` (l'écran d'accueil s'affiche, d'où l'on lance le diagnostic).
  */
+import { validateCommand } from '../protocol'
 import { showDiagnostic, type DiagnosticDeps } from './diagnostic'
 import { Flow, guidedChoice, setupHandler, type FlowDeps, type StorageLike } from './flow'
 import { browserDeps, LeclercAdapter } from './leclerc'
@@ -80,17 +82,45 @@ export function run(win: Window & typeof globalThis = window, options: AgentOpti
   // Le mode configuration (DRV-307) et le diagnostic (DRV-308) partagent les dépendances du passage (celles que les tests changent aussi).
   deps.onSetup ??= setupHandler(deps)
   const flow = new Flow(deps)
+  const diagnosticDeps = (): DiagnosticDeps => ({
+    ...deps,
+    originReplaced: bridge ? null : ORIGIN_SHAPE.test(origin),
+    copy: options.copy ?? ((text) => copyText(win, text)),
+  })
   transport.listen(
-    (message) => void flow.start(message),
+    (message) => {
+      if (isCommand(message)) return void command(flow, message, diagnosticDeps)
+      void flow.start(message)
+    },
     () => void flow.invalid(),
   )
-  if (win.location.hash === DIAGNOSTIC_HASH) {
-    void welcome({
-      ...deps,
-      originReplaced: bridge ? null : ORIGIN_SHAPE.test(origin),
-      copy: options.copy ?? ((text) => copyText(win, text)),
-    })
+  if (win.location.hash === DIAGNOSTIC_HASH) void welcome(diagnosticDeps())
+}
+
+/** Un message dont le type est `command` : il ne passe pas par la validation d'un plan. */
+function isCommand(message: unknown): boolean {
+  return (
+    typeof message === 'object' &&
+    message !== null &&
+    (message as { type?: unknown }).type === 'command'
+  )
+}
+
+/**
+ * Une commande de l'application (DRV-308) : `diagnostic` ouvre l'écran du diagnostic. Elle n'ouvre rien pendant un passage (un seul écran
+ * à la fois) et ne renvoie rien à l'application ; une commande invalide montre « liste illisible ».
+ */
+async function command(flow: Flow, raw: unknown, depsOf: () => DiagnosticDeps): Promise<void> {
+  try {
+    validateCommand(raw)
+  } catch {
+    return flow.invalid()
   }
+  await flow.exclusive(async () => {
+    const deps = depsOf()
+    await showDiagnostic(deps)
+    deps.ui.close()
+  })
 }
 
 /** L'écran d'accueil : « Ouvre d'abord Repas », et le diagnostic pour qui le demande. */

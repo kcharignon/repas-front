@@ -113,10 +113,15 @@ release_selftest() {
   echo "   réussie, l'APK porte la clé jetable (effacé en sortie)."
 }
 
+# L'agent du drive est un actif de l'application (DRV-313) : construit par Node avant Gradle (`make agent-build`), monté dans ../drive-agent/dist.
+require_agent() {
+  [ -f ../drive-agent/dist/agent.js ] || fail "l'agent du drive manque (drive-agent/dist/agent.js) : lance d'abord make agent-build."
+}
+
 case "${1:-apk}" in
-  test) run_tests ;;
-  apk) build_debug ;;
-  release) build_release ;;
+  test) require_agent; run_tests ;;
+  apk) require_agent; build_debug ;;
+  release) require_agent; build_release ;;
   release-selftest) release_selftest ;;
   *)
     echo "Usage : build.sh test|apk|release|release-selftest" >&2

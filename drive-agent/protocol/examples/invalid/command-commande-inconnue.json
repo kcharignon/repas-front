@@ -1,0 +1,5 @@
+{
+  "path": "command",
+  "why": "Seule la commande diagnostic existe.",
+  "message": { "v": 1, "type": "command", "command": "supprimer" }
+}

@@ -1,0 +1,5 @@
+{
+  "path": "command",
+  "why": "Le nom de la commande est exact, sans variante.",
+  "message": { "v": 1, "type": "command", "command": "Diagnostic" }
+}

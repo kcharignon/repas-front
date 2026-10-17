@@ -8,6 +8,7 @@ import {
   LIMITS,
   PROTOCOL_VERSION,
   ProtocolError,
+  validateCommand,
   validatePlan,
   validateResult,
 } from '../protocol'
@@ -175,5 +176,26 @@ describe('validateResult', () => {
   it('refuse les types de plan', () => {
     expect(pathOf(() => validateResult({ type: 'plan' }))).toBe('type')
     expect(pathOf(() => validateResult(null))).toBe('')
+  })
+})
+
+describe('validateCommand', () => {
+  it.each(validExamples('command'))('accepte l’exemple valide « $name »', ({ message }) => {
+    expect(validateCommand(message)).toBe(message)
+  })
+
+  it.each(invalidExamples('command'))(
+    'refuse « $name » au chemin $path : $why',
+    ({ message, path }) => {
+      expect(pathOf(() => validateCommand(message))).toBe(path)
+    },
+  )
+
+  it('ne prend pas une commande pour un plan, ni un plan pour une commande', () => {
+    const command = validExamples('command')[0]?.message
+    const planMessage = validExamples('plan')[0]?.message
+
+    expect(pathOf(() => validatePlan(command))).toBe('type')
+    expect(pathOf(() => validateCommand(planMessage))).not.toBe('(accepté)')
   })
 })

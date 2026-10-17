@@ -96,6 +96,20 @@ export class Flow {
     }
   }
 
+  /**
+   * Une tâche qui prend l'écran de l'agent (le diagnostic, ouvert par une commande de l'application) : un seul passage ou écran à la
+   * fois, donc ignorée pendant un passage, comme un passage l'est pendant elle.
+   */
+  async exclusive(task: () => Promise<void>): Promise<void> {
+    if (this.busy) return
+    this.busy = true
+    try {
+      await task()
+    } finally {
+      this.busy = false
+    }
+  }
+
   /** Un message de Repas illisible (trop gros, ni base64url ni JSON). */
   async invalid(): Promise<void> {
     if (this.busy) return

@@ -145,24 +145,37 @@ lab-loader: ## Build the short loader bookmarklet for a merged commit: make lab-
 	@$(RUN) npm run --silent lab:loader -- $(sha)
 
 ## —— Android 📱 (Repas Drive) ———————————————————————————————————————————————
-.PHONY: android android-test android-release android-release-selftest
+.PHONY: android android-test android-release android-release-selftest android-agent-hash
 
 # L'application « Repas Drive » (DRV-311, android/) se construit dans une image à part (JDK, Gradle, SDK Android), avec l'identifiant de
 # l'utilisateur pour que les fichiers produits ne soient pas à root. Elle ne contacte aucun site Leclerc. Les variables de version et de
 # signature (ANDROID_VERSION_TAG, ANDROID_VERSION_CODE, ANDROID_KEYSTORE_BASE64…) passent du shell appelant au conteneur : android/README.md.
 ANDROID_APP_RUN = $(DOCKER_COMPOSE) --profile android run --rm --user $(shell id -u):$(shell id -g) android
 
-android: ## Build the debug APK of the Repas Drive app (android/): dist/repas-drive-debug.apk with its size and SHA-256
+# L'agent du drive (drive-agent/dist/agent.js) est construit par Node puis embarqué dans l'APK (DRV-313) : sur un poste, chaque commande Android
+# le reconstruit d'abord ; la CI le construit avant avec setup-node et passe ANDROID_AGENT= pour ne pas relancer le conteneur Node.
+# `mkdir` : sans dossier, Docker créerait drive-agent/dist à la place de l'utilisateur (propriétaire root) en le montant.
+ANDROID_AGENT ?= agent-build
+ANDROID_PREPARE = @mkdir -p drive-agent/dist
+
+android: $(ANDROID_AGENT) ## Build the debug APK of the Repas Drive app (android/): dist/repas-drive-debug.apk with its size and SHA-256
+	$(ANDROID_PREPARE)
 	@$(ANDROID_APP_RUN) ./build.sh apk
 
-android-test: ## Run the Kotlin unit tests of the Repas Drive app (and of its version derivation)
+android-test: $(ANDROID_AGENT) ## Run the Kotlin unit tests of the Repas Drive app (and of its version derivation)
+	$(ANDROID_PREPARE)
 	@$(ANDROID_APP_RUN) ./build.sh test
 
-android-release: ## Build the signed APK dist/repas-drive.apk (needs ANDROID_KEYSTORE_BASE64/_PASSWORD, ANDROID_KEY_ALIAS/_PASSWORD, ANDROID_VERSION_TAG, ANDROID_VERSION_CODE; refuses without a key)
+android-release: $(ANDROID_AGENT) ## Build the signed APK dist/repas-drive.apk (needs ANDROID_KEYSTORE_BASE64/_PASSWORD, ANDROID_KEY_ALIAS/_PASSWORD, ANDROID_VERSION_TAG, ANDROID_VERSION_CODE; refuses without a key)
+	$(ANDROID_PREPARE)
 	@$(ANDROID_APP_RUN) ./build.sh release
 
-android-release-selftest: ## Prove that the release build refuses without a key and succeeds with a throwaway key created on the spot
+android-release-selftest: $(ANDROID_AGENT) ## Prove that the release build refuses without a key and succeeds with a throwaway key created on the spot
+	$(ANDROID_PREPARE)
 	@$(ANDROID_APP_RUN) ./build.sh release-selftest
+
+android-agent-hash: ## Note the SHA-384 of the built drive agent in android/agent.js.sha384 (after a deliberate change of the agent)
+	@$(RUN) npm run --silent android:agent-hash -- --write
 
 ## —— Android lab 📱 ————————————————————————————————————————————————————————
 .PHONY: android-lab android-lab-test android-lab-hash

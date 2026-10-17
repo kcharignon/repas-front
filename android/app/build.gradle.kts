@@ -1,4 +1,6 @@
 import eu.kantin.repas.drive.build.AppVersion
+import java.security.MessageDigest
+import java.util.Base64
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -29,6 +31,44 @@ val releaseStorePassword = env("ANDROID_KEYSTORE_PASSWORD")
 val releaseKeyAlias = env("ANDROID_KEY_ALIAS")
 val releaseKeyPassword = env("ANDROID_KEY_PASSWORD")
 
+/**
+ * Copie l'agent du drive (`drive-agent/dist/agent.js`, construit par `make agent-build`) dans les actifs de l'application, avec
+ * l'empreinte attendue, et refuse de construire si son empreinte SHA-384 n'est pas celle de `agent.js.sha384` (DRV-313).
+ * L'application revérifie la même empreinte au démarrage avant d'injecter quoi que ce soit.
+ */
+abstract class PrepareAgentAsset : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val agentFile: RegularFileProperty
+
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val expectedDigestFile: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun prepare() {
+        val bytes = agentFile.get().asFile.readBytes()
+        val actual = "sha384-" + Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-384").digest(bytes))
+        val expected = expectedDigestFile.get().asFile.readText().trim()
+        if (actual != expected) {
+            throw GradleException(
+                "L'agent drive-agent/dist/agent.js n'est plus celui attendu.\n" +
+                    "  empreinte attendue (android/agent.js.sha384) : $expected\n" +
+                    "  empreinte du fichier                         : $actual\n" +
+                    "Si l'agent a changé exprès : make android-agent-hash, relire, puis commiter agent.js.sha384 et le dire dans la PR."
+            )
+        }
+        val target = outputDir.get().asFile
+        target.deleteRecursively()
+        target.mkdirs()
+        target.resolve("agent.js").writeBytes(bytes)
+        target.resolve("agent.js.sha384").writeText("$expected\n")
+    }
+}
+
 android {
     namespace = "eu.kantin.repas.drive"
     compileSdk = 36
@@ -46,6 +86,8 @@ android {
 
     buildFeatures {
         resValues = true
+        // BuildConfig.DEBUG : le menu « Plan d'essai (débogage) » n'existe que dans l'APK de débogage.
+        buildConfig = true
     }
 
     signingConfigs {
@@ -94,6 +136,16 @@ kotlin {
     }
 }
 
+androidComponents {
+    onVariants { variant ->
+        val prepare = tasks.register<PrepareAgentAsset>("prepareAgentAsset${variant.name.replaceFirstChar { it.titlecase() }}") {
+            agentFile.set(rootProject.layout.projectDirectory.file("../drive-agent/dist/agent.js"))
+            expectedDigestFile.set(rootProject.layout.projectDirectory.file("agent.js.sha384"))
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(prepare, PrepareAgentAsset::outputDir)
+    }
+}
+
 // Une publication refuse de se construire sans clé, sans étiquette ou sans compteur. Rien de ce qui est vérifié ici n'est affiché.
 val verifyReleaseInputs by tasks.registering {
     group = "verification"
@@ -132,4 +184,6 @@ dependencies {
     // Seule bibliothèque à l'exécution : les indications client (client hints) de la WebView, pour le mode ordinateur.
     implementation("androidx.webkit:webkit:1.17.1")
     testImplementation("junit:junit:4.13.2")
+    // Les tests jouent sur la JVM, où `org.json` d'Android n'est qu'une coquille vide : la vraie bibliothèque la remplace.
+    testImplementation("org.json:json:20250517")
 }

@@ -30,13 +30,13 @@ function read(folder: string, file: string): unknown {
 }
 
 /** Les exemples valides dont le nom commence par `plan` ou `result`. */
-export function validExamples(kind: 'plan' | 'result'): ValidExample[] {
+export function validExamples(kind: 'plan' | 'result' | 'command'): ValidExample[] {
   return names('valid')
     .filter((file) => file.startsWith(`${kind}-`))
     .map((file) => ({ name: file.replace('.json', ''), message: read('valid', file) }))
 }
 
-export function invalidExamples(kind: 'plan' | 'result'): InvalidExample[] {
+export function invalidExamples(kind: 'plan' | 'result' | 'command'): InvalidExample[] {
   return names('invalid')
     .filter((file) => file.startsWith(`${kind}-`))
     .map((file) => {
@@ -51,6 +51,6 @@ export function invalidExamples(kind: 'plan' | 'result'): InvalidExample[] {
     })
 }
 
-export function schema(kind: 'plan' | 'result'): object {
+export function schema(kind: 'plan' | 'result' | 'command'): object {
   return JSON.parse(readFileSync(join(ROOT, `${kind}.schema.json`), 'utf8')) as object
 }
