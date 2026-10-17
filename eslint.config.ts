@@ -38,6 +38,7 @@ export default defineConfigWithVueTs(
       'src/**/__tests__/*',
       'drive-agent/lab/src/__tests__/*',
       'drive-agent/android-lab/__tests__/*',
+      'android/__tests__/*',
     ],
   },
 

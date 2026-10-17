@@ -47,3 +47,18 @@ drive-agent/android-lab/.kotlin/
 drive-agent/android-lab/build/
 drive-agent/android-lab/app/build/
 drive-agent/android-lab/local.properties
+
+# Application Android « Repas Drive » (android/) : sorties de Gradle et fichiers locaux du SDK. Aucune clé de publication
+# n'entre dans le dépôt : seule debug.keystore (clé de débogage publique) est suivie.
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/buildSrc/.gradle/
+android/buildSrc/build/
+android/local.properties
+android/*.jks
+android/*.p12
+android/*.pfx
+android/**/*.keystore
+!android/debug.keystore

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Une feuille de basilic, dans la zone sûre (le disque central de 66 dp) d'une icône adaptative de 108 dp. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,28 C72,32 80,48 76,68 C58,72 40,64 36,46 C35,37 43,29 54,28 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M44,66 C50,56 58,46 68,38"
+        android:strokeColor="@color/basil"
+        android:strokeLineCap="round"
+        android:strokeWidth="2.5" />
+</vector>
