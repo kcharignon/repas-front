@@ -12,7 +12,7 @@ export default mergeConfig(
       setupFiles: ['./src/__tests__/setup.ts'],
       coverage: {
         provider: 'v8',
-        include: ['src/**/*.{ts,vue}', 'drive-agent/lab/src/**/*.ts', 'drive-agent/src/**/*.ts'],
+        include: ['src/**/*.{ts,vue}', 'drive-agent/lab/src/**/*.ts', 'drive-agent/src/**/*.ts', 'drive-agent/protocol/**/*.ts'],
         exclude: [
           'src/main.ts',
           'src/pwa.ts',

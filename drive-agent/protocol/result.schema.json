@@ -1,0 +1,221 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Message de l'agent du drive vers Repas (protocole v1) : result et setup-result",
+  "description": "Source de vérité documentaire (architecture.md § 8 du dépôt back). Les validateurs de drive-agent/protocol font foi à l'exécution ; un test vérifie qu'ils donnent le même verdict que ce schéma. Ce que JSON Schema ne sait pas dire (identifiants de produit sans doublon dans rejected, adresse de base cohérente avec l'hôte et l'identifiant du magasin d'un setup-result) n'est vérifié que par les validateurs.",
+  "type": "object",
+  "required": ["v", "type", "runId", "agentVersion", "store"],
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "required": ["outcome", "lines"],
+      "properties": {
+        "v": true,
+        "runId": true,
+        "agentVersion": true,
+        "type": { "const": "result" },
+        "outcome": { "enum": ["completed", "partial", "aborted", "error"] },
+        "store": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id"],
+          "properties": { "id": { "$ref": "#/definitions/storeId" } }
+        },
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "message"],
+          "properties": {
+            "code": { "$ref": "#/definitions/errorCode" },
+            "message": { "type": "string", "minLength": 1, "maxLength": 200 }
+          }
+        },
+        "lines": { "type": "array", "maxItems": 100, "items": { "$ref": "#/definitions/line" } }
+      },
+      "if": { "properties": { "outcome": { "const": "error" } } },
+      "then": { "required": ["error"] }
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "v": true,
+        "runId": true,
+        "agentVersion": true,
+        "type": { "const": "setup-result" },
+        "store": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "host", "baseUrl", "label"],
+          "properties": {
+            "id": { "$ref": "#/definitions/storeId" },
+            "host": { "type": "string", "pattern": "^[a-z0-9-]+\\.leclercdrive\\.fr$" },
+            "baseUrl": {
+              "type": "string",
+              "pattern": "^https://[a-z0-9-]+\\.leclercdrive\\.fr/magasin-[0-9]{1,12}-[0-9]{1,12}$"
+            },
+            "label": { "oneOf": [{ "$ref": "#/definitions/label" }, { "type": "null" }] }
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "v": { "const": 1 },
+    "runId": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "agentVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }
+  },
+  "definitions": {
+    "label": { "type": "string", "minLength": 1, "maxLength": 255 },
+    "storeId": { "type": "string", "pattern": "^[0-9]{1,12}$" },
+    "productId": { "type": "string", "pattern": "^[0-9]{1,12}$" },
+    "errorCode": {
+      "enum": [
+        "NOT_LOGGED_IN",
+        "STORE_MISMATCH",
+        "BLOCKED",
+        "CONTRACT_CHANGED",
+        "NETWORK",
+        "CANCELLED",
+        "INVALID_MESSAGE",
+        "UNSUPPORTED_PAGE"
+      ]
+    },
+    "quantity": { "type": "integer", "minimum": 1, "maximum": 99 },
+    "unavailableIds": {
+      "description": "Au plus 4 pour ADDED (le produit mis au panier n'en fait pas partie), 5 sinon.",
+      "type": "array",
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": { "$ref": "#/definitions/productId" }
+    },
+    "content": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit"],
+      "properties": {
+        "value": { "type": "number", "exclusiveMinimum": 0 },
+        "unit": { "enum": ["g", "kg", "ml", "cl", "l", "piece"] }
+      }
+    },
+    "ean": { "type": ["string", "null"], "pattern": "^[0-9]{8,14}$" },
+    "price": {
+      "description": "Prix TTC en centimes, avec le prix à l'unité de mesure quand l'agent l'a lu (décision D22).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cents"],
+      "properties": {
+        "cents": { "type": "integer", "minimum": 0, "maximum": 100000000 },
+        "perMeasure": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cents", "unit"],
+          "properties": {
+            "cents": { "type": "integer", "minimum": 0, "maximum": 100000000 },
+            "unit": { "enum": ["kg", "l", "piece"] }
+          }
+        }
+      }
+    },
+    "rejectedProduct": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label"],
+      "properties": {
+        "id": { "$ref": "#/definitions/productId" },
+        "label": { "$ref": "#/definitions/label" },
+        "ean": { "$ref": "#/definitions/ean" },
+        "content": { "$ref": "#/definitions/content" }
+      }
+    },
+    "chosenProduct": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label"],
+      "properties": {
+        "id": { "$ref": "#/definitions/productId" },
+        "label": { "$ref": "#/definitions/label" },
+        "ean": { "$ref": "#/definitions/ean" },
+        "content": { "$ref": "#/definitions/content" },
+        "price": { "$ref": "#/definitions/price" }
+      }
+    },
+    "line": {
+      "type": "object",
+      "required": ["ingredientSlug", "outcome"],
+      "properties": {
+        "ingredientSlug": { "type": "string", "pattern": "^[a-z0-9-]{1,100}$" },
+        "outcome": {
+          "enum": ["ADDED", "CHOSEN", "HAVE_AT_HOME", "SKIPPED", "UNAVAILABLE", "FAILED"]
+        },
+        "rejected": {
+          "description": "Les produits que l'utilisateur a choisi de ne plus jamais prendre, sans doublon.",
+          "type": "array",
+          "maxItems": 20,
+          "items": { "$ref": "#/definitions/rejectedProduct" }
+        }
+      },
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "required": ["productId", "quantity", "usedRank"],
+          "properties": {
+            "ingredientSlug": true,
+            "rejected": true,
+            "outcome": { "const": "ADDED" },
+            "productId": { "$ref": "#/definitions/productId" },
+            "quantity": { "$ref": "#/definitions/quantity" },
+            "usedRank": { "type": "integer", "minimum": 1, "maximum": 5 },
+            "unavailableIds": {
+              "allOf": [
+                { "$ref": "#/definitions/unavailableIds" },
+                { "type": "array", "maxItems": 4 }
+              ]
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": ["product", "quantity", "placement"],
+          "properties": {
+            "ingredientSlug": true,
+            "rejected": true,
+            "outcome": { "const": "CHOSEN" },
+            "product": { "$ref": "#/definitions/chosenProduct" },
+            "quantity": { "$ref": "#/definitions/quantity" },
+            "placement": { "enum": ["PRIMARY", "FALLBACK", "ONCE"] },
+            "unavailableIds": { "$ref": "#/definitions/unavailableIds" }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "ingredientSlug": true,
+            "rejected": true,
+            "outcome": { "const": "UNAVAILABLE" },
+            "unavailableIds": { "$ref": "#/definitions/unavailableIds" }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "ingredientSlug": true,
+            "rejected": true,
+            "outcome": { "enum": ["HAVE_AT_HOME", "SKIPPED"] }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": ["error"],
+          "properties": {
+            "ingredientSlug": true,
+            "rejected": true,
+            "outcome": { "const": "FAILED" },
+            "error": { "$ref": "#/definitions/errorCode" }
+          }
+        }
+      ]
+    }
+  }
+}

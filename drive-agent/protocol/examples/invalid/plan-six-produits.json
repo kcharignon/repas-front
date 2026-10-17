@@ -1,0 +1,84 @@
+{
+  "path": "lines[0].products",
+  "why": "5 produits au plus.",
+  "message": {
+    "v": 1,
+    "type": "plan",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "retailer": "leclerc",
+    "store": { "id": "000000", "host": "courses-test.leclercdrive.fr" },
+    "returnPath": "/drive/retour",
+    "lines": [
+      {
+        "ingredientSlug": "farine",
+        "name": "Farine",
+        "status": "KNOWN",
+        "products": [
+          {
+            "id": "600000",
+            "label": "Produit de test",
+            "content": { "value": 1000, "unit": "g" },
+            "packs": 1,
+            "packsStatus": "COMPUTED"
+          },
+          {
+            "id": "600001",
+            "label": "Produit de test",
+            "content": { "value": 1000, "unit": "g" },
+            "packs": 1,
+            "packsStatus": "COMPUTED"
+          },
+          {
+            "id": "600002",
+            "label": "Produit de test",
+            "content": { "value": 1000, "unit": "g" },
+            "packs": 1,
+            "packsStatus": "COMPUTED"
+          },
+          {
+            "id": "600003",
+            "label": "Produit de test",
+            "content": { "value": 1000, "unit": "g" },
+            "packs": 1,
+            "packsStatus": "COMPUTED"
+          },
+          {
+            "id": "600004",
+            "label": "Produit de test",
+            "content": { "value": 1000, "unit": "g" },
+            "packs": 1,
+            "packsStatus": "COMPUTED"
+          },
+          {
+            "id": "600005",
+            "label": "Produit de test",
+            "content": { "value": 1000, "unit": "g" },
+            "packs": 1,
+            "packsStatus": "COMPUTED"
+          }
+        ],
+        "rejected": [{ "id": "999000", "label": "Farine complète de test 1 kg" }],
+        "searchQuery": "farine"
+      },
+      {
+        "ingredientSlug": "poivre",
+        "name": "Poivre",
+        "status": "NEW",
+        "products": [],
+        "rejected": [],
+        "searchQuery": "poivre"
+      },
+      { "ingredientSlug": "sel", "name": "Sel", "status": "HAVE_AT_HOME" },
+      { "ingredientSlug": "huile", "name": "Huile", "status": "SKIP" },
+      {
+        "ingredientSlug": "lait",
+        "name": "Lait",
+        "status": "NEW",
+        "products": [],
+        "rejected": [],
+        "searchQuery": "lait demi-écrémé",
+        "replaces": { "id": "98765", "label": "Lait UHT de test 1 L" }
+      }
+    ]
+  }
+}

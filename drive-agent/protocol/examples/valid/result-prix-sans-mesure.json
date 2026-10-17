@@ -1,0 +1,17 @@
+{
+  "v": 1,
+  "type": "result",
+  "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+  "agentVersion": "1.0.0",
+  "outcome": "completed",
+  "store": { "id": "000000" },
+  "lines": [
+    {
+      "ingredientSlug": "farine",
+      "outcome": "CHOSEN",
+      "quantity": 1,
+      "placement": "PRIMARY",
+      "product": { "id": "123456", "label": "Farine de test", "price": { "cents": 0 } }
+    }
+  ]
+}

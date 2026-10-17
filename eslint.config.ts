@@ -50,7 +50,7 @@ export default defineConfigWithVueTs(
   // éprouve chacune de ces règles sur un code qui les enfreint. Placé après le bloc d'oxlint pour qu'il ne les désactive pas.
   {
     name: 'drive-agent/src',
-    files: ['drive-agent/src/**/*.ts'],
+    files: ['drive-agent/src/**/*.ts', 'drive-agent/protocol/**/*.ts'],
     // Le code de l'agent tourne dans une page web : ces globales sont connues, donc `window.eval` et `setTimeout("code")` sont vus.
     languageOptions: {
       globals: { window: 'readonly', setTimeout: 'readonly', setInterval: 'readonly' },
@@ -72,7 +72,7 @@ export default defineConfigWithVueTs(
           patterns: [
             {
               regex: '^(?!\\.\\.?/)',
-              message: "Pas de dépendance d'exécution dans l'agent : seuls les fichiers de drive-agent/src s'importent (chemin relatif).",
+              message: "Pas de dépendance d'exécution dans l'agent : seuls les fichiers de drive-agent/src et de drive-agent/protocol s'importent (chemin relatif).",
             },
           ],
         },

@@ -1,0 +1,56 @@
+{
+  "path": "lines[1].status",
+  "why": "Quatre statuts : KNOWN, NEW, HAVE_AT_HOME, SKIP.",
+  "message": {
+    "v": 1,
+    "type": "plan",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "retailer": "leclerc",
+    "store": { "id": "000000", "host": "courses-test.leclercdrive.fr" },
+    "returnPath": "/drive/retour",
+    "lines": [
+      {
+        "ingredientSlug": "farine",
+        "name": "Farine",
+        "status": "KNOWN",
+        "products": [
+          {
+            "id": "123456",
+            "label": "Farine de blé T55 de test 1 kg",
+            "content": { "value": 1000, "unit": "g" },
+            "packs": 1,
+            "packsStatus": "COMPUTED"
+          },
+          {
+            "id": "222333",
+            "label": "Farine de blé T45 de test 1 kg",
+            "content": { "value": 1000, "unit": "g" },
+            "packs": 1,
+            "packsStatus": "COMPUTED"
+          }
+        ],
+        "rejected": [{ "id": "999000", "label": "Farine complète de test 1 kg" }],
+        "searchQuery": "farine"
+      },
+      {
+        "ingredientSlug": "poivre",
+        "name": "Poivre",
+        "status": "MAYBE",
+        "products": [],
+        "rejected": [],
+        "searchQuery": "poivre"
+      },
+      { "ingredientSlug": "sel", "name": "Sel", "status": "HAVE_AT_HOME" },
+      { "ingredientSlug": "huile", "name": "Huile", "status": "SKIP" },
+      {
+        "ingredientSlug": "lait",
+        "name": "Lait",
+        "status": "NEW",
+        "products": [],
+        "rejected": [],
+        "searchQuery": "lait demi-écrémé",
+        "replaces": { "id": "98765", "label": "Lait UHT de test 1 L" }
+      }
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "v": 1,
+  "type": "plan",
+  "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+  "retailer": "leclerc",
+  "store": { "id": "000000", "host": "courses-test.leclercdrive.fr" },
+  "returnPath": "/drive/retour",
+  "lines": [
+    {
+      "ingredientSlug": "oeufs",
+      "name": "Œufs",
+      "status": "KNOWN",
+      "products": [
+        {
+          "id": "300001",
+          "label": "Œufs de test x6",
+          "content": { "value": 6, "unit": "piece" },
+          "packs": null,
+          "packsStatus": "TO_CHECK"
+        },
+        {
+          "id": "300002",
+          "label": "Œufs de test x12",
+          "content": { "value": 12, "unit": "piece" },
+          "packs": null,
+          "packsStatus": null
+        },
+        { "id": "300003", "label": "Œufs de test sans contenu connu" }
+      ]
+    }
+  ]
+}

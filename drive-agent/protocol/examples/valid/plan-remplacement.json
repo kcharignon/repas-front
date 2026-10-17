@@ -1,0 +1,18 @@
+{
+  "v": 1,
+  "type": "plan",
+  "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+  "retailer": "leclerc",
+  "store": { "id": "000000", "host": "courses-test.leclercdrive.fr" },
+  "returnPath": "/drive/retour",
+  "lines": [
+    {
+      "ingredientSlug": "beurre",
+      "name": "Beurre",
+      "status": "NEW",
+      "rejected": [{ "id": "500001", "label": "Beurre de test 250 g" }],
+      "searchQuery": "beurre doux",
+      "replaces": { "id": "500002", "label": "Beurre demi-sel de test 250 g" }
+    }
+  ]
+}

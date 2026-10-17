@@ -1,0 +1,19 @@
+{
+  "v": 1,
+  "type": "result",
+  "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+  "agentVersion": "1.0.0",
+  "outcome": "partial",
+  "store": { "id": "000000" },
+  "error": { "code": "BLOCKED", "message": "Le site a refusé deux requêtes de suite." },
+  "lines": [
+    {
+      "ingredientSlug": "farine",
+      "outcome": "ADDED",
+      "productId": "123456",
+      "usedRank": 1,
+      "quantity": 2
+    },
+    { "ingredientSlug": "sucre", "outcome": "FAILED", "error": "BLOCKED" }
+  ]
+}
