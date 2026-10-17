@@ -132,7 +132,7 @@ test('un libellé qui contient du HTML s’affiche tel quel, sans rien exécuter
 
   await expect(page.getByText('<img src=x onerror="window.pwned=1">').first()).toBeVisible()
   expect(await page.evaluate(() => (window as unknown as { pwned?: number }).pwned)).toBeUndefined()
-  expect(await page.locator('.overlay img, .overlay script').count()).toBe(0)
+  await expect(page.locator('.overlay img, .overlay script')).toHaveCount(0)
   expect(errors).toEqual([])
 })
 

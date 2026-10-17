@@ -83,6 +83,16 @@ export const S = {
     failed: (n: number) => `Échecs : ${n}`,
     back: 'Retourner dans Repas',
   },
+  /** Les lignes du journal de progression (une par ingrédient traité). */
+  log: {
+    added: (name: string) => `${name} : ajouté`,
+    addedBackup: (name: string) => `${name} : ajouté, produit de secours`,
+    haveAtHome: (name: string) => `${name} : tu en as toujours`,
+    skipped: (name: string) => `${name} : passé`,
+    toChoose: (name: string) => `${name} : à choisir ensuite`,
+    unavailable: (name: string) => `${name} : plus disponible, à choisir ensuite`,
+    failed: (name: string) => `${name} : échec`,
+  },
   error: {
     close: 'Fermer',
     back: 'Retourner dans Repas',

@@ -96,8 +96,15 @@ describe('un seul fichier, sans dépendance ni code distant', () => {
     for (const { code } of [agent, sample]) {
       expect(code).not.toMatch(/\beval\s*\(|new\s+Function|\bFunction\s*\(/)
       expect(code).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML|document\.write/)
-      expect(code).not.toMatch(/XMLHttpRequest|WebSocket|EventSource|sendBeacon/)
-      expect(code).not.toMatch(/https?:\/\//)
+      // L'en-tête `X-Requested-With: XMLHttpRequest` du panier de l'enseigne (DRV-303) est un texte, pas l'API XMLHttpRequest.
+      const withoutHeader = code.replace(/"X-Requested-With":`XMLHttpRequest`/g, '')
+      expect(withoutHeader).not.toMatch(/XMLHttpRequest|WebSocket|EventSource|sendBeacon/)
+      // Aucune adresse absolue, sauf l'adresse de base du magasin bâtie sur l'hôte de la page (`https://${hôte}`, DRV-303) et la base
+      // fictive qui sert à analyser un chemin.
+      const withoutPageHost = code
+        .replace(/https:\/\/\$\{[^}]*\}/g, '')
+        .replace('https://x.invalid', '')
+      expect(withoutPageHost).not.toMatch(/https?:\/\//)
     }
   })
 
@@ -127,6 +134,49 @@ describe('un seul fichier, sans dépendance ni code distant', () => {
     dom.window.eval(agent.code)
 
     expect(dom.serialize()).toBe(before)
+    expect(Object.getOwnPropertyNames(dom.window)).toEqual(names)
+  })
+})
+
+describe('le vrai agent construit, avec un plan', () => {
+  it('affiche son interface fermée à la page quand l’application envoie un plan, sans variable globale ni requête', async () => {
+    // Given : une page de magasin inventée, et le pont de l'application
+    const dom = new JSDOM('<!doctype html><html><body><p>Page</p></body></html>', {
+      runScripts: 'outside-only',
+      url: 'https://fd0-courses.leclercdrive.fr/magasin-000123-000123-Ville-Test/recherche.aspx',
+    })
+    let receive: (event: { data: unknown }) => void = () => undefined
+    const sent: string[] = []
+    Object.assign(dom.window, {
+      repasHost: {
+        postMessage: (text: string) => sent.push(text),
+        addEventListener: (_type: string, listener: typeof receive) => (receive = listener),
+      },
+    })
+    const names = Object.getOwnPropertyNames(dom.window)
+    dom.window.eval(agent.code)
+    expect(dom.window.document.documentElement.children).toHaveLength(2)
+
+    // When
+    receive({
+      data: JSON.stringify({
+        v: 1,
+        type: 'plan',
+        runId: '8f14e45f-ceea-467a-9575-8e6b8c0a1b2c',
+        retailer: 'leclerc',
+        store: { id: '000123', host: 'fd0-courses.leclercdrive.fr' },
+        returnPath: '/drive/retour',
+        lines: [{ ingredientSlug: 'sel', name: 'Sel', status: 'HAVE_AT_HOME' }],
+      }),
+    })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    // Then : un conteneur de plus, que la page ne peut pas lire, et rien d'envoyé avant la confirmation
+    const host = dom.window.document.documentElement.lastElementChild as HTMLElement
+    expect(host.tagName).toBe('DIV')
+    expect(host.shadowRoot).toBeNull()
+    expect(host.textContent).toBe('')
+    expect(sent).toEqual([])
     expect(Object.getOwnPropertyNames(dom.window)).toEqual(names)
   })
 })
