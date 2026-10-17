@@ -32,6 +32,7 @@ mot de passe **`M0t 2 p@sse`**. `make fixtures` ne vide rien et peut être relan
 | `make e2e-offline` | joue la lecture hors-ligne (service worker, réseau coupé) contre l'**image de production** et le vrai back |
 | `make lighthouse` | mesure les pages principales de l'image de production (compte de démo) : performance ≥ 90, accessibilité et bonnes pratiques 100, SEO ≥ 90 |
 | `make e2e-visual` | idem avec capture, vidéo et trace de chaque test, puis rapport sur http://localhost:9323 |
+| `make lab` | construit le favori de test du chantier drive (`drive-agent/lab/`, outil jetable) et affiche la taille de sa chaîne `javascript:` |
 | `make prod` | image de production (Caddy : statique + relais vers le back) sur http://localhost:8081 |
 | `make api-update` | figer le contrat de l'API sur le dernier commit du back (`ref=<sha>` pour un autre) et régénérer les types |
 | `make sh` / `make npm c="run lint"` | un shell ou une commande npm dans le conteneur |
