@@ -1,0 +1,25 @@
+{
+  "v": 1,
+  "type": "plan",
+  "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+  "retailer": "leclerc",
+  "store": { "id": "000000", "host": "courses-test.leclercdrive.fr" },
+  "returnPath": "/drive/retour",
+  "lines": [
+    {
+      "ingredientSlug": "creme-fraiche",
+      "name": "Crème fraîche épaisse 🥛",
+      "status": "KNOWN",
+      "products": [
+        {
+          "id": "424242",
+          "label": "Crème fraîche épaisse d’été, œufs & lait 🐄 20 cl",
+          "content": { "value": 20, "unit": "cl" },
+          "packs": 1,
+          "packsStatus": "COMPUTED"
+        }
+      ],
+      "searchQuery": "crème fraîche"
+    }
+  ]
+}

@@ -1,0 +1,209 @@
+// Les types du protocole v1 (architecture.md § 8 du dépôt back). Les schémas JSON (`*.schema.json`) disent la même chose ; le test de
+// conformité (`drive-agent/test/protocol-schemas.spec.ts`) vérifie qu'ils donnent le même verdict que les validateurs de `validate.ts`.
+
+/** La version du protocole : le champ `v` de chaque message. */
+export const PROTOCOL_VERSION = 1
+
+/** Les bornes du protocole, vérifiées des deux côtés. */
+export const LIMITS = {
+  /** Taille maximale d'un message une fois décodé (64 Ko). */
+  messageBytes: 64 * 1024,
+  /** Lignes d'un plan ou d'un résultat. */
+  lines: 100,
+  /** Produits classés par priorité d'une ligne. */
+  products: 5,
+  /** Produits refusés d'une ligne. */
+  rejected: 20,
+  /** Produits indisponibles d'une ligne `ADDED` (le produit mis au panier n'en fait pas partie). */
+  unavailableAdded: 4,
+  /** Nombre de produits à mettre au panier. */
+  packsMax: 99,
+  /** Libellés, noms et requêtes (en caractères). */
+  label: 255,
+  /** Message d'une erreur (en caractères). */
+  errorMessage: 200,
+  /** Prix, en centimes (un million d'euros). */
+  cents: 100_000_000,
+} as const
+
+/** Le seul chemin de retour permis, sur l'origine de Repas écrite en dur dans l'agent. */
+export const RETURN_PATH = '/drive/retour'
+
+export const ERROR_CODES = [
+  'NOT_LOGGED_IN',
+  'STORE_MISMATCH',
+  'BLOCKED',
+  'CONTRACT_CHANGED',
+  'NETWORK',
+  'CANCELLED',
+  'INVALID_MESSAGE',
+  'UNSUPPORTED_PAGE',
+] as const
+export type ErrorCode = (typeof ERROR_CODES)[number]
+
+export const CONTENT_UNITS = ['g', 'kg', 'ml', 'cl', 'l', 'piece'] as const
+/** L'unité d'un contenu net : `g`, `ml` et `piece` sont les unités normalisées de l'agent. */
+export type ContentUnit = (typeof CONTENT_UNITS)[number]
+
+export const MEASURE_UNITS = ['kg', 'l', 'piece'] as const
+/** L'unité d'un prix par mesure. */
+export type MeasureUnit = (typeof MEASURE_UNITS)[number]
+
+export const LINE_STATUSES = ['KNOWN', 'NEW', 'HAVE_AT_HOME', 'SKIP'] as const
+export type LineStatus = (typeof LINE_STATUSES)[number]
+
+export const PACKS_STATUSES = ['COMPUTED', 'TO_CHECK'] as const
+export type PacksStatus = (typeof PACKS_STATUSES)[number]
+
+export const PLACEMENTS = ['PRIMARY', 'FALLBACK', 'ONCE'] as const
+export type Placement = (typeof PLACEMENTS)[number]
+
+export const OUTCOMES = ['completed', 'partial', 'aborted', 'error'] as const
+export type Outcome = (typeof OUTCOMES)[number]
+
+export const LINE_OUTCOMES = [
+  'ADDED',
+  'CHOSEN',
+  'HAVE_AT_HOME',
+  'SKIPPED',
+  'UNAVAILABLE',
+  'FAILED',
+] as const
+export type LineOutcome = (typeof LINE_OUTCOMES)[number]
+
+/** Un contenu net : `1000 g`, `6 piece`. */
+export interface ProductContent {
+  value: number
+  unit: ContentUnit
+}
+
+/** Un produit désigné par son identifiant chez l'enseigne et son libellé. */
+export interface ProductRef {
+  id: string
+  label: string
+}
+
+/** Un produit accepté d'une ligne `KNOWN`, avec ses propres `packs` (les contenus diffèrent d'un produit à l'autre). */
+export interface PlanProduct extends ProductRef {
+  content?: ProductContent
+  packs?: number | null
+  packsStatus?: PacksStatus | null
+}
+
+export interface PlanLine {
+  ingredientSlug: string
+  name: string
+  status: LineStatus
+  products?: PlanProduct[]
+  rejected?: ProductRef[]
+  searchQuery?: string
+  replaces?: ProductRef
+}
+
+export interface StoreRef {
+  id: string
+  host: string
+}
+
+interface MessageHead {
+  v: typeof PROTOCOL_VERSION
+  runId: string
+  retailer: 'leclerc'
+  store: StoreRef
+  returnPath: typeof RETURN_PATH
+}
+
+/** Repas vers l'agent : la liste à mettre au panier. */
+export interface PlanMessage extends MessageHead {
+  type: 'plan'
+  lines: PlanLine[]
+}
+
+/** Repas vers l'agent : « lis le magasin courant et renvoie-le ». */
+export interface SetupMessage extends MessageHead {
+  type: 'setup'
+}
+
+/** Prix d'un produit en centimes, avec le prix à l'unité de mesure quand l'agent l'a lu (décision D22). */
+export interface ProductPrice {
+  cents: number
+  perMeasure?: { cents: number; unit: MeasureUnit }
+}
+
+/** Un produit refusé par l'utilisateur, avec de quoi le mémoriser. */
+export interface RejectedProduct extends ProductRef {
+  ean?: string | null
+  content?: ProductContent
+}
+
+/** Le produit choisi par l'utilisateur sur le site. */
+export interface ChosenProduct extends RejectedProduct {
+  price?: ProductPrice
+}
+
+interface LineBase {
+  ingredientSlug: string
+  /** Les produits que l'utilisateur a choisi de ne plus jamais prendre. */
+  rejected?: RejectedProduct[]
+}
+
+/** Un produit connu a été mis au panier ; `usedRank` 1 = le préféré. */
+export interface AddedLine extends LineBase {
+  outcome: 'ADDED'
+  productId: string
+  quantity: number
+  usedRank: number
+  unavailableIds?: string[]
+}
+
+/** L'utilisateur a choisi un produit sur le site, ajouté au panier. */
+export interface ChosenLine extends LineBase {
+  outcome: 'CHOSEN'
+  product: ChosenProduct
+  quantity: number
+  placement: Placement
+  unavailableIds?: string[]
+}
+
+export interface UnavailableLine extends LineBase {
+  outcome: 'UNAVAILABLE'
+  unavailableIds?: string[]
+}
+
+/** « J'en ai toujours » ou « passer cette fois » : rien n'a été mis au panier. */
+export interface SettledLine extends LineBase {
+  outcome: 'HAVE_AT_HOME' | 'SKIPPED'
+}
+
+export interface FailedLine extends LineBase {
+  outcome: 'FAILED'
+  error: ErrorCode
+}
+
+export type ResultLine = AddedLine | ChosenLine | UnavailableLine | SettledLine | FailedLine
+
+export interface ResultError {
+  code: ErrorCode
+  message: string
+}
+
+/** Agent vers Repas : ce qui a été mis au panier. */
+export interface ResultMessage {
+  v: typeof PROTOCOL_VERSION
+  type: 'result'
+  runId: string
+  agentVersion: string
+  outcome: Outcome
+  store: { id: string }
+  error?: ResultError
+  lines: ResultLine[]
+}
+
+/** Agent vers Repas : le magasin courant. */
+export interface SetupResultMessage {
+  v: typeof PROTOCOL_VERSION
+  type: 'setup-result'
+  runId: string
+  agentVersion: string
+  store: { id: string; host: string; baseUrl: string; label: string | null }
+}

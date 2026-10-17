@@ -1,0 +1,15 @@
+{
+  "path": "store.label",
+  "why": "label est obligatoire (null si inconnu).",
+  "message": {
+    "v": 1,
+    "type": "setup-result",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "agentVersion": "1.0.0",
+    "store": {
+      "id": "000000",
+      "host": "courses-test.leclercdrive.fr",
+      "baseUrl": "https://courses-test.leclercdrive.fr/magasin-000000-000000"
+    }
+  }
+}

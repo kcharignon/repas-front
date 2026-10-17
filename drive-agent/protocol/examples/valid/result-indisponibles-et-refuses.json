@@ -1,0 +1,26 @@
+{
+  "v": 1,
+  "type": "result",
+  "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+  "agentVersion": "1.0.0",
+  "outcome": "completed",
+  "store": { "id": "000000" },
+  "lines": [
+    {
+      "ingredientSlug": "farine",
+      "outcome": "ADDED",
+      "productId": "500005",
+      "usedRank": 5,
+      "quantity": 99,
+      "unavailableIds": ["500001", "500002", "500003", "500004"],
+      "rejected": [
+        {
+          "id": "600001",
+          "label": "Farine refusée de test",
+          "ean": "30000017",
+          "content": { "value": 500, "unit": "g" }
+        }
+      ]
+    }
+  ]
+}

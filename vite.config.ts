@@ -64,6 +64,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // Le protocole de l'agent du drive (DRV-302), partagé avec l'agent qui, lui, l'importe par chemin relatif.
+      '@drive-protocol': fileURLToPath(new URL('./drive-agent/protocol/index.ts', import.meta.url)),
     },
   },
   server: {

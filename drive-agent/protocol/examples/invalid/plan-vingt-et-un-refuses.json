@@ -1,0 +1,78 @@
+{
+  "path": "lines[0].rejected",
+  "why": "20 produits refusés au plus.",
+  "message": {
+    "v": 1,
+    "type": "plan",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "retailer": "leclerc",
+    "store": { "id": "000000", "host": "courses-test.leclercdrive.fr" },
+    "returnPath": "/drive/retour",
+    "lines": [
+      {
+        "ingredientSlug": "farine",
+        "name": "Farine",
+        "status": "KNOWN",
+        "products": [
+          {
+            "id": "123456",
+            "label": "Farine de blé T55 de test 1 kg",
+            "content": { "value": 1000, "unit": "g" },
+            "packs": 1,
+            "packsStatus": "COMPUTED"
+          },
+          {
+            "id": "222333",
+            "label": "Farine de blé T45 de test 1 kg",
+            "content": { "value": 1000, "unit": "g" },
+            "packs": 1,
+            "packsStatus": "COMPUTED"
+          }
+        ],
+        "rejected": [
+          { "id": "800000", "label": "Refusé" },
+          { "id": "800001", "label": "Refusé" },
+          { "id": "800002", "label": "Refusé" },
+          { "id": "800003", "label": "Refusé" },
+          { "id": "800004", "label": "Refusé" },
+          { "id": "800005", "label": "Refusé" },
+          { "id": "800006", "label": "Refusé" },
+          { "id": "800007", "label": "Refusé" },
+          { "id": "800008", "label": "Refusé" },
+          { "id": "800009", "label": "Refusé" },
+          { "id": "800010", "label": "Refusé" },
+          { "id": "800011", "label": "Refusé" },
+          { "id": "800012", "label": "Refusé" },
+          { "id": "800013", "label": "Refusé" },
+          { "id": "800014", "label": "Refusé" },
+          { "id": "800015", "label": "Refusé" },
+          { "id": "800016", "label": "Refusé" },
+          { "id": "800017", "label": "Refusé" },
+          { "id": "800018", "label": "Refusé" },
+          { "id": "800019", "label": "Refusé" },
+          { "id": "800020", "label": "Refusé" }
+        ],
+        "searchQuery": "farine"
+      },
+      {
+        "ingredientSlug": "poivre",
+        "name": "Poivre",
+        "status": "NEW",
+        "products": [],
+        "rejected": [],
+        "searchQuery": "poivre"
+      },
+      { "ingredientSlug": "sel", "name": "Sel", "status": "HAVE_AT_HOME" },
+      { "ingredientSlug": "huile", "name": "Huile", "status": "SKIP" },
+      {
+        "ingredientSlug": "lait",
+        "name": "Lait",
+        "status": "NEW",
+        "products": [],
+        "rejected": [],
+        "searchQuery": "lait demi-écrémé",
+        "replaces": { "id": "98765", "label": "Lait UHT de test 1 L" }
+      }
+    ]
+  }
+}

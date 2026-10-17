@@ -1,7 +1,7 @@
 {
   "extends": "@vue/tsconfig/tsconfig.dom.json",
   // L'agent du drive (drive-agent/src) : TypeScript strict, DOM seul. Aucun type de Node : le code tourne dans une page web.
-  "include": ["drive-agent/src/**/*.ts"],
+  "include": ["drive-agent/src/**/*.ts", "drive-agent/protocol/**/*.ts"],
   "compilerOptions": {
     "types": [],
     "noUncheckedIndexedAccess": true,

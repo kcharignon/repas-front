@@ -1,0 +1,52 @@
+{
+  "path": "outcome",
+  "why": "completed, partial, aborted ou error.",
+  "message": {
+    "v": 1,
+    "type": "result",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "agentVersion": "1.0.0",
+    "outcome": "done",
+    "store": { "id": "000000" },
+    "lines": [
+      {
+        "ingredientSlug": "farine",
+        "outcome": "ADDED",
+        "productId": "222333",
+        "usedRank": 2,
+        "quantity": 1,
+        "unavailableIds": ["123456"]
+      },
+      {
+        "ingredientSlug": "poivre",
+        "outcome": "CHOSEN",
+        "quantity": 1,
+        "placement": "PRIMARY",
+        "product": {
+          "id": "555111",
+          "ean": null,
+          "label": "Poivre noir moulu de test 50 g",
+          "content": { "value": 50, "unit": "g" }
+        }
+      },
+      {
+        "ingredientSlug": "lait",
+        "outcome": "CHOSEN",
+        "quantity": 1,
+        "placement": "FALLBACK",
+        "product": {
+          "id": "444222",
+          "ean": null,
+          "label": "Lait demi-écrémé de test 1 L",
+          "content": { "value": 1, "unit": "l" }
+        },
+        "unavailableIds": ["98765"],
+        "rejected": [{ "id": "98765", "label": "Lait UHT de test 1 L" }]
+      },
+      { "ingredientSlug": "sel", "outcome": "HAVE_AT_HOME" },
+      { "ingredientSlug": "huile", "outcome": "SKIPPED" },
+      { "ingredientSlug": "riz", "outcome": "UNAVAILABLE", "unavailableIds": ["31415"] },
+      { "ingredientSlug": "beurre", "outcome": "FAILED", "error": "BLOCKED" }
+    ]
+  }
+}

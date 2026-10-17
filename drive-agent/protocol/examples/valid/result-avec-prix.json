@@ -1,0 +1,23 @@
+{
+  "v": 1,
+  "type": "result",
+  "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+  "agentVersion": "1.0.0",
+  "outcome": "completed",
+  "store": { "id": "000000" },
+  "lines": [
+    {
+      "ingredientSlug": "farine",
+      "outcome": "CHOSEN",
+      "quantity": 2,
+      "placement": "ONCE",
+      "product": {
+        "id": "123456",
+        "ean": "3000000000017",
+        "label": "Farine de blé de test 1 kg",
+        "content": { "value": 1, "unit": "kg" },
+        "price": { "cents": 129, "perMeasure": { "cents": 129, "unit": "kg" } }
+      }
+    }
+  ]
+}
