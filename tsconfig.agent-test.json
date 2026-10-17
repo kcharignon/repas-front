@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.agent.json",
+  // Les tests et l'outil de construction de l'agent : mêmes règles strictes, types de Node permis (ils ne partent pas dans l'agent).
+  "include": ["drive-agent/src/**/*.ts", "drive-agent/test/**/*.ts", "drive-agent/scripts/**/*.mjs"],
+  "compilerOptions": {
+    "types": ["node"],
+    "allowJs": true,
+    "checkJs": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.agent-test.tsbuildinfo"
+  }
+}
