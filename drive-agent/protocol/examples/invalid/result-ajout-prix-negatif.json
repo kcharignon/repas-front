@@ -1,0 +1,22 @@
+{
+  "path": "lines[0].price.cents",
+  "why": "Le prix d’une ligne ADDED est un entier de centimes, positif ou nul.",
+  "message": {
+    "v": 1,
+    "type": "result",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "agentVersion": "1.0.0",
+    "outcome": "completed",
+    "store": { "id": "000000" },
+    "lines": [
+      {
+        "ingredientSlug": "farine",
+        "outcome": "ADDED",
+        "productId": "222333",
+        "usedRank": 1,
+        "quantity": 1,
+        "price": { "cents": -1 }
+      }
+    ]
+  }
+}

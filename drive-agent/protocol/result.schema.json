@@ -167,6 +167,7 @@
             "productId": { "$ref": "#/definitions/productId" },
             "quantity": { "$ref": "#/definitions/quantity" },
             "usedRank": { "type": "integer", "minimum": 1, "maximum": 5 },
+            "price": { "$ref": "#/definitions/price" },
             "unavailableIds": {
               "allOf": [
                 { "$ref": "#/definitions/unavailableIds" },

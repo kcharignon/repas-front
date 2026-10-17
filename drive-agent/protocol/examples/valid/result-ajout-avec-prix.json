@@ -1,0 +1,27 @@
+{
+  "v": 1,
+  "type": "result",
+  "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+  "agentVersion": "1.0.0",
+  "outcome": "completed",
+  "store": { "id": "000000" },
+  "lines": [
+    {
+      "ingredientSlug": "farine",
+      "outcome": "ADDED",
+      "productId": "222333",
+      "usedRank": 2,
+      "quantity": 1,
+      "unavailableIds": ["123456"],
+      "price": { "cents": 129, "perMeasure": { "cents": 129, "unit": "kg" } }
+    },
+    {
+      "ingredientSlug": "sucre",
+      "outcome": "ADDED",
+      "productId": "444555",
+      "usedRank": 1,
+      "quantity": 2,
+      "price": { "cents": 99 }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "path": "lines[0].price",
+  "why": "Seule une ligne ADDED porte un prix : ce produit n’a pas été mis au panier.",
+  "message": {
+    "v": 1,
+    "type": "result",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "agentVersion": "1.0.0",
+    "outcome": "completed",
+    "store": { "id": "000000" },
+    "lines": [{ "ingredientSlug": "farine", "outcome": "UNAVAILABLE", "price": { "cents": 129 } }]
+  }
+}

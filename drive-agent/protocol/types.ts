@@ -147,13 +147,17 @@ interface LineBase {
   rejected?: RejectedProduct[]
 }
 
-/** Un produit connu a été mis au panier ; `usedRank` 1 = le préféré. */
+/**
+ * Un produit connu a été mis au panier ; `usedRank` 1 = le préféré. `price` est le prix lu sur le site pendant le passage : Repas
+ * rafraîchit ainsi le prix mémorisé du produit (décision D22).
+ */
 export interface AddedLine extends LineBase {
   outcome: 'ADDED'
   productId: string
   quantity: number
   usedRank: number
   unavailableIds?: string[]
+  price?: ProductPrice
 }
 
 /** L'utilisateur a choisi un produit sur le site, ajouté au panier. */
