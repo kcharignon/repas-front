@@ -7,7 +7,7 @@ import {
   stepLine,
   type StepRecord,
 } from '../essais/quantites'
-import { FLOUR, MILK, SUGAR, searchPage } from './fixtures'
+import { ERROR_PAGE, FLOUR, MILK, SUGAR, searchPage } from './fixtures'
 import {
   button,
   cartCall,
@@ -275,9 +275,7 @@ describe('essai 3b : quantités', () => {
   it('présente un 404 comme une requête non comprise et ne propose que le retrait', async () => {
     const harness = mount({
       route: (url) =>
-        url.includes('panier.aspx')
-          ? html('<html>introuvable</html>', 404)
-          : html(searchPage([FLOUR])),
+        url.includes('panier.aspx') ? html(ERROR_PAGE, 404) : html(searchPage([FLOUR])),
     })
     await ready(harness)
     click(harness.root, "Préparer l'étape 1")

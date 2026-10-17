@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { cartBody, cartPayload, parseCartBody, summarizeCartResponse } from '../cart'
+import { ERROR_PAGE } from './fixtures'
 
 const ADD = { action: 1, productId: '1000001', quantity: 1, deliveryPoint: '123456' } as const
 
@@ -404,6 +405,23 @@ describe('summarizeCartResponse : la quantité obtenue', () => {
 
 describe('summarizeCartResponse : blocage ou requête non comprise', () => {
   const html404 = '<html><body><h1>Ce service est momentanément indisponible</h1></body></html>'
+
+  it('classe en requête non comprise une page d’erreur 404 qui contient le mot datadome', () => {
+    const summary = summarizeCartResponse(ERROR_PAGE, 404, '1955')
+
+    expect(summary.blocked).toBe(false)
+    expect(summary.rejected).toBe(true)
+  })
+
+  it('classe en blocage une réponse JSON de défi de l’anti-robot, avec ou sans code 403', () => {
+    const challenge = '{"url":"https://geo.captcha-delivery.com/captcha/?initialCid=abc"}'
+
+    expect(summarizeCartResponse(challenge, 403, '1').blocked).toBe(true)
+    expect(summarizeCartResponse(challenge, 200, '1')).toMatchObject({
+      blocked: true,
+      rejected: false,
+    })
+  })
 
   it('classe un 404 HTML en requête non comprise, pas en blocage', () => {
     const summary = summarizeCartResponse(html404, 404, '1955')

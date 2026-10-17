@@ -404,6 +404,18 @@ describe('inspectFrame', () => {
     expect(report.lines.join('\n')).toContain('vide')
   })
 
+  it('ne prend pas le mot datadome, seul, pour un texte de blocage', () => {
+    const html = `<html><body><p>${'Ce service est momentanément indisponible, merci de réessayer plus tard (datadome). '.repeat(2)}</p></body></html>`
+    const frame = {
+      contentDocument: new DOMParser().parseFromString(html, 'text/html'),
+      contentWindow: { location: { pathname: '/recherche.aspx' } },
+    } as unknown as Pick<HTMLIFrameElement, 'contentDocument' | 'contentWindow'>
+
+    const report = inspectFrame(frame, '/recherche.aspx', '/p')
+
+    expect(report.lines.join('\n')).not.toContain('Texte de blocage')
+  })
+
   it('reconnaît un texte de blocage et un chemin illisible', () => {
     const html = `<html><body><p>${'Please complete the CAPTCHA to continue and prove you are human. '.repeat(2)}</p></body></html>`
     const frame = {

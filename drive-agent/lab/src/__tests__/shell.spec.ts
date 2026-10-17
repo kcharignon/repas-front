@@ -16,7 +16,7 @@ import {
   untilOutput,
   type Harness,
 } from './harness'
-import { FLOUR, MILK, SUGAR, searchPage } from './fixtures'
+import { ERROR_PAGE, FLOUR, MILK, SUGAR, searchPage } from './fixtures'
 
 afterEach(unmount)
 
@@ -268,6 +268,17 @@ describe('essai 2 : recherche sur le site', () => {
 
     expect(text).toContain('HTTP 403')
     expect(harness.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('ne prend pas une page d’erreur 404 qui contient le mot datadome pour un blocage', async () => {
+    const harness = mount({ route: () => html(ERROR_PAGE, 404) })
+    openEssai(harness, 2)
+
+    click(harness.root, 'Chercher')
+    const text = await untilOutput(harness.root, 'Réponse inattendue')
+
+    expect(text).toContain('HTTP 404')
+    expect(text).not.toContain('Blocage probable')
   })
 
   it('dit qu’une réponse inattendue n’a rien à analyser', async () => {

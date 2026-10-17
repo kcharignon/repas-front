@@ -112,3 +112,9 @@ export function searchPage(products: readonly FakeProduct[], style: PageStyle = 
   }
   return `<html><head><title>Recherche</title></head><body>${NAVIGATION}${body}<footer>Bas de page</footer></body></html>`
 }
+
+/** Page d'erreur 404 INVENTÉE : elle contient le mot « datadome » dans ses balises, sans être une page de défi. */
+export const ERROR_PAGE =
+  '<html><head><title>Erreur</title><meta name="datadome" content="protected">' +
+  '<script src="https://static.datadome.example/tags.js"></script></head>' +
+  '<body><h1>Désolé, ce service est momentanément indisponible</h1></body></html>'
