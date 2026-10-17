@@ -34,7 +34,11 @@ export default defineConfigWithVueTs(
 
   {
     ...pluginVitest.configs.recommended,
-    files: ['src/**/__tests__/*', 'drive-agent/lab/src/__tests__/*'],
+    files: [
+      'src/**/__tests__/*',
+      'drive-agent/lab/src/__tests__/*',
+      'drive-agent/android-lab/__tests__/*',
+    ],
   },
 
   ...pluginOxlint.buildFromOxlintConfigFile('.oxlintrc.json'),

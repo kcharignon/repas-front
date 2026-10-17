@@ -21,6 +21,7 @@
     "test:e2e": "playwright test",
     "lab:build": "node drive-agent/lab/build.ts",
     "lab:loader": "node drive-agent/lab/loader.ts",
+    "lab:android-hash": "node drive-agent/android-lab/lab-digest.ts",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
     "check": "run-s lint format:check api:check type-check test",
     "api:update": "node scripts/api.mjs update",

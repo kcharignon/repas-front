@@ -12,6 +12,8 @@ permissions:
 jobs:
   checks:
     name: Contrôles
+    # Les pré-versions `android-lab-<date>` (workflow android-lab.yml) ne sont pas des versions du front : rien à déployer.
+    if: ${{ !startsWith(github.event.release.tag_name, 'android-lab-') }}
     runs-on: ubuntu-latest
     steps:
       - name: Version et branche

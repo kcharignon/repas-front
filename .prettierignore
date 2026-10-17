@@ -1,3 +1,9 @@
 src/api/schema.d.ts
 # Banc d'essai du favori : le code minifié publié (servi par jsDelivr, vérifié par son empreinte) ne se reformate pas.
 drive-agent/lab/published
+# Application Android jetable : sorties de Gradle
+drive-agent/android-lab/.gradle
+drive-agent/android-lab/.kotlin
+drive-agent/android-lab/build
+drive-agent/android-lab/app/build
+drive-agent/android-lab/dist

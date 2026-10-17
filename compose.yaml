@@ -109,6 +109,22 @@ services:
       - node_modules:/app/node_modules
     command: ["npx", "playwright", "show-report", "--host", "0.0.0.0", "--port", "9323"]
 
+  # Application Android jetable du chantier drive (DRV-011, drive-agent/android-lab) : `make android-lab`.
+  # Image JDK 17 + Gradle + SDK Android (sans Node). Les sources sont montées, l'APK tombe dans drive-agent/android-lab/dist/.
+  # Le cache de Gradle vit dans un volume ; le conteneur tourne avec l'identifiant de l'utilisateur (voir le Makefile).
+  android-lab:
+    profiles: [android]
+    build:
+      context: ./drive-agent/android-lab
+    init: true
+    working_dir: /work/drive-agent/android-lab
+    environment:
+      ANDROID_LAB_VERSION_CODE: ${ANDROID_LAB_VERSION_CODE:-1}
+      ANDROID_LAB_COMMIT: ${ANDROID_LAB_COMMIT:-local}
+    volumes:
+      - ./drive-agent:/work/drive-agent
+      - android-lab-gradle:/gradle
+
   # Image de production (statique + relais vers le back) : http://localhost:8081, pour essayer le build comme en production.
   prod:
     profiles: [prod]
@@ -129,6 +145,7 @@ services:
 
 volumes:
   node_modules:
+  android-lab-gradle:
 
 networks:
   back:

@@ -135,6 +135,22 @@ lab-publish: ## Copy the built lab.js into drive-agent/lab/published/ (served by
 lab-loader: ## Build the short loader bookmarklet for a merged commit: make lab-loader sha=<40-char commit> (writes dist/lab-loader.txt)
 	@$(RUN) npm run --silent lab:loader -- $(sha)
 
+## —— Android lab 📱 ————————————————————————————————————————————————————————
+.PHONY: android-lab android-lab-test android-lab-hash
+
+# L'application Android jetable (DRV-011) se construit dans une image à part (JDK, Gradle, SDK Android), avec l'identifiant de l'utilisateur
+# pour que les fichiers produits ne soient pas à root. Elle ne contacte aucun site Leclerc.
+ANDROID_RUN = $(DOCKER_COMPOSE) --profile android run --rm --user $(shell id -u):$(shell id -g) android-lab
+
+android-lab: ## Build the throwaway Android test app (drive-agent/android-lab): Kotlin unit tests, then dist/repas-android-lab.apk with its SHA-256
+	@$(ANDROID_RUN) ./build.sh apk
+
+android-lab-test: ## Run only the Kotlin unit tests of the throwaway Android test app
+	@$(ANDROID_RUN) ./build.sh test
+
+android-lab-hash: ## Note the SHA-384 of drive-agent/lab/published/lab.js in drive-agent/android-lab/lab.js.sha384 (after a deliberate change of the lab)
+	@$(RUN) npm run --silent lab:android-hash -- --write
+
 ## —— Production image 📦 ————————————————————————————————————————————————————
 .PHONY: prod prod-stop
 

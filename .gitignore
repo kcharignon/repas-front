@@ -40,3 +40,10 @@ __screenshots__/
 
 test-results/
 playwright-report/
+
+# Application Android jetable (drive-agent/android-lab) : sorties de Gradle et fichiers locaux du SDK
+drive-agent/android-lab/.gradle/
+drive-agent/android-lab/.kotlin/
+drive-agent/android-lab/build/
+drive-agent/android-lab/app/build/
+drive-agent/android-lab/local.properties

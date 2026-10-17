@@ -1,0 +1,3 @@
+# Le contexte de construction de l'image ne contient que le Dockerfile : les sources sont montées au lancement.
+*
+!Dockerfile
