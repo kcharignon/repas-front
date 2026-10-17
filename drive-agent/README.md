@@ -4,7 +4,7 @@ L'**agent** est le petit programme JavaScript qui tourne dans la page de l'ensei
 
 Contexte et protocole : `docs/drive/` du dépôt back (`kcharignon/repas`), en particulier `architecture.md` § 8 et le ticket `DRV-301`.
 
-État : **squelette** (DRV-301) et **protocole v1** (DRV-302). La construction, ses garde-fous et ses règles de code sont en place, et le protocole (messages, codec, validateurs, transports) est écrit ; l'agent lui-même ne fait encore rien (il reste silencieux sur la page) : l'adaptateur Leclerc (DRV-303), l'interface (DRV-304) et l'orchestrateur (DRV-305) s'y ajoutent.
+État : **squelette** (DRV-301), **protocole v1** (DRV-302) et **adaptateur Leclerc** (DRV-303). La construction, ses garde-fous et ses règles de code sont en place, et le protocole (messages, codec, validateurs, transports) est écrit ; l'agent lui-même ne fait encore rien (il reste silencieux sur la page) : l'interface (DRV-304) et l'orchestrateur (DRV-305) s'y ajoutent et branchent le tout.
 
 > `lab/` (banc d'essai du favori) et `android-lab/` (application de test) sont des outils jetables du spike. Ils restent en place jusqu'à la fin du jalon M3b et ne font pas partie de l'agent.
 
@@ -29,13 +29,31 @@ drive-agent/
     agent.ts          ce que fait l'agent quand l'application l'injecte
     version.ts        AGENT_VERSION (semver)
     transport/        comment le message arrive et repart : `fragmentTransport` (fragment d'adresse) et `bridgeTransport` (pont de l'application)
-    leclerc/ ui/ flow/ diagnostic/    à venir : DRV-303, 304, 305-306, 308
+    leclerc/          tout ce qui est propre à E.Leclerc Drive, derrière `RetailerAdapter` : magasin, recherche, panier, erreurs, cadence (voir plus bas)
+    ui/ flow/ diagnostic/    à venir : DRV-304, 305-306, 308
   protocol/           le protocole v1, partagé avec le front (alias `@drive-protocol`) : schémas JSON, types, codec, validateurs, exemples
   test/               tests Vitest de l'agent et du protocole, et entries/ : points d'entrée d'essai pour la chaîne de construction
   fixtures/           données SYNTHÉTIQUES inventées (voir son README)
   scripts/build.mjs   la construction
   dist/               sorties de la construction (ignoré par Git)
 ```
+
+## L'adaptateur Leclerc (`src/leclerc/`)
+
+Seul contrat supporté : le site PC `fdN-courses.leclercdrive.fr` (faits mesurés dans `recherche.md` et `DRV-007` du dépôt back). Toutes les requêtes vont à **l'hôte de la page** (chemins relatifs, cookies de la session envoyés par le navigateur, jamais lus). `fetch` et l'horloge sont injectés : les tests n'ont ni réseau ni attente réelle.
+
+| Fichier        | Rôle                                                                                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `adapter.ts`   | `RetailerAdapter` (`readStore`, `searchProducts`, `setCartQuantity`, `readProductFromSearch`), `LeclercAdapter`, `browserDeps(window)`                        |
+| `pacer.ts`     | `Pacer` : une requête à la fois, 800 ms + gigue jusqu'à 700 ms entre deux, 403/429 retenté une fois puis `BLOCKED`, erreur réseau retentée une fois après 2 s |
+| `store.ts`     | Magasin lu dans `/magasin-<id>-<id>[-<Ville>]`, adresse du panier **sans** suffixe de ville, point de livraison                                               |
+| `embedded.ts`  | Analyse tolérante du JSON de produits embarqué dans la page de recherche                                                                                      |
+| `content.ts`   | Contenu net (`g`, `ml`, `piece`) : champs structurés, libellé, prix ÷ prix par mesure ; `null` plutôt qu'une valeur fausse                                    |
+| `candidate.ts` | `Candidate` : produit interprété, prix en **centimes** (décision D22)                                                                                         |
+| `cart.ts`      | Requête du panier (`d=<JSON>`, en-tête `zcwb`, quantité absolue) et lecture de la réponse (`lstProduitsLight`)                                                |
+| `errors.ts`    | `LeclercError` : `NOT_LOGGED_IN`, `BLOCKED`, `CONTRACT_CHANGED`, `NETWORK`, `UNSUPPORTED_PAGE` (messages fixes : jamais de cookie ni de page)                 |
+
+Un 404 n'est **pas** un blocage (requête mal formée : `CONTRACT_CHANGED`) ; seuls 403, 429 et une page de défi (`captcha-delivery.com`) sont `BLOCKED`. Les fixtures (`fixtures/leclerc/`) sont inventées.
 
 ## Construction
 
