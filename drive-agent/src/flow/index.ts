@@ -4,6 +4,7 @@ export { packsFor, type Packs } from './packs'
 export { priceOf, settleKnownLine, type KnownLineDeps, type Verdict } from './phase-a'
 export { guidedChoice, labelOf, MAX_CANDIDATES } from './phase-b'
 export { buildResult, endingOf, endProps, resultLines, type Ending } from './result'
+export { setupHandler, type SetupDeps } from './setup'
 export { emptyState, RUN_PREFIX, RunStore, type RunState } from './run-state'
 export type {
   FlowDeps,

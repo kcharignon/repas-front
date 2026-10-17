@@ -7,6 +7,7 @@ import {
   type PlanProduct,
   type ProductRef,
   type ResultMessage,
+  type SetupResultMessage,
 } from '../protocol'
 import { Flow, type FlowDeps, type StorageLike } from '../src/flow'
 import type {
@@ -258,10 +259,11 @@ export function fakeWakeLock(options: { refuse?: boolean } = {}) {
 /** Un orchestrateur et l'horloge fausse : chaque lecture de l'heure avance d'une seconde. */
 export function makeFlow(parts: Partial<FlowDeps> & Pick<FlowDeps, 'ui'>) {
   const sent: ResultMessage[] = []
+  const setups: SetupResultMessage[] = []
   let clock = 1_000_000
   const deps: FlowDeps = {
     adapter: fakeAdapter().adapter,
-    send: (message) => void sent.push(message),
+    send: (message) => void (message.type === 'result' ? sent.push(message) : setups.push(message)),
     storage: null,
     wakeLock: null,
     now: () => (clock += 1000),
@@ -269,7 +271,7 @@ export function makeFlow(parts: Partial<FlowDeps> & Pick<FlowDeps, 'ui'>) {
     canReturn: true,
     ...parts,
   }
-  return { flow: new Flow(deps), sent }
+  return { flow: new Flow(deps), sent, setups }
 }
 
 /** Le résultat envoyé doit être conforme au protocole : le même validateur que Repas. */

@@ -5,7 +5,7 @@
  * passage : récapitulatif et confirmation, phase A, phase B (choix guidé), résultat (`flow/`, DRV-305 et DRV-306). Tant qu'aucun plan n'est reçu, l'agent reste
  * silencieux sur la page : aucune bannière, aucune variable globale, aucune requête.
  */
-import { Flow, guidedChoice, type FlowDeps, type StorageLike } from './flow'
+import { Flow, guidedChoice, setupHandler, type FlowDeps, type StorageLike } from './flow'
 import { browserDeps, LeclercAdapter } from './leclerc'
 import { bridgeTransport, type Bridge } from './transport/bridge'
 import { fragmentTransport } from './transport/fragment'
@@ -54,16 +54,27 @@ export function run(win: Window & typeof globalThis = window, options: AgentOpti
         },
         origin,
       )
+  const adapter = new LeclercAdapter(browserDeps(win))
+  const ui = createUi({ win })
+  const send = (message: Parameters<Transport['send']>[0]) => transport.send(message)
   const flow = new Flow({
-    adapter: new LeclercAdapter(browserDeps(win)),
-    ui: createUi({ win }),
-    send: (message) => transport.send(message),
+    adapter,
+    ui,
+    send,
     storage: sessionStorageOf(win),
     wakeLock: win.navigator.wakeLock ?? null,
     now: () => Date.now(),
     agentVersion: AGENT_VERSION,
     canReturn: bridge !== undefined || ORIGIN_SHAPE.test(origin),
     phaseB: guidedChoice,
+    // Un message `setup` : lire le magasin de la page, avec les mêmes dépendances que le passage (même celles que les tests changent).
+    onSetup: (message) =>
+      setupHandler({
+        adapter: options.flow?.adapter ?? adapter,
+        ui: options.flow?.ui ?? ui,
+        send: options.flow?.send ?? send,
+        agentVersion: options.flow?.agentVersion ?? AGENT_VERSION,
+      })(message),
     ...options.flow,
   })
   transport.listen(

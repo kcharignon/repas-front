@@ -51,7 +51,7 @@ export function endingOf(
 }
 
 export function buildResult(
-  plan: PlanMessage,
+  plan: Pick<PlanMessage, 'runId' | 'store'>,
   lines: ResultLine[],
   ending: Ending,
   agentVersion: string,

@@ -35,6 +35,8 @@ const SCREENS = [
   'chooser',
   'chooser-gone',
   'placement',
+  'store',
+  'store-label',
   'hostile',
   'end-completed',
   'end-partial',

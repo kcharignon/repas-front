@@ -13,6 +13,7 @@ import type {
   ScreenAnswer,
   ScreenName,
   ScreenProps,
+  StoreProps,
   SummaryProps,
 } from './types'
 
@@ -279,6 +280,22 @@ const placement: Renderer<'placement'> = (props: PlacementProps, answer) => {
   }
 }
 
+const store: Renderer<'store'> = (props: StoreProps, answer) => {
+  const save = button(S.store.save, () => answer('save'), 'primary')
+  return {
+    el: screen(
+      title(S.store.title),
+      h('p', { text: S.store.text(props.label ?? S.store.unnamed(props.id)) }),
+      h('p', { class: 'hint', text: S.store.notice }),
+      actions(
+        save,
+        button(S.store.cancel, () => answer('cancel')),
+      ),
+    ),
+    focus: save,
+  }
+}
+
 const error: Renderer<'error'> = (props: ErrorProps, answer) => {
   const close = button(S.error.close, () => answer('close'), props.canReturn ? 'plain' : 'primary')
   const back = button(S.error.back, () => answer('return'), 'primary')
@@ -327,6 +344,7 @@ export const RENDERERS: { [K in ScreenName]: Renderer<K> } = {
   quantity,
   chooser,
   placement,
+  store,
   error,
   end,
 }

@@ -36,6 +36,16 @@ export const S = {
     diagnostic: 'Diagnostic',
     close: 'Fermer',
   },
+  /** Le mode configuration (DRV-307) : lire le magasin de la page et le donner à Repas. */
+  store: {
+    title: 'Enregistrer ce magasin dans Repas ?',
+    text: (name: string) => `Repas retiendra ce magasin pour préparer tes envois : ${name}.`,
+    unnamed: (id: string) => `magasin n° ${id}`,
+    notice:
+      'Seul le magasin est transmis. Aucune donnée de ton compte Leclerc ne quitte cette page.',
+    save: 'Enregistrer',
+    cancel: 'Annuler',
+  },
   summary: {
     title: 'Prêt à remplir ton panier',
     intro:
