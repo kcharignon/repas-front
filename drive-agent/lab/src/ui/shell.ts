@@ -4,6 +4,7 @@ import { LAB_NOTICE } from '../config'
 import type { LabEnv } from '../env'
 import { ESSAIS } from '../essais'
 import { formatEvent } from '../frame'
+import { maskStore } from '../redact'
 import { parseStore } from '../store'
 import { append, clear, h } from './dom'
 import { STYLES } from './styles'
@@ -86,7 +87,7 @@ export function createLab(env: LabEnv): Lab {
       onEvent: null,
       record(event) {
         session.events.push(event)
-        live.textContent = formatEvent(event)
+        live.textContent = maskStore(formatEvent(event), store())
         session.onEvent?.(event)
       },
       show() {

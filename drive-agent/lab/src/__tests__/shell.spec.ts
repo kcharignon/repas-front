@@ -119,14 +119,27 @@ describe('menu et lancement', () => {
 })
 
 describe('essai 1 : sonde', () => {
-  it('indique l’hôte et le magasin de la page', () => {
+  it('indique l’hôte et le magasin de la page, sans afficher le numéro du magasin', () => {
     const harness = mount({ path: '/magasin-999111-999111/accueil.aspx' })
 
     openEssai(harness, 1)
 
     expect(output(harness.root)).toContain(`Hôte : ${window.location.host}`)
-    expect(output(harness.root)).toContain("Magasin lu dans l'adresse : 999111")
+    expect(output(harness.root)).toContain(
+      "Magasin lu dans l'adresse : [n° magasin] (début d'adresse : magasin-[masqué])",
+    )
+    expect(output(harness.root)).not.toContain('999111')
     expect(harness.fetch).not.toHaveBeenCalled()
+  })
+
+  it('copie exactement ce qui est affiché', async () => {
+    const harness = mount()
+    openEssai(harness, 1)
+
+    click(harness.root, 'Copier le résultat')
+
+    await vi.waitFor(() => expect(harness.copied).toHaveLength(1))
+    expect(harness.copied[0]).toBe(output(harness.root))
   })
 
   it('copie le résultat avec le numéro du magasin masqué', async () => {

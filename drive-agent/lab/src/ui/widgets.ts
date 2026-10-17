@@ -1,6 +1,7 @@
 // Outil de test jetable, à supprimer après la décision G1 (DRV-005).
 // Petits éléments d'interface partagés par les essais.
 import { maskStore } from '../redact'
+import { findDeliveryPoint, type StoreInfo } from '../store'
 import { append, h } from './dom'
 import type { ScreenContext } from './types'
 
@@ -43,23 +44,34 @@ export interface ResultsPanel {
   status(message: string): void
 }
 
-/** Zone de résultat : texte lisible, copiable (le numéro du magasin y est masqué), effaçable. */
+/** Zone de résultat : texte lisible, copiable, effaçable. Le magasin y est masqué, à l'écran comme à la copie. */
 export function resultsPanel(ctx: ScreenContext): ResultsPanel {
   const lines: string[] = []
+  let store: StoreInfo | null = null
+  let point: string[] | null = null
+  /** Le texte tel qu'il s'affiche et se copie : magasin et point de livraison masqués. */
+  const masked = () => {
+    store = ctx.store() ?? store
+    if (store && point === null) {
+      const found = findDeliveryPoint(ctx.env.win.document.documentElement.outerHTML, store)
+      point = found.from === 'page' ? [found.value] : []
+    }
+    return maskStore(lines.join('\n'), store, point ?? [])
+  }
   const out = h('pre', {
     class: 'out',
     attrs: { tabindex: '0', 'aria-label': 'Résultat de l’essai' },
   })
   const status = h('p', { class: 'status', attrs: { role: 'status' } })
   const render = () => {
-    out.textContent = lines.length > 0 ? lines.join('\n') : 'Pas encore de résultat.'
+    out.textContent = lines.length > 0 ? masked() : 'Pas encore de résultat.'
   }
-  const text = () => lines.join('\n')
+  const text = masked
 
   const copy = button(
     'Copier le résultat',
     () => {
-      void ctx.env.copy(maskStore(text(), ctx.store())).then((done) => {
+      void ctx.env.copy(text()).then((done) => {
         status.textContent = done
           ? 'Copié. Le numéro du magasin est masqué dans le texte copié.'
           : 'La copie a échoué : appuie longuement sur le texte pour le sélectionner.'
