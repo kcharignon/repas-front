@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   conclusions,
@@ -175,6 +175,31 @@ describe('essai 3b : quantités', () => {
     })
     expect(text).toContain('Adresse du panier : sans suffixe de ville')
     expect(text).toContain('Content-Type, Accept, X-Requested-With, zcwb')
+  })
+
+  it('masque le magasin et la ville à l’écran comme à la copie', async () => {
+    const reply = json([
+      {
+        eTypeEvenement: 1,
+        sIdUnique: 'Panier123456',
+        sIdUniquePanier: 'Panier123456',
+        lstProduitsLight: [{ iIdProduit: FLOUR_ID, iQtePanier: 3 }],
+      },
+    ])
+    const harness = mount({
+      path: '/magasin-123456-123456-Ville-Test/recherche.aspx',
+      route: (url) => (url.includes('panier.aspx') ? reply.clone() : html(searchPage([FLOUR]))),
+    })
+    await ready(harness)
+    click(harness.root, "Préparer l'étape 1")
+
+    const screen = await confirm(harness, 'Oui, fixer à 3', 1)
+    click(harness.root, 'Copier le résultat')
+    await vi.waitFor(() => expect(harness.copied).toHaveLength(1))
+
+    expect(screen).toContain('sIdUniquePanier=Panier[n° magasin]')
+    expect(screen).not.toMatch(/123456|Ville-Test/i)
+    expect(harness.copied[0]).toBe(screen)
   })
 
   it('envoie les corps du site : identifiant en texte, contexte à l’ajout seulement', async () => {

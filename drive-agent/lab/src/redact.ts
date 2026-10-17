@@ -48,9 +48,14 @@ function maskCity(text: string, city: string | null): string {
 
 /**
  * Remplace le magasin (numéro, début d'adresse `magasin-…`) par des repères neutres.
- * Appliqué au texte copié : le dépôt est public et le magasin de l'utilisateur est une donnée personnelle.
+ * Appliqué à tout texte affiché ou copié : le dépôt est public et le magasin de l'utilisateur est une donnée personnelle.
+ * `extra` : d'autres numéros à masquer (le point de livraison lu dans la page, qui peut différer de ceux de l'adresse).
  */
-export function maskStore(text: string, store: StoreInfo | null): string {
+export function maskStore(
+  text: string,
+  store: StoreInfo | null,
+  extra: readonly string[] = [],
+): string {
   let masked = maskEmails(text)
   if (!store) return masked
   const segment = store.basePath.slice(1)
@@ -68,6 +73,12 @@ export function maskStore(text: string, store: StoreInfo | null): string {
   const ids = new Set([store.id])
   if (store.secondId !== null) ids.add(store.secondId)
   if (/^\d+$/.test(store.second)) ids.add(store.second)
+  for (const value of extra) if (value.length >= 4) ids.add(value)
+  // Le site écrit parfois un numéro sans ses zéros de tête (« 053701 » devient « 53701 »).
+  for (const id of ids) {
+    const bare = id.replace(/^0+/, '')
+    if (bare.length >= 4) ids.add(bare)
+  }
   for (const id of ids) {
     masked = masked.replace(new RegExp(`(?<!\\d)${escapeRegExp(id)}(?!\\d)`, 'g'), '[n° magasin]')
   }

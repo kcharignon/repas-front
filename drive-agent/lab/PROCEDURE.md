@@ -17,49 +17,52 @@ Durée : environ une heure, avec ton téléphone et ton ordinateur.
 ## Ce que le banc fait, et ne fait pas
 
 - Il **ne lit jamais** ton mot de passe, tes cookies ni tes identifiants. Pour le cookie anti-robot `datadome`, il dit seulement « oui » ou « non » (il existe, ou pas).
-- Il **n'envoie rien** ailleurs que sur le site Leclerc où tu es. Seule exception : les essais 7 et 8 ouvrent `https://kantin.eu/` quand tu le demandes.
+- Il **n'envoie rien** ailleurs que sur le site Leclerc où tu es. Seules exceptions : le chargeur télécharge le banc depuis `cdn.jsdelivr.net` à chaque lancement, et les essais 7 et 8 ouvrent `https://kantin.eu/` quand tu le demandes.
 - Il **n'écrit dans ton panier** que dans les essais 3, 3b et 12, **un seul produit à la fois**, après ta confirmation **avant chaque écriture**. Il le retire ensuite, si tu confirmes encore.
 - Il **ne valide jamais** une commande, ne choisit pas de créneau, ne paie rien.
 - Il **s'arrête tout seul** à la première réponse « 403 » ou « 429 » (le site nous demande de ralentir).
 
 **Règle d'or :** ne colle jamais dans une conversation ou dans le rapport un mot de passe, un code reçu par SMS, un cookie, une adresse e-mail ou le numéro de ton magasin. Le bouton « Copier le résultat » masque déjà le numéro du magasin. Relis quand même avant de coller.
 
-> **Tu as déjà le favori `lab` et tu veux seulement refaire l'ajout au panier (DRV-008) ?** Refais la partie A (`make lab` donne une nouvelle chaîne), puis remplace l'adresse du favori `lab` existant par la nouvelle chaîne (gestionnaire de favoris de Chrome, **⋮**, **Modifier**). Sur l'ordinateur, tape `lab` dans la barre d'adresse sur une page de ton magasin. Puis fais, dans l'ordre : étape 18 (essai 2), étape 19 (essai 10), étapes 20 à 23 (essai 3), étapes 24 à 29 (essai 3b).
+> **Tu as déjà le favori `lab` et tu veux seulement refaire l'ajout au panier (DRV-008) ?** Après chaque mise à jour du banc, l'agent te donne un nouveau numéro de commit : refais les étapes 1 à 4 de la partie A (le chargeur change, son adresse est liée à ce commit), en modifiant le favori `lab` existant. Sur l'ordinateur, tape `lab` dans la barre d'adresse sur une page de ton magasin. Puis fais, dans l'ordre : étape 18 (essai 2), étape 19 (essai 10), étapes 20 à 23 (essai 3), étapes 24 à 29 (essai 3b).
 
-## Partie A : préparer le favori (sur ton ordinateur)
+## Partie A : préparer le favori « chargeur » (sur ton ordinateur)
 
-1. Ouvre un terminal dans le dossier du front : `cd /home/kantin/Projet/repas-front`.
+Le **chargeur** est un tout petit favori (environ 1 Ko, donc facile à installer). Il va chercher le vrai banc d'essai sur Internet, chez jsDelivr (un service public qui héberge des fichiers), et le lance sur la page où tu es. Il vérifie que le fichier reçu est exactement celui qu'on a publié (grâce à une « empreinte », comme une signature). Si ce n'est pas le bon, il ne le lance pas et te le dit.
 
-2. Tape `make lab` puis Entrée. Attends la fin (quelques secondes, Docker doit tourner). Tu dois lire :
+1. Ouvre un terminal dans le dossier du front : `cd /home/kantin/Projet/repas-front`. Puis récupère la dernière version : tape `git checkout main`, Entrée, puis `git pull`, Entrée.
+
+2. Tape `make lab-loader sha=$(git rev-parse HEAD)` puis Entrée. Attends la fin (quelques secondes, Docker doit tourner). Tu dois lire :
 
    ```text
-   Favori du banc d'essai construit : drive-agent/lab/dist/lab-bookmarklet.txt
-   Taille de la chaîne : … octets (… Ko), limite 60000 octets (60,0 Ko)
-   …
-   Fin de la chaîne : …;void 0
+   Chargeur du banc d'essai construit : drive-agent/lab/dist/lab-loader.txt
+   Taille de la chaîne : … caractères, limite 1500
+   Adresse du banc : https://cdn.jsdelivr.net/gh/kcharignon/repas-front@…/drive-agent/lab/published/lab.js
+   Empreinte : sha384-…
    ```
 
-   Si tu lis « Trop gros », arrête-toi et préviens l'agent.
+   - L'adresse du banc contient le numéro du commit (`sha`) : elle ne change jamais pour un commit donné. Pour refaire le chargeur plus tard (après une mise à jour du banc), refais cette étape.
+   - Si tu lis « ne correspond plus au banc actuel », le banc a changé sans être republié : préviens l'agent. Il lance `make lab-publish`, ouvre une PR, puis te redonne un numéro de commit.
 
-3. La chaîne à utiliser est dans le fichier `drive-agent/lab/dist/lab-bookmarklet.txt`. C'est une seule très longue ligne. Elle commence par `javascript:` et se termine par `;void 0`.
-
-4. Copie cette chaîne dans le presse-papiers de Windows. Dans le même terminal, tape :
+3. La chaîne est dans le fichier `drive-agent/lab/dist/lab-loader.txt`. C'est une seule ligne courte. Elle commence par `javascript:` et se termine par `;void 0`. Copie-la dans le presse-papiers de Windows. Dans le même terminal, tape :
 
    ```text
-   clip.exe < drive-agent/lab/dist/lab-bookmarklet.txt
+   clip.exe < drive-agent/lab/dist/lab-loader.txt
    ```
 
    Autre façon : tape `explorer.exe drive-agent/lab/dist`, ouvre le fichier avec le Bloc-notes, puis Ctrl+A et Ctrl+C.
 
-5. Envoie cette chaîne à toi-même **par e-mail** : crée un nouveau message pour ta propre adresse, colle (Ctrl+V) dans le texte du message, envoie. Une note (Google Keep) ou un fichier dans ton Drive marchent aussi.
+4. Dans Chrome **sur l'ordinateur** (connecté avec le même compte Google que le téléphone, synchronisation des favoris activée), ouvre le gestionnaire de favoris (Ctrl+Maj+O), menu **⋮** en haut à droite, **Ajouter un nouveau favori**. Nom : `lab` (trois lettres, en minuscules). URL : colle la chaîne (Ctrl+V). Enregistre. Si un favori `lab` existe déjà, modifie-le (**⋮**, **Modifier**) et remplace son adresse.
 
-   **N'utilise pas** WhatsApp, Telegram ni Signal : ces applications mettent le texte en forme et peuvent le casser.
+5. Attends une minute. Sur le **téléphone**, ouvre Chrome, menu **⋮**, **Favoris** (puis **Appareil mobile** ou le dossier des favoris de l'ordinateur) : le favori `lab` doit apparaître. S'il est là, passe à la partie C. S'il n'arrive pas après cinq minutes, fais la partie B.
 
-   _Autre solution, très fiable : Chrome synchronisé._ Si Chrome est connecté au même compte Google sur ton ordinateur et sur ton téléphone, crée le favori sur l'ordinateur : ouvre le gestionnaire de favoris (Ctrl+Maj+O), menu **⋮** en haut à droite, **Ajouter un nouveau favori**, nom `lab`, URL : colle la chaîne (Ctrl+V). Après quelques instants, le favori apparaît sur le téléphone (Chrome, **Favoris**, **Appareil mobile**). Tu peux alors passer directement à la partie C.
+   _Repli pour l'ordinateur seulement : l'ancien gros favori._ Il contient tout le banc (près de 60 Ko), donc il est trop gros pour la synchronisation vers le téléphone (limite entre 8 et 16 Ko, DRV-006). Pour l'ordinateur : `make lab`, puis `clip.exe < drive-agent/lab/dist/lab-bookmarklet.txt`, puis crée le favori comme à l'étape 4. Si tu lis « Trop gros », arrête-toi et préviens l'agent.
 
-## Partie B : créer le favori sur Chrome Android
+   _Pour l'agent (mise à jour du banc)._ `make lab-publish` copie le banc dans `drive-agent/lab/published/lab.js` ; une PR le fusionne ; puis `make lab-loader sha=<commit de fusion>` ; vérifier avec `curl` (seulement vers `cdn.jsdelivr.net`) que l'adresse répond 200, avec `Access-Control-Allow-Origin: *`, et que l'empreinte du fichier reçu est celle de la chaîne.
 
-6. Sur ton téléphone, ouvre le message reçu. Appuie longuement sur la chaîne, choisis **Tout sélectionner**, puis **Copier**.
+## Partie B : si le favori n'arrive pas sur le téléphone, le créer à la main
+
+6. Envoie la chaîne du chargeur à toi-même **par e-mail** : crée un nouveau message pour ta propre adresse, colle (Ctrl+V) dans le texte du message, envoie. Une note (Google Keep) ou un fichier dans ton Drive marchent aussi. **N'utilise pas** WhatsApp, Telegram ni Signal : ces applications mettent le texte en forme et peuvent le casser. Puis, sur ton téléphone, ouvre le message reçu. Appuie longuement sur la chaîne, choisis **Tout sélectionner**, puis **Copier**.
 
 7. Ouvre Chrome et va sur n'importe quelle page (par exemple `https://kantin.eu`).
 
@@ -97,7 +100,7 @@ Pour relancer le banc plus tard, refais l'étape 15. Pour le fermer, touche **Fe
 
 ## Partie E : les 12 essais et le 3b
 
-Pour chaque essai : touche son nom dans le menu, fais ce qui est écrit, puis touche **Copier le résultat**. Colle le texte dans un message à toi-même (étape 5) pour le garder. Touche **← Menu** pour revenir.
+Pour chaque essai : touche son nom dans le menu, fais ce qui est écrit, puis touche **Copier le résultat**. Colle le texte dans un message à toi-même (un e-mail, comme à l'étape 6) pour le garder. Touche **← Menu** pour revenir.
 
 **Ordre conseillé :** 1, 2, 10, 3, 3b, 12, 5, 6, 9, 4, 11, 7, 8. Les essais 7 et 8 te font quitter la page : fais-les en dernier. Les essais 4 et 11 font beaucoup de recherches : fais-les vers la fin, parce qu'ils peuvent déclencher un blocage.
 
@@ -244,8 +247,9 @@ Le « fragment » est la partie de l'adresse après le signe `#`. On veut savoir
 
 ## Partie G : si ça ne marche pas
 
-- **Rien ne se passe quand je touche le favori.** Vérifie que l'URL du favori commence par `javascript:` et finit par `;void 0` (Chrome, **⋮**, **Favoris**, appui long, **Modifier**). Recommence la copie depuis l'e-mail (pas depuis une messagerie). Essaie la solution « Chrome synchronisé » de l'étape 5. Essaie aussi sur ton ordinateur : ouvre une page de ton magasin dans Chrome de bureau, crée le favori de la même façon, tape `lab` dans la barre d'adresse. Dis à l'agent ce qui marche et ce qui ne marche pas.
-- **Chrome refuse de coller toute la chaîne, ou la coupe.** Utilise la solution « Chrome synchronisé » (créer le favori sur l'ordinateur). Note-le dans le rapport.
+- **Rien ne se passe quand je touche le favori.** Vérifie que l'URL du favori commence par `javascript:` et finit par `;void 0` (Chrome, **⋮**, **Favoris**, appui long, **Modifier**). Recommence la copie depuis l'e-mail (pas depuis une messagerie). Essaie la synchronisation de la partie A (étapes 4 et 5). Essaie aussi sur ton ordinateur : ouvre une page de ton magasin dans Chrome de bureau, crée le favori de la même façon, tape `lab` dans la barre d'adresse. Dis à l'agent ce qui marche et ce qui ne marche pas.
+- **Chrome refuse de coller toute la chaîne, ou la coupe.** Utilise la synchronisation de la partie A (créer le favori sur l'ordinateur). Note-le dans le rapport.
+- **Une fenêtre dit « Banc d'essai : chargement impossible (réseau, empreinte ou adresse) ».** Le chargeur n'a pas pu récupérer le banc : vérifie ta connexion, recharge la page et recommence. Si ça persiste, refais la partie A (étapes 1 à 4) pour avoir un chargeur à jour, et préviens l'agent.
 - **Un message « Banc d'essai : lancement impossible (…) » s'affiche.** Recopie le message entre parenthèses dans le rapport.
 - **« La requête n'a pas été comprise par Leclerc (HTTP 404) ».** Ce n'est pas un blocage : le site a répondu, mais pas à cette requête. Copie le résultat (essai 3 ou 3b) et donne-le à l'agent. Essaie aussi l'essai 3 avec la case « Diagnostic » cochée.
 - **« Blocage probable (403/429) ».** C'est le site qui nous demande de ralentir. Recharge-le dans Chrome, attends dix minutes. Note après combien de requêtes ça s'est produit.

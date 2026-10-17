@@ -261,6 +261,26 @@ describe('maskStore', () => {
     expect(maskStore('Ab /magasin-123456-123456-Ab/x', tiny)).toBe('Ab /magasin-[masqué]/x')
   })
 
+  it('masque aussi les numéros supplémentaires demandés, par exemple le point de livraison', () => {
+    const withCity = parseStore({ ...LOCATION, pathname: CITY_PATH }) as StoreInfo
+
+    expect(maskStore('sIdUnique=Panier654321 ; point 654321 ; 6543210', withCity, ['654321'])).toBe(
+      'sIdUnique=Panier[n° magasin] ; point [n° magasin] ; 6543210',
+    )
+    expect(maskStore('Panier123', withCity, ['123'])).toBe('Panier123')
+  })
+
+  it('masque un numéro écrit sans ses zéros de tête', () => {
+    const padded = parseStore({
+      ...LOCATION,
+      pathname: '/magasin-053701-053701-Ville-Test/recherche.aspx',
+    }) as StoreInfo
+
+    expect(maskStore('sIdUnique=Panier53701 et Panier053701', padded)).toBe(
+      'sIdUnique=Panier[n° magasin] et Panier[n° magasin]',
+    )
+  })
+
   it('masque les adresses e-mail même sans magasin', () => {
     expect(maskStore('a@b.fr', null)).toBe('[adresse e-mail masquée]')
   })

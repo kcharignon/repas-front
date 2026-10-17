@@ -464,6 +464,60 @@ describe('essai 3 : réponses du panier', () => {
     expect(harness.copied[0]).not.toMatch(/Ville-Test|123456/i)
   })
 
+  it('masque à l’écran comme à la copie tout ce que l’ajout et le retrait affichent du magasin', async () => {
+    // Given : une page de magasin INVENTÉE, un point de livraison INVENTÉ différent des numéros de l’adresse,
+    // et une réponse du panier qui répète ces numéros dans ses évènements et dans le produit
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      '<script type="text/plain">{"sNoPointLivraison":"654321"}</script>',
+    )
+    const reply = () =>
+      json([
+        {
+          eTypeEvenement: 101,
+          sIdUnique: `Produit${FLOUR_ID}`,
+          iIdProduit: FLOUR_ID,
+          sIdUniquePanier: 'Panier123456',
+          sRefPanier: 'Panier654321',
+        },
+        {
+          eTypeEvenement: 1,
+          sIdUnique: 'Panier123456',
+          sIdUniquePanier: 'Panier123456',
+          sRefPanier: 'Panier654321',
+          sLienMagasin: '/magasin-123456-123456-Ville-Test/panier.aspx',
+          lstProduitsLight: [{ iIdProduit: FLOUR_ID, iQtePanier: 1 }],
+        },
+      ])
+    const harness = mount({
+      path: '/magasin-123456-123456-Ville-Test/recherche.aspx',
+      route: (url) => (url.includes('panier.aspx') ? reply() : html(searchPage([FLOUR]))),
+    })
+    await searched(harness)
+    openEssai(harness, 3)
+    pick(harness, FLOUR_ID)
+
+    // When : ajout, puis retrait
+    click(harness.root, 'Préparer l’ajout')
+    click(harness.root, 'Oui, ajouter 1 au panier')
+    await untilOutput(harness.root, 'Quantité obtenue')
+    click(harness.root, 'Retirer ce produit du panier')
+    click(harness.root, 'Oui, retirer du panier')
+    const screen = await untilOutput(harness.root, 'Retrait demandé')
+    click(harness.root, 'Copier le résultat')
+    await vi.waitFor(() => expect(harness.copied).toHaveLength(1))
+
+    // Then : ni l’écran ni le texte copié ne montrent le numéro, le point de livraison ou la ville
+    expect(screen).toContain('sIdUniquePanier=Panier[n° magasin]')
+    expect(screen).toContain('sIdUnique=Panier[n° magasin]')
+    expect(screen).toContain(`Produit ${FLOUR_ID} dans la réponse`)
+    for (const text of [screen, harness.copied[0] ?? '']) {
+      expect(text).not.toMatch(/123456|654321|Ville-Test/i)
+    }
+    expect(harness.copied[0]).toBe(screen)
+    document.querySelectorAll('script[type="text/plain"]').forEach((node) => node.remove())
+  })
+
   it('dit quand la forme de l’adresse est inattendue et garde le segment complet', async () => {
     const harness = mount({ path: '/magasin-123456-Ville-Test/recherche.aspx' })
     await searched(harness)

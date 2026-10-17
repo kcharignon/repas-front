@@ -124,10 +124,16 @@ fixtures: ## Create the demo accounts and data in the back dev database: admin@r
 	@echo "✅ Connecte-toi sur http://localhost:$(FRONT_PORT) avec admin@repas.fr (administrateur) ou user@repas.fr, mot de passe : M0t 2 p@sse"
 
 ## —— Drive Leclerc 🛒 ————————————————————————————————————————————————————
-.PHONY: lab
+.PHONY: lab lab-publish lab-loader
 
 lab: ## Build the throwaway drive test bookmarklet (drive-agent/lab) into drive-agent/lab/dist/lab-bookmarklet.txt and print its size
 	@$(RUN) npm run --silent lab:build
+
+lab-publish: ## Copy the built lab.js into drive-agent/lab/published/ (served by jsDelivr once merged; commit it in a PR)
+	@$(RUN) npm run --silent lab:build -- --publish
+
+lab-loader: ## Build the short loader bookmarklet for a merged commit: make lab-loader sha=<40-char commit> (writes dist/lab-loader.txt)
+	@$(RUN) npm run --silent lab:loader -- $(sha)
 
 ## —— Production image 📦 ————————————————————————————————————————————————————
 .PHONY: prod prod-stop
