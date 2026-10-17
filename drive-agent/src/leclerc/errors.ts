@@ -1,0 +1,25 @@
+/** Les erreurs de l'adaptateur Leclerc ; ce sont des codes d'erreur du protocole (`ErrorCode`). */
+export type LeclercErrorCode =
+  'NOT_LOGGED_IN' | 'BLOCKED' | 'CONTRACT_CHANGED' | 'NETWORK' | 'UNSUPPORTED_PAGE'
+
+const MESSAGES: Record<LeclercErrorCode, string> = {
+  NOT_LOGGED_IN: 'Tu n’es pas connecté au drive.',
+  BLOCKED: 'Le site a refusé les requêtes (blocage anti-robot).',
+  CONTRACT_CHANGED: 'Le site ne répond plus comme prévu.',
+  NETWORK: 'Le site ne répond pas.',
+  UNSUPPORTED_PAGE: 'Cette page n’est pas une page de magasin du drive.',
+}
+
+/**
+ * Une erreur de l'adaptateur. Le message est un texte fixe : il ne contient jamais d'en-tête, de cookie ni de contenu de page
+ * (le message part dans le résultat envoyé à Repas, et dans le journal de diagnostic).
+ */
+export class LeclercError extends Error {
+  readonly code: LeclercErrorCode
+
+  constructor(code: LeclercErrorCode) {
+    super(MESSAGES[code])
+    this.name = 'LeclercError'
+    this.code = code
+  }
+}
