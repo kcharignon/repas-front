@@ -12,6 +12,12 @@
     },
     {
       "path": "./tsconfig.lab.json"
+    },
+    {
+      "path": "./tsconfig.agent.json"
+    },
+    {
+      "path": "./tsconfig.agent-test.json"
     }
   ]
 }

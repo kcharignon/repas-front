@@ -77,7 +77,7 @@ audit: ## Check the production dependencies against known security advisories
 outdated: ## List the dependencies with a newer version, majors included
 	@$(RUN) npm outdated || true
 
-quality: check audit api-verify ## Run everything the CI runs except the browsers
+quality: check audit api-verify agent-verify ## Run everything the CI runs except the browsers
 
 ## —— End to end 🎭 ——————————————————————————————————————————————————————————
 .PHONY: e2e e2e-offline e2e-visual e2e-report lighthouse
@@ -124,7 +124,16 @@ fixtures: ## Create the demo accounts and data in the back dev database: admin@r
 	@echo "✅ Connecte-toi sur http://localhost:$(FRONT_PORT) avec admin@repas.fr (administrateur) ou user@repas.fr, mot de passe : M0t 2 p@sse"
 
 ## —— Drive Leclerc 🛒 ————————————————————————————————————————————————————
-.PHONY: lab lab-publish lab-loader
+.PHONY: agent-build agent-verify agent-test lab lab-publish lab-loader
+
+agent-build: ## Build the drive agent (drive-agent/): dist/agent.js and dist/manifest.json (version, size, SHA-384)
+	@$(RUN) npm run --silent agent:build
+
+agent-verify: ## Build the drive agent twice and fail if the two builds differ (reproducibility)
+	@$(RUN) npm run --silent agent:verify
+
+agent-test: ## Run the unit tests of the drive agent only (build chain, code rules, agent)
+	@$(RUN) npm run --silent agent:test
 
 lab: ## Build the throwaway drive test bookmarklet (drive-agent/lab) into drive-agent/lab/dist/lab-bookmarklet.txt and print its size
 	@$(RUN) npm run --silent lab:build
