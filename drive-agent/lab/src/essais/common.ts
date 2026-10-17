@@ -1,5 +1,6 @@
 // Outil de test jetable, à supprimer après la décision G1 (DRV-005).
 // Ce que plusieurs essais font de la même façon : exiger un magasin, chercher, décrire une réponse, montrer un produit.
+import type { CartSummary } from '../cart'
 import { PRODUCTS_SHOWN } from '../config'
 import { getPage, type Reply } from '../http'
 import { extractProducts, findEanKeys, keywordExcerpt, type ParseResult } from '../parse'
@@ -25,6 +26,21 @@ export function describeReply(reply: Reply): string {
 
 export const BLOCK_MESSAGE =
   'Blocage probable (403/429) : on arrête. Recharge le site dans Chrome, attends, puis recommence plus tard.'
+
+/** Dernière ligne de chaque boîte de confirmation d'une écriture. */
+export const CONFIRM_NOTE = "Rien n'est envoyé tant que tu ne touches pas le bouton ci-dessous."
+
+/** Réponse hors 2xx ou sans JSON qui n'est pas un 403/429 (404, page d'erreur…) : ce n'est pas l'anti-robot. */
+export function notUnderstoodMessage(status: number): string {
+  return `La requête n'a pas été comprise par Leclerc (HTTP ${status}). Ce n'est pas un blocage de l'anti-robot.`
+}
+
+/** Le message à ajouter sous la réponse d'une écriture au panier : blocage, requête non comprise, ou rien. */
+export function cartVerdict(reply: Reply, summary: CartSummary): string[] {
+  if (reply.blocked || summary.blocked) return [BLOCK_MESSAGE]
+  if (summary.rejected) return [notUnderstoodMessage(reply.status)]
+  return []
+}
 
 export interface SearchOutcome {
   reply: Reply

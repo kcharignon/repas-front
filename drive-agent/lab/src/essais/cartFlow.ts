@@ -1,18 +1,27 @@
 // Outil de test jetable, à supprimer après la décision G1 (DRV-005).
-// Écriture au panier des essais 3 et 12 : un seul produit, quantité 1, confirmation avant chaque écriture, aucune boucle.
-import { cartBody, summarizeCartResponse } from '../cart'
+// Écriture au panier des essais 3, 3b et 12 : un seul produit, confirmation avant chaque écriture, aucune boucle.
+import { cartBody, summarizeCartResponse, type CartSummary } from '../cart'
 import { cartUrl, findDeliveryPoint, type StoreInfo } from '../store'
-import { postForm } from '../http'
+import { postForm, type Reply } from '../http'
 import type { Product } from '../parse'
 import { append, clear, h } from '../ui/dom'
 import type { ScreenContext } from '../ui/types'
 import { button, confirmBox, labelled, type ResultsPanel } from '../ui/widgets'
-import { BLOCK_MESSAGE, describeReply, needStore } from './common'
+import { CONFIRM_NOTE, cartVerdict, describeReply, needStore } from './common'
 
 /** Une seule écriture à la fois par banc : les requêtes d'écriture ne se chevauchent jamais. */
 const writing = new WeakSet<object>()
 
-const BUSY = ['Une requête au panier est déjà en cours : attends sa fin.']
+export const BUSY = ['Une requête au panier est déjà en cours : attends sa fin.']
+
+/** Prend le verrou d'écriture du banc ; `null` s'il est déjà pris. Appeler la fonction rendue le libère. */
+export function lockWriting(ctx: ScreenContext): (() => void) | null {
+  if (writing.has(ctx.state)) return null
+  writing.add(ctx.state)
+  return () => {
+    writing.delete(ctx.state)
+  }
+}
 
 export interface AddCheck {
   allowed: boolean
@@ -47,6 +56,71 @@ export function checkBeforeAdd(products: readonly Product[], productId: string):
   return { allowed: true, warnings: [] }
 }
 
+export interface CartCall {
+  reply: Reply
+  /** `null` si la requête n'a pas abouti (réseau coupé). */
+  summary: CartSummary | null
+  /** 403/429 ou page de contrôle : on s'arrête. */
+  blocked: boolean
+  /** Message sous la réponse : blocage, ou requête non comprise (404, page d'erreur…). Vide si tout va bien. */
+  verdict: string[]
+  /** D'où vient le point de livraison envoyé (sa valeur n'est jamais affichée). */
+  pointFrom: 'page' | 'adresse'
+}
+
+export interface CartWrite {
+  productId: string
+  action: 1 | 2
+  quantity: number
+  /** Variante de diagnostic : sans l'objet de contexte à l'ajout. */
+  withoutContext?: boolean
+}
+
+/** Une écriture au panier : point de livraison lu dans la page, requête du site, réponse résumée. */
+export async function sendCart(
+  ctx: ScreenContext,
+  store: StoreInfo,
+  write: CartWrite,
+): Promise<CartCall> {
+  const point = findDeliveryPoint(ctx.env.win.document.documentElement.outerHTML, store)
+  const reply = await postForm(
+    ctx.env.fetch,
+    cartUrl(store),
+    cartBody({
+      action: write.action,
+      productId: write.productId,
+      quantity: write.quantity,
+      deliveryPoint: point.value,
+      searchText: ctx.state.lastQuery,
+      withoutContext: write.withoutContext,
+    }),
+    ctx.env.now,
+  )
+  if (reply.error !== null) {
+    return { reply, summary: null, blocked: false, verdict: [], pointFrom: point.from }
+  }
+  const summary = summarizeCartResponse(reply.text, reply.status, write.productId)
+  return {
+    reply,
+    summary,
+    blocked: reply.blocked || summary.blocked,
+    verdict: cartVerdict(reply, summary),
+    pointFrom: point.from,
+  }
+}
+
+export function pointLine(from: 'page' | 'adresse'): string {
+  return from === 'page'
+    ? 'Point de livraison : lu dans la page.'
+    : "Point de livraison : absent de la page, repris de l'adresse (peut être faux)."
+}
+
+/** Le contexte de recherche joint à l'ajout, en clair (le texte cherché n'a rien de personnel). */
+export function contextText(searchText: string | null, withoutContext: boolean): string {
+  if (withoutContext) return 'sans contexte (diagnostic)'
+  return `contexte de recherche « ${searchText ?? ''} »`
+}
+
 export interface AddOffer {
   productId: string
   label: string | null
@@ -54,7 +128,7 @@ export interface AddOffer {
   afterAdd?: (store: StoreInfo) => Promise<void>
 }
 
-function labelOf(label: string | null): string {
+export function labelOf(label: string | null): string {
   return label ? ` « ${label} »` : ''
 }
 
@@ -85,6 +159,39 @@ export function productPicker(
   return labelled('Produit de la dernière recherche (facultatif)', select)
 }
 
+export interface Preflight {
+  id: string
+  store: StoreInfo
+  warnings: string[]
+}
+
+/** Contrôles communs avant toute demande d'écriture : magasin, verrou, identifiant, produit déjà au panier. */
+export function preflight(
+  ctx: ScreenContext,
+  panel: ResultsPanel,
+  productId: string,
+): Preflight | null {
+  const store = needStore(ctx, panel)
+  if (!store) return null
+  if (writing.has(ctx.state)) {
+    panel.set(BUSY)
+    return null
+  }
+  const id = productId.trim()
+  if (!/^\d{1,12}$/.test(id)) {
+    panel.set([
+      "Identifiant invalide : des chiffres seulement (12 au plus), comme celui vu à l'essai 2.",
+    ])
+    return null
+  }
+  const check = checkBeforeAdd(ctx.state.lastProducts, id)
+  if (!check.allowed) {
+    panel.set(check.warnings)
+    return null
+  }
+  return { id, store, warnings: check.warnings }
+}
+
 /** Propose l'ajout d'un produit : contrôle, puis confirmation explicite, puis écriture, puis proposition de retrait. */
 export function offerAdd(
   ctx: ScreenContext,
@@ -92,34 +199,19 @@ export function offerAdd(
   zone: HTMLElement,
   offer: AddOffer,
 ): void {
-  const store = needStore(ctx, panel)
-  if (!store) return
-  if (writing.has(ctx.state)) {
-    panel.set(BUSY)
-    return
-  }
-  const id = offer.productId.trim()
-  if (!/^\d{1,12}$/.test(id)) {
-    panel.set([
-      "Identifiant invalide : des chiffres seulement (12 au plus), comme celui vu à l'essai 2.",
-    ])
-    return
-  }
-  const check = checkBeforeAdd(ctx.state.lastProducts, id)
-  if (!check.allowed) {
-    panel.set(check.warnings)
-    return
-  }
+  const checked = preflight(ctx, panel, offer.productId)
+  if (!checked) return
+  const { id, store, warnings } = checked
 
   clear(zone)
-  const withContext = h('input', { attrs: { type: 'checkbox' } })
+  const withoutContext = h('input', { attrs: { type: 'checkbox' } })
   append(
     zone,
     h(
       'label',
       { class: 'inline' },
-      withContext,
-      "Joindre un objet d'analytique vide (si l'ajout simple a échoué)",
+      withoutContext,
+      "Diagnostic : sans l'objet de contexte (le site, lui, le joint)",
     ),
   )
   confirmBox(
@@ -127,13 +219,13 @@ export function offerAdd(
     {
       message: [
         `Tu vas ajouter 1 exemplaire du produit ${id}${labelOf(offer.label)} à ton VRAI panier Leclerc.`,
-        ...check.warnings,
-        "Rien n'est envoyé tant que tu ne touches pas le bouton ci-dessous.",
+        ...warnings,
+        CONFIRM_NOTE,
       ],
       confirmLabel: 'Oui, ajouter 1 au panier',
     },
     () => {
-      void write(ctx, panel, zone, store, offer, id, withContext.checked)
+      void write(ctx, panel, zone, store, offer, id, withoutContext.checked)
     },
   )
 }
@@ -145,12 +237,12 @@ async function write(
   store: StoreInfo,
   offer: AddOffer,
   id: string,
-  withContext: boolean,
+  withoutContext: boolean,
 ): Promise<void> {
   clear(zone)
   writing.add(ctx.state)
   try {
-    await writeOnce(ctx, panel, zone, store, offer, id, withContext)
+    await writeOnce(ctx, panel, zone, store, offer, id, withoutContext)
   } finally {
     writing.delete(ctx.state)
   }
@@ -163,30 +255,23 @@ async function writeOnce(
   store: StoreInfo,
   offer: AddOffer,
   id: string,
-  withContext: boolean,
+  withoutContext: boolean,
 ): Promise<void> {
   panel.set([`Ajout du produit ${id}${labelOf(offer.label)}, quantité visée 1…`])
-  const point = findDeliveryPoint(ctx.env.win.document.documentElement.outerHTML, store)
-  const reply = await postForm(
-    ctx.env.fetch,
-    cartUrl(store),
-    cartBody({ action: 1, productId: id, quantity: 1, deliveryPoint: point.value, withContext }),
-    ctx.env.now,
-  )
+  const call = await sendCart(ctx, store, { productId: id, action: 1, quantity: 1, withoutContext })
   const lines = [
-    `Ajout du produit ${id}${labelOf(offer.label)} : action 1, quantité visée 1${withContext ? ", avec objet d'analytique vide" : ''}`,
-    describeReply(reply),
+    `Ajout du produit ${id}${labelOf(offer.label)} : action 1, quantité visée 1, ${contextText(ctx.state.lastQuery, withoutContext)}`,
+    describeReply(call.reply),
+    pointLine(call.pointFrom),
   ]
-  if (reply.error !== null) {
+  if (call.summary === null) {
     panel.set(lines)
     return
   }
-  const summary = summarizeCartResponse(reply.text, reply.status, id)
-  lines.push(...summary.lines)
-  if (reply.blocked || summary.blocked) lines.push(BLOCK_MESSAGE)
+  lines.push(...call.summary.lines, ...call.verdict)
   ctx.state.lastAdded = { productId: id, label: offer.label }
   panel.set(lines)
-  if (reply.blocked) return
+  if (call.blocked) return
 
   if (offer.afterAdd) await offer.afterAdd(store)
   append(
@@ -215,7 +300,7 @@ function askRemove(
     {
       message: [
         `Tu vas retirer le produit ${id}${labelOf(label)} de ton panier Leclerc (quantité mise à 0).`,
-        "Rien n'est envoyé tant que tu ne touches pas le bouton ci-dessous.",
+        CONFIRM_NOTE,
       ],
       confirmLabel: 'Oui, retirer du panier',
       danger: true,
@@ -255,19 +340,13 @@ async function removeOnce(
   label: string | null,
 ): Promise<void> {
   panel.add('', `Retrait du produit ${id}${labelOf(label)} : action 2, quantité 0…`)
-  const point = findDeliveryPoint(ctx.env.win.document.documentElement.outerHTML, store)
-  const reply = await postForm(
-    ctx.env.fetch,
-    cartUrl(store),
-    cartBody({ action: 2, productId: id, quantity: 0, deliveryPoint: point.value }),
-    ctx.env.now,
-  )
-  const lines = [describeReply(reply)]
-  if (reply.error === null) {
-    const summary = summarizeCartResponse(reply.text, reply.status, id)
-    lines.push(...summary.lines)
-    if (reply.blocked || summary.blocked) lines.push(BLOCK_MESSAGE)
-    else lines.push('Retrait demandé. Vérifie sur le site que le panier est revenu comme avant.')
+  const call = await sendCart(ctx, store, { productId: id, action: 2, quantity: 0 })
+  const lines = [describeReply(call.reply)]
+  if (call.summary !== null) {
+    lines.push(...call.summary.lines, ...call.verdict)
+    if (call.verdict.length === 0) {
+      lines.push('Retrait demandé. Vérifie sur le site que le panier est revenu comme avant.')
+    }
   }
   panel.add(...lines)
 }

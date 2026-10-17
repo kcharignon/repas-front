@@ -62,6 +62,7 @@ describe('isSensitiveKey', () => {
     'sIdSession',
     'sPrenom',
     'sNom',
+    'sNoPointLivraison',
   ])('reconnaît %s', (key) => {
     expect(isSensitiveKey(key)).toBe(true)
   })

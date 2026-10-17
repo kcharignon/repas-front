@@ -8,21 +8,36 @@ export interface CartRequest {
   /** 1 : ajouter ou augmenter ; 2 : diminuer ou retirer. */
   action: 1 | 2
   productId: string
-  /** Quantité absolue visée (pas une variation) ; 0 avec l'action 2 retire le produit. */
+  /** Quantité visée ; 0 avec l'action 2 retire le produit (le sens des autres valeurs est l'objet de l'essai 3b). */
   quantity: number
   deliveryPoint: string
-  /** Joint un objet d'analytique vide (`objContexteProvenanceArticle`) : facultatif d'après la source. */
-  withContext?: boolean
+  /** Dernier mot cherché (essai 2) : le site le joint au contexte de l'ajout ; vide s'il n'y en a pas. */
+  searchText?: string | null
+  /** Variante de diagnostic : n'envoie pas l'objet de contexte à l'ajout (le site, lui, l'envoie toujours). */
+  withoutContext?: boolean
 }
 
+/**
+ * Le champ `d` tel que le site l'envoie (relevé DRV-007) : identifiant de produit en TEXTE ; à l'ajout seulement,
+ * l'objet `objContexteProvenanceArticle` (origine 4, type de page 3, texte cherché, vue 0, « uni-2 »).
+ * L'ordre des clés est celui du site.
+ */
 export function cartPayload(request: CartRequest): string {
   const payload: Record<string, unknown> = {
     eTypeAction: request.action,
-    iIdProduit: Number(request.productId),
+    iIdProduit: request.productId,
     iQuantite: request.quantity,
     sNoPointLivraison: request.deliveryPoint,
   }
-  if (request.withContext) payload.objContexteProvenanceArticle = {}
+  if (request.action === 1 && !request.withoutContext) {
+    payload.objContexteProvenanceArticle = {
+      eOrigine: 4,
+      eTypePage: 3,
+      sTexteRecherche: request.searchText ?? '',
+      eVue: 0,
+      sInformationsComplementaires: 'uni-2',
+    }
+  }
   return JSON.stringify(payload)
 }
 
@@ -133,6 +148,12 @@ export interface CartSummary {
   lines: string[]
   /** Blocage de l'anti-bot reconnu (403, 429, page de contrôle). */
   blocked: boolean
+  /** Réponse que Leclerc n'a pas comprise : code hors 2xx ou texte qui n'est pas du JSON, sans être un blocage (404, page d'erreur…). */
+  rejected: boolean
+  /** Quantité du produit testé au panier après l'écriture (`iQtePanier`) ; `null` si la réponse ne la dit pas. */
+  obtained: number | null
+  /** Vrai : la quantité est déduite de l'absence du produit dans `lstProduitsLight` (il n'est plus au panier). */
+  obtainedByAbsence: boolean
 }
 
 function visibleText(text: string): string {
@@ -142,6 +163,102 @@ function visibleText(text: string): string {
     .replace(/<[^>]+>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'string' && /^\s*-?\d+(?:[.,]\d+)?\s*$/.test(value)) {
+    return Number(value.replace(',', '.'))
+  }
+  return null
+}
+
+/** Première valeur d'une clé : dans l'objet lui-même d'abord, puis plus profond. */
+function findKey(value: unknown, key: string, depth = 0): unknown {
+  if (depth > 6 || typeof value !== 'object' || value === null) return undefined
+  const record = asRecord(value)
+  if (record) {
+    if (key in record) return record[key]
+    for (const item of Object.values(record)) {
+      const found = findKey(item, key, depth + 1)
+      if (found !== undefined) return found
+    }
+    return undefined
+  }
+  for (const item of value as unknown[]) {
+    const found = findKey(item, key, depth + 1)
+    if (found !== undefined) return found
+  }
+  return undefined
+}
+
+function startsWithPanier(value: unknown): boolean {
+  return typeof value === 'string' && value.startsWith('Panier')
+}
+
+/** L'évènement d'état du panier : `eTypeEvenement` 1 dont l'identifiant (`sIdUnique`) commence par « Panier ». */
+function findCartEvent(events: readonly unknown[]): Record<string, unknown> | null {
+  const typed = events.map(asRecord).filter((record) => record?.eTypeEvenement === 1)
+  const named = typed.find(
+    (record) => startsWithPanier(record?.sIdUnique) || startsWithPanier(record?.sNomEvenement),
+  )
+  const withList = typed.find((record) => findKey(record, 'lstProduitsLight') !== undefined)
+  return named ?? withList ?? null
+}
+
+interface CartReading {
+  lines: string[]
+  obtained: number | null
+  byAbsence: boolean
+}
+
+/** Ce que l'évènement `Panier…` dit du produit testé et du panier : `lstProduitsLight`, `iQuantitePanier`, `sTotalAPayer`. */
+function readCart(events: readonly unknown[], productId: string): CartReading {
+  const event = findCartEvent(events)
+  if (event === null) {
+    return {
+      lines: ["Panier : pas d'évènement « Panier… », quantité obtenue non lue."],
+      obtained: null,
+      byAbsence: false,
+    }
+  }
+  const lines: string[] = []
+  const list = findKey(event, 'lstProduitsLight')
+  let obtained: number | null = null
+  let byAbsence = false
+  if (!Array.isArray(list)) {
+    lines.push('Panier : lstProduitsLight introuvable, quantité obtenue non lue.')
+  } else {
+    const entry = list
+      .map(asRecord)
+      .find((item) => item !== null && String(item.iIdProduit) === productId)
+    if (entry) {
+      obtained = asNumber(entry.iQtePanier)
+      const available = asNumber(entry.iQteDisponible) ?? '?'
+      const max = asNumber(entry.fQuantiteMax) ?? '?'
+      lines.push(
+        `Quantité obtenue du produit ${productId} (iQtePanier) : ${obtained ?? 'non lue'} ; iQteDisponible ${available} ; fQuantiteMax ${max}`,
+      )
+    } else {
+      obtained = 0
+      byAbsence = true
+      lines.push(
+        `Produit ${productId} absent de lstProduitsLight (${list.length} au panier) : quantité obtenue 0`,
+      )
+    }
+  }
+  const articles = asNumber(findKey(event, 'iQuantitePanier')) ?? '?'
+  const total = findKey(event, 'sTotalAPayer')
+  const totalText =
+    typeof total === 'string' || typeof total === 'number' ? shorten(total, 40) : '?'
+  lines.push(`Panier : iQuantitePanier ${articles} ; sTotalAPayer ${totalText}`)
+  return { lines, obtained, byAbsence }
 }
 
 /** Résume la réponse du panier sans jamais en recopier un cookie, un jeton ou une donnée de compte. */
@@ -154,15 +271,18 @@ export function summarizeCartResponse(
   const lines: string[] = []
   const parsed = parseJson(text.trim())
   const events = parsed === undefined ? null : eventsOf(parsed)
+  const rejected = !blocked && (status < 200 || status >= 300 || events === null)
 
   if (events === null) {
     lines.push(`Réponse non JSON (${text.length} caractères).`)
     const excerpt = maskEmails(visibleText(text)).slice(0, EXCERPT_CHARS)
     if (excerpt) lines.push(`Début du texte : ${excerpt}`)
-    return { lines, blocked }
+    return { lines, blocked, rejected, obtained: null, obtainedByAbsence: false }
   }
 
   lines.push(`Réponse JSON : ${events.length} évènement(s).`)
+  const cart = readCart(events, productId)
+  lines.push(...cart.lines)
   events.slice(0, 8).forEach((event, index) => {
     const pairs: string[] = []
     flatten(event, '', pairs, 14)
@@ -184,5 +304,11 @@ export function summarizeCartResponse(
     flatten(item, '', pairs, 12)
     lines.push(`Produit ${productId} dans la réponse : ${pairs.join(' ; ')}`)
   })
-  return { lines, blocked }
+  return {
+    lines,
+    blocked,
+    rejected,
+    obtained: cart.obtained,
+    obtainedByAbsence: cart.byAbsence,
+  }
 }
