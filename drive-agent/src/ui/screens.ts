@@ -1,8 +1,10 @@
 // Les écrans : chacun reçoit ses données et un rappel `answer`, et rend ses nœuds. Aucune logique d'envoi ici.
-import { append, h, type Child } from './dom'
+import { append, clear, h, type Child } from './dom'
 import { ERROR_TEXTS, S } from './strings'
 import type {
   ChooserProps,
+  DiagnosticProps,
+  DiagnosticRow,
   EndProps,
   ErrorProps,
   PlacementProps,
@@ -296,6 +298,71 @@ const store: Renderer<'store'> = (props: StoreProps, answer) => {
   }
 }
 
+const diagnostic: Renderer<'diagnostic'> = (props: DiagnosticProps, answer) => {
+  const list = h('ul', { class: 'checks', attrs: { 'aria-label': S.diagnostic.list } })
+  const status = h('p', { class: 'hint', text: S.diagnostic.running, attrs: { role: 'status' } })
+  const area = h('textarea', {
+    attrs: { readonly: '', rows: '10', 'aria-label': S.diagnostic.report },
+  })
+  const copy = h('button', {
+    text: S.diagnostic.copy,
+    class: 'primary',
+    attrs: { type: 'button' },
+  })
+  const result = h(
+    'div',
+    { hidden: true },
+    h('p', { class: 'hint', text: S.diagnostic.privacy }),
+    area,
+    copy,
+  )
+  copy.addEventListener('click', () => {
+    void props.copy(area.value).then((done) => {
+      if (!done) {
+        area.focus()
+        area.select()
+      }
+      status.textContent = done ? S.diagnostic.copied : S.diagnostic.copyFailed
+    })
+  })
+  const close = button(S.diagnostic.close, () => answer('close'))
+  const paint = (rows: readonly DiagnosticRow[]) => {
+    clear(list)
+    for (const row of rows) {
+      append(
+        list,
+        h(
+          'li',
+          { class: `check-row ${row.tone}` },
+          h('span', { class: 'badge', text: row.badge }),
+          h('span', { class: 'what', text: row.label }),
+          row.detail === null ? null : h('span', { class: 'hint', text: row.detail }),
+        ),
+      )
+    }
+  }
+  return {
+    el: screen(
+      title(S.diagnostic.title),
+      h('p', { text: S.diagnostic.intro }),
+      list,
+      status,
+      result,
+      actions(close),
+    ),
+    focus: close,
+    start: () =>
+      props.start({
+        update: paint,
+        finish: (summary, report) => {
+          status.textContent = summary
+          area.value = report
+          result.hidden = false
+        },
+      }),
+  }
+}
+
 const error: Renderer<'error'> = (props: ErrorProps, answer) => {
   const close = button(S.error.close, () => answer('close'), props.canReturn ? 'plain' : 'primary')
   const back = button(S.error.back, () => answer('return'), 'primary')
@@ -345,6 +412,7 @@ export const RENDERERS: { [K in ScreenName]: Renderer<K> } = {
   chooser,
   placement,
   store,
+  diagnostic,
   error,
   end,
 }

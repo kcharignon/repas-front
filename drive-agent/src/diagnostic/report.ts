@@ -1,0 +1,63 @@
+// Le rapport du diagnostic (DRV-308) : un texte à copier et à coller, sans aucune donnée personnelle (pas de cookie, d'identifiant de
+// compte, d'adresse, de nom, de numéro de magasin entier ni de contenu de page). Il ne se construit qu'à partir des résultats des
+// contrôles, qui ne portent que des nombres et des phrases fixes.
+import type { DiagnosticRow } from '../ui'
+import { S } from '../ui'
+import { CHECK_IDS, type CheckId, type CheckResult, type PageFacts } from './checks'
+
+const T = S.diagnostic
+
+/** « OK », « KO BLOCKED », « NON TESTÉ » : ce qu'on lit devant chaque contrôle. */
+export function badgeOf(result: CheckResult): string {
+  if (result.status === 'OK') return T.badge.OK
+  if (result.status === 'NOT_TESTED') return T.badge.NOT_TESTED
+  return result.code ? `${T.badge.KO} ${result.code}` : T.badge.KO
+}
+
+/** Les lignes de l'écran : un contrôle sans résultat attend encore. */
+export function rowsOf(results: readonly CheckResult[]): DiagnosticRow[] {
+  const byId = new Map<CheckId, CheckResult>(results.map((result) => [result.id, result]))
+  return CHECK_IDS.map((id) => {
+    const result = byId.get(id)
+    if (!result) return { label: T.check[id], badge: T.badge.wait, detail: null, tone: 'wait' }
+    return {
+      label: T.check[id],
+      badge: badgeOf(result),
+      detail: result.detail ?? null,
+      tone: result.status === 'OK' ? 'ok' : result.status === 'KO' ? 'ko' : 'skip',
+    }
+  })
+}
+
+export function summaryOf(results: readonly CheckResult[]): string {
+  const count = (status: CheckResult['status']) =>
+    results.filter((result) => result.status === status).length
+  return T.finished(count('OK'), count('KO'), count('NOT_TESTED'))
+}
+
+/** « 2026-10-18 14:03 UTC » : à la minute, en temps universel. */
+export function dateOf(now: number): string {
+  return `${new Date(now).toISOString().slice(0, 16).replace('T', ' ')} UTC`
+}
+
+export function reportOf(
+  agentVersion: string,
+  now: number,
+  page: PageFacts | null,
+  results: readonly CheckResult[],
+): string {
+  const lines = [
+    T.text.title,
+    T.text.agent(agentVersion),
+    T.text.date(dateOf(now)),
+    ...(page ? [T.text.host(page.host), T.text.store(page.store)] : []),
+    '',
+    ...rowsOf(results).map(
+      (row) => `[${row.badge}] ${row.label}${row.detail === null ? '' : ` : ${row.detail}`}`,
+    ),
+    '',
+    T.text.noWrite,
+    T.privacy,
+  ]
+  return lines.join('\n')
+}

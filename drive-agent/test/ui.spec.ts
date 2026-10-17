@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { h } from '../src/ui/dom'
 import { createUi, ERROR_TEXTS, renderPicker, type UiHandle } from '../src/ui'
-import type { ChooserProps, EndProps, SummaryProps } from '../src/ui'
+import type { ChooserProps, DiagnosticRow, DiagnosticView, EndProps, SummaryProps } from '../src/ui'
 import { ERROR_CODES } from '../protocol'
 
 const HOSTILE = '<img src=x onerror="window.pwned=1"><script>window.pwned=1</script>'
@@ -386,6 +386,108 @@ describe('choix de produit (hôte)', () => {
     void handle.show('chooser', { ...base, mount: () => second })
     handle.close()
     expect(second).toHaveBeenCalledOnce()
+  })
+})
+
+describe('diagnostic', () => {
+  const rows: DiagnosticRow[] = [
+    { label: 'Version de l’agent', badge: 'OK', detail: 'version 0.5.0', tone: 'ok' },
+    { label: 'Recherche d’un mot courant', badge: 'KO BLOCKED', detail: null, tone: 'ko' },
+    { label: 'Cadre de même origine', badge: 'NON TESTÉ', detail: HOSTILE, tone: 'skip' },
+    { label: 'Contenu net des produits', badge: '…', detail: null, tone: 'wait' },
+  ]
+  const textarea = () => shadow().querySelector('textarea') as HTMLTextAreaElement
+
+  function openDiagnostic(copy: (text: string) => Promise<boolean> = () => Promise.resolve(true)) {
+    const handle = open()
+    let view: DiagnosticView | null = null
+    const answer = handle.show('diagnostic', { copy, start: (given) => (view = given) })
+    return { answer, view: () => view as unknown as DiagnosticView }
+  }
+
+  it('lance les contrôles une fois dans la page ; le rapport reste caché tant qu’ils tournent', () => {
+    const { view } = openDiagnostic()
+
+    expect(shadow().querySelector('h1')?.textContent).toBe('Diagnostic')
+    expect(shadow().textContent).toContain('Contrôles en cours…')
+    expect(shadow().querySelector('textarea')?.closest('[hidden]')).not.toBeNull()
+    expect(view()).toBeDefined()
+  })
+
+  it('montre chaque contrôle avec son résultat écrit en toutes lettres, et le détail tel quel même s’il contient du HTML', () => {
+    const { view } = openDiagnostic()
+
+    view().update(rows)
+
+    const items = [...shadow().querySelectorAll('.check-row')].map((item) => item.textContent)
+    expect(items).toEqual([
+      'OKVersion de l’agentversion 0.5.0',
+      'KO BLOCKEDRecherche d’un mot courant',
+      `NON TESTÉCadre de même origine${HOSTILE}`,
+      '…Contenu net des produits',
+    ])
+    expect(shadow().querySelector('.check-row img, .check-row script')).toBeNull()
+  })
+
+  it('remplace les lignes à chaque mise à jour, sans en ajouter', () => {
+    const { view } = openDiagnostic()
+
+    view().update(rows)
+    view().update(rows.slice(0, 2))
+
+    expect(shadow().querySelectorAll('.check-row')).toHaveLength(2)
+  })
+
+  it('à la fin : annonce le résumé et montre le rapport à copier', () => {
+    const { view } = openDiagnostic()
+
+    view().finish(
+      'Contrôles terminés : 1 réussi, 1 en échec, 0 non testé.',
+      'Repas Drive : diagnostic\nAgent : 0.5.0',
+    )
+
+    expect(shadow().querySelector('[role="status"]')?.textContent).toBe(
+      'Contrôles terminés : 1 réussi, 1 en échec, 0 non testé.',
+    )
+    expect(textarea().value).toBe('Repas Drive : diagnostic\nAgent : 0.5.0')
+    expect(textarea().readOnly).toBe(true)
+    expect(textarea().closest('[hidden]')).toBeNull()
+    expect(shadow().textContent).toContain('ne contient ni cookie')
+  })
+
+  it('« Copier le rapport » copie le texte et le dit', async () => {
+    const copy = vi.fn<(text: string) => Promise<boolean>>().mockResolvedValue(true)
+    const { view } = openDiagnostic(copy)
+    view().finish('fini', 'le rapport')
+
+    press('Copier le rapport')
+    await vi.waitFor(() =>
+      expect(shadow().querySelector('[role="status"]')?.textContent).toBe('Rapport copié.'),
+    )
+
+    expect(copy).toHaveBeenCalledWith('le rapport')
+  })
+
+  it('quand le navigateur refuse, sélectionne le texte et dit de le copier à la main', async () => {
+    const { view } = openDiagnostic(() => Promise.resolve(false))
+    view().finish('fini', 'le rapport')
+
+    press('Copier le rapport')
+    await vi.waitFor(() =>
+      expect(shadow().querySelector('[role="status"]')?.textContent).toBe(
+        'Copie impossible : sélectionne le texte du rapport et copie-le.',
+      ),
+    )
+
+    expect(shadow().activeElement).toBe(textarea())
+  })
+
+  it('« Fermer » rend « close »', async () => {
+    const { answer } = openDiagnostic()
+
+    press('Fermer')
+
+    await expect(answer).resolves.toBe('close')
   })
 })
 

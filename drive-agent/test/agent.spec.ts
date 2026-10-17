@@ -11,7 +11,8 @@ import {
   type SetupResultMessage,
 } from '../protocol'
 import { run } from '../src/agent'
-import { fakeUi, home, plan, skip } from './flow-helpers'
+import type { DiagnosticProps } from '../src/ui'
+import { fakeAdapter, fakeUi, home, plan, skip } from './flow-helpers'
 
 const PLAN = plan([home('sel'), skip('huile')])
 const ORIGIN = 'https://repas.exemple.invalid'
@@ -116,6 +117,84 @@ describe('avec le pont de l’application', () => {
     await vi.waitFor(() =>
       expect(screens.propsOf('error')).toEqual([{ code: 'INVALID_MESSAGE', canReturn: false }]),
     )
+  })
+})
+
+describe('le diagnostic', () => {
+  const asDiagnostic = () => window.history.replaceState(null, '', '#repas-diagnostic')
+
+  it('s’ouvre sur l’écran d’accueil quand l’adresse se termine par #repas-diagnostic ; « Fermer » ne fait rien d’autre', async () => {
+    asDiagnostic()
+    const screens = fakeUi({ welcome: () => 'close' })
+
+    run(window, { origin: ORIGIN, flow: { ui: screens.ui } })
+
+    await vi.waitFor(() => expect(screens.closed.count).toBe(1))
+    expect(screens.screens()).toEqual(['welcome'])
+  })
+
+  it('« Diagnostic » joue les contrôles en lecture seule : une recherche, aucun appel au panier, aucun message vers Repas', async () => {
+    asDiagnostic()
+    const navigate = vi.fn<(url: string) => void>()
+    const searches: string[] = []
+    const adapter = {
+      ...fakeAdapter().adapter,
+      searchProducts: (query: string) => {
+        searches.push(query)
+        return Promise.resolve([])
+      },
+    }
+    const shown: DiagnosticProps[] = []
+    const screens = fakeUi({
+      welcome: () => 'diagnostic',
+      diagnostic: (props) =>
+        new Promise<'close'>((resolve) => {
+          shown.push(props)
+          props.start({ update: () => undefined, finish: () => resolve('close') })
+        }),
+    })
+
+    run(window, { origin: ORIGIN, navigate, flow: { ui: screens.ui, adapter } })
+
+    await vi.waitFor(() => expect(screens.closed.count).toBe(1))
+    expect(screens.screens()).toEqual(['welcome', 'diagnostic'])
+    expect(searches).toEqual(['sel'])
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('le presse-papiers de la page copie le rapport ; un refus rend « false »', async () => {
+    asDiagnostic()
+    const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    Object.defineProperty(window.navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    })
+    const results: boolean[] = []
+    const screens = fakeUi({
+      welcome: () => 'diagnostic',
+      diagnostic: async (props) => {
+        results.push(await props.copy('le rapport'))
+        writeText.mockRejectedValueOnce(new Error('refusé'))
+        results.push(await props.copy('le rapport'))
+        Reflect.deleteProperty(window.navigator, 'clipboard')
+        results.push(await props.copy('le rapport'))
+        return 'close' as const
+      },
+    })
+
+    run(window, { origin: ORIGIN, flow: { ui: screens.ui } })
+
+    await vi.waitFor(() => expect(screens.closed.count).toBe(1))
+    expect(results).toEqual([true, false, false])
+    expect(writeText).toHaveBeenCalledWith('le rapport')
+  })
+
+  it('sans ce fragment, aucun écran : l’agent reste silencieux', () => {
+    const screens = fakeUi()
+
+    run(window, { origin: ORIGIN, flow: { ui: screens.ui } })
+
+    expect(screens.shown).toEqual([])
   })
 })
 
