@@ -25,7 +25,7 @@ function textOf(harness: Harness): string {
 }
 
 describe('menu et lancement', () => {
-  it('affiche le menu des 12 essais et la mention d’outil jetable', () => {
+  it('affiche le menu des 12 essais et du 3b, et la mention d’outil jetable', () => {
     // Given / When
     const harness = mount()
 
@@ -33,11 +33,12 @@ describe('menu et lancement', () => {
     const items = Array.from(harness.root.querySelectorAll('.menu button')).map(
       (item) => item.querySelector('strong')?.textContent,
     )
-    expect(items).toHaveLength(12)
+    expect(items).toHaveLength(13)
     expect(items[0]).toBe("Sonde d'environnement")
+    expect(items[3]).toBe('Quantités')
     expect(
       Array.from(harness.root.querySelectorAll('.menu .num')).map((item) => item.textContent),
-    ).toEqual(Array.from({ length: 12 }, (_, i) => `${i + 1}.`))
+    ).toEqual(['1.', '2.', '3.', '3b.', ...Array.from({ length: 9 }, (_, i) => `${i + 4}.`)])
     expect(textOf(harness)).toContain(LAB_NOTICE)
     expect(harness.lab.host.id).toBe(HOST_ID)
     expect(document.getElementById(HOST_ID)).toBe(harness.lab.host)
@@ -53,7 +54,7 @@ describe('menu et lancement', () => {
     expect(second).toBeNull()
     expect(document.querySelectorAll(`#${HOST_ID}`)).toHaveLength(1)
     expect(harness.root.querySelector<HTMLElement>('.overlay')?.hidden).toBe(false)
-    expect(harness.root.querySelectorAll('.menu button')).toHaveLength(12)
+    expect(harness.root.querySelectorAll('.menu button')).toHaveLength(13)
   })
 
   it('lance un banc neuf quand il n’y en a pas', () => {
@@ -72,7 +73,7 @@ describe('menu et lancement', () => {
     click(harness.root, 'Sonde')
     expect(harness.root.querySelector('h1')?.textContent).toBe("1. Sonde d'environnement")
     click(harness.root, '← Menu')
-    expect(harness.root.querySelectorAll('.menu button')).toHaveLength(12)
+    expect(harness.root.querySelectorAll('.menu button')).toHaveLength(13)
     harness.root
       .querySelector('.overlay')
       ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
@@ -85,7 +86,7 @@ describe('menu et lancement', () => {
 
     harness.lab.showEssai(99)
 
-    expect(harness.root.querySelectorAll('.menu button')).toHaveLength(12)
+    expect(harness.root.querySelectorAll('.menu button')).toHaveLength(13)
   })
 
   it('met la feuille de style dans le Shadow DOM sans balise style quand le navigateur sait la construire', () => {

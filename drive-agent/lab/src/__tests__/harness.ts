@@ -100,7 +100,7 @@ export function click(root: ShadowRoot, part: string): void {
   button(root, part).click()
 }
 
-export function openEssai(harness: Harness, id: number): void {
+export function openEssai(harness: Harness, id: number | string): void {
   harness.lab.showEssai(id)
 }
 

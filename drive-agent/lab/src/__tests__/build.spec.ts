@@ -55,7 +55,7 @@ describe('le favori construit', () => {
     expect(built.code).not.toMatch(/localStorage|sessionStorage|indexedDB/)
   })
 
-  it('démarre une fois collé : le menu des 12 essais s’affiche, et un second lancement rouvre le même banc', () => {
+  it('démarre une fois collé : le menu des 12 essais et du 3b s’affiche, et un second lancement rouvre le même banc', () => {
     // Given : une page de magasin inventée
     const dom = new JSDOM('<!doctype html><html><body><p>Page</p></body></html>', {
       url: 'https://fd9-courses.example/magasin-999111-999111/accueil.aspx',
@@ -76,7 +76,7 @@ describe('le favori construit', () => {
     const hosts = dom.window.document.querySelectorAll('#repas-lab-host')
     expect(hosts).toHaveLength(1)
     const root = hosts[0]?.shadowRoot
-    expect(root?.querySelectorAll('.menu button')).toHaveLength(12)
+    expect(root?.querySelectorAll('.menu button')).toHaveLength(13)
     expect(root?.textContent).toContain(LAB_NOTICE)
     dom.window.close()
   })

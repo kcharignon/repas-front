@@ -40,7 +40,7 @@ export const recherche: Essai = {
       hint('Une seule requête, comme la recherche du site.'),
       labelled('Mot à chercher', query),
       h('div', { class: 'row' }, go),
-      hint('Sert aux essais 3, 10 et 12.'),
+      hint('Sert aux essais 3, 3b, 10 et 12.'),
       panel.el,
     )
   },
