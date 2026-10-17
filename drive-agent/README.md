@@ -4,7 +4,7 @@ L'**agent** est le petit programme JavaScript qui tourne dans la page de l'ensei
 
 Contexte et protocole : `docs/drive/` du dépôt back (`kcharignon/repas`), en particulier `architecture.md` § 8 et le ticket `DRV-301`.
 
-État : **squelette** (DRV-301). La construction, ses garde-fous et ses règles de code sont en place ; l'agent lui-même ne fait encore rien (il reste silencieux sur la page) : le protocole (DRV-302), l'adaptateur Leclerc (DRV-303), l'interface (DRV-304) et l'orchestrateur (DRV-305) s'y ajoutent.
+État : **squelette** (DRV-301) et **protocole v1** (DRV-302). La construction, ses garde-fous et ses règles de code sont en place, et le protocole (messages, codec, validateurs, transports) est écrit ; l'agent lui-même ne fait encore rien (il reste silencieux sur la page) : l'adaptateur Leclerc (DRV-303), l'interface (DRV-304) et l'orchestrateur (DRV-305) s'y ajoutent.
 
 > `lab/` (banc d'essai du favori) et `android-lab/` (application de test) sont des outils jetables du spike. Ils restent en place jusqu'à la fin du jalon M3b et ne font pas partie de l'agent.
 
@@ -28,8 +28,10 @@ drive-agent/
     index.ts          point d'entrée : exécute l'agent au chargement (rien n'est exporté)
     agent.ts          ce que fait l'agent quand l'application l'injecte
     version.ts        AGENT_VERSION (semver)
-    protocol/ leclerc/ ui/ flow/ diagnostic/    à venir : DRV-302, 303, 304, 305-306, 308
-  test/               tests Vitest de l'agent, et entries/ : points d'entrée d'essai pour la chaîne de construction
+    transport/        comment le message arrive et repart : `fragmentTransport` (fragment d'adresse) et `bridgeTransport` (pont de l'application)
+    leclerc/ ui/ flow/ diagnostic/    à venir : DRV-303, 304, 305-306, 308
+  protocol/           le protocole v1, partagé avec le front (alias `@drive-protocol`) : schémas JSON, types, codec, validateurs, exemples
+  test/               tests Vitest de l'agent et du protocole, et entries/ : points d'entrée d'essai pour la chaîne de construction
   fixtures/           données SYNTHÉTIQUES inventées (voir son README)
   scripts/build.mjs   la construction
   dist/               sorties de la construction (ignoré par Git)
@@ -65,6 +67,6 @@ L'agent tourne dans la page d'une enseigne, avec les droits de l'utilisateur. Da
 - `eval`, `new Function`, `setTimeout("code")`, les adresses `javascript:` et l'import dynamique : **aucun code distant** ;
 - `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`, la balise `script` : afficher avec `textContent` et `createElement` ;
 - un `fetch` vers une adresse absolue (seul l'hôte de la page est permis : chemin relatif), `XMLHttpRequest`, `WebSocket`, `EventSource`, `Worker`, `sendBeacon` ;
-- tout import qui n'est pas un fichier relatif de `src/` : **aucune dépendance à l'exécution**.
+- tout import qui n'est pas un fichier relatif (`src/`, ou `protocol/` par `../../protocol`) : **aucune dépendance à l'exécution**. Les mêmes règles couvrent `protocol/`.
 
 `test/rules.spec.ts` éprouve chaque règle sur un code qui l'enfreint. TypeScript est strict, avec un `tsconfig` dédié (`tsconfig.agent.json`, DOM seul, aucun type de Node). Les tests utilisent des données synthétiques : jamais de HTML brut d'une enseigne, de vrai numéro de magasin, de nom de ville, de cookie, de jeton, d'identifiant ni d'e-mail (le dépôt est public).
