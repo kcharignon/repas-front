@@ -564,3 +564,67 @@ describe('la progression', () => {
     expect(Math.max(...steps.mock.calls.map(([done]) => done))).toBeLessThanOrEqual(18)
   })
 })
+
+describe('la cause précise des échecs et la connexion dans le rapport (tickets A et G)', () => {
+  it('un visiteur détecté par la recherche arrête le test avant toute écriture, et le rapport en donne la cause', async () => {
+    const parts = shop(standardShelves(ALL_WORDS), {
+      before: () => {
+        throw new LeclercError('NOT_LOGGED_IN', 200, 'SESSION_VISITOR')
+      },
+    })
+
+    const data = await play(parts)
+
+    expect(data.halt).toEqual({ code: 'NOT_LOGGED_IN', http: null, cause: 'SESSION_VISITOR' })
+    expect(parts.writes).toEqual([])
+    expect(parts.cart()).toEqual({})
+    expect(reportOf(data)).toContain('Arrêt : NOT_LOGGED_IN (SESSION_VISITOR)')
+  })
+
+  it('une recherche du lot qui échoue porte sa cause et son code HTTP', async () => {
+    const parts = shop(standardShelves(ALL_WORDS), {
+      before: (call) => {
+        if (call === 'search riz')
+          throw new LeclercError('CONTRACT_CHANGED', 200, 'SEARCH_NO_STATE')
+      },
+    })
+
+    const data = await play(parts)
+
+    expect(data.words.find((word) => word.word === 'riz')?.failure).toEqual({
+      code: 'CONTRACT_CHANGED',
+      http: 200,
+      cause: 'SEARCH_NO_STATE',
+    })
+    expect(reportOf(data)).toContain('riz : KO CONTRACT_CHANGED (SEARCH_NO_STATE), HTTP 200')
+  })
+
+  it('une écriture refusée porte aussi sa cause, et le panier est nettoyé', async () => {
+    const parts = shop(standardShelves(ALL_WORDS), {
+      before: (call) => {
+        if (call === 'cart 2000000 3')
+          throw new LeclercError('CONTRACT_CHANGED', 200, 'CART_NO_CART_EVENT')
+      },
+    })
+
+    const data = await play(parts)
+
+    expect(data.items[0]?.writes.at(-1)?.failure).toEqual({
+      code: 'CONTRACT_CHANGED',
+      http: 200,
+      cause: 'CART_NO_CART_EVENT',
+    })
+    expect(reportOf(data)).toContain('CONTRACT_CHANGED (CART_NO_CART_EVENT)')
+  })
+
+  it('le rapport dit ce que la page montre de la connexion', async () => {
+    const parts = shop(standardShelves(ALL_WORDS), {
+      session: { state: 'MEMBER', signs: ['LOGOUT_LINK'] },
+    })
+
+    const data = await play(parts)
+
+    expect(data.page?.session).toBe('connecté (signes : LOGOUT_LINK)')
+    expect(reportOf(data)).toContain('Connexion : connecté (signes : LOGOUT_LINK)')
+  })
+})

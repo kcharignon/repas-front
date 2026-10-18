@@ -6,7 +6,7 @@ import { reportOf, rowsOf, summaryOf } from './report'
 
 export { CHECK_IDS, hostFamily, runChecks, storeTail, TEST_TERM } from './checks'
 export type { CheckId, CheckResult, ChecksDeps, PageFacts } from './checks'
-export { badgeOf, dateOf, reportOf, rowsOf, summaryOf } from './report'
+export { badgeOf, dateOf, pageLines, reportOf, rowsOf, summaryOf } from './report'
 
 export interface DiagnosticDeps extends ChecksDeps {
   ui: Ui

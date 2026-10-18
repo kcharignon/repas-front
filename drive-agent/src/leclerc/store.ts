@@ -33,15 +33,17 @@ const STORE_PATH = /^\/magasin-([0-9]{1,12})-([0-9]{1,12})(-[^/?#]*)?(?=\/|$)/i
 /**
  * Lit l'identifiant et l'hôte du magasin dans l'adresse de la page.
  *
- * @throws {LeclercError} `UNSUPPORTED_PAGE` si la page n'est pas sur `*.leclercdrive.fr` ou n'a pas d'adresse de magasin.
+ * @throws {LeclercError} `UNSUPPORTED_PAGE` si la page n'est pas sur `*.leclercdrive.fr` (cause `PAGE_HOST`) ou n'a pas d'adresse de magasin
+ *   (cause `PAGE_PATH`).
  */
 export function readStorePaths(location: LocationLike, label: string | null = null): StorePaths {
   const host = location.hostname.toLowerCase()
   const found = STORE_PATH.exec(location.pathname)
   const id = found?.[1]
   const second = found?.[2]
-  if (!STORE_HOST.test(host) || !found || id === undefined || second === undefined) {
-    throw new LeclercError('UNSUPPORTED_PAGE')
+  if (!STORE_HOST.test(host)) throw new LeclercError('UNSUPPORTED_PAGE', null, 'PAGE_HOST')
+  if (!found || id === undefined || second === undefined) {
+    throw new LeclercError('UNSUPPORTED_PAGE', null, 'PAGE_PATH')
   }
   const cartPath = `/magasin-${id}-${second}`
   return {

@@ -71,7 +71,18 @@ function lightLines(cart: Cart, asText: boolean): Record<string, unknown>[] {
 // boutons y sont minuscules, ce que l'interface de l'agent doit compenser (échelle d'affichage). Avec `width=device-width`, le faux site
 // cachait ce défaut.
 const HEAD = '<meta charset="utf-8">'
-const NAV = '<nav><a href="./">Accueil</a> <a href="panier.aspx">Panier</a></nav>'
+
+/** Ce que la page montre de la connexion : un client connecté ou un visiteur (ticket G). Libellés inventés, plausibles, jamais mesurés. */
+export type Session = 'member' | 'visitor'
+const NAV: Record<Session, string> = {
+  member:
+    '<nav><a href="./">Accueil</a> <a href="panier.aspx">Panier</a> <a href="compte.aspx">Mon compte</a> <a href="deconnexion.aspx">Se déconnecter</a></nav>',
+  visitor:
+    '<nav><a href="./">Accueil</a> <a href="panier.aspx">Panier</a> <a href="connexion.aspx">Se connecter</a> <a href="inscription.aspx">Créer un compte</a></nav>',
+}
+
+/** La forme d'une page de recherche sans résultat (ticket C) : plusieurs formes plausibles du même squelette, aucune n'est mesurée. */
+export type EmptyForm = 'list' | 'no-list' | 'encoded'
 
 /** Une page du faux magasin : un titre, une phrase, et le JSON d'initialisation (point de livraison, panier). */
 function storePage(
@@ -79,6 +90,8 @@ function storePage(
   text: string,
   widgets: Record<string, unknown>,
   cart: Cart,
+  session: Session = 'member',
+  encoded = false,
 ): string {
   const { items, total } = totalsOf(cart)
   const state = {
@@ -88,16 +101,20 @@ function storePage(
     ...widgets,
     lstProduitsLight: lightLines(cart, false),
   }
+  // L'état embarqué : dans un script, ou (forme \`encoded\`) dans un attribut dont les guillemets sont des entités HTML.
+  const embedded = encoded
+    ? `<div id="etat" data-init="${JSON.stringify(state).replaceAll('"', '&quot;')}"></div>`
+    : `<script>
+var widgets = ${JSON.stringify(state, null, 2)};
+</script>`
   return `<!doctype html>
 <html lang="fr">
 <head>${HEAD}<title>${title} (faux site de test)</title></head>
 <body>
-${NAV}
+${NAV[session]}
 <h1>${title}</h1>
 <p>${text}</p>
-<script>
-var widgets = ${JSON.stringify(state, null, 2)};
-</script>
+${embedded}
 <footer>Faux site Leclerc : données inventées.</footer>
 </body>
 </html>
@@ -119,21 +136,48 @@ export function enseignePage(storePath: string): string {
 `
 }
 
-export function homePage(cart: Cart): string {
-  return storePage('Accueil du magasin', 'Bienvenue dans le faux drive.', {}, cart)
+export function homePage(cart: Cart, session: Session = 'member'): string {
+  return storePage('Accueil du magasin', 'Bienvenue dans le faux drive.', {}, cart, session)
 }
 
-/** La page de recherche : les produits trouvés, avec leur quantité déjà au panier. */
-export function searchPage(query: string, found: readonly FakeProduct[], cart: Cart): string {
+/**
+ * La page de recherche : les produits trouvés, avec leur quantité déjà au panier. Sans produit, la page prend la forme \`empty\` : liste vide
+ * avec le message du site (\`list\`), squelette seul, sans conteneur de produits ni message (\`no-list\`), ou état encodé en entités HTML
+ * (\`encoded\`). \`session\` : l'en-tête d'un client connecté ou d'un visiteur (les produits sont les mêmes : le catalogue est public).
+ */
+export function searchPage(
+  query: string,
+  found: readonly FakeProduct[],
+  cart: Cart,
+  session: Session = 'member',
+  empty: EmptyForm = 'list',
+): string {
+  const title = `Recherche : ${query.replace(/[<>&"]/g, '')}`
+  if (found.length === 0 && empty === 'no-list') return storePage(title, '', {}, cart, session)
   const products = found.map((product) => productJson(product, cart.get(product.id) ?? 0))
   const text =
     found.length === 0 ? 'Aucun résultat pour votre recherche' : 'Résultats pour votre recherche'
   return storePage(
-    `Recherche : ${query.replace(/[<>&"]/g, '')}`,
+    title,
     text,
-    {
-      widgets: [{ nom: 'produits', lstProduits: products }],
-    },
+    { widgets: [{ nom: 'produits', lstProduits: products }] },
+    cart,
+    session,
+    found.length === 0 && empty === 'encoded',
+  )
+}
+
+/** Une page de recherche dont les produits ont des champs renommés : le squelette est là, mais l'agent ne sait plus lire les produits. */
+export function renamedProductsPage(found: readonly FakeProduct[], cart: Cart): string {
+  const products = found.map((product) => ({
+    id: String(product.id),
+    intitule: product.label1,
+    prix: product.price,
+  }))
+  return storePage(
+    'Recherche',
+    'Résultats pour votre recherche',
+    { widgets: [{ nom: 'produits', lstProduits: products }] },
     cart,
   )
 }

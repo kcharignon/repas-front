@@ -438,6 +438,208 @@ describe('la file et la cadence de l’adaptateur', () => {
   })
 })
 
+const NAV = '<nav><a href="/accueil">Accueil</a> <a href="/panier">Panier</a></nav>'
+const VISITOR_NAV =
+  '<nav><a href="/connexion">Se connecter</a> <a href="/inscription">Créer un compte</a></nav>'
+const MEMBER_NAV =
+  '<nav><a href="/compte">Mon compte</a> <a href="/sortie">Se déconnecter</a></nav>'
+/** La page de recherche inventée, avec l'en-tête d'un visiteur ou d'un client connecté. */
+const farineWith = (nav: string) => fixture('recherche-farine.html').replace(NAV, nav)
+
+describe('la cause de chaque erreur de l’adaptateur (ticket A)', () => {
+  it.each([
+    ['un 404', { status: 404, body: fixture('erreur-404.html') }, 'CONTRACT_CHANGED', 'HTTP_404'],
+    ['un 400', { status: 400, body: 'x' }, 'CONTRACT_CHANGED', 'HTTP_400'],
+    ['un 401', { status: 401, body: 'non' }, 'NOT_LOGGED_IN', 'HTTP_401'],
+    [
+      'une redirection vers la connexion',
+      { body: 'x', redirected: true, url: `https://${PAGE.hostname}/connexion.aspx?retour=1` },
+      'NOT_LOGGED_IN',
+      'LOGIN_REDIRECT',
+    ],
+    [
+      'une page de connexion servie en 200',
+      { body: fixture('connexion.html') },
+      'NOT_LOGGED_IN',
+      'LOGIN_FORM',
+    ],
+    [
+      'une page dont le format a changé',
+      { body: fixture('recherche-changee.html') },
+      'CONTRACT_CHANGED',
+      'SEARCH_NO_STATE',
+    ],
+    [
+      'des produits aux champs renommés',
+      { body: fixture('recherche-liste-illisible.html') },
+      'CONTRACT_CHANGED',
+      'SEARCH_PRODUCTS_UNREADABLE',
+    ],
+    [
+      'une page d’erreur après redirection',
+      {
+        body: fixture('erreur-404.html'),
+        redirected: true,
+        url: `https://${PAGE.hostname}/Erreur.aspx`,
+      },
+      'CONTRACT_CHANGED',
+      'SEARCH_REDIRECTED',
+    ],
+  ] as const)('recherche, %s : %s, cause %s', async (_name, scripted, code, cause) => {
+    const { adapter } = shop(undefined, scripted)
+
+    const error = await adapter.searchProducts('farine').catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(LeclercError)
+    expect(error).toMatchObject({ code, cause })
+  })
+
+  it.each([
+    ['un 404', { status: 404, body: 'introuvable' }, 'CONTRACT_CHANGED', 'HTTP_404', 404],
+    ['un 401', { status: 401, body: 'non' }, 'NOT_LOGGED_IN', 'HTTP_401', 401],
+    [
+      'une réponse qui n’est pas du JSON',
+      { body: '<html>Page</html>' },
+      'CONTRACT_CHANGED',
+      'CART_NOT_JSON',
+      200,
+    ],
+    [
+      'une réponse sans évènement panier',
+      { body: fixture('panier-invalide.json') },
+      'CONTRACT_CHANGED',
+      'CART_NO_CART_EVENT',
+      200,
+    ],
+    [
+      'une page de connexion à la place de la réponse',
+      { body: fixture('connexion.html') },
+      'NOT_LOGGED_IN',
+      'LOGIN_FORM',
+      200,
+    ],
+  ] as const)(
+    'panier, %s : %s, cause %s, HTTP %d',
+    async (_name, scripted, code, cause, status) => {
+      const { adapter } = shop(scripted)
+
+      const error = await adapter.setCartQuantity('1000001', 1).catch((caught: unknown) => caught)
+
+      expect(error).toBeInstanceOf(LeclercError)
+      expect(error).toMatchObject({ code, cause, status })
+    },
+  )
+
+  it.each([
+    [
+      'hors de leclercdrive.fr',
+      { hostname: 'courses-test.exemple.invalid', pathname: '/magasin-1-1/x' },
+      'PAGE_HOST',
+    ],
+    ['sans magasin', { hostname: PAGE.hostname, pathname: '/accueil' }, 'PAGE_PATH'],
+  ])('une page %s : UNSUPPORTED_PAGE, cause %s', (_name, location, cause) => {
+    const site = fakeSite(() => ({}), { location })
+
+    expect(() => new LeclercAdapter(site.deps).readStore()).toThrow(
+      expect.objectContaining({ code: 'UNSUPPORTED_PAGE', cause }),
+    )
+  })
+
+  it('le message de l’erreur reste un texte fixe : la cause est un code, jamais un morceau de page', async () => {
+    const { adapter } = shop(undefined, { body: '<p>cookie=SECRET magasin-654321</p>' })
+
+    const error = (await adapter
+      .searchProducts('farine')
+      .catch((caught: unknown) => caught)) as LeclercError
+
+    expect(error.cause).toBe('SEARCH_NO_STATE')
+    expect(error.message).toBe('Le site ne répond plus comme prévu.')
+    expect(JSON.stringify([error.cause, error.message])).not.toMatch(/SECRET|654321/)
+  })
+})
+
+describe('une page « aucun résultat » n’arrête pas le passage (ticket C)', () => {
+  it.each([
+    'recherche-vide.html',
+    'recherche-vide-sans-liste.html',
+    'recherche-vide-encodee.html',
+    'recherche-vide-panier-garni.html',
+  ])('%s : aucun produit, sans erreur, et la recherche suivante est possible', async (name) => {
+    const site = fakeSite((call) => ({
+      body: call.url.includes('xyz') ? fixture(name) : fixture('recherche-farine.html'),
+    }))
+    const adapter = new LeclercAdapter(site.deps)
+
+    await expect(adapter.searchProducts('xyz')).resolves.toEqual([])
+    await expect(adapter.searchProducts('farine')).resolves.toHaveLength(5)
+    await expect(adapter.readProductFromSearch('xyz', '1000001')).resolves.toBeNull()
+  })
+
+  it('lit quand même le total du panier porté par une page « aucun résultat »', async () => {
+    const site = fakeSite(() => ({ body: fixture('recherche-vide-panier-garni.html') }))
+    const adapter = new LeclercAdapter(site.deps)
+
+    await adapter.searchProducts('xyz')
+
+    expect(adapter.pageCartTotal()).toBe(947)
+  })
+})
+
+describe('le visiteur non connecté (ticket G)', () => {
+  it('readSession lit la page courante, sans aucune requête', () => {
+    const site = fakeSite(() => ({}), { pageText: () => farineWith(VISITOR_NAV) })
+    const adapter = new LeclercAdapter(site.deps)
+
+    expect(adapter.readSession()).toMatchObject({
+      state: 'VISITOR',
+      signs: ['LOGIN_LINK', 'REGISTER_LINK'],
+    })
+    expect(site.calls).toEqual([])
+  })
+
+  it.each([
+    ['d’un client connecté', farineWith(MEMBER_NAV), 'MEMBER'],
+    ['sans aucun signe', fixture('recherche-farine.html'), 'UNKNOWN'],
+  ])('readSession : page %s, état %s', (_name, text, state) => {
+    const site = fakeSite(() => ({}), { pageText: () => text })
+
+    expect(new LeclercAdapter(site.deps).readSession().state).toBe(state)
+  })
+
+  it('une recherche qui revient avec la page d’un visiteur lève NOT_LOGGED_IN, même si elle porte des produits', async () => {
+    const { adapter } = shop(undefined, { body: farineWith(VISITOR_NAV) })
+
+    await expect(adapter.searchProducts('farine')).rejects.toThrow(
+      expect.objectContaining({ code: 'NOT_LOGGED_IN', cause: 'SESSION_VISITOR', status: 200 }),
+    )
+  })
+
+  it('la page d’un client connecté, ou sans aucun signe, passe', async () => {
+    const member = shop(undefined, { body: farineWith(MEMBER_NAV) })
+
+    await expect(member.adapter.searchProducts('farine')).resolves.toHaveLength(5)
+    await expect(shop().adapter.searchProducts('farine')).resolves.toHaveLength(5)
+  })
+
+  it('un visiteur détecté en cours de passage : la recherche suivante lève NOT_LOGGED_IN, sans écriture de plus', async () => {
+    let searches = 0
+    const site = fakeSite((call) => {
+      if (call.init.method === 'POST') return { body: fixture('panier-ajout.json') }
+      searches += 1
+      return { body: farineWith(searches === 1 ? MEMBER_NAV : VISITOR_NAV) }
+    })
+    const adapter = new LeclercAdapter(site.deps)
+
+    await adapter.searchProducts('farine')
+    await adapter.setCartQuantity('1000001', 1)
+    await expect(adapter.searchProducts('sucre')).rejects.toThrow(
+      expect.objectContaining({ code: 'NOT_LOGGED_IN', cause: 'SESSION_VISITOR' }),
+    )
+
+    expect(site.calls.map((call) => call.init.method)).toEqual(['GET', 'POST', 'GET'])
+  })
+})
+
 describe('browserDeps', () => {
   it('branche la page, son fetch et l’horloge réelle', async () => {
     // Given : une fenêtre factice

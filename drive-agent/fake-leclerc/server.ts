@@ -18,9 +18,12 @@ import {
   errorPage,
   homePage,
   loginPage,
+  renamedProductsPage,
   repasReturnPage,
   searchPage,
   type CartAction,
+  type EmptyForm,
+  type Session,
 } from './pages.ts'
 
 /** Le faux magasin : son identifiant et son nom d'hôte (le plan de Repas et la page doivent s'accorder dessus). */
@@ -35,7 +38,13 @@ export const MIN_GAP_MS = 800
 const TOLERANCE_MS = 5
 
 export type FaultKind =
-  'forbidden' | 'too-many-requests' | 'challenge' | 'contract-changed' | 'not-found' | 'logged-out'
+  | 'forbidden'
+  | 'too-many-requests'
+  | 'challenge'
+  | 'contract-changed'
+  | 'products-renamed'
+  | 'not-found'
+  | 'logged-out'
 
 /** Un défaut simulé : `after` requêtes passent d'abord (0 : dès la première), `on` dit à quelles requêtes il s'applique. */
 export interface Fault {
@@ -53,6 +62,17 @@ export interface Behavior {
    * de l'hôte, qui n'est pas une page de magasin). C'est ce que l'application doit savoir dire à l'utilisateur au lieu d'un écran vide.
    */
   unknownStore?: boolean
+  /**
+   * La page de recherche sans produit : `list` (liste vide et message du site, par défaut), `no-list` (squelette seul) ou `encoded` (état en
+   * entités HTML). Plusieurs formes plausibles d'une page que le vrai site n'a jamais été relevé servir (ticket C).
+   */
+  emptySearch?: EmptyForm
+  /**
+   * Le faux site sert la page d'un VISITEUR non connecté (en-tête « Se connecter » / « Créer un compte », pas de « Se déconnecter ») une fois
+   * `visitorAfter` recherches et écritures du panier terminées (`0` : dès la première page ; absent ou `null` : jamais). Le catalogue reste
+   * public et le panier accepte les écritures d'un visiteur : c'est le danger que l'agent doit détecter (ticket G).
+   */
+  visitorAfter?: number | null
 }
 
 export type RequestKind = 'search' | 'cart' | 'page' | 'repas' | 'control' | 'other'
@@ -255,6 +275,7 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       'too-many-requests': 429,
       challenge: 200,
       'contract-changed': 200,
+      'products-renamed': 200,
       'not-found': 404,
       'logged-out': 302,
     }[kind]
@@ -262,12 +283,22 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       return send(res, 302, '', { Location: `${PAGE_PATH}/connexion.aspx` })
     }
     if (kind === 'challenge') return send(res, 200, challengePage(), HTML)
+    if (kind === 'products-renamed') {
+      const query = entry.detail ?? ''
+      return send(res, 200, renamedProductsPage(searchCatalog(query), cart), HTML)
+    }
     if (kind === 'contract-changed') {
       return scope === 'search'
         ? send(res, 200, changedSearchPage(), HTML)
         : send(res, 200, JSON.stringify([{ eTypeEvenement: 7, sIdUnique: 'Autre' }]), JSON_HEADERS)
     }
     return send(res, entry.status, errorPage(), HTML)
+  }
+
+  /** La page d'un visiteur une fois `visitorAfter` requêtes terminées ; `finished` : combien l'ont été avant la page servie. */
+  function sessionAfter(finished: number): Session {
+    const after = behavior.visitorAfter
+    return after !== undefined && after !== null && finished >= after ? 'visitor' : 'member'
   }
 
   async function search(entry: FakeRequest, url: URL, res: ServerResponse): Promise<void> {
@@ -278,7 +309,15 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       'search',
       () => {
         entry.status = 200
-        return send(res, 200, searchPage(query, searchCatalog(query), cart), HTML)
+        const session = sessionAfter(pacedCount - 1)
+        const page = searchPage(
+          query,
+          searchCatalog(query),
+          cart,
+          session,
+          behavior.emptySearch ?? 'list',
+        )
+        return send(res, 200, page, HTML)
       },
       res,
     )
@@ -390,7 +429,7 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
         return send(res, 302, '', { Location: '/' })
       }
       entry.status = 200
-      return send(res, 200, homePage(cart), HTML)
+      return send(res, 200, homePage(cart, sessionAfter(pacedCount)), HTML)
     }
     entry.status = 404
     return send(res, 404, errorPage(), HTML)

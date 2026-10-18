@@ -8,6 +8,14 @@ export {
 } from './adapter'
 export { type Candidate, type PricePerMeasure } from './candidate'
 export { contentFromLabel, parseContent, type Content, type ContentSource } from './content'
+export { causeLabel, causeText, type LeclercCause } from './causes'
 export { LeclercError, type LeclercErrorCode } from './errors'
 export { JITTER_MS, MAX_BLOCKS, NETWORK_RETRY_MS, Pacer, PAUSE_MS, type FetchFn } from './pacer'
+export {
+  describeSession,
+  readSession,
+  type SessionReading,
+  type SessionSign,
+  type SessionState,
+} from './session'
 export { type LocationLike, type StoreInfo } from './store'

@@ -1,8 +1,10 @@
 import { CART_HEADERS, cartBody, MAX_QUANTITY, readCartResponse, readPageTotal } from './cart'
 import { type Candidate, toCandidate } from './candidate'
+import { httpCause } from './causes'
 import { LeclercError } from './errors'
-import { extractProducts } from './embedded'
 import { type FetchFn, Pacer, type PacerDeps, type Reply } from './pacer'
+import { readSearchPage } from './search-page'
+import { looksLikeLoginPage, readSession, type SessionReading } from './session'
 import {
   type LocationLike,
   readDeliveryPoint,
@@ -42,13 +44,15 @@ export interface RetailerAdapter {
   readProductFromSearch(query: string, productId: string): Promise<Candidate | null>
   /** Le total du panier (centimes) lu dans la page de la dernière recherche, `null` si elle n'en portait pas ou s'il n'y a pas eu de recherche. */
   pageCartTotal(): number | null
+  /** Ce que la page courante montre de la connexion de l'utilisateur (visiteur, client connecté ou inconnu). Aucune requête. */
+  readSession(): SessionReading
 }
 
 export interface LeclercDeps extends PacerDeps {
   /** `window.fetch` : l'adaptateur n'envoie des requêtes qu'à l'hôte de la page (chemins relatifs). */
   fetch: FetchFn
   location: LocationLike
-  /** Le texte de la page (pour y lire le point de livraison) ; appelé une fois. */
+  /** Le texte de la page : le point de livraison s'y lit une fois ; `readSession` le relit à chaque appel (sans requête). */
   pageText: () => string
   /** Le libellé du magasin lu dans la page, s'il y en a un. */
   readLabel?: () => string | null
@@ -56,8 +60,6 @@ export interface LeclercDeps extends PacerDeps {
 
 const PRODUCT_ID = /^[0-9]{1,12}$/
 const SEARCH_HEADERS = { Accept: 'text/html,application/xhtml+xml' }
-/** Une page de recherche sans résultat : le texte du site, ou une liste de produits vide. */
-const NO_RESULT = /aucun\s+(?:r[ée]sultat|produit|article)|lstProduits["']?\s*[:=]\s*\[\s*\]/i
 /** Une redirection vers une page de connexion. */
 const LOGIN_PATH = /connexion|identif|login|authent/i
 
@@ -86,9 +88,7 @@ export class LeclercAdapter implements RetailerAdapter {
     const url = `${pagePath}/recherche.aspx?TexteRecherche=${encodeURIComponent(text)}`
     const reply = await this.pacer.request(url, { method: 'GET', headers: SEARCH_HEADERS })
     this.assertUsable(reply)
-    const { products } = extractProducts(reply.text)
-    if (products.length === 0 && !NO_RESULT.test(reply.text))
-      throw new LeclercError('CONTRACT_CHANGED', reply.status)
+    const products = this.readSearch(reply)
     this.lastQuery = text
     this.pageTotal = readPageTotal(reply.text)
     const candidates = products.map(toCandidate)
@@ -135,17 +135,49 @@ export class LeclercAdapter implements RetailerAdapter {
     }
   }
 
+  /**
+   * La page de recherche lue (ticket C : une page sans résultat est une liste vide, une structure inconnue est `CONTRACT_CHANGED` avec sa cause),
+   * puis contrôlée : la page d'un visiteur non connecté arrête tout, même si elle porte des produits (ticket G).
+   */
+  private readSearch(reply: Reply): ReturnType<typeof readSearchPage> {
+    let products
+    try {
+      products = readSearchPage(reply)
+    } catch (error) {
+      if (error instanceof LeclercError && error.code === 'CONTRACT_CHANGED')
+        this.assertMember(reply)
+      throw error
+    }
+    this.assertMember(reply)
+    return products
+  }
+
+  /** @throws {LeclercError} `NOT_LOGGED_IN` si la réponse est la page d'un visiteur : rien ne s'écrit dans un panier anonyme. */
+  private assertMember(reply: Reply): void {
+    if (readSession(reply.text).state === 'VISITOR') {
+      throw new LeclercError('NOT_LOGGED_IN', reply.status, 'SESSION_VISITOR')
+    }
+  }
+
   /** La réponse du panier lue ; une réponse illisible garde son code HTTP, pour le rapport du test automatique. */
   private readCart(reply: Reply, productId: string): ReturnType<typeof readCartResponse> {
     try {
       return readCartResponse(reply.text, productId)
     } catch (error) {
-      throw error instanceof LeclercError ? new LeclercError(error.code, reply.status) : error
+      if (!(error instanceof LeclercError)) throw error
+      if (error.cause === 'CART_NOT_JSON' && looksLikeLoginPage(reply.text, false)) {
+        throw new LeclercError('NOT_LOGGED_IN', reply.status, 'LOGIN_FORM')
+      }
+      throw error.withStatus(reply.status)
     }
   }
 
   pageCartTotal(): number | null {
     return this.pageTotal
+  }
+
+  readSession(): SessionReading {
+    return readSession(this.deps.pageText())
   }
 
   async readProductFromSearch(query: string, productId: string): Promise<Candidate | null> {
@@ -162,12 +194,15 @@ export class LeclercAdapter implements RetailerAdapter {
    * ou une route disparue) ; seuls 403, 429 et la page de défi, traités par le `Pacer`, sont `BLOCKED`.
    */
   private assertUsable(reply: Reply): void {
-    const loggedOut =
-      reply.status === 401 || (reply.redirected && LOGIN_PATH.test(safePath(reply.url)))
-    if (loggedOut) throw new LeclercError('NOT_LOGGED_IN', reply.status)
-    if (reply.status >= 500) throw new LeclercError('NETWORK', reply.status)
+    if (reply.status === 401) throw new LeclercError('NOT_LOGGED_IN', reply.status, 'HTTP_401')
+    if (reply.redirected && LOGIN_PATH.test(safePath(reply.url))) {
+      throw new LeclercError('NOT_LOGGED_IN', reply.status, 'LOGIN_REDIRECT')
+    }
+    if (reply.status >= 500) {
+      throw new LeclercError('NETWORK', reply.status, httpCause(reply.status))
+    }
     if (reply.status < 200 || reply.status >= 300) {
-      throw new LeclercError('CONTRACT_CHANGED', reply.status)
+      throw new LeclercError('CONTRACT_CHANGED', reply.status, httpCause(reply.status))
     }
   }
 }

@@ -16,6 +16,7 @@ import type {
   Content,
   PricePerMeasure,
   RetailerAdapter,
+  SessionReading,
 } from '../src/leclerc'
 import type { ProgressPatch, ScreenAnswer, ScreenName, ScreenProps, Ui } from '../src/ui'
 
@@ -167,6 +168,8 @@ export function fakeAdapter(
     /** Appelé avant chaque requête : `search <id>`, `find <mot>`, `cart <id> <quantité>`. */
     before?: (call: string) => void | Promise<void>
     store?: () => ReturnType<RetailerAdapter['readStore']>
+    /** Ce que la page dit de la connexion de l'utilisateur (par défaut : rien, état inconnu). */
+    session?: SessionReading
     /** Ce que la recherche d'un mot rend : des identifiants du rayon, dans l'ordre. Un mot absent ne trouve rien. */
     found?: Record<string, string[]>
   } = {},
@@ -195,6 +198,7 @@ export function fakeAdapter(
       return item ? candidate(id, item) : null
     },
     pageCartTotal: () => null,
+    readSession: () => options.session ?? { state: 'UNKNOWN', signs: [] },
     async setCartQuantity(id, quantity): Promise<CartResult> {
       calls.push(`cart ${id} ${quantity}`)
       inFlight += 1

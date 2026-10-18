@@ -3,6 +3,7 @@
 // contrôles, qui ne portent que des nombres et des phrases fixes.
 import type { DiagnosticRow } from '../ui'
 import { S } from '../ui'
+import { causeText } from '../leclerc'
 import { CHECK_IDS, type CheckId, type CheckResult, type PageFacts } from './checks'
 
 const T = S.diagnostic
@@ -20,10 +21,13 @@ export function rowsOf(results: readonly CheckResult[]): DiagnosticRow[] {
   return CHECK_IDS.map((id) => {
     const result = byId.get(id)
     if (!result) return { label: T.check[id], badge: T.badge.wait, detail: null, tone: 'wait' }
+    const detail = [result.detail, result.cause && causeText(result.cause)]
+      .filter(Boolean)
+      .join(' ; ')
     return {
       label: T.check[id],
       badge: badgeOf(result),
-      detail: result.detail ?? null,
+      detail: detail === '' ? null : detail,
       tone: result.status === 'OK' ? 'ok' : result.status === 'KO' ? 'ko' : 'skip',
     }
   })
@@ -40,6 +44,15 @@ export function dateOf(now: number): string {
   return `${new Date(now).toISOString().slice(0, 16).replace('T', ' ')} UTC`
 }
 
+/** L'hôte, le magasin et, s'il est connu, ce que la page montre de la connexion (signes de visiteur ou de client : des noms seulement). */
+export function pageLines(page: PageFacts): string[] {
+  return [
+    T.text.host(page.host),
+    T.text.store(page.store),
+    ...(page.session === undefined ? [] : [`Connexion : ${page.session}`]),
+  ]
+}
+
 export function reportOf(
   agentVersion: string,
   now: number,
@@ -50,7 +63,7 @@ export function reportOf(
     T.text.title,
     T.text.agent(agentVersion),
     T.text.date(dateOf(now)),
-    ...(page ? [T.text.host(page.host), T.text.store(page.store)] : []),
+    ...(page ? pageLines(page) : []),
     '',
     ...rowsOf(results).map(
       (row) => `[${row.badge}] ${row.label}${row.detail === null ? '' : ` : ${row.detail}`}`,

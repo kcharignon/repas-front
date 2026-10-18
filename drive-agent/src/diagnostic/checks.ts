@@ -1,7 +1,13 @@
 // Les contrôles du diagnostic (DRV-308) : tous en lecture seule, un seul appel au site (une recherche, à la cadence de l'adaptateur).
 // Chaque contrôle rend `OK`, `KO` (avec le code d'erreur quand il y en a un) ou `NOT_TESTED`. Un détail ne contient que des nombres et
 // des phrases fixes : jamais un cookie, un identifiant, une adresse ni un morceau de page.
-import { LeclercError, type LeclercErrorCode, type RetailerAdapter } from '../leclerc'
+import {
+  describeSession,
+  LeclercError,
+  type LeclercCause,
+  type LeclercErrorCode,
+  type RetailerAdapter,
+} from '../leclerc'
 import { S } from '../ui'
 import type { StorageLike, WakeLockLike } from '../flow'
 
@@ -22,6 +28,8 @@ export interface CheckResult {
   status: 'OK' | 'KO' | 'NOT_TESTED'
   /** Le code d'erreur d'un contrôle en échec, quand le site ou la page en est la cause. */
   code?: LeclercErrorCode
+  /** Quelle vérification a échoué (ticket A) : un code fixe, montré avec son libellé. */
+  cause?: LeclercCause
   detail?: string
 }
 
@@ -41,6 +49,8 @@ export interface ChecksDeps {
 export interface PageFacts {
   host: string
   store: string
+  /** Ce que la page montre de la connexion de l'utilisateur (ticket G) : un état et les noms des signes lus. */
+  session?: string
 }
 
 const HOST = /^(fd\d{1,3})-courses\.leclercdrive\.fr$/
@@ -60,17 +70,34 @@ const ok = (id: CheckId, detail?: string): CheckResult => ({
   status: 'OK',
   ...(detail !== undefined && { detail }),
 })
-const ko = (id: CheckId, detail?: string, code?: LeclercErrorCode): CheckResult => ({
+const ko = (
+  id: CheckId,
+  detail?: string,
+  code?: LeclercErrorCode,
+  cause?: LeclercCause | null,
+): CheckResult => ({
   id,
   status: 'KO',
   ...(code && { code }),
+  ...(cause && { cause }),
   ...(detail !== undefined && { detail }),
 })
 const skipped = (id: CheckId, detail: string): CheckResult => ({ id, status: 'NOT_TESTED', detail })
 
-/** Une erreur de l'adaptateur a son code ; tout autre incident est un site qui ne répond plus comme prévu. */
-const codeOf = (error: unknown): LeclercErrorCode =>
-  error instanceof LeclercError ? error.code : 'CONTRACT_CHANGED'
+/** Une erreur de l'adaptateur a son code et sa cause ; tout autre incident est un site qui ne répond plus comme prévu (cause EXCEPTION). */
+const faultOf = (error: unknown): { code: LeclercErrorCode; cause: LeclercCause | null } =>
+  error instanceof LeclercError
+    ? { code: error.code, cause: error.cause }
+    : { code: 'CONTRACT_CHANGED', cause: 'EXCEPTION' }
+
+/** Ce que la page montre de la connexion, ou rien si elle ne se laisse pas lire. */
+function sessionOf(adapter: RetailerAdapter): string | undefined {
+  try {
+    return describeSession(adapter.readSession())
+  } catch {
+    return undefined
+  }
+}
 
 /** Lit, écrit puis efface une clé d'essai : le stockage de session est-il utilisable ? */
 function sessionWorks(storage: StorageLike | null): boolean {
@@ -115,10 +142,16 @@ export async function runChecks(
   let page: PageFacts | null = null
   try {
     const store = deps.adapter.readStore()
-    page = { host: hostFamily(store.host), store: storeTail(store.id) }
+    const session = sessionOf(deps.adapter)
+    page = {
+      host: hostFamily(store.host),
+      store: storeTail(store.id),
+      ...(session !== undefined && { session }),
+    }
     await push(ok('page', D.page(page.host, page.store)))
   } catch (error) {
-    await push(ko('page', undefined, codeOf(error)))
+    const { code, cause } = faultOf(error)
+    await push(ko('page', undefined, code, cause))
   }
 
   await push(
@@ -139,7 +172,8 @@ export async function runChecks(
     try {
       found = await deps.adapter.searchProducts(TEST_TERM)
     } catch (error) {
-      await push(ko('search', undefined, codeOf(error)))
+      const { code, cause } = faultOf(error)
+      await push(ko('search', undefined, code, cause))
     }
     if (found === null) {
       await push(skipped('content', D.searchFailed))
@@ -148,10 +182,15 @@ export async function runChecks(
       const whole = found.filter(complete).length
       await push(
         read === 0
-          ? ko('search', D.searchEmpty(TEST_TERM), 'CONTRACT_CHANGED')
+          ? ko('search', D.searchEmpty(TEST_TERM), 'CONTRACT_CHANGED', 'SEARCH_COMMON_EMPTY')
           : whole * 2 >= read
             ? ok('search', D.searchOk(TEST_TERM, read, whole))
-            : ko('search', D.searchIncomplete(TEST_TERM, read, whole), 'CONTRACT_CHANGED'),
+            : ko(
+                'search',
+                D.searchIncomplete(TEST_TERM, read, whole),
+                'CONTRACT_CHANGED',
+                'SEARCH_FIELDS_INCOMPLETE',
+              ),
       )
       const known = found.filter((candidate) => candidate.content !== null).length
       await push(
@@ -159,7 +198,7 @@ export async function runChecks(
           ? skipped('content', D.searchFailed)
           : known * 2 >= read
             ? ok('content', D.contentOk(known, read))
-            : ko('content', D.contentKo(known, read), 'CONTRACT_CHANGED'),
+            : ko('content', D.contentKo(known, read), 'CONTRACT_CHANGED', 'CONTENT_UNREADABLE'),
       )
     }
   }

@@ -149,19 +149,25 @@ function findCartEvent(events: readonly unknown[]): Record<string, unknown> | nu
 /**
  * Lit la réponse d'une écriture au panier : la quantité obtenue du produit et le nombre d'articles.
  *
- * @throws {LeclercError} `CONTRACT_CHANGED` si la réponse n'est pas du JSON, n'a pas d'évènement panier ou pas de `lstProduitsLight`.
+ * @throws {LeclercError} `CONTRACT_CHANGED`, avec la cause de l'échec (`CART_NOT_JSON`, `CART_NO_EVENTS`, `CART_NO_CART_EVENT`, `CART_NO_PRODUCT_LIST`,
+ *   `CART_QUANTITY_UNREADABLE`) : la réponse n'est pas du JSON, n'a pas d'évènement panier, pas de `lstProduitsLight` ou une quantité illisible.
  */
 export function readCartResponse(text: string, productId: string): CartReading {
   const parsed = parseJson(text.trim())
-  const events = parsed === undefined ? null : eventsOf(parsed)
-  const event = events && findCartEvent(events)
-  const list = event ? findKey(event, 'lstProduitsLight') : undefined
-  if (!event || !Array.isArray(list)) throw new LeclercError('CONTRACT_CHANGED')
+  if (parsed === undefined) throw new LeclercError('CONTRACT_CHANGED', null, 'CART_NOT_JSON')
+  const events = eventsOf(parsed)
+  if (events === null) throw new LeclercError('CONTRACT_CHANGED', null, 'CART_NO_EVENTS')
+  const event = findCartEvent(events)
+  if (!event) throw new LeclercError('CONTRACT_CHANGED', null, 'CART_NO_CART_EVENT')
+  const list = findKey(event, 'lstProduitsLight')
+  if (!Array.isArray(list)) throw new LeclercError('CONTRACT_CHANGED', null, 'CART_NO_PRODUCT_LIST')
   const entry = list
     .map(asRecord)
     .find((item) => item !== null && String(item.iIdProduit) === productId)
   const obtained = entry ? asNumber(entry.iQtePanier) : 0
-  if (obtained === null) throw new LeclercError('CONTRACT_CHANGED')
+  if (obtained === null) {
+    throw new LeclercError('CONTRACT_CHANGED', null, 'CART_QUANTITY_UNREADABLE')
+  }
   return {
     obtained,
     items: asNumber(findKey(event, 'iQuantitePanier')),

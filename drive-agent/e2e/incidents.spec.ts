@@ -44,13 +44,26 @@ for (const kind of ['forbidden', 'too-many-requests', 'challenge'] satisfies Fau
   })
 }
 
-for (const [name, fault] of [
-  ['une page de recherche dont les champs ont changé', { kind: 'contract-changed', on: 'search' }],
-  ['une réponse du panier qui a changé', { kind: 'contract-changed', on: 'cart' }],
-  ['une recherche qui répond 404', { kind: 'not-found', on: 'search' }],
-  ['un panier qui répond 404', { kind: 'not-found', on: 'cart' }],
-] as [string, Fault][]) {
-  test(`interrompt le passage (« le site a changé ») devant ${name}`, async ({
+for (const [name, fault, cause] of [
+  [
+    'une page de recherche dont les champs ont changé',
+    { kind: 'contract-changed', on: 'search' },
+    'SEARCH_NO_STATE',
+  ],
+  [
+    'une page de recherche dont les produits ont des champs renommés',
+    { kind: 'products-renamed', on: 'search' },
+    'SEARCH_PRODUCTS_UNREADABLE',
+  ],
+  [
+    'une réponse du panier qui a changé',
+    { kind: 'contract-changed', on: 'cart' },
+    'CART_NO_CART_EVENT',
+  ],
+  ['une recherche qui répond 404', { kind: 'not-found', on: 'search' }, 'HTTP_404'],
+  ['un panier qui répond 404', { kind: 'not-found', on: 'cart' }, 'HTTP_404'],
+] as [string, Fault, string][]) {
+  test(`interrompt le passage (« le site a changé ») devant ${name}, et dit laquelle des vérifications a échoué`, async ({
     page,
     fake,
     agentCode,
@@ -75,7 +88,7 @@ for (const [name, fault] of [
     await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
     expect(await returnedResult(page, fake)).toMatchObject({
       outcome: 'error',
-      error: { code: 'CONTRACT_CHANGED' },
+      error: { code: 'CONTRACT_CHANGED', message: `Le site a changé (${cause})` },
     })
   })
 }
@@ -95,6 +108,55 @@ test('s’arrête aussitôt quand le compte n’est plus connecté', async ({ pa
   expect(await returnedResult(page, fake)).toMatchObject({
     outcome: 'error',
     error: { code: 'NOT_LOGGED_IN' },
+  })
+})
+
+test('refuse de commencer devant la page d’un visiteur non connecté : rien n’est cherché ni écrit, et le conseil est de se connecter', async ({
+  page,
+  fake,
+  agentCode,
+}) => {
+  // Given : le site sert la page d'un visiteur (le catalogue est public, le panier accepterait les écritures)
+  fake.setBehavior({ visitorAfter: 0 })
+
+  // When
+  await openWithFragment(page, fake, agentCode, THREE_LINES)
+
+  // Then : « Connecte-toi à Leclerc, puis relance l'envoi », pas de récapitulatif, aucune requête, panier intact
+  await expect(page.getByRole('heading', { name: 'Tu n’es pas connecté' })).toBeVisible()
+  await expect(page.getByText('Connecte-toi à Leclerc, puis relance l’envoi')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Commencer' })).toHaveCount(0)
+  expect(fake.paced()).toEqual([])
+  expect(fake.cart()).toEqual({})
+  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+  expect(await returnedResult(page, fake)).toMatchObject({
+    outcome: 'error',
+    error: { code: 'NOT_LOGGED_IN', message: 'Tu n’es pas connecté (SESSION_VISITOR)' },
+    lines: [],
+  })
+})
+
+test('un client connecté qui devient visiteur en cours de passage : la recherche suivante arrête tout, sans écrire dans un panier anonyme', async ({
+  page,
+  fake,
+  agentCode,
+}) => {
+  // Given : le site sert la page d'un visiteur à partir de la troisième requête (la première ligne est faite avant)
+  fake.setBehavior({ visitorAfter: 2 })
+
+  // When
+  await openWithFragment(page, fake, agentCode, THREE_LINES)
+  await page.getByRole('button', { name: 'Commencer' }).click()
+  await expect(page.getByText('Connecte-toi à Leclerc')).toBeVisible()
+
+  // Then : la farine est au panier, la ligne suivante a été cherchée puis refusée, rien d'autre n'est parti
+  expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'cart', 'search'])
+  expect(fake.cart()).toEqual({ 1000001: 3 })
+  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+  expect(await returnedResult(page, fake)).toMatchObject({
+    outcome: 'error',
+    error: { code: 'NOT_LOGGED_IN', message: 'Tu n’es pas connecté (SESSION_VISITOR)' },
+    lines: [{ ingredientSlug: 'farine', outcome: 'ADDED' }],
   })
 })
 
