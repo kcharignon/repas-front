@@ -3,7 +3,7 @@ import { LeclercError } from './errors'
 
 /** Le magasin de la page, tel que le protocole le renvoie (`setup-result`). */
 export interface StoreInfo {
-  /** Premier identifiant de l'adresse, conservé en texte (« 053701 » garde son zéro). */
+  /** Premier identifiant de l'adresse, conservé en texte (« 001234 » garde son zéro). */
   id: string
   /** Hôte de la page (par magasin : `fdN-courses.leclercdrive.fr`). */
   host: string

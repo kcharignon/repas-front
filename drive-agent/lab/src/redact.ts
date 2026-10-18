@@ -74,7 +74,7 @@ export function maskStore(
   if (store.secondId !== null) ids.add(store.secondId)
   if (/^\d+$/.test(store.second)) ids.add(store.second)
   for (const value of extra) if (value.length >= 4) ids.add(value)
-  // Le site écrit parfois un numéro sans ses zéros de tête (« 053701 » devient « 53701 »).
+  // Le site écrit parfois un numéro sans ses zéros de tête (« 001234 » devient « 1234 »).
   for (const id of ids) {
     const bare = id.replace(/^0+/, '')
     if (bare.length >= 4) ids.add(bare)
