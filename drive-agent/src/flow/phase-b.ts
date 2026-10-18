@@ -12,6 +12,7 @@ import {
   type RejectedProduct,
 } from '../../protocol'
 import { LeclercError, type Candidate, type RetailerAdapter } from '../leclerc'
+import { cleanText } from '../text'
 import {
   formatContent,
   formatMeasure,
@@ -44,8 +45,6 @@ const isPicked = (value: unknown): value is Picked => {
   return type === 'choose' || type === 'failure'
 }
 
-const clean = (text: string): string => text.replace(/\s+/g, ' ').trim()
-
 const cut = (text: string): string => {
   const chars = Array.from(text)
   return chars.length > LIMITS.label ? chars.slice(0, LIMITS.label).join('') : text
@@ -53,8 +52,8 @@ const cut = (text: string): string => {
 
 /** Le libellé d'un produit pour Repas : les deux lignes de l'enseigne, de 1 à 255 caractères. */
 export function labelOf(candidate: Candidate): string {
-  const first = clean(candidate.label)
-  const second = clean(candidate.label2 ?? '')
+  const first = cleanText(candidate.label)
+  const second = cleanText(candidate.label2 ?? '')
   const joined = second !== '' && !first.toLowerCase().includes(second.toLowerCase())
   return cut((joined ? `${first} ${second}` : first) || S.picker.noLabel(candidate.id))
 }
@@ -98,10 +97,10 @@ function itemOf(line: PlanLine, candidate: Candidate, refused: ReadonlySet<strin
     price === null ? null : formatPrice(price),
     pricePerMeasure ? formatMeasure(pricePerMeasure.cents, pricePerMeasure.unit) : null,
   ].filter((detail): detail is string => detail !== null)
-  const second = clean(candidate.label2 ?? '')
+  const second = cleanText(candidate.label2 ?? '')
   return {
     id: candidate.id,
-    name: clean(candidate.label) || S.picker.noLabel(candidate.id),
+    name: cleanText(candidate.label) || S.picker.noLabel(candidate.id),
     label2: second === '' ? null : second,
     details,
     promo: promo === null ? null : S.picker.promo(formatPrice(promo)),
