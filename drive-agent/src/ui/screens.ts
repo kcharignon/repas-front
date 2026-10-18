@@ -397,6 +397,21 @@ const end: Renderer<'end'> = (props: EndProps, answer) => {
         h('li', { text: S.end.unavailable(props.unavailable) }),
         h('li', { text: S.end.failed(props.failed) }),
       ),
+      props.changes && props.changes.length > 0
+        ? h(
+            'div',
+            { class: 'notice' },
+            h('p', {}, h('strong', { text: S.end.changes.title })),
+            h('p', { text: S.end.changes.text }),
+            h(
+              'ul',
+              {},
+              ...props.changes.map((change) =>
+                h('li', { text: S.end.changes.item(change.name, change.planned, change.live) }),
+              ),
+            ),
+          )
+        : null,
       actions(back),
     ),
     focus: back,

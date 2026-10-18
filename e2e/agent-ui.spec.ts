@@ -41,6 +41,7 @@ const SCREENS = [
   'diagnostic-running',
   'hostile',
   'end-completed',
+  'end-changes',
   'end-partial',
   'end-aborted',
   ...ERROR_SCREENS,

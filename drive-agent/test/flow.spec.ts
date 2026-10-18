@@ -2,6 +2,7 @@
 // d'écran simulés. Aucun réseau, aucun DOM propre : tout est injecté.
 import { describe, expect, it, vi } from 'vitest'
 
+import type { NeededQuantity } from '../protocol'
 import { LeclercAdapter, LeclercError } from '../src/leclerc'
 import type { PendingLine, PhaseB } from '../src/flow'
 import { RUN_PREFIX } from '../src/flow'
@@ -346,6 +347,322 @@ describe('la quantité à vérifier', () => {
     await flow.start(plan([known('farine', [product('1000001', null), product('1000002', 1)])]))
 
     expect(screens.screens()).not.toContain('quantity')
+  })
+})
+
+describe('le contenu lu en direct fait foi (DRV-613)', () => {
+  const KILO = { quantity: 1, unitSymbol: 'kg', dimension: 'WEIGHT', baseFactor: 1000 } as const
+  const GRAMS_100 = { value: 100, unit: 'g' } as const
+  const GRAMS_500 = { value: 500, unit: 'g' } as const
+
+  /** Un kilo de farine voulu ; le plan mémorise `planned` produits (le contenu mémorisé n'y est pour rien : seul ce nombre compte). */
+  const farine = (planned: number | null, needed: NeededQuantity | null = KILO) => ({
+    ...known('farine', [
+      { ...product('1000001', planned), content: { value: 1000, unit: 'g' as const } },
+    ]),
+    ...(needed && { needed }),
+  })
+
+  it('met au panier le nombre calculé sur le contenu en direct quand il diffère de celui du plan, et le dit à la fin', async () => {
+    // Given : le plan croit à 1 kg par produit (1 produit pour 1 kg), le site n'en vend que 100 g
+    const { adapter, writes, calls } = fakeAdapter({ '1000001': { content: GRAMS_100 } })
+    const screens = fakeUi()
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter })
+
+    // When
+    await flow.start(plan([farine(1)]))
+
+    // Then : 10 produits, sans question ni requête de plus ; le résultat porte la quantité réellement mise au panier
+    expect(writes).toEqual([{ id: '1000001', quantity: 10 }])
+    expect(calls).toEqual(['search 1000001', 'cart 1000001 10'])
+    expect(screens.screens()).not.toContain('quantity')
+    expect(expectConform(sent[0]).lines).toEqual([
+      {
+        ingredientSlug: 'farine',
+        outcome: 'ADDED',
+        productId: '1000001',
+        quantity: 10,
+        usedRank: 1,
+      },
+    ])
+    expect(screens.propsOf('end')).toEqual([
+      {
+        outcome: 'completed',
+        added: 1,
+        chosen: 0,
+        haveAtHome: 0,
+        skipped: 0,
+        unavailable: 0,
+        failed: 0,
+        changes: [{ name: 'Farine', planned: 1, live: 10 }],
+      },
+    ])
+  })
+
+  /** La quantité écrite par la requête du panier (le champ `d` du corps, décodé). */
+  const sentQuantity = (call: { init: RequestInit }) =>
+    (JSON.parse(decodeURIComponent(String(call.init.body).slice(2))) as { iQuantite: number })
+      .iQuantite
+
+  it('sur la vraie page de recherche (fixture), le nombre mis dans la requête du panier est celui du contenu lu', async () => {
+    // Given : le plan mémorise 30 produits pour 3 kg de farine ; la page montre « 1 kg » pour ce produit
+    const site = fakeSite((call) =>
+      call.init.method === 'POST'
+        ? { body: fixture('panier-ajout.json') }
+        : { body: fixture('recherche-farine.html') },
+    )
+    const screens = fakeUi()
+    const { flow } = makeFlow({ ui: screens.ui, adapter: new LeclercAdapter(site.deps) })
+    const threeKilos = {
+      quantity: 3,
+      unitSymbol: 'kg',
+      dimension: 'WEIGHT',
+      baseFactor: 1000,
+    } as const
+
+    // When
+    await flow.start(plan([{ ...farine(30), needed: threeKilos }]))
+
+    // Then : 3 produits de 1 kg, pas 30
+    const writes = site.calls.filter((call) => call.init.method === 'POST')
+    expect(writes.map(sentQuantity)).toEqual([3])
+    expect(screens.propsOf('end')[0]?.changes).toEqual([{ name: 'Farine', planned: 30, live: 3 }])
+  })
+
+  it('sur la vraie page de recherche, un contenu que le site ne donne plus laisse le nombre du plan', async () => {
+    // Given : la page n'a plus ni « 1 kg » ni prix à l'unité de mesure pour ce produit
+    const page = fixture('recherche-farine.html')
+      .replace('"sLibelleLigne2": "1 kg"', '"sLibelleLigne2": "selon arrivage"')
+      .replace('"sPrixParUniteDeMesure": "1,29 € / kg"', '"sPrixParUniteDeMesure": ""')
+    const site = fakeSite((call) =>
+      call.init.method === 'POST' ? { body: fixture('panier-ajout.json') } : { body: page },
+    )
+    const screens = fakeUi()
+    const { flow } = makeFlow({ ui: screens.ui, adapter: new LeclercAdapter(site.deps) })
+    const threeKilos = {
+      quantity: 3,
+      unitSymbol: 'kg',
+      dimension: 'WEIGHT',
+      baseFactor: 1000,
+    } as const
+
+    // When : le plan mémorise 11 produits (le stock du site en compte 12)
+    await flow.start(plan([{ ...farine(11), needed: threeKilos }]))
+
+    // Then : le plan fait foi, comme avant
+    const writes = site.calls.filter((call) => call.init.method === 'POST')
+    expect(writes.map(sentQuantity)).toEqual([11])
+    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+  })
+
+  it('le nombre rendu à Repas est celui que le panier a gardé, pas celui du plan ni celui du calcul', async () => {
+    // Given : le calcul en direct donne 10, le site n'en garde que 4
+    const { adapter, writes } = fakeAdapter({
+      '1000001': { content: GRAMS_100, obtained: () => 4 },
+    })
+    const { flow, sent } = makeFlow({ ui: fakeUi().ui, adapter })
+
+    // When
+    await flow.start(plan([farine(1)]))
+
+    // Then
+    expect(writes).toEqual([{ id: '1000001', quantity: 10 }])
+    expect(sent[0]?.lines[0]).toMatchObject({ outcome: 'ADDED', quantity: 4 })
+  })
+
+  it('un contenu en direct qui donne le même nombre que le plan ne change rien et n’ajoute aucune mention', async () => {
+    // Given : 500 g en direct pour 1 kg demandé, soit 2 produits, comme le plan
+    const { adapter, writes } = fakeAdapter({ '1000001': { content: GRAMS_500 } })
+    const screens = fakeUi()
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter })
+
+    // When
+    await flow.start(plan([farine(2)]))
+
+    // Then
+    expect(writes).toEqual([{ id: '1000001', quantity: 2 }])
+    expect(expectConform(sent[0]).lines[0]).toMatchObject({ outcome: 'ADDED', quantity: 2 })
+    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+  })
+
+  it.each([
+    ['un contenu illisible sur le site', { content: null }, farine(3)],
+    [
+      'un contenu d’une autre dimension que la quantité demandée',
+      { content: { value: 75, unit: 'ml' as const } },
+      farine(3),
+    ],
+    ['un contenu nul', { content: { value: 0, unit: 'g' as const } }, farine(3)],
+    ['une ligne sans quantité demandée (needed)', { content: GRAMS_100 }, farine(3, null)],
+    [
+      'une quantité demandée sans dimension',
+      { content: GRAMS_100 },
+      farine(3, { quantity: 1, unitSymbol: 'kg' }),
+    ],
+  ])('garde le nombre du plan avec %s', async (_name, item, line) => {
+    // Given
+    const { adapter, writes } = fakeAdapter({ '1000001': item })
+    const screens = fakeUi()
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter })
+
+    // When
+    await flow.start(plan([line]))
+
+    // Then : comportement d'avant, sans question et sans mention
+    expect(writes).toEqual([{ id: '1000001', quantity: 3 }])
+    expect(screens.screens()).not.toContain('quantity')
+    expect(expectConform(sent[0]).lines[0]).toMatchObject({ outcome: 'ADDED', quantity: 3 })
+    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+  })
+
+  it('un nombre à vérifier reste une question pour l’utilisateur, même quand le contenu en direct est lisible', async () => {
+    // Given : le plan ne sait pas calculer (contenu mémorisé inconnu)
+    const { adapter, writes } = fakeAdapter({ '1000001': { content: GRAMS_100 } })
+    const screens = fakeUi({ quantity: () => 6 })
+    const { flow } = makeFlow({ ui: screens.ui, adapter })
+
+    // When
+    await flow.start(plan([farine(null)]))
+
+    // Then : l'utilisateur tranche, rien n'est signalé
+    expect(screens.propsOf('quantity')).toEqual([
+      { ingredient: 'Farine', productLabel: 'Produit de test 1000001', packs: null },
+    ])
+    expect(writes).toEqual([{ id: '1000001', quantity: 6 }])
+    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+  })
+
+  it('juge chaque produit sur son propre contenu : le produit de secours est recalculé comme le préféré', async () => {
+    // Given : le préféré est en rupture ; le secours, mémorisé à 2 produits, ne contient en fait que 100 g
+    const line = {
+      ...known('farine', [product('1000001', 1), product('1000002', 2)]),
+      needed: KILO,
+    }
+    const { adapter, writes } = fakeAdapter({
+      '1000001': { stock: 0, content: GRAMS_500 },
+      '1000002': { content: GRAMS_100 },
+    })
+    const screens = fakeUi()
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter })
+
+    // When
+    await flow.start(plan([line]))
+
+    // Then
+    expect(writes).toEqual([{ id: '1000002', quantity: 10 }])
+    expect(sent[0]?.lines[0]).toMatchObject({ productId: '1000002', quantity: 10, usedRank: 2 })
+    expect(screens.propsOf('end')[0]?.changes).toEqual([{ name: 'Farine', planned: 2, live: 10 }])
+  })
+
+  it('un produit que le panier refuse n’est pas signalé : seul le produit finalement mis au panier l’est', async () => {
+    // Given : le préféré a un contenu différent, mais le panier le refuse ; le secours est conforme
+    const line = {
+      ...known('farine', [product('1000001', 1), product('1000002', 2)]),
+      needed: KILO,
+    }
+    const { adapter } = fakeAdapter({
+      '1000001': { content: GRAMS_100, obtained: () => 0 },
+      '1000002': { content: GRAMS_500 },
+    })
+    const screens = fakeUi()
+    const { flow } = makeFlow({ ui: screens.ui, adapter })
+
+    // When
+    await flow.start(plan([line]))
+
+    // Then
+    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+  })
+
+  it('la mention survit à un rechargement de la page : elle figure à la fin du passage repris', async () => {
+    // Given : un premier passage interrompu (page rechargée) après la farine, dont le contenu en direct diffère
+    const storage = fakeStorage()
+    const shelf = { '1000001': { content: GRAMS_100 }, '1000003': {} }
+    const first = fakeAdapter(shelf, {
+      before: (call) =>
+        call === 'search 1000003' ? new Promise<void>(() => undefined) : undefined,
+    })
+    const lines = () => [farine(1), known('sucre', [product('1000003')])]
+    void makeFlow({ ui: fakeUi().ui, adapter: first.adapter, storage }).flow.start(plan(lines()))
+    await vi.waitFor(() =>
+      expect(storage.getItem(`${RUN_PREFIX}${RUN_ID}`)).toContain('"changes":[{'),
+    )
+
+    // When : la page rechargée reprend
+    const second = fakeAdapter(shelf)
+    const screens = fakeUi({ resume: () => 'resume' })
+    const { flow } = makeFlow({ ui: screens.ui, adapter: second.adapter, storage })
+    await flow.start(plan(lines()))
+
+    // Then : la farine n'est pas refaite, mais sa mention est là
+    expect(second.writes).toEqual([{ id: '1000003', quantity: 1 }])
+    expect(screens.propsOf('end')[0]?.changes).toEqual([{ name: 'Farine', planned: 1, live: 10 }])
+  })
+
+  /** Un état de reprise d'un passage dont `sel` est fait ; `extra` y ajoute ce que le test veut éprouver. */
+  const storedState = (extra: Record<string, unknown> = {}) =>
+    fakeStorage({
+      [`${RUN_PREFIX}${RUN_ID}`]: JSON.stringify({
+        v: 1,
+        runId: RUN_ID,
+        updatedAt: 1,
+        phase: 'PHASE_A',
+        done: { sel: { ingredientSlug: 'sel', outcome: 'HAVE_AT_HOME' } },
+        waiting: {},
+        ...extra,
+      }),
+    })
+
+  it('un état ancien, sans mention, se reprend comme avant', async () => {
+    // Given : un état écrit par une version de l'agent qui ne connaissait pas `changes`
+    const screens = fakeUi({ resume: () => 'resume' })
+    const { flow } = makeFlow({
+      ui: screens.ui,
+      adapter: fakeAdapter().adapter,
+      storage: storedState(),
+    })
+
+    // When
+    await flow.start(plan([home('sel')]))
+
+    // Then
+    expect(screens.propsOf('resume')).toEqual([{ done: 1, total: 1 }])
+    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+  })
+
+  it.each([
+    ['pas une liste', 'oui'],
+    ['une entrée qui n’est pas un objet', [3]],
+    ['un nombre hors des bornes', [{ ingredientSlug: 'sel', planned: 1, live: 1000 }]],
+    ['un nombre fractionnaire', [{ ingredientSlug: 'sel', planned: 1.5, live: 2 }]],
+    ['un identifiant qui n’est pas du texte', [{ ingredientSlug: 4, planned: 1, live: 2 }]],
+  ])('ignore un état dont les mentions sont mal formées (%s)', async (_name, changes) => {
+    const screens = fakeUi()
+    const { flow } = makeFlow({
+      ui: screens.ui,
+      adapter: fakeAdapter().adapter,
+      storage: storedState({ changes }),
+    })
+
+    await flow.start(plan([home('sel')]))
+
+    expect(screens.screens()[0]).toBe('summary')
+  })
+
+  it('une mention d’un ingrédient qui n’est pas dans le plan n’est pas affichée', async () => {
+    // Given : un état de reprise (le stockage est partagé avec la page) cite un ingrédient étranger au plan
+    const screens = fakeUi({ resume: () => 'resume' })
+    const { flow } = makeFlow({
+      ui: screens.ui,
+      adapter: fakeAdapter().adapter,
+      storage: storedState({ changes: [{ ingredientSlug: 'inconnu', planned: 1, live: 2 }] }),
+    })
+
+    // When
+    await flow.start(plan([home('sel')]))
+
+    // Then
+    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
   })
 })
 

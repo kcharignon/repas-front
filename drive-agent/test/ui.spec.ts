@@ -721,6 +721,35 @@ describe('fin', () => {
     await expect(answer).resolves.toBe('return')
   })
 
+  it('sans ligne recalculée, ne montre pas la mention « contenu différent »', () => {
+    const handle = open()
+    void handle.show('end', END)
+
+    expect(shadow().textContent).not.toContain('Contenu différent')
+  })
+
+  it('montre chaque ligne dont le nombre de produits a été recalculé sur le contenu lu en direct', async () => {
+    const handle = open()
+    const answer = handle.show('end', {
+      ...END,
+      changes: [
+        { name: 'Farine', planned: 1, live: 10 },
+        { name: HOSTILE, planned: 4, live: 2 },
+      ],
+    })
+
+    const note = shadow().querySelector('.notice')
+    expect(note?.querySelector('strong')?.textContent).toBe('Contenu différent de celui mémorisé')
+    expect([...(note?.querySelectorAll('li') ?? [])].map((item) => item.textContent)).toEqual([
+      'Farine : 10 au lieu de 1',
+      `${HOSTILE} : 2 au lieu de 4`,
+    ])
+    expect(shadow().querySelector('img, script, iframe, object')).toBeNull()
+    expect((window as unknown as { pwned?: number }).pwned).toBeUndefined()
+    press('Retourner dans Repas')
+    await expect(answer).resolves.toBe('return')
+  })
+
   it('ajoute le conseil de l’erreur qui a interrompu l’envoi', () => {
     const handle = open()
     void handle.show('end', { ...END, outcome: 'partial', error: 'BLOCKED', failed: 3 })

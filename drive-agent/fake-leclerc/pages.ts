@@ -31,8 +31,10 @@ function productJson(product: FakeProduct, inCart: number): Record<string, unkno
     nrPVUnitaireTTC: product.price,
     sPrixUnitaire: euros(cents(product.price)),
     sPrixPromo: product.promo === undefined ? null : euros(cents(product.promo)),
-    nrPVParUniteDeMesureTTC: product.perMeasure,
-    sPrixParUniteDeMesure: `${euros(cents(product.perMeasure))} / ${product.measure}`,
+    nrPVParUniteDeMesureTTC: product.noContent ? null : product.perMeasure,
+    sPrixParUniteDeMesure: product.noContent
+      ? ''
+      : `${euros(cents(product.perMeasure))} / ${product.measure}`,
     iQteDisponible: product.stock,
     iQuantitePanier: inCart,
     sUrlVignetteProduit: `https://photos-test.leclercdrive.fr/image.ashx?id=${product.id - 999000}&use=l&cat=p`,
