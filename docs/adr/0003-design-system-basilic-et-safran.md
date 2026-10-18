@@ -1,8 +1,8 @@
 # 0003 — Design système « Basilic & safran » : Tailwind, Reka UI, jetons en variables CSS
 
-- **Statut** : Accepted (jetons et composants à ajuster après la validation des maquettes par l'utilisateur)
+- **Statut** : Accepted (jetons et composants à ajuster après la validation des maquettes par l'utilisateur) ; amendé le 2026-10-18 (le téléphone prépare et envoie aussi la liste au drive)
 - **Date** : 2026-10-15
-- **Liens** : [0001](0001-stack-du-front.md), plan du front (section 7, dépôt back)
+- **Liens** : [0001](0001-stack-du-front.md), [0008](0008-envoi-de-la-liste-au-drive.md), plan du front (section 7, dépôt back)
 
 ## Contexte
 
@@ -39,3 +39,7 @@ redessiner sans lutter contre un kit imposé.
 - Vuetify, PrimeVue, Naive UI : complets mais imposent leur esthétique et un poids de bundle élevé.
 - Bootstrap (comme le Twig) : c'est précisément le « fonctionnel mais moche » à quitter.
 - Storybook / Histoire pour le catalogue : outillage lourd ou en bêta avec Vite 8 ; la page `/design` suffit pour l'instant.
+
+## Amendement du 2026-10-18 (ADR 0008)
+
+Le téléphone ne sert plus seulement à consulter et cocher la liste en magasin : c'est aussi l'appareil qui **prépare et envoie la liste au drive** (écrans `/drive/*` : réglages, envoi, retour, « Mes produits », aide), puisque l'application Android qui fait le travail est sur le téléphone. Ces écrans sont pensés mobile d'abord et suivent les mêmes règles que les autres : composants `Ui*`, jetons de couleur, thème clair et sombre, cibles ≥ 44 px, textes dans `fr.ts`, contrastes AA vérifiés par axe ; le téléphone cible des essais de bout en bout du drive est un Pixel 7. La politique de contenu n'autorise toujours aucune image externe : les produits de l'enseigne s'affichent sans vignette.

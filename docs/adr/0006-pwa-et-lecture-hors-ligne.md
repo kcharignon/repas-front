@@ -1,8 +1,8 @@
 # 0006 — PWA : application installable et liste en cours lisible hors-ligne
 
-- **Statut** : Accepted
+- **Statut** : Accepted ; amendé le 2026-10-18 (envoi de la liste au drive)
 - **Date** : 2026-10-15
-- **Liens** : [0004](0004-front-dans-docker.md), [0005](0005-session-du-front.md), plan du front (phase 5) du dépôt back
+- **Liens** : [0004](0004-front-dans-docker.md), [0005](0005-session-du-front.md), [0008](0008-envoi-de-la-liste-au-drive.md), plan du front (phase 5) du dépôt back
 
 ## Contexte
 
@@ -48,3 +48,11 @@ résolution de conflits avec `If-Match`) est un autre chantier, hors périmètre
 - Négatives : `vite-plugin-pwa` / Workbox ajoutent une chaîne de dépendances de build (284 paquets de développement) ; la copie hors-ligne est
   en clair dans le navigateur de l'utilisateur (une liste de courses, pas un secret) ; pas d'édition hors-ligne.
 - À surveiller : si l'on garde un jour d'autres données hors-ligne, étendre `shouldDehydrateQuery` (liste blanche) et non l'ouvrir.
+
+## Amendement du 2026-10-18 (ADR 0008)
+
+La liste de courses se consulte en magasin, mais elle s'**envoie** aussi au drive depuis le téléphone. Ce que cela change à ce qui précède :
+
+9. **Rien du drive n'est gardé hors ligne.** Ni le service worker (aucune réponse de `/api`, § 2) ni la copie hors ligne (liste blanche : la liste en cours et son résumé, § 3) ne gardent le plan, les choix, les réglages ou l'estimation du drive ; le plan est relu à chaque ouverture de l'écran d'envoi.
+10. **Une action du drive demande le réseau.** Envoyer, ouvrir le drive, enregistrer ses réglages et terminer ou rouvrir une liste depuis l'écran du retour sont désactivés hors connexion, avec leur explication (§ 5).
+11. **Le rechargement par une nouvelle version (§ 8) peut tomber pendant un envoi** : l'utilisateur est alors dans l'écran du drive de l'application. Le passage en cours est retrouvé par son brouillon (`repas.drive.run` dans `localStorage`, ADR 0008 § 6) et le résultat est gardé dès le démarrage de l'application, avant que l'écran du retour existe.

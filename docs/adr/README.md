@@ -9,5 +9,6 @@
 | [0005](0005-session-du-front.md) | Session du front : jeton en mémoire, refresh par cookie, garde de routes | Accepted |
 | [0006](0006-pwa-et-lecture-hors-ligne.md) | PWA : application installable et liste en cours lisible hors-ligne | Accepted |
 | [0007](0007-deploiement-par-release.md) | Déploiement : une release GitHub publie l'image et la met en production | Accepted |
+| [0008](0008-envoi-de-la-liste-au-drive.md) | Envoi de la liste de courses au drive : application Android, pont natif, agent embarqué | Accepted |
 
 Une décision nouvelle = un nouvel ADR (numéro suivant) dans le même commit que le code qui l'applique.
