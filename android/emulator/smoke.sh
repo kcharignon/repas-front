@@ -250,6 +250,34 @@ done
 sleep 2
 screenshot 07-drive
 
+# La page de Leclerc s'affiche en mode ordinateur (fenêtre de 980 px CSS sur ~411 dp) : son texte est petit. Le menu l'agrandit d'un cran, sans geste.
+# On lit l'échelle de la page (dp par pixel CSS) dans la WebView : la page se zoome autour du centre de l'écran, un lien du haut de page sort du cadre.
+page_scale() { json_number "$(display_measures)" scale; }
+small=$(page_scale)
+if tap 'content-desc="Menu"' && wait_until 10 ui_has 'Agrandir la page' && tap 'text="Agrandir la page"'; then
+  sleep 2
+  big=$(page_scale)
+  if [ -n "$small" ] && [ -n "$big" ] && at_least "$big" "$(awk -v a="$small" 'BEGIN { print a * 1.3 }')"; then
+    ok "« Agrandir la page » agrandit la page de Leclerc (échelle de la page : $small, puis $big dp par pixel CSS)"
+  else
+    ko "« Agrandir la page » n'a pas agrandi la page (échelle : ${small:-?}, puis ${big:-?})"
+  fi
+  screenshot 07b-drive-agrandi
+  if tap 'content-desc="Menu"' && wait_until 10 ui_has 'Réduire la page' && tap 'text="Réduire la page"'; then
+    sleep 2
+    back=$(page_scale)
+    if [ -n "$back" ] && at_least "$big" "$(awk -v a="$back" 'BEGIN { print a * 1.3 }')"; then
+      ok "« Réduire la page » la réduit (échelle de la page : $big, puis $back)"
+    else
+      ko "« Réduire la page » n'a rien changé (échelle : ${back:-?})"
+    fi
+  else
+    ko "l'entrée « Réduire la page » du menu est introuvable"
+  fi
+else
+  ko "l'entrée « Agrandir la page » du menu est introuvable"
+fi
+
 # --- 6. Pont application -> page -> agent ----------------------------------------------------------------------------------------------
 say
 say "6. Diagnostic de l'agent (application vers page, par le pont)"

@@ -38,17 +38,19 @@ set_config() { # set_config <clé> <valeur> : fixe une ligne de config.ini de l'
 }
 
 if [ ! -d "$ANDROID_AVD_HOME/$AVD.avd" ]; then
-  log "Création de l'AVD « $AVD » (Pixel 5, Android ${API}, Google APIs)."
+  log "Création de l'AVD « $AVD » (Android ${API}, Google APIs, écran de Pixel 9)."
   mkdir -p "$ANDROID_AVD_HOME"
   echo no | avdmanager create avd --name "$AVD" --package "$IMAGE" --device pixel_5 --force > /dev/null
-  # Un écran plus petit : des captures plus légères à lire, un démarrage plus court.
-  set_config hw.lcd.width 720
-  set_config hw.lcd.height 1560
-  set_config hw.lcd.density 320
   set_config hw.ramSize 3072
   set_config disk.dataPartition.size 4G
   set_config hw.keyboard yes
 fi
+# L'écran est celui du téléphone de l'utilisateur, un Pixel 9 : 1080 x 2424 pixels à 420 dpi, soit 411 x 923 dp. Un écran plus petit ou plus
+# grand cacherait le défaut de lisibilité du site en mode ordinateur (fenêtre de 980 px CSS affichée sur 411 dp, facteur 2,4). Réécrit à chaque
+# démarrage, pour qu'un AVD créé avant ce réglage le reçoive aussi ; EMULATOR_LCD_* le change (compose.yaml).
+set_config hw.lcd.width "${EMULATOR_LCD_WIDTH:-1080}"
+set_config hw.lcd.height "${EMULATOR_LCD_HEIGHT:-2424}"
+set_config hw.lcd.density "${EMULATOR_LCD_DENSITY:-420}"
 
 # --- 2. Faux site et DNS local -----------------------------------------------------------------------------------------------------------
 mkdir -p "$SITE"

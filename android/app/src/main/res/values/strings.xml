@@ -4,6 +4,8 @@
 
     <string name="menu_button">Menu</string>
     <string name="menu_about">Version et mode d’emploi</string>
+    <string name="menu_zoom_in">Agrandir la page</string>
+    <string name="menu_zoom_out">Réduire la page</string>
     <string name="menu_drive_settings">Réglages du drive</string>
     <string name="menu_open_drive">Ouvrir le drive Leclerc</string>
     <string name="menu_logout_drive">Se déconnecter de Leclerc et effacer les données du drive</string>

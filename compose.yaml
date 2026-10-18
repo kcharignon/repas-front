@@ -169,6 +169,10 @@ services:
     environment:
       EMULATOR_MEMORY: ${EMULATOR_MEMORY:-3072}
       EMULATOR_CORES: ${EMULATOR_CORES:-4}
+      # L'écran de l'émulateur : un Pixel 9 par défaut (le téléphone de l'utilisateur).
+      EMULATOR_LCD_WIDTH: ${EMULATOR_LCD_WIDTH:-1080}
+      EMULATOR_LCD_HEIGHT: ${EMULATOR_LCD_HEIGHT:-2424}
+      EMULATOR_LCD_DENSITY: ${EMULATOR_LCD_DENSITY:-420}
     volumes:
       - android-emulator-sdk:/sdk
       # L'APK de débogage construit par `make android`, en lecture seule.
