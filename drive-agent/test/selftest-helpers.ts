@@ -122,6 +122,7 @@ export function shop(shelves: Shelves, options: ShopOptions = {}) {
       })
     },
     pageCartTotal: () => pageTotal,
+    cartQuantity: (id) => cart.get(id) ?? null,
     readSession: () => options.session ?? { state: 'UNKNOWN', signs: [] },
     readArrival: () => ({
       address: '/',

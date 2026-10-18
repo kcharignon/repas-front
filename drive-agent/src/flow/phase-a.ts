@@ -10,6 +10,7 @@ import {
   type ResultLine,
 } from '../../protocol'
 import type { Candidate, Content, RetailerAdapter } from '../leclerc'
+import { type CartNote, putInCart } from './keep-cart'
 import { packsFor } from './packs'
 import { findKnownProduct } from './search-by-name'
 
@@ -26,10 +27,11 @@ export interface ContentChange {
 
 /**
  * Ce que la phase A décide d'une ligne : une issue finale, ou une attente de la phase B (les produits connus indisponibles).
- * `change` n'accompagne qu'une issue `ADDED` dont la quantité a été recalculée.
+ * `change` n'accompagne qu'une issue `ADDED` dont la quantité a été recalculée ; `cart` qu'une issue dont la quantité déjà au panier est à
+ * dire à la fin (conservée parce que plus grande que celle du plan, ou illisible : ticket M).
  */
 export type Verdict =
-  | { kind: 'done'; line: ResultLine; change?: ContentChange }
+  | { kind: 'done'; line: ResultLine; change?: ContentChange; cart?: CartNote }
   | { kind: 'waiting'; unavailable: string[] }
 
 /** Le prix lu pour Repas (décision D22) : unitaire TTC en centimes, et à l'unité de mesure quand le site la donne. */
@@ -66,6 +68,9 @@ export interface KnownLineDeps {
  * requêtes de plus, ticket D) ; le produit introuvable après cela, ou à stock nul, est indisponible. Un produit que le panier refuse
  * (quantité obtenue nulle) l'est aussi. Chaque écriture est vérifiée par la réponse du panier : `quantity` est ce que le site a mis au panier.
  *
+ * **Le panier n'est jamais réduit** (ticket M) : un produit déjà au panier en plus grande quantité que celle du plan reste tel quel (rien
+ * n'est écrit, `quantity` est celle du panier, `cart` le dit) ; voir `putInCart`.
+ *
  * **Le contenu en direct fait foi** (DRV-613) : la fiche d'un produit est partagée entre les utilisateurs du magasin, son contenu
  * mémorisé peut être faux ou périmé. Quand le plan donne un nombre de produits sûr et que la recherche vient de montrer le contenu
  * du produit, le nombre est recalculé avec `packsFor` (comme en phase B) sur ce contenu et la quantité demandée (`needed`) ; s'il
@@ -94,8 +99,8 @@ export async function settleKnownLine(line: PlanLine, deps: KnownLineDeps): Prom
       if (packs === null)
         return { kind: 'done', line: { ingredientSlug: line.ingredientSlug, outcome: 'SKIPPED' } }
     }
-    const cart = await deps.adapter.setCartQuantity(product.id, packs)
-    if (cart.obtained < 1) {
+    const settled = await putInCart(deps.adapter, seen, packs)
+    if (settled.obtained < 1) {
       unavailable.push(product.id)
       continue
     }
@@ -106,12 +111,13 @@ export async function settleKnownLine(line: PlanLine, deps: KnownLineDeps): Prom
         ingredientSlug: line.ingredientSlug,
         outcome: 'ADDED',
         productId: product.id,
-        quantity: Math.min(cart.obtained, LIMITS.packsMax),
+        quantity: Math.min(settled.obtained, LIMITS.packsMax),
         usedRank: index + 1,
         ...(unavailable.length > 0 && { unavailableIds: unavailable }),
         ...(price && { price }),
       },
       ...(change && { change }),
+      ...(settled.note && { cart: settled.note }),
     }
   }
   return { kind: 'waiting', unavailable }

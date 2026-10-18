@@ -412,6 +412,36 @@ const end: Renderer<'end'> = (props: EndProps, answer) => {
             ),
           )
         : null,
+      props.kept && props.kept.length > 0
+        ? h(
+            'div',
+            { class: 'notice' },
+            h('p', {}, h('strong', { text: S.end.kept.title })),
+            h('p', { text: S.end.kept.text }),
+            h(
+              'ul',
+              {},
+              ...props.kept.map((line) =>
+                h('li', { text: S.end.kept.item(line.name, line.inCart) }),
+              ),
+            ),
+          )
+        : null,
+      props.unreadable && props.unreadable.length > 0
+        ? h(
+            'div',
+            { class: 'notice' },
+            h('p', {}, h('strong', { text: S.end.unreadable.title })),
+            h('p', { text: S.end.unreadable.text }),
+            h(
+              'ul',
+              {},
+              ...props.unreadable.map((line) =>
+                h('li', { text: S.end.unreadable.item(line.name, line.atLeast) }),
+              ),
+            ),
+          )
+        : null,
       actions(back),
     ),
     focus: back,

@@ -2,6 +2,7 @@
 // Aucune donnée personnelle : des identifiants de lignes et de produits, rien d'autre. Une erreur du stockage (plein, interdit) ne gêne
 // jamais le passage : on perd seulement la reprise.
 import { LIMITS, LINE_OUTCOMES, type ResultLine } from '../../protocol'
+import type { CartNote } from './keep-cart'
 import type { ContentChange } from './phase-a'
 import type { StorageLike } from './types'
 
@@ -11,6 +12,9 @@ export const RUN_PREFIX = 'repas:run:'
 export interface RecordedChange extends ContentChange {
   ingredientSlug: string
 }
+
+/** Une ligne dont la quantité déjà au panier est à dire à la fin (ticket M : conservée, ou illisible), gardée pour l'écran de fin. */
+export type RecordedCart = CartNote & { ingredientSlug: string }
 
 export interface RunState {
   v: 1
@@ -24,10 +28,21 @@ export interface RunState {
   waiting: Record<string, string[]>
   /** Les lignes ajoutées avec un nombre recalculé en direct, dans l'ordre du passage. */
   changes: RecordedChange[]
+  /** Les lignes dont la quantité déjà au panier est à signaler (conservée ou illisible), dans l'ordre du passage. */
+  carts: RecordedCart[]
 }
 
 export function emptyState(runId: string, now: number): RunState {
-  return { v: 1, runId, updatedAt: now, phase: 'PHASE_A', done: {}, waiting: {}, changes: [] }
+  return {
+    v: 1,
+    runId,
+    updatedAt: now,
+    phase: 'PHASE_A',
+    done: {},
+    waiting: {},
+    changes: [],
+    carts: [],
+  }
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -42,8 +57,23 @@ const isChange = (value: unknown): value is RecordedChange =>
   isPacks(value.planned) &&
   isPacks(value.live)
 
-/** Un état tel qu'il est stocké : `changes` est facultatif, un état écrit avant DRV-613 n'en a pas. */
-type StoredState = Omit<RunState, 'changes'> & { changes?: RecordedChange[] }
+/** La quantité au panier d'une mention : un entier de 1 à 99 999 (le site n'en laisse pas plus de 1 000). */
+const isInCart = (value: unknown): value is number =>
+  Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 99999
+
+const isCart = (value: unknown): value is RecordedCart => {
+  if (!isObject(value) || typeof value.ingredientSlug !== 'string' || !isPacks(value.wanted)) {
+    return false
+  }
+  if (value.kind === 'KEPT') return isInCart(value.inCart)
+  return value.kind === 'UNREADABLE' && (value.inCart === null || isInCart(value.inCart))
+}
+
+/** Un état tel qu'il est stocké : `changes` (DRV-613) et `carts` (ticket M) sont facultatifs, un état plus ancien n'en a pas. */
+type StoredState = Omit<RunState, 'changes' | 'carts'> & {
+  changes?: RecordedChange[]
+  carts?: RecordedCart[]
+}
 
 /** Un état lu du stockage n'est cru que s'il a la bonne forme : la page de l'enseigne partage ce stockage. */
 function isState(value: unknown, runId: string): value is StoredState {
@@ -64,7 +94,10 @@ function isState(value: unknown, runId: string): value is StoredState {
   const changesOk =
     value.changes === undefined ||
     (Array.isArray(value.changes) && value.changes.every((change) => isChange(change)))
-  return doneOk && waitingOk && changesOk
+  const cartsOk =
+    value.carts === undefined ||
+    (Array.isArray(value.carts) && value.carts.every((cart) => isCart(cart)))
+  return doneOk && waitingOk && changesOk && cartsOk
 }
 
 export class RunStore {
@@ -78,7 +111,9 @@ export class RunStore {
     try {
       const raw = this.storage?.getItem(RUN_PREFIX + runId)
       const state: unknown = raw ? JSON.parse(raw) : null
-      return isState(state, runId) ? { ...state, changes: state.changes ?? [] } : null
+      return isState(state, runId)
+        ? { ...state, changes: state.changes ?? [], carts: state.carts ?? [] }
+        : null
     } catch {
       return null
     }

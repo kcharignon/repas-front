@@ -65,6 +65,11 @@ export interface RetailerAdapter {
   setCartQuantity(productId: string, quantity: number): Promise<CartResult>
   /** Le produit voulu parmi les résultats d'une recherche (stock, prix du jour), ou `null` s'il n'y figure pas. */
   readProductFromSearch(query: string, productId: string): Promise<Candidate | null>
+  /**
+   * La quantité de ce produit dans la dernière réponse du panier (ticket M : plancher de ce qu'on écrit quand la recherche ne donne pas la
+   * quantité déjà au panier), `null` si cette réponse ne le cite pas ou s'il n'y en a pas eu. Aucune requête.
+   */
+  cartQuantity(productId: string): number | null
   /** Le total du panier (centimes) lu dans la page de la dernière recherche, `null` si elle n'en portait pas ou s'il n'y a pas eu de recherche. */
   pageCartTotal(): number | null
   /** Ce que la page courante montre de la connexion de l'utilisateur (visiteur, client connecté ou inconnu). Aucune requête. */
@@ -114,6 +119,8 @@ export class LeclercAdapter implements RetailerAdapter {
   private searchBase: SearchBase | null = null
   private facts: SearchFacts | null = null
   private readonly stocks = new Map<string, number>()
+  /** Les quantités de la dernière réponse du panier lisible (ticket M), `null` avant la première. */
+  private cartLines: ReadonlyMap<string, number> | null = null
 
   constructor(deps: LeclercDeps) {
     this.deps = deps
@@ -301,7 +308,8 @@ export class LeclercAdapter implements RetailerAdapter {
       body,
     })
     this.assertUsable(reply)
-    const { obtained, items, totalCents } = this.readCart(reply, productId)
+    const { obtained, items, totalCents, quantities } = this.readCart(reply, productId)
+    this.cartLines = quantities
     return {
       productId,
       requested: quantity,
@@ -353,6 +361,10 @@ export class LeclercAdapter implements RetailerAdapter {
 
   pageCartTotal(): number | null {
     return this.pageTotal
+  }
+
+  cartQuantity(productId: string): number | null {
+    return this.cartLines?.get(productId) ?? null
   }
 
   readSession(): SessionReading {

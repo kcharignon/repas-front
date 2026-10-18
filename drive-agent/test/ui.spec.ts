@@ -771,6 +771,55 @@ describe('fin', () => {
     await expect(answer).resolves.toBe('return')
   })
 
+  it('sans quantité conservée ni illisible, ne montre aucune de ces mentions', () => {
+    const handle = open()
+    void handle.show('end', END)
+
+    expect(shadow().textContent).not.toContain('Déjà')
+    expect(shadow().textContent).not.toContain('illisible')
+  })
+
+  it('dit pour chaque ligne la quantité déjà au panier qui est conservée', async () => {
+    const handle = open()
+    const answer = handle.show('end', {
+      ...END,
+      kept: [
+        { name: 'Farine', wanted: 2, inCart: 5 },
+        { name: HOSTILE, wanted: 1, inCart: 3 },
+      ],
+    })
+
+    const note = shadow().querySelector('.notice')
+    expect(note?.querySelector('strong')?.textContent).toBe('Quantités déjà au panier')
+    expect(note?.textContent).toContain('Repas ne réduit jamais')
+    expect([...(note?.querySelectorAll('li') ?? [])].map((item) => item.textContent)).toEqual([
+      'Farine — Déjà 5 au panier : conservé',
+      `${HOSTILE} — Déjà 3 au panier : conservé`,
+    ])
+    expect(shadow().querySelector('img, script, iframe, object')).toBeNull()
+    press('Retourner dans Repas')
+    await expect(answer).resolves.toBe('return')
+  })
+
+  it('signale les quantités que la recherche ne donnait pas, avec le plancher connu quand il y en a un', () => {
+    const handle = open()
+    void handle.show('end', {
+      ...END,
+      unreadable: [
+        { name: 'Farine', atLeast: 4 },
+        { name: 'Sucre', atLeast: null },
+      ],
+    })
+
+    const notes = [...shadow().querySelectorAll('.notice')]
+    const note = notes.find((item) => item.textContent?.includes('illisible'))
+    expect(note?.querySelector('strong')?.textContent).toBe('Quantité au panier illisible')
+    expect([...(note?.querySelectorAll('li') ?? [])].map((item) => item.textContent)).toEqual([
+      'Farine — au moins 4 gardés, vérifie dans ton panier',
+      'Sucre — vérifie dans ton panier',
+    ])
+  })
+
   it('ajoute le conseil de l’erreur qui a interrompu l’envoi', () => {
     const handle = open()
     void handle.show('end', { ...END, outcome: 'partial', error: 'BLOCKED', failed: 3 })

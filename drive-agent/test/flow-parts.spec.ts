@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { ERROR_CODES, LIMITS, type ResultLine } from '../protocol'
 import {
   buildResult,
+  cartsOf,
   changesOf,
   endingOf,
   endProps,
@@ -257,6 +258,48 @@ describe('changesOf', () => {
   })
 })
 
+describe('cartsOf (ticket M)', () => {
+  const lines = [known('farine', [product('1')]), known('sucre', [product('2')])]
+
+  it('sépare les quantités conservées et les quantités illisibles, dans l’ordre du plan, avec le nom de l’ingrédient', () => {
+    const state = emptyState('x', 1)
+    state.carts.push(
+      { ingredientSlug: 'sucre', kind: 'UNREADABLE', wanted: 1, inCart: 4 },
+      { ingredientSlug: 'farine', kind: 'KEPT', wanted: 2, inCart: 5 },
+    )
+
+    expect(cartsOf(plan(lines), state)).toEqual({
+      kept: [{ name: 'Farine', wanted: 2, inCart: 5 }],
+      unreadable: [{ name: 'Sucre', atLeast: 4 }],
+    })
+  })
+
+  it('une quantité illisible sans plancher a « atLeast » nul', () => {
+    const state = emptyState('x', 1)
+    state.carts.push({ ingredientSlug: 'farine', kind: 'UNREADABLE', wanted: 2, inCart: null })
+
+    expect(cartsOf(plan(lines), state).unreadable).toEqual([{ name: 'Farine', atLeast: null }])
+  })
+
+  it('garde une seule mention par ligne et ignore un ingrédient qui n’est pas dans le plan', () => {
+    const state = emptyState('x', 1)
+    state.carts.push(
+      { ingredientSlug: 'farine', kind: 'KEPT', wanted: 2, inCart: 5 },
+      { ingredientSlug: 'farine', kind: 'KEPT', wanted: 1, inCart: 9 },
+      { ingredientSlug: 'inconnu', kind: 'KEPT', wanted: 1, inCart: 2 },
+    )
+
+    expect(cartsOf(plan(lines), state)).toEqual({
+      kept: [{ name: 'Farine', wanted: 2, inCart: 5 }],
+      unreadable: [],
+    })
+  })
+
+  it('ne rend rien sans mention', () => {
+    expect(cartsOf(plan(lines), emptyState('x', 1))).toEqual({ kept: [], unreadable: [] })
+  })
+})
+
 describe('le résultat', () => {
   it.each(ERROR_CODES)('porte un message d’erreur fixe et court pour « %s »', (code) => {
     const result = buildResult(plan([]), [], { outcome: 'error', code }, '1.2.3')
@@ -311,5 +354,18 @@ describe('le résultat', () => {
     expect(endProps([], { outcome: 'completed' }, changes)).toMatchObject({ changes })
     expect(endProps([], { outcome: 'completed' }, [])).not.toHaveProperty('changes')
     expect(endProps([], { outcome: 'completed' })).not.toHaveProperty('changes')
+  })
+
+  it('ajoute les quantités conservées et illisibles à l’écran de fin, et seulement s’il y en a', () => {
+    const carts = {
+      kept: [{ name: 'Farine', wanted: 2, inCart: 5 }],
+      unreadable: [{ name: 'Sucre', atLeast: null }],
+    }
+
+    expect(endProps([], { outcome: 'completed' }, [], carts)).toMatchObject(carts)
+    const none = endProps([], { outcome: 'completed' }, [], { kept: [], unreadable: [] })
+    expect(none).not.toHaveProperty('kept')
+    expect(none).not.toHaveProperty('unreadable')
+    expect(endProps([], { outcome: 'completed' })).not.toHaveProperty('kept')
   })
 })

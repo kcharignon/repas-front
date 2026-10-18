@@ -394,6 +394,21 @@ export const S = {
       item: (name: string, planned: number, live: number) =>
         `${name} : ${live} au lieu de ${planned}`,
     },
+    /** Le panier avait déjà plus que le plan : Repas ne réduit jamais une quantité déjà au panier (ticket M). */
+    kept: {
+      title: 'Quantités déjà au panier',
+      text: 'Repas ne réduit jamais une quantité déjà au panier : ces lignes sont restées telles quelles.',
+      item: (name: string, inCart: number) => `${name} — Déjà ${inCart} au panier : conservé`,
+    },
+    /** La recherche ne donnait pas la quantité déjà au panier : Repas n'a pas pu s'en assurer (ticket M). */
+    unreadable: {
+      title: 'Quantité au panier illisible',
+      text: 'Leclerc n’a pas dit ce que ton panier contenait déjà pour ces lignes. Vérifie-les dans ton panier.',
+      item: (name: string, atLeast: number | null) =>
+        atLeast === null
+          ? `${name} — vérifie dans ton panier`
+          : `${name} — au moins ${atLeast} gardés, vérifie dans ton panier`,
+    },
     back: 'Retourner dans Repas',
   },
   /** Les lignes du journal de progression (une par ingrédient traité). */

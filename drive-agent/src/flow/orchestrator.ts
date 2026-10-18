@@ -12,8 +12,9 @@ import {
 import { LeclercError, type LeclercCause } from '../leclerc'
 import { own } from '../own'
 import { S, type SummaryProps } from '../ui'
+import type { CartNote } from './keep-cart'
 import { settleKnownLine, type ContentChange } from './phase-a'
-import { buildResult, changesOf, endProps, endingOf, resultLines } from './result'
+import { buildResult, cartsOf, changesOf, endProps, endingOf, resultLines } from './result'
 import { emptyState, RunStore, type RunState } from './run-state'
 import type { FlowDeps, PendingLine, Step } from './types'
 import { keepAwake } from './wake-lock'
@@ -265,7 +266,7 @@ export class Flow {
       },
     })
     if (verdict.kind === 'waiting') this.wait(run, line, verdict.unavailable)
-    else this.record(run, verdict.line, verdict.change)
+    else this.record(run, verdict.line, verdict.change, verdict.cart)
   }
 
   /** Une erreur pendant une ligne : une erreur réseau n'abîme que la ligne (l'adaptateur a déjà retenté), les autres arrêtent le passage. */
@@ -292,7 +293,7 @@ export class Flow {
         pending: this.pending(run),
         adapter: this.deps.adapter,
         ui: this.deps.ui,
-        record: (line) => this.record(run, line),
+        record: (line, cart) => this.record(run, line, undefined, cart),
         stopRequested: () => run.stopped,
         showProgress: () => this.showProgress(run),
       })
@@ -317,7 +318,10 @@ export class Flow {
       ending.outcome === 'aborted' ? 'ABORTED' : ending.outcome === 'error' ? 'ERROR' : 'DONE',
     )
     const result = buildResult(run.plan, lines, ending, agentVersion)
-    await ui.show('end', endProps(lines, ending, changesOf(run.plan, run.state)))
+    await ui.show(
+      'end',
+      endProps(lines, ending, changesOf(run.plan, run.state), cartsOf(run.plan, run.state)),
+    )
     this.runs.remove(run.plan.runId)
     send(result)
     ui.close()
@@ -358,11 +362,13 @@ export class Flow {
 
   /**
    * Une issue finale : sauvegardée pour la reprise, ajoutée au journal, la progression avance. `change` : le nombre de produits a été
-   * recalculé sur le contenu lu en direct (DRV-613), à rappeler à l'écran de fin.
+   * recalculé sur le contenu lu en direct (DRV-613), à rappeler à l'écran de fin. `cart` : la quantité déjà au panier est conservée ou
+   * illisible (ticket M), à rappeler aussi.
    */
-  private record(run: Run, line: ResultLine, change?: ContentChange): void {
+  private record(run: Run, line: ResultLine, change?: ContentChange, cart?: CartNote): void {
     const { slug, entry } = this.describe(run, line)
     if (change) run.state.changes.push({ ingredientSlug: slug, ...change })
+    if (cart) run.state.carts.push({ ingredientSlug: slug, ...cart })
     run.state.done[slug] = line
     delete run.state.waiting[slug]
     this.touch(run)

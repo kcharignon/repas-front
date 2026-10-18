@@ -140,6 +140,8 @@ export interface ShelfItem {
   promo?: number | null
   /** Ce que le panier garde d'une demande de `quantity` (par défaut tout). */
   obtained?: (quantity: number) => number
+  /** La quantité déjà au panier que la recherche lit (par défaut 0 : le site la donne toujours) ; `null` : illisible. */
+  inCart?: number | null
 }
 
 export function candidate(id: string, item: ShelfItem = {}): Candidate {
@@ -151,7 +153,7 @@ export function candidate(id: string, item: ShelfItem = {}): Candidate {
     pricePerMeasure: item.perMeasure ?? null,
     promo: item.promo ?? null,
     stock: item.stock === undefined ? 10 : item.stock,
-    inCart: null,
+    inCart: item.inCart === undefined ? 0 : item.inCart,
     thumbnailUrl: null,
     content: item.content ?? null,
     contentSource: item.content ? 'label' : null,
@@ -174,9 +176,12 @@ export function fakeAdapter(
     found?: Record<string, string[]>
     /** La recherche d'un produit connu par son libellé : vrai si le moteur le retrouve sous cette requête (par défaut : toujours, s'il est au rayon). */
     sees?: (query: string, id: string) => boolean
+    /** Ce que la dernière réponse du panier disait déjà, par identifiant de produit (ensuite : ce que chaque écriture y a laissé). */
+    lastCart?: Record<string, number>
   } = {},
 ) {
   const calls: string[] = []
+  const cartReply = new Map<string, number>(Object.entries(options.lastCart ?? {}))
   /** Les recherches d'un produit connu par son libellé : la requête et l'identifiant voulu. */
   const searched: { query: string; id: string }[] = []
   const writes: { id: string; quantity: number }[] = []
@@ -203,6 +208,7 @@ export function fakeAdapter(
       return item && (options.sees?.(query, id) ?? true) ? candidate(id, item) : null
     },
     pageCartTotal: () => null,
+    cartQuantity: (id) => cartReply.get(id) ?? null,
     readSession: () => options.session ?? { state: 'UNKNOWN', signs: [] },
     readArrival: () => ({
       address: '/',
@@ -223,6 +229,7 @@ export function fakeAdapter(
         await Promise.resolve()
         writes.push({ id, quantity })
         const obtained = shelf[id]?.obtained?.(quantity) ?? quantity
+        cartReply.set(id, obtained)
         return {
           productId: id,
           requested: quantity,
