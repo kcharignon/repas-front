@@ -11,12 +11,16 @@ ARG CMDLINE_TOOLS_SHA256=0877a1d048fe4a24efe2eff536ca4223f7adeb58648bb81909d33c4
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # dnsmasq : le DNS de l'émulateur (tout *.leclercdrive.fr pointe vers le faux site, le reste ne se résout pas) ; python3 et openssl : le faux
-# site local ; les bibliothèques sont celles dont l'émulateur a besoin même sans fenêtre.
+# site local (HTTPS) ; les bibliothèques sont celles dont l'émulateur a besoin même sans fenêtre.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl unzip dnsmasq python3 openssl procps iproute2 \
        libpulse0 libgl1 libnss3 libx11-6 libxcb1 libxdamage1 libxcomposite1 libxcursor1 libxi6 libxtst6 libxrandr2 libxkbfile1 \
        libasound2 libdbus-1-3 libbsd0 libnspr4 \
     && rm -rf /var/lib/apt/lists/*
+
+# Node, le même que celui du front (Dockerfile racine, `node:24`) : il fait tourner le faux site Leclerc complet (drive-agent/fake-leclerc,
+# monté en lecture seule sur /opt/fake-leclerc par compose.yaml), derrière le faux site HTTPS de testsite.py (DRV-319, partie 2).
+COPY --from=node:24.22.0-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 
 RUN curl -fsSL -o /tmp/cmdline-tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS}_latest.zip" \
     && echo "${CMDLINE_TOOLS_SHA256}  /tmp/cmdline-tools.zip" | sha256sum -c - \

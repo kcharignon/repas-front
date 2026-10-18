@@ -104,12 +104,27 @@
       item.lines = m.result && m.result.lines ? m.result.lines.length : -1
       item.hasStore = !!(m.result && m.result.store)
       if (m.result && m.result.type === 'setup-result') {
-        // Le magasin lu par l'agent (DRV-320) : identifiant et hôte seulement, jamais l'adresse complète
+        // Le magasin lu par l'agent (DRV-320) : identifiant, hôte et adresse de base du faux magasin (le vrai n'est jamais contacté)
         item.storeId = m.result.store.id
         item.storeHost = m.result.store.host
+        item.storeBase = m.result.store.baseUrl
         show('result', 'drive.result : ' + item.runId + ' → magasin ' + item.storeId, true)
       } else {
         show('result', 'drive.result : ' + item.runId + ' → ' + item.outcome + (item.errorCode ? ' (' + item.errorCode + ')' : ''), true)
+      }
+      // Le détail des lignes rendues par l'agent (DRV-319, partie 2), en fin de relevé : « ingrédient:issue:référence:quantité », séparés par des virgules ;
+      // la référence est l'identifiant du produit mis au panier ou choisi, ou, pour une ligne en échec, son code d'erreur.
+      // Les relevés plus anciens se lisent par motif jusqu'à « hasStore » ou « storeHost » : un champ ajouté après eux ne les change pas.
+      if (m.result && m.result.lines && m.result.lines.length) {
+        item.detail = m.result.lines
+          .map(function (line) {
+            var reference = line.productId || (line.product && line.product.id) || line.error || ''
+            return [line.ingredientSlug, line.outcome, reference, line.quantity == null ? '' : line.quantity].join(':')
+          })
+          .join(',')
+        show('detail', 'Lignes : ' + item.detail.split(',').join(', '), true)
+      } else {
+        show('detail', 'Lignes : aucune', true)
       }
     } else if (m.type === 'drive.error' || m.type === 'error') {
       item.code = m.code
@@ -128,7 +143,8 @@
       .then(function (command) {
         if (!command || !command.do) return
         if (command.do === 'drive.start') {
-          var plan = JSON.parse(JSON.stringify(PLAN))
+          // Le plan du test (DRV-319, partie 2) : celui de la commande, ou le plan d'essai de la page ; `runId` de la commande s'il y en a un.
+          var plan = JSON.parse(JSON.stringify(command.plan || PLAN))
           if (command.runId) plan.runId = command.runId
           send({ v: 1, type: 'drive.start', plan: plan })
         } else if (command.do === 'drive.setup') {

@@ -25,7 +25,7 @@ L'application affiche le drive Leclerc dans une **WebView en mode ordinateur**, 
 | Version et signature | `android/app/build.gradle.kts`, `android/buildSrc/` (`AppVersion`), `android/build.sh`, `android/debug.keystore` (clé de débogage **publique**) |
 | Empreinte de l'agent | `android/agent.js.sha384`, `android/agent-digest.ts` (`make android-agent-hash`) |
 | Tests | `android/app/src/test/kotlin/` (JUnit), `android/__tests__/` (Vitest : `hygiene`, `agent-asset`, `debug-plan`, `injection`) |
-| Émulateur | `android/emulator/` (`Dockerfile`, `entrypoint.sh`, `ctl.sh`, `smoke.sh`, `testsite.py`, `testpage.html`), service `android-emulator` de `compose.yaml` |
+| Émulateur | `android/emulator/` (`Dockerfile`, `entrypoint.sh`, `ctl.sh`, `lib.sh` outils communs, `smoke.sh`, `e2e.sh` + `e2e/*.json` les plans, `testsite.py` faux sites HTTPS et relais, `testpage.html`, `repaspage.html`), service `android-emulator` de `compose.yaml` (monte `drive-agent/fake-leclerc` : Node l'y exécute) |
 | CI | `.github/workflows/android.yml` (séparé de `make check`) |
 
 ## 2. Commandes
@@ -39,6 +39,7 @@ L'application affiche le drive Leclerc dans une **WebView en mode ordinateur**, 
 | `make android-agent-hash` | note l'empreinte SHA-384 du nouvel agent dans `android/agent.js.sha384` |
 | `make android-emulator-up\|down\|status` | émulateur Docker permanent (KVM requis) ; `status` rend 0 seulement s'il a démarré |
 | `make android-smoke` | test de fumée sur une page **locale** ; rapport et captures dans `android/dist/smoke/` |
+| `make android-e2e` | scénarios complets contre le **faux Leclerc complet** (DRV-309, HTTPS) : lecture du magasin, passage complet, annuler, abandon, tué puis repris, blocage, site changé ; rapport et captures dans `android/dist/e2e/` (~4 min 30) |
 
 Chaque commande reconstruit d'abord l'agent (`make agent-build`) ; la construction **échoue** si son empreinte n'est pas celle de `agent.js.sha384`. `make check` ne construit pas l'application, mais joue `android/__tests__/` ; jouer aussi `make android-test` dès que `android/` change.
 
@@ -67,7 +68,8 @@ Lire `src/features/drive/bridge/native.ts` et `driveBridge.ts` du front : l'appl
 - **Permanent** : SDK, image système (Android 14 Google APIs x86_64) et AVD `repas` dans le volume Docker `repas-front_android-emulator-sdk` (≈ 2 Go téléchargés, 6 Go sur disque, 2 min 45 la première fois, ≈ 30 s ensuite). Profil Compose à part (`make stop` ne l'arrête pas). Réglages : `EMULATOR_MEMORY` (3072 Mo), `EMULATOR_CORES` (4). Pour repartir de zéro : `make android-emulator-down` puis `docker volume rm repas-front_android-emulator-sdk`.
 - **Le verdict attendu du test de fumée est « KO avec `Arrêt : UNSUPPORTED_PAGE` »** pour le test automatique : la page locale n'est pas une page de magasin ; ce qui compte est que le rapport arrive (26 contrôles OK). Exit 0 = tout passe, 1 = échec (voir `rapport.txt` et `journal-android.txt`), 3 = KVM manque.
 - **Lire les captures avant de conclure** : `android/dist/smoke/01-page-locale.png`, `02-menu.png`, `03-diagnostic-agent.png`, `04-rapport-selftest.png` et `rapport.txt` ; un « OK » sans avoir regardé les images ne prouve rien.
-- La CI n'a pas KVM : l'émulateur est une cible **manuelle**, `make check` n'y touche pas. Les scénarios complets (coquille Repas, faux site Leclerc de DRV-309 : `drive-agent/fake-leclerc/`, déjà fait côté agent, servi en HTTP sur la boucle locale ; il reste à y ajouter HTTPS avec l'autorité de test et à l'atteindre depuis l'émulateur) sont la livraison 2 de DRV-319.
+- La CI n'a pas KVM : l'émulateur est une cible **manuelle**, `make check` n'y touche pas (il joue seulement `android/__tests__/emulator-e2e.spec.ts` : plans valides, scripts de syntaxe correcte, aucun faux certificat dans l'application).
+- **`make android-e2e`** (DRV-319, partie 2) : le faux Leclerc complet (`drive-agent/fake-leclerc/`, Node 24 copié dans l'image de l'émulateur, dossier monté en lecture seule) tourne dans le conteneur sur `127.0.0.1:8099`, derrière le relais HTTPS de `testsite.py` pour le seul nom `courses-test.leclercdrive.fr` ; son pilotage `/__fake/*` (état, défauts, remise à neuf) n'est joignable que par `docker compose exec`. Le faux Repas (`repaspage.html`) reçoit les plans par `/__command` (`plan` complet, `android/emulator/e2e/*.json` avec `__RUN_ID__`) et relève chaque résultat (`detail` : `ingrédient:issue:référence:quantité`). Après un changement dans `android/emulator/`, `compose.yaml` ou `drive-agent/fake-leclerc/` : `make android-emulator-down` puis `up`. Le faux certificat n'est accepté que par la WebView de l'émulateur (`lib.sh`, `/data/local/tmp/webview-command-line`), jamais par l'application. **Lire les captures `e01` à `e13`** avant de conclure.
 
 ## 5. Recettes
 
@@ -86,7 +88,7 @@ Clé de signature créée (`keytool`, dans Docker) et sauvegardée par l'utilisa
 ## 6. Definition of Done
 
 - [ ] `make android-test` et `make android` verts ; `make check` vert (dont `hygiene` et `agent-asset`) ; `make android-release-selftest` si `build.sh` ou la signature changent
-- [ ] `make android-smoke` joué et ses captures **lues** si le pont, l'injection, le menu ou la WebView changent (sinon dire pourquoi non)
+- [ ] `make android-smoke` et `make android-e2e` joués et leurs captures **lues** si le pont, l'injection, le menu, la WebView, le passage du plan ou l'agent changent (sinon dire pourquoi non)
 - [ ] Aucune permission ajoutée, aucun objet natif exposé, aucune clé ni donnée réelle ; menus de débogage sous `BuildConfig.DEBUG`
 - [ ] README `android/` à jour (en français, pas à pas pour les étapes humaines) ; PR (Quoi / Vérifié / À relire) ; `gh pr checks` tout vert, puis `gh pr merge --squash --delete-branch`, `gh issue close <n>`
 

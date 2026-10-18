@@ -4,17 +4,20 @@ Ils ne contiennent AUCUNE donnée réelle : des pages de test qui relèvent ce q
 
 Selon le nom demandé (en-tête Host) :
   repas.test (le faux front Repas, DRV-317)   toute adresse hors /__ : la page repaspage.html (comme un SPA)
-  *.leclercdrive.fr (le faux drive)           GET / (l'accueil) et GET /magasin-… (une page de magasin, DRV-320) : la page de test testpage.html ;
+  courses-test.leclercdrive.fr (le faux       TOUT (hors /__) est relayé en HTTP vers le faux site Leclerc complet (Node, drive-agent/fake-leclerc, DRV-309),
+  magasin, DRV-319 partie 2)                  qui tourne dans ce conteneur sur 127.0.0.1:8099 : recherche, panier, défauts simulés, cadence jugée
+  autre *.leclercdrive.fr (le faux drive)     GET / (l'accueil) et GET /magasin-… (une page de magasin, DRV-320) : la page de test testpage.html ;
                                               le reste, 404 (par exemple les recherches que tenterait l'agent : elles n'aboutissent jamais)
 Pour tous les noms :
-  POST /__report      la page y dépose ce qu'elle a relevé (JSON, 8 Ko au plus) ; le test de fumée le relit
+  POST /__report      la page y dépose ce qu'elle a relevé (JSON, 8 Ko au plus) ; les tests de l'émulateur le relisent
   GET  /__reports     la liste des relevés, en JSON
-  POST /__command     le test dépose un ordre pour le faux Repas (JSON, 1 Ko au plus) ; la page le prend avec GET /__command
+  POST /__command     le test dépose un ordre pour le faux Repas (JSON, 16 Ko au plus : un plan en tient) ; la page le prend avec GET /__command
   GET  /__command     le plus ancien ordre en attente (JSON) ou 204
   POST /__reset       vide les relevés et les ordres
 
 Le journal des requêtes (méthode et chemin seulement) est dans $SITE_DIR/access.log.
 """
+import http.client
 import json
 import os
 import ssl
@@ -26,8 +29,15 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DRIVE_PAGE = os.path.join(HERE, "testpage.html")
 REPAS_PAGE = os.path.join(HERE, "repaspage.html")
 REPAS_HOST = "repas.test"
+# Le faux magasin Leclerc complet (Node), en HTTP sur la boucle locale du conteneur : seuls ces noms lui sont relayés, tels quels (en-tête Host compris,
+# qu'il vérifie lui-même : il refuse tout autre nom).
+FAKE_LECLERC = ("127.0.0.1", int(os.environ.get("FAKE_LECLERC_PORT", "8099")))
+FAKE_LECLERC_HOSTS = {"courses-test.leclercdrive.fr"}
+MAX_PROXY_BYTES = 64 * 1024
+HOP_BY_HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers", "transfer-encoding", "upgrade",
+              "host", "content-length", "date", "server"}
 MAX_REPORT_BYTES = 8 * 1024
-MAX_COMMAND_BYTES = 1024
+MAX_COMMAND_BYTES = 16 * 1024
 MAX_REPORTS = 200
 MAX_COMMANDS = 20
 
@@ -54,9 +64,37 @@ class Handler(BaseHTTPRequestHandler):
         with open(path, "rb") as handle:
             self._send(200, handle.read(), "text/html; charset=utf-8")
 
+    def _relay(self):
+        """Relaie la requête telle quelle au faux Leclerc complet et rend sa réponse (statut, en-têtes, corps)."""
+        length = min(int(self.headers.get("Content-Length") or 0), MAX_PROXY_BYTES)
+        body = self.rfile.read(length) if length else None
+        headers = {key: value for key, value in self.headers.items() if key.lower() not in HOP_BY_HOP}
+        headers["Host"] = self.headers.get("Host", "")
+        connection = http.client.HTTPConnection(*FAKE_LECLERC, timeout=60)
+        try:
+            connection.request(self.command, self.path, body=body, headers=headers)
+            reply = connection.getresponse()
+            data = reply.read()
+            self.send_response(reply.status)
+            for key, value in reply.getheaders():
+                if key.lower() not in HOP_BY_HOP:
+                    self.send_header(key, value)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except OSError:
+            self._send(502, b"le faux Leclerc ne repond pas")
+        finally:
+            connection.close()
+
+    def _is_fake_leclerc(self, path):
+        return self._host() in FAKE_LECLERC_HOSTS and not path.startswith("/__")
+
     def do_GET(self):
         path = self.path.split("?", 1)[0]
-        if path == "/__reports":
+        if self._is_fake_leclerc(path):
+            self._relay()
+        elif path == "/__reports":
             with lock:
                 body = json.dumps(reports).encode()
             self._send(200, body, "application/json")
@@ -76,6 +114,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?", 1)[0]
+        if self._is_fake_leclerc(path):
+            return self._relay()
         limit = MAX_COMMAND_BYTES if path == "/__command" else MAX_REPORT_BYTES
         length = min(int(self.headers.get("Content-Length") or 0), limit)
         raw = self.rfile.read(length)

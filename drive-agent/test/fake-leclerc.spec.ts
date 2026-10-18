@@ -397,6 +397,58 @@ describe('les défauts simulés', () => {
   })
 })
 
+describe('la racine du magasin et la remise à neuf (DRV-319, émulateur Android)', () => {
+  it('mène la racine de l’hôte du magasin à son accueil, l’adresse que l’application ouvre pour un plan', async () => {
+    // When
+    const reply = await call('/')
+    const home = await call(reply.headers.location as string)
+
+    // Then
+    expect(reply.status).toBe(302)
+    expect(reply.headers.location).toBe(`${PAGE_PATH}/`)
+    expect(home.status).toBe(200)
+    expect(home.text).toContain('Accueil du magasin')
+  })
+
+  it('remet à neuf le panier, le journal, les violations, la cadence et les défauts, par le pilotage HTTP', async () => {
+    // Given : un panier garni, deux recherches trop rapprochées, un défaut simulé
+    await cartCall('1000001', 2)
+    await search('farine')
+    await search('sucre')
+    await call('/__fake/behavior', {
+      method: 'POST',
+      host: 'localhost',
+      body: JSON.stringify({ latencyMs: 50, fault: { kind: 'forbidden', after: 5 } }),
+    })
+    expect(fake.violations()).not.toEqual([])
+
+    // When
+    const reply = await call('/__fake/reset', { method: 'POST', host: 'localhost' })
+    const state = JSON.parse((await call('/__fake/state', { host: 'localhost' })).text)
+    await search('farine')
+
+    // Then : rien ne reste, et la première requête d’après n’est ni « trop rapide » ni touchée par l’ancien défaut
+    expect(reply.status).toBe(200)
+    expect(state).toMatchObject({
+      cart: {},
+      requests: [],
+      violations: [],
+      behavior: { latencyMs: 0, fault: null },
+    })
+    expect(fake.violations()).toEqual([])
+    expect(fake.paced()).toHaveLength(1)
+    expect(fake.paced()[0]?.fault).toBeUndefined()
+  })
+
+  it('n’offre pas la remise à neuf sous le nom du faux magasin', async () => {
+    // When
+    const reply = await call('/__fake/reset', { method: 'POST' })
+
+    // Then
+    expect(reply.status).toBe(404)
+  })
+})
+
 describe('le faux Repas', () => {
   it('sert la page de retour qui affiche le fragment reçu', async () => {
     // When
