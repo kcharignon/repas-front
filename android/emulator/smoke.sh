@@ -171,8 +171,8 @@ post_command '{"do":"raw","text":"pas du json"}'
 if wait_until 10 has_report '"type": "error", "code": "INVALID_MESSAGE"'; then ok "un message illisible reçoit INVALID_MESSAGE"; else ko "pas de réponse au message illisible"; fi
 post_command '{"do":"raw","text":"{\"v\":1,\"type\":\"inconnu\"}"}'
 if wait_until 10 has_report '"type": "error", "code": "UNKNOWN_TYPE"'; then ok "un type inconnu reçoit UNKNOWN_TYPE"; else ko "pas de réponse au type inconnu"; fi
-post_command '{"do":"drive.start"}'
-if wait_until 10 has_report '"type": "drive.error", "code": "UNAVAILABLE"'; then ok "drive.start reçoit UNAVAILABLE (le passage du plan est DRV-314)"; else ko "pas de réponse à drive.start"; fi
+post_command '{"do":"raw","text":"{\"v\":1,\"type\":\"drive.start\",\"plan\":{}}"}'
+if wait_until 10 has_report '"type": "drive.error", "code": "INVALID_PLAN"'; then ok "un plan invalide reçoit drive.error INVALID_PLAN"; else ko "pas de réponse au plan invalide"; fi
 
 # --- 3. Menu de l'application et lien externe ---------------------------------------------------------------------------------------------
 say
@@ -198,9 +198,102 @@ if reports | grep -q '"hostname": "example.org"'; then ko "la coquille a chargé
 adb shell am start -n "$APP/.MainActivity" > /dev/null
 sleep 2
 
-# --- 4. Le drive, second écran -----------------------------------------------------------------------------------------------------------
+# --- 4. Passage du plan (DRV-314) --------------------------------------------------------------------------------------------------------
 say
-say "4. Le menu ouvre le drive (second écran) sur le faux site"
+say "4. Passage du plan : drive.start, l'agent, drive.result, abandon, interruption et reprise"
+RUN_A=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+RUN_B=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
+RUN_C=cccccccc-cccc-4ccc-8ccc-cccccccccccc
+RUN_D=dddddddd-dddd-4ddd-8ddd-dddddddddddd
+RUN_E=eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee
+start_pass() { post_command "{\"do\":\"drive.start\",\"runId\":\"$1\"}"; }
+reset_reports() { emu curl -sk -X POST "https://127.0.0.1/__reset" > /dev/null; }
+screen_held() { adb shell dumpsys window 2> /dev/null | grep -m1 mHoldScreenWindow | grep -q DriveActivity; }
+screen_not_held() { ! screen_held; }
+ui_lacks() { ! ui_has "$1"; }
+result_report() { # result_report <runId> <issue> : le relevé de drive.result de ce passage, avec cette issue
+  reports | grep -q "\"type\": \"drive.result\", \"runId\": \"$1\", \"resultType\": \"result\", \"outcome\": \"$2\""
+}
+open_pass() { # open_pass <runId> : drive.start, puis le drive s'ouvre et reçoit le plan
+  reset_reports
+  start_pass "$1"
+  wait_until 40 has_report '"hostname": "www.leclercdrive.fr"' && wait_until 30 has_report '"command": "plan"'
+}
+
+say "   a. Jusqu'au résultat de l'agent"
+if open_pass "$RUN_A"; then
+  ok "drive.start ouvre le drive sur la page du magasin du plan (faux site) et le plan arrive à l'agent par le pont"
+else
+  ko "drive.start n'a pas mené le plan jusqu'à l'agent"
+fi
+check "l'écran reste allumé pendant le passage" screen_held
+if wait_until 20 has_report '"kind": "agent-ui", "mounted": true'; then ok "l'agent a monté son interface (après le chargement de la page)"; else ko "l'agent n'a pas monté son interface"; fi
+sleep 2
+screenshot 03-passage-agent
+if tap 'text="Retourner dans Repas"'; then ok "« Retourner dans Repas » touché dans l'interface de l'agent"; else ko "le bouton de retour de l'agent est introuvable"; fi
+if wait_until 20 result_report "$RUN_A" error; then
+  ok "Repas reçoit drive.result : le résultat de l'agent, du même runId (issue « error » : la page de test n'est pas un magasin)"
+else
+  ko "Repas n'a pas reçu drive.result"
+fi
+if wait_until 10 ui_has 'drive.result'; then ok "l'application est revenue à l'écran Repas"; else ko "l'écran Repas n'est pas revenu"; fi
+check "l'écran n'est plus maintenu allumé une fois le passage fini" screen_not_held
+sleep 1
+screenshot 04-passage-resultat
+
+say "   b. Abandon par l'utilisateur"
+if open_pass "$RUN_B"; then ok "second passage ouvert"; else ko "le second passage n'a pas démarré"; fi
+adb shell input keyevent KEYCODE_BACK
+if wait_until 10 ui_has "Abandonner l.envoi"; then ok "le retour, au bout de l'historique, demande s'il faut abandonner l'envoi"; else ko "pas de demande d'abandon"; fi
+sleep 1
+screenshot 05-abandon
+if tap 'text="Abandonner"' && wait_until 20 result_report "$RUN_B" aborted; then
+  ok "l'abandon donne un résultat aborted à Repas, et l'application revient à l'écran Repas"
+else
+  ko "l'abandon n'a pas donné de résultat aborted"
+fi
+check "le résultat porte le code CANCELLED" has_report "\"runId\": \"$RUN_B\", \"resultType\": \"result\", \"outcome\": \"aborted\", \"errorCode\": \"CANCELLED\""
+
+say "   c. Interruption, un seul passage à la fois, reprise, drive.cancel"
+if open_pass "$RUN_C"; then ok "troisième passage ouvert"; else ko "le troisième passage n'a pas démarré"; fi
+adb shell am start -n "$APP/.MainActivity" > /dev/null 2>&1 # l'application revient devant : l'écran du drive est refermé, le passage reste
+if wait_until 15 ui_has 'Envoi interrompu'; then ok "un passage interrompu propose de le reprendre ou de l'abandonner"; else ko "pas de proposition de reprise"; fi
+sleep 1
+screenshot 06-reprise
+start_pass "$RUN_D"
+if wait_until 15 has_report "\"type\": \"drive.error\", \"code\": \"BUSY\", \"runId\": \"$RUN_C\""; then
+  ok "un second plan reçoit drive.error BUSY, avec le runId du passage en cours"
+else
+  ko "le second plan n'a pas reçu BUSY"
+fi
+if tap 'text="Reprendre"' && wait_until 40 has_report_count '"command": "plan"' 2; then
+  ok "« Reprendre » rouvre le drive : le plan est renvoyé à l'agent"
+else
+  ko "« Reprendre » n'a pas renvoyé le plan"
+fi
+adb shell am start -n "$APP/.MainActivity" > /dev/null 2>&1
+wait_until 15 ui_has 'Envoi interrompu' || ko "pas de proposition de reprise la seconde fois"
+post_command "{\"do\":\"drive.cancel\",\"runId\":\"$RUN_C\"}"
+if wait_until 15 result_report "$RUN_C" aborted; then ok "drive.cancel donne un résultat aborted à Repas"; else ko "drive.cancel n'a pas donné de résultat aborted"; fi
+if wait_until 10 ui_lacks 'Envoi interrompu'; then ok "la proposition de reprise disparaît"; else ko "la proposition de reprise est restée affichée"; fi
+post_command "{\"do\":\"drive.cancel\",\"runId\":\"$RUN_C\"}"
+if wait_until 15 has_report '"type": "drive.error", "code": "NO_PASS"'; then ok "drive.cancel sans passage en cours reçoit NO_PASS"; else ko "pas de NO_PASS"; fi
+
+say "   d. Application tuée pendant un passage : reprise, résultat gardé jusqu'au rechargement de la page"
+if open_pass "$RUN_E"; then ok "quatrième passage ouvert"; else ko "le quatrième passage n'a pas démarré"; fi
+adb shell am force-stop "$APP"
+reset_reports
+adb shell am start -W -n "$APP/.MainActivity" > /dev/null 2>&1
+if wait_until 40 ui_has 'Envoi interrompu'; then ok "après la mort du processus, le passage non terminé (moins de 24 h) est proposé à la reprise"; else ko "le passage n'a pas survécu à la mort du processus"; fi
+if tap 'text="Abandonner"' && wait_until 30 result_report "$RUN_E" aborted; then
+  ok "le résultat gardé est livré à la page de Repas rechargée"
+else
+  ko "le résultat n'a pas été livré à la page rechargée"
+fi
+
+# --- 5. Le drive, second écran -----------------------------------------------------------------------------------------------------------
+say
+say "5. Le menu ouvre le drive (second écran) sur le faux site"
 open_drive() {
   emu curl -sk -X POST "https://127.0.0.1/__reset" > /dev/null
   tap 'content-desc="Menu"' && wait_until 10 ui_has 'Ouvrir le drive Leclerc' && tap 'text="Ouvrir le drive Leclerc"' \
@@ -212,11 +305,11 @@ for fact in '"topFrame": true' '"bridge": true' '"debug": true' '"frozen": true'
   if grep -q "$fact" <<< "$loaded"; then ok "relevé du drive : $fact"; else ko "relevé du drive manquant : $fact"; fi
 done
 sleep 2
-screenshot 03-drive
+screenshot 07-drive
 
-# --- 5. Pont application -> page -> agent ----------------------------------------------------------------------------------------------
+# --- 6. Pont application -> page -> agent ----------------------------------------------------------------------------------------------
 say
-say "5. Diagnostic de l'agent (application vers page, par le pont)"
+say "6. Diagnostic de l'agent (application vers page, par le pont)"
 if tap 'content-desc="Menu"'; then ok "bouton Menu du drive touché"; else ko "bouton Menu du drive introuvable à l'écran"; fi
 if wait_until 10 ui_has 'Test automatique (débogage)'; then
   ok "le menu du drive propose « Test automatique (débogage) »"
@@ -225,7 +318,7 @@ else
 fi
 check "le menu du drive propose aussi « Plan d'essai (débogage) »" ui_has "Plan d.essai (débogage)"
 sleep 1
-screenshot 04-menu-drive
+screenshot 08-menu-drive
 if tap 'text="Diagnostic de l.agent"'; then ok "entrée « Diagnostic de l'agent » touchée"; else ko "entrée « Diagnostic de l'agent » introuvable"; fi
 if wait_until 15 has_report '"kind": "message", "command": "diagnostic"'; then
   ok "la page a reçu la commande « diagnostic » par le pont"
@@ -238,11 +331,11 @@ else
   ko "l'agent n'a pas monté son interface"
 fi
 sleep 3
-screenshot 05-diagnostic-agent
+screenshot 09-diagnostic-agent
 
-# --- 6. Test automatique : aller-retour complet --------------------------------------------------------------------------------------
+# --- 7. Test automatique : aller-retour complet --------------------------------------------------------------------------------------
 say
-say "6. Test automatique (application, pont, agent, pont, application)"
+say "7. Test automatique (application, pont, agent, pont, application)"
 adb shell input keyevent KEYCODE_BACK # quitte l'écran du drive : retour à la coquille
 sleep 2
 if open_drive && tap 'content-desc="Menu"' && wait_until 10 ui_has 'Test automatique (débogage)' && tap 'text="Test automatique (débogage)"'; then
@@ -256,7 +349,7 @@ else
   ko "pas de rapport du test automatique en 120 s"
 fi
 sleep 6 # le temps que l'aperçu du presse-papiers d'Android s'efface
-screenshot 06-rapport-selftest
+screenshot 10-rapport-selftest
 screen=$(ui)
 if grep -q 'Arrêt : UNSUPPORTED_PAGE' <<< "$screen"; then
   ok "le rapport dit « UNSUPPORTED_PAGE » : normal, la page de test n'est pas une page de magasin du drive"
@@ -265,9 +358,9 @@ else
 fi
 grep -o 'Agent : [^&]*\|Verdict : [^&]*' <<< "$screen" | sed 's/^/      rapport : /' | tee -a "$REPORT"
 
-# --- 7. Retour à la coquille ------------------------------------------------------------------------------------------------------------
+# --- 8. Retour à la coquille ------------------------------------------------------------------------------------------------------------
 say
-say "7. Retour à la coquille : sa page répond encore"
+say "8. Retour à la coquille : sa page répond encore"
 adb shell input keyevent KEYCODE_BACK # ferme le rapport
 sleep 1
 adb shell input keyevent KEYCODE_BACK # quitte l'écran du drive
@@ -280,11 +373,11 @@ else
   ko "la page de la coquille ne répond plus après le retour du drive"
 fi
 sleep 1
-screenshot 07-retour-coquille
+screenshot 11-retour-coquille
 
-# --- 8. Bilan --------------------------------------------------------------------------------------------------------------------------------
+# --- 9. Bilan --------------------------------------------------------------------------------------------------------------------------------
 say
-say "8. Bilan"
+say "9. Bilan"
 check "l'application tourne toujours" adb shell pidof "$APP"
 crashes=$(adb logcat -d -b crash 2> /dev/null | grep -c "Process: $APP")
 if [ "$crashes" = "0" ]; then ok "aucun plantage dans le journal d'Android"; else ko "$crashes trace(s) de plantage dans le journal d'Android"; fi

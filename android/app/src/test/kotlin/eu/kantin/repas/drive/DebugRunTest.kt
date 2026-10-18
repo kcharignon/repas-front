@@ -88,6 +88,7 @@ class DebugRunTest {
         val run = DebugRun(
             template = { template },
             send = { text -> if (accept) sent += text; accept },
+            startPass = { text -> if (accept) sent += text; accept },
             show = { shown += it },
             newRunId = { "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c" },
         )

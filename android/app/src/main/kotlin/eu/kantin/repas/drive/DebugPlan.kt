@@ -64,6 +64,8 @@ object DebugPlan {
 class DebugRun(
     private val template: () -> String?,
     private val send: (String) -> Boolean,
+    /** Enregistre le plan comme passage en cours (un seul à la fois, écran allumé) et l'envoie à l'agent : le chemin d'un plan de Repas (DRV-314). */
+    private val startPass: (String) -> Boolean,
     private val show: (String) -> Unit,
     private val newRunId: () -> String,
 ) {
@@ -97,7 +99,7 @@ class DebugRun(
         }
         val plan = template()?.let { DebugPlan.plan(it, newRunId(), store.optString("id"), store.optString("host")) }
             ?: return finish("Plan d'essai impossible : le magasin lu par l'agent n'a pas la forme attendue.")
-        if (!send(plan)) return finish("L'agent ne répond plus : rouvre une page du drive et recommence.")
+        if (!startPass(plan)) return finish("L'agent ne répond plus ou un autre envoi est en cours : rouvre une page du drive et recommence.")
         step = Step.WAITING_RESULT
     }
 

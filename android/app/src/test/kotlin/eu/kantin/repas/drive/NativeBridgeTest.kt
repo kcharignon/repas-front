@@ -1,5 +1,6 @@
 package eu.kantin.repas.drive
 
+import java.io.File
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -29,11 +30,72 @@ class NativeBridgeTest {
         assertEquals(NativeRequest.AppMenu, screen("""{"v":1,"type":"app.menu"}"""))
     }
 
+    private val plan = File("src/test/resources/plan-complet.json").readText()
+
     @Test
-    fun `drive start et drive cancel sont confies au passage du plan`() {
-        val start = screen("""{"v":1,"type":"drive.start","plan":{}}""") as NativeRequest.Drive
-        assertEquals("drive.start", start.type)
-        assertEquals("drive.cancel", (screen("""{"v":1,"type":"drive.cancel"}""") as NativeRequest.Drive).type)
+    fun `drive start porte un plan valide`() {
+        val start = screen("""{"v":1,"type":"drive.start","plan":$plan}""") as NativeRequest.DriveStart
+
+        assertEquals("8f14e45f-ceea-467a-9575-8e6b8c0a1b2c", start.plan.runId)
+        assertEquals("courses-test.leclercdrive.fr", start.plan.storeHost)
+    }
+
+    @Test
+    fun `un plan invalide, absent ou d'un hote non autorise recoit INVALID_PLAN`() {
+        val badHost = plan.replace("courses-test.leclercdrive.fr", "exemple.invalid")
+        val asSetup = plan.replaceFirst("plan\"", "setup\"")
+        listOf(
+            """{"v":1,"type":"drive.start"}""",
+            """{"v":1,"type":"drive.start","plan":"texte"}""",
+            """{"v":1,"type":"drive.start","plan":{}}""",
+            """{"v":1,"type":"drive.start","plan":$badHost}""",
+            """{"v":1,"type":"drive.start","plan":$asSetup}""",
+        ).forEach {
+            val refused = refusedWith(screen(it))
+            assertEquals(it.take(60), "drive.error", refused.getString("type"))
+            assertEquals("INVALID_PLAN", refused.getString("code"))
+        }
+    }
+
+    @Test
+    fun `un plan qui fait depasser le message de 64 Ko est refuse`() {
+        val padded = JSONObject(plan).put("x", "a".repeat(BridgeMessages.MAX_BYTES)).toString()
+        assertEquals(Rejection.TOO_LARGE, (screen("""{"v":1,"type":"drive.start","plan":$padded}""") as NativeRequest.Refused).reason)
+    }
+
+    @Test
+    fun `drive cancel vise le passage en cours, avec ou sans identifiant`() {
+        assertEquals(null, (screen("""{"v":1,"type":"drive.cancel"}""") as NativeRequest.DriveCancel).runId)
+        assertEquals(null, (screen("""{"v":1,"type":"drive.cancel","runId":null}""") as NativeRequest.DriveCancel).runId)
+        val runId = "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c"
+        assertEquals(runId, (screen("""{"v":1,"type":"drive.cancel","runId":"$runId"}""") as NativeRequest.DriveCancel).runId)
+    }
+
+    @Test
+    fun `drive cancel avec un identifiant qui n'est pas un UUID est refuse`() {
+        listOf("\"pas-un-uuid\"", "12", "true", "[]", "\"\"").forEach {
+            val refused = refusedWith(screen("""{"v":1,"type":"drive.cancel","runId":$it}"""))
+            assertEquals(it, "INVALID_MESSAGE", refused.getString("code"))
+        }
+    }
+
+    @Test
+    fun `le resultat d'un passage est livre dans une enveloppe drive result`() {
+        val result = JSONObject("""{"v":1,"type":"result","runId":"8f14e45f-ceea-467a-9575-8e6b8c0a1b2c","outcome":"completed","lines":[]}""")
+        val message = JSONObject(NativeBridge.driveResult(result))
+
+        assertEquals(1, message.getInt("v"))
+        assertEquals("drive.result", message.getString("type"))
+        assertTrue(sameJson(result, message.getJSONObject("result")))
+        assertEquals(setOf("v", "type", "result"), message.keys().asSequence().toSet())
+    }
+
+    @Test
+    fun `les codes de drive error sont ceux du contrat`() {
+        assertEquals(
+            listOf("INVALID_PLAN", "BUSY", "UNAVAILABLE", "NO_PASS"),
+            listOf(NativeBridge.INVALID_PLAN, NativeBridge.BUSY, NativeBridge.UNAVAILABLE, NativeBridge.NO_PASS),
+        )
     }
 
     @Test

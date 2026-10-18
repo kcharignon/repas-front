@@ -96,17 +96,13 @@
       item.versionCode = m.versionCode
       item.drive = m.drive
       show('info', 'app.info : version ' + m.version + ', numéro ' + m.versionCode + ', drive ' + m.drive, true)
-    } else if (m.type === 'drive.started') {
-      item.runId = m.runId
-      item.resumed = m.resumed
-      show('started', 'drive.started : ' + m.runId + (m.resumed ? ' (repris)' : ''), true)
     } else if (m.type === 'drive.result') {
-      item.runId = m.runId
+      item.runId = m.result && m.result.runId
       item.resultType = m.result && m.result.type
       item.outcome = m.result && m.result.outcome
       item.errorCode = m.result && m.result.error && m.result.error.code
       item.lines = m.result && m.result.lines ? m.result.lines.length : -1
-      show('result', 'drive.result : ' + m.runId + ' → ' + item.outcome + (item.errorCode ? ' (' + item.errorCode + ')' : ''), true)
+      show('result', 'drive.result : ' + item.runId + ' → ' + item.outcome + (item.errorCode ? ' (' + item.errorCode + ')' : ''), true)
     } else if (m.type === 'drive.error' || m.type === 'error') {
       item.code = m.code
       item.runId = m.runId
