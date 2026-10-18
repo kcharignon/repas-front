@@ -2177,7 +2177,40 @@ export interface components {
             updatedAt: string;
         };
     };
-    responses: never;
+    responses: {
+        /** @description Trop d'écritures du drive de cet utilisateur : plus de 60 par minute (compteur commun à `PUT /drive/settings`, `PUT /drive/choices`, `PUT` et `DELETE /drive/choices/{ingredientSlug}`). Message `DRIVE_RATE_LIMITED`, rien n'a été enregistré ; patienter au moins le délai de `Retry-After`, sans réessayer en boucle. */
+        DriveWriteRateLimited: {
+            headers: {
+                /** @description Secondes à attendre au minimum avant de réessayer. Après une rafale le délai annoncé peut n'être que de 1 seconde alors que le compteur ne se libère que progressivement : si la requête est encore refusée, patienter jusqu'à une minute */
+                "Retry-After"?: number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    error?: {
+                        /** @example DRIVE_RATE_LIMITED */
+                        message?: string;
+                    };
+                };
+            };
+        };
+        /** @description Trop de lectures coûteuses du drive de cet utilisateur : plus de 120 par minute (compteur commun à `GET /drive/plans/{shoppingListId}` et `GET /drive/estimates/{shoppingListId}`). Message `DRIVE_RATE_LIMITED` ; patienter au moins le délai de `Retry-After`, sans réessayer en boucle. */
+        DriveReadRateLimited: {
+            headers: {
+                /** @description Secondes à attendre au minimum avant de réessayer. Après une rafale le délai annoncé peut n'être que de 1 seconde alors que le compteur ne se libère que progressivement : si la requête est encore refusée, patienter jusqu'à une minute */
+                "Retry-After"?: number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    error?: {
+                        /** @example DRIVE_RATE_LIMITED */
+                        message?: string;
+                    };
+                };
+            };
+        };
+    };
     parameters: {
         /** @description Version (ETag) de la ressource lue par le client, entre guillemets. Absent : pas de contrôle (la dernière écriture gagne). Une autre version répond 412 (la ressource a été modifiée depuis la lecture) ; une modification simultanée détectée à l'enregistrement répond 409. ADR 0016. */
         IfMatch: string;
@@ -4560,6 +4593,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            429: components["responses"]["DriveWriteRateLimited"];
         };
     };
     delete_api_forget_choice: {
@@ -4616,6 +4650,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            429: components["responses"]["DriveWriteRateLimited"];
         };
     };
     get_api_get_drive_estimate: {
@@ -4663,6 +4698,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            429: components["responses"]["DriveReadRateLimited"];
         };
     };
     get_api_get_drive_plan: {
@@ -4710,6 +4746,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            429: components["responses"]["DriveReadRateLimited"];
         };
     };
     get_api_get_drive_settings: {
@@ -4766,6 +4803,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            429: components["responses"]["DriveWriteRateLimited"];
         };
     };
     get_api_list_choices: {
@@ -4853,6 +4891,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            429: components["responses"]["DriveWriteRateLimited"];
         };
     };
 }

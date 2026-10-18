@@ -2372,6 +2372,9 @@
                     },
                     "422": {
                         "description": "Corps invalide, ou pr\u00e9f\u00e9rence refus\u00e9e (message `DRIVE_CHOICE_INVALID`) : produit inconnu ou d'un autre magasin, doublon, produit \u00e0 la fois accept\u00e9 et refus\u00e9, plus de 5 produits accept\u00e9s ou 20 refus\u00e9s, \u00ab j'en ai toujours \u00bb avec des produits ; ou plafond atteint (message `DRIVE_LIMIT_REACHED`) : la cr\u00e9ation d\u00e9passerait 1 000 pr\u00e9f\u00e9rences dans le magasin"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/DriveWriteRateLimited"
                     }
                 }
             },
@@ -2430,6 +2433,9 @@
                     },
                     "422": {
                         "description": "Param\u00e8tre `retailer` ou `storeId` absent ou invalide"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/DriveWriteRateLimited"
                     }
                 }
             }
@@ -2472,6 +2478,9 @@
                     },
                     "409": {
                         "description": "Pas de magasin enregistr\u00e9 (message `DRIVE_NOT_CONFIGURED`)"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/DriveReadRateLimited"
                     }
                 }
             }
@@ -2514,6 +2523,9 @@
                     },
                     "409": {
                         "description": "Pas de magasin enregistr\u00e9 (message `DRIVE_NOT_CONFIGURED`), ou la liste n'est pas envoy\u00e9e au drive (message `SHOPPING_LIST_NOT_SENT`)"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/DriveReadRateLimited"
                     }
                 }
             }
@@ -2563,6 +2575,9 @@
                     },
                     "422": {
                         "description": "Corps invalide, ou magasin refus\u00e9 (message `DRIVE_STORE_INVALID`) : adresse qui n'est pas celle d'un magasin de l'enseigne, identifiant diff\u00e9rent de celui de l'adresse"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/DriveWriteRateLimited"
                     }
                 }
             }
@@ -2648,6 +2663,9 @@
                     },
                     "422": {
                         "description": "Corps invalide, ou intention refus\u00e9e (message `DRIVE_CHOICE_INVALID`) : identifiant, libell\u00e9, contenu ou prix hors des bornes, plus de 200 intentions, plus de 5 produits accept\u00e9s ou 20 refus\u00e9s pour un ingr\u00e9dient, produit \u00e0 la fois choisi et refus\u00e9 pour un ingr\u00e9dient ; ou plafond atteint (message `DRIVE_LIMIT_REACHED`) : plus de 5 000 \u00e9critures de produits dans la journ\u00e9e UTC, ou plus de 1 000 pr\u00e9f\u00e9rences dans le magasin. Rien n'est enregistr\u00e9"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/DriveWriteRateLimited"
                     }
                 }
             }
@@ -4917,6 +4935,70 @@
                     }
                 },
                 "type": "object"
+            }
+        },
+        "responses": {
+            "DriveWriteRateLimited": {
+                "description": "Trop d'\u00e9critures du drive de cet utilisateur : plus de 60 par minute (compteur commun \u00e0 `PUT /drive/settings`, `PUT /drive/choices`, `PUT` et `DELETE /drive/choices/{ingredientSlug}`). Message `DRIVE_RATE_LIMITED`, rien n'a \u00e9t\u00e9 enregistr\u00e9 ; patienter au moins le d\u00e9lai de `Retry-After`, sans r\u00e9essayer en boucle.",
+                "headers": {
+                    "Retry-After": {
+                        "description": "Secondes \u00e0 attendre au minimum avant de r\u00e9essayer. Apr\u00e8s une rafale le d\u00e9lai annonc\u00e9 peut n'\u00eatre que de 1 seconde alors que le compteur ne se lib\u00e8re que progressivement : si la requ\u00eate est encore refus\u00e9e, patienter jusqu'\u00e0 une minute",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "example": 12
+                        }
+                    }
+                },
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "properties": {
+                                "error": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "DRIVE_RATE_LIMITED"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "type": "object"
+                        }
+                    }
+                }
+            },
+            "DriveReadRateLimited": {
+                "description": "Trop de lectures co\u00fbteuses du drive de cet utilisateur : plus de 120 par minute (compteur commun \u00e0 `GET /drive/plans/{shoppingListId}` et `GET /drive/estimates/{shoppingListId}`). Message `DRIVE_RATE_LIMITED` ; patienter au moins le d\u00e9lai de `Retry-After`, sans r\u00e9essayer en boucle.",
+                "headers": {
+                    "Retry-After": {
+                        "description": "Secondes \u00e0 attendre au minimum avant de r\u00e9essayer. Apr\u00e8s une rafale le d\u00e9lai annonc\u00e9 peut n'\u00eatre que de 1 seconde alors que le compteur ne se lib\u00e8re que progressivement : si la requ\u00eate est encore refus\u00e9e, patienter jusqu'\u00e0 une minute",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "example": 12
+                        }
+                    }
+                },
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "properties": {
+                                "error": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "DRIVE_RATE_LIMITED"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "type": "object"
+                        }
+                    }
+                }
             }
         },
         "parameters": {
