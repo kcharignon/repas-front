@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "eu.kantin.repas.drive",
+      "sha256_cert_fingerprints": ["5B:3E:97:B2:2A:51:4F:9C:B7:7D:4A:E7:75:B3:2E:27:C8:1C:88:8E:A3:6F:BE:EB:63:60:FD:9D:CD:23:EF:AE"]
+    }
+  }
+]
