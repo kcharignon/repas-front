@@ -92,6 +92,15 @@ class ShellNavigationTest {
     }
 
     @Test
+    fun `un schema qui n'est https qu'une fois mis en majuscules par Unicode n'est pas https`() {
+        // « \u017F » (s long) devient « S » en majuscule : http\u017F://hote ne doit pas rester dans la coquille.
+        listOf("http\u017F://repas.exemple.test/", "http\u017F://autre.exemple.test/").forEach {
+            assertEquals(it, Decision.BLOCK, navigation.decide(it))
+            assertNull(it, navigation.entryUrl(it))
+        }
+    }
+
+    @Test
     fun `un lien entrant n'est repris que s'il est de l'origine de Repas`() {
         assertEquals("https://repas.exemple.test/confirmation-email?token=x", navigation.entryUrl("https://repas.exemple.test/confirmation-email?token=x"))
         assertNull(navigation.entryUrl("https://autre.exemple.test/"))

@@ -155,4 +155,16 @@ class NavigationPolicyTest {
         assertEquals("?", NavigationPolicy.describe(""))
         assertEquals("?", NavigationPolicy.describe(null))
     }
+
+    @Test
+    fun `un schema qui n'est https qu'une fois mis en majuscules par Unicode n'est pas https`() {
+        // « \u017F » (s long) devient « S » en majuscule : une comparaison sans casse ferait de http\u017F:// un https://. Une adresse
+        // que le navigateur n'accepterait pas comme https ne doit jamais rester dans l'application.
+        listOf("http\u017F://www.leclercdrive.fr/", "http\u017F://www.leclercdrive.fr:443/", "http\u017F://evil.com/").forEach {
+            assertFalse(it, NavigationPolicy.isAllowed(it))
+            assertNull(it, NavigationPolicy.httpsHostOf(it))
+            assertEquals(it, Decision.BLOCK, NavigationPolicy.decide(it))
+        }
+        assertEquals("?", NavigationPolicy.describe("http\u017F://www.leclercdrive.fr/"))
+    }
 }
