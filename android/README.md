@@ -2,7 +2,7 @@
 
 L'application Android de Repas (tickets `DRV-311` à `DRV-319`, dépôt back `docs/drive/`) : **l'application Repas complète**. Une **coquille** ([`MainActivity`](#la-coquille-repas-drv-317)) charge le front Repas dans une WebView ; le drive Leclerc est un **second écran** (`DriveActivity`, WebView en mode ordinateur où l'agent de `drive-agent/` est injecté) que la coquille ouvre. Repas parle à l'application par le **pont natif** `window.repasNative`. **Écrite en Kotlin, AndroidX réduit au strict nécessaire.**
 
-État : **coquille Repas** (DRV-317), **hôte WebView du drive** (DRV-312, devenu `DriveActivity`) et **agent embarqué** (DRV-313). **Passage du plan et retour du résultat** (DRV-314) : `drive.start` ouvre le drive sur le magasin du plan, l'agent s'exécute, `drive.result` revient à Repas. **Lecture du magasin** (DRV-320) : `drive.setup` ouvre le drive pour que l'utilisateur choisisse son magasin, que l'agent lit. La publication signée (DRV-315) vient ensuite. Le nom de paquet reste `eu.kantin.repas.drive` (il ne change plus : un paquet renommé ne se met pas à jour par-dessus l'ancien).
+État : **coquille Repas** (DRV-317), **hôte WebView du drive** (DRV-312, devenu `DriveActivity`) et **agent embarqué** (DRV-313). **Passage du plan et retour du résultat** (DRV-314) : `drive.start` ouvre le drive sur le magasin du plan, l'agent s'exécute, `drive.result` revient à Repas. **Lecture du magasin** (DRV-320) : `drive.setup` ouvre le drive pour que l'utilisateur choisisse son magasin, que l'agent lit. **Essais complets dans l'émulateur** (DRV-319) : `make android-e2e` joue de vrais passages (l'agent réel, la vraie WebView) contre le faux site Leclerc complet. La publication signée (DRV-315) vient ensuite. Le nom de paquet reste `eu.kantin.repas.drive` (il ne change plus : un paquet renommé ne se met pas à jour par-dessus l'ancien).
 
 > `drive-agent/android-lab/` est l'application de test jetable du spike (DRV-011). Elle reste en place, avec le banc d'essai `drive-agent/lab/`, jusqu'à la fin du jalon M3b ; ce dossier-ci la prolonge sans la modifier.
 
@@ -21,12 +21,13 @@ Tout se lance dans Docker (image : JDK 17, Gradle, SDK Android ; rien à install
 | `make android-emulator-down` | arrête l'émulateur (le SDK et l'AVD restent dans leur volume) |
 | `make android-emulator-status` | dit si KVM, le volume du SDK et l'émulateur sont prêts (code 0 seulement s'il a démarré) |
 | `make android-smoke` | test de fumée : construit un APK de débogage qui vise le faux Repas local, démarre l'émulateur au besoin, joue la coquille et le drive sur les faux sites locaux ; rapport et captures dans `android/dist/smoke/` |
+| `make android-e2e` | scénarios complets : même APK, contre le **faux site Leclerc complet** (HTTPS) : lecture du magasin, passage complet (phases A et B, retour dans Repas), « Annuler », abandon, application tuée puis reprise, blocage simulé, site changé ; rapport et captures dans `android/dist/e2e/` (voir « Les scénarios complets » plus bas) |
 
 Chaque commande Android reconstruit d'abord l'agent (`make agent-build`, Node dans Docker) : `agent.js` est un actif de l'APK (voir plus bas). La CI le construit avec `setup-node` puis passe `ANDROID_AGENT=` aux commandes `make` pour ne pas relancer Node dans Docker. La CI (`.github/workflows/android.yml`, séparée de `make check`) joue `make android-test`, `make android` et `make android-release-selftest` ; l'APK de débogage est déposé en artefact du run. Elle ne tourne que si `android/`, l'agent (`drive-agent/src`, `protocol`, `scripts`, `package*.json`), son workflow, `compose.yaml` ou le `Makefile` changent. Lancé à la main sur `main` (`gh workflow run android.yml --ref main`, avec au besoin `-f tag=android-dev-2026-10-18b` pour choisir l'étiquette), il publie aussi l'APK de débogage en **pré-version GitHub** `android-dev-<date>` (jamais une release de production ; mode d'emploi : `PROCEDURE.md`). L'image de construction est mise en cache par GitHub Actions.
 
 ## Émulateur de test (DRV-319)
 
-Un émulateur Android tourne dans Docker, sans fenêtre, pour essayer l'APK de débogage sans téléphone. **Il ne contacte jamais le vrai site Leclerc** : le DNS de l'émulateur envoie tout `*.leclercdrive.fr` vers un faux site local (une page de test sans aucune donnée d'enseigne) et ne résout aucun autre nom. Seul le premier lancement va sur Internet, pour télécharger le SDK chez Google (`dl.google.com`).
+Un émulateur Android tourne dans Docker, sans fenêtre, pour essayer l'APK de débogage sans téléphone. **Il ne contacte jamais le vrai site Leclerc** : le DNS de l'émulateur envoie tout `*.leclercdrive.fr` vers des faux sites locaux (une page de test, et le faux magasin Leclerc complet de `drive-agent/fake-leclerc/`, sans aucune donnée d'enseigne) et ne résout aucun autre nom. Seul le premier lancement va sur Internet, pour télécharger le SDK chez Google (`dl.google.com`).
 
 Cibles manuelles : la CI n'a pas KVM, elle ne lance jamais l'émulateur, et `make check` n'y touche pas.
 
@@ -51,6 +52,7 @@ L'émulateur a besoin de l'accélération matérielle, sinon il est inutilisable
 | `make android-emulator-up` | démarre l'émulateur (Android 14, Google APIs, x86_64) et attend `sys.boot_completed` |
 | `make android-emulator-status` | KVM, volume, état de l'émulateur |
 | `make android-smoke` | le test de fumée (ci-dessous) |
+| `make android-e2e` | les scénarios complets contre le faux Leclerc (ci-dessous) |
 | `make android-emulator-down` | arrête l'émulateur |
 
 - **Premier lancement** : télécharge environ 2 Go (outils, émulateur, image système ; 6 Go sur le disque une fois décompressé) dans le volume Docker `repas-front_android-emulator-sdk`, crée l'AVD `repas`, puis démarre : 2 minutes 45 mesurées avec une bonne connexion. **Ensuite** : une trentaine de secondes, rien n'est retéléchargé. Pour repartir de zéro : `make android-emulator-down` puis `docker volume rm repas-front_android-emulator-sdk`.
@@ -59,7 +61,7 @@ L'émulateur a besoin de l'accélération matérielle, sinon il est inutilisable
 
 ### 3. Le test de fumée (`make android-smoke`)
 
-Environ deux minutes une fois l'émulateur démarré. Il construit l'APK de débogage avec `ANDROID_REPAS_ORIGIN=https://repas.test/` (nom du faux Repas, dans `dist/repas-drive-smoke.apk` : l'APK de débogage ordinaire `dist/repas-drive-debug.apk` n'est pas touché) puis contrôle, dans l'ordre, et écrit le tout dans `android/dist/smoke/rapport.txt` avec des captures (`01-coquille-repas.png`, `02-menu-repas.png`, `03-passage-agent.png`, `04-passage-resultat.png`, `05-abandon.png`, `06-reprise.png`, `07-drive.png`, `08-menu-drive.png`, `09-diagnostic-agent.png`, `10-rapport-selftest.png`, `11-retour-coquille.png`, et pour la lecture du magasin `12-lecture-magasin-accueil.png`, `13-lecture-magasin-confirmation.png`, `14-lecture-magasin-resultat.png`, `15-lecture-magasin-abandon.png`) :
+Environ quatre à cinq minutes une fois l'émulateur démarré (283 s mesurées, dont jusqu'à deux minutes pour le test automatique de l'agent). Il construit l'APK de débogage avec `ANDROID_REPAS_ORIGIN=https://repas.test/` (nom du faux Repas, dans `dist/repas-drive-smoke.apk` : l'APK de débogage ordinaire `dist/repas-drive-debug.apk` n'est pas touché) puis contrôle, dans l'ordre, et écrit le tout dans `android/dist/smoke/rapport.txt` avec des captures (`01-coquille-repas.png`, `02-menu-repas.png`, `03-passage-agent.png`, `04-passage-resultat.png`, `05-abandon.png`, `06-reprise.png`, `07-drive.png`, `08-menu-drive.png`, `09-diagnostic-agent.png`, `10-rapport-selftest.png`, `11-retour-coquille.png`, et pour la lecture du magasin `12-lecture-magasin-accueil.png`, `13-lecture-magasin-confirmation.png`, `14-lecture-magasin-resultat.png`, `15-lecture-magasin-abandon.png`) :
 
 1. le réseau : `www.leclercdrive.fr` et `repas.test` se résolvent vers la machine locale (`10.0.2.2`) et un autre nom ne se résout pas ; sinon le test s'arrête avant d'ouvrir quoi que ce soit ;
 2. l'APK de débogage s'installe, l'application démarre sans plantage ;
@@ -77,16 +79,40 @@ Le faux Repas obéit aux ordres que le test dépose sur `/__command` du faux sit
 
 Code de sortie : 0 si tout passe, 1 sinon (le détail est dans le rapport et `journal-android.txt`), 3 si KVM manque.
 
-### 4. Comment ça marche
+### 4. Les scénarios complets (`make android-e2e`, DRV-319 partie 2)
 
-Le conteneur (`android/emulator/`, service `android-emulator` de `compose.yaml`, profil à part pour que `make stop` ne l'arrête pas) lance, dans l'ordre : `dnsmasq` (le DNS, seule réponse : `*.leclercdrive.fr` vers `10.0.2.2`, l'adresse de la machine hôte vue par l'émulateur) ; `testsite.py` (le faux site, HTTPS sur le port 443 du conteneur, avec un certificat jetable créé dans le volume, jamais dans le dépôt) ; l'émulateur (`-no-window -no-audio -gpu swiftshader_indirect`, KVM). Pour que la WebView accepte ce certificat sans toucher à l'application, le test de fumée écrit dans l'émulateur `/data/local/tmp/webview-command-line` avec `--ignore-certificate-errors-spki-list=<empreinte de la clé du faux site>` : seule cette clé est acceptée. Cela ne marche que sur une image Google APIs « userdebug » (pas une image avec Play Store), c'est pourquoi c'est celle-là. L'application n'est pas modifiée : l'APK testé est celui que produit `make android`.
+Là où le test de fumée essaie la coquille et le pont sur une page de test, `make android-e2e` joue de **vrais passages** : **l'agent réel dans la vraie WebView du drive**, contre le **faux site Leclerc complet** de DRV-309 (`drive-agent/fake-leclerc/` : 31 produits inventés, recherche, panier en quantités absolues, ruptures, promotions, défauts simulés, requêtes vérifiées à la lettre, cadence jugée), servi en **HTTPS** sous `courses-test.leclercdrive.fr` ; le faux Repas (`repaspage.html`) joue le front. Même APK de débogage que le test de fumée (`dist/repas-drive-smoke.apk`, qui vise `https://repas.test/`), même émulateur. Durée : environ **4 min 30** de scénarios une fois l'émulateur démarré (21 s à froid, le SDK étant déjà dans son volume), soit **5 minutes** de bout en bout avec la construction de l'APK (en cache). Rapport texte et captures (`e01-….png` à `e13-….png`, **à lire avant de conclure** : un « OK » sans avoir regardé les images ne prouve rien) dans `android/dist/e2e/`. Code de sortie : 0 si tout passe, 1 sinon (détail dans `rapport.txt` et `journal-android.txt`), 3 si KVM manque.
 
-### 5. Dépannage
+Chaque scénario repart d'un faux Leclerc remis à neuf (`POST /__fake/reset` : panier vide, journal, cadence et défauts à zéro). Le faux Repas reçoit ses ordres de `/__command` (le plan complet y tient : `android/emulator/e2e/plan-complet.json` et `plan-connu.json`, avec `__RUN_ID__`) et relève chaque réponse de l'application, dont le détail des lignes du résultat (`ingrédient:issue:référence:quantité`).
+
+| # | Scénario | Ce qui est prouvé |
+|---|---|---|
+| 0 | réseau, installation | `www.leclercdrive.fr`, `repas.test` et `courses-test.leclercdrive.fr` se résolvent vers `10.0.2.2` (réessayé une minute après le démarrage, mais arrêt aussitôt si un nom se résout ailleurs), un autre nom non ; le faux Leclerc répond ; l'APK s'installe, la coquille charge le faux Repas, `app.info` annonce le drive |
+| 1 | lecture du magasin (`drive.setup`) | le drive s'ouvre sur l'accueil avec son message ; le lien « Choisir le magasin du faux Leclerc » mène à la racine de l'hôte du magasin, que le faux site redirige vers l'accueil du magasin ; l'agent demande « Enregistrer ce magasin dans Repas ? » sans envoyer la moindre recherche ; Repas reçoit un `setup-result` (numéro `000001`, hôte `courses-test.leclercdrive.fr`, adresse de base) |
+| 2 | passage complet | `drive.start` d'un plan de cinq lignes ; récapitulatif (2 connus, 1 à choisir, 1 « j'en ai toujours », 1 ignoré), **rien ne part avant « Commencer »** ; phase A : farine ×3 et sucre ×1 au panier du faux Leclerc ; phase B : la liste de l'agent affiche le poivre, « 80 g demandés, 40 g par produit : 2 », l'agent ne choisit pas seul ; « Choisir » met 2 poivres au panier ; « Panier rempli » ; « Retourner dans Repas » : Repas reçoit `completed` avec chaque ligne (ajoutée, ajoutée, à la maison, ignorée, choisie) ; **cadence** jugée par le faux site (au moins 800 ms entre deux requêtes, aucune en parallèle, aucune refusée pour sa forme) ; écran allumé seulement pendant le passage |
+| 3 | « Annuler » au récapitulatif | « Envoi arrêté », Repas reçoit `aborted`, aucune requête partie, panier vide |
+| 4 | abandon en plein passage | avec une latence de 1,5 s par requête, le retour du téléphone demande « Abandonner l'envoi ? », « Abandonner » : Repas reçoit `aborted` / `CANCELLED` sans ligne |
+| 5 | application tuée puis reprise | phase A faite, l'agent attend le choix, `force-stop` ; au redémarrage « Envoi interrompu » → « Reprendre » : le drive se rouvre, le plan est renvoyé, l'agent (WebView neuve, session perdue) repart du récapitulatif, termine ; panier exact **sans doublon** (quantités absolues), cadence tenue d'un passage à l'autre, Repas reçoit `completed` |
+| 6 | blocage simulé | le faux Leclerc répond 403 à l'écriture du panier : « Panier rempli en partie », l'agent n'envoie que 3 requêtes (une recherche, l'écriture refusée, **une seule** nouvelle tentative) puis plus rien, rien au panier ; Repas reçoit `partial` / `BLOCKED`, les deux lignes en échec |
+| 7 | site changé | la page de recherche n'a plus les champs attendus : « Envoi interrompu », « Leclerc a modifié son site » ; Repas reçoit `error` / `CONTRACT_CHANGED`, rien au panier |
+| 8 | bilan | l'application tourne, aucun plantage ni blocage (ANR) dans le journal d'Android, le journal du DNS prouve qu'aucune demande n'est partie vers Internet |
+
+**Ce que ces essais ne prouvent pas** : DataDome (l'anti-robot), la connexion à un vrai compte, le vrai site, le vrai téléphone : c'est la recette de l'utilisateur (DRV-505). Une hypothèse y est écrite : **la racine de l'hôte d'un magasin mène à l'accueil du magasin** (le faux site la redirige) ; l'application ouvre `https://<hôte du magasin>/` pour un plan, et seul l'essai sur le vrai site (recette, partie « Premier envoi ») confirme que le vrai drive fait de même.
+
+**Le faux certificat n'est jamais accepté par l'application.** La coquille et le drive refusent un certificat en cause (`onReceivedSslError` annule), l'application n'a ni `network_security_config` ni gestionnaire de confiance : l'APK de publication ne fait confiance à aucun faux certificat. C'est la WebView de l'**émulateur de test** qui reçoit, de l'extérieur (`install_apk` de `lib.sh` écrit `/data/local/tmp/webview-command-line` avec `--ignore-certificate-errors-spki-list=` et l'empreinte de la clé publique du faux site, et d'elle seule), l'ordre de lui faire confiance. `__tests__/emulator-e2e.spec.ts` (joué par `make check`) vérifie que l'application n'écrit jamais ce réglage ni un gestionnaire de confiance, que les plans des scénarios sont de vrais plans du protocole v1 aux produits du faux catalogue, et que les scripts sont de la syntaxe bash valide.
+
+### 5. Comment ça marche
+
+Le conteneur (`android/emulator/`, service `android-emulator` de `compose.yaml`, profil à part pour que `make stop` ne l'arrête pas) lance, dans l'ordre : `dnsmasq` (le DNS, seule réponse : `*.leclercdrive.fr` vers `10.0.2.2`, l'adresse de la machine hôte vue par l'émulateur) ; `testsite.py` (le faux site, HTTPS sur le port 443 du conteneur, avec un certificat jetable créé dans le volume, jamais dans le dépôt) ; l'émulateur (`-no-window -no-audio -gpu swiftshader_indirect`, KVM). Pour que la WebView accepte ce certificat sans toucher à l'application, le test de fumée écrit dans l'émulateur `/data/local/tmp/webview-command-line` avec `--ignore-certificate-errors-spki-list=<empreinte de la clé du faux site>` : seule cette clé est acceptée. Cela ne marche que sur une image Google APIs « userdebug » (pas une image avec Play Store), c'est pourquoi c'est celle-là. L'application n'est pas modifiée : l'APK testé est celui que produit `make android`. Pour `make android-e2e`, le conteneur embarque aussi **Node** (le même que celui du front, copié de l'image `node:24`) qui exécute le **faux Leclerc complet** (`drive-agent/fake-leclerc/`, monté en lecture seule sur `/opt/fake-leclerc`, HTTP sur `127.0.0.1:8099` dans le conteneur) ; `testsite.py` le relaie en HTTPS pour le seul nom `courses-test.leclercdrive.fr` (le reste de `*.leclercdrive.fr` garde la page de test du test de fumée). Son pilotage `/__fake/*` (état, panier, défauts, remise à neuf) n'est offert qu'aux noms de la boucle locale : les scripts y accèdent par `docker compose exec`, jamais l'émulateur.
+
+### 6. Dépannage
 
 - **`/dev/kvm` manque** (message « KVM absent ») : voir 1. Après un redémarrage de WSL, refaire `sudo modprobe kvm_intel && sudo chmod 666 /dev/kvm`, ou rendre cela permanent.
 - **`/dev/kvm` existe mais l'accès est refusé** : `sudo chmod 666 /dev/kvm`.
 - **Le démarrage dépasse 30 minutes ou le conteneur s'arrête** : les dernières lignes du journal sont affichées ; en entier : `docker compose --profile android-emulator logs android-emulator`. Un téléchargement interrompu se reprend en relançant `make android-emulator-up`. Si le volume est abîmé : voir « repartir de zéro » en 2.
 - **Mémoire** : l'émulateur prend environ 3 Go ; si WSL est à court, baisser `EMULATOR_MEMORY` (par exemple 2048) ou augmenter `memory=` dans `C:\Users\<toi>\.wslconfig`, puis `wsl --shutdown`.
+- **`make android-e2e` s'arrête sur « le faux site Leclerc complet ne répond pas »** (ou « courses-test.leclercdrive.fr ne se résout pas ») : le conteneur date d'avant Node et du dossier monté ; `make android-emulator-down` puis `make android-emulator-up` le reconstruit (quelques dizaines de secondes, le SDK reste dans son volume). Le journal du faux site : `docker compose --profile android-emulator exec android-emulator cat /sdk/site/fake-leclerc.log`.
+- **Un scénario de `android-e2e` échoue sur un texte de l'agent** : les textes cherchés sont ceux de `drive-agent/src/ui/strings.ts` ; si l'agent les change, les adapter dans `e2e.sh` (les captures montrent l'écran réel).
 - **« l'émulateur n'est pas prêt » ou « APK manque »** pendant `smoke.sh` lancé à la main : passer par `make android-smoke`, qui construit l'APK et démarre l'émulateur avant.
 - **Le test de fumée échoue sur « la page locale ne s'est pas chargée »** : l'émulateur vient peut-être juste de démarrer ; relancer. Voir aussi `docker compose --profile android-emulator exec android-emulator tail /sdk/site/access.log` (les chemins demandés au faux site).
 
@@ -95,9 +121,10 @@ Le conteneur (`android/emulator/`, service `android-emulator` de `compose.yaml`,
 ```
 android/
   Dockerfile, build.sh      image de construction et script lancé dedans (test, apk, release, release-selftest)
-  emulator/                 l'émulateur de test (DRV-319) : Dockerfile (outils), entrypoint.sh (SDK, AVD, DNS, faux site, émulateur),
-                            testsite.py (les faux sites locaux, selon le nom demandé) + testpage.html (le faux drive) + repaspage.html
-                            (le faux Repas), ctl.sh (up, down, status), smoke.sh (le test de fumée)
+  emulator/                 l'émulateur de test (DRV-319) : Dockerfile (outils, Node), entrypoint.sh (SDK, AVD, DNS, faux sites, émulateur),
+                            testsite.py (les faux sites HTTPS, selon le nom demandé, et le relais vers le faux Leclerc) + testpage.html (le faux
+                            drive) + repaspage.html (le faux Repas), ctl.sh (up, down, status), lib.sh (outils communs des essais),
+                            smoke.sh (le test de fumée), e2e.sh (les scénarios complets) + e2e/*.json (leurs plans)
   settings.gradle.kts, build.gradle.kts, gradle.properties
   buildSrc/                 la dérivation de la version (AppVersion), en Kotlin pur, avec ses tests
   app/
@@ -130,7 +157,7 @@ android/
     src/test/kotlin/...     tests JUnit (Kotlin pur, sans téléphone)
   agent.js.sha384           l'empreinte attendue de l'agent embarqué (la construction échoue sinon)
   agent-digest.ts           la vérifier ou la noter (`make android-agent-hash`)
-  __tests__/               tests Vitest : pas de clé dans le dépôt (hygiene), empreinte de l'agent (agent-asset), plan d'essai (debug-plan), pont, mode débogage et agent réel dans jsdom, dont le test automatique de bout en bout avec un faux site (injection)
+  __tests__/               tests Vitest : pas de clé dans le dépôt (hygiene), empreinte de l'agent (agent-asset), plan d'essai (debug-plan), pont, mode débogage et agent réel dans jsdom, dont le test automatique de bout en bout avec un faux site (injection), plans et scripts de l'émulateur, aucun faux certificat dans l'application (emulator-e2e)
   debug.keystore            clé de débogage PUBLIQUE (mot de passe « android »), la seule clé suivie par Git
 ```
 

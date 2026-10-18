@@ -15,138 +15,21 @@
 # Code de sortie : 0 si tous les contrôles passent, 1 sinon, 3 si KVM manque.
 set -u
 cd "$(dirname "$0")/../.."
+source android/emulator/lib.sh # les outils communs avec e2e.sh (DRV-319, partie 2)
 
-read -ra COMPOSE <<< "${DOCKER_COMPOSE:-docker compose}"
-COMPOSE+=(--profile android-emulator)
-SERVICE=android-emulator
-APP=eu.kantin.repas.drive
-OUT=android/dist/smoke
-SITE_HOST=www.leclercdrive.fr
-REPAS_HOST=repas.test
-# L'APK de débogage construit pour viser https://repas.test/ (voir le Makefile) : l'APK de débogage ordinaire vise le vrai Repas.
-APK=/apk/repas-drive-smoke.apk
-
-emu() { "${COMPOSE[@]}" exec -T "$SERVICE" "$@"; }
-adb() { emu adb "$@"; }
-reports() { emu curl -sk "https://127.0.0.1/__reports" 2> /dev/null; }
-
-mkdir -p "$OUT"
-for old in "${OUT:?}"/*.png "${OUT:?}"/*.txt; do [ -e "$old" ] && rm -f "$old"; done
-REPORT="$OUT/rapport.txt"
-: > "$REPORT"
-FAILURES=0
-START=$SECONDS
-
-say() { echo "$*" | tee -a "$REPORT"; }
-ok() { say "  OK  $*"; }
-ko() { say "  KO  $*"; FAILURES=$((FAILURES + 1)); }
-check() { # check <description> <commande…> : OK si la commande réussit
-  local description=$1
-  shift
-  if "$@" > /dev/null 2>&1; then ok "$description"; else ko "$description"; fi
-}
-
-# Attend (timeout en secondes) que la commande réussisse.
-wait_until() {
-  local timeout=$1
-  shift
-  local until=$((SECONDS + timeout))
-  while ! "$@" > /dev/null 2>&1; do
-    [ "$SECONDS" -lt "$until" ] && sleep 2 || return 1
-  done
-}
-
-has_report() { reports | grep -q "$1"; }
-has_report_count() { [ "$(reports | grep -o "$1" | wc -l)" -ge "$2" ]; } # au moins N relevés de ce motif
-post_command() { emu curl -sk -X POST -H 'Content-Type: application/json' -d "$1" "https://127.0.0.1/__command" > /dev/null; } # un ordre pour le faux Repas
-screenshot() { adb exec-out screencap -p > "$OUT/$1.png" && say "      capture : $OUT/$1.png"; }
-ui() { # l'arbre de l'écran en XML (uiautomator plante parfois en sortant : on réessaie)
-  local attempt xml
-  for attempt in 1 2 3; do
-    adb shell rm -f /sdcard/ui.xml > /dev/null 2>&1
-    adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1
-    xml=$(adb shell cat /sdcard/ui.xml 2> /dev/null)
-    if grep -q '<hierarchy' <<< "$xml"; then
-      printf '%s\n' "$xml"
-      return 0
-    fi
-    sleep 1
-  done
-  return 1
-}
-ui_has() { ui | grep -q "$1"; }
-
-# Touche l'élément (texte ou description) dont l'attribut correspond à l'expression ; sort en erreur s'il n'est pas à l'écran.
-tap() {
-  local bounds x1 y1 x2 y2 attempt
-  for attempt in 1 2 3 4 5; do
-    bounds=$(ui | grep -o "<node [^>]*$1[^>]*>" | head -n 1 | sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')
-    [ -n "$bounds" ] && break
-    sleep 2
-  done
-  [ -n "$bounds" ] || return 1
-  read -r x1 y1 x2 y2 <<< "$bounds"
-  adb shell input tap $(((x1 + x2) / 2)) $(((y1 + y2) / 2))
-}
-
-start_app() {
-  emu curl -sk -X POST "https://127.0.0.1/__reset" > /dev/null
-  adb shell am force-stop "$APP"
-  adb logcat -c
-  adb shell am start -W -n "$APP/.MainActivity" > /dev/null
-}
+init_output android/dist/smoke
 
 say "Test de fumée de Repas Drive dans l'émulateur ($(date '+%Y-%m-%d %H:%M'))"
 say
 
 # --- 0. Où l'on en est ---------------------------------------------------------------------------------------------------------------------
 say "0. Émulateur et réseau"
-if [ ! -c /dev/kvm ]; then
-  say "  KO  /dev/kvm manque (étape humaine : sudo modprobe kvm_intel && sudo chmod 666 /dev/kvm ; voir android/README.md)"
-  exit 3
-fi
-if [ "$(adb shell getprop sys.boot_completed 2> /dev/null | tr -d '\r')" != "1" ]; then
-  ko "l'émulateur n'est pas prêt (make android-emulator-up)"
-  exit 1
-fi
-ok "émulateur démarré ($(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r'))"
-resolved=$(adb shell ping -c 1 -W 3 "$SITE_HOST" 2>&1 | head -n 1)
-if grep -q '(10\.0\.2\.2)' <<< "$resolved"; then
-  ok "$SITE_HOST se résout vers la machine locale (10.0.2.2), jamais vers Internet"
-else
-  ko "$SITE_HOST ne se résout pas vers 10.0.2.2 : $resolved. ARRÊT, pour ne pas risquer de contacter le vrai site."
-  exit 1
-fi
-if adb shell ping -c 1 -W 3 "$REPAS_HOST" 2>&1 | head -n 1 | grep -q '(10\.0\.2\.2)'; then
-  ok "$REPAS_HOST (le faux Repas) se résout vers la machine locale (10.0.2.2)"
-else
-  ko "$REPAS_HOST ne se résout pas vers 10.0.2.2 : le faux Repas manque (make android-emulator-down puis up reconstruit l'émulateur). ARRÊT."
-  exit 1
-fi
-if adb shell ping -c 1 -W 3 example.org 2>&1 | grep -q 'unknown host\|Name or service not known\|bad address'; then
-  ok "un autre nom (example.org) ne se résout pas : le DNS de l'émulateur est fermé"
-else
-  ko "un autre nom se résout : le DNS de l'émulateur n'est pas fermé"
-fi
+check_network
 
 # --- 1. Installation ---------------------------------------------------------------------------------------------------------------------
 say
 say "1. Installation de l'APK de débogage (qui vise https://$REPAS_HOST/)"
-if ! emu test -f "$APK"; then
-  ko "$APK manque (make android-smoke le construit)"
-  exit 1
-fi
-adb shell pm uninstall "$APP" > /dev/null 2>&1
-if adb install -t "$APK" 2>&1 | grep -q Success; then
-  ok "APK installé ($(adb shell dumpsys package "$APP" | grep -m1 versionName | tr -d ' \r'))"
-else
-  ko "l'installation de l'APK a échoué"
-  exit 1
-fi
-# La WebView n'ignore les erreurs de certificat que pour la clé publique du faux site (jetable, créée dans le volume de l'émulateur).
-spki=$(emu cat /sdk/site/spki.b64 | tr -d '\r\n')
-adb shell "echo '_ --ignore-certificate-errors-spki-list=$spki' > /data/local/tmp/webview-command-line"
-ok "WebView réglée pour faire confiance au certificat du faux site, et à lui seul"
+install_apk
 
 # --- 2. La coquille Repas ------------------------------------------------------------------------------------------------------------------
 say
@@ -209,13 +92,6 @@ RUN_C=cccccccc-cccc-4ccc-8ccc-cccccccccccc
 RUN_D=dddddddd-dddd-4ddd-8ddd-dddddddddddd
 RUN_E=eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee
 start_pass() { post_command "{\"do\":\"drive.start\",\"runId\":\"$1\"}"; }
-reset_reports() { emu curl -sk -X POST "https://127.0.0.1/__reset" > /dev/null; }
-screen_held() { adb shell dumpsys window 2> /dev/null | grep -m1 mHoldScreenWindow | grep -q DriveActivity; }
-screen_not_held() { ! screen_held; }
-ui_lacks() { ! ui_has "$1"; }
-result_report() { # result_report <runId> <issue> : le relevé de drive.result de ce passage, avec cette issue
-  reports | grep -q "\"type\": \"drive.result\", \"runId\": \"$1\", \"resultType\": \"result\", \"outcome\": \"$2\""
-}
 open_pass() { # open_pass <runId> : drive.start, puis le drive s'ouvre et reçoit le plan
   reset_reports
   start_pass "$1"
@@ -442,24 +318,5 @@ screenshot 11-retour-coquille
 # --- 9. Bilan --------------------------------------------------------------------------------------------------------------------------------
 say
 say "9. Bilan"
-check "l'application tourne toujours" adb shell pidof "$APP"
-crashes=$(adb logcat -d -b crash 2> /dev/null | grep -c "Process: $APP")
-if [ "$crashes" = "0" ]; then ok "aucun plantage dans le journal d'Android"; else ko "$crashes trace(s) de plantage dans le journal d'Android"; fi
-if adb logcat -d 2> /dev/null | grep -q "ANR in $APP"; then ko "l'application a cessé de répondre (ANR)"; else ok "aucun « l'application ne répond pas »"; fi
-forwarded=$(emu grep -c forwarded /sdk/site/dns.log 2> /dev/null)
-names=$(emu grep -o "query\[[A-Z]*\] [^ ]*leclercdrive[^ ]*" /sdk/site/dns.log 2> /dev/null | awk "{print \$2}" | sort -u | tr "\n" " ")
-others=$(emu grep -c "REFUSED" /sdk/site/dns.log 2> /dev/null)
-if [ "${forwarded:-0}" = "0" ]; then
-  ok "le DNS n'a transmis aucune demande à Internet (noms Leclerc demandés : ${names:-aucun}, tous résolus localement ; ${others:-0} réponses de refus pour tout le reste)"
-else
-  ko "le DNS a transmis $forwarded demande(s) à Internet"
-fi
-say
-if [ "$FAILURES" -eq 0 ]; then
-  say "RÉSULTAT : le test de fumée a réussi en $((SECONDS - START)) s. Captures et rapport : $OUT/"
-  exit 0
-fi
-say "RÉSULTAT : $FAILURES contrôle(s) en échec ($((SECONDS - START)) s). Captures et rapport : $OUT/"
-adb logcat -d -t 80 -s AndroidRuntime:E RepasDrive:W chromium:E 2> /dev/null > "$OUT/journal-android.txt"
-say "Journal d'Android (extrait) : $OUT/journal-android.txt"
-exit 1
+final_checks
+conclude "le test de fumée"

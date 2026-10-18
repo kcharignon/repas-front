@@ -7,7 +7,7 @@
 <style>
   body { font: 18px/1.4 system-ui, sans-serif; margin: 24px; color: #1d2b1f; background: #fff; }
   h1 { font-size: 26px; margin: 0 0 4px; }
-  a#store { display: inline-block; margin-bottom: 16px; padding: 12px 0; font-weight: 600; }
+  a#store, a#fake-leclerc { display: inline-block; margin-bottom: 8px; padding: 12px 0; font-weight: 600; }
   p.note { margin: 0 0 20px; color: #4a5a4c; }
   ul { list-style: none; padding: 0; margin: 0; }
   li { padding: 10px 12px; margin-bottom: 8px; border-radius: 8px; background: #f1f1ec; }
@@ -20,6 +20,7 @@
 <h1>Page locale de test</h1>
 <p class="note">Faux site de l'émulateur (DRV-319, DRV-320) : aucune donnée d'enseigne. L'application doit y avoir mis son pont et son agent.</p>
 <p><a id="store" href="/magasin-123456-123456-Ville-Test/accueil.aspx">Choisir mon magasin de test</a></p>
+<p><a id="fake-leclerc" href="https://courses-test.leclercdrive.fr/">Choisir le magasin du faux Leclerc</a></p>
 <ul id="checks"></ul>
 <script>
 (function () {

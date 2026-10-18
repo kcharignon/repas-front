@@ -208,7 +208,7 @@ android-lab-hash: ## Note the SHA-384 of drive-agent/lab/published/lab.js in dri
 	@$(RUN) npm run --silent lab:android-hash -- --write
 
 ## —— Android emulator 🤖 ————————————————————————————————————————————————————
-.PHONY: android-emulator-up android-emulator-down android-emulator-status android-smoke
+.PHONY: android-emulator-up android-emulator-down android-emulator-status android-smoke android-e2e
 
 # L'émulateur Android de test (DRV-319, android/emulator/) : sans fenêtre, accéléré par KVM (/dev/kvm), SDK et AVD dans le volume Docker
 # `android-emulator-sdk` (téléchargés une seule fois). Cibles manuelles : la CI n'a pas KVM, `make check` n'y touche pas. Mode d'emploi : android/README.md.
@@ -227,6 +227,11 @@ android-smoke: ## Smoke test: build the debug APK aimed at the local fake Repas,
 	@ANDROID_REPAS_ORIGIN=https://repas.test/ ANDROID_APK_NAME=repas-drive-smoke.apk $(MAKE) --no-print-directory android
 	@$(MAKE) --no-print-directory android-emulator-up
 	@DOCKER_COMPOSE="$(DOCKER_COMPOSE)" ./android/emulator/smoke.sh
+
+android-e2e: ## End-to-end scenarios in the emulator against the full fake Leclerc over HTTPS (read the store, a complete pass, abandon, resume, blocked, site changed); report and screenshots in android/dist/e2e/
+	@ANDROID_REPAS_ORIGIN=https://repas.test/ ANDROID_APK_NAME=repas-drive-smoke.apk $(MAKE) --no-print-directory android
+	@$(MAKE) --no-print-directory android-emulator-up
+	@DOCKER_COMPOSE="$(DOCKER_COMPOSE)" ./android/emulator/e2e.sh
 
 ## —— Production image 📦 ————————————————————————————————————————————————————
 .PHONY: prod prod-stop

@@ -82,6 +82,8 @@ export interface FakeLeclerc {
   readonly repas: string
   behavior(): Behavior
   setBehavior(patch: Partial<Behavior>): void
+  /** Remet le faux site à neuf : panier vide, journal et violations effacés, cadence repartie de zéro, comportement par défaut. */
+  reset(): void
   /** Remplace le contenu du panier : identifiant de produit vers quantité. */
   seedCart(lines: Record<number, number>): void
   cart(): Record<number, number>
@@ -196,6 +198,15 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
   let inFlight = 0
   let lastPacedEnd: number | null = null
   let pacedCount = 0
+
+  function reset(): void {
+    behavior = { latencyMs: 0, fault: null }
+    cart.clear()
+    log.length = 0
+    violations.length = 0
+    lastPacedEnd = null
+    pacedCount = 0
+  }
 
   /** Une requête de l'agent à cadencer (recherche ou écriture du panier) : contrôle de la cadence, latence, défaut simulé. */
   async function paced(
@@ -334,6 +345,12 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       entry.status = 200
       return send(res, 200, repasReturnPage(), HTML)
     }
+    // La racine de l'hôte d'un magasin mène à l'accueil du magasin : c'est l'adresse que l'application ouvre pour un plan (DRV-314, DRV-319).
+    if (path === '/' && req.method === 'GET') {
+      entry.kind = 'page'
+      entry.status = 302
+      return send(res, 302, '', { Location: `${PAGE_PATH}/` })
+    }
     const store = STORE_PATTERN.exec(path)
     const rest = store?.[4] ?? ''
     if (!store) {
@@ -394,6 +411,10 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       behavior = { ...behavior, ...(JSON.parse(await readBody(req)) as Partial<Behavior>) }
       return send(res, 200, JSON.stringify(behavior), json)
     }
+    if (req.method === 'POST' && path === '/__fake/reset') {
+      reset()
+      return send(res, 200, JSON.stringify(behavior), json)
+    }
     if (req.method === 'POST' && path === '/__fake/cart') {
       cart.clear()
       for (const [id, quantity] of Object.entries(
@@ -451,6 +472,7 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
     setBehavior(patch) {
       behavior = { ...behavior, ...patch }
     },
+    reset,
     seedCart(lines) {
       cart.clear()
       for (const [id, quantity] of Object.entries(lines))
