@@ -43,6 +43,19 @@ export default {
     name: 'Nom',
     symbol: 'Symbole',
     symbolHint: 'Peut rester vide (par exemple pour « unité »).',
+    dimension: 'Ce que l’unité mesure',
+    dimensionHint: 'Sert à calculer combien de produits acheter.',
+    noDimension: 'Aucune (cuillère, tranche…)',
+    dimensions: {
+      WEIGHT: 'Poids',
+      VOLUME: 'Volume',
+      COUNT: 'Nombre de pièces',
+      PACKAGE: 'Conditionnement',
+    },
+    baseFactor: 'Facteur de base',
+    baseFactorHint:
+      'Combien d’unités de base (gramme, millilitre, pièce) vaut cette unité : 1000 pour le kilo, 1 pour le gramme ou pour un conditionnement.',
+    unitMeasure: '{dimension}, × {factor}',
     image: 'Image',
     imageHint: 'Adresse de l’image, par exemple images/department/fruits.png.',
     order: "Ordre d'affichage",
@@ -84,6 +97,7 @@ export default {
       order: 'Indiquez un ordre.',
       sameUnit: 'Choisissez deux unités différentes.',
       coefficient: 'Entrez un nombre supérieur à zéro.',
+      baseFactor: 'Entrez un nombre supérieur à zéro, ou laissez vide.',
       protectedAccount: 'Ce compte est protégé : il reste actif et ne se supprime pas.',
       ownAccount: 'Vous ne pouvez pas supprimer votre propre compte.',
     },
@@ -384,6 +398,9 @@ export default {
       'Trop de produits mémorisés, ou trop d’écritures aujourd’hui : oubliez des produits dans « Mes produits », ou réessayez demain.',
     driveStoreMismatch:
       'Votre magasin a changé : la page vient d’être rechargée, refaites votre action.',
+    unitMeasureIncomplete:
+      'La dimension et le facteur de base vont ensemble : renseignez les deux, ou laissez-les vides.',
+    unitBaseFactorInvalid: 'Le facteur de base doit être un nombre supérieur à zéro.',
     driveStoreInvalid:
       'Cette adresse n’est pas celle d’un magasin Leclerc Drive : vérifiez-la, elle ressemble à https://exemple.leclercdrive.fr/magasin-123456-123456.',
   },
@@ -824,7 +841,7 @@ export default {
         phone:
           'Sur votre téléphone, l’application garde votre connexion à Leclerc, comme le ferait un navigateur. Elle ne la partage ni avec Repas ni avec personne d’autre que Leclerc et ses propres services. Vous pouvez l’effacer à tout moment : menu de l’application, « Se déconnecter de Leclerc et effacer les données du drive ».',
         sheets:
-          'Les fiches de produits (nom, contenu, prix vu, magasin) sont communes à tous les utilisateurs de Repas et ne disent pas qui les a vues. Chacun ne retrouve que les produits qu’il a lui-même mémorisés. Ces fiches restent quand un compte est supprimé, mais sans aucun lien avec la personne.',
+          'Les fiches de produits (nom, contenu, prix vu, magasin) sont communes à tous les utilisateurs de Repas et ne disent pas qui les a vues. Chacun ne retrouve que les produits qu’il a lui-même mémorisés. La première personne qui décrit un produit fixe sa fiche (nom, contenu, code-barres) : les suivantes ne la réécrivent pas, elles ne font que la compléter si elle est incomplète ; le prix vu, lui, est rafraîchi par celles qui choisissent ce produit. Ces fiches restent quand un compte est supprimé, mais sans aucun lien avec la personne.',
       },
       erase: {
         title: 'Comment tout effacer',

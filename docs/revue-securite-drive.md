@@ -84,7 +84,7 @@ Les pré-versions `android-dev-*` (APK de débogage) et `android-lab-*` (banc d'
 
 ### C8 — À garder identique (info)
 
-La note du front (`drivePrivacy` de `fr.ts`) doit rester identique au fond à `docs/drive/note-vie-privee.md` du back : D3 y ajoute une phrase, à reporter côté back. Autre écart non corrigé, déjà noté par la revue du back (C1) : « Chacun ne retrouve que les produits qu'il a lui-même mémorisés » reste vrai, mais le contenu d'une fiche peut venir d'un autre utilisateur du même magasin. **Suite (DRV-613, partie 2)** : l'agent ne fait plus confiance au contenu mémorisé pour la quantité : en phase A il recalcule le nombre de produits sur le contenu lu en direct (et `needed`), le met au panier s'il diffère de celui du plan et le signale à l'écran de fin (`AGENT_VERSION` 0.8.0).
+La note du front (`drivePrivacy` de `fr.ts`) doit rester identique au fond à `docs/drive/note-vie-privee.md` du back : D3 y ajoute une phrase, à reporter côté back. Autre écart non corrigé, déjà noté par la revue du back (C1) : « Chacun ne retrouve que les produits qu'il a lui-même mémorisés » reste vrai, mais le contenu d'une fiche peut venir d'un autre utilisateur du même magasin (la note du front dit maintenant, comme celle du back, que la première personne qui décrit un produit fixe sa fiche et que les suivantes ne font que la compléter : DRV-613 partie 1). **Suite (DRV-613, partie 2)** : l'agent ne fait plus confiance au contenu mémorisé pour la quantité : en phase A il recalcule le nombre de produits sur le contenu lu en direct (et `needed`), le met au panier s'il diffère de celui du plan et le signale à l'écran de fin (`AGENT_VERSION` 0.8.0).
 
 ### C9 — Le CI et les actions GitHub (info)
 

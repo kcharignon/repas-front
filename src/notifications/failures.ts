@@ -18,6 +18,9 @@ const driveCodes = new Map([
   ['DRIVE_LIMIT_REACHED', 'errors.driveLimitReached'],
   ['DRIVE_STORE_MISMATCH', 'errors.driveStoreMismatch'],
   ['DRIVE_STORE_INVALID', 'errors.driveStoreInvalid'],
+  // Unités (DRV-409) : la dimension et le facteur de base vont ensemble, le facteur est strictement positif
+  ['UNIT_MEASURE_INCOMPLETE', 'errors.unitMeasureIncomplete'],
+  ['UNIT_BASE_FACTOR_INVALID', 'errors.unitBaseFactorInvalid'],
 ])
 
 /** Le message que lit l'utilisateur pour un échec d'écriture, selon le code renvoyé par le back (ADR 0007, 0016). */
