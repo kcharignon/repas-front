@@ -150,9 +150,14 @@ class DrivePass(
 }
 
 /**
- * Ce que l'écran du drive dit en haut d'écran tant que la page n'est pas celle d'un magasin ([NavigationPolicy.isStorePage]) pendant un
- * passage : l'agent n'agit que sur une page de magasin, et ne reçoit son message (plan ou lecture du magasin) qu'à ce moment-là. Plutôt qu'un
- * écran vide (la page de l'enseigne n'a rien de Repas), un message dit quoi faire : se connecter, ouvrir la page de son magasin.
+ * Ce que l'écran du drive dit en haut d'écran pendant un passage tant que la page n'est pas celle d'un magasin ([NavigationPolicy.isStorePage])
+ * ou que le site l'a refusée : l'agent n'agit que sur une page de magasin, et ne reçoit son message (plan ou lecture du magasin) qu'à ce
+ * moment-là. Plutôt qu'un écran qui n'a rien de Repas, un message dit quoi faire, et ne fait jamais rien à la place de l'utilisateur.
+ *
+ * Pour un plan (ticket E de l'audit du 2026-10-18) : le drive s'ouvre sur la racine de l'hôte, l'accueil du magasin, où il faut toucher
+ * « Commencer mes courses » ([OPEN], sans alarme : c'est l'attente normale) ; si le site refuse la page, tarde ou n'a pas d'agent ([PLAN],
+ * [VERIFICATION]), le bouton « Ouvrir l'accueil du drive » recharge cette page de départ ([PassRequest.startUrl]). Dès que l'utilisateur est sur une
+ * page de magasin, le message du passage part tout seul vers l'agent.
  */
 enum class StoreBanner {
     /** Pas de passage, ou la page est celle d'un magasin : rien à dire. */
@@ -161,15 +166,28 @@ enum class StoreBanner {
     /** Lecture du magasin (`drive.setup`) : se connecter puis choisir son magasin. */
     SETUP,
 
-    /** Envoi d'un plan : le magasin du plan n'est pas ouvert (adresse inconnue du site, connexion demandée) : l'ouvrir. */
+    /** Envoi d'un plan, accueil du magasin ou autre page qui n'en est pas une : toucher « Commencer mes courses » pour ouvrir son magasin. Pas de bouton. */
+    OPEN,
+
+    /** Envoi d'un plan : « Cette page n'est pas celle de ton magasin » (page refusée, trop lente ou sans agent), avec le bouton « Ouvrir l'accueil du drive ». */
     PLAN,
+
+    /** Le site demande une vérification (403, 429) : la faire sur la page, Repas reprend ensuite. La page reste visible ; le bouton reste là si ce n'était pas un défi. */
+    VERIFICATION,
     ;
 
+    /** Ce message porte le bouton « Ouvrir l'accueil du drive ». */
+    val hasAction: Boolean get() = this == PLAN || this == VERIFICATION
+
     companion object {
-        fun of(request: PassRequest?, url: String?): StoreBanner = when {
-            request == null || NavigationPolicy.isStorePage(url) -> NONE
-            request.isSetup -> SETUP
-            else -> PLAN
+        /** Le message à montrer pour la page d'adresse [url], que [trouble] (la surveillance de la page, [OpeningWatch]) juge ainsi. */
+        fun of(request: PassRequest?, url: String?, trouble: PageTrouble = PageTrouble.NONE): StoreBanner = when {
+            request == null -> NONE
+            trouble == PageTrouble.VERIFICATION -> VERIFICATION
+            request.isSetup -> if (NavigationPolicy.isStorePage(url) && trouble == PageTrouble.NONE) NONE else SETUP
+            trouble != PageTrouble.NONE -> PLAN
+            NavigationPolicy.isStorePage(url) -> NONE
+            else -> OPEN
         }
     }
 }

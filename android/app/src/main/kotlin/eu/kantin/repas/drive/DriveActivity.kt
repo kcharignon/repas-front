@@ -9,6 +9,8 @@ import android.graphics.Color
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.Message
 import android.view.Gravity
 import android.view.View
@@ -25,6 +27,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -44,10 +47,12 @@ private const val PAGE_ZOOM_STEP = 1.5f
  * ([NavigationPolicy]) : tout autre lien s'ouvre dans le navigateur du téléphone. Aucun objet natif n'est exposé aux pages ; l'agent y est
  * injecté par [AgentHost] (DRV-313).
  *
- * **Passage du plan (DRV-314).** Quand un passage est en cours ([DrivePass]), l'écran s'ouvre sur la page du magasin du plan ([DrivePlan.startUrl],
- * jamais la racine de l'hôte), envoie le plan à l'agent une fois la page chargée, annoncée **et** celle d'un magasin (sinon un message dit d'ouvrir
- * son magasin, [StoreBanner]), reste allumé tant que le passage dure, et rend la main à la coquille avec le résultat de
- * l'agent (ou un résultat `aborted` si l'utilisateur abandonne). Sans passage, c'est le drive à parcourir à la main.
+ * **Passage du plan (DRV-314).** Quand un passage est en cours ([DrivePass]), l'écran s'ouvre sur la racine de l'hôte du magasin ([DrivePlan.startUrl],
+ * l'accueil du magasin : `/magasin-<id>-<id>/` est une page 404 du vrai site), où l'utilisateur touche lui-même « Commencer mes courses » ; il envoie
+ * le plan à l'agent une fois la page chargée, annoncée **et** celle d'un magasin (en attendant, un message dit d'ouvrir son magasin, ou si le site
+ * refuse la page, tarde ou n'a pas d'agent, de recommencer : [StoreBanner], [OpeningWatch], ticket E), reste allumé tant que le passage dure, et
+ * rend la main à la coquille avec le résultat de l'agent (ou un résultat `aborted` si l'utilisateur abandonne). Sans passage, c'est le drive à
+ * parcourir à la main.
  *
  * **Lecture du magasin (DRV-320).** Pour `drive.setup`, l'écran s'ouvre sur l'accueil du drive avec un message en français simple (se connecter,
  * choisir son magasin). Le message `setup` n'est envoyé à l'agent que lorsque la page est celle d'un magasin ([NavigationPolicy.isStorePage]) :
@@ -57,11 +62,25 @@ class DriveActivity : Activity() {
     private lateinit var webView: WebView
     private lateinit var problems: ProblemPanel
     private lateinit var resultPanel: TextPanel
+    private lateinit var bannerBox: LinearLayout
     private lateinit var storeBanner: TextView
+    private lateinit var bannerAction: Button
     private lateinit var agent: AgentHost
     private lateinit var debugRun: DebugRun
     private lateinit var selftestRun: SelftestRun
     private val delivery = PlanDelivery()
+
+    /** Ce qui cloche avec la page où l'envoi attend la page du magasin (ticket E) : le site la refuse, la détourne, tarde, ou son agent manque. */
+    private val watch = OpeningWatch()
+    private val timers = Handler(Looper.getMainLooper())
+    private val onLoadTimeout = Runnable {
+        watch.loadTimedOut()
+        updateStoreBanner(webView.url)
+    }
+    private val onAgentTimeout = Runnable {
+        watch.agentTimedOut()
+        updateStoreBanner(webView.url)
+    }
     private var abandonDialog: AlertDialog? = null
 
     /** La fenêtre vide qui reçoit un `window.open` avant que son adresse soit confiée à la WebView principale. */
@@ -99,21 +118,35 @@ class DriveActivity : Activity() {
         }
         webView = createWebView()
         problems = ProblemPanel(this, ::problemMessage) { retry() }
-        storeBanner = label("", sizeSp = 16f, color = Color.WHITE).apply {
+        // Le message d'en-tête (se connecter, choisir ou ouvrir son magasin) et, pour un plan, son issue : ouvrir l'accueil du drive.
+        storeBanner = label("", sizeSp = 16f, color = Color.WHITE)
+        bannerAction = roundedButton(getString(R.string.plan_banner_action), filled = false) { openHome() }.apply {
+            visibility = View.GONE
+            // Le texte du bouton est long : de la marge de chaque côté, pour qu'il ne soit jamais rogné.
+            setPadding(dp(24), paddingTop, dp(24), paddingBottom)
+        }
+        bannerBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             setBackgroundColor(BASIL)
             setPadding(dp(16), dp(12), dp(16), dp(12))
             visibility = View.GONE
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+            addView(storeBanner, LinearLayout.LayoutParams(MATCH, WRAP))
+            addView(bannerAction, LinearLayout.LayoutParams(WRAP, WRAP).apply { topMargin = dp(8) })
+        }
+        // Le panneau d'incident ne recouvre que la page : le message d'en-tête reste visible au-dessus (et son bouton touchable).
+        val content = FrameLayout(this).apply {
+            addView(webView, FrameLayout.LayoutParams(MATCH, MATCH))
+            addView(problems, FrameLayout.LayoutParams(MATCH, MATCH))
         }
         val page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(storeBanner, LinearLayout.LayoutParams(MATCH, WRAP))
-            addView(webView, LinearLayout.LayoutParams(MATCH, 0, 1f))
+            addView(bannerBox, LinearLayout.LayoutParams(MATCH, WRAP))
+            addView(content, LinearLayout.LayoutParams(MATCH, 0, 1f))
         }
         val root = FrameLayout(this).apply {
             setBackgroundColor(Color.WHITE)
             addView(page, FrameLayout.LayoutParams(MATCH, MATCH))
-            addView(problems, FrameLayout.LayoutParams(MATCH, MATCH))
             addView(
                 menuButton { showMenu(menuEntries()) },
                 FrameLayout.LayoutParams(dp(48), dp(48), Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(12), dp(24)) },
@@ -124,6 +157,7 @@ class DriveActivity : Activity() {
         setContentView(root)
         registerBackAction()
 
+        navigationBegins()
         webView.loadUrl(pass.current()?.request?.startUrl ?: NavigationPolicy.START_URL)
         updateStoreBanner(pass.current()?.request?.startUrl)
     }
@@ -144,6 +178,7 @@ class DriveActivity : Activity() {
     }
 
     override fun onDestroy() {
+        timers.removeCallbacksAndMessages(null)
         abandonDialog?.dismiss()
         popup?.destroy()
         popup = null
@@ -156,12 +191,15 @@ class DriveActivity : Activity() {
     // Retour arrière
 
     /**
-     * Retour arrière : ferme l'écran de résultat, puis revient en arrière dans la WebView ; au bout de l'historique, pendant un passage il
-     * demande s'il faut abandonner l'envoi, sinon il rend la main à la coquille Repas.
+     * Retour arrière : ferme l'écran de résultat, puis (pendant un passage dont le plan est parti vers l'agent de la page) demande s'il faut
+     * abandonner l'envoi, sinon revient en arrière dans la WebView ; au bout de l'historique, pendant un passage il demande s'il faut abandonner
+     * l'envoi, sinon il rend la main à la coquille Repas.
      */
     private fun goBackOrExit() {
         when {
             resultPanel.isShowing -> resultPanel.hide()
+            // L'agent travaille sur cette page : revenir à l'accueil le tuerait en plein passage, on demande d'abandonner l'envoi.
+            pass.current() != null && watch.hasDeliveredPlan() -> askAbandon()
             webView.canGoBack() -> webView.goBack()
             pass.current() != null -> askAbandon()
             else -> finish()
@@ -226,7 +264,11 @@ class DriveActivity : Activity() {
             // Seule la page principale est limitée à Leclerc : les cadres (par exemple le défi anti-robot) restent libres de charger.
             if (!request.isForMainFrame) return false
             val url = request.url.toString()
-            if (NavigationPolicy.decide(url) == Decision.ALLOW) return false
+            if (NavigationPolicy.decide(url) == Decision.ALLOW) {
+                // Une nouvelle page (lien touché, redirection) : ce qu'on savait de la précédente est oublié, avant même sa réponse.
+                navigationBegins()
+                return false
+            }
             route(url)
             return true
         }
@@ -240,25 +282,36 @@ class DriveActivity : Activity() {
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             loadFailed = false
             delivery.pageStarted()
+            watch.pageStarted()
+            timers.removeCallbacks(onAgentTimeout)
+            armLoadTimer()
             updateStoreBanner(url)
         }
 
         override fun onPageFinished(view: WebView, url: String?) {
             if (!loadFailed) problems.hide()
+            watch.pageFinished()
+            timers.removeCallbacks(onLoadTimeout)
             agent.onPageFinished(view, url)
             updateStoreBanner(url)
             if (delivery.pageFinished()) sendPlan()
+            armAgentTimer(url)
         }
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
             // Une navigation annulée (redirection, lien confié au navigateur) n'est pas une panne.
             if (!request.isForMainFrame || error.description?.contains("ERR_ABORTED") == true) return
+            watch.loadFailed()
             showProblem(LoadProblems.fromWebViewError(error.errorCode))
+            updateStoreBanner(view.url)
         }
 
         override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
             if (!request.isForMainFrame) return
+            // Le statut de la page principale (404, 5xx…) : une page d'erreur du site n'est jamais celle du magasin, et ne reçoit pas le plan.
+            watch.httpError(errorResponse.statusCode)
             LoadProblems.fromHttpStatus(errorResponse.statusCode)?.let(::showProblem)
+            updateStoreBanner(view.url)
         }
 
         override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
@@ -342,6 +395,7 @@ class DriveActivity : Activity() {
 
     private fun retry() {
         problems.hide()
+        navigationBegins()
         if (webView.url == null) webView.loadUrl(pass.current()?.request?.startUrl ?: NavigationPolicy.START_URL) else webView.reload()
     }
 
@@ -350,24 +404,70 @@ class DriveActivity : Activity() {
 
     /**
      * Le message du passage en cours part vers l'agent (le plan, ou `setup` pour la lecture du magasin) : la page a annoncé son agent et fini de
-     * charger (une fois par page). Il attend une page de magasin : sur l'accueil de l'enseigne ou la connexion, l'agent n'aurait rien à faire
-     * (un plan, lui, s'ouvre sur la page de son magasin, [DrivePlan.startUrl] ; si le site l'en détourne, le message d'en-tête le dit).
+     * charger (une fois par page). Il attend une page de magasin : sur l'accueil du magasin, de l'enseigne ou la connexion, l'agent n'aurait rien à
+     * faire (le message d'en-tête dit à l'utilisateur d'ouvrir son magasin) ; et jamais vers une page que le site a refusée ([OpeningWatch.canDeliver]).
      */
     private fun sendPlan() {
         val request = pass.current()?.request ?: return
-        if (!NavigationPolicy.isStorePage(webView.url)) return delivery.failed()
-        if (!agent.send(request.text)) delivery.failed()
+        // Pas de message vers une page que le site a refusée ou détournée (ticket E) : le bandeau dit quoi faire à l'utilisateur.
+        if (!watch.canDeliver(webView.url)) return delivery.failed()
+        if (agent.send(request.text)) {
+            watch.planSent()
+            updateStoreBanner(webView.url)
+        } else {
+            delivery.failed()
+        }
     }
 
-    /** Le message d'en-tête (se connecter, choisir ou ouvrir son magasin) reste affiché pendant un passage, tant que la page n'est pas celle d'un magasin. */
+    /** Une page principale va être demandée : la surveillance repart de zéro et son délai de chargement est armé. */
+    private fun navigationBegins() {
+        watch.restart()
+        timers.removeCallbacks(onAgentTimeout)
+        armLoadTimer()
+    }
+
+    /** Le délai de chargement d'un plan (ticket E) : au-delà, la page est trop lente et le bandeau le dit. Pas pour la lecture du magasin. */
+    private fun armLoadTimer() {
+        timers.removeCallbacks(onLoadTimeout)
+        if (pass.current()?.request?.isSetup == false) timers.postDelayed(onLoadTimeout, OpeningWatch.LOAD_TIMEOUT_MS)
+    }
+
+    /** Une page de magasin a fini de charger : si son agent ne s'est pas annoncé (et n'a pas reçu le plan) dans le délai, le bandeau le dit. */
+    private fun armAgentTimer(url: String?) {
+        timers.removeCallbacks(onAgentTimeout)
+        if (pass.current()?.request?.isSetup == false && watch.canDeliver(url)) timers.postDelayed(onAgentTimeout, OpeningWatch.AGENT_TIMEOUT_MS)
+    }
+
+    /**
+     * Le message d'en-tête pendant un passage (ticket E) : tant que la page n'est pas celle d'un magasin (ou que le site l'a refusée, détournée,
+     * qu'il tarde ou que l'agent manque), il dit quoi faire ; pour un plan il porte « Ouvrir l'accueil du drive ». Jamais un écran muet.
+     */
     private fun updateStoreBanner(url: String?) {
-        val text = when (StoreBanner.of(pass.current()?.request, url)) {
+        val banner = StoreBanner.of(pass.current()?.request, url, watch.trouble(url))
+        val text = when (banner) {
             StoreBanner.NONE -> null
             StoreBanner.SETUP -> R.string.setup_banner
             StoreBanner.PLAN -> R.string.plan_banner
+            StoreBanner.OPEN -> R.string.plan_banner_open
+            StoreBanner.VERIFICATION -> R.string.plan_banner_verification
         }
         if (text != null) storeBanner.setText(text)
-        storeBanner.visibility = if (text != null) View.VISIBLE else View.GONE
+        bannerAction.visibility = if (banner.hasAction) View.VISIBLE else View.GONE
+        bannerBox.visibility = if (text != null) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * « Ouvrir l'accueil du drive » : recharge la page de départ du passage (la racine de l'hôte du magasin, où l'utilisateur est déjà connecté). Elle
+     * affiche l'accueil du magasin : il touche lui-même « Commencer mes courses » (l'application ne clique jamais à sa place), et dès qu'il est sur
+     * une page de magasin le message du passage part tout seul vers l'agent ([sendPlan]) ; si ce n'est pas le magasin du plan, l'agent le dit
+     * (`STORE_MISMATCH`).
+     */
+    private fun openHome() {
+        val request = pass.current()?.request ?: return
+        problems.hide()
+        navigationBegins()
+        updateStoreBanner(request.startUrl)
+        webView.loadUrl(request.startUrl)
     }
 
     /** Le résultat de l'agent. Vrai si c'est celui du passage en cours : il est clos, et l'écran se referme ou montre l'essai. */
