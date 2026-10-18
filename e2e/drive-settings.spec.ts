@@ -1,0 +1,139 @@
+// Réglages du drive (DRV-403), sans back ni compte : l'API est simulée (`e2e/support/driveBack.ts`). Hors de l'application Repas : le
+// pont natif est absent, le magasin se saisit à la main. Jouée sur bureau et sur Pixel 7.
+import AxeBuilder from '@axe-core/playwright'
+import { expect, test, type Page } from '@playwright/test'
+
+import { fakeDriveBack } from './support/driveBack'
+
+const address = 'https://exemple.leclercdrive.fr/magasin-654321-654321'
+const scan = (page: Page) =>
+  new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .exclude('.vue-devtools__anchor-btn')
+    .analyze()
+
+test('sans magasin : enregistrer son adresse, lui donner un nom, puis gérer ses produits', async ({
+  page,
+}) => {
+  const back = await fakeDriveBack(page, { store: null })
+
+  // Du compte aux réglages, avec le motif de l'envoi
+  await page.goto('/moi')
+  await page.getByRole('link', { name: /Réglages du drive/ }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Réglages du drive' })).toBeVisible()
+  await expect(page.getByText('Aucun magasin enregistré.')).toBeVisible()
+
+  // Une adresse qui n'est pas celle d'un magasin est refusée sans appeler le back
+  await page.getByLabel('Adresse de votre magasin').fill('https://exemple.example.com/magasin-1-1')
+  await page.getByRole('button', { name: 'Enregistrer mon magasin' }).click()
+  await expect(
+    page.getByText('Cette adresse n’est pas celle d’un magasin Leclerc Drive'),
+  ).toBeVisible()
+  expect(back.bodies).toEqual([])
+
+  // Adresse collée du navigateur (avec une suite) et nom facultatif
+  await page.getByLabel('Adresse de votre magasin').fill(`${address}/accueil?a=1`)
+  await page.getByLabel('Nom de votre magasin (facultatif)').fill('Ville-Test')
+  await page.getByRole('button', { name: 'Enregistrer mon magasin' }).click()
+  await expect(page.getByText('Magasin enregistré.')).toBeVisible()
+  expect(back.bodies).toEqual([
+    { retailer: 'leclerc', store: { id: '654321', baseUrl: address, label: 'Ville-Test' } },
+  ])
+  await expect(page.getByText('Magasin …321')).toBeVisible()
+  await expect(page.getByText('Aucun magasin enregistré.')).toHaveCount(0)
+
+  // Le résumé des produits mène à leur gestion
+  await expect(page.getByText('Ingrédients avec des produits', { exact: true })).toBeVisible()
+  await page.getByRole('link', { name: 'Gérer mes produits' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Mes produits' })).toBeVisible()
+})
+
+test('envoyé ici faute de magasin, le motif disparaît une fois le magasin enregistré', async ({
+  page,
+}) => {
+  await fakeDriveBack(page, { store: null })
+  await page.goto('/drive/reglages?magasin=requis')
+  await expect(
+    page.getByText('Choisissez d’abord votre magasin pour envoyer une liste au drive.'),
+  ).toBeVisible()
+
+  await page.getByLabel('Adresse de votre magasin').fill(address)
+  await page.getByRole('button', { name: 'Enregistrer mon magasin' }).click()
+
+  await expect(page.getByText('Magasin …321')).toBeVisible()
+  await expect(page).toHaveURL(/\/drive\/reglages$/)
+  await expect(page.getByText('Choisissez d’abord votre magasin')).toHaveCount(0)
+})
+
+test('hors de l’application : propose de l’installer et mène à l’aide', async ({ page }) => {
+  await fakeDriveBack(page)
+  await page.goto('/drive/reglages')
+
+  await expect(page.getByText('Vous utilisez Repas dans un navigateur')).toBeVisible()
+  await page.getByRole('link', { name: 'Aide d’installation' }).click()
+  await expect(page).toHaveURL(/\/drive\/aide$/)
+})
+
+test('dans l’application : montre sa version et que le drive est prêt', async ({ page }) => {
+  await fakeDriveBack(page)
+  // Un faux pont natif (`repasNative`) qui répond à `app.info`, comme le fera l'application
+  await page.addInitScript(() => {
+    const listeners: ((event: { data: unknown }) => void)[] = []
+    Object.assign(window, {
+      repasNative: {
+        postMessage: (text: string) => {
+          if ((JSON.parse(text) as { type: string }).type !== 'app.info') return
+          const data = JSON.stringify({
+            v: 1,
+            type: 'app.info',
+            version: '0.5.0',
+            versionCode: 5,
+            drive: true,
+          })
+          setTimeout(() => listeners.forEach((listener) => listener({ data })), 0)
+        },
+        addEventListener: (_type: string, listener: (event: { data: unknown }) => void) =>
+          void listeners.push(listener),
+      },
+    })
+  })
+  await page.goto('/drive/reglages')
+
+  await expect(page.getByText('Version 0.5.0')).toBeVisible()
+  await expect(page.getByText('Le drive est prêt dans cette application.')).toBeVisible()
+  await expect(page.getByText('Vous utilisez Repas dans un navigateur')).toHaveCount(0)
+})
+
+test('le drive coupé : « pas encore activé », sans formulaire', async ({ page }) => {
+  await fakeDriveBack(page, { enabled: false })
+  await page.goto('/drive/reglages')
+
+  await expect(page.getByText('L’envoi au drive n’est pas encore activé')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Enregistrer mon magasin' })).toHaveCount(0)
+})
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`les réglages du drive sont accessibles, sans défilement horizontal, thème ${colorScheme}`, async ({
+    page,
+  }) => {
+    await fakeDriveBack(page)
+    await page.emulateMedia({ colorScheme })
+
+    await page.goto('/drive/reglages')
+    await expect(page.getByText('Magasin …456')).toBeVisible()
+    await expect(page.getByText('Ingrédients avec des produits', { exact: true })).toBeVisible()
+    expect((await scan(page)).violations).toEqual([])
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    )
+    expect(overflow).toBeLessThanOrEqual(0)
+
+    // L'erreur de saisie est lue par les lecteurs d'écran et lisible
+    await page.getByLabel('Adresse de votre magasin').fill('pas une adresse')
+    await page.getByRole('button', { name: 'Enregistrer mon magasin' }).click()
+    await expect(
+      page.getByText('Cette adresse n’est pas celle d’un magasin Leclerc Drive'),
+    ).toBeVisible()
+    expect((await scan(page)).violations).toEqual([])
+  })
+}

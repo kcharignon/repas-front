@@ -28,3 +28,7 @@ export type ChoiceIntent = Schemas['ChoiceIntentPayload']
 export type DriveChoice = Schemas['ChoiceDTO']
 export type DriveChoiceProduct = Schemas['ChoiceProductDTO']
 export type DriveChoicePayload = Schemas['ReplaceIngredientPreferencePayload']
+
+// Drive : le magasin enregistré (DRV-203, DRV-403)
+export type DriveStore = Schemas['DriveStoreDTO']
+export type DriveStorePayload = Schemas['DriveStorePayload']

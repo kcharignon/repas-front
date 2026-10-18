@@ -382,6 +382,8 @@ export default {
     driveChoiceNotFound: 'Cet ingrédient n’a plus de produit mémorisé.',
     driveStoreMismatch:
       'Votre magasin a changé : la page vient d’être rechargée, refaites votre action.',
+    driveStoreInvalid:
+      'Cette adresse n’est pas celle d’un magasin Leclerc Drive : vérifiez-la, elle ressemble à https://exemple.leclercdrive.fr/magasin-123456-123456.',
   },
   driveSend: {
     title: 'Envoi au drive',
@@ -564,12 +566,61 @@ export default {
     },
     basketKept: 'Le panier Leclerc n’est pas vidé par Repas.',
   },
-  drivePlaceholder: {
-    settings: {
-      title: 'Réglages du drive',
-      soon: 'Le choix du magasin et des produits arrive bientôt.',
-      storeRequired: 'Choisissez d’abord votre magasin pour envoyer une liste au drive.',
+  driveSettings: {
+    title: 'Réglages du drive',
+    back: 'Mon compte',
+    entry: 'Réglages du drive',
+    entryHelp: 'Votre magasin Leclerc Drive et l’application Repas.',
+    disabled: 'L’envoi au drive n’est pas encore activé : il n’y a rien à régler pour le moment.',
+    storeRequired: 'Choisissez d’abord votre magasin pour envoyer une liste au drive.',
+    store: 'Votre magasin',
+    storeNamed: 'Magasin …{tail}',
+    none: 'Aucun magasin enregistré.',
+    storeHelp:
+      'Repas remplit le panier de ce magasin. Les produits mémorisés sont propres à ce magasin.',
+    read: 'Lire mon magasin dans l’application',
+    readHelp: 'L’application ouvre le site du drive : choisissez votre magasin, puis revenez ici.',
+    readDone: 'Magasin …{tail} lu dans l’application. Vérifiez, puis enregistrez.',
+    readErrors: {
+      UNAVAILABLE:
+        'L’application ne peut pas lire votre magasin pour le moment. Saisissez son adresse ci-dessous.',
+      CANCELLED: 'Aucun magasin choisi. Réessayez, ou saisissez son adresse ci-dessous.',
+      NOT_FOUND:
+        'L’application n’a pas trouvé de magasin sur la page. Choisissez-en un sur le site du drive, puis réessayez.',
+      FAILED: 'La lecture a échoué. Réessayez, ou saisissez l’adresse ci-dessous.',
     },
+    address: 'Adresse de votre magasin',
+    addressHint:
+      'Celle du site du drive une fois votre magasin choisi, par exemple https://exemple.leclercdrive.fr/magasin-123456-123456.',
+    name: 'Nom de votre magasin (facultatif)',
+    nameHint: 'Pour le reconnaître : le nom de votre ville, par exemple.',
+    changeWarning:
+      'C’est un autre magasin : les produits mémorisés pour l’ancien ne seront plus proposés, vous choisirez de nouveau vos produits.',
+    save: 'Enregistrer mon magasin',
+    saved: 'Magasin enregistré.',
+    errors: {
+      address:
+        'Cette adresse n’est pas celle d’un magasin Leclerc Drive : elle ressemble à https://exemple.leclercdrive.fr/magasin-123456-123456.',
+    },
+    offline:
+      'Hors connexion : l’enregistrement est impossible tant que le réseau n’est pas revenu.',
+    app: 'Application Repas',
+    appVersion: 'Version {version}',
+    appChecking: 'Vérification de l’application…',
+    appNoAnswer: 'L’application ne répond pas : fermez-la, puis rouvrez-la.',
+    appReady: 'Le drive est prêt dans cette application.',
+    appDriveOff:
+      'Le drive ne peut pas fonctionner dans cette version de l’application : mettez-la à jour.',
+    appMissing:
+      'Vous utilisez Repas dans un navigateur. Pour envoyer une liste au drive, installez l’application Repas sur votre téléphone.',
+    help: 'Aide d’installation',
+    products: 'Produits mémorisés',
+    productsWith: 'Ingrédients avec des produits',
+    productsRejected: 'Ingrédients avec des produits refusés',
+    productsHome: 'Ingrédients que vous avez toujours',
+    manage: 'Gérer mes produits',
+  },
+  drivePlaceholder: {
     help: {
       title: 'Installer l’application',
       soon: 'Le mode d’emploi de l’installation arrive bientôt.',
