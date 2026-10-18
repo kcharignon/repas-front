@@ -149,6 +149,27 @@ services:
       - ./drive-agent:/work/drive-agent
       - android-lab-gradle:/gradle
 
+  # Émulateur Android de test (DRV-319, android/emulator/) : `make android-emulator-up`, `-down`, `-status`, puis `make android-smoke`.
+  # Sans fenêtre, accéléré par KVM (/dev/kvm de la machine, voir android/README.md). Le SDK, l'image système et l'AVD sont téléchargés au premier
+  # lancement dans le volume `android-emulator-sdk`, puis réutilisés. Aucun port publié, aucun secret. Le DNS de l'émulateur envoie tout
+  # *.leclercdrive.fr vers le faux site local du conteneur : jamais le vrai. Profil à part : `make stop` ne l'arrête pas.
+  android-emulator:
+    profiles: [android-emulator]
+    build:
+      context: ./android/emulator
+    image: repas-front-android-emulator
+    init: true
+    devices:
+      - /dev/kvm:/dev/kvm
+    environment:
+      EMULATOR_MEMORY: ${EMULATOR_MEMORY:-3072}
+      EMULATOR_CORES: ${EMULATOR_CORES:-4}
+    volumes:
+      - android-emulator-sdk:/sdk
+      # L'APK de débogage construit par `make android`, en lecture seule.
+      - ./android/dist:/apk:ro
+    stop_grace_period: 30s
+
   # Image de production (statique + relais vers le back) : http://localhost:8081, pour essayer le build comme en production.
   prod:
     profiles: [prod]
@@ -171,6 +192,7 @@ volumes:
   node_modules:
   android-lab-gradle:
   android-gradle:
+  android-emulator-sdk:
 
 networks:
   back:
