@@ -1,6 +1,6 @@
 // La forme de la requête de recherche (priorité maximale de la recette réelle du 2026-10-18 : `GET …/recherche.aspx?TexteRecherche=sel` répond
 // HTTP 400 sur une vraie page de magasin, alors que le banc d'essai du matin, le même GET, passait). Ces tests figent la requête courante,
-// celle du banc d'essai (`drive-agent/lab/src/store.ts` : `searchUrl`, `getPage` : chemin de la page AVEC la ville, `Accept: text/html,
+// celle du banc d'essai (retiré le 2026-10-19, dans l'historique Git : `drive-agent/lab/src/store.ts`, `searchUrl`, `getPage` : chemin de la page AVEC la ville, `Accept: text/html,
 // application/xhtml+xml`, `credentials: same-origin`), et les variantes de repli essayées sur un 400. Aucun réseau.
 import { describe, expect, it } from 'vitest'
 

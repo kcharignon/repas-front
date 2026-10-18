@@ -37,4 +37,4 @@ Un seul geste lance tout le test. L’application cherche 12 produits courants s
 - **Le rapport dit « Arrêt : BLOCKED »** : Leclerc a ralenti les requêtes. Attends quelques minutes, recharge la page, recommence, et dis-le dans ta réponse.
 - **Le site s’affiche en version mobile** (le nom du site commence par `m-`) : touche **⋮**, **Se déconnecter de Leclerc et effacer les données du drive**, puis rouvre le drive.
 - **Le menu dit que ta WebView est trop ancienne** : mets à jour « Android System WebView » dans le Play Store.
-- **L’installation est refusée** : désinstalle d’abord l’ancienne version de **Repas Drive** (l’ancien nom de l’application), puis recommence. L’application de test `Banc Repas` est différente et peut rester.
+- **L’installation est refusée** : désinstalle d’abord l’ancienne version de **Repas Drive** (l’ancien nom de l’application), puis recommence.
