@@ -380,6 +380,8 @@ export default {
     driveChoiceInvalid:
       'Cette préférence est refusée : 5 produits acceptés et 20 refusés au plus, et un produit ne peut pas être à la fois accepté et refusé.',
     driveChoiceNotFound: 'Cet ingrédient n’a plus de produit mémorisé.',
+    driveLimitReached:
+      'Trop de produits mémorisés, ou trop d’écritures aujourd’hui : oubliez des produits dans « Mes produits », ou réessayez demain.',
     driveStoreMismatch:
       'Votre magasin a changé : la page vient d’être rechargée, refaites votre action.',
     driveStoreInvalid:
@@ -521,6 +523,8 @@ export default {
       INVALID_MESSAGE: 'L’application n’a pas compris le plan envoyé.',
       UNSUPPORTED_PAGE: 'Cette page de Leclerc n’est pas prise en charge.',
     },
+    ignored:
+      '{count} ligne inattendue ignorée : elle ne figure pas dans le plan envoyé, rien n’a été mémorisé pour elle. | {count} lignes inattendues ignorées : elles ne figurent pas dans le plan envoyé, rien n’a été mémorisé pour elles.',
     save: {
       saving: 'Enregistrement de vos choix…',
       saved: 'Vos choix sont enregistrés pour les prochains envois.',

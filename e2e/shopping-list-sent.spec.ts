@@ -49,7 +49,7 @@ const reply = (route: Route, body?: unknown, status = body === undefined ? 204 :
   )
 
 /** Un faux back : une liste dont le statut change avec `send` et `reopen`. Rend les appels reçus. */
-async function fakeBack(page: Page, initial: Status = 'ACTIVE') {
+async function fakeBack(page: Page, initial: Status = 'ACTIVE', enabled = true) {
   let status = initial
   const received: string[] = []
   await page.addInitScript(() => localStorage.setItem('repas.session', '1'))
@@ -80,7 +80,7 @@ async function fakeBack(page: Page, initial: Status = 'ACTIVE') {
           return reply(route, list(status))
         case 'GET /api/v1/drive/settings':
           return reply(route, {
-            enabled: true,
+            enabled,
             retailer: 'leclerc',
             store: {
               id: '123456',
@@ -135,6 +135,24 @@ test('envoyer une liste au drive, la lire sans pouvoir la modifier, puis la rouv
   await expect(page.getByText('En cours')).toBeVisible()
   for (const box of await page.getByRole('checkbox').all()) await expect(box).toBeEnabled()
   expect(received).toContain('POST /api/v1/shopping-lists/l1/reopen')
+})
+
+test('fonction coupée (retour arrière) : une liste envoyée se rouvre, sans proposer l’envoi', async ({
+  page,
+}) => {
+  const received = await fakeBack(page, 'SENT', false)
+  await page.goto('/listes/l1')
+  await expect(page.getByText('Cette liste est envoyée au drive')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Rouvrir la liste' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Rouvrir la liste' }).click()
+
+  await expect(page.getByText('En cours')).toBeVisible()
+  expect(received).toContain('POST /api/v1/shopping-lists/l1/reopen')
+  // La liste est de nouveau modifiable ; tant que la fonction est coupée, l'envoi reste masqué
+  for (const box of await page.getByRole('checkbox').all()) await expect(box).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toHaveCount(0)
 })
 
 for (const colorScheme of ['light', 'dark'] as const) {
