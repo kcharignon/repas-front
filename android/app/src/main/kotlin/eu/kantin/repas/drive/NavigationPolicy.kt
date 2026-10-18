@@ -26,6 +26,9 @@ object NavigationPolicy {
     private const val HTTPS = "https://"
     private const val HTTP = "http://"
 
+    /** Le début du chemin d'une page de magasin : `/magasin-123456-123456`, puis `/`, `-Ville`, ou la fin du chemin. */
+    private val STORE_PATH = Regex("^/magasin-[0-9]{1,12}-[0-9]{1,12}(-[^/]*)?(/|$)", RegexOption.IGNORE_CASE)
+
     fun decide(url: String?): Decision {
         if (url == null) return Decision.BLOCK
         if (isAllowed(url)) return Decision.ALLOW
@@ -46,6 +49,20 @@ object NavigationPolicy {
     fun isAllowed(url: String?): Boolean {
         val host = httpsHostOf(url) ?: return false
         return host == ALLOWED_DOMAIN || host.endsWith(".$ALLOWED_DOMAIN")
+    }
+
+    /**
+     * L'adresse est-elle celle d'une page de magasin (DRV-320) ? Une page `https` du drive dont le chemin commence par
+     * `/magasin-<identifiant>-<identifiant>` (chiffres), éventuellement suivi d'un nom de ville : la même règle que l'agent
+     * (`readStorePaths`), qui lit le magasin dans cette adresse. L'accueil du drive et la page de connexion n'en sont pas.
+     */
+    fun isStorePage(url: String?): Boolean {
+        if (!isAllowed(url)) return false
+        val afterScheme = url!!.substring(HTTPS.length)
+        val pathStart = afterScheme.indexOfAny(charArrayOf('/', '?', '#'))
+        if (pathStart < 0 || afterScheme[pathStart] != '/') return false
+        val path = afterScheme.substring(pathStart).substringBefore('?').substringBefore('#')
+        return STORE_PATH.containsMatchIn(path)
     }
 
     /**

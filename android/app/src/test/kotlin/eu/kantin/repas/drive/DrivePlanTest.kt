@@ -17,6 +17,7 @@ class DrivePlanTest {
     private fun resource(name: String) = File("src/test/resources/$name").readText()
 
     private val valid = JSONObject(resource("plan-complet.json"))
+    private val RUN_ID = "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c"
 
     /** Le plan valide dont on remplace un champ (`null` : on l'enlève). */
     private fun with(key: String, value: Any?, store: Boolean = false): JSONObject {
@@ -130,6 +131,43 @@ class DrivePlanTest {
         assertEquals(0, result.getJSONArray("lines").length())
         assertEquals("CANCELLED", result.getJSONObject("error").getString("code"))
         assertEquals("0.6.0", result.getString("agentVersion"))
+    }
+
+    // —— la lecture du magasin (DRV-320) ————————————————————————————————————————————————————————————————————————————————
+
+    @Test
+    fun `une lecture du magasin est le message setup du fichier de reference, sans magasin`() {
+        val setup = SetupRequest.of(RUN_ID)!!
+
+        assertTrue(sameJson(JSONObject(resource("setup-message.json")), JSONObject(setup.text)))
+        assertTrue(setup.isSetup)
+        assertEquals(NavigationPolicy.START_URL, setup.startUrl)
+    }
+
+    @Test
+    fun `seul un UUID identifie une lecture du magasin`() {
+        listOf(null, "", "pas-un-uuid", 12, true, JSONObject()).forEach { assertNull(it.toString(), SetupRequest.of(it)) }
+    }
+
+    @Test
+    fun `l'abandon d'une lecture du magasin est le resultat aborted du fichier de reference, sans magasin`() {
+        val aborted = JSONObject(SetupRequest.of(RUN_ID)!!.abortedResult("1.0.0"))
+
+        assertTrue(sameJson(JSONObject(resource("aborted-setup-result.json")), aborted))
+        assertFalse(aborted.has("store"))
+    }
+
+    @Test
+    fun `un passage gardé se relit, plan ou lecture du magasin, sinon rien`() {
+        val plan = DrivePlan.parse(valid)!!
+        val setup = SetupRequest.of(RUN_ID)!!
+
+        assertEquals(false, PassRequests.parseText(plan.text)!!.isSetup)
+        assertEquals(true, PassRequests.parseText(setup.text)!!.isSetup)
+        assertEquals(RUN_ID, PassRequests.parseText(setup.text)!!.runId)
+        listOf(null, "pas du json", "{}", """{"type":"setup","runId":"x"}""", """{"type":"command"}""").forEach {
+            assertNull(it, PassRequests.parseText(it))
+        }
     }
 
     @Test
