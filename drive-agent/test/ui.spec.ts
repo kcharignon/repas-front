@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { h } from '../src/ui/dom'
 import { createUi, ERROR_TEXTS, renderPicker, type UiHandle } from '../src/ui'
+import { STYLES } from '../src/ui/styles'
 import type { ChooserProps, DiagnosticRow, DiagnosticView, EndProps, SummaryProps } from '../src/ui'
 import { ERROR_CODES } from '../protocol'
 
@@ -870,5 +871,170 @@ describe('clavier', () => {
     const other = new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true })
     shadow().querySelector('.overlay')?.dispatchEvent(other)
     expect(other.defaultPrevented).toBe(false)
+  })
+})
+
+// —— l'échelle d'affichage (site de bureau affiché sur un écran de téléphone) ——————————————————————————————————————————————————————————————
+
+/** `visualViewport` de test : une cible d'événements dont l'on change les mesures à la main. */
+class FakeViewport extends EventTarget {
+  width = 980
+  height = 2016
+  offsetLeft = 0
+  offsetTop = 0
+  scale = 0.4207
+  set(
+    parts: Partial<Pick<FakeViewport, 'width' | 'height' | 'offsetLeft' | 'offsetTop' | 'scale'>>,
+  ) {
+    Object.assign(this, parts)
+    this.dispatchEvent(new Event('resize'))
+  }
+}
+
+describe('l’échelle d’affichage', () => {
+  const originals = { innerWidth: window.innerWidth, innerHeight: window.innerHeight }
+  const define = (target: object, name: string, value: unknown) =>
+    Object.defineProperty(target, name, { value, configurable: true, writable: true })
+
+  /** La WebView d'un Pixel 9 en mode ordinateur, telle que mesurée (fenêtre de 980 px CSS, écran de 412 dp, échelle 0,4207). */
+  function pixel9(): FakeViewport {
+    const viewport = new FakeViewport()
+    define(window, 'innerWidth', 980)
+    define(window, 'innerHeight', 2016)
+    define(window.screen, 'width', 412)
+    define(window, 'visualViewport', viewport)
+    return viewport
+  }
+
+  afterEach(() => {
+    define(window, 'innerWidth', originals.innerWidth)
+    define(window, 'innerHeight', originals.innerHeight)
+    Reflect.deleteProperty(window.screen, 'width')
+    Reflect.deleteProperty(window, 'visualViewport')
+  })
+
+  const frame = () => shadow().querySelector<HTMLElement>('.overlay') as HTMLElement
+
+  it('agrandit le cadre pour qu’il fasse la largeur de l’écran, sur toute la zone visible', () => {
+    pixel9()
+    const handle = open()
+
+    void handle.show('summary', SUMMARY)
+
+    const scale = 1 / 0.4207
+    expect(frame().style.getPropertyValue('transform')).toBe(`scale(${scale})`)
+    // Avant son agrandissement le cadre mesure 412 px CSS : la largeur de l'écran en dp, comme sur un téléphone.
+    expect(parseFloat(frame().style.getPropertyValue('width'))).toBeCloseTo(412.286, 2)
+    expect(parseFloat(frame().style.getPropertyValue('height'))).toBeCloseTo(2016 * 0.4207, 2)
+    expect(frame().style.getPropertyValue('left')).toBe('0px')
+    expect(frame().style.getPropertyValue('top')).toBe('0px')
+    // Le conteneur, lui, couvre toujours toute la fenêtre de la page.
+    expect(handle.host?.style.getPropertyValue('inset')).toBe('0px')
+    expect(shadow().querySelector('.backdrop')).not.toBeNull()
+  })
+
+  it('ne change rien sur un écran ordinaire (facteur 1) : pas d’agrandissement', () => {
+    define(window, 'innerWidth', 412)
+    define(window, 'innerHeight', 860)
+    define(window.screen, 'width', 412)
+    define(
+      window,
+      'visualViewport',
+      Object.assign(new FakeViewport(), { width: 412, height: 860, scale: 1 }),
+    )
+    const handle = open()
+
+    void handle.show('summary', SUMMARY)
+
+    expect(frame().style.getPropertyValue('transform')).toBe('')
+    expect(frame().style.getPropertyValue('width')).toBe('412px')
+    expect(frame().style.getPropertyValue('height')).toBe('860px')
+  })
+
+  it('sans mesure d’écran ni de zone visible (jsdom), le cadre prend toute la fenêtre, sans agrandissement', () => {
+    const handle = open()
+
+    void handle.show('summary', SUMMARY)
+
+    expect(frame().style.getPropertyValue('transform')).toBe('')
+    expect(frame().style.getPropertyValue('width')).toBe(`${window.innerWidth}px`)
+  })
+
+  it('sans aucune mesure (fenêtre vide), laisse la feuille de style remplir le conteneur', () => {
+    define(window, 'innerWidth', 0)
+    define(window, 'innerHeight', 0)
+    const handle = open()
+
+    void handle.show('summary', SUMMARY)
+
+    for (const name of ['left', 'top', 'width', 'height', 'transform']) {
+      expect(frame().style.getPropertyValue(name)).toBe('')
+    }
+  })
+
+  it('se pose sur la zone visible quand la page est agrandie au pincement, à la taille d’un téléphone', () => {
+    const viewport = pixel9()
+    // L'utilisateur a agrandi la page jusqu'à 0,7 dp par pixel CSS et regarde en bas à droite.
+    viewport.scale = 0.7
+    viewport.width = 589
+    viewport.height = 1318
+    viewport.offsetLeft = 391
+    viewport.offsetTop = 698
+    const handle = open()
+
+    void handle.show('summary', SUMMARY)
+
+    expect(frame().style.getPropertyValue('left')).toBe('391px')
+    expect(frame().style.getPropertyValue('top')).toBe('698px')
+    expect(frame().style.getPropertyValue('transform')).toBe(`scale(${1 / 0.7})`)
+    expect(parseFloat(frame().style.getPropertyValue('width'))).toBeCloseTo(412.3, 1)
+  })
+
+  it('suit les changements de la zone visible (zoom initial qui arrive tard, rotation, clavier, défilement)', () => {
+    const viewport = pixel9()
+    viewport.scale = 1 // la WebView n'a pas encore appliqué le zoom de la fenêtre large
+    viewport.width = 412
+    viewport.height = 860
+    const handle = open()
+    void handle.show('summary', SUMMARY)
+    expect(frame().style.getPropertyValue('transform')).toBe('')
+
+    // Le zoom arrive : l'interface s'agrandit sans qu'on la rouvre.
+    viewport.set({ scale: 0.4207, width: 980, height: 2016 })
+    expect(frame().style.getPropertyValue('transform')).toBe(`scale(${1 / 0.4207})`)
+
+    // Un défilement de la zone visible la déplace.
+    viewport.offsetTop = 120
+    viewport.dispatchEvent(new Event('scroll'))
+    expect(frame().style.getPropertyValue('top')).toBe('120px')
+
+    // Une rotation change la fenêtre elle-même.
+    define(window, 'innerWidth', 980)
+    viewport.scale = 0.89
+    viewport.height = 409
+    viewport.offsetTop = 0
+    window.dispatchEvent(new Event('resize'))
+    expect(frame().style.getPropertyValue('transform')).toBe(`scale(${1 / 0.89})`)
+    expect(frame().style.getPropertyValue('height')).toBe(`${409 / (1 / 0.89)}px`)
+  })
+
+  it('cesse de suivre l’affichage une fois fermée, et reprend à la réouverture', () => {
+    const viewport = pixel9()
+    const handle = open()
+    void handle.show('summary', SUMMARY)
+    handle.close()
+
+    viewport.set({ scale: 0.5 })
+    window.dispatchEvent(new Event('resize'))
+
+    expect(handle.host).toBeNull()
+    void handle.show('summary', SUMMARY)
+    expect(frame().style.getPropertyValue('transform')).toBe(`scale(${1 / 0.5})`)
+  })
+
+  it('garde les cibles tactiles à 48 px et refuse le zoom de la page par-dessus l’interface', () => {
+    expect(STYLES).toContain('--target:48px')
+    expect(STYLES).toMatch(/\.overlay\{[^}]*touch-action:pan-y/)
+    expect(STYLES).not.toMatch(/min-height:44px|min-width:44px|width:44px|height:44px/)
   })
 })

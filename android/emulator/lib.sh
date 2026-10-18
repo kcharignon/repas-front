@@ -43,6 +43,52 @@ check() { # check <description> <commande…> : OK si la commande réussit
   if "$@" > /dev/null 2>&1; then ok "$description"; else ko "$description"; fi
 }
 
+# --- Lisibilité : ce que l'on voit réellement à l'écran, en dp --------------------------------------------------------------------------------
+# Le site Leclerc est affiché en mode ordinateur : une fenêtre de ~980 px CSS sur ~411 dp. L'interface de l'agent doit donc s'agrandir (facteur
+# ~2,4) pour que le texte et les cibles soient lisibles et touchables ; sans cela une cible de 44 px CSS ne mesure que ~18 dp.
+screen_density() { adb shell wm density 2> /dev/null | grep -o '[0-9]\+' | tail -n 1; } # dpi de l'écran (420 pour un Pixel 9)
+screen_width_px() { adb shell wm size 2> /dev/null | grep -o '[0-9]\+x[0-9]\+' | tail -n 1 | cut -dx -f1; }
+# Les limites, en pixels physiques, du premier élément de l'écran dont l'attribut correspond à l'expression : « x1 y1 x2 y2 ».
+node_bounds() { ui | grep -o "<node [^>]*$1[^>]*>" | head -n 1 | sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/'; }
+# Sa hauteur en dp (entier) : un dp fait dpi / 160 pixels.
+node_height_dp() {
+  local bounds x1 y1 x2 y2
+  bounds=$(node_bounds "$1")
+  [ -n "$bounds" ] || return 1
+  read -r x1 y1 x2 y2 <<< "$bounds"
+  echo $(((y2 - y1) * 160 / $(screen_density)))
+}
+# Les mesures de la page du drive et de l'interface de l'agent, une ligne de JSON (voir display.mjs) : par le débogage à distance de la WebView,
+# qui n'existe que dans l'APK de débogage.
+display_measures() {
+  local pid
+  pid=$(adb shell pidof "$APP" | tr -d '\r')
+  [ -n "$pid" ] || return 1
+  adb forward --remove-all > /dev/null 2>&1
+  adb forward tcp:9222 "localabstract:webview_devtools_remote_$pid" > /dev/null 2>&1 || return 1
+  emu node /opt/repas-emulator/display.mjs 2> /dev/null
+}
+json_number() { grep -o "\"$2\":[0-9.]*" <<< "$1" | head -n 1 | cut -d: -f2; } # json_number <json> <clé> : un nombre (clé unique)
+# Vrai si le premier nombre est au moins égal au second (nombres décimaux).
+at_least() { awk -v a="$1" -v b="$2" 'BEGIN { exit !(a >= b) }'; }
+# Vérifie qu'un élément de l'écran est une cible tactile d'au moins 44 dp visuels et qu'il tient dans la largeur de l'écran. Usage : touch_target <expression d'attribut> <description>
+touch_target() {
+  local bounds x1 y1 x2 y2 height width
+  bounds=$(node_bounds "$1")
+  if [ -z "$bounds" ]; then
+    ko "lisibilité : \"$2\" est introuvable à l'écran"
+    return
+  fi
+  read -r x1 y1 x2 y2 <<< "$bounds"
+  height=$(((y2 - y1) * 160 / $(screen_density)))
+  width=$(screen_width_px)
+  if [ "$height" -ge 44 ] && [ "$x1" -ge 0 ] && [ "$x2" -le "$width" ]; then
+    ok "lisibilité : \"$2\" mesure $height dp de haut à l'écran (44 dp au moins) et tient dans sa largeur"
+  else
+    ko "lisibilité : \"$2\" mesure $height dp de haut (44 dp au moins) et occupe de $x1 à $x2 px sur $width"
+  fi
+}
+
 # Attend (timeout en secondes) que la commande réussisse.
 wait_until() {
   local timeout=$1

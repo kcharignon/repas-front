@@ -66,8 +66,11 @@ function lightLines(cart: Cart, asText: boolean): Record<string, unknown>[] {
   })
 }
 
-const HEAD =
-  '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+// Pas de balise `viewport` : comme le site PC de l'enseigne (servi à l'application en mode ordinateur), la page est faite pour une fenêtre
+// de bureau. Un navigateur de téléphone lui donne alors une fenêtre de 980 px CSS, affichée sur un écran d'environ 400 dp : texte et
+// boutons y sont minuscules, ce que l'interface de l'agent doit compenser (échelle d'affichage). Avec `width=device-width`, le faux site
+// cachait ce défaut.
+const HEAD = '<meta charset="utf-8">'
 
 /** Ce que la page montre de la connexion : un client connecté ou un visiteur (ticket G). Libellés inventés, plausibles, jamais mesurés. */
 export type Session = 'member' | 'visitor'
