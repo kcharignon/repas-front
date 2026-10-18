@@ -2,6 +2,7 @@
 // garanti : on cherche des champs nommés dans le texte de la page, pas une structure précise. Pas de grosse expression régulière
 // unique : on repère chaque `iIdProduit`, on délimite l'objet `{…}` qui l'entoure et on y lit les champs voulus, les inconnus étant ignorés.
 import { own } from '../own'
+import { cleanText } from '../text'
 
 /** Le contenu net structuré que le site joint à un produit (relevé DRV-007) ; chaque champ est `null` s'il manque. */
 export interface StructuredContent {
@@ -60,7 +61,10 @@ export function decodeEntities(text: string): string {
   })
 }
 
-/** Lit une chaîne de JSON ou de JavaScript : échappements `\uXXXX`, `\"`, `\/`, puis entités HTML. */
+/**
+ * Lit une chaîne de JSON ou de JavaScript : échappements `\uXXXX`, `\"`, `\/`, puis entités HTML, puis `cleanText` : le texte rendu est la source de
+ * tous les libellés et textes de contenu de l'agent, sans caractère invisible ni de contrôle (que le back refuserait, voir `../text.ts`).
+ */
 export function decodeJsString(text: string): string {
   const unescaped = text.replace(
     /\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|[\\/"'bfnrt])/g,
@@ -71,7 +75,7 @@ export function decodeJsString(text: string): string {
       return simple[code] ?? code
     },
   )
-  return decodeEntities(unescaped).replace(/\s+/g, ' ').trim()
+  return cleanText(decodeEntities(unescaped))
 }
 
 /** « 1 234,56 € » donne 1234.56 ; « abc » donne `null`. */

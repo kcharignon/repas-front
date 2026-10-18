@@ -121,19 +121,44 @@ describe('lire le magasin de la page', () => {
     expect((sent[0] as SetupResultMessage).store.label).toBe('Magasin de test')
   })
 
-  it.each([[''], ['   ']])('un libellé vide (« %s ») devient « pas de libellé »', async (label) => {
+  it('retire du libellé du magasin les caractères invisibles et de contrôle', async () => {
     const adapter = fakeAdapter(
       {},
       {
-        store: () => ({ ...STORE, baseUrl: `https://${STORE.host}/magasin-000123-000123`, label }),
+        store: () => ({
+          ...STORE,
+          baseUrl: `https://${STORE.host}/magasin-000123-000123`,
+          label: 'Magasin\u200B de\u202E test\uFEFF',
+        }),
       },
     ).adapter
     const { flow, sent } = setupFlow({ store: () => 'save' }, adapter)
 
     await flow.start(SETUP)
 
-    expect((sent[0] as SetupResultMessage).store.label).toBeNull()
+    expect((sent[0] as SetupResultMessage).store.label).toBe('Magasin de test')
   })
+
+  it.each([[''], ['   '], ['\u200B\uFEFF']])(
+    'un libellé vide ou invisible (« %s ») devient « pas de libellé »',
+    async (label) => {
+      const adapter = fakeAdapter(
+        {},
+        {
+          store: () => ({
+            ...STORE,
+            baseUrl: `https://${STORE.host}/magasin-000123-000123`,
+            label,
+          }),
+        },
+      ).adapter
+      const { flow, sent } = setupFlow({ store: () => 'save' }, adapter)
+
+      await flow.start(SETUP)
+
+      expect((sent[0] as SetupResultMessage).store.label).toBeNull()
+    },
+  )
 
   it('borne un libellé trop long à 255 caractères, pour rester conforme au protocole', async () => {
     const adapter = fakeAdapter(

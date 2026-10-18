@@ -4,6 +4,7 @@ import { openWithFragment, returnedResult } from './support/agent'
 import { expectPoliteAgent } from './support/cadence'
 import { expect, test } from './support/fixtures'
 import { fresh, known, planOf, product } from './support/plans'
+import { BACK_FORBIDDEN } from '../test/back-label-rules'
 
 const KILO = { quantity: 1, unitSymbol: 'kg', dimension: 'WEIGHT', baseFactor: 1000 } as const
 
@@ -42,6 +43,38 @@ test('fait choisir un nouveau produit dans la liste de l’agent, calcule le nom
       },
     ],
   })
+})
+
+test('retire les caractères invisibles d’un libellé de l’enseigne : la liste, le résultat et le libellé envoyé n’en gardent aucun (le back refuserait tout le lot)', async ({
+  page,
+  fake,
+  agentCode,
+}) => {
+  // Given : du vinaigre, dont les deux libellés portent sur le faux site des caractères invisibles (1000032), 500 ml demandés
+  const needed = { quantity: 500, unitSymbol: 'ml', dimension: 'VOLUME', baseFactor: 1 } as const
+  await openWithFragment(page, fake, agentCode, planOf([fresh('vinaigre', 'Vinaigre', { needed })]))
+
+  // When : la liste montre le produit (son libellé se lit d'une traite), on le choisit
+  await page.getByRole('button', { name: 'Commencer' }).click()
+  const card = page.getByRole('listitem').filter({ hasText: 'Vinaigre de cidre Verger Imaginaire' })
+  await expect(card).toContainText('500 ml demandés, 750 ml par produit : 1')
+  await card.getByRole('button', { name: 'Choisir' }).click()
+  await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+
+  // Then : le libellé renvoyé à Repas est propre et le back l'accepterait
+  expect(fake.cart()).toEqual({ 1000032: 1 })
+  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+  const result = await returnedResult(page, fake)
+  expect(result).toMatchObject({
+    lines: [
+      {
+        ingredientSlug: 'vinaigre',
+        outcome: 'CHOSEN',
+        product: { id: '1000032', label: 'Vinaigre de cidre Verger Imaginaire 75 cl' },
+      },
+    ],
+  })
+  expect(BACK_FORBIDDEN.test(JSON.stringify(result))).toBe(false)
 })
 
 test('remplace un produit devenu indisponible : nouvelle recherche, « ne plus jamais prendre », rôle du nouveau produit', async ({
