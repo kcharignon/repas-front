@@ -1,0 +1,11 @@
+{
+  "path": "type",
+  "why": "Le type est selftest-result, pas result.",
+  "message": {
+    "v": 1,
+    "type": "result",
+    "ok": true,
+    "agentVersion": "0.6.0",
+    "report": "Verdict : OK"
+  }
+}

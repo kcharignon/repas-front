@@ -194,6 +194,7 @@ export function fakeAdapter(
       const item = shelf[id]
       return item ? candidate(id, item) : null
     },
+    pageCartTotal: () => null,
     async setCartQuantity(id, quantity): Promise<CartResult> {
       calls.push(`cart ${id} ${quantity}`)
       inFlight += 1
@@ -210,6 +211,8 @@ export function fakeAdapter(
           obtained,
           ok: obtained === quantity,
           items: null,
+          totalCents: null,
+          status: 200,
         }
       } finally {
         inFlight -= 1

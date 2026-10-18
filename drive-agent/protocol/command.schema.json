@@ -9,8 +9,8 @@
     "v": { "const": 1 },
     "type": { "const": "command" },
     "command": {
-      "description": "diagnostic : ouvre l'écran de diagnostic de l'agent (auto-test et rapport copiable, DRV-308).",
-      "enum": ["diagnostic"]
+      "description": "diagnostic : ouvre l'écran de diagnostic de l'agent (auto-test et rapport copiable, DRV-308). selftest : lance le test automatique de la variante de débogage (DRV-318) ; l'agent ne l'honore que si l'application a annoncé debug: true dans son message d'accueil.",
+      "enum": ["diagnostic", "selftest"]
     }
   }
 }

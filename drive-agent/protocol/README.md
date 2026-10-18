@@ -1,13 +1,13 @@
 # Protocole v1 de l'agent du drive
 
-Ce que Repas et l'agent s'envoient : `plan` et `setup` (Repas vers l'agent), `result` et `setup-result` (agent vers Repas), et `command` (application vers l'agent, DRV-313). Le format et les règles sont décrits dans `architecture.md` § 8 du dépôt back (`kcharignon/repas`, `docs/drive/`) ; le ticket est DRV-302. **Le schéma JSON et ce document doivent rester identiques à `architecture.md` § 8** : changer le format, c'est changer les trois dans le même commit.
+Ce que Repas et l'agent s'envoient : `plan` et `setup` (Repas vers l'agent), `result` et `setup-result` (agent vers Repas), `command` (application vers l'agent, DRV-313) et `selftest-result` (agent vers application, variante de débogage, DRV-318). Le format et les règles sont décrits dans `architecture.md` § 8 du dépôt back (`kcharignon/repas`, `docs/drive/`) ; le ticket est DRV-302. **Le schéma JSON et ce document doivent rester identiques à `architecture.md` § 8** : changer le format, c'est changer les trois dans le même commit.
 
-| Fichier                                                                              | Rôle                                                                                                                                    |
-| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `plan.schema.json`, `result.schema.json`, `command.schema.json`                      | Les schémas JSON (draft-07), source de vérité documentaire                                                                              |
-| `index.ts`                                                                           | Le module partagé : types, constantes et limites, `encodeMessage`, `decodeMessage`, `validatePlan`, `validateResult`, `validateCommand` |
-| `types.ts`, `codec.ts`, `check.ts`, `plan.ts`, `result.ts`, `command.ts`, `error.ts` | Son contenu                                                                                                                             |
-| `examples/valid/`, `examples/invalid/`                                               | Les exemples (au moins 6 de chaque par schéma, un seul valide pour `command`), tous rejoués par les tests                               |
+| Fichier                                                                                        | Rôle                                                                                                                                    |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `plan.schema.json`, `result.schema.json`, `command.schema.json`, `selftest-result.schema.json` | Les schémas JSON (draft-07), source de vérité documentaire                                                                              |
+| `index.ts`                                                                                     | Le module partagé : types, constantes et limites, `encodeMessage`, `decodeMessage`, `validatePlan`, `validateResult`, `validateCommand` |
+| `types.ts`, `codec.ts`, `check.ts`, `plan.ts`, `result.ts`, `command.ts`, `error.ts`           | Son contenu                                                                                                                             |
+| `examples/valid/`, `examples/invalid/`                                                         | Les exemples (au moins 6 de chaque par schéma, un seul valide pour `command`), tous rejoués par les tests                               |
 
 Le module n'a **aucune dépendance d'exécution** et ajoute moins de 6 Ko à l'agent (un test le mesure). L'agent l'importe par chemin relatif (`../../protocol`), le front par l'alias `@drive-protocol`.
 
@@ -39,7 +39,8 @@ try {
 - Les libellés, noms et requêtes ont de 1 à 255 caractères (comptés en caractères Unicode).
 - `setup-result` : `baseUrl` est `https://<host>/magasin-<id>-<second identifiant>`, avec l'hôte et l'identifiant du magasin.
 
-- `command` (DRV-313) : `{v: 1, type: "command", command}`, rien d'autre (ni `runId`, ni magasin, ni chemin de retour : l'agent ne renvoie rien à Repas). Une seule commande existe : `diagnostic` ouvre l'écran de diagnostic de l'agent (DRV-308). Elle vient de l'application, jamais de Repas. `validateCommand` la valide ; `validatePlan` la refuse (`type`).
+- `command` (DRV-313) : `{v: 1, type: "command", command}`, rien d'autre (ni `runId`, ni magasin, ni chemin de retour : l'agent ne renvoie rien à Repas). Deux commandes existent : `diagnostic` ouvre l'écran de diagnostic de l'agent (DRV-308) ; `selftest` lance le test automatique de la variante de débogage (DRV-318) et **n'est honorée que si l'application a annoncé `debug: true`** dans son message d'accueil. Elles viennent de l'application, jamais de Repas. `validateCommand` les valide ; `validatePlan` les refuse (`type`).
+- `selftest-result` (DRV-318, agent vers application, jamais vers Repas) : `{v: 1, type: "selftest-result", ok, agentVersion, report}` ; `ok` est un booléen, `agentVersion` un semver, `report` un texte de 1 à 20 000 caractères, sans donnée personnelle. `validateSelftestResult` le valide ; `validateResult` le refuse (`type`).
 
 ## Les exemples
 

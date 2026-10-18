@@ -16,10 +16,13 @@ const MESSAGES: Record<LeclercErrorCode, string> = {
  */
 export class LeclercError extends Error {
   readonly code: LeclercErrorCode
+  /** Le code HTTP de la réponse qui a causé l'erreur, `null` s'il n'y en a pas (erreur réseau, page hors magasin). Un nombre, jamais un texte. */
+  readonly status: number | null
 
-  constructor(code: LeclercErrorCode) {
+  constructor(code: LeclercErrorCode, status: number | null = null) {
     super(MESSAGES[code])
     this.name = 'LeclercError'
     this.code = code
+    this.status = status
   }
 }

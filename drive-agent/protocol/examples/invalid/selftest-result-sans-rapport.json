@@ -1,0 +1,5 @@
+{
+  "path": "report",
+  "why": "Le rapport est obligatoire.",
+  "message": { "v": 1, "type": "selftest-result", "ok": true, "agentVersion": "0.6.0" }
+}

@@ -145,7 +145,7 @@ const progress: Renderer<'progress'> = (props: ProgressProps, answer) => {
   paint()
   return {
     el: screen(
-      title(S.progress.title),
+      title(props.title ?? S.progress.title),
       bar,
       count,
       // Une seule zone annoncée par les lecteurs d'écran : l'ingrédient en cours et les dernières actions.

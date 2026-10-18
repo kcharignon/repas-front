@@ -94,6 +94,63 @@ export const S = {
       noWrite: 'Aucune écriture au panier.',
     },
   },
+  /** Le test automatique de la variante de débogage (DRV-318) : l'écran de progression et le rapport texte copiable. */
+  selftest: {
+    title: 'Test automatique',
+    starting: 'Démarrage…',
+    /** Ce que l'écran de progression dit de l'étape en cours. */
+    current: {
+      check: 'Diagnostic de l’agent',
+      search: (word: string) => `Recherche « ${word} »`,
+      passage: (word: string) => `Essai au panier : ${word}`,
+      cleanup: 'Retrait des produits d’essai',
+      compare: 'Comparaison du panier',
+    },
+    reportReady: 'Rapport prêt, envoyé à l’application.',
+    step: {
+      check: 'Diagnostic de l’agent',
+      store: 'Lecture du magasin',
+      lot: (n: number) => `Lot de ${n} recherches`,
+      passage: (n: number) => `Essai au panier (${n} produits au plus)`,
+      compare: 'Panier avant et après',
+    },
+    text: {
+      title: 'Repas Drive : test automatique',
+      verdictOk: 'Verdict : OK',
+      verdictKo: (n: number) => `Verdict : KO (${n} étape${n > 1 ? 's' : ''} en échec)`,
+      verdictStopped: 'Verdict : INTERROMPU (arrêt demandé)',
+      duration: (time: string) => `Durée totale : ${time}`,
+      halt: (why: string) => `Arrêt : ${why}. Les étapes suivantes ne sont pas jouées.`,
+      haltRepeated: 'trois recherches de suite sans résultat',
+      wordOk: (found: number, content: number, price: number) =>
+        `${found} produits, contenu net lu ${content}, prix lus ${price}`,
+      wordNone: 'aucun produit lu',
+      notTested: 'non testé',
+      lotSummary: (planned: number, done: number, ok: number, average: string) =>
+        `${planned} prévues, ${done} faites, ${ok} réussies, temps moyen ${average}`,
+      storeRead: (host: string, store: string, label: string) =>
+        `hôte ${host}, magasin ${store}, libellé ${label}`,
+      labelKnown: 'présent',
+      labelUnknown: 'absent',
+      noEligible: 'aucun produit éligible (en stock, hors panier, prix lu)',
+      add: 'ajout 1',
+      set: (quantity: number) => `mise à ${quantity}`,
+      remove: 'retrait',
+      write: (what: string, http: number | null, obtained: number | null) =>
+        `${what} : ${http === null ? 'sans réponse' : `HTTP ${http}`}, obtenu ${obtained ?? 'non lu'}`,
+      otherFailure: 'erreur inattendue',
+      items: (before: string, after: string, derived: boolean) =>
+        `articles : ${before} avant${derived ? ' (déduit de la première réponse)' : ''}, ${after} après`,
+      total: (before: string, after: string) => `total : ${before} avant, ${after} après`,
+      unknown: 'non lu',
+      noWrite: 'aucun produit ajouté : le panier n’a pas été touché',
+      back: 'le panier est revenu à son état initial',
+      differs: 'le panier n’est PAS revenu à son état initial',
+      unreadable: 'le panier n’a pas pu être relu après le retrait',
+      leftovers: (labels: string) => `à retirer à la main : ${labels}`,
+      noOrder: 'Aucune commande, aucun paiement.',
+    },
+  },
   /** Le mode configuration (DRV-307) : lire le magasin de la page et le donner à Repas. */
   store: {
     title: 'Enregistrer ce magasin dans Repas ?',

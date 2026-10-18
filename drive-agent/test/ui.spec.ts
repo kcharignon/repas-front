@@ -215,6 +215,17 @@ describe('progression', () => {
     expect(shadow().querySelector('[aria-live="polite"] li')?.textContent).toBe('Farine : ajouté')
   })
 
+  it('porte le titre du remplissage du panier, ou celui que l’appelant donne (le test automatique)', () => {
+    const handle = open()
+    void handle.show('progress', props)
+    expect(shadow().querySelector('h1, h2')?.textContent).toBe('Remplissage du panier')
+
+    void handle.show('progress', { ...props, title: 'Test automatique' })
+
+    expect(shadow().querySelector('h1, h2')?.textContent).toBe('Test automatique')
+    expect(shadow().textContent).not.toContain('Remplissage du panier')
+  })
+
   it('se met à jour sans refaire l’écran et ne garde que les cinq dernières actions', () => {
     const handle = open()
     void handle.show('progress', props)

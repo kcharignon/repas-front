@@ -110,7 +110,7 @@ export class Pacer {
       this.blocks += 1
       if (this.blocks >= MAX_BLOCKS) {
         this.stopped = true
-        throw new LeclercError('BLOCKED')
+        throw new LeclercError('BLOCKED', reply.status)
       }
     }
   }

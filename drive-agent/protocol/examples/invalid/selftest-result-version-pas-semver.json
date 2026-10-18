@@ -1,0 +1,11 @@
+{
+  "path": "agentVersion",
+  "why": "La version de l’agent est de la forme X.Y.Z.",
+  "message": {
+    "v": 1,
+    "type": "selftest-result",
+    "ok": true,
+    "agentVersion": "0.6",
+    "report": "Verdict : OK"
+  }
+}

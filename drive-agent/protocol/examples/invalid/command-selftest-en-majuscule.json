@@ -1,0 +1,5 @@
+{
+  "path": "command",
+  "why": "Les commandes sont en minuscules.",
+  "message": { "v": 1, "type": "command", "command": "SELFTEST" }
+}
