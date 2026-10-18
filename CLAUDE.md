@@ -42,7 +42,7 @@ OpenAPI généré (`openapi-typescript` + `openapi-fetch`), Tailwind CSS + compo
 
 L'infrastructure (serveur, bordure Caddy, `deploy.sh`, sauvegardes) est dans le dépôt back `kcharignon/repas` : skill `/repas-ops` (`/home/kantin/Projet/Repas/.claude/skills/repas-ops/`, recette `references/release.md`), ADR 0017 et 0018 ; ici, [ADR 0007](docs/adr/0007-deploiement-par-release.md). **L'utilisateur n'est pas devops : une étape à la fois, le but expliqué, jamais de secret dans le chat.**
 
-1. PR, CI verte, je fusionne (squash) : seul dépôt où j'ai le droit de fusionner.
+1. PR, CI verte, je fusionne (squash) : j'ai le droit de fusionner sur ce dépôt comme sur le back.
 2. Quand l'utilisateur veut livrer : `gh release create vX.Y.Z --target main --generate-notes` (`gh release list --limit 3` pour la version suivante ; `--prerelease` pour un essai). Un changement d'API cassant : le back sort d'abord, compatible avec l'ancien front.
 3. La CI teste, construit `ghcr.io/kcharignon/repas-front:vX.Y.Z`, puis **le job « Déploiement en production » attend l'utilisateur** : page du run (`gh run list --workflow Release`) → _Review deployments_ → production → _Approve and deploy_. Je ne peux pas approuver ; je donne le lien du run et je surveille (`gh run view <id>`).
 4. `deploy.sh front` (serveur) déploie, vérifie que le SPA répond et **revient seul à la version précédente** en cas d'échec. Je vérifie ensuite : `https://kantin.eu/` (200, `<div id="app">`), `/api/v1/health`, et en lecture seule `ssh -i ~/.ssh/repas_deploy deploy@64.227.124.100 'cd /opt/repas && cat state/ok-front && docker compose --profile front ps'`.
@@ -67,4 +67,4 @@ L'image de production ne contient ni nom de domaine ni secret ; ne jamais en ajo
 - Une branche par unité logique, PR vers `main` avec la description du modèle (Quoi / Vérifié / À relire), **sans pied d'attribution**.
 - **Sur ce dépôt, Claude peut créer et fusionner ses PR** (autorisation de l'utilisateur, 2026-10-15), seulement une fois la CI verte,
   en squash. Jamais de push direct sur `main`, jamais de force-push, jamais de `--no-verify`.
-- Sur le dépôt back (`kcharignon/repas`) la règle reste l'inverse : Claude ouvre les PR, l'humain les fusionne.
+- Sur le dépôt back (`kcharignon/repas`) la règle est la même depuis le 2026-10-16 (`CLAUDE.md` du back) : Claude ouvre et fusionne ses PR en squash (`gh pr merge --squash --delete-branch`), CI verte et description remplie, jamais une PR rouge, jamais de push sur `main` ni de force-push. Seule l'approbation du déploiement en production reste à l'humain.

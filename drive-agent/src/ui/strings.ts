@@ -309,7 +309,7 @@ export const ERROR_TEXTS: Record<ErrorCode, { title: string; text: string }> = {
   },
   CONTRACT_CHANGED: {
     title: 'Le site a changé',
-    text: 'Leclerc a modifié son site. Mets à jour l’application Repas Drive, puis réessaie.',
+    text: 'Leclerc a modifié son site. Mets à jour l’application Repas, puis réessaie.',
   },
   NETWORK: {
     title: 'Le site ne répond pas',
