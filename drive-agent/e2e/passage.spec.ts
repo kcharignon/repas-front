@@ -142,6 +142,70 @@ test('demande la quantité quand elle est à vérifier, et passe la ligne si l�
   })
 })
 
+/** Une quantité demandée en poids, dans l'unité de la liste (« 3 kg »), comme le plan du back la porte. */
+const weight = (quantity: number, unitSymbol = 'kg', baseFactor = 1000) =>
+  ({ quantity, unitSymbol, dimension: 'WEIGHT', baseFactor }) as const
+
+test('met au panier le nombre calculé sur le contenu lu sur le site, pas celui du plan, et le dit à la fin (DRV-613)', async ({
+  page,
+  fake,
+  agentCode,
+}) => {
+  // Given : le plan mémorise 30 farines (contenu mémorisé : 100 g) pour 3 kg, le site en vend de 1 kg ; le sucre est conforme au plan
+  const memorized = { ...product(1000001, 30), content: { value: 100, unit: 'g' as const } }
+  const plan = planOf([
+    known('farine', 'Farine', [memorized], { needed: weight(3) }),
+    known('sucre', 'Sucre', [product(1000006, 2)], { needed: weight(2) }),
+  ])
+
+  // When
+  await openWithFragment(page, fake, agentCode, plan)
+  await page.getByRole('button', { name: 'Commencer' }).click()
+  await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+
+  // Then : 3 farines (le contenu en direct fait foi), 2 sucres (inchangé), sans question ni requête de plus
+  expect(fake.cart()).toEqual({ 1000001: 3, 1000006: 2 })
+  expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'cart', 'search', 'cart'])
+  expectPoliteAgent(fake)
+
+  // And : l'écran de fin signale la seule ligne recalculée
+  await expect(page.getByText('Contenu différent de celui mémorisé')).toBeVisible()
+  await expect(page.getByText('Farine : 3 au lieu de 30')).toBeVisible()
+  await expect(page.getByText('Sucre :')).toHaveCount(0)
+
+  // And : le résultat porte la quantité réellement mise au panier
+  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+  expect(await returnedResult(page, fake)).toMatchObject({
+    outcome: 'completed',
+    lines: [
+      { ingredientSlug: 'farine', outcome: 'ADDED', productId: '1000001', quantity: 3 },
+      { ingredientSlug: 'sucre', outcome: 'ADDED', productId: '1000006', quantity: 2 },
+    ],
+  })
+})
+
+test('garde le nombre du plan quand le contenu lu sur le site ne se compare pas, sans rien signaler (DRV-613)', async ({
+  page,
+  fake,
+  agentCode,
+}) => {
+  // Given : un produit au contenu illisible sur le site (1000031), un autre dont le contenu est en pièces pour une quantité en grammes
+  const plan = planOf([
+    known('cacao', 'Cacao', [product(1000031, 5)], { needed: weight(1) }),
+    known('oeufs', 'Oeufs', [product(1000014, 2)], { needed: weight(500, 'g', 1) }),
+  ])
+
+  // When
+  await openWithFragment(page, fake, agentCode, plan)
+  await page.getByRole('button', { name: 'Commencer' }).click()
+  await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+
+  // Then : comme avant, le plan fait foi, et rien n'est signalé
+  expect(fake.cart()).toEqual({ 1000031: 5, 1000014: 2 })
+  await expect(page.getByText('Contenu différent de celui mémorisé')).toHaveCount(0)
+  expectPoliteAgent(fake)
+})
+
 test('annule au récapitulatif : rien ne part vers le site, Repas est prévenu', async ({
   page,
   fake,

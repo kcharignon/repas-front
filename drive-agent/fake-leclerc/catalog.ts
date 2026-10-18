@@ -1,4 +1,4 @@
-// Le catalogue du faux site : 30 produits INVENTÉS (marques, libellés, prix, identifiants). Rien n'est copié d'une enseigne.
+// Le catalogue du faux site : 31 produits INVENTÉS (marques, libellés, prix, identifiants). Rien n'est copié d'une enseigne.
 // Les champs ont les noms que `recherche.md` (dépôt back) relève sur le vrai site : c'est la structure qui est imitée, pas le contenu.
 
 /** Le point de livraison du faux magasin (`sNoPointLivraison`) : différent de l'identifiant du magasin, comme sur le vrai site. */
@@ -19,6 +19,8 @@ export interface FakeProduct {
   stock: number
   /** Contenu net structuré (`sUniteMesure`…), pour les produits qui en portent un. */
   structured?: { unit: 'KG' | 'L' | 'U'; each: number; total: number; totalUnit: 'kg' | 'l' | 'u' }
+  /** Le site ne donne aucun contenu net lisible : ni seconde ligne, ni prix à l'unité de mesure (l'agent n'en déduit rien). */
+  noContent?: boolean
   aisle: number
   family: number
 }
@@ -81,6 +83,8 @@ export const PRODUCTS: readonly FakeProduct[] = [
   make('Tomates grappe Jardin Inventé', '500 g', 2.2, 4.4, 'kg', 6),
   make('Crème fraîche épaisse Laiterie du Test', '20 cl', 1.5, 7.5, 'L', 10),
   make('Yaourt nature Laiterie du Test', '8 x 125 g', 2.4, 2.4, 'kg', 16),
+  // Un produit dont le contenu net ne se lit nulle part (DRV-613 : l'agent garde alors le nombre du plan).
+  make('Cacao maigre Plantation Fictive', null, 3.2, 3.2, 'kg', 14, { noContent: true }),
 ]
 
 /** Un texte sans accent ni majuscule : « Œufs » et « oeufs » se valent, comme dans une recherche. */
