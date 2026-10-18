@@ -21,7 +21,6 @@ export default defineConfigWithVueTs(
     '**/dist/**',
     '**/dist-ssr/**',
     '**/coverage/**',
-    'drive-agent/lab/published/**',
   ]),
 
   ...pluginVue.configs['flat/essential'],
@@ -36,8 +35,6 @@ export default defineConfigWithVueTs(
     ...pluginVitest.configs.recommended,
     files: [
       'src/**/__tests__/*',
-      'drive-agent/lab/src/__tests__/*',
-      'drive-agent/android-lab/__tests__/*',
       'android/__tests__/*',
       'drive-agent/test/**/*',
     ],

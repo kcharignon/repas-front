@@ -130,7 +130,7 @@ fixtures: ## Create the demo accounts and data in the back dev database: admin@r
 	@echo "✅ Connecte-toi sur http://localhost:$(FRONT_PORT) avec admin@repas.fr (administrateur) ou user@repas.fr, mot de passe : M0t 2 p@sse"
 
 ## —— Drive Leclerc 🛒 ————————————————————————————————————————————————————
-.PHONY: agent-build agent-verify agent-test agent-e2e e2e-agent agent-fake lab lab-publish lab-loader
+.PHONY: agent-build agent-verify agent-test agent-e2e e2e-agent agent-fake
 
 agent-build: ## Build the drive agent (drive-agent/): dist/agent.js and dist/manifest.json (version, size, SHA-384)
 	@$(RUN) npm run --silent agent:build
@@ -148,15 +148,6 @@ e2e-agent: agent-e2e ## Same as agent-e2e
 
 agent-fake: ## Start the fake Leclerc site by hand on 127.0.0.1:8099 with the Node of your machine (FAKE_LECLERC_PORT, FAKE_LECLERC_HOSTS); Ctrl-C to stop
 	@npm run --silent agent:fake
-
-lab: ## Build the throwaway drive test bookmarklet (drive-agent/lab) into drive-agent/lab/dist/lab-bookmarklet.txt and print its size
-	@$(RUN) npm run --silent lab:build
-
-lab-publish: ## Copy the built lab.js into drive-agent/lab/published/ (served by jsDelivr once merged; commit it in a PR)
-	@$(RUN) npm run --silent lab:build -- --publish
-
-lab-loader: ## Build the short loader bookmarklet for a merged commit: make lab-loader sha=<40-char commit> (writes dist/lab-loader.txt)
-	@$(RUN) npm run --silent lab:loader -- $(sha)
 
 ## —— Android 📱 (Repas Drive) ———————————————————————————————————————————————
 .PHONY: android android-test android-release android-release-verify android-release-selftest android-agent-hash
@@ -193,22 +184,6 @@ android-release-selftest: $(ANDROID_AGENT) ## Prove that the release build refus
 
 android-agent-hash: ## Note the SHA-384 of the built drive agent in android/agent.js.sha384 (after a deliberate change of the agent)
 	@$(RUN) npm run --silent android:agent-hash -- --write
-
-## —— Android lab 📱 ————————————————————————————————————————————————————————
-.PHONY: android-lab android-lab-test android-lab-hash
-
-# L'application Android jetable (DRV-011) se construit dans une image à part (JDK, Gradle, SDK Android), avec l'identifiant de l'utilisateur
-# pour que les fichiers produits ne soient pas à root. Elle ne contacte aucun site Leclerc.
-ANDROID_RUN = $(DOCKER_COMPOSE) --profile android run --rm --user $(shell id -u):$(shell id -g) android-lab
-
-android-lab: ## Build the throwaway Android test app (drive-agent/android-lab): Kotlin unit tests, then dist/repas-android-lab.apk with its SHA-256
-	@$(ANDROID_RUN) ./build.sh apk
-
-android-lab-test: ## Run only the Kotlin unit tests of the throwaway Android test app
-	@$(ANDROID_RUN) ./build.sh test
-
-android-lab-hash: ## Note the SHA-384 of drive-agent/lab/published/lab.js in drive-agent/android-lab/lab.js.sha384 (after a deliberate change of the lab)
-	@$(RUN) npm run --silent lab:android-hash -- --write
 
 ## —— Android emulator 🤖 ————————————————————————————————————————————————————
 .PHONY: android-emulator-up android-emulator-down android-emulator-status android-smoke android-e2e

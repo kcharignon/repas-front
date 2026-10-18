@@ -41,13 +41,6 @@ __screenshots__/
 test-results/
 playwright-report/
 
-# Application Android jetable (drive-agent/android-lab) : sorties de Gradle et fichiers locaux du SDK
-drive-agent/android-lab/.gradle/
-drive-agent/android-lab/.kotlin/
-drive-agent/android-lab/build/
-drive-agent/android-lab/app/build/
-drive-agent/android-lab/local.properties
-
 # Application Android « Repas Drive » (android/) : sorties de Gradle et fichiers locaux du SDK. Aucune clé de publication
 # n'entre dans le dépôt : seule debug.keystore (clé de débogage publique) est suivie.
 android/.gradle/
@@ -55,6 +48,7 @@ android/.kotlin/
 android/build/
 android/app/build/
 android/buildSrc/.gradle/
+android/buildSrc/.kotlin/
 android/buildSrc/build/
 android/local.properties
 android/*.jks

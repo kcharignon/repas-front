@@ -102,7 +102,7 @@ describe('android-release.yml ne publie que sur une étiquette android-vX.Y.Z po
 })
 
 describe("les autres workflows Android ne publient pas d'APK signé et avertissent", () => {
-  it.each(['android.yml', 'android-lab.yml'])("%s prévient de ne pas installer la pré-version sur le téléphone des courses", (name) => {
+  it.each(['android.yml'])("%s prévient de ne pas installer la pré-version sur le téléphone des courses", (name) => {
     const text = read('.github', 'workflows', name)
     expect(text).toContain('Ne pas installer cette pré-version sur le téléphone des courses')
     expect(text).toContain('android/PUBLICATION.md')

@@ -12,7 +12,7 @@ permissions:
 jobs:
   checks:
     name: Contrôles
-    # Les releases de l'application Android (`android-lab-<date>`, `android-dev-<date>` : pré-versions de débogage ; `android-vX.Y.Z` : publication
+    # Les releases de l'application Android (`android-dev-<date>` : pré-version de débogage ; `android-vX.Y.Z` : publication
     # signée, android-release.yml) ne sont pas des versions du front : rien à déployer. Elles sont créées par des workflows avec le jeton
     # de GitHub, qui ne déclenche pas celui-ci ; cette condition garde la porte fermée si l'une d'elles était publiée à la main.
     if: ${{ !startsWith(github.event.release.tag_name, 'android-') }}
