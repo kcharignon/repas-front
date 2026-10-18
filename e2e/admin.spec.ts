@@ -4,13 +4,19 @@ import { expect, test, type APIRequestContext } from '@playwright/test'
 import { apiToken, email, hasSession, signIn } from './support/session'
 
 // Administration (réservée aux administrateurs) contre le VRAI back. Les unités, rayons et types ne se suppriment pas :
-// le test modifie une unité existante puis la remet dans son état de départ, il n'en crée pas.
+// les tests modifient une unité existante (nom, symbole, dimension et facteur) puis la remettent dans son état de départ, ils n'en créent pas.
 test.describe('administration', () => {
   // eslint-disable-next-line playwright/no-skipped-test
   test.skip(!hasSession, 'E2E_WITH_BACK, E2E_EMAIL et E2E_PASSWORD sont nécessaires')
 
   let token = ''
-  let unit = { slug: '', name: '', symbol: '' }
+  let unit: {
+    slug: string
+    name: string
+    symbol: string
+    dimension: string | null
+    baseFactor: number | null
+  } = { slug: '', name: '', symbol: '', dimension: null, baseFactor: null }
   const bearer = () => ({ Authorization: `Bearer ${token}` })
 
   test.beforeEach(async ({ request }) => {
@@ -26,7 +32,13 @@ test.describe('administration', () => {
   test.afterEach(async ({ request }) => {
     await request.put(`/api/v1/units/${unit.slug}`, {
       headers: bearer(),
-      data: { name: unit.name, symbol: unit.symbol },
+      // Les deux ensemble : un corps qui en mentionne un remplace la paire (`null` et `null` l'efface)
+      data: {
+        name: unit.name,
+        symbol: unit.symbol,
+        dimension: unit.dimension,
+        baseFactor: unit.baseFactor,
+      },
     })
   })
 
@@ -50,6 +62,31 @@ test.describe('administration', () => {
     await expect(
       page.getByRole('listitem').filter({ hasText: unit.name }).getByText('zz'),
     ).toBeVisible()
+  })
+
+  test("l'administrateur renseigne la dimension et le facteur d'une unité, le back refuse l'incohérence", async ({
+    page,
+  }) => {
+    await signIn(page, '/admin/unites')
+    const row = page.getByRole('listitem').filter({ hasText: unit.name })
+    await page.getByRole('button', { name: `Modifier ${unit.name}`, exact: true }).click()
+    await expect(page.getByText('Sert à calculer combien de produits acheter.')).toBeVisible()
+
+    await page.getByLabel('Ce que l’unité mesure').selectOption('VOLUME')
+    await page.getByLabel('Facteur de base').fill('2')
+    await page.getByRole('button', { name: 'Enregistrer' }).click()
+    await expect(row.getByText('Volume, × 2')).toBeVisible()
+
+    // Une dimension sans facteur : refusée par le back, dont on lit le message en français
+    await page.getByRole('button', { name: `Modifier ${unit.name}`, exact: true }).click()
+    await page.getByLabel('Ce que l’unité mesure').selectOption('WEIGHT')
+    await page.getByLabel('Facteur de base').fill('')
+    await page.getByRole('button', { name: 'Enregistrer' }).click()
+    await expect(page.getByRole('alert')).toContainText(
+      'La dimension et le facteur de base vont ensemble',
+    )
+    await page.getByRole('button', { name: 'Annuler' }).click()
+    await expect(row.getByText('Volume, × 2')).toBeVisible()
   })
 
   test('la liste des utilisateurs montre les comptes de démonstration', async ({ page }) => {
