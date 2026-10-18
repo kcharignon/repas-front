@@ -4,7 +4,6 @@ import java.io.File
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -35,36 +34,33 @@ class DrivePlanTest {
         assertEquals("8f14e45f-ceea-467a-9575-8e6b8c0a1b2c", plan.runId)
         assertEquals("000000", plan.storeId)
         assertEquals("courses-test.leclercdrive.fr", plan.storeHost)
-        assertEquals("https://courses-test.leclercdrive.fr/magasin-000000-000000/", plan.startUrl)
+        assertEquals("https://courses-test.leclercdrive.fr/", plan.startUrl)
         assertTrue(NavigationPolicy.isAllowed(plan.startUrl))
         assertTrue(sameJson(valid, JSONObject(plan.text)))
     }
 
     /**
-     * Garde de la recette réelle : un plan ne s'ouvre JAMAIS sur la racine de l'hôte (`https://<hôte>/`), site ordinaire de l'enseigne qui
-     * n'est pas une page de magasin (l'agent n'y agit pas, l'utilisateur n'y voit rien de Repas). Il s'ouvre sur la page de son magasin.
+     * Garde de la recette réelle (2026-10-18, Pixel 9) : `https://<hôte>/magasin-<id>-<id>/` est une PAGE 404 sur le vrai site (« la page
+     * demandée n'a pas pu être trouvée »). La racine de l'hôte, session ouverte, affiche l'accueil du magasin et son bouton « Commencer mes
+     * courses », qui mène aux vraies pages du magasin (celles que l'agent lit, `isStorePage`). Un plan s'ouvre donc sur la RACINE de l'hôte
+     * (jamais sur une adresse de magasin inventée) ; le message du passage part vers l'agent quand l'utilisateur touche ce bouton.
      */
     @Test
-    fun `un plan s'ouvre sur la page de son magasin, jamais sur la racine de l'hote`() {
+    fun `un plan s'ouvre sur la racine de son hote, jamais sur une adresse de magasin sans ville`() {
         val stores = listOf("000000" to "courses-test.leclercdrive.fr", "1" to "fd9-courses.leclercdrive.fr", "123456789012" to "fd14-courses.leclercdrive.fr")
         stores.forEach { (id, host) ->
             val plan = DrivePlan.parse(with("host", host, store = true).apply { getJSONObject("store").put("id", id) })!!
 
-            assertEquals("https://$host/magasin-$id-$id/", plan.startUrl)
-            assertNotEquals("la racine de l'hote n'est pas une page de magasin", "https://$host/", plan.startUrl)
-            assertTrue("devrait être une page de magasin : ${plan.startUrl}", NavigationPolicy.isStorePage(plan.startUrl))
+            assertEquals("https://$host/", plan.startUrl)
+            assertFalse("/magasin-$id-$id/ est une page 404 du vrai site", plan.startUrl.contains("/magasin-"))
             assertTrue(NavigationPolicy.isAllowed(plan.startUrl))
-            assertFalse("la racine de l'hote n'est pas une page de magasin", NavigationPolicy.isStorePage("https://$host/"))
+            assertFalse("la racine n'est pas une page de magasin : l'agent y attend", NavigationPolicy.isStorePage(plan.startUrl))
         }
     }
 
     @Test
-    fun `la page de depart d'un plan est celle que l'agent lit, avec ou sans suffixe de ville`() {
-        val plan = DrivePlan.parse(valid)!!
-
-        assertTrue(NavigationPolicy.isStorePage(plan.startUrl))
-        assertTrue(NavigationPolicy.isStorePage(plan.startUrl.removeSuffix("/") + "-Ville-Test/accueil.aspx"))
-        assertTrue(NavigationPolicy.isStorePage(plan.startUrl.removeSuffix("/")))
+    fun `l'ouverture d'une lecture du magasin est l'accueil de l'enseigne`() {
+        assertEquals(NavigationPolicy.START_URL, SetupRequest.of(RUN_ID)!!.startUrl)
     }
 
     @Test

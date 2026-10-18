@@ -63,7 +63,10 @@
     <string name="abandon_confirm">Abandonner</string>
     <string name="abandon_continue">Continuer</string>
     <string name="setup_banner">Connecte-toi à Leclerc si besoin, puis choisis ton magasin. Repas le lira ensuite. Le bouton retour du téléphone annule.</string>
-    <string name="plan_banner">Repas attend la page de ton magasin sur Leclerc. Connecte-toi si besoin, puis ouvre ton magasin : Repas remplira ensuite ton panier. Le bouton retour du téléphone annule.</string>
+    <string name="plan_banner_open">Ouvre ton magasin sur Leclerc : connecte-toi si besoin, puis touche « Commencer mes courses ». Repas reprendra tout seul. Le bouton retour du téléphone annule.</string>
+    <string name="plan_banner">Cette page n’est pas celle de ton magasin : Leclerc l’a refusée ou ne répond pas. Touche « Ouvrir l’accueil du drive » pour recommencer. Le bouton retour du téléphone annule.</string>
+    <string name="plan_banner_action">Ouvrir l’accueil du drive</string>
+    <string name="plan_banner_verification">Leclerc demande une vérification. Fais-la sur la page : Repas reprendra ensuite. Sinon, touche « Ouvrir l’accueil du drive ». Le bouton retour du téléphone annule.</string>
     <string name="menu_abandon_setup">Abandonner la lecture du magasin</string>
     <string name="abandon_setup_title">Abandonner la lecture du magasin ?</string>
     <string name="abandon_setup_message">Repas ne retiendra aucun magasin. Tu pourras recommencer depuis les réglages du drive.</string>

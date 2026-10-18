@@ -15,7 +15,10 @@ interface PassRequest {
     /** Le message du protocole v1 (`plan` ou `setup`) en JSON compact : ce que l'on envoie à l'agent et ce que l'on garde pour la reprise. */
     val text: String
 
-    /** La page où le drive s'ouvre. */
+    /**
+     * La page où le drive s'ouvre : celle où l'utilisateur est déjà connecté et d'où il ouvre son magasin. Elle sert aussi de repli (« Ouvrir
+     * l'accueil du drive ») quand le site refuse ou n'affiche pas la page (ticket E de l'audit du 2026-10-18).
+     */
     val startUrl: String
 
     /** Vrai pour la lecture du magasin : l'agent n'a rien à faire avant que la page soit celle d'un magasin ([NavigationPolicy.isStorePage]). */
@@ -95,13 +98,14 @@ class DrivePlan private constructor(
     override val text: String,
 ) : PassRequest {
     /**
-     * La page où le drive s'ouvre : l'accueil du magasin du plan, `https://<hôte>/magasin-<id>-<id>/` (la forme des adresses du drive, comme
-     * [NavigationPolicy.isStorePage] et l'agent la lisent ; le suffixe de ville est facultatif pour une page). **Jamais la racine de l'hôte** :
-     * c'est le site ordinaire de l'enseigne, qui n'est pas une page de magasin, où l'agent n'agit pas et où l'utilisateur ne voit rien de Repas
-     * (constat de la recette réelle : l'hypothèse « la racine mène à l'accueil du magasin », posée par DRV-319, était fausse). L'hôte a déjà été
-     * contrôlé (`*.leclercdrive.fr`, https), l'identifiant n'est que des chiffres.
+     * La page où le drive s'ouvre : la **racine de l'hôte** du magasin, `https://<hôte>/`. Constat de la recette réelle (2026-10-18, Pixel 9) :
+     * avec la session ouverte, elle affiche l'accueil du magasin et son bouton « Commencer mes courses », qui mène aux vraies pages du magasin
+     * (`/magasin-<id>-<id>-<Ville>/…`, celles que lisent [NavigationPolicy.isStorePage] et l'agent). `/magasin-<id>-<id>/` (sans ville, l'adresse que
+     * ce code ouvrait avant) est une page 404 du vrai site. La racine n'est pas une page de magasin pour l'agent : il attend, un message
+     * d'en-tête dit à l'utilisateur de toucher « Commencer mes courses » (l'application ne clique jamais à sa place), et le message du passage
+     * part vers l'agent dès qu'une page de magasin est atteinte ([StoreBanner]). L'hôte a déjà été contrôlé (`*.leclercdrive.fr`, https).
      */
-    override val startUrl: String get() = "https://$storeHost/magasin-$storeId-$storeId/"
+    override val startUrl: String get() = "https://$storeHost/"
     override val isSetup: Boolean get() = false
 
     override fun abortedResult(agentVersion: String): String = abortedResultJson(runId, storeId, agentVersion, "Envoi abandonné.")

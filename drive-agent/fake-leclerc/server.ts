@@ -14,7 +14,7 @@ import {
   cartResponse,
   challengePage,
   changedSearchPage,
-  enseignePage,
+  accueilPage,
   errorPage,
   homePage,
   loginPage,
@@ -31,6 +31,8 @@ export const STORE = { id: '000001', host: 'courses-test.leclercdrive.fr' } as c
 /** Début des adresses des pages du magasin (avec le suffixe de ville, que portent les pages) et de celle du panier (sans). */
 export const PAGE_PATH = `/magasin-${STORE.id}-${STORE.id}-Ville-Test`
 export const CART_PATH = `/magasin-${STORE.id}-${STORE.id}`
+/** Un autre magasin que celui du plan : l'accueil du magasin propose d'en changer, pour essayer le message « Ce n'est pas le bon magasin ». */
+export const OTHER_STORE_PATH = `/magasin-000002-000002-Ville-Test`
 
 /** Cadence minimale entre deux requêtes de l'agent (architecture.md § 8 du dépôt back) : écrite ici, pas lue dans l'agent. */
 export const MIN_GAP_MS = 800
@@ -58,10 +60,13 @@ export interface Behavior {
   latencyMs: number
   fault: Fault | null
   /**
-   * Vrai : le faux site ne reconnaît pas le magasin demandé et renvoie l'accueil du magasin vers la page ordinaire de l'enseigne (la racine
-   * de l'hôte, qui n'est pas une page de magasin). C'est ce que l'application doit savoir dire à l'utilisateur au lieu d'un écran vide.
+   * Le code HTTP (404, 403, 503…) que le faux site renvoie, avec sa page d'erreur générique, à la racine de l'hôte : la page où l'application ouvre un
+   * plan (ticket E de l'audit du 2026-10-18), refusée par le site (page d'erreur, défi anti-robot servi en 403). Le reste du site répond.
+   * `null` retire le défaut.
    */
-  unknownStore?: boolean
+  homeStatus?: number | null
+  /** Le délai (ms) avant de répondre à la racine de l'hôte : une page trop lente, que l'application doit savoir dire (ticket E). */
+  homeDelayMs?: number | null
   /**
    * La page de recherche sans produit : `list` (liste vide et message du site, par défaut), `no-list` (squelette seul) ou `encoded` (état en
    * entités HTML). Plusieurs formes plausibles d'une page que le vrai site n'a jamais été relevé servir (ticket C).
@@ -390,12 +395,19 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       entry.status = 200
       return send(res, 200, repasReturnPage(), HTML)
     }
-    // La racine de l'hôte est le site ordinaire de l'enseigne, pas une page de magasin (l'agent n'y agit pas) : l'utilisateur y choisit son
-    // magasin. L'application ne l'ouvre jamais pour un plan : elle ouvre directement la page du magasin (DrivePlan.startUrl).
+    // La racine de l'hôte est l'accueil du magasin (session ouverte), pas une page de magasin pour l'agent (qui n'y agit pas) : l'utilisateur y
+    // touche « Commencer mes courses ». C'est là que l'application ouvre un plan (DrivePlan.startUrl) ; `/magasin-<id>-<id>/` (sans ville), que
+    // l'application ouvrait avant, est une page 404 du vrai site (recette réelle du 2026-10-18) et du faux.
     if (path === '/' && req.method === 'GET') {
       entry.kind = 'page'
+      if (behavior.homeDelayMs != null && behavior.homeDelayMs > 0)
+        await sleep(behavior.homeDelayMs)
+      if (behavior.homeStatus != null) {
+        entry.status = behavior.homeStatus
+        return send(res, behavior.homeStatus, errorPage(), HTML)
+      }
       entry.status = 200
-      return send(res, 200, enseignePage(PAGE_PATH), HTML)
+      return send(res, 200, accueilPage(PAGE_PATH, OTHER_STORE_PATH), HTML)
     }
     const store = STORE_PATTERN.exec(path)
     const rest = store?.[4] ?? ''
@@ -424,9 +436,10 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       return send(res, 200, loginPage(), HTML)
     }
     if (rest === '' || rest === '/' || rest === '/accueil.aspx') {
-      if (behavior.unknownStore) {
-        entry.status = 302
-        return send(res, 302, '', { Location: '/' })
+      // Sans suffixe de ville, l'accueil du magasin est une page 404 (comme sur le vrai site) : seules les adresses avec la ville sont des pages.
+      if (store[3] === undefined) {
+        entry.status = 404
+        return send(res, 404, errorPage(), HTML)
       }
       entry.status = 200
       return send(res, 200, homePage(cart, sessionAfter(pacedCount)), HTML)
