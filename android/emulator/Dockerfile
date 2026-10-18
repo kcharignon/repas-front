@@ -32,7 +32,7 @@ ENV ANDROID_USER_HOME=/sdk/.android
 ENV ANDROID_AVD_HOME=/sdk/.android/avd
 ENV PATH="/opt/cmdline-tools/latest/bin:/sdk/platform-tools:/sdk/emulator:${PATH}"
 
-COPY entrypoint.sh testsite.py testpage.html /opt/repas-emulator/
+COPY entrypoint.sh testsite.py testpage.html repaspage.html /opt/repas-emulator/
 RUN chmod +x /opt/repas-emulator/entrypoint.sh && mkdir -p /sdk
 
 WORKDIR /sdk

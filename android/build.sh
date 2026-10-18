@@ -42,8 +42,10 @@ run_tests() {
 build_debug() {
   "${GRADLE[@]}" :app:assembleDebug
   mkdir -p "$DIST"
-  cp app/build/outputs/apk/debug/app-debug.apk "$DIST/repas-drive-debug.apk"
-  report "$DIST/repas-drive-debug.apk"
+  # ANDROID_APK_NAME : un autre nom de fichier (le test de l'émulateur construit un APK qui vise un faux Repas local, sans écraser le vrai).
+  local name="${ANDROID_APK_NAME:-repas-drive-debug.apk}"
+  cp app/build/outputs/apk/debug/app-debug.apk "$DIST/$name"
+  report "$DIST/$name"
 }
 
 # Refuse tout de suite, avec un message clair, ce que Gradle refuserait de toute façon un peu plus tard.

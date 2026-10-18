@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Une seule permission : Internet, pour afficher le drive. Jamais d'autre (DRV-312). -->
+<!-- Une seule permission : Internet, pour afficher Repas et le drive. Jamais d'autre (DRV-312, DRV-317) : le front n'envoie ni fichier ni photo, donc
+     pas de sélecteur de fichiers ni d'accès au stockage. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
+        android:name=".RepasApp"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:enableOnBackInvokedCallback="true"
@@ -12,7 +14,7 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar"
+        android:theme="@style/Theme.Repas"
         android:usesCleartextTraffic="false">
 
         <meta-data
@@ -20,14 +22,32 @@
             android:value="true" />
 
         <!-- configChanges : tourner l'écran ne recrée pas l'activité, donc ne recharge pas la page. -->
+        <!-- singleTask : un lien https://kantin.eu/… ouvert depuis une autre application arrive dans la coquille déjà ouverte (onNewIntent). -->
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|locale|layoutDirection"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Les liens vers Repas (courriel de confirmation d'adresse…) s'ouvrent dans l'application. autoVerify demande que
+                 https://<hôte>/.well-known/assetlinks.json déclare ce paquet et l'empreinte de la clé de signature : étape humaine, android/README.md. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="${repasHost}" />
+            </intent-filter>
         </activity>
+
+        <!-- Le drive, second écran : lancé par la coquille, jamais par une autre application. -->
+        <activity
+            android:name=".DriveActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|locale|layoutDirection"
+            android:exported="false" />
     </application>
 </manifest>
