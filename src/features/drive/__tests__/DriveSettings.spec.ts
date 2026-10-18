@@ -362,6 +362,10 @@ describe('réglages du drive : l’application et les produits', () => {
 
     expect(wrapper.text()).toContain('Le drive est prêt dans cette application.')
     expect(wrapper.text()).not.toContain('navigateur')
+    // Déjà installée : l'aide ne propose pas de l'installer, elle mène à la mise à jour
+    const help = wrapper.find('a[href="/drive/aide#mise-a-jour"]')
+    expect(help.text()).toBe('Mettre à jour l’application')
+    expect(wrapper.text()).not.toContain('Aide d’installation')
   })
 
   it('dans une application dont le drive ne peut pas fonctionner, demande de la mettre à jour', async () => {

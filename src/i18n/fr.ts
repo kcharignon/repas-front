@@ -645,6 +645,8 @@ export default {
     appMissing:
       'Vous utilisez Repas dans un navigateur. Pour envoyer une liste au drive, installez l’application Repas sur votre téléphone.',
     help: 'Aide d’installation',
+    // Dans l'application elle-même : elle est installée, l'aide sert à la mettre à jour
+    helpInApp: 'Mettre à jour l’application',
     products: 'Produits mémorisés',
     productsWith: 'Ingrédients avec des produits',
     productsRejected: 'Ingrédients avec des produits refusés',
@@ -693,11 +695,18 @@ export default {
     title: 'Installer l’application Repas',
     intro:
       'L’application Android « Repas » contient tout Repas : vos recettes, vos listes de courses et l’envoi de la liste au drive Leclerc. Elle s’installe en quelques minutes, sans passer par Google Play.',
+    // Dans l'application elle-même : elle est déjà installée, la page sert à la mettre à jour et à la dépanner
+    titleInApp: 'L’application Repas',
+    introInApp:
+      'Vous utilisez déjà l’application Android « Repas ». Cette page explique comment la mettre à jour, lancer un envoi au drive Leclerc, et que faire en cas de problème.',
     back: 'Retour à la liste',
     entry: {
       title: 'Application',
       link: 'Installer l’application Android',
       help: 'Le mode d’emploi pour installer et mettre à jour l’application Repas.',
+      // Dans l'application : on ne propose pas de l'installer, elle l'est déjà
+      updateLink: 'Mettre à jour l’application',
+      updateHelp: 'Mode d’emploi pour mettre à jour l’application.',
     },
     contents: 'Sur cette page',
     state: {

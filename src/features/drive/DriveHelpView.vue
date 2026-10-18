@@ -76,9 +76,11 @@ onMounted(() => {
   <main class="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-6">
     <header class="flex flex-col gap-3">
       <h1 class="font-display text-3xl leading-tight font-bold md:text-4xl">
-        {{ t('driveHelp.title') }}
+        {{ t(inApp ? 'driveHelp.titleInApp' : 'driveHelp.title') }}
       </h1>
-      <p class="max-w-prose text-muted">{{ t('driveHelp.intro') }}</p>
+      <p class="max-w-prose text-muted">
+        {{ t(inApp ? 'driveHelp.introInApp' : 'driveHelp.intro') }}
+      </p>
       <p class="max-w-prose rounded-xl bg-soft px-4 py-3 font-semibold">
         <template v-if="!inApp">{{ t('driveHelp.state.browser') }}</template>
         <template v-else-if="version !== null">
