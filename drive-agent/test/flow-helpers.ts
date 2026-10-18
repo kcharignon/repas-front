@@ -172,9 +172,13 @@ export function fakeAdapter(
     session?: SessionReading
     /** Ce que la recherche d'un mot rend : des identifiants du rayon, dans l'ordre. Un mot absent ne trouve rien. */
     found?: Record<string, string[]>
+    /** La recherche d'un produit connu par son libellé : vrai si le moteur le retrouve sous cette requête (par défaut : toujours, s'il est au rayon). */
+    sees?: (query: string, id: string) => boolean
   } = {},
 ) {
   const calls: string[] = []
+  /** Les recherches d'un produit connu par son libellé : la requête et l'identifiant voulu. */
+  const searched: { query: string; id: string }[] = []
   const writes: { id: string; quantity: number }[] = []
   let inFlight = 0
   let peak = 0
@@ -191,11 +195,12 @@ export function fakeAdapter(
       await options.before?.(`find ${query}`)
       return (options.found?.[query] ?? []).map((id) => candidate(id, shelf[id]))
     },
-    async readProductFromSearch(_query, id) {
+    async readProductFromSearch(query, id) {
       calls.push(`search ${id}`)
+      searched.push({ query, id })
       await options.before?.(`search ${id}`)
       const item = shelf[id]
-      return item ? candidate(id, item) : null
+      return item && (options.sees?.(query, id) ?? true) ? candidate(id, item) : null
     },
     pageCartTotal: () => null,
     readSession: () => options.session ?? { state: 'UNKNOWN', signs: [] },
@@ -233,7 +238,7 @@ export function fakeAdapter(
       }
     },
   }
-  return { adapter, calls, writes, maxInFlight: () => peak }
+  return { adapter, calls, searched, writes, maxInFlight: () => peak }
 }
 
 // —— Le stockage, le verrou d'écran, le flux ————————————————————————————————————————————————————————————————————————————————

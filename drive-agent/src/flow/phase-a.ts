@@ -11,6 +11,7 @@ import {
 } from '../../protocol'
 import type { Candidate, Content, RetailerAdapter } from '../leclerc'
 import { packsFor } from './packs'
+import { findKnownProduct } from './search-by-name'
 
 /**
  * Le contenu lu en direct n'a pas donné le même nombre de produits que le plan (DRV-613) : le nombre calculé en direct a été mis au
@@ -61,8 +62,9 @@ export interface KnownLineDeps {
 
 /**
  * Met au panier le premier produit disponible d'une ligne `KNOWN`. La disponibilité se lit dans la recherche par libellé (stock du
- * produit) ; le produit introuvable ou à stock nul est indisponible. Un produit que le panier refuse (quantité obtenue nulle) l'est
- * aussi. Chaque écriture est vérifiée par la réponse du panier : `quantity` est ce que le site a mis au panier.
+ * produit) ; si le libellé complet ne le retrouve pas, ses formes dérivées sont essayées une par une (`findKnownProduct`, au plus 4
+ * requêtes de plus, ticket D) ; le produit introuvable après cela, ou à stock nul, est indisponible. Un produit que le panier refuse
+ * (quantité obtenue nulle) l'est aussi. Chaque écriture est vérifiée par la réponse du panier : `quantity` est ce que le site a mis au panier.
  *
  * **Le contenu en direct fait foi** (DRV-613) : la fiche d'un produit est partagée entre les utilisateurs du magasin, son contenu
  * mémorisé peut être faux ou périmé. Quand le plan donne un nombre de produits sûr et que la recherche vient de montrer le contenu
@@ -78,7 +80,7 @@ export async function settleKnownLine(line: PlanLine, deps: KnownLineDeps): Prom
   const unavailable: string[] = []
   for (const [index, product] of products.entries()) {
     if (refused.has(product.id)) continue
-    const seen = await deps.adapter.readProductFromSearch(product.label, product.id)
+    const seen = await findKnownProduct(deps.adapter, product.label, product.id)
     if (seen === null || seen.stock === 0) {
       unavailable.push(product.id)
       continue

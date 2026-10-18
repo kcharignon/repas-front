@@ -653,3 +653,49 @@ describe('le durcissement face au vrai site : visiteur, « aucun résultat », c
     expect(fake.behavior()).toEqual({ latencyMs: 0, fault: null })
   })
 })
+
+describe('le moteur strict (ticket D de l’audit du 2026-10-18) : sensible aux accents, à la ligature et au pluriel', () => {
+  const idsOf = async (word: string) =>
+    extractProducts((await search(word)).text).products.map((product) => product.id)
+
+  it('par défaut, le moteur est tolérant : « œuf » trouve les « Oeufs » du catalogue', async () => {
+    expect(fake.behavior().strictSearch).toBeUndefined()
+    expect(await idsOf('œuf')).toEqual(['1000014', '1000015'])
+  })
+
+  it('« œuf » ne répond rien, « oeuf » répond : la ligature n’est pas repliée', async () => {
+    fake.setBehavior({ strictSearch: true })
+
+    expect(await idsOf('œuf')).toEqual([])
+    expect(await idsOf('oeuf')).toEqual(['1000014', '1000015'])
+  })
+
+  it('les accents comptent : « crème » répond, « creme » ne répond rien', async () => {
+    fake.setBehavior({ strictSearch: true })
+
+    expect(await idsOf('crème')).toEqual(['1000029'])
+    expect(await idsOf('creme')).toEqual([])
+  })
+
+  it('le pluriel compte : « spaghetti » répond, « spaghettis » ne répond rien', async () => {
+    fake.setBehavior({ strictSearch: true })
+
+    expect(await idsOf('spaghetti')).toEqual(['1000025'])
+    expect(await idsOf('spaghettis')).toEqual([])
+  })
+
+  it('les majuscules ne comptent pas, ni l’ordre des mots, et tous les mots doivent figurer', async () => {
+    fake.setBehavior({ strictSearch: true })
+
+    expect(await idsOf('FARINE sarrasin')).toEqual(['1000004'])
+    expect(await idsOf('sarrasin farine')).toEqual(['1000004'])
+    expect(await idsOf('farine zzzz')).toEqual([])
+  })
+
+  it('la remise à neuf rend le moteur tolérant', async () => {
+    fake.setBehavior({ strictSearch: true })
+    fake.reset()
+
+    expect(await idsOf('œuf')).toEqual(['1000014', '1000015'])
+  })
+})

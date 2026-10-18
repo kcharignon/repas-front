@@ -24,6 +24,7 @@ import {
 } from '../ui'
 import { packsFor } from './packs'
 import { priceOf } from './phase-a'
+import { searchByName } from './search-by-name'
 import type { PendingLine, PhaseB, PhaseBContext } from './types'
 
 /** Le nombre de produits affichés. */
@@ -31,7 +32,10 @@ export const MAX_CANDIDATES = 8
 
 /** La recherche en cours d'une ligne : ce que la liste montre. */
 interface Search {
+  /** La recherche dont la liste montre les produits (le nom, ou la forme dérivée qui a répondu : ticket D). */
   query: string
+  /** Le nom cherché au départ quand c'est une de ses formes qui a répondu (« œuf » quand c'est « oeuf »), sinon `null`. */
+  asked: string | null
   candidates: Candidate[]
   /** Un message à montrer une fois (le site ne répond pas, le panier a refusé…). */
   notice: string | null
@@ -111,12 +115,25 @@ function itemOf(line: PlanLine, candidate: Candidate, refused: ReadonlySet<strin
 
 /**
  * Cherche `query` ; une erreur réseau (déjà retentée une fois par l'adaptateur) n'abîme pas la ligne : elle devient un message et
- * l'utilisateur peut réessayer ou passer. Toute autre erreur remonte et arrête le passage.
+ * l'utilisateur peut réessayer ou passer. Toute autre erreur remonte et arrête le passage. Avec `derived` (le nom de l'ingrédient, cherché
+ * par l'agent) et si le nom ne répond rien, ses formes dérivées sont essayées une par une (`searchByName`, ticket D) ; ce que l'utilisateur
+ * tape lui-même est cherché tel quel.
  */
-async function load(search: Search, adapter: RetailerAdapter, query: string): Promise<void> {
+async function load(
+  search: Search,
+  adapter: RetailerAdapter,
+  query: string,
+  derived = false,
+): Promise<void> {
   search.query = query
+  search.asked = null
   try {
-    search.candidates = (await adapter.searchProducts(query)).slice(0, MAX_CANDIDATES)
+    const found = derived
+      ? await searchByName(adapter, query)
+      : { query, candidates: await adapter.searchProducts(query) }
+    search.query = found.query
+    search.asked = found.query === query ? null : query
+    search.candidates = found.candidates.slice(0, MAX_CANDIDATES)
     search.notice = null
   } catch (error) {
     if (!(error instanceof LeclercError) || error.code !== 'NETWORK') throw error
@@ -135,7 +152,7 @@ async function settleLine(
   const slug = line.ingredientSlug
   const refused = new Set((line.rejected ?? []).map((product) => product.id))
   const never = new Set<string>()
-  const search: Search = { query: '', candidates: [], notice: null }
+  const search: Search = { query: '', asked: null, candidates: [], notice: null }
   const items = () => search.candidates.map((candidate) => itemOf(line, candidate, refused))
   /** Les produits indisponibles dont l'utilisateur ne veut plus jamais : ils partent avec l'issue de la ligne, quelle qu'elle soit. */
   const rejected = () => {
@@ -144,7 +161,7 @@ async function settleLine(
   }
 
   ui.update({ current: line.name })
-  await load(search, adapter, line.searchQuery ?? line.name)
+  await load(search, adapter, line.searchQuery ?? line.name, true)
 
   for (;;) {
     const notice = search.notice
@@ -165,6 +182,7 @@ async function settleLine(
             gone: unavailable,
             checked: never,
             query: search.query,
+            asked: search.asked,
             items: items(),
             notice,
           },
@@ -176,7 +194,7 @@ async function settleLine(
               load(search, adapter, query).then(
                 () => {
                   if (!live) return
-                  picker.results(search.query, items(), search.notice)
+                  picker.results(search.query, items(), search.notice, search.asked)
                   picker.busy(null)
                 },
                 (error: unknown) => {

@@ -9,6 +9,8 @@ export {
   type Verdict,
 } from './phase-a'
 export { guidedChoice, labelOf, MAX_CANDIDATES } from './phase-b'
+export { findKnownProduct, searchByName, type NameSearch } from './search-by-name'
+export { MAX_FALLBACKS, searchForms } from './search-forms'
 export { buildResult, changesOf, endingOf, endProps, resultLines, type Ending } from './result'
 export { setupHandler, type SetupDeps } from './setup'
 export { emptyState, RUN_PREFIX, RunStore, type RecordedChange, type RunState } from './run-state'
