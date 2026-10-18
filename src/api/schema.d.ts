@@ -385,7 +385,10 @@ export interface paths {
         };
         /** Détail d'une unité */
         get: operations["get_api_get_unit"];
-        /** Remplace l'unité (administrateur) ; son slug ne change pas */
+        /**
+         * Remplace l'unité (administrateur) ; son slug ne change pas
+         * @description Un corps qui ne mentionne ni `dimension` ni `baseFactor` laisse les deux valeurs de l'unité telles quelles ; un corps qui en mentionne un remplace la paire (un champ absent compte comme `null`), et `null`, `null` l'efface.
+         */
         put: operations["put_api_update_unit"];
         post?: never;
         delete?: never;
@@ -508,6 +511,40 @@ export interface paths {
         put?: never;
         /** Retire 1 à la quantité d'un ingrédient dans la liste active de l'utilisateur (la ligne disparaît à zéro) */
         post: operations["post_api_decrease_ingredient"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shopping-lists/{id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rouvre une liste envoyée au drive : elle redevient active et modifiable, l'éventuelle autre liste active de l'utilisateur passe en pause */
+        post: operations["post_api_reopen_shopping_list"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shopping-lists/{id}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Envoie une liste de courses au drive : elle passe au statut `SENT` et n'est plus modifiable (sans effet si elle l'est déjà) */
+        post: operations["post_api_send_shopping_list"];
         delete?: never;
         options?: never;
         head?: never;
@@ -752,6 +789,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/drive/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Réglages du drive de l'utilisateur connecté (magasin) et état de l'interrupteur de la fonction */
+        get: operations["get_api_get_drive_settings"];
+        /** Enregistre le magasin du drive de l'utilisateur connecté (remplace le précédent) */
+        put: operations["put_api_save_drive_settings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -878,6 +933,8 @@ export interface components {
              */
             order: number;
         };
+        /** @enum {string} */
+        Dimension: "WEIGHT" | "VOLUME" | "COUNT" | "PACKAGE";
         UnitPayload: {
             /**
              * @description Nom de l'unité (son slug en dérive et ne change plus)
@@ -889,6 +946,19 @@ export interface components {
              * @example pin
              */
             symbol: string;
+            /**
+             * @description Ce que l'unité mesure : `WEIGHT` (poids), `VOLUME`, `COUNT` (pièces) ou `PACKAGE` (conditionnement). `null` : dimension inconnue (cuillère, tranche…). Va avec `baseFactor`.
+             * @default null
+             * @example WEIGHT
+             */
+            dimension: components["schemas"]["Dimension"] | null;
+            /**
+             * Format: float
+             * @description Combien d'unités de base (g, ml, pièce) vaut une unité, strictement positif : 1000 pour le kilo. Va avec `dimension` ; sans importance pour `PACKAGE` (1).
+             * @default null
+             * @example 1000
+             */
+            baseFactor: number | null;
         };
         ListAvailableIngredientsRequestQuery: {
             /** @default null */
@@ -966,6 +1036,30 @@ export interface components {
              * @example 3f9c0a5e7d1b4c6a8e2f0b9d7c5a3e1f3f9c0a5e7d1b4c6a8e2f0b9d7c5a3e1f
              */
             token: string;
+        };
+        /** @enum {string} */
+        Retailer: "leclerc";
+        DriveStorePayload: {
+            /**
+             * @description Identifiant du magasin chez l'enseigne : celui de l'adresse de base
+             * @example 123456
+             */
+            id: string;
+            /**
+             * @description Adresse de base du magasin : `https://<sous-domaine>.leclercdrive.fr/magasin-<id>-<id>`
+             * @example https://exemple.leclercdrive.fr/magasin-123456-123456
+             */
+            baseUrl: string;
+            /**
+             * @description Nom du magasin tel que lu par l'agent (255 caractères au plus)
+             * @default null
+             * @example Ville-Test
+             */
+            label: string | null;
+        };
+        DriveSettingsPayload: {
+            retailer: components["schemas"]["Retailer"];
+            store: components["schemas"]["DriveStorePayload"];
         };
         IngredientSearchResultDTO: {
             /**
@@ -1092,7 +1186,7 @@ export interface components {
              * @example ACTIVE
              * @enum {string}
              */
-            status: "ACTIVE" | "PAUSED" | "COMPLETED";
+            status: "ACTIVE" | "PAUSED" | "SENT" | "COMPLETED";
             /**
              * @description La liste est en cours (au plus une par utilisateur)
              * @example true
@@ -1108,6 +1202,16 @@ export interface components {
              * @example false
              */
             isCompleted: boolean;
+            /**
+             * @description La liste est envoyée au drive : elle n'est plus modifiable (statut `SENT`)
+             * @example false
+             */
+            isSent: boolean;
+            /**
+             * @description Date d'envoi au drive (ATOM), null si la liste n'est pas envoyée
+             * @example null
+             */
+            sentAt?: string | null;
             /**
              * @description Date de création (ATOM)
              * @example 2026-10-12T10:00:00+02:00
@@ -1127,6 +1231,18 @@ export interface components {
              * @example g
              */
             symbol: string;
+            /**
+             * @description Ce que l'unité mesure : poids, volume, pièces ou conditionnement ; null si inconnu (cuillère, tranche…)
+             * @example WEIGHT
+             * @enum {string|null}
+             */
+            dimension?: "WEIGHT" | "VOLUME" | "COUNT" | "PACKAGE" | null;
+            /**
+             * Format: float
+             * @description Combien d'unités de base (g, ml, pièce) vaut l'unité, null si la dimension est inconnue
+             * @example 1000
+             */
+            baseFactor?: number | null;
         };
         ActiveShoppingListSummaryDTO: {
             /**
@@ -1283,6 +1399,16 @@ export interface components {
             unitSymbol: string;
             /** @description La ligne est cochée (déjà dans le caddie) */
             checked: boolean;
+            /**
+             * @description Identifiant stable de l'ingrédient (slug)
+             * @example oeuf
+             */
+            ingredientSlug: string;
+            /**
+             * @description Identifiant stable de l'unité d'achat (slug)
+             * @example gramme
+             */
+            unitSlug: string;
         };
         ShoppingListDepartmentDTO: {
             /**
@@ -1360,13 +1486,23 @@ export interface components {
              * @example ACTIVE
              * @enum {string}
              */
-            status: "ACTIVE" | "PAUSED" | "COMPLETED";
+            status: "ACTIVE" | "PAUSED" | "SENT" | "COMPLETED";
             /** @example true */
             isActive: boolean;
             /** @example false */
             isPaused: boolean;
             /** @example false */
             isCompleted: boolean;
+            /**
+             * @description La liste est envoyée au drive : elle n'est plus modifiable (statut `SENT`)
+             * @example false
+             */
+            isSent: boolean;
+            /**
+             * @description Date d'envoi au drive (ATOM), null si la liste n'est pas envoyée
+             * @example null
+             */
+            sentAt?: string | null;
             /**
              * @description Nombre de lignes d'ingrédient
              * @example 12
@@ -1506,6 +1642,38 @@ export interface components {
              * @enum {string}
              */
             status: "PENDING" | "ACTIVE" | "DISABLED";
+        };
+        DriveStoreDTO: {
+            /**
+             * @description Identifiant du magasin chez l'enseigne (chiffres, zéros initiaux conservés)
+             * @example 123456
+             */
+            id: string;
+            /**
+             * @description Nom du magasin tel que lu par l'agent, si connu
+             * @example Ville-Test
+             */
+            label?: string | null;
+            /**
+             * @description Adresse de base du magasin sur le site de l'enseigne
+             * @example https://exemple.leclercdrive.fr/magasin-123456-123456
+             */
+            baseUrl: string;
+        };
+        DriveSettingsDTO: {
+            /**
+             * @description Vrai si la fonction « envoyer au drive » est allumée (interrupteur `DRIVE_ENABLED`) ; faux, toutes les autres routes du drive répondent `404 DRIVE_DISABLED`
+             * @example true
+             */
+            enabled: boolean;
+            /**
+             * @description Enseigne du drive
+             * @example leclerc
+             * @enum {string}
+             */
+            retailer: "leclerc";
+            /** @description Magasin de l'utilisateur, `null` tant qu'il n'a pas été enregistré */
+            store?: components["schemas"]["DriveStoreDTO"] | null;
         };
     };
     responses: never;
@@ -1656,6 +1824,13 @@ export interface operations {
             };
             /** @description Ressource inconnue */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La liste est envoyée au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2167,7 +2342,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Corps de la requête invalide */
+            /** @description Corps de la requête invalide (dont une dimension sans facteur de base ou l'inverse, ou un facteur qui n'est pas strictement positif) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2806,6 +2981,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description La liste est envoyée au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description La version de la liste n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
             412: {
                 headers: {
@@ -2887,7 +3069,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Corps de la requête invalide */
+            /** @description Corps de la requête invalide (dont une dimension sans facteur de base ou l'inverse, ou un facteur qui n'est pas strictement positif) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3053,6 +3235,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description La liste est envoyée au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     put_api_plan_recipe: {
@@ -3166,6 +3355,115 @@ export interface operations {
             };
         };
     };
+    post_api_reopen_shopping_list: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Version (ETag) de la ressource lue par le client, entre guillemets. Absent : pas de contrôle (la dernière écriture gagne). Une autre version répond 412 (la ressource a été modifiée depuis la lecture) ; une modification simultanée détectée à l'enregistrement répond 409. ADR 0016. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Liste rouverte */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La ressource appartient à un autre utilisateur */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Liste inconnue, ou fonction drive coupée (message `DRIVE_DISABLED`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La liste n'est pas envoyée (message `SHOPPING_LIST_NOT_SENT`), ou elle a été enregistrée entre-temps par une autre requête */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La version de la liste n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    post_api_send_shopping_list: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Version (ETag) de la ressource lue par le client, entre guillemets. Absent : pas de contrôle (la dernière écriture gagne). Une autre version répond 412 (la ressource a été modifiée depuis la lecture) ; une modification simultanée détectée à l'enregistrement répond 409. ADR 0016. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Liste envoyée (ou déjà envoyée) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La ressource appartient à un autre utilisateur */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Liste inconnue, ou fonction drive coupée (message `DRIVE_DISABLED`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La liste n'est ni active ni déjà envoyée (message `SHOPPING_LIST_NOT_SENDABLE`), ou elle a été enregistrée entre-temps par une autre requête */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La version de la liste n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La liste est vide (message `SHOPPING_LIST_EMPTY`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     post_api_complete_shopping_list: {
         parameters: {
             query?: never;
@@ -3232,6 +3530,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description La liste est envoyée au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     post_api_uncheck_shopping_list_row: {
@@ -3261,6 +3566,13 @@ export interface operations {
             };
             /** @description Ressource inconnue */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La liste est envoyée au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3302,6 +3614,13 @@ export interface operations {
             };
             /** @description Ressource inconnue */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La liste est envoyée au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3686,6 +4005,62 @@ export interface operations {
             };
             /** @description Trop de demandes depuis cette adresse IP */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_api_get_drive_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description L'interrupteur et le magasin de l'utilisateur (`store: null` tant qu'il n'en a pas enregistré) ; `200` aussi quand la fonction est coupée (`enabled: false`) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriveSettingsDTO"];
+                };
+            };
+        };
+    };
+    put_api_save_drive_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DriveSettingsPayload"];
+            };
+        };
+        responses: {
+            /** @description Magasin enregistré */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide, ou magasin refusé (message `DRIVE_STORE_INVALID`) : adresse qui n'est pas celle d'un magasin de l'enseigne, identifiant différent de celui de l'adresse */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

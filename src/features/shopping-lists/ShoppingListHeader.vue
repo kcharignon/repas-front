@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -8,20 +8,40 @@ import UiButton from '@/design/UiButton.vue'
 import UiConfirmDialog from '@/design/UiConfirmDialog.vue'
 import UiDialog from '@/design/UiDialog.vue'
 import UiField from '@/design/UiField.vue'
+import UiLinkButton from '@/design/UiLinkButton.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
-import { useChangeListStatus, useDeleteShoppingList, useRenameShoppingList } from './queries'
+import { useDriveSettings } from '@/features/drive/queries'
+import { useOnline } from '@/offline/useOnline'
+import {
+  useChangeListStatus,
+  useDeleteShoppingList,
+  useRenameShoppingList,
+  useReopenShoppingList,
+  useSendShoppingList,
+} from './queries'
 
 const props = defineProps<{ list: ShoppingList }>()
 
-const { t } = useI18n()
+const { t, d } = useI18n()
 const router = useRouter()
+const online = useOnline()
 
 const status = useChangeListStatus()
 const rename = useRenameShoppingList()
 const remove = useDeleteShoppingList()
+const send = useSendShoppingList()
+const reopen = useReopenShoppingList()
+
+// L'envoi n'est proposé que si la fonction est allumée, pour une liste en cours qui a des articles.
+const settings = useDriveSettings(() => props.list.isActive)
+const canSend = computed(
+  () => props.list.isActive && props.list.rowCount > 0 && settings.data.value?.enabled === true,
+)
 
 const renaming = ref(false)
 const deleting = ref(false)
+const sending = ref(false)
+const reopening = ref(false)
 const name = ref('')
 
 function openRename() {
@@ -45,15 +65,39 @@ function confirmDelete() {
   })
 }
 
+function confirmSend() {
+  send.mutate(
+    { id: props.list.id, version: props.list.version },
+    {
+      onSuccess: async () => {
+        sending.value = false
+        await router.push({ name: 'drive-send', params: { listId: props.list.id } })
+      },
+      onError: () => (sending.value = false),
+    },
+  )
+}
+
+function confirmReopen() {
+  reopen.mutate(
+    { id: props.list.id, version: props.list.version },
+    { onSettled: () => (reopening.value = false) },
+  )
+}
+
 const statusLabel = (list: ShoppingList) =>
-  list.isActive ? 'active' : list.isPaused ? 'paused' : 'completed'
+  list.isActive ? 'active' : list.isPaused ? 'paused' : list.isSent ? 'sent' : 'completed'
 </script>
 
 <template>
   <header class="flex flex-col gap-3">
     <div>
       <p class="text-sm font-bold text-primary">
-        {{ t(`shoppingList.status.${statusLabel(list)}`) }}
+        {{
+          list.isSent && list.sentAt
+            ? t('shoppingList.sentOn', { date: d(new Date(list.sentAt), 'long') })
+            : t(`shoppingList.status.${statusLabel(list)}`)
+        }}
       </p>
       <h1 class="font-display text-3xl leading-tight font-bold md:text-4xl">
         {{ list.displayName }}
@@ -64,29 +108,50 @@ const statusLabel = (list: ShoppingList) =>
     </div>
 
     <div class="flex flex-wrap gap-2">
-      <UiButton variant="secondary" @click="openRename">{{ t('shoppingList.rename') }}</UiButton>
-      <UiButton
-        v-if="list.isActive"
-        variant="secondary"
-        :disabled="status.isPending.value"
-        @click="status.mutate({ id: list.id, action: 'pause' })"
-      >
-        {{ t('shoppingList.pause') }}
-      </UiButton>
-      <UiButton
-        v-if="list.isActive"
-        :disabled="status.isPending.value"
-        @click="status.mutate({ id: list.id, action: 'complete' })"
-      >
-        {{ t('shoppingList.complete') }}
-      </UiButton>
-      <UiButton
-        v-if="!list.isActive"
-        :disabled="status.isPending.value"
-        @click="status.mutate({ id: list.id, action: 'activate' })"
-      >
-        {{ t('shoppingList.activate') }}
-      </UiButton>
+      <!-- Liste envoyée au drive : lecture seule, seules la reprise de l'envoi, la fin, la réouverture et la suppression sont permises. -->
+      <template v-if="list.isSent">
+        <UiLinkButton :to="{ name: 'drive-send', params: { listId: list.id } }">
+          {{ t('shoppingList.resumeSend') }}
+        </UiLinkButton>
+        <UiButton
+          variant="secondary"
+          :disabled="status.isPending.value"
+          @click="status.mutate({ id: list.id, action: 'complete' })"
+        >
+          {{ t('shoppingList.complete') }}
+        </UiButton>
+        <UiButton variant="secondary" :disabled="!online" @click="reopening = true">
+          {{ t('shoppingList.reopen') }}
+        </UiButton>
+      </template>
+      <template v-else>
+        <UiButton variant="secondary" @click="openRename">{{ t('shoppingList.rename') }}</UiButton>
+        <UiButton
+          v-if="list.isActive"
+          variant="secondary"
+          :disabled="status.isPending.value"
+          @click="status.mutate({ id: list.id, action: 'pause' })"
+        >
+          {{ t('shoppingList.pause') }}
+        </UiButton>
+        <UiButton
+          v-if="list.isActive"
+          :disabled="status.isPending.value"
+          @click="status.mutate({ id: list.id, action: 'complete' })"
+        >
+          {{ t('shoppingList.complete') }}
+        </UiButton>
+        <UiButton v-if="canSend" variant="accent" :disabled="!online" @click="sending = true">
+          {{ t('shoppingList.send') }}
+        </UiButton>
+        <UiButton
+          v-if="!list.isActive"
+          :disabled="status.isPending.value"
+          @click="status.mutate({ id: list.id, action: 'activate' })"
+        >
+          {{ t('shoppingList.activate') }}
+        </UiButton>
+      </template>
       <UiButton variant="ghost" @click="deleting = true">{{ t('common.delete') }}</UiButton>
     </div>
 
@@ -107,6 +172,26 @@ const statusLabel = (list: ShoppingList) =>
         </div>
       </form>
     </UiDialog>
+
+    <UiConfirmDialog
+      v-model:open="sending"
+      variant="primary"
+      :title="t('shoppingList.sendTitle')"
+      :description="t('shoppingList.sendHelp')"
+      :confirm-label="t('shoppingList.send')"
+      :pending="send.isPending.value"
+      @confirm="confirmSend"
+    />
+
+    <UiConfirmDialog
+      v-model:open="reopening"
+      variant="primary"
+      :title="t('shoppingList.reopenTitle')"
+      :description="t('shoppingList.reopenHelp')"
+      :confirm-label="t('shoppingList.reopen')"
+      :pending="reopen.isPending.value"
+      @confirm="confirmReopen"
+    />
 
     <UiConfirmDialog
       v-model:open="deleting"

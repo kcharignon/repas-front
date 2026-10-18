@@ -201,6 +201,27 @@ android-lab-test: ## Run only the Kotlin unit tests of the throwaway Android tes
 android-lab-hash: ## Note the SHA-384 of drive-agent/lab/published/lab.js in drive-agent/android-lab/lab.js.sha384 (after a deliberate change of the lab)
 	@$(RUN) npm run --silent lab:android-hash -- --write
 
+## —— Android emulator 🤖 ————————————————————————————————————————————————————
+.PHONY: android-emulator-up android-emulator-down android-emulator-status android-smoke
+
+# L'émulateur Android de test (DRV-319, android/emulator/) : sans fenêtre, accéléré par KVM (/dev/kvm), SDK et AVD dans le volume Docker
+# `android-emulator-sdk` (téléchargés une seule fois). Cibles manuelles : la CI n'a pas KVM, `make check` n'y touche pas. Mode d'emploi : android/README.md.
+ANDROID_EMULATOR_CTL = DOCKER_COMPOSE="$(DOCKER_COMPOSE)" ./android/emulator/ctl.sh
+
+android-emulator-up: ## Start the Android test emulator (needs /dev/kvm) and wait until it has booted; the first run downloads the SDK (about 2 GB)
+	@$(ANDROID_EMULATOR_CTL) up
+
+android-emulator-down: ## Stop the Android test emulator (the SDK and the AVD stay in their Docker volume)
+	@$(ANDROID_EMULATOR_CTL) down
+
+android-emulator-status: ## Say whether KVM, the SDK volume and the emulator are ready (exit code 0 only when it has booted)
+	@$(ANDROID_EMULATOR_CTL) status
+
+android-smoke: ## Smoke test: build the debug APK, start the emulator if needed, run the app on a local test page; report and screenshots in android/dist/smoke/
+	@$(MAKE) --no-print-directory android
+	@$(MAKE) --no-print-directory android-emulator-up
+	@DOCKER_COMPOSE="$(DOCKER_COMPOSE)" ./android/emulator/smoke.sh
+
 ## —— Production image 📦 ————————————————————————————————————————————————————
 .PHONY: prod prod-stop
 

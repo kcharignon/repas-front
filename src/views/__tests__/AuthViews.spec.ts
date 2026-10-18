@@ -44,7 +44,10 @@ describe('LoginView', () => {
     const { wrapper, router } = await mountView(LoginView, '/connexion')
 
     await wrapper.find('form').trigger('submit')
-    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('shopping-list'))
+    // La page de la liste est chargée à la demande : sa première compilation prend jusqu'à une demi-seconde, plus sous charge.
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('shopping-list'), {
+      timeout: 5000,
+    })
   })
 
   it('dit « Identifiants invalides. » sur un 401 et reste sur la page', async () => {

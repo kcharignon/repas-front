@@ -75,6 +75,28 @@ describe('messageForFailure', () => {
     expect(isStale(new Error('x'))).toBe(false)
   })
 
+  it.each([
+    [404, 'DRIVE_DISABLED', 'L’envoi au drive n’est pas disponible pour le moment.'],
+    [
+      409,
+      'SHOPPING_LIST_SENT',
+      'Cette liste vient d’être envoyée au drive : elle n’est plus modifiable.',
+    ],
+    [409, 'SHOPPING_LIST_NOT_SENT', 'Cette liste n’est plus envoyée au drive.'],
+    [409, 'SHOPPING_LIST_NOT_SENDABLE', 'Seule une liste en cours peut être envoyée au drive.'],
+    [
+      422,
+      'SHOPPING_LIST_EMPTY',
+      'La liste est vide : ajoutez des articles avant de l’envoyer au drive.',
+    ],
+  ])('traduit le code du drive %i %s en français simple', (status, code, expected) => {
+    expect(messageForFailure(new ApiError(status, code))).toBe(expected)
+  })
+
+  it('un drive coupé (404 DRIVE_DISABLED) demande aussi de relire les réglages', () => {
+    expect(isStale(new ApiError(404, 'DRIVE_DISABLED'))).toBe(true)
+  })
+
   it('notifyFailure pousse le message dans le magasin', () => {
     vi.useFakeTimers()
     setActivePinia(createPinia())

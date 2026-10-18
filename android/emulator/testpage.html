@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page locale de test</title>
+<style>
+  body { font: 18px/1.4 system-ui, sans-serif; margin: 24px; color: #1d2b1f; background: #fff; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  p.note { margin: 0 0 20px; color: #4a5a4c; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { padding: 10px 12px; margin-bottom: 8px; border-radius: 8px; background: #f1f1ec; }
+  li.ok { border-left: 8px solid #2e7d32; }
+  li.ko { border-left: 8px solid #c62828; }
+  li.wait { border-left: 8px solid #9e9e9e; }
+</style>
+</head>
+<body>
+<h1>Page locale de test</h1>
+<p class="note">Faux site de l'émulateur (DRV-319) : aucune donnée d'enseigne. L'application doit y avoir mis son pont et son agent.</p>
+<ul id="checks"></ul>
+<script>
+(function () {
+  'use strict'
+  var list = document.getElementById('checks')
+  var rows = {}
+
+  function show(key, label, ok, detail) {
+    var row = rows[key]
+    if (!row) {
+      row = rows[key] = document.createElement('li')
+      list.appendChild(row)
+    }
+    row.className = ok === null ? 'wait' : ok ? 'ok' : 'ko'
+    row.textContent = label + ' : ' + (ok === null ? 'en attente' : ok ? 'oui' : 'non') + (detail ? ' (' + detail + ')' : '')
+  }
+
+  function report(item) {
+    try {
+      fetch('/__report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })
+    } catch (e) {
+      /* le test de fumée verra l'absence de relevé */
+    }
+  }
+
+  var host = window.repasHost
+  var facts = {
+    kind: 'load',
+    hostname: location.hostname,
+    topFrame: window.top === window,
+    bridge: !!host && host.isRepasBridge === true,
+    debug: !!host && host.isDebug === true,
+    frozen: !!host && Object.isFrozen(host),
+    desktopAgent: !/Mobile/i.test(navigator.userAgent),
+  }
+  show('bridge', 'Le pont repasHost est en place (injection.js)', facts.bridge)
+  show('debug', 'Le pont annonce la variante de débogage', facts.debug)
+  show('frozen', 'Le pont est gelé', facts.frozen)
+  show('desktop', 'Mode ordinateur (agent utilisateur sans « Mobile »)', facts.desktopAgent)
+  show('message', 'Un message de l’application est arrivé', null)
+  show('agent', 'L’agent a affiché son interface', null)
+  report(facts)
+
+  if (facts.bridge) {
+    var baseline = document.documentElement.children.length
+    host.addEventListener('message', function (event) {
+      var command = ''
+      try {
+        var parsed = JSON.parse(event.data)
+        command = String(parsed.command || parsed.type || '')
+      } catch (e) {
+        command = '?'
+      }
+      show('message', 'Un message de l’application est arrivé', true, command)
+      report({ kind: 'message', command: command })
+      // L'agent monte son interface (un élément ajouté à la page, au contenu fermé) à la première commande qui en demande une.
+      var tries = 0
+      var timer = setInterval(function () {
+        tries += 1
+        var mounted = document.documentElement.children.length > baseline
+        if (mounted || tries >= 20) {
+          clearInterval(timer)
+          show('agent', 'L’agent a affiché son interface', mounted)
+          report({ kind: 'agent-ui', mounted: mounted })
+        }
+      }, 250)
+    })
+  }
+})()
+</script>
+</body>
+</html>
