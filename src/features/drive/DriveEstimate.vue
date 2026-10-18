@@ -8,7 +8,7 @@ import { ApiError } from '@/api'
 import type { DriveEstimateLine } from '@/api'
 import { hasFailed } from '@/api/query'
 import UiButton from '@/design/UiButton.vue'
-import { messageForFailure } from '@/notifications/failures'
+import { isRateLimited, messageForFailure } from '@/notifications/failures'
 import { useOnline } from '@/offline/useOnline'
 import { formatEuros, groupLines, isLowCoverage, toBuy } from './estimate'
 import { useDriveEstimate, useDriveSettings } from './queries'
@@ -37,6 +37,12 @@ const driveOff = computed(
 )
 const notConfigured = computed(
   () => failure.value instanceof ApiError && failure.value.message === 'DRIVE_NOT_CONFIGURED',
+)
+// Ce qui est dit quand l'estimation ne vient pas : le magasin manque, trop de lectures en peu de temps (passager), ou rien de précis
+const failureText = computed(() =>
+  notConfigured.value || isRateLimited(failure.value)
+    ? messageForFailure(failure.value)
+    : t('driveEstimate.unavailable'),
 )
 // Hors connexion, sans estimation déjà relue : rien à dire (la liste, elle, reste lisible)
 const visible = computed(
@@ -91,7 +97,7 @@ const linkClass =
 
     <template v-else-if="failure !== null">
       <p role="alert" class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft">
-        {{ notConfigured ? messageForFailure(failure) : t('driveEstimate.unavailable') }}
+        {{ failureText }}
       </p>
       <RouterLink v-if="notConfigured" :to="{ name: 'drive-settings' }" :class="linkClass">
         {{ t('driveEstimate.settings') }}

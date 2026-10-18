@@ -3,6 +3,7 @@
 import { expect, test } from '@playwright/test'
 
 import { fakeApp, fakeBack, scan } from './support/drive'
+import { fakeDriveBack } from './support/driveBack'
 
 for (const colorScheme of ['light', 'dark'] as const) {
   test(`dans un navigateur : l’installation, le dépannage au clavier et le mode assisté, thème ${colorScheme}`, async ({
@@ -58,8 +59,50 @@ test('dans l’application : annonce la version et ne propose pas le mode assist
   await page.goto('/drive/aide')
 
   await expect(page.getByText('Vous êtes dans l’application Repas, version 1.0.0.')).toBeVisible()
+  // Déjà installée : le titre ne propose pas de l'installer
+  await expect(page.getByRole('heading', { level: 1, name: 'L’application Repas' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: /^Installer/ })).toHaveCount(0)
   await expect(
     page.getByRole('heading', { name: 'Sans l’application : le mode assisté' }),
   ).toHaveCount(0)
+  expect((await scan(page)).violations).toEqual([])
+})
+
+// L'entrée « Application » de « Mon compte » : installer dans un navigateur, mettre à jour dans l'application (qu'on n'a pas à installer)
+test('« Mon compte », dans un navigateur : propose d’installer l’application', async ({ page }) => {
+  await fakeDriveBack(page)
+  await page.goto('/moi')
+
+  const entry = page.getByRole('link', { name: /Installer l’application Android/ })
+  await expect(entry).toBeVisible()
+  await expect(page.getByRole('link', { name: /Mettre à jour l’application/ })).toHaveCount(0)
+  expect((await scan(page)).violations).toEqual([])
+
+  await entry.click()
+  await expect(page).toHaveURL(/\/drive\/aide$/)
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Installer l’application Repas' }),
+  ).toBeVisible()
+})
+
+test('« Mon compte », dans l’application : propose de la mettre à jour et mène à cette rubrique', async ({
+  page,
+}) => {
+  await fakeDriveBack(page)
+  await fakeApp(page)
+  await page.goto('/moi')
+
+  const entry = page.getByRole('link', { name: /Mettre à jour l’application/ })
+  await expect(entry).toBeVisible()
+  await expect(page.getByText('Mode d’emploi pour mettre à jour l’application.')).toBeVisible()
+  await expect(page.getByRole('link', { name: /Installer l’application Android/ })).toHaveCount(0)
+  expect((await scan(page)).violations).toEqual([])
+
+  await entry.click()
+  await expect(page).toHaveURL(/\/drive\/aide#mise-a-jour$/)
+  await expect(page.getByRole('heading', { level: 1, name: 'L’application Repas' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { level: 2, name: 'Mettre à jour l’application' }),
+  ).toBeInViewport()
   expect((await scan(page)).violations).toEqual([])
 })

@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import { focusManager, onlineManager, QueryObserver } from '@tanstack/vue-query'
 import { ref } from 'vue'
 
 import { ApiError } from '@/api'
@@ -65,6 +66,51 @@ describe('createQueryClient', () => {
     expect(retry(0, new ApiError(404, 'x'))).toBe(false)
     expect(retry(0, new ApiError(500, 'x'))).toBe(true)
     expect(retry(2, new ApiError(500, 'x'))).toBe(false)
+  })
+
+  describe('au retour du focus ou du réseau', () => {
+    afterEach(() => {
+      focusManager.setFocused(undefined)
+      onlineManager.setOnline(true)
+    })
+
+    /** Combien de fois la lecture est rejouée toute seule après son échec, quand le focus puis le réseau reviennent. */
+    async function rejoue(error: Error): Promise<number> {
+      const client = createQueryClient()
+      client.mount()
+      let attempts = 0
+      const observer = new QueryObserver(client, {
+        queryKey: ['lecture', error.message],
+        queryFn: () => {
+          attempts++
+
+          return Promise.reject(error)
+        },
+        retry: false,
+      })
+      const stop = observer.subscribe(() => undefined)
+      await vi.waitFor(() => expect(observer.getCurrentResult().isError).toBe(true))
+      expect(attempts).toBe(1)
+
+      focusManager.setFocused(true)
+      await vi.waitFor(() => expect(observer.getCurrentResult().isFetching).toBe(false))
+      onlineManager.setOnline(false)
+      onlineManager.setOnline(true)
+      await vi.waitFor(() => expect(observer.getCurrentResult().isFetching).toBe(false))
+      stop()
+      client.unmount()
+      client.clear()
+
+      return attempts - 1
+    }
+
+    it('ne relit pas toute seule une lecture que le back vient de refuser pour trop de demandes (429)', async () => {
+      expect(await rejoue(new ApiError(429, 'DRIVE_RATE_LIMITED', 1))).toBe(0)
+    })
+
+    it('relit une lecture tombée en panne (5xx), puisque la panne peut être finie', async () => {
+      expect(await rejoue(new ApiError(500, 'boom'))).toBeGreaterThan(0)
+    })
   })
 
   it('ne rejoue pas une lecture sans réseau : elle échoue tout de suite', () => {

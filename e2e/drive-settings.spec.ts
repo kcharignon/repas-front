@@ -106,6 +106,10 @@ test('dans l’application : montre sa version et que le drive est prêt', async
   await expect(page.getByText('Version 0.5.0')).toBeVisible()
   await expect(page.getByText('Le drive est prêt dans cette application.')).toBeVisible()
   await expect(page.getByText('Vous utilisez Repas dans un navigateur')).toHaveCount(0)
+  // Déjà installée : l'aide ne propose pas de l'installer, elle mène à la mise à jour
+  await expect(page.getByRole('link', { name: 'Aide d’installation' })).toHaveCount(0)
+  await page.getByRole('link', { name: 'Mettre à jour l’application' }).click()
+  await expect(page).toHaveURL(/\/drive\/aide#mise-a-jour$/)
 })
 
 /**

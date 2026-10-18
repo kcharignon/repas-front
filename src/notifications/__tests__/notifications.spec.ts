@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { ApiError } from '@/api'
-import { isStale, messageForFailure, notifyFailure } from '@/notifications/failures'
+import { isRateLimited, isStale, messageForFailure, notifyFailure } from '@/notifications/failures'
 import { useNotificationsStore } from '@/notifications/store'
 
 describe('notifications', () => {
@@ -59,6 +59,44 @@ describe('messageForFailure', () => {
     [300, 'Trop de requêtes. Réessayez dans 5 minutes'],
   ])('annonce le délai d’un 429 (%i s)', (seconds, expected) => {
     expect(messageForFailure(new ApiError(429, 'x', seconds))).toBe(expected)
+  })
+
+  it.each([
+    [null, 'une minute'],
+    [1, 'une minute'],
+    [59, 'une minute'],
+    [60, 'une minute'],
+    [61, '2 minutes'],
+    [300, '5 minutes'],
+  ])(
+    'DRIVE_RATE_LIMITED (Retry-After %s) : passager, au moins une minute, jamais moins que le délai annoncé',
+    (seconds, wait) => {
+      expect(messageForFailure(new ApiError(429, 'DRIVE_RATE_LIMITED', seconds))).toBe(
+        `Trop de demandes en peu de temps. Attendez ${wait}, puis réessayez.`,
+      )
+    },
+  )
+
+  it('DRIVE_RATE_LIMITED se distingue des plafonds de quantité et du refus d’une préférence', () => {
+    const texts = [
+      messageForFailure(new ApiError(429, 'DRIVE_RATE_LIMITED', 1)),
+      messageForFailure(new ApiError(422, 'DRIVE_LIMIT_REACHED')),
+      messageForFailure(new ApiError(422, 'DRIVE_CHOICE_INVALID')),
+    ]
+
+    expect(new Set(texts).size).toBe(3)
+    expect(texts[0]).not.toContain('demain')
+  })
+
+  it('un 429 est un refus passager, un autre échec non', () => {
+    expect(isRateLimited(new ApiError(429, 'DRIVE_RATE_LIMITED', 1))).toBe(true)
+    expect(isRateLimited(new ApiError(429, 'x'))).toBe(true)
+    expect(isRateLimited(new ApiError(422, 'DRIVE_LIMIT_REACHED'))).toBe(false)
+    expect(isRateLimited(new Error('x'))).toBe(false)
+  })
+
+  it('un 429 ne demande pas de relire l’écran : la ressource n’a pas changé', () => {
+    expect(isStale(new ApiError(429, 'DRIVE_RATE_LIMITED', 1))).toBe(false)
   })
 
   it('traite une erreur inconnue comme une erreur générale', () => {

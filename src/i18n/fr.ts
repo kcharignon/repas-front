@@ -385,6 +385,9 @@ export default {
       "Modifié ailleurs entre-temps : la page vient d'être rechargée, refaites votre action.",
     tooMany:
       'Trop de requêtes. Réessayez dans {minutes} minute | Trop de requêtes. Réessayez dans {minutes} minutes',
+    // `DRIVE_RATE_LIMITED` (429, DRV-615) : passager, distinct des plafonds de quantité ; `{wait}` vaut au moins une minute
+    driveRateLimited: 'Trop de demandes en peu de temps. Attendez {wait}, puis réessayez.',
+    driveWait: 'une minute | {minutes} minutes',
     driveDisabled: 'L’envoi au drive n’est pas disponible pour le moment.',
     listSent: 'Cette liste vient d’être envoyée au drive : elle n’est plus modifiable.',
     listNotSent: 'Cette liste n’est plus envoyée au drive.',
@@ -549,6 +552,9 @@ export default {
       saving: 'Enregistrement de vos choix…',
       saved: 'Vos choix sont enregistrés pour les prochains envois.',
       failed: 'Vos choix n’ont pas pu être enregistrés. {reason}',
+      // Trop de demandes (429, DRV-615) : le résultat reste en mémoire sur cette page, rien n'est perdu
+      rateLimited:
+        'Vos choix ne sont pas encore enregistrés, mais ils sont gardés sur cette page : rien n’est perdu. {reason}',
       retry: 'Réessayer l’enregistrement',
     },
     counts: {
@@ -639,6 +645,8 @@ export default {
     appMissing:
       'Vous utilisez Repas dans un navigateur. Pour envoyer une liste au drive, installez l’application Repas sur votre téléphone.',
     help: 'Aide d’installation',
+    // Dans l'application elle-même : elle est installée, l'aide sert à la mettre à jour
+    helpInApp: 'Mettre à jour l’application',
     products: 'Produits mémorisés',
     productsWith: 'Ingrédients avec des produits',
     productsRejected: 'Ingrédients avec des produits refusés',
@@ -687,11 +695,18 @@ export default {
     title: 'Installer l’application Repas',
     intro:
       'L’application Android « Repas » contient tout Repas : vos recettes, vos listes de courses et l’envoi de la liste au drive Leclerc. Elle s’installe en quelques minutes, sans passer par Google Play.',
+    // Dans l'application elle-même : elle est déjà installée, la page sert à la mettre à jour et à la dépanner
+    titleInApp: 'L’application Repas',
+    introInApp:
+      'Vous utilisez déjà l’application Android « Repas ». Cette page explique comment la mettre à jour, lancer un envoi au drive Leclerc, et que faire en cas de problème.',
     back: 'Retour à la liste',
     entry: {
       title: 'Application',
       link: 'Installer l’application Android',
       help: 'Le mode d’emploi pour installer et mettre à jour l’application Repas.',
+      // Dans l'application : on ne propose pas de l'installer, elle l'est déjà
+      updateLink: 'Mettre à jour l’application',
+      updateHelp: 'Mode d’emploi pour mettre à jour l’application.',
     },
     contents: 'Sur cette page',
     state: {
