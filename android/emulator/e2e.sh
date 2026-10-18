@@ -293,6 +293,7 @@ wait_until 70 agent_screen 'Prêt à remplir ton panier' || ko "le récapitulati
 tap 'text="Commencer"' || ko "le bouton « Commencer » est introuvable"
 if wait_until 60 ui_has 'Envoi interrompu'; then ok "l'agent s'interrompt : « Envoi interrompu »"; else ko "l'agent n'a pas détecté le changement"; fi
 check "l'agent dit que Leclerc a modifié son site" ui_has 'Leclerc a modifié son site'
+check "le conseil nomme l'application Repas (et non « Repas Drive »)" ui_has "application Repas, puis"
 sleep 1
 screenshot e13-site-change
 if tap 'text="Retourner dans Repas"' && wait_until 20 result_has "$RUN_CHANGED" error ', "errorCode": "CONTRACT_CHANGED"'; then
