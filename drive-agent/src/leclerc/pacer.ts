@@ -34,9 +34,15 @@ export function isChallenge(text: string): boolean {
   return /captcha-delivery\.com/i.test(text)
 }
 
-/** Une adresse de l'hôte courant : un chemin qui commence par un seul `/`, jamais `//hôte` ni `https://…`. */
+/**
+ * Une adresse de l'hôte courant : un chemin qui commence par un seul `/`, jamais `//hôte` ni `https://…`. Un navigateur lit « \ » comme
+ * « / » et ignore les tabulations et retours à la ligne d'une adresse : `/\hôte` et `/<tabulation>/hôte` sont donc refusés aussi.
+ */
 function assertSameHost(url: string): void {
-  if (!/^\/(?!\/)/.test(url)) throw new Error('Une requête ne part que vers l’hôte de la page.')
+  const seen = url.replace(/[\t\n\r]/g, '')
+  if (!url.startsWith('/') || !/^\/(?![/\\])/.test(seen)) {
+    throw new Error('Une requête ne part que vers l’hôte de la page.')
+  }
 }
 
 /**
