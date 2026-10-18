@@ -411,6 +411,9 @@ export default {
     storeEnding: 'Magasin …{ending}',
     loading: 'Préparation de l’envoi…',
     retry: 'Réessayer',
+    offHelp:
+      'Une liste envoyée au drive ne se modifie plus. Vous pouvez la rouvrir pour la modifier.',
+    offHelpOffline: 'Hors connexion : la liste se rouvrira quand le réseau sera revenu.',
     intro:
       'Vérifiez la liste, puis ouvrez le drive : le panier de Leclerc se remplit avec les produits retenus, puis vous revenez ici avec un récapitulatif. Connectez-vous à Leclerc si besoin.',
     counts: {

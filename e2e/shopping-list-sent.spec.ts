@@ -88,6 +88,9 @@ async function fakeBack(page: Page, initial: Status = 'ACTIVE', enabled = true) 
               baseUrl: 'https://courses-test.leclercdrive.fr/magasin-123456-123456',
             },
           })
+        case 'GET /api/v1/drive/plans/l1':
+          // Interrupteur coupé : toutes les routes du drive répondent 404 DRIVE_DISABLED (hors réouverture d'une liste)
+          return reply(route, { error: { message: enabled ? 'inconnu' : 'DRIVE_DISABLED' } }, 404)
         case 'POST /api/v1/shopping-lists/l1/send':
           status = 'SENT'
           return reply(route)
@@ -154,6 +157,55 @@ test('fonction coupée (retour arrière) : une liste envoyée se rouvre, sans pr
   for (const box of await page.getByRole('checkbox').all()) await expect(box).toBeEnabled()
   await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toHaveCount(0)
 })
+
+test('fonction coupée : « Reprendre l’envoi » dit que l’envoi n’est pas disponible, sans l’ouvrir, et laisse rouvrir la liste', async ({
+  page,
+}) => {
+  const received = await fakeBack(page, 'SENT', false)
+  await page.goto('/listes/l1')
+  await page.getByRole('link', { name: 'Reprendre l’envoi' }).click()
+  await expect(page).toHaveURL(/\/drive\/envoi\/l1$/)
+
+  // L'écran répond « pas disponible » ; ni « Ouvrir le drive » ni « Envoyer au drive », mais « Rouvrir la liste »
+  await expect(page.getByRole('alert')).toContainText(
+    'L’envoi au drive n’est pas disponible pour le moment.',
+  )
+  await expect(page.getByRole('button', { name: 'Rouvrir la liste' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ouvrir le drive' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toHaveCount(0)
+  expect(received).not.toContain('POST /api/v1/shopping-lists/l1/reopen')
+
+  // Même confirmation que sur l'écran de la liste, puis retour à la liste, de nouveau modifiable
+  await page.getByRole('button', { name: 'Rouvrir la liste' }).click()
+  await expect(page.getByRole('dialog')).toContainText('Le panier Leclerc ne sera pas vidé.')
+  await page.getByRole('dialog').getByRole('button', { name: 'Rouvrir la liste' }).click()
+  await expect(page).toHaveURL(/\/listes\/l1$/)
+  await expect(page.getByText('En cours')).toBeVisible()
+  expect(received).toContain('POST /api/v1/shopping-lists/l1/reopen')
+  await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toHaveCount(0)
+})
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`« Reprendre l’envoi » interrupteur coupé et sa confirmation sont accessibles, thème ${colorScheme}`, async ({
+    page,
+  }) => {
+    await fakeBack(page, 'SENT', false)
+    await page.emulateMedia({ colorScheme })
+    await page.goto('/drive/envoi/l1')
+    await expect(page.getByRole('button', { name: 'Rouvrir la liste' })).toBeVisible()
+    const scan = () =>
+      new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+        .exclude('.vue-devtools__anchor-btn')
+        .analyze()
+
+    expect((await scan()).violations).toEqual([])
+
+    await page.getByRole('button', { name: 'Rouvrir la liste' }).click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    expect((await scan()).violations).toEqual([])
+  })
+}
 
 for (const colorScheme of ['light', 'dark'] as const) {
   test(`la liste envoyée et sa confirmation sont accessibles, thème ${colorScheme}`, async ({

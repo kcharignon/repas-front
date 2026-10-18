@@ -9,7 +9,7 @@ import { hasFailed } from '@/api/query'
 import UiButton from '@/design/UiButton.vue'
 import UiConfirmDialog from '@/design/UiConfirmDialog.vue'
 import UiLinkButton from '@/design/UiLinkButton.vue'
-import { useReopenShoppingList } from '@/features/shopping-lists/queries'
+import { useReopenShoppingList, useShoppingList } from '@/features/shopping-lists/queries'
 import { messageForFailure } from '@/notifications/failures'
 import { useOnline } from '@/offline/useOnline'
 import { DriveBridgeError, driveBridge } from './bridge'
@@ -101,6 +101,34 @@ onMounted(() => {
 
 const planError = computed(() => (hasFailed(plan) ? messageForFailure(plan.error.value) : null))
 
+// Fonction coupée (retour arrière) : le plan répond « pas disponible », mais une liste restée envoyée doit pouvoir se rouvrir (la
+// réouverture, elle, reste permise interrupteur coupé). Le plan n'a pas pu donner la version : on lit la liste, et seulement alors.
+const driveOff = computed(
+  () =>
+    hasFailed(plan) &&
+    plan.error.value instanceof ApiError &&
+    plan.error.value.message === 'DRIVE_DISABLED',
+)
+const sentList = useShoppingList(
+  () => listId.value,
+  () => driveOff.value,
+)
+const canReopenWhenOff = computed(() => driveOff.value && sentList.data.value?.isSent === true)
+/** La confirmation : celle de l'écran de la liste quand le drive est coupé, celle de l'attente du retour sinon. */
+const reopenCopy = computed(() =>
+  driveOff.value
+    ? {
+        title: t('shoppingList.reopenTitle'),
+        description: t('shoppingList.reopenHelp'),
+        label: t('shoppingList.reopen'),
+      }
+    : {
+        title: t('driveSend.waiting.reopenTitle'),
+        description: t('driveSend.waiting.reopenHelp'),
+        label: t('driveSend.waiting.reopenList'),
+      },
+)
+
 function failureText(error: unknown): string {
   if (!(error instanceof DriveBridgeError)) return t('driveSend.failure.invalidPlan')
   switch (error.code) {
@@ -145,7 +173,7 @@ function abandon() {
 }
 
 function confirmReopenList() {
-  const version = plan.data.value?.listVersion
+  const version = plan.data.value?.listVersion ?? sentList.data.value?.version
   if (version === undefined) return
   reopen.mutate(
     { id: listId.value, version },
@@ -306,12 +334,19 @@ function confirmReopenList() {
       <p role="alert" class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft">
         {{ planError }}
       </p>
+      <p v-if="canReopenWhenOff" class="max-w-prose text-muted">{{ t('driveSend.offHelp') }}</p>
       <div class="flex flex-wrap gap-2">
+        <UiButton v-if="canReopenWhenOff" :disabled="!online" @click="reopening = true">
+          {{ t('shoppingList.reopen') }}
+        </UiButton>
         <UiButton variant="secondary" @click="plan.refetch()">{{ t('driveSend.retry') }}</UiButton>
         <UiButton v-if="waiting" variant="ghost" @click="abandon">
           {{ t('driveSend.elsewhere.abandon') }}
         </UiButton>
       </div>
+      <p v-if="canReopenWhenOff && !online" class="font-semibold">
+        {{ t('driveSend.offHelpOffline') }}
+      </p>
     </template>
 
     <p v-else class="text-muted" role="status">{{ t('driveSend.loading') }}</p>
@@ -319,9 +354,9 @@ function confirmReopenList() {
     <UiConfirmDialog
       v-model:open="reopening"
       variant="primary"
-      :title="t('driveSend.waiting.reopenTitle')"
-      :description="t('driveSend.waiting.reopenHelp')"
-      :confirm-label="t('driveSend.waiting.reopenList')"
+      :title="reopenCopy.title"
+      :description="reopenCopy.description"
+      :confirm-label="reopenCopy.label"
       :pending="reopen.isPending.value"
       @confirm="confirmReopenList"
     />
