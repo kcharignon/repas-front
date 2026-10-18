@@ -1,10 +1,16 @@
 // L'état de reprise d'un passage, dans `sessionStorage` sous `repas:run:<runId>` : les issues des lignes déjà faites et la phase.
 // Aucune donnée personnelle : des identifiants de lignes et de produits, rien d'autre. Une erreur du stockage (plein, interdit) ne gêne
 // jamais le passage : on perd seulement la reprise.
-import { LINE_OUTCOMES, type ResultLine } from '../../protocol'
+import { LIMITS, LINE_OUTCOMES, type ResultLine } from '../../protocol'
+import type { ContentChange } from './phase-a'
 import type { StorageLike } from './types'
 
 export const RUN_PREFIX = 'repas:run:'
+
+/** Une ligne dont le nombre de produits a été recalculé sur le contenu lu en direct (DRV-613), gardée pour l'écran de fin. */
+export interface RecordedChange extends ContentChange {
+  ingredientSlug: string
+}
 
 export interface RunState {
   v: 1
@@ -16,17 +22,31 @@ export interface RunState {
   done: Record<string, ResultLine>
   /** Les lignes qui attendent un choix (phase B) : les produits connus indisponibles. */
   waiting: Record<string, string[]>
+  /** Les lignes ajoutées avec un nombre recalculé en direct, dans l'ordre du passage. */
+  changes: RecordedChange[]
 }
 
 export function emptyState(runId: string, now: number): RunState {
-  return { v: 1, runId, updatedAt: now, phase: 'PHASE_A', done: {}, waiting: {} }
+  return { v: 1, runId, updatedAt: now, phase: 'PHASE_A', done: {}, waiting: {}, changes: [] }
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
+const isPacks = (value: unknown): value is number =>
+  Number.isInteger(value) && (value as number) >= 1 && (value as number) <= LIMITS.packsMax
+
+const isChange = (value: unknown): value is RecordedChange =>
+  isObject(value) &&
+  typeof value.ingredientSlug === 'string' &&
+  isPacks(value.planned) &&
+  isPacks(value.live)
+
+/** Un état tel qu'il est stocké : `changes` est facultatif, un état écrit avant DRV-613 n'en a pas. */
+type StoredState = Omit<RunState, 'changes'> & { changes?: RecordedChange[] }
+
 /** Un état lu du stockage n'est cru que s'il a la bonne forme : la page de l'enseigne partage ce stockage. */
-function isState(value: unknown, runId: string): value is RunState {
+function isState(value: unknown, runId: string): value is StoredState {
   if (!isObject(value) || value.v !== 1 || value.runId !== runId) return false
   if (typeof value.updatedAt !== 'number') return false
   if (value.phase !== 'PHASE_A' && value.phase !== 'PHASE_B') return false
@@ -41,7 +61,10 @@ function isState(value: unknown, runId: string): value is RunState {
   const waitingOk = Object.values(waiting).every(
     (ids) => Array.isArray(ids) && ids.every((id) => typeof id === 'string'),
   )
-  return doneOk && waitingOk
+  const changesOk =
+    value.changes === undefined ||
+    (Array.isArray(value.changes) && value.changes.every((change) => isChange(change)))
+  return doneOk && waitingOk && changesOk
 }
 
 export class RunStore {
@@ -55,7 +78,7 @@ export class RunStore {
     try {
       const raw = this.storage?.getItem(RUN_PREFIX + runId)
       const state: unknown = raw ? JSON.parse(raw) : null
-      return isState(state, runId) ? state : null
+      return isState(state, runId) ? { ...state, changes: state.changes ?? [] } : null
     } catch {
       return null
     }

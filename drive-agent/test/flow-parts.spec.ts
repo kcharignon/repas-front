@@ -2,7 +2,15 @@
 import { describe, expect, it } from 'vitest'
 
 import { ERROR_CODES, LIMITS, type ResultLine } from '../protocol'
-import { buildResult, endingOf, endProps, priceOf, resultLines, settleKnownLine } from '../src/flow'
+import {
+  buildResult,
+  changesOf,
+  endingOf,
+  endProps,
+  priceOf,
+  resultLines,
+  settleKnownLine,
+} from '../src/flow'
 import { emptyState } from '../src/flow/run-state'
 import { candidate, fakeAdapter, known, plan, product } from './flow-helpers'
 
@@ -72,6 +80,67 @@ describe('settleKnownLine', () => {
     expect(priced).toMatchObject({ line: { price: { cents: 129 } } })
     expect(unpriced).toMatchObject({ line: { outcome: 'ADDED' } })
     expect((unpriced as { line: ResultLine }).line).not.toHaveProperty('price')
+  })
+
+  describe('le contenu lu en direct (DRV-613)', () => {
+    const needed = { quantity: 800, unitSymbol: 'g', dimension: 'WEIGHT', baseFactor: 1 } as const
+    const line = { ...known('farine', [product('1000001', 4)]), needed }
+
+    it('met le nombre calculé sur le contenu lu et rend l’écart avec celui du plan, sans rien demander', async () => {
+      // Given : 800 g demandés, le plan compte 4 produits (200 g) ; le site en vend de 500 g
+      const { adapter, writes } = fakeAdapter({ '1000001': { content: { value: 500, unit: 'g' } } })
+
+      // When
+      const verdict = await settleKnownLine(line, { adapter, askQuantity: noQuestion })
+
+      // Then
+      expect(writes).toEqual([{ id: '1000001', quantity: 2 }])
+      expect(verdict).toMatchObject({
+        kind: 'done',
+        line: { outcome: 'ADDED', quantity: 2 },
+        change: { planned: 4, live: 2 },
+      })
+    })
+
+    it('ne rend aucun écart quand le calcul en direct donne le nombre du plan', async () => {
+      const { adapter } = fakeAdapter({ '1000001': { content: { value: 200, unit: 'g' } } })
+
+      const verdict = await settleKnownLine(line, { adapter, askQuantity: noQuestion })
+
+      expect(verdict).toMatchObject({ kind: 'done', line: { quantity: 4 } })
+      expect(verdict).not.toHaveProperty('change')
+    })
+
+    it('utilise la même formule que la phase B, arrondi supérieur compris', async () => {
+      // Given : 800 g demandés, 300 g par produit : 3 (2,67 arrondi au-dessus)
+      const { adapter, writes } = fakeAdapter({ '1000001': { content: { value: 300, unit: 'g' } } })
+
+      const verdict = await settleKnownLine(line, { adapter, askQuantity: noQuestion })
+
+      expect(writes).toEqual([{ id: '1000001', quantity: 3 }])
+      expect(verdict).toMatchObject({ change: { planned: 4, live: 3 } })
+    })
+
+    it('un contenu en direct qui pousserait au-delà de 99 est plafonné comme en phase B', async () => {
+      const { adapter, writes } = fakeAdapter({
+        '1000001': { content: { value: 1, unit: 'g' }, stock: 500 },
+      })
+
+      await settleKnownLine(line, { adapter, askQuantity: noQuestion })
+
+      expect(writes).toEqual([{ id: '1000001', quantity: LIMITS.packsMax }])
+    })
+
+    it('ne recalcule rien pour un produit indisponible : aucune écriture, aucun écart', async () => {
+      const { adapter, writes } = fakeAdapter({
+        '1000001': { stock: 0, content: { value: 500, unit: 'g' } },
+      })
+
+      const verdict = await settleKnownLine(line, { adapter, askQuantity: noQuestion })
+
+      expect(writes).toEqual([])
+      expect(verdict).toEqual({ kind: 'waiting', unavailable: ['1000001'] })
+    })
   })
 
   it('plafonne la quantité rendue à 99', async () => {
@@ -156,6 +225,38 @@ describe('endingOf', () => {
   })
 })
 
+describe('changesOf', () => {
+  const lines = [known('farine', [product('1')]), known('sucre', [product('2')])]
+
+  it('rend les lignes recalculées dans l’ordre du plan, avec le nom de l’ingrédient', () => {
+    const state = emptyState('x', 1)
+    state.changes.push(
+      { ingredientSlug: 'sucre', planned: 1, live: 2 },
+      { ingredientSlug: 'farine', planned: 3, live: 1 },
+    )
+
+    expect(changesOf(plan(lines), state)).toEqual([
+      { name: 'Farine', planned: 3, live: 1 },
+      { name: 'Sucre', planned: 1, live: 2 },
+    ])
+  })
+
+  it('garde une seule mention par ligne et ignore un ingrédient qui n’est pas dans le plan', () => {
+    const state = emptyState('x', 1)
+    state.changes.push(
+      { ingredientSlug: 'farine', planned: 3, live: 1 },
+      { ingredientSlug: 'farine', planned: 5, live: 9 },
+      { ingredientSlug: 'inconnu', planned: 1, live: 2 },
+    )
+
+    expect(changesOf(plan(lines), state)).toEqual([{ name: 'Farine', planned: 3, live: 1 }])
+  })
+
+  it('ne rend rien sans mention', () => {
+    expect(changesOf(plan(lines), emptyState('x', 1))).toEqual([])
+  })
+})
+
 describe('le résultat', () => {
   it.each(ERROR_CODES)('porte un message d’erreur fixe et court pour « %s »', (code) => {
     const result = buildResult(plan([]), [], { outcome: 'error', code }, '1.2.3')
@@ -202,5 +303,13 @@ describe('le résultat', () => {
       unavailable: 0,
       failed: 1,
     })
+  })
+
+  it('ajoute les lignes recalculées à l’écran de fin, et seulement s’il y en a', () => {
+    const changes = [{ name: 'Farine', planned: 3, live: 1 }]
+
+    expect(endProps([], { outcome: 'completed' }, changes)).toMatchObject({ changes })
+    expect(endProps([], { outcome: 'completed' }, [])).not.toHaveProperty('changes')
+    expect(endProps([], { outcome: 'completed' })).not.toHaveProperty('changes')
   })
 })

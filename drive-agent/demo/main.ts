@@ -219,6 +219,21 @@ const SCREENS: Record<string, () => unknown> = {
       unavailable: 0,
       failed: 0,
     }),
+  // Le contenu lu en direct n'est pas celui que Repas avait mémorisé : le nombre de produits a été recalculé (DRV-613).
+  'end-changes': () =>
+    ui.show('end', {
+      outcome: 'completed',
+      added: 3,
+      chosen: 0,
+      haveAtHome: 0,
+      skipped: 0,
+      unavailable: 0,
+      failed: 0,
+      changes: [
+        { name: 'Farine de blé', planned: 1, live: 10 },
+        { name: 'Lait demi-écrémé', planned: 6, live: 2 },
+      ],
+    }),
   'end-partial': () =>
     ui.show('end', {
       outcome: 'partial',

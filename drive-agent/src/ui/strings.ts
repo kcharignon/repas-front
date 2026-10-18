@@ -268,6 +268,13 @@ export const S = {
     skipped: (n: number) => `Passés : ${n}`,
     unavailable: (n: number) => `Indisponibles : ${n}`,
     failed: (n: number) => `Échecs : ${n}`,
+    /** Le nombre de produits a été calculé sur le contenu lu sur le site, pas sur celui que Repas avait mémorisé (DRV-613). */
+    changes: {
+      title: 'Contenu différent de celui mémorisé',
+      text: 'Le nombre de produits a été calculé sur le contenu lu sur le site. Vérifie ces lignes dans ton panier.',
+      item: (name: string, planned: number, live: number) =>
+        `${name} : ${live} au lieu de ${planned}`,
+    },
     back: 'Retourner dans Repas',
   },
   /** Les lignes du journal de progression (une par ingrédient traité). */
