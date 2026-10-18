@@ -832,4 +832,38 @@ export default {
       },
     },
   },
+  // L'estimation du coût d'une liste (DRV-612)
+  driveEstimate: {
+    title: 'Estimation du coût',
+    loading: 'Calcul de l’estimation…',
+    unavailable: 'L’estimation n’est pas disponible pour le moment.',
+    retry: 'Réessayer',
+    settings: 'Réglages du drive',
+    total: 'Total estimé',
+    coverage: '{count} article sur {total} estimé | {count} articles sur {total} estimés',
+    notIncluded:
+      '{count} article n’est pas dans le total. | {count} articles ne sont pas dans le total.',
+    periodOne: 'D’après les prix vus le {date}.',
+    periodRange: 'D’après les prix vus entre le {from} et le {to}.',
+    lowCoverage:
+      'Estimation peu fiable : moins de la moitié des articles ont un prix connu, le total ne couvre qu’une partie de la liste.',
+    noPrice: 'Aucun prix connu pour le moment : les prix se mémorisent à chaque envoi au drive.',
+    nothingToBuy: 'Rien à estimer : aucun article de cette liste n’est à acheter au drive.',
+    detail: 'Voir le détail ({count} ligne) | Voir le détail ({count} lignes)',
+    groups: {
+      unestimated: 'Non estimées ({count})',
+      estimated: 'Estimées ({count})',
+      haveAtHome: 'Déjà à la maison ({count})',
+    },
+    neverGuessed: 'Ces articles ne sont pas dans le total : Repas ne devine jamais un prix.',
+    packsAt: '{count} × {price}',
+    seenOn: 'prix vu le {date}',
+    status: {
+      ESTIMATED: 'estimée',
+      NO_PRODUCT: 'pas de produit choisi',
+      NO_PRICE: 'pas de prix mémorisé',
+      TO_CHECK: 'à vérifier',
+      HAVE_AT_HOME: 'déjà à la maison',
+    },
+  },
 }

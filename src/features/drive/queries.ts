@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { unwrap } from '@/api'
 import type { ChoiceIntent, DriveStorePayload } from '@/api'
+import { shoppingListKeys } from '@/features/shopping-lists/queries'
 import { useSessionStore } from '@/session/session'
 
 export const driveKeys = {
@@ -10,6 +11,8 @@ export const driveKeys = {
   settings: ['drive', 'settings'] as const,
   appInfo: ['drive', 'app-info'] as const,
   plan: (listId: string) => ['drive', 'plan', listId] as const,
+  // Sous les clés des listes : toute écriture sur une liste (qui invalide `shoppingListKeys.all`) relit aussi son estimation
+  estimate: (listId: string) => [...shoppingListKeys.all, 'drive-estimate', listId] as const,
 }
 
 /**
@@ -79,5 +82,26 @@ export function useSaveDriveSettings() {
       unwrap(api.PUT('/api/v1/drive/settings', { body: { retailer: 'leclerc', store } })),
     meta: { silent: true },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: driveKeys.all }),
+  })
+}
+
+/**
+ * L'estimation du coût d'une liste d'après les prix mémorisés (DRV-612). Elle dépend des produits choisis et des prix vus, qui changent
+ * entre deux ouvertures : elle est relue à chaque ouverture de l'écran, et après toute écriture sur les listes.
+ */
+export function useDriveEstimate(listId: () => string, enabled: () => boolean = () => true) {
+  const { api } = useSessionStore()
+
+  return useQuery({
+    queryKey: computed(() => driveKeys.estimate(listId())),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/drive/estimates/{shoppingListId}', {
+          params: { path: { shoppingListId: listId() } },
+        }),
+      ),
+    enabled: computed(enabled),
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
 }

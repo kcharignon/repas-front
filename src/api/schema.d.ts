@@ -807,6 +807,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/drive/estimates/{shoppingListId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Estimation du coût d'une liste d'après les derniers prix vus du produit préféré de chaque ligne (total, couverture, dates des prix, une ligne par ingrédient avec son statut) ; une estimation datée, jamais un prix garanti */
+        get: operations["get_api_get_drive_estimate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/drive/plans/{shoppingListId}": {
         parameters: {
             query?: never;
@@ -1833,6 +1850,101 @@ export interface components {
              */
             baseUrl: string;
         };
+        DriveEstimateLineDTO: {
+            /**
+             * @description Slug de l'ingrédient
+             * @example farine
+             */
+            ingredientSlug: string;
+            /**
+             * @description Nom de l'ingrédient
+             * @example Farine
+             */
+            ingredientName: string;
+            /**
+             * @description Libellé du produit préféré (rang 1) ; `null` si l'ingrédient n'a pas de produit accepté dans ce magasin ou est « j'en ai toujours »
+             * @example Farine de blé T55 Marque Repère 1 kg
+             */
+            productLabel?: string | null;
+            /**
+             * @description Nombre de produits à acheter (1 à 99) quand il se calcule de façon sûre, sinon `null`
+             * @example 1
+             */
+            packs?: number | null;
+            /**
+             * @description Dernier prix vu du produit en centimes (TTC) ; `null` sans produit ou sans prix mémorisé
+             * @example 129
+             */
+            unitPriceCents?: number | null;
+            /**
+             * @description Nombre de produits multiplié par le prix, en centimes ; renseigné pour `ESTIMATED` seulement
+             * @example 129
+             */
+            subtotalCents?: number | null;
+            /**
+             * @description Date à laquelle le prix a été vu (ISO 8601) ; `null` sans prix
+             * @example 2026-10-12T09:30:00+02:00
+             */
+            priceSeenAt?: string | null;
+            /**
+             * @description `ESTIMATED` : dans le total ; `NO_PRODUCT` : aucun produit accepté ; `NO_PRICE` : le produit préféré n'a pas de prix mémorisé ; `TO_CHECK` : le nombre de produits ne se calcule pas de façon sûre ; `HAVE_AT_HOME` : « j'en ai toujours », hors total et hors couverture
+             * @example ESTIMATED
+             * @enum {string}
+             */
+            status: "ESTIMATED" | "NO_PRODUCT" | "NO_PRICE" | "TO_CHECK" | "HAVE_AT_HOME";
+        };
+        DriveEstimateDTO: {
+            /**
+             * @description Identifiant de la liste de courses
+             * @example 0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10
+             */
+            shoppingListId: string;
+            /**
+             * @description Enseigne du drive
+             * @example leclerc
+             * @enum {string}
+             */
+            retailer: "leclerc";
+            store: components["schemas"]["DriveStoreDTO"];
+            /**
+             * @description Total estimé en centimes : somme des sous-totaux des lignes `ESTIMATED` seulement ; les autres lignes ne sont pas devinées
+             * @example 1247
+             */
+            estimatedTotalCents: number;
+            /**
+             * @description Nombre de lignes `ESTIMATED`
+             * @example 8
+             */
+            estimatedLines: number;
+            /**
+             * @description Nombre de lignes à acheter qui ne sont pas estimées (`NO_PRODUCT`, `NO_PRICE`, `TO_CHECK`)
+             * @example 4
+             */
+            unestimatedLines: number;
+            /**
+             * Format: float
+             * @description Lignes estimées sur lignes à acheter (les « j'en ai toujours » ne comptent pas), de 0 à 1 arrondi à 4 décimales ; 0 quand rien n'est à acheter
+             * @example 0.6667
+             */
+            coverage: number;
+            /**
+             * @description Date du prix le plus ancien parmi les lignes du total (ISO 8601), `null` sans ligne estimée
+             * @example 2026-10-12T09:30:00+02:00
+             */
+            oldestPriceAt?: string | null;
+            /**
+             * @description Date du prix le plus récent parmi les lignes du total (ISO 8601), `null` sans ligne estimée
+             * @example 2026-10-18T10:00:00+02:00
+             */
+            newestPriceAt?: string | null;
+            /** @description Une ligne par ingrédient de la liste, dans l'ordre de la liste (slug d'ingrédient croissant) */
+            lines: components["schemas"]["DriveEstimateLineDTO"][];
+            /**
+             * @description Texte fixe à afficher avec l'estimation : une estimation datée, jamais un prix garanti
+             * @example Estimation d'après les derniers prix vus ; le prix réel est celui du drive.
+             */
+            disclaimer: string;
+        };
         DrivePlanCountsDTO: {
             /**
              * @description Lignes dont au moins un produit est connu dans le magasin (`KNOWN`)
@@ -1858,7 +1970,7 @@ export interface components {
              */
             quantity: number;
             /**
-             * @description Symbole de l'unité d'achat (vide pour une unité sans symbole)
+             * @description Symbole de l'unité d'achat, ou son nom si elle n'a pas de symbole (jamais vide, 32 caractères au plus)
              * @example g
              */
             unitSymbol: string;
@@ -4499,6 +4611,53 @@ export interface operations {
             };
             /** @description Paramètre `retailer` ou `storeId` absent ou invalide */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_api_get_drive_estimate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Identifiant de la liste de courses (tout statut : lecture seule)
+                 * @example 0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10
+                 */
+                shoppingListId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description L'estimation, dans le magasin courant de l'utilisateur */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriveEstimateDTO"];
+                };
+            };
+            /** @description La liste appartient à un autre utilisateur */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`) ou liste inconnue */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pas de magasin enregistré (message `DRIVE_NOT_CONFIGURED`) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

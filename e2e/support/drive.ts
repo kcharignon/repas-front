@@ -63,6 +63,82 @@ export const plan = {
   ],
 }
 
+/** L'estimation du coût de la liste `l1` (DRV-612) : 3 lignes estimées (5,72 €), 2 non estimées, 1 « déjà à la maison » ; couverture 3 sur 5. */
+export const estimate = {
+  shoppingListId: 'l1',
+  retailer: 'leclerc',
+  store: plan.store,
+  estimatedTotalCents: 572,
+  estimatedLines: 3,
+  unestimatedLines: 2,
+  coverage: 0.6,
+  oldestPriceAt: '2026-10-12T09:30:00+02:00',
+  newestPriceAt: '2026-10-18T10:00:00+02:00',
+  lines: [
+    {
+      ingredientSlug: 'beurre',
+      ingredientName: 'Beurre',
+      productLabel: 'Beurre doux 250 g',
+      packs: 1,
+      unitPriceCents: 245,
+      subtotalCents: 245,
+      priceSeenAt: '2026-10-12T09:30:00+02:00',
+      status: 'ESTIMATED',
+    },
+    {
+      ingredientSlug: 'farine',
+      ingredientName: 'Farine',
+      productLabel: 'Farine de blé T55 Marque Repère 1 kg',
+      packs: 1,
+      unitPriceCents: 129,
+      subtotalCents: 129,
+      priceSeenAt: '2026-10-18T10:00:00+02:00',
+      status: 'ESTIMATED',
+    },
+    {
+      ingredientSlug: 'huile',
+      ingredientName: 'Huile',
+      productLabel: 'Huile de test 1 L',
+      packs: null,
+      unitPriceCents: null,
+      subtotalCents: null,
+      priceSeenAt: null,
+      status: 'NO_PRICE',
+    },
+    {
+      ingredientSlug: 'lait',
+      ingredientName: 'Lait',
+      productLabel: 'Lait demi-écrémé 1 L',
+      packs: 2,
+      unitPriceCents: 99,
+      subtotalCents: 198,
+      priceSeenAt: '2026-10-15T08:00:00+02:00',
+      status: 'ESTIMATED',
+    },
+    {
+      ingredientSlug: 'poivre',
+      ingredientName: 'Poivre',
+      productLabel: null,
+      packs: null,
+      unitPriceCents: null,
+      subtotalCents: null,
+      priceSeenAt: null,
+      status: 'NO_PRODUCT',
+    },
+    {
+      ingredientSlug: 'sel',
+      ingredientName: 'Sel',
+      productLabel: null,
+      packs: null,
+      unitPriceCents: null,
+      subtotalCents: null,
+      priceSeenAt: null,
+      status: 'HAVE_AT_HOME',
+    },
+  ],
+  disclaimer: 'Estimation d’après les derniers prix vus ; le prix réel est celui du drive.',
+}
+
 const reply = (route: Route, body?: unknown, status = body === undefined ? 204 : 200) =>
   route.fulfill(
     body === undefined
@@ -93,6 +169,8 @@ export async function fakeBack(page: Page) {
           })
         case 'GET /api/v1/drive/plans/l1':
           return reply(route, plan)
+        case 'GET /api/v1/drive/estimates/l1':
+          return reply(route, estimate)
         case 'GET /api/v1/drive/settings':
           return reply(route, {
             enabled: true,

@@ -7,6 +7,7 @@ import { DRAFT_KEY } from '../bridge'
 import { fakeNative } from '../bridge/__tests__/fakeNative'
 import type { SentMessage } from '../bridge/__tests__/fakeNative'
 import DriveSendView from '../DriveSendView.vue'
+import { estimate } from './estimateFixtures'
 import { plan, storeBaseUrl } from './fixtures'
 
 // Données SYNTHÉTIQUES : magasin d'essai et produits inventés.
@@ -131,6 +132,22 @@ describe('écran d’envoi au drive, dans l’application', () => {
       'Déjà à la maison1',
       'Passés cette fois0',
     ])
+  })
+
+  it('montre l’estimation du coût de la liste entre le résumé et les lignes', async () => {
+    installApp()
+    const { wrapper, fetchMock } = await open({
+      'GET /api/v1/drive/settings': () =>
+        json({ enabled: true, retailer: 'leclerc', store: estimate().store }),
+      'GET /api/v1/drive/estimates/l1': () => json(estimate()),
+    })
+    await loaded(wrapper)
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Estimation du coût'))
+
+    expect(wrapper.text().replace(/\s/g, ' ')).toContain('12,47 €')
+    expect(calls(fetchMock)).toContain('GET /api/v1/drive/estimates/l1')
+    const titles = wrapper.findAll('h2').map((title) => title.text())
+    expect(titles.indexOf('Estimation du coût')).toBeLessThan(titles.indexOf('Votre liste (12)'))
   })
 
   it('« Choisir un autre produit » et « Passer cette fois » changent la ligne et les compteurs, et s’annulent', async () => {
