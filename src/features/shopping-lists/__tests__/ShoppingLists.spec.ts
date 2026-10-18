@@ -116,6 +116,29 @@ describe('ShoppingListsView', () => {
     expect(items[1]?.text()).toContain('10 octobre 2026')
   })
 
+  it('montre une liste envoyée avec son badge court et sa date d’envoi', async () => {
+    const sent = {
+      id: 's',
+      displayName: 'Courses envoyées',
+      status: 'SENT',
+      isActive: false,
+      isPaused: false,
+      isCompleted: false,
+      isSent: true,
+      sentAt: '2026-10-15T18:30:00+02:00',
+      createdAt: '2026-10-14T10:00:00+02:00',
+    }
+    const { wrapper } = await open({
+      'GET /api/v1/shopping-lists': () => json({ member: [sent, ...member], totalItems: 4 }),
+    })
+
+    const item = wrapper.findAll('li')[0]
+
+    expect(item?.find('a > span:last-child').text()).toBe('Envoyée')
+    expect(item?.text()).toContain('Envoyée au drive le 15 octobre 2026')
+    expect(item?.find('a').attributes('href')).toBe('/listes/s')
+  })
+
   it('ouvre la liste active sur /liste et les autres sur /listes/:id', async () => {
     const { wrapper } = await open()
 

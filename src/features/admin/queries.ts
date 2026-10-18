@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { ApiError, unwrap } from '@/api'
-import type { UserStatus } from '@/api'
+import type { UnitPayload, UserStatus } from '@/api'
 import { ingredientKeys } from '@/features/ingredients/queries'
 import { recipeKeys } from '@/features/recipes/queries'
 import { useSessionStore } from '@/session/session'
@@ -23,6 +23,10 @@ function useRefresh(keys: readonly (readonly string[])[]) {
   }
 }
 
+// `dimension` et `baseFactor` valent `null` par défaut dans le contrat, ce qui les rend « requis » dans les types générés. Absents du
+// corps, le back garde les valeurs de l'unité (`null`, `null` les effacerait) : leur saisie viendra avec DRV-409.
+const unitBody = (form: { name: string; symbol: string }) => form as UnitPayload
+
 export function useSaveUnit() {
   const { api } = useSessionStore()
   const refresh = useRefresh([ingredientKeys.units, ingredientKeys.all])
@@ -37,12 +41,14 @@ export function useSaveUnit() {
       form: { name: string; symbol: string }
     }) => {
       if (slug === null) {
-        const { response, error } = await api.POST('/api/v1/units', { body: form })
+        const { response, error } = await api.POST('/api/v1/units', { body: unitBody(form) })
         if (!response.ok) throw ApiError.fromResponse(response, error)
 
         return slugOf(response)
       }
-      await unwrap(api.PUT('/api/v1/units/{slug}', { params: { path: { slug } }, body: form }))
+      await unwrap(
+        api.PUT('/api/v1/units/{slug}', { params: { path: { slug } }, body: unitBody(form) }),
+      )
 
       return slug
     },

@@ -66,6 +66,11 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/features/shopping-lists/ShoppingListDetailView.vue'),
       },
       {
+        path: 'drive/envoi/:listId',
+        name: 'drive-send',
+        component: () => import('@/features/drive/DriveSendView.vue'),
+      },
+      {
         path: 'recettes',
         name: 'recipes',
         component: () => import('@/features/recipes/RecipesView.vue'),

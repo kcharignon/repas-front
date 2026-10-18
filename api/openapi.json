@@ -189,6 +189,9 @@
                     },
                     "404": {
                         "description": "Ressource inconnue"
+                    },
+                    "409": {
+                        "description": "La liste est envoy\u00e9e au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`)"
                     }
                 }
             }
@@ -726,7 +729,7 @@
                         "description": "Un \u00e9l\u00e9ment de m\u00eame slug existe d\u00e9j\u00e0 (le slug d\u00e9rive du nom)"
                     },
                     "422": {
-                        "description": "Corps de la requ\u00eate invalide"
+                        "description": "Corps de la requ\u00eate invalide (dont une dimension sans facteur de base ou l'inverse, ou un facteur qui n'est pas strictement positif)"
                     }
                 }
             }
@@ -1340,6 +1343,9 @@
                     "404": {
                         "description": "Ressource inconnue"
                     },
+                    "409": {
+                        "description": "La liste est envoy\u00e9e au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`)"
+                    },
                     "422": {
                         "description": "Corps de la requ\u00eate invalide"
                     },
@@ -1387,6 +1393,7 @@
                     "Units"
                 ],
                 "summary": "Remplace l'unit\u00e9 (administrateur) ; son slug ne change pas",
+                "description": "Un corps qui ne mentionne ni `dimension` ni `baseFactor` laisse les deux valeurs de l'unit\u00e9 telles quelles ; un corps qui en mentionne un remplace la paire (un champ absent compte comme `null`), et `null`, `null` l'efface.",
                 "operationId": "put_api_update_unit",
                 "parameters": [
                     {
@@ -1419,7 +1426,7 @@
                         "description": "Inconnu"
                     },
                     "422": {
-                        "description": "Corps de la requ\u00eate invalide"
+                        "description": "Corps de la requ\u00eate invalide (dont une dimension sans facteur de base ou l'inverse, ou un facteur qui n'est pas strictement positif)"
                     }
                 }
             }
@@ -1627,6 +1634,9 @@
                     },
                     "404": {
                         "description": "Ressource inconnue"
+                    },
+                    "409": {
+                        "description": "La liste est envoy\u00e9e au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`)"
                     }
                 }
             }
@@ -1728,6 +1738,87 @@
                 }
             }
         },
+        "/api/v1/shopping-lists/{id}/reopen": {
+            "post": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "Rouvre une liste envoy\u00e9e au drive : elle redevient active et modifiable, l'\u00e9ventuelle autre liste active de l'utilisateur passe en pause",
+                "operationId": "post_api_reopen_shopping_list",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/IfMatch"
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Liste rouverte"
+                    },
+                    "403": {
+                        "description": "La ressource appartient \u00e0 un autre utilisateur"
+                    },
+                    "404": {
+                        "description": "Liste inconnue, ou fonction drive coup\u00e9e (message `DRIVE_DISABLED`)"
+                    },
+                    "409": {
+                        "description": "La liste n'est pas envoy\u00e9e (message `SHOPPING_LIST_NOT_SENT`), ou elle a \u00e9t\u00e9 enregistr\u00e9e entre-temps par une autre requ\u00eate"
+                    },
+                    "412": {
+                        "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
+                    }
+                }
+            }
+        },
+        "/api/v1/shopping-lists/{id}/send": {
+            "post": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "Envoie une liste de courses au drive : elle passe au statut `SENT` et n'est plus modifiable (sans effet si elle l'est d\u00e9j\u00e0)",
+                "operationId": "post_api_send_shopping_list",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/IfMatch"
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Liste envoy\u00e9e (ou d\u00e9j\u00e0 envoy\u00e9e)"
+                    },
+                    "403": {
+                        "description": "La ressource appartient \u00e0 un autre utilisateur"
+                    },
+                    "404": {
+                        "description": "Liste inconnue, ou fonction drive coup\u00e9e (message `DRIVE_DISABLED`)"
+                    },
+                    "409": {
+                        "description": "La liste n'est ni active ni d\u00e9j\u00e0 envoy\u00e9e (message `SHOPPING_LIST_NOT_SENDABLE`), ou elle a \u00e9t\u00e9 enregistr\u00e9e entre-temps par une autre requ\u00eate"
+                    },
+                    "412": {
+                        "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
+                    },
+                    "422": {
+                        "description": "La liste est vide (message `SHOPPING_LIST_EMPTY`)"
+                    }
+                }
+            }
+        },
         "/api/v1/shopping-lists/{id}/complete": {
             "post": {
                 "tags": [
@@ -1784,6 +1875,9 @@
                     },
                     "404": {
                         "description": "Ressource inconnue"
+                    },
+                    "409": {
+                        "description": "La liste est envoy\u00e9e au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`)"
                     }
                 }
             }
@@ -1814,6 +1908,9 @@
                     },
                     "404": {
                         "description": "Ressource inconnue"
+                    },
+                    "409": {
+                        "description": "La liste est envoy\u00e9e au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`)"
                     }
                 }
             }
@@ -1857,6 +1954,9 @@
                     },
                     "404": {
                         "description": "Ressource inconnue"
+                    },
+                    "409": {
+                        "description": "La liste est envoy\u00e9e au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`)"
                     },
                     "422": {
                         "description": "Corps de la requ\u00eate invalide"
@@ -2229,6 +2329,55 @@
                 },
                 "security": []
             }
+        },
+        "/api/v1/drive/settings": {
+            "get": {
+                "tags": [
+                    "Drive"
+                ],
+                "summary": "R\u00e9glages du drive de l'utilisateur connect\u00e9 (magasin) et \u00e9tat de l'interrupteur de la fonction",
+                "operationId": "get_api_get_drive_settings",
+                "responses": {
+                    "200": {
+                        "description": "L'interrupteur et le magasin de l'utilisateur (`store: null` tant qu'il n'en a pas enregistr\u00e9) ; `200` aussi quand la fonction est coup\u00e9e (`enabled: false`)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DriveSettingsDTO"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Drive"
+                ],
+                "summary": "Enregistre le magasin du drive de l'utilisateur connect\u00e9 (remplace le pr\u00e9c\u00e9dent)",
+                "operationId": "put_api_save_drive_settings",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DriveSettingsPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Magasin enregistr\u00e9"
+                    },
+                    "404": {
+                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`)"
+                    },
+                    "422": {
+                        "description": "Corps invalide, ou magasin refus\u00e9 (message `DRIVE_STORE_INVALID`) : adresse qui n'est pas celle d'un magasin de l'enseigne, identifiant diff\u00e9rent de celui de l'adresse"
+                    }
+                }
+            }
         }
     },
     "components": {
@@ -2439,6 +2588,15 @@
                 },
                 "type": "object"
             },
+            "Dimension": {
+                "type": "string",
+                "enum": [
+                    "WEIGHT",
+                    "VOLUME",
+                    "COUNT",
+                    "PACKAGE"
+                ]
+            },
             "UnitPayload": {
                 "required": [
                     "name",
@@ -2456,6 +2614,27 @@
                         "type": "string",
                         "maxLength": 50,
                         "example": "pin"
+                    },
+                    "dimension": {
+                        "description": "Ce que l'unit\u00e9 mesure : `WEIGHT` (poids), `VOLUME`, `COUNT` (pi\u00e8ces) ou `PACKAGE` (conditionnement). `null` : dimension inconnue (cuill\u00e8re, tranche\u2026). Va avec `baseFactor`.",
+                        "default": null,
+                        "example": "WEIGHT",
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/Dimension"
+                            }
+                        ]
+                    },
+                    "baseFactor": {
+                        "description": "Combien d'unit\u00e9s de base (g, ml, pi\u00e8ce) vaut une unit\u00e9, strictement positif : 1000 pour le kilo. Va avec `dimension` ; sans importance pour `PACKAGE` (1).",
+                        "type": "number",
+                        "format": "float",
+                        "default": null,
+                        "minimum": 0,
+                        "exclusiveMinimum": true,
+                        "example": 1000,
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -2603,6 +2782,56 @@
                         "type": "string",
                         "maxLength": 256,
                         "example": "3f9c0a5e7d1b4c6a8e2f0b9d7c5a3e1f3f9c0a5e7d1b4c6a8e2f0b9d7c5a3e1f"
+                    }
+                },
+                "type": "object"
+            },
+            "Retailer": {
+                "type": "string",
+                "enum": [
+                    "leclerc"
+                ]
+            },
+            "DriveStorePayload": {
+                "required": [
+                    "id",
+                    "baseUrl"
+                ],
+                "properties": {
+                    "id": {
+                        "description": "Identifiant du magasin chez l'enseigne : celui de l'adresse de base",
+                        "type": "string",
+                        "maxLength": 20,
+                        "example": "123456"
+                    },
+                    "baseUrl": {
+                        "description": "Adresse de base du magasin : `https://<sous-domaine>.leclercdrive.fr/magasin-<id>-<id>`",
+                        "type": "string",
+                        "maxLength": 255,
+                        "example": "https://exemple.leclercdrive.fr/magasin-123456-123456"
+                    },
+                    "label": {
+                        "description": "Nom du magasin tel que lu par l'agent (255 caract\u00e8res au plus)",
+                        "type": "string",
+                        "default": null,
+                        "maxLength": 255,
+                        "example": "Ville-Test",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "DriveSettingsPayload": {
+                "required": [
+                    "retailer",
+                    "store"
+                ],
+                "properties": {
+                    "retailer": {
+                        "$ref": "#/components/schemas/Retailer"
+                    },
+                    "store": {
+                        "$ref": "#/components/schemas/DriveStorePayload"
                     }
                 },
                 "type": "object"
@@ -2792,6 +3021,7 @@
                     "isActive",
                     "isPaused",
                     "isCompleted",
+                    "isSent",
                     "createdAt"
                 ],
                 "properties": {
@@ -2811,6 +3041,7 @@
                         "enum": [
                             "ACTIVE",
                             "PAUSED",
+                            "SENT",
                             "COMPLETED"
                         ],
                         "example": "ACTIVE"
@@ -2829,6 +3060,17 @@
                         "description": "La liste est termin\u00e9e",
                         "type": "boolean",
                         "example": false
+                    },
+                    "isSent": {
+                        "description": "La liste est envoy\u00e9e au drive : elle n'est plus modifiable (statut `SENT`)",
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "sentAt": {
+                        "description": "Date d'envoi au drive (ATOM), null si la liste n'est pas envoy\u00e9e",
+                        "type": "string",
+                        "example": null,
+                        "nullable": true
                     },
                     "createdAt": {
                         "description": "Date de cr\u00e9ation (ATOM)",
@@ -2858,6 +3100,25 @@
                         "description": "Symbole affich\u00e9 \u00e0 c\u00f4t\u00e9 d'une quantit\u00e9 (peut \u00eatre vide)",
                         "type": "string",
                         "example": "g"
+                    },
+                    "dimension": {
+                        "description": "Ce que l'unit\u00e9 mesure : poids, volume, pi\u00e8ces ou conditionnement ; null si inconnu (cuill\u00e8re, tranche\u2026)",
+                        "type": "string",
+                        "enum": [
+                            "WEIGHT",
+                            "VOLUME",
+                            "COUNT",
+                            "PACKAGE"
+                        ],
+                        "example": "WEIGHT",
+                        "nullable": true
+                    },
+                    "baseFactor": {
+                        "description": "Combien d'unit\u00e9s de base (g, ml, pi\u00e8ce) vaut l'unit\u00e9, null si la dimension est inconnue",
+                        "type": "number",
+                        "format": "float",
+                        "example": 1000,
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -3081,7 +3342,9 @@
                     "ingredientName",
                     "quantity",
                     "unitSymbol",
-                    "checked"
+                    "checked",
+                    "ingredientSlug",
+                    "unitSlug"
                 ],
                 "properties": {
                     "id": {
@@ -3107,6 +3370,16 @@
                     "checked": {
                         "description": "La ligne est coch\u00e9e (d\u00e9j\u00e0 dans le caddie)",
                         "type": "boolean"
+                    },
+                    "ingredientSlug": {
+                        "description": "Identifiant stable de l'ingr\u00e9dient (slug)",
+                        "type": "string",
+                        "example": "oeuf"
+                    },
+                    "unitSlug": {
+                        "description": "Identifiant stable de l'unit\u00e9 d'achat (slug)",
+                        "type": "string",
+                        "example": "gramme"
                     }
                 },
                 "type": "object"
@@ -3213,6 +3486,7 @@
                     "isActive",
                     "isPaused",
                     "isCompleted",
+                    "isSent",
                     "rowCount",
                     "recipeCount",
                     "departments",
@@ -3252,6 +3526,7 @@
                         "enum": [
                             "ACTIVE",
                             "PAUSED",
+                            "SENT",
                             "COMPLETED"
                         ],
                         "example": "ACTIVE"
@@ -3267,6 +3542,17 @@
                     "isCompleted": {
                         "type": "boolean",
                         "example": false
+                    },
+                    "isSent": {
+                        "description": "La liste est envoy\u00e9e au drive : elle n'est plus modifiable (statut `SENT`)",
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "sentAt": {
+                        "description": "Date d'envoi au drive (ATOM), null si la liste n'est pas envoy\u00e9e",
+                        "type": "string",
+                        "example": null,
+                        "nullable": true
                     },
                     "rowCount": {
                         "description": "Nombre de lignes d'ingr\u00e9dient",
@@ -3498,6 +3784,62 @@
                     }
                 },
                 "type": "object"
+            },
+            "DriveStoreDTO": {
+                "required": [
+                    "id",
+                    "baseUrl"
+                ],
+                "properties": {
+                    "id": {
+                        "description": "Identifiant du magasin chez l'enseigne (chiffres, z\u00e9ros initiaux conserv\u00e9s)",
+                        "type": "string",
+                        "example": "123456"
+                    },
+                    "label": {
+                        "description": "Nom du magasin tel que lu par l'agent, si connu",
+                        "type": "string",
+                        "example": "Ville-Test",
+                        "nullable": true
+                    },
+                    "baseUrl": {
+                        "description": "Adresse de base du magasin sur le site de l'enseigne",
+                        "type": "string",
+                        "example": "https://exemple.leclercdrive.fr/magasin-123456-123456"
+                    }
+                },
+                "type": "object"
+            },
+            "DriveSettingsDTO": {
+                "required": [
+                    "enabled",
+                    "retailer"
+                ],
+                "properties": {
+                    "enabled": {
+                        "description": "Vrai si la fonction \u00ab envoyer au drive \u00bb est allum\u00e9e (interrupteur `DRIVE_ENABLED`) ; faux, toutes les autres routes du drive r\u00e9pondent `404 DRIVE_DISABLED`",
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "retailer": {
+                        "description": "Enseigne du drive",
+                        "type": "string",
+                        "enum": [
+                            "leclerc"
+                        ],
+                        "example": "leclerc"
+                    },
+                    "store": {
+                        "description": "Magasin de l'utilisateur, `null` tant qu'il n'a pas \u00e9t\u00e9 enregistr\u00e9",
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/DriveStoreDTO"
+                            }
+                        ]
+                    }
+                },
+                "type": "object"
             }
         },
         "parameters": {
@@ -3558,6 +3900,9 @@
         },
         {
             "name": "Auth"
+        },
+        {
+            "name": "Drive"
         }
     ]
 }
