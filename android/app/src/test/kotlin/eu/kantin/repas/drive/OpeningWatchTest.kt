@@ -7,7 +7,7 @@ import org.junit.Test
 
 /**
  * La surveillance de la page où un envoi attend la page du magasin (ticket E de l'audit des hypothèses) : ce qui cloche (erreur du site, délai
- * dépassé, page sans l'agent), pour ne jamais laisser l'utilisateur devant un écran muet. La racine de l'hôte, où un plan s'ouvre, n'est pas
+ * dépassé, page sans l'agent), pour ne jamais laisser l'utilisateur devant un écran muet. L'accueil de l'enseigne, où un plan s'ouvre, n'est pas
  * une page de magasin pour l'agent : l'attendre est normal, ce n'est pas un problème. Adresses SYNTHÉTIQUES.
  */
 class OpeningWatchTest {
@@ -40,7 +40,7 @@ class OpeningWatchTest {
 
     @Test
     fun `une page qui n'est pas celle d'un magasin n'est pas un probleme, mais ne recoit pas le plan`() {
-        // L'accueil du magasin (la racine de l'hôte), l'accueil de l'enseigne, la connexion : l'utilisateur y choisit son magasin.
+        // La racine de l'hôte du magasin (une page 404 du vrai site), l'accueil de l'enseigne, la connexion : l'utilisateur y choisit son magasin.
         listOf(root, enseigne, "https://courses-test.leclercdrive.fr/connexion.aspx", "https://courses-test.leclercdrive.fr/autre", null).forEach {
             val watch = loaded()
             assertEquals(it, PageTrouble.NONE, watch.trouble(it))

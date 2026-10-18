@@ -13,6 +13,7 @@ import { readSearchPage } from '../src/leclerc/search-page'
 import { readSession } from '../src/leclerc/session'
 import {
   CART_PATH,
+  HOME_HOST,
   isLoopback,
   OTHER_STORE_PATH,
   PAGE_PATH,
@@ -417,21 +418,110 @@ describe('les défauts simulés', () => {
 })
 
 describe('la racine du magasin et la remise à neuf (DRV-319, émulateur Android)', () => {
-  it('sert à la racine de l’hôte l’accueil du magasin et son bouton « Commencer mes courses », qui n’est pas une page de magasin pour l’agent (recette réelle du 2026-10-18)', async () => {
-    // When
-    const reply = await call('/')
+  // L’accueil de l’enseigne est servi sous son nom : le faux site ne l’accepte que sur demande (`hosts`), comme tout autre nom.
+  beforeEach(async () => {
+    await fake.close()
+    fake = await startFakeLeclerc({ hosts: [HOME_HOST] })
+  })
 
-    // Then : session ouverte, la racine affiche le magasin ; le bouton mène aux vraies pages (avec ville), et l’on peut changer de magasin
+  /** Le lien « Commencer mes courses » ou « Changer de magasin » de l’accueil : son adresse, lue dans la page comme le fait un navigateur. */
+  const linkOf = (page: string, id: string): URL => {
+    const href = new RegExp(`id="${id}" href="([^"]+)"`).exec(page)?.[1]
+    if (href === undefined) throw new Error(`lien ${id} absent de la page`)
+    return new URL(`http:${href}`)
+  }
+
+  it('sert à la racine de l’hôte du magasin une PAGE 404, comme le vrai site (recette réelle du 2026-10-18, application 0.1.3)', async () => {
+    // When
+    const root = await call('/')
+    const withoutCity = await call(`${CART_PATH}/`)
+
+    // Then : « la page demandée n’a pas pu être trouvée » ; ni accueil, ni bouton « Commencer mes courses », ni page de magasin
+    expect(root.status).toBe(404)
+    expect(root.text).toContain('momentanément indisponible')
+    expect(root.text).not.toContain('Commencer mes courses')
+    expect(withoutCity.status).toBe(404)
+    expect(fake.requests()[0]).toMatchObject({
+      kind: 'page',
+      host: STORE.host,
+      path: '/',
+      status: 404,
+    })
+  })
+
+  it('sert à la racine de l’enseigne l’accueil du magasin et son bouton « Commencer mes courses », qui n’est pas une page de magasin pour l’agent (recette réelle du 2026-10-18)', async () => {
+    // When
+    const reply = await call('/', { host: HOME_HOST })
+
+    // Then : session ouverte, l’accueil affiche le magasin ; le bouton mène aux vraies pages (avec ville, sur l’hôte du magasin), et l’on peut changer de magasin
     expect(reply.status).toBe(200)
     expect(reply.text).toContain('Commencer mes courses')
     expect(reply.text).toContain('Je peux retirer ma commande')
-    expect(reply.text).toContain(`href="${PAGE_PATH}/"`)
     expect(reply.text).toContain('id="other-store"')
-    expect(reply.text).toContain(`href="${OTHER_STORE_PATH}/"`)
-    expect(reply.text.replace(PAGE_PATH, '').replace(OTHER_STORE_PATH, '')).not.toContain(
+    const start = linkOf(reply.text, 'start-shopping')
+    expect(start.hostname).toBe(STORE.host)
+    expect(start.pathname).toBe(`${PAGE_PATH}/`)
+    expect(linkOf(reply.text, 'other-store').pathname).toBe(`${OTHER_STORE_PATH}/`)
+    expect(reply.text.replaceAll(PAGE_PATH, '').replaceAll(OTHER_STORE_PATH, '')).not.toContain(
       '/magasin-',
     )
-    expect(fake.requests().at(-1)).toMatchObject({ kind: 'page', path: '/', status: 200 })
+    expect(fake.requests().at(-1)).toMatchObject({
+      kind: 'page',
+      host: HOME_HOST,
+      path: '/',
+      status: 200,
+    })
+  })
+
+  it('mène « Commencer mes courses » à une vraie page de magasin, avec sa ville, sur l’hôte du magasin', async () => {
+    // Given
+    const home = await call('/', { host: HOME_HOST })
+    const start = linkOf(home.text, 'start-shopping')
+
+    // When : on touche le bouton, comme le ferait la WebView (même port, autre nom d’hôte)
+    const store = await call(start.pathname, { host: start.hostname })
+
+    // Then
+    expect(store.status).toBe(200)
+    expect(store.text).toContain('Accueil du magasin')
+    expect(start.pathname).toMatch(/^\/magasin-\d{1,12}-\d{1,12}-[^/]+\/$/)
+  })
+
+  it('mène « Commencer mes courses » où « startPath » le demande (une page 404 sur le chemin de l’utilisateur), et ignore un chemin douteux', async () => {
+    // Given : le bouton mène à la racine de l’hôte du magasin, qui est une page 404
+    fake.setBehavior({ startPath: '/' })
+
+    // When
+    const toRoot = linkOf((await call('/', { host: HOME_HOST })).text, 'start-shopping')
+    const target = await call(toRoot.pathname, { host: toRoot.hostname })
+
+    // Then
+    expect(toRoot.hostname).toBe(STORE.host)
+    expect(toRoot.pathname).toBe('/')
+    expect(target.status).toBe(404)
+
+    // When : un chemin qui sortirait de l’attribut est ignoré, le bouton retrouve la page du magasin
+    fake.setBehavior({ startPath: '/"><script>x</script>' })
+    const safe = linkOf((await call('/', { host: HOME_HOST })).text, 'start-shopping')
+    fake.setBehavior({ startPath: null })
+    const normal = linkOf((await call('/', { host: HOME_HOST })).text, 'start-shopping')
+
+    // Then
+    expect(safe.pathname).toBe(`${PAGE_PATH}/`)
+    expect(normal.pathname).toBe(`${PAGE_PATH}/`)
+  })
+
+  it('ne sert à l’enseigne que son accueil : toute autre page y est une 404', async () => {
+    // When
+    const replies = await Promise.all(
+      [`${PAGE_PATH}/`, `${PAGE_PATH}/recherche.aspx?TexteRecherche=farine`, '/connexion.aspx'].map(
+        (path) => call(path, { host: HOME_HOST }),
+      ),
+    )
+
+    // Then
+    expect(replies.map((reply) => reply.status)).toEqual([404, 404, 404])
+    expect(fake.paced()).toEqual([])
   })
 
   it('refuse, comme le vrai site, l’accueil du magasin sans suffixe de ville : l’adresse que l’application ouvrait avant est une page 404', async () => {
@@ -462,7 +552,7 @@ describe('la racine du magasin et la remise à neuf (DRV-319, émulateur Android
     fake.setBehavior({ homeStatus: 404 })
 
     // When
-    const home = await call('/')
+    const home = await call('/', { host: HOME_HOST })
 
     // Then : la page d’erreur générique, avec le code demandé ; le reste du site répond normalement
     expect(home.status).toBe(404)
@@ -473,14 +563,14 @@ describe('la racine du magasin et la remise à neuf (DRV-319, émulateur Android
 
     // When : un autre code, puis le défaut retiré par le pilotage (null), puis la remise à neuf
     fake.setBehavior({ homeStatus: 403 })
-    expect((await call('/')).status).toBe(403)
+    expect((await call('/', { host: HOME_HOST })).status).toBe(403)
     fake.setBehavior({ homeStatus: null })
-    expect((await call('/')).status).toBe(200)
+    expect((await call('/', { host: HOME_HOST })).status).toBe(200)
     fake.setBehavior({ homeStatus: 503 })
     fake.reset()
 
     // Then
-    expect((await call('/')).status).toBe(200)
+    expect((await call('/', { host: HOME_HOST })).status).toBe(200)
   })
 
   it('fait attendre la page d’ouverture quand « homeDelayMs » le demande (page trop lente, ticket E)', async () => {
@@ -489,7 +579,7 @@ describe('la racine du magasin et la remise à neuf (DRV-319, émulateur Android
 
     // When
     const begun = Date.now()
-    const home = await call('/')
+    const home = await call('/', { host: HOME_HOST })
     const waited = Date.now() - begun
 
     // Then : la page finit par arriver, mais après le délai ; les pages du magasin n’attendent pas

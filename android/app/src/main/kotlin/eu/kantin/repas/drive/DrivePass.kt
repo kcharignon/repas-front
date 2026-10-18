@@ -154,7 +154,7 @@ class DrivePass(
  * ou que le site l'a refusée : l'agent n'agit que sur une page de magasin, et ne reçoit son message (plan ou lecture du magasin) qu'à ce
  * moment-là. Plutôt qu'un écran qui n'a rien de Repas, un message dit quoi faire, et ne fait jamais rien à la place de l'utilisateur.
  *
- * Pour un plan (ticket E de l'audit du 2026-10-18) : le drive s'ouvre sur la racine de l'hôte, l'accueil du magasin, où il faut toucher
+ * Pour un plan (ticket E de l'audit du 2026-10-18) : le drive s'ouvre sur l'accueil de l'enseigne, qui affiche l'accueil du magasin, où il faut toucher
  * « Commencer mes courses » ([OPEN], sans alarme : c'est l'attente normale) ; si le site refuse la page, tarde ou n'a pas d'agent ([PLAN],
  * [VERIFICATION]), le bouton « Ouvrir l'accueil du drive » recharge cette page de départ ([PassRequest.startUrl]). Dès que l'utilisateur est sur une
  * page de magasin, le message du passage part tout seul vers l'agent.

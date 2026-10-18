@@ -200,4 +200,27 @@ class NavigationPolicyTest {
         stores.forEach { assertTrue("devrait être une page de magasin : $it", NavigationPolicy.isStorePage(it)) }
         others.forEach { assertFalse("ne devrait pas être une page de magasin : $it", NavigationPolicy.isStorePage(it)) }
     }
+
+    /**
+     * Un plan s'ouvre sur l'accueil de l'enseigne (`www`), et « Commencer mes courses » mène, par une ou plusieurs redirections, à la page du
+     * magasin sur son hôte `fdN-courses` : chaque étape reste dans l'application (l'agent y est injecté, le pont y est ouvert), et seule la
+     * dernière est une page de magasin, celle où le plan part vers l'agent.
+     */
+    @Test
+    fun `de l'accueil de l'enseigne a la page du magasin, chaque etape reste dans l'application`() {
+        val steps = listOf(
+            NavigationPolicy.START_URL,
+            "https://fd9-courses.leclercdrive.fr/",
+            "https://fd9-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/",
+            "https://fd9-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/accueil.aspx",
+        )
+
+        steps.forEach {
+            assertEquals(it, Decision.ALLOW, NavigationPolicy.decide(it))
+            assertTrue(it, BridgeMessages.isAllowedOrigin(NavigationPolicy.httpsHostOf(it)?.let { host -> "https://$host" }))
+        }
+        assertEquals(listOf(false, false, true, true), steps.map(NavigationPolicy::isStorePage))
+        assertEquals("www.leclercdrive.fr", NavigationPolicy.httpsHostOf(steps.first()))
+        assertEquals("fd9-courses.leclercdrive.fr", NavigationPolicy.httpsHostOf(steps.last()))
+    }
 }

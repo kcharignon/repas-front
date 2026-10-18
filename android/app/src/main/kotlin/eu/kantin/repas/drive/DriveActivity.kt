@@ -47,8 +47,9 @@ private const val PAGE_ZOOM_STEP = 1.5f
  * ([NavigationPolicy]) : tout autre lien s'ouvre dans le navigateur du téléphone. Aucun objet natif n'est exposé aux pages ; l'agent y est
  * injecté par [AgentHost] (DRV-313).
  *
- * **Passage du plan (DRV-314).** Quand un passage est en cours ([DrivePass]), l'écran s'ouvre sur la racine de l'hôte du magasin ([DrivePlan.startUrl],
- * l'accueil du magasin : `/magasin-<id>-<id>/` est une page 404 du vrai site), où l'utilisateur touche lui-même « Commencer mes courses » ; il envoie
+ * **Passage du plan (DRV-314).** Quand un passage est en cours ([DrivePass]), l'écran s'ouvre sur l'accueil de l'enseigne ([DrivePlan.startUrl],
+ * `https://www.leclercdrive.fr/`, qui affiche l'accueil du magasin de l'utilisateur : la racine de l'hôte du magasin et `/magasin-<id>-<id>/` sont des
+ * pages 404 du vrai site), où l'utilisateur touche lui-même « Commencer mes courses » ; il envoie
  * le plan à l'agent une fois la page chargée, annoncée **et** celle d'un magasin (en attendant, un message dit d'ouvrir son magasin, ou si le site
  * refuse la page, tarde ou n'a pas d'agent, de recommencer : [StoreBanner], [OpeningWatch], ticket E), reste allumé tant que le passage dure, et
  * rend la main à la coquille avec le résultat de l'agent (ou un résultat `aborted` si l'utilisateur abandonne). Sans passage, c'est le drive à
@@ -457,10 +458,10 @@ class DriveActivity : Activity() {
     }
 
     /**
-     * « Ouvrir l'accueil du drive » : recharge la page de départ du passage (la racine de l'hôte du magasin, où l'utilisateur est déjà connecté). Elle
-     * affiche l'accueil du magasin : il touche lui-même « Commencer mes courses » (l'application ne clique jamais à sa place), et dès qu'il est sur
-     * une page de magasin le message du passage part tout seul vers l'agent ([sendPlan]) ; si ce n'est pas le magasin du plan, l'agent le dit
-     * (`STORE_MISMATCH`).
+     * « Ouvrir l'accueil du drive » : recharge la page de départ du passage (l'accueil de l'enseigne, [NavigationPolicy.START_URL], où
+     * l'utilisateur est déjà connecté). Elle affiche l'accueil du magasin : il touche lui-même « Commencer mes courses » (l'application ne
+     * clique jamais à sa place), et dès qu'il est sur une page de magasin le message du passage part tout seul vers l'agent ([sendPlan]) ; si
+     * ce n'est pas le magasin du plan, l'agent le dit (`STORE_MISMATCH`).
      */
     private fun openHome() {
         val request = pass.current()?.request ?: return

@@ -104,6 +104,9 @@ has_report_count() { [ "$(reports | grep -o "$1" | wc -l)" -ge "$2" ]; } # au mo
 not_reported() { ! has_report "$1"; } # aucun relevé de ce motif
 post_command() { emu curl -sk -X POST -H 'Content-Type: application/json' -d "$1" "https://127.0.0.1/__command" > /dev/null; } # un ordre pour le faux Repas
 reset_reports() { emu curl -sk -X POST "https://127.0.0.1/__reset" > /dev/null; }
+# Ce que sert l'accueil de l'enseigne (www.leclercdrive.fr, la page de départ d'un plan et de la lecture du magasin) : « test » (la page locale de
+# test, test de fumée) ou « fake » (l'accueil du faux Leclerc complet, scénarios complets). Usage : www_mode test|fake
+www_mode() { emu curl -sk -X POST -H 'Content-Type: application/json' -d "{\"mode\":\"$1\"}" "https://127.0.0.1/__www" > /dev/null; }
 screenshot() { adb exec-out screencap -p > "$OUT/$1.png" && say "      capture : $OUT/$1.png"; }
 ui() { # l'arbre de l'écran en XML (uiautomator plante parfois en sortant : on réessaie)
   local attempt xml
