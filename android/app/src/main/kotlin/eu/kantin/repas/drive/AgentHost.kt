@@ -24,9 +24,12 @@ import java.io.IOException
 internal class AgentHost private constructor(
     val status: AgentStatus,
     private val script: AgentScript?,
+    /** La variante de débogage : son script d'injection annonce `debug: true`, ce qui permet le test automatique (DRV-318). */
+    private val debug: Boolean,
     private val onAgentMessage: (Inbound.FromAgent) -> Unit,
 ) {
     private var reply: JavaScriptReplyProxy? = null
+    private var pageAnnouncedDebug = false
     private val documentStart = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
 
     /** Vrai si une page du drive a annoncé son agent : un message peut lui être envoyé. */
@@ -38,7 +41,10 @@ internal class AgentHost private constructor(
         WebViewCompat.addWebMessageListener(webView, BridgeMessages.OBJECT_NAME, BridgeMessages.ORIGIN_RULES) { _, message, origin, isMainFrame, proxy ->
             val text = if (message.type == WebMessageCompat.TYPE_STRING) message.data else null
             when (val inbound = BridgeMessages.screen(text, origin.toString(), isMainFrame)) {
-                is Inbound.Hello -> reply = proxy
+                is Inbound.Hello -> {
+                    reply = proxy
+                    pageAnnouncedDebug = inbound.debug
+                }
                 is Inbound.FromAgent -> {
                     reply = proxy
                     onAgentMessage(inbound)
@@ -70,6 +76,12 @@ internal class AgentHost private constructor(
     /** Demande à l'agent d'ouvrir son diagnostic (commande du protocole, jamais un fragment d'adresse). */
     fun openDiagnostic(): Boolean = send(BridgeMessages.COMMAND_DIAGNOSTIC)
 
+    /**
+     * Lance le test automatique (variante de débogage seulement, DRV-318) : une commande sur le pont. `false` si l'application n'est pas la
+     * variante de débogage, si la page n'a pas annoncé `debug: true`, ou si aucune page n'a annoncé son agent.
+     */
+    fun openSelftest(): Boolean = debug && pageAnnouncedDebug && send(BridgeMessages.COMMAND_SELFTEST)
+
     /** Une phrase pour la fenêtre « Version » : version et début de l'empreinte de l'agent, ou ce qui l'empêche d'agir. */
     fun describe(context: Context): String = when (status) {
         AgentStatus.READY -> context.getString(R.string.agent_ready, script?.version, script?.digest?.take(DIGEST_SHOWN))
@@ -90,12 +102,12 @@ internal class AgentHost private constructor(
         private const val DIGEST_SHOWN = 18
 
         /** Charge et vérifie l'agent embarqué, et décide si la WebView sait le recevoir. */
-        fun create(context: Context, onAgentMessage: (Inbound.FromAgent) -> Unit): AgentHost {
-            val (status, script) = AgentAsset.load { name -> readAsset(context, name) }
+        fun create(context: Context, debug: Boolean, onAgentMessage: (Inbound.FromAgent) -> Unit): AgentHost {
+            val (status, script) = AgentAsset.load({ name -> readAsset(context, name) }, debug)
             if (status == AgentStatus.READY && !WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
-                return AgentHost(AgentStatus.WEBVIEW_TOO_OLD, null, onAgentMessage)
+                return AgentHost(AgentStatus.WEBVIEW_TOO_OLD, null, debug, onAgentMessage)
             }
-            return AgentHost(status, script, onAgentMessage)
+            return AgentHost(status, script, debug, onAgentMessage)
         }
 
         fun readAsset(context: Context, name: String): ByteArray? = try {

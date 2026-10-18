@@ -8,8 +8,13 @@ import { fileURLToPath } from 'node:url'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { validateResult, type ResultMessage } from '../../drive-agent/protocol'
+import {
+  validateResult,
+  validateSelftestResult,
+  type ResultMessage,
+} from '../../drive-agent/protocol'
 import { run } from '../../drive-agent/src/agent'
+import { LOT_WORDS } from '../../drive-agent/src/selftest'
 import { fakeUi, home, plan, skip } from '../../drive-agent/test/flow-helpers'
 
 const INJECTION = readFileSync(
@@ -17,6 +22,9 @@ const INJECTION = readFileSync(
   'utf8',
 )
 const HELLO = '{"v":1,"type":"hello"}'
+const HELLO_DEBUG = '{"v":1,"type":"hello","debug":true}'
+/** Le marqueur que l'application remplace par `true` dans sa variante de débogage (AgentAsset.DEBUG_PLACEHOLDER). */
+const DEBUG_MARKER = '/*__DEBUG__*/false'
 
 /** Le canal natif simulé : un EventTarget qui reçoit les messages de l'application, et un `postMessage` vers elle. */
 class NativeChannel extends EventTarget {
@@ -32,9 +40,11 @@ function withNative(): NativeChannel {
   return channel
 }
 
-/** Évalue `injection.js` avec un « agent » donné (un texte JavaScript) dans la page de jsdom. */
-function inject(agent: string): void {
-  new Function(INJECTION.replace('/*__AGENT__*/', () => agent))()
+/** Évalue `injection.js` avec un « agent » donné (un texte JavaScript) dans la page de jsdom ; `debug` comme dans l'APK de débogage. */
+function inject(agent: string, debug = false): void {
+  new Function(
+    INJECTION.replace(DEBUG_MARKER, String(debug)).replace('/*__AGENT__*/', () => agent),
+  )()
 }
 
 /** Le pont tel que l'agent le voit (la forme de `Bridge` dans drive-agent/src/transport/bridge.ts). */
@@ -131,6 +141,37 @@ describe('le pont vu par l’agent', () => {
     channel.fromApp('encore')
 
     expect(received).toEqual(['texte', 'encore'])
+  })
+})
+
+describe('le mode débogage (DRV-318)', () => {
+  it('le fichier porte le marqueur du mode débogage une seule fois, à `false` tel quel', () => {
+    expect(INJECTION.split(DEBUG_MARKER)).toHaveLength(2)
+  })
+
+  it('la variante de débogage annonce debug: true et pose isDebug sur le pont, que la page ne peut plus changer', () => {
+    const channel = withNative()
+
+    inject(COUNTER, true)
+
+    const bridge = bridgeOf() as PageBridge & { isDebug?: boolean }
+    expect(channel.postMessage).toHaveBeenCalledExactlyOnceWith(HELLO_DEBUG)
+    expect(bridge.isDebug).toBe(true)
+    expect(Object.isFrozen(bridge)).toBe(true)
+    expect(() => {
+      'use strict'
+      bridge.isDebug = false
+    }).toThrow(TypeError)
+    expect(bridge.isDebug).toBe(true)
+  })
+
+  it('toute autre variante annonce le message d’accueil habituel et ne pose pas isDebug', () => {
+    const channel = withNative()
+
+    inject(COUNTER, false)
+
+    expect(channel.postMessage).toHaveBeenCalledExactlyOnceWith(HELLO)
+    expect('isDebug' in bridgeOf()).toBe(false)
   })
 })
 
@@ -262,5 +303,175 @@ describe('le fichier agent.js réel, tel que l’application l’injecte', () =>
     // Les seules requêtes tentées visent l'hôte de la page (chemins relatifs).
     await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalled())
     expect(fetchSpy.mock.calls.every(([url]) => String(url).startsWith('/'))).toBe(true)
+  }, 30_000)
+})
+
+// Le test automatique de la variante de débogage (DRV-318), de bout en bout : le vrai fichier agent.js derrière le pont de l'injection, le
+// vrai adaptateur, un faux site Leclerc (rayons inventés, panier en mémoire) à la place du réseau, et une fausse horloge pour la cadence.
+describe('le test automatique, de bout en bout avec l’agent construit et un faux site', () => {
+  const COMMAND = JSON.stringify({ v: 1, type: 'command', command: 'selftest' })
+
+  interface Hit {
+    method: string
+    url: string
+    at: number
+    body?: { quantity: number; id: string }
+  }
+
+  /** Un faux drive : trois produits par mot du lot (identifiants inventés), un panier en mémoire, les réponses au format du site. */
+  function fakeDrive(initial: Record<string, number> = {}) {
+    const words: string[] = [...LOT_WORDS]
+    const cart = new Map(Object.entries(initial))
+    const hits: Hit[] = []
+    const items = () => [...cart.values()].reduce((sum, quantity) => sum + quantity, 0)
+    const euros = () => `${(items() * 1.29).toFixed(2).replace('.', ',')} €`
+    const reply = (body: string) =>
+      ({ status: 200, url: '', redirected: false, text: () => Promise.resolve(body) }) as Response
+
+    const search = (word: string) => {
+      const index = words.indexOf(word)
+      const products =
+        index < 0
+          ? []
+          : [0, 1, 2].map((rank) => {
+              const id = String(5_000_000 + index * 10 + rank)
+              return {
+                iIdProduit: Number(id),
+                sLibelleLigne1: `${word} de test ${rank + 1}`,
+                sLibelleLigne2: '1 kg',
+                nrPVUnitaireTTC: 1.29,
+                sPrixUnitaire: '1,29 €',
+                nrPVParUniteDeMesureTTC: 1.29,
+                sPrixParUniteDeMesure: '1,29 € / kg',
+                iQteDisponible: 12,
+                iQuantitePanier: cart.get(id) ?? 0,
+              }
+            })
+      return reply(
+        `<html><body><p>Résultats</p><script>var widgets = ${JSON.stringify({
+          widgets: [{ nom: 'produits', lstProduits: products }],
+          sTotalAPayer: euros(),
+        })}</script></body></html>`,
+      )
+    }
+
+    const write = (body: string) => {
+      const sent = JSON.parse(String(new URLSearchParams(body).get('d'))) as {
+        iIdProduit: string
+        iQuantite: number
+      }
+      if (sent.iQuantite > 0) cart.set(sent.iIdProduit, sent.iQuantite)
+      else cart.delete(sent.iIdProduit)
+      hits.at(-1)!.body = { id: sent.iIdProduit, quantity: sent.iQuantite }
+      return reply(
+        JSON.stringify([
+          { eTypeEvenement: 101, sIdUnique: `Produit${sent.iIdProduit}` },
+          {
+            eTypeEvenement: 1,
+            sIdUnique: 'Panier123456',
+            iQuantitePanier: items(),
+            sTotalAPayer: euros(),
+            lstProduitsLight: [...cart].map(([id, quantity]) => ({
+              iIdProduit: Number(id),
+              iQtePanier: quantity,
+              iQteDisponible: 12,
+            })),
+          },
+        ]),
+      )
+    }
+
+    const fetchStub = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input)
+      hits.push({ method: init?.method ?? 'GET', url, at: Date.now() })
+      if (init?.method === 'POST') return write(String(init.body))
+      const word = decodeURIComponent(url.split('TexteRecherche=')[1] ?? '')
+      return search(word)
+    })
+    return { cart, hits, fetchStub }
+  }
+
+  /** Fait avancer la fausse horloge (la cadence du site) jusqu'à ce que `until` soit vrai. */
+  async function advance(until: () => boolean): Promise<void> {
+    for (let i = 0; i < 600 && !until(); i += 1) await vi.advanceTimersByTimeAsync(250)
+  }
+
+  it('joue les 24 requêtes à la cadence du site, rapporte OK, et laisse le panier vide', async () => {
+    // Given : la variante de débogage de l'application, avec l'agent construit
+    const { buildAgent } = await import('../../drive-agent/scripts/build.mjs')
+    const built = await buildAgent()
+    const drive = fakeDrive()
+    vi.stubGlobal('fetch', drive.fetchStub)
+    vi.useFakeTimers()
+    const channel = withNative()
+    inject(built.code, true)
+
+    // When : l'application lance le test
+    channel.fromApp(COMMAND)
+    await advance(() => channel.postMessage.mock.calls.length >= 2)
+
+    // Then : un seul rapport est parti, conforme au protocole
+    expect(channel.postMessage).toHaveBeenCalledTimes(2)
+    expect(channel.postMessage.mock.calls[0]?.[0]).toBe(HELLO_DEBUG)
+    const message = validateSelftestResult(JSON.parse(channel.postMessage.mock.calls[1]?.[0] ?? ''))
+    expect(message.ok).toBe(true)
+    expect(message.report).toContain('Verdict : OK')
+    expect(message.report).toContain('Lot de 12 recherches')
+
+    // Then : 1 + 12 recherches, 3 recherches d'essai, 8 écritures (1, 3, 2, 1, 1 puis trois retraits)
+    expect(drive.hits).toHaveLength(24)
+    expect(drive.hits.filter((hit) => hit.method === 'GET')).toHaveLength(16)
+    expect(drive.hits.flatMap((hit) => (hit.body ? [hit.body.quantity] : []))).toEqual([
+      1, 3, 2, 1, 1, 0, 0, 0,
+    ])
+    expect(drive.cart.size).toBe(0)
+
+    // Then : la cadence est respectée (800 ms au moins entre deux requêtes) et toutes visent l'hôte de la page
+    const gaps = drive.hits.slice(1).map((hit, i) => hit.at - (drive.hits[i]?.at ?? 0))
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(800)
+    expect(drive.hits.every((hit) => hit.url.startsWith('/'))).toBe(true)
+
+    // Then : aucune donnée personnelle dans le rapport
+    expect(message.report).toContain('Hôte : fd0')
+    expect(message.report).toContain('Magasin : …123')
+    expect(message.report).not.toMatch(/leclercdrive|Ville-Test|https?:|@|\d{6,}/i)
+    expect(message.report.replace(/Ce rapport ne contient ni cookie[^\n]*/, '')).not.toMatch(
+      /cookie/i,
+    )
+  }, 60_000)
+
+  it('rend le panier de l’utilisateur tel qu’il était, produits déjà présents compris', async () => {
+    const { buildAgent } = await import('../../drive-agent/scripts/build.mjs')
+    const built = await buildAgent()
+    // Le premier produit du premier rayon (5000000) est déjà au panier de l'utilisateur, deux fois.
+    const drive = fakeDrive({ '5000000': 2 })
+    vi.stubGlobal('fetch', drive.fetchStub)
+    vi.useFakeTimers()
+    const channel = withNative()
+    inject(built.code, true)
+
+    channel.fromApp(COMMAND)
+    await advance(() => channel.postMessage.mock.calls.length >= 2)
+
+    const message = validateSelftestResult(JSON.parse(channel.postMessage.mock.calls[1]?.[0] ?? ''))
+    expect(message.ok).toBe(true)
+    expect([...drive.cart]).toEqual([['5000000', 2]])
+    expect(drive.hits.some((hit) => hit.body?.id === '5000000')).toBe(false)
+  }, 60_000)
+
+  it('est refusée par une application qui n’est pas la variante de débogage : aucune requête, aucun rapport', async () => {
+    const { buildAgent } = await import('../../drive-agent/scripts/build.mjs')
+    const built = await buildAgent()
+    const drive = fakeDrive()
+    vi.stubGlobal('fetch', drive.fetchStub)
+    vi.useFakeTimers()
+    const channel = withNative()
+    inject(built.code, false)
+
+    channel.fromApp(COMMAND)
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    expect(drive.hits).toEqual([])
+    expect(channel.postMessage).toHaveBeenCalledExactlyOnceWith(HELLO)
   }, 30_000)
 })

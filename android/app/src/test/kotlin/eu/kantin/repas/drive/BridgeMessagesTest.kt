@@ -106,18 +106,28 @@ class BridgeMessagesTest {
     }
 
     @Test
-    fun `l'annonce de la page est reconnue`() {
-        assertEquals(Inbound.Hello, BridgeMessages.screen("""{"v":1,"type":"hello"}""", origin, true))
+    fun `l'annonce de la page est reconnue, avec ou sans le mode debogage`() {
+        assertEquals(Inbound.Hello(debug = false), BridgeMessages.screen("""{"v":1,"type":"hello"}""", origin, true))
+        assertEquals(Inbound.Hello(debug = true), BridgeMessages.screen("""{"v":1,"type":"hello","debug":true}""", origin, true))
+        // Une valeur qui n'est pas vraiment « true » n'annonce pas le mode débogage.
+        assertEquals(Inbound.Hello(debug = false), BridgeMessages.screen("""{"v":1,"type":"hello","debug":"true"}""", origin, true))
+        assertEquals(Inbound.Hello(debug = false), BridgeMessages.screen("""{"v":1,"type":"hello","debug":1}""", origin, true))
     }
 
     @Test
     fun `les messages de l'agent sont transmis tels quels`() {
-        listOf("result", "setup-result", "progress", "log").forEach { type ->
+        listOf("result", "setup-result", "selftest-result", "progress", "log").forEach { type ->
             val text = """{"v":1,"type":"$type"}"""
             val inbound = BridgeMessages.screen(text, origin, true) as Inbound.FromAgent
             assertEquals(type, inbound.type)
             assertEquals(text, inbound.text)
         }
+    }
+
+    @Test
+    fun `la commande du test automatique est du protocole v1 et tient dans la borne`() {
+        assertEquals("""{"v":1,"type":"command","command":"selftest"}""", BridgeMessages.COMMAND_SELFTEST)
+        assertTrue(BridgeMessages.fitsBound(BridgeMessages.COMMAND_SELFTEST))
     }
 
     @Test
