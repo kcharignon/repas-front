@@ -2,12 +2,14 @@
 // L'analyse tolérante du JSON de produits embarqué dans la page de recherche (DRV-303). Pages INVENTÉES.
 import { describe, expect, it } from 'vitest'
 
+import { toCandidate } from '../src/leclerc/candidate'
 import {
   decodeEntities,
   decodeJsString,
   extractProducts,
   parseLooseNumber,
 } from '../src/leclerc/embedded'
+import { BACK_FORBIDDEN } from './back-label-rules'
 import { fixture } from './leclerc-helpers'
 
 const FLOUR = {
@@ -190,5 +192,60 @@ describe('decodeEntities, decodeJsString et parseLooseNumber', () => {
     [null, null],
   ])('lit le nombre de %j', (value, expected) => {
     expect(parseLooseNumber(value)).toBe(expected)
+  })
+})
+
+describe('les caractères invisibles et de contrôle d’un libellé de l’enseigne', () => {
+  // Le back refuse en bloc (`422 DRIVE_CHOICE_INVALID`) un libellé qui en porte un : l'agent les retire dès la lecture de la page.
+  // Le motif est celui du back, copié dans back-label-rules.ts.
+  it('les retire de tous les textes lus : libellés, seconde ligne, prix par mesure, unités du contenu structuré', () => {
+    // When : la fixture écrit les caractères en `\uXXXX` du JSON, en entités HTML et en caractères de contrôle
+    const { products } = extractProducts(fixture('recherche-invisibles.html'))
+
+    // Then
+    expect(products.map((product) => product.id)).toEqual(['1000101', '1000102'])
+    expect(products[0]).toMatchObject({
+      label1: 'Vinaigre de cidre Verger Imaginaire',
+      label2: '75 cl',
+      measureText: '3,20 € / L',
+    })
+    expect(products[1]).toMatchObject({
+      label1: 'Moutarde forte Pot Fictif des Tests',
+      label2: '200 g',
+      structured: { unitMeasure: 'KG', totalUnit: 'kg' },
+    })
+    for (const product of products) {
+      for (const text of [product.label1, product.label2, product.measureText]) {
+        expect(BACK_FORBIDDEN.test(text ?? '')).toBe(false)
+      }
+    }
+  })
+
+  it('lit encore le contenu net d’un libellé que des invisibles coupaient (« 75 cl » coupé par un joint de mots)', () => {
+    const { products } = extractProducts(fixture('recherche-invisibles.html'))
+
+    const contents = products.map((product) => toCandidate(product).content)
+
+    expect(contents).toEqual([
+      { value: 750, unit: 'ml' },
+      { value: 200, unit: 'g' },
+    ])
+  })
+
+  it('traite un libellé fait seulement d’invisibles comme un libellé absent : ce n’est pas un produit', () => {
+    const page = '<script>{"iIdProduit":7,"sLibelleLigne1":"\\u200B\\u202E\\uFEFF"}</script>'
+
+    const { products, ids } = extractProducts(page)
+
+    expect(products).toEqual([])
+    expect(ids).toBe(1)
+  })
+
+  it('decodeJsString les retire, qu’ils viennent d’un échappement JSON, d’une entité ou d’un caractère brut', () => {
+    expect(decodeJsString('a\\u200Bb\\u202Ec\\uFEFFd')).toBe('abcd')
+    expect(decodeJsString('a&#8203;b&#x202E;c&#xFEFF;d&#8206;e')).toBe('abcde')
+    expect(decodeJsString('a\u200Bb\u2066c\u2069d\u0007e')).toBe('abcde')
+    expect(decodeJsString('a\\n b\\u0085c')).toBe('a b c')
+    expect(decodeJsString('a\\u2028b')).toBe('a b')
   })
 })

@@ -1,4 +1,4 @@
-// Le catalogue du faux site : 31 produits INVENTÉS (marques, libellés, prix, identifiants). Rien n'est copié d'une enseigne.
+// Le catalogue du faux site : 32 produits INVENTÉS (marques, libellés, prix, identifiants). Rien n'est copié d'une enseigne.
 // Les champs ont les noms que `recherche.md` (dépôt back) relève sur le vrai site : c'est la structure qui est imitée, pas le contenu.
 
 /** Le point de livraison du faux magasin (`sNoPointLivraison`) : différent de l'identifiant du magasin, comme sur le vrai site. */
@@ -85,6 +85,16 @@ export const PRODUCTS: readonly FakeProduct[] = [
   make('Yaourt nature Laiterie du Test', '8 x 125 g', 2.4, 2.4, 'kg', 16),
   // Un produit dont le contenu net ne se lit nulle part (DRV-613 : l'agent garde alors le nombre du plan).
   make('Cacao maigre Plantation Fictive', null, 3.2, 3.2, 'kg', 14, { noContent: true }),
+  // Un produit dont les deux libellés portent des caractères invisibles (largeur nulle, sens de lecture, marque d'ordre des octets, joint de
+  // mots) : le back refuse en bloc un tel libellé (`422 DRIVE_CHOICE_INVALID`), l'agent doit les retirer à la lecture (1000032).
+  make(
+    'Vinaigre\u200B de cidre\u202E Verger\uFEFF Imaginaire',
+    '75\u2060 cl\u200F',
+    2.4,
+    3.2,
+    'L',
+    6,
+  ),
 ]
 
 /** Un texte sans accent ni majuscule : « Œufs » et « oeufs » se valent, comme dans une recherche. */
