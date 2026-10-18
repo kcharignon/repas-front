@@ -18,6 +18,7 @@ import { driveBridge } from './bridge'
 import { buildChoiceBatches } from './choices'
 import { basketUrl } from './leclerc'
 import { useDrivePlan, useDriveSettings, useSaveChoices } from './queries'
+import { expectedFromPlan } from './restrictToPlan'
 import { useDriveReturnStore } from './returnStore'
 import { countOutcomes, failedLines, formatPrice } from './summary'
 
@@ -72,11 +73,27 @@ const refusedListId = ref<string | null>(null)
 
 // --- Enregistrement des choix (un seul appel, sauf plus de 200 intentions) ---
 const save = useSaveChoices()
+
+/**
+ * Les lignes que le résultat doit pouvoir expliquer, quand le brouillon n'a pas gardé le plan envoyé : le plan relu du back (celui que
+ * l'écran lit déjà pour les noms). Une lecture qui échoue arrête l'enregistrement : sans plan, rien n'est mémorisé (DRV-614).
+ */
+async function expectedLines() {
+  const data =
+    plan.data.value ?? (await plan.refetch({ cancelRefetch: false, throwOnError: true })).data
+  if (data === undefined) throw new Error('plan')
+
+  return expectedFromPlan(data)
+}
+
 async function persist() {
-  const current = run.value
-  if (current === null) return
+  if (run.value === null) return
   store.saving()
   try {
+    // Le résultat n'est enregistré qu'une fois recoupé avec le plan envoyé : une ligne que le plan n'explique pas est ignorée (DRV-614)
+    if (!store.checked) store.check(await expectedLines())
+    const current = run.value
+    if (current === null) return
     await save.mutateAsync({
       storeId: current.result.store.id,
       batches: buildChoiceBatches(current.result),
@@ -319,6 +336,10 @@ const countKeys = [
           {{ t('driveReturn.save.retry') }}
         </UiButton>
       </div>
+
+      <p v-if="store.ignored > 0" class="text-sm text-muted">
+        {{ t('driveReturn.ignored', { count: store.ignored }, store.ignored) }}
+      </p>
 
       <section class="flex flex-col items-start gap-3">
         <div class="flex flex-wrap gap-2">

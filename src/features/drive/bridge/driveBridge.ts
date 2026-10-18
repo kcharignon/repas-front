@@ -1,7 +1,7 @@
 import { LIMITS, PROTOCOL_VERSION, ProtocolError, validatePlan } from '@drive-protocol'
 import type { PlanMessage } from '@drive-protocol'
 
-import { browserDraftStorage, createDraftStore } from './draft'
+import { browserDraftStorage, createDraftStore, sentLinesOf } from './draft'
 import type { DraftStorage, DriveResult, RunDraft } from './draft'
 import { DriveBridgeError } from './errors'
 import { byteLength, findNativeBridge, parseInbound } from './native'
@@ -182,6 +182,8 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
         runId: message.runId,
         listId,
         startedAt: current?.runId === message.runId ? current.startedAt : now().toISOString(),
+        // Les lignes envoyées : l'écran du retour n'enregistre que ce qui s'y rattache (DRV-614)
+        lines: sentLinesOf(message),
       }
       // Le brouillon d'abord : le résultat ne peut pas arriver avant qu'il soit gardé
       drafts.save(draft)
