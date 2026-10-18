@@ -1,6 +1,7 @@
 // Analyse tolérante du JSON de produits embarqué dans la page de recherche (recherche.md § 2 du dépôt back). Le format exact n'est pas
 // garanti : on cherche des champs nommés dans le texte de la page, pas une structure précise. Pas de grosse expression régulière
 // unique : on repère chaque `iIdProduit`, on délimite l'objet `{…}` qui l'entoure et on y lit les champs voulus, les inconnus étant ignorés.
+import { own } from '../own'
 
 /** Le contenu net structuré que le site joint à un produit (relevé DRV-007) ; chaque champ est `null` s'il manque. */
 export interface StructuredContent {
@@ -55,7 +56,7 @@ export function decodeEntities(text: string): string {
     if (body.startsWith('#x') || body.startsWith('#X'))
       return fromCode(parseInt(body.slice(2), 16), whole)
     if (body.startsWith('#')) return fromCode(parseInt(body.slice(1), 10), whole)
-    return ENTITIES[body.toLowerCase()] ?? whole
+    return own(ENTITIES, body.toLowerCase()) ?? whole
   })
 }
 

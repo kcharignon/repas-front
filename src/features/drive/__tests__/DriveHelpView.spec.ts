@@ -66,6 +66,17 @@ describe('aide et installation de l’application', () => {
     expect(steps[5]).toContain('connectez-vous à Repas')
   })
 
+  it('ne mène pas à une version d’essai : seules les versions « android-v… » sont à installer', async () => {
+    // Les pré-versions de débogage s'appellent « android-dev-… » : debuggables et signées d'une clé publique, jamais à installer.
+    const { wrapper } = await open()
+
+    const step = wrapper.findAll('#installer li')[1]?.text() ?? ''
+    expect(step).toContain('commence par « android-v »')
+    expect(step).toContain('« dev »')
+    expect(step).toContain('Pre-release')
+    expect(step).not.toContain('commence par « android- »')
+  })
+
   it('couvre la connexion à Leclerc, l’envoi, la mise à jour, la désinstallation et l’ancienne icône', async () => {
     const { wrapper } = await open()
 
@@ -139,6 +150,15 @@ describe('aide et installation de l’application', () => {
     ])
     expect(note.text()).toContain('suspendre un compte E.Leclerc')
     expect(note.text()).toContain('Rien de cela ne passe par les serveurs de Repas')
+  })
+
+  it('dit que les pages de Leclerc font appel à leurs propres services (cookies tiers acceptés par l’application)', async () => {
+    const { wrapper } = await open()
+
+    const note = wrapper.find('#vie-privee').text()
+    expect(note).toContain('leurs propres services')
+    expect(note).toContain('mesure d’audience')
+    expect(note).not.toContain('ni avec personne.')
   })
 
   it('le sommaire mène à la rubrique et y pose le focus', async () => {
