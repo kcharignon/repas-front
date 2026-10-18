@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Lancé DANS le conteneur de l'émulateur (jamais à la main sur la machine) par `make android-emulator-up` (DRV-319).
+#
+# 1. Premier lancement seulement : télécharge dans le volume /sdk le SDK (platform-tools, émulateur) et l'image système Google APIs, puis crée
+#    l'AVD. Les lancements suivants réutilisent tout, sans rien télécharger.
+# 2. Démarre le DNS local (tout *.leclercdrive.fr pointe vers la machine hôte de l'émulateur, 10.0.2.2 ; aucun autre nom ne se résout) et le
+#    faux site local (testsite.py, HTTPS sur le port 443) : l'émulateur ne peut donc JAMAIS joindre le vrai site Leclerc.
+# 3. Lance l'émulateur sans fenêtre, accéléré par KVM.
+set -euo pipefail
+
+API="${EMULATOR_API:-34}"
+IMAGE="system-images;android-${API};google_apis;x86_64"
+AVD=repas
+SITE=/sdk/site
+
+log() { echo "[émulateur] $*"; }
+
+# --- 1. SDK, image système, AVD (volume) -------------------------------------------------------------------------------------------------
+# avdmanager ne trouve les images système que si les outils en ligne de commande sont dans le SDK lui-même : on les y copie une fois.
+if [ ! -x /sdk/cmdline-tools/latest/bin/avdmanager ]; then
+  mkdir -p /sdk/cmdline-tools
+  cp -r /opt/cmdline-tools/latest /sdk/cmdline-tools/latest
+fi
+export PATH="/sdk/cmdline-tools/latest/bin:$PATH"
+if [ ! -x /sdk/platform-tools/adb ] || [ ! -x /sdk/emulator/emulator ] || [ ! -f "/sdk/system-images/android-${API}/google_apis/x86_64/system.img" ]; then
+  log "Premier lancement : téléchargement du SDK et de l'image système Android ${API} (environ 2 Go, une seule fois)."
+  (set +o pipefail; yes | sdkmanager --sdk_root=/sdk --licenses > /dev/null)
+  sdkmanager --sdk_root=/sdk "platform-tools" "emulator" "$IMAGE"
+  log "Téléchargement terminé."
+fi
+
+set_config() { # set_config <clé> <valeur> : fixe une ligne de config.ini de l'AVD
+  local file="$ANDROID_AVD_HOME/$AVD.avd/config.ini"
+  grep -v "^$1=" "$file" > "$file.tmp" || true
+  echo "$1=$2" >> "$file.tmp"
+  mv "$file.tmp" "$file"
+}
+
+if [ ! -d "$ANDROID_AVD_HOME/$AVD.avd" ]; then
+  log "Création de l'AVD « $AVD » (Pixel 5, Android ${API}, Google APIs)."
+  mkdir -p "$ANDROID_AVD_HOME"
+  echo no | avdmanager create avd --name "$AVD" --package "$IMAGE" --device pixel_5 --force > /dev/null
+  # Un écran plus petit : des captures plus légères à lire, un démarrage plus court.
+  set_config hw.lcd.width 720
+  set_config hw.lcd.height 1560
+  set_config hw.lcd.density 320
+  set_config hw.ramSize 3072
+  set_config disk.dataPartition.size 4G
+  set_config hw.keyboard yes
+fi
+
+# --- 2. Faux site et DNS local -----------------------------------------------------------------------------------------------------------
+mkdir -p "$SITE"
+if [ ! -f "$SITE/cert.pem" ] || ! openssl x509 -in "$SITE/cert.pem" -noout -checkend 604800 > /dev/null; then
+  log "Création du certificat jetable du faux site (reste dans le volume, jamais dans le dépôt)."
+  openssl req -x509 -newkey rsa:2048 -nodes -days 397 -keyout "$SITE/key.pem" -out "$SITE/cert.pem" \
+    -subj "/CN=faux-drive.test" -addext "subjectAltName=DNS:leclercdrive.fr,DNS:*.leclercdrive.fr" 2> /dev/null
+fi
+# L'empreinte de sa clé publique : la WebView de l'émulateur n'ignore les erreurs de certificat que pour cette clé-là (voir smoke.sh).
+openssl x509 -in "$SITE/cert.pem" -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64 > "$SITE/spki.b64"
+
+: > "$SITE/dns.log"
+: > "$SITE/access.log"
+dnsmasq --keep-in-foreground --user=root --no-resolv --no-hosts --bind-interfaces --listen-address=127.0.0.1 \
+  --address=/leclercdrive.fr/10.0.2.2 --log-queries --log-facility="$SITE/dns.log" &
+SITE_DIR="$SITE" python3 /opt/repas-emulator/testsite.py &
+
+# --- 3. L'émulateur ---------------------------------------------------------------------------------------------------------------------
+log "Démarrage de l'émulateur (sans fenêtre, accélération KVM)."
+exec emulator -avd "$AVD" -no-window -no-audio -no-boot-anim -no-snapshot -no-metrics -accel on \
+  -gpu swiftshader_indirect -memory "${EMULATOR_MEMORY:-3072}" -cores "${EMULATOR_CORES:-4}" -dns-server 127.0.0.1
