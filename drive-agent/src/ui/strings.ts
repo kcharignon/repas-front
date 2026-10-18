@@ -94,6 +94,7 @@ export const S = {
       version: (version: string) => `version ${version}`,
       page: (host: string, store: string) => `hôte ${host}, magasin ${store}`,
       hostOther: 'autre hôte leclercdrive.fr',
+      hostMobile: 'site mobile (pas la version ordinateur)',
       originOk: 'origine écrite dans l’agent',
       originMissing: 'origine non remplacée dans l’agent',
       originBridge: 'pont de l’application : pas d’origine à vérifier',
@@ -439,6 +440,17 @@ export const S = {
     back: 'Retourner dans Repas',
   },
 } as const
+
+/**
+ * Le titre et le conseil d'une cause qui en a de plus précis que ceux de son code d'erreur (ticket J : le site mobile). Une table lue par `own` :
+ * la cause vient d'un code fixe, mais ne l'indexe jamais en direct.
+ */
+export const CAUSE_TEXTS: Readonly<Record<string, { title: string; text: string }>> = {
+  PAGE_MOBILE: {
+    title: 'Ce n’est pas la version ordinateur du site',
+    text: 'Leclerc affiche son site mobile, et Repas ne sait travailler que sur la version ordinateur. Dans l’application Repas, ouvre « Ouvrir le drive Leclerc » depuis le menu, puis relance l’envoi depuis Repas.',
+  },
+}
 
 /** Le titre et le conseil de chaque erreur du protocole. */
 export const ERROR_TEXTS: Record<ErrorCode, { title: string; text: string }> = {

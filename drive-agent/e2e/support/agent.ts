@@ -66,12 +66,19 @@ export async function openWithFragment(
   fake: FakeLeclerc,
   agentCode: string,
   message: unknown,
-  { path = `${PAGE_PATH}/` }: { path?: string } = {},
+  {
+    path = `${PAGE_PATH}/`,
+    origin = fake.leclerc,
+  }: {
+    path?: string
+    /** L'origine de la page ouverte (par défaut celle du faux magasin) : un autre nom d'hôte du faux site, comme le site mobile. */
+    origin?: string
+  } = {},
 ): Promise<void> {
   await page.addInitScript(OPEN_SHADOW)
   await page.addInitScript({ content: withOrigin(agentCode, fake.repas) })
   const fragment = typeof message === 'string' ? message : encodeMessage(message)
-  await page.goto(`${fake.leclerc}${path}#repas=${fragment}`)
+  await page.goto(`${origin}${path}#repas=${fragment}`)
 }
 
 /** Le résultat que l'agent a rendu à Repas par navigation : lu dans l'adresse du faux Repas, puis validé par le protocole. */

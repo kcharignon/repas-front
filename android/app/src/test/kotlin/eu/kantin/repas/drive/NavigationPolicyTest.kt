@@ -202,6 +202,41 @@ class NavigationPolicyTest {
     }
 
     /**
+     * Le site mobile de Leclerc (`m-courses`, ticket J) n'a pas les routes du site ordinateur : même avec une adresse de la forme d'un magasin, ce n'est
+     * pas une page où l'agent peut écrire. L'application ne lui envoie donc jamais un plan ni la lecture du magasin.
+     */
+    @Test
+    fun `le site mobile se reconnait a son nom et n'est jamais une page de magasin`() {
+        val mobile = listOf(
+            "https://m-courses.leclercdrive.fr/",
+            "https://m-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/recherche.aspx",
+            "https://M-COURSES.LECLERCDRIVE.FR/magasin-123456-123456/accueil.aspx",
+            "https://m-autre.leclercdrive.fr/magasin-123456-123456/accueil.aspx",
+            "https://m.leclercdrive.fr/magasin-123456-123456/accueil.aspx",
+        )
+        val desktop = listOf(
+            "https://fd9-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/recherche.aspx",
+            "https://fd14-courses.leclercdrive.fr/",
+            "https://courses-test.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx",
+            "https://www.leclercdrive.fr/",
+            "https://mm-courses.leclercdrive.fr/magasin-123456-123456/accueil.aspx",
+            "https://xm-courses.leclercdrive.fr/magasin-123456-123456/accueil.aspx",
+            "https://m-courses.exemple.org/magasin-123456-123456/accueil.aspx",
+            "http://m-courses.leclercdrive.fr/",
+            "",
+            null,
+        )
+        mobile.forEach {
+            assertTrue("devrait être le site mobile : $it", NavigationPolicy.isMobileSite(it))
+            assertFalse("le site mobile n'est pas une page de magasin : $it", NavigationPolicy.isStorePage(it))
+            // Il reste dans l'application (la page se charge, l'utilisateur y est guidé) : seul l'agent n'y agit pas.
+            assertEquals(it, Decision.ALLOW, NavigationPolicy.decide(it))
+        }
+        desktop.forEach { assertFalse("ne devrait pas être le site mobile : $it", NavigationPolicy.isMobileSite(it)) }
+        assertTrue(NavigationPolicy.isStorePage("https://fd9-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/recherche.aspx"))
+    }
+
+    /**
      * Un plan s'ouvre sur l'accueil de l'enseigne (`www`), et « Commencer mes courses » mène, par une ou plusieurs redirections, à la page du
      * magasin sur son hôte `fdN-courses` : chaque étape reste dans l'application (l'agent y est injecté, le pont y est ouvert), et seule la
      * dernière est une page de magasin, celle où le plan part vers l'agent.

@@ -27,6 +27,7 @@ export const CAUSE_LABELS = {
   // La page courante.
   PAGE_HOST: 'la page n’est pas sur un site leclercdrive.fr',
   PAGE_PATH: 'l’adresse de la page n’est pas celle d’un magasin',
+  PAGE_MOBILE: 'le site mobile (m-courses), pas la version ordinateur du site',
   // Les contrôles du diagnostic.
   SEARCH_COMMON_EMPTY: 'aucun produit pour le mot courant d’essai',
   SEARCH_FIELDS_INCOMPLETE: 'produits lus sans tous les champs attendus',

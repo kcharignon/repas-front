@@ -759,6 +759,35 @@ describe('erreurs', () => {
     expect(ERROR_TEXTS.NOT_LOGGED_IN.text).toContain('Connecte-toi')
   })
 
+  it('le site mobile (cause PAGE_MOBILE) dit « Ce n’est pas la version ordinateur du site » et quoi faire (ticket J)', () => {
+    const handle = open()
+    void handle.show('error', { code: 'UNSUPPORTED_PAGE', canReturn: true, cause: 'PAGE_MOBILE' })
+
+    expect(shadow().querySelector('h1')?.textContent).toBe(
+      'Ce n’est pas la version ordinateur du site',
+    )
+    expect(shadow().textContent).toContain('version ordinateur')
+    expect(shadow().textContent).not.toContain(ERROR_TEXTS.UNSUPPORTED_PAGE.title)
+  })
+
+  it('une cause sans texte à elle garde le titre et le conseil du code d’erreur', () => {
+    const handle = open()
+    void handle.show('error', { code: 'UNSUPPORTED_PAGE', canReturn: true, cause: 'PAGE_PATH' })
+
+    expect(shadow().querySelector('h1')?.textContent).toBe(ERROR_TEXTS.UNSUPPORTED_PAGE.title)
+    expect(shadow().textContent).toContain(ERROR_TEXTS.UNSUPPORTED_PAGE.text)
+  })
+
+  it('une cause hostile (« constructor », « __proto__ ») ne change rien au texte', () => {
+    for (const cause of ['constructor', '__proto__', 'toString']) {
+      const handle = open()
+      void handle.show('error', { code: 'NETWORK', canReturn: false, cause })
+
+      expect(shadow().querySelector('h1')?.textContent).toBe(ERROR_TEXTS.NETWORK.title)
+      handle.close()
+    }
+  })
+
   it('sans retour possible, ne propose que « Fermer »', async () => {
     const handle = open()
     const answer = handle.show('error', { code: 'INVALID_MESSAGE', canReturn: false })

@@ -376,7 +376,11 @@ export class Flow {
   ): Promise<void> {
     const { ui, send, agentVersion } = this.deps
     this.enter('ERROR')
-    const answer = await ui.show('error', { code, canReturn: plan !== null })
+    const answer = await ui.show('error', {
+      code,
+      canReturn: plan !== null,
+      ...(cause && { cause }),
+    })
     if (answer === 'return' && plan) {
       send(buildResult(plan, [], { outcome: 'error', code, ...(cause && { cause }) }, agentVersion))
     }

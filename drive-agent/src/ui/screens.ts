@@ -1,6 +1,7 @@
 // Les écrans : chacun reçoit ses données et un rappel `answer`, et rend ses nœuds. Aucune logique d'envoi ici.
 import { append, clear, h, type Child } from './dom'
-import { ERROR_TEXTS, S } from './strings'
+import { own } from '../own'
+import { CAUSE_TEXTS, ERROR_TEXTS, S } from './strings'
 import type {
   ChallengeProps,
   ChooserProps,
@@ -389,10 +390,14 @@ const challenge: Renderer<'challenge'> = (_props: ChallengeProps, answer) => {
 const error: Renderer<'error'> = (props: ErrorProps, answer) => {
   const close = button(S.error.close, () => answer('close'), props.canReturn ? 'plain' : 'primary')
   const back = button(S.error.back, () => answer('return'), 'primary')
+  // Une cause qui a son propre texte (le site mobile, ticket J) remplace celui du code d'erreur.
+  const texts =
+    (props.cause === undefined ? undefined : own(CAUSE_TEXTS, props.cause)) ??
+    ERROR_TEXTS[props.code]
   return {
     el: screen(
-      title(ERROR_TEXTS[props.code].title),
-      h('p', { text: ERROR_TEXTS[props.code].text }),
+      title(texts.title),
+      h('p', { text: texts.text }),
       actions(...(props.canReturn ? [back, close] : [close])),
     ),
   }

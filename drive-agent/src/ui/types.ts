@@ -104,6 +104,11 @@ export type ChallengeProps = Record<string, never>
 
 export interface ErrorProps {
   code: ErrorCode
+  /**
+   * Quelle vérification a échoué (`LeclercError.cause`, ticket A) : une cause qui a son propre texte (le site mobile, ticket J) remplace le titre et
+   * le conseil du code d'erreur ; les autres sont ignorées.
+   */
+  cause?: string
   /** Vrai : un résultat peut repartir vers Repas (bouton « Retourner dans Repas »), sinon l'écran se ferme seulement. */
   canReturn: boolean
 }

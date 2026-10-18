@@ -271,7 +271,9 @@ describe('une page qui n’est pas celle d’un magasin', () => {
       await flow.start(SETUP)
 
       expect(screens.screens()).toEqual(['error'])
-      expect(screens.propsOf('error')).toEqual([{ code: 'UNSUPPORTED_PAGE', canReturn: true }])
+      expect(screens.propsOf('error')).toEqual([
+        { code: 'UNSUPPORTED_PAGE', canReturn: true, cause: expect.stringMatching(/^PAGE_/) },
+      ])
       expect(sent).toHaveLength(1)
       expect(sent[0]).not.toHaveProperty('store')
       expect(sent[0]).toMatchObject({
@@ -308,8 +310,39 @@ describe('une page qui n’est pas celle d’un magasin', () => {
 
     await flow.start(SETUP)
 
-    expect(screens.propsOf('error')).toEqual([{ code: 'CONTRACT_CHANGED', canReturn: false }])
+    expect(screens.propsOf('error')).toEqual([
+      { code: 'CONTRACT_CHANGED', canReturn: false, cause: 'EXCEPTION' },
+    ])
     expect(sent).toEqual([])
+  })
+})
+
+describe('le site mobile de Leclerc (ticket J)', () => {
+  it('« Ce n’est pas la version ordinateur du site » : cause PAGE_MOBILE, aucun magasin lu ni enregistré, le retour dit la cause', async () => {
+    // Given : une page de magasin, mais sur le site mobile
+    const { adapter, site } = page(
+      '/magasin-123456-123456-Ville-Test/recherche.aspx',
+      'm-courses.leclercdrive.fr',
+    )
+    const { flow, sent, screens } = setupFlow({ error: () => 'return' }, adapter)
+
+    // When
+    await flow.start(SETUP)
+
+    // Then : l'écran d'erreur, pas de « Enregistrer ce magasin », aucune requête, et pas de magasin rendu à Repas
+    expect(screens.screens()).toEqual(['error'])
+    expect(screens.propsOf('error')).toEqual([
+      { code: 'UNSUPPORTED_PAGE', canReturn: true, cause: 'PAGE_MOBILE' },
+    ])
+    expect(site.calls).toEqual([])
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).not.toHaveProperty('store')
+    expect(sent[0]).toMatchObject({
+      type: 'result',
+      outcome: 'error',
+      error: { code: 'UNSUPPORTED_PAGE', message: 'Page non prise en charge (PAGE_MOBILE)' },
+    })
+    validateResult(JSON.parse(JSON.stringify(sent[0])))
   })
 })
 

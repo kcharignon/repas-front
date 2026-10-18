@@ -29,6 +29,9 @@ object NavigationPolicy {
     /** Le début du chemin d'une page de magasin : `/magasin-123456-123456`, puis `/`, `-Ville`, ou la fin du chemin. */
     private val STORE_PATH = Regex("^/magasin-[0-9]{1,12}-[0-9]{1,12}(-[^/]*)?(/|$)", RegexOption.IGNORE_CASE)
 
+    /** Le premier nom du site mobile de Leclerc (`m-courses.leclercdrive.fr`) : `m`, ou un nom qui commence par `m-`. */
+    private val MOBILE_LABEL = Regex("m(-[a-z0-9-]*)?")
+
     fun decide(url: String?): Decision {
         if (url == null) return Decision.BLOCK
         if (isAllowed(url)) return Decision.ALLOW
@@ -52,12 +55,24 @@ object NavigationPolicy {
     }
 
     /**
+     * L'adresse est-elle celle du site mobile de Leclerc (`m-courses.leclercdrive.fr`, ticket J) ? Il n'a pas les routes du site ordinateur (la
+     * recherche y répond 200 sans produit) : l'agent n'y agit pas, et l'application ne lui envoie ni plan ni lecture du magasin ([isStorePage]).
+     * La WebView est en mode ordinateur pour ne pas le recevoir ; s'il apparaît quand même, [StoreBanner.MOBILE] le dit à l'utilisateur.
+     */
+    fun isMobileSite(url: String?): Boolean {
+        if (!isAllowed(url)) return false
+        val host = httpsHostOf(url) ?: return false
+        return MOBILE_LABEL.matches(host.substringBefore('.'))
+    }
+
+    /**
      * L'adresse est-elle celle d'une page de magasin (DRV-320) ? Une page `https` du drive dont le chemin commence par
      * `/magasin-<identifiant>-<identifiant>` (chiffres), éventuellement suivi d'un nom de ville : la même règle que l'agent
-     * (`readStorePaths`), qui lit le magasin dans cette adresse. L'accueil du drive et la page de connexion n'en sont pas.
+     * (`readStorePaths`), qui lit le magasin dans cette adresse. L'accueil du drive et la page de connexion n'en sont pas, ni le site mobile
+     * ([isMobileSite]), même avec une adresse de cette forme.
      */
     fun isStorePage(url: String?): Boolean {
-        if (!isAllowed(url)) return false
+        if (!isAllowed(url) || isMobileSite(url)) return false
         val afterScheme = url!!.substring(HTTPS.length)
         val pathStart = afterScheme.indexOfAny(charArrayOf('/', '?', '#'))
         if (pathStart < 0 || afterScheme[pathStart] != '/') return false

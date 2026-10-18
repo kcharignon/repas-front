@@ -66,6 +66,7 @@
     <string name="plan_banner_open">Ouvre ton magasin sur Leclerc : connecte-toi si besoin, puis touche « Commencer mes courses ». Repas reprendra tout seul. Le bouton retour du téléphone annule.</string>
     <string name="plan_banner">Cette page n’est pas celle de ton magasin : Leclerc l’a refusée ou ne répond pas. Touche « Ouvrir l’accueil du drive » pour recommencer. Le bouton retour du téléphone annule.</string>
     <string name="plan_banner_action">Ouvrir l’accueil du drive</string>
+    <string name="plan_banner_mobile">Leclerc affiche son site mobile : ce n’est pas la version ordinateur du site, et Repas ne peut pas y agir. Touche « Ouvrir l’accueil du drive » pour recommencer. Le bouton retour du téléphone annule.</string>
     <string name="plan_banner_verification">Leclerc demande une vérification. Fais-la sur la page : Repas reprendra ensuite. Sinon, touche « Ouvrir l’accueil du drive ». Le bouton retour du téléphone annule.</string>
     <string name="menu_abandon_setup">Abandonner la lecture du magasin</string>
     <string name="abandon_setup_title">Abandonner la lecture du magasin ?</string>

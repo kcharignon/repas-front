@@ -26,7 +26,7 @@ export {
   type SessionSign,
   type SessionState,
 } from './session'
-export { type LocationLike, type StoreInfo } from './store'
+export { isMobileHost, type LocationLike, type StoreInfo } from './store'
 export {
   addressShape,
   headerNames,

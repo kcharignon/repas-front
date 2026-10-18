@@ -4,6 +4,7 @@
 import {
   type ArrivalFacts,
   describeSession,
+  isMobileHost,
   LeclercError,
   type LeclercCause,
   type LeclercErrorCode,
@@ -57,9 +58,11 @@ export interface PageFacts {
 
 const HOST = /^(fd\d{1,3})-courses\.leclercdrive\.fr$/
 
-/** `fd9` pour `fd9-courses.leclercdrive.fr`, un texte fixe pour tout autre hôte. */
+/** `fd9` pour `fd9-courses.leclercdrive.fr`, un texte fixe pour le site mobile (ticket J) et pour tout autre hôte. */
 export function hostFamily(host: string): string {
-  return HOST.exec(host.toLowerCase())?.[1] ?? S.diagnostic.detail.hostOther
+  const family = HOST.exec(host.toLowerCase())?.[1]
+  if (family !== undefined) return family
+  return isMobileHost(host) ? S.diagnostic.detail.hostMobile : S.diagnostic.detail.hostOther
 }
 
 /** Les trois derniers chiffres au plus : un numéro court est caché en entier. */

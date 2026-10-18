@@ -5,10 +5,12 @@ import { defineConfig, devices } from '@playwright/test'
 // (`drive-agent/fake-leclerc/`). Pas de front ni de back : chaque test démarre son propre faux site sur un port libre.
 // `make agent-e2e` (Docker) ou `npm run agent:e2e`.
 //
-// Le navigateur ne sort jamais du poste : le faux magasin `courses-test.leclercdrive.fr` est résolu vers 127.0.0.1 et TOUT autre nom
-// d'hôte (sauf `localhost` et `127.0.0.1`) n'a pas d'adresse. Aucune requête ne peut atteindre une vraie enseigne.
+// Le navigateur ne sort jamais du poste : le faux magasin `courses-test.leclercdrive.fr` (et, pour le test du site mobile, le faux
+// `m-courses.leclercdrive.fr`) est résolu vers 127.0.0.1 et TOUT autre nom d'hôte (sauf `localhost` et `127.0.0.1`) n'a pas d'adresse.
+// Aucune requête ne peut atteindre une vraie enseigne.
 const HOST_RULES = [
   'MAP courses-test.leclercdrive.fr 127.0.0.1',
+  'MAP m-courses.leclercdrive.fr 127.0.0.1',
   'MAP * ~NOTFOUND',
   'EXCLUDE localhost',
   'EXCLUDE 127.0.0.1',

@@ -853,7 +853,9 @@ describe('les erreurs', () => {
 
     await flow.start(plan([home('sel')]))
 
-    expect(screens.propsOf('error')).toEqual([{ code: 'CONTRACT_CHANGED', canReturn: false }])
+    expect(screens.propsOf('error')).toEqual([
+      { code: 'CONTRACT_CHANGED', canReturn: false, cause: 'EXCEPTION' },
+    ])
     expect(sent).toEqual([])
   })
 })
@@ -971,6 +973,35 @@ describe('le démarrage', () => {
     await flow.start(plan([home('sel')]))
 
     expect(screens.propsOf('error')).toEqual([{ code: 'UNSUPPORTED_PAGE', canReturn: true }])
+  })
+
+  it('le site mobile de Leclerc : UNSUPPORTED_PAGE de cause PAGE_MOBILE, aucune requête, et la cause part au résultat (ticket J)', async () => {
+    // Given : l'adaptateur dit que la page est le site mobile
+    const { adapter, calls } = fakeAdapter({ '1000001': {} })
+    const screens = fakeUi({ error: () => 'return' })
+    const { flow, sent } = makeFlow({
+      ui: screens.ui,
+      adapter: {
+        ...adapter,
+        readStore: () => {
+          throw new LeclercError('UNSUPPORTED_PAGE', null, 'PAGE_MOBILE')
+        },
+      },
+    })
+
+    // When
+    await flow.start(plan([known('farine', [product('1000001')])]))
+
+    // Then : l'écran d'erreur reçoit la cause, rien n'est demandé au site, le résultat dit laquelle
+    expect(screens.propsOf('error')).toEqual([
+      { code: 'UNSUPPORTED_PAGE', canReturn: true, cause: 'PAGE_MOBILE' },
+    ])
+    expect(screens.screens()).toEqual(['error'])
+    expect(calls).toEqual([])
+    expect(expectConform(sent[0])).toMatchObject({
+      outcome: 'error',
+      error: { code: 'UNSUPPORTED_PAGE', message: 'Page non prise en charge (PAGE_MOBILE)' },
+    })
   })
 
   it('refuse de naviguer quand le retour est impossible (origine non écrite) : UNSUPPORTED_PAGE avant toute action', async () => {
