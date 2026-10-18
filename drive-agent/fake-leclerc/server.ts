@@ -53,12 +53,18 @@ export type FaultKind =
   | 'products-renamed'
   | 'not-found'
   | 'logged-out'
+  /** Le site retient la requête : aucune réponse, jusqu'à ce que le client abandonne (le délai d'attente de l'agent, ticket K). */
+  | 'hang'
 
-/** Un défaut simulé : `after` requêtes passent d'abord (0 : dès la première), `on` dit à quelles requêtes il s'applique. */
+/**
+ * Un défaut simulé : `after` requêtes passent d'abord (0 : dès la première), `on` dit à quelles requêtes il s'applique, `times` combien de
+ * requêtes il touche ensuite (absent : toutes celles qui suivent).
+ */
 export interface Fault {
   kind: FaultKind
   after?: number
   on?: 'search' | 'cart' | 'all'
+  times?: number
 }
 
 export interface Behavior {
@@ -281,7 +287,13 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
     try {
       if (behavior.latencyMs > 0) await sleep(behavior.latencyMs)
       const { fault } = behavior
-      if (fault && [scope, 'all'].includes(fault.on ?? 'all') && rank > (fault.after ?? 0)) {
+      const first = (fault?.after ?? 0) + 1
+      if (
+        fault &&
+        [scope, 'all'].includes(fault.on ?? 'all') &&
+        rank >= first &&
+        (fault.times === undefined || rank < first + fault.times)
+      ) {
         entry.fault = fault.kind
         await serveFault(fault.kind, scope, entry, res)
       } else {
@@ -308,7 +320,15 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       'products-renamed': 200,
       'not-found': 404,
       'logged-out': 302,
+      hang: 0,
     }[kind]
+    if (kind === 'hang') {
+      // Aucune réponse : la requête reste ouverte jusqu'à ce que le client la ferme (le délai d'attente de l'agent).
+      return new Promise<void>((resolve) => {
+        if (res.destroyed || res.writableEnded) return resolve()
+        res.once('close', () => resolve())
+      })
+    }
     if (kind === 'logged-out') {
       return send(res, 302, '', { Location: `${PAGE_PATH}/connexion.aspx` })
     }

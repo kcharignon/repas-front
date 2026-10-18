@@ -12,6 +12,9 @@ const MESSAGES: Record<LeclercErrorCode, string> = {
   UNSUPPORTED_PAGE: 'Cette page n’est pas une page de magasin du drive.',
 }
 
+/** Le message d'une erreur réseau dont la cause est un délai d'attente dépassé (ticket K) : Leclerc répond, mais trop lentement. */
+const TIMEOUT_MESSAGE = 'Leclerc met trop de temps à répondre.'
+
 /**
  * Une erreur de l'adaptateur. Le message est un texte fixe : il ne contient jamais d'en-tête, de cookie ni de contenu de page
  * (le message part dans le résultat envoyé à Repas, et dans le journal de diagnostic).
@@ -31,7 +34,7 @@ export class LeclercError extends Error {
     status: number | null = null,
     cause: LeclercCause | null = null,
   ) {
-    super(MESSAGES[code])
+    super(code === 'NETWORK' && cause === 'REQUEST_TIMEOUT' ? TIMEOUT_MESSAGE : MESSAGES[code])
     this.name = 'LeclercError'
     this.code = code
     this.status = status

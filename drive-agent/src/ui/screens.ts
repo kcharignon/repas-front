@@ -2,6 +2,7 @@
 import { append, clear, h, type Child } from './dom'
 import { ERROR_TEXTS, S } from './strings'
 import type {
+  ChallengeProps,
   ChooserProps,
   DiagnosticProps,
   DiagnosticRow,
@@ -30,6 +31,11 @@ export interface Rendered {
   start?: () => void
   /** Appelé quand l'écran est remplacé ou fermé. */
   dispose?: () => void
+  /**
+   * Un bandeau en bas de l'écran : la page de l'enseigne reste visible et touchable au-dessus (pas de fond, la fenêtre n'est pas modale). Pour
+   * ce qu'il faut faire DANS la page, comme la vérification de l'anti-robot (ticket K).
+   */
+  sheet?: boolean
 }
 
 type Answer<K extends ScreenName> = (value: ScreenAnswer<K>) => void
@@ -363,6 +369,23 @@ const diagnostic: Renderer<'diagnostic'> = (props: DiagnosticProps, answer) => {
   }
 }
 
+const challenge: Renderer<'challenge'> = (_props: ChallengeProps, answer) => {
+  const resume = button(S.challenge.resume, () => answer('resume'), 'primary')
+  return {
+    el: screen(
+      title(S.challenge.title),
+      h('p', { text: S.challenge.text }),
+      h('p', { class: 'hint', text: S.challenge.reload }),
+      actions(
+        resume,
+        button(S.challenge.stop, () => answer('stop')),
+      ),
+    ),
+    focus: resume,
+    sheet: true,
+  }
+}
+
 const error: Renderer<'error'> = (props: ErrorProps, answer) => {
   const close = button(S.error.close, () => answer('close'), props.canReturn ? 'plain' : 'primary')
   const back = button(S.error.back, () => answer('return'), 'primary')
@@ -412,6 +435,7 @@ const end: Renderer<'end'> = (props: EndProps, answer) => {
             ),
           )
         : null,
+      props.slow ? h('p', { class: 'notice', text: S.end.slow }) : null,
       props.kept && props.kept.length > 0
         ? h(
             'div',
@@ -458,6 +482,7 @@ export const RENDERERS: { [K in ScreenName]: Renderer<K> } = {
   placement,
   store,
   diagnostic,
+  challenge,
   error,
   end,
 }

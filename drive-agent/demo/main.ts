@@ -250,6 +250,20 @@ const SCREENS: Record<string, () => unknown> = {
         { name: 'Sucre en poudre', atLeast: null },
       ],
     }),
+  // Leclerc a mis trop de temps à répondre pour une ligne (ticket K).
+  'end-slow': () =>
+    ui.show('end', {
+      outcome: 'partial',
+      added: 3,
+      chosen: 0,
+      haveAtHome: 0,
+      skipped: 0,
+      unavailable: 0,
+      failed: 1,
+      slow: true,
+    }),
+  // L'anti-robot demande une vérification : un bandeau, la page reste visible derrière (ticket K).
+  challenge: () => ui.show('challenge', {}),
   'end-partial': () =>
     ui.show('end', {
       outcome: 'partial',
