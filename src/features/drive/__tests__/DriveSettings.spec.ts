@@ -8,7 +8,7 @@ import { fakeNative } from '../bridge/__tests__/fakeNative'
 import DriveSettingsView from '../DriveSettingsView.vue'
 import { StoreReadError } from '../storeReader'
 
-// La lecture par l'application n'est pas branchée : on la simule, comme le fera l'intégration.
+// La lecture par l'application (storeReader, testé à part avec un faux pont) est simulée ici : on éprouve l'écran.
 const reader = vi.hoisted(() => ({
   can: vi.fn<() => boolean>(() => false),
   read: vi.fn<() => Promise<unknown>>(),
@@ -282,6 +282,7 @@ describe('réglages du drive : la lecture du magasin par l’application', () =>
   })
 
   it.each([
+    ['BUSY', 'Un envoi au drive est déjà en cours'],
     ['CANCELLED', 'Aucun magasin choisi'],
     ['NOT_FOUND', 'n’a pas trouvé de magasin'],
     ['UNAVAILABLE', 'ne peut pas lire votre magasin'],

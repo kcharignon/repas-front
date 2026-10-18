@@ -173,6 +173,8 @@ post_command '{"do":"raw","text":"{\"v\":1,\"type\":\"inconnu\"}"}'
 if wait_until 10 has_report '"type": "error", "code": "UNKNOWN_TYPE"'; then ok "un type inconnu reçoit UNKNOWN_TYPE"; else ko "pas de réponse au type inconnu"; fi
 post_command '{"do":"raw","text":"{\"v\":1,\"type\":\"drive.start\",\"plan\":{}}"}'
 if wait_until 10 has_report '"type": "drive.error", "code": "INVALID_PLAN"'; then ok "un plan invalide reçoit drive.error INVALID_PLAN"; else ko "pas de réponse au plan invalide"; fi
+post_command '{"do":"raw","text":"{\"v\":1,\"type\":\"drive.setup\",\"runId\":\"pas-un-uuid\"}"}'
+if wait_until 10 has_report '"type": "drive.error", "code": "INVALID_SETUP"'; then ok "une lecture du magasin sans identifiant valide reçoit drive.error INVALID_SETUP"; else ko "pas de réponse à drive.setup invalide"; fi
 
 # --- 3. Menu de l'application et lien externe ---------------------------------------------------------------------------------------------
 say
@@ -266,6 +268,12 @@ if wait_until 15 has_report "\"type\": \"drive.error\", \"code\": \"BUSY\", \"ru
 else
   ko "le second plan n'a pas reçu BUSY"
 fi
+post_command "{\"do\":\"drive.setup\",\"runId\":\"$RUN_D\"}"
+if wait_until 15 has_report_count "\"type\": \"drive.error\", \"code\": \"BUSY\", \"runId\": \"$RUN_C\"" 2; then
+  ok "une lecture du magasin pendant un passage reçoit aussi drive.error BUSY"
+else
+  ko "la lecture du magasin pendant un passage n'a pas reçu BUSY"
+fi
 if tap 'text="Reprendre"' && wait_until 40 has_report_count '"command": "plan"' 2; then
   ok "« Reprendre » rouvre le drive : le plan est renvoyé à l'agent"
 else
@@ -290,6 +298,62 @@ if tap 'text="Abandonner"' && wait_until 30 result_report "$RUN_E" aborted; then
 else
   ko "le résultat n'a pas été livré à la page rechargée"
 fi
+
+# --- 4b. Lecture du magasin (DRV-320) ---------------------------------------------------------------------------------------------------
+say
+say "4b. Lecture du magasin : drive.setup, l'agent, setup-result et abandon"
+RUN_F=ffffffff-ffff-4fff-8fff-ffffffffffff
+RUN_G=99999999-9999-4999-8999-999999999999
+start_setup() { post_command "{\"do\":\"drive.setup\",\"runId\":\"$1\"}"; }
+store_report() { # store_report <runId> : Repas a reçu le magasin lu pour cette lecture (identifiant et hôte du faux site)
+  reports | grep -q "\"runId\": \"$1\", \"resultType\": \"setup-result\", \"lines\": -1, \"hasStore\": true, \"storeId\": \"123456\", \"storeHost\": \"$SITE_HOST\""
+}
+no_setup_yet() { ! has_report '"command": "setup"'; }
+
+say "   a. Se connecter, choisir son magasin, puis l'agent le lit"
+reset_reports
+start_setup "$RUN_F"
+if wait_until 40 has_report '"hostname": "www.leclercdrive.fr", "path": "/"'; then
+  ok "drive.setup ouvre le drive sur l'accueil (faux site)"
+else
+  ko "drive.setup n'a pas ouvert l'accueil du drive"
+fi
+if wait_until 10 ui_has 'choisis ton magasin'; then ok "le message en français simple (se connecter, choisir son magasin) est à l'écran"; else ko "le message de la lecture du magasin n'est pas à l'écran"; fi
+check "l'écran reste allumé pendant la lecture" screen_held
+sleep 6
+check "tant que la page n'est pas celle d'un magasin, rien n'est envoyé à l'agent" no_setup_yet
+screenshot 12-lecture-magasin-accueil
+if tap 'text="Choisir mon magasin de test"'; then ok "magasin choisi sur le faux site (lien touché)"; else ko "le lien du magasin est introuvable à l'écran"; fi
+if wait_until 30 has_report '"command": "setup"'; then ok "sur la page du magasin, l'agent reçoit le message setup par le pont"; else ko "l'agent n'a pas reçu le message setup"; fi
+if wait_until 15 ui_has 'Enregistrer ce magasin'; then ok "l'agent demande confirmation (écran « Enregistrer ce magasin dans Repas ? »)"; else ko "l'agent n'a pas affiché sa confirmation"; fi
+check "le message de la lecture du magasin a disparu (l'agent a pris la main)" ui_lacks 'Connecte-toi à Leclerc'
+sleep 1
+screenshot 13-lecture-magasin-confirmation
+if tap 'text="Enregistrer"'; then ok "« Enregistrer » touché dans l'interface de l'agent"; else ko "le bouton « Enregistrer » est introuvable"; fi
+if wait_until 20 store_report "$RUN_F"; then
+  ok "Repas reçoit drive.result : le setup-result de l'agent (identifiant et hôte du magasin du faux site), du même runId"
+else
+  ko "Repas n'a pas reçu le magasin lu"
+fi
+if wait_until 10 ui_has 'magasin 123456'; then ok "l'application est revenue à l'écran Repas"; else ko "l'écran Repas n'est pas revenu"; fi
+check "l'écran n'est plus maintenu allumé une fois la lecture finie" screen_not_held
+sleep 1
+screenshot 14-lecture-magasin-resultat
+
+say "   b. Abandon par l'utilisateur"
+reset_reports
+start_setup "$RUN_G"
+if wait_until 40 has_report '"hostname": "www.leclercdrive.fr", "path": "/"'; then ok "seconde lecture ouverte"; else ko "la seconde lecture n'a pas démarré"; fi
+adb shell input keyevent KEYCODE_BACK
+if wait_until 10 ui_has "Abandonner la lecture du magasin"; then ok "le retour demande s'il faut abandonner la lecture du magasin"; else ko "pas de demande d'abandon de la lecture"; fi
+sleep 1
+screenshot 15-lecture-magasin-abandon
+if tap 'text="Abandonner"' && wait_until 20 has_report "\"runId\": \"$RUN_G\", \"resultType\": \"result\", \"outcome\": \"aborted\", \"errorCode\": \"CANCELLED\", \"lines\": 0, \"hasStore\": false"; then
+  ok "l'abandon donne un résultat aborted à Repas, sans magasin"
+else
+  ko "l'abandon de la lecture n'a pas donné de résultat aborted"
+fi
+if wait_until 10 ui_has 'drive.result'; then ok "l'application est revenue à l'écran Repas"; else ko "l'écran Repas n'est pas revenu"; fi
 
 # --- 5. Le drive, second écran -----------------------------------------------------------------------------------------------------------
 say

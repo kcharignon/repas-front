@@ -248,16 +248,20 @@ class MainActivity : Activity() {
             }
             NativeRequest.AppMenu -> openMenu()
             is NativeRequest.DriveStart -> startPass(request.plan)
+            is NativeRequest.DriveSetup -> startPass(request.setup)
             is NativeRequest.DriveCancel -> cancelPass(request.runId)
         }
         // Après la réponse : la page a un écouteur (elle vient de nous écrire), un résultat en attente peut lui être livré.
         flushOutbox(pageIsAlive = true)
     }
 
-    /** `drive.start` : un seul passage à la fois ; sinon l'écran du drive s'ouvre sur le magasin du plan (le même passage renvoyé le rouvre). */
-    private fun startPass(plan: DrivePlan) {
-        if (repasApp.agentLoad.status != AgentStatus.READY) return post(NativeBridge.driveError(NativeBridge.UNAVAILABLE, plan.runId))
-        when (val outcome = repasApp.pass.start(plan, PassSource.REPAS)) {
+    /**
+     * `drive.start` et `drive.setup` : un seul passage à la fois ; sinon l'écran du drive s'ouvre, sur le magasin du plan ou sur l'accueil du
+     * drive pour la lecture du magasin (le même passage renvoyé le rouvre).
+     */
+    private fun startPass(request: PassRequest) {
+        if (repasApp.agentLoad.status != AgentStatus.READY) return post(NativeBridge.driveError(NativeBridge.UNAVAILABLE, request.runId))
+        when (val outcome = repasApp.pass.start(request, PassSource.REPAS)) {
             is StartOutcome.Busy -> post(NativeBridge.driveError(NativeBridge.BUSY, outcome.runId))
             StartOutcome.Started, StartOutcome.Resumed -> openDrive()
         }
@@ -296,9 +300,10 @@ class MainActivity : Activity() {
         val interrupted = repasApp.pass.current() ?: return
         // La coquille au premier plan avec un passage en cours : l'écran du drive n'est pas devant, donc le passage a été interrompu.
         if (interrupted.source != PassSource.REPAS || resumeDialog?.isShowing == true) return
+        val setup = interrupted.request.isSetup
         resumeDialog = AlertDialog.Builder(this)
-            .setTitle(R.string.resume_title)
-            .setMessage(R.string.resume_message)
+            .setTitle(if (setup) R.string.resume_setup_title else R.string.resume_title)
+            .setMessage(if (setup) R.string.resume_setup_message else R.string.resume_message)
             .setCancelable(false)
             .setPositiveButton(R.string.resume_confirm) { _, _ -> openDrive() }
             .setNegativeButton(R.string.resume_abandon) { _, _ ->

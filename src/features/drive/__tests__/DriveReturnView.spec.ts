@@ -223,6 +223,18 @@ describe('retour du drive : l’enregistrement échoue', () => {
     expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
   })
 
+  it('un résultat sans magasin n’enregistre rien : il ne faut pas mémoriser pour le mauvais magasin', async () => {
+    const { store: _store, ...withoutStore } = result()
+    const { wrapper, fetchMock } = await open({ kind: 'result', result: withoutStore, draft })
+    await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
+
+    expect(wrapper.find('[role="alert"]').text()).toContain(
+      'Vos choix n’ont pas pu être enregistrés.',
+    )
+    expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
+    expect(localStorage.getItem(DRAFT_KEY)).not.toBeNull()
+  })
+
   it.each([
     [409, 'DRIVE_STORE_MISMATCH', 'Votre magasin a changé'],
     [422, 'DRIVE_CHOICE_INVALID', 'Cette préférence est refusée'],

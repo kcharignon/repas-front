@@ -7,7 +7,9 @@
  *  - `SEND_FAILED` : le pont a refusé l'envoi ;
  *  - `REFUSED` : l'application a refusé (`detail` : son code, par exemple `UNKNOWN_TYPE`) ;
  *  - `TIMEOUT` : l'application n'a pas répondu ;
- *  - `INVALID_RESPONSE` : la réponse de l'application est mal formée.
+ *  - `INVALID_RESPONSE` : la réponse de l'application est mal formée ;
+ *  - `CANCELLED` : la lecture du magasin a été abandonnée (l'utilisateur est revenu sans choisir de magasin) ;
+ *  - `SETUP_FAILED` : l'agent n'a pas pu lire le magasin (`detail` : son code d'erreur, par exemple `UNSUPPORTED_PAGE`).
  */
 export type DriveBridgeErrorCode =
   | 'UNAVAILABLE'
@@ -18,6 +20,8 @@ export type DriveBridgeErrorCode =
   | 'REFUSED'
   | 'TIMEOUT'
   | 'INVALID_RESPONSE'
+  | 'CANCELLED'
+  | 'SETUP_FAILED'
 
 /** Une erreur du pont. Ni son texte ni `detail` ne contiennent le message : seulement un code ou le chemin d'un champ. */
 export class DriveBridgeError extends Error {

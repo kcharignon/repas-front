@@ -4,8 +4,8 @@ Ils ne contiennent AUCUNE donnée réelle : des pages de test qui relèvent ce q
 
 Selon le nom demandé (en-tête Host) :
   repas.test (le faux front Repas, DRV-317)   toute adresse hors /__ : la page repaspage.html (comme un SPA)
-  *.leclercdrive.fr (le faux drive)           GET / : la page de test testpage.html ; le reste, 404 (par exemple les recherches que tenterait
-                                              l'agent : elles n'aboutissent jamais)
+  *.leclercdrive.fr (le faux drive)           GET / (l'accueil) et GET /magasin-… (une page de magasin, DRV-320) : la page de test testpage.html ;
+                                              le reste, 404 (par exemple les recherches que tenterait l'agent : elles n'aboutissent jamais)
 Pour tous les noms :
   POST /__report      la page y dépose ce qu'elle a relevé (JSON, 8 Ko au plus) ; le test de fumée le relit
   GET  /__reports     la liste des relevés, en JSON
@@ -69,7 +69,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, json.dumps(command).encode(), "application/json")
         elif self._host() == REPAS_HOST and not path.startswith("/__"):
             self._page(REPAS_PAGE)
-        elif path == "/":
+        elif path == "/" or path.startswith("/magasin-"):
             self._page(DRIVE_PAGE)
         else:
             self._send(404, b"introuvable")

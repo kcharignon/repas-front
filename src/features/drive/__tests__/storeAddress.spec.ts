@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import { parseStoreAddress, storeTail } from '../storeAddress'
-import { canReadStoreFromApp, readStoreFromApp } from '../storeReader'
 
 const base = 'https://exemple.leclercdrive.fr/magasin-123456-123456'
 
@@ -49,12 +48,5 @@ describe('adresse d’un magasin', () => {
   it('montre les derniers chiffres de l’identifiant', () => {
     expect(storeTail('123456')).toBe('456')
     expect(storeTail('12')).toBe('12')
-  })
-})
-
-describe('lecture du magasin par l’application', () => {
-  it('n’est pas branchée : elle se déclare indisponible', async () => {
-    expect(canReadStoreFromApp()).toBe(false)
-    await expect(readStoreFromApp()).rejects.toMatchObject({ code: 'UNAVAILABLE' })
   })
 })

@@ -1,7 +1,8 @@
-// La lecture du magasin par l'application (DRV-307, décision D28) : le front demande à l'application d'ouvrir le drive en mode
-// réglage (message `drive.setup`) et reçoit le magasin lu sur la page. Ce module est la seule frontière : l'écran des réglages n'en
-// connaît que ces deux fonctions. L'implémentation réelle (message `drive.setup` du pont, côté application DRV-314) est branchée à
-// l'intégration ; en attendant, la lecture est déclarée indisponible et l'écran propose la saisie de l'adresse.
+// La lecture du magasin par l'application (DRV-307, DRV-320, décision D28) : le front demande à l'application d'ouvrir le drive (message
+// `drive.setup` du pont) : l'utilisateur s'y connecte et y choisit son magasin, l'agent le lit sur la page et l'application revient avec
+// lui. Ce module est la seule frontière : l'écran des réglages n'en connaît que ces deux fonctions.
+import { driveBridge, DriveBridgeError } from './bridge'
+import type { DriveBridge } from './bridge'
 
 /** Le magasin lu par l'agent : son identifiant et son adresse (jamais son nom, que l'agent ne lit pas). */
 export interface StoreReading {
@@ -11,8 +12,10 @@ export interface StoreReading {
 }
 
 export type StoreReadErrorCode =
-  /** L'application ne sait pas (encore) lire le magasin. */
+  /** L'application ne sait pas (ou ne peut pas) lire le magasin : hors de l'application, drive coupé ou application trop ancienne. */
   | 'UNAVAILABLE'
+  /** Un envoi au drive (ou une autre lecture) est déjà en cours dans l'application. */
+  | 'BUSY'
   /** L'utilisateur est revenu sans avoir choisi de magasin. */
   | 'CANCELLED'
   /** L'agent n'a trouvé aucun magasin sur la page. */
@@ -26,12 +29,37 @@ export class StoreReadError extends Error {
   }
 }
 
-/** L'application sait-elle lire le magasin ? Faux tant que l'intégration n'est pas faite : l'écran n'affiche alors pas le bouton. */
-export function canReadStoreFromApp(): boolean {
-  return false
+/** L'application sait-elle lire le magasin ? Vrai dans l'application Repas (le pont natif est là) : l'écran affiche alors le bouton. */
+export function canReadStoreFromApp(bridge: DriveBridge = driveBridge): boolean {
+  return bridge.isAvailable()
 }
 
-/** Demande à l'application d'ouvrir le drive en mode réglage et rend le magasin choisi ; lève une `StoreReadError`. */
-export function readStoreFromApp(): Promise<StoreReading> {
-  return Promise.reject(new StoreReadError('UNAVAILABLE'))
+/** Pourquoi la lecture a échoué, dans le vocabulaire de l'écran des réglages. */
+function codeOf(error: DriveBridgeError): StoreReadErrorCode {
+  switch (error.code) {
+    case 'CANCELLED':
+      return 'CANCELLED'
+    case 'SETUP_FAILED':
+      return error.detail === 'UNSUPPORTED_PAGE' ? 'NOT_FOUND' : 'FAILED'
+    case 'REFUSED':
+      return error.detail === 'BUSY' ? 'BUSY' : 'UNAVAILABLE'
+    case 'INVALID_RESPONSE':
+      return 'FAILED'
+    default:
+      return 'UNAVAILABLE'
+  }
+}
+
+/**
+ * Demande à l'application d'ouvrir le drive pour lire le magasin choisi, et le rend (le retour peut prendre plusieurs minutes : il faut
+ * se connecter et choisir son magasin). Lève une `StoreReadError`.
+ */
+export async function readStoreFromApp(bridge: DriveBridge = driveBridge): Promise<StoreReading> {
+  try {
+    const store = await bridge.startSetup()
+
+    return { id: store.id, baseUrl: store.baseUrl, label: store.label }
+  } catch (error) {
+    throw error instanceof DriveBridgeError ? new StoreReadError(codeOf(error)) : error
+  }
 }

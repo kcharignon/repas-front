@@ -64,6 +64,24 @@ class NativeBridgeTest {
     }
 
     @Test
+    fun `drive setup porte l'identifiant du passage (DRV-320)`() {
+        val runId = "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c"
+        val setup = screen("""{"v":1,"type":"drive.setup","runId":"$runId"}""") as NativeRequest.DriveSetup
+
+        assertEquals(runId, setup.setup.runId)
+        assertTrue(setup.setup.isSetup)
+    }
+
+    @Test
+    fun `drive setup sans identifiant valide est refuse avec INVALID_SETUP`() {
+        listOf("", ",\"runId\":null", ",\"runId\":\"pas-un-uuid\"", ",\"runId\":12", ",\"runId\":{}", ",\"runId\":\"\"").forEach {
+            val refused = screen("""{"v":1,"type":"drive.setup"$it}""") as NativeRequest.Refused
+            assertEquals(it, "INVALID_SETUP", JSONObject(refused.reply).getString("code"))
+            assertEquals("drive.error", JSONObject(refused.reply).getString("type"))
+        }
+    }
+
+    @Test
     fun `drive cancel vise le passage en cours, avec ou sans identifiant`() {
         assertEquals(null, (screen("""{"v":1,"type":"drive.cancel"}""") as NativeRequest.DriveCancel).runId)
         assertEquals(null, (screen("""{"v":1,"type":"drive.cancel","runId":null}""") as NativeRequest.DriveCancel).runId)
@@ -93,8 +111,8 @@ class NativeBridgeTest {
     @Test
     fun `les codes de drive error sont ceux du contrat`() {
         assertEquals(
-            listOf("INVALID_PLAN", "BUSY", "UNAVAILABLE", "NO_PASS"),
-            listOf(NativeBridge.INVALID_PLAN, NativeBridge.BUSY, NativeBridge.UNAVAILABLE, NativeBridge.NO_PASS),
+            listOf("INVALID_PLAN", "INVALID_SETUP", "BUSY", "UNAVAILABLE", "NO_PASS"),
+            listOf(NativeBridge.INVALID_PLAN, NativeBridge.INVALID_SETUP, NativeBridge.BUSY, NativeBridge.UNAVAILABLE, NativeBridge.NO_PASS),
         )
     }
 

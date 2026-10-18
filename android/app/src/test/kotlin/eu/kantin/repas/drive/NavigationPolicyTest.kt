@@ -167,4 +167,37 @@ class NavigationPolicyTest {
         }
         assertEquals("?", NavigationPolicy.describe("http\u017F://www.leclercdrive.fr/"))
     }
+
+    @Test
+    fun `une page de magasin se reconnait a son chemin (DRV-320), l'accueil et la connexion non`() {
+        val stores = listOf(
+            "https://fd0-courses.leclercdrive.fr/magasin-123456-123456/accueil.aspx",
+            "https://fd0-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/recherche.aspx?TexteRecherche=farine#haut",
+            "https://fd0-courses.leclercdrive.fr/magasin-123456-123456",
+            "https://fd0-courses.leclercdrive.fr/magasin-123456-123456?x=1",
+            "https://www.leclercdrive.fr/MAGASIN-000001-000001-Ville-Test/",
+        )
+        val others = listOf(
+            "https://www.leclercdrive.fr/",
+            "https://www.leclercdrive.fr",
+            "https://www.leclercdrive.fr/connexion.aspx",
+            "https://www.leclercdrive.fr/?u=/magasin-123456-123456/",
+            "https://www.leclercdrive.fr?u=/magasin-123456-123456/",
+            "https://www.leclercdrive.fr#/magasin-123456-123456/",
+            "https://www.leclercdrive.fr/#/magasin-123456-123456/",
+            "https://www.leclercdrive.fr/x/magasin-123456-123456/",
+            "https://www.leclercdrive.fr/magasin-123456/accueil.aspx",
+            "https://www.leclercdrive.fr/magasin-abc-123456/accueil.aspx",
+            "https://www.leclercdrive.fr/magasin-123456-123456abc/accueil.aspx",
+            "https://www.leclercdrive.fr/magasin-1234567890123-1/accueil.aspx",
+            "https://exemple.org/magasin-123456-123456/accueil.aspx",
+            "http://www.leclercdrive.fr/magasin-123456-123456/accueil.aspx",
+            "https://www.leclercdrive.fr.evil.com/magasin-123456-123456/accueil.aspx",
+            "about:blank",
+            "",
+            null,
+        )
+        stores.forEach { assertTrue("devrait être une page de magasin : $it", NavigationPolicy.isStorePage(it)) }
+        others.forEach { assertFalse("ne devrait pas être une page de magasin : $it", NavigationPolicy.isStorePage(it)) }
+    }
 }

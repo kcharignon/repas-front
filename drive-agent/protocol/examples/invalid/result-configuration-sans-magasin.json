@@ -1,0 +1,10 @@
+{
+  "path": "store",
+  "why": "Un setup-result a toujours un magasin (seul un result peut ne pas en avoir).",
+  "message": {
+    "v": 1,
+    "type": "setup-result",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "agentVersion": "1.0.0"
+  }
+}
