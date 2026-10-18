@@ -15,6 +15,7 @@ import type {
   CartResult,
   Content,
   PricePerMeasure,
+  RequestStats,
   RetailerAdapter,
   SessionReading,
 } from '../src/leclerc'
@@ -178,6 +179,8 @@ export function fakeAdapter(
     sees?: (query: string, id: string) => boolean
     /** Ce que la dernière réponse du panier disait déjà, par identifiant de produit (ensuite : ce que chaque écriture y a laissé). */
     lastCart?: Record<string, number>
+    /** Les compteurs de l'adaptateur (par défaut : une requête par appel, rien d'autre). */
+    stats?: () => RequestStats
   } = {},
 ) {
   const calls: string[] = []
@@ -208,6 +211,16 @@ export function fakeAdapter(
       return item && (options.sees?.(query, id) ?? true) ? candidate(id, item) : null
     },
     pageCartTotal: () => null,
+    stats:
+      options.stats ??
+      (() => ({
+        requests: calls.length,
+        errors: 0,
+        blocks: 0,
+        timeouts: 0,
+        slow: 0,
+        peakPauseMs: 0,
+      })),
     cartQuantity: (id) => cartReply.get(id) ?? null,
     readSession: () => options.session ?? { state: 'UNKNOWN', signs: [] },
     readArrival: () => ({

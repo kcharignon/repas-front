@@ -30,6 +30,8 @@ export const LIMITS = {
   selftestReport: 20_000,
   /** Prix, en centimes (un million d'euros). */
   cents: 100_000_000,
+  /** Un compteur de requêtes, d'erreurs ou de blocages d'un passage (ticket L). */
+  requests: 100_000,
 } as const
 
 /** Le seul chemin de retour permis, sur l'origine de Repas écrite en dur dans l'agent. */
@@ -218,6 +220,17 @@ export interface ResultError {
   message: string
 }
 
+/**
+ * Les compteurs d'un passage (ticket L de l'audit du 2026-10-18) : des nombres, jamais une adresse ni un contenu. `requests` : les requêtes envoyées au
+ * site, reprises comprises ; `errors` : celles qui n'ont pas eu de réponse (réseau, délai d'attente) ou une réponse 4xx ou 5xx hors refus ;
+ * `blocks` : les refus de l'anti-robot (403, 429, page de défi). Cumulés sur tout le passage, même repris après un rechargement.
+ */
+export interface ResultStats {
+  requests: number
+  errors: number
+  blocks: number
+}
+
 /** Agent vers Repas : ce qui a été mis au panier. */
 export interface ResultMessage {
   v: typeof PROTOCOL_VERSION
@@ -228,6 +241,8 @@ export interface ResultMessage {
   /** Absent seulement quand un `setup` sans magasin (DRV-320) s'arrête avant que le magasin soit connu. */
   store?: { id: string }
   error?: ResultError
+  /** Facultatif (ticket L) : absent d'un résultat où aucune requête n'est partie, et des agents d'avant. */
+  stats?: ResultStats
   lines: ResultLine[]
 }
 

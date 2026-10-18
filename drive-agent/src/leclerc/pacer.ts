@@ -14,6 +14,35 @@ export const MAX_BLOCKS = 2
  * laisserait l'écran de progression figé, sans message, jusqu'à l'abandon. Les réponses mesurées durent de 0,1 à 1,9 s.
  */
 export const REQUEST_TIMEOUT_MS = 20_000
+/**
+ * La cadence s'adapte à Leclerc (ticket L de l'audit du 2026-10-18, H12) : quand le site ralentit, la pause entre deux requêtes s'allonge, jamais
+ * au-delà de `MAX_PAUSE_MS` (gigue comprise), puis revient à `PAUSE_MS` à mesure que les réponses redeviennent rapides. Jamais plus vite que la
+ * cadence normale, jamais deux requêtes à la fois.
+ */
+export const MAX_PAUSE_MS = 3000
+/** Une réponse (corps compris) plus lente que cela dit que Leclerc ralentit. */
+export const SLOW_REPLY_MS = 3000
+/** Ce qu'une réponse lente ajoute à la pause. */
+export const SLOWDOWN_STEP_MS = 400
+/** Ce que le refus de l'anti-robot (403, 429, page de défi) ou un délai d'attente dépassé ajoute à la pause. */
+export const REFUSAL_STEP_MS = 800
+/** Ce que chaque réponse rapide, sans refus, retire de la pause ajoutée. */
+export const RECOVERY_STEP_MS = 200
+
+/**
+ * Les compteurs de la cadence : des NOMBRES, jamais une adresse, un en-tête ni un contenu. `requests` : les requêtes envoyées, reprises comprises ;
+ * `errors` : sans réponse (réseau, délai d'attente) ou à réponse 4xx ou 5xx hors refus ; `blocks` : les refus 403, 429 et pages de défi ;
+ * `timeouts` : les délais d'attente dépassés (déjà dans `errors`) ; `slow` : les réponses plus lentes que `SLOW_REPLY_MS` ; `peakPauseMs` : la plus
+ * longue pause demandée entre deux requêtes.
+ */
+export interface RequestStats {
+  requests: number
+  errors: number
+  blocks: number
+  timeouts: number
+  slow: number
+  peakPauseMs: number
+}
 
 export type FetchFn = (input: string, init?: RequestInit) => Promise<Response>
 
@@ -88,8 +117,19 @@ export class Pacer {
   private readonly deps: PacerDeps
   private queue: Promise<unknown> = Promise.resolve()
   private lastEnd: number | null = null
+  /** Les refus de suite (403, 429) : deux arrêtent tout. */
   private blocks = 0
   private stopped = false
+  /** Ce que la cadence ajoute à la pause normale parce que Leclerc ralentit (0 à `MAX_PAUSE_MS - PAUSE_MS`). */
+  private extraMs = 0
+  private readonly counters: RequestStats = {
+    requests: 0,
+    errors: 0,
+    blocks: 0,
+    timeouts: 0,
+    slow: 0,
+    peakPauseMs: 0,
+  }
 
   constructor(fetchFn: FetchFn, deps: PacerDeps) {
     this.fetchFn = fetchFn
@@ -101,6 +141,21 @@ export class Pacer {
     return this.stopped
   }
 
+  /** Les compteurs depuis la création du Pacer (une copie : des nombres seulement). */
+  stats(): RequestStats {
+    return { ...this.counters }
+  }
+
+  /** Leclerc ralentit : la pause s'allonge de `by`, sans dépasser `MAX_PAUSE_MS`. */
+  private slowDown(by: number): void {
+    this.extraMs = Math.min(MAX_PAUSE_MS - PAUSE_MS, this.extraMs + by)
+  }
+
+  /** Une réponse rapide : la pause allongée se raccourcit, jusqu'à la pause normale. */
+  private recover(): void {
+    this.extraMs = Math.max(0, this.extraMs - RECOVERY_STEP_MS)
+  }
+
   /** Envoie une requête à son tour. Rend toute réponse qui n'est pas un blocage (404, 500… compris : à l'appelant de juger). */
   request(url: string, init: RequestInit): Promise<Reply> {
     const turn = this.queue.then(() => this.send(url, init))
@@ -110,7 +165,11 @@ export class Pacer {
 
   private async pause(): Promise<void> {
     if (this.lastEnd === null) return
-    const gap = PAUSE_MS + Math.floor(this.deps.random() * (JITTER_MS + 1))
+    const gap = Math.min(
+      MAX_PAUSE_MS,
+      PAUSE_MS + this.extraMs + Math.floor(this.deps.random() * (JITTER_MS + 1)),
+    )
+    this.counters.peakPauseMs = Math.max(this.counters.peakPauseMs, gap)
     const wait = gap - (this.deps.now() - this.lastEnd)
     if (wait > 0) await this.deps.sleep(wait)
   }
@@ -122,6 +181,8 @@ export class Pacer {
       if (this.stopped) throw new LeclercError('BLOCKED')
       await this.pause()
       let reply: Reply
+      this.counters.requests += 1
+      const startedAt = this.deps.now()
       // Le délai d'attente de cette tentative : il interrompt le `fetch` (et la lecture du corps) et se désarme dès que la réponse est là.
       let timedOut = false
       const controller = this.deps.timer ? new AbortController() : null
@@ -145,6 +206,11 @@ export class Pacer {
         }
       } catch {
         this.lastEnd = this.deps.now()
+        this.counters.errors += 1
+        if (timedOut) {
+          this.counters.timeouts += 1
+          this.slowDown(REFUSAL_STEP_MS)
+        }
         if (networkRetried) {
           throw new LeclercError('NETWORK', null, timedOut ? 'REQUEST_TIMEOUT' : null)
         }
@@ -155,9 +221,21 @@ export class Pacer {
         disarm?.()
       }
       this.lastEnd = this.deps.now()
+      const challenge = isChallenge(reply.text)
+      const refused = challenge || reply.status === 403 || reply.status === 429
+      const slow = this.lastEnd - startedAt > SLOW_REPLY_MS
+      if (slow) this.counters.slow += 1
+      if (refused) {
+        this.counters.blocks += 1
+        this.slowDown(REFUSAL_STEP_MS)
+      } else {
+        if (reply.status >= 400) this.counters.errors += 1
+        if (slow) this.slowDown(SLOWDOWN_STEP_MS)
+        else this.recover()
+      }
       // Une page de défi : l'utilisateur doit la passer lui-même, la retenter n'y changerait rien et ne ferait qu'insister.
-      if (isChallenge(reply.text)) throw new LeclercError('BLOCKED', reply.status, 'CHALLENGE')
-      if (reply.status !== 403 && reply.status !== 429) {
+      if (challenge) throw new LeclercError('BLOCKED', reply.status, 'CHALLENGE')
+      if (!refused) {
         this.blocks = 0
         return reply
       }

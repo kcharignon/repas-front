@@ -3,7 +3,7 @@
 // contrôles, qui ne portent que des nombres et des phrases fixes.
 import type { DiagnosticRow } from '../ui'
 import { S } from '../ui'
-import { causeText } from '../leclerc'
+import { causeText, type RequestStats } from '../leclerc'
 import { CHECK_IDS, type CheckId, type CheckResult, type PageFacts } from './checks'
 import { probeLines, type ProbeFacts } from './probes'
 
@@ -60,6 +60,7 @@ export function reportOf(
   page: PageFacts | null,
   results: readonly CheckResult[],
   probes?: ProbeFacts | null,
+  stats?: RequestStats | null,
 ): string {
   const sondes = probeLines(probes)
   const lines = [
@@ -69,6 +70,7 @@ export function reportOf(
     ...(page ? pageLines(page) : []),
     '',
     ...(sondes.length > 0 ? [...sondes, ''] : []),
+    ...(stats ? [T.text.requests(stats), ''] : []),
     ...rowsOf(results).map(
       (row) => `[${row.badge}] ${row.label}${row.detail === null ? '' : ` : ${row.detail}`}`,
     ),

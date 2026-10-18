@@ -124,6 +124,16 @@ export const S = {
       host: (host: string) => `Hôte : ${host}`,
       store: (store: string) => `Magasin : ${store}`,
       noWrite: 'Aucune écriture au panier.',
+      /** Les compteurs de requêtes du diagnostic (ticket L) : des nombres seulement. */
+      requests: (stats: {
+        requests: number
+        errors: number
+        blocks: number
+        timeouts: number
+        slow: number
+        peakPauseMs: number
+      }) =>
+        `Requêtes du diagnostic : ${stats.requests} (erreurs ${stats.errors}, blocages ${stats.blocks}, délais dépassés ${stats.timeouts}, réponses lentes ${stats.slow}), pause la plus longue ${stats.peakPauseMs} ms`,
     },
     /**
      * Les sondes du site réel (ticket B de l'audit du 2026-10-18) : des formes, des noms et des nombres, jamais une valeur du site. Elles disent

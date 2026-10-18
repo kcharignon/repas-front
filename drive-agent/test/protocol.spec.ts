@@ -238,3 +238,60 @@ describe('validateSelftestResult', () => {
     expect(pathOf(() => validateSelftestResult(result))).not.toBe('(accepté)')
   })
 })
+
+describe('validateResult : les compteurs d’un passage (ticket L)', () => {
+  const base = {
+    v: 1,
+    type: 'result',
+    runId: '8f14e45f-ceea-467a-9575-8e6b8c0a1b2c',
+    agentVersion: '1.0.0',
+    outcome: 'completed',
+    lines: [],
+  }
+
+  it('est facultatif : un résultat sans « stats » est valide, comme avant', () => {
+    expect(() => validateResult(base)).not.toThrow()
+  })
+
+  it('accepte trois entiers de 0 à la borne', () => {
+    const stats = { requests: LIMITS.requests, errors: 0, blocks: 7 }
+
+    expect(validateResult({ ...base, stats })).toMatchObject({ stats })
+  })
+
+  it.each([
+    ['un compteur manquant', { requests: 1, errors: 0 }, 'stats.blocks'],
+    ['un compteur négatif', { requests: 1, errors: -1, blocks: 0 }, 'stats.errors'],
+    ['un compteur fractionnaire', { requests: 1.5, errors: 0, blocks: 0 }, 'stats.requests'],
+    [
+      'un compteur au-delà de la borne',
+      { requests: LIMITS.requests + 1, errors: 0, blocks: 0 },
+      'stats.requests',
+    ],
+    ['un compteur en texte', { requests: '1', errors: 0, blocks: 0 }, 'stats.requests'],
+    ['une clé inconnue', { requests: 1, errors: 0, blocks: 0, timeouts: 1 }, 'stats.timeouts'],
+    ['des compteurs qui ne sont pas un objet', [1, 2, 3], 'stats'],
+    ['des compteurs nuls', null, 'stats'],
+  ])('refuse %s', (_name, stats, path) => {
+    expect(pathOf(() => validateResult({ ...base, stats }))).toBe(path)
+  })
+
+  it('un setup-result n’en porte pas', () => {
+    const setup = {
+      v: 1,
+      type: 'setup-result',
+      runId: base.runId,
+      agentVersion: '1.0.0',
+      store: {
+        id: '000000',
+        host: 'courses-test.leclercdrive.fr',
+        baseUrl: 'https://courses-test.leclercdrive.fr/magasin-000000-000000',
+        label: null,
+      },
+    }
+
+    expect(
+      pathOf(() => validateResult({ ...setup, stats: { requests: 0, errors: 0, blocks: 0 } })),
+    ).toBe('stats')
+  })
+})

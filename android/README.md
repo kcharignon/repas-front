@@ -167,7 +167,7 @@ android/
       AgentAsset.kt         l'agent embarqué : empreinte, version, script injecté, états (Kotlin pur)
       BridgeMessages.kt     les règles du canal : origines, 64 Ko, forme du JSON, commande de diagnostic (Kotlin pur)
       DebugPlan.kt          (débogage) le plan d'essai et son déroulement en deux messages (Kotlin pur)
-      ResultReport.kt       (débogage) le résultat de l'agent en texte à copier, sans numéro de magasin entier (Kotlin pur)
+      ResultReport.kt       (débogage) le résultat de l'agent en texte à copier, sans numéro de magasin entier, avec ses compteurs de requêtes quand il en porte (ticket L, Kotlin pur)
       SelftestReport.kt     (débogage) le rapport du test automatique : sa forme, le masquage, et `SelftestRun` (n'accepte que le rapport demandé) (Kotlin pur)
       TextPanel.kt          (débogage) l'écran de texte : « Copier », « Partager » (feuille de partage), « Fermer », copie automatique du rapport
       VersionLabel.kt       la ligne de version montrée à l'utilisateur

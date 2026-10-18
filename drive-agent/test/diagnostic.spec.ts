@@ -46,10 +46,11 @@ const deps = (adapter: RetailerAdapter, extra: Partial<ChecksDeps> = {}): Checks
 
 const run = async (checks: ChecksDeps) => {
   const seen: CheckResult[] = []
-  const { results, page } = await runChecks(checks, (result) => seen.push(result))
+  const { results, page, stats } = await runChecks(checks, (result) => seen.push(result))
   return {
     results,
     page,
+    stats,
     seen,
     by: Object.fromEntries(results.map((result) => [result.id, result])),
   }
@@ -206,6 +207,36 @@ describe('quand le site ne répond pas comme prévu', () => {
       code: 'CONTRACT_CHANGED',
       detail: 'seulement 1 produits sur 3',
     })
+  })
+})
+
+describe('les compteurs de requêtes du diagnostic (ticket L)', () => {
+  it('runChecks rend les compteurs de l’adaptateur : des nombres, une recherche du mot courant et celle du mot absurde', async () => {
+    const { adapter } = site(GOOD)
+
+    const { stats } = await run(deps(adapter))
+
+    expect(stats.requests).toBeGreaterThanOrEqual(2)
+    expect(Object.values(stats).every((value) => typeof value === 'number')).toBe(true)
+  })
+
+  it('le rapport les dit sur une ligne de nombres : requêtes, erreurs, blocages, délais dépassés, réponses lentes, pause la plus longue', () => {
+    const report = reportOf('0.5.0', NOW, null, [], null, {
+      requests: 12,
+      errors: 1,
+      blocks: 2,
+      timeouts: 1,
+      slow: 3,
+      peakPauseMs: 1600,
+    })
+
+    expect(report).toContain(
+      'Requêtes du diagnostic : 12 (erreurs 1, blocages 2, délais dépassés 1, réponses lentes 3), pause la plus longue 1600 ms',
+    )
+  })
+
+  it('sans compteurs, le rapport reste celui d’avant', () => {
+    expect(reportOf('0.5.0', NOW, null, [])).not.toContain('Requêtes du diagnostic')
   })
 })
 

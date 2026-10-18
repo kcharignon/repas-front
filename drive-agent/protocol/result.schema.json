@@ -29,6 +29,16 @@
             "message": { "type": "string", "minLength": 1, "maxLength": 200 }
           }
         },
+        "stats": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requests", "errors", "blocks"],
+          "properties": {
+            "requests": { "$ref": "#/definitions/counter" },
+            "errors": { "$ref": "#/definitions/counter" },
+            "blocks": { "$ref": "#/definitions/counter" }
+          }
+        },
         "lines": { "type": "array", "maxItems": 100, "items": { "$ref": "#/definitions/line" } }
       },
       "if": { "properties": { "outcome": { "const": "error" } } },
@@ -70,6 +80,7 @@
   "definitions": {
     "label": { "type": "string", "minLength": 1, "maxLength": 255 },
     "storeId": { "type": "string", "pattern": "^[0-9]{1,12}$" },
+    "counter": { "type": "integer", "minimum": 0, "maximum": 100000 },
     "productId": { "type": "string", "pattern": "^[0-9]{1,12}$" },
     "errorCode": {
       "enum": [

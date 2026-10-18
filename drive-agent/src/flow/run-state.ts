@@ -1,7 +1,7 @@
 // L'état de reprise d'un passage, dans `sessionStorage` sous `repas:run:<runId>` : les issues des lignes déjà faites et la phase.
 // Aucune donnée personnelle : des identifiants de lignes et de produits, rien d'autre. Une erreur du stockage (plein, interdit) ne gêne
 // jamais le passage : on perd seulement la reprise.
-import { LIMITS, LINE_OUTCOMES, type ResultLine } from '../../protocol'
+import { LIMITS, LINE_OUTCOMES, type ResultLine, type ResultStats } from '../../protocol'
 import type { CartNote } from './keep-cart'
 import type { ContentChange } from './phase-a'
 import type { StorageLike } from './types'
@@ -30,6 +30,8 @@ export interface RunState {
   changes: RecordedChange[]
   /** Les lignes dont la quantité déjà au panier est à signaler (conservée ou illisible), dans l'ordre du passage. */
   carts: RecordedCart[]
+  /** Les compteurs de requêtes du passage entier (ticket L), toutes les pages qu'il a connues : un nombre de plus à chaque ligne faite. */
+  stats: ResultStats
 }
 
 export function emptyState(runId: string, now: number): RunState {
@@ -42,6 +44,7 @@ export function emptyState(runId: string, now: number): RunState {
     waiting: {},
     changes: [],
     carts: [],
+    stats: { requests: 0, errors: 0, blocks: 0 },
   }
 }
 
@@ -69,10 +72,21 @@ const isCart = (value: unknown): value is RecordedCart => {
   return value.kind === 'UNREADABLE' && (value.inCart === null || isInCart(value.inCart))
 }
 
-/** Un état tel qu'il est stocké : `changes` (DRV-613) et `carts` (ticket M) sont facultatifs, un état plus ancien n'en a pas. */
-type StoredState = Omit<RunState, 'changes' | 'carts'> & {
+const isCounter = (value: unknown): value is number =>
+  Number.isInteger(value) && (value as number) >= 0 && (value as number) <= LIMITS.requests
+
+const isStats = (value: unknown): value is ResultStats =>
+  isObject(value) &&
+  Object.keys(value).length === 3 &&
+  isCounter(value.requests) &&
+  isCounter(value.errors) &&
+  isCounter(value.blocks)
+
+/** Un état tel qu'il est stocké : `changes` (DRV-613), `carts` (ticket M) et `stats` (ticket L) sont facultatifs, un état plus ancien n'en a pas. */
+type StoredState = Omit<RunState, 'changes' | 'carts' | 'stats'> & {
   changes?: RecordedChange[]
   carts?: RecordedCart[]
+  stats?: ResultStats
 }
 
 /** Un état lu du stockage n'est cru que s'il a la bonne forme : la page de l'enseigne partage ce stockage. */
@@ -97,7 +111,8 @@ function isState(value: unknown, runId: string): value is StoredState {
   const cartsOk =
     value.carts === undefined ||
     (Array.isArray(value.carts) && value.carts.every((cart) => isCart(cart)))
-  return doneOk && waitingOk && changesOk && cartsOk
+  const statsOk = value.stats === undefined || isStats(value.stats)
+  return doneOk && waitingOk && changesOk && cartsOk && statsOk
 }
 
 export class RunStore {
@@ -112,7 +127,12 @@ export class RunStore {
       const raw = this.storage?.getItem(RUN_PREFIX + runId)
       const state: unknown = raw ? JSON.parse(raw) : null
       return isState(state, runId)
-        ? { ...state, changes: state.changes ?? [], carts: state.carts ?? [] }
+        ? {
+            ...state,
+            changes: state.changes ?? [],
+            carts: state.carts ?? [],
+            stats: state.stats ?? { requests: 0, errors: 0, blocks: 0 },
+          }
         : null
     } catch {
       return null

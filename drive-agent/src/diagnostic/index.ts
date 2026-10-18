@@ -27,10 +27,10 @@ export async function showDiagnostic(deps: DiagnosticDeps): Promise<void> {
       void runChecks(deps, (result) => {
         collected.push(result)
         view.update(rowsOf(collected))
-      }).then(({ results, page, probes }) => {
+      }).then(({ results, page, probes, stats }) => {
         view.finish(
           summaryOf(results),
-          reportOf(deps.agentVersion, deps.now(), page, results, probes),
+          reportOf(deps.agentVersion, deps.now(), page, results, probes, stats),
         )
       })
     },

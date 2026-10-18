@@ -13,11 +13,17 @@ export { LeclercError, type LeclercErrorCode } from './errors'
 export {
   JITTER_MS,
   MAX_BLOCKS,
+  MAX_PAUSE_MS,
   NETWORK_RETRY_MS,
   Pacer,
   PAUSE_MS,
+  RECOVERY_STEP_MS,
+  REFUSAL_STEP_MS,
   REQUEST_TIMEOUT_MS,
+  SLOW_REPLY_MS,
+  SLOWDOWN_STEP_MS,
   type FetchFn,
+  type RequestStats,
 } from './pacer'
 export {
   describeSession,
