@@ -564,6 +564,191 @@ describe('driveBridge', () => {
     })
   })
 
+  describe('startSetup : lire le magasin dans l’application (DRV-320)', () => {
+    const STORE = {
+      id: '123456',
+      host: 'ville-test.leclercdrive.fr',
+      baseUrl: 'https://ville-test.leclercdrive.fr/magasin-123456-123456',
+      label: null,
+    }
+    const setupResult = (runId: string) => ({
+      v: 1,
+      type: 'drive.result',
+      result: { v: 1, type: 'setup-result', runId, agentVersion: '1.0.0', store: STORE },
+    })
+    const plainResult = (runId: string, outcome: string, error?: string) => ({
+      v: 1,
+      type: 'drive.result',
+      result: {
+        v: 1,
+        type: 'result',
+        runId,
+        agentVersion: '1.0.0',
+        outcome,
+        ...(error && { error: { code: error, message: 'Texte' } }),
+        lines: [],
+      },
+    })
+    /** Le faux pont répond à `drive.setup` en suivant `answer`. */
+    const reading = (answer: (runId: string, reply: (message: unknown) => void) => void) =>
+      setup((message, reply) => {
+        if (message.type === 'drive.setup') answer(message.runId ?? '', reply)
+      })
+    const rejection = async (promise: Promise<unknown>) => {
+      try {
+        await promise
+      } catch (error) {
+        return error as DriveBridgeError
+      }
+      throw new Error('aurait dû être refusé')
+    }
+
+    it('envoie drive.setup avec un identifiant de passage, et rend le magasin lu', async () => {
+      const { bridge, sent } = reading((runId, reply) => reply(setupResult(runId)))
+
+      await expect(bridge.startSetup()).resolves.toEqual(STORE)
+
+      expect(sent).toHaveLength(1)
+      expect(sent[0]).toMatchObject({ v: 1, type: 'drive.setup' })
+      expect(sent[0]?.runId).toMatch(/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/)
+      expect(Object.keys(sent[0] ?? {}).sort()).toEqual(['runId', 'type', 'v'])
+    })
+
+    it('le résultat n’est pas montré aux écrans du retour, et ne touche pas au brouillon d’un envoi', async () => {
+      const { bridge, listen, events } = reading((runId, reply) => reply(setupResult(runId)))
+      listen()
+      bridge.startRun(plan(), 'l1')
+
+      await bridge.startSetup()
+
+      expect(events).toEqual([])
+      expect(bridge.loadDraft()?.runId).toBe(RUN)
+    })
+
+    it('attend la réponse : rien n’est rendu tant que l’application ne revient pas', async () => {
+      const { bridge, sent, reply } = setup()
+      const settled = vi.fn<(value: unknown) => void>()
+
+      void bridge.startSetup().then(settled, settled)
+      await Promise.resolve()
+      expect(settled).not.toHaveBeenCalled()
+
+      reply(setupResult(sent[0]?.runId ?? ''))
+      await vi.waitFor(() => expect(settled).toHaveBeenCalledWith(STORE))
+    })
+
+    it('un résultat d’un autre passage ne termine pas la lecture', async () => {
+      const { bridge, sent, reply } = setup()
+      const settled = vi.fn<(value: unknown) => void>()
+      void bridge.startSetup().then(settled, settled)
+
+      reply(setupResult(OTHER_RUN))
+      await Promise.resolve()
+      expect(settled).not.toHaveBeenCalled()
+
+      reply(setupResult(sent[0]?.runId ?? ''))
+      await vi.waitFor(() => expect(settled).toHaveBeenCalledWith(STORE))
+    })
+
+    it('une lecture déjà en cours est rouverte avec le même identifiant, pas doublée', async () => {
+      const { bridge, sent, reply } = setup()
+
+      const first = bridge.startSetup()
+      const second = bridge.startSetup()
+
+      expect(second).toBe(first)
+      expect(sent).toHaveLength(2)
+      expect(sent[1]?.runId).toBe(sent[0]?.runId)
+      reply(setupResult(sent[0]?.runId ?? ''))
+      expect(await first).toEqual(STORE)
+    })
+
+    it('une nouvelle lecture, après la fin de la précédente, a un nouvel identifiant', async () => {
+      const { bridge, sent } = reading((runId, reply) => reply(setupResult(runId)))
+
+      await bridge.startSetup()
+      await bridge.startSetup()
+
+      expect(sent[1]?.runId).not.toBe(sent[0]?.runId)
+    })
+
+    it('un abandon (résultat aborted) rejette avec CANCELLED', async () => {
+      const { bridge } = reading((runId, reply) =>
+        reply(plainResult(runId, 'aborted', 'CANCELLED')),
+      )
+
+      expect(await rejection(bridge.startSetup())).toMatchObject({ code: 'CANCELLED' })
+    })
+
+    it('une erreur de l’agent rejette avec SETUP_FAILED et son code', async () => {
+      const { bridge } = reading((runId, reply) =>
+        reply(plainResult(runId, 'error', 'UNSUPPORTED_PAGE')),
+      )
+
+      expect(await rejection(bridge.startSetup())).toMatchObject({
+        code: 'SETUP_FAILED',
+        detail: 'UNSUPPORTED_PAGE',
+      })
+    })
+
+    it.each(['BUSY', 'UNAVAILABLE', 'INVALID_SETUP'])(
+      'le refus %s de l’application rejette avec REFUSED, sans événement pour les écrans',
+      async (code) => {
+        const { bridge, listen, events } = reading((_runId, reply) =>
+          reply({ v: 1, type: 'drive.error', code, runId: OTHER_RUN }),
+        )
+        listen()
+
+        expect(await rejection(bridge.startSetup())).toMatchObject({
+          code: 'REFUSED',
+          detail: code,
+        })
+        expect(events).toEqual([])
+      },
+    )
+
+    it('un magasin lu que personne n’attend (page rechargée) est ignoré, pas montré comme périmé', () => {
+      const { listen, events, reply } = setup()
+      listen()
+
+      reply(setupResult(OTHER_RUN))
+
+      expect(events).toEqual([])
+    })
+
+    it('hors de l’application : UNAVAILABLE, sans rien envoyer', () => {
+      const bridge = createDriveBridge({ window: {} })
+
+      expect(codeOf(() => void bridge.startSetup())).toBe('UNAVAILABLE')
+    })
+
+    it('si le pont refuse l’envoi, la lecture n’attend pas pour rien', () => {
+      const native = fakeNative()
+      vi.mocked(native.bridge.postMessage).mockImplementationOnce(() => {
+        throw new Error('boom')
+      })
+      const bridge = createDriveBridge({ window: native.window, now: () => NOW })
+
+      expect(codeOf(() => void bridge.startSetup())).toBe('SEND_FAILED')
+      void bridge.startSetup()
+      expect(native.sent).toHaveLength(1)
+    })
+  })
+
+  describe('openMenu', () => {
+    it('envoie app.menu, sans rien attendre', () => {
+      const { bridge, sent } = setup()
+
+      bridge.openMenu()
+
+      expect(sent).toEqual([{ v: 1, type: 'app.menu' }])
+    })
+
+    it('hors de l’application : UNAVAILABLE', () => {
+      expect(codeOf(() => createDriveBridge({ window: {} }).openMenu())).toBe('UNAVAILABLE')
+    })
+  })
+
   it('ne fait aucun appel réseau et n’écrit rien dans la console', async () => {
     const fetchMock = vi.fn<typeof fetch>()
     vi.stubGlobal('fetch', fetchMock)

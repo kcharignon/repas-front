@@ -75,10 +75,13 @@ const save = useSaveChoices()
 async function persist() {
   const current = run.value
   if (current === null) return
+  const storeId = current.result.store?.id
+  // Un passage de la liste porte toujours son magasin ; sans lui, mémoriser des choix pour le mauvais magasin serait pire que rien
+  if (storeId === undefined) return store.failed(new Error('Résultat sans magasin'))
   store.saving()
   try {
     await save.mutateAsync({
-      storeId: current.result.store.id,
+      storeId,
       batches: buildChoiceBatches(current.result),
     })
     driveBridge.clearDraft()
