@@ -31,4 +31,9 @@ export type DriveChoicePayload = Schemas['ReplaceIngredientPreferencePayload']
 
 // Drive : le magasin enregistré (DRV-203, DRV-403)
 export type DriveStore = Schemas['DriveStoreDTO']
+
+// Drive : l'estimation du coût d'une liste (DRV-611, DRV-612)
+export type DriveEstimate = Schemas['DriveEstimateDTO']
+export type DriveEstimateLine = Schemas['DriveEstimateLineDTO']
+export type DriveEstimateStatus = DriveEstimateLine['status']
 export type DriveStorePayload = Schemas['DriveStorePayload']

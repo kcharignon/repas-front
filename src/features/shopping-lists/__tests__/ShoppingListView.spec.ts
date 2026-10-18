@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { appContext, calls, json, me, stubApi } from '@/__tests__/helpers'
 import ShoppingListView from '@/features/shopping-lists/ShoppingListView.vue'
 import { useNotificationsStore } from '@/notifications/store'
+import { estimate } from '@/features/drive/__tests__/estimateFixtures'
 import { useSessionStore } from '@/session/session'
 
 type Row = {
@@ -373,6 +374,51 @@ describe('ShoppingListView', () => {
         calls(fetchMock).filter((call) => call === 'GET /api/v1/shopping-lists/list-1').length,
       ).toBeGreaterThan(1)
       window.dispatchEvent(new Event('online'))
+    })
+  })
+
+  describe('estimation du coût (drive)', () => {
+    const drive = (enabled: boolean) => ({
+      'GET /api/v1/drive/settings': () =>
+        json({ enabled, retailer: 'leclerc', store: estimate().store }),
+      'GET /api/v1/drive/estimates/list-1': () => json(estimate()),
+    })
+
+    it('montre l’estimation de la liste quand le drive est allumé et configuré', async () => {
+      const fetchMock = backWith(drive(true))
+
+      const wrapper = await mountList()
+      await vi.waitFor(() => expect(wrapper.text()).toContain('Estimation du coût'))
+
+      expect(wrapper.text().replace(/\s/g, ' ')).toContain('12,47 €')
+      expect(calls(fetchMock)).toContain('GET /api/v1/drive/estimates/list-1')
+    })
+
+    it('la relit après une écriture sur la liste', async () => {
+      const fetchMock = backWith({
+        ...drive(true),
+        'POST /api/v1/shopping-list-rows/r1/tick': () => new Response(null, { status: 204 }),
+      })
+      const wrapper = await mountList()
+      await vi.waitFor(() => expect(wrapper.text()).toContain('Estimation du coût'))
+
+      await checkbox(wrapper, 'Courgettes')?.trigger('click')
+
+      await vi.waitFor(() =>
+        expect(
+          calls(fetchMock).filter((call) => call === 'GET /api/v1/drive/estimates/list-1'),
+        ).toHaveLength(2),
+      )
+    })
+
+    it('n’affiche rien quand le drive est éteint', async () => {
+      const fetchMock = backWith(drive(false))
+
+      const wrapper = await mountList()
+      await flushPromises()
+
+      expect(wrapper.text()).not.toContain('Estimation du coût')
+      expect(calls(fetchMock)).not.toContain('GET /api/v1/drive/estimates/list-1')
     })
   })
 })

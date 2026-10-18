@@ -16,6 +16,7 @@ import { DriveBridgeError, driveBridge } from './bridge'
 import type { RunDraft } from './bridge'
 import { buildPlanMessage, effectiveStatus } from './buildPlanMessage'
 import type { LineChange } from './buildPlanMessage'
+import DriveEstimate from './DriveEstimate.vue'
 import DriveSendLine from './DriveSendLine.vue'
 import { useDrivePlan } from './queries'
 
@@ -259,6 +260,8 @@ function confirmReopenList() {
             <dd class="font-display text-2xl font-bold">{{ counts[key] }}</dd>
           </div>
         </dl>
+
+        <DriveEstimate :list-id="listId" />
 
         <section class="flex flex-col gap-3">
           <h2 class="font-display text-xl font-bold">

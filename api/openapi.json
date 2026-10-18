@@ -2434,6 +2434,48 @@
                 }
             }
         },
+        "/api/v1/drive/estimates/{shoppingListId}": {
+            "get": {
+                "tags": [
+                    "Drive"
+                ],
+                "summary": "Estimation du co\u00fbt d'une liste d'apr\u00e8s les derniers prix vus du produit pr\u00e9f\u00e9r\u00e9 de chaque ligne (total, couverture, dates des prix, une ligne par ingr\u00e9dient avec son statut) ; une estimation dat\u00e9e, jamais un prix garanti",
+                "operationId": "get_api_get_drive_estimate",
+                "parameters": [
+                    {
+                        "name": "shoppingListId",
+                        "in": "path",
+                        "description": "Identifiant de la liste de courses (tout statut : lecture seule)",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "example": "0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "L'estimation, dans le magasin courant de l'utilisateur",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DriveEstimateDTO"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "La liste appartient \u00e0 un autre utilisateur"
+                    },
+                    "404": {
+                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`) ou liste inconnue"
+                    },
+                    "409": {
+                        "description": "Pas de magasin enregistr\u00e9 (message `DRIVE_NOT_CONFIGURED`)"
+                    }
+                }
+            }
+        },
         "/api/v1/drive/plans/{shoppingListId}": {
             "get": {
                 "tags": [
@@ -4323,6 +4365,149 @@
                 },
                 "type": "object"
             },
+            "DriveEstimateLineDTO": {
+                "required": [
+                    "ingredientSlug",
+                    "ingredientName",
+                    "status"
+                ],
+                "properties": {
+                    "ingredientSlug": {
+                        "description": "Slug de l'ingr\u00e9dient",
+                        "type": "string",
+                        "example": "farine"
+                    },
+                    "ingredientName": {
+                        "description": "Nom de l'ingr\u00e9dient",
+                        "type": "string",
+                        "example": "Farine"
+                    },
+                    "productLabel": {
+                        "description": "Libell\u00e9 du produit pr\u00e9f\u00e9r\u00e9 (rang 1) ; `null` si l'ingr\u00e9dient n'a pas de produit accept\u00e9 dans ce magasin ou est \u00ab j'en ai toujours \u00bb",
+                        "type": "string",
+                        "example": "Farine de bl\u00e9 T55 Marque Rep\u00e8re 1 kg",
+                        "nullable": true
+                    },
+                    "packs": {
+                        "description": "Nombre de produits \u00e0 acheter (1 \u00e0 99) quand il se calcule de fa\u00e7on s\u00fbre, sinon `null`",
+                        "type": "integer",
+                        "maximum": 99,
+                        "minimum": 1,
+                        "example": 1,
+                        "nullable": true
+                    },
+                    "unitPriceCents": {
+                        "description": "Dernier prix vu du produit en centimes (TTC) ; `null` sans produit ou sans prix m\u00e9moris\u00e9",
+                        "type": "integer",
+                        "example": 129,
+                        "nullable": true
+                    },
+                    "subtotalCents": {
+                        "description": "Nombre de produits multipli\u00e9 par le prix, en centimes ; renseign\u00e9 pour `ESTIMATED` seulement",
+                        "type": "integer",
+                        "example": 129,
+                        "nullable": true
+                    },
+                    "priceSeenAt": {
+                        "description": "Date \u00e0 laquelle le prix a \u00e9t\u00e9 vu (ISO 8601) ; `null` sans prix",
+                        "type": "string",
+                        "example": "2026-10-12T09:30:00+02:00",
+                        "nullable": true
+                    },
+                    "status": {
+                        "description": "`ESTIMATED` : dans le total ; `NO_PRODUCT` : aucun produit accept\u00e9 ; `NO_PRICE` : le produit pr\u00e9f\u00e9r\u00e9 n'a pas de prix m\u00e9moris\u00e9 ; `TO_CHECK` : le nombre de produits ne se calcule pas de fa\u00e7on s\u00fbre ; `HAVE_AT_HOME` : \u00ab j'en ai toujours \u00bb, hors total et hors couverture",
+                        "type": "string",
+                        "enum": [
+                            "ESTIMATED",
+                            "NO_PRODUCT",
+                            "NO_PRICE",
+                            "TO_CHECK",
+                            "HAVE_AT_HOME"
+                        ],
+                        "example": "ESTIMATED"
+                    }
+                },
+                "type": "object"
+            },
+            "DriveEstimateDTO": {
+                "required": [
+                    "shoppingListId",
+                    "retailer",
+                    "store",
+                    "estimatedTotalCents",
+                    "estimatedLines",
+                    "unestimatedLines",
+                    "coverage",
+                    "lines",
+                    "disclaimer"
+                ],
+                "properties": {
+                    "shoppingListId": {
+                        "description": "Identifiant de la liste de courses",
+                        "type": "string",
+                        "example": "0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10"
+                    },
+                    "retailer": {
+                        "description": "Enseigne du drive",
+                        "type": "string",
+                        "enum": [
+                            "leclerc"
+                        ],
+                        "example": "leclerc"
+                    },
+                    "store": {
+                        "$ref": "#/components/schemas/DriveStoreDTO"
+                    },
+                    "estimatedTotalCents": {
+                        "description": "Total estim\u00e9 en centimes : somme des sous-totaux des lignes `ESTIMATED` seulement ; les autres lignes ne sont pas devin\u00e9es",
+                        "type": "integer",
+                        "example": 1247
+                    },
+                    "estimatedLines": {
+                        "description": "Nombre de lignes `ESTIMATED`",
+                        "type": "integer",
+                        "example": 8
+                    },
+                    "unestimatedLines": {
+                        "description": "Nombre de lignes \u00e0 acheter qui ne sont pas estim\u00e9es (`NO_PRODUCT`, `NO_PRICE`, `TO_CHECK`)",
+                        "type": "integer",
+                        "example": 4
+                    },
+                    "coverage": {
+                        "description": "Lignes estim\u00e9es sur lignes \u00e0 acheter (les \u00ab j'en ai toujours \u00bb ne comptent pas), de 0 \u00e0 1 arrondi \u00e0 4 d\u00e9cimales ; 0 quand rien n'est \u00e0 acheter",
+                        "type": "number",
+                        "format": "float",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "example": 0.6667
+                    },
+                    "oldestPriceAt": {
+                        "description": "Date du prix le plus ancien parmi les lignes du total (ISO 8601), `null` sans ligne estim\u00e9e",
+                        "type": "string",
+                        "example": "2026-10-12T09:30:00+02:00",
+                        "nullable": true
+                    },
+                    "newestPriceAt": {
+                        "description": "Date du prix le plus r\u00e9cent parmi les lignes du total (ISO 8601), `null` sans ligne estim\u00e9e",
+                        "type": "string",
+                        "example": "2026-10-18T10:00:00+02:00",
+                        "nullable": true
+                    },
+                    "lines": {
+                        "description": "Une ligne par ingr\u00e9dient de la liste, dans l'ordre de la liste (slug d'ingr\u00e9dient croissant)",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DriveEstimateLineDTO"
+                        }
+                    },
+                    "disclaimer": {
+                        "description": "Texte fixe \u00e0 afficher avec l'estimation : une estimation dat\u00e9e, jamais un prix garanti",
+                        "type": "string",
+                        "example": "Estimation d'apr\u00e8s les derniers prix vus ; le prix r\u00e9el est celui du drive."
+                    }
+                },
+                "type": "object"
+            },
             "DrivePlanCountsDTO": {
                 "required": [
                     "known",
@@ -4361,7 +4546,7 @@
                         "example": 300
                     },
                     "unitSymbol": {
-                        "description": "Symbole de l'unit\u00e9 d'achat (vide pour une unit\u00e9 sans symbole)",
+                        "description": "Symbole de l'unit\u00e9 d'achat, ou son nom si elle n'a pas de symbole (jamais vide, 32 caract\u00e8res au plus)",
                         "type": "string",
                         "example": "g"
                     },

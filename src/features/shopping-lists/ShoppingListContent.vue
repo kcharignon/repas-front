@@ -8,6 +8,7 @@ import type { ShoppingList } from '@/api'
 import UiButton from '@/design/UiButton.vue'
 import UiCheckbox from '@/design/UiCheckbox.vue'
 import UiProgressBar from '@/design/UiProgressBar.vue'
+import DriveEstimate from '@/features/drive/DriveEstimate.vue'
 import { formatQuantity, imageUrl } from './format'
 import { useChangeServing, useToggleRow, useUnplanRecipe } from './queries'
 
@@ -65,6 +66,8 @@ const stepClass =
         :label="t('shoppingList.progress', { done, total: rows.length })"
       />
     </div>
+
+    <DriveEstimate :list-id="list.id" />
 
     <TabsRoot v-model="tab" class="flex flex-col gap-4">
       <TabsList :aria-label="t('shoppingList.sections')" class="flex gap-1 rounded-2xl bg-soft p-1">
