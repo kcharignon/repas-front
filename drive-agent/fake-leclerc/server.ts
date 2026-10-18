@@ -1,0 +1,473 @@
+// Le faux site Leclerc (DRV-309) : un serveur minimal, sans dépendance, qui imite la STRUCTURE du drive (recherche, panier, connexion) avec
+// des données inventées, pour jouer l'agent de bout en bout sans jamais contacter l'enseigne. Voir README.md.
+//
+//   - Il n'écoute que sur 127.0.0.1 et refuse toute connexion qui ne vient pas de la boucle locale ou qui vise un autre nom d'hôte que
+//     ceux de sa liste (`localhost`, `127.0.0.1`, et les noms de faux magasins) : il ne sort jamais du poste.
+//   - La requête du panier est vérifiée à la lettre (en-tête `zcwb`, adresse SANS suffixe de ville, identifiant en texte, objet de contexte
+//     à l'ajout seulement, point de livraison) : tout écart reçoit la page d'erreur générique 404, comme sur le vrai site.
+//   - Il surveille la cadence (jamais deux requêtes en parallèle, 800 ms au moins entre deux) et la consigne dans `violations()`.
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import type { AddressInfo } from 'node:net'
+
+import { DELIVERY_POINT, findProduct, searchCatalog } from './catalog.ts'
+import {
+  cartResponse,
+  challengePage,
+  changedSearchPage,
+  errorPage,
+  homePage,
+  loginPage,
+  repasReturnPage,
+  searchPage,
+  type CartAction,
+} from './pages.ts'
+
+/** Le faux magasin : son identifiant et son nom d'hôte (le plan de Repas et la page doivent s'accorder dessus). */
+export const STORE = { id: '000001', host: 'courses-test.leclercdrive.fr' } as const
+/** Début des adresses des pages du magasin (avec le suffixe de ville, que portent les pages) et de celle du panier (sans). */
+export const PAGE_PATH = `/magasin-${STORE.id}-${STORE.id}-Ville-Test`
+export const CART_PATH = `/magasin-${STORE.id}-${STORE.id}`
+
+/** Cadence minimale entre deux requêtes de l'agent (architecture.md § 8 du dépôt back) : écrite ici, pas lue dans l'agent. */
+export const MIN_GAP_MS = 800
+/** Marge de mesure : l'horloge du serveur et celle de la page ne se lisent pas au même instant. */
+const TOLERANCE_MS = 5
+
+export type FaultKind =
+  'forbidden' | 'too-many-requests' | 'challenge' | 'contract-changed' | 'not-found' | 'logged-out'
+
+/** Un défaut simulé : `after` requêtes passent d'abord (0 : dès la première), `on` dit à quelles requêtes il s'applique. */
+export interface Fault {
+  kind: FaultKind
+  after?: number
+  on?: 'search' | 'cart' | 'all'
+}
+
+export interface Behavior {
+  /** Délai ajouté à chaque réponse de recherche ou de panier. */
+  latencyMs: number
+  fault: Fault | null
+}
+
+export type RequestKind = 'search' | 'cart' | 'page' | 'repas' | 'control' | 'other'
+
+export interface FakeRequest {
+  kind: RequestKind
+  method: string
+  path: string
+  /** Début et fin de la réponse, en millisecondes depuis le démarrage du processus. */
+  startedAt: number
+  endedAt: number
+  status: number
+  /** Le défaut simulé appliqué à cette requête, s'il y en a un. */
+  fault?: FaultKind
+  /** Pourquoi une requête du panier a été refusée (404 générique) : en-tête manquant, adresse avec suffixe… */
+  rejected?: string
+  /** Le mot cherché (recherche) ou le champ `d` décodé (panier). */
+  detail?: string
+}
+
+export interface Violation {
+  kind: 'parallel' | 'too-fast'
+  /** Rang (à partir de 1) de la requête fautive parmi les recherches et écritures du panier. */
+  request: number
+  gapMs?: number
+}
+
+export interface FakeLeclerc {
+  readonly port: number
+  /** `http://courses-test.leclercdrive.fr:<port>` : l'origine des pages du faux magasin (le navigateur de test résout ce nom vers 127.0.0.1). */
+  readonly leclerc: string
+  /** `http://localhost:<port>` : l'origine du faux Repas, où l'agent renvoie son résultat. */
+  readonly repas: string
+  behavior(): Behavior
+  setBehavior(patch: Partial<Behavior>): void
+  /** Remplace le contenu du panier : identifiant de produit vers quantité. */
+  seedCart(lines: Record<number, number>): void
+  cart(): Record<number, number>
+  requests(): FakeRequest[]
+  /** Les recherches et écritures du panier, dans l'ordre. */
+  paced(): FakeRequest[]
+  violations(): Violation[]
+  close(): Promise<void>
+}
+
+export interface FakeOptions {
+  /** 0 (par défaut) : un port libre. */
+  port?: number
+  /** Noms d'hôte de faux magasins à accepter en plus de `courses-test.leclercdrive.fr`. */
+  hosts?: string[]
+  behavior?: Partial<Behavior>
+}
+
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
+const STORE_PATTERN = /^\/magasin-(\d{1,12})-(\d{1,12})(-[^/?#]*)?(\/.*)?$/
+
+/** Vrai pour une connexion venue de la boucle locale. */
+export function isLoopback(address: string | undefined): boolean {
+  return (
+    address === '::1' ||
+    address === '127.0.0.1' ||
+    /^(?:::ffff:)?127\.\d+\.\d+\.\d+$/.test(address ?? '')
+  )
+}
+
+/** Le nom d'hôte d'un en-tête `Host` (sans port) ; `[::1]` garde ses crochets. */
+export function hostnameOf(header: string | undefined): string {
+  const host = (header ?? '').toLowerCase()
+  return host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : (host.split(':')[0] ?? '')
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+const now = (): number => performance.now()
+
+async function readBody(req: IncomingMessage): Promise<string> {
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const chunk of req as AsyncIterable<Buffer>) {
+    size += chunk.length
+    if (size > 64 * 1024) throw new Error('corps trop gros')
+    chunks.push(chunk)
+  }
+  return Buffer.concat(chunks).toString('utf8')
+}
+
+/** Écrit la réponse et attend qu'elle soit partie (c'est là que la cadence se compte). */
+function send(
+  res: ServerResponse,
+  status: number,
+  body: string,
+  headers: Record<string, string> = {},
+): Promise<void> {
+  return new Promise((resolve) => {
+    res.writeHead(status, { 'Cache-Control': 'no-store', ...headers })
+    res.end(body, () => resolve())
+  })
+}
+
+const HTML = { 'Content-Type': 'text/html; charset=utf-8', 'X-Frame-Options': 'DENY' }
+const JSON_HEADERS = {
+  'Content-Type': 'application/json; charset=utf-8',
+  'X-Frame-Options': 'DENY',
+  'X-DataDome': 'protected',
+}
+
+/** Le champ `d` du panier, vérifié contre la forme relevée sur le vrai site (DRV-007). `null` si tout est conforme. */
+export function cartRequestProblem(d: unknown): string | null {
+  if (typeof d !== 'object' || d === null) return 'champ d illisible'
+  const body = d as Record<string, unknown>
+  if (typeof body.iIdProduit !== 'string' || !/^\d{1,12}$/.test(body.iIdProduit)) {
+    return 'iIdProduit doit être un texte numérique'
+  }
+  if (body.sNoPointLivraison !== DELIVERY_POINT) return 'point de livraison inconnu'
+  const quantity = body.iQuantite
+  if (
+    typeof quantity !== 'number' ||
+    !Number.isInteger(quantity) ||
+    quantity < 0 ||
+    quantity > 99
+  ) {
+    return 'iQuantite invalide'
+  }
+  if (body.eTypeAction === 2) {
+    return quantity === 0 && body.objContexteProvenanceArticle === undefined
+      ? null
+      : 'un retrait a une quantité nulle et pas de contexte'
+  }
+  if (body.eTypeAction !== 1 || quantity < 1) return 'eTypeAction ou quantité invalide'
+  const context = body.objContexteProvenanceArticle as Record<string, unknown> | undefined
+  const valid =
+    context !== undefined &&
+    context.eOrigine === 4 &&
+    context.eTypePage === 3 &&
+    typeof context.sTexteRecherche === 'string' &&
+    context.eVue === 0 &&
+    context.sInformationsComplementaires === 'uni-2'
+  return valid ? null : 'objContexteProvenanceArticle manquant ou incomplet'
+}
+
+export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeLeclerc> {
+  const hosts = new Set([STORE.host, ...(options.hosts ?? [])])
+  let behavior: Behavior = { latencyMs: 0, fault: null, ...options.behavior }
+  const cart = new Map<number, number>()
+  const log: FakeRequest[] = []
+  const violations: Violation[] = []
+  let inFlight = 0
+  let lastPacedEnd: number | null = null
+  let pacedCount = 0
+
+  /** Une requête de l'agent à cadencer (recherche ou écriture du panier) : contrôle de la cadence, latence, défaut simulé. */
+  async function paced(
+    entry: FakeRequest,
+    scope: 'search' | 'cart',
+    serve: () => Promise<void>,
+    res: ServerResponse,
+  ): Promise<void> {
+    const rank = ++pacedCount
+    const gap = lastPacedEnd === null ? null : entry.startedAt - lastPacedEnd
+    if (inFlight > 0) violations.push({ kind: 'parallel', request: rank })
+    else if (gap !== null && gap < MIN_GAP_MS - TOLERANCE_MS) {
+      violations.push({ kind: 'too-fast', request: rank, gapMs: Math.round(gap) })
+    }
+    inFlight += 1
+    try {
+      if (behavior.latencyMs > 0) await sleep(behavior.latencyMs)
+      const { fault } = behavior
+      if (fault && [scope, 'all'].includes(fault.on ?? 'all') && rank > (fault.after ?? 0)) {
+        entry.fault = fault.kind
+        await serveFault(fault.kind, scope, entry, res)
+      } else {
+        await serve()
+      }
+    } finally {
+      inFlight -= 1
+      entry.endedAt = now()
+      lastPacedEnd = entry.endedAt
+    }
+  }
+
+  async function serveFault(
+    kind: FaultKind,
+    scope: 'search' | 'cart',
+    entry: FakeRequest,
+    res: ServerResponse,
+  ): Promise<void> {
+    entry.status = {
+      forbidden: 403,
+      'too-many-requests': 429,
+      challenge: 200,
+      'contract-changed': 200,
+      'not-found': 404,
+      'logged-out': 302,
+    }[kind]
+    if (kind === 'logged-out') {
+      return send(res, 302, '', { Location: `${PAGE_PATH}/connexion.aspx` })
+    }
+    if (kind === 'challenge') return send(res, 200, challengePage(), HTML)
+    if (kind === 'contract-changed') {
+      return scope === 'search'
+        ? send(res, 200, changedSearchPage(), HTML)
+        : send(res, 200, JSON.stringify([{ eTypeEvenement: 7, sIdUnique: 'Autre' }]), JSON_HEADERS)
+    }
+    return send(res, entry.status, errorPage(), HTML)
+  }
+
+  async function search(entry: FakeRequest, url: URL, res: ServerResponse): Promise<void> {
+    const query = url.searchParams.get('TexteRecherche') ?? ''
+    entry.detail = query
+    await paced(
+      entry,
+      'search',
+      () => {
+        entry.status = 200
+        return send(res, 200, searchPage(query, searchCatalog(query), cart), HTML)
+      },
+      res,
+    )
+  }
+
+  async function cartWrite(
+    entry: FakeRequest,
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    await paced(
+      entry,
+      'cart',
+      async () => {
+        const field = new URLSearchParams(await readBody(req)).get('d')
+        if (field !== null) entry.detail = field
+        const reject = async (why: string) => {
+          entry.rejected = why
+          entry.status = 404
+          await send(res, 404, errorPage(), HTML)
+        }
+        // La requête du site : formulaire, en-têtes `X-Requested-With` et `zcwb`, adresse SANS suffixe de ville (recherche.md § 2).
+        if (req.headers.zcwb !== 'ajax-manager') return reject('en-tête zcwb manquant')
+        if (req.headers['x-requested-with'] !== 'XMLHttpRequest')
+          return reject('X-Requested-With manquant')
+        if (!/^application\/x-www-form-urlencoded/i.test(req.headers['content-type'] ?? '')) {
+          return reject('Content-Type attendu : formulaire')
+        }
+        let d: unknown
+        try {
+          d = JSON.parse(field ?? '')
+        } catch {
+          return reject('champ d absent ou illisible')
+        }
+        const problem = cartRequestProblem(d)
+        if (problem) return reject(problem)
+        const body = d as { eTypeAction: number; iIdProduit: string; iQuantite: number }
+        const product = findProduct(Number(body.iIdProduit))
+        const before = cart.get(Number(body.iIdProduit)) ?? 0
+        let after = before
+        if (body.eTypeAction === 2) after = 0
+        else if (product && product.stock > 0) after = Math.min(body.iQuantite, product.stock)
+        if (after === 0) cart.delete(Number(body.iIdProduit))
+        else cart.set(Number(body.iIdProduit), after)
+        entry.status = 200
+        if (!product) return send(res, 200, JSON.stringify([]), JSON_HEADERS)
+        const action: CartAction = after === 0 ? 'remove' : before === 0 ? 'add' : 'change'
+        await send(res, 200, JSON.stringify(cartResponse(cart, product, action)), JSON_HEADERS)
+      },
+      res,
+    )
+  }
+
+  async function route(
+    entry: FakeRequest,
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+    loopbackHost: boolean,
+  ): Promise<void> {
+    const path = url.pathname
+    if (path.startsWith('/__fake/')) {
+      entry.kind = 'control'
+      if (loopbackHost) return control(entry, req, res, path)
+      entry.status = 404
+      return send(res, 404, 'inconnu')
+    }
+    if (path === '/drive/retour') {
+      entry.kind = 'repas'
+      entry.status = 200
+      return send(res, 200, repasReturnPage(), HTML)
+    }
+    const store = STORE_PATTERN.exec(path)
+    const rest = store?.[4] ?? ''
+    if (!store) {
+      entry.status = 404
+      return send(res, 404, errorPage(), HTML)
+    }
+    if (rest === '/recherche.aspx' && req.method === 'GET') {
+      entry.kind = 'search'
+      return search(entry, url, res)
+    }
+    if (rest === '/panier.aspx' && req.method === 'POST' && url.searchParams.get('op') === '1') {
+      entry.kind = 'cart'
+      // L'adresse du panier est SANS suffixe de ville : avec lui, le site répond par sa page d'erreur générique.
+      if (store[3] !== undefined) {
+        entry.rejected = 'adresse du panier avec suffixe de ville'
+        entry.status = 404
+        await readBody(req)
+        return send(res, 404, errorPage(), HTML)
+      }
+      return cartWrite(entry, req, res)
+    }
+    entry.kind = 'page'
+    if (rest === '/connexion.aspx') {
+      entry.status = 200
+      return send(res, 200, loginPage(), HTML)
+    }
+    if (rest === '' || rest === '/' || rest === '/accueil.aspx') {
+      entry.status = 200
+      return send(res, 200, homePage(cart), HTML)
+    }
+    entry.status = 404
+    return send(res, 404, errorPage(), HTML)
+  }
+
+  /** Le pilotage par HTTP (hôtes de la boucle locale seulement) : pour un navigateur ou un émulateur qui n'est pas dans ce processus. */
+  async function control(
+    entry: FakeRequest,
+    req: IncomingMessage,
+    res: ServerResponse,
+    path: string,
+  ): Promise<void> {
+    const json = { 'Content-Type': 'application/json; charset=utf-8' }
+    entry.status = 200
+    if (path === '/__fake/state') {
+      return send(
+        res,
+        200,
+        JSON.stringify({
+          cart: Object.fromEntries(cart),
+          behavior,
+          requests: log.filter((r) => r.kind !== 'control'),
+          violations,
+        }),
+        json,
+      )
+    }
+    if (req.method === 'POST' && path === '/__fake/behavior') {
+      behavior = { ...behavior, ...(JSON.parse(await readBody(req)) as Partial<Behavior>) }
+      return send(res, 200, JSON.stringify(behavior), json)
+    }
+    if (req.method === 'POST' && path === '/__fake/cart') {
+      cart.clear()
+      for (const [id, quantity] of Object.entries(
+        JSON.parse(await readBody(req)) as Record<string, number>,
+      )) {
+        if (quantity > 0) cart.set(Number(id), quantity)
+      }
+      return send(res, 200, JSON.stringify(Object.fromEntries(cart)), json)
+    }
+    entry.status = 404
+    return send(res, 404, 'inconnu')
+  }
+
+  const server: Server = createServer((req, res) => {
+    const url = new URL(req.url ?? '/', 'http://fake.invalid')
+    const hostname = hostnameOf(req.headers.host)
+    const loopbackHost = LOOPBACK_HOSTS.has(hostname)
+    // Seule la boucle locale entre, et seulement sous un nom connu : rien d'autre ne passe, même si le port était ouvert par erreur.
+    if (!isLoopback(req.socket.remoteAddress) || !(loopbackHost || hosts.has(hostname))) {
+      void send(res, 403, 'Faux site de test : accès local seulement.', {
+        'Content-Type': 'text/plain; charset=utf-8',
+      })
+      return
+    }
+    const entry: FakeRequest = {
+      kind: 'other',
+      method: req.method ?? 'GET',
+      path: url.pathname,
+      startedAt: now(),
+      endedAt: 0,
+      status: 0,
+    }
+    log.push(entry)
+    route(entry, req, res, url, loopbackHost)
+      .catch(() => {
+        entry.status = 500
+        if (!res.headersSent) void send(res, 500, 'erreur du faux site')
+      })
+      .finally(() => {
+        if (entry.endedAt === 0) entry.endedAt = now()
+      })
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(options.port ?? 0, '127.0.0.1', resolve)
+  })
+  const port = (server.address() as AddressInfo).port
+
+  return {
+    port,
+    leclerc: `http://${STORE.host}:${port}`,
+    repas: `http://localhost:${port}`,
+    behavior: () => ({ ...behavior }),
+    setBehavior(patch) {
+      behavior = { ...behavior, ...patch }
+    },
+    seedCart(lines) {
+      cart.clear()
+      for (const [id, quantity] of Object.entries(lines))
+        if (quantity > 0) cart.set(Number(id), quantity)
+    },
+    cart: () => Object.fromEntries(cart),
+    requests: () =>
+      log.filter((request) => request.kind !== 'control').map((request) => ({ ...request })),
+    paced: () =>
+      log
+        .filter((request) => request.kind === 'search' || request.kind === 'cart')
+        .map((request) => ({ ...request })),
+    violations: () => violations.map((violation) => ({ ...violation })),
+    close: () =>
+      new Promise<void>((resolve) => {
+        server.closeAllConnections()
+        server.close(() => resolve())
+      }),
+  }
+}
