@@ -19,7 +19,13 @@ internal object DesktopMode {
         val supported = WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)
         val identity = UserAgents.identity(WebSettings.getDefaultUserAgent(context), supported)
         settings.userAgentString = identity.userAgent
-        // Une mise en page large que l'on agrandit au pincement, comme la « version pour ordinateur » de Chrome.
+        // Une mise en page large que l'on agrandit au pincement, comme la « version pour ordinateur » de Chrome. La fenêtre de la page fait alors
+        // ~980 px CSS, affichée sur ~411 dp d'écran (un Pixel 9) : le texte du site y est petit, comme sur Chrome en « version pour ordinateur ».
+        // Ce qu'on lit à l'écran se rattrape par le pincement, le double toucher (zoom sur le bloc touché) et le menu « Agrandir la page ».
+        // Volontairement PAS de `textZoom`, de `LayoutAlgorithm.TEXT_AUTOSIZING` ni de `setInitialScale` : les deux premiers changent la taille
+        // du texte de l'interface de l'agent elle-même (qui se mesure et se corrige, `drive-agent/src/ui/scale.ts`) et refont la mise en page d'un
+        // site que l'on ne peut pas ouvrir ici (débordements, texte coupé) ; le troisième cache une partie de la largeur de la page derrière un
+        // défilement horizontal, sur une mise en page inconnue. Le zoom de la page est donc toujours un geste de l'utilisateur, jamais un réglage.
         settings.useWideViewPort = true
         settings.loadWithOverviewMode = true
         settings.setSupportZoom(true)

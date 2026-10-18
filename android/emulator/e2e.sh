@@ -143,6 +143,17 @@ check "l'écran reste allumé pendant le passage" screen_held
 check "rien ne part vers le site avant « Commencer »" nothing_sent
 sleep 1
 screenshot e04-recapitulatif
+# Lisibilité : le site s'affiche en mode ordinateur (~980 px CSS sur ~411 dp), l'interface de l'agent s'agrandit pour le compenser.
+touch_target 'text="Commencer"' "Commencer"
+touch_target 'text="Annuler"' "Annuler"
+measures=$(display_measures)
+say "      affichage mesuré dans la WebView : ${measures:-aucune mesure}"
+factor=$(json_number "$measures" factor)
+if [ -n "$factor" ] && at_least "$factor" 1.5; then
+  ok "lisibilité : l'interface de l'agent est agrandie d'un facteur ${factor} (fenêtre du site de $(json_number "$measures" innerWidth) px CSS affichée sur un écran de $(json_number "$measures" screenWidth) dp, échelle de la page $(json_number "$measures" scale))"
+else
+  ko "lisibilité : l'interface de l'agent n'est pas agrandie (facteur ${factor:-inconnu}) alors que la fenêtre du site est celle d'un ordinateur"
+fi
 if tap 'text="Commencer"'; then ok "« Commencer » touché"; else ko "le bouton « Commencer » est introuvable"; fi
 if wait_until 60 cart_is "$CART_KNOWN"; then
   ok "phase A : le panier du faux Leclerc a les quantités du plan (farine x3, sucre x1), écrites en quantités absolues"
@@ -158,6 +169,8 @@ check "phase B : le nombre de produits est calculé (80 g demandés, 40 g par pr
 check "l'agent ne choisit jamais seul : le panier n'a pas changé" cart_is "$CART_KNOWN"
 sleep 1
 screenshot e05-choix
+touch_target 'text="Choisir"' "Choisir (liste de produits)"
+touch_target 'text="Passer cette fois"' "Passer cette fois"
 if tap 'text="Choisir"'; then ok "premier produit proposé choisi (poivre moulu)"; else ko "aucun bouton « Choisir » à l'écran"; fi
 if wait_until 60 ui_has 'Panier rempli'; then ok "l'agent annonce « Panier rempli »"; else ko "l'agent n'a pas annoncé la fin"; fi
 check "le panier du faux Leclerc : farine x3, sucre x1 et le poivre choisi x2" cart_is "$CART_FULL"

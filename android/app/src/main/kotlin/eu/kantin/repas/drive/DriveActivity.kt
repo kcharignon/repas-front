@@ -32,6 +32,9 @@ import android.widget.Toast
 import android.window.OnBackInvokedDispatcher
 import java.util.UUID
 
+/** Un cran de zoom de la page de Leclerc (menu « Agrandir la page » et « Réduire la page »). */
+private const val PAGE_ZOOM_STEP = 1.5f
+
 /**
  * L'écran du drive (DRV-312, DRV-313) : le drive Leclerc en plein écran, en mode ordinateur permanent. C'était l'hôte WebView de
  * « Repas Drive » ; c'est maintenant le second écran de l'application, que la coquille Repas ([MainActivity]) ouvre.
@@ -228,6 +231,12 @@ class DriveActivity : Activity() {
             return true
         }
 
+        override fun onScaleChanged(view: WebView, oldScale: Float, newScale: Float) {
+            val anchor = zoomAnchor ?: return
+            zoomAnchor = null
+            if (oldScale > 0f) view.scrollTo((anchor[0] * newScale / oldScale).toInt(), (anchor[1] * newScale / oldScale).toInt())
+        }
+
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             loadFailed = false
             delivery.pageStarted()
@@ -420,12 +429,31 @@ class DriveActivity : Activity() {
     private fun menuEntries(): List<Pair<Int, () -> Unit>> = buildList {
         if (BuildConfig.DEBUG) add(R.string.menu_selftest to ::startSelftest)
         pass.current()?.let { add((if (it.request.isSetup) R.string.menu_abandon_setup else R.string.menu_abandon) to ::askAbandon) }
+        add(R.string.menu_zoom_in to { zoomPage(PAGE_ZOOM_STEP) })
+        add(R.string.menu_zoom_out to { zoomPage(1 / PAGE_ZOOM_STEP) })
         add(R.string.menu_about to { showAbout(repasApp.agentLoad.describe(this@DriveActivity)) })
         add(R.string.menu_logout_drive to { confirmClearDriveData(::clearDriveData) })
         add(R.string.menu_browser to ::openCurrentPageInBrowser)
         add(R.string.menu_diagnostic to ::openAgentDiagnostic)
         if (BuildConfig.DEBUG) add(R.string.menu_debug_plan to ::startDebugPlan)
     }
+
+    /**
+     * Agrandir ou réduire la page de Leclerc d'un cran, d'un geste : le site s'affiche en mode ordinateur (fenêtre de 980 px CSS affichée sur
+     * ~411 dp), son texte y est petit. Le pincement et le double toucher le font déjà ; ce menu est la voie sans geste, et sans risque pour
+     * l'agent : son interface lit le zoom de la page à chaque instant et s'y adapte (`drive-agent/src/ui/scale.ts`). La WebView borne le zoom.
+     */
+    private fun zoomPage(factor: Float) {
+        zoomAnchor = intArrayOf(webView.scrollX, webView.scrollY)
+        webView.zoomBy(factor)
+    }
+
+    /**
+     * Le défilement avant un zoom du menu : la WebView zoome autour du centre de l'écran, et le haut de la page sortirait du cadre. Une fois
+     * l'échelle changée ([DriveWebViewClient.onScaleChanged]), le coin haut gauche de ce que l'on voyait est remis en place (le défilement
+     * suit l'échelle).
+     */
+    private var zoomAnchor: IntArray? = null
 
     /** Se déconnecter de Leclerc : cookies, stockage du site, cache et historique du drive, puis retour à l'accueil du drive. */
     private fun clearDriveData() {
