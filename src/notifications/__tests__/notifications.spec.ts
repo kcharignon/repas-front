@@ -85,6 +85,12 @@ describe('messageForFailure', () => {
     [409, 'SHOPPING_LIST_NOT_SENT', 'Cette liste n’est plus envoyée au drive.'],
     [
       422,
+      'UNIT_MEASURE_INCOMPLETE',
+      'La dimension et le facteur de base vont ensemble : renseignez les deux, ou laissez-les vides.',
+    ],
+    [422, 'UNIT_BASE_FACTOR_INVALID', 'Le facteur de base doit être un nombre supérieur à zéro.'],
+    [
+      422,
       'DRIVE_LIMIT_REACHED',
       'Trop de produits mémorisés, ou trop d’écritures aujourd’hui : oubliez des produits dans « Mes produits », ou réessayez demain.',
     ],
