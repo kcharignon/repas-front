@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { ResultLine } from '@drive-protocol'
 
-import { appContext, bodyOf, calls, json, me, stubApi } from '@/__tests__/helpers'
+import { appContext, bodyOf, calls, json, me, rateLimited, stubApi } from '@/__tests__/helpers'
 import { useSessionStore } from '@/session/session'
 import { DRAFT_KEY } from '../bridge'
 import type { DriveEvent } from '../bridge'
@@ -227,6 +227,65 @@ describe('retour du drive : l’enregistrement échoue', () => {
     await saved(wrapper)
 
     expect(calls(fetchMock).filter((call) => call === 'PUT /api/v1/drive/choices')).toHaveLength(2)
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+  })
+
+  it('trop de demandes (429) : garde le résultat et le même lot, n’insiste pas, et réessaie à la demande', async () => {
+    let attempts = 0
+    const { wrapper, fetchMock } = await open(
+      { kind: 'result', result: result(), draft },
+      { 'PUT /api/v1/drive/choices': () => (++attempts < 3 ? rateLimited(1)() : noContent()) },
+    )
+    await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
+
+    const message = wrapper.find('[role="alert"]').text()
+    expect(message).toContain('ils sont gardés sur cette page : rien n’est perdu.')
+    expect(message).toContain(
+      'Trop de demandes en peu de temps. Attendez une minute, puis réessayez.',
+    )
+    expect(message).not.toContain('Vos choix n’ont pas pu être enregistrés')
+    // Le résultat, le brouillon et le bouton sont là ; l'écran n'a pas réessayé tout seul
+    expect(localStorage.getItem(DRAFT_KEY)).not.toBeNull()
+    expect(wrapper.text()).toContain('Le panier est rempli')
+    expect(wrapper.findAll('main ul > li')).toHaveLength(12)
+    expect(attempts).toBe(1)
+
+    // Toujours refusé : même message, rien de perdu, et c'est encore à l'utilisateur de décider
+    await press('Réessayer l’enregistrement')
+    expect(attempts).toBe(2)
+    expect(wrapper.find('[role="alert"]').text()).toContain('rien n’est perdu')
+
+    await press('Réessayer l’enregistrement')
+    await saved(wrapper)
+
+    const puts = calls(fetchMock)
+      .map((call, index) => [call, index] as const)
+      .filter(([call]) => call === 'PUT /api/v1/drive/choices')
+    expect(puts).toHaveLength(3)
+    const bodies = await Promise.all(puts.map(([, index]) => bodyOf(fetchMock, index)))
+    expect(bodies[1]).toEqual(bodies[0])
+    expect(bodies[2]).toEqual(bodies[0])
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+  })
+
+  it('trop de demandes (429) en relisant le plan : rien n’est enregistré, le résultat reste, on réessaie à la demande', async () => {
+    let limited = true
+    const { wrapper, fetchMock } = await open(
+      { kind: 'result', result: result(), draft },
+      { 'GET /api/v1/drive/plans/l1': () => (limited ? rateLimited(1)() : json(plan())) },
+    )
+    await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
+
+    expect(wrapper.find('[role="alert"]').text()).toContain('rien n’est perdu')
+    expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
+    expect(localStorage.getItem(DRAFT_KEY)).not.toBeNull()
+    expect(wrapper.findAll('main ul > li')).toHaveLength(12)
+
+    limited = false
+    await press('Réessayer l’enregistrement')
+    await saved(wrapper)
+
+    expect(calls(fetchMock)).toContain('PUT /api/v1/drive/choices')
     expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
   })
 

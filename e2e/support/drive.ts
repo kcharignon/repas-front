@@ -146,9 +146,30 @@ const reply = (route: Route, body?: unknown, status = body === undefined ? 204 :
       : { status, contentType: 'application/json', body: JSON.stringify(body) },
   )
 
+/** Combien de fois chaque route du drive refuse d'abord par `429 DRIVE_RATE_LIMITED` (DRV-615) avant de répondre normalement. */
+export interface Refusals {
+  choices?: number
+  plan?: number
+  estimate?: number
+}
+
 /** Rend les corps reçus par `PUT /drive/choices` et les appels reçus. */
-export async function fakeBack(page: Page) {
+export async function fakeBack(page: Page, refusals: Refusals = {}) {
   const received = { choices: [] as unknown[], calls: [] as string[] }
+  const left = { ...refusals }
+  /** Le limiteur de débit du back : `Retry-After` optimiste (1 s), le compteur ne se libère en vrai qu'en environ une minute. */
+  const refuse = (route: Route, name: keyof Refusals) => {
+    if ((left[name] ?? 0) <= 0) return false
+    left[name] = (left[name] ?? 0) - 1
+    route.fulfill({
+      status: 429,
+      contentType: 'application/json',
+      headers: { 'Retry-After': '1' },
+      body: JSON.stringify({ error: { message: 'DRIVE_RATE_LIMITED' } }),
+    })
+
+    return true
+  }
   await page.addInitScript(() => localStorage.setItem('repas.session', '1'))
   await page.route(
     (url) => url.pathname.startsWith('/api/'),
@@ -168,9 +189,9 @@ export async function fakeBack(page: Page) {
             defaultServing: 4,
           })
         case 'GET /api/v1/drive/plans/l1':
-          return reply(route, plan)
+          return refuse(route, 'plan') || reply(route, plan)
         case 'GET /api/v1/drive/estimates/l1':
-          return reply(route, estimate)
+          return refuse(route, 'estimate') || reply(route, estimate)
         case 'GET /api/v1/drive/settings':
           return reply(route, {
             enabled: true,
@@ -180,6 +201,7 @@ export async function fakeBack(page: Page) {
         case 'GET /api/v1/shopping-lists/l1':
           return reply(route, { id: 'l1', displayName: 'Courses', version: 7, status: 'SENT' })
         case 'PUT /api/v1/drive/choices':
+          if (refuse(route, 'choices')) return
           received.choices.push(request.postDataJSON())
           return reply(route)
         case 'POST /api/v1/shopping-lists/l1/complete':

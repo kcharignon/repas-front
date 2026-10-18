@@ -11,6 +11,18 @@ import { routes } from '@/router'
 export const json = (body: unknown, init: ResponseInit = {}) =>
   new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' }, ...init })
 
+/**
+ * La réponse du limiteur de débit du drive (DRV-615) : `429 DRIVE_RATE_LIMITED` et son `Retry-After`, que le back annonce optimiste
+ * (souvent 1 seconde après une rafale alors que le compteur ne se libère qu'en environ une minute).
+ */
+export const rateLimited =
+  (retryAfter = 1) =>
+  () =>
+    json(
+      { error: { message: 'DRIVE_RATE_LIMITED' } },
+      { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+    )
+
 export type Handler = (request: Request) => Response | Promise<Response>
 
 /**

@@ -385,6 +385,9 @@ export default {
       "Modifié ailleurs entre-temps : la page vient d'être rechargée, refaites votre action.",
     tooMany:
       'Trop de requêtes. Réessayez dans {minutes} minute | Trop de requêtes. Réessayez dans {minutes} minutes',
+    // `DRIVE_RATE_LIMITED` (429, DRV-615) : passager, distinct des plafonds de quantité ; `{wait}` vaut au moins une minute
+    driveRateLimited: 'Trop de demandes en peu de temps. Attendez {wait}, puis réessayez.',
+    driveWait: 'une minute | {minutes} minutes',
     driveDisabled: 'L’envoi au drive n’est pas disponible pour le moment.',
     listSent: 'Cette liste vient d’être envoyée au drive : elle n’est plus modifiable.',
     listNotSent: 'Cette liste n’est plus envoyée au drive.',
@@ -549,6 +552,9 @@ export default {
       saving: 'Enregistrement de vos choix…',
       saved: 'Vos choix sont enregistrés pour les prochains envois.',
       failed: 'Vos choix n’ont pas pu être enregistrés. {reason}',
+      // Trop de demandes (429, DRV-615) : le résultat reste en mémoire sur cette page, rien n'est perdu
+      rateLimited:
+        'Vos choix ne sont pas encore enregistrés, mais ils sont gardés sur cette page : rien n’est perdu. {reason}',
       retry: 'Réessayer l’enregistrement',
     },
     counts: {

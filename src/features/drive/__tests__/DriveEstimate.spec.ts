@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
-import { appContext, calls, json, me, stubApi } from '@/__tests__/helpers'
+import { appContext, calls, json, me, rateLimited, stubApi } from '@/__tests__/helpers'
 import { useSessionStore } from '@/session/session'
 import DriveEstimate from '../DriveEstimate.vue'
 import { disclaimer, estimate } from './estimateFixtures'
@@ -199,6 +199,27 @@ describe('bloc « Estimation du coût »', () => {
     expect(wrapper.find('[role="alert"]').text()).toBe(
       'L’estimation n’est pas disponible pour le moment.',
     )
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(plain(wrapper.find('dd').text())).toBe('12,47 €')
+  })
+
+  it('trop de lectures (429) : le dit comme un refus passager, sans relire tout seul, puis réessaie à la demande', async () => {
+    let limited = true
+    const { wrapper, fetchMock } = await open({
+      'GET /api/v1/drive/estimates/l1': () => (limited ? rateLimited(1)() : json(estimate())),
+    })
+
+    expect(wrapper.find('[role="alert"]').text()).toBe(
+      'Trop de demandes en peu de temps. Attendez une minute, puis réessayez.',
+    )
+    // L'écran n'insiste pas : une seule lecture tant que l'utilisateur ne redemande rien
+    await flushPromises()
+    expect(calls(fetchMock).filter((call) => call.includes('/drive/estimates/'))).toHaveLength(1)
+
+    limited = false
     await wrapper.find('button').trigger('click')
     await flushPromises()
 

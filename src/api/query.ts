@@ -1,15 +1,19 @@
 import type { Ref } from 'vue'
 import { MutationCache, QueryClient } from '@tanstack/vue-query'
+import type { Query } from '@tanstack/vue-query'
 
-import { isStale, notifyFailure } from '@/notifications/failures'
+import { isRateLimited, isStale, notifyFailure } from '@/notifications/failures'
 import { ApiError } from './errors'
 
 /**
  * Réglages communs des données serveur : on ne rejoue pas une erreur du back (4xx : la rejouer donne le même refus), on
  * relit à la reprise de focus (le téléphone revient de la poche, la liste a pu changer ailleurs). Sans réseau on n'attend pas
- * en silence : la lecture échoue tout de suite (l'écran garde ce qu'il a déjà), l'écriture le dit (`networkMode: 'always'`).
+ * en silence : la lecture échoue tout de suite (l'écran garde ce qu'il a déjà), l'écriture le dit (`networkMode: 'always'`). Une lecture
+ * que le back vient de refuser pour trop de requêtes (429, DRV-615) n'est pas relue toute seule non plus : l'utilisateur la relit
+ * lui-même (« Réessayer ») une fois le délai passé.
  */
 export function createQueryClient(): QueryClient {
+  const unlessRateLimited = (query: Query) => !isRateLimited(query.state.error)
   const client: QueryClient = new QueryClient({
     // Un échec d'écriture se dit toujours à l'utilisateur ; si la ressource a changé ailleurs (412, 409) on relit tout.
     mutationCache: new MutationCache({
@@ -23,6 +27,8 @@ export function createQueryClient(): QueryClient {
       queries: {
         networkMode: 'always',
         staleTime: 15_000,
+        refetchOnWindowFocus: unlessRateLimited,
+        refetchOnReconnect: unlessRateLimited,
         retry: (failureCount, error) =>
           failureCount < 2 &&
           navigator.onLine &&

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
-import { appContext, calls, json, me, stubApi } from '@/__tests__/helpers'
+import { appContext, calls, json, me, rateLimited, stubApi } from '@/__tests__/helpers'
 import { useSessionStore } from '@/session/session'
 import { DRAFT_KEY } from '../bridge'
 import { fakeNative } from '../bridge/__tests__/fakeNative'
@@ -507,6 +507,28 @@ describe('lecture du plan', () => {
       message.replace(/'/g, '’'),
     )
     expect(wrapper.find('dl').exists()).toBe(false)
+  })
+
+  it('trop de lectures (429) : le dit comme un refus passager, sans relire tout seul, puis réessaie à la demande', async () => {
+    installApp()
+    let limited = true
+    const { wrapper, fetchMock } = await open({
+      'GET /api/v1/drive/plans/l1': () => (limited ? rateLimited(1)() : json(plan())),
+    })
+    await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
+
+    expect(wrapper.find('[role="alert"]').text()).toBe(
+      'Trop de demandes en peu de temps. Attendez une minute, puis réessayez.',
+    )
+    expect(wrapper.find('dl').exists()).toBe(false)
+    await flushPromises()
+    expect(calls(fetchMock).filter((call) => call.includes('/drive/plans/'))).toHaveLength(1)
+
+    limited = false
+    await press('Réessayer')
+
+    await loaded(wrapper)
+    expect(calls(fetchMock).filter((call) => call.includes('/drive/plans/'))).toHaveLength(2)
   })
 
   describe('fonction coupée (retour arrière)', () => {

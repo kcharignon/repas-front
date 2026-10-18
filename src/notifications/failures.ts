@@ -23,9 +23,29 @@ const driveCodes = new Map([
   ['UNIT_BASE_FACTOR_INVALID', 'errors.unitBaseFactorInvalid'],
 ])
 
+/**
+ * Trop de requêtes en peu de temps (`429`) : un refus passager, qui ne dit rien de la requête elle-même (le drive plafonne le débit par
+ * utilisateur, DRV-615, et n'a rien enregistré). On ne le rejoue jamais tout seul.
+ */
+export const isRateLimited = (error: unknown): error is ApiError =>
+  error instanceof ApiError && error.status === 429
+
+/**
+ * `DRIVE_RATE_LIMITED` : le débit du drive est plafonné par utilisateur et par minute. `Retry-After` est un minimum, jamais une promesse :
+ * après une rafale il annonce souvent 1 seconde alors que le compteur ne se libère qu'en environ une minute. On dit donc toujours au
+ * moins une minute, et davantage si le back en annonce davantage.
+ */
+function driveRateLimited(error: ApiError): string {
+  const minutes = Math.max(1, Math.ceil((error.retryAfter ?? 60) / 60))
+  const wait = i18n.global.t('errors.driveWait', { minutes }, minutes)
+
+  return t('errors.driveRateLimited', { wait })
+}
+
 /** Le message que lit l'utilisateur pour un échec d'écriture, selon le code renvoyé par le back (ADR 0007, 0016). */
 export function messageForFailure(error: unknown): string {
   if (!(error instanceof ApiError)) return t('errors.generic')
+  if (error.message === 'DRIVE_RATE_LIMITED') return driveRateLimited(error)
   const code = driveCodes.get(error.message)
   if (code !== undefined) return t(code)
 

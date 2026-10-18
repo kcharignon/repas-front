@@ -12,7 +12,7 @@ import {
   useReopenShoppingList,
   useShoppingList,
 } from '@/features/shopping-lists/queries'
-import { messageForFailure } from '@/notifications/failures'
+import { isRateLimited, messageForFailure } from '@/notifications/failures'
 import { useOnline } from '@/offline/useOnline'
 import { driveBridge } from './bridge'
 import { buildChoiceBatches } from './choices'
@@ -73,6 +73,12 @@ const refusedListId = ref<string | null>(null)
 
 // --- Enregistrement des choix (un seul appel, sauf plus de 200 intentions) ---
 const save = useSaveChoices()
+/** Pourquoi l'enregistrement a échoué ; trop de demandes (429) est passager et ne perd rien : le résultat reste sur la page. */
+const saveFailure = computed(() =>
+  t(isRateLimited(store.error) ? 'driveReturn.save.rateLimited' : 'driveReturn.save.failed', {
+    reason: messageForFailure(store.error),
+  }),
+)
 
 /**
  * Les lignes que le résultat doit pouvoir expliquer, quand le brouillon n'a pas gardé le plan envoyé : le plan relu du back (celui que
@@ -334,7 +340,7 @@ const countKeys = [
           role="alert"
           class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
         >
-          {{ t('driveReturn.save.failed', { reason: messageForFailure(store.error) }) }}
+          {{ saveFailure }}
         </p>
         <UiButton variant="secondary" :disabled="!online" @click="persist">
           {{ t('driveReturn.save.retry') }}
