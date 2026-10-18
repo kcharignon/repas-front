@@ -78,6 +78,8 @@ L'état d'un passage non terminé est dans le `sessionStorage` de la page de Lec
 
 Les pré-versions `android-dev-*` (APK de débogage) et `android-lab-*` (banc d'essai) sont publiques, débogables et signées d'une clé publique du dépôt. D2 en réduit le risque (l'aide ne mène plus qu'à `android-v…`), pas la présence. Recommandation : supprimer les pré-versions anciennes quand l'essai est fini, ne jamais installer une pré-version sur le téléphone qui sert aux courses, et retirer `drive-agent/lab/`, `drive-agent/android-lab/` et leurs workflows à la fin du jalon M3b (le banc tire du code d'un CDN, avec empreinte, pour le favori de bureau : acceptable pour l'essai, pas à garder).
 
+**Suite (2026-10-19)** : `drive-agent/lab/`, `drive-agent/android-lab/`, le workflow `android-lab.yml`, les cibles `make` (`lab*`, `android-lab*`), les scripts npm (`lab:*`), les entrées de configuration et de documentation qui ne servaient qu'à eux sont **retirés** (l'historique Git les garde ; l'agent, son empreinte et ses fixtures sont inchangés). Le workflow `android.yml` et sa pré-version `android-dev-*` **restent** : le runbook du back s'en sert pour le test automatique quand Leclerc change (`android/PROCEDURE.md`), avec leur avertissement. Reste, à la main : supprimer de la page des releases les pré-versions `android-lab-*` déjà publiées et les `android-dev-*` dont on n'a plus besoin.
+
 ### C7 — Copies du contrat du back (info)
 
 `api/openapi.json` et `src/api/schema.d.ts` portent l'adresse de messagerie réelle d'un tiers, recopiée des exemples du back. À corriger au back, puis `npm run api:update` (voir « Données personnelles »). Le test de #109 écarte ces deux fichiers en attendant ; retirer cette exception ensuite.

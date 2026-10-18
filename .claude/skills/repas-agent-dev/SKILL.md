@@ -27,7 +27,6 @@ L'agent s'exécute **dans la page de l'enseigne, avec les droits de l'utilisateu
 | Construction | `drive-agent/scripts/build.mjs` (`buildAgent`, `digestOf`), sorties `drive-agent/dist/` (jamais commité) |
 | Tests | `drive-agent/test/*.spec.ts`, aides `leclerc-helpers.ts` / `flow-helpers.ts` / `selftest-helpers.ts`, `rules.spec.ts` (une preuve par règle ESLint), `build.spec.ts` ; e2e interface `e2e/agent-ui.spec.ts` ; page de démonstration `drive-agent/demo/` |
 | Faux site Leclerc et e2e de l'agent (DRV-309) | `drive-agent/fake-leclerc/` (`server.ts`, `catalog.ts`, `pages.ts`, `main.ts`, `README.md`), `drive-agent/e2e/` (`passage`, `choix`, `incidents`, `pont` `.spec.ts`, `support/{agent,cadence,fixtures,plans}.ts`, `playwright.config.ts`) |
-| Jetables (ne pas étendre) | `drive-agent/lab/`, `drive-agent/android-lab/` (outils du spike DRV-001/011) |
 
 ## 2. Règles de sécurité (ESLint les impose ; `drive-agent/test/rules.spec.ts` le prouve)
 
@@ -114,4 +113,4 @@ Une vérification de l'adaptateur qui peut échouer de plus : un code dans `CAUS
 
 ## 10. Interdits
 
-Contacter Leclerc ; stocker, lire ou journaliser un cookie, un jeton ou un identifiant d'enseigne ; ajouter du code chargé à distance ; valider une commande, choisir un créneau, payer, vider le panier ; dépasser 99 par produit ; étendre `lab/` ou `android-lab/` ; `--no-verify`, force-push, push sur `main` ; fusionner une PR dont un contrôle n'est pas vert.
+Contacter Leclerc ; stocker, lire ou journaliser un cookie, un jeton ou un identifiant d'enseigne ; ajouter du code chargé à distance ; valider une commande, choisir un créneau, payer, vider le panier ; dépasser 99 par produit ; recréer un banc d'essai jetable (`lab/`, `android-lab/`, retirés le 2026-10-19) ; `--no-verify`, force-push, push sur `main` ; fusionner une PR dont un contrôle n'est pas vert.

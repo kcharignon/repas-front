@@ -11,7 +11,7 @@
       "path": "./tsconfig.vitest.json"
     },
     {
-      "path": "./tsconfig.lab.json"
+      "path": "./tsconfig.android.json"
     },
     {
       "path": "./tsconfig.agent.json"

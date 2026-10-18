@@ -33,9 +33,7 @@ mot de passe **`M0t 2 p@sse`**. `make fixtures` ne vide rien et peut être relan
 | `make lighthouse` | mesure les pages principales de l'image de production (compte de démo) : performance ≥ 90, accessibilité et bonnes pratiques 100, SEO ≥ 90 |
 | `make e2e-visual` | idem avec capture, vidéo et trace de chaque test, puis rapport sur http://localhost:9323 |
 | `make agent-build` / `agent-verify` / `agent-test` | l'agent du drive (`drive-agent/`) : `dist/agent.js` avec sa version et son empreinte SHA-384 (construction reproductible vérifiée), puis ses tests seuls ; voir `drive-agent/README.md` |
-| `make lab` | construit le favori de test du chantier drive (`drive-agent/lab/`, outil jetable) et affiche la taille de sa chaîne `javascript:` |
 | `make android` / `android-test` / `android-release` | l'application Android « Repas Drive » du chantier drive (`android/`) dans Docker : APK de débogage, tests Kotlin, APK signé (refuse sans clé de signature) ; voir `android/README.md` |
-| `make android-lab` | construit l'application Android de test du chantier drive (`drive-agent/android-lab/`, outil jetable) dans Docker : tests Kotlin, puis l'APK de débogage avec son empreinte SHA-256 |
 | `make prod` | image de production (Caddy : statique + relais vers le back) sur http://localhost:8081 |
 | `make api-update` | figer le contrat de l'API sur le dernier commit du back (`ref=<sha>` pour un autre) et régénérer les types |
 | `make sh` / `make npm c="run lint"` | un shell ou une commande npm dans le conteneur |

@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.app.json",
+  // L'application Android (android/) : ses tests (android/__tests__) et l'outil de l'empreinte de l'agent (android/agent-digest.ts). Types de Node permis.
+  "include": ["android/**/*.ts", "env.d.ts"],
+  "exclude": ["android/dist/**"],
+  "compilerOptions": {
+    "types": ["node"],
+    // Les tests de android/ importent l'outil de construction de l'agent (drive-agent/scripts/build.mjs, JavaScript typé par JSDoc).
+    "allowJs": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.android.tsbuildinfo"
+  }
+}

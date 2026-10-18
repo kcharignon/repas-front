@@ -138,22 +138,6 @@ services:
       - ./drive-agent/dist:/work/drive-agent/dist:ro
       - android-gradle:/gradle
 
-  # Application Android jetable du chantier drive (DRV-011, drive-agent/android-lab) : `make android-lab`.
-  # Image JDK 17 + Gradle + SDK Android (sans Node). Les sources sont montées, l'APK tombe dans drive-agent/android-lab/dist/.
-  # Le cache de Gradle vit dans un volume ; le conteneur tourne avec l'identifiant de l'utilisateur (voir le Makefile).
-  android-lab:
-    profiles: [android]
-    build:
-      context: ./drive-agent/android-lab
-    init: true
-    working_dir: /work/drive-agent/android-lab
-    environment:
-      ANDROID_LAB_VERSION_CODE: ${ANDROID_LAB_VERSION_CODE:-1}
-      ANDROID_LAB_COMMIT: ${ANDROID_LAB_COMMIT:-local}
-    volumes:
-      - ./drive-agent:/work/drive-agent
-      - android-lab-gradle:/gradle
-
   # Émulateur Android de test (DRV-319, android/emulator/) : `make android-emulator-up`, `-down`, `-status`, puis `make android-smoke` ou `make android-e2e`.
   # Sans fenêtre, accéléré par KVM (/dev/kvm de la machine, voir android/README.md). Le SDK, l'image système et l'AVD sont téléchargés au premier
   # lancement dans le volume `android-emulator-sdk`, puis réutilisés. Aucun port publié, aucun secret. Le DNS de l'émulateur envoie tout
@@ -201,7 +185,6 @@ services:
 
 volumes:
   node_modules:
-  android-lab-gradle:
   android-gradle:
   android-emulator-sdk:
 

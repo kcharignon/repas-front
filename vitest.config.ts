@@ -12,15 +12,12 @@ export default mergeConfig(
       setupFiles: ['./src/__tests__/setup.ts'],
       coverage: {
         provider: 'v8',
-        include: ['src/**/*.{ts,vue}', 'drive-agent/lab/src/**/*.ts', 'drive-agent/src/**/*.ts', 'drive-agent/protocol/**/*.ts'],
+        include: ['src/**/*.{ts,vue}', 'drive-agent/src/**/*.ts', 'drive-agent/protocol/**/*.ts'],
         exclude: [
           'src/main.ts',
           'src/pwa.ts',
           'src/**/__tests__/**',
           'src/api/schema.d.ts',
-          // Banc d'essai du favori (outil jetable) : son point d'entrée ne fait qu'appeler le code testé.
-          'drive-agent/lab/src/main.ts',
-          'drive-agent/lab/src/__tests__/**',
           // Agent du drive : son point d'entrée ne fait qu'appeler le code testé (le fichier construit est éprouvé par build.spec.ts).
           'drive-agent/src/index.ts',
         ],

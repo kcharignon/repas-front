@@ -174,7 +174,7 @@ jobs:
           - Construit depuis le commit \`${GITHUB_SHA}\` (numéro de version de l'application : ${RUN_NUMBER})
           - Mode d'emploi pas à pas : https://github.com/${GH_REPO}/blob/${GITHUB_SHA}/android/PROCEDURE.md
 
-          L'APK est signé avec la clé de débogage publique du dépôt (mot de passe \`android\`) : elle ne protège rien. Il s'installe à côté de l'application de test \`eu.kantin.repas.lab\`.
+          L'APK est signé avec la clé de débogage publique du dépôt (mot de passe \`android\`) : elle ne protège rien.
           NOTES
           gh release create "$tag" repas-drive-debug.apk \
             --target "$GITHUB_SHA" \

@@ -30,7 +30,7 @@ Jusqu'ici le front servait à consulter, cocher et éditer la liste de courses (
 
 ## Alternatives écartées
 
-- **Un favori JavaScript** sur Chrome Android : impossible (DRV-006). Le favori de bureau et le banc d'essai (`drive-agent/lab/`) ne sont que des outils jetables du spike.
+- **Un favori JavaScript** sur Chrome Android : impossible (DRV-006). Le favori de bureau n'est pas construit, et le banc d'essai du spike (`drive-agent/lab/`, `drive-agent/android-lab/`) est retiré (2026-10-19, il reste dans l'historique Git).
 - **Lien `repasdrive://open?plan=…` et retour par `https://kantin.eu/drive/retour#result=…`** (décision G1 du 2026-10-17) : remplacé par le pont natif dès que la coquille Repas existe (D28), qui évite une URL longue, un fragment à effacer et un lien qui n'ouvre rien quand l'application est absente. Le transport par fragment (`#repas=`) reste dans l'agent pour les essais hors application ; aucune page de Repas n'en écrit.
 - **Servir l'agent depuis le front** : le front deviendrait une porte vers les comptes de l'enseigne ; l'agent est embarqué et vérifié par empreinte.
 - **Un cadre Leclerc dans Repas, ou des vignettes de produits** : refus possible de l'enseigne, politique de contenu à relâcher.

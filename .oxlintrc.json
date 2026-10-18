@@ -4,7 +4,6 @@
   "env": {
     "browser": true
   },
-  "ignorePatterns": ["drive-agent/lab/published/**"],
   "categories": {
     "correctness": "error"
   }

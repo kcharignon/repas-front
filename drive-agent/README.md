@@ -6,7 +6,7 @@ Contexte et protocole : `docs/drive/` du dépôt back (`kcharignon/repas`), en p
 
 État : **squelette** (DRV-301), **protocole v1** (DRV-302), **adaptateur Leclerc** (DRV-303), **interface superposée** (DRV-304), **orchestrateur de la phase A** (DRV-305) et **choix guidé, phase B** (DRV-306) et **mode configuration** (DRV-307) et **diagnostic** (DRV-308). Un plan reçu par un transport (pont de l'application, ou fragment `#repas=`) fait démarrer le passage : récapitulatif et confirmation, produits connus mis au panier, choix des nouveaux produits, résultat. Sans plan, l'agent reste silencieux sur la page. Un message `setup` lit le magasin de la page et le rend à Repas. Une commande `diagnostic` de l'application ouvre le diagnostic aussitôt (DRV-313) ; une page ouverte sur `#repas-diagnostic` (favori de bureau) affiche l'accueil, d'où on le lance.
 
-> `lab/` (banc d'essai du favori) et `android-lab/` (application de test) sont des outils jetables du spike. Ils restent en place jusqu'à la fin du jalon M3b et ne font pas partie de l'agent.
+> Le banc d'essai du favori (`lab/`) et l'application de test (`android-lab/`), outils jetables du spike, ont été **retirés le 2026-10-19** (ils restent dans l'historique Git). Les mentions du « banc d'essai » plus bas (`search-request.ts`, diagnostic) désignent la requête de recherche qu'il envoyait sur le vrai site et que l'agent reproduit (forme `a`).
 
 ## Commandes
 

@@ -11,9 +11,6 @@ test-results
 .env.*
 !.env.example
 .eslintcache
-drive-agent/android-lab/.gradle
-drive-agent/android-lab/.kotlin
-drive-agent/android-lab/app/build
 android/.gradle
 android/.kotlin
 android/app/build
