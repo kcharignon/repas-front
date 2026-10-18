@@ -109,9 +109,12 @@ export function validatePlan(input: unknown): PlanMessage | SetupMessage {
   exactly(message, 'v', PROTOCOL_VERSION)
   text(message, 'runId', UUID)
   exactly(message, 'retailer', 'leclerc')
-  const store = object(message, 'store', ['id', 'host'])
-  text(store, 'id', ID)
-  text(store, 'host', HOST)
+  // Le magasin est obligatoire pour un plan ; un `setup` peut ne pas en avoir (Repas ne le connaît pas encore, DRV-320).
+  if (type === 'plan' || message.v.store !== undefined) {
+    const store = object(message, 'store', ['id', 'host'])
+    text(store, 'id', ID)
+    text(store, 'host', HOST)
+  }
   exactly(message, 'returnPath', RETURN_PATH)
   if (type === 'plan') distinct(each(message, 'lines', LIMITS.lines, planLine), 'ingredientSlug')
   return input as PlanMessage | SetupMessage

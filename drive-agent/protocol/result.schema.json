@@ -3,7 +3,7 @@
   "title": "Message de l'agent du drive vers Repas (protocole v1) : result et setup-result",
   "description": "Source de vérité documentaire (architecture.md § 8 du dépôt back). Les validateurs de drive-agent/protocol font foi à l'exécution ; un test vérifie qu'ils donnent le même verdict que ce schéma. Ce que JSON Schema ne sait pas dire (identifiants de produit sans doublon dans rejected, adresse de base cohérente avec l'hôte et l'identifiant du magasin d'un setup-result) n'est vérifié que par les validateurs.",
   "type": "object",
-  "required": ["v", "type", "runId", "agentVersion", "store"],
+  "required": ["v", "type", "runId", "agentVersion"],
   "oneOf": [
     {
       "additionalProperties": false,
@@ -36,6 +36,7 @@
     },
     {
       "additionalProperties": false,
+      "required": ["store"],
       "properties": {
         "v": true,
         "runId": true,

@@ -1,0 +1,12 @@
+{
+  "path": "store.host",
+  "why": "Un setup qui donne un magasin le donne en entier (identifiant et hôte).",
+  "message": {
+    "v": 1,
+    "type": "setup",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "retailer": "leclerc",
+    "store": { "id": "000000" },
+    "returnPath": "/drive/retour"
+  }
+}

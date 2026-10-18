@@ -10,7 +10,8 @@ import { fakeSite } from './leclerc-helpers'
 
 type Sent = ResultMessage | SetupResultMessage
 
-const { lines: _lines, type: _type, ...HEAD } = plan([])
+const { lines: _lines, type: _type, store: _store, ...HEAD } = plan([])
+/** Un `setup` de Repas qui ne connaît pas encore le magasin (DRV-320) : l'agent lit celui de la page. */
 const SETUP = { ...HEAD, type: 'setup' as const }
 
 /** Un orchestrateur dont `onSetup` est le gestionnaire de l'agent, et tout ce qu'il envoie à Repas. */
@@ -154,6 +155,62 @@ describe('lire le magasin de la page', () => {
   })
 })
 
+describe('le magasin du message', () => {
+  const PAGE = { id: '123456', host: 'fd9-courses.leclercdrive.fr' }
+
+  it('sans magasin dans le message : on lit celui de la page', async () => {
+    const { adapter } = page()
+    const { flow, sent } = setupFlow({ store: () => 'save' }, adapter)
+
+    await flow.start(SETUP)
+
+    expect(SETUP).not.toHaveProperty('store')
+    expect(sent[0]).toMatchObject({ type: 'setup-result', store: { id: PAGE.id, host: PAGE.host } })
+  })
+
+  it('avec le magasin de la page : même chemin qu’un message sans magasin', async () => {
+    const { adapter } = page()
+    const { flow, sent, screens } = setupFlow({ store: () => 'save' }, adapter)
+
+    await flow.start({ ...SETUP, store: PAGE })
+
+    expect(screens.screens()).toEqual(['store'])
+    expect(sent[0]).toMatchObject({ type: 'setup-result', store: { id: PAGE.id } })
+  })
+
+  it.each([
+    ['un autre identifiant', { id: '000999', host: PAGE.host }],
+    ['un autre hôte', { id: PAGE.id, host: 'fd1-courses.leclercdrive.fr' }],
+  ])('%s : STORE_MISMATCH, rien n’est lu ni enregistré', async (_name, store) => {
+    const { adapter } = page()
+    const { flow, sent, screens } = setupFlow({ error: () => 'return' }, adapter)
+
+    await flow.start({ ...SETUP, store })
+
+    expect(screens.screens()).toEqual(['error'])
+    expect(screens.propsOf('error')).toEqual([{ code: 'STORE_MISMATCH', canReturn: true }])
+    expect(sent).toEqual([
+      expect.objectContaining({
+        type: 'result',
+        outcome: 'error',
+        store: { id: store.id },
+        error: expect.objectContaining({ code: 'STORE_MISMATCH' }),
+      }),
+    ])
+    validateResult(JSON.parse(JSON.stringify(sent[0])))
+    expect(screens.closed.count).toBe(1)
+  })
+
+  it('STORE_MISMATCH puis « Fermer » : rien n’est envoyé', async () => {
+    const { adapter } = page()
+    const { flow, sent } = setupFlow({ error: () => 'close' }, adapter)
+
+    await flow.start({ ...SETUP, store: { id: '000999', host: PAGE.host } })
+
+    expect(sent).toEqual([])
+  })
+})
+
 describe('l’utilisateur refuse', () => {
   it('« Annuler » rend un résultat « aborted » sans ligne, sans rien enregistrer', async () => {
     const { adapter } = page()
@@ -168,7 +225,6 @@ describe('l’utilisateur refuse', () => {
         runId: RUN_ID,
         agentVersion: '0.4.0',
         outcome: 'aborted',
-        store: { id: STORE.id },
         lines: [],
       },
     ])
@@ -192,6 +248,7 @@ describe('une page qui n’est pas celle d’un magasin', () => {
       expect(screens.screens()).toEqual(['error'])
       expect(screens.propsOf('error')).toEqual([{ code: 'UNSUPPORTED_PAGE', canReturn: true }])
       expect(sent).toHaveLength(1)
+      expect(sent[0]).not.toHaveProperty('store')
       expect(sent[0]).toMatchObject({
         type: 'result',
         outcome: 'error',

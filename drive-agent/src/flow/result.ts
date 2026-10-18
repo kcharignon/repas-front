@@ -6,6 +6,7 @@ import {
   type PlanMessage,
   type ResultLine,
   type ResultMessage,
+  type SetupMessage,
 } from '../../protocol'
 import { own } from '../own'
 import type { EndProps } from '../ui'
@@ -52,7 +53,7 @@ export function endingOf(
 }
 
 export function buildResult(
-  plan: Pick<PlanMessage, 'runId' | 'store'>,
+  plan: Pick<PlanMessage | SetupMessage, 'runId' | 'store'>,
   lines: ResultLine[],
   ending: Ending,
   agentVersion: string,
@@ -63,7 +64,7 @@ export function buildResult(
     runId: plan.runId,
     agentVersion,
     outcome: ending.outcome,
-    store: { id: plan.store.id },
+    ...(plan.store && { store: { id: plan.store.id } }),
     ...(ending.code && { error: { code: ending.code, message: ERROR_TEXTS[ending.code].title } }),
     lines,
   }

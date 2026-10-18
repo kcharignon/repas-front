@@ -133,7 +133,7 @@ export function validateResult(input: unknown): ResultMessage | SetupResultMessa
     return input as SetupResultMessage
   }
   const outcome = oneOf(message, 'outcome', OUTCOMES)
-  text(object(message, 'store', ['id']), 'id', ID)
+  optional(message, 'store', (parent, name) => text(object(parent, name, ['id']), 'id', ID))
   if (outcome === 'error' && message.v.error === undefined) fail('error')
   optional(message, 'error', (parent, name) => {
     const error = object(parent, name, ['code', 'message'])

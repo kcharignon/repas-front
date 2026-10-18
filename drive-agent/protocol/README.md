@@ -29,7 +29,8 @@ try {
 
 ## Précisions du format
 
-- `setup` a les mêmes champs qu'un `plan`, sans `lines` (interdit). Le magasin y est obligatoire.
+- `setup` a les mêmes champs qu'un `plan`, sans `lines` (interdit). Son `store` est **facultatif** (DRV-320) : sans lui, Repas ne connaît pas encore le magasin et l'agent lit celui de la page ; avec lui, la page doit être celle de ce magasin (sinon `STORE_MISMATCH`). Un `plan` a toujours son `store`.
+- Le `store` d'un `result` est facultatif lui aussi : il manque quand un `setup` sans magasin s'arrête avant que le magasin soit connu (`aborted`, `UNSUPPORTED_PAGE`). Celui d'un `setup-result` est obligatoire.
 - `packs` et `packsStatus` d'un produit du plan sont facultatifs, ou `null`. `content` est facultatif.
 - `needed` (DRV-306, facultatif, sur toute ligne) : ce que la liste demande, `{quantity, unitSymbol, dimension?, baseFactor?}`. `quantity` est un nombre de 0 (exclu) à 1 000 000 dans l'unité de la ligne (« 800 » `g`), `dimension` parmi `WEIGHT`, `VOLUME`, `COUNT`, `PACKAGE` (ou `null`), `baseFactor` le facteur de l'unité vers l'unité de base (1 pour le gramme, 1000 pour le kilo). L'agent s'en sert, pour une ligne à choisir (phase B), à calculer le nombre de produits du produit choisi (règles de `architecture.md` § 6) ; sans `needed` ou sans dimension, il demande la quantité à l'utilisateur.
 - Un `result` d'issue `error` porte son `error` `{code, message}` ; les autres issues peuvent en porter un (`partial` avec `BLOCKED`).
