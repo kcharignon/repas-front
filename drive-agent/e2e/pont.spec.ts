@@ -82,6 +82,44 @@ test('mode configuration : lit le magasin de la page et le rend à l’applicati
   expect(fake.paced()).toEqual([])
 })
 
+test('mode configuration sans magasin dans le message (DRV-320) : lit celui de la page', async ({
+  page,
+  fake,
+  agentCode,
+}) => {
+  // Given : l'application ne connaît pas encore le magasin de l'utilisateur
+  const app = await openWithBridge(page, fake, agentCode)
+  const { store: _store, ...withoutStore } = SETUP
+  app.answerHello(withoutStore)
+
+  // When
+  await page.getByRole('button', { name: 'Enregistrer' }).click()
+
+  // Then
+  expect(await app.received('setup-result')).toMatchObject({
+    runId: RUN_ID,
+    store: { id: '000001', host: 'courses-test.leclercdrive.fr' },
+  })
+})
+
+test('mode configuration avec un autre magasin que celui de la page : STORE_MISMATCH, rien n’est lu', async ({
+  page,
+  fake,
+  agentCode,
+}) => {
+  const app = await openWithBridge(page, fake, agentCode)
+  app.answerHello({ ...SETUP, store: { ...SETUP.store, id: '000999' } })
+
+  await expect(page.getByRole('heading', { name: 'Ce n’est pas le bon magasin' })).toBeVisible()
+  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+
+  expect(await app.received('result')).toMatchObject({
+    outcome: 'error',
+    error: { code: 'STORE_MISMATCH' },
+    store: { id: '000999' },
+  })
+})
+
 test('reprend le plan que l’application renvoie à chaque chargement de la page', async ({
   page,
   fake,

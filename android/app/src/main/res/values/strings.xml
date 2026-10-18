@@ -60,10 +60,16 @@
     <string name="abandon_message">Les produits déjà mis au panier y restent. Repas sera prévenu que l’envoi a été abandonné.</string>
     <string name="abandon_confirm">Abandonner</string>
     <string name="abandon_continue">Continuer</string>
+    <string name="setup_banner">Connecte-toi à Leclerc si besoin, puis choisis ton magasin. Repas le lira ensuite. Le bouton retour du téléphone annule.</string>
+    <string name="menu_abandon_setup">Abandonner la lecture du magasin</string>
+    <string name="abandon_setup_title">Abandonner la lecture du magasin ?</string>
+    <string name="abandon_setup_message">Repas ne retiendra aucun magasin. Tu pourras recommencer depuis les réglages du drive.</string>
     <string name="pass_busy">Un envoi est déjà en cours : termine-le ou abandonne-le d’abord.</string>
 
     <string name="resume_title">Envoi interrompu</string>
     <string name="resume_message">Un envoi de ta liste au drive a été interrompu. Tu peux le reprendre ou l’abandonner (les produits déjà mis au panier y restent).</string>
+    <string name="resume_setup_title">Lecture du magasin interrompue</string>
+    <string name="resume_setup_message">La lecture de ton magasin a été interrompue. Tu peux la reprendre ou l’abandonner.</string>
     <string name="resume_confirm">Reprendre</string>
     <string name="resume_abandon">Abandonner</string>
 </resources>

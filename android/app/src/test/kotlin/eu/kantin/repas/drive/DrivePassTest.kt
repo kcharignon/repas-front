@@ -46,7 +46,7 @@ class DrivePassTest {
         val pass = pass()
 
         assertSame(StartOutcome.Started, pass.start(plan(), PassSource.REPAS))
-        assertEquals(runId, pass.current()!!.plan.runId)
+        assertEquals(runId, pass.current()!!.request.runId)
         assertEquals(PassSource.REPAS, pass.current()!!.source)
         assertEquals(now, pass.current()!!.startedAt)
     }
@@ -59,7 +59,7 @@ class DrivePassTest {
         val second = pass.start(plan(otherRunId), PassSource.REPAS)
 
         assertEquals(runId, (second as StartOutcome.Busy).runId)
-        assertEquals(runId, pass.current()!!.plan.runId)
+        assertEquals(runId, pass.current()!!.request.runId)
     }
 
     @Test
@@ -105,7 +105,7 @@ class DrivePassTest {
         assertNull(pass.finish(result(otherRunId)))
         assertNull(pass.finish("pas du json"))
         assertNull(pass.finish("""{"v":1,"type":"setup-result","runId":"$runId"}"""))
-        assertEquals(runId, pass.current()!!.plan.runId)
+        assertEquals(runId, pass.current()!!.request.runId)
         assertTrue(pass.pendingMessages().isEmpty())
     }
 
@@ -141,7 +141,7 @@ class DrivePassTest {
 
         pass.start(plan(), PassSource.REPAS)
         assertNull(pass.abort(otherRunId))
-        assertEquals(runId, pass.current()!!.plan.runId)
+        assertEquals(runId, pass.current()!!.request.runId)
         assertNotNull(pass.abort(runId))
         assertNull(pass.current())
     }
@@ -188,7 +188,7 @@ class DrivePassTest {
         now += DrivePass.MAX_AGE_MS - 1
         val restored = pass(store)
 
-        assertEquals(runId, restored.current()!!.plan.runId)
+        assertEquals(runId, restored.current()!!.request.runId)
         assertEquals(PassSource.REPAS, restored.current()!!.source)
         assertEquals(1_000_000L, restored.current()!!.startedAt)
         assertTrue(restored.start(plan(otherRunId), PassSource.REPAS) is StartOutcome.Busy)
@@ -261,5 +261,92 @@ class DrivePassTest {
     fun `un passage ecrit sans date est ignore`() {
         val plan = plan().text
         assertNull(pass(MemoryStore(JSONObject().put("pass", JSONObject().put("plan", plan)).toString())).current())
+    }
+
+    // —— la lecture du magasin (DRV-320) ————————————————————————————————————————————————————————————————————————————————
+
+    private fun setup(id: String = runId) = SetupRequest.of(id)!!
+
+    private fun setupResult(id: String = runId) =
+        """{"v":1,"type":"setup-result","runId":"$id","agentVersion":"0.6.0","store":{"id":"000000","host":"courses-test.leclercdrive.fr","baseUrl":"https://courses-test.leclercdrive.fr/magasin-000000-000000","label":null}}"""
+
+    @Test
+    fun `une lecture du magasin est un passage comme un autre, un seul a la fois dans les deux sens`() {
+        val pass = pass()
+        assertSame(StartOutcome.Started, pass.start(setup(), PassSource.REPAS))
+
+        assertSame(StartOutcome.Resumed, pass.start(setup(), PassSource.REPAS))
+        assertEquals(runId, (pass.start(plan(otherRunId), PassSource.REPAS) as StartOutcome.Busy).runId)
+        assertEquals(runId, (pass.start(setup(otherRunId), PassSource.REPAS) as StartOutcome.Busy).runId)
+        assertTrue(pass.current()!!.request.isSetup)
+    }
+
+    @Test
+    fun `un plan en cours refuse une lecture du magasin avec son identifiant`() {
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+
+        assertEquals(runId, (pass.start(setup(otherRunId), PassSource.REPAS) as StartOutcome.Busy).runId)
+    }
+
+    @Test
+    fun `le setup-result de l'agent clot la lecture et part vers Repas dans drive result`() {
+        val pass = pass()
+        pass.start(setup(), PassSource.REPAS)
+
+        assertNotNull(pass.finish(setupResult()))
+
+        assertNull(pass.current())
+        val sent = JSONObject(pass.pendingMessages().single())
+        assertEquals("drive.result", sent.getString("type"))
+        assertEquals("setup-result", sent.getJSONObject("result").getString("type"))
+        assertEquals("000000", sent.getJSONObject("result").getJSONObject("store").getString("id"))
+    }
+
+    @Test
+    fun `l'agent peut aussi clore la lecture par un result (annule, page inconnue)`() {
+        val pass = pass()
+        pass.start(setup(), PassSource.REPAS)
+
+        assertNotNull(pass.finish("""{"v":1,"type":"result","runId":"$runId","agentVersion":"0.6.0","outcome":"aborted","lines":[]}"""))
+
+        assertNull(pass.current())
+        assertEquals("aborted", JSONObject(pass.pendingMessages().single()).getJSONObject("result").getString("outcome"))
+    }
+
+    @Test
+    fun `le setup-result d'un autre passage est ignore`() {
+        val pass = pass()
+        pass.start(setup(), PassSource.REPAS)
+
+        assertNull(pass.finish(setupResult(otherRunId)))
+        assertEquals(runId, pass.current()!!.request.runId)
+    }
+
+    @Test
+    fun `l'abandon d'une lecture du magasin donne un resultat aborted sans magasin`() {
+        val pass = pass()
+        pass.start(setup(), PassSource.REPAS)
+
+        assertNotNull(pass.abort(runId))
+
+        val sent = JSONObject(pass.pendingMessages().single()).getJSONObject("result")
+        assertEquals("aborted", sent.getString("outcome"))
+        assertEquals("CANCELLED", sent.getJSONObject("error").getString("code"))
+        assertFalse(sent.has("store"))
+        assertNull(pass.current())
+    }
+
+    @Test
+    fun `une lecture du magasin non terminee survit a la fin du processus, sans autre chose que son message`() {
+        val store = MemoryStore()
+        pass(store).start(setup(), PassSource.REPAS)
+
+        val restored = pass(store)
+
+        assertTrue(restored.current()!!.request.isSetup)
+        assertEquals(runId, restored.current()!!.request.runId)
+        assertEquals(setup().text, restored.current()!!.request.text)
+        assertEquals(setOf("plan", "startedAt"), JSONObject(store.value!!).getJSONObject("pass").keys().asSequence().toSet())
     }
 }

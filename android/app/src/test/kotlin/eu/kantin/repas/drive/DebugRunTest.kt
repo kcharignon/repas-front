@@ -69,15 +69,13 @@ class DebugRunTest {
     }
 
     @Test
-    fun `le message setup suit le protocole et se rabat sur l'accueil du drive pour un hote inconnu`() {
+    fun `le message setup suit le protocole et n'a pas de magasin, l'agent lit celui de la page`() {
         val golden = JSONObject(File("src/test/resources/setup-message.json").readText())
 
-        val built = JSONObject(DebugPlan.setupMessage(runId, host))
-        assertEquals(golden.keys().asSequence().toSet(), built.keys().asSequence().toSet())
-        listOf("v", "type", "runId", "retailer", "returnPath").forEach { assertEquals(golden.get(it), built.get(it)) }
-        listOf("id", "host").forEach { assertEquals(golden.getJSONObject("store").get(it), built.getJSONObject("store").get(it)) }
-        assertEquals("www.leclercdrive.fr", JSONObject(DebugPlan.setupMessage(runId, null)).getJSONObject("store").getString("host"))
-        assertEquals("www.leclercdrive.fr", JSONObject(DebugPlan.setupMessage(runId, "exemple.invalid")).getJSONObject("store").getString("host"))
+        val built = JSONObject(DebugPlan.setupMessage(runId))
+
+        assertTrue(sameJson(golden, built))
+        assertFalse(built.has("store"))
     }
 
     // —— le déroulement ————————————————————————————————————————————————————————————————————————————————————————————————
@@ -101,7 +99,7 @@ class DebugRunTest {
     fun `l'essai envoie d'abord setup, puis le plan avec le magasin lu par l'agent, puis montre le resultat`() {
         val h = Harness(template)
 
-        assertTrue(h.run.start(host))
+        assertTrue(h.run.start())
         assertEquals(1, h.sent.size)
         assertEquals("setup", JSONObject(h.sent[0]).getString("type"))
 
@@ -122,7 +120,7 @@ class DebugRunTest {
     fun `sans canal vers l'agent, l'essai ne demarre pas`() {
         val h = Harness(template, accept = false)
 
-        assertFalse(h.run.start(host))
+        assertFalse(h.run.start())
         h.run.onAgentMessage("setup-result", setupResult)
         // Rien n'attendait ce magasin : le message est montré tel un résultat, aucun plan ne part.
         assertTrue(h.sent.isEmpty())
@@ -131,7 +129,7 @@ class DebugRunTest {
     @Test
     fun `si l'utilisateur refuse le magasin, le resultat est montre et aucun plan ne part`() {
         val h = Harness(template)
-        h.run.start(host)
+        h.run.start()
 
         h.run.onAgentMessage("result", finalResult.replace("completed", "aborted"))
 
@@ -142,7 +140,7 @@ class DebugRunTest {
     @Test
     fun `un magasin de forme inattendue arrete l'essai avec un message clair`() {
         val h = Harness(template)
-        h.run.start(host)
+        h.run.start()
 
         h.run.onAgentMessage("setup-result", setupResult.replace("\"123456\"", "\"12 34\""))
 
@@ -153,12 +151,12 @@ class DebugRunTest {
     @Test
     fun `une reponse sans magasin ou sans modele arrete l'essai`() {
         val noStore = Harness(template)
-        noStore.run.start(host)
+        noStore.run.start()
         noStore.run.onAgentMessage("setup-result", """{"v":1,"type":"setup-result"}""")
         assertTrue(noStore.shown[0].startsWith("Magasin illisible"))
 
         val noTemplate = Harness(null)
-        noTemplate.run.start(host)
+        noTemplate.run.start()
         noTemplate.run.onAgentMessage("setup-result", setupResult)
         assertTrue(noTemplate.shown[0].startsWith("Plan d'essai impossible"))
         assertEquals(1, noTemplate.sent.size)
@@ -167,7 +165,7 @@ class DebugRunTest {
     @Test
     fun `si le plan ne peut plus partir, l'essai le dit`() {
         val h = Harness(template)
-        h.run.start(host)
+        h.run.start()
         h.accept = false
 
         h.run.onAgentMessage("setup-result", setupResult)
@@ -178,7 +176,7 @@ class DebugRunTest {
     @Test
     fun `les messages de progression sont ignores`() {
         val h = Harness(template)
-        h.run.start(host)
+        h.run.start()
 
         h.run.onAgentMessage("progress", """{"v":1,"type":"progress"}""")
         h.run.onAgentMessage("log", """{"v":1,"type":"log"}""")

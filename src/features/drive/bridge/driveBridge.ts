@@ -1,5 +1,5 @@
 import { LIMITS, PROTOCOL_VERSION, ProtocolError, validatePlan } from '@drive-protocol'
-import type { PlanMessage } from '@drive-protocol'
+import type { PlanMessage, SetupResultMessage } from '@drive-protocol'
 
 import { browserDraftStorage, createDraftStore, sentLinesOf } from './draft'
 import type { DraftStorage, DriveResult, RunDraft } from './draft'
@@ -17,6 +17,9 @@ export type DriveEvent =
   | { kind: 'refused'; code: string; runId: string | null }
   /** L'application a envoyé une réponse du drive mal formée (`detail` : le champ fautif). */
   | { kind: 'invalid'; detail: string | null }
+
+/** Le magasin lu par l'agent sur la page du drive (`setup-result`). */
+export type SetupStore = SetupResultMessage['store']
 
 export interface DriveBridgeOptions {
   /** La fenêtre qui porte `repasNative` ; par défaut celle de la page (cherchée à chaque appel). */
@@ -47,6 +50,13 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
   const buffered: DriveEvent[] = []
   let listening: NativeBridge | null = null
   let infoInFlight: Promise<AppInfo> | null = null
+  /** La lecture du magasin en cours (DRV-320) : un seul à la fois, en mémoire de la page. */
+  let pendingSetup: {
+    runId: string
+    promise: Promise<SetupStore>
+    resolve: (store: SetupStore) => void
+    reject: (error: DriveBridgeError) => void
+  } | null = null
   let pendingInfo: {
     resolve: (info: AppInfo) => void
     reject: (error: DriveBridgeError) => void
@@ -71,6 +81,30 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
     settle(pending)
   }
 
+  /** Termine la lecture du magasin en cours ; faux s'il n'y en a pas (ou si la réponse n'est pas la sienne). */
+  const settleSetup = (
+    runId: string | null,
+    settle: (pending: NonNullable<typeof pendingSetup>) => void,
+  ) => {
+    if (pendingSetup === null || (runId !== null && runId !== pendingSetup.runId)) return false
+    const pending = pendingSetup
+    pendingSetup = null
+    settle(pending)
+
+    return true
+  }
+
+  /** Le résultat de l'agent pour la lecture du magasin : le magasin, ou pourquoi il n'y en a pas. */
+  const receiveSetup = (result: DriveResult): boolean =>
+    settleSetup(result.runId, (pending) => {
+      if (result.type === 'setup-result') return pending.resolve(result.store)
+      pending.reject(
+        result.outcome === 'aborted'
+          ? new DriveBridgeError('CANCELLED')
+          : new DriveBridgeError('SETUP_FAILED', result.error?.code ?? null),
+      )
+    })
+
   const receive = (inbound: Inbound) => {
     switch (inbound.type) {
       case 'app.info':
@@ -80,6 +114,14 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
           pending.reject(new DriveBridgeError('REFUSED', inbound.code)),
         )
       case 'drive.error':
+        // Pendant une lecture du magasin, un refus est le sien (le `runId` d'un BUSY est celui du passage qui occupe la place)
+        if (
+          settleSetup(null, (pending) =>
+            pending.reject(new DriveBridgeError('REFUSED', inbound.code)),
+          )
+        )
+          return
+
         return publish({ kind: 'refused', code: inbound.code, runId: inbound.runId })
       case 'invalid':
         // Une réponse mal formée à `app.info` ne doit pas laisser l'appel en attente
@@ -89,13 +131,14 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
 
         return publish({ kind: 'invalid', detail: inbound.detail })
       case 'drive.result': {
+        if (receiveSetup(inbound.result)) return
         const draft = drafts.load()
+        if (draft !== null && draft.runId === inbound.result.runId)
+          return publish({ kind: 'result', result: inbound.result, draft })
+        // Un magasin lu que personne n'attend (page rechargée) n'est pas un passage périmé : rien à montrer
+        if (inbound.result.type === 'setup-result') return
 
-        return publish(
-          draft !== null && draft.runId === inbound.result.runId
-            ? { kind: 'result', result: inbound.result, draft }
-            : { kind: 'stale', result: inbound.result },
-        )
+        return publish({ kind: 'stale', result: inbound.result })
       }
     }
   }
@@ -195,6 +238,41 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
       }
 
       return draft
+    },
+
+    /**
+     * Fait lire le magasin à l'application (DRV-320, `drive.setup`) : elle ouvre le drive, l'utilisateur s'y connecte et choisit son
+     * magasin, l'agent le lit et l'application revient ici. Rend le magasin lu ; rejette avec une `DriveBridgeError` : `UNAVAILABLE`
+     * (hors de l'application), `REFUSED` (`detail` : `BUSY`, `UNAVAILABLE`, `INVALID_SETUP`), `CANCELLED` (abandon) ou `SETUP_FAILED`
+     * (`detail` : le code de l'agent). Une lecture déjà en cours est rouverte et attendue, pas doublée.
+     */
+    startSetup(): Promise<SetupStore> {
+      const native = requireNative()
+      const created = pendingSetup === null
+      const runId = pendingSetup?.runId ?? crypto.randomUUID()
+      if (pendingSetup === null) {
+        let resolve!: (store: SetupStore) => void
+        let reject!: (error: DriveBridgeError) => void
+        const promise = new Promise<SetupStore>((ok, ko) => {
+          resolve = ok
+          reject = ko
+        })
+        pendingSetup = { runId, promise, resolve, reject }
+      }
+      const pending = pendingSetup
+      try {
+        send(native, { v: PROTOCOL_VERSION, type: 'drive.setup', runId })
+      } catch (error) {
+        if (created) pendingSetup = null
+        throw error
+      }
+
+      return pending.promise
+    },
+
+    /** Ouvre le menu de l'application (`app.menu` : version, mode d'emploi, déconnexion de Leclerc). Sans réponse. */
+    openMenu(): void {
+      send(requireNative(), { v: PROTOCOL_VERSION, type: 'app.menu' })
     },
 
     /**

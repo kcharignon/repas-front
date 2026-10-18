@@ -5,11 +5,12 @@ import type { NativeBridge } from '../native'
 
 type Listener = (event: { data: unknown }) => void
 
-/** Un message envoyé par la page à l'application, lu comme JSON (`plan` pour `drive.start`). */
+/** Un message envoyé par la page à l'application, lu comme JSON (`plan` pour `drive.start`, `runId` pour `drive.setup`). */
 export interface SentMessage {
   v: number
   type: string
   plan?: PlanMessage
+  runId?: string
 }
 
 /**

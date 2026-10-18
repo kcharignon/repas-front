@@ -14,6 +14,9 @@ sealed interface NativeRequest {
     /** `drive.start` : lancer le passage de ce plan (DRV-314). Le plan est valide dans sa forme et son hôte. */
     class DriveStart(val plan: DrivePlan) : NativeRequest
 
+    /** `drive.setup` : lire le magasin choisi sur le drive (DRV-320). Le `runId` est un UUID. */
+    class DriveSetup(val setup: SetupRequest) : NativeRequest
+
     /** `drive.cancel` : abandonner le passage en cours ; [runId], s'il est donné, doit être celui du passage. */
     class DriveCancel(val runId: String?) : NativeRequest
 
@@ -39,8 +42,12 @@ object NativeBridge {
     const val INVALID_MESSAGE = "INVALID_MESSAGE"
     const val UNKNOWN_TYPE = "UNKNOWN_TYPE"
 
-    /** Les codes de `drive.error` : plan invalide, un autre passage est en cours (avec son `runId`), drive inutilisable, rien à annuler. */
+    /**
+     * Les codes de `drive.error` : plan invalide, `drive.setup` invalide, un autre passage est en cours (avec son `runId`), drive inutilisable,
+     * rien à annuler.
+     */
     const val INVALID_PLAN = "INVALID_PLAN"
+    const val INVALID_SETUP = "INVALID_SETUP"
     const val BUSY = "BUSY"
     const val UNAVAILABLE = "UNAVAILABLE"
     const val NO_PASS = "NO_PASS"
@@ -64,6 +71,8 @@ object NativeBridge {
             "app.menu" -> NativeRequest.AppMenu
             "drive.start" -> DrivePlan.parse(json.optJSONObject("plan"))?.let { NativeRequest.DriveStart(it) }
                 ?: refused(driveError(INVALID_PLAN), Rejection.NOT_PROTOCOL)
+            "drive.setup" -> SetupRequest.of(json.opt("runId"))?.let { NativeRequest.DriveSetup(it) }
+                ?: refused(driveError(INVALID_SETUP), Rejection.NOT_PROTOCOL)
             "drive.cancel" -> {
                 val runId = json.opt("runId")
                 when {

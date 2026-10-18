@@ -256,6 +256,27 @@ describe('le mode configuration', () => {
     })
   })
 
+  it('par le pont, sans magasin dans le message (DRV-320) : lit celui de la page', async () => {
+    let receive: (event: { data: unknown }) => void = () => undefined
+    const bridge = {
+      postMessage: vi.fn<(text: string) => void>(),
+      addEventListener: (_type: 'message', listener: typeof receive) => {
+        receive = listener
+      },
+    }
+    Object.assign(window, { repasHost: bridge })
+    run(window, { flow: { ui: fakeUi({ store: () => 'save' }).ui } })
+    const { store: _store, ...withoutStore } = SETUP
+
+    receive({ data: JSON.stringify(withoutStore) })
+
+    await vi.waitFor(() => expect(bridge.postMessage).toHaveBeenCalledOnce())
+    expect(validateResult(JSON.parse(bridge.postMessage.mock.calls[0]?.[0] ?? ''))).toMatchObject({
+      type: 'setup-result',
+      store: { id: '000123', host: 'fd0-courses.leclercdrive.fr' },
+    })
+  })
+
   it('annulé : rend « aborted » ; la page n’est pas touchée par une requête', async () => {
     window.history.replaceState(null, '', `#repas=${encodeMessage(SETUP)}`)
     const navigate = vi.fn<(url: string) => void>()

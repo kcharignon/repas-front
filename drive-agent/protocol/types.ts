@@ -142,9 +142,13 @@ export interface PlanMessage extends MessageHead {
   lines: PlanLine[]
 }
 
-/** Repas vers l'agent : « lis le magasin courant et renvoie-le ». */
-export interface SetupMessage extends MessageHead {
+/**
+ * Repas vers l'agent : « lis le magasin courant et renvoie-le ». Sans `store`, Repas ne connaît pas encore le magasin (DRV-320) :
+ * l'agent lit celui de la page. Avec un `store`, la page doit être celle de ce magasin (sinon `STORE_MISMATCH`).
+ */
+export interface SetupMessage extends Omit<MessageHead, 'store'> {
   type: 'setup'
+  store?: StoreRef
 }
 
 /** Prix d'un produit en centimes, avec le prix à l'unité de mesure quand l'agent l'a lu (décision D22). */
@@ -221,7 +225,8 @@ export interface ResultMessage {
   runId: string
   agentVersion: string
   outcome: Outcome
-  store: { id: string }
+  /** Absent seulement quand un `setup` sans magasin (DRV-320) s'arrête avant que le magasin soit connu. */
+  store?: { id: string }
   error?: ResultError
   lines: ResultLine[]
 }

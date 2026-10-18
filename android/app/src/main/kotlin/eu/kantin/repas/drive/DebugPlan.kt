@@ -15,26 +15,18 @@ object DebugPlan {
     const val TEMPLATE_FILE = "debug-plan.json"
 
     private const val MAX_LINES = 100
-    private const val FALLBACK_HOST = "www.leclercdrive.fr"
     private val RUN_ID = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
     private val STORE_ID = Regex("[0-9]{1,12}")
     private val STORE_HOST = Regex("[a-z0-9-]+\\.leclercdrive\\.fr")
 
-    /**
-     * Le message `setup` qui demande à l'agent de lire le magasin de la page. Son champ `store` est obligatoire mais l'agent ne s'en sert
-     * pas : il lit celui de la page. `pageHost` est l'hôte de la page courante, ou l'accueil du drive à défaut.
-     */
-    fun setupMessage(runId: String, pageHost: String?): String {
-        val host = pageHost?.takeIf { STORE_HOST.matches(it) } ?: FALLBACK_HOST
-        return JSONObject()
-            .put("v", 1)
-            .put("type", "setup")
-            .put("runId", runId)
-            .put("retailer", "leclerc")
-            .put("store", JSONObject().put("id", "0").put("host", host))
-            .put("returnPath", "/drive/retour")
-            .toString()
-    }
+    /** Le message `setup` qui demande à l'agent de lire le magasin de la page : sans `store`, l'agent lit celui de la page (DRV-320). */
+    fun setupMessage(runId: String): String = JSONObject()
+        .put("v", 1)
+        .put("type", "setup")
+        .put("runId", runId)
+        .put("retailer", "leclerc")
+        .put("returnPath", "/drive/retour")
+        .toString()
 
     /**
      * Le plan d'essai pour ce magasin, ou `null` si une valeur n'est pas de la forme du protocole (identifiant, hôte, passage), si le
@@ -73,9 +65,9 @@ class DebugRun(
 
     private var step = Step.IDLE
 
-    /** Lance l'essai sur la page courante (`pageHost` : son hôte). `false` si le message n'a pas pu partir vers l'agent. */
-    fun start(pageHost: String?): Boolean {
-        if (!send(DebugPlan.setupMessage(newRunId(), pageHost))) return false
+    /** Lance l'essai sur la page courante. `false` si le message n'a pas pu partir vers l'agent. */
+    fun start(): Boolean {
+        if (!send(DebugPlan.setupMessage(newRunId()))) return false
         step = Step.WAITING_STORE
         return true
     }

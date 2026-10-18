@@ -18,7 +18,7 @@
 </head>
 <body>
 <h1>Faux Repas de test</h1>
-<p class="note">Page locale de l'émulateur (DRV-317, DRV-314) : elle joue le rôle du front Repas, sans aucune donnée réelle. Elle parle à l'application par <code>window.repasNative</code>.</p>
+<p class="note">Page locale de l'émulateur (DRV-317, DRV-314, DRV-320) : elle joue le rôle du front Repas, sans aucune donnée réelle. Elle parle à l'application par <code>window.repasNative</code>.</p>
 <ul id="facts"></ul>
 <p><a id="external" href="https://example.org/">Un lien vers un autre site</a></p>
 <nav>Barre du bas du front (simulée)</nav>
@@ -102,7 +102,15 @@
       item.outcome = m.result && m.result.outcome
       item.errorCode = m.result && m.result.error && m.result.error.code
       item.lines = m.result && m.result.lines ? m.result.lines.length : -1
-      show('result', 'drive.result : ' + item.runId + ' → ' + item.outcome + (item.errorCode ? ' (' + item.errorCode + ')' : ''), true)
+      item.hasStore = !!(m.result && m.result.store)
+      if (m.result && m.result.type === 'setup-result') {
+        // Le magasin lu par l'agent (DRV-320) : identifiant et hôte seulement, jamais l'adresse complète
+        item.storeId = m.result.store.id
+        item.storeHost = m.result.store.host
+        show('result', 'drive.result : ' + item.runId + ' → magasin ' + item.storeId, true)
+      } else {
+        show('result', 'drive.result : ' + item.runId + ' → ' + item.outcome + (item.errorCode ? ' (' + item.errorCode + ')' : ''), true)
+      }
     } else if (m.type === 'drive.error' || m.type === 'error') {
       item.code = m.code
       item.runId = m.runId
@@ -123,6 +131,8 @@
           var plan = JSON.parse(JSON.stringify(PLAN))
           if (command.runId) plan.runId = command.runId
           send({ v: 1, type: 'drive.start', plan: plan })
+        } else if (command.do === 'drive.setup') {
+          send({ v: 1, type: 'drive.setup', runId: command.runId })
         } else if (command.do === 'drive.cancel') {
           send({ v: 1, type: 'drive.cancel', runId: command.runId || PLAN.runId })
         } else if (command.do === 'app.info') {

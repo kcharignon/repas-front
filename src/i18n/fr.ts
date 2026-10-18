@@ -588,6 +588,7 @@ export default {
     readErrors: {
       UNAVAILABLE:
         'L’application ne peut pas lire votre magasin pour le moment. Saisissez son adresse ci-dessous.',
+      BUSY: 'Un envoi au drive est déjà en cours dans l’application. Terminez-le ou abandonnez-le, puis réessayez.',
       CANCELLED: 'Aucun magasin choisi. Réessayez, ou saisissez son adresse ci-dessous.',
       NOT_FOUND:
         'L’application n’a pas trouvé de magasin sur la page. Choisissez-en un sur le site du drive, puis réessayez.',
@@ -623,6 +624,12 @@ export default {
     productsRejected: 'Ingrédients avec des produits refusés',
     productsHome: 'Ingrédients que vous avez toujours',
     manage: 'Gérer mes produits',
+  },
+  // Les entrées de l’application dans « Mon compte » (DRV-320)
+  driveAccount: {
+    appMenu: 'Menu de l’application',
+    appMenuHelp: 'Version, mode d’emploi et déconnexion de Leclerc.',
+    appMenuFailed: 'Le menu de l’application n’a pas pu s’ouvrir. Réessayez.',
   },
   theme: {
     label: 'Thème',

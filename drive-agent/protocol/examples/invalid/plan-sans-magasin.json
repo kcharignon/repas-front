@@ -1,0 +1,12 @@
+{
+  "path": "store",
+  "why": "Un plan a toujours un magasin (seul un setup peut ne pas en avoir).",
+  "message": {
+    "v": 1,
+    "type": "plan",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "retailer": "leclerc",
+    "returnPath": "/drive/retour",
+    "lines": []
+  }
+}

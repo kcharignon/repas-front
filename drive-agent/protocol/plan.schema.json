@@ -4,7 +4,7 @@
   "description": "Source de vérité documentaire (architecture.md § 8 du dépôt back). Les validateurs de drive-agent/protocol font foi à l'exécution ; un test vérifie qu'ils donnent le même verdict que ce schéma. Ce que JSON Schema ne sait pas dire (identifiants de produit sans doublon dans products et dans rejected, aucun produit à la fois dans products et dans rejected, ingredientSlug uniques entre les lignes) n'est vérifié que par les validateurs.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["v", "type", "runId", "retailer", "store", "returnPath"],
+  "required": ["v", "type", "runId", "retailer", "returnPath"],
   "properties": {
     "v": { "const": 1 },
     "type": { "enum": ["plan", "setup"] },
@@ -31,7 +31,7 @@
     }
   },
   "if": { "properties": { "type": { "const": "plan" } } },
-  "then": { "required": ["lines"] },
+  "then": { "required": ["lines", "store"] },
   "else": { "not": { "required": ["lines"] } },
   "definitions": {
     "label": { "type": "string", "minLength": 1, "maxLength": 255 },

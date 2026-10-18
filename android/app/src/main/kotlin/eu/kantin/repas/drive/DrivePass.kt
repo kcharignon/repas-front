@@ -4,11 +4,11 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
-/** D'où vient un passage : de Repas (`drive.start`), ou du menu « Plan d'essai » de la variante de débogage. */
+/** D'où vient un passage : de Repas (`drive.start`, `drive.setup`), ou du menu « Plan d'essai » de la variante de débogage. */
 enum class PassSource { REPAS, DEBUG }
 
-/** Le passage en cours : son plan, d'où il vient et l'heure (ms) de son début. */
-class ActivePass(val plan: DrivePlan, val source: PassSource, val startedAt: Long)
+/** Le passage en cours : sa demande (un plan ou la lecture du magasin), d'où il vient et l'heure (ms) de son début. */
+class ActivePass(val request: PassRequest, val source: PassSource, val startedAt: Long)
 
 /** Le résultat de `DrivePass.start`. */
 sealed interface StartOutcome {
@@ -63,19 +63,20 @@ class DrivePass(
         return pass
     }
 
-    fun start(plan: DrivePlan, source: PassSource): StartOutcome {
+    fun start(request: PassRequest, source: PassSource): StartOutcome {
         val running = current()
         if (running != null) {
-            return if (running.plan.runId == plan.runId && running.source == source) StartOutcome.Resumed else StartOutcome.Busy(running.plan.runId)
+            return if (running.request.runId == request.runId && running.source == source) StartOutcome.Resumed else StartOutcome.Busy(running.request.runId)
         }
-        active = ActivePass(plan, source, clock())
+        active = ActivePass(request, source, clock())
         persist()
         return StartOutcome.Started
     }
 
     /**
-     * Le message `result` de l'agent : s'il porte le `runId` du passage en cours, le clôt et (passage de Repas) met `drive.result` dans la file.
-     * Rend le passage clos, ou `null` si le résultat n'est pas celui du passage en cours (il est ignoré).
+     * Le message `result` de l'agent (ou `setup-result` pour la lecture du magasin) : s'il porte le `runId` du passage en cours, le clôt et
+     * (passage de Repas) met `drive.result` dans la file. Rend le passage clos, ou `null` si le résultat n'est pas celui du passage en cours
+     * (il est ignoré).
      */
     fun finish(resultText: String): ActivePass? {
         val pass = current() ?: return null
@@ -84,7 +85,9 @@ class DrivePass(
         } catch (_: JSONException) {
             return null
         }
-        if (result.opt("type") != "result" || result.opt("runId") != pass.plan.runId) return null
+        val type = result.opt("type")
+        if (type != "result" && !(type == "setup-result" && pass.request.isSetup)) return null
+        if (result.opt("runId") != pass.request.runId) return null
         close(pass, result)
         return pass
     }
@@ -95,8 +98,8 @@ class DrivePass(
      */
     fun abort(runId: String? = null): ActivePass? {
         val pass = current() ?: return null
-        if (runId != null && runId != pass.plan.runId) return null
-        close(pass, JSONObject(pass.plan.abortedResult(agentVersion())))
+        if (runId != null && runId != pass.request.runId) return null
+        close(pass, JSONObject(pass.request.abortedResult(agentVersion())))
         return pass
     }
 
@@ -118,7 +121,7 @@ class DrivePass(
     private fun persist() {
         val json = JSONObject()
         active?.takeIf { it.source == PassSource.REPAS }?.let {
-            json.put("pass", JSONObject().put("plan", it.plan.text).put("startedAt", it.startedAt))
+            json.put("pass", JSONObject().put("plan", it.request.text).put("startedAt", it.startedAt))
         }
         if (outbox.isNotEmpty()) json.put("outbox", JSONArray(outbox))
         store.save(if (json.length() == 0) null else json.toString())
@@ -131,8 +134,8 @@ class DrivePass(
             null
         } ?: return
         saved.optJSONObject("pass")?.let { pass ->
-            val plan = DrivePlan.parseText(pass.optString("plan"))
-            if (plan != null && pass.has("startedAt")) active = ActivePass(plan, PassSource.REPAS, pass.optLong("startedAt"))
+            val request = PassRequests.parseText(pass.optString("plan"))
+            if (request != null && pass.has("startedAt")) active = ActivePass(request, PassSource.REPAS, pass.optLong("startedAt"))
         }
         saved.optJSONArray("outbox")?.let { messages ->
             for (index in 0 until messages.length()) messages.optString(index).takeIf { it.isNotEmpty() }?.let { outbox += it }

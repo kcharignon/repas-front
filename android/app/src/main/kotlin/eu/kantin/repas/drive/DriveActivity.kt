@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Message
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.ConsoleMessage
@@ -25,6 +26,8 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import android.window.OnBackInvokedDispatcher
 import java.util.UUID
@@ -41,11 +44,16 @@ import java.util.UUID
  * **Passage du plan (DRV-314).** Quand un passage est en cours ([DrivePass]), l'écran s'ouvre sur l'accueil du magasin du plan, envoie le plan
  * à l'agent une fois la page chargée et annoncée, reste allumé tant que le passage dure, et rend la main à la coquille avec le résultat de
  * l'agent (ou un résultat `aborted` si l'utilisateur abandonne). Sans passage, c'est le drive à parcourir à la main.
+ *
+ * **Lecture du magasin (DRV-320).** Pour `drive.setup`, l'écran s'ouvre sur l'accueil du drive avec un message en français simple (se connecter,
+ * choisir son magasin). Le message `setup` n'est envoyé à l'agent que lorsque la page est celle d'un magasin ([NavigationPolicy.isStorePage]) :
+ * l'agent lit alors le magasin, demande confirmation, et son `setup-result` est livré à Repas comme un résultat de passage.
  */
 class DriveActivity : Activity() {
     private lateinit var webView: WebView
     private lateinit var problems: ProblemPanel
     private lateinit var resultPanel: TextPanel
+    private lateinit var setupBanner: TextView
     private lateinit var agent: AgentHost
     private lateinit var debugRun: DebugRun
     private lateinit var selftestRun: SelftestRun
@@ -79,7 +87,7 @@ class DriveActivity : Activity() {
             show = { resultPanel.show(it, R.string.selftest_title, autoCopy = true) },
         )
         agent = AgentHost.create(repasApp.agentLoad, BuildConfig.DEBUG, onHello = { if (delivery.hello()) sendPlan() }) { message ->
-            if (message.type == "result" && onAgentResult(message.text)) return@create
+            if ((message.type == "result" || message.type == "setup-result") && onAgentResult(message.text)) return@create
             // La variante de débogage montre le résultat de l'essai et le rapport du test automatique.
             if (BuildConfig.DEBUG && !selftestRun.onAgentMessage(message.type, message.text)) {
                 debugRun.onAgentMessage(message.type, message.text)
@@ -87,9 +95,20 @@ class DriveActivity : Activity() {
         }
         webView = createWebView()
         problems = ProblemPanel(this, ::problemMessage) { retry() }
+        setupBanner = label(getString(R.string.setup_banner), sizeSp = 16f, color = Color.WHITE).apply {
+            setBackgroundColor(BASIL)
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            visibility = View.GONE
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
+        val page = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(setupBanner, LinearLayout.LayoutParams(MATCH, WRAP))
+            addView(webView, LinearLayout.LayoutParams(MATCH, 0, 1f))
+        }
         val root = FrameLayout(this).apply {
             setBackgroundColor(Color.WHITE)
-            addView(webView, FrameLayout.LayoutParams(MATCH, MATCH))
+            addView(page, FrameLayout.LayoutParams(MATCH, MATCH))
             addView(problems, FrameLayout.LayoutParams(MATCH, MATCH))
             addView(
                 menuButton { showMenu(menuEntries()) },
@@ -101,7 +120,8 @@ class DriveActivity : Activity() {
         setContentView(root)
         registerBackAction()
 
-        webView.loadUrl(pass.current()?.plan?.startUrl ?: NavigationPolicy.START_URL)
+        webView.loadUrl(pass.current()?.request?.startUrl ?: NavigationPolicy.START_URL)
+        updateSetupBanner(null)
     }
 
     override fun onResume() {
@@ -210,11 +230,13 @@ class DriveActivity : Activity() {
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             loadFailed = false
             delivery.pageStarted()
+            updateSetupBanner(url)
         }
 
         override fun onPageFinished(view: WebView, url: String?) {
             if (!loadFailed) problems.hide()
             agent.onPageFinished(view, url)
+            updateSetupBanner(url)
             if (delivery.pageFinished()) sendPlan()
         }
 
@@ -310,16 +332,26 @@ class DriveActivity : Activity() {
 
     private fun retry() {
         problems.hide()
-        if (webView.url == null) webView.loadUrl(pass.current()?.plan?.startUrl ?: NavigationPolicy.START_URL) else webView.reload()
+        if (webView.url == null) webView.loadUrl(pass.current()?.request?.startUrl ?: NavigationPolicy.START_URL) else webView.reload()
     }
 
     // ---------------------------------------------------------------------------------------------------------------
     // Le passage du plan (DRV-314)
 
-    /** Le plan du passage en cours part vers l'agent : la page a annoncé son agent et fini de charger (une fois par page). */
+    /**
+     * Le message du passage en cours part vers l'agent (le plan, ou `setup` pour la lecture du magasin) : la page a annoncé son agent et fini de
+     * charger (une fois par page). La lecture du magasin attend une page de magasin : sur l'accueil ou la connexion, l'agent n'aurait rien à lire.
+     */
     private fun sendPlan() {
-        val plan = pass.current()?.plan ?: return
-        if (!agent.send(plan.text)) delivery.failed()
+        val request = pass.current()?.request ?: return
+        if (request.isSetup && !NavigationPolicy.isStorePage(webView.url)) return delivery.failed()
+        if (!agent.send(request.text)) delivery.failed()
+    }
+
+    /** Le message « connecte-toi, choisis ton magasin » reste affiché pendant une lecture du magasin, tant que la page n'est pas celle d'un magasin. */
+    private fun updateSetupBanner(url: String?) {
+        val waiting = pass.current()?.request?.isSetup == true && !NavigationPolicy.isStorePage(url)
+        setupBanner.visibility = if (waiting) View.VISIBLE else View.GONE
     }
 
     /** Le résultat de l'agent. Vrai si c'est celui du passage en cours : il est clos, et l'écran se referme ou montre l'essai. */
@@ -339,9 +371,10 @@ class DriveActivity : Activity() {
 
     private fun askAbandon() {
         if (abandonDialog?.isShowing == true) return
+        val setup = pass.current()?.request?.isSetup == true
         abandonDialog = AlertDialog.Builder(this)
-            .setTitle(R.string.abandon_title)
-            .setMessage(R.string.abandon_message)
+            .setTitle(if (setup) R.string.abandon_setup_title else R.string.abandon_title)
+            .setMessage(if (setup) R.string.abandon_setup_message else R.string.abandon_message)
             .setPositiveButton(R.string.abandon_confirm) { _, _ -> abandonPass() }
             .setNegativeButton(R.string.abandon_continue, null)
             .show()
@@ -379,7 +412,7 @@ class DriveActivity : Activity() {
 
     private fun menuEntries(): List<Pair<Int, () -> Unit>> = buildList {
         if (BuildConfig.DEBUG) add(R.string.menu_selftest to ::startSelftest)
-        if (pass.current() != null) add(R.string.menu_abandon to ::askAbandon)
+        pass.current()?.let { add((if (it.request.isSetup) R.string.menu_abandon_setup else R.string.menu_abandon) to ::askAbandon) }
         add(R.string.menu_about to { showAbout(repasApp.agentLoad.describe(this@DriveActivity)) })
         add(R.string.menu_logout_drive to { confirmClearDriveData(::clearDriveData) })
         add(R.string.menu_browser to ::openCurrentPageInBrowser)
@@ -417,7 +450,7 @@ class DriveActivity : Activity() {
     /** Variante de débogage seulement : l'agent lit le magasin de la page, puis reçoit un plan synthétique de quatre ingrédients. */
     private fun startDebugPlan() {
         if (pass.current() != null) return toast(R.string.pass_busy)
-        if (!debugRun.start(NavigationPolicy.httpsHostOf(webView.url))) toast(agent.unavailableMessage())
+        if (!debugRun.start()) toast(agent.unavailableMessage())
     }
 
     private fun toast(message: Int) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
