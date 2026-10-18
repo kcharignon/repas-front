@@ -1,7 +1,7 @@
 // Ce que le test automatique (DRV-318) relève, étape par étape. Rien ici ne porte de donnée personnelle : des nombres, des codes
 // d'erreur du protocole, des libellés de produits du catalogue nettoyés (`safeLabel`) et des mots de recherche fixes.
 import type { LeclercCause, LeclercErrorCode } from '../leclerc'
-import type { CheckResult, PageFacts } from '../diagnostic'
+import type { CheckResult, PageFacts, ProbeFacts } from '../diagnostic'
 
 export type Status = 'OK' | 'KO' | 'NOT_TESTED'
 
@@ -73,6 +73,8 @@ export interface SelftestData {
   durationMs: number
   page: PageFacts | null
   check: { status: Status; ms: number; results: CheckResult[] }
+  /** Les sondes du site réel du diagnostic (ticket B) : formes, noms et nombres, jamais une valeur. */
+  probes?: ProbeFacts | null
   store: { status: Status; ms: number; labelKnown?: boolean; failure?: Failure }
   words: WordResult[]
   items: ItemResult[]

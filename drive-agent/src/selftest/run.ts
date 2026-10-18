@@ -143,6 +143,7 @@ export async function runSelftest(deps: RunDeps, hooks: Hooks): Promise<Selftest
     ? 'KO'
     : 'OK'
   const check = { status: checkStatus, ms: now() - t, results: checks.results }
+  const probes = checks.probes
   done += 1
 
   // 2. La lecture du magasin de la page (aucune requête).
@@ -337,6 +338,7 @@ export async function runSelftest(deps: RunDeps, hooks: Hooks): Promise<Selftest
     durationMs: now() - started,
     page,
     check,
+    probes,
     store,
     words,
     items,

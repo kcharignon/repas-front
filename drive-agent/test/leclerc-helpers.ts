@@ -18,7 +18,14 @@ export interface Call {
 
 /** Une réponse programmée : le code, le corps, l'adresse finale ; ou une erreur réseau. */
 export type Scripted =
-  { status?: number; body?: string; url?: string; redirected?: boolean } | Error
+  | {
+      status?: number
+      body?: string
+      url?: string
+      redirected?: boolean
+      headers?: Record<string, string>
+    }
+  | Error
 
 export interface Site {
   deps: LeclercDeps
@@ -66,6 +73,7 @@ export function fakeSite(
         status: scripted.status ?? 200,
         url: scripted.url ?? `https://${PAGE.hostname}${url}`,
         redirected: scripted.redirected ?? false,
+        headers: new Headers(scripted.headers ?? {}),
         text: () => Promise.resolve(body),
       } as unknown as Response
     },

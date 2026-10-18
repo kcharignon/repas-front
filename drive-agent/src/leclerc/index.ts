@@ -19,3 +19,16 @@ export {
   type SessionState,
 } from './session'
 export { type LocationLike, type StoreInfo } from './store'
+export {
+  addressShape,
+  headerNames,
+  mimeOf,
+  stateKeys,
+  type ArrivalFacts,
+  type AttemptFacts,
+  type DeliveryFacts,
+  type NavigationFacts,
+  type SearchFacts,
+  type StateKeys,
+} from './probe'
+export { buildSearch, FALLBACK_ORDER, SEARCH_VARIANTS, type SearchVariant } from './search-request'

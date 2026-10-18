@@ -7,6 +7,8 @@ import { reportOf, rowsOf, summaryOf } from './report'
 export { CHECK_IDS, hostFamily, runChecks, storeTail, TEST_TERM } from './checks'
 export type { CheckId, CheckResult, ChecksDeps, PageFacts } from './checks'
 export { badgeOf, dateOf, pageLines, reportOf, rowsOf, summaryOf } from './report'
+export { attemptsText, NONSENSE_TERM, probeLines } from './probes'
+export type { ProbedSearch, ProbeFacts } from './probes'
 
 export interface DiagnosticDeps extends ChecksDeps {
   ui: Ui
@@ -25,8 +27,11 @@ export async function showDiagnostic(deps: DiagnosticDeps): Promise<void> {
       void runChecks(deps, (result) => {
         collected.push(result)
         view.update(rowsOf(collected))
-      }).then(({ results, page }) => {
-        view.finish(summaryOf(results), reportOf(deps.agentVersion, deps.now(), page, results))
+      }).then(({ results, page, probes }) => {
+        view.finish(
+          summaryOf(results),
+          reportOf(deps.agentVersion, deps.now(), page, results, probes),
+        )
       })
     },
   })

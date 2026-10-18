@@ -3,12 +3,35 @@ import { type Candidate, toCandidate } from './candidate'
 import { httpCause } from './causes'
 import { LeclercError } from './errors'
 import { type FetchFn, Pacer, type PacerDeps, type Reply } from './pacer'
+import {
+  addressShape,
+  type ArrivalFacts,
+  type AttemptFacts,
+  attemptOf,
+  type CookieFacts,
+  cookieFacts,
+  deliveryFacts,
+  describeSearchReply,
+  type NavigationFacts,
+  pagePhrases,
+  type SearchFacts,
+} from './probe'
 import { readSearchPage } from './search-page'
+import {
+  applicable,
+  buildSearch,
+  FALLBACK_ORDER,
+  SEARCH_VARIANTS,
+  type SearchContext,
+  type SearchVariant,
+} from './search-request'
 import { looksLikeLoginPage, readSession, type SessionReading } from './session'
 import {
+  findSearchBase,
   type LocationLike,
   readDeliveryPoint,
   readStorePaths,
+  type SearchBase,
   type StoreInfo,
   type StorePaths,
 } from './store'
@@ -46,6 +69,18 @@ export interface RetailerAdapter {
   pageCartTotal(): number | null
   /** Ce que la page courante montre de la connexion de l'utilisateur (visiteur, client connecté ou inconnu). Aucune requête. */
   readSession(): SessionReading
+  /** Ce que la page d'arrivée laisse voir pour le diagnostic (ticket B) : formes et nombres seulement. Aucune requête. */
+  readArrival(): ArrivalFacts
+  /**
+   * Ce que la dernière recherche a laissé voir de la réponse du site (ticket B) : code, type, longueur, formes d'adresse, noms de clés et
+   * d'en-têtes, jamais une valeur. `null` avant toute recherche ou si la dernière n'a pas eu de réponse.
+   */
+  lastSearchFacts(): SearchFacts | null
+  /**
+   * Sonde, pour le diagnostic, les variantes de la requête de recherche que la dernière recherche n'a pas essayées (chacune un GET, à la cadence
+   * normale) et rend toutes les tentatives, dans l'ordre des variantes. Ne retient aucune variante et ne lève jamais d'erreur.
+   */
+  exploreSearchVariants(query: string): Promise<AttemptFacts[]>
 }
 
 export interface LeclercDeps extends PacerDeps {
@@ -56,10 +91,13 @@ export interface LeclercDeps extends PacerDeps {
   pageText: () => string
   /** Le libellé du magasin lu dans la page, s'il y en a un. */
   readLabel?: () => string | null
+  /** Ce que le navigateur sait de la navigation qui a amené sur la page (redirections, code HTTP) ; `null` s'il ne le dit pas. */
+  navigation?: () => NavigationFacts | null
+  /** Les cookies lisibles par la page : un nombre et un oui/non, jamais un nom ni une valeur. */
+  cookies?: () => CookieFacts | null
 }
 
 const PRODUCT_ID = /^[0-9]{1,12}$/
-const SEARCH_HEADERS = { Accept: 'text/html,application/xhtml+xml' }
 /** Une redirection vers une page de connexion. */
 const LOGIN_PATH = /connexion|identif|login|authent/i
 
@@ -70,6 +108,11 @@ export class LeclercAdapter implements RetailerAdapter {
   private lastQuery = ''
   private pageTotal: number | null = null
   private deliveryPoint: string | null = null
+  /** La forme de requête de recherche qui a passé la dernière fois : celle d'abord essayée ensuite (aucune avant la première). */
+  private searchVariant: SearchVariant | null = null
+  /** Le chemin avec la ville que la page donne, une fois trouvé (la page ne change pas de magasin pendant la vie de l'agent). */
+  private searchBase: SearchBase | null = null
+  private facts: SearchFacts | null = null
   private readonly stocks = new Map<string, number>()
 
   constructor(deps: LeclercDeps) {
@@ -84,11 +127,27 @@ export class LeclercAdapter implements RetailerAdapter {
   async searchProducts(query: string): Promise<Candidate[]> {
     const text = query.trim()
     if (text === '') return []
-    const { pagePath } = this.paths()
-    const url = `${pagePath}/recherche.aspx?TexteRecherche=${encodeURIComponent(text)}`
-    const reply = await this.pacer.request(url, { method: 'GET', headers: SEARCH_HEADERS })
-    this.assertUsable(reply)
-    const products = this.readSearch(reply)
+    this.facts = null
+    const paths = this.paths()
+    const { reply, variant, url, attempts } = await this.requestSearch(text, paths)
+    const facts = describeSearchReply(variant, reply, url, paths.store.id)
+    facts.attempts = attempts
+    this.facts = facts
+    let products
+    try {
+      this.assertUsable(reply)
+      products = this.readSearch(reply)
+    } catch (error) {
+      facts.outcome = 'FAILED'
+      facts.phrases = pagePhrases(reply.text)
+      if (error instanceof LeclercError) facts.fault = { code: error.code, cause: error.cause }
+      else facts.fault = { code: 'CONTRACT_CHANGED', cause: 'EXCEPTION' }
+      throw error
+    }
+    facts.products = products.length
+    facts.outcome = products.length > 0 ? 'PRODUCTS' : 'EMPTY'
+    if (products.length === 0) facts.phrases = pagePhrases(reply.text)
+    if (reply.status >= 200 && reply.status < 300) this.searchVariant = variant
     this.lastQuery = text
     this.pageTotal = readPageTotal(reply.text)
     const candidates = products.map(toCandidate)
@@ -96,6 +155,126 @@ export class LeclercAdapter implements RetailerAdapter {
       if (candidate.stock !== null) this.stocks.set(candidate.id, candidate.stock)
     }
     return candidates
+  }
+
+  /**
+   * La recherche, avec son repli : la requête courante (ou la dernière forme qui a passé), et tant que le site répond HTTP 400 (recette réelle
+   * du 2026-10-18 : un GET que le banc d'essai faisait passer répondait 400), chacune des autres formes une fois (`search-request.ts`), une
+   * requête à la fois à la cadence normale. Toute autre réponse arrête le repli. Les tentatives sont notées pour le diagnostic.
+   */
+  private async requestSearch(
+    text: string,
+    paths: StorePaths,
+  ): Promise<{ reply: Reply; variant: SearchVariant; url: string; attempts: AttemptFacts[] }> {
+    const context = this.searchContext(paths)
+    const kept = this.searchVariant
+    const order =
+      kept === null ? [...FALLBACK_ORDER] : [kept, ...FALLBACK_ORDER.filter((v) => v !== kept)]
+    const attempts: AttemptFacts[] = []
+    const seen = new Set<string>()
+    let last: { reply: Reply; variant: SearchVariant; url: string } | null = null
+    for (const variant of order) {
+      if (!applicable(variant, context)) continue
+      const { url, init } = buildSearch(variant, context, text)
+      // Deux formes qui donnent la même requête (une adresse sans ville : e1 et e2 sont la requête courante) ne sont pas rejouées.
+      const key = `${url}\n${JSON.stringify(init)}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const reply = await this.pacer.request(url, init)
+      attempts.push(attemptOf(variant, reply, url))
+      last = { reply, variant, url }
+      if (reply.status !== 400) break
+    }
+    if (last === null) throw new LeclercError('CONTRACT_CHANGED', null, 'EXCEPTION')
+    return { ...last, attempts }
+  }
+
+  /**
+   * Ce que la page donne pour bâtir les adresses de recherche. Le chemin avec la ville est lu dans la page (formulaire de recherche du site, à défaut
+   * premier lien) : la page est sérialisée, ce qui coûte, donc tant qu'il n'est pas trouvé et une fois par recherche seulement.
+   */
+  private searchContext(paths: StorePaths): SearchContext {
+    const base = this.searchBaseOf(paths)
+    return {
+      pagePath: paths.pagePath,
+      cartPath: paths.cartPath,
+      pathname: this.deps.location.pathname,
+      linkPath: base?.path ?? null,
+    }
+  }
+
+  private searchBaseOf(paths: StorePaths): SearchBase | null {
+    this.searchBase ??= findSearchBase(this.deps.pageText(), paths.cartPath)
+    return this.searchBase
+  }
+
+  readArrival(): ArrivalFacts {
+    let storeId: string | null = null
+    let searchBase: ArrivalFacts['searchBase'] = null
+    try {
+      const paths = this.paths()
+      storeId = paths.store.id
+      const base = this.searchBaseOf(paths)
+      if (base) searchBase = { shape: addressShape(base.path), source: base.source }
+    } catch {
+      // Hors d'un magasin : rien à comparer.
+    }
+    let navigation: NavigationFacts | null = null
+    try {
+      navigation = this.deps.navigation?.() ?? null
+    } catch {
+      // Le navigateur ne le dit pas.
+    }
+    let cookies: CookieFacts | null = null
+    try {
+      cookies = this.deps.cookies?.() ?? null
+    } catch {
+      // La page ne les dit pas.
+    }
+    return {
+      address: addressShape(this.deps.location.pathname),
+      redirects: navigation?.redirects ?? null,
+      status: navigation?.status ?? null,
+      delivery: deliveryFacts(this.deps.pageText(), storeId),
+      cookies,
+      searchBase,
+    }
+  }
+
+  lastSearchFacts(): SearchFacts | null {
+    return this.facts
+  }
+
+  async exploreSearchVariants(query: string): Promise<AttemptFacts[]> {
+    const facts = this.facts
+    const text = query.trim()
+    if (facts === null || text === '') return []
+    try {
+      const paths = this.paths()
+      const context = this.searchContext(paths)
+      const seen = new Set(
+        facts.attempts.map((attempt) => {
+          const { url, init } = buildSearch(attempt.variant, context, text)
+          return `${url}\n${JSON.stringify(init)}`
+        }),
+      )
+      for (const variant of SEARCH_VARIANTS) {
+        if (facts.attempts.some((attempt) => attempt.variant === variant)) continue
+        if (!applicable(variant, context)) continue
+        const { url, init } = buildSearch(variant, context, text)
+        const key = `${url}\n${JSON.stringify(init)}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        const reply = await this.pacer.request(url, init)
+        facts.attempts.push(attemptOf(variant, reply, url))
+      }
+    } catch {
+      // Un blocage ou un réseau coupé pendant la sonde l'arrête : la sonde n'est jamais une erreur.
+    }
+    facts.attempts.sort(
+      (a, b) => SEARCH_VARIANTS.indexOf(a.variant) - SEARCH_VARIANTS.indexOf(b.variant),
+    )
+    return [...facts.attempts]
   }
 
   async setCartQuantity(productId: string, quantity: number): Promise<CartResult> {
@@ -221,8 +400,30 @@ export function browserDeps(win: Window & typeof globalThis): LeclercDeps {
     fetch: (input, init) => win.fetch(input, init),
     location: win.location,
     pageText: () => new win.XMLSerializer().serializeToString(win.document),
+    navigation: () => navigationOf(win),
+    cookies: () => cookiesOf(win),
     sleep: (ms) => new Promise((resolve) => win.setTimeout(resolve, ms)),
     random: () => Math.random(),
     now: () => Date.now(),
+  }
+}
+
+/** Les redirections et le code HTTP du document, lus dans la mesure du navigateur (`PerformanceNavigationTiming`) : des nombres seulement. */
+function navigationOf(win: Window & typeof globalThis): NavigationFacts | null {
+  const entry = win.performance?.getEntriesByType?.('navigation')[0] as
+    { redirectCount?: unknown; responseStatus?: unknown } | undefined
+  if (!entry) return null
+  const count = (value: unknown) =>
+    typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null
+  const status = count(entry.responseStatus)
+  return { redirects: count(entry.redirectCount), status: status === 0 ? null : status }
+}
+
+/** Le compte des cookies lisibles par la page et la présence d'un cookie anti-robot (voir `cookieFacts` : jamais un nom ni une valeur). */
+function cookiesOf(win: Window & typeof globalThis): CookieFacts | null {
+  try {
+    return cookieFacts(win.document.cookie)
+  } catch {
+    return null
   }
 }

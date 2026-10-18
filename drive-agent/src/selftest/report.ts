@@ -1,7 +1,7 @@
 // Le rapport du test automatique (DRV-318) : un texte à copier et à coller, sans aucune donnée personnelle (pas de cookie, d'adresse,
 // de nom, de ville, de numéro de magasin entier ni d'hôte autre que `fdN`). Il ne se construit qu'à partir du relevé (`SelftestData`),
 // qui ne porte que des nombres, des codes d'erreur, des mots de recherche fixes et des libellés de produits nettoyés.
-import { dateOf, pageLines, rowsOf } from '../diagnostic'
+import { dateOf, pageLines, probeLines, rowsOf } from '../diagnostic'
 import { formatPrice, S } from '../ui'
 import { LOT_WORDS, MAX_PRODUCTS, PASSAGE_WORDS } from './run'
 import type {
@@ -142,6 +142,7 @@ export function reportOf(data: SelftestData): string {
     T.duration(seconds(data.durationMs)),
     ...halt,
     '',
+    ...(probeLines(data.probes).length > 0 ? [...probeLines(data.probes), ''] : []),
     ...block(
       0,
       S.selftest.step.check,

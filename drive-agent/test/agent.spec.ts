@@ -135,7 +135,7 @@ describe('le diagnostic', () => {
     expect(screens.screens()).toEqual(['welcome'])
   })
 
-  it('« Diagnostic » joue les contrôles en lecture seule : une recherche, aucun appel au panier, aucun message vers Repas', async () => {
+  it('« Diagnostic » joue les contrôles en lecture seule : deux recherches (le mot courant, puis le mot absurde des sondes), aucun appel au panier, aucun message vers Repas', async () => {
     asDiagnostic()
     const navigate = vi.fn<(url: string) => void>()
     const searches: string[] = []
@@ -160,7 +160,7 @@ describe('le diagnostic', () => {
 
     await vi.waitFor(() => expect(screens.closed.count).toBe(1))
     expect(screens.screens()).toEqual(['welcome', 'diagnostic'])
-    expect(searches).toEqual(['sel'])
+    expect(searches).toEqual(['sel', 'zzqxkw'])
     expect(navigate).not.toHaveBeenCalled()
   })
 
@@ -406,7 +406,7 @@ describe('la commande de diagnostic de l’application', () => {
 
     // When
     receive(COMMAND)
-    await vi.waitFor(() => expect(searches).toEqual(['sel']))
+    await vi.waitFor(() => expect(searches).toEqual(['sel', 'zzqxkw']))
     closeDiagnostic()
 
     // Then
