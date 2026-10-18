@@ -123,6 +123,16 @@ export function shop(shelves: Shelves, options: ShopOptions = {}) {
     },
     pageCartTotal: () => pageTotal,
     readSession: () => options.session ?? { state: 'UNKNOWN', signs: [] },
+    readArrival: () => ({
+      address: '/',
+      redirects: null,
+      status: null,
+      delivery: { read: false, sameAsAddress: null },
+      cookies: null,
+      searchBase: null,
+    }),
+    lastSearchFacts: () => null,
+    exploreSearchVariants: () => Promise.resolve([]),
   }
   return {
     adapter,

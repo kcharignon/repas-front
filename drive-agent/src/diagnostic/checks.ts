@@ -2,6 +2,7 @@
 // Chaque contrôle rend `OK`, `KO` (avec le code d'erreur quand il y en a un) ou `NOT_TESTED`. Un détail ne contient que des nombres et
 // des phrases fixes : jamais un cookie, un identifiant, une adresse ni un morceau de page.
 import {
+  type ArrivalFacts,
   describeSession,
   LeclercError,
   type LeclercCause,
@@ -10,6 +11,7 @@ import {
 } from '../leclerc'
 import { S } from '../ui'
 import type { StorageLike, WakeLockLike } from '../flow'
+import { attemptsText, NONSENSE_TERM, type ProbedSearch, type ProbeFacts } from './probes'
 
 export const CHECK_IDS = [
   'agent',
@@ -90,6 +92,64 @@ const faultOf = (error: unknown): { code: LeclercErrorCode; cause: LeclercCause 
     ? { code: error.code, cause: error.cause }
     : { code: 'CONTRACT_CHANGED', cause: 'EXCEPTION' }
 
+/** L'erreur d'une recherche avec son code HTTP (un blocage n'a pas de faits de réponse : le code HTTP de l'erreur dit au moins cela). */
+const probedFault = (error: unknown): NonNullable<ProbedSearch['fault']> => ({
+  ...faultOf(error),
+  status: error instanceof LeclercError ? error.status : null,
+})
+
+/** Les erreurs après lesquelles chercher encore ne dirait rien de plus : un blocage, une session perdue, une page hors magasin, un site muet, un refus HTTP. */
+const STOPS_PROBING = new Set<LeclercErrorCode>([
+  'BLOCKED',
+  'NOT_LOGGED_IN',
+  'UNSUPPORTED_PAGE',
+  'NETWORK',
+])
+const stopsProbing = (fault: ProbedSearch['fault']): boolean =>
+  fault !== null && (STOPS_PROBING.has(fault.code) || (fault.cause?.startsWith('HTTP_') ?? false))
+
+/**
+ * Les sondes des recherches (ticket B) : ce que la recherche du mot courant a laissé voir ; si sa première requête a échoué, les autres formes de
+ * requête sont sondées (recette réelle du 2026-10-18 : HTTP 400) ; puis, si la page répond, la forme d'une réponse sans résultat (mot absurde).
+ * Lecture seule, à la cadence normale ; aucune erreur n'en sort.
+ */
+async function probeSearches(
+  adapter: RetailerAdapter,
+  arrival: ArrivalFacts | null,
+  commonFault: ProbedSearch['fault'],
+): Promise<ProbeFacts> {
+  const commonFacts = adapter.lastSearchFacts()
+  if (commonFacts?.attempts.some((a) => a.status === null || a.status < 200 || a.status >= 300)) {
+    await adapter.exploreSearchVariants(TEST_TERM)
+  }
+  const common: ProbedSearch = {
+    term: TEST_TERM,
+    facts: commonFacts,
+    fault: commonFault,
+    skipped: false,
+  }
+  if (stopsProbing(commonFault)) {
+    return {
+      arrival,
+      common,
+      nonsense: { term: NONSENSE_TERM, facts: null, fault: null, skipped: true },
+    }
+  }
+  let nonsenseFault: ProbedSearch['fault'] = null
+  try {
+    await adapter.searchProducts(NONSENSE_TERM)
+  } catch (error) {
+    nonsenseFault = probedFault(error)
+  }
+  const nonsense: ProbedSearch = {
+    term: NONSENSE_TERM,
+    facts: adapter.lastSearchFacts(),
+    fault: nonsenseFault,
+    skipped: false,
+  }
+  return { arrival, common, nonsense }
+}
+
 /** Ce que la page montre de la connexion, ou rien si elle ne se laisse pas lire. */
 function sessionOf(adapter: RetailerAdapter): string | undefined {
   try {
@@ -128,7 +188,7 @@ const D = S.diagnostic.detail
 export async function runChecks(
   deps: ChecksDeps,
   onResult: (result: CheckResult) => void,
-): Promise<{ results: CheckResult[]; page: PageFacts | null }> {
+): Promise<{ results: CheckResult[]; page: PageFacts | null; probes: ProbeFacts }> {
   const results: CheckResult[] = []
   const push = async (result: CheckResult) => {
     results.push(result)
@@ -154,6 +214,14 @@ export async function runChecks(
     await push(ko('page', undefined, code, cause))
   }
 
+  let arrival: ArrivalFacts | null = null
+  try {
+    arrival = deps.adapter.readArrival()
+  } catch {
+    arrival = null
+  }
+  let probes: ProbeFacts = { arrival, common: null, nonsense: null }
+
   await push(
     deps.originReplaced === null
       ? skipped('origin', D.originBridge)
@@ -164,6 +232,7 @@ export async function runChecks(
   await push(sessionWorks(deps.storage) ? ok('session', D.sessionOk) : ko('session', D.sessionKo))
   await push(deps.wakeLock ? ok('wakeLock', D.wakeLockOk) : ko('wakeLock', D.wakeLockKo))
 
+  let commonFault: ProbedSearch['fault'] = null
   if (page === null) {
     await push(skipped('search', D.pageSkipped))
     await push(skipped('content', D.searchFailed))
@@ -172,19 +241,34 @@ export async function runChecks(
     try {
       found = await deps.adapter.searchProducts(TEST_TERM)
     } catch (error) {
-      const { code, cause } = faultOf(error)
-      await push(ko('search', undefined, code, cause))
+      commonFault = probedFault(error)
+      const { code, cause } = commonFault
+      const tried = deps.adapter.lastSearchFacts()?.attempts ?? []
+      await push(
+        ko(
+          'search',
+          tried.some((attempt) => attempt.status !== 200)
+            ? D.searchAttempts(attemptsText(tried))
+            : undefined,
+          code,
+          cause,
+        ),
+      )
     }
     if (found === null) {
       await push(skipped('content', D.searchFailed))
     } else {
       const read = found.length
       const whole = found.filter(complete).length
+      const variant = deps.adapter.lastSearchFacts()?.variant ?? 'a'
       await push(
         read === 0
           ? ko('search', D.searchEmpty(TEST_TERM), 'CONTRACT_CHANGED', 'SEARCH_COMMON_EMPTY')
           : whole * 2 >= read
-            ? ok('search', D.searchOk(TEST_TERM, read, whole))
+            ? ok(
+                'search',
+                `${D.searchOk(TEST_TERM, read, whole)}${variant === 'a' ? '' : D.searchVariant(variant)}`,
+              )
             : ko(
                 'search',
                 D.searchIncomplete(TEST_TERM, read, whole),
@@ -203,6 +287,8 @@ export async function runChecks(
     }
   }
 
+  if (page !== null) probes = await probeSearches(deps.adapter, arrival, commonFault)
+
   await push(skipped('frame', D.frameSkipped))
-  return { results, page }
+  return { results, page, probes }
 }

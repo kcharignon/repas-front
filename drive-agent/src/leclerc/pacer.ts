@@ -11,13 +11,28 @@ export const MAX_BLOCKS = 2
 
 export type FetchFn = (input: string, init?: RequestInit) => Promise<Response>
 
-/** Ce que l'adaptateur retient d'une réponse : jamais un en-tête, jamais un cookie. */
+/** Ce que l'adaptateur retient d'une réponse : jamais la valeur d'un en-tête, jamais un cookie. */
 export interface Reply {
   status: number
   text: string
   /** L'adresse finale (après redirection) et si la réponse en vient d'une. */
   url: string
   redirected: boolean
+  /** Les NOMS des en-têtes de la réponse (jamais leurs valeurs : les cookies y sont), pour le diagnostic. */
+  headers: string[]
+  /** La valeur de `Content-Type`, dont le diagnostic ne garde que le type de média. */
+  contentType: string | null
+}
+
+/** Les noms des en-têtes d'une réponse (vide si elle n'en dit rien : un faux `fetch` de test). */
+function headerNamesOf(headers: Headers | undefined): string[] {
+  const names: string[] = []
+  try {
+    headers?.forEach((_value, name) => names.push(name))
+  } catch {
+    return []
+  }
+  return names
 }
 
 export interface PacerDeps {
@@ -100,6 +115,8 @@ export class Pacer {
           text: await response.text(),
           url: response.url,
           redirected: response.redirected,
+          headers: headerNamesOf(response.headers),
+          contentType: response.headers?.get?.('content-type') ?? null,
         }
       } catch {
         this.lastEnd = this.deps.now()

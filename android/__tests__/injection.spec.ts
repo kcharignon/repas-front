@@ -396,7 +396,7 @@ describe('le test automatique, de bout en bout avec l’agent construit et un fa
     for (let i = 0; i < 600 && !until(); i += 1) await vi.advanceTimersByTimeAsync(250)
   }
 
-  it('joue les 24 requêtes à la cadence du site, rapporte OK, et laisse le panier vide', async () => {
+  it('joue les 25 requêtes à la cadence du site, rapporte OK, et laisse le panier vide', async () => {
     // Given : la variante de débogage de l'application, avec l'agent construit
     const { buildAgent } = await import('../../drive-agent/scripts/build.mjs')
     const built = await buildAgent()
@@ -418,9 +418,9 @@ describe('le test automatique, de bout en bout avec l’agent construit et un fa
     expect(message.report).toContain('Verdict : OK')
     expect(message.report).toContain('Lot de 12 recherches')
 
-    // Then : 1 + 12 recherches, 3 recherches d'essai, 8 écritures (1, 3, 2, 1, 1 puis trois retraits)
-    expect(drive.hits).toHaveLength(24)
-    expect(drive.hits.filter((hit) => hit.method === 'GET')).toHaveLength(16)
+    // Then : 1 + 1 (mot absurde des sondes) + 12 recherches, 3 recherches d'essai, 8 écritures (1, 3, 2, 1, 1 puis trois retraits)
+    expect(drive.hits).toHaveLength(25)
+    expect(drive.hits.filter((hit) => hit.method === 'GET')).toHaveLength(17)
     expect(drive.hits.flatMap((hit) => (hit.body ? [hit.body.quantity] : []))).toEqual([
       1, 3, 2, 1, 1, 0, 0, 0,
     ])
@@ -435,9 +435,12 @@ describe('le test automatique, de bout en bout avec l’agent construit et un fa
     expect(message.report).toContain('Hôte : fd0')
     expect(message.report).toContain('Magasin : …123')
     expect(message.report).not.toMatch(/leclercdrive|Ville-Test|https?:|@|\d{6,}/i)
-    expect(message.report.replace(/Ce rapport ne contient ni cookie[^\n]*/, '')).not.toMatch(
-      /cookie/i,
-    )
+    // (Le mot « cookie » ne figure que dans la phrase de confidentialité et dans la ligne qui COMPTE les cookies lisibles par la page, ticket B : un nombre et un oui/non.)
+    expect(
+      message.report
+        .replace(/Ce rapport ne contient ni cookie[^\n]*/, '')
+        .replace(/ - Cookies lisibles par la page : \d+ ; cookie de protection anti-robot : (oui|non)[^\n]*/, ''),
+    ).not.toMatch(/cookie/i)
   }, 60_000)
 
   it('rend le panier de l’utilisateur tel qu’il était, produits déjà présents compris', async () => {

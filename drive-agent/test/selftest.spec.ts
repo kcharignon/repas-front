@@ -88,9 +88,13 @@ describe('en fonctionnement normal', () => {
     // When
     const data = await play(parts)
 
-    // Then : le diagnostic cherche « sel », le lot cherche les douze mots, puis l'essai
-    expect(parts.calls.slice(0, 13)).toEqual(['search sel', ...ALL_WORDS.map((w) => `search ${w}`)])
-    expect(parts.calls.slice(13)).toEqual([
+    // Then : le diagnostic cherche « sel » puis le mot absurde (la forme d'une réponse sans résultat), le lot cherche les douze mots, puis l'essai
+    expect(parts.calls.slice(0, 14)).toEqual([
+      'search sel',
+      'search zzqxkw',
+      ...ALL_WORDS.map((w) => `search ${w}`),
+    ])
+    expect(parts.calls.slice(14)).toEqual([
       'search farine',
       'cart 2000000 1',
       'cart 2000000 3',
@@ -458,6 +462,22 @@ describe('showSelftest (l’écran et l’envoi du rapport)', () => {
 })
 
 describe('le rapport', () => {
+  it('porte les sondes du site réel du diagnostic (ticket B), avant les étapes, sans la moindre valeur', async () => {
+    const parts = shop(standardShelves(ALL_WORDS), { label: 'Ville-Test' })
+    const data = await play(parts)
+
+    const report = reportOf(data)
+
+    expect(data.probes?.arrival).toMatchObject({ address: '/' })
+    expect(report).toContain(
+      'Sondes du site (des formes, des noms et des nombres : aucune valeur du site) :',
+    )
+    expect(report).toContain(' - Adresse d’arrivée : /')
+    expect(report.indexOf('Sondes du site')).toBeLessThan(
+      report.indexOf('1. [OK] Diagnostic de l’agent'),
+    )
+  })
+
   it('dit OK ou KO par étape, les durées, les codes HTTP, les quantités et les produits trouvés par mot', async () => {
     const parts = shop(standardShelves(ALL_WORDS), { label: 'Ville-Test' })
     const data = await play(parts)

@@ -199,6 +199,16 @@ export function fakeAdapter(
     },
     pageCartTotal: () => null,
     readSession: () => options.session ?? { state: 'UNKNOWN', signs: [] },
+    readArrival: () => ({
+      address: '/',
+      redirects: null,
+      status: null,
+      delivery: { read: false, sameAsAddress: null },
+      cookies: null,
+      searchBase: null,
+    }),
+    lastSearchFacts: () => null,
+    exploreSearchVariants: () => Promise.resolve([]),
     async setCartQuantity(id, quantity): Promise<CartResult> {
       calls.push(`cart ${id} ${quantity}`)
       inFlight += 1

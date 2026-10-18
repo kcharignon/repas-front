@@ -53,10 +53,68 @@ export function readStorePaths(location: LocationLike, label: string | null = nu
   }
 }
 
-/** Le point de livraison (`sNoPointLivraison`) lu dans la page ; à défaut, le premier identifiant de l'adresse. */
-export function readDeliveryPoint(pageText: string, store: StoreInfo): string {
+/** Le point de livraison (`sNoPointLivraison`) lu dans le texte de la page, `null` s'il n'y est pas. */
+export function findDeliveryPoint(pageText: string): string | null {
   const found = /["']?sNoPointLivraison["']?\s*[:=]\s*["']?(\w{3,20})["']?/.exec(
     pageText.replace(/&quot;/g, '"'),
   )
-  return found?.[1] ?? store.id
+  return found?.[1] ?? null
+}
+
+/** Le point de livraison (`sNoPointLivraison`) lu dans la page ; à défaut, le premier identifiant de l'adresse. */
+export function readDeliveryPoint(pageText: string, store: StoreInfo): string {
+  return findDeliveryPoint(pageText) ?? store.id
+}
+
+/** D'où vient le chemin avec la ville : de l'action du formulaire de recherche du site, ou d'un lien de la page. */
+export type SearchBaseSource = 'FORM' | 'LINK'
+
+export interface SearchBase {
+  /** `/magasin-<id>-<id>-<Ville>` */
+  path: string
+  source: SearchBaseSource
+}
+
+/** Le préfixe `/magasin-<id>-<id>` d'un magasin : des chiffres seulement, donc sans caractère spécial pour une expression régulière. */
+const CART_PATH = /^\/magasin-\d{1,12}-\d{1,12}$/
+
+/** Un site devant un chemin : `https://hôte` n'en fait pas partie. */
+const ORIGIN = /^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i
+
+/** Les caractères qu'un nom de ville ne contient pas (ce qui ferme une adresse dans une page, ou un échappement). */
+const CITY_CHARS = `[^/"'?#<>\\s\\\\&]{1,80}`
+
+/**
+ * Le chemin du magasin AVEC sa ville, tiré de l'action du formulaire de recherche du site : `<form action="/magasin-<id>-<id>-<Ville>/recherche.aspx">`
+ * (avec ou sans son hôte). Recette réelle du 2026-10-18 : la recherche répond HTTP 400 sur le chemin de l'accueil du magasin et réussit sur celui de la
+ * page de résultats du site, dont l'adresse porte la ville. `null` si aucun formulaire ne vise ce magasin avec une ville. [cartPath] : `/magasin-<id>-<id>`.
+ */
+export function findSearchFormPath(pageText: string, cartPath: string): string | null {
+  if (!CART_PATH.test(cartPath)) return null
+  const target = new RegExp(`^${cartPath}(-${CITY_CHARS})/recherche\\.aspx$`, 'i')
+  for (const form of pageText.matchAll(/<form\b[^>]*\baction\s*=\s*(["'])([^"']*)\1/gi)) {
+    const path = (form[2] ?? '').replace(ORIGIN, '').split(/[?#]/, 1)[0] ?? ''
+    const found = target.exec(path)
+    if (found?.[1]) return `${cartPath}${found[1]}`
+  }
+  return null
+}
+
+/**
+ * Le chemin du magasin AVEC sa ville, tiré du premier lien de la page qui commence par [cartPath] (`/magasin-<id>-<id>`) suivi de `-` : le site le
+ * donne dans ses liens quand l'adresse de la page n'en a pas. `null` s'il n'y en a pas. Un lien d'un autre magasin n'en est jamais un : le préfixe est
+ * celui de ce magasin.
+ */
+export function findCityPath(pageText: string, cartPath: string): string | null {
+  if (!CART_PATH.test(cartPath)) return null
+  const found = new RegExp(`${cartPath}(-${CITY_CHARS})(?=[/"'?#<>\\s]|$)`, 'i').exec(pageText)
+  return found?.[1] ? `${cartPath}${found[1]}` : null
+}
+
+/** Le chemin avec la ville que la page donne : le formulaire de recherche d'abord, à défaut le premier lien. */
+export function findSearchBase(pageText: string, cartPath: string): SearchBase | null {
+  const form = findSearchFormPath(pageText, cartPath)
+  if (form) return { path: form, source: 'FORM' }
+  const link = findCityPath(pageText, cartPath)
+  return link ? { path: link, source: 'LINK' } : null
 }

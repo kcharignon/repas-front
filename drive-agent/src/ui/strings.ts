@@ -1,5 +1,6 @@
 // Tous les textes de l'interface de l'agent, en français simple (tutoiement, phrases courtes). Aucun texte n'est écrit ailleurs.
 import type { ErrorCode, LineStatus, Outcome } from '../../protocol'
+import { own } from '../own'
 
 /** « 1 produit », « 3 produits » : le nombre suivi du bon mot. */
 export function count(n: number, one: string, many: string): string {
@@ -26,6 +27,33 @@ export function formatContent(value: number, unit: 'g' | 'ml' | 'piece'): string
 /** Le prix à l'unité de mesure : « 5,16 € / kg ». */
 export function formatMeasure(cents: number, unit: 'kg' | 'l' | 'piece'): string {
   return `${formatPrice(cents)} / ${unit === 'l' ? 'L' : unit === 'piece' ? 'pièce' : 'kg'}`
+}
+
+/** La taille d'une réponse, jamais en six chiffres (un numéro de magasin y ressemblerait) : « 512 caractères », « 612,3 k caractères ». */
+export function sizeText(length: number): string {
+  return length < 1000
+    ? `${length} caractère${length > 1 ? 's' : ''}`
+    : `${(Math.round(length / 100) / 10).toFixed(1).replace('.', ',')} k caractères`
+}
+
+/** Ce que dit chaque forme de requête de recherche (`leclerc/search-request.ts`), pour le rapport du diagnostic. */
+const VARIANT_LABELS: Record<string, string> = {
+  a: 'requête courante',
+  b: 'sans en-tête',
+  c: 'Accept */*',
+  g: 'ville tirée de la page',
+  e1: 'sans ville',
+  e2: 'adresse relative',
+  f: 'sans Referer',
+  h: 'sans cache',
+}
+export function variantLabel(variant: string): string {
+  return own(VARIANT_LABELS, variant) ?? 'forme inconnue'
+}
+
+/** Une liste de noms séparés par des virgules, « aucun » si elle est vide. */
+export function listText(names: readonly string[]): string {
+  return names.length === 0 ? 'aucun' : names.join(', ')
 }
 
 export const S = {
@@ -80,6 +108,9 @@ export const S = {
       searchIncomplete: (term: string, read: number, complete: number) =>
         `« ${term} » : ${read} produits lus, seulement ${complete} avec tous les champs attendus`,
       searchFailed: 'recherche impossible, contenu non analysé',
+      searchAttempts: (list: string) => `requêtes essayées (variante=code HTTP) : ${list}`,
+      searchVariant: (variant: string) =>
+        ` (passée par la requête ${variant} : ${variantLabel(variant)})`,
       contentOk: (known: number, read: number) => `${known} produits sur ${read}`,
       contentKo: (known: number, read: number) => `seulement ${known} produits sur ${read}`,
       frameSkipped: 'non utilisé : l’agent affiche lui-même la liste de produits',
@@ -92,6 +123,91 @@ export const S = {
       host: (host: string) => `Hôte : ${host}`,
       store: (store: string) => `Magasin : ${store}`,
       noWrite: 'Aucune écriture au panier.',
+    },
+    /**
+     * Les sondes du site réel (ticket B de l'audit du 2026-10-18) : des formes, des noms et des nombres, jamais une valeur du site. Elles disent
+     * POURQUOI une recherche échoue (code HTTP, type, longueur, chemin demandé, variantes essayées) et ce que la page laisse voir.
+     */
+    probe: {
+      title: 'Sondes du site (des formes, des noms et des nombres : aucune valeur du site) :',
+      yes: 'oui',
+      no: 'non',
+      unknown: 'inconnu',
+      notApplicable: 'sans objet',
+      noReply: 'aucune réponse',
+      inPage: 'page',
+      inReply: (term: string) => `réponse « ${term} »`,
+      address: (shape: string) => `Adresse d’arrivée : ${shape}`,
+      city: (value: string) => `Suffixe de ville dans l’adresse de la page : ${value}`,
+      cookies: (count: number, antiBot: string) =>
+        `Cookies lisibles par la page : ${count} ; cookie de protection anti-robot : ${antiBot} (les cookies HttpOnly ne sont pas lisibles)`,
+      arrival: (redirects: number | null, status: number | null) =>
+        `Arrivée : ${
+          redirects === null
+            ? 'redirections non mesurables'
+            : `${redirects} redirection${redirects > 1 ? 's' : ''} suivie${redirects > 1 ? 's' : ''} par le navigateur`
+        }, ${status === null ? 'code HTTP non mesurable' : `HTTP ${status}`}`,
+      delivery: (where: string, read: string, same: string) =>
+        `Point de livraison (${where}) : lu ${read}, égal au numéro de l’adresse ${same}`,
+      searchSkipped: (term: string) =>
+        `Recherche « ${term} » : non faite (page non prise en charge, blocage ou recherche courante en échec)`,
+      searchNoReply: (term: string, why: string | null) =>
+        `Recherche « ${term} » : aucune réponse${why === null ? '' : ` (${why})`}`,
+      searchReply: (
+        term: string,
+        reply: {
+          status: number
+          mime: string | null
+          length: number
+          redirected: boolean
+          variant: string
+        },
+      ) =>
+        `Recherche « ${term} » : HTTP ${reply.status}, contenu ${reply.mime ?? 'inconnu'}, ${sizeText(reply.length)}, ${
+          reply.redirected ? 'redirigée' : 'non redirigée'
+        }, requête ${reply.variant}`,
+      requested: (requested: string, answered: string, variant: string) =>
+        `Chemin demandé : ${requested} (requête ${variant} : ${variantLabel(variant)})${
+          answered === requested ? '' : `, chemin de la réponse : ${answered}`
+        }`,
+      searchBase: (base: { shape: string; source: 'FORM' | 'LINK' } | null) =>
+        `Chemin avec ville tiré de la page : ${
+          base === null
+            ? 'aucun'
+            : `${base.shape} (${base.source === 'FORM' ? 'formulaire de recherche' : 'lien'})`
+        }`,
+      outcome: (term: string, result: string) => `Résultat « ${term} » : ${result}`,
+      outcomeProducts: (n: number) => `${n} produit${n > 1 ? 's' : ''} lu${n > 1 ? 's' : ''}`,
+      outcomeEmpty: 'aucun produit, liste vide reconnue',
+      outcomeFailed: (error: string) => `erreur ${error}`,
+      attempts: (term: string, list: string) =>
+        `HTTP : ${list} (recherche « ${term} » ; d, le banc d’essai, envoie la même requête que a)`,
+      attempt: (attempt: {
+        variant: string
+        status: number | null
+        mime: string | null
+        length: number | null
+        address: string
+      }) =>
+        `Variante ${attempt.variant} (${variantLabel(attempt.variant)}) : ${
+          attempt.status === null ? 'aucune réponse' : `HTTP ${attempt.status}`
+        }, contenu ${attempt.mime ?? 'inconnu'}, ${attempt.length === null ? 'longueur inconnue' : sizeText(attempt.length)}, chemin ${attempt.address}`,
+      phrases: (list: string) => `Mots de page d’erreur reconnus : ${list}`,
+      session: (term: string, state: string) => `Connexion dans la réponse « ${term} » : ${state}`,
+      keys: (
+        term: string,
+        keys: {
+          total: number
+          present: readonly string[]
+          absent: readonly string[]
+          session: readonly string[]
+        },
+      ) =>
+        `Clés d’état de la réponse « ${term} » : ${keys.total} clés au total ; connues présentes (${keys.present.length}/${
+          keys.present.length + keys.absent.length
+        }) : ${listText(keys.present)} ; connues absentes : ${listText(keys.absent)} ; liées à la connexion : ${listText(keys.session)}`,
+      headers: (term: string, names: readonly string[]) =>
+        `En-têtes de la réponse « ${term} » (noms seulement) : ${listText(names)}`,
     },
   },
   /** Le test automatique de la variante de débogage (DRV-318) : l'écran de progression et le rapport texte copiable. */

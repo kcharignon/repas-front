@@ -80,10 +80,11 @@ describe('en fonctionnement normal', () => {
     expect(by.search?.detail).toBe(
       '« sel » : 5 produits lus, 5 avec tous les champs attendus (identifiant, libellé, prix, stock)',
     )
-    // Une seule recherche, aucun appel au panier.
-    expect(fake.calls).toHaveLength(1)
+    // Deux recherches (le mot courant, puis le mot absurde des sondes), aucun appel au panier.
+    expect(fake.calls).toHaveLength(2)
     expect(fake.calls[0]?.url).toContain('/recherche.aspx?TexteRecherche=sel')
-    expect(fake.calls[0]?.init.method).toBe('GET')
+    expect(fake.calls[1]?.url).toContain('/recherche.aspx?TexteRecherche=zzqxkw')
+    expect(fake.calls.every((call) => call.init.method === 'GET')).toBe(true)
   })
 
   it('rend chaque résultat dès qu’il est connu, dans l’ordre', async () => {

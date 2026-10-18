@@ -5,6 +5,7 @@ import type { DiagnosticRow } from '../ui'
 import { S } from '../ui'
 import { causeText } from '../leclerc'
 import { CHECK_IDS, type CheckId, type CheckResult, type PageFacts } from './checks'
+import { probeLines, type ProbeFacts } from './probes'
 
 const T = S.diagnostic
 
@@ -58,13 +59,16 @@ export function reportOf(
   now: number,
   page: PageFacts | null,
   results: readonly CheckResult[],
+  probes?: ProbeFacts | null,
 ): string {
+  const sondes = probeLines(probes)
   const lines = [
     T.text.title,
     T.text.agent(agentVersion),
     T.text.date(dateOf(now)),
     ...(page ? pageLines(page) : []),
     '',
+    ...(sondes.length > 0 ? [...sondes, ''] : []),
     ...rowsOf(results).map(
       (row) => `[${row.badge}] ${row.label}${row.detail === null ? '' : ` : ${row.detail}`}`,
     ),
