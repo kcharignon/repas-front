@@ -33,8 +33,9 @@ RUN curl -fsSL -o /tmp/cmdline-tools.zip "https://dl.google.com/android/reposito
     && rm /tmp/cmdline-tools.zip
 
 # Les licences du SDK Android sont acceptées ici, à la construction de l'image (comme dans toute image de CI Android).
+# `platform-tools` y est installé aussi : sans lui, le plugin Android le télécharge à chaque construction, et un incident réseau à ce moment fait échouer la construction avant tout contrôle (DRV-315).
 RUN (set +o pipefail; yes | "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null) \
-    && "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" "platforms;android-${ANDROID_PLATFORM}" "build-tools;${ANDROID_BUILD_TOOLS}" > /dev/null \
+    && "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-${ANDROID_PLATFORM}" "build-tools;${ANDROID_BUILD_TOOLS}" > /dev/null \
     && chmod -R a+rwX "${ANDROID_HOME}"
 
 ENV ANDROID_BUILD_TOOLS=${ANDROID_BUILD_TOOLS}

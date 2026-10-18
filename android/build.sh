@@ -180,17 +180,31 @@ release_selftest() {
   trap "rm -rf '$work' '$PWD/dist/selftest'" EXIT
   local clean_env=(env -u ANDROID_KEYSTORE_BASE64 -u ANDROID_KEYSTORE_PASSWORD -u ANDROID_KEY_ALIAS -u ANDROID_KEY_PASSWORD -u ANDROID_VERSION_TAG -u ANDROID_VERSION_CODE)
 
+  # Le premier appel de Gradle dans un conteneur neuf télécharge ses plugins : un incident réseau à ce moment ferait échouer l'essai pour une
+  # autre raison que celle qu'il juge. On le fait donc d'abord, avec trois essais, avant de juger le refus.
+  echo "0. Préparation de Gradle (plugins téléchargés une fois, jusqu'à trois essais)."
+  local attempt warmup=""
+  for attempt in 1 2 3; do
+    if warmup=$("${GRADLE[@]}" --quiet :app:tasks 2>&1); then break; fi
+    [ "$attempt" -lt 3 ] || fail "Gradle n'a pas pu se préparer en trois essais. Fin de sa sortie :
+$(tail -n 25 <<<"$warmup")"
+    sleep 5
+  done
+
   echo "1. Sans clé de signature, la publication doit être refusée."
   if output=$("${clean_env[@]}" ANDROID_DIST=dist/selftest "$0" release 2>&1); then
     fail "la publication a réussi sans clé de signature."
   fi
-  grep -q "pas de clé de signature" <<<"$output" || fail "le refus sans clé n'a pas le message attendu : $output"
+  grep -q "pas de clé de signature" <<<"$output" || fail "le refus sans clé n'a pas le message attendu : $(tail -n 25 <<<"$output")"
   [ ! -e dist/selftest/repas-drive.apk ] || fail "un APK a été produit sans clé de signature."
   # Seconde ligne de défense : Gradle, appelé directement sans passer par ce script, refuse lui aussi.
   if output=$("${clean_env[@]}" "${GRADLE[@]}" :app:assembleRelease 2>&1); then
     fail "Gradle a construit une publication sans clé de signature."
   fi
-  grep -q "Pas de clé de signature" <<<"$output" || fail "le refus de Gradle sans clé n'a pas le message attendu."
+  # Gradle doit s'arrêter sur le refus de la clé. S'il s'arrête avant (réseau, dépôt de plugins…), la fin de sa sortie dit pourquoi : rien de secret
+  # n'y figure, l'environnement de cet appel est vide de toute clé.
+  grep -q "Pas de clé de signature" <<<"$output" || fail "le refus de Gradle sans clé n'a pas le message attendu. Fin de la sortie de Gradle :
+$(tail -n 25 <<<"$output")"
   echo "   refusée par le script et par Gradle, comme attendu."
 
   echo "2. Avec une clé jetable, la publication doit réussir et l'APK doit porter cette clé."
