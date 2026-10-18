@@ -5,7 +5,7 @@ export interface StoreInfo {
   /** Hôte de la page (par magasin : `fdN-courses.leclercdrive.fr`). */
   host: string
   origin: string
-  /** Premier identifiant de l'adresse (« 053701 »). */
+  /** Premier identifiant de l'adresse (« 001234 »). */
   id: string
   /** Deuxième partie de l'adresse (un second identifiant, ou un nom de ville purement décoratif). */
   second: string

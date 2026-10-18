@@ -29,9 +29,19 @@ object NavigationPolicy {
     fun decide(url: String?): Decision {
         if (url == null) return Decision.BLOCK
         if (isAllowed(url)) return Decision.ALLOW
-        val isWebPage = url.startsWith(HTTPS, ignoreCase = true) || url.startsWith(HTTP, ignoreCase = true)
+        val isWebPage = startsWithAscii(url, HTTPS) || startsWithAscii(url, HTTP)
         return if (isWebPage) Decision.OPEN_EXTERNALLY else Decision.BLOCK
     }
+
+    /**
+     * Vrai si `url` commence par `prefix` (en minuscules ASCII), sans tenir compte de la casse des seules lettres ASCII. Pas de comparaison
+     * « sans casse » de Kotlin : elle suit Unicode, où « \u017F » (s long) devient « S » en majuscule et ferait de `http\u017F://` un `https://`.
+     */
+    internal fun startsWithAscii(url: String, prefix: String): Boolean =
+        url.length >= prefix.length && prefix.indices.all { index ->
+            val char = url[index]
+            (if (char in 'A'..'Z') char + ('a' - 'A') else char) == prefix[index]
+        }
 
     fun isAllowed(url: String?): Boolean {
         val host = httpsHostOf(url) ?: return false
@@ -43,7 +53,7 @@ object NavigationPolicy {
      * Le port n'est accepté que s'il est 443.
      */
     fun httpsHostOf(url: String?): String? {
-        if (url == null || !url.startsWith(HTTPS, ignoreCase = true)) return null
+        if (url == null || !startsWithAscii(url, HTTPS)) return null
         val authority = authorityOf(url.substring(HTTPS.length))
         val colon = authority.indexOf(':')
         val host = if (colon < 0) authority else authority.substring(0, colon)
@@ -58,7 +68,7 @@ object NavigationPolicy {
     fun describe(url: String?): String {
         if (url == null) return "?"
         for (scheme in listOf(HTTPS, HTTP)) {
-            if (!url.startsWith(scheme, ignoreCase = true)) continue
+            if (!startsWithAscii(url, scheme)) continue
             val authority = authorityOf(url.substring(scheme.length))
             val host = authority.substringBefore(':')
             // Un identifiant dans l'adresse (« nom:secret@site ») n'est jamais recopié.

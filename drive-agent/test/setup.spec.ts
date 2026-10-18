@@ -89,7 +89,7 @@ describe('lire le magasin de la page', () => {
     expect(Object.keys(message.store).sort()).toEqual(['baseUrl', 'host', 'id', 'label'])
   })
 
-  it('garde le zéro de tête du numéro (« 053701 » n’est pas 53701)', async () => {
+  it('garde le zéro de tête du numéro (« 001234 » n’est pas 1234)', async () => {
     const { adapter } = page('/magasin-000123-000456/accueil.aspx')
     const { flow, sent } = setupFlow({ store: () => 'save' }, adapter)
 
