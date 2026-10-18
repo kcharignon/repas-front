@@ -152,7 +152,7 @@ services:
       - ./drive-agent:/work/drive-agent
       - android-lab-gradle:/gradle
 
-  # Émulateur Android de test (DRV-319, android/emulator/) : `make android-emulator-up`, `-down`, `-status`, puis `make android-smoke`.
+  # Émulateur Android de test (DRV-319, android/emulator/) : `make android-emulator-up`, `-down`, `-status`, puis `make android-smoke` ou `make android-e2e`.
   # Sans fenêtre, accéléré par KVM (/dev/kvm de la machine, voir android/README.md). Le SDK, l'image système et l'AVD sont téléchargés au premier
   # lancement dans le volume `android-emulator-sdk`, puis réutilisés. Aucun port publié, aucun secret. Le DNS de l'émulateur envoie tout
   # *.leclercdrive.fr vers le faux site local du conteneur : jamais le vrai. Profil à part : `make stop` ne l'arrête pas.
@@ -171,6 +171,8 @@ services:
       - android-emulator-sdk:/sdk
       # L'APK de débogage construit par `make android`, en lecture seule.
       - ./android/dist:/apk:ro
+      # Le faux site Leclerc complet (DRV-309), rejoué dans l'émulateur par `make android-e2e` (DRV-319, partie 2) : Node l'exécute dans le conteneur.
+      - ./drive-agent/fake-leclerc:/opt/fake-leclerc:ro
     stop_grace_period: 30s
 
   # Image de production (statique + relais vers le back) : http://localhost:8081, pour essayer le build comme en production.
