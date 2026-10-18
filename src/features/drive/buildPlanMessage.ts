@@ -1,5 +1,5 @@
 import type { PlanLine, PlanMessage } from '@drive-protocol'
-import { LIMITS, PROTOCOL_VERSION, RETURN_PATH } from '@drive-protocol'
+import { PROTOCOL_VERSION, RETURN_PATH } from '@drive-protocol'
 
 import type { DrivePlan, DrivePlanLine } from '@/api'
 
@@ -21,20 +21,6 @@ export function effectiveStatus(line: DrivePlanLine, changes: LineChanges): Plan
   return line.status
 }
 
-/**
- * La quantité demandée, telle que le plan la donne. Le protocole refuse un symbole vide (une unité « pièce » n'en a pas toujours) :
- * sans `needed` la ligne reste valable, l'agent demande alors la quantité à l'utilisateur, au lieu de faire échouer tout le passage.
- */
-function neededOf({ needed }: DrivePlanLine): PlanLine['needed'] {
-  const usable =
-    needed.unitSymbol !== '' &&
-    needed.unitSymbol.length <= LIMITS.unitSymbol &&
-    needed.quantity > 0 &&
-    needed.quantity <= LIMITS.quantity
-
-  return usable ? needed : undefined
-}
-
 function translate(line: DrivePlanLine, changes: LineChanges): PlanLine {
   const status = effectiveStatus(line, changes)
   const head = { ingredientSlug: line.ingredientSlug, name: line.ingredientName }
@@ -44,13 +30,8 @@ function translate(line: DrivePlanLine, changes: LineChanges): PlanLine {
     id: retailerProductId,
     label,
   }))
-  const needed = neededOf(line)
-  const common = {
-    ...head,
-    rejected,
-    searchQuery: line.searchQuery,
-    ...(needed === undefined ? {} : { needed }),
-  }
+  // La quantité demandée est recopiée telle quelle : le plan ne renvoie jamais de symbole vide (le nom de l'unité à défaut)
+  const common = { ...head, rejected, searchQuery: line.searchQuery, needed: line.needed }
   if (status === 'NEW') {
     // Un produit remplacé : le préféré (rang 1), pour que l'agent demande ce que devient le nouveau
     const preferred = line.products[0]

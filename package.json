@@ -33,7 +33,9 @@
     "api:update": "node scripts/api.mjs update",
     "api:generate": "node scripts/api.mjs generate",
     "api:check": "node scripts/api.mjs check",
-    "api:verify": "node scripts/api.mjs verify"
+    "api:verify": "node scripts/api.mjs verify",
+    "samples:update": "node scripts/samples.mjs update",
+    "samples:verify": "node scripts/samples.mjs verify"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",

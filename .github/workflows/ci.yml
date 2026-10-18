@@ -33,6 +33,8 @@ jobs:
         run: npm run api:check
       - name: Contrat figé (identique au commit du back)
         run: npm run api:verify
+      - name: Exemples de contrat (identiques au commit du back)
+        run: npm run samples:verify
       - name: Types (vue-tsc)
         run: npm run type-check
       - name: Tests unitaires et couverture

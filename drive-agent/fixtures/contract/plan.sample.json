@@ -1,0 +1,144 @@
+{
+    "shoppingListId": "0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10",
+    "listVersion": 2,
+    "retailer": "leclerc",
+    "store": {
+        "id": "123456",
+        "label": "Ville-Test",
+        "baseUrl": "https://exemple.leclercdrive.fr/magasin-123456-123456"
+    },
+    "generatedAt": "2026-10-18T10:30:00+00:00",
+    "counts": {
+        "known": 3,
+        "new": 1,
+        "haveAtHome": 1
+    },
+    "lines": [
+        {
+            "ingredientSlug": "farine",
+            "ingredientName": "Farine",
+            "needed": {
+                "quantity": 300,
+                "unitSymbol": "g",
+                "dimension": "WEIGHT",
+                "baseFactor": 1
+            },
+            "status": "KNOWN",
+            "products": [
+                {
+                    "rank": 1,
+                    "retailerProductId": "555101",
+                    "ean": "2000000000008",
+                    "label": "Farine de blé T55 1 kg",
+                    "content": {
+                        "value": 1,
+                        "unit": "kg"
+                    },
+                    "packs": 1,
+                    "packsStatus": "COMPUTED"
+                },
+                {
+                    "rank": 2,
+                    "retailerProductId": "555102",
+                    "ean": null,
+                    "label": "Farine de blé T45 500 g",
+                    "content": {
+                        "value": 500,
+                        "unit": "g"
+                    },
+                    "packs": 1,
+                    "packsStatus": "COMPUTED"
+                }
+            ],
+            "rejected": [],
+            "searchQuery": "Farine"
+        },
+        {
+            "ingredientSlug": "lait",
+            "ingredientName": "Lait",
+            "needed": {
+                "quantity": 1.5,
+                "unitSymbol": "l",
+                "dimension": "VOLUME",
+                "baseFactor": 1000
+            },
+            "status": "KNOWN",
+            "products": [
+                {
+                    "rank": 1,
+                    "retailerProductId": "555201",
+                    "ean": null,
+                    "label": "Lait demi-écrémé UHT 50 cl",
+                    "content": {
+                        "value": 50,
+                        "unit": "cl"
+                    },
+                    "packs": 3,
+                    "packsStatus": "COMPUTED"
+                }
+            ],
+            "rejected": [
+                {
+                    "retailerProductId": "555299",
+                    "label": "Lait entier UHT 1 l"
+                }
+            ],
+            "searchQuery": "Lait"
+        },
+        {
+            "ingredientSlug": "oeuf",
+            "ingredientName": "Œufs",
+            "needed": {
+                "quantity": 6,
+                "unitSymbol": "unité",
+                "dimension": "COUNT",
+                "baseFactor": 1
+            },
+            "status": "NEW",
+            "products": [],
+            "rejected": [],
+            "searchQuery": "Œufs"
+        },
+        {
+            "ingredientSlug": "sel",
+            "ingredientName": "Sel",
+            "needed": {
+                "quantity": 2,
+                "unitSymbol": "cuillère à soupe",
+                "dimension": null,
+                "baseFactor": null
+            },
+            "status": "KNOWN",
+            "products": [
+                {
+                    "rank": 1,
+                    "retailerProductId": "555401",
+                    "ean": null,
+                    "label": "Sel fin 1 kg",
+                    "content": {
+                        "value": 1,
+                        "unit": "kg"
+                    },
+                    "packs": null,
+                    "packsStatus": "TO_CHECK"
+                }
+            ],
+            "rejected": [],
+            "searchQuery": "Sel"
+        },
+        {
+            "ingredientSlug": "sucre",
+            "ingredientName": "Sucre",
+            "needed": {
+                "quantity": 1,
+                "unitSymbol": "kg",
+                "dimension": "WEIGHT",
+                "baseFactor": 1000
+            },
+            "status": "HAVE_AT_HOME",
+            "products": [],
+            "rejected": [],
+            "searchQuery": "Sucre"
+        }
+    ]
+}

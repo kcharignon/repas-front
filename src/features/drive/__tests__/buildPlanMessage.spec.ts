@@ -117,13 +117,6 @@ describe('buildPlanMessage', () => {
     expect(lineOf(message, 'curry')).not.toHaveProperty('replaces')
   })
 
-  it('omet la quantité demandée quand son symbole est vide : le protocole le refuse, l’agent la demandera', () => {
-    const poivre = lineOf(buildPlanMessage(plan(), {}, RUN_ID), 'poivre')
-
-    expect(poivre.status).toBe('NEW')
-    expect(poivre).not.toHaveProperty('needed')
-  })
-
   it('garde le refusé d’une ligne nouvelle', () => {
     expect(lineOf(buildPlanMessage(plan(), {}, RUN_ID), 'moutarde')).toMatchObject({
       status: 'NEW',

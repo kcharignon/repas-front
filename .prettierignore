@@ -9,3 +9,5 @@ drive-agent/android-lab/app/build
 drive-agent/android-lab/dist
 # Fixtures de l'agent du drive : pages et réponses inventées, figées à l'octet près
 drive-agent/fixtures/leclerc
+# Exemples de contrat du back (DRV-501) : copies à l'octet près des réponses de l'API
+drive-agent/fixtures/contract/*.json
