@@ -273,10 +273,10 @@ describe('maskStore', () => {
   it('masque un numéro écrit sans ses zéros de tête', () => {
     const padded = parseStore({
       ...LOCATION,
-      pathname: '/magasin-053701-053701-Ville-Test/recherche.aspx',
+      pathname: '/magasin-001234-001234-Ville-Test/recherche.aspx',
     }) as StoreInfo
 
-    expect(maskStore('sIdUnique=Panier53701 et Panier053701', padded)).toBe(
+    expect(maskStore('sIdUnique=Panier1234 et Panier001234', padded)).toBe(
       'sIdUnique=Panier[n° magasin] et Panier[n° magasin]',
     )
   })
