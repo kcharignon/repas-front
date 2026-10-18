@@ -130,6 +130,8 @@ services:
       - ANDROID_KEYSTORE_PASSWORD
       - ANDROID_KEY_ALIAS
       - ANDROID_KEY_PASSWORD
+      # Les empreintes SHA-256 attendues du certificat de signature (publiques), pour `make android-release-verify`.
+      - ANDROID_EXPECTED_CERT_SHA256
     volumes:
       - ./android:/work/android
       # L'agent construit par `make agent-build`, embarqué dans l'APK (DRV-313) : lecture seule.

@@ -5,7 +5,9 @@ name: Android
 #   - « prerelease » (déclenchement à la main sur main seulement, `gh workflow run android.yml --ref main`) publie l'APK de débogage dans une
 #     pré-version GitHub `android-dev-<date>` (DRV-313) : jamais une release de production (release.yml ne s'occupe que des tags vX.Y.Z) ;
 #   - « release » prouve que la publication refuse de se construire sans clé de signature et réussit avec une clé jetable créée dans le
-#     job (`make android-release-selftest`). Aucune vraie clé n'est utilisée ici : la publication signée est celle de DRV-315.
+#     job (`make android-release-selftest`) et que le contrôle de l'APK signé (`build.sh verify-release`) accepte le bon certificat et refuse tout le reste.
+#     Aucune vraie clé n'est utilisée ici : la publication signée est celle de android-release.yml (DRV-315).
+# La publication SIGNÉE (étiquette `android-vX.Y.Z`, clé de l'utilisateur en secrets) est un autre workflow : android-release.yml (DRV-315, android/PUBLICATION.md).
 # L'agent du drive (drive-agent/dist/agent.js) est un actif de l'application : chaque job le construit d'abord avec Node (`npm run agent:build`),
 # puis les commandes make reçoivent ANDROID_AGENT= pour ne pas le reconstruire dans Docker. Son empreinte attendue est android/agent.js.sha384.
 # L'image de construction (JDK, Gradle, SDK Android) est lourde : ses couches sont gardées dans le cache de GitHub Actions.
@@ -163,6 +165,8 @@ jobs:
             done
           fi
           cat > notes.md <<NOTES
+          **Ne pas installer cette pré-version sur le téléphone des courses.** Elle est signée d'une clé de débogage PUBLIQUE (n'importe qui peut fabriquer un fichier qui s'installe par-dessus), l'application est débogable et porte des menus d'essai. Le téléphone des courses reçoit seulement une version \`android-vX.Y.Z\` (sans mention « Pre-release »). Mode d'emploi : https://github.com/${GH_REPO}/blob/${GITHUB_SHA}/android/PUBLICATION.md
+
           APK de débogage de « Repas Drive » (DRV-313, test automatique DRV-318), pour essayer l'agent sur un téléphone sans Repas. Ce n'est pas une release de production.
 
           - Empreinte SHA-256 de \`repas-drive-debug.apk\` : \`${SHA256}\`
