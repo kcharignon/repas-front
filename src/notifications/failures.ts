@@ -15,6 +15,7 @@ const driveCodes = new Map([
   ['DRIVE_NOT_CONFIGURED', 'errors.driveNotConfigured'],
   ['DRIVE_CHOICE_INVALID', 'errors.driveChoiceInvalid'],
   ['DRIVE_CHOICE_NOT_FOUND', 'errors.driveChoiceNotFound'],
+  ['DRIVE_LIMIT_REACHED', 'errors.driveLimitReached'],
   ['DRIVE_STORE_MISMATCH', 'errors.driveStoreMismatch'],
   ['DRIVE_STORE_INVALID', 'errors.driveStoreInvalid'],
 ])

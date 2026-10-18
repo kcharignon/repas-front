@@ -347,6 +347,21 @@ describe('Mes produits : un ingrédient', () => {
     expect(useNotificationsStore().items).toHaveLength(0)
   })
 
+  it('dit le plafond atteint (422 DRIVE_LIMIT_REACHED), autrement que le refus d’une préférence', async () => {
+    const { wrapper } = await detail({
+      'PUT /api/v1/drive/choices/farine': failure(422, 'DRIVE_LIMIT_REACHED'),
+    })
+
+    await press(wrapper, 'Descendre')
+    await press(wrapper, 'Enregistrer')
+
+    const alert = wrapper.find('[role="alert"]').text()
+    expect(alert).toContain('Trop de produits mémorisés, ou trop d’écritures aujourd’hui')
+    expect(alert).toContain('réessayez demain')
+    expect(alert).not.toContain('Cette préférence est refusée')
+    expect(acceptedLabels(wrapper)).toEqual([B.label, A.label])
+  })
+
   it('relit les écrans du drive quand le magasin a changé (409)', async () => {
     const { wrapper, fetchMock } = await detail({
       'PUT /api/v1/drive/choices/farine': failure(409, 'DRIVE_STORE_MISMATCH'),

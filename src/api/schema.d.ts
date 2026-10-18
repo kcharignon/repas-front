@@ -526,7 +526,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Rouvre une liste envoyée au drive : elle redevient active et modifiable, l'éventuelle autre liste active de l'utilisateur passe en pause */
+        /** Rouvre une liste envoyée au drive : elle redevient active et modifiable, l'éventuelle autre liste active de l'utilisateur passe en pause. Reste disponible quand la fonction drive est coupée (`DRIVE_ENABLED` faux), contrairement à l'envoi */
         post: operations["post_api_reopen_shopping_list"];
         delete?: never;
         options?: never;
@@ -868,7 +868,7 @@ export interface paths {
         };
         /** Préférences de produits de l'utilisateur connecté dans son magasin courant, par ingrédient : produits acceptés classés, produits refusés, « j'en ai toujours » */
         get: operations["get_api_list_choices"];
-        /** Mémorise un lot d'intentions de l'agent (produits choisis, refusés, « j'en ai toujours ») dans les préférences de l'utilisateur connecté */
+        /** Mémorise un lot d'intentions de l'agent (produits choisis, refusés, « j'en ai toujours ») dans les préférences de l'utilisateur connecté. La fiche d'un produit déjà connu (commune au magasin) n'est complétée que là où elle est vide : libellé, contenu et code-barres ne sont jamais réécrits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte déjà */
         put: operations["put_api_save_product_choices"];
         post?: never;
         delete?: never;
@@ -1199,7 +1199,7 @@ export interface components {
              */
             retailerProductId: string;
             /**
-             * @description Libellé du produit (255 caractères au plus, sans caractère de contrôle)
+             * @description Libellé du produit (255 caractères au plus, sans caractère de contrôle ni caractère invisible : saut de ligne, sens de lecture, largeur nulle)
              * @default null
              * @example Farine de blé T55 Marque Repère 1 kg
              */
@@ -3884,7 +3884,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Liste inconnue, ou fonction drive coupée (message `DRIVE_DISABLED`) */
+            /** @description Liste inconnue */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4553,7 +4553,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Corps invalide, ou préférence refusée (message `DRIVE_CHOICE_INVALID`) : produit inconnu ou d'un autre magasin, doublon, produit à la fois accepté et refusé, plus de 5 produits acceptés ou 20 refusés, « j'en ai toujours » avec des produits */
+            /** @description Corps invalide, ou préférence refusée (message `DRIVE_CHOICE_INVALID`) : produit inconnu ou d'un autre magasin, doublon, produit à la fois accepté et refusé, plus de 5 produits acceptés ou 20 refusés, « j'en ai toujours » avec des produits ; ou plafond atteint (message `DRIVE_LIMIT_REACHED`) : la création dépasserait 1 000 préférences dans le magasin */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4846,7 +4846,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Corps invalide, ou intention refusée (message `DRIVE_CHOICE_INVALID`) : identifiant, libellé, contenu ou prix hors des bornes, plus de 200 intentions, plus de 5 produits acceptés ou 20 refusés pour un ingrédient, produit à la fois choisi et refusé pour un ingrédient */
+            /** @description Corps invalide, ou intention refusée (message `DRIVE_CHOICE_INVALID`) : identifiant, libellé, contenu ou prix hors des bornes, plus de 200 intentions, plus de 5 produits acceptés ou 20 refusés pour un ingrédient, produit à la fois choisi et refusé pour un ingrédient ; ou plafond atteint (message `DRIVE_LIMIT_REACHED`) : plus de 5 000 écritures de produits dans la journée UTC, ou plus de 1 000 préférences dans le magasin. Rien n'est enregistré */
             422: {
                 headers: {
                     [name: string]: unknown;

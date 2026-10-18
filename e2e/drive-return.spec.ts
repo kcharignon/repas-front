@@ -58,6 +58,64 @@ test('un passage réussi : retour automatique, choix enregistrés en un appel, r
   expect(received.calls).toContain('POST /api/v1/shopping-lists/l1/complete')
 })
 
+test('un faux résultat posté par la page de l’enseigne : seules les lignes du plan sont retenues', async ({
+  page,
+}) => {
+  const received = await fakeBack(page)
+  // Ce que la page de Leclerc pourrait fabriquer avec le bon identifiant de passage : un ingrédient hors liste, un produit hors plan,
+  // un produit « choisi » pour une ligne qui n'était pas à choisir ; une seule ligne est honnête
+  await fakeApp(page, {
+    v: 1,
+    type: 'result',
+    agentVersion: '1.0.0',
+    outcome: 'completed',
+    store: { id: '123456' },
+    lines: [
+      {
+        ingredientSlug: 'farine',
+        outcome: 'ADDED',
+        productId: '123456',
+        quantity: 1,
+        usedRank: 1,
+        price: { cents: 189 },
+      },
+      {
+        ingredientSlug: 'pirate',
+        outcome: 'CHOSEN',
+        quantity: 1,
+        placement: 'PRIMARY',
+        product: { id: '555999', label: 'Produit hors liste' },
+      },
+      { ingredientSlug: 'beurre', outcome: 'ADDED', productId: '777000', quantity: 1, usedRank: 1 },
+      {
+        ingredientSlug: 'lait',
+        outcome: 'CHOSEN',
+        quantity: 1,
+        placement: 'PRIMARY',
+        product: { id: '555998', label: 'Produit imposé' },
+      },
+    ],
+  })
+  await page.goto('/drive/envoi/l1')
+  await page.getByRole('button', { name: 'Ouvrir le drive' }).click()
+
+  await expect(page).toHaveURL(/\/drive\/retour$/)
+  await expect(
+    page.getByText('Vos choix sont enregistrés pour les prochains envois.'),
+  ).toBeVisible()
+  await expect(page.getByText('3 lignes inattendues ignorées')).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: 'Détail (1)' })).toBeVisible()
+  await expect(page.getByText('Produit hors liste')).toHaveCount(0)
+  await expect(page.getByText('Produit imposé')).toHaveCount(0)
+
+  // Une seule intention part : le prix lu de la farine, la seule ligne que le plan explique
+  const [body] = received.choices as { choices: { ingredientSlug: string; action: string }[] }[]
+  expect(body?.choices).toEqual([
+    expect.objectContaining({ ingredientSlug: 'farine', action: 'REFRESH_PRICE' }),
+  ])
+  expect((await scan(page)).violations).toEqual([])
+})
+
 test('un passage arrêté par Leclerc : échecs expliqués, on réessaie seulement ce qui a échoué', async ({
   page,
 }) => {

@@ -54,6 +54,18 @@ const driveResult = (runId = RUN) => ({ v: 1, type: 'drive.result', result: resu
 
 const NOW = new Date('2026-10-18T10:00:00.000Z')
 
+// Les lignes du plan d'essai (farine, connue, deux produits acceptés), telles que le brouillon les garde
+const SENT_LINES = [{ ingredientSlug: 'farine', status: 'KNOWN', products: ['111', '222'] }]
+
+const line = (extra: Record<string, unknown> = {}) => ({
+  ingredientSlug: 'farine',
+  status: 'KNOWN',
+  products: ['111'],
+  ...extra,
+})
+const withLines = (lines: unknown) =>
+  JSON.stringify({ runId: RUN, listId: 'l1', startedAt: NOW.toISOString(), lines })
+
 const codeOf = (action: () => unknown): DriveBridgeErrorCode | undefined => {
   try {
     action()
@@ -195,7 +207,12 @@ describe('driveBridge', () => {
 
       const draft = bridge.startRun(plan(), 'l1')
 
-      expect(draft).toEqual({ runId: RUN, listId: 'l1', startedAt: NOW.toISOString() })
+      expect(draft).toEqual({
+        runId: RUN,
+        listId: 'l1',
+        startedAt: NOW.toISOString(),
+        lines: SENT_LINES,
+      })
       expect(sent).toEqual([{ v: 1, type: 'drive.start', plan: plan() }])
       expect(bridge.loadDraft()).toEqual(draft)
     })
@@ -311,7 +328,7 @@ describe('driveBridge', () => {
         {
           kind: 'result',
           result: result(),
-          draft: { runId: RUN, listId: 'l1', startedAt: NOW.toISOString() },
+          draft: { runId: RUN, listId: 'l1', startedAt: NOW.toISOString(), lines: SENT_LINES },
         },
       ])
       expect(bridge.matchesDraft(result())).toBe(true)
@@ -451,16 +468,9 @@ describe('driveBridge', () => {
 
       const reloaded = createDriveBridge({ window: first.window, now: () => NOW })
 
-      expect(reloaded.loadDraft()).toEqual({
-        runId: RUN,
-        listId: 'l1',
-        startedAt: NOW.toISOString(),
-      })
-      expect(JSON.parse(localStorage.getItem(DRAFT_KEY) ?? '')).toEqual({
-        runId: RUN,
-        listId: 'l1',
-        startedAt: NOW.toISOString(),
-      })
+      const expected = { runId: RUN, listId: 'l1', startedAt: NOW.toISOString(), lines: SENT_LINES }
+      expect(reloaded.loadDraft()).toEqual(expected)
+      expect(JSON.parse(localStorage.getItem(DRAFT_KEY) ?? '')).toEqual(expected)
     })
 
     it('rattache après un rechargement le résultat qui arrive', () => {
@@ -497,6 +507,40 @@ describe('driveBridge', () => {
       expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
     })
 
+    it('garde les lignes du plan telles qu’envoyées : une ligne remplacée y est « à choisir »', () => {
+      const { bridge } = setup()
+      const lines: PlanMessage['lines'] = [
+        farine(),
+        { ingredientSlug: 'poivre', name: 'Poivre', status: 'NEW', products: [] },
+        {
+          ingredientSlug: 'beurre',
+          name: 'Beurre',
+          status: 'NEW',
+          replaces: { id: '444', label: 'Beurre de test' },
+        },
+        { ingredientSlug: 'sel', name: 'Sel', status: 'HAVE_AT_HOME' },
+        { ingredientSlug: 'riz', name: 'Riz', status: 'SKIP' },
+      ]
+
+      const draft = bridge.startRun(plan(RUN, lines), 'l1')
+
+      expect(draft.lines).toEqual([
+        ...SENT_LINES,
+        { ingredientSlug: 'poivre', status: 'NEW', products: [] },
+        { ingredientSlug: 'beurre', status: 'NEW', products: [] },
+        { ingredientSlug: 'sel', status: 'HAVE_AT_HOME', products: [] },
+        { ingredientSlug: 'riz', status: 'SKIP', products: [] },
+      ])
+    })
+
+    it('relit un brouillon sans lignes, écrit par une version plus ancienne', () => {
+      const { bridge } = setup()
+      const old = { runId: RUN, listId: 'l1', startedAt: NOW.toISOString() }
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(old))
+
+      expect(bridge.loadDraft()).toEqual(old)
+    })
+
     it.each([
       ['du texte qui n’est pas du JSON', 'pas json'],
       ['une liste', '[]'],
@@ -515,6 +559,22 @@ describe('driveBridge', () => {
         JSON.stringify({ runId: RUN, listId: 'x'.repeat(101), startedAt: NOW.toISOString() }),
       ],
       ['une date illisible', JSON.stringify({ runId: RUN, listId: 'l1', startedAt: 'hier' })],
+      ['des lignes qui ne sont pas une liste', withLines({})],
+      [
+        'plus de 100 lignes',
+        withLines(Array.from({ length: 101 }, (_, i) => line({ ingredientSlug: 'a' + i }))),
+      ],
+      ['une ligne qui n’est pas un objet', withLines(['farine'])],
+      ['une ligne avec une clé en trop', withLines([line({ name: 'Farine' })])],
+      ['une ligne sans produits', withLines([{ ingredientSlug: 'farine', status: 'KNOWN' }])],
+      ['un slug invalide', withLines([line({ ingredientSlug: 'Farine !' })])],
+      ['deux lignes du même ingrédient', withLines([line(), line()])],
+      ['un statut inconnu', withLines([line({ status: 'DONE' })])],
+      ['plus de 5 produits', withLines([line({ products: ['1', '2', '3', '4', '5', '6'] })])],
+      [
+        'un identifiant de produit qui n’est pas en chiffres',
+        withLines([line({ products: ['abc'] })]),
+      ],
       [
         'une date dans le futur',
         JSON.stringify({ runId: RUN, listId: 'l1', startedAt: '2026-10-19T10:00:00.000Z' }),
