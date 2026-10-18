@@ -684,7 +684,7 @@ export default {
     install: {
       chrome: 'Sur votre téléphone Android, ouvrez cette page dans Chrome.',
       download:
-        'Touchez « Télécharger la dernière version ». Sur la page GitHub, repérez la version la plus récente dont le nom commence par « android- », puis touchez le fichier qui se termine par « .apk » (dans la rubrique « Assets »).',
+        'Touchez « Télécharger la dernière version ». Sur la page GitHub, repérez la version la plus récente dont le nom commence par « android-v » (par exemple « android-v0.1.0 »), puis touchez le fichier qui se termine par « .apk » (dans la rubrique « Assets »). Ignorez les versions dont le nom contient « dev » ou qui portent la mention « Pre-release » : ce sont des essais réservés aux développeurs, jamais à installer pour de vrai.',
       allow:
         'Android affiche peut-être « Pour votre sécurité, votre téléphone n’est pas autorisé à installer des applications inconnues depuis cette source ». Touchez « Paramètres », activez « Autoriser depuis cette source », puis revenez en arrière.',
       open: 'Quand le téléchargement est terminé, touchez « Ouvrir » (ou ouvrez le fichier depuis les notifications ou le dossier « Téléchargements »), puis « Installer ».',
@@ -778,7 +778,7 @@ export default {
         session:
           'L’application ouvre Leclerc dans sa propre fenêtre. C’est vous qui vous connectez à Leclerc, comme sur le site. Ensuite elle cherche les produits et les met dans votre panier depuis votre session Leclerc, comme si vous le faisiez vous-même.',
         local:
-          'Tout cela se passe entre votre téléphone et Leclerc. Rien de cela ne passe par les serveurs de Repas. À la fin, l’application ne rend à Repas que ce qu’il doit retenir : les produits que vous avez choisis.',
+          'Tout cela se passe entre votre téléphone et Leclerc. Rien de cela ne passe par les serveurs de Repas. Comme dans un navigateur, les pages de Leclerc font appel à leurs propres services (protection contre les robots, mesure d’audience) : Repas n’y a pas accès et ne les choisit pas. À la fin, l’application ne rend à Repas que ce qu’il doit retenir : les produits que vous avez choisis.',
         order:
           'Vous finalisez votre commande vous-même sur Leclerc. Repas ne valide jamais de commande, ne choisit pas de créneau, ne paie rien et ne vide jamais votre panier.',
       },
@@ -811,7 +811,7 @@ export default {
         backups:
           'Le serveur fait une copie de sauvegarde chaque nuit et garde les 14 dernières : une donnée effacée peut rester dans ces copies environ deux semaines au plus, puis elles sont remplacées.',
         phone:
-          'Sur votre téléphone, l’application garde votre connexion à Leclerc, comme le ferait un navigateur. Elle ne la partage ni avec Repas ni avec personne. Vous pouvez l’effacer à tout moment : menu de l’application, « Se déconnecter de Leclerc et effacer les données du drive ».',
+          'Sur votre téléphone, l’application garde votre connexion à Leclerc, comme le ferait un navigateur. Elle ne la partage ni avec Repas ni avec personne d’autre que Leclerc et ses propres services. Vous pouvez l’effacer à tout moment : menu de l’application, « Se déconnecter de Leclerc et effacer les données du drive ».',
         sheets:
           'Les fiches de produits (nom, contenu, prix vu, magasin) sont communes à tous les utilisateurs de Repas et ne disent pas qui les a vues. Chacun ne retrouve que les produits qu’il a lui-même mémorisés. Ces fiches restent quand un compte est supprimé, mais sans aucun lien avec la personne.',
       },

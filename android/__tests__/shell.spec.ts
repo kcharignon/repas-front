@@ -45,6 +45,17 @@ describe('le manifeste de l’application', () => {
   })
 })
 
+describe('le mode d’emploi de l’application', () => {
+  const strings = read(join(androidDir, 'app', 'src', 'main', 'res', 'values', 'strings.xml'))
+
+  // Les pages de Leclerc chargent leurs propres services (anti-robot, mesure) et la WebView du drive accepte leurs cookies : ne pas dire
+  // que l'application « ne parle qu'à leclercdrive.fr ».
+  it('ne prétend pas que le drive ne contacte que leclercdrive.fr', () => {
+    expect(strings).not.toContain('ne parle qu’à leclercdrive.fr')
+    expect(strings).toContain('ses pages font appel à leurs propres services')
+  })
+})
+
 describe('l’origine de Repas', () => {
   it('est celle de la production dans l’APK de publication, quoi qu’on passe à la construction', () => {
     const release = /getByName\("release"\)\s*\{([\s\S]*?)\n {8}\}/.exec(buildTypes)?.[1] ?? ''
