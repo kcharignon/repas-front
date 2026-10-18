@@ -22,3 +22,8 @@ export type DriveSettings = Schemas['DriveSettingsDTO']
 export type DrivePlan = Schemas['DrivePlanDTO']
 export type DrivePlanLine = Schemas['DrivePlanLineDTO']
 export type DrivePlanProduct = Schemas['DrivePlanProductDTO']
+
+// Drive : les préférences de produits (DRV-208, DRV-410)
+export type DriveChoice = Schemas['ChoiceDTO']
+export type DriveChoiceProduct = Schemas['ChoiceProductDTO']
+export type DriveChoicePayload = Schemas['ReplaceIngredientPreferencePayload']

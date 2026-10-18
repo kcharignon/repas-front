@@ -247,6 +247,66 @@ export default {
     logout: 'Se déconnecter',
     administration: 'Administration',
   },
+  driveProducts: {
+    title: 'Mes produits',
+    drive: 'Drive',
+    entry: 'Mes produits du drive',
+    entryHelp: 'Les produits que Repas prend en priorité pour vos courses au drive.',
+    intro:
+      'Les produits que Repas prend pour chaque ingrédient quand vous envoyez une liste au drive.',
+    rule: 'Repas prend le premier produit disponible de la liste. Les produits refusés ne sont jamais pris.',
+    back: 'Tous mes produits',
+    unavailable: 'L’envoi au drive n’est pas disponible pour le moment.',
+    noStore:
+      'Vous n’avez pas encore enregistré votre magasin : choisissez-le dans les réglages du drive pour mémoriser vos produits.',
+    none: 'Aucun produit mémorisé pour le moment. Les produits se choisissent sur le site du drive pendant un envoi : ils apparaîtront ici, et vous pourrez les classer.',
+    missing: 'Cet ingrédient n’a pas de produit mémorisé.',
+    search: 'Rechercher un ingrédient',
+    noMatch: 'Aucun ingrédient ne correspond à votre recherche.',
+    haveAtHome: 'Vous en avez toujours',
+    preferred: 'Préféré : {label}',
+    nothingAccepted: 'Aucun produit accepté',
+    fallbacks: '{n} produit de secours | {n} produits de secours',
+    rejectedCount: '{n} produit refusé | {n} produits refusés',
+    pieces: '{n} pièce | {n} pièces',
+    offline:
+      'Hors connexion : les modifications sont impossibles tant que le réseau n’est pas revenu.',
+    haveAtHomeSwitch: 'J’en ai toujours',
+    haveAtHomeHelp:
+      'Repas ne met rien au panier pour cet ingrédient. À l’enregistrement, ses produits sont oubliés.',
+    accepted: 'Produits acceptés',
+    acceptedHelp:
+      'Du préféré aux produits de secours ({max} au plus). Le préféré est pris s’il est disponible, sinon le suivant.',
+    acceptedNone:
+      'Aucun produit accepté. Un produit se choisit sur le site du drive, pendant un envoi.',
+    acceptedFull:
+      'Vous avez déjà {max} produits acceptés : retirez-en un avant d’en accepter un autre.',
+    preferredBadge: 'Préféré',
+    fallbackBadge: 'Secours',
+    position: 'Produit {position} sur {total}.',
+    up: 'Monter',
+    down: 'Descendre',
+    remove: 'Retirer',
+    never: 'Ne plus jamais prendre',
+    rejected: 'Produits refusés',
+    rejectedNone: 'Aucun produit refusé.',
+    rejectedFull: 'Vous avez déjà {max} produits refusés : acceptez-en un de nouveau d’abord.',
+    acceptAgain: 'Accepter de nouveau',
+    dirty: 'Modifications non enregistrées.',
+    cancel: 'Annuler les modifications',
+    saved: 'Produits enregistrés.',
+    forget: 'Oublier cet ingrédient',
+    forgetTitle: 'Oublier {name} ?',
+    forgetDescription:
+      'Repas oublie les produits acceptés et refusés pour cet ingrédient. Au prochain envoi, vous choisirez de nouveau.',
+    forgetConfirm: 'Oublier',
+    forgotten: '{name} : produits oubliés.',
+    moved: '{name} : position {position} sur {total}.',
+    removed: '{name} est retiré de la liste.',
+    rejectedNow: '{name} ne sera plus jamais pris.',
+    acceptedAgain: '{name} est de nouveau accepté, en dernier.',
+    cancelled: 'Modifications annulées.',
+  },
   auth: {
     pitch: 'Vos recettes, vos courses, sans oublier le basilic.',
   },
@@ -316,6 +376,11 @@ export default {
     listNotSendable: 'Seule une liste en cours peut être envoyée au drive.',
     listEmpty: 'La liste est vide : ajoutez des articles avant de l’envoyer au drive.',
     driveNotConfigured: 'Choisissez d’abord votre magasin dans les réglages du drive.',
+    driveChoiceInvalid:
+      'Cette préférence est refusée : 5 produits acceptés et 20 refusés au plus, et un produit ne peut pas être à la fois accepté et refusé.',
+    driveChoiceNotFound: 'Cet ingrédient n’a plus de produit mémorisé.',
+    driveStoreMismatch:
+      'Votre magasin a changé : la page vient d’être rechargée, refaites votre action.',
   },
   driveSend: {
     title: 'Envoi au drive',
