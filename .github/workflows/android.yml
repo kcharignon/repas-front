@@ -11,6 +11,11 @@ name: Android
 # L'image de construction (JDK, Gradle, SDK Android) est lourde : ses couches sont gardées dans le cache de GitHub Actions.
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Étiquette de la pré-version de débogage : android-dev-AAAA-MM-JJ, suivie au besoin d'une lettre (android-dev-2026-10-18b). Vide : la date du jour."
+        required: false
+        default: ""
   push:
     branches: [main]
     paths:
@@ -132,19 +137,33 @@ jobs:
           GH_REPO: ${{ github.repository }}
           SHA256: ${{ needs.debug.outputs.sha256 }}
           RUN_NUMBER: ${{ github.run_number }}
+          TAG_INPUT: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           # Le fichier téléchargé est bien celui que le job précédent a construit.
           echo "${SHA256}  repas-drive-debug.apk" | sha256sum -c -
           date=$(date -u +%Y-%m-%d)
-          tag="android-dev-${date}"
-          n=1
-          while gh release view "$tag" > /dev/null 2>&1; do
-            n=$((n + 1))
-            tag="android-dev-${date}-${n}"
-          done
+          if [ -n "${TAG_INPUT}" ]; then
+            # Une étiquette choisie à la main : de la forme android-dev-AAAA-MM-JJ[lettre], jamais vX.Y.Z ni android-vX.Y.Z, jamais déjà prise.
+            if ! [[ "${TAG_INPUT}" =~ ^android-dev-[0-9]{4}-[0-9]{2}-[0-9]{2}[a-z]?$ ]]; then
+              echo "Étiquette refusée : il faut android-dev-AAAA-MM-JJ, suivie au besoin d'une lettre." >&2
+              exit 1
+            fi
+            tag="${TAG_INPUT}"
+            if gh release view "$tag" > /dev/null 2>&1; then
+              echo "L'étiquette $tag existe déjà." >&2
+              exit 1
+            fi
+          else
+            tag="android-dev-${date}"
+            n=1
+            while gh release view "$tag" > /dev/null 2>&1; do
+              n=$((n + 1))
+              tag="android-dev-${date}-${n}"
+            done
+          fi
           cat > notes.md <<NOTES
-          APK de débogage de « Repas Drive » (DRV-313), pour essayer l'agent sur un téléphone sans Repas. Ce n'est pas une release de production.
+          APK de débogage de « Repas Drive » (DRV-313, test automatique DRV-318), pour essayer l'agent sur un téléphone sans Repas. Ce n'est pas une release de production.
 
           - Empreinte SHA-256 de \`repas-drive-debug.apk\` : \`${SHA256}\`
           - Empreinte SHA-384 de l'agent embarqué : \`$(cat android/agent.js.sha384)\`
@@ -156,6 +175,6 @@ jobs:
           gh release create "$tag" repas-drive-debug.apk \
             --target "$GITHUB_SHA" \
             --prerelease \
-            --title "Repas Drive, essai de débogage ${date}" \
+            --title "Repas Drive, essai de débogage ${tag#android-dev-}" \
             --notes-file notes.md
           echo "Pré-version : https://github.com/${GH_REPO}/releases/tag/${tag}" >> "$GITHUB_STEP_SUMMARY"
