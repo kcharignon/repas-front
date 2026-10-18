@@ -31,10 +31,21 @@ export interface StorePaths {
 const STORE_PATH = /^\/magasin-([0-9]{1,12})-([0-9]{1,12})(-[^/?#]*)?(?=\/|$)/i
 
 /**
+ * Le site mobile de l'enseigne (ticket J, hypothèse H11) : sans le mode ordinateur, Leclerc sert `m-courses.leclercdrive.fr`, dont les routes sont autres
+ * (la recherche y répond 200 sans produit : DRV-011). Son premier nom est `m` ou commence par `m-`.
+ */
+const MOBILE_HOST = /^m(?:-[a-z0-9-]*)?\./i
+
+/** Vrai pour un hôte du site mobile de l'enseigne (`m-courses.leclercdrive.fr`) : l'agent n'y agit pas. */
+export function isMobileHost(host: string): boolean {
+  return STORE_HOST.test(host.toLowerCase()) && MOBILE_HOST.test(host)
+}
+
+/**
  * Lit l'identifiant et l'hôte du magasin dans l'adresse de la page.
  *
- * @throws {LeclercError} `UNSUPPORTED_PAGE` si la page n'est pas sur `*.leclercdrive.fr` (cause `PAGE_HOST`) ou n'a pas d'adresse de magasin
- *   (cause `PAGE_PATH`).
+ * @throws {LeclercError} `UNSUPPORTED_PAGE` si la page n'est pas sur `*.leclercdrive.fr` (cause `PAGE_HOST`), est le site mobile (cause `PAGE_MOBILE`,
+ *   ticket J : avant toute lecture de l'adresse, le site mobile n'a pas les routes du site ordinateur) ou n'a pas d'adresse de magasin (cause `PAGE_PATH`).
  */
 export function readStorePaths(location: LocationLike, label: string | null = null): StorePaths {
   const host = location.hostname.toLowerCase()
@@ -42,6 +53,7 @@ export function readStorePaths(location: LocationLike, label: string | null = nu
   const id = found?.[1]
   const second = found?.[2]
   if (!STORE_HOST.test(host)) throw new LeclercError('UNSUPPORTED_PAGE', null, 'PAGE_HOST')
+  if (isMobileHost(host)) throw new LeclercError('UNSUPPORTED_PAGE', null, 'PAGE_MOBILE')
   if (!found || id === undefined || second === undefined) {
     throw new LeclercError('UNSUPPORTED_PAGE', null, 'PAGE_PATH')
   }

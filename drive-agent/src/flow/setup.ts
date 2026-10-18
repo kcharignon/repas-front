@@ -1,7 +1,7 @@
 // Le mode configuration (DRV-307) : l'utilisateur ouvre son drive (magasin choisi) et Repas demande à l'agent de lire ce magasin. Rien
 // n'est envoyé au site : le magasin se lit dans l'adresse de la page ; seul le magasin part vers Repas, après un « Enregistrer ».
 import { LIMITS, PROTOCOL_VERSION, type SetupMessage } from '../../protocol'
-import { LeclercError, type RetailerAdapter } from '../leclerc'
+import { LeclercError, type LeclercCause, type RetailerAdapter } from '../leclerc'
 import { cleanText } from '../text'
 import type { Ui } from '../ui'
 import { buildResult } from './result'
@@ -30,10 +30,21 @@ export function setupHandler(deps: SetupDeps): (message: SetupMessage) => Promis
   const { adapter, ui, send, agentVersion } = deps
   return async (message) => {
     /** Un écran d'erreur ; « Retourner dans Repas » renvoie un résultat en erreur. */
-    const stop = async (code: 'UNSUPPORTED_PAGE' | 'STORE_MISMATCH') => {
-      const answer = await ui.show('error', { code, canReturn: true })
-      if (answer === 'return')
-        send(buildResult(message, [], { outcome: 'error', code }, agentVersion))
+    const stop = async (
+      code: 'UNSUPPORTED_PAGE' | 'STORE_MISMATCH',
+      cause: LeclercCause | null = null,
+    ) => {
+      const answer = await ui.show('error', { code, canReturn: true, ...(cause && { cause }) })
+      if (answer === 'return') {
+        send(
+          buildResult(
+            message,
+            [],
+            { outcome: 'error', code, ...(cause && { cause }) },
+            agentVersion,
+          ),
+        )
+      }
       ui.close()
     }
     let store
@@ -41,7 +52,7 @@ export function setupHandler(deps: SetupDeps): (message: SetupMessage) => Promis
       store = adapter.readStore()
     } catch (error) {
       if (!(error instanceof LeclercError) || error.code !== 'UNSUPPORTED_PAGE') throw error
-      return stop(error.code)
+      return stop(error.code, error.cause)
     }
     if (message.store && (message.store.id !== store.id || message.store.host !== store.host)) {
       return stop('STORE_MISMATCH')

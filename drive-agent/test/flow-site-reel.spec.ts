@@ -262,7 +262,9 @@ describe('le visiteur non connecté est arrêté avant toute écriture (ticket G
     expect(calls).toEqual([])
     expect(writes).toEqual([])
     expect(screens.screens()).toEqual(['error'])
-    expect(screens.propsOf('error')).toEqual([{ code: 'NOT_LOGGED_IN', canReturn: true }])
+    expect(screens.propsOf('error')).toEqual([
+      { code: 'NOT_LOGGED_IN', canReturn: true, cause: 'SESSION_VISITOR' },
+    ])
     expect(flow.history).toEqual(['START', 'VALIDATED', 'ERROR'])
     expect(expectConform(sent[0])).toMatchObject({
       outcome: 'error',

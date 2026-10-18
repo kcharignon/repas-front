@@ -60,7 +60,27 @@ class StoreBannerTest {
         // Y compris la vérification : si le refus du site n'est pas un défi, l'utilisateur garde une issue.
         assertTrue(StoreBanner.PLAN.hasAction)
         assertTrue(StoreBanner.VERIFICATION.hasAction)
+        assertTrue(StoreBanner.MOBILE.hasAction)
         listOf(StoreBanner.NONE, StoreBanner.SETUP, StoreBanner.OPEN).forEach { assertFalse(it.name, it.hasAction) }
+    }
+
+    /**
+     * Le site mobile (ticket J) : l'agent n'y agit pas, l'application ne lui envoie rien. Le message dit que ce n'est pas la version ordinateur du
+     * site et propose de recommencer depuis l'accueil du drive, pour un envoi comme pour la lecture du magasin.
+     */
+    @Test
+    fun `le site mobile dit que ce n'est pas la version ordinateur, pour un envoi comme pour la lecture du magasin`() {
+        val mobilePage = "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx"
+        val mobileRoot = "https://m-courses.leclercdrive.fr/"
+
+        listOf(mobilePage, mobileRoot).forEach {
+            assertEquals(it, StoreBanner.MOBILE, StoreBanner.of(plan, it))
+            assertEquals(it, StoreBanner.MOBILE, StoreBanner.of(setup, it))
+            assertEquals(it, StoreBanner.MOBILE, StoreBanner.of(plan, it, PageTrouble.NONE))
+        }
+        // Sans passage en cours, rien à dire ; une vérification du site passe avant (la page doit rester visible pour qu'on la passe).
+        assertEquals(StoreBanner.NONE, StoreBanner.of(null, mobilePage))
+        assertEquals(StoreBanner.VERIFICATION, StoreBanner.of(plan, mobilePage, PageTrouble.VERIFICATION))
     }
 
     @Test

@@ -174,18 +174,29 @@ enum class StoreBanner {
 
     /** Le site demande une vérification (403, 429) : la faire sur la page, Repas reprend ensuite. La page reste visible ; le bouton reste là si ce n'était pas un défi. */
     VERIFICATION,
+
+    /**
+     * La page est le site mobile de Leclerc (ticket J) : ce n'est pas la version ordinateur du site, l'agent n'y agit pas et rien ne lui est envoyé.
+     * Le bouton « Ouvrir l'accueil du drive » recommence depuis l'accueil de l'enseigne (la WebView est en mode ordinateur).
+     */
+    MOBILE,
     ;
 
     /** Ce message porte le bouton « Ouvrir l'accueil du drive ». */
-    val hasAction: Boolean get() = this == PLAN || this == VERIFICATION
+    val hasAction: Boolean get() = this == PLAN || this == VERIFICATION || this == MOBILE
 
     companion object {
         /** Le message à montrer pour la page d'adresse [url], que [trouble] (la surveillance de la page, [OpeningWatch]) juge ainsi. */
         fun of(request: PassRequest?, url: String?, trouble: PageTrouble = PageTrouble.NONE): StoreBanner = when {
             request == null -> NONE
             trouble == PageTrouble.VERIFICATION -> VERIFICATION
-            request.isSetup -> if (NavigationPolicy.isStorePage(url) && trouble == PageTrouble.NONE) NONE else SETUP
+            request.isSetup -> when {
+                trouble == PageTrouble.NONE && NavigationPolicy.isMobileSite(url) -> MOBILE
+                NavigationPolicy.isStorePage(url) && trouble == PageTrouble.NONE -> NONE
+                else -> SETUP
+            }
             trouble != PageTrouble.NONE -> PLAN
+            NavigationPolicy.isMobileSite(url) -> MOBILE
             NavigationPolicy.isStorePage(url) -> NONE
             else -> OPEN
         }

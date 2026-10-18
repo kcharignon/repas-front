@@ -285,6 +285,7 @@ describe('ce que le rapport laisse voir', () => {
     expect(hostFamily('fd9-courses.leclercdrive.fr')).toBe('fd9')
     expect(hostFamily('FD12-courses.leclercdrive.fr')).toBe('fd12')
     expect(hostFamily('ville-test-courses.leclercdrive.fr')).toBe('autre hôte leclercdrive.fr')
+    expect(hostFamily('m-courses.leclercdrive.fr')).toBe('site mobile (pas la version ordinateur)')
   })
 
   it('ne contient aucune des valeurs interdites : numéro entier, ville, cookie, libellé de produit, adresse', async () => {
@@ -525,6 +526,20 @@ describe('la cause précise d’un échec dans le diagnostic (ticket A)', () => 
 
     expect(by.search).toMatchObject({ code: 'CONTRACT_CHANGED', cause: 'EXCEPTION' })
     expect(reportOf('0.5.0', NOW, page, results)).not.toContain('secret interne')
+  })
+
+  it('le site mobile : KO UNSUPPORTED_PAGE de cause PAGE_MOBILE, sans aucune requête (ticket J)', async () => {
+    const { adapter, fake } = site(GOOD, {
+      hostname: 'm-courses.leclercdrive.fr',
+      pathname: '/magasin-000123-000123-Ville-Test/recherche.aspx',
+    })
+
+    const { by, page } = await run(deps(adapter))
+
+    expect(by.page).toMatchObject({ status: 'KO', code: 'UNSUPPORTED_PAGE', cause: 'PAGE_MOBILE' })
+    expect(by.search).toMatchObject({ status: 'NOT_TESTED' })
+    expect(page).toBeNull()
+    expect(fake.calls).toEqual([])
   })
 
   it('une page non prise en charge dit pourquoi', async () => {

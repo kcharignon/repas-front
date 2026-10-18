@@ -49,6 +49,15 @@ class OpeningWatchTest {
     }
 
     @Test
+    fun `le site mobile ne recoit jamais le plan, meme charge sans incident (ticket J)`() {
+        val mobilePage = "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx"
+        val watch = loaded()
+
+        assertEquals(PageTrouble.NONE, watch.trouble(mobilePage))
+        assertFalse(watch.canDeliver(mobilePage))
+    }
+
+    @Test
     fun `une erreur HTTP du site sur la page principale est signalee, meme sur une adresse de magasin`() {
         listOf(400, 404, 410, 418, 451, 500, 502, 503, 599).forEach { status ->
             val watch = OpeningWatch()
