@@ -184,6 +184,7 @@ describe('Mes produits : la liste des ingrédients', () => {
       'GET /api/v1/drive/settings': () => json({ enabled: true, retailer: 'leclerc', store: null }),
     })
     expect(noStore.wrapper.text()).toContain('Vous n’avez pas encore enregistré votre magasin')
+    expect(noStore.wrapper.find('a[href="/drive/reglages"]').exists()).toBe(true)
     expect(calls(noStore.fetchMock)).not.toContain('GET /api/v1/drive/choices')
   })
 

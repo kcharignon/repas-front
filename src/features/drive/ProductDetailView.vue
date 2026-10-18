@@ -191,7 +191,12 @@ const rowClass = 'flex flex-col gap-3 rounded-2xl border border-line bg-surface 
       {{ t('errors.unreachable') }}
     </p>
     <p v-else-if="!enabled" class="text-muted">{{ t('driveProducts.unavailable') }}</p>
-    <p v-else-if="store === null" class="text-muted">{{ t('driveProducts.noStore') }}</p>
+    <p v-else-if="store === null" class="text-muted">
+      {{ t('driveProducts.noStore') }}
+      <RouterLink :to="{ name: 'drive-settings' }" class="font-bold text-primary underline">{{
+        t('driveProducts.settings')
+      }}</RouterLink>
+    </p>
     <p v-else-if="choice === undefined || draft === null" class="text-muted">
       {{ t('driveProducts.missing') }}
     </p>

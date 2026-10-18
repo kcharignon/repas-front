@@ -258,7 +258,8 @@ export default {
     back: 'Tous mes produits',
     unavailable: 'L’envoi au drive n’est pas disponible pour le moment.',
     noStore:
-      'Vous n’avez pas encore enregistré votre magasin : choisissez-le dans les réglages du drive pour mémoriser vos produits.',
+      'Vous n’avez pas encore enregistré votre magasin : sans lui, aucun produit n’est mémorisé.',
+    settings: 'Réglages du drive',
     none: 'Aucun produit mémorisé pour le moment. Les produits se choisissent sur le site du drive pendant un envoi : ils apparaîtront ici, et vous pourrez les classer.',
     missing: 'Cet ingrédient n’a pas de produit mémorisé.',
     search: 'Rechercher un ingrédient',
