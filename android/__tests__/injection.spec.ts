@@ -59,18 +59,44 @@ const COUNTER = 'window.__starts = (window.__starts || 0) + 1'
 const starts = () => (window as unknown as { __starts?: number }).__starts ?? 0
 
 // Le diagnostic lance une vraie recherche (chemin relatif, à l'hôte de la page) : aucun réseau dans ces tests.
-const fetchSpy = vi.fn<typeof fetch>().mockRejectedValue(new Error('pas de réseau dans les tests'))
+let fetchSpy = vi.fn<typeof fetch>()
 
+/** Fait avancer l'horloge simulée par pas de 250 ms jusqu'à ce que `until` soit vrai (la cadence du site, 800 ms, passe par là). */
+async function advance(until: () => boolean): Promise<void> {
+  for (let i = 0; i < 600 && !until(); i += 1) await vi.advanceTimersByTimeAsync(250)
+}
+
+/** Laisse l'agent aller au bout de ce qu'il a entrepris : plus aucune requête pendant 10 s d'horloge simulée (douze fois la cadence du site). */
+async function untilQuiet(requests: () => number): Promise<void> {
+  let seen = requests()
+  let quiet = 0
+  for (let i = 0; i < 2_400 && quiet < 10_000; i += 1) {
+    await vi.advanceTimersByTimeAsync(250)
+    const now = requests()
+    quiet = now === seen ? quiet + 250 : 0
+    seen = now
+  }
+  expect(quiet, 'l’agent a fini ses requêtes').toBeGreaterThanOrEqual(10_000)
+}
+
+// Chaque test est isolé : horloge simulée, faux `fetch` et page neufs, et rien de ce qu'il a mis en route ne lui survit. Un diagnostic ou un
+// passage laissé en vie par un test (une recherche attend la cadence du site) retomberait sinon dans le faux `fetch` du test suivant : 27
+// requêtes au lieu de 25 quand la machine est chargée. À la fin du test, ce qui attend l'horloge est jeté : l'agent resté en suspens ne reprend jamais.
 beforeEach(() => {
+  vi.useFakeTimers()
+  fetchSpy = vi.fn<typeof fetch>().mockRejectedValue(new Error('pas de réseau dans les tests'))
   vi.stubGlobal('fetch', fetchSpy)
 })
 
-afterEach(() => {
-  Reflect.deleteProperty(window, 'repasHost')
-  Reflect.deleteProperty(window, '__starts')
+afterEach(async () => {
+  await vi.advanceTimersByTimeAsync(0)
+  vi.clearAllTimers()
   vi.useRealTimers()
   vi.unstubAllGlobals()
-  fetchSpy.mockClear()
+  Reflect.deleteProperty(window, 'repasHost')
+  Reflect.deleteProperty(window, '__starts')
+  window.sessionStorage.clear()
+  document.documentElement.innerHTML = '<head></head><body></body>'
 })
 
 describe('le pont vu par l’agent', () => {
@@ -110,7 +136,6 @@ describe('le pont vu par l’agent', () => {
   })
 
   it('garde les messages arrivés avant l’agent et les lui rend une fois son démarrage fini', async () => {
-    vi.useFakeTimers()
     const channel = withNative()
     inject(COUNTER)
     channel.fromApp('premier')
@@ -249,7 +274,8 @@ describe('de bout en bout avec l’agent réel dans jsdom', () => {
     channel.fromApp(JSON.stringify(plan([home('sel'), skip('huile')])))
 
     // Then
-    await vi.waitFor(() => expect(channel.postMessage).toHaveBeenCalledTimes(2))
+    await advance(() => channel.postMessage.mock.calls.length >= 2)
+    expect(channel.postMessage).toHaveBeenCalledTimes(2)
     expect(channel.postMessage.mock.calls[0]?.[0]).toBe(HELLO)
     const result = validateResult(
       JSON.parse(channel.postMessage.mock.calls[1]?.[0] ?? ''),
@@ -272,8 +298,11 @@ describe('de bout en bout avec l’agent réel dans jsdom', () => {
 
     channel.fromApp('{"v":1,"type":"command","command":"diagnostic"}')
 
-    await vi.waitFor(() => expect(diagnostic.closed.count).toBe(1))
+    await advance(() => diagnostic.closed.count >= 1)
+    expect(diagnostic.closed.count).toBe(1)
     expect(diagnostic.screens()).toEqual(['diagnostic'])
+    // Le diagnostic va au bout de ses contrôles dans ce test, il n'en laisse rien au suivant.
+    await untilQuiet(() => fetchSpy.mock.calls.length)
     expect(channel.postMessage).toHaveBeenCalledExactlyOnceWith(HELLO)
   })
 })
@@ -298,11 +327,15 @@ describe('le fichier agent.js réel, tel que l’application l’injecte', () =>
     channel.fromApp('{"v":1,"type":"command","command":"diagnostic"}')
 
     // Then : l'interface de l'agent s'est posée dans la page, et rien n'est parti vers l'application
-    await vi.waitFor(() => expect(document.documentElement.outerHTML).not.toBe(before))
+    await advance(() => document.documentElement.outerHTML !== before)
+    expect(document.documentElement.outerHTML).not.toBe(before)
     expect(channel.postMessage).toHaveBeenCalledTimes(1)
-    // Les seules requêtes tentées visent l'hôte de la page (chemins relatifs).
-    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalled())
+    // Le diagnostic va au bout de ses contrôles dans ce test (il ne laisse rien au suivant) : les seules requêtes tentées visent l'hôte
+    // de la page (chemins relatifs).
+    await untilQuiet(() => fetchSpy.mock.calls.length)
+    expect(fetchSpy).toHaveBeenCalled()
     expect(fetchSpy.mock.calls.every(([url]) => String(url).startsWith('/'))).toBe(true)
+    expect(channel.postMessage).toHaveBeenCalledTimes(1)
   }, 30_000)
 })
 
@@ -391,18 +424,12 @@ describe('le test automatique, de bout en bout avec l’agent construit et un fa
     return { cart, hits, fetchStub }
   }
 
-  /** Fait avancer la fausse horloge (la cadence du site) jusqu'à ce que `until` soit vrai. */
-  async function advance(until: () => boolean): Promise<void> {
-    for (let i = 0; i < 600 && !until(); i += 1) await vi.advanceTimersByTimeAsync(250)
-  }
-
   it('joue les 25 requêtes à la cadence du site, rapporte OK, et laisse le panier vide', async () => {
     // Given : la variante de débogage de l'application, avec l'agent construit
     const { buildAgent } = await import('../../drive-agent/scripts/build.mjs')
     const built = await buildAgent()
     const drive = fakeDrive()
     vi.stubGlobal('fetch', drive.fetchStub)
-    vi.useFakeTimers()
     const channel = withNative()
     inject(built.code, true)
 
@@ -449,7 +476,6 @@ describe('le test automatique, de bout en bout avec l’agent construit et un fa
     // Le premier produit du premier rayon (5000000) est déjà au panier de l'utilisateur, deux fois.
     const drive = fakeDrive({ '5000000': 2 })
     vi.stubGlobal('fetch', drive.fetchStub)
-    vi.useFakeTimers()
     const channel = withNative()
     inject(built.code, true)
 
@@ -467,7 +493,6 @@ describe('le test automatique, de bout en bout avec l’agent construit et un fa
     const built = await buildAgent()
     const drive = fakeDrive()
     vi.stubGlobal('fetch', drive.fetchStub)
-    vi.useFakeTimers()
     const channel = withNative()
     inject(built.code, false)
 
