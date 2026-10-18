@@ -113,6 +113,38 @@ describe('Pacer : un seul hôte', () => {
     expect(site.calls).toEqual([])
   })
 
+  // Un navigateur lit « \ » comme « / » et ignore les tabulations et retours à la ligne d'une adresse : ces chemins, qui commencent
+  // par une seule barre, partent pourtant vers un autre hôte.
+  it.each([
+    ['/\\autre.exemple.invalid/x'],
+    ['/\t/autre.exemple.invalid/x'],
+    ['/\n/autre.exemple.invalid/x'],
+    ['/\r/autre.exemple.invalid/x'],
+    ['/\t\\autre.exemple.invalid/x'],
+  ])('refuse le chemin %j, que le navigateur enverrait à un autre hôte', async (url) => {
+    const site = fakeSite(() => ({ body: 'ok' }))
+    expect(new URL(url, 'https://fd0-courses.leclercdrive.fr').host).toBe('autre.exemple.invalid')
+
+    await expect(pacerOf(site).request(url, {})).rejects.toThrow(/hôte de la page/)
+
+    expect(site.calls).toEqual([])
+  })
+
+  it.each([
+    ['/magasin-000123-000123/panier.aspx?op=1'],
+    ['/magasin-000123-000123-Ville-Test/recherche.aspx?TexteRecherche=a%5Cb'],
+    ['/a\\b'],
+  ])('laisse passer le chemin %j, qui reste sur l’hôte de la page', async (url) => {
+    const site = fakeSite(() => ({ body: 'ok' }))
+    expect(new URL(url, 'https://fd0-courses.leclercdrive.fr').host).toBe(
+      'fd0-courses.leclercdrive.fr',
+    )
+
+    await pacerOf(site).request(url, {})
+
+    expect(site.calls).toHaveLength(1)
+  })
+
   it('envoie avec les cookies de la session du navigateur (same-origin), sans les lire', async () => {
     const site = fakeSite(() => ({ body: 'ok' }))
 
