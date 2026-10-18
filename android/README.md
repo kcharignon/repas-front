@@ -17,14 +17,80 @@ Tout se lance dans Docker (image : JDK 17, Gradle, SDK Android ; rien à install
 | `make android-test` | joue les tests Kotlin : ceux de l'application et ceux de la dérivation de la version (`buildSrc`) |
 | `make android-release` | construit l'APK signé `android/dist/repas-drive.apk` ; **refuse sans clé de signature**, sans étiquette ou sans compteur de version |
 | `make android-release-selftest` | prouve le refus sans clé et la réussite avec une clé jetable créée à l'instant (rien n'est conservé) |
+| `make android-emulator-up` | démarre l'émulateur de test et attend la fin de son démarrage (voir « Émulateur de test » plus bas ; demande KVM) |
+| `make android-emulator-down` | arrête l'émulateur (le SDK et l'AVD restent dans leur volume) |
+| `make android-emulator-status` | dit si KVM, le volume du SDK et l'émulateur sont prêts (code 0 seulement s'il a démarré) |
+| `make android-smoke` | test de fumée : construit l'APK de débogage, démarre l'émulateur au besoin, lance l'application sur une page locale de test ; rapport et captures dans `android/dist/smoke/` |
 
 Chaque commande Android reconstruit d'abord l'agent (`make agent-build`, Node dans Docker) : `agent.js` est un actif de l'APK (voir plus bas). La CI le construit avec `setup-node` puis passe `ANDROID_AGENT=` aux commandes `make` pour ne pas relancer Node dans Docker. La CI (`.github/workflows/android.yml`, séparée de `make check`) joue `make android-test`, `make android` et `make android-release-selftest` ; l'APK de débogage est déposé en artefact du run. Elle ne tourne que si `android/`, l'agent (`drive-agent/src`, `protocol`, `scripts`, `package*.json`), son workflow, `compose.yaml` ou le `Makefile` changent. Lancé à la main sur `main` (`gh workflow run android.yml --ref main`, avec au besoin `-f tag=android-dev-2026-10-18b` pour choisir l'étiquette), il publie aussi l'APK de débogage en **pré-version GitHub** `android-dev-<date>` (jamais une release de production ; mode d'emploi : `PROCEDURE.md`). L'image de construction est mise en cache par GitHub Actions.
+
+## Émulateur de test (DRV-319)
+
+Un émulateur Android tourne dans Docker, sans fenêtre, pour essayer l'APK de débogage sans téléphone. **Il ne contacte jamais le vrai site Leclerc** : le DNS de l'émulateur envoie tout `*.leclercdrive.fr` vers un faux site local (une page de test sans aucune donnée d'enseigne) et ne résout aucun autre nom. Seul le premier lancement va sur Internet, pour télécharger le SDK chez Google (`dl.google.com`).
+
+Cibles manuelles : la CI n'a pas KVM, elle ne lance jamais l'émulateur, et `make check` n'y touche pas.
+
+### 1. Activer KVM (étape humaine)
+
+L'émulateur a besoin de l'accélération matérielle, sinon il est inutilisable. Sous WSL2, `/dev/kvm` n'existe pas tant que le module n'est pas chargé. Vérifier : `ls -l /dev/kvm` (une ligne `crw-rw-rw-`).
+
+- **À la main** (à refaire après chaque redémarrage de WSL) : `sudo modprobe kvm_intel && sudo chmod 666 /dev/kvm` (processeur AMD : `kvm_amd`).
+- **De façon permanente** : dans WSL, `sudo nano /etc/wsl.conf` et ajouter (sans écraser une section `[boot]` qui existerait déjà : dans ce cas, ajouter cette commande à la ligne `command` existante avec `&&`) :
+
+  ```ini
+  [boot]
+  command = modprobe kvm_intel && chmod 666 /dev/kvm
+  ```
+
+  Puis, côté Windows (PowerShell) : `wsl --shutdown`, et rouvrir WSL. Les commandes `make` ci-dessous refusent de démarrer sans KVM et rappellent cette étape.
+
+### 2. Lancer, arrêter, vérifier
+
+| Commande | Effet |
+|---|---|
+| `make android-emulator-up` | démarre l'émulateur (Android 14, Google APIs, x86_64) et attend `sys.boot_completed` |
+| `make android-emulator-status` | KVM, volume, état de l'émulateur |
+| `make android-smoke` | le test de fumée (ci-dessous) |
+| `make android-emulator-down` | arrête l'émulateur |
+
+- **Premier lancement** : télécharge environ 2 Go (outils, émulateur, image système ; 6 Go sur le disque une fois décompressé) dans le volume Docker `repas-front_android-emulator-sdk`, crée l'AVD `repas`, puis démarre : 2 minutes 45 mesurées avec une bonne connexion. **Ensuite** : une trentaine de secondes, rien n'est retéléchargé. Pour repartir de zéro : `make android-emulator-down` puis `docker volume rm repas-front_android-emulator-sdk`.
+- **Dans l'émulateur** : `docker compose --profile android-emulator exec android-emulator adb <commande>` (par exemple `adb logcat -d`, `adb shell`). Aucun port n'est publié sur la machine.
+- Réglages : `EMULATOR_MEMORY` (Mo, 3072 par défaut) et `EMULATOR_CORES` (4 par défaut), par exemple `EMULATOR_MEMORY=4096 make android-emulator-up`.
+
+### 3. Le test de fumée (`make android-smoke`)
+
+Environ une minute une fois l'émulateur démarré. Il contrôle, dans l'ordre, et écrit le tout dans `android/dist/smoke/rapport.txt` avec quatre captures (`01-page-locale.png`, `02-menu.png`, `03-diagnostic-agent.png`, `04-rapport-selftest.png`) :
+
+1. le réseau : `www.leclercdrive.fr` se résout vers la machine locale (`10.0.2.2`) et un autre nom ne se résout pas ; sinon le test s'arrête avant d'ouvrir quoi que ce soit ;
+2. l'APK de débogage s'installe, l'application démarre sans plantage ;
+3. la WebView affiche la page locale de test, et celle-ci relève que le pont `repasHost` et son marqueur de débogage sont en place (le script d'injection a tourné), en mode ordinateur ;
+4. le menu de débogage s'ouvre (« Test automatique (débogage) », « Plan d'essai (débogage) ») ;
+5. « Diagnostic de l'agent » : la commande traverse le pont jusqu'à la page, et l'agent injecté y monte son interface ;
+6. « Test automatique (débogage) » : l'aller-retour complet application, pont, agent, pont, application, jusqu'à l'écran « Rapport du test automatique ». **Le verdict de ce rapport est « KO » avec `Arrêt : UNSUPPORTED_PAGE`, et c'est le résultat attendu** : la page de test n'est pas une page de magasin du drive ; ce qui compte, c'est que le rapport arrive ;
+7. le bilan : l'application tourne toujours, aucun plantage ni blocage dans le journal d'Android, et le journal du DNS prouve qu'aucune demande n'est partie vers Internet.
+
+Code de sortie : 0 si tout passe, 1 sinon (le détail est dans le rapport et `journal-android.txt`), 3 si KVM manque. Les scénarios complets (coquille Repas, faux site Leclerc avec passage complet) sont la deuxième livraison de DRV-319.
+
+### 4. Comment ça marche
+
+Le conteneur (`android/emulator/`, service `android-emulator` de `compose.yaml`, profil à part pour que `make stop` ne l'arrête pas) lance, dans l'ordre : `dnsmasq` (le DNS, seule réponse : `*.leclercdrive.fr` vers `10.0.2.2`, l'adresse de la machine hôte vue par l'émulateur) ; `testsite.py` (le faux site, HTTPS sur le port 443 du conteneur, avec un certificat jetable créé dans le volume, jamais dans le dépôt) ; l'émulateur (`-no-window -no-audio -gpu swiftshader_indirect`, KVM). Pour que la WebView accepte ce certificat sans toucher à l'application, le test de fumée écrit dans l'émulateur `/data/local/tmp/webview-command-line` avec `--ignore-certificate-errors-spki-list=<empreinte de la clé du faux site>` : seule cette clé est acceptée. Cela ne marche que sur une image Google APIs « userdebug » (pas une image avec Play Store), c'est pourquoi c'est celle-là. L'application n'est pas modifiée : l'APK testé est celui que produit `make android`.
+
+### 5. Dépannage
+
+- **`/dev/kvm` manque** (message « KVM absent ») : voir 1. Après un redémarrage de WSL, refaire `sudo modprobe kvm_intel && sudo chmod 666 /dev/kvm`, ou rendre cela permanent.
+- **`/dev/kvm` existe mais l'accès est refusé** : `sudo chmod 666 /dev/kvm`.
+- **Le démarrage dépasse 30 minutes ou le conteneur s'arrête** : les dernières lignes du journal sont affichées ; en entier : `docker compose --profile android-emulator logs android-emulator`. Un téléchargement interrompu se reprend en relançant `make android-emulator-up`. Si le volume est abîmé : voir « repartir de zéro » en 2.
+- **Mémoire** : l'émulateur prend environ 3 Go ; si WSL est à court, baisser `EMULATOR_MEMORY` (par exemple 2048) ou augmenter `memory=` dans `C:\Users\<toi>\.wslconfig`, puis `wsl --shutdown`.
+- **« l'émulateur n'est pas prêt » ou « APK manque »** pendant `smoke.sh` lancé à la main : passer par `make android-smoke`, qui construit l'APK et démarre l'émulateur avant.
+- **Le test de fumée échoue sur « la page locale ne s'est pas chargée »** : l'émulateur vient peut-être juste de démarrer ; relancer. Voir aussi `docker compose --profile android-emulator exec android-emulator tail /sdk/site/access.log` (les chemins demandés au faux site).
 
 ## Structure
 
 ```
 android/
   Dockerfile, build.sh      image de construction et script lancé dedans (test, apk, release, release-selftest)
+  emulator/                 l'émulateur de test (DRV-319) : Dockerfile (outils), entrypoint.sh (SDK, AVD, DNS, faux site, émulateur),
+                            testsite.py + testpage.html (le faux site local), ctl.sh (up, down, status), smoke.sh (le test de fumée)
   settings.gradle.kts, build.gradle.kts, gradle.properties
   buildSrc/                 la dérivation de la version (AppVersion), en Kotlin pur, avec ses tests
   app/
