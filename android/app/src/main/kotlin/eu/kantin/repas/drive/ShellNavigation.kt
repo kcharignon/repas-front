@@ -39,7 +39,7 @@ class ShellNavigation(origin: String) {
     fun decide(url: String?): Decision {
         if (url == null) return Decision.BLOCK
         if (NavigationPolicy.httpsHostOf(url) == host) return Decision.ALLOW
-        val isWebPage = url.startsWith("https://", ignoreCase = true) || url.startsWith("http://", ignoreCase = true)
+        val isWebPage = NavigationPolicy.startsWithAscii(url, "https://") || NavigationPolicy.startsWithAscii(url, "http://")
         return if (isWebPage) Decision.OPEN_EXTERNALLY else Decision.BLOCK
     }
 
