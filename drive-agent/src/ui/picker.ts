@@ -29,7 +29,10 @@ export interface PickerProps {
   gone: readonly { id: string; label: string }[]
   /** Les identifiants dont la case est cochée. */
   checked: ReadonlySet<string>
+  /** La recherche dont la liste montre les produits : celle qui a répondu. */
   query: string
+  /** Le nom cherché d'abord quand c'est une de ses formes qui a répondu (ticket D), pour le dire ; `null` si la recherche est celle du nom. */
+  asked?: string | null
   items: readonly PickerItem[]
   /** Un message à montrer au-dessus de la liste (le site ne répond pas, le panier a refusé…). */
   notice: string | null
@@ -43,7 +46,12 @@ export interface PickerHooks {
 
 export interface Picker {
   /** Remplace les résultats. */
-  results: (query: string, items: readonly PickerItem[], notice: string | null) => void
+  results: (
+    query: string,
+    items: readonly PickerItem[],
+    notice: string | null,
+    asked?: string | null,
+  ) => void
   /** Occupé : plus rien ne se touche et `message` est annoncé ; `null` rend la main. */
   busy: (message: string | null) => void
 }
@@ -127,10 +135,15 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
           }),
         )
 
-  const results: Picker['results'] = (query, items, notice) => {
+  const results: Picker['results'] = (query, items, notice, asked = null) => {
     clear(list)
     append(list, ...items.map((item, index) => row(item, index, hooks.choose)))
-    status.textContent = items.length > 0 ? S.picker.results(query) : S.picker.none(query)
+    status.textContent =
+      items.length === 0
+        ? S.picker.none(query)
+        : asked === null
+          ? S.picker.results(query)
+          : S.picker.resultsInstead(query, asked)
     note.textContent = notice ?? ''
     note.hidden = notice === null
   }
@@ -144,7 +157,7 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
     if (on) status.textContent = message
   }
 
-  results(props.query, props.items, props.notice)
+  results(props.query, props.items, props.notice, props.asked)
   append(
     zone,
     h(

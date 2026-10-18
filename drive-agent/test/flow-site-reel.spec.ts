@@ -146,9 +146,12 @@ describe('une page « aucun résultat » n’arrête pas le passage (ticket C)',
     // When
     await flow.start(plan([fresh('betternut'), fresh('bettrave')]))
 
-    // Then : les deux lignes ont été cherchées et proposées, rien n'a été écrit, aucune erreur
+    // Then : les deux lignes ont été cherchées (leur nom, puis leur pluriel : ticket D) et proposées, rien n'a été écrit, aucune erreur
     expect(asked).toEqual(['Betternut', 'Bettrave'])
-    expect(site.calls.map((call) => call.init.method)).toEqual(['GET', 'GET'])
+    expect(site.calls.map((call) => call.init.method)).toEqual(['GET', 'GET', 'GET', 'GET'])
+    expect(
+      site.calls.map((call) => decodeURIComponent(call.url.split('TexteRecherche=')[1] ?? '')),
+    ).toEqual(['betternut', 'betternuts', 'bettrave', 'bettraves'])
     expect(screens.propsOf('error')).toEqual([])
     expect(expectConform(sent[0])).toMatchObject({
       outcome: 'completed',
@@ -203,8 +206,8 @@ describe('une page « aucun résultat » n’arrête pas le passage (ticket C)',
       ]),
     )
 
-    // Then
-    expect(site.calls.map((call) => call.init.method)).toEqual(['GET', 'GET'])
+    // Then : le libellé complet puis ses trois formes (ticket D), puis le nom de l'ingrédient, qui répond
+    expect(site.calls.map((call) => call.init.method)).toEqual(['GET', 'GET', 'GET', 'GET', 'GET'])
     expect(screens.propsOf('chooser')).toHaveLength(1)
     expect(expectConform(sent[0])).toMatchObject({
       outcome: 'completed',

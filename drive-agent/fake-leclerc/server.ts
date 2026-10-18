@@ -73,6 +73,12 @@ export interface Behavior {
    */
   emptySearch?: EmptyForm
   /**
+   * Le moteur de recherche strict : sensible aux accents, à la ligature « œ » et au pluriel (« œuf » ne trouve rien, « oeuf » trouve les
+   * « Oeufs » ; « creme » ne trouve rien, « crème » trouve la crème fraîche). Absent ou faux : le moteur tolérant d'avant. Il sert à éprouver
+   * le repli de l'agent (ticket D de l'audit du 2026-10-18, H3 et H7).
+   */
+  strictSearch?: boolean
+  /**
    * Le faux site sert la page d'un VISITEUR non connecté (en-tête « Se connecter » / « Créer un compte », pas de « Se déconnecter ») une fois
    * `visitorAfter` recherches et écritures du panier terminées (`0` : dès la première page ; absent ou `null` : jamais). Le catalogue reste
    * public et le panier accepte les écritures d'un visiteur : c'est le danger que l'agent doit détecter (ticket G).
@@ -317,7 +323,7 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
         const session = sessionAfter(pacedCount - 1)
         const page = searchPage(
           query,
-          searchCatalog(query),
+          searchCatalog(query, behavior.strictSearch === true),
           cart,
           session,
           behavior.emptySearch ?? 'list',
