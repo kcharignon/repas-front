@@ -620,13 +620,6 @@ export default {
     productsHome: 'Ingrédients que vous avez toujours',
     manage: 'Gérer mes produits',
   },
-  drivePlaceholder: {
-    help: {
-      title: 'Installer l’application',
-      soon: 'Le mode d’emploi de l’installation arrive bientôt.',
-    },
-    back: 'Retour à la liste',
-  },
   theme: {
     label: 'Thème',
     system: 'Système',
