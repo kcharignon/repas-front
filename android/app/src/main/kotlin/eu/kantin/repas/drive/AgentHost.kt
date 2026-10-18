@@ -41,6 +41,8 @@ internal class AgentHost private constructor(
     private val script: AgentScript?,
     /** La variante de débogage : son script d'injection annonce `debug: true`, ce qui permet le test automatique (DRV-318). */
     private val debug: Boolean,
+    /** Une page du drive a annoncé son agent (`hello`) : le canal de réponse vers elle est prêt. */
+    private val onHello: () -> Unit,
     private val onAgentMessage: (Inbound.FromAgent) -> Unit,
 ) {
     private var reply: JavaScriptReplyProxy? = null
@@ -59,6 +61,7 @@ internal class AgentHost private constructor(
                 is Inbound.Hello -> {
                     reply = proxy
                     pageAnnouncedDebug = inbound.debug
+                    onHello()
                 }
                 is Inbound.FromAgent -> {
                     reply = proxy
@@ -119,8 +122,8 @@ internal class AgentHost private constructor(
             return AgentLoad(status, script)
         }
 
-        fun create(load: AgentLoad, debug: Boolean, onAgentMessage: (Inbound.FromAgent) -> Unit): AgentHost =
-            AgentHost(load.status, load.script, debug, onAgentMessage)
+        fun create(load: AgentLoad, debug: Boolean, onHello: () -> Unit, onAgentMessage: (Inbound.FromAgent) -> Unit): AgentHost =
+            AgentHost(load.status, load.script, debug, onHello, onAgentMessage)
 
         fun readAsset(context: Context, name: String): ByteArray? = try {
             context.assets.open(name).use { it.readBytes() }

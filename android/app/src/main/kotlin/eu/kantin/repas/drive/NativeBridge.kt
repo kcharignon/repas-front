@@ -11,8 +11,11 @@ sealed interface NativeRequest {
     /** `app.menu` : ouvrir le menu de l'application (version, mode d'emploi, déconnexion du drive). */
     data object AppMenu : NativeRequest
 
-    /** `drive.start` ou `drive.cancel` : le passage du plan (DRV-314). */
-    class Drive(val type: String, val json: JSONObject) : NativeRequest
+    /** `drive.start` : lancer le passage de ce plan (DRV-314). Le plan est valide dans sa forme et son hôte. */
+    class DriveStart(val plan: DrivePlan) : NativeRequest
+
+    /** `drive.cancel` : abandonner le passage en cours ; [runId], s'il est donné, doit être celui du passage. */
+    class DriveCancel(val runId: String?) : NativeRequest
 
     /** Un message de la bonne origine mais mal formé : [reply] est la réponse à renvoyer à la page, [reason] ce qu'on note au journal. */
     class Refused(val reply: String, val reason: Rejection) : NativeRequest
@@ -35,7 +38,12 @@ object NativeBridge {
     /** Les codes d'erreur de `error` et de `drive.error`. */
     const val INVALID_MESSAGE = "INVALID_MESSAGE"
     const val UNKNOWN_TYPE = "UNKNOWN_TYPE"
+
+    /** Les codes de `drive.error` : plan invalide, un autre passage est en cours (avec son `runId`), drive inutilisable, rien à annuler. */
+    const val INVALID_PLAN = "INVALID_PLAN"
+    const val BUSY = "BUSY"
     const val UNAVAILABLE = "UNAVAILABLE"
+    const val NO_PASS = "NO_PASS"
 
     private const val PROTOCOL_VERSION = 1
 
@@ -54,7 +62,16 @@ object NativeBridge {
         return when (val type = json.optString("type")) {
             "app.info" -> NativeRequest.AppInfo
             "app.menu" -> NativeRequest.AppMenu
-            "drive.start", "drive.cancel" -> NativeRequest.Drive(type, json)
+            "drive.start" -> DrivePlan.parse(json.optJSONObject("plan"))?.let { NativeRequest.DriveStart(it) }
+                ?: refused(driveError(INVALID_PLAN), Rejection.NOT_PROTOCOL)
+            "drive.cancel" -> {
+                val runId = json.opt("runId")
+                when {
+                    !json.has("runId") || json.isNull("runId") -> NativeRequest.DriveCancel(null)
+                    runId is String && DrivePlan.isRunId(runId) -> NativeRequest.DriveCancel(runId)
+                    else -> refused(error(INVALID_MESSAGE), Rejection.NOT_PROTOCOL)
+                }
+            }
             else -> refused(error(UNKNOWN_TYPE), Rejection.NOT_PROTOCOL)
         }
     }
@@ -70,6 +87,12 @@ object NativeBridge {
         put("versionCode", versionCode)
         put("drive", drive)
     }
+
+    /**
+     * Le résultat d'un passage (celui de l'agent, ou un résultat `aborted`), à livrer à Repas : `{v, type: "drive.result", result}`. Il peut
+     * dépasser 64 Ko de l'enveloppe : la borne ne vaut que pour la page vers l'application.
+     */
+    fun driveResult(result: JSONObject): String = message("drive.result") { put("result", result) }
 
     /** Un message mal formé ou inconnu. */
     fun error(code: String): String = message("error") { put("code", code) }

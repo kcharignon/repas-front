@@ -2,6 +2,7 @@ package eu.kantin.repas.drive
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -36,6 +37,10 @@ import java.util.UUID
  * ni ne journalise jamais (ni cookie, ni contenu de page, ni adresse complète). Navigation limitée à `https` et `*.leclercdrive.fr`
  * ([NavigationPolicy]) : tout autre lien s'ouvre dans le navigateur du téléphone. Aucun objet natif n'est exposé aux pages ; l'agent y est
  * injecté par [AgentHost] (DRV-313).
+ *
+ * **Passage du plan (DRV-314).** Quand un passage est en cours ([DrivePass]), l'écran s'ouvre sur l'accueil du magasin du plan, envoie le plan
+ * à l'agent une fois la page chargée et annoncée, reste allumé tant que le passage dure, et rend la main à la coquille avec le résultat de
+ * l'agent (ou un résultat `aborted` si l'utilisateur abandonne). Sans passage, c'est le drive à parcourir à la main.
  */
 class DriveActivity : Activity() {
     private lateinit var webView: WebView
@@ -44,12 +49,15 @@ class DriveActivity : Activity() {
     private lateinit var agent: AgentHost
     private lateinit var debugRun: DebugRun
     private lateinit var selftestRun: SelftestRun
+    private val delivery = PlanDelivery()
+    private var abandonDialog: AlertDialog? = null
 
     /** La fenêtre vide qui reçoit un `window.open` avant que son adresse soit confiée à la WebView principale. */
     private var popup: WebView? = null
     private var loadFailed = false
 
     private val repasApp get() = application as RepasApp
+    private val pass get() = repasApp.pass
 
     @Suppress("DEPRECATION")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -62,6 +70,7 @@ class DriveActivity : Activity() {
         debugRun = DebugRun(
             template = { AgentHost.readAsset(this, DebugPlan.TEMPLATE_FILE)?.toString(Charsets.UTF_8) },
             send = { agent.send(it) },
+            startPass = ::startDebugPass,
             show = { resultPanel.show(it) },
             newRunId = { UUID.randomUUID().toString() },
         )
@@ -69,9 +78,9 @@ class DriveActivity : Activity() {
             send = { agent.openSelftest() },
             show = { resultPanel.show(it, R.string.selftest_title, autoCopy = true) },
         )
-        agent = AgentHost.create(repasApp.agentLoad, BuildConfig.DEBUG) { message ->
-            // La variante de débogage montre le résultat de l'essai et le rapport du test automatique ; le passage du plan et son retour
-            // vers Repas arrivent avec DRV-314.
+        agent = AgentHost.create(repasApp.agentLoad, BuildConfig.DEBUG, onHello = { if (delivery.hello()) sendPlan() }) { message ->
+            if (message.type == "result" && onAgentResult(message.text)) return@create
+            // La variante de débogage montre le résultat de l'essai et le rapport du test automatique.
             if (BuildConfig.DEBUG && !selftestRun.onAgentMessage(message.type, message.text)) {
                 debugRun.onAgentMessage(message.type, message.text)
             }
@@ -92,15 +101,18 @@ class DriveActivity : Activity() {
         setContentView(root)
         registerBackAction()
 
-        webView.loadUrl(NavigationPolicy.START_URL)
+        webView.loadUrl(pass.current()?.plan?.startUrl ?: NavigationPolicy.START_URL)
     }
 
     override fun onResume() {
         super.onResume()
         webView.onResume()
+        updateKeepScreenOn()
     }
 
     override fun onPause() {
+        // L'écran ne reste allumé que pendant un passage, et seulement quand l'écran du drive est au premier plan.
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         // Les cookies de la WebView sont écrits sur le disque ici, pour qu'ils survivent à la fermeture de l'application.
         DriveProfile.cookieManager().flush()
         webView.onPause()
@@ -108,6 +120,7 @@ class DriveActivity : Activity() {
     }
 
     override fun onDestroy() {
+        abandonDialog?.dismiss()
         popup?.destroy()
         popup = null
         (webView.parent as? ViewGroup)?.removeView(webView)
@@ -118,11 +131,15 @@ class DriveActivity : Activity() {
     // ---------------------------------------------------------------------------------------------------------------
     // Retour arrière
 
-    /** Retour arrière : ferme l'écran de résultat, puis revient en arrière dans la WebView, puis rend la main à la coquille Repas. */
+    /**
+     * Retour arrière : ferme l'écran de résultat, puis revient en arrière dans la WebView ; au bout de l'historique, pendant un passage il
+     * demande s'il faut abandonner l'envoi, sinon il rend la main à la coquille Repas.
+     */
     private fun goBackOrExit() {
         when {
             resultPanel.isShowing -> resultPanel.hide()
             webView.canGoBack() -> webView.goBack()
+            pass.current() != null -> askAbandon()
             else -> finish()
         }
     }
@@ -192,11 +209,13 @@ class DriveActivity : Activity() {
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             loadFailed = false
+            delivery.pageStarted()
         }
 
         override fun onPageFinished(view: WebView, url: String?) {
             if (!loadFailed) problems.hide()
             agent.onPageFinished(view, url)
+            if (delivery.pageFinished()) sendPlan()
         }
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -291,7 +310,68 @@ class DriveActivity : Activity() {
 
     private fun retry() {
         problems.hide()
-        if (webView.url == null) webView.loadUrl(NavigationPolicy.START_URL) else webView.reload()
+        if (webView.url == null) webView.loadUrl(pass.current()?.plan?.startUrl ?: NavigationPolicy.START_URL) else webView.reload()
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // Le passage du plan (DRV-314)
+
+    /** Le plan du passage en cours part vers l'agent : la page a annoncé son agent et fini de charger (une fois par page). */
+    private fun sendPlan() {
+        val plan = pass.current()?.plan ?: return
+        if (!agent.send(plan.text)) delivery.failed()
+    }
+
+    /** Le résultat de l'agent. Vrai si c'est celui du passage en cours : il est clos, et l'écran se referme ou montre l'essai. */
+    private fun onAgentResult(text: String): Boolean {
+        val ended = pass.finish(text) ?: return false
+        endOfPass(ended, text)
+        return true
+    }
+
+    /** Le passage de débogage (menu « Plan d'essai ») passe par le même chemin qu'un plan de Repas ; `false` si un autre passage est en cours. */
+    private fun startDebugPass(planText: String): Boolean {
+        val plan = DrivePlan.parseText(planText) ?: return false
+        if (pass.start(plan, PassSource.DEBUG) is StartOutcome.Busy) return false
+        updateKeepScreenOn()
+        return agent.send(plan.text)
+    }
+
+    private fun askAbandon() {
+        if (abandonDialog?.isShowing == true) return
+        abandonDialog = AlertDialog.Builder(this)
+            .setTitle(R.string.abandon_title)
+            .setMessage(R.string.abandon_message)
+            .setPositiveButton(R.string.abandon_confirm) { _, _ -> abandonPass() }
+            .setNegativeButton(R.string.abandon_continue, null)
+            .show()
+    }
+
+    /** L'utilisateur abandonne : le passage prend fin par un résultat `aborted` (pour Repas), et l'écran se referme. */
+    private fun abandonPass() {
+        val ended = pass.abort() ?: return finish()
+        endOfPass(ended, null)
+    }
+
+    /** Un passage de Repas rend la main à la coquille, qui livre le résultat ; un passage de débogage montre le résultat de l'agent. */
+    private fun endOfPass(ended: ActivePass, resultText: String?) {
+        updateKeepScreenOn()
+        if (ended.source == PassSource.DEBUG) {
+            if (resultText != null) debugRun.onAgentMessage("result", resultText) else finish()
+            return
+        }
+        // La coquille est dessous : elle revient au premier plan (et la crée si le système l'avait fermée), et livre le résultat à Repas.
+        startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        finish()
+    }
+
+    /** L'écran reste allumé tant qu'un passage dure (l'agent demande aussi un verrou d'écran à la page), jamais au-delà. */
+    private fun updateKeepScreenOn() {
+        if (pass.current() != null) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
     }
 
     // ---------------------------------------------------------------------------------------------------------------
@@ -299,6 +379,7 @@ class DriveActivity : Activity() {
 
     private fun menuEntries(): List<Pair<Int, () -> Unit>> = buildList {
         if (BuildConfig.DEBUG) add(R.string.menu_selftest to ::startSelftest)
+        if (pass.current() != null) add(R.string.menu_abandon to ::askAbandon)
         add(R.string.menu_about to { showAbout(repasApp.agentLoad.describe(this@DriveActivity)) })
         add(R.string.menu_logout_drive to { confirmClearDriveData(::clearDriveData) })
         add(R.string.menu_browser to ::openCurrentPageInBrowser)
@@ -335,6 +416,7 @@ class DriveActivity : Activity() {
 
     /** Variante de débogage seulement : l'agent lit le magasin de la page, puis reçoit un plan synthétique de quatre ingrédients. */
     private fun startDebugPlan() {
+        if (pass.current() != null) return toast(R.string.pass_busy)
         if (!debugRun.start(NavigationPolicy.httpsHostOf(webView.url))) toast(agent.unavailableMessage())
     }
 

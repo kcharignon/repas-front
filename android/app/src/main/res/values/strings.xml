@@ -54,4 +54,16 @@
     <string name="selftest_started">Test lancé : il dure environ une minute. Garde l’application ouverte et ne touche à rien.</string>
     <string name="selftest_no_store">Ouvre d’abord une page de ton magasin sur le drive (une recherche suffit), puis relance le test.</string>
     <string name="report_copied">Rapport copié : colle-le dans la conversation.</string>
+
+    <string name="menu_abandon">Abandonner l’envoi</string>
+    <string name="abandon_title">Abandonner l’envoi ?</string>
+    <string name="abandon_message">Les produits déjà mis au panier y restent. Repas sera prévenu que l’envoi a été abandonné.</string>
+    <string name="abandon_confirm">Abandonner</string>
+    <string name="abandon_continue">Continuer</string>
+    <string name="pass_busy">Un envoi est déjà en cours : termine-le ou abandonne-le d’abord.</string>
+
+    <string name="resume_title">Envoi interrompu</string>
+    <string name="resume_message">Un envoi de ta liste au drive a été interrompu. Tu peux le reprendre ou l’abandonner (les produits déjà mis au panier y restent).</string>
+    <string name="resume_confirm">Reprendre</string>
+    <string name="resume_abandon">Abandonner</string>
 </resources>

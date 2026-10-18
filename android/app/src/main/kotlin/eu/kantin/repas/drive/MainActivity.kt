@@ -1,6 +1,7 @@
 package eu.kantin.repas.drive
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
@@ -39,6 +40,9 @@ import androidx.webkit.WebViewFeature
  * - **Données** : cookies (dont celui de rafraîchissement du jeton, `HttpOnly`), stockage du site et service worker restent dans le profil
  *   par défaut de la WebView. Le drive a le sien ([DriveProfile]) : la WebView de Repas ne reçoit ni l'agent Leclerc ni les cookies de Leclerc.
  * - **Pont natif** : `window.repasNative`, réservé à l'origine de Repas ([NativeBridge]). Aucun `addJavascriptInterface`.
+ * - **Passage du plan (DRV-314)** : `drive.start` ouvre [DriveActivity] sur le magasin du plan ; le résultat revient ici, d'où `drive.result`
+ *   est posté à la page (mis en file, et gardé par [DrivePass], si la page s'est rechargée entre-temps). Un passage interrompu (application
+ *   fermée ou tuée, moins de 24 h) se reprend ou s'abandonne à la réouverture.
  */
 class MainActivity : Activity() {
     private lateinit var webView: WebView
@@ -46,9 +50,17 @@ class MainActivity : Activity() {
     private val repasOrigin: String = RepasOrigin.parse(BuildConfig.REPAS_ORIGIN) ?: error("REPAS_ORIGIN invalide.")
     private val navigation = ShellNavigation(repasOrigin)
 
-    /** Le canal de réponse vers la page de Repas courante : donné par son premier message, perdu quand elle se recharge. */
+    /**
+     * Le canal de réponse vers la page de Repas : celui de son dernier message. Il n'est pas effacé au début d'une page : l'ordre entre
+     * `onPageStarted` et le premier message de la page n'est pas garanti (il arrive avant, on l'a mesuré), et effacer le canal d'une page qui
+     * ne reparlera pas lui ferait manquer ses résultats. Les chargements que l'application déclenche elle-même l'effacent ([load]).
+     */
     private var reply: JavaScriptReplyProxy? = null
+
+    /** Les débuts de page vus depuis le dernier message : tant qu'il y en a, le canal est peut-être celui d'une page disparue. */
+    private var startsSinceMessage = 0
     private var loadFailed = false
+    private var resumeDialog: AlertDialog? = null
 
     private val repasApp get() = application as RepasApp
 
@@ -82,12 +94,15 @@ class MainActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        navigation.entryUrl(intent.dataString)?.let { webView.loadUrl(it) }
+        navigation.entryUrl(intent.dataString)?.let(::load)
     }
 
     override fun onResume() {
         super.onResume()
         webView.onResume()
+        // Un résultat arrivé pendant que l'écran du drive était devant, ou un passage interrompu par la fermeture de l'application.
+        flushOutbox()
+        askResumeIfInterrupted()
     }
 
     override fun onPause() {
@@ -98,6 +113,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        resumeDialog?.dismiss()
         (webView.parent as? ViewGroup)?.removeView(webView)
         webView.destroy()
         super.onDestroy()
@@ -171,8 +187,7 @@ class MainActivity : Activity() {
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             loadFailed = false
-            // La page précédente n'existe plus : son canal de réponse non plus, la nouvelle page le donnera par son premier message.
-            reply = null
+            startsSinceMessage++
         }
 
         override fun onPageFinished(view: WebView, url: String?) {
@@ -213,29 +228,84 @@ class MainActivity : Activity() {
     // Le pont natif
 
     private fun onNativeMessage(text: String?, origin: String, isMainFrame: Boolean, proxy: JavaScriptReplyProxy) {
-        when (val request = NativeBridge.screen(text, origin, isMainFrame, repasOrigin)) {
-            is NativeRequest.Ignored -> Log.w(TAG, "Message de la page ignoré : ${request.reason}")
+        val request = NativeBridge.screen(text, origin, isMainFrame, repasOrigin)
+        if (request is NativeRequest.Ignored) {
+            Log.w(TAG, "Message de la page ignoré : ${request.reason}")
+            return
+        }
+        // Le message vient bien de la page de Repas : son canal de réponse est celui de la page courante, sûrement vivante.
+        reply = proxy
+        startsSinceMessage = 0
+        when (request) {
+            is NativeRequest.Ignored -> Unit
             is NativeRequest.Refused -> {
                 Log.w(TAG, "Message de la page refusé : ${request.reason}")
-                answer(proxy, request.reply)
+                post(request.reply)
             }
             NativeRequest.AppInfo -> {
                 val version = installedVersion()
-                answer(proxy, NativeBridge.appInfo(version.name, version.code, repasApp.agentLoad.status == AgentStatus.READY))
+                post(NativeBridge.appInfo(version.name, version.code, repasApp.agentLoad.status == AgentStatus.READY))
             }
-            NativeRequest.AppMenu -> {
-                reply = proxy
-                openMenu()
-            }
-            // Le passage du plan arrive avec DRV-314 : en attendant, la page est prévenue que le drive n'est pas encore là.
-            is NativeRequest.Drive -> answer(proxy, NativeBridge.driveError(NativeBridge.UNAVAILABLE))
+            NativeRequest.AppMenu -> openMenu()
+            is NativeRequest.DriveStart -> startPass(request.plan)
+            is NativeRequest.DriveCancel -> cancelPass(request.runId)
+        }
+        // Après la réponse : la page a un écouteur (elle vient de nous écrire), un résultat en attente peut lui être livré.
+        flushOutbox(pageIsAlive = true)
+    }
+
+    /** `drive.start` : un seul passage à la fois ; sinon l'écran du drive s'ouvre sur le magasin du plan (le même passage renvoyé le rouvre). */
+    private fun startPass(plan: DrivePlan) {
+        if (repasApp.agentLoad.status != AgentStatus.READY) return post(NativeBridge.driveError(NativeBridge.UNAVAILABLE, plan.runId))
+        when (val outcome = repasApp.pass.start(plan, PassSource.REPAS)) {
+            is StartOutcome.Busy -> post(NativeBridge.driveError(NativeBridge.BUSY, outcome.runId))
+            StartOutcome.Started, StartOutcome.Resumed -> openDrive()
         }
     }
 
-    /** Répond à la page, et retient son canal pour la suite. */
-    private fun answer(proxy: JavaScriptReplyProxy, text: String) {
-        reply = proxy
-        post(text)
+    /** `drive.cancel` : le passage prend fin par un résultat `aborted` (livré par `drive.result`) . */
+    private fun cancelPass(runId: String?) {
+        if (repasApp.pass.abort(runId) == null) return post(NativeBridge.driveError(NativeBridge.NO_PASS, runId))
+        resumeDialog?.dismiss()
+    }
+
+    private fun openDrive() = startActivity(Intent(this, DriveActivity::class.java))
+
+    /**
+     * Livre à la page de Repas les `drive.result` en attente, si elle a un canal de réponse (sinon ils restent gardés pour la prochaine
+     * fois). [pageIsAlive] : on vient de recevoir un message de la page, son canal est vivant et ce qu'on y poste arrive ; sinon (retour du
+     * drive, abandon) le canal est celui du dernier message, et si une page a commencé depuis, le résultat est posté **et gardé** jusqu'au
+     * prochain message de la page : mieux vaut un doublon, que le front ignore (résultat périmé), qu'un résultat perdu.
+     */
+    private fun flushOutbox(pageIsAlive: Boolean = false) {
+        if (reply == null) return
+        val pending = repasApp.pass.pendingMessages()
+        if (pending.isEmpty()) return
+        pending.forEach(::post)
+        if (pageIsAlive || startsSinceMessage == 0) repasApp.pass.delivered(pending.size)
+    }
+
+    /** Charge une adresse de Repas à l'initiative de l'application : la page actuelle disparaît, son canal de réponse aussi. */
+    private fun load(url: String) {
+        reply = null
+        webView.loadUrl(url)
+    }
+
+    /** L'application a été fermée ou tuée pendant un passage de moins de 24 h : on propose de le reprendre ou de l'abandonner. */
+    private fun askResumeIfInterrupted() {
+        val interrupted = repasApp.pass.current() ?: return
+        // La coquille au premier plan avec un passage en cours : l'écran du drive n'est pas devant, donc le passage a été interrompu.
+        if (interrupted.source != PassSource.REPAS || resumeDialog?.isShowing == true) return
+        resumeDialog = AlertDialog.Builder(this)
+            .setTitle(R.string.resume_title)
+            .setMessage(R.string.resume_message)
+            .setCancelable(false)
+            .setPositiveButton(R.string.resume_confirm) { _, _ -> openDrive() }
+            .setNegativeButton(R.string.resume_abandon) { _, _ ->
+                repasApp.pass.abort()
+                flushOutbox()
+            }
+            .show()
     }
 
     private fun post(text: String) {
@@ -263,7 +333,12 @@ class MainActivity : Activity() {
 
     private fun retry() {
         problems.hide()
-        if (webView.url == null) webView.loadUrl("$repasOrigin/") else webView.reload()
+        if (webView.url == null) {
+            load("$repasOrigin/")
+        } else {
+            reply = null
+            webView.reload()
+        }
     }
 
     // ---------------------------------------------------------------------------------------------------------------
@@ -271,8 +346,8 @@ class MainActivity : Activity() {
 
     private fun openMenu() = showMenu(
         listOf(
-            R.string.menu_drive_settings to { webView.loadUrl("$repasOrigin$DRIVE_SETTINGS_PATH") },
-            R.string.menu_open_drive to { startActivity(Intent(this, DriveActivity::class.java)) },
+            R.string.menu_drive_settings to { load("$repasOrigin$DRIVE_SETTINGS_PATH") },
+            R.string.menu_open_drive to ::openDrive,
             R.string.menu_about to { showAbout(repasApp.agentLoad.describe(this)) },
             R.string.menu_logout_drive to { confirmClearDriveData(::clearDriveData) },
         ),
@@ -282,7 +357,7 @@ class MainActivity : Activity() {
     private fun clearDriveData() {
         val shared = !DriveProfile.isolated
         DriveProfile.clear(if (shared) webView else null)
-        if (shared) webView.loadUrl("$repasOrigin/")
+        if (shared) load("$repasOrigin/")
         toast(R.string.drive_data_cleared)
     }
 
