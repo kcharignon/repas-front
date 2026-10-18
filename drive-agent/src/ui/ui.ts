@@ -79,6 +79,7 @@ export function createUi(options: UiOptions = {}): UiHandle {
     host: HTMLElement
     root: ShadowRoot
     overlay: HTMLElement
+    backdrop: HTMLElement
     current: Rendered | null
   } | null = null
   /** Remet le cadre à la bonne échelle quand l'affichage change : fenêtre, rotation, clavier, zoom ou défilement de la zone visible. */
@@ -100,9 +101,10 @@ export function createUi(options: UiOptions = {}): UiHandle {
     })
     overlay.addEventListener('keydown', (event) => trapFocus(event as KeyboardEvent, root, overlay))
     // Le fond remplit toute la fenêtre ; le cadre, lui, suit la zone visible (la page peut être agrandie au pincement).
-    append(root, h('div', { class: 'backdrop' }), overlay)
+    const backdrop = h('div', { class: 'backdrop' })
+    append(root, backdrop, overlay)
     win.document.documentElement.appendChild(host)
-    view = { host, root, overlay, current: null }
+    view = { host, root, overlay, backdrop, current: null }
     replace()
     win.addEventListener('resize', replace)
     win.visualViewport?.addEventListener('resize', replace)
@@ -129,6 +131,7 @@ export function createUi(options: UiOptions = {}): UiHandle {
         clear(shown.overlay)
         shown.overlay.appendChild(rendered.el)
         shown.current = rendered
+        setSheet(shown, rendered.sheet === true)
         rendered.start?.()
         rendered.el.scrollTop = 0
         const first = rendered.focus ?? rendered.el.querySelector<HTMLElement>(FOCUSABLE)
@@ -150,6 +153,21 @@ export function createUi(options: UiOptions = {}): UiHandle {
       view = null
     },
   }
+}
+
+/**
+ * Un bandeau (`sheet`) laisse la page visible et touchable : le conteneur ne capte plus les touchers (seul le bandeau les capte, `styles.ts`), il
+ * n'y a pas de fond et la fenêtre n'est plus modale. Tout autre écran remet le plein écran. Par une déclaration CSSOM `!important`, comme le reste
+ * de l'épinglage : une règle de la page ne la bat pas.
+ */
+function setSheet(
+  view: { host: HTMLElement; overlay: HTMLElement; backdrop: HTMLElement },
+  sheet: boolean,
+): void {
+  view.overlay.classList.toggle('sheet', sheet)
+  view.overlay.setAttribute('aria-modal', sheet ? 'false' : 'true')
+  view.backdrop.hidden = sheet
+  view.host.style.setProperty('pointer-events', sheet ? 'none' : 'auto', 'important')
 }
 
 /** Garde le clavier dans l'écran : Tab après le dernier élément revient au premier, Maj+Tab avant le premier va au dernier. */

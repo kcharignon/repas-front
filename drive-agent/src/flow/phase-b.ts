@@ -138,7 +138,7 @@ async function load(
     search.notice = null
   } catch (error) {
     if (!(error instanceof LeclercError) || error.code !== 'NETWORK') throw error
-    search.notice = S.picker.network
+    search.notice = error.cause === 'REQUEST_TIMEOUT' ? S.picker.slow : S.picker.network
   }
 }
 
@@ -259,7 +259,10 @@ async function settleLine(
       settled = await putInCart(adapter, candidate, packs)
     } catch (error) {
       if (!(error instanceof LeclercError) || error.code !== 'NETWORK') throw error
-      record({ ingredientSlug: slug, outcome: 'FAILED', error: 'NETWORK', ...rejected() })
+      record(
+        { ingredientSlug: slug, outcome: 'FAILED', error: 'NETWORK', ...rejected() },
+        error.cause === 'REQUEST_TIMEOUT' ? { slow: true } : undefined,
+      )
       return 'done'
     }
     if (settled.obtained < 1) {
@@ -278,7 +281,7 @@ async function settleLine(
         }),
         ...rejected(),
       },
-      settled.note ?? undefined,
+      settled.note ? { cart: settled.note } : undefined,
     )
     return 'done'
   }

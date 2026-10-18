@@ -99,6 +99,9 @@ export interface StoreProps {
   label: string | null
 }
 
+/** La demande de vérification de l'anti-robot (ticket K) : elle n'a pas de donnée, l'écran dit toujours la même chose. */
+export type ChallengeProps = Record<string, never>
+
 export interface ErrorProps {
   code: ErrorCode
   /** Vrai : un résultat peut repartir vers Repas (bouton « Retourner dans Repas »), sinon l'écran se ferme seulement. */
@@ -130,6 +133,11 @@ export interface EndProps {
    * disait, `null` si elle n'en disait rien. Absent (jamais vide) quand aucune.
    */
   unreadable?: readonly { name: string; atLeast: number | null }[]
+  /**
+   * Leclerc a mis trop de temps à répondre pour au moins une requête (ticket K : une ligne en échec `NETWORK` par délai d'attente dépassé).
+   * Absent quand ce n'est pas arrivé.
+   */
+  slow?: true
 }
 
 /** Les écrans : ce que `ui.show(nom, props)` affiche et ce que sa promesse rend. */
@@ -145,6 +153,11 @@ export interface ScreenMap {
   diagnostic: { props: DiagnosticProps; answer: 'close' }
   /** Le rôle choisi, ou `null` pour revenir à la liste de produits. */
   placement: { props: PlacementProps; answer: Placement | null }
+  /**
+   * Le site demande une vérification (page de défi de l'anti-robot, ticket K) : un bandeau, la page reste visible et touchable derrière. `resume` :
+   * l'utilisateur l'a faite, le passage reprend ; `stop` : il arrête.
+   */
+  challenge: { props: ChallengeProps; answer: 'resume' | 'stop' }
   error: { props: ErrorProps; answer: 'return' | 'close' }
   end: { props: EndProps; answer: 'return' }
 }

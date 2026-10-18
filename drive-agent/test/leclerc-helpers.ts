@@ -24,11 +24,22 @@ export type Scripted =
       url?: string
       redirected?: boolean
       headers?: Record<string, string>
+      /**
+       * La réponse met ce temps à venir (ms de l'horloge fausse). Si un délai d'attente injecté (`site.timer`) sonne avant, il est déclenché et le
+       * `fetch` est interrompu (`AbortError`), comme celui du navigateur ; `Infinity` : elle ne vient jamais.
+       */
+      delayMs?: number
     }
   | Error
 
 export interface Site {
   deps: LeclercDeps
+  /** Combien de délais d'attente sont encore armés (un délai est annulé dès que la réponse vient). */
+  activeTimers: () => number
+  /** Laisse passer `ms` de l'horloge fausse et fait sonner les délais d'attente échus. */
+  elapse: (ms: number) => void
+  /** Le délai d'attente de l'horloge fausse, à donner à `deps.timer` pour qu'une requête puisse expirer (absent par défaut : `signal` n'est pas posé). */
+  timer: NonNullable<LeclercDeps['timer']>
   calls: Call[]
   /** Les pauses demandées au `sleep` injecté. */
   sleeps: number[]
@@ -57,6 +68,14 @@ export function fakeSite(
   let random = 0
   let inFlight = 0
   let peak = 0
+  const timers: { at: number; fire: () => void; active: boolean }[] = []
+  const timer: Site['timer'] = (ms, fire) => {
+    const entry = { at: clock.now + ms, fire, active: true }
+    timers.push(entry)
+    return () => {
+      entry.active = false
+    }
+  }
   const deps: LeclercDeps = {
     fetch: async (url, init = {}) => {
       const call = { url, init, at: clock.now }
@@ -68,6 +87,17 @@ export function fakeSite(
       inFlight -= 1
       const scripted = handler(call, index)
       if (scripted instanceof Error) throw scripted
+      const delay = scripted.delayMs ?? 0
+      if (delay > 0) {
+        const due = timers.filter((entry) => entry.active).sort((a, b) => a.at - b.at)[0]
+        if (due && due.at <= clock.now + delay) {
+          clock.now = Math.max(clock.now, due.at)
+          due.active = false
+          due.fire()
+          throw new DOMException('Aborted', 'AbortError')
+        }
+        clock.now += delay
+      }
       const body = scripted.body ?? ''
       return {
         status: scripted.status ?? 200,
@@ -90,6 +120,17 @@ export function fakeSite(
   }
   return {
     deps,
+    timer,
+    activeTimers: () => timers.filter((entry) => entry.active).length,
+    elapse: (ms) => {
+      clock.now += ms
+      for (const entry of timers) {
+        if (entry.active && entry.at <= clock.now) {
+          entry.active = false
+          entry.fire()
+        }
+      }
+    },
     calls,
     sleeps,
     maxInFlight: () => peak,

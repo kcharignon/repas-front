@@ -10,6 +10,7 @@ import type {
 import type { RetailerAdapter } from '../leclerc'
 import type { Ui } from '../ui'
 import type { CartNote } from './keep-cart'
+import type { ContentChange } from './phase-a'
 
 /** Le stockage de session de la page (`sessionStorage`) : l'état de reprise y vit le temps de l'onglet. */
 export interface StorageLike {
@@ -32,6 +33,16 @@ export interface PendingLine {
   unavailable: PlanProduct[]
 }
 
+/** Ce que l'écran de fin et le journal doivent dire d'une ligne en plus de son issue. */
+export interface LineNotes {
+  /** Le nombre de produits a été recalculé sur le contenu lu en direct (DRV-613). */
+  change?: ContentChange
+  /** La quantité déjà au panier est conservée ou illisible (ticket M). */
+  cart?: CartNote
+  /** La ligne a échoué parce que Leclerc a mis trop de temps à répondre (ticket K). */
+  slow?: boolean
+}
+
 /** Ce que la phase B reçoit pour guider l'utilisateur (DRV-306). */
 export interface PhaseBContext {
   pending: readonly PendingLine[]
@@ -39,10 +50,10 @@ export interface PhaseBContext {
   ui: Ui
   /**
    * Enregistre l'issue d'une ligne en attente (`CHOSEN`, `HAVE_AT_HOME`, `SKIPPED`, `FAILED`…) : elle est sauvegardée pour la reprise
-   * et la progression avance. Une ligne qu'on n'enregistre pas devient `UNAVAILABLE` au résultat. `cart` : ce que l'écran de fin doit dire de
-   * la quantité déjà au panier (ticket M).
+   * et la progression avance. Une ligne qu'on n'enregistre pas devient `UNAVAILABLE` au résultat. `notes` : ce que l'écran de fin et le journal en
+   * disent de plus (quantité du panier conservée, lenteur de Leclerc).
    */
-  record(line: ResultLine, cart?: CartNote): void
+  record(line: ResultLine, notes?: LineNotes): void
   /** Vrai dès que l'utilisateur a touché « Arrêter » : finir la ligne en cours, puis rendre la main. */
   stopRequested(): boolean
   /** Remet l'écran de progression, après un écran de la phase B. */

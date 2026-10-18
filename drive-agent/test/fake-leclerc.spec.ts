@@ -386,6 +386,44 @@ describe('les défauts simulés', () => {
     expect(reply.text).toContain('captcha-delivery.com')
   })
 
+  it('« times » limite le défaut aux requêtes qui suivent « after » : la suivante passe (ticket K)', async () => {
+    // Given : la deuxième requête seulement est refusée
+    fake.setBehavior({ fault: { kind: 'forbidden', after: 1, times: 1 } })
+
+    // When
+    const replies = [await search('farine'), await search('sucre'), await search('sel')]
+
+    // Then
+    expect(replies.map((reply) => reply.status)).toEqual([200, 403, 200])
+    expect(fake.paced().map((paced) => paced.fault)).toEqual([undefined, 'forbidden', undefined])
+  })
+
+  it('« hang » retient la requête sans répondre jusqu’à ce que le client abandonne, puis la requête suivante passe (ticket K)', async () => {
+    // Given : la première requête est retenue, pas la suivante
+    fake.setBehavior({ fault: { kind: 'hang', times: 1 } })
+    const outcome = await new Promise<string>((resolve) => {
+      const req = request(
+        {
+          host: '127.0.0.1',
+          port: fake.port,
+          path: `${PAGE_PATH}/recherche.aspx?TexteRecherche=farine`,
+          headers: { Host: `${STORE.host}:${fake.port}` },
+        },
+        () => resolve('réponse'),
+      )
+      req.on('error', () => resolve('abandon'))
+      req.end()
+      // When : le client abandonne après un moment, comme le fait le délai d'attente de l'agent
+      setTimeout(() => req.destroy(), 150)
+    })
+
+    // Then : pas de réponse, la requête est finie dès l'abandon, et la suivante est servie
+    expect(outcome).toBe('abandon')
+    await expect.poll(() => fake.paced()[0]?.endedAt ?? 0).toBeGreaterThan(0)
+    expect(fake.paced()[0]).toMatchObject({ fault: 'hang', status: 0 })
+    expect((await search('sucre')).status).toBe(200)
+  })
+
   it('change de contrat : des champs que l’agent ne connaît plus, et un panier sans évènement Panier', async () => {
     // Given
     fake.setBehavior({ fault: { kind: 'contract-changed' } })

@@ -133,6 +133,68 @@ describe('le conteneur', () => {
   })
 })
 
+describe('la demande de vérification de l’anti-robot (ticket K)', () => {
+  const host = () => ui?.host as HTMLElement
+  const overlay = () => shadow().querySelector('.overlay') as HTMLElement
+  const backdrop = () => shadow().querySelector('.backdrop') as HTMLElement
+
+  it('dit quoi faire : faire la vérification dans la page, puis toucher « Reprendre »', () => {
+    const handle = open()
+    void handle.show('challenge', {})
+
+    expect(shadow().querySelector('h1')?.textContent).toBe('Leclerc demande une vérification')
+    expect(shadow().textContent).toContain('Fais-la dans la page, puis touche Reprendre.')
+    expect(labels()).toEqual(['Reprendre', 'Arrêter'])
+    expect(shadow().activeElement?.textContent).toBe('Reprendre')
+  })
+
+  it.each([
+    ['Reprendre', 'resume'],
+    ['Arrêter', 'stop'],
+  ])('« %s » rend « %s »', async (label, expected) => {
+    const handle = open()
+    const answer = handle.show('challenge', {})
+
+    press(label)
+
+    await expect(answer).resolves.toBe(expected)
+  })
+
+  it('laisse la page visible et touchable derrière : un bandeau, sans fond, qui ne capte aucun toucher hors de lui', () => {
+    const handle = open()
+    void handle.show('challenge', {})
+
+    expect(host().style.getPropertyValue('pointer-events')).toBe('none')
+    expect(host().style.getPropertyPriority('pointer-events')).toBe('important')
+    expect(overlay().classList.contains('sheet')).toBe(true)
+    expect(backdrop().hidden).toBe(true)
+    expect(overlay().getAttribute('aria-modal')).toBe('false')
+    expect(STYLES).toMatch(/\.overlay\.sheet\s*\{[^}]*pointer-events:none/)
+    expect(STYLES).toMatch(/\.overlay\.sheet>\.screen\s*\{[^}]*pointer-events:auto/)
+  })
+
+  it('un écran suivant reprend toute la fenêtre : fond, toucher capté, boîte de dialogue modale', () => {
+    const handle = open()
+    void handle.show('challenge', {})
+
+    void handle.show('progress', { total: 2, done: 0, current: 'Farine', log: [] })
+
+    expect(host().style.getPropertyValue('pointer-events')).toBe('auto')
+    expect(overlay().classList.contains('sheet')).toBe(false)
+    expect(backdrop().hidden).toBe(false)
+    expect(overlay().getAttribute('aria-modal')).toBe('true')
+  })
+
+  it('un écran ordinaire ne touche pas aux réglages du bandeau', () => {
+    const handle = open()
+    void handle.show('summary', SUMMARY)
+
+    expect(host().style.getPropertyValue('pointer-events')).toBe('auto')
+    expect(overlay().classList.contains('sheet')).toBe(false)
+    expect(backdrop().hidden).toBe(false)
+  })
+})
+
 describe('écran d’accueil', () => {
   it.each([
     ['Diagnostic', 'diagnostic'],
@@ -818,6 +880,23 @@ describe('fin', () => {
       'Farine — au moins 4 gardés, vérifie dans ton panier',
       'Sucre — vérifie dans ton panier',
     ])
+  })
+
+  it('sans réponse trop lente, ne montre pas la mention « Leclerc met trop de temps »', () => {
+    const handle = open()
+    void handle.show('end', END)
+
+    expect(shadow().textContent).not.toContain('trop de temps')
+  })
+
+  it('dit quand Leclerc a mis trop de temps à répondre, et quoi faire : relancer, ce qui est au panier n’est pas touché', () => {
+    const handle = open()
+    void handle.show('end', { ...END, outcome: 'partial', failed: 2, slow: true })
+
+    const note = shadow().querySelector('.notice')
+    expect(note?.textContent).toBe(
+      'Leclerc a mis trop de temps à répondre. Relance l’envoi dans un moment : ce qui est déjà au panier n’est pas touché.',
+    )
   })
 
   it('ajoute le conseil de l’erreur qui a interrompu l’envoi', () => {

@@ -415,6 +415,10 @@ export function browserDeps(win: Window & typeof globalThis): LeclercDeps {
     navigation: () => navigationOf(win),
     cookies: () => cookiesOf(win),
     sleep: (ms) => new Promise((resolve) => win.setTimeout(resolve, ms)),
+    timer: (ms, fire) => {
+      const id = win.setTimeout(fire, ms)
+      return () => win.clearTimeout(id)
+    },
     random: () => Math.random(),
     now: () => Date.now(),
   }

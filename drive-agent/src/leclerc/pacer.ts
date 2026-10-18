@@ -8,6 +8,12 @@ export const JITTER_MS = 700
 export const NETWORK_RETRY_MS = 2000
 /** Nombre de réponses 403 ou 429 de suite qui arrête tout. */
 export const MAX_BLOCKS = 2
+/**
+ * Le délai d'attente de chaque requête (ticket K de l'audit du 2026-10-18, H15) : réponse et corps compris. Au-delà, la requête est interrompue et
+ * traitée comme une erreur réseau (une reprise après 2 s, puis `NETWORK` de cause `REQUEST_TIMEOUT`) : sans lui, une requête que le site retient
+ * laisserait l'écran de progression figé, sans message, jusqu'à l'abandon. Les réponses mesurées durent de 0,1 à 1,9 s.
+ */
+export const REQUEST_TIMEOUT_MS = 20_000
 
 export type FetchFn = (input: string, init?: RequestInit) => Promise<Response>
 
@@ -39,6 +45,11 @@ export interface PacerDeps {
   sleep: (ms: number) => Promise<void>
   random: () => number
   now: () => number
+  /**
+   * Un délai d'attente : appelle `fire` après `ms` millisecondes, et rend de quoi l'annuler. L'agent le fournit toujours (`browserDeps`) ; sans lui
+   * (certains tests) aucune requête n'expire et aucun signal d'interruption n'est posé.
+   */
+  timer?: (ms: number, fire: () => void) => () => void
 }
 
 /**
@@ -66,7 +77,10 @@ function assertSameHost(url: string): void {
  *  - au moins 800 ms entre la fin d'une requête et le début de la suivante, plus une gigue de 0 à 700 ms ;
  *  - une réponse 403 ou 429 (ou une page de défi) est retentée une fois après la pause ; une seconde de suite arrête tout : l'erreur
  *    `BLOCKED` est levée et plus aucune requête ne part ;
- *  - une erreur réseau est retentée une fois, après 2 s ; la seconde lève `NETWORK`.
+ *  - une page de défi de l'anti-robot lève `BLOCKED` (cause `CHALLENGE`) dès la première réponse, sans reprise, et n'arrête pas le Pacer : c'est
+ *    à l'utilisateur de faire la vérification, puis à l'appelant de recommencer (ticket K) ;
+ *  - une erreur réseau est retentée une fois, après 2 s ; la seconde lève `NETWORK` ;
+ *  - une requête qui ne répond pas en `REQUEST_TIMEOUT_MS` est interrompue et traitée de même (`NETWORK`, cause `REQUEST_TIMEOUT`).
  * Seul l'hôte de la page est joint (chemins relatifs), avec les cookies de la session que le navigateur envoie lui-même.
  */
 export class Pacer {
@@ -108,8 +122,19 @@ export class Pacer {
       if (this.stopped) throw new LeclercError('BLOCKED')
       await this.pause()
       let reply: Reply
+      // Le délai d'attente de cette tentative : il interrompt le `fetch` (et la lecture du corps) et se désarme dès que la réponse est là.
+      let timedOut = false
+      const controller = this.deps.timer ? new AbortController() : null
+      const disarm = this.deps.timer?.(REQUEST_TIMEOUT_MS, () => {
+        timedOut = true
+        controller?.abort()
+      })
       try {
-        const response = await this.fetchFn(url, { credentials: 'same-origin', ...init })
+        const response = await this.fetchFn(url, {
+          credentials: 'same-origin',
+          ...init,
+          ...(controller && { signal: controller.signal }),
+        })
         reply = {
           status: response.status,
           text: await response.text(),
@@ -120,13 +145,19 @@ export class Pacer {
         }
       } catch {
         this.lastEnd = this.deps.now()
-        if (networkRetried) throw new LeclercError('NETWORK')
+        if (networkRetried) {
+          throw new LeclercError('NETWORK', null, timedOut ? 'REQUEST_TIMEOUT' : null)
+        }
         networkRetried = true
         await this.deps.sleep(NETWORK_RETRY_MS)
         continue
+      } finally {
+        disarm?.()
       }
       this.lastEnd = this.deps.now()
-      if (reply.status !== 403 && reply.status !== 429 && !isChallenge(reply.text)) {
+      // Une page de défi : l'utilisateur doit la passer lui-même, la retenter n'y changerait rien et ne ferait qu'insister.
+      if (isChallenge(reply.text)) throw new LeclercError('BLOCKED', reply.status, 'CHALLENGE')
+      if (reply.status !== 403 && reply.status !== 429) {
         this.blocks = 0
         return reply
       }

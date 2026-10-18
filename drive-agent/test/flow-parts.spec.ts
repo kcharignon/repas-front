@@ -356,6 +356,12 @@ describe('le résultat', () => {
     expect(endProps([], { outcome: 'completed' })).not.toHaveProperty('changes')
   })
 
+  it('ajoute « slow » à l’écran de fin quand Leclerc a mis trop de temps à répondre, et seulement alors', () => {
+    expect(endProps([], { outcome: 'partial' }, [], undefined, true)).toMatchObject({ slow: true })
+    expect(endProps([], { outcome: 'partial' }, [], undefined, false)).not.toHaveProperty('slow')
+    expect(endProps([], { outcome: 'partial' })).not.toHaveProperty('slow')
+  })
+
   it('ajoute les quantités conservées et illisibles à l’écran de fin, et seulement s’il y en a', () => {
     const carts = {
       kept: [{ name: 'Farine', wanted: 2, inCart: 5 }],

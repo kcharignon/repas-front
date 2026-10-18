@@ -126,6 +126,7 @@ export function endProps(
   ending: Ending,
   changes: readonly EndChange[] = [],
   carts: Carts = { kept: [], unreadable: [] },
+  slow = false,
 ): EndProps {
   const count = (outcome: ResultLine['outcome']) =>
     lines.filter((line) => line.outcome === outcome).length
@@ -141,5 +142,6 @@ export function endProps(
     ...(changes.length > 0 && { changes }),
     ...(carts.kept.length > 0 && { kept: carts.kept }),
     ...(carts.unreadable.length > 0 && { unreadable: carts.unreadable }),
+    ...(slow && { slow: true as const }),
   }
 }

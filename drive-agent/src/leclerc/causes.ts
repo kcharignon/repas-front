@@ -21,6 +21,9 @@ export const CAUSE_LABELS = {
   LOGIN_REDIRECT: 'redirection vers une page de connexion',
   LOGIN_FORM: 'page de connexion servie à la place de la réponse',
   SESSION_VISITOR: 'page d’un visiteur non connecté',
+  // Les requêtes elles-mêmes (ticket K).
+  REQUEST_TIMEOUT: 'Leclerc n’a pas répondu dans le délai d’attente (20 s)',
+  CHALLENGE: 'page de vérification de l’anti-robot (défi) servie à la place de la réponse',
   // La page courante.
   PAGE_HOST: 'la page n’est pas sur un site leclercdrive.fr',
   PAGE_PATH: 'l’adresse de la page n’est pas celle d’un magasin',

@@ -714,4 +714,36 @@ describe('browserDeps', () => {
     expect(deps.random()).toBeGreaterThanOrEqual(0)
     expect(deps.now()).toBeGreaterThan(0)
   })
+
+  it('branche le délai d’attente (ticket K) sur les minuteries de la fenêtre : il sonne après le délai, et ne sonne plus une fois annulé', () => {
+    // Given : une fenêtre dont les minuteries sont simulées
+    vi.useFakeTimers()
+    try {
+      const win = {
+        fetch: vi.fn<typeof fetch>(),
+        location: { hostname: PAGE.hostname, pathname: PAGE.pathname },
+        document,
+        XMLSerializer,
+        setTimeout: (callback: () => void, ms: number) => setTimeout(callback, ms),
+        clearTimeout: (id: ReturnType<typeof setTimeout>) => clearTimeout(id),
+      } as unknown as Window & typeof globalThis
+      const { timer } = browserDeps(win)
+      const rung = vi.fn<() => void>()
+      const cancelled = vi.fn<() => void>()
+
+      // When
+      timer?.(1000, rung)
+      timer?.(1000, cancelled)?.()
+      vi.advanceTimersByTime(999)
+      const before = rung.mock.calls.length
+      vi.advanceTimersByTime(1)
+
+      // Then
+      expect(before).toBe(0)
+      expect(rung).toHaveBeenCalledTimes(1)
+      expect(cancelled).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

@@ -12,11 +12,10 @@ import {
 import { LeclercError, type LeclercCause } from '../leclerc'
 import { own } from '../own'
 import { S, type SummaryProps } from '../ui'
-import type { CartNote } from './keep-cart'
-import { settleKnownLine, type ContentChange } from './phase-a'
+import { settleKnownLine } from './phase-a'
 import { buildResult, cartsOf, changesOf, endProps, endingOf, resultLines } from './result'
 import { emptyState, RunStore, type RunState } from './run-state'
-import type { FlowDeps, PendingLine, Step } from './types'
+import type { FlowDeps, LineNotes, PendingLine, Step } from './types'
 import { keepAwake } from './wake-lock'
 
 /** Un passage en cours. */
@@ -34,6 +33,8 @@ interface Run {
   halted: ErrorCode | null
   /** Quelle vérification a échoué, quand l'adaptateur le dit (ticket A) : elle part dans le message du résultat. */
   cause: LeclercCause | null
+  /** Une requête a dépassé son délai d'attente (ticket K) : l'écran de fin le dit. */
+  slow: boolean
   release: () => Promise<void>
 }
 
@@ -54,6 +55,9 @@ function faultOf(error: unknown): Fault {
     ? { code: error.code, cause: error.cause }
     : { code: 'CONTRACT_CHANGED', cause: 'EXCEPTION' }
 }
+
+/** Le site a servi une page de défi de l'anti-robot (ticket K) : l'utilisateur peut la passer, le passage attend. */
+const isChallenge = ({ code, cause }: Fault): boolean => code === 'BLOCKED' && cause === 'CHALLENGE'
 
 /** Les lignes sans action sur le site : « j'en ai toujours » et « passer cette fois ». */
 function staticOutcome(line: PlanLine): ResultLine | null {
@@ -168,6 +172,7 @@ export class Flow {
       stopped: !proceed,
       halted: null,
       cause: null,
+      slow: false,
       release: () => Promise.resolve(),
     }
     if (proceed) {
@@ -241,12 +246,30 @@ export class Flow {
       if (this.isProcessed(run, line)) continue
       run.current = line.name
       this.deps.ui.update({ current: line.name })
-      try {
-        await this.settle(run, line)
-      } catch (error) {
-        this.absorb(run, line, faultOf(error))
+      for (;;) {
+        try {
+          await this.settle(run, line)
+          break
+        } catch (error) {
+          const fault = faultOf(error)
+          // Un défi de l'anti-robot : le passage attend que l'utilisateur le passe, puis refait la ligne en cours.
+          if (isChallenge(fault) && (await this.verification(run)) === 'resume') continue
+          this.absorb(run, line, fault)
+          break
+        }
       }
     }
+  }
+
+  /**
+   * Le site demande une vérification (ticket K) : un bandeau dit à l'utilisateur de la faire dans la page, puis de toucher « Reprendre ». Le
+   * passage est suspendu, son état reste dans le stockage de session (la page peut se recharger : la reprise le propose) et rien n'est rendu à Repas.
+   * « Reprendre » remet l'écran de progression ; « Arrêter » rend la main comme un blocage.
+   */
+  private async verification(run: Run): Promise<'resume' | 'stop'> {
+    const answer = await this.deps.ui.show('challenge', {})
+    if (answer === 'resume') this.showProgress(run)
+    return answer
   }
 
   private async settle(run: Run, line: PlanLine): Promise<void> {
@@ -266,12 +289,19 @@ export class Flow {
       },
     })
     if (verdict.kind === 'waiting') this.wait(run, line, verdict.unavailable)
-    else this.record(run, verdict.line, verdict.change, verdict.cart)
+    else {
+      this.record(run, verdict.line, {
+        ...(verdict.change && { change: verdict.change }),
+        ...(verdict.cart && { cart: verdict.cart }),
+      })
+    }
   }
 
   /** Une erreur pendant une ligne : une erreur réseau n'abîme que la ligne (l'adaptateur a déjà retenté), les autres arrêtent le passage. */
   private absorb(run: Run, line: PlanLine, { code, cause }: Fault): void {
-    if (code === 'NETWORK') return this.record(run, failed(line, code))
+    if (code === 'NETWORK') {
+      return this.record(run, failed(line, code), cause === 'REQUEST_TIMEOUT' ? { slow: true } : {})
+    }
     run.halted = code
     run.cause = cause
     if (code === 'BLOCKED') this.failRemaining(run, code)
@@ -288,24 +318,30 @@ export class Flow {
   private async phaseB(run: Run, phaseB: NonNullable<FlowDeps['phaseB']>): Promise<void> {
     run.state.phase = 'PHASE_B'
     this.runs.save(run.state)
-    try {
-      const outcome = await phaseB({
-        pending: this.pending(run),
-        adapter: this.deps.adapter,
-        ui: this.deps.ui,
-        record: (line, cart) => this.record(run, line, undefined, cart),
-        stopRequested: () => run.stopped,
-        showProgress: () => this.showProgress(run),
-      })
-      if (outcome === 'cancelled') run.stopped = true
-    } catch (error) {
-      const fault = faultOf(error)
-      run.halted = fault.code
-      run.cause = fault.cause
-      // Leclerc bloque : les lignes qui attendaient encore un choix échouent (`BLOCKED`), comme en phase A. Pour les autres erreurs
-      // elles restent « indisponibles » au résultat.
-      if (run.halted === 'BLOCKED') {
-        for (const { line } of this.pending(run)) this.record(run, failed(line, run.halted))
+    for (;;) {
+      try {
+        const outcome = await phaseB({
+          pending: this.pending(run),
+          adapter: this.deps.adapter,
+          ui: this.deps.ui,
+          record: (line, notes) => this.record(run, line, notes),
+          stopRequested: () => run.stopped,
+          showProgress: () => this.showProgress(run),
+        })
+        if (outcome === 'cancelled') run.stopped = true
+        return
+      } catch (error) {
+        const fault = faultOf(error)
+        // Un défi de l'anti-robot : une fois la vérification faite, la phase B reprend avec les lignes qui attendent encore.
+        if (isChallenge(fault) && (await this.verification(run)) === 'resume') continue
+        run.halted = fault.code
+        run.cause = fault.cause
+        // Leclerc bloque : les lignes qui attendaient encore un choix échouent (`BLOCKED`), comme en phase A. Pour les autres erreurs
+        // elles restent « indisponibles » au résultat.
+        if (run.halted === 'BLOCKED') {
+          for (const { line } of this.pending(run)) this.record(run, failed(line, run.halted))
+        }
+        return
       }
     }
   }
@@ -320,7 +356,13 @@ export class Flow {
     const result = buildResult(run.plan, lines, ending, agentVersion)
     await ui.show(
       'end',
-      endProps(lines, ending, changesOf(run.plan, run.state), cartsOf(run.plan, run.state)),
+      endProps(
+        lines,
+        ending,
+        changesOf(run.plan, run.state),
+        cartsOf(run.plan, run.state),
+        run.slow,
+      ),
     )
     this.runs.remove(run.plan.runId)
     send(result)
@@ -363,10 +405,11 @@ export class Flow {
   /**
    * Une issue finale : sauvegardée pour la reprise, ajoutée au journal, la progression avance. `change` : le nombre de produits a été
    * recalculé sur le contenu lu en direct (DRV-613), à rappeler à l'écran de fin. `cart` : la quantité déjà au panier est conservée ou
-   * illisible (ticket M), à rappeler aussi.
+   * illisible (ticket M), à rappeler aussi. `slow` : la ligne a échoué parce que Leclerc a mis trop de temps à répondre (ticket K).
    */
-  private record(run: Run, line: ResultLine, change?: ContentChange, cart?: CartNote): void {
-    const { slug, entry } = this.describe(run, line)
+  private record(run: Run, line: ResultLine, { change, cart, slow }: LineNotes = {}): void {
+    const { slug, entry } = this.describe(run, line, slow === true)
+    if (slow) run.slow = true
     if (change) run.state.changes.push({ ingredientSlug: slug, ...change })
     if (cart) run.state.carts.push({ ingredientSlug: slug, ...cart })
     run.state.done[slug] = line
@@ -391,7 +434,7 @@ export class Flow {
     this.runs.save(run.state)
   }
 
-  private describe(run: Run, line: ResultLine): { slug: string; entry: string } {
+  private describe(run: Run, line: ResultLine, slow = false): { slug: string; entry: string } {
     const slug = line.ingredientSlug
     const name = run.names.get(slug) ?? slug
     switch (line.outcome) {
@@ -404,7 +447,7 @@ export class Flow {
       case 'SKIPPED':
         return { slug, entry: S.log.skipped(name) }
       default:
-        return { slug, entry: S.log.failed(name) }
+        return { slug, entry: slow ? S.log.slow(name) : S.log.failed(name) }
     }
   }
 

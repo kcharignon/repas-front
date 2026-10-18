@@ -98,6 +98,13 @@ const buttonOf = (zone: HTMLElement, name: string) => {
   return button
 }
 const choose = (zone: HTMLElement, name: string) => buttonOf(zone, name).click()
+/** « Chercher autre chose » : écrit `query` dans le champ de recherche de la liste et le soumet. */
+const search = (view: View, query: string) => {
+  const input = view.zone.querySelector<HTMLInputElement>('#chercher')
+  if (!input) throw new Error('champ absent')
+  input.value = query
+  view.zone.querySelector('form')?.dispatchEvent(new Event('submit', { cancelable: true }))
+}
 
 /** Les gestes de l'utilisateur, un par affichage de la liste : un geste rend sa réponse, ou touche la liste puis attend sa réponse. */
 type Step = (view: View) => ChooserAnswer | void | Promise<ChooserAnswer | void>
@@ -127,6 +134,8 @@ function run(
     others?: PlanLine[]
     /** La réponse à « Que fais-tu de ce produit ? » (`null` : revenir à la liste). */
     placementAnswer?: 'PRIMARY' | 'FALLBACK' | 'ONCE' | null
+    /** La réponse de l'utilisateur devant la demande de vérification de l'anti-robot (ticket K). */
+    challenge?: () => 'resume' | 'stop'
   } = {},
 ) {
   const placements: PlacementProps[] = []
@@ -142,6 +151,7 @@ function run(
       return options.placementAnswer === undefined ? 'PRIMARY' : options.placementAnswer
     },
     ...(options.quantity && { quantity: options.quantity }),
+    ...(options.challenge && { challenge: options.challenge }),
   })
   const { flow, sent } = makeFlow({
     ui: screens.ui,
@@ -664,13 +674,6 @@ describe('un produit connu devenu indisponible', () => {
 // —— Chercher autre chose ————————————————————————————————————————————————————————————————————————————————————————————————
 
 describe('chercher autre chose', () => {
-  const search = (view: View, query: string) => {
-    const input = view.zone.querySelector<HTMLInputElement>('#chercher')
-    if (!input) throw new Error('champ absent')
-    input.value = query
-    view.zone.querySelector('form')?.dispatchEvent(new Event('submit', { cancelable: true }))
-  }
-
   it('relance la recherche avec le nouveau mot et montre ses résultats', async () => {
     const found = { ...FOUND, 'poivre vert': ['2000002'] }
     const test = run(
@@ -856,6 +859,99 @@ describe('les erreurs du site', () => {
       error: 'NETWORK',
     })
     expect(lineOf(test.sent[0], 'sel')).toMatchObject({ outcome: 'HAVE_AT_HOME' })
+  })
+
+  it('une réponse trop lente (délai dépassé) devient un message qui le dit, pas « le site ne répond pas » : l’utilisateur peut passer', async () => {
+    const test = run(
+      pepper(),
+      [
+        (view) => {
+          expect(view.zone.querySelector('[role="alert"]')?.textContent).toBe(
+            'Leclerc met trop de temps à répondre. Réessaie dans un instant.',
+          )
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        before: () => {
+          throw new LeclercError('NETWORK', null, 'REQUEST_TIMEOUT')
+        },
+      },
+    )
+
+    await test.start()
+
+    expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'SKIPPED' })
+  })
+
+  it('un défi de l’anti-robot pendant une recherche suspend le passage ; la vérification faite, la liste de la ligne revient et le choix aboutit', async () => {
+    // Given : la recherche « sel » de l'utilisateur tombe sur le défi, une seule fois
+    let challenged = false
+    const asked: string[] = []
+    const test = run(
+      pepper(),
+      [
+        async (view) => {
+          search(view, 'sel')
+          return view.answered
+        },
+        (view) => choose(view.zone, 'Poivre noir'),
+      ],
+      {
+        challenge: () => {
+          asked.push('challenge')
+          return 'resume'
+        },
+        before: (call) => {
+          if (call === 'find sel' && !challenged) {
+            challenged = true
+            throw new LeclercError('BLOCKED', 200, 'CHALLENGE')
+          }
+        },
+      },
+    )
+
+    // When
+    await test.start()
+
+    // Then : la demande a été faite une fois, la ligne est de nouveau cherchée et choisie ; rien n'a échoué
+    expect(asked).toEqual(['challenge'])
+    expect(test.screens.screens()).toEqual([
+      'summary',
+      'progress',
+      'chooser',
+      'challenge',
+      'progress',
+      'chooser',
+      'progress',
+      'end',
+    ])
+    expect(test.adapter.calls).toEqual(['find poivre', 'find sel', 'find poivre', 'cart 2000001 2'])
+    expect(expectConform(test.sent[0])).toMatchObject({ outcome: 'completed' })
+    expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', quantity: 2 })
+  })
+
+  it('« Arrêter » devant le défi rend la main comme avant : « partial », les lignes qui restent échouent (BLOCKED), la cause est dite', async () => {
+    const test = run(pepper(), [], {
+      others: [fresh('sel')],
+      challenge: () => 'stop',
+      before: (call) => {
+        if (call.startsWith('find')) throw new LeclercError('BLOCKED', 200, 'CHALLENGE')
+      },
+    })
+
+    await test.start()
+
+    expect(expectConform(test.sent[0])).toMatchObject({
+      outcome: 'partial',
+      error: { code: 'BLOCKED', message: 'Leclerc a ralenti les requêtes (CHALLENGE)' },
+    })
+    expect(
+      test.sent[0]?.lines.map((line) => [line.outcome, 'error' in line ? line.error : null]),
+    ).toEqual([
+      ['FAILED', 'BLOCKED'],
+      ['FAILED', 'BLOCKED'],
+    ])
   })
 
   it('un blocage à la recherche d’une ligne fait échouer les lignes restantes (« BLOCKED ») et rend « partial »', async () => {

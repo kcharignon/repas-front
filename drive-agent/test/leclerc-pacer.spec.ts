@@ -9,12 +9,21 @@ import {
   NETWORK_RETRY_MS,
   Pacer,
   PAUSE_MS,
+  REQUEST_TIMEOUT_MS,
 } from '../src/leclerc'
 import { fixture, fakeSite } from './leclerc-helpers'
 
 function pacerOf(site: ReturnType<typeof fakeSite>): Pacer {
   return new Pacer(site.deps.fetch, site.deps)
 }
+
+/** Un Pacer qui a un délai d'attente par requête (celui de l'horloge fausse du site). */
+function timedPacerOf(site: ReturnType<typeof fakeSite>): Pacer {
+  return new Pacer(site.deps.fetch, { ...site.deps, timer: site.timer })
+}
+
+/** Laisse les tâches en attente s'exécuter (les promesses qui ne dépendent d'aucune horloge). */
+const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
 describe('Pacer : la cadence', () => {
   it('connaît les constantes du protocole : 800 ms, 700 ms de gigue, 2 blocages, reprise après 2 s', () => {
@@ -256,5 +265,228 @@ describe('Pacer : les erreurs réseau', () => {
     expect(failure).toMatchObject({ code: 'NETWORK' })
     expect((failure as Error).message).not.toContain('secret')
     expect(site.calls).toHaveLength(2)
+  })
+})
+
+describe('Pacer : le délai d’attente de chaque requête (ticket K)', () => {
+  const lastSignal = (site: ReturnType<typeof fakeSite>, index = 0) =>
+    site.calls[index]?.init.signal as AbortSignal | undefined
+
+  it('est de 20 secondes', () => {
+    expect(REQUEST_TIMEOUT_MS).toBe(20_000)
+  })
+
+  it('pose un signal d’interruption sur la requête, que la réponse annule : aucun délai ne reste armé', async () => {
+    // Given : un site qui répond tout de suite
+    const site = fakeSite(() => ({ body: 'ok' }))
+
+    // When
+    await timedPacerOf(site).request('/a', {})
+
+    // Then
+    expect(lastSignal(site)).toBeInstanceOf(AbortSignal)
+    expect(lastSignal(site)?.aborted).toBe(false)
+    expect(site.activeTimers()).toBe(0)
+  })
+
+  it('une réponse qui vient juste avant le délai passe', async () => {
+    const site = fakeSite(() => ({ body: 'ok', delayMs: REQUEST_TIMEOUT_MS - 100 }))
+
+    const reply = await timedPacerOf(site).request('/a', {})
+
+    expect(reply.text).toBe('ok')
+    expect(site.calls).toHaveLength(1)
+    expect(site.sleeps).toEqual([])
+  })
+
+  it('interrompt la requête qui ne répond pas dans le délai, puis la retente une fois après 2 s', async () => {
+    // Given : la première réponse ne vient jamais, la seconde est immédiate
+    const site = fakeSite((_call, index) =>
+      index === 0 ? { delayMs: Number.POSITIVE_INFINITY } : { body: 'ok' },
+    )
+
+    // When
+    const reply = await timedPacerOf(site).request('/a', {})
+
+    // Then : la première est interrompue au bout de 20 s, la reprise part après 2 s et réussit
+    expect(reply.text).toBe('ok')
+    expect(site.calls).toHaveLength(2)
+    expect(lastSignal(site, 0)?.aborted).toBe(true)
+    expect(lastSignal(site, 1)?.aborted).toBe(false)
+    expect(site.sleeps).toEqual([NETWORK_RETRY_MS])
+    expect((site.calls[1]?.at ?? 0) - (site.calls[0]?.at ?? 0)).toBeGreaterThanOrEqual(
+      REQUEST_TIMEOUT_MS + NETWORK_RETRY_MS,
+    )
+  })
+
+  it('deux délais dépassés de suite : NETWORK avec la cause REQUEST_TIMEOUT et un message qui le dit, jamais BLOCKED', async () => {
+    const site = fakeSite(() => ({ delayMs: Number.POSITIVE_INFINITY }))
+    const pacer = timedPacerOf(site)
+
+    const failure = await pacer.request('/a', {}).catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(LeclercError)
+    expect(failure).toMatchObject({
+      code: 'NETWORK',
+      cause: 'REQUEST_TIMEOUT',
+      status: null,
+      message: 'Leclerc met trop de temps à répondre.',
+    })
+    expect(site.calls).toHaveLength(2)
+    expect(pacer.isStopped).toBe(false)
+  })
+
+  it('un délai dépassé n’arrête pas le Pacer : la requête suivante part, à la cadence normale', async () => {
+    const site = fakeSite((_call, index) =>
+      index < 2 ? { delayMs: Number.POSITIVE_INFINITY } : { body: 'ok' },
+    )
+    const pacer = timedPacerOf(site)
+    await pacer.request('/a', {}).catch(() => undefined)
+
+    const reply = await pacer.request('/b', {})
+
+    expect(reply.text).toBe('ok')
+    expect(site.calls.map((call) => call.url)).toEqual(['/a', '/a', '/b'])
+    expect((site.calls[2]?.at ?? 0) - (site.calls[1]?.at ?? 0)).toBeGreaterThanOrEqual(
+      REQUEST_TIMEOUT_MS + PAUSE_MS,
+    )
+  })
+
+  it('ne compte pas un délai dépassé comme un refus du site : un 403 qui suit a sa propre reprise', async () => {
+    const replies = [
+      { delayMs: Number.POSITIVE_INFINITY },
+      { status: 403, body: 'non' },
+      { body: 'ok' },
+    ]
+    const site = fakeSite((_call, index) => replies[index] ?? { body: 'ok' })
+    const pacer = timedPacerOf(site)
+
+    const reply = await pacer.request('/a', {})
+
+    expect(reply.text).toBe('ok')
+    expect(site.calls).toHaveLength(3)
+    expect(pacer.isStopped).toBe(false)
+  })
+
+  it('le délai couvre aussi la lecture du corps de la réponse', async () => {
+    // Given : la réponse arrive, mais son corps ne vient jamais (le fetch du test ne le rend que s'il n'est pas interrompu)
+    const site = fakeSite(() => ({}), {
+      fetch: (_url, init) =>
+        Promise.resolve({
+          status: 200,
+          url: '/a',
+          redirected: false,
+          headers: new Headers(),
+          text: () =>
+            new Promise<string>((_resolve, reject) => {
+              init?.signal?.addEventListener('abort', () =>
+                reject(new DOMException('Aborted', 'AbortError')),
+              )
+            }),
+        } as unknown as Response),
+    })
+    const failure = timedPacerOf(site)
+      .request('/a', {})
+      .catch((error: unknown) => error)
+
+    // When : le délai sonne, la reprise attend à son tour, puis sonne
+    await flush()
+    site.elapse(REQUEST_TIMEOUT_MS)
+    await flush()
+    site.elapse(REQUEST_TIMEOUT_MS)
+
+    // Then
+    expect(await failure).toMatchObject({ code: 'NETWORK', cause: 'REQUEST_TIMEOUT' })
+    expect(site.activeTimers()).toBe(0)
+  })
+
+  it('une erreur réseau ordinaire n’est pas un délai dépassé : même code, message et cause d’avant', async () => {
+    const site = fakeSite(() => new Error('réseau coupé'))
+
+    const failure = await timedPacerOf(site)
+      .request('/a', {})
+      .catch((error: unknown) => error)
+
+    expect(failure).toMatchObject({
+      code: 'NETWORK',
+      cause: null,
+      message: 'Le site ne répond pas.',
+    })
+    expect(site.activeTimers()).toBe(0)
+  })
+
+  it('ne met dans l’erreur ni adresse, ni cookie, ni contenu de page', async () => {
+    const site = fakeSite(() => ({ delayMs: Number.POSITIVE_INFINITY }))
+
+    const failure = await timedPacerOf(site)
+      .request('/magasin-000123-000123/panier.aspx?op=1', {})
+      .catch((error: unknown) => error)
+
+    expect(JSON.stringify([(failure as Error).message, (failure as Error).stack])).not.toMatch(
+      /magasin|panier|000123|cookie/i,
+    )
+  })
+})
+
+describe('Pacer : la page de défi de l’anti-robot (ticket K)', () => {
+  it.each([[200], [403], [429]])(
+    'une page de défi servie avec le code %i lève BLOCKED, cause CHALLENGE, dès la première réponse : elle n’est pas retentée',
+    async (status) => {
+      // Given
+      const site = fakeSite(() => ({ status, body: fixture('defi.html') }))
+
+      // When
+      const failure = await pacerOf(site)
+        .request('/a', {})
+        .catch((error: unknown) => error)
+
+      // Then
+      expect(failure).toMatchObject({ code: 'BLOCKED', cause: 'CHALLENGE', status })
+      expect(site.calls).toHaveLength(1)
+    },
+  )
+
+  it('n’arrête pas le Pacer : une fois le défi résolu par l’utilisateur, la requête suivante part à la cadence normale', async () => {
+    // Given : un défi à la première requête, puis une page
+    const site = fakeSite((_call, index) =>
+      index === 0 ? { body: fixture('defi.html') } : { body: 'ok' },
+    )
+    const pacer = pacerOf(site)
+    await expect(pacer.request('/a', {})).rejects.toThrow(
+      expect.objectContaining({ code: 'BLOCKED', cause: 'CHALLENGE' }),
+    )
+    expect(pacer.isStopped).toBe(false)
+
+    // When
+    const reply = await pacer.request('/a', {})
+
+    // Then : la pause normale a eu lieu avant la requête qui suit
+    expect(reply.text).toBe('ok')
+    expect(site.sleeps).toEqual([PAUSE_MS])
+  })
+
+  it('un 403 ordinaire n’est pas un défi : une reprise, puis l’arrêt, sans cause', async () => {
+    const site = fakeSite(() => ({ status: 403, body: 'refusé' }))
+    const pacer = pacerOf(site)
+
+    const failure = await pacer.request('/a', {}).catch((error: unknown) => error)
+
+    expect(failure).toMatchObject({ code: 'BLOCKED', cause: null, status: 403 })
+    expect(site.calls).toHaveLength(2)
+    expect(pacer.isStopped).toBe(true)
+  })
+
+  it('ne met aucune partie de la page de défi dans l’erreur', async () => {
+    const site = fakeSite(() => ({
+      body: '<a href="https://geo.captcha-delivery.com/captcha/?cid=SECRET123">défi</a>',
+    }))
+
+    const failure = await pacerOf(site)
+      .request('/a', {})
+      .catch((error: unknown) => error)
+
+    expect(JSON.stringify([(failure as Error).message, (failure as Error).stack])).not.toMatch(
+      /SECRET|captcha|cid=/i,
+    )
   })
 })

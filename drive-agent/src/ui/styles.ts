@@ -12,6 +12,8 @@ export const STYLES = `
 [hidden]{display:none!important}
 .backdrop{position:absolute;inset:0;background:var(--bg)}
 .overlay{position:absolute;left:0;top:0;width:100%;height:100%;transform-origin:0 0;touch-action:pan-y;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
+.overlay.sheet{background:transparent;pointer-events:none;overflow:visible}
+.overlay.sheet>.screen{flex:none;max-height:70%;margin-top:auto;border-top:3px solid var(--accent);background:var(--bg);pointer-events:auto}
 .screen{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:16px 16px var(--clear);overflow-wrap:anywhere}
 .screen.fill{display:flex;flex-direction:column;padding:0;overflow:hidden}
 h1{margin:0 0 12px;font-size:1.35rem;line-height:1.25}

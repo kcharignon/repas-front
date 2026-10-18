@@ -32,6 +32,7 @@ export {
 } from './run-state'
 export type {
   FlowDeps,
+  LineNotes,
   PendingLine,
   PhaseB,
   PhaseBContext,

@@ -347,6 +347,8 @@ export const S = {
       `Résultats pour « ${query} » (rien trouvé pour « ${asked} »)`,
     none: (query: string) => `Aucun produit trouvé pour « ${query} ». Essaie un autre mot.`,
     network: 'Le site ne répond pas. Réessaie dans un instant.',
+    /** La requête a dépassé son délai d'attente (ticket K) : Leclerc répond, mais trop lentement. */
+    slow: 'Leclerc met trop de temps à répondre. Réessaie dans un instant.',
     choose: 'Choisir',
     out: 'Indisponible',
     refused: 'Produit refusé',
@@ -394,6 +396,8 @@ export const S = {
       item: (name: string, planned: number, live: number) =>
         `${name} : ${live} au lieu de ${planned}`,
     },
+    /** Une requête a dépassé son délai d'attente : l'envoi peut se relancer, ce qui est au panier n'est pas touché (ticket K). */
+    slow: 'Leclerc a mis trop de temps à répondre. Relance l’envoi dans un moment : ce qui est déjà au panier n’est pas touché.',
     /** Le panier avait déjà plus que le plan : Repas ne réduit jamais une quantité déjà au panier (ticket M). */
     kept: {
       title: 'Quantités déjà au panier',
@@ -420,6 +424,15 @@ export const S = {
     toChoose: (name: string) => `${name} : à choisir ensuite`,
     unavailable: (name: string) => `${name} : plus disponible, à choisir ensuite`,
     failed: (name: string) => `${name} : échec`,
+    slow: (name: string) => `${name} : Leclerc met trop de temps à répondre`,
+  },
+  /** La demande de vérification de l'anti-robot (ticket K) : un bandeau en bas de l'écran, pour que la page reste visible. */
+  challenge: {
+    title: 'Leclerc demande une vérification',
+    text: 'Fais-la dans la page, puis touche Reprendre.',
+    reload: 'Si rien ne s’affiche, recharge la page : ton avancement est gardé.',
+    resume: 'Reprendre',
+    stop: 'Arrêter',
   },
   error: {
     close: 'Fermer',
