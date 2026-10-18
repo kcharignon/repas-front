@@ -6,6 +6,7 @@ import UiButton from '@/design/UiButton.vue'
 import UiChip from '@/design/UiChip.vue'
 import { useThemeStore } from '@/design/theme'
 import SettingsForms from '@/features/account/SettingsForms.vue'
+import DriveAccountLinks from '@/features/drive/DriveAccountLinks.vue'
 import { useSessionStore } from '@/session/session'
 
 const { t } = useI18n()
@@ -41,6 +42,8 @@ async function logout() {
         </UiChip>
       </div>
     </section>
+
+    <DriveAccountLinks />
 
     <RouterLink
       v-if="session.isAdmin"

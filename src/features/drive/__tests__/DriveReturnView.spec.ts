@@ -224,8 +224,8 @@ describe('retour du drive : l’enregistrement échoue', () => {
   })
 
   it.each([
-    [409, 'DRIVE_STORE_MISMATCH', 'Le magasin de ce passage n’est plus votre magasin actuel'],
-    [422, 'DRIVE_CHOICE_INVALID', 'Certains choix lus sur Leclerc ne sont pas valides'],
+    [409, 'DRIVE_STORE_MISMATCH', 'Votre magasin a changé'],
+    [422, 'DRIVE_CHOICE_INVALID', 'Cette préférence est refusée'],
     [409, 'DRIVE_NOT_CONFIGURED', 'Choisissez d’abord votre magasin'],
   ])('explique le refus %i %s', async (status, code, message) => {
     const { wrapper } = await open(

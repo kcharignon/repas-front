@@ -88,6 +88,16 @@ export const routes: RouteRecordRaw[] = [
         props: { topic: 'help' },
       },
       {
+        path: 'drive/produits',
+        name: 'drive-products',
+        component: () => import('@/features/drive/ProductsView.vue'),
+      },
+      {
+        path: 'drive/produits/:slug',
+        name: 'drive-product',
+        component: () => import('@/features/drive/ProductDetailView.vue'),
+      },
+      {
         path: 'recettes',
         name: 'recipes',
         component: () => import('@/features/recipes/RecipesView.vue'),
