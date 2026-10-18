@@ -10,6 +10,7 @@ import {
   type ResultLine,
 } from '../../protocol'
 import { LeclercError } from '../leclerc'
+import { own } from '../own'
 import { S, type SummaryProps } from '../ui'
 import { settleKnownLine } from './phase-a'
 import { buildResult, endProps, endingOf, resultLines } from './result'
@@ -298,13 +299,17 @@ export class Flow {
   }
 
   private isProcessed(run: Run, line: PlanLine): boolean {
-    return line.ingredientSlug in run.state.done || line.ingredientSlug in run.state.waiting
+    const { done, waiting } = run.state
+    return (
+      own(done, line.ingredientSlug) !== undefined ||
+      own(waiting, line.ingredientSlug) !== undefined
+    )
   }
 
   /** Les lignes qui attendent un choix, avec leurs produits connus indisponibles (dans l'ordre de priorité). */
   private pending(run: Run): PendingLine[] {
     return run.plan.lines.flatMap((line) => {
-      const ids = run.state.waiting[line.ingredientSlug]
+      const ids = own(run.state.waiting, line.ingredientSlug)
       if (!ids) return []
       return [
         { line, unavailable: (line.products ?? []).filter((product) => ids.includes(product.id)) },

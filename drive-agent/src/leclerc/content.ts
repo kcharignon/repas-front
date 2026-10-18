@@ -3,6 +3,7 @@
 //   2. le libellé de seconde ligne (« 1 kg », « 6 x 125 g », « lot de 4 ») ;
 //   3. le prix unitaire divisé par le prix à l'unité de mesure (1,29 € ÷ 2,58 €/kg = 0,5 kg).
 // Règle absolue : `null` plutôt qu'une valeur fausse. Un libellé ambigu, ou qui contredit les prix, ne donne rien.
+import { own } from '../own'
 import type { StructuredContent } from './embedded'
 
 /** Les unités de base du contenu net ; ce sont des unités du protocole. */
@@ -50,7 +51,7 @@ function round(value: number): number {
 }
 
 function convert(amount: number, unit: string): Content | null {
-  const factor = FACTORS[unit]
+  const factor = own(FACTORS, unit)
   return factor ? { value: round(amount * factor.value), unit: factor.unit } : null
 }
 
