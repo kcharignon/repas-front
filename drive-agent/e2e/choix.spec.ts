@@ -136,9 +136,9 @@ test('laisse passer une ligne ou dire « j’en ai toujours », même quand la r
   await page.getByRole('button', { name: 'J’en ai toujours' }).click()
   await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
 
-  // Then : rien au panier, deux recherches et aucune écriture
+  // Then : rien au panier, trois recherches (« gnocchis », son singulier « gnocchi » quand il ne répond rien, puis « sel ») et aucune écriture
   expect(fake.cart()).toEqual({})
-  expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'search'])
+  expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'search', 'search'])
   await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
   expect(await returnedResult(page, fake)).toMatchObject({
     lines: [
@@ -175,8 +175,8 @@ for (const [form, cart] of [
     await page.getByRole('button', { name: 'J’en ai toujours' }).click()
     await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
 
-    // Then : aucune erreur, deux recherches, aucune écriture, le panier n'a pas bougé
-    expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'search'])
+    // Then : aucune erreur, trois recherches (« gnocchis », « gnocchi », « sel »), aucune écriture, le panier n'a pas bougé
+    expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'search', 'search'])
     expect(fake.cart()).toEqual(cart)
     await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
     const result = await returnedResult(page, fake)

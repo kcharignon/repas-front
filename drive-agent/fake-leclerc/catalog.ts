@@ -102,8 +102,25 @@ export function normalize(text: string): string {
   return text.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/œ/gi, 'oe').toLowerCase()
 }
 
-/** Les produits dont le libellé contient tous les mots cherchés, dans l'ordre du catalogue. */
-export function searchCatalog(query: string): FakeProduct[] {
+/**
+ * Les produits dont le libellé contient tous les mots cherchés, dans l'ordre du catalogue. Par défaut la recherche est tolérante (sans accents
+ * ni majuscules, `œ` = `oe`). Avec `strict`, elle imite un moteur sensible aux accents, à la ligature et au pluriel (le vrai site, d'après les
+ * hypothèses H3 et H7 de l'audit du 2026-10-18) : seules les majuscules sont ignorées, « œuf » ne trouve pas les « Oeufs », « creme » ne trouve
+ * pas la « Crème », « spaghettis » ne trouve pas le « Spaghetti » ; un mot cherché est une partie d'un mot du libellé (« oeuf » trouve « Oeufs »).
+ */
+export function searchCatalog(query: string, strict = false): FakeProduct[] {
+  if (strict) {
+    const words = query
+      .normalize('NFC')
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter(Boolean)
+    if (words.length === 0) return []
+    return PRODUCTS.filter((product) => {
+      const label = `${product.label1} ${product.label2 ?? ''}`.normalize('NFC').toLowerCase()
+      return words.every((word) => label.includes(word))
+    })
+  }
   const words = normalize(query)
     .split(/[^a-z0-9]+/)
     .filter(Boolean)

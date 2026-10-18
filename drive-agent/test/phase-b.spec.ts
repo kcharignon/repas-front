@@ -1019,3 +1019,140 @@ describe('le libellé d’un produit pour Repas', () => {
     expect(backAcceptsLabel(product.label)).toBe(true)
   })
 })
+
+// —— Quand le nom ne répond rien : les formes dérivées (ticket D de l'audit du 2026-10-18) —————————————————————————————————————
+
+describe('quand la recherche du nom ne répond rien', () => {
+  const egg = (extra: Partial<PlanLine> = {}): PlanLine => ({
+    ...fresh('oeuf'),
+    name: 'Œuf',
+    searchQuery: 'œuf',
+    ...extra,
+  })
+  const shelf = { '2000010': { label: 'Oeufs frais de test', label2: '6 pièces' } }
+  const statusOf = (zone: HTMLElement) => zone.querySelector('[role="status"]')?.textContent ?? ''
+  const queryOf = (zone: HTMLElement) =>
+    zone.querySelector<HTMLInputElement>('#chercher')?.value ?? ''
+
+  it('essaie « oeuf » après « œuf », montre ses produits et dit laquelle des deux recherches a répondu', async () => {
+    // Given : le site ne comprend « œuf » que sans ligature
+    const test = run(
+      egg(),
+      [
+        (view) => {
+          expect(rows(view.zone).map(nameOf)).toEqual(['Oeufs frais de test'])
+          expect(statusOf(view.zone)).toBe('Résultats pour « oeuf » (rien trouvé pour « œuf »)')
+          expect(queryOf(view.zone)).toBe('oeuf')
+          choose(view.zone, 'Oeufs frais')
+        },
+      ],
+      { shelf, found: { oeuf: ['2000010'] } },
+    )
+
+    // When
+    await test.start()
+
+    // Then : deux recherches, puis l'ajout au panier du produit choisi
+    expect(test.adapter.calls).toEqual(['find œuf', 'find oeuf', 'cart 2000010 1'])
+    expect(lineOf(test.sent[0], 'oeuf')).toMatchObject({ outcome: 'CHOSEN' })
+  })
+
+  it('une réponse du nom lui-même ne dit rien de plus : « Résultats pour « poivre » », une seule requête', async () => {
+    const test = run(pepper(), [
+      (view) => {
+        expect(statusOf(view.zone)).toBe('Résultats pour « poivre »')
+        return { kind: 'skip' }
+      },
+    ])
+
+    await test.start()
+
+    expect(test.adapter.calls).toEqual(['find poivre'])
+  })
+
+  it('rien ne répond : « Aucun produit trouvé pour « zzqxkw ». Essaie un autre mot. », au plus 5 requêtes, le champ garde le nom', async () => {
+    // Given
+    const test = run(
+      { ...fresh('zzqxkw'), name: 'Zzqxkw', searchQuery: 'zzqxkw' },
+      [
+        (view) => {
+          expect(statusOf(view.zone)).toBe(
+            'Aucun produit trouvé pour « zzqxkw ». Essaie un autre mot.',
+          )
+          expect(queryOf(view.zone)).toBe('zzqxkw')
+          expect(rows(view.zone)).toHaveLength(0)
+          return { kind: 'skip' }
+        },
+      ],
+      { found: {} },
+    )
+
+    // When
+    await test.start()
+
+    // Then : le nom, puis son pluriel (la seule autre forme d'un mot inventé)
+    expect(test.adapter.calls).toEqual(['find zzqxkw', 'find zzqxkws'])
+    expect(lineOf(test.sent[0], 'zzqxkw')).toMatchObject({ outcome: 'SKIPPED' })
+  })
+
+  it('un nom long dont aucune forme ne répond fait 5 requêtes au plus, toutes différentes', async () => {
+    const name = 'Herbes de Provence'
+    const test = run({ ...fresh('herbes'), name, searchQuery: name }, [() => ({ kind: 'skip' })], {
+      found: {},
+    })
+
+    await test.start()
+
+    expect(test.adapter.calls).toHaveLength(5)
+    expect(new Set(test.adapter.calls).size).toBe(5)
+    expect(test.adapter.calls.every((call) => call.startsWith('find '))).toBe(true)
+  })
+
+  it('les requêtes de repli se font en série, à la suite les unes des autres', async () => {
+    const test = run(egg(), [() => ({ kind: 'skip' })], { found: {} })
+
+    await test.start()
+
+    expect(test.adapter.maxInFlight()).toBeLessThanOrEqual(1)
+  })
+
+  it('ce que l’utilisateur tape lui-même n’est pas réécrit : une recherche sans réponse ne lance qu’une requête', async () => {
+    // Given : l'utilisateur cherche « tomates » dans « Chercher autre chose », sans réponse
+    const type = (view: View, query: string) => {
+      const input = view.zone.querySelector<HTMLInputElement>('#chercher')
+      if (!input) throw new Error('champ absent')
+      input.value = query
+      view.zone.querySelector('form')?.dispatchEvent(new Event('submit', { cancelable: true }))
+    }
+    const test = run(pepper(), [
+      async (view) => {
+        type(view, 'tomates')
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(statusOf(view.zone)).toBe(
+          'Aucun produit trouvé pour « tomates ». Essaie un autre mot.',
+        )
+        return { kind: 'skip' }
+      },
+    ])
+
+    // When
+    await test.start()
+
+    // Then
+    expect(test.adapter.calls).toEqual(['find poivre', 'find tomates'])
+  })
+
+  it('un blocage pendant une requête de repli arrête le passage, sans autre requête', async () => {
+    const test = run(egg(), [() => ({ kind: 'skip' })], {
+      found: {},
+      before: (call) => {
+        if (call === 'find oeuf') throw new LeclercError('BLOCKED', 403)
+      },
+    })
+
+    await test.start()
+
+    expect(test.adapter.calls).toEqual(['find œuf', 'find oeuf'])
+    expect(test.sent[0]).toMatchObject({ outcome: 'partial' })
+  })
+})

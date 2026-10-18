@@ -342,6 +342,9 @@ export const S = {
     searching: 'Recherche en cours…',
     adding: 'Ajout au panier…',
     results: (query: string) => `Résultats pour « ${query} »`,
+    /** Le nom n'a rien donné : l'agent a essayé une autre forme (« oeuf » pour « œuf ») et dit laquelle a répondu. */
+    resultsInstead: (query: string, asked: string) =>
+      `Résultats pour « ${query} » (rien trouvé pour « ${asked} »)`,
     none: (query: string) => `Aucun produit trouvé pour « ${query} ». Essaie un autre mot.`,
     network: 'Le site ne répond pas. Réessaie dans un instant.',
     choose: 'Choisir',

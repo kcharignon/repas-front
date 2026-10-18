@@ -659,6 +659,26 @@ describe('liste de produits dans l’écran de choix', () => {
 
     await expect(answer).resolves.toEqual({ kind: 'content', value: { query: 'sel gris' } })
   })
+
+  it('dit quelle recherche a répondu quand le nom n’a rien donné (ticket D), sans toucher au champ « Chercher autre chose »', () => {
+    const zone = document.createElement('div')
+    const hooks = { choose: () => undefined, search: () => undefined, never: () => undefined }
+
+    const picker = renderPicker(zone, props, hooks)
+    const status = () => zone.querySelector('[role="status"]')?.textContent
+
+    expect(status()).toBe('Résultats pour « poivre »')
+
+    picker.results('oeuf', items, null, 'œuf')
+    expect(status()).toBe('Résultats pour « oeuf » (rien trouvé pour « œuf »)')
+
+    picker.results('œuf', [], null, null)
+    expect(status()).toBe('Aucun produit trouvé pour « œuf ». Essaie un autre mot.')
+
+    picker.results('œuf', [], null, 'oeuf')
+    expect(status()).toBe('Aucun produit trouvé pour « œuf ». Essaie un autre mot.')
+    expect(zone.querySelector<HTMLInputElement>('#chercher')?.value).toBe('poivre')
+  })
 })
 
 describe('erreurs', () => {
