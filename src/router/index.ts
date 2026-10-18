@@ -83,8 +83,7 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'drive/aide',
         name: 'drive-help',
-        component: () => import('@/features/drive/DrivePlaceholderView.vue'),
-        props: { topic: 'help' },
+        component: () => import('@/features/drive/DriveHelpView.vue'),
       },
       {
         path: 'drive/produits',

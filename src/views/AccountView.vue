@@ -6,6 +6,7 @@ import UiButton from '@/design/UiButton.vue'
 import UiChip from '@/design/UiChip.vue'
 import { useThemeStore } from '@/design/theme'
 import SettingsForms from '@/features/account/SettingsForms.vue'
+import AppHelpLink from '@/features/drive/AppHelpLink.vue'
 import DriveAccountLinks from '@/features/drive/DriveAccountLinks.vue'
 import { useSessionStore } from '@/session/session'
 
@@ -42,6 +43,8 @@ async function logout() {
         </UiChip>
       </div>
     </section>
+
+    <AppHelpLink />
 
     <DriveAccountLinks />
 
