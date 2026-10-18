@@ -824,7 +824,7 @@ export default {
         phone:
           'Sur votre téléphone, l’application garde votre connexion à Leclerc, comme le ferait un navigateur. Elle ne la partage ni avec Repas ni avec personne d’autre que Leclerc et ses propres services. Vous pouvez l’effacer à tout moment : menu de l’application, « Se déconnecter de Leclerc et effacer les données du drive ».',
         sheets:
-          'Les fiches de produits (nom, contenu, prix vu, magasin) sont communes à tous les utilisateurs de Repas et ne disent pas qui les a vues. Chacun ne retrouve que les produits qu’il a lui-même mémorisés. Ces fiches restent quand un compte est supprimé, mais sans aucun lien avec la personne.',
+          'Les fiches de produits (nom, contenu, prix vu, magasin) sont communes à tous les utilisateurs de Repas et ne disent pas qui les a vues. Chacun ne retrouve que les produits qu’il a lui-même mémorisés. La première personne qui décrit un produit fixe sa fiche (nom, contenu, code-barres) : les suivantes ne la réécrivent pas, elles ne font que la compléter si elle est incomplète ; le prix vu, lui, est rafraîchi par celles qui choisissent ce produit. Ces fiches restent quand un compte est supprimé, mais sans aucun lien avec la personne.',
       },
       erase: {
         title: 'Comment tout effacer',
