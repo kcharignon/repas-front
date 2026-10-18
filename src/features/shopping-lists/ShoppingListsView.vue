@@ -21,10 +21,17 @@ function createList() {
 const badge = {
   ACTIVE: 'bg-primary text-on-primary',
   PAUSED: 'bg-soft text-ink',
+  SENT: 'bg-accent text-on-accent',
   COMPLETED: 'border border-line text-muted',
 } as const
 
-const label = { ACTIVE: 'active', PAUSED: 'paused', COMPLETED: 'completed' } as const
+// Le badge d'une liste envoyée est court (« Envoyée ») : sa date d'envoi est dans la ligne du dessous.
+const label = {
+  ACTIVE: 'status.active',
+  PAUSED: 'status.paused',
+  SENT: 'sentBadge',
+  COMPLETED: 'status.completed',
+} as const
 </script>
 
 <template>
@@ -62,10 +69,14 @@ const label = { ACTIVE: 'active', PAUSED: 'paused', COMPLETED: 'completed' } as 
         >
           <span class="flex flex-col">
             <span class="text-lg font-bold">{{ list.displayName }}</span>
-            <span class="text-sm text-muted">{{ d(new Date(list.createdAt), 'long') }}</span>
+            <span class="text-sm text-muted">{{
+              list.isSent && list.sentAt
+                ? t('shoppingList.sentOn', { date: d(new Date(list.sentAt), 'long') })
+                : d(new Date(list.createdAt), 'long')
+            }}</span>
           </span>
           <span :class="['rounded-full px-3 py-1 text-sm font-semibold', badge[list.status]]">
-            {{ t(`shoppingList.status.${label[list.status]}`) }}
+            {{ t(`shoppingList.${label[list.status]}`) }}
           </span>
         </RouterLink>
       </li>

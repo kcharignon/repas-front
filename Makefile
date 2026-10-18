@@ -124,7 +124,7 @@ fixtures: ## Create the demo accounts and data in the back dev database: admin@r
 	@echo "✅ Connecte-toi sur http://localhost:$(FRONT_PORT) avec admin@repas.fr (administrateur) ou user@repas.fr, mot de passe : M0t 2 p@sse"
 
 ## —— Drive Leclerc 🛒 ————————————————————————————————————————————————————
-.PHONY: agent-build agent-verify agent-test lab lab-publish lab-loader
+.PHONY: agent-build agent-verify agent-test agent-e2e e2e-agent agent-fake lab lab-publish lab-loader
 
 agent-build: ## Build the drive agent (drive-agent/): dist/agent.js and dist/manifest.json (version, size, SHA-384)
 	@$(RUN) npm run --silent agent:build
@@ -134,6 +134,14 @@ agent-verify: ## Build the drive agent twice and fail if the two builds differ (
 
 agent-test: ## Run the unit tests of the drive agent only (build chain, code rules, agent)
 	@$(RUN) npm run --silent agent:test
+
+agent-e2e: ## Run the drive agent end to end in Chromium (Pixel 7) against the fake Leclerc site: no back, no front, no network (DRV-309)
+	@$(RUN) npm run --silent agent:e2e
+
+e2e-agent: agent-e2e ## Same as agent-e2e
+
+agent-fake: ## Start the fake Leclerc site by hand on 127.0.0.1:8099 with the Node of your machine (FAKE_LECLERC_PORT, FAKE_LECLERC_HOSTS); Ctrl-C to stop
+	@npm run --silent agent:fake
 
 lab: ## Build the throwaway drive test bookmarklet (drive-agent/lab) into drive-agent/lab/dist/lab-bookmarklet.txt and print its size
 	@$(RUN) npm run --silent lab:build
