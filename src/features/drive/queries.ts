@@ -1,12 +1,14 @@
 import { computed } from 'vue'
-import { useMutation, useQuery } from '@tanstack/vue-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { unwrap } from '@/api'
-import type { ChoiceIntent } from '@/api'
+import type { ChoiceIntent, DriveStorePayload } from '@/api'
 import { useSessionStore } from '@/session/session'
 
 export const driveKeys = {
+  all: ['drive'] as const,
   settings: ['drive', 'settings'] as const,
+  appInfo: ['drive', 'app-info'] as const,
   plan: (listId: string) => ['drive', 'plan', listId] as const,
 }
 
@@ -61,5 +63,21 @@ export function useSaveChoices() {
         )
     },
     meta: { silent: true },
+  })
+}
+
+/**
+ * Enregistre le magasin de l'utilisateur (`PUT /drive/settings`) ; il remplace le précédent. L'échec s'affiche dans l'écran
+ * (`silent`) ; en cas de succès, tout ce que le drive a lu pour l'ancien magasin (choix, plans) est relu.
+ */
+export function useSaveDriveSettings() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (store: DriveStorePayload) =>
+      unwrap(api.PUT('/api/v1/drive/settings', { body: { retailer: 'leclerc', store } })),
+    meta: { silent: true },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: driveKeys.all }),
   })
 }

@@ -68,6 +68,8 @@ export interface DriveBack {
   /** Les corps JSON des écritures, dans l'ordre. */
   bodies: unknown[]
   choices: Choice[]
+  /** Le magasin enregistré, `null` s'il n'y en a pas. */
+  store: { id: string; baseUrl: string; label?: string | null } | null
 }
 
 /** Un faux back où l'utilisateur est connecté, le drive allumé, un magasin et trois ingrédients ayant une préférence. */
@@ -83,11 +85,11 @@ export async function fakeDriveBack(
       choice('oeufs', 'Œufs', [product('4', 'Œufs plein air x6', { value: 6, unit: 'piece' })]),
       choice('sel', 'Sel', [], [], true),
     ],
+    store:
+      options.store === undefined
+        ? { id: '123456', baseUrl: 'https://exemple.leclercdrive.fr/magasin-123456-123456' }
+        : options.store,
   }
-  const store =
-    options.store === undefined
-      ? { id: '123456', baseUrl: 'https://exemple.leclercdrive.fr/magasin-123456-123456' }
-      : options.store
   const find = (slug: string) => back.choices.find((item) => item.ingredientSlug === slug)
 
   await page.addInitScript(() => localStorage.setItem('repas.session', '1'))
@@ -110,7 +112,23 @@ export async function fakeDriveBack(
           defaultServing: 4,
         })
       if (key === 'GET /api/v1/drive/settings')
-        return reply(route, { enabled: options.enabled ?? true, retailer: 'leclerc', store })
+        return reply(route, {
+          enabled: options.enabled ?? true,
+          retailer: 'leclerc',
+          store: back.store,
+        })
+      if (key === 'PUT /api/v1/drive/settings') {
+        const body = request.postDataJSON() as { store: NonNullable<DriveBack['store']> }
+        back.bodies.push(body)
+        const valid = /^https:\/\/[a-z0-9-]+\.leclercdrive\.fr\/magasin-(\d+)-\d+$/.exec(
+          body.store.baseUrl,
+        )
+        if (valid?.[1] !== body.store.id)
+          return reply(route, { error: { message: 'DRIVE_STORE_INVALID' } }, 422)
+        back.store = body.store
+
+        return reply(route)
+      }
       if (key === 'GET /api/v1/drive/choices')
         return reply(route, { member: back.choices, totalItems: back.choices.length })
       if (slug !== undefined && request.method() === 'PUT') {

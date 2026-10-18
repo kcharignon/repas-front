@@ -24,10 +24,14 @@ async function open(enabled: boolean) {
 describe('entrées du drive dans le compte', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('propose « Mes produits » quand le drive est allumé', async () => {
+  it('propose les réglages et « Mes produits » quand le drive est allumé', async () => {
     const wrapper = await open(true)
 
-    expect(wrapper.find('a').attributes('href')).toBe('/drive/produits')
+    expect(wrapper.findAll('a').map((link) => link.attributes('href'))).toEqual([
+      '/drive/reglages',
+      '/drive/produits',
+    ])
+    expect(wrapper.text()).toContain('Réglages du drive')
     expect(wrapper.text()).toContain('Mes produits du drive')
   })
 
