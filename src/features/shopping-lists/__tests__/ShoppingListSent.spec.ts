@@ -49,7 +49,12 @@ const detail = (status: Status = 'ACTIVE', rowCount = 2) => ({
 })
 
 const none = { shoppingListId: null, quantityByIngredientSlug: {}, plannedRecipeIds: [] }
-const settings = (enabled: boolean) => () => json({ enabled, retailer: 'leclerc' })
+const store = {
+  id: '123456',
+  label: null,
+  baseUrl: 'https://courses-test.leclercdrive.fr/magasin-123456-123456',
+}
+const settings = (enabled: boolean) => () => json({ enabled, retailer: 'leclerc', store })
 
 const session = {
   'POST /api/auth/refresh': () => json({ token: 'jeton' }),
@@ -295,6 +300,19 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     expect(context.router.currentRoute.value.params.listId).toBe('l1')
   })
 
+  it('mène aux réglages du drive, sans confirmation, quand aucun magasin n’est enregistré', async () => {
+    const { fetchMock, context } = await openActive({
+      'GET /api/v1/drive/settings': () => json({ enabled: true, retailer: 'leclerc' }),
+    })
+    await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+
+    button('Envoyer au drive')?.click()
+    await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-settings'))
+
+    expect(context.router.currentRoute.value.query.magasin).toBe('requis')
+    expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/send')
+  })
+
   it('désactive l’envoi sans réseau', async () => {
     await openActive()
     await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
@@ -346,7 +364,7 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
   it('retire le bouton quand le drive est coupé entre-temps (404 DRIVE_DISABLED)', async () => {
     let enabled = true
     await send({
-      'GET /api/v1/drive/settings': () => json({ enabled, retailer: 'leclerc' }),
+      'GET /api/v1/drive/settings': () => json({ enabled, retailer: 'leclerc', store }),
       'POST /api/v1/shopping-lists/l1/send': () => {
         enabled = false
 
