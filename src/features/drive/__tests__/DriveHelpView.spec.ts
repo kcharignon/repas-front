@@ -1,0 +1,188 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+
+import { appContext } from '@/__tests__/helpers'
+import { APP_RELEASES_URL } from '../appInstall'
+import { fakeNative } from '../bridge/__tests__/fakeNative'
+import AppHelpLink from '../AppHelpLink.vue'
+import DriveHelpView from '../DriveHelpView.vue'
+
+type Native = ReturnType<typeof fakeNative>
+
+const scrollIntoView = vi.fn<() => void>()
+
+beforeEach(() => {
+  Element.prototype.scrollIntoView = scrollIntoView
+})
+
+afterEach(() => {
+  delete (globalThis as { repasNative?: unknown }).repasNative
+  scrollIntoView.mockClear()
+  document.body.innerHTML = ''
+})
+
+/** L'application Repas : le faux pont répond à `app.info` (ou par une erreur quand `version` est `null`). */
+function installApp(version: string | null = '1.2.3'): Native {
+  const native = fakeNative((message, reply) => {
+    if (message.type !== 'app.info') return
+    reply(
+      version === null
+        ? { v: 1, type: 'error', code: 'UNKNOWN_TYPE' }
+        : { v: 1, type: 'app.info', version, versionCode: 12, drive: true },
+    )
+  })
+  ;(globalThis as { repasNative?: unknown }).repasNative = native.bridge
+
+  return native
+}
+
+async function open(path = '/drive/aide') {
+  const context = appContext()
+  await context.router.push(path)
+  const wrapper = mount(DriveHelpView, {
+    attachTo: document.body,
+    global: { plugins: context.plugins },
+  })
+  await flushPromises()
+
+  return { wrapper, context }
+}
+
+describe('aide et installation de l’application', () => {
+  it('dans un navigateur : explique l’installation et propose la dernière version', async () => {
+    const { wrapper } = await open()
+
+    expect(wrapper.find('h1').text()).toBe('Installer l’application Repas')
+    expect(wrapper.text()).toContain('Vous êtes dans un navigateur.')
+    const download = wrapper.find(`a[href="${APP_RELEASES_URL}"]`)
+    expect(download.text()).toBe('Télécharger la dernière version')
+    expect(download.attributes('target')).toBe('_blank')
+    expect(download.attributes('rel')).toBe('noopener noreferrer')
+    expect(download.attributes('aria-label')).toContain('nouvel onglet')
+    // Les étapes de l’installation, dans l’ordre
+    const steps = wrapper.findAll('#installer li').map((step) => step.text())
+    expect(steps).toHaveLength(6)
+    expect(steps[2]).toContain('Autoriser depuis cette source')
+    expect(steps[5]).toContain('connectez-vous à Repas')
+  })
+
+  it('couvre la connexion à Leclerc, l’envoi, la mise à jour, la désinstallation et l’ancienne icône', async () => {
+    const { wrapper } = await open()
+
+    expect(wrapper.find('#connexion-leclerc').text()).toContain('Repas ne les voit jamais')
+    expect(wrapper.find('#connexion-leclerc a[href="/drive/reglages"]').text()).toBe(
+      'Réglages du drive',
+    )
+    expect(wrapper.find('#envoi').text()).toContain('Repas ne valide jamais une commande')
+    expect(wrapper.find('#mise-a-jour').text()).toContain('installez-la par-dessus')
+    expect(wrapper.find('#desinstaller').text()).toContain('Désinstaller')
+    expect(wrapper.find('#ancienne-icone').text()).toContain('ancienne icône')
+  })
+
+  it('le dépannage est repliable et couvre l’installation, Play Protect, Leclerc et le mode assisté', async () => {
+    const { wrapper } = await open()
+
+    const details = wrapper.findAll('#depannage details')
+    expect(details).toHaveLength(7)
+    expect(details.every((item) => item.element.hasAttribute('open'))).toBe(false)
+    const questions = details.map((item) => item.find('summary').text())
+    expect(questions).toEqual(
+      expect.arrayContaining([
+        'L’installation est bloquée',
+        'Play Protect affiche un avertissement',
+        'Je n’arrive pas à me connecter à Leclerc',
+        '« Le site a changé » ou « Leclerc a changé »',
+      ]),
+    )
+    expect(wrapper.find('#depannage').text()).toContain('mode assisté')
+  })
+
+  it('hors de l’application : le mode assisté mène à la liste', async () => {
+    const { wrapper } = await open()
+
+    const assisted = wrapper.find('#mode-assiste')
+    expect(assisted.find('h2').text()).toBe('Sans l’application : le mode assisté')
+    expect(assisted.find('a').attributes('href')).toBe('/liste')
+    expect(wrapper.find('nav a[href="/drive/aide#mode-assiste"]').exists()).toBe(true)
+  })
+
+  it('dans l’application : annonce la version et n’affiche pas le mode assisté', async () => {
+    installApp('1.2.3')
+    const { wrapper } = await open()
+
+    expect(wrapper.text()).toContain('Vous êtes dans l’application Repas, version 1.2.3.')
+    expect(wrapper.text()).not.toContain('Vous êtes dans un navigateur.')
+    expect(wrapper.find('#mode-assiste').exists()).toBe(false)
+    expect(wrapper.find('nav a[href="/drive/aide#mode-assiste"]').exists()).toBe(false)
+  })
+
+  it('dans l’application qui ne donne pas sa version : le dit sans elle', async () => {
+    installApp(null)
+    const { wrapper } = await open()
+
+    expect(wrapper.text()).toContain('Vous êtes dans l’application Repas.')
+    expect(wrapper.find('header').text()).not.toContain('version')
+  })
+
+  it('porte la note de vie privée complète, avec l’ancre #vie-privee', async () => {
+    const { wrapper } = await open()
+
+    const note = wrapper.find('#vie-privee')
+    expect(note.find('h2').text()).toBe('Votre vie privée avec le drive')
+    expect(note.findAll('h3').map((title) => title.text())).toEqual([
+      'Comment ça se passe',
+      'Ce que Repas enregistre',
+      'Ce que Repas ne voit et n’enregistre jamais',
+      'Où, et combien de temps',
+      'Comment tout effacer',
+      'Avant d’utiliser l’envoi : ce que vous devez savoir',
+    ])
+    expect(note.text()).toContain('suspendre un compte E.Leclerc')
+    expect(note.text()).toContain('Rien de cela ne passe par les serveurs de Repas')
+  })
+
+  it('le sommaire mène à la rubrique et y pose le focus', async () => {
+    const { wrapper, context } = await open()
+    scrollIntoView.mockClear()
+
+    await wrapper.find('nav a[href="/drive/aide#depannage"]').trigger('click')
+    await flushPromises()
+
+    expect(context.router.currentRoute.value.hash).toBe('#depannage')
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    expect(document.activeElement?.id).toBe('depannage')
+  })
+
+  it('ouverte sur une ancre, amène la rubrique à l’écran', async () => {
+    await open('/drive/aide#vie-privee')
+
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    expect(document.activeElement?.id).toBe('vie-privee')
+  })
+
+  it('ouverte sur une ancre inconnue, ne fait rien', async () => {
+    await open('/drive/aide#nimporte-quoi')
+
+    expect(scrollIntoView).not.toHaveBeenCalled()
+  })
+
+  it('chaque rubrique du sommaire existe dans la page', async () => {
+    const { wrapper } = await open()
+
+    const targets = wrapper.findAll('nav a').map((link) => link.attributes('href')?.split('#')[1])
+    expect(targets).toHaveLength(9)
+    for (const id of targets) expect(wrapper.find(`#${id}`).exists()).toBe(true)
+  })
+})
+
+describe('entrée de « Mon compte »', () => {
+  it('mène à l’aide d’installation', async () => {
+    const context = appContext()
+    await context.router.push('/moi')
+    const wrapper = mount(AppHelpLink, { global: { plugins: context.plugins } })
+
+    expect(wrapper.find('h2').text()).toBe('Application')
+    expect(wrapper.find('a').attributes('href')).toBe('/drive/aide')
+    expect(wrapper.find('a').text()).toContain('Installer l’application Android')
+  })
+})
