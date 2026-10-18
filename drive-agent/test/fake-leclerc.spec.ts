@@ -14,6 +14,7 @@ import { readSession } from '../src/leclerc/session'
 import {
   CART_PATH,
   isLoopback,
+  OTHER_STORE_PATH,
   PAGE_PATH,
   STORE,
   startFakeLeclerc,
@@ -416,47 +417,87 @@ describe('les défauts simulés', () => {
 })
 
 describe('la racine du magasin et la remise à neuf (DRV-319, émulateur Android)', () => {
-  it('sert à la racine de l’hôte le site ordinaire de l’enseigne, qui n’est pas une page de magasin : l’application ne l’ouvre jamais pour un plan', async () => {
+  it('sert à la racine de l’hôte l’accueil du magasin et son bouton « Commencer mes courses », qui n’est pas une page de magasin pour l’agent (recette réelle du 2026-10-18)', async () => {
     // When
     const reply = await call('/')
 
-    // Then : une page ordinaire (sans redirection vers le magasin) d’où l’on choisit son magasin
+    // Then : session ouverte, la racine affiche le magasin ; le bouton mène aux vraies pages (avec ville), et l’on peut changer de magasin
     expect(reply.status).toBe(200)
-    expect(reply.text).toContain("Accueil de l'enseigne")
+    expect(reply.text).toContain('Commencer mes courses')
+    expect(reply.text).toContain('Je peux retirer ma commande')
     expect(reply.text).toContain(`href="${PAGE_PATH}/"`)
-    expect(reply.text.replace(PAGE_PATH, '')).not.toContain('/magasin-')
+    expect(reply.text).toContain('id="other-store"')
+    expect(reply.text).toContain(`href="${OTHER_STORE_PATH}/"`)
+    expect(reply.text.replace(PAGE_PATH, '').replace(OTHER_STORE_PATH, '')).not.toContain(
+      '/magasin-',
+    )
     expect(fake.requests().at(-1)).toMatchObject({ kind: 'page', path: '/', status: 200 })
   })
 
-  it('sert l’accueil du magasin à l’adresse que l’application ouvre pour un plan, avec ou sans suffixe de ville', async () => {
+  it('refuse, comme le vrai site, l’accueil du magasin sans suffixe de ville : l’adresse que l’application ouvrait avant est une page 404', async () => {
     // When
     const withoutCity = await call(`${CART_PATH}/`)
+    const bare = await call(CART_PATH)
     const withCity = await call(`${PAGE_PATH}/`)
+    const withCityAndPage = await call(`${PAGE_PATH}/accueil.aspx`)
 
-    // Then
-    expect(withoutCity.status).toBe(200)
-    expect(withoutCity.text).toContain('Accueil du magasin')
+    // Then : seule l’adresse avec la ville est une page de magasin
+    expect(withoutCity.status).toBe(404)
+    expect(withoutCity.text).toContain('momentanément indisponible')
+    expect(bare.status).toBe(404)
     expect(withCity.status).toBe(200)
     expect(withCity.text).toContain('Accueil du magasin')
+    expect(withCityAndPage.status).toBe(200)
+    // L’adresse du panier, elle, reste sans ville (DRV-007) : la page 404 n’est que l’accueil.
+    expect((await cartCall('1000001', 1)).status).toBe(200)
   })
 
-  it('renvoie l’accueil du magasin vers la racine quand il ne reconnaît pas le magasin (défaut « unknownStore »)', async () => {
+  it('sert un autre magasin que celui du plan (pour le message « Ce n’est pas le bon magasin »)', async () => {
+    expect(OTHER_STORE_PATH).not.toContain(STORE.id)
+    expect((await call(`${OTHER_STORE_PATH}/`)).text).toContain('Accueil du magasin')
+  })
+
+  it('refuse la page d’ouverture par une erreur HTTP quand « homeStatus » le demande (page d’erreur ou défi, ticket E)', async () => {
     // Given
-    fake.setBehavior({ unknownStore: true })
+    fake.setBehavior({ homeStatus: 404 })
 
     // When
-    const home = await call(`${CART_PATH}/`)
+    const home = await call('/')
 
-    // Then : le magasin demandé n’est pas servi, l’utilisateur est renvoyé au site ordinaire
-    expect(home.status).toBe(302)
-    expect(home.headers.location).toBe('/')
+    // Then : la page d’erreur générique, avec le code demandé ; le reste du site répond normalement
+    expect(home.status).toBe(404)
+    expect(home.text).toContain('momentanément indisponible')
     expect((await call(`${PAGE_PATH}/connexion.aspx`)).status).toBe(200)
+    expect((await call(`${PAGE_PATH}/`)).status).toBe(200)
+    expect((await search('farine')).status).toBe(200)
 
-    // When : la remise à neuf retire le défaut
+    // When : un autre code, puis le défaut retiré par le pilotage (null), puis la remise à neuf
+    fake.setBehavior({ homeStatus: 403 })
+    expect((await call('/')).status).toBe(403)
+    fake.setBehavior({ homeStatus: null })
+    expect((await call('/')).status).toBe(200)
+    fake.setBehavior({ homeStatus: 503 })
     fake.reset()
 
     // Then
-    expect((await call(`${CART_PATH}/`)).status).toBe(200)
+    expect((await call('/')).status).toBe(200)
+  })
+
+  it('fait attendre la page d’ouverture quand « homeDelayMs » le demande (page trop lente, ticket E)', async () => {
+    // Given
+    fake.setBehavior({ homeDelayMs: 150 })
+
+    // When
+    const begun = Date.now()
+    const home = await call('/')
+    const waited = Date.now() - begun
+
+    // Then : la page finit par arriver, mais après le délai ; les pages du magasin n’attendent pas
+    expect(home.status).toBe(200)
+    expect(waited).toBeGreaterThanOrEqual(140)
+    const storeBegun = Date.now()
+    await call(`${PAGE_PATH}/`)
+    expect(Date.now() - storeBegun).toBeLessThan(140)
   })
 
   it('remet à neuf le panier, le journal, les violations, la cadence et les défauts, par le pilotage HTTP', async () => {

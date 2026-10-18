@@ -101,6 +101,7 @@ wait_until() {
 
 has_report() { reports | grep -q "$1"; }
 has_report_count() { [ "$(reports | grep -o "$1" | wc -l)" -ge "$2" ]; } # au moins N relevés de ce motif
+not_reported() { ! has_report "$1"; } # aucun relevé de ce motif
 post_command() { emu curl -sk -X POST -H 'Content-Type: application/json' -d "$1" "https://127.0.0.1/__command" > /dev/null; } # un ordre pour le faux Repas
 reset_reports() { emu curl -sk -X POST "https://127.0.0.1/__reset" > /dev/null; }
 screenshot() { adb exec-out screencap -p > "$OUT/$1.png" && say "      capture : $OUT/$1.png"; }

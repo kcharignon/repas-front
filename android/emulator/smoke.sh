@@ -92,20 +92,33 @@ RUN_C=cccccccc-cccc-4ccc-8ccc-cccccccccccc
 RUN_D=dddddddd-dddd-4ddd-8ddd-dddddddddddd
 RUN_E=eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee
 start_pass() { post_command "{\"do\":\"drive.start\",\"runId\":\"$1\"}"; }
-open_pass() { # open_pass <runId> : drive.start, puis le drive s'ouvre et reçoit le plan
+# Le drive s'ouvre sur la racine de l'hôte du plan (l'accueil du magasin, constat de la recette réelle) : l'utilisateur ouvre son magasin lui-même.
+open_home() { # open_home <runId> : drive.start, puis le drive s'ouvre sur la racine de l'hôte, avec le message qui dit d'ouvrir son magasin
   reset_reports
   start_pass "$1"
-  wait_until 40 has_report '"hostname": "www.leclercdrive.fr"' && wait_until 30 has_report '"command": "plan"'
+  wait_until 40 has_report '"hostname": "www.leclercdrive.fr", "path": "/"' && wait_until 20 ui_has 'Commencer mes courses'
+}
+open_store() { tap 'text="Choisir mon magasin de test"' && wait_until 30 has_report '"command": "plan"'; } # l'utilisateur touche son magasin : le plan part vers l'agent
+open_pass() { # open_pass <runId> : drive.start, l'accueil, le magasin ouvert, le plan reçu par l'agent
+  open_home "$1" && open_store
 }
 
 say "   a. Jusqu'au résultat de l'agent"
-if open_pass "$RUN_A"; then
-  ok "drive.start ouvre le drive sur la page du magasin du plan (faux site) et le plan arrive à l'agent par le pont"
+if open_home "$RUN_A"; then
+  ok "drive.start ouvre le drive sur la racine de l'hôte du plan (l'accueil du magasin), avec le message « Commencer mes courses »"
 else
-  ko "drive.start n'a pas mené le plan jusqu'à l'agent"
+  ko "drive.start n'a pas ouvert l'accueil du drive avec son message"
 fi
-check "le drive s'est ouvert sur la page du magasin du plan (/magasin-123456-123456/), jamais sur la racine de l'hôte" \
-  has_report '"hostname": "www.leclercdrive.fr", "path": "/magasin-123456-123456/"'
+check "le drive ne s'est jamais ouvert sur /magasin-123456-123456/ (page 404 du vrai site)" not_reported '"path": "/magasin-123456-123456/"'
+check "tant que l'utilisateur n'a pas ouvert son magasin, l'agent ne reçoit rien" not_reported '"command": "plan"'
+screenshot 03a-accueil-du-drive
+if open_store; then
+  ok "l'utilisateur touche son magasin (lien touché) : le plan arrive à l'agent par le pont, tout seul"
+else
+  ko "le plan n'est pas arrivé à l'agent une fois le magasin ouvert"
+fi
+check "le magasin ouvert est une page de magasin avec sa ville (/magasin-123456-123456-Ville-Test/…)" \
+  has_report '"path": "/magasin-123456-123456-Ville-Test/accueil.aspx"'
 check "l'écran reste allumé pendant le passage" screen_held
 if wait_until 20 has_report '"kind": "agent-ui", "mounted": true'; then ok "l'agent a monté son interface (après le chargement de la page)"; else ko "l'agent n'a pas monté son interface"; fi
 if wait_until 15 ui_has 'Prêt à remplir ton panier'; then ok "l'agent affiche son récapitulatif, sans que l'utilisateur ait à naviguer"; else ko "l'agent n'a pas affiché son récapitulatif"; fi
@@ -153,8 +166,8 @@ if wait_until 15 has_report_count "\"type\": \"drive.error\", \"code\": \"BUSY\"
 else
   ko "la lecture du magasin pendant un passage n'a pas reçu BUSY"
 fi
-if tap 'text="Reprendre"' && wait_until 40 has_report_count '"command": "plan"' 2; then
-  ok "« Reprendre » rouvre le drive : le plan est renvoyé à l'agent"
+if tap 'text="Reprendre"' && wait_until 40 ui_has 'Commencer mes courses' && tap 'text="Choisir mon magasin de test"' && wait_until 40 has_report_count '"command": "plan"' 2; then
+  ok "« Reprendre » rouvre le drive sur l'accueil ; une fois le magasin ouvert, le plan est renvoyé à l'agent"
 else
   ko "« Reprendre » n'a pas renvoyé le plan"
 fi
