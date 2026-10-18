@@ -67,6 +67,26 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
+  agent-e2e:
+    name: Agent du drive (bout en bout, faux site Leclerc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # L'agent réel dans Chromium mobile contre le faux site (données inventées, local seulement) : aucun accès à une enseigne.
+      - run: npm run agent:e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report-agent
+          path: playwright-report/agent-e2e/
+          retention-days: 7
+
   audit:
     name: Avis de sécurité (npm audit)
     runs-on: ubuntu-latest

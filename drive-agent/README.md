@@ -12,11 +12,13 @@ Contexte et protocole : `docs/drive/` du dépôt back (`kcharignon/repas`), en p
 
 Tout se lance dans Docker (`make help` les liste toutes).
 
-| Commande            | Rôle                                                                                                         |
-| ------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `make agent-build`  | construit `dist/agent.js` et `dist/manifest.json` (version, taille, empreinte SHA-384)                       |
-| `make agent-verify` | construit deux fois et échoue si les deux empreintes diffèrent (rejoué par la CI)                            |
-| `make agent-test`   | joue les tests de l'agent seul (chaîne de construction, règles de code, agent) ; `make check` les joue aussi |
+| Commande            | Rôle                                                                                                                                            |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make agent-build`  | construit `dist/agent.js` et `dist/manifest.json` (version, taille, empreinte SHA-384)                                                          |
+| `make agent-verify` | construit deux fois et échoue si les deux empreintes diffèrent (rejoué par la CI)                                                               |
+| `make agent-test`   | joue les tests de l'agent seul (chaîne de construction, règles de code, agent) ; `make check` les joue aussi                                    |
+| `make agent-e2e`    | joue l'agent réel dans Chromium (Pixel 7) contre le faux site Leclerc (`fake-leclerc/`, `e2e/`, DRV-309), sans back ni réseau ; la CI le rejoue |
+| `make agent-fake`   | lance le faux site Leclerc à la main sur 127.0.0.1:8099 (Node 24 de la machine)                                                                 |
 
 Le dossier `dist/` n'est jamais commité.
 
@@ -38,6 +40,8 @@ drive-agent/
   test/               tests Vitest de l'agent et du protocole, et entries/ : points d'entrée d'essai pour la chaîne de construction
   demo/               page de démonstration de l'interface (hors production) : chaque écran avec des données inventées
   fixtures/           données SYNTHÉTIQUES inventées (voir son README)
+  fake-leclerc/       le faux site Leclerc (serveur Node, données inventées, DRV-309) : voir son README
+  e2e/                les tests de bout en bout de l'agent dans Chromium contre le faux site (Playwright, DRV-309)
   scripts/build.mjs   la construction
   dist/               sorties de la construction (ignoré par Git)
 ```
@@ -136,6 +140,15 @@ Le résultat, précédé de `sha384-`, doit être celui de `dist/manifest.json`.
 Monter `AGENT_VERSION` (`src/version.ts`) à chaque changement de l'agent.
 
 Un favori JavaScript pour Chrome de bureau reste possible plus tard (Chrome Android, lui, ne lance aucun favori JavaScript) ; il est facultatif et n'est pas construit ici.
+
+## Le faux site et les tests de bout en bout (DRV-309)
+
+`fake-leclerc/` imite la structure du drive (recherche, panier, connexion, page de défi) avec des données inventées et juge la politesse de l'agent (jamais en parallèle, 800 ms au moins entre deux requêtes, forme exacte de la requête du panier). `e2e/` joue l'agent **construit** dans Chromium (Pixel 7), page du faux magasin ouverte sous `courses-test.leclercdrive.fr` (résolu vers 127.0.0.1, tout autre hôte sans adresse) :
+
+- par le **fragment** d'adresse : plan dans `#repas=`, résultat rendu au faux Repas par navigation (`passage.spec.ts`, `choix.spec.ts`, `incidents.spec.ts`) : plan valide et invalide, magasin différent, phase A (rupture, promotion, panier déjà garni, quantité à vérifier), phase B (choix, recherche, « ne plus jamais prendre », rôle), blocage 403 / 429 / défi, site changé, 404, déconnexion, reprise après rechargement ;
+- par le **pont** de l'application, avec le vrai `android/app/src/main/assets/injection.js` et un faux canal natif (`pont.spec.ts`) : plan et résultat par le pont, mode configuration, diagnostic.
+
+Seul le Shadow DOM de l'interface est ouvert pour Playwright (`attachShadow` forcé à `open`) ; l'agent n'est pas modifié. Un test échoue si l'agent envoie deux requêtes à la fois ou plus vite que la cadence (`support/cadence.ts`). Le cadre natif (variante P1) a été abandonné à la décision G1 : `X-Frame-Options: DENY` est servi mais aucun test de cadre n'existe.
 
 ## Règles de code
 

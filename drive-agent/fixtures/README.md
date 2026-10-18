@@ -4,6 +4,8 @@ Des données **synthétiques**, inventées pour les tests (plans, résultats, pa
 de vrai numéro de magasin, de nom de ville, de cookie, de jeton, d'identifiant ni d'adresse e-mail. Un produit de test s'appelle « Farine de
 test 1 kg », un magasin « 000000 », un hôte `courses-test.exemple.invalid`.
 
+Le faux site Leclerc (`../fake-leclerc/`, DRV-309) a son propre catalogue inventé de 30 produits.
+
 ## `leclerc/` (DRV-303)
 
 Elles reproduisent la **structure** décrite par `recherche.md` du dépôt back (noms de champs du JSON embarqué, forme des réponses du
