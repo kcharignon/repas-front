@@ -30,6 +30,10 @@ const EMPTY_FORMS: [string, string][] = [
     script(`${SKELETON},\n"widgets": [ { "nom": "produits",\n "lstProduits" : [ \n ] } ]`),
   ],
   ['une liste de produits nulle', script(`${SKELETON},"widgets":[{"lstProduits":null}]`)],
+  [
+    'une liste de produits vide et aucun autre repère (la seule forme que l’ancien code reconnaissait)',
+    script('"widgets":[{"nom":"produits","lstProduits":[]}]'),
+  ],
   ['aucun conteneur de produits', script(SKELETON)],
   [
     'un état dont les guillemets sont écrits \\u0022',

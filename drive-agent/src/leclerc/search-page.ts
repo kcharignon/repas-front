@@ -39,6 +39,8 @@ const PRODUCT_FIELDS = [
   'sPrixParUniteDeMesure',
   'sUrlVignetteProduit',
 ].map(key)
+/** Une liste de produits explicitement vide ou nulle : la seule forme que l'ancien code reconnaissait, elle compte pour deux repères. */
+const EMPTY_LIST = /(?<![A-Za-z0-9_])["']?lstProduits["']?\s*[:=]\s*(?:\[\s*\]|null\b)/
 /** Une liste de produits qui n'est ni vide ni nulle : `lstProduits: [` suivi d'autre chose que `]`. */
 const NON_EMPTY_LIST = /(?<![A-Za-z0-9_])["']?lstProduits["']?\s*[:=]\s*\[\s*[^\s\]]/
 /** Le message du site, dans le texte visible (sans accent ni majuscule). */
@@ -56,7 +58,7 @@ export function readSearchPage(reply: SearchReply): RawProduct[] {
 
   const readings = pageReadings(reply.text)
   const has = (pattern: RegExp) => readings.some((reading) => pattern.test(reading))
-  const skeleton = SKELETON.filter(has).length
+  const skeleton = SKELETON.filter(has).length + (has(EMPTY_LIST) ? 1 : 0)
   if (looksLikeLoginPage(reply.text, skeleton > 0)) {
     throw new LeclercError('NOT_LOGGED_IN', reply.status, 'LOGIN_FORM')
   }

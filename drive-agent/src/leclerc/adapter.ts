@@ -52,7 +52,7 @@ export interface LeclercDeps extends PacerDeps {
   /** `window.fetch` : l'adaptateur n'envoie des requêtes qu'à l'hôte de la page (chemins relatifs). */
   fetch: FetchFn
   location: LocationLike
-  /** Le texte de la page (pour y lire le point de livraison) ; appelé une fois. */
+  /** Le texte de la page : le point de livraison s'y lit une fois ; `readSession` le relit à chaque appel (sans requête). */
   pageText: () => string
   /** Le libellé du magasin lu dans la page, s'il y en a un. */
   readLabel?: () => string | null

@@ -32,6 +32,21 @@ describe('un visiteur', () => {
       ['LOGIN_LINK', 'REGISTER_LINK'],
     ],
     [
+      'un libellé double « Connexion ou inscription »',
+      '<a href="/compte">Connexion ou inscription</a>',
+      ['LOGIN_LINK', 'REGISTER_LINK'],
+    ],
+    [
+      'des libellés en infobulle ou en attribut aria-label (pictogrammes)',
+      '<a title="Se connecter"><i></i></a><button aria-label="Créer un compte"></button>',
+      ['LOGIN_LINK', 'REGISTER_LINK'],
+    ],
+    [
+      'des libellés suivis d’une flèche ou d’un deux-points',
+      '<a>Se connecter »</a><a>Créer un compte :</a>',
+      ['LOGIN_LINK', 'REGISTER_LINK'],
+    ],
+    [
       'un indicateur d’état à faux et un lien « Se connecter »',
       '<a>Se connecter</a><script>var s = {"bConnecte": false}</script>',
       ['LOGIN_LINK', 'STATE_FLAG_OFF'],
@@ -49,6 +64,11 @@ describe('un client connecté', () => {
     ['un lien « Se déconnecter »', '<a href="/sortie">Se déconnecter</a>', ['LOGOUT_LINK']],
     ['un lien « Déconnexion »', '<a>Déconnexion</a> <a>Mon compte</a>', ['LOGOUT_LINK']],
     ['un lien « Mes commandes »', '<a>Mes commandes</a>', ['ORDERS_LINK']],
+    [
+      'un pictogramme dont le texte de remplacement est « Déconnexion »',
+      '<a href="/sortie"><img src="/sortie.png" alt="Déconnexion"></a>',
+      ['LOGOUT_LINK'],
+    ],
     [
       'un indicateur d’état à vrai',
       '<script>var s = {"bClientConnecte":true}</script>',
@@ -86,6 +106,16 @@ describe('dans le doute, l’état est inconnu (l’agent ne bloque jamais sur u
     [
       'des libellés dans un commentaire ou un style',
       page('<!-- Se connecter Créer un compte --><style>.x::after{content:"Se connecter"}</style>'),
+    ],
+    [
+      'les liens d’un client connecté qui parlent de connexion ou d’inscription sans être ceux d’un visiteur',
+      page(
+        '<a>Connexion et sécurité</a><a>Inscription à la newsletter</a><a>Identifiants de connexion</a>',
+      ),
+    ],
+    [
+      'un libellé double dont une partie est inconnue',
+      page('<a>Connexion / Aide</a><a>Inscription / Contact</a>'),
     ],
     [
       'un long paragraphe qui parle de connexion et d’inscription',

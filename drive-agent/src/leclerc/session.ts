@@ -37,26 +37,52 @@ const MAX_LABEL = 40
 /** Un lien ou un bouton : ses attributs (bornés) et son contenu (borné : un libellé n'est pas un paragraphe). */
 const CLICKABLE = /<(a|button)\b([^>]{0,500})>([\s\S]{0,300}?)<\/\1\s*>/gi
 const ATTRIBUTE_LABEL = /\b(?:aria-label|title)\s*=\s*(?:"([^"]{0,100})"|'([^']{0,100})')/i
+/** Le texte de remplacement d'une image dans un lien (un pictogramme « Déconnexion »). */
+const IMAGE_LABEL = /<img\b[^>]*\balt\s*=\s*(?:"([^"]{0,100})"|'([^']{0,100})')/i
 const PASSWORD_FIELD = /<input\b[^>]*\btype\s*=\s*["']?password\b/i
 /** Un indicateur d'état « connecté » dans le JSON de la page : nom supposé (convention des champs du site : `b` pour un booléen). */
 const STATE_FLAG =
   /["']?b(?:Est|Is)?(?:Client|Utilisateur|User|Compte)?Connecte["']?\s*[:=]\s*(true|false)\b/gi
 
 const LOGOUT = /\bdeconne(?:xion|ct)/
-const LOGIN =
-  /\b(?:se connecter|me connecter|connexion|connectez-vous|identifiez-vous|s'identifier)\b/
-const REGISTER =
-  /\b(?:creer (?:un|mon|votre) compte|s'inscrire|inscription|inscrivez-vous|nouveau client)\b/
 const ORDERS = /^mes commandes$/
+/**
+ * Les libellés EXACTS d'un lien de visiteur. Un libellé qui contient seulement le mot (« Connexion et sécurité », « Inscription à la
+ * newsletter ») n'en est pas un : un client connecté en voit aussi. Un libellé double (« Connexion / Inscription ») est coupé en parties,
+ * qui doivent toutes être connues.
+ */
+const LOGIN_LABELS = new Set([
+  'se connecter',
+  'me connecter',
+  'connexion',
+  'connectez-vous',
+  'identifiez-vous',
+  "s'identifier",
+])
+const REGISTER_LABELS = new Set([
+  'creer un compte',
+  'creer mon compte',
+  'creer votre compte',
+  'ouvrir un compte',
+  "s'inscrire",
+  'inscription',
+  'inscrivez-vous',
+  'nouveau client',
+])
+const SEPARATOR = /\s*(?:\/|\||·|,|;|\bou\b|\bet\b)\s*/
 
-/** Les signes que porte le libellé d'un lien ou d'un bouton. */
+/** Les signes que porte le libellé (comparable, voir `fold`) d'un lien ou d'un bouton. */
 function signsOfLabel(label: string): SessionSign[] {
-  if (label === '' || label.length > MAX_LABEL) return []
-  if (LOGOUT.test(label)) return ['LOGOUT_LINK']
+  const text = label.replace(/[\s.:!»›>→]+$/, '')
+  if (text === '' || text.length > MAX_LABEL) return []
+  if (LOGOUT.test(text)) return ['LOGOUT_LINK']
+  if (ORDERS.test(text)) return ['ORDERS_LINK']
   const signs: SessionSign[] = []
-  if (LOGIN.test(label)) signs.push('LOGIN_LINK')
-  if (REGISTER.test(label)) signs.push('REGISTER_LINK')
-  if (ORDERS.test(label)) signs.push('ORDERS_LINK')
+  for (const part of text.split(SEPARATOR)) {
+    if (LOGIN_LABELS.has(part)) signs.push('LOGIN_LINK')
+    else if (REGISTER_LABELS.has(part)) signs.push('REGISTER_LINK')
+    else return []
+  }
   return signs
 }
 
@@ -66,7 +92,12 @@ export function readSession(page: string): SessionReading {
   const visible = page.replace(INVISIBLE, ' ')
   for (const link of visible.matchAll(CLICKABLE)) {
     const attribute = ATTRIBUTE_LABEL.exec(link[2] ?? '')
-    const labels = [link[3] ?? '', attribute?.[1] ?? attribute?.[2] ?? '']
+    const image = IMAGE_LABEL.exec(link[3] ?? '')
+    const labels = [
+      link[3] ?? '',
+      attribute?.[1] ?? attribute?.[2] ?? '',
+      image?.[1] ?? image?.[2] ?? '',
+    ]
     for (const label of labels) {
       for (const sign of signsOfLabel(fold(label))) found.add(sign)
     }
