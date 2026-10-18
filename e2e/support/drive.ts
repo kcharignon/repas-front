@@ -201,9 +201,13 @@ declare global {
 
 /**
  * Le faux pont de l'application. Au lancement du drive (`drive.start`), il répond par un résultat tiré du plan : `completed` (tout est
- * mis au panier, un produit de secours, des prix) ou `partial` (le beurre échoue, `BLOCKED`).
+ * mis au panier, un produit de secours, des prix) ou `partial` (le beurre échoue, `BLOCKED`). Avec un résultat tout fait (sans son
+ * `runId`, celui du plan reçu y est mis), il le renvoie tel quel : le parcours choisit alors lui-même ce que l'agent a fait.
  */
-export async function fakeApp(page: Page, mode: 'completed' | 'partial' = 'completed') {
+export async function fakeApp(
+  page: Page,
+  mode: 'completed' | 'partial' | Record<string, unknown> = 'completed',
+) {
   await page.addInitScript((mode) => {
     const listeners = new Set<(event: { data: unknown }) => void>()
     window.__sent = []
@@ -222,7 +226,10 @@ export async function fakeApp(page: Page, mode: 'completed' | 'partial' = 'compl
           })
           setTimeout(() => emit(data), 0)
         }
-        if (message.type === 'drive.start') {
+        if (message.type === 'drive.start' && typeof mode === 'object') {
+          const result = { ...mode, runId: message.plan.runId }
+          setTimeout(() => emit(JSON.stringify({ v: 1, type: 'drive.result', result })), 100)
+        } else if (message.type === 'drive.start') {
           const lines = message.plan.lines.map(
             (line: {
               ingredientSlug: string
