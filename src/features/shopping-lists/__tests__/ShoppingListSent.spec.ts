@@ -162,6 +162,26 @@ describe('liste envoyée au drive (page de la liste)', () => {
     expect(reopen?.headers.get('If-Match')).toBe('"7"')
   })
 
+  it('propose « Rouvrir la liste » quand la fonction est coupée (DRIVE_ENABLED faux), et la rouvre', async () => {
+    const { wrapper, fetchMock } = await openSent({
+      'GET /api/v1/drive/settings': settings(false),
+      'POST /api/v1/shopping-lists/l1/reopen': noContent,
+    })
+
+    const actions = [...wrapper.findAll('header a, header button')].map((action) => action.text())
+    expect(actions).toContain('Rouvrir la liste')
+    expect(button('Envoyer au drive')).toBeUndefined()
+    expect(button('Rouvrir la liste')?.disabled).toBe(false)
+
+    button('Rouvrir la liste')?.click()
+    await vi.waitFor(() => expect(dialogButton('Rouvrir la liste')).toBeDefined())
+    dialogButton('Rouvrir la liste').click()
+    await flushPromises()
+
+    const [reopen] = requests(fetchMock, 'POST', '/reopen')
+    expect(reopen?.headers.get('If-Match')).toBe('"7"')
+  })
+
   it('rouvre puis relit la liste, qui redevient modifiable', async () => {
     let reopened = false
     const { wrapper } = await openSent({

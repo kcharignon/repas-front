@@ -83,6 +83,11 @@ describe('messageForFailure', () => {
       'Cette liste vient d’être envoyée au drive : elle n’est plus modifiable.',
     ],
     [409, 'SHOPPING_LIST_NOT_SENT', 'Cette liste n’est plus envoyée au drive.'],
+    [
+      422,
+      'DRIVE_LIMIT_REACHED',
+      'Trop de produits mémorisés, ou trop d’écritures aujourd’hui : oubliez des produits dans « Mes produits », ou réessayez demain.',
+    ],
     [409, 'SHOPPING_LIST_NOT_SENDABLE', 'Seule une liste en cours peut être envoyée au drive.'],
     [
       422,

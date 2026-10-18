@@ -2,7 +2,7 @@
 export { createDriveBridge, driveBridge } from './driveBridge'
 export type { DriveBridge, DriveBridgeOptions, DriveEvent, SetupStore } from './driveBridge'
 export { DRAFT_KEY, DRAFT_TTL_MS } from './draft'
-export type { DriveResult, RunDraft } from './draft'
+export type { DriveResult, RunDraft, SentLine } from './draft'
 export { DriveBridgeError } from './errors'
 export type { DriveBridgeErrorCode } from './errors'
 export type { AppInfo } from './native'

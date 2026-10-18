@@ -6,6 +6,8 @@ import { appContext, bodyOf, calls, json, me, stubApi } from '@/__tests__/helper
 import { useSessionStore } from '@/session/session'
 import { DRAFT_KEY } from '../bridge'
 import type { DriveEvent } from '../bridge'
+import { sentLinesOf } from '../bridge/draft'
+import { buildPlanMessage } from '../buildPlanMessage'
 import DriveReturnView from '../DriveReturnView.vue'
 import { useDriveReturnStore } from '../returnStore'
 import { plan, storeBaseUrl } from './fixtures'
@@ -14,7 +16,11 @@ import { result, RUN } from './results'
 // Données SYNTHÉTIQUES : magasin d'essai, produits et listes inventés.
 type Handlers = Parameters<typeof stubApi>[0]
 
+// Un brouillon écrit par une version plus ancienne n'a pas les lignes du plan : l'écran relit le plan du back
 const draft = { runId: RUN, listId: 'l1', startedAt: new Date().toISOString() }
+// Le brouillon d'aujourd'hui garde les lignes du plan envoyé (ici le plan du back, sans rien remplacer ni passer)
+const sentLines = sentLinesOf(buildPlanMessage(plan(), {}, RUN))
+const sentDraft = { ...draft, lines: sentLines }
 const noContent = () => new Response(null, { status: 204 })
 const failure = (status: number, message: string) => () => json({ error: { message } }, { status })
 const store = { id: '123456', label: null, baseUrl: storeBaseUrl }
@@ -157,9 +163,10 @@ describe('retour du drive : un passage réussi', () => {
         price: { cents: 189 },
       },
     ]
-    const { wrapper, fetchMock } = await open(outcomeOf(lines), {
-      'GET /api/v1/drive/plans/l1': failure(500, 'boom'),
-    })
+    const { wrapper, fetchMock } = await open(
+      { kind: 'result', result: result({ lines }), draft: sentDraft },
+      { 'GET /api/v1/drive/plans/l1': failure(500, 'boom') },
+    )
     await saved(wrapper)
 
     expect(wrapper.find('h3').text()).toBe('farine')
@@ -238,6 +245,7 @@ describe('retour du drive : l’enregistrement échoue', () => {
   it.each([
     [409, 'DRIVE_STORE_MISMATCH', 'Votre magasin a changé'],
     [422, 'DRIVE_CHOICE_INVALID', 'Cette préférence est refusée'],
+    [422, 'DRIVE_LIMIT_REACHED', 'Trop de produits mémorisés, ou trop d’écritures aujourd’hui'],
     [409, 'DRIVE_NOT_CONFIGURED', 'Choisissez d’abord votre magasin'],
   ])('explique le refus %i %s', async (status, code, message) => {
     const { wrapper } = await open(
@@ -314,6 +322,160 @@ describe('retour du drive : chaque issue du passage', () => {
     expect(wrapper.find('a[href="/drive/envoi/l1"]').exists()).toBe(true)
     expect(wrapper.find('a[href*="lignes"]').exists()).toBe(false)
     expect(wrapper.find('section[role="status"] p.font-semibold').exists()).toBe(code !== undefined)
+  })
+})
+
+describe('retour du drive : le résultat est recoupé avec le plan envoyé (DRV-614)', () => {
+  const chosen = (slug: string): ResultLine => ({
+    ingredientSlug: slug,
+    outcome: 'CHOSEN',
+    quantity: 1,
+    placement: 'PRIMARY',
+    product: { id: '555999', label: 'Produit de test' },
+  })
+  const added = (slug: string, productId: string): ResultLine => ({
+    ingredientSlug: slug,
+    outcome: 'ADDED',
+    productId,
+    quantity: 1,
+    usedRank: 1,
+  })
+  const putBody = async (fetchMock: ReturnType<typeof stubApi>) =>
+    (await bodyOf(fetchMock, calls(fetchMock).indexOf('PUT /api/v1/drive/choices'))) as {
+      choices: {
+        ingredientSlug: string
+        action: string
+        product: { retailerProductId: string } | null
+      }[]
+    }
+  const sentOf = (lines: ResultLine[], from = sentDraft) =>
+    ({ kind: 'result', result: result({ lines }), draft: from }) as DriveEvent
+
+  it('n’enregistre ni n’affiche une ligne que le plan n’explique pas, et la compte', async () => {
+    const lines = [
+      added('farine', '123456'),
+      chosen('pirate'),
+      added('beurre', '777000'),
+      chosen('lait'),
+      chosen('poivre'),
+    ]
+    const { wrapper, fetchMock } = await open(sentOf(lines))
+    await saved(wrapper)
+
+    const body = await putBody(fetchMock)
+    expect(body.choices.map((choice) => [choice.ingredientSlug, choice.action])).toEqual([
+      ['poivre', 'ADD_PRODUCT'],
+    ])
+    expect(wrapper.text()).toContain('3 lignes inattendues ignorées')
+    expect(wrapper.text()).toContain('Détail (2)')
+    expect(wrapper.findAll('main ul > li').map((item) => item.find('h3').text())).toEqual([
+      'Farine',
+      'Poivre',
+    ])
+    expect(wrapper.text()).not.toContain('pirate')
+    expect(wrapper.findAll('dl > div')[0]?.text()).toBe('Ajoutés au panier1')
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+  })
+
+  it('dit « 1 ligne inattendue ignorée » au singulier, et n’appelle pas le back quand plus rien ne reste', async () => {
+    const { wrapper, fetchMock } = await open(sentOf([chosen('pirate')]))
+    await saved(wrapper)
+
+    expect(wrapper.text()).toContain('1 ligne inattendue ignorée')
+    expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
+    expect(wrapper.text()).not.toContain('Détail')
+    expect(wrapper.findAll('main ul > li')).toHaveLength(0)
+  })
+
+  it('ne dit rien quand tout s’explique par le plan', async () => {
+    const { wrapper } = await open({ kind: 'result', result: result(), draft: sentDraft })
+    await saved(wrapper)
+
+    expect(wrapper.text()).not.toContain('inattendue')
+    expect(wrapper.text()).toContain('Détail (12)')
+  })
+
+  it('accepte un produit choisi pour une ligne connue que l’utilisateur a remplacée (envoyée « à choisir »)', async () => {
+    const replaced = {
+      ...sentDraft,
+      lines: sentLines.map((line) =>
+        line.ingredientSlug === 'farine' ? { ...line, status: 'NEW' as const, products: [] } : line,
+      ),
+    }
+    const { wrapper, fetchMock } = await open(sentOf([chosen('farine')], replaced))
+    await saved(wrapper)
+
+    expect((await putBody(fetchMock)).choices.map((choice) => choice.action)).toEqual([
+      'ADD_PRODUCT',
+    ])
+    expect(wrapper.text()).not.toContain('inattendue')
+  })
+
+  it('refuse le même produit choisi pour la même ligne quand elle n’avait pas été remplacée', async () => {
+    const { wrapper, fetchMock } = await open(sentOf([chosen('farine')]))
+    await saved(wrapper)
+
+    expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
+    expect(wrapper.text()).toContain('1 ligne inattendue ignorée')
+  })
+
+  it('« Réessayer les échecs » ne propose pas une ligne ignorée', async () => {
+    const lines: ResultLine[] = [
+      { ingredientSlug: 'beurre', outcome: 'FAILED', error: 'NETWORK' },
+      { ingredientSlug: 'pirate', outcome: 'FAILED', error: 'NETWORK' },
+    ]
+    const { wrapper } = await open(sentOf(lines))
+    await saved(wrapper)
+
+    expect(wrapper.find('a[href="/drive/envoi/l1?lignes=beurre"]').exists()).toBe(true)
+    expect(wrapper.find('a[href*="pirate"]').exists()).toBe(false)
+  })
+
+  describe('brouillon sans les lignes du plan (version plus ancienne) : le plan est relu du back', () => {
+    it('recoupe le résultat avec le plan relu, avant de rien enregistrer', async () => {
+      const { wrapper, fetchMock } = await open(
+        outcomeOf([
+          { ...added('farine', '123456'), price: { cents: 189 } } as ResultLine,
+          chosen('pirate'),
+          added('beurre', '777000'),
+        ]),
+      )
+      await saved(wrapper)
+
+      const body = await putBody(fetchMock)
+      expect(body.choices.map((choice) => [choice.ingredientSlug, choice.action])).toEqual([
+        ['farine', 'REFRESH_PRICE'],
+      ])
+      expect(wrapper.text()).toContain('2 lignes inattendues ignorées')
+      expect(calls(fetchMock).filter((call) => call.includes('/plans/'))).toHaveLength(1)
+    })
+
+    it('sans plan retrouvé, n’enregistre rien, garde le résultat et le brouillon, puis réessaie', async () => {
+      let up = false
+      const { wrapper, fetchMock } = await open(
+        outcomeOf([added('farine', '123456'), chosen('poivre')]),
+        {
+          'GET /api/v1/drive/plans/l1': () => (up ? json(plan()) : failure(500, 'boom')()),
+        },
+      )
+      await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
+
+      expect(wrapper.find('[role="alert"]').text()).toContain(
+        'Vos choix n’ont pas pu être enregistrés.',
+      )
+      expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
+      expect(localStorage.getItem(DRAFT_KEY)).not.toBeNull()
+      expect(wrapper.findAll('main ul > li')).toHaveLength(2)
+
+      up = true
+      await press('Réessayer l’enregistrement')
+      await saved(wrapper)
+
+      expect(calls(fetchMock).filter((call) => call === 'PUT /api/v1/drive/choices')).toHaveLength(
+        1,
+      )
+      expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+    })
   })
 })
 
@@ -430,6 +592,29 @@ describe('retour du drive : terminer ou rouvrir la liste', () => {
       .map(([input]) => input as Request)
       .find((candidate) => candidate.url.endsWith('/reopen'))
     expect(request?.headers.get('If-Match')).toBe('"7"')
+  })
+
+  it('« Rouvrir la liste » reste possible quand la fonction est coupée : le reste du drive répond 404 DRIVE_DISABLED', async () => {
+    const { wrapper, context, fetchMock } = await open(
+      { kind: 'result', result: result(), draft: sentDraft },
+      {
+        'GET /api/v1/drive/settings': () => json({ enabled: false, retailer: 'leclerc' }),
+        'GET /api/v1/drive/plans/l1': failure(404, 'DRIVE_DISABLED'),
+        'PUT /api/v1/drive/choices': failure(404, 'DRIVE_DISABLED'),
+        'POST /api/v1/shopping-lists/l1/reopen': noContent,
+      },
+    )
+    await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
+    expect(wrapper.find('[role="alert"]').text()).toContain('n’est pas disponible pour le moment')
+    await vi.waitFor(() => expect(button('Rouvrir la liste')?.disabled).toBe(false))
+
+    await press('Rouvrir la liste')
+    await confirmInDialog('Rouvrir la liste')
+
+    await vi.waitFor(() =>
+      expect(context.router.currentRoute.value.name).toBe('shopping-list-detail'),
+    )
+    expect(calls(fetchMock)).toContain('POST /api/v1/shopping-lists/l1/reopen')
   })
 
   it('désactive ces actions sans réseau, et le dit', async () => {

@@ -54,6 +54,8 @@ Ce que la page **ne peut pas** faire : atteindre Repas autrement que par ce cana
 
 Pourquoi pas corrigé : fermer le pont à la page ne sert à rien tant que la page partage le monde de l'agent (elle peut remplacer `JSON.stringify`, `fetch` ou `attachShadow` avant que l'agent s'en serve, donc lire ou fausser tout ce qu'il fait). Seule une isolation (monde isolé, absent d'Android WebView) règle le fond. C'est la limite connue d'un agent injecté dans une page tierce, et la page est celle de l'enseigne chez qui l'utilisateur a son propre compte.
 
+**Décision (2026-10-18) : option C, sans confirmation supplémentaire, faite par DRV-614.** L'écran du retour ne retient d'un résultat que ce que le plan envoyé explique : une ligne dont l'ingrédient n'est pas dans le plan, un produit ajouté qui n'est pas l'un des siens, un produit choisi pour une ligne qui n'était pas à choisir sont ignorés, jamais enregistrés, comptés dans un message du récapitulatif (« N lignes inattendues ignorées »). Le brouillon de passage garde pour cela les lignes du plan envoyé (slug, statut, identifiants des produits) ; sans elles (brouillon d'une version plus ancienne), le plan est relu du back et, faute de plan, rien n'est enregistré. Le risque résiduel est celui que la revue décrit pour C : le contenu d'une ligne du plan (libellé, prix) reste fabricable ; les fiches de produits partagées sont protégées côté back (DRV-613, premier écrivain gagnant). L'option B (« Enregistrer ces choix ? ») reste possible plus tard.
+
 Options : **A** (retenue par défaut) accepter et le dire dans la note de vie privée et l'ADR (« la page de Leclerc est dans la base de confiance de l'envoi ») ; **B** (petit changement, recommandé avant d'ouvrir à des inconnus) l'écran du retour montre ce qui sera mémorisé et demande « Enregistrer ces choix ? » au lieu de l'enregistrer au montage ; **C** le front ne retient d'un résultat que les lignes dont l'identifiant d'ingrédient figure dans le plan de la liste du brouillon. A et B se combinent ; C ne protège que l'identité des lignes, pas leur contenu. À décider avec C1 du back (fiches partagées).
 
 ### C2 — Coût d'analyse d'une page pathologique (basse)
@@ -114,7 +116,7 @@ Les workflows référencent les actions par étiquette (`actions/checkout@v7`, `
 - Intégrité de l'agent : empreinte SHA-384 vérifiée à la construction et au démarrage, jamais injecté s'il est altéré ou absent ; la construction est reproductible (deux constructions identiques, et l'empreinte de l'hôte est celle de Docker).
 
 **3. Front web**
-- `driveBridge` : message ignoré s'il n'est pas du texte de 64 Ko au plus, du JSON de version 1 et d'un type connu ; chaque message reconnu est validé champ par champ (`validateResult` pour un résultat, motif strict pour les codes et les identifiants) ; un résultat n'est pris que s'il porte l'identifiant du brouillon (limite : C1) ; le brouillon (`repas.drive.run`) ne contient que l'identifiant du passage, l'identifiant de la liste et la date (clés exactes, 24 h), aucune donnée personnelle.
+- `driveBridge` : message ignoré s'il n'est pas du texte de 64 Ko au plus, du JSON de version 1 et d'un type connu ; chaque message reconnu est validé champ par champ (`validateResult` pour un résultat, motif strict pour les codes et les identifiants) ; un résultat n'est pris que s'il porte l'identifiant du brouillon, puis recoupé avec le plan envoyé (C1, DRV-614) ; le brouillon (`repas.drive.run`) ne contient que l'identifiant du passage, celui de la liste, la date et, pour chaque ligne du plan, le slug de l'ingrédient, son statut et les identifiants de ses produits (clés exactes, 24 h) : ni magasin, ni jeton, ni libellé.
 - Rendu : interpolation Vue partout (échappement), aucun `v-html`, aucun libellé du back ou de l'agent en HTML ; liens externes en `target="_blank" rel="noopener noreferrer"` ; aucune image externe ; politique de contenu de production inchangée depuis #26 (`default-src 'self'`, pas de script en ligne, pas d'image hors origine, `frame-ancestors 'none'`).
 - Stockage : le jeton d'accès reste en mémoire ; la copie hors ligne ne garde que la liste active, au nom de l'utilisateur, 7 jours ; le plan du drive (qui contient la liste) n'est jamais gardé (`gcTime: 0`).
 - Messages d'erreur : codes et chemins de champ seulement, jamais le contenu du message refusé.
@@ -122,7 +124,7 @@ Les workflows référencent les actions par étiquette (`actions/checkout@v7`, `
 
 ## Risques résiduels
 
-1. **C1** : tant qu'il n'est pas tranché, la page de Leclerc peut falsifier ce qui est mémorisé. À régler (au moins B) avant d'ouvrir à des inconnus, en même temps que C1 du back.
+1. **C1** : réduit par DRV-614 (option C : seules les lignes du plan sont retenues) et, côté back, par DRV-613 (premier écrivain gagnant, plafonds). La page de Leclerc peut encore fabriquer le contenu d'une ligne du plan ; l'option B (confirmation) reste à décider avant d'ouvrir à des inconnus.
 2. Les pré-versions publiques débogables (C6), tant qu'elles existent.
 3. Tout ce qui dépend de Leclerc (anti-robot, changement du site, conditions d'utilisation) est hors de ce périmètre et couvert par `runbook.md` et la note de vie privée.
 4. Versions d'Android 8 à 13 et téléphones réels : non essayés (recette).
