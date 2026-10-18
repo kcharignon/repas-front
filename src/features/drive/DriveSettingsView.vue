@@ -265,9 +265,11 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
           </template>
           <p v-else class="text-muted">{{ t('driveSettings.appMissing') }}</p>
           <div>
-            <UiLinkButton variant="secondary" :to="{ name: 'drive-help' }">{{
-              t('driveSettings.help')
-            }}</UiLinkButton>
+            <UiLinkButton
+              variant="secondary"
+              :to="inApp ? { name: 'drive-help', hash: '#mise-a-jour' } : { name: 'drive-help' }"
+              >{{ t(inApp ? 'driveSettings.helpInApp' : 'driveSettings.help') }}</UiLinkButton
+            >
           </div>
         </div>
       </section>

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
-import { appContext, bodyOf, calls, json, me, stubApi } from '@/__tests__/helpers'
+import { appContext, bodyOf, calls, json, me, rateLimited, stubApi } from '@/__tests__/helpers'
 import { useNotificationsStore } from '@/notifications/store'
 import { useSessionStore } from '@/session/session'
 import { fakeNative } from '../bridge/__tests__/fakeNative'
@@ -196,6 +196,28 @@ describe('réglages du drive : le magasin', () => {
     expect(useNotificationsStore().items).toHaveLength(0)
   })
 
+  it('trop d’écritures (429) : le dit à côté du formulaire, sans notification, et laisse réessayer', async () => {
+    let limited = true
+    const { wrapper, fetchMock } = await open({
+      'PUT /api/v1/drive/settings': () =>
+        limited ? rateLimited(1)() : new Response(null, { status: 204 }),
+    })
+
+    await submit(wrapper)
+
+    expect(wrapper.find('[role="alert"]').text()).toBe(
+      'Trop de demandes en peu de temps. Attendez une minute, puis réessayez.',
+    )
+    expect(useNotificationsStore().items).toHaveLength(0)
+    expect(calls(fetchMock).filter((call) => call === 'PUT /api/v1/drive/settings')).toHaveLength(1)
+
+    limited = false
+    await submit(wrapper)
+
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(calls(fetchMock).filter((call) => call === 'PUT /api/v1/drive/settings')).toHaveLength(2)
+  })
+
   it('prévient quand l’adresse saisie est celle d’un autre magasin', async () => {
     const { wrapper } = await open()
     expect(wrapper.text()).not.toContain('C’est un autre magasin')
@@ -340,6 +362,10 @@ describe('réglages du drive : l’application et les produits', () => {
 
     expect(wrapper.text()).toContain('Le drive est prêt dans cette application.')
     expect(wrapper.text()).not.toContain('navigateur')
+    // Déjà installée : l'aide ne propose pas de l'installer, elle mène à la mise à jour
+    const help = wrapper.find('a[href="/drive/aide#mise-a-jour"]')
+    expect(help.text()).toBe('Mettre à jour l’application')
+    expect(wrapper.text()).not.toContain('Aide d’installation')
   })
 
   it('dans une application dont le drive ne peut pas fonctionner, demande de la mettre à jour', async () => {

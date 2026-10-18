@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
-import { appContext, bodyOf, calls, json, me, stubApi } from '@/__tests__/helpers'
+import { appContext, bodyOf, calls, json, me, rateLimited, stubApi } from '@/__tests__/helpers'
 import { useNotificationsStore } from '@/notifications/store'
 import { useSessionStore } from '@/session/session'
 import ProductDetailView from '../ProductDetailView.vue'
@@ -362,6 +362,24 @@ describe('Mes produits : un ingrédient', () => {
     expect(acceptedLabels(wrapper)).toEqual([B.label, A.label])
   })
 
+  it('trop d’écritures (429) : le dit autrement que le plafond de quantité, garde les modifications et ne relit rien', async () => {
+    const { wrapper, fetchMock } = await detail({
+      'PUT /api/v1/drive/choices/farine': rateLimited(1),
+    })
+
+    await press(wrapper, 'Descendre')
+    const before = calls(fetchMock).filter((call) => call.includes('/drive/settings')).length
+    await press(wrapper, 'Enregistrer')
+
+    const alert = wrapper.find('[role="alert"]').text()
+    expect(alert).toBe('Trop de demandes en peu de temps. Attendez une minute, puis réessayez.')
+    expect(alert).not.toContain('demain')
+    expect(acceptedLabels(wrapper)).toEqual([B.label, A.label])
+    expect(useNotificationsStore().items).toHaveLength(0)
+    // Rien n'a changé côté serveur : les écrans du drive ne sont pas relus
+    expect(calls(fetchMock).filter((call) => call.includes('/drive/settings'))).toHaveLength(before)
+  })
+
   it('relit les écrans du drive quand le magasin a changé (409)', async () => {
     const { wrapper, fetchMock } = await detail({
       'PUT /api/v1/drive/choices/farine': failure(409, 'DRIVE_STORE_MISMATCH'),
@@ -402,6 +420,25 @@ describe('Mes produits : un ingrédient', () => {
     const query = new URL(request.url).searchParams
     expect(query.get('retailer')).toBe('leclerc')
     expect(query.get('storeId')).toBe('123456')
+  })
+
+  it('trop d’écritures (429) à l’oubli : le dit et reste sur l’ingrédient', async () => {
+    const { wrapper, context } = await detail({
+      'DELETE /api/v1/drive/choices/farine': rateLimited(1),
+    })
+
+    await press(wrapper, 'Oublier cet ingrédient')
+    ;(
+      [...document.body.querySelectorAll('[role="dialog"] button')].find(
+        (button) => button.textContent.trim() === 'Oublier',
+      ) as HTMLButtonElement
+    ).click()
+    await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
+
+    expect(wrapper.find('[role="alert"]').text()).toBe(
+      'Trop de demandes en peu de temps. Attendez une minute, puis réessayez.',
+    )
+    expect(context.router.currentRoute.value.name).not.toBe('drive-products')
   })
 
   it('dit pourquoi l’oubli échoue (404 déjà oublié)', async () => {

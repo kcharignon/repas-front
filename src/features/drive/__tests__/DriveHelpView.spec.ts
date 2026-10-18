@@ -123,6 +123,10 @@ describe('aide et installation de l’application', () => {
 
     expect(wrapper.text()).toContain('Vous êtes dans l’application Repas, version 1.2.3.')
     expect(wrapper.text()).not.toContain('Vous êtes dans un navigateur.')
+    // Déjà installée : le titre ne propose pas de l'installer, l'introduction dit à quoi sert la page
+    expect(wrapper.find('h1').text()).toBe('L’application Repas')
+    expect(wrapper.find('header p').text()).toContain('Vous utilisez déjà l’application')
+    expect(wrapper.find('header p').text()).toContain('comment la mettre à jour')
     expect(wrapper.find('#mode-assiste').exists()).toBe(false)
     expect(wrapper.find('nav a[href="/drive/aide#mode-assiste"]').exists()).toBe(false)
   })
@@ -196,13 +200,40 @@ describe('aide et installation de l’application', () => {
 })
 
 describe('entrée de « Mon compte »', () => {
-  it('mène à l’aide d’installation', async () => {
+  async function entry() {
     const context = appContext()
     await context.router.push('/moi')
-    const wrapper = mount(AppHelpLink, { global: { plugins: context.plugins } })
+
+    return mount(AppHelpLink, { global: { plugins: context.plugins } })
+  }
+
+  it('dans un navigateur : propose d’installer l’application', async () => {
+    const wrapper = await entry()
 
     expect(wrapper.find('h2').text()).toBe('Application')
     expect(wrapper.find('a').attributes('href')).toBe('/drive/aide')
     expect(wrapper.find('a').text()).toContain('Installer l’application Android')
+    expect(wrapper.find('a').text()).toContain('installer et mettre à jour')
+    expect(wrapper.find('a').text()).not.toContain('Mettre à jour l’application')
+  })
+
+  it('dans l’application : propose de la mettre à jour, jamais de l’installer, et mène à cette rubrique', async () => {
+    installApp()
+    const wrapper = await entry()
+
+    expect(wrapper.find('h2').text()).toBe('Application')
+    expect(wrapper.find('a').attributes('href')).toBe('/drive/aide#mise-a-jour')
+    expect(wrapper.find('a').text()).toContain('Mettre à jour l’application')
+    expect(wrapper.find('a').text()).toContain('Mode d’emploi pour mettre à jour l’application.')
+    expect(wrapper.find('a').text()).not.toContain('Installer')
+  })
+
+  it('dans l’application : l’adresse de l’entrée amène la rubrique de mise à jour à l’écran', async () => {
+    installApp()
+    const { wrapper } = await open('/drive/aide#mise-a-jour')
+
+    expect(wrapper.find('#mise-a-jour h2').text()).toBe('Mettre à jour l’application')
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    expect(document.activeElement?.id).toBe('mise-a-jour')
   })
 })
