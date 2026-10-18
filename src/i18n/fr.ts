@@ -762,6 +762,11 @@ export default {
   },
   // La note de vie privée du drive (DRV-504) : à garder identique au fond à `docs/drive/note-vie-privee.md` du dépôt back
   drivePrivacy: {
+    short: {
+      title: 'Votre vie privée',
+      text: 'Repas retient votre magasin, les produits que vous choisissez (avec leur prix vu) et la date d’envoi de vos listes. Il ne voit jamais votre identifiant, votre mot de passe, vos cookies, votre panier Leclerc ni vos commandes : l’envoi se fait dans l’application, avec votre propre connexion à Leclerc. Attention : Leclerc peut suspendre un compte qu’il juge utilisé de façon abusive.',
+      link: 'Lisez la note complète',
+    },
     full: {
       title: 'Votre vie privée avec le drive',
       intro:
