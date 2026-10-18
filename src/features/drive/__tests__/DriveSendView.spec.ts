@@ -495,7 +495,6 @@ describe('lecture du plan', () => {
 
   it.each([
     [409, 'SHOPPING_LIST_NOT_SENT', 'Cette liste n’est plus envoyée au drive.'],
-    [404, 'DRIVE_DISABLED', 'L’envoi au drive n’est pas disponible pour le moment.'],
     [403, 'SHOPPING_LIST_FORBIDDEN', 'Vous n’avez pas le droit de faire cela.'],
     [404, 'SHOPPING_LIST_NOT_FOUND', 'Cet élément n’existe plus.'],
   ])('explique le refus %i %s', async (status, code, message) => {
@@ -508,6 +507,116 @@ describe('lecture du plan', () => {
       message.replace(/'/g, '’'),
     )
     expect(wrapper.find('dl').exists()).toBe(false)
+  })
+
+  describe('fonction coupée (retour arrière)', () => {
+    const SENT = { id: 'l1', version: 7, isSent: true }
+    const disabled = {
+      'GET /api/v1/drive/plans/l1': failure(404, 'DRIVE_DISABLED'),
+      'GET /api/v1/shopping-lists/l1': () => json(SENT),
+    }
+    const alert = (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
+      wrapper.find('[role="alert"]').text().replace(/'/g, '’')
+
+    it('dit « pas disponible », sans « Ouvrir le drive » ni « Envoyer au drive », et propose de rouvrir la liste envoyée', async () => {
+      installApp()
+      const { wrapper } = await open(disabled)
+
+      await vi.waitFor(() => expect(button('Rouvrir la liste')).toBeDefined())
+
+      expect(alert(wrapper)).toBe('L’envoi au drive n’est pas disponible pour le moment.')
+      expect(wrapper.text()).toContain('Vous pouvez la rouvrir pour la modifier.')
+      expect(button('Ouvrir le drive')).toBeUndefined()
+      expect(button('Envoyer au drive')).toBeUndefined()
+      expect(wrapper.find('dl').exists()).toBe(false)
+    })
+
+    it('rouvre la liste avec la confirmation de l’écran de la liste, la version lue, et efface un passage resté en attente', async () => {
+      localStorage.setItem(DRAFT_KEY, draftOf('l1'))
+      installApp()
+      const { wrapper, context, fetchMock } = await open({
+        ...disabled,
+        'POST /api/v1/shopping-lists/l1/reopen': noContent,
+      })
+      await vi.waitFor(() => expect(button('Rouvrir la liste')).toBeDefined())
+      expect(wrapper.text()).not.toContain('En attente du retour du drive…')
+
+      await press('Rouvrir la liste')
+      const dialog = document.body.querySelector('[role="dialog"]')
+      expect(dialog?.textContent).toContain('Rouvrir la liste ?')
+      expect(dialog?.textContent).toContain('Le panier Leclerc ne sera pas vidé.')
+      expect(dialog?.textContent).not.toContain('envoi en cours')
+      expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/reopen')
+      ;[...document.body.querySelectorAll('[role="dialog"] button')]
+        .find((item) => item.textContent.trim() === 'Rouvrir la liste')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+
+      await vi.waitFor(() =>
+        expect(context.router.currentRoute.value.name).toBe('shopping-list-detail'),
+      )
+      const request = fetchMock.mock.calls
+        .map(([input]) => input as Request)
+        .find((candidate) => candidate.url.endsWith('/reopen'))
+      expect(request?.headers.get('If-Match')).toBe('"7"')
+      expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+    })
+
+    it('ne propose pas de rouvrir une liste qui n’est pas envoyée', async () => {
+      installApp()
+      const { wrapper, fetchMock } = await open({
+        ...disabled,
+        'GET /api/v1/shopping-lists/l1': () => json({ ...SENT, isSent: false }),
+      })
+      await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
+      await vi.waitFor(() => expect(calls(fetchMock)).toContain('GET /api/v1/shopping-lists/l1'))
+      await flushPromises()
+
+      expect(button('Rouvrir la liste')).toBeUndefined()
+      expect(button('Réessayer')).toBeDefined()
+    })
+
+    it('ne propose rien de plus quand la liste ne se lit pas', async () => {
+      installApp()
+      const { wrapper } = await open({
+        ...disabled,
+        'GET /api/v1/shopping-lists/l1': failure(404, 'SHOPPING_LIST_NOT_FOUND'),
+      })
+      await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
+      await flushPromises()
+
+      expect(button('Rouvrir la liste')).toBeUndefined()
+    })
+
+    it('désactive « Rouvrir la liste » sans réseau', async () => {
+      installApp()
+      const { wrapper } = await open(disabled)
+      await vi.waitFor(() => expect(button('Rouvrir la liste')).toBeDefined())
+
+      window.dispatchEvent(new Event('offline'))
+      await flushPromises()
+
+      expect(button('Rouvrir la liste')?.disabled).toBe(true)
+      expect(wrapper.text()).toContain('Hors connexion')
+    })
+
+    it('ne lit pas la liste quand le plan se lit (aucune requête de plus)', async () => {
+      installApp()
+      const { wrapper, fetchMock } = await open()
+      await loaded(wrapper)
+
+      expect(calls(fetchMock)).not.toContain('GET /api/v1/shopping-lists/l1')
+    })
+
+    it('les autres refus du plan ne proposent pas de rouvrir', async () => {
+      installApp()
+      const { wrapper, fetchMock } = await open({
+        'GET /api/v1/drive/plans/l1': failure(409, 'SHOPPING_LIST_NOT_SENT'),
+      })
+      await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
+
+      expect(button('Rouvrir la liste')).toBeUndefined()
+      expect(calls(fetchMock)).not.toContain('GET /api/v1/shopping-lists/l1')
+    })
   })
 
   it('propose de réessayer quand le serveur est injoignable', async () => {
