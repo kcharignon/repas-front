@@ -123,6 +123,9 @@ services:
       - ANDROID_VERSION_TAG
       - ANDROID_VERSION_CODE
       - ANDROID_COMMIT=${ANDROID_COMMIT:-local}
+      # L'origine de Repas visée par l'APK de débogage (jamais par la publication) et le nom de cet APK : voir android/README.md.
+      - ANDROID_REPAS_ORIGIN
+      - ANDROID_APK_NAME
       - ANDROID_KEYSTORE_BASE64
       - ANDROID_KEYSTORE_PASSWORD
       - ANDROID_KEY_ALIAS

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Une feuille de basilic, dans la zone sûre (le disque central de 66 dp) d'une icône adaptative de 108 dp. -->
+<!-- Une feuille de basilic à nervure de safran, dans la zone sûre (le disque central de 66 dp) d'une icône adaptative de 108 dp. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -11,7 +11,7 @@
     <path
         android:fillColor="#00000000"
         android:pathData="M44,66 C50,56 58,46 68,38"
-        android:strokeColor="@color/basil"
+        android:strokeColor="@color/saffron"
         android:strokeLineCap="round"
-        android:strokeWidth="2.5" />
+        android:strokeWidth="3" />
 </vector>

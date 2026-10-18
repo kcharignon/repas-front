@@ -1,27 +1,17 @@
 package eu.kantin.repas.drive
 
 import android.app.Activity
-import android.app.AlertDialog
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
-import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
-import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
-import android.os.Message
+import android.util.Log
 import android.view.Gravity
-import android.view.View
 import android.view.ViewGroup
-import android.view.WindowInsets
-import android.view.WindowManager
-import android.window.OnBackInvokedDispatcher
-import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
-import android.webkit.JsResult
+import android.webkit.ConsoleMessage
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
@@ -29,112 +19,96 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
-import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
-import android.widget.LinearLayout
-import android.widget.TextView
 import android.widget.Toast
-import java.util.UUID
+import android.window.OnBackInvokedDispatcher
+import androidx.webkit.JavaScriptReplyProxy
+import androidx.webkit.WebMessageCompat
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 
 /**
- * L'hôte WebView de « Repas Drive » (DRV-312) : le drive Leclerc en plein écran, en mode ordinateur permanent.
+ * La coquille de l'application Repas (DRV-317) : le front Repas en plein écran dans une WebView, sur l'origine écrite à la construction
+ * (`BuildConfig.REPAS_ORIGIN`). Le drive est un second écran ([DriveActivity]).
  *
- * L'utilisateur se connecte lui-même ; ses cookies restent dans la WebView, que l'application ne lit ni ne journalise jamais (ni
- * cookie, ni contenu de page, ni adresse complète). Navigation limitée à `https` et `*.leclercdrive.fr` ([NavigationPolicy]) : tout
- * autre lien s'ouvre dans le navigateur du téléphone. Aucun objet natif n'est exposé aux pages ; l'agent y est injecté par [AgentHost] (DRV-313).
+ * - **Navigation** : seule l'origine de Repas reste dans la WebView ([ShellNavigation]) ; tout autre lien s'ouvre dans le navigateur du
+ *   téléphone, `*.leclercdrive.fr` compris. Les liens `https://kantin.eu/…` reçus d'une autre application (courriel de confirmation)
+ *   arrivent ici.
+ * - **Données** : cookies (dont celui de rafraîchissement du jeton, `HttpOnly`), stockage du site et service worker restent dans le profil
+ *   par défaut de la WebView. Le drive a le sien ([DriveProfile]) : la WebView de Repas ne reçoit ni l'agent Leclerc ni les cookies de Leclerc.
+ * - **Pont natif** : `window.repasNative`, réservé à l'origine de Repas ([NativeBridge]). Aucun `addJavascriptInterface`.
  */
 class MainActivity : Activity() {
     private lateinit var webView: WebView
-    private lateinit var problemPanel: View
-    private lateinit var problemText: TextView
-    private lateinit var resultPanel: TextPanel
-    private lateinit var agent: AgentHost
-    private lateinit var debugRun: DebugRun
-    private lateinit var selftestRun: SelftestRun
+    private lateinit var problems: ProblemPanel
+    private val repasOrigin: String = RepasOrigin.parse(BuildConfig.REPAS_ORIGIN) ?: error("REPAS_ORIGIN invalide.")
+    private val navigation = ShellNavigation(repasOrigin)
 
-    /** La fenêtre vide qui reçoit un `window.open` avant que son adresse soit confiée à la WebView principale. */
-    private var popup: WebView? = null
+    /** Le canal de réponse vers la page de Repas courante : donné par son premier message, perdu quand elle se recharge. */
+    private var reply: JavaScriptReplyProxy? = null
     private var loadFailed = false
 
-    @Suppress("DEPRECATION")
+    private val repasApp get() = application as RepasApp
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         // Le débogage à distance de la WebView n'existe que dans la version de débogage.
         if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) WebView.setWebContentsDebuggingEnabled(true)
 
-        resultPanel = TextPanel(this)
-        debugRun = DebugRun(
-            template = { AgentHost.readAsset(this, DebugPlan.TEMPLATE_FILE)?.toString(Charsets.UTF_8) },
-            send = { agent.send(it) },
-            show = { resultPanel.show(it) },
-            newRunId = { UUID.randomUUID().toString() },
-        )
-        selftestRun = SelftestRun(
-            send = { agent.openSelftest() },
-            show = { resultPanel.show(it, R.string.selftest_title, autoCopy = true) },
-        )
-        agent = AgentHost.create(this, BuildConfig.DEBUG) { message ->
-            // La variante de débogage montre le résultat de l'essai et le rapport du test automatique ; le passage du plan et son retour
-            // vers Repas arrivent avec DRV-314.
-            if (BuildConfig.DEBUG && !selftestRun.onAgentMessage(message.type, message.text)) {
-                debugRun.onAgentMessage(message.type, message.text)
-            }
-        }
         webView = createWebView()
-        problemPanel = problemPanel()
+        problems = ProblemPanel(this, ::problemMessage) { retry() }
         val root = FrameLayout(this).apply {
-            setBackgroundColor(Color.WHITE)
+            setBackgroundColor(getColor(R.color.background))
             addView(webView, FrameLayout.LayoutParams(MATCH, MATCH))
-            addView(problemPanel, FrameLayout.LayoutParams(MATCH, MATCH))
-            addView(
-                menuButton(),
-                FrameLayout.LayoutParams(dp(48), dp(48), Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(12), dp(24)) },
-            )
-            addView(resultPanel, FrameLayout.LayoutParams(MATCH, MATCH))
+            addView(problems, FrameLayout.LayoutParams(MATCH, MATCH))
+            // Le menu de l'application s'ouvre par `app.menu` depuis le front ; la variante de débogage a en plus ce bouton.
+            if (BuildConfig.DEBUG) {
+                addView(
+                    menuButton { openMenu() }.apply { alpha = 0.7f },
+                    FrameLayout.LayoutParams(dp(40), dp(40), Gravity.CENTER_VERTICAL or Gravity.END).apply { setMargins(0, 0, dp(4), 0) },
+                )
+            }
         }
         keepClearOfSystemBars(root)
         setContentView(root)
         registerBackAction()
 
-        webView.loadUrl(NavigationPolicy.START_URL)
+        webView.loadUrl(navigation.entryUrl(intent?.dataString) ?: "$repasOrigin/")
+    }
+
+    /** Un lien `https://kantin.eu/…` ouvert depuis une autre application pendant que celle-ci tourne. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        navigation.entryUrl(intent.dataString)?.let { webView.loadUrl(it) }
     }
 
     override fun onResume() {
         super.onResume()
-        // L'écran reste allumé tant que l'application est au premier plan (le passage de la liste, DRV-314, en a besoin).
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         webView.onResume()
     }
 
     override fun onPause() {
-        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        // Les cookies de la WebView sont écrits sur le disque ici, pour qu'ils survivent à la fermeture de l'application.
+        // Les cookies de la WebView sont écrits sur le disque ici, pour que la session survive à la fermeture de l'application.
         CookieManager.getInstance().flush()
         webView.onPause()
         super.onPause()
     }
 
     override fun onDestroy() {
-        popup?.destroy()
-        popup = null
         (webView.parent as? ViewGroup)?.removeView(webView)
         webView.destroy()
         super.onDestroy()
     }
 
     // ---------------------------------------------------------------------------------------------------------------
-    // Retour arrière et marges
+    // Retour arrière
 
-    /** Retour arrière : ferme l'écran de résultat, puis revient en arrière dans la WebView, puis quitte l'application. */
+    /** Retour arrière dans le front, puis sortie de l'application. */
     private fun goBackOrExit() {
-        when {
-            resultPanel.isShowing -> resultPanel.hide()
-            webView.canGoBack() -> webView.goBack()
-            else -> finish()
-        }
+        if (webView.canGoBack()) webView.goBack() else finish()
     }
 
     /** `targetSdk` 36 : le geste « retour » passe par un rappel (la méthode `onBackPressed` n'est plus appelée depuis Android 13). */
@@ -147,20 +121,6 @@ class MainActivity : Activity() {
     @Suppress("OVERRIDE_DEPRECATION", "DEPRECATION")
     override fun onBackPressed() {
         goBackOrExit()
-    }
-
-    /** Depuis Android 15 l'écran passe sous les barres du système et le clavier : la racine garde ses marges. */
-    private fun keepClearOfSystemBars(root: View) {
-        root.setOnApplyWindowInsetsListener { view, insets ->
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                val types = WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout() or WindowInsets.Type.ime()
-                val margins = insets.getInsets(types)
-                view.setPadding(margins.left, margins.top, margins.right, margins.bottom)
-                WindowInsets.CONSUMED
-            } else {
-                insets
-            }
-        }
     }
 
     // ---------------------------------------------------------------------------------------------------------------
@@ -176,57 +136,47 @@ class MainActivity : Activity() {
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             safeBrowsingEnabled = true
             setGeolocationEnabled(false)
-            // `window.open` et les liens `target=_blank` passent par `onCreateWindow` : ils s'ouvrent dans cette WebView.
-            setSupportMultipleWindows(true)
-            javaScriptCanOpenWindowsAutomatically = true
         }
-        DesktopMode.apply(this, view.settings)
-        // Le canal et l'injection de l'agent (DRV-313) : avant le premier chargement, réservés aux pages *.leclercdrive.fr.
-        agent.attach(view)
         CookieManager.getInstance().apply {
             setAcceptCookie(true)
-            // Leclerc charge des éléments d'autres sites (anti-robot, mesure) qui posent leurs propres cookies.
-            setAcceptThirdPartyCookies(view, true)
+            // Le front n'appelle que son propre site : aucun cookie d'un autre.
+            setAcceptThirdPartyCookies(view, false)
         }
-        view.webViewClient = DriveWebViewClient()
-        view.webChromeClient = DriveChromeClient()
+        // Le pont natif, avant le premier chargement, réservé à l'origine de Repas. Sans la fonction (WebView très ancienne), la page ne le voit pas.
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            WebViewCompat.addWebMessageListener(view, NativeBridge.OBJECT_NAME, setOf(repasOrigin)) { _, message, origin, isMainFrame, proxy ->
+                val text = if (message.type == WebMessageCompat.TYPE_STRING) message.data else null
+                onNativeMessage(text, origin.toString(), isMainFrame, proxy)
+            }
+        }
+        view.webViewClient = ShellWebViewClient()
+        view.webChromeClient = ShellChromeClient()
         return view
     }
 
-    /** Applique la règle de navigation à une adresse demandée hors de la page (fenêtre `window.open`). */
-    private fun route(url: String?) {
-        when (NavigationPolicy.decide(url)) {
-            Decision.ALLOW -> webView.loadUrl(url!!)
-            Decision.OPEN_EXTERNALLY -> openInPhoneBrowser(url!!)
-            Decision.BLOCK -> Unit
-        }
-    }
-
-    private fun openInPhoneBrowser(url: String) {
-        try {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE))
-        } catch (_: ActivityNotFoundException) {
-            toast(R.string.no_browser)
-        }
-    }
-
-    private inner class DriveWebViewClient : WebViewClient() {
+    private inner class ShellWebViewClient : WebViewClient() {
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-            // Seule la page principale est limitée à Leclerc : les cadres (par exemple le défi anti-robot) restent libres de charger.
+            // Seule la page principale est limitée à Repas : les cadres restent libres de charger.
             if (!request.isForMainFrame) return false
             val url = request.url.toString()
-            if (NavigationPolicy.decide(url) == Decision.ALLOW) return false
-            route(url)
-            return true
+            return when (navigation.decide(url)) {
+                Decision.ALLOW -> false
+                Decision.OPEN_EXTERNALLY -> {
+                    openInPhoneBrowser(url)
+                    true
+                }
+                Decision.BLOCK -> true
+            }
         }
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             loadFailed = false
+            // La page précédente n'existe plus : son canal de réponse non plus, la nouvelle page le donnera par son premier message.
+            reply = null
         }
 
         override fun onPageFinished(view: WebView, url: String?) {
-            if (!loadFailed) problemPanel.visibility = View.GONE
-            agent.onPageFinished(view, url)
+            if (!loadFailed) problems.hide()
         }
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -253,185 +203,95 @@ class MainActivity : Activity() {
         }
     }
 
-    private inner class DriveChromeClient : WebChromeClient() {
-        override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean {
-            popup?.destroy()
-            val holder = WebView(this@MainActivity)
-            holder.settings.allowFileAccess = false
-            holder.webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(v: WebView, request: WebResourceRequest): Boolean {
-                    route(request.url.toString())
-                    return true
-                }
-
-                override fun onPageStarted(v: WebView, url: String?, favicon: Bitmap?) {
-                    v.stopLoading()
-                    route(url)
-                }
-            }
-            popup = holder
-            (resultMsg.obj as WebView.WebViewTransport).webView = holder
-            resultMsg.sendToTarget()
-            return true
-        }
-
-        override fun onCloseWindow(window: WebView) {
-            if (window === popup) popup = null
-            window.destroy()
-        }
-
-        override fun onJsAlert(view: WebView, url: String?, message: String?, result: JsResult): Boolean =
-            askJs(message, result, withCancel = false)
-
-        override fun onJsConfirm(view: WebView, url: String?, message: String?, result: JsResult): Boolean =
-            askJs(message, result, withCancel = true)
-
+    /** Aucune permission d'Android n'est demandée (ni fichiers, ni position, ni caméra) : le front n'envoie ni fichier ni photo. */
+    private inner class ShellChromeClient : WebChromeClient() {
         // Rien de ce que dit la page n'est écrit dans le journal du téléphone.
         override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean = true
     }
 
-    private fun askJs(message: String?, result: JsResult, withCancel: Boolean): Boolean {
-        if (isFinishing) {
-            result.cancel()
-            return true
+    // ---------------------------------------------------------------------------------------------------------------
+    // Le pont natif
+
+    private fun onNativeMessage(text: String?, origin: String, isMainFrame: Boolean, proxy: JavaScriptReplyProxy) {
+        when (val request = NativeBridge.screen(text, origin, isMainFrame, repasOrigin)) {
+            is NativeRequest.Ignored -> Log.w(TAG, "Message de la page ignoré : ${request.reason}")
+            is NativeRequest.Refused -> {
+                Log.w(TAG, "Message de la page refusé : ${request.reason}")
+                answer(proxy, request.reply)
+            }
+            NativeRequest.AppInfo -> {
+                val version = installedVersion()
+                answer(proxy, NativeBridge.appInfo(version.name, version.code, repasApp.agentLoad.status == AgentStatus.READY))
+            }
+            NativeRequest.AppMenu -> {
+                reply = proxy
+                openMenu()
+            }
+            // Le passage du plan arrive avec DRV-314 : en attendant, la page est prévenue que le drive n'est pas encore là.
+            is NativeRequest.Drive -> answer(proxy, NativeBridge.driveError(NativeBridge.UNAVAILABLE))
         }
-        AlertDialog.Builder(this)
-            .setMessage(message)
-            .setPositiveButton(R.string.ok) { _, _ -> result.confirm() }
-            .apply { if (withCancel) setNegativeButton(R.string.cancel) { _, _ -> result.cancel() } }
-            .setOnCancelListener { result.cancel() }
-            .show()
-        return true
+    }
+
+    /** Répond à la page, et retient son canal pour la suite. */
+    private fun answer(proxy: JavaScriptReplyProxy, text: String) {
+        reply = proxy
+        post(text)
+    }
+
+    private fun post(text: String) {
+        try {
+            reply?.postMessage(text)
+        } catch (_: RuntimeException) {
+            // La page a disparu entre-temps : rien à faire.
+        }
     }
 
     // ---------------------------------------------------------------------------------------------------------------
     // Les erreurs de chargement
 
-    private fun problemPanel(): View = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        gravity = Gravity.CENTER
-        setBackgroundColor(Color.WHITE)
-        setPadding(dp(32), dp(32), dp(32), dp(32))
-        // Le panneau recouvre la page : il avale les touches.
-        isClickable = true
-        visibility = View.GONE
-        problemText = label("", sizeSp = 17f)
-        addView(problemText, LinearLayout.LayoutParams(MATCH, WRAP))
-        addView(roundedButton(getString(R.string.retry), filled = true) { retry() }, LinearLayout.LayoutParams(WRAP, WRAP).apply { topMargin = dp(24) })
+    private fun problemMessage(problem: LoadProblem): Int = when (problem) {
+        LoadProblem.OFFLINE -> R.string.problem_repas_offline
+        LoadProblem.UNAVAILABLE -> R.string.problem_repas_unavailable
+        LoadProblem.CERTIFICATE -> R.string.problem_repas_certificate
+        LoadProblem.OTHER -> R.string.problem_repas_other
     }
 
     private fun showProblem(problem: LoadProblem) {
         loadFailed = true
-        problemText.setText(
-            when (problem) {
-                LoadProblem.OFFLINE -> R.string.problem_offline
-                LoadProblem.UNAVAILABLE -> R.string.problem_unavailable
-                LoadProblem.CERTIFICATE -> R.string.problem_certificate
-                LoadProblem.OTHER -> R.string.problem_other
-            },
-        )
-        problemPanel.visibility = View.VISIBLE
+        problems.show(problem)
     }
 
     private fun retry() {
-        problemPanel.visibility = View.GONE
-        if (webView.url == null) webView.loadUrl(NavigationPolicy.START_URL) else webView.reload()
+        problems.hide()
+        if (webView.url == null) webView.loadUrl("$repasOrigin/") else webView.reload()
     }
 
     // ---------------------------------------------------------------------------------------------------------------
     // Le menu
 
-    private fun menuButton(): View = TextView(this).apply {
-        text = "⋮"
-        textSize = 24f
-        gravity = Gravity.CENTER
-        setTextColor(Color.WHITE)
-        contentDescription = getString(R.string.menu_button)
-        background = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(BASIL)
-        }
-        elevation = dp(6).toFloat()
-        setOnClickListener { showMenu() }
+    private fun openMenu() = showMenu(
+        listOf(
+            R.string.menu_drive_settings to { webView.loadUrl("$repasOrigin$DRIVE_SETTINGS_PATH") },
+            R.string.menu_open_drive to { startActivity(Intent(this, DriveActivity::class.java)) },
+            R.string.menu_about to { showAbout(repasApp.agentLoad.describe(this)) },
+            R.string.menu_logout_drive to { confirmClearDriveData(::clearDriveData) },
+        ),
+    )
+
+    /** Se déconnecter de Leclerc : le profil du drive est vidé. Sans profils, Repas aussi l'est, et la page se recharge. */
+    private fun clearDriveData() {
+        val shared = !DriveProfile.isolated
+        DriveProfile.clear(if (shared) webView else null)
+        if (shared) webView.loadUrl("$repasOrigin/")
+        toast(R.string.drive_data_cleared)
     }
 
-    private fun showMenu() {
-        val entries = menuEntries()
-        AlertDialog.Builder(this)
-            .setItems(entries.map { getString(it.first) }.toTypedArray()) { _, which -> entries[which].second() }
-            .show()
-    }
+    private fun toast(message: Int) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 
-    private fun menuEntries(): List<Pair<Int, () -> Unit>> = buildList {
-        if (BuildConfig.DEBUG) add(R.string.menu_selftest to ::startSelftest)
-        add(R.string.menu_about to ::showAbout)
-        add(R.string.menu_logout to ::confirmClearData)
-        add(R.string.menu_browser to ::openCurrentPageInBrowser)
-        add(R.string.menu_diagnostic to ::openAgentDiagnostic)
-        if (BuildConfig.DEBUG) add(R.string.menu_debug_plan to ::startDebugPlan)
-    }
+    private companion object {
+        const val TAG = "RepasDrive"
 
-    private fun showAbout() {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.app_name)
-            .setMessage(versionLine() + "\n" + agent.describe(this) + "\n\n" + getString(R.string.about_manual))
-            .setPositiveButton(R.string.close, null)
-            .show()
+        /** La page des réglages du drive du front (DRV-403). */
+        const val DRIVE_SETTINGS_PATH = "/drive/reglages"
     }
-
-    private fun versionLine(): String {
-        val info = packageManager.getPackageInfo(packageName, 0)
-        @Suppress("DEPRECATION")
-        val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode else info.versionCode.toLong()
-        val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
-        return VersionLabel.render(info.versionName ?: "?", code, getString(R.string.build_commit), debuggable)
-    }
-
-    private fun confirmClearData() {
-        AlertDialog.Builder(this)
-            .setMessage(R.string.clear_message)
-            .setPositiveButton(R.string.clear_confirm) { _, _ -> clearBrowserData() }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
-    }
-
-    /** Se déconnecter : cookies, stockage du site, cache et historique de la WebView, puis retour à l'accueil du drive. */
-    private fun clearBrowserData() {
-        CookieManager.getInstance().apply {
-            removeAllCookies(null)
-            flush()
-        }
-        WebStorage.getInstance().deleteAllData()
-        webView.clearCache(true)
-        webView.clearHistory()
-        problemPanel.visibility = View.GONE
-        webView.loadUrl(NavigationPolicy.START_URL)
-    }
-
-    /** La page courante dans le navigateur du téléphone (l'accueil du drive si la page n'est pas une page du drive). */
-    private fun openCurrentPageInBrowser() {
-        openInPhoneBrowser(webView.url?.takeIf { NavigationPolicy.isAllowed(it) } ?: NavigationPolicy.START_URL)
-    }
-
-    /** Le diagnostic de l'agent : une commande sur le pont, jamais un fragment d'adresse (un fragment trop long fait échouer le site). */
-    private fun openAgentDiagnostic() {
-        if (!agent.openDiagnostic()) toast(agent.unavailableMessage())
-    }
-
-    /**
-     * Variante de débogage seulement (DRV-318) : le test automatique en un geste. L'agent enchaîne diagnostic, lecture du magasin, douze
-     * recherches et un essai de trois produits au panier (retirés ensuite), puis rend un seul rapport, copié et proposé au partage.
-     */
-    private fun startSelftest() {
-        if (NavigationPolicy.httpsHostOf(webView.url) == null) return toast(R.string.selftest_no_store)
-        if (!selftestRun.start()) return toast(agent.unavailableMessage())
-        toast(R.string.selftest_started)
-    }
-
-    /** Variante de débogage seulement : l'agent lit le magasin de la page, puis reçoit un plan synthétique de quatre ingrédients. */
-    private fun startDebugPlan() {
-        if (!debugRun.start(NavigationPolicy.httpsHostOf(webView.url))) toast(agent.unavailableMessage())
-    }
-
-    private fun toast(message: Int) =Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 }

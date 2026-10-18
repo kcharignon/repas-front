@@ -19,6 +19,15 @@ val appVersion = try {
 } catch (e: IllegalArgumentException) {
     throw GradleException(e.message, e)
 }
+// L'origine du front Repas que la coquille charge (DRV-317). L'APK de publication a toujours celle de la production ; l'APK de débogage peut
+// en viser une autre (`ANDROID_REPAS_ORIGIN=https://hote.exemple/`, https seulement), par exemple le faux Repas de l'émulateur.
+val productionOrigin = "https://kantin.eu/"
+fun originHost(origin: String): String {
+    val match = Regex("^https://([a-z0-9]([a-z0-9.-]*[a-z0-9])?)/$").find(origin)
+        ?: throw GradleException("ANDROID_REPAS_ORIGIN doit être de la forme https://hote/ (https, sans port ni chemin) : « $origin ».")
+    return match.groupValues[1]
+}
+val debugOrigin = env("ANDROID_REPAS_ORIGIN") ?: productionOrigin
 val buildCommit = try {
     AppVersion.shortCommit(env("ANDROID_COMMIT"))
 } catch (e: IllegalArgumentException) {
@@ -113,10 +122,14 @@ android {
     buildTypes {
         getByName("debug") {
             signingConfig = signingConfigs.getByName("debug")
+            buildConfigField("String", "REPAS_ORIGIN", "\"$debugOrigin\"")
+            manifestPlaceholders["repasHost"] = originHost(debugOrigin)
         }
         getByName("release") {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
+            buildConfigField("String", "REPAS_ORIGIN", "\"$productionOrigin\"")
+            manifestPlaceholders["repasHost"] = originHost(productionOrigin)
         }
     }
 

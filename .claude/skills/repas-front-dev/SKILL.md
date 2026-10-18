@@ -1,0 +1,104 @@
+---
+name: repas-front-dev
+description: Développer le front web de Repas (Vue 3 + TypeScript, dépôt `kcharignon/repas-front`), en particulier les écrans du chantier « envoyer la liste au drive Leclerc » (`src/features/drive/`, `src/features/shopping-lists/`, module `driveBridge`, pont natif `repasNative`). À utiliser pour une page, un composant, une requête d'API, un texte, un test Vitest ou Playwright, une mise à jour du contrat OpenAPI, ou tout ticket DRV-4xx. Les domaines agent (`drive-agent/`) et Android (`android/`) ont leurs propres skills.
+---
+
+# repas-front-dev — développer le front Repas
+
+Vue 3 (`<script setup>`), TypeScript strict, Vite, Pinia, TanStack Query, client OpenAPI généré, Tailwind + Reka UI, Vitest, Playwright. **Tout tourne dans Docker** (pas de Node sur l'hôte) : passer par `make`.
+
+## 0. Avant toute chose
+
+1. Lire `CLAUDE.md` du front, `docs/adr/README.md` (ADR 0002 contrat, 0003 design, 0005 session, 0006 PWA) et, pour le chantier drive, le ticket `docs/drive/tickets/DRV-4xx-*.md` **du dépôt back** `kcharignon/repas` (autonome ; ses sections « RÉVISION », « Précisions du back » et « Réalisation » priment sur le texte d'origine), `docs/drive/README.md`, `docs/drive/architecture.md` §§ 7-9 et `docs/drive/consignes-agents.md`.
+2. Règles transverses (détail : `consignes-agents.md` du back) : aucun contact avec Leclerc, aucune donnée réelle (valeurs factices `123456`, `Ville-Test`), jamais de déploiement, de release ni de secret ; une PR n'est fusionnée que si **tous** les contrôles de la CI sont verts ; commits courts en français **sans `Co-Authored-By`** ; travailler dans un worktree dédié quand d'autres agents travaillent (`git worktree add`), jamais dans le répertoire d'un autre agent ; ne toucher ni au dépôt back ni à sa roadmap : dire dans le rapport ce qu'il faut cocher.
+3. Un module décrit par un ticket n'existe peut-être pas encore : vérifier dans `src/` avant de l'utiliser. À la date d'écriture, `src/features/drive/` contient `queries.ts` (`useDriveSettings`), `DriveSendView.vue` (squelette) et `bridge/` (le module `driveBridge`, DRV-402, fait) ; les réglages (DRV-403), le flux d'envoi avec `buildPlanMessage` (DRV-404) et le retour (DRV-405) restent à faire. Relire `git log` et `src/features/drive/` avant de s'y fier.
+
+## 1. Commandes (Makefile, `make help` les liste)
+
+| Commande | Rôle |
+|---|---|
+| `make check` | lint (oxlint + ESLint), Prettier, `api-check`, `vue-tsc`, Vitest (agent compris) : **avant chaque commit** |
+| `make quality` | `check` + `audit` + `api-verify` + `agent-verify` (ce que rejoue la CI hors navigateurs) |
+| `make test-coverage` | seuil 80 % lignes/fonctions/branches/instructions dans `vitest.config.ts` : il ne baisse **jamais** |
+| `make api-update ref=<sha>` (= `npm run api:update -- <sha>`) | fige `api/openapi.json` sur un commit du back, régénère `src/api/schema.d.ts` ; relire le diff des deux fichiers |
+| `make e2e` | Playwright (Chromium bureau + Pixel 7) contre le vrai back de dev (`make fixtures` crée `admin@repas.fr`) ; `make e2e-visual` : captures, vidéos, rapport sur http://localhost:9323 |
+| `make start` / `stop` | le front sur http://localhost:5173, branché sur le back de dev (réseau `repas_default` : le back doit tourner) |
+
+Hors Docker : `npm run check`, `npm run test:e2e`. Les sorties de `make check` sont à lire en entier : un échec Prettier, de type ou de couverture bloque la CI. Prettier couvre `src`, `e2e` et `drive-agent` (pas `.claude/` ni `docs/`) ; `src/api/schema.d.ts` n'est jamais formaté à la main.
+
+## 1b. Carte du code (chemins vérifiés)
+
+| Sujet | Où |
+|---|---|
+| Client d'API et erreurs | `src/api/{client,errors,query,version}.ts` (`unwrap`, `ApiError`, `ifMatch`, `versionOf`), types générés `src/api/schema.d.ts`, contrat figé `api/{contract,openapi}.json` |
+| Session | `src/session/{session,guard}.ts` (jeton en mémoire, garde de routes) |
+| Échecs d'écriture | `src/notifications/failures.ts` (`messageForFailure`, `isStale`, `driveCodes`), `store.ts` (toasts) |
+| Hors ligne | `src/offline/{persistence,useOnline}.ts`, `src/app/OfflineBanner.vue`, `src/pwaUpdate.ts` |
+| Listes de courses | `src/features/shopping-lists/` (`ShoppingListHeader.vue`, `ShoppingListContent.vue`, `ShoppingListsView.vue`, `ShoppingListView.vue`, `queries.ts`) |
+| Drive | `src/features/drive/` (`queries.ts`, `DriveSendView.vue` squelette), pont `src/features/drive/bridge/` (`driveBridge.ts`, `native.ts`, `draft.ts`, `errors.ts`, `index.ts`), protocole `drive-agent/protocol/` par `@drive-protocol` |
+| Design et textes | `src/design/` (`Ui*`, `theme.css`), `src/i18n/fr.ts` |
+| Tests | `src/**/__tests__/`, aides `src/__tests__/helpers.ts` (`stubApi`, `appContext`, `json`, `calls`), e2e `e2e/*.spec.ts`, `playwright.config.ts` |
+
+## 2. Conventions
+
+- **Types de l'API générés, jamais écrits à la main** (`src/api/schema.d.ts`, commité mais produit par `openapi-typescript`) : un changement de contrat doit casser la compilation. Appels par `unwrap(api.GET('/api/v1/drive/settings'))` avec `useSessionStore().api` ; données serveur par TanStack Query (`queries.ts` par feature, clés exportées comme `driveKeys`).
+- **Aucune logique métier dans un composant** : les conditionnements (`packs`, `packsStatus`) viennent du plan du back ; le front affiche, saisit, appelle, relit. Une écriture sur liste porte `If-Match` (`ifMatch(list.version)`) ; `412`/`409`/`DRIVE_DISABLED` = la ressource a changé : l'écran se relit (`isStale` de `src/notifications/failures.ts`).
+- **Erreurs du back** : le message est un code en majuscules (`SHOPPING_LIST_SENT`, `DRIVE_NOT_CONFIGURED`, `DRIVE_STORE_MISMATCH`, `DRIVE_CHOICE_INVALID`…). Un code que l'écran doit distinguer reçoit son texte dans `driveCodes` (`failures.ts`) et `errors.*` de `fr.ts` (aujourd'hui `DRIVE_DISABLED`, `SHOPPING_LIST_SENT`, `_NOT_SENT`, `_NOT_SENDABLE`, `_EMPTY` ; les `DRIVE_*` des réglages et des choix restent à ajouter avec DRV-403 à 405) ; un code absent retombe sur le texte du statut.
+- **Textes** : jamais de chaîne en dur dans un composant, tout dans `src/i18n/fr.ts` (français seul, tutoiement pour le drive). Une clé manquante fait un `console.warn`, donc **échoue le test** (`src/__tests__/setup.ts` : aucun `console.warn`/`console.error` toléré).
+- **Couleurs par jetons** : `src/design/theme.css` (clair et sombre) et classes Tailwind de jeton (`bg-primary`, `text-muted`, `bg-soft`…) ; jamais d'hexadécimal dans un composant. Composants `Ui*` de `src/design/`, catalogue sur `/design`.
+- **Session** (ADR 0005) : jeton d'accès **en mémoire** (store Pinia), jamais dans `localStorage`/`sessionStorage`/cookie lisible ; refresh par cookie `HttpOnly`. Seul un indice booléen (`repas.session`) et un instantané utilisateur vivent en `localStorage`.
+- **CSP de production** (`docker/Caddyfile`) : `default-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'`. **Aucune image externe** (pas de vignettes Leclerc en v1), pas de script en ligne, pas de nom de domaine ni de secret dans l'image : ne rien relâcher sans ADR.
+- **Accessibilité et mobile** : WCAG AA, cibles tactiles ≥ 44 px, clavier, thèmes clair/sombre, `prefers-reduced-motion`. Le téléphone (Pixel 7) est la cible principale du drive.
+- **Hors ligne** (ADR 0006) : le service worker ne met **aucune réponse de `/api` en cache** ; seule la liste en cours est relue depuis `localStorage` (`repas.cache`, au nom de l'utilisateur). Une action du drive (`send`, `reopen`, ouvrir le drive) est désactivée sans réseau, avec une explication.
+
+## 3. Le drive côté front
+
+- **Protocole partagé** : `import { encodeMessage, decodeMessage, validatePlan, validateResult, PROTOCOL_VERSION } from '@drive-protocol'` (alias vers `drive-agent/protocol/index.ts`, déclaré dans `vite.config.ts` et `tsconfig.app.json`). Ne jamais recopier un type, une borne ou un schéma : importer. Tout résultat reçu passe par `validateResult` avant d'être affiché ou enregistré ; les libellés s'affichent en texte (jamais `v-html`). Bornes : 64 Ko, 100 lignes, 5 produits, 20 refusés.
+- **Plan** : `GET /api/v1/drive/plans/{id}` → `buildPlanMessage` (DRV-404, pas encore écrit) traduit `retailerProductId` en `id`, garde l'ordre de priorité, **recopie `needed`**, applique les surcharges (`replace` : `KNOWN` devient `NEW` avec `replaces` ; `skip` : `SKIP`). Le plan se recharge à chaque ouverture de l'écran.
+- **Pont natif `repasNative`** (décision D28). Côté front, c'est fait (`src/features/drive/bridge/`, importer **uniquement** `@/features/drive/bridge`, jamais `window.repasNative` dans un écran) : `driveBridge.isAvailable()`, `info()` (`app.info` → `{version, versionCode, drive}`, 3 s de délai), `startRun(plan, listId)` (valide le plan par `validatePlan`, écrit le brouillon **avant** d'envoyer `drive.start`), `cancel()` (`drive.cancel`), `listen()` à appeler au démarrage, `onEvent` (`result`, `stale`, `refused`, `invalid` ; les événements arrivés sans écran sont rejoués au premier abonné), `loadDraft`/`clearDraft`/`matchesDraft`. Erreurs `DriveBridgeError` (`UNAVAILABLE`, `INVALID_PLAN`, `TOO_LARGE` > 64 Ko, `RUN_IN_PROGRESS`, `SEND_FAILED`, `REFUSED`, `TIMEOUT`, `INVALID_RESPONSE`) : l'écran choisit le texte, le message n'est jamais journalisé ni affiché. Hors application (`UNAVAILABLE`) : proposer d'installer l'application (DRV-316) et le mode assisté. **Côté Android le pont n'existe pas encore** (DRV-317 et DRV-314) : les tests jouent un faux canal (`bridge/__tests__/fakeNative.ts`). Plus de lien `repasdrive://`, plus de fragment d'adresse, plus de favori.
+- **Brouillon de passage** `{runId, listId, startedAt}` dans `localStorage` (clé `repas.drive.run`, `DRAFT_TTL_MS` 24 h, validé à la lecture, aucune donnée personnelle, repli en mémoire si `localStorage` est refusé : alors il ne survit pas) : l'utilisateur quitte l'écran pour le drive et le **service worker de production recharge la page** dès qu'il détecte une nouvelle version (`src/pwaUpdate.ts`). Le brouillon s'écrit **avant** de lancer le drive et se retrouve après rechargement ; un résultat dont le `runId` n'est pas celui du brouillon est ignoré (message). Toute écriture dans `localStorage` est protégée par `try/catch` (déjà fait dans `draft.ts` : réutiliser, ne pas réécrire).
+- **Enregistrement des choix** (DRV-405) : un seul `PUT /drive/choices` (≤ 200 intentions). `CHOSEN` PRIMARY/FALLBACK → `ADD_PRODUCT` ; `ONCE` → rien ; chaque `rejected` → `REJECT_PRODUCT` ; `HAVE_AT_HOME` **après** les `REJECT_PRODUCT` du même ingrédient ; une ligne `ADDED` avec `price` → `REFRESH_PRICE` ; un produit jamais à la fois ajouté et refusé. En cas d'échec, garder le résultat en mémoire et proposer « Réessayer l'enregistrement » ; le brouillon ne s'efface qu'après succès.
+- **Liste `SENT`** : lecture seule (pas de case, de `+`/`-`, de portions, de renommage), actions « Reprendre l'envoi », « Terminer », « Rouvrir la liste » (confirmation : « Le panier Leclerc ne sera pas vidé. »), « Supprimer ». `/liste` ne crée jamais de liste tout seul quand il n'y a que des `SENT`. `checked` n'est jamais modifié par un envoi. Le bouton « Envoyer au drive » n'apparaît que si `GET /drive/settings` renvoie `enabled: true`.
+- **Libellé du magasin** : l'agent ne lit pas le libellé ; afficher « Magasin …123 » (derniers chiffres) et laisser nommer le magasin (champ facultatif de `PUT /drive/settings`).
+
+## 4. Recettes
+
+### 4.1 Nouvel écran ou nouvelle feature
+1. Contrat à jour : `make api-update ref=<sha du back fusionné>`, relire le diff (un champ ajouté est compatible, un champ retiré est une rupture).
+2. `src/features/<feature>/queries.ts` (clés, `useQuery`/`useMutation`, invalidations), vue + composants, route dans `src/router` (protégée par défaut ; `meta.public` seulement pour une page publique), textes dans `fr.ts`, composants `Ui*`.
+3. Tests Vitest à côté (`__tests__/`) avec `stubApi` et `appContext()` de `src/__tests__/helpers.ts` : un appel d'API non prévu fait échouer le test. Cas : chargement, vide, succès, chaque code d'erreur du back, hors ligne.
+4. e2e : faux back par `page.route` (modèle `e2e/shopping-list-sent.spec.ts`, indice de session posé par `addInitScript`), axe (`@axe-core/playwright`) sans violation A/AA, projets `chromium` et `mobile` (Pixel 7). `make e2e` pour les scénarios contre le vrai back (un test à la fois : un seul compte ; vider le limiteur de débit du back en cas de 429).
+5. Test visuel : `make e2e-visual`, **lire les captures** (mobile et bureau, clair et sombre) avant de conclure ; une page visible non vue n'est pas finie.
+
+### 4.2 Nouveau texte ou nouveau code d'erreur
+Ajouter la clé dans `fr.ts`, brancher le code dans `driveCodes` de `failures.ts` si c'est un code du back, tester `messageForFailure`.
+
+### 4.3 Changement de format du plan ou du résultat
+Ne se fait pas dans le front seul : schémas `drive-agent/protocol/*.schema.json`, validateurs, exemples, `drive-agent/protocol/README.md` et `architecture.md` § 8 du back changent **dans le même commit** (voir `repas-agent-dev`).
+
+## 5. Definition of Done
+
+- [ ] `make check` vert (lint, format, `api-check`, types, tests) ; `make quality` avant la PR ; couverture ≥ 80 % non abaissée
+- [ ] Textes dans `fr.ts`, couleurs par jetons, aucune image externe, aucun `v-html`, aucune logique métier dans un composant
+- [ ] Test unitaire + e2e Pixel 7 + axe ; captures Chromium lues (mobile et bureau)
+- [ ] PR au modèle `.github/pull_request_template.md` (Quoi / Vérifié / À relire), sans pied d'attribution ; ticket : section « Réalisation » à fournir dans le rapport pour le back
+- [ ] `gh pr checks` : **tous** verts (un contrôle rouge sans rapport avec le changement et reconnu instable se relance : `gh run rerun --failed`, jamais en le masquant), puis `gh pr merge --squash --delete-branch` (autorisé sur ce dépôt), puis `gh issue close <n> -c "Fait par la PR #<m>"`
+
+### Livraison (rappel)
+
+- Une branche depuis `main` à jour par ticket (`feat/drv-4xx-…`), un ticket = une PR = une fusion avant le suivant.
+- Jobs de la CI à attendre (`gh pr checks`, boucle `until`, pas de longue attente isolée) : « Qualité et tests », « Bout en bout (Playwright) », « Agent du drive (bout en bout, faux site Leclerc) », « Avis de sécurité (npm audit) », « Docker Lint », « Image Docker (build et fumée) ». Rouge : deux tentatives raisonnables de correction, sinon laisser la PR ouverte et le dire dans le rapport. Ne jamais masquer un test, une règle ESLint ou la couverture.
+- Un changement d'API cassant sort d'abord côté back, compatible avec l'ancien front ; le front fige ensuite le contrat sur le commit fusionné du back.
+
+## 6. Erreurs fréquentes
+
+- Écrire un type d'API à la main, ou oublier `make api-update` après un changement du back (la CI rejoue `api-verify`).
+- Une clé i18n absente, ou un `console.warn` laissé : le test échoue.
+- `localStorage` sans `try/catch`, ou un jeton qui y atterrit.
+- Compter sur le seul état en mémoire pour le brouillon de passage : le service worker recharge la page.
+- Parler à `window.repasNative` ailleurs que dans `bridge/`, ou supposer l'application Android prête (le pont natif n'y est pas encore : DRV-317, DRV-314).
+- Faire du calcul de conditionnements, de tri ou de priorité dans le front (le back valide, le front envoie l'ordre voulu).
+
+## 7. Interdits
+
+Contacter Leclerc ou un autre site d'enseigne ; mettre un identifiant, cookie, jeton, numéro de magasin, ville ou e-mail réels dans le code, un test, une capture ou une PR ; `eval`/`v-html`/`innerHTML` sur une donnée venue de l'agent ou du back ; relâcher la CSP ; baisser le seuil de couverture ; `--no-verify`, force-push, push sur `main` ; fusionner une PR dont un contrôle n'est pas vert ; `make prod` ou déployer sans demande (l'approbation de la mise en production est humaine, ADR 0007 du front).

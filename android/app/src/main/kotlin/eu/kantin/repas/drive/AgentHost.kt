@@ -9,6 +9,21 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import java.io.IOException
 
+/** L'agent embarqué lu et vérifié : son état et, s'il est prêt, le script à injecter. */
+internal class AgentLoad(val status: AgentStatus, val script: AgentScript?) {
+    /** Une phrase pour la fenêtre « Version » : version et début de l'empreinte de l'agent, ou ce qui l'empêche d'agir. */
+    fun describe(context: Context): String = when (status) {
+        AgentStatus.READY -> context.getString(R.string.agent_ready, script?.version, script?.digest?.take(DIGEST_SHOWN))
+        AgentStatus.MISSING -> context.getString(R.string.agent_missing)
+        AgentStatus.CORRUPT -> context.getString(R.string.agent_corrupt)
+        AgentStatus.WEBVIEW_TOO_OLD -> context.getString(R.string.agent_webview_too_old)
+    }
+
+    private companion object {
+        const val DIGEST_SHOWN = 18
+    }
+}
+
 /**
  * Le lien entre l'application et l'agent dans la WebView (DRV-313) : l'injection de l'agent dans les pages https de `*.leclercdrive.fr` et
  * le canal de messages. Les règles (origines, bornes, forme des messages) sont dans [BridgeMessages] et [AgentAsset], en Kotlin pur ; ici,
@@ -83,12 +98,7 @@ internal class AgentHost private constructor(
     fun openSelftest(): Boolean = debug && pageAnnouncedDebug && send(BridgeMessages.COMMAND_SELFTEST)
 
     /** Une phrase pour la fenêtre « Version » : version et début de l'empreinte de l'agent, ou ce qui l'empêche d'agir. */
-    fun describe(context: Context): String = when (status) {
-        AgentStatus.READY -> context.getString(R.string.agent_ready, script?.version, script?.digest?.take(DIGEST_SHOWN))
-        AgentStatus.MISSING -> context.getString(R.string.agent_missing)
-        AgentStatus.CORRUPT -> context.getString(R.string.agent_corrupt)
-        AgentStatus.WEBVIEW_TOO_OLD -> context.getString(R.string.agent_webview_too_old)
-    }
+    fun describe(context: Context): String = AgentLoad(status, script).describe(context)
 
     /** Ce qu'il faut dire à l'utilisateur quand un message ne peut pas partir vers l'agent. */
     fun unavailableMessage(): Int = when (status) {
@@ -99,16 +109,18 @@ internal class AgentHost private constructor(
 
     companion object {
         private const val TAG = "RepasDrive"
-        private const val DIGEST_SHOWN = 18
 
         /** Charge et vérifie l'agent embarqué, et décide si la WebView sait le recevoir. */
-        fun create(context: Context, debug: Boolean, onAgentMessage: (Inbound.FromAgent) -> Unit): AgentHost {
+        fun load(context: Context, debug: Boolean): AgentLoad {
             val (status, script) = AgentAsset.load({ name -> readAsset(context, name) }, debug)
             if (status == AgentStatus.READY && !WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
-                return AgentHost(AgentStatus.WEBVIEW_TOO_OLD, null, debug, onAgentMessage)
+                return AgentLoad(AgentStatus.WEBVIEW_TOO_OLD, null)
             }
-            return AgentHost(status, script, debug, onAgentMessage)
+            return AgentLoad(status, script)
         }
+
+        fun create(load: AgentLoad, debug: Boolean, onAgentMessage: (Inbound.FromAgent) -> Unit): AgentHost =
+            AgentHost(load.status, load.script, debug, onAgentMessage)
 
         fun readAsset(context: Context, name: String): ByteArray? = try {
             context.assets.open(name).use { it.readBytes() }

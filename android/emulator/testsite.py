@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
-"""Le faux site local de l'émulateur (DRV-319) : HTTPS sur le port 443, sous un nom `*.leclercdrive.fr` que le DNS local de l'émulateur
-envoie ici. Il ne contient AUCUNE donnée d'une enseigne : une page de test qui relève ce que le pont et l'agent font dans la WebView.
+"""Les faux sites locaux de l'émulateur (DRV-319, DRV-317) : HTTPS sur le port 443, sous des noms que le DNS local de l'émulateur envoie ici.
+Ils ne contiennent AUCUNE donnée réelle : des pages de test qui relèvent ce que le pont et l'agent font dans la WebView.
 
-  GET  /              la page de test (testpage.html)
+Selon le nom demandé (en-tête Host) :
+  repas.test (le faux front Repas, DRV-317)   toute adresse hors /__ : la page repaspage.html (comme un SPA)
+  *.leclercdrive.fr (le faux drive)           GET / : la page de test testpage.html ; le reste, 404 (par exemple les recherches que tenterait
+                                              l'agent : elles n'aboutissent jamais)
+Pour tous les noms :
   POST /__report      la page y dépose ce qu'elle a relevé (JSON, 8 Ko au plus) ; le test de fumée le relit
   GET  /__reports     la liste des relevés, en JSON
-  POST /__reset       vide la liste
-  tout le reste       404 (par exemple les recherches que tenterait l'agent : elles n'aboutissent jamais)
+  POST /__command     le test dépose un ordre pour le faux Repas (JSON, 1 Ko au plus) ; la page le prend avec GET /__command
+  GET  /__command     le plus ancien ordre en attente (JSON) ou 204
+  POST /__reset       vide les relevés et les ordres
 
 Le journal des requêtes (méthode et chemin seulement) est dans $SITE_DIR/access.log.
 """
@@ -17,16 +22,22 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 SITE_DIR = os.environ.get("SITE_DIR", "/sdk/site")
-PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testpage.html")
+HERE = os.path.dirname(os.path.abspath(__file__))
+DRIVE_PAGE = os.path.join(HERE, "testpage.html")
+REPAS_PAGE = os.path.join(HERE, "repaspage.html")
+REPAS_HOST = "repas.test"
 MAX_REPORT_BYTES = 8 * 1024
+MAX_COMMAND_BYTES = 1024
 MAX_REPORTS = 200
+MAX_COMMANDS = 20
 
 reports = []
+commands = []
 lock = threading.Lock()
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "faux-drive"
+    server_version = "faux-sites"
 
     def _send(self, status, body=b"", content_type="text/plain; charset=utf-8"):
         self.send_response(status)
@@ -36,34 +47,52 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _host(self):
+        return (self.headers.get("Host") or "").split(":", 1)[0].lower()
+
+    def _page(self, path):
+        with open(path, "rb") as handle:
+            self._send(200, handle.read(), "text/html; charset=utf-8")
+
     def do_GET(self):
         path = self.path.split("?", 1)[0]
         if path == "/__reports":
             with lock:
                 body = json.dumps(reports).encode()
             self._send(200, body, "application/json")
+        elif path == "/__command":
+            with lock:
+                command = commands.pop(0) if commands else None
+            if command is None:
+                self._send(204)
+            else:
+                self._send(200, json.dumps(command).encode(), "application/json")
+        elif self._host() == REPAS_HOST and not path.startswith("/__"):
+            self._page(REPAS_PAGE)
         elif path == "/":
-            with open(PAGE, "rb") as handle:
-                self._send(200, handle.read(), "text/html; charset=utf-8")
+            self._page(DRIVE_PAGE)
         else:
             self._send(404, b"introuvable")
 
     def do_POST(self):
         path = self.path.split("?", 1)[0]
-        length = min(int(self.headers.get("Content-Length") or 0), MAX_REPORT_BYTES)
+        limit = MAX_COMMAND_BYTES if path == "/__command" else MAX_REPORT_BYTES
+        length = min(int(self.headers.get("Content-Length") or 0), limit)
         raw = self.rfile.read(length)
         if path == "/__reset":
             with lock:
                 reports.clear()
+                commands.clear()
             self._send(204)
-        elif path == "/__report":
+        elif path in ("/__report", "/__command"):
             try:
                 item = json.loads(raw)
             except ValueError:
                 return self._send(400, b"JSON attendu")
+            target, maximum = (reports, MAX_REPORTS) if path == "/__report" else (commands, MAX_COMMANDS)
             with lock:
-                if len(reports) < MAX_REPORTS:
-                    reports.append(item)
+                if len(target) < maximum:
+                    target.append(item)
             self._send(204)
         else:
             self._send(404, b"introuvable")

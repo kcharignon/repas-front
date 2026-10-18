@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
-# Test de fumée de l'application « Repas Drive » dans l'émulateur (DRV-319, première livraison). Lancé par `make android-smoke` (qui construit
-# l'APK de débogage et démarre l'émulateur avant), depuis la racine du dépôt.
+# Test de fumée de l'application Repas dans l'émulateur (DRV-319, DRV-317). Lancé par `make android-smoke` (qui construit l'APK de débogage
+# visant le faux Repas local et démarre l'émulateur avant), depuis la racine du dépôt.
 #
-# Il ne contacte JAMAIS le vrai site Leclerc : le DNS de l'émulateur envoie tout *.leclercdrive.fr vers le faux site local du conteneur
-# (testsite.py, page testpage.html), et rien d'autre ne se résout. Le test le vérifie d'abord, puis une dernière fois dans le journal du DNS.
+# Il ne contacte JAMAIS le vrai site Leclerc ni le vrai Repas : le DNS de l'émulateur envoie tout *.leclercdrive.fr et repas.test vers les faux
+# sites locaux du conteneur (testsite.py : testpage.html pour le drive, repaspage.html pour Repas), et rien d'autre ne se résout. Le test le
+# vérifie d'abord, puis une dernière fois dans le journal du DNS.
 #
-# Ce qu'il prouve, dans l'ordre : l'application s'installe et démarre sans planter ; une WebView affiche la page locale de test ; le script
-# d'injection et le pont ont répondu sur cette page ; le menu de débogage s'ouvre ; la commande « Diagnostic de l'agent » traverse le pont
-# jusqu'à la page et à l'agent ; le test automatique fait l'aller-retour complet (application, pont, agent, pont, application) et affiche son
-# rapport. Les captures d'écran et le rapport texte sont dans android/dist/smoke/.
+# Ce qu'il prouve, dans l'ordre : l'application s'installe et démarre sans planter ; la coquille charge le faux Repas ; celui-ci voit le pont
+# `repasNative`, reçoit la réponse d'`app.info`, et les messages refusés reçoivent une erreur ; le menu s'ouvre (`app.menu`) ; un lien vers un
+# autre site ne s'ouvre pas dans la coquille ; le menu ouvre le drive (second écran) sur le faux site, où le script d'injection et le pont
+# `repasHost` ont répondu ; la commande « Diagnostic de l'agent » traverse le pont jusqu'à l'agent ; le test automatique fait l'aller-retour
+# complet et affiche son rapport ; le retour ramène à la coquille, dont la page répond encore. Les captures d'écran et le rapport texte sont
+# dans android/dist/smoke/.
 # Code de sortie : 0 si tous les contrôles passent, 1 sinon, 3 si KVM manque.
 set -u
 cd "$(dirname "$0")/../.."
@@ -19,6 +22,9 @@ SERVICE=android-emulator
 APP=eu.kantin.repas.drive
 OUT=android/dist/smoke
 SITE_HOST=www.leclercdrive.fr
+REPAS_HOST=repas.test
+# L'APK de débogage construit pour viser https://repas.test/ (voir le Makefile) : l'APK de débogage ordinaire vise le vrai Repas.
+APK=/apk/repas-drive-smoke.apk
 
 emu() { "${COMPOSE[@]}" exec -T "$SERVICE" "$@"; }
 adb() { emu adb "$@"; }
@@ -51,6 +57,8 @@ wait_until() {
 }
 
 has_report() { reports | grep -q "$1"; }
+has_report_count() { [ "$(reports | grep -o "$1" | wc -l)" -ge "$2" ]; } # au moins N relevés de ce motif
+post_command() { emu curl -sk -X POST -H 'Content-Type: application/json' -d "$1" "https://127.0.0.1/__command" > /dev/null; } # un ordre pour le faux Repas
 screenshot() { adb exec-out screencap -p > "$OUT/$1.png" && say "      capture : $OUT/$1.png"; }
 ui() { # l'arbre de l'écran en XML (uiautomator plante parfois en sortant : on réessaie)
   local attempt xml
@@ -109,6 +117,12 @@ else
   ko "$SITE_HOST ne se résout pas vers 10.0.2.2 : $resolved. ARRÊT, pour ne pas risquer de contacter le vrai site."
   exit 1
 fi
+if adb shell ping -c 1 -W 3 "$REPAS_HOST" 2>&1 | head -n 1 | grep -q '(10\.0\.2\.2)'; then
+  ok "$REPAS_HOST (le faux Repas) se résout vers la machine locale (10.0.2.2)"
+else
+  ko "$REPAS_HOST ne se résout pas vers 10.0.2.2 : le faux Repas manque (make android-emulator-down puis up reconstruit l'émulateur). ARRÊT."
+  exit 1
+fi
 if adb shell ping -c 1 -W 3 example.org 2>&1 | grep -q 'unknown host\|Name or service not known\|bad address'; then
   ok "un autre nom (example.org) ne se résout pas : le DNS de l'émulateur est fermé"
 else
@@ -117,10 +131,9 @@ fi
 
 # --- 1. Installation ---------------------------------------------------------------------------------------------------------------------
 say
-say "1. Installation de l'APK de débogage"
-APK=/apk/repas-drive-debug.apk
+say "1. Installation de l'APK de débogage (qui vise https://$REPAS_HOST/)"
 if ! emu test -f "$APK"; then
-  ko "$APK manque (make android)"
+  ko "$APK manque (make android-smoke le construit)"
   exit 1
 fi
 adb shell pm uninstall "$APP" > /dev/null 2>&1
@@ -135,35 +148,84 @@ spki=$(emu cat /sdk/site/spki.b64 | tr -d '\r\n')
 adb shell "echo '_ --ignore-certificate-errors-spki-list=$spki' > /data/local/tmp/webview-command-line"
 ok "WebView réglée pour faire confiance au certificat du faux site, et à lui seul"
 
-# --- 2. Lancement et page locale -----------------------------------------------------------------------------------------------------------
+# --- 2. La coquille Repas ------------------------------------------------------------------------------------------------------------------
 say
-say "2. Lancement et page locale de test"
+say "2. La coquille charge le faux Repas et lui donne le pont repasNative"
 start_app
-if wait_until 40 has_report '"kind": "load"'; then ok "la WebView a chargé la page locale de test"; else ko "la page locale de test ne s'est pas chargée en 40 s"; fi
+if wait_until 40 has_report '"page": "repas"'; then ok "la coquille a chargé le faux Repas"; else ko "le faux Repas ne s'est pas chargé en 40 s"; fi
 check "l'application tourne (pas de plantage au lancement)" adb shell pidof "$APP"
 loaded=$(reports)
-for fact in '"hostname": "www.leclercdrive.fr"' '"topFrame": true' '"bridge": true' '"debug": true' '"frozen": true' '"desktopAgent": true'; do
-  if grep -q "$fact" <<< "$loaded"; then ok "relevé de la page : $fact"; else ko "relevé de la page manquant : $fact"; fi
+for fact in '"hostname": "repas.test"' '"topFrame": true' '"native": true' '"mobileAgent": true' '"cookieSet": true'; do
+  if grep -q "$fact" <<< "$loaded"; then ok "relevé du faux Repas : $fact"; else ko "relevé du faux Repas manquant : $fact"; fi
+done
+if wait_until 15 has_report '"type": "app.info"'; then ok "app.info a reçu sa réponse"; else ko "pas de réponse à app.info"; fi
+info=$(reports | grep -o '{[^{}]*"type": "app.info"[^{}]*}' | head -n 1)
+say "      réponse : ${info:-aucune}"
+grep -q '"drive": true' <<< "$info" && ok "app.info annonce que le drive est utilisable" || ko "app.info n'annonce pas le drive"
+sleep 2
+screenshot 01-coquille-repas
+
+say
+say "   Le pont refuse ce qui n'est pas valide"
+post_command '{"do":"raw","text":"pas du json"}'
+if wait_until 10 has_report '"type": "error", "code": "INVALID_MESSAGE"'; then ok "un message illisible reçoit INVALID_MESSAGE"; else ko "pas de réponse au message illisible"; fi
+post_command '{"do":"raw","text":"{\"v\":1,\"type\":\"inconnu\"}"}'
+if wait_until 10 has_report '"type": "error", "code": "UNKNOWN_TYPE"'; then ok "un type inconnu reçoit UNKNOWN_TYPE"; else ko "pas de réponse au type inconnu"; fi
+post_command '{"do":"drive.start"}'
+if wait_until 10 has_report '"type": "drive.error", "code": "UNAVAILABLE"'; then ok "drive.start reçoit UNAVAILABLE (le passage du plan est DRV-314)"; else ko "pas de réponse à drive.start"; fi
+
+# --- 3. Menu de l'application et lien externe ---------------------------------------------------------------------------------------------
+say
+say "3. Menu de l'application (app.menu) et lien vers un autre site"
+post_command '{"do":"app.menu"}'
+if wait_until 10 ui_has 'Réglages du drive'; then ok "app.menu ouvre le menu de l'application"; else ko "le menu ne s'est pas ouvert par app.menu"; fi
+check "le menu propose « Ouvrir le drive Leclerc »" ui_has 'Ouvrir le drive Leclerc'
+check "le menu propose « Version et mode d.emploi »" ui_has "Version et mode d.emploi"
+check "le menu propose de se déconnecter de Leclerc" ui_has 'Se déconnecter de Leclerc'
+sleep 1
+screenshot 02-menu-repas
+adb shell input keyevent KEYCODE_BACK
+sleep 1
+if tap 'text="Un lien vers un autre site"'; then ok "lien externe touché"; else ko "lien externe introuvable à l'écran"; fi
+sleep 3
+resumed=$(adb shell dumpsys activity activities 2> /dev/null | grep -m1 -E "topResumedActivity|mResumedActivity" | tr -d '\r')
+if ! grep -q "$APP/.MainActivity" <<< "$resumed" || ui_has 'Aucun navigateur'; then
+  ok "le lien s'ouvre hors de la coquille (navigateur du téléphone)"
+else
+  ko "le lien est resté dans la coquille : $resumed"
+fi
+if reports | grep -q '"hostname": "example.org"'; then ko "la coquille a chargé un autre site"; else ok "la coquille n'a chargé aucun autre site"; fi
+adb shell am start -n "$APP/.MainActivity" > /dev/null
+sleep 2
+
+# --- 4. Le drive, second écran -----------------------------------------------------------------------------------------------------------
+say
+say "4. Le menu ouvre le drive (second écran) sur le faux site"
+open_drive() {
+  emu curl -sk -X POST "https://127.0.0.1/__reset" > /dev/null
+  tap 'content-desc="Menu"' && wait_until 10 ui_has 'Ouvrir le drive Leclerc' && tap 'text="Ouvrir le drive Leclerc"' \
+    && wait_until 40 has_report '"hostname": "www.leclercdrive.fr"'
+}
+if open_drive; then ok "« Ouvrir le drive Leclerc » ouvre l'écran du drive, qui a chargé la page locale"; else ko "l'écran du drive ne s'est pas ouvert"; fi
+loaded=$(reports)
+for fact in '"topFrame": true' '"bridge": true' '"debug": true' '"frozen": true' '"desktopAgent": true'; do
+  if grep -q "$fact" <<< "$loaded"; then ok "relevé du drive : $fact"; else ko "relevé du drive manquant : $fact"; fi
 done
 sleep 2
-screenshot 01-page-locale
+screenshot 03-drive
 
-# --- 3. Menu de débogage -----------------------------------------------------------------------------------------------------------------
+# --- 5. Pont application -> page -> agent ----------------------------------------------------------------------------------------------
 say
-say "3. Menu de débogage"
-if tap 'content-desc="Menu"'; then ok "bouton Menu touché"; else ko "bouton Menu introuvable à l'écran"; fi
+say "5. Diagnostic de l'agent (application vers page, par le pont)"
+if tap 'content-desc="Menu"'; then ok "bouton Menu du drive touché"; else ko "bouton Menu du drive introuvable à l'écran"; fi
 if wait_until 10 ui_has 'Test automatique (débogage)'; then
-  ok "le menu est ouvert et propose « Test automatique (débogage) »"
+  ok "le menu du drive propose « Test automatique (débogage) »"
 else
-  ko "le menu de débogage ne s'est pas ouvert"
+  ko "le menu de débogage du drive ne s'est pas ouvert"
 fi
-check "le menu propose aussi « Plan d'essai (débogage) »" ui_has "Plan d.essai (débogage)"
+check "le menu du drive propose aussi « Plan d'essai (débogage) »" ui_has "Plan d.essai (débogage)"
 sleep 1
-screenshot 02-menu
-
-# --- 4. Pont application -> page -> agent ----------------------------------------------------------------------------------------------
-say
-say "4. Diagnostic de l'agent (application vers page, par le pont)"
+screenshot 04-menu-drive
 if tap 'text="Diagnostic de l.agent"'; then ok "entrée « Diagnostic de l'agent » touchée"; else ko "entrée « Diagnostic de l'agent » introuvable"; fi
 if wait_until 15 has_report '"kind": "message", "command": "diagnostic"'; then
   ok "la page a reçu la commande « diagnostic » par le pont"
@@ -176,14 +238,14 @@ else
   ko "l'agent n'a pas monté son interface"
 fi
 sleep 3
-screenshot 03-diagnostic-agent
+screenshot 05-diagnostic-agent
 
-# --- 5. Test automatique : aller-retour complet --------------------------------------------------------------------------------------
+# --- 6. Test automatique : aller-retour complet --------------------------------------------------------------------------------------
 say
-say "5. Test automatique (application, pont, agent, pont, application)"
-start_app
-wait_until 40 has_report '"kind": "load"' || ko "la page locale ne s'est pas rechargée"
-if tap 'content-desc="Menu"' && wait_until 10 ui_has 'Test automatique (débogage)' && tap 'text="Test automatique (débogage)"'; then
+say "6. Test automatique (application, pont, agent, pont, application)"
+adb shell input keyevent KEYCODE_BACK # quitte l'écran du drive : retour à la coquille
+sleep 2
+if open_drive && tap 'content-desc="Menu"' && wait_until 10 ui_has 'Test automatique (débogage)' && tap 'text="Test automatique (débogage)"'; then
   ok "« Test automatique (débogage) » lancé"
 else
   ko "le test automatique n'a pas pu être lancé depuis le menu"
@@ -194,7 +256,7 @@ else
   ko "pas de rapport du test automatique en 120 s"
 fi
 sleep 6 # le temps que l'aperçu du presse-papiers d'Android s'efface
-screenshot 04-rapport-selftest
+screenshot 06-rapport-selftest
 screen=$(ui)
 if grep -q 'Arrêt : UNSUPPORTED_PAGE' <<< "$screen"; then
   ok "le rapport dit « UNSUPPORTED_PAGE » : normal, la page de test n'est pas une page de magasin du drive"
@@ -203,9 +265,26 @@ else
 fi
 grep -o 'Agent : [^&]*\|Verdict : [^&]*' <<< "$screen" | sed 's/^/      rapport : /' | tee -a "$REPORT"
 
-# --- 6. Bilan --------------------------------------------------------------------------------------------------------------------------------
+# --- 7. Retour à la coquille ------------------------------------------------------------------------------------------------------------
 say
-say "6. Bilan"
+say "7. Retour à la coquille : sa page répond encore"
+adb shell input keyevent KEYCODE_BACK # ferme le rapport
+sleep 1
+adb shell input keyevent KEYCODE_BACK # quitte l'écran du drive
+sleep 2
+before=$(reports | grep -o '"type": "app.info"' | wc -l)
+post_command '{"do":"app.info"}'
+if wait_until 15 has_report_count '"type": "app.info"' $((before + 1)); then
+  ok "la page de la coquille répond encore (app.info) après le retour du drive"
+else
+  ko "la page de la coquille ne répond plus après le retour du drive"
+fi
+sleep 1
+screenshot 07-retour-coquille
+
+# --- 8. Bilan --------------------------------------------------------------------------------------------------------------------------------
+say
+say "8. Bilan"
 check "l'application tourne toujours" adb shell pidof "$APP"
 crashes=$(adb logcat -d -b crash 2> /dev/null | grep -c "Process: $APP")
 if [ "$crashes" = "0" ]; then ok "aucun plantage dans le journal d'Android"; else ko "$crashes trace(s) de plantage dans le journal d'Android"; fi
