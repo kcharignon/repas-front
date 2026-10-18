@@ -34,8 +34,12 @@ const stepClass =
 
 <template>
   <div class="flex flex-col gap-5">
+    <section v-if="list.isSent" role="status" class="rounded-2xl bg-soft px-5 py-4">
+      <p class="font-semibold">{{ t('shoppingList.sentHelp') }}</p>
+    </section>
+
     <section
-      v-if="list.isCompleted"
+      v-else-if="list.isCompleted"
       role="status"
       class="flex flex-col items-start gap-3 rounded-2xl bg-soft px-5 py-4"
     >
@@ -87,6 +91,7 @@ const stepClass =
             <li v-for="row in department.rows" :key="row.id">
               <UiCheckbox
                 :model-value="row.checked"
+                :disabled="list.isSent"
                 @update:model-value="
                   (checked) => toggle.mutate({ rowId: row.id, checked: checked === true })
                 "
@@ -134,7 +139,13 @@ const stepClass =
                 <span class="text-sm font-semibold text-muted">{{
                   t('shoppingList.serving')
                 }}</span>
-                <span class="inline-flex items-center rounded-2xl border-[1.5px] border-line">
+                <span v-if="list.isSent" class="min-w-8 text-center text-lg font-bold">{{
+                  meal.serving
+                }}</span>
+                <span
+                  v-else
+                  class="inline-flex items-center rounded-2xl border-[1.5px] border-line"
+                >
                   <button
                     type="button"
                     :aria-label="t('shoppingList.fewer', { name: meal.recipeName })"

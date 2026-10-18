@@ -230,3 +230,35 @@ export function useActiveSummary() {
     queryFn: () => unwrap(api.GET('/api/v1/shopping-lists/active/summary')),
   })
 }
+
+/** Envoie une liste au drive : elle passe à `SENT` et n'est plus modifiable (sans effet si elle l'est déjà). */
+export function useSendShoppingList() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, version }: { id: string; version: number }) =>
+      unwrap(
+        api.POST('/api/v1/shopping-lists/{id}/send', {
+          params: { path: { id }, header: ifMatch(version) },
+        }),
+      ),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: shoppingListKeys.all }),
+  })
+}
+
+/** Rouvre une liste envoyée : elle redevient active et modifiable (l'éventuelle autre liste active passe en pause). */
+export function useReopenShoppingList() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, version }: { id: string; version: number }) =>
+      unwrap(
+        api.POST('/api/v1/shopping-lists/{id}/reopen', {
+          params: { path: { id }, header: ifMatch(version) },
+        }),
+      ),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: shoppingListKeys.all }),
+  })
+}
