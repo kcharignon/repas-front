@@ -9,6 +9,7 @@ import {
   type SetupMessage,
 } from '../../protocol'
 import { own } from '../own'
+import type { LeclercCause } from '../leclerc'
 import type { EndProps } from '../ui'
 import { ERROR_TEXTS } from '../ui'
 import type { RunState } from './run-state'
@@ -31,6 +32,8 @@ export function changesOf(plan: PlanMessage, state: RunState): EndChange[] {
 export interface Ending {
   outcome: Outcome
   code?: ErrorCode
+  /** Quelle vérification a échoué (ticket A) : un code fixe, ajouté au message du résultat. */
+  cause?: LeclercCause
 }
 
 /** Les issues finales, dans l'ordre du plan ; une ligne qui attend encore un choix devient `UNAVAILABLE`. */
@@ -56,14 +59,25 @@ export function endingOf(
   lines: readonly ResultLine[],
   stoppedByUser: boolean,
   code: ErrorCode | null,
+  cause: LeclercCause | null = null,
 ): Ending {
-  if (code === 'BLOCKED') return { outcome: 'partial', code }
-  if (code !== null) return { outcome: 'error', code }
+  const why = cause === null ? {} : { cause }
+  if (code === 'BLOCKED') return { outcome: 'partial', code, ...why }
+  if (code !== null) return { outcome: 'error', code, ...why }
   if (stoppedByUser) return { outcome: 'aborted' }
   const incomplete = lines.some(
     (line) => line.outcome === 'FAILED' || line.outcome === 'UNAVAILABLE',
   )
   return { outcome: incomplete ? 'partial' : 'completed' }
+}
+
+/**
+ * Le message du résultat : le titre de l'erreur et, entre parenthèses, la cause précise (ticket A), par exemple
+ * « Le site a changé (SEARCH_NO_STATE) ». Un code fixe : jamais un morceau de page ni le message d'une exception.
+ */
+export function errorMessage(ending: Ending): string {
+  const title = ending.code ? ERROR_TEXTS[ending.code].title : ''
+  return ending.cause ? `${title} (${ending.cause})` : title
 }
 
 export function buildResult(
@@ -79,7 +93,7 @@ export function buildResult(
     agentVersion,
     outcome: ending.outcome,
     ...(plan.store && { store: { id: plan.store.id } }),
-    ...(ending.code && { error: { code: ending.code, message: ERROR_TEXTS[ending.code].title } }),
+    ...(ending.code && { error: { code: ending.code, message: errorMessage(ending) } }),
     lines,
   }
 }

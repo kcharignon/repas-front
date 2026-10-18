@@ -18,7 +18,7 @@ import {
 import { LeclercAdapter, type RetailerAdapter } from '../src/leclerc'
 import type { DiagnosticProps, DiagnosticRow, DiagnosticView } from '../src/ui'
 import { fakeAdapter, fakeStorage, fakeUi, fakeWakeLock } from './flow-helpers'
-import { fakeSite, fixture, type Scripted } from './leclerc-helpers'
+import { fakeSite, fixture, PAGE, type Scripted } from './leclerc-helpers'
 
 const NOW = Date.UTC(2026, 9, 18, 14, 3, 27)
 const GOOD: Scripted = { body: fixture('recherche-farine.html') }
@@ -333,6 +333,7 @@ describe('ce que le rapport laisse voir', () => {
       'Date : 2026-10-18 14:03 UTC',
       'Hôte : fd0',
       'Magasin : …123',
+      'Connexion : indéterminé (aucun signe)',
       '',
       '[OK] Version de l’agent : version 0.5.0',
       '[OK] Page prise en charge : hôte fd0, magasin …123',
@@ -424,5 +425,159 @@ describe('l’écran du diagnostic', () => {
     expect(finished[0]?.summary).toBe('Contrôles terminés : 7 réussis, 0 en échec, 1 non testé.')
     expect(finished[0]?.report).toContain('Agent : 0.5.0')
     expect(ui.propsOf('diagnostic')[0]?.copy).toBe(copy)
+  })
+})
+
+describe('la cause précise d’un échec dans le diagnostic (ticket A)', () => {
+  const rowOf = (results: readonly CheckResult[], id: (typeof CHECK_IDS)[number]) =>
+    rowsOf(results)[CHECK_IDS.indexOf(id)]
+
+  it('une page de recherche refaite : la cause est lue dans la ligne et dans le rapport', async () => {
+    const { results, page, by } = await run(
+      deps(site({ body: fixture('recherche-changee.html') }).adapter),
+    )
+
+    expect(by.search).toMatchObject({
+      status: 'KO',
+      code: 'CONTRACT_CHANGED',
+      cause: 'SEARCH_NO_STATE',
+    })
+    expect(rowOf(results, 'search')?.detail).toBe(
+      'cause SEARCH_NO_STATE : page de recherche sans l’état embarqué du magasin',
+    )
+    expect(reportOf('0.5.0', NOW, page, results)).toContain(
+      '[KO CONTRACT_CHANGED] Recherche d’un mot courant : cause SEARCH_NO_STATE : page de recherche sans l’état embarqué du magasin',
+    )
+  })
+
+  it('des produits aux champs renommés ne sont pas pris pour une recherche vide', async () => {
+    const { by } = await run(
+      deps(site({ body: fixture('recherche-liste-illisible.html') }).adapter),
+    )
+
+    expect(by.search).toMatchObject({
+      code: 'CONTRACT_CHANGED',
+      cause: 'SEARCH_PRODUCTS_UNREADABLE',
+    })
+  })
+
+  it.each([
+    ['une réponse inattendue', { status: 404 }, 'HTTP_404'],
+    ['un 401', { status: 401 }, 'HTTP_401'],
+  ] as const)('%s : cause %s', async (_name, reply, cause) => {
+    const { by } = await run(deps(site(reply).adapter))
+
+    expect(by.search?.cause).toBe(cause)
+  })
+
+  it('une page « aucun résultat » pour le mot courant : le rapport le dit comme une anomalie, avec sa cause', async () => {
+    const { by, results, page } = await run(
+      deps(site({ body: fixture('recherche-vide-sans-liste.html') }).adapter),
+    )
+
+    expect(by.search).toMatchObject({
+      status: 'KO',
+      code: 'CONTRACT_CHANGED',
+      cause: 'SEARCH_COMMON_EMPTY',
+    })
+    expect(reportOf('0.5.0', NOW, page, results)).toContain(
+      '« sel » : aucun produit lu ; cause SEARCH_COMMON_EMPTY',
+    )
+  })
+
+  it('des produits incomplets, un contenu net illisible : une cause chacun', async () => {
+    const incomplete = {
+      ...fakeAdapter().adapter,
+      searchProducts: () =>
+        Promise.resolve([{ id: '1', label: 'A', label2: null, price: null, stock: null }] as never),
+    }
+    const unreadable = {
+      ...fakeAdapter().adapter,
+      searchProducts: () =>
+        Promise.resolve(
+          ['1', '2', '3'].map((id) => ({
+            id,
+            label: 'Produit de test',
+            label2: null,
+            price: 100,
+            stock: 3,
+            content: null,
+          })) as never,
+        ),
+    }
+
+    expect((await run(deps(incomplete))).by.search?.cause).toBe('SEARCH_FIELDS_INCOMPLETE')
+    expect((await run(deps(unreadable))).by.content?.cause).toBe('CONTENT_UNREADABLE')
+  })
+
+  it('une erreur imprévue de l’adaptateur s’appelle EXCEPTION, sans citer son message', async () => {
+    const adapter = fakeAdapter(
+      {},
+      {
+        before: () => {
+          throw new Error('secret interne')
+        },
+      },
+    ).adapter
+
+    const { by, results, page } = await run(deps(adapter))
+
+    expect(by.search).toMatchObject({ code: 'CONTRACT_CHANGED', cause: 'EXCEPTION' })
+    expect(reportOf('0.5.0', NOW, page, results)).not.toContain('secret interne')
+  })
+
+  it('une page non prise en charge dit pourquoi', async () => {
+    const { by } = await run(
+      deps(site(GOOD, { hostname: PAGE.hostname, pathname: '/accueil' }).adapter),
+    )
+
+    expect(by.page).toMatchObject({ status: 'KO', code: 'UNSUPPORTED_PAGE', cause: 'PAGE_PATH' })
+  })
+})
+
+describe('la connexion de l’utilisateur dans le diagnostic (ticket G)', () => {
+  const NAV = '<nav><a href="/accueil">Accueil</a> <a href="/panier">Panier</a></nav>'
+  const visitorPage = fixture('recherche-farine.html').replace(
+    NAV,
+    '<nav><a>Se connecter</a> <a>Créer un compte</a></nav>',
+  )
+  const memberPage = fixture('recherche-farine.html').replace(
+    NAV,
+    '<nav><a>Se déconnecter</a></nav>',
+  )
+
+  it('le rapport dit ce que la page montre de la connexion, avec les noms des signes lus', async () => {
+    const fake = fakeSite(() => GOOD, { pageText: () => memberPage })
+    const { results, page } = await run(deps(new LeclercAdapter(fake.deps)))
+
+    expect(page?.session).toBe('connecté (signes : LOGOUT_LINK)')
+    expect(reportOf('0.5.0', NOW, page, results)).toContain(
+      'Connexion : connecté (signes : LOGOUT_LINK)',
+    )
+  })
+
+  it('un visiteur : la recherche est KO NOT_LOGGED_IN (SESSION_VISITOR) et le rapport le dit', async () => {
+    const fake = fakeSite(() => ({ body: visitorPage }), { pageText: () => visitorPage })
+
+    const { by, results, page } = await run(deps(new LeclercAdapter(fake.deps)))
+
+    expect(by.search).toMatchObject({
+      status: 'KO',
+      code: 'NOT_LOGGED_IN',
+      cause: 'SESSION_VISITOR',
+    })
+    expect(by.content).toMatchObject({ status: 'NOT_TESTED' })
+    const report = reportOf('0.5.0', NOW, page, results)
+    expect(report).toContain('Connexion : visiteur (signes : LOGIN_LINK, REGISTER_LINK)')
+    expect(report).toContain('[KO NOT_LOGGED_IN] Recherche d’un mot courant')
+  })
+
+  it('le rapport ne contient que des noms de signes, jamais un libellé de la page', async () => {
+    const fake = fakeSite(() => GOOD, { pageText: () => visitorPage })
+    const { results, page } = await run(deps(new LeclercAdapter(fake.deps)))
+
+    const report = reportOf('0.5.0', NOW, page, results)
+
+    expect(report).not.toMatch(/Se connecter|Créer un compte/)
   })
 })

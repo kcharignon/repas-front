@@ -1,6 +1,12 @@
 // Outils des tests du test automatique (DRV-318) : un magasin simulé (rayons, panier, pannes programmées) derrière `RetailerAdapter`.
 // Données synthétiques seulement : magasin `123456`, produits `2000001` et suivants.
-import { LeclercError, type Candidate, type CartResult, type RetailerAdapter } from '../src/leclerc'
+import {
+  LeclercError,
+  type Candidate,
+  type CartResult,
+  type RetailerAdapter,
+  type SessionReading,
+} from '../src/leclerc'
 import { PASSAGE_WORDS } from '../src/selftest'
 import { fakeStorage, fakeWakeLock } from './flow-helpers'
 
@@ -44,6 +50,8 @@ export interface ShopOptions {
   label?: string | null
   /** Le magasin de la page (par défaut un magasin inventé de numéro complet 123456). */
   store?: { id: string; host: string }
+  /** Ce que la page dit de la connexion (par défaut : rien, état inconnu). */
+  session?: SessionReading
 }
 
 export function shop(shelves: Shelves, options: ShopOptions = {}) {
@@ -114,6 +122,7 @@ export function shop(shelves: Shelves, options: ShopOptions = {}) {
       })
     },
     pageCartTotal: () => pageTotal,
+    readSession: () => options.session ?? { state: 'UNKNOWN', signs: [] },
   }
   return {
     adapter,

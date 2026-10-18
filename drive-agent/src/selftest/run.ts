@@ -62,7 +62,7 @@ const BLOCKING = new Set<Failure['code']>(['BLOCKED', 'NOT_LOGGED_IN', 'UNSUPPOR
 
 const failureOf = (error: unknown): Failure =>
   error instanceof LeclercError
-    ? { code: error.code, http: error.status }
+    ? { code: error.code, http: error.status, ...(error.cause && { cause: error.cause }) }
     : { code: 'OTHER', http: null }
 
 const isBlocking = (failure: Failure) => BLOCKING.has(failure.code)
@@ -134,7 +134,9 @@ export async function runSelftest(deps: RunDeps, hooks: Hooks): Promise<Selftest
   const blocked = checks.results.find(
     (result) => result.status === 'KO' && result.code && BLOCKING.has(result.code),
   )
-  if (blocked?.code) run.halt = { code: blocked.code, http: null }
+  if (blocked?.code) {
+    run.halt = { code: blocked.code, http: null, ...(blocked.cause && { cause: blocked.cause }) }
+  }
   const checkStatus: Status = checks.results.some(
     (result) => result.status === 'KO' && result.id !== 'wakeLock',
   )

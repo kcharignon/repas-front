@@ -9,7 +9,7 @@ import {
   type PlanMessage,
   type ResultLine,
 } from '../../protocol'
-import { LeclercError } from '../leclerc'
+import { LeclercError, type LeclercCause } from '../leclerc'
 import { own } from '../own'
 import { S, type SummaryProps } from '../ui'
 import { settleKnownLine, type ContentChange } from './phase-a'
@@ -31,14 +31,27 @@ interface Run {
   stopped: boolean
   /** Le code qui a interrompu le passage (`BLOCKED`, `NOT_LOGGED_IN`…). */
   halted: ErrorCode | null
+  /** Quelle vérification a échoué, quand l'adaptateur le dit (ticket A) : elle part dans le message du résultat. */
+  cause: LeclercCause | null
   release: () => Promise<void>
 }
 
 const LOG_SIZE = 5
 
-/** Une erreur de l'adaptateur a son code ; tout autre incident est un site qui ne répond plus comme prévu (jamais son message). */
-function codeOf(error: unknown): ErrorCode {
-  return error instanceof LeclercError ? error.code : 'CONTRACT_CHANGED'
+/** Ce qui interrompt un passage : le code d'erreur du protocole, et la vérification précise qui a échoué quand on la connaît. */
+interface Fault {
+  code: ErrorCode
+  cause: LeclercCause | null
+}
+
+/**
+ * Une erreur de l'adaptateur a son code et sa cause ; tout autre incident est un site qui ne répond plus comme prévu, de cause
+ * `EXCEPTION` (jamais son message).
+ */
+function faultOf(error: unknown): Fault {
+  return error instanceof LeclercError
+    ? { code: error.code, cause: error.cause }
+    : { code: 'CONTRACT_CHANGED', cause: 'EXCEPTION' }
 }
 
 /** Les lignes sans action sur le site : « j'en ai toujours » et « passer cette fois ». */
@@ -91,7 +104,7 @@ export class Flow {
     try {
       await this.execute(raw)
     } catch {
-      await this.showError('CONTRACT_CHANGED', null)
+      await this.showError('CONTRACT_CHANGED', null, 'EXCEPTION')
     } finally {
       this.busy = false
     }
@@ -141,8 +154,8 @@ export class Flow {
     // Pas de retour possible vers Repas : on refuse avant de toucher au panier (ou de lire le magasin).
     if (!deps.canReturn) return this.showError('UNSUPPORTED_PAGE', null)
     if (message.type === 'setup') return void (await deps.onSetup?.(message))
-    const problem = this.storeProblem(message)
-    if (problem) return this.showError(problem, message)
+    const problem = this.storeProblem(message) ?? this.sessionProblem()
+    if (problem) return this.showError(problem.code, message, problem.cause)
 
     const { state, proceed } = await this.confirm(message)
     const run: Run = {
@@ -153,6 +166,7 @@ export class Flow {
       current: '',
       stopped: !proceed,
       halted: null,
+      cause: null,
       release: () => Promise.resolve(),
     }
     if (proceed) {
@@ -175,12 +189,30 @@ export class Flow {
   }
 
   /** Le magasin de la page doit être celui du message. */
-  private storeProblem(plan: PlanMessage): ErrorCode | null {
+  private storeProblem(plan: PlanMessage): Fault | null {
     try {
       const store = this.deps.adapter.readStore()
-      return store.id === plan.store.id && store.host === plan.store.host ? null : 'STORE_MISMATCH'
+      return store.id === plan.store.id && store.host === plan.store.host
+        ? null
+        : { code: 'STORE_MISMATCH', cause: null }
     } catch (error) {
-      return codeOf(error)
+      return faultOf(error)
+    }
+  }
+
+  /**
+   * Un visiteur non connecté ne remplit jamais un panier anonyme (ticket G) : si la page ouverte est celle d'un visiteur, l'agent s'arrête
+   * AVANT le récapitulatif, sans une requête ni une écriture. Une page dont l'état de connexion est inconnu ne bloque rien (la lecture de
+   * la page ne devine pas : voir `leclerc/session.ts`) ; les détections pendant le passage (redirection de connexion, 401, page d'un
+   * visiteur dans une réponse de recherche) restent.
+   */
+  private sessionProblem(): Fault | null {
+    try {
+      return this.deps.adapter.readSession().state === 'VISITOR'
+        ? { code: 'NOT_LOGGED_IN', cause: 'SESSION_VISITOR' }
+        : null
+    } catch {
+      return null
     }
   }
 
@@ -211,7 +243,7 @@ export class Flow {
       try {
         await this.settle(run, line)
       } catch (error) {
-        this.absorb(run, line, codeOf(error))
+        this.absorb(run, line, faultOf(error))
       }
     }
   }
@@ -237,9 +269,10 @@ export class Flow {
   }
 
   /** Une erreur pendant une ligne : une erreur réseau n'abîme que la ligne (l'adaptateur a déjà retenté), les autres arrêtent le passage. */
-  private absorb(run: Run, line: PlanLine, code: ErrorCode): void {
+  private absorb(run: Run, line: PlanLine, { code, cause }: Fault): void {
     if (code === 'NETWORK') return this.record(run, failed(line, code))
     run.halted = code
+    run.cause = cause
     if (code === 'BLOCKED') this.failRemaining(run, code)
     else if (code !== 'NOT_LOGGED_IN') this.record(run, failed(line, code))
   }
@@ -265,7 +298,9 @@ export class Flow {
       })
       if (outcome === 'cancelled') run.stopped = true
     } catch (error) {
-      run.halted = codeOf(error)
+      const fault = faultOf(error)
+      run.halted = fault.code
+      run.cause = fault.cause
       // Leclerc bloque : les lignes qui attendaient encore un choix échouent (`BLOCKED`), comme en phase A. Pour les autres erreurs
       // elles restent « indisponibles » au résultat.
       if (run.halted === 'BLOCKED') {
@@ -277,7 +312,7 @@ export class Flow {
   private async finish(run: Run): Promise<void> {
     const { ui, send, agentVersion } = this.deps
     const lines = resultLines(run.plan, run.state)
-    const ending = endingOf(lines, run.stopped, run.halted)
+    const ending = endingOf(lines, run.stopped, run.halted, run.cause)
     this.enter(
       ending.outcome === 'aborted' ? 'ABORTED' : ending.outcome === 'error' ? 'ERROR' : 'DONE',
     )
@@ -288,12 +323,16 @@ export class Flow {
     ui.close()
   }
 
-  private async showError(code: ErrorCode, plan: PlanMessage | null): Promise<void> {
+  private async showError(
+    code: ErrorCode,
+    plan: PlanMessage | null,
+    cause: LeclercCause | null = null,
+  ): Promise<void> {
     const { ui, send, agentVersion } = this.deps
     this.enter('ERROR')
     const answer = await ui.show('error', { code, canReturn: plan !== null })
     if (answer === 'return' && plan) {
-      send(buildResult(plan, [], { outcome: 'error', code }, agentVersion))
+      send(buildResult(plan, [], { outcome: 'error', code, ...(cause && { cause }) }, agentVersion))
     }
     ui.close()
   }

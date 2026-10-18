@@ -1,7 +1,7 @@
 // Le rapport du test automatique (DRV-318) : un texte à copier et à coller, sans aucune donnée personnelle (pas de cookie, d'adresse,
 // de nom, de ville, de numéro de magasin entier ni d'hôte autre que `fdN`). Il ne se construit qu'à partir du relevé (`SelftestData`),
 // qui ne porte que des nombres, des codes d'erreur, des mots de recherche fixes et des libellés de produits nettoyés.
-import { dateOf, rowsOf } from '../diagnostic'
+import { dateOf, pageLines, rowsOf } from '../diagnostic'
 import { formatPrice, S } from '../ui'
 import { LOT_WORDS, MAX_PRODUCTS, PASSAGE_WORDS } from './run'
 import type {
@@ -24,10 +24,11 @@ export function seconds(ms: number): string {
 
 const badge = (status: Status) => BADGE[status]
 
-/** « BLOCKED, HTTP 429 » : le code d'erreur et, s'il y en a un, le code HTTP. */
+/** « BLOCKED, HTTP 429 » ou « CONTRACT_CHANGED (SEARCH_NO_STATE), HTTP 200 » : le code d'erreur, sa cause et, s'il y en a un, le code HTTP. */
 export function failureText(failure: Failure): string {
   const code = failure.code === 'OTHER' ? T.otherFailure : failure.code
-  return failure.http === null ? code : `${code}, HTTP ${failure.http}`
+  const named = failure.cause === undefined ? code : `${code} (${failure.cause})`
+  return failure.http === null ? named : `${named}, HTTP ${failure.http}`
 }
 
 /** Le statut de chaque étape, dans l'ordre du rapport. */
@@ -136,9 +137,7 @@ export function reportOf(data: SelftestData): string {
     T.title,
     S.diagnostic.text.agent(data.agentVersion),
     S.diagnostic.text.date(dateOf(data.now)),
-    ...(data.page
-      ? [S.diagnostic.text.host(data.page.host), S.diagnostic.text.store(data.page.store)]
-      : []),
+    ...(data.page ? pageLines(data.page) : []),
     verdict,
     T.duration(seconds(data.durationMs)),
     ...halt,

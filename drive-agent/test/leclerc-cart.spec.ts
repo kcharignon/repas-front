@@ -142,6 +142,27 @@ describe('readCartResponse', () => {
   })
 })
 
+describe('readCartResponse : la vérification qui a échoué (ticket A)', () => {
+  const NO_LIST = '[{"eTypeEvenement":1,"sIdUnique":"Panier1","iQuantitePanier":2}]'
+  const NO_QUANTITY =
+    '[{"eTypeEvenement":1,"sIdUnique":"Panier1","lstProduitsLight":[{"iIdProduit":5,"iQtePanier":"beaucoup"}]}]'
+
+  it.each([
+    ['du texte qui n’est pas du JSON', '<html>Erreur</html>', 'CART_NOT_JSON'],
+    ['un JSON vide', 'null', 'CART_NO_EVENTS'],
+    ['un nombre', '42', 'CART_NO_EVENTS'],
+    ['une liste d’évènements vide', '[]', 'CART_NO_CART_EVENT'],
+    ['un objet inattendu', '{"erreur":"inattendu"}', 'CART_NO_CART_EVENT'],
+    ['des évènements sans évènement panier', fixture('panier-invalide.json'), 'CART_NO_CART_EVENT'],
+    ['un évènement panier sans liste de produits', NO_LIST, 'CART_NO_PRODUCT_LIST'],
+    ['une quantité illisible', NO_QUANTITY, 'CART_QUANTITY_UNREADABLE'],
+  ])('%s : %s', (_name, text, cause) => {
+    expect(() => readCartResponse(text, '5')).toThrow(
+      expect.objectContaining({ code: 'CONTRACT_CHANGED', cause }),
+    )
+  })
+})
+
 describe('parseTotal', () => {
   it.each([
     ['9,47 €', 947],

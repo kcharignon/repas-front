@@ -148,6 +148,49 @@ test('laisse passer une ligne ou dire « j’en ai toujours », même quand la r
   })
 })
 
+for (const [form, cart] of [
+  ['no-list', { 1000001: 2 }],
+  ['encoded', {}],
+] as const) {
+  test(`une page sans résultat d'une autre forme (« ${form} »)${Object.keys(cart).length > 0 ? ', panier garni,' : ''} n'arrête pas le passage : la ligne est proposée à « Passer cette fois », la suivante est cherchée`, async ({
+    page,
+    fake,
+    agentCode,
+  }) => {
+    // Given : le site répond à « gnocchis » par une page sans produit d'une forme que le vrai site n'a jamais été relevé servir
+    fake.setBehavior({ emptySearch: form })
+    fake.seedCart(cart)
+    await openWithFragment(
+      page,
+      fake,
+      agentCode,
+      planOf([fresh('gnocchis', 'Gnocchis'), fresh('sel', 'Sel')]),
+    )
+
+    // When
+    await page.getByRole('button', { name: 'Commencer' }).click()
+    await expect(page.getByText('Aucun produit trouvé pour « gnocchis »')).toBeVisible()
+    await page.getByRole('button', { name: 'Passer cette fois' }).click()
+    await expect(page.getByRole('listitem').filter({ hasText: 'Sel fin' })).toBeVisible()
+    await page.getByRole('button', { name: 'J’en ai toujours' }).click()
+    await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+
+    // Then : aucune erreur, deux recherches, aucune écriture, le panier n'a pas bougé
+    expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'search'])
+    expect(fake.cart()).toEqual(cart)
+    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    const result = await returnedResult(page, fake)
+    expect(result).toMatchObject({
+      outcome: 'completed',
+      lines: [
+        { ingredientSlug: 'gnocchis', outcome: 'SKIPPED' },
+        { ingredientSlug: 'sel', outcome: 'HAVE_AT_HOME' },
+      ],
+    })
+    expect(result).not.toHaveProperty('error')
+  })
+}
+
 test('annule le passage depuis le choix : la ligne reste à choisir et Repas le sait', async ({
   page,
   fake,

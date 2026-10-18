@@ -197,8 +197,8 @@ function buildProduct(id: string, slices: string[]): RawProduct {
   }
 }
 
-/** Le texte tel quel, puis décodé des entités HTML, puis débarrassé des guillemets échappés : on garde la lecture la plus riche. */
-function readings(text: string): string[] {
+/** Les lectures d'une page : le texte tel quel, puis décodé des entités HTML, puis débarrassé des guillemets échappés. */
+export function pageReadings(text: string): string[] {
   const out = [text]
   if (/&quot;|&#0*34;|&#x0*22;/i.test(text)) out.push(decodeEntities(text))
   if (/\\u0022|\\x22/i.test(text) || /\\"/.test(text)) {
@@ -226,7 +226,7 @@ export interface EmbeddedProducts {
 export function extractProducts(page: string): EmbeddedProducts {
   let best = page
   let bestCount = -1
-  for (const reading of readings(page)) {
+  for (const reading of pageReadings(page)) {
     const count = distinctIds(reading).length
     if (count > bestCount) {
       best = reading

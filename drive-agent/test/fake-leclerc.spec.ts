@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cartBody, CART_HEADERS, readCartResponse } from '../src/leclerc/cart'
 import { extractProducts } from '../src/leclerc/embedded'
 import { toCandidate } from '../src/leclerc/candidate'
+import { readSearchPage } from '../src/leclerc/search-page'
+import { readSession } from '../src/leclerc/session'
 import {
   CART_PATH,
   isLoopback,
@@ -504,5 +506,109 @@ describe('le faux Repas', () => {
     // Then
     expect(reply.status).toBe(200)
     expect(reply.text).toContain('id="resultat"')
+  })
+})
+
+describe('le durcissement face au vrai site : visiteur, « aucun résultat », causes (tickets A, C et G)', () => {
+  it('par défaut, les pages sont celles d’un client connecté (aucun signe de visiteur)', async () => {
+    const page = await search('farine')
+    const home = await call(`${PAGE_PATH}/`)
+
+    expect(readSession(page.text)).toEqual({ state: 'MEMBER', signs: ['LOGOUT_LINK'] })
+    expect(readSession(home.text).state).toBe('MEMBER')
+  })
+
+  it('visitorAfter: 0 sert la page d’un visiteur dès la première page, accueil compris, avec les mêmes produits (le catalogue est public)', async () => {
+    fake.setBehavior({ visitorAfter: 0 })
+
+    const page = await search('farine')
+    const home = await call(`${PAGE_PATH}/`)
+
+    expect(readSession(page.text)).toEqual({
+      state: 'VISITOR',
+      signs: ['LOGIN_LINK', 'REGISTER_LINK'],
+    })
+    expect(readSession(home.text).state).toBe('VISITOR')
+    expect(extractProducts(page.text).products).toHaveLength(5)
+  })
+
+  it('visitorAfter: 2 laisse passer deux requêtes du panier ou de recherche, puis sert un visiteur', async () => {
+    fake.setBehavior({ visitorAfter: 2 })
+
+    const first = await search('farine')
+    await cartCall('1000001', 1)
+    const third = await search('sucre')
+
+    expect(readSession(first.text).state).toBe('MEMBER')
+    expect(readSession(third.text).state).toBe('VISITOR')
+    expect(readSession((await call(`${PAGE_PATH}/`)).text).state).toBe('VISITOR')
+  })
+
+  it('un visiteur peut écrire dans un panier anonyme : le faux site l’accepte, c’est le danger à détecter', async () => {
+    fake.setBehavior({ visitorAfter: 0 })
+
+    const written = await cartCall('1000001', 2)
+
+    expect(written.status).toBe(200)
+    expect(fake.cart()).toEqual({ 1000001: 2 })
+  })
+
+  it.each(['list', 'no-list', 'encoded'] as const)(
+    'la page sans résultat de forme « %s » est lue comme une liste vide par l’analyseur de l’agent',
+    async (form) => {
+      fake.setBehavior({ emptySearch: form })
+
+      const page = await search('gnocchis')
+
+      expect(readSearchPage({ text: page.text, status: page.status, redirected: false })).toEqual(
+        [],
+      )
+    },
+  )
+
+  it('les trois formes sont bien différentes (liste vide et message, squelette seul, état encodé)', async () => {
+    const texts: string[] = []
+    for (const form of ['list', 'no-list', 'encoded'] as const) {
+      fake.setBehavior({ emptySearch: form })
+      texts.push((await search('gnocchis')).text)
+    }
+
+    expect(texts[0]).toContain('"lstProduits": []')
+    expect(texts[0]).toContain('Aucun résultat')
+    expect(texts[1]).not.toContain('lstProduits"')
+    expect(texts[1]).not.toContain('Aucun résultat')
+    expect(texts[2]).toContain('&quot;lstProduits&quot;:[]')
+    expect(texts[2]).not.toContain('var widgets')
+  })
+
+  it.each([
+    ['contract-changed', 'SEARCH_NO_STATE'],
+    ['products-renamed', 'SEARCH_PRODUCTS_UNREADABLE'],
+  ] as const)('le défaut « %s » est lu avec la cause %s', async (kind, cause) => {
+    fake.setBehavior({ fault: { kind, on: 'search' } })
+
+    const page = await search('farine')
+
+    expect(() =>
+      readSearchPage({ text: page.text, status: page.status, redirected: false }),
+    ).toThrow(expect.objectContaining({ code: 'CONTRACT_CHANGED', cause }))
+  })
+
+  it('une réponse du panier qui a changé est lue avec la cause CART_NO_CART_EVENT', async () => {
+    fake.setBehavior({ fault: { kind: 'contract-changed', on: 'cart' } })
+
+    const cart = await cartCall('1000001', 1)
+
+    expect(() => readCartResponse(cart.text, '1000001')).toThrow(
+      expect.objectContaining({ code: 'CONTRACT_CHANGED', cause: 'CART_NO_CART_EVENT' }),
+    )
+  })
+
+  it('la remise à neuf efface les nouveaux comportements', async () => {
+    fake.setBehavior({ visitorAfter: 0, emptySearch: 'no-list' })
+
+    fake.reset()
+
+    expect(fake.behavior()).toEqual({ latencyMs: 0, fault: null })
   })
 })
