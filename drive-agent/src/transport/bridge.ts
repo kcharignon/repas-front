@@ -6,6 +6,11 @@ import type { Transport } from './transport'
  * messages de l'application et qui lui en envoie. L'application ne l'ouvre qu'aux pages `*.leclercdrive.fr`.
  */
 export interface Bridge {
+  /**
+   * Vrai seulement dans la variante de débogage de l'application : son script d'injection le pose sur le pont (et l'annonce dans son
+   * message d'accueil, `debug: true`). Sans lui, l'agent n'honore pas la commande `selftest` (DRV-318).
+   */
+  readonly isDebug?: boolean
   postMessage(text: string): void
   addEventListener(type: 'message', listener: (event: { data: unknown }) => void): void
 }

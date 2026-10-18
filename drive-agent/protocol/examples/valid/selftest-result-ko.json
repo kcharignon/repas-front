@@ -1,0 +1,7 @@
+{
+  "v": 1,
+  "type": "selftest-result",
+  "ok": false,
+  "agentVersion": "0.6.0",
+  "report": "Test automatique Repas Drive\nVerdict : KO\nArrêt : blocage du site (BLOCKED, HTTP 429)."
+}

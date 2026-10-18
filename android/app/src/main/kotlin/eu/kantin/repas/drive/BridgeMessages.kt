@@ -8,8 +8,11 @@ enum class Rejection { ORIGIN, NOT_MAIN_FRAME, NOT_TEXT, TOO_LARGE, NOT_JSON, NO
 
 /** Ce que l'application retient d'un message reçu d'une page. */
 sealed interface Inbound {
-    /** L'annonce de la page (envoyée par le petit script d'injection, pas par l'agent) : elle donne le canal de réponse. */
-    data object Hello : Inbound
+    /**
+     * L'annonce de la page (envoyée par le petit script d'injection, pas par l'agent) : elle donne le canal de réponse. `debug` : le script
+     * d'injection de la variante de débogage a annoncé `debug: true` (DRV-318) ; c'est le seul cas où l'agent honore la commande `selftest`.
+     */
+    data class Hello(val debug: Boolean) : Inbound
 
     /** Un message de l'agent, JSON du protocole v1 : l'application n'en interprète que le type (et `result` pour la suite). */
     class FromAgent(val type: String, val text: String) : Inbound
@@ -38,9 +41,12 @@ object BridgeMessages {
     /** La commande qui ouvre le diagnostic de l'agent (protocole v1, `command.schema.json`). */
     const val COMMAND_DIAGNOSTIC = """{"v":1,"type":"command","command":"diagnostic"}"""
 
+    /** La commande qui lance le test automatique de la variante de débogage (DRV-318) ; l'agent la refuse hors du mode débogage. */
+    const val COMMAND_SELFTEST = """{"v":1,"type":"command","command":"selftest"}"""
+
     private const val DOMAIN_SUFFIX = ".leclercdrive.fr"
     private const val PROTOCOL_VERSION = 1
-    private val FROM_AGENT_TYPES = setOf("result", "setup-result", "progress", "log")
+    private val FROM_AGENT_TYPES = setOf("result", "setup-result", "selftest-result", "progress", "log")
 
     /** Une origine de la forme `https://<sous-domaine>.leclercdrive.fr` (port 443 permis), comme `ORIGIN_RULES`. */
     fun isAllowedOrigin(origin: String?): Boolean {
@@ -66,7 +72,7 @@ object BridgeMessages {
         if (json.optInt("v", -1) != PROTOCOL_VERSION) return Inbound.Rejected(Rejection.NOT_PROTOCOL)
         val type = json.optString("type")
         return when {
-            type == "hello" -> Inbound.Hello
+            type == "hello" -> Inbound.Hello(debug = json.opt("debug") == true)
             type in FROM_AGENT_TYPES -> Inbound.FromAgent(type, data)
             else -> Inbound.Rejected(Rejection.NOT_PROTOCOL)
         }

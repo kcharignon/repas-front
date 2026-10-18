@@ -50,6 +50,34 @@ class AgentAssetTest {
     }
 
     @Test
+    fun `l'assemblage ecrit le mode debogage dans le script, true pour le debogage et false partout ailleurs`() {
+        val template = "var DEBUG = ${AgentAsset.DEBUG_PLACEHOLDER}\n${AgentAsset.PLACEHOLDER}\n"
+
+        assertEquals("var DEBUG = true\n$agent\n", AgentAsset.assemble(template, agent, debug = true))
+        assertEquals("var DEBUG = false\n$agent\n", AgentAsset.assemble(template, agent, debug = false))
+        assertEquals("var DEBUG = false\n$agent\n", AgentAsset.assemble(template, agent))
+    }
+
+    @Test
+    fun `le mode debogage de l'application arrive jusqu'au script injecte`() {
+        val template = "var DEBUG = ${AgentAsset.DEBUG_PLACEHOLDER}; ${AgentAsset.PLACEHOLDER}"
+        val files = assets(template = template)
+
+        assertTrue(AgentAsset.load(files, debug = true).second!!.source.startsWith("var DEBUG = true;"))
+        assertTrue(AgentAsset.load(files, debug = false).second!!.source.startsWith("var DEBUG = false;"))
+        assertTrue(AgentAsset.load(files).second!!.source.startsWith("var DEBUG = false;"))
+    }
+
+    @Test
+    fun `le fichier injection de l'application porte le marqueur du mode debogage une seule fois`() {
+        val real = java.io.File("src/main/assets/injection.js").readText()
+
+        assertEquals(2, real.split(AgentAsset.DEBUG_PLACEHOLDER).size)
+        assertTrue(AgentAsset.assemble(real, agent, debug = true).contains("var DEBUG = true"))
+        assertTrue(AgentAsset.assemble(real, agent).contains("var DEBUG = false"))
+    }
+
+    @Test
     fun `l'assemblage exige le marqueur une fois exactement`() {
         listOf("sans marqueur", "${AgentAsset.PLACEHOLDER} et ${AgentAsset.PLACEHOLDER}").forEach {
             try {
@@ -91,6 +119,6 @@ class AgentAssetTest {
             assertEquals(AgentStatus.MISSING, status)
             assertNull(script)
         }
-        assertTrue(AgentAsset.load { null }.first == AgentStatus.MISSING)
+        assertTrue(AgentAsset.load({ null }).first == AgentStatus.MISSING)
     }
 }

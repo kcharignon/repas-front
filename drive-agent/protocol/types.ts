@@ -26,6 +26,8 @@ export const LIMITS = {
   quantity: 1_000_000,
   /** Message d'une erreur (en caractères). */
   errorMessage: 200,
+  /** Rapport du test automatique (en caractères, DRV-318). */
+  selftestReport: 20_000,
   /** Prix, en centimes (un million d'euros). */
   cents: 100_000_000,
 } as const
@@ -233,8 +235,11 @@ export interface SetupResultMessage {
   store: { id: string; host: string; baseUrl: string; label: string | null }
 }
 
-export const COMMANDS = ['diagnostic'] as const
-/** Une demande de l'application à l'agent, sans plan : `diagnostic` ouvre l'écran de diagnostic (DRV-308). */
+export const COMMANDS = ['diagnostic', 'selftest'] as const
+/**
+ * Une demande de l'application à l'agent, sans plan : `diagnostic` ouvre l'écran de diagnostic (DRV-308) ; `selftest` lance le test
+ * automatique de la variante de débogage (DRV-318), que l'agent n'honore que si l'application a annoncé `debug: true`.
+ */
 export type Command = (typeof COMMANDS)[number]
 
 /** Application vers l'agent : une commande (pas de plan, pas de magasin, pas de retour vers Repas). */
@@ -242,4 +247,14 @@ export interface CommandMessage {
   v: typeof PROTOCOL_VERSION
   type: 'command'
   command: Command
+}
+
+/** Agent vers l'application (variante de débogage seulement, DRV-318) : le rapport du test automatique, en texte à copier. */
+export interface SelftestResultMessage {
+  v: typeof PROTOCOL_VERSION
+  type: 'selftest-result'
+  /** Vrai : toutes les étapes sont réussies et le panier est revenu à son état initial. */
+  ok: boolean
+  agentVersion: string
+  report: string
 }

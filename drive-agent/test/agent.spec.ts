@@ -7,12 +7,14 @@ import {
   decodeMessage,
   encodeMessage,
   validateResult,
+  validateSelftestResult,
   type ResultMessage,
   type SetupResultMessage,
 } from '../protocol'
 import { run } from '../src/agent'
 import type { DiagnosticProps } from '../src/ui'
 import { fakeAdapter, fakeUi, home, plan, skip } from './flow-helpers'
+import { runDeps, shop, standardShelves } from './selftest-helpers'
 
 const PLAN = plan([home('sel'), skip('huile')])
 const ORIGIN = 'https://repas.exemple.invalid'
@@ -443,5 +445,125 @@ describe('la commande de diagnostic de l’application', () => {
     // Then
     await vi.waitFor(() => expect(bridge.postMessage).toHaveBeenCalledOnce())
     expect(screens.screens()).toEqual(['diagnostic', 'summary', 'progress', 'end'])
+  })
+})
+
+describe('la commande « selftest » de l’application (DRV-318)', () => {
+  const COMMAND = { v: 1, type: 'command', command: 'selftest' }
+  const fetchSpy = vi
+    .fn<typeof fetch>()
+    .mockRejectedValue(new Error('pas de réseau dans les tests'))
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchSpy)
+    fetchSpy.mockClear()
+  })
+
+  /** Le pont de l'application ; `debug` : le script d'injection de la variante de débogage a posé `isDebug`. */
+  function withBridge(debug: boolean) {
+    let listener: (event: { data: unknown }) => void = () => undefined
+    const bridge = {
+      ...(debug ? { isDebug: true } : {}),
+      postMessage: vi.fn<(text: string) => void>(),
+      addEventListener: (_type: 'message', handler: typeof listener) => {
+        listener = handler
+      },
+    }
+    Object.assign(window, { repasHost: bridge })
+    return { bridge, receive: (message: unknown) => listener({ data: JSON.stringify(message) }) }
+  }
+
+  it('est refusée si l’application n’a pas annoncé le mode débogage : rien à l’écran, rien sur le site, rien d’envoyé', async () => {
+    // Given : le pont d'une application de publication (pas de `isDebug`)
+    const { bridge, receive } = withBridge(false)
+    const parts = shop(standardShelves(['sel', 'farine']))
+    const screens = fakeUi()
+    run(window, { flow: { ui: screens.ui, adapter: parts.adapter } })
+
+    // When
+    receive(COMMAND)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    // Then
+    expect(screens.screens()).toEqual([])
+    expect(parts.calls).toEqual([])
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(bridge.postMessage).not.toHaveBeenCalled()
+  })
+
+  it('est refusée sans pont : le fragment d’adresse ne peut pas lancer le test', async () => {
+    const parts = shop(standardShelves(['sel']))
+    const screens = fakeUi()
+    run(window, { flow: { ui: screens.ui, adapter: parts.adapter } })
+
+    expect(screens.screens()).toEqual([])
+    expect(parts.calls).toEqual([])
+  })
+
+  it('est honorée si l’application a annoncé le mode débogage : le rapport repart vers l’application, conforme au protocole', async () => {
+    // Given
+    const { bridge, receive } = withBridge(true)
+    const shelves = standardShelves([
+      'farine',
+      'sucre',
+      'sel',
+      'poivre',
+      "huile d'olive",
+      'beurre',
+      'lait',
+      'oeufs',
+      'riz',
+      'pâtes',
+      'tomates',
+      'bananes',
+    ])
+    const parts = shop(shelves)
+    const screens = fakeUi()
+    const { now } = runDeps(parts.adapter)
+    run(window, { flow: { ui: screens.ui, adapter: parts.adapter, now } })
+
+    // When
+    receive(COMMAND)
+
+    // Then
+    await vi.waitFor(() => expect(bridge.postMessage).toHaveBeenCalledOnce())
+    const message = validateSelftestResult(JSON.parse(bridge.postMessage.mock.calls[0]?.[0] ?? ''))
+    expect(message).toMatchObject({ type: 'selftest-result', ok: true })
+    expect(message.report).toContain('Verdict : OK')
+    expect(screens.screens()).toEqual(['progress'])
+    expect(screens.closed.count).toBe(1)
+    expect(parts.cart()).toEqual({})
+  })
+
+  it('est ignorée pendant un passage ; le passage, lui, n’est pas touché', async () => {
+    const { bridge, receive } = withBridge(true)
+    const { adapter, calls } = fakeAdapter()
+    const screens = fakeUi({ summary: () => new Promise<'start'>(() => undefined) })
+    run(window, { flow: { ui: screens.ui, adapter } })
+    receive(PLAN)
+    await vi.waitFor(() => expect(screens.screens()).toEqual(['summary']))
+
+    receive(COMMAND)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    expect(screens.screens()).toEqual(['summary'])
+    expect(calls).toEqual([])
+    expect(bridge.postMessage).not.toHaveBeenCalled()
+  })
+
+  it('un seul test à la fois : une seconde commande pendant le test est ignorée', async () => {
+    const { bridge, receive } = withBridge(true)
+    const parts = shop(standardShelves(['sel']))
+    const screens = fakeUi()
+    run(window, {
+      flow: { ui: screens.ui, adapter: parts.adapter, now: runDeps(parts.adapter).now },
+    })
+
+    receive(COMMAND)
+    receive(COMMAND)
+
+    await vi.waitFor(() => expect(bridge.postMessage).toHaveBeenCalledOnce())
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    expect(bridge.postMessage).toHaveBeenCalledOnce()
+    expect(screens.screens()).toEqual(['progress'])
   })
 })

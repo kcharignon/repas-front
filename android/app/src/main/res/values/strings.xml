@@ -8,6 +8,7 @@
     <string name="menu_browser">Ouvrir dans le navigateur</string>
     <string name="menu_diagnostic">Diagnostic de l’agent</string>
     <string name="menu_debug_plan">Plan d’essai (débogage)</string>
+    <string name="menu_selftest">Test automatique (débogage)</string>
 
     <string name="about_manual">Repas Drive affiche le site du drive Leclerc comme sur un ordinateur. Connecte-toi toi-même sur le site : l’application ne lit jamais ton mot de passe ni tes cookies, et ne parle qu’à leclercdrive.fr.\n\n• Le bouton retour du téléphone revient à la page précédente.\n• Un lien vers un autre site s’ouvre dans le navigateur du téléphone.\n• Pour changer de compte ou tout effacer : menu, « Se déconnecter et effacer les données ».</string>
 
@@ -37,4 +38,11 @@
     <string name="result_title">Résultat de l’essai</string>
     <string name="copy">Copier</string>
     <string name="copied">Copié.</string>
+    <string name="share">Partager</string>
+    <string name="share_failed">Aucune application ne peut recevoir ce texte.</string>
+
+    <string name="selftest_title">Rapport du test automatique</string>
+    <string name="selftest_started">Test lancé : il dure environ une minute. Garde l’application ouverte et ne touche à rien.</string>
+    <string name="selftest_no_store">Ouvre d’abord une page de ton magasin sur le drive (une recherche suffit), puis relance le test.</string>
+    <string name="report_copied">Rapport copié : colle-le dans la conversation.</string>
 </resources>

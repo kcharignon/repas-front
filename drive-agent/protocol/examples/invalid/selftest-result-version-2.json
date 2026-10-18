@@ -1,0 +1,11 @@
+{
+  "path": "v",
+  "why": "Seule la version 1 du protocole existe.",
+  "message": {
+    "v": 2,
+    "type": "selftest-result",
+    "ok": true,
+    "agentVersion": "0.6.0",
+    "report": "Verdict : OK"
+  }
+}

@@ -56,6 +56,21 @@ describe('readStore', () => {
   })
 })
 
+describe('pageCartTotal', () => {
+  it('rend le total du panier porté par la page de la dernière recherche, null sinon', async () => {
+    const withTotal = `${fixture('recherche-farine.html')}<script>var cart = {"sTotalAPayer":"7,25 €"}</script>`
+    const { adapter } = shop(undefined, { body: withTotal })
+    expect(adapter.pageCartTotal()).toBeNull()
+
+    await adapter.searchProducts('farine')
+
+    expect(adapter.pageCartTotal()).toBe(725)
+    const plain = shop()
+    await plain.adapter.searchProducts('farine')
+    expect(plain.adapter.pageCartTotal()).toBeNull()
+  })
+})
+
 describe('searchProducts', () => {
   it('cherche sur l’hôte courant avec la session du navigateur, et rend les 5 candidats attendus', async () => {
     // Given
@@ -228,6 +243,35 @@ describe('setCartQuantity', () => {
       obtained: 3,
       ok: true,
       items: 5,
+      totalCents: 947,
+      status: 200,
+    })
+  })
+
+  it('rend le code HTTP de la réponse et le total du panier, pour le rapport du test automatique', async () => {
+    const { adapter } = shop({ status: 200, body: fixture('panier-retrait.json') })
+
+    const result = await adapter.setCartQuantity('1000001', 0)
+
+    expect(result).toMatchObject({ status: 200, obtained: 0, items: 0, totalCents: 0 })
+  })
+
+  it('garde le code HTTP dans l’erreur d’une réponse inattendue, sans rien d’autre', async () => {
+    const { adapter } = shop({ status: 404, body: 'introuvable' })
+
+    const error = await adapter.setCartQuantity('1000001', 1).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(LeclercError)
+    expect(error).toMatchObject({ code: 'CONTRACT_CHANGED', status: 404 })
+    expect((error as LeclercError).message).not.toContain('404')
+  })
+
+  it('garde le code HTTP d’un blocage', async () => {
+    const { adapter } = shop({ status: 429, body: 'refusé' })
+
+    await expect(adapter.setCartQuantity('1000001', 1)).rejects.toMatchObject({
+      code: 'BLOCKED',
+      status: 429,
     })
   })
 

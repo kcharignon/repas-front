@@ -29,14 +29,16 @@ function read(folder: string, file: string): unknown {
   return JSON.parse(readFileSync(join(ROOT, 'examples', folder, file), 'utf8'))
 }
 
-/** Les exemples valides dont le nom commence par `plan` ou `result`. */
-export function validExamples(kind: 'plan' | 'result' | 'command'): ValidExample[] {
+export type Kind = 'plan' | 'result' | 'command' | 'selftest-result'
+
+/** Les exemples valides dont le nom commence par le nom du genre (`plan`, `result`, `command`, `selftest-result`). */
+export function validExamples(kind: Kind): ValidExample[] {
   return names('valid')
     .filter((file) => file.startsWith(`${kind}-`))
     .map((file) => ({ name: file.replace('.json', ''), message: read('valid', file) }))
 }
 
-export function invalidExamples(kind: 'plan' | 'result' | 'command'): InvalidExample[] {
+export function invalidExamples(kind: Kind): InvalidExample[] {
   return names('invalid')
     .filter((file) => file.startsWith(`${kind}-`))
     .map((file) => {
@@ -51,6 +53,6 @@ export function invalidExamples(kind: 'plan' | 'result' | 'command'): InvalidExa
     })
 }
 
-export function schema(kind: 'plan' | 'result' | 'command'): object {
+export function schema(kind: Kind): object {
   return JSON.parse(readFileSync(join(ROOT, `${kind}.schema.json`), 'utf8')) as object
 }

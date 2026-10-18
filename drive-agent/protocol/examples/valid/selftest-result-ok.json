@@ -1,0 +1,7 @@
+{
+  "v": 1,
+  "type": "selftest-result",
+  "ok": true,
+  "agentVersion": "0.6.0",
+  "report": "Test automatique Repas Drive\nAgent : 0.6.0\nVerdict : OK\n1. [OK] Diagnostic de l'agent"
+}

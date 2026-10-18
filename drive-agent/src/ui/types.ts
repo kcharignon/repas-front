@@ -23,6 +23,8 @@ export interface ResumeProps {
 }
 
 export interface ProgressProps {
+  /** Le titre de l'écran, `S.progress.title` s'il manque (le test automatique en met un autre, DRV-318). */
+  title?: string
   total: number
   done: number
   /** L'ingrédient en cours. */

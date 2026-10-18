@@ -1,4 +1,4 @@
-import { CART_HEADERS, cartBody, MAX_QUANTITY, readCartResponse } from './cart'
+import { CART_HEADERS, cartBody, MAX_QUANTITY, readCartResponse, readPageTotal } from './cart'
 import { type Candidate, toCandidate } from './candidate'
 import { LeclercError } from './errors'
 import { extractProducts } from './embedded'
@@ -24,6 +24,10 @@ export interface CartResult {
   ok: boolean
   /** Nombre d'articles du panier (`iQuantitePanier`), `null` si la réponse ne le dit pas. */
   items: number | null
+  /** Total du panier en centimes (`sTotalAPayer`), `null` si la réponse ne le dit pas. */
+  totalCents: number | null
+  /** Le code HTTP de la réponse du site. */
+  status: number
 }
 
 /** Tout ce qui est propre à une enseigne, derrière une interface : une autre enseigne ou un changement du site ne touche que ce dossier. */
@@ -36,6 +40,8 @@ export interface RetailerAdapter {
   setCartQuantity(productId: string, quantity: number): Promise<CartResult>
   /** Le produit voulu parmi les résultats d'une recherche (stock, prix du jour), ou `null` s'il n'y figure pas. */
   readProductFromSearch(query: string, productId: string): Promise<Candidate | null>
+  /** Le total du panier (centimes) lu dans la page de la dernière recherche, `null` si elle n'en portait pas ou s'il n'y a pas eu de recherche. */
+  pageCartTotal(): number | null
 }
 
 export interface LeclercDeps extends PacerDeps {
@@ -60,6 +66,7 @@ export class LeclercAdapter implements RetailerAdapter {
   private readonly deps: LeclercDeps
   private readonly pacer: Pacer
   private lastQuery = ''
+  private pageTotal: number | null = null
   private deliveryPoint: string | null = null
   private readonly stocks = new Map<string, number>()
 
@@ -81,8 +88,9 @@ export class LeclercAdapter implements RetailerAdapter {
     this.assertUsable(reply)
     const { products } = extractProducts(reply.text)
     if (products.length === 0 && !NO_RESULT.test(reply.text))
-      throw new LeclercError('CONTRACT_CHANGED')
+      throw new LeclercError('CONTRACT_CHANGED', reply.status)
     this.lastQuery = text
+    this.pageTotal = readPageTotal(reply.text)
     const candidates = products.map(toCandidate)
     for (const candidate of candidates) {
       if (candidate.stock !== null) this.stocks.set(candidate.id, candidate.stock)
@@ -114,8 +122,30 @@ export class LeclercAdapter implements RetailerAdapter {
       body,
     })
     this.assertUsable(reply)
-    const { obtained, items } = readCartResponse(reply.text, productId)
-    return { productId, requested: quantity, sent, obtained, ok: obtained === sent, items }
+    const { obtained, items, totalCents } = this.readCart(reply, productId)
+    return {
+      productId,
+      requested: quantity,
+      sent,
+      obtained,
+      ok: obtained === sent,
+      items,
+      totalCents,
+      status: reply.status,
+    }
+  }
+
+  /** La réponse du panier lue ; une réponse illisible garde son code HTTP, pour le rapport du test automatique. */
+  private readCart(reply: Reply, productId: string): ReturnType<typeof readCartResponse> {
+    try {
+      return readCartResponse(reply.text, productId)
+    } catch (error) {
+      throw error instanceof LeclercError ? new LeclercError(error.code, reply.status) : error
+    }
+  }
+
+  pageCartTotal(): number | null {
+    return this.pageTotal
   }
 
   async readProductFromSearch(query: string, productId: string): Promise<Candidate | null> {
@@ -134,9 +164,11 @@ export class LeclercAdapter implements RetailerAdapter {
   private assertUsable(reply: Reply): void {
     const loggedOut =
       reply.status === 401 || (reply.redirected && LOGIN_PATH.test(safePath(reply.url)))
-    if (loggedOut) throw new LeclercError('NOT_LOGGED_IN')
-    if (reply.status >= 500) throw new LeclercError('NETWORK')
-    if (reply.status < 200 || reply.status >= 300) throw new LeclercError('CONTRACT_CHANGED')
+    if (loggedOut) throw new LeclercError('NOT_LOGGED_IN', reply.status)
+    if (reply.status >= 500) throw new LeclercError('NETWORK', reply.status)
+    if (reply.status < 200 || reply.status >= 300) {
+      throw new LeclercError('CONTRACT_CHANGED', reply.status)
+    }
   }
 }
 

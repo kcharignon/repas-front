@@ -1,0 +1,12 @@
+{
+  "path": "cookie",
+  "why": "Aucune clé hors v, type, ok, agentVersion et report.",
+  "message": {
+    "v": 1,
+    "type": "selftest-result",
+    "ok": true,
+    "agentVersion": "0.6.0",
+    "report": "Verdict : OK",
+    "cookie": "x"
+  }
+}

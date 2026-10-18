@@ -11,6 +11,7 @@ import {
   validateCommand,
   validatePlan,
   validateResult,
+  validateSelftestResult,
 } from '../protocol'
 import { invalidExamples, validExamples } from './protocol-examples'
 
@@ -197,5 +198,43 @@ describe('validateCommand', () => {
 
     expect(pathOf(() => validatePlan(command))).toBe('type')
     expect(pathOf(() => validateCommand(planMessage))).not.toBe('(accepté)')
+  })
+})
+
+describe('validateSelftestResult', () => {
+  it.each(validExamples('selftest-result'))('accepte l’exemple valide « $name »', ({ message }) => {
+    expect(validateSelftestResult(message)).toBe(message)
+  })
+
+  it.each(invalidExamples('selftest-result'))(
+    'refuse « $name » au chemin $path : $why',
+    ({ message, path }) => {
+      expect(pathOf(() => validateSelftestResult(message))).toBe(path)
+    },
+  )
+
+  it('borne le rapport à 20 000 caractères', () => {
+    const message = (report: string) => ({
+      v: 1,
+      type: 'selftest-result',
+      ok: true,
+      agentVersion: '0.6.0',
+      report,
+    })
+
+    expect(pathOf(() => validateSelftestResult(message('a'.repeat(LIMITS.selftestReport))))).toBe(
+      '(accepté)',
+    )
+    expect(
+      pathOf(() => validateSelftestResult(message('a'.repeat(LIMITS.selftestReport + 1)))),
+    ).toBe('report')
+  })
+
+  it('ne prend pas un résultat de passage pour un rapport, ni l’inverse', () => {
+    const report = validExamples('selftest-result')[0]?.message
+    const result = validExamples('result')[0]?.message
+
+    expect(pathOf(() => validateResult(report))).toBe('type')
+    expect(pathOf(() => validateSelftestResult(result))).not.toBe('(accepté)')
   })
 })

@@ -6,7 +6,10 @@
       bridge.ts) : `postMessage(texte)` vers l'application et `addEventListener('message', ...)` pour ses messages. Il garde en file les
       messages reçus avant que l'agent ait fini de démarrer, et signale la page à l'application (message `hello`) : c'est ce premier message
       qui lui donne le canal de réponse vers cette page.
-   2. L'agent ne démarre que dans la page principale, une seule fois, et seulement si le pont est en place. */
+   2. L'agent ne démarre que dans la page principale, une seule fois, et seulement si le pont est en place.
+   3. Le mode débogage (DRV-318). L'application remplace le marqueur DEBUG ci-dessous par `true` dans sa variante de débogage seulement. Alors le
+      pont porte `isDebug` et le message d'accueil annonce `debug: true` : c'est ce qui permet à l'agent d'honorer la commande `selftest`.
+      Dans toute autre variante le marqueur vaut `false`, le pont n'a pas `isDebug` et l'agent refuse la commande. */
 if (
   (function () {
     'use strict'
@@ -18,6 +21,7 @@ if (
     // Déjà installé (page évaluée deux fois) : ni second pont, ni second agent.
     if (Object.prototype.hasOwnProperty.call(channel, 'isRepasBridge')) return false
 
+    var DEBUG = /*__DEBUG__*/false
     var MAX_QUEUED = 4
     var defer = win.setTimeout.bind(win)
     var listeners = []
@@ -65,6 +69,7 @@ if (
       },
     }
     Object.defineProperty(bridge, 'isRepasBridge', { value: true })
+    if (DEBUG) Object.defineProperty(bridge, 'isDebug', { value: true })
     Object.freeze(bridge)
 
     try {
@@ -73,7 +78,7 @@ if (
       return false
     }
     if (win.repasHost !== bridge) return false
-    channel.postMessage('{"v":1,"type":"hello"}')
+    channel.postMessage(DEBUG ? '{"v":1,"type":"hello","debug":true}' : '{"v":1,"type":"hello"}')
     return true
   })()
 ) {

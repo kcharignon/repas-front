@@ -52,6 +52,7 @@ class MainActivity : Activity() {
     private lateinit var resultPanel: TextPanel
     private lateinit var agent: AgentHost
     private lateinit var debugRun: DebugRun
+    private lateinit var selftestRun: SelftestRun
 
     /** La fenêtre vide qui reçoit un `window.open` avant que son adresse soit confiée à la WebView principale. */
     private var popup: WebView? = null
@@ -71,9 +72,16 @@ class MainActivity : Activity() {
             show = { resultPanel.show(it) },
             newRunId = { UUID.randomUUID().toString() },
         )
-        agent = AgentHost.create(this) { message ->
-            // La variante de débogage montre le résultat de l'essai ; le passage du plan et son retour vers Repas arrivent avec DRV-314.
-            if (BuildConfig.DEBUG) debugRun.onAgentMessage(message.type, message.text)
+        selftestRun = SelftestRun(
+            send = { agent.openSelftest() },
+            show = { resultPanel.show(it, R.string.selftest_title, autoCopy = true) },
+        )
+        agent = AgentHost.create(this, BuildConfig.DEBUG) { message ->
+            // La variante de débogage montre le résultat de l'essai et le rapport du test automatique ; le passage du plan et son retour
+            // vers Repas arrivent avec DRV-314.
+            if (BuildConfig.DEBUG && !selftestRun.onAgentMessage(message.type, message.text)) {
+                debugRun.onAgentMessage(message.type, message.text)
+            }
         }
         webView = createWebView()
         problemPanel = problemPanel()
@@ -355,6 +363,7 @@ class MainActivity : Activity() {
     }
 
     private fun menuEntries(): List<Pair<Int, () -> Unit>> = buildList {
+        if (BuildConfig.DEBUG) add(R.string.menu_selftest to ::startSelftest)
         add(R.string.menu_about to ::showAbout)
         add(R.string.menu_logout to ::confirmClearData)
         add(R.string.menu_browser to ::openCurrentPageInBrowser)
@@ -407,6 +416,16 @@ class MainActivity : Activity() {
     /** Le diagnostic de l'agent : une commande sur le pont, jamais un fragment d'adresse (un fragment trop long fait échouer le site). */
     private fun openAgentDiagnostic() {
         if (!agent.openDiagnostic()) toast(agent.unavailableMessage())
+    }
+
+    /**
+     * Variante de débogage seulement (DRV-318) : le test automatique en un geste. L'agent enchaîne diagnostic, lecture du magasin, douze
+     * recherches et un essai de trois produits au panier (retirés ensuite), puis rend un seul rapport, copié et proposé au partage.
+     */
+    private fun startSelftest() {
+        if (NavigationPolicy.httpsHostOf(webView.url) == null) return toast(R.string.selftest_no_store)
+        if (!selftestRun.start()) return toast(agent.unavailableMessage())
+        toast(R.string.selftest_started)
     }
 
     /** Variante de débogage seulement : l'agent lit le magasin de la page, puis reçoit un plan synthétique de quatre ingrédients. */

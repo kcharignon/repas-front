@@ -63,6 +63,28 @@ export interface CartReading {
   obtained: number
   /** Nombre d'articles du panier (`iQuantitePanier`), `null` si la réponse ne le dit pas. */
   items: number | null
+  /** Total du panier en centimes (`sTotalAPayer`), `null` si la réponse ne le dit pas ou s'il n'est pas lisible. */
+  totalCents: number | null
+}
+
+/** « 12,34 € » (ou « 1 234,56 € ») donne 1234 ; tout autre texte, `null` (le total ne sert qu'à comparer deux états du panier). */
+export function parseTotal(value: unknown): number | null {
+  if (typeof value === 'number')
+    return Number.isFinite(value) && value >= 0 ? Math.round(value * 100) : null
+  if (typeof value !== 'string') return null
+  const found = /^(\d{1,7})(?:[.,](\d{1,2}))?(?:€|eur|euros)?$/i.exec(value.replace(/\s/g, ''))
+  return found?.[1] ? Number(found[1]) * 100 + Number((found[2] ?? '').padEnd(2, '0')) : null
+}
+
+/**
+ * Le total du panier lu dans le texte d'une page du magasin (`sTotalAPayer`, entre guillemets, dans le JSON qu'elle embarque), en
+ * centimes ; `null` s'il n'y figure pas ou si ce n'est pas un montant.
+ */
+export function readPageTotal(pageText: string): number | null {
+  const found = /["']?sTotalAPayer["']?\s*[:=]\s*(?:"([^"\\]{1,24})"|'([^'\\]{1,24})')/.exec(
+    pageText.replace(/&quot;/g, '"'),
+  )
+  return parseTotal(found?.[1] ?? found?.[2])
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -140,5 +162,9 @@ export function readCartResponse(text: string, productId: string): CartReading {
     .find((item) => item !== null && String(item.iIdProduit) === productId)
   const obtained = entry ? asNumber(entry.iQtePanier) : 0
   if (obtained === null) throw new LeclercError('CONTRACT_CHANGED')
-  return { obtained, items: asNumber(findKey(event, 'iQuantitePanier')) }
+  return {
+    obtained,
+    items: asNumber(findKey(event, 'iQuantitePanier')),
+    totalCents: parseTotal(findKey(event, 'sTotalAPayer')),
+  }
 }

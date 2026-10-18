@@ -2,7 +2,14 @@
 // Le panier (DRV-303) : la requête telle que le site l'envoie (DRV-007) et la lecture de sa réponse. Données INVENTÉES.
 import { describe, expect, it } from 'vitest'
 
-import { CART_HEADERS, cartBody, cartPayload, readCartResponse } from '../src/leclerc/cart'
+import {
+  CART_HEADERS,
+  cartBody,
+  cartPayload,
+  parseTotal,
+  readCartResponse,
+  readPageTotal,
+} from '../src/leclerc/cart'
 import { LeclercError } from '../src/leclerc'
 import { fixture } from './leclerc-helpers'
 
@@ -65,10 +72,12 @@ describe('readCartResponse', () => {
     expect(readCartResponse(fixture('panier-ajout.json'), '1000001')).toEqual({
       obtained: 3,
       items: 5,
+      totalCents: 947,
     })
     expect(readCartResponse(fixture('panier-ajout.json'), '1000003')).toEqual({
       obtained: 2,
       items: 5,
+      totalCents: 947,
     })
   })
 
@@ -76,6 +85,7 @@ describe('readCartResponse', () => {
     expect(readCartResponse(fixture('panier-changement.json'), '1000001')).toEqual({
       obtained: 2,
       items: 2,
+      totalCents: 258,
     })
   })
 
@@ -83,10 +93,12 @@ describe('readCartResponse', () => {
     expect(readCartResponse(fixture('panier-retrait.json'), '1000001')).toEqual({
       obtained: 0,
       items: 0,
+      totalCents: 0,
     })
     expect(readCartResponse(fixture('panier-ajout.json'), '9999999')).toEqual({
       obtained: 0,
       items: 5,
+      totalCents: 947,
     })
   })
 
@@ -106,7 +118,11 @@ describe('readCartResponse', () => {
       },
     ]
 
-    expect(readCartResponse(JSON.stringify(events), '5')).toEqual({ obtained: 4, items: null })
+    expect(readCartResponse(JSON.stringify(events), '5')).toEqual({
+      obtained: 4,
+      items: null,
+      totalCents: null,
+    })
   })
 
   it.each([
@@ -123,5 +139,40 @@ describe('readCartResponse', () => {
     expect(() => readCartResponse(text, '5')).toThrow(
       expect.objectContaining({ code: 'CONTRACT_CHANGED' }),
     )
+  })
+})
+
+describe('parseTotal', () => {
+  it.each([
+    ['9,47 €', 947],
+    ['0,00 €', 0],
+    ['1 234,56 €', 123456],
+    ['12 €', 1200],
+    ['3,5 €', 350],
+    ['12.30', 1230],
+    [2.58, 258],
+  ])('lit « %s » comme %d centimes', (value, cents) => {
+    expect(parseTotal(value)).toBe(cents)
+  })
+
+  it.each([['beaucoup'], [''], ['12,345 €'], ['-3 €'], [null], [undefined], [Number.NaN], [-1]])(
+    'ne devine rien de %j',
+    (value) => {
+      expect(parseTotal(value)).toBeNull()
+    },
+  )
+})
+
+describe('readPageTotal', () => {
+  it('lit le total du panier dans le JSON embarqué d’une page, entités comprises', () => {
+    expect(
+      readPageTotal('<script>var p = {"iQuantitePanier":2,"sTotalAPayer":"4,10 €"}</script>'),
+    ).toBe(410)
+    expect(readPageTotal('data-x="{&quot;sTotalAPayer&quot;:&quot;0,00 €&quot;}"')).toBe(0)
+  })
+
+  it('rend null quand la page n’en porte pas, ou quand ce n’est pas un montant', () => {
+    expect(readPageTotal('<html>Aucun panier</html>')).toBeNull()
+    expect(readPageTotal('{"sTotalAPayer":"voir le panier"}')).toBeNull()
   })
 })

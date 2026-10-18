@@ -8,13 +8,14 @@
  * (le menu de « Repas Drive » ; le diagnostic s'ouvre aussitôt) ou, pour le favori de bureau, une adresse de page qui se termine par
  * `#repas-diagnostic` (l'écran d'accueil s'affiche, d'où l'on lance le diagnostic).
  */
-import { validateCommand } from '../protocol'
+import { validateCommand, type SelftestResultMessage } from '../protocol'
 import { showDiagnostic, type DiagnosticDeps } from './diagnostic'
 import { Flow, guidedChoice, setupHandler, type FlowDeps, type StorageLike } from './flow'
 import { browserDeps, LeclercAdapter } from './leclerc'
 import { bridgeTransport, type Bridge } from './transport/bridge'
 import { fragmentTransport } from './transport/fragment'
 import type { Transport } from './transport/transport'
+import { showSelftest, type SelftestDeps } from './selftest'
 import { createUi } from './ui'
 import { AGENT_VERSION } from './version'
 
@@ -87,9 +88,18 @@ export function run(win: Window & typeof globalThis = window, options: AgentOpti
     originReplaced: bridge ? null : ORIGIN_SHAPE.test(origin),
     copy: options.copy ?? ((text) => copyText(win, text)),
   })
+  // Le test automatique n'existe que si l'application a annoncé le mode débogage (`isDebug` du pont, posé par son script d'injection de la
+  // variante de débogage) : sinon la commande est refusée.
+  const selftestDeps =
+    bridge?.isDebug === true
+      ? (): SelftestDeps => ({
+          ...diagnosticDeps(),
+          send: (message: SelftestResultMessage) => bridge.postMessage(JSON.stringify(message)),
+        })
+      : null
   transport.listen(
     (message) => {
-      if (isCommand(message)) return void command(flow, message, diagnosticDeps)
+      if (isCommand(message)) return void command(flow, message, diagnosticDeps, selftestDeps)
       void flow.start(message)
     },
     () => void flow.invalid(),
@@ -107,14 +117,25 @@ function isCommand(message: unknown): boolean {
 }
 
 /**
- * Une commande de l'application (DRV-308) : `diagnostic` ouvre l'écran du diagnostic. Elle n'ouvre rien pendant un passage (un seul écran
- * à la fois) et ne renvoie rien à l'application ; une commande invalide montre « liste illisible ».
+ * Une commande de l'application : `diagnostic` ouvre l'écran du diagnostic (DRV-308) ; `selftest` lance le test automatique (DRV-318) et
+ * lui rend un rapport, mais seulement si l'application a annoncé le mode débogage (`selftestDepsOf` est `null` sinon : refusée, sans rien
+ * afficher ni envoyer). Aucune n'ouvre rien pendant un passage (un seul écran à la fois) ; une commande invalide montre « liste illisible ».
  */
-async function command(flow: Flow, raw: unknown, depsOf: () => DiagnosticDeps): Promise<void> {
+async function command(
+  flow: Flow,
+  raw: unknown,
+  depsOf: () => DiagnosticDeps,
+  selftestDepsOf: (() => SelftestDeps) | null,
+): Promise<void> {
+  let name: ReturnType<typeof validateCommand>['command']
   try {
-    validateCommand(raw)
+    name = validateCommand(raw).command
   } catch {
     return flow.invalid()
+  }
+  if (name === 'selftest') {
+    if (selftestDepsOf === null) return
+    return flow.exclusive(() => showSelftest(selftestDepsOf()))
   }
   await flow.exclusive(async () => {
     const deps = depsOf()

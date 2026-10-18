@@ -18,6 +18,7 @@ import {
   validateCommand,
   validatePlan,
   validateResult,
+  validateSelftestResult,
 } from '../protocol'
 import { buildAgent } from '../scripts/build.mjs'
 import { invalidExamples, schema, validExamples } from './protocol-examples'
@@ -37,6 +38,7 @@ describe.each([
   ['plan', validatePlan],
   ['result', validateResult],
   ['command', validateCommand],
+  ['selftest-result', validateSelftestResult],
 ] as const)('schéma %s.schema.json', (kind, validator) => {
   const validate = ajv.compile(schema(kind))
 
@@ -56,8 +58,10 @@ describe.each([
     },
   )
 
-  it('a au moins 6 exemples invalides et 6 valides (1 pour les commandes, qui n’ont qu’une valeur)', () => {
-    expect(validExamples(kind).length).toBeGreaterThanOrEqual(kind === 'command' ? 1 : 6)
+  it('a au moins 6 exemples invalides et 6 valides (1 ou 2 pour les commandes et le rapport du test, qui sont courts)', () => {
+    expect(validExamples(kind).length).toBeGreaterThanOrEqual(
+      kind === 'plan' || kind === 'result' ? 6 : 1,
+    )
     expect(invalidExamples(kind).length).toBeGreaterThanOrEqual(6)
   })
 })
@@ -73,7 +77,12 @@ describe('les schémas et le module disent la même chose', () => {
     }
     return found
   }
-  const both = JSON.stringify([schema('plan'), schema('result'), schema('command')])
+  const both = JSON.stringify([
+    schema('plan'),
+    schema('result'),
+    schema('command'),
+    schema('selftest-result'),
+  ])
 
   it.each([
     ['statuts de ligne', LINE_STATUSES],
@@ -109,6 +118,7 @@ describe('les schémas et le module disent la même chose', () => {
     expect(bounds(result, 'maximum')).toEqual(
       expect.arrayContaining([LIMITS.packsMax, LIMITS.cents]),
     )
+    expect(bounds(schema('selftest-result'), 'maxLength')).toContain(LIMITS.selftestReport)
     expect(bounds(plan, 'maxLength')).toContain(LIMITS.label)
     expect(bounds(result, 'maxLength')).toEqual(
       expect.arrayContaining([LIMITS.label, LIMITS.errorMessage]),

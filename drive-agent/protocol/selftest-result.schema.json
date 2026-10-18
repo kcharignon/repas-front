@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Rapport du test automatique, de l'agent du drive vers l'application (protocole v1, DRV-318)",
+  "description": "Variante de débogage seulement : l'agent rend à l'application le rapport en texte du test automatique, sans donnée personnelle. Les validateurs de drive-agent/protocol font foi à l'exécution ; un test vérifie qu'ils donnent le même verdict que ce schéma.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "type", "ok", "agentVersion", "report"],
+  "properties": {
+    "v": { "const": 1 },
+    "type": { "const": "selftest-result" },
+    "ok": { "type": "boolean" },
+    "agentVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "report": { "type": "string", "minLength": 1, "maxLength": 20000 }
+  }
+}

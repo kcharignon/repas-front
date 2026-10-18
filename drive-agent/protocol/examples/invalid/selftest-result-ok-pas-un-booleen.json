@@ -1,0 +1,11 @@
+{
+  "path": "ok",
+  "why": "ok est un booléen, pas un texte.",
+  "message": {
+    "v": 1,
+    "type": "selftest-result",
+    "ok": "oui",
+    "agentVersion": "0.6.0",
+    "report": "Verdict : OK"
+  }
+}
