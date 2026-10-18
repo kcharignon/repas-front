@@ -3,7 +3,7 @@
 #
 # 1. Premier lancement seulement : télécharge dans le volume /sdk le SDK (platform-tools, émulateur) et l'image système Google APIs, puis crée
 #    l'AVD. Les lancements suivants réutilisent tout, sans rien télécharger.
-# 2. Démarre le DNS local (tout *.leclercdrive.fr pointe vers la machine hôte de l'émulateur, 10.0.2.2 ; aucun autre nom ne se résout) et le
+# 2. Démarre le DNS local (tout *.leclercdrive.fr, et le faux Repas repas.test, pointent vers la machine hôte de l'émulateur, 10.0.2.2 ; aucun autre nom ne se résout) et le
 #    faux site local (testsite.py, HTTPS sur le port 443) : l'émulateur ne peut donc JAMAIS joindre le vrai site Leclerc.
 # 3. Lance l'émulateur sans fenêtre, accéléré par KVM.
 set -euo pipefail
@@ -51,10 +51,11 @@ fi
 
 # --- 2. Faux site et DNS local -----------------------------------------------------------------------------------------------------------
 mkdir -p "$SITE"
-if [ ! -f "$SITE/cert.pem" ] || ! openssl x509 -in "$SITE/cert.pem" -noout -checkend 604800 > /dev/null; then
-  log "Création du certificat jetable du faux site (reste dans le volume, jamais dans le dépôt)."
+if [ ! -f "$SITE/cert.pem" ] || ! openssl x509 -in "$SITE/cert.pem" -noout -checkend 604800 > /dev/null \
+  || ! openssl x509 -in "$SITE/cert.pem" -noout -ext subjectAltName | grep -q "repas.test"; then
+  log "Création du certificat jetable des faux sites (reste dans le volume, jamais dans le dépôt)."
   openssl req -x509 -newkey rsa:2048 -nodes -days 397 -keyout "$SITE/key.pem" -out "$SITE/cert.pem" \
-    -subj "/CN=faux-drive.test" -addext "subjectAltName=DNS:leclercdrive.fr,DNS:*.leclercdrive.fr" 2> /dev/null
+    -subj "/CN=faux-sites.test" -addext "subjectAltName=DNS:leclercdrive.fr,DNS:*.leclercdrive.fr,DNS:repas.test" 2> /dev/null
 fi
 # L'empreinte de sa clé publique : la WebView de l'émulateur n'ignore les erreurs de certificat que pour cette clé-là (voir smoke.sh).
 openssl x509 -in "$SITE/cert.pem" -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64 > "$SITE/spki.b64"
@@ -62,7 +63,7 @@ openssl x509 -in "$SITE/cert.pem" -pubkey -noout | openssl pkey -pubin -outform 
 : > "$SITE/dns.log"
 : > "$SITE/access.log"
 dnsmasq --keep-in-foreground --user=root --no-resolv --no-hosts --bind-interfaces --listen-address=127.0.0.1 \
-  --address=/leclercdrive.fr/10.0.2.2 --log-queries --log-facility="$SITE/dns.log" &
+  --address=/leclercdrive.fr/10.0.2.2 --address=/repas.test/10.0.2.2 --log-queries --log-facility="$SITE/dns.log" &
 SITE_DIR="$SITE" python3 /opt/repas-emulator/testsite.py &
 
 # --- 3. L'émulateur ---------------------------------------------------------------------------------------------------------------------

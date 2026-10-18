@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le thème sombre du front : fond et encre. Le basilic et le safran de l'icône ne changent pas. -->
+<resources>
+    <color name="ink">#EAF1EC</color>
+    <color name="background">#0F1713</color>
+</resources>

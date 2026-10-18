@@ -1,0 +1,85 @@
+package eu.kantin.repas.drive
+
+import org.json.JSONException
+import org.json.JSONObject
+
+/** Ce que l'application retient d'un message reçu de la page de Repas (`window.repasNative`). */
+sealed interface NativeRequest {
+    /** `app.info` : la version de l'application. */
+    data object AppInfo : NativeRequest
+
+    /** `app.menu` : ouvrir le menu de l'application (version, mode d'emploi, déconnexion du drive). */
+    data object AppMenu : NativeRequest
+
+    /** `drive.start` ou `drive.cancel` : le passage du plan (DRV-314). */
+    class Drive(val type: String, val json: JSONObject) : NativeRequest
+
+    /** Un message de la bonne origine mais mal formé : [reply] est la réponse à renvoyer à la page, [reason] ce qu'on note au journal. */
+    class Refused(val reply: String, val reason: Rejection) : NativeRequest
+
+    /** Un message d'une autre origine ou d'un cadre secondaire : aucune réponse, rien d'autre que la raison au journal. */
+    class Ignored(val reason: Rejection) : NativeRequest
+}
+
+/**
+ * Le pont natif entre le front Repas et l'application (DRV-317) : `window.repasNative`, un canal `addWebMessageListener` réservé à l'origine
+ * de Repas (`BuildConfig.REPAS_ORIGIN`) ; aucun `addJavascriptInterface`. Les règles sont ici, en Kotlin pur, pour se tester sans téléphone.
+ *
+ * Les messages sont du JSON en texte (UTF-8, 64 Ko au plus pour ceux de la page) avec `v: 1` et un `type`. L'application répond sur le même
+ * canal. Le contrat complet, côté page, est dans `android/README.md`.
+ */
+object NativeBridge {
+    /** Le nom de l'objet vu par la page : `window.repasNative`. */
+    const val OBJECT_NAME = "repasNative"
+
+    /** Les codes d'erreur de `error` et de `drive.error`. */
+    const val INVALID_MESSAGE = "INVALID_MESSAGE"
+    const val UNKNOWN_TYPE = "UNKNOWN_TYPE"
+    const val UNAVAILABLE = "UNAVAILABLE"
+
+    private const val PROTOCOL_VERSION = 1
+
+    /** Contrôle un message reçu de la page : origine, cadre principal, texte, borne, JSON de version 1, type connu. */
+    fun screen(data: String?, origin: String?, isMainFrame: Boolean, repasOrigin: String): NativeRequest {
+        if (!RepasOrigin.matches(origin, repasOrigin)) return NativeRequest.Ignored(Rejection.ORIGIN)
+        if (!isMainFrame) return NativeRequest.Ignored(Rejection.NOT_MAIN_FRAME)
+        if (data == null) return refused(error(INVALID_MESSAGE), Rejection.NOT_TEXT)
+        if (!BridgeMessages.fitsBound(data)) return refused(error(INVALID_MESSAGE), Rejection.TOO_LARGE)
+        val json = try {
+            JSONObject(data)
+        } catch (_: JSONException) {
+            return refused(error(INVALID_MESSAGE), Rejection.NOT_JSON)
+        }
+        if (json.optInt("v", -1) != PROTOCOL_VERSION) return refused(error(INVALID_MESSAGE), Rejection.NOT_PROTOCOL)
+        return when (val type = json.optString("type")) {
+            "app.info" -> NativeRequest.AppInfo
+            "app.menu" -> NativeRequest.AppMenu
+            "drive.start", "drive.cancel" -> NativeRequest.Drive(type, json)
+            else -> refused(error(UNKNOWN_TYPE), Rejection.NOT_PROTOCOL)
+        }
+    }
+
+    private fun refused(reply: String, reason: Rejection): NativeRequest = NativeRequest.Refused(reply, reason)
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // Les réponses de l'application à la page
+
+    /** Réponse à `app.info`. `drive` : le drive est utilisable (agent intact, WebView assez récente). */
+    fun appInfo(version: String, versionCode: Long, drive: Boolean): String = message("app.info") {
+        put("version", version)
+        put("versionCode", versionCode)
+        put("drive", drive)
+    }
+
+    /** Un message mal formé ou inconnu. */
+    fun error(code: String): String = message("error") { put("code", code) }
+
+    /** Un refus d'un message `drive.*`, avec au besoin le `runId` du passage concerné. */
+    fun driveError(code: String, runId: String? = null): String = message("drive.error") {
+        put("code", code)
+        if (runId != null) put("runId", runId)
+    }
+
+    private fun message(type: String, fill: JSONObject.() -> Unit): String =
+        JSONObject().put("v", PROTOCOL_VERSION).put("type", type).apply(fill).toString()
+}

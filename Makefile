@@ -209,8 +209,8 @@ android-emulator-down: ## Stop the Android test emulator (the SDK and the AVD st
 android-emulator-status: ## Say whether KVM, the SDK volume and the emulator are ready (exit code 0 only when it has booted)
 	@$(ANDROID_EMULATOR_CTL) status
 
-android-smoke: ## Smoke test: build the debug APK, start the emulator if needed, run the app on a local test page; report and screenshots in android/dist/smoke/
-	@$(MAKE) --no-print-directory android
+android-smoke: ## Smoke test: build the debug APK aimed at the local fake Repas, start the emulator if needed, play the shell and drive scenario; report and screenshots in android/dist/smoke/
+	@ANDROID_REPAS_ORIGIN=https://repas.test/ ANDROID_APK_NAME=repas-drive-smoke.apk $(MAKE) --no-print-directory android
 	@$(MAKE) --no-print-directory android-emulator-up
 	@DOCKER_COMPOSE="$(DOCKER_COMPOSE)" ./android/emulator/smoke.sh
 

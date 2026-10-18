@@ -1,8 +1,8 @@
-# Repas Drive : l'application Android
+# Repas : l'application Android
 
-L'application Android du chantier « envoyer la liste de courses au drive Leclerc » (tickets `DRV-311` à `DRV-316`, dépôt back `docs/drive/`). Elle affiche le drive Leclerc dans une WebView en mode ordinateur, y injectera l'agent de `drive-agent/` et rendra le résultat à Repas. **Écrite en Kotlin, une seule activité, AndroidX réduit au strict nécessaire.**
+L'application Android de Repas (tickets `DRV-311` à `DRV-319`, dépôt back `docs/drive/`) : **l'application Repas complète**. Une **coquille** ([`MainActivity`](#la-coquille-repas-drv-317)) charge le front Repas dans une WebView ; le drive Leclerc est un **second écran** (`DriveActivity`, WebView en mode ordinateur où l'agent de `drive-agent/` est injecté) que la coquille ouvre. Repas parle à l'application par le **pont natif** `window.repasNative`. **Écrite en Kotlin, AndroidX réduit au strict nécessaire.**
 
-État : **hôte WebView** (DRV-312) et **agent embarqué** (DRV-313). L'application ouvre le drive en plein écran, en mode ordinateur, et l'utilisateur s'y connecte lui-même ; l'agent de `drive-agent/` est injecté dans ses pages, avec un canal de messages réservé à `*.leclercdrive.fr`. Le passage du plan reçu de Repas (DRV-314) et la publication signée (DRV-315) viennent ensuite.
+État : **coquille Repas** (DRV-317), **hôte WebView du drive** (DRV-312, devenu `DriveActivity`) et **agent embarqué** (DRV-313). Le passage du plan et le retour du résultat (DRV-314) et la publication signée (DRV-315) viennent ensuite. Le nom de paquet reste `eu.kantin.repas.drive` (il ne change plus : un paquet renommé ne se met pas à jour par-dessus l'ancien).
 
 > `drive-agent/android-lab/` est l'application de test jetable du spike (DRV-011). Elle reste en place, avec le banc d'essai `drive-agent/lab/`, jusqu'à la fin du jalon M3b ; ce dossier-ci la prolonge sans la modifier.
 
@@ -20,7 +20,7 @@ Tout se lance dans Docker (image : JDK 17, Gradle, SDK Android ; rien à install
 | `make android-emulator-up` | démarre l'émulateur de test et attend la fin de son démarrage (voir « Émulateur de test » plus bas ; demande KVM) |
 | `make android-emulator-down` | arrête l'émulateur (le SDK et l'AVD restent dans leur volume) |
 | `make android-emulator-status` | dit si KVM, le volume du SDK et l'émulateur sont prêts (code 0 seulement s'il a démarré) |
-| `make android-smoke` | test de fumée : construit l'APK de débogage, démarre l'émulateur au besoin, lance l'application sur une page locale de test ; rapport et captures dans `android/dist/smoke/` |
+| `make android-smoke` | test de fumée : construit un APK de débogage qui vise le faux Repas local, démarre l'émulateur au besoin, joue la coquille et le drive sur les faux sites locaux ; rapport et captures dans `android/dist/smoke/` |
 
 Chaque commande Android reconstruit d'abord l'agent (`make agent-build`, Node dans Docker) : `agent.js` est un actif de l'APK (voir plus bas). La CI le construit avec `setup-node` puis passe `ANDROID_AGENT=` aux commandes `make` pour ne pas relancer Node dans Docker. La CI (`.github/workflows/android.yml`, séparée de `make check`) joue `make android-test`, `make android` et `make android-release-selftest` ; l'APK de débogage est déposé en artefact du run. Elle ne tourne que si `android/`, l'agent (`drive-agent/src`, `protocol`, `scripts`, `package*.json`), son workflow, `compose.yaml` ou le `Makefile` changent. Lancé à la main sur `main` (`gh workflow run android.yml --ref main`, avec au besoin `-f tag=android-dev-2026-10-18b` pour choisir l'étiquette), il publie aussi l'APK de débogage en **pré-version GitHub** `android-dev-<date>` (jamais une release de production ; mode d'emploi : `PROCEDURE.md`). L'image de construction est mise en cache par GitHub Actions.
 
@@ -59,17 +59,21 @@ L'émulateur a besoin de l'accélération matérielle, sinon il est inutilisable
 
 ### 3. Le test de fumée (`make android-smoke`)
 
-Environ une minute une fois l'émulateur démarré. Il contrôle, dans l'ordre, et écrit le tout dans `android/dist/smoke/rapport.txt` avec quatre captures (`01-page-locale.png`, `02-menu.png`, `03-diagnostic-agent.png`, `04-rapport-selftest.png`) :
+Environ deux minutes une fois l'émulateur démarré. Il construit l'APK de débogage avec `ANDROID_REPAS_ORIGIN=https://repas.test/` (nom du faux Repas, dans `dist/repas-drive-smoke.apk` : l'APK de débogage ordinaire `dist/repas-drive-debug.apk` n'est pas touché) puis contrôle, dans l'ordre, et écrit le tout dans `android/dist/smoke/rapport.txt` avec des captures (`01-coquille-repas.png`, `02-menu-repas.png`, `03-drive.png`, `04-menu-drive.png`, `05-diagnostic-agent.png`, `06-rapport-selftest.png`, `07-retour-coquille.png`) :
 
-1. le réseau : `www.leclercdrive.fr` se résout vers la machine locale (`10.0.2.2`) et un autre nom ne se résout pas ; sinon le test s'arrête avant d'ouvrir quoi que ce soit ;
+1. le réseau : `www.leclercdrive.fr` et `repas.test` se résolvent vers la machine locale (`10.0.2.2`) et un autre nom ne se résout pas ; sinon le test s'arrête avant d'ouvrir quoi que ce soit ;
 2. l'APK de débogage s'installe, l'application démarre sans plantage ;
-3. la WebView affiche la page locale de test, et celle-ci relève que le pont `repasHost` et son marqueur de débogage sont en place (le script d'injection a tourné), en mode ordinateur ;
-4. le menu de débogage s'ouvre (« Test automatique (débogage) », « Plan d'essai (débogage) ») ;
-5. « Diagnostic de l'agent » : la commande traverse le pont jusqu'à la page, et l'agent injecté y monte son interface ;
-6. « Test automatique (débogage) » : l'aller-retour complet application, pont, agent, pont, application, jusqu'à l'écran « Rapport du test automatique ». **Le verdict de ce rapport est « KO » avec `Arrêt : UNSUPPORTED_PAGE`, et c'est le résultat attendu** : la page de test n'est pas une page de magasin du drive ; ce qui compte, c'est que le rapport arrive ;
-7. le bilan : l'application tourne toujours, aucun plantage ni blocage dans le journal d'Android, et le journal du DNS prouve qu'aucune demande n'est partie vers Internet.
+3. la coquille charge le **faux Repas** (`emulator/repaspage.html`, servi comme un SPA sous `repas.test`) : celui-ci relève qu'il est dans la page principale, que le pont `repasNative` existe, que le cookie est accepté, que l'agent utilisateur est celui d'un téléphone, et qu'`app.info` a reçu sa réponse (`drive: true`) ; un message illisible reçoit `INVALID_MESSAGE`, un type inconnu `UNKNOWN_TYPE` ;
+4. `app.menu` ouvre le menu de l'application ; un lien vers un autre site ne s'ouvre pas dans la coquille (navigateur du téléphone) ;
+5. le menu « Ouvrir le drive Leclerc » ouvre `DriveActivity` sur le faux site Leclerc, où le pont `repasHost` et son marqueur de débogage sont en place (le script d'injection a tourné), en mode ordinateur ;
+6. « Diagnostic de l'agent » : la commande traverse le pont jusqu'à la page, et l'agent injecté y monte son interface ;
+7. « Test automatique (débogage) » : l'aller-retour complet application, pont, agent, pont, application, jusqu'à l'écran « Rapport du test automatique ». **Le verdict de ce rapport est « KO » avec `Arrêt : UNSUPPORTED_PAGE`, et c'est le résultat attendu** : la page de test n'est pas une page de magasin du drive ; ce qui compte, c'est que le rapport arrive ;
+8. le retour ramène à la coquille, dont la page répond encore (`app.info`) ;
+9. le bilan : l'application tourne toujours, aucun plantage ni blocage dans le journal d'Android, et le journal du DNS prouve qu'aucune demande n'est partie vers Internet.
 
-Code de sortie : 0 si tout passe, 1 sinon (le détail est dans le rapport et `journal-android.txt`), 3 si KVM manque. Les scénarios complets (coquille Repas, faux site Leclerc avec passage complet) sont la deuxième livraison de DRV-319.
+Le faux Repas obéit aux ordres que le test dépose sur `/__command` du faux site (`drive.start`, `drive.cancel`, `app.info`, `app.menu`, ou un message brut) : aucun toucher dans la page n'est nécessaire, et la page relève chaque réponse de l'application sur `/__report`. **Après un changement dans `android/emulator/`, `make android-emulator-down` puis `make android-emulator-up`** reconstruit le conteneur (le test s'arrête avec ce conseil si `repas.test` ne se résout pas).
+
+Code de sortie : 0 si tout passe, 1 sinon (le détail est dans le rapport et `journal-android.txt`), 3 si KVM manque.
 
 ### 4. Comment ça marche
 
@@ -90,13 +94,20 @@ Le conteneur (`android/emulator/`, service `android-emulator` de `compose.yaml`,
 android/
   Dockerfile, build.sh      image de construction et script lancé dedans (test, apk, release, release-selftest)
   emulator/                 l'émulateur de test (DRV-319) : Dockerfile (outils), entrypoint.sh (SDK, AVD, DNS, faux site, émulateur),
-                            testsite.py + testpage.html (le faux site local), ctl.sh (up, down, status), smoke.sh (le test de fumée)
+                            testsite.py (les faux sites locaux, selon le nom demandé) + testpage.html (le faux drive) + repaspage.html
+                            (le faux Repas), ctl.sh (up, down, status), smoke.sh (le test de fumée)
   settings.gradle.kts, build.gradle.kts, gradle.properties
   buildSrc/                 la dérivation de la version (AppVersion), en Kotlin pur, avec ses tests
   app/
     build.gradle.kts        applicationId eu.kantin.repas.drive, minSdk 26, targetSdk 36, signatures, version
     src/main/kotlin/eu/kantin/repas/drive/
-      MainActivity.kt       l'hôte : WebView plein écran, retour arrière, marges, panneau d'erreur, menu
+      RepasApp.kt           l'application : l'agent embarqué, lu et vérifié une fois, partagé par les deux écrans
+      MainActivity.kt       la coquille Repas : WebView sur l'origine de Repas, pont `repasNative`, liens entrants, menu (DRV-317)
+      DriveActivity.kt      le drive, second écran : l'ancien hôte WebView en mode ordinateur, agent injecté (DRV-312, DRV-313)
+      ShellNavigation.kt    l'origine de Repas (`RepasOrigin`) et la règle de navigation de la coquille (Kotlin pur)
+      NativeBridge.kt       les règles du pont `repasNative` : origine, 64 Ko, forme du JSON, réponses (Kotlin pur)
+      DriveProfile.kt       le profil « drive » de la WebView : cookies et stockage du drive séparés de ceux de Repas
+      Dialogs.kt, InstalledVersion.kt   fenêtres communes (version et mode d'emploi, confirmation d'effacement, menu), version installée
       DesktopMode.kt        le mode ordinateur appliqué à la WebView (agent utilisateur, indications client, fenêtre large, zoom)
       NavigationPolicy.kt   la règle de navigation (seules les pages https de leclercdrive.fr restent dans l'application)
       UserAgent.kt          l'identité « ordinateur » : agent utilisateur, indications client, repli si elles manquent (Kotlin pur)
@@ -119,7 +130,64 @@ android/
   debug.keystore            clé de débogage PUBLIQUE (mot de passe « android »), la seule clé suivie par Git
 ```
 
-`NavigationPolicy`, `UserAgent` et `LoadProblem` sont écrites sans classe Android pour se tester sans téléphone ; `DesktopMode` et `MainActivity` n'en sont que la colle, à essayer sur un téléphone (recette de l'utilisateur).
+`NavigationPolicy`, `ShellNavigation`, `NativeBridge`, `UserAgent` et `LoadProblem` sont écrites sans classe Android pour se tester sans téléphone ; `DesktopMode`, `MainActivity` et `DriveActivity` n'en sont que la colle, essayée dans l'émulateur (`make android-smoke`) puis sur un téléphone (recette de l'utilisateur).
+
+## La coquille Repas (DRV-317)
+
+`MainActivity` charge le front Repas dans une WebView, sur **`BuildConfig.REPAS_ORIGIN`** : `https://kantin.eu/` dans l'APK de publication, toujours. L'APK de débogage peut viser un autre hôte `https` (sans port ni chemin) : `ANDROID_REPAS_ORIGIN=https://hote.exemple/ make android` (le test de fumée vise ainsi `https://repas.test/`) ; un autre nom de fichier se choisit par `ANDROID_APK_NAME`. Hôte, filtre d'intention et pont suivent l'origine ; jamais elle ne vient d'un message ni d'une page.
+
+- **Navigation** (`ShellNavigation`) : seules les pages `https` de l'origine de Repas restent dans la WebView ; toute autre page web (`*.leclercdrive.fr` compris, le drive a son écran) s'ouvre dans le navigateur du téléphone ; les autres adresses (`javascript:`, `intent:`, `tel:`…) sont ignorées. Les cadres ne sont pas limités.
+- **Données** : JavaScript, stockage du DOM et service worker (par défaut) restent actifs ; les cookies, dont celui de rafraîchissement du jeton (`HttpOnly`), sont écrits sur le disque à chaque `onPause` : la session survit à la fermeture de l'application. Contenu mixte refusé, Safe Browsing actif, aucun cookie tiers, aucun accès aux fichiers. Le drive a son **propre profil de WebView** (`DriveProfile`, fonction `MULTI_PROFILE` de `androidx.webkit`) : la WebView de Repas ne reçoit ni l'agent Leclerc ni les cookies de Leclerc, et « Se déconnecter de Leclerc et effacer les données du drive » n'efface que le drive. Sur une WebView sans profils, le drive partage les données de Repas et la fenêtre de confirmation prévient que Repas sera déconnecté aussi.
+- **Confort** : bouton retour = retour arrière dans le front, puis sortie ; page d'erreur en français avec « Réessayer » (hors connexion, serveur muet, certificat refusé) ; marges sous les barres du système (`targetSdk` 36) ; barre d'état et fond aux couleurs du thème clair ou sombre du système (`res/values*/themes.xml`, jetons « Basilic & safran » du front) ; icône adaptative (feuille de basilic sur fond basilic, nervure safran, icône thématique d'Android 13) et écran de lancement basilic (Android 12 et plus : `windowSplashScreen*` ; avant : `launch_background`), sans image externe.
+- **Pas de sélecteur de fichiers** : le front n'envoie ni fichier ni photo (`__tests__/shell.spec.ts` échoue si un champ `type="file"` apparaît dans `src/`), donc ni `onShowFileChooser`, ni permission de stockage ou de caméra. Une seule permission : Internet.
+- **Menu** : il s'ouvre par le message `app.menu` du pont (le front le déclenche depuis sa page « Moi » : à ajouter côté front) ; la variante de débogage a en plus un bouton ⋮ sur le bord droit. Entrées : « Réglages du drive » (charge `/drive/reglages` du front), « Ouvrir le drive Leclerc » (`DriveActivity`, pour se connecter à Leclerc à l'avance), « Version et mode d'emploi », « Se déconnecter de Leclerc et effacer les données du drive ».
+- **Liens entrants** : un lien `https://<hôte de Repas>/…` reçu d'une autre application (courriel de confirmation d'adresse) s'ouvre dans la coquille (`launchMode="singleTask"`, `onNewIntent`). Le filtre d'intention porte `autoVerify="true"`.
+
+### Étape humaine : publier `assetlinks.json` (liens vérifiés)
+
+Sans ce fichier, Android ne vérifie pas le lien : un lien `https://kantin.eu/…` s'ouvre dans le navigateur (ou propose le choix) au lieu de l'application. À faire **une fois l'APK de publication signé** (DRV-315), par l'humain :
+
+1. récupérer l'empreinte SHA-256 du certificat de signature de publication : `keytool -list -v -keystore <fichier de clé> -alias <alias>` (ligne « SHA256 »), ou `apksigner verify --print-certs android/dist/repas-drive.apk` ;
+2. publier `https://kantin.eu/.well-known/assetlinks.json` (code 200, `application/json`, **sans redirection**, accessible sans identification) avec ce contenu, l'empreinte remplaçant l'indication :
+
+   ```json
+   [
+     {
+       "relation": ["delegate_permission/common.handle_all_urls"],
+       "target": {
+         "namespace": "android_app",
+         "package_name": "eu.kantin.repas.drive",
+         "sha256_cert_fingerprints": ["<EMPREINTE SHA-256 DU CERTIFICAT DE PUBLICATION>"]
+       }
+     }
+   ]
+   ```
+
+   Côté front, le fichier va dans `public/.well-known/assetlinks.json` (servi tel quel par Caddy : vérifier que la règle de repli du SPA ne le renvoie pas vers `index.html`) ; l'empreinte du certificat n'est pas un secret.
+3. vérifier : `adb shell pm get-app-links eu.kantin.repas.drive` (état `verified` pour l'hôte), ou ouvrir un lien reçu par courriel.
+
+**Ne jamais** y mettre l'empreinte de la clé de débogage (publique) : n'importe qui pourrait alors se faire passer pour l'application. L'APK de débogage ne sera donc jamais « vérifié » : c'est voulu.
+
+### Le pont natif `repasNative` (DRV-317)
+
+`WebViewCompat.addWebMessageListener`, nom `repasNative`, **origine autorisée : celle de Repas seulement** (`setOf(REPAS_ORIGIN)`), page principale seulement ; **aucun `addJavascriptInterface`**. Sans la fonction (WebView très ancienne), l'objet n'existe pas : le front doit tester sa présence. Côté page :
+
+```js
+const native = window.repasNative // undefined hors de l'application
+native.addEventListener('message', (event) => handle(JSON.parse(event.data))) // AVANT le premier message
+native.postMessage(JSON.stringify({ v: 1, type: 'app.info' }))
+```
+
+Messages : JSON en **texte**, `v: 1` et `type`, **64 Ko au plus** (octets UTF-8) dans le sens page vers application. L'application répond sur le même canal ; le canal de réponse est celui de la page courante et disparaît quand la page se recharge (la nouvelle page le retrouve par son premier message).
+
+| De la page vers l'application | Réponse |
+|---|---|
+| `{"v":1,"type":"app.info"}` | `{"v":1,"type":"app.info","version":"1.2.3","versionCode":42,"drive":true}` : `version` et `versionCode` de l'application ; `drive` : faux si l'agent embarqué est absent, altéré ou si la WebView est trop ancienne |
+| `{"v":1,"type":"app.menu"}` | aucune : le menu de l'application s'ouvre |
+| `drive.start`, `drive.cancel` | traités par DRV-314 ; avant lui : `{"v":1,"type":"drive.error","code":"UNAVAILABLE"}` |
+| tout autre message | `{"v":1,"type":"error","code":"INVALID_MESSAGE"}` (pas du texte, plus de 64 Ko, pas du JSON objet, `v` différent de 1) ou `{"v":1,"type":"error","code":"UNKNOWN_TYPE"}` (type inconnu) |
+
+Un message d'une autre origine ou d'un cadre secondaire n'est jamais livré à l'application (le canal n'existe pas pour lui) ; s'il arrivait, il est ignoré sans réponse et seule la raison est notée au journal (jamais le contenu).
 
 ## L'agent embarqué (DRV-313)
 
@@ -152,8 +220,8 @@ Exemple : `ANDROID_VERSION_TAG=android-v0.1.0 ANDROID_VERSION_CODE=7 make androi
 ## Règles
 
 - **Rien d'une enseigne n'est lu ni conservé** : aucun identifiant, cookie, jeton ni contenu de page dans les journaux ou le dépôt. L'utilisateur se connecte lui-même dans la WebView. Les cookies restent sur le téléphone (ni sauvegarde dans le nuage, ni transfert d'appareil : `data_extraction_rules.xml`).
-- **Aucun objet natif exposé aux pages** (pas de `addJavascriptInterface`) : seul un canal de messages restreint à `*.leclercdrive.fr` (DRV-313). Le code qui tourne dans les pages est `injection.js` et `agent.js`, tous deux dans l'APK et vérifiés : jamais de code reçu d'un site.
-- **Une seule permission : Internet**. Jamais d'autre (pas de position, de fichiers ni de contacts). `ACCESS_NETWORK_STATE` n'est pas demandée non plus : « hors connexion » se déduit de l'erreur de la WebView.
+- **Aucun objet natif exposé aux pages** (pas de `addJavascriptInterface`) : deux canaux de messages seulement, `repasNative` restreint à l'origine de Repas (DRV-317) et `repasHost` restreint à `*.leclercdrive.fr` (DRV-313). Le code qui tourne dans les pages du drive est `injection.js` et `agent.js`, tous deux dans l'APK et vérifiés : jamais de code reçu d'un site. L'agent n'est jamais injecté dans la WebView de Repas.
+- **Une seule permission : Internet**. Jamais d'autre (pas de position, de fichiers, de caméra ni de contacts). `ACCESS_NETWORK_STATE` n'est pas demandée non plus : « hors connexion » se déduit de l'erreur de la WebView.
 - **Données synthétiques** dans les tests : aucun vrai numéro de magasin, nom de ville, cookie ou HTML d'enseigne (dépôt public). Aucun essai ne contacte `leclercdrive.fr` depuis la CI : le site se visite seulement sur le téléphone de l'utilisateur (recette, DRV-505).
 - `targetSdk` 36 : depuis Android 15 l'écran passe sous les barres du système (bord à bord). La racine de l'écran garde ses marges sous les barres du système, les encoches et le clavier (`setOnApplyWindowInsetsListener`) ; le spike restait en 34 pour éviter ce travail. Le geste « retour » passe par `OnBackInvokedCallback` (Android 13 et plus) : la méthode `onBackPressed` n'y est plus appelée.
 - Gradle est lancé sans démon, plugins et dépendances épinglés (`build.gradle.kts`, `app/build.gradle.kts`), image de construction épinglée par empreinte (`Dockerfile`). Une mise à jour d'outil se fait à la main, une PR par chantier.

@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Faux Repas de test</title>
+<style>
+  body { font: 17px/1.4 system-ui, sans-serif; margin: 0; padding: 20px 20px 96px; color: #16221c; background: #f4f6f3; }
+  h1 { font-size: 24px; margin: 0 0 4px; color: #1e6b4c; }
+  p.note { margin: 0 0 16px; color: #55645c; font-size: 15px; }
+  ul { list-style: none; padding: 0; margin: 0 0 16px; }
+  li { padding: 8px 10px; margin-bottom: 6px; border-radius: 8px; background: #fff; border-left: 8px solid #9e9e9e; word-break: break-word; }
+  li.ok { border-left-color: #2e7d32; }
+  li.ko { border-left-color: #c62828; }
+  a { color: #1e6b4c; font-weight: 600; }
+  nav { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 20px; background: #fff; border-top: 1px solid #c9d3cc; }
+</style>
+</head>
+<body>
+<h1>Faux Repas de test</h1>
+<p class="note">Page locale de l'émulateur (DRV-317, DRV-314) : elle joue le rôle du front Repas, sans aucune donnée réelle. Elle parle à l'application par <code>window.repasNative</code>.</p>
+<ul id="facts"></ul>
+<p><a id="external" href="https://example.org/">Un lien vers un autre site</a></p>
+<nav>Barre du bas du front (simulée)</nav>
+<script>
+(function () {
+  'use strict'
+  var facts = document.getElementById('facts')
+  var rows = {}
+  var PLAN = {
+    v: 1,
+    type: 'plan',
+    runId: '8f14e45f-ceea-467a-9575-8e6b8c0a1b2c',
+    retailer: 'leclerc',
+    store: { id: '123456', host: 'www.leclercdrive.fr' },
+    returnPath: '/drive/retour',
+    lines: [
+      { ingredientSlug: 'farine', name: 'Farine', status: 'NEW' },
+      { ingredientSlug: 'oeufs', name: 'Oeufs', status: 'NEW' },
+    ],
+  }
+
+  function show(key, text, ok) {
+    var row = rows[key]
+    if (!row) {
+      row = rows[key] = document.createElement('li')
+      facts.appendChild(row)
+    }
+    row.className = ok === undefined ? '' : ok ? 'ok' : 'ko'
+    row.textContent = text
+  }
+
+  function report(item) {
+    try {
+      fetch('/__report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })
+    } catch (e) {
+      /* le test verra l'absence de relevé */
+    }
+  }
+
+  var native = window.repasNative
+  report({
+    kind: 'load',
+    page: 'repas',
+    hostname: location.hostname,
+    path: location.pathname,
+    topFrame: window.top === window,
+    native: !!native && typeof native.postMessage === 'function',
+    mobileAgent: /Mobile/i.test(navigator.userAgent),
+    serviceWorker: 'serviceWorker' in navigator,
+    cookieSet: (function () {
+      document.cookie = 'repas_test=1; max-age=3600; path=/; secure; samesite=lax'
+      return document.cookie.indexOf('repas_test=1') >= 0
+    })(),
+  })
+  show('native', 'Le pont repasNative est en place : ' + (native ? 'oui' : 'non'), !!native)
+  show('url', 'Adresse : ' + location.pathname)
+  if (!native) return
+
+  function send(message) {
+    native.postMessage(JSON.stringify(message))
+  }
+
+  // Le front enregistre son écouteur AVANT le premier message : l'application répond (et livre un résultat en attente) sur ce canal.
+  native.addEventListener('message', function (event) {
+    var m
+    try {
+      m = JSON.parse(event.data)
+    } catch (e) {
+      show('bad', 'Message illisible de l’application', false)
+      return report({ kind: 'native', type: 'unreadable' })
+    }
+    var item = { kind: 'native', type: m.type }
+    if (m.type === 'app.info') {
+      item.version = m.version
+      item.versionCode = m.versionCode
+      item.drive = m.drive
+      show('info', 'app.info : version ' + m.version + ', numéro ' + m.versionCode + ', drive ' + m.drive, true)
+    } else if (m.type === 'drive.started') {
+      item.runId = m.runId
+      item.resumed = m.resumed
+      show('started', 'drive.started : ' + m.runId + (m.resumed ? ' (repris)' : ''), true)
+    } else if (m.type === 'drive.result') {
+      item.runId = m.runId
+      item.resultType = m.result && m.result.type
+      item.outcome = m.result && m.result.outcome
+      item.errorCode = m.result && m.result.error && m.result.error.code
+      item.lines = m.result && m.result.lines ? m.result.lines.length : -1
+      show('result', 'drive.result : ' + m.runId + ' → ' + item.outcome + (item.errorCode ? ' (' + item.errorCode + ')' : ''), true)
+    } else if (m.type === 'drive.error' || m.type === 'error') {
+      item.code = m.code
+      item.runId = m.runId
+      show('error-' + m.type, m.type + ' : ' + m.code, false)
+    }
+    report(item)
+  })
+
+  send({ v: 1, type: 'app.info' })
+
+  // Les ordres du test : l'émulateur les dépose sur /__command, la page les exécute (aucun toucher dans la page nécessaire).
+  function poll() {
+    fetch('/__command', { cache: 'no-store' })
+      .then(function (response) { return response.ok ? response.json() : null })
+      .then(function (command) {
+        if (!command || !command.do) return
+        if (command.do === 'drive.start') {
+          var plan = JSON.parse(JSON.stringify(PLAN))
+          if (command.runId) plan.runId = command.runId
+          send({ v: 1, type: 'drive.start', plan: plan })
+        } else if (command.do === 'drive.cancel') {
+          send({ v: 1, type: 'drive.cancel', runId: command.runId || PLAN.runId })
+        } else if (command.do === 'app.info') {
+          send({ v: 1, type: 'app.info' })
+        } else if (command.do === 'app.menu') {
+          send({ v: 1, type: 'app.menu' })
+        } else if (command.do === 'raw') {
+          native.postMessage(String(command.text))
+        }
+      })
+      .catch(function () { /* le serveur n'est pas là : on réessaie */ })
+  }
+  setInterval(poll, 500)
+})()
+</script>
+</body>
+</html>
