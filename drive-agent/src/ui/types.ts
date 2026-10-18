@@ -115,6 +115,11 @@ export interface EndProps {
   skipped: number
   unavailable: number
   failed: number
+  /**
+   * Les lignes dont le nombre de produits a été recalculé sur le contenu lu en direct, différent de celui que Repas avait mémorisé
+   * (DRV-613). Absent (jamais vide) quand aucune ne l'a été.
+   */
+  changes?: readonly { name: string; planned: number; live: number }[]
 }
 
 /** Les écrans : ce que `ui.show(nom, props)` affiche et ce que sa promesse rend. */

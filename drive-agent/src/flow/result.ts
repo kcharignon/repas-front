@@ -13,6 +13,20 @@ import type { EndProps } from '../ui'
 import { ERROR_TEXTS } from '../ui'
 import type { RunState } from './run-state'
 
+/** Une ligne dont le nombre de produits a été recalculé en direct, avec le nom de l'ingrédient pour l'écran de fin. */
+type EndChange = NonNullable<EndProps['changes']>[number]
+
+/**
+ * Les lignes dont le contenu lu en direct a changé le nombre de produits (DRV-613), dans l'ordre du plan, une seule fois chacune. Ce
+ * qui vient de l'état de reprise (le stockage est partagé avec la page) n'est cru que pour une ligne du plan.
+ */
+export function changesOf(plan: PlanMessage, state: RunState): EndChange[] {
+  return plan.lines.flatMap(({ ingredientSlug, name }) => {
+    const found = state.changes.find((change) => change.ingredientSlug === ingredientSlug)
+    return found ? [{ name, planned: found.planned, live: found.live }] : []
+  })
+}
+
 /** L'issue globale d'un passage et, s'il y en a un, le code qui l'a interrompu. */
 export interface Ending {
   outcome: Outcome
@@ -71,7 +85,11 @@ export function buildResult(
 }
 
 /** Les nombres de l'écran de fin. */
-export function endProps(lines: readonly ResultLine[], ending: Ending): EndProps {
+export function endProps(
+  lines: readonly ResultLine[],
+  ending: Ending,
+  changes: readonly EndChange[] = [],
+): EndProps {
   const count = (outcome: ResultLine['outcome']) =>
     lines.filter((line) => line.outcome === outcome).length
   return {
@@ -83,5 +101,6 @@ export function endProps(lines: readonly ResultLine[], ending: Ending): EndProps
     skipped: count('SKIPPED'),
     unavailable: count('UNAVAILABLE'),
     failed: count('FAILED'),
+    ...(changes.length > 0 && { changes }),
   }
 }
