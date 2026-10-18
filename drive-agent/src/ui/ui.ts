@@ -1,5 +1,6 @@
 // L'interface superposée : un Shadow DOM fermé dans un conteneur plein écran, au-dessus de la page de l'enseigne.
 import { append, clear, h } from './dom'
+import { displayLayout, measureDisplay, type DisplayLayout } from './scale'
 import { RENDERERS, type Rendered } from './screens'
 import { S } from './strings'
 import { STYLES } from './styles'
@@ -40,6 +41,26 @@ function pin(host: HTMLElement): void {
   for (const [name, value] of rules) host.style.setProperty(name, value, 'important')
 }
 
+/**
+ * Pose le cadre de l'interface sur la zone visible de la page, agrandi de son facteur (`scale.ts`) : sa largeur, en pixels CSS, est alors celle
+ * de l'écran en dp, comme sur un téléphone ordinaire, et il remplit exactement la zone (aucun défilement horizontal). Par des déclarations
+ * CSSOM (`style.setProperty`), comme le conteneur : une politique de sécurité de la page peut interdire l'attribut `style`, pas cet objet.
+ */
+function place(overlay: HTMLElement, layout: DisplayLayout): void {
+  const { style } = overlay
+  if (layout.width <= 0 || layout.height <= 0) {
+    // Aucune mesure : le cadre remplit le conteneur, à l'échelle de la page (feuille de style).
+    for (const name of ['left', 'top', 'width', 'height', 'transform']) style.removeProperty(name)
+    return
+  }
+  style.setProperty('left', `${layout.left}px`)
+  style.setProperty('top', `${layout.top}px`)
+  style.setProperty('width', `${layout.width / layout.scale}px`)
+  style.setProperty('height', `${layout.height / layout.scale}px`)
+  if (layout.scale === 1) style.removeProperty('transform')
+  else style.setProperty('transform', `scale(${layout.scale})`)
+}
+
 /** Feuille de style sans balise `<style>` (une politique de sécurité de la page pourrait l'interdire) ; à défaut, la balise. */
 function installStyles(win: Window & typeof globalThis, root: ShadowRoot): void {
   try {
@@ -60,6 +81,10 @@ export function createUi(options: UiOptions = {}): UiHandle {
     overlay: HTMLElement
     current: Rendered | null
   } | null = null
+  /** Remet le cadre à la bonne échelle quand l'affichage change : fenêtre, rotation, clavier, zoom ou défilement de la zone visible. */
+  const replace = () => {
+    if (view) place(view.overlay, displayLayout(measureDisplay(win)))
+  }
   /** Numéro du dernier écran affiché : la réponse d'un écran remplacé est ignorée. */
   let serial = 0
 
@@ -74,9 +99,14 @@ export function createUi(options: UiOptions = {}): UiHandle {
       attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': S.dialog },
     })
     overlay.addEventListener('keydown', (event) => trapFocus(event as KeyboardEvent, root, overlay))
-    append(root, overlay)
+    // Le fond remplit toute la fenêtre ; le cadre, lui, suit la zone visible (la page peut être agrandie au pincement).
+    append(root, h('div', { class: 'backdrop' }), overlay)
     win.document.documentElement.appendChild(host)
     view = { host, root, overlay, current: null }
+    replace()
+    win.addEventListener('resize', replace)
+    win.visualViewport?.addEventListener('resize', replace)
+    win.visualViewport?.addEventListener('scroll', replace)
     return view
   }
 
@@ -112,6 +142,11 @@ export function createUi(options: UiOptions = {}): UiHandle {
       serial += 1
       view?.current?.dispose?.()
       view?.host.remove()
+      if (view) {
+        win.removeEventListener('resize', replace)
+        win.visualViewport?.removeEventListener('resize', replace)
+        win.visualViewport?.removeEventListener('scroll', replace)
+      }
       view = null
     },
   }
