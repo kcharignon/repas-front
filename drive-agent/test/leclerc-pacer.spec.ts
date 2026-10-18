@@ -6,10 +6,15 @@ import {
   JITTER_MS,
   LeclercError,
   MAX_BLOCKS,
+  MAX_PAUSE_MS,
   NETWORK_RETRY_MS,
   Pacer,
   PAUSE_MS,
+  RECOVERY_STEP_MS,
+  REFUSAL_STEP_MS,
   REQUEST_TIMEOUT_MS,
+  SLOW_REPLY_MS,
+  SLOWDOWN_STEP_MS,
 } from '../src/leclerc'
 import { fixture, fakeSite } from './leclerc-helpers'
 
@@ -446,7 +451,7 @@ describe('Pacer : la page de défi de l’anti-robot (ticket K)', () => {
     },
   )
 
-  it('n’arrête pas le Pacer : une fois le défi résolu par l’utilisateur, la requête suivante part à la cadence normale', async () => {
+  it('n’arrête pas le Pacer : une fois le défi résolu par l’utilisateur, la requête suivante part, après la pause d’un site qui ralentit (ticket L)', async () => {
     // Given : un défi à la première requête, puis une page
     const site = fakeSite((_call, index) =>
       index === 0 ? { body: fixture('defi.html') } : { body: 'ok' },
@@ -460,9 +465,9 @@ describe('Pacer : la page de défi de l’anti-robot (ticket K)', () => {
     // When
     const reply = await pacer.request('/a', {})
 
-    // Then : la pause normale a eu lieu avant la requête qui suit
+    // Then : la pause a eu lieu avant la requête qui suit, allongée par le refus
     expect(reply.text).toBe('ok')
-    expect(site.sleeps).toEqual([PAUSE_MS])
+    expect(site.sleeps).toEqual([PAUSE_MS + REFUSAL_STEP_MS])
   })
 
   it('un 403 ordinaire n’est pas un défi : une reprise, puis l’arrêt, sans cause', async () => {
@@ -488,5 +493,266 @@ describe('Pacer : la page de défi de l’anti-robot (ticket K)', () => {
     expect(JSON.stringify([(failure as Error).message, (failure as Error).stack])).not.toMatch(
       /SECRET|captcha|cid=/i,
     )
+  })
+})
+
+// Ticket L de l'audit du 2026-10-18 (H12) : l'agent compte ses requêtes, ses erreurs et ses blocages (des nombres), et ralentit quand Leclerc ralentit.
+describe('Pacer : les compteurs d’un passage (ticket L)', () => {
+  it('part de zéro', () => {
+    const pacer = pacerOf(fakeSite(() => ({ body: 'ok' })))
+
+    expect(pacer.stats()).toEqual({
+      requests: 0,
+      errors: 0,
+      blocks: 0,
+      timeouts: 0,
+      slow: 0,
+      peakPauseMs: 0,
+    })
+  })
+
+  it('compte chaque requête envoyée, reprises comprises', async () => {
+    // Given : une erreur réseau, puis une réponse ; puis deux réponses
+    const site = fakeSite((_call, index) => (index === 0 ? new Error('coupé') : { body: 'ok' }))
+    const pacer = pacerOf(site)
+
+    // When
+    await pacer.request('/a', {})
+    await pacer.request('/b', {})
+    await pacer.request('/c', {})
+
+    // Then : quatre requêtes parties (la première a été retentée), une erreur
+    expect(pacer.stats()).toMatchObject({ requests: 4, errors: 1, blocks: 0 })
+  })
+
+  it.each([[403], [429]])(
+    'compte un refus %i comme un blocage, pas comme une erreur',
+    async (status) => {
+      const site = fakeSite((_call, index) =>
+        index === 0 ? { status, body: 'non' } : { body: 'ok' },
+      )
+      const pacer = pacerOf(site)
+
+      await pacer.request('/a', {})
+
+      expect(pacer.stats()).toMatchObject({ requests: 2, errors: 0, blocks: 1 })
+    },
+  )
+
+  it('compte une page de défi comme un blocage', async () => {
+    const site = fakeSite(() => ({ body: fixture('defi.html') }))
+    const pacer = pacerOf(site)
+
+    await pacer.request('/a', {}).catch(() => undefined)
+
+    expect(pacer.stats()).toMatchObject({ requests: 1, errors: 0, blocks: 1 })
+  })
+
+  it.each([[404], [400], [500], [503]])(
+    'compte une réponse %i comme une erreur (le site a répondu, mais pas comme prévu), pas comme un blocage',
+    async (status) => {
+      const pacer = pacerOf(fakeSite(() => ({ status, body: 'x' })))
+
+      const reply = await pacer.request('/a', {})
+
+      expect(reply.status).toBe(status)
+      expect(pacer.stats()).toMatchObject({ requests: 1, errors: 1, blocks: 0 })
+    },
+  )
+
+  it('compte un délai d’attente dépassé comme une erreur et le compte à part', async () => {
+    const site = fakeSite(() => ({ delayMs: Number.POSITIVE_INFINITY }))
+    const pacer = timedPacerOf(site)
+
+    await pacer.request('/a', {}).catch(() => undefined)
+
+    expect(pacer.stats()).toMatchObject({ requests: 2, errors: 2, blocks: 0, timeouts: 2 })
+  })
+
+  it('compte les réponses lentes à part : une réponse qui dépasse le seuil', async () => {
+    const site = fakeSite((_call, index) => ({
+      body: 'ok',
+      delayMs: index === 1 ? SLOW_REPLY_MS + 100 : 0,
+    }))
+    const pacer = pacerOf(site)
+
+    await pacer.request('/a', {})
+    await pacer.request('/b', {})
+    await pacer.request('/c', {})
+
+    expect(pacer.stats()).toMatchObject({ requests: 3, errors: 0, slow: 1 })
+  })
+
+  it('rend une copie : la modifier ne change pas les compteurs', async () => {
+    const pacer = pacerOf(fakeSite(() => ({ body: 'ok' })))
+    await pacer.request('/a', {})
+
+    const copy = pacer.stats()
+    copy.requests = 99
+
+    expect(pacer.stats().requests).toBe(1)
+  })
+
+  it('ne garde que des nombres : rien d’une adresse, d’une page ni d’un en-tête', async () => {
+    const site = fakeSite(() => ({
+      status: 403,
+      body: 'Set-Cookie: datadome=SECRET123',
+      headers: { 'set-cookie': 'datadome=SECRET123' },
+    }))
+    const pacer = pacerOf(site)
+    await pacer.request('/magasin-000123-000123/panier.aspx', {}).catch(() => undefined)
+
+    const stats = pacer.stats()
+
+    expect(Object.values(stats).every((value) => typeof value === 'number')).toBe(true)
+    expect(JSON.stringify(stats)).not.toMatch(/SECRET|magasin|cookie/i)
+  })
+})
+
+describe('Pacer : la cadence s’adapte quand Leclerc ralentit (ticket L)', () => {
+  const FAST = { body: 'ok' }
+  const slow = { body: 'ok', delayMs: SLOW_REPLY_MS + 500 }
+
+  it('connaît ses constantes : la pause monte jusqu’à 3 s', () => {
+    expect([
+      MAX_PAUSE_MS,
+      SLOW_REPLY_MS,
+      SLOWDOWN_STEP_MS,
+      REFUSAL_STEP_MS,
+      RECOVERY_STEP_MS,
+    ]).toEqual([3000, 3000, 400, 800, 200])
+  })
+
+  it('une réponse lente allonge la pause qui la suit, et chaque réponse lente de plus l’allonge encore', async () => {
+    // Given : trois réponses lentes de suite, puis une rapide
+    const replies = [slow, slow, slow, FAST, FAST]
+    const site = fakeSite((_call, index) => replies[index] ?? FAST)
+    const pacer = pacerOf(site)
+
+    // When
+    for (const path of ['/a', '/b', '/c', '/d', '/e']) await pacer.request(path, {})
+
+    // Then : 800 normales d'abord, puis +400 par réponse lente
+    expect(site.sleeps).toEqual([
+      PAUSE_MS + SLOWDOWN_STEP_MS,
+      PAUSE_MS + 2 * SLOWDOWN_STEP_MS,
+      PAUSE_MS + 3 * SLOWDOWN_STEP_MS,
+      PAUSE_MS + 3 * SLOWDOWN_STEP_MS - RECOVERY_STEP_MS,
+    ])
+  })
+
+  it('un refus 429 (même si la reprise passe) allonge la pause de la reprise et des requêtes suivantes, puis la pause revient peu à peu', async () => {
+    // Given : un 429 à la première requête, puis des réponses rapides
+    const site = fakeSite((_call, index) => (index === 0 ? { status: 429, body: 'non' } : FAST))
+    const pacer = pacerOf(site)
+
+    // When
+    for (const path of ['/a', '/b', '/c', '/d', '/e']) await pacer.request(path, {})
+
+    // Then : la reprise attend 800 + 800 ; chaque réponse rapide retire 200 ms ; elle revient à 800
+    expect(site.sleeps).toEqual([
+      PAUSE_MS + REFUSAL_STEP_MS,
+      PAUSE_MS + REFUSAL_STEP_MS - RECOVERY_STEP_MS,
+      PAUSE_MS + REFUSAL_STEP_MS - 2 * RECOVERY_STEP_MS,
+      PAUSE_MS + REFUSAL_STEP_MS - 3 * RECOVERY_STEP_MS,
+      PAUSE_MS,
+    ])
+  })
+
+  it('ne descend jamais sous la pause normale : après le retour, 800 ms, comme avant', async () => {
+    const site = fakeSite((_call, index) => (index === 0 ? slow : FAST))
+    const pacer = pacerOf(site)
+
+    for (let i = 0; i < 8; i += 1) await pacer.request(`/${i}`, {})
+
+    expect(site.sleeps.at(-1)).toBe(PAUSE_MS)
+    expect(Math.min(...site.sleeps)).toBeGreaterThanOrEqual(PAUSE_MS)
+  })
+
+  it('ne dépasse jamais 3 s entre deux requêtes, même au plus fort du ralentissement et avec la gigue maximale', async () => {
+    // Given : des réponses lentes à n'en plus finir, la gigue maximale
+    const site = fakeSite(() => slow)
+    site.setRandom(0.999999)
+    const pacer = pacerOf(site)
+
+    // When
+    for (let i = 0; i < 12; i += 1) await pacer.request(`/${i}`, {})
+
+    // Then : la pause plafonne à 3 s
+    expect(Math.max(...site.sleeps)).toBeLessThanOrEqual(MAX_PAUSE_MS)
+    expect(site.sleeps.slice(-3)).toEqual([MAX_PAUSE_MS, MAX_PAUSE_MS, MAX_PAUSE_MS])
+    expect(pacer.stats().peakPauseMs).toBe(MAX_PAUSE_MS)
+  })
+
+  it('un délai d’attente dépassé allonge aussi la pause', async () => {
+    const site = fakeSite((_call, index) =>
+      index === 0 ? { delayMs: Number.POSITIVE_INFINITY } : FAST,
+    )
+    const pacer = timedPacerOf(site)
+
+    await pacer.request('/a', {})
+    await pacer.request('/b', {})
+
+    // La reprise suit les 2 s de l'erreur réseau, mais la pause qu'elle demande est celle d'un site ralenti.
+    expect(pacer.stats().peakPauseMs).toBe(PAUSE_MS + REFUSAL_STEP_MS)
+  })
+
+  it('reste en série : jamais deux requêtes en parallèle, même quand la cadence s’adapte', async () => {
+    const site = fakeSite((_call, index) => (index % 3 === 0 ? slow : FAST))
+    const pacer = pacerOf(site)
+
+    await Promise.all(['/a', '/b', '/c', '/d', '/e'].map((path) => pacer.request(path, {})))
+
+    expect(site.maxInFlight()).toBe(1)
+  })
+
+  it('une réponse rapide, sans refus, ne change rien à la cadence normale', async () => {
+    const site = fakeSite(() => FAST)
+    const pacer = pacerOf(site)
+
+    for (const path of ['/a', '/b', '/c']) await pacer.request(path, {})
+
+    expect(site.sleeps).toEqual([PAUSE_MS, PAUSE_MS])
+    expect(pacer.stats().peakPauseMs).toBe(PAUSE_MS)
+  })
+})
+
+describe('Pacer : un passage de 200 requêtes reste sous le plafond d’arrêt (ticket L)', () => {
+  it('des refus isolés (un 429 de temps en temps, chacun suivi d’une réponse) n’arrêtent jamais le passage ; les compteurs disent tout', async () => {
+    // Given : un 429 toutes les dix requêtes, 200 requêtes demandées
+    const site = fakeSite((_call, index) =>
+      index % 10 === 3 ? { status: 429, body: 'non' } : { body: 'ok' },
+    )
+    const pacer = pacerOf(site)
+
+    // When
+    for (let i = 0; i < 200; i += 1) await pacer.request(`/${i}`, {})
+
+    // Then : 200 réponses obtenues, 22 refus retentés, jamais arrêté, jamais deux refus de suite
+    const stats = pacer.stats()
+    expect(pacer.isStopped).toBe(false)
+    expect(stats.requests).toBe(site.calls.length)
+    expect(stats.requests).toBe(200 + stats.blocks)
+    expect(stats.blocks).toBeGreaterThanOrEqual(20)
+    expect(stats.errors).toBe(0)
+    expect(stats.peakPauseMs).toBeLessThanOrEqual(MAX_PAUSE_MS)
+    expect(site.maxInFlight()).toBe(1)
+  })
+
+  it('deux refus de suite arrêtent tout, comme avant : BLOCKED, puis plus aucune requête', async () => {
+    const site = fakeSite((_call, index) =>
+      index === 40 || index === 41 ? { status: 429, body: 'non' } : { body: 'ok' },
+    )
+    const pacer = pacerOf(site)
+
+    let stopped: unknown = null
+    for (let i = 0; i < 200 && stopped === null; i += 1) {
+      await pacer.request(`/${i}`, {}).catch((error: unknown) => (stopped = error))
+    }
+
+    expect(stopped).toMatchObject({ code: 'BLOCKED', status: 429 })
+    expect(pacer.isStopped).toBe(true)
+    expect(site.calls).toHaveLength(42)
+    expect(pacer.stats()).toMatchObject({ requests: 42, blocks: 2 })
   })
 })

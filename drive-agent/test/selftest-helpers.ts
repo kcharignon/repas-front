@@ -123,6 +123,14 @@ export function shop(shelves: Shelves, options: ShopOptions = {}) {
     },
     pageCartTotal: () => pageTotal,
     cartQuantity: (id) => cart.get(id) ?? null,
+    stats: () => ({
+      requests: calls.length,
+      errors: 0,
+      blocks: 0,
+      timeouts: 0,
+      slow: 0,
+      peakPauseMs: 0,
+    }),
     readSession: () => options.session ?? { state: 'UNKNOWN', signs: [] },
     readArrival: () => ({
       address: '/',

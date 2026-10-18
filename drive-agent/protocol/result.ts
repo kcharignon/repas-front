@@ -123,7 +123,7 @@ export function validateResult(input: unknown): ResultMessage | SetupResultMessa
   const message = object(
     root(input),
     '',
-    type === 'result' ? [...keys, 'outcome', 'error', 'lines'] : keys,
+    type === 'result' ? [...keys, 'outcome', 'error', 'stats', 'lines'] : keys,
   )
   exactly(message, 'v', PROTOCOL_VERSION)
   text(message, 'runId', UUID)
@@ -139,6 +139,10 @@ export function validateResult(input: unknown): ResultMessage | SetupResultMessa
     const error = object(parent, name, ['code', 'message'])
     oneOf(error, 'code', ERROR_CODES)
     text(error, 'message', undefined, LIMITS.errorMessage)
+  })
+  optional(message, 'stats', (parent, name) => {
+    const stats = object(parent, name, ['requests', 'errors', 'blocks'])
+    for (const key of ['requests', 'errors', 'blocks']) int(stats, key, 0, LIMITS.requests)
   })
   each(message, 'lines', LIMITS.lines, resultLine)
   return input as ResultMessage

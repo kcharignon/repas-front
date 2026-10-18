@@ -30,6 +30,10 @@ object ResultReport {
         appendLine("Version de l'agent : " + message.optString("agentVersion", "?"))
         appendLine("Magasin : " + storeTail(message.optJSONObject("store")?.optString("id").orEmpty()))
         message.optJSONObject("error")?.let { appendLine("Erreur : " + it.optString("code", "?") + " (" + it.optString("message") + ")") }
+        // Les compteurs du passage (ticket L) : des nombres seulement, quand l'agent en donne.
+        message.optJSONObject("stats")?.let {
+            appendLine("Requêtes : " + it.optInt("requests") + " (erreurs " + it.optInt("errors") + ", blocages " + it.optInt("blocks") + ")")
+        }
         val lines = message.optJSONArray("lines")
         appendLine("Lignes : " + (lines?.length() ?: 0))
         for (index in 0 until (lines?.length() ?: 0)) {

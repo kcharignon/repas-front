@@ -387,6 +387,26 @@ describe('setCartQuantity', () => {
   })
 })
 
+describe('stats (ticket L)', () => {
+  it('rend les compteurs de la cadence : une recherche et une écriture font deux requêtes', async () => {
+    const { adapter } = shop()
+    expect(adapter.stats()).toMatchObject({ requests: 0, errors: 0, blocks: 0 })
+
+    await adapter.searchProducts('farine')
+    await adapter.setCartQuantity('1000001', 3)
+
+    expect(adapter.stats()).toMatchObject({ requests: 2, errors: 0, blocks: 0 })
+  })
+
+  it('compte un refus 403 retenté (deux requêtes, deux blocages) puis l’arrêt', async () => {
+    const { adapter } = shop(undefined, { status: 403, body: 'refusé' })
+
+    await adapter.searchProducts('farine').catch(() => undefined)
+
+    expect(adapter.stats()).toMatchObject({ requests: 2, blocks: 2 })
+  })
+})
+
 describe('cartQuantity (ticket M)', () => {
   it('ne sait rien avant la première réponse du panier', async () => {
     const { adapter } = shop()

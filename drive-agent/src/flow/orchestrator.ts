@@ -2,14 +2,16 @@
 //   START → VALIDATED → CONFIRMED → PHASE_A → PHASE_B → DONE      (+ ABORTED : l'utilisateur arrête ; ERROR : le passage s'interrompt)
 // Rien n'est envoyé au site avant le « Commencer ». Un seul passage à la fois.
 import {
+  LIMITS,
   ProtocolError,
   validatePlan,
   type ErrorCode,
   type PlanLine,
   type PlanMessage,
   type ResultLine,
+  type ResultStats,
 } from '../../protocol'
-import { LeclercError, type LeclercCause } from '../leclerc'
+import { LeclercError, type LeclercCause, type RequestStats } from '../leclerc'
 import { own } from '../own'
 import { S, type SummaryProps } from '../ui'
 import { settleKnownLine } from './phase-a'
@@ -35,6 +37,10 @@ interface Run {
   cause: LeclercCause | null
   /** Une requête a dépassé son délai d'attente (ticket K) : l'écran de fin le dit. */
   slow: boolean
+  /** Les compteurs de requêtes des pages d'avant, quand le passage est repris après un rechargement (ticket L). */
+  base: ResultStats
+  /** Les compteurs de l'adaptateur au début de cette page : le passage ne compte que ce qui part ensuite. */
+  start: RequestStats
   release: () => Promise<void>
 }
 
@@ -173,6 +179,8 @@ export class Flow {
       halted: null,
       cause: null,
       slow: false,
+      base: { ...state.stats },
+      start: deps.adapter.stats(),
       release: () => Promise.resolve(),
     }
     if (proceed) {
@@ -353,7 +361,7 @@ export class Flow {
     this.enter(
       ending.outcome === 'aborted' ? 'ABORTED' : ending.outcome === 'error' ? 'ERROR' : 'DONE',
     )
-    const result = buildResult(run.plan, lines, ending, agentVersion)
+    const result = buildResult(run.plan, lines, ending, agentVersion, this.passStats(run))
     await ui.show(
       'end',
       endProps(
@@ -433,7 +441,23 @@ export class Flow {
     this.deps.ui.update({ entry })
   }
 
+  /**
+   * Les compteurs du passage entier (ticket L) : ceux des pages d'avant (l'état de reprise) plus ce que l'adaptateur a compté depuis le début de
+   * celle-ci. Des nombres seulement, dans les bornes du protocole.
+   */
+  private passStats(run: Run): ResultStats {
+    const now = this.deps.adapter.stats()
+    const count = (before: number, from: number, until: number) =>
+      Math.min(LIMITS.requests, Math.max(0, before + until - from))
+    return {
+      requests: count(run.base.requests, run.start.requests, now.requests),
+      errors: count(run.base.errors, run.start.errors, now.errors),
+      blocks: count(run.base.blocks, run.start.blocks, now.blocks),
+    }
+  }
+
   private touch(run: Run): void {
+    run.state.stats = this.passStats(run)
     run.state.updatedAt = this.deps.now()
     this.runs.save(run.state)
   }

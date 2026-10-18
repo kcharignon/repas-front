@@ -44,6 +44,15 @@ class ResultReportTest {
         assertTrue(report.contains("- huile : FAILED, erreur NETWORK"))
     }
 
+    /** Ticket L : les compteurs du passage (des nombres) sont dans le rapport quand le résultat en porte, et seulement alors. */
+    @Test
+    fun `un resultat qui porte des compteurs les montre, un autre n'en dit rien`() {
+        val counted = result.replace("\"store\":{\"id\":\"123456\"},", "\"store\":{\"id\":\"123456\"},\"stats\":{\"requests\":42,\"errors\":1,\"blocks\":2},")
+
+        assertTrue(ResultReport.render(counted).contains("Requêtes : 42 (erreurs 1, blocages 2)"))
+        assertFalse(ResultReport.render(result).contains("Requêtes"))
+    }
+
     @Test
     fun `le magasin lu montre l'hote mais ni le numero entier, ni l'adresse, ni le libelle`() {
         val setup = """{"v":1,"type":"setup-result","agentVersion":"1.0.0","store":{"id":"123456","host":"fd0-courses.leclercdrive.fr","baseUrl":"https://fd0-courses.leclercdrive.fr/magasin-123456-123456","label":"Ville-Test"}}"""

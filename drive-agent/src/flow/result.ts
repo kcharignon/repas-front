@@ -6,6 +6,7 @@ import {
   type PlanMessage,
   type ResultLine,
   type ResultMessage,
+  type ResultStats,
   type SetupMessage,
 } from '../../protocol'
 import { own } from '../own'
@@ -102,11 +103,16 @@ export function errorMessage(ending: Ending): string {
   return ending.cause ? `${title} (${ending.cause})` : title
 }
 
+/**
+ * Le message du résultat. `stats` : les compteurs de requêtes du passage (ticket L) ; ils ne partent que si au moins une requête est partie (une
+ * annulation au récapitulatif n'a rien à compter).
+ */
 export function buildResult(
   plan: Pick<PlanMessage | SetupMessage, 'runId' | 'store'>,
   lines: ResultLine[],
   ending: Ending,
   agentVersion: string,
+  stats?: ResultStats,
 ): ResultMessage {
   return {
     v: PROTOCOL_VERSION,
@@ -116,6 +122,7 @@ export function buildResult(
     outcome: ending.outcome,
     ...(plan.store && { store: { id: plan.store.id } }),
     ...(ending.code && { error: { code: ending.code, message: errorMessage(ending) } }),
+    ...(stats && stats.requests > 0 && { stats }),
     lines,
   }
 }

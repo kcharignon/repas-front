@@ -2,7 +2,7 @@ import { CART_HEADERS, cartBody, MAX_QUANTITY, readCartResponse, readPageTotal }
 import { type Candidate, toCandidate } from './candidate'
 import { httpCause } from './causes'
 import { LeclercError } from './errors'
-import { type FetchFn, Pacer, type PacerDeps, type Reply } from './pacer'
+import { type FetchFn, Pacer, type PacerDeps, type Reply, type RequestStats } from './pacer'
 import {
   addressShape,
   type ArrivalFacts,
@@ -70,6 +70,11 @@ export interface RetailerAdapter {
    * quantité déjà au panier), `null` si cette réponse ne le cite pas ou s'il n'y en a pas eu. Aucune requête.
    */
   cartQuantity(productId: string): number | null
+  /**
+   * Les compteurs de la cadence depuis la création de l'adaptateur (ticket L) : requêtes, erreurs, blocages, délais dépassés, réponses lentes, plus
+   * longue pause. Des nombres seulement. Cumulatifs : un passage en prend la différence entre son début et sa fin.
+   */
+  stats(): RequestStats
   /** Le total du panier (centimes) lu dans la page de la dernière recherche, `null` si elle n'en portait pas ou s'il n'y a pas eu de recherche. */
   pageCartTotal(): number | null
   /** Ce que la page courante montre de la connexion de l'utilisateur (visiteur, client connecté ou inconnu). Aucune requête. */
@@ -365,6 +370,10 @@ export class LeclercAdapter implements RetailerAdapter {
 
   cartQuantity(productId: string): number | null {
     return this.cartLines?.get(productId) ?? null
+  }
+
+  stats(): RequestStats {
+    return this.pacer.stats()
   }
 
   readSession(): SessionReading {

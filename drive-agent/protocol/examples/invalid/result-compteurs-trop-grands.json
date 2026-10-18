@@ -1,0 +1,13 @@
+{
+  "path": "stats.requests",
+  "why": "Un compteur est un entier de 0 à 100 000.",
+  "message": {
+    "v": 1,
+    "type": "result",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "agentVersion": "1.0.0",
+    "outcome": "completed",
+    "stats": { "requests": 100001, "errors": 0, "blocks": 0 },
+    "lines": [{ "ingredientSlug": "sel", "outcome": "HAVE_AT_HOME" }]
+  }
+}

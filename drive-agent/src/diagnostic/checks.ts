@@ -8,6 +8,7 @@ import {
   LeclercError,
   type LeclercCause,
   type LeclercErrorCode,
+  type RequestStats,
   type RetailerAdapter,
 } from '../leclerc'
 import { S } from '../ui'
@@ -63,6 +64,18 @@ export function hostFamily(host: string): string {
   const family = HOST.exec(host.toLowerCase())?.[1]
   if (family !== undefined) return family
   return isMobileHost(host) ? S.diagnostic.detail.hostMobile : S.diagnostic.detail.hostOther
+}
+
+/** Ce que l'adaptateur a compté entre deux relevés (ticket L) : le diagnostic ne dit que ses propres requêtes ; la pause la plus longue est celle du relevé final. */
+function statsSince(before: RequestStats, after: RequestStats): RequestStats {
+  return {
+    requests: after.requests - before.requests,
+    errors: after.errors - before.errors,
+    blocks: after.blocks - before.blocks,
+    timeouts: after.timeouts - before.timeouts,
+    slow: after.slow - before.slow,
+    peakPauseMs: after.peakPauseMs,
+  }
 }
 
 /** Les trois derniers chiffres au plus : un numéro court est caché en entier. */
@@ -191,8 +204,15 @@ const D = S.diagnostic.detail
 export async function runChecks(
   deps: ChecksDeps,
   onResult: (result: CheckResult) => void,
-): Promise<{ results: CheckResult[]; page: PageFacts | null; probes: ProbeFacts }> {
+): Promise<{
+  results: CheckResult[]
+  page: PageFacts | null
+  probes: ProbeFacts
+  /** Les requêtes que le diagnostic a envoyées (ticket L) : des nombres, depuis le début des contrôles. */
+  stats: RequestStats
+}> {
   const results: CheckResult[] = []
+  const before = deps.adapter.stats()
   const push = async (result: CheckResult) => {
     results.push(result)
     onResult(result)
@@ -293,5 +313,5 @@ export async function runChecks(
   if (page !== null) probes = await probeSearches(deps.adapter, arrival, commonFault)
 
   await push(skipped('frame', D.frameSkipped))
-  return { results, page, probes }
+  return { results, page, probes, stats: statsSince(before, deps.adapter.stats()) }
 }
