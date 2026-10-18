@@ -38,6 +38,12 @@ const canSend = computed(
   () => props.list.isActive && props.list.rowCount > 0 && settings.data.value?.enabled === true,
 )
 
+/** Sans magasin enregistré, l'envoi mène aux réglages du drive (DRV-403) au lieu de la confirmation. */
+function askToSend() {
+  if (settings.data.value?.store) sending.value = true
+  else void router.push({ name: 'drive-settings', query: { magasin: 'requis' } })
+}
+
 const renaming = ref(false)
 const deleting = ref(false)
 const sending = ref(false)
@@ -141,7 +147,7 @@ const statusLabel = (list: ShoppingList) =>
         >
           {{ t('shoppingList.complete') }}
         </UiButton>
-        <UiButton v-if="canSend" variant="accent" :disabled="!online" @click="sending = true">
+        <UiButton v-if="canSend" variant="accent" :disabled="!online" @click="askToSend">
           {{ t('shoppingList.send') }}
         </UiButton>
         <UiButton

@@ -6,6 +6,7 @@ import { useSessionStore } from '@/session/session'
 
 export const driveKeys = {
   settings: ['drive', 'settings'] as const,
+  plan: (listId: string) => ['drive', 'plan', listId] as const,
 }
 
 /**
@@ -19,5 +20,26 @@ export function useDriveSettings(enabled: () => boolean = () => true) {
     queryKey: driveKeys.settings,
     queryFn: () => unwrap(api.GET('/api/v1/drive/settings')),
     enabled: computed(enabled),
+  })
+}
+
+/**
+ * Le plan d'une liste envoyée : ce que le back sait de chaque ligne (produits classés, refusés, nombre de produits). Il dépend des
+ * choix mémorisés, qui changent entre deux ouvertures : il est relu à chaque ouverture de l'écran, jamais gardé.
+ */
+export function useDrivePlan(listId: () => string) {
+  const { api } = useSessionStore()
+
+  return useQuery({
+    queryKey: computed(() => driveKeys.plan(listId())),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/drive/plans/{shoppingListId}', {
+          params: { path: { shoppingListId: listId() } },
+        }),
+      ),
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
   })
 }

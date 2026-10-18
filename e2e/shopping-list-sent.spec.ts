@@ -79,7 +79,15 @@ async function fakeBack(page: Page, initial: Status = 'ACTIVE') {
         case 'GET /api/v1/shopping-lists/l1':
           return reply(route, list(status))
         case 'GET /api/v1/drive/settings':
-          return reply(route, { enabled: true, retailer: 'leclerc' })
+          return reply(route, {
+            enabled: true,
+            retailer: 'leclerc',
+            store: {
+              id: '123456',
+              label: null,
+              baseUrl: 'https://courses-test.leclercdrive.fr/magasin-123456-123456',
+            },
+          })
         case 'POST /api/v1/shopping-lists/l1/send':
           status = 'SENT'
           return reply(route)

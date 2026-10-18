@@ -71,6 +71,18 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/features/drive/DriveSendView.vue'),
       },
       {
+        path: 'drive/reglages',
+        name: 'drive-settings',
+        component: () => import('@/features/drive/DrivePlaceholderView.vue'),
+        props: { topic: 'settings' },
+      },
+      {
+        path: 'drive/aide',
+        name: 'drive-help',
+        component: () => import('@/features/drive/DrivePlaceholderView.vue'),
+        props: { topic: 'help' },
+      },
+      {
         path: 'recettes',
         name: 'recipes',
         component: () => import('@/features/recipes/RecipesView.vue'),

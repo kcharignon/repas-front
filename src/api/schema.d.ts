@@ -789,6 +789,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/drive/choices/{ingredientSlug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Remplace d'un coup la préférence de l'utilisateur connecté pour un ingrédient : produits acceptés dans l'ordre, produits refusés, ou « j'en ai toujours » (sans produit ni « j'en ai toujours », la préférence est supprimée) */
+        put: operations["put_api_replace_ingredient_preference"];
+        post?: never;
+        /** Oublie toute la préférence de l'utilisateur connecté pour un ingrédient : produits acceptés et refusés, ou « j'en ai toujours » (les produits restent connus) */
+        delete: operations["delete_api_forget_choice"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/drive/plans/{shoppingListId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Plan d'envoi d'une liste envoyée au drive : pour chaque ligne, le statut (`KNOWN`, `NEW`, `HAVE_AT_HOME`), la quantité demandée, les produits classés avec leur nombre de produits et les produits refusés */
+        get: operations["get_api_get_drive_plan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/drive/settings": {
         parameters: {
             query?: never;
@@ -800,6 +835,24 @@ export interface paths {
         get: operations["get_api_get_drive_settings"];
         /** Enregistre le magasin du drive de l'utilisateur connecté (remplace le précédent) */
         put: operations["put_api_save_drive_settings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/drive/choices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Préférences de produits de l'utilisateur connecté dans son magasin courant, par ingrédient : produits acceptés classés, produits refusés, « j'en ai toujours » */
+        get: operations["get_api_list_choices"];
+        /** Mémorise un lot d'intentions de l'agent (produits choisis, refusés, « j'en ai toujours ») dans les préférences de l'utilisateur connecté */
+        put: operations["put_api_save_product_choices"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1039,6 +1092,30 @@ export interface components {
         };
         /** @enum {string} */
         Retailer: "leclerc";
+        ForgetChoiceRequestQuery: {
+            retailer: components["schemas"]["Retailer"];
+            storeId: string;
+        };
+        ListChoicesRequestQuery: {
+            retailer: components["schemas"]["Retailer"];
+        };
+        ReplaceIngredientPreferencePayload: {
+            retailer: components["schemas"]["Retailer"];
+            /**
+             * @description Magasin des produits : doit être le magasin courant des réglages de l'utilisateur
+             * @example 123456
+             */
+            storeId: string;
+            /**
+             * @description Vrai pour « j'en ai toujours » : `accepted` et `rejected` doivent alors être vides
+             * @example false
+             */
+            haveAtHome: boolean;
+            /** @description Identifiants Repas des produits acceptés (`productId` de `GET /drive/choices`), le préféré d'abord ; 5 au plus */
+            accepted: string[];
+            /** @description Identifiants Repas des produits à ne jamais prendre ; 20 au plus */
+            rejected: string[];
+        };
         DriveStorePayload: {
             /**
              * @description Identifiant du magasin chez l'enseigne : celui de l'adresse de base
@@ -1060,6 +1137,102 @@ export interface components {
         DriveSettingsPayload: {
             retailer: components["schemas"]["Retailer"];
             store: components["schemas"]["DriveStorePayload"];
+        };
+        /** @enum {string} */
+        ChoiceAction: "ADD_PRODUCT" | "REJECT_PRODUCT" | "HAVE_AT_HOME" | "REFRESH_PRICE";
+        /** @enum {string} */
+        Placement: "PRIMARY" | "FALLBACK";
+        /** @enum {string} */
+        ContentUnit: "g" | "kg" | "ml" | "cl" | "l" | "piece";
+        ProductContentPayload: {
+            /**
+             * Format: float
+             * @description Quantité contenue : de 0,001 à 100 000
+             * @example 1000
+             */
+            value: number;
+            unit: components["schemas"]["ContentUnit"];
+        };
+        /** @enum {string} */
+        PriceUnit: "kg" | "l" | "piece";
+        PricePerMeasurePayload: {
+            /**
+             * @description Prix TTC de l'unité de mesure en centimes : de 0 à 1 000 000
+             * @example 249
+             */
+            cents: number;
+            unit: components["schemas"]["PriceUnit"];
+        };
+        ProductPricePayload: {
+            /**
+             * @description Prix unitaire TTC en centimes : de 0 à 1 000 000
+             * @example 249
+             */
+            cents: number;
+            /**
+             * @description Prix à l'unité de mesure, `null` si le site ne le donne pas
+             * @default null
+             */
+            perMeasure: components["schemas"]["PricePerMeasurePayload"] | null;
+        };
+        ProductPayload: {
+            /**
+             * @description Identifiant du produit chez l'enseigne : 1 à 12 chiffres, en texte
+             * @example 123456
+             */
+            retailerProductId: string;
+            /**
+             * @description Libellé du produit (255 caractères au plus, sans caractère de contrôle)
+             * @default null
+             * @example Farine de blé T55 Marque Repère 1 kg
+             */
+            label: string | null;
+            /**
+             * @description Code-barres, 8 à 14 chiffres
+             * @default null
+             * @example 3017620422003
+             */
+            ean: string | null;
+            /**
+             * @description Contenu net, `null` si l'agent n'a pas su le lire
+             * @default null
+             */
+            content: components["schemas"]["ProductContentPayload"] | null;
+            /**
+             * @description Prix lu par l'agent, `null` s'il ne l'a pas lu
+             * @default null
+             */
+            price: components["schemas"]["ProductPricePayload"] | null;
+        };
+        ChoiceIntentPayload: {
+            /**
+             * @description Slug de l'ingrédient (minuscules, chiffres et tirets, 255 au plus)
+             * @example farine
+             */
+            ingredientSlug: string;
+            action: components["schemas"]["ChoiceAction"];
+            /**
+             * @description Pour `ADD_PRODUCT` : `PRIMARY` (nouveau produit préféré, rang 1) ou `FALLBACK` (produit de secours, après les autres)
+             * @default null
+             * @example PRIMARY
+             * @enum {unknown|null}
+             */
+            placement: "PRIMARY" | "FALLBACK" | null;
+            /**
+             * @description Le produit concerné, selon `action`
+             * @default null
+             */
+            product: components["schemas"]["ProductPayload"] | null;
+        };
+        SaveProductChoicesPayload: {
+            retailer: components["schemas"]["Retailer"];
+            /**
+             * @description Magasin des produits : doit être le magasin courant des réglages de l'utilisateur
+             * @example 123456
+             */
+            storeId: string;
+            /** @description Intentions, 200 au plus, appliquées dans l'ordre reçu pour un même ingrédient */
+            choices: components["schemas"]["ChoiceIntentPayload"][];
         };
         IngredientSearchResultDTO: {
             /**
@@ -1660,6 +1833,164 @@ export interface components {
              */
             baseUrl: string;
         };
+        DrivePlanCountsDTO: {
+            /**
+             * @description Lignes dont au moins un produit est connu dans le magasin (`KNOWN`)
+             * @example 12
+             */
+            known: number;
+            /**
+             * @description Lignes sans produit connu : il faudra en choisir un (`NEW`)
+             * @example 3
+             */
+            new: number;
+            /**
+             * @description Lignes « j'en ai toujours », ignorées à l'envoi (`HAVE_AT_HOME`)
+             * @example 2
+             */
+            haveAtHome: number;
+        };
+        DrivePlanNeededDTO: {
+            /**
+             * Format: float
+             * @description Quantité demandée par la liste, dans l'unité d'achat de la ligne
+             * @example 300
+             */
+            quantity: number;
+            /**
+             * @description Symbole de l'unité d'achat (vide pour une unité sans symbole)
+             * @example g
+             */
+            unitSymbol: string;
+            /**
+             * @description Dimension de l'unité, `null` si elle ne se convertit pas (cuillère, tranche…)
+             * @example WEIGHT
+             * @enum {string|null}
+             */
+            dimension?: "WEIGHT" | "VOLUME" | "COUNT" | "PACKAGE" | null;
+            /**
+             * Format: float
+             * @description Facteur qui ramène l'unité à l'unité de base de sa dimension (1 pour le gramme, 1000 pour le kilo), `null` sans dimension
+             * @example 1
+             */
+            baseFactor?: number | null;
+        };
+        ProductContentDTO: {
+            /**
+             * Format: float
+             * @description Quantité contenue, dans l'unité ci-dessous
+             * @example 1000
+             */
+            value: number;
+            /**
+             * @description Unité du contenu
+             * @example g
+             * @enum {string}
+             */
+            unit: "g" | "kg" | "ml" | "cl" | "l" | "piece";
+        };
+        DrivePlanProductDTO: {
+            /**
+             * @description Rang du produit : 1 = le préféré, les suivants servent de secours
+             * @example 1
+             */
+            rank: number;
+            /**
+             * @description Identifiant du produit chez l'enseigne (chiffres)
+             * @example 123456
+             */
+            retailerProductId: string;
+            /**
+             * @description Code-barres, si connu
+             * @example 3017620422003
+             */
+            ean?: string | null;
+            /**
+             * @description Libellé du produit
+             * @example Farine de blé T55 Marque Repère 1 kg
+             */
+            label: string;
+            /** @description Contenu net, `null` si inconnu */
+            content?: components["schemas"]["ProductContentDTO"] | null;
+            /**
+             * @description Nombre de produits à mettre au panier pour la quantité demandée (1 à 99), calculé avec le contenu de ce produit ; `null` quand il ne se calcule pas
+             * @example 1
+             */
+            packs?: number | null;
+            /**
+             * @description `COMPUTED` : calcul fiable ; `TO_CHECK` : valeur par défaut ou absente, l'agent demande la quantité
+             * @example COMPUTED
+             * @enum {string}
+             */
+            packsStatus: "COMPUTED" | "TO_CHECK";
+        };
+        DrivePlanRejectedDTO: {
+            /**
+             * @description Identifiant du produit chez l'enseigne (chiffres)
+             * @example 999000
+             */
+            retailerProductId: string;
+            /**
+             * @description Libellé du produit
+             * @example Farine complète bio 1 kg
+             */
+            label: string;
+        };
+        DrivePlanLineDTO: {
+            /**
+             * @description Slug de l'ingrédient
+             * @example farine
+             */
+            ingredientSlug: string;
+            /**
+             * @description Nom de l'ingrédient
+             * @example Farine
+             */
+            ingredientName: string;
+            needed: components["schemas"]["DrivePlanNeededDTO"];
+            /**
+             * @description `KNOWN` : au moins un produit accepté dans ce magasin ; `NEW` : aucun, l'utilisateur en choisira un ; `HAVE_AT_HOME` : « j'en ai toujours », ligne ignorée
+             * @example KNOWN
+             * @enum {string}
+             */
+            status: "KNOWN" | "NEW" | "HAVE_AT_HOME";
+            /** @description Produits acceptés, du préféré (rang 1) aux produits de secours, 5 au plus, chacun avec son propre nombre de produits ; vide hors `KNOWN` */
+            products: components["schemas"]["DrivePlanProductDTO"][];
+            /** @description Produits que l'utilisateur ne veut jamais, 20 au plus (aussi pour une ligne `NEW`) ; vide pour `HAVE_AT_HOME` */
+            rejected: components["schemas"]["DrivePlanRejectedDTO"][];
+            /**
+             * @description Texte à chercher sur le site de l'enseigne : le nom de l'ingrédient
+             * @example Farine
+             */
+            searchQuery: string;
+        };
+        DrivePlanDTO: {
+            /**
+             * @description Identifiant de la liste de courses
+             * @example 0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10
+             */
+            shoppingListId: string;
+            /**
+             * @description Version de la liste au moment du plan
+             * @example 5
+             */
+            listVersion: number;
+            /**
+             * @description Enseigne du drive
+             * @example leclerc
+             * @enum {string}
+             */
+            retailer: "leclerc";
+            store: components["schemas"]["DriveStoreDTO"];
+            /**
+             * @description Date de calcul du plan (ISO 8601)
+             * @example 2026-10-18T10:00:00+02:00
+             */
+            generatedAt: string;
+            counts: components["schemas"]["DrivePlanCountsDTO"];
+            /** @description Une ligne par ingrédient de la liste, dans l'ordre de la liste (slug d'ingrédient croissant) */
+            lines: components["schemas"]["DrivePlanLineDTO"][];
+        };
         DriveSettingsDTO: {
             /**
              * @description Vrai si la fonction « envoyer au drive » est allumée (interrupteur `DRIVE_ENABLED`) ; faux, toutes les autres routes du drive répondent `404 DRIVE_DISABLED`
@@ -1674,6 +2005,64 @@ export interface components {
             retailer: "leclerc";
             /** @description Magasin de l'utilisateur, `null` tant qu'il n'a pas été enregistré */
             store?: components["schemas"]["DriveStoreDTO"] | null;
+        };
+        ChoiceProductDTO: {
+            /**
+             * @description Identifiant Repas du produit
+             * @example 0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10
+             */
+            productId: string;
+            /**
+             * @description Identifiant du produit chez l'enseigne (chiffres)
+             * @example 123456
+             */
+            retailerProductId: string;
+            /**
+             * @description Code-barres, si connu
+             * @example 3017620422003
+             */
+            ean?: string | null;
+            /**
+             * @description Libellé du produit
+             * @example Farine de blé T55 Marque Repère 1 kg
+             */
+            label: string;
+            /** @description Contenu net, `null` si inconnu */
+            content?: components["schemas"]["ProductContentDTO"] | null;
+        };
+        AcceptedProductDTO: {
+            /**
+             * @description Rang du produit : 1 = le préféré, les suivants servent de secours
+             * @example 1
+             */
+            rank: number;
+            product: components["schemas"]["ChoiceProductDTO"];
+        };
+        ChoiceDTO: {
+            /**
+             * @description Slug de l'ingrédient
+             * @example farine
+             */
+            ingredientSlug: string;
+            /**
+             * @description Nom de l'ingrédient ; son slug si l'ingrédient n'existe plus
+             * @example Farine
+             */
+            ingredientName: string;
+            /**
+             * @description Vrai pour « j'en ai toujours » : la ligne est ignorée à l'envoi, `accepted` et `rejected` sont vides
+             * @example false
+             */
+            haveAtHome: boolean;
+            /** @description Produits acceptés, du préféré (rang 1) aux produits de secours ; 5 au plus */
+            accepted: components["schemas"]["AcceptedProductDTO"][];
+            /** @description Produits que l'utilisateur ne veut jamais ; 20 au plus */
+            rejected: components["schemas"]["ChoiceProductDTO"][];
+            /**
+             * @description Dernière modification de la préférence (ISO 8601)
+             * @example 2026-10-18T10:00:00+02:00
+             */
+            updatedAt: string;
         };
     };
     responses: never;
@@ -4012,6 +4401,158 @@ export interface operations {
             };
         };
     };
+    put_api_replace_ingredient_preference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Slug de l'ingrédient
+                 * @example farine
+                 */
+                ingredientSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceIngredientPreferencePayload"];
+            };
+        };
+        responses: {
+            /** @description Préférence remplacée (créée si elle n'existait pas, supprimée si le corps est vide) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pas de magasin enregistré (message `DRIVE_NOT_CONFIGURED`), ou `storeId` n'est pas le magasin courant (message `DRIVE_STORE_MISMATCH`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide, ou préférence refusée (message `DRIVE_CHOICE_INVALID`) : produit inconnu ou d'un autre magasin, doublon, produit à la fois accepté et refusé, plus de 5 produits acceptés ou 20 refusés, « j'en ai toujours » avec des produits */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_api_forget_choice: {
+        parameters: {
+            query: {
+                /**
+                 * @description Enseigne du drive
+                 * @example leclerc
+                 */
+                retailer: "leclerc";
+                /**
+                 * @description Magasin de la préférence : doit être le magasin courant des réglages
+                 * @example 123456
+                 */
+                storeId: string;
+            };
+            header?: never;
+            path: {
+                /**
+                 * @description Slug de l'ingrédient
+                 * @example farine
+                 */
+                ingredientSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Préférence oubliée */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`), ou pas de préférence pour cet ingrédient (message `DRIVE_CHOICE_NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pas de magasin enregistré (message `DRIVE_NOT_CONFIGURED`), ou `storeId` n'est pas le magasin courant (message `DRIVE_STORE_MISMATCH`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paramètre `retailer` ou `storeId` absent ou invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_api_get_drive_plan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Identifiant de la liste de courses (statut `SENT`)
+                 * @example 0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10
+                 */
+                shoppingListId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Le plan, dans le magasin courant de l'utilisateur */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrivePlanDTO"];
+                };
+            };
+            /** @description La liste appartient à un autre utilisateur */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`) ou liste inconnue */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pas de magasin enregistré (message `DRIVE_NOT_CONFIGURED`), ou la liste n'est pas envoyée au drive (message `SHOPPING_LIST_NOT_SENT`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_api_get_drive_settings: {
         parameters: {
             query?: never;
@@ -4060,6 +4601,93 @@ export interface operations {
                 content?: never;
             };
             /** @description Corps invalide, ou magasin refusé (message `DRIVE_STORE_INVALID`) : adresse qui n'est pas celle d'un magasin de l'enseigne, identifiant différent de celui de l'adresse */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_api_list_choices: {
+        parameters: {
+            query: {
+                /**
+                 * @description Enseigne du drive
+                 * @example leclerc
+                 */
+                retailer: "leclerc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Les préférences de l'utilisateur (liste vide tant qu'il n'a pas de magasin ni de préférence), triées par slug d'ingrédient */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        member?: components["schemas"]["ChoiceDTO"][];
+                        /** @example 3 */
+                        totalItems?: number;
+                    };
+                };
+            };
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paramètre `retailer` absent ou inconnu */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    put_api_save_product_choices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveProductChoicesPayload"];
+            };
+        };
+        responses: {
+            /** @description Préférences enregistrées (tout ou rien) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pas de magasin enregistré (message `DRIVE_NOT_CONFIGURED`), ou `storeId` n'est pas le magasin courant (message `DRIVE_STORE_MISMATCH`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide, ou intention refusée (message `DRIVE_CHOICE_INVALID`) : identifiant, libellé, contenu ou prix hors des bornes, plus de 200 intentions, plus de 5 produits acceptés ou 20 refusés pour un ingrédient, produit à la fois choisi et refusé pour un ingrédient */
             422: {
                 headers: {
                     [name: string]: unknown;

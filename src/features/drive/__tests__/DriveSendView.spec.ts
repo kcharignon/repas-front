@@ -1,0 +1,517 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+
+import { appContext, calls, json, me, stubApi } from '@/__tests__/helpers'
+import { useSessionStore } from '@/session/session'
+import { DRAFT_KEY } from '../bridge'
+import { fakeNative } from '../bridge/__tests__/fakeNative'
+import type { SentMessage } from '../bridge/__tests__/fakeNative'
+import DriveSendView from '../DriveSendView.vue'
+import { plan, storeBaseUrl } from './fixtures'
+
+// Données SYNTHÉTIQUES : magasin d'essai et produits inventés.
+const RUN = '8f14e45f-ceea-467a-9575-8e6b8c0a1b2c'
+const OTHER_RUN = '0b6d1a3e-7c1f-4a55-9a8e-2f4d9c3b7e10'
+
+type Handlers = Parameters<typeof stubApi>[0]
+
+const noContent = () => new Response(null, { status: 204 })
+const failure = (status: number, message: string) => () => json({ error: { message } }, { status })
+const appInfo = (drive: boolean) => ({
+  v: 1,
+  type: 'app.info',
+  version: '1.0.0',
+  versionCode: 1,
+  drive,
+})
+
+const draftOf = (listId: string, runId = RUN) =>
+  JSON.stringify({ runId, listId, startedAt: new Date().toISOString() })
+
+/** Le faux pont de l'application, posé sur la fenêtre comme le ferait `addWebMessageListener`. */
+function installApp(drive = true, onStart?: (message: SentMessage) => void) {
+  const native = fakeNative((message, reply) => {
+    if (message.type === 'app.info') reply(appInfo(drive))
+    onStart?.(message)
+  })
+  ;(globalThis as { repasNative?: unknown }).repasNative = native.bridge
+
+  return native
+}
+
+const session = {
+  'POST /api/auth/refresh': () => json({ token: 'jeton' }),
+  'GET /api/v1/me': () => json(me),
+}
+
+async function open(handlers: Handlers = {}, listId = 'l1') {
+  const fetchMock = stubApi({
+    ...session,
+    'GET /api/v1/drive/plans/l1': () => json(plan()),
+    ...handlers,
+  })
+  localStorage.setItem('repas.session', '1')
+  const context = appContext()
+  await useSessionStore().restore()
+  await context.router.push(`/drive/envoi/${listId}`)
+  const wrapper = mount(DriveSendView, {
+    attachTo: document.body,
+    global: { plugins: context.plugins },
+  })
+  await vi.waitFor(() => expect(wrapper.find('h1').exists()).toBe(true))
+
+  return { wrapper, context, fetchMock }
+}
+
+const loaded = (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
+  vi.waitFor(() => expect(wrapper.find('dl').exists()).toBe(true))
+
+const button = (label: string) =>
+  [...document.body.querySelectorAll('button')].find(
+    (candidate) => candidate.textContent.trim() === label,
+  ) as HTMLButtonElement | undefined
+
+const press = async (label: string) => {
+  const target = button(label)
+  if (target === undefined) throw new Error(`Bouton absent : ${label}`)
+  target.click()
+  await flushPromises()
+}
+
+const counts = (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
+  wrapper.findAll('dl > div').map((cell) => cell.text())
+
+const started = (native: ReturnType<typeof fakeNative>) =>
+  native.sent.filter((message) => message.type === 'drive.start')
+
+beforeEach(() => localStorage.clear())
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  delete (globalThis as { repasNative?: unknown }).repasNative
+  document.body.innerHTML = ''
+  localStorage.clear()
+  window.dispatchEvent(new Event('online'))
+})
+
+describe('écran d’envoi au drive, dans l’application', () => {
+  it('affiche toute la liste avec les produits dans l’ordre de priorité, leur nombre, les refusés et les compteurs', async () => {
+    installApp()
+    const { wrapper, fetchMock } = await open()
+    await loaded(wrapper)
+
+    expect(calls(fetchMock)).toContain('GET /api/v1/drive/plans/l1')
+    expect(wrapper.find('h2:nth-of-type(1)').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Magasin …456')
+    expect(wrapper.text()).toContain('Votre liste (12)')
+    expect(wrapper.findAll('main > section ul > li')).toHaveLength(12)
+
+    const farine = wrapper.findAll('main > section ul > li')[0]!
+    expect(farine.text()).toContain('À acheter : 800 g')
+    expect(farine.findAll('ol > li').map((item) => item.text().replace(/\s+/g, ' '))).toEqual([
+      '1. Farine de blé T55 Marque Repère 1 kg · 1 produit',
+      '2. Farine de blé T45 1 kg (secours) · 2 produits',
+    ])
+    expect(farine.text()).toContain('Refusés : Farine complète bio 1 kg')
+
+    const beurre = wrapper.findAll('main > section ul > li')[1]!
+    expect(beurre.find('ol > li').text().replace(/\s+/g, ' ')).toBe(
+      '1. Beurre doux 250 g · quantité à vérifier',
+    )
+
+    const poivre = wrapper.findAll('main > section ul > li')[8]!
+    expect(poivre.text()).toContain('Nouveau : vous choisirez le produit sur Leclerc.')
+    expect(wrapper.findAll('main > section ul > li')[11]!.text()).toContain(
+      'Vous en avez déjà : rien à mettre au panier.',
+    )
+
+    expect(counts(wrapper)).toEqual([
+      'Produits connus8',
+      'À choisir3',
+      'Déjà à la maison1',
+      'Passés cette fois0',
+    ])
+  })
+
+  it('« Choisir un autre produit » et « Passer cette fois » changent la ligne et les compteurs, et s’annulent', async () => {
+    installApp()
+    const { wrapper } = await open()
+    await loaded(wrapper)
+
+    await press('Choisir un autre produit')
+    expect(wrapper.findAll('main > section ul > li')[0]!.text()).toContain(
+      'Vous choisirez un autre produit sur Leclerc, à la place de : Farine de blé T55 Marque Repère 1 kg.',
+    )
+    expect(counts(wrapper).slice(0, 2)).toEqual(['Produits connus7', 'À choisir4'])
+
+    await wrapper.find('button[aria-label="Passer cette fois : Lait"]').trigger('click')
+    expect(counts(wrapper)).toEqual([
+      'Produits connus6',
+      'À choisir4',
+      'Déjà à la maison1',
+      'Passés cette fois1',
+    ])
+    expect(wrapper.findAll('main > section ul > li')[2]!.text()).toContain(
+      'Passé cette fois : rien ne sera mis au panier.',
+    )
+
+    // L'annulation : les mêmes boutons, pressés une seconde fois
+    await wrapper.find('button[aria-label="Choisir un autre produit : Farine"]').trigger('click')
+    await wrapper.find('button[aria-label="Passer cette fois : Lait"]').trigger('click')
+    expect(counts(wrapper)[0]).toBe('Produits connus8')
+    expect(wrapper.findAll('main > section ul > li')[0]!.find('ol').exists()).toBe(true)
+  })
+
+  it('n’offre aucun choix pour une ligne « vous en avez déjà », ni « autre produit » pour une ligne à choisir', async () => {
+    installApp()
+    const { wrapper } = await open()
+    await loaded(wrapper)
+
+    const items = wrapper.findAll('main > section ul > li')
+    expect(items[11]!.find('button').exists()).toBe(false)
+    expect(items[8]!.findAll('button').map((item) => item.text())).toEqual(['Passer cette fois'])
+    expect(items[0]!.findAll('button').map((item) => item.text())).toEqual([
+      'Choisir un autre produit',
+      'Passer cette fois',
+    ])
+  })
+
+  it('« Ouvrir le drive » garde le brouillon, envoie le plan de 12 lignes avec les surcharges, puis attend le retour', async () => {
+    const native = installApp()
+    const { wrapper } = await open()
+    await loaded(wrapper)
+    await press('Choisir un autre produit')
+    await wrapper.find('button[aria-label="Passer cette fois : Lait"]').trigger('click')
+
+    await press('Ouvrir le drive')
+
+    const [start] = started(native)
+    expect(start?.plan?.lines).toHaveLength(12)
+    expect(start?.plan).toMatchObject({
+      type: 'plan',
+      retailer: 'leclerc',
+      store: { id: '123456', host: new URL(storeBaseUrl).host },
+      returnPath: '/drive/retour',
+    })
+    const lines = Object.fromEntries(start!.plan!.lines.map((line) => [line.ingredientSlug, line]))
+    expect(lines.farine).toMatchObject({
+      status: 'NEW',
+      products: [],
+      replaces: { id: '123456', label: 'Farine de blé T55 Marque Repère 1 kg' },
+      rejected: [{ id: '999000', label: 'Farine complète bio 1 kg' }],
+    })
+    expect(lines.lait).toEqual({ ingredientSlug: 'lait', name: 'Lait', status: 'SKIP' })
+    expect(lines.beurre).toMatchObject({
+      status: 'KNOWN',
+      products: [{ id: '300001', packs: null }],
+    })
+
+    // Le brouillon est écrit, avec le runId du message
+    expect(JSON.parse(localStorage.getItem(DRAFT_KEY) ?? 'null')).toMatchObject({
+      runId: start!.plan!.runId,
+      listId: 'l1',
+    })
+    expect(wrapper.text()).toContain('En attente du retour du drive…')
+    expect(wrapper.find('dl').exists()).toBe(false)
+  })
+
+  it('retrouve un passage en cours après un rechargement : « Rouvrir le drive » garde le même passage', async () => {
+    localStorage.setItem(DRAFT_KEY, draftOf('l1'))
+    const native = installApp()
+    const { wrapper } = await open()
+    await vi.waitFor(() => expect(wrapper.text()).toContain('En attente du retour du drive…'))
+
+    await press('Rouvrir le drive')
+
+    expect(started(native)[0]?.plan?.runId).toBe(RUN)
+    expect(wrapper.text()).toContain('En attente du retour du drive…')
+  })
+
+  it('« Recommencer » abandonne le passage et revient à la liste', async () => {
+    localStorage.setItem(DRAFT_KEY, draftOf('l1'))
+    const native = installApp()
+    const { wrapper } = await open()
+    await vi.waitFor(() => expect(wrapper.text()).toContain('En attente du retour du drive…'))
+
+    await press('Recommencer')
+
+    expect(native.sent.map((message) => message.type)).toContain('drive.cancel')
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+    await loaded(wrapper)
+    expect(wrapper.text()).not.toContain('En attente du retour du drive…')
+
+    // Un nouveau passage a un nouveau runId
+    await press('Ouvrir le drive')
+    expect(started(native)[0]?.plan?.runId).not.toBe(RUN)
+  })
+
+  it('« Rouvrir la liste » demande confirmation, rouvre avec la version du plan, abandonne le passage', async () => {
+    localStorage.setItem(DRAFT_KEY, draftOf('l1'))
+    const native = installApp()
+    const { wrapper, context, fetchMock } = await open({
+      'POST /api/v1/shopping-lists/l1/reopen': noContent,
+    })
+    await vi.waitFor(() => expect(wrapper.text()).toContain('En attente du retour du drive…'))
+
+    await press('Rouvrir la liste')
+    expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(
+      'Le panier Leclerc ne sera pas vidé.',
+    )
+    expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/reopen')
+    ;[...document.body.querySelectorAll('[role="dialog"] button')]
+      .find((item) => item.textContent.trim() === 'Rouvrir la liste')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+
+    await vi.waitFor(() =>
+      expect(context.router.currentRoute.value.name).toBe('shopping-list-detail'),
+    )
+    const request = fetchMock.mock.calls
+      .map(([input]) => input as Request)
+      .find((candidate) => candidate.url.endsWith('/reopen'))
+    expect(request?.headers.get('If-Match')).toBe('"7"')
+    expect(native.sent.map((message) => message.type)).toContain('drive.cancel')
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+  })
+
+  it('un passage d’une autre liste bloque : le voir ou l’abandonner', async () => {
+    localStorage.setItem(DRAFT_KEY, draftOf('l2', OTHER_RUN))
+    const native = installApp()
+    const { wrapper } = await open()
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Un autre envoi est en cours'))
+
+    expect(wrapper.find('a[href="/drive/envoi/l2"]').text()).toBe('Voir cet envoi')
+    expect(wrapper.find('dl').exists()).toBe(false)
+
+    await press('Abandonner cet envoi')
+
+    expect(native.sent.map((message) => message.type)).toContain('drive.cancel')
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+    await loaded(wrapper)
+  })
+
+  it('un passage apparu dans un autre onglet est repris au lieu d’en lancer un second', async () => {
+    const native = installApp()
+    const { wrapper } = await open()
+    await loaded(wrapper)
+    localStorage.setItem(DRAFT_KEY, draftOf('l1', OTHER_RUN))
+
+    await press('Ouvrir le drive')
+
+    expect(started(native)).toHaveLength(0)
+    expect(wrapper.text()).toContain('En attente du retour du drive…')
+  })
+
+  it('désactive le drive sans réseau, et le dit', async () => {
+    installApp()
+    const { wrapper } = await open()
+    await loaded(wrapper)
+
+    window.dispatchEvent(new Event('offline'))
+    await flushPromises()
+
+    expect(button('Ouvrir le drive')?.disabled).toBe(true)
+    expect(wrapper.text()).toContain('Hors connexion')
+  })
+
+  it('refuse d’ouvrir le drive quand l’application dit qu’il n’est pas utilisable', async () => {
+    installApp(false)
+    const { wrapper } = await open()
+
+    await vi.waitFor(() =>
+      expect(wrapper.text()).toContain('Le drive n’est pas utilisable sur cet appareil'),
+    )
+    expect(button('Ouvrir le drive')?.disabled).toBe(true)
+    expect(wrapper.find('a[href="/drive/aide"]').exists()).toBe(true)
+  })
+
+  it('une liste sans ligne n’a rien à envoyer', async () => {
+    installApp()
+    const { wrapper } = await open({
+      'GET /api/v1/drive/plans/l1': () =>
+        json(plan({ lines: [], counts: { known: 0, new: 0, haveAtHome: 0 } })),
+    })
+    await loaded(wrapper)
+
+    expect(wrapper.text()).toContain('Cette liste n’a aucun article à envoyer.')
+    expect(button('Ouvrir le drive')?.disabled).toBe(true)
+  })
+
+  describe('erreurs du lancement', () => {
+    it('une liste de plus de 100 articles ne part pas', async () => {
+      const native = installApp()
+      const many = plan()
+      many.lines = Array.from({ length: 101 }, (_, index) => ({
+        ...many.lines[8]!,
+        ingredientSlug: `article-${index}`,
+        ingredientName: `Article ${index}`,
+      }))
+      const { wrapper } = await open({ 'GET /api/v1/drive/plans/l1': () => json(many) })
+      await loaded(wrapper)
+
+      await press('Ouvrir le drive')
+
+      expect(wrapper.find('[role="alert"]').text()).toContain('plus de 100 articles')
+      expect(started(native)).toHaveLength(0)
+      expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+    })
+
+    it('un plan de plus de 64 Ko est signalé', async () => {
+      installApp()
+      const heavy = plan()
+      const label = 'é'.repeat(250)
+      heavy.lines = Array.from({ length: 60 }, (_, index) => ({
+        ...heavy.lines[0]!,
+        ingredientSlug: `article-${index}`,
+        products: [1, 2, 3, 4, 5].map((rank) => ({
+          ...heavy.lines[0]!.products[0]!,
+          rank,
+          retailerProductId: `${index}${rank}`,
+          label,
+        })),
+      }))
+      const { wrapper } = await open({ 'GET /api/v1/drive/plans/l1': () => json(heavy) })
+      await loaded(wrapper)
+
+      await press('Ouvrir le drive')
+
+      expect(wrapper.find('[role="alert"]').text()).toContain('trop gros')
+      expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+    })
+
+    it('un plan invalide est signalé sans rien envoyer', async () => {
+      const native = installApp()
+      const broken = plan()
+      broken.lines[0]!.ingredientSlug = 'Pas un slug'
+      const { wrapper } = await open({ 'GET /api/v1/drive/plans/l1': () => json(broken) })
+      await loaded(wrapper)
+
+      await press('Ouvrir le drive')
+
+      expect(wrapper.find('[role="alert"]').text()).toContain('plan d’envoi n’est pas valide')
+      expect(started(native)).toHaveLength(0)
+    })
+
+    it('un pont qui refuse l’envoi est signalé, le brouillon n’est pas gardé', async () => {
+      const native = installApp()
+      const { wrapper } = await open()
+      await loaded(wrapper)
+      vi.mocked(native.bridge.postMessage).mockImplementation(() => {
+        throw new Error('pont fermé')
+      })
+
+      await press('Ouvrir le drive')
+
+      expect(wrapper.find('[role="alert"]').text()).toContain('n’a pas pu ouvrir le drive')
+      expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+    })
+
+    it('une adresse de magasin illisible est signalée', async () => {
+      installApp()
+      const broken = plan()
+      broken.store.baseUrl = 'pas une adresse'
+      const { wrapper } = await open({ 'GET /api/v1/drive/plans/l1': () => json(broken) })
+      await loaded(wrapper)
+
+      await press('Ouvrir le drive')
+
+      expect(wrapper.find('[role="alert"]').text()).toContain('plan d’envoi n’est pas valide')
+    })
+  })
+})
+
+describe('écran d’envoi au drive, hors de l’application', () => {
+  it('explique, renvoie vers l’installation et propose une recherche Leclerc par ligne', async () => {
+    const { wrapper } = await open()
+    await loaded(wrapper)
+
+    expect(wrapper.text()).toContain('L’envoi automatique n’est pas disponible ici')
+    expect(wrapper.find('a[href="/drive/aide"]').text()).toBe('Installer l’application')
+    expect(button('Ouvrir le drive')).toBeUndefined()
+    expect(wrapper.findAll('main > section ul > li button')).toHaveLength(0)
+
+    const links = wrapper.findAll('main > section ul > li > a')
+    // Une recherche par ligne, sauf « vous en avez déjà »
+    expect(links).toHaveLength(11)
+    expect(links[0]!.attributes()).toMatchObject({
+      href: `${storeBaseUrl}/recherche.aspx?TexteRecherche=Farine`,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+    })
+    expect(links[0]!.attributes('aria-label')).toBe(
+      'Chercher sur Leclerc : Farine (s’ouvre dans un nouvel onglet)',
+    )
+    expect(links[6]!.attributes('href')).toBe(
+      `${storeBaseUrl}/recherche.aspx?TexteRecherche=P%C3%A2tes`,
+    )
+  })
+})
+
+describe('lecture du plan', () => {
+  it('mène aux réglages quand aucun magasin n’est enregistré (409 DRIVE_NOT_CONFIGURED)', async () => {
+    installApp()
+    const { context } = await open({
+      'GET /api/v1/drive/plans/l1': failure(409, 'DRIVE_NOT_CONFIGURED'),
+    })
+
+    await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-settings'))
+    expect(context.router.currentRoute.value.query.magasin).toBe('requis')
+  })
+
+  it.each([
+    [409, 'SHOPPING_LIST_NOT_SENT', 'Cette liste n’est plus envoyée au drive.'],
+    [404, 'DRIVE_DISABLED', 'L’envoi au drive n’est pas disponible pour le moment.'],
+    [403, 'SHOPPING_LIST_FORBIDDEN', 'Vous n’avez pas le droit de faire cela.'],
+    [404, 'SHOPPING_LIST_NOT_FOUND', 'Cet élément n’existe plus.'],
+  ])('explique le refus %i %s', async (status, code, message) => {
+    installApp()
+    const { wrapper } = await open({ 'GET /api/v1/drive/plans/l1': failure(status, code) })
+
+    await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
+
+    expect(wrapper.find('[role="alert"]').text().replace(/'/g, '’')).toBe(
+      message.replace(/'/g, '’'),
+    )
+    expect(wrapper.find('dl').exists()).toBe(false)
+  })
+
+  it('propose de réessayer quand le serveur est injoignable', async () => {
+    installApp()
+    let up = false
+    const { wrapper } = await open({
+      'GET /api/v1/drive/plans/l1': () => (up ? json(plan()) : failure(500, 'boom')()),
+    })
+    await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
+
+    up = true
+    await press('Réessayer')
+
+    await loaded(wrapper)
+  })
+
+  it('laisse abandonner un passage en cours même quand le plan ne se lit pas', async () => {
+    localStorage.setItem(DRAFT_KEY, draftOf('l1'))
+    installApp()
+    const { wrapper } = await open({
+      'GET /api/v1/drive/plans/l1': failure(409, 'SHOPPING_LIST_NOT_SENT'),
+    })
+    await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
+
+    await press('Abandonner cet envoi')
+
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+  })
+
+  it('relit le plan à chaque ouverture de l’écran', async () => {
+    installApp()
+    const first = await open()
+    await loaded(first.wrapper)
+    first.wrapper.unmount()
+
+    const second = await open()
+    await loaded(second.wrapper)
+
+    expect(
+      calls(second.fetchMock).filter((call) => call === 'GET /api/v1/drive/plans/l1'),
+    ).toHaveLength(1)
+  })
+})
