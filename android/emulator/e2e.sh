@@ -9,11 +9,13 @@
 #
 # Les scénarios, dans l'ordre (chacun repart d'un faux Leclerc remis à neuf) :
 #   1. lecture du magasin (`drive.setup`) : accueil du drive, choix du magasin du faux Leclerc, l'agent le lit, Repas reçoit son numéro et son hôte ;
-#   2. passage complet : le drive s'ouvre sur la RACINE de l'hôte du plan, l'accueil du magasin (constat de la recette réelle : /magasin-N-N/ y est
-#      une page 404), avec un message qui dit de toucher « Commencer mes courses » ; l'agent ne reçoit rien tant que l'utilisateur n'a pas ouvert son
-#      magasin lui-même (l'application ne clique jamais à sa place), puis le plan part tout seul : récapitulatif, phase A (deux produits connus,
-#      quantités du plan), phase B (un nouveau produit choisi dans la liste de l'agent, nombre calculé), « j'en ai toujours » et « ignoré » ; retour
-#      dans Repas avec le résultat ; panier du faux Leclerc, cadence, requêtes ;
+#   2. passage complet : le drive s'ouvre sur l'ACCUEIL DE L'ENSEIGNE (www.leclercdrive.fr, comme la lecture du magasin), qui affiche
+#      l'accueil du magasin de l'utilisateur (constat de la recette réelle du 2026-10-18 : la racine de l'hôte du magasin et /magasin-N-N/ y sont des
+#      pages 404, le faux site les refuse aussi), avec un message qui dit de toucher « Commencer mes courses » ; le test ÉCHOUE si le départ retombe
+#      sur la racine de l'hôte du magasin (non-régression) ; l'agent ne reçoit rien tant que l'utilisateur n'a pas ouvert son magasin lui-même
+#      (l'application ne clique jamais à sa place), puis le plan part tout seul : récapitulatif, phase A (deux produits connus, quantités du plan),
+#      phase B (un nouveau produit choisi dans la liste de l'agent, nombre calculé), « j'en ai toujours » et « ignoré » ; retour dans Repas avec le
+#      résultat ; panier du faux Leclerc, cadence, requêtes ;
 #   3. « Annuler » au récapitulatif : rien ne part vers le site, Repas reçoit un résultat « aborted » ;
 #   4. abandon par l'utilisateur en plein passage (retour du téléphone, « Abandonner ») : Repas reçoit « aborted / CANCELLED » ;
 #   5. application tuée en plein passage, puis reprise : le passage repart, se termine, le panier est exact et Repas reçoit le résultat ;
@@ -23,7 +25,9 @@
 #   9. page d'ouverture refusée par une page d'erreur (404) : un bandeau dit « Cette page n'est pas celle de ton magasin » et propose « Ouvrir
 #      l'accueil du drive », l'agent ne reçoit rien, puis le récapitulatif s'affiche dès que l'utilisateur ouvre son magasin ;
 #  10. page d'ouverture trop lente : le bandeau s'affiche au bout de 25 s, l'accueil du drive reste à un geste ;
-#  11. 403 (le défi de l'anti-robot est servi ainsi) : la page reste visible, le bandeau dit de faire la vérification.
+#  11. 403 (le défi de l'anti-robot est servi ainsi) : la page reste visible, le bandeau dit de faire la vérification ;
+#  12. « Commencer mes courses » mène à une page 404 (la racine de l'hôte du magasin, ou /magasin-N-N/ sans ville) : le bandeau s'affiche, le plan
+#      ne part pas, et « Ouvrir l'accueil du drive » recharge l'accueil de l'enseigne.
 # Les captures d'écran et le rapport texte sont dans android/dist/e2e/.
 # Code de sortie : 0 si tous les contrôles passent, 1 sinon, 3 si KVM manque.
 set -u
@@ -46,6 +50,8 @@ paced_count() { fake_state | grep -o '"kind":"\(search\|cart\)"' | wc -l; }
 nothing_sent() { [ "$(paced_count)" = "0" ]; }
 requested() { fake_state | grep -qF "\"path\":\"$1\""; } # le faux Leclerc a reçu une requête sur ce chemin
 not_requested() { ! requested "$1"; }
+requested_on() { fake_state | grep -qF "\"host\":\"$1\",\"path\":\"$2\""; } # ... sur ce nom d'hôte et ce chemin (requested_on <hôte> <chemin>)
+not_requested_on() { ! requested_on "$1" "$2"; }
 min_gap() { # le plus petit délai (ms) entre la fin d'une requête de l'agent (recherche, panier) et le début de la suivante
   fake_state | emu python3 -c 'import json,sys
 d=json.load(sys.stdin)
@@ -79,8 +85,8 @@ home_button() { ui_has 'text="Ouvrir l’accueil du drive"'; }
 home_button_absent() { ! home_button; }
 open_home() { tap 'text="Ouvrir l’accueil du drive"'; }
 
-# Le drive s'ouvre sur la racine de l'hôte du plan : l'accueil du magasin (constat de la recette réelle), d'où l'UTILISATEUR ouvre son magasin en
-# touchant « Commencer mes courses » (l'application ne clique jamais à sa place). Le plan part alors tout seul vers l'agent.
+# Le drive s'ouvre sur l'accueil de l'enseigne (www), qui affiche l'accueil du magasin (constat de la recette réelle), d'où l'UTILISATEUR ouvre son
+# magasin en touchant « Commencer mes courses » (l'application ne clique jamais à sa place). Le plan part alors tout seul vers l'agent.
 enter_store() { wait_until 70 ui_has 'text="Commencer mes courses"' && tap 'text="Commencer mes courses"'; }
 # Le passage s'ouvre : le drive est sur l'accueil du magasin, l'utilisateur ouvre son magasin, le plan arrive à l'agent, qui affiche son récapitulatif.
 open_pass() { # open_pass <runId> <fichier de plan>
@@ -98,6 +104,22 @@ say
 # --- 0. Où l'on en est ---------------------------------------------------------------------------------------------------------------------
 say "0. Émulateur, réseau et faux sites"
 check_network fake-leclerc
+# L'accueil de l'enseigne (www, la page de départ d'un plan et de la lecture du magasin) est servi par le faux Leclerc complet pendant ces
+# scénarios, et redevient la page locale de test du test de fumée en sortant (quelle que soit la sortie).
+www_mode fake
+trap 'www_mode test' EXIT
+if emu curl -sk -H "Host: $SITE_HOST" "https://127.0.0.1/" | grep -q 'Commencer mes courses'; then
+  ok "l'accueil de l'enseigne ($SITE_HOST) est servi par le faux Leclerc complet : l'accueil du magasin et son bouton « Commencer mes courses »"
+else
+  ko "l'accueil de l'enseigne n'est pas servi par le faux Leclerc complet (make android-emulator-down puis up reconstruit l'émulateur). ARRÊT."
+  exit 1
+fi
+if [ "$(emu curl -sk -o /dev/null -w '%{http_code}' -H "Host: $FAKE_STORE_HOST" "https://127.0.0.1/")" = "404" ]; then
+  ok "la racine de l'hôte du magasin ($FAKE_STORE_HOST) est une page 404, comme sur le vrai site (recette réelle du 2026-10-18)"
+else
+  ko "la racine de l'hôte du magasin n'est pas une page 404 : le faux site cacherait le défaut au lieu de l'attraper. ARRÊT."
+  exit 1
+fi
 say
 say "   Installation de l'APK de débogage (qui vise https://$REPAS_HOST/)"
 install_apk
@@ -118,7 +140,8 @@ else
 fi
 sleep 2
 screenshot e01-lecture-accueil
-if tap 'text="Choisir le magasin du faux Leclerc"'; then ok "le magasin du faux Leclerc est choisi (lien touché)"; else ko "le lien du faux magasin est introuvable"; fi
+# L'accueil de l'enseigne est celui du faux Leclerc : l'utilisateur y est chez son magasin, « Commencer mes courses » ouvre les pages du magasin.
+if tap 'text="Commencer mes courses"'; then ok "le magasin du faux Leclerc est ouvert (« Commencer mes courses » touché)"; else ko "le bouton « Commencer mes courses » est introuvable"; fi
 if wait_until 40 ui_has 'Enregistrer ce magasin'; then
   ok "sur la page du faux magasin, l'agent demande confirmation"
 else
@@ -145,7 +168,7 @@ RUN_FULL=f01100c0-0000-4000-8000-000000000002
 fake_reset
 start_plan "$RUN_FULL" plan-complet.json
 if wait_until 70 ui_has 'text="Commencer mes courses"'; then
-  ok "drive.start ouvre le drive sur la racine de l'hôte du plan : l'accueil du magasin, avec son bouton « Commencer mes courses »"
+  ok "drive.start ouvre le drive sur l'accueil de l'enseigne (www), la page de départ d'un plan : l'accueil du magasin, avec son bouton « Commencer mes courses »"
 else
   ko "l'accueil du magasin ne s'est pas affiché"
 fi
@@ -154,7 +177,8 @@ check "ce message ne propose pas « Ouvrir l'accueil du drive » : rien n'est en
 sleep 5
 check "tant que l'utilisateur n'a pas ouvert son magasin, l'agent n'affiche rien" ui_lacks 'Prêt à remplir ton panier'
 check "rien ne part vers le site avant l'ouverture du magasin" nothing_sent
-check "le faux Leclerc a servi l'accueil à la racine de l'hôte" requested '/'
+check "le faux Leclerc a servi l'accueil de l'enseigne ($SITE_HOST/), la page de départ du plan" requested_on "$SITE_HOST" '/'
+check "NON-RÉGRESSION : jamais la racine de l'hôte du magasin ($FAKE_STORE_HOST/), page 404 du vrai site (recette réelle, application 0.1.3)" not_requested_on "$FAKE_STORE_HOST" '/'
 check "jamais l'adresse /magasin-000001-000001/ (page 404 du vrai site)" not_requested '/magasin-000001-000001/'
 screenshot e04a-accueil-du-magasin
 if tap 'text="Commencer mes courses"'; then ok "l'utilisateur ouvre son magasin (bouton du site touché ; l'application ne clique jamais à sa place)"; else ko "le bouton « Commencer mes courses » est introuvable"; fi
@@ -164,7 +188,8 @@ else
   ko "le récapitulatif de l'agent ne s'est pas affiché"
 fi
 check "le message d'en-tête a disparu" ui_lacks 'touche « Commencer mes courses'
-check "le faux Leclerc a servi la page du magasin (avec sa ville)" requested '/magasin-000001-000001-Ville-Test/'
+check "le faux Leclerc a servi la page du magasin (avec sa ville), sur l'hôte du magasin" requested_on "$FAKE_STORE_HOST" '/magasin-000001-000001-Ville-Test/'
+check "NON-RÉGRESSION : le départ n'est jamais retombé sur la racine de l'hôte du magasin" not_requested_on "$FAKE_STORE_HOST" '/'
 check "récapitulatif : 2 produits connus à mettre au panier" ui_has 'produits connus à mettre'
 check "récapitulatif : 1 nouveau produit à choisir" ui_has 'nouveau produit à choisir'
 check "l'écran reste allumé pendant le passage" screen_held
@@ -362,7 +387,7 @@ say "8. L'utilisateur ouvre un AUTRE magasin que celui du plan : l'agent reçoit
 RUN_OTHER=07e50000-0000-4000-8000-000000000008
 fake_reset
 start_plan "$RUN_OTHER" plan-connu.json
-if wait_until 70 ui_has 'text="Changer de magasin"'; then ok "le drive est sur l'accueil du magasin du plan, qui propose « Changer de magasin »"; else ko "l'accueil du magasin ne s'est pas affiché"; fi
+if wait_until 70 ui_has 'text="Changer de magasin"'; then ok "le drive est sur l'accueil de l'enseigne, qui propose « Changer de magasin »"; else ko "l'accueil du magasin ne s'est pas affiché"; fi
 if tap 'text="Changer de magasin"'; then ok "l'utilisateur choisit un autre magasin (lien touché)"; else ko "le lien « Changer de magasin » est introuvable"; fi
 if wait_until 70 ui_has 'Ce n’est pas le bon magasin'; then
   ok "dès que la page de ce magasin s'ouvre, l'agent reçoit le plan tout seul et dit « Ce n'est pas le bon magasin » (STORE_MISMATCH)"
@@ -381,7 +406,7 @@ back_to_repas || ko "l'écran Repas n'est pas revenu"
 
 # --- 9. Page d'ouverture refusée par une page d'erreur (404) ---------------------------------------------------------------------------------
 say
-say "9. Le site répond une page d'erreur (404) à la page d'ouverture : un bandeau dit quoi faire, rien n'est envoyé à la page d'erreur, « Ouvrir l'accueil du drive » recommence"
+say "9. Le site répond une page d'erreur (404) à la page d'ouverture (l'accueil de l'enseigne) : un bandeau dit quoi faire, rien n'est envoyé à la page d'erreur, « Ouvrir l'accueil du drive » recommence"
 RUN_404=e4040000-0000-4000-8000-000000000009
 fake_reset
 fake_behavior '{"homeStatus":404}'
@@ -392,7 +417,8 @@ else
   ko "page d'erreur 404 : aucun bandeau, l'utilisateur reste devant un écran muet"
 fi
 check "le bandeau propose le bouton « Ouvrir l'accueil du drive »" home_button
-check "le site a bien été interrogé à la racine de l'hôte" requested '/'
+check "le site a bien été interrogé à l'accueil de l'enseigne (la page de départ du plan)" requested_on "$SITE_HOST" '/'
+check "NON-RÉGRESSION : le repli ne mène pas à la racine de l'hôte du magasin" not_requested_on "$FAKE_STORE_HOST" '/'
 sleep 6
 check "l'agent n'affiche rien et ne reçoit pas le plan sur une page d'erreur" ui_lacks 'Prêt à remplir ton panier'
 check "rien n'est parti vers le site" nothing_sent
@@ -400,7 +426,7 @@ screenshot e15-page-erreur-404
 fake_behavior '{"homeStatus":null}' # le site répond de nouveau
 if open_home; then ok "« Ouvrir l'accueil du drive » touché"; else ko "le bouton « Ouvrir l'accueil du drive » est introuvable"; fi
 if wait_until 40 ui_has 'text="Commencer mes courses"'; then
-  ok "l'accueil du magasin s'affiche, avec son bouton « Commencer mes courses »"
+  ok "le bouton recharge l'accueil de l'enseigne, qui s'affiche cette fois avec son bouton « Commencer mes courses »"
 else
   ko "l'accueil du magasin ne s'est pas affiché"
 fi
@@ -477,9 +503,49 @@ else
 fi
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
-# --- 12. Bilan ------------------------------------------------------------------------------------------------------------------------------
+# --- 12. « Commencer mes courses » mène à une page 404 ------------------------------------------------------------------------------------------
 say
-say "12. Bilan"
+say "12. Le chemin de l'utilisateur tombe sur une page 404 (la racine de l'hôte du magasin, ou /magasin-N-N/ sans ville) : le repli s'affiche, le plan ne part pas, le bouton recharge l'accueil de l'enseigne"
+RUN_DEAD=de4d0000-0000-4000-8000-000000000012
+fake_reset
+fake_behavior '{"startPath":"/"}' # le bouton « Commencer mes courses » du faux site mène d'abord à la racine de l'hôte du magasin, une page 404
+start_plan "$RUN_DEAD" plan-connu.json
+for dead in '/' '/magasin-000001-000001/'; do
+  if enter_store; then ok "page 404 ($dead) : l'utilisateur touche « Commencer mes courses »"; else ko "page 404 ($dead) : l'accueil de l'enseigne ne s'est pas affiché"; fi
+  if wait_until 40 ui_has 'celle de ton magasin'; then
+    ok "page 404 ($dead) : le bandeau « Cette page n'est pas celle de ton magasin » s'affiche, au lieu d'un écran muet"
+  else
+    ko "page 404 ($dead) : aucun bandeau, l'utilisateur reste devant un écran muet"
+  fi
+  sleep 2 # le temps que la page 404 remplace l'accueil à l'écran
+  check "le bandeau propose le bouton « Ouvrir l'accueil du drive »" home_button
+  check "la page 404 n'a pas le bouton « Commencer mes courses »" ui_lacks 'text="Commencer mes courses"'
+  check "l'agent ne reçoit pas le plan sur une page 404" ui_lacks 'Prêt à remplir ton panier'
+  check "rien n'est parti vers le site" nothing_sent
+  check "le faux Leclerc a bien servi cette page 404 ($FAKE_STORE_HOST$dead)" requested_on "$FAKE_STORE_HOST" "$dead"
+  sleep 1
+  if [ "$dead" = '/' ]; then screenshot e19-lien-mort-racine; else screenshot e20-lien-mort-sans-ville; fi
+  # Le lien se lit au chargement de l'accueil : le chemin du bouton est fixé AVANT de recharger (d'abord l'autre page 404, puis la bonne).
+  if [ "$dead" = '/' ]; then fake_behavior '{"startPath":"/magasin-000001-000001/"}'; else fake_behavior '{"startPath":null}'; fi
+  if open_home && wait_until 70 ui_has 'text="Commencer mes courses"'; then
+    ok "« Ouvrir l'accueil du drive » recharge l'accueil de l'enseigne, qui s'affiche de nouveau"
+  else
+    ko "l'accueil de l'enseigne ne s'est pas rechargé"
+  fi
+done
+# Le dernier rechargement a lu le bon chemin : le bouton mène de nouveau à la page du magasin.
+tap 'text="Commencer mes courses"' || ko "le bouton « Commencer mes courses » est introuvable"
+if wait_until 70 agent_screen 'Prêt à remplir ton panier'; then ok "le chemin retrouvé, l'agent reçoit le plan tout seul"; else ko "l'agent n'a pas affiché son récapitulatif"; fi
+if tap 'text="Annuler"' && tap 'text="Retourner dans Repas"' && wait_until 20 result_has "$RUN_DEAD" aborted ''; then
+  ok "« Annuler » : Repas reçoit un résultat « aborted »"
+else
+  ko "Repas n'a pas reçu un résultat « aborted »"
+fi
+back_to_repas || ko "l'écran Repas n'est pas revenu"
+
+# --- 13. Bilan ------------------------------------------------------------------------------------------------------------------------------
+say
+say "13. Bilan"
 fake_reset
 final_checks
 conclude "les scénarios complets"

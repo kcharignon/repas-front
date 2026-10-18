@@ -34,28 +34,44 @@ class DrivePlanTest {
         assertEquals("8f14e45f-ceea-467a-9575-8e6b8c0a1b2c", plan.runId)
         assertEquals("000000", plan.storeId)
         assertEquals("courses-test.leclercdrive.fr", plan.storeHost)
-        assertEquals("https://courses-test.leclercdrive.fr/", plan.startUrl)
+        assertEquals(NavigationPolicy.START_URL, plan.startUrl)
         assertTrue(NavigationPolicy.isAllowed(plan.startUrl))
         assertTrue(sameJson(valid, JSONObject(plan.text)))
     }
 
     /**
-     * Garde de la recette réelle (2026-10-18, Pixel 9) : `https://<hôte>/magasin-<id>-<id>/` est une PAGE 404 sur le vrai site (« la page
-     * demandée n'a pas pu être trouvée »). La racine de l'hôte, session ouverte, affiche l'accueil du magasin et son bouton « Commencer mes
-     * courses », qui mène aux vraies pages du magasin (celles que l'agent lit, `isStorePage`). Un plan s'ouvre donc sur la RACINE de l'hôte
-     * (jamais sur une adresse de magasin inventée) ; le message du passage part vers l'agent quand l'utilisateur touche ce bouton.
+     * Garde de la recette réelle (2026-10-18, Pixel 9, application 0.1.3) : sur le vrai site, la RACINE de l'hôte du magasin (`https://<hôte>/`) est
+     * une PAGE 404 (« la page demandée n'a pas pu être trouvée »), comme `/magasin-<id>-<id>/` sans ville. Seul l'accueil de l'enseigne
+     * (`https://www.leclercdrive.fr/`), session ouverte, affiche l'accueil du magasin de l'utilisateur et son bouton « Commencer mes courses »,
+     * qui mène aux vraies pages du magasin (avec la ville, celles que l'agent lit, `isStorePage`). Un plan s'ouvre donc sur l'accueil de
+     * l'enseigne, comme la lecture du magasin, quel que soit l'hôte du magasin du plan : jamais sur une adresse de l'hôte du magasin, jamais sur
+     * une adresse de magasin inventée. Le message du passage part vers l'agent quand l'utilisateur touche ce bouton.
      */
     @Test
-    fun `un plan s'ouvre sur la racine de son hote, jamais sur une adresse de magasin sans ville`() {
+    fun `un plan s'ouvre sur l'accueil de l'enseigne, jamais sur la racine de l'hote du magasin ni sur une page 404`() {
         val stores = listOf("000000" to "courses-test.leclercdrive.fr", "1" to "fd9-courses.leclercdrive.fr", "123456789012" to "fd14-courses.leclercdrive.fr")
         stores.forEach { (id, host) ->
             val plan = DrivePlan.parse(with("host", host, store = true).apply { getJSONObject("store").put("id", id) })!!
 
-            assertEquals("https://$host/", plan.startUrl)
+            assertEquals("https://www.leclercdrive.fr/", plan.startUrl)
+            assertEquals(NavigationPolicy.START_URL, plan.startUrl)
+            assertFalse("la racine de l'hôte du magasin ($host) est une page 404 du vrai site", plan.startUrl.contains(host))
             assertFalse("/magasin-$id-$id/ est une page 404 du vrai site", plan.startUrl.contains("/magasin-"))
             assertTrue(NavigationPolicy.isAllowed(plan.startUrl))
-            assertFalse("la racine n'est pas une page de magasin : l'agent y attend", NavigationPolicy.isStorePage(plan.startUrl))
+            assertFalse("l'accueil de l'enseigne n'est pas une page de magasin : l'agent y attend", NavigationPolicy.isStorePage(plan.startUrl))
         }
+    }
+
+    @Test
+    fun `un plan et une lecture du magasin s'ouvrent sur la meme page`() {
+        assertEquals(SetupRequest.of(RUN_ID)!!.startUrl, DrivePlan.parse(valid)!!.startUrl)
+    }
+
+    @Test
+    fun `un plan repris apres la mort de l'application s'ouvre aussi sur l'accueil de l'enseigne`() {
+        val restored = PassRequests.parseText(DrivePlan.parse(valid)!!.text)!!
+
+        assertEquals(NavigationPolicy.START_URL, restored.startUrl)
     }
 
     @Test

@@ -69,7 +69,8 @@ dnsmasq --keep-in-foreground --user=root --no-resolv --no-hosts --bind-interface
   --address=/leclercdrive.fr/10.0.2.2 --address=/repas.test/10.0.2.2 --log-queries --log-facility="$SITE/dns.log" &
 # Le faux Leclerc complet (catalogue, recherche, panier, défauts simulés) : accès local seulement, il n'écoute que sur 127.0.0.1 (le relais HTTPS de
 # testsite.py lui parle ; le pilotage /__fake/* n'est offert qu'aux noms de la boucle locale, donc à `docker compose exec`, jamais à l'émulateur).
-FAKE_LECLERC_PORT=8099 node /opt/fake-leclerc/main.ts > "$SITE/fake-leclerc.log" 2>&1 &
+# Il accepte aussi le nom de l'accueil de l'enseigne (www), que testsite.py ne lui relaie qu'en mode « fake » (scénarios complets).
+FAKE_LECLERC_PORT=8099 FAKE_LECLERC_HOSTS=www.leclercdrive.fr node /opt/fake-leclerc/main.ts > "$SITE/fake-leclerc.log" 2>&1 &
 SITE_DIR="$SITE" python3 /opt/repas-emulator/testsite.py &
 
 # --- 3. L'émulateur ---------------------------------------------------------------------------------------------------------------------

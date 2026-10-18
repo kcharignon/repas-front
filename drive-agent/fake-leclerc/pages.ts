@@ -122,19 +122,20 @@ ${embedded}
 }
 
 /**
- * La racine de l'hôte, session ouverte : l'accueil du magasin, que le vrai site affiche à cette adresse (recette réelle du 2026-10-18 : nom du
- * magasin, « Je peux retirer ma commande », bouton « Commencer mes courses »). Ce n'est pas une page de magasin pour l'agent (aucune adresse
- * `/magasin-<id>-<id>-<ville>`) : le bouton mène aux vraies pages du magasin (`storePath`, avec la ville), et `otherStorePath` à un autre magasin.
+ * La racine de l'enseigne (`www.leclercdrive.fr`), session ouverte : l'accueil du magasin de l'utilisateur, que le vrai site affiche à cette
+ * adresse (recette réelle du 2026-10-18 : nom du magasin, « Je peux retirer ma commande », bouton « Commencer mes courses »). La racine de
+ * l'hôte du magasin, elle, est une page 404. Ce n'est pas une page de magasin pour l'agent (aucune adresse `/magasin-<id>-<id>-<ville>`) : le
+ * bouton mène aux vraies pages du magasin (`storeUrl`, avec la ville, sur l'hôte du magasin), et `otherStoreUrl` à un autre magasin.
  */
-export function accueilPage(storePath: string, otherStorePath?: string): string {
+export function accueilPage(storeUrl: string, otherStoreUrl?: string): string {
   return `<!doctype html>
 <html lang="fr">
 <head>${HEAD}<title>Accueil du magasin (faux site de test)</title></head>
 <body>
 <h1>Faux Leclerc Ville-Test</h1>
 <p>Je peux retirer ma commande</p>
-<p><a id="start-shopping" href="${storePath}/">Commencer mes courses</a></p>
-${otherStorePath === undefined ? '' : `<p><a id="other-store" href="${otherStorePath}/">Changer de magasin</a></p>\n`}<footer>Faux site Leclerc : données inventées.</footer>
+<p><a id="start-shopping" href="${storeUrl}">Commencer mes courses</a></p>
+${otherStoreUrl === undefined ? '' : `<p><a id="other-store" href="${otherStoreUrl}">Changer de magasin</a></p>\n`}<footer>Faux site Leclerc : données inventées.</footer>
 </body>
 </html>
 `

@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { PRODUCTS } from '../../drive-agent/fake-leclerc/catalog'
-import { STORE } from '../../drive-agent/fake-leclerc/server'
+import { HOME_HOST, STORE } from '../../drive-agent/fake-leclerc/server'
 import { validatePlan, type PlanMessage } from '../../drive-agent/protocol'
 
 const androidDir = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -84,6 +84,45 @@ describe('les scripts de l’émulateur', () => {
         .map((address) => address.replace(/^https?:\/\//i, '')),
     )
     expect([...hosts].sort()).toEqual(['$FAKE_STORE_HOST', '$REPAS_HOST', '127.0.0.1', 'repas.test'])
+  })
+})
+
+// Recette réelle du 2026-10-18 (Pixel 9, application 0.1.3) : un plan s'ouvrait sur la racine de l'hôte du magasin, une PAGE 404 du vrai site, que
+// le faux site servait à tort comme un accueil et qui a masqué le défaut. Le faux site est fidèle (racine de l'hôte du magasin = 404, accueil sur
+// l'enseigne) ; ces gardes tiennent ensemble ce que l'application, le faux site et les scripts de l'émulateur disent de la page de départ.
+describe('la page de départ d’un plan dans l’émulateur (recette réelle du 2026-10-18)', () => {
+  const script = read(join(emulatorDir, 'e2e.sh'))
+
+  it('est celle de l’application : l’accueil de l’enseigne (NavigationPolicy.START_URL), servi par le faux Leclerc complet sous le même nom', () => {
+    const policy = read(join(androidDir, 'app/src/main/kotlin/eu/kantin/repas/drive/NavigationPolicy.kt'))
+    const plan = read(join(androidDir, 'app/src/main/kotlin/eu/kantin/repas/drive/DrivePlan.kt'))
+
+    expect(/const val START_URL = "([^"]+)"/.exec(policy)?.[1]).toBe(`https://${HOME_HOST}/`)
+    // La lecture du magasin (SetupRequest) et le plan (DrivePlan) : les deux pages de départ sont celle-là, jamais l'hôte du magasin du plan.
+    const starts = [...plan.matchAll(/override val startUrl: String get\(\) = (.+)/g)].map((match) => match[1])
+    expect(starts).toEqual(['NavigationPolicy.START_URL', 'NavigationPolicy.START_URL'])
+    expect(read(join(emulatorDir, 'lib.sh'))).toContain(`SITE_HOST=${HOME_HOST}`)
+    expect(read(join(emulatorDir, 'testsite.py'))).toContain(`HOME_HOST = "${HOME_HOST}"`)
+    expect(read(join(emulatorDir, 'entrypoint.sh'))).toContain(`FAKE_LECLERC_HOSTS=${HOME_HOST}`)
+  })
+
+  it('fait échouer les scénarios complets si le départ retombe sur la racine de l’hôte du magasin', () => {
+    expect(script).toContain(`not_requested_on "$FAKE_STORE_HOST" '/'`)
+    expect(script).toContain(`requested_on "$SITE_HOST" '/'`)
+    expect(script).toContain('www_mode fake')
+    expect(script).toContain(`trap 'www_mode test' EXIT`)
+    expect(read(join(emulatorDir, 'smoke.sh'))).toContain('www_mode test')
+  })
+
+  it('vérifie, avant de jouer, que le faux site est fidèle : racine de l’hôte du magasin en 404, accueil sur l’enseigne', () => {
+    expect(script).toContain(`-H "Host: $FAKE_STORE_HOST"`)
+    expect(script).toContain(`-H "Host: $SITE_HOST"`)
+    expect(script).toMatch(/= "404" \]/)
+  })
+
+  it('joue le repli sur les pages 404 de la recette réelle : la racine de l’hôte du magasin et /magasin-N-N/ sans ville', () => {
+    expect(script).toContain(`for dead in '/' '/magasin-${STORE.id}-${STORE.id}/'; do`)
+    expect(script).toContain('"startPath"')
   })
 })
 

@@ -33,7 +33,7 @@ class StoreBannerTest {
     }
 
     /**
-     * Constat de la recette réelle : la page d'ouverture d'un plan est la racine de l'hôte, qui affiche l'accueil du magasin avec son bouton
+     * Constat de la recette réelle : la page d'ouverture d'un plan est l'accueil de l'enseigne, qui affiche l'accueil du magasin avec son bouton
      * « Commencer mes courses ». Ce n'est pas une page de magasin pour l'agent : l'utilisateur doit toucher ce bouton. Le message le dit
      * (et ne le fait jamais à sa place), sans alarme : c'est l'attente normale.
      */
@@ -79,5 +79,37 @@ class StoreBannerTest {
     @Test
     fun `une page d'erreur du site pendant une lecture du magasin garde le message de la lecture`() {
         assertEquals(StoreBanner.SETUP, StoreBanner.of(setup, storePage, PageTrouble.HTTP_ERROR))
+    }
+
+    /**
+     * Constat de la recette réelle (application 0.1.3) : la racine de l'hôte du magasin et `/magasin-<id>-<id>/` (sans ville) sont des pages 404
+     * du vrai site. Que l'utilisateur les rencontre pendant un envoi (un ancien lien, une redirection) ou que l'accueil de l'enseigne lui-même
+     * soit refusé, le repli s'affiche (jamais un écran muet), le plan ne part pas vers la page d'erreur, et le bouton « Ouvrir l'accueil du
+     * drive » recharge la page de départ du plan : l'accueil de l'enseigne, qui n'est pas une de ces pages 404.
+     */
+    @Test
+    fun `une page 404 pendant un envoi montre le repli, dont le bouton recharge l'accueil de l'enseigne`() {
+        val pages404 = listOf(
+            storeRoot,
+            "https://courses-test.leclercdrive.fr/magasin-000000-000000/",
+            "https://courses-test.leclercdrive.fr/magasin-000000-000000",
+            enseigne,
+        )
+        pages404.forEach { url ->
+            // Dans l'ordre de la WebView (début de la page, puis son statut) comme dans l'ordre inverse, qu'elle ne s'interdit pas.
+            val inOrder = OpeningWatch().apply { pageStarted(); httpError(404); pageFinished() }
+            val reversed = OpeningWatch().apply { httpError(404); pageStarted(); pageFinished() }
+            listOf(inOrder, reversed).forEach { watch ->
+                val banner = StoreBanner.of(plan, url, watch.trouble(url))
+
+                assertEquals(url, StoreBanner.PLAN, banner)
+                assertTrue("le bouton « Ouvrir l'accueil du drive » est proposé : $url", banner.hasAction)
+                assertFalse("le plan ne part pas vers une page 404 : $url", watch.canDeliver(url))
+            }
+        }
+        // Ce que recharge le bouton : la page de départ du plan, l'accueil de l'enseigne, jamais une de ces pages.
+        assertEquals(NavigationPolicy.START_URL, plan.startUrl)
+        assertFalse(pages404.dropLast(1).contains(plan.startUrl))
+        assertEquals(StoreBanner.OPEN, StoreBanner.of(plan, plan.startUrl))
     }
 }

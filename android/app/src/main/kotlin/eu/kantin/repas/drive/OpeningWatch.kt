@@ -24,11 +24,11 @@ enum class PageTrouble {
 /**
  * La surveillance de la page où un envoi (ou la lecture du magasin) attend la page du magasin (ticket E de l'audit du 2026-10-18).
  *
- * Un plan s'ouvre sur la racine de l'hôte du magasin ([DrivePlan.startUrl]), qui affiche l'accueil du magasin : ce n'est pas une page de magasin
+ * Un plan s'ouvre sur l'accueil de l'enseigne ([DrivePlan.startUrl]), qui affiche l'accueil du magasin : ce n'est pas une page de magasin
  * pour l'agent, l'utilisateur doit toucher « Commencer mes courses » (l'attendre est normal, ce n'est pas un problème, [StoreBanner.OPEN]). Le
- * site peut aussi refuser la page (page d'erreur, statut 4xx ou 5xx, défi anti-robot), la servir trop lentement, ou servir une page de magasin
- * sans que l'agent s'y annonce. Dans ces cas l'utilisateur ne doit pas rester devant un écran qui n'a rien de Repas : [trouble] dit ce qui
- * cloche, et [StoreBanner] en fait un message avec une issue.
+ * site peut aussi refuser la page (page d'erreur, statut 4xx ou 5xx, dont les 404 de la racine de l'hôte du magasin et de `/magasin-<id>-<id>/`,
+ * défi anti-robot), la servir trop lentement, ou servir une page de magasin sans que l'agent s'y annonce. Dans ces cas l'utilisateur ne doit
+ * pas rester devant un écran qui n'a rien de Repas : [trouble] dit ce qui cloche, et [StoreBanner] en fait un message avec une issue.
  *
  * Kotlin pur : l'activité lui rapporte les événements de la WebView (début et fin de page, statut HTTP de la page principale, délais écoulés,
  * plan parti vers l'agent) et le consulte. Les délais eux-mêmes sont armés par l'activité (`Handler`), qui appelle [loadTimedOut] et

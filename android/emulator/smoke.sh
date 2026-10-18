@@ -25,6 +25,9 @@ say
 # --- 0. Où l'on en est ---------------------------------------------------------------------------------------------------------------------
 say "0. Émulateur et réseau"
 check_network
+# L'accueil de l'enseigne (www) est ici la page locale de test (testpage.html) : après un essai complet interrompu (e2e.sh le remet en « test » en
+# sortant, mais une coupure brutale peut l'en empêcher), on repart de là.
+www_mode test
 
 # --- 1. Installation ---------------------------------------------------------------------------------------------------------------------
 say
@@ -92,8 +95,9 @@ RUN_C=cccccccc-cccc-4ccc-8ccc-cccccccccccc
 RUN_D=dddddddd-dddd-4ddd-8ddd-dddddddddddd
 RUN_E=eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee
 start_pass() { post_command "{\"do\":\"drive.start\",\"runId\":\"$1\"}"; }
-# Le drive s'ouvre sur la racine de l'hôte du plan (l'accueil du magasin, constat de la recette réelle) : l'utilisateur ouvre son magasin lui-même.
-open_home() { # open_home <runId> : drive.start, puis le drive s'ouvre sur la racine de l'hôte, avec le message qui dit d'ouvrir son magasin
+# Le drive s'ouvre sur l'accueil de l'enseigne (www, la page locale de test ici ; le plan du faux Repas a aussi cet hôte) : l'utilisateur ouvre
+# son magasin lui-même (constat de la recette réelle).
+open_home() { # open_home <runId> : drive.start, puis le drive s'ouvre sur l'accueil de l'enseigne, avec le message qui dit d'ouvrir son magasin
   reset_reports
   start_pass "$1"
   wait_until 40 has_report '"hostname": "www.leclercdrive.fr", "path": "/"' && wait_until 20 ui_has 'Commencer mes courses'
@@ -105,7 +109,7 @@ open_pass() { # open_pass <runId> : drive.start, l'accueil, le magasin ouvert, l
 
 say "   a. Jusqu'au résultat de l'agent"
 if open_home "$RUN_A"; then
-  ok "drive.start ouvre le drive sur la racine de l'hôte du plan (l'accueil du magasin), avec le message « Commencer mes courses »"
+  ok "drive.start ouvre le drive sur l'accueil de l'enseigne (la page de départ d'un plan), avec le message « Commencer mes courses »"
 else
   ko "drive.start n'a pas ouvert l'accueil du drive avec son message"
 fi

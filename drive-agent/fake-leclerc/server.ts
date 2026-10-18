@@ -28,6 +28,12 @@ import {
 
 /** Le faux magasin : son identifiant et son nom d'hôte (le plan de Repas et la page doivent s'accorder dessus). */
 export const STORE = { id: '000001', host: 'courses-test.leclercdrive.fr' } as const
+/**
+ * L'accueil de l'enseigne (`NavigationPolicy.START_URL` de l'application Android) : le seul nom dont la racine est une page. Session ouverte, il
+ * affiche l'accueil du magasin de l'utilisateur et son bouton « Commencer mes courses », qui mène aux pages du magasin sur SON hôte. Ce nom
+ * n'est servi que sur demande (`hosts`, `FAKE_LECLERC_HOSTS`), comme tout nom autre que celui du faux magasin.
+ */
+export const HOME_HOST = 'www.leclercdrive.fr'
 /** Début des adresses des pages du magasin (avec le suffixe de ville, que portent les pages) et de celle du panier (sans). */
 export const PAGE_PATH = `/magasin-${STORE.id}-${STORE.id}-Ville-Test`
 export const CART_PATH = `/magasin-${STORE.id}-${STORE.id}`
@@ -60,13 +66,19 @@ export interface Behavior {
   latencyMs: number
   fault: Fault | null
   /**
-   * Le code HTTP (404, 403, 503…) que le faux site renvoie, avec sa page d'erreur générique, à la racine de l'hôte : la page où l'application ouvre un
-   * plan (ticket E de l'audit du 2026-10-18), refusée par le site (page d'erreur, défi anti-robot servi en 403). Le reste du site répond.
-   * `null` retire le défaut.
+   * Le code HTTP (404, 403, 503…) que le faux site renvoie, avec sa page d'erreur générique, à la racine de l'enseigne (`HOME_HOST`) : la page où
+   * l'application ouvre un plan (ticket E de l'audit du 2026-10-18), refusée par le site (page d'erreur, défi anti-robot servi en 403). Le reste
+   * du site répond. `null` retire le défaut.
    */
   homeStatus?: number | null
-  /** Le délai (ms) avant de répondre à la racine de l'hôte : une page trop lente, que l'application doit savoir dire (ticket E). */
+  /** Le délai (ms) avant de répondre à la racine de l'enseigne : une page trop lente, que l'application doit savoir dire (ticket E). */
   homeDelayMs?: number | null
+  /**
+   * Là où mène le bouton « Commencer mes courses » de l'accueil de l'enseigne : un chemin de l'hôte du magasin (`/`, `/magasin-000001-000001/` :
+   * des pages 404, comme sur le vrai site). Par défaut, l'accueil du magasin avec sa ville. Pour essayer le repli quand le chemin de l'utilisateur
+   * tombe sur une page 404. Un chemin qui n'est pas fait de lettres, chiffres, `.`, `_`, `~`, `-` et `/` est ignoré. `null` retire le défaut.
+   */
+  startPath?: string | null
   /**
    * La page de recherche sans produit : `list` (liste vide et message du site, par défaut), `no-list` (squelette seul) ou `encoded` (état en
    * entités HTML). Plusieurs formes plausibles d'une page que le vrai site n'a jamais été relevé servir (ticket C).
@@ -91,6 +103,8 @@ export type RequestKind = 'search' | 'cart' | 'page' | 'repas' | 'control' | 'ot
 export interface FakeRequest {
   kind: RequestKind
   method: string
+  /** Le nom d'hôte demandé (`Host`, sans le port) : `courses-test…` (le faux magasin), `www…` (l'enseigne) ou `localhost` (le pilotage). */
+  host: string
   path: string
   /** Début et fin de la réponse, en millisecondes depuis le démarrage du processus. */
   startedAt: number
@@ -134,7 +148,7 @@ export interface FakeLeclerc {
 export interface FakeOptions {
   /** 0 (par défaut) : un port libre. */
   port?: number
-  /** Noms d'hôte de faux magasins à accepter en plus de `courses-test.leclercdrive.fr`. */
+  /** Noms d'hôte à accepter en plus de `courses-test.leclercdrive.fr` : d'autres faux magasins, et l'accueil de l'enseigne (`HOME_HOST`). */
   hosts?: string[]
   behavior?: Partial<Behavior>
 }
@@ -155,6 +169,11 @@ export function isLoopback(address: string | undefined): boolean {
 export function hostnameOf(header: string | undefined): string {
   const host = (header ?? '').toLowerCase()
   return host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : (host.split(':')[0] ?? '')
+}
+
+/** Le port d'un en-tête `Host`, avec ses deux-points (`:8099`), ou rien : pour écrire un lien vers un autre nom sur le même port et le même schéma. */
+function portSuffixOf(header: string | undefined): string {
+  return /:(\d{1,5})$/.exec(header ?? '')?.[0] ?? ''
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
@@ -401,11 +420,19 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       entry.status = 200
       return send(res, 200, repasReturnPage(), HTML)
     }
-    // La racine de l'hôte est l'accueil du magasin (session ouverte), pas une page de magasin pour l'agent (qui n'y agit pas) : l'utilisateur y
-    // touche « Commencer mes courses ». C'est là que l'application ouvre un plan (DrivePlan.startUrl) ; `/magasin-<id>-<id>/` (sans ville), que
-    // l'application ouvrait avant, est une page 404 du vrai site (recette réelle du 2026-10-18) et du faux.
+    // Recette réelle du 2026-10-18 (Pixel 9, application 0.1.3) : la RACINE de l'hôte du magasin (`https://<hôte>/`) et `/magasin-<id>-<id>/` (sans
+    // ville) sont des pages 404 du vrai site. Seule la racine de l'ENSEIGNE (`https://www.leclercdrive.fr/`, `HOME_HOST`) est une page : session
+    // ouverte, l'accueil du magasin de l'utilisateur, avec le bouton « Commencer mes courses » qui mène aux pages du magasin (avec la ville) sur
+    // son hôte. Ce n'est pas une page de magasin pour l'agent (qui n'y agit pas) ; c'est là que l'application ouvre un plan
+    // (`DrivePlan.startUrl` = `NavigationPolicy.START_URL`), et l'utilisateur y touche lui-même le bouton. Le faux ne cache plus ce défaut : s'il
+    // retombait sur la racine de l'hôte du magasin, le scénario d'émulateur échouerait.
+    const home = hostnameOf(req.headers.host) === HOME_HOST
     if (path === '/' && req.method === 'GET') {
       entry.kind = 'page'
+      if (!home) {
+        entry.status = 404
+        return send(res, 404, errorPage(), HTML)
+      }
       if (behavior.homeDelayMs != null && behavior.homeDelayMs > 0)
         await sleep(behavior.homeDelayMs)
       if (behavior.homeStatus != null) {
@@ -413,7 +440,19 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
         return send(res, behavior.homeStatus, errorPage(), HTML)
       }
       entry.status = 200
-      return send(res, 200, accueilPage(PAGE_PATH, OTHER_STORE_PATH), HTML)
+      // Liens sans schéma, vers le nom du faux magasin sur le même port : ils suivent le schéma de la page (HTTP en test, HTTPS dans l'émulateur).
+      const origin = `//${STORE.host}${portSuffixOf(req.headers.host)}`
+      const start =
+        behavior.startPath != null && /^\/[\w./~-]*$/.test(behavior.startPath)
+          ? behavior.startPath
+          : `${PAGE_PATH}/`
+      return send(res, 200, accueilPage(`${origin}${start}`, `${origin}${OTHER_STORE_PATH}/`), HTML)
+    }
+    if (home) {
+      // L'enseigne n'a que son accueil ici : les pages d'un magasin sont sur l'hôte du magasin.
+      entry.kind = 'page'
+      entry.status = 404
+      return send(res, 404, errorPage(), HTML)
     }
     const store = STORE_PATTERN.exec(path)
     const rest = store?.[4] ?? ''
@@ -511,6 +550,7 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
     const entry: FakeRequest = {
       kind: 'other',
       method: req.method ?? 'GET',
+      host: hostname,
       path: url.pathname,
       startedAt: now(),
       endedAt: 0,

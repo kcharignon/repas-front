@@ -6,14 +6,24 @@ Selon le nom demandé (en-tête Host) :
   repas.test (le faux front Repas, DRV-317)   toute adresse hors /__ : la page repaspage.html (comme un SPA)
   courses-test.leclercdrive.fr (le faux       TOUT (hors /__) est relayé en HTTP vers le faux site Leclerc complet (Node, drive-agent/fake-leclerc, DRV-309),
   magasin, DRV-319 partie 2)                  qui tourne dans ce conteneur sur 127.0.0.1:8099 : recherche, panier, défauts simulés, cadence jugée
-  autre *.leclercdrive.fr (le faux drive)     GET / (l'accueil) et GET /magasin-… (une page de magasin, DRV-320) : la page de test testpage.html ;
-                                              le reste, 404 (par exemple les recherches que tenterait l'agent : elles n'aboutissent jamais)
+  www.leclercdrive.fr (l'accueil de           deux modes, choisis par POST /__www (voir plus bas) :
+  l'enseigne, NavigationPolicy.START_URL)       « test » (par défaut, le test de fumée) : GET / (l'accueil) et GET /magasin-… (une page de magasin,
+                                                DRV-320) : la page de test testpage.html ; le reste, 404 (par exemple les recherches que tenterait
+                                                l'agent : elles n'aboutissent jamais) ;
+                                              « fake » (les scénarios complets, e2e.sh) : relayé comme le faux magasin vers le faux Leclerc complet,
+                                                qui y sert l'accueil du magasin et son bouton « Commencer mes courses » (qui mène à une page de magasin
+                                                avec sa ville sur courses-test.leclercdrive.fr) ; la racine de courses-test, elle, y est une page 404
+                                                (recette réelle du 2026-10-18 : la racine de l'hôte d'un magasin est une page 404 du vrai site)
+  autre *.leclercdrive.fr (le faux drive)     comme www en mode « test » : GET / et GET /magasin-… : la page de test testpage.html ; le reste, 404
 Pour tous les noms :
   POST /__report      la page y dépose ce qu'elle a relevé (JSON, 8 Ko au plus) ; les tests de l'émulateur le relisent
   GET  /__reports     la liste des relevés, en JSON
   POST /__command     le test dépose un ordre pour le faux Repas (JSON, 16 Ko au plus : un plan en tient) ; la page le prend avec GET /__command
   GET  /__command     le plus ancien ordre en attente (JSON) ou 204
   POST /__reset       vide les relevés et les ordres
+  POST /__www         {"mode": "test" | "fake"} : ce que sert www.leclercdrive.fr (voir plus haut) ; « test » au démarrage, e2e.sh passe en « fake »
+                      et le remet en « test » en sortant, smoke.sh le remet en « test » avant de commencer
+  GET  /__www         le mode courant, en JSON
 
 Le journal des requêtes (méthode et chemin seulement) est dans $SITE_DIR/access.log.
 """
@@ -33,6 +43,10 @@ REPAS_HOST = "repas.test"
 # qu'il vérifie lui-même : il refuse tout autre nom).
 FAKE_LECLERC = ("127.0.0.1", int(os.environ.get("FAKE_LECLERC_PORT", "8099")))
 FAKE_LECLERC_HOSTS = {"courses-test.leclercdrive.fr"}
+# L'accueil de l'enseigne (NavigationPolicy.START_URL de l'application) : relayé au faux Leclerc seulement en mode « fake » (voir l'en-tête).
+HOME_HOST = "www.leclercdrive.fr"
+WWW_MODES = ("test", "fake")
+state = {"www": "test"}
 MAX_PROXY_BYTES = 64 * 1024
 HOP_BY_HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers", "transfer-encoding", "upgrade",
               "host", "content-length", "date", "server"}
@@ -88,7 +102,9 @@ class Handler(BaseHTTPRequestHandler):
             connection.close()
 
     def _is_fake_leclerc(self, path):
-        return self._host() in FAKE_LECLERC_HOSTS and not path.startswith("/__")
+        host = self._host()
+        relayed = host in FAKE_LECLERC_HOSTS or (host == HOME_HOST and state["www"] == "fake")
+        return relayed and not path.startswith("/__")
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
@@ -98,6 +114,8 @@ class Handler(BaseHTTPRequestHandler):
             with lock:
                 body = json.dumps(reports).encode()
             self._send(200, body, "application/json")
+        elif path == "/__www":
+            self._send(200, json.dumps({"mode": state["www"]}).encode(), "application/json")
         elif path == "/__command":
             with lock:
                 command = commands.pop(0) if commands else None
@@ -123,6 +141,16 @@ class Handler(BaseHTTPRequestHandler):
             with lock:
                 reports.clear()
                 commands.clear()
+            self._send(204)
+        elif path == "/__www":
+            try:
+                mode = json.loads(raw).get("mode")
+            except (ValueError, AttributeError):
+                mode = None
+            if mode not in WWW_MODES:
+                return self._send(400, b"mode attendu : test ou fake")
+            with lock:
+                state["www"] = mode
             self._send(204)
         elif path in ("/__report", "/__command"):
             try:

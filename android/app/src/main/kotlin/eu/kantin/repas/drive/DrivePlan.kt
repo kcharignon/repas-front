@@ -86,8 +86,8 @@ object PassRequests {
 
 /**
  * Un plan de Repas à passer au drive (DRV-314) : le message `plan` du protocole v1 reçu par `drive.start`, validé dans sa **forme** et son
- * **hôte** seulement. L'application ne lit pas les lignes : c'est l'agent qui les valide et les interprète ; elle ne garde que de quoi ouvrir
- * la page du magasin (hôte et identifiant) et identifier le passage (`runId`).
+ * **hôte** seulement. L'application ne lit pas les lignes : c'est l'agent qui les valide et les interprète ; elle ne garde que de quoi contrôler
+ * le magasin (hôte et identifiant), rendre le résultat `aborted` et identifier le passage (`runId`).
  *
  * Kotlin pur, pour se tester sans téléphone.
  */
@@ -98,14 +98,17 @@ class DrivePlan private constructor(
     override val text: String,
 ) : PassRequest {
     /**
-     * La page où le drive s'ouvre : la **racine de l'hôte** du magasin, `https://<hôte>/`. Constat de la recette réelle (2026-10-18, Pixel 9) :
-     * avec la session ouverte, elle affiche l'accueil du magasin et son bouton « Commencer mes courses », qui mène aux vraies pages du magasin
-     * (`/magasin-<id>-<id>-<Ville>/…`, celles que lisent [NavigationPolicy.isStorePage] et l'agent). `/magasin-<id>-<id>/` (sans ville, l'adresse que
-     * ce code ouvrait avant) est une page 404 du vrai site. La racine n'est pas une page de magasin pour l'agent : il attend, un message
-     * d'en-tête dit à l'utilisateur de toucher « Commencer mes courses » (l'application ne clique jamais à sa place), et le message du passage
-     * part vers l'agent dès qu'une page de magasin est atteinte ([StoreBanner]). L'hôte a déjà été contrôlé (`*.leclercdrive.fr`, https).
+     * La page où le drive s'ouvre : l'**accueil de l'enseigne** ([NavigationPolicy.START_URL], `https://www.leclercdrive.fr/`), la même que pour la
+     * lecture du magasin, quel que soit l'hôte du magasin du plan. Constat de la recette réelle (2026-10-18, Pixel 9, application 0.1.3) : la racine
+     * de l'hôte du magasin (`https://<hôte>/`, ce que ce code ouvrait) et `/magasin-<id>-<id>/` (sans ville, ce qu'il ouvrait avant) sont des
+     * **pages 404** du vrai site. L'accueil de l'enseigne, session ouverte, affiche l'accueil du magasin de l'utilisateur et son bouton « Commencer
+     * mes courses », qui mène aux vraies pages du magasin (`https://<hôte>/magasin-<id>-<id>-<Ville>/…`, celles que lisent
+     * [NavigationPolicy.isStorePage] et l'agent). Ce n'est pas une page de magasin pour l'agent : il attend, un message d'en-tête dit à
+     * l'utilisateur de toucher « Commencer mes courses » (l'application ne clique jamais à sa place), et le message du passage part vers l'agent dès
+     * qu'une page de magasin est atteinte ([StoreBanner]) ; si ce n'est pas le magasin du plan, l'agent répond `STORE_MISMATCH`. Le magasin du plan
+     * ([storeId], [storeHost]) ne sert qu'à valider le plan et à rendre le résultat `aborted` : il n'est jamais ouvert.
      */
-    override val startUrl: String get() = "https://$storeHost/"
+    override val startUrl: String get() = NavigationPolicy.START_URL
     override val isSetup: Boolean get() = false
 
     override fun abortedResult(agentVersion: String): String = abortedResultJson(runId, storeId, agentVersion, "Envoi abandonné.")
