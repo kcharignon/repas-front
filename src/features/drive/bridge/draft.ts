@@ -30,8 +30,8 @@ export interface SentLine {
 /**
  * Le passage en cours : de quoi rattacher le résultat à la bonne liste, même après un rechargement de la page (nouvelle version
  * du service worker), et de quoi le recouper avec le plan envoyé. Ni magasin ni jeton : l'identifiant du passage et de la liste, la
- * date, et pour chaque ligne le slug de l'ingrédient, son statut et les identifiants de ses produits (la liste de courses, que la
- * lecture hors ligne garde déjà dans ce navigateur).
+ * date, et pour chaque ligne le slug de l'ingrédient, son statut et les identifiants de ses produits (le contenu de la liste de
+ * courses, que la lecture hors ligne garde déjà dans ce navigateur tant que la liste est la liste en cours).
  */
 export interface RunDraft {
   runId: string
