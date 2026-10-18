@@ -17,9 +17,9 @@ import AccountView from '@/views/AccountView.vue'
 const admin = { ...me, roles: ['ROLE_USER', 'ROLE_ADMIN'], isAdmin: true }
 const units = {
   member: [
-    { slug: 'gramme', name: 'Gramme', symbol: 'g' },
-    { slug: 'kilo', name: 'Kilo', symbol: 'kg' },
-    { slug: 'unite', name: 'Unité', symbol: '' },
+    { slug: 'gramme', name: 'Gramme', symbol: 'g', dimension: 'WEIGHT', baseFactor: 1 },
+    { slug: 'kilo', name: 'Kilo', symbol: 'kg', dimension: 'WEIGHT', baseFactor: 1000 },
+    { slug: 'unite', name: 'Unité', symbol: '', dimension: null, baseFactor: null },
   ],
   totalItems: 3,
 }
@@ -184,31 +184,191 @@ describe('garde administrateur', () => {
 })
 
 describe('unités', () => {
-  it('liste les unités, crée puis modifie', async () => {
-    const { wrapper, fetchMock } = await open(UnitsAdminView, {
+  const unitsView = (handlers: Parameters<typeof stubApi>[0] = {}) =>
+    open(UnitsAdminView, {
       'POST /api/v1/units': () =>
         new Response(null, { status: 201, headers: { Location: '/api/v1/units/litre' } }),
       'PUT /api/v1/units/gramme': () => new Response(null, { status: 204 }),
+      'PUT /api/v1/units/unite': () => new Response(null, { status: 204 }),
+      ...handlers,
     })
+  const openForm = async (
+    wrapper: Awaited<ReturnType<typeof unitsView>>['wrapper'],
+    label: string,
+  ) => {
+    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(3))
+    button(label)?.click()
+    await vi.waitFor(() => expect(field('Nom')).not.toBeNull())
+  }
+
+  it('liste les unités avec ce qu’elles mesurent, rien pour une unité sans dimension', async () => {
+    const { wrapper } = await unitsView()
+    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(3))
+
+    const lines = wrapper.findAll('li').map((item) => item.text().replace(/\s+/g, ' '))
+
+    expect(lines[0]).toContain('Gramme')
+    expect(lines[0]).toContain('Poids, × 1')
+    expect(lines[1]).toContain('Poids, × 1000')
+    expect(lines[2]).toBe('Unité—Modifier')
+  })
+
+  it('crée une unité sans dimension : les deux champs partent à null', async () => {
+    const { wrapper, fetchMock } = await unitsView()
     await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(3))
     expect(wrapper.findAll('li')[2]?.text()).toContain('—')
 
     button('Nouvelle unité')?.click()
     await vi.waitFor(() => expect(field('Nom')).not.toBeNull())
-    type(field('Nom'), '  Litre ')
-    type(field('Symbole'), 'l')
+    type(field('Nom'), '  Pincée ')
+    type(field('Symbole'), 'pin')
     await submitDialog()
-    expect(await body(fetchMock, 'POST', '/units')).toEqual({ name: 'Litre', symbol: 'l' })
 
-    button('Modifier Gramme')?.click()
-    await vi.waitFor(() => expect(field('Nom').value).toBe('Gramme'))
+    expect(await body(fetchMock, 'POST', '/units')).toEqual({
+      name: 'Pincée',
+      symbol: 'pin',
+      dimension: null,
+      baseFactor: null,
+    })
+  })
+
+  it('crée une unité avec sa dimension et son facteur, et explique à quoi ils servent', async () => {
+    const { fetchMock } = await unitsView()
+    await vi.waitFor(() => expect(button('Nouvelle unité')).toBeDefined())
+
+    button('Nouvelle unité')?.click()
+    await vi.waitFor(() => expect(field('Nom')).not.toBeNull())
+    expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(
+      'Sert à calculer combien de produits acheter.',
+    )
+    expect(
+      [...field('Ce que l’unité mesure').querySelectorAll('option')].map((o) =>
+        o.textContent.trim(),
+      ),
+    ).toEqual([
+      'Aucune (cuillère, tranche…)',
+      'Poids',
+      'Volume',
+      'Nombre de pièces',
+      'Conditionnement',
+    ])
+    type(field('Nom'), 'Litre')
+    type(field('Symbole'), 'l')
+    type(field('Ce que l’unité mesure'), 'VOLUME')
+    type(field('Facteur de base'), '1000')
+    await submitDialog()
+
+    expect(await body(fetchMock, 'POST', '/units')).toEqual({
+      name: 'Litre',
+      symbol: 'l',
+      dimension: 'VOLUME',
+      baseFactor: 1000,
+    })
+  })
+
+  it('modifie une unité en reprenant ses valeurs, puis change sa dimension et son facteur', async () => {
+    const { wrapper, fetchMock } = await unitsView()
+    await openForm(wrapper, 'Modifier Gramme')
+    expect(field('Nom').value).toBe('Gramme')
+    expect(field('Ce que l’unité mesure').value).toBe('WEIGHT')
+    expect(field('Facteur de base').value).toBe('1')
+
     type(field('Symbole'), 'gr')
     await submitDialog()
-    expect(await body(fetchMock, 'PUT', '/units/gramme')).toEqual({ name: 'Gramme', symbol: 'gr' })
+    expect(await body(fetchMock, 'PUT', '/units/gramme')).toEqual({
+      name: 'Gramme',
+      symbol: 'gr',
+      dimension: 'WEIGHT',
+      baseFactor: 1,
+    })
+
+    await vi.waitFor(() => expect(document.body.querySelector('[role="dialog"]')).toBeNull())
+    button('Modifier Gramme')?.click()
+    await vi.waitFor(() => expect(field('Nom')).not.toBeNull())
+    type(field('Ce que l’unité mesure'), 'PACKAGE')
+    type(field('Facteur de base'), '0.5')
+    await submitDialog()
+    const puts = fetchMock.mock.calls
+      .map(([call]) => call as Request)
+      .filter((request) => request.method === 'PUT' && request.url.endsWith('/units/gramme'))
+    expect(await puts[1]?.json()).toMatchObject({ dimension: 'PACKAGE', baseFactor: 0.5 })
+  })
+
+  it('efface la dimension et le facteur d’une unité quand on choisit « Aucune » et vide le facteur', async () => {
+    const { wrapper, fetchMock } = await unitsView()
+    await openForm(wrapper, 'Modifier Gramme')
+
+    type(field('Ce que l’unité mesure'), '')
+    type(field('Facteur de base'), '')
+    await submitDialog()
+
+    expect(await body(fetchMock, 'PUT', '/units/gramme')).toEqual({
+      name: 'Gramme',
+      symbol: 'g',
+      dimension: null,
+      baseFactor: null,
+    })
+  })
+
+  it('refuse un facteur nul ou négatif sans appeler le back', async () => {
+    const { wrapper, fetchMock } = await unitsView()
+    await openForm(wrapper, 'Modifier Gramme')
+
+    type(field('Facteur de base'), '0')
+    await submitDialog()
+    expect(document.body.textContent).toContain(
+      'Entrez un nombre supérieur à zéro, ou laissez vide.',
+    )
+    type(field('Facteur de base'), '-2')
+    await submitDialog()
+
+    expect(document.body.textContent).toContain(
+      'Entrez un nombre supérieur à zéro, ou laissez vide.',
+    )
+    expect(calls(fetchMock).filter((call) => call.startsWith('PUT /api/v1/units'))).toEqual([])
+  })
+
+  it.each([
+    ['une dimension sans facteur', 'WEIGHT', '', 'UNIT_MEASURE_INCOMPLETE'],
+    ['un facteur sans dimension', '', '1000', 'UNIT_MEASURE_INCOMPLETE'],
+  ])(
+    'envoie %s et affiche le refus du back en français',
+    async (_label, dimension, factor, code) => {
+      const { wrapper, fetchMock } = await unitsView({
+        'PUT /api/v1/units/unite': () => json({ error: { message: code } }, { status: 422 }),
+      })
+      await openForm(wrapper, 'Modifier Unité')
+      type(field('Ce que l’unité mesure'), dimension)
+      type(field('Facteur de base'), factor)
+
+      await submitDialog()
+
+      expect(await body(fetchMock, 'PUT', '/units/unite')).toMatchObject({
+        dimension: dimension === '' ? null : dimension,
+        baseFactor: factor === '' ? null : Number(factor),
+      })
+      expect(document.body.querySelector('[role="dialog"] [role="alert"]')?.textContent).toBe(
+        'La dimension et le facteur de base vont ensemble : renseignez les deux, ou laissez-les vides.',
+      )
+    },
+  )
+
+  it('traduit le refus d’un facteur invalide (UNIT_BASE_FACTOR_INVALID)', async () => {
+    const { wrapper } = await unitsView({
+      'PUT /api/v1/units/gramme': () =>
+        json({ error: { message: 'UNIT_BASE_FACTOR_INVALID' } }, { status: 422 }),
+    })
+    await openForm(wrapper, 'Modifier Gramme')
+
+    await submitDialog()
+
+    expect(document.body.querySelector('[role="dialog"] [role="alert"]')?.textContent).toBe(
+      'Le facteur de base doit être un nombre supérieur à zéro.',
+    )
   })
 
   it('exige un nom et affiche le refus du back', async () => {
-    const { wrapper, fetchMock } = await open(UnitsAdminView, {
+    const { wrapper, fetchMock } = await unitsView({
       'POST /api/v1/units': () =>
         json({ error: { message: 'name: déjà utilisé' } }, { status: 422 }),
     })

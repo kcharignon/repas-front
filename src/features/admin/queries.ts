@@ -23,32 +23,20 @@ function useRefresh(keys: readonly (readonly string[])[]) {
   }
 }
 
-// `dimension` et `baseFactor` valent `null` par défaut dans le contrat, ce qui les rend « requis » dans les types générés. Absents du
-// corps, le back garde les valeurs de l'unité (`null`, `null` les effacerait) : leur saisie viendra avec DRV-409.
-const unitBody = (form: { name: string; symbol: string }) => form as UnitPayload
-
 export function useSaveUnit() {
   const { api } = useSessionStore()
   const refresh = useRefresh([ingredientKeys.units, ingredientKeys.all])
 
   return useMutation({
     meta: { silent: true },
-    mutationFn: async ({
-      slug,
-      form,
-    }: {
-      slug: string | null
-      form: { name: string; symbol: string }
-    }) => {
+    mutationFn: async ({ slug, form }: { slug: string | null; form: UnitPayload }) => {
       if (slug === null) {
-        const { response, error } = await api.POST('/api/v1/units', { body: unitBody(form) })
+        const { response, error } = await api.POST('/api/v1/units', { body: form })
         if (!response.ok) throw ApiError.fromResponse(response, error)
 
         return slugOf(response)
       }
-      await unwrap(
-        api.PUT('/api/v1/units/{slug}', { params: { path: { slug } }, body: unitBody(form) }),
-      )
+      await unwrap(api.PUT('/api/v1/units/{slug}', { params: { path: { slug } }, body: form }))
 
       return slug
     },
