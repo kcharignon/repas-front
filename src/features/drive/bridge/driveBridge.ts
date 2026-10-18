@@ -1,0 +1,234 @@
+import { LIMITS, PROTOCOL_VERSION, ProtocolError, validatePlan } from '@drive-protocol'
+import type { PlanMessage } from '@drive-protocol'
+
+import { browserDraftStorage, createDraftStore } from './draft'
+import type { DraftStorage, DriveResult, RunDraft } from './draft'
+import { DriveBridgeError } from './errors'
+import { byteLength, findNativeBridge, parseInbound } from './native'
+import type { AppInfo, Inbound, NativeBridge } from './native'
+
+/** Ce que le pont annonce aux écrans (`onEvent`). */
+export type DriveEvent =
+  /** Le résultat du passage en cours (`draft` : à quelle liste il appartient). L'écran efface ensuite le brouillon (`clearDraft`). */
+  | { kind: 'result'; result: DriveResult; draft: RunDraft }
+  /** Un résultat qui n'est pas celui du passage en cours (autre `runId`, brouillon expiré ou absent) : à ignorer. */
+  | { kind: 'stale'; result: DriveResult }
+  /** L'application a refusé un message `drive.*` (`code` : `UNAVAILABLE`…, `runId` du passage concerné s'il est connu). */
+  | { kind: 'refused'; code: string; runId: string | null }
+  /** L'application a envoyé une réponse du drive mal formée (`detail` : le champ fautif). */
+  | { kind: 'invalid'; detail: string | null }
+
+export interface DriveBridgeOptions {
+  /** La fenêtre qui porte `repasNative` ; par défaut celle de la page (cherchée à chaque appel). */
+  window?: object
+  /** Où garder le brouillon ; par défaut `localStorage` (la mémoire de la page s'il est refusé). */
+  storage?: DraftStorage
+  now?: () => Date
+  /** Attente de la réponse à `app.info`, en millisecondes. */
+  infoTimeoutMs?: number
+}
+
+/** Au plus autant d'événements gardés pour un écran qui n'est pas encore là (le résultat peut arriver pendant un changement de page). */
+const BUFFER = 20
+
+/**
+ * Le seul endroit qui connaît le pont natif de l'application Repas (`repasNative`, DRV-317) : les écrans du drive (DRV-403 à 405) n'en
+ * voient ni le format ni le stockage du brouillon. Aucun appel réseau ; rien n'est journalisé (un plan est la liste de courses).
+ */
+export function createDriveBridge(options: DriveBridgeOptions = {}) {
+  const win = (): object => options.window ?? globalThis
+  const now = options.now ?? (() => new Date())
+  const drafts = createDraftStore(
+    options.storage ?? browserDraftStorage(win() as { localStorage?: Storage }),
+    now,
+  )
+
+  const listeners = new Set<(event: DriveEvent) => void>()
+  const buffered: DriveEvent[] = []
+  let listening: NativeBridge | null = null
+  let infoInFlight: Promise<AppInfo> | null = null
+  let pendingInfo: {
+    resolve: (info: AppInfo) => void
+    reject: (error: DriveBridgeError) => void
+    timer: ReturnType<typeof setTimeout>
+  } | null = null
+
+  const publish = (event: DriveEvent) => {
+    if (listeners.size === 0) {
+      if (event.kind !== 'invalid') buffered.push(event)
+      if (buffered.length > BUFFER) buffered.shift()
+
+      return
+    }
+    for (const listener of listeners) listener(event)
+  }
+
+  const settleInfo = (settle: (pending: NonNullable<typeof pendingInfo>) => void) => {
+    if (pendingInfo === null) return
+    const pending = pendingInfo
+    pendingInfo = null
+    clearTimeout(pending.timer)
+    settle(pending)
+  }
+
+  const receive = (inbound: Inbound) => {
+    switch (inbound.type) {
+      case 'app.info':
+        return settleInfo((pending) => pending.resolve(inbound.info))
+      case 'error':
+        return settleInfo((pending) =>
+          pending.reject(new DriveBridgeError('REFUSED', inbound.code)),
+        )
+      case 'drive.error':
+        return publish({ kind: 'refused', code: inbound.code, runId: inbound.runId })
+      case 'invalid':
+        // Une réponse mal formée à `app.info` ne doit pas laisser l'appel en attente
+        settleInfo((pending) =>
+          pending.reject(new DriveBridgeError('INVALID_RESPONSE', inbound.detail)),
+        )
+
+        return publish({ kind: 'invalid', detail: inbound.detail })
+      case 'drive.result': {
+        const draft = drafts.load()
+
+        return publish(
+          draft !== null && draft.runId === inbound.result.runId
+            ? { kind: 'result', result: inbound.result, draft }
+            : { kind: 'stale', result: inbound.result },
+        )
+      }
+    }
+  }
+
+  /** Écoute le pont (une seule fois par pont) ; `null` hors de l'application. */
+  const connect = (): NativeBridge | null => {
+    const native = findNativeBridge(win())
+    if (native !== null && native !== listening) {
+      native.addEventListener('message', (event) => {
+        const inbound = parseInbound(event.data)
+        if (inbound !== null) receive(inbound)
+      })
+      listening = native
+    }
+
+    return native
+  }
+
+  const requireNative = (): NativeBridge => {
+    const native = connect()
+    if (native === null) throw new DriveBridgeError('UNAVAILABLE')
+
+    return native
+  }
+
+  const send = (native: NativeBridge, message: object): void => {
+    const text = JSON.stringify(message)
+    if (byteLength(text) > LIMITS.messageBytes) throw new DriveBridgeError('TOO_LARGE')
+    try {
+      native.postMessage(text)
+    } catch {
+      throw new DriveBridgeError('SEND_FAILED')
+    }
+  }
+
+  return {
+    /** L'application Repas est-elle là ? Faux dans un navigateur ordinaire : proposer l'installation (DRV-316) et le mode assisté. */
+    isAvailable: (): boolean => findNativeBridge(win()) !== null,
+
+    /** La version de l'application et l'état du drive (`app.info`). */
+    info(): Promise<AppInfo> {
+      const native = requireNative()
+      // Une demande déjà en cours : sa réponse sert à tous ceux qui attendent
+      infoInFlight ??= new Promise<AppInfo>((resolve, reject) => {
+        const timer = setTimeout(
+          () => settleInfo((pending) => pending.reject(new DriveBridgeError('TIMEOUT'))),
+          options.infoTimeoutMs ?? 3000,
+        )
+        pendingInfo = { resolve, reject, timer }
+        try {
+          send(native, { v: PROTOCOL_VERSION, type: 'app.info' })
+        } catch (error) {
+          settleInfo((pending) => pending.reject(error as DriveBridgeError))
+        }
+      }).finally(() => (infoInFlight = null))
+
+      return infoInFlight
+    },
+
+    /**
+     * Lance le passage : valide le plan (protocole v1), garde le brouillon puis envoie `drive.start`. La suite arrive par `onEvent`
+     * (`result`, ou `refused` si l'application refuse). Un passage de moins de 24 h non terminé (un autre `runId`) bloque : l'écran
+     * propose de le reprendre ou de l'abandonner (`cancel`, puis `clearDraft`). Rend le brouillon enregistré.
+     */
+    startRun(plan: PlanMessage, listId: string): RunDraft {
+      const native = requireNative()
+      let message: PlanMessage
+      try {
+        const valid = validatePlan(plan)
+        if (valid.type !== 'plan') throw new DriveBridgeError('INVALID_PLAN', 'type')
+        message = valid
+      } catch (error) {
+        if (error instanceof DriveBridgeError) throw error
+        throw new DriveBridgeError(
+          'INVALID_PLAN',
+          error instanceof ProtocolError ? error.path : null,
+        )
+      }
+      const current = drafts.load()
+      if (current !== null && current.runId !== message.runId)
+        throw new DriveBridgeError('RUN_IN_PROGRESS')
+
+      const draft: RunDraft = {
+        runId: message.runId,
+        listId,
+        startedAt: current?.runId === message.runId ? current.startedAt : now().toISOString(),
+      }
+      // Le brouillon d'abord : le résultat ne peut pas arriver avant qu'il soit gardé
+      drafts.save(draft)
+      try {
+        send(native, { v: PROTOCOL_VERSION, type: 'drive.start', plan: message })
+      } catch (error) {
+        if (current === null) drafts.clear()
+        throw error
+      }
+
+      return draft
+    },
+
+    /**
+     * Commence à écouter le pont sans attendre un écran : à appeler au démarrage de l'application, pour que le résultat arrivé avant
+     * l'écran du retour soit gardé (puis rejoué par `onEvent`). Sans effet hors de l'application ou si l'écoute a déjà commencé.
+     */
+    listen(): void {
+      connect()
+    },
+
+    /** Demande l'arrêt du passage : l'application répond par un résultat `aborted` (`onEvent`). Le brouillon reste jusque-là. */
+    cancel(): void {
+      send(requireNative(), { v: PROTOCOL_VERSION, type: 'drive.cancel' })
+    },
+
+    /**
+     * Écoute ce que l'application envoie du drive. Les événements arrivés alors qu'aucun écran n'écoutait sont rejoués au premier
+     * abonné. Rend la fonction qui arrête l'écoute.
+     */
+    onEvent(listener: (event: DriveEvent) => void): () => void {
+      connect()
+      listeners.add(listener)
+      for (const event of buffered.splice(0)) listener(event)
+
+      return () => listeners.delete(listener)
+    },
+
+    /** Le passage en cours (`runId`, `listId`, `startedAt`), s'il a moins de 24 h. Survit à un rechargement de la page. */
+    loadDraft: (): RunDraft | null => drafts.load(),
+    clearDraft: (): void => drafts.clear(),
+    /** Ce résultat est-il celui du passage en cours ? Sinon il est périmé. */
+    matchesDraft: (result: { runId: string }): boolean => drafts.matches(result),
+  }
+}
+
+export type DriveBridge = ReturnType<typeof createDriveBridge>
+
+/** Le pont de la page : les écrans importent celui-ci, les tests fabriquent le leur avec `createDriveBridge`. */
+export const driveBridge: DriveBridge = createDriveBridge()

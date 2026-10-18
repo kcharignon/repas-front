@@ -6,6 +6,8 @@
     "drive-agent/protocol/**/*.ts",
     "drive-agent/test/**/*.ts",
     "drive-agent/demo/**/*.ts",
+    "drive-agent/fake-leclerc/**/*.ts",
+    "drive-agent/e2e/**/*.ts",
     "drive-agent/scripts/**/*.mjs"
   ],
   "compilerOptions": {
