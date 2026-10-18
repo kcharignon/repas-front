@@ -387,6 +387,54 @@ describe('setCartQuantity', () => {
   })
 })
 
+describe('cartQuantity (ticket M)', () => {
+  it('ne sait rien avant la première réponse du panier', async () => {
+    const { adapter } = shop()
+    await adapter.searchProducts('farine')
+
+    expect(adapter.cartQuantity('1000001')).toBeNull()
+  })
+
+  it('rend la quantité de chaque produit que la dernière réponse du panier cite, null pour les autres', async () => {
+    const { adapter } = shop()
+
+    await adapter.setCartQuantity('1000001', 3)
+
+    expect(adapter.cartQuantity('1000001')).toBe(3)
+    expect(adapter.cartQuantity('1000003')).toBe(2)
+    expect(adapter.cartQuantity('9999999')).toBeNull()
+  })
+
+  it('la réponse suivante remplace la précédente : un panier vidé ne sait plus rien de ces produits', async () => {
+    let reply = fixture('panier-ajout.json')
+    const site = fakeSite((call) =>
+      call.init.method === 'POST' ? { body: reply } : { body: fixture('recherche-farine.html') },
+    )
+    const adapter = new LeclercAdapter(site.deps)
+    await adapter.setCartQuantity('1000001', 3)
+
+    reply = fixture('panier-retrait.json')
+    await adapter.setCartQuantity('1000001', 0)
+
+    expect(adapter.cartQuantity('1000001')).toBeNull()
+    expect(adapter.cartQuantity('1000003')).toBeNull()
+  })
+
+  it('une écriture qui échoue ne fait pas oublier la dernière réponse lisible', async () => {
+    let reply: Scripted = { body: fixture('panier-ajout.json') }
+    const site = fakeSite((call) =>
+      call.init.method === 'POST' ? reply : { body: fixture('recherche-farine.html') },
+    )
+    const adapter = new LeclercAdapter(site.deps)
+    await adapter.setCartQuantity('1000001', 3)
+
+    reply = { status: 404, body: 'introuvable' }
+    await expect(adapter.setCartQuantity('1000001', 3)).rejects.toThrow(LeclercError)
+
+    expect(adapter.cartQuantity('1000003')).toBe(2)
+  })
+})
+
 describe('readProductFromSearch', () => {
   it('rend le produit voulu parmi les résultats, ou null', async () => {
     const { adapter } = shop()

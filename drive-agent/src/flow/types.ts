@@ -9,6 +9,7 @@ import type {
 } from '../../protocol'
 import type { RetailerAdapter } from '../leclerc'
 import type { Ui } from '../ui'
+import type { CartNote } from './keep-cart'
 
 /** Le stockage de session de la page (`sessionStorage`) : l'état de reprise y vit le temps de l'onglet. */
 export interface StorageLike {
@@ -38,9 +39,10 @@ export interface PhaseBContext {
   ui: Ui
   /**
    * Enregistre l'issue d'une ligne en attente (`CHOSEN`, `HAVE_AT_HOME`, `SKIPPED`, `FAILED`…) : elle est sauvegardée pour la reprise
-   * et la progression avance. Une ligne qu'on n'enregistre pas devient `UNAVAILABLE` au résultat.
+   * et la progression avance. Une ligne qu'on n'enregistre pas devient `UNAVAILABLE` au résultat. `cart` : ce que l'écran de fin doit dire de
+   * la quantité déjà au panier (ticket M).
    */
-  record(line: ResultLine): void
+  record(line: ResultLine, cart?: CartNote): void
   /** Vrai dès que l'utilisateur a touché « Arrêter » : finir la ligne en cours, puis rendre la main. */
   stopRequested(): boolean
   /** Remet l'écran de progression, après un écran de la phase B. */

@@ -106,8 +106,65 @@ test('met la quantité demandée au panier même quand il est déjà garni, sans
   await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
 
-  // Then : la quantité est absolue (3, pas 5) et le sel est resté
+  // Then : la quantité monte à celle du plan (3) et le sel est resté
   expect(fake.cart()).toEqual({ 1000001: 3, 1000009: 5 })
+})
+
+test('ne réduit jamais une quantité déjà au panier : 5 déjà pour un plan de 2, rien n’est écrit, le résultat dit 5 et la fin le dit', async ({
+  page,
+  fake,
+  agentCode,
+}) => {
+  // Given : la farine est déjà au panier en 5 exemplaires, avec du sel (5) que le plan ne cite pas ; le plan n'en veut que 2
+  fake.seedCart({ 1000001: 5, 1000009: 5 })
+
+  // When
+  await openWithFragment(
+    page,
+    fake,
+    agentCode,
+    planOf([known('farine', 'Farine', [product(1000001, 2)])]),
+  )
+  await page.getByRole('button', { name: 'Commencer' }).click()
+  await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+
+  // Then : le panier n'a pas bougé, sans une seule écriture, et la fin dit ce qui a été conservé
+  expect(fake.cart()).toEqual({ 1000001: 5, 1000009: 5 })
+  expect(fake.paced().map((call) => call.kind)).toEqual(['search'])
+  await expect(page.getByText('Déjà 5 au panier : conservé')).toBeVisible()
+  expectPoliteAgent(fake)
+  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+  expect(await returnedResult(page, fake)).toMatchObject({
+    outcome: 'completed',
+    lines: [{ ingredientSlug: 'farine', outcome: 'ADDED', productId: '1000001', quantity: 5 }],
+  })
+})
+
+test('rejouer un envoi déjà fait n’écrit plus rien : le panier a déjà les quantités du plan', async ({
+  page,
+  fake,
+  agentCode,
+}) => {
+  // Given : le panier a déjà exactement les quantités du plan (un premier envoi vient de les y mettre)
+  fake.seedCart({ 1000001: 3, 1000006: 1 })
+
+  // When
+  await openWithFragment(
+    page,
+    fake,
+    agentCode,
+    planOf([
+      known('farine', 'Farine', [product(1000001, 3)]),
+      known('sucre', 'Sucre', [product(1000006, 1)]),
+    ]),
+  )
+  await page.getByRole('button', { name: 'Commencer' }).click()
+  await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+
+  // Then : une recherche par ligne, aucune écriture, aucune mention
+  expect(fake.cart()).toEqual({ 1000001: 3, 1000006: 1 })
+  expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'search'])
+  await expect(page.getByText('conservé')).toHaveCount(0)
 })
 
 test('demande la quantité quand elle est à vérifier, et passe la ligne si l’utilisateur le veut', async ({

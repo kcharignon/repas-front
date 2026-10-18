@@ -22,6 +22,7 @@ import {
   S,
   type PickerItem,
 } from '../ui'
+import { putInCart } from './keep-cart'
 import { packsFor } from './packs'
 import { priceOf } from './phase-a'
 import { searchByName } from './search-by-name'
@@ -253,29 +254,32 @@ async function settleLine(
     }
 
     context.showProgress()
-    let cart
+    let settled
     try {
-      cart = await adapter.setCartQuantity(candidate.id, packs)
+      settled = await putInCart(adapter, candidate, packs)
     } catch (error) {
       if (!(error instanceof LeclercError) || error.code !== 'NETWORK') throw error
       record({ ingredientSlug: slug, outcome: 'FAILED', error: 'NETWORK', ...rejected() })
       return 'done'
     }
-    if (cart.obtained < 1) {
+    if (settled.obtained < 1) {
       search.notice = S.picker.cartRefused
       continue
     }
-    record({
-      ingredientSlug: slug,
-      outcome: 'CHOSEN',
-      product: chosenProduct(candidate),
-      quantity: Math.min(cart.obtained, LIMITS.packsMax),
-      placement,
-      ...(unavailable.length > 0 && {
-        unavailableIds: unavailable.map((product) => product.id).slice(0, LIMITS.products),
-      }),
-      ...rejected(),
-    })
+    record(
+      {
+        ingredientSlug: slug,
+        outcome: 'CHOSEN',
+        product: chosenProduct(candidate),
+        quantity: Math.min(settled.obtained, LIMITS.packsMax),
+        placement,
+        ...(unavailable.length > 0 && {
+          unavailableIds: unavailable.map((product) => product.id).slice(0, LIMITS.products),
+        }),
+        ...rejected(),
+      },
+      settled.note ?? undefined,
+    )
     return 'done'
   }
 }

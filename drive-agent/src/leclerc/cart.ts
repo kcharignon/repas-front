@@ -65,6 +65,12 @@ export interface CartReading {
   items: number | null
   /** Total du panier en centimes (`sTotalAPayer`), `null` si la réponse ne le dit pas ou s'il n'est pas lisible. */
   totalCents: number | null
+  /**
+   * La quantité de chaque produit du panier que la réponse donne (`lstProduitsLight`), par identifiant de produit (ticket M : l'agent n'écrit
+   * jamais une quantité plus basse que celle que le panier a déjà). Une ligne dont l'identifiant ou la quantité sont illisibles est ignorée.
+   * Une `Map`, pas un objet : l'identifiant vient de la page.
+   */
+  quantities: ReadonlyMap<string, number>
 }
 
 /** « 12,34 € » (ou « 1 234,56 € ») donne 1234 ; tout autre texte, `null` (le total ne sert qu'à comparer deux états du panier). */
@@ -135,6 +141,21 @@ function findKey(value: unknown, key: string, depth = 0): unknown {
   return undefined
 }
 
+/** Un identifiant de produit de l'enseigne : des chiffres, en texte (`iIdProduit` arrive en nombre ou en texte selon la réponse). */
+const PRODUCT_ID = /^[0-9]{1,12}$/
+
+/** Les quantités des produits d'une liste `lstProduitsLight` : celles dont l'identifiant et la quantité se lisent. */
+function quantitiesOf(list: readonly unknown[]): Map<string, number> {
+  const quantities = new Map<string, number>()
+  for (const item of list) {
+    const record = asRecord(item)
+    const quantity = record ? asNumber(record.iQtePanier) : null
+    const id = record === null ? '' : String(record.iIdProduit)
+    if (quantity !== null && quantity >= 0 && PRODUCT_ID.test(id)) quantities.set(id, quantity)
+  }
+  return quantities
+}
+
 const startsWithPanier = (value: unknown) => typeof value === 'string' && value.startsWith('Panier')
 
 /** L'évènement d'état du panier : `eTypeEvenement` 1 dont l'identifiant (`sIdUnique`) commence par « Panier ». */
@@ -172,5 +193,6 @@ export function readCartResponse(text: string, productId: string): CartReading {
     obtained,
     items: asNumber(findKey(event, 'iQuantitePanier')),
     totalCents: parseTotal(findKey(event, 'sTotalAPayer')),
+    quantities: quantitiesOf(list),
   }
 }

@@ -234,6 +234,22 @@ const SCREENS: Record<string, () => unknown> = {
         { name: 'Lait demi-écrémé', planned: 6, live: 2 },
       ],
     }),
+  // Le panier avait déjà plus que le plan (conservé), ou la recherche ne disait pas la quantité (illisible) : ticket M.
+  'end-cart': () =>
+    ui.show('end', {
+      outcome: 'completed',
+      added: 3,
+      chosen: 0,
+      haveAtHome: 0,
+      skipped: 0,
+      unavailable: 0,
+      failed: 0,
+      kept: [{ name: 'Farine de blé', wanted: 2, inCart: 5 }],
+      unreadable: [
+        { name: 'Lait demi-écrémé', atLeast: 4 },
+        { name: 'Sucre en poudre', atLeast: null },
+      ],
+    }),
   'end-partial': () =>
     ui.show('end', {
       outcome: 'partial',

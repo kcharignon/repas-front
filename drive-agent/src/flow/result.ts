@@ -28,6 +28,28 @@ export function changesOf(plan: PlanMessage, state: RunState): EndChange[] {
   })
 }
 
+/** Ce que l'écran de fin dit des quantités déjà au panier (ticket M) : celles qui sont conservées, et celles qu'on n'a pas pu lire. */
+export interface Carts {
+  kept: { name: string; wanted: number; inCart: number }[]
+  unreadable: { name: string; atLeast: number | null }[]
+}
+
+/**
+ * Les lignes dont la quantité déjà au panier est à dire à la fin, dans l'ordre du plan, une seule fois chacune : `kept` (le panier avait plus
+ * que le plan, rien n'a été réduit) et `unreadable` (la recherche ne donnait pas la quantité ; `atLeast` est le plancher connu, `null` s'il n'y
+ * en avait pas). Comme pour `changesOf`, ce qui vient de l'état de reprise n'est cru que pour une ligne du plan.
+ */
+export function cartsOf(plan: PlanMessage, state: RunState): Carts {
+  const carts: Carts = { kept: [], unreadable: [] }
+  for (const { ingredientSlug, name } of plan.lines) {
+    const found = state.carts.find((cart) => cart.ingredientSlug === ingredientSlug)
+    if (found?.kind === 'KEPT')
+      carts.kept.push({ name, wanted: found.wanted, inCart: found.inCart })
+    else if (found) carts.unreadable.push({ name, atLeast: found.inCart })
+  }
+  return carts
+}
+
 /** L'issue globale d'un passage et, s'il y en a un, le code qui l'a interrompu. */
 export interface Ending {
   outcome: Outcome
@@ -103,6 +125,7 @@ export function endProps(
   lines: readonly ResultLine[],
   ending: Ending,
   changes: readonly EndChange[] = [],
+  carts: Carts = { kept: [], unreadable: [] },
 ): EndProps {
   const count = (outcome: ResultLine['outcome']) =>
     lines.filter((line) => line.outcome === outcome).length
@@ -116,5 +139,7 @@ export function endProps(
     unavailable: count('UNAVAILABLE'),
     failed: count('FAILED'),
     ...(changes.length > 0 && { changes }),
+    ...(carts.kept.length > 0 && { kept: carts.kept }),
+    ...(carts.unreadable.length > 0 && { unreadable: carts.unreadable }),
   }
 }

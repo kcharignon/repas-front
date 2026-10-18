@@ -42,6 +42,7 @@ const SCREENS = [
   'hostile',
   'end-completed',
   'end-changes',
+  'end-cart',
   'end-partial',
   'end-aborted',
   ...ERROR_SCREENS,

@@ -69,12 +69,12 @@ describe('cartPayload et cartBody', () => {
 
 describe('readCartResponse', () => {
   it('lit la quantité obtenue et le nombre d’articles dans l’évènement panier d’un ajout', () => {
-    expect(readCartResponse(fixture('panier-ajout.json'), '1000001')).toEqual({
+    expect(readCartResponse(fixture('panier-ajout.json'), '1000001')).toMatchObject({
       obtained: 3,
       items: 5,
       totalCents: 947,
     })
-    expect(readCartResponse(fixture('panier-ajout.json'), '1000003')).toEqual({
+    expect(readCartResponse(fixture('panier-ajout.json'), '1000003')).toMatchObject({
       obtained: 2,
       items: 5,
       totalCents: 947,
@@ -82,7 +82,7 @@ describe('readCartResponse', () => {
   })
 
   it('lit un changement de quantité dont les identifiants et quantités sont en texte', () => {
-    expect(readCartResponse(fixture('panier-changement.json'), '1000001')).toEqual({
+    expect(readCartResponse(fixture('panier-changement.json'), '1000001')).toMatchObject({
       obtained: 2,
       items: 2,
       totalCents: 258,
@@ -90,12 +90,12 @@ describe('readCartResponse', () => {
   })
 
   it('compte 0 pour un produit qui n’est plus dans lstProduitsLight (retrait)', () => {
-    expect(readCartResponse(fixture('panier-retrait.json'), '1000001')).toEqual({
+    expect(readCartResponse(fixture('panier-retrait.json'), '1000001')).toMatchObject({
       obtained: 0,
       items: 0,
       totalCents: 0,
     })
-    expect(readCartResponse(fixture('panier-ajout.json'), '9999999')).toEqual({
+    expect(readCartResponse(fixture('panier-ajout.json'), '9999999')).toMatchObject({
       obtained: 0,
       items: 5,
       totalCents: 947,
@@ -118,7 +118,7 @@ describe('readCartResponse', () => {
       },
     ]
 
-    expect(readCartResponse(JSON.stringify(events), '5')).toEqual({
+    expect(readCartResponse(JSON.stringify(events), '5')).toMatchObject({
       obtained: 4,
       items: null,
       totalCents: null,
@@ -139,6 +139,62 @@ describe('readCartResponse', () => {
     expect(() => readCartResponse(text, '5')).toThrow(
       expect.objectContaining({ code: 'CONTRACT_CHANGED' }),
     )
+  })
+})
+
+describe('readCartResponse : la quantité de chaque produit du panier (ticket M)', () => {
+  it('rend la quantité de chaque produit de la réponse, pour ne jamais réduire une quantité déjà au panier', () => {
+    const reading = readCartResponse(fixture('panier-ajout.json'), '1000001')
+
+    expect([...reading.quantities]).toEqual([
+      ['1000001', 3],
+      ['1000003', 2],
+    ])
+  })
+
+  it('lit les identifiants et quantités donnés en texte', () => {
+    const reading = readCartResponse(fixture('panier-changement.json'), '1000001')
+
+    expect(reading.quantities.get('1000001')).toBe(2)
+  })
+
+  it('un panier vidé (retrait) n’a aucune quantité', () => {
+    expect(readCartResponse(fixture('panier-retrait.json'), '1000001').quantities.size).toBe(0)
+  })
+
+  it('ignore une ligne dont l’identifiant ou la quantité sont illisibles, sans échouer pour autant', () => {
+    const events = [
+      {
+        eTypeEvenement: 1,
+        sIdUnique: 'Panier1',
+        lstProduitsLight: [
+          { iIdProduit: 5, iQtePanier: 4 },
+          { iIdProduit: 6, iQtePanier: 'beaucoup' },
+          { iIdProduit: 'x<script>', iQtePanier: 2 },
+          { iQtePanier: 3 },
+          'pas un objet',
+        ],
+      },
+    ]
+
+    const reading = readCartResponse(JSON.stringify(events), '5')
+
+    expect([...reading.quantities]).toEqual([['5', 4]])
+  })
+
+  it('un identifiant comme « __proto__ » ou « constructor » n’est qu’une clé de plus', () => {
+    const events = [
+      {
+        eTypeEvenement: 1,
+        sIdUnique: 'Panier1',
+        lstProduitsLight: [{ iIdProduit: 5, iQtePanier: 1 }],
+      },
+    ]
+
+    const { quantities } = readCartResponse(JSON.stringify(events), '5')
+
+    expect(quantities.get('constructor')).toBeUndefined()
+    expect(quantities.get('__proto__')).toBeUndefined()
   })
 })
 

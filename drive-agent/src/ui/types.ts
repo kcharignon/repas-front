@@ -120,6 +120,16 @@ export interface EndProps {
    * (DRV-613). Absent (jamais vide) quand aucune ne l'a été.
    */
   changes?: readonly { name: string; planned: number; live: number }[]
+  /**
+   * Les lignes dont le panier avait déjà plus que la quantité du plan (ticket M) : Repas n'y a rien réduit, `inCart` est conservé. Absent
+   * (jamais vide) quand aucune.
+   */
+  kept?: readonly { name: string; wanted: number; inCart: number }[]
+  /**
+   * Les lignes dont la recherche ne donnait pas la quantité déjà au panier (ticket M) ; `atLeast` est ce que la dernière réponse du panier en
+   * disait, `null` si elle n'en disait rien. Absent (jamais vide) quand aucune.
+   */
+  unreadable?: readonly { name: string; atLeast: number | null }[]
 }
 
 /** Les écrans : ce que `ui.show(nom, props)` affiche et ce que sa promesse rend. */
