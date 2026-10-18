@@ -1,7 +1,8 @@
 import { computed } from 'vue'
-import { useQuery } from '@tanstack/vue-query'
+import { useMutation, useQuery } from '@tanstack/vue-query'
 
 import { unwrap } from '@/api'
+import type { ChoiceIntent } from '@/api'
 import { useSessionStore } from '@/session/session'
 
 export const driveKeys = {
@@ -27,7 +28,7 @@ export function useDriveSettings(enabled: () => boolean = () => true) {
  * Le plan d'une liste envoyée : ce que le back sait de chaque ligne (produits classés, refusés, nombre de produits). Il dépend des
  * choix mémorisés, qui changent entre deux ouvertures : il est relu à chaque ouverture de l'écran, jamais gardé.
  */
-export function useDrivePlan(listId: () => string) {
+export function useDrivePlan(listId: () => string, enabled: () => boolean = () => true) {
   const { api } = useSessionStore()
 
   return useQuery({
@@ -38,8 +39,27 @@ export function useDrivePlan(listId: () => string) {
           params: { path: { shoppingListId: listId() } },
         }),
       ),
+    enabled: computed(enabled),
     staleTime: 0,
     gcTime: 0,
     refetchOnMount: 'always',
+  })
+}
+
+/**
+ * Enregistre ce que le passage a appris (`PUT /drive/choices`), lot après lot (200 intentions au plus par appel, un seul lot presque
+ * toujours). L'écran du retour dit lui-même l'échec et propose de réessayer : pas de notification en plus.
+ */
+export function useSaveChoices() {
+  const { api } = useSessionStore()
+
+  return useMutation({
+    mutationFn: async ({ storeId, batches }: { storeId: string; batches: ChoiceIntent[][] }) => {
+      for (const choices of batches)
+        await unwrap(
+          api.PUT('/api/v1/drive/choices', { body: { retailer: 'leclerc', storeId, choices } }),
+        )
+    },
+    meta: { silent: true },
   })
 }

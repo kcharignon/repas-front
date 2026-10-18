@@ -44,7 +44,7 @@ const session = {
   'GET /api/v1/me': () => json(me),
 }
 
-async function open(handlers: Handlers = {}, listId = 'l1') {
+async function open(handlers: Handlers = {}, listId = 'l1', query = '') {
   const fetchMock = stubApi({
     ...session,
     'GET /api/v1/drive/plans/l1': () => json(plan()),
@@ -53,7 +53,7 @@ async function open(handlers: Handlers = {}, listId = 'l1') {
   localStorage.setItem('repas.session', '1')
   const context = appContext()
   await useSessionStore().restore()
-  await context.router.push(`/drive/envoi/${listId}`)
+  await context.router.push(`/drive/envoi/${listId}${query}`)
   const wrapper = mount(DriveSendView, {
     attachTo: document.body,
     global: { plugins: context.plugins },
@@ -299,6 +299,25 @@ describe('écran d’envoi au drive, dans l’application', () => {
 
     expect(started(native)).toHaveLength(0)
     expect(wrapper.text()).toContain('En attente du retour du drive…')
+  })
+
+  it('« Réessayer les échecs » : ne reprend que les lignes nommées, le plan envoyé aussi', async () => {
+    const native = installApp()
+    const { wrapper } = await open({}, 'l1', '?lignes=beurre,poivre')
+    await loaded(wrapper)
+
+    expect(wrapper.findAll('main > section ul > li')).toHaveLength(2)
+    expect(wrapper.text()).toContain('Votre liste (2)')
+    expect(wrapper.text()).toContain('Reprise des articles en échec : 2 articles')
+    expect(wrapper.find('a[href="/drive/envoi/l1"]').text()).toBe('Voir toute la liste')
+    expect(counts(wrapper)[0]).toBe('Produits connus1')
+
+    await press('Ouvrir le drive')
+
+    expect(started(native)[0]?.plan?.lines.map((line) => line.ingredientSlug)).toEqual([
+      'beurre',
+      'poivre',
+    ])
   })
 
   it('désactive le drive sans réseau, et le dit', async () => {

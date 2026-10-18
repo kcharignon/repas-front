@@ -42,7 +42,18 @@ const waiting = computed(() => draft.value !== null && draft.value.listId === li
 /** Un passage d'une autre liste est en cours : un seul à la fois. */
 const elsewhere = computed(() => draft.value !== null && draft.value.listId !== listId.value)
 
-const lines = computed(() => plan.data.value?.lines ?? [])
+// « Réessayer les échecs » (retour du drive) : seules les lignes nommées dans l'adresse sont reprises
+const only = computed(() => {
+  const names = route.query.lignes
+  return typeof names === 'string' && names !== '' ? new Set(names.split(',')) : null
+})
+const visible = computed(() => {
+  const data = plan.data.value
+  if (data === undefined || only.value === null) return data
+
+  return { ...data, lines: data.lines.filter((line) => only.value?.has(line.ingredientSlug)) }
+})
+const lines = computed(() => visible.value?.lines ?? [])
 const counts = computed(() => {
   const statuses = lines.value.map((line) => effectiveStatus(line, changes.value))
   const count = (status: string) => statuses.filter((candidate) => candidate === status).length
@@ -107,7 +118,7 @@ function failureText(error: unknown): string {
 
 /** Lance le drive ; en attente d'un résultat, rouvre le même passage (même `runId`). */
 function openDrive() {
-  const data = plan.data.value
+  const data = visible.value
   if (data === undefined) return
   failure.value = null
   try {
@@ -181,6 +192,15 @@ function confirmReopenList() {
 
     <template v-else-if="plan.data.value">
       <p class="text-muted">{{ storeName }}</p>
+      <p v-if="only !== null && !waiting" class="flex flex-wrap items-center gap-x-3 font-semibold">
+        {{ t('driveSend.retryOnly', { count: lines.length }, lines.length) }}
+        <RouterLink
+          :to="{ name: 'drive-send', params: { listId } }"
+          class="inline-flex min-h-11 items-center font-bold text-primary underline"
+        >
+          {{ t('driveSend.showAll') }}
+        </RouterLink>
+      </p>
 
       <!-- En attente du résultat du drive -->
       <section

@@ -13,6 +13,8 @@ const driveCodes = new Map([
   ['SHOPPING_LIST_NOT_SENDABLE', 'errors.listNotSendable'],
   ['SHOPPING_LIST_EMPTY', 'errors.listEmpty'],
   ['DRIVE_NOT_CONFIGURED', 'errors.driveNotConfigured'],
+  ['DRIVE_STORE_MISMATCH', 'errors.driveStoreMismatch'],
+  ['DRIVE_CHOICE_INVALID', 'errors.driveChoiceInvalid'],
 ])
 
 /** Le message que lit l'utilisateur pour un échec d'écriture, selon le code renvoyé par le back (ADR 0007, 0016). */
