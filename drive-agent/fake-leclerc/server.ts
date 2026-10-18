@@ -14,6 +14,7 @@ import {
   cartResponse,
   challengePage,
   changedSearchPage,
+  enseignePage,
   errorPage,
   homePage,
   loginPage,
@@ -47,6 +48,11 @@ export interface Behavior {
   /** Délai ajouté à chaque réponse de recherche ou de panier. */
   latencyMs: number
   fault: Fault | null
+  /**
+   * Vrai : le faux site ne reconnaît pas le magasin demandé et renvoie l'accueil du magasin vers la page ordinaire de l'enseigne (la racine
+   * de l'hôte, qui n'est pas une page de magasin). C'est ce que l'application doit savoir dire à l'utilisateur au lieu d'un écran vide.
+   */
+  unknownStore?: boolean
 }
 
 export type RequestKind = 'search' | 'cart' | 'page' | 'repas' | 'control' | 'other'
@@ -345,11 +351,12 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       entry.status = 200
       return send(res, 200, repasReturnPage(), HTML)
     }
-    // La racine de l'hôte d'un magasin mène à l'accueil du magasin : c'est l'adresse que l'application ouvre pour un plan (DRV-314, DRV-319).
+    // La racine de l'hôte est le site ordinaire de l'enseigne, pas une page de magasin (l'agent n'y agit pas) : l'utilisateur y choisit son
+    // magasin. L'application ne l'ouvre jamais pour un plan : elle ouvre directement la page du magasin (DrivePlan.startUrl).
     if (path === '/' && req.method === 'GET') {
       entry.kind = 'page'
-      entry.status = 302
-      return send(res, 302, '', { Location: `${PAGE_PATH}/` })
+      entry.status = 200
+      return send(res, 200, enseignePage(PAGE_PATH), HTML)
     }
     const store = STORE_PATTERN.exec(path)
     const rest = store?.[4] ?? ''
@@ -378,6 +385,10 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       return send(res, 200, loginPage(), HTML)
     }
     if (rest === '' || rest === '/' || rest === '/accueil.aspx') {
+      if (behavior.unknownStore) {
+        entry.status = 302
+        return send(res, 302, '', { Location: '/' })
+      }
       entry.status = 200
       return send(res, 200, homePage(cart), HTML)
     }

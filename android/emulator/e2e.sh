@@ -9,13 +9,16 @@
 #
 # Les scénarios, dans l'ordre (chacun repart d'un faux Leclerc remis à neuf) :
 #   1. lecture du magasin (`drive.setup`) : accueil du drive, choix du magasin du faux Leclerc, l'agent le lit, Repas reçoit son numéro et son hôte ;
-#   2. passage complet : récapitulatif, phase A (deux produits connus, quantités du plan), phase B (un nouveau produit choisi dans la liste de l'agent,
+#   2. passage complet : le drive s'ouvre DIRECTEMENT sur la page du magasin du plan (jamais la racine de l'hôte, qui est le site ordinaire de
+#      l'enseigne), récapitulatif, phase A (deux produits connus, quantités du plan), phase B (un nouveau produit choisi dans la liste de l'agent,
 #      nombre calculé), « j'en ai toujours » et « ignoré » ; retour dans Repas avec le résultat ; panier du faux Leclerc, cadence, requêtes ;
 #   3. « Annuler » au récapitulatif : rien ne part vers le site, Repas reçoit un résultat « aborted » ;
 #   4. abandon par l'utilisateur en plein passage (retour du téléphone, « Abandonner ») : Repas reçoit « aborted / CANCELLED » ;
 #   5. application tuée en plein passage, puis reprise : le passage repart, se termine, le panier est exact et Repas reçoit le résultat ;
 #   6. blocage simulé (403) : l'agent s'arrête sans insister (une seule nouvelle tentative), le dit, Repas reçoit « partial / BLOCKED » ;
-#   7. site changé (contrat modifié) : l'agent s'interrompt, Repas reçoit « error / CONTRACT_CHANGED », rien n'est mis au panier.
+#   7. site changé (contrat modifié) : l'agent s'interrompt, Repas reçoit « error / CONTRACT_CHANGED », rien n'est mis au panier ;
+#   8. page du magasin détournée (le site renvoie vers son accueil ordinaire) : un message dit d'ouvrir son magasin, l'agent ne reçoit rien, puis le
+#      récapitulatif s'affiche dès que l'utilisateur ouvre la page de son magasin.
 # Les captures d'écran et le rapport texte sont dans android/dist/e2e/.
 # Code de sortie : 0 si tous les contrôles passent, 1 sinon, 3 si KVM manque.
 set -u
@@ -37,6 +40,7 @@ no_rejected() { ! fake_state | grep -q '"rejected"'; }
 paced_count() { fake_state | grep -o '"kind":"\(search\|cart\)"' | wc -l; }
 nothing_sent() { [ "$(paced_count)" = "0" ]; }
 requested() { fake_state | grep -qF "\"path\":\"$1\""; } # le faux Leclerc a reçu une requête sur ce chemin
+not_requested() { ! requested "$1"; }
 min_gap() { # le plus petit délai (ms) entre la fin d'une requête de l'agent (recherche, panier) et le début de la suivante
   fake_state | emu python3 -c 'import json,sys
 d=json.load(sys.stdin)
@@ -104,7 +108,7 @@ sleep 2
 screenshot e01-lecture-accueil
 if tap 'text="Choisir le magasin du faux Leclerc"'; then ok "le magasin du faux Leclerc est choisi (lien touché)"; else ko "le lien du faux magasin est introuvable"; fi
 if wait_until 40 ui_has 'Enregistrer ce magasin'; then
-  ok "sur la page du faux magasin (racine de l'hôte redirigée vers son accueil), l'agent demande confirmation"
+  ok "sur la page du faux magasin, l'agent demande confirmation"
 else
   ko "l'agent n'a pas demandé confirmation"
 fi
@@ -131,6 +135,8 @@ if open_pass "$RUN_FULL" plan-complet.json; then
 else
   ko "le récapitulatif de l'agent ne s'est pas affiché"
 fi
+check "le drive s'est ouvert directement sur la page du magasin du plan (/magasin-000001-000001/)" requested '/magasin-000001-000001/'
+check "le faux Leclerc n'a jamais été interrogé à la racine de l'hôte (le site ordinaire de l'enseigne, pas une page de magasin)" not_requested '/'
 check "récapitulatif : 2 produits connus à mettre au panier" ui_has 'produits connus à mettre'
 check "récapitulatif : 1 nouveau produit à choisir" ui_has 'nouveau produit à choisir'
 check "l'écran reste allumé pendant le passage" screen_held
@@ -304,9 +310,43 @@ fi
 check "rien n'a été mis au panier" cart_is '{}'
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
-# --- 8. Bilan ------------------------------------------------------------------------------------------------------------------------------
+# --- 8. Page du magasin détournée ------------------------------------------------------------------------------------------------------------
 say
-say "8. Bilan"
+say "8. Le site renvoie la page du magasin vers son accueil ordinaire : un message dit quoi faire, puis l'agent reprend"
+RUN_LOST=1057ed00-0000-4000-8000-000000000008
+fake_reset
+fake_behavior '{"unknownStore":true}' # la page du magasin du plan est renvoyée vers la racine de l'hôte, qui n'est pas une page de magasin
+start_plan "$RUN_LOST" plan-connu.json
+if wait_until 70 ui_has 'Repas attend la page de ton magasin'; then
+  ok "le drive dit d'ouvrir son magasin (message de l'application) au lieu de laisser un écran qui n'a rien de Repas"
+else
+  ko "aucun message n'explique que la page du magasin n'est pas ouverte"
+fi
+sleep 8
+check "tant que la page n'est pas celle d'un magasin, l'agent n'affiche rien (il n'a pas reçu le plan)" ui_lacks 'Prêt à remplir ton panier'
+check "rien n'est parti vers le site" nothing_sent
+check "le site a bien détourné la page du magasin vers sa racine" requested '/'
+screenshot e14-magasin-detourne
+fake_behavior '{"unknownStore":false}' # le magasin est reconnu : l'utilisateur l'ouvre depuis le site de l'enseigne
+if tap 'text="Choisir mon magasin"'; then ok "l'utilisateur ouvre son magasin depuis la page de l'enseigne (lien touché)"; else ko "le lien « Choisir mon magasin » est introuvable"; fi
+if wait_until 70 agent_screen 'Prêt à remplir ton panier'; then
+  ok "dès que la page du magasin s'ouvre, l'agent reçoit le plan et affiche son récapitulatif"
+else
+  ko "l'agent n'a pas affiché son récapitulatif sur la page du magasin"
+fi
+check "le message d'en-tête a disparu" ui_lacks 'Repas attend la page de ton magasin'
+sleep 1
+screenshot e15-magasin-ouvert
+if tap 'text="Annuler"' && tap 'text="Retourner dans Repas"' && wait_until 20 result_has "$RUN_LOST" aborted ''; then
+  ok "« Annuler » : Repas reçoit un résultat « aborted »"
+else
+  ko "Repas n'a pas reçu de résultat « aborted »"
+fi
+back_to_repas || ko "l'écran Repas n'est pas revenu"
+
+# --- 9. Bilan ------------------------------------------------------------------------------------------------------------------------------
+say
+say "9. Bilan"
 fake_reset
 final_checks
 conclude "les scénarios complets"

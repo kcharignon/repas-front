@@ -414,16 +414,47 @@ describe('les défauts simulés', () => {
 })
 
 describe('la racine du magasin et la remise à neuf (DRV-319, émulateur Android)', () => {
-  it('mène la racine de l’hôte du magasin à son accueil, l’adresse que l’application ouvre pour un plan', async () => {
+  it('sert à la racine de l’hôte le site ordinaire de l’enseigne, qui n’est pas une page de magasin : l’application ne l’ouvre jamais pour un plan', async () => {
     // When
     const reply = await call('/')
-    const home = await call(reply.headers.location as string)
+
+    // Then : une page ordinaire (sans redirection vers le magasin) d’où l’on choisit son magasin
+    expect(reply.status).toBe(200)
+    expect(reply.text).toContain("Accueil de l'enseigne")
+    expect(reply.text).toContain(`href="${PAGE_PATH}/"`)
+    expect(reply.text.replace(PAGE_PATH, '')).not.toContain('/magasin-')
+    expect(fake.requests().at(-1)).toMatchObject({ kind: 'page', path: '/', status: 200 })
+  })
+
+  it('sert l’accueil du magasin à l’adresse que l’application ouvre pour un plan, avec ou sans suffixe de ville', async () => {
+    // When
+    const withoutCity = await call(`${CART_PATH}/`)
+    const withCity = await call(`${PAGE_PATH}/`)
 
     // Then
-    expect(reply.status).toBe(302)
-    expect(reply.headers.location).toBe(`${PAGE_PATH}/`)
-    expect(home.status).toBe(200)
-    expect(home.text).toContain('Accueil du magasin')
+    expect(withoutCity.status).toBe(200)
+    expect(withoutCity.text).toContain('Accueil du magasin')
+    expect(withCity.status).toBe(200)
+    expect(withCity.text).toContain('Accueil du magasin')
+  })
+
+  it('renvoie l’accueil du magasin vers la racine quand il ne reconnaît pas le magasin (défaut « unknownStore »)', async () => {
+    // Given
+    fake.setBehavior({ unknownStore: true })
+
+    // When
+    const home = await call(`${CART_PATH}/`)
+
+    // Then : le magasin demandé n’est pas servi, l’utilisateur est renvoyé au site ordinaire
+    expect(home.status).toBe(302)
+    expect(home.headers.location).toBe('/')
+    expect((await call(`${PAGE_PATH}/connexion.aspx`)).status).toBe(200)
+
+    // When : la remise à neuf retire le défaut
+    fake.reset()
+
+    // Then
+    expect((await call(`${CART_PATH}/`)).status).toBe(200)
   })
 
   it('remet à neuf le panier, le journal, les violations, la cadence et les défauts, par le pilotage HTTP', async () => {
