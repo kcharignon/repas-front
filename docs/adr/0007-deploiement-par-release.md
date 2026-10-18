@@ -15,6 +15,7 @@ Le front est une image Caddy (`prod` du `Dockerfile`) qui sert les fichiers stat
 3. `deploy.sh` vérifie que le SPA répond après le déploiement et revient seul à la version précédente sinon. Le front n'a aucune base de données : le retour arrière est complet.
 4. L'image ne connaît aucun nom de domaine ni secret : elle est identique en développement, en essai et en production. Rien n'est cuit dans l'image au déploiement.
 5. Le contrat d'API (`api/contract.json`) est figé à un commit du back : un changement cassant de l'API sort en deux temps (back compatible d'abord, puis front).
+6. **Amendement du 2026-10-18 (DRV-315)** : l'application Android ne passe pas par cette release. Son APK signé se publie par une étiquette `android-vX.Y.Z` poussée par l'utilisateur, qui lance `android-release.yml` : la clé de signature vit dans quatre secrets GitHub lus par un travail en lecture seule, un second travail sans secret publie la release (ni brouillon ni pré-version) après contrôle de l'APK. `release.yml` ignore toute release dont l'étiquette commence par `android-`. Procédure : `android/PUBLICATION.md`.
 
 ## Conséquences
 

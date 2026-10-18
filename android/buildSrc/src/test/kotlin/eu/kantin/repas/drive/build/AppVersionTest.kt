@@ -8,10 +8,19 @@ import org.junit.Test
 /** La dérivation de la version. Étiquettes et compteurs SYNTHÉTIQUES. */
 class AppVersionTest {
     @Test
-    fun `le nom vient de l'etiquette et le code du compteur`() {
+    fun `le nom vient de l'etiquette et le code du compteur quand il est donne`() {
         assertEquals(AppVersion("1.2.3", 42), AppVersion.derive("android-v1.2.3", "42"))
         assertEquals(AppVersion("0.1.0", 7), AppVersion.derive("android-v0.1.0", "7"))
         assertEquals(AppVersion("10.20.30", 2_100_000_000), AppVersion.derive("android-v10.20.30", "2100000000"))
+    }
+
+    @Test
+    fun `sans compteur, le code vient de l'etiquette`() {
+        assertEquals(AppVersion("1.2.3", 1_002_003), AppVersion.derive("android-v1.2.3", null))
+        assertEquals(AppVersion("0.1.0", 1_000), AppVersion.derive("android-v0.1.0", null))
+        assertEquals(AppVersion("0.0.1", 1), AppVersion.derive("android-v0.0.1", null))
+        assertEquals(AppVersion("10.20.30", 10_020_030), AppVersion.derive("android-v10.20.30", ""))
+        assertEquals(AppVersion("2099.999.999", 2_099_999_999), AppVersion.derive("android-v2099.999.999", null))
     }
 
     @Test
@@ -23,7 +32,7 @@ class AppVersionTest {
     @Test
     fun `l'etiquette et le compteur sont independants`() {
         assertEquals(AppVersion("0.0.0-dev", 9), AppVersion.derive(null, "9"))
-        assertEquals(AppVersion("2.0.1", 1), AppVersion.derive("android-v2.0.1", null))
+        assertEquals(AppVersion("2.0.1", 2_000_001), AppVersion.derive("android-v2.0.1", null))
     }
 
     @Test
@@ -46,6 +55,8 @@ class AppVersionTest {
             "android-v1.2.x",
             "android-v-1.2.3",
             "android-v12345.0.0",
+            "android-v1.1000.0",
+            "android-v1.0.1000",
             "refs/tags/android-v1.2.3",
             "android-V1.2.3",
             "Android-v1.2.3",
@@ -73,21 +84,46 @@ class AppVersionTest {
         assertThrows(IllegalArgumentException::class.java) { AppVersion.derive(null, "n'importe quoi") }
     }
 
-    @Test
-    fun `une publication exige l'etiquette et le compteur`() {
-        assertEquals(AppVersion("1.0.0", 3), AppVersion.derive("android-v1.0.0", "3", forRelease = true))
+    fun `une publication exige l'etiquette et en tire le code`() {
+        assertEquals(AppVersion("1.0.0", 1_000_000), AppVersion.derive("android-v1.0.0", null, forRelease = true))
+        assertEquals(AppVersion("0.1.0", 1_000), AppVersion.derive("android-v0.1.0", "", forRelease = true))
 
-        val withoutTag = assertThrows(IllegalArgumentException::class.java) { AppVersion.derive(null, "3", forRelease = true) }
+        val withoutTag = assertThrows(IllegalArgumentException::class.java) { AppVersion.derive(null, null, forRelease = true) }
         assertTrue(withoutTag.message!!.contains("ANDROID_VERSION_TAG"))
-
-        val withoutCounter = assertThrows(IllegalArgumentException::class.java) { AppVersion.derive("android-v1.0.0", null, forRelease = true) }
-        assertTrue(withoutCounter.message!!.contains("ANDROID_VERSION_CODE"))
-
+        assertThrows(IllegalArgumentException::class.java) { AppVersion.derive(null, "3", forRelease = true) }
         assertThrows(IllegalArgumentException::class.java) { AppVersion.derive("", "", forRelease = true) }
     }
 
     @Test
-    fun `le code monte avec le compteur, jamais avec le nom`() {
+    fun `un compteur donne en plus d'une publication doit etre celui de l'etiquette`() {
+        assertEquals(AppVersion("1.2.3", 1_002_003), AppVersion.derive("android-v1.2.3", "1002003", forRelease = true))
+
+        val contradicts = assertThrows(IllegalArgumentException::class.java) { AppVersion.derive("android-v1.2.3", "42", forRelease = true) }
+        assertTrue(contradicts.message!!.contains("contredit"))
+        assertTrue(contradicts.message!!.contains("1002003"))
+    }
+
+    @Test
+    fun `le code d'une etiquette monte avec le numero de version`() {
+        val tags = listOf("0.0.1", "0.0.2", "0.0.10", "0.1.0", "0.9.0", "0.10.0", "1.0.0", "1.9.0", "1.10.0", "2.0.0", "10.0.0")
+        val codes = tags.map { AppVersion.derive("android-v$it", null).code }
+        assertEquals(codes.sorted(), codes)
+        assertEquals(codes.size, codes.toSet().size)
+    }
+
+    @Test
+    fun `une etiquette qui donnerait un code hors limites est refusee`() {
+        val zero = assertThrows(IllegalArgumentException::class.java) { AppVersion.derive("android-v0.0.0", null) }
+        assertTrue(zero.message!!.contains("android-v0.0.1"))
+        val tooBig = assertThrows(IllegalArgumentException::class.java) { AppVersion.derive("android-v2100.0.0", null) }
+        assertTrue(tooBig.message!!.contains("2099"))
+        // Avec un compteur explicite (constructions de debogage), l'etiquette ne donne que le nom.
+        assertEquals(AppVersion("0.0.0", 5), AppVersion.derive("android-v0.0.0", "5"))
+        assertThrows(IllegalArgumentException::class.java) { AppVersion.derive("android-v0.0.0", "5", forRelease = true) }
+    }
+
+    @Test
+    fun `un compteur de debogage monte avec le compteur, jamais avec le nom`() {
         val older = AppVersion.derive("android-v1.10.0", "5")
         val newer = AppVersion.derive("android-v1.9.0", "6")
         assertTrue(newer.code > older.code)

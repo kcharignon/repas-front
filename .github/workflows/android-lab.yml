@@ -89,6 +89,8 @@ jobs:
             tag="android-lab-${date}-${n}"
           done
           cat > notes.md <<NOTES
+          **Ne pas installer cette pré-version sur le téléphone des courses.** Elle est signée d'une clé de débogage PUBLIQUE (n'importe qui peut fabriquer un fichier qui s'installe par-dessus) et c'est un banc d'essai jetable, pas l'application Repas. Le téléphone des courses reçoit seulement une version \`android-vX.Y.Z\` (sans mention « Pre-release »). Mode d'emploi : https://github.com/${GH_REPO}/blob/${GITHUB_SHA}/android/PUBLICATION.md
+
           APK de test jetable du chantier drive (DRV-011). Outil à supprimer après la décision G1.
 
           - Empreinte SHA-256 de \`repas-android-lab.apk\` : \`${SHA256}\`
