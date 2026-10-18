@@ -421,6 +421,9 @@ export default {
     offline:
       'Hors connexion : l’envoi au drive est impossible tant que le réseau n’est pas revenu.',
     emptyPlan: 'Cette liste n’a aucun article à envoyer.',
+    retryOnly:
+      'Reprise des articles en échec : {count} article | Reprise des articles en échec : {count} articles',
+    showAll: 'Voir toute la liste',
     waiting: {
       title: 'En attente du retour du drive…',
       help: 'Le drive est ouvert dans l’application. Quand le passage est terminé, vous revenez ici avec un récapitulatif.',
@@ -458,6 +461,108 @@ export default {
       sendFailed: 'L’application n’a pas pu ouvrir le drive. Réessayez.',
       appRefused: 'L’application ne répond pas comme prévu. Fermez-la, rouvrez-la, puis réessayez.',
     },
+  },
+  driveReturn: {
+    title: 'Retour du drive',
+    backToList: 'Retour à la liste',
+    allLists: 'Mes listes',
+    none: {
+      title: 'Aucun résultat à afficher',
+      help: 'Le résultat d’un envoi n’est gardé que pendant la visite : si la page a été rechargée, ouvrez la liste pour reprendre l’envoi.',
+    },
+    stale: {
+      title: 'Ce résultat ne correspond pas à votre dernier envoi',
+      help: 'Il a été ignoré : rien n’a été enregistré.',
+    },
+    refused: {
+      title: 'Le drive n’a pas démarré',
+      help: 'L’application a refusé de lancer l’envoi : rien n’a été mis au panier. Mettez l’application à jour si cela se répète.',
+      code: 'Code : {code}',
+      backToSend: 'Revenir à l’envoi',
+    },
+    invalid: {
+      title: 'Réponse incomprise',
+      help: 'L’application a renvoyé une réponse que Repas ne comprend pas. Mettez l’application à jour, puis recommencez.',
+    },
+    setup: {
+      title: 'Lecture du magasin',
+      help: 'Ce résultat est celui d’une lecture du magasin : il se traite dans les réglages du drive.',
+      settings: 'Réglages du drive',
+    },
+    outcome: {
+      completed: {
+        title: 'Le panier est rempli',
+        help: 'Les produits retenus sont dans votre panier Leclerc. Il reste à le finaliser sur le site de Leclerc.',
+      },
+      partial: {
+        title: 'Le passage s’est arrêté avant la fin',
+        help: 'Ce qui a été fait reste dans le panier. Vous pouvez réessayer le reste.',
+      },
+      aborted: {
+        title: 'Passage arrêté',
+        help: 'Vous avez arrêté le passage : ce qui était déjà dans le panier y reste.',
+      },
+      error: {
+        title: 'Le passage a échoué',
+        help: 'Le passage n’a pas pu aller au bout. Ce qui était déjà dans le panier y reste.',
+      },
+    },
+    errorCode: {
+      NOT_LOGGED_IN: 'Vous n’êtes pas connecté à Leclerc : connectez-vous, puis recommencez.',
+      STORE_MISMATCH: 'Le magasin choisi sur Leclerc n’est pas celui des réglages de Repas.',
+      BLOCKED:
+        'Leclerc a bloqué les demandes (trop de demandes ou contrôle anti-robot). Attendez un moment, puis réessayez.',
+      CONTRACT_CHANGED:
+        'Le site de Leclerc a changé : l’envoi automatique ne fonctionne plus pour l’instant.',
+      NETWORK: 'La connexion a été coupée pendant le passage.',
+      CANCELLED: 'Le passage a été annulé.',
+      INVALID_MESSAGE: 'L’application n’a pas compris le plan envoyé.',
+      UNSUPPORTED_PAGE: 'Cette page de Leclerc n’est pas prise en charge.',
+    },
+    save: {
+      saving: 'Enregistrement de vos choix…',
+      saved: 'Vos choix sont enregistrés pour les prochains envois.',
+      failed: 'Vos choix n’ont pas pu être enregistrés. {reason}',
+      retry: 'Réessayer l’enregistrement',
+    },
+    counts: {
+      label: 'Récapitulatif du passage',
+      added: 'Ajoutés au panier',
+      chosen: 'Choisis sur Leclerc',
+      haveAtHome: 'Déjà à la maison',
+      skipped: 'Passés',
+      unavailable: 'Indisponibles',
+      failed: 'Échecs',
+      priced: 'Prix lus',
+    },
+    lines: 'Détail ({count})',
+    quantity: '× {count}',
+    unknownProduct: 'Produit n° {id}',
+    line: {
+      fallback: 'Produit de secours utilisé : le préféré n’était pas disponible.',
+      chosenPrimary: 'Choisi sur Leclerc, mémorisé comme produit préféré.',
+      chosenFallback: 'Choisi sur Leclerc, mémorisé comme produit de secours.',
+      chosenOnce: 'Choisi sur Leclerc pour cette fois seulement.',
+      haveAtHome: 'Vous en avez déjà : mémorisé.',
+      skipped: 'Passé cette fois.',
+      unavailable: 'Aucun produit disponible : rien n’a été mis au panier.',
+      failed: 'Échec : {reason}',
+      rejected: 'Ne sera plus proposé : {labels}',
+    },
+    actions: {
+      finalize: 'Finaliser sur Leclerc',
+      finalizeHelp: 'S’ouvre dans le navigateur.',
+      retryFailed: 'Réessayer les échecs',
+      resume: 'Reprendre l’envoi',
+      complete: 'Terminer la liste',
+      completeTitle: 'Terminer la liste ?',
+      completeHelp: 'La liste sera terminée. Le panier Leclerc ne sera pas vidé.',
+      reopen: 'Rouvrir la liste',
+      reopenTitle: 'Rouvrir la liste ?',
+      reopenHelp: 'La liste redevient modifiable. Le panier Leclerc ne sera pas vidé.',
+      offline: 'Hors connexion : ces actions reviennent avec le réseau.',
+    },
+    basketKept: 'Le panier Leclerc n’est pas vidé par Repas.',
   },
   drivePlaceholder: {
     settings: {

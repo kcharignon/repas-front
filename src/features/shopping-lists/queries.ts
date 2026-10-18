@@ -148,13 +148,14 @@ export function useShoppingLists() {
 }
 
 /** Le détail d'une liste précise (pas seulement l'active). */
-export function useShoppingList(id: () => string) {
+export function useShoppingList(id: () => string, enabled: () => boolean = () => true) {
   const { api } = useSessionStore()
 
   return useQuery({
     queryKey: computed(() => shoppingListKeys.detail(id())),
     queryFn: () =>
       unwrap(api.GET('/api/v1/shopping-lists/{id}', { params: { path: { id: id() } } })),
+    enabled: computed(enabled),
   })
 }
 
