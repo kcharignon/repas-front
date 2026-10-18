@@ -7,6 +7,7 @@ import {
   type ResultLine,
   type ResultMessage,
 } from '../../protocol'
+import { own } from '../own'
 import type { EndProps } from '../ui'
 import { ERROR_TEXTS } from '../ui'
 import type { RunState } from './run-state'
@@ -21,8 +22,8 @@ export interface Ending {
 export function resultLines(plan: PlanMessage, state: RunState): ResultLine[] {
   const lines: ResultLine[] = []
   for (const { ingredientSlug } of plan.lines) {
-    const done = state.done[ingredientSlug]
-    const waiting = state.waiting[ingredientSlug]
+    const done = own(state.done, ingredientSlug)
+    const waiting = own(state.waiting, ingredientSlug)
     if (done) lines.push(done)
     else if (waiting) {
       lines.push({
