@@ -94,8 +94,14 @@ class DrivePlan private constructor(
     val storeHost: String,
     override val text: String,
 ) : PassRequest {
-    /** La page où le drive s'ouvre : l'accueil du magasin du plan. L'hôte a déjà été contrôlé (`*.leclercdrive.fr`, https). */
-    override val startUrl: String get() = "https://$storeHost/"
+    /**
+     * La page où le drive s'ouvre : l'accueil du magasin du plan, `https://<hôte>/magasin-<id>-<id>/` (la forme des adresses du drive, comme
+     * [NavigationPolicy.isStorePage] et l'agent la lisent ; le suffixe de ville est facultatif pour une page). **Jamais la racine de l'hôte** :
+     * c'est le site ordinaire de l'enseigne, qui n'est pas une page de magasin, où l'agent n'agit pas et où l'utilisateur ne voit rien de Repas
+     * (constat de la recette réelle : l'hypothèse « la racine mène à l'accueil du magasin », posée par DRV-319, était fausse). L'hôte a déjà été
+     * contrôlé (`*.leclercdrive.fr`, https), l'identifiant n'est que des chiffres.
+     */
+    override val startUrl: String get() = "https://$storeHost/magasin-$storeId-$storeId/"
     override val isSetup: Boolean get() = false
 
     override fun abortedResult(agentVersion: String): String = abortedResultJson(runId, storeId, agentVersion, "Envoi abandonné.")

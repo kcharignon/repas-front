@@ -150,6 +150,31 @@ class DrivePass(
 }
 
 /**
+ * Ce que l'écran du drive dit en haut d'écran tant que la page n'est pas celle d'un magasin ([NavigationPolicy.isStorePage]) pendant un
+ * passage : l'agent n'agit que sur une page de magasin, et ne reçoit son message (plan ou lecture du magasin) qu'à ce moment-là. Plutôt qu'un
+ * écran vide (la page de l'enseigne n'a rien de Repas), un message dit quoi faire : se connecter, ouvrir la page de son magasin.
+ */
+enum class StoreBanner {
+    /** Pas de passage, ou la page est celle d'un magasin : rien à dire. */
+    NONE,
+
+    /** Lecture du magasin (`drive.setup`) : se connecter puis choisir son magasin. */
+    SETUP,
+
+    /** Envoi d'un plan : le magasin du plan n'est pas ouvert (adresse inconnue du site, connexion demandée) : l'ouvrir. */
+    PLAN,
+    ;
+
+    companion object {
+        fun of(request: PassRequest?, url: String?): StoreBanner = when {
+            request == null || NavigationPolicy.isStorePage(url) -> NONE
+            request.isSetup -> SETUP
+            else -> PLAN
+        }
+    }
+}
+
+/**
  * Quand envoyer le plan à l'agent (DRV-314) : une fois par page, quand la page a annoncé son agent (`hello`) **et** fini de charger. L'interface
  * de l'agent ne peut pas se poser avant la fin du chargement (pas encore de `document.documentElement`).
  *

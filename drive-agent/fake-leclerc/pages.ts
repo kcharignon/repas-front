@@ -101,6 +101,21 @@ var widgets = ${JSON.stringify(state, null, 2)};
 `
 }
 
+/** La racine de l'hôte : le site ordinaire de l'enseigne, où l'on choisit son magasin (aucune adresse `/magasin-<id>-<id>`, donc pas une page de magasin). */
+export function enseignePage(storePath: string): string {
+  return `<!doctype html>
+<html lang="fr">
+<head>${HEAD}<title>Accueil de l'enseigne (faux site de test)</title></head>
+<body>
+<h1>Accueil de l'enseigne</h1>
+<p>Bienvenue sur le faux site de l'enseigne : choisissez votre magasin pour commencer vos courses.</p>
+<p><a id="choose-store" href="${storePath}/">Choisir mon magasin</a></p>
+<footer>Faux site Leclerc : données inventées.</footer>
+</body>
+</html>
+`
+}
+
 export function homePage(cart: Cart): string {
   return storePage('Accueil du magasin', 'Bienvenue dans le faux drive.', {}, cart)
 }

@@ -41,8 +41,9 @@ import java.util.UUID
  * ([NavigationPolicy]) : tout autre lien s'ouvre dans le navigateur du téléphone. Aucun objet natif n'est exposé aux pages ; l'agent y est
  * injecté par [AgentHost] (DRV-313).
  *
- * **Passage du plan (DRV-314).** Quand un passage est en cours ([DrivePass]), l'écran s'ouvre sur l'accueil du magasin du plan, envoie le plan
- * à l'agent une fois la page chargée et annoncée, reste allumé tant que le passage dure, et rend la main à la coquille avec le résultat de
+ * **Passage du plan (DRV-314).** Quand un passage est en cours ([DrivePass]), l'écran s'ouvre sur la page du magasin du plan ([DrivePlan.startUrl],
+ * jamais la racine de l'hôte), envoie le plan à l'agent une fois la page chargée, annoncée **et** celle d'un magasin (sinon un message dit d'ouvrir
+ * son magasin, [StoreBanner]), reste allumé tant que le passage dure, et rend la main à la coquille avec le résultat de
  * l'agent (ou un résultat `aborted` si l'utilisateur abandonne). Sans passage, c'est le drive à parcourir à la main.
  *
  * **Lecture du magasin (DRV-320).** Pour `drive.setup`, l'écran s'ouvre sur l'accueil du drive avec un message en français simple (se connecter,
@@ -53,7 +54,7 @@ class DriveActivity : Activity() {
     private lateinit var webView: WebView
     private lateinit var problems: ProblemPanel
     private lateinit var resultPanel: TextPanel
-    private lateinit var setupBanner: TextView
+    private lateinit var storeBanner: TextView
     private lateinit var agent: AgentHost
     private lateinit var debugRun: DebugRun
     private lateinit var selftestRun: SelftestRun
@@ -95,7 +96,7 @@ class DriveActivity : Activity() {
         }
         webView = createWebView()
         problems = ProblemPanel(this, ::problemMessage) { retry() }
-        setupBanner = label(getString(R.string.setup_banner), sizeSp = 16f, color = Color.WHITE).apply {
+        storeBanner = label("", sizeSp = 16f, color = Color.WHITE).apply {
             setBackgroundColor(BASIL)
             setPadding(dp(16), dp(12), dp(16), dp(12))
             visibility = View.GONE
@@ -103,7 +104,7 @@ class DriveActivity : Activity() {
         }
         val page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(setupBanner, LinearLayout.LayoutParams(MATCH, WRAP))
+            addView(storeBanner, LinearLayout.LayoutParams(MATCH, WRAP))
             addView(webView, LinearLayout.LayoutParams(MATCH, 0, 1f))
         }
         val root = FrameLayout(this).apply {
@@ -121,7 +122,7 @@ class DriveActivity : Activity() {
         registerBackAction()
 
         webView.loadUrl(pass.current()?.request?.startUrl ?: NavigationPolicy.START_URL)
-        updateSetupBanner(null)
+        updateStoreBanner(pass.current()?.request?.startUrl)
     }
 
     override fun onResume() {
@@ -230,13 +231,13 @@ class DriveActivity : Activity() {
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             loadFailed = false
             delivery.pageStarted()
-            updateSetupBanner(url)
+            updateStoreBanner(url)
         }
 
         override fun onPageFinished(view: WebView, url: String?) {
             if (!loadFailed) problems.hide()
             agent.onPageFinished(view, url)
-            updateSetupBanner(url)
+            updateStoreBanner(url)
             if (delivery.pageFinished()) sendPlan()
         }
 
@@ -340,18 +341,24 @@ class DriveActivity : Activity() {
 
     /**
      * Le message du passage en cours part vers l'agent (le plan, ou `setup` pour la lecture du magasin) : la page a annoncé son agent et fini de
-     * charger (une fois par page). La lecture du magasin attend une page de magasin : sur l'accueil ou la connexion, l'agent n'aurait rien à lire.
+     * charger (une fois par page). Il attend une page de magasin : sur l'accueil de l'enseigne ou la connexion, l'agent n'aurait rien à faire
+     * (un plan, lui, s'ouvre sur la page de son magasin, [DrivePlan.startUrl] ; si le site l'en détourne, le message d'en-tête le dit).
      */
     private fun sendPlan() {
         val request = pass.current()?.request ?: return
-        if (request.isSetup && !NavigationPolicy.isStorePage(webView.url)) return delivery.failed()
+        if (!NavigationPolicy.isStorePage(webView.url)) return delivery.failed()
         if (!agent.send(request.text)) delivery.failed()
     }
 
-    /** Le message « connecte-toi, choisis ton magasin » reste affiché pendant une lecture du magasin, tant que la page n'est pas celle d'un magasin. */
-    private fun updateSetupBanner(url: String?) {
-        val waiting = pass.current()?.request?.isSetup == true && !NavigationPolicy.isStorePage(url)
-        setupBanner.visibility = if (waiting) View.VISIBLE else View.GONE
+    /** Le message d'en-tête (se connecter, choisir ou ouvrir son magasin) reste affiché pendant un passage, tant que la page n'est pas celle d'un magasin. */
+    private fun updateStoreBanner(url: String?) {
+        val text = when (StoreBanner.of(pass.current()?.request, url)) {
+            StoreBanner.NONE -> null
+            StoreBanner.SETUP -> R.string.setup_banner
+            StoreBanner.PLAN -> R.string.plan_banner
+        }
+        if (text != null) storeBanner.setText(text)
+        storeBanner.visibility = if (text != null) View.VISIBLE else View.GONE
     }
 
     /** Le résultat de l'agent. Vrai si c'est celui du passage en cours : il est clos, et l'écran se referme ou montre l'essai. */

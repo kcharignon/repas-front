@@ -104,13 +104,16 @@ if open_pass "$RUN_A"; then
 else
   ko "drive.start n'a pas mené le plan jusqu'à l'agent"
 fi
+check "le drive s'est ouvert sur la page du magasin du plan (/magasin-123456-123456/), jamais sur la racine de l'hôte" \
+  has_report '"hostname": "www.leclercdrive.fr", "path": "/magasin-123456-123456/"'
 check "l'écran reste allumé pendant le passage" screen_held
 if wait_until 20 has_report '"kind": "agent-ui", "mounted": true'; then ok "l'agent a monté son interface (après le chargement de la page)"; else ko "l'agent n'a pas monté son interface"; fi
+if wait_until 15 ui_has 'Prêt à remplir ton panier'; then ok "l'agent affiche son récapitulatif, sans que l'utilisateur ait à naviguer"; else ko "l'agent n'a pas affiché son récapitulatif"; fi
 sleep 2
 screenshot 03-passage-agent
-if tap 'text="Retourner dans Repas"'; then ok "« Retourner dans Repas » touché dans l'interface de l'agent"; else ko "le bouton de retour de l'agent est introuvable"; fi
-if wait_until 20 result_report "$RUN_A" error; then
-  ok "Repas reçoit drive.result : le résultat de l'agent, du même runId (issue « error » : la page de test n'est pas un magasin)"
+if tap 'text="Annuler"' && tap 'text="Retourner dans Repas"'; then ok "« Annuler » puis « Retourner dans Repas » touchés dans l'interface de l'agent"; else ko "les boutons de l'agent sont introuvables"; fi
+if wait_until 20 result_report "$RUN_A" aborted; then
+  ok "Repas reçoit drive.result : le résultat de l'agent, du même runId (issue « aborted » : l'utilisateur a annulé au récapitulatif)"
 else
   ko "Repas n'a pas reçu drive.result"
 fi
