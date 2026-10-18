@@ -19,6 +19,7 @@ import {
   product,
   type ShelfItem,
 } from './flow-helpers'
+import { backAcceptsLabel } from './back-label-rules'
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -969,5 +970,52 @@ describe('le libellé d’un produit pour Repas', () => {
       'Sel fin de test 1 kg',
     )
     expect(labelOf({ ...candidate('7'), label: '', label2: null })).toBe('Produit 7')
+  })
+
+  it('retire les caractères invisibles et de contrôle que le back refuse (sinon tout l’enregistrement des choix échoue)', () => {
+    const label = labelOf({
+      ...candidate('1'),
+      label: 'Sel\u200B fin\u202E de\uFEFF test\u0007',
+      label2: '1\u2060 kg\u2028',
+    })
+
+    expect(label).toBe('Sel fin de test 1 kg')
+    expect(backAcceptsLabel(label)).toBe(true)
+  })
+
+  it('retombe sur « Produit <id> » quand le libellé n’était fait que d’invisibles', () => {
+    expect(labelOf({ ...candidate('7'), label: '\u200B\uFEFF', label2: '\u202E' })).toBe(
+      'Produit 7',
+    )
+  })
+
+  it('part sans invisibles dans le résultat et s’affiche sans eux dans la liste, d’un produit marqué', async () => {
+    // Given : un produit dont les deux lignes portent des caractères que le back refuse
+    const shelf = {
+      '4000003': {
+        label: 'Poivre\u200B gris\u202E de\uFEFF test',
+        label2: '500\u2060 g',
+        content: { value: 500, unit: 'g' as const },
+      },
+    }
+    const test = run(
+      pepper(),
+      [
+        (view) => {
+          expect(rows(view.zone).map(nameOf)).toEqual(['Poivre gris de test'])
+          choose(view.zone, 'Poivre gris')
+        },
+      ],
+      { shelf, found: { poivre: ['4000003'] } },
+    )
+
+    // When
+    await test.start()
+
+    // Then
+    const message = expectConform(test.sent[0])
+    const product = (lineOf(message) as { product: { label: string } }).product
+    expect(product.label).toBe('Poivre gris de test 500 g')
+    expect(backAcceptsLabel(product.label)).toBe(true)
   })
 })

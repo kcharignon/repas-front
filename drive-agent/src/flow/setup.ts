@@ -2,6 +2,7 @@
 // n'est envoyé au site : le magasin se lit dans l'adresse de la page ; seul le magasin part vers Repas, après un « Enregistrer ».
 import { LIMITS, PROTOCOL_VERSION, type SetupMessage } from '../../protocol'
 import { LeclercError, type RetailerAdapter } from '../leclerc'
+import { cleanText } from '../text'
 import type { Ui } from '../ui'
 import { buildResult } from './result'
 import type { FlowDeps } from './types'
@@ -15,7 +16,7 @@ export interface SetupDeps {
 
 /** Un libellé de magasin pour le protocole : de 1 à 255 caractères, ou rien. */
 function labelOf(label: string | null): string | null {
-  const text = label?.replace(/\s+/g, ' ').trim() ?? ''
+  const text = cleanText(label ?? '')
   return text === '' ? null : Array.from(text).slice(0, LIMITS.label).join('')
 }
 

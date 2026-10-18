@@ -17,6 +17,7 @@ import {
   startFakeLeclerc,
   type FakeLeclerc,
 } from '../fake-leclerc/server'
+import { BACK_FORBIDDEN, backAcceptsLabel } from './back-label-rules'
 
 interface Reply {
   status: number
@@ -125,6 +126,21 @@ describe('la page de recherche', () => {
     // Then
     expect(milk.map((product) => product.id)).toEqual(['1000011'])
     expect(eggs.map((product) => product.id)).toEqual(['1000014', '1000015'])
+  })
+
+  it('sert un produit aux libellés marqués de caractères invisibles, que l’analyseur de l’agent nettoie (le back les refuserait)', async () => {
+    // When
+    const reply = await search('vinaigre')
+    const [product] = extractProducts(reply.text).products
+    const raw = /"sLibelleLigne1": "([^"]*)"/.exec(reply.text)?.[1] ?? ''
+
+    // Then : la page porte bien des caractères que le back refuse, l'agent n'en garde aucun
+    expect(BACK_FORBIDDEN.test(raw)).toBe(true)
+    expect(product?.id).toBe('1000032')
+    expect(product?.label1).toBe('Vinaigre de cidre Verger Imaginaire')
+    expect(product?.label2).toBe('75 cl')
+    expect(backAcceptsLabel(product?.label1 ?? '')).toBe(true)
+    expect(toCandidate(product as never).content).toEqual({ value: 750, unit: 'ml' })
   })
 
   it('dit « aucun résultat » quand rien ne correspond', async () => {

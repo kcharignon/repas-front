@@ -30,6 +30,7 @@ drive-agent/
     index.ts          point d'entrée : exécute l'agent au chargement (rien n'est exporté)
     agent.ts          ce que fait l'agent quand l'application l'injecte
     version.ts        AGENT_VERSION (semver)
+    text.ts           `cleanText` : tout texte lu sur la page de l'enseigne en passe par là (caractères invisibles et de contrôle retirés, espaces resserrées)
     transport/        comment le message arrive et repart : `fragmentTransport` (fragment d'adresse) et `bridgeTransport` (pont de l'application)
     leclerc/          tout ce qui est propre à E.Leclerc Drive, derrière `RetailerAdapter` : magasin, recherche, panier, erreurs, cadence (voir plus bas)
     ui/               l'interface superposée en Shadow DOM : écrans, textes (`strings.ts`), styles, `ui.show(écran, props)` (voir plus bas)
@@ -62,6 +63,8 @@ Seul contrat supporté : le site PC `fdN-courses.leclercdrive.fr` (faits mesuré
 | `errors.ts`    | `LeclercError` : `NOT_LOGGED_IN`, `BLOCKED`, `CONTRACT_CHANGED`, `NETWORK`, `UNSUPPORTED_PAGE` (messages fixes : jamais de cookie ni de page)                 |
 
 Un 404 n'est **pas** un blocage (requête mal formée : `CONTRACT_CHANGED`) ; seuls 403, 429 et une page de défi (`captcha-delivery.com`) sont `BLOCKED`. Les fixtures (`fixtures/leclerc/`) sont inventées.
+
+**Les textes de la page sont nettoyés à la source** : `decodeJsString` (`embedded.ts`), par où passent tous les libellés, secondes lignes, prix par mesure et unités du contenu structuré, rend un texte sans caractère invisible ni de contrôle (`cleanText`, `src/text.ts`). Le back refuse en bloc (`422 DRIVE_CHOICE_INVALID`, tout le lot de `PUT /drive/choices`) un libellé qui porte l'un des caractères de `LABEL_FORBIDDEN_CHARACTERS_PATTERN` (`Product.php` du dépôt back : contrôles, U+2028 et U+2029, U+061C, U+200B à U+200F, U+202A à U+202E, U+2060, U+2066 à U+2069, U+FEFF) : un seul libellé marqué ferait perdre les choix de tout un passage. Une largeur nulle disparaît sans laisser d'espace, un saut de ligne ou une tabulation devient une espace. `test/label-characters.spec.ts` recopie le motif du back (`test/back-label-rules.ts`, avec le chemin du fichier du back) et éprouve **chaque point de code Unicode** : si le back en refuse un de plus, ce test échoue tant que `src/text.ts` ne le retire pas. Les libellés qui partent vers Repas repassent par `cleanText` (`labelOf`, `flow/phase-b.ts`) ; la fixture `recherche-invisibles.html` et le produit `1000032` du faux site portent de tels caractères.
 
 ## L'interface superposée (`src/ui/`)
 
