@@ -1,0 +1,40 @@
+{
+  "v": 1,
+  "type": "plan",
+  "runId": "__RUN_ID__",
+  "retailer": "leclerc",
+  "store": { "id": "000001", "host": "courses-test.leclercdrive.fr" },
+  "returnPath": "/drive/retour",
+  "lines": [
+    {
+      "ingredientSlug": "farine",
+      "name": "Farine",
+      "status": "KNOWN",
+      "products": [
+        {
+          "id": "1000001",
+          "label": "Farine de blé T55 Moulin Imaginaire 1 kg",
+          "packs": 3,
+          "packsStatus": "COMPUTED"
+        }
+      ],
+      "rejected": [],
+      "searchQuery": "farine"
+    },
+    {
+      "ingredientSlug": "sucre",
+      "name": "Sucre",
+      "status": "KNOWN",
+      "products": [
+        {
+          "id": "1000006",
+          "label": "Sucre en poudre Épicerie Factice 1 kg",
+          "packs": 1,
+          "packsStatus": "COMPUTED"
+        }
+      ],
+      "rejected": [],
+      "searchQuery": "sucre"
+    }
+  ]
+}
