@@ -14,6 +14,7 @@ import { useNotificationsStore } from '@/notifications/store'
 import { useOnline } from '@/offline/useOnline'
 import { driveBridge } from './bridge'
 import { useDriveChoices } from './choicesQueries'
+import DrivePrivacyNote from './DrivePrivacyNote.vue'
 import { driveKeys, useDriveSettings, useSaveDriveSettings } from './queries'
 import { parseStoreAddress, storeTail } from './storeAddress'
 import { canReadStoreFromApp, readStoreFromApp, StoreReadError } from './storeReader'
@@ -156,6 +157,8 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
     <p v-else-if="!enabled" class="text-muted">{{ t('driveSettings.disabled') }}</p>
 
     <template v-else>
+      <DrivePrivacyNote />
+
       <section class="flex flex-col gap-3" aria-labelledby="store-title">
         <h2 id="store-title" class="font-display text-2xl font-bold">
           {{ t('driveSettings.store') }}

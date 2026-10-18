@@ -1,0 +1,103 @@
+{
+    "member": [
+        {
+            "ingredientSlug": "farine",
+            "ingredientName": "Farine",
+            "haveAtHome": false,
+            "accepted": [
+                {
+                    "rank": 1,
+                    "product": {
+                        "productId": "9684fc84-f500-5edc-8b33-f6b38b890810",
+                        "retailerProductId": "555101",
+                        "ean": "2000000000008",
+                        "label": "Farine de blé T55 1 kg",
+                        "content": {
+                            "value": 1,
+                            "unit": "kg"
+                        }
+                    }
+                },
+                {
+                    "rank": 2,
+                    "product": {
+                        "productId": "b9af7875-8284-578e-85e8-325822109260",
+                        "retailerProductId": "555102",
+                        "ean": null,
+                        "label": "Farine de blé T45 500 g",
+                        "content": {
+                            "value": 500,
+                            "unit": "g"
+                        }
+                    }
+                }
+            ],
+            "rejected": [],
+            "updatedAt": "2026-10-18T09:20:00+00:00"
+        },
+        {
+            "ingredientSlug": "lait",
+            "ingredientName": "Lait",
+            "haveAtHome": false,
+            "accepted": [
+                {
+                    "rank": 1,
+                    "product": {
+                        "productId": "7dddc9eb-3f96-5c8c-97f4-297bc4463bcd",
+                        "retailerProductId": "555201",
+                        "ean": null,
+                        "label": "Lait demi-écrémé UHT 50 cl",
+                        "content": {
+                            "value": 50,
+                            "unit": "cl"
+                        }
+                    }
+                }
+            ],
+            "rejected": [
+                {
+                    "productId": "f2c2d89d-3f2f-5f86-ac89-f64024749722",
+                    "retailerProductId": "555299",
+                    "ean": null,
+                    "label": "Lait entier UHT 1 l",
+                    "content": {
+                        "value": 1,
+                        "unit": "l"
+                    }
+                }
+            ],
+            "updatedAt": "2026-10-18T09:20:00+00:00"
+        },
+        {
+            "ingredientSlug": "sel",
+            "ingredientName": "Sel",
+            "haveAtHome": false,
+            "accepted": [
+                {
+                    "rank": 1,
+                    "product": {
+                        "productId": "d080c309-b5e9-56b9-b73b-f5153fdc223b",
+                        "retailerProductId": "555401",
+                        "ean": null,
+                        "label": "Sel fin 1 kg",
+                        "content": {
+                            "value": 1,
+                            "unit": "kg"
+                        }
+                    }
+                }
+            ],
+            "rejected": [],
+            "updatedAt": "2026-10-18T09:20:00+00:00"
+        },
+        {
+            "ingredientSlug": "sucre",
+            "ingredientName": "Sucre",
+            "haveAtHome": true,
+            "accepted": [],
+            "rejected": [],
+            "updatedAt": "2026-10-18T09:20:00+00:00"
+        }
+    ],
+    "totalItems": 4
+}

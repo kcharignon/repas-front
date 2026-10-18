@@ -77,7 +77,7 @@ audit: ## Check the production dependencies against known security advisories
 outdated: ## List the dependencies with a newer version, majors included
 	@$(RUN) npm outdated || true
 
-quality: check audit api-verify agent-verify ## Run everything the CI runs except the browsers
+quality: check audit api-verify samples-verify agent-verify ## Run everything the CI runs except the browsers
 
 ## —— End to end 🎭 ——————————————————————————————————————————————————————————
 .PHONY: e2e e2e-offline e2e-visual e2e-report lighthouse
@@ -104,7 +104,7 @@ e2e-report: ## Open the last Playwright report on http://localhost:9323
 	@$(DOCKER_COMPOSE) --profile report run --rm --service-ports e2e-report
 
 ## —— API contract 📄 ————————————————————————————————————————————————————————
-.PHONY: api-update api-check api-verify
+.PHONY: api-update api-check api-verify samples-update samples-verify
 
 api-update: ## Pin the contract to the latest back commit (or ref=<sha>) and regenerate the types
 	@$(RUN) npm run api:update $(if $(ref),-- $(ref),)
@@ -114,6 +114,12 @@ api-check: ## Fail if src/api/schema.d.ts does not match api/openapi.json
 
 api-verify: ## Fail if api/openapi.json is not the file of the pinned back commit (needs the network)
 	@$(RUN) npm run api:verify
+
+samples-update: ## Copy the back's contract samples (docs/drive/samples) of commit ref=<sha> into drive-agent/fixtures/contract (needs the network)
+	@$(RUN) npm run samples:update -- $(ref)
+
+samples-verify: ## Fail if the contract samples are not the files of the commit noted in drive-agent/fixtures/contract/SOURCE.md (needs the network)
+	@$(RUN) npm run samples:verify
 
 ## —— Back & demo data 🗃️ ————————————————————————————————————————————————————
 .PHONY: fixtures

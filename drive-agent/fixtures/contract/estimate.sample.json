@@ -1,0 +1,68 @@
+{
+    "shoppingListId": "0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10",
+    "retailer": "leclerc",
+    "store": {
+        "id": "123456",
+        "label": "Ville-Test",
+        "baseUrl": "https://exemple.leclercdrive.fr/magasin-123456-123456"
+    },
+    "estimatedTotalCents": 199,
+    "estimatedLines": 1,
+    "unestimatedLines": 3,
+    "coverage": 0.25,
+    "oldestPriceAt": "2026-10-18T10:00:00+00:00",
+    "newestPriceAt": "2026-10-18T10:00:00+00:00",
+    "lines": [
+        {
+            "ingredientSlug": "farine",
+            "ingredientName": "Farine",
+            "productLabel": "Farine de blé T55 1 kg",
+            "packs": 1,
+            "unitPriceCents": 199,
+            "subtotalCents": 199,
+            "priceSeenAt": "2026-10-18T10:00:00+00:00",
+            "status": "ESTIMATED"
+        },
+        {
+            "ingredientSlug": "lait",
+            "ingredientName": "Lait",
+            "productLabel": "Lait demi-écrémé UHT 50 cl",
+            "packs": null,
+            "unitPriceCents": null,
+            "subtotalCents": null,
+            "priceSeenAt": null,
+            "status": "NO_PRICE"
+        },
+        {
+            "ingredientSlug": "oeuf",
+            "ingredientName": "Œufs",
+            "productLabel": null,
+            "packs": null,
+            "unitPriceCents": null,
+            "subtotalCents": null,
+            "priceSeenAt": null,
+            "status": "NO_PRODUCT"
+        },
+        {
+            "ingredientSlug": "sel",
+            "ingredientName": "Sel",
+            "productLabel": "Sel fin 1 kg",
+            "packs": null,
+            "unitPriceCents": 45,
+            "subtotalCents": null,
+            "priceSeenAt": "2026-10-18T09:20:00+00:00",
+            "status": "TO_CHECK"
+        },
+        {
+            "ingredientSlug": "sucre",
+            "ingredientName": "Sucre",
+            "productLabel": null,
+            "packs": null,
+            "unitPriceCents": null,
+            "subtotalCents": null,
+            "priceSeenAt": null,
+            "status": "HAVE_AT_HOME"
+        }
+    ],
+    "disclaimer": "Estimation d'après les derniers prix vus ; le prix réel est celui du drive."
+}

@@ -386,3 +386,32 @@ describe('réglages du drive : l’application et les produits', () => {
     expect(wrapper.find('#products-title ~ div [role="alert"]').text()).toContain('injoignable')
   })
 })
+
+describe('réglages du drive : la note de vie privée', () => {
+  it('s’affiche au-dessus de la section du magasin et mène à la note complète de l’aide', async () => {
+    const { wrapper, context } = await open()
+
+    const note = wrapper.find('#drive-privacy-note-title')
+    const store = wrapper.find('#store-title')
+    expect(note.text()).toBe('Votre vie privée')
+    expect(
+      note.element.compareDocumentPosition(store.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+
+    const link = wrapper.find('a[href="/drive/aide#vie-privee"]')
+    expect(link.text()).toBe('Lisez la note complète')
+    await link.trigger('click')
+    // La page d'aide se charge à la demande : on attend la fin de la navigation
+    await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-help'))
+    expect(context.router.currentRoute.value.hash).toBe('#vie-privee')
+  })
+
+  it('reste là sans magasin enregistré (avant la première activation), mais pas quand le drive est coupé', async () => {
+    const empty = await open({}, '/drive/reglages', settingsOf(null))
+    expect(empty.wrapper.find('#drive-privacy-note-title').exists()).toBe(true)
+    document.body.innerHTML = ''
+
+    const off = await open({}, '/drive/reglages', settingsOf(null, false))
+    expect(off.wrapper.find('#drive-privacy-note-title').exists()).toBe(false)
+  })
+})

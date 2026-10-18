@@ -37,7 +37,7 @@ const known = (
 const fresh = (slug: string, name: string): DrivePlanLine => ({
   ingredientSlug: slug,
   ingredientName: name,
-  needed: { quantity: 2, unitSymbol: '', dimension: 'COUNT', baseFactor: 1 },
+  needed: { quantity: 2, unitSymbol: 'pièce', dimension: 'COUNT', baseFactor: 1 },
   status: 'NEW',
   products: [],
   rejected: [],

@@ -1,0 +1,9 @@
+{
+    "enabled": true,
+    "retailer": "leclerc",
+    "store": {
+        "id": "123456",
+        "label": "Ville-Test",
+        "baseUrl": "https://exemple.leclercdrive.fr/magasin-123456-123456"
+    }
+}
