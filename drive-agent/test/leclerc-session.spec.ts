@@ -81,6 +81,29 @@ describe('un client connecté', () => {
     expect(reading.signs).toEqual(signs)
   })
 
+  // Recette réelle du 2026-10-18 (Pixel 9, agent 0.9.1) : « Connexion : indéterminé (signes : LOGIN_LINK, LOGOUT_LINK, ORDERS_LINK) » alors que
+  // l'utilisateur est connecté : le site garde un lien de connexion pour un membre aussi. Il ne dit donc pas « visiteur » à lui seul.
+  it('un lien « Se connecter » gardé par le site pour un membre n’empêche pas de le reconnaître', () => {
+    const reading = readSession(
+      page('<a>Se connecter</a><a>Se déconnecter</a><a>Mes commandes</a>'),
+    )
+
+    expect(reading.state).toBe('MEMBER')
+    expect(reading.signs).toEqual(['LOGIN_LINK', 'LOGOUT_LINK', 'ORDERS_LINK'])
+  })
+
+  it('un lien « Se connecter » avec un seul signe de client : client', () => {
+    expect(readSession(page('<a>Se connecter</a><a>Mes commandes</a>')).state).toBe('MEMBER')
+  })
+
+  it('un visiteur reste reconnu : « Se connecter » et « Créer un compte » sans signe de client', () => {
+    expect(readSession(page('<a>Se connecter</a><a>Créer un compte</a>')).state).toBe('VISITOR')
+  })
+
+  it('un lien « Se connecter » avec un champ de mot de passe : visiteur', () => {
+    expect(readSession(page('<a>Se connecter</a><input type="password">')).state).toBe('VISITOR')
+  })
+
   it('« Déconnexion » n’est pas lu comme « Connexion »', () => {
     expect(readSession(page('<a>Déconnexion</a>')).signs).toEqual(['LOGOUT_LINK'])
   })

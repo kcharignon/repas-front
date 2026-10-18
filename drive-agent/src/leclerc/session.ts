@@ -5,7 +5,9 @@
 //   - visiteur : au moins DEUX signes de visiteur (lien « Se connecter », lien « Créer un compte », champ de mot de passe, indicateur d'état
 //     à faux) et AUCUN signe de client ;
 //   - client connecté : au moins un signe de client (lien « Se déconnecter », « Mes commandes », indicateur d'état à vrai) et aucun signe de
-//     visiteur ;
+//     visiteur FORT (« Créer un compte », champ de mot de passe, indicateur à faux). Le lien « Se connecter » est un signe FAIBLE : recette réelle
+//     du 2026-10-18, le site le garde pour un client connecté (« LOGIN_LINK, LOGOUT_LINK, ORDERS_LINK » lus sur sa page) ; il compte pour un
+//     visiteur avec un autre signe, jamais contre un client ;
 //   - sinon : inconnu. L'agent ne bloque jamais sur un état inconnu (les détections de redirection de connexion et de 401 restent).
 // Les libellés ci-dessous sont des hypothèses plausibles, pas des mesures : les signes lus figurent dans le diagnostic (noms seulement),
 // pour que la recette réelle les confirme ou les corrige.
@@ -24,6 +26,9 @@ export const VISITOR_SIGNS = [
 export const MEMBER_SIGNS = ['LOGOUT_LINK', 'ORDERS_LINK', 'STATE_FLAG_ON'] as const
 
 export type SessionSign = (typeof VISITOR_SIGNS)[number] | (typeof MEMBER_SIGNS)[number]
+
+/** Le seul signe de visiteur qu'un client connecté montre aussi (constat de la recette réelle) : il ne s'oppose jamais à un signe de client. */
+const WEAK_VISITOR_SIGN: SessionSign = 'LOGIN_LINK'
 
 export interface SessionReading {
   state: SessionState
@@ -109,10 +114,16 @@ export function readSession(page: string): SessionReading {
     }
   }
   const signs = [...VISITOR_SIGNS, ...MEMBER_SIGNS].filter((sign) => found.has(sign))
-  const visitor = signs.filter((sign) => (VISITOR_SIGNS as readonly string[]).includes(sign)).length
+  const visitorSigns = signs.filter((sign) => (VISITOR_SIGNS as readonly string[]).includes(sign))
+  const visitor = visitorSigns.length
+  const strongVisitor = visitorSigns.filter((sign) => sign !== WEAK_VISITOR_SIGN).length
   const member = signs.length - visitor
   const state: SessionState =
-    member === 0 && visitor >= 2 ? 'VISITOR' : visitor === 0 && member >= 1 ? 'MEMBER' : 'UNKNOWN'
+    member === 0 && visitor >= 2
+      ? 'VISITOR'
+      : strongVisitor === 0 && member >= 1
+        ? 'MEMBER'
+        : 'UNKNOWN'
   return { state, signs }
 }
 
