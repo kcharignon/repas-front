@@ -25,6 +25,20 @@ import type { ProgressPatch, ScreenAnswer, ScreenName, ScreenProps, Ui } from '.
 export const RUN_ID = '8f14e45f-ceea-467a-9575-8e6b8c0a1b2c'
 export const STORE = { id: '000123', host: 'fd0-courses.leclercdrive.fr' }
 
+/** Une page sans menu des rayons (DRV-647) : ce que les adaptateurs simulés rendent. */
+export const NO_MENU: ReturnType<RetailerAdapter['readAisleMenu']> = {
+  menu: false,
+  links: 0,
+  menuLinks: 0,
+  aisles: [],
+  aisleCount: 0,
+  families: 0,
+  aisleIds: [],
+  familyIds: [],
+  shapes: [],
+  vocabulary: [],
+}
+
 // —— Les plans ————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 export const product = (
@@ -259,6 +273,8 @@ export function fakeAdapter(
       await options.onFollow?.()
     },
     exploreSearchVariants: () => Promise.resolve([]),
+    readAisleMenu: () => NO_MENU,
+    describeLastReply: () => null,
     async setCartQuantity(id, quantity): Promise<CartResult> {
       calls.push(`cart ${id} ${quantity}`)
       inFlight += 1

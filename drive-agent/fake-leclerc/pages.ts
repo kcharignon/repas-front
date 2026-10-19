@@ -197,8 +197,36 @@ export function basketPage(cart: Cart, session: Session = 'member'): string {
   ).replace('<footer>', `<ul id="lignes">\n${lines}\n</ul>\n<footer>`)
 }
 
+/**
+ * Le menu « Rayons » de l'accueil du magasin (DRV-647, étape 0) : un bouton replié et, cachés dessous, des liens de rayon et de famille au numéro dans
+ * l'adresse (`rayon-41-….aspx`, `famille-410-….aspx`, relatifs au chemin du magasin). FORME INVENTÉE, plausible, jamais mesurée : c'est ce que le
+ * diagnostic doit mesurer sur le vrai site. Les rayons 41, 12 et 60 sont ceux du catalogue ; le 15 (jus) n'a pas de lien, pour la correspondance.
+ */
+const AISLE_MENU = `<div class="menu-rayons">
+<button type="button" aria-expanded="false">Rayons</button>
+<ul hidden>
+<li><a href="rayon-41-Fruits-et-legumes.aspx">Fruits et légumes</a>
+<ul>
+<li><a href="famille-410-Tomates.aspx">Tomates</a></li>
+<li><a href="famille-411-Pommes.aspx">Pommes</a></li>
+<li><a href="famille-412-Courgettes.aspx">Courgettes</a></li>
+</ul></li>
+<li><a href="rayon-12-Epicerie-salee.aspx">Épicerie salée</a></li>
+<li><a href="rayon-60-Bebe.aspx">Bébé</a></li>
+<li><a href="rayon-70-Boissons.aspx">Boissons</a></li>
+<li><a href="rayon-80-Entretien.aspx">Entretien</a></li>
+</ul>
+</div>
+`
+
 export function homePage(cart: Cart, session: Session = 'member'): string {
-  return storePage('Accueil du magasin', 'Bienvenue dans le faux drive.', {}, cart, session)
+  return storePage(
+    'Accueil du magasin',
+    'Bienvenue dans le faux drive.',
+    {},
+    cart,
+    session,
+  ).replace('<h1>', `${AISLE_MENU}<h1>`)
 }
 
 /**

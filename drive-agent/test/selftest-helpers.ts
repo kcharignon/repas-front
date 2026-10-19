@@ -8,7 +8,7 @@ import {
   type SessionReading,
 } from '../src/leclerc'
 import { PASSAGE_WORDS } from '../src/selftest'
-import { fakeStorage, fakeWakeLock } from './flow-helpers'
+import { fakeStorage, fakeWakeLock, NO_MENU } from './flow-helpers'
 
 export const NOW = Date.UTC(2026, 9, 18, 14, 3, 27)
 
@@ -146,6 +146,8 @@ export function shop(shelves: Shelves, options: ShopOptions = {}) {
     }),
     lastSearchFacts: () => null,
     exploreSearchVariants: () => Promise.resolve([]),
+    readAisleMenu: () => NO_MENU,
+    describeLastReply: () => null,
     readEntry: () => ({ kind: 'NONE' }),
     followEntry: () => Promise.resolve(),
   }

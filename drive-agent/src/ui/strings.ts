@@ -351,6 +351,45 @@ export const S = {
         `${rank} : ${reason} (iQteDisponible : ${stock ?? 'absent'}, eDisponibilite : ${availability ?? 'absente'})`,
       lastPassItem: (rank: number, reason: string, tried: number) =>
         `${rank} : ${reason} (${tried} recherche${tried > 1 ? 's' : ''})`,
+      /**
+       * DRV-647 (étape 0) : d'où viennent les libellés de rayons. Le menu « Rayons » de la page (lu dans le DOM, sans clic) : des nombres, les formes
+       * des adresses, l'identifiant lu dans l'adresse et le libellé du rayon, un texte du catalogue public.
+       */
+      menu: (m: {
+        menu: boolean
+        links: number
+        menuLinks: number
+        aisles: number
+        families: number
+      }) =>
+        `Menu des rayons de la page : titre « Rayons » ${m.menu ? 'présent' : 'absent'} ; liens de la page : ${m.links}, dans le bloc du menu : ${m.menuLinks} ; liens de rayon : ${m.aisles} ; liens de famille : ${m.families}`,
+      menuShapes: (list: string) => `Adresses des liens de rayon et de famille (motifs) : ${list}`,
+      menuAisle: (kind: 'RAYON' | 'MENU', id: number | null, label: string | null) =>
+        `${kind === 'RAYON' ? 'Lien de rayon' : 'Lien du menu'} ${id ?? '(sans numéro)'} : ${
+          label === null ? '(libellé écarté)' : `« ${label} »`
+        }`,
+      menuMore: (hidden: number, max: number) =>
+        `Liens de rayon non montrés : ${hidden} (${max} au plus)`,
+      menuKeys: (list: string) => `Clés de rayon ou de filtre dans l’état de la page : ${list}`,
+      replyPath: (term: string, path: string) =>
+        `Réponse « ${term} », chemin des produits depuis le premier niveau : ${path}`,
+      replyTop: (term: string, total: number, list: string) =>
+        `Réponse « ${term} », clés du premier niveau (${total}, noms seulement) : ${list}`,
+      replyProduct: (term: string, total: number, list: string) =>
+        `Réponse « ${term} », clés d’un produit (${total}, noms seulement sauf rayon et famille) : ${list}`,
+      replyNoProduct: (term: string) => `Réponse « ${term} » : état des produits non délimité`,
+      replyKeys: (term: string, list: string) =>
+        `Réponse « ${term} », clés de rayon ou de filtre : ${list}`,
+      coverage: (
+        kind: 'Rayons' | 'Familles',
+        term: string,
+        found: number,
+        seen: number,
+        missing: string,
+      ) =>
+        `${kind} de « ${term} » avec un lien dans le menu : ${found} sur ${seen}${missing === '' ? '' : ` (sans lien : ${missing})`}`,
+      coverageNone: (kind: 'Rayons' | 'Familles', term: string) =>
+        `${kind} de « ${term} » avec un lien dans le menu : aucun lien numéroté dans la page`,
     },
   },
   /** Le test automatique de la variante de débogage (DRV-318) : l'écran de progression et le rapport texte copiable. */
