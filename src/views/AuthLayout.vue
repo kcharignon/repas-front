@@ -11,7 +11,7 @@ const { t } = useI18n()
 <template>
   <div class="flex min-h-dvh flex-col bg-bg md:flex-row">
     <header
-      class="relative overflow-hidden bg-[#1e6b4c] px-7 pt-12 pb-10 text-white md:flex md:w-1/2 md:flex-col md:justify-center md:px-16"
+      class="relative overflow-hidden bg-[#1e6b4c] px-7 pt-6 pb-5 text-white md:flex md:w-1/2 md:flex-col md:justify-center md:px-16 md:pt-12 md:pb-10"
     >
       <div
         class="pointer-events-none absolute -top-14 -right-16 size-64 rounded-full bg-white/10"
@@ -19,9 +19,16 @@ const { t } = useI18n()
       <div
         class="pointer-events-none absolute -bottom-24 right-10 size-44 rounded-full bg-accent/25"
       />
-      <img :src="logo" alt="" class="relative h-[75px] w-[84px] object-contain" />
-      <p class="relative mt-5 font-display text-4xl leading-none font-bold">{{ t('app.name') }}</p>
-      <p class="relative mt-2 max-w-72 text-lg leading-snug">{{ t('auth.pitch') }}</p>
+      <!-- Sur téléphone le logo et le nom tiennent sur une ligne : le bouton principal du formulaire se voit sans défiler à 360 × 640 -->
+      <div class="relative flex items-center gap-3 md:block">
+        <img :src="logo" alt="" class="h-12 w-[54px] object-contain md:h-[75px] md:w-[84px]" />
+        <p class="font-display text-3xl leading-none font-bold md:mt-5 md:text-4xl">
+          {{ t('app.name') }}
+        </p>
+      </div>
+      <p class="relative mt-3 max-w-72 text-base leading-snug md:mt-2 md:text-lg">
+        {{ t('auth.pitch') }}
+      </p>
     </header>
 
     <main class="flex flex-1 flex-col justify-center px-6 py-8 md:px-16">
