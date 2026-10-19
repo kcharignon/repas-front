@@ -224,88 +224,94 @@ declare global {
 /**
  * Le faux pont de l'application. Au lancement du drive (`drive.start`), il répond par un résultat tiré du plan : `completed` (tout est
  * mis au panier, un produit de secours, des prix) ou `partial` (le beurre échoue, `BLOCKED`). Avec un résultat tout fait (sans son
- * `runId`, celui du plan reçu y est mis), il le renvoie tel quel : le parcours choisit alors lui-même ce que l'agent a fait.
+ * `runId`, celui du plan reçu y est mis), il le renvoie tel quel : le parcours choisit alors lui-même ce que l'agent a fait. `version` est
+ * celle que l'application annonce à `app.info` (`null` : elle ne répond pas), pour essayer une application trop ancienne (DRV-640).
  */
 export async function fakeApp(
   page: Page,
   mode: 'completed' | 'partial' | Record<string, unknown> = 'completed',
+  version: string | null = '1.0.0',
 ) {
-  await page.addInitScript((mode) => {
-    const listeners = new Set<(event: { data: unknown }) => void>()
-    window.__sent = []
-    ;(window as unknown as { repasNative: unknown }).repasNative = {
-      postMessage(text: string) {
-        const message = JSON.parse(text)
-        window.__sent.push(message)
-        const emit = (data: string) => listeners.forEach((listener) => listener({ data }))
-        if (message.type === 'app.info') {
-          const data = JSON.stringify({
-            v: 1,
-            type: 'app.info',
-            version: '1.0.0',
-            versionCode: 1,
-            drive: true,
-          })
-          setTimeout(() => emit(data), 0)
-        }
-        if (message.type === 'drive.start' && typeof mode === 'object') {
-          const result = { ...mode, runId: message.plan.runId }
-          setTimeout(() => emit(JSON.stringify({ v: 1, type: 'drive.result', result })), 100)
-        } else if (message.type === 'drive.start') {
-          const lines = message.plan.lines.map(
-            (line: {
-              ingredientSlug: string
-              name: string
-              status: string
-              products?: { id: string }[]
-            }) => {
-              const slug = line.ingredientSlug
-              if (line.status === 'HAVE_AT_HOME')
-                return { ingredientSlug: slug, outcome: 'HAVE_AT_HOME' }
-              if (line.status === 'SKIP') return { ingredientSlug: slug, outcome: 'SKIPPED' }
-              if (line.status === 'NEW')
+  await page.addInitScript(
+    ([mode, version]) => {
+      const listeners = new Set<(event: { data: unknown }) => void>()
+      window.__sent = []
+      ;(window as unknown as { repasNative: unknown }).repasNative = {
+        postMessage(text: string) {
+          const message = JSON.parse(text)
+          window.__sent.push(message)
+          const emit = (data: string) => listeners.forEach((listener) => listener({ data }))
+          // `version` nulle : l'application ne répond pas à `app.info` (une ancienne version qui ne dit pas la sienne)
+          if (message.type === 'app.info' && version !== null) {
+            const data = JSON.stringify({
+              v: 1,
+              type: 'app.info',
+              version,
+              versionCode: 1,
+              drive: true,
+            })
+            setTimeout(() => emit(data), 0)
+          }
+          if (message.type === 'drive.start' && typeof mode === 'object') {
+            const result = { ...mode, runId: message.plan.runId }
+            setTimeout(() => emit(JSON.stringify({ v: 1, type: 'drive.result', result })), 100)
+          } else if (message.type === 'drive.start') {
+            const lines = message.plan.lines.map(
+              (line: {
+                ingredientSlug: string
+                name: string
+                status: string
+                products?: { id: string }[]
+              }) => {
+                const slug = line.ingredientSlug
+                if (line.status === 'HAVE_AT_HOME')
+                  return { ingredientSlug: slug, outcome: 'HAVE_AT_HOME' }
+                if (line.status === 'SKIP') return { ingredientSlug: slug, outcome: 'SKIPPED' }
+                if (line.status === 'NEW')
+                  return {
+                    ingredientSlug: slug,
+                    outcome: 'CHOSEN',
+                    quantity: 1,
+                    placement: 'PRIMARY',
+                    product: { id: '5551' + slug.length, label: line.name + ' choisi sur le site' },
+                  }
+                if (mode === 'partial' && slug === 'beurre')
+                  return { ingredientSlug: slug, outcome: 'FAILED', error: 'BLOCKED' }
+                const products = line.products ?? []
                 return {
                   ingredientSlug: slug,
-                  outcome: 'CHOSEN',
+                  outcome: 'ADDED',
+                  productId: products[products.length - 1]?.id,
                   quantity: 1,
-                  placement: 'PRIMARY',
-                  product: { id: '5551' + slug.length, label: line.name + ' choisi sur le site' },
+                  usedRank: products.length,
+                  ...(products.length > 1 ? { unavailableIds: [products[0]?.id] } : {}),
+                  price: { cents: 189 },
                 }
-              if (mode === 'partial' && slug === 'beurre')
-                return { ingredientSlug: slug, outcome: 'FAILED', error: 'BLOCKED' }
-              const products = line.products ?? []
-              return {
-                ingredientSlug: slug,
-                outcome: 'ADDED',
-                productId: products[products.length - 1]?.id,
-                quantity: 1,
-                usedRank: products.length,
-                ...(products.length > 1 ? { unavailableIds: [products[0]?.id] } : {}),
-                price: { cents: 189 },
-              }
-            },
-          )
-          const result = {
-            v: 1,
-            type: 'result',
-            runId: message.plan.runId,
-            agentVersion: '1.0.0',
-            outcome: mode,
-            store: { id: message.plan.store.id },
-            lines,
-            ...(mode === 'partial'
-              ? { error: { code: 'BLOCKED', message: 'Trop de demandes' } }
-              : {}),
+              },
+            )
+            const result = {
+              v: 1,
+              type: 'result',
+              runId: message.plan.runId,
+              agentVersion: '1.0.0',
+              outcome: mode,
+              store: { id: message.plan.store.id },
+              lines,
+              ...(mode === 'partial'
+                ? { error: { code: 'BLOCKED', message: 'Trop de demandes' } }
+                : {}),
+            }
+            setTimeout(() => emit(JSON.stringify({ v: 1, type: 'drive.result', result })), 100)
           }
-          setTimeout(() => emit(JSON.stringify({ v: 1, type: 'drive.result', result })), 100)
-        }
-      },
-      addEventListener: (_type: string, listener: (event: { data: unknown }) => void) =>
-        void listeners.add(listener),
-      removeEventListener: (_type: string, listener: (event: { data: unknown }) => void) =>
-        void listeners.delete(listener),
-    }
-  }, mode)
+        },
+        addEventListener: (_type: string, listener: (event: { data: unknown }) => void) =>
+          void listeners.add(listener),
+        removeEventListener: (_type: string, listener: (event: { data: unknown }) => void) =>
+          void listeners.delete(listener),
+      }
+    },
+    [mode, version] as const,
+  )
 }
 
 /** La phrase de synthèse de l'écran d'envoi pour le plan de `plan` : 8 connus, 3 à choisir, 1 « j'en ai toujours » (DRV-622). */
