@@ -200,7 +200,7 @@ export const S = {
       inReply: (term: string) => `réponse « ${term} »`,
       address: (shape: string) => `Adresse d’arrivée : ${shape}`,
       city: (value: string) => `Suffixe de ville dans l’adresse de la page : ${value}`,
-      /** Les deux liens de la page (DRV-625) : présents ou non, la forme de leur adresse et où elle mène. Jamais l'adresse. */
+      /** Un lien de la page (DRV-625) : présent ou non, la forme de son adresse et où il mène. Jamais l'adresse. */
       link: (
         name: string,
         link: { present: boolean; shape: string | null; where: string | null },
@@ -211,7 +211,14 @@ export const S = {
             : ''
         }`,
       startLink: 'Lien « Commencer mes courses » dans la page',
-      basketLink: 'Lien du panier dans la page',
+      /** « Commencer mes courses » : absent, ou un bouton sans adresse que l'agent sait cliquer (oui / non). Jamais d'adresse. */
+      start: (present: boolean, clickable: boolean) =>
+        present
+          ? `« Commencer mes courses » : bouton cliquable : ${clickable ? 'oui' : 'non'}`
+          : '« Commencer mes courses » : absent de la page',
+      /** La page du panier (`detail-panier.aspx` sous le chemin du magasin) : connue quand la page montre le chemin du magasin avec la ville. */
+      basketPage: (known: string) =>
+        `Page du panier (detail-panier.aspx sous le chemin du magasin) : ${known}`,
       where: {
         RELATIVE: 'adresse sans site',
         SAME_HOST: 'même hôte que la page',

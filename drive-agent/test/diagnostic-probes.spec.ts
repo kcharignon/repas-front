@@ -213,14 +213,14 @@ describe('une page qui n’est pas celle d’un magasin', () => {
   })
 })
 
-describe('les deux liens de la page (DRV-625)', () => {
+describe('« Commencer mes courses » et la page du panier (DRV-625, DRV-629)', () => {
   const home = { hostname: 'www.leclercdrive.fr', pathname: '/', protocol: 'https:', port: '' }
 
-  it('l’accueil de l’enseigne : « Commencer mes courses » et le panier, présents ou non, avec la forme de leur adresse', async () => {
+  it('un lien : présent, avec la forme de son adresse, sans numéro ni ville', async () => {
     const { adapter, fake } = site(normal, {
       location: home,
       pageText: () =>
-        '<a href="https://fd0-courses.leclercdrive.fr/magasin-000123-000123-Ville-Test/">Commencer mes courses</a><a href="/magasin-000123-000123-Ville-Test/panier.aspx">Mon panier</a>',
+        '<a href="https://fd0-courses.leclercdrive.fr/magasin-000123-000123-Ville-Test/">Commencer mes courses</a>',
     })
 
     const { probes } = await runChecks(deps(adapter), () => undefined)
@@ -229,21 +229,49 @@ describe('les deux liens de la page (DRV-625)', () => {
     expect(text).toContain(
       'Lien « Commencer mes courses » dans la page : oui, adresse /magasin-N-N-V/, autre hôte leclercdrive.fr',
     )
-    expect(text).toContain(
-      'Lien du panier dans la page : oui, adresse /magasin-N-N-V/panier.aspx, adresse sans site',
-    )
     expect(text).not.toContain('000123')
     expect(fake.calls).toEqual([])
   })
 
-  it('sans lien : « non »', async () => {
+  it('le bouton du vrai site : « bouton cliquable : oui » quand le DOM le donne, « non » sinon, jamais une adresse', async () => {
+    const page = '<a class="btn" role="button">Commencer mes courses</a>'
+    const clickable = site(normal, {
+      location: home,
+      pageText: () => page,
+      startButton: () => ({ click: () => undefined }),
+    })
+    const stuck = site(normal, { location: home, pageText: () => page, startButton: () => null })
+
+    const yes = probeLines((await runChecks(deps(clickable.adapter), () => undefined)).probes)
+    const no = probeLines((await runChecks(deps(stuck.adapter), () => undefined)).probes)
+
+    expect(yes).toContain(' - « Commencer mes courses » : bouton cliquable : oui')
+    expect(no).toContain(' - « Commencer mes courses » : bouton cliquable : non')
+    expect(clickable.fake.calls).toEqual([])
+  })
+
+  it('sans bouton ni lien : absent de la page', async () => {
     const { adapter } = site(normal, { location: home, pageText: () => '<p>Bonjour</p>' })
 
     const { probes } = await runChecks(deps(adapter), () => undefined)
-    const text = probeLines(probes).join('\n')
 
-    expect(text).toContain('Lien « Commencer mes courses » dans la page : non')
-    expect(text).toContain('Lien du panier dans la page : non')
+    expect(probeLines(probes)).toContain(' - « Commencer mes courses » : absent de la page')
+  })
+
+  it('la page du panier : oui sur une page du magasin avec la ville dans le chemin, non sans ville, sans objet ailleurs', async () => {
+    const answer = async (pathname: string) => {
+      const { adapter } = site(normal, {
+        location: { hostname: 'fd0-courses.leclercdrive.fr', pathname },
+        pageText: () => '<p>Bonjour</p>',
+      })
+      const { probes } = await runChecks(deps(adapter), () => undefined)
+      return probeLines(probes).filter((line) => line.includes('Page du panier'))
+    }
+    const label = ' - Page du panier (detail-panier.aspx sous le chemin du magasin) : '
+
+    expect(await answer('/magasin-000123-000123-Ville-Test/')).toEqual([`${label}oui`])
+    expect(await answer('/magasin-000123-000123/')).toEqual([`${label}non`])
+    expect(await answer('/')).toEqual([`${label}sans objet`])
   })
 })
 

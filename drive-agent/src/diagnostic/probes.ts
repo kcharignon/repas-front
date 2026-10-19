@@ -52,10 +52,11 @@ function cityOf(address: string): string {
   return S.diagnostic.probe.notApplicable
 }
 
-/** Une ligne de lien du rapport : présent ou non, la forme de l'adresse et où elle mène (DRV-625). */
-function linkLine(name: string, link: LinkFacts): string {
-  return P.link(name, {
-    present: link.present,
+/** La ligne « Commencer mes courses » : absent, bouton cliquable (le vrai site, DRV-629), ou lien avec la forme de son adresse et où il mène. */
+function startLine(link: LinkFacts, clickable: boolean): string {
+  if (!link.present || link.shape === null) return P.start(link.present, clickable)
+  return P.link(P.startLink, {
+    present: true,
     shape: link.shape,
     where: link.where === null ? null : (own(P.where, link.where) ?? null),
   })
@@ -114,9 +115,9 @@ export function probeLines(probes: ProbeFacts | null | undefined): string[] {
       lines.push(P.cookies(arrival.cookies.count, yesNo(arrival.cookies.antiBot)))
     lines.push(P.arrival(arrival.redirects, arrival.status))
     if (arrival.entry) {
-      lines.push(linkLine(P.startLink, arrival.entry.start))
-      lines.push(linkLine(P.basketLink, arrival.entry.basket))
+      lines.push(startLine(arrival.entry.start, arrival.entry.clickable))
     }
+    lines.push(P.basketPage(cityOf(arrival.address)))
     lines.push(
       P.delivery(P.inPage, yesNo(arrival.delivery.read), yesNo(arrival.delivery.sameAsAddress)),
     )

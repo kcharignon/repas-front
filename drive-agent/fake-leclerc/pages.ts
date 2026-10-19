@@ -132,8 +132,18 @@ export function accueilPage(
   otherStoreUrl?: string,
   form: HomeForm = 'link',
 ): string {
-  const start =
-    form === 'no-link'
+  const button = form === 'button' || form === 'button-human' || form === 'button-inert'
+  // Le clic ouvre le magasin ; `button-human` ignore un clic de programme, `button-inert` n'ouvre rien.
+  const onClick =
+    form === 'button-inert'
+      ? ''
+      : `${form === 'button-human' ? 'if (!event.isTrusted) return;' : ''} location.assign('${storeUrl}');`
+  const start = button
+    ? `<p><a id="start-shopping" class="btn" role="button">Commencer mes courses</a></p>
+<script>
+document.getElementById('start-shopping').addEventListener('click', function (event) {${onClick}});
+</script>`
+    : form === 'no-link'
       ? '<p><a href="/connexion.aspx">Se connecter</a></p>'
       : `<p><a id="start-shopping" href="${storeUrl}">Commencer mes courses</a></p>`
   const challenge =
@@ -151,6 +161,27 @@ ${challenge}${otherStoreUrl === undefined ? '' : `<p><a id="other-store" href="$
 </body>
 </html>
 `
+}
+
+/**
+ * La page du panier (DRV-629) : `<chemin du magasin avec la ville>/detail-panier.aspx`, la page que « Finaliser sur Leclerc » ouvre. Les lignes du
+ * panier en mémoire du faux site, leur total ; données inventées.
+ */
+export function basketPage(cart: Cart, session: Session = 'member'): string {
+  const { items, total } = totalsOf(cart)
+  const lines = [...cart]
+    .flatMap(([id, quantity]) => {
+      const product = findProduct(id)
+      return product ? [`<li>${quantity} × ${product.label1}</li>`] : []
+    })
+    .join('\n')
+  return storePage(
+    'Mon panier',
+    items === 0 ? 'Votre panier est vide' : `${items} articles, total ${total}`,
+    {},
+    cart,
+    session,
+  ).replace('<footer>', `<ul id="lignes">\n${lines}\n</ul>\n<footer>`)
 }
 
 export function homePage(cart: Cart, session: Session = 'member'): string {
@@ -246,10 +277,13 @@ export function challengePage(): string {
 }
 
 /**
- * Ce que l'accueil de l'enseigne montre (DRV-625) : le lien « Commencer mes courses » (`link`, par défaut), la page d'un visiteur qui n'a que « Se connecter »
- * (`no-link`), ou le lien accompagné d'un défi de l'anti-robot (`challenge`) : dans les deux derniers cas l'agent ne suit rien.
+ * Ce que l'accueil de l'enseigne montre (DRV-625, DRV-629) : le lien « Commencer mes courses » (`link`, par défaut), la page d'un visiteur qui n'a
+ * que « Se connecter » (`no-link`), ou le lien accompagné d'un défi de l'anti-robot (`challenge`) : dans les deux derniers cas l'agent ne suit
+ * rien. Le vrai site (constat du 2026-10-19) a un BOUTON sans adresse : `button` (un élément sans `href` dont un script ouvre le magasin au clic,
+ * quel qu'il soit), `button-human` (idem, mais le script ignore tout clic qui n'est pas un vrai toucher : `event.isTrusted`, comme le site
+ * qui distingue un clic programmé), `button-inert` (le bouton est là et ne fait rien).
  */
-export type HomeForm = 'link' | 'no-link' | 'challenge'
+export type HomeForm = 'link' | 'no-link' | 'challenge' | 'button' | 'button-human' | 'button-inert'
 
 /** Le faux Repas : la page de retour, qui affiche le fragment `#result=` reçu (décodé) pour que les tests le lisent. */
 export function repasReturnPage(): string {

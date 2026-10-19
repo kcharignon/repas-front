@@ -116,3 +116,67 @@ test('un autre magasin que celui du plan : le lien n’est pas suivi', async ({
     expect(new URL(page.url()).pathname).toBe('/')
   })
 })
+
+// DRV-629 : sur le vrai site, « Commencer mes courses » est un bouton SANS adresse (constat du 2026-10-19) : l'agent le clique.
+test('le bouton sans adresse : l’agent le clique tout seul, arrive sur la page du magasin du plan et remplit le panier', async ({
+  page,
+  agentCode,
+}) => {
+  await withHome(async (fake, home) => {
+    // Given : l'accueil n'a qu'un bouton, sans adresse, dont un script ouvre le magasin
+    fake.setBehavior({ homeForm: 'button' })
+    const app = await openWithBridge(page, fake, agentCode, { path: '/', origin: home })
+    app.answerHello(PLAN)
+
+    // When : l'agent le dit, puis clique le bouton sans que l'utilisateur touche rien
+    await expect(page.getByRole('heading', { name: OPENING })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Commencer', exact: true })).toBeVisible()
+
+    // Then : on est dans le magasin, rien n'a été demandé ni écrit avant « Commencer »
+    expect(new URL(page.url()).pathname).toBe('/magasin-000001-000001-Ville-Test/')
+    expect(fake.paced()).toEqual([])
+    await page.getByRole('button', { name: 'Commencer', exact: true }).click()
+    expect(await app.received('result')).toMatchObject({ outcome: 'completed' })
+    expect(fake.cart()).toEqual({ 1000001: 2 })
+  })
+})
+
+test('le site ignore le clic d’un programme : le bandeau dit de toucher le bouton, sans boucle ni écriture ; le toucher de l’utilisateur ouvre le magasin', async ({
+  page,
+  agentCode,
+}) => {
+  await withHome(async (fake, home) => {
+    // Given : le bouton n'ouvre le magasin que pour un vrai toucher (`event.isTrusted`)
+    fake.setBehavior({ homeForm: 'button-human' })
+    const app = await openWithBridge(page, fake, agentCode, { path: '/', origin: home })
+    app.answerHello(PLAN)
+
+    // Then : le clic de l'agent n'a rien fait, la page est restée là, l'écran dit quoi faire
+    await expect(page.getByRole('heading', { name: OPENING })).toBeVisible()
+    await expect(page.getByRole('heading', { name: MANUAL })).toBeVisible({ timeout: 25_000 })
+    expect(new URL(page.url()).pathname).toBe('/')
+    expect(fake.paced()).toEqual([])
+    expect(fake.cart()).toEqual({})
+
+    // When : l'utilisateur touche lui-même le bouton (un vrai toucher), l'agent reprend sur la page du magasin
+    await page.locator('#start-shopping').click()
+    await expect(page.getByRole('button', { name: 'Commencer', exact: true })).toBeVisible()
+    expect(fake.paced()).toEqual([])
+  })
+})
+
+test('un bouton qui ne fait rien : même repli, une seule page demandée (pas de boucle)', async ({
+  page,
+  agentCode,
+}) => {
+  await withHome(async (fake, home) => {
+    fake.setBehavior({ homeForm: 'button-inert' })
+    const app = await openWithBridge(page, fake, agentCode, { path: '/', origin: home })
+    app.answerHello(PLAN)
+
+    await expect(page.getByRole('heading', { name: MANUAL })).toBeVisible({ timeout: 25_000 })
+    const pages = fake.requests().filter((request) => request.kind === 'page')
+    expect(pages.map((request) => request.status)).toEqual([200])
+    expect(fake.paced()).toEqual([])
+  })
+})

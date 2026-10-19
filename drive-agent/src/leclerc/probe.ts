@@ -334,7 +334,7 @@ export interface ArrivalFacts {
   cookies: CookieFacts | null
   /** Le chemin avec la ville que la page donne (formulaire de recherche, à défaut lien), en motif ; `null` si elle n'en donne pas. */
   searchBase: { shape: string; source: 'FORM' | 'LINK' } | null
-  /** Le lien « Commencer mes courses » et le lien du panier de la page : présents ou non, la forme de leur adresse (DRV-625). */
+  /** « Commencer mes courses » dans la page : présent ou non, la forme de son adresse, bouton cliquable ou non (DRV-625, DRV-629). */
   entry?: EntryFacts
 }
 

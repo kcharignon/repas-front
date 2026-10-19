@@ -580,6 +580,35 @@ describe('la racine du magasin et la remise à neuf (DRV-319, émulateur Android
     expect((await cartCall('1000001', 1)).status).toBe(200)
   })
 
+  it('sert la page du panier sous le chemin AVEC la ville (DRV-629), une 404 sans ville, et la refuse quand « basketStatus » le demande', async () => {
+    fake.seedCart({ 1000001: 2 })
+
+    const withCity = await call(`${PAGE_PATH}/detail-panier.aspx`)
+    const withoutCity = await call(`${CART_PATH}/detail-panier.aspx`)
+    fake.setBehavior({ basketStatus: 404 })
+    const refused = await call(`${PAGE_PATH}/detail-panier.aspx`)
+    fake.setBehavior({ basketStatus: null })
+
+    expect(withCity.status).toBe(200)
+    expect(withCity.text).toContain('Mon panier')
+    expect(withCity.text).toContain('2 ×')
+    expect(withoutCity.status).toBe(404)
+    expect(refused.status).toBe(404)
+    expect((await call(`${PAGE_PATH}/detail-panier.aspx`)).status).toBe(200)
+  })
+
+  it('sert l’accueil avec un bouton SANS adresse quand « homeForm » vaut « button » (le vrai site, DRV-629)', async () => {
+    for (const form of ['button', 'button-human', 'button-inert'] as const) {
+      fake.setBehavior({ homeForm: form })
+
+      const text = (await call('/', { host: HOME_HOST })).text
+
+      expect(text).toContain('Commencer mes courses')
+      expect(text).not.toMatch(/<a[^>]*href=[^>]*>Commencer mes courses/)
+      expect(text).toContain("addEventListener('click'")
+    }
+  })
+
   it('sert un autre magasin que celui du plan (pour le message « Ce n’est pas le bon magasin »)', async () => {
     expect(OTHER_STORE_PATH).not.toContain(STORE.id)
     expect((await call(`${OTHER_STORE_PATH}/`)).text).toContain('Accueil du magasin')
