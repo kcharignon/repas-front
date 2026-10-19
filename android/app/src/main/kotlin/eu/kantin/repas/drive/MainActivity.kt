@@ -176,8 +176,8 @@ class MainActivity : Activity() {
             if (!request.isForMainFrame) return false
             val url = request.url.toString()
             // Un lien du drive (« Finaliser sur Leclerc ») s'ouvre dans l'application, connecté, pas dans le navigateur du téléphone (DRV-625).
-            DriveEntry.target(url, repasApp.storePath)?.let {
-                openDrive(it)
+            DriveEntry.resolve(url, repasApp.storePath)?.let {
+                openDrive(it.page, it.outcome)
                 return true
             }
             return when (navigation.decide(url)) {
@@ -278,9 +278,14 @@ class MainActivity : Activity() {
         resumeDialog?.dismiss()
     }
 
-    /** Ouvre l'écran du drive ; sans passage en cours il s'ouvre sur [startUrl] (DRV-625 : la page de « Finaliser sur Leclerc »), sinon sur l'accueil du drive. */
-    private fun openDrive(startUrl: String? = null) =
-        startActivity(Intent(this, DriveActivity::class.java).apply { startUrl?.let { putExtra(DriveActivity.EXTRA_START_URL, it) } })
+    /** Ouvre l'écran du drive ; sans passage en cours il s'ouvre sur [startUrl] (DRV-625 : la page de « Finaliser sur Leclerc », DRV-631 : sa forme), sinon sur l'accueil du drive. */
+    private fun openDrive(startUrl: String? = null, finalize: FinalizeOutcome? = null) =
+        startActivity(
+            Intent(this, DriveActivity::class.java).apply {
+                startUrl?.let { putExtra(DriveActivity.EXTRA_START_URL, it) }
+                finalize?.let { putExtra(DriveActivity.EXTRA_FINALIZE, it.name) }
+            },
+        )
 
     /**
      * Livre à la page de Repas les `drive.result` en attente, si elle a un canal de réponse (sinon ils restent gardés pour la prochaine
@@ -360,7 +365,7 @@ class MainActivity : Activity() {
         listOf(
             R.string.menu_drive_settings to { load("$repasOrigin$DRIVE_SETTINGS_PATH") },
             R.string.menu_open_drive to { openDrive() },
-            R.string.menu_about to { showAbout(repasApp.agentLoad.describe(this)) },
+            R.string.menu_about to { showAbout(repasApp.agentLoad.describe(this), repasApp.finalizeOutcome.last()) },
             R.string.menu_logout_drive to { confirmClearDriveData(::clearDriveData) },
         ),
     )

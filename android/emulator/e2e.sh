@@ -37,11 +37,13 @@
 #      de produits, car aucun n'a de produit retenu) : deux touches pour le geste, rien n'est cherché ni retenu pour les trois autres ;
 #  14. la quantité à vérifier (DRV-626) : un produit au contenu inconnu ouvre « Vérifie la quantité », qui dit « Il te faut : 200 g. », le champ
 #      « 1 » est sélectionné : taper 4 donne 4 (pas 14), même après avoir touché le champ.
-#  15. deuxième envoi, tout est connu (DRV-625, DRV-629) : au téléphone, une seule touche dans le drive (« Commencer »), le résultat revient à Repas tout seul,
-#      puis « Finaliser sur Leclerc » (une touche) ouvre la PAGE DU PANIER DANS l'application (détail-panier.aspx sous le chemin du magasin AVEC la ville,
-#      que l'application a retenu), connecté, pas le navigateur du téléphone ;
-#  16. la page du panier refusée par le site (404) : « Finaliser sur Leclerc » se replie sur l'accueil du drive ;
-#  17. chemin du magasin inconnu (données de l'application effacées) : « Finaliser sur Leclerc » ouvre l'accueil du drive, sans demander la page du panier ;
+#  15. deuxième envoi, tout est connu (DRV-625, DRV-631) : au téléphone, une seule touche dans le drive (« Commencer »), le résultat revient à Repas tout seul,
+#      puis « Finaliser sur Leclerc » (une touche) ouvre l'ACCUEIL DU MAGASIN AVEC SA VILLE DANS l'application (le chemin que l'application a retenu),
+#      connecté, pas le navigateur du téléphone, avec le bandeau « Ton panier est dans l'icône en haut à droite. » qui disparaît à la première navigation ;
+#      JAMAIS la page detail-panier.aspx de Leclerc (ouverte « introuvable » sur le vrai site) ;
+#  16. l'accueil du magasin refusé par le site (404) : « Finaliser sur Leclerc » se replie sur l'accueil du drive (la forme du repli est gardée) ;
+#  16b. l'accueil du magasin répond 200 mais son titre dit « introuvable » : même repli ;
+#  17. chemin du magasin inconnu (données de l'application effacées) : « Finaliser sur Leclerc » ouvre l'accueil du drive, avec le même bandeau ;
 #  18. le site ignore le clic d'un programme (seul un vrai toucher ouvre le magasin) : le clic de l'agent ne fait rien, il dit de toucher « Commencer mes
 #      courses » (une seule tentative, pas de boucle, rien d'écrit), l'utilisateur le touche et l'envoi continue.
 # Les captures d'écran et le rapport texte sont dans android/dist/e2e/.
@@ -702,51 +704,86 @@ else
 fi
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 check "dans le drive, une seule touche pour tout l'envoi (« Commencer »)" [ "$touches" = "1" ]
-# « Finaliser sur Leclerc » : un lien du récapitulatif de Repas vers le drive, ouvert dans l'application (jamais le navigateur du téléphone), sur la page
-# du panier : le chemin du magasin avec sa ville, que l'application a retenu de la dernière page de magasin vue, puis detail-panier.aspx (DRV-629).
-BASKET_PATH_CITY="/magasin-$FAKE_STORE_ID-$FAKE_STORE_ID-Ville-Test/detail-panier.aspx"
+# « Finaliser sur Leclerc » : un lien du récapitulatif de Repas vers le drive, ouvert dans l'application (jamais le navigateur du téléphone), sur l'ACCUEIL DU
+# MAGASIN avec sa ville : le chemin que l'application a retenu de la dernière page de magasin vue (DRV-631). Jamais detail-panier.aspx, que le vrai site ouvre
+# « introuvable » quand on n'y arrive pas depuis son site.
+HOME_PATH_CITY="/magasin-$FAKE_STORE_ID-$FAKE_STORE_ID-Ville-Test"
+BASKET_PAGES_CITY="$HOME_PATH_CITY/detail-panier.aspx"
+BASKET_PAGES_BARE="/magasin-$FAKE_STORE_ID-$FAKE_STORE_ID/detail-panier.aspx"
+BASKET_BANNER='Ton panier est dans l'
+# La forme du dernier « Finaliser » est gardée dans une préférence privée de l'application (la variante de débogage se lit par run-as) ; l'écriture est asynchrone.
+finalize_outcome_is() { adb shell run-as "$APP" cat shared_prefs/drive-store.xml 2> /dev/null | grep -q "name=\"finalize\">$1<"; }
 # Le journal du faux Leclerc repart de zéro (pour prouver qu'aucune autre page n'est demandée), le panier du deuxième envoi est remis.
 fake_reset
 emu curl -s -X POST -d '{"1000001":3,"1000006":1}' "$FAKE_CONTROL/cart" > /dev/null
 if touch 'text="Finaliser sur Leclerc"'; then ok "touche : « Finaliser sur Leclerc »"; else ko "le lien « Finaliser sur Leclerc » est introuvable dans le faux Repas"; fi
-if wait_until 40 ui_has 'text="Mon panier"'; then
-  ok "« Finaliser sur Leclerc » ouvre la page du panier DANS l'application, connecté, sans passer par l'accueil"
+if wait_until 40 ui_has 'text="Accueil du magasin"'; then
+  ok "« Finaliser sur Leclerc » ouvre l'accueil du magasin avec sa ville DANS l'application, connecté, sans passer par l'accueil de l'enseigne"
 else
-  ko "la page du panier ne s'est pas ouverte dans l'application"
+  ko "l'accueil du magasin ne s'est pas ouvert dans l'application"
 fi
-check "le faux Leclerc a servi la page du panier sous le chemin du magasin AVEC la ville" requested_on "$FAKE_STORE_HOST" "$BASKET_PATH_CITY"
-check "jamais la page du panier sans ville (404 sur le vrai site)" not_requested_on "$FAKE_STORE_HOST" "/magasin-$FAKE_STORE_ID-$FAKE_STORE_ID/detail-panier.aspx"
+check "le faux Leclerc a servi l'accueil du magasin AVEC la ville" requested_on "$FAKE_STORE_HOST" "$HOME_PATH_CITY"
+check "JAMAIS la page du panier de Leclerc (ni avec la ville)" not_requested_on "$FAKE_STORE_HOST" "$BASKET_PAGES_CITY"
+check "JAMAIS la page du panier de Leclerc (ni sans la ville)" not_requested_on "$FAKE_STORE_HOST" "$BASKET_PAGES_BARE"
 check "l'accueil de l'enseigne n'a pas été demandé : aucun détour par l'accueil" not_requested_on "$SITE_HOST" '/'
+check "le bandeau court dit où est le panier" ui_has "$BASKET_BANNER"
+check "le bandeau n'a pas de bouton" ui_lacks 'text="Ouvrir l’accueil du drive"'
 check "c'est l'écran du drive de l'application, pas le navigateur du téléphone" focused_is_drive
 check "aucun bandeau d'envoi : ce n'est pas un envoi" ui_lacks 'Touche « Commencer mes courses »'
 check "au total, deux touches pour ce deuxième envoi dans l'application (« Commencer » et « Finaliser »)" [ "$touches" = "2" ]
 check "rien n'a été écrit au panier par cette ouverture" cart_is '{"1000001":3,"1000006":1}'
+check "la forme du « Finaliser » est gardée dans l'application : OUVERTE" wait_until 10 finalize_outcome_is OUVERTE
 screenshot e26-finaliser-dans-l-application
+# La première navigation fait disparaître le bandeau.
+if tap 'text="Panier"'; then ok "touche : « Panier » (une première navigation dans le site)"; else ko "le lien « Panier » est introuvable dans la page du faux magasin"; fi
+if wait_until 20 ui_lacks "$BASKET_BANNER"; then ok "le bandeau a disparu à la première navigation"; else ko "le bandeau est resté après une navigation"; fi
 adb shell input keyevent KEYCODE_BACK
 if wait_until 20 ui_has 'Faux Repas de test'; then ok "retour : l'écran Repas revient"; else ko "l'écran Repas n'est pas revenu"; fi
 
-# --- 16. La page du panier refusée par le site : l'accueil du drive -----------------------------------------------------------------------------
+# --- 16. L'accueil du magasin refusé par le site : l'accueil du drive ----------------------------------------------------------------------------
 say
-say "16. La page du panier est refusée par le site (404) : « Finaliser sur Leclerc » se replie sur l'accueil du drive (DRV-629)"
+say "16. L'accueil du magasin est refusé par le site (404) : « Finaliser sur Leclerc » se replie sur l'accueil du drive (DRV-631)"
 fake_reset
-fake_behavior '{"basketStatus":404}'
+fake_behavior '{"storeHomeStatus":404}'
 touch 'text="Finaliser sur Leclerc"' || ko "le lien « Finaliser sur Leclerc » est introuvable dans le faux Repas"
 if wait_until 40 ui_has 'text="Commencer mes courses"'; then
-  ok "la page du panier refusée (404) : l'accueil du drive s'ouvre à la place (son bouton « Commencer mes courses » est là)"
+  ok "l'accueil du magasin refusé (404) : l'accueil du drive s'ouvre à la place (son bouton « Commencer mes courses » est là)"
 else
   ko "le drive ne s'est pas replié sur l'accueil"
 fi
-check "le faux Leclerc a bien été interrogé sur la page du panier d'abord" requested_on "$FAKE_STORE_HOST" "$BASKET_PATH_CITY"
+check "le faux Leclerc a bien été interrogé sur l'accueil du magasin d'abord" requested_on "$FAKE_STORE_HOST" "$HOME_PATH_CITY"
 check "l'accueil de l'enseigne a été servi ensuite" requested_on "$SITE_HOST" '/'
+check "jamais la page du panier de Leclerc" not_requested_on "$FAKE_STORE_HOST" "$BASKET_PAGES_CITY"
 check "aucun panneau d'erreur : l'utilisateur n'a pas vu la page 404" ui_lacks 'text="Réessayer"'
+check "le bandeau court dit où est le panier, sur l'accueil du drive aussi" ui_has "$BASKET_BANNER"
 check "c'est toujours l'écran du drive de l'application" focused_is_drive
+check "la forme du repli est gardée : ERREUR_HTTP_4XX" wait_until 10 finalize_outcome_is ERREUR_HTTP_4XX
 screenshot e27-finaliser-page-refusee
+adb shell input keyevent KEYCODE_BACK
+wait_until 20 ui_has 'Faux Repas de test' || ko "l'écran Repas n'est pas revenu"
+
+# --- 16b. Une page « introuvable » déguisée en 200 : l'accueil du drive ------------------------------------------------------------------------------
+say
+say "16b. L'accueil du magasin répond 200 mais son titre dit « introuvable » : « Finaliser sur Leclerc » se replie sur l'accueil du drive (DRV-631)"
+fake_reset
+fake_behavior '{"storeHomeTitle":"not-found"}'
+touch 'text="Finaliser sur Leclerc"' || ko "le lien « Finaliser sur Leclerc » est introuvable dans le faux Repas"
+if wait_until 40 ui_has 'text="Commencer mes courses"'; then
+  ok "la page « introuvable » déguisée en 200 n'est pas restée à l'écran : l'accueil du drive s'est ouvert à la place"
+else
+  ko "le drive ne s'est pas replié sur l'accueil"
+fi
+check "le faux Leclerc a bien été interrogé sur l'accueil du magasin d'abord" requested_on "$FAKE_STORE_HOST" "$HOME_PATH_CITY"
+check "jamais la page du panier de Leclerc" not_requested_on "$FAKE_STORE_HOST" "$BASKET_PAGES_CITY"
+check "le bandeau court dit où est le panier" ui_has "$BASKET_BANNER"
+check "la forme du repli est gardée : TITRE_INTROUVABLE" wait_until 10 finalize_outcome_is TITRE_INTROUVABLE
+screenshot e27b-finaliser-titre-introuvable
 adb shell input keyevent KEYCODE_BACK
 wait_until 20 ui_has 'Faux Repas de test' || ko "l'écran Repas n'est pas revenu"
 
 # --- 17. Chemin du magasin inconnu : l'accueil du drive -------------------------------------------------------------------------------------------
 say
-say "17. Chemin du magasin inconnu (données de l'application effacées) : « Finaliser sur Leclerc » ouvre l'accueil du drive, sans demander la page du panier (DRV-629)"
+say "17. Chemin du magasin inconnu (données de l'application effacées) : « Finaliser sur Leclerc » ouvre l'accueil du drive, avec le bandeau (DRV-631)"
 fake_reset
 adb shell am force-stop "$APP"
 if adb shell run-as "$APP" rm -f shared_prefs/drive-store.xml > /dev/null 2>&1; then ok "le chemin retenu est effacé (préférence « drive-store »)"; else ko "impossible d'effacer le chemin retenu"; fi
@@ -758,8 +795,11 @@ if wait_until 40 ui_has 'text="Commencer mes courses"'; then
 else
   ko "le drive ne s'est pas ouvert sur l'accueil"
 fi
-check "la page du panier n'a jamais été demandée (ni avec ni sans ville)" not_requested_on "$FAKE_STORE_HOST" "$BASKET_PATH_CITY"
-check "ni la page du panier sans ville" not_requested_on "$FAKE_STORE_HOST" "/magasin-$FAKE_STORE_ID-$FAKE_STORE_ID/detail-panier.aspx"
+check "le bandeau court dit où est le panier" ui_has "$BASKET_BANNER"
+check "l'accueil du magasin n'a pas été demandé (chemin inconnu)" not_requested_on "$FAKE_STORE_HOST" "$HOME_PATH_CITY"
+check "la page du panier de Leclerc n'a jamais été demandée (ni avec ni sans ville)" not_requested_on "$FAKE_STORE_HOST" "$BASKET_PAGES_CITY"
+check "ni la page du panier sans ville" not_requested_on "$FAKE_STORE_HOST" "$BASKET_PAGES_BARE"
+check "la forme du repli est gardée : CHEMIN_INCONNU" wait_until 10 finalize_outcome_is CHEMIN_INCONNU
 screenshot e28-finaliser-chemin-inconnu
 adb shell input keyevent KEYCODE_BACK
 wait_until 20 ui_has 'Faux Repas de test' || ko "l'écran Repas n'est pas revenu"

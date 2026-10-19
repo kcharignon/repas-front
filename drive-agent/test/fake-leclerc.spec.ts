@@ -597,6 +597,21 @@ describe('la racine du magasin et la remise à neuf (DRV-319, émulateur Android
     expect((await call(`${PAGE_PATH}/detail-panier.aspx`)).status).toBe(200)
   })
 
+  it('refuse l’accueil du magasin avec la ville par un code HTTP, ou le sert « introuvable » sous un statut 200 (DRV-631)', async () => {
+    fake.setBehavior({ storeHomeStatus: 404 })
+    const refused = await call(PAGE_PATH)
+    fake.setBehavior({ storeHomeStatus: null, storeHomeTitle: 'not-found' })
+    const disguised = await call(PAGE_PATH)
+    fake.setBehavior({ storeHomeTitle: null })
+    const normal = await call(PAGE_PATH)
+
+    expect(refused.status).toBe(404)
+    expect(disguised.status).toBe(200)
+    expect(disguised.text).toContain('<title>Page introuvable')
+    expect(normal.status).toBe(200)
+    expect(normal.text).toContain('<title>Accueil du magasin')
+  })
+
   it('sert l’accueil avec un bouton SANS adresse quand « homeForm » vaut « button » (le vrai site, DRV-629)', async () => {
     for (const form of ['button', 'button-human', 'button-inert'] as const) {
       fake.setBehavior({ homeForm: form })

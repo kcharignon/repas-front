@@ -190,6 +190,9 @@ enum class StoreBanner {
      * Le bouton « Ouvrir l'accueil du drive » recommence depuis l'accueil de l'enseigne (la WebView est en mode ordinateur).
      */
     MOBILE,
+
+    /** Arrivée de « Finaliser sur Leclerc » (DRV-631), sans passage : « Ton panier est dans l'icône en haut à droite. » Pas de bouton ; disparaît à la première navigation. */
+    BASKET,
     ;
 
     /** Ce message porte le bouton « Ouvrir l'accueil du drive ». */
@@ -197,8 +200,8 @@ enum class StoreBanner {
 
     companion object {
         /** Le message à montrer pour la page d'adresse [url], que [trouble] (la surveillance de la page, [OpeningWatch]) juge ainsi. */
-        fun of(request: PassRequest?, url: String?, trouble: PageTrouble = PageTrouble.NONE): StoreBanner = when {
-            request == null -> NONE
+        fun of(request: PassRequest?, url: String?, trouble: PageTrouble = PageTrouble.NONE, basketHint: Boolean = false): StoreBanner = when {
+            request == null -> if (basketHint && trouble == PageTrouble.NONE) BASKET else NONE
             trouble == PageTrouble.VERIFICATION -> VERIFICATION
             request.isSetup -> when {
                 trouble == PageTrouble.NONE && NavigationPolicy.isMobileSite(url) -> MOBILE

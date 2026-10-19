@@ -11,7 +11,7 @@ import { buildPlanMessage } from '../buildPlanMessage'
 import DriveReturnView from '../DriveReturnView.vue'
 import { useDriveReturnStore } from '../returnStore'
 import { plan, storeBaseUrl } from './fixtures'
-import { BASKET_PATH, basketUrl, DRIVE_HOME_URL } from '../leclerc'
+import { finalizeLink, DRIVE_HOME_URL } from '../leclerc'
 import { result, RUN } from './results'
 
 // Données SYNTHÉTIQUES : magasin d'essai, produits et listes inventés.
@@ -25,7 +25,7 @@ const sentDraft = { ...draft, lines: sentLines }
 const noContent = () => new Response(null, { status: 204 })
 const failure = (status: number, message: string) => () => json({ error: { message } }, { status })
 const store = { id: '123456', label: null, baseUrl: storeBaseUrl }
-const basketLink = `${storeBaseUrl}${BASKET_PATH}`
+const basketLink = storeBaseUrl
 const listDetail = { id: 'l1', version: 7 }
 
 const okHandlers: Handlers = {
@@ -214,7 +214,7 @@ describe('retour du drive : un passage réussi', () => {
     expect(wrapper.find('a[target="_blank"]').text()).toContain('S’ouvre dans un nouvel onglet.')
   })
 
-  it('dans l’application, ouvre la page du panier du magasin dans l’application : même fenêtre, aucune mention du navigateur', async () => {
+  it('dans l’application, ouvre le magasin dans l’application : même fenêtre, aucune mention du navigateur', async () => {
     const native = {
       postMessage: vi.fn<(text: string) => void>(),
       addEventListener: vi.fn<() => void>(),
@@ -236,15 +236,15 @@ describe('retour du drive : un passage réussi', () => {
     }
   })
 
-  it('bâtit l’adresse du panier à partir de l’hôte et des numéros du magasin enregistré, jamais d’une page de Leclerc (DRV-629)', () => {
-    expect(basketUrl(null)).toBeNull()
-    expect(basketUrl(null, true)).toBeNull()
-    expect(basketUrl(storeBaseUrl)).toBe(DRIVE_HOME_URL)
-    expect(basketUrl(storeBaseUrl, true)).toBe(basketLink)
+  it('bâtit le lien du magasin à partir de l’hôte et des numéros du magasin enregistré, jamais d’une page de Leclerc (DRV-629)', () => {
+    expect(finalizeLink(null)).toBeNull()
+    expect(finalizeLink(null, true)).toBeNull()
+    expect(finalizeLink(storeBaseUrl)).toBe(DRIVE_HOME_URL)
+    expect(finalizeLink(storeBaseUrl, true)).toBe(basketLink)
     // Une ville, des paramètres ou un identifiant dans l'adresse enregistrée ne passent pas dans le lien : la ville vient de l'application
-    expect(basketUrl(`${storeBaseUrl}-Ville-Test/recherche.aspx?x=1#y`, true)).toBe(basketLink)
+    expect(finalizeLink(`${storeBaseUrl}-Ville-Test/recherche.aspx?x=1#y`, true)).toBe(basketLink)
     expect(
-      basketUrl('https://nom:secret@courses-test.leclercdrive.fr/magasin-123456-123456', true),
+      finalizeLink('https://nom:secret@courses-test.leclercdrive.fr/magasin-123456-123456', true),
     ).toBe(basketLink)
   })
 
@@ -254,12 +254,12 @@ describe('retour du drive : un passage réussi', () => {
     'https://courses-test.leclercdrive.fr/autre/magasin-123456-123456',
     'pas une adresse',
   ])('%s : repli sur l’accueil du drive', (base) => {
-    expect(basketUrl(base, true)).toBe(DRIVE_HOME_URL)
+    expect(finalizeLink(base, true)).toBe(DRIVE_HOME_URL)
   })
 
-  it('la page du panier est un segment fixe sous le chemin du magasin', () => {
-    expect(BASKET_PATH).toBe('/detail-panier.aspx')
-    expect(basketLink.endsWith(BASKET_PATH)).toBe(true)
+  it('le lien ne mène jamais à la page du panier de Leclerc (DRV-631)', () => {
+    expect(basketLink).not.toContain('detail-panier')
+    expect(finalizeLink(storeBaseUrl, true)).not.toContain('detail-panier')
   })
 })
 
