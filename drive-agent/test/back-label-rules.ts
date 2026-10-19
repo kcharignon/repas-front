@@ -3,11 +3,14 @@
 
 /**
  * COPIE, à l'octet près, de `LABEL_FORBIDDEN_CHARACTERS_PATTERN` dans `src/Drive/Domain/Model/Product.php` du dépôt back
- * `kcharignon/repas` (PR #159) : contrôles (`Cc`), séparateurs de ligne et de paragraphe (`Zl`, `Zp`), marque d'ordre des octets, marques
- * et inversions du sens de lecture, espaces et jointures de largeur nulle.
+ * `kcharignon/repas` (PR #198, qui élargit celui de la PR #159) : contrôles (`Cc`), TOUS les caractères de format (`Cf` : trait d'union
+ * conditionnel U+00AD, marques et inversions du sens de lecture, largeurs nulles, opérateurs invisibles U+2060 à U+2064, marque d'ordre des
+ * octets, TAG), séparateurs de ligne et de paragraphe (`Zl`, `Zp`), puis une liste d'invisibles d'autres catégories (`Lo`, `Mn`) : U+034F,
+ * remplisseurs hangul, voyelles inhérentes khmères, sélecteurs mongols et sélecteurs de variation, bloc des TAG.
  * Si le back change ce motif, le recopier ici : `label-characters.spec.ts` échoue alors tant que l'agent n'en retire pas autant.
+ * (Le back l'écrit en trois morceaux concaténés ; c'est le même motif.)
  */
-export const BACK_FORBIDDEN_PATTERN_PHP = String.raw`/[\p{Cc}\p{Zl}\p{Zp}\x{061C}\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}\x{2066}-\x{2069}\x{FEFF}]/u`
+export const BACK_FORBIDDEN_PATTERN_PHP = String.raw`/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\x{034F}\x{115F}\x{1160}\x{17B4}\x{17B5}\x{180B}-\x{180F}\x{3164}\x{FE00}-\x{FE0F}\x{FFA0}\x{E0000}-\x{E007F}\x{E0100}-\x{E01EF}]/u`
 
 /** Le même motif en JavaScript (`\x{200B}` de PCRE s'écrit `\u{200B}` avec le drapeau `u`). */
 export const BACK_FORBIDDEN = new RegExp(
@@ -27,13 +30,18 @@ function phpTrim(text: string): string {
   return chars.join('')
 }
 
-/** Le libellé d'un produit est-il accepté par `Product::checkedLabel` (`trim`, non vide, 255 au plus, rien d'interdit, pas que des espaces) ? */
+/**
+ * Le libellé d'un produit est-il accepté par `Product::checkedLabel` (`trim`, non vide, 255 au plus, rien d'interdit, pas que des espaces) ?
+ * Une moitié de paire de substitution n'existe pas en UTF-8 : le JSON du message est refusé avant d'arriver au motif (et `preg_match` rend
+ * `false` sur de l'UTF-8 invalide, `!== 0` : refusé aussi).
+ */
 export function backAcceptsLabel(label: string): boolean {
   const trimmed = phpTrim(label)
   return (
     trimmed !== '' &&
     [...trimmed].length <= BACK_LABEL_MAX_LENGTH &&
     !BACK_FORBIDDEN.test(trimmed) &&
+    !/\p{Cs}/u.test(trimmed) &&
     !/^[\p{Z}\s]*$/u.test(trimmed)
   )
 }
