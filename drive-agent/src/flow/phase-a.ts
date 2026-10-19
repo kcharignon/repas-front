@@ -9,10 +9,21 @@ import {
   type ProductPrice,
   type ResultLine,
 } from '../../protocol'
-import type { Candidate, Content, RetailerAdapter } from '../leclerc'
+import { type Candidate, type Content, type RetailerAdapter, saysOutOfStock } from '../leclerc'
+import type { UnavailableReason } from '../ui'
 import { type CartNote, putInCart } from './keep-cart'
 import { packsFor } from './packs'
-import { findKnownProduct } from './search-by-name'
+import { lookUpKnownProduct } from './search-by-name'
+
+export type { UnavailableReason } from '../ui'
+
+/** Un produit habituel mis de côté pour la phase B, avec sa raison et le nombre de recherches faites pour le retrouver. */
+export interface UnavailableNote {
+  id: string
+  reason: UnavailableReason
+  /** Les recherches faites pour retrouver ce produit (1 à 5). */
+  tried: number
+}
 
 /**
  * Le contenu lu en direct n'a pas donné le même nombre de produits que le plan (DRV-613) : le nombre calculé en direct a été mis au
@@ -31,8 +42,15 @@ export interface ContentChange {
  * dire à la fin (conservée parce que plus grande que celle du plan, ou illisible : ticket M).
  */
 export type Verdict =
-  | { kind: 'done'; line: ResultLine; change?: ContentChange; cart?: CartNote }
-  | { kind: 'waiting'; unavailable: string[] }
+  | {
+      kind: 'done'
+      line: ResultLine
+      change?: ContentChange
+      cart?: CartNote
+      /** Le site disait ce produit en rupture et le panier l'a pourtant pris (DRV-635) : le journal le note. */
+      accepted?: true
+    }
+  | { kind: 'waiting'; unavailable: string[]; notes: UnavailableNote[] }
 
 /** Le prix lu pour Repas (décision D22) : unitaire TTC en centimes, et à l'unité de mesure quand le site la donne. */
 export function priceOf(candidate: Candidate): ProductPrice | undefined {
@@ -60,13 +78,21 @@ export interface KnownLineDeps {
   adapter: RetailerAdapter
   /** L'écran « Quantité à vérifier » : le nombre choisi, ou `null` pour passer la ligne. */
   askQuantity: (line: PlanLine, product: PlanProduct) => Promise<number | null>
+  /**
+   * Les produits à étiquette de rupture que le panier a déjà refusés dans cet envoi (DRV-635) : une seule tentative d'écriture par produit et par
+   * envoi, même s'il figure sur deux lignes. Le passage la remplit ; absente, chaque ligne tente pour son compte.
+   */
+  declined?: Set<string>
 }
 
 /**
- * Met au panier le premier produit disponible d'une ligne `KNOWN`. La disponibilité se lit dans la recherche par libellé (stock du
- * produit) ; si le libellé complet ne le retrouve pas, ses formes dérivées sont essayées une par une (`findKnownProduct`, au plus 4
- * requêtes de plus, ticket D) ; le produit introuvable après cela, ou à stock nul, est indisponible. Un produit que le panier refuse
- * (quantité obtenue nulle) l'est aussi. Chaque écriture est vérifiée par la réponse du panier : `quantity` est ce que le site a mis au panier.
+ * Met au panier le premier produit disponible d'une ligne `KNOWN`. Le produit se retrouve par la recherche de son libellé tel quel, puis de ses
+ * formes (`lookUpKnownProduct`, au plus 5 requêtes, DRV-635) ; le stock lu et « Bientôt disponible » ne sont que des ÉTIQUETTES, que le site
+ * ordinateur et le site mobile ne disent pas pareil pour un même produit : **le panier tranche**. Un produit à étiquette de rupture est donc
+ * tenté UNE fois (une seule écriture, au rythme du `Pacer`) ; accepté, il est au panier comme les autres ; refusé, c'est `OUT_OF_STOCK`. Un produit
+ * que la recherche ne retrouve pas est `NOT_FOUND` (jamais « indisponible » : « pas de résultat » ne prouve rien), un produit qui se disait
+ * disponible et que le panier refuse (quantité obtenue nulle) est `CART_REFUSED`. Chaque écriture est vérifiée par la réponse du panier :
+ * `quantity` est ce que le site a mis au panier. Les trois raisons sont rendues dans `notes`, pour la phase B, le journal et l'écran de fin.
  *
  * **Le panier n'est jamais réduit** (ticket M) : un produit déjà au panier en plus grande quantité que celle du plan reste tel quel (rien
  * n'est écrit, `quantity` est celle du panier, `cart` le dit) ; voir `putInCart`.
@@ -83,11 +109,25 @@ export async function settleKnownLine(line: PlanLine, deps: KnownLineDeps): Prom
   const products = line.products ?? []
   const refused = new Set((line.rejected ?? []).map((product) => product.id))
   const unavailable: string[] = []
+  const notes: UnavailableNote[] = []
+  const giveUp = (id: string, reason: UnavailableReason, tried: number) => {
+    unavailable.push(id)
+    notes.push({ id, reason, tried })
+  }
   for (const [index, product] of products.entries()) {
     if (refused.has(product.id)) continue
-    const seen = await findKnownProduct(deps.adapter, product.label, product.id)
-    if (seen === null || seen.stock === 0) {
-      unavailable.push(product.id)
+    const { product: seen, tried } = await lookUpKnownProduct(
+      deps.adapter,
+      product.label,
+      product.id,
+    )
+    if (seen === null) {
+      giveUp(product.id, 'NOT_FOUND', tried)
+      continue
+    }
+    const saidOut = saysOutOfStock(seen)
+    if (saidOut && deps.declined?.has(product.id)) {
+      giveUp(product.id, 'OUT_OF_STOCK', tried)
       continue
     }
     const planned = product.packsStatus === 'TO_CHECK' ? null : (product.packs ?? null)
@@ -101,7 +141,8 @@ export async function settleKnownLine(line: PlanLine, deps: KnownLineDeps): Prom
     }
     const settled = await putInCart(deps.adapter, seen, packs)
     if (settled.obtained < 1) {
-      unavailable.push(product.id)
+      if (saidOut) deps.declined?.add(product.id)
+      giveUp(product.id, saidOut ? 'OUT_OF_STOCK' : 'CART_REFUSED', tried)
       continue
     }
     const price = priceOf(seen)
@@ -118,7 +159,8 @@ export async function settleKnownLine(line: PlanLine, deps: KnownLineDeps): Prom
       },
       ...(change && { change }),
       ...(settled.note && { cart: settled.note }),
+      ...(saidOut && { accepted: true as const }),
     }
   }
-  return { kind: 'waiting', unavailable }
+  return { kind: 'waiting', unavailable, notes }
 }

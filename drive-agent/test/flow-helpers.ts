@@ -146,6 +146,10 @@ export interface ShelfItem {
   obtained?: (quantity: number) => number
   /** La quantité déjà au panier que la recherche lit (par défaut 0 : le site la donne toujours) ; `null` : illisible. */
   inCart?: number | null
+  /** L'adresse de la photo, déjà validée par l'adaptateur (par défaut : aucune). */
+  image?: string | null
+  /** La fiche dit « Bientôt disponible » (DRV-635). */
+  comingSoon?: boolean
 }
 
 export function candidate(id: string, item: ShelfItem = {}): Candidate {
@@ -158,7 +162,9 @@ export function candidate(id: string, item: ShelfItem = {}): Candidate {
     promo: item.promo ?? null,
     stock: item.stock === undefined ? 10 : item.stock,
     inCart: item.inCart === undefined ? 0 : item.inCart,
-    thumbnailUrl: null,
+    imageUrl: item.image ?? null,
+    availability: null,
+    comingSoon: item.comingSoon ?? false,
     content: item.content ?? null,
     contentSource: item.content ? 'label' : null,
   }
@@ -335,3 +341,6 @@ export function expectConform(message: ResultMessage | undefined): ResultMessage
   validateResult(JSON.parse(JSON.stringify(message)))
   return message
 }
+
+/** Une vraie rupture (DRV-635) : la fiche dit stock 0 ET le panier ne garde rien. Seul ce produit est « plus disponible ». */
+export const OUT_OF_STOCK: ShelfItem = { stock: 0, obtained: () => 0 }

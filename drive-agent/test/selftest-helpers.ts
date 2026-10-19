@@ -95,7 +95,9 @@ export function shop(shelves: Shelves, options: ShopOptions = {}) {
         promo: null,
         stock: stocks.get(item.id) ?? null,
         inCart: cart.get(item.id) ?? 0,
-        thumbnailUrl: null,
+        availability: null,
+        comingSoon: false,
+        imageUrl: null,
         content: { value: 1000, unit: 'g' },
         contentSource: 'label',
       }))

@@ -68,9 +68,9 @@ test('prend le produit suivant quand le préféré est en rupture, et le dit à 
   await page.getByRole('button', { name: 'Commencer' }).click()
   await returnsToRepas(page, fake)
 
-  // Then : rien n'est écrit pour le produit en rupture ; le suivant est pris, au prix de la promotion
+  // Then : le produit en rupture est tenté une seule fois (le panier le refuse, DRV-635), puis le suivant est pris, au prix de la promotion
   expect(fake.cart()).toEqual({ 1000003: 2 })
-  expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'search', 'cart'])
+  expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'cart', 'search', 'cart'])
   expectPoliteAgent(fake)
   expect(await returnedResult(page, fake)).toMatchObject({
     outcome: 'completed',

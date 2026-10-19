@@ -2,6 +2,10 @@
 // page de recherche = HTML qui embarque un JSON d'initialisation (`widgets`), panier = tableau d'évènements dont `Panier<point>`
 // porte `lstProduitsLight`. Les pages d'erreur et de défi sont minimales : seul compte ce que l'agent y reconnaît.
 import { DELIVERY_POINT, findProduct, paidPrice, type FakeProduct } from './catalog.ts'
+import { photoAddress } from './photos.ts'
+
+/** Le mode de disponibilité des produits à stock nul (DRV-635) : voir `Behavior.availability` du serveur. */
+export type Availability = 'misleading' | 'real-out'
 
 /** Le panier : identifiant du produit, quantité. */
 export type Cart = ReadonlyMap<number, number>
@@ -22,7 +26,11 @@ export function totalsOf(cart: Cart): { items: number; totalCents: number; total
   return { items, totalCents, total: euros(totalCents) }
 }
 
-function productJson(product: FakeProduct, inCart: number): Record<string, unknown> {
+function productJson(
+  product: FakeProduct,
+  inCart: number,
+  availability?: Availability,
+): Record<string, unknown> {
   const { structured } = product
   return {
     iIdProduit: product.id,
@@ -37,9 +45,14 @@ function productJson(product: FakeProduct, inCart: number): Record<string, unkno
       : `${euros(cents(product.perMeasure))} / ${product.measure}`,
     iQteDisponible: product.stock,
     iQuantitePanier: inCart,
-    sUrlVignetteProduit: `https://photos-test.leclercdrive.fr/image.ashx?id=${product.id - 999000}&use=l&cat=p`,
+    sUrlVignetteProduit: photoAddress(product),
     iIdRayon: product.aisle,
     iIdFamille: product.family,
+    // DRV-635 : l'étiquette de disponibilité du site ordinateur (1 : disponible, 2 : bientôt disponible), seulement dans les modes qui l'éprouvent.
+    ...(availability && {
+      eDisponibilite: product.stock === 0 ? 2 : 1,
+      ...(product.stock === 0 && { sLibelleDisponibilite: 'Bientôt disponible' }),
+    }),
     ...(structured && {
       sUniteMesure: structured.unit,
       nrContenanceUnitaire: structured.each,
@@ -199,10 +212,13 @@ export function searchPage(
   cart: Cart,
   session: Session = 'member',
   empty: EmptyForm = 'list',
+  availability?: Availability,
 ): string {
   const title = `Recherche : ${query.replace(/[<>&"]/g, '')}`
   if (found.length === 0 && empty === 'no-list') return storePage(title, '', {}, cart, session)
-  const products = found.map((product) => productJson(product, cart.get(product.id) ?? 0))
+  const products = found.map((product) =>
+    productJson(product, cart.get(product.id) ?? 0, availability),
+  )
   const text =
     found.length === 0 ? 'Aucun résultat pour votre recherche' : 'Résultats pour votre recherche'
   return storePage(
