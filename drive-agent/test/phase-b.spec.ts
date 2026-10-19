@@ -99,6 +99,14 @@ const buttonOf = (zone: HTMLElement, name: string) => {
   return button
 }
 const choose = (zone: HTMLElement, name: string) => buttonOf(zone, name).click()
+/** Le bouton de la rangée des rayons (DRV-647) dont le texte commence par [text]. */
+const chipOf = (zone: HTMLElement, text: string): HTMLButtonElement => {
+  const chip = [...zone.querySelectorAll<HTMLButtonElement>('.aisles button')].find((button) =>
+    button.textContent?.startsWith(text),
+  )
+  if (!chip) throw new Error(`Pas de rayon « ${text} » dans la rangée`)
+  return chip
+}
 /** « Chercher autre chose » : écrit `query` dans le champ de recherche de la liste et le soumet. */
 const search = (view: View, query: string) => {
   const input = view.zone.querySelector<HTMLInputElement>('#chercher')
@@ -137,12 +145,15 @@ function run(
     placementAnswer?: 'PRIMARY' | 'ONCE' | null
     /** La réponse de l'utilisateur devant la demande de vérification de l'anti-robot (ticket K). */
     challenge?: () => 'resume' | 'stop'
+    /** Le libellé de chaque rayon que l'adaptateur sait lire (DRV-647). */
+    aisleLabels?: Record<number, string>
   } = {},
 ) {
   const placements: PlacementProps[] = []
   const adapter = fakeAdapter(options.shelf ?? SHELF, {
     found: options.found ?? FOUND,
     ...(options.before && { before: options.before }),
+    ...(options.aisleLabels && { aisleLabels: options.aisleLabels }),
   })
   const user = session(...steps)
   const screens = fakeUi({
@@ -2058,6 +2069,8 @@ describe('les rayons conseillés rangent la liste, sans cacher aucun produit (DR
     return rows(view.zone).map(nameOf)
   }
   const sauce = (index: number) => `Sauce tomate ${index}`
+  /** DRV-647 : un rayon appris est choisi d'avance dans la rangée ; « Tous » montre de nouveau toute la liste, rangée par DRV-642. */
+  const showAll = (view: View) => chipOf(view.zone, 'Tous').click()
   const fresher = (index: number) => `Tomates fraîches ${index}`
 
   it('place d’abord les 6 produits frais, dans l’ordre du site, puis tous les autres dans l’ordre du site : aucun n’est caché', async () => {
@@ -2068,6 +2081,7 @@ describe('les rayons conseillés rangent la liste, sans cacher aucun produit (DR
       tomato({ rayonHints: [FRESH] }),
       [
         (view) => {
+          showAll(view)
           all = everything(view)
           return { kind: 'skip' }
         },
@@ -2094,6 +2108,7 @@ describe('les rayons conseillés rangent la liste, sans cacher aucun produit (DR
       tomato({ rayonHints: [FRESH] }),
       [
         (view) => {
+          showAll(view)
           first = rows(view.zone).map(nameOf)
           return { kind: 'skip' }
         },
@@ -2137,6 +2152,7 @@ describe('les rayons conseillés rangent la liste, sans cacher aucun produit (DR
       tomato({ rayonHints: [999999] }),
       [
         (view) => {
+          showAll(view)
           all = everything(view)
           return { kind: 'skip' }
         },
@@ -2156,6 +2172,7 @@ describe('les rayons conseillés rangent la liste, sans cacher aucun produit (DR
       tomato({ rayonHints: [JUICE, FRESH] }),
       [
         (view) => {
+          showAll(view)
           all = everything(view)
           return { kind: 'skip' }
         },
@@ -2183,6 +2200,7 @@ describe('les rayons conseillés rangent la liste, sans cacher aucun produit (DR
         async (view) => {
           search(view, 'tomates')
           await new Promise((resolve) => setTimeout(resolve, 0))
+          showAll(view)
           all = everything(view)
           return { kind: 'skip' }
         },
@@ -2213,6 +2231,7 @@ describe('les rayons conseillés rangent la liste, sans cacher aucun produit (DR
       tomato({ rayonHints: [FRESH] }),
       [
         (view) => {
+          showAll(view)
           all = everything(view)
           return { kind: 'skip' }
         },
@@ -2304,5 +2323,166 @@ describe('les rayons conseillés rangent la liste, sans cacher aucun produit (DR
     await plain.start()
 
     expect(hinted.adapter.calls).toEqual(plain.adapter.calls)
+  })
+})
+
+describe('le filtre par rayon du site (DRV-647)', () => {
+  const FRESH = 41
+  const CANNED = 7
+  const JUICE = 15
+  /** 12 produits « tomate » : 6 conserves, 4 frais, 2 jus, mêlés dans l'ordre du site. */
+  const AISLES = [
+    CANNED,
+    FRESH,
+    CANNED,
+    JUICE,
+    CANNED,
+    FRESH,
+    CANNED,
+    FRESH,
+    CANNED,
+    JUICE,
+    CANNED,
+    FRESH,
+  ]
+  const ids = AISLES.map((_aisle, index) => String(6000001 + index))
+  const shelf: Record<string, ShelfItem> = Object.fromEntries(
+    ids.map((id, index) => [
+      id,
+      {
+        label: `${AISLES[index] === FRESH ? 'Tomates' : AISLES[index] === JUICE ? 'Jus' : 'Conserve'} ${index}`,
+        content: { value: 500, unit: 'g' },
+        aisle: AISLES[index] ?? null,
+        family: 400 + (AISLES[index] ?? 0),
+      },
+    ]),
+  )
+  const found = { tomate: ids }
+  const labels = { [FRESH]: 'Fruits et légumes', [CANNED]: 'Conserves' }
+  const line = (extra: Partial<PlanLine> = {}): PlanLine => ({
+    ...fresh('tomate'),
+    needed: { quantity: 500, unitSymbol: 'g', dimension: 'WEIGHT', baseFactor: 1 },
+    ...extra,
+  })
+  const chips = (zone: HTMLElement) =>
+    [...zone.querySelectorAll<HTMLButtonElement>('.aisles button')].map((button) => ({
+      text: button.textContent,
+      pressed: button.getAttribute('aria-pressed'),
+    }))
+  const names = (zone: HTMLElement) => rows(zone).map(nameOf)
+
+  it('montre « Tous » puis les rayons présents, du plus fourni au moins fourni, avec leur libellé et le repli « Rayon 1 » ; un toucher filtre sans requête', async () => {
+    let before: { text: string | null; pressed: string | null }[] = []
+    let onlyFresh: string[] = []
+    let again: string[] = []
+    let finds = 0
+    const test = run(
+      line(),
+      [
+        (view) => {
+          before = chips(view.zone)
+          finds = test.adapter.calls.length
+          chipOf(view.zone, 'Fruits et légumes').click()
+          onlyFresh = names(view.zone)
+          // Retoucher le rayon choisi revient à « Tous ».
+          chipOf(view.zone, 'Fruits et légumes').click()
+          again = names(view.zone)
+          expect(test.adapter.calls).toHaveLength(finds)
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf, found, aisleLabels: labels },
+    )
+
+    await test.start()
+
+    expect(before).toEqual([
+      { text: 'Tous (12)', pressed: 'true' },
+      { text: 'Conserves (6)', pressed: 'false' },
+      { text: 'Fruits et légumes (4)', pressed: 'false' },
+      { text: 'Rayon 1 (2)', pressed: 'false' },
+    ])
+    expect(onlyFresh).toEqual(['Tomates 1', 'Tomates 5', 'Tomates 7', 'Tomates 11'])
+    // Toute la liste revient, par lots : le premier lot de huit.
+    expect(again).toHaveLength(8)
+  })
+
+  it('le rayon appris (« rayonHints ») est choisi d’avance, « Tous » est à un toucher, et le produit choisi garde son rayon', async () => {
+    let first: string[] = []
+    let pressed: (string | null)[] = []
+    let all: string[] = []
+    const test = run(
+      line({ rayonHints: [FRESH] }),
+      [
+        (view) => {
+          first = names(view.zone)
+          pressed = chips(view.zone).map((chip) => chip.pressed)
+          chipOf(view.zone, 'Tous').click()
+          all = names(view.zone)
+          chipOf(view.zone, 'Fruits et légumes').click()
+          choose(view.zone, 'Tomates 5')
+        },
+      ],
+      { shelf, found, aisleLabels: labels },
+    )
+
+    await test.start()
+
+    expect(first).toEqual(['Tomates 1', 'Tomates 5', 'Tomates 7', 'Tomates 11'])
+    // Le rayon appris passe juste après « Tous ».
+    expect(pressed).toEqual(['false', 'true', 'false', 'false'])
+    expect(all).toHaveLength(8)
+    expect(all[0]).toBe('Tomates 1')
+    expect(lineOf(test.sent[0], 'tomate')).toMatchObject({
+      outcome: 'CHOSEN',
+      product: { id: '6000006', rayonId: FRESH },
+    })
+    expect(test.adapter.calls.filter((call) => call.startsWith('find'))).toEqual(['find tomate'])
+  })
+
+  it('un seul rayon dans les résultats : pas de rangée', async () => {
+    let count = -1
+    const one = Object.fromEntries(
+      ids.slice(0, 3).map((id) => [id, { ...shelf[id], aisle: FRESH }]),
+    )
+    const test = run(
+      line(),
+      [
+        (view) => {
+          count = view.zone.querySelectorAll('.aisles button').length
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf: one, found: { tomate: ids.slice(0, 3) } },
+    )
+
+    await test.start()
+
+    expect(count).toBe(0)
+  })
+
+  it('« Chercher autre chose » refait la rangée pour les nouveaux résultats', async () => {
+    let after: (string | null)[] = []
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          chipOf(view.zone, 'Conserves').click()
+          search(view, 'jus tomate')
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          after = chips(view.zone).map((chip) => chip.text)
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        shelf,
+        found: { ...found, 'jus tomate': [ids[3] ?? '', ids[9] ?? '', ids[1] ?? ''] },
+        aisleLabels: labels,
+      },
+    )
+
+    await test.start()
+
+    expect(after).toEqual(['Tous (3)', 'Rayon 1 (2)', 'Fruits et légumes (1)'])
   })
 })

@@ -26,6 +26,32 @@ export function totalsOf(cart: Cart): { items: number; totalCents: number; total
   return { items, totalCents, total: euros(totalCents) }
 }
 
+/**
+ * Les textes du rayon que le faux site joint aux produits (DRV-647, étape 1) : les NOMS des champs sont ceux mesurés sur le vrai site par le diagnostic 0.32.0,
+ * les VALEURS sont inventées (jamais vues). Chaque source de libellé de l'agent est éprouvée par un rayon : 41 par `sLibelleUrlNaviguerRayon` (texte lisible),
+ * 15 par `sUrlVoirRayon` (le nom dans l'adresse), 12 par `sCategorie`, 60 par un `objFiltreBloc` de la réponse (`AISLE_FILTERS`) ; le 7 (conserves) n'a
+ * aucun libellé lisible : l'agent l'appelle « Rayon 1 ».
+ */
+const AISLE_TEXTS: Readonly<Record<number, Record<string, string>>> = {
+  41: { sLibelleUrlNaviguerRayon: 'Fruits et légumes', fVoirRayon: '1' },
+  15: { sLibelleUrlNaviguerRayon: '', sUrlVoirRayon: 'rayon-15-Boissons-sans-alcool.aspx' },
+  12: { sCategorie: 'Épicerie salée' },
+  7: { sLibelleUrlNaviguerRayon: '/rayon.aspx?Filtres=7' },
+}
+
+/** Les libellés de rayon que porte la liste de filtres de la réponse (DRV-647) : un `objFiltreBloc` par rayon, forme inventée. */
+const AISLE_FILTERS: Readonly<Record<number, string>> = { 60: 'Surgelés' }
+
+/** Les filtres de rayon d'une réponse : ceux des rayons présents dans les produits trouvés, avec leur nombre. */
+function filtersOf(found: readonly FakeProduct[]): Record<string, unknown>[] {
+  return Object.entries(AISLE_FILTERS).flatMap(([aisle, label]) => {
+    const count = found.filter((product) => product.aisle === Number(aisle)).length
+    return count === 0
+      ? []
+      : [{ objFiltreBloc: { iIdRayon: Number(aisle), sLibelle: label, iNbProduits: count } }]
+  })
+}
+
 function productJson(
   product: FakeProduct,
   inCart: number,
@@ -48,6 +74,7 @@ function productJson(
     sUrlVignetteProduit: photoAddress(product),
     iIdRayon: product.aisle,
     iIdFamille: product.family,
+    ...AISLE_TEXTS[product.aisle],
     // DRV-635 : l'étiquette de disponibilité du site ordinateur (1 : disponible, 2 : bientôt disponible), seulement dans les modes qui l'éprouvent.
     ...(availability && {
       eDisponibilite: product.stock === 0 ? 2 : 1,
@@ -252,7 +279,7 @@ export function searchPage(
   return storePage(
     title,
     text,
-    { widgets: [{ nom: 'produits', lstProduits: products }] },
+    { widgets: [{ nom: 'produits', lstProduits: products }], lstFiltres: filtersOf(found) },
     cart,
     session,
     found.length === 0 && empty === 'encoded',

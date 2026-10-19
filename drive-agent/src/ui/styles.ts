@@ -76,6 +76,9 @@ textarea{width:100%;margin:8px 0;padding:8px 10px;font:.9rem/1.4 ui-monospace,mo
 .gone p{margin:0 0 4px}
 .check{display:flex;align-items:center;gap:10px;min-height:var(--target);margin:0;font-weight:400}
 .check input{flex:none;width:var(--target);height:var(--target);accent-color:var(--accent)}
+.aisles{position:relative;display:flex;gap:8px;margin:4px 0 8px;padding:2px 2px 6px;overflow-x:auto;overscroll-behavior-x:contain;touch-action:pan-x pan-y}
+.aisles>.chip{flex:none;padding:6px 14px;border-color:var(--line);border-radius:24px;white-space:nowrap}
+.aisles>.chip[aria-pressed=true]{border-color:var(--accent);background:var(--accent);color:var(--on);font-weight:600}
 .candidates{margin:8px 0;padding:0;list-style:none}
 .candidate{margin:8px 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
 .candidate p{margin:2px 0}

@@ -390,6 +390,19 @@ export const S = {
         `${kind} de « ${term} » avec un lien dans le menu : ${found} sur ${seen}${missing === '' ? '' : ` (sans lien : ${missing})`}`,
       coverageNone: (kind: 'Rayons' | 'Familles', term: string) =>
         `${kind} de « ${term} » avec un lien dans le menu : aucun lien numéroté dans la page`,
+      /** DRV-647 (étape 1) : le libellé que l'écran de choix montre pour un rayon, et d'où il vient. */
+      aisleLabel: (id: number, count: number, label: string, source: string) =>
+        `Libellé du rayon ${id} (${count} produit${count > 1 ? 's' : ''}) : « ${label} » (source : ${source})`,
+      aisleLabelNone: (id: number, count: number, fallback: string) =>
+        `Libellé du rayon ${id} (${count} produit${count > 1 ? 's' : ''}) : aucun texte lisible (repli : « ${fallback} »)`,
+      firstAisleText: (term: string, field: string, value: string) =>
+        `Premier produit de « ${term} », ${field} : ${value}`,
+      namedKeys: (where: string, name: string, keys: string) =>
+        `Clés de ${name} (${where}, noms seulement) : ${keys}`,
+      absent: 'absent',
+      hidden: '(écarté : ressemble à une donnée personnelle)',
+      object: 'objet',
+      listOf: (size: number) => `liste de ${size}, premier élément`,
     },
   },
   /** Le test automatique de la variante de débogage (DRV-318) : l'écran de progression et le rapport texte copiable. */
@@ -518,6 +531,11 @@ export const S = {
     replaces: (product: string) => `Tu remplaces : ${product}.`,
     gone: (labels: string) => `Ces produits ne sont plus disponibles : ${labels}.`,
     never: (product: string) => `Ne plus proposer ${product}`,
+    /** La rangée de filtres par rayon du site (DRV-647) : « Tous (40) », « Fruits et légumes (6) », et « Rayon 2 » pour un rayon sans libellé lisible. */
+    aisles: 'Rayons',
+    allAisles: (count: number) => `Tous (${count})`,
+    aisleChip: (label: string, count: number) => `${label} (${count})`,
+    aisleFallback: (rank: number) => `Rayon ${rank}`,
     searchLabel: 'Chercher autre chose',
     searchButton: 'Chercher',
     searching: 'Recherche en cours…',

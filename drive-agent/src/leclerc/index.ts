@@ -8,7 +8,22 @@ export {
   type ReplyFacts,
   type RetailerAdapter,
 } from './adapter'
-export { catalogId, rankByAisle } from './aisle'
+export { catalogId, countAisles, rankByAisle } from './aisle'
+export {
+  aisleChoices,
+  humanize,
+  labelFromUrl,
+  MAX_AISLE_LABEL,
+  plausibleLabel,
+  type AisleChoice,
+  type AisleLabelSource,
+  shownAisleText,
+  shownAisleTexts,
+  shownAisleUrl,
+  type ShownAisleTexts,
+  type ShownText,
+} from './aisle-labels'
+export type { AisleTexts } from './embedded'
 export {
   aisleMenuFacts,
   MAX_LABEL,
@@ -22,6 +37,9 @@ export {
 } from './aisle-menu'
 export {
   aisleVocabulary,
+  facetLabels,
+  namedObjectKeys,
+  type NamedObjectKeys,
   replyShape,
   type KeyShape,
   type PathStep,
