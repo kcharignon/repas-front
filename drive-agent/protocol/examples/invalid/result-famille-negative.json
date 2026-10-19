@@ -1,0 +1,27 @@
+{
+  "path": "lines[0].product.familyId",
+  "why": "familyId est un entier de 1 à 2147483647.",
+  "message": {
+    "v": 1,
+    "type": "result",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "agentVersion": "1.0.0",
+    "outcome": "completed",
+    "store": {
+      "id": "000000"
+    },
+    "lines": [
+      {
+        "ingredientSlug": "tomate",
+        "outcome": "CHOSEN",
+        "quantity": 2,
+        "placement": "PRIMARY",
+        "product": {
+          "id": "555111",
+          "label": "Tomates grappe de test 500 g",
+          "familyId": -1
+        }
+      }
+    ]
+  }
+}

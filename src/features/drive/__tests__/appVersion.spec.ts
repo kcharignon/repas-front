@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { MIN_DRIVE_APP_VERSION, compareVersions, isDriveAppVersionEnough } from '../appVersion'
+import {
+  MIN_DRIVE_APP_VERSION,
+  RAYON_HINTS_APP_VERSION,
+  compareVersions,
+  isDriveAppVersionEnough,
+  isRayonHintsAppVersion,
+} from '../appVersion'
 
 describe('compareVersions (comparaison numérique, jamais lexicale)', () => {
   it.each([
@@ -49,5 +55,31 @@ describe('isDriveAppVersionEnough', () => {
     ['inconnue', false],
   ])('%j : %s', (version, enough) => {
     expect(isDriveAppVersionEnough(version)).toBe(enough)
+  })
+})
+
+describe('isRayonHintsAppVersion (DRV-642)', () => {
+  it.each(['0.1.15', '0.1.16', '0.2.0', '1.0.0', '0.0.0-dev'])(
+    '%s connaît les rayons conseillés',
+    (version) => {
+      expect(isRayonHintsAppVersion(version)).toBe(true)
+    },
+  )
+
+  it.each(['0.1.14', '0.1.10', '0.1.9', '0.0.1', null, undefined, '', 'abc'])(
+    '%s ne les connaît pas',
+    (version) => {
+      expect(isRayonHintsAppVersion(version)).toBe(false)
+    },
+  )
+
+  it('compare nombre par nombre, jamais en texte (0.1.100 est au-dessus de 0.1.15)', () => {
+    expect(isRayonHintsAppVersion('0.1.100')).toBe(true)
+  })
+
+  it('n’est jamais plus bas que la version minimale du drive', () => {
+    expect(compareVersions(RAYON_HINTS_APP_VERSION, MIN_DRIVE_APP_VERSION)).toBeGreaterThanOrEqual(
+      0,
+    )
   })
 })

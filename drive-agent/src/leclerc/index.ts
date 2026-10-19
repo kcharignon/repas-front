@@ -7,6 +7,7 @@ export {
   type LeclercDeps,
   type RetailerAdapter,
 } from './adapter'
+export { catalogId, rankByAisle } from './aisle'
 export { saysOutOfStock, type Candidate, type PricePerMeasure } from './candidate'
 export type { CartProductFacts } from './cart'
 export { contentFromLabel, parseContent, type Content, type ContentSource } from './content'

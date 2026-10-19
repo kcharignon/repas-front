@@ -11,7 +11,14 @@ import {
   type PlanProduct,
   type RejectedProduct,
 } from '../../protocol'
-import { LeclercError, saysOutOfStock, type Candidate, type RetailerAdapter } from '../leclerc'
+import {
+  catalogId,
+  LeclercError,
+  rankByAisle,
+  saysOutOfStock,
+  type Candidate,
+  type RetailerAdapter,
+} from '../leclerc'
 import { cleanText } from '../text'
 import {
   formatContent,
@@ -93,11 +100,16 @@ const refusedOf = (product: PlanProduct): RejectedProduct => ({
 function chosenProduct(candidate: Candidate): ChosenLine['product'] {
   const price = priceOf(candidate)
   const { content } = candidate
+  // Le rayon et la famille du produit (DRV-642) : des faits du catalogue que Repas apprend ; absents si le site ne les donne pas.
+  const rayonId = catalogId(candidate.aisle)
+  const familyId = catalogId(candidate.family)
   return {
     id: candidate.id,
     label: labelOf(candidate),
     ...(content && content.value > 0 && Number.isFinite(content.value) && { content }),
     ...(price && { price }),
+    ...(rayonId !== null && { rayonId }),
+    ...(familyId !== null && { familyId }),
   }
 }
 
@@ -161,6 +173,7 @@ async function load(
   search: Search,
   adapter: RetailerAdapter,
   query: string,
+  hints: readonly number[] | undefined,
   derived = false,
 ): Promise<void> {
   search.query = query
@@ -171,7 +184,8 @@ async function load(
       : { query, candidates: await adapter.searchProducts(query) }
     search.query = found.query
     search.asked = found.query === query ? null : query
-    search.candidates = found.candidates.slice(0, MAX_CANDIDATES)
+    // Les rayons conseillés d'abord (DRV-642), AVANT le plafond : un produit d'un rayon conseillé ne tombe jamais sous le plafond au profit d'un autre.
+    search.candidates = rankByAisle(found.candidates, hints).slice(0, MAX_CANDIDATES)
     search.notice = null
   } catch (error) {
     if (!(error instanceof LeclercError) || error.code !== 'NETWORK') throw error
@@ -216,7 +230,7 @@ async function settleLine(
   }
 
   ui.update({ current: line.name })
-  await load(search, adapter, line.searchQuery ?? line.name, true)
+  await load(search, adapter, line.searchQuery ?? line.name, line.rayonHints, true)
 
   for (;;) {
     const notice = search.notice
@@ -249,7 +263,7 @@ async function settleLine(
             never: (id, on) => void (on ? never.add(id) : never.delete(id)),
             search: (query) => {
               picker.busy(S.picker.searching)
-              load(search, adapter, query).then(
+              load(search, adapter, query, line.rayonHints).then(
                 () => {
                   if (!live) return
                   picker.results(search.query, items(), search.notice, search.asked)

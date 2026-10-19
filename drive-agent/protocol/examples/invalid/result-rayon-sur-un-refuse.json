@@ -1,0 +1,34 @@
+{
+  "path": "lines[0].rejected[0].rayonId",
+  "why": "Le rayon n'est donné que pour le produit choisi, pas pour un produit refusé.",
+  "message": {
+    "v": 1,
+    "type": "result",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "agentVersion": "1.0.0",
+    "outcome": "completed",
+    "store": {
+      "id": "000000"
+    },
+    "lines": [
+      {
+        "ingredientSlug": "tomate",
+        "outcome": "CHOSEN",
+        "quantity": 2,
+        "placement": "PRIMARY",
+        "product": {
+          "id": "555111",
+          "label": "Tomates grappe de test 500 g",
+          "rayonId": 41
+        },
+        "rejected": [
+          {
+            "id": "999000",
+            "label": "Tomates en conserve de test",
+            "rayonId": 41
+          }
+        ]
+      }
+    ]
+  }
+}

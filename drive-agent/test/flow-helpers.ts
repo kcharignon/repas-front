@@ -152,6 +152,9 @@ export interface ShelfItem {
   image?: string | null
   /** La fiche dit « Bientôt disponible » (DRV-635). */
   comingSoon?: boolean
+  /** Le rayon et la famille du produit chez l'enseigne (DRV-642) ; par défaut : non lus. */
+  aisle?: number | null
+  family?: number | null
 }
 
 export function candidate(id: string, item: ShelfItem = {}): Candidate {
@@ -167,8 +170,8 @@ export function candidate(id: string, item: ShelfItem = {}): Candidate {
     imageUrl: item.image ?? null,
     availability: null,
     comingSoon: item.comingSoon ?? false,
-    aisle: null,
-    family: null,
+    aisle: item.aisle ?? null,
+    family: item.family ?? null,
     content: item.content ?? null,
     contentSource: item.content ? 'label' : null,
   }

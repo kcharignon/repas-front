@@ -1,4 +1,4 @@
-// Le catalogue du faux site : 79 produits INVENTÉS (marques, libellés, prix, identifiants). Rien n'est copié d'une enseigne.
+// Le catalogue du faux site : 127 produits INVENTÉS (marques, libellés, prix, identifiants). Rien n'est copié d'une enseigne.
 // Les champs ont les noms que `recherche.md` (dépôt back) relève sur le vrai site : c'est la structure qui est imitée, pas le contenu.
 
 /** Le point de livraison du faux magasin (`sNoPointLivraison`) : différent de l'identifiant du magasin, comme sur le vrai site. */
@@ -29,6 +29,9 @@ export interface FakeProduct {
   aisle: number
   family: number
 }
+
+/** Les rangs, dans la recherche « carotte », des 6 produits frais (DRV-642). */
+const FRESH_CARROTS: ReadonlySet<number> = new Set([5, 11, 19, 20, 33, 39])
 
 let next = 1000000
 const make = (
@@ -138,6 +141,29 @@ export const PRODUCTS: readonly FakeProduct[] = [
   make('Courgettes grillées surgelées Jardin Inventé', '600 g', 2.95, 4.92, 'kg', 9, {
     aisle: 60,
     family: 601,
+  }),
+  // DRV-642. Une recherche de légumes aux rayons mêlés (« carotte » : 40 produits, 1000088 à 1000127) pour classer par rayon : 6 produits frais
+  // (rayon 41, famille 413) dispersés parmi 34 produits d'autres rayons (conserves 7, jus 15, surgelés 60), dans un ordre du site où les frais
+  // ne sont ni en tête ni groupés. Des identifiants de rayon inventés, jamais ceux d'une enseigne.
+  ...Array.from({ length: 40 }, (_unused, index) => {
+    const fresh = FRESH_CARROTS.has(index)
+    const number = String(index + 1).padStart(2, '0')
+    const [kind, aisle, family] = fresh
+      ? ['Carottes fraîches Jardin Inventé lot', 41, 413]
+      : index % 3 === 0
+        ? ['Jus de carotte Verger Imaginaire série', 15, 521]
+        : index % 3 === 1
+          ? ['Carottes râpées en boîte Conserverie Fictive série', 7, 71]
+          : ['Poêlée de carottes surgelée Jardin Inventé série', 60, 602]
+    return make(
+      `${kind} ${number}`,
+      `${400 + index} g`,
+      (150 + index * 5) / 100,
+      (300 + index * 5) / 100,
+      'kg',
+      12,
+      { aisle: aisle as number, family: family as number },
+    )
   }),
 ]
 

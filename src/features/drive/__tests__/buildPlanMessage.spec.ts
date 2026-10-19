@@ -145,3 +145,73 @@ describe('effectiveStatus', () => {
     expect(effectiveStatus(sel!, { sel: 'SKIP' })).toBe('HAVE_AT_HOME')
   })
 })
+
+describe('buildPlanMessage : les rayons conseillés (DRV-642)', () => {
+  const hinted = (hints: unknown) => {
+    const base = plan()
+    return {
+      ...base,
+      lines: base.lines.map((line) =>
+        ['farine', 'poivre', 'sel'].includes(line.ingredientSlug)
+          ? { ...line, rayonHints: hints }
+          : line,
+      ),
+    } as ReturnType<typeof plan>
+  }
+
+  it('sans l’option, le message est celui d’avant, octet pour octet, même si le plan porte des rayons', () => {
+    const before = JSON.stringify(buildPlanMessage(plan(), {}, RUN_ID))
+
+    expect(JSON.stringify(buildPlanMessage(hinted([41, 12]), {}, RUN_ID))).toBe(before)
+    expect(before).not.toContain('rayonHints')
+  })
+
+  it('avec l’option, recopie les rayons conseillés des lignes connues et des lignes à choisir, validés par le protocole', () => {
+    const message = buildPlanMessage(hinted([41, 12, 60]), {}, RUN_ID, { rayonHints: true })
+
+    expect(() => validatePlan(message)).not.toThrow()
+    expect(lineOf(message, 'farine')).toMatchObject({ rayonHints: [41, 12, 60] })
+    expect(lineOf(message, 'poivre')).toMatchObject({ status: 'NEW', rayonHints: [41, 12, 60] })
+    // Une ligne « Choisir un autre produit » est à choisir sur le site : les rayons la suivent
+    const replaced = buildPlanMessage(hinted([41]), { farine: 'REPLACE' }, RUN_ID, {
+      rayonHints: true,
+    })
+    expect(lineOf(replaced, 'farine')).toMatchObject({ status: 'NEW', rayonHints: [41] })
+    // Les lignes sans rayon appris n'ont pas la clé
+    expect(lineOf(message, 'curry')).not.toHaveProperty('rayonHints')
+  })
+
+  it.each([
+    ['absent', undefined],
+    ['null', null],
+    ['vide', []],
+  ])('rayons %s : la clé n’est pas envoyée', (_name, hints) => {
+    const message = buildPlanMessage(hinted(hints), {}, RUN_ID, { rayonHints: true })
+
+    expect(() => validatePlan(message)).not.toThrow()
+    expect(JSON.stringify(message)).not.toContain('rayonHints')
+  })
+
+  it('ne laisse partir que des valeurs que l’agent accepte : invalides retirées, doublons retirés, trois au plus', () => {
+    const message = buildPlanMessage(
+      hinted([0, -1, 1.5, '41', 41, 41, 2_147_483_648, 12, 60, 7]),
+      {},
+      RUN_ID,
+      { rayonHints: true },
+    )
+
+    expect(() => validatePlan(message)).not.toThrow()
+    expect(lineOf(message, 'farine')).toMatchObject({ rayonHints: [41, 12, 60] })
+  })
+
+  it('ne met pas de rayons sur une ligne passée ou « tu en as déjà »', () => {
+    const message = buildPlanMessage(hinted([41]), { poivre: 'SKIP' }, RUN_ID, { rayonHints: true })
+
+    expect(lineOf(message, 'poivre')).toEqual({
+      ingredientSlug: 'poivre',
+      name: 'Poivre',
+      status: 'SKIP',
+    })
+    expect(lineOf(message, 'sel')).not.toHaveProperty('rayonHints')
+  })
+})

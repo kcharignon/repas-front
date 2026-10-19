@@ -295,3 +295,98 @@ describe('validateResult : les compteurs d’un passage (ticket L)', () => {
     ).toBe('stats')
   })
 })
+
+describe('les rayons du produit (DRV-642) : des ajouts facultatifs du protocole v1', () => {
+  const head = {
+    v: 1,
+    type: 'plan',
+    runId: '8f14e45f-ceea-467a-9575-8e6b8c0a1b2c',
+    retailer: 'leclerc',
+    store: { id: '000000', host: 'courses-test.leclercdrive.fr' },
+    returnPath: '/drive/retour',
+  }
+  const plan = (line: object) => ({
+    ...head,
+    lines: [{ ingredientSlug: 'tomate', name: 'Tomate', status: 'NEW', ...line }],
+  })
+  const result = (product: object) => ({
+    v: 1,
+    type: 'result',
+    runId: head.runId,
+    agentVersion: '1.0.0',
+    outcome: 'completed',
+    lines: [
+      {
+        ingredientSlug: 'tomate',
+        outcome: 'CHOSEN',
+        quantity: 1,
+        placement: 'PRIMARY',
+        product: { id: '555111', label: 'Tomates de test', ...product },
+      },
+    ],
+  })
+
+  it('les bornes du module sont celles du contrat : 3 rayons, des entiers de 1 à 2147483647', () => {
+    expect(LIMITS.rayonHints).toBe(3)
+    expect(LIMITS.catalogId).toBe(2_147_483_647)
+  })
+
+  it('un plan sans « rayonHints » reste valide et repart octet pour octet', () => {
+    // Given : un message d'avant, sans la clé
+    const before = encodeMessage(plan({ products: [], rejected: [], searchQuery: 'tomate' }))
+
+    // When
+    const after = encodeMessage(validatePlan(decodeMessage(before)))
+
+    // Then
+    expect(after).toBe(before)
+    expect(before).not.toMatch(/^$/)
+    expect(JSON.stringify(decodeMessage(before))).not.toContain('rayonHints')
+  })
+
+  it('un résultat sans « rayonId » ni « familyId » reste valide et repart octet pour octet', () => {
+    const before = encodeMessage(result({ content: { value: 500, unit: 'g' } }))
+
+    expect(encodeMessage(validateResult(decodeMessage(before)))).toBe(before)
+    expect(JSON.stringify(decodeMessage(before))).not.toMatch(/rayonId|familyId/)
+  })
+
+  it.each([[[]], [[1]], [[41, 12, 60]], [[1, 2_147_483_647]]])(
+    'accepte les rayons %j',
+    (rayonHints) => {
+      expect(validatePlan(plan({ rayonHints }))).toBeTruthy()
+    },
+  )
+
+  it.each([
+    ['quatre rayons', [1, 2, 3, 4], 'lines[0].rayonHints'],
+    ['un rayon à zéro', [0], 'lines[0].rayonHints[0]'],
+    ['un rayon négatif', [5, -1], 'lines[0].rayonHints[1]'],
+    ['un rayon fractionnaire', [1.5], 'lines[0].rayonHints[0]'],
+    ['un rayon trop grand', [2_147_483_648], 'lines[0].rayonHints[0]'],
+    ['un rayon en texte', ['41'], 'lines[0].rayonHints[0]'],
+    ['un rayon nul', [null], 'lines[0].rayonHints[0]'],
+    ['un nombre seul', 41, 'lines[0].rayonHints'],
+    ['un objet', { 0: 41 }, 'lines[0].rayonHints'],
+    ['null', null, 'lines[0].rayonHints'],
+  ])('refuse %s', (_name, rayonHints, path) => {
+    expect(pathOf(() => validatePlan(plan({ rayonHints })))).toBe(path)
+  })
+
+  it('accepte le rayon et la famille du seul produit choisi', () => {
+    expect(validateResult(result({ rayonId: 41, familyId: 410 }))).toBeTruthy()
+    expect(validateResult(result({ rayonId: 41 }))).toBeTruthy()
+    expect(validateResult(result({ familyId: 410 }))).toBeTruthy()
+  })
+
+  it.each([
+    ['un rayon à zéro', { rayonId: 0 }, 'lines[0].product.rayonId'],
+    ['un rayon fractionnaire', { rayonId: 1.5 }, 'lines[0].product.rayonId'],
+    ['une famille négative', { familyId: -4 }, 'lines[0].product.familyId'],
+    ['une famille trop grande', { familyId: 2_147_483_648 }, 'lines[0].product.familyId'],
+    ['un rayon en texte', { rayonId: '41' }, 'lines[0].product.rayonId'],
+    ['une famille nulle', { familyId: null }, 'lines[0].product.familyId'],
+  ])('refuse %s', (_name, product, path) => {
+    expect(pathOf(() => validateResult(result(product)))).toBe(path)
+  })
+})

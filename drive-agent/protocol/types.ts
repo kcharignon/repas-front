@@ -32,6 +32,10 @@ export const LIMITS = {
   cents: 100_000_000,
   /** Un compteur de requêtes, d'erreurs ou de blocages d'un passage (ticket L). */
   requests: 100_000,
+  /** Rayons conseillés pour une ligne du plan (DRV-642), du plus choisi au moins choisi. */
+  rayonHints: 3,
+  /** Un identifiant de rayon ou de famille de l'enseigne (DRV-642) : un entier de 1 à cette valeur (le plus grand entier 32 bits). */
+  catalogId: 2_147_483_647,
 } as const
 
 /** Le seul chemin de retour permis, sur l'origine de Repas écrite en dur dans l'agent. */
@@ -123,6 +127,12 @@ export interface PlanLine {
   searchQuery?: string
   replaces?: ProductRef
   needed?: NeededQuantity
+  /**
+   * Facultatif (DRV-642) : les rayons de l'enseigne où l'on prend d'habitude cet ingrédient (0 à 3 identifiants, du plus choisi au moins
+   * choisi). Ils servent à ranger la liste de produits de l'écran de choix (ceux de ces rayons d'abord, aucun n'est caché) ; absents ou
+   * vides, la liste garde l'ordre du site. Un récepteur qui ne connaît pas la clé rejette le plan.
+   */
+  rayonHints?: number[]
 }
 
 export interface StoreRef {
@@ -168,6 +178,12 @@ export interface RejectedProduct extends ProductRef {
 /** Le produit choisi par l'utilisateur sur le site. */
 export interface ChosenProduct extends RejectedProduct {
   price?: ProductPrice
+  /**
+   * Facultatifs (DRV-642) : le rayon et la famille du produit chez l'enseigne (des faits du catalogue, pas de donnée de personne). Repas
+   * en apprend dans quel rayon on prend d'habitude chaque ingrédient. Absents quand le site ne les donne pas, et chez les agents d'avant.
+   */
+  rayonId?: number
+  familyId?: number
 }
 
 interface LineBase {

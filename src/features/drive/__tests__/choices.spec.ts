@@ -240,3 +240,61 @@ describe('buildChoiceBatches', () => {
     })
   })
 })
+
+describe('buildChoiceBatches : le rayon et la famille du produit choisi (DRV-642)', () => {
+  const chosen = (product: object, placement: 'PRIMARY' | 'ONCE' = 'PRIMARY'): ResultLine =>
+    ({
+      ingredientSlug: 'tomate',
+      outcome: 'CHOSEN',
+      quantity: 1,
+      placement,
+      product: { id: '555111', label: 'Tomates de test', ...product },
+    }) as ResultLine
+
+  it('recopie rayonId et familyId dans le produit de l’intention, un résultat valide pour le protocole', () => {
+    const message = result({ lines: [chosen({ rayonId: 41, familyId: 410 })] })
+
+    expect(() => validateResult(message)).not.toThrow()
+    const intent = buildChoiceBatches(message)[0]?.[0]
+    expect(intent?.product).toMatchObject({
+      retailerProductId: '555111',
+      rayonId: 41,
+      familyId: 410,
+    })
+  })
+
+  it('l’un sans l’autre : seule la clé donnée part', () => {
+    const onlyRayon = batchOf([chosen({ rayonId: 41 })])[0]?.[0]
+    const onlyFamily = batchOf([chosen({ familyId: 410 })])[0]?.[0]
+
+    expect(onlyRayon?.product).toHaveProperty('rayonId', 41)
+    expect(onlyRayon?.product).not.toHaveProperty('familyId')
+    expect(onlyFamily?.product).toHaveProperty('familyId', 410)
+    expect(onlyFamily?.product).not.toHaveProperty('rayonId')
+  })
+
+  it('un agent ancien (sans ces clés) : le corps est celui d’avant, sans clé de plus', () => {
+    const intent = batchOf([chosen({})])[0]?.[0]
+
+    expect(intent?.product).toEqual({
+      retailerProductId: '555111',
+      label: 'Tomates de test',
+      ean: null,
+      content: null,
+      price: null,
+    })
+    expect(JSON.stringify(intent)).not.toMatch(/rayonId|familyId/)
+  })
+
+  it('ne laisse pas partir une valeur que le back refuserait (zéro, négative, fractionnaire, trop grande, en texte)', () => {
+    for (const bad of [0, -3, 1.5, 2_147_483_648, '41', null]) {
+      const intent = batchOf([chosen({ rayonId: bad, familyId: bad })])[0]?.[0]
+
+      expect(JSON.stringify(intent)).not.toMatch(/rayonId|familyId/)
+    }
+  })
+
+  it('un produit « cette fois seulement » (ONCE) n’enregistre rien, donc ne dit pas son rayon', () => {
+    expect(batchOf([chosen({ rayonId: 41 }, 'ONCE')])).toEqual([])
+  })
+})

@@ -854,3 +854,61 @@ describe('lecture du plan', () => {
     ).toHaveLength(1)
   })
 })
+
+describe('écran d’envoi au drive, rayons conseillés (DRV-642)', () => {
+  /** Le plan de référence dont la ligne « poivre » (à choisir) et la ligne « farine » (connue) portent des rayons conseillés. */
+  const withHints = () => {
+    const base = plan()
+    return {
+      ...base,
+      lines: base.lines.map((line) =>
+        ['poivre', 'farine'].includes(line.ingredientSlug)
+          ? { ...line, rayonHints: [41, 12] }
+          : line,
+      ),
+    }
+  }
+
+  function installVersion(version: string) {
+    const native = fakeNative((message, reply) => {
+      if (message.type === 'app.info')
+        reply({ v: 1, type: 'app.info', version, versionCode: 1, drive: true })
+    })
+    ;(globalThis as { repasNative?: unknown }).repasNative = native.bridge
+
+    return native
+  }
+
+  async function send(version: string) {
+    const native = installVersion(version)
+    const { wrapper } = await open({ 'GET /api/v1/drive/plans/l1': () => json(withHints()) })
+    await loaded(wrapper)
+    await vi.waitFor(() => expect(native.sent.map((m) => m.type)).toContain('app.info'))
+    await flushPromises()
+    await press('Ouvrir le drive')
+
+    return started(native)[0]?.plan
+  }
+
+  it.each(['0.1.15', '0.2.0', '1.0.0', '0.0.0-dev'])(
+    'une application %s (agent à jour) : les rayons conseillés partent avec le plan',
+    async (version) => {
+      const message = await send(version)
+
+      const line = (slug: string) => message?.lines.find((item) => item.ingredientSlug === slug)
+      expect(line('poivre')?.rayonHints).toEqual([41, 12])
+      expect(line('farine')?.rayonHints).toEqual([41, 12])
+      expect(line('curry')).not.toHaveProperty('rayonHints')
+    },
+  )
+
+  it.each(['0.1.10', '0.1.14'])(
+    'une application %s (agent plus ancien) : le plan part sans « rayonHints », un agent ancien refuserait la clé',
+    async (version) => {
+      const message = await send(version)
+
+      expect(message?.lines.length).toBeGreaterThan(0)
+      expect(JSON.stringify(message)).not.toContain('rayonHints')
+    },
+  )
+})

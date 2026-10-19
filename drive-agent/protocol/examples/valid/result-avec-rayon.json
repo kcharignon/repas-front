@@ -1,0 +1,52 @@
+{
+  "v": 1,
+  "type": "result",
+  "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+  "agentVersion": "1.0.0",
+  "outcome": "completed",
+  "store": {
+    "id": "000000"
+  },
+  "lines": [
+    {
+      "ingredientSlug": "tomate",
+      "outcome": "CHOSEN",
+      "quantity": 2,
+      "placement": "PRIMARY",
+      "product": {
+        "id": "555111",
+        "label": "Tomates grappe de test 500 g",
+        "content": {
+          "value": 500,
+          "unit": "g"
+        },
+        "price": {
+          "cents": 249
+        },
+        "rayonId": 41,
+        "familyId": 410
+      }
+    },
+    {
+      "ingredientSlug": "pomme",
+      "outcome": "CHOSEN",
+      "quantity": 1,
+      "placement": "ONCE",
+      "product": {
+        "id": "555112",
+        "label": "Pommes de test 1 kg",
+        "rayonId": 41
+      }
+    },
+    {
+      "ingredientSlug": "sel",
+      "outcome": "CHOSEN",
+      "quantity": 1,
+      "placement": "PRIMARY",
+      "product": {
+        "id": "555113",
+        "label": "Sel fin de test 1 kg"
+      }
+    }
+  ]
+}
