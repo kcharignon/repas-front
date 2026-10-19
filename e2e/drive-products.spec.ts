@@ -20,11 +20,11 @@ test('classer les produits d’une farine, refuser l’un, accepter l’autre de
   await page.goto('/moi')
   await page.getByRole('link', { name: /Mes produits du drive/ }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Mes produits' })).toBeVisible()
-  await expect(page.getByText('Vous en avez toujours')).toBeVisible()
-  await page.getByRole('searchbox', { name: 'Rechercher un ingrédient' }).fill('oeuf')
+  await expect(page.getByText('J’en ai toujours')).toBeVisible()
+  await page.getByRole('searchbox', { name: 'Rechercher un article' }).fill('oeuf')
   await expect(page.getByRole('link', { name: /Farine/ })).toHaveCount(0)
   await expect(page.getByRole('link', { name: /Œufs/ })).toBeVisible()
-  await page.getByRole('searchbox', { name: 'Rechercher un ingrédient' }).fill('')
+  await page.getByRole('searchbox', { name: 'Rechercher un article' }).fill('')
   await page.getByRole('link', { name: /Farine/ }).click()
 
   // Le préféré descend, le suivant devient préféré
@@ -37,14 +37,14 @@ test('classer les produits d’une farine, refuser l’un, accepter l’autre de
     .getByRole('button', { name: /Descendre/ })
     .click()
   await expect(items.first()).toContainText(farineB.label)
-  await expect(items.first()).toContainText('Préféré')
+  await expect(items.first()).toContainText('Habituel')
   // Le focus suit le produit déplacé
   await expect(items.nth(1).getByRole('button', { name: /Monter/ })).toBeFocused()
 
   // Refuser le second, accepter de nouveau le produit déjà refusé
   await items
     .nth(1)
-    .getByRole('button', { name: /Ne plus jamais prendre/ })
+    .getByRole('button', { name: /Ne plus proposer/ })
     .click()
   await expect(items).toHaveCount(1)
   await page.getByRole('button', { name: /Accepter de nouveau Farine complète/ }).click()
@@ -69,7 +69,7 @@ test('oublier un ingrédient demande confirmation, puis revient à la liste', as
   const back = await fakeDriveBack(page)
   await page.goto('/drive/produits/farine')
 
-  await page.getByRole('button', { name: 'Oublier cet ingrédient' }).click()
+  await page.getByRole('button', { name: 'Oublier cet article' }).click()
   await expect(page.getByRole('dialog')).toContainText('Oublier Farine ?')
   expect(back.received).not.toContain('DELETE /api/v1/drive/choices/farine')
   await page.getByRole('dialog').getByRole('button', { name: 'Oublier' }).click()
@@ -82,7 +82,7 @@ test('oublier un ingrédient demande confirmation, puis revient à la liste', as
 test('le drive coupé : pas d’entrée dans le compte, message sur l’écran', async ({ page }) => {
   await fakeDriveBack(page, { enabled: false })
   await page.goto('/moi')
-  await expect(page.getByRole('heading', { level: 1, name: 'Mon compte' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Moi' })).toBeVisible()
   await expect(page.getByRole('link', { name: /Mes produits du drive/ })).toHaveCount(0)
 
   await page.goto('/drive/produits')
@@ -107,14 +107,16 @@ for (const colorScheme of ['light', 'dark'] as const) {
     expect((await scan(page)).violations).toEqual([])
 
     await page.getByRole('link', { name: /Farine/ }).click()
-    await expect(page.getByRole('heading', { level: 2, name: 'Produits refusés' })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { level: 2, name: 'Produits à ne plus proposer' }),
+    ).toBeVisible()
     expect((await scan(page)).violations).toEqual([])
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     )
     expect(overflow).toBeLessThanOrEqual(0)
 
-    await page.getByRole('button', { name: 'Oublier cet ingrédient' }).click()
+    await page.getByRole('button', { name: 'Oublier cet article' }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
     expect((await scan(page)).violations).toEqual([])
   })

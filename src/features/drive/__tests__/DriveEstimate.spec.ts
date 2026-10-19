@@ -79,17 +79,17 @@ describe('bloc « Estimation du coût »', () => {
 
     const details = wrapper.find('details')
     expect(details.element.hasAttribute('open')).toBe(false)
-    expect(details.find('summary').text()).toBe('Voir le détail (13 lignes)')
+    expect(details.find('summary').text()).toBe('Voir le détail (13 articles)')
     expect(details.findAll('h3').map((title) => title.text())).toEqual([
       'Non estimées (4)',
       'Estimées (8)',
-      'Déjà à la maison (1)',
+      'J’en ai toujours (1)',
     ])
     const lines = details.findAll('li').map((line) => plain(line.text()))
     expect(lines[0]).toContain('Curry')
     expect(lines[0]).toContain('pas de produit choisi')
     expect(lines[1]).toContain('Moutarde de test 200 g')
-    expect(lines[1]).toContain('pas de prix mémorisé')
+    expect(lines[1]).toContain('pas de prix connu')
     expect(lines[3]).toContain('Thym de test 20 g')
     expect(lines[3]).toContain('1,50 €')
     expect(lines[3]).toContain('à vérifier')
@@ -102,7 +102,7 @@ describe('bloc « Estimation du coût »', () => {
     expect(milk).toContain('1,98 €')
     expect(milk).toContain('estimée')
     expect(lines[lines.length - 1]).toContain('Sel')
-    expect(lines[lines.length - 1]).toContain('déjà à la maison')
+    expect(lines[lines.length - 1]).toContain('j’en ai toujours')
     expect(details.text()).toContain('Repas ne devine jamais un prix')
   })
 

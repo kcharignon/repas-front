@@ -5,7 +5,7 @@ export type LeclercErrorCode =
   'NOT_LOGGED_IN' | 'BLOCKED' | 'CONTRACT_CHANGED' | 'NETWORK' | 'UNSUPPORTED_PAGE'
 
 const MESSAGES: Record<LeclercErrorCode, string> = {
-  NOT_LOGGED_IN: 'Tu n’es pas connecté au drive.',
+  NOT_LOGGED_IN: 'Vous n’êtes pas connecté au drive.',
   BLOCKED: 'Le site a refusé les requêtes (blocage anti-robot).',
   CONTRACT_CHANGED: 'Le site ne répond plus comme prévu.',
   NETWORK: 'Le site ne répond pas.',

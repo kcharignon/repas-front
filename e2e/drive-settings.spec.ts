@@ -43,7 +43,7 @@ test('sans magasin : enregistrer son adresse, lui donner un nom, puis gérer ses
   await expect(page.getByText('Aucun magasin enregistré.')).toHaveCount(0)
 
   // Le résumé des produits mène à leur gestion
-  await expect(page.getByText('Ingrédients avec des produits', { exact: true })).toBeVisible()
+  await expect(page.getByText('Articles avec des produits', { exact: true })).toBeVisible()
   await page.getByRole('link', { name: 'Gérer mes produits' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Mes produits' })).toBeVisible()
 })
@@ -229,7 +229,7 @@ for (const [answer, message] of [
   })
 }
 
-test('« Mon compte » : « Menu de l’application » n’existe que dans l’application et ouvre son menu', async ({
+test('« Moi » : « Menu de l’application » n’existe que dans l’application et ouvre son menu', async ({
   page,
 }) => {
   await fakeDriveBack(page)
@@ -264,7 +264,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
     await page.goto('/drive/reglages')
     await expect(page.getByText('Magasin …456')).toBeVisible()
-    await expect(page.getByText('Ingrédients avec des produits', { exact: true })).toBeVisible()
+    await expect(page.getByText('Articles avec des produits', { exact: true })).toBeVisible()
     expect((await scan(page)).violations).toEqual([])
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,

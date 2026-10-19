@@ -8,7 +8,7 @@ import { useNotificationsStore } from '@/notifications/store'
 import { driveBridge } from './bridge'
 import { useDriveSettings } from './queries'
 
-// Les entrées du drive dans « Mon compte » : absentes tant que la fonction n'est pas allumée (ou que la lecture échoue).
+// Les entrées du drive dans « Moi » : absentes tant que la fonction n'est pas allumée (ou que la lecture échoue).
 const { t } = useI18n()
 const notifications = useNotificationsStore()
 const settings = useDriveSettings()

@@ -92,12 +92,12 @@ test.describe('un nouvel ingrédient (phase B)', () => {
 
     // Then
     await expect(
-      page.getByText('Aucun produit trouvé pour « zzqxkw ». Essaie un autre mot.'),
+      page.getByText('Aucun produit trouvé pour « zzqxkw ». Essayez un autre mot.'),
     ).toBeVisible()
     await expect(page.getByLabel('Chercher autre chose')).toHaveValue('zzqxkw')
     expect(searches(fake)).toEqual(['zzqxkw', 'zzqxkws'])
     expectPoliteAgent(fake)
-    await page.getByRole('button', { name: 'Passer cette fois' }).click()
+    await page.getByRole('button', { name: 'Pas cette fois' }).click()
     await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
   })
 
@@ -130,7 +130,7 @@ test.describe('un nouvel ingrédient (phase B)', () => {
     expect(fake.paced()).toHaveLength(5)
     expectPoliteAgent(fake)
     expect(Math.min(...gapsBetween(fake))).toBeGreaterThanOrEqual(MIN_GAP_MS - 5)
-    await page.getByRole('button', { name: 'Annuler le passage' }).click()
+    await page.getByRole('button', { name: 'Annuler l’envoi' }).click()
   })
 
   test('ce que l’utilisateur tape dans « Chercher autre chose » n’est pas réécrit : une seule requête', async ({
@@ -150,10 +150,10 @@ test.describe('un nouvel ingrédient (phase B)', () => {
 
     // Then
     await expect(
-      page.getByText('Aucun produit trouvé pour « œuf ». Essaie un autre mot.'),
+      page.getByText('Aucun produit trouvé pour « œuf ». Essayez un autre mot.'),
     ).toBeVisible()
     expect(searches(fake)).toEqual(['sel', 'œuf'])
-    await page.getByRole('button', { name: 'Annuler le passage' }).click()
+    await page.getByRole('button', { name: 'Annuler l’envoi' }).click()
   })
 })
 
@@ -205,7 +205,7 @@ test.describe('un produit connu (phase A)', () => {
     await page.getByRole('button', { name: 'Commencer' }).click()
     await expect(page.getByText('Ces produits ne sont plus disponibles')).toBeVisible()
     await expect(
-      page.getByText('Aucun produit trouvé pour « gnocchis ». Essaie un autre mot.'),
+      page.getByText('Aucun produit trouvé pour « gnocchis ». Essayez un autre mot.'),
     ).toBeVisible()
 
     // Then : le libellé et ses trois formes, puis la recherche de l'ingrédient et son singulier ; aucune requête rejouée
@@ -218,7 +218,7 @@ test.describe('un produit connu (phase A)', () => {
       'gnocchi',
     ])
     expectPoliteAgent(fake)
-    await page.getByRole('button', { name: 'Passer cette fois' }).click()
+    await page.getByRole('button', { name: 'Pas cette fois' }).click()
     await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
     expect(fake.cart()).toEqual({})
   })

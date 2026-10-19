@@ -105,14 +105,14 @@ describe('aide et installation de l’application', () => {
         '« Le site a changé » ou « Leclerc a changé »',
       ]),
     )
-    expect(wrapper.find('#depannage').text()).toContain('mode assisté')
+    expect(wrapper.find('#depannage').text()).toContain('Chercher à la main')
   })
 
   it('hors de l’application : le mode assisté mène à la liste', async () => {
     const { wrapper } = await open()
 
     const assisted = wrapper.find('#mode-assiste')
-    expect(assisted.find('h2').text()).toBe('Sans l’application : le mode assisté')
+    expect(assisted.find('h2').text()).toBe('Sans l’application : chercher à la main')
     expect(assisted.find('a').attributes('href')).toBe('/liste')
     expect(wrapper.find('nav a[href="/drive/aide#mode-assiste"]').exists()).toBe(true)
   })
@@ -199,7 +199,7 @@ describe('aide et installation de l’application', () => {
   })
 })
 
-describe('entrée de « Mon compte »', () => {
+describe('entrée de « Moi »', () => {
   async function entry() {
     const context = appContext()
     await context.router.push('/moi')

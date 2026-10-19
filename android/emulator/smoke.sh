@@ -125,7 +125,7 @@ check "le magasin ouvert est une page de magasin avec sa ville (/magasin-123456-
   has_report '"path": "/magasin-123456-123456-Ville-Test/accueil.aspx"'
 check "l'écran reste allumé pendant le passage" screen_held
 if wait_until 20 has_report '"kind": "agent-ui", "mounted": true'; then ok "l'agent a monté son interface (après le chargement de la page)"; else ko "l'agent n'a pas monté son interface"; fi
-if wait_until 15 ui_has 'Prêt à remplir ton panier'; then ok "l'agent affiche son récapitulatif, sans que l'utilisateur ait à naviguer"; else ko "l'agent n'a pas affiché son récapitulatif"; fi
+if wait_until 15 ui_has 'Prêt à remplir votre panier'; then ok "l'agent affiche son récapitulatif, sans que l'utilisateur ait à naviguer"; else ko "l'agent n'a pas affiché son récapitulatif"; fi
 sleep 2
 screenshot 03-passage-agent
 if tap 'text="Annuler"' && tap 'text="Retourner dans Repas"'; then ok "« Annuler » puis « Retourner dans Repas » touchés dans l'interface de l'agent"; else ko "les boutons de l'agent sont introuvables"; fi
@@ -214,7 +214,7 @@ if wait_until 40 has_report '"hostname": "www.leclercdrive.fr", "path": "/"'; th
 else
   ko "drive.setup n'a pas ouvert l'accueil du drive"
 fi
-if wait_until 10 ui_has 'choisis ton magasin'; then ok "le message en français simple (se connecter, choisir son magasin) est à l'écran"; else ko "le message de la lecture du magasin n'est pas à l'écran"; fi
+if wait_until 10 ui_has 'choisissez votre magasin'; then ok "le message en français simple (se connecter, choisir son magasin) est à l'écran"; else ko "le message de la lecture du magasin n'est pas à l'écran"; fi
 check "l'écran reste allumé pendant la lecture" screen_held
 sleep 6
 check "tant que la page n'est pas celle d'un magasin, rien n'est envoyé à l'agent" no_setup_yet
@@ -222,7 +222,7 @@ screenshot 12-lecture-magasin-accueil
 if tap 'text="Choisir mon magasin de test"'; then ok "magasin choisi sur le faux site (lien touché)"; else ko "le lien du magasin est introuvable à l'écran"; fi
 if wait_until 30 has_report '"command": "setup"'; then ok "sur la page du magasin, l'agent reçoit le message setup par le pont"; else ko "l'agent n'a pas reçu le message setup"; fi
 if wait_until 15 ui_has 'Enregistrer ce magasin'; then ok "l'agent demande confirmation (écran « Enregistrer ce magasin dans Repas ? »)"; else ko "l'agent n'a pas affiché sa confirmation"; fi
-check "le message de la lecture du magasin a disparu (l'agent a pris la main)" ui_lacks 'Connecte-toi à Leclerc'
+check "le message de la lecture du magasin a disparu (l'agent a pris la main)" ui_lacks 'Connectez-vous à Leclerc'
 sleep 1
 screenshot 13-lecture-magasin-confirmation
 if tap 'text="Enregistrer"'; then ok "« Enregistrer » touché dans l'interface de l'agent"; else ko "le bouton « Enregistrer » est introuvable"; fi

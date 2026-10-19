@@ -21,7 +21,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       page.getByRole('link', { name: /^Télécharger la dernière version/ }),
     ).toHaveAttribute('href', 'https://github.com/kcharignon/repas-front/releases')
     await expect(
-      page.getByRole('heading', { level: 2, name: 'Sans l’application : le mode assisté' }),
+      page.getByRole('heading', { level: 2, name: 'Sans l’application : chercher à la main' }),
     ).toBeVisible()
 
     // Le dépannage se déplie au clavier
@@ -63,13 +63,13 @@ test('dans l’application : annonce la version et ne propose pas le mode assist
   await expect(page.getByRole('heading', { level: 1, name: 'L’application Repas' })).toBeVisible()
   await expect(page.getByRole('heading', { level: 1, name: /^Installer/ })).toHaveCount(0)
   await expect(
-    page.getByRole('heading', { name: 'Sans l’application : le mode assisté' }),
+    page.getByRole('heading', { name: 'Sans l’application : chercher à la main' }),
   ).toHaveCount(0)
   expect((await scan(page)).violations).toEqual([])
 })
 
-// L'entrée « Application » de « Mon compte » : installer dans un navigateur, mettre à jour dans l'application (qu'on n'a pas à installer)
-test('« Mon compte », dans un navigateur : propose d’installer l’application', async ({ page }) => {
+// L'entrée « Application » de « Moi » : installer dans un navigateur, mettre à jour dans l'application (qu'on n'a pas à installer)
+test('« Moi », dans un navigateur : propose d’installer l’application', async ({ page }) => {
   await fakeDriveBack(page)
   await page.goto('/moi')
 
@@ -85,7 +85,7 @@ test('« Mon compte », dans un navigateur : propose d’installer l’applicati
   ).toBeVisible()
 })
 
-test('« Mon compte », dans l’application : propose de la mettre à jour et mène à cette rubrique', async ({
+test('« Moi », dans l’application : propose de la mettre à jour et mène à cette rubrique', async ({
   page,
 }) => {
   await fakeDriveBack(page)

@@ -136,7 +136,7 @@ describe('un passage complet', () => {
       { current: 'Farine' },
       { done: 1, entry: 'Farine : ajouté' },
       { current: 'sel' },
-      { done: 2, entry: 'sel : tu en as toujours' },
+      { done: 2, entry: 'sel : j’en ai toujours' },
     ])
   })
 })
@@ -171,7 +171,7 @@ describe('les produits de secours', () => {
     expect(sent[0]?.outcome).toBe('completed')
     expect(screens.updates).toContainEqual({
       done: 1,
-      entry: 'Farine : ajouté, produit de secours',
+      entry: 'Farine : ajouté, produit de remplacement',
     })
   })
 

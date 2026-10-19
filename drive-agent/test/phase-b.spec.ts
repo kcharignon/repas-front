@@ -132,7 +132,7 @@ function run(
     before?: (call: string) => void | Promise<void>
     quantity?: (props: QuantityProps) => number | null
     others?: PlanLine[]
-    /** La réponse à « Que fais-tu de ce produit ? » (`null` : revenir à la liste). */
+    /** La réponse à « Que faites-vous de ce produit ? » (`null` : revenir à la liste). */
     placementAnswer?: 'PRIMARY' | 'FALLBACK' | 'ONCE' | null
     /** La réponse de l'utilisateur devant la demande de vérification de l'anti-robot (ticket K). */
     challenge?: () => 'resume' | 'stop'
@@ -227,7 +227,7 @@ describe('un nouvel ingrédient', () => {
 
     await test.start()
 
-    expect(test.user.views[0]?.zone.textContent).toContain('Il te faut : 800 g.')
+    expect(test.user.views[0]?.zone.textContent).toContain('Il vous faut : 800 g.')
     expect(test.user.views[0]?.props).toMatchObject({ ingredient: 'Poivre', position: 1, total: 1 })
   })
 
@@ -304,7 +304,7 @@ describe('le contenu est inconnu', () => {
 
     expect(asked).toHaveLength(1)
     expect(test.user.views[0]?.zone.textContent).toContain(
-      'Contenu inconnu : tu choisiras la quantité.',
+      'Contenu inconnu : vous choisirez la quantité.',
     )
   })
 
@@ -350,7 +350,7 @@ describe('les actions de la barre', () => {
     })
   })
 
-  it('« Annuler le passage » rend « aborted » avec ce qui a déjà été fait', async () => {
+  it('« Annuler l’envoi » rend « aborted » avec ce qui a déjà été fait', async () => {
     const adapter = fakeAdapter({ '1000001': {}, ...SHELF }, { found: FOUND })
     const user = session(() => ({ kind: 'cancel' }))
     const screens = fakeUi({ chooser: user.chooser })
@@ -408,7 +408,7 @@ describe('les actions de la barre', () => {
   })
 })
 
-// —— Produits refusés et indisponibles ———————————————————————————————————————————————————————————————————————————————————————
+// —— Produits à ne plus proposer et indisponibles ———————————————————————————————————————————————————————————————————————————————————————
 
 describe('les produits refusés et indisponibles', () => {
   const refused = [{ id: '2000002', label: 'Poivre blanc de test 1 kg' }]
@@ -418,7 +418,7 @@ describe('les produits refusés et indisponibles', () => {
       (view) => {
         const button = buttonOf(view.zone, 'Poivre blanc')
         expect(button.disabled).toBe(true)
-        expect(button.textContent).toBe('Produit refusé')
+        expect(button.textContent).toBe('Ne plus proposer')
         button.click()
         return { kind: 'skip' }
       },
@@ -508,7 +508,7 @@ describe('un produit connu devenu indisponible', () => {
     expect(zone?.textContent).toContain(
       'Ces produits ne sont plus disponibles : Farine de test A, Farine de test B.',
     )
-    expect(zone?.textContent).toContain('Ne plus jamais prendre Farine de test A')
+    expect(zone?.textContent).toContain('Ne plus proposer Farine de test A')
     expect(test.adapter.calls.slice(0, 2)).toEqual(['search 1000001', 'search 1000002'])
   })
 
@@ -558,7 +558,7 @@ describe('un produit connu devenu indisponible', () => {
     expect(test.user.views).toHaveLength(2)
   })
 
-  it('la case « Ne plus jamais prendre » cochée met le produit dans « rejected », avec son libellé et son contenu', async () => {
+  it('la case « Ne plus proposer » cochée met le produit dans « rejected », avec son libellé et son contenu', async () => {
     const test = run(
       flour(),
       [
@@ -654,7 +654,7 @@ describe('un produit connu devenu indisponible', () => {
 
     expect(test.screens.screens()).toContain('placement')
     expect(test.user.views[0]?.zone.textContent).toContain(
-      'Tu remplaces : Poivre habituel de test.',
+      'Vous remplacez : Poivre habituel de test.',
     )
     expect(test.user.views[0]?.zone.querySelector('.gone')).toBeNull()
     expect(lineOf(test.sent[0])).toMatchObject({ placement: 'FALLBACK' })
@@ -793,7 +793,7 @@ describe('les erreurs du site', () => {
       [
         (view) => {
           expect(view.zone.querySelector('[role="alert"]')?.textContent).toBe(
-            'Le site ne répond pas. Réessaie dans un instant.',
+            'Le site ne répond pas. Réessayez dans un instant.',
           )
           return { kind: 'skip' }
         },
@@ -867,7 +867,7 @@ describe('les erreurs du site', () => {
       [
         (view) => {
           expect(view.zone.querySelector('[role="alert"]')?.textContent).toBe(
-            'Leclerc met trop de temps à répondre. Réessaie dans un instant.',
+            'Leclerc met trop de temps à répondre. Réessayez dans un instant.',
           )
           return { kind: 'skip' }
         },
@@ -1166,14 +1166,14 @@ describe('quand la recherche du nom ne répond rien', () => {
     expect(test.adapter.calls).toEqual(['find poivre'])
   })
 
-  it('rien ne répond : « Aucun produit trouvé pour « zzqxkw ». Essaie un autre mot. », au plus 5 requêtes, le champ garde le nom', async () => {
+  it('rien ne répond : « Aucun produit trouvé pour « zzqxkw ». Essayez un autre mot. », au plus 5 requêtes, le champ garde le nom', async () => {
     // Given
     const test = run(
       { ...fresh('zzqxkw'), name: 'Zzqxkw', searchQuery: 'zzqxkw' },
       [
         (view) => {
           expect(statusOf(view.zone)).toBe(
-            'Aucun produit trouvé pour « zzqxkw ». Essaie un autre mot.',
+            'Aucun produit trouvé pour « zzqxkw ». Essayez un autre mot.',
           )
           expect(queryOf(view.zone)).toBe('zzqxkw')
           expect(rows(view.zone)).toHaveLength(0)
@@ -1225,7 +1225,7 @@ describe('quand la recherche du nom ne répond rien', () => {
         type(view, 'tomates')
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(statusOf(view.zone)).toBe(
-          'Aucun produit trouvé pour « tomates ». Essaie un autre mot.',
+          'Aucun produit trouvé pour « tomates ». Essayez un autre mot.',
         )
         return { kind: 'skip' }
       },
