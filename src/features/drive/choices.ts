@@ -103,6 +103,13 @@ function intentsOf(line: ResultLine): ChoiceIntent[] {
 }
 
 /**
+ * Les choix que ces intentions enregistrent vraiment : un produit retenu ou refusé, un « j'en ai toujours ». Rafraîchir un prix n'en est pas un :
+ * l'utilisateur n'a rien choisi.
+ */
+export const countChoices = (batches: ChoiceIntent[][]): number =>
+  batches.flat().filter((intent) => intent.action !== 'REFRESH_PRICE').length
+
+/**
  * Ce que le résultat d'un passage apprend à Repas, en lots de 200 intentions au plus (un seul, presque toujours). Les intentions d'une
  * ligne ne sont jamais séparées entre deux lots.
  */

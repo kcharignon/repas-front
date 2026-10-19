@@ -112,6 +112,11 @@ const linkClass =
     <template v-else-if="data !== undefined">
       <p v-if="nothingToBuy" class="text-muted">{{ t('driveEstimate.nothingToBuy') }}</p>
 
+      <!-- Aucun article n'a de prix : une seule phrase, ni compteur, ni avertissement, ni détail (DRV-626) -->
+      <p v-else-if="noPrice" class="text-muted" data-testid="no-price">
+        {{ t('driveEstimate.noPrice') }}
+      </p>
+
       <template v-else>
         <p
           v-if="lowCoverage"
@@ -121,8 +126,7 @@ const linkClass =
           {{ t('driveEstimate.lowCoverage') }}
         </p>
 
-        <p v-if="noPrice" class="text-muted">{{ t('driveEstimate.noPrice') }}</p>
-        <dl v-else class="flex flex-col gap-1">
+        <dl class="flex flex-col gap-1">
           <dt class="text-sm text-muted">{{ t('driveEstimate.total') }}</dt>
           <dd class="font-display text-3xl font-bold">
             {{ formatEuros(data.estimatedTotalCents) }}
@@ -138,9 +142,12 @@ const linkClass =
         <p v-if="period !== null" class="text-muted">{{ period }}</p>
       </template>
 
-      <p class="text-sm text-muted">{{ data.disclaimer }}</p>
+      <p v-if="!noPrice" class="text-sm text-muted">{{ data.disclaimer }}</p>
 
-      <details v-if="data.lines.length > 0" class="group rounded-xl border border-line bg-surface">
+      <details
+        v-if="!noPrice && data.lines.length > 0"
+        class="group rounded-xl border border-line bg-surface"
+      >
         <summary
           class="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-2 font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary [&::-webkit-details-marker]:hidden"
         >

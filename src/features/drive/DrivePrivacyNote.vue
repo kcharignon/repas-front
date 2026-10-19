@@ -2,10 +2,11 @@
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
-// La note de vie privée courte du drive (DRV-504), à afficher dans les réglages du drive avant la première activation de l'envoi : ce que
-// Repas retient, ce qu'il ne voit jamais, et le risque pour le compte Leclerc. Elle mène à la note complète de l'aide (`#vie-privee`,
-// `DrivePrivacyFull`). Le texte est dans `drivePrivacy.short` ; les deux notes disent la même chose, à garder identiques au fond à
-// `docs/drive/note-vie-privee.md` du dépôt back.
+// La note de vie privée courte du drive (DRV-504), à afficher dans les réglages du drive : une phrase (DRV-626 : la note entière remplissait le
+// premier écran et poussait « Votre magasin » sous la ligne de flottaison) qui dit l'essentiel, et le lien vers la note complète de l'aide
+// (`#vie-privee`, `DrivePrivacyFull`), qui dit ce que Repas retient, comment tout effacer et le risque pour le compte Leclerc. Le texte est dans
+// `drivePrivacy.short` ; la note courte ne dit rien que la note complète ne dise aussi (à garder identique au fond à `docs/drive/note-vie-privee.md`
+// du dépôt back).
 const { t } = useI18n()
 </script>
 

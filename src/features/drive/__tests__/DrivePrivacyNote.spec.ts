@@ -14,21 +14,28 @@ afterEach(() => {
 })
 
 describe('note de vie privée courte', () => {
-  it('dit ce que Repas retient, ce qu’il ne voit jamais et le risque pour le compte Leclerc', async () => {
+  it('dit l’essentiel en une phrase de 15 mots au plus : ce que Repas ne voit jamais (DRV-626)', async () => {
     const context = appContext()
     await context.router.push('/drive/reglages')
     const wrapper = mount(DrivePrivacyNote, { global: { plugins: context.plugins } })
 
     expect(wrapper.find('h2').text()).toBe('Votre vie privée')
+    expect(wrapper.findAll('p')).toHaveLength(1)
     const text = wrapper.find('p').text()
-    expect(text).toContain('Repas retient votre magasin')
-    expect(text).toContain('les produits que vous choisissez (avec leur prix vu)')
-    expect(text).toContain('la date d’envoi de vos listes')
-    expect(text).toContain(
-      'Il ne voit jamais votre identifiant, votre mot de passe, vos cookies, votre panier Leclerc ni vos commandes',
-    )
-    expect(text).toContain('avec votre propre connexion à Leclerc')
-    expect(text).toContain('Leclerc peut suspendre un compte')
+    expect(text).toBe('Repas ne voit jamais votre mot de passe ni votre panier Leclerc.')
+    expect(text.split(/\s+/).length).toBeLessThanOrEqual(15)
+  })
+
+  it('tient sur le premier écran : titre, une phrase, un lien, rien d’autre', async () => {
+    const context = appContext()
+    await context.router.push('/drive/reglages')
+    const wrapper = mount(DrivePrivacyNote, { global: { plugins: context.plugins } })
+
+    expect(wrapper.findAll('h2, p, a').map((node) => node.element.tagName)).toEqual([
+      'H2',
+      'P',
+      'A',
+    ])
   })
 
   it('le lien mène à la note complète de l’aide, qui existe à cette ancre', async () => {
@@ -64,19 +71,20 @@ describe('note de vie privée courte', () => {
       .find('#vie-privee')
       .text()
 
-    // Chaque fait de la note courte a son pendant dans la note complète
+    // Chaque fait de la note courte a son pendant dans la note complète, qui garde tout le reste (ce que Repas retient, le risque pour le compte)
     for (const [brief, detail] of [
-      ['votre magasin', 'Votre magasin Leclerc'],
-      ['leur prix vu', 'la date où il a été vu'],
-      ['la date d’envoi', 'la date de l’envoi'],
-      ['votre identifiant, votre mot de passe', 'Votre identifiant et votre mot de passe Leclerc'],
-      ['vos cookies', 'Vos cookies'],
-      ['votre panier Leclerc ni vos commandes', 'votre panier Leclerc, vos commandes'],
-      ['avec votre propre connexion à Leclerc', 'votre propre connexion'],
-      ['peut suspendre un compte', 'suspendre un compte E.Leclerc'],
+      ['votre mot de passe', 'Votre identifiant et votre mot de passe Leclerc'],
+      ['votre panier Leclerc', 'le contenu réel de votre panier Leclerc'],
     ] as const) {
       expect(short).toContain(brief)
-      expect(full).toContain(detail)
+      expect(full.toLowerCase()).toContain(detail.toLowerCase())
     }
+    for (const kept of [
+      'Votre magasin Leclerc',
+      'la date où il a été vu',
+      'la date de l’envoi',
+      'suspendre un compte E.Leclerc',
+    ])
+      expect(full).toContain(kept)
   })
 })

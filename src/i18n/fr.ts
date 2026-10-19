@@ -445,7 +445,8 @@ export default {
     statusReplace: 'Vous choisirez un autre produit sur Leclerc, à la place de : {label}.',
     statusHaveAtHome: 'J’en ai toujours : rien à mettre au panier.',
     statusSkip: 'Pas cette fois : rien ne sera mis au panier.',
-    products: 'Produits retenus, par ordre de préférence',
+    // Lu par les lecteurs d'écran avant la liste : un seul produit, c'est le produit habituel ; plusieurs, ce sont les produits retenus
+    products: 'Produit habituel : | Produits retenus :',
     fallback: 'remplacement',
     packs: '{count} produit | {count} produits',
     packsToCheck: 'à vérifier',
@@ -513,6 +514,7 @@ export default {
     none: {
       title: 'Aucun récapitulatif à afficher',
       help: 'Un récapitulatif ne se garde pas quand la page est rechargée. Ouvrez la liste pour reprendre l’envoi.',
+      open: 'Ouvrir mes listes',
     },
     stale: {
       title: 'Ce récapitulatif ne correspond pas à votre dernier envoi',
@@ -541,6 +543,10 @@ export default {
       completed: {
         title: 'Le panier est rempli',
         help: 'Vos produits sont dans le panier Leclerc : il reste à le finaliser.',
+      },
+      // Un envoi arrêté avant que rien ne soit mis au panier ni choisi : « en partie » serait faux (même titre que l'écran de fin de l'agent)
+      notFilled: {
+        title: 'Le panier n’est pas rempli',
       },
       partial: {
         title: 'Le panier est rempli en partie',
@@ -873,7 +879,8 @@ export default {
   drivePrivacy: {
     short: {
       title: 'Votre vie privée',
-      text: 'Repas retient votre magasin, les produits que vous choisissez (avec leur prix vu) et la date d’envoi de vos listes. Il ne voit jamais votre identifiant, votre mot de passe, vos cookies, votre panier Leclerc ni vos commandes : l’envoi se fait dans l’application, avec votre propre connexion à Leclerc. Attention : Leclerc peut suspendre un compte qu’il juge utilisé de façon abusive.',
+      // Une seule phrase en tête des réglages (DRV-626) : le reste (ce que Repas retient, le risque pour le compte Leclerc) est dans la note complète
+      text: 'Repas ne voit jamais votre mot de passe ni votre panier Leclerc.',
       link: 'Lisez la note complète',
     },
     full: {
@@ -961,7 +968,8 @@ export default {
     periodRange: 'D’après les prix vus entre le {from} et le {to}.',
     lowCoverage:
       'Estimation peu fiable : moins de la moitié des articles ont un prix connu, le total ne couvre qu’une partie de la liste.',
-    noPrice: 'Aucun prix connu pour le moment : Repas retient les prix à chaque envoi au drive.',
+    // Aucun article n'a de prix : une seule phrase, ni compteur, ni avertissement, ni détail (DRV-626)
+    noPrice: 'Pas encore de prix : Repas les retient à chaque envoi au drive.',
     nothingToBuy: 'Rien à estimer : aucun article de cette liste n’est à acheter au drive.',
     detail: 'Voir le détail ({count} article) | Voir le détail ({count} articles)',
     groups: {

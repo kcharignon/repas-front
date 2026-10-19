@@ -15,7 +15,7 @@ import {
 import { isRateLimited, messageForFailure } from '@/notifications/failures'
 import { useOnline } from '@/offline/useOnline'
 import { driveBridge } from './bridge'
-import { buildChoiceBatches } from './choices'
+import { buildChoiceBatches, countChoices } from './choices'
 import { basketUrl } from './leclerc'
 import { useDrivePlan, useDriveSettings, useSaveChoices } from './queries'
 import { expectedFromPlan } from './restrictToPlan'
@@ -68,6 +68,13 @@ const counts = computed(() => (result.value ? countOutcomes(result.value) : null
 const shownCounts = computed(() => (counts.value ? visibleCounts(counts.value) : []))
 const finalizeUrl = computed(() => basketUrl(settings.data.value?.store?.baseUrl))
 const saved = computed(() => store.status === 'saved')
+/**
+ * Ce que Repas retient VRAIMENT de cet envoi : un produit choisi, un produit à ne plus proposer, un « j'en ai toujours ». Sans cela (tout était
+ * déjà choisi, tout est passé, rien n'a pu être mis au panier), « Vos choix sont enregistrés » serait faux : l'écran se tait (DRV-626).
+ */
+const hasChoices = computed(() =>
+  result.value ? countChoices(buildChoiceBatches(result.value)) > 0 : false,
+)
 
 // --- Le titre dit le résultat ; au plus trois phrases : ce qui s'est passé, ce qui est sauf, ce qu'il reste à faire ---
 const headline = computed(() => {
@@ -77,6 +84,9 @@ const headline = computed(() => {
   if (current.kind === 'refused') return t('driveReturn.refused.title')
   if (current.kind === 'invalid') return t('driveReturn.invalid.title')
   if (result.value === null) return t('driveReturn.setup.title')
+  // Arrêté avant que rien ne soit mis au panier ni choisi : « rempli en partie » serait faux
+  const none = counts.value !== null && counts.value.added + counts.value.chosen === 0
+  if (result.value.outcome === 'partial' && none) return t('driveReturn.outcome.notFilled.title')
 
   return t(`driveReturn.outcome.${result.value.outcome}.title`)
 })
@@ -319,6 +329,9 @@ function confirmReopen() {
       class="flex flex-col items-start gap-3 rounded-2xl bg-soft px-5 py-4"
     >
       <p class="max-w-prose text-muted">{{ t('driveReturn.none.help') }}</p>
+      <RouterLink :to="{ name: 'shopping-lists' }" :class="primaryClass">
+        {{ t('driveReturn.none.open') }}
+      </RouterLink>
     </section>
 
     <section
@@ -390,10 +403,14 @@ function confirmReopen() {
         <p class="max-w-prose text-lg">{{ sentences.join(' ') }}</p>
       </div>
 
-      <p v-if="store.status === 'saving'" role="status" class="text-muted">
+      <p v-if="store.status === 'saving' && hasChoices" role="status" class="text-muted">
         {{ t('driveReturn.save.saving') }}
       </p>
-      <p v-else-if="store.status === 'saved'" role="status" class="font-semibold text-primary">
+      <p
+        v-else-if="store.status === 'saved' && hasChoices"
+        role="status"
+        class="font-semibold text-primary"
+      >
         {{ t('driveReturn.save.saved') }}
       </p>
       <div v-else-if="store.status === 'failed'" class="flex flex-col items-start gap-3">

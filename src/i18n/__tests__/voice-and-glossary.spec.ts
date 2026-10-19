@@ -55,9 +55,10 @@ export const FORBIDDEN: readonly Rule[] = [
     use: 'Pas cette fois',
   },
   { pattern: /^\s*passer\s*$/i, use: 'Pas cette fois' },
-  // Le produit retenu pour un article et son remplaçant.
+  // Le produit retenu pour un article et son remplaçant. « Préférence » aussi (DRV-626) : Repas ne montre pas un ordre de préférence, il dit
+  // « produit habituel » ou « produits retenus » ; « enregistré dans les préférences » reste interdit par la règle de « Repas s'en souvient ».
   {
-    pattern: word('préférée?s?|primaires?|secours|fallbacks?'),
+    pattern: word('préférée?s?|préférences?|primaires?|secours|fallbacks?'),
     use: 'produit habituel / produit de remplacement',
   },
   // Un produit exclu.
@@ -339,6 +340,9 @@ describe('le détecteur lui-même (il ne doit pas devenir aveugle)', () => {
     'Vous en avez déjà',
     'Mon nouveau produit préféré',
     'Produit de secours',
+    'Produits retenus, par ordre de préférence',
+    'Vos préférences de produits',
+    'Une préférence enregistrée',
     'Produits refusés',
     'Produit mémorisé',
     'Résumé de l’envoi',
@@ -363,6 +367,8 @@ describe('le détecteur lui-même (il ne doit pas devenir aveugle)', () => {
     'J’en ai toujours',
     'Mon nouveau produit habituel',
     'Produit de remplacement',
+    'Produit habituel :',
+    'Produits retenus :',
     'Ne plus proposer',
     'Repas s’en souvient',
     'Récapitulatif',
