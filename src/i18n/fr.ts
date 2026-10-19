@@ -603,23 +603,40 @@ export default {
     entry: 'Réglages du drive',
     entryHelp: 'Votre magasin Leclerc Drive et l’application Repas.',
     disabled: 'L’envoi au drive n’est pas encore activé : il n’y a rien à régler pour le moment.',
-    storeRequired: 'Choisissez d’abord votre magasin pour envoyer une liste au drive.',
+    // Envoyé ici faute de magasin (DRV-622, DRV-623) : un titre, une phrase, un bouton qui fait le travail
+    chooseTitle: 'Choisissez votre magasin',
+    chooseHelp: 'Pour envoyer votre liste, Repas doit connaître votre magasin Leclerc.',
+    choose: 'Choisir mon magasin',
     store: 'Votre magasin',
     storeNamed: 'Magasin …{tail}',
     none: 'Aucun magasin enregistré.',
     storeHelp:
       'Repas remplit le panier de ce magasin. Les produits dont Repas se souvient sont propres à ce magasin.',
     read: 'Lire mon magasin dans l’application',
-    readHelp: 'L’application ouvre le site du drive : choisissez votre magasin, puis revenez ici.',
-    readDone: 'Magasin …{tail} lu dans l’application. Vérifiez, puis enregistrez.',
+    // Avec un magasin déjà enregistré, le même geste s'appelle « Changer de magasin »
+    change: 'Changer de magasin',
+    readHelp:
+      'L’application ouvre Leclerc. Choisissez votre magasin, puis touchez « Utiliser ce magasin ».',
+    // Repas enregistre tout seul le magasin lu (un seul geste, dans l'application)
+    readDone: 'Magasin …{tail} enregistré.',
+    // Le magasin lu n'est pas celui qui est enregistré : la seule confirmation du parcours
+    changeTitle: 'Utiliser le magasin …{tail} ?',
+    changeConfirm: 'Changer de magasin',
+    changeKeep: 'Garder l’ancien',
+    // Le serveur a refusé le magasin lu (`DRIVE_STORE_INVALID`) : rien n'est enregistré
+    readRefused:
+      'Repas n’a pas pu utiliser ce magasin. Rien n’est enregistré. Réessayez, ou saisissez l’adresse à la main.',
+    manual: 'Saisir l’adresse à la main',
     readErrors: {
       UNAVAILABLE:
-        'L’application ne peut pas lire votre magasin pour le moment. Saisissez son adresse ci-dessous.',
-      BUSY: 'Un envoi au drive est déjà en cours dans l’application. Terminez-le ou abandonnez-le, puis réessayez.',
-      CANCELLED: 'Aucun magasin choisi. Réessayez, ou saisissez son adresse ci-dessous.',
+        'L’application ne peut pas lire votre magasin pour le moment. Rien n’est enregistré. Saisissez son adresse à la main.',
+      BUSY: 'Un envoi au drive est déjà en cours dans l’application. Rien n’est enregistré. Terminez-le ou abandonnez-le, puis réessayez.',
+      CANCELLED:
+        'Aucun magasin choisi. Rien n’est enregistré. Réessayez, ou saisissez l’adresse à la main.',
       NOT_FOUND:
-        'L’application n’a pas trouvé de magasin sur la page. Choisissez-en un sur le site du drive, puis réessayez.',
-      FAILED: 'La lecture a échoué. Réessayez, ou saisissez l’adresse ci-dessous.',
+        'L’application n’a pas trouvé de magasin sur la page. Rien n’est enregistré. Choisissez-en un sur le site du drive, puis réessayez.',
+      FAILED:
+        'La lecture a échoué. Rien n’est enregistré. Réessayez, ou saisissez l’adresse à la main.',
     },
     address: 'Adresse de votre magasin',
     addressHint:
@@ -627,7 +644,7 @@ export default {
     name: 'Nom de votre magasin (facultatif)',
     nameHint: 'Pour le reconnaître : le nom de votre ville, par exemple.',
     changeWarning:
-      'C’est un autre magasin : les produits dont Repas se souvient pour l’ancien ne seront plus proposés, vous choisirez de nouveau vos produits.',
+      'Ce n’est pas votre magasin actuel. Les produits habituels de l’ancien magasin ne seront plus proposés. Vous les choisirez de nouveau.',
     save: 'Enregistrer mon magasin',
     saved: 'Magasin enregistré.',
     errors: {

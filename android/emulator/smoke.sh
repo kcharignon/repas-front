@@ -221,11 +221,11 @@ check "tant que la page n'est pas celle d'un magasin, rien n'est envoyé à l'ag
 screenshot 12-lecture-magasin-accueil
 if tap 'text="Choisir mon magasin de test"'; then ok "magasin choisi sur le faux site (lien touché)"; else ko "le lien du magasin est introuvable à l'écran"; fi
 if wait_until 30 has_report '"command": "setup"'; then ok "sur la page du magasin, l'agent reçoit le message setup par le pont"; else ko "l'agent n'a pas reçu le message setup"; fi
-if wait_until 15 ui_has 'Enregistrer ce magasin'; then ok "l'agent demande confirmation (écran « Enregistrer ce magasin dans Repas ? »)"; else ko "l'agent n'a pas affiché sa confirmation"; fi
+if wait_until 15 ui_has 'Utiliser ce magasin'; then ok "l'agent demande confirmation (écran « Utiliser ce magasin ? »)"; else ko "l'agent n'a pas affiché sa confirmation"; fi
 check "le message de la lecture du magasin a disparu (l'agent a pris la main)" ui_lacks 'Connectez-vous à Leclerc'
 sleep 1
 screenshot 13-lecture-magasin-confirmation
-if tap 'text="Enregistrer"'; then ok "« Enregistrer » touché dans l'interface de l'agent"; else ko "le bouton « Enregistrer » est introuvable"; fi
+if tap 'text="Utiliser ce magasin"'; then ok "« Utiliser ce magasin » touché dans l'interface de l'agent"; else ko "le bouton « Utiliser ce magasin » est introuvable"; fi
 if wait_until 20 store_report "$RUN_F"; then
   ok "Repas reçoit drive.result : le setup-result de l'agent (identifiant et hôte du magasin du faux site), du même runId"
 else

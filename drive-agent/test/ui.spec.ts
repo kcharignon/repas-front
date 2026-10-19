@@ -565,15 +565,25 @@ describe('diagnostic', () => {
   })
 })
 
-describe('enregistrer le magasin (mode configuration)', () => {
-  it('montre le numéro quand la page ne donne pas de libellé, et prend « Enregistrer » pour premier bouton', () => {
+describe('utiliser le magasin (mode configuration, DRV-623)', () => {
+  it('montre le numéro quand la page ne donne pas de libellé, et prend « Utiliser ce magasin » pour premier bouton', () => {
     const handle = open()
     void handle.show('store', { id: '123456', label: null })
 
-    expect(shadow().querySelector('h1')?.textContent).toBe('Enregistrer ce magasin dans Repas ?')
-    expect(shadow().textContent).toContain('magasin n° 123456')
-    expect(labels()).toEqual(['Enregistrer', 'Annuler'])
-    expect(shadow().activeElement?.textContent).toBe('Enregistrer')
+    expect(shadow().querySelector('h1')?.textContent).toBe('Utiliser ce magasin ?')
+    expect(shadow().textContent).toContain('Magasin n° 123456')
+    expect(labels()).toEqual(['Utiliser ce magasin', 'Annuler'])
+    expect(shadow().activeElement?.textContent).toBe('Utiliser ce magasin')
+  })
+
+  it('est un seul écran à un seul bouton principal, et ne parle plus d’« enregistrer » : Repas enregistre tout seul', () => {
+    const handle = open()
+    void handle.show('store', { id: '123456', label: null })
+
+    expect(shadow().querySelectorAll('button.primary')).toHaveLength(1)
+    expect(shadow().querySelectorAll('button')).toHaveLength(2)
+    expect(shadow().textContent).not.toMatch(/enregistr/i)
+    expect(shadow().textContent).toContain('rien de votre compte Leclerc ne quitte cette page')
   })
 
   it('montre le libellé quand il y en a un, tel quel même s’il contient du HTML', () => {
@@ -586,7 +596,7 @@ describe('enregistrer le magasin (mode configuration)', () => {
   })
 
   it.each([
-    ['Enregistrer', 'save'],
+    ['Utiliser ce magasin', 'save'],
     ['Annuler', 'cancel'],
   ])('« %s » rend %s', async (label, expected) => {
     const handle = open()

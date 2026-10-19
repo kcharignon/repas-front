@@ -80,12 +80,15 @@ const searchUrl = (query: string): string =>
 
 watch(listId, () => (changes.value = {}))
 
-// Sans magasin enregistré, le plan est refusé (409) : on mène aux réglages
+// Sans magasin enregistré, le plan est refusé (409) : on mène à « Choisissez votre magasin », qui nous rend la liste
 watch(
   () => plan.error.value,
   (error) => {
     if (error instanceof ApiError && error.message === 'DRIVE_NOT_CONFIGURED')
-      void router.replace({ name: 'drive-settings', query: { magasin: 'requis' } })
+      void router.replace({
+        name: 'drive-settings',
+        query: { magasin: 'requis', retour: 'envoi', liste: listId.value },
+      })
   },
   { immediate: true },
 )

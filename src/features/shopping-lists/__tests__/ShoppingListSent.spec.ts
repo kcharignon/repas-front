@@ -252,6 +252,7 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     handlers: Parameters<typeof stubApi>[0] = {},
     list = detail('ACTIVE'),
     enabled = true,
+    path = '/liste',
   ) => {
     const fetchMock = stubApi({
       ...session,
@@ -262,6 +263,7 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
       ...handlers,
     })
     const context = await signedIn()
+    await context.router.push(path)
     const wrapper = mount(ShoppingListView, {
       attachTo: document.body,
       global: { plugins: context.plugins },
@@ -329,8 +331,44 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     button('Envoyer au drive')?.click()
     await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-settings'))
 
-    expect(context.router.currentRoute.value.query.magasin).toBe('requis')
+    // Le magasin est demandé en un geste, et l'écran du magasin sait quelle liste l'attend (DRV-622)
+    expect(context.router.currentRoute.value.query).toEqual({ magasin: 'requis', retour: 'liste' })
     expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/send')
+  })
+
+  it('revenu de l’écran du magasin, rouvre la confirmation de l’envoi sans retoucher « Envoyer au drive »', async () => {
+    const { fetchMock, context } = await openActive(
+      { 'POST /api/v1/shopping-lists/l1/send': noContent },
+      detail('ACTIVE'),
+      true,
+      '/liste?envoyer=1',
+    )
+
+    await vi.waitFor(() => expect(dialogButton('Envoyer au drive')).toBeDefined())
+    // La demande est consommée : un rechargement ne rouvre pas la confirmation
+    await vi.waitFor(() => expect(context.router.currentRoute.value.query.envoyer).toBeUndefined())
+    expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/send')
+
+    dialogButton('Envoyer au drive').click()
+    await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-send'))
+    expect(requests(fetchMock, 'POST', '/send')).toHaveLength(1)
+  })
+
+  it('sans « envoyer » dans l’adresse, n’ouvre aucune confirmation tout seul', async () => {
+    await openActive()
+    await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+    await flushPromises()
+
+    expect(body().querySelector('[role="dialog"]')).toBeNull()
+  })
+
+  it('ne rouvre pas la confirmation d’une liste que le drive n’accepte pas (fonction coupée)', async () => {
+    const { context } = await openActive({}, detail('ACTIVE'), false, '/liste?envoyer=1')
+    await flushPromises()
+
+    expect(body().querySelector('[role="dialog"]')).toBeNull()
+    // Rien ne s'ouvre : la demande reste dans l'adresse, sans effet
+    expect(context.router.currentRoute.value.query.envoyer).toBe('1')
   })
 
   it('désactive l’envoi sans réseau', async () => {

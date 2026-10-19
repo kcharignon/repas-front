@@ -1,5 +1,6 @@
 // Le mode configuration (DRV-307) : l'utilisateur ouvre son drive (magasin choisi) et Repas demande à l'agent de lire ce magasin. Rien
-// n'est envoyé au site : le magasin se lit dans l'adresse de la page ; seul le magasin part vers Repas, après un « Enregistrer ».
+// n'est envoyé au site : le magasin se lit dans l'adresse de la page ; seul le magasin part vers Repas, après un seul geste, « Utiliser
+// ce magasin » (DRV-623). Repas l'enregistre alors tout seul : l'agent ne demande pas deux fois la même chose.
 import { LIMITS, PROTOCOL_VERSION, type SetupMessage } from '../../protocol'
 import { LeclercError, type LeclercCause, type RetailerAdapter } from '../leclerc'
 import { cleanText } from '../text'
@@ -21,9 +22,9 @@ function labelOf(label: string | null): string | null {
 }
 
 /**
- * Le gestionnaire du message `setup` (à brancher sur `FlowDeps.onSetup`) : lit le magasin de la page, demande « Enregistrer ce magasin
- * dans Repas ? » puis renvoie `setup-result`. Une page qui n'est pas celle d'un magasin donne `UNSUPPORTED_PAGE` ; refuser donne un
- * résultat `aborted`. Sans `store` dans le message (Repas ne connaît pas encore le magasin, DRV-320), on lit celui de la page ; avec un
+ * Le gestionnaire du message `setup` (à brancher sur `FlowDeps.onSetup`) : lit le magasin de la page, demande « Utiliser ce magasin ? »
+ * (un seul écran, DRV-623) puis renvoie `setup-result`. Une page qui n'est pas celle d'un magasin donne `UNSUPPORTED_PAGE` ; refuser
+ * donne un résultat `aborted`. Sans `store` dans le message (Repas ne connaît pas encore le magasin, DRV-320), on lit celui de la page ; avec un
  * `store`, la page doit être celle de ce magasin, sinon `STORE_MISMATCH`.
  */
 export function setupHandler(deps: SetupDeps): (message: SetupMessage) => Promise<void> {

@@ -294,7 +294,7 @@ const store: Renderer<'store'> = (props: StoreProps, answer) => {
   return {
     el: screen(
       title(S.store.title),
-      h('p', { text: S.store.text(props.label ?? S.store.unnamed(props.id)) }),
+      h('p', { class: 'shop', text: props.label ?? S.store.unnamed(props.id) }),
       h('p', { class: 'hint', text: S.store.notice }),
       actions(
         save,
