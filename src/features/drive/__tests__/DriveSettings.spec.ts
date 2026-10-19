@@ -613,7 +613,8 @@ describe('réglages du drive : l’application et les produits', () => {
     const { wrapper } = await open()
     await vi.waitFor(() => expect(wrapper.text()).toContain('Version 0.5.0'))
 
-    expect(wrapper.text()).toContain('Le drive est prêt dans cette application.')
+    // Rien à faire : « prêt » n'est pas dit (DRV-628)
+    expect(wrapper.text()).not.toContain('prêt')
     expect(wrapper.text()).not.toContain('navigateur')
     // Déjà installée : l'aide ne propose pas de l'installer, elle mène à la mise à jour
     const help = wrapper.find('a[href="/drive/aide#mise-a-jour"]')
@@ -649,6 +650,38 @@ describe('réglages du drive : l’application et les produits', () => {
     const summary = wrapper.findAll('dd').map((value) => value.text())
     // Avec produits : farine et beurre ; avec refusés : farine ; « j'en ai toujours » : sel
     expect(summary).toEqual(['2', '1', '1'])
+    expect(wrapper.find('a[href="/drive/produits"]').text()).toBe('Gérer mes produits')
+  })
+
+  it('n’écrit jamais un compteur à zéro : seulement ce qui existe (DRV-628)', async () => {
+    const { wrapper } = await open({
+      'GET /api/v1/drive/choices': () =>
+        json({
+          member: [
+            {
+              ingredientSlug: 'sel',
+              ingredientName: 'Sel',
+              haveAtHome: true,
+              accepted: [],
+              rejected: [],
+            },
+          ],
+          totalItems: 1,
+        }),
+    })
+
+    expect(wrapper.findAll('dd').map((value) => value.text())).toEqual(['1'])
+    expect(wrapper.text()).toContain('J’en ai toujours')
+    expect(wrapper.text()).not.toContain('Articles avec des produits')
+    expect(wrapper.text()).not.toContain('à ne plus proposer')
+  })
+
+  it('sans aucun produit retenu, ne garde que le lien « Gérer mes produits »', async () => {
+    const { wrapper } = await open({
+      'GET /api/v1/drive/choices': () => json({ member: [], totalItems: 0 }),
+    })
+
+    expect(wrapper.find('dl').exists()).toBe(false)
     expect(wrapper.find('a[href="/drive/produits"]').text()).toBe('Gérer mes produits')
   })
 

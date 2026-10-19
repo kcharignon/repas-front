@@ -202,7 +202,8 @@ describe('Mes produits : un ingrédient', () => {
     const { wrapper } = await detail()
 
     expect(wrapper.find('h1').text()).toBe('Farine')
-    expect(wrapper.text()).not.toContain('premier produit disponible')
+    expect(wrapper.text()).not.toContain('Repas prend le premier produit')
+    expect(wrapper.text()).not.toContain('jamais pris')
     expect(acceptedLabels(wrapper)).toEqual([A.label, B.label])
     const items = wrapper.findAll('ol li')
     expect(items[0]?.text()).toContain('Habituel')

@@ -224,8 +224,7 @@ export default {
     noneHelp: 'Créez une liste pour y planifier des recettes et noter vos courses.',
     create: 'Créer ma liste',
     completedTitle: 'Courses terminées',
-    completedHelp:
-      'Tout est dans le panier. Décochez un article pour reprendre la liste, ou commencez-en une nouvelle.',
+    completedHelp: 'Décochez un article pour reprendre la liste, ou commencez-en une nouvelle.',
     startNew: 'Nouvelle liste',
     progress: '{done} sur {total} articles dans le panier',
     sections: 'Contenu de la liste',
@@ -273,7 +272,7 @@ export default {
     noStore:
       'Vous n’avez pas encore enregistré votre magasin : sans lui, Repas ne peut se souvenir d’aucun produit.',
     settings: 'Réglages du drive',
-    none: 'Repas ne se souvient encore d’aucun produit. Les produits se choisissent sur le site du drive pendant un envoi : ils apparaîtront ici, et vous pourrez les classer.',
+    none: 'Repas ne se souvient encore d’aucun produit. Ils apparaîtront ici après un envoi.',
     missing: 'Repas ne se souvient d’aucun produit pour cet article.',
     search: 'Rechercher un article',
     noMatch: 'Aucun article ne correspond à votre recherche.',
@@ -286,13 +285,10 @@ export default {
     offline:
       'Hors connexion : les modifications sont impossibles tant que le réseau n’est pas revenu.',
     haveAtHomeSwitch: 'J’en ai toujours',
-    haveAtHomeHelp:
-      'Repas ne met rien au panier pour cet article. À l’enregistrement, ses produits sont oubliés.',
+    haveAtHomeHelp: 'Rien au panier pour cet article. Ses produits seront oubliés.',
     accepted: 'Produits acceptés',
-    acceptedHelp:
-      'Du produit habituel aux produits de remplacement ({max} au plus). Le produit habituel est pris s’il est disponible, sinon le suivant.',
-    acceptedNone:
-      'Aucun produit accepté. Un produit se choisit sur le site du drive, pendant un envoi.',
+    acceptedHelp: 'Le premier produit disponible est pris ({max} au plus).',
+    acceptedNone: 'Aucun produit accepté : choisissez-en un pendant un envoi.',
     acceptedFull:
       'Vous avez déjà {max} produits acceptés : retirez-en un avant d’en accepter un autre.',
     preferredBadge: 'Habituel',
@@ -313,7 +309,7 @@ export default {
     forget: 'Oublier cet article',
     forgetTitle: 'Oublier {name} ?',
     forgetDescription:
-      'Repas oublie les produits acceptés et ceux à ne plus proposer pour cet article. Au prochain envoi, vous choisirez de nouveau.',
+      'Repas oublie les produits de cet article : vous les choisirez de nouveau au prochain envoi.',
     forgetConfirm: 'Oublier',
     forgotten: '{name} : produits oubliés.',
     moved: '{name} : position {position} sur {total}.',
@@ -660,8 +656,7 @@ export default {
     read: 'Lire mon magasin dans l’application',
     // Avec un magasin déjà enregistré, le même geste s'appelle « Changer de magasin »
     change: 'Changer de magasin',
-    readHelp:
-      'L’application ouvre Leclerc. Choisissez votre magasin, puis touchez « Utiliser ce magasin ».',
+    readHelp: 'Choisissez votre magasin, puis touchez « Utiliser ce magasin ».',
     // Repas enregistre tout seul le magasin lu (un seul geste, dans l'application)
     readDone: 'Magasin …{tail} enregistré.',
     // Le magasin lu n'est pas celui qui est enregistré : la seule confirmation du parcours
@@ -702,7 +697,6 @@ export default {
     appVersion: 'Version {version}',
     appChecking: 'Vérification de l’application…',
     appNoAnswer: 'L’application ne répond pas : fermez-la, puis rouvrez-la.',
-    appReady: 'Le drive est prêt dans cette application.',
     appDriveOff:
       'Le drive ne peut pas fonctionner dans cette version de l’application : mettez-la à jour.',
     appMissing:
