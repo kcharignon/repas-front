@@ -23,6 +23,7 @@ import {
   SHELF_TERMS,
   faultText,
   shelfFacts,
+  shelfIds,
   shelvesRowDetail,
   type ShelfFacts,
 } from './probes'
@@ -186,8 +187,11 @@ async function probeSearches(
  * La page ne porte aucun indice de pagination connu : « page suivante » de la première reste inconnue. Un blocage, une session perdue ou un refus
  * arrête la série (« recherche non faite » pour les mots restants). Aucune erreur n'en sort.
  */
-async function probeShelves(adapter: RetailerAdapter): Promise<ShelfFacts[]> {
+async function probeShelves(
+  adapter: RetailerAdapter,
+): Promise<{ shelves: ShelfFacts[]; reply: Exclude<ProbeFacts['reply'], undefined> }> {
   const shelves: ShelfFacts[] = []
+  let reply: Exclude<ProbeFacts['reply'], undefined> = null
   let stopped = false
   const none = (term: string, fault?: string): ShelfFacts => ({
     term,
@@ -205,14 +209,38 @@ async function probeShelves(adapter: RetailerAdapter): Promise<ShelfFacts[]> {
     }
     try {
       const found = await adapter.searchProducts(term)
-      shelves.push({ ...shelfFacts(term, found), ...(index === 0 && { nextPage: null }) })
+      shelves.push({
+        ...shelfFacts(term, found),
+        ...(index === 0 && { nextPage: null, ...shelfIds(found) }),
+      })
+      // La structure de la première réponse (DRV-647) : des noms de clés, lus dans la réponse déjà reçue, sans requête de plus.
+      if (index === 0) reply = replyOf(adapter, term)
     } catch (error) {
       const fault = probedFault(error)
       stopped = stopsProbing(fault)
       shelves.push(none(term, faultText(fault)))
     }
   }
-  return shelves
+  return { shelves, reply }
+}
+
+/** La structure de la dernière réponse de recherche, ou `null` si elle ne se lit pas (DRV-647). */
+function replyOf(adapter: RetailerAdapter, term: string): Exclude<ProbeFacts['reply'], undefined> {
+  try {
+    const facts = adapter.describeLastReply()
+    return facts === null ? null : { term, facts }
+  } catch {
+    return null
+  }
+}
+
+/** Le menu des rayons de la page en cours (DRV-647), sans requête ; `null` si le DOM ne se laisse pas lire. */
+function menuOf(adapter: RetailerAdapter): Exclude<ProbeFacts['aisleMenu'], undefined> {
+  try {
+    return adapter.readAisleMenu()
+  } catch {
+    return null
+  }
 }
 
 /** Ce que la page montre de la connexion, ou rien si elle ne se laisse pas lire. */
@@ -304,7 +332,10 @@ export async function runChecks(
   await push(sessionWorks(deps.storage) ? ok('session', D.sessionOk) : ko('session', D.sessionKo))
   await push(deps.wakeLock ? ok('wakeLock', D.wakeLockOk) : ko('wakeLock', D.wakeLockKo))
 
+  // Le menu des rayons de la page (DRV-647), lu avant toute recherche : le DOM de la page telle qu'elle est arrivée.
+  const aisleMenu = menuOf(deps.adapter)
   let commonFault: ProbedSearch['fault'] = null
+  let commonReply: Exclude<ProbeFacts['reply'], undefined> = null
   let availability: AvailabilityFacts | null = null
   if (page === null) {
     await push(skipped('search', D.pageSkipped))
@@ -332,6 +363,7 @@ export async function runChecks(
       await push(skipped('content', D.searchFailed))
     } else {
       const read = found.length
+      commonReply = replyOf(deps.adapter, TEST_TERM)
       availability = availabilityFacts(found)
       const whole = found.filter(complete).length
       const variant = deps.adapter.lastSearchFacts()?.variant ?? 'a'
@@ -374,20 +406,24 @@ export async function runChecks(
         : nonsenseFault !== null && HARD_STOPS.has(nonsenseFault.code)
           ? D.shelvesStopped(faultText(nonsenseFault))
           : null
-  const shelves = shelvesSkip === null ? await probeShelves(deps.adapter) : undefined
+  const measured = shelvesSkip === null ? await probeShelves(deps.adapter) : undefined
+  const shelves = measured?.shelves
   // La disponibilité de l'échantillon et les raisons du dernier envoi (DRV-635) : des nombres et des mots fixes, jamais un libellé.
   probes = {
     ...probes,
     availability,
     ...(shelves && { shelves }),
     ...(shelvesSkip !== null && { shelvesSkipped: shelvesSkip }),
+    // D'où viennent les libellés de rayons (DRV-647) : le menu de la page, la structure de la réponse « tomate » (à défaut celle de « sel »).
+    aisleMenu,
+    reply: measured?.reply ?? commonReply,
     lastPass: readLastReasons(deps.storage),
     lastRefusals: readLastRefusals(deps.storage),
   }
 
   if (shelves === undefined) await push(skipped('shelves', shelvesSkip ?? D.pageSkipped))
   else {
-    const detail = shelvesRowDetail(shelves)
+    const detail = shelvesRowDetail(shelves, aisleMenu)
     const seen = shelves.some((shelf) => shelf.aisles.length > 0)
     await push(seen ? ok('shelves', detail) : skipped('shelves', detail))
   }

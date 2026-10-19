@@ -1,15 +1,22 @@
 // Les sondes du site réel dans le diagnostic (ticket B de l'audit du 2026-10-18). Ce fichier met en phrases ce que l'adaptateur a relevé
 // (`leclerc/probe.ts`) : des FORMES (motifs d'adresse), des NOMS (clés, en-têtes, signes), des NOMBRES (codes HTTP, produits, longueurs) et des
 // mots fixes. Jamais une valeur du site : un libellé, un cookie, un numéro de magasin, une ville, une adresse. Les phrases sont dans `ui/strings.ts`.
+// Seule exception (DRV-647, étape 0) : le libellé d'un lien de RAYON du menu de la page, texte du catalogue public, nettoyé, borné et écarté s'il
+// ressemble à une donnée (`safeAisleLabel` de l'adaptateur), et les identifiants de rayon et de famille (des nombres).
 import type {
+  AisleMenuFacts,
   ArrivalFacts,
   AttemptFacts,
   Candidate,
+  KeyShape,
   LeclercCause,
   LeclercErrorCode,
   LinkFacts,
+  ReplyFacts,
   SearchFacts,
+  VocabularyKey,
 } from '../leclerc'
+import { MAX_MENU_AISLES } from '../leclerc'
 import type { LastReason, LastRefusal } from '../flow'
 import { own } from '../own'
 import { S } from '../ui'
@@ -39,6 +46,10 @@ export interface ProbeFacts {
   shelves?: readonly ShelfFacts[]
   /** Pourquoi les rayons n'ont pas été lus (DRV-646) : un motif fixe. */
   shelvesSkipped?: string
+  /** Le menu des rayons de la page (DRV-647) : identifiants et libellés de catalogue des liens de rayon. `null` : la page ne se laisse pas lire. */
+  aisleMenu?: AisleMenuFacts | null
+  /** La structure d'une réponse de recherche (DRV-647) : le mot cherché, les noms de ses clés. */
+  reply?: { term: string; facts: ReplyFacts } | null
   /** Pourquoi le dernier envoi n'a pas mis des produits habituels au panier (DRV-635), dans l'ordre du passage. */
   lastPass?: readonly LastReason[]
   /** Ce que le panier a répondu aux produits choisis qu'il n'a pas pris, au dernier envoi (DRV-644). */
@@ -83,6 +94,9 @@ export interface ShelfFacts {
   noFamily: number
   /** Première recherche seulement : la page porte-t-elle une page suivante ? `null` : aucun indice lisible. */
   nextPage?: boolean | null
+  /** Première recherche seulement (DRV-647) : tous les identifiants de rayon et de famille distincts, pour la correspondance avec le menu. */
+  aisleIds?: readonly number[]
+  familyIds?: readonly number[]
   /** Pourquoi la recherche a échoué (code et cause : un mot fixe). */
   fault?: string
 }
@@ -113,6 +127,26 @@ export function shelfFacts(term: string, candidates: readonly Candidate[]): Shel
     families: families.groups,
     noAisle: aisles.missing,
     noFamily: families.missing,
+  }
+}
+
+/** Les identifiants de rayon et de famille distincts d'une recherche, dans l'ordre de la page (DRV-647) : des nombres, 200 au plus chacun. */
+export function shelfIds(candidates: readonly Candidate[]): {
+  aisleIds: number[]
+  familyIds: number[]
+} {
+  const distinct = (values: readonly (number | null)[]) =>
+    [
+      ...new Set(
+        values.filter(
+          (value): value is number =>
+            value !== null && Number.isInteger(value) && value >= 0 && value <= 99_999_999,
+        ),
+      ),
+    ].slice(0, 200)
+  return {
+    aisleIds: distinct(candidates.map((candidate) => candidate.aisle)),
+    familyIds: distinct(candidates.map((candidate) => candidate.family)),
   }
 }
 
@@ -220,14 +254,24 @@ const groupsText = (groups: readonly ShelfGroup[]) =>
   groups.length === 0 ? P.unknown : groups.map(({ id, count }) => `${id}:${count}`).join(' ')
 
 /** Le détail de la ligne de contrôle « Rayons vus » : « tomate 15:2 41:1 (203 produits) ; pomme … », trois groupes au plus par mot. */
-export function shelvesRowDetail(shelves: readonly ShelfFacts[]): string {
-  return shelves
+export function shelvesRowDetail(
+  shelves: readonly ShelfFacts[],
+  menu?: AisleMenuFacts | null,
+): string {
+  const words = shelves
     .map((shelf) =>
       shelf.products === null
         ? `${shelf.term} non faite`
         : `${shelf.term} ${groupsText(shelf.aisles.slice(0, 3))} (${shelf.products} produit${shelf.products > 1 ? 's' : ''})`,
     )
     .join(' ; ')
+  // DRV-647 : combien des rayons de la première recherche ont un lien numéroté dans le menu de la page.
+  const first = shelves[0]
+  if (!menu || menu.aisleIds.length === 0 || !first?.aisleIds || first.aisleIds.length === 0) {
+    return words
+  }
+  const { found, seen } = menuCoverage(first.aisleIds, menu.aisleIds)
+  return `${words} ; liens du menu : ${found}/${seen}`
 }
 
 /** Les lignes d'une recherche d'essai (DRV-646) : rayons puis familles, et pour la première l'indice de page suivante. */
@@ -263,8 +307,102 @@ function shelfLines(shelf: ShelfFacts): string[] {
   return lines
 }
 
-/** Les lignes des sondes du rapport (vide si rien n'a été relevé). */
-export function probeLines(probes: ProbeFacts | null | undefined): string[] {
+/** Les identifiants dont la valeur est rapportée dans les clés d'un produit (DRV-647) : le rayon et la famille, des nombres. */
+const VALUE_KEYS = ['iIdRayon', 'iIdFamille'] as const
+
+/** « lstProduits[12] », « objPrix{} », « sLibelleLigne1 », « ? » pour un nom qui n'a pas le style du site ; le rayon et la famille avec leur valeur. */
+function keyText(key: KeyShape, values: Readonly<Record<string, number | null>> = {}): string {
+  const name = key.name ?? '?'
+  if (key.kind === 'LIST') return `${name}[${key.size ?? '?'}]`
+  if (key.kind === 'OBJECT') return `${name}{}`
+  const value = key.name === null ? undefined : own(values, key.name)
+  return value === undefined || value === null ? name : `${name} = ${value}`
+}
+
+const keysText = (keys: readonly KeyShape[], values?: Readonly<Record<string, number | null>>) =>
+  keys.length === 0 ? P.unknown : keys.map((key) => keyText(key, values)).join(', ')
+
+const vocabularyText = (keys: readonly VocabularyKey[]) =>
+  keys.length === 0 ? 'aucune' : keys.map(({ name, count }) => `${name} (${count})`).join(', ')
+
+/** Les lignes du menu des rayons de la page (DRV-647) : comptes, formes d'adresse, une ligne par lien de rayon, clés de l'état de la page. */
+function menuLines(menu: AisleMenuFacts): string[] {
+  const lines = [
+    P.menu({
+      menu: menu.menu,
+      links: menu.links,
+      menuLinks: menu.menuLinks,
+      aisles: menu.aisleCount,
+      families: menu.families,
+    }),
+  ]
+  if (menu.shapes.length > 0) lines.push(P.menuShapes(menu.shapes.join(' ; ')))
+  for (const aisle of menu.aisles) lines.push(P.menuAisle(aisle.kind, aisle.id, aisle.label))
+  if (menu.aisleCount > menu.aisles.length) {
+    lines.push(P.menuMore(menu.aisleCount - menu.aisles.length, MAX_MENU_AISLES))
+  }
+  lines.push(P.menuKeys(vocabularyText(menu.vocabulary)))
+  return lines
+}
+
+/** Les lignes de la structure d'une réponse de recherche (DRV-647) : chemin des produits, clés du premier niveau et d'un produit. */
+function replyLines(term: string, facts: ReplyFacts): string[] {
+  const { shape } = facts
+  const lines: string[] = []
+  if (shape === null) lines.push(P.replyNoProduct(term))
+  else {
+    const path = shape.path.map((step) => `${step.name ?? '?'}${step.list ? '[]' : ''}`)
+    lines.push(P.replyPath(term, path.length === 0 ? '(premier niveau)' : path.join(' > ')))
+    lines.push(P.replyTop(term, shape.topTotal, keysText(shape.top)))
+    const values = { [VALUE_KEYS[0]]: shape.aisle, [VALUE_KEYS[1]]: shape.family }
+    lines.push(P.replyProduct(term, shape.productTotal, keysText(shape.product, values)))
+  }
+  lines.push(P.replyKeys(term, vocabularyText(facts.vocabulary)))
+  return lines
+}
+
+/** Combien des identifiants vus dans une recherche ont un lien numéroté dans le menu (DRV-647) : les identifiants manquants, 8 au plus. */
+export function menuCoverage(
+  seen: readonly number[],
+  linked: readonly number[],
+): { found: number; seen: number; missing: number[] } {
+  const known = new Set(linked)
+  const missing = seen.filter((id) => !known.has(id))
+  return { found: seen.length - missing.length, seen: seen.length, missing: missing.slice(0, 8) }
+}
+
+function coverageLine(
+  kind: 'Rayons' | 'Familles',
+  term: string,
+  seen: readonly number[],
+  linked: readonly number[],
+): string {
+  if (linked.length === 0) return P.coverageNone(kind, term)
+  const { found, missing } = menuCoverage(seen, linked)
+  return P.coverage(kind, term, found, seen.length, missing.join(', '))
+}
+
+/** Le relevé DRV-647 : menu de la page, structure de la réponse, et correspondance des rayons de la première recherche d'essai avec le menu. */
+function aisleSourceLines(probes: ProbeFacts): string[] {
+  const lines: string[] = []
+  if (probes.aisleMenu) lines.push(...menuLines(probes.aisleMenu))
+  if (probes.reply) lines.push(...replyLines(probes.reply.term, probes.reply.facts))
+  const first = probes.shelves?.[0]
+  if (probes.aisleMenu && first?.aisleIds && first.familyIds && first.aisleIds.length > 0) {
+    lines.push(coverageLine('Rayons', first.term, first.aisleIds, probes.aisleMenu.aisleIds))
+    lines.push(coverageLine('Familles', first.term, first.familyIds, probes.aisleMenu.familyIds))
+  }
+  return lines
+}
+
+/**
+ * Les lignes des sondes du rapport (vide si rien n'a été relevé). `aisleSource: false` laisse de côté le relevé DRV-647 (menu des rayons, structure de
+ * la réponse) : le test automatique, dont le rapport est borné à 20 000 caractères, ne le reprend pas ; il est au diagnostic.
+ */
+export function probeLines(
+  probes: ProbeFacts | null | undefined,
+  { aisleSource = true }: { aisleSource?: boolean } = {},
+): string[] {
   if (!probes) return []
   const lines: string[] = []
   const {
@@ -296,6 +434,7 @@ export function probeLines(probes: ProbeFacts | null | undefined): string[] {
   // Les rayons juste après la recherche du mot courant, pas après les clés et les en-têtes.
   if (shelvesSkipped !== undefined) lines.push(P.shelvesSkipped(shelvesSkipped))
   for (const shelf of shelves ?? []) lines.push(...shelfLines(shelf))
+  if (aisleSource) lines.push(...aisleSourceLines(probes))
   if (availability) {
     lines.push(P.availability(availability))
     const values =

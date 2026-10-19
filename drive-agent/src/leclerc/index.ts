@@ -5,9 +5,29 @@ export {
   LeclercAdapter,
   type CartResult,
   type LeclercDeps,
+  type ReplyFacts,
   type RetailerAdapter,
 } from './adapter'
 export { catalogId, rankByAisle } from './aisle'
+export {
+  aisleMenuFacts,
+  MAX_LABEL,
+  MAX_MENU_AISLES,
+  readPageLinks,
+  safeAisleLabel,
+  type AisleMenuFacts,
+  type MenuAisle,
+  type PageLink,
+  type PageLinks,
+} from './aisle-menu'
+export {
+  aisleVocabulary,
+  replyShape,
+  type KeyShape,
+  type PathStep,
+  type ReplyShape,
+  type VocabularyKey,
+} from './reply-shape'
 export { saysOutOfStock, type Candidate, type PricePerMeasure } from './candidate'
 export type { CartProductFacts } from './cart'
 export { contentFromLabel, parseContent, type Content, type ContentSource } from './content'

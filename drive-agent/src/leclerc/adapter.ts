@@ -6,6 +6,7 @@ import {
   readPageTotal,
   type CartProductFacts,
 } from './cart'
+import { aisleMenuFacts, type AisleMenuFacts, type PageLinks, readPageLinks } from './aisle-menu'
 import { type Candidate, toCandidate } from './candidate'
 import { httpCause } from './causes'
 import {
@@ -31,6 +32,7 @@ import {
   pagePhrases,
   type SearchFacts,
 } from './probe'
+import { aisleVocabulary, replyShape, type ReplyShape, type VocabularyKey } from './reply-shape'
 import { readSearchPage } from './search-page'
 import {
   applicable,
@@ -119,6 +121,22 @@ export interface RetailerAdapter {
    * après `ENTRY_WAIT_MS`. Sans lien ni bouton vérifié, ne fait rien et se résout aussitôt. Aucune écriture.
    */
   followEntry(): Promise<void>
+  /**
+   * Le menu des rayons de la page en cours (DRV-647, étape 0) : les liens de rayon, leur identifiant et leur libellé de catalogue, et les clés de l'état
+   * de la page qui parlent de rayon ou de filtre. Lu dans le DOM tel qu'il est : aucune requête, aucun clic.
+   */
+  readAisleMenu(): AisleMenuFacts
+  /**
+   * La forme de l'état embarqué de la dernière réponse de recherche (DRV-647, étape 0) : noms des clés du premier niveau et d'un produit, chemin
+   * jusqu'aux produits, clés qui parlent de rayon ou de filtre. Aucune requête ; `null` avant toute recherche ou sans produit.
+   */
+  describeLastReply(): ReplyFacts | null
+}
+
+/** Ce que la dernière réponse de recherche laisse voir de sa structure (DRV-647) : des noms de clés et des nombres. */
+export interface ReplyFacts {
+  shape: ReplyShape | null
+  vocabulary: VocabularyKey[]
 }
 
 export interface LeclercDeps extends PacerDeps {
@@ -137,6 +155,8 @@ export interface LeclercDeps extends PacerDeps {
   navigate?: (url: string) => void
   /** Le bouton « Commencer mes courses » sans adresse de la page, à cliquer (DRV-629). Absent, un tel bouton n'est pas touché. */
   startButton?: () => StartButton | null
+  /** Les liens de la page et le bloc du menu « Rayons », lus dans le DOM (DRV-647). Absente, la page n'a aucun lien. */
+  pageLinks?: () => PageLinks
 }
 
 /** Le temps laissé à une navigation pour quitter la page avant de la dire sans effet. */
@@ -158,6 +178,8 @@ export class LeclercAdapter implements RetailerAdapter {
   /** Le chemin avec la ville que la page donne, une fois trouvé (la page ne change pas de magasin pendant la vie de l'agent). */
   private searchBase: SearchBase | null = null
   private facts: SearchFacts | null = null
+  /** Le texte de la dernière réponse de recherche, gardé en mémoire seulement pour `describeLastReply` (remplacé à chaque recherche). */
+  private lastReplyText: string | null = null
   /** L'adresse que `readEntry` a vérifiée en dernier, `null` sans lien sûr : la seule que `followEntry` suive. */
   private entryUrl: string | null = null
   /** Le bouton que `readEntry` a trouvé en dernier, `null` sans bouton : le seul que `followEntry` clique. */
@@ -179,8 +201,10 @@ export class LeclercAdapter implements RetailerAdapter {
     const text = query.trim()
     if (text === '') return []
     this.facts = null
+    this.lastReplyText = null
     const paths = this.paths()
     const { reply, variant, url, attempts } = await this.requestSearch(text, paths)
+    this.lastReplyText = reply.text
     const facts = describeSearchReply(variant, reply, url, paths.store.id)
     facts.attempts = attempts
     this.facts = facts
@@ -337,6 +361,22 @@ export class LeclercAdapter implements RetailerAdapter {
 
   lastSearchFacts(): SearchFacts | null {
     return this.facts
+  }
+
+  readAisleMenu(): AisleMenuFacts {
+    let links: PageLinks = { menu: false, links: [] }
+    try {
+      links = this.deps.pageLinks?.() ?? links
+    } catch {
+      // Le DOM ne se laisse pas lire : aucun lien.
+    }
+    return aisleMenuFacts(links, this.deps.location, this.deps.pageText())
+  }
+
+  describeLastReply(): ReplyFacts | null {
+    const text = this.lastReplyText
+    if (text === null) return null
+    return { shape: replyShape(text), vocabulary: aisleVocabulary(text) }
   }
 
   async exploreSearchVariants(query: string): Promise<AttemptFacts[]> {
@@ -505,6 +545,7 @@ export function browserDeps(win: Window & typeof globalThis): LeclercDeps {
     location: win.location,
     navigate: (url) => win.location.assign(url),
     startButton: () => findStartButton(win.document),
+    pageLinks: () => readPageLinks(win.document),
     pageText: () => new win.XMLSerializer().serializeToString(win.document),
     navigation: () => navigationOf(win),
     cookies: () => cookiesOf(win),
