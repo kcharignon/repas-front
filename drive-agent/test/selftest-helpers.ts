@@ -148,6 +148,7 @@ export function shop(shelves: Shelves, options: ShopOptions = {}) {
     exploreSearchVariants: () => Promise.resolve([]),
     readAisleMenu: () => NO_MENU,
     describeLastReply: () => null,
+    aisleChoices: () => [],
     readEntry: () => ({ kind: 'NONE' }),
     followEntry: () => Promise.resolve(),
   }

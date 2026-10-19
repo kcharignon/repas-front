@@ -20,6 +20,7 @@ import {
   NONSENSE_TERM,
   type ProbedSearch,
   type ProbeFacts,
+  SHELF_GROUPS,
   SHELF_TERMS,
   faultText,
   shelfFacts,
@@ -187,11 +188,14 @@ async function probeSearches(
  * La page ne porte aucun indice de pagination connu : « page suivante » de la première reste inconnue. Un blocage, une session perdue ou un refus
  * arrête la série (« recherche non faite » pour les mots restants). Aucune erreur n'en sort.
  */
-async function probeShelves(
-  adapter: RetailerAdapter,
-): Promise<{ shelves: ShelfFacts[]; reply: Exclude<ProbeFacts['reply'], undefined> }> {
+async function probeShelves(adapter: RetailerAdapter): Promise<{
+  shelves: ShelfFacts[]
+  reply: Exclude<ProbeFacts['reply'], undefined>
+  aisleLabels: Exclude<ProbeFacts['aisleLabels'], undefined>
+}> {
   const shelves: ShelfFacts[] = []
   let reply: Exclude<ProbeFacts['reply'], undefined> = null
+  let aisleLabels: Exclude<ProbeFacts['aisleLabels'], undefined> = null
   let stopped = false
   const none = (term: string, fault?: string): ShelfFacts => ({
     term,
@@ -214,14 +218,30 @@ async function probeShelves(
         ...(index === 0 && { nextPage: null, ...shelfIds(found) }),
       })
       // La structure de la première réponse (DRV-647) : des noms de clés, lus dans la réponse déjà reçue, sans requête de plus.
-      if (index === 0) reply = replyOf(adapter, term)
+      if (index === 0) {
+        reply = replyOf(adapter, term)
+        aisleLabels = labelsOf(adapter, term, found)
+      }
     } catch (error) {
       const fault = probedFault(error)
       stopped = stopsProbing(fault)
       shelves.push(none(term, faultText(fault)))
     }
   }
-  return { shelves, reply }
+  return { shelves, reply, aisleLabels }
+}
+
+/** Le libellé résolu des rayons les plus fournis d'une recherche (DRV-647, étape 1) : ce que l'écran de choix montrerait, sans requête. */
+function labelsOf(
+  adapter: RetailerAdapter,
+  term: string,
+  found: Awaited<ReturnType<RetailerAdapter['searchProducts']>>,
+): Exclude<ProbeFacts['aisleLabels'], undefined> {
+  try {
+    return { term, choices: adapter.aisleChoices(found).slice(0, SHELF_GROUPS) }
+  } catch {
+    return null
+  }
 }
 
 /** La structure de la dernière réponse de recherche, ou `null` si elle ne se lit pas (DRV-647). */
@@ -417,6 +437,7 @@ export async function runChecks(
     // D'où viennent les libellés de rayons (DRV-647) : le menu de la page, la structure de la réponse « tomate » (à défaut celle de « sel »).
     aisleMenu,
     reply: measured?.reply ?? commonReply,
+    aisleLabels: measured?.aisleLabels ?? null,
     lastPass: readLastReasons(deps.storage),
     lastRefusals: readLastRefusals(deps.storage),
   }

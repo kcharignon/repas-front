@@ -10,6 +10,7 @@ import {
   type SetupResultMessage,
 } from '../protocol'
 import { Flow, type FlowDeps, type StorageLike } from '../src/flow'
+import { countAisles } from '../src/leclerc'
 import type {
   Candidate,
   CartResult,
@@ -215,6 +216,8 @@ export function fakeAdapter(
     entry?: EntryReading
     /** Appelé quand l'agent suit le lien ; peut ne jamais rendre la main (la page a quitté le script). */
     onFollow?: () => void | Promise<void>
+    /** Le libellé de chaque rayon (DRV-647) ; un rayon absent n'a pas de libellé lisible. */
+    aisleLabels?: Record<number, string>
   } = {},
 ) {
   const calls: string[] = []
@@ -275,6 +278,11 @@ export function fakeAdapter(
     exploreSearchVariants: () => Promise.resolve([]),
     readAisleMenu: () => NO_MENU,
     describeLastReply: () => null,
+    aisleChoices: (candidates) =>
+      countAisles(candidates).map(({ id, count }) => {
+        const label = options.aisleLabels?.[id] ?? null
+        return { id, count, label, source: label === null ? null : 'NAVIGATE' }
+      }),
     async setCartQuantity(id, quantity): Promise<CartResult> {
       calls.push(`cart ${id} ${quantity}`)
       inFlight += 1

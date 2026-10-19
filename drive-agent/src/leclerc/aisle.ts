@@ -36,3 +36,17 @@ export function rankByAisle(
   }
   return [...groups.flat(), ...rest]
 }
+
+/**
+ * Les rayons présents dans une recherche (DRV-647) : chaque identifiant de rayon valable et son nombre de produits, du plus fourni au moins fourni, à
+ * égalité dans l'ordre de la page. Les produits sans rayon ne comptent dans aucun. Une fonction pure.
+ */
+export function countAisles(candidates: readonly Candidate[]): { id: number; count: number }[] {
+  const counts = new Map<number, number>()
+  for (const candidate of candidates) {
+    const id = catalogId(candidate.aisle)
+    if (id !== null) counts.set(id, (counts.get(id) ?? 0) + 1)
+  }
+  // Le tri est stable : à égalité, l'ordre d'apparition (celui de la page) est gardé.
+  return [...counts].map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count)
+}

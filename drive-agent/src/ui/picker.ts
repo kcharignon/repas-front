@@ -29,7 +29,24 @@ export interface PickerItem {
    * `refused` : l'utilisateur ne veut jamais ce produit, il ne se choisit pas.
    */
   state: 'ok' | 'out' | 'refused'
+  /** Le rayon du site du produit (DRV-647), pour le filtre ; `null` ou absent : le produit n'apparaît que sous « Tous ». */
+  aisle?: number | null
 }
+
+/** Un rayon de la rangée de filtres (DRV-647) : son identifiant, son libellé à afficher (déjà replié par l'appelant) et son nombre de produits. */
+export interface AisleChip {
+  id: number
+  label: string
+  count: number
+}
+
+/** La rangée de filtres (DRV-647) : les rayons présents, du plus fourni au moins fourni, et celui qui est choisi (`null` : « Tous »). */
+export interface AisleRow {
+  chips: readonly AisleChip[]
+  selected: number | null
+}
+
+const NO_ROW: AisleRow = { chips: [], selected: null }
 
 export interface PickerProps {
   /** « 800 g » : la quantité demandée par la liste. */
@@ -52,12 +69,16 @@ export interface PickerProps {
   items: readonly PickerItem[]
   /** Un message à montrer au-dessus de la liste (le site ne répond pas, le panier a refusé…). */
   notice: string | null
+  /** La rangée de filtres par rayon (DRV-647) ; absente ou de moins de deux rayons, rien ne s'affiche. */
+  aisles?: AisleRow
 }
 
 export interface PickerHooks {
   choose: (id: string) => void
   search: (query: string) => void
   never: (id: string, on: boolean) => void
+  /** Le rayon choisi dans la rangée a changé (DRV-647), `null` : « Tous ». Aucune requête : la liste se filtre d'elle-même. */
+  aisle?: (id: number | null) => void
 }
 
 export interface Picker {
@@ -67,6 +88,7 @@ export interface Picker {
     items: readonly PickerItem[],
     notice: string | null,
     asked?: string | null,
+    aisles?: AisleRow,
   ) => void
   /** Occupé : plus rien ne se touche et `message` est annoncé ; `null` rend la main. */
   busy: (message: string | null) => void
@@ -177,6 +199,12 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
   const status = h('p', { class: 'hint', attrs: { role: 'status' } })
   const note = h('p', { class: 'notice', hidden: true, attrs: { role: 'alert' } })
   const list = h('ul', { class: 'candidates', attrs: { 'aria-label': S.picker.list } })
+  // La rangée de filtres par rayon (DRV-647) : « Tous » puis les rayons présents ; un toucher filtre la liste déjà reçue, sans requête.
+  const shelf = h('div', {
+    class: 'aisles',
+    hidden: true,
+    attrs: { role: 'group', 'aria-label': S.picker.aisles },
+  })
 
   const gone =
     props.gone.length === 0
@@ -201,6 +229,9 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
   // La sentinelle : un élément sans hauteur sous la liste ; quand elle approche de la zone visible, le lot suivant s'ajoute.
   const more = h('div', { class: 'more', hidden: true, attrs: { 'aria-hidden': 'true' } })
   let all: readonly PickerItem[] = []
+  /** Les produits que la liste montre : tous, ou ceux du rayon choisi. */
+  let visible: readonly PickerItem[] = []
+  let current: AisleRow = NO_ROW
   let shown = 0
   let waiting = false
   const watcher =
@@ -220,15 +251,15 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
   }
   /** Ajoute le lot suivant À LA SUITE de la liste : les fiches déjà là ne sont pas touchées. */
   function showMore(): void {
-    const end = Math.min(shown + BATCH_SIZE, all.length)
+    const end = Math.min(shown + BATCH_SIZE, visible.length)
     if (end > shown) {
-      const batch = all
+      const batch = visible
         .slice(shown, end)
         .map((item, offset) => row(item, shown + offset, hooks.choose, waiting))
       shown = end
       append(list, ...batch)
     }
-    more.hidden = shown >= all.length
+    more.hidden = shown >= visible.length
     if (watcher === null) return
     watcher.unobserve(more)
     // Observer de nouveau redonne l'état tout de suite : si la sentinelle est encore près de l'écran (écran haut), le lot suivant suit.
@@ -238,11 +269,63 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
   const root = watcher === null ? zone.getRootNode() : null
   root?.addEventListener('scroll', scrolled, true)
 
-  const results: Picker['results'] = (query, items, notice, asked = null) => {
+  /** Refait la liste depuis le début avec les produits du rayon choisi (ou tous). */
+  function fill(): void {
     clear(list)
-    all = items
+    visible =
+      current.selected === null ? all : all.filter((item) => item.aisle === current.selected)
     shown = 0
     showMore()
+  }
+  /** Le bouton choisi est enfoncé (`aria-pressed`), les autres non. */
+  function press(): void {
+    for (const button of shelf.querySelectorAll<HTMLElement>('button')) {
+      const id = button.dataset.aisle === undefined ? null : Number(button.dataset.aisle)
+      button.setAttribute('aria-pressed', current.selected === id ? 'true' : 'false')
+    }
+  }
+  /** Redessine la rangée : rien sous deux rayons ; sinon « Tous » et chaque rayon, celui qui est choisi enfoncé (`aria-pressed`). */
+  function drawShelf(): void {
+    clear(shelf)
+    shelf.hidden = current.chips.length < 2
+    if (shelf.hidden) return
+    const chip = (id: number | null, text: string) =>
+      h('button', {
+        text,
+        class: 'chip',
+        disabled: waiting,
+        attrs: {
+          type: 'button',
+          'aria-pressed': current.selected === id ? 'true' : 'false',
+          ...(id !== null && { 'data-aisle': String(id) }),
+        },
+        on: {
+          click: () => {
+            // Retoucher le rayon choisi revient à « Tous ».
+            const next = id === null || current.selected === id ? null : id
+            if (next === current.selected) return
+            current = { ...current, selected: next }
+            hooks.aisle?.(next)
+            press()
+            fill()
+          },
+        },
+      })
+    append(
+      shelf,
+      chip(null, S.picker.allAisles(all.length)),
+      ...current.chips.map(({ id, label, count }) => chip(id, S.picker.aisleChip(label, count))),
+    )
+  }
+
+  const results: Picker['results'] = (query, items, notice, asked = null, aisles = NO_ROW) => {
+    all = items
+    // Un rayon choisi qui n'est pas dans ces résultats ne filtre rien : « Tous ».
+    const present =
+      aisles.chips.length >= 2 && aisles.chips.some(({ id }) => id === aisles.selected)
+    current = { chips: aisles.chips, selected: present ? aisles.selected : null }
+    drawShelf()
+    fill()
     status.textContent =
       items.length === 0
         ? S.picker.none(query)
@@ -260,10 +343,11 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
     for (const button of list.querySelectorAll('button')) {
       button.disabled = on || button.hasAttribute(OFF)
     }
+    for (const button of shelf.querySelectorAll('button')) button.disabled = on
     if (on) status.textContent = message
   }
 
-  results(props.query, props.items, props.notice, props.asked)
+  results(props.query, props.items, props.notice, props.asked, props.aisles)
   append(
     zone,
     h(
@@ -274,6 +358,7 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
       gone,
       form,
       status,
+      shelf,
       note,
       list,
       more,

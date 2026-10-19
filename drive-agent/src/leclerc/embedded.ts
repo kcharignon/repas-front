@@ -16,6 +16,18 @@ export interface StructuredContent {
   totalUnit: string | null
 }
 
+/**
+ * Les textes du rayon que le site joint à un produit (noms mesurés par le diagnostic 0.32.0, DRV-647 ; valeurs jamais vues) : `sLibelleUrlNaviguerRayon`,
+ * `sUrlVoirRayon` et `sCategorie`, bornés à [MAX_AISLE_TEXT] caractères, chacun `null` s'il manque.
+ */
+export interface AisleTexts {
+  navigate: string | null
+  url: string | null
+  category: string | null
+}
+
+const MAX_AISLE_TEXT = 300
+
 /** Un produit tel que la page le donne, avant toute interprétation (prix en euros, libellés bruts). */
 export interface RawProduct {
   id: string
@@ -45,6 +57,8 @@ export interface RawProduct {
   /** `iIdRayon` et `iIdFamille` (DRV-646) : des identifiants numériques, mesurés par le diagnostic. */
   aisle: number | null
   family: number | null
+  /** Les textes du rayon du produit (DRV-647), présents seulement si l'un d'eux est lu : d'où l'agent tire le libellé du rayon. */
+  aisleTexts?: AisleTexts
   /** Présent seulement si au moins un champ du contenu net structuré est lu. */
   structured?: StructuredContent
 }
@@ -189,6 +203,12 @@ function buildProduct(id: string, slices: string[]): RawProduct {
   const text = (name: string) => first((slice) => readField(slice, name))
   const number = (name: string) => first((slice) => parseLooseNumber(readField(slice, name)))
   const measureText = text('sPrixParUniteDeMesure')
+  const bounded = (name: string) => text(name)?.slice(0, MAX_AISLE_TEXT) ?? null
+  const aisleTexts: AisleTexts = {
+    navigate: bounded('sLibelleUrlNaviguerRayon'),
+    url: bounded('sUrlVoirRayon'),
+    category: bounded('sCategorie'),
+  }
   const structured: StructuredContent = {
     unitMeasure: text('sUniteMesure'),
     unitContent: number('nrContenanceUnitaire'),
@@ -210,6 +230,7 @@ function buildProduct(id: string, slices: string[]): RawProduct {
     thumbnail: text('sUrlVignetteProduit'),
     aisle: number('iIdRayon'),
     family: number('iIdFamille'),
+    ...(Object.values(aisleTexts).some((value) => value !== null) && { aisleTexts }),
     ...(Object.values(structured).some((value) => value !== null) ? { structured } : {}),
   }
 }

@@ -111,6 +111,44 @@ const CHOOSER: ChooserProps = {
   mount: mounting(PICKER),
 }
 
+// DRV-647 : la rangée des rayons du site au-dessus des résultats (« Tous » puis les rayons présents, le rayon appris choisi d'avance), des libellés
+// inventés, dont un très long, et le repli « Rayon 1 » d'un rayon sans libellé lisible.
+const AISLE_OF = [41, 7, 41, 15, 7, 41, 60, 7]
+const AISLE_ITEMS: PickerItem[] = Array.from({ length: 8 }, (_unused, index) => ({
+  id: String(1003000 + index),
+  name:
+    AISLE_OF[index] === 41
+      ? `Tomates de test n° ${index + 1}`
+      : `Sauce tomate de test n° ${index + 1}`,
+  label2: '500 g',
+  details: ['500 g', '2,10 €', '4,20 € / kg'],
+  promo: null,
+  explain: '500 g par produit : 1 produit.',
+  state: 'ok',
+  photo: photo(3001 + index),
+  aisle: AISLE_OF[index] ?? null,
+}))
+const CHOOSER_AISLES: ChooserProps = {
+  ingredient: 'Tomate',
+  position: 1,
+  total: 4,
+  mount: mounting({
+    ...PICKER,
+    need: '500 g',
+    query: 'tomate',
+    items: AISLE_ITEMS,
+    aisles: {
+      chips: [
+        { id: 41, label: 'Fruits et légumes', count: 3 },
+        { id: 7, label: 'Conserves', count: 3 },
+        { id: 15, label: 'Épicerie salée, sauces et condiments', count: 1 },
+        { id: 60, label: 'Rayon 1', count: 1 },
+      ],
+      selected: 41,
+    },
+  }),
+}
+
 // Un ingrédient dont le produit habituel n'est plus disponible : bandeau, cases « Ne plus proposer », message du site.
 const CHOOSER_GONE: ChooserProps = {
   ingredient: 'Farine de blé',
@@ -227,6 +265,7 @@ const SCREENS: Record<string, () => unknown> = {
       mount: mounting({ ...PICKER, query: 'biscuit', items: MANY }),
     }),
   'chooser-gone': () => ui.show('chooser', CHOOSER_GONE),
+  'chooser-aisles': () => ui.show('chooser', CHOOSER_AISLES),
   diagnostic: () =>
     ui.show('diagnostic', {
       copy: () => Promise.resolve(true),
