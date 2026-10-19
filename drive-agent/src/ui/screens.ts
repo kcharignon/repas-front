@@ -1,6 +1,7 @@
 // Les écrans : chacun reçoit ses données et un rappel `answer`, et rend ses nœuds. Aucune logique d'envoi ici.
 import { append, clear, h, type Child } from './dom'
 import { own } from '../own'
+import { photoFrame } from './photo'
 import { CAUSE_TEXTS, ERROR_TEXTS, errorParts, S } from './strings'
 import type {
   ChallengeProps,
@@ -333,7 +334,16 @@ const placement: Renderer<'placement'> = (props: PlacementProps, answer) => {
   return {
     el: screen(
       title(S.placement.title),
-      h('p', { text: S.placement.text(props.productLabel, props.ingredient) }),
+      h(
+        'div',
+        { class: 'media' },
+        photoFrame(props.photo, props.productLabel),
+        h(
+          'div',
+          { class: 'text' },
+          h('p', { text: S.placement.text(props.productLabel, props.ingredient) }),
+        ),
+      ),
       h(
         'div',
         { class: 'stack' },

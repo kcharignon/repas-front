@@ -77,6 +77,8 @@ export interface ChooserProps {
 export interface PlacementProps {
   ingredient: string
   productLabel: string
+  /** L'adresse de la photo du produit choisi (DRV-633), `null` s'il n'y en a pas ; revérifiée à l'affichage. */
+  photo?: string | null | undefined
 }
 
 /** Une ligne du diagnostic : le contrôle, son résultat en texte (le résultat n'est jamais dit par la seule couleur) et son détail. */

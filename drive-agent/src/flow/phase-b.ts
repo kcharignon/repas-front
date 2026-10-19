@@ -129,6 +129,7 @@ function itemOf(line: PlanLine, candidate: Candidate, refused: ReadonlySet<strin
     label2: second === '' || repeatsSize ? null : second,
     details,
     promo: promo === null ? null : S.picker.promo(formatPrice(promo)),
+    photo: candidate.imageUrl,
     explain: explain(line, candidate),
     state: refused.has(candidate.id) ? 'refused' : candidate.stock === 0 ? 'out' : 'ok',
   }
@@ -275,6 +276,7 @@ async function settleLine(
       const role = await ui.show('placement', {
         ingredient: line.name,
         productLabel: labelOf(candidate),
+        photo: candidate.imageUrl,
       })
       if (role === null) continue
       placement = role
