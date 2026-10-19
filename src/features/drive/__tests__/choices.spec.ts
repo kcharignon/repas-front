@@ -50,6 +50,30 @@ describe('buildChoiceBatches', () => {
     })
   })
 
+  it('nettoie les libellés avant de les envoyer : un agent plus ancien peut laisser passer un caractère invisible que le back refuse (et le back rejette alors tout le lot)', () => {
+    // Given : trait d'union conditionnel, opérateurs invisibles, largeur nulle, marque d'ordre des octets, espace insécable
+    const [batch] = batchOf([
+      {
+        ingredientSlug: 'poivre',
+        outcome: 'CHOSEN',
+        quantity: 1,
+        placement: 'PRIMARY',
+        product: { id: '1', label: 'Poi\u00ADvre\u2061 noir\u200B 50\u00A0g' },
+        rejected: [
+          { id: '2', label: 'Moutarde\u2062 forte\uFEFF' },
+          { id: '3', label: '\u00AD\u200B' },
+        ],
+      },
+    ])
+
+    // Then : les refus d'abord, puis l'ajout ; un libellé qui n'était fait que d'invisibles devient l'identifiant (le back exige un libellé)
+    expect(batch?.map((intent) => intent.product?.label)).toEqual([
+      'Moutarde forte',
+      '3',
+      'Poivre noir 50 g',
+    ])
+  })
+
   it('ne mémorise rien pour « cette fois seulement », les lignes passées, indisponibles ou en échec', () => {
     expect(
       batchOf([
