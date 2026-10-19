@@ -737,6 +737,9 @@ screenshot e26-finaliser-dans-l-application
 # La première navigation fait disparaître le bandeau.
 if tap 'text="Panier"'; then ok "touche : « Panier » (une première navigation dans le site)"; else ko "le lien « Panier » est introuvable dans la page du faux magasin"; fi
 if wait_until 20 ui_lacks "$BASKET_BANNER"; then ok "le bandeau a disparu à la première navigation"; else ko "le bandeau est resté après une navigation"; fi
+# Le retour revient d'abord à l'accueil du magasin (l'historique du site), puis à Repas.
+adb shell input keyevent KEYCODE_BACK
+wait_until 20 ui_has 'text="Accueil du magasin"' || ko "le retour n'a pas ramené l'accueil du magasin"
 adb shell input keyevent KEYCODE_BACK
 if wait_until 20 ui_has 'Faux Repas de test'; then ok "retour : l'écran Repas revient"; else ko "l'écran Repas n'est pas revenu"; fi
 
