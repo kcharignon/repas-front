@@ -22,7 +22,7 @@ test('remplit le panier à la cadence du chantier, avec des requêtes de la form
 
   // When : l'utilisateur lit le récapitulatif, puis commence
   await openWithFragment(page, fake, agentCode, plan)
-  await expect(page.getByRole('heading', { name: 'Prêt à remplir ton panier' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Prêt à remplir votre panier' })).toBeVisible()
   expect(fake.paced(), 'rien ne part avant « Commencer »').toEqual([])
   await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
@@ -181,11 +181,11 @@ test('demande la quantité quand elle est à vérifier, et passe la ligne si l�
   // When : 4 farines, puis on passe le sucre
   await openWithFragment(page, fake, agentCode, plan)
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByRole('heading', { name: 'Vérifie la quantité' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Vérifiez la quantité' })).toBeVisible()
   await page.getByLabel('Nombre de produits (de 1 à 99)').fill('4')
   await page.getByRole('button', { name: 'Valider' }).click()
   await expect(page.getByText('Combien de « Sucre')).toBeVisible()
-  await page.getByRole('button', { name: 'Passer' }).click()
+  await page.getByRole('button', { name: 'Pas cette fois' }).click()
   await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
 
   // Then
@@ -226,7 +226,7 @@ test('met au panier le nombre calculé sur le contenu lu sur le site, pas celui 
   expectPoliteAgent(fake)
 
   // And : l'écran de fin signale la seule ligne recalculée
-  await expect(page.getByText('Contenu différent de celui mémorisé')).toBeVisible()
+  await expect(page.getByText('Contenu différent de celui dont Repas se souvenait')).toBeVisible()
   await expect(page.getByText('Farine : 3 au lieu de 30')).toBeVisible()
   await expect(page.getByText('Sucre :')).toHaveCount(0)
 
@@ -259,7 +259,7 @@ test('garde le nombre du plan quand le contenu lu sur le site ne se compare pas,
 
   // Then : comme avant, le plan fait foi, et rien n'est signalé
   expect(fake.cart()).toEqual({ 1000031: 5, 1000014: 2 })
-  await expect(page.getByText('Contenu différent de celui mémorisé')).toHaveCount(0)
+  await expect(page.getByText('Contenu différent de celui dont Repas se souvenait')).toHaveCount(0)
   expectPoliteAgent(fake)
 })
 

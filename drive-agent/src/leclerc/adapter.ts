@@ -171,7 +171,7 @@ export class LeclercAdapter implements RetailerAdapter {
 
   /**
    * La recherche, avec son repli : la requête courante (ou la dernière forme qui a passé), et tant que le site répond HTTP 400 (recette réelle
-   * du 2026-10-18 : un GET que le banc d'essai faisait passer répondait 400), chacune des autres formes une fois (`search-request.ts`), une
+   * du 2026-10-18 : un GET qui passait la veille dans un essai jetable répondait 400), chacune des autres formes une fois (`search-request.ts`), une
    * requête à la fois à la cadence normale. Toute autre réponse arrête le repli. Les tentatives sont notées pour le diagnostic.
    */
   private async requestSearch(

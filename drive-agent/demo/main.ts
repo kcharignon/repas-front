@@ -58,7 +58,7 @@ const CANDIDATES: PickerItem[] = [
     label2: null,
     details: [],
     promo: null,
-    explain: 'Contenu inconnu : tu choisiras la quantité.',
+    explain: 'Contenu inconnu : vous choisirez la quantité.',
     state: 'ok',
   },
 ]
@@ -90,7 +90,7 @@ const CHOOSER: ChooserProps = {
   mount: mounting(PICKER),
 }
 
-// Un ingrédient dont le produit habituel n'est plus disponible : bandeau, cases « Ne plus jamais prendre », message du site.
+// Un ingrédient dont le produit habituel n'est plus disponible : bandeau, cases « Ne plus proposer », message du site.
 const CHOOSER_GONE: ChooserProps = {
   ingredient: 'Farine de blé',
   position: 1,
@@ -106,7 +106,7 @@ const CHOOSER_GONE: ChooserProps = {
     checked: new Set(['2000002']),
     query: 'farine',
     items: CANDIDATES.slice(0, 2),
-    notice: 'Leclerc n’a pas pu mettre ce produit au panier. Choisis-en un autre.',
+    notice: 'Leclerc n’a pas pu mettre ce produit au panier. Choisissez-en un autre.',
   }),
 }
 
@@ -170,10 +170,10 @@ const SCREENS: Record<string, () => unknown> = {
       done: 3,
       current: 'Farine de blé',
       log: [
-        'Sel : à la maison',
-        'Huile : passée',
+        'Sel : j’en ai toujours',
+        'Huile : pas cette fois',
         'Beurre : ajouté',
-        'Lait : ajouté, produit de secours',
+        'Lait : ajouté, produit de remplacement',
       ],
     }),
   quantity: () =>
@@ -250,7 +250,7 @@ const SCREENS: Record<string, () => unknown> = {
         { name: 'Sucre en poudre', atLeast: null },
       ],
     }),
-  // Leclerc a mis trop de temps à répondre pour une ligne (ticket K).
+  // Leclerc a mis trop de temps à répondre pour un article (ticket K).
   'end-slow': () =>
     ui.show('end', {
       outcome: 'partial',

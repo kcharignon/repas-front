@@ -1,6 +1,6 @@
 // La forme de la requête de recherche. Recette réelle du 2026-10-18 : `GET <chemin de la page>/recherche.aspx?TexteRecherche=sel` répond HTTP 400
-// sur une vraie page de magasin, alors que le banc d'essai du matin (`drive-agent/lab/src/store.ts` : `searchUrl`, et `http.ts` : `getPage`) envoyait
-// la même requête et passait. Ce fichier fige la requête courante (`a`, celle du banc d'essai : chemin de la page AVEC la ville, `Accept: text/html,
+// sur une vraie page de magasin, alors qu'un essai jetable du matin (le banc d'essai du favori, retiré depuis, dans l'historique Git) envoyait
+// la même requête et passait. Ce fichier fige la requête courante (`a`, celle de cet essai : chemin de la page AVEC la ville, `Accept: text/html,
 // application/xhtml+xml`, les cookies de la session) et liste les variantes essayées quand le site répond 400, une par différence possible :
 //   b  le même GET sans aucun en-tête personnalisé (fetch par défaut) ;
 //   c  avec `Accept: */*` (identique à `b` sur le réseau : n'est que sondée, jamais un repli) ;
@@ -11,7 +11,7 @@
 //   f  sans l'en-tête Referer (`referrerPolicy: 'no-referrer'`) ;
 //   h  sans cache (`cache: 'no-store'`).
 // L'adresse absolue (origine + chemin) ne fait pas une variante : le navigateur résout un chemin relatif contre l'origine de la page et envoie
-// exactement la même requête (c'est ce que faisait le banc d'essai).
+// exactement la même requête (c'est ce que faisait l'essai du matin).
 // Toutes sont des GET sans corps : aucune n'écrit. Chacune est une adresse de l'hôte de la page (un chemin qui commence par un seul « / »).
 
 /**

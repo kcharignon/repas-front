@@ -19,7 +19,7 @@ test('fait choisir un nouveau produit dans la liste de l’agent, calcule le nom
 
   // When : la recherche affiche les produits ; on choisit le poivre moulu de 40 g
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByText('Il te faut : 80 g.')).toBeVisible()
+  await expect(page.getByText('Il vous faut : 80 g.')).toBeVisible()
   const card = page.getByRole('listitem').filter({ hasText: 'Poivre noir moulu' })
   await expect(card).toContainText('80 g demandés, 40 g par produit : 2')
   expect(fake.cart(), 'l’agent ne choisit jamais seul').toEqual({})
@@ -89,12 +89,12 @@ test('remplace un produit devenu indisponible : nouvelle recherche, « ne plus j
   await expect(page.getByText('Ces produits ne sont plus disponibles')).toBeVisible()
 
   // When : l'utilisateur ne veut plus jamais ce produit, cherche autre chose et choisit le sarrasin comme produit de secours
-  await page.getByLabel('Ne plus jamais prendre Farine de blé T45').check()
+  await page.getByLabel('Ne plus proposer Farine de blé T45').check()
   await page.getByLabel('Chercher autre chose').fill('farine sarrasin')
   await page.getByRole('button', { name: 'Chercher', exact: true }).click()
   await expect(page.getByText('Résultats pour « farine sarrasin »')).toBeVisible()
   await page.getByRole('button', { name: 'Choisir' }).click()
-  await page.getByRole('button', { name: 'Produit de secours' }).click()
+  await page.getByRole('button', { name: 'Produit de remplacement' }).click()
   await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
 
   // Then : 1 kg demandé, 500 g par produit, donc 2 ; le produit refusé et l'indisponible partent avec le résultat
@@ -131,7 +131,7 @@ test('laisse passer une ligne ou dire « j’en ai toujours », même quand la r
   // When
   await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByText('Aucun produit trouvé pour « gnocchis »')).toBeVisible()
-  await page.getByRole('button', { name: 'Passer cette fois' }).click()
+  await page.getByRole('button', { name: 'Pas cette fois' }).click()
   await expect(page.getByRole('listitem').filter({ hasText: 'Sel fin' })).toBeVisible()
   await page.getByRole('button', { name: 'J’en ai toujours' }).click()
   await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
@@ -170,7 +170,7 @@ for (const [form, cart] of [
     // When
     await page.getByRole('button', { name: 'Commencer' }).click()
     await expect(page.getByText('Aucun produit trouvé pour « gnocchis »')).toBeVisible()
-    await page.getByRole('button', { name: 'Passer cette fois' }).click()
+    await page.getByRole('button', { name: 'Pas cette fois' }).click()
     await expect(page.getByRole('listitem').filter({ hasText: 'Sel fin' })).toBeVisible()
     await page.getByRole('button', { name: 'J’en ai toujours' }).click()
     await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
@@ -201,7 +201,7 @@ test('annule le passage depuis le choix : la ligne reste à choisir et Repas le 
   await page.getByRole('button', { name: 'Commencer' }).click()
 
   // When
-  await page.getByRole('button', { name: 'Annuler le passage' }).click()
+  await page.getByRole('button', { name: 'Annuler l’envoi' }).click()
   await expect(page.getByRole('heading', { name: 'Envoi arrêté' })).toBeVisible()
   await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
 

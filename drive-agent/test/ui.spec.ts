@@ -143,7 +143,7 @@ describe('la demande de vérification de l’anti-robot (ticket K)', () => {
     void handle.show('challenge', {})
 
     expect(shadow().querySelector('h1')?.textContent).toBe('Leclerc demande une vérification')
-    expect(shadow().textContent).toContain('Fais-la dans la page, puis touche Reprendre.')
+    expect(shadow().textContent).toContain('Faites-la dans la page, puis touchez Reprendre.')
     expect(labels()).toEqual(['Reprendre', 'Arrêter'])
     expect(shadow().activeElement?.textContent).toBe('Reprendre')
   })
@@ -206,7 +206,7 @@ describe('écran d’accueil', () => {
     press(label)
 
     await expect(answer).resolves.toBe(expected)
-    expect(shadow().querySelector('h1')?.textContent).toBe('Ouvre d’abord Repas')
+    expect(shadow().querySelector('h1')?.textContent).toBe('Ouvrez d’abord Repas')
   })
 })
 
@@ -219,10 +219,10 @@ describe('récapitulatif et confirmation', () => {
     expect(text).toContain('2 produits connus à mettre au panier')
     expect(text).toContain('1 nouveau produit à choisir')
     expect(text).toContain('1 « j’en ai toujours »')
-    expect(text).toContain('0 ignoré')
+    expect(text).toContain('0 « pas cette fois »')
     expect(text).toContain('Farine : connu (Farine T55 1 kg)')
     expect(text).toContain('Poivre : à choisir')
-    expect(text).toContain('Repas ne vide pas ton panier Leclerc.')
+    expect(text).toContain('Repas ne vide pas votre panier Leclerc.')
     expect(shadow().querySelector('details')).not.toBeNull()
   })
 
@@ -254,7 +254,7 @@ describe('reprise', () => {
   ])('« %s » rend « %s »', async (label, expected) => {
     const handle = open()
     const answer = handle.show('resume', { done: 3, total: 8 })
-    expect(shadow().textContent).toContain('3 lignes sur 8 sont déjà faites')
+    expect(shadow().textContent).toContain('3 articles sur 8 sont déjà faits')
 
     press(label)
 
@@ -281,12 +281,12 @@ describe('progression', () => {
   it('porte le titre du remplissage du panier, ou celui que l’appelant donne (le test automatique)', () => {
     const handle = open()
     void handle.show('progress', props)
-    expect(shadow().querySelector('h1, h2')?.textContent).toBe('Remplissage du panier')
+    expect(shadow().querySelector('h1, h2')?.textContent).toBe('Votre panier se remplit')
 
     void handle.show('progress', { ...props, title: 'Test automatique' })
 
     expect(shadow().querySelector('h1, h2')?.textContent).toBe('Test automatique')
-    expect(shadow().textContent).not.toContain('Remplissage du panier')
+    expect(shadow().textContent).not.toContain('Votre panier se remplit')
   })
 
   it('se met à jour sans refaire l’écran et ne garde que les cinq dernières actions', () => {
@@ -386,7 +386,7 @@ describe('quantité à vérifier', () => {
 
       expect(settled).not.toHaveBeenCalled()
       expect(shadow().querySelector('[role="alert"]')?.textContent).toBe(
-        'Entre un nombre entier de 1 à 99.',
+        'Entrez un nombre entier de 1 à 99.',
       )
       expect(input().getAttribute('aria-invalid')).toBe('true')
     },
@@ -396,7 +396,7 @@ describe('quantité à vérifier', () => {
     const handle = open()
     const answer = handle.show('quantity', props)
 
-    press('Passer')
+    press('Pas cette fois')
 
     await expect(answer).resolves.toBeNull()
   })
@@ -417,13 +417,13 @@ describe('choix de produit (hôte)', () => {
     expect(shadow().textContent).toContain('Poivre (2 sur 5)')
     expect(shadow().querySelector('.zone')?.textContent).toBe('contenu de test')
     expect(mount).toHaveBeenCalledOnce()
-    expect(labels()).toEqual(['Passer cette fois', 'J’en ai toujours', 'Annuler le passage'])
+    expect(labels()).toEqual(['Pas cette fois', 'J’en ai toujours', 'Annuler l’envoi'])
   })
 
   it.each([
-    ['Passer cette fois', { kind: 'skip' }],
+    ['Pas cette fois', { kind: 'skip' }],
     ['J’en ai toujours', { kind: 'have' }],
-    ['Annuler le passage', { kind: 'cancel' }],
+    ['Annuler l’envoi', { kind: 'cancel' }],
   ])('« %s » rend %j', async (label, expected) => {
     const handle = open()
     const answer = handle.show('chooser', { ...base, mount: () => undefined })
@@ -549,7 +549,7 @@ describe('diagnostic', () => {
     press('Copier le rapport')
     await vi.waitFor(() =>
       expect(shadow().querySelector('[role="status"]')?.textContent).toBe(
-        'Copie impossible : sélectionne le texte du rapport et copie-le.',
+        'Copie impossible : sélectionnez le texte du rapport et copiez-le.',
       ),
     )
 
@@ -606,11 +606,11 @@ describe('rôle du produit choisi', () => {
     void handle.show('placement', props)
 
     expect(shadow().querySelector('h1')?.textContent).toBe(
-      'Que fais-tu de « Farine de test 1 kg » ?',
+      'Que faites-vous de « Farine de test 1 kg » ?',
     )
     expect(labels()).toEqual([
-      'Mon nouveau produit préféré',
-      'Produit de secours',
+      'Mon nouveau produit habituel',
+      'Produit de remplacement',
       'Seulement cette fois',
       'Revenir à la liste',
     ])
@@ -618,12 +618,12 @@ describe('rôle du produit choisi', () => {
       const hint = shadow().getElementById(button.getAttribute('aria-describedby') ?? '')
       expect(hint?.textContent?.length).toBeGreaterThan(10)
     }
-    expect(shadow().activeElement?.textContent).toBe('Mon nouveau produit préféré')
+    expect(shadow().activeElement?.textContent).toBe('Mon nouveau produit habituel')
   })
 
   it.each([
-    ['Mon nouveau produit préféré', 'PRIMARY'],
-    ['Produit de secours', 'FALLBACK'],
+    ['Mon nouveau produit habituel', 'PRIMARY'],
+    ['Produit de remplacement', 'FALLBACK'],
     ['Seulement cette fois', 'ONCE'],
     ['Revenir à la liste', null],
   ])('« %s » rend %s', async (label, expected) => {
@@ -699,7 +699,7 @@ describe('liste de produits dans l’écran de choix', () => {
       ]),
     ).toEqual([
       ['Choisir', false],
-      ['Produit refusé', true],
+      ['Ne plus proposer', true],
     ])
     press('Choisir')
 
@@ -735,10 +735,10 @@ describe('liste de produits dans l’écran de choix', () => {
     expect(status()).toBe('Résultats pour « oeuf » (rien trouvé pour « œuf »)')
 
     picker.results('œuf', [], null, null)
-    expect(status()).toBe('Aucun produit trouvé pour « œuf ». Essaie un autre mot.')
+    expect(status()).toBe('Aucun produit trouvé pour « œuf ». Essayez un autre mot.')
 
     picker.results('œuf', [], null, 'oeuf')
-    expect(status()).toBe('Aucun produit trouvé pour « œuf ». Essaie un autre mot.')
+    expect(status()).toBe('Aucun produit trouvé pour « œuf ». Essayez un autre mot.')
     expect(zone.querySelector<HTMLInputElement>('#chercher')?.value).toBe('poivre')
   })
 })
@@ -753,10 +753,10 @@ describe('erreurs', () => {
   })
 
   it('dit quoi faire quand Leclerc ralentit les requêtes ou quand le site a changé', () => {
-    expect(ERROR_TEXTS.BLOCKED.text).toContain('Attends')
-    expect(ERROR_TEXTS.BLOCKED.text).toContain('recharge la page')
-    expect(ERROR_TEXTS.CONTRACT_CHANGED.text).toContain('Mets à jour')
-    expect(ERROR_TEXTS.NOT_LOGGED_IN.text).toContain('Connecte-toi')
+    expect(ERROR_TEXTS.BLOCKED.text).toContain('Attendez')
+    expect(ERROR_TEXTS.BLOCKED.text).toContain('rechargez la page')
+    expect(ERROR_TEXTS.CONTRACT_CHANGED.text).toContain('Mettez à jour')
+    expect(ERROR_TEXTS.NOT_LOGGED_IN.text).toContain('Connectez-vous')
   })
 
   it('le site mobile (cause PAGE_MOBILE) dit « Ce n’est pas la version ordinateur du site » et quoi faire (ticket J)', () => {
@@ -820,7 +820,7 @@ describe('fin', () => {
       'Ajoutés : 2',
       'Choisis : 1',
       'J’en ai toujours : 1',
-      'Passés : 0',
+      'Pas cette fois : 0',
       'Indisponibles : 0',
       'Échecs : 0',
     ]) {
@@ -851,7 +851,9 @@ describe('fin', () => {
     })
 
     const note = shadow().querySelector('.notice')
-    expect(note?.querySelector('strong')?.textContent).toBe('Contenu différent de celui mémorisé')
+    expect(note?.querySelector('strong')?.textContent).toBe(
+      'Contenu différent de celui dont Repas se souvenait',
+    )
     expect([...(note?.querySelectorAll('li') ?? [])].map((item) => item.textContent)).toEqual([
       'Farine : 10 au lieu de 1',
       `${HOSTILE} : 2 au lieu de 4`,
@@ -906,8 +908,8 @@ describe('fin', () => {
     const note = notes.find((item) => item.textContent?.includes('illisible'))
     expect(note?.querySelector('strong')?.textContent).toBe('Quantité au panier illisible')
     expect([...(note?.querySelectorAll('li') ?? [])].map((item) => item.textContent)).toEqual([
-      'Farine — au moins 4 gardés, vérifie dans ton panier',
-      'Sucre — vérifie dans ton panier',
+      'Farine — au moins 4 gardés, vérifiez dans votre panier',
+      'Sucre — vérifiez dans votre panier',
     ])
   })
 
@@ -924,7 +926,7 @@ describe('fin', () => {
 
     const note = shadow().querySelector('.notice')
     expect(note?.textContent).toBe(
-      'Leclerc a mis trop de temps à répondre. Relance l’envoi dans un moment : ce qui est déjà au panier n’est pas touché.',
+      'Leclerc a mis trop de temps à répondre. Relancez l’envoi dans un moment : ce qui est déjà au panier n’est pas touché.',
     )
   })
 
