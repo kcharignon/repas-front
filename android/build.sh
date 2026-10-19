@@ -6,7 +6,8 @@
 #   ./build.sh apk               l'APK de débogage dans dist/repas-drive-debug.apk, avec sa taille et son empreinte SHA-256
 #   ./build.sh release           l'APK signé dans dist/repas-drive.apk ; refuse sans clé de signature ni étiquette de version
 #   ./build.sh verify-release    contrôle l'APK signé (dist/repas-drive.apk, ou le fichier donné en argument) : signature et empreinte du
-#                                certificat, version tirée de l'étiquette, une seule permission, ni débogage ni plan d'essai, agent intact ;
+#                                certificat, version tirée de l'étiquette, une seule permission, ni débogage ni plan d'essai ni fournisseur
+#                                d'identité factice, agent intact ;
 #                                écrit dist/release-facts.env (version, empreintes) pour les notes de la release (DRV-315)
 #   ./build.sh release-selftest  prouve le refus sans clé, la réussite avec une clé jetable créée à l'instant et les refus du contrôle
 #
@@ -93,6 +94,7 @@ normalize_fingerprint() { printf '%s' "$1" | tr -d ': \t\r\n' | tr 'A-F' 'a-f'; 
 #     jamais celui de la clé de débogage publique ;
 #   - paquet, nom et code de version conformes à l'étiquette (le code est recalculé ici, indépendamment du Kotlin), minSdk 26, targetSdk 36 ;
 #   - une seule permission (Internet), non débogable, `BuildConfig.DEBUG` faux, origine de Repas de production, aucun plan d'essai ;
+#   - la vraie connexion avec Google (Credential Manager) et jamais le fournisseur d'identité factice de débogage (AUTH-011) ;
 #   - l'agent embarqué est celui de android/agent.js.sha384.
 verify_release() {
   local apk=${1:-$DIST/repas-drive.apk}
@@ -152,12 +154,25 @@ verify_release() {
   agent_actual="sha384-$(unzip -p "$apk" assets/agent.js | openssl dgst -sha384 -binary | base64 -w0)"
   agent_expected=$(tr -d ' \t\r\n' < agent.js.sha384)
   [ "$agent_actual" = "$agent_expected" ] || fail "l'agent embarqué n'a pas l'empreinte de android/agent.js.sha384 (embarqué : $agent_actual)."
-  ! unzip -p "$apk" 'classes*.dex' | grep -aq 'repas\.test' || fail "l'APK contient l'origine du faux Repas des essais (repas.test)."
+  # Le code de l'APK, lu une fois dans un fichier : `unzip | grep -q` sous `pipefail` rendrait un faux « absent » quand grep trouve et coupe le tuyau.
+  local dex
+  dex=$(mktemp)
+  unzip -p "$apk" 'classes*.dex' > "$dex" || { rm -f "$dex"; fail "le code de l'APK (classes*.dex) est illisible."; }
+  local dex_problem=""
+  if grep -aq 'repas\.test' "$dex"; then
+    dex_problem="l'APK contient l'origine du faux Repas des essais (repas.test)."
+  elif grep -aq 'FakeGoogleIdentity' "$dex"; then
+    dex_problem="l'APK contient le fournisseur d'identité factice de débogage (FakeGoogleIdentity) : sa connexion avec Google ne serait pas la vraie."
+  elif ! grep -aq 'CredentialManagerGoogleIdentity' "$dex"; then
+    dex_problem="l'APK n'a pas la connexion avec Google par Credential Manager (CredentialManagerGoogleIdentity)."
+  fi
+  rm -f "$dex"
+  [ -z "$dex_problem" ] || fail "$dex_problem"
   local config=app/build/generated/source/buildConfig/release/eu/kantin/repas/drive/BuildConfig.java
   [ -f "$config" ] || fail "la configuration de construction ($config) manque : contrôler l'APK juste après make android-release."
   grep -q 'boolean DEBUG = false;' "$config" || fail "BuildConfig.DEBUG n'est pas faux : le menu de débogage serait dans l'APK."
   grep -qF 'REPAS_ORIGIN = "https://kantin.eu/";' "$config" || fail "l'origine de Repas de l'APK n'est pas celle de la production."
-  echo "   agent intact ($agent_actual), ni plan d'essai ni menu de débogage, origine de production."
+  echo "   agent intact ($agent_actual), ni plan d'essai ni menu de débogage, origine de production, connexion avec Google réelle (pas le fournisseur factice)."
 
   # Les faits publics de cette publication, pour les notes de la release.
   local sha256 fingerprint
@@ -253,7 +268,14 @@ $(tail -n 25 <<<"$output")"
   cp "$apk" "$work/debug-signed.apk"
   "$BUILD_TOOLS/apksigner" sign --ks debug.keystore --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android "$work/debug-signed.apk"
   REFUSED_APK="$work/debug-signed.apk" refused "clé de débogage publique" ANDROID_VERSION_TAG=$tag ANDROID_EXPECTED_CERT_SHA256=$debug_fingerprint
-  echo "   accepté avec le bon certificat ; refusé avec un autre, sans empreinte attendue, avec une autre version et avec la clé de débogage."
+  # Une copie qui embarquerait le fournisseur d'identité factice de débogage (AUTH-011), re-signée de la bonne clé, est refusée elle aussi.
+  mkdir -p "$work/fake"
+  printf 'dex\nLeu/kantin/repas/drive/FakeGoogleIdentity;\n' > "$work/fake/classes99.dex"
+  cp "$apk" "$work/fake-identity.apk"
+  jar --update --no-manifest --file "$work/fake-identity.apk" -C "$work/fake" classes99.dex
+  "$BUILD_TOOLS/apksigner" sign --ks "$work/test.p12" --ks-type PKCS12 --ks-pass "pass:$password" --ks-key-alias test --key-pass "pass:$password" "$work/fake-identity.apk"
+  REFUSED_APK="$work/fake-identity.apk" refused "fournisseur d'identité factice" ANDROID_VERSION_TAG=$tag ANDROID_EXPECTED_CERT_SHA256=$cert
+  echo "   accepté avec le bon certificat ; refusé avec un autre, sans empreinte attendue, avec une autre version, avec la clé de débogage et avec le fournisseur d'identité factice."
 }
 
 # L'agent du drive est un actif de l'application (DRV-313) : construit par Node avant Gradle (`make agent-build`), monté dans ../drive-agent/dist.

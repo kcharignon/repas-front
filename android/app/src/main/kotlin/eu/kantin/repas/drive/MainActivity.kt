@@ -43,6 +43,9 @@ import androidx.webkit.WebViewFeature
  * - **Passage du plan (DRV-314)** : `drive.start` ouvre [DriveActivity] sur le magasin du plan ; le résultat revient ici, d'où `drive.result`
  *   est posté à la page (mis en file, et gardé par [DrivePass], si la page s'est rechargée entre-temps). Un passage interrompu (application
  *   fermée ou tuée, moins de 24 h) se reprend ou s'abandonne à la réouverture.
+ * - **Connexion avec Google (AUTH-011)** : `google.signIn` fait obtenir un jeton d'identité par la plateforme ([IdentityProviders], par-dessus la
+ *   coquille), jamais par une page de Google dans la WebView ; [SignInRelay] en tient une seule à la fois et rend `google.result` ou
+ *   `google.error` à la page qui l'a demandée. Le jeton n'est ni gardé ni mis en file, et rien de la demande n'est écrit au journal.
  */
 class MainActivity : Activity() {
     private lateinit var webView: WebView
@@ -64,6 +67,9 @@ class MainActivity : Activity() {
     private var startsSinceMessage = 0
     private var loadFailed = false
     private var resumeDialog: AlertDialog? = null
+
+    /** La connexion avec Google (AUTH-011) : créée à la première demande de la page, abandonnée quand l'écran se ferme. */
+    private val signInRelay = lazy { SignInRelay(IdentityProviders.create(this)) }
 
     private val repasApp get() = application as RepasApp
 
@@ -116,6 +122,8 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        // Une feuille de choix du compte encore ouverte : la demande est abandonnée, sa réponse n'arrivera pas à une page disparue.
+        if (signInRelay.isInitialized()) signInRelay.value.cancel()
         resumeDialog?.dismiss()
         (webView.parent as? ViewGroup)?.removeView(webView)
         webView.destroy()
@@ -252,12 +260,14 @@ class MainActivity : Activity() {
             }
             NativeRequest.AppInfo -> {
                 val version = installedVersion()
-                post(NativeBridge.appInfo(version.name, version.code, repasApp.agentLoad.status == AgentStatus.READY))
+                post(NativeBridge.appInfo(version.name, version.code, repasApp.agentLoad.status == AgentStatus.READY, google = true))
             }
             NativeRequest.AppMenu -> openMenu()
             is NativeRequest.DriveStart -> startPass(request.plan)
             is NativeRequest.DriveSetup -> startPass(request.setup)
             is NativeRequest.DriveCancel -> cancelPass(request.runId)
+            // La réponse va à la page qui a demandé, par son propre canal : si elle a disparu entre-temps, le jeton est perdu, jamais gardé.
+            is NativeRequest.GoogleSignIn -> signInRelay.value.request(request) { answer -> postTo(proxy, answer) }
         }
         // Après la réponse : la page a un écouteur (elle vient de nous écrire), un résultat en attente peut lui être livré.
         flushOutbox(pageIsAlive = true)
@@ -329,8 +339,12 @@ class MainActivity : Activity() {
     }
 
     private fun post(text: String) {
+        reply?.let { postTo(it, text) }
+    }
+
+    private fun postTo(channel: JavaScriptReplyProxy, text: String) {
         try {
-            reply?.postMessage(text)
+            channel.postMessage(text)
         } catch (_: RuntimeException) {
             // La page a disparu entre-temps : rien à faire.
         }

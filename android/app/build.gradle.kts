@@ -194,8 +194,14 @@ tasks.configureEach {
 }
 
 dependencies {
-    // Seule bibliothèque à l'exécution : les indications client (client hints) de la WebView, pour le mode ordinateur.
+    // Les indications client (client hints) de la WebView, pour le mode ordinateur.
     implementation("androidx.webkit:webkit:1.17.1")
+    // La connexion avec Google (AUTH-011) : Credential Manager et sa feuille native de choix du compte, jamais une page de Google dans une
+    // WebView. Versions stables (la 1.7.0 de Credential Manager n'est qu'en préversion) ; elles n'ajoutent aucune permission. `googleid` reste
+    // en 1.2.0 : la 1.2.1 est compilée par Kotlin 2.4, que le compilateur épinglé ici (2.2.21) refuse de lire ; elle suivra la montée de Kotlin.
+    implementation("androidx.credentials:credentials:1.6.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.2.0")
     // Le cœur : les règles en Kotlin pur (`android/core`, AUTH-015). Il ne dépend jamais de l'application.
     implementation(project(":core"))
     testImplementation("junit:junit:4.13.2")

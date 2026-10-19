@@ -1,9 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Une seule permission : Internet, pour afficher Repas et le drive. Jamais d'autre (DRV-312, DRV-317) : le front n'envoie ni fichier ni photo, donc
      pas de sélecteur de fichiers ni d'accès au stockage. -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- La connexion avec Google (AUTH-011) n'ajoute aucune permission. Les bibliothèques de Credential Manager en apportent trois, que l'on retire
+         ici : l'empreinte digitale et la biométrie (androidx.biometric, pour les clés d'accès, que Repas n'utilise pas : un jeton d'identité Google
+         n'en a pas besoin) et la permission propre des récepteurs dynamiques d'androidx.core. `build.sh verify-release` refuse toute permission
+         autre qu'Internet dans l'APK de publication. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" tools:node="remove" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" tools:node="remove" />
+    <permission android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" tools:node="remove" />
+    <uses-permission android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" tools:node="remove" />
 
     <application
         android:name=".RepasApp"
