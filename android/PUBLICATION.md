@@ -2,6 +2,8 @@
 
 Procédure **pour l'utilisateur**, une étape à la fois (l'assistant te guide et vérifie après chaque étape). Elle sert **une fois** (clé, secrets, `assetlinks.json`), puis à chaque nouvelle version (étapes 5 à 8). Ticket DRV-315, workflow [`android-release.yml`](../.github/workflows/android-release.yml).
 
+> **Mise à jour du 2026-10-20 (phase bêta, jusqu'à la 1.0.0).** Le déploiement du site n'a plus d'approbation manuelle (plus de « Approve and deploy ») et l'assistant principal crée lui-même les releases du site et pousse l'étiquette `android-vX.Y.Z`, une fois le back et le site déployés quand le protocole change. Les passages ci-dessous où c'est « toi » qui publies, pousses ou approuves décrivent l'ancien régime. Inchangé : la clé de signature et les secrets restent à toi, jamais dans le chat ; les sous-agents ne publient rien ; le passage à la 1.0.0 remettra une approbation. Détail : `CLAUDE.md`, « Livrer en production ».
+
 ## Ce qu'il faut savoir avant de commencer
 
 - La version « de production » de l'application est un **fichier `.apk` signé avec ta clé**, publié dans une *release* GitHub. Elle est installée à la main, sans Google Play. Les mises à jour se font en installant le nouveau fichier **par-dessus**.
