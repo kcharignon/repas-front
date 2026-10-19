@@ -204,8 +204,21 @@ Ce que le workflow a déjà contrôlé avant de publier : agent embarqué = `and
 2. Sur le téléphone : télécharge le nouveau `repas-drive.apk` comme à l'étape 7 et installe-le **sans désinstaller** : Android propose « Mettre à jour » et **garde tout** (connexion à Repas, connexion à Leclerc).
 3. Vérifie le numéro de version (étape 7, point 5).
 4. « Application non installée » ou conflit : la version installée n'est pas signée de ta clé (une pré-version de débogage). Désinstalle-la, puis installe la nouvelle. Si c'est bien la tienne, vérifie que le numéro de la nouvelle version est **plus grand** que celui installé.
+5. **Une fois la release publiée** (pas avant : sinon les téléphones seraient invités à une version qui n'existe pas encore), l'assistant dit au serveur quelle est la dernière version : `APP_LATEST_VERSION`, écrit par le script `ecrire-app-version.sh` du skill `repas-ops` (dépôt back), comme `DRIVE_ENABLED`. Les personnes dont l'application est plus ancienne voient alors, en haut de « Moi », « Une nouvelle version de l'application est prête. » et un bouton « Mettre à jour » vers le mode d'emploi (DRV-637) ; l'administrateur les voit « À mettre à jour » dans la liste des comptes. Rien n'est bloqué.
 
-*(La vérification automatique « Une nouvelle version est disponible » dans l'application n'existe pas encore : `version.json`, publié avec chaque release, est fait pour elle. En attendant, la mise à jour se fait à la main, comme ci-dessus.)*
+*(L'application envoie sa version au serveur une fois par connexion, au démarrage : c'est ce qui permet le bandeau et la colonne de l'administration. La vérification « Une nouvelle version est disponible » faite par l'application elle-même n'existe pas encore : `version.json`, publié avec chaque release, est fait pour elle. La mise à jour se fait toujours à la main, comme ci-dessus.)*
+
+## Le site s'adapte à l'application (principe)
+
+Le site et l'application se publient séparément, et une personne peut garder une ancienne application longtemps sans le savoir. Le site, lui, est toujours à jour : il est chargé en direct dans l'application. **C'est donc le site qui s'adapte à l'application, jamais l'inverse.**
+
+- Une fonction du site qui a besoin d'une application récente (un message nouveau du pont, un champ que l'agent embarqué doit connaître, une ouverture de Leclerc que l'ancienne application ne sait pas suivre) **demande d'abord sa version à l'application** (`driveBridge.info()`), la compare **nombre par nombre** (`compareVersions` de `src/features/drive/appVersion.ts` : `0.1.10` est au-dessus de `0.1.9`) et, pour une application plus ancienne ou qui ne dit pas sa version, **retombe sur un comportement sûr** : ce qui marchait avant, ou une invitation à mettre à jour, jamais une erreur muette.
+- Les seuils sont écrits **à un seul endroit**, `src/features/drive/appVersion.ts` :
+  - `MIN_DRIVE_APP_VERSION` : en dessous, l'envoi au drive n'est pas proposé (une phrase « Mets à jour l'application… », un bouton vers le mode d'emploi, les recherches à la main), et la liste n'est jamais verrouillée ;
+  - `RAYON_HINTS_APP_VERSION` : en dessous, le site n'envoie pas les rayons conseillés (un agent plus ancien refuserait tout le plan) et la liste garde l'ordre du site.
+  Une nouvelle exigence ajoute sa constante à côté, avec sa raison et la première version publiée qui la remplit ; on ne relève un seuil que pour un changement de l'application, jamais pour un changement du seul site.
+- La version donnée par l'application n'accorde aucun droit : elle ne sert qu'à choisir le bon comportement et à informer (bandeau de « Moi », administration).
+- Avec ce principe, l'ordre de publication ne casse rien pour l'utilisateur : un site récent sait parler à une ancienne application. La seule exception reste l'étape 5 (« Ordre quand le protocole change ») : un champ nouveau envoyé par l'application à un site qui ne le connaît pas encore.
 
 ## Si la clé est perdue, volée ou à changer
 

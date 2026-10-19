@@ -6,6 +6,8 @@ import {
   compareVersions,
   isDriveAppVersionEnough,
   isRayonHintsAppVersion,
+  isReportableAppVersion,
+  offersAppUpdate,
 } from '../appVersion'
 
 describe('compareVersions (comparaison numérique, jamais lexicale)', () => {
@@ -81,5 +83,77 @@ describe('isRayonHintsAppVersion (DRV-642)', () => {
     expect(compareVersions(RAYON_HINTS_APP_VERSION, MIN_DRIVE_APP_VERSION)).toBeGreaterThanOrEqual(
       0,
     )
+  })
+})
+
+describe('isReportableAppVersion (DRV-637 : ce que le serveur retient)', () => {
+  it.each(['0.1.8', '0.1.10', '1.0.0', '10.20.30'])('%s est envoyée', (version) => {
+    expect(isReportableAppVersion(version)).toBe(true)
+  })
+
+  it.each([
+    '0.0.0-dev',
+    '0.1.8-debug',
+    '0.1.8+abc',
+    ' 0.1.8',
+    '0.1',
+    '0.1.8.1',
+    'v0.1.8',
+    '1234567890.123456789.1',
+    '',
+    null,
+    undefined,
+  ])('%j n’est pas envoyée', (version) => {
+    expect(isReportableAppVersion(version)).toBe(false)
+  })
+})
+
+describe('offersAppUpdate (DRV-637 : le bandeau de « Moi »)', () => {
+  const facts = (latest: string | null, minimum: string | null, outdated = false) => ({
+    latest,
+    minimum,
+    outdated,
+  })
+
+  it.each([
+    ['0.1.8', facts('0.1.10', null), true],
+    ['0.1.9', facts('0.1.10', null), true],
+    ['0.1.10', facts('0.1.10', null), false],
+    ['0.1.11', facts('0.1.10', null), false],
+    ['0.1.100', facts('0.1.15', null), false],
+    ['0.1.8', facts(null, '0.1.9'), true],
+    ['0.1.9', facts(null, '0.1.9'), false],
+    ['0.1.9', facts('0.1.12', '0.1.8'), true],
+    ['0.1.12', facts('0.1.12', '0.1.8'), false],
+  ])('application %s, serveur %j : %s', (running, update, offered) => {
+    expect(offersAppUpdate(running, update)).toBe(offered)
+  })
+
+  it('compare la version qui tourne, pas celle que le serveur a retenue (juste après une mise à jour)', () => {
+    expect(offersAppUpdate('0.1.10', facts('0.1.10', null, true))).toBe(false)
+    expect(offersAppUpdate('0.1.8', facts('0.1.10', null, false))).toBe(true)
+  })
+
+  it.each([null, undefined, '', 'abc'])(
+    'version de l’application inconnue (%j) : le calcul du serveur sert de repli',
+    (running) => {
+      expect(offersAppUpdate(running, facts('0.1.10', null, true))).toBe(true)
+      expect(offersAppUpdate(running, facts('0.1.10', null, false))).toBe(false)
+    },
+  )
+
+  it('le serveur ne connaît aucune version publiée : jamais de bandeau, même si `outdated` dit vrai', () => {
+    expect(offersAppUpdate('0.1.8', facts(null, null, true))).toBe(false)
+    expect(offersAppUpdate(null, facts(null, null, true))).toBe(false)
+    expect(offersAppUpdate('0.1.8', { outdated: true })).toBe(false)
+  })
+
+  it('sans réponse du serveur (ancienne copie de la session) : pas de bandeau', () => {
+    expect(offersAppUpdate('0.1.8', undefined)).toBe(false)
+    expect(offersAppUpdate('0.1.8', null)).toBe(false)
+  })
+
+  it('une construction de développement est le code courant : pas de bandeau', () => {
+    expect(offersAppUpdate('0.0.0-dev', facts('0.1.10', '0.1.9', true))).toBe(false)
   })
 })

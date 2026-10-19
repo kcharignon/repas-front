@@ -91,6 +91,10 @@ export default {
       'Le compte {email} disparaît avec ses listes de courses, ses recettes et ses ingrédients personnalisés, comme s’il n’avait jamais existé. Les recettes qu’un autre utilisateur en a copiées restent. Cette action est irréversible.',
     userStats: '{recipes} recettes, {ingredients} ingrédients, {lists} listes',
     since: 'inscrit le {date}',
+    // La version de l'application Android vue pour ce compte (DRV-637)
+    appVersion: 'Application : {version}',
+    appVersionUnknown: '—',
+    appOutdated: 'À mettre à jour',
     errors: {
       name: 'Donne un nom.',
       image: 'Indique une image.',
@@ -805,6 +809,11 @@ export default {
       updateLink: 'Mettre à jour l’application',
       updateHelp: 'Ouvrir la dernière version.',
     },
+    // En haut de « Moi », dans l'application seulement, quand une version plus récente est publiée (DRV-637)
+    updateBanner: {
+      text: 'Une nouvelle version de l’application est prête.',
+      action: 'Mettre à jour',
+    },
     download: 'Télécharger la dernière version',
     downloadFor: 'Télécharger la dernière version (s’ouvre dans un nouvel onglet)',
     steps: {
@@ -848,6 +857,8 @@ export default {
         'Les prix servent à estimer le coût d’une liste. L’estimation est indicative : elle est faite d’après les derniers prix vus, avec leur date, et le vrai prix est toujours celui de Leclerc. Elle ne compte que les articles dont le prix est connu, elle est peu fiable quand moins de la moitié en ont un, et Repas ne devine jamais un prix.',
       lists:
         'Pour chaque liste : le fait qu’elle a été « envoyée au drive » et la date de l’envoi.',
+      appVersion:
+        'Le numéro de version de l’application Repas de ton téléphone, avec la date où il a été vu, pour te dire quand une nouvelle version est prête. Seule la version est retenue : aucun identifiant de ton téléphone, aucun modèle de téléphone.',
     },
     never: {
       title: 'Ce que Repas ne voit et n’enregistre jamais',

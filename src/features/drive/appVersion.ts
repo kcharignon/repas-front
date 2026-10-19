@@ -51,6 +51,46 @@ export function isDriveAppVersionEnough(version: string | null | undefined): boo
   return order !== null && order >= 0
 }
 
+/**
+ * La forme que le serveur retient (DRV-637, `PUT /api/v1/users/me/app-version`) : trois nombres, rien d'autre, 20 caractères au plus. Une
+ * construction de développement (`0.0.0-dev`) ou une version mal formée n'est pas envoyée (le serveur la refuserait par un `422`).
+ */
+const REPORTABLE = /^[0-9]+\.[0-9]+\.[0-9]+$/
+
+/** Cette version peut-elle être envoyée au serveur ? */
+export function isReportableAppVersion(version: string | null | undefined): version is string {
+  return typeof version === 'string' && version.length <= 20 && REPORTABLE.test(version)
+}
+
+/** Ce que le serveur sait des versions publiées (`appUpdate` de `GET /api/v1/me`, DRV-637). */
+export interface AppUpdateFacts {
+  latest?: string | null
+  minimum?: string | null
+  /** Calculé par le serveur pour la version ENREGISTRÉE du compte, pas pour celle qui tourne. */
+  outdated: boolean
+}
+
+/**
+ * Faut-il inviter à mettre à jour l'application (DRV-637) ? À appeler seulement dans l'application. `running` : la version donnée par le pont
+ * (`null` si elle n'a pas répondu). Elle est comparée NUMÉRIQUEMENT à `latest` et à `minimum` : juste après une mise à jour, le serveur peut
+ * encore croire l'ancienne version (il ne l'apprend qu'au démarrage, au plus une fois par minute). Version du pont inconnue ou mal formée :
+ * le calcul du serveur (`outdated`) sert de repli. Le serveur ne connaît ni `latest` ni `minimum` : jamais d'invitation. Une construction de
+ * développement est le code courant : jamais d'invitation.
+ */
+export function offersAppUpdate(
+  running: string | null | undefined,
+  facts: AppUpdateFacts | null | undefined,
+): boolean {
+  if (facts === null || facts === undefined) return false
+  const targets = [facts.latest, facts.minimum].filter(
+    (target): target is string => typeof target === 'string',
+  )
+  if (targets.length === 0 || running === DEV_BUILD) return false
+  if (parts(running) === null) return facts.outdated
+
+  return targets.some((target) => (compareVersions(running, target) ?? 0) < 0)
+}
+
 /** L'agent de cette application connaît-il les rayons conseillés ? Une version inconnue ou mal formée ne les connaît pas. */
 export function isRayonHintsAppVersion(version: string | null | undefined): boolean {
   if (version === DEV_BUILD) return true
