@@ -7,6 +7,7 @@ Ce que Repas et l'agent s'envoient : `plan` et `setup` (Repas vers l'agent), `re
 | `plan.schema.json`, `result.schema.json`, `command.schema.json`, `selftest-result.schema.json` | Les schémas JSON (draft-07), source de vérité documentaire                                                                              |
 | `index.ts`                                                                                     | Le module partagé : types, constantes et limites, `encodeMessage`, `decodeMessage`, `validatePlan`, `validateResult`, `validateCommand` |
 | `types.ts`, `codec.ts`, `check.ts`, `plan.ts`, `result.ts`, `command.ts`, `error.ts`           | Son contenu                                                                                                                             |
+| `clean-text.ts`                                                                                | `cleanText` : le nettoyage d'un libellé (caractères que le back refuse) que l'agent et le front partagent ; ne change pas le format     |
 | `examples/valid/`, `examples/invalid/`                                                         | Les exemples (au moins 6 de chaque par schéma, un seul valide pour `command`), tous rejoués par les tests                               |
 
 Le module n'a **aucune dépendance d'exécution** et ajoute moins de 6 Ko à l'agent (un test le mesure). L'agent l'importe par chemin relatif (`../../protocol`), le front par l'alias `@drive-protocol`.

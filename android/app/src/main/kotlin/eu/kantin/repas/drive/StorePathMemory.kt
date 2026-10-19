@@ -9,11 +9,11 @@ interface StorePathStore {
 /**
  * Le chemin d'un magasin AVEC sa ville, tel que la dernière page de magasin vue dans le drive l'a donné (DRV-629) : `https://<hôte>/magasin-N-N-Ville`.
  *
- * Pourquoi : la page du panier du vrai site est `<chemin du magasin avec la ville>/detail-panier.aspx` (constat du 2026-10-19), et la ville ne se
- * lit que dans une page du magasin. Le front ne connaît le magasin que par ses numéros (`/magasin-N-N`) ; « Finaliser sur Leclerc » est donc un lien
- * `https://<hôte>/magasin-N-N/detail-panier.aspx` que la coquille complète ici ([DriveEntry.target]) avec la ville retenue, SI elle est du même hôte et
- * des mêmes numéros. Jamais une adresse tirée du message du plan ni d'un texte de page : seule une adresse que la WebView a vraiment chargée, de
- * forme vérifiée, est retenue.
+ * Pourquoi : l'accueil du magasin qui charge toujours est `<chemin du magasin avec la ville>` (constat du 2026-10-19), et la ville ne se lit que dans une
+ * page du magasin. Le front ne connaît le magasin que par ses numéros (`/magasin-N-N`) ; « Finaliser sur Leclerc » est donc un lien
+ * `https://<hôte>/magasin-N-N` que la coquille complète ici ([DriveEntry.resolve]) avec la ville retenue, SI elle est du même hôte et des mêmes
+ * numéros (DRV-631 : l'accueil du magasin, jamais la page du panier). Jamais une adresse tirée du message du plan ni d'un texte de page : seule une
+ * adresse que la WebView a vraiment chargée, de forme vérifiée, est retenue.
  *
  * Gardée dans une préférence privée de l'application (exclue des sauvegardes), jamais journalisée, effacée avec les données du drive.
  *
@@ -31,12 +31,15 @@ class StorePathMemory(private val store: StorePathStore) {
         if (entry.value != store.load()) store.save(entry.value)
     }
 
-    /** La page du panier du magasin [first]-[second] de l'hôte [host], si le chemin retenu est celui de ce magasin ; sinon `null`. */
-    fun basketUrl(host: String, first: String, second: String): String? {
+    /** L'accueil du magasin [first]-[second] de l'hôte [host] (avec la ville), si le chemin retenu est celui de ce magasin ; sinon `null`. */
+    fun storeHomeUrl(host: String, first: String, second: String): String? {
         val entry = parse(store.load()) ?: return null
         if (entry.host != host || entry.first != first || entry.second != second) return null
-        return "${entry.value}/${DriveEntry.BASKET_PAGE}"
+        return entry.value
     }
+
+    /** Un chemin de magasin est-il retenu (de n'importe quel magasin) ? */
+    fun hasPath(): Boolean = parse(store.load()) != null
 
     /** Oublie le chemin (déconnexion du drive). */
     fun forget() = store.save(null)

@@ -16,6 +16,9 @@ class RepasApp : Application() {
      */
     internal val storePath: StorePathMemory by lazy { StorePathMemory(PrefsStorePathStore(this)) }
 
+    /** La forme du dernier « Finaliser sur Leclerc » (DRV-631), montrée dans « Version et mode d'emploi ». */
+    internal val finalizeOutcome: FinalizeOutcomeMemory by lazy { FinalizeOutcomeMemory(PrefsFinalizeOutcomeStore(this)) }
+
     internal val pass: DrivePass by lazy {
         DrivePass(
             store = PrefsPassStore(this),
@@ -58,5 +61,23 @@ internal class PrefsStorePathStore(context: Context) : StorePathStore {
 
     private companion object {
         const val KEY = "path"
+    }
+}
+
+/**
+ * Le [FinalizeOutcomeStore] du téléphone (DRV-631) : une préférence privée de l'application, exclue des sauvegardes, qui ne contient qu'un mot (la
+ * forme du dernier « Finaliser sur Leclerc »), jamais une adresse, un numéro de magasin ni une ville. Effacée avec les données du drive.
+ */
+internal class PrefsFinalizeOutcomeStore(context: Context) : FinalizeOutcomeStore {
+    private val prefs = context.getSharedPreferences("drive-store", Context.MODE_PRIVATE)
+
+    override fun load(): String? = prefs.getString(KEY, null)
+
+    override fun save(value: String?) {
+        prefs.edit().apply { if (value == null) remove(KEY) else putString(KEY, value) }.apply()
+    }
+
+    private companion object {
+        const val KEY = "finalize"
     }
 }

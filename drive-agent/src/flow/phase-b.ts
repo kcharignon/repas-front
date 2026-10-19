@@ -64,9 +64,14 @@ export function labelOf(candidate: Candidate): string {
   return cut((joined ? `${first} ${second}` : first) || S.picker.noLabel(candidate.id))
 }
 
+/**
+ * Un produit connu que l'utilisateur ne veut plus jamais, tel qu'il repart vers Repas. Son libellé vient de la fiche mémorisée par Repas, qui
+ * peut avoir été enregistrée avant que le back refuse certains caractères invisibles (trait d'union conditionnel…) : il est nettoyé comme un
+ * libellé lu sur le site, sinon le back refuserait tout le lot de choix.
+ */
 const refusedOf = (product: PlanProduct): RejectedProduct => ({
   id: product.id,
-  label: product.label,
+  label: cut(cleanText(product.label) || S.picker.noLabel(product.id)),
   ...(product.content && { content: product.content }),
 })
 

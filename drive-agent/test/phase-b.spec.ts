@@ -2,7 +2,7 @@
 // produits, elle, est la vraie (elle se monte dans un nœud de jsdom) pour éprouver ce que l'utilisateur voit et touche. Aucun réseau.
 import { afterEach, describe, expect, it } from 'vitest'
 
-import type { PlanLine, ResultLine } from '../protocol'
+import type { PlanLine, ProductRef, ResultLine } from '../protocol'
 import { guidedChoice, labelOf, MAX_CANDIDATES, productSearchForms } from '../src/flow'
 import { LeclercError } from '../src/leclerc'
 import type { ChooserAnswer, ChooserProps, PlacementProps, QuantityProps } from '../src/ui'
@@ -727,6 +727,38 @@ describe('un produit connu devenu indisponible', () => {
       outcome: 'CHOSEN',
       rejected: [{ id: '1000001', label: 'Farine de test A', content: { value: 1000, unit: 'g' } }],
     })
+  })
+
+  it('nettoie le libellé du produit refusé : une fiche enregistrée avant le durcissement du back ne fait pas refuser tout le lot', async () => {
+    // Given : deux fiches mémorisées avec des invisibles que le back refuse aujourd'hui (trait d'union conditionnel, opérateur invisible),
+    // la seconde n'étant faite que de cela
+    const legacy = [
+      {
+        ...product('1000001', 1, 'Fari\u00ADne de\u2061 test A'),
+        content: { value: 1000, unit: 'g' as const },
+      },
+      product('1000002', 2, '\u200B\u00AD'),
+    ]
+    const test = run(
+      flour({ products: legacy }),
+      [
+        (view) => {
+          view.zone.querySelector<HTMLInputElement>('#jamais-0')?.click()
+          view.zone.querySelector<HTMLInputElement>('#jamais-1')?.click()
+          choose(view.zone, 'Poivre noir')
+        },
+      ],
+      { shelf },
+    )
+
+    // When
+    await test.start()
+
+    // Then : les libellés repartent nettoyés (ou, vides, « Produit <id> ») et le back les accepterait
+    const rejected = (lineOf(expectConform(test.sent[0]), 'farine') as { rejected: ProductRef[] })
+      .rejected
+    expect(rejected.map((item) => item.label)).toEqual(['Farine de test A', 'Produit 1000002'])
+    for (const item of rejected) expect(backAcceptsLabel(item.label)).toBe(true)
   })
 
   it('une case cochée puis décochée ne refuse rien', async () => {
@@ -1486,6 +1518,17 @@ describe('le libellé d’un produit pour Repas', () => {
     })
 
     expect(label).toBe('Sel fin de test 1 kg')
+    expect(backAcceptsLabel(label)).toBe(true)
+  })
+
+  it('retire aussi le trait d’union conditionnel et les opérateurs invisibles, que le back refuse depuis sa PR #198', () => {
+    const label = labelOf({
+      ...candidate('1'),
+      label: 'Fro\u00ADmage ra\u00ADpé\u2061',
+      label2: '2\u2062 x 100\u2063 g\u2064',
+    })
+
+    expect(label).toBe('Fromage rapé 2 x 100 g')
     expect(backAcceptsLabel(label)).toBe(true)
   })
 
