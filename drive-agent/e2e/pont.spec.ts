@@ -65,10 +65,8 @@ test('mode configuration : lit le magasin de la page et le rend à l’applicati
   app.answerHello(SETUP)
 
   // When : l'application demande le magasin, l'utilisateur accepte
-  await expect(
-    page.getByRole('heading', { name: 'Enregistrer ce magasin dans Repas ?' }),
-  ).toBeVisible()
-  await page.getByRole('button', { name: 'Enregistrer' }).click()
+  await expect(page.getByRole('heading', { name: 'Utiliser ce magasin ?' })).toBeVisible()
+  await page.getByRole('button', { name: 'Utiliser ce magasin' }).click()
 
   // Then : l'identifiant et l'hôte du faux magasin, l'adresse sans suffixe de ville ni port
   expect(await app.received('setup-result')).toMatchObject({
@@ -93,7 +91,7 @@ test('mode configuration sans magasin dans le message (DRV-320) : lit celui de l
   app.answerHello(withoutStore)
 
   // When
-  await page.getByRole('button', { name: 'Enregistrer' }).click()
+  await page.getByRole('button', { name: 'Utiliser ce magasin' }).click()
 
   // Then
   expect(await app.received('setup-result')).toMatchObject({

@@ -142,7 +142,7 @@ sleep 2
 screenshot e01-lecture-accueil
 # L'accueil de l'enseigne est celui du faux Leclerc : l'utilisateur y est chez son magasin, « Commencer mes courses » ouvre les pages du magasin.
 if tap 'text="Commencer mes courses"'; then ok "le magasin du faux Leclerc est ouvert (« Commencer mes courses » touché)"; else ko "le bouton « Commencer mes courses » est introuvable"; fi
-if wait_until 40 ui_has 'Enregistrer ce magasin'; then
+if wait_until 40 ui_has 'Utiliser ce magasin'; then
   ok "sur la page du faux magasin, l'agent demande confirmation"
 else
   ko "l'agent n'a pas demandé confirmation"
@@ -151,7 +151,7 @@ check "le faux Leclerc a servi l'accueil du magasin" requested '/magasin-000001-
 check "aucune recherche ni écriture du panier pendant la lecture du magasin" nothing_sent
 sleep 1
 screenshot e02-lecture-confirmation
-if tap 'text="Enregistrer"'; then ok "« Enregistrer » touché"; else ko "le bouton « Enregistrer » est introuvable"; fi
+if tap 'text="Utiliser ce magasin"'; then ok "« Utiliser ce magasin » touché"; else ko "le bouton « Utiliser ce magasin » est introuvable"; fi
 if wait_until 20 has_report "\"runId\": \"$RUN_SETUP\", \"resultType\": \"setup-result\", \"lines\": -1, \"hasStore\": true, \"storeId\": \"$FAKE_STORE_ID\", \"storeHost\": \"$FAKE_STORE_HOST\", \"storeBase\": \"https://$FAKE_STORE_HOST/magasin-$FAKE_STORE_ID-$FAKE_STORE_ID\""; then
   ok "Repas reçoit le magasin lu : numéro, hôte et adresse du faux magasin, du même runId"
 else
