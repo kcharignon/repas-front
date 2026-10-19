@@ -20,6 +20,11 @@ function open(): UiHandle {
 const shadow = () => (ui?.host?.shadowRoot ?? null) as ShadowRoot
 const buttons = () => [...shadow().querySelectorAll('button')]
 const labels = () => buttons().map((button) => button.textContent)
+/** Les boutons que l'utilisateur voit : ceux d'une partie cachée (`hidden`) ne comptent pas. */
+const visibleLabels = () =>
+  buttons()
+    .filter((button) => !button.closest('[hidden]'))
+    .map((button) => button.textContent)
 const press = (label: string) => {
   const found = buttons().find((button) => button.textContent === label)
   if (!found) throw new Error(`Pas de bouton « ${label} » parmi ${labels().join(', ')}`)
@@ -404,6 +409,40 @@ describe('quantité à vérifier', () => {
 
 describe('choix de produit (hôte)', () => {
   const base = { ingredient: 'Poivre', position: 2, total: 5 }
+  /** Une liste de deux produits, un qui se choisit et un que l'utilisateur ne veut plus. */
+  const mountList: ChooserProps['mount'] = (zone, done) =>
+    void renderPicker(
+      zone,
+      {
+        need: null,
+        replaces: null,
+        gone: [],
+        checked: new Set<string>(),
+        query: 'poivre',
+        items: [
+          {
+            id: '111',
+            name: 'Poivre de test',
+            label2: null,
+            details: [],
+            promo: null,
+            explain: '',
+            state: 'ok',
+          },
+          {
+            id: '222',
+            name: 'Poivre à éviter',
+            label2: null,
+            details: [],
+            promo: null,
+            explain: '',
+            state: 'refused',
+          },
+        ],
+        notice: null,
+      },
+      { choose: (id) => done(id), search: () => undefined, never: () => undefined },
+    )
 
   it('montre l’ingrédient, le compteur et remplit la zone de contenu une fois dans la page', () => {
     const handle = open()
@@ -417,7 +456,37 @@ describe('choix de produit (hôte)', () => {
     expect(shadow().textContent).toContain('Poivre (2 sur 5)')
     expect(shadow().querySelector('.zone')?.textContent).toBe('contenu de test')
     expect(mount).toHaveBeenCalledOnce()
-    expect(labels()).toEqual(['Pas cette fois', 'J’en ai toujours', 'Annuler l’envoi'])
+  })
+
+  it('range les gestes : « Choisir » est le principal, les autres réponses sont secondaires, « Annuler l’envoi » est discret, tout en bas', () => {
+    const handle = open()
+    void handle.show('chooser', { ...base, mount: mountList })
+
+    // Les autres réponses sont en haut, avant la liste ; l'annulation est le dernier élément de l'écran, après la liste.
+    expect(visibleLabels()).toEqual([
+      'Pas cette fois',
+      'J’en ai toujours',
+      'Passer les 4 suivants',
+      'Chercher',
+      'Choisir',
+      'Ne plus proposer',
+      'Annuler l’envoi',
+    ])
+    const classOf = (label: string) =>
+      buttons().find((button) => button.textContent === label)?.className
+    expect(classOf('Choisir')).toBe('primary')
+    for (const label of ['Pas cette fois', 'J’en ai toujours', 'Passer les 4 suivants']) {
+      expect(`${label} : ${classOf(label)}`).toBe(`${label} : secondary`)
+    }
+    expect(classOf('Chercher')).toBe('secondary')
+    expect(classOf('Annuler l’envoi')).toBe('quiet')
+    // Rien n'est rouge : annuler n'est plus un bouton d'alarme.
+    expect(shadow().querySelector('.danger')).toBeNull()
+    // Un seul geste principal par produit (« Choisir ») : ni « Chercher », ni la confirmation (cachée) n'en sont un de plus à l'écran.
+    const primaries = buttons().filter(
+      (button) => button.className === 'primary' && !button.closest('[hidden]'),
+    )
+    expect(primaries.map((button) => button.textContent)).toEqual(['Choisir'])
   })
 
   it.each([
@@ -460,6 +529,159 @@ describe('choix de produit (hôte)', () => {
     void handle.show('chooser', { ...base, mount: () => second })
     handle.close()
     expect(second).toHaveBeenCalledOnce()
+  })
+
+  describe('« Passer les n suivants » (DRV-624)', () => {
+    const leaves = (position: number, total: number) => {
+      const handle = open()
+      void handle.show('chooser', { ingredient: 'Poivre', position, total, mount: () => undefined })
+      return visibleLabels().filter((label) => label?.startsWith('Passer les'))
+    }
+
+    it.each([
+      [1, 4, ['Passer les 4 suivants']],
+      [2, 4, ['Passer les 3 suivants']],
+      [3, 4, ['Passer les 2 suivants']],
+      [4, 4, []],
+      [1, 1, []],
+      [1, 2, ['Passer les 2 suivants']],
+    ])(
+      'au rang %i sur %i, le bouton compte les articles encore à choisir, celui-ci compris, et disparaît quand il n’en reste qu’un',
+      (position, total, expected) => {
+        expect(leaves(position, total)).toEqual(expected)
+      },
+    )
+
+    it('passe tout de suite quand rien n’est à confirmer', async () => {
+      const handle = open()
+      const answer = handle.show('chooser', { ...base, mount: () => undefined })
+
+      press('Passer les 4 suivants')
+
+      await expect(answer).resolves.toEqual({ kind: 'rest' })
+    })
+
+    it('demande une confirmation d’une ligne quand un article passé n’a encore aucun produit retenu, et ne répond rien avant', async () => {
+      // Given
+      const handle = open()
+      const settled = vi.fn<(answer: unknown) => void>()
+      void handle
+        .show('chooser', { ...base, confirmRest: true, mount: () => undefined })
+        .then(settled)
+
+      // When
+      press('Passer les 4 suivants')
+      await Promise.resolve()
+
+      // Then : la question prend la place des réponses, elle est annoncée et prend le focus ; rien n'est répondu
+      expect(settled).not.toHaveBeenCalled()
+      expect(visibleLabels()).toEqual([
+        'Passer les 4 suivants',
+        'Revenir au choix',
+        'Annuler l’envoi',
+      ])
+      const question = shadow().querySelector('.sure')
+      expect(question?.textContent).toBe('Ces 4 articles ne seront pas mis au panier.')
+      expect(question?.getAttribute('role')).toBe('alert')
+      expect(shadow().activeElement).toBe(question)
+      expect(shadow().querySelector('.confirm .primary')?.textContent).toBe('Passer les 4 suivants')
+    })
+
+    it('« Passer les n suivants » de la confirmation répond `rest`', async () => {
+      const handle = open()
+      const answer = handle.show('chooser', { ...base, confirmRest: true, mount: () => undefined })
+      press('Passer les 4 suivants')
+
+      shadow().querySelector<HTMLButtonElement>('.confirm .primary')?.click()
+
+      await expect(answer).resolves.toEqual({ kind: 'rest' })
+    })
+
+    it('« Revenir au choix » remet les réponses, avec le focus sur le bouton qu’on vient de toucher', async () => {
+      const handle = open()
+      const settled = vi.fn<(answer: unknown) => void>()
+      void handle
+        .show('chooser', { ...base, confirmRest: true, mount: () => undefined })
+        .then(settled)
+      press('Passer les 4 suivants')
+
+      press('Revenir au choix')
+      await Promise.resolve()
+
+      expect(settled).not.toHaveBeenCalled()
+      expect(visibleLabels().slice(0, 3)).toEqual([
+        'Pas cette fois',
+        'J’en ai toujours',
+        'Passer les 4 suivants',
+      ])
+      expect(shadow().activeElement?.textContent).toBe('Passer les 4 suivants')
+      expect(shadow().querySelector('.confirm')?.hasAttribute('hidden')).toBe(true)
+    })
+
+    it('le dernier article n’a ni bouton ni confirmation, même quand un article sans produit retenu reste', () => {
+      const handle = open()
+      void handle.show('chooser', {
+        ...base,
+        position: 5,
+        confirmRest: true,
+        mount: () => undefined,
+      })
+
+      expect(shadow().querySelector('.confirm')).toBeNull()
+      expect(visibleLabels()).toEqual(['Pas cette fois', 'J’en ai toujours', 'Annuler l’envoi'])
+    })
+  })
+
+  describe('focus et annonce', () => {
+    it('le focus arrive sur l’article, jamais sur un bouton, et sa ligne avec le compteur est une zone annoncée', () => {
+      const handle = open()
+      void handle.show('chooser', { ...base, mount: () => undefined })
+
+      const head = shadow().querySelector('.head')
+      expect(shadow().activeElement).toBe(head)
+      expect(head?.textContent).toBe('Poivre (2 sur 5)')
+      expect(head?.getAttribute('role')).toBe('status')
+      expect(shadow().querySelector('section')?.getAttribute('aria-labelledby')).toBe('titre')
+      expect(shadow().getElementById('titre')?.textContent).toBe('Poivre')
+    })
+
+    it('chaque article remplace le précédent : un seul compteur, annoncé avec son rang', () => {
+      const handle = open()
+      void handle.show('chooser', { ...base, position: 1, total: 3, mount: () => undefined })
+      void handle.show('chooser', { ...base, position: 2, total: 3, mount: () => undefined })
+
+      expect(shadow().querySelectorAll('[role="status"]')).toHaveLength(1)
+      expect(shadow().querySelector('[role="status"]')?.textContent).toBe('Poivre (2 sur 3)')
+    })
+
+    it('quand la question de confirmation est affichée, Tab après le dernier bouton revient au premier bouton visible (jamais à un bouton caché)', () => {
+      const handle = open()
+      void handle.show('chooser', { ...base, confirmRest: true, mount: () => undefined })
+      press('Passer les 4 suivants')
+      buttons().at(-1)?.focus()
+
+      const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+      shadow().querySelector('.overlay')?.dispatchEvent(event)
+
+      expect(event.defaultPrevented).toBe(true)
+      expect(shadow().activeElement?.textContent).toBe('Passer les 4 suivants')
+      expect(shadow().activeElement?.closest('[hidden]')).toBeNull()
+    })
+
+    it('Tab après « Annuler l’envoi » revient au premier bouton', () => {
+      const handle = open()
+      void handle.show('chooser', { ...base, mount: () => undefined })
+      const items = [...shadow().querySelectorAll<HTMLElement>('button')].filter(
+        (button) => !button.closest('[hidden]'),
+      )
+      items.at(-1)?.focus()
+
+      const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+      shadow().querySelector('.overlay')?.dispatchEvent(event)
+
+      expect(event.defaultPrevented).toBe(true)
+      expect(shadow().activeElement?.textContent).toBe('Pas cette fois')
+    })
   })
 })
 
@@ -608,33 +830,37 @@ describe('utiliser le magasin (mode configuration, DRV-623)', () => {
   })
 })
 
-describe('rôle du produit choisi', () => {
+describe('« Toujours prendre ce produit ? » (DRV-624)', () => {
   const props = { ingredient: 'Farine', productLabel: 'Farine de test 1 kg' }
 
-  it('pose la question avec le produit dans le titre, et les trois choix expliqués', () => {
+  it('pose une question, avec deux réponses en boutons, la première par défaut, et une sortie discrète', () => {
     const handle = open()
     void handle.show('placement', props)
 
-    expect(shadow().querySelector('h1')?.textContent).toBe(
-      'Que faites-vous de « Farine de test 1 kg » ?',
+    expect(shadow().querySelector('h1')?.textContent).toBe('Toujours prendre ce produit ?')
+    expect(shadow().querySelector('section p')?.textContent).toBe(
+      'Vous avez choisi « Farine de test 1 kg » pour Farine.',
     )
     expect(labels()).toEqual([
-      'Mon nouveau produit habituel',
-      'Produit de remplacement',
-      'Seulement cette fois',
+      'Toujours prendre celui-ci',
+      'Cette fois seulement',
       'Revenir à la liste',
     ])
-    for (const button of buttons().slice(0, 3)) {
-      const hint = shadow().getElementById(button.getAttribute('aria-describedby') ?? '')
-      expect(hint?.textContent?.length).toBeGreaterThan(10)
-    }
-    expect(shadow().activeElement?.textContent).toBe('Mon nouveau produit habituel')
+    expect(shadow().activeElement?.textContent).toBe('Toujours prendre celui-ci')
+    const classes = buttons().map((button) => button.className)
+    expect(classes).toEqual(['primary', '', 'quiet'])
+  })
+
+  it('ne parle ni de « secours », ni de « préféré », ni de produit de remplacement', () => {
+    const handle = open()
+    void handle.show('placement', props)
+
+    expect(shadow().textContent).not.toMatch(/secours|préfér|remplacement|habituel/i)
   })
 
   it.each([
-    ['Mon nouveau produit habituel', 'PRIMARY'],
-    ['Produit de remplacement', 'FALLBACK'],
-    ['Seulement cette fois', 'ONCE'],
+    ['Toujours prendre celui-ci', 'PRIMARY'],
+    ['Cette fois seulement', 'ONCE'],
     ['Revenir à la liste', null],
   ])('« %s » rend %s', async (label, expected) => {
     const handle = open()
@@ -649,7 +875,7 @@ describe('rôle du produit choisi', () => {
     const handle = open()
     void handle.show('placement', { ingredient: HOSTILE, productLabel: HOSTILE })
 
-    expect(shadow().querySelector('h1')?.textContent).toContain(HOSTILE)
+    expect(shadow().querySelector('section')?.textContent).toContain(HOSTILE)
     expect(shadow().querySelector('img, script')).toBeNull()
   })
 })

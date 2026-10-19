@@ -33,6 +33,8 @@ const SCREENS = [
   'progress',
   'quantity',
   'chooser',
+  'chooser-confirm',
+  'chooser-last',
   'chooser-gone',
   'placement',
   'store',

@@ -132,8 +132,8 @@ function run(
     before?: (call: string) => void | Promise<void>
     quantity?: (props: QuantityProps) => number | null
     others?: PlanLine[]
-    /** La réponse à « Que faites-vous de ce produit ? » (`null` : revenir à la liste). */
-    placementAnswer?: 'PRIMARY' | 'FALLBACK' | 'ONCE' | null
+    /** La réponse à « Toujours prendre ce produit ? » (`null` : revenir à la liste). */
+    placementAnswer?: 'PRIMARY' | 'ONCE' | null
     /** La réponse de l'utilisateur devant la demande de vérification de l'anti-robot (ticket K). */
     challenge?: () => 'resume' | 'stop'
   } = {},
@@ -168,7 +168,7 @@ const lineOf = (message: { lines: ResultLine[] } | undefined, slug = 'poivre') =
 // —— Choisir un produit ———————————————————————————————————————————————————————————————————————————————————————————————————
 
 describe('un nouvel ingrédient', () => {
-  it('cherche son nom, montre la liste, met au panier le nombre calculé (800 g demandés, 500 g par produit : 2) et le prend pour préféré sans question', async () => {
+  it('cherche son nom, montre la liste, met au panier le nombre calculé (800 g demandés, 500 g par produit : 2) et le prend pour produit habituel sans question', async () => {
     // Given
     const test = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')])
 
@@ -216,10 +216,12 @@ describe('un nouvel ingrédient', () => {
     const [first, second] = rows(test.user.views[0]?.zone ?? document.createElement('div'))
     expect(first?.textContent).toContain('Poivre noir moulu de test')
     expect(first?.textContent).toContain('500 g · 2,58 € · 5,16 € / kg')
-    expect(first?.textContent).toContain('800 g demandés, 500 g par produit : 2')
+    expect(first?.textContent).toContain('500 g par produit : 2 produits.')
     expect(second?.textContent).toContain('1 kg · 4,99 €')
     expect(second?.textContent).toContain('En promotion : 4,50 €')
-    expect(second?.textContent).toContain('800 g demandés, 1 kg par produit : 1')
+    expect(second?.textContent).toContain('1 kg par produit : 1 produit.')
+    // La quantité demandée se dit une fois, en haut de la liste, pas sur chaque produit.
+    expect(first?.textContent).not.toContain('demandé')
   })
 
   it('montre la quantité demandée en haut de la liste', async () => {
@@ -240,9 +242,7 @@ describe('un nouvel ingrédient', () => {
     await test.start()
 
     expect(test.adapter.calls).toContain('cart 2000001 2')
-    expect(test.user.views[0]?.zone.textContent).toContain(
-      'Demandé : 2 paquet. À mettre au panier : 2.',
-    )
+    expect(test.user.views[0]?.zone.textContent).toContain('À mettre au panier : 2 produits.')
   })
 
   it('jamais plus que le stock : la quantité rendue est celle que le panier a gardée', async () => {
@@ -348,6 +348,16 @@ describe('les actions de la barre', () => {
       ingredientSlug: 'poivre',
       outcome: 'HAVE_AT_HOME',
     })
+  })
+
+  it('« Passer cette fois » et « J’en ai toujours » ne passent que l’article affiché', async () => {
+    const test = run(pepper(), [() => ({ kind: 'skip' }), () => ({ kind: 'have' })], {
+      others: [fresh('sel')],
+    })
+
+    await test.start()
+
+    expect(test.user.views).toHaveLength(2)
   })
 
   it('« Annuler l’envoi » rend « aborted » avec ce qui a déjà été fait', async () => {
@@ -514,10 +524,9 @@ describe('un produit connu devenu indisponible', () => {
 
   it.each([
     ['PRIMARY', 'PRIMARY'],
-    ['FALLBACK', 'FALLBACK'],
     ['ONCE', 'ONCE'],
   ] as const)(
-    'demande le rôle du produit choisi (%s) et le rend avec les identifiants indisponibles',
+    'pose une seule question sur le produit choisi (%s) et rend sa réponse avec les identifiants indisponibles',
     async (answer, placement) => {
       // Given
       const test = run(flour(), [(view) => choose(view.zone, 'Poivre noir')], {
@@ -542,7 +551,7 @@ describe('un produit connu devenu indisponible', () => {
     },
   )
 
-  it('« Revenir à la liste » sur le rôle ne met rien au panier', async () => {
+  it('« Revenir à la liste » sur la question ne met rien au panier', async () => {
     const test = run(
       flour(),
       [(view) => choose(view.zone, 'Poivre noir'), () => ({ kind: 'skip' })],
@@ -644,10 +653,10 @@ describe('un produit connu devenu indisponible', () => {
     })
   })
 
-  it('un autre produit demandé (« replaces ») pose aussi la question du rôle, sans bandeau ni case', async () => {
+  it('un autre produit demandé (« replaces ») pose aussi la question, sans bandeau ni case', async () => {
     const line = pepper({ replaces: { id: '98765', label: 'Poivre habituel de test' } })
     const test = run(line, [(view) => choose(view.zone, 'Poivre noir')], {
-      placementAnswer: 'FALLBACK',
+      placementAnswer: 'ONCE',
     })
 
     await test.start()
@@ -657,8 +666,24 @@ describe('un produit connu devenu indisponible', () => {
       'Vous remplacez : Poivre habituel de test.',
     )
     expect(test.user.views[0]?.zone.querySelector('.gone')).toBeNull()
-    expect(lineOf(test.sent[0])).toMatchObject({ placement: 'FALLBACK' })
+    expect(lineOf(test.sent[0])).toMatchObject({ placement: 'ONCE' })
     expect(lineOf(test.sent[0])).not.toHaveProperty('unavailableIds')
+  })
+
+  it('l’agent n’émet plus jamais « FALLBACK » (le protocole l’accepte toujours)', async () => {
+    // Given : toutes les issues possibles de la question, et le produit retenu qui revient
+    for (const placementAnswer of ['PRIMARY', 'ONCE'] as const) {
+      const test = run(flour(), [(view) => choose(view.zone, 'Poivre noir')], {
+        shelf,
+        placementAnswer,
+      })
+
+      // When
+      await test.start()
+
+      // Then
+      expect(JSON.stringify(test.sent[0])).not.toContain('FALLBACK')
+    }
   })
 
   it('un ingrédient jamais acheté ne pose aucune question de rôle', async () => {
@@ -668,6 +693,249 @@ describe('un produit connu devenu indisponible', () => {
 
     expect(test.screens.screens()).not.toContain('placement')
     expect(lineOf(test.sent[0])).toMatchObject({ placement: 'PRIMARY' })
+  })
+})
+
+// —— Passer les suivants (DRV-624) ——————————————————————————————————————————————————————————————————————————————————————————
+
+describe('« Passer les n suivants »', () => {
+  const four = [fresh('sel'), fresh('huile'), fresh('riz')]
+  const rest = (): ChooserAnswer => ({ kind: 'rest' })
+
+  it('choisir le premier, passer les trois suivants : deux touches pour quatre nouveaux articles, rien n’est retenu pour les trois autres', async () => {
+    // Given : quatre articles jamais achetés, l'utilisateur choisit le premier puis passe le reste
+    const test = run(pepper(), [(view) => choose(view.zone, 'Poivre noir'), rest], {
+      others: four,
+      found: { ...FOUND, sel: ['2000004'] },
+    })
+
+    // When
+    await test.start()
+
+    // Then : deux écrans de choix seulement, les trois suivants sont passés sans même être cherchés
+    expect(test.user.views.map((view) => view.props)).toMatchObject([
+      { ingredient: 'Poivre', position: 1, total: 4 },
+      { ingredient: 'Sel', position: 2, total: 4 },
+    ])
+    expect(test.adapter.calls).toEqual(['find poivre', 'cart 2000001 2', 'find sel'])
+    expect(test.adapter.writes).toEqual([{ id: '2000001', quantity: 2 }])
+    const message = expectConform(test.sent[0])
+    expect(message).toMatchObject({ outcome: 'completed' })
+    expect(message.lines.map((line) => [line.ingredientSlug, line.outcome])).toEqual([
+      ['poivre', 'CHOSEN'],
+      ['sel', 'SKIPPED'],
+      ['huile', 'SKIPPED'],
+      ['riz', 'SKIPPED'],
+    ])
+    // « Pas cette fois » : ni « j'en ai toujours », ni refus, ni produit.
+    for (const slug of ['sel', 'huile', 'riz']) {
+      expect(lineOf(message, slug)).toEqual({ ingredientSlug: slug, outcome: 'SKIPPED' })
+    }
+    expect(JSON.stringify(message)).not.toContain('HAVE_AT_HOME')
+    expect(test.screens.screens().filter((screen) => screen === 'chooser')).toHaveLength(2)
+  })
+
+  it('passe aussi l’article affiché, avec ses refus cochés exprès (comme « Pas cette fois »)', async () => {
+    const flour = {
+      ...known('farine', [
+        product('1000001', 1, 'Farine de test A'),
+        product('1000002', 2, 'Farine de test B'),
+      ]),
+      searchQuery: 'poivre',
+    }
+    const shelf: Record<string, ShelfItem> = {
+      ...SHELF,
+      '1000001': { stock: 0 },
+      '1000002': { stock: 0 },
+    }
+    const test = run(
+      flour,
+      [
+        (view) => {
+          view.zone.querySelector<HTMLInputElement>('#jamais-1')?.click()
+          return rest()
+        },
+      ],
+      { shelf, others: [fresh('sel')] },
+    )
+
+    await test.start()
+
+    expect(expectConform(test.sent[0]).lines).toEqual([
+      {
+        ingredientSlug: 'farine',
+        outcome: 'SKIPPED',
+        rejected: [{ id: '1000002', label: 'Farine de test B' }],
+      },
+      { ingredientSlug: 'sel', outcome: 'SKIPPED' },
+    ])
+  })
+
+  it('compte les articles qui restent dans l’écran : le bouton disparaît au dernier', async () => {
+    const test = run(
+      pepper(),
+      [() => ({ kind: 'skip' }), () => ({ kind: 'skip' }), () => ({ kind: 'skip' })],
+      {
+        others: [fresh('sel'), fresh('huile')],
+      },
+    )
+
+    await test.start()
+
+    expect(test.user.views.map((view) => view.props.total - view.props.position + 1)).toEqual([
+      3, 2, 1,
+    ])
+  })
+
+  describe('la confirmation d’une ligne', () => {
+    const gone: Record<string, ShelfItem> = {
+      ...SHELF,
+      '1000001': { stock: 0 },
+      '1000002': { stock: 0 },
+      '1000003': { stock: 0 },
+    }
+    /** Un article dont l'unique produit retenu n'est plus en stock (`id`), cherché sous « poivre ». */
+    const flourGone = (slug: string, id = '1000001'): PlanLine => ({
+      ...known(slug, [product(id, 1, `Produit de test ${id}`)]),
+      searchQuery: 'poivre',
+    })
+    const askedFor = (test: ReturnType<typeof run>) =>
+      test.user.views.map((view) => view.props.confirmRest)
+
+    it('est demandée quand un article passé n’a encore aucun produit retenu (celui qui est affiché compris)', async () => {
+      const test = run(pepper(), [() => ({ kind: 'skip' }), () => ({ kind: 'skip' })], {
+        others: [flourGone('farine')],
+        shelf: gone,
+      })
+
+      await test.start()
+
+      // L'article affiché (poivre, jamais acheté) fait demander ; une fois passé, il ne reste que la farine, dont le produit est parti.
+      expect(askedFor(test)).toEqual([true, false])
+    })
+
+    it('est demandée dès qu’un des articles suivants n’a rien de retenu', async () => {
+      const test = run(flourGone('farine'), [() => ({ kind: 'skip' }), () => ({ kind: 'skip' })], {
+        others: [pepper()],
+        shelf: gone,
+      })
+
+      await test.start()
+
+      expect(askedFor(test)).toEqual([true, true])
+    })
+
+    it('n’est pas demandée quand tous les articles ont un produit retenu devenu indisponible, ou un produit que l’utilisateur remplace', async () => {
+      // Given : deux articles dont le produit habituel n'est plus là, et un troisième remplacé exprès
+      const replaced = pepper({ replaces: { id: '98765', label: 'Poivre habituel de test' } })
+      const test = run(
+        flourGone('farine'),
+        [() => ({ kind: 'skip' }), () => ({ kind: 'skip' }), () => ({ kind: 'skip' })],
+        { others: [flourGone('sucre', '1000002'), replaced], shelf: gone },
+      )
+
+      // When
+      await test.start()
+
+      // Then : 3 articles à choisir, aucun n'est un premier choix
+      expect(askedFor(test)).toEqual([false, false, false])
+    })
+
+    it('transmet `rest` tel quel à la phase B : la confirmation est l’affaire de l’écran', async () => {
+      const test = run(pepper(), [rest], { others: four })
+
+      await test.start()
+
+      expect(test.user.views).toHaveLength(1)
+      expect(expectConform(test.sent[0]).lines.map((line) => line.outcome)).toEqual([
+        'SKIPPED',
+        'SKIPPED',
+        'SKIPPED',
+        'SKIPPED',
+      ])
+    })
+  })
+
+  it('l’écran de fin compte les articles passés', async () => {
+    const test = run(pepper(), [rest], { others: four })
+
+    await test.start()
+
+    expect(test.screens.propsOf('end')[0]).toMatchObject({ chosen: 0, skipped: 4, haveAtHome: 0 })
+  })
+})
+
+// —— Un produit retenu et disponible n'ouvre jamais l'écran de choix (phase A, DRV-624) ————————————————————————————————————————
+
+describe('un produit retenu et disponible', () => {
+  const FARINE = [
+    product('1000001', 2, 'Farine de test A'),
+    product('1000002', 1, 'Farine de test B'),
+  ]
+  const shelf: Record<string, ShelfItem> = { ...SHELF, '1000001': {}, '1000002': {} }
+
+  it('est mis au panier par la phase A, sans écran de choix ni question', async () => {
+    // Given : la farine a son produit habituel en stock ; le poivre est nouveau
+    const adapter = fakeAdapter(shelf, { found: FOUND })
+    const user = session((view) => choose(view.zone, 'Poivre noir'))
+    const screens = fakeUi({ chooser: user.chooser })
+    const { flow, sent } = makeFlow({
+      ui: screens.ui,
+      adapter: adapter.adapter,
+      phaseB: guidedChoice,
+    })
+
+    // When
+    await flow.start(plan([known('farine', FARINE), pepper()]))
+
+    // Then : un seul écran de choix, celui du poivre ; la farine est ajoutée avant, sans question
+    expect(screens.propsOf('chooser')).toMatchObject([
+      { ingredient: 'Poivre', position: 1, total: 1 },
+    ])
+    expect(screens.screens()).not.toContain('placement')
+    expect(lineOf(sent[0], 'farine')).toMatchObject({
+      outcome: 'ADDED',
+      productId: '1000001',
+      usedRank: 1,
+    })
+  })
+
+  it('même quand le produit habituel manque : le suivant disponible est pris, sans écran de choix', async () => {
+    const stock: Record<string, ShelfItem> = { ...shelf, '1000001': { stock: 0 } }
+    const adapter = fakeAdapter(stock, { found: FOUND })
+    const screens = fakeUi({ chooser: () => Promise.reject(new Error('aucun choix attendu')) })
+    const { flow, sent } = makeFlow({
+      ui: screens.ui,
+      adapter: adapter.adapter,
+      phaseB: guidedChoice,
+    })
+
+    await flow.start(plan([known('farine', FARINE)]))
+
+    expect(screens.propsOf('chooser')).toEqual([])
+    expect(lineOf(sent[0], 'farine')).toMatchObject({
+      outcome: 'ADDED',
+      productId: '1000002',
+      usedRank: 2,
+    })
+  })
+
+  it('seul un article dont plus aucun produit retenu n’est disponible ouvre l’écran de choix', async () => {
+    const stock: Record<string, ShelfItem> = {
+      ...shelf,
+      '1000001': { stock: 0 },
+      '1000002': { stock: 0 },
+    }
+    const adapter = fakeAdapter(stock, { found: { farine: ['2000001'] } })
+    const user = session(() => ({ kind: 'skip' }))
+    const screens = fakeUi({ chooser: user.chooser })
+    const { flow } = makeFlow({ ui: screens.ui, adapter: adapter.adapter, phaseB: guidedChoice })
+
+    await flow.start(plan([known('farine', FARINE)]))
+
+    expect(screens.propsOf('chooser')).toMatchObject([
+      { ingredient: 'Farine', position: 1, total: 1 },
+    ])
   })
 })
 

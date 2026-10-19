@@ -47,6 +47,8 @@ export interface QuantityProps {
 export type ChooserAnswer =
   | { kind: 'skip' }
   | { kind: 'have' }
+  /** « Passer les n suivants » (DRV-624) : « Pas cette fois » pour cet article et tous ceux qui restent à choisir, sans rien retenir. */
+  | { kind: 'rest' }
   | { kind: 'cancel' }
   /** Le contenu de la zone a conclu (un produit choisi…) : `value` est défini par DRV-306. */
   | { kind: 'content'; value: unknown }
@@ -57,13 +59,18 @@ export interface ChooserProps {
   position: number
   total: number
   /**
+   * Vrai : un des articles que « Passer les n suivants » passerait (celui-ci compris) n'a encore aucun produit retenu. L'écran demande alors une
+   * confirmation d'une ligne avant de répondre `rest` (DRV-624). Le bouton lui-même est visible dès qu'il reste plus d'un article à choisir.
+   */
+  confirmRest?: boolean
+  /**
    * Remplit la zone de contenu (cadre natif, liste de candidats…) quand l'écran est affiché. `answer` conclut l'écran avec la valeur
    * donnée. Rend, si besoin, la fonction qui nettoie quand l'écran est remplacé.
    */
   mount: (zone: HTMLElement, answer: (value: unknown) => void) => (() => void) | void
 }
 
-/** « Que fais-tu de ce produit ? » : le rôle du produit choisi quand l'ingrédient en avait déjà (phase B, DRV-306). */
+/** « Toujours prendre ce produit ? » : le produit choisi n'est pas celui que Repas retenait pour l'article (phase B, DRV-306, DRV-624). */
 export interface PlacementProps {
   ingredient: string
   productLabel: string
@@ -156,8 +163,11 @@ export interface ScreenMap {
   chooser: { props: ChooserProps; answer: ChooserAnswer }
   store: { props: StoreProps; answer: 'save' | 'cancel' }
   diagnostic: { props: DiagnosticProps; answer: 'close' }
-  /** Le rôle choisi, ou `null` pour revenir à la liste de produits. */
-  placement: { props: PlacementProps; answer: Placement | null }
+  /**
+   * `PRIMARY` (« Toujours prendre celui-ci ») ou `ONCE` (« Cette fois seulement »), ou `null` pour revenir à la liste de produits. L'écran ne
+   * rend plus `FALLBACK` (DRV-624) : le protocole l'accepte toujours, l'agent ne l'émet plus.
+   */
+  placement: { props: PlacementProps; answer: Exclude<Placement, 'FALLBACK'> | null }
   /**
    * Le site demande une vérification (page de défi de l'anti-robot, ticket K) : un bandeau, la page reste visible et touchable derrière. `resume` :
    * l'utilisateur l'a faite, le passage reprend ; `stop` : il arrête.

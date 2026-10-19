@@ -1,7 +1,7 @@
 // Phase B (DRV-306, variante P2 retenue à G1) : pour chaque ligne à choisir, l'agent cherche le nom de l'ingrédient, affiche les produits
 // dans l'écran de choix, et l'utilisateur en choisit un. L'agent ne choisit jamais seul : l'ajout au panier vient d'un bouton « Choisir ».
-//   ligne -> recherche -> liste (choisir | chercher autre chose | passer | j'en ai toujours | annuler)
-//         -> [quantité à vérifier] -> [rôle du produit] -> panier -> issue `CHOSEN`
+//   ligne -> recherche -> liste (choisir | chercher autre chose | passer | passer les suivants | j'en ai toujours | annuler)
+//         -> [quantité à vérifier] -> [« toujours ce produit ? »] -> panier -> issue `CHOSEN`
 // Jamais un produit refusé (grisé, non sélectionnable), jamais plus que le stock (l'adaptateur plafonne), requêtes en série.
 import {
   LIMITS,
@@ -81,7 +81,7 @@ function chosenProduct(candidate: Candidate): ChosenLine['product'] {
   }
 }
 
-/** « 800 g demandés, 500 g par produit : 2 », ou, quand le calcul est impossible, ce qui reste à faire. */
+/** « 500 g par produit : 2 produits. » (la quantité demandée est dite en haut de la liste), ou, quand le calcul est impossible, ce qui reste à faire. */
 function explain(line: PlanLine, candidate: Candidate): string {
   const { needed } = line
   const { packs, status } = packsFor(needed, candidate.content)
@@ -90,10 +90,15 @@ function explain(line: PlanLine, candidate: Candidate): string {
     needed.dimension === 'PACKAGE' || !candidate.content
       ? null
       : formatContent(candidate.content.value, candidate.content.unit)
-  const asked = `${formatNumber(needed.quantity)} ${needed.unitSymbol}`
-  const measure = needed.dimension === 'WEIGHT' || needed.dimension === 'VOLUME'
-  return S.picker.pack(asked, measure, needed.quantity >= 2, per, packs)
+  return S.picker.pack(per, packs)
 }
+
+/**
+ * Rien n'est encore retenu pour cet article : ni produit habituel devenu indisponible, ni produit à remplacer. Le passer, c'est ne jamais lui
+ * choisir de produit : « Passer les n suivants » le fait confirmer (DRV-624).
+ */
+const isFirstChoice = ({ line, unavailable }: PendingLine): boolean =>
+  unavailable.length === 0 && !line.replaces
 
 function itemOf(line: PlanLine, candidate: Candidate, refused: ReadonlySet<string>): PickerItem {
   const { content, price, pricePerMeasure, promo } = candidate
@@ -142,13 +147,18 @@ async function load(
   }
 }
 
-/** Une ligne : la liste de produits, jusqu'à un produit choisi, un « passer », un « j'en ai toujours » ou une annulation. */
+/**
+ * Une ligne : la liste de produits, jusqu'à un produit choisi, un « passer », un « j'en ai toujours », un « passer les suivants » (`rest` : cette
+ * ligne est passée, et la phase B passe aussi toutes celles qui la suivent) ou une annulation. `left` : les lignes qui restent à choisir, celle-ci
+ * en tête.
+ */
 async function settleLine(
   { line, unavailable }: PendingLine,
   position: number,
   total: number,
+  left: readonly PendingLine[],
   context: PhaseBContext,
-): Promise<'done' | 'cancelled'> {
+): Promise<'done' | 'cancelled' | 'rest'> {
   const { adapter, ui, record } = context
   const slug = line.ingredientSlug
   const refused = new Set((line.rejected ?? []).map((product) => product.id))
@@ -171,6 +181,7 @@ async function settleLine(
       ingredient: line.name,
       position,
       total,
+      confirmRest: left.some(isFirstChoice),
       mount: (zone, conclude) => {
         let live = true
         const picker = renderPicker(
@@ -212,9 +223,9 @@ async function settleLine(
     })
 
     if (answer.kind === 'cancel') return 'cancelled'
-    if (answer.kind === 'skip') {
+    if (answer.kind === 'skip' || answer.kind === 'rest') {
       record({ ingredientSlug: slug, outcome: 'SKIPPED', ...rejected() })
-      return 'done'
+      return answer.kind === 'rest' ? 'rest' : 'done'
     }
     if (answer.kind === 'have') {
       record({ ingredientSlug: slug, outcome: 'HAVE_AT_HOME', ...rejected() })
@@ -242,7 +253,9 @@ async function settleLine(
       if (packs === null) continue
     }
 
-    // Un ingrédient qui n'avait aucun produit mémorisé : le produit devient le préféré, sans question.
+    // Un article qui n'avait aucun produit retenu : le produit devient son produit habituel, sans question. Sinon une seule question, à deux
+    // réponses (DRV-624) : « Toujours prendre celui-ci » (`PRIMARY` : Repas le met en tête et garde les anciens à sa suite) ou « Cette fois
+    // seulement » (`ONCE` : rien n'est retenu). L'agent n'émet plus `FALLBACK`, que le protocole accepte toujours.
     let placement: Placement = 'PRIMARY'
     if (unavailable.length > 0 || line.replaces) {
       const role = await ui.show('placement', {
@@ -287,13 +300,21 @@ async function settleLine(
   }
 }
 
-/** La phase B de l'agent : les lignes à choisir, une à la fois, dans l'ordre du plan. */
+/**
+ * La phase B de l'agent : les lignes à choisir, une à la fois, dans l'ordre du plan. « Passer les suivants » passe la ligne affichée et toutes
+ * celles qui restent : une issue `SKIPPED` chacune, comme « Pas cette fois », donc rien n'est retenu (ni « j'en ai toujours », ni refus).
+ */
 export const guidedChoice: PhaseB = async (context) => {
   const { pending } = context
   for (const [index, item] of pending.entries()) {
     if (context.stopRequested()) return 'cancelled'
-    if ((await settleLine(item, index + 1, pending.length, context)) === 'cancelled') {
-      return 'cancelled'
+    const settled = await settleLine(item, index + 1, pending.length, pending.slice(index), context)
+    if (settled === 'cancelled') return 'cancelled'
+    if (settled === 'rest') {
+      for (const { line } of pending.slice(index + 1)) {
+        context.record({ ingredientSlug: line.ingredientSlug, outcome: 'SKIPPED' })
+      }
+      return 'done'
     }
     // L'écran de progression pendant la recherche de la ligne suivante.
     if (index < pending.length - 1) context.showProgress()

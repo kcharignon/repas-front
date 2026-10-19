@@ -33,7 +33,8 @@ details li{padding:4px 0}
 button,input{font:inherit;color:inherit;min-width:var(--target);min-height:var(--target);border-radius:10px}
 button{padding:8px 16px;border:2px solid var(--accent);background:var(--card);cursor:pointer}
 button.primary{background:var(--accent);color:var(--on);font-weight:600}
-button.danger{border-color:var(--danger);color:var(--danger)}
+button.secondary{border-color:var(--line)}
+button.quiet{border-color:transparent;background:transparent;color:var(--muted);text-decoration:underline}
 button:disabled{opacity:.6;cursor:default}
 input{width:8em;padding:8px 10px;border:2px solid var(--line);background:var(--card)}
 label{display:block;margin:12px 0 4px;font-weight:600}
@@ -45,9 +46,15 @@ progress{width:100%;height:16px;accent-color:var(--accent)}
 .live li{padding:4px 0;color:var(--muted)}
 .bar{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--card)}
 .bar p{margin:0}
+.bar .head{font-size:1.1rem}
+.bar .head strong{font-weight:700}
+.bar .head:focus-visible,.bar .sure:focus-visible{outline:0}
+.bar .sure{font-weight:600}
+.bar .confirm .actions{margin-top:8px}
+.bar .confirm .actions>button{flex-basis:12em}
 .bar .actions{margin:0;padding:0}
-.bar .actions>button{flex:1 1 7em;padding:6px 10px;font-size:.95rem}
-.zone{flex:1;min-height:0;overflow:auto}
+.bar .actions>button{flex:1 1 9em;padding:6px 10px;font-size:.95rem}
+.scroll{flex:1;min-height:0;overflow:auto;padding-bottom:var(--clear)}
 .checks{margin:12px 0;padding:0;list-style:none}
 .check-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;padding:8px 0;border-bottom:1px solid var(--line)}
 .check-row .badge{flex:none;min-width:6.5em;padding:2px 8px;border:2px solid var(--line);border-radius:8px;font-weight:700;font-size:.9rem;text-align:center}
@@ -56,10 +63,10 @@ progress{width:100%;height:16px;accent-color:var(--accent)}
 .check-row .what{flex:1 1 12em;font-weight:600}
 .check-row .hint{flex:1 0 100%;margin:0}
 textarea{width:100%;margin:8px 0;padding:8px 10px;font:.9rem/1.4 ui-monospace,monospace;color:inherit;border:2px solid var(--line);border-radius:10px;background:var(--card);resize:vertical}
-.choice{margin:12px 0}
-.choice>button{display:block;width:100%;text-align:left}
-.choice .hint{margin:4px 0 0}
-.picker{padding:12px 12px var(--clear);overflow-wrap:anywhere}
+.stack{display:flex;flex-direction:column;gap:8px;margin:16px 0}
+.stack>button{width:100%}
+.foot{margin:8px 0;text-align:center}
+.picker{padding:12px 12px 0;overflow-wrap:anywhere}
 .picker form{margin:12px 0}
 .search{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
 .search label{flex:1 0 100%;margin:0}

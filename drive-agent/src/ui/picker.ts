@@ -89,9 +89,10 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
     value: props.query,
     attrs: { id: 'chercher', type: 'search', maxlength: '255', autocomplete: 'off' },
   })
+  // Pas un deuxième bouton principal (DRV-624) : le geste de l'écran est « Choisir ».
   const go = h('button', {
     text: S.picker.searchButton,
-    class: 'primary',
+    class: 'secondary',
     attrs: { type: 'submit' },
   })
   const form = h(
