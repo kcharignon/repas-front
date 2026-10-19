@@ -15,19 +15,19 @@ test('dans l’application : choisir un autre produit, passer une ligne, ouvrir 
 
   const farine = page.getByRole('listitem').filter({ hasText: 'Farine de blé T55' }).first()
   await expect(farine).toContainText('1. Farine de blé T55 Marque Repère 1 kg')
-  await expect(farine).toContainText('2. Farine de blé T45 1 kg (secours)')
-  await expect(farine).toContainText('Refusés : Farine complète bio 1 kg')
+  await expect(farine).toContainText('2. Farine de blé T45 1 kg (remplacement)')
+  await expect(farine).toContainText('Ne plus proposer : Farine complète bio 1 kg')
   await expect(page.getByRole('listitem').filter({ hasText: 'Beurre doux' }).first()).toContainText(
     'quantité à vérifier',
   )
 
   await page.getByRole('button', { name: 'Choisir un autre produit : Farine' }).click()
-  await page.getByRole('button', { name: 'Passer cette fois : Lait' }).click()
+  await page.getByRole('button', { name: 'Pas cette fois : Lait' }).click()
   await expect(page.getByText('Vous choisirez un autre produit sur Leclerc')).toBeVisible()
   expect((await scan(page)).violations).toEqual([])
 
   await page.getByRole('button', { name: 'Ouvrir le drive' }).click()
-  await expect(page.getByText('En attente du retour du drive…')).toBeVisible()
+  await expect(page.getByText('En attente du récapitulatif…')).toBeVisible()
 
   const start = await page.evaluate(() => window.__sent.find((m) => m.type === 'drive.start'))
   expect(start?.plan?.lines).toHaveLength(12)
@@ -41,7 +41,7 @@ test('dans l’application : choisir un autre produit, passer une ligne, ouvrir 
 
   // Le brouillon survit à un rechargement (service worker de production)
   await page.reload()
-  await expect(page.getByText('En attente du retour du drive…')).toBeVisible()
+  await expect(page.getByText('En attente du récapitulatif…')).toBeVisible()
   expect((await scan(page)).violations).toEqual([])
 })
 

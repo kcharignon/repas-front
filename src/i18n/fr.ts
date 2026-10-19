@@ -217,7 +217,7 @@ export default {
     activate: 'Reprendre cette liste',
     deleteTitle: 'Supprimer la liste ?',
     deleteHelp:
-      '« {name} » sera supprimée avec ses repas et ses lignes. Cette action est définitive.',
+      '« {name} » sera supprimée avec ses repas et ses articles. Cette action est définitive.',
     current: 'Liste en cours',
     dateLabel: 'Liste du {date}',
     noneTitle: 'Aucune liste en cours',
@@ -229,10 +229,10 @@ export default {
     startNew: 'Nouvelle liste',
     progress: '{done} sur {total} articles dans le panier',
     sections: 'Contenu de la liste',
-    ingredientsTab: 'Ingrédients · {count}',
+    ingredientsTab: 'Articles · {count}',
     recipesTab: 'Recettes · {count}',
     emptyIngredients:
-      "Rien à acheter pour l'instant : planifiez une recette ou ajoutez des ingrédients.",
+      "Rien à acheter pour l'instant : planifiez une recette ou ajoutez des articles.",
     emptyRecipes: 'Aucune recette planifiée : choisissez-en une dans vos recettes.',
     serving: 'Nombre de personnes',
     fewer: 'Une personne de moins pour {name}',
@@ -240,7 +240,7 @@ export default {
     unplan: 'Retirer {name} de la liste',
   },
   account: {
-    title: 'Mon compte',
+    title: 'Moi',
     saved: 'Réglages enregistrés.',
     servingTitle: 'Nombre de personnes',
     serving: 'Nombre de personnes par défaut',
@@ -267,58 +267,59 @@ export default {
     entry: 'Mes produits du drive',
     entryHelp: 'Les produits que Repas prend en priorité pour vos courses au drive.',
     intro:
-      'Les produits que Repas prend pour chaque ingrédient quand vous envoyez une liste au drive.',
-    rule: 'Repas prend le premier produit disponible de la liste. Les produits refusés ne sont jamais pris.',
+      'Les produits que Repas prend pour chaque article quand vous envoyez une liste au drive.',
+    rule: 'Repas prend le premier produit disponible de la liste. Les produits à ne plus proposer ne sont jamais pris.',
     back: 'Tous mes produits',
     unavailable: 'L’envoi au drive n’est pas disponible pour le moment.',
     noStore:
-      'Vous n’avez pas encore enregistré votre magasin : sans lui, aucun produit n’est mémorisé.',
+      'Vous n’avez pas encore enregistré votre magasin : sans lui, Repas ne peut se souvenir d’aucun produit.',
     settings: 'Réglages du drive',
-    none: 'Aucun produit mémorisé pour le moment. Les produits se choisissent sur le site du drive pendant un envoi : ils apparaîtront ici, et vous pourrez les classer.',
-    missing: 'Cet ingrédient n’a pas de produit mémorisé.',
-    search: 'Rechercher un ingrédient',
-    noMatch: 'Aucun ingrédient ne correspond à votre recherche.',
-    haveAtHome: 'Vous en avez toujours',
-    preferred: 'Préféré : {label}',
+    none: 'Repas ne se souvient encore d’aucun produit. Les produits se choisissent sur le site du drive pendant un envoi : ils apparaîtront ici, et vous pourrez les classer.',
+    missing: 'Repas ne se souvient d’aucun produit pour cet article.',
+    search: 'Rechercher un article',
+    noMatch: 'Aucun article ne correspond à votre recherche.',
+    haveAtHome: 'J’en ai toujours',
+    preferred: 'Produit habituel : {label}',
     nothingAccepted: 'Aucun produit accepté',
-    fallbacks: '{n} produit de secours | {n} produits de secours',
-    rejectedCount: '{n} produit refusé | {n} produits refusés',
+    fallbacks: '{n} produit de remplacement | {n} produits de remplacement',
+    rejectedCount: '{n} produit à ne plus proposer | {n} produits à ne plus proposer',
     pieces: '{n} pièce | {n} pièces',
     offline:
       'Hors connexion : les modifications sont impossibles tant que le réseau n’est pas revenu.',
     haveAtHomeSwitch: 'J’en ai toujours',
     haveAtHomeHelp:
-      'Repas ne met rien au panier pour cet ingrédient. À l’enregistrement, ses produits sont oubliés.',
+      'Repas ne met rien au panier pour cet article. À l’enregistrement, ses produits sont oubliés.',
     accepted: 'Produits acceptés',
     acceptedHelp:
-      'Du préféré aux produits de secours ({max} au plus). Le préféré est pris s’il est disponible, sinon le suivant.',
+      'Du produit habituel aux produits de remplacement ({max} au plus). Le produit habituel est pris s’il est disponible, sinon le suivant.',
     acceptedNone:
       'Aucun produit accepté. Un produit se choisit sur le site du drive, pendant un envoi.',
     acceptedFull:
       'Vous avez déjà {max} produits acceptés : retirez-en un avant d’en accepter un autre.',
-    preferredBadge: 'Préféré',
-    fallbackBadge: 'Secours',
+    preferredBadge: 'Habituel',
+    fallbackBadge: 'Remplacement',
     position: 'Produit {position} sur {total}.',
     up: 'Monter',
     down: 'Descendre',
     remove: 'Retirer',
-    never: 'Ne plus jamais prendre',
-    rejected: 'Produits refusés',
-    rejectedNone: 'Aucun produit refusé.',
-    rejectedFull: 'Vous avez déjà {max} produits refusés : acceptez-en un de nouveau d’abord.',
+    never: 'Ne plus proposer',
+    rejected: 'Produits à ne plus proposer',
+    rejectedNone: 'Aucun produit à ne plus proposer.',
+    rejectedFull:
+      'Vous avez déjà {max} produits à ne plus proposer : acceptez-en un de nouveau d’abord.',
     acceptAgain: 'Accepter de nouveau',
     dirty: 'Modifications non enregistrées.',
     cancel: 'Annuler les modifications',
     saved: 'Produits enregistrés.',
-    forget: 'Oublier cet ingrédient',
+    forget: 'Oublier cet article',
     forgetTitle: 'Oublier {name} ?',
     forgetDescription:
-      'Repas oublie les produits acceptés et refusés pour cet ingrédient. Au prochain envoi, vous choisirez de nouveau.',
+      'Repas oublie les produits acceptés et ceux à ne plus proposer pour cet article. Au prochain envoi, vous choisirez de nouveau.',
     forgetConfirm: 'Oublier',
     forgotten: '{name} : produits oubliés.',
     moved: '{name} : position {position} sur {total}.',
     removed: '{name} est retiré de la liste.',
-    rejectedNow: '{name} ne sera plus jamais pris.',
+    rejectedNow: '{name} ne sera plus proposé.',
     acceptedAgain: '{name} est de nouveau accepté, en dernier.',
     cancelled: 'Modifications annulées.',
   },
@@ -395,10 +396,10 @@ export default {
     listEmpty: 'La liste est vide : ajoutez des articles avant de l’envoyer au drive.',
     driveNotConfigured: 'Choisissez d’abord votre magasin dans les réglages du drive.',
     driveChoiceInvalid:
-      'Cette préférence est refusée : 5 produits acceptés et 20 refusés au plus, et un produit ne peut pas être à la fois accepté et refusé.',
-    driveChoiceNotFound: 'Cet ingrédient n’a plus de produit mémorisé.',
+      'Ce choix n’est pas valable : 5 produits acceptés et 20 à ne plus proposer au plus, et un produit ne peut pas être les deux à la fois.',
+    driveChoiceNotFound: 'Repas ne se souvient plus de produit pour cet article.',
     driveLimitReached:
-      'Trop de produits mémorisés, ou trop d’écritures aujourd’hui : oubliez des produits dans « Mes produits », ou réessayez demain.',
+      'Repas se souvient déjà de trop de produits, ou il y a eu trop d’écritures aujourd’hui : oubliez des produits dans « Mes produits », ou réessayez demain.',
     driveStoreMismatch:
       'Votre magasin a changé : la page vient d’être rechargée, refaites votre action.',
     unitMeasureIncomplete:
@@ -420,28 +421,28 @@ export default {
     intro:
       'Vérifiez la liste, puis ouvrez le drive : le panier de Leclerc se remplit avec les produits retenus, puis vous revenez ici avec un récapitulatif. Connectez-vous à Leclerc si besoin.',
     counts: {
-      label: 'Résumé de l’envoi',
+      label: 'Contenu de l’envoi',
       known: 'Produits connus',
       new: 'À choisir',
-      haveAtHome: 'Déjà à la maison',
-      skipped: 'Passés cette fois',
+      haveAtHome: 'J’en ai toujours',
+      skipped: 'Pas cette fois',
     },
     lines: 'Votre liste ({count})',
     need: 'À acheter : {quantity}',
     statusNew: 'Nouveau : vous choisirez le produit sur Leclerc.',
     statusReplace: 'Vous choisirez un autre produit sur Leclerc, à la place de : {label}.',
-    statusHaveAtHome: 'Vous en avez déjà : rien à mettre au panier.',
-    statusSkip: 'Passé cette fois : rien ne sera mis au panier.',
+    statusHaveAtHome: 'J’en ai toujours : rien à mettre au panier.',
+    statusSkip: 'Pas cette fois : rien ne sera mis au panier.',
     products: 'Produits retenus, par ordre de préférence',
-    fallback: 'secours',
+    fallback: 'remplacement',
     packs: '{count} produit | {count} produits',
     packsToCheck: 'à vérifier',
     packsUnknown: 'quantité à vérifier',
-    rejected: 'Refusés : {labels}',
+    rejected: 'Ne plus proposer : {labels}',
     replace: 'Choisir un autre produit',
     replaceFor: 'Choisir un autre produit : {name}',
-    skip: 'Passer cette fois',
-    skipFor: 'Passer cette fois : {name}',
+    skip: 'Pas cette fois',
+    skipFor: 'Pas cette fois : {name}',
     open: 'Ouvrir le drive',
     reopenDrive: 'Rouvrir le drive',
     opening: 'Ouverture…',
@@ -452,10 +453,10 @@ export default {
       'Reprise des articles en échec : {count} article | Reprise des articles en échec : {count} articles',
     showAll: 'Voir toute la liste',
     waiting: {
-      title: 'En attente du retour du drive…',
-      help: 'Le drive est ouvert dans l’application. Quand le passage est terminé, vous revenez ici avec un récapitulatif.',
+      title: 'En attente du récapitulatif…',
+      help: 'Le drive est ouvert dans l’application. Quand l’envoi est terminé, vous revenez ici avec un récapitulatif.',
       restart: 'Recommencer',
-      restartHelp: 'Recommencer abandonne le passage en cours et reprend la liste depuis le début.',
+      restartHelp: 'Recommencer abandonne l’envoi en cours et reprend la liste depuis le début.',
       reopenList: 'Rouvrir la liste',
       reopenTitle: 'Rouvrir la liste ?',
       reopenHelp:
@@ -469,7 +470,7 @@ export default {
     },
     notInApp: {
       title: 'L’envoi automatique n’est pas disponible ici',
-      help: 'Le remplissage du panier fonctionne dans l’application Repas pour Android. Vous pouvez l’installer, ou chercher vous-même chaque produit sur le site de Leclerc avec les liens ci-dessous.',
+      help: 'L’envoi automatique fonctionne dans l’application Repas pour Android. Vous pouvez l’installer, ou chercher vous-même chaque produit sur le site de Leclerc avec les liens ci-dessous.',
       install: 'Installer l’application',
       search: 'Chercher sur Leclerc',
       searchFor: 'Chercher sur Leclerc : {name} (s’ouvre dans un nouvel onglet)',
@@ -480,30 +481,30 @@ export default {
       aid: 'Voir l’aide',
     },
     failure: {
-      invalidPlan: 'Le plan d’envoi n’est pas valide. Rechargez la page et réessayez.',
+      invalidPlan: 'Cet envoi n’est pas valide. Rechargez la page et réessayez.',
       tooManyLines:
-        'La liste a plus de {max} articles : ce n’est pas possible en un seul passage. Retirez des articles de la liste, puis renvoyez-la.',
+        'La liste a plus de {max} articles : ce n’est pas possible en un seul envoi. Retirez des articles de la liste, puis renvoyez-la.',
       tooLarge:
-        'Le plan est trop gros pour être transmis à l’application. Passez cette fois quelques articles, ou retirez-en de la liste.',
+        'L’envoi est trop gros pour être transmis à l’application. Choisissez « Pas cette fois » pour quelques articles, ou retirez-en de la liste.',
       sendFailed: 'L’application n’a pas pu ouvrir le drive. Réessayez.',
       appRefused: 'L’application ne répond pas comme prévu. Fermez-la, rouvrez-la, puis réessayez.',
     },
   },
   driveReturn: {
-    title: 'Retour du drive',
+    title: 'Récapitulatif',
     backToList: 'Retour à la liste',
     allLists: 'Mes listes',
     none: {
-      title: 'Aucun résultat à afficher',
-      help: 'Le résultat d’un envoi n’est gardé que pendant la visite : si la page a été rechargée, ouvrez la liste pour reprendre l’envoi.',
+      title: 'Aucun récapitulatif à afficher',
+      help: 'Le récapitulatif d’un envoi n’est gardé que pendant la visite : si la page a été rechargée, ouvrez la liste pour reprendre l’envoi.',
     },
     stale: {
-      title: 'Ce résultat ne correspond pas à votre dernier envoi',
-      help: 'Il a été ignoré : rien n’a été enregistré.',
+      title: 'Ce récapitulatif ne correspond pas à votre dernier envoi',
+      help: 'Il n’a pas été pris en compte : rien n’a été enregistré.',
     },
     refused: {
       title: 'Le drive n’a pas démarré',
-      help: 'L’application a refusé de lancer l’envoi : rien n’a été mis au panier. Mettez l’application à jour si cela se répète.',
+      help: 'L’application n’a pas lancé l’envoi : rien n’a été mis au panier. Mettez l’application à jour si cela se répète.',
       code: 'Code : {code}',
       backToSend: 'Revenir à l’envoi',
     },
@@ -513,7 +514,7 @@ export default {
     },
     setup: {
       title: 'Lecture du magasin',
-      help: 'Ce résultat est celui d’une lecture du magasin : il se traite dans les réglages du drive.',
+      help: 'Cette réponse est celle d’une lecture du magasin : elle se traite dans les réglages du drive.',
       settings: 'Réglages du drive',
     },
     outcome: {
@@ -522,16 +523,16 @@ export default {
         help: 'Les produits retenus sont dans votre panier Leclerc. Il reste à le finaliser sur le site de Leclerc.',
       },
       partial: {
-        title: 'Le passage s’est arrêté avant la fin',
+        title: 'L’envoi s’est arrêté avant la fin',
         help: 'Ce qui a été fait reste dans le panier. Vous pouvez réessayer le reste.',
       },
       aborted: {
-        title: 'Passage arrêté',
-        help: 'Vous avez arrêté le passage : ce qui était déjà dans le panier y reste.',
+        title: 'Envoi arrêté',
+        help: 'Vous avez arrêté l’envoi : ce qui était déjà dans le panier y reste.',
       },
       error: {
-        title: 'Le passage a échoué',
-        help: 'Le passage n’a pas pu aller au bout. Ce qui était déjà dans le panier y reste.',
+        title: 'L’envoi a échoué',
+        help: 'L’envoi n’a pas pu aller au bout. Ce qui était déjà dans le panier y reste.',
       },
     },
     errorCode: {
@@ -541,13 +542,13 @@ export default {
         'Leclerc a bloqué les demandes (trop de demandes ou contrôle anti-robot). Attendez un moment, puis réessayez.',
       CONTRACT_CHANGED:
         'Le site de Leclerc a changé : l’envoi automatique ne fonctionne plus pour l’instant.',
-      NETWORK: 'La connexion a été coupée pendant le passage.',
-      CANCELLED: 'Le passage a été annulé.',
-      INVALID_MESSAGE: 'L’application n’a pas compris le plan envoyé.',
+      NETWORK: 'La connexion a été coupée pendant l’envoi.',
+      CANCELLED: 'L’envoi a été annulé.',
+      INVALID_MESSAGE: 'L’application n’a pas compris l’envoi.',
       UNSUPPORTED_PAGE: 'Cette page de Leclerc n’est pas prise en charge.',
     },
     ignored:
-      '{count} ligne inattendue ignorée : elle ne figure pas dans le plan envoyé, rien n’a été mémorisé pour elle. | {count} lignes inattendues ignorées : elles ne figurent pas dans le plan envoyé, rien n’a été mémorisé pour elles.',
+      '{count} article inattendu n’a pas été pris en compte : il ne figure pas dans l’envoi, Repas ne s’en souvient pas. | {count} articles inattendus n’ont pas été pris en compte : ils ne figurent pas dans l’envoi, Repas ne s’en souvient pas.',
     save: {
       saving: 'Enregistrement de vos choix…',
       saved: 'Vos choix sont enregistrés pour les prochains envois.',
@@ -558,11 +559,11 @@ export default {
       retry: 'Réessayer l’enregistrement',
     },
     counts: {
-      label: 'Récapitulatif du passage',
+      label: 'Récapitulatif de l’envoi',
       added: 'Ajoutés au panier',
       chosen: 'Choisis sur Leclerc',
-      haveAtHome: 'Déjà à la maison',
-      skipped: 'Passés',
+      haveAtHome: 'J’en ai toujours',
+      skipped: 'Pas cette fois',
       unavailable: 'Indisponibles',
       failed: 'Échecs',
       priced: 'Prix lus',
@@ -571,12 +572,12 @@ export default {
     quantity: '× {count}',
     unknownProduct: 'Produit n° {id}',
     line: {
-      fallback: 'Produit de secours utilisé : le préféré n’était pas disponible.',
-      chosenPrimary: 'Choisi sur Leclerc, mémorisé comme produit préféré.',
-      chosenFallback: 'Choisi sur Leclerc, mémorisé comme produit de secours.',
+      fallback: 'Produit de remplacement utilisé : le produit habituel n’était pas disponible.',
+      chosenPrimary: 'Choisi sur Leclerc, produit habituel : Repas s’en souvient.',
+      chosenFallback: 'Choisi sur Leclerc, produit de remplacement : Repas s’en souvient.',
       chosenOnce: 'Choisi sur Leclerc pour cette fois seulement.',
-      haveAtHome: 'Vous en avez déjà : mémorisé.',
-      skipped: 'Passé cette fois.',
+      haveAtHome: 'J’en ai toujours : Repas s’en souvient.',
+      skipped: 'Pas cette fois.',
       unavailable: 'Aucun produit disponible : rien n’a été mis au panier.',
       failed: 'Échec : {reason}',
       rejected: 'Ne sera plus proposé : {labels}',
@@ -598,7 +599,7 @@ export default {
   },
   driveSettings: {
     title: 'Réglages du drive',
-    back: 'Mon compte',
+    back: 'Moi',
     entry: 'Réglages du drive',
     entryHelp: 'Votre magasin Leclerc Drive et l’application Repas.',
     disabled: 'L’envoi au drive n’est pas encore activé : il n’y a rien à régler pour le moment.',
@@ -607,7 +608,7 @@ export default {
     storeNamed: 'Magasin …{tail}',
     none: 'Aucun magasin enregistré.',
     storeHelp:
-      'Repas remplit le panier de ce magasin. Les produits mémorisés sont propres à ce magasin.',
+      'Repas remplit le panier de ce magasin. Les produits dont Repas se souvient sont propres à ce magasin.',
     read: 'Lire mon magasin dans l’application',
     readHelp: 'L’application ouvre le site du drive : choisissez votre magasin, puis revenez ici.',
     readDone: 'Magasin …{tail} lu dans l’application. Vérifiez, puis enregistrez.',
@@ -626,7 +627,7 @@ export default {
     name: 'Nom de votre magasin (facultatif)',
     nameHint: 'Pour le reconnaître : le nom de votre ville, par exemple.',
     changeWarning:
-      'C’est un autre magasin : les produits mémorisés pour l’ancien ne seront plus proposés, vous choisirez de nouveau vos produits.',
+      'C’est un autre magasin : les produits dont Repas se souvient pour l’ancien ne seront plus proposés, vous choisirez de nouveau vos produits.',
     save: 'Enregistrer mon magasin',
     saved: 'Magasin enregistré.',
     errors: {
@@ -647,13 +648,13 @@ export default {
     help: 'Aide d’installation',
     // Dans l'application elle-même : elle est installée, l'aide sert à la mettre à jour
     helpInApp: 'Mettre à jour l’application',
-    products: 'Produits mémorisés',
-    productsWith: 'Ingrédients avec des produits',
-    productsRejected: 'Ingrédients avec des produits refusés',
-    productsHome: 'Ingrédients que vous avez toujours',
+    products: 'Produits dont Repas se souvient',
+    productsWith: 'Articles avec des produits',
+    productsRejected: 'Articles avec des produits à ne plus proposer',
+    productsHome: 'Articles « J’en ai toujours »',
     manage: 'Gérer mes produits',
   },
-  // Les entrées de l’application dans « Mon compte » (DRV-320)
+  // Les entrées de l’application dans « Moi » (DRV-320)
   driveAccount: {
     appMenu: 'Menu de l’application',
     appMenuHelp: 'Version, mode d’emploi et déconnexion de Leclerc.',
@@ -725,7 +726,7 @@ export default {
       update: 'Mettre à jour l’application',
       uninstall: 'Désinstaller l’application',
       troubleshooting: 'En cas de problème',
-      assisted: 'Sans l’application : le mode assisté',
+      assisted: 'Sans l’application : chercher à la main',
     },
     install: {
       chrome: 'Sur votre téléphone Android, ouvrez cette page dans Chrome.',
@@ -769,7 +770,7 @@ export default {
     uninstall: {
       text: 'Touchez l’icône Repas sans la relâcher, puis « Désinstaller » (ou : Paramètres, Applications, Repas, Désinstaller). Votre compte, vos recettes et vos listes ne sont pas touchés. La connexion à Leclerc gardée par l’application est effacée avec elle.',
       clear:
-        'Pour seulement vous déconnecter de Leclerc et effacer les données du drive, sans désinstaller : dans l’écran du drive, « Menu », puis « Se déconnecter de Leclerc et effacer les données du drive ».',
+        'Pour seulement vous déconnecter de Leclerc, sans désinstaller : dans l’écran du drive, « Menu », puis « Se déconnecter de Leclerc ». Les cookies, les données du site et l’historique du drive sont alors effacés.',
     },
     problems: {
       blocked: {
@@ -786,15 +787,15 @@ export default {
       },
       login: {
         q: 'Je n’arrive pas à me connecter à Leclerc',
-        a: 'Vérifiez d’abord que vous pouvez vous connecter au site de Leclerc dans un navigateur. Si l’application ne vous reconnaît plus : dans l’écran du drive, « Menu », puis « Se déconnecter de Leclerc et effacer les données du drive », et reconnectez-vous. Si Leclerc ralentit ou refuse les requêtes, attendez plusieurs heures sans insister. Votre compte Leclerc dépend de Leclerc : en cas de blocage, contactez son service client.',
+        a: 'Vérifiez d’abord que vous pouvez vous connecter au site de Leclerc dans un navigateur. Si l’application ne vous reconnaît plus : dans l’écran du drive, « Menu », puis « Se déconnecter de Leclerc », et reconnectez-vous. Si Leclerc ralentit ou refuse les requêtes, attendez plusieurs heures sans insister. Votre compte Leclerc dépend de Leclerc : en cas de blocage, contactez son service client.',
       },
       changed: {
         q: '« Le site a changé » ou « Leclerc a changé »',
-        a: 'Leclerc a modifié son site et l’envoi automatique s’est arrêté pour ne rien abîmer. Cela ne vient pas de votre téléphone. En attendant une mise à jour de l’application, utilisez le mode assisté (voir plus bas) : vous cherchez les produits sur Leclerc avec les liens de la liste. Installez la nouvelle version de l’application dès qu’elle est annoncée.',
+        a: 'Leclerc a modifié son site et l’envoi automatique s’est arrêté pour ne rien abîmer. Cela ne vient pas de votre téléphone. En attendant une mise à jour de l’application, passez à « Chercher à la main » (voir plus bas) : les liens de la liste vous mènent aux produits sur Leclerc. Installez la nouvelle version de l’application dès qu’elle est annoncée.',
       },
       mobile: {
         q: 'Leclerc s’affiche en version mobile, ou « Page non prise en charge »',
-        a: 'L’application doit afficher le site de Leclerc en version ordinateur. Dans l’écran du drive, « Menu », puis « Se déconnecter de Leclerc et effacer les données du drive », puis rouvrez le drive.',
+        a: 'L’application doit afficher le site de Leclerc en version ordinateur. Dans l’écran du drive, « Menu », puis « Se déconnecter de Leclerc », puis rouvrez le drive.',
       },
       webview: {
         q: '« Le drive n’est pas utilisable sur cet appareil »',
@@ -833,7 +834,7 @@ export default {
         store:
           'Votre magasin Leclerc : son numéro, son adresse sur le site de Leclerc, et le nom que vous lui avez donné si vous en avez mis un.',
         choices:
-          'Vos produits mémorisés, ingrédient par ingrédient : votre produit préféré, vos produits de secours (5 au plus), vos produits refusés (20 au plus) et les ingrédients que vous avez « toujours chez vous ».',
+          'Les produits dont Repas se souvient, article par article : votre produit habituel, vos produits de remplacement (5 au plus), les produits à ne plus proposer (20 au plus) et les articles « J’en ai toujours ».',
         products:
           'Pour chaque produit : son numéro chez Leclerc, son nom, son contenu (par exemple 1 kg), et son prix avec la date où il a été vu. Les prix servent à estimer le coût d’une liste ; l’estimation est datée et le vrai prix est toujours celui de Leclerc.',
         lists:
@@ -857,17 +858,17 @@ export default {
         backups:
           'Le serveur fait une copie de sauvegarde chaque nuit et garde les 14 dernières : une donnée effacée peut rester dans ces copies environ deux semaines au plus, puis elles sont remplacées.',
         phone:
-          'Sur votre téléphone, l’application garde votre connexion à Leclerc, comme le ferait un navigateur. Elle ne la partage ni avec Repas ni avec personne d’autre que Leclerc et ses propres services. Vous pouvez l’effacer à tout moment : menu de l’application, « Se déconnecter de Leclerc et effacer les données du drive ».',
+          'Sur votre téléphone, l’application garde votre connexion à Leclerc, comme le ferait un navigateur. Elle ne la partage ni avec Repas ni avec personne d’autre que Leclerc et ses propres services. Vous pouvez l’effacer à tout moment : menu de l’application, « Se déconnecter de Leclerc ».',
         sheets:
-          'Les fiches de produits (nom, contenu, prix vu, magasin) sont communes à tous les utilisateurs de Repas et ne disent pas qui les a vues. Chacun ne retrouve que les produits qu’il a lui-même mémorisés. La première personne qui décrit un produit fixe sa fiche (nom, contenu, code-barres) : les suivantes ne la réécrivent pas, elles ne font que la compléter si elle est incomplète ; le prix vu, lui, est rafraîchi par celles qui choisissent ce produit. Ces fiches restent quand un compte est supprimé, mais sans aucun lien avec la personne.',
+          'Les descriptions de produits (nom, contenu, prix vu, magasin) sont communes à tous les utilisateurs de Repas et ne disent pas qui les a vues. Chacun ne retrouve que les produits dont Repas se souvient pour lui. La première personne qui décrit un produit fixe sa description (nom, contenu, code-barres) : les suivantes ne la réécrivent pas, elles ne font que la compléter si elle est incomplète ; le prix vu, lui, est rafraîchi par celles qui choisissent ce produit. Ces descriptions restent quand un compte est supprimé, mais sans aucun lien avec la personne.',
       },
       erase: {
         title: 'Comment tout effacer',
         product:
-          'Un produit, ou un ingrédient : dans « Mon compte », « Mes produits du drive » : retirez un produit, refusez-en un, ou touchez « Oublier cet ingrédient » pour effacer tout ce que Repas retient sur lui.',
+          'Un produit, ou un article : dans « Moi », « Mes produits du drive » : retirez un produit, choisissez « Ne plus proposer » pour un autre, ou touchez « Oublier cet article » pour effacer tout ce que Repas retient sur lui.',
         store:
-          'Un changement de magasin : si vous changez de magasin, les produits mémorisés pour l’ancien magasin ne sont plus utilisés, mais ils restent enregistrés jusqu’à la suppression de votre compte.',
-        all: 'Tout, d’un coup : demandez la suppression de votre compte à la personne qui administre Repas. Elle efface vos données du drive (magasin, produits mémorisés), vos listes de courses avec leur statut d’envoi, et le reste de votre compte.',
+          'Un changement de magasin : si vous changez de magasin, les produits dont Repas se souvient pour l’ancien magasin ne sont plus utilisés, mais ils restent enregistrés jusqu’à la suppression de votre compte.',
+        all: 'Tout, d’un coup : demandez la suppression de votre compte à la personne qui administre Repas. Elle efface vos données du drive (magasin, produits dont Repas se souvient), vos listes de courses avec leur statut d’envoi, et le reste de votre compte.',
         rights:
           'Pour exercer vos droits (savoir ce que Repas a de vous, corriger, effacer), écrivez à la personne qui vous a donné accès à Repas.',
       },
@@ -898,13 +899,13 @@ export default {
     periodRange: 'D’après les prix vus entre le {from} et le {to}.',
     lowCoverage:
       'Estimation peu fiable : moins de la moitié des articles ont un prix connu, le total ne couvre qu’une partie de la liste.',
-    noPrice: 'Aucun prix connu pour le moment : les prix se mémorisent à chaque envoi au drive.',
+    noPrice: 'Aucun prix connu pour le moment : Repas retient les prix à chaque envoi au drive.',
     nothingToBuy: 'Rien à estimer : aucun article de cette liste n’est à acheter au drive.',
-    detail: 'Voir le détail ({count} ligne) | Voir le détail ({count} lignes)',
+    detail: 'Voir le détail ({count} article) | Voir le détail ({count} articles)',
     groups: {
       unestimated: 'Non estimées ({count})',
       estimated: 'Estimées ({count})',
-      haveAtHome: 'Déjà à la maison ({count})',
+      haveAtHome: 'J’en ai toujours ({count})',
     },
     neverGuessed: 'Ces articles ne sont pas dans le total : Repas ne devine jamais un prix.',
     packsAt: '{count} × {price}',
@@ -912,9 +913,9 @@ export default {
     status: {
       ESTIMATED: 'estimée',
       NO_PRODUCT: 'pas de produit choisi',
-      NO_PRICE: 'pas de prix mémorisé',
+      NO_PRICE: 'pas de prix connu',
       TO_CHECK: 'à vérifier',
-      HAVE_AT_HOME: 'déjà à la maison',
+      HAVE_AT_HOME: 'j’en ai toujours',
     },
   },
 }

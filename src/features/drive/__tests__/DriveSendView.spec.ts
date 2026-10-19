@@ -111,9 +111,9 @@ describe('écran d’envoi au drive, dans l’application', () => {
     expect(farine.text()).toContain('À acheter : 800 g')
     expect(farine.findAll('ol > li').map((item) => item.text().replace(/\s+/g, ' '))).toEqual([
       '1. Farine de blé T55 Marque Repère 1 kg · 1 produit',
-      '2. Farine de blé T45 1 kg (secours) · 2 produits',
+      '2. Farine de blé T45 1 kg (remplacement) · 2 produits',
     ])
-    expect(farine.text()).toContain('Refusés : Farine complète bio 1 kg')
+    expect(farine.text()).toContain('Ne plus proposer : Farine complète bio 1 kg')
 
     const beurre = wrapper.findAll('main > section ul > li')[1]!
     expect(beurre.find('ol > li').text().replace(/\s+/g, ' ')).toBe(
@@ -123,14 +123,14 @@ describe('écran d’envoi au drive, dans l’application', () => {
     const poivre = wrapper.findAll('main > section ul > li')[8]!
     expect(poivre.text()).toContain('Nouveau : vous choisirez le produit sur Leclerc.')
     expect(wrapper.findAll('main > section ul > li')[11]!.text()).toContain(
-      'Vous en avez déjà : rien à mettre au panier.',
+      'J’en ai toujours : rien à mettre au panier.',
     )
 
     expect(counts(wrapper)).toEqual([
       'Produits connus8',
       'À choisir3',
-      'Déjà à la maison1',
-      'Passés cette fois0',
+      'J’en ai toujours1',
+      'Pas cette fois0',
     ])
   })
 
@@ -161,20 +161,20 @@ describe('écran d’envoi au drive, dans l’application', () => {
     )
     expect(counts(wrapper).slice(0, 2)).toEqual(['Produits connus7', 'À choisir4'])
 
-    await wrapper.find('button[aria-label="Passer cette fois : Lait"]').trigger('click')
+    await wrapper.find('button[aria-label="Pas cette fois : Lait"]').trigger('click')
     expect(counts(wrapper)).toEqual([
       'Produits connus6',
       'À choisir4',
-      'Déjà à la maison1',
-      'Passés cette fois1',
+      'J’en ai toujours1',
+      'Pas cette fois1',
     ])
     expect(wrapper.findAll('main > section ul > li')[2]!.text()).toContain(
-      'Passé cette fois : rien ne sera mis au panier.',
+      'Pas cette fois : rien ne sera mis au panier.',
     )
 
     // L'annulation : les mêmes boutons, pressés une seconde fois
     await wrapper.find('button[aria-label="Choisir un autre produit : Farine"]').trigger('click')
-    await wrapper.find('button[aria-label="Passer cette fois : Lait"]').trigger('click')
+    await wrapper.find('button[aria-label="Pas cette fois : Lait"]').trigger('click')
     expect(counts(wrapper)[0]).toBe('Produits connus8')
     expect(wrapper.findAll('main > section ul > li')[0]!.find('ol').exists()).toBe(true)
   })
@@ -186,10 +186,10 @@ describe('écran d’envoi au drive, dans l’application', () => {
 
     const items = wrapper.findAll('main > section ul > li')
     expect(items[11]!.find('button').exists()).toBe(false)
-    expect(items[8]!.findAll('button').map((item) => item.text())).toEqual(['Passer cette fois'])
+    expect(items[8]!.findAll('button').map((item) => item.text())).toEqual(['Pas cette fois'])
     expect(items[0]!.findAll('button').map((item) => item.text())).toEqual([
       'Choisir un autre produit',
-      'Passer cette fois',
+      'Pas cette fois',
     ])
   })
 
@@ -198,7 +198,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
     const { wrapper } = await open()
     await loaded(wrapper)
     await press('Choisir un autre produit')
-    await wrapper.find('button[aria-label="Passer cette fois : Lait"]').trigger('click')
+    await wrapper.find('button[aria-label="Pas cette fois : Lait"]').trigger('click')
 
     await press('Ouvrir le drive')
 
@@ -228,7 +228,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
       runId: start!.plan!.runId,
       listId: 'l1',
     })
-    expect(wrapper.text()).toContain('En attente du retour du drive…')
+    expect(wrapper.text()).toContain('En attente du récapitulatif…')
     expect(wrapper.find('dl').exists()).toBe(false)
   })
 
@@ -236,26 +236,26 @@ describe('écran d’envoi au drive, dans l’application', () => {
     localStorage.setItem(DRAFT_KEY, draftOf('l1'))
     const native = installApp()
     const { wrapper } = await open()
-    await vi.waitFor(() => expect(wrapper.text()).toContain('En attente du retour du drive…'))
+    await vi.waitFor(() => expect(wrapper.text()).toContain('En attente du récapitulatif…'))
 
     await press('Rouvrir le drive')
 
     expect(started(native)[0]?.plan?.runId).toBe(RUN)
-    expect(wrapper.text()).toContain('En attente du retour du drive…')
+    expect(wrapper.text()).toContain('En attente du récapitulatif…')
   })
 
   it('« Recommencer » abandonne le passage et revient à la liste', async () => {
     localStorage.setItem(DRAFT_KEY, draftOf('l1'))
     const native = installApp()
     const { wrapper } = await open()
-    await vi.waitFor(() => expect(wrapper.text()).toContain('En attente du retour du drive…'))
+    await vi.waitFor(() => expect(wrapper.text()).toContain('En attente du récapitulatif…'))
 
     await press('Recommencer')
 
     expect(native.sent.map((message) => message.type)).toContain('drive.cancel')
     expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
     await loaded(wrapper)
-    expect(wrapper.text()).not.toContain('En attente du retour du drive…')
+    expect(wrapper.text()).not.toContain('En attente du récapitulatif…')
 
     // Un nouveau passage a un nouveau runId
     await press('Ouvrir le drive')
@@ -268,7 +268,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
     const { wrapper, context, fetchMock } = await open({
       'POST /api/v1/shopping-lists/l1/reopen': noContent,
     })
-    await vi.waitFor(() => expect(wrapper.text()).toContain('En attente du retour du drive…'))
+    await vi.waitFor(() => expect(wrapper.text()).toContain('En attente du récapitulatif…'))
 
     await press('Rouvrir la liste')
     expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(
@@ -315,7 +315,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
     await press('Ouvrir le drive')
 
     expect(started(native)).toHaveLength(0)
-    expect(wrapper.text()).toContain('En attente du retour du drive…')
+    expect(wrapper.text()).toContain('En attente du récapitulatif…')
   })
 
   it('« Réessayer les échecs » : ne reprend que les lignes nommées, le plan envoyé aussi', async () => {
@@ -423,7 +423,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
 
       await press('Ouvrir le drive')
 
-      expect(wrapper.find('[role="alert"]').text()).toContain('plan d’envoi n’est pas valide')
+      expect(wrapper.find('[role="alert"]').text()).toContain('Cet envoi n’est pas valide')
       expect(started(native)).toHaveLength(0)
     })
 
@@ -450,7 +450,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
 
       await press('Ouvrir le drive')
 
-      expect(wrapper.find('[role="alert"]').text()).toContain('plan d’envoi n’est pas valide')
+      expect(wrapper.find('[role="alert"]').text()).toContain('Cet envoi n’est pas valide')
     })
   })
 })
@@ -561,7 +561,7 @@ describe('lecture du plan', () => {
         'POST /api/v1/shopping-lists/l1/reopen': noContent,
       })
       await vi.waitFor(() => expect(button('Rouvrir la liste')).toBeDefined())
-      expect(wrapper.text()).not.toContain('En attente du retour du drive…')
+      expect(wrapper.text()).not.toContain('En attente du récapitulatif…')
 
       await press('Rouvrir la liste')
       const dialog = document.body.querySelector('[role="dialog"]')

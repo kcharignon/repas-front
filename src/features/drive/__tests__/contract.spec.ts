@@ -259,13 +259,13 @@ describe('les écrans lisent les exemples du back sans erreur', () => {
     expect(calls(fetchMock)).toContain('GET /api/v1/drive/choices')
   })
 
-  it('Mes produits : le produit préféré de chaque ingrédient, ou « Vous en avez toujours »', async () => {
+  it('Mes produits : le produit préféré de chaque ingrédient, ou « J’en ai toujours »', async () => {
     const { wrapper } = await show(ProductsView, '/drive/produits')
     const text = plain(wrapper.text())
 
     for (const label of ['Farine de blé T55 1 kg', 'Lait demi-écrémé UHT 50 cl', 'Sel fin 1 kg'])
       expect(text).toContain(label)
-    expect(text).toContain('Vous en avez toujours')
+    expect(text).toContain('J’en ai toujours')
   })
 
   it('estimation : le total, la couverture et un statut par ligne', async () => {
@@ -282,14 +282,14 @@ describe('les écrans lisent les exemples du back sans erreur', () => {
     expect(wrapper.findAll('h3').map((title) => title.text())).toEqual([
       'Non estimées (3)',
       'Estimées (1)',
-      'Déjà à la maison (1)',
+      'J’en ai toujours (1)',
     ])
     for (const status of [
       'estimée',
-      'pas de prix mémorisé',
+      'pas de prix connu',
       'pas de produit choisi',
       'à vérifier',
-      'déjà à la maison',
+      'j’en ai toujours',
     ])
       expect(text).toContain(status)
   })

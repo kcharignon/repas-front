@@ -131,17 +131,17 @@ afterEach(() => {
 })
 
 describe('Mes produits : la liste des ingrédients', () => {
-  it('montre le produit préféré, les secours et les refusés, ou « Vous en avez toujours »', async () => {
+  it('montre le produit préféré, les secours et les refusés, ou « J’en ai toujours »', async () => {
     const { wrapper, fetchMock } = await open(ProductsView, '/drive/produits')
 
     const rows = wrapper.findAll('li a')
     expect(rows).toHaveLength(3)
     expect(rows[0]?.text()).toContain('Farine')
-    expect(rows[0]?.text()).toContain('Préféré : Farine de blé T55 Marque Repère 1 kg')
-    expect(rows[0]?.text()).toContain('1 produit de secours · 1 produit refusé')
-    expect(rows[1]?.text()).toContain('Vous en avez toujours')
-    expect(rows[1]?.text()).not.toContain('Préféré')
-    expect(rows[2]?.text()).not.toContain('secours')
+    expect(rows[0]?.text()).toContain('Produit habituel : Farine de blé T55 Marque Repère 1 kg')
+    expect(rows[0]?.text()).toContain('1 produit de remplacement · 1 produit à ne plus proposer')
+    expect(rows[1]?.text()).toContain('J’en ai toujours')
+    expect(rows[1]?.text()).not.toContain('Produit habituel')
+    expect(rows[2]?.text()).not.toContain('remplacement')
     expect(rows[0]?.attributes('href')).toBe('/drive/produits/farine')
     expect(calls(fetchMock)).toContain('GET /api/v1/drive/choices')
     const read = fetchMock.mock.calls
@@ -160,7 +160,7 @@ describe('Mes produits : la liste des ingrédients', () => {
 
     await wrapper.find('input[type="search"]').setValue('zzz')
     expect(wrapper.findAll('li a')).toHaveLength(0)
-    expect(wrapper.text()).toContain('Aucun ingrédient ne correspond à votre recherche.')
+    expect(wrapper.text()).toContain('Aucun article ne correspond à votre recherche.')
   })
 
   it('explique quand aucun produit n’est mémorisé', async () => {
@@ -168,7 +168,7 @@ describe('Mes produits : la liste des ingrédients', () => {
       'GET /api/v1/drive/choices': list(),
     })
 
-    expect(wrapper.text()).toContain('Aucun produit mémorisé pour le moment.')
+    expect(wrapper.text()).toContain('Repas ne se souvient encore d’aucun produit.')
     expect(wrapper.find('input[type="search"]').exists()).toBe(false)
   })
 
@@ -203,14 +203,14 @@ describe('Mes produits : un ingrédient', () => {
 
     expect(wrapper.find('h1').text()).toBe('Farine')
     expect(wrapper.text()).toContain(
-      'Repas prend le premier produit disponible de la liste. Les produits refusés ne sont jamais pris.',
+      'Repas prend le premier produit disponible de la liste. Les produits à ne plus proposer ne sont jamais pris.',
     )
     expect(acceptedLabels(wrapper)).toEqual([A.label, B.label])
     const items = wrapper.findAll('ol li')
-    expect(items[0]?.text()).toContain('Préféré')
+    expect(items[0]?.text()).toContain('Habituel')
     expect(items[0]?.text()).toContain('1 kg')
     expect(items[0]?.text()).toContain('Produit 1 sur 2')
-    expect(items[1]?.text()).toContain('Secours')
+    expect(items[1]?.text()).toContain('Remplacement')
     expect(items[1]?.text()).toContain('Produit 2 sur 2')
     expect(wrapper.text()).toContain(C.label)
     expect(wrapper.find('ol').attributes('aria-label')).toBe('Produits acceptés')
@@ -269,7 +269,7 @@ describe('Mes produits : un ingrédient', () => {
 
     await press(wrapper, 'Accepter de nouveau')
     expect(acceptedLabels(wrapper)).toEqual([A.label, B.label, C.label])
-    expect(wrapper.text()).toContain('Aucun produit refusé.')
+    expect(wrapper.text()).toContain('Aucun produit à ne plus proposer.')
     await press(wrapper, 'Enregistrer')
 
     expect((await bodyOf(fetchMock, puts(fetchMock))) as object).toMatchObject({
@@ -278,10 +278,10 @@ describe('Mes produits : un ingrédient', () => {
     })
   })
 
-  it('« Ne plus jamais prendre » déplace le produit vers les refusés', async () => {
+  it('« Ne plus proposer » déplace le produit vers les refusés', async () => {
     const { wrapper, fetchMock } = await detail({ 'PUT /api/v1/drive/choices/farine': noContent })
 
-    await press(wrapper, 'Ne plus jamais prendre')
+    await press(wrapper, 'Ne plus proposer')
     expect(acceptedLabels(wrapper)).toEqual([B.label])
     expect(wrapper.text()).toContain(A.label)
     await press(wrapper, 'Enregistrer')
@@ -310,7 +310,7 @@ describe('Mes produits : un ingrédient', () => {
 
     await press(wrapper, 'J’en ai toujours')
     expect(wrapper.find('ol').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('Produits refusés')
+    expect(wrapper.text()).not.toContain('Produits à ne plus proposer')
     await press(wrapper, 'Enregistrer')
 
     expect(await bodyOf(fetchMock, puts(fetchMock))).toEqual({
@@ -342,7 +342,7 @@ describe('Mes produits : un ingrédient', () => {
     await press(wrapper, 'Descendre')
     await press(wrapper, 'Enregistrer')
 
-    expect(wrapper.find('[role="alert"]').text()).toContain('Cette préférence est refusée')
+    expect(wrapper.find('[role="alert"]').text()).toContain('Ce choix n’est pas valable')
     expect(acceptedLabels(wrapper)).toEqual([B.label, A.label])
     expect(useNotificationsStore().items).toHaveLength(0)
   })
@@ -356,9 +356,11 @@ describe('Mes produits : un ingrédient', () => {
     await press(wrapper, 'Enregistrer')
 
     const alert = wrapper.find('[role="alert"]').text()
-    expect(alert).toContain('Trop de produits mémorisés, ou trop d’écritures aujourd’hui')
+    expect(alert).toContain(
+      'Repas se souvient déjà de trop de produits, ou il y a eu trop d’écritures aujourd’hui',
+    )
     expect(alert).toContain('réessayez demain')
-    expect(alert).not.toContain('Cette préférence est refusée')
+    expect(alert).not.toContain('Ce choix n’est pas valable')
     expect(acceptedLabels(wrapper)).toEqual([B.label, A.label])
   })
 
@@ -402,7 +404,7 @@ describe('Mes produits : un ingrédient', () => {
       'DELETE /api/v1/drive/choices/farine': noContent,
     })
 
-    await press(wrapper, 'Oublier cet ingrédient')
+    await press(wrapper, 'Oublier cet article')
     expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(
       'Oublier Farine ?',
     )
@@ -427,7 +429,7 @@ describe('Mes produits : un ingrédient', () => {
       'DELETE /api/v1/drive/choices/farine': rateLimited(1),
     })
 
-    await press(wrapper, 'Oublier cet ingrédient')
+    await press(wrapper, 'Oublier cet article')
     ;(
       [...document.body.querySelectorAll('[role="dialog"] button')].find(
         (button) => button.textContent.trim() === 'Oublier',
@@ -446,7 +448,7 @@ describe('Mes produits : un ingrédient', () => {
       'DELETE /api/v1/drive/choices/farine': failure(404, 'DRIVE_CHOICE_NOT_FOUND'),
     })
 
-    await press(wrapper, 'Oublier cet ingrédient')
+    await press(wrapper, 'Oublier cet article')
     ;(
       [...document.body.querySelectorAll('[role="dialog"] button')].find(
         (button) => button.textContent.trim() === 'Oublier',
@@ -454,7 +456,9 @@ describe('Mes produits : un ingrédient', () => {
     ).click()
     await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
 
-    expect(wrapper.find('[role="alert"]').text()).toContain('n’a plus de produit mémorisé')
+    expect(wrapper.find('[role="alert"]').text()).toContain(
+      'ne se souvient plus de produit pour cet article',
+    )
   })
 
   it('une préférence vidée puis enregistrée est oubliée par le back : retour à la liste', async () => {
@@ -489,7 +493,7 @@ describe('Mes produits : un ingrédient', () => {
   it('dit quand l’ingrédient n’a pas de préférence', async () => {
     const { wrapper } = await detail({}, 'inconnu')
 
-    expect(wrapper.text()).toContain('Cet ingrédient n’a pas de produit mémorisé.')
+    expect(wrapper.text()).toContain('Repas ne se souvient d’aucun produit pour cet article.')
     expect(wrapper.find('a').attributes('href')).toBe('/drive/produits')
   })
 

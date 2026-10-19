@@ -37,7 +37,7 @@ test('un passage réussi : retour automatique, choix enregistrés en un appel, r
   const farine = page
     .getByRole('listitem')
     .filter({ has: page.getByRole('heading', { name: 'Farine' }) })
-  await expect(farine).toContainText('mémorisé comme produit préféré')
+  await expect(farine).toContainText('produit habituel : Repas s’en souvient')
   await expect(
     page.getByRole('listitem').filter({ has: page.getByRole('heading', { name: 'Beurre' }) }),
   ).toContainText('1,89')
@@ -103,7 +103,7 @@ test('un faux résultat posté par la page de l’enseigne : seules les lignes d
   await expect(
     page.getByText('Vos choix sont enregistrés pour les prochains envois.'),
   ).toBeVisible()
-  await expect(page.getByText('3 lignes inattendues ignorées')).toBeVisible()
+  await expect(page.getByText('3 articles inattendus n’ont pas été pris en compte')).toBeVisible()
   await expect(page.getByRole('heading', { level: 2, name: 'Détail (1)' })).toBeVisible()
   await expect(page.getByText('Produit hors liste')).toHaveCount(0)
   await expect(page.getByText('Produit imposé')).toHaveCount(0)
@@ -125,7 +125,7 @@ test('un passage arrêté par Leclerc : échecs expliqués, on réessaie seuleme
   await page.getByRole('button', { name: 'Ouvrir le drive' }).click()
 
   await expect(
-    page.getByRole('heading', { level: 2, name: 'Le passage s’est arrêté avant la fin' }),
+    page.getByRole('heading', { level: 2, name: 'L’envoi s’est arrêté avant la fin' }),
   ).toBeVisible()
   await expect(page.getByText('Leclerc a bloqué les demandes').first()).toBeVisible()
   await expect(page.getByText('Échecs1')).toBeVisible()
@@ -176,7 +176,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await expect(
       page.getByRole('heading', {
         level: 2,
-        name: 'Ce résultat ne correspond pas à votre dernier envoi',
+        name: 'Ce récapitulatif ne correspond pas à votre dernier envoi',
       }),
     ).toBeVisible()
     expect(received.calls.filter((call) => call === 'PUT /api/v1/drive/choices')).toHaveLength(1)

@@ -5,7 +5,7 @@ import { ChevronRight } from 'lucide-vue-next'
 
 import { driveBridge } from './bridge'
 
-// L'entrée « Application Android » de « Mon compte » (DRV-316) : toujours là, drive allumé ou non, car l'application contient tout Repas.
+// L'entrée « Application Android » de « Moi » (DRV-316) : toujours là, drive allumé ou non, car l'application contient tout Repas.
 // Dans un navigateur elle propose d'installer l'application ; dans l'application elle-même, installer n'aurait pas de sens : elle mène à la
 // rubrique « Mettre à jour l'application » de la même page d'aide.
 const { t } = useI18n()

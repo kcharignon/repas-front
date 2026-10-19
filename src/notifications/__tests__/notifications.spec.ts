@@ -130,7 +130,7 @@ describe('messageForFailure', () => {
     [
       422,
       'DRIVE_LIMIT_REACHED',
-      'Trop de produits mémorisés, ou trop d’écritures aujourd’hui : oubliez des produits dans « Mes produits », ou réessayez demain.',
+      'Repas se souvient déjà de trop de produits, ou il y a eu trop d’écritures aujourd’hui : oubliez des produits dans « Mes produits », ou réessayez demain.',
     ],
     [409, 'SHOPPING_LIST_NOT_SENDABLE', 'Seule une liste en cours peut être envoyée au drive.'],
     [

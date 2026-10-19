@@ -243,10 +243,10 @@ test.describe('parcours complet, pont et API simulés', () => {
     ])
 
     // 7. Le récapitulatif : les compteurs, puis chaque ligne
-    const counts = page.getByLabel('Récapitulatif du passage')
+    const counts = page.getByLabel('Récapitulatif de l’envoi')
     await expect(counts).toContainText('Ajoutés au panier2')
     await expect(counts).toContainText('Choisis sur Leclerc1')
-    await expect(counts).toContainText('Déjà à la maison1')
+    await expect(counts).toContainText('J’en ai toujours1')
     await expect(counts).toContainText('Indisponibles1')
     await expect(counts).toContainText('Prix lus3')
     const line = (name: string) =>
@@ -255,9 +255,11 @@ test.describe('parcours complet, pont et API simulés', () => {
     await expect(line('Lait')).toContainText(
       'Aucun produit disponible : rien n’a été mis au panier.',
     )
-    await expect(line('Œufs')).toContainText('Choisi sur Leclerc, mémorisé comme produit préféré.')
+    await expect(line('Œufs')).toContainText(
+      'Choisi sur Leclerc, produit habituel : Repas s’en souvient.',
+    )
     await expect(line('Œufs')).toContainText('Ne sera plus proposé : Œufs cage x6')
-    await expect(line('Sucre')).toContainText('Vous en avez déjà : mémorisé.')
+    await expect(line('Sucre')).toContainText('J’en ai toujours : Repas s’en souvient.')
     await expect(page.getByText('Le panier Leclerc n’est pas vidé par Repas.')).toBeVisible()
     expect(await page.evaluate(() => localStorage.getItem('repas.drive.run'))).toBeNull()
     expect((await scan(page)).violations).toEqual([])

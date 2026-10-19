@@ -29,7 +29,7 @@ test.describe('mon compte', () => {
 
   test('changer le nombre de personnes par défaut', async ({ page }) => {
     await signIn(page, '/moi')
-    await expect(page.getByRole('heading', { level: 1, name: 'Mon compte' })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name: 'Moi' })).toBeVisible()
 
     await page.getByLabel('Nombre de personnes par défaut').fill(String(initialServing + 1))
     await page.getByRole('button', { name: 'Enregistrer' }).click()
@@ -65,7 +65,7 @@ test.describe('mon compte', () => {
     test(`la page du compte est accessible (WCAG AA), thème ${colorScheme}`, async ({ page }) => {
       await page.emulateMedia({ colorScheme })
       await signIn(page, '/moi')
-      await expect(page.getByRole('heading', { level: 1, name: 'Mon compte' })).toBeVisible()
+      await expect(page.getByRole('heading', { level: 1, name: 'Moi' })).toBeVisible()
 
       const { violations } = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])

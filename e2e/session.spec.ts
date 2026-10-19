@@ -51,11 +51,11 @@ test.describe('avec le back', () => {
 
     // Retour à la page demandée avant la connexion
     await expect(page).toHaveURL(/\/moi$/)
-    await expect(page.getByRole('heading', { level: 1, name: 'Mon compte' })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name: 'Moi' })).toBeVisible()
 
     // Le jeton n'est qu'en mémoire : après rechargement, le cookie de rafraîchissement rouvre la session.
     await page.reload()
-    await expect(page.getByRole('heading', { level: 1, name: 'Mon compte' })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name: 'Moi' })).toBeVisible()
     await expect(page.getByText(email)).toBeVisible()
     expect(
       await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage })),

@@ -76,7 +76,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await summary.focus()
     await page.keyboard.press('Enter')
     await expect(block.getByText('Non estimées (2)')).toBeVisible()
-    await expect(block.getByText('pas de prix mémorisé')).toBeVisible()
+    await expect(block.getByText('pas de prix connu')).toBeVisible()
     await expect(block.getByText('pas de produit choisi')).toBeVisible()
     await expect(block.getByText('déjà à la maison').last()).toBeVisible()
     await expect(block.getByText('2 × 0,99 €')).toBeVisible()
