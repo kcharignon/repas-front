@@ -11,6 +11,8 @@
 #   1. lecture du magasin (`drive.setup`) : accueil du drive, choix du magasin du faux Leclerc, l'agent le lit, Repas reçoit son numéro et son hôte ;
 #      (Depuis DRV-629 le faux accueil a, comme le vrai site, un BOUTON « Commencer mes courses » sans adresse : l'agent le CLIQUE ; les scénarios 8 et 12
 #      reprennent la forme « lien ».)
+#  1b. « Se connecter » touché avant le magasin (Leclerc exige le magasin AVANT la connexion) : la page de connexion s'affiche, le bandeau ramène au
+#      choix du magasin (« Choisis d'abord ton magasin… »), le retour de la page remet le message de la lecture du magasin, puis abandon ;
 #   2. passage complet : le drive s'ouvre sur l'ACCUEIL DE L'ENSEIGNE (www.leclercdrive.fr, comme la lecture du magasin), qui affiche
 #      l'accueil du magasin de l'utilisateur (constat de la recette réelle du 2026-10-18 : la racine de l'hôte du magasin et /magasin-N-N/ y sont des
 #      pages 404, le faux site les refuse aussi) ; le test ÉCHOUE si le départ retombe sur la racine de l'hôte du magasin (non-régression) ; DRV-625 :
@@ -153,16 +155,17 @@ say "1. Lecture du magasin (drive.setup) : le magasin du faux Leclerc, lu par l'
 RUN_SETUP=5e7b0000-0000-4000-8000-000000000001
 fake_reset
 start_setup "$RUN_SETUP"
-if wait_until 40 ui_has 'choisis ton magasin'; then
-  ok "drive.setup ouvre le drive sur l'accueil, avec le message en français simple"
+if wait_until 40 ui_has 'Choisis ton magasin, puis touche'; then
+  ok "drive.setup ouvre le drive sur l'accueil, avec le message en français simple : le magasin d'abord"
 else
   ko "le drive ne s'est pas ouvert sur l'accueil"
 fi
+check "le message de la lecture du magasin ne parle pas de connexion (Leclerc veut le magasin avant la connexion)" ui_lacks 'Connecte-toi'
 sleep 2
 screenshot e01-lecture-accueil
 # L'accueil de l'enseigne est celui du faux Leclerc : l'utilisateur y est chez son magasin, « Commencer mes courses » ouvre les pages du magasin.
 if tap 'text="Commencer mes courses"'; then ok "le magasin du faux Leclerc est ouvert (« Commencer mes courses » touché)"; else ko "le bouton « Commencer mes courses » est introuvable"; fi
-if wait_until 40 ui_has 'Utiliser ce magasin'; then
+if wait_until 40 ui_has 'Utiliser ce magasin ?'; then
   ok "sur la page du faux magasin, l'agent demande confirmation"
 else
   ko "l'agent n'a pas demandé confirmation"
@@ -181,6 +184,46 @@ back_to_repas || ko "l'écran Repas n'est pas revenu"
 check "l'écran n'est plus maintenu allumé" screen_not_held
 screenshot e03-lecture-resultat
 
+# --- 1b. « Se connecter » touché avant le magasin --------------------------------------------------------------------------------------------
+# Recette réelle (2026-10-19) : Leclerc exige un magasin choisi AVANT la connexion (« Avant de vous authentifier, veuillez sélectionner un Drive. »).
+# Si l'utilisateur touche « Se connecter » en premier, le bandeau le ramène au choix du magasin ; revenu à l'accueil, il retrouve le message de la
+# lecture du magasin. Le faux accueil n'a ici que « Se connecter » (forme « no-link »), et le faux site local sert la page de connexion de l'enseigne.
+say
+say "1b. Lecture du magasin : « Se connecter » touché avant le magasin (Leclerc veut le magasin d'abord)"
+RUN_EARLY=5e7b0000-0000-4000-8000-00000000001b
+fake_reset
+fake_behavior '{"homeForm":"no-link"}'
+start_setup "$RUN_EARLY"
+if wait_until 40 ui_has 'Choisis ton magasin, puis touche' && wait_until 20 ui_has 'text="Se connecter"'; then
+  ok "la lecture du magasin s'ouvre sur l'accueil : le message dit de choisir le magasin, la page n'a que « Se connecter »"
+else
+  ko "la lecture du magasin ne s'est pas ouverte sur l'accueil du faux site"
+fi
+if tap 'text="Se connecter"'; then ok "« Se connecter » touché en premier"; else ko "le lien « Se connecter » est introuvable"; fi
+if wait_until 30 ui_has 'Choisis d’abord ton magasin'; then
+  ok "la page de connexion s'affiche avant tout magasin : le bandeau ramène au choix du magasin"
+else
+  ko "le bandeau « Choisis d'abord ton magasin » ne s'est pas affiché sur la page de connexion"
+fi
+check "le bandeau ne parle pas de connexion et ne propose pas de bouton" ui_lacks 'Connecte-toi\|Ouvrir l’accueil du drive'
+check "rien n'est parti vers l'agent : la page de connexion n'est pas une page de magasin" not_reported '"command": "setup"'
+sleep 1
+screenshot e03b-connexion-avant-magasin
+adb shell input keyevent KEYCODE_BACK
+if wait_until 20 ui_has 'Choisis ton magasin, puis touche'; then
+  ok "le retour de la page ramène à l'accueil : le message de la lecture du magasin est revenu"
+else
+  ko "le retour n'a pas ramené le message de la lecture du magasin"
+fi
+adb shell input keyevent KEYCODE_BACK
+if wait_until 15 ui_has "Abandonner la lecture du magasin"; then ok "le retour suivant demande s'il faut abandonner la lecture du magasin"; else ko "pas de demande d'abandon de la lecture"; fi
+if tap 'text="Abandonner"' && wait_until 20 has_report "\"runId\": \"$RUN_EARLY\", \"resultType\": \"result\", \"outcome\": \"aborted\", \"errorCode\": \"CANCELLED\", \"lines\": 0, \"hasStore\": false"; then
+  ok "l'abandon donne un résultat aborted à Repas, sans magasin"
+else
+  ko "l'abandon de la lecture n'a pas donné le résultat attendu"
+fi
+back_to_repas || ko "l'écran Repas n'est pas revenu"
+
 # --- 2. Passage complet : phase A, phase B, retour ---------------------------------------------------------------------------------------
 say
 say "2. Passage complet : récapitulatif, phase A (produits connus), phase B (nouveau produit choisi), retour dans Repas"
@@ -195,7 +238,7 @@ fi
 check "le faux Leclerc a servi l'accueil de l'enseigne ($SITE_HOST/), la page de départ du plan" requested_on "$SITE_HOST" '/'
 check "NON-RÉGRESSION : jamais la racine de l'hôte du magasin ($FAKE_STORE_HOST/), page 404 du vrai site (recette réelle, application 0.1.3)" not_requested_on "$FAKE_STORE_HOST" '/'
 check "jamais l'adresse /magasin-000001-000001/ (page 404 du vrai site)" not_requested '/magasin-000001-000001/'
-check "aucun bandeau de l'application : l'agent a parlé à sa place (« Ouverture de ton magasin… »), puis le magasin s'est ouvert" ui_lacks 'Connecte-toi si besoin'
+check "aucun bandeau de l'application : l'agent a parlé à sa place (« Ouverture de ton magasin… »), puis le magasin s'est ouvert" ui_lacks 'Choisis ton magasin\|Connecte-toi'
 check "aucun bandeau « Touche Commencer mes courses » : l'entrée a réussi" ui_lacks 'Touche « Commencer mes courses »'
 check "le faux Leclerc a servi la page du magasin (avec sa ville), sur l'hôte du magasin" requested_on "$FAKE_STORE_HOST" '/magasin-000001-000001-Ville-Test/'
 check "NON-RÉGRESSION : le départ n'est jamais retombé sur la racine de l'hôte du magasin" not_requested_on "$FAKE_STORE_HOST" '/'
