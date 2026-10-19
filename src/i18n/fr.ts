@@ -215,6 +215,7 @@ export default {
     pause: 'Mettre en pause',
     complete: 'Terminer',
     activate: 'Reprendre cette liste',
+    moreActions: 'Plus d’actions',
     deleteTitle: 'Supprimer la liste ?',
     deleteHelp:
       '« {name} » sera supprimée avec ses repas et ses articles. Cette action est définitive.',

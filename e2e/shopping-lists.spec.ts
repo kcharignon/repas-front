@@ -33,12 +33,16 @@ test.describe('mes listes', () => {
     await page.getByRole('button', { name: 'Nouvelle liste' }).click()
     await expect(page).toHaveURL(/\/liste$/)
 
-    await page.getByRole('button', { name: 'Renommer' }).click()
+    // Renommer, mettre en pause et supprimer sont rangés dans « ⋮ » (« Plus d'actions »)
+    const more = page.getByRole('button', { name: 'Plus d’actions' })
+    await more.click()
+    await page.getByRole('menuitem', { name: 'Renommer' }).click()
     await page.getByLabel('Nom de la liste').fill(name)
     await page.getByRole('button', { name: 'Enregistrer' }).click()
     await expect(page.getByRole('heading', { level: 1, name })).toBeVisible()
 
-    await page.getByRole('button', { name: 'Mettre en pause' }).click()
+    await more.click()
+    await page.getByRole('menuitem', { name: 'Mettre en pause' }).click()
     await page.goto('/listes')
     await expect(page.getByRole('link', { name: new RegExp(`${name}.*En pause`) })).toBeVisible()
 
@@ -46,7 +50,8 @@ test.describe('mes listes', () => {
     await page.getByRole('button', { name: 'Reprendre cette liste' }).click()
     await expect(page.getByText('En cours')).toBeVisible()
 
-    await page.getByRole('button', { name: 'Supprimer' }).click()
+    await more.click()
+    await page.getByRole('menuitem', { name: 'Supprimer' }).click()
     await page.getByRole('dialog').getByRole('button', { name: 'Supprimer' }).click()
     await expect(page).toHaveURL(/\/listes$/)
     await expect(page.getByRole('link', { name: new RegExp(name) })).toHaveCount(0)
@@ -73,7 +78,8 @@ test.describe('mes listes', () => {
       expect((await scan()).violations).toEqual([])
 
       await page.goto('/liste')
-      await page.getByRole('button', { name: 'Renommer' }).click()
+      await page.getByRole('button', { name: 'Plus d’actions' }).click()
+      await page.getByRole('menuitem', { name: 'Renommer' }).click()
       await expect(page.getByRole('dialog')).toBeVisible()
       expect((await scan()).violations).toEqual([])
     })

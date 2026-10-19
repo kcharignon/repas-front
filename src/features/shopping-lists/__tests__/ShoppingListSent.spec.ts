@@ -70,6 +70,31 @@ const body = () => document.body
 const button = (label: string) =>
   [...body().querySelectorAll('button')].find((candidate) => candidate.textContent.trim() === label)
 
+const menuItem = (label: string) =>
+  [...body().querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+    (item) => item.textContent.trim() === label,
+  )
+
+const menuItems = () =>
+  [...body().querySelectorAll('[role="menuitem"]')].map((item) => item.textContent.trim())
+
+/** Ouvre « ⋮ » (« Plus d'actions ») et attend l'action `label`. */
+async function openMenu(label: string) {
+  body().querySelector<HTMLButtonElement>('button[aria-label="Plus d’actions"]')?.click()
+  await vi.waitFor(() => expect(menuItem(label)).toBeDefined())
+
+  return menuItem(label) as HTMLElement
+}
+
+/** « ⋮ » puis l'action `label` du menu. */
+const choose = async (label: string) => (await openMenu(label)).click()
+
+/** Les actions visibles de la rangée : libellé, ou nom accessible pour « ⋮ ». */
+const rowActions = () =>
+  [
+    ...body().querySelectorAll('[data-test="list-actions"] a, [data-test="list-actions"] button'),
+  ].map((action) => action.getAttribute('aria-label') ?? action.textContent.trim())
+
 const dialogButton = (label: string) =>
   [...body().querySelectorAll('[role="dialog"] button')].find(
     (candidate) => candidate.textContent.trim() === label,
@@ -162,9 +187,11 @@ describe('liste envoyée au drive (page de la liste)', () => {
   it('ne propose que reprendre l’envoi, terminer, rouvrir et supprimer', async () => {
     const { wrapper } = await openSent()
 
-    const actions = [...wrapper.findAll('header a, header button')].map((action) => action.text())
-    expect(actions).toEqual(['Reprendre l’envoi', 'Terminer', 'Rouvrir la liste', 'Supprimer'])
+    // Une rangée : la reprise de l'envoi, « Terminer », puis « ⋮ » qui range la réouverture et la suppression
+    expect(rowActions()).toEqual(['Reprendre l’envoi', 'Terminer', 'Plus d’actions'])
     expect(wrapper.find('header a').attributes('href')).toBe('/drive/envoi/l1')
+    await openMenu('Rouvrir la liste')
+    expect(menuItems()).toEqual(['Rouvrir la liste', 'Supprimer'])
   })
 
   it('est en lecture seule : cases désactivées, pas de + ni de −, pas de retrait de recette', async () => {
@@ -188,7 +215,7 @@ describe('liste envoyée au drive (page de la liste)', () => {
       'POST /api/v1/shopping-lists/l1/reopen': noContent,
     })
 
-    button('Rouvrir la liste')?.click()
+    await choose('Rouvrir la liste')
     await vi.waitFor(() => expect(body().textContent).toContain('La liste redevient modifiable.'))
     expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/reopen')
     dialogButton('Rouvrir la liste').click()
@@ -204,12 +231,12 @@ describe('liste envoyée au drive (page de la liste)', () => {
       'POST /api/v1/shopping-lists/l1/reopen': noContent,
     })
 
-    const actions = [...wrapper.findAll('header a, header button')].map((action) => action.text())
-    expect(actions).toContain('Rouvrir la liste')
+    expect(wrapper.find('header').exists()).toBe(true)
     expect(button('Envoyer au drive')).toBeUndefined()
-    expect(button('Rouvrir la liste')?.disabled).toBe(false)
+    const item = await openMenu('Rouvrir la liste')
+    expect(item.getAttribute('aria-disabled')).toBeNull()
 
-    button('Rouvrir la liste')?.click()
+    item.click()
     await vi.waitFor(() => expect(dialogButton('Rouvrir la liste')).toBeDefined())
     dialogButton('Rouvrir la liste').click()
     await flushPromises()
@@ -230,7 +257,7 @@ describe('liste envoyée au drive (page de la liste)', () => {
       },
     })
 
-    button('Rouvrir la liste')?.click()
+    await choose('Rouvrir la liste')
     await vi.waitFor(() => expect(dialogButton('Rouvrir la liste')).toBeDefined())
     dialogButton('Rouvrir la liste').click()
 
@@ -258,7 +285,11 @@ describe('liste envoyée au drive (page de la liste)', () => {
     window.dispatchEvent(new Event('offline'))
     await flushPromises()
 
-    expect(button('Rouvrir la liste')?.disabled).toBe(true)
+    const reopen = await openMenu('Rouvrir la liste')
+    expect(reopen.getAttribute('aria-disabled')).toBe('true')
+    reopen.click()
+    await flushPromises()
+    expect(body().querySelector('[role="dialog"]')).toBeNull()
   })
 
   it('dit qu’une liste n’est plus envoyée (409 SHOPPING_LIST_NOT_SENT) et la relit', async () => {
@@ -266,7 +297,7 @@ describe('liste envoyée au drive (page de la liste)', () => {
       'POST /api/v1/shopping-lists/l1/reopen': failure(409, 'SHOPPING_LIST_NOT_SENT'),
     })
 
-    button('Rouvrir la liste')?.click()
+    await choose('Rouvrir la liste')
     await vi.waitFor(() => expect(dialogButton('Rouvrir la liste')).toBeDefined())
     dialogButton('Rouvrir la liste').click()
 
@@ -315,6 +346,108 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     await openActive()
 
     await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+  })
+
+  it('une seule rangée : « Envoyer au drive » à gauche, « Terminer » à côté, le reste dans « ⋮ »', async () => {
+    await openActive()
+    await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+
+    expect(rowActions()).toEqual(['Envoyer au drive', 'Terminer', 'Plus d’actions'])
+    expect(button('Envoyer au drive')?.classList).toContain('bg-accent')
+    expect(button('Terminer')?.classList).toContain('border-primary')
+    expect(body().querySelectorAll('[data-test="list-actions"]')).toHaveLength(1)
+    await openMenu('Renommer')
+    expect(menuItems()).toEqual(['Renommer', 'Mettre en pause', 'Supprimer'])
+  })
+
+  it.each([
+    ['dans un navigateur', 'browser' as const, true],
+    ['drive coupé', '1.0.0' as const, false],
+  ])(
+    'sans « Envoyer au drive » (%s), « Terminer » devient l’action principale',
+    async (_case, app, enabled) => {
+      const { fetchMock } = await openActive({}, detail('ACTIVE'), enabled, '/liste', app)
+      await vi.waitFor(() => expect(calls(fetchMock)).toContain('GET /api/v1/drive/settings'))
+      await flushPromises()
+
+      expect(rowActions()).toEqual(['Terminer', 'Plus d’actions'])
+      expect(button('Terminer')?.classList).toContain('bg-primary')
+      await openMenu('Renommer')
+      expect(menuItems()).toEqual(['Renommer', 'Mettre en pause', 'Supprimer'])
+    },
+  )
+
+  it('« Terminer » à côté de l’envoi termine la liste', async () => {
+    const { fetchMock } = await openActive({
+      'POST /api/v1/shopping-lists/l1/complete': noContent,
+    })
+    await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+
+    button('Terminer')?.click()
+
+    await vi.waitFor(() =>
+      expect(calls(fetchMock)).toContain('POST /api/v1/shopping-lists/l1/complete'),
+    )
+  })
+
+  const fromMenu = async (label: string) => {
+    const opened = await openActive({ 'POST /api/v1/shopping-lists/l1/pause': noContent })
+    await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+    await choose(label)
+
+    return opened
+  }
+
+  it('« Mettre en pause » du menu met la liste en pause', async () => {
+    const { fetchMock } = await fromMenu('Mettre en pause')
+
+    await vi.waitFor(() =>
+      expect(calls(fetchMock)).toContain('POST /api/v1/shopping-lists/l1/pause'),
+    )
+  })
+
+  it('« Renommer » du menu ouvre le renommage, avec le nom actuel', async () => {
+    await fromMenu('Renommer')
+
+    await vi.waitFor(() =>
+      expect(body().querySelector<HTMLInputElement>('[role="dialog"] input')?.value).toBe(
+        'Courses du week-end',
+      ),
+    )
+  })
+
+  it('« Supprimer » du menu ouvre la confirmation qui existait, sans rien supprimer avant elle', async () => {
+    const { fetchMock } = await fromMenu('Supprimer')
+
+    await vi.waitFor(() => expect(body().textContent).toContain('Supprimer la liste ?'))
+    expect(calls(fetchMock).some((request) => request.startsWith('DELETE'))).toBe(false)
+  })
+
+  describe('quand « Terminer » ne tient pas sur la rangée (320 px, grands caractères)', () => {
+    // jsdom ne fait aucune mise en page : « Terminer » est placé sur une deuxième ligne, cachée par la rangée
+    const offsetTop = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetTop')!
+    afterEach(() => Object.defineProperty(HTMLElement.prototype, 'offsetTop', offsetTop))
+
+    it('il est caché de la rangée et passe en tête de « ⋮ », d’où il termine la liste', async () => {
+      Object.defineProperty(HTMLElement.prototype, 'offsetTop', {
+        configurable: true,
+        get(this: HTMLElement) {
+          return this.textContent.trim() === 'Terminer' && this.closest('[data-test]') ? 60 : 0
+        },
+      })
+      const { fetchMock } = await openActive({
+        'POST /api/v1/shopping-lists/l1/complete': noContent,
+      })
+      await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+
+      await vi.waitFor(() => expect(button('Terminer')?.classList).toContain('invisible'))
+      await choose('Terminer')
+      expect(menuItems()[0]).toBe('Terminer')
+
+      await vi.waitFor(() =>
+        expect(calls(fetchMock)).toContain('POST /api/v1/shopping-lists/l1/complete'),
+      )
+    })
   })
 
   it('ne le propose pas dans un navigateur, où il ne pourrait rien faire (DRV-641)', async () => {
@@ -631,7 +764,7 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     )
     expect(wrapper.find('[role="checkbox"]').attributes('aria-checked')).toBe('false')
     expect(wrapper.find('[role="checkbox"]').attributes('disabled')).toBeDefined()
-    expect(button('Rouvrir la liste')).toBeDefined()
+    expect(await openMenu('Rouvrir la liste')).toBeDefined()
   })
 
   it('ne crée aucune liste toute seule quand il n’y en a pas d’active', async () => {
