@@ -8,6 +8,13 @@
  */
 export const MIN_DRIVE_APP_VERSION = '0.1.10'
 
+/**
+ * La première version de l'application dont l'agent embarqué connaît `rayonHints` (DRV-642, agent 0.31.0). Un agent plus ancien refuse en bloc un
+ * plan qui porte une clé qu'il ne connaît pas : le site n'envoie les rayons conseillés qu'à partir de cette version (en dessous, la liste garde l'ordre
+ * du site). À fixer sur la première version Android publiée avec l'agent 0.31.0 ou plus (`android/agent.js.sha384`) ; jamais plus bas.
+ */
+export const RAYON_HINTS_APP_VERSION = '0.1.15'
+
 /** Le nom des constructions de développement (`AppVersion.DEV_NAME`, côté Android) : le code courant, jamais une ancienne version. */
 const DEV_BUILD = '0.0.0-dev'
 
@@ -40,6 +47,15 @@ export function isDriveAppVersionEnough(version: string | null | undefined): boo
   if (version === DEV_BUILD) return true
 
   const order = compareVersions(version, MIN_DRIVE_APP_VERSION)
+
+  return order !== null && order >= 0
+}
+
+/** L'agent de cette application connaît-il les rayons conseillés ? Une version inconnue ou mal formée ne les connaît pas. */
+export function isRayonHintsAppVersion(version: string | null | undefined): boolean {
+  if (version === DEV_BUILD) return true
+
+  const order = compareVersions(version, RAYON_HINTS_APP_VERSION)
 
   return order !== null && order >= 0
 }

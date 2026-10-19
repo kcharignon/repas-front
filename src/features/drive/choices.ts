@@ -8,6 +8,7 @@ import {
 } from '@drive-protocol'
 
 import type { ChoiceIntent } from '@/api'
+import { catalogIdOf, type WithRayon } from './rayon'
 
 /** Intentions par appel `PUT /api/v1/drive/choices` (borne du back). */
 export const MAX_INTENTS = 200
@@ -15,7 +16,8 @@ export const MAX_INTENTS = 200
 /** Le back refuse un prix de plus de 1 000 000 centimes (le protocole va jusqu'à 100 000 000) : un prix plus haut n'est pas gardé. */
 const MAX_CENTS = 1_000_000
 
-type Product = NonNullable<ChoiceIntent['product']>
+/** Le produit d'une intention, avec son rayon et sa famille (DRV-642 ; types écrits à la main en attendant le contrat du back, voir `rayon.ts`). */
+type Product = NonNullable<ChoiceIntent['product']> & WithRayon
 type Price = NonNullable<Product['price']>
 
 function priceOf(price: ProductPrice | undefined): Price | null {
@@ -32,15 +34,21 @@ function priceOf(price: ProductPrice | undefined): Price | null {
  * Un produit à mémoriser : identifiant en chaîne (`id` du protocole), libellé et contenu tels que l'agent les a lus. Le libellé est nettoyé une
  * seconde fois (`cleanText`, la fonction de l'agent) : un agent plus ancien, embarqué dans une application pas encore mise à jour, peut laisser
  * passer un caractère invisible que le back refuse, et le back rejette alors tout le lot (`422 DRIVE_CHOICE_INVALID`). Un libellé qui n'était
- * fait que d'invisibles redevient l'identifiant du produit : le back exige un libellé.
+ * fait que d'invisibles redevient l'identifiant du produit : le back exige un libellé. Le rayon et la famille d'un produit choisi (DRV-642) ne
+ * partent que s'ils sont valides, et seulement quand l'agent les a donnés : un agent ancien n'en dit rien, la clé est alors absente.
  */
 function productOf(product: RejectedProduct | ChosenProduct): Product {
+  const rayonId = 'rayonId' in product ? catalogIdOf(product.rayonId) : null
+  const familyId = 'familyId' in product ? catalogIdOf(product.familyId) : null
+
   return {
     retailerProductId: product.id,
     label: cleanText(product.label) || product.id,
     ean: product.ean ?? null,
     content: product.content ?? null,
     price: 'price' in product ? priceOf(product.price) : null,
+    ...(rayonId !== null && { rayonId }),
+    ...(familyId !== null && { familyId }),
   }
 }
 

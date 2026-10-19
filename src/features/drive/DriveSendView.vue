@@ -14,7 +14,7 @@ import { messageForFailure } from '@/notifications/failures'
 import { useOnline } from '@/offline/useOnline'
 import { DriveBridgeError, driveBridge } from './bridge'
 import type { RunDraft } from './bridge'
-import { isDriveAppVersionEnough } from './appVersion'
+import { isDriveAppVersionEnough, isRayonHintsAppVersion } from './appVersion'
 import { buildPlanMessage, effectiveStatus } from './buildPlanMessage'
 import type { LineChange } from './buildPlanMessage'
 import DriveEstimate from './DriveEstimate.vue'
@@ -39,6 +39,8 @@ const driveUsable = ref(true)
 // La version de l'application (DRV-640) : tant qu'elle n'a pas répondu on attend ; trop ancienne ou inconnue, l'envoi n'est pas proposé
 const appCheck = ref<'checking' | 'enough' | 'tooOld'>(inApp ? 'checking' : 'enough')
 const tooOld = computed(() => appCheck.value === 'tooOld')
+// L'agent de l'application connaît-il les rayons conseillés (DRV-642) ? Sinon le plan part sans eux : un agent plus ancien refuse un plan qui porte une clé qu'il ne connaît pas.
+const agentKnowsRayons = ref(false)
 /** Mode assisté : un lien de recherche par article, sans choix de produit (hors de l'application, ou dans une application trop ancienne). */
 const assisted = computed(() => !inApp || tooOld.value)
 
@@ -114,6 +116,7 @@ onMounted(() => {
     (info) => {
       driveUsable.value = info.drive
       appCheck.value = isDriveAppVersionEnough(info.version) ? 'enough' : 'tooOld'
+      agentKnowsRayons.value = isRayonHintsAppVersion(info.version)
     },
     // Une application qui ne dit pas sa version est trop ancienne
     () => (appCheck.value = 'tooOld'),
@@ -179,7 +182,10 @@ function openDrive() {
   failure.value = null
   try {
     const runId = draft.value?.runId ?? crypto.randomUUID()
-    draft.value = driveBridge.startRun(buildPlanMessage(data, changes.value, runId), listId.value)
+    draft.value = driveBridge.startRun(
+      buildPlanMessage(data, changes.value, runId, { rayonHints: agentKnowsRayons.value }),
+      listId.value,
+    )
   } catch (error) {
     if (error instanceof DriveBridgeError && error.code === 'RUN_IN_PROGRESS')
       draft.value = driveBridge.loadDraft()
