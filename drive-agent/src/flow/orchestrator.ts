@@ -15,7 +15,7 @@ import {
 import { LeclercError, type LeclercCause, type RequestStats } from '../leclerc'
 import { own } from '../own'
 import { formatNeeded, S, type SummaryProps } from '../ui'
-import { settleKnownLine } from './phase-a'
+import { settleKnownLine, type UnavailableNote } from './phase-a'
 import {
   buildResult,
   cartsOf,
@@ -23,6 +23,7 @@ import {
   endingOf,
   endProps,
   hasSomethingToRead,
+  reasonsOf,
   resultLines,
 } from './result'
 import { emptyState, RunStore, type RunState } from './run-state'
@@ -50,6 +51,8 @@ interface Run {
   base: ResultStats
   /** Les compteurs de l'adaptateur au début de cette page : le passage ne compte que ce qui part ensuite. */
   start: RequestStats
+  /** Les produits à étiquette de rupture que le panier a refusés dans cet envoi : une seule tentative d'écriture chacun (DRV-635). */
+  declined: Set<string>
   release: () => Promise<void>
 }
 
@@ -194,6 +197,7 @@ export class Flow {
       slow: false,
       base: { ...state.stats },
       start: deps.adapter.stats(),
+      declined: new Set(),
       release: () => Promise.resolve(),
     }
     if (proceed) {
@@ -328,9 +332,10 @@ export class Flow {
   private async settle(run: Run, line: PlanLine): Promise<void> {
     const fixed = staticOutcome(line)
     if (fixed) return this.record(run, fixed)
-    if (line.status === 'NEW') return this.wait(run, line, [])
+    if (line.status === 'NEW') return this.wait(run, line, [], [])
     const verdict = await settleKnownLine(line, {
       adapter: this.deps.adapter,
+      declined: run.declined,
       askQuantity: async (asked, product) => {
         const answer = await this.deps.ui.show('quantity', {
           ingredient: asked.name,
@@ -342,11 +347,12 @@ export class Flow {
         return answer
       },
     })
-    if (verdict.kind === 'waiting') this.wait(run, line, verdict.unavailable)
+    if (verdict.kind === 'waiting') this.wait(run, line, verdict.unavailable, verdict.notes)
     else {
       this.record(run, verdict.line, {
         ...(verdict.change && { change: verdict.change }),
         ...(verdict.cart && { cart: verdict.cart }),
+        ...(verdict.accepted && { accepted: true }),
       })
     }
   }
@@ -414,7 +420,10 @@ export class Flow {
       changesOf(run.plan, run.state),
       cartsOf(run.plan, run.state),
       run.slow,
+      reasonsOf(run.plan, run.state),
     )
+    // Les raisons de cet envoi restent pour le diagnostic (DRV-635) : des mots fixes et des nombres, sans libellé.
+    this.runs.keepReasons(run.state.reasons)
     // Un envoi terminé sans rien à lire repart tout de suite vers Repas (DRV-625) ; l'écran de fin reste pour le reste (partiel, arrêté, erreur).
     if (hasSomethingToRead(props)) await ui.show('end', props)
     this.runs.remove(run.plan.runId)
@@ -453,8 +462,17 @@ export class Flow {
     return run.plan.lines.flatMap((line) => {
       const ids = own(run.state.waiting, line.ingredientSlug)
       if (!ids) return []
+      const reasons = new Map(
+        run.state.reasons
+          .filter((note) => note.ingredientSlug === line.ingredientSlug)
+          .map((note) => [note.id, note.reason] as const),
+      )
       return [
-        { line, unavailable: (line.products ?? []).filter((product) => ids.includes(product.id)) },
+        {
+          line,
+          unavailable: (line.products ?? []).filter((product) => ids.includes(product.id)),
+          reasons,
+        },
       ]
     })
   }
@@ -464,8 +482,15 @@ export class Flow {
    * recalculé sur le contenu lu en direct (DRV-613), à rappeler à l'écran de fin. `cart` : la quantité déjà au panier est conservée ou
    * illisible (ticket M), à rappeler aussi. `slow` : la ligne a échoué parce que Leclerc a mis trop de temps à répondre (ticket K).
    */
-  private record(run: Run, line: ResultLine, { change, cart, slow }: LineNotes = {}): void {
-    const { slug, entry } = this.describe(run, line, slow === true)
+  private record(
+    run: Run,
+    line: ResultLine,
+    { change, cart, slow, accepted }: LineNotes = {},
+  ): void {
+    const { slug, entry } = this.describe(run, line, {
+      slow: slow === true,
+      accepted: accepted === true,
+    })
     if (slow) run.slow = true
     if (change) run.state.changes.push({ ingredientSlug: slug, ...change })
     if (cart) run.state.carts.push({ ingredientSlug: slug, ...cart })
@@ -476,12 +501,30 @@ export class Flow {
     this.deps.ui.update({ done: Object.keys(run.state.done).length, entry })
   }
 
-  /** Une ligne qui attend la phase B. */
-  private wait(run: Run, line: PlanLine, unavailable: string[]): void {
+  /** Une ligne qui attend la phase B, avec la raison de chacun de ses produits habituels écartés (DRV-635). */
+  private wait(
+    run: Run,
+    line: PlanLine,
+    unavailable: string[],
+    notes: readonly UnavailableNote[],
+  ): void {
     const name = line.name
     run.state.waiting[line.ingredientSlug] = unavailable
+    run.state.reasons = [
+      ...run.state.reasons.filter((note) => note.ingredientSlug !== line.ingredientSlug),
+      ...notes.map((note) => ({ ...note, ingredientSlug: line.ingredientSlug })),
+    ]
     this.touch(run)
-    const entry = unavailable.length > 0 ? S.log.unavailable(name) : S.log.toChoose(name)
+    // Le produit préféré donne le ton : rupture, introuvable ou refusé par le panier.
+    const first = notes[0]?.reason
+    const entry =
+      first === undefined
+        ? S.log.toChoose(name)
+        : first === 'NOT_FOUND'
+          ? S.log.notFound(name)
+          : first === 'CART_REFUSED'
+            ? S.log.cartRefused(name)
+            : S.log.unavailable(name)
     run.log.push(entry)
     this.deps.ui.update({ entry })
   }
@@ -507,14 +550,25 @@ export class Flow {
     this.runs.save(run.state)
   }
 
-  private describe(run: Run, line: ResultLine, slow = false): { slug: string; entry: string } {
+  private describe(
+    run: Run,
+    line: ResultLine,
+    { slow, accepted }: { slow: boolean; accepted: boolean },
+  ): { slug: string; entry: string } {
     const slug = line.ingredientSlug
     const name = run.names.get(slug) ?? slug
     switch (line.outcome) {
       case 'ADDED':
-        return { slug, entry: line.usedRank > 1 ? S.log.addedBackup(name) : S.log.added(name) }
+        return {
+          slug,
+          entry: accepted
+            ? S.log.acceptedAnyway(name)
+            : line.usedRank > 1
+              ? S.log.addedBackup(name)
+              : S.log.added(name),
+        }
       case 'CHOSEN':
-        return { slug, entry: S.log.added(name) }
+        return { slug, entry: accepted ? S.log.acceptedAnyway(name) : S.log.added(name) }
       case 'HAVE_AT_HOME':
         return { slug, entry: S.log.haveAtHome(name) }
       case 'SKIPPED':

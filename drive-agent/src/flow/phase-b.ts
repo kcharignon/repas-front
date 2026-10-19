@@ -11,7 +11,7 @@ import {
   type PlanProduct,
   type RejectedProduct,
 } from '../../protocol'
-import { LeclercError, type Candidate, type RetailerAdapter } from '../leclerc'
+import { LeclercError, saysOutOfStock, type Candidate, type RetailerAdapter } from '../leclerc'
 import { cleanText } from '../text'
 import {
   formatContent,
@@ -26,6 +26,7 @@ import { putInCart } from './keep-cart'
 import { packsFor } from './packs'
 import { priceOf } from './phase-a'
 import { searchByName } from './search-by-name'
+import { productSearchForms } from './search-forms'
 import type { PendingLine, PhaseB, PhaseBContext } from './types'
 
 /** Le nombre de produits affichés. */
@@ -125,7 +126,7 @@ function itemOf(line: PlanLine, candidate: Candidate, refused: ReadonlySet<strin
     details,
     promo: promo === null ? null : S.picker.promo(formatPrice(promo)),
     explain: explain(line, candidate),
-    state: refused.has(candidate.id) ? 'refused' : candidate.stock === 0 ? 'out' : 'ok',
+    state: refused.has(candidate.id) ? 'refused' : saysOutOfStock(candidate) ? 'out' : 'ok',
   }
 }
 
@@ -158,12 +159,24 @@ async function load(
 }
 
 /**
+ * La recherche préremplie dans « Chercher autre chose » (DRV-635) : la forme la plus simple du premier produit habituel que la phase A n'a pas retrouvé
+ * (la dernière de `productSearchForms`), sans la lancer. `null` quand tous ont été retrouvés.
+ */
+function prefillOf(
+  unavailable: readonly PlanProduct[],
+  reasons: PendingLine['reasons'],
+): string | null {
+  const lost = unavailable.find((product) => reasons?.get(product.id) === 'NOT_FOUND')
+  return lost ? (productSearchForms(lost.label).at(-1) ?? cut(lost.label)) : null
+}
+
+/**
  * Une ligne : la liste de produits, jusqu'à un produit choisi, un « passer », un « j'en ai toujours », un « passer les suivants » (`rest` : cette
  * ligne est passée, et la phase B passe aussi toutes celles qui la suivent) ou une annulation. `left` : les lignes qui restent à choisir, celle-ci
  * en tête.
  */
 async function settleLine(
-  { line, unavailable }: PendingLine,
+  { line, unavailable, reasons }: PendingLine,
   position: number,
   total: number,
   left: readonly PendingLine[],
@@ -199,7 +212,11 @@ async function settleLine(
           {
             need: formatNeeded(line.needed),
             replaces: line.replaces?.label ?? null,
-            gone: unavailable,
+            gone: unavailable.map((product) => {
+              const reason = reasons?.get(product.id)
+              return { id: product.id, label: product.label, ...(reason && { reason }) }
+            }),
+            prefill: prefillOf(unavailable, reasons),
             checked: never,
             query: search.query,
             asked: search.asked,
@@ -244,9 +261,10 @@ async function settleLine(
 
     const id = answer.value.id
     const candidate = search.candidates.find((found) => found.id === id)
-    // Défense en profondeur : la liste ne propose pas ces produits, un message ne doit pas pouvoir les imposer.
-    if (!candidate || refused.has(id) || candidate.stock === 0) {
-      search.notice = S.picker.cartRefused
+    // Défense en profondeur : la liste ne propose pas les produits écartés, un message ne doit pas pouvoir les imposer. Un produit « Plus en stock »
+    // se choisit : le panier tranche (DRV-635).
+    if (!candidate || refused.has(id)) {
+      search.notice = S.picker.cartRefused(candidate ? cleanText(candidate.label) : '')
       continue
     }
 
@@ -288,7 +306,10 @@ async function settleLine(
       return 'done'
     }
     if (settled.obtained < 1) {
-      search.notice = S.picker.cartRefused
+      // Le panier n'a rien pris : le produit reste dans la liste, rien n'est retenu pour lui (DRV-635).
+      search.notice = S.picker.cartRefused(
+        cleanText(candidate.label) || S.picker.noLabel(candidate.id),
+      )
       continue
     }
     record(
@@ -303,7 +324,12 @@ async function settleLine(
         }),
         ...rejected(),
       },
-      settled.note ? { cart: settled.note } : undefined,
+      settled.note || saysOutOfStock(candidate)
+        ? {
+            ...(settled.note && { cart: settled.note }),
+            ...(saysOutOfStock(candidate) && { accepted: true }),
+          }
+        : undefined,
     )
     return 'done'
   }

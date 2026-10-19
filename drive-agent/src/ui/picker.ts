@@ -3,6 +3,7 @@
 // Tout s'affiche par `textContent` (un libellé de l'enseigne n'est jamais du HTML) ; aucune image n'est chargée.
 import { append, clear, h } from './dom'
 import { S } from './strings'
+import type { UnavailableReason } from './types'
 
 /** Un produit proposé, déjà prêt à l'affichage (les calculs sont faits par l'appelant). */
 export interface PickerItem {
@@ -16,7 +17,10 @@ export interface PickerItem {
   promo: string | null
   /** « 800 g demandés, 500 g par produit : 2 », ou « contenu inconnu ». */
   explain: string
-  /** `out` : plus en stock ; `refused` : l'utilisateur ne veut jamais ce produit. Ni l'un ni l'autre ne se choisit. */
+  /**
+   * `out` : le site dit « Plus en stock » ou « Bientôt disponible » (DRV-635) : une étiquette que le panier peut démentir, le produit se choisit quand même ;
+   * `refused` : l'utilisateur ne veut jamais ce produit, il ne se choisit pas.
+   */
   state: 'ok' | 'out' | 'refused'
 }
 
@@ -25,8 +29,13 @@ export interface PickerProps {
   need: string | null
   /** Le libellé du produit que l'utilisateur veut remplacer. */
   replaces: string | null
-  /** Les produits mémorisés devenus indisponibles : chacun a sa case « Ne plus jamais prendre ». */
-  gone: readonly { id: string; label: string }[]
+  /**
+   * Les produits mémorisés que la phase A n'a pas mis au panier : chacun a sa case « Ne plus proposer », décochée. `reason` (DRV-635) dit pourquoi :
+   * en rupture (« Ces produits ne sont plus disponibles »), introuvable (« Je ne retrouve pas … ») ou refusé par le panier ; absente, en rupture.
+   */
+  gone: readonly { id: string; label: string; reason?: UnavailableReason }[]
+  /** La recherche préremplie dans « Chercher autre chose » (DRV-635), sans être lancée : la forme la plus simple d'un produit introuvable. */
+  prefill?: string | null
   /** Les identifiants dont la case est cochée. */
   checked: ReadonlySet<string>
   /** La recherche dont la liste montre les produits : celle qui a répondu. */
@@ -60,12 +69,15 @@ const OFF = 'data-off'
 
 function row(item: PickerItem, index: number, choose: PickerHooks['choose']): HTMLElement {
   const nameId = `produit-${index}`
-  const off = item.state !== 'ok'
-  const hint = { ok: item.explain, out: S.picker.outHint, refused: S.picker.refusedHint }[
-    item.state
-  ]
+  // Un produit « Plus en stock » reste à choisir : le panier tranche (DRV-635). Seul un produit écarté par l'utilisateur est grisé.
+  const off = item.state === 'refused'
+  const hint = {
+    ok: item.explain,
+    out: `${S.picker.outHint} ${item.explain}`,
+    refused: S.picker.refusedHint,
+  }[item.state]
   const button = h('button', {
-    text: { ok: S.picker.choose, out: S.picker.out, refused: S.picker.refused }[item.state],
+    text: off ? S.picker.refused : S.picker.choose,
     class: off ? '' : 'primary',
     disabled: off,
     attrs: { type: 'button', 'aria-describedby': nameId, ...(off && { [OFF]: '1' }) },
@@ -83,10 +95,30 @@ function row(item: PickerItem, index: number, choose: PickerHooks['choose']): HT
   )
 }
 
+/**
+ * Les phrases de la section des produits écartés (DRV-635) : les produits en rupture se disent ensemble (« Ces produits ne sont plus disponibles »),
+ * chaque produit introuvable ou refusé par le panier a sa phrase, qui le nomme. Seule la rupture dit « plus disponible ».
+ */
+function goneSentences(gone: PickerProps['gone']): HTMLElement[] {
+  const out = gone.filter((product) => (product.reason ?? 'OUT_OF_STOCK') === 'OUT_OF_STOCK')
+  return [
+    ...(out.length > 0
+      ? [h('p', { text: S.picker.gone(out.map((product) => product.label).join(', ')) })]
+      : []),
+    ...gone.flatMap((product) =>
+      product.reason === 'NOT_FOUND'
+        ? [h('p', { text: S.picker.notFound(product.label) })]
+        : product.reason === 'CART_REFUSED'
+          ? [h('p', { text: S.picker.cartRefused(product.label) })]
+          : [],
+    ),
+  ]
+}
+
 /** Remplit `zone` ; rend de quoi mettre la liste à jour et la rendre inactive pendant une requête. */
 export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: PickerHooks): Picker {
   const input = h('input', {
-    value: props.query,
+    value: props.prefill ?? props.query,
     attrs: { id: 'chercher', type: 'search', maxlength: '255', autocomplete: 'off' },
   })
   // Pas un deuxième bouton principal (DRV-624) : le geste de l'écran est « Choisir ».
@@ -122,7 +154,7 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
       : h(
           'section',
           { class: 'gone' },
-          h('p', { text: S.picker.gone(props.gone.map((product) => product.label).join(', ')) }),
+          ...goneSentences(props.gone),
           ...props.gone.map((product, index) => {
             const box = h('input', {
               attrs: { type: 'checkbox', id: `jamais-${index}` },

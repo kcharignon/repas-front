@@ -106,3 +106,75 @@ export function searchForms(name: string): string[] {
   }
   return forms.length > MAX_FALLBACKS ? forms.filter((form) => form !== plural) : forms
 }
+
+// —— Les formes du libellé d'un produit habituel (DRV-635) ——————————————————————————————————————————————————————————————————————
+// Relevé sur le vrai site (2026-10-19) pour « Oeufs C'est Qui Le Patron Plein Air x6 » : « c'est » (apostrophe) et « cest » (apostrophe retirée)
+// retrouvent le produit, « c est » (apostrophe remplacée par une espace) ne trouve RIEN. Une forme qui remplace un signe par une espace fait donc
+// perdre un produit disponible : ici, les signes se RETIRENT, ils ne se remplacent jamais par une espace, et l'apostrophe est gardée dans les
+// premières formes.
+
+/** Le nombre de formes dérivées d'un libellé, au plus : avec la requête du libellé tel quel, cinq requêtes par produit habituel. */
+export const MAX_PRODUCT_FORMS = 4
+
+/**
+ * Sans signe : tout ce qui n'est ni lettre, ni chiffre, ni espace est retiré, SANS être remplacé par une espace (« c'est » devient « cest »,
+ * « chocolat-noisette » devient « chocolatnoisette »). Seul le séparateur décimal entre deux chiffres reste (« 1,5 l »).
+ */
+function withoutSigns(text: string): string {
+  return squash(
+    text.replace(/[^\p{L}\p{N}\s]/gu, (sign, offset: number, whole: string) =>
+      (sign === ',' || sign === '.') &&
+      /\d/.test(whole[offset - 1] ?? '') &&
+      /\d/.test(whole[offset + 1] ?? '')
+        ? sign
+        : '',
+    ),
+  )
+}
+
+/** Une quantité ou une unité seule (« 450 », « x6 », « 6x33 », « g », « cl ») : elle ne dit pas ce qu'est le produit. */
+const QUANTITY_WORD = /^(?:\d+(?:[.,]\d+)?|x\d+|\d+x\d*|[mk]?g|[mcdk]?l|pieces?|u)$/
+
+/** Les deux mots les plus longs d'un texte (de trois lettres au moins), dans l'ordre où ils s'écrivent : la marque et le mot principal, en général. */
+function keywords(text: string): string | null {
+  const words = text.split(' ').filter((word) => /^\p{L}{3,}$/u.test(word))
+  const longest = words
+    .map((word, index) => ({ word, index }))
+    .sort((a, b) => length(b.word) - length(a.word) || a.index - b.index)
+    .slice(0, 2)
+    .sort((a, b) => a.index - b.index)
+  return longest.length === 0 ? null : longest.map(({ word }) => word).join(' ')
+}
+
+/**
+ * Les formes à essayer, dans l'ordre, quand la recherche du libellé tel quel ne retrouve pas un produit habituel :
+ *   1. minuscules, sans accents, « œ » en « oe », apostrophes droites (l'apostrophe est GARDÉE : « c'est ») ;
+ *   2. sans aucun signe, sans espace en échange (« cest ») ;
+ *   3. sans le texte entre parenthèses, sans mots de liaison ni quantités, sans signe ;
+ *   4. les deux mots les plus longs seuls.
+ * Jamais le libellé lui-même ni une forme qui ne s'en distingue que par la casse (le site ne la distingue pas : relevé du 2026-10-19), jamais deux
+ * fois la même, jamais de forme de moins de deux caractères, au plus `MAX_PRODUCT_FORMS`. La plus simple est la dernière. Fonction pure.
+ */
+export function productSearchForms(label: string): string[] {
+  const original = squash(label.normalize('NFC'))
+  if (length(original) < 2) return []
+  const folded = plain(original).replace(/œ/g, 'oe').replace(/æ/g, 'ae')
+  const bare = withoutSigns(folded)
+  const cleaned = withoutSigns(clean(folded))
+    .split(' ')
+    .filter((word) => !QUANTITY_WORD.test(word))
+    .join(' ')
+  const forms: string[] = []
+  for (const form of [folded, bare, cleaned, keywords(cleaned)]) {
+    if (
+      form === null ||
+      length(form) < 2 ||
+      form === original.toLowerCase() ||
+      forms.includes(form)
+    ) {
+      continue
+    }
+    forms.push(form)
+  }
+  return forms.slice(0, MAX_PRODUCT_FORMS)
+}

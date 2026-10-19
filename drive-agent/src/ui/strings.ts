@@ -2,6 +2,7 @@
 // Le diagnostic et le test automatique sont des outils du mainteneur : exemptés du glossaire, pas du tutoiement. Gardé par src/i18n/__tests__/voice-and-glossary.spec.ts.
 import type { ErrorCode, LineStatus, Outcome } from '../../protocol'
 import { own } from '../own'
+import type { UnavailableReason } from './types'
 
 /** « 1 produit », « 3 produits » : le nombre suivi du bon mot. */
 export function count(n: number, one: string, many: string): string {
@@ -293,6 +294,26 @@ export const S = {
         }) : ${listText(keys.present)} ; connues absentes : ${listText(keys.absent)} ; liées à la connexion : ${listText(keys.session)}`,
       headers: (term: string, names: readonly string[]) =>
         `En-têtes de la réponse « ${term} » (noms seulement) : ${listText(names)}`,
+      /** DRV-635 : le stock et l'étiquette de disponibilité d'un échantillon de résultats (12 au plus), des nombres seulement, jamais un libellé. */
+      availability: (a: {
+        sampled: number
+        zeroStock: number
+        stocked: number
+        unreadable: number
+      }) =>
+        `Disponibilité de l’échantillon (${a.sampled} produits) : iQteDisponible à 0 : ${a.zeroStock}, positif : ${a.stocked}, illisible : ${a.unreadable}`,
+      availabilityLabels: (values: string, unread: number, soon: number) =>
+        `eDisponibilite (valeur : produits) : ${values} ; absente ou illisible : ${unread} ; « Bientôt disponible » : ${soon}`,
+      /** Les raisons du dernier envoi, par produit habituel écarté, dans l'ordre du passage : un mot fixe et un nombre, jamais un libellé. */
+      lastPass: (list: string) => `Dernier envoi, produits habituels écartés : ${list}`,
+      /** Les raisons, pour le mainteneur (le diagnostic est exempté du glossaire) : les mots de DRV-635. */
+      reason: {
+        OUT_OF_STOCK: 'en rupture',
+        NOT_FOUND: 'introuvable',
+        CART_REFUSED: 'refusé par le panier',
+      } satisfies Record<UnavailableReason, string>,
+      lastPassItem: (rank: number, reason: string, tried: number) =>
+        `${rank} : ${reason} (${tried} recherche${tried > 1 ? 's' : ''})`,
     },
   },
   /** Le test automatique de la variante de débogage (DRV-318) : l'écran de progression et le rapport texte copiable. */
@@ -434,7 +455,6 @@ export const S = {
     /** La requête a dépassé son délai d'attente (ticket K) : Leclerc répond, mais trop lentement. */
     slow: 'Leclerc met trop de temps à répondre. Réessaie dans un instant.',
     choose: 'Choisir',
-    out: 'Indisponible',
     refused: 'Ne plus proposer',
     refusedHint: 'Déjà écarté de tes choix.',
     outHint: 'Plus en stock.',
@@ -446,7 +466,12 @@ export const S = {
       per === null
         ? `À mettre au panier : ${count(packs, 'produit', 'produits')}.`
         : `${per} par produit : ${count(packs, 'produit', 'produits')}.`,
-    cartRefused: 'Leclerc n’a pas pu mettre ce produit au panier. Choisis-en un autre.',
+    /** Le panier n'a rien pris de ce produit (DRV-635) : on le nomme, la liste reste affichée. */
+    cartRefused: (product: string) =>
+      `Leclerc n’a pas pu mettre « ${product} » au panier. Choisis-en un autre.`,
+    /** Aucune recherche n'a retrouvé ce produit habituel (DRV-635) : il n'est pas dit indisponible, la recherche est préremplie. */
+    notFound: (product: string) =>
+      `Je ne retrouve pas « ${product} » : cherche-le ou choisis-en un autre.`,
   },
   /** Le produit choisi n'est pas celui que Repas retenait (DRV-624) : une question, deux réponses. L'ordre des produits reste l'affaire de Repas. */
   placement: {
@@ -507,6 +532,17 @@ export const S = {
       item: (name: string, atLeast: number | null) =>
         atLeast === null ? name : `${name} — au moins ${atLeast} gardés`,
     },
+    /** Pourquoi des articles n'ont pas de produit (DRV-635), dans un bloc « Détails » replié : la raison et le nombre de recherches faites. */
+    reasons: {
+      title: 'Détails',
+      reason: {
+        OUT_OF_STOCK: 'en rupture',
+        NOT_FOUND: 'introuvable',
+        CART_REFUSED: 'pas pris par le panier',
+      } satisfies Record<UnavailableReason, string>,
+      item: (name: string, reason: string, tried: number) =>
+        `${name} — ${reason}, ${count(tried, 'recherche', 'recherches')}`,
+    },
     back: 'Retourner dans Repas',
   },
   /** Les lignes du journal de progression (une par article traité). */
@@ -518,6 +554,10 @@ export const S = {
     toChoose: (name: string) => `${name} : à choisir ensuite`,
     unavailable: (name: string) => `${name} : plus disponible, à choisir ensuite`,
     failed: (name: string) => `${name} : échec`,
+    notFound: (name: string) => `${name} : produit introuvable, à choisir ensuite`,
+    cartRefused: (name: string) => `${name} : pas pris par le panier, à choisir ensuite`,
+    /** Le site disait ce produit en rupture et le panier l'a pourtant pris (DRV-635). */
+    acceptedAnyway: (name: string) => `${name} : ajouté, Leclerc l’a accepté`,
     slow: (name: string) => `${name} : Leclerc met trop de temps à répondre`,
   },
   /** La demande de vérification de l'anti-robot (ticket K) : un bandeau en bas de l'écran, pour que la page reste visible. */
