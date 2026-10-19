@@ -259,6 +259,7 @@ describe('les raisons de l’envoi : état de reprise et diagnostic', () => {
       waiting: { gateaux: ['1000034'] },
       changes: [],
       carts: [],
+      unreached: [],
       reasons: [
         { ingredientSlug: 'gateaux', id: '1000034', reason: 'NOT_FOUND' as const, tried: 5 },
       ],

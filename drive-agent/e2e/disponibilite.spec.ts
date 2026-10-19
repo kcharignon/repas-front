@@ -213,7 +213,7 @@ test.describe('« Bientôt disponible » : le panier tranche', () => {
         { ingredientSlug: 'sel', outcome: 'SKIPPED' },
       ],
     })
-    const chosen = (result as { lines: Record<string, unknown>[] }).lines[0] ?? {}
+    const chosen = (result as unknown as { lines: Record<string, unknown>[] }).lines[0] ?? {}
     expect(Object.keys(chosen).sort()).toEqual(
       ['ingredientSlug', 'outcome', 'placement', 'product', 'quantity', 'unavailableIds'].sort(),
     )
