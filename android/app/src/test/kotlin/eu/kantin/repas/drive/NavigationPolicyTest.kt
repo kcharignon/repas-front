@@ -229,6 +229,45 @@ class NavigationPolicyTest {
     }
 
     /**
+     * La page de connexion hors d'un magasin : Leclerc la refuse tant qu'aucun magasin n'est choisi (« veuillez sélectionner un Drive »). Seule
+     * l'adresse compte : `/connexion` ou `/connexion.aspx`, sur le drive, hors site mobile, et jamais sous le chemin d'un magasin.
+     */
+    @Test
+    fun `la page de connexion hors d'un magasin se reconnait a son chemin, jamais une page de magasin ni le site mobile`() {
+        val login = listOf(
+            "https://www.leclercdrive.fr/connexion",
+            "https://www.leclercdrive.fr/connexion/",
+            "https://www.leclercdrive.fr/connexion.aspx",
+            "https://www.leclercdrive.fr/Connexion.aspx?retour=%2F#haut",
+            "https://courses-test.leclercdrive.fr/connexion.aspx",
+        )
+        val others = listOf(
+            "https://www.leclercdrive.fr/",
+            "https://www.leclercdrive.fr/?u=/connexion",
+            "https://www.leclercdrive.fr#/connexion",
+            "https://www.leclercdrive.fr/connexion-et-securite",
+            "https://www.leclercdrive.fr/mon-compte/connexion.aspx",
+            "https://www.leclercdrive.fr/deconnexion.aspx",
+            // Sous le chemin d'un magasin, un magasin est ouvert : c'est une page de magasin, pas ce cas.
+            "https://courses-test.leclercdrive.fr/magasin-000000-000000-Ville-Test/connexion.aspx",
+            "https://m-courses.leclercdrive.fr/connexion.aspx",
+            "https://exemple.org/connexion.aspx",
+            "http://www.leclercdrive.fr/connexion.aspx",
+            "https://www.leclercdrive.fr.evil.com/connexion.aspx",
+            "about:blank",
+            "",
+            null,
+        )
+        login.forEach {
+            assertTrue("devrait être la page de connexion : $it", NavigationPolicy.isLoginPage(it))
+            assertFalse("la page de connexion n'est pas une page de magasin : $it", NavigationPolicy.isStorePage(it))
+            assertFalse("la page de connexion n'est pas l'accueil : $it", NavigationPolicy.isHomePage(it))
+            assertEquals(it, Decision.ALLOW, NavigationPolicy.decide(it))
+        }
+        others.forEach { assertFalse("ne devrait pas être la page de connexion : $it", NavigationPolicy.isLoginPage(it)) }
+    }
+
+    /**
      * Le site mobile de Leclerc (`m-courses`, ticket J) n'a pas les routes du site ordinateur : même avec une adresse de la forme d'un magasin, ce n'est
      * pas une page où l'agent peut écrire. L'application ne lui envoie donc jamais un plan ni la lecture du magasin.
      */

@@ -168,6 +168,10 @@ const WEB_GROUPS = [
   'driveHelp',
   'driveTerms',
   'driveEstimate',
+  // Mot de passe oublié : deux écrans neufs, lus par le glossaire et par la règle « aucun avertissement » comme le reste
+  'login',
+  'forgotPassword',
+  'resetPassword',
 ] as const
 
 /**

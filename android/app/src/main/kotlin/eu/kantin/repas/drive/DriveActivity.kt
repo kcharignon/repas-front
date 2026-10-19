@@ -486,6 +486,7 @@ class DriveActivity : Activity() {
             StoreBanner.SETUP -> R.string.setup_banner
             StoreBanner.PLAN -> R.string.plan_banner
             StoreBanner.OPEN -> R.string.plan_banner_open
+            StoreBanner.STORE_FIRST -> R.string.store_first_banner
             StoreBanner.VERIFICATION -> R.string.plan_banner_verification
             StoreBanner.MOBILE -> R.string.plan_banner_mobile
         }
