@@ -18,7 +18,7 @@
 </head>
 <body>
 <h1>Faux Repas de test</h1>
-<p class="note">Page locale de l'émulateur (DRV-317, DRV-314, DRV-320) : elle joue le rôle du front Repas, sans aucune donnée réelle. Elle parle à l'application par <code>window.repasNative</code>.</p>
+<p class="note">Page locale de l'émulateur (DRV-317, DRV-314, DRV-320, AUTH-011) : elle joue le rôle du front Repas, sans aucune donnée réelle. Elle parle à l'application par <code>window.repasNative</code>.</p>
 <ul id="facts"></ul>
 <p><a id="external" href="https://example.org/">Un lien vers un autre site</a></p>
 <p><a id="finalize" href="https://courses-test.leclercdrive.fr/magasin-000001-000001">Finaliser sur Leclerc</a></p>
@@ -96,7 +96,16 @@
       item.version = m.version
       item.versionCode = m.versionCode
       item.drive = m.drive
-      show('info', 'app.info : version ' + m.version + ', numéro ' + m.versionCode + ', drive ' + m.drive, true)
+      // La connexion avec Google (AUTH-011) : drapeau de capacité, absent d'une application plus ancienne.
+      item.google = m.google
+      show('info', 'app.info : version ' + m.version + ', numéro ' + m.versionCode + ', drive ' + m.drive + ', google ' + m.google, true)
+    } else if (m.type === 'google.result') {
+      // Le jeton du fournisseur factice de l'APK de débogage (jamais un jeton de Google) : relevé pour que le test le compare, pas affiché.
+      item.idToken = m.idToken
+      show('google', 'google.result : jeton reçu (' + String(m.idToken).length + ' caractères)', true)
+    } else if (m.type === 'google.error') {
+      item.code = m.code
+      show('google', 'google.error : ' + m.code, false)
     } else if (m.type === 'drive.result') {
       item.runId = m.result && m.result.runId
       item.resultType = m.result && m.result.type
@@ -156,6 +165,9 @@
           send({ v: 1, type: 'app.info' })
         } else if (command.do === 'app.menu') {
           send({ v: 1, type: 'app.menu' })
+        } else if (command.do === 'google.signIn') {
+          // AUTH-011 : l'ID client et le nonce du test (valeurs synthétiques ; en vrai, la page les tient du back).
+          send({ v: 1, type: 'google.signIn', clientId: command.clientId, nonce: command.nonce })
         } else if (command.do === 'raw') {
           native.postMessage(String(command.text))
         }

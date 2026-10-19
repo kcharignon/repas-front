@@ -24,8 +24,24 @@ function files(dir: string, extension: RegExp): string[] {
 
 describe('le manifeste de l’application', () => {
   it('ne demande que la permission Internet', () => {
-    const permissions = [...manifest.matchAll(/<uses-permission[^>]*android:name="([^"]+)"/g)].map((match) => match[1])
+    const permissions = [...manifest.matchAll(/<uses-permission\b[^>]*>/g)]
+      .map((match) => match[0])
+      .filter((tag) => !tag.includes('tools:node="remove"'))
+      .map((tag) => /android:name="([^"]+)"/.exec(tag)?.[1])
     expect(permissions).toEqual(['android.permission.INTERNET'])
+  })
+
+  it('retire les permissions qu’apportent les bibliothèques de la connexion avec Google (AUTH-011)', () => {
+    const removed = [...manifest.matchAll(/<(uses-permission|permission)\b[^>]*tools:node="remove"[^>]*>/g)].map(
+      (match) => `${match[1]} ${/android:name="([^"]+)"/.exec(match[0])?.[1]}`,
+    )
+    expect(removed).toEqual([
+      'uses-permission android.permission.USE_BIOMETRIC',
+      'uses-permission android.permission.USE_FINGERPRINT',
+      `permission \${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`,
+      `uses-permission \${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`,
+    ])
+    expect(manifest).toContain('xmlns:tools="http://schemas.android.com/tools"')
   })
 
   it('ouvre les liens https vers l’hôte de Repas, vérifiés (autoVerify), dans la coquille seulement', () => {

@@ -8,9 +8,9 @@ L'application est faite de deux morceaux, pour qu'un iPhone puisse un jour réut
  │ écrans : MainActivity, DriveActivity   │            │ les règles : adresses permises, messages du     │
  │ la WebView : AgentHost, DesktopMode,   │  appelle   │ pont, plan, passage, empreinte de l'agent,      │
  │   DriveProfile                         ├──────────► │ version, bandeaux, surveillance de la page       │
- │ les services d'Android :               │            │                                                │
+ │ les services d'Android :               │            │ la connexion avec Google (SignInRelay)         │
  │   AndroidLinkOpener, Prefs…Store,      │ implémente │ les services de plateforme (interfaces) :       │
- │   (AUTH-011) Credential Manager        │◄───────────┤   IdentityProvider, LinkOpener,                 │
+ │   CredentialManagerGoogleIdentity      │◄───────────┤   IdentityProvider, LinkOpener,                 │
  └───────────────────────────────────────┘            │   PassStore, StorePathStore                     │
                                                        └────────────────────────────────────────────────┘
           dépend du cœur  ─────────────────────►  le cœur ne dépend de rien d'Android
@@ -40,7 +40,8 @@ Le cœur : `android/core/src/main/kotlin/eu/kantin/repas/drive/` (le paquet n'a 
 | `FinalizeOutcome.kt` | la forme du dernier « Finaliser » (un mot, jamais une adresse) et son port de stockage (`FinalizeOutcomeStore`) |
 | `StorePathMemory.kt` | le chemin du magasin avec sa ville, et son port de stockage (`StorePathStore`) |
 | `OpeningWatch.kt` | la surveillance de la page où l'envoi attend la page du magasin (`PageTrouble`) |
-| `NativeBridge.kt` | les règles du pont `repasNative` : origine, 64 Ko, forme du JSON, réponses |
+| `NativeBridge.kt` | les règles du pont `repasNative` : origine, 64 Ko, forme du JSON, réponses ; `google.signIn` (forme de l'ID client et du nonce), `google.result`, `google.error`, `app.info.google` (AUTH-011) |
+| `SignInRelay.kt` | la connexion avec Google entre la page et `IdentityProvider` : une demande à la fois (`BUSY`), une seule réponse, aucune après l'abandon, rien de gardé (AUTH-011) |
 | `BridgeMessages.kt` | les règles du canal `repasHost` entre l'application et l'agent |
 | `DrivePlan.kt` | le plan reçu de Repas (forme, hôte, bornes), la lecture du magasin et le résultat `aborted` |
 | `DrivePass.kt` | le passage (un seul à la fois, reprise sous 24 h, résultats à livrer, son port `PassStore`), le bandeau (`StoreBanner`), l'envoi du plan (`PlanDelivery`) |
@@ -63,10 +64,13 @@ L'application : `android/app/src/main/kotlin/eu/kantin/repas/drive/`, tout ce qu
 | `DriveProfile.kt` | le profil « drive » de la WebView (cookies et stockage séparés de Repas) |
 | `RepasApp.kt` | l'application ; les stockages Android (`PrefsPassStore`, `PrefsStorePathStore`, `PrefsFinalizeOutcomeStore`) |
 | `AndroidServices.kt` | les services de plateforme d'Android derrière les interfaces du cœur (`AndroidLinkOpener`) |
+| `GoogleSignIn.kt` | la connexion avec Google d'Android derrière `IdentityProvider` : `CredentialManagerGoogleIdentity` (Credential Manager, version à rappel), la traduction de ses réponses et de ses erreurs en codes du pont (`identityResultOf`, `identityErrorOf`, AUTH-011) |
 | `InstalledVersion.kt` | la version installée, lue dans le gestionnaire de paquets |
 | `Dialogs.kt`, `Views.kt`, `TextPanel.kt` | fenêtres, vues, écran de texte |
 
-Les tests suivent : `core/src/test` pour tout ce qui se joue sur la JVM seule ; `app/src/test` pour ce qui touche à Android ou à un actif de l'application (`LoadProblemTest` rapproche le classement des constantes de la WebView, `BuildOriginTest` lit `BuildConfig`, `InjectionAssetTest` lit `injection.js`, `DebugRunTest` joue le vrai `debug-plan.json`).
+Deux fichiers dépendent de la variante (AUTH-011) : `IdentityProviders.kt` existe dans `app/src/release/kotlin` (la vraie connexion, `CredentialManagerGoogleIdentity`) et dans `app/src/debug/kotlin`, où il donne le fournisseur factice `FakeGoogleIdentity.kt` (même dossier) ; celui-ci n'est donc jamais dans l'APK de publication, et `build.sh verify-release` le vérifie.
+
+Les tests suivent : `core/src/test` pour tout ce qui se joue sur la JVM seule (dont `SignInRelayTest` : la connexion avec Google de bout en bout, avec un fournisseur de test) ; `app/src/test` pour ce qui touche à Android ou à un actif de l'application (`LoadProblemTest` rapproche le classement des constantes de la WebView, `BuildOriginTest` lit `BuildConfig`, `InjectionAssetTest` lit `injection.js`, `DebugRunTest` joue le vrai `debug-plan.json`, `GoogleSignInTest` traduit les exceptions de Credential Manager) ; `app/src/testDebug` pour la variante de débogage (`FakeGoogleIdentityTest`).
 
 ## Les services de plateforme
 
@@ -74,7 +78,7 @@ Quand le cœur a besoin de quelque chose que seule la plateforme sait faire, il 
 
 | Interface (cœur) | Ce qu'elle demande | Android | iPhone |
 |---|---|---|---|
-| `IdentityProvider` | un jeton d'identité, par la feuille de choix du compte de la plateforme (`signIn(clientId, nonce, callback)`) | Credential Manager (AUTH-011, à écrire) | hors portée |
+| `IdentityProvider` | un jeton d'identité, par la feuille de choix du compte de la plateforme (`signIn(clientId, nonce, callback)`) | `CredentialManagerGoogleIdentity` (`GoogleSignIn.kt`, AUTH-011) ; dans l'APK de débogage, le fournisseur factice `FakeGoogleIdentity` | hors portée |
 | `LinkOpener` | ouvrir une page web dans le navigateur du système | `AndroidLinkOpener` (`AndroidServices.kt`) | hors portée |
 | `PassStore` | garder une valeur texte : le passage non terminé et les résultats à livrer | `PrefsPassStore` (préférence privée, hors sauvegarde) | hors portée |
 | `StorePathStore` | garder le chemin du magasin | `PrefsStorePathStore` | hors portée |

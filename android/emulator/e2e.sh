@@ -8,6 +8,8 @@
 # dans le conteneur de l'émulateur : le DNS n'envoie nulle part ailleurs, JAMAIS vers le vrai Leclerc ni le vrai Repas (vérifié d'abord et à la fin).
 #
 # Les scénarios, dans l'ordre (chacun repart d'un faux Leclerc remis à neuf) :
+#   0. réseau, faux sites, installation ; `app.info` annonce le drive et la connexion avec Google, et `google.signIn` reçoit le jeton du fournisseur
+#      factice de l'APK de débogage (AUTH-011 ; le détail des chemins est dans smoke.sh) ;
 #   1. lecture du magasin (`drive.setup`) : accueil du drive, choix du magasin du faux Leclerc, l'agent le lit, Repas reçoit son numéro et son hôte ;
 #      (Depuis DRV-629 le faux accueil a, comme le vrai site, un BOUTON « Commencer mes courses » sans adresse : l'agent le CLIQUE ; les scénarios 8 et 12
 #      reprennent la forme « lien ».)
@@ -150,6 +152,15 @@ install_apk
 start_app
 if wait_until 40 has_report '"page": "repas"'; then ok "la coquille a chargé le faux Repas"; else ko "le faux Repas ne s'est pas chargé en 40 s"; fi
 if wait_until 15 has_report '"drive": true'; then ok "app.info annonce que le drive est utilisable"; else ko "app.info n'annonce pas le drive"; fi
+# La connexion avec Google (AUTH-011), d'un aller-retour : le fournisseur factice de l'APK de débogage rend son jeton d'essai (jamais Google ; le
+# détail des chemins est dans smoke.sh, 2b).
+check "app.info annonce la connexion avec Google (google: true)" has_report '"drive": true, "google": true'
+post_command '{"do":"google.signIn","clientId":"123456789-exemple0synthetique.apps.googleusercontent.com","nonce":"nonce_essai_e2e-0123456789"}'
+if wait_until 15 has_report '"type": "google.result", "idToken": "jeton-d-essai-de-debogage-jamais-accepte-par-un-vrai-back"'; then
+  ok "google.signIn reçoit google.result avec le jeton du fournisseur factice, par le pont"
+else
+  ko "google.signIn n'a pas reçu son jeton"
+fi
 
 # --- 1. Lecture du magasin ------------------------------------------------------------------------------------------------------------------
 say
