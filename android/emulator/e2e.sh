@@ -213,7 +213,7 @@ if wait_until 60 cart_is "$CART_KNOWN"; then
 else
   ko "phase A : le panier du faux Leclerc n'a pas les quantités du plan : $(fake_state | cut -c1-120)"
 fi
-if wait_until 60 ui_has 'Il te faut'; then
+if wait_until 60 ui_has 'Il vous faut'; then
   ok "phase B : l'agent affiche lui-même la liste des produits trouvés pour le poivre"
 else
   ko "phase B : la liste de choix ne s'est pas affichée"
@@ -290,7 +290,7 @@ say "5. Application tuée en plein passage, puis reprise"
 RUN_RESUME=4e5a0000-0000-4000-8000-000000000005
 if open_pass "$RUN_RESUME" plan-complet.json; then ok "le récapitulatif s'affiche"; else ko "le récapitulatif ne s'est pas affiché"; fi
 tap 'text="Commencer"' || ko "le bouton « Commencer » est introuvable"
-if wait_until 60 ui_has 'Il te faut' && cart_is "$CART_KNOWN"; then
+if wait_until 60 ui_has 'Il vous faut' && cart_is "$CART_KNOWN"; then
   ok "la phase A est faite (panier : farine x3, sucre x1), l'agent attend le choix du poivre"
 else
   ko "le passage n'est pas arrivé à l'attente du choix"
@@ -316,7 +316,7 @@ while [ "$SECONDS" -lt "$until" ]; do
 done
 if [ "$resumed" = "1" ]; then ok "le drive se rouvre et le plan est renvoyé à l'agent (récapitulatif)"; else ko "le plan n'a pas été renvoyé à l'agent"; fi
 tap 'text="Commencer"' || ko "le bouton « Commencer » est introuvable"
-wait_until 60 ui_has 'Il te faut' || ko "la liste de choix ne s'est pas affichée après la reprise"
+wait_until 60 ui_has 'Il vous faut' || ko "la liste de choix ne s'est pas affichée après la reprise"
 tap 'text="Choisir"' || ko "aucun bouton « Choisir » à l'écran"
 if wait_until 60 ui_has 'Panier rempli'; then ok "le passage repris se termine (« Panier rempli »)"; else ko "le passage repris ne s'est pas terminé"; fi
 check "le panier du faux Leclerc est exact, sans doublon (farine x3, sucre x1, poivre x2)" cart_is "$CART_FULL"
