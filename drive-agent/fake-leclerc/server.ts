@@ -133,6 +133,11 @@ export interface Behavior {
    */
   availability?: Availability
   /**
+   * Les produits (identifiants) que le panier REFUSE alors que la fiche les dit en stock (DRV-644) : le cas « disponible mais pas pris, sans raison donnée ». La réponse
+   * du panier dit alors `iQteDisponible` avec le stock de la fiche, donc aucun signe de rupture.
+   */
+  refuseCart?: number[]
+  /**
    * Le faux site sert la page d'un VISITEUR non connecté (en-tête « Se connecter » / « Créer un compte », pas de « Se déconnecter ») une fois
    * `visitorAfter` recherches et écritures du panier terminées (`0` : dès la première page ; absent ou `null` : jamais). Le catalogue reste
    * public et le panier accepte les écritures d'un visiteur : c'est le danger que l'agent doit détecter (ticket G).
@@ -446,6 +451,7 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
         const before = cart.get(Number(body.iIdProduit)) ?? 0
         let after = before
         if (body.eTypeAction === 2) after = 0
+        else if (product && behavior.refuseCart?.includes(product.id)) after = before
         else if (product && product.stock > 0) after = Math.min(body.iQuantite, product.stock)
         // La disponibilité trompeuse (DRV-635) : la fiche dit stock nul, le panier prend le produit.
         else if (product && behavior.availability === 'misleading')

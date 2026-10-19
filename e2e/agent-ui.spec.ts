@@ -37,6 +37,7 @@ const SCREENS = [
   'chooser-last',
   'chooser-single',
   'chooser-gone',
+  'chooser-long',
   'placement',
   'placement-text',
   'store',
@@ -54,6 +55,7 @@ const SCREENS = [
   'end-partial',
   'end-none',
   'end-reasons',
+  'end-unreached',
   'end-error',
   'end-aborted',
   ...ERROR_SCREENS,
@@ -335,3 +337,95 @@ test('sans photo, la question et la liste n’ont aucune balise img ni cadre', a
   await expect(page.locator('.overlay img')).toHaveCount(0)
   expect(requestedByPage(page)).toEqual([])
 })
+
+// —— Tous les résultats de la recherche, en défilant (DRV-643) ————————————————————————————————————————————————————————————————————
+
+const rowCount = (page: Page) =>
+  page.evaluate(() => {
+    const root = (document.documentElement.lastElementChild as HTMLElement).shadowRoot as ShadowRoot
+    return root.querySelectorAll('li.candidate').length
+  })
+
+const photoIds = (page: Page) =>
+  new Set(requestedByPage(page).map((address) => Number(new URL(address).searchParams.get('id'))))
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`une recherche de 60 produits : un premier lot, la suite en défilant jusqu’au bout, les photos au fil du défilement (${colorScheme}, 360×640)`, async ({
+    page,
+  }, testInfo) => {
+    await page.emulateMedia({ colorScheme })
+    await openPage(page)
+
+    await show(page, 'chooser-long')
+
+    // Un premier lot seulement, sans rien à toucher pour voir la suite ; sa sentinelle n'a pas de texte.
+    expect(await rowCount(page)).toBe(8)
+    await expect(page.getByText('Biscuit sablé de test n° 60')).toHaveCount(0)
+    await page.screenshot({ path: testInfo.outputPath(`defilement-debut-${colorScheme}.png`) })
+    // Les photos : seulement celles des fiches affichées (et de leur voisinage), jamais les 60.
+    await expect.poll(() => photoIds(page).size).toBeGreaterThan(0)
+    expect(photoIds(page).has(2060)).toBe(false)
+    expect(photoIds(page).size).toBeLessThanOrEqual(8)
+
+    // La personne fait défiler : chaque descente ajoute un lot, jusqu'à la soixantième fiche.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const root = (document.documentElement.lastElementChild as HTMLElement)
+              .shadowRoot as ShadowRoot
+            const scroll = root.querySelector('.scroll') as HTMLElement
+            scroll.scrollTop = scroll.scrollHeight
+            return root.querySelectorAll('li.candidate').length
+          }),
+        { timeout: 20_000, intervals: [100, 200] },
+      )
+      .toBe(60)
+
+    // Au bout : la dernière fiche, puis « Annuler l'envoi » sous elle, atteignable ; rien ne déborde ; chaque cible se touche.
+    await page.evaluate(() => {
+      const root = (document.documentElement.lastElementChild as HTMLElement)
+        .shadowRoot as ShadowRoot
+      const scroll = root.querySelector('.scroll') as HTMLElement
+      scroll.scrollTop = scroll.scrollHeight
+    })
+    await expect(page.getByText('Biscuit sablé de test n° 60')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Annuler l’envoi' })).toBeVisible()
+    const metrics = await page.evaluate(() => {
+      const root = (document.documentElement.lastElementChild as HTMLElement)
+        .shadowRoot as ShadowRoot
+      const screen = root.querySelector('.screen') as HTMLElement
+      const small = [...root.querySelectorAll('button, input, summary')]
+        .filter((element) => !element.closest('[hidden]'))
+        .filter((element) => {
+          const box = element.getBoundingClientRect()
+          return box.width < 43.5 || box.height < 43.5
+        })
+      const buttons = [...root.querySelectorAll('li.candidate button')] as HTMLButtonElement[]
+      return {
+        overflow: screen.scrollWidth - screen.clientWidth,
+        page: document.documentElement.scrollWidth - window.innerWidth,
+        small: small.length,
+        // Le produit « Plus en stock » (n° 21) reste à choisir.
+        outEnabled: buttons[20]?.disabled === false,
+        sentinelHidden: (root.querySelector('.more') as HTMLElement).hidden,
+      }
+    })
+    expect(metrics).toEqual({
+      overflow: 0,
+      page: 0,
+      small: 0,
+      outEnabled: true,
+      sentinelHidden: true,
+    })
+    await expect.poll(() => photoIds(page).has(2060)).toBe(true)
+    for (const address of requestedByPage(page)) {
+      expect(new URL(address).hostname, address).toBe(PHOTO_HOST)
+    }
+    const { violations } = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze()
+    expect(violations).toEqual([])
+    await page.screenshot({ path: testInfo.outputPath(`defilement-fin-${colorScheme}.png`) })
+  })
+}

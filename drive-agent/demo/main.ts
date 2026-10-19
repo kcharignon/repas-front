@@ -72,6 +72,18 @@ const CANDIDATES: PickerItem[] = [
   },
 ]
 
+// DRV-643 : une recherche aux nombreux résultats (60 produits), affichés par lots en défilant ; chaque fiche a sa photo (identifiants 2001 à 2060).
+const MANY: PickerItem[] = Array.from({ length: 60 }, (_unused, index) => ({
+  id: String(1002000 + index),
+  name: `Biscuit sablé de test n° ${index + 1}`,
+  label2: `${150 + index} g`,
+  details: [`${150 + index} g`, '1,90 €', '12,60 € / kg'],
+  promo: null,
+  explain: `${150 + index} g par produit : 1 produit.`,
+  state: index === 20 ? 'out' : 'ok',
+  photo: photo(2001 + index),
+}))
+
 const PICKER: PickerProps = {
   need: '100 g',
   replaces: null,
@@ -209,6 +221,11 @@ const SCREENS: Record<string, () => unknown> = {
   'chooser-last': () => ui.show('chooser', { ...CHOOSER, position: 5 }),
   // Un seul article à choisir : pas de compteur « (1 sur 1) » (DRV-626).
   'chooser-single': () => ui.show('chooser', { ...CHOOSER, position: 1, total: 1 }),
+  'chooser-long': () =>
+    ui.show('chooser', {
+      ...CHOOSER,
+      mount: mounting({ ...PICKER, query: 'biscuit', items: MANY }),
+    }),
   'chooser-gone': () => ui.show('chooser', CHOOSER_GONE),
   diagnostic: () =>
     ui.show('diagnostic', {
@@ -324,6 +341,22 @@ const SCREENS: Record<string, () => unknown> = {
         { name: 'Farine', reason: 'OUT_OF_STOCK', tried: 1 },
         { name: 'Œufs', reason: 'NOT_FOUND', tried: 5 },
         { name: 'Sucre', reason: 'CART_REFUSED', tried: 1 },
+      ],
+    }),
+  // Des produits choisis que le panier n'a pas pris : le choix est enregistré, une phrase par produit et pourquoi (DRV-644).
+  'end-unreached': () =>
+    ui.show('end', {
+      outcome: 'completed',
+      added: 2,
+      chosen: 3,
+      haveAtHome: 0,
+      skipped: 0,
+      unavailable: 0,
+      failed: 0,
+      unreached: [
+        { label: 'Sirop de test Fraise 60cl', reason: 'COMING_SOON' },
+        { label: 'Farine de test', reason: 'OUT_OF_STOCK' },
+        { label: 'Biscuit sablé de test', reason: 'CART_REFUSED' },
       ],
     }),
   // Arrêté avant que rien ne soit mis au panier ni choisi : « Le panier n'est pas rempli » (DRV-626).

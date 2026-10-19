@@ -29,8 +29,22 @@ import { searchByName } from './search-by-name'
 import { productSearchForms } from './search-forms'
 import type { PendingLine, PhaseB, PhaseBContext } from './types'
 
-/** Le nombre de produits affichés. */
-export const MAX_CANDIDATES = 8
+/**
+ * Le plafond technique des produits gardés pour une recherche (DRV-643) : la liste montre TOUS les produits que la page de l'enseigne contient, dans son
+ * ordre, mais une page anormalement longue (ou hostile) ne doit ni alourdir la mémoire ni la préparation des fiches. Une page de recherche d'un magasin en
+ * porte bien moins ; au-delà, la personne affine sa recherche (le champ « Chercher autre chose »).
+ */
+export const MAX_CANDIDATES = 200
+
+/** Un nombre lu dans la réponse du panier, gardé tel quel s'il est entier et raisonnable, sinon `null` (il est stocké, relu et écrit dans le diagnostic). */
+const readCount = (value: number | null | undefined): number | null =>
+  value !== null &&
+  value !== undefined &&
+  Number.isInteger(value) &&
+  value >= 0 &&
+  value <= 1_000_000
+    ? value
+    : null
 
 /** La recherche en cours d'une ligne : ce que la liste montre. */
 interface Search {
@@ -129,7 +143,8 @@ function itemOf(line: PlanLine, candidate: Candidate, refused: ReadonlySet<strin
     name: cleanText(candidate.label) || S.picker.noLabel(candidate.id),
     label2: second === '' || repeatsSize ? null : second,
     details,
-    promo: promo === null ? null : S.picker.promo(formatPrice(promo)),
+    // Une promotion à zéro n'existe pas (DRV-632, DRV-644) : pas de ligne « En promotion : 0,00 € ».
+    promo: promo === null || !(promo > 0) ? null : S.picker.promo(formatPrice(promo)),
     photo: candidate.imageUrl,
     explain: explain(line, candidate),
     state: refused.has(candidate.id) ? 'refused' : saysOutOfStock(candidate) ? 'out' : 'ok',
@@ -249,6 +264,7 @@ async function settleLine(
         )
         return () => {
           live = false
+          picker.dispose()
         }
       },
     })
@@ -313,11 +329,36 @@ async function settleLine(
       return 'done'
     }
     if (settled.obtained < 1) {
-      // Le panier n'a rien pris : le produit reste dans la liste, rien n'est retenu pour lui (DRV-635).
-      search.notice = S.picker.cartRefused(
-        cleanText(candidate.label) || S.picker.noLabel(candidate.id),
+      // Le panier n'a rien pris (DRV-644) : c'est quand même le produit que la personne veut, en priorité. Le choix est enregistré (la même ligne `CHOSEN`
+      // qu'un choix pris au panier, aucune clé de plus), le passage continue, et la fin dit en une phrase que le produit n'est pas au panier, et pourquoi.
+      const facts = settled.facts ?? null
+      record(
+        {
+          ingredientSlug: slug,
+          outcome: 'CHOSEN',
+          product: chosenProduct(candidate),
+          quantity: Math.min(packs, LIMITS.packsMax),
+          placement,
+          ...(unavailable.length > 0 && {
+            unavailableIds: unavailable.map((product) => product.id).slice(0, LIMITS.products),
+          }),
+          ...rejected(),
+        },
+        {
+          unreached: {
+            // « Bientôt disponible » se dit avec les mots de Leclerc (l'application officielle n'a pas non plus de bouton d'ajout) ; un stock nul, la rupture.
+            reason: candidate.comingSoon
+              ? 'COMING_SOON'
+              : candidate.stock === 0 || facts?.stock === 0
+                ? 'OUT_OF_STOCK'
+                : 'CART_REFUSED',
+            label: cut(cleanText(candidate.label) || S.picker.noLabel(candidate.id)),
+            stock: readCount(facts?.stock),
+            availability: readCount(facts?.availability),
+          },
+        },
       )
-      continue
+      return 'done'
     }
     record(
       {

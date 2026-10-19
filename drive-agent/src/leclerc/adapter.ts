@@ -1,4 +1,11 @@
-import { CART_HEADERS, cartBody, MAX_QUANTITY, readCartResponse, readPageTotal } from './cart'
+import {
+  CART_HEADERS,
+  cartBody,
+  MAX_QUANTITY,
+  readCartResponse,
+  readPageTotal,
+  type CartProductFacts,
+} from './cart'
 import { type Candidate, toCandidate } from './candidate'
 import { httpCause } from './causes'
 import {
@@ -59,6 +66,8 @@ export interface CartResult {
   items: number | null
   /** Total du panier en centimes (`sTotalAPayer`), `null` si la réponse ne le dit pas. */
   totalCents: number | null
+  /** La disponibilité du produit que la réponse du panier donne (DRV-644), `null` quand elle n'en dit rien. */
+  product?: CartProductFacts | null
   /** Le code HTTP de la réponse du site. */
   status: number
 }
@@ -386,7 +395,7 @@ export class LeclercAdapter implements RetailerAdapter {
       body,
     })
     this.assertUsable(reply)
-    const { obtained, items, totalCents, quantities } = this.readCart(reply, productId)
+    const { obtained, items, totalCents, quantities, product } = this.readCart(reply, productId)
     this.cartLines = quantities
     return {
       productId,
@@ -396,6 +405,7 @@ export class LeclercAdapter implements RetailerAdapter {
       ok: obtained === sent,
       items,
       totalCents,
+      ...(product && { product }),
       status: reply.status,
     }
   }

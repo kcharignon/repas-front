@@ -51,6 +51,22 @@ export function cartsOf(plan: PlanMessage, state: RunState): Carts {
   return carts
 }
 
+/** Un produit choisi que le panier n'a pas pris (DRV-644), avec pourquoi. */
+type EndUnreached = NonNullable<EndProps['unreached']>[number]
+
+/**
+ * Les produits choisis que le panier n'a pas pris, dans l'ordre du plan, un par ligne : le nom du produit et pourquoi. Comme pour `changesOf`, ce qui
+ * vient de l'état de reprise n'est cru que pour une ligne du plan, et seulement si la ligne a bien fini `CHOSEN`.
+ */
+export function unreachedOf(plan: PlanMessage, state: RunState): EndUnreached[] {
+  return plan.lines.flatMap(({ ingredientSlug }) => {
+    const found = state.unreached.find((note) => note.ingredientSlug === ingredientSlug)
+    return found && own(state.done, ingredientSlug)?.outcome === 'CHOSEN'
+      ? [{ label: found.label, reason: found.reason }]
+      : []
+  })
+}
+
 /** Un article resté sans produit à la fin (`UNAVAILABLE`), avec la raison de son produit habituel et le nombre de recherches faites (DRV-635). */
 type EndReason = NonNullable<EndProps['reasons']>[number]
 
@@ -153,6 +169,7 @@ export function hasSomethingToRead(props: EndProps): boolean {
     (props.changes?.length ?? 0) > 0 ||
     (props.kept?.length ?? 0) > 0 ||
     (props.unreadable?.length ?? 0) > 0 ||
+    (props.unreached?.length ?? 0) > 0 ||
     props.slow === true
   )
 }
@@ -165,6 +182,7 @@ export function endProps(
   carts: Carts = { kept: [], unreadable: [] },
   slow = false,
   reasons: readonly EndReason[] = [],
+  unreached: readonly EndUnreached[] = [],
 ): EndProps {
   const count = (outcome: ResultLine['outcome']) =>
     lines.filter((line) => line.outcome === outcome).length
@@ -182,5 +200,6 @@ export function endProps(
     ...(carts.unreadable.length > 0 && { unreadable: carts.unreadable }),
     ...(slow && { slow: true as const }),
     ...(reasons.length > 0 && { reasons }),
+    ...(unreached.length > 0 && { unreached }),
   }
 }

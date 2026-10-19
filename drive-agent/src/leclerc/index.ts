@@ -8,6 +8,7 @@ export {
   type RetailerAdapter,
 } from './adapter'
 export { saysOutOfStock, type Candidate, type PricePerMeasure } from './candidate'
+export type { CartProductFacts } from './cart'
 export { contentFromLabel, parseContent, type Content, type ContentSource } from './content'
 export { causeLabel, causeText, type LeclercCause } from './causes'
 export { LeclercError, type LeclercErrorCode } from './errors'

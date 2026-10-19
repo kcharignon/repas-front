@@ -485,7 +485,9 @@ const error: Renderer<'error'> = (props: ErrorProps, answer) => {
  * s'il y en a un, ne change rien au texte.
  */
 function endText(props: EndProps): string {
-  if (props.outcome === 'completed') return S.end.completed
+  // Des produits choisis n'ont pas été pris par le panier (DRV-644) : « Tes produits sont dans ton panier » serait faux, la phrase de chaque produit suit.
+  if (props.outcome === 'completed')
+    return (props.unreached?.length ?? 0) > 0 ? S.end.completedSome : S.end.completed
   const code = props.outcome === 'aborted' ? undefined : props.error
   const left = props.failed + props.unavailable
   const safe = props.outcome === 'partial' && left > 0 ? S.end.safeLeft(left) : S.end.safe
@@ -508,6 +510,8 @@ function endText(props: EndProps): string {
  * 6 articles à ajouter »), c'est « Le panier n'est pas rempli » : le même titre que le récapitulatif de Repas (DRV-626).
  */
 function endTitle(props: EndProps): string {
+  if (props.outcome === 'completed' && (props.unreached?.length ?? 0) > 0)
+    return S.end.title.partial
   return props.outcome === 'partial' && props.added + props.chosen === 0
     ? S.end.notFilled
     : S.end.title[props.outcome]
@@ -562,6 +566,15 @@ const end: Renderer<'end'> = (props: EndProps, answer) => {
               ...props.kept.map((line) =>
                 h('li', { text: S.end.kept.item(line.name, line.inCart) }),
               ),
+            ),
+          )
+        : null,
+      props.unreached && props.unreached.length > 0
+        ? h(
+            'div',
+            { class: 'notice' },
+            ...props.unreached.map((line) =>
+              h('p', { text: S.end.unreached.item(line.label, S.end.unreached.why[line.reason]) }),
             ),
           )
         : null,

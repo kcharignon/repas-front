@@ -25,6 +25,7 @@ import {
   hasSomethingToRead,
   reasonsOf,
   resultLines,
+  unreachedOf,
 } from './result'
 import { emptyState, RunStore, type RunState } from './run-state'
 import type { FlowDeps, LineNotes, PendingLine, Step } from './types'
@@ -421,9 +422,11 @@ export class Flow {
       cartsOf(run.plan, run.state),
       run.slow,
       reasonsOf(run.plan, run.state),
+      unreachedOf(run.plan, run.state),
     )
     // Les raisons de cet envoi restent pour le diagnostic (DRV-635) : des mots fixes et des nombres, sans libellé.
     this.runs.keepReasons(run.state.reasons)
+    this.runs.keepRefusals(run.state.unreached)
     // Un envoi terminé sans rien à lire repart tout de suite vers Repas (DRV-625) ; l'écran de fin reste pour le reste (partiel, arrêté, erreur).
     if (hasSomethingToRead(props)) await ui.show('end', props)
     this.runs.remove(run.plan.runId)
@@ -485,15 +488,22 @@ export class Flow {
   private record(
     run: Run,
     line: ResultLine,
-    { change, cart, slow, accepted }: LineNotes = {},
+    { change, cart, slow, accepted, unreached }: LineNotes = {},
   ): void {
     const { slug, entry } = this.describe(run, line, {
       slow: slow === true,
       accepted: accepted === true,
+      unreached: unreached !== undefined,
     })
     if (slow) run.slow = true
     if (change) run.state.changes.push({ ingredientSlug: slug, ...change })
     if (cart) run.state.carts.push({ ingredientSlug: slug, ...cart })
+    if (unreached) {
+      run.state.unreached = [
+        ...run.state.unreached.filter((note) => note.ingredientSlug !== slug),
+        { ingredientSlug: slug, ...unreached },
+      ]
+    }
     run.state.done[slug] = line
     delete run.state.waiting[slug]
     this.touch(run)
@@ -553,7 +563,7 @@ export class Flow {
   private describe(
     run: Run,
     line: ResultLine,
-    { slow, accepted }: { slow: boolean; accepted: boolean },
+    { slow, accepted, unreached }: { slow: boolean; accepted: boolean; unreached: boolean },
   ): { slug: string; entry: string } {
     const slug = line.ingredientSlug
     const name = run.names.get(slug) ?? slug
@@ -568,7 +578,14 @@ export class Flow {
               : S.log.added(name),
         }
       case 'CHOSEN':
-        return { slug, entry: accepted ? S.log.acceptedAnyway(name) : S.log.added(name) }
+        return {
+          slug,
+          entry: unreached
+            ? S.log.savedNotInCart(name)
+            : accepted
+              ? S.log.acceptedAnyway(name)
+              : S.log.added(name),
+        }
       case 'HAVE_AT_HOME':
         return { slug, entry: S.log.haveAtHome(name) }
       case 'SKIPPED':

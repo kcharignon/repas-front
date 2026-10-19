@@ -1,4 +1,4 @@
-// Le catalogue du faux site : 32 produits INVENTÉS (marques, libellés, prix, identifiants). Rien n'est copié d'une enseigne.
+// Le catalogue du faux site : 79 produits INVENTÉS (marques, libellés, prix, identifiants). Rien n'est copié d'une enseigne.
 // Les champs ont les noms que `recherche.md` (dépôt back) relève sur le vrai site : c'est la structure qui est imitée, pas le contenu.
 
 /** Le point de livraison du faux magasin (`sNoPointLivraison`) : différent de l'identifiant du magasin, comme sur le vrai site. */
@@ -110,6 +110,19 @@ export const PRODUCTS: readonly FakeProduct[] = [
   // de l'enseigne (1000033). Un produit en stock au libellé qui porte une apostrophe, pour le moteur de recherche à apostrophe stricte (1000034).
   make("Céréales fourrées P'tit Fermier Chocolat noisette", '450 g', 2.19, 4.87, 'kg', 0),
   make("Gâteaux C'est Nous Pépites", '300 g', 1.85, 6.17, 'kg', 9),
+  // DRV-643. Une recherche aux nombreux résultats (« biscuit » : 45 produits, 1000035 à 1000079), pour l'affichage de la liste par lots en défilant. Un libellé
+  // qui ne contient aucun mot des autres recherches du faux site. Deux sont en rupture (1000040, 1000075), un en promotion (1000050).
+  ...Array.from({ length: 45 }, (_unused, index) =>
+    make(
+      `Biscuit sablé Sablerie Fictive série ${String(index + 1).padStart(2, '0')}`,
+      `${150 + index} g`,
+      (100 + index * 10) / 100,
+      (600 + index * 10) / 100,
+      'kg',
+      index === 5 || index === 40 ? 0 : 10 + index,
+      index === 15 ? { promo: 1.9 } : {},
+    ),
+  ),
 ]
 
 /** Un texte sans accent ni majuscule : « Œufs » et « oeufs » se valent, comme dans une recherche. */

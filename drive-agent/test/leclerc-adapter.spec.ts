@@ -251,6 +251,8 @@ describe('setCartQuantity', () => {
       ok: true,
       items: 5,
       totalCents: 947,
+      // La disponibilité que l'évènement du produit donne (DRV-644)
+      product: { stock: 12, availability: null },
       status: 200,
     })
   })

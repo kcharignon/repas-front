@@ -151,7 +151,7 @@ test.describe('« Bientôt disponible » : le panier tranche', () => {
     })
   })
 
-  test('vraie rupture : une seule tentative, « plus disponible » est dit, et un « Choisir » refusé garde la liste avec un message qui nomme le produit', async ({
+  test('vraie rupture : une seule tentative, « Plus en stock. » sans nombre ; « Choisir » enregistre le choix, le passage continue, la fin dit pourquoi (DRV-644)', async ({
     page,
     fake,
     agentCode,
@@ -167,6 +167,7 @@ test.describe('« Bientôt disponible » : le panier tranche', () => {
           searchQuery: 'cereales',
           needed: GRAMS,
         }),
+        fresh('sel', 'Sel', { needed: GRAMS }),
       ]),
     )
 
@@ -175,27 +176,81 @@ test.describe('« Bientôt disponible » : le panier tranche', () => {
     await expect(page.getByText('Ces produits ne sont plus disponibles')).toBeVisible()
     expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'cart', 'search'])
 
-    // And : l'utilisateur tente quand même le produit dans la liste, le panier le refuse encore
+    // And : la fiche dit seulement « Plus en stock. » (pas de nombre de produits à mettre au panier), « Choisir » reste actif
     const card = page.getByRole('listitem').filter({ hasText: 'Céréales fourrées' })
     await expect(card).toContainText('Plus en stock.')
+    await expect(card).not.toContainText('À mettre au panier')
     await card.getByRole('button', { name: 'Choisir' }).click()
-    await page.getByRole('button', { name: 'Cette fois seulement' }).click()
+    await page.getByRole('button', { name: 'Toujours prendre celui-ci' }).click()
+
+    // Then : le passage continue (l'article suivant), sans bandeau ni demande de choisir autre chose
+    await expect(page.getByText('Il te faut : 900 g.')).toBeVisible()
+    await expect(page.locator('.head strong')).toHaveText('Sel')
+    await expect(page.getByText('Choisis-en un autre')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Pas cette fois' }).click()
+
+    // And : la fin le dit en une phrase, avec la raison ; le panier est vide
     await expect(
       page.getByText(
-        "Leclerc n’a pas pu mettre « Céréales fourrées P'tit Fermier Chocolat noisette » au panier. Choisis-en un autre.",
+        "« Céréales fourrées P'tit Fermier Chocolat noisette » est enregistré, mais pas dans ton panier. Leclerc indique « Bientôt disponible » : tu ne peux pas le commander pour l’instant.",
       ),
     ).toBeVisible()
-    await expect(card).toBeVisible()
-    await expect(page.getByLabel(/Ne plus proposer Céréales fourrées/)).not.toBeChecked()
-
-    // Then : rien au panier, rien retiré de la mémoire de Repas
     expect(fake.cart()).toEqual({})
-    await page.getByRole('button', { name: 'Pas cette fois' }).click()
+    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
     await returnsToRepas(page, fake)
+
+    // And : le résultat est une ligne CHOSEN ordinaire, avec le produit à mémoriser et aucune clé de plus
     const result = await returnedResult(page, fake)
-    expect(result).toMatchObject({ lines: [{ ingredientSlug: 'cereales', outcome: 'SKIPPED' }] })
-    expect(JSON.stringify(result)).not.toContain('rejected')
+    expect(result).toMatchObject({
+      lines: [
+        {
+          ingredientSlug: 'cereales',
+          outcome: 'CHOSEN',
+          placement: 'PRIMARY',
+          quantity: 2,
+          product: { id: String(CEREALS) },
+        },
+        { ingredientSlug: 'sel', outcome: 'SKIPPED' },
+      ],
+    })
+    const chosen = (result as unknown as { lines: Record<string, unknown>[] }).lines[0] ?? {}
+    expect(Object.keys(chosen).sort()).toEqual(
+      ['ingredientSlug', 'outcome', 'placement', 'product', 'quantity', 'unavailableIds'].sort(),
+    )
     expectPoliteAgent(fake)
+  })
+
+  test('disponible sur la fiche mais pas pris par le panier : même enregistrement, la raison dit que Leclerc n’en donne pas', async ({
+    page,
+    fake,
+    agentCode,
+  }) => {
+    // Given : le panier refuse le gâteau (1000034), dont la fiche dit un stock
+    fake.setBehavior({ refuseCart: [CAKES] })
+    await openWithFragment(
+      page,
+      fake,
+      agentCode,
+      planOf([fresh('gateaux', 'Gâteaux', { needed: GRAMS })]),
+    )
+
+    // When : l'utilisateur choisit ce gâteau
+    await page.getByRole('button', { name: 'Commencer' }).click()
+    const card = page.getByRole('listitem').filter({ hasText: 'Pépites' })
+    await card.getByRole('button', { name: 'Choisir' }).click()
+
+    // Then : la fin dit pourquoi, le choix revient à Repas, le panier est vide
+    await expect(
+      page.getByText(
+        "« Gâteaux C'est Nous Pépites » est enregistré, mais pas dans ton panier : Leclerc n’a pas voulu le mettre au panier, sans en donner la raison.",
+      ),
+    ).toBeVisible()
+    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    await returnsToRepas(page, fake)
+    expect(fake.cart()).toEqual({})
+    expect(await returnedResult(page, fake)).toMatchObject({
+      lines: [{ ingredientSlug: 'gateaux', outcome: 'CHOSEN', product: { id: String(CAKES) } }],
+    })
   })
 })
 

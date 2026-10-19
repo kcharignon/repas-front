@@ -8,6 +8,12 @@ import type { ErrorCode, LineStatus, Outcome, Placement } from '../../protocol'
  */
 export type UnavailableReason = 'OUT_OF_STOCK' | 'NOT_FOUND' | 'CART_REFUSED'
 
+/**
+ * Pourquoi un produit CHOISI n'est pas au panier (DRV-644) : `COMING_SOON` (la fiche porte « Bientôt disponible », comme l'application officielle de l'enseigne),
+ * `OUT_OF_STOCK` (la fiche ou la réponse du panier dit un stock nul) ou `CART_REFUSED` (la fiche le disait disponible, le panier n'en a rien pris). Un état de l'agent et de son écran, pas du protocole.
+ */
+export type UnreachedReason = 'OUT_OF_STOCK' | 'COMING_SOON' | 'CART_REFUSED'
+
 export interface SummaryLine {
   name: string
   status: LineStatus
@@ -175,6 +181,11 @@ export interface EndProps {
    * recherches faites, dans un bloc « Détails » replié. Absent (jamais vide) quand aucun.
    */
   reasons?: readonly { name: string; reason: UnavailableReason; tried: number }[]
+  /**
+   * Les produits que l'utilisateur a choisis et que le panier n'a pas pris (DRV-644) : le choix est enregistré, le produit n'est pas au panier. Le nom du
+   * produit et pourquoi. Absent (jamais vide) quand aucun.
+   */
+  unreached?: readonly { label: string; reason: UnreachedReason }[]
 }
 
 /** Les écrans : ce que `ui.show(nom, props)` affiche et ce que sa promesse rend. */
