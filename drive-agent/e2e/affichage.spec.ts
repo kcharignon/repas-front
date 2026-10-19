@@ -22,14 +22,17 @@ async function seen(page: import('@playwright/test').Page) {
       frameHeight: frame.height * dp,
       horizontalOverflow: overlay.scrollWidth - overlay.clientWidth,
       pageOverflow: document.documentElement.scrollWidth - window.innerWidth,
-      buttons: [...root.querySelectorAll('button, summary')].map((element) => {
-        const box = element.getBoundingClientRect()
-        return {
-          label: element.textContent,
-          heightDp: box.height * dp,
-          rightDp: box.right * dp,
-        }
-      }),
+      // Une partie cachée (la confirmation de l'écran de choix) n'a pas de cible à toucher.
+      buttons: [...root.querySelectorAll('button, summary')]
+        .filter((element) => !element.closest('[hidden]'))
+        .map((element) => {
+          const box = element.getBoundingClientRect()
+          return {
+            label: element.textContent,
+            heightDp: box.height * dp,
+            rightDp: box.right * dp,
+          }
+        }),
       // La taille de police calculée est celle de la feuille de style (16 px) : le cadre agrandi la multiplie par son facteur.
       factor: frame.width / overlay.offsetWidth,
       fontDp:

@@ -22,7 +22,7 @@ const CANDIDATES: PickerItem[] = [
     label2: '50 g',
     details: ['50 g', '2,58 €', '51,60 € / kg'],
     promo: null,
-    explain: '100 g demandés, 50 g par produit : 2',
+    explain: '50 g par produit : 2 produits.',
     state: 'ok',
   },
   {
@@ -31,7 +31,7 @@ const CANDIDATES: PickerItem[] = [
     label2: HOSTILE,
     details: ['100 g', '3,99 €', '39,90 € / kg'],
     promo: 'En promotion : 3,50 €',
-    explain: '100 g demandés, 100 g par produit : 1',
+    explain: '100 g par produit : 1 produit.',
     state: 'ok',
   },
   {
@@ -183,6 +183,16 @@ const SCREENS: Record<string, () => unknown> = {
       packs: 2,
     }),
   chooser: () => ui.show('chooser', CHOOSER),
+  // Un article n'a encore aucun produit retenu : « Passer les n suivants » demande une confirmation d'une ligne (DRV-624).
+  'chooser-confirm': () => {
+    const shown = ui.show('chooser', { ...CHOOSER, confirmRest: true })
+    // Le premier bouton de ce nom est celui des réponses ; le second, caché, confirme.
+    const buttons = [...(ui.host?.shadowRoot?.querySelectorAll('button') ?? [])]
+    buttons.find((button) => button.textContent === 'Passer les 4 suivants')?.click()
+    return shown
+  },
+  // Le dernier article à choisir : plus de « Passer les suivants ».
+  'chooser-last': () => ui.show('chooser', { ...CHOOSER, position: 5 }),
   'chooser-gone': () => ui.show('chooser', CHOOSER_GONE),
   diagnostic: () =>
     ui.show('diagnostic', {

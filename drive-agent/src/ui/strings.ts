@@ -338,6 +338,11 @@ export const S = {
     counter: (position: number, total: number) => `${position} sur ${total}`,
     skip: 'Pas cette fois',
     haveAtHome: 'J’en ai toujours',
+    /** « Pas cette fois » pour cet article et tous ceux qui restent à choisir (DRV-624) : `n` les compte tous, celui-ci compris. */
+    rest: (n: number) => `Passer les ${n} suivants`,
+    /** La confirmation d'une ligne, quand un des articles passés n'a encore aucun produit retenu. */
+    restSure: (n: number) => `Ces ${n} articles ne seront pas mis au panier.`,
+    restBack: 'Revenir au choix',
     cancel: 'Annuler l’envoi',
   },
   /** La liste de produits que l'agent affiche dans l'écran de choix (DRV-306). */
@@ -367,22 +372,20 @@ export const S = {
     promo: (price: string) => `En promotion : ${price}`,
     unknownContent: 'Contenu inconnu : vous choisirez la quantité.',
     noLabel: (id: string) => `Produit ${id}`,
-    /** « 800 g demandés, 500 g par produit : 2 » pour un poids ou un volume ; sinon « Demandé : 2 paquet. À mettre au panier : 2. » */
-    pack: (asked: string, measure: boolean, plural: boolean, per: string | null, packs: number) =>
-      measure
-        ? `${asked} ${plural ? 'demandés' : 'demandé'}, ${per ?? '?'} par produit : ${packs}`
-        : `Demandé : ${asked}${per === null ? '' : `, ${per} par produit`}. À mettre au panier : ${packs}.`,
+    /** Le nombre à mettre au panier : « 500 g par produit : 2 produits. » (la quantité demandée est dite plus haut : « Il vous faut : 800 g. »). */
+    pack: (per: string | null, packs: number) =>
+      per === null
+        ? `À mettre au panier : ${count(packs, 'produit', 'produits')}.`
+        : `${per} par produit : ${count(packs, 'produit', 'produits')}.`,
     cartRefused: 'Leclerc n’a pas pu mettre ce produit au panier. Choisissez-en un autre.',
   },
+  /** Le produit choisi n'est pas celui que Repas retenait (DRV-624) : une question, deux réponses. L'ordre des produits reste l'affaire de Repas. */
   placement: {
-    title: (product: string) => `Que faites-vous de « ${product} » ?`,
-    text: (ingredient: string) => `C’est un autre produit pour ${ingredient}.`,
-    primary: 'Mon nouveau produit habituel',
-    primaryHint: 'Repas le prendra en premier ; les autres restent des produits de remplacement.',
-    fallback: 'Produit de remplacement',
-    fallbackHint: 'Repas le prendra après les autres, s’ils ne sont pas disponibles.',
-    once: 'Seulement cette fois',
-    onceHint: 'Repas ne s’en souviendra pas.',
+    title: 'Toujours prendre ce produit ?',
+    text: (product: string, ingredient: string) =>
+      `Vous avez choisi « ${product} » pour ${ingredient}.`,
+    always: 'Toujours prendre celui-ci',
+    once: 'Cette fois seulement',
     back: 'Revenir à la liste',
   },
   /**

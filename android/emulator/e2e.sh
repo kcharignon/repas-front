@@ -27,7 +27,9 @@
 #  10. page d'ouverture trop lente : le bandeau s'affiche au bout de 25 s, l'accueil du drive reste à un geste ;
 #  11. 403 (le défi de l'anti-robot est servi ainsi) : la page reste visible, le bandeau dit de faire la vérification ;
 #  12. « Commencer mes courses » mène à une page 404 (la racine de l'hôte du magasin, ou /magasin-N-N/ sans ville) : le bandeau s'affiche, le plan
-#      ne part pas, et « Ouvrir l'accueil du drive » recharge l'accueil de l'enseigne.
+#      ne part pas, et « Ouvrir l'accueil du drive » recharge l'accueil de l'enseigne ;
+#  13. quatre nouveaux articles (DRV-624) : « Choisir » le premier, puis « Passer les 3 suivants » (une confirmation d'une ligne, car aucun n'a de
+#      produit retenu) : deux touches pour le geste, rien n'est cherché ni retenu pour les trois autres.
 # Les captures d'écran et le rapport texte sont dans android/dist/e2e/.
 # Code de sortie : 0 si tous les contrôles passent, 1 sinon, 3 si KVM manque.
 set -u
@@ -218,7 +220,8 @@ if wait_until 60 ui_has 'Il vous faut'; then
 else
   ko "phase B : la liste de choix ne s'est pas affichée"
 fi
-check "phase B : le nombre de produits est calculé (80 g demandés, 40 g par produit)" ui_has '80 g demandés'
+check "phase B : la quantité demandée est dite en haut de la liste, puis le nombre de produits est calculé (40 g par produit : 2 produits)" ui_has 'Il vous faut : 80 g'
+check "phase B : le nombre de produits est calculé (40 g par produit)" ui_has '40 g par produit'
 check "l'agent ne choisit jamais seul : le panier n'a pas changé" cart_is "$CART_KNOWN"
 sleep 1
 screenshot e05-choix
@@ -543,9 +546,50 @@ else
 fi
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
-# --- 13. Bilan ------------------------------------------------------------------------------------------------------------------------------
+# --- 13. Quatre nouveaux articles : choisir le premier, passer les trois suivants ------------------------------------------------------------
 say
-say "13. Bilan"
+say "13. Quatre nouveaux articles : « Choisir » le premier, puis « Passer les 3 suivants » (confirmation d'une ligne), rien n'est retenu pour les autres"
+RUN_REST=be570000-0000-4000-8000-000000000013
+if open_pass "$RUN_REST" plan-nouveaux.json; then ok "le récapitulatif s'affiche (4 nouveaux produits à choisir)"; else ko "le récapitulatif ne s'est pas affiché"; fi
+check "récapitulatif : 4 nouveaux produits à choisir" ui_has '4 nouveaux produits à choisir'
+tap 'text="Commencer"' || ko "le bouton « Commencer » est introuvable"
+if wait_until 60 ui_has 'Il vous faut : 80 g'; then ok "la liste du poivre s'affiche (1 sur 4)"; else ko "la liste de choix ne s'est pas affichée"; fi
+check "l'écran dit « 1 sur 4 »" ui_has '1 sur 4'
+touch_target 'text="Passer les 4 suivants"' "Passer les 4 suivants"
+touch_target 'text="J’en ai toujours"' "J’en ai toujours"
+screenshot e21-choix-premier-article
+if tap 'text="Choisir"'; then ok "touche 1 : premier produit proposé choisi (poivre moulu)"; else ko "aucun bouton « Choisir » à l'écran"; fi
+if wait_until 60 ui_has '2 sur 4'; then ok "l'article suivant s'affiche (2 sur 4)"; else ko "le deuxième article ne s'est pas affiché"; fi
+check "le bouton compte les articles qui restent à choisir, celui-ci compris : « Passer les 3 suivants »" ui_has 'text="Passer les 3 suivants"'
+touch_target 'text="Passer les 3 suivants"' "Passer les 3 suivants"
+screenshot e22-passer-les-suivants
+if tap 'text="Passer les 3 suivants"'; then ok "touche 2 : « Passer les 3 suivants »"; else ko "le bouton « Passer les 3 suivants » est introuvable"; fi
+if wait_until 20 ui_has 'ne seront pas mis au panier'; then
+  ok "aucun article n'a de produit retenu : une confirmation d'une ligne s'affiche (« Ces 3 articles ne seront pas mis au panier. »)"
+else
+  ko "la confirmation d'une ligne ne s'est pas affichée"
+fi
+sleep 1
+screenshot e23-passer-confirmation
+check "avant la confirmation, rien n'est passé : le poivre est au panier, trois requêtes seulement (recherche, panier, recherche du sel)" cart_is '{"1000021":2}'
+if [ "$(paced_count)" = "3" ]; then ok "trois requêtes avant la confirmation"; else ko "$(paced_count) requêtes avant la confirmation (3 attendues)"; fi
+if tap 'text="Passer les 3 suivants"'; then ok "touche 3 : la confirmation"; else ko "le bouton de confirmation est introuvable"; fi
+if wait_until 60 ui_has 'Le panier est rempli'; then ok "l'agent annonce « Le panier est rempli »"; else ko "l'agent n'a pas annoncé la fin"; fi
+check "le panier est celui du seul premier choix (poivre x2) et rien n'a été cherché pour les trois autres : 3 requêtes en tout" cart_is '{"1000021":2}'
+if [ "$(paced_count)" = "3" ]; then ok "toujours 3 requêtes : les trois articles passés n'ont pas été cherchés"; else ko "$(paced_count) requêtes en tout (3 attendues)"; fi
+polite_agent
+if tap 'text="Retourner dans Repas"' && wait_until 20 result_has "$RUN_REST" completed ''; then
+  ok "Repas reçoit le résultat « completed »"
+else
+  ko "Repas n'a pas reçu le résultat du passage"
+fi
+check "le résultat : le poivre choisi, les trois autres « pas cette fois » (ni « j'en ai toujours », ni refus, ni produit)" \
+  result_detail 'poivre:CHOSEN:1000021:2,sel:SKIPPED::,riz:SKIPPED::,huile:SKIPPED::'
+back_to_repas || ko "l'écran Repas n'est pas revenu"
+
+# --- 14. Bilan ------------------------------------------------------------------------------------------------------------------------------
+say
+say "14. Bilan"
 fake_reset
 final_checks
 conclude "les scénarios complets"

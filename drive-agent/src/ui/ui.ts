@@ -173,7 +173,10 @@ function setSheet(
 /** Garde le clavier dans l'écran : Tab après le dernier élément revient au premier, Maj+Tab avant le premier va au dernier. */
 function trapFocus(event: KeyboardEvent, root: ShadowRoot, overlay: HTMLElement): void {
   if (event.key !== 'Tab') return
-  const items = [...overlay.querySelectorAll<HTMLElement>(FOCUSABLE)]
+  // Une partie cachée (`hidden` : la confirmation de l'écran de choix, le rapport du diagnostic) n'est pas dans l'ordre de tabulation.
+  const items = [...overlay.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+    (item) => item.closest('[hidden]') === null,
+  )
   const first = items[0]
   const last = items[items.length - 1]
   if (!first || !last) return

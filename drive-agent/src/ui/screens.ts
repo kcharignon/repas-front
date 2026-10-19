@@ -44,10 +44,14 @@ type Renderer<K extends ScreenName> = (props: ScreenProps<K>, answer: Answer<K>)
 
 const LOG_SIZE = 5
 
+/**
+ * Le rang d'un bouton dans l'écran (DRV-624) : `primary` est LE geste de l'écran, `secondary` une autre réponse possible, `quiet` ce qu'on
+ * garde à portée sans l'offrir (annuler l'envoi, revenir en arrière). Aucun écran n'a plus de bouton rouge : annuler se défait en relançant l'envoi.
+ */
 function button(
   label: string,
   onClick: () => void,
-  kind: 'plain' | 'primary' | 'danger' = 'plain',
+  kind: 'plain' | 'primary' | 'secondary' | 'quiet' = 'plain',
 ) {
   return h('button', {
     text: label,
@@ -220,32 +224,85 @@ const quantity: Renderer<'quantity'> = (props: QuantityProps, answer) => {
   }
 }
 
+/**
+ * L'écran de choix d'un produit (phase B). En haut : l'article et son compteur, puis les autres réponses possibles (« Pas cette fois »,
+ * « J'en ai toujours », « Passer les n suivants »). Au milieu : la liste de produits, dont chaque « Choisir » est le geste principal. Tout en bas
+ * de la liste, discret : « Annuler l'envoi » (le menu de l'application laisse la place de le faire défiler jusque-là, `--clear`).
+ */
 const chooser: Renderer<'chooser'> = (props: ChooserProps, answer) => {
   const zone = h('div', { class: 'zone' })
+  // Les articles encore à choisir, celui-ci compris : « Passer les n suivants » les passe tous (« Pas cette fois »), sans rien retenir.
+  const left = props.total - props.position + 1
+  // Le focus arrive sur l'article (jamais sur un bouton : un « Entrée » tenu ne doit pas répondre à l'article suivant) et sa ligne est une zone
+  // annoncée (`role="status"`) : « Poivre (2 sur 4) » se lit d'une traite. Le compteur reste du texte de cette ligne : posé dans un `span` à part,
+  // la WebView d'Android ne l'exposait pas (relevé dans l'émulateur).
+  const head = h(
+    'p',
+    { class: 'head', attrs: { tabindex: '-1', role: 'status' } },
+    h('strong', { text: props.ingredient, attrs: { id: 'titre' } }),
+    ` (${S.chooser.counter(props.position, props.total)})`,
+  )
+  const skip = button(S.chooser.skip, () => answer({ kind: 'skip' }), 'secondary')
+  const have = button(S.chooser.haveAtHome, () => answer({ kind: 'have' }), 'secondary')
+  const choices = actions(skip, have)
   const bar = h(
     'div',
     { class: 'bar', attrs: { role: 'group', 'aria-label': S.chooser.group } },
-    h(
-      'p',
-      {},
-      h('strong', { text: props.ingredient, attrs: { id: 'titre' } }),
-      ` (${S.chooser.counter(props.position, props.total)})`,
-    ),
-    actions(
-      button(S.chooser.skip, () => answer({ kind: 'skip' })),
-      button(S.chooser.haveAtHome, () => answer({ kind: 'have' })),
-      button(S.chooser.cancel, () => answer({ kind: 'cancel' }), 'danger'),
-    ),
+    head,
+    choices,
+  )
+  if (left > 1) {
+    // La confirmation d'une ligne : seulement quand un des articles passés n'a encore aucun produit retenu. Elle prend la place des réponses.
+    const confirm = h('div', { class: 'confirm', hidden: true })
+    const sure = h('p', {
+      class: 'sure',
+      text: S.chooser.restSure(left),
+      attrs: { role: 'alert', tabindex: '-1' },
+    })
+    const rest = button(
+      S.chooser.rest(left),
+      () => {
+        if (props.confirmRest !== true) return answer({ kind: 'rest' })
+        choices.hidden = true
+        confirm.hidden = false
+        sure.focus({ preventScroll: true })
+      },
+      'secondary',
+    )
+    append(
+      confirm,
+      sure,
+      actions(
+        button(S.chooser.rest(left), () => answer({ kind: 'rest' }), 'primary'),
+        button(
+          S.chooser.restBack,
+          () => {
+            confirm.hidden = true
+            choices.hidden = false
+            rest.focus({ preventScroll: true })
+          },
+          'secondary',
+        ),
+      ),
+    )
+    choices.appendChild(rest)
+    bar.appendChild(confirm)
+  }
+  const foot = h(
+    'div',
+    { class: 'foot' },
+    button(S.chooser.cancel, () => answer({ kind: 'cancel' }), 'quiet'),
   )
   let dispose: (() => void) | void
   const el = h(
     'section',
     { class: 'screen fill', attrs: { 'aria-labelledby': 'titre' } },
     bar,
-    zone,
+    h('div', { class: 'scroll' }, zone, foot),
   )
   return {
     el,
+    focus: head,
     start: () => {
       dispose = props.mount(zone, (value) => answer({ kind: 'content', value }))
     },
@@ -253,39 +310,29 @@ const chooser: Renderer<'chooser'> = (props: ChooserProps, answer) => {
   }
 }
 
-/** Un choix à trois issues : un gros bouton avec, dessous, ce qu'il veut dire (le texte du bouton est l'intitulé seul). */
-function choice(label: string, hint: string, id: string, onClick: () => void, kind = 'plain') {
-  return h(
-    'div',
-    { class: 'choice' },
-    h('button', {
-      text: label,
-      class: kind === 'plain' ? '' : kind,
-      attrs: { type: 'button', 'aria-describedby': id },
-      on: { click: onClick },
-    }),
-    h('p', { class: 'hint', text: hint, attrs: { id } }),
-  )
-}
-
+/**
+ * Le produit choisi n'est pas celui que Repas retenait (DRV-624) : une question, deux réponses. L'ordre des produits (le nouveau en tête, les
+ * anciens à sa suite) est l'affaire de Repas : l'écran ne le montre pas. `Revenir à la liste` n'est pas une réponse, c'est la sortie discrète.
+ */
 const placement: Renderer<'placement'> = (props: PlacementProps, answer) => {
+  const always = button(S.placement.always, () => answer('PRIMARY'), 'primary')
   return {
     el: screen(
-      title(S.placement.title(props.productLabel)),
-      h('p', { text: S.placement.text(props.ingredient) }),
-      choice(
-        S.placement.primary,
-        S.placement.primaryHint,
-        'aide-prefere',
-        () => answer('PRIMARY'),
-        'primary',
+      title(S.placement.title),
+      h('p', { text: S.placement.text(props.productLabel, props.ingredient) }),
+      h(
+        'div',
+        { class: 'stack' },
+        always,
+        button(S.placement.once, () => answer('ONCE')),
       ),
-      choice(S.placement.fallback, S.placement.fallbackHint, 'aide-secours', () =>
-        answer('FALLBACK'),
+      h(
+        'div',
+        { class: 'foot' },
+        button(S.placement.back, () => answer(null), 'quiet'),
       ),
-      choice(S.placement.once, S.placement.onceHint, 'aide-une-fois', () => answer('ONCE')),
-      actions(button(S.placement.back, () => answer(null))),
     ),
+    focus: always,
   }
 }
 

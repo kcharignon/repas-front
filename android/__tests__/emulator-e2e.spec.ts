@@ -29,8 +29,8 @@ function planOf(file: string): PlanMessage {
 }
 
 describe('les plans des scénarios de l’émulateur', () => {
-  it('en compte au moins un complet (connus, nouveau, à la maison, ignoré) et un court', () => {
-    expect(planFiles).toEqual(['plan-complet.json', 'plan-connu.json'])
+  it('en compte au moins un complet (connus, nouveau, à la maison, ignoré), un court et un de quatre nouveaux articles (DRV-624)', () => {
+    expect(planFiles).toEqual(['plan-complet.json', 'plan-connu.json', 'plan-nouveaux.json'])
     const statuses = new Set(planOf('plan-complet.json').lines.map((line) => line.status))
     expect([...statuses].sort()).toEqual(['HAVE_AT_HOME', 'KNOWN', 'NEW', 'SKIP'])
   })
