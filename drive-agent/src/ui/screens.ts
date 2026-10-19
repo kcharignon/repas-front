@@ -1,7 +1,7 @@
 // Les écrans : chacun reçoit ses données et un rappel `answer`, et rend ses nœuds. Aucune logique d'envoi ici.
 import { append, clear, h, type Child } from './dom'
 import { own } from '../own'
-import { CAUSE_TEXTS, ERROR_TEXTS, S } from './strings'
+import { CAUSE_TEXTS, ERROR_TEXTS, errorParts, S } from './strings'
 import type {
   ChallengeProps,
   ChooserProps,
@@ -403,28 +403,51 @@ const error: Renderer<'error'> = (props: ErrorProps, answer) => {
   }
 }
 
+/**
+ * Ce que dit l'écran de fin (DRV-622) : une phrase quand tout est fait, sinon trois au plus : ce qui s'est passé, ce qui est sauf (avec ce
+ * qu'il reste à ajouter quand l'envoi s'est arrêté avant la fin) et l'action. Un arrêt voulu (`aborted`) n'est pas une panne : son code,
+ * s'il y en a un, ne change rien au texte.
+ */
+function endText(props: EndProps): string {
+  if (props.outcome === 'completed') return S.end.completed
+  const code = props.outcome === 'aborted' ? undefined : props.error
+  const left = props.failed + props.unavailable
+  const safe = props.outcome === 'partial' && left > 0 ? S.end.safeLeft(left) : S.end.safe
+  if (code !== undefined) {
+    const parts = errorParts(code)
+    return `${parts.happened} ${safe} ${parts.action}`
+  }
+  const lead =
+    props.outcome === 'partial'
+      ? S.end.stopped
+      : props.outcome === 'error'
+        ? S.end.notFinished
+        : null
+
+  return [lead, safe, S.end.resume].filter((sentence) => sentence !== null).join(' ')
+}
+
+/** Les compteurs qui existent, dans l'ordre de l'écran : jamais un zéro, jamais « Échecs » (le texte dit ce qui reste à ajouter). */
+function endCounts(props: EndProps): string[] {
+  return [
+    props.added > 0 ? S.end.added(props.added) : null,
+    props.chosen > 0 ? S.end.chosen(props.chosen) : null,
+    props.haveAtHome > 0 ? S.end.haveAtHome(props.haveAtHome) : null,
+    props.skipped > 0 ? S.end.skipped(props.skipped) : null,
+    props.unavailable > 0 ? S.end.unavailable(props.unavailable) : null,
+  ].filter((line) => line !== null)
+}
+
 const end: Renderer<'end'> = (props: EndProps, answer) => {
   const back = button(S.end.back, () => answer('return'), 'primary')
-  const hint =
-    props.error !== undefined
-      ? h('p', { class: 'notice', text: ERROR_TEXTS[props.error].text })
-      : props.outcome === 'completed'
-        ? h('p', { class: 'hint', text: S.end.completedHint })
-        : null
+  const counts = endCounts(props)
   return {
     el: screen(
       title(S.end.title[props.outcome]),
-      hint,
-      h(
-        'ul',
-        { class: 'counts' },
-        h('li', { text: S.end.added(props.added) }),
-        h('li', { text: S.end.chosen(props.chosen) }),
-        h('li', { text: S.end.haveAtHome(props.haveAtHome) }),
-        h('li', { text: S.end.skipped(props.skipped) }),
-        h('li', { text: S.end.unavailable(props.unavailable) }),
-        h('li', { text: S.end.failed(props.failed) }),
-      ),
+      h('p', { text: endText(props) }),
+      counts.length > 0
+        ? h('ul', { class: 'counts' }, ...counts.map((text) => h('li', { text })))
+        : null,
       props.changes && props.changes.length > 0
         ? h(
             'div',

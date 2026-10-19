@@ -25,7 +25,9 @@ for (const kind of ['forbidden', 'too-many-requests'] satisfies FaultKind[]) {
     // When
     await openWithFragment(page, fake, agentCode, THREE_LINES)
     await page.getByRole('button', { name: 'Commencer' }).click()
-    await expect(page.getByRole('heading', { name: 'Panier rempli en partie' })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Le panier est rempli en partie' }),
+    ).toBeVisible()
 
     // Then : la requête bloquée est retentée UNE fois (après la pause), puis plus rien ne part
     expect(fake.paced().map((call) => call.fault)).toEqual([undefined, kind, kind])
@@ -76,7 +78,7 @@ test.describe('une page de défi de l’anti-robot', () => {
     // When : l'utilisateur fait la vérification (le faux site ne la demande plus), puis touche « Reprendre »
     fake.setBehavior({ fault: null })
     await page.getByRole('button', { name: 'Reprendre', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
     // Then : la ligne en cours est refaite, rien n'a échoué ni été fait deux fois
     expect(fake.cart()).toEqual({ 1000001: 3, 1000006: 1, 1000009: 1 })
@@ -119,14 +121,16 @@ test.describe('une page de défi de l’anti-robot', () => {
     ).toBeVisible()
 
     await page.getByRole('button', { name: 'Arrêter' }).click()
-    await expect(page.getByRole('heading', { name: 'Panier rempli en partie' })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Le panier est rempli en partie' }),
+    ).toBeVisible()
 
     expect(fake.cart()).toEqual({ 1000001: 3 })
     expect(fake.paced()).toHaveLength(3)
     await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
     expect(await returnedResult(page, fake)).toMatchObject({
       outcome: 'partial',
-      error: { code: 'BLOCKED', message: 'Leclerc a ralenti les requêtes (CHALLENGE)' },
+      error: { code: 'BLOCKED', message: 'Leclerc a ralenti les demandes (CHALLENGE)' },
       lines: [
         { ingredientSlug: 'farine', outcome: 'ADDED' },
         { ingredientSlug: 'sucre', outcome: 'FAILED', error: 'BLOCKED' },
@@ -157,7 +161,7 @@ test.describe('une page de défi de l’anti-robot', () => {
     await expect(page.getByText('1 article sur 3 est déjà fait')).toBeVisible()
     await waitForQuiet(fake)
     await page.getByRole('button', { name: 'Reprendre', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
     // Then : la farine n'est pas refaite
     expect(fake.cart()).toEqual({ 1000001: 3, 1000006: 1, 1000009: 1 })
@@ -188,7 +192,7 @@ test('interrompt une requête que le site retient (20 s, une reprise), dit que L
 
   // When
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByRole('heading', { name: 'Panier rempli en partie' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'Le panier est rempli en partie' })).toBeVisible({
     timeout: 100_000,
   })
 
@@ -202,7 +206,7 @@ test('interrompt une requête que le site retient (20 s, une reprise), dit que L
   expect(fake.cart()).toEqual({ 1000006: 1 })
   expectPoliteAgent(fake)
   await expect(page.getByText('Leclerc a mis trop de temps à répondre.')).toBeVisible()
-  await expect(page.getByText('Échecs : 1')).toBeVisible()
+  await expect(page.getByText('il reste 1 article à ajouter')).toBeVisible()
   await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
   expect(await returnedResult(page, fake)).toMatchObject({
     outcome: 'partial',
@@ -283,8 +287,8 @@ for (const [name, fault, cause] of [
     await page.getByRole('button', { name: 'Commencer' }).click()
 
     // Then : un 404 n'est pas un blocage (aucune seconde tentative) et rien n'est mis au panier
-    await expect(page.getByRole('heading', { name: 'Envoi interrompu' })).toBeVisible()
-    await expect(page.getByText('Leclerc a modifié son site')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'L’envoi s’est arrêté' })).toBeVisible()
+    await expect(page.getByText('Leclerc a changé son site')).toBeVisible()
     expect(fake.paced().filter((call) => call.fault)).toHaveLength(1)
     expect(fake.cart()).toEqual({})
     await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
@@ -324,9 +328,9 @@ test('refuse de commencer devant la page d’un visiteur non connecté : rien n�
   // When
   await openWithFragment(page, fake, agentCode, THREE_LINES)
 
-  // Then : « Connectez-vous à Leclerc, puis relance l'envoi », pas de récapitulatif, aucune requête, panier intact
+  // Then : « Connectez-vous à Leclerc, puis reprenez l'envoi », pas de récapitulatif, aucune requête, panier intact
   await expect(page.getByRole('heading', { name: 'Vous n’êtes pas connecté' })).toBeVisible()
-  await expect(page.getByText('Connectez-vous à Leclerc, puis relancez l’envoi')).toBeVisible()
+  await expect(page.getByText('Connectez-vous à Leclerc, puis reprenez l’envoi')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Commencer' })).toHaveCount(0)
   expect(fake.paced()).toEqual([])
   expect(fake.cart()).toEqual({})
@@ -379,7 +383,7 @@ test('reprend après un rechargement de la page sans refaire les lignes déjà f
   await expect(page.getByText('1 article sur 3 est déjà fait')).toBeVisible()
   await waitForQuiet(fake)
   await page.getByRole('button', { name: 'Reprendre' }).click()
-  await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
   // Then : les deux autres lignes sont faites, la farine n'a pas été cherchée ni écrite une seconde fois
   expect(fake.cart()).toEqual({ 1000001: 3, 1000006: 1, 1000009: 1 })

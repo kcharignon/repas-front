@@ -944,7 +944,7 @@ describe('les erreurs du site', () => {
 
     expect(expectConform(test.sent[0])).toMatchObject({
       outcome: 'partial',
-      error: { code: 'BLOCKED', message: 'Leclerc a ralenti les requêtes (CHALLENGE)' },
+      error: { code: 'BLOCKED', message: 'Leclerc a ralenti les demandes (CHALLENGE)' },
     })
     expect(
       test.sent[0]?.lines.map((line) => [line.outcome, 'error' in line ? line.error : null]),

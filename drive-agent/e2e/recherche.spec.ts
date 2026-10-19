@@ -45,7 +45,7 @@ test.describe('un nouvel ingrédient (phase B)', () => {
 
     // And : le choix de l'utilisateur met le produit au panier
     await card.getByRole('button', { name: 'Choisir' }).click()
-    await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
     expect(fake.cart()).toEqual({ 1000014: 1 })
     expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'search', 'cart'])
     expectPoliteAgent(fake)
@@ -98,7 +98,7 @@ test.describe('un nouvel ingrédient (phase B)', () => {
     expect(searches(fake)).toEqual(['zzqxkw', 'zzqxkws'])
     expectPoliteAgent(fake)
     await page.getByRole('button', { name: 'Pas cette fois' }).click()
-    await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
   })
 
   test('un nom long qui ne répond à rien fait cinq requêtes au plus, toutes différentes, chacune après la précédente et à la cadence normale', async ({
@@ -170,7 +170,7 @@ test.describe('un produit connu (phase A)', () => {
 
     // When
     await page.getByRole('button', { name: 'Commencer' }).click()
-    await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
     // Then : le libellé, sa forme en minuscules, sa forme sans ligature (qui retrouve le produit), puis l'écriture
     expect(searches(fake)).toEqual([
@@ -219,7 +219,7 @@ test.describe('un produit connu (phase A)', () => {
     ])
     expectPoliteAgent(fake)
     await page.getByRole('button', { name: 'Pas cette fois' }).click()
-    await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
     expect(fake.cart()).toEqual({})
   })
 })

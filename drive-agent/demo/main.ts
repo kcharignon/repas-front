@@ -275,6 +275,18 @@ const SCREENS: Record<string, () => unknown> = {
       unavailable: 1,
       failed: 3,
     }),
+  // L'envoi s'est arrêté sur une erreur : trois phrases (ce qui s'est passé, ce qui est sauf, l'action), jamais un code (DRV-622).
+  'end-error': () =>
+    ui.show('end', {
+      outcome: 'error',
+      error: 'NOT_LOGGED_IN',
+      added: 0,
+      chosen: 0,
+      haveAtHome: 0,
+      skipped: 0,
+      unavailable: 0,
+      failed: 0,
+    }),
   'end-aborted': () =>
     ui.show('end', {
       outcome: 'aborted',

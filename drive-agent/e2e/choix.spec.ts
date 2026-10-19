@@ -24,7 +24,7 @@ test('fait choisir un nouveau produit dans la liste de l’agent, calcule le nom
   await expect(card).toContainText('80 g demandés, 40 g par produit : 2')
   expect(fake.cart(), 'l’agent ne choisit jamais seul').toEqual({})
   await card.getByRole('button', { name: 'Choisir' }).click()
-  await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
   // Then : 2 produits au panier, le choix revient à Repas avec son prix lu
   expect(fake.cart()).toEqual({ 1000021: 2 })
@@ -59,7 +59,7 @@ test('retire les caractères invisibles d’un libellé de l’enseigne : la lis
   const card = page.getByRole('listitem').filter({ hasText: 'Vinaigre de cidre Verger Imaginaire' })
   await expect(card).toContainText('500 ml demandés, 750 ml par produit : 1')
   await card.getByRole('button', { name: 'Choisir' }).click()
-  await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
   // Then : le libellé renvoyé à Repas est propre et le back l'accepterait
   expect(fake.cart()).toEqual({ 1000032: 1 })
@@ -95,7 +95,7 @@ test('remplace un produit devenu indisponible : nouvelle recherche, « ne plus j
   await expect(page.getByText('Résultats pour « farine sarrasin »')).toBeVisible()
   await page.getByRole('button', { name: 'Choisir' }).click()
   await page.getByRole('button', { name: 'Produit de remplacement' }).click()
-  await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
   // Then : 1 kg demandé, 500 g par produit, donc 2 ; le produit refusé et l'indisponible partent avec le résultat
   expect(fake.cart()).toEqual({ 1000004: 2 })
@@ -134,7 +134,7 @@ test('laisse passer une ligne ou dire « j’en ai toujours », même quand la r
   await page.getByRole('button', { name: 'Pas cette fois' }).click()
   await expect(page.getByRole('listitem').filter({ hasText: 'Sel fin' })).toBeVisible()
   await page.getByRole('button', { name: 'J’en ai toujours' }).click()
-  await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
   // Then : rien au panier, trois recherches (« gnocchis », son singulier « gnocchi » quand il ne répond rien, puis « sel ») et aucune écriture
   expect(fake.cart()).toEqual({})
@@ -173,7 +173,7 @@ for (const [form, cart] of [
     await page.getByRole('button', { name: 'Pas cette fois' }).click()
     await expect(page.getByRole('listitem').filter({ hasText: 'Sel fin' })).toBeVisible()
     await page.getByRole('button', { name: 'J’en ai toujours' }).click()
-    await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
     // Then : aucune erreur, trois recherches (« gnocchis », « gnocchi », « sel »), aucune écriture, le panier n'a pas bougé
     expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'search', 'search'])
@@ -202,7 +202,7 @@ test('annule le passage depuis le choix : la ligne reste à choisir et Repas le 
 
   // When
   await page.getByRole('button', { name: 'Annuler l’envoi' }).click()
-  await expect(page.getByRole('heading', { name: 'Envoi arrêté' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Vous avez arrêté l’envoi' })).toBeVisible()
   await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
 
   // Then

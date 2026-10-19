@@ -765,9 +765,25 @@ describe('erreurs', () => {
   it('dit quoi faire quand Leclerc ralentit les requêtes ou quand le site a changé', () => {
     expect(ERROR_TEXTS.BLOCKED.text).toContain('Attendez')
     expect(ERROR_TEXTS.BLOCKED.text).toContain('rechargez la page')
-    expect(ERROR_TEXTS.CONTRACT_CHANGED.text).toContain('Mettez à jour')
+    // Quand l'utilisateur ne peut rien faire, le texte le dit franchement et propose le repli : chercher à la main
+    expect(ERROR_TEXTS.CONTRACT_CHANGED.text).toBe(
+      'Leclerc a changé son site, l’envoi automatique est arrêté. Ce qui est déjà au panier y reste. Cherchez vos produits à la main sur Leclerc.',
+    )
     expect(ERROR_TEXTS.NOT_LOGGED_IN.text).toContain('Connectez-vous')
   })
+
+  it.each(ERROR_CODES)(
+    '« %s » tient en trois phrases de 20 mots au plus : ce qui s’est passé, ce qui est sauf, une action',
+    (code) => {
+      const sentences = ERROR_TEXTS[code].text.split(/(?<=[.!?])\s+/)
+
+      expect(sentences).toHaveLength(3)
+      expect(sentences[1]).toBe('Ce qui est déjà au panier y reste.')
+      for (const sentence of sentences) expect(sentence.split(/\s+/).length).toBeLessThanOrEqual(20)
+      // Aucun code à l'écran
+      expect(ERROR_TEXTS[code].text).not.toMatch(/[A-Z]{2,}_[A-Z_]+/)
+    },
+  )
 
   it('le site mobile (cause PAGE_MOBILE) dit « Ce n’est pas la version ordinateur du site » et quoi faire (ticket J)', () => {
     const handle = open()
@@ -825,18 +841,18 @@ describe('fin', () => {
     const handle = open()
     const answer = handle.show('end', END)
 
-    const text = shadow().textContent ?? ''
-    for (const line of [
-      'Ajoutés : 2',
-      'Choisis : 1',
+    // Seuls les compteurs qui existent : jamais un zéro, ni « Échecs », ni « Prix lus »
+    expect([...shadow().querySelectorAll('.counts li')].map((item) => item.textContent)).toEqual([
+      'Ajoutés au panier : 2',
+      'Choisis sur Leclerc : 1',
       'J’en ai toujours : 1',
-      'Pas cette fois : 0',
-      'Indisponibles : 0',
-      'Échecs : 0',
-    ]) {
-      expect(text).toContain(line)
-    }
-    expect(shadow().querySelector('h1')?.textContent).toBe('Panier rempli')
+    ])
+    const text = shadow().textContent ?? ''
+    expect(text).not.toMatch(/Échecs|Prix lus|: 0/)
+    expect(shadow().querySelector('h1')?.textContent).toBe('Le panier est rempli')
+    expect(shadow().querySelector('h1 + p')?.textContent).toBe(
+      'Vos produits sont dans votre panier Leclerc. Retournez dans Repas pour le finaliser.',
+    )
 
     press('Retourner dans Repas')
 
@@ -940,22 +956,98 @@ describe('fin', () => {
     )
   })
 
-  it('ajoute le conseil de l’erreur qui a interrompu l’envoi', () => {
+  it('dit ce qui s’est passé, ce qui est sauf avec ce qu’il reste à ajouter, et l’action', () => {
     const handle = open()
-    void handle.show('end', { ...END, outcome: 'partial', error: 'BLOCKED', failed: 3 })
+    void handle.show('end', {
+      ...END,
+      outcome: 'partial',
+      error: 'BLOCKED',
+      failed: 2,
+      unavailable: 1,
+    })
 
-    expect(shadow().querySelector('h1')?.textContent).toBe('Panier rempli en partie')
-    expect(shadow().querySelector('.notice')?.textContent).toBe(ERROR_TEXTS.BLOCKED.text)
+    expect(shadow().querySelector('h1')?.textContent).toBe('Le panier est rempli en partie')
+    expect(shadow().querySelector('h1 + p')?.textContent).toBe(
+      'Leclerc a ralenti les demandes. Ce qui est déjà au panier y reste : il reste 3 articles à ajouter. Attendez quelques minutes, rechargez la page, puis reprenez l’envoi depuis Repas.',
+    )
+    // « Échecs » n'existe plus : l'échec se dit dans la phrase ; l'indisponible reste un compteur parce qu'il existe
+    expect([...shadow().querySelectorAll('.counts li')].map((item) => item.textContent)).toEqual([
+      'Ajoutés au panier : 2',
+      'Choisis sur Leclerc : 1',
+      'J’en ai toujours : 1',
+      'Indisponibles : 1',
+    ])
   })
 
   it.each([
-    ['aborted', 'Envoi arrêté'],
-    ['error', 'Envoi interrompu'],
-  ] as const)('titre de l’issue « %s »', (outcome, expected) => {
+    [
+      { outcome: 'partial', failed: 1 },
+      'Le panier est rempli en partie',
+      'L’envoi s’est arrêté avant la fin. Ce qui est déjà au panier y reste : il reste 1 article à ajouter. Retournez dans Repas pour reprendre l’envoi.',
+    ],
+    [
+      { outcome: 'aborted' },
+      'Vous avez arrêté l’envoi',
+      'Ce qui est déjà au panier y reste. Retournez dans Repas pour reprendre l’envoi.',
+    ],
+    [
+      { outcome: 'aborted', error: 'CANCELLED' },
+      'Vous avez arrêté l’envoi',
+      'Ce qui est déjà au panier y reste. Retournez dans Repas pour reprendre l’envoi.',
+    ],
+    [
+      { outcome: 'error', error: 'NOT_LOGGED_IN' },
+      'L’envoi s’est arrêté',
+      'Vous n’êtes pas connecté à Leclerc. Ce qui est déjà au panier y reste. Connectez-vous à Leclerc, puis reprenez l’envoi depuis Repas.',
+    ],
+    [
+      { outcome: 'error', error: 'CONTRACT_CHANGED' },
+      'L’envoi s’est arrêté',
+      'Leclerc a changé son site, l’envoi automatique est arrêté. Ce qui est déjà au panier y reste. Cherchez vos produits à la main sur Leclerc.',
+    ],
+    [
+      { outcome: 'error' },
+      'L’envoi s’est arrêté',
+      'L’envoi n’a pas pu aller au bout. Ce qui est déjà au panier y reste. Retournez dans Repas pour reprendre l’envoi.',
+    ],
+  ] as const)('issue %j : titre « %s », trois phrases', (extra, expectedTitle, expectedText) => {
     const handle = open()
-    void handle.show('end', { ...END, outcome })
+    void handle.show('end', { ...END, ...extra })
 
-    expect(shadow().querySelector('h1')?.textContent).toBe(expected)
+    expect(shadow().querySelector('h1')?.textContent).toBe(expectedTitle)
+    expect(shadow().querySelector('h1 + p')?.textContent).toBe(expectedText)
+  })
+
+  it.each(['completed', 'partial', 'aborted', 'error'] as const)(
+    'issue « %s » : aucun compteur à zéro, aucun code, un seul bouton principal',
+    (outcome) => {
+      const handle = open()
+      void handle.show('end', {
+        ...END,
+        outcome,
+        ...(outcome === 'error' && { error: 'NETWORK' as const }),
+        ...(outcome === 'partial' && { failed: 2 }),
+      })
+
+      const text = shadow().textContent ?? ''
+      expect(text).not.toMatch(/(^|[^\d])0(?!\d)/)
+      expect(text).not.toMatch(/Échecs|Prix lus|[A-Z]{2,}_[A-Z_]+|Code\s*:/)
+      expect(labels()).toEqual(['Retourner dans Repas'])
+      expect(shadow().querySelectorAll('button.primary')).toHaveLength(1)
+    },
+  )
+
+  it('sans aucun compteur, ne montre pas de liste vide', () => {
+    const handle = open()
+    void handle.show('end', {
+      ...END,
+      outcome: 'aborted',
+      added: 0,
+      chosen: 0,
+      haveAtHome: 0,
+    })
+
+    expect(shadow().querySelector('.counts')).toBeNull()
   })
 })
 
