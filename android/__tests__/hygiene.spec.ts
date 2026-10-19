@@ -10,7 +10,7 @@ const androidDir = join(dirname(fileURLToPath(import.meta.url)), '..')
 const repoDir = join(androidDir, '..')
 
 /** Les sorties de construction ne comptent pas : elles ne sont pas dans le dépôt (.gitignore). Chemins relatifs à android/. */
-const BUILD_OUTPUTS = new Set(['.gradle', '.kotlin', 'build', 'dist', 'app/build', 'buildSrc/.gradle', 'buildSrc/build'])
+const BUILD_OUTPUTS = new Set(['.gradle', '.kotlin', 'build', 'dist', 'app/build', 'core/build', 'buildSrc/.gradle', 'buildSrc/build'])
 const KEY_FILE = /\.(jks|p12|pfx|keystore|pem|key|pk8)$/i
 const SIGNING_VARIABLES = ['ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD']
 

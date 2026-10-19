@@ -14,7 +14,7 @@ Tout se lance dans Docker (image : JDK 17, Gradle, SDK Android ; rien à install
 |---|---|
 | `make android-agent-hash` | note l'empreinte SHA-384 de l'agent construit dans `android/agent.js.sha384` (après un changement voulu de l'agent) |
 | `make android` | construit l'APK de débogage : `android/dist/repas-drive-debug.apk`, avec sa taille et son empreinte SHA-256 |
-| `make android-test` | joue les tests Kotlin : ceux de l'application et ceux de la dérivation de la version (`buildSrc`) |
+| `make android-test` | joue les tests Kotlin : ceux du cœur (`core/`, dont `CoreArchitectureTest` : le cœur n'importe rien d'Android), ceux de l'application et ceux de la dérivation de la version (`buildSrc`) |
 | `make android-release` | construit l'APK signé `android/dist/repas-drive.apk` ; **refuse sans clé de signature** ni étiquette de version (`ANDROID_VERSION_TAG=android-vX.Y.Z`, dont le code de version est tiré) |
 | `make android-release-verify` | contrôle l'APK signé juste après sa construction (`ANDROID_VERSION_TAG` et `ANDROID_EXPECTED_CERT_SHA256`, l'empreinte SHA-256 publique attendue du certificat) : signature et certificat, version, une seule permission, non débogable, `BuildConfig.DEBUG` faux, agent intact ; écrit `dist/release-facts.env` |
 | `make android-release-selftest` | prouve le refus sans clé, la réussite avec une clé jetable créée à l'instant et les refus du contrôle (mauvais certificat, autre version, clé de débogage) ; rien n'est conservé |
@@ -152,42 +152,50 @@ android/
                             de la page du drive par le débogage à distance de la WebView : fenêtre, écran, échelle, facteur de l'interface de l'agent)
   settings.gradle.kts, build.gradle.kts, gradle.properties
   buildSrc/                 la dérivation de la version (AppVersion), en Kotlin pur, avec ses tests
-  app/
+  ARCHITECTURE.md           le découpage en cœur sans Android et en application, la règle d'or « le cœur n'importe rien d'Android », les services de plateforme (AUTH-015)
+  core/                     le CŒUR : du Kotlin sans aucune classe Android (module Gradle JVM : pas de SDK, un `import android.…` ne compile pas)
+    build.gradle.kts        plugin Kotlin JVM seulement ; `org.json` en `compileOnly` (Android l'apporte)
+    src/main/kotlin/eu/kantin/repas/drive/   (le paquet est resté `eu.kantin.repas.drive`)
+      DrivePlan.kt          le plan reçu de Repas (forme, hôte, bornes) et le résultat `aborted`
+      DrivePass.kt          le passage : un seul à la fois, reprise sous 24 h, résultats à livrer (`DrivePass`, son port `PassStore`) ; quand envoyer le plan à l'agent (`PlanDelivery`) ; le bandeau d'en-tête (`StoreBanner`)
+      OpeningWatch.kt       la surveillance de la page où l'envoi attend la page du magasin : erreur du site, lenteur, agent absent (`PageTrouble`)
+      ShellNavigation.kt    l'origine de Repas (`RepasOrigin`) et la règle de navigation de la coquille
+      NativeBridge.kt       les règles du pont `repasNative` : origine, 64 Ko, forme du JSON, réponses
+      NavigationPolicy.kt   la règle de navigation (seules les pages https de leclercdrive.fr restent dans l'application)
+      DriveEntry.kt         où ouvrir le drive depuis « Finaliser sur Leclerc » ; StorePathMemory.kt : le chemin du magasin avec sa ville (son port `StorePathStore`)
+      UserAgent.kt          l'identité « ordinateur » : agent utilisateur, indications client, repli si elles manquent
+      LoadProblem.kt        le classement des incidents de chargement, affichés en français avec « Réessayer »
+      AgentAsset.kt         l'agent embarqué : empreinte, version, script injecté, états
+      BridgeMessages.kt     les règles du canal : origines, 64 Ko, forme du JSON, commande de diagnostic
+      VersionLabel.kt       la ligne de version montrée à l'utilisateur
+      IdentityProvider.kt   le service de plateforme « obtenir un jeton d'identité » (`IdentityProvider`, `IdentityResult`, `IdentityError`), écrit pour AUTH-011 ; LinkOpener.kt : « ouvrir une page web dans le navigateur du système »
+      DebugPlan.kt          (débogage) le plan d'essai et son déroulement en deux messages
+      ResultReport.kt       (débogage) le résultat de l'agent en texte à copier, sans numéro de magasin entier, avec ses compteurs de requêtes quand il en porte (ticket L)
+      SelftestReport.kt     (débogage) le rapport du test automatique : sa forme, le masquage, et `SelftestRun` (n'accepte que le rapport demandé)
+    src/test/kotlin/...     tests JUnit sur la JVM seule, dont `CoreArchitectureTest` (le cœur n'importe rien d'Android) ; src/test/resources/ : les exemples du protocole que les tests lisent
+  app/                      l'APPLICATION : tout ce qui touche à Android ; dépend du cœur, jamais l'inverse
     build.gradle.kts        applicationId eu.kantin.repas.drive, minSdk 26, targetSdk 36, signatures, version
     src/main/kotlin/eu/kantin/repas/drive/
-      RepasApp.kt           l'application : l'agent embarqué, lu et vérifié une fois, et le passage en cours (`DrivePass`), partagés par les deux écrans
-      DrivePlan.kt          le plan reçu de Repas (forme, hôte, bornes) et le résultat `aborted` (Kotlin pur)
-      DrivePass.kt          le passage : un seul à la fois, reprise sous 24 h, résultats à livrer (`DrivePass`) ; quand envoyer le plan à l'agent (`PlanDelivery`) ; le bandeau d'en-tête (`StoreBanner`) (Kotlin pur)
-      OpeningWatch.kt       la surveillance de la page où l'envoi attend la page du magasin : erreur du site, lenteur, agent absent (`PageTrouble`) (Kotlin pur)
+      RepasApp.kt           l'application : l'agent embarqué, lu et vérifié une fois, et le passage en cours (`DrivePass`), partagés par les deux écrans ; les stockages Android (`PrefsPassStore`, `PrefsStorePathStore`)
       MainActivity.kt       la coquille Repas : WebView sur l'origine de Repas, pont `repasNative`, liens entrants, menu (DRV-317)
       DriveActivity.kt      le drive, second écran : l'ancien hôte WebView en mode ordinateur, agent injecté (DRV-312, DRV-313)
-      ShellNavigation.kt    l'origine de Repas (`RepasOrigin`) et la règle de navigation de la coquille (Kotlin pur)
-      NativeBridge.kt       les règles du pont `repasNative` : origine, 64 Ko, forme du JSON, réponses (Kotlin pur)
       DriveProfile.kt       le profil « drive » de la WebView : cookies et stockage du drive séparés de ceux de Repas
       Dialogs.kt, InstalledVersion.kt   fenêtres communes (version et mode d'emploi, confirmation d'effacement, menu), version installée
       DesktopMode.kt        le mode ordinateur appliqué à la WebView (agent utilisateur, indications client, fenêtre large, zoom)
-      NavigationPolicy.kt   la règle de navigation (seules les pages https de leclercdrive.fr restent dans l'application)
-      UserAgent.kt          l'identité « ordinateur » : agent utilisateur, indications client, repli si elles manquent (Kotlin pur)
-      LoadProblem.kt        le classement des incidents de chargement, affichés en français avec « Réessayer » (Kotlin pur)
       Views.kt              les petits outils de vue (boutons, étiquettes, dp)
+      AndroidServices.kt    les services de plateforme d'Android derrière les interfaces du cœur (`AndroidLinkOpener`)
       AgentHost.kt          la colle androidx.webkit : injection de l'agent, canal repasHost, envoi vers l'agent
-      AgentAsset.kt         l'agent embarqué : empreinte, version, script injecté, états (Kotlin pur)
-      BridgeMessages.kt     les règles du canal : origines, 64 Ko, forme du JSON, commande de diagnostic (Kotlin pur)
-      DebugPlan.kt          (débogage) le plan d'essai et son déroulement en deux messages (Kotlin pur)
-      ResultReport.kt       (débogage) le résultat de l'agent en texte à copier, sans numéro de magasin entier, avec ses compteurs de requêtes quand il en porte (ticket L, Kotlin pur)
-      SelftestReport.kt     (débogage) le rapport du test automatique : sa forme, le masquage, et `SelftestRun` (n'accepte que le rapport demandé) (Kotlin pur)
       TextPanel.kt          (débogage) l'écran de texte : « Copier », « Partager » (feuille de partage), « Fermer », copie automatique du rapport
-      VersionLabel.kt       la ligne de version montrée à l'utilisateur
     src/main/assets/injection.js   ce que l'application évalue dans chaque page du drive : met en place le pont, puis lance l'agent
     src/debug/assets/debug-plan.json  le plan d'essai (dans l'APK de débogage seulement)
-    src/test/kotlin/...     tests JUnit (Kotlin pur, sans téléphone)
+    src/test/kotlin/...     tests JUnit de ce qui touche à Android ou à un actif de l'application (constantes de la WebView, `BuildConfig`, `injection.js`, `debug-plan.json`)
   agent.js.sha384           l'empreinte attendue de l'agent embarqué (la construction échoue sinon)
   agent-digest.ts           la vérifier ou la noter (`make android-agent-hash`)
-  __tests__/               tests Vitest : pas de clé dans le dépôt (hygiene), empreinte de l'agent (agent-asset), plan d'essai (debug-plan), pont, mode débogage et agent réel dans jsdom, dont le test automatique de bout en bout avec un faux site (injection), plans et scripts de l'émulateur, aucun faux certificat dans l'application (emulator-e2e)
+  __tests__/               tests Vitest : pas de clé dans le dépôt (hygiene), le découpage cœur/application et sa page (core), empreinte de l'agent (agent-asset), plan d'essai (debug-plan), pont, mode débogage et agent réel dans jsdom, dont le test automatique de bout en bout avec un faux site (injection), plans et scripts de l'émulateur, aucun faux certificat dans l'application (emulator-e2e)
   debug.keystore            clé de débogage PUBLIQUE (mot de passe « android »), la seule clé suivie par Git
 ```
 
-`NavigationPolicy`, `ShellNavigation`, `NativeBridge`, `UserAgent` et `LoadProblem` sont écrites sans classe Android pour se tester sans téléphone ; `DesktopMode`, `MainActivity` et `DriveActivity` n'en sont que la colle, essayée dans l'émulateur (`make android-smoke`) puis sur un téléphone (recette de l'utilisateur).
+`core/` ne compile que sans Android : c'est ce qui permet de tester sans téléphone les règles de navigation, du pont, du plan et du passage, et de les réutiliser un jour sur un iPhone ([`ARCHITECTURE.md`](ARCHITECTURE.md)). `DesktopMode`, `MainActivity` et `DriveActivity` n'en sont que la colle, essayée dans l'émulateur (`make android-smoke`) puis sur un téléphone (recette de l'utilisateur).
 
 ## La coquille Repas (DRV-317)
 
@@ -350,6 +358,7 @@ Exemples : `ANDROID_VERSION_TAG=android-v0.1.0 ANDROID_VERSION_CODE=7 make andro
 
 ## Règles
 
+- **Le cœur n'importe rien d'Android** (AUTH-015, [`ARCHITECTURE.md`](ARCHITECTURE.md)) : `core/` est un module Kotlin sans le SDK Android, ni `android.*`, ni `androidx.*`, ni `BuildConfig`, ni `R`. Une règle qui se joue sans téléphone y va, avec ses tests JUnit ; ce qui touche Android reste dans `app/` et le cœur le demande par une interface (`IdentityProvider`, `LinkOpener`, `PassStore`, `StorePathStore`). `make android-test` (`CoreArchitectureTest`) et `make check` (`android/__tests__/core.spec.ts`) échouent sinon ; ce que le cœur emprunte à la JVM (`org.json`, `MessageDigest`, `Base64`) est une liste fermée.
 - **Rien d'une enseigne n'est lu ni conservé** : aucun identifiant, cookie, jeton ni contenu de page dans les journaux ou le dépôt. L'utilisateur se connecte lui-même dans la WebView. Les cookies restent sur le téléphone (ni sauvegarde dans le nuage, ni transfert d'appareil : `data_extraction_rules.xml`).
 - **Aucun objet natif exposé aux pages** (pas de `addJavascriptInterface`) : deux canaux de messages seulement, `repasNative` restreint à l'origine de Repas (DRV-317) et `repasHost` restreint à `*.leclercdrive.fr` (DRV-313). Le code qui tourne dans les pages du drive est `injection.js` et `agent.js`, tous deux dans l'APK et vérifiés : jamais de code reçu d'un site. L'agent n'est jamais injecté dans la WebView de Repas.
 - **Une seule permission : Internet**. Jamais d'autre (pas de position, de fichiers, de caméra ni de contacts). `ACCESS_NETWORK_STATE` n'est pas demandée non plus : « hors connexion » se déduit de l'erreur de la WebView.

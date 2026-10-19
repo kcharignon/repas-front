@@ -167,7 +167,7 @@ android: $(ANDROID_AGENT) ## Build the debug APK of the Repas Drive app (android
 	$(ANDROID_PREPARE)
 	@$(ANDROID_APP_RUN) ./build.sh apk
 
-android-test: $(ANDROID_AGENT) ## Run the Kotlin unit tests of the Repas Drive app (and of its version derivation)
+android-test: $(ANDROID_AGENT) ## Run the Kotlin unit tests of the Repas Drive app: its Android-free core (core/), the app (app/) and its version derivation
 	$(ANDROID_PREPARE)
 	@$(ANDROID_APP_RUN) ./build.sh test
 
