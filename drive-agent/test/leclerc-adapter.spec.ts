@@ -99,6 +99,8 @@ describe('searchProducts', () => {
       promo: null,
       stock: 12,
       inCart: 0,
+      availability: null,
+      comingSoon: false,
       imageUrl: 'https://photos-test.leclercdrive.fr/image.ashx?id=11&use=l&cat=p',
       content: { value: 1000, unit: 'g' },
       contentSource: 'label',

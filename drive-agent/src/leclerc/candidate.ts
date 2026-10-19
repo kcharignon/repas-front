@@ -31,10 +31,21 @@ export interface Candidate {
    * identifiant ni port (`photo-url.ts`). Sinon `null`. Elle ne sert qu'à l'écran de choix : elle n'est jamais envoyée à Repas.
    */
   imageUrl: string | null
+  /** `eDisponibilite` (DRV-635) : l'étiquette de disponibilité du site, mesurée par le diagnostic, jamais un verrou. */
+  availability: number | null
+  /** La fiche dit « Bientôt disponible » (DRV-635). */
+  comingSoon: boolean
   content: Content | null
   /** D'où vient `content` ; `prices` est le moins précis (prix arrondis au centime). */
   contentSource: ContentSource | null
 }
+
+/**
+ * Le site dit ce produit en rupture : stock nul ou « Bientôt disponible » (DRV-635). C'est une ÉTIQUETTE, pas un verdict : le site ordinateur et
+ * le site mobile ne disent pas la même chose du stock d'un même produit dans le même magasin ; seule la réponse du panier tranche.
+ */
+export const saysOutOfStock = (candidate: Pick<Candidate, 'stock' | 'comingSoon'>): boolean =>
+  candidate.stock === 0 || candidate.comingSoon
 
 const cents = (euros: number | null): number | null =>
   euros === null ? null : Math.round(euros * 100)
@@ -71,6 +82,8 @@ export function toCandidate(raw: RawProduct, page: LocationLike | null = null): 
     promo: promoCents(raw.promoText),
     stock: raw.stock,
     inCart: raw.inCart,
+    availability: raw.availability,
+    comingSoon: raw.comingSoon,
     imageUrl: photoUrl(raw.thumbnail, page),
     content: parsed?.content ?? null,
     contentSource: parsed?.source ?? null,

@@ -182,9 +182,9 @@ describe('settleKnownLine : un produit déjà au panier en plus grande quantité
   })
 
   it('juge chaque produit sur sa propre quantité : le produit de secours déjà au panier garde la sienne', async () => {
-    // Given : le préféré est en rupture ; le produit de secours est déjà là en 4
+    // Given : le préféré est en rupture et le panier le refuse ; le produit de secours est déjà là en 4
     const { adapter, writes } = fakeAdapter({
-      '1000001': { stock: 0 },
+      '1000001': { stock: 0, obtained: () => 0 },
       '1000002': { inCart: 4 },
     })
 
@@ -194,8 +194,8 @@ describe('settleKnownLine : un produit déjà au panier en plus grande quantité
       { adapter, askQuantity: noQuestion },
     )
 
-    // Then
-    expect(writes).toEqual([])
+    // Then : une seule tentative pour le préféré, rien d'écrit pour le produit de secours
+    expect(writes).toEqual([{ id: '1000001', quantity: 1 }])
     expect(verdict).toMatchObject({
       kind: 'done',
       line: { productId: '1000002', quantity: 4, usedRank: 2, unavailableIds: ['1000001'] },

@@ -3,7 +3,7 @@
 // requêtes), en s'arrêtant à la première qui répond. Au plus 1 + `MAX_FALLBACKS` requêtes, jamais deux fois la même. Une erreur du site (`BLOCKED`,
 // `NOT_LOGGED_IN`, `NETWORK`, `CONTRACT_CHANGED`) remonte telle quelle et arrête le repli : rien ne la masque.
 import type { Candidate, RetailerAdapter } from '../leclerc'
-import { searchForms } from './search-forms'
+import { productSearchForms, searchForms } from './search-forms'
 
 /** Ce que la recherche d'un nom a donné : la recherche qui a répondu (le nom, ou une de ses formes) et ses produits. */
 export interface NameSearch {
@@ -30,21 +30,40 @@ export async function searchByName(
   return { query: name, candidates: first }
 }
 
+/** Ce que la recherche d'un produit habituel a donné : le produit retrouvé (ou `null`) et le nombre de recherches faites pour le retrouver. */
+export interface KnownSearch {
+  product: Candidate | null
+  /** Le libellé tel quel compte pour une : au plus `1 + MAX_PRODUCT_FORMS`, jamais deux fois la même (DRV-635). */
+  tried: number
+}
+
 /**
- * Le produit connu `id` (stock, prix du jour) : cherché par son libellé complet, comme avant ; s'il n'y figure pas, par les formes du libellé,
- * l'une après l'autre, jusqu'à ce qu'une le retrouve. `null` quand aucune ne le retrouve : « plus disponible » reste le dernier recours.
+ * Le produit connu `id` (stock, prix du jour) : cherché par son libellé TEL QUEL (apostrophe comprise), puis par ses formes (`productSearchForms` :
+ * sans accents, sans signes, sans mots de liaison, mots-clés), l'une après l'autre, jusqu'à ce qu'une le retrouve. Au plus 5 requêtes, en série, à la
+ * cadence du `Pacer`. `product` est `null` quand aucune ne le retrouve : INTROUVABLE, ce qui ne prouve jamais qu'il est indisponible (DRV-635).
  * @throws {LeclercError} l'erreur de l'adaptateur, à traiter par l'appelant.
  */
+export async function lookUpKnownProduct(
+  adapter: Pick<RetailerAdapter, 'readProductFromSearch'>,
+  label: string,
+  id: string,
+): Promise<KnownSearch> {
+  let tried = 1
+  const seen = await adapter.readProductFromSearch(label, id)
+  if (seen !== null) return { product: seen, tried }
+  for (const form of productSearchForms(label)) {
+    tried += 1
+    const found = await adapter.readProductFromSearch(form, id)
+    if (found !== null) return { product: found, tried }
+  }
+  return { product: null, tried }
+}
+
+/** Le produit connu `id`, ou `null` quand aucune des recherches de `lookUpKnownProduct` ne le retrouve. */
 export async function findKnownProduct(
   adapter: Pick<RetailerAdapter, 'readProductFromSearch'>,
   label: string,
   id: string,
 ): Promise<Candidate | null> {
-  const seen = await adapter.readProductFromSearch(label, id)
-  if (seen !== null) return seen
-  for (const form of searchForms(label)) {
-    const found = await adapter.readProductFromSearch(form, id)
-    if (found !== null) return found
-  }
-  return null
+  return (await lookUpKnownProduct(adapter, label, id)).product
 }

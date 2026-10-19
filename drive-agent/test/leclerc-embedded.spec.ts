@@ -80,6 +80,8 @@ describe('extractProducts', () => {
         measureText: '1,29 € / kg',
         stock: 12,
         inCart: 0,
+        availability: null,
+        comingSoon: false,
         thumbnail: null,
       })
       expect(products[1]).toMatchObject({ promoText: '1,35 €', stock: 0 })

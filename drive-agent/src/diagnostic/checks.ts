@@ -12,8 +12,15 @@ import {
   type RetailerAdapter,
 } from '../leclerc'
 import { S } from '../ui'
-import type { StorageLike, WakeLockLike } from '../flow'
-import { attemptsText, NONSENSE_TERM, type ProbedSearch, type ProbeFacts } from './probes'
+import { readLastReasons, type StorageLike, type WakeLockLike } from '../flow'
+import {
+  attemptsText,
+  availabilityFacts,
+  type AvailabilityFacts,
+  NONSENSE_TERM,
+  type ProbedSearch,
+  type ProbeFacts,
+} from './probes'
 
 export const CHECK_IDS = [
   'agent',
@@ -256,6 +263,7 @@ export async function runChecks(
   await push(deps.wakeLock ? ok('wakeLock', D.wakeLockOk) : ko('wakeLock', D.wakeLockKo))
 
   let commonFault: ProbedSearch['fault'] = null
+  let availability: AvailabilityFacts | null = null
   if (page === null) {
     await push(skipped('search', D.pageSkipped))
     await push(skipped('content', D.searchFailed))
@@ -282,6 +290,7 @@ export async function runChecks(
       await push(skipped('content', D.searchFailed))
     } else {
       const read = found.length
+      availability = availabilityFacts(found)
       const whole = found.filter(complete).length
       const variant = deps.adapter.lastSearchFacts()?.variant ?? 'a'
       await push(
@@ -311,6 +320,8 @@ export async function runChecks(
   }
 
   if (page !== null) probes = await probeSearches(deps.adapter, arrival, commonFault)
+  // La disponibilité de l'échantillon et les raisons du dernier envoi (DRV-635) : des nombres et des mots fixes, jamais un libellé.
+  probes = { ...probes, availability, lastPass: readLastReasons(deps.storage) }
 
   await push(skipped('frame', D.frameSkipped))
   return { results, page, probes, stats: statsSince(before, deps.adapter.stats()) }

@@ -108,14 +108,18 @@ const CHOOSER_GONE: ChooserProps = {
     ...PICKER,
     need: '800 g',
     replaces: 'Farine de blé T55 de test 1 kg',
+    // Les trois raisons (DRV-635) : rupture, introuvable (recherche préremplie), refusé par le panier.
     gone: [
-      { id: '2000001', label: 'Farine de blé T55 de test 1 kg' },
-      { id: '2000002', label: 'Farine de blé T45 de test 1 kg' },
+      { id: '2000001', label: 'Farine de blé T55 de test 1 kg', reason: 'OUT_OF_STOCK' },
+      { id: '2000002', label: 'Farine de blé T45 de test 1 kg', reason: 'NOT_FOUND' },
+      { id: '2000003', label: 'Farine de blé T65 de test 1 kg', reason: 'CART_REFUSED' },
     ],
+    prefill: 'farine t45',
     checked: new Set(['2000002']),
     query: 'farine',
     items: CANDIDATES.slice(0, 2),
-    notice: 'Leclerc n’a pas pu mettre ce produit au panier. Choisis-en un autre.',
+    notice:
+      'Leclerc n’a pas pu mettre « Poivre noir moulu de test » au panier. Choisis-en un autre.',
   }),
 }
 
@@ -305,6 +309,22 @@ const SCREENS: Record<string, () => unknown> = {
       skipped: 0,
       unavailable: 1,
       failed: 3,
+    }),
+  // Des articles sans produit, avec la raison de chacun dans « Détails » (DRV-635).
+  'end-reasons': () =>
+    ui.show('end', {
+      outcome: 'partial',
+      added: 2,
+      chosen: 0,
+      haveAtHome: 0,
+      skipped: 0,
+      unavailable: 3,
+      failed: 0,
+      reasons: [
+        { name: 'Farine', reason: 'OUT_OF_STOCK', tried: 1 },
+        { name: 'Œufs', reason: 'NOT_FOUND', tried: 5 },
+        { name: 'Sucre', reason: 'CART_REFUSED', tried: 1 },
+      ],
     }),
   // Arrêté avant que rien ne soit mis au panier ni choisi : « Le panier n'est pas rempli » (DRV-626).
   'end-none': () =>

@@ -53,6 +53,7 @@ const SCREENS = [
   'entry-manual',
   'end-partial',
   'end-none',
+  'end-reasons',
   'end-error',
   'end-aborted',
   ...ERROR_SCREENS,
