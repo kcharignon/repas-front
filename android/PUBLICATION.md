@@ -133,6 +133,7 @@ La troisième commande demande à Google de lire le fichier comme le fera Androi
 
 - Première version : `android-v0.1.0`. Ensuite : `android-v0.1.1` (petit correctif), `android-v0.2.0` (nouveauté ou changement de l'agent), `android-v1.0.0` quand la version est jugée stable.
 - **Ne réutilise jamais un numéro déjà publié.**
+- **Ordre quand le protocole change : le site d'abord, l'application ensuite.** Quand un message entre l'application et Repas gagne un champ (par exemple le champ `stats` du résultat, ajouté avec l'agent 0.15.0), un récepteur qui ne connaît pas ce champ **rejette tout le message**. L'application qui embarque le nouvel agent enverrait alors un résultat que l'ancien site refuse. Donc : **déploie d'abord le site** (release `vX.Y.Z` du front, approbation du déploiement, `https://kantin.eu/` qui répond), **puis seulement** pousse l'étiquette `android-vX.Y.Z` de l'application qui embarque cet agent. L'ordre inverse est sans danger : un site plus récent lit les messages d'une application plus ancienne, puisqu'un champ ajouté est facultatif. En cas de doute (l'agent a-t-il changé dans cette version ?), demande à l'assistant : la version de l'agent est dans les notes de la release et dans `drive-agent/src/version.ts`.
 
 ```bash
 cd ~/Projet/repas-front        # ton dépôt local
@@ -188,16 +189,16 @@ Ce que le workflow a déjà contrôlé avant de publier : agent embarqué = `and
 
 **À savoir d'abord** : si une **pré-version** `android-dev-…` ou l'ancienne « Repas Drive » est installée, **désinstalle-la d'abord** (appui long sur l'icône, « Infos sur l'appli », « Désinstaller ») : elle est signée d'une autre clé, Android refuse de mettre la nouvelle par-dessus. Cela efface la connexion à Leclerc dans l'application : tu la referas. Tes recettes et tes listes sont sur ton compte Repas, elles ne bougent pas.
 
-1. Sur le téléphone, dans **Chrome**, va sur `https://github.com/kcharignon/repas-front/releases` (tape l'adresse toi-même), ouvre la version la plus récente dont le nom commence par **`android-v`** et **sans** « Pre-release », puis touche **`repas-drive.apk`** dans « Assets ». (L'aide de Repas, « Mon compte » puis « Installer l'application Android », explique la même chose.)
+1. Sur le téléphone, dans **Chrome**, va sur `https://github.com/kcharignon/repas-front/releases` (tape l'adresse toi-même), ouvre la version la plus récente dont le nom commence par **`android-v`** et **sans** « Pre-release », puis touche **`repas-drive.apk`** dans « Assets ». (L'aide de Repas, « Moi » puis « Installer l'application Android », explique la même chose.)
 2. Quand le téléchargement est fini, touche « Ouvrir ». Si Android dit qu'il ne peut pas installer d'applications inconnues depuis Chrome, touche « Paramètres », active « Autoriser depuis cette source », reviens en arrière, puis « Installer ».
 3. Si **Play Protect** avertit que l'application ne vient pas de Google Play : « Plus de détails » puis « Installer quand même » (seulement si tu as pris le fichier sur la page GitHub ci-dessus).
 4. Touche « Ouvrir », connecte-toi à Repas.
-5. **Vérifie la version** : « Mon compte », « Drive », « Menu de l'application », « Version et mode d'emploi » : la ligne doit être du genre `Version 0.1.0 (numéro 1000), construction abc1234`, **sans** « , débogage ». Il n'y a pas de petit bouton rond **⋮** sur le bord droit de l'écran (il n'existe que dans la version de débogage).
+5. **Vérifie la version** : « Moi », « Drive », « Menu de l'application », « Version et mode d'emploi » : la ligne doit être du genre `Version 0.1.0 (numéro 1000), construction abc1234`, **sans** « , débogage ». Il n'y a pas de petit bouton rond **⋮** sur le bord droit de l'écran (il n'existe que dans la version de débogage).
 6. **Vérifie le lien vérifié** (une fois `assetlinks.json` publié) : envoie-toi un e-mail avec un lien `https://kantin.eu/…` et ouvre-le : il doit s'ouvrir **dans l'application**, sans demander de choisir. Si ce n'est pas le cas : contrôle l'étape 4 ; sur Android 12 et plus, « Paramètres », « Applications », « Repas », « Ouvrir par défaut » permet d'ajouter `kantin.eu` à la main ; avec le téléphone branché et l'assistant : `adb shell pm get-app-links eu.kantin.repas.drive` doit dire `kantin.eu: verified` (`adb shell pm verify-app-links --re-verify eu.kantin.repas.drive` relance la vérification).
 
 ## Étape 8. Mettre à jour par-dessus (à chaque version suivante)
 
-1. L'assistant et toi : nouvelle étiquette plus grande (étape 5), release vérifiée (étape 6).
+1. L'assistant et toi : si le protocole a changé, le site est déjà déployé (étape 5, « Ordre quand le protocole change ») ; nouvelle étiquette plus grande (étape 5), release vérifiée (étape 6).
 2. Sur le téléphone : télécharge le nouveau `repas-drive.apk` comme à l'étape 7 et installe-le **sans désinstaller** : Android propose « Mettre à jour » et **garde tout** (connexion à Repas, connexion à Leclerc).
 3. Vérifie le numéro de version (étape 7, point 5).
 4. « Application non installée » ou conflit : la version installée n'est pas signée de ta clé (une pré-version de débogage). Désinstalle-la, puis installe la nouvelle. Si c'est bien la tienne, vérifie que le numéro de la nouvelle version est **plus grand** que celui installé.
