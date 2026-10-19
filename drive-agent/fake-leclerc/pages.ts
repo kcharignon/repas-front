@@ -2,6 +2,7 @@
 // page de recherche = HTML qui embarque un JSON d'initialisation (`widgets`), panier = tableau d'évènements dont `Panier<point>`
 // porte `lstProduitsLight`. Les pages d'erreur et de défi sont minimales : seul compte ce que l'agent y reconnaît.
 import { DELIVERY_POINT, findProduct, paidPrice, type FakeProduct } from './catalog.ts'
+import { photoAddress } from './photos.ts'
 
 /** Le panier : identifiant du produit, quantité. */
 export type Cart = ReadonlyMap<number, number>
@@ -37,7 +38,7 @@ function productJson(product: FakeProduct, inCart: number): Record<string, unkno
       : `${euros(cents(product.perMeasure))} / ${product.measure}`,
     iQteDisponible: product.stock,
     iQuantitePanier: inCart,
-    sUrlVignetteProduit: `https://photos-test.leclercdrive.fr/image.ashx?id=${product.id - 999000}&use=l&cat=p`,
+    sUrlVignetteProduit: photoAddress(product),
     iIdRayon: product.aisle,
     iIdFamille: product.family,
     ...(structured && {

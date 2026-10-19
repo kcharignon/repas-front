@@ -21,6 +21,7 @@ import {
   startFakeLeclerc,
   type FakeLeclerc,
 } from '../fake-leclerc/server'
+import { FOREIGN_PHOTO_HOST, PHOTO_HOST } from '../fake-leclerc/photos'
 import { BACK_FORBIDDEN, backAcceptsLabel } from './back-label-rules'
 
 interface Reply {
@@ -96,7 +97,7 @@ describe('la page de recherche', () => {
     // When
     const reply = await search('farine')
     const { products } = extractProducts(reply.text)
-    const candidates = products.map(toCandidate)
+    const candidates = products.map((product) => toCandidate(product))
 
     // Then
     expect(reply.status).toBe(200)
@@ -869,5 +870,66 @@ describe('le moteur strict (ticket D de l’audit du 2026-10-18) : sensible aux 
     fake.reset()
 
     expect(await idsOf('œuf')).toEqual(['1000014', '1000015'])
+  })
+})
+
+describe('les photos des produits (DRV-633)', () => {
+  const candidatesOf = async () => {
+    const reply = await search('farine')
+    return extractProducts(reply.text).products.map((product) => toCandidate(product, null))
+  }
+
+  it('la recherche donne une adresse de photo sur l’hôte d’images, une autre hôte, ou rien : l’agent ne garde que la première', async () => {
+    const reply = await search('farine')
+    const raw = extractProducts(reply.text).products.map((product) => product.thumbnail)
+
+    expect(raw).toEqual([
+      `https://${PHOTO_HOST}/image.ashx?id=1001&use=l&cat=p`,
+      `https://${PHOTO_HOST}/image.ashx?id=1002&use=l&cat=p`,
+      `https://${FOREIGN_PHOTO_HOST}/image.ashx?id=1003&use=l&cat=p`,
+      `https://${PHOTO_HOST}/image.ashx?id=1004&use=l&cat=p`,
+      null,
+    ])
+    expect((await candidatesOf()).map((candidate) => candidate.imageUrl)).toEqual([
+      `https://${PHOTO_HOST}/image.ashx?id=1001&use=l&cat=p`,
+      `https://${PHOTO_HOST}/image.ashx?id=1002&use=l&cat=p`,
+      null,
+      `https://${PHOTO_HOST}/image.ashx?id=1004&use=l&cat=p`,
+      null,
+    ])
+  })
+
+  it('sert une image synthétique (SVG, sans texte) sur l’hôte d’images, sans cadence ni défaut simulé', async () => {
+    fake.setBehavior({ fault: { kind: 'forbidden' } })
+
+    const reply = await call('/image.ashx?id=1001&use=l&cat=p', { host: PHOTO_HOST })
+
+    expect(reply.status).toBe(200)
+    expect(reply.headers['content-type']).toBe('image/svg+xml')
+    expect(reply.text).toContain('<svg')
+    expect(reply.text).not.toContain('<text')
+    expect(fake.paced()).toEqual([])
+    expect(fake.requests().at(-1)).toMatchObject({ kind: 'image', host: PHOTO_HOST, status: 200 })
+  })
+
+  it('la photo d’un produit dont l’image « manque », ou d’un identifiant inconnu, répond 404', async () => {
+    expect((await call('/image.ashx?id=1004&use=l&cat=p', { host: PHOTO_HOST })).status).toBe(404)
+    expect((await call('/image.ashx?id=999999&use=l&cat=p', { host: PHOTO_HOST })).status).toBe(404)
+    expect((await call('/image.ashx?id=abc', { host: PHOTO_HOST })).status).toBe(404)
+  })
+
+  it('l’hôte d’images ne sert rien d’autre que image.ashx en GET', async () => {
+    expect((await call('/', { host: PHOTO_HOST })).status).toBe(404)
+    expect(
+      (await call(`${PAGE_PATH}/recherche.aspx?TexteRecherche=farine`, { host: PHOTO_HOST }))
+        .status,
+    ).toBe(404)
+    expect((await call('/image.ashx?id=1001', { host: PHOTO_HOST, method: 'POST' })).status).toBe(
+      404,
+    )
+  })
+
+  it('l’hôte « autre site » n’est pas servi : le faux site refuse son nom', async () => {
+    expect((await call('/image.ashx?id=1003', { host: FOREIGN_PHOTO_HOST })).status).toBe(403)
   })
 })
