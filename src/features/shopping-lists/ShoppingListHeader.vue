@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import type { ShoppingList } from '@/api'
 import UiButton from '@/design/UiButton.vue'
@@ -23,6 +23,7 @@ import {
 const props = defineProps<{ list: ShoppingList }>()
 
 const { t, d } = useI18n()
+const route = useRoute()
 const router = useRouter()
 const online = useOnline()
 
@@ -38,10 +39,17 @@ const canSend = computed(
   () => props.list.isActive && props.list.rowCount > 0 && settings.data.value?.enabled === true,
 )
 
-/** Sans magasin enregistré, l'envoi mène aux réglages du drive (DRV-403) au lieu de la confirmation. */
+/**
+ * Sans magasin enregistré, l'envoi mène à l'écran « Choisissez votre magasin » (DRV-622) au lieu de la confirmation ; une fois le
+ * magasin enregistré, cet écran nous rend la liste (`retour=liste`) et l'envoi reprend à sa confirmation (`envoyer`).
+ */
 function askToSend() {
   if (settings.data.value?.store) sending.value = true
-  else void router.push({ name: 'drive-settings', query: { magasin: 'requis' } })
+  else
+    void router.push({
+      name: 'drive-settings',
+      query: { magasin: 'requis', retour: 'liste' },
+    })
 }
 
 const renaming = ref(false)
@@ -49,6 +57,18 @@ const deleting = ref(false)
 const sending = ref(false)
 const reopening = ref(false)
 const name = ref('')
+
+// Revenu de l'écran du magasin : l'envoi reprend à sa confirmation, sans retoucher « Envoyer au drive » (DRV-622)
+watch(
+  () => [route.query.envoyer, canSend.value] as const,
+  ([resume, can]) => {
+    if (resume === undefined || !can) return
+    sending.value = true
+    // La demande est consommée : un rechargement ne rouvre pas la confirmation
+    void router.replace({ query: { ...route.query, envoyer: undefined } })
+  },
+  { immediate: true },
+)
 
 function openRename() {
   name.value = props.list.name ?? ''

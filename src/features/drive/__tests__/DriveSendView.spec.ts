@@ -490,7 +490,12 @@ describe('lecture du plan', () => {
     })
 
     await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-settings'))
-    expect(context.router.currentRoute.value.query.magasin).toBe('requis')
+    // L'écran du magasin sait où nous rendre : l'écran de l'envoi de cette liste
+    expect(context.router.currentRoute.value.query).toEqual({
+      magasin: 'requis',
+      retour: 'envoi',
+      liste: 'l1',
+    })
   })
 
   it.each([

@@ -11,6 +11,8 @@ withDefaults(
     title: string
     description: string
     confirmLabel: string
+    /** Le libellé du refus ; par défaut « Annuler ». */
+    cancelLabel?: string
     pending?: boolean
     /** `danger` pour une action destructive (par défaut), `primary` pour une action sans retour difficile. */
     variant?: 'danger' | 'primary'
@@ -26,7 +28,9 @@ const { t } = useI18n()
 <template>
   <UiDialog v-model:open="open" :title="title" :description="description">
     <div class="flex flex-wrap justify-end gap-2">
-      <UiButton variant="ghost" @click="open = false">{{ t('common.cancel') }}</UiButton>
+      <UiButton variant="ghost" @click="open = false">{{
+        cancelLabel ?? t('common.cancel')
+      }}</UiButton>
       <UiButton :variant="variant" :disabled="pending" @click="emit('confirm')">{{
         confirmLabel
       }}</UiButton>

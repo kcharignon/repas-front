@@ -49,6 +49,19 @@ const session = {
 }
 const noContent = () => new Response(null, { status: 204 })
 const failure = (status: number, message: string) => () => json({ error: { message } }, { status })
+/** Un faux back qui se souvient du magasin qu'on lui écrit, comme le vrai : les réglages relus après l'écriture le montrent. */
+function rememberingStore(initial: unknown = null) {
+  let saved = initial
+
+  return {
+    'GET /api/v1/drive/settings': () => json(settingsOf(saved)),
+    'PUT /api/v1/drive/settings': async (request: Request) => {
+      saved = ((await request.clone().json()) as { store: unknown }).store
+
+      return noContent()
+    },
+  }
+}
 
 async function open(
   handlers: Parameters<typeof stubApi>[0] = {},
@@ -115,17 +128,36 @@ describe('réglages du drive : le drive coupé ou illisible', () => {
 })
 
 describe('réglages du drive : le magasin', () => {
-  it('sans magasin : « aucun magasin », le motif de l’envoi et un formulaire vide', async () => {
-    const { wrapper } = await open({}, '/drive/reglages?magasin=requis', settingsOf(null))
+  it('sans magasin : « aucun magasin », la saisie à la main et un formulaire vide', async () => {
+    const { wrapper } = await open({}, '/drive/reglages', settingsOf(null))
 
+    expect(wrapper.find('h1').text()).toBe('Réglages du drive')
     expect(wrapper.text()).toContain('Aucun magasin enregistré.')
-    expect(wrapper.text()).toContain(
-      'Choisissez d’abord votre magasin pour envoyer une liste au drive.',
-    )
+    expect(wrapper.text()).not.toContain('Choisissez votre magasin')
     expect(
       wrapper.find(`#${CSS.escape(field(wrapper, 'Adresse de votre magasin') ?? '')}`).element,
     ).toHaveProperty('value', '')
     expect(wrapper.text()).toContain('Vous n’avez pas encore enregistré votre magasin')
+  })
+
+  it('envoyé ici faute de magasin : « Choisissez votre magasin » et rien d’autre à décider (DRV-622)', async () => {
+    const { wrapper } = await open(
+      {},
+      '/drive/reglages?magasin=requis&retour=liste',
+      settingsOf(null),
+    )
+
+    expect(wrapper.find('h1').text()).toBe('Choisissez votre magasin')
+    expect(wrapper.text()).toContain(
+      'Pour envoyer votre liste, Repas doit connaître votre magasin Leclerc.',
+    )
+    // Pas de réglage à côté : ni l'application, ni les produits ; la note de vie privée reste, après l'action
+    expect(wrapper.text()).not.toContain('Application Repas')
+    expect(wrapper.text()).not.toContain('Produits dont Repas se souvient')
+    expect(wrapper.find('#drive-privacy-note-title').exists()).toBe(true)
+    // Le retour mène à la liste, pas à « Moi »
+    expect(wrapper.find('a[href="/liste"]').text()).toBe('Retour à la liste')
+    expect(wrapper.find('a[href="/moi"]').exists()).toBe(false)
   })
 
   it('montre « Magasin …456 » faute de nom, et le nom s’il existe', async () => {
@@ -220,7 +252,7 @@ describe('réglages du drive : le magasin', () => {
 
   it('prévient quand l’adresse saisie est celle d’un autre magasin', async () => {
     const { wrapper } = await open()
-    expect(wrapper.text()).not.toContain('C’est un autre magasin')
+    expect(wrapper.text()).not.toContain('Ce n’est pas votre magasin actuel')
 
     await type(
       wrapper,
@@ -228,7 +260,9 @@ describe('réglages du drive : le magasin', () => {
       'https://exemple.leclercdrive.fr/magasin-999000-999000',
     )
 
-    expect(wrapper.text()).toContain('C’est un autre magasin')
+    expect(wrapper.text()).toContain(
+      'Ce n’est pas votre magasin actuel. Les produits habituels de l’ancien magasin ne seront plus proposés. Vous les choisirez de nouveau.',
+    )
   })
 
   it('sans réseau : lecture seule, enregistrement impossible', async () => {
@@ -245,101 +279,319 @@ describe('réglages du drive : le magasin', () => {
   })
 })
 
-describe('réglages du drive : la lecture du magasin par l’application', () => {
-  const readButton = (wrapper: Wrapper) =>
-    wrapper
-      .findAll('button')
-      .find((button) => button.text() === 'Lire mon magasin dans l’application')
+describe('réglages du drive : la lecture du magasin par l’application (un seul geste, DRV-623)', () => {
+  const button = (wrapper: Wrapper, name: string) =>
+    wrapper.findAll('button').find((candidate) => candidate.text() === name)
+  const body = () => document.body
+  const dialogButton = (name: string) =>
+    [...body().querySelectorAll('[role="dialog"] button')].find(
+      (candidate) => candidate.textContent.trim() === name,
+    ) as HTMLButtonElement | undefined
+  const puts = (fetchMock: ReturnType<typeof stubApi>) =>
+    fetchMock.mock.calls
+      .map(([input]) => input as Request)
+      .filter((request) => request.method === 'PUT')
+  const found = (id: string, host = 'exemple') => ({
+    id,
+    baseUrl: `https://${host}.leclercdrive.fr/magasin-${id}-${id}`,
+    label: null,
+  })
 
-  it('n’affiche pas le bouton tant que la lecture n’est pas branchée', async () => {
+  it('n’affiche pas le bouton tant que la lecture n’est pas branchée, et laisse la saisie ouverte', async () => {
     const { wrapper } = await open()
 
-    expect(readButton(wrapper)).toBeUndefined()
+    expect(button(wrapper, 'Lire mon magasin dans l’application')).toBeUndefined()
+    expect(button(wrapper, 'Changer de magasin')).toBeUndefined()
+    // Sans l'application, la saisie est le seul moyen : elle n'est pas repliée
+    expect(wrapper.find('details').attributes('open')).toBeDefined()
   })
 
-  it('remplit l’adresse avec le magasin lu, sans garder le nom d’un autre magasin', async () => {
+  it('avec l’application : la saisie à la main est repliée sous « Saisir l’adresse à la main »', async () => {
     reader.can.mockReturnValue(true)
-    reader.read.mockResolvedValue({
-      id: '999000',
-      baseUrl: 'https://autre.leclercdrive.fr/magasin-999000-999000',
-      label: null,
+    const { wrapper } = await open({}, '/drive/reglages', settingsOf(null))
+
+    expect(wrapper.find('details summary').text()).toBe('Saisir l’adresse à la main')
+    expect(wrapper.find('details').attributes('open')).toBeUndefined()
+    // Elle garde son bouton
+    expect(wrapper.find('details form').text()).toContain('Enregistrer mon magasin')
+  })
+
+  it('premier enregistrement : le magasin lu est enregistré tout seul, sans « Enregistrer mon magasin »', async () => {
+    reader.can.mockReturnValue(true)
+    reader.read.mockResolvedValue(found('999000'))
+    const { wrapper, fetchMock } = await open(
+      rememberingStore(),
+      '/drive/reglages',
+      settingsOf(null),
+    )
+
+    await button(wrapper, 'Lire mon magasin dans l’application')?.trigger('click')
+    await flushPromises()
+
+    expect(puts(fetchMock)).toHaveLength(1)
+    expect(
+      await bodyOf(
+        fetchMock,
+        fetchMock.mock.calls.findIndex(([i]) => (i as Request).method === 'PUT'),
+      ),
+    ).toEqual({
+      retailer: 'leclerc',
+      store: {
+        id: '999000',
+        baseUrl: 'https://exemple.leclercdrive.fr/magasin-999000-999000',
+        label: null,
+      },
     })
-    const { wrapper } = await open(
-      {},
-      '/drive/reglages',
-      settingsOf({ ...stored, label: 'Ville-Test' }),
-    )
-
-    await readButton(wrapper)?.trigger('click')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('Magasin …000 lu dans l’application')
-    const address = wrapper.find(`#${CSS.escape(field(wrapper, 'Adresse de votre magasin') ?? '')}`)
-    expect((address.element as HTMLInputElement).value).toBe(
-      'https://autre.leclercdrive.fr/magasin-999000-999000',
-    )
-    const name = wrapper.find(
-      `#${CSS.escape(field(wrapper, 'Nom de votre magasin (facultatif)') ?? '')}`,
-    )
-    expect((name.element as HTMLInputElement).value).toBe('')
-    expect(wrapper.text()).toContain('C’est un autre magasin')
+    expect(wrapper.text()).toContain('Magasin …000 enregistré.')
+    expect(wrapper.text()).not.toContain('Vérifiez, puis enregistrez')
+    // Le même geste, désormais, sert à changer de magasin
+    expect(button(wrapper, 'Changer de magasin')).toBeDefined()
+    expect(button(wrapper, 'Lire mon magasin dans l’application')).toBeUndefined()
+    expect(body().querySelector('[role="dialog"]')).toBeNull()
   })
 
-  it('garde le nom quand c’est le même magasin', async () => {
+  it('envoyé ici faute de magasin : « Choisir mon magasin » lit et enregistre, puis rend la liste à sa confirmation', async () => {
     reader.can.mockReturnValue(true)
-    reader.read.mockResolvedValue({ id: '123456', baseUrl: base })
-    const { wrapper } = await open(
+    reader.read.mockResolvedValue(found('999000'))
+    const { wrapper, fetchMock, context } = await open(
+      rememberingStore(),
+      '/drive/reglages?magasin=requis&retour=liste',
+      settingsOf(null),
+    )
+    expect(button(wrapper, 'Lire mon magasin dans l’application')).toBeUndefined()
+
+    await button(wrapper, 'Choisir mon magasin')?.trigger('click')
+    await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('shopping-list'))
+
+    expect(puts(fetchMock)).toHaveLength(1)
+    expect(context.router.currentRoute.value.query).toEqual({ envoyer: '1' })
+    expect(useNotificationsStore().items.map((item) => item.text)).toContain(
+      'Magasin …000 enregistré.',
+    )
+  })
+
+  it('venu de l’écran de l’envoi d’une liste déjà envoyée : le magasin enregistré, on y retourne', async () => {
+    reader.can.mockReturnValue(true)
+    reader.read.mockResolvedValue(found('999000'))
+    const { wrapper, context } = await open(
+      rememberingStore(),
+      '/drive/reglages?magasin=requis&retour=envoi&liste=l1',
+      settingsOf(null),
+    )
+    expect(wrapper.find('a[href="/listes/l1"]').text()).toBe('Retour à la liste')
+
+    await button(wrapper, 'Choisir mon magasin')?.trigger('click')
+    await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-send'))
+
+    expect(context.router.currentRoute.value.params.listId).toBe('l1')
+  })
+
+  it('le même magasin relu : rien n’est écrit, aucun écran de plus', async () => {
+    reader.can.mockReturnValue(true)
+    reader.read.mockResolvedValue({ id: '123456', baseUrl: base, label: null })
+    const { wrapper, fetchMock } = await open(
       {},
       '/drive/reglages',
       settingsOf({ ...stored, label: 'Ville-Test' }),
     )
 
-    await readButton(wrapper)?.trigger('click')
+    await button(wrapper, 'Changer de magasin')?.trigger('click')
     await flushPromises()
 
-    const name = wrapper.find(
-      `#${CSS.escape(field(wrapper, 'Nom de votre magasin (facultatif)') ?? '')}`,
+    expect(puts(fetchMock)).toHaveLength(0)
+    expect(wrapper.text()).toContain('Magasin …456 enregistré.')
+    expect(body().querySelector('[role="dialog"]')).toBeNull()
+  })
+
+  it('rejoué : le même résultat reçu deux fois n’enregistre qu’une fois', async () => {
+    reader.can.mockReturnValue(true)
+    reader.read.mockResolvedValue(found('999000'))
+    const { wrapper, fetchMock } = await open(
+      rememberingStore(),
+      '/drive/reglages',
+      settingsOf(null),
     )
-    expect((name.element as HTMLInputElement).value).toBe('Ville-Test')
+
+    // Deux touches coup sur coup : la seconde est ignorée tant que la lecture n'est pas finie
+    const read = button(wrapper, 'Lire mon magasin dans l’application')
+    await read?.trigger('click')
+    await read?.trigger('click')
+    await flushPromises()
+    expect(reader.read).toHaveBeenCalledTimes(1)
+    // Puis le même magasin relu, une fois enregistré : rien de plus n'est écrit
+    await button(wrapper, 'Changer de magasin')?.trigger('click')
+    await flushPromises()
+
+    expect(reader.read).toHaveBeenCalledTimes(2)
+    expect(puts(fetchMock)).toHaveLength(1)
+    expect(body().querySelector('[role="dialog"]')).toBeNull()
+  })
+
+  it('un autre magasin que celui qui est enregistré : confirmation explicite, rien n’est écrit avant', async () => {
+    reader.can.mockReturnValue(true)
+    reader.read.mockResolvedValue(found('999000', 'autre'))
+    const { wrapper, fetchMock } = await open(
+      rememberingStore({ ...stored, label: 'Ville-Test' }),
+      '/drive/reglages',
+    )
+
+    await button(wrapper, 'Changer de magasin')?.trigger('click')
+    await vi.waitFor(() => expect(dialogButton('Changer de magasin')).toBeDefined())
+
+    expect(puts(fetchMock)).toHaveLength(0)
+    const dialog = body().querySelector('[role="dialog"]')?.textContent ?? ''
+    expect(dialog).toContain('Utiliser le magasin …000 ?')
+    expect(dialog).toContain(
+      'Ce n’est pas votre magasin actuel. Les produits habituels de l’ancien magasin ne seront plus proposés. Vous les choisirez de nouveau.',
+    )
+    expect(dialogButton('Garder l’ancien')).toBeDefined()
+
+    dialogButton('Changer de magasin')?.click()
+    await vi.waitFor(() => expect(puts(fetchMock)).toHaveLength(1))
+    // Le nom de l'ancien magasin ne suit pas
+    expect(
+      await bodyOf(
+        fetchMock,
+        fetchMock.mock.calls.findIndex(([i]) => (i as Request).method === 'PUT'),
+      ),
+    ).toEqual({
+      retailer: 'leclerc',
+      store: {
+        id: '999000',
+        baseUrl: 'https://autre.leclercdrive.fr/magasin-999000-999000',
+        label: null,
+      },
+    })
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Magasin …000 enregistré.'))
+  })
+
+  it('« Garder l’ancien » : rien n’est écrit, le magasin enregistré reste', async () => {
+    reader.can.mockReturnValue(true)
+    reader.read.mockResolvedValue(found('999000'))
+    const { wrapper, fetchMock } = await open({}, '/drive/reglages', settingsOf(stored))
+
+    await button(wrapper, 'Changer de magasin')?.trigger('click')
+    await vi.waitFor(() => expect(dialogButton('Garder l’ancien')).toBeDefined())
+    dialogButton('Garder l’ancien')?.click()
+    await vi.waitFor(() => expect(body().querySelector('[role="dialog"]')).toBeNull())
+
+    expect(puts(fetchMock)).toHaveLength(0)
+    expect(wrapper.text()).toContain('Magasin …456')
+    expect(wrapper.text()).not.toContain('enregistré.')
+  })
+
+  it('une lecture refusée par le serveur (DRIVE_STORE_INVALID) : trois phrases, rien n’est enregistré', async () => {
+    reader.can.mockReturnValue(true)
+    reader.read.mockResolvedValue(found('999000'))
+    const { wrapper } = await open(
+      { 'PUT /api/v1/drive/settings': failure(422, 'DRIVE_STORE_INVALID') },
+      '/drive/reglages',
+      settingsOf(null),
+    )
+
+    await button(wrapper, 'Lire mon magasin dans l’application')?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[role="alert"]').text()).toBe(
+      'Repas n’a pas pu utiliser ce magasin. Rien n’est enregistré. Réessayez, ou saisissez l’adresse à la main.',
+    )
+    expect(wrapper.text()).toContain('Aucun magasin enregistré.')
+    expect(wrapper.text()).not.toContain('enregistré.Changer')
+    expect(button(wrapper, 'Lire mon magasin dans l’application')).toBeDefined()
+    // La saisie à la main s'ouvre : le repli est à un geste
+    expect(wrapper.find('details').attributes('open')).toBeDefined()
+    expect(useNotificationsStore().items).toHaveLength(0)
+  })
+
+  it('un autre refus du serveur (429) : le dit sans rien enregistrer', async () => {
+    reader.can.mockReturnValue(true)
+    reader.read.mockResolvedValue(found('999000'))
+    const { wrapper } = await open(
+      { 'PUT /api/v1/drive/settings': rateLimited(1) },
+      '/drive/reglages',
+      settingsOf(null),
+    )
+
+    await button(wrapper, 'Lire mon magasin dans l’application')?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[role="alert"]').text()).toBe(
+      'Trop de demandes en peu de temps. Attendez une minute, puis réessayez.',
+    )
+    expect(wrapper.text()).toContain('Aucun magasin enregistré.')
   })
 
   it.each([
-    ['BUSY', 'Un envoi au drive est déjà en cours'],
-    ['CANCELLED', 'Aucun magasin choisi'],
-    ['NOT_FOUND', 'n’a pas trouvé de magasin'],
-    ['UNAVAILABLE', 'ne peut pas lire votre magasin'],
-    ['FAILED', 'La lecture a échoué'],
-  ] as const)('dit pourquoi la lecture a échoué (%s)', async (code, text) => {
-    reader.can.mockReturnValue(true)
-    reader.read.mockRejectedValue(new StoreReadError(code))
-    const { wrapper } = await open()
+    [
+      'BUSY',
+      'Un envoi au drive est déjà en cours dans l’application. Rien n’est enregistré. Terminez-le ou abandonnez-le, puis réessayez.',
+    ],
+    [
+      'CANCELLED',
+      'Aucun magasin choisi. Rien n’est enregistré. Réessayez, ou saisissez l’adresse à la main.',
+    ],
+    [
+      'NOT_FOUND',
+      'L’application n’a pas trouvé de magasin sur la page. Rien n’est enregistré. Choisissez-en un sur le site du drive, puis réessayez.',
+    ],
+    [
+      'UNAVAILABLE',
+      'L’application ne peut pas lire votre magasin pour le moment. Rien n’est enregistré. Saisissez son adresse à la main.',
+    ],
+    [
+      'FAILED',
+      'La lecture a échoué. Rien n’est enregistré. Réessayez, ou saisissez l’adresse à la main.',
+    ],
+  ] as const)(
+    'dit pourquoi la lecture a échoué (%s), en trois phrases, sans rien enregistrer',
+    async (code, text) => {
+      reader.can.mockReturnValue(true)
+      reader.read.mockRejectedValue(new StoreReadError(code))
+      const { wrapper, fetchMock } = await open({}, '/drive/reglages', settingsOf(null))
 
-    await readButton(wrapper)?.trigger('click')
-    await flushPromises()
+      await button(wrapper, 'Lire mon magasin dans l’application')?.trigger('click')
+      await flushPromises()
 
-    expect(wrapper.find('[role="alert"]').text()).toContain(text)
-  })
+      expect(wrapper.find('[role="alert"]').text()).toBe(text)
+      expect(puts(fetchMock)).toHaveLength(0)
+      expect(wrapper.find('details').attributes('open')).toBeDefined()
+    },
+  )
 
   it('refuse un magasin lu dont l’adresse ne convient pas', async () => {
     reader.can.mockReturnValue(true)
     reader.read.mockResolvedValue({ id: '1', baseUrl: 'https://exemple.example.com/magasin-1-1' })
-    const { wrapper } = await open()
+    const { wrapper, fetchMock } = await open({}, '/drive/reglages', settingsOf(null))
 
-    await readButton(wrapper)?.trigger('click')
+    await button(wrapper, 'Lire mon magasin dans l’application')?.trigger('click')
     await flushPromises()
 
     expect(wrapper.find('[role="alert"]').text()).toContain('La lecture a échoué')
+    expect(puts(fetchMock)).toHaveLength(0)
   })
 
   it('traite une erreur inattendue comme un échec', async () => {
     reader.can.mockReturnValue(true)
     reader.read.mockRejectedValue(new Error('boom'))
-    const { wrapper } = await open()
+    const { wrapper } = await open({}, '/drive/reglages', settingsOf(null))
 
-    await readButton(wrapper)?.trigger('click')
+    await button(wrapper, 'Lire mon magasin dans l’application')?.trigger('click')
     await flushPromises()
 
     expect(wrapper.find('[role="alert"]').text()).toContain('La lecture a échoué')
+  })
+
+  it('sans réseau : la lecture ne se lance pas', async () => {
+    reader.can.mockReturnValue(true)
+    const { wrapper } = await open({}, '/drive/reglages', settingsOf(null))
+
+    window.dispatchEvent(new Event('offline'))
+    await flushPromises()
+
+    expect(
+      button(wrapper, 'Lire mon magasin dans l’application')?.attributes('disabled'),
+    ).toBeDefined()
+    expect(wrapper.text()).toContain('Hors connexion')
   })
 })
 

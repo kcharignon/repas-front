@@ -3,6 +3,8 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page, type Route } from '@playwright/test'
 
+import { fakeAppForSetup } from './support/setupApp'
+
 type Status = 'ACTIVE' | 'SENT'
 
 const list = (status: Status) => ({
@@ -48,9 +50,10 @@ const reply = (route: Route, body?: unknown, status = body === undefined ? 204 :
       : { status, contentType: 'application/json', body: JSON.stringify(body) },
   )
 
-/** Un faux back : une liste dont le statut change avec `send` et `reopen`. Rend les appels reçus. */
-async function fakeBack(page: Page, initial: Status = 'ACTIVE', enabled = true) {
+/** Un faux back : une liste dont le statut change avec `send` et `reopen`. Rend les appels reçus. `withStore` faux : pas de magasin enregistré. */
+async function fakeBack(page: Page, initial: Status = 'ACTIVE', enabled = true, withStore = true) {
   let status = initial
+  let hasStore = withStore
   const received: string[] = []
   await page.addInitScript(() => localStorage.setItem('repas.session', '1'))
   await page.route(
@@ -82,12 +85,17 @@ async function fakeBack(page: Page, initial: Status = 'ACTIVE', enabled = true) 
           return reply(route, {
             enabled,
             retailer: 'leclerc',
-            store: {
-              id: '123456',
-              label: null,
-              baseUrl: 'https://courses-test.leclercdrive.fr/magasin-123456-123456',
-            },
+            store: hasStore
+              ? {
+                  id: '123456',
+                  label: null,
+                  baseUrl: 'https://courses-test.leclercdrive.fr/magasin-123456-123456',
+                }
+              : null,
           })
+        case 'PUT /api/v1/drive/settings':
+          hasStore = true
+          return reply(route)
         case 'GET /api/v1/drive/plans/l1':
           // Interrupteur coupé : toutes les routes du drive répondent 404 DRIVE_DISABLED (hors réouverture d'une liste)
           return reply(route, { error: { message: enabled ? 'inconnu' : 'DRIVE_DISABLED' } }, 404)
@@ -228,3 +236,32 @@ for (const colorScheme of ['light', 'dark'] as const) {
     expect((await scan()).violations).toEqual([])
   })
 }
+
+test('sans magasin : « Choisir mon magasin » le lit, l’enregistre, et l’envoi reprend à sa confirmation (DRV-622, DRV-623)', async ({
+  page,
+}) => {
+  const received = await fakeBack(page, 'ACTIVE', true, false)
+  await fakeAppForSetup(page, 'found')
+  await page.goto('/liste')
+
+  // Un geste : l'écran dit ce qu'il attend et porte le bouton qui fait le travail
+  await page.getByRole('button', { name: 'Envoyer au drive' }).click()
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Choisissez votre magasin' }),
+  ).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Retour à la liste' })).toBeVisible()
+  expect(received).not.toContain('POST /api/v1/shopping-lists/l1/send')
+
+  // Un geste : le magasin est lu dans l'application puis enregistré tout seul, et la liste nous attend à sa confirmation
+  await page.getByRole('button', { name: 'Choisir mon magasin' }).click()
+  const confirm = page.getByRole('dialog')
+  await expect(confirm).toContainText('La liste ne sera plus modifiable. Vous pourrez la rouvrir.')
+  await expect(page).toHaveURL(/\/liste$/)
+  expect(received.filter((call) => call === 'PUT /api/v1/drive/settings')).toHaveLength(1)
+  expect(received).not.toContain('POST /api/v1/shopping-lists/l1/send')
+
+  // Un geste : la confirmation envoie la liste
+  await confirm.getByRole('button', { name: 'Envoyer au drive' }).click()
+  await expect(page).toHaveURL(/\/drive\/envoi\/l1$/)
+  expect(received).toContain('POST /api/v1/shopping-lists/l1/send')
+})

@@ -4,6 +4,7 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 
 import { fakeDriveBack } from './support/driveBack'
+import { fakeAppForSetup } from './support/setupApp'
 
 const address = 'https://exemple.leclercdrive.fr/magasin-654321-654321'
 const scan = (page: Page) =>
@@ -48,21 +49,23 @@ test('sans magasin : enregistrer son adresse, lui donner un nom, puis gérer ses
   await expect(page.getByRole('heading', { level: 1, name: 'Mes produits' })).toBeVisible()
 })
 
-test('envoyé ici faute de magasin, le motif disparaît une fois le magasin enregistré', async ({
+test('envoyé ici faute de magasin, « Choisissez votre magasin » disparaît une fois le magasin enregistré', async ({
   page,
 }) => {
   await fakeDriveBack(page, { store: null })
   await page.goto('/drive/reglages?magasin=requis')
   await expect(
-    page.getByText('Choisissez d’abord votre magasin pour envoyer une liste au drive.'),
+    page.getByRole('heading', { level: 1, name: 'Choisissez votre magasin' }),
   ).toBeVisible()
+  // Hors de l'application, personne ne peut lire le magasin : la saisie à la main est là, ouverte
+  await expect(page.getByRole('button', { name: 'Choisir mon magasin' })).toHaveCount(0)
 
   await page.getByLabel('Adresse de votre magasin').fill(address)
   await page.getByRole('button', { name: 'Enregistrer mon magasin' }).click()
 
   await expect(page.getByText('Magasin …321')).toBeVisible()
   await expect(page).toHaveURL(/\/drive\/reglages$/)
-  await expect(page.getByText('Choisissez d’abord votre magasin')).toHaveCount(0)
+  await expect(page.getByText('Choisissez votre magasin')).toHaveCount(0)
 })
 
 test('hors de l’application : propose de l’installer et mène à l’aide', async ({ page }) => {
@@ -112,83 +115,19 @@ test('dans l’application : montre sa version et que le drive est prêt', async
   await expect(page).toHaveURL(/\/drive\/aide#mise-a-jour$/)
 })
 
-/**
- * Un faux pont natif qui joue l'application : il répond à `drive.setup` comme elle (après l'aller-retour dans le drive) par le
- * résultat de l'agent donné, et garde ce que la page envoie dans `window.__sent`.
- */
-async function fakeAppForSetup(page: Page, answer: 'found' | 'aborted' | 'busy' | 'unsupported') {
-  await page.addInitScript((answer) => {
-    const listeners: ((event: { data: unknown }) => void)[] = []
-    const win = window as unknown as { __sent: { type: string; runId?: string }[] }
-    win.__sent = []
-    const emit = (message: unknown, delay: number) =>
-      setTimeout(
-        () => listeners.forEach((listener) => listener({ data: JSON.stringify(message) })),
-        delay,
-      )
-    Object.assign(window, {
-      repasNative: {
-        postMessage: (text: string) => {
-          const message = JSON.parse(text) as { type: string; runId?: string }
-          win.__sent.push(message)
-          if (message.type === 'app.info')
-            emit({ v: 1, type: 'app.info', version: '0.5.0', versionCode: 5, drive: true }, 0)
-          if (message.type !== 'drive.setup') return
-          const head = { v: 1, runId: message.runId, agentVersion: '1.0.0' }
-          if (answer === 'busy') emit({ v: 1, type: 'drive.error', code: 'BUSY', runId: null }, 50)
-          else if (answer === 'found')
-            emit(
-              {
-                v: 1,
-                type: 'drive.result',
-                result: {
-                  ...head,
-                  type: 'setup-result',
-                  store: {
-                    id: '654321',
-                    host: 'exemple.leclercdrive.fr',
-                    baseUrl: 'https://exemple.leclercdrive.fr/magasin-654321-654321',
-                    label: null,
-                  },
-                },
-              },
-              150,
-            )
-          else
-            emit(
-              {
-                v: 1,
-                type: 'drive.result',
-                result: {
-                  ...head,
-                  type: 'result',
-                  lines: [],
-                  ...(answer === 'aborted'
-                    ? { outcome: 'aborted', error: { code: 'CANCELLED', message: 'Abandonné' } }
-                    : { outcome: 'error', error: { code: 'UNSUPPORTED_PAGE', message: 'Page' } }),
-                },
-              },
-              150,
-            )
-        },
-        addEventListener: (_type: string, listener: (event: { data: unknown }) => void) =>
-          void listeners.push(listener),
-      },
-    })
-  }, answer)
-}
-
-test('dans l’application : « Lire mon magasin » ouvre le drive, et au retour le formulaire est rempli', async ({
+test('dans l’application : « Lire mon magasin » ouvre le drive, et au retour le magasin est enregistré tout seul', async ({
   page,
 }) => {
   const back = await fakeDriveBack(page, { store: null })
   await fakeAppForSetup(page, 'found')
   await page.goto('/drive/reglages')
+  // La saisie à la main est repliée : le geste est dans l'application
+  await expect(page.getByLabel('Adresse de votre magasin')).toBeHidden()
 
   await page.getByRole('button', { name: 'Lire mon magasin dans l’application' }).click()
 
-  await expect(page.getByText('Magasin …321 lu dans l’application')).toBeVisible()
-  await expect(page.getByLabel('Adresse de votre magasin')).toHaveValue(address)
+  await expect(page.getByText('Magasin …321 enregistré.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Enregistrer mon magasin' })).toBeHidden()
   const sent = await page.evaluate(() =>
     (window as unknown as { __sent: { type: string; runId?: string }[] }).__sent.filter(
       (message) => message.type === 'drive.setup',
@@ -197,13 +136,46 @@ test('dans l’application : « Lire mon magasin » ouvre le drive, et au retour
   expect(sent).toHaveLength(1)
   expect(sent[0]?.runId).toMatch(/^[0-9a-f-]{36}$/)
 
-  // L'utilisateur vérifie, donne un nom et enregistre : seul ce geste écrit dans Repas
-  expect(back.bodies).toEqual([])
+  // Un seul enregistrement, sans nom : celui du résultat de l'agent
+  expect(back.bodies).toEqual([
+    { retailer: 'leclerc', store: { id: '654321', baseUrl: address, label: null } },
+  ])
+
+  // Le nom est facultatif : il se donne, si l'on veut, sous « Saisir l'adresse à la main »
+  await page.getByText('Saisir l’adresse à la main').click()
   await page.getByLabel('Nom de votre magasin (facultatif)').fill('Ville-Test')
   await page.getByRole('button', { name: 'Enregistrer mon magasin' }).click()
   await expect(page.getByText('Magasin enregistré.')).toBeVisible()
+  expect(back.bodies.at(-1)).toEqual({
+    retailer: 'leclerc',
+    store: { id: '654321', baseUrl: address, label: 'Ville-Test' },
+  })
+})
+
+test('dans l’application : un autre magasin que le mien demande confirmation, « Garder l’ancien » ne change rien', async ({
+  page,
+}) => {
+  // Le magasin enregistré (123456) n'est pas celui que l'application lit (654321)
+  const back = await fakeDriveBack(page)
+  await fakeAppForSetup(page, 'found')
+  await page.goto('/drive/reglages')
+
+  await page.getByRole('button', { name: 'Changer de magasin' }).click()
+  const confirm = page.getByRole('dialog')
+  await expect(confirm).toContainText('Utiliser le magasin …321 ?')
+  await expect(confirm).toContainText(
+    'Les produits habituels de l’ancien magasin ne seront plus proposés.',
+  )
+  await confirm.getByRole('button', { name: 'Garder l’ancien' }).click()
+  await expect(confirm).toBeHidden()
+  expect(back.bodies).toEqual([])
+  await expect(page.getByText('Magasin …456')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Changer de magasin' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Changer de magasin' }).click()
+  await expect(page.getByText('Magasin …321 enregistré.')).toBeVisible()
   expect(back.bodies).toEqual([
-    { retailer: 'leclerc', store: { id: '654321', baseUrl: address, label: 'Ville-Test' } },
+    { retailer: 'leclerc', store: { id: '654321', baseUrl: address, label: null } },
   ])
 })
 
@@ -222,6 +194,8 @@ for (const [answer, message] of [
     await page.getByRole('button', { name: 'Lire mon magasin dans l’application' }).click()
 
     await expect(page.getByRole('alert').filter({ hasText: message })).toBeVisible()
+    // Rien n'est enregistré, et la saisie à la main s'ouvre
+    await expect(page.getByLabel('Adresse de votre magasin')).toBeVisible()
     await expect(page.getByLabel('Adresse de votre magasin')).toHaveValue('')
     await expect(
       page.getByRole('button', { name: 'Lire mon magasin dans l’application' }),
