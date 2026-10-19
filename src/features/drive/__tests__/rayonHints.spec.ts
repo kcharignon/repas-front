@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { catalogIdOf, rayonHintsOf } from '../rayon'
+import { rayonHintsOf } from '../buildPlanMessage'
+import { catalogIdOf } from '../choices'
 
 describe('rayonHintsOf', () => {
   it('garde les rayons valides dans l’ordre reçu', () => {

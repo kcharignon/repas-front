@@ -32,6 +32,7 @@ const known = (
   products,
   rejected,
   searchQuery: name,
+  rayonHints: [],
 })
 
 const fresh = (slug: string, name: string): DrivePlanLine => ({
@@ -42,6 +43,7 @@ const fresh = (slug: string, name: string): DrivePlanLine => ({
   products: [],
   rejected: [],
   searchQuery: name,
+  rayonHints: [],
 })
 
 /**

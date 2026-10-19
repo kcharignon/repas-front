@@ -3435,6 +3435,24 @@
                                 "$ref": "#/components/schemas/ProductPricePayload"
                             }
                         ]
+                    },
+                    "rayonId": {
+                        "description": "Rayon de l'enseigne o\u00f9 le site range le produit (`iIdRayon` chez Leclerc) : entier de 1 \u00e0 2147483647. Facultatif : absent ou `null`, la fiche du produit n'est pas modifi\u00e9e ; une valeur d\u00e9j\u00e0 connue n'est jamais remplac\u00e9e. Sert \u00e0 apprendre dans quel rayon de l'enseigne chercher les ingr\u00e9dients d'un rayon de Repas (`rayonHints` du plan)",
+                        "type": "integer",
+                        "default": null,
+                        "maximum": 2147483647,
+                        "minimum": 1,
+                        "example": 4001,
+                        "nullable": true
+                    },
+                    "familyId": {
+                        "description": "Famille de l'enseigne, le niveau sous le rayon (`iIdFamille` chez Leclerc) : entier de 1 \u00e0 2147483647. Facultatif, m\u00eames r\u00e8gles que `rayonId`",
+                        "type": "integer",
+                        "default": null,
+                        "maximum": 2147483647,
+                        "minimum": 1,
+                        "example": 4101,
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -4847,6 +4865,21 @@
                         "description": "Texte \u00e0 chercher sur le site de l'enseigne : le nom de l'ingr\u00e9dient",
                         "type": "string",
                         "example": "Farine"
+                    },
+                    "rayonHints": {
+                        "description": "Rayons de l'enseigne o\u00f9 chercher d'abord cet ingr\u00e9dient (DRV-642), 3 au plus, du plus choisi au moins choisi : ceux o\u00f9 les utilisateurs ont choisi des produits pour des ingr\u00e9dients du m\u00eame rayon de Repas. Ce sont des identifiants de rayon de l'enseigne (`iIdRayon` chez Leclerc), jamais des noms. Vide quand rien n'est encore appris pour ce rayon de Repas, ou quand l'ingr\u00e9dient n'a pas de rayon. Un classement, pas un filtre : aucun produit n'est \u00e9cart\u00e9. Cl\u00e9 facultative pour le lecteur (un back plus ancien ne l'envoie pas)",
+                        "type": "array",
+                        "items": {
+                            "type": "integer",
+                            "maximum": 2147483647,
+                            "minimum": 1
+                        },
+                        "default": [],
+                        "maxItems": 3,
+                        "example": [
+                            4001,
+                            4002
+                        ]
                     }
                 },
                 "type": "object"

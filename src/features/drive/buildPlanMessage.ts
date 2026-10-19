@@ -1,8 +1,23 @@
 import type { PlanLine, PlanMessage } from '@drive-protocol'
-import { PROTOCOL_VERSION, RETURN_PATH } from '@drive-protocol'
+import { LIMITS, PROTOCOL_VERSION, RETURN_PATH } from '@drive-protocol'
 
 import type { DrivePlan, DrivePlanLine } from '@/api'
-import { rayonHintsOf, type WithRayonHints } from './rayon'
+import { catalogIdOf } from './choices'
+
+/**
+ * Les rayons conseillés d'une ligne tels qu'ils partent à l'agent : les valeurs valides seulement (jamais un message que l'agent refuserait en
+ * bloc), sans doublon, trois au plus, dans l'ordre reçu. Vide quand le back n'en donne pas.
+ */
+export function rayonHintsOf(line: { rayonHints?: readonly number[] | null }): number[] {
+  const hints: number[] = []
+  for (const value of line.rayonHints ?? []) {
+    const id = catalogIdOf(value)
+    if (id !== null && !hints.includes(id)) hints.push(id)
+    if (hints.length === LIMITS.rayonHints) break
+  }
+
+  return hints
+}
 
 /**
  * Ce que l'utilisateur change pour ce passage seulement (rien n'est mémorisé) :
@@ -27,11 +42,7 @@ export interface PlanOptions {
   rayonHints?: boolean
 }
 
-function translate(
-  line: DrivePlanLine & WithRayonHints,
-  changes: LineChanges,
-  options: PlanOptions,
-): PlanLine {
+function translate(line: DrivePlanLine, changes: LineChanges, options: PlanOptions): PlanLine {
   const status = effectiveStatus(line, changes)
   const head = { ingredientSlug: line.ingredientSlug, name: line.ingredientName }
   if (status === 'HAVE_AT_HOME' || status === 'SKIP') return { ...head, status }

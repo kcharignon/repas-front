@@ -1,5 +1,6 @@
 import {
   cleanText,
+  LIMITS,
   type ChosenProduct,
   type ProductPrice,
   type RejectedProduct,
@@ -8,7 +9,6 @@ import {
 } from '@drive-protocol'
 
 import type { ChoiceIntent } from '@/api'
-import { catalogIdOf, type WithRayon } from './rayon'
 
 /** Intentions par appel `PUT /api/v1/drive/choices` (borne du back). */
 export const MAX_INTENTS = 200
@@ -16,8 +16,22 @@ export const MAX_INTENTS = 200
 /** Le back refuse un prix de plus de 1 000 000 centimes (le protocole va jusqu'à 100 000 000) : un prix plus haut n'est pas gardé. */
 const MAX_CENTS = 1_000_000
 
-/** Le produit d'une intention, avec son rayon et sa famille (DRV-642 ; types écrits à la main en attendant le contrat du back, voir `rayon.ts`). */
-type Product = NonNullable<ChoiceIntent['product']> & WithRayon
+/** Un identifiant de rayon ou de famille que le protocole accepte : un entier de 1 à 2 147 483 647. Sinon `null`. */
+export function catalogIdOf(value: unknown): number | null {
+  return typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 1 &&
+    value <= LIMITS.catalogId
+    ? value
+    : null
+}
+
+/** Le produit d'une intention, avec son rayon et sa famille (DRV-642), présents seulement quand l'agent les a donnés. */
+type WireProduct = NonNullable<ChoiceIntent['product']>
+/** Le contrat marque `rayonId` et `familyId` requis (défaut `null`) ; le back accepte aussi leur absence, qu'on garde quand l'agent n'en dit rien. */
+type Product = Omit<WireProduct, 'rayonId' | 'familyId'> &
+  Partial<Pick<WireProduct, 'rayonId' | 'familyId'>>
+type Intent = Omit<ChoiceIntent, 'product'> & { product?: Product | null }
 type Price = NonNullable<Product['price']>
 
 function priceOf(price: ProductPrice | undefined): Price | null {
@@ -58,7 +72,7 @@ function productOf(product: RejectedProduct | ChosenProduct): Product {
  */
 function intentsOf(line: ResultLine): ChoiceIntent[] {
   const slug = line.ingredientSlug
-  const intents: ChoiceIntent[] = []
+  const intents: Intent[] = []
   // Un produit à la fois ajouté et refusé donnerait 422 sur tout le lot : l'ajout, explicite, l'emporte
   const added = line.outcome === 'CHOSEN' && line.placement !== 'ONCE' ? line.product.id : null
   for (const product of line.rejected ?? []) {
@@ -113,7 +127,7 @@ function intentsOf(line: ResultLine): ChoiceIntent[] {
       break
   }
 
-  return intents
+  return intents as ChoiceIntent[]
 }
 
 /**
