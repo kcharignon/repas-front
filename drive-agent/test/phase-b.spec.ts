@@ -224,6 +224,98 @@ describe('un nouvel ingrédient', () => {
     expect(first?.textContent).not.toContain('demandé')
   })
 
+  describe('la taille ne s’affiche qu’une fois par produit (DRV-626)', () => {
+    /** Les lignes de texte d'un produit de la liste, une par paragraphe. */
+    const linesOf = (row: HTMLElement | undefined) =>
+      [...(row?.querySelectorAll('p') ?? [])].map((paragraph) => paragraph.textContent)
+
+    it('retire la seconde ligne du libellé quand elle ne fait que redire la taille', async () => {
+      const test = run(pepper(), [() => ({ kind: 'skip' })])
+
+      await test.start()
+
+      const [first, second] = rows(test.user.views[0]?.zone ?? document.createElement('div'))
+      // Le nom, la ligne du prix (avec la taille), le nombre de produits : rien d'autre
+      expect(linesOf(first)).toEqual([
+        'Poivre noir moulu de test',
+        '500 g · 2,58 € · 5,16 € / kg',
+        '500 g par produit : 2 produits.',
+      ])
+      expect(linesOf(second)).toEqual([
+        'Poivre blanc de test',
+        '1 kg · 4,99 €',
+        'En promotion : 4,50 €',
+        '1 kg par produit : 1 produit.',
+      ])
+    })
+
+    it.each([['40g'], ['40 G'], ['40\u00a0g'], ['40 g ']])(
+      'la reconnaît sous une autre écriture (« %s »)',
+      async (second) => {
+        const shelf = {
+          '5000001': {
+            label: 'Poivre de test',
+            label2: second,
+            content: { value: 40, unit: 'g' as const },
+            price: 180,
+          },
+        }
+        const test = run(pepper(), [() => ({ kind: 'skip' })], {
+          shelf,
+          found: { poivre: ['5000001'] },
+        })
+
+        await test.start()
+
+        expect(linesOf(rows(test.user.views[0]?.zone ?? document.createElement('div'))[0])).toEqual(
+          ['Poivre de test', '40 g · 1,80 €', '40 g par produit : 20 produits.'],
+        )
+      },
+    )
+
+    it('garde la seconde ligne quand elle dit autre chose que la taille', async () => {
+      const shelf = {
+        '5000002': {
+          label: 'Poivre de test',
+          label2: 'Lot de 2 sachets',
+          content: { value: 40, unit: 'g' as const },
+          price: 180,
+        },
+        '5000003': {
+          label: 'Poivre de test bis',
+          label2: '45 g',
+          content: { value: 40, unit: 'g' as const },
+          price: 180,
+        },
+      }
+      const test = run(pepper(), [() => ({ kind: 'skip' })], {
+        shelf,
+        found: { poivre: ['5000002', '5000003'] },
+      })
+
+      await test.start()
+
+      const [first, second] = rows(test.user.views[0]?.zone ?? document.createElement('div'))
+      expect(linesOf(first)).toContain('Lot de 2 sachets')
+      // Une autre taille n'est pas une répétition : elle reste (le contenu lu et le libellé se contredisent, l'utilisateur le voit)
+      expect(linesOf(second)).toContain('45 g')
+    })
+
+    it('garde la seconde ligne quand le contenu est inconnu : elle est alors la seule à donner la taille', async () => {
+      const shelf = { '5000004': { label: 'Poivre de test', label2: '40 g', price: 180 } }
+      const test = run(pepper(), [() => ({ kind: 'skip' })], {
+        shelf,
+        found: { poivre: ['5000004'] },
+      })
+
+      await test.start()
+
+      expect(linesOf(rows(test.user.views[0]?.zone ?? document.createElement('div'))[0])).toContain(
+        '40 g',
+      )
+    })
+  })
+
   it('montre la quantité demandée en haut de la liste', async () => {
     const test = run(pepper(), [() => ({ kind: 'skip' })])
 
@@ -281,8 +373,9 @@ describe('le contenu est inconnu', () => {
     await test.start()
 
     // Then
+    // L'écran dit aussi ce que la liste demande (« Il vous faut : 800 g. », DRV-626)
     expect(asked).toEqual([
-      { ingredient: 'Poivre', productLabel: 'Mélange mystère de test', packs: null },
+      { ingredient: 'Poivre', productLabel: 'Mélange mystère de test', packs: null, need: '800 g' },
     ])
     expect(test.adapter.calls).toEqual(['find poivre', 'cart 2000004 3'])
     expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', quantity: 3 })

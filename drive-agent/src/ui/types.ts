@@ -4,7 +4,7 @@ import type { ErrorCode, LineStatus, Outcome, Placement } from '../../protocol'
 export interface SummaryLine {
   name: string
   status: LineStatus
-  /** Le produit préféré d'une ligne connue. */
+  /** Le produit habituel d'une ligne connue. */
   detail?: string
 }
 
@@ -39,15 +39,17 @@ export type ProgressPatch = Partial<Omit<ProgressProps, 'log'>> & { entry?: stri
 export interface QuantityProps {
   ingredient: string
   productLabel: string
-  /** Les `packs` du plan, `null` s'il n'y en a pas : le champ propose alors 1. */
+  /** Les `packs` du plan, `null` s'il n'y en a pas : le champ propose alors 1 (et le sélectionne en entier : on tape le nombre par-dessus). */
   packs: number | null
+  /** La quantité que la liste demande, « 200 g » (comme sur l'écran de choix), quand l'étape la connaît (DRV-626). */
+  need?: string | null
 }
 
 /** Ce que l'utilisateur peut faire pendant le choix d'un produit (phase B, DRV-306). */
 export type ChooserAnswer =
   | { kind: 'skip' }
   | { kind: 'have' }
-  /** « Passer les n suivants » (DRV-624) : « Pas cette fois » pour cet article et tous ceux qui restent à choisir, sans rien retenir. */
+  /** « Passer ces n articles » (DRV-624, DRV-626) : « Pas cette fois » pour cet article et tous ceux qui restent à choisir, sans rien retenir. */
   | { kind: 'rest' }
   | { kind: 'cancel' }
   /** Le contenu de la zone a conclu (un produit choisi…) : `value` est défini par DRV-306. */
@@ -59,8 +61,9 @@ export interface ChooserProps {
   position: number
   total: number
   /**
-   * Vrai : un des articles que « Passer les n suivants » passerait (celui-ci compris) n'a encore aucun produit retenu. L'écran demande alors une
-   * confirmation d'une ligne avant de répondre `rest` (DRV-624). Le bouton lui-même est visible dès qu'il reste plus d'un article à choisir.
+   * Vrai : un des articles que « Passer ces n articles » passerait (celui-ci compris) n'a encore aucun produit retenu. L'écran demande alors une
+   * confirmation d'une ligne avant de répondre `rest` (DRV-624) : un écran à deux boutons, sans la liste de produits ni la recherche (DRV-626).
+   * Le bouton lui-même est visible dès qu'il reste plus d'un article à choisir.
    */
   confirmRest?: boolean
   /**

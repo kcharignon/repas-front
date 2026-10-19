@@ -16,8 +16,11 @@ export {
   count,
   formatContent,
   formatMeasure,
+  formatNeeded,
   formatNumber,
   formatPrice,
+  summarySentence,
+  type SummaryCounts,
 } from './strings'
 export { createUi, type UiHandle, type UiOptions } from './ui'
 export type * from './types'

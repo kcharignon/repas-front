@@ -248,7 +248,7 @@ test('annule le passage depuis le choix : la ligne reste à choisir et Repas le 
   expect(fake.cart()).toEqual({})
 })
 
-// —— « Passer les n suivants » (DRV-624) ————————————————————————————————————————————————————————————————————————————————————
+// —— « Passer ces n articles » (DRV-624, DRV-626) ————————————————————————————————————————————————————————————————————————————————————
 
 test('quatre nouveaux articles : choisir le premier, passer les trois suivants (avec la confirmation d’une ligne), rien n’est cherché ni retenu pour eux', async ({
   page,
@@ -278,11 +278,15 @@ test('quatre nouveaux articles : choisir le premier, passer les trois suivants (
     .getByRole('button', { name: 'Choisir' })
     .click()
   await expect(page.locator('.head')).toHaveText('Sel (2 sur 4)')
-  await page.getByRole('button', { name: 'Passer les 3 suivants' }).click()
+  await page.getByRole('button', { name: 'Passer ces 3 articles' }).click()
   // Aucun article n'a encore de produit retenu : une confirmation d'une ligne, rien n'est passé avant
   await expect(page.getByText('Ces 3 articles ne seront pas mis au panier.')).toBeVisible()
+  // L'écran n'a plus que deux boutons : ni la liste de produits (aucun « Choisir » vert dessous), ni la recherche (DRV-626)
+  await expect(page.getByRole('button', { name: 'Choisir' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Chercher', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Revenir au choix' })).toBeVisible()
   expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'cart', 'search'])
-  await page.getByRole('button', { name: 'Passer les 3 suivants' }).click()
+  await page.getByRole('button', { name: 'Passer ces 3 articles' }).click()
   await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
   // Then : un seul produit au panier, deux recherches (poivre, sel) et une écriture, les trois autres sont passés sans produit ni refus
@@ -315,20 +319,21 @@ test('« Revenir au choix » sur la confirmation garde l’article et sa liste, 
     planOf([fresh('poivre', 'Poivre'), fresh('sel', 'Sel')]),
   )
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await page.getByRole('button', { name: 'Passer les 2 suivants' }).click()
+  await page.getByRole('button', { name: 'Passer ces 2 articles' }).click()
   await expect(page.getByText('Ces 2 articles ne seront pas mis au panier.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Choisir' })).toHaveCount(0)
 
   // When
   await page.getByRole('button', { name: 'Revenir au choix' }).click()
 
   // Then : les réponses sont revenues, on peut encore choisir
   await expect(page.getByRole('button', { name: 'Pas cette fois' })).toBeVisible()
-  await expect(page.getByText('Ces 2 articles')).toBeHidden()
+  await expect(page.getByText('Ces 2 articles ne seront pas mis au panier.')).toBeHidden()
   await expect(page.getByRole('button', { name: 'Choisir' }).first()).toBeVisible()
   expect(fake.cart()).toEqual({})
 })
 
-test('trois articles dont le produit habituel est en rupture : « Passer les 3 suivants » passe tout de suite, sans confirmation', async ({
+test('trois articles dont le produit habituel est en rupture : « Passer ces 3 articles » passe tout de suite, sans confirmation', async ({
   page,
   fake,
   agentCode,
@@ -348,7 +353,7 @@ test('trois articles dont le produit habituel est en rupture : « Passer les 3 s
   await expect(page.getByText('Ces produits ne sont plus disponibles')).toBeVisible()
 
   // When
-  await page.getByRole('button', { name: 'Passer les 3 suivants' }).click()
+  await page.getByRole('button', { name: 'Passer ces 3 articles' }).click()
   await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
 
   // Then : rien au panier, rien n'est retenu, aucune question
@@ -381,9 +386,9 @@ test('un produit retenu et disponible n’ouvre jamais l’écran de choix : la 
   await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByRole('button', { name: 'Choisir' }).first()).toBeVisible()
 
-  // Then : l'écran de choix est celui du sel, seul (1 sur 1, pas de « Passer les suivants »), et la farine est déjà au panier
-  await expect(page.locator('.head')).toHaveText('Sel (1 sur 1)')
+  // Then : l'écran de choix est celui du sel, seul (ni « (1 sur 1) », ni « Passer ces n articles »), et la farine est déjà au panier
+  await expect(page.locator('.head')).toHaveText('Sel')
   await expect(page.locator('.head strong')).toHaveText('Sel')
-  await expect(page.getByRole('button', { name: /Passer les/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Passer ces/ })).toHaveCount(0)
   expect(fake.cart()).toEqual({ 1000001: 3 })
 })

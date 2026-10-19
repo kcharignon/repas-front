@@ -16,7 +16,7 @@ import { cleanText } from '../text'
 import {
   formatContent,
   formatMeasure,
-  formatNumber,
+  formatNeeded,
   formatPrice,
   renderPicker,
   S,
@@ -95,23 +95,33 @@ function explain(line: PlanLine, candidate: Candidate): string {
 
 /**
  * Rien n'est encore retenu pour cet article : ni produit habituel devenu indisponible, ni produit à remplacer. Le passer, c'est ne jamais lui
- * choisir de produit : « Passer les n suivants » le fait confirmer (DRV-624).
+ * choisir de produit : « Passer ces n articles » le fait confirmer (DRV-624).
  */
 const isFirstChoice = ({ line, unavailable }: PendingLine): boolean =>
   unavailable.length === 0 && !line.replaces
 
+/** Un libellé sans espaces ni casse, virgule décimale en point : « 40 g », « 40g » et « 40 G » se valent. */
+const squash = (text: string): string =>
+  text
+    .toLowerCase()
+    .replace(/[\s\u00a0\u202f]+/gu, '')
+    .replace(',', '.')
+
 function itemOf(line: PlanLine, candidate: Candidate, refused: ReadonlySet<string>): PickerItem {
   const { content, price, pricePerMeasure, promo } = candidate
+  const size = content ? formatContent(content.value, content.unit) : null
   const details = [
-    content ? formatContent(content.value, content.unit) : null,
+    size,
     price === null ? null : formatPrice(price),
     pricePerMeasure ? formatMeasure(pricePerMeasure.cents, pricePerMeasure.unit) : null,
   ].filter((detail): detail is string => detail !== null)
   const second = cleanText(candidate.label2 ?? '')
+  // La seconde ligne du libellé qui ne fait que redire la taille (« 40 g ») est retirée : la ligne du prix la dit déjà (DRV-626).
+  const repeatsSize = size !== null && squash(second) === squash(size)
   return {
     id: candidate.id,
     name: cleanText(candidate.label) || S.picker.noLabel(candidate.id),
-    label2: second === '' ? null : second,
+    label2: second === '' || repeatsSize ? null : second,
     details,
     promo: promo === null ? null : S.picker.promo(formatPrice(promo)),
     explain: explain(line, candidate),
@@ -187,9 +197,7 @@ async function settleLine(
         const picker = renderPicker(
           zone,
           {
-            need: line.needed
-              ? `${formatNumber(line.needed.quantity)} ${line.needed.unitSymbol}`
-              : null,
+            need: formatNeeded(line.needed),
             replaces: line.replaces?.label ?? null,
             gone: unavailable,
             checked: never,
@@ -249,6 +257,7 @@ async function settleLine(
         ingredient: line.name,
         productLabel: labelOf(candidate),
         packs: computed.packs,
+        need: formatNeeded(line.needed),
       })
       if (packs === null) continue
     }
@@ -301,7 +310,7 @@ async function settleLine(
 }
 
 /**
- * La phase B de l'agent : les lignes à choisir, une à la fois, dans l'ordre du plan. « Passer les suivants » passe la ligne affichée et toutes
+ * La phase B de l'agent : les lignes à choisir, une à la fois, dans l'ordre du plan. « Passer ces n articles » passe la ligne affichée et toutes
  * celles qui restent : une issue `SKIPPED` chacune, comme « Pas cette fois », donc rien n'est retenu (ni « j'en ai toujours », ni refus).
  */
 export const guidedChoice: PhaseB = async (context) => {
