@@ -81,7 +81,7 @@ describe('aide et installation de l’application', () => {
     const { wrapper } = await open()
 
     expect(wrapper.find('#connexion-leclerc').text()).toContain(
-      'Connecte-toi à ton compte E.Leclerc',
+      'connecte-toi à ton compte E.Leclerc',
     )
     expect(wrapper.find('#connexion-leclerc a[href="/drive/reglages"]').text()).toBe(
       'Réglages du drive',
@@ -90,6 +90,29 @@ describe('aide et installation de l’application', () => {
     expect(wrapper.find('#mise-a-jour').text()).toContain('installe-la par-dessus')
     expect(wrapper.find('#desinstaller').text()).toContain('Désinstaller')
     expect(wrapper.find('#ancienne-icone').text()).toContain('ancienne icône')
+  })
+
+  it('Leclerc veut un magasin avant la connexion : le mode d’emploi dit le magasin d’abord, la connexion ensuite', async () => {
+    const { wrapper } = await open()
+
+    // Les étapes de la première connexion, dans l'ordre : le magasin, l'ouverture du drive, puis la connexion.
+    const steps = wrapper.findAll('#connexion-leclerc li').map((step) => step.text())
+    const store = steps.findIndex((step) => /magasin/i.test(step))
+    const login = steps.findIndex((step) => /connecte-toi/i.test(step))
+    expect(store).toBe(0)
+    expect(login).toBeGreaterThan(store)
+    expect(steps[login]).toContain('Une fois ton magasin ouvert')
+    // Le dépannage de la connexion renvoie d'abord au choix du magasin, puis à la connexion
+    const help =
+      wrapper
+        .findAll('#depannage details')
+        .find((item) => item.find('summary').text() === 'Je n’arrive pas à me connecter à Leclerc')
+        ?.text() ?? ''
+    expect(help).toContain('sélectionner un Drive')
+    expect(help.indexOf('choisis d’abord ton magasin')).toBeGreaterThan(-1)
+    expect(help.indexOf('choisis d’abord ton magasin')).toBeLessThan(
+      help.indexOf('puis connecte-toi'),
+    )
   })
 
   it('le dépannage est repliable et couvre l’installation, Play Protect, Leclerc et le mode assisté', async () => {

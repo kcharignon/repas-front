@@ -158,16 +158,26 @@ class DrivePass(
  * « Commencer mes courses » ([OPEN], sans alarme : c'est l'attente normale) ; si le site refuse la page, tarde ou n'a pas d'agent ([PLAN],
  * [VERIFICATION]), le bouton « Ouvrir l'accueil du drive » recharge cette page de départ ([PassRequest.startUrl]). Dès que l'utilisateur est sur une
  * page de magasin, le message du passage part tout seul vers l'agent.
+ *
+ * L'ordre que Leclerc impose : un magasin d'abord, la connexion ensuite (« Avant de vous authentifier, veuillez sélectionner un Drive. »). Aucun
+ * de ces messages ne parle donc de connexion avant le magasin ; la connexion n'est demandée que par l'agent, quand elle manque. Si la page de
+ * connexion s'affiche avant tout magasin ([NavigationPolicy.isLoginPage]), [STORE_FIRST] ramène au choix du magasin.
  */
 enum class StoreBanner {
     /** Pas de passage, ou la page est celle d'un magasin : rien à dire. */
     NONE,
 
-    /** Lecture du magasin (`drive.setup`) : se connecter puis choisir son magasin. */
+    /** Lecture du magasin (`drive.setup`) : choisir son magasin, puis toucher « Utiliser ce magasin ». Rien sur la connexion : Leclerc veut le magasin d'abord. */
     SETUP,
 
     /** Envoi d'un plan, accueil du magasin ou autre page qui n'en est pas une : toucher « Commencer mes courses » pour ouvrir son magasin. Pas de bouton. */
     OPEN,
+
+    /**
+     * La page de connexion de Leclerc s'affiche avant qu'un magasin soit ouvert ([NavigationPolicy.isLoginPage]), pour un envoi comme pour la
+     * lecture du magasin : Leclerc refuserait la connexion (« veuillez sélectionner un Drive »). Le message ramène au choix du magasin. Pas de bouton.
+     */
+    STORE_FIRST,
 
     /** Envoi d'un plan : « Cette page n'est pas celle de ton magasin » (page refusée, trop lente ou sans agent), avec le bouton « Ouvrir l'accueil du drive ». */
     PLAN,
@@ -193,6 +203,7 @@ enum class StoreBanner {
             request.isSetup -> when {
                 trouble == PageTrouble.NONE && NavigationPolicy.isMobileSite(url) -> MOBILE
                 NavigationPolicy.isStorePage(url) && trouble == PageTrouble.NONE -> NONE
+                trouble == PageTrouble.NONE && NavigationPolicy.isLoginPage(url) -> STORE_FIRST
                 else -> SETUP
             }
             trouble != PageTrouble.NONE -> PLAN
@@ -200,6 +211,8 @@ enum class StoreBanner {
             NavigationPolicy.isStorePage(url) -> NONE
             // L'accueil de l'enseigne : l'agent y suit « Commencer mes courses » ou dit lui-même de le toucher (DRV-625), le bandeau se tait.
             NavigationPolicy.isHomePage(url) -> NONE
+            // La connexion avant tout magasin : Leclerc la refuse, le message ramène au choix du magasin.
+            NavigationPolicy.isLoginPage(url) -> STORE_FIRST
             else -> OPEN
         }
     }

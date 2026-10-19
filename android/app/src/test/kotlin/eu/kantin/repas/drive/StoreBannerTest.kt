@@ -39,11 +39,35 @@ class StoreBannerTest {
      */
     @Test
     fun `sur l'accueil du magasin ou toute page qui n'en est pas une, un plan dit d'ouvrir son magasin, sans alarme ni bouton`() {
-        listOf(storeRoot, login, null, "https://courses-test.leclercdrive.fr/autre-page").forEach {
+        listOf(storeRoot, null, "https://courses-test.leclercdrive.fr/autre-page").forEach {
             assertEquals(it, StoreBanner.OPEN, StoreBanner.of(plan, it))
             assertEquals(it, StoreBanner.OPEN, StoreBanner.of(plan, it, PageTrouble.NONE))
         }
         assertFalse(StoreBanner.OPEN.hasAction)
+    }
+
+    /**
+     * Recette réelle (2026-10-19) : Leclerc exige un magasin choisi AVANT la connexion (« Avant de vous authentifier, veuillez sélectionner un
+     * Drive. »). Si la page de connexion s'affiche avant tout magasin, pour un envoi comme pour la lecture du magasin, le message ramène au choix
+     * du magasin ; il ne parle pas de connexion et ne porte pas de bouton. Une page refusée ou une vérification gardent leur propre message.
+     */
+    @Test
+    fun `la page de connexion avant tout magasin ramene au choix du magasin, pour un envoi comme pour la lecture du magasin`() {
+        listOf(login, "https://www.leclercdrive.fr/connexion").forEach {
+            assertEquals(it, StoreBanner.STORE_FIRST, StoreBanner.of(plan, it))
+            assertEquals(it, StoreBanner.STORE_FIRST, StoreBanner.of(setup, it))
+            assertEquals(it, StoreBanner.STORE_FIRST, StoreBanner.of(setup, it, PageTrouble.NONE))
+            assertEquals(it, StoreBanner.PLAN, StoreBanner.of(plan, it, PageTrouble.HTTP_ERROR))
+            assertEquals(it, StoreBanner.SETUP, StoreBanner.of(setup, it, PageTrouble.HTTP_ERROR))
+            assertEquals(it, StoreBanner.VERIFICATION, StoreBanner.of(plan, it, PageTrouble.VERIFICATION))
+            // Sans passage en cours, rien à dire
+            assertEquals(it, StoreBanner.NONE, StoreBanner.of(null, it))
+        }
+        assertFalse(StoreBanner.STORE_FIRST.hasAction)
+        // Sous le chemin d'un magasin, un magasin est ouvert : rien à dire pour la lecture, l'agent a la main pour un envoi.
+        val inStore = "https://courses-test.leclercdrive.fr/magasin-000000-000000-Ville-Test/connexion.aspx"
+        assertEquals(StoreBanner.NONE, StoreBanner.of(setup, inStore))
+        assertEquals(StoreBanner.NONE, StoreBanner.of(plan, inStore))
     }
 
     /** DRV-625 : sur l'accueil de l'enseigne, l'agent suit lui-même « Commencer mes courses » (ou dit de le toucher) : le bandeau de l'application se tait. */
@@ -70,7 +94,7 @@ class StoreBannerTest {
         assertTrue(StoreBanner.PLAN.hasAction)
         assertTrue(StoreBanner.VERIFICATION.hasAction)
         assertTrue(StoreBanner.MOBILE.hasAction)
-        listOf(StoreBanner.NONE, StoreBanner.SETUP, StoreBanner.OPEN).forEach { assertFalse(it.name, it.hasAction) }
+        listOf(StoreBanner.NONE, StoreBanner.SETUP, StoreBanner.OPEN, StoreBanner.STORE_FIRST).forEach { assertFalse(it.name, it.hasAction) }
     }
 
     /**
@@ -100,8 +124,8 @@ class StoreBannerTest {
     }
 
     @Test
-    fun `une lecture du magasin dit de se connecter et de choisir son magasin tant que la page n'en est pas un`() {
-        listOf(enseigne, storeRoot, login, null).forEach { assertEquals(it, StoreBanner.SETUP, StoreBanner.of(setup, it)) }
+    fun `une lecture du magasin dit de choisir son magasin tant que la page n'en est pas un`() {
+        listOf(enseigne, storeRoot, null).forEach { assertEquals(it, StoreBanner.SETUP, StoreBanner.of(setup, it)) }
         assertEquals(StoreBanner.NONE, StoreBanner.of(setup, storePage))
     }
 

@@ -801,7 +801,7 @@ export default {
         'La première fois, Repas te demande de choisir ton magasin dans les réglages du drive : suis les indications de cet écran.',
       open: 'Ouvre une liste, touche « Envoyer au drive » puis « Ouvrir le drive ». Le site de Leclerc s’affiche dans l’application.',
       login:
-        'Connecte-toi à ton compte E.Leclerc, comme sur le site. Si Leclerc t’envoie un code par e-mail, saisis-le.',
+        'Une fois ton magasin ouvert, connecte-toi à ton compte E.Leclerc, comme sur le site. Si Leclerc t’envoie un code par e-mail, saisis-le.',
       kept: 'Si Leclerc te redemande un jour de te connecter, fais-le de la même façon.',
       settings: 'Réglages du drive',
     },
@@ -838,7 +838,7 @@ export default {
       },
       login: {
         q: 'Je n’arrive pas à me connecter à Leclerc',
-        a: 'Vérifie d’abord que tu peux te connecter au site de Leclerc dans un navigateur. Si l’application ne te reconnaît plus : dans l’écran du drive, « Menu », puis « Se déconnecter de Leclerc », et reconnecte-toi.',
+        a: 'Si Leclerc dit de sélectionner un Drive, choisis d’abord ton magasin, puis connecte-toi. Vérifie aussi que tu peux te connecter au site de Leclerc dans un navigateur. Si l’application ne te reconnaît plus : dans l’écran du drive, « Menu », puis « Se déconnecter de Leclerc », et reconnecte-toi.',
       },
       changed: {
         q: '« Le site a changé » ou « Leclerc a changé »',

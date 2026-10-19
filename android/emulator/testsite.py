@@ -14,6 +14,8 @@ Selon le nom demandé (en-tête Host) :
                                                 qui y sert l'accueil du magasin et son bouton « Commencer mes courses » (qui mène à une page de magasin
                                                 avec sa ville sur courses-test.leclercdrive.fr) ; la racine de courses-test, elle, y est une page 404
                                                 (recette réelle du 2026-10-18 : la racine de l'hôte d'un magasin est une page 404 du vrai site)
+                                              dans les deux modes, GET /connexion.aspx : la page de connexion hors d'un magasin, qui dit comme le vrai
+                                                site « Avant de vous authentifier, veuillez sélectionner un Drive. » (scénario 1b de e2e.sh)
   autre *.leclercdrive.fr (le faux drive)     comme www en mode « test » : GET / et GET /magasin-… : la page de test testpage.html ; le reste, 404
 Pour tous les noms :
   POST /__report      la page y dépose ce qu'elle a relevé (JSON, 8 Ko au plus) ; les tests de l'émulateur le relisent
@@ -47,6 +49,14 @@ FAKE_LECLERC_HOSTS = {"courses-test.leclercdrive.fr"}
 HOME_HOST = "www.leclercdrive.fr"
 WWW_MODES = ("test", "fake")
 state = {"www": "test"}
+# La page de connexion de l'enseigne, hors d'un magasin (dans les deux modes) : le vrai site exige un magasin choisi AVANT la connexion et le dit
+# (« Avant de vous authentifier, veuillez sélectionner un Drive. »). Sert au scénario 1b de e2e.sh : « Se connecter » touché trop tôt.
+LOGIN_PATH = "/connexion.aspx"
+LOGIN_PAGE = (
+    '<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Connexion (faux site de test)</title></head>'
+    "<body><h1>Connexion</h1>"
+    '<p style="color:#b00020">Avant de vous authentifier, veuillez sélectionner un Drive.</p></body></html>'
+).encode()
 MAX_PROXY_BYTES = 64 * 1024
 HOP_BY_HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers", "transfer-encoding", "upgrade",
               "host", "content-length", "date", "server"}
@@ -108,7 +118,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
-        if self._is_fake_leclerc(path):
+        if self._host() == HOME_HOST and path == LOGIN_PATH:
+            self._send(200, LOGIN_PAGE, "text/html; charset=utf-8")
+        elif self._is_fake_leclerc(path):
             self._relay()
         elif path == "/__reports":
             with lock:
