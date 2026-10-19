@@ -35,12 +35,12 @@ test('un passage réussi : retour automatique, choix enregistrés en un appel, r
 
   // Le récapitulatif : une phrase, les compteurs qui existent (jamais « Échecs » ni « Prix lus »), un seul bouton principal
   await expect(
-    page.getByText('Tes produits sont dans le panier Leclerc : il reste à le finaliser.'),
+    page.getByText('Ton panier est prêt. Retrouve-le dans l’appli Drive Leclerc.'),
   ).toBeVisible()
   await expect(page.getByLabel('Récapitulatif de l’envoi')).not.toContainText(
     /Échecs|Prix lus|\b0\b/,
   )
-  await expect(page.getByRole('link', { name: /^Finaliser sur Leclerc/ })).toHaveClass(/bg-primary/)
+  await expect(page.getByRole('button', { name: 'Terminer la liste' })).toHaveClass(/bg-primary/)
   await expect(page.locator('main a.bg-primary, main button.bg-primary')).toHaveCount(1)
 
   // Les détails sont repliés : chaque article, produit de secours signalé
@@ -50,11 +50,9 @@ test('un passage réussi : retour automatique, choix enregistrés en un appel, r
   await expect(farine).toContainText('produit habituel : Repas s’en souvient')
   await expect(page.getByRole('listitem').filter({ hasText: 'Beurre' })).toContainText('1,89')
   await expect(page.getByText(/vidé/)).toHaveCount(0)
-  // Dans l'application, « Finaliser sur Leclerc » ouvre le magasin dans l’application (même fenêtre), pas le navigateur ;
-  // la ville du chemin, l’application la complète, et ne va jamais à detail-panier (DRV-631)
-  const finalize = page.getByRole('link', { name: /^Finaliser sur Leclerc/ })
-  await expect(finalize).toHaveAttribute('href', /^https:\/\/[a-z0-9.-]+\/magasin-\d+-\d+$/)
-  await expect(finalize).not.toHaveAttribute('target', /.+/)
+  // Plus de lien vers le site de Leclerc : le panier se retrouve dans l’appli officielle (DRV-645)
+  await expect(page.getByRole('link', { name: /Finaliser/ })).toHaveCount(0)
+  await expect(page.locator('main a[href^="http"]')).toHaveCount(0)
 
   // Le brouillon est effacé : l'écran d'envoi ne montre plus d'attente
   expect(await page.evaluate(() => localStorage.getItem('repas.drive.run'))).toBeNull()
