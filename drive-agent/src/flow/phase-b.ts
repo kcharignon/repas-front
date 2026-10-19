@@ -27,6 +27,7 @@ import {
   formatPrice,
   renderPicker,
   S,
+  type AisleRow,
   type PickerItem,
 } from '../ui'
 import { putInCart } from './keep-cart'
@@ -62,6 +63,8 @@ interface Search {
   candidates: Candidate[]
   /** Un message à montrer une fois (le site ne répond pas, le panier a refusé…). */
   notice: string | null
+  /** La rangée de filtres par rayon du site (DRV-647) et le rayon choisi : recalculée à chaque recherche, gardée quand l'écran se rouvre. */
+  aisles: AisleRow
 }
 
 /** Ce que la liste de produits rend à l'écran de choix. */
@@ -160,6 +163,43 @@ function itemOf(line: PlanLine, candidate: Candidate, refused: ReadonlySet<strin
     photo: candidate.imageUrl,
     explain: explain(line, candidate),
     state: refused.has(candidate.id) ? 'refused' : saysOutOfStock(candidate) ? 'out' : 'ok',
+    aisle: catalogId(candidate.aisle),
+  }
+}
+
+/**
+ * La rangée de filtres d'une recherche (DRV-647) : les rayons présents, du plus fourni au moins fourni, avec leur libellé du site (l'adaptateur le
+ * lit dans ce qui est déjà reçu) ; un rayon sans libellé lisible devient « Rayon 1 », « Rayon 2 »…, jamais un identifiant nu. Le premier rayon appris
+ * (`rayonHints`, DRV-642) qui est présent est choisi d'avance et placé juste après « Tous » ; sinon « Tous ». Aucune requête.
+ */
+export function aisleRowOf(
+  adapter: Pick<RetailerAdapter, 'aisleChoices'>,
+  candidates: readonly Candidate[],
+  hints: readonly number[] | undefined,
+): AisleRow {
+  let choices: ReturnType<RetailerAdapter['aisleChoices']> = []
+  try {
+    choices = adapter.aisleChoices(candidates)
+  } catch {
+    // Un libellé illisible ne doit jamais empêcher de choisir : pas de rangée.
+  }
+  let rank = 0
+  const chips = choices.map(({ id, label, count }) => ({
+    id,
+    count,
+    label: label ?? S.picker.aisleFallback(++rank),
+  }))
+  const learned = (hints ?? [])
+    .map((hint) => catalogId(hint))
+    .find((id) => id !== null && chips.some((chip) => chip.id === id))
+  if (learned === undefined || learned === null) return { chips, selected: null }
+  // Le rayon appris passe juste après « Tous » : choisi d'avance, il se voit sans faire défiler la rangée, et « Tous » reste à un toucher.
+  return {
+    chips: [
+      ...chips.filter((chip) => chip.id === learned),
+      ...chips.filter((chip) => chip.id !== learned),
+    ],
+    selected: learned,
   }
 }
 
@@ -186,6 +226,7 @@ async function load(
     search.asked = found.query === query ? null : query
     // Les rayons conseillés d'abord (DRV-642), AVANT le plafond : un produit d'un rayon conseillé ne tombe jamais sous le plafond au profit d'un autre.
     search.candidates = rankByAisle(found.candidates, hints).slice(0, MAX_CANDIDATES)
+    search.aisles = aisleRowOf(adapter, search.candidates, hints)
     search.notice = null
   } catch (error) {
     if (!(error instanceof LeclercError) || error.code !== 'NETWORK') throw error
@@ -221,7 +262,13 @@ async function settleLine(
   const slug = line.ingredientSlug
   const refused = new Set((line.rejected ?? []).map((product) => product.id))
   const never = new Set<string>()
-  const search: Search = { query: '', asked: null, candidates: [], notice: null }
+  const search: Search = {
+    query: '',
+    asked: null,
+    candidates: [],
+    notice: null,
+    aisles: { chips: [], selected: null },
+  }
   const items = () => search.candidates.map((candidate) => itemOf(line, candidate, refused))
   /** Les produits indisponibles dont l'utilisateur ne veut plus jamais : ils partent avec l'issue de la ligne, quelle qu'elle soit. */
   const rejected = () => {
@@ -257,16 +304,20 @@ async function settleLine(
             asked: search.asked,
             items: items(),
             notice,
+            aisles: search.aisles,
           },
           {
             choose: (id) => conclude({ type: 'choose', id } satisfies Picked),
             never: (id, on) => void (on ? never.add(id) : never.delete(id)),
+            aisle: (id) => {
+              search.aisles = { ...search.aisles, selected: id }
+            },
             search: (query) => {
               picker.busy(S.picker.searching)
               load(search, adapter, query, line.rayonHints).then(
                 () => {
                   if (!live) return
-                  picker.results(search.query, items(), search.notice, search.asked)
+                  picker.results(search.query, items(), search.notice, search.asked, search.aisles)
                   picker.busy(null)
                 },
                 (error: unknown) => {

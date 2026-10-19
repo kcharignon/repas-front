@@ -38,6 +38,7 @@ const SCREENS = [
   'chooser-single',
   'chooser-gone',
   'chooser-long',
+  'chooser-aisles',
   'placement',
   'placement-text',
   'store',

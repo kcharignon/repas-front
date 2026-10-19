@@ -3,7 +3,11 @@
 // mots fixes. Jamais une valeur du site : un libellé, un cookie, un numéro de magasin, une ville, une adresse. Les phrases sont dans `ui/strings.ts`.
 // Seule exception (DRV-647, étape 0) : le libellé d'un lien de RAYON du menu de la page, texte du catalogue public, nettoyé, borné et écarté s'il
 // ressemble à une donnée (`safeAisleLabel` de l'adaptateur), et les identifiants de rayon et de famille (des nombres).
+// Étape 1 (DRV-647) : le libellé résolu de chaque rayon et les textes du rayon du premier produit (catalogue public, rendus sûrs par l'adaptateur :
+// ni numéro de magasin, ni ville, ni e-mail).
 import type {
+  AisleChoice,
+  AisleLabelSource,
   AisleMenuFacts,
   ArrivalFacts,
   AttemptFacts,
@@ -12,8 +16,10 @@ import type {
   LeclercCause,
   LeclercErrorCode,
   LinkFacts,
+  NamedObjectKeys,
   ReplyFacts,
   SearchFacts,
+  ShownText,
   VocabularyKey,
 } from '../leclerc'
 import { MAX_MENU_AISLES } from '../leclerc'
@@ -50,6 +56,8 @@ export interface ProbeFacts {
   aisleMenu?: AisleMenuFacts | null
   /** La structure d'une réponse de recherche (DRV-647) : le mot cherché, les noms de ses clés. */
   reply?: { term: string; facts: ReplyFacts } | null
+  /** Étape 1 (DRV-647) : les rayons les plus fournis de la première recherche d'essai, leur libellé résolu et sa source (8 au plus). */
+  aisleLabels?: { term: string; choices: readonly AisleChoice[] } | null
   /** Pourquoi le dernier envoi n'a pas mis des produits habituels au panier (DRV-635), dans l'ordre du passage. */
   lastPass?: readonly LastReason[]
   /** Ce que le panier a répondu aux produits choisis qu'il n'a pas pris, au dernier envoi (DRV-644). */
@@ -382,9 +390,65 @@ function coverageLine(
   return P.coverage(kind, term, found, seen.length, missing.join(', '))
 }
 
+const SOURCE_FIELDS: Record<NonNullable<AisleLabelSource>, string> = {
+  NAVIGATE: 'sLibelleUrlNaviguerRayon',
+  URL: 'sUrlVoirRayon',
+  CATEGORY: 'sCategorie',
+  REPLY: 'objet de rayon de la réponse',
+  PAGE: 'objet de rayon de la page',
+}
+
+const shownText = (shown: ShownText): string =>
+  shown.kind === 'ABSENT' ? P.absent : shown.kind === 'HIDDEN' ? P.hidden : `« ${shown.text} »`
+
+const namedKeysText = (keys: NamedObjectKeys | null | undefined): string =>
+  keys === null || keys === undefined
+    ? P.absent
+    : `${keys.kind === 'LIST' ? P.listOf(keys.size ?? 0) : P.object} ; ${keys.total} clés : ${keysText(keys.keys)}`
+
+/**
+ * Le relevé DRV-647, étape 1 : le libellé résolu de chaque rayon le plus fourni de la première recherche d'essai et sa source, les textes du rayon du
+ * premier produit (rendus sûrs par l'adaptateur), les NOMS des clés d'un `objFiltreBloc` et de `objNavigationRayonFamille`.
+ */
+function labelLines(probes: ProbeFacts): string[] {
+  const lines: string[] = []
+  const labels = probes.aisleLabels
+  if (labels) {
+    let rank = 0
+    for (const { id, label, count, source } of labels.choices) {
+      lines.push(
+        label === null || source === null
+          ? P.aisleLabelNone(id, count, S.picker.aisleFallback(++rank))
+          : P.aisleLabel(id, count, label, SOURCE_FIELDS[source]),
+      )
+    }
+  }
+  const facts = probes.reply?.facts
+  if (facts && probes.reply) {
+    const { term } = probes.reply
+    if (facts.firstAisleTexts) {
+      const { navigate, url, category } = facts.firstAisleTexts
+      lines.push(P.firstAisleText(term, 'sLibelleUrlNaviguerRayon', shownText(navigate)))
+      lines.push(P.firstAisleText(term, 'sUrlVoirRayon', shownText(url)))
+      lines.push(P.firstAisleText(term, 'sCategorie', shownText(category)))
+    }
+    if (facts.filterBlock !== undefined) {
+      lines.push(
+        P.namedKeys(`réponse « ${term} »`, 'objFiltreBloc', namedKeysText(facts.filterBlock)),
+      )
+    }
+    if (facts.pageNavigation !== undefined) {
+      lines.push(
+        P.namedKeys('page', 'objNavigationRayonFamille', namedKeysText(facts.pageNavigation)),
+      )
+    }
+  }
+  return lines
+}
+
 /** Le relevé DRV-647 : menu de la page, structure de la réponse, et correspondance des rayons de la première recherche d'essai avec le menu. */
 function aisleSourceLines(probes: ProbeFacts): string[] {
-  const lines: string[] = []
+  const lines: string[] = [...labelLines(probes)]
   if (probes.aisleMenu) lines.push(...menuLines(probes.aisleMenu))
   if (probes.reply) lines.push(...replyLines(probes.reply.term, probes.reply.facts))
   const first = probes.shelves?.[0]

@@ -7,7 +7,14 @@ import {
   type CartProductFacts,
 } from './cart'
 import { aisleMenuFacts, type AisleMenuFacts, type PageLinks, readPageLinks } from './aisle-menu'
+import {
+  aisleChoices,
+  shownAisleTexts,
+  type AisleChoice,
+  type ShownAisleTexts,
+} from './aisle-labels'
 import { type Candidate, toCandidate } from './candidate'
+import { extractProducts } from './embedded'
 import { httpCause } from './causes'
 import {
   entryFacts,
@@ -32,7 +39,15 @@ import {
   pagePhrases,
   type SearchFacts,
 } from './probe'
-import { aisleVocabulary, replyShape, type ReplyShape, type VocabularyKey } from './reply-shape'
+import {
+  aisleVocabulary,
+  facetLabels,
+  namedObjectKeys,
+  replyShape,
+  type NamedObjectKeys,
+  type ReplyShape,
+  type VocabularyKey,
+} from './reply-shape'
 import { readSearchPage } from './search-page'
 import {
   applicable,
@@ -131,12 +146,22 @@ export interface RetailerAdapter {
    * jusqu'aux produits, clés qui parlent de rayon ou de filtre. Aucune requête ; `null` avant toute recherche ou sans produit.
    */
   describeLastReply(): ReplyFacts | null
+  /**
+   * Les rayons présents dans ces produits (DRV-647, étape 1), du plus fourni au moins fourni : identifiant, libellé du site (`null` s'il n'en a pas de
+   * lisible) et nombre de produits. Lu dans ce qui est déjà reçu (les produits, la dernière réponse, la page) : aucune requête.
+   */
+  aisleChoices(candidates: readonly Candidate[]): AisleChoice[]
 }
 
 /** Ce que la dernière réponse de recherche laisse voir de sa structure (DRV-647) : des noms de clés et des nombres. */
 export interface ReplyFacts {
   shape: ReplyShape | null
   vocabulary: VocabularyKey[]
+  /** Étape 1 : les textes du rayon du premier produit (valeurs du catalogue, rendues sûres par le diagnostic), `null` sans produit. */
+  firstAisleTexts?: ShownAisleTexts | null
+  /** Les NOMS des clés d'un `objFiltreBloc` de la réponse et du premier niveau de `objNavigationRayonFamille` de la page. */
+  filterBlock?: NamedObjectKeys | null
+  pageNavigation?: NamedObjectKeys | null
 }
 
 export interface LeclercDeps extends PacerDeps {
@@ -163,6 +188,8 @@ export interface LeclercDeps extends PacerDeps {
 export const ENTRY_WAIT_MS = 15_000
 
 const PRODUCT_ID = /^[0-9]{1,12}$/
+/** La ville du chemin du magasin (`/magasin-N-N-<Ville>`) : un libellé de rayon qui la porte est écarté. */
+const STORE_CITY = /^\/magasin-\d{1,12}-\d{1,12}-([^/?#]+)/i
 /** Une redirection vers une page de connexion. */
 const LOGIN_PATH = /connexion|identif|login|authent/i
 
@@ -180,6 +207,10 @@ export class LeclercAdapter implements RetailerAdapter {
   private facts: SearchFacts | null = null
   /** Le texte de la dernière réponse de recherche, gardé en mémoire seulement pour `describeLastReply` (remplacé à chaque recherche). */
   private lastReplyText: string | null = null
+  /** Les libellés de rayon lus hors des produits dans la dernière réponse (DRV-647), calculés une fois par réponse, à la demande. */
+  private replyFacets: { text: string; labels: Map<number, string[]> } | null = null
+  /** Ceux de la page (DRV-647) : la page ne change pas pendant la vie de l'agent, ils sont lus une fois, à la demande. */
+  private pageFacets: Map<number, string[]> | null = null
   /** L'adresse que `readEntry` a vérifiée en dernier, `null` sans lien sûr : la seule que `followEntry` suive. */
   private entryUrl: string | null = null
   /** Le bouton que `readEntry` a trouvé en dernier, `null` sans bouton : le seul que `followEntry` clique. */
@@ -376,7 +407,45 @@ export class LeclercAdapter implements RetailerAdapter {
   describeLastReply(): ReplyFacts | null {
     const text = this.lastReplyText
     if (text === null) return null
-    return { shape: replyShape(text), vocabulary: aisleVocabulary(text) }
+    let pageNavigation: NamedObjectKeys | null = null
+    try {
+      pageNavigation = namedObjectKeys(this.deps.pageText(), 'objNavigationRayonFamille')
+    } catch {
+      // La page ne se laisse pas lire.
+    }
+    const firstProduct = extractProducts(text).products[0]
+    return {
+      shape: replyShape(text),
+      vocabulary: aisleVocabulary(text),
+      firstAisleTexts:
+        firstProduct === undefined ? null : shownAisleTexts(firstProduct.aisleTexts, this.city()),
+      filterBlock: namedObjectKeys(text, 'objFiltreBloc'),
+      pageNavigation,
+    }
+  }
+
+  /** La ville du chemin de la page (`/magasin-N-N-<Ville>`), `null` sans elle. */
+  private city(): string | null {
+    return STORE_CITY.exec(this.deps.location.pathname)?.[1] ?? null
+  }
+
+  aisleChoices(candidates: readonly Candidate[]): AisleChoice[] {
+    const text = this.lastReplyText
+    if (text !== null && this.replyFacets?.text !== text) {
+      this.replyFacets = { text, labels: facetLabels(text) }
+    }
+    if (this.pageFacets === null) {
+      try {
+        this.pageFacets = facetLabels(this.deps.pageText())
+      } catch {
+        this.pageFacets = new Map()
+      }
+    }
+    return aisleChoices(candidates, {
+      city: this.city(),
+      ...(this.replyFacets && text !== null && { reply: this.replyFacets.labels }),
+      page: this.pageFacets,
+    })
   }
 
   async exploreSearchVariants(query: string): Promise<AttemptFacts[]> {

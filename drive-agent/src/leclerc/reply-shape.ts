@@ -3,7 +3,7 @@
 // produits (une liste de filtres, de facettes ?). Règle du diagnostic (`probe.ts`) : jamais une valeur du site, sauf le rayon et la famille d'un produit
 // (des nombres). Un nom de clé qui n'a pas le style des noms du site (`sLibelle`, `lstProduits`) n'est pas écrit : il peut être une donnée (une ville, une
 // recherche récente) ; il est remplacé par `?`.
-import { pageReadings } from './embedded'
+import { decodeJsString, pageReadings } from './embedded'
 
 /** Le style des noms du site : une à trois lettres minuscules, puis une majuscule (`bClientConnecte`, `iIdRayon`, `sLibelleLigne1`, `lstProduits`). */
 export const SITE_STYLE = /^[a-z]{1,3}[A-Z][A-Za-z0-9]{1,40}$/
@@ -277,4 +277,93 @@ export function aisleVocabulary(page: string): VocabularyKey[] {
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
     .slice(0, MAX_VOCABULARY)
+}
+
+/** Les clés d'un objet nommé de l'état (DRV-647) : sa sorte, le nombre d'éléments d'une liste, et les NOMS des clés (de l'objet, ou de son premier élément). */
+export interface NamedObjectKeys {
+  kind: 'LIST' | 'OBJECT'
+  size?: number
+  keys: KeyShape[]
+  total: number
+}
+
+/**
+ * Les NOMS des clés du premier objet `[name]` de [page] (`objFiltreBloc`, `objNavigationRayonFamille`) : ses clés directes, ou, pour une liste, celles de
+ * son premier élément. `null` s'il n'y est pas. Jamais une valeur.
+ */
+export function namedObjectKeys(page: string, name: string): NamedObjectKeys | null {
+  if (!KEY_NAME.test(name)) return null
+  const pattern = new RegExp(`"${name}"\\s*:\\s*([[{])`)
+  for (const text of pageReadings(page)) {
+    const found = pattern.exec(text)
+    if (found === null) continue
+    const open = found.index + found[0].length - 1
+    const close = closing(text, open)
+    if (close < 0) return null
+    let object: { start: number; end: number } | null = { start: open, end: close }
+    let size: number | undefined
+    if (found[1] === '[') {
+      size = itemsOf(text, open, close)
+      const first = /^\[\s*\{/.exec(text.slice(open, open + 200))
+      const start = first === null ? -1 : open + first[0].length - 1
+      const end = start < 0 ? -1 : closing(text, start)
+      object = end < 0 ? null : { start, end }
+    }
+    const entries = object === null ? [] : entriesOf(text, object.start, object.end)
+    return {
+      kind: found[1] === '[' ? 'LIST' : 'OBJECT',
+      ...(size !== undefined && { size }),
+      keys: entries.slice(0, MAX_SHAPE_KEYS).map(shapeOf),
+      total: entries.length,
+    }
+  }
+  return null
+}
+
+/** Les clés d'un libellé de rayon dans un objet de filtre ou de navigation (DRV-647) : une liste fermée, aucune n'est mesurée. */
+const FACET_LABEL_KEYS = [
+  'sLibelleRayon',
+  'sLibelle',
+  'sNomRayon',
+  'sLibelleFiltre',
+  'sNom',
+] as const
+/** Au plus autant d'objets de rayon lus. */
+const MAX_FACETS = 2000
+
+/**
+ * Les libellés de rayon que l'état de [page] porte HORS des produits (DRV-647, source 4 : une facette de `objFiltreBloc`, un nœud de
+ * `objNavigationRayonFamille`) : un objet qui a lui-même une clé `iIdRayon` numérique et une clé de libellé de [FACET_LABEL_KEYS], sans `iIdProduit`
+ * (le libellé d'un produit n'est jamais pris pour celui de son rayon). Par rayon, les textes lus (bruts, décodés), dans l'ordre de la page.
+ */
+export function facetLabels(page: string): Map<number, string[]> {
+  const labels = new Map<number, string[]>()
+  const seen = new Set<number>()
+  for (const text of pageReadings(page)) {
+    let read = 0
+    for (const match of text.matchAll(/"iIdRayon"\s*:\s*"?(\d{1,9})(?!\d)/g)) {
+      if (++read > MAX_FACETS || match.index === undefined) break
+      const span = objectAround(text, match.index)
+      if (span === null || seen.has(span.start)) continue
+      seen.add(span.start)
+      const entries = entriesOf(text, span.start, span.end)
+      if (entries.some((entry) => entry.name === 'iIdProduit')) continue
+      const id = Number(match[1])
+      // La clé `iIdRayon` doit être une clé directe de cet objet, pas celle d'un enfant.
+      if (!entries.some((entry) => entry.name === 'iIdRayon')) continue
+      for (const key of FACET_LABEL_KEYS) {
+        const entry = entries.find((one) => one.name === key && one.kind === 'VALUE')
+        const quote = entry === undefined ? undefined : text[entry.from]
+        if (entry === undefined || (quote !== '"' && quote !== "'")) continue
+        const end = stringEnd(text, entry.from, Math.min(text.length, entry.from + 400))
+        if (end < 0) continue
+        const value = decodeJsString(text.slice(entry.from + 1, end))
+        if (value === '') continue
+        labels.set(id, [...(labels.get(id) ?? []), value])
+        break
+      }
+    }
+    if (labels.size > 0) break
+  }
+  return labels
 }

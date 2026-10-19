@@ -3,6 +3,8 @@
 export { append, clear, h, text, type Child, type Props } from './dom'
 export {
   renderPicker,
+  type AisleChip,
+  type AisleRow,
   type Picker,
   type PickerHooks,
   type PickerItem,

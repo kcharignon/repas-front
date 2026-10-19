@@ -1,6 +1,6 @@
 import { type Content, type ContentSource, measureReference, parseContent } from './content'
 import { photoUrl } from '../photo-url'
-import type { RawProduct } from './embedded'
+import type { AisleTexts, RawProduct } from './embedded'
 import type { LocationLike } from './store'
 
 /** Le prix à l'unité de mesure, en centimes, ramené au kilo, au litre ou à la pièce (les unités du protocole, décision D22). */
@@ -38,6 +38,8 @@ export interface Candidate {
   /** `iIdRayon` et `iIdFamille` (DRV-646) : lus pour le diagnostic seulement, jamais envoyés à Repas. */
   aisle: number | null
   family: number | null
+  /** Les textes du rayon lus avec le produit (DRV-647) : la matière du libellé du rayon (`aisle-labels.ts`). Jamais envoyés à Repas. */
+  aisleTexts?: AisleTexts
   content: Content | null
   /** D'où vient `content` ; `prices` est le moins précis (prix arrondis au centime). */
   contentSource: ContentSource | null
@@ -89,6 +91,7 @@ export function toCandidate(raw: RawProduct, page: LocationLike | null = null): 
     comingSoon: raw.comingSoon,
     aisle: raw.aisle,
     family: raw.family,
+    ...(raw.aisleTexts && { aisleTexts: raw.aisleTexts }),
     imageUrl: photoUrl(raw.thumbnail, page),
     content: parsed?.content ?? null,
     contentSource: parsed?.source ?? null,
