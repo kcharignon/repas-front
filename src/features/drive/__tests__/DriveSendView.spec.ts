@@ -109,7 +109,8 @@ describe('écran d’envoi au drive, dans l’application', () => {
     expect(summary(wrapper)).toBe(
       '12 articles : 8 sont déjà choisis, 3 sont à choisir sur Leclerc, 1 ne sera pas mis au panier.',
     )
-    expect(wrapper.text()).toContain('Le panier de Leclerc va se remplir, puis vous revenez ici.')
+    // Une phrase de synthèse et le bouton : plus de phrase d'explication (DRV-628)
+    expect(wrapper.text()).not.toContain('va se remplir')
     // Plus de bloc de compteurs ; la liste est repliée et le bouton passe avant elle (et avant l’estimation)
     expect(wrapper.find('dl').exists()).toBe(false)
     expect(wrapper.find('details > summary').text()).toBe('Voir les articles')
@@ -293,7 +294,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
 
     await press('Rouvrir la liste')
     expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(
-      'Le panier Leclerc ne sera pas vidé.',
+      'L’envoi en cours est abandonné et la liste redevient modifiable.',
     )
     expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/reopen')
     ;[...document.body.querySelectorAll('[role="dialog"] button')]
@@ -635,7 +636,8 @@ describe('lecture du plan', () => {
       await press('Rouvrir la liste')
       const dialog = document.body.querySelector('[role="dialog"]')
       expect(dialog?.textContent).toContain('Rouvrir la liste ?')
-      expect(dialog?.textContent).toContain('Le panier Leclerc ne sera pas vidé.')
+      expect(dialog?.textContent).toContain('La liste redevient modifiable.')
+      expect(dialog?.textContent).not.toContain('vidé')
       expect(dialog?.textContent).not.toContain('envoi en cours')
       expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/reopen')
       ;[...document.body.querySelectorAll('[role="dialog"] button')]

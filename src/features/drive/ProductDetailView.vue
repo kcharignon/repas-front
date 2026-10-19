@@ -206,7 +206,6 @@ const rowClass = 'flex flex-col gap-3 rounded-2xl border border-line bg-surface 
         <h1 class="font-display text-3xl leading-tight font-bold md:text-4xl">
           {{ choice.ingredientName }}
         </h1>
-        <p class="text-muted">{{ t('driveProducts.rule') }}</p>
       </header>
 
       <p class="sr-only" role="status">{{ announcement }}</p>

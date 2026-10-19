@@ -276,9 +276,10 @@ describe('les écrans lisent les exemples du back sans erreur', () => {
 
     expect(plain(wrapper.find('dd').text())).toBe('1,99 €')
     expect(text).toContain('1 article sur 4 estimé')
-    expect(text).toContain('3 articles ne sont pas dans le total.')
-    expect(text).toContain('Estimation peu fiable')
-    expect(text).toContain(estimate.disclaimer)
+    // Le total et le nombre d'articles estimés, rien d'autre (DRV-628) : le texte du back n'est plus affiché
+    expect(text).not.toContain('ne sont pas dans le total')
+    expect(text).not.toContain('Estimation peu fiable')
+    expect(text).not.toContain(estimate.disclaimer)
     expect(wrapper.findAll('h3').map((title) => title.text())).toEqual([
       'Non estimées (3)',
       'Estimées (1)',

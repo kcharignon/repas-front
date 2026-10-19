@@ -7,6 +7,7 @@ import type { ResultLine } from '@drive-protocol'
 import { appContext, calls, json, me, stubApi } from '@/__tests__/helpers'
 import { i18n } from '@/i18n'
 import fr from '@/i18n/fr'
+import { WARNING_WORDS } from '@/i18n/__tests__/warningWords'
 import { useSessionStore } from '@/session/session'
 import { DRAFT_KEY } from '../bridge'
 import type { DriveEvent } from '../bridge'
@@ -176,6 +177,20 @@ describe('l’écran de l’envoi : une décision', () => {
     expect(tooLong('envoi', visibleText(main))).toEqual([])
     expect(CODE.test(visibleText(main))).toBe(false)
   })
+
+  it('ne contient ni mise en garde ni rassurance ni explication : le titre, la synthèse, le bouton (DRV-628)', async () => {
+    const wrapper = await openSend()
+    const main = wrapper.find('main').element
+
+    // Tout le texte, liste dépliée comprise : aucun mot d'avertissement
+    expect(main.textContent).not.toMatch(WARNING_WORDS)
+    expect(wrapper.text()).not.toContain('va se remplir')
+    // Ce qui est lu sans rien déplier : le magasin et UNE phrase de synthèse, puis le bouton
+    expect(wrapper.findAll('main > section > p, main > p').map((p) => p.text())).toEqual([
+      'Magasin …456',
+      '12 articles : 8 sont déjà choisis, 3 sont à choisir sur Leclerc, 1 ne sera pas mis au panier.',
+    ])
+  })
 })
 
 describe('le récapitulatif : aucun compteur à zéro, aucun code visible, un seul bouton principal', () => {
@@ -327,5 +342,8 @@ describe('le récapitulatif : aucun compteur à zéro, aucun code visible, un se
 
     // Aucune phrase de plus de 20 mots
     expect(tooLong('récapitulatif', text)).toEqual([])
+
+    // Ni mise en garde ni rassurance, dépliée ou non (DRV-628) : « Repas ne vide pas votre panier », « Le panier n'est pas vidé par Repas »…
+    expect(main.textContent).not.toMatch(WARNING_WORDS)
   })
 })

@@ -168,9 +168,7 @@ describe('liste envoyée au drive (page de la liste)', () => {
     })
 
     button('Rouvrir la liste')?.click()
-    await vi.waitFor(() =>
-      expect(body().textContent).toContain('Le panier Leclerc ne sera pas vidé.'),
-    )
+    await vi.waitFor(() => expect(body().textContent).toContain('La liste redevient modifiable.'))
     expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/reopen')
     dialogButton('Rouvrir la liste').click()
     await flushPromises()

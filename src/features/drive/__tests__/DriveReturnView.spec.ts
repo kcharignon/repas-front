@@ -127,7 +127,7 @@ describe('retour du drive : un passage réussi', () => {
     ])
     expect(wrapper.find('details > summary').text()).toBe('Détails')
     expect(wrapper.findAll('details li')).toHaveLength(12)
-    expect(wrapper.text()).toContain('Le panier Leclerc n’est pas vidé par Repas.')
+    expect(wrapper.text()).not.toContain('vidé')
   })
 
   it('nomme les ingrédients et les produits d’après le plan, et signale le produit de secours utilisé', async () => {
@@ -857,8 +857,9 @@ describe('retour du drive : terminer ou rouvrir la liste', () => {
 
     await press('Terminer la liste')
     expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(
-      'Le panier Leclerc ne sera pas vidé.',
+      'La liste sera terminée.',
     )
+    expect(document.body.querySelector('[role="dialog"]')?.textContent).not.toContain('vidé')
     expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/complete')
     await confirmInDialog('Terminer la liste')
 

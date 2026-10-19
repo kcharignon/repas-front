@@ -160,14 +160,12 @@ test.describe('parcours complet, pont et API simulés', () => {
     ).not.toThrow()
     await fakeApp(page, result)
 
-    // 1. Les réglages : note de vie privée, magasin du back, résumé des produits mémorisés
+    // 1. Les réglages : magasin du back, résumé des produits mémorisés
     await page.goto('/drive/reglages')
     await expect(page.getByRole('heading', { level: 1, name: 'Réglages du drive' })).toBeVisible()
-    await expect(page.getByRole('heading', { level: 2, name: 'Votre vie privée' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Lisez la note complète' })).toHaveAttribute(
-      'href',
-      '/drive/aide#vie-privee',
-    )
+    // « Votre magasin » est le premier bloc, sans note au-dessus et visible sans défiler (DRV-628)
+    await expect(page.getByRole('heading', { level: 2, name: 'Votre magasin' })).toBeInViewport()
+    await expect(page.getByRole('heading', { name: 'Votre vie privée' })).toHaveCount(0)
     await expect(page.getByText('Ville-Test', { exact: true })).toBeVisible()
     await expect(page.getByText('Magasin …456')).toBeVisible()
     await page.getByRole('link', { name: 'Gérer mes produits' }).click()
@@ -266,7 +264,7 @@ test.describe('parcours complet, pont et API simulés', () => {
     )
     await expect(line('Œufs')).toContainText('Ne sera plus proposé : Œufs cage x6')
     await expect(line('Sucre')).toContainText('J’en ai toujours : Repas s’en souvient.')
-    await expect(page.getByText('Le panier Leclerc n’est pas vidé par Repas.')).toBeVisible()
+    await expect(page.getByText(/vidé/)).toHaveCount(0)
     expect(await page.evaluate(() => localStorage.getItem('repas.drive.run'))).toBeNull()
     expect((await scan(page)).violations).toEqual([])
   })

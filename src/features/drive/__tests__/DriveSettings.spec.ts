@@ -151,10 +151,11 @@ describe('réglages du drive : le magasin', () => {
     expect(wrapper.text()).toContain(
       'Pour envoyer votre liste, Repas doit connaître votre magasin Leclerc.',
     )
-    // Pas de réglage à côté : ni l'application, ni les produits ; la note de vie privée reste, après l'action
+    // Pas de réglage à côté : ni l'application, ni les produits, ni note de vie privée (DRV-628)
     expect(wrapper.text()).not.toContain('Application Repas')
     expect(wrapper.text()).not.toContain('Produits dont Repas se souvient')
-    expect(wrapper.find('#drive-privacy-note-title').exists()).toBe(true)
+    expect(wrapper.find('#drive-privacy-note-title').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('vie privée')
     // Le retour mène à la liste, pas à « Moi »
     expect(wrapper.find('a[href="/liste"]').text()).toBe('Retour à la liste')
     expect(wrapper.find('a[href="/moi"]').exists()).toBe(false)
@@ -612,7 +613,8 @@ describe('réglages du drive : l’application et les produits', () => {
     const { wrapper } = await open()
     await vi.waitFor(() => expect(wrapper.text()).toContain('Version 0.5.0'))
 
-    expect(wrapper.text()).toContain('Le drive est prêt dans cette application.')
+    // Rien à faire : « prêt » n'est pas dit (DRV-628)
+    expect(wrapper.text()).not.toContain('prêt')
     expect(wrapper.text()).not.toContain('navigateur')
     // Déjà installée : l'aide ne propose pas de l'installer, elle mène à la mise à jour
     const help = wrapper.find('a[href="/drive/aide#mise-a-jour"]')
@@ -651,6 +653,38 @@ describe('réglages du drive : l’application et les produits', () => {
     expect(wrapper.find('a[href="/drive/produits"]').text()).toBe('Gérer mes produits')
   })
 
+  it('n’écrit jamais un compteur à zéro : seulement ce qui existe (DRV-628)', async () => {
+    const { wrapper } = await open({
+      'GET /api/v1/drive/choices': () =>
+        json({
+          member: [
+            {
+              ingredientSlug: 'sel',
+              ingredientName: 'Sel',
+              haveAtHome: true,
+              accepted: [],
+              rejected: [],
+            },
+          ],
+          totalItems: 1,
+        }),
+    })
+
+    expect(wrapper.findAll('dd').map((value) => value.text())).toEqual(['1'])
+    expect(wrapper.text()).toContain('J’en ai toujours')
+    expect(wrapper.text()).not.toContain('Articles avec des produits')
+    expect(wrapper.text()).not.toContain('à ne plus proposer')
+  })
+
+  it('sans aucun produit retenu, ne garde que le lien « Gérer mes produits »', async () => {
+    const { wrapper } = await open({
+      'GET /api/v1/drive/choices': () => json({ member: [], totalItems: 0 }),
+    })
+
+    expect(wrapper.find('dl').exists()).toBe(false)
+    expect(wrapper.find('a[href="/drive/produits"]').text()).toBe('Gérer mes produits')
+  })
+
   it('sans magasin, ne lit pas les produits', async () => {
     const { wrapper, fetchMock } = await open({}, '/drive/reglages', settingsOf(null))
 
@@ -666,31 +700,29 @@ describe('réglages du drive : l’application et les produits', () => {
   })
 })
 
-describe('réglages du drive : la note de vie privée', () => {
-  it('s’affiche au-dessus de la section du magasin et mène à la note complète de l’aide', async () => {
-    const { wrapper, context } = await open()
+describe('réglages du drive : « Votre magasin » en premier (DRV-628)', () => {
+  it('est le premier bloc, sans note de vie privée au-dessus ni lien vers les conditions', async () => {
+    const { wrapper } = await open()
 
-    const note = wrapper.find('#drive-privacy-note-title')
-    const store = wrapper.find('#store-title')
-    expect(note.text()).toBe('Votre vie privée')
-    expect(
-      note.element.compareDocumentPosition(store.element) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
-
-    const link = wrapper.find('a[href="/drive/aide#vie-privee"]')
-    expect(link.text()).toBe('Lisez la note complète')
-    await link.trigger('click')
-    // La page d'aide se charge à la demande : on attend la fin de la navigation
-    await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-help'))
-    expect(context.router.currentRoute.value.hash).toBe('#vie-privee')
+    // Le premier titre de section est « Votre magasin » : rien avant lui que le retour et le titre de la page
+    expect(wrapper.find('h2').text()).toBe('Votre magasin')
+    expect(wrapper.find('#drive-privacy-note-title').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('vie privée')
+    expect(wrapper.text()).not.toContain('jamais')
+    expect(wrapper.find('a[href="/drive/conditions"]').exists()).toBe(false)
   })
 
-  it('reste là sans magasin enregistré (avant la première activation), mais pas quand le drive est coupé', async () => {
+  it('reste ainsi sans magasin enregistré (avant la première activation)', async () => {
     const empty = await open({}, '/drive/reglages', settingsOf(null))
-    expect(empty.wrapper.find('#drive-privacy-note-title').exists()).toBe(true)
-    document.body.innerHTML = ''
 
-    const off = await open({}, '/drive/reglages', settingsOf(null, false))
-    expect(off.wrapper.find('#drive-privacy-note-title').exists()).toBe(false)
+    expect(empty.wrapper.find('h2').text()).toBe('Votre magasin')
+    expect(empty.wrapper.text()).not.toContain('vie privée')
+  })
+
+  it('ne dit rien du magasin au-delà de son nom : ni explication, ni mécanisme', async () => {
+    const { wrapper } = await open()
+
+    expect(wrapper.text()).not.toContain('Repas remplit le panier de ce magasin')
+    expect(wrapper.text()).not.toContain('propres à ce magasin')
   })
 })

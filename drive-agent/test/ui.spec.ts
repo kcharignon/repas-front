@@ -216,7 +216,7 @@ describe('écran d’accueil', () => {
 })
 
 describe('récapitulatif et confirmation', () => {
-  it('dit les comptes en une phrase, la même que l’écran de l’envoi de Repas, la liste repliable et le rappel avant « Commencer »', () => {
+  it('dit les comptes en une phrase, la même que l’écran de l’envoi de Repas, et la liste repliable : ni rassurance ni rappel (DRV-628)', () => {
     const handle = open()
     void handle.show('summary', SUMMARY)
 
@@ -225,10 +225,20 @@ describe('récapitulatif et confirmation', () => {
     expect(shadow().querySelector('.lead')?.textContent).toBe(
       '4 articles : 2 sont déjà choisis, 1 est à choisir sur Leclerc, 1 ne sera pas mis au panier.',
     )
-    expect(text).toContain('Rien ne part tant que vous n’avez pas touché « Commencer ».')
     expect(text).toContain('Farine : connu (Farine T55 1 kg)')
     expect(text).toContain('Poivre : à choisir')
-    expect(text).toContain('Repas ne vide pas votre panier Leclerc.')
+    expect(text).not.toContain('Rien ne part')
+    expect(text).not.toContain('Repas ne vide pas')
+    expect(text).not.toContain('commandé')
+    expect(shadow().querySelector('.notice')).toBeNull()
+    // Le titre, une phrase, la liste repliée, deux boutons : rien d'autre
+    expect([...shadow().querySelectorAll('h1, p, summary, button')].map((n) => n.tagName)).toEqual([
+      'H1',
+      'P',
+      'SUMMARY',
+      'BUTTON',
+      'BUTTON',
+    ])
     expect(shadow().querySelector('details')).not.toBeNull()
   })
 
@@ -977,7 +987,13 @@ describe('utiliser le magasin (mode configuration, DRV-623)', () => {
     expect(shadow().querySelectorAll('button.primary')).toHaveLength(1)
     expect(shadow().querySelectorAll('button')).toHaveLength(2)
     expect(shadow().textContent).not.toMatch(/enregistr/i)
-    expect(shadow().textContent).toContain('rien de votre compte Leclerc ne quitte cette page')
+    // Le titre et le bouton disent tout : plus de note sur ce qui est transmis (DRV-628)
+    expect([...shadow().querySelectorAll('h1, p, button')].map((n) => n.tagName)).toEqual([
+      'H1',
+      'P',
+      'BUTTON',
+      'BUTTON',
+    ])
   })
 
   it('montre le libellé quand il y en a un, tel quel même s’il contient du HTML', () => {
@@ -1261,7 +1277,7 @@ describe('fin', () => {
     const handle = open()
     void handle.show('end', END)
 
-    expect(shadow().textContent).not.toContain('Contenu différent')
+    expect(shadow().textContent).not.toContain('Quantités changées')
   })
 
   it('montre chaque ligne dont le nombre de produits a été recalculé sur le contenu lu en direct', async () => {
@@ -1275,9 +1291,8 @@ describe('fin', () => {
     })
 
     const note = shadow().querySelector('.notice')
-    expect(note?.querySelector('strong')?.textContent).toBe(
-      'Contenu différent de celui dont Repas se souvenait',
-    )
+    expect(note?.querySelector('strong')?.textContent).toBe('Quantités changées')
+    expect(note?.textContent).toContain('Vérifiez ces articles dans votre panier.')
     expect([...(note?.querySelectorAll('li') ?? [])].map((item) => item.textContent)).toEqual([
       'Farine : 10 au lieu de 1',
       `${HOSTILE} : 2 au lieu de 4`,
@@ -1308,7 +1323,8 @@ describe('fin', () => {
 
     const note = shadow().querySelector('.notice')
     expect(note?.querySelector('strong')?.textContent).toBe('Quantités déjà au panier')
-    expect(note?.textContent).toContain('Repas ne réduit jamais')
+    expect(note?.textContent).toContain('Ces articles sont restés tels quels.')
+    expect(note?.textContent).not.toContain('jamais')
     expect([...(note?.querySelectorAll('li') ?? [])].map((item) => item.textContent)).toEqual([
       'Farine — Déjà 5 au panier : conservé',
       `${HOSTILE} — Déjà 3 au panier : conservé`,
@@ -1332,8 +1348,8 @@ describe('fin', () => {
     const note = notes.find((item) => item.textContent?.includes('illisible'))
     expect(note?.querySelector('strong')?.textContent).toBe('Quantité au panier illisible')
     expect([...(note?.querySelectorAll('li') ?? [])].map((item) => item.textContent)).toEqual([
-      'Farine — au moins 4 gardés, vérifiez dans votre panier',
-      'Sucre — vérifiez dans votre panier',
+      'Farine — au moins 4 gardés',
+      'Sucre',
     ])
   })
 
@@ -1344,14 +1360,12 @@ describe('fin', () => {
     expect(shadow().textContent).not.toContain('trop de temps')
   })
 
-  it('dit quand Leclerc a mis trop de temps à répondre, et quoi faire : relancer, ce qui est au panier n’est pas touché', () => {
+  it('dit quand Leclerc a mis trop de temps à répondre : le reste (ce qui est sauf, l’action) est dans le texte de l’écran', () => {
     const handle = open()
     void handle.show('end', { ...END, outcome: 'partial', failed: 2, slow: true })
 
     const note = shadow().querySelector('.notice')
-    expect(note?.textContent).toBe(
-      'Leclerc a mis trop de temps à répondre. Relancez l’envoi dans un moment : ce qui est déjà au panier n’est pas touché.',
-    )
+    expect(note?.textContent).toBe('Leclerc a mis trop de temps à répondre.')
   })
 
   it('dit ce qui s’est passé, ce qui est sauf avec ce qu’il reste à ajouter, et l’action', () => {

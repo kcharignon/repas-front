@@ -205,7 +205,7 @@ export default {
     sendHelp: 'La liste ne sera plus modifiable. Vous pourrez la rouvrir.',
     reopen: 'Rouvrir la liste',
     reopenTitle: 'Rouvrir la liste ?',
-    reopenHelp: 'Le panier Leclerc ne sera pas vidé.',
+    reopenHelp: 'La liste redevient modifiable.',
     allLists: 'Mes listes',
     new: 'Nouvelle liste',
     noList: "Vous n'avez encore aucune liste.",
@@ -224,8 +224,7 @@ export default {
     noneHelp: 'Créez une liste pour y planifier des recettes et noter vos courses.',
     create: 'Créer ma liste',
     completedTitle: 'Courses terminées',
-    completedHelp:
-      'Tout est dans le panier. Décochez un article pour reprendre la liste, ou commencez-en une nouvelle.',
+    completedHelp: 'Décochez un article pour reprendre la liste, ou commencez-en une nouvelle.',
     startNew: 'Nouvelle liste',
     progress: '{done} sur {total} articles dans le panier',
     sections: 'Contenu de la liste',
@@ -268,13 +267,12 @@ export default {
     entryHelp: 'Les produits que Repas prend en priorité pour vos courses au drive.',
     intro:
       'Les produits que Repas prend pour chaque article quand vous envoyez une liste au drive.',
-    rule: 'Repas prend le premier produit disponible de la liste. Les produits à ne plus proposer ne sont jamais pris.',
     back: 'Tous mes produits',
     unavailable: 'L’envoi au drive n’est pas disponible pour le moment.',
     noStore:
       'Vous n’avez pas encore enregistré votre magasin : sans lui, Repas ne peut se souvenir d’aucun produit.',
     settings: 'Réglages du drive',
-    none: 'Repas ne se souvient encore d’aucun produit. Les produits se choisissent sur le site du drive pendant un envoi : ils apparaîtront ici, et vous pourrez les classer.',
+    none: 'Repas ne se souvient encore d’aucun produit. Ils apparaîtront ici après un envoi.',
     missing: 'Repas ne se souvient d’aucun produit pour cet article.',
     search: 'Rechercher un article',
     noMatch: 'Aucun article ne correspond à votre recherche.',
@@ -287,13 +285,10 @@ export default {
     offline:
       'Hors connexion : les modifications sont impossibles tant que le réseau n’est pas revenu.',
     haveAtHomeSwitch: 'J’en ai toujours',
-    haveAtHomeHelp:
-      'Repas ne met rien au panier pour cet article. À l’enregistrement, ses produits sont oubliés.',
+    haveAtHomeHelp: 'Rien au panier pour cet article. Ses produits seront oubliés.',
     accepted: 'Produits acceptés',
-    acceptedHelp:
-      'Du produit habituel aux produits de remplacement ({max} au plus). Le produit habituel est pris s’il est disponible, sinon le suivant.',
-    acceptedNone:
-      'Aucun produit accepté. Un produit se choisit sur le site du drive, pendant un envoi.',
+    acceptedHelp: 'Le premier produit disponible est pris ({max} au plus).',
+    acceptedNone: 'Aucun produit accepté : choisissez-en un pendant un envoi.',
     acceptedFull:
       'Vous avez déjà {max} produits acceptés : retirez-en un avant d’en accepter un autre.',
     preferredBadge: 'Habituel',
@@ -314,7 +309,7 @@ export default {
     forget: 'Oublier cet article',
     forgetTitle: 'Oublier {name} ?',
     forgetDescription:
-      'Repas oublie les produits acceptés et ceux à ne plus proposer pour cet article. Au prochain envoi, vous choisirez de nouveau.',
+      'Repas oublie les produits de cet article : vous les choisirez de nouveau au prochain envoi.',
     forgetConfirm: 'Oublier',
     forgotten: '{name} : produits oubliés.',
     moved: '{name} : position {position} sur {total}.',
@@ -437,7 +432,6 @@ export default {
       other: '{count} ne sera pas mis au panier | {count} ne seront pas mis au panier',
       allOther: 'il ne sera pas mis au panier | aucun ne sera mis au panier',
     },
-    intro: 'Le panier de Leclerc va se remplir, puis vous revenez ici.',
     articles: 'Vos articles',
     showArticles: 'Voir les articles',
     need: 'À acheter : {quantity}',
@@ -467,13 +461,12 @@ export default {
     showAll: 'Voir toute la liste',
     waiting: {
       title: 'En attente du récapitulatif…',
-      help: 'Le drive est ouvert dans l’application. Quand l’envoi est terminé, vous revenez ici avec un récapitulatif.',
+      help: 'Le drive est ouvert dans l’application. Gardez l’application ouverte.',
       restart: 'Recommencer',
       restartHelp: 'Recommencer abandonne l’envoi en cours et reprend la liste depuis le début.',
       reopenList: 'Rouvrir la liste',
       reopenTitle: 'Rouvrir la liste ?',
-      reopenHelp:
-        'L’envoi en cours est abandonné et la liste redevient modifiable. Le panier Leclerc ne sera pas vidé.',
+      reopenHelp: 'L’envoi en cours est abandonné et la liste redevient modifiable.',
     },
     elsewhere: {
       title: 'Un autre envoi est en cours',
@@ -640,13 +633,12 @@ export default {
       update: 'Mettre à jour l’application',
       complete: 'Terminer la liste',
       completeTitle: 'Terminer la liste ?',
-      completeHelp: 'La liste sera terminée. Le panier Leclerc ne sera pas vidé.',
+      completeHelp: 'La liste sera terminée.',
       reopen: 'Rouvrir la liste',
       reopenTitle: 'Rouvrir la liste ?',
-      reopenHelp: 'La liste redevient modifiable. Le panier Leclerc ne sera pas vidé.',
+      reopenHelp: 'La liste redevient modifiable.',
       offline: 'Hors connexion : ces actions reviennent avec le réseau.',
     },
-    basketKept: 'Le panier Leclerc n’est pas vidé par Repas.',
   },
   driveSettings: {
     title: 'Réglages du drive',
@@ -661,13 +653,10 @@ export default {
     store: 'Votre magasin',
     storeNamed: 'Magasin …{tail}',
     none: 'Aucun magasin enregistré.',
-    storeHelp:
-      'Repas remplit le panier de ce magasin. Les produits dont Repas se souvient sont propres à ce magasin.',
     read: 'Lire mon magasin dans l’application',
     // Avec un magasin déjà enregistré, le même geste s'appelle « Changer de magasin »
     change: 'Changer de magasin',
-    readHelp:
-      'L’application ouvre Leclerc. Choisissez votre magasin, puis touchez « Utiliser ce magasin ».',
+    readHelp: 'Choisissez votre magasin, puis touchez « Utiliser ce magasin ».',
     // Repas enregistre tout seul le magasin lu (un seul geste, dans l'application)
     readDone: 'Magasin …{tail} enregistré.',
     // Le magasin lu n'est pas celui qui est enregistré : la seule confirmation du parcours
@@ -708,7 +697,6 @@ export default {
     appVersion: 'Version {version}',
     appChecking: 'Vérification de l’application…',
     appNoAnswer: 'L’application ne répond pas : fermez-la, puis rouvrez-la.',
-    appReady: 'Le drive est prêt dans cette application.',
     appDriveOff:
       'Le drive ne peut pas fonctionner dans cette version de l’application : mettez-la à jour.',
     appMissing:
@@ -799,7 +787,7 @@ export default {
     install: {
       chrome: 'Sur votre téléphone Android, ouvrez cette page dans Chrome.',
       download:
-        'Touchez « Télécharger la dernière version ». Sur la page GitHub, repérez la version la plus récente dont le nom commence par « android-v » (par exemple « android-v0.1.0 »), puis touchez le fichier qui se termine par « .apk » (dans la rubrique « Assets »). Ignorez les versions dont le nom contient « dev » ou qui portent la mention « Pre-release » : ce sont des essais réservés aux développeurs, jamais à installer pour de vrai.',
+        'Touchez « Télécharger la dernière version ». Sur la page GitHub, repérez la version la plus récente dont le nom commence par « android-v » (par exemple « android-v0.1.0 »), puis touchez le fichier qui se termine par « .apk » (dans la rubrique « Assets »). Ignorez les versions dont le nom contient « dev » ou qui portent la mention « Pre-release » : ce sont des essais réservés aux développeurs.',
       allow:
         'Android affiche peut-être « Pour votre sécurité, votre téléphone n’est pas autorisé à installer des applications inconnues depuis cette source ». Touchez « Paramètres », activez « Autoriser depuis cette source », puis revenez en arrière.',
       open: 'Quand le téléchargement est terminé, touchez « Ouvrir » (ou ouvrez le fichier depuis les notifications ou le dossier « Téléchargements »), puis « Installer ».',
@@ -809,7 +797,7 @@ export default {
         'Touchez « Ouvrir », puis connectez-vous à Repas avec votre adresse e-mail et votre mot de passe habituels. Vos recettes et vos listes sont déjà là : tout est sur votre compte.',
     },
     pwa: {
-      text: 'Si vous aviez ajouté Repas à votre écran d’accueil depuis Chrome, vous pouvez retirer cette ancienne icône une fois l’application installée : touchez-la sans la relâcher, puis « Désinstaller » (ou « Supprimer »). Rien n’est perdu : vos recettes et vos listes restent sur votre compte.',
+      text: 'Si vous aviez ajouté Repas à votre écran d’accueil depuis Chrome, vous pouvez retirer cette ancienne icône une fois l’application installée : touchez-la sans la relâcher, puis « Désinstaller » (ou « Supprimer »).',
       careful:
         'Les deux icônes portent le même nom. L’ancienne est en général celle qui porte un petit logo de Chrome dans un coin : en cas de doute, gardez les deux.',
     },
@@ -818,25 +806,25 @@ export default {
         'La première fois, Repas vous demande de choisir votre magasin dans les réglages du drive : suivez les indications de cet écran.',
       open: 'Ouvrez une liste, touchez « Envoyer au drive » puis « Ouvrir le drive ». Le site de Leclerc s’affiche dans l’application.',
       login:
-        'Connectez-vous à votre compte E.Leclerc, comme sur le site : c’est vous qui tapez votre identifiant et votre mot de passe, Repas ne les voit jamais. Si Leclerc vous envoie un code par e-mail, saisissez-le.',
-      kept: 'L’application garde votre connexion à Leclerc, comme le ferait un navigateur. Si Leclerc vous la redemande un jour, reconnectez-vous de la même façon.',
+        'Connectez-vous à votre compte E.Leclerc, comme sur le site. Si Leclerc vous envoie un code par e-mail, saisissez-le.',
+      kept: 'Si Leclerc vous redemande un jour de vous connecter, faites-le de la même façon.',
       settings: 'Réglages du drive',
     },
     send: {
       open: 'Ouvrez la liste de courses et touchez « Envoyer au drive ».',
       check:
         'Vérifiez les articles, puis touchez « Ouvrir le drive ». Le site de Leclerc s’ouvre dans l’application.',
-      wait: 'Laissez faire : l’application cherche les produits un par un, avec des pauses. C’est voulu, pour ne pas gêner Leclerc. Ne quittez pas l’application pendant ce temps.',
-      back: 'À la fin, vous revenez dans Repas avec un récapitulatif. Terminez ensuite votre commande vous-même sur le site de Leclerc : choix du créneau et paiement. Repas ne valide jamais une commande.',
+      wait: 'Gardez l’application ouverte.',
+      back: 'À la fin, vous revenez dans Repas avec un récapitulatif. Terminez ensuite votre commande vous-même sur le site de Leclerc : choix du créneau et paiement.',
     },
     update: {
       site: 'Le site se met à jour tout seul. L’application, elle, ne change que de temps en temps (par exemple quand Leclerc modifie son site).',
-      how: 'Pour la mettre à jour, téléchargez la dernière version comme pour l’installation, puis installez-la par-dessus : vos données sont conservées.',
+      how: 'Pour la mettre à jour, téléchargez la dernière version comme pour l’installation, puis installez-la par-dessus.',
       version:
         'Pour connaître votre version : dans l’écran du drive, touchez « Menu » puis « Version et mode d’emploi », et comparez avec le nom de la dernière version sur GitHub.',
     },
     uninstall: {
-      text: 'Touchez l’icône Repas sans la relâcher, puis « Désinstaller » (ou : Paramètres, Applications, Repas, Désinstaller). Votre compte, vos recettes et vos listes ne sont pas touchés. La connexion à Leclerc gardée par l’application est effacée avec elle.',
+      text: 'Touchez l’icône Repas sans la relâcher, puis « Désinstaller » (ou : Paramètres, Applications, Repas, Désinstaller). La connexion à Leclerc gardée par l’application est effacée avec elle.',
       clear:
         'Pour seulement vous déconnecter de Leclerc, sans désinstaller : dans l’écran du drive, « Menu », puis « Se déconnecter de Leclerc ». Les cookies, les données du site et l’historique du drive sont alors effacés.',
     },
@@ -847,19 +835,19 @@ export default {
       },
       protect: {
         q: 'Play Protect affiche un avertissement',
-        a: 'Google Play Protect ne connaît pas l’application, car elle ne vient pas de Google Play. Si vous avez bien téléchargé le fichier depuis la page GitHub de Repas, touchez « Plus de détails », puis « Installer quand même ». Dans le doute, n’installez pas et demandez à la personne qui gère Repas.',
+        a: 'Google Play Protect ne connaît pas l’application, car elle ne vient pas de Google Play. Si vous avez bien téléchargé le fichier depuis la page GitHub de Repas, touchez « Plus de détails », puis « Installer quand même ».',
       },
       conflict: {
         q: '« Application non installée » ou conflit avec une application existante',
-        a: 'Une version d’essai, ou signée autrement, est déjà sur le téléphone. Désinstallez l’ancienne application Repas, puis installez la nouvelle. Vos recettes et vos listes restent sur votre compte ; seule la connexion à Leclerc dans l’application est à refaire.',
+        a: 'Une version d’essai, ou signée autrement, est déjà sur le téléphone. Désinstallez l’ancienne application Repas, puis installez la nouvelle. Vous devrez vous reconnecter à Leclerc.',
       },
       login: {
         q: 'Je n’arrive pas à me connecter à Leclerc',
-        a: 'Vérifiez d’abord que vous pouvez vous connecter au site de Leclerc dans un navigateur. Si l’application ne vous reconnaît plus : dans l’écran du drive, « Menu », puis « Se déconnecter de Leclerc », et reconnectez-vous. Si Leclerc ralentit ou refuse les requêtes, attendez plusieurs heures sans insister. Votre compte Leclerc dépend de Leclerc : en cas de blocage, contactez son service client.',
+        a: 'Vérifiez d’abord que vous pouvez vous connecter au site de Leclerc dans un navigateur. Si l’application ne vous reconnaît plus : dans l’écran du drive, « Menu », puis « Se déconnecter de Leclerc », et reconnectez-vous.',
       },
       changed: {
         q: '« Le site a changé » ou « Leclerc a changé »',
-        a: 'Leclerc a modifié son site et l’envoi automatique s’est arrêté pour ne rien abîmer. Cela ne vient pas de votre téléphone. En attendant une mise à jour de l’application, passez à « Chercher à la main » (voir plus bas) : les liens de la liste vous mènent aux produits sur Leclerc. Installez la nouvelle version de l’application dès qu’elle est annoncée.',
+        a: 'Leclerc a modifié son site et l’envoi automatique s’est arrêté. En attendant une mise à jour de l’application, passez à « Chercher à la main » (voir plus bas) : les liens de la liste vous mènent aux produits sur Leclerc. Installez la nouvelle version de l’application dès qu’elle est annoncée.',
       },
       mobile: {
         q: 'Leclerc s’affiche en version mobile, ou « Page non prise en charge »',
@@ -875,82 +863,82 @@ export default {
       action: 'Aller à ma liste',
     },
   },
-  // La note de vie privée du drive (DRV-504) : à garder identique au fond à `docs/drive/note-vie-privee.md` du dépôt back
-  drivePrivacy: {
-    short: {
-      title: 'Votre vie privée',
-      // Une seule phrase en tête des réglages (DRV-626) : le reste (ce que Repas retient, le risque pour le compte Leclerc) est dans la note complète
-      text: 'Repas ne voit jamais votre mot de passe ni votre panier Leclerc.',
-      link: 'Lisez la note complète',
+  // Les conditions d'utilisation du drive (DRV-504 puis DRV-628) : la SEULE page qui parle des risques, de la vie privée et des engagements.
+  // Les écrans du parcours n'en disent rien (voice-and-glossary.spec.ts échoue sinon) ; on l'ouvre si on le veut, depuis « Moi » et l'aide.
+  // À garder identique au fond à `docs/drive/note-vie-privee.md` du dépôt back.
+  driveTerms: {
+    title: 'Conditions d’utilisation du drive',
+    link: 'Conditions d’utilisation',
+    back: 'Moi',
+    intro:
+      'Envoyer votre liste au drive, c’est Repas qui prépare la liste et l’application qui la met dans votre panier Leclerc, avec votre connexion à vous. Voici comment cela se passe, ce que Repas garde, ce qu’il ne voit pas, les risques, et comment tout effacer.',
+    how: {
+      title: 'Comment ça se passe',
+      start:
+        'Quand vous touchez « Envoyer au drive », Repas prépare votre liste et la donne à l’application, sur votre téléphone. Rien n’est mis au panier tant que vous n’avez pas touché « Commencer ».',
+      session:
+        'L’application ouvre Leclerc dans sa propre fenêtre. C’est vous qui vous connectez à Leclerc, comme sur le site. Ensuite elle cherche les produits et les met dans votre panier depuis votre session Leclerc, comme si vous le faisiez vous-même : un produit à la fois, avec des pauses, pour ne pas gêner Leclerc.',
+      local:
+        'Tout cela se passe entre votre téléphone et Leclerc. Rien de cela ne passe par les serveurs de Repas. Comme dans un navigateur, les pages de Leclerc font appel à leurs propres services (protection contre les robots, mesure d’audience) : Repas n’y a pas accès et ne les choisit pas. À la fin, l’application ne rend à Repas que ce qu’il doit retenir : les produits que vous avez choisis, et votre magasin quand vous le lui faites lire. Rien d’autre de votre compte Leclerc ne quitte la page.',
+      resume:
+        'Si l’envoi s’arrête, vous le reprenez là où il en était : l’avancement est gardé et les articles déjà faits ne sont pas refaits.',
+      order:
+        'Vous finalisez votre commande vous-même sur Leclerc. Repas ne valide jamais de commande, ne choisit pas de créneau, ne paie rien et ne vide jamais votre panier. Il ne réduit jamais une quantité déjà au panier : un article déjà présent en plus grande quantité reste tel quel.',
     },
-    full: {
-      title: 'Votre vie privée avec le drive',
-      intro:
-        'Envoyer votre liste au drive, c’est Repas qui prépare la liste et l’application qui la met dans votre panier Leclerc, avec votre connexion à vous. Voici ce que Repas garde, ce qu’il ne voit jamais, et comment tout effacer.',
-      how: {
-        title: 'Comment ça se passe',
-        start:
-          'Quand vous touchez « Envoyer au drive », Repas prépare votre liste et la donne à l’application, sur votre téléphone.',
-        session:
-          'L’application ouvre Leclerc dans sa propre fenêtre. C’est vous qui vous connectez à Leclerc, comme sur le site. Ensuite elle cherche les produits et les met dans votre panier depuis votre session Leclerc, comme si vous le faisiez vous-même.',
-        local:
-          'Tout cela se passe entre votre téléphone et Leclerc. Rien de cela ne passe par les serveurs de Repas. Comme dans un navigateur, les pages de Leclerc font appel à leurs propres services (protection contre les robots, mesure d’audience) : Repas n’y a pas accès et ne les choisit pas. À la fin, l’application ne rend à Repas que ce qu’il doit retenir : les produits que vous avez choisis.',
-        order:
-          'Vous finalisez votre commande vous-même sur Leclerc. Repas ne valide jamais de commande, ne choisit pas de créneau, ne paie rien et ne vide jamais votre panier.',
-      },
-      saves: {
-        title: 'Ce que Repas enregistre',
-        store:
-          'Votre magasin Leclerc : son numéro, son adresse sur le site de Leclerc, et le nom que vous lui avez donné si vous en avez mis un.',
-        choices:
-          'Les produits dont Repas se souvient, article par article : votre produit habituel, vos produits de remplacement (5 au plus), les produits à ne plus proposer (20 au plus) et les articles « J’en ai toujours ».',
-        products:
-          'Pour chaque produit : son numéro chez Leclerc, son nom, son contenu (par exemple 1 kg), et son prix avec la date où il a été vu. Les prix servent à estimer le coût d’une liste ; l’estimation est datée et le vrai prix est toujours celui de Leclerc.',
-        lists:
-          'Pour chaque liste : le fait qu’elle a été « envoyée au drive » et la date de l’envoi.',
-      },
-      never: {
-        title: 'Ce que Repas ne voit et n’enregistre jamais',
-        credentials:
-          'Votre identifiant et votre mot de passe Leclerc, et le code que Leclerc vous envoie par e-mail.',
-        cookies: 'Vos cookies et vos jetons de connexion à Leclerc.',
-        address: 'Votre adresse, votre créneau de retrait, votre moyen de paiement.',
-        basket: 'Le contenu réel de votre panier Leclerc, vos commandes, vos achats passés.',
-        photos: 'Les photos des produits.',
-      },
-      where: {
-        title: 'Où, et combien de temps',
-        server:
-          'Les données sont dans la base de Repas, sur le serveur de Repas (hébergé chez DigitalOcean). Repas ne les donne à personne, ne les vend pas, ne fait pas de publicité et n’envoie pas de statistiques à des tiers.',
-        duration:
-          'Elles restent tant que votre compte existe, ou jusqu’à ce que vous les oubliez (voir plus bas).',
-        backups:
-          'Le serveur fait une copie de sauvegarde chaque nuit et garde les 14 dernières : une donnée effacée peut rester dans ces copies environ deux semaines au plus, puis elles sont remplacées.',
-        phone:
-          'Sur votre téléphone, l’application garde votre connexion à Leclerc, comme le ferait un navigateur. Elle ne la partage ni avec Repas ni avec personne d’autre que Leclerc et ses propres services. Vous pouvez l’effacer à tout moment : menu de l’application, « Se déconnecter de Leclerc ».',
-        sheets:
-          'Les descriptions de produits (nom, contenu, prix vu, magasin) sont communes à tous les utilisateurs de Repas et ne disent pas qui les a vues. Chacun ne retrouve que les produits dont Repas se souvient pour lui. La première personne qui décrit un produit fixe sa description (nom, contenu, code-barres) : les suivantes ne la réécrivent pas, elles ne font que la compléter si elle est incomplète ; le prix vu, lui, est rafraîchi par celles qui choisissent ce produit. Ces descriptions restent quand un compte est supprimé, mais sans aucun lien avec la personne.',
-      },
-      erase: {
-        title: 'Comment tout effacer',
-        product:
-          'Un produit, ou un article : dans « Moi », « Mes produits du drive » : retirez un produit, choisissez « Ne plus proposer » pour un autre, ou touchez « Oublier cet article » pour effacer tout ce que Repas retient sur lui.',
-        store:
-          'Un changement de magasin : si vous changez de magasin, les produits dont Repas se souvient pour l’ancien magasin ne sont plus utilisés, mais ils restent enregistrés jusqu’à la suppression de votre compte.',
-        all: 'Tout, d’un coup : demandez la suppression de votre compte à la personne qui administre Repas. Elle efface vos données du drive (magasin, produits dont Repas se souvient), vos listes de courses avec leur statut d’envoi, et le reste de votre compte.',
-        rights:
-          'Pour exercer vos droits (savoir ce que Repas a de vous, corriger, effacer), écrivez à la personne qui vous a donné accès à Repas.',
-      },
-      before: {
-        title: 'Avant d’utiliser l’envoi : ce que vous devez savoir',
-        account:
-          'L’envoi agit dans votre propre compte Leclerc, avec votre propre connexion, comme si vous faisiez les recherches et les ajouts vous-même. Repas ne voit jamais vos identifiants.',
-        suspension:
-          'Les conditions d’utilisation de Leclerc permettent à l’enseigne de suspendre un compte E.Leclerc (et la cagnotte de Tickets E.Leclerc qui va avec) si elle juge l’usage abusif. Repas limite ce risque : une requête à la fois, avec des pauses, seulement quand vous le demandez, et seulement pour votre liste. Mais le risque existe et il est pour votre compte.',
-        stop: 'Si Leclerc ralentit les requêtes, l’application s’arrête d’elle-même. Si votre compte Leclerc pose un problème, contactez le service client de Leclerc : Repas n’a aucun accès à votre compte et ne contacte jamais Leclerc.',
-        manual:
-          'Vous pouvez vous en passer à tout moment : la liste de Repas reste utilisable pour faire vos courses à la main sur Leclerc.',
-      },
+    saves: {
+      title: 'Ce que Repas enregistre',
+      store:
+        'Votre magasin Leclerc : son numéro, son adresse sur le site de Leclerc, et le nom que vous lui avez donné si vous en avez mis un.',
+      choices:
+        'Les produits dont Repas se souvient, article par article : votre produit habituel, vos produits de remplacement (5 au plus), les produits à ne plus proposer (20 au plus) et les articles « J’en ai toujours ». Ces produits sont propres à votre magasin.',
+      products:
+        'Pour chaque produit : son numéro chez Leclerc, son nom, son contenu (par exemple 1 kg), et son prix avec la date où il a été vu.',
+      estimate:
+        'Les prix servent à estimer le coût d’une liste. L’estimation est indicative : elle est faite d’après les derniers prix vus, avec leur date, et le vrai prix est toujours celui de Leclerc. Elle ne compte que les articles dont le prix est connu, elle est peu fiable quand moins de la moitié en ont un, et Repas ne devine jamais un prix.',
+      lists:
+        'Pour chaque liste : le fait qu’elle a été « envoyée au drive » et la date de l’envoi.',
+    },
+    never: {
+      title: 'Ce que Repas ne voit et n’enregistre jamais',
+      credentials:
+        'Votre identifiant et votre mot de passe Leclerc, et le code que Leclerc vous envoie par e-mail.',
+      cookies: 'Vos cookies et vos jetons de connexion à Leclerc.',
+      address: 'Votre adresse, votre créneau de retrait, votre moyen de paiement.',
+      basket: 'Le contenu réel de votre panier Leclerc, vos commandes, vos achats passés.',
+      photos: 'Les photos des produits.',
+    },
+    where: {
+      title: 'Où, et combien de temps',
+      server:
+        'Les données sont dans la base de Repas, sur le serveur de Repas (hébergé chez DigitalOcean). Repas ne les donne à personne, ne les vend pas, ne fait pas de publicité et n’envoie pas de statistiques à des tiers.',
+      duration:
+        'Elles restent tant que votre compte existe, ou jusqu’à ce que vous les oubliez (voir plus bas).',
+      backups:
+        'Le serveur fait une copie de sauvegarde chaque nuit et garde les 14 dernières : une donnée effacée peut rester dans ces copies environ deux semaines au plus, puis elles sont remplacées.',
+      phone:
+        'Sur votre téléphone, l’application garde votre connexion à Leclerc, comme le ferait un navigateur. Elle ne la partage ni avec Repas ni avec personne d’autre que Leclerc et ses propres services. Vous pouvez l’effacer à tout moment : menu de l’application, « Se déconnecter de Leclerc ».',
+      sheets:
+        'Les descriptions de produits (nom, contenu, prix vu, magasin) sont communes à tous les utilisateurs de Repas et ne disent pas qui les a vues. Chacun ne retrouve que les produits dont Repas se souvient pour lui. La première personne qui décrit un produit fixe sa description (nom, contenu, code-barres) : les suivantes ne la réécrivent pas, elles ne font que la compléter si elle est incomplète ; le prix vu, lui, est rafraîchi par celles qui choisissent ce produit. Ces descriptions restent quand un compte est supprimé, mais sans aucun lien avec la personne.',
+    },
+    erase: {
+      title: 'Comment tout effacer',
+      product:
+        'Un produit, ou un article : dans « Moi », « Mes produits du drive » : retirez un produit, choisissez « Ne plus proposer » pour un autre, ou touchez « Oublier cet article » pour effacer tout ce que Repas retient sur lui.',
+      store:
+        'Un changement de magasin : si vous changez de magasin, les produits dont Repas se souvient pour l’ancien magasin ne sont plus utilisés, mais ils restent enregistrés jusqu’à la suppression de votre compte.',
+      all: 'Tout, d’un coup : demandez la suppression de votre compte à la personne qui administre Repas. Elle efface vos données du drive (magasin, produits dont Repas se souvient), vos listes de courses avec leur statut d’envoi, et le reste de votre compte.',
+      rights:
+        'Pour exercer vos droits (savoir ce que Repas a de vous, corriger, effacer), écrivez à la personne qui vous a donné accès à Repas.',
+    },
+    before: {
+      title: 'Avant d’utiliser l’envoi : ce que vous devez savoir',
+      account:
+        'L’envoi agit dans votre propre compte Leclerc, avec votre propre connexion, comme si vous faisiez les recherches et les ajouts vous-même. Repas ne voit jamais vos identifiants.',
+      suspension:
+        'Les conditions d’utilisation de Leclerc permettent à l’enseigne de suspendre un compte E.Leclerc (et la cagnotte de Tickets E.Leclerc qui va avec) si elle juge l’usage abusif. Repas limite ce risque : une requête à la fois, avec des pauses, seulement quand vous le demandez, et seulement pour votre liste. Mais le risque existe et il est pour votre compte.',
+      stop: 'Si Leclerc ralentit les requêtes, l’application s’arrête d’elle-même. Attendez plusieurs heures avant de reprendre l’envoi, sans le relancer en boucle. Si votre compte Leclerc pose un problème, contactez le service client de Leclerc : Repas n’a aucun accès à votre compte et ne contacte jamais Leclerc.',
+      manual:
+        'Vous pouvez vous en passer à tout moment : la liste de Repas reste utilisable pour faire vos courses à la main sur Leclerc.',
     },
   },
   // L'estimation du coût d'une liste (DRV-612)
@@ -962,22 +950,16 @@ export default {
     settings: 'Réglages du drive',
     total: 'Total estimé',
     coverage: '{count} article sur {total} estimé | {count} articles sur {total} estimés',
-    notIncluded:
-      '{count} article n’est pas dans le total. | {count} articles ne sont pas dans le total.',
-    periodOne: 'D’après les prix vus le {date}.',
-    periodRange: 'D’après les prix vus entre le {from} et le {to}.',
-    lowCoverage:
-      'Estimation peu fiable : moins de la moitié des articles ont un prix connu, le total ne couvre qu’une partie de la liste.',
-    // Aucun article n'a de prix : une seule phrase, ni compteur, ni avertissement, ni détail (DRV-626)
-    noPrice: 'Pas encore de prix : Repas les retient à chaque envoi au drive.',
-    nothingToBuy: 'Rien à estimer : aucun article de cette liste n’est à acheter au drive.',
+    // Aucun article n'a de prix : une seule phrase, ni compteur, ni avertissement, ni détail (DRV-626). Le total et le nombre d'articles estimés,
+    // rien d'autre (DRV-628) : les réserves sur l'estimation sont dans les conditions d'utilisation du drive.
+    noPrice: 'Pas encore de prix connu.',
+    nothingToBuy: 'Rien à estimer : aucun article n’est à acheter au drive.',
     detail: 'Voir le détail ({count} article) | Voir le détail ({count} articles)',
     groups: {
       unestimated: 'Non estimées ({count})',
       estimated: 'Estimées ({count})',
       haveAtHome: 'J’en ai toujours ({count})',
     },
-    neverGuessed: 'Ces articles ne sont pas dans le total : Repas ne devine jamais un prix.',
     packsAt: '{count} × {price}',
     seenOn: 'prix vu le {date}',
     status: {

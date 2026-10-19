@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 import fr from '@/i18n/fr'
+import { WARNING_WORDS } from './warningWords'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 
@@ -204,9 +205,15 @@ const WEB_GROUPS = [
   'driveSettings',
   'driveAccount',
   'driveHelp',
-  'drivePrivacy',
+  'driveTerms',
   'driveEstimate',
 ] as const
+
+/**
+ * La seule page où l'on parle des risques et des engagements (DRV-628) : les conditions d'utilisation du drive. Elle s'ouvre si l'on veut
+ * (jamais imposée), et elle est lue par le glossaire et le vouvoiement comme le reste.
+ */
+const TERMS_GROUP = 'driveTerms'
 
 function flatten(value: unknown, path: string, out: { where: string; text: string }[]): void {
   if (typeof value === 'string') out.push({ where: path, text: value })
@@ -487,5 +494,126 @@ describe('le menu de l’application', () => {
     expect(label('menu_logout_drive')).toBe('Se déconnecter de Leclerc')
     expect(label('clear_message')).toContain('seront effacés')
     expect(label('clear_message_shared')).toContain('seront effacés')
+  })
+})
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Aucun avertissement hors des conditions d'utilisation (DRV-628)
+//
+// Décision de l'utilisateur (2026-10-19) : « Les messages qui font peur, je ne les veux que dans des CGU, nulle part ailleurs. » L'écran sert
+// l'action en cours : une phrase y reste seulement si elle dit ce qui se passe ou ce qu'il faut faire maintenant. Les risques, les
+// rassurances en série, les réserves sur l'estimation et les notes de vie privée vivent dans UNE page, « Conditions d'utilisation du drive »
+// (`driveTerms` de `fr.ts`), que l'on ouvre si on le veut. Ce test échoue si l'un de ces mots réapparaît ailleurs : dans le front web, dans
+// l'interface de l'agent ou dans l'application Android.
+
+// Les mots d'un avertissement, d'une rassurance ou d'une réserve : `warningWords.ts` (DRV-628, portée 5, et les formes voisines trouvées à l'inventaire).
+
+/**
+ * Les parties de `strings.ts` qui ne sont pas un écran de l'utilisateur : le rapport texte copiable du diagnostic et le test automatique de la
+ * variante de débogage. Ce sont des outils du mainteneur (ils parlent de requêtes, de cookies, de panier d'essai) ; leur écran, lui, est lu.
+ */
+const WARNING_EXEMPT_AGENT_PATHS = [
+  ['S', 'diagnostic', 'text'],
+  ['S', 'diagnostic', 'probe'],
+  ['S', 'selftest'],
+] as const
+
+/** Ce que le texte `text` de `where` dit de trop : le mot d'avertissement trouvé, en phrase lisible. */
+export function warnings(where: string, text: string): string[] {
+  const match = WARNING_WORDS.exec(text)
+  return match === null
+    ? []
+    : [
+        `${where} : « ${match[0]} » est un avertissement ou une rassurance : à l'écran, seules comptent les phrases qui disent ce qui se passe ou ce qu'il faut faire ; le reste va dans les conditions d'utilisation du drive (« ${text} »)`,
+      ]
+}
+
+describe('aucun avertissement hors des conditions d’utilisation du drive (DRV-628)', () => {
+  it.each([
+    'Rien n’est commandé ni payé.',
+    'Repas ne vide pas votre panier Leclerc.',
+    'Le panier Leclerc n’est pas vidé par Repas.',
+    'Repas ne voit jamais votre mot de passe.',
+    'Estimation peu fiable : moins de la moitié des articles ont un prix.',
+    'Repas ne devine jamais un prix.',
+    'D’après les prix vus le 3 mars.',
+    'Leclerc peut suspendre un compte.',
+    'Le risque existe.',
+    'Faites attention à votre compte.',
+    'Ne relancez pas l’envoi en boucle.',
+    'La cagnotte de Tickets E.Leclerc.',
+    'Une vérification anti-robot.',
+  ])('repère « %s »', (text) => {
+    expect(warnings('essai', text)).not.toEqual([])
+  })
+
+  it.each([
+    'Le panier est rempli',
+    'Leclerc a ralenti les demandes.',
+    'La liste ne sera plus modifiable. Vous pourrez la rouvrir.',
+    'Gardez l’application ouverte.',
+    'Ce qui est déjà au panier y reste.',
+    '6 articles : 2 sont déjà choisis, 4 sont à choisir sur Leclerc.',
+  ])('laisse passer « %s »', (text) => {
+    expect(warnings('essai', text)).toEqual([])
+  })
+
+  it('lit les groupes du drive du front web, hors de la page des conditions', () => {
+    // Les groupes qui ne parlent pas du drive (l'administration des comptes : « comme s'il n'avait jamais existé ») ne sont pas du parcours.
+    const lues = sources.web.filter(
+      (entry) =>
+        WEB_GROUPS.some((group) => entry.where.includes(` ${group}.`)) &&
+        !entry.where.includes(` ${TERMS_GROUP}.`),
+    )
+    expect(lues.length).toBeGreaterThan(300)
+    expect(lues.flatMap((entry) => warnings(entry.where, entry.text))).toEqual([])
+  })
+
+  it('lit l’interface de l’agent (strings.ts), hors rapports du mainteneur', () => {
+    const lues = sources.agent
+      .filter((entry) => entry.where.startsWith('drive-agent/src/ui/strings.ts'))
+      .filter(
+        (entry) =>
+          !WARNING_EXEMPT_AGENT_PATHS.some((prefix) =>
+            entry.where.includes(` ${prefix.join('.')}`),
+          ),
+      )
+    expect(lues.length).toBeGreaterThan(100)
+    expect(lues.flatMap((entry) => warnings(entry.where, entry.text))).toEqual([])
+  })
+
+  it('lit l’application Android (strings.xml) en entier', () => {
+    expect(sources.android.flatMap((entry) => warnings(entry.where, entry.text))).toEqual([])
+  })
+
+  it('nomme des exemptions qui existent encore (aucune exemption périmée)', () => {
+    const where = sources.agent.map((entry) => entry.where)
+    for (const prefix of WARNING_EXEMPT_AGENT_PATHS) {
+      expect(where.some((path) => path.includes(` ${prefix.join('.')}`))).toBe(true)
+    }
+  })
+
+  it('garde tout ce qui a quitté l’écran dans la page des conditions', () => {
+    const terms = sources.web
+      .filter((entry) => entry.where.includes(` ${TERMS_GROUP}.`))
+      .map((entry) => entry.text)
+      .join('\n')
+      .toLowerCase()
+    // Un fait de fond par ligne : la page des conditions doit encore le dire, puisque l'écran ne le dit plus.
+    for (const fact of [
+      'suspendre un compte',
+      'cagnotte',
+      'ne valide jamais de commande',
+      'ne vide jamais votre panier',
+      'ne réduit jamais une quantité',
+      'ne voit jamais',
+      'ne devine jamais un prix',
+      'l’estimation est indicative',
+      'touché « commencer »',
+      'ne sont pas refaits',
+      'attendez plusieurs heures',
+    ]) {
+      expect(terms.includes(fact), `la page des conditions ne dit plus « ${fact} »`).toBe(true)
+    }
   })
 })

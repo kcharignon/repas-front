@@ -52,5 +52,12 @@ const row =
       </span>
       <Smartphone class="size-5 shrink-0 text-muted" aria-hidden="true" />
     </button>
+    <!-- Les conditions d'utilisation du drive (DRV-628) : un lien discret, jamais imposé -->
+    <RouterLink
+      :to="{ name: 'drive-terms' }"
+      class="inline-flex min-h-11 items-center self-start text-sm text-muted underline hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
+    >
+      {{ t('driveTerms.link') }}
+    </RouterLink>
   </section>
 </template>

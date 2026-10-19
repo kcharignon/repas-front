@@ -144,7 +144,7 @@ test('envoyer une liste au drive, la lire sans pouvoir la modifier, puis la rouv
 
   // Réouverture : confirmation, puis la liste redevient modifiable
   await page.getByRole('button', { name: 'Rouvrir la liste' }).click()
-  await expect(page.getByRole('dialog')).toContainText('Le panier Leclerc ne sera pas vidé.')
+  await expect(page.getByRole('dialog')).toContainText('La liste redevient modifiable.')
   await page.getByRole('dialog').getByRole('button', { name: 'Rouvrir la liste' }).click()
   await expect(page.getByText('En cours')).toBeVisible()
   for (const box of await page.getByRole('checkbox').all()) await expect(box).toBeEnabled()
@@ -188,7 +188,7 @@ test('fonction coupée : « Reprendre l’envoi » dit que l’envoi n’est pas
 
   // Même confirmation que sur l'écran de la liste, puis retour à la liste, de nouveau modifiable
   await page.getByRole('button', { name: 'Rouvrir la liste' }).click()
-  await expect(page.getByRole('dialog')).toContainText('Le panier Leclerc ne sera pas vidé.')
+  await expect(page.getByRole('dialog')).toContainText('La liste redevient modifiable.')
   await page.getByRole('dialog').getByRole('button', { name: 'Rouvrir la liste' }).click()
   await expect(page).toHaveURL(/\/listes\/l1$/)
   await expect(page.getByText('En cours')).toBeVisible()

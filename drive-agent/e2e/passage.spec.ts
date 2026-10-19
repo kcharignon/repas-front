@@ -271,7 +271,7 @@ test('met au panier le nombre calculé sur le contenu lu sur le site, pas celui 
   expectPoliteAgent(fake)
 
   // And : l'écran de fin signale la seule ligne recalculée
-  await expect(page.getByText('Contenu différent de celui dont Repas se souvenait')).toBeVisible()
+  await expect(page.getByText('Quantités changées')).toBeVisible()
   await expect(page.getByText('Farine : 3 au lieu de 30')).toBeVisible()
   await expect(page.getByText('Sucre :')).toHaveCount(0)
 
@@ -304,7 +304,7 @@ test('garde le nombre du plan quand le contenu lu sur le site ne se compare pas,
 
   // Then : comme avant, le plan fait foi, et rien n'est signalé
   expect(fake.cart()).toEqual({ 1000031: 5, 1000014: 2 })
-  await expect(page.getByText('Contenu différent de celui dont Repas se souvenait')).toHaveCount(0)
+  await expect(page.getByText('Quantités changées')).toHaveCount(0)
   expectPoliteAgent(fake)
 })
 

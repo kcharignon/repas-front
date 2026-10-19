@@ -13,11 +13,9 @@ test('dans l’application : choisir un autre produit, passer une ligne, ouvrir 
   await expect(
     page.getByRole('heading', { level: 1, name: 'Votre liste est prête pour le drive' }),
   ).toBeVisible()
-  // Une phrase de synthèse, une phrase d'explication, le bouton visible sans défiler ; la liste est repliée (12 articles)
+  // Une phrase de synthèse, le bouton visible sans défiler, aucune explication (DRV-628) ; la liste est repliée (12 articles)
   await expect(page.getByText(SUMMARY_12)).toBeVisible()
-  await expect(
-    page.getByText('Le panier de Leclerc va se remplir, puis vous revenez ici.'),
-  ).toBeVisible()
+  await expect(page.getByText('va se remplir')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Ouvrir le drive' })).toBeInViewport()
   await expect(page.getByRole('listitem').filter({ hasText: 'Farine de blé T55' })).toHaveCount(0)
   await openArticles(page)

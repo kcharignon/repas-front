@@ -86,6 +86,11 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/features/drive/DriveHelpView.vue'),
       },
       {
+        path: 'drive/conditions',
+        name: 'drive-terms',
+        component: () => import('@/features/drive/DriveTermsView.vue'),
+      },
+      {
         path: 'drive/produits',
         name: 'drive-products',
         component: () => import('@/features/drive/ProductsView.vue'),
