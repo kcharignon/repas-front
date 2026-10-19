@@ -51,6 +51,22 @@ export function cartsOf(plan: PlanMessage, state: RunState): Carts {
   return carts
 }
 
+/** Un article resté sans produit à la fin (`UNAVAILABLE`), avec la raison de son produit habituel et le nombre de recherches faites (DRV-635). */
+type EndReason = NonNullable<EndProps['reasons']>[number]
+
+/**
+ * Les articles qui attendent encore un choix à la fin et dont la phase A sait pourquoi leur produit habituel n'a pas été mis au panier, dans l'ordre
+ * du plan, une fois chacun : la raison du premier produit de la ligne (le préféré). Un article nouveau n'en a pas. Comme pour `changesOf`, ce qui
+ * vient de l'état de reprise n'est cru que pour une ligne du plan.
+ */
+export function reasonsOf(plan: PlanMessage, state: RunState): EndReason[] {
+  return plan.lines.flatMap(({ ingredientSlug, name }) => {
+    if (own(state.waiting, ingredientSlug) === undefined) return []
+    const found = state.reasons.find((note) => note.ingredientSlug === ingredientSlug)
+    return found ? [{ name, reason: found.reason, tried: found.tried }] : []
+  })
+}
+
 /** L'issue globale d'un passage et, s'il y en a un, le code qui l'a interrompu. */
 export interface Ending {
   outcome: Outcome
@@ -148,6 +164,7 @@ export function endProps(
   changes: readonly EndChange[] = [],
   carts: Carts = { kept: [], unreadable: [] },
   slow = false,
+  reasons: readonly EndReason[] = [],
 ): EndProps {
   const count = (outcome: ResultLine['outcome']) =>
     lines.filter((line) => line.outcome === outcome).length
@@ -164,5 +181,6 @@ export function endProps(
     ...(carts.kept.length > 0 && { kept: carts.kept }),
     ...(carts.unreadable.length > 0 && { unreadable: carts.unreadable }),
     ...(slow && { slow: true as const }),
+    ...(reasons.length > 0 && { reasons }),
   }
 }

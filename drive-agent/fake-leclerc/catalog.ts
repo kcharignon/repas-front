@@ -96,6 +96,10 @@ export const PRODUCTS: readonly FakeProduct[] = [
     'L',
     6,
   ),
+  // DRV-635. Un produit à stock nul dont la fiche dit « Bientôt disponible » : le mode « disponibilité trompeuse » du faux site le fait accepter par le panier, comme le site mobile
+  // de l'enseigne (1000033). Un produit en stock au libellé qui porte une apostrophe, pour le moteur de recherche à apostrophe stricte (1000034).
+  make("Céréales fourrées P'tit Fermier Chocolat noisette", '450 g', 2.19, 4.87, 'kg', 0),
+  make("Gâteaux C'est Nous Pépites", '300 g', 1.85, 6.17, 'kg', 9),
 ]
 
 /** Un texte sans accent ni majuscule : « Œufs » et « oeufs » se valent, comme dans une recherche. */
@@ -104,12 +108,32 @@ export function normalize(text: string): string {
 }
 
 /**
+ * Le moteur « apostrophe stricte » (DRV-635), d'après le relevé du 2026-10-19 sur le vrai site : « c'est » et « cest » retrouvent « C'est », « c est » (l'apostrophe
+ * remplacée par une espace) ne trouve RIEN. Les mots se séparent aux espaces seulement, l'apostrophe est retirée des deux côtés, et un mot cherché est le
+ * début d'un mot du libellé (« est » n'est le début d'aucun mot de « Gâteaux C'est Nous », « cest » l'est). Accents et majuscules sont ignorés.
+ */
+function searchWithStrictApostrophe(query: string): FakeProduct[] {
+  const tokens = (text: string) => normalize(text).replace(/['’]/g, '').split(/\s+/).filter(Boolean)
+  const words = tokens(query)
+  if (words.length === 0) return []
+  return PRODUCTS.filter((product) => {
+    const labelWords = tokens(`${product.label1} ${product.label2 ?? ''}`)
+    return words.every((word) => labelWords.some((labelWord) => labelWord.startsWith(word)))
+  })
+}
+
+/**
  * Les produits dont le libellé contient tous les mots cherchés, dans l'ordre du catalogue. Par défaut la recherche est tolérante (sans accents
  * ni majuscules, `œ` = `oe`). Avec `strict`, elle imite un moteur sensible aux accents, à la ligature et au pluriel (le vrai site, d'après les
  * hypothèses H3 et H7 de l'audit du 2026-10-18) : seules les majuscules sont ignorées, « œuf » ne trouve pas les « Oeufs », « creme » ne trouve
  * pas la « Crème », « spaghettis » ne trouve pas le « Spaghetti » ; un mot cherché est une partie d'un mot du libellé (« oeuf » trouve « Oeufs »).
  */
-export function searchCatalog(query: string, strict = false): FakeProduct[] {
+export function searchCatalog(
+  query: string,
+  strict = false,
+  strictApostrophe = false,
+): FakeProduct[] {
+  if (strictApostrophe) return searchWithStrictApostrophe(query)
   if (strict) {
     const words = query
       .normalize('NFC')

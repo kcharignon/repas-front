@@ -555,6 +555,26 @@ const end: Renderer<'end'> = (props: EndProps, answer) => {
             ),
           )
         : null,
+      props.reasons && props.reasons.length > 0
+        ? h(
+            'details',
+            {},
+            h('summary', { text: S.end.reasons.title }),
+            h(
+              'ul',
+              {},
+              ...props.reasons.map((line) =>
+                h('li', {
+                  text: S.end.reasons.item(
+                    line.name,
+                    S.end.reasons.reason[line.reason],
+                    line.tried,
+                  ),
+                }),
+              ),
+            ),
+          )
+        : null,
       props.unreadable && props.unreadable.length > 0
         ? h(
             'div',

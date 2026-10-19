@@ -33,6 +33,13 @@ export interface RawProduct {
   stock: number | null
   /** `iQuantitePanier` : quantité déjà au panier. */
   inCart: number | null
+  /**
+   * `eDisponibilite` (DRV-635) : l'étiquette de disponibilité du site, lue comme un nombre (`null` si elle manque ou n'est pas un nombre). Mesurée,
+   * pas interprétée : le site ordinateur et le site mobile ne disent pas la même chose du stock d'un même produit.
+   */
+  availability: number | null
+  /** La fiche du produit dit « Bientôt disponible » (DRV-635) : une étiquette de rupture, que le panier peut démentir. */
+  comingSoon: boolean
   /** `sUrlVignetteProduit`. */
   thumbnail: string | null
   /** Présent seulement si au moins un champ du contenu net structuré est lu. */
@@ -111,6 +118,9 @@ function readField(text: string, name: string): string | null {
   const value = found?.[3] !== undefined ? raw : decodeJsString(raw)
   return value === '' ? null : value
 }
+
+/** « Bientôt disponible », avec ou sans accent (le texte est décodé avant : `ô` et `&ocirc;` y sont déjà « ô »). */
+const COMING_SOON = /bient[oô]t\s+disponible/i
 
 const MAX_SPAN = 6000
 
@@ -192,6 +202,8 @@ function buildProduct(id: string, slices: string[]): RawProduct {
     measureText,
     stock: number('iQteDisponible'),
     inCart: number('iQuantitePanier'),
+    availability: number('eDisponibilite'),
+    comingSoon: slices.some((slice) => COMING_SOON.test(decodeJsString(slice))),
     thumbnail: text('sUrlVignetteProduit'),
     ...(Object.values(structured).some((value) => value !== null) ? { structured } : {}),
   }

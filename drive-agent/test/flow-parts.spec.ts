@@ -46,12 +46,19 @@ describe('settleKnownLine', () => {
 
   it('n’ajoute jamais un produit qui n’est pas dans la liste : sans produit utilisable, la ligne attend', async () => {
     const line = known('farine', [product('1000001')])
-    const { adapter, calls } = fakeAdapter({ '1000001': { stock: 0 }, '1000002': {} })
+    const { adapter, calls } = fakeAdapter({
+      '1000001': { stock: 0, obtained: () => 0 },
+      '1000002': {},
+    })
 
     const verdict = await settleKnownLine(line, { adapter, askQuantity: noQuestion })
 
-    expect(verdict).toEqual({ kind: 'waiting', unavailable: ['1000001'] })
-    expect(calls).toEqual(['search 1000001'])
+    expect(verdict).toEqual({
+      kind: 'waiting',
+      unavailable: ['1000001'],
+      notes: [{ id: '1000001', reason: 'OUT_OF_STOCK', tried: 1 }],
+    })
+    expect(calls).toEqual(['search 1000001', 'cart 1000001 1'])
   })
 
   it('une ligne sans produit attend, sans requête', async () => {
@@ -62,7 +69,7 @@ describe('settleKnownLine', () => {
       { adapter, askQuantity: noQuestion },
     )
 
-    expect(verdict).toEqual({ kind: 'waiting', unavailable: [] })
+    expect(verdict).toEqual({ kind: 'waiting', unavailable: [], notes: [] })
     expect(calls).toEqual([])
   })
 
@@ -132,15 +139,16 @@ describe('settleKnownLine', () => {
       expect(writes).toEqual([{ id: '1000001', quantity: LIMITS.packsMax }])
     })
 
-    it('ne recalcule rien pour un produit indisponible : aucune écriture, aucun écart', async () => {
+    it('un produit que le panier refuse : une seule tentative, aucun écart signalé', async () => {
       const { adapter, writes } = fakeAdapter({
-        '1000001': { stock: 0, content: { value: 500, unit: 'g' } },
+        '1000001': { stock: 0, obtained: () => 0, content: { value: 500, unit: 'g' } },
       })
 
       const verdict = await settleKnownLine(line, { adapter, askQuantity: noQuestion })
 
-      expect(writes).toEqual([])
-      expect(verdict).toEqual({ kind: 'waiting', unavailable: ['1000001'] })
+      expect(writes).toHaveLength(1)
+      expect(verdict).toMatchObject({ kind: 'waiting', unavailable: ['1000001'] })
+      expect(verdict).not.toHaveProperty('change')
     })
   })
 
