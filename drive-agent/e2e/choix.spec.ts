@@ -1,5 +1,8 @@
 // La phase B de bout en bout : l'agent affiche lui-même la liste des produits trouvés par la recherche, l'utilisateur choisit, et seul
 // ce choix met un produit au panier (la page de l'enseigne refuse d'être affichée dans un cadre : décision G1).
+import type { Page } from '@playwright/test'
+
+import { PHOTO_HOST, photoReply } from '../fake-leclerc/photos'
 import { openWithFragment, returnedResult, returnsToRepas } from './support/agent'
 import { expectPoliteAgent } from './support/cadence'
 import { expect, test } from './support/fixtures'
@@ -385,4 +388,106 @@ test('un produit retenu et disponible n’ouvre jamais l’écran de choix : la 
   await expect(page.locator('.head strong')).toHaveText('Sel')
   await expect(page.getByRole('button', { name: /Passer ces/ })).toHaveCount(0)
   expect(fake.cart()).toEqual({ 1000001: 3 })
+})
+
+// —— Les photos des produits (DRV-633) ————————————————————————————————————————————————————————————————————————————————————————————
+
+/**
+ * Le navigateur de test n'a aucune adresse pour l'hôte d'images (et la page est en HTTP) : on répond nous-mêmes aux adresses
+ * `https://photos-test.leclercdrive.fr/…` avec l'image synthétique du faux site, et on note toute requête d'image.
+ */
+async function servePhotos(page: Page): Promise<string[]> {
+  const requested: string[] = []
+  page.on('request', (request) => {
+    if (request.resourceType() === 'image') requested.push(request.url())
+  })
+  await page.route(`https://${PHOTO_HOST}/**`, async (route) => {
+    const url = new URL(route.request().url())
+    const photo = photoReply(url.search)
+    await route.fulfill({ status: photo.status, contentType: photo.type, body: photo.body })
+  })
+  return requested
+}
+
+test('montre la photo des produits qui en ont une, et laisse les autres en texte : adresse refusée, photo en 404, pas de photo', async ({
+  page,
+  fake,
+  agentCode,
+}) => {
+  // Given : de la farine (1000001 et 1000002 ont une photo, 1000003 l'adresse d'un autre hôte, 1000004 une photo en 404, 1000005 rien)
+  const requested = await servePhotos(page)
+  await openWithFragment(
+    page,
+    fake,
+    agentCode,
+    planOf([fresh('farine', 'Farine', { needed: KILO })]),
+  )
+
+  // When : la liste s'affiche
+  await page.getByRole('button', { name: 'Commencer' }).click()
+  await expect(page.getByText('Il te faut : 1 kg.')).toBeVisible()
+  const card = (name: string) => page.getByRole('listitem').filter({ hasText: name })
+
+  // Then : deux photos chargées, à gauche du libellé (texte alternatif = libellé), les trois autres fiches sont en texte, sans image cassée
+  for (const name of ['Farine de blé T55', 'Farine de blé T45']) {
+    const image = card(name).locator('img')
+    await expect(image).toHaveCount(1)
+    await expect
+      .poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth))
+      .toBeGreaterThan(0)
+    await expect(image).toHaveAttribute('alt', new RegExp(name))
+    await expect(image).toHaveAttribute('loading', 'lazy')
+  }
+  for (const name of ['Farine de blé T65', 'Farine de sarrasin', 'Farine complète']) {
+    await expect(card(name), name).toBeVisible()
+    await expect(card(name).locator('img'), name).toHaveCount(0)
+    await expect(card(name).getByRole('button', { name: 'Choisir' }), name).toBeEnabled()
+  }
+  // Aucune requête d'image vers un autre hôte que celui des images de l'enseigne ; la photo en 404 a bien été demandée, puis retirée
+  expect(requested.length).toBeGreaterThan(0)
+  for (const address of requested) expect(new URL(address).hostname, address).toBe(PHOTO_HOST)
+  expect(
+    fake.requests().filter((request) => request.kind === 'image' || request.host === PHOTO_HOST),
+    'le faux hôte d’images n’est pas atteint : le navigateur de test ne résout que le faux magasin',
+  ).toEqual([])
+  expect(requested.some((address) => address.includes('id=1004'))).toBe(true)
+  expect(requested.some((address) => address.includes('id=1003'))).toBe(false)
+
+  // Et le résultat renvoyé à Repas ne dit rien des photos
+  await card('Farine de blé T55').getByRole('button', { name: 'Choisir' }).click()
+  await returnsToRepas(page, fake)
+  const result = await returnedResult(page, fake)
+  expect(JSON.stringify(result)).not.toMatch(/photo|image|leclercdrive/i)
+  expect(result).toMatchObject({ lines: [{ outcome: 'CHOSEN', product: { id: '1000001' } }] })
+})
+
+test('la question « Toujours prendre ce produit ? » montre la photo du produit choisi', async ({
+  page,
+  fake,
+  agentCode,
+}) => {
+  // Given : le seul produit connu de la farine est en rupture ; on choisit la farine T55, qui a une photo
+  await servePhotos(page)
+  const plan = planOf([known('farine', 'Farine', [product(1000002)], { needed: KILO })])
+  await openWithFragment(page, fake, agentCode, plan)
+  await page.getByRole('button', { name: 'Commencer' }).click()
+  await expect(page.getByText('Ces produits ne sont plus disponibles')).toBeVisible()
+
+  // When
+  await page
+    .getByRole('listitem')
+    .filter({ hasText: 'Farine de blé T55' })
+    .getByRole('button', { name: 'Choisir' })
+    .click()
+
+  // Then : la photo est à côté du libellé du produit choisi
+  await expect(page.getByRole('heading', { name: 'Toujours prendre ce produit ?' })).toBeVisible()
+  const image = page.locator('.overlay img')
+  await expect(image).toHaveCount(1)
+  await expect(image).toHaveAttribute('alt', /Farine de blé T55/)
+  await expect
+    .poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth))
+    .toBeGreaterThan(0)
+  await page.getByRole('button', { name: 'Cette fois seulement' }).click()
+  await returnsToRepas(page, fake)
 })

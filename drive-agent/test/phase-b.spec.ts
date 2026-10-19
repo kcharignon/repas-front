@@ -675,7 +675,7 @@ describe('un produit connu devenu indisponible', () => {
 
       // Then
       expect(test.placements).toEqual([
-        { ingredient: 'Farine', productLabel: 'Poivre noir moulu de test 500 g' },
+        { ingredient: 'Farine', productLabel: 'Poivre noir moulu de test 500 g', photo: null },
       ])
       expect(lineOf(expectConform(test.sent[0]), 'farine')).toMatchObject({
         outcome: 'CHOSEN',
@@ -1822,5 +1822,92 @@ describe('la raison de chaque produit habituel écarté (DRV-635)', () => {
     expect(lineOf(test.sent[0], 'gateaux')).toMatchObject({
       rejected: [{ id: '1000001', label: LABEL_A }],
     })
+  })
+})
+
+// —— Les photos (DRV-633) ————————————————————————————————————————————————————————————————————————————————————————————————————
+
+describe('les photos des produits', () => {
+  const PHOTO = (id: string) =>
+    `https://photos-test.leclercdrive.fr/image.ashx?id=${id}&use=l&cat=p`
+  const withPhotos = (shelf: Record<string, ShelfItem>): Record<string, ShelfItem> =>
+    Object.fromEntries(
+      Object.entries(shelf).map(([id, entry]) => [id, { ...entry, image: PHOTO(id) }]),
+    )
+
+  it('chaque fiche reçoit l’adresse de la photo de son produit ; un produit sans photo n’en a pas', async () => {
+    const shelf = { ...withPhotos(SHELF), '2000002': { ...SHELF['2000002'], image: null } }
+    const test = run(pepper(), [() => ({ kind: 'skip' })], { shelf })
+
+    await test.start()
+
+    const zone = test.user.views[0]?.zone ?? document.createElement('div')
+    expect(rows(zone).map((row) => row.querySelector('img')?.getAttribute('src') ?? null)).toEqual([
+      PHOTO('2000001'),
+      null,
+      PHOTO('2000003'),
+      PHOTO('2000004'),
+    ])
+    expect(rows(zone)[0]?.querySelector('img')?.getAttribute('alt')).toBe(
+      'Poivre noir moulu de test',
+    )
+  })
+
+  it('le résultat renvoyé à Repas est le même, octet pour octet, avec ou sans photos : aucune adresse d’image ne part', async () => {
+    const without = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')])
+    const photos = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')], {
+      shelf: withPhotos(SHELF),
+    })
+
+    await without.start()
+    await photos.start()
+
+    expect(JSON.stringify(photos.sent)).toBe(JSON.stringify(without.sent))
+    expect(JSON.stringify(photos.sent)).not.toMatch(/photo|image|leclercdrive/i)
+    expect(photos.adapter.calls).toEqual(without.adapter.calls)
+  })
+
+  it('l’état de reprise ne garde aucune adresse de photo', async () => {
+    const test = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')], {
+      shelf: withPhotos(SHELF),
+    })
+
+    await test.start()
+
+    const stored = JSON.stringify(
+      Object.fromEntries(
+        Array.from({ length: sessionStorage.length }, (_, index) => {
+          const key = sessionStorage.key(index) ?? ''
+          return [key, sessionStorage.getItem(key)]
+        }),
+      ),
+    )
+    expect(stored).not.toMatch(/image\.ashx|leclercdrive|photo/i)
+  })
+
+  it('la question « Toujours prendre ce produit ? » reçoit la photo du produit choisi', async () => {
+    const FARINE = [
+      {
+        ...product('1000001', 1, 'Farine de test A'),
+        content: { value: 1000, unit: 'g' as const },
+      },
+    ]
+    const shelf = { ...withPhotos(SHELF), '1000001': OUT_OF_STOCK }
+    const line = {
+      ...known('farine', FARINE),
+      searchQuery: 'poivre',
+      needed: { quantity: 800, unitSymbol: 'g', dimension: 'WEIGHT' as const, baseFactor: 1 },
+    }
+    const test = run(line, [(view) => choose(view.zone, 'Poivre noir')], { shelf })
+
+    await test.start()
+
+    expect(test.placements).toEqual([
+      {
+        ingredient: 'Farine',
+        productLabel: 'Poivre noir moulu de test 500 g',
+        photo: PHOTO('2000001'),
+      },
+    ])
   })
 })

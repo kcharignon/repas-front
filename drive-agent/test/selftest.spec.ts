@@ -45,7 +45,7 @@ describe('le choix automatique du produit', () => {
       label2: null,
       pricePerMeasure: null,
       promo: null,
-      thumbnailUrl: null,
+      imageUrl: null,
       content: null,
       contentSource: null,
     }) as Parameters<typeof pickCandidate>[0][number]

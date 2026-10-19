@@ -10,6 +10,9 @@ import {
   type PickerProps,
 } from '../src/ui'
 
+// Les photos de la démonstration (DRV-633) : le test (`e2e/agent-ui.spec.ts`) répond lui-même à ces adresses (jamais une vraie image), 404 pour l'identifiant 9999.
+const photo = (id: number) => `https://photos-test.leclercdrive.fr/image.ashx?id=${id}&use=l&cat=p`
+
 const HOSTILE = '<img src=x onerror="window.pwned=1"> <script>window.pwned=1</script>'
 
 // Ouvert pour que les outils de test lisent l'interface ; l'agent, lui, la ferme.
@@ -24,6 +27,7 @@ const CANDIDATES: PickerItem[] = [
     promo: null,
     explain: '50 g par produit : 2 produits.',
     state: 'ok',
+    photo: photo(1001),
   },
   {
     id: '1000002',
@@ -33,6 +37,7 @@ const CANDIDATES: PickerItem[] = [
     promo: 'En promotion : 3,50 €',
     explain: '100 g par produit : 1 produit.',
     state: 'ok',
+    photo: photo(1002),
   },
   {
     id: '1000003',
@@ -42,6 +47,8 @@ const CANDIDATES: PickerItem[] = [
     promo: null,
     explain: '',
     state: 'refused',
+    // Une adresse d'un autre hôte : refusée, la fiche reste en texte.
+    photo: 'https://images.autre-site.invalid/image.ashx?id=1003',
   },
   {
     id: '1000004',
@@ -51,6 +58,8 @@ const CANDIDATES: PickerItem[] = [
     promo: null,
     explain: '',
     state: 'out',
+    // Une photo qui répond 404 : la fiche reste en texte, sans icône d'image cassée.
+    photo: photo(9999),
   },
   {
     id: '1000005',
@@ -221,6 +230,12 @@ const SCREENS: Record<string, () => unknown> = {
   store: () => ui.show('store', { id: '123456', label: null }),
   'store-label': () => ui.show('store', { id: '123456', label: 'Magasin de test, Ville-Test' }),
   placement: () =>
+    ui.show('placement', {
+      ingredient: 'Farine de blé',
+      productLabel: 'Farine de blé T45 de test 1 kg',
+      photo: photo(1001),
+    }),
+  'placement-text': () =>
     ui.show('placement', {
       ingredient: 'Farine de blé',
       productLabel: 'Farine de blé T45 de test 1 kg',

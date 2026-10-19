@@ -1,5 +1,7 @@
 import { type Content, type ContentSource, measureReference, parseContent } from './content'
+import { photoUrl } from '../photo-url'
 import type { RawProduct } from './embedded'
+import type { LocationLike } from './store'
 
 /** Le prix à l'unité de mesure, en centimes, ramené au kilo, au litre ou à la pièce (les unités du protocole, décision D22). */
 export interface PricePerMeasure {
@@ -24,12 +26,15 @@ export interface Candidate {
   stock: number | null
   /** `iQuantitePanier` : quantité déjà au panier. */
   inCart: number | null
+  /**
+   * L'adresse de la photo du produit (`sUrlVignetteProduit`, DRV-633), seulement si elle est affichable : `https` d'un hôte de `leclercdrive.fr`, sans
+   * identifiant ni port (`photo-url.ts`). Sinon `null`. Elle ne sert qu'à l'écran de choix : elle n'est jamais envoyée à Repas.
+   */
+  imageUrl: string | null
   /** `eDisponibilite` (DRV-635) : l'étiquette de disponibilité du site, mesurée par le diagnostic, jamais un verrou. */
   availability: number | null
   /** La fiche dit « Bientôt disponible » (DRV-635). */
   comingSoon: boolean
-  /** Adresse de la vignette (`https://…` ou chemin), jamais un autre schéma. */
-  thumbnailUrl: string | null
   content: Content | null
   /** D'où vient `content` ; `prices` est le moins précis (prix arrondis au centime). */
   contentSource: ContentSource | null
@@ -60,13 +65,8 @@ function promoCents(text: string | null): number | null {
   return found?.[1] ? Math.round(Number(found[1].replace(',', '.')) * 100) : null
 }
 
-/** Une vignette n'est gardée que si c'est une adresse https ou un chemin du site : jamais `javascript:` ni `data:`. */
-function safeUrl(url: string | null): string | null {
-  return url !== null && /^(?:https:)?\/\/|^\/(?!\/)/i.test(url) ? url : null
-}
-
-/** Interprète un produit brut de la page : prix en centimes, contenu net, vignette sûre. */
-export function toCandidate(raw: RawProduct): Candidate {
+/** Interprète un produit brut de la page : prix en centimes, contenu net, photo sûre (`page` : l'emplacement de la page, pour une adresse relative). */
+export function toCandidate(raw: RawProduct, page: LocationLike | null = null): Candidate {
   const parsed = parseContent(
     raw.label2,
     raw.unitPrice,
@@ -84,7 +84,7 @@ export function toCandidate(raw: RawProduct): Candidate {
     inCart: raw.inCart,
     availability: raw.availability,
     comingSoon: raw.comingSoon,
-    thumbnailUrl: safeUrl(raw.thumbnail),
+    imageUrl: photoUrl(raw.thumbnail, page),
     content: parsed?.content ?? null,
     contentSource: parsed?.source ?? null,
   }

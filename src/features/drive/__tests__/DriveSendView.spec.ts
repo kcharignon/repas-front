@@ -541,6 +541,107 @@ describe('écran d’envoi au drive, hors de l’application', () => {
   })
 })
 
+describe('écran d’envoi au drive, version de l’application (DRV-640)', () => {
+  const sentence = 'Mets à jour l’application pour envoyer ta liste.'
+
+  /** Une application qui annonce cette version (`null` : elle ne répond pas à `app.info`). */
+  function installVersion(version: string | null) {
+    const native = fakeNative((message, reply) => {
+      if (message.type === 'app.info' && version !== null)
+        reply({ v: 1, type: 'app.info', version, versionCode: 1, drive: true })
+    })
+    ;(globalThis as { repasNative?: unknown }).repasNative = native.bridge
+
+    return native
+  }
+
+  it.each(['0.1.8', '0.1.9'])(
+    'une application %s : une phrase et « Mettre à jour », ni le drive ni l’agent, les recherches restent',
+    async (version) => {
+      const native = installVersion(version)
+      const { wrapper } = await open()
+      await loaded(wrapper)
+
+      await vi.waitFor(() => expect(wrapper.text()).toContain(sentence))
+      const message = wrapper.find('section[role="status"]')
+      expect(message.text()).toContain(sentence)
+      const update = message.find('a')
+      expect(update.text()).toBe('Mettre à jour')
+      expect(update.attributes('href')).toBe('/drive/aide')
+
+      expect(button('Ouvrir le drive')).toBeUndefined()
+      expect(wrapper.text()).not.toContain('sont déjà choisis')
+      // Le repli à la main : un lien de recherche par article, liste ouverte
+      const links = wrapper.findAll('main > section ul > li > a')
+      expect(links).toHaveLength(11)
+      expect(links[0]!.attributes('href')).toBe(
+        `${storeBaseUrl}/recherche.aspx?TexteRecherche=Farine`,
+      )
+      expect(wrapper.findAll('main > section ul > li button')).toHaveLength(0)
+      expect(wrapper.find('details').exists()).toBe(false)
+      expect(started(native)).toHaveLength(0)
+    },
+  )
+
+  it('une application qui ne dit pas sa version est traitée comme trop ancienne', async () => {
+    installVersion(null)
+    const { wrapper } = await open({}, 'l1', '')
+    await loaded(wrapper)
+
+    await vi.waitFor(() => expect(wrapper.text()).toContain(sentence), { timeout: 6000 })
+    expect(button('Ouvrir le drive')).toBeUndefined()
+    expect(wrapper.findAll('main > section ul > li > a')).toHaveLength(11)
+  }, 10000)
+
+  it('une réponse mal formée est traitée comme une version inconnue', async () => {
+    const native = fakeNative((message, reply) => {
+      if (message.type === 'app.info') reply({ v: 1, type: 'app.info', version: 7 })
+    })
+    ;(globalThis as { repasNative?: unknown }).repasNative = native.bridge
+    const { wrapper } = await open()
+    await loaded(wrapper)
+
+    await vi.waitFor(() => expect(wrapper.text()).toContain(sentence))
+    expect(button('Ouvrir le drive')).toBeUndefined()
+  })
+
+  it.each(['0.1.10', '0.2.0', '1.0.0'])(
+    'une application %s : le comportement habituel, sans la phrase',
+    async (version) => {
+      const native = installVersion(version)
+      const { wrapper } = await open()
+      await loaded(wrapper)
+
+      await vi.waitFor(() => expect(native.sent.map((m) => m.type)).toContain('app.info'))
+      await flushPromises()
+      expect(wrapper.text()).not.toContain(sentence)
+      expect(button('Ouvrir le drive')?.disabled).toBe(false)
+      await press('Ouvrir le drive')
+      expect(started(native)).toHaveLength(1)
+    },
+  )
+
+  it('un navigateur (sans pont) garde son message « installe l’application », sans la phrase', async () => {
+    const { wrapper } = await open()
+    await loaded(wrapper)
+
+    expect(wrapper.text()).not.toContain(sentence)
+    expect(wrapper.text()).toContain('L’envoi automatique n’est pas disponible ici')
+    expect(wrapper.find('a[href="/drive/aide"]').text()).toBe('Installer l’application')
+    expect(wrapper.findAll('main > section ul > li > a')).toHaveLength(11)
+  })
+
+  it('un passage déjà commencé garde « Rouvrir le drive », même avec une application ancienne', async () => {
+    installVersion('0.1.8')
+    localStorage.setItem(DRAFT_KEY, draftOf('l1'))
+    const { wrapper } = await open()
+    await loaded(wrapper)
+
+    expect(wrapper.text()).toContain('En attente du récapitulatif…')
+    expect(button('Rouvrir le drive')).toBeDefined()
+  })
+})
+
 describe('lecture du plan', () => {
   it('mène aux réglages quand aucun magasin n’est enregistré (409 DRIVE_NOT_CONFIGURED)', async () => {
     installApp()

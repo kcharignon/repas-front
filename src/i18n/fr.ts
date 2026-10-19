@@ -515,6 +515,11 @@ export default {
       search: 'Chercher sur Leclerc',
       searchFor: 'Chercher sur Leclerc : {name} (s’ouvre dans un nouvel onglet)',
     },
+    // Une application trop ancienne pour le drive (DRV-640) : une phrase et un bouton, les liens de recherche restent sous l'écran
+    appTooOld: {
+      text: 'Mets à jour l’application pour envoyer ta liste.',
+      update: 'Mettre à jour',
+    },
     // Une erreur dit trois choses : ce qui s'est passé, ce qui est sauf, une action (principes-produit.md § 4)
     driveUnusable: {
       title: 'Le drive ne fonctionne pas sur ce téléphone',
@@ -781,120 +786,31 @@ export default {
     tiles: 'Types de recette',
     progressLabel: '{done} sur {total} articles dans le panier',
   },
-  // Aide et installation de l'application Android (DRV-316)
+  // La page de l'application Android (DRV-316), réduite à l'essentiel : la version installée et un bouton vers GitHub. Le reste du mode
+  // d'emploi (installation détaillée, dépannage, désinstallation…) est dans `android/README.md`, section « Dépannage de l'installation ».
   driveHelp: {
+    // Dans un navigateur : trois courtes étapes
     title: 'Installer l’application Repas',
     intro:
-      'L’application Android « Repas » contient tout Repas : tes recettes, tes listes de courses et l’envoi de la liste au drive Leclerc. Elle s’installe en quelques minutes, sans passer par Google Play.',
-    // Dans l'application elle-même : elle est déjà installée, la page sert à la mettre à jour et à la dépanner
-    titleInApp: 'L’application Repas',
-    introInApp:
-      'Tu utilises déjà l’application Android « Repas ». Cette page explique comment la mettre à jour, lancer un envoi au drive Leclerc, et que faire en cas de problème.',
-    back: 'Retour à la liste',
+      'L’application Android « Repas » s’installe en quelques minutes, sans passer par Google Play.',
+    // Dans l'application elle-même : elle est déjà installée, la page ne sert qu'à la mettre à jour
+    titleInApp: 'Mettre à jour l’application',
+    version: 'Version installée : {version}',
     entry: {
       title: 'Application',
       link: 'Installer l’application Android',
-      help: 'Le mode d’emploi pour installer et mettre à jour l’application Repas.',
+      help: 'Télécharger et installer l’application Repas.',
       // Dans l'application : on ne propose pas de l'installer, elle l'est déjà
       updateLink: 'Mettre à jour l’application',
-      updateHelp: 'Mode d’emploi pour mettre à jour l’application.',
-    },
-    contents: 'Sur cette page',
-    state: {
-      inApp: 'Tu es dans l’application Repas.',
-      inAppVersion: 'Tu es dans l’application Repas, version {version}.',
-      browser:
-        'Tu es dans un navigateur. Pour envoyer ta liste au drive automatiquement, il faut l’application Repas sur un téléphone Android.',
+      updateHelp: 'Ouvrir la dernière version.',
     },
     download: 'Télécharger la dernière version',
     downloadFor: 'Télécharger la dernière version (s’ouvre dans un nouvel onglet)',
-    sections: {
-      install: 'Installer l’application',
-      pwa: 'Retirer l’ancienne icône',
-      firstLogin: 'Se connecter à Leclerc la première fois',
-      send: 'Lancer un envoi',
-      update: 'Mettre à jour l’application',
-      uninstall: 'Désinstaller l’application',
-      troubleshooting: 'En cas de problème',
-      assisted: 'Sans l’application : chercher à la main',
-    },
-    install: {
-      chrome: 'Sur ton téléphone Android, ouvre cette page dans Chrome.',
+    steps: {
       download:
-        'Touche « Télécharger la dernière version ». Sur la page GitHub, repère la version la plus récente dont le nom commence par « android-v » (par exemple « android-v0.1.0 »), puis touche le fichier qui se termine par « .apk » (dans la rubrique « Assets »). Ignore les versions dont le nom contient « dev » ou qui portent la mention « Pre-release » : ce sont des essais réservés aux développeurs.',
-      allow:
-        'Android te dit peut-être que ton téléphone n’a pas le droit d’installer des applications inconnues. Touche « Paramètres », active « Autoriser depuis cette source », puis reviens en arrière.',
-      open: 'Quand le téléchargement est terminé, touche « Ouvrir » (ou ouvre le fichier depuis les notifications ou le dossier « Téléchargements »), puis « Installer ».',
-      protect:
-        'Si Play Protect affiche un avertissement, vois « En cas de problème » plus bas : il suffit de choisir « Installer quand même ».',
-      launch:
-        'Touche « Ouvrir », puis connecte-toi à Repas avec ton adresse e-mail et ton mot de passe habituels. Tes recettes et tes listes sont déjà là : tout est sur ton compte.',
-    },
-    pwa: {
-      text: 'Si tu avais ajouté Repas à ton écran d’accueil depuis Chrome, tu peux retirer cette ancienne icône une fois l’application installée : touche-la sans la relâcher, puis « Désinstaller » (ou « Supprimer »).',
-      careful:
-        'Les deux icônes portent le même nom. L’ancienne est en général celle qui porte un petit logo de Chrome dans un coin : en cas de doute, garde les deux.',
-    },
-    firstLogin: {
-      store:
-        'La première fois, Repas te demande de choisir ton magasin dans les réglages du drive : suis les indications de cet écran.',
-      open: 'Ouvre une liste, touche « Envoyer au drive » puis « Ouvrir le drive ». Le site de Leclerc s’affiche dans l’application.',
-      login:
-        'Une fois ton magasin ouvert, connecte-toi à ton compte E.Leclerc, comme sur le site. Si Leclerc t’envoie un code par e-mail, saisis-le.',
-      kept: 'Si Leclerc te redemande un jour de te connecter, fais-le de la même façon.',
-      settings: 'Réglages du drive',
-    },
-    send: {
-      open: 'Ouvre la liste de courses et touche « Envoyer au drive ».',
-      check:
-        'Vérifie les articles, puis touche « Ouvrir le drive ». Le site de Leclerc s’ouvre dans l’application.',
-      wait: 'Garde l’application ouverte.',
-      back: 'À la fin, tu reviens dans Repas avec un récapitulatif. Termine ensuite ta commande toi-même sur le site de Leclerc : choix du créneau et paiement.',
-    },
-    update: {
-      site: 'Le site se met à jour tout seul. L’application, elle, ne change que de temps en temps (par exemple quand Leclerc modifie son site).',
-      how: 'Pour la mettre à jour, télécharge la dernière version comme pour l’installation, puis installe-la par-dessus.',
-      version:
-        'Pour connaître ta version : dans l’écran du drive, touche « Menu » puis « Version et mode d’emploi », et compare avec le nom de la dernière version sur GitHub.',
-    },
-    uninstall: {
-      text: 'Touche l’icône Repas sans la relâcher, puis « Désinstaller » (ou : Paramètres, Applications, Repas, Désinstaller). La connexion à Leclerc gardée par l’application est effacée avec elle.',
-      clear:
-        'Pour seulement te déconnecter de Leclerc, sans désinstaller : dans l’écran du drive, « Menu », puis « Se déconnecter de Leclerc ». Les cookies, les données du site et l’historique du drive sont alors effacés.',
-    },
-    problems: {
-      blocked: {
-        q: 'L’installation est bloquée',
-        a: 'Android demande d’autoriser l’installation pour l’application qui a téléchargé le fichier (en général Chrome). Va dans Paramètres, Applications, Chrome, « Installer des applications inconnues », puis active « Autoriser depuis cette source ». Reviens au fichier téléchargé et relance l’installation. Sur un téléphone prêté par une entreprise ou une école, cette option peut être interdite.',
-      },
-      protect: {
-        q: 'Play Protect affiche un avertissement',
-        a: 'Google Play Protect ne connaît pas l’application, car elle ne vient pas de Google Play. Si tu as bien téléchargé le fichier depuis la page GitHub de Repas, touche « Plus de détails », puis « Installer quand même ».',
-      },
-      conflict: {
-        q: '« Application non installée » ou conflit avec une application existante',
-        a: 'Une version d’essai, ou signée autrement, est déjà sur le téléphone. Désinstalle l’ancienne application Repas, puis installe la nouvelle. Tu devras te reconnecter à Leclerc.',
-      },
-      login: {
-        q: 'Je n’arrive pas à me connecter à Leclerc',
-        a: 'Si Leclerc dit de sélectionner un Drive, choisis d’abord ton magasin, puis connecte-toi. Vérifie aussi que tu peux te connecter au site de Leclerc dans un navigateur. Si l’application ne te reconnaît plus : dans l’écran du drive, « Menu », puis « Se déconnecter de Leclerc », et reconnecte-toi.',
-      },
-      changed: {
-        q: '« Le site a changé » ou « Leclerc a changé »',
-        a: 'Leclerc a modifié son site et l’envoi automatique s’est arrêté. En attendant une mise à jour de l’application, passe à « Chercher à la main » (voir plus bas) : les liens de la liste te mènent aux produits sur Leclerc. Installe la nouvelle version de l’application dès qu’elle est annoncée.',
-      },
-      mobile: {
-        q: 'Leclerc s’affiche en version mobile, ou « Page non prise en charge »',
-        a: 'L’application doit afficher le site de Leclerc en version ordinateur. Dans l’écran du drive, « Menu », puis « Se déconnecter de Leclerc », puis rouvre le drive.',
-      },
-      webview: {
-        q: '« Le drive n’est pas utilisable sur cet appareil »',
-        a: 'Mets à jour l’application Repas et le composant « Android System WebView » (dans Google Play), puis réessaie.',
-      },
-    },
-    assisted: {
-      text: 'Tu peux préparer tes courses sans l’application. Sur la liste, touche « Envoyer au drive » : Repas montre chaque article avec un lien « Chercher sur Leclerc » qui ouvre le site de Leclerc sur le produit, et tu ajoutes les produits au panier toi-même. Si le bouton n’apparaît pas, l’envoi au drive n’est pas activé pour le moment.',
-      action: 'Aller à ma liste',
+        'Touche « Télécharger la dernière version », puis le fichier « .apk » de la version dont le nom commence par « android-v ».',
+      open: 'Ouvre le fichier téléchargé.',
+      install: 'Touche « Installer ».',
     },
   },
   // Les conditions d'utilisation du drive (DRV-504 puis DRV-628) : la SEULE page qui parle des risques, de la vie privée et des engagements.

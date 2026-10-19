@@ -334,7 +334,7 @@ describe('la mesure de la disponibilité (diagnostic)', () => {
 
   it('lit l’étiquette et la mention « Bientôt disponible » de la fiche d’un produit', () => {
     const { products } = extractProducts(labelled)
-    const candidates = products.map(toCandidate)
+    const candidates = products.map((product) => toCandidate(product))
 
     expect(
       candidates.map((candidate) => [
@@ -352,7 +352,9 @@ describe('la mesure de la disponibilité (diagnostic)', () => {
   })
 
   it('sans étiquette (la fixture d’avant), tout est lisible comme absent', () => {
-    const candidates = extractProducts(fixture('recherche-farine.html')).products.map(toCandidate)
+    const candidates = extractProducts(fixture('recherche-farine.html')).products.map((product) =>
+      toCandidate(product),
+    )
 
     expect(
       candidates.every((candidate) => candidate.availability === null && !candidate.comingSoon),
@@ -360,7 +362,7 @@ describe('la mesure de la disponibilité (diagnostic)', () => {
   })
 
   it('la répartition ne contient que des nombres : stock nul, positif, illisible, valeurs de l’étiquette, « Bientôt disponible »', () => {
-    const candidates = extractProducts(labelled).products.map(toCandidate)
+    const candidates = extractProducts(labelled).products.map((product) => toCandidate(product))
 
     expect(availabilityFacts(candidates)).toEqual({
       sampled: 5,

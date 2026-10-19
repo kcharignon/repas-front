@@ -44,7 +44,7 @@ describe('un nom d’unité venu de la page', () => {
       '{"iIdProduit":123,"sLibelleLigne1":"Farine T55","nrPVUnitaireTTC":1.5,"sUniteMesureTotale":"constructor","nrContenanceTotale":2}'
 
     // When
-    const [candidate] = extractProducts(page).products.map(toCandidate)
+    const [candidate] = extractProducts(page).products.map((product) => toCandidate(product))
 
     // Then
     expect(candidate?.content).toBeNull()
