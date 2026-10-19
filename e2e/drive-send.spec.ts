@@ -98,3 +98,65 @@ test('à 360 px de large : « Ouvrir le drive » est visible sans défiler, au-d
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360)
   expect((await scan(page)).violations).toEqual([])
 })
+
+// Une application trop ancienne pour le drive (DRV-640) : le web est à jour, l'application non. Une phrase, « Mettre à jour », ni le
+// drive ni l'agent, et les recherches à la main restent. 360×640, thèmes clair et sombre.
+const TOO_OLD = 'Mets à jour l’application pour envoyer ta liste.'
+
+for (const [label, version] of [
+  ['0.1.8', '0.1.8'],
+  ['0.1.9', '0.1.9'],
+  ['sans version', null],
+] as const) {
+  for (const colorScheme of ['light', 'dark'] as const) {
+    test(`application ${label} : mise à jour demandée, recherche à la main gardée, thème ${colorScheme}`, async ({
+      page,
+    }, testInfo) => {
+      await fakeBack(page)
+      await fakeApp(page, 'completed', version)
+      await page.emulateMedia({ colorScheme })
+      await page.setViewportSize({ width: 360, height: 640 })
+      await page.goto('/drive/envoi/l1')
+
+      await expect(page.getByText(TOO_OLD)).toBeVisible({ timeout: 8000 })
+      await expect(page.getByRole('button', { name: 'Ouvrir le drive' })).toHaveCount(0)
+      const update = page.getByRole('link', { name: 'Mettre à jour' })
+      await expect(update).toHaveAttribute('href', '/drive/aide')
+      expect((await update.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+      await expect(page.getByRole('link', { name: /^Chercher sur Leclerc/ })).toHaveCount(11)
+      expect(await page.evaluate(() => window.__sent.some((m) => m.type === 'drive.start'))).toBe(
+        false,
+      )
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+        360,
+      )
+      expect((await scan(page)).violations).toEqual([])
+      if (version === '0.1.8')
+        await page.screenshot({ path: testInfo.outputPath(`trop-ancienne-${colorScheme}.png`) })
+
+      await update.click()
+      await expect(page).toHaveURL(/\/drive\/aide/)
+    })
+  }
+}
+
+test('application 0.1.10 : « Ouvrir le drive » comme avant, sans la phrase', async ({ page }) => {
+  await fakeBack(page)
+  await fakeApp(page, 'completed', '0.1.10')
+  await page.goto('/drive/envoi/l1')
+
+  await expect(page.getByText(SUMMARY_12)).toBeVisible()
+  await expect(page.getByText(TOO_OLD)).toHaveCount(0)
+  await page.getByRole('button', { name: 'Ouvrir le drive' }).click()
+  await expect(page.getByText('En attente du récapitulatif…')).toBeVisible()
+})
+
+test('dans un navigateur : le message « installe l’application » ne change pas', async ({
+  page,
+}) => {
+  await fakeBack(page)
+  await page.goto('/drive/envoi/l1')
+
+  await expect(page.getByText('L’envoi automatique n’est pas disponible ici')).toBeVisible()
+  await expect(page.getByText(TOO_OLD)).toHaveCount(0)
+})

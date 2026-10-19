@@ -515,6 +515,11 @@ export default {
       search: 'Chercher sur Leclerc',
       searchFor: 'Chercher sur Leclerc : {name} (s’ouvre dans un nouvel onglet)',
     },
+    // Une application trop ancienne pour le drive (DRV-640) : une phrase et un bouton, les liens de recherche restent sous l'écran
+    appTooOld: {
+      text: 'Mets à jour l’application pour envoyer ta liste.',
+      update: 'Mettre à jour',
+    },
     // Une erreur dit trois choses : ce qui s'est passé, ce qui est sauf, une action (principes-produit.md § 4)
     driveUnusable: {
       title: 'Le drive ne fonctionne pas sur ce téléphone',
