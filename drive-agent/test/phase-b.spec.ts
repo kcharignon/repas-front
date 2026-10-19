@@ -347,15 +347,56 @@ describe('un nouvel ingrédient', () => {
     expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', quantity: 1 })
   })
 
-  it('affiche au plus huit produits', async () => {
-    const ids = Array.from({ length: 12 }, (_value, index) => String(3000001 + index))
-    const test = run(pepper(), [() => ({ kind: 'skip' })], { found: { poivre: ids }, shelf: {} })
+  it('affiche tous les produits de la recherche, huit d’abord puis la suite en défilant, sans aucune requête de plus (DRV-643)', async () => {
+    const ids = Array.from({ length: 30 }, (_value, index) => String(3000001 + index))
+    const counts: number[] = []
+    const test = run(
+      pepper(),
+      [
+        (view) => {
+          counts.push(rows(view.zone).length)
+          // La personne fait défiler : la sentinelle approche, le lot suivant s'ajoute (huit par huit), les premières fiches ne bougent pas.
+          const first = rows(view.zone)[0]
+          for (let step = 0; step < 4; step += 1) {
+            view.zone.dispatchEvent(new Event('scroll'))
+            counts.push(rows(view.zone).length)
+          }
+          expect(rows(view.zone)[0]).toBe(first)
+          return { kind: 'skip' }
+        },
+      ],
+      { found: { poivre: ids }, shelf: {} },
+    )
 
     await test.start()
 
-    expect(rows(test.user.views[0]?.zone ?? document.createElement('div'))).toHaveLength(
-      MAX_CANDIDATES,
+    // Sans IntersectionObserver (jsdom) tout ce qui est « près » de la fenêtre s'ajoute d'un coup : le défilement dit seulement que la suite est demandée.
+    expect(counts[0]).toBe(8)
+    expect(counts.at(-1)).toBe(30)
+    expect(test.adapter.calls.filter((call) => call.startsWith('find'))).toEqual(['find poivre'])
+  })
+
+  it('garde au plus MAX_CANDIDATES produits : un plafond technique, pas un choix d’affichage', async () => {
+    const ids = Array.from({ length: MAX_CANDIDATES + 40 }, (_value, index) =>
+      String(3000001 + index),
     )
+    let total = 0
+    const test = run(
+      pepper(),
+      [
+        (view) => {
+          view.zone.dispatchEvent(new Event('scroll'))
+          total = rows(view.zone).length
+          return { kind: 'skip' }
+        },
+      ],
+      { found: { poivre: ids }, shelf: {} },
+    )
+
+    await test.start()
+
+    expect(MAX_CANDIDATES).toBe(200)
+    expect(total).toBe(MAX_CANDIDATES)
   })
 })
 

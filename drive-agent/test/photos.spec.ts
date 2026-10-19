@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { createUi, renderPicker, type PickerItem, type UiHandle } from '../src/ui'
-import { MAX_PHOTOS } from '../src/ui/picker'
+import { BATCH_SIZE } from '../src/ui/picker'
 import { photoFrame } from '../src/ui/photo'
 
 const GOOD = 'https://photos-test.leclercdrive.fr/image.ashx?id=11&use=l&cat=p'
@@ -123,19 +123,17 @@ describe('la photo d’une fiche', () => {
   })
 })
 
-describe('au plus 12 photos', () => {
-  it('seuls les 12 premiers produits ont leur photo, les suivants restent en texte', () => {
-    const zone = picker(Array.from({ length: 15 }, (_, index) => item(index + 1)))
+describe('les photos suivent les lots (DRV-643)', () => {
+  it('seules les fiches affichées ont leur photo : un lot, un lot de photos, aucune limite de nombre', () => {
+    const zone = picker(Array.from({ length: 30 }, (_, index) => item(index + 1)))
 
-    expect(MAX_PHOTOS).toBe(12)
-    expect(rowsOf(zone)).toHaveLength(15)
-    expect(imagesOf(zone)).toHaveLength(12)
-    const withPhoto = rowsOf(zone).map((row) => row.querySelector('img') !== null)
-    expect(withPhoto.slice(0, 12).every(Boolean)).toBe(true)
-    expect(withPhoto.slice(12).some(Boolean)).toBe(false)
+    // Le premier lot seulement : les autres fiches n'existent pas encore, donc ne demandent aucune image.
+    expect(rowsOf(zone)).toHaveLength(BATCH_SIZE)
+    expect(imagesOf(zone)).toHaveLength(BATCH_SIZE)
+    expect(imagesOf(zone).every((image) => image.getAttribute('loading') === 'lazy')).toBe(true)
   })
 
-  it('une nouvelle liste (autre recherche) remplace les photos, toujours 12 au plus', () => {
+  it('une nouvelle liste (autre recherche) remplace les photos, un premier lot à la fois', () => {
     const zone = document.body.appendChild(document.createElement('div'))
     const shown = renderPicker(
       zone,
@@ -157,7 +155,8 @@ describe('au plus 12 photos', () => {
       null,
     )
 
-    expect(imagesOf(zone)).toHaveLength(12)
+    expect(imagesOf(zone)).toHaveLength(BATCH_SIZE)
+    expect(imagesOf(zone)[0]?.getAttribute('src')).toContain('id=100')
   })
 })
 

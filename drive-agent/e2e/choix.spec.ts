@@ -491,3 +491,65 @@ test('la question « Toujours prendre ce produit ? » montre la photo du produit
   await page.getByRole('button', { name: 'Cette fois seulement' }).click()
   await returnsToRepas(page, fake)
 })
+
+// —— Tous les résultats de la recherche, en défilant (DRV-643) ————————————————————————————————————————————————————————————————
+
+test('une recherche de 45 produits : huit fiches d’abord, la suite en défilant, une seule requête au site, jusqu’à la dernière fiche', async ({
+  page,
+  fake,
+  agentCode,
+}) => {
+  // Given : du biscuit, que le faux site trouve en 45 produits (1000035 à 1000079)
+  const requested = await servePhotos(page)
+  await openWithFragment(
+    page,
+    fake,
+    agentCode,
+    planOf([fresh('biscuit', 'Biscuit', { needed: KILO })]),
+  )
+
+  // When : la liste s'affiche
+  await page.getByRole('button', { name: 'Commencer' }).click()
+  await expect(page.getByText('Il te faut : 1 kg.')).toBeVisible()
+
+  // Then : un premier lot seulement, dans l'ordre du site, et ses photos seulement
+  const cards = page
+    .getByRole('listitem')
+    .filter({ has: page.getByRole('button', { name: 'Choisir' }) })
+  await expect(cards).toHaveCount(8)
+  await expect(cards.first()).toContainText('série 01')
+  await expect(page.getByText('série 45')).toHaveCount(0)
+  expect(requested.length).toBeLessThanOrEqual(8)
+
+  // When : la personne fait défiler jusqu'au bout
+  for (let guard = 0; guard < 30 && (await cards.count()) < 45; guard += 1) {
+    const before = await cards.count()
+    await page.locator('.scroll').evaluate((element) => {
+      element.scrollTop = element.scrollHeight
+    })
+    await expect.poll(() => cards.count()).toBeGreaterThan(before)
+  }
+
+  // Then : les 45 produits, dans l'ordre, la dernière fiche et « Annuler l'envoi » sous elle ; une seule recherche, aucune requête de plus
+  await expect(cards).toHaveCount(45)
+  await expect(cards.last()).toContainText('série 45')
+  await page.locator('.scroll').evaluate((element) => {
+    element.scrollTop = element.scrollHeight
+  })
+  await expect(cards.last()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Annuler l’envoi' })).toBeVisible()
+  expect(fake.paced().map((call) => call.kind)).toEqual(['search'])
+  expect(fake.cart()).toEqual({})
+  // Les photos suivent les fiches : une fois au bout, 45 images demandées au plus (jamais une rafale avant d'y arriver)
+  await expect.poll(() => requested.length).toBeGreaterThan(8)
+  expect(requested.length).toBeLessThanOrEqual(45)
+  for (const address of requested) expect(new URL(address).hostname, address).toBe(PHOTO_HOST)
+
+  // And : choisir un produit du dernier lot le met au panier comme n'importe quel autre (le contenu du biscuit est inconnu du plan : la quantité se confirme)
+  await cards.last().getByRole('button', { name: 'Choisir' }).click()
+  await page.getByRole('button', { name: 'Valider' }).click()
+  await returnsToRepas(page, fake)
+  expect(fake.cart()).toEqual({ 1000079: 1 })
+  expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'cart'])
+  expectPoliteAgent(fake)
+})

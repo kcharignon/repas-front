@@ -82,6 +82,7 @@ textarea{width:100%;margin:8px 0;padding:8px 10px;font:.9rem/1.4 ui-monospace,mo
 .candidate .name{font-weight:600}
 .candidate.off .name{color:var(--muted)}
 .candidate>button{width:100%;margin-top:8px}
+.more{height:1px}
 .media{display:flex;align-items:flex-start;gap:12px}
 .media .text{flex:1 1 0;min-width:0}
 .photo{flex:none;display:flex;align-items:center;justify-content:center;width:80px;height:80px;padding:4px;border:1px solid var(--line);border-radius:8px;background:var(--photo)}

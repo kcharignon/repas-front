@@ -1,7 +1,10 @@
 // Le sélecteur de produits (DRV-306, variante P2) : la liste que l'agent affiche lui-même dans la zone de l'écran « chooser ». L'enseigne
 // refuse d'être affichée dans un cadre (décision G1) : l'utilisateur choisit donc dans cette liste, nourrie par la recherche de l'agent.
-// Tout s'affiche par `textContent` (un libellé de l'enseigne n'est jamais du HTML). Les photos (DRV-633, `photo.ts`) sont les seules images : 12 au plus,
-// chargées à la demande, depuis les serveurs de l'enseigne comme le fait sa page.
+// Tout s'affiche par `textContent` (un libellé de l'enseigne n'est jamais du HTML). Les photos (DRV-633, `photo.ts`) sont les seules images : chargées à la
+// demande, depuis les serveurs de l'enseigne comme le fait sa page.
+// DRV-643 : la liste montre TOUS les produits de la recherche, mais par lots. Un premier lot s'affiche ; la suite est ajoutée (jamais la liste refaite)
+// quand une sentinelle placée sous la dernière fiche approche de la zone visible. Seules les fiches affichées ont une photo : une fiche pas encore
+// ajoutée ne demande rien à l'enseigne.
 import { append, clear, h } from './dom'
 import { photoFrame } from './photo'
 import { S } from './strings'
@@ -67,14 +70,24 @@ export interface Picker {
   ) => void
   /** Occupé : plus rien ne se touche et `message` est annoncé ; `null` rend la main. */
   busy: (message: string | null) => void
+  /** Cesse d'observer le défilement (l'écran quitte la scène). */
+  dispose: () => void
 }
 
 const OFF = 'data-off'
 
-/** Les photos ne sont montrées que pour les premiers produits de la liste : pas de rafale d'images vers l'enseigne. */
-export const MAX_PHOTOS = 12
+/** Le nombre de fiches ajoutées à chaque fois : de quoi remplir un écran de téléphone, assez peu pour que l'ajout ne se voie pas. */
+export const BATCH_SIZE = 8
 
-function row(item: PickerItem, index: number, choose: PickerHooks['choose']): HTMLElement {
+/** La suite est ajoutée un peu AVANT que la sentinelle entre à l'écran (environ trois fiches), pour que le défilement ne bute jamais sur la fin. */
+const AHEAD_PX = 400
+
+function row(
+  item: PickerItem,
+  index: number,
+  choose: PickerHooks['choose'],
+  waiting: boolean,
+): HTMLElement {
   const nameId = `produit-${index}`
   // Un produit « Plus en stock » reste à choisir : le panier tranche (DRV-635). Seul un produit écarté par l'utilisateur est grisé.
   const off = item.state === 'refused'
@@ -86,7 +99,7 @@ function row(item: PickerItem, index: number, choose: PickerHooks['choose']): HT
   const button = h('button', {
     text: off ? S.picker.refused : S.picker.choose,
     class: off ? '' : 'primary',
-    disabled: off,
+    disabled: off || waiting,
     attrs: { type: 'button', 'aria-describedby': nameId, ...(off && { [OFF]: '1' }) },
     on: { click: () => choose(item.id) },
   })
@@ -96,7 +109,7 @@ function row(item: PickerItem, index: number, choose: PickerHooks['choose']): HT
     h(
       'div',
       { class: 'media' },
-      index < MAX_PHOTOS ? photoFrame(item.photo, item.name) : null,
+      photoFrame(item.photo, item.name),
       h(
         'div',
         { class: 'text' },
@@ -184,9 +197,51 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
           }),
         )
 
+  // La sentinelle : un élément sans hauteur sous la liste ; quand elle approche de la zone visible, le lot suivant s'ajoute.
+  const more = h('div', { class: 'more', hidden: true, attrs: { 'aria-hidden': 'true' } })
+  let all: readonly PickerItem[] = []
+  let shown = 0
+  let waiting = false
+  const watcher =
+    typeof IntersectionObserver === 'function'
+      ? new IntersectionObserver(
+          (entries) => {
+            if (entries.some((entry) => entry.isIntersecting)) showMore()
+          },
+          { rootMargin: `0px 0px ${AHEAD_PX}px 0px` },
+        )
+      : null
+  /** Sans `IntersectionObserver` : la sentinelle est-elle à moins de `AHEAD_PX` du bas de la fenêtre ? */
+  const near = () => more.getBoundingClientRect().top <= window.innerHeight + AHEAD_PX
+  const scrolled = () => {
+    if (!zone.isConnected) return
+    while (!more.hidden && near()) showMore()
+  }
+  /** Ajoute le lot suivant À LA SUITE de la liste : les fiches déjà là ne sont pas touchées. */
+  function showMore(): void {
+    const end = Math.min(shown + BATCH_SIZE, all.length)
+    if (end > shown) {
+      const batch = all
+        .slice(shown, end)
+        .map((item, offset) => row(item, shown + offset, hooks.choose, waiting))
+      shown = end
+      append(list, ...batch)
+    }
+    more.hidden = shown >= all.length
+    if (watcher === null) return
+    watcher.unobserve(more)
+    // Observer de nouveau redonne l'état tout de suite : si la sentinelle est encore près de l'écran (écran haut), le lot suivant suit.
+    if (!more.hidden) watcher.observe(more)
+  }
+  // Sans observateur, c'est l'événement de défilement de l'arbre qui porte la liste (il ne remonte pas : écoute en capture).
+  const root = watcher === null ? zone.getRootNode() : null
+  root?.addEventListener('scroll', scrolled, true)
+
   const results: Picker['results'] = (query, items, notice, asked = null) => {
     clear(list)
-    append(list, ...items.map((item, index) => row(item, index, hooks.choose)))
+    all = items
+    shown = 0
+    showMore()
     status.textContent =
       items.length === 0
         ? S.picker.none(query)
@@ -200,6 +255,7 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
     const on = message !== null
     input.disabled = on
     go.disabled = on
+    waiting = on
     for (const button of list.querySelectorAll('button')) {
       button.disabled = on || button.hasAttribute(OFF)
     }
@@ -219,7 +275,15 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
       status,
       note,
       list,
+      more,
     ),
   )
-  return { results, busy }
+  return {
+    results,
+    busy,
+    dispose: () => {
+      watcher?.disconnect()
+      root?.removeEventListener('scroll', scrolled, true)
+    },
+  }
 }

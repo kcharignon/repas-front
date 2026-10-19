@@ -29,8 +29,12 @@ import { searchByName } from './search-by-name'
 import { productSearchForms } from './search-forms'
 import type { PendingLine, PhaseB, PhaseBContext } from './types'
 
-/** Le nombre de produits affichés. */
-export const MAX_CANDIDATES = 8
+/**
+ * Le plafond technique des produits gardés pour une recherche (DRV-643) : la liste montre TOUS les produits que la page de l'enseigne contient, dans son
+ * ordre, mais une page anormalement longue (ou hostile) ne doit ni alourdir la mémoire ni la préparation des fiches. Une page de recherche d'un magasin en
+ * porte bien moins ; au-delà, la personne affine sa recherche (le champ « Chercher autre chose »).
+ */
+export const MAX_CANDIDATES = 200
 
 /** La recherche en cours d'une ligne : ce que la liste montre. */
 interface Search {
@@ -249,6 +253,7 @@ async function settleLine(
         )
         return () => {
           live = false
+          picker.dispose()
         }
       },
     })
