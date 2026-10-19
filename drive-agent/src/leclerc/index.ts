@@ -7,7 +7,7 @@ export {
   type LeclercDeps,
   type RetailerAdapter,
 } from './adapter'
-export { type Candidate, type PricePerMeasure } from './candidate'
+export { saysOutOfStock, type Candidate, type PricePerMeasure } from './candidate'
 export { contentFromLabel, parseContent, type Content, type ContentSource } from './content'
 export { causeLabel, causeText, type LeclercCause } from './causes'
 export { LeclercError, type LeclercErrorCode } from './errors'

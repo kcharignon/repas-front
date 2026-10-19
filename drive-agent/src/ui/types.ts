@@ -1,6 +1,13 @@
 // Les écrans de l'interface et ce que chacun reçoit (`props`) et rend (`answer`, la réponse de l'utilisateur).
 import type { ErrorCode, LineStatus, Outcome, Placement } from '../../protocol'
 
+/**
+ * Pourquoi un produit habituel n'a pas été mis au panier (DRV-635). `OUT_OF_STOCK` : le site le dit en rupture (stock nul ou « Bientôt disponible ») ET le
+ * panier en a refusé un ; `NOT_FOUND` : aucune recherche ne l'a retrouvé (ce qui ne prouve rien sur sa disponibilité) ; `CART_REFUSED` : le site le disait
+ * disponible et le panier n'en a rien pris. Seul `OUT_OF_STOCK` se dit « n'est plus disponible ». Un état de l'agent et de son écran, pas du protocole.
+ */
+export type UnavailableReason = 'OUT_OF_STOCK' | 'NOT_FOUND' | 'CART_REFUSED'
+
 export interface SummaryLine {
   name: string
   status: LineStatus
@@ -161,6 +168,11 @@ export interface EndProps {
    * Absent quand ce n'est pas arrivé.
    */
   slow?: true
+  /**
+   * Les articles restés sans produit dont la phase A sait pourquoi leur produit habituel n'a pas été mis au panier (DRV-635) : la raison et le nombre de
+   * recherches faites, dans un bloc « Détails » replié. Absent (jamais vide) quand aucun.
+   */
+  reasons?: readonly { name: string; reason: UnavailableReason; tried: number }[]
 }
 
 /** Les écrans : ce que `ui.show(nom, props)` affiche et ce que sa promesse rend. */

@@ -4,11 +4,13 @@
 import type {
   ArrivalFacts,
   AttemptFacts,
+  Candidate,
   LeclercCause,
   LeclercErrorCode,
   LinkFacts,
   SearchFacts,
 } from '../leclerc'
+import type { LastReason } from '../flow'
 import { own } from '../own'
 import { S } from '../ui'
 
@@ -31,6 +33,56 @@ export interface ProbeFacts {
   common: ProbedSearch | null
   /** Le mot absurde : la forme d'une réponse sans résultat. */
   nonsense: ProbedSearch | null
+  /** La disponibilité lue sur la recherche courante (DRV-635). */
+  availability?: AvailabilityFacts | null
+  /** Pourquoi le dernier envoi n'a pas mis des produits habituels au panier (DRV-635), dans l'ordre du passage. */
+  lastPass?: readonly LastReason[]
+}
+
+/** Ce que l'échantillon de résultats dit de la disponibilité (DRV-635) : des nombres, jamais un libellé. */
+export interface AvailabilityFacts {
+  sampled: number
+  /** `iQteDisponible` à 0, positif, illisible. */
+  zeroStock: number
+  stocked: number
+  unreadable: number
+  /** La répartition des valeurs entières de `eDisponibilite` (6 au plus, les plus fréquentes d'abord) : la valeur et le nombre de produits. */
+  labels: readonly { value: number; count: number }[]
+  /** Produits sans `eDisponibilite` lisible. */
+  noLabel: number
+  /** Produits dont la fiche dit « Bientôt disponible ». */
+  comingSoon: number
+}
+
+/** Le nombre de produits de l'échantillon de la mesure : les premiers de la recherche courante. */
+export const AVAILABILITY_SAMPLE = 12
+
+/**
+ * Le stock et l'étiquette de disponibilité des `AVAILABILITY_SAMPLE` premiers résultats, en nombres (DRV-635) : de quoi savoir si « Bientôt
+ * disponible » et le stock sont fiables. `null` sans résultat.
+ */
+export function availabilityFacts(candidates: readonly Candidate[]): AvailabilityFacts | null {
+  const sample = candidates.slice(0, AVAILABILITY_SAMPLE)
+  if (sample.length === 0) return null
+  const counts = new Map<number, number>()
+  let noLabel = 0
+  for (const { availability } of sample) {
+    if (availability === null || !Number.isInteger(availability) || Math.abs(availability) > 999) {
+      noLabel += 1
+    } else counts.set(availability, (counts.get(availability) ?? 0) + 1)
+  }
+  return {
+    sampled: sample.length,
+    zeroStock: sample.filter((candidate) => candidate.stock === 0).length,
+    stocked: sample.filter((candidate) => candidate.stock !== null && candidate.stock > 0).length,
+    unreadable: sample.filter((candidate) => candidate.stock === null).length,
+    labels: [...counts]
+      .map(([value, count]) => ({ value, count }))
+      .sort((a, b) => b.count - a.count || a.value - b.value)
+      .slice(0, 6),
+    noLabel,
+    comingSoon: sample.filter((candidate) => candidate.comingSoon).length,
+  }
 }
 
 const P = S.diagnostic.probe
@@ -106,7 +158,7 @@ function searchLines(search: ProbedSearch): string[] {
 export function probeLines(probes: ProbeFacts | null | undefined): string[] {
   if (!probes) return []
   const lines: string[] = []
-  const { arrival, common, nonsense } = probes
+  const { arrival, common, nonsense, availability, lastPass } = probes
   if (arrival) {
     lines.push(P.address(arrival.address))
     lines.push(P.city(cityOf(arrival.address)))
@@ -123,6 +175,23 @@ export function probeLines(probes: ProbeFacts | null | undefined): string[] {
     )
   }
   if (common) lines.push(...searchLines(common))
+  if (availability) {
+    lines.push(P.availability(availability))
+    const values =
+      availability.labels.length === 0
+        ? P.unknown
+        : availability.labels.map(({ value, count }) => `${value} : ${count}`).join(', ')
+    lines.push(P.availabilityLabels(values, availability.noLabel, availability.comingSoon))
+  }
+  if (lastPass && lastPass.length > 0) {
+    lines.push(
+      P.lastPass(
+        lastPass
+          .map(({ reason, tried }, index) => P.lastPassItem(index + 1, P.reason[reason], tried))
+          .join(' ; '),
+      ),
+    )
+  }
   if (nonsense) {
     lines.push(...searchLines(nonsense))
     const facts = nonsense.facts

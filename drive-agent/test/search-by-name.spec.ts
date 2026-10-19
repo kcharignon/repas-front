@@ -3,7 +3,15 @@
 // éprouvé sur des adaptateurs simulés (ordre, arrêt, bornes, erreurs) puis sur le vrai adaptateur avec un faux `fetch` (cadence, absence de parallélisme).
 import { describe, expect, it } from 'vitest'
 
-import { findKnownProduct, MAX_FALLBACKS, searchByName, searchForms } from '../src/flow'
+import {
+  findKnownProduct,
+  lookUpKnownProduct,
+  MAX_FALLBACKS,
+  MAX_PRODUCT_FORMS,
+  productSearchForms,
+  searchByName,
+  searchForms,
+} from '../src/flow'
 import { LeclercAdapter, LeclercError, PAUSE_MS, type Candidate } from '../src/leclerc'
 import { candidate } from './flow-helpers'
 import { fakeSite, fixture, type Call, type Scripted } from './leclerc-helpers'
@@ -240,7 +248,7 @@ describe('avec le vrai adaptateur : la cadence normale est respectée', () => {
 
 // —— Un produit connu (H3) ————————————————————————————————————————————————————————————————————————————————————————————————————
 
-describe('findKnownProduct : le libellé complet d’abord, ses formes ensuite, « introuvable » en dernier recours', () => {
+describe('findKnownProduct : le libellé tel quel d’abord, ses formes ensuite, « introuvable » en dernier recours', () => {
   const LABEL = 'Crème fraîche épaisse Laiterie du Test 20 cl'
 
   it('un produit retrouvé par son libellé complet ne coûte qu’une requête', async () => {
@@ -265,27 +273,31 @@ describe('findKnownProduct : le libellé complet d’abord, ses formes ensuite, 
   })
 
   it('une forme qui répond sans le produit voulu n’arrête pas le repli : c’est le produit qui compte, pas une réponse', async () => {
-    // Given : le libellé sans accent rend d'autres produits, le premier mot seul rend le bon
+    // Given : le libellé sans accent rend d'autres produits, la forme la plus simple rend le bon
+    const forms = productSearchForms(LABEL)
     const site = engine({
-      'creme fraiche epaisse laiterie du test 20 cl': ['1000099'],
-      creme: ['1000099', '1000028'],
+      [forms[0] ?? '']: ['1000099'],
+      [forms.at(-1) ?? '']: ['1000099', '1000028'],
     })
 
     // When
     const seen = await findKnownProduct(site.adapter, LABEL, '1000028')
 
     // Then
-    expect(site.queries).toEqual([LABEL, ...searchForms(LABEL)])
+    expect(site.queries).toEqual([LABEL, ...forms])
     expect(seen?.id).toBe('1000028')
   })
 
-  it('un produit qu’aucune forme ne retrouve est introuvable (« plus disponible » reste le dernier recours), après 5 requêtes au plus', async () => {
+  it('un produit qu’aucune forme ne retrouve est introuvable (jamais « indisponible »), après 5 requêtes au plus', async () => {
     const site = engine({ [LABEL]: ['1000099'] })
 
     const seen = await findKnownProduct(site.adapter, LABEL, '1000028')
+    const again = await lookUpKnownProduct(engine({}).adapter, LABEL, '1000028')
 
     expect(seen).toBeNull()
-    expect(site.queries.length).toBeLessThanOrEqual(1 + MAX_FALLBACKS)
+    expect(again).toEqual({ product: null, tried: site.queries.length })
+    expect(site.queries.length).toBeLessThanOrEqual(1 + MAX_PRODUCT_FORMS)
+    expect(MAX_PRODUCT_FORMS).toBeLessThanOrEqual(MAX_FALLBACKS)
     expect(new Set(site.queries).size).toBe(site.queries.length)
     expect(site.peak()).toBe(1)
   })

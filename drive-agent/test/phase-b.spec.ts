@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { PlanLine, ProductRef, ResultLine } from '../protocol'
-import { guidedChoice, labelOf, MAX_CANDIDATES } from '../src/flow'
+import { guidedChoice, labelOf, MAX_CANDIDATES, productSearchForms } from '../src/flow'
 import { LeclercError } from '../src/leclerc'
 import type { ChooserAnswer, ChooserProps, PlacementProps, QuantityProps } from '../src/ui'
 import {
@@ -15,6 +15,7 @@ import {
   home,
   known,
   makeFlow,
+  OUT_OF_STOCK,
   plan,
   product,
   type ShelfItem,
@@ -543,16 +544,20 @@ describe('les produits refusés et indisponibles', () => {
     expect(test.adapter.writes).toEqual([])
     expect(test.user.views).toHaveLength(2)
     expect(test.user.views[1]?.zone.textContent).toContain(
-      'Leclerc n’a pas pu mettre ce produit au panier',
+      'Leclerc n’a pas pu mettre « Poivre blanc de test » au panier. Choisis-en un autre.',
     )
   })
 
-  it('un produit en rupture de stock est grisé et ne se choisit pas', async () => {
+  it('un produit « Plus en stock » se choisit : le bouton est actif et la fiche reste honnête (DRV-635)', async () => {
     const test = run(pepper(), [
       (view) => {
+        const card = [...view.zone.querySelectorAll('li')].find((item) =>
+          item.textContent.includes('Poivre en grains'),
+        )
         const button = buttonOf(view.zone, 'Poivre en grains')
-        expect(button.disabled).toBe(true)
-        expect(button.textContent).toBe('Indisponible')
+        expect(button.disabled).toBe(false)
+        expect(button.textContent).toBe('Choisir')
+        expect(card?.textContent).toContain('Plus en stock.')
         return { kind: 'skip' }
       },
     ])
@@ -560,6 +565,38 @@ describe('les produits refusés et indisponibles', () => {
     await test.start()
 
     expect(test.adapter.writes).toEqual([])
+  })
+
+  it('un produit « Plus en stock » que le panier accepte est au panier, comme un autre (le panier tranche)', async () => {
+    const test = run(pepper(), [(view) => choose(view.zone, 'Poivre en grains')])
+
+    await test.start()
+
+    expect(test.adapter.writes).toEqual([{ id: '2000003', quantity: 4 }])
+    expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', product: { id: '2000003' } })
+  })
+
+  it('un produit « Plus en stock » que le panier refuse : le message le nomme, la liste reste, rien n’est retenu pour lui', async () => {
+    const shelf = { ...SHELF, '2000003': { ...SHELF['2000003'], obtained: () => 0 } }
+    const test = run(
+      pepper(),
+      [(view) => choose(view.zone, 'Poivre en grains'), (view) => choose(view.zone, 'Poivre noir')],
+      { shelf },
+    )
+
+    await test.start()
+
+    const again = test.user.views[1]?.zone
+    expect(again?.querySelector('[role="alert"]')?.textContent).toBe(
+      'Leclerc n’a pas pu mettre « Poivre en grains de test » au panier. Choisis-en un autre.',
+    )
+    expect(buttonOf(again as HTMLElement, 'Poivre en grains').disabled).toBe(false)
+    expect(test.adapter.writes).toEqual([
+      { id: '2000003', quantity: 4 },
+      { id: '2000001', quantity: 2 },
+    ])
+    expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', product: { id: '2000001' } })
+    expect(lineOf(test.sent[0])).not.toHaveProperty('rejected')
   })
 
   it('un produit inconnu de la liste (message forgé) ne met rien au panier', async () => {
@@ -592,8 +629,8 @@ describe('un produit connu devenu indisponible', () => {
   ]
   const shelf: Record<string, ShelfItem> = {
     ...SHELF,
-    '1000001': { stock: 0 },
-    '1000002': { stock: 0 },
+    '1000001': OUT_OF_STOCK,
+    '1000002': OUT_OF_STOCK,
   }
   const flour = (extra: Partial<PlanLine> = {}) => ({
     ...known('farine', FARINE),
@@ -612,7 +649,13 @@ describe('un produit connu devenu indisponible', () => {
       'Ces produits ne sont plus disponibles : Farine de test A, Farine de test B.',
     )
     expect(zone?.textContent).toContain('Ne plus proposer Farine de test A')
-    expect(test.adapter.calls.slice(0, 2)).toEqual(['search 1000001', 'search 1000002'])
+    // chaque produit est cherché puis tenté une seule fois au panier (le panier tranche), avant la phase B
+    expect(test.adapter.calls.slice(0, 4)).toEqual([
+      'search 1000001',
+      'cart 1000001 1',
+      'search 1000002',
+      'cart 1000002 2',
+    ])
   })
 
   it.each([
@@ -656,7 +699,11 @@ describe('un produit connu devenu indisponible', () => {
 
     await test.start()
 
-    expect(test.adapter.writes).toEqual([])
+    // seules les deux tentatives de la phase A ont écrit : le produit de la liste n'est pas mis au panier
+    expect(test.adapter.writes).toEqual([
+      { id: '1000001', quantity: 1 },
+      { id: '1000002', quantity: 2 },
+    ])
     expect(test.user.views).toHaveLength(2)
   })
 
@@ -870,8 +917,8 @@ describe('« Passer les n suivants »', () => {
     }
     const shelf: Record<string, ShelfItem> = {
       ...SHELF,
-      '1000001': { stock: 0 },
-      '1000002': { stock: 0 },
+      '1000001': OUT_OF_STOCK,
+      '1000002': OUT_OF_STOCK,
     }
     const test = run(
       flour,
@@ -915,9 +962,9 @@ describe('« Passer les n suivants »', () => {
   describe('la confirmation d’une ligne', () => {
     const gone: Record<string, ShelfItem> = {
       ...SHELF,
-      '1000001': { stock: 0 },
-      '1000002': { stock: 0 },
-      '1000003': { stock: 0 },
+      '1000001': OUT_OF_STOCK,
+      '1000002': OUT_OF_STOCK,
+      '1000003': OUT_OF_STOCK,
     }
     /** Un article dont l'unique produit retenu n'est plus en stock (`id`), cherché sous « poivre ». */
     const flourGone = (slug: string, id = '1000001'): PlanLine => ({
@@ -1029,7 +1076,7 @@ describe('un produit retenu et disponible', () => {
   })
 
   it('même quand le produit habituel manque : le suivant disponible est pris, sans écran de choix', async () => {
-    const stock: Record<string, ShelfItem> = { ...shelf, '1000001': { stock: 0 } }
+    const stock: Record<string, ShelfItem> = { ...shelf, '1000001': OUT_OF_STOCK }
     const adapter = fakeAdapter(stock, { found: FOUND })
     const screens = fakeUi({ chooser: () => Promise.reject(new Error('aucun choix attendu')) })
     const { flow, sent } = makeFlow({
@@ -1051,8 +1098,8 @@ describe('un produit retenu et disponible', () => {
   it('seul un article dont plus aucun produit retenu n’est disponible ouvre l’écran de choix', async () => {
     const stock: Record<string, ShelfItem> = {
       ...shelf,
-      '1000001': { stock: 0 },
-      '1000002': { stock: 0 },
+      '1000001': OUT_OF_STOCK,
+      '1000002': OUT_OF_STOCK,
     }
     const adapter = fakeAdapter(stock, { found: { farine: ['2000001'] } })
     const user = session(() => ({ kind: 'skip' }))
@@ -1399,7 +1446,7 @@ describe('les erreurs du site', () => {
     await test.start()
 
     expect(test.user.views[1]?.zone.querySelector('[role="alert"]')?.textContent).toContain(
-      'Leclerc n’a pas pu mettre ce produit au panier',
+      'Leclerc n’a pas pu mettre « Poivre noir moulu de test » au panier.',
     )
     expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', product: { id: '2000002' } })
   })
@@ -1656,5 +1703,124 @@ describe('quand la recherche du nom ne répond rien', () => {
 
     expect(test.adapter.calls).toEqual(['find œuf', 'find oeuf'])
     expect(test.sent[0]).toMatchObject({ outcome: 'partial' })
+  })
+})
+
+// —— Introuvable n'est pas indisponible (DRV-635) ————————————————————————————————————————————————————————————————————————————
+
+const SHELF_OUT: Record<string, ShelfItem> = {
+  ...SHELF,
+  '1000001': OUT_OF_STOCK,
+  '1000002': OUT_OF_STOCK,
+}
+
+describe('la raison de chaque produit habituel écarté (DRV-635)', () => {
+  const LABEL_A = "Gâteaux C'est Nous Pépites 300 g"
+  const PRODUCTS = [
+    { ...product('1000001', 1, LABEL_A), content: { value: 300, unit: 'g' as const } },
+    product('1000002', 1, 'Farine de test B'),
+    product('1000003', 1, 'Sucre de test C'),
+  ]
+  const mixed = (): PlanLine => ({
+    ...known('gateaux', PRODUCTS),
+    searchQuery: 'poivre',
+  })
+  /** A est introuvable, B est refusé par le panier, C est en rupture : trois raisons dans la même ligne. */
+  const shelf: Record<string, ShelfItem> = {
+    ...SHELF,
+    '1000001': {},
+    '1000002': { stock: 10, obtained: () => 0 },
+    '1000003': OUT_OF_STOCK,
+  }
+  const sees = (_query: string, id: string) => id !== '1000001'
+
+  function runMixed(steps: Step[]) {
+    const adapter = fakeAdapter(shelf, { found: FOUND, sees })
+    const user = session(...steps)
+    const screens = fakeUi({ chooser: user.chooser, placement: () => 'ONCE' })
+    const { flow, sent } = makeFlow({
+      ui: screens.ui,
+      adapter: adapter.adapter,
+      phaseB: guidedChoice,
+    })
+    return { start: () => flow.start(plan([mixed()])), adapter, user, sent }
+  }
+
+  it('chaque raison a sa phrase : la rupture se dit « plus disponible », le reste ne le dit jamais', async () => {
+    const test = runMixed([() => ({ kind: 'skip' })])
+
+    await test.start()
+
+    const text = test.user.views[0]?.zone.textContent ?? ''
+    expect(text).toContain('Ces produits ne sont plus disponibles : Sucre de test C.')
+    expect(text).toContain(`Je ne retrouve pas « ${LABEL_A} » : cherche-le ou choisis-en un autre.`)
+    expect(text).toContain(
+      'Leclerc n’a pas pu mettre « Farine de test B » au panier. Choisis-en un autre.',
+    )
+    // « plus disponible » ne qualifie ni le produit introuvable ni celui que le panier a refusé
+    expect(text).not.toContain('Farine de test B, ')
+    expect(text).not.toMatch(/plus disponibles : [^.]*(Gâteaux|Farine)/)
+  })
+
+  it('la recherche est préremplie avec la forme la plus simple du produit introuvable, sans être lancée', async () => {
+    const test = runMixed([() => ({ kind: 'skip' })])
+
+    await test.start()
+
+    const input = test.user.views[0]?.zone.querySelector<HTMLInputElement>('#chercher')
+    expect(input?.value).toBe(productSearchForms(LABEL_A).at(-1))
+    expect(input?.value).toBe('gateaux pepites')
+    // la liste montre toujours les résultats de la recherche de l’article : rien n’a été cherché de plus
+    expect(test.adapter.calls.filter((call) => call.startsWith('find '))).toEqual(['find poivre'])
+  })
+
+  it('sans produit introuvable, la recherche garde le nom de l’article', async () => {
+    const gone = {
+      ...known('farine', [
+        product('1000001', 1, 'Farine de test A'),
+        product('1000002', 2, 'Farine de test B'),
+      ]),
+      searchQuery: 'poivre',
+    }
+    const test = run(gone, [() => ({ kind: 'skip' })], { shelf: SHELF_OUT })
+
+    await test.start()
+
+    expect(test.user.views[0]?.zone.querySelector<HTMLInputElement>('#chercher')?.value).toBe(
+      'poivre',
+    )
+  })
+
+  it('« Ne plus proposer » est décochée pour chacun, et rien n’est retiré de la mémoire sans un geste', async () => {
+    const test = runMixed([(view) => choose(view.zone, 'Poivre noir')])
+
+    await test.start()
+
+    const boxes = [
+      ...(test.user.views[0]?.zone.querySelectorAll<HTMLInputElement>('input[type="checkbox"]') ??
+        []),
+    ]
+    expect(boxes).toHaveLength(3)
+    expect(boxes.every((box) => !box.checked)).toBe(true)
+    expect(lineOf(test.sent[0], 'gateaux')).toMatchObject({
+      outcome: 'CHOSEN',
+      unavailableIds: ['1000001', '1000002', '1000003'],
+    })
+    expect(lineOf(test.sent[0], 'gateaux')).not.toHaveProperty('rejected')
+  })
+
+  it('cocher « Ne plus proposer » sur un produit introuvable est un geste de l’utilisateur : il part dans « rejected »', async () => {
+    const test = runMixed([
+      (view) => {
+        view.zone.querySelector<HTMLInputElement>('#jamais-0')?.click()
+        choose(view.zone, 'Poivre noir')
+      },
+    ])
+
+    await test.start()
+
+    expect(lineOf(test.sent[0], 'gateaux')).toMatchObject({
+      rejected: [{ id: '1000001', label: LABEL_A }],
+    })
   })
 })
