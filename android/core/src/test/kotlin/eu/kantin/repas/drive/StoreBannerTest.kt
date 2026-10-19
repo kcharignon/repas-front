@@ -27,6 +27,16 @@ class StoreBannerTest {
     }
 
     @Test
+    fun `l'arrivee de Finaliser, sans passage, dit ou est le panier, sans bouton ni alarme`() {
+        listOf(null, storePage, storeRoot, enseigne).forEach { assertEquals(it, StoreBanner.BASKET, StoreBanner.of(null, it, PageTrouble.NONE, basketHint = true)) }
+        assertFalse(StoreBanner.BASKET.hasAction)
+        // Une page refusee ou un defi : le message de la page prime, pas le bandeau du panier
+        PageTrouble.entries.filter { it != PageTrouble.NONE }.forEach {
+            assertEquals(it.name, StoreBanner.NONE, StoreBanner.of(null, storeRoot, it, basketHint = true))
+        }
+    }
+
+    @Test
     fun `un plan sur une page de magasin n'a rien a dire`() {
         assertEquals(StoreBanner.NONE, StoreBanner.of(plan, storePage))
         assertEquals(StoreBanner.NONE, StoreBanner.of(plan, "https://courses-test.leclercdrive.fr/magasin-000000-000000/panier.aspx"))

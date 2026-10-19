@@ -74,6 +74,16 @@ export interface Behavior {
   latencyMs: number
   fault: Fault | null
   /**
+   * Le code HTTP (404, 500…) que l'accueil du magasin AVEC la ville (`/magasin-N-N-Ville`, la page que « Finaliser sur Leclerc » ouvre, DRV-631)
+   * renvoie, avec la page d'erreur générique : pour essayer le repli sur l'accueil du drive. `null` retire le défaut.
+   */
+  storeHomeStatus?: number | null
+  /**
+   * `not-found` : l'accueil du magasin AVEC la ville répond 200 mais porte le titre « Page introuvable » (une page « introuvable » déguisée, DRV-631).
+   * `null` retire le défaut.
+   */
+  storeHomeTitle?: 'not-found' | null
+  /**
    * Le code HTTP (404, 403, 503…) que le faux site renvoie, avec sa page d'erreur générique, à la racine de l'enseigne (`HOME_HOST`) : la page où
    * l'application ouvre un plan (ticket E de l'audit du 2026-10-18), refusée par le site (page d'erreur, défi anti-robot servi en 403). Le reste
    * du site répond. `null` retire le défaut.
@@ -532,8 +542,23 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
         entry.status = 404
         return send(res, 404, errorPage(), HTML)
       }
+      if (behavior.storeHomeStatus != null) {
+        entry.status = behavior.storeHomeStatus
+        return send(res, behavior.storeHomeStatus, errorPage(), HTML)
+      }
       entry.status = 200
-      return send(res, 200, homePage(cart, sessionAfter(pacedCount)), HTML)
+      const home = homePage(cart, sessionAfter(pacedCount))
+      return send(
+        res,
+        200,
+        behavior.storeHomeTitle === 'not-found'
+          ? home.replace(
+              /<title>[^<]*<\/title>/,
+              '<title>Page introuvable (faux site de test)</title>',
+            )
+          : home,
+        HTML,
+      )
     }
     entry.status = 404
     return send(res, 404, errorPage(), HTML)

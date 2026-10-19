@@ -64,6 +64,8 @@
     <string name="abandon_continue">Continuer</string>
     <string name="setup_banner">Choisis ton magasin, puis touche « Utiliser ce magasin ». Le bouton retour du téléphone annule.</string>
     <string name="store_first_banner">Choisis d’abord ton magasin : touche la flèche retour de la page, puis choisis-le.</string>
+    <string name="basket_banner">Ton panier est dans l’icône en haut à droite.</string>
+    <string name="about_finalize">Dernier « Finaliser sur Leclerc » : %1$s</string>
     <string name="plan_banner_open">Touche « Commencer mes courses ».</string>
     <string name="plan_banner">Cette page n’est pas celle de ton magasin : Leclerc ne l’a pas ouverte ou ne répond pas. Touche « Ouvrir l’accueil du drive » pour recommencer. Le bouton retour du téléphone annule.</string>
     <string name="plan_banner_action">Ouvrir l’accueil du drive</string>

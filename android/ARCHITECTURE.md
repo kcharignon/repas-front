@@ -36,7 +36,8 @@ Le cœur : `android/core/src/main/kotlin/eu/kantin/repas/drive/` (le paquet n'a 
 |---|---|
 | `NavigationPolicy.kt` | la règle de navigation du drive (seules les pages `https` de `leclercdrive.fr` restent dans l'application), les formes d'adresses, le site mobile, l'accueil |
 | `ShellNavigation.kt` | l'origine de Repas (`RepasOrigin`) et la règle de navigation de la coquille |
-| `DriveEntry.kt` | où ouvrir le drive depuis « Finaliser sur Leclerc » (page du panier ou accueil) |
+| `DriveEntry.kt` | où ouvrir le drive depuis « Finaliser sur Leclerc » (l'accueil du magasin, ou l'accueil du drive) |
+| `FinalizeOutcome.kt` | la forme du dernier « Finaliser » (un mot, jamais une adresse) et son port de stockage (`FinalizeOutcomeStore`) |
 | `StorePathMemory.kt` | le chemin du magasin avec sa ville, et son port de stockage (`StorePathStore`) |
 | `OpeningWatch.kt` | la surveillance de la page où l'envoi attend la page du magasin (`PageTrouble`) |
 | `NativeBridge.kt` | les règles du pont `repasNative` : origine, 64 Ko, forme du JSON, réponses |
@@ -60,7 +61,7 @@ L'application : `android/app/src/main/kotlin/eu/kantin/repas/drive/`, tout ce qu
 | `AgentHost.kt` | la colle `androidx.webkit` : injection de l'agent, canal `repasHost` |
 | `DesktopMode.kt` | le mode ordinateur appliqué à la WebView |
 | `DriveProfile.kt` | le profil « drive » de la WebView (cookies et stockage séparés de Repas) |
-| `RepasApp.kt` | l'application ; les stockages Android (`PrefsPassStore`, `PrefsStorePathStore`) |
+| `RepasApp.kt` | l'application ; les stockages Android (`PrefsPassStore`, `PrefsStorePathStore`, `PrefsFinalizeOutcomeStore`) |
 | `AndroidServices.kt` | les services de plateforme d'Android derrière les interfaces du cœur (`AndroidLinkOpener`) |
 | `InstalledVersion.kt` | la version installée, lue dans le gestionnaire de paquets |
 | `Dialogs.kt`, `Views.kt`, `TextPanel.kt` | fenêtres, vues, écran de texte |
@@ -77,6 +78,7 @@ Quand le cœur a besoin de quelque chose que seule la plateforme sait faire, il 
 | `LinkOpener` | ouvrir une page web dans le navigateur du système | `AndroidLinkOpener` (`AndroidServices.kt`) | hors portée |
 | `PassStore` | garder une valeur texte : le passage non terminé et les résultats à livrer | `PrefsPassStore` (préférence privée, hors sauvegarde) | hors portée |
 | `StorePathStore` | garder le chemin du magasin | `PrefsStorePathStore` | hors portée |
+| `FinalizeOutcomeStore` | garder la forme du dernier « Finaliser » | `PrefsFinalizeOutcomeStore` | hors portée |
 
 - **Pas de `SecureStore`** : rien ne garde de secret aujourd'hui (la connexion Google ne garde pas le jeton). Le jour où quelque chose en aura besoin, on l'ajoute au cœur avec son implémentation.
 - **Pas encore d'interface** pour l'écran allumé (`FLAG_KEEP_SCREEN_ON`), la WebView elle-même (injection, pont, profil, mode ordinateur) ni les fenêtres : il n'y a qu'une plateforme, on n'invente pas l'interface avant le second besoin. Les *règles* de ces morceaux sont déjà dans le cœur, c'est ce qui compte.
@@ -98,6 +100,6 @@ Le jour où l'iPhone devient un besoin, ce ne sera pas une réécriture :
    - `String.format` (`ResultReport`) et les conversions d'octets (`Charsets`) : leurs équivalents multiplateformes ;
    - JUnit : `kotlin.test` ;
 3. revérifier les expressions régulières du cœur sur Kotlin/Native (les formes d'adresses en dépendent) : les tests les couvrent déjà ;
-4. écrire côté iPhone les implémentations des interfaces de plateforme (`IdentityProvider`, `LinkOpener`, les deux stockages) et la colle du `WKWebView` (injection du script, canal de messages, profil) ; `injection.js` est propre à Android, l'iPhone aura le sien.
+4. écrire côté iPhone les implémentations des interfaces de plateforme (`IdentityProvider`, `LinkOpener`, les trois stockages) et la colle du `WKWebView` (injection du script, canal de messages, profil) ; `injection.js` est propre à Android, l'iPhone aura le sien.
 
 Rien de cela n'est fait ni préparé de façon cachée : le cœur compile et se teste aujourd'hui sans Android, c'est tout ce que ce découpage promet.

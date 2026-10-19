@@ -1,9 +1,10 @@
-import type {
-  ChosenProduct,
-  ProductPrice,
-  RejectedProduct,
-  ResultLine,
-  ResultMessage,
+import {
+  cleanText,
+  type ChosenProduct,
+  type ProductPrice,
+  type RejectedProduct,
+  type ResultLine,
+  type ResultMessage,
 } from '@drive-protocol'
 
 import type { ChoiceIntent } from '@/api'
@@ -27,11 +28,16 @@ function priceOf(price: ProductPrice | undefined): Price | null {
   }
 }
 
-/** Un produit à mémoriser : identifiant en chaîne (`id` du protocole), libellé et contenu tels que l'agent les a lus. */
+/**
+ * Un produit à mémoriser : identifiant en chaîne (`id` du protocole), libellé et contenu tels que l'agent les a lus. Le libellé est nettoyé une
+ * seconde fois (`cleanText`, la fonction de l'agent) : un agent plus ancien, embarqué dans une application pas encore mise à jour, peut laisser
+ * passer un caractère invisible que le back refuse, et le back rejette alors tout le lot (`422 DRIVE_CHOICE_INVALID`). Un libellé qui n'était
+ * fait que d'invisibles redevient l'identifiant du produit : le back exige un libellé.
+ */
 function productOf(product: RejectedProduct | ChosenProduct): Product {
   return {
     retailerProductId: product.id,
-    label: product.label,
+    label: cleanText(product.label) || product.id,
     ean: product.ean ?? null,
     content: product.content ?? null,
     price: 'price' in product ? priceOf(product.price) : null,
