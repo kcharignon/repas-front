@@ -343,6 +343,22 @@ const SCREENS: Record<string, () => unknown> = {
         { name: 'Sucre', reason: 'CART_REFUSED', tried: 1 },
       ],
     }),
+  // Des produits choisis que le panier n'a pas pris : le choix est enregistré, une phrase par produit et pourquoi (DRV-644).
+  'end-unreached': () =>
+    ui.show('end', {
+      outcome: 'completed',
+      added: 2,
+      chosen: 3,
+      haveAtHome: 0,
+      skipped: 0,
+      unavailable: 0,
+      failed: 0,
+      unreached: [
+        { label: 'Sirop de test Fraise 60cl', reason: 'COMING_SOON' },
+        { label: 'Farine de test', reason: 'OUT_OF_STOCK' },
+        { label: 'Biscuit sablé de test', reason: 'CART_REFUSED' },
+      ],
+    }),
   // Arrêté avant que rien ne soit mis au panier ni choisi : « Le panier n'est pas rempli » (DRV-626).
   'end-none': () =>
     ui.show('end', {

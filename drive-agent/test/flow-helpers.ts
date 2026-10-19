@@ -144,6 +144,8 @@ export interface ShelfItem {
   promo?: number | null
   /** Ce que le panier garde d'une demande de `quantity` (par défaut tout). */
   obtained?: (quantity: number) => number
+  /** Ce que la réponse du panier dit de la disponibilité du produit (DRV-644) ; absent : rien. */
+  cartFacts?: { stock: number | null; availability: number | null }
   /** La quantité déjà au panier que la recherche lit (par défaut 0 : le site la donne toujours) ; `null` : illisible. */
   inCart?: number | null
   /** L'adresse de la photo, déjà validée par l'adaptateur (par défaut : aucune). */
@@ -270,6 +272,7 @@ export function fakeAdapter(
           ok: obtained === quantity,
           items: null,
           totalCents: null,
+          ...(shelf[id]?.cartFacts && { product: shelf[id]?.cartFacts }),
           status: 200,
         }
       } finally {

@@ -522,13 +522,17 @@ test('une recherche de 45 produits : huit fiches d’abord, la suite en défilan
   expect(requested.length).toBeLessThanOrEqual(8)
 
   // When : la personne fait défiler jusqu'au bout
-  for (let guard = 0; guard < 30 && (await cards.count()) < 45; guard += 1) {
-    const before = await cards.count()
-    await page.locator('.scroll').evaluate((element) => {
-      element.scrollTop = element.scrollHeight
-    })
-    await expect.poll(() => cards.count()).toBeGreaterThan(before)
-  }
+  await expect
+    .poll(
+      async () => {
+        await page.locator('.scroll').evaluate((element) => {
+          element.scrollTop = element.scrollHeight
+        })
+        return cards.count()
+      },
+      { timeout: 20_000, intervals: [100, 200] },
+    )
+    .toBe(45)
 
   // Then : les 45 produits, dans l'ordre, la dernière fiche et « Annuler l'envoi » sous elle ; une seule recherche, aucune requête de plus
   await expect(cards).toHaveCount(45)

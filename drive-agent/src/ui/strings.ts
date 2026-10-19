@@ -2,7 +2,7 @@
 // Le diagnostic et le test automatique sont des outils du mainteneur : exemptés du glossaire, pas du tutoiement. Gardé par src/i18n/__tests__/voice-and-glossary.spec.ts.
 import type { ErrorCode, LineStatus, Outcome } from '../../protocol'
 import { own } from '../own'
-import type { UnavailableReason } from './types'
+import type { UnavailableReason, UnreachedReason } from './types'
 
 /** « 1 produit », « 3 produits » : le nombre suivi du bon mot. */
 export function count(n: number, one: string, many: string): string {
@@ -312,6 +312,22 @@ export const S = {
         NOT_FOUND: 'introuvable',
         CART_REFUSED: 'refusé par le panier',
       } satisfies Record<UnavailableReason, string>,
+      /** DRV-644 : ce que la réponse du panier a dit des produits choisis qu'il n'a pas pris : des nombres lus tels quels (`iQteDisponible`, `eDisponibilite`), jamais un nom. */
+      lastRefusals: (list: string) =>
+        `Dernier envoi, produits choisis non pris par le panier : ${list}`,
+      /** Les raisons d'un refus du panier, pour le mainteneur (le diagnostic est exempté du glossaire). */
+      refusal: {
+        OUT_OF_STOCK: 'en rupture',
+        COMING_SOON: 'bientôt disponible',
+        CART_REFUSED: 'refusé par le panier',
+      } satisfies Record<UnreachedReason, string>,
+      lastRefusalItem: (
+        rank: number,
+        reason: string,
+        stock: number | null,
+        availability: number | null,
+      ) =>
+        `${rank} : ${reason} (iQteDisponible : ${stock ?? 'absent'}, eDisponibilite : ${availability ?? 'absente'})`,
       lastPassItem: (rank: number, reason: string, tried: number) =>
         `${rank} : ${reason} (${tried} recherche${tried > 1 ? 's' : ''})`,
     },
@@ -497,6 +513,8 @@ export const S = {
     /** Un envoi arrêté avant que rien ne soit mis au panier ni choisi : « en partie » serait faux (DRV-626). Le même mot que le récapitulatif de Repas. */
     notFilled: 'Le panier n’est pas rempli',
     completed: 'Tes produits sont dans ton panier Leclerc. Retourne dans Repas pour le finaliser.',
+    /** Des produits choisis n'ont pas été pris par le panier (DRV-644) : seule l'action, chaque produit a sa phrase. */
+    completedSome: 'Retourne dans Repas pour le finaliser.',
     /** Ce qui est sauf : rien de ce qui est déjà au panier n'est retiré. */
     safe: 'Ce qui est déjà au panier y reste.',
     /** Ce qui est sauf et ce qu'il reste à ajouter, quand l'envoi s'est arrêté avant la fin. */
@@ -543,6 +561,18 @@ export const S = {
       item: (name: string, reason: string, tried: number) =>
         `${name} — ${reason}, ${count(tried, 'recherche', 'recherches')}`,
     },
+    /** Un produit choisi que le panier n'a pas pris (DRV-644) : le choix est enregistré, une phrase par produit, et pourquoi. */
+    unreached: {
+      item: (product: string, why: string) =>
+        `« ${product} » est enregistré, mais pas dans ton panier${why}`,
+      /** La suite de la phrase : la raison, avec les mots de Leclerc quand c'est lui qui les dit. */
+      why: {
+        OUT_OF_STOCK: ' : Leclerc le dit en rupture dans ton magasin.',
+        COMING_SOON:
+          '. Leclerc indique « Bientôt disponible » : tu ne peux pas le commander pour l’instant.',
+        CART_REFUSED: ' : Leclerc n’a pas voulu le mettre au panier, sans en donner la raison.',
+      } satisfies Record<UnreachedReason, string>,
+    },
     back: 'Retourner dans Repas',
   },
   /** Les lignes du journal de progression (une par article traité). */
@@ -558,6 +588,8 @@ export const S = {
     cartRefused: (name: string) => `${name} : pas pris par le panier, à choisir ensuite`,
     /** Le site disait ce produit en rupture et le panier l'a pourtant pris (DRV-635). */
     acceptedAnyway: (name: string) => `${name} : ajouté, Leclerc l’a accepté`,
+    /** Le produit choisi n'est pas au panier, mais le choix est enregistré (DRV-644). */
+    savedNotInCart: (name: string) => `${name} : enregistré, pas dans le panier`,
     slow: (name: string) => `${name} : Leclerc met trop de temps à répondre`,
   },
   /** La demande de vérification de l'anti-robot (ticket K) : un bandeau en bas de l'écran, pour que la page reste visible. */

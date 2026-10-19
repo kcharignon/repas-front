@@ -3,6 +3,7 @@
 // jamais le passage : on perd seulement la reprise.
 import { LIMITS, LINE_OUTCOMES, type ResultLine, type ResultStats } from '../../protocol'
 import type { CartNote } from './keep-cart'
+import type { UnreachedReason } from '../ui'
 import type { ContentChange, UnavailableNote } from './phase-a'
 import type { StorageLike } from './types'
 
@@ -11,6 +12,8 @@ export const RUN_PREFIX = 'repas:run:'
 export const ENTRY_KEY = 'repas:entry'
 /** Les raisons du dernier envoi (DRV-635), gardées pour le diagnostic : des mots fixes et des nombres, jamais un libellé ni un identifiant. */
 export const LAST_REASONS_KEY = 'repas:last-reasons'
+/** Ce que le panier a répondu au dernier produit choisi qu'il n'a pas pris (DRV-644), gardé pour le diagnostic : deux nombres et un mot fixe. */
+export const LAST_REFUSALS_KEY = 'repas:last-refusals'
 
 /** Une ligne dont le nombre de produits a été recalculé sur le contenu lu en direct (DRV-613), gardée pour l'écran de fin. */
 export interface RecordedChange extends ContentChange {
@@ -22,6 +25,21 @@ export type RecordedCart = CartNote & { ingredientSlug: string }
 
 /** Un produit habituel mis de côté pour la phase B, avec sa raison (DRV-635), gardé pour le choix, le journal et l'écran de fin. */
 export type RecordedReason = UnavailableNote & { ingredientSlug: string }
+
+/**
+ * Un produit choisi que le panier n'a pas pris (DRV-644), gardé pour l'écran de fin : son nom (nettoyé, de 1 à 255 caractères), pourquoi, et ce que la réponse du
+ * panier disait de sa disponibilité (des nombres lus tels quels, `null` si elle n'en disait rien).
+ */
+export interface RecordedUnreached {
+  ingredientSlug: string
+  reason: UnreachedReason
+  label: string
+  stock: number | null
+  availability: number | null
+}
+
+/** Ce que le diagnostic garde d'un refus du panier : jamais le nom ni l'identifiant du produit. */
+export type LastRefusal = Pick<RecordedUnreached, 'reason' | 'stock' | 'availability'>
 
 export interface RunState {
   v: 1
@@ -39,6 +57,8 @@ export interface RunState {
   carts: RecordedCart[]
   /** Les produits habituels que la phase A n'a pas mis au panier, avec leur raison, dans l'ordre du passage (DRV-635). */
   reasons: RecordedReason[]
+  /** Les produits choisis que le panier n'a pas pris, dans l'ordre du passage (DRV-644). */
+  unreached: RecordedUnreached[]
   /** Les compteurs de requêtes du passage entier (ticket L), toutes les pages qu'il a connues : un nombre de plus à chaque ligne faite. */
   stats: ResultStats
 }
@@ -54,6 +74,7 @@ export function emptyState(runId: string, now: number): RunState {
     changes: [],
     carts: [],
     reasons: [],
+    unreached: [],
     stats: { requests: 0, errors: 0, blocks: 0 },
   }
 }
@@ -93,6 +114,22 @@ const isReason = (value: unknown): value is RecordedReason =>
   (value.tried as number) >= 1 &&
   (value.tried as number) <= 99
 
+const isNullableCount = (value: unknown): value is number | null =>
+  value === null ||
+  (Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 1_000_000)
+
+const isUnreached = (value: unknown): value is RecordedUnreached =>
+  isObject(value) &&
+  typeof value.ingredientSlug === 'string' &&
+  (value.reason === 'OUT_OF_STOCK' ||
+    value.reason === 'COMING_SOON' ||
+    value.reason === 'CART_REFUSED') &&
+  typeof value.label === 'string' &&
+  value.label.length >= 1 &&
+  value.label.length <= LIMITS.label &&
+  isNullableCount(value.stock) &&
+  isNullableCount(value.availability)
+
 const isCounter = (value: unknown): value is number =>
   Number.isInteger(value) && (value as number) >= 0 && (value as number) <= LIMITS.requests
 
@@ -104,10 +141,11 @@ const isStats = (value: unknown): value is ResultStats =>
   isCounter(value.blocks)
 
 /** Un état tel qu'il est stocké : `changes` (DRV-613), `carts` (ticket M), `reasons` (DRV-635) et `stats` (ticket L) sont facultatifs, un état plus ancien n'en a pas. */
-type StoredState = Omit<RunState, 'changes' | 'carts' | 'reasons' | 'stats'> & {
+type StoredState = Omit<RunState, 'changes' | 'carts' | 'reasons' | 'unreached' | 'stats'> & {
   changes?: RecordedChange[]
   carts?: RecordedCart[]
   reasons?: RecordedReason[]
+  unreached?: RecordedUnreached[]
   stats?: ResultStats
 }
 
@@ -136,12 +174,30 @@ function isState(value: unknown, runId: string): value is StoredState {
   const reasonsOk =
     value.reasons === undefined ||
     (Array.isArray(value.reasons) && value.reasons.every((reason) => isReason(reason)))
+  const unreachedOk =
+    value.unreached === undefined ||
+    (Array.isArray(value.unreached) && value.unreached.every((item) => isUnreached(item)))
   const statsOk = value.stats === undefined || isStats(value.stats)
-  return doneOk && waitingOk && changesOk && cartsOk && reasonsOk && statsOk
+  return doneOk && waitingOk && changesOk && cartsOk && reasonsOk && unreachedOk && statsOk
 }
 
 /** La raison d'un produit habituel du dernier envoi, sans libellé ni identifiant (DRV-635) : de quoi la dire dans le diagnostic. */
 export type LastReason = Pick<UnavailableNote, 'reason' | 'tried'>
+
+/** Les refus du panier du dernier envoi, tels que `RunStore.keepRefusals` les a gardés ; vide si le stockage est muet ou si rien n'a été gardé. */
+export function readLastRefusals(storage: StorageLike | null): LastRefusal[] {
+  try {
+    const raw = storage?.getItem(LAST_REFUSALS_KEY)
+    const list: unknown = raw ? JSON.parse(raw) : []
+    return Array.isArray(list)
+      ? list.filter((item): item is LastRefusal =>
+          isUnreached({ ingredientSlug: '', label: '-', ...(item as object) }),
+        )
+      : []
+  } catch {
+    return []
+  }
+}
 
 /** Les raisons du dernier envoi, telles que `RunStore.keepReasons` les a gardées ; vide si le stockage est muet ou si rien n'a été gardé. */
 export function readLastReasons(storage: StorageLike | null): LastReason[] {
@@ -175,6 +231,7 @@ export class RunStore {
             changes: state.changes ?? [],
             carts: state.carts ?? [],
             reasons: state.reasons ?? [],
+            unreached: state.unreached ?? [],
             stats: state.stats ?? { requests: 0, errors: 0, blocks: 0 },
           }
         : null
@@ -224,6 +281,22 @@ export class RunStore {
       }
       const kept = reasons.slice(0, 100).map(({ reason, tried }) => ({ reason, tried }))
       this.storage?.setItem(LAST_REASONS_KEY, JSON.stringify(kept))
+    } catch {
+      // Stockage plein ou interdit : le diagnostic n'aura pas ces lignes.
+    }
+  }
+
+  /** Garde les refus du panier de cet envoi pour le diagnostic, à la place de ceux du précédent (DRV-644). */
+  keepRefusals(unreached: readonly LastRefusal[]): void {
+    try {
+      if (unreached.length === 0) {
+        this.storage?.removeItem(LAST_REFUSALS_KEY)
+        return
+      }
+      const kept = unreached
+        .slice(0, 100)
+        .map(({ reason, stock, availability }) => ({ reason, stock, availability }))
+      this.storage?.setItem(LAST_REFUSALS_KEY, JSON.stringify(kept))
     } catch {
       // Stockage plein ou interdit : le diagnostic n'aura pas ces lignes.
     }

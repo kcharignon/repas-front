@@ -225,6 +225,23 @@ describe('un nouvel ingrédient', () => {
     expect(first?.textContent).not.toContain('demandé')
   })
 
+  it('pas de ligne « En promotion » pour une promotion à zéro, et « Plus en stock. » sans nombre de produits (DRV-644)', async () => {
+    const shelf = {
+      ...SHELF,
+      '2000001': { ...SHELF['2000001'], promo: 0 },
+    }
+    const test = run(pepper(), [() => ({ kind: 'skip' })], { shelf })
+
+    await test.start()
+
+    const [first, , out] = rows(test.user.views[0]?.zone ?? document.createElement('div'))
+    expect(first?.textContent).not.toContain('En promotion')
+    expect(first?.textContent).toContain('500 g par produit : 2 produits.')
+    expect(out?.textContent).toContain('Plus en stock.')
+    expect(out?.textContent).not.toContain('À mettre au panier')
+    expect(out?.textContent).not.toContain('par produit')
+  })
+
   describe('la taille ne s’affiche qu’une fois par produit (DRV-626)', () => {
     /** Les lignes de texte d'un produit de la liste, une par paragraphe. */
     const linesOf = (row: HTMLElement | undefined) =>
@@ -617,27 +634,85 @@ describe('les produits refusés et indisponibles', () => {
     expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', product: { id: '2000003' } })
   })
 
-  it('un produit « Plus en stock » que le panier refuse : le message le nomme, la liste reste, rien n’est retenu pour lui', async () => {
+  it('un produit « Plus en stock » que le panier refuse : le choix est enregistré (ligne CHOSEN), le passage continue, la fin dit pourquoi (DRV-644)', async () => {
     const shelf = { ...SHELF, '2000003': { ...SHELF['2000003'], obtained: () => 0 } }
-    const test = run(
-      pepper(),
-      [(view) => choose(view.zone, 'Poivre en grains'), (view) => choose(view.zone, 'Poivre noir')],
-      { shelf },
-    )
+    const test = run(pepper(), [(view) => choose(view.zone, 'Poivre en grains')], { shelf })
 
     await test.start()
 
-    const again = test.user.views[1]?.zone
-    expect(again?.querySelector('[role="alert"]')?.textContent).toBe(
-      'Leclerc n’a pas pu mettre « Poivre en grains de test » au panier. Choisis-en un autre.',
-    )
-    expect(buttonOf(again as HTMLElement, 'Poivre en grains').disabled).toBe(false)
-    expect(test.adapter.writes).toEqual([
-      { id: '2000003', quantity: 4 },
-      { id: '2000001', quantity: 2 },
+    // Une seule liste montrée : ni bandeau, ni retour à la liste ; le panier n'a rien pris, mais le choix part comme un choix ordinaire
+    expect(test.user.views).toHaveLength(1)
+    expect(test.adapter.writes).toEqual([{ id: '2000003', quantity: 4 }])
+    expect(lineOf(test.sent[0])).toEqual({
+      ingredientSlug: 'poivre',
+      outcome: 'CHOSEN',
+      product: expect.objectContaining({ id: '2000003', label: 'Poivre en grains de test' }),
+      quantity: 4,
+      placement: 'PRIMARY',
+    })
+    expect(test.screens.propsOf('end')[0]?.unreached).toEqual([
+      { label: 'Poivre en grains de test', reason: 'OUT_OF_STOCK' },
     ])
+  })
+
+  it('une fiche « Bientôt disponible » que le panier refuse : la raison est dite avec les mots de Leclerc', async () => {
+    const shelf = {
+      ...SHELF,
+      '2000003': { ...SHELF['2000003'], obtained: () => 0, comingSoon: true },
+    }
+    const test = run(pepper(), [(view) => choose(view.zone, 'Poivre en grains')], { shelf })
+
+    await test.start()
+
+    expect(test.screens.propsOf('end')[0]?.unreached).toEqual([
+      { label: 'Poivre en grains de test', reason: 'COMING_SOON' },
+    ])
+  })
+
+  it('une fiche disponible que le panier ne prend pas, sans rien en dire : « CART_REFUSED », le choix est enregistré', async () => {
+    const shelf = {
+      ...SHELF,
+      '2000001': {
+        ...SHELF['2000001'],
+        obtained: () => 0,
+        cartFacts: { stock: 12, availability: 1 },
+      },
+    }
+    const test = run(pepper(), [(view) => choose(view.zone, 'Poivre noir')], { shelf })
+
+    await test.start()
+
     expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', product: { id: '2000001' } })
-    expect(lineOf(test.sent[0])).not.toHaveProperty('rejected')
+    expect(test.screens.propsOf('end')[0]?.unreached).toEqual([
+      { label: 'Poivre noir moulu de test', reason: 'CART_REFUSED' },
+    ])
+  })
+
+  it('une fiche disponible dont la réponse du panier dit un stock nul : la raison est la rupture (le motif lu)', async () => {
+    const shelf = {
+      ...SHELF,
+      '2000001': {
+        ...SHELF['2000001'],
+        obtained: () => 0,
+        cartFacts: { stock: 0, availability: 2 },
+      },
+    }
+    const test = run(pepper(), [(view) => choose(view.zone, 'Poivre noir')], { shelf })
+
+    await test.start()
+
+    expect(test.screens.propsOf('end')[0]?.unreached).toEqual([
+      { label: 'Poivre noir moulu de test', reason: 'OUT_OF_STOCK' },
+    ])
+  })
+
+  it('un produit pris au panier ne laisse aucune mention « pas dans ton panier »', async () => {
+    const test = run(pepper(), [(view) => choose(view.zone, 'Poivre noir')])
+
+    await test.start()
+
+    expect(test.screens.propsOf('end')).toEqual([])
+    expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', quantity: 2 })
   })
 
   it('un produit inconnu de la liste (message forgé) ne met rien au panier', async () => {
@@ -1476,20 +1551,17 @@ describe('les erreurs du site', () => {
     })
   })
 
-  it('un panier qui refuse le produit (quantité nulle) ramène à la liste avec un message', async () => {
+  it('un panier qui refuse le produit (quantité nulle) n’empêche pas de l’enregistrer : le passage continue avec l’article suivant', async () => {
     const shelf = { ...SHELF, '2000001': { ...SHELF['2000001'], obtained: () => 0 } }
-    const test = run(
-      pepper(),
-      [(view) => choose(view.zone, 'Poivre noir'), (view) => choose(view.zone, 'Poivre blanc')],
-      { shelf },
-    )
+    const test = run(pepper(), [(view) => choose(view.zone, 'Poivre noir')], {
+      shelf,
+      others: [{ ...fresh('sel'), name: 'Sel' }],
+    })
 
     await test.start()
 
-    expect(test.user.views[1]?.zone.querySelector('[role="alert"]')?.textContent).toContain(
-      'Leclerc n’a pas pu mettre « Poivre noir moulu de test » au panier.',
-    )
-    expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', product: { id: '2000002' } })
+    expect(test.user.views).toHaveLength(2)
+    expect(test.sent[0]?.lines.map((item) => item.outcome)).toEqual(['CHOSEN', 'UNAVAILABLE'])
   })
 })
 

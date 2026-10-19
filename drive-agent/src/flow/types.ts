@@ -10,6 +10,7 @@ import type {
 import type { RetailerAdapter } from '../leclerc'
 import type { Ui } from '../ui'
 import type { CartNote } from './keep-cart'
+import type { UnreachedReason } from '../ui'
 import type { ContentChange, UnavailableReason } from './phase-a'
 
 /** Le stockage de session de la page (`sessionStorage`) : l'état de reprise y vit le temps de l'onglet. */
@@ -48,6 +49,16 @@ export interface LineNotes {
   slow?: boolean
   /** Le produit se disait en rupture et le panier l'a pourtant pris (DRV-635) : le journal le note. */
   accepted?: boolean
+  /**
+   * Le produit choisi n'a pas été pris par le panier (DRV-644) : le choix est enregistré quand même. `label` : son nom, `stock` et `availability` : ce que la
+   * réponse du panier en disait.
+   */
+  unreached?: {
+    reason: UnreachedReason
+    label: string
+    stock: number | null
+    availability: number | null
+  }
 }
 
 /** Ce que la phase B reçoit pour guider l'utilisateur (DRV-306). */

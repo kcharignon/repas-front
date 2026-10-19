@@ -6,7 +6,7 @@
 // pas (champ absent ou illisible), la dernière réponse du panier sert de plancher (`RetailerAdapter.cartQuantity`) et la fin le signale :
 // l'agent n'écrit alors pas plus bas que ce qu'il a su, mais ne peut pas jurer de ce que le panier contient.
 import { LIMITS } from '../../protocol'
-import type { Candidate, RetailerAdapter } from '../leclerc'
+import type { Candidate, CartProductFacts, RetailerAdapter } from '../leclerc'
 
 /** Ce que l'écran de fin doit dire d'une ligne à propos de la quantité déjà au panier. */
 export type CartNote =
@@ -24,6 +24,8 @@ export interface Settled {
   obtained: number
   /** Ce que l'écran de fin doit en dire, `null` quand rien n'est à signaler. */
   note: CartNote | null
+  /** Ce que la réponse du panier dit de la disponibilité du produit (DRV-644), `null` quand rien n'a été écrit ou qu'elle n'en dit rien. */
+  facts?: CartProductFacts | null
 }
 
 /**
@@ -49,7 +51,11 @@ export async function putInCart(
     return { obtained: floor, note: noteOf(readable, wanted, floor) }
   }
   const cart = await adapter.setCartQuantity(seen.id, wanted)
-  return { obtained: cart.obtained, note: readable ? null : noteOf(false, wanted, floor) }
+  return {
+    obtained: cart.obtained,
+    note: readable ? null : noteOf(false, wanted, floor),
+    ...(cart.product && { facts: cart.product }),
+  }
 }
 
 /** La mention d'une ligne : « conservé » si le panier avait plus et que la recherche le disait ; « illisible » si elle ne le disait pas. */

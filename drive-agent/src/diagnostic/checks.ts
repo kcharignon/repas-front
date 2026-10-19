@@ -12,7 +12,7 @@ import {
   type RetailerAdapter,
 } from '../leclerc'
 import { S } from '../ui'
-import { readLastReasons, type StorageLike, type WakeLockLike } from '../flow'
+import { readLastReasons, readLastRefusals, type StorageLike, type WakeLockLike } from '../flow'
 import {
   attemptsText,
   availabilityFacts,
@@ -321,7 +321,12 @@ export async function runChecks(
 
   if (page !== null) probes = await probeSearches(deps.adapter, arrival, commonFault)
   // La disponibilité de l'échantillon et les raisons du dernier envoi (DRV-635) : des nombres et des mots fixes, jamais un libellé.
-  probes = { ...probes, availability, lastPass: readLastReasons(deps.storage) }
+  probes = {
+    ...probes,
+    availability,
+    lastPass: readLastReasons(deps.storage),
+    lastRefusals: readLastRefusals(deps.storage),
+  }
 
   await push(skipped('frame', D.frameSkipped))
   return { results, page, probes, stats: statsSince(before, deps.adapter.stats()) }

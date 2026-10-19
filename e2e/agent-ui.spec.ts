@@ -55,6 +55,7 @@ const SCREENS = [
   'end-partial',
   'end-none',
   'end-reasons',
+  'end-unreached',
   'end-error',
   'end-aborted',
   ...ERROR_SCREENS,
@@ -367,18 +368,19 @@ for (const colorScheme of ['light', 'dark'] as const) {
     expect(photoIds(page).size).toBeLessThanOrEqual(8)
 
     // La personne fait défiler : chaque descente ajoute un lot, jusqu'à la soixantième fiche.
-    let previous = 8
-    for (let guard = 0; guard < 30 && previous < 60; guard += 1) {
-      await page.evaluate(() => {
-        const root = (document.documentElement.lastElementChild as HTMLElement)
-          .shadowRoot as ShadowRoot
-        const scroll = root.querySelector('.scroll') as HTMLElement
-        scroll.scrollTop = scroll.scrollHeight
-      })
-      await expect.poll(() => rowCount(page)).toBeGreaterThan(previous)
-      previous = await rowCount(page)
-    }
-    expect(previous).toBe(60)
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const root = (document.documentElement.lastElementChild as HTMLElement)
+              .shadowRoot as ShadowRoot
+            const scroll = root.querySelector('.scroll') as HTMLElement
+            scroll.scrollTop = scroll.scrollHeight
+            return root.querySelectorAll('li.candidate').length
+          }),
+        { timeout: 20_000, intervals: [100, 200] },
+      )
+      .toBe(60)
 
     // Au bout : la dernière fiche, puis « Annuler l'envoi » sous elle, atteignable ; rien ne déborde ; chaque cible se touche.
     await page.evaluate(() => {

@@ -10,7 +10,7 @@ import type {
   LinkFacts,
   SearchFacts,
 } from '../leclerc'
-import type { LastReason } from '../flow'
+import type { LastReason, LastRefusal } from '../flow'
 import { own } from '../own'
 import { S } from '../ui'
 
@@ -37,6 +37,8 @@ export interface ProbeFacts {
   availability?: AvailabilityFacts | null
   /** Pourquoi le dernier envoi n'a pas mis des produits habituels au panier (DRV-635), dans l'ordre du passage. */
   lastPass?: readonly LastReason[]
+  /** Ce que le panier a répondu aux produits choisis qu'il n'a pas pris, au dernier envoi (DRV-644). */
+  lastRefusals?: readonly LastRefusal[]
 }
 
 /** Ce que l'échantillon de résultats dit de la disponibilité (DRV-635) : des nombres, jamais un libellé. */
@@ -158,7 +160,7 @@ function searchLines(search: ProbedSearch): string[] {
 export function probeLines(probes: ProbeFacts | null | undefined): string[] {
   if (!probes) return []
   const lines: string[] = []
-  const { arrival, common, nonsense, availability, lastPass } = probes
+  const { arrival, common, nonsense, availability, lastPass, lastRefusals } = probes
   if (arrival) {
     lines.push(P.address(arrival.address))
     lines.push(P.city(cityOf(arrival.address)))
@@ -188,6 +190,17 @@ export function probeLines(probes: ProbeFacts | null | undefined): string[] {
       P.lastPass(
         lastPass
           .map(({ reason, tried }, index) => P.lastPassItem(index + 1, P.reason[reason], tried))
+          .join(' ; '),
+      ),
+    )
+  }
+  if (lastRefusals && lastRefusals.length > 0) {
+    lines.push(
+      P.lastRefusals(
+        lastRefusals
+          .map(({ reason, stock, availability: label }, index) =>
+            P.lastRefusalItem(index + 1, P.refusal[reason], stock, label),
+          )
           .join(' ; '),
       ),
     )

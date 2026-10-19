@@ -28,6 +28,7 @@ export {
   endProps,
   hasSomethingToRead,
   reasonsOf,
+  unreachedOf,
   resultLines,
   type Ending,
 } from './result'
@@ -35,13 +36,17 @@ export { setupHandler, type SetupDeps } from './setup'
 export {
   emptyState,
   LAST_REASONS_KEY,
+  LAST_REFUSALS_KEY,
   readLastReasons,
+  readLastRefusals,
   RUN_PREFIX,
   RunStore,
   type LastReason,
+  type LastRefusal,
   type RecordedCart,
   type RecordedChange,
   type RecordedReason,
+  type RecordedUnreached,
   type RunState,
 } from './run-state'
 export type {

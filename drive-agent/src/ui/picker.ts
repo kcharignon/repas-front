@@ -93,7 +93,8 @@ function row(
   const off = item.state === 'refused'
   const hint = {
     ok: item.explain,
-    out: `${S.picker.outHint} ${item.explain}`,
+    // Un produit absent : le nombre à mettre au panier n'a pas de sens, la fiche dit seulement qu'il n'est plus en stock (DRV-644).
+    out: S.picker.outHint,
     refused: S.picker.refusedHint,
   }[item.state]
   const button = h('button', {
