@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { cva, type VariantProps } from 'class-variance-authority'
+import type { ClassValue } from 'clsx'
 
 import { cn } from './cn'
 
@@ -31,13 +32,18 @@ const props = withDefaults(
     variant?: NonNullable<Variants['variant']>
     size?: NonNullable<Variants['size']>
     type?: 'button' | 'submit' | 'reset'
+    /** Classes de l'appelant, fusionnées : elles l'emportent sur celles de la variante (`px-4` remplace `px-5`). */
+    class?: ClassValue
   }>(),
-  { variant: 'primary', size: 'md', type: 'button' },
+  { variant: 'primary', size: 'md', type: 'button', class: undefined },
 )
 </script>
 
 <template>
-  <button :type="props.type" :class="cn(button({ variant: props.variant, size: props.size }))">
+  <button
+    :type="props.type"
+    :class="cn(button({ variant: props.variant, size: props.size }), props.class)"
+  >
     <slot />
   </button>
 </template>

@@ -140,12 +140,13 @@ test('envoyer une liste au drive, la lire sans pouvoir la modifier, puis la rouv
   await expect(page.getByRole('progressbar')).toHaveCount(0)
   await expect(page.getByRole('checkbox')).toHaveCount(2)
   for (const box of await page.getByRole('checkbox').all()) await expect(box).toBeDisabled()
-  await expect(page.getByRole('button', { name: 'Renommer' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Mettre en pause' })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Reprendre l’envoi' })).toBeVisible()
+  // « ⋮ » ne range que la réouverture et la suppression : ni renommer ni mettre en pause
+  await page.getByRole('button', { name: 'Plus d’actions' }).click()
+  await expect(page.getByRole('menuitem')).toHaveText(['Rouvrir la liste', 'Supprimer'])
 
   // Réouverture : confirmation, puis la liste redevient modifiable
-  await page.getByRole('button', { name: 'Rouvrir la liste' }).click()
+  await page.getByRole('menuitem', { name: 'Rouvrir la liste' }).click()
   await expect(page.getByRole('dialog')).toContainText('La liste redevient modifiable.')
   await page.getByRole('dialog').getByRole('button', { name: 'Rouvrir la liste' }).click()
   await expect(page.getByText('En cours')).toBeVisible()
@@ -161,7 +162,8 @@ test('fonction coupée (retour arrière) : une liste envoyée se rouvre, sans pr
   await expect(page.getByText('Cette liste est envoyée au drive')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toHaveCount(0)
 
-  await page.getByRole('button', { name: 'Rouvrir la liste' }).click()
+  await page.getByRole('button', { name: 'Plus d’actions' }).click()
+  await page.getByRole('menuitem', { name: 'Rouvrir la liste' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Rouvrir la liste' }).click()
 
   await expect(page.getByText('En cours')).toBeVisible()
@@ -236,7 +238,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
     expect((await scan()).violations).toEqual([])
 
-    await page.getByRole('button', { name: 'Rouvrir la liste' }).click()
+    await page.getByRole('button', { name: 'Plus d’actions' }).click()
+    await expect(page.getByRole('menu')).toBeVisible()
+    expect((await scan()).violations).toEqual([])
+    await page.getByRole('menuitem', { name: 'Rouvrir la liste' }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
     expect((await scan()).violations).toEqual([])
   })
