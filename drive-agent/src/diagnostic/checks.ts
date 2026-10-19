@@ -20,6 +20,9 @@ import {
   NONSENSE_TERM,
   type ProbedSearch,
   type ProbeFacts,
+  SHELF_TERMS,
+  shelfFacts,
+  type ShelfFacts,
 } from './probes'
 
 export const CHECK_IDS = [
@@ -173,6 +176,30 @@ async function probeSearches(
   return { arrival, common, nonsense }
 }
 
+/**
+ * Les rayons et familles que la recherche rend pour trois produits frais (DRV-646) : trois recherches ordinaires, en série, à la cadence normale.
+ * La page ne porte aucun indice de pagination connu : « page suivante » de la première reste inconnue. Un blocage, une session perdue ou un refus
+ * arrête la série (« recherche non faite » pour les mots restants). Aucune erreur n'en sort.
+ */
+async function probeShelves(adapter: RetailerAdapter): Promise<ShelfFacts[]> {
+  const shelves: ShelfFacts[] = []
+  let stopped = false
+  for (const [index, term] of SHELF_TERMS.entries()) {
+    if (stopped) {
+      shelves.push({ term, products: null, aisles: [], families: [], noAisle: 0, noFamily: 0 })
+      continue
+    }
+    try {
+      const found = await adapter.searchProducts(term)
+      shelves.push({ ...shelfFacts(term, found), ...(index === 0 && { nextPage: null }) })
+    } catch (error) {
+      stopped = stopsProbing(probedFault(error))
+      shelves.push({ term, products: null, aisles: [], families: [], noAisle: 0, noFamily: 0 })
+    }
+  }
+  return shelves
+}
+
 /** Ce que la page montre de la connexion, ou rien si elle ne se laisse pas lire. */
 function sessionOf(adapter: RetailerAdapter): string | undefined {
   try {
@@ -320,10 +347,16 @@ export async function runChecks(
   }
 
   if (page !== null) probes = await probeSearches(deps.adapter, arrival, commonFault)
+  // Les rayons vus par trois recherches de produits frais (DRV-646), si le site répond encore.
+  const shelves =
+    page === null || stopsProbing(commonFault) || stopsProbing(probes.nonsense?.fault ?? null)
+      ? undefined
+      : await probeShelves(deps.adapter)
   // La disponibilité de l'échantillon et les raisons du dernier envoi (DRV-635) : des nombres et des mots fixes, jamais un libellé.
   probes = {
     ...probes,
     availability,
+    ...(shelves && { shelves }),
     lastPass: readLastReasons(deps.storage),
     lastRefusals: readLastRefusals(deps.storage),
   }

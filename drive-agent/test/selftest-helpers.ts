@@ -97,6 +97,8 @@ export function shop(shelves: Shelves, options: ShopOptions = {}) {
         inCart: cart.get(item.id) ?? 0,
         availability: null,
         comingSoon: false,
+        aisle: null,
+        family: null,
         imageUrl: null,
         content: { value: 1000, unit: 'g' },
         contentSource: 'label',

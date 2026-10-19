@@ -35,6 +35,8 @@ export interface ProbeFacts {
   nonsense: ProbedSearch | null
   /** La disponibilité lue sur la recherche courante (DRV-635). */
   availability?: AvailabilityFacts | null
+  /** Les rayons vus par les recherches d'essai (DRV-646), dans l'ordre de `SHELF_TERMS`. */
+  shelves?: readonly ShelfFacts[]
   /** Pourquoi le dernier envoi n'a pas mis des produits habituels au panier (DRV-635), dans l'ordre du passage. */
   lastPass?: readonly LastReason[]
   /** Ce que le panier a répondu aux produits choisis qu'il n'a pas pris, au dernier envoi (DRV-644). */
@@ -54,6 +56,60 @@ export interface AvailabilityFacts {
   noLabel: number
   /** Produits dont la fiche dit « Bientôt disponible ». */
   comingSoon: number
+}
+
+/** Les mots d'essai des produits frais dont on mesure les rayons (DRV-646). */
+export const SHELF_TERMS = ['tomate', 'pomme', 'courgette'] as const
+/** Les groupes montrés au plus par ligne. */
+export const SHELF_GROUPS = 8
+
+/** Un identifiant de rayon ou de famille et le nombre de produits qui le portent. */
+export interface ShelfGroup {
+  id: number
+  count: number
+}
+
+/** Les rayons et familles vus par une recherche d'essai : des identifiants et des nombres, jamais un produit. */
+export interface ShelfFacts {
+  term: string
+  /** Produits lus ; `null` : la recherche a échoué ou n'a pas été faite. */
+  products: number | null
+  aisles: readonly ShelfGroup[]
+  families: readonly ShelfGroup[]
+  /** Produits sans identifiant de rayon, de famille lisible. */
+  noAisle: number
+  noFamily: number
+  /** Première recherche seulement : la page porte-t-elle une page suivante ? `null` : aucun indice lisible. */
+  nextPage?: boolean | null
+}
+
+/** Regroupe des identifiants numériques par valeur : les plus fréquents d'abord, `SHELF_GROUPS` au plus. */
+function groupIds(values: readonly (number | null)[]): { groups: ShelfGroup[]; missing: number } {
+  const counts = new Map<number, number>()
+  let missing = 0
+  for (const value of values) {
+    if (value === null || !Number.isInteger(value) || value < 0 || value > 99_999_999) missing += 1
+    else counts.set(value, (counts.get(value) ?? 0) + 1)
+  }
+  const groups = [...counts]
+    .map(([id, count]) => ({ id, count }))
+    .sort((a, b) => b.count - a.count || a.id - b.id)
+    .slice(0, SHELF_GROUPS)
+  return { groups, missing }
+}
+
+/** Les rayons et familles de CHAQUE produit lu par une recherche (DRV-646). */
+export function shelfFacts(term: string, candidates: readonly Candidate[]): ShelfFacts {
+  const aisles = groupIds(candidates.map((candidate) => candidate.aisle))
+  const families = groupIds(candidates.map((candidate) => candidate.family))
+  return {
+    term,
+    products: candidates.length,
+    aisles: aisles.groups,
+    families: families.groups,
+    noAisle: aisles.missing,
+    noFamily: families.missing,
+  }
 }
 
 /** Le nombre de produits de l'échantillon de la mesure : les premiers de la recherche courante. */
@@ -156,11 +212,47 @@ function searchLines(search: ProbedSearch): string[] {
   return lines
 }
 
+const groupsText = (groups: readonly ShelfGroup[]) =>
+  groups.length === 0 ? P.unknown : groups.map(({ id, count }) => `${id}:${count}`).join(' ')
+
+/** Les lignes d'une recherche d'essai (DRV-646) : rayons puis familles, et pour la première l'indice de page suivante. */
+function shelfLines(shelf: ShelfFacts): string[] {
+  if (shelf.products === null) return [P.shelvesNone(shelf.term)]
+  const lines = [
+    P.shelves(
+      'Rayons vus',
+      'rayon',
+      shelf.term,
+      groupsText(shelf.aisles),
+      shelf.products,
+      shelf.noAisle,
+    ),
+    P.shelves(
+      'Familles vues',
+      'famille',
+      shelf.term,
+      groupsText(shelf.families),
+      shelf.products,
+      shelf.noFamily,
+    ),
+  ]
+  if (shelf.nextPage !== undefined) {
+    lines.push(
+      P.nextPage(
+        shelf.term,
+        shelf.products,
+        shelf.nextPage === null ? 'inconnue' : shelf.nextPage ? 'oui' : 'non',
+      ),
+    )
+  }
+  return lines
+}
+
 /** Les lignes des sondes du rapport (vide si rien n'a été relevé). */
 export function probeLines(probes: ProbeFacts | null | undefined): string[] {
   if (!probes) return []
   const lines: string[] = []
-  const { arrival, common, nonsense, availability, lastPass, lastRefusals } = probes
+  const { arrival, common, nonsense, availability, lastPass, lastRefusals, shelves } = probes
   if (arrival) {
     lines.push(P.address(arrival.address))
     lines.push(P.city(cityOf(arrival.address)))
@@ -205,6 +297,7 @@ export function probeLines(probes: ProbeFacts | null | undefined): string[] {
       ),
     )
   }
+  for (const shelf of shelves ?? []) lines.push(...shelfLines(shelf))
   if (nonsense) {
     lines.push(...searchLines(nonsense))
     const facts = nonsense.facts

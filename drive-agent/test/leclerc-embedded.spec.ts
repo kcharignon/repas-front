@@ -83,6 +83,8 @@ describe('extractProducts', () => {
         availability: null,
         comingSoon: false,
         thumbnail: null,
+        aisle: null,
+        family: null,
       })
       expect(products[1]).toMatchObject({ promoText: '1,35 €', stock: 0 })
     },

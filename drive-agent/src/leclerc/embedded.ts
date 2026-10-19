@@ -42,6 +42,9 @@ export interface RawProduct {
   comingSoon: boolean
   /** `sUrlVignetteProduit`. */
   thumbnail: string | null
+  /** `iIdRayon` et `iIdFamille` (DRV-646) : des identifiants numériques, mesurés par le diagnostic. */
+  aisle: number | null
+  family: number | null
   /** Présent seulement si au moins un champ du contenu net structuré est lu. */
   structured?: StructuredContent
 }
@@ -205,6 +208,8 @@ function buildProduct(id: string, slices: string[]): RawProduct {
     availability: number('eDisponibilite'),
     comingSoon: slices.some((slice) => COMING_SOON.test(decodeJsString(slice))),
     thumbnail: text('sUrlVignetteProduit'),
+    aisle: number('iIdRayon'),
+    family: number('iIdFamille'),
     ...(Object.values(structured).some((value) => value !== null) ? { structured } : {}),
   }
 }

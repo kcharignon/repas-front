@@ -35,6 +35,9 @@ export interface Candidate {
   availability: number | null
   /** La fiche dit « Bientôt disponible » (DRV-635). */
   comingSoon: boolean
+  /** `iIdRayon` et `iIdFamille` (DRV-646) : lus pour le diagnostic seulement, jamais envoyés à Repas. */
+  aisle: number | null
+  family: number | null
   content: Content | null
   /** D'où vient `content` ; `prices` est le moins précis (prix arrondis au centime). */
   contentSource: ContentSource | null
@@ -84,6 +87,8 @@ export function toCandidate(raw: RawProduct, page: LocationLike | null = null): 
     inCart: raw.inCart,
     availability: raw.availability,
     comingSoon: raw.comingSoon,
+    aisle: raw.aisle,
+    family: raw.family,
     imageUrl: photoUrl(raw.thumbnail, page),
     content: parsed?.content ?? null,
     contentSource: parsed?.source ?? null,

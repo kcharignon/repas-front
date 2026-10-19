@@ -170,4 +170,30 @@ test.describe('diagnostic', () => {
       expect(fake.paced().every((call) => call.kind === 'search')).toBe(true)
     })
   }
+
+  test('le rapport donne les rayons et familles de trois produits frais (DRV-646), sans aucun nom de produit', async ({
+    page,
+    fake,
+    agentCode,
+  }) => {
+    // Given
+    const app = await openWithBridge(page, fake, agentCode)
+    await app.received('hello')
+
+    // When
+    await app.send(DIAGNOSTIC)
+
+    // Then
+    const report = page.getByLabel('Rapport à copier')
+    await expect(report).toHaveValue(/Rayons vus pour « tomate » : 15:2 41:1 \(3 produits\)/)
+    await expect(report).toHaveValue(
+      /Familles vues pour « tomate » : 327:1 328:1 410:1 \(3 produits\)/,
+    )
+    await expect(report).toHaveValue(/Rayons vus pour « pomme » : 41:2 12:1 15:1 \(4 produits\)/)
+    await expect(report).toHaveValue(/Rayons vus pour « courgette » : 41:2 60:1 \(3 produits\)/)
+    await expect(report).toHaveValue(
+      /Première réponse pour « tomate » : 3 produits ; page suivante : inconnue/,
+    )
+    await expect(report).not.toHaveValue(/Tomates|Pommes|Courgettes/)
+  })
 })
