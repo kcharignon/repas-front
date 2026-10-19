@@ -86,10 +86,11 @@ export const PRODUCTS: readonly FakeProduct[] = [
   // Un produit dont le contenu net ne se lit nulle part (DRV-613 : l'agent garde alors le nombre du plan).
   make('Cacao maigre Plantation Fictive', null, 3.2, 3.2, 'kg', 14, { noContent: true }),
   // Un produit dont les deux libellés portent des caractères invisibles (largeur nulle, sens de lecture, marque d'ordre des octets, joint de
-  // mots) : le back refuse en bloc un tel libellé (`422 DRIVE_CHOICE_INVALID`), l'agent doit les retirer à la lecture (1000032).
+  // mots, trait d'union conditionnel, opérateur invisible) : le back refuse en bloc un tel libellé (`422 DRIVE_CHOICE_INVALID`), l'agent doit
+  // les retirer à la lecture (1000032).
   make(
-    'Vinaigre\u200B de cidre\u202E Verger\uFEFF Imaginaire',
-    '75\u2060 cl\u200F',
+    'Vinaigre\u200B de ci\u00ADdre\u202E Verger\uFEFF Imaginaire',
+    '75\u2060 cl\u200F\u2061',
     2.4,
     3.2,
     'L',
