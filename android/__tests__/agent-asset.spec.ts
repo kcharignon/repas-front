@@ -106,7 +106,7 @@ describe('les messages que l’application envoie à l’agent suivent le protoc
   })
 
   it('le message setup de l’essai (fichier de référence du test Kotlin) est un setup valide', () => {
-    const setup = JSON.parse(read('app/src/test/resources/setup-message.json')) as unknown
+    const setup = JSON.parse(read('core/src/test/resources/setup-message.json')) as unknown
 
     expect(validatePlan(setup)).toMatchObject({ type: 'setup' })
   })

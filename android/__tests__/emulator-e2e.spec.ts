@@ -100,7 +100,7 @@ describe('la page de départ d’un plan dans l’émulateur (recette réelle du
 
   it('est celle de l’application : l’accueil de l’enseigne (NavigationPolicy.START_URL), servi par le faux Leclerc complet sous le même nom', () => {
     const policy = read(join(androidDir, 'core/src/main/kotlin/eu/kantin/repas/drive/NavigationPolicy.kt'))
-    const plan = read(join(androidDir, 'app/src/main/kotlin/eu/kantin/repas/drive/DrivePlan.kt'))
+    const plan = read(join(androidDir, 'core/src/main/kotlin/eu/kantin/repas/drive/DrivePlan.kt'))
 
     expect(/const val START_URL = "([^"]+)"/.exec(policy)?.[1]).toBe(`https://${HOME_HOST}/`)
     // La lecture du magasin (SetupRequest) et le plan (DrivePlan) : les deux pages de départ sont celle-là, jamais l'hôte du magasin du plan.
