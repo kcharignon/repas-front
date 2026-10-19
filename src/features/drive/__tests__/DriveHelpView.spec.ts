@@ -53,7 +53,7 @@ describe('aide et installation de l’application', () => {
     const { wrapper } = await open()
 
     expect(wrapper.find('h1').text()).toBe('Installer l’application Repas')
-    expect(wrapper.text()).toContain('Vous êtes dans un navigateur.')
+    expect(wrapper.text()).toContain('Tu es dans un navigateur.')
     const download = wrapper.find(`a[href="${APP_RELEASES_URL}"]`)
     expect(download.text()).toBe('Télécharger la dernière version')
     expect(download.attributes('target')).toBe('_blank')
@@ -63,7 +63,7 @@ describe('aide et installation de l’application', () => {
     const steps = wrapper.findAll('#installer li').map((step) => step.text())
     expect(steps).toHaveLength(6)
     expect(steps[2]).toContain('Autoriser depuis cette source')
-    expect(steps[5]).toContain('connectez-vous à Repas')
+    expect(steps[5]).toContain('connecte-toi à Repas')
   })
 
   it('ne mène pas à une version d’essai : seules les versions « android-v… » sont à installer', async () => {
@@ -81,13 +81,13 @@ describe('aide et installation de l’application', () => {
     const { wrapper } = await open()
 
     expect(wrapper.find('#connexion-leclerc').text()).toContain(
-      'Connectez-vous à votre compte E.Leclerc',
+      'Connecte-toi à ton compte E.Leclerc',
     )
     expect(wrapper.find('#connexion-leclerc a[href="/drive/reglages"]').text()).toBe(
       'Réglages du drive',
     )
-    expect(wrapper.find('#envoi').text()).toContain('Gardez l’application ouverte.')
-    expect(wrapper.find('#mise-a-jour').text()).toContain('installez-la par-dessus')
+    expect(wrapper.find('#envoi').text()).toContain('Garde l’application ouverte.')
+    expect(wrapper.find('#mise-a-jour').text()).toContain('installe-la par-dessus')
     expect(wrapper.find('#desinstaller').text()).toContain('Désinstaller')
     expect(wrapper.find('#ancienne-icone').text()).toContain('ancienne icône')
   })
@@ -123,11 +123,11 @@ describe('aide et installation de l’application', () => {
     installApp('1.2.3')
     const { wrapper } = await open()
 
-    expect(wrapper.text()).toContain('Vous êtes dans l’application Repas, version 1.2.3.')
-    expect(wrapper.text()).not.toContain('Vous êtes dans un navigateur.')
+    expect(wrapper.text()).toContain('Tu es dans l’application Repas, version 1.2.3.')
+    expect(wrapper.text()).not.toContain('Tu es dans un navigateur.')
     // Déjà installée : le titre ne propose pas de l'installer, l'introduction dit à quoi sert la page
     expect(wrapper.find('h1').text()).toBe('L’application Repas')
-    expect(wrapper.find('header p').text()).toContain('Vous utilisez déjà l’application')
+    expect(wrapper.find('header p').text()).toContain('Tu utilises déjà l’application')
     expect(wrapper.find('header p').text()).toContain('comment la mettre à jour')
     expect(wrapper.find('#mode-assiste').exists()).toBe(false)
     expect(wrapper.find('nav a[href="/drive/aide#mode-assiste"]').exists()).toBe(false)
@@ -137,7 +137,7 @@ describe('aide et installation de l’application', () => {
     installApp(null)
     const { wrapper } = await open()
 
-    expect(wrapper.text()).toContain('Vous êtes dans l’application Repas.')
+    expect(wrapper.text()).toContain('Tu es dans l’application Repas.')
     expect(wrapper.find('header').text()).not.toContain('version')
   })
 

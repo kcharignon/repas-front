@@ -6,7 +6,7 @@ import { expect, test } from '@playwright/test'
 import { fakeApp, fakeBack, scan } from './support/drive'
 
 const message =
-  'Trop de demandes en peu de temps. Rien n’est perdu. Attendez une minute, puis réessayez.'
+  'Trop de demandes en peu de temps. Rien n’est perdu. Attends une minute, puis réessaie.'
 
 test('le plan est refusé (429) : message passager, aucune relecture toute seule, puis nouvel essai à la demande', async ({
   page,
@@ -66,7 +66,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     ).toBeVisible()
     const alert = page.getByRole('alert').filter({ hasText: 'Ils sont gardés sur cette page' })
     await expect(alert).toHaveText(
-      `Vos choix ne sont pas encore enregistrés. Ils sont gardés sur cette page. ${message}`,
+      `Tes choix ne sont pas encore enregistrés. Ils sont gardés sur cette page. ${message}`,
     )
     // Le récapitulatif et le brouillon de passage sont intacts, et rien n'a été enregistré
     await expect(page.getByText('Détails', { exact: true })).toBeVisible()
@@ -76,7 +76,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
     await page.getByRole('button', { name: 'Réessayer l’enregistrement' }).click()
     await expect(
-      page.getByText('Vos choix sont enregistrés pour les prochains envois.'),
+      page.getByText('Tes choix sont enregistrés pour les prochains envois.'),
     ).toBeVisible()
     expect(received.choices).toHaveLength(1)
     expect(await page.evaluate(() => localStorage.getItem('repas.drive.run'))).toBeNull()

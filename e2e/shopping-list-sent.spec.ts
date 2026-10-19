@@ -124,7 +124,7 @@ test('envoyer une liste au drive, la lire sans pouvoir la modifier, puis la rouv
   // Envoi : confirmation, puis l'écran d'envoi
   await page.getByRole('button', { name: 'Envoyer au drive' }).click()
   const confirm = page.getByRole('dialog')
-  await expect(confirm).toContainText('La liste ne sera plus modifiable. Vous pourrez la rouvrir.')
+  await expect(confirm).toContainText('La liste ne sera plus modifiable. Tu pourras la rouvrir.')
   await confirm.getByRole('button', { name: 'Envoyer au drive' }).click()
   await expect(page).toHaveURL(/\/drive\/envoi\/l1$/)
   expect(received).toContain('POST /api/v1/shopping-lists/l1/send')
@@ -179,7 +179,7 @@ test('fonction coupée : « Reprendre l’envoi » dit que l’envoi n’est pas
 
   // L'écran répond « pas disponible » ; ni « Ouvrir le drive » ni « Envoyer au drive », mais « Rouvrir la liste »
   await expect(page.getByRole('alert')).toContainText(
-    'L’envoi au drive n’est pas disponible pour le moment. Votre liste n’a pas changé. Réessayez plus tard.',
+    'L’envoi au drive n’est pas disponible pour le moment. Ta liste n’a pas changé. Réessaie plus tard.',
   )
   await expect(page.getByRole('button', { name: 'Rouvrir la liste' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Ouvrir le drive' })).toHaveCount(0)
@@ -249,16 +249,14 @@ test('sans magasin : « Choisir mon magasin » le lit, l’enregistre, et l’en
 
   // Un geste : l'écran dit ce qu'il attend et porte le bouton qui fait le travail
   await page.getByRole('button', { name: 'Envoyer au drive' }).click()
-  await expect(
-    page.getByRole('heading', { level: 1, name: 'Choisissez votre magasin' }),
-  ).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Choisis ton magasin' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Retour à la liste' })).toBeVisible()
   expect(received).not.toContain('POST /api/v1/shopping-lists/l1/send')
 
   // Un geste : le magasin est lu dans l'application puis enregistré tout seul, et la liste nous attend à sa confirmation
   await page.getByRole('button', { name: 'Choisir mon magasin' }).click()
   const confirm = page.getByRole('dialog')
-  await expect(confirm).toContainText('La liste ne sera plus modifiable. Vous pourrez la rouvrir.')
+  await expect(confirm).toContainText('La liste ne sera plus modifiable. Tu pourras la rouvrir.')
   await expect(page).toHaveURL(/\/liste$/)
   expect(received.filter((call) => call === 'PUT /api/v1/drive/settings')).toHaveLength(1)
   expect(received).not.toContain('POST /api/v1/shopping-lists/l1/send')

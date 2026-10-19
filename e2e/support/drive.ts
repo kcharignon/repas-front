@@ -34,7 +34,7 @@ const fresh = (slug: string, name: string, status = 'NEW') => ({
   searchQuery: name,
 })
 
-/** 12 lignes : 8 connues (dont Farine à deux produits classés et un refusé), 3 nouvelles, 1 « vous en avez déjà ». */
+/** 12 lignes : 8 connues (dont Farine à deux produits classés et un refusé), 3 nouvelles, 1 « tu en as déjà ». */
 export const plan = {
   shoppingListId: 'l1',
   listVersion: 7,

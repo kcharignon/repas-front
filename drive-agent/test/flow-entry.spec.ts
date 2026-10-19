@@ -43,7 +43,7 @@ function home(
 }
 
 describe('entrer dans le magasin', () => {
-  it('suit « Commencer mes courses » : « Ouverture de votre magasin… », puis la page change', async () => {
+  it('suit « Commencer mes courses » : « Ouverture de ton magasin… », puis la page change', async () => {
     // Given : la page quitte le script au clic, la promesse ne se résout jamais
     const { flow, screens, adapter, sent, storage } = home(LINK, {
       onFollow: () => new Promise(() => undefined),

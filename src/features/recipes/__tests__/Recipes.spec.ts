@@ -219,7 +219,7 @@ describe('RecipesView', () => {
     const { wrapper } = await open()
 
     await vi.waitFor(() =>
-      expect(wrapper.text()).toContain("Vous n'avez pas encore de recette de ce type."),
+      expect(wrapper.text()).toContain("Tu n'as pas encore de recette de ce type."),
     )
   })
 

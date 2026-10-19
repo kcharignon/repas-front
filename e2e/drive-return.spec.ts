@@ -19,7 +19,7 @@ test('un passage réussi : retour automatique, choix enregistrés en un appel, r
   await expect(page).toHaveURL(/\/drive\/retour$/)
   await expect(page.getByRole('heading', { level: 1, name: 'Le panier est rempli' })).toBeVisible()
   await expect(
-    page.getByText('Vos choix sont enregistrés pour les prochains envois.'),
+    page.getByText('Tes choix sont enregistrés pour les prochains envois.'),
   ).toBeVisible()
 
   // Un seul appel : 4 ajouts (3 nouvelles lignes et Farine remplacée) et les 7 prix lus des lignes ajoutées
@@ -35,7 +35,7 @@ test('un passage réussi : retour automatique, choix enregistrés en un appel, r
 
   // Le récapitulatif : une phrase, les compteurs qui existent (jamais « Échecs » ni « Prix lus »), un seul bouton principal
   await expect(
-    page.getByText('Vos produits sont dans le panier Leclerc : il reste à le finaliser.'),
+    page.getByText('Tes produits sont dans le panier Leclerc : il reste à le finaliser.'),
   ).toBeVisible()
   await expect(page.getByLabel('Récapitulatif de l’envoi')).not.toContainText(
     /Échecs|Prix lus|\b0\b/,
@@ -108,14 +108,14 @@ test('un faux résultat posté par la page de l’enseigne : seules les lignes d
   await page.getByRole('button', { name: 'Ouvrir le drive' }).click()
 
   await expect(page).toHaveURL(/\/drive\/retour$/)
-  // Seul le prix lu de la farine est enregistré : aucun choix n'a été fait, la phrase « Vos choix sont enregistrés » est tue (DRV-626)
+  // Seul le prix lu de la farine est enregistré : aucun choix n'a été fait, la phrase « Tes choix sont enregistrés » est tue (DRV-626)
   await expect.poll(() => received.choices.length).toBe(1)
-  await expect(page.getByText('Vos choix sont enregistrés pour les prochains envois.')).toHaveCount(
+  await expect(page.getByText('Tes choix sont enregistrés pour les prochains envois.')).toHaveCount(
     0,
   )
   await openDetails(page)
   await expect(
-    page.getByText('3 articles ne figuraient pas dans votre liste : Repas les a laissés de côté.'),
+    page.getByText('3 articles ne figuraient pas dans ta liste : Repas les a laissés de côté.'),
   ).toBeVisible()
   await expect(page.locator('details li')).toHaveCount(1)
   await expect(page.getByText('Produit hors liste')).toHaveCount(0)
@@ -142,7 +142,7 @@ test('un passage arrêté par Leclerc : trois phrases, un seul bouton principal 
   ).toBeVisible()
   await expect(
     page.getByText(
-      'Leclerc a ralenti les demandes. Ce qui est déjà au panier y reste : il reste 1 article à ajouter. Attendez quelques minutes, puis reprenez l’envoi.',
+      'Leclerc a ralenti les demandes. Ce qui est déjà au panier y reste : il reste 1 article à ajouter. Attends quelques minutes, puis reprends l’envoi.',
     ),
   ).toBeVisible()
   // Ni « Échecs » ni code à l'écran ; le code n'est lu que dans « Détails »
@@ -200,7 +200,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await expect(
       page.getByRole('heading', {
         level: 1,
-        name: 'Ce récapitulatif ne correspond pas à votre dernier envoi',
+        name: 'Ce récapitulatif ne correspond pas à ton dernier envoi',
       }),
     ).toBeVisible()
     expect(received.calls.filter((call) => call === 'PUT /api/v1/drive/choices')).toHaveLength(1)

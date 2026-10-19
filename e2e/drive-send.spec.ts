@@ -11,7 +11,7 @@ test('dans l’application : choisir un autre produit, passer une ligne, ouvrir 
   await fakeApp(page)
   await page.goto('/drive/envoi/l1')
   await expect(
-    page.getByRole('heading', { level: 1, name: 'Votre liste est prête pour le drive' }),
+    page.getByRole('heading', { level: 1, name: 'Ta liste est prête pour le drive' }),
   ).toBeVisible()
   // Une phrase de synthèse, le bouton visible sans défiler, aucune explication (DRV-628) ; la liste est repliée (12 articles)
   await expect(page.getByText(SUMMARY_12)).toBeVisible()
@@ -30,7 +30,7 @@ test('dans l’application : choisir un autre produit, passer une ligne, ouvrir 
 
   await page.getByRole('button', { name: 'Choisir un autre produit : Farine' }).click()
   await page.getByRole('button', { name: 'Pas cette fois : Lait' }).click()
-  await expect(page.getByText('Vous choisirez un autre produit sur Leclerc')).toBeVisible()
+  await expect(page.getByText('Tu choisiras un autre produit sur Leclerc')).toBeVisible()
   // La phrase suit les choix : Farine devient « à choisir », Lait « pas cette fois »
   await expect(
     page.getByText(

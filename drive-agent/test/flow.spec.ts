@@ -322,7 +322,7 @@ describe('la quantité à vérifier', () => {
 
     // Then
     expect(screens.propsOf('quantity')).toEqual([
-      // Le plan de ce test ne dit pas ce que la liste demande : pas de « Il vous faut » (DRV-626)
+      // Le plan de ce test ne dit pas ce que la liste demande : pas de « Il te faut » (DRV-626)
       { ingredient: 'Farine', productLabel: item.label, packs: item.packs ?? null, need: null },
     ])
     expect(screens.screens()).toEqual(['summary', 'progress', 'quantity', 'progress'])

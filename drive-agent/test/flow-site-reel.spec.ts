@@ -268,7 +268,7 @@ describe('le visiteur non connecté est arrêté avant toute écriture (ticket G
     expect(flow.history).toEqual(['START', 'VALIDATED', 'ERROR'])
     expect(expectConform(sent[0])).toMatchObject({
       outcome: 'error',
-      error: { code: 'NOT_LOGGED_IN', message: 'Vous n’êtes pas connecté (SESSION_VISITOR)' },
+      error: { code: 'NOT_LOGGED_IN', message: 'Tu n’es pas connecté (SESSION_VISITOR)' },
       lines: [],
     })
   })
@@ -370,7 +370,7 @@ describe('le visiteur non connecté est arrêté avant toute écriture (ticket G
     expect(writes).toEqual([{ id: '1000001', quantity: 1 }])
     expect(expectConform(sent[0])).toMatchObject({
       outcome: 'error',
-      error: { code: 'NOT_LOGGED_IN', message: 'Vous n’êtes pas connecté (SESSION_VISITOR)' },
+      error: { code: 'NOT_LOGGED_IN', message: 'Tu n’es pas connecté (SESSION_VISITOR)' },
       lines: [{ ingredientSlug: 'farine', outcome: 'ADDED' }],
     })
   })

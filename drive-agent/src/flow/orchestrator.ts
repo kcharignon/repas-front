@@ -217,7 +217,7 @@ export class Flow {
 
   /**
    * Entrer dans le magasin sans geste (DRV-625) : sur l'accueil de l'enseigne, l'agent suit lui-même « Commencer mes courses » (une action de la
-   * page, à la cadence des autres, pendant que le bandeau dit « Ouverture de votre magasin… ») ; la page suivante est celle du magasin et
+   * page, à la cadence des autres, pendant que le bandeau dit « Ouverture de ton magasin… ») ; la page suivante est celle du magasin et
    * l'application y renvoie le plan. Une seule tentative par envoi et par onglet : au moindre doute (lien absent, adresse qui n'est pas celle du
    * magasin du plan, défi de l'anti-robot, page restée là) le bandeau dit de toucher le bouton, sans boucle, sans requête et sans écriture.
    */

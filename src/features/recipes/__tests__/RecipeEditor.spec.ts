@@ -214,10 +214,10 @@ describe('RecipeEditorView', () => {
 
       await submit(wrapper)
 
-      expect(wrapper.text()).toContain('Donnez un nom à la recette.')
-      expect(wrapper.text()).toContain('Choisissez un ingrédient.')
-      expect(wrapper.text()).toContain('Entrez une quantité supérieure à zéro.')
-      expect(wrapper.text()).toContain('Choisissez une unité.')
+      expect(wrapper.text()).toContain('Donne un nom à la recette.')
+      expect(wrapper.text()).toContain('Choisis un ingrédient.')
+      expect(wrapper.text()).toContain('Entre une quantité supérieure à zéro.')
+      expect(wrapper.text()).toContain('Choisis une unité.')
       expect(calls(fetchMock).filter((call) => call.startsWith('POST /api/v1/recipes'))).toEqual([])
     })
 
@@ -228,7 +228,7 @@ describe('RecipeEditorView', () => {
 
       await submit(wrapper)
 
-      expect(wrapper.text()).toContain('Ajoutez au moins un ingrédient.')
+      expect(wrapper.text()).toContain('Ajoute au moins un ingrédient.')
     })
 
     it('propose le premier type par défaut', async () => {

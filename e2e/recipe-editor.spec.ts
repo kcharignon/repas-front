@@ -68,8 +68,8 @@ test.describe('éditeur de recette', () => {
     await signIn(page, '/recettes/nouvelle')
     await page.getByRole('button', { name: 'Enregistrer' }).click()
 
-    await expect(page.getByText('Donnez un nom à la recette.')).toBeVisible()
-    await expect(page.getByText('Choisissez un ingrédient.')).toBeVisible()
+    await expect(page.getByText('Donne un nom à la recette.')).toBeVisible()
+    await expect(page.getByText('Choisis un ingrédient.')).toBeVisible()
     await expect(page).toHaveURL(/\/recettes\/nouvelle$/)
   })
 
@@ -79,7 +79,7 @@ test.describe('éditeur de recette', () => {
       await signIn(page, '/recettes/nouvelle')
       await expect(page.getByRole('heading', { level: 1, name: 'Nouvelle recette' })).toBeVisible()
       await page.getByRole('button', { name: 'Enregistrer' }).click()
-      await expect(page.getByText('Donnez un nom à la recette.')).toBeVisible()
+      await expect(page.getByText('Donne un nom à la recette.')).toBeVisible()
 
       const { violations } = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])

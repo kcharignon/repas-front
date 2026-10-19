@@ -343,7 +343,7 @@ describe('le récapitulatif : aucun compteur à zéro, aucun code visible, un se
     // Aucune phrase de plus de 20 mots
     expect(tooLong('récapitulatif', text)).toEqual([])
 
-    // Ni mise en garde ni rassurance, dépliée ou non (DRV-628) : « Repas ne vide pas votre panier », « Le panier n'est pas vidé par Repas »…
+    // Ni mise en garde ni rassurance, dépliée ou non (DRV-628) : « Repas ne vide pas ton panier », « Le panier n'est pas vidé par Repas »…
     expect(main.textContent).not.toMatch(WARNING_WORDS)
   })
 })

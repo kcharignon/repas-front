@@ -104,7 +104,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
     await loaded(wrapper)
 
     expect(calls(fetchMock)).toContain('GET /api/v1/drive/plans/l1')
-    expect(wrapper.find('h1').text()).toBe('Votre liste est prête pour le drive')
+    expect(wrapper.find('h1').text()).toBe('Ta liste est prête pour le drive')
     expect(wrapper.text()).toContain('Magasin …456')
     expect(summary(wrapper)).toBe(
       '12 articles : 8 sont déjà choisis, 3 sont à choisir sur Leclerc, 1 ne sera pas mis au panier.',
@@ -136,7 +136,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
     expect(wrapper.text()).not.toMatch(/préférence/i)
 
     const poivre = wrapper.findAll('main > section ul > li')[8]!
-    expect(poivre.text()).toContain('Nouveau : vous choisirez le produit sur Leclerc.')
+    expect(poivre.text()).toContain('Nouveau : tu choisiras le produit sur Leclerc.')
     expect(wrapper.findAll('main > section ul > li')[11]!.text()).toContain(
       'J’en ai toujours : rien à mettre au panier.',
     )
@@ -150,7 +150,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
     await loaded(wrapper)
 
     expect(wrapper.find('details').exists()).toBe(false)
-    expect(wrapper.find('h2').text()).toBe('Vos articles')
+    expect(wrapper.find('h2').text()).toBe('Tes articles')
     expect(wrapper.findAll('main > section ul > li')).toHaveLength(6)
     expect(summary(wrapper)).toBe('6 articles : tous sont déjà choisis.')
   })
@@ -180,7 +180,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
 
     await press('Choisir un autre produit')
     expect(wrapper.findAll('main > section ul > li')[0]!.text()).toContain(
-      'Vous choisirez un autre produit sur Leclerc, à la place de : Farine de blé T55 Marque Repère 1 kg.',
+      'Tu choisiras un autre produit sur Leclerc, à la place de : Farine de blé T55 Marque Repère 1 kg.',
     )
     expect(summary(wrapper)).toBe(
       '12 articles : 7 sont déjà choisis, 4 sont à choisir sur Leclerc, 1 ne sera pas mis au panier.',
@@ -201,7 +201,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
     expect(wrapper.findAll('main > section ul > li')[0]!.find('ol').exists()).toBe(true)
   })
 
-  it('n’offre aucun choix pour une ligne « vous en avez déjà », ni « autre produit » pour une ligne à choisir', async () => {
+  it('n’offre aucun choix pour une ligne « tu en as déjà », ni « autre produit » pour une ligne à choisir', async () => {
     installApp()
     const { wrapper } = await open()
     await loaded(wrapper)
@@ -472,7 +472,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
 
       const alert = wrapper.find('[role="alert"]')
       expect(alert.find('p').text()).toBe(
-        'Le drive n’a pas répondu comme prévu. Rien n’a été perdu. Mettez l’application à jour, puis réessayez.',
+        'Le drive n’a pas répondu comme prévu. Rien n’a été perdu. Mets l’application à jour, puis réessaie.',
       )
       expect(alert.find('a[href="/drive/aide#mise-a-jour"]').text()).toBe(
         'Mettre à jour l’application',
@@ -495,7 +495,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
 
       const alert = wrapper.find('[role="alert"]')
       expect(alert.text()).toBe(
-        'Cette liste a plus de 100 articles : c’est trop pour un seul envoi. Votre liste n’a pas changé. Retirez des articles, puis renvoyez-la.',
+        'Cette liste a plus de 100 articles : c’est trop pour un seul envoi. Ta liste n’a pas changé. Retire des articles, puis renvoie-la.',
       )
       expect(alert.find('a').exists()).toBe(false)
     })
@@ -525,7 +525,7 @@ describe('écran d’envoi au drive, hors de l’application', () => {
     expect(wrapper.findAll('main > section ul > li button')).toHaveLength(0)
 
     const links = wrapper.findAll('main > section ul > li > a')
-    // Une recherche par ligne, sauf « vous en avez déjà »
+    // Une recherche par ligne, sauf « tu en as déjà »
     expect(links).toHaveLength(11)
     expect(links[0]!.attributes()).toMatchObject({
       href: `${storeBaseUrl}/recherche.aspx?TexteRecherche=Farine`,
@@ -561,9 +561,9 @@ describe('lecture du plan', () => {
     [
       409,
       'SHOPPING_LIST_NOT_SENT',
-      'Cette liste n’est plus envoyée au drive. Rien n’a été changé. Ouvrez la liste pour voir où elle en est.',
+      'Cette liste n’est plus envoyée au drive. Rien n’a été changé. Ouvre la liste pour voir où elle en est.',
     ],
-    [403, 'SHOPPING_LIST_FORBIDDEN', 'Vous n’avez pas le droit de faire cela.'],
+    [403, 'SHOPPING_LIST_FORBIDDEN', 'Tu n’as pas le droit de faire cela.'],
     [404, 'SHOPPING_LIST_NOT_FOUND', 'Cet élément n’existe plus.'],
   ])('explique le refus %i %s', async (status, code, message) => {
     installApp()
@@ -586,7 +586,7 @@ describe('lecture du plan', () => {
     await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
 
     expect(wrapper.find('[role="alert"]').text()).toBe(
-      'Trop de demandes en peu de temps. Rien n’est perdu. Attendez une minute, puis réessayez.',
+      'Trop de demandes en peu de temps. Rien n’est perdu. Attends une minute, puis réessaie.',
     )
     expect(wrapper.find('p.text-xl').exists()).toBe(false)
     await flushPromises()
@@ -615,9 +615,9 @@ describe('lecture du plan', () => {
       await vi.waitFor(() => expect(button('Rouvrir la liste')).toBeDefined())
 
       expect(alert(wrapper)).toBe(
-        'L’envoi au drive n’est pas disponible pour le moment. Votre liste n’a pas changé. Réessayez plus tard.',
+        'L’envoi au drive n’est pas disponible pour le moment. Ta liste n’a pas changé. Réessaie plus tard.',
       )
-      expect(wrapper.text()).toContain('Vous pouvez la rouvrir pour la modifier.')
+      expect(wrapper.text()).toContain('Tu peux la rouvrir pour la modifier.')
       expect(button('Ouvrir le drive')).toBeUndefined()
       expect(button('Envoyer au drive')).toBeUndefined()
       expect(wrapper.find('p.text-xl').exists()).toBe(false)

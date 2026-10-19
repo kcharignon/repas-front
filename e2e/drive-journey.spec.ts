@@ -163,9 +163,9 @@ test.describe('parcours complet, pont et API simulés', () => {
     // 1. Les réglages : magasin du back, résumé des produits mémorisés
     await page.goto('/drive/reglages')
     await expect(page.getByRole('heading', { level: 1, name: 'Réglages du drive' })).toBeVisible()
-    // « Votre magasin » est le premier bloc, sans note au-dessus et visible sans défiler (DRV-628)
-    await expect(page.getByRole('heading', { level: 2, name: 'Votre magasin' })).toBeInViewport()
-    await expect(page.getByRole('heading', { name: 'Votre vie privée' })).toHaveCount(0)
+    // « Ton magasin » est le premier bloc, sans note au-dessus et visible sans défiler (DRV-628)
+    await expect(page.getByRole('heading', { level: 2, name: 'Ton magasin' })).toBeInViewport()
+    await expect(page.getByRole('heading', { name: 'Ta vie privée' })).toHaveCount(0)
     await expect(page.getByText('Ville-Test', { exact: true })).toBeVisible()
     await expect(page.getByText('Magasin …456')).toBeVisible()
     await page.getByRole('link', { name: 'Gérer mes produits' }).click()
@@ -187,7 +187,7 @@ test.describe('parcours complet, pont et API simulés', () => {
         '5 articles : 3 sont déjà choisis, 1 est à choisir sur Leclerc, 1 ne sera pas mis au panier.',
       ),
     ).toBeVisible()
-    await expect(page.getByRole('heading', { level: 2, name: 'Vos articles' })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 2, name: 'Tes articles' })).toBeVisible()
     await expect(page.getByText('À acheter : 6 unité')).toBeVisible()
     expect((await scan(page)).violations).toEqual([])
 
@@ -214,7 +214,7 @@ test.describe('parcours complet, pont et API simulés', () => {
       page.getByRole('heading', { level: 1, name: 'Le panier est rempli' }),
     ).toBeVisible()
     await expect(
-      page.getByText('Vos choix sont enregistrés pour les prochains envois.'),
+      page.getByText('Tes choix sont enregistrés pour les prochains envois.'),
     ).toBeVisible()
 
     // 6. Les choix enregistrés, dans l'ordre du résultat : prix, produit refusé puis choisi, « déjà à la maison »

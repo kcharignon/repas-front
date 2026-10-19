@@ -76,7 +76,7 @@ const confirmInDialog = async (label: string) => {
   await flushPromises()
 }
 
-// L'enregistrement est fini quand le store le dit : la phrase « Vos choix sont enregistrés » ne s'écrit que s'il y a un choix à enregistrer (DRV-626)
+// L'enregistrement est fini quand le store le dit : la phrase « Tes choix sont enregistrés » ne s'écrit que s'il y a un choix à enregistrer (DRV-626)
 const saved = (_wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
   vi.waitFor(() => expect(useDriveReturnStore().status).toBe('saved'))
 
@@ -118,7 +118,7 @@ describe('retour du drive : un passage réussi', () => {
 
     expect(wrapper.find('h1').text()).toBe('Le panier est rempli')
     expect(wrapper.find('main [role="status"] p').text()).toBe(
-      'Vos produits sont dans le panier Leclerc : il reste à le finaliser.',
+      'Tes produits sont dans le panier Leclerc : il reste à le finaliser.',
     )
     // Seuls les compteurs qui existent : jamais un zéro, jamais « Échecs » ni « Prix lus »
     expect(wrapper.findAll('dl > div').map((cell) => cell.text())).toEqual([
@@ -253,7 +253,7 @@ describe('retour du drive : l’enregistrement échoue', () => {
     await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
 
     expect(wrapper.find('[role="alert"]').text()).toContain(
-      'Vos choix n’ont pas pu être enregistrés.',
+      'Tes choix n’ont pas pu être enregistrés.',
     )
     expect(localStorage.getItem(DRAFT_KEY)).not.toBeNull()
     expect(wrapper.text()).toContain('Le panier est rempli')
@@ -278,9 +278,9 @@ describe('retour du drive : l’enregistrement échoue', () => {
     const message = wrapper.find('[role="alert"]').text()
     expect(message).toContain('Ils sont gardés sur cette page.')
     expect(message).toContain(
-      'Trop de demandes en peu de temps. Rien n’est perdu. Attendez une minute, puis réessayez.',
+      'Trop de demandes en peu de temps. Rien n’est perdu. Attends une minute, puis réessaie.',
     )
-    expect(message).not.toContain('Vos choix n’ont pas pu être enregistrés')
+    expect(message).not.toContain('Tes choix n’ont pas pu être enregistrés')
     // Le résultat, le brouillon et le bouton sont là ; l'écran n'a pas réessayé tout seul
     expect(localStorage.getItem(DRAFT_KEY)).not.toBeNull()
     expect(wrapper.text()).toContain('Le panier est rempli')
@@ -332,21 +332,21 @@ describe('retour du drive : l’enregistrement échoue', () => {
     await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
 
     expect(wrapper.find('[role="alert"]').text()).toContain(
-      'Vos choix n’ont pas pu être enregistrés.',
+      'Tes choix n’ont pas pu être enregistrés.',
     )
     expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
     expect(localStorage.getItem(DRAFT_KEY)).not.toBeNull()
   })
 
   it.each([
-    [409, 'DRIVE_STORE_MISMATCH', 'Votre magasin a changé'],
+    [409, 'DRIVE_STORE_MISMATCH', 'Ton magasin a changé'],
     [422, 'DRIVE_CHOICE_INVALID', 'Ce choix n’est pas valable'],
     [
       422,
       'DRIVE_LIMIT_REACHED',
       'Repas se souvient déjà de trop de produits, ou il y a eu trop d’écritures aujourd’hui',
     ],
-    [409, 'DRIVE_NOT_CONFIGURED', 'Choisissez d’abord votre magasin'],
+    [409, 'DRIVE_NOT_CONFIGURED', 'Choisis d’abord ton magasin'],
   ])('explique le refus %i %s', async (status, code, message) => {
     const { wrapper } = await open(
       { kind: 'result', result: result(), draft },
@@ -380,7 +380,7 @@ describe('retour du drive : chaque issue du passage', () => {
 
     expect(wrapper.find('h1').text()).toBe('Le panier est rempli en partie')
     expect(wrapper.find('main [role="status"] p').text()).toBe(
-      'Leclerc a ralenti les demandes. Ce qui est déjà au panier y reste : il reste 2 articles à ajouter. Attendez quelques minutes, puis reprenez l’envoi.',
+      'Leclerc a ralenti les demandes. Ce qui est déjà au panier y reste : il reste 2 articles à ajouter. Attends quelques minutes, puis reprends l’envoi.',
     )
     // « Échecs » n’est plus un compteur : l’échec se dit dans la phrase, et chaque article dans « Détails »
     expect(wrapper.findAll('dl > div').map((cell) => cell.text())).toEqual(['Ajoutés au panier1'])
@@ -415,7 +415,7 @@ describe('retour du drive : chaque issue du passage', () => {
     expect(wrapper.find('h1').text()).toBe('Le panier n’est pas rempli')
     // Le texte reste en trois phrases : ce qui s'est passé, ce qui est sauf, l'action
     expect(wrapper.find('main [role="status"] p').text()).toBe(
-      'Leclerc a ralenti les demandes. Ce qui est déjà au panier y reste : il reste 3 articles à ajouter. Attendez quelques minutes, puis reprenez l’envoi.',
+      'Leclerc a ralenti les demandes. Ce qui est déjà au panier y reste : il reste 3 articles à ajouter. Attends quelques minutes, puis reprends l’envoi.',
     )
     // Aucun compteur à zéro : seul ce qui existe
     expect(wrapper.findAll('dl > div').map((cell) => cell.text())).toEqual(['Indisponibles1'])
@@ -454,9 +454,9 @@ describe('retour du drive : chaque issue du passage', () => {
     const { wrapper } = await open(outcomeOf([], 'aborted'))
     await saved(wrapper)
 
-    expect(wrapper.find('h1').text()).toBe('Vous avez arrêté l’envoi')
+    expect(wrapper.find('h1').text()).toBe('Tu as arrêté l’envoi')
     expect(wrapper.find('main [role="status"] p').text()).toBe(
-      'Ce qui est déjà au panier y reste. Reprenez l’envoi quand vous voulez.',
+      'Ce qui est déjà au panier y reste. Reprends l’envoi quand tu veux.',
     )
     expect(wrapper.find('a[href="/drive/envoi/l1"]').classes()).toContain('bg-primary')
     expect(wrapper.find('dl').exists()).toBe(false)
@@ -482,32 +482,32 @@ describe('retour du drive : chaque issue du passage', () => {
   it.each([
     [
       'NOT_LOGGED_IN',
-      'Vous n’êtes pas connecté à Leclerc. Ce qui est déjà au panier y reste. Connectez-vous à Leclerc, puis reprenez l’envoi.',
+      'Tu n’es pas connecté à Leclerc. Ce qui est déjà au panier y reste. Connecte-toi à Leclerc, puis reprends l’envoi.',
       'Reprendre l’envoi',
     ],
     [
       'STORE_MISMATCH',
-      'Le magasin ouvert sur Leclerc n’est pas le vôtre. Ce qui est déjà au panier y reste. Ouvrez votre magasin sur Leclerc, puis reprenez l’envoi.',
+      'Le magasin ouvert sur Leclerc n’est pas le tien. Ce qui est déjà au panier y reste. Ouvre ton magasin sur Leclerc, puis reprends l’envoi.',
       'Reprendre l’envoi',
     ],
     [
       'NETWORK',
-      'La connexion a été coupée pendant l’envoi. Ce qui est déjà au panier y reste. Vérifiez votre connexion, puis reprenez l’envoi.',
+      'La connexion a été coupée pendant l’envoi. Ce qui est déjà au panier y reste. Vérifie ta connexion, puis reprends l’envoi.',
       'Reprendre l’envoi',
     ],
     [
       'UNSUPPORTED_PAGE',
-      'Repas ne peut pas travailler sur cette page de Leclerc. Ce qui est déjà au panier y reste. Ouvrez la page de votre magasin, puis reprenez l’envoi.',
+      'Repas ne peut pas travailler sur cette page de Leclerc. Ce qui est déjà au panier y reste. Ouvre la page de ton magasin, puis reprends l’envoi.',
       'Reprendre l’envoi',
     ],
     [
       'CONTRACT_CHANGED',
-      'Leclerc a changé son site, l’envoi automatique est arrêté. Ce qui est déjà au panier y reste. Cherchez vos produits à la main sur Leclerc.',
+      'Leclerc a changé son site, l’envoi automatique est arrêté. Ce qui est déjà au panier y reste. Cherche tes produits à la main sur Leclerc.',
       'Chercher à la main sur Leclerc',
     ],
     [
       'INVALID_MESSAGE',
-      'L’application n’a pas compris l’envoi. Ce qui est déjà au panier y reste. Mettez l’application à jour, puis reprenez l’envoi.',
+      'L’application n’a pas compris l’envoi. Ce qui est déjà au panier y reste. Mets l’application à jour, puis reprends l’envoi.',
       'Mettre à jour l’application',
     ],
   ] as const)(
@@ -585,7 +585,7 @@ describe('retour du drive : le résultat est recoupé avec le plan envoyé (DRV-
     ])
     // Dit sans jargon, et seulement dans « Détails »
     expect(wrapper.find('details').text()).toContain(
-      '3 articles ne figuraient pas dans votre liste : Repas les a laissés de côté.',
+      '3 articles ne figuraient pas dans ta liste : Repas les a laissés de côté.',
     )
     expect(wrapper.text()).not.toContain('inattendu')
     expect(wrapper.findAll('main ul > li').map((item) => item.find('p').text())).toEqual([
@@ -597,12 +597,12 @@ describe('retour du drive : le résultat est recoupé avec le plan envoyé (DRV-
     expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
   })
 
-  it('dit « 1 article ne figurait pas dans votre liste » au singulier, et n’appelle pas le back quand plus rien ne reste', async () => {
+  it('dit « 1 article ne figurait pas dans ta liste » au singulier, et n’appelle pas le back quand plus rien ne reste', async () => {
     const { wrapper, fetchMock } = await open(sentOf([chosen('pirate')]))
     await saved(wrapper)
 
     expect(wrapper.find('details').text()).toContain(
-      '1 article ne figurait pas dans votre liste : Repas l’a laissé de côté.',
+      '1 article ne figurait pas dans ta liste : Repas l’a laissé de côté.',
     )
     expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
     expect(wrapper.findAll('main ul > li')).toHaveLength(0)
@@ -637,7 +637,7 @@ describe('retour du drive : le résultat est recoupé avec le plan envoyé (DRV-
     await saved(wrapper)
 
     expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
-    expect(wrapper.text()).toContain('1 article ne figurait pas dans votre liste')
+    expect(wrapper.text()).toContain('1 article ne figurait pas dans ta liste')
   })
 
   it('ne compte pas, parmi ce qui reste à ajouter, une ligne que le plan n’explique pas', async () => {
@@ -672,7 +672,7 @@ describe('retour du drive : le résultat est recoupé avec le plan envoyé (DRV-
         ['farine', 'REFRESH_PRICE'],
       ])
       expect(wrapper.find('details').text()).toContain(
-        '2 articles ne figuraient pas dans votre liste : Repas les a laissés de côté.',
+        '2 articles ne figuraient pas dans ta liste : Repas les a laissés de côté.',
       )
       expect(calls(fetchMock).filter((call) => call.includes('/plans/'))).toHaveLength(1)
     })
@@ -688,7 +688,7 @@ describe('retour du drive : le résultat est recoupé avec le plan envoyé (DRV-
       await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
 
       expect(wrapper.find('[role="alert"]').text()).toContain(
-        'Vos choix n’ont pas pu être enregistrés.',
+        'Tes choix n’ont pas pu être enregistrés.',
       )
       expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
       expect(localStorage.getItem(DRAFT_KEY)).not.toBeNull()
@@ -706,8 +706,8 @@ describe('retour du drive : le résultat est recoupé avec le plan envoyé (DRV-
   })
 })
 
-describe('retour du drive : « Vos choix sont enregistrés » ne se dit que s’il y a un choix enregistré (DRV-626)', () => {
-  const saidSaved = 'Vos choix sont enregistrés pour les prochains envois.'
+describe('retour du drive : « Tes choix sont enregistrés » ne se dit que s’il y a un choix enregistré (DRV-626)', () => {
+  const saidSaved = 'Tes choix sont enregistrés pour les prochains envois.'
   const chosen: ResultLine = {
     ingredientSlug: 'poivre',
     outcome: 'CHOSEN',
@@ -752,8 +752,8 @@ describe('retour du drive : « Vos choix sont enregistrés » ne se dit que s’
     const { wrapper } = await open(event)
     await saved(wrapper)
 
-    expect(wrapper.text()).not.toContain('Vos choix')
-    expect(wrapper.text()).not.toContain('Enregistrement de vos choix')
+    expect(wrapper.text()).not.toContain('Tes choix')
+    expect(wrapper.text()).not.toContain('Enregistrement de tes choix')
   })
 
   it('tout était déjà choisi : seuls les prix sont relus, aucun choix n’est enregistré, la phrase est tue', async () => {
@@ -762,7 +762,7 @@ describe('retour du drive : « Vos choix sont enregistrés » ne se dit que s’
 
     // Le prix lu est bien enregistré (il sert à l'estimation) ; ce n'est pas un choix de l'utilisateur
     expect(calls(fetchMock)).toContain('PUT /api/v1/drive/choices')
-    expect(wrapper.text()).not.toContain('Vos choix')
+    expect(wrapper.text()).not.toContain('Tes choix')
   })
 
   it('tout est passé ou indisponible : rien à enregistrer, la phrase est tue', async () => {
@@ -775,7 +775,7 @@ describe('retour du drive : « Vos choix sont enregistrés » ne se dit que s’
     await saved(wrapper)
 
     expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
-    expect(wrapper.text()).not.toContain('Vos choix')
+    expect(wrapper.text()).not.toContain('Tes choix')
   })
 
   it('un échec d’enregistrement reste dit, avec « Réessayer l’enregistrement »', async () => {
@@ -810,9 +810,7 @@ describe('retour du drive : ce qui n’est pas le résultat du dernier envoi', (
       result: result({ runId: '0b6d1a3e-7c1f-4a55-9a8e-2f4d9c3b7e10' }),
     })
 
-    expect(wrapper.find('h1').text()).toBe(
-      'Ce récapitulatif ne correspond pas à votre dernier envoi',
-    )
+    expect(wrapper.find('h1').text()).toBe('Ce récapitulatif ne correspond pas à ton dernier envoi')
     expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
     expect(localStorage.getItem(DRAFT_KEY)).not.toBeNull()
   })
@@ -846,7 +844,7 @@ describe('retour du drive : ce qui n’est pas le résultat du dernier envoi', (
 
     expect(wrapper.find('h1').text()).toBe('Le drive n’a pas répondu comme prévu')
     expect(wrapper.find('[role="alert"]').text()).toContain(
-      'Rien n’a été perdu. Mettez l’application à jour, puis réessayez.',
+      'Rien n’a été perdu. Mets l’application à jour, puis réessaie.',
     )
     expect(wrapper.find('a[href="/drive/aide#mise-a-jour"]').text()).toBe(
       'Mettre à jour l’application',

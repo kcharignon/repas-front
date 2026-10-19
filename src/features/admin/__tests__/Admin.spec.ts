@@ -316,15 +316,11 @@ describe('unités', () => {
 
     type(field('Facteur de base'), '0')
     await submitDialog()
-    expect(document.body.textContent).toContain(
-      'Entrez un nombre supérieur à zéro, ou laissez vide.',
-    )
+    expect(document.body.textContent).toContain('Entre un nombre supérieur à zéro, ou laisse vide.')
     type(field('Facteur de base'), '-2')
     await submitDialog()
 
-    expect(document.body.textContent).toContain(
-      'Entrez un nombre supérieur à zéro, ou laissez vide.',
-    )
+    expect(document.body.textContent).toContain('Entre un nombre supérieur à zéro, ou laisse vide.')
     expect(calls(fetchMock).filter((call) => call.startsWith('PUT /api/v1/units'))).toEqual([])
   })
 
@@ -348,7 +344,7 @@ describe('unités', () => {
         baseFactor: factor === '' ? null : Number(factor),
       })
       expect(document.body.querySelector('[role="dialog"] [role="alert"]')?.textContent).toBe(
-        'La dimension et le facteur de base vont ensemble : renseignez les deux, ou laissez-les vides.',
+        'La dimension et le facteur de base vont ensemble : renseigne les deux, ou laisse-les vides.',
       )
     },
   )
@@ -377,7 +373,7 @@ describe('unités', () => {
     await vi.waitFor(() => expect(field('Nom')).not.toBeNull())
 
     await submitDialog()
-    expect(document.body.textContent).toContain('Donnez un nom.')
+    expect(document.body.textContent).toContain('Donne un nom.')
     expect(calls(fetchMock).filter((call) => call.startsWith('POST /api/v1/units'))).toEqual([])
 
     type(field('Nom'), 'Gramme')
@@ -400,7 +396,7 @@ describe('rayons', () => {
     button('Nouveau rayon')?.click()
     await vi.waitFor(() => expect(field('Nom')).not.toBeNull())
     await submitDialog()
-    expect(document.body.textContent).toContain('Indiquez une image.')
+    expect(document.body.textContent).toContain('Indique une image.')
     type(field('Nom'), 'Frais')
     type(field('Image'), 'images/frais.png')
     await submitDialog()
@@ -433,7 +429,7 @@ describe('types de recette', () => {
     button('Nouveau type de recette')?.click()
     await vi.waitFor(() => expect(field('Nom')).not.toBeNull())
     await submitDialog()
-    expect(document.body.textContent).toContain('Indiquez un ordre.')
+    expect(document.body.textContent).toContain('Indique un ordre.')
     type(field('Nom'), 'Boisson')
     type(field('Image'), 'images/boisson.png')
     type(field("Ordre d'affichage"), '5')
@@ -496,8 +492,8 @@ describe('conversions', () => {
 
     await submitDialog()
 
-    expect(document.body.textContent).toContain('Choisissez deux unités différentes.')
-    expect(document.body.textContent).toContain('Entrez un nombre supérieur à zéro.')
+    expect(document.body.textContent).toContain('Choisis deux unités différentes.')
+    expect(document.body.textContent).toContain('Entre un nombre supérieur à zéro.')
     expect(calls(fetchMock).filter((call) => call.startsWith('POST /api/v1/conversions'))).toEqual(
       [],
     )

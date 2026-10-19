@@ -218,7 +218,7 @@ describe('bloc « Estimation du coût »', () => {
     })
 
     expect(wrapper.find('[role="alert"]').text()).toBe(
-      'Trop de demandes en peu de temps. Rien n’est perdu. Attendez une minute, puis réessayez.',
+      'Trop de demandes en peu de temps. Rien n’est perdu. Attends une minute, puis réessaie.',
     )
     // L'écran n'insiste pas : une seule lecture tant que l'utilisateur ne redemande rien
     await flushPromises()
@@ -238,7 +238,7 @@ describe('bloc « Estimation du coût »', () => {
     })
 
     expect(wrapper.find('[role="alert"]').text()).toBe(
-      'Choisissez d’abord votre magasin dans les réglages du drive.',
+      'Choisis d’abord ton magasin dans les réglages du drive.',
     )
     expect(wrapper.find('a').attributes('href')).toBe('/drive/reglages')
     expect(wrapper.find('button').exists()).toBe(false)

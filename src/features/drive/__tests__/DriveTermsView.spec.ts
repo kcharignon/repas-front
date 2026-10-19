@@ -32,7 +32,7 @@ describe('conditions d’utilisation du drive', () => {
       'Ce que Repas ne voit et n’enregistre jamais',
       'Où, et combien de temps',
       'Comment tout effacer',
-      'Avant d’utiliser l’envoi : ce que vous devez savoir',
+      'Avant d’utiliser l’envoi : ce que tu dois savoir',
     ])
   })
 
@@ -43,10 +43,10 @@ describe('conditions d’utilisation du drive', () => {
     expect(text).toContain('suspendre un compte E.Leclerc')
     expect(text).toContain('cagnotte de Tickets E.Leclerc')
     expect(text).toContain('Repas ne valide jamais de commande')
-    expect(text).toContain('ne vide jamais votre panier')
+    expect(text).toContain('ne vide jamais ton panier')
     expect(text).toContain('Il ne réduit jamais une quantité déjà au panier')
-    expect(text).toContain('Rien n’est mis au panier tant que vous n’avez pas touché « Commencer »')
-    expect(text).toContain('Attendez plusieurs heures')
+    expect(text).toContain('Rien n’est mis au panier tant que tu n’as pas touché « Commencer »')
+    expect(text).toContain('Attends plusieurs heures')
     expect(text).toContain('Rien de cela ne passe par les serveurs de Repas')
   })
 

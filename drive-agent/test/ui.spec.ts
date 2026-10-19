@@ -148,7 +148,7 @@ describe('la demande de vérification de l’anti-robot (ticket K)', () => {
     void handle.show('challenge', {})
 
     expect(shadow().querySelector('h1')?.textContent).toBe('Leclerc demande une vérification')
-    expect(shadow().textContent).toContain('Faites-la dans la page, puis touchez Reprendre.')
+    expect(shadow().textContent).toContain('Fais-la dans la page, puis touche Reprendre.')
     expect(labels()).toEqual(['Reprendre', 'Arrêter'])
     expect(shadow().activeElement?.textContent).toBe('Reprendre')
   })
@@ -211,7 +211,7 @@ describe('écran d’accueil', () => {
     press(label)
 
     await expect(answer).resolves.toBe(expected)
-    expect(shadow().querySelector('h1')?.textContent).toBe('Ouvrez d’abord Repas')
+    expect(shadow().querySelector('h1')?.textContent).toBe('Ouvre d’abord Repas')
   })
 })
 
@@ -326,12 +326,12 @@ describe('progression', () => {
   it('porte le titre du remplissage du panier, ou celui que l’appelant donne (le test automatique)', () => {
     const handle = open()
     void handle.show('progress', props)
-    expect(shadow().querySelector('h1, h2')?.textContent).toBe('Votre panier se remplit')
+    expect(shadow().querySelector('h1, h2')?.textContent).toBe('Ton panier se remplit')
 
     void handle.show('progress', { ...props, title: 'Test automatique' })
 
     expect(shadow().querySelector('h1, h2')?.textContent).toBe('Test automatique')
-    expect(shadow().textContent).not.toContain('Votre panier se remplit')
+    expect(shadow().textContent).not.toContain('Ton panier se remplit')
   })
 
   it('se met à jour sans refaire l’écran et ne garde que les cinq dernières actions', () => {
@@ -469,19 +469,19 @@ describe('quantité à vérifier', () => {
     const handle = open()
     void handle.show('quantity', { ...props, need: '200 g' })
 
-    expect(shadow().textContent).toContain('Il vous faut : 200 g.')
+    expect(shadow().textContent).toContain('Il te faut : 200 g.')
     // Le texte vient avant le champ : on le lit avant de taper
     const paragraphs = [...shadow().querySelectorAll('p')].map((p) => p.textContent)
-    expect(paragraphs.indexOf('Il vous faut : 200 g.')).toBeGreaterThan(0)
+    expect(paragraphs.indexOf('Il te faut : 200 g.')).toBeGreaterThan(0)
   })
 
   it('n’écrit rien quand la quantité demandée est inconnue', () => {
     const handle = open()
     void handle.show('quantity', { ...props, need: null })
-    expect(shadow().textContent).not.toContain('Il vous faut')
+    expect(shadow().textContent).not.toContain('Il te faut')
 
     void handle.show('quantity', props)
-    expect(shadow().textContent).not.toContain('Il vous faut')
+    expect(shadow().textContent).not.toContain('Il te faut')
   })
 
   it('propose 1 quand le plan ne donne pas de quantité', () => {
@@ -523,7 +523,7 @@ describe('quantité à vérifier', () => {
 
       expect(settled).not.toHaveBeenCalled()
       expect(shadow().querySelector('[role="alert"]')?.textContent).toBe(
-        'Entrez un nombre entier de 1 à 99.',
+        'Entre un nombre entier de 1 à 99.',
       )
       expect(input().getAttribute('aria-invalid')).toBe('true')
     },
@@ -953,7 +953,7 @@ describe('diagnostic', () => {
     press('Copier le rapport')
     await vi.waitFor(() =>
       expect(shadow().querySelector('[role="status"]')?.textContent).toBe(
-        'Copie impossible : sélectionnez le texte du rapport et copiez-le.',
+        'Copie impossible : sélectionne le texte du rapport et copie-le.',
       ),
     )
 
@@ -1027,7 +1027,7 @@ describe('« Toujours prendre ce produit ? » (DRV-624)', () => {
 
     expect(shadow().querySelector('h1')?.textContent).toBe('Toujours prendre ce produit ?')
     expect(shadow().querySelector('section p')?.textContent).toBe(
-      'Vous avez choisi « Farine de test 1 kg » pour Farine.',
+      'Tu as choisi « Farine de test 1 kg » pour Farine.',
     )
     expect(labels()).toEqual([
       'Toujours prendre celui-ci',
@@ -1159,10 +1159,10 @@ describe('liste de produits dans l’écran de choix', () => {
     expect(status()).toBe('Résultats pour « oeuf » (rien trouvé pour « œuf »)')
 
     picker.results('œuf', [], null, null)
-    expect(status()).toBe('Aucun produit trouvé pour « œuf ». Essayez un autre mot.')
+    expect(status()).toBe('Aucun produit trouvé pour « œuf ». Essaie un autre mot.')
 
     picker.results('œuf', [], null, 'oeuf')
-    expect(status()).toBe('Aucun produit trouvé pour « œuf ». Essayez un autre mot.')
+    expect(status()).toBe('Aucun produit trouvé pour « œuf ». Essaie un autre mot.')
     expect(zone.querySelector<HTMLInputElement>('#chercher')?.value).toBe('poivre')
   })
 })
@@ -1177,13 +1177,13 @@ describe('erreurs', () => {
   })
 
   it('dit quoi faire quand Leclerc ralentit les requêtes ou quand le site a changé', () => {
-    expect(ERROR_TEXTS.BLOCKED.text).toContain('Attendez')
-    expect(ERROR_TEXTS.BLOCKED.text).toContain('rechargez la page')
+    expect(ERROR_TEXTS.BLOCKED.text).toContain('Attends')
+    expect(ERROR_TEXTS.BLOCKED.text).toContain('recharge la page')
     // Quand l'utilisateur ne peut rien faire, le texte le dit franchement et propose le repli : chercher à la main
     expect(ERROR_TEXTS.CONTRACT_CHANGED.text).toBe(
-      'Leclerc a changé son site, l’envoi automatique est arrêté. Ce qui est déjà au panier y reste. Cherchez vos produits à la main sur Leclerc.',
+      'Leclerc a changé son site, l’envoi automatique est arrêté. Ce qui est déjà au panier y reste. Cherche tes produits à la main sur Leclerc.',
     )
-    expect(ERROR_TEXTS.NOT_LOGGED_IN.text).toContain('Connectez-vous')
+    expect(ERROR_TEXTS.NOT_LOGGED_IN.text).toContain('Connecte-toi')
   })
 
   it.each(ERROR_CODES)(
@@ -1265,7 +1265,7 @@ describe('fin', () => {
     expect(text).not.toMatch(/Échecs|Prix lus|: 0/)
     expect(shadow().querySelector('h1')?.textContent).toBe('Le panier est rempli')
     expect(shadow().querySelector('h1 + p')?.textContent).toBe(
-      'Vos produits sont dans votre panier Leclerc. Retournez dans Repas pour le finaliser.',
+      'Tes produits sont dans ton panier Leclerc. Retourne dans Repas pour le finaliser.',
     )
 
     press('Retourner dans Repas')
@@ -1292,7 +1292,7 @@ describe('fin', () => {
 
     const note = shadow().querySelector('.notice')
     expect(note?.querySelector('strong')?.textContent).toBe('Quantités changées')
-    expect(note?.textContent).toContain('Vérifiez ces articles dans votre panier.')
+    expect(note?.textContent).toContain('Vérifie ces articles dans ton panier.')
     expect([...(note?.querySelectorAll('li') ?? [])].map((item) => item.textContent)).toEqual([
       'Farine : 10 au lieu de 1',
       `${HOSTILE} : 2 au lieu de 4`,
@@ -1380,7 +1380,7 @@ describe('fin', () => {
 
     expect(shadow().querySelector('h1')?.textContent).toBe('Le panier est rempli en partie')
     expect(shadow().querySelector('h1 + p')?.textContent).toBe(
-      'Leclerc a ralenti les demandes. Ce qui est déjà au panier y reste : il reste 3 articles à ajouter. Attendez quelques minutes, rechargez la page, puis reprenez l’envoi depuis Repas.',
+      'Leclerc a ralenti les demandes. Ce qui est déjà au panier y reste : il reste 3 articles à ajouter. Attends quelques minutes, recharge la page, puis reprends l’envoi depuis Repas.',
     )
     // « Échecs » n'existe plus : l'échec se dit dans la phrase ; l'indisponible reste un compteur parce qu'il existe
     expect([...shadow().querySelectorAll('.counts li')].map((item) => item.textContent)).toEqual([
@@ -1407,7 +1407,7 @@ describe('fin', () => {
     expect(shadow().querySelector('h1')?.textContent).toBe('Le panier n’est pas rempli')
     // Le texte reste en trois phrases, et ne contredit plus le titre
     expect(shadow().querySelector('h1 + p')?.textContent).toBe(
-      'Leclerc a ralenti les demandes. Ce qui est déjà au panier y reste : il reste 6 articles à ajouter. Attendez quelques minutes, rechargez la page, puis reprenez l’envoi depuis Repas.',
+      'Leclerc a ralenti les demandes. Ce qui est déjà au panier y reste : il reste 6 articles à ajouter. Attends quelques minutes, recharge la page, puis reprends l’envoi depuis Repas.',
     )
     expect(shadow().textContent).not.toContain('en partie')
   })
@@ -1429,7 +1429,7 @@ describe('fin', () => {
       void handle.show('end', { ...END, outcome, added: 0, chosen: 0, failed: 1 })
 
       expect(shadow().querySelector('h1')?.textContent).toBe(
-        outcome === 'aborted' ? 'Vous avez arrêté l’envoi' : 'L’envoi s’est arrêté',
+        outcome === 'aborted' ? 'Tu as arrêté l’envoi' : 'L’envoi s’est arrêté',
       )
     },
   )
@@ -1438,32 +1438,32 @@ describe('fin', () => {
     [
       { outcome: 'partial', failed: 1 },
       'Le panier est rempli en partie',
-      'L’envoi s’est arrêté avant la fin. Ce qui est déjà au panier y reste : il reste 1 article à ajouter. Retournez dans Repas pour reprendre l’envoi.',
+      'L’envoi s’est arrêté avant la fin. Ce qui est déjà au panier y reste : il reste 1 article à ajouter. Retourne dans Repas pour reprendre l’envoi.',
     ],
     [
       { outcome: 'aborted' },
-      'Vous avez arrêté l’envoi',
-      'Ce qui est déjà au panier y reste. Retournez dans Repas pour reprendre l’envoi.',
+      'Tu as arrêté l’envoi',
+      'Ce qui est déjà au panier y reste. Retourne dans Repas pour reprendre l’envoi.',
     ],
     [
       { outcome: 'aborted', error: 'CANCELLED' },
-      'Vous avez arrêté l’envoi',
-      'Ce qui est déjà au panier y reste. Retournez dans Repas pour reprendre l’envoi.',
+      'Tu as arrêté l’envoi',
+      'Ce qui est déjà au panier y reste. Retourne dans Repas pour reprendre l’envoi.',
     ],
     [
       { outcome: 'error', error: 'NOT_LOGGED_IN' },
       'L’envoi s’est arrêté',
-      'Vous n’êtes pas connecté à Leclerc. Ce qui est déjà au panier y reste. Connectez-vous à Leclerc, puis reprenez l’envoi depuis Repas.',
+      'Tu n’es pas connecté à Leclerc. Ce qui est déjà au panier y reste. Connecte-toi à Leclerc, puis reprends l’envoi depuis Repas.',
     ],
     [
       { outcome: 'error', error: 'CONTRACT_CHANGED' },
       'L’envoi s’est arrêté',
-      'Leclerc a changé son site, l’envoi automatique est arrêté. Ce qui est déjà au panier y reste. Cherchez vos produits à la main sur Leclerc.',
+      'Leclerc a changé son site, l’envoi automatique est arrêté. Ce qui est déjà au panier y reste. Cherche tes produits à la main sur Leclerc.',
     ],
     [
       { outcome: 'error' },
       'L’envoi s’est arrêté',
-      'L’envoi n’a pas pu aller au bout. Ce qui est déjà au panier y reste. Retournez dans Repas pour reprendre l’envoi.',
+      'L’envoi n’a pas pu aller au bout. Ce qui est déjà au panier y reste. Retourne dans Repas pour reprendre l’envoi.',
     ],
   ] as const)('issue %j : titre « %s », trois phrases', (extra, expectedTitle, expectedText) => {
     const handle = open()

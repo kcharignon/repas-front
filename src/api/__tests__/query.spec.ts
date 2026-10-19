@@ -27,7 +27,7 @@ describe('createQueryClient', () => {
     await fail(client, new ApiError(403, 'Forbidden'))
 
     expect(useNotificationsStore().items.map((item) => item.text)).toEqual([
-      "Vous n'avez pas le droit de faire cela.",
+      "Tu n'as pas le droit de faire cela.",
     ])
   })
 

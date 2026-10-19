@@ -19,7 +19,7 @@ test('fait choisir un nouveau produit dans la liste de l’agent, calcule le nom
 
   // When : la recherche affiche les produits ; on choisit le poivre moulu de 40 g
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByText('Il vous faut : 80 g.')).toBeVisible()
+  await expect(page.getByText('Il te faut : 80 g.')).toBeVisible()
   const card = page.getByRole('listitem').filter({ hasText: 'Poivre noir moulu' })
   await expect(card).toContainText('40 g par produit : 2 produits.')
   expect(fake.cart(), 'l’agent ne choisit jamais seul').toEqual({})
@@ -232,7 +232,7 @@ test('annule le passage depuis le choix : la ligne reste à choisir et Repas le 
 
   // When
   await page.getByRole('button', { name: 'Annuler l’envoi' }).click()
-  await expect(page.getByRole('heading', { name: 'Vous avez arrêté l’envoi' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Tu as arrêté l’envoi' })).toBeVisible()
   await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
 
   // Then

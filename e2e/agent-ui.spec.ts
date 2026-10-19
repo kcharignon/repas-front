@@ -125,7 +125,7 @@ test('le style de la page hôte n’altère pas l’interface', async ({ page })
 
   await show(page, 'summary')
 
-  await expect(page.getByRole('heading', { name: 'Prêt à remplir votre panier' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Prêt à remplir ton panier' })).toBeVisible()
   const sizes = await page.evaluate(() => {
     const host = document.documentElement.lastElementChild as HTMLElement
     const box = host.getBoundingClientRect()
