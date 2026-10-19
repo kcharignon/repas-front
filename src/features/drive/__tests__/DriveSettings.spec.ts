@@ -516,7 +516,7 @@ describe('réglages du drive : la lecture du magasin par l’application (un seu
     await flushPromises()
 
     expect(wrapper.find('[role="alert"]').text()).toBe(
-      'Trop de demandes en peu de temps. Attendez une minute, puis réessayez.',
+      'Trop de demandes en peu de temps. Rien n’est perdu. Attendez une minute, puis réessayez.',
     )
     expect(wrapper.text()).toContain('Aucun magasin enregistré.')
   })
