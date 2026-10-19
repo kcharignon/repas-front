@@ -13,8 +13,11 @@ export {
   availabilityFacts,
   NONSENSE_TERM,
   probeLines,
+  SHELF_GROUPS,
+  SHELF_TERMS,
+  shelfFacts,
 } from './probes'
-export type { AvailabilityFacts, ProbedSearch, ProbeFacts } from './probes'
+export type { AvailabilityFacts, ProbedSearch, ProbeFacts, ShelfFacts, ShelfGroup } from './probes'
 
 export interface DiagnosticDeps extends ChecksDeps {
   ui: Ui

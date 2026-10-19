@@ -101,6 +101,8 @@ describe('searchProducts', () => {
       inCart: 0,
       availability: null,
       comingSoon: false,
+      aisle: 12,
+      family: 345,
       imageUrl: 'https://photos-test.leclercdrive.fr/image.ashx?id=11&use=l&cat=p',
       content: { value: 1000, unit: 'g' },
       contentSource: 'label',

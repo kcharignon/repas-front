@@ -167,6 +167,8 @@ export function candidate(id: string, item: ShelfItem = {}): Candidate {
     imageUrl: item.image ?? null,
     availability: null,
     comingSoon: item.comingSoon ?? false,
+    aisle: null,
+    family: null,
     content: item.content ?? null,
     contentSource: item.content ? 'label' : null,
   }

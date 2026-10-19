@@ -123,6 +123,22 @@ export const PRODUCTS: readonly FakeProduct[] = [
       index === 15 ? { promo: 1.9 } : {},
     ),
   ),
+  // DRV-646. Des produits frais dont le diagnostic mesure les rayons (« tomate », « pomme », « courgette ») : des rayons et des familles inventés,
+  // plusieurs produits par rayon, un produit d'un autre rayon pour que les groupes diffèrent (1000080 à 1000087).
+  make('Tomates cerises Jardin Inventé', '250 g', 1.99, 7.96, 'kg', 14, { aisle: 41, family: 410 }),
+  make('Pommes Gala Verger Imaginaire', '1 kg', 2.49, 2.49, 'kg', 30, { aisle: 41, family: 411 }),
+  make('Pommes Golden Verger Imaginaire', '1 kg', 2.39, 2.39, 'kg', 22, { aisle: 41, family: 411 }),
+  make('Compote de pommes Verger Imaginaire', '4 x 100 g', 1.55, 3.88, 'kg', 18, {
+    aisle: 12,
+    family: 345,
+  }),
+  make('Jus de pomme Verger Imaginaire', '1 L', 1.65, 1.65, 'L', 12, { aisle: 15, family: 520 }),
+  make('Courgettes Jardin Inventé', '500 g', 1.79, 3.58, 'kg', 16, { aisle: 41, family: 412 }),
+  make('Courgettes bio Jardin Inventé', '500 g', 2.29, 4.58, 'kg', 7, { aisle: 41, family: 412 }),
+  make('Courgettes grillées surgelées Jardin Inventé', '600 g', 2.95, 4.92, 'kg', 9, {
+    aisle: 60,
+    family: 601,
+  }),
 ]
 
 /** Un texte sans accent ni majuscule : « Œufs » et « oeufs » se valent, comme dans une recherche. */

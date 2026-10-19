@@ -7,10 +7,11 @@ import {
   probeLines,
   reportOf,
   runChecks,
+  shelfFacts,
   type ChecksDeps,
   type ProbeFacts,
 } from '../src/diagnostic'
-import { LeclercAdapter } from '../src/leclerc'
+import { type Candidate, LeclercAdapter } from '../src/leclerc'
 import { fakeStorage, fakeWakeLock } from './flow-helpers'
 import { fakeSite, fixture, PAGE, type Call, type Scripted } from './leclerc-helpers'
 
@@ -36,7 +37,7 @@ const deps = (adapter: LeclercAdapter): ChecksDeps => ({
 })
 
 describe('en fonctionnement normal', () => {
-  it('deux recherches seulement (le mot courant, puis le mot absurde), aucune écriture', async () => {
+  it('cinq recherches seulement (le mot courant, le mot absurde, trois produits frais), aucune écriture', async () => {
     const { adapter, fake } = site(normal)
 
     const { probes } = await runChecks(deps(adapter), () => undefined)
@@ -44,10 +45,66 @@ describe('en fonctionnement normal', () => {
     expect(fake.calls.map((call) => call.url)).toEqual([
       '/magasin-000123-000123-Ville-Test/recherche.aspx?TexteRecherche=sel',
       '/magasin-000123-000123-Ville-Test/recherche.aspx?TexteRecherche=zzqxkw',
+      '/magasin-000123-000123-Ville-Test/recherche.aspx?TexteRecherche=tomate',
+      '/magasin-000123-000123-Ville-Test/recherche.aspx?TexteRecherche=pomme',
+      '/magasin-000123-000123-Ville-Test/recherche.aspx?TexteRecherche=courgette',
     ])
     expect(fake.calls.every((call) => call.init.method === 'GET')).toBe(true)
     expect(probes?.common?.facts?.outcome).toBe('PRODUCTS')
     expect(probes?.nonsense?.facts).toMatchObject({ outcome: 'EMPTY', products: 0, status: 200 })
+  })
+
+  it('rapporte les rayons et familles de trois produits frais : des identifiants et des nombres, jamais un libellé (DRV-646)', async () => {
+    const { adapter } = site(normal)
+
+    const { probes } = await runChecks(deps(adapter), () => undefined)
+    const text = probeLines(probes).join('\n')
+
+    for (const term of ['tomate', 'pomme', 'courgette']) {
+      expect(text).toContain(`Rayons vus pour « ${term} » : 12:5 (5 produits)`)
+      expect(text).toContain(`Familles vues pour « ${term} » : 345:5 (5 produits)`)
+    }
+    expect(text).toContain(
+      'Première réponse pour « tomate » : 5 produits ; page suivante : inconnue',
+    )
+    expect(text).not.toContain('Première réponse pour « pomme »')
+    expect(text).not.toContain('Farine')
+  })
+
+  it('regroupe par identifiant, les plus nombreux d’abord, huit groupes au plus, et compte les produits sans identifiant', () => {
+    const candidate = (aisle: number | null, family: number | null) =>
+      ({ aisle, family }) as Candidate
+    const many = [
+      ...Array.from({ length: 10 }, (_unused, index) => candidate(100 + index, null)),
+      candidate(7, null),
+      candidate(7, null),
+      candidate(9, null),
+    ]
+
+    const facts = shelfFacts('tomate', many)
+
+    expect(facts.aisles).toHaveLength(8)
+    expect(facts.aisles.slice(0, 2)).toEqual([
+      { id: 7, count: 2 },
+      { id: 9, count: 1 },
+    ])
+    expect(facts.noFamily).toBe(13)
+    expect(
+      probeLines({ arrival: null, common: null, nonsense: null, shelves: [facts] }).join('\n'),
+    ).toContain('Familles vues pour « tomate » : inconnu (13 produits, 13 sans famille)')
+  })
+
+  it('un blocage pendant les recherches d’essai arrête la série : les mots restants sont « non faits »', async () => {
+    const { adapter, fake } = site((call) =>
+      asked(call, 'tomate') ? { status: 403 } : normal(call),
+    )
+
+    const { probes } = await runChecks(deps(adapter), () => undefined)
+    const text = probeLines(probes).join('\n')
+
+    expect(fake.calls.some((call) => asked(call, 'pomme') || asked(call, 'courgette'))).toBe(false)
+    expect(text).toContain('Rayons vus pour « tomate » : recherche non faite')
+    expect(text).toContain('Rayons vus pour « courgette » : recherche non faite')
   })
 
   it('rapporte la forme de l’adresse d’arrivée, le point de livraison et les clés connues de la réponse sans résultat', async () => {

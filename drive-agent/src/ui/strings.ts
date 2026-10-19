@@ -304,6 +304,19 @@ export const S = {
         `Disponibilité de l’échantillon (${a.sampled} produits) : iQteDisponible à 0 : ${a.zeroStock}, positif : ${a.stocked}, illisible : ${a.unreadable}`,
       availabilityLabels: (values: string, unread: number, soon: number) =>
         `eDisponibilite (valeur : produits) : ${values} ; absente ou illisible : ${unread} ; « Bientôt disponible » : ${soon}`,
+      /** DRV-646 : les rayons et familles vus par une recherche d'essai (« 12:5 14:2 » : identifiant, nombre de produits), des nombres seulement. */
+      shelves: (
+        title: string,
+        kind: string,
+        term: string,
+        groups: string,
+        products: number,
+        missing: number,
+      ) =>
+        `${title} pour « ${term} » : ${groups} (${products} produit${products > 1 ? 's' : ''}${missing > 0 ? `, ${missing} sans ${kind}` : ''})`,
+      shelvesNone: (term: string) => `Rayons vus pour « ${term} » : recherche non faite`,
+      nextPage: (term: string, products: number, next: string) =>
+        `Première réponse pour « ${term} » : ${products} produit${products > 1 ? 's' : ''} ; page suivante : ${next}`,
       /** Les raisons du dernier envoi, par produit habituel écarté, dans l'ordre du passage : un mot fixe et un nombre, jamais un libellé. */
       lastPass: (list: string) => `Dernier envoi, produits habituels écartés : ${list}`,
       /** Les raisons, pour le mainteneur (le diagnostic est exempté du glossaire) : les mots de DRV-635. */

@@ -160,7 +160,7 @@ describe('le diagnostic', () => {
 
     await vi.waitFor(() => expect(screens.closed.count).toBe(1))
     expect(screens.screens()).toEqual(['welcome', 'diagnostic'])
-    expect(searches).toEqual(['sel', 'zzqxkw'])
+    expect(searches).toEqual(['sel', 'zzqxkw', 'tomate', 'pomme', 'courgette'])
     expect(navigate).not.toHaveBeenCalled()
   })
 
@@ -406,7 +406,9 @@ describe('la commande de diagnostic de l’application', () => {
 
     // When
     receive(COMMAND)
-    await vi.waitFor(() => expect(searches).toEqual(['sel', 'zzqxkw']))
+    await vi.waitFor(() =>
+      expect(searches).toEqual(['sel', 'zzqxkw', 'tomate', 'pomme', 'courgette']),
+    )
     closeDiagnostic()
 
     // Then
