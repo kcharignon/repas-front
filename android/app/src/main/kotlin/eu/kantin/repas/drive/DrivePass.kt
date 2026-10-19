@@ -198,6 +198,8 @@ enum class StoreBanner {
             trouble != PageTrouble.NONE -> PLAN
             NavigationPolicy.isMobileSite(url) -> MOBILE
             NavigationPolicy.isStorePage(url) -> NONE
+            // L'accueil de l'enseigne : l'agent y suit « Commencer mes courses » ou dit lui-même de le toucher (DRV-625), le bandeau se tait.
+            NavigationPolicy.isHomePage(url) -> NONE
             else -> OPEN
         }
     }

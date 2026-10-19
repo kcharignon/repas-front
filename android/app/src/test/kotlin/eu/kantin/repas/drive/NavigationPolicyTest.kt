@@ -102,6 +102,33 @@ class NavigationPolicyTest {
     }
 
     @Test
+    fun `l'accueil de l'enseigne est la racine de www, sans chemin`() {
+        listOf(
+            "https://www.leclercdrive.fr/",
+            "https://www.leclercdrive.fr",
+            "https://www.leclercdrive.fr/?a=1",
+            "https://www.leclercdrive.fr/#haut",
+            "HTTPS://WWW.LeclercDrive.FR/",
+            "https://www.leclercdrive.fr:443/",
+        ).forEach { assertTrue(it, NavigationPolicy.isHomePage(it)) }
+        listOf(
+            "https://www.leclercdrive.fr/connexion.aspx",
+            "https://www.leclercdrive.fr//",
+            "https://courses-test.leclercdrive.fr/",
+            "https://m-courses.leclercdrive.fr/",
+            "https://leclercdrive.fr/",
+            "https://www.leclercdrive.fr.evil.com/",
+            "https://user:pass@www.leclercdrive.fr/",
+            "http://www.leclercdrive.fr/",
+            "https://courses-test.leclercdrive.fr/magasin-000000-000000-Ville-Test/",
+            "",
+        ).forEach { assertFalse(it, NavigationPolicy.isHomePage(it)) }
+        assertFalse(NavigationPolicy.isHomePage(null))
+        assertTrue(NavigationPolicy.isHomePage(NavigationPolicy.START_URL))
+        assertFalse("l'accueil n'est pas une page de magasin", NavigationPolicy.isStorePage(NavigationPolicy.START_URL))
+    }
+
+    @Test
     fun `un site d'une page web ordinaire s'ouvre dans le navigateur du telephone`() {
         assertEquals(Decision.OPEN_EXTERNALLY, NavigationPolicy.decide("https://www.exemple.org/page"))
         assertEquals(Decision.OPEN_EXTERNALLY, NavigationPolicy.decide("https://leclercdrive.fr.evil.com/"))

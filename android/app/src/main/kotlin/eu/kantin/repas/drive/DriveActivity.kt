@@ -159,9 +159,18 @@ class DriveActivity : Activity() {
         registerBackAction()
 
         navigationBegins()
-        webView.loadUrl(pass.current()?.request?.startUrl ?: NavigationPolicy.START_URL)
+        webView.loadUrl(firstUrl())
         updateStoreBanner(pass.current()?.request?.startUrl)
     }
+
+    /**
+     * La première page : celle du passage en cours ; sinon, pour un lien du drive ouvert depuis Repas (« Finaliser sur Leclerc », DRV-625), la page
+     * demandée, revérifiée ([DriveEntry.target]) ; sinon l'accueil du drive.
+     */
+    private fun firstUrl(): String =
+        pass.current()?.request?.startUrl
+            ?: DriveEntry.target(intent?.getStringExtra(EXTRA_START_URL))
+            ?: NavigationPolicy.START_URL
 
     override fun onResume() {
         super.onResume()
@@ -397,7 +406,7 @@ class DriveActivity : Activity() {
     private fun retry() {
         problems.hide()
         navigationBegins()
-        if (webView.url == null) webView.loadUrl(pass.current()?.request?.startUrl ?: NavigationPolicy.START_URL) else webView.reload()
+        if (webView.url == null) webView.loadUrl(firstUrl()) else webView.reload()
     }
 
     // ---------------------------------------------------------------------------------------------------------------
@@ -411,7 +420,7 @@ class DriveActivity : Activity() {
     private fun sendPlan() {
         val request = pass.current()?.request ?: return
         // Pas de message vers une page que le site a refusée ou détournée (ticket E) : le bandeau dit quoi faire à l'utilisateur.
-        if (!watch.canDeliver(webView.url)) return delivery.failed()
+        if (!watch.canDeliver(webView.url, entersStore = !request.isSetup)) return delivery.failed()
         if (agent.send(request.text)) {
             watch.planSent()
             updateStoreBanner(webView.url)
@@ -436,7 +445,7 @@ class DriveActivity : Activity() {
     /** Une page de magasin a fini de charger : si son agent ne s'est pas annoncé (et n'a pas reçu le plan) dans le délai, le bandeau le dit. */
     private fun armAgentTimer(url: String?) {
         timers.removeCallbacks(onAgentTimeout)
-        if (pass.current()?.request?.isSetup == false && watch.canDeliver(url)) timers.postDelayed(onAgentTimeout, OpeningWatch.AGENT_TIMEOUT_MS)
+        if (pass.current()?.request?.isSetup == false && watch.canDeliver(url, entersStore = true)) timers.postDelayed(onAgentTimeout, OpeningWatch.AGENT_TIMEOUT_MS)
     }
 
     /**
@@ -593,4 +602,9 @@ class DriveActivity : Activity() {
     }
 
     private fun toast(message: Int) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+
+    companion object {
+        /** La page où ouvrir le drive quand aucun passage n'est en cours (DRV-625), vérifiée par [DriveEntry.target]. */
+        const val EXTRA_START_URL = "eu.kantin.repas.drive.START_URL"
+    }
 }

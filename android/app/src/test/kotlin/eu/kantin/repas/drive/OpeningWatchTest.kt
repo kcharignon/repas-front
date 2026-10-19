@@ -48,6 +48,28 @@ class OpeningWatchTest {
         }
     }
 
+    /** DRV-625 : un plan part aussi de l'accueil de l'enseigne, où l'agent entre dans le magasin ; la lecture du magasin attend toujours une page de magasin. */
+    @Test
+    fun `un plan part de l'accueil de l'enseigne, pas la lecture du magasin, et jamais d'une page refusee`() {
+        val watch = loaded()
+        assertTrue(watch.canDeliver(enseigne, entersStore = true))
+        assertFalse(watch.canDeliver(enseigne))
+        assertFalse("la racine de l'hôte du magasin n'est pas l'accueil", watch.canDeliver(root, entersStore = true))
+        assertFalse(watch.canDeliver("https://www.leclercdrive.fr/connexion", entersStore = true))
+        assertEquals(PageTrouble.NONE, watch.trouble(enseigne))
+
+        val refused = OpeningWatch().apply { pageStarted(); httpError(403); pageFinished() }
+        assertFalse(refused.canDeliver(enseigne, entersStore = true))
+    }
+
+    @Test
+    fun `un agent absent de l'accueil de l'enseigne est dit, comme sur une page de magasin`() {
+        val watch = loaded().apply { agentTimedOut() }
+        assertEquals(PageTrouble.NO_AGENT, watch.trouble(enseigne))
+        assertEquals(PageTrouble.NO_AGENT, watch.trouble(storePage))
+        assertEquals(PageTrouble.NONE, watch.trouble(root))
+    }
+
     @Test
     fun `le site mobile ne recoit jamais le plan, meme charge sans incident (ticket J)`() {
         val mobilePage = "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx"
