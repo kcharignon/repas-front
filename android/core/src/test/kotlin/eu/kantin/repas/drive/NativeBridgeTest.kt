@@ -179,13 +179,177 @@ class NativeBridgeTest {
 
     @Test
     fun `la reponse a app info porte la version, le numero et la disponibilite du drive`() {
-        val info = JSONObject(NativeBridge.appInfo("1.2.3", 42, drive = true))
+        val info = JSONObject(NativeBridge.appInfo("1.2.3", 42, drive = true, google = true))
         assertEquals(1, info.getInt("v"))
         assertEquals("app.info", info.getString("type"))
         assertEquals("1.2.3", info.getString("version"))
         assertEquals(42L, info.getLong("versionCode"))
         assertTrue(info.getBoolean("drive"))
-        assertFalse(JSONObject(NativeBridge.appInfo("1.2.3", 42, drive = false)).getBoolean("drive"))
+        assertFalse(JSONObject(NativeBridge.appInfo("1.2.3", 42, drive = false, google = true)).getBoolean("drive"))
+    }
+
+    @Test
+    fun `app info gagne le seul drapeau google, a cote des trois champs existants (AUTH-011)`() {
+        val info = JSONObject(NativeBridge.appInfo("1.2.3", 42, drive = true, google = true))
+
+        assertEquals(setOf("v", "type", "version", "versionCode", "drive", "google"), info.keys().asSequence().toSet())
+        assertTrue(info.getBoolean("google"))
+        assertFalse(JSONObject(NativeBridge.appInfo("1.2.3", 42, drive = true, google = false)).getBoolean("google"))
+    }
+
+    // —— la connexion avec Google (AUTH-011) : google.signIn, google.result, google.error ————————————————————————————————
+
+    private val clientId = "123456789-exemple0synthetique.apps.googleusercontent.com"
+    private val nonce = "nonce_synthetique-0123456789"
+
+    private fun signIn(clientId: Any? = this.clientId, nonce: Any? = this.nonce, extra: String = ""): String {
+        val json = JSONObject().put("v", 1).put("type", "google.signIn")
+        if (clientId != null) json.put("clientId", clientId)
+        if (nonce != null) json.put("nonce", nonce)
+        return json.toString().removeSuffix("}") + extra + "}"
+    }
+
+    private fun assertInvalidRequest(request: NativeRequest, case: String) {
+        val refused = request as? NativeRequest.Refused ?: throw AssertionError("$case : accepté, alors qu'il devait être refusé")
+        val reply = JSONObject(refused.reply)
+        assertEquals(case, "google.error", reply.getString("type"))
+        assertEquals(case, "INVALID_REQUEST", reply.getString("code"))
+        assertEquals(case, setOf("v", "type", "code"), reply.keys().asSequence().toSet())
+        assertEquals(case, Rejection.NOT_PROTOCOL, refused.reason)
+    }
+
+    @Test
+    fun `google signIn valide porte l'ID client et le nonce, rien d'autre`() {
+        val request = screen(signIn(extra = ""","prompt":"select_account","x":1""")) as NativeRequest.GoogleSignIn
+
+        assertEquals(clientId, request.clientId)
+        assertEquals(nonce, request.nonce)
+    }
+
+    @Test
+    fun `ni l'ID client ni le nonce ne s'affichent quand on ecrit la demande`() {
+        val request = screen(signIn()) as NativeRequest.GoogleSignIn
+
+        assertFalse(request.toString().contains(clientId))
+        assertFalse(request.toString().contains(nonce))
+        assertFalse(request.toString().contains("googleusercontent"))
+    }
+
+    @Test
+    fun `un ID client de la forme d'un client Web Google est accepte`() {
+        listOf(
+            "1-a.apps.googleusercontent.com",
+            "123456789012-abcdefghijklmnopqrstuvwxyz012345.apps.googleusercontent.com",
+        ).forEach { assertTrue(it, screen(signIn(clientId = it)) is NativeRequest.GoogleSignIn) }
+    }
+
+    @Test
+    fun `un ID client mal forme recoit INVALID_REQUEST`() {
+        listOf<Any?>(
+            null,
+            "",
+            12345,
+            true,
+            JSONObject().put("id", clientId),
+            "123456789-exemple.apps.googleusercontent.com.evil.test",
+            "https://123456789-exemple.apps.googleusercontent.com",
+            "123456789-exemple.apps.googleusercontent.com\n",
+            " 123456789-exemple.apps.googleusercontent.com",
+            "123456789-Exemple.apps.googleusercontent.com",
+            "123456789_exemple.apps.googleusercontent.com",
+            "-exemple.apps.googleusercontent.com",
+            "123456789-.apps.googleusercontent.com",
+            "abc-exemple.apps.googleusercontent.com",
+            "123456789-exemple.apps.googleusercontent.org",
+            "123456789-exemple.appsXgoogleusercontent.com",
+            "123456789-exem.ple.apps.googleusercontent.com",
+            "١٢٣-exemple.apps.googleusercontent.com",
+        ).forEach { assertInvalidRequest(screen(signIn(clientId = it)), "clientId « $it »") }
+    }
+
+    @Test
+    fun `un nonce de 16 a 128 caracteres A-Z a-z 0-9 _ - est accepte`() {
+        listOf("a".repeat(16), "Z".repeat(128), "AZaz09_-AZaz09_-", "NO_ACCOUNT-0123456789").forEach {
+            assertTrue(it, screen(signIn(nonce = it)) is NativeRequest.GoogleSignIn)
+        }
+    }
+
+    @Test
+    fun `un nonce mal forme recoit INVALID_REQUEST`() {
+        listOf<Any?>(
+            null,
+            "",
+            "a".repeat(15),
+            "a".repeat(129),
+            1234567890123456789L,
+            listOf("nonce_synthetique-0123456789"),
+            "nonce synthetique 0123456789",
+            "nonce+synthetique/0123456789=",
+            "nonce.synthetique.0123456789",
+            "nonce_synthetique-0123456789\n",
+            "nonce_synthétique-0123456789",
+        ).forEach { assertInvalidRequest(screen(signIn(nonce = it)), "nonce « $it »") }
+    }
+
+    @Test
+    fun `google signIn d'une autre origine ou d'un cadre secondaire est ignore sans reponse`() {
+        assertEquals(Rejection.ORIGIN, (screen(signIn(), from = "https://autre.exemple.test") as NativeRequest.Ignored).reason)
+        assertEquals(Rejection.ORIGIN, (screen(signIn(), from = "https://www.leclercdrive.fr") as NativeRequest.Ignored).reason)
+        assertEquals(Rejection.NOT_MAIN_FRAME, (screen(signIn(), main = false) as NativeRequest.Ignored).reason)
+    }
+
+    @Test
+    fun `google signIn de plus de 64 Ko est refuse comme tout message`() {
+        val big = signIn(extra = ""","x":"${"a".repeat(BridgeMessages.MAX_BYTES)}"""")
+        assertEquals(Rejection.TOO_LARGE, (screen(big) as NativeRequest.Refused).reason)
+    }
+
+    @Test
+    fun `google result porte le jeton, et rien d'autre`() {
+        val message = JSONObject(NativeBridge.googleResult("jeton.synthetique.signature"))
+
+        assertEquals(1, message.getInt("v"))
+        assertEquals("google.result", message.getString("type"))
+        assertEquals("jeton.synthetique.signature", message.getString("idToken"))
+        assertEquals(setOf("v", "type", "idToken"), message.keys().asSequence().toSet())
+    }
+
+    @Test
+    fun `google error porte un code, et rien d'autre`() {
+        val message = JSONObject(NativeBridge.googleError("BUSY"))
+
+        assertEquals("google.error", message.getString("type"))
+        assertEquals("BUSY", message.getString("code"))
+        assertEquals(setOf("v", "type", "code"), message.keys().asSequence().toSet())
+    }
+
+    @Test
+    fun `les codes de google error sont ceux du contrat`() {
+        val codes = IdentityError.entries.map { it.name } + listOf(NativeBridge.BUSY, NativeBridge.INVALID_REQUEST)
+
+        assertEquals(setOf("CANCELLED", "NO_ACCOUNT", "UNAVAILABLE", "BUSY", "INVALID_REQUEST", "FAILED"), codes.toSet())
+        codes.forEach { assertTrue(it, Regex("^[A-Z][A-Z0-9_]{0,63}$").matches(it)) }
+    }
+
+    @Test
+    fun `la reponse de la plateforme devient google result ou google error`() {
+        assertEquals("jeton", JSONObject(NativeBridge.googleAnswer(IdentityResult.Token("jeton"))).getString("idToken"))
+        IdentityError.entries.forEach {
+            val message = JSONObject(NativeBridge.googleAnswer(IdentityResult.Failure(it)))
+            assertEquals("google.error", message.getString("type"))
+            assertEquals(it.name, message.getString("code"))
+        }
+    }
+
+    @Test
+    fun `un jeton vide ou trop long n'est pas rendu a la page`() {
+        listOf("", "   ", "a".repeat(NativeBridge.MAX_ID_TOKEN_CHARS + 1)).forEach {
+            val message = JSONObject(NativeBridge.googleAnswer(IdentityResult.Token(it)))
+            assertEquals("google.error", message.getString("type"))
+            assertEquals("FAILED", message.getString("code"))
+        }
+        val longest = "a".repeat(NativeBridge.MAX_ID_TOKEN_CHARS)
+        assertEquals(longest, JSONObject(NativeBridge.googleAnswer(IdentityResult.Token(longest))).getString("idToken"))
     }
 
     @Test
