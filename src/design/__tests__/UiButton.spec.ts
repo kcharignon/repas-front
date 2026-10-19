@@ -29,6 +29,13 @@ describe('UiButton', () => {
     expect(wrapper.classes()).toContain('min-h-11')
   })
 
+  it('fusionne la classe de l’appelant : elle remplace celle de la variante en cas de conflit', () => {
+    const wrapper = mount(UiButton, { props: { class: 'flex-1 px-4' }, slots: { default: 'x' } })
+
+    expect(wrapper.classes()).toEqual(expect.arrayContaining(['flex-1', 'px-4', 'min-h-11']))
+    expect(wrapper.classes()).not.toContain('px-5')
+  })
+
   it("n'émet pas de clic quand il est désactivé", async () => {
     const wrapper = mount(UiButton, { attrs: { disabled: true }, slots: { default: 'x' } })
 
