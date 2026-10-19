@@ -37,6 +37,8 @@ export interface ProbeFacts {
   availability?: AvailabilityFacts | null
   /** Les rayons vus par les recherches d'essai (DRV-646), dans l'ordre de `SHELF_TERMS`. */
   shelves?: readonly ShelfFacts[]
+  /** Pourquoi les rayons n'ont pas été lus (DRV-646) : un motif fixe. */
+  shelvesSkipped?: string
   /** Pourquoi le dernier envoi n'a pas mis des produits habituels au panier (DRV-635), dans l'ordre du passage. */
   lastPass?: readonly LastReason[]
   /** Ce que le panier a répondu aux produits choisis qu'il n'a pas pris, au dernier envoi (DRV-644). */
@@ -81,6 +83,8 @@ export interface ShelfFacts {
   noFamily: number
   /** Première recherche seulement : la page porte-t-elle une page suivante ? `null` : aucun indice lisible. */
   nextPage?: boolean | null
+  /** Pourquoi la recherche a échoué (code et cause : un mot fixe). */
+  fault?: string
 }
 
 /** Regroupe des identifiants numériques par valeur : les plus fréquents d'abord, `SHELF_GROUPS` au plus. */
@@ -146,7 +150,7 @@ export function availabilityFacts(candidates: readonly Candidate[]): Availabilit
 const P = S.diagnostic.probe
 
 /** « BLOCKED, HTTP 403 » ou « CONTRACT_CHANGED (HTTP_400) » : le code d'erreur, sa cause et le code HTTP s'il y en a un. */
-function faultText(fault: {
+export function faultText(fault: {
   code: LeclercErrorCode
   cause: LeclercCause | null
   status?: number | null
@@ -215,9 +219,20 @@ function searchLines(search: ProbedSearch): string[] {
 const groupsText = (groups: readonly ShelfGroup[]) =>
   groups.length === 0 ? P.unknown : groups.map(({ id, count }) => `${id}:${count}`).join(' ')
 
+/** Le détail de la ligne de contrôle « Rayons vus » : « tomate 15:2 41:1 (203 produits) ; pomme … », trois groupes au plus par mot. */
+export function shelvesRowDetail(shelves: readonly ShelfFacts[]): string {
+  return shelves
+    .map((shelf) =>
+      shelf.products === null
+        ? `${shelf.term} non faite`
+        : `${shelf.term} ${groupsText(shelf.aisles.slice(0, 3))} (${shelf.products} produit${shelf.products > 1 ? 's' : ''})`,
+    )
+    .join(' ; ')
+}
+
 /** Les lignes d'une recherche d'essai (DRV-646) : rayons puis familles, et pour la première l'indice de page suivante. */
 function shelfLines(shelf: ShelfFacts): string[] {
-  if (shelf.products === null) return [P.shelvesNone(shelf.term)]
+  if (shelf.products === null) return [P.shelvesNone(shelf.term, shelf.fault)]
   const lines = [
     P.shelves(
       'Rayons vus',
@@ -252,7 +267,16 @@ function shelfLines(shelf: ShelfFacts): string[] {
 export function probeLines(probes: ProbeFacts | null | undefined): string[] {
   if (!probes) return []
   const lines: string[] = []
-  const { arrival, common, nonsense, availability, lastPass, lastRefusals, shelves } = probes
+  const {
+    arrival,
+    common,
+    nonsense,
+    availability,
+    lastPass,
+    lastRefusals,
+    shelves,
+    shelvesSkipped,
+  } = probes
   if (arrival) {
     lines.push(P.address(arrival.address))
     lines.push(P.city(cityOf(arrival.address)))
@@ -269,6 +293,9 @@ export function probeLines(probes: ProbeFacts | null | undefined): string[] {
     )
   }
   if (common) lines.push(...searchLines(common))
+  // Les rayons juste après la recherche du mot courant, pas après les clés et les en-têtes.
+  if (shelvesSkipped !== undefined) lines.push(P.shelvesSkipped(shelvesSkipped))
+  for (const shelf of shelves ?? []) lines.push(...shelfLines(shelf))
   if (availability) {
     lines.push(P.availability(availability))
     const values =
@@ -297,7 +324,6 @@ export function probeLines(probes: ProbeFacts | null | undefined): string[] {
       ),
     )
   }
-  for (const shelf of shelves ?? []) lines.push(...shelfLines(shelf))
   if (nonsense) {
     lines.push(...searchLines(nonsense))
     const facts = nonsense.facts
