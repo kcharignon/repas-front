@@ -16,7 +16,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await expect(
       page.getByRole('heading', { level: 1, name: 'Installer l’application Repas' }),
     ).toBeVisible()
-    await expect(page.getByText('Vous êtes dans un navigateur.')).toBeVisible()
+    await expect(page.getByText('Tu es dans un navigateur.')).toBeVisible()
     await expect(
       page.getByRole('link', { name: /^Télécharger la dernière version/ }),
     ).toHaveAttribute('href', 'https://github.com/kcharignon/repas-front/releases')
@@ -61,7 +61,7 @@ test('dans l’application : annonce la version et ne propose pas le mode assist
   await fakeApp(page)
   await page.goto('/drive/aide')
 
-  await expect(page.getByText('Vous êtes dans l’application Repas, version 1.0.0.')).toBeVisible()
+  await expect(page.getByText('Tu es dans l’application Repas, version 1.0.0.')).toBeVisible()
   // Déjà installée : le titre ne propose pas de l'installer
   await expect(page.getByRole('heading', { level: 1, name: 'L’application Repas' })).toBeVisible()
   await expect(page.getByRole('heading', { level: 1, name: /^Installer/ })).toHaveCount(0)

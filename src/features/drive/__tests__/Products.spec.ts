@@ -160,7 +160,7 @@ describe('Mes produits : la liste des ingrédients', () => {
 
     await wrapper.find('input[type="search"]').setValue('zzz')
     expect(wrapper.findAll('li a')).toHaveLength(0)
-    expect(wrapper.text()).toContain('Aucun article ne correspond à votre recherche.')
+    expect(wrapper.text()).toContain('Aucun article ne correspond à ta recherche.')
   })
 
   it('explique quand aucun produit n’est mémorisé', async () => {
@@ -183,7 +183,7 @@ describe('Mes produits : la liste des ingrédients', () => {
     const noStore = await open(ProductsView, '/drive/produits', {
       'GET /api/v1/drive/settings': () => json({ enabled: true, retailer: 'leclerc', store: null }),
     })
-    expect(noStore.wrapper.text()).toContain('Vous n’avez pas encore enregistré votre magasin')
+    expect(noStore.wrapper.text()).toContain('Tu n’as pas encore enregistré ton magasin')
     expect(noStore.wrapper.find('a[href="/drive/reglages"]').exists()).toBe(true)
     expect(calls(noStore.fetchMock)).not.toContain('GET /api/v1/drive/choices')
   })
@@ -259,7 +259,7 @@ describe('Mes produits : un ingrédient', () => {
 
     await press(wrapper, 'Accepter de nouveau')
     expect(acceptedLabels(wrapper)).toEqual([A.label, B.label, 'Farine X1', 'Farine X2', C.label])
-    expect(wrapper.text()).toContain('Vous avez déjà 5 produits acceptés')
+    expect(wrapper.text()).toContain('Tu as déjà 5 produits acceptés')
     expect(buttonsOf(wrapper, 'Accepter de nouveau')[0]?.attributes('disabled')).toBeDefined()
   })
 
@@ -358,7 +358,7 @@ describe('Mes produits : un ingrédient', () => {
     expect(alert).toContain(
       'Repas se souvient déjà de trop de produits, ou il y a eu trop d’écritures aujourd’hui',
     )
-    expect(alert).toContain('réessayez demain')
+    expect(alert).toContain('réessaie demain')
     expect(alert).not.toContain('Ce choix n’est pas valable')
     expect(acceptedLabels(wrapper)).toEqual([B.label, A.label])
   })
@@ -374,7 +374,7 @@ describe('Mes produits : un ingrédient', () => {
 
     const alert = wrapper.find('[role="alert"]').text()
     expect(alert).toBe(
-      'Trop de demandes en peu de temps. Rien n’est perdu. Attendez une minute, puis réessayez.',
+      'Trop de demandes en peu de temps. Rien n’est perdu. Attends une minute, puis réessaie.',
     )
     expect(alert).not.toContain('demain')
     expect(acceptedLabels(wrapper)).toEqual([B.label, A.label])
@@ -392,7 +392,7 @@ describe('Mes produits : un ingrédient', () => {
     const before = calls(fetchMock).filter((call) => call.includes('/drive/settings')).length
     await press(wrapper, 'Enregistrer')
 
-    expect(wrapper.find('[role="alert"]').text()).toContain('Votre magasin a changé')
+    expect(wrapper.find('[role="alert"]').text()).toContain('Ton magasin a changé')
     await vi.waitFor(() =>
       expect(calls(fetchMock).filter((call) => call.includes('/drive/settings')).length).toBe(
         before + 1,
@@ -439,7 +439,7 @@ describe('Mes produits : un ingrédient', () => {
     await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
 
     expect(wrapper.find('[role="alert"]').text()).toBe(
-      'Trop de demandes en peu de temps. Rien n’est perdu. Attendez une minute, puis réessayez.',
+      'Trop de demandes en peu de temps. Rien n’est perdu. Attends une minute, puis réessaie.',
     )
     expect(context.router.currentRoute.value.name).not.toBe('drive-products')
   })

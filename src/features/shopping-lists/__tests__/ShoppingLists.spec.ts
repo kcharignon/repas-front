@@ -167,7 +167,7 @@ describe('ShoppingListsView', () => {
     const context = await signedIn()
     const wrapper = mount(ShoppingListsView, { global: { plugins: context.plugins } })
 
-    await vi.waitFor(() => expect(wrapper.text()).toContain("Vous n'avez encore aucune liste."))
+    await vi.waitFor(() => expect(wrapper.text()).toContain("Tu n'as encore aucune liste."))
   })
 
   it('signale un back injoignable', async () => {

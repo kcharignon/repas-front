@@ -22,7 +22,7 @@ test('remplit le panier à la cadence du chantier, avec des requêtes de la form
 
   // When : l'utilisateur lit le récapitulatif, puis commence
   await openWithFragment(page, fake, agentCode, plan)
-  await expect(page.getByRole('heading', { name: 'Prêt à remplir votre panier' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Prêt à remplir ton panier' })).toBeVisible()
   expect(fake.paced(), 'rien ne part avant « Commencer »').toEqual([])
   await page.getByRole('button', { name: 'Commencer' }).click()
   await returnsToRepas(page, fake)
@@ -179,7 +179,7 @@ test('demande la quantité quand elle est à vérifier, et passe la ligne si l�
   // When : 4 farines, puis on passe le sucre
   await openWithFragment(page, fake, agentCode, plan)
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByRole('heading', { name: 'Vérifiez la quantité' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Vérifie la quantité' })).toBeVisible()
   await page.getByLabel('Nombre de produits (de 1 à 99)').fill('4')
   await page.getByRole('button', { name: 'Valider' }).click()
   await expect(page.getByText('Combien de « Sucre')).toBeVisible()
@@ -196,7 +196,7 @@ test('demande la quantité quand elle est à vérifier, et passe la ligne si l�
   })
 })
 
-test('la quantité se tape par-dessus le « 1 » prérempli (jamais « 14 »), et l’écran dit ce qu’il vous faut (DRV-626)', async ({
+test('la quantité se tape par-dessus le « 1 » prérempli (jamais « 14 »), et l’écran dit ce qu’il te faut (DRV-626)', async ({
   page,
   fake,
   agentCode,
@@ -206,11 +206,11 @@ test('la quantité se tape par-dessus le « 1 » prérempli (jamais « 14 »), e
   const plan = planOf([known('farine', 'Farine', [product(1000001, null)], { needed })])
   await openWithFragment(page, fake, agentCode, plan)
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByRole('heading', { name: 'Vérifiez la quantité' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Vérifie la quantité' })).toBeVisible()
   const input = page.getByLabel('Nombre de produits (de 1 à 99)')
 
   // Then : la quantité demandée est dite, le champ « 1 » est sélectionné en entier : taper 4 donne « 4 »
-  await expect(page.getByText('Il vous faut : 200 g.')).toBeVisible()
+  await expect(page.getByText('Il te faut : 200 g.')).toBeVisible()
   await expect(input).toBeFocused()
   await page.keyboard.type('4')
   await expect(input).toHaveValue('4')
@@ -318,7 +318,7 @@ test('annule au récapitulatif : rien ne part vers le site, Repas est prévenu',
     planOf([known('farine', 'Farine', [product(1000001, 3)])]),
   )
   await page.getByRole('button', { name: 'Annuler' }).click()
-  await expect(page.getByRole('heading', { name: 'Vous avez arrêté l’envoi' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Tu as arrêté l’envoi' })).toBeVisible()
   await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
 
   // Then

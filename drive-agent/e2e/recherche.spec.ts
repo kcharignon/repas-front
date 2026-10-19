@@ -91,7 +91,7 @@ test.describe('un nouvel ingrédient (phase B)', () => {
 
     // Then
     await expect(
-      page.getByText('Aucun produit trouvé pour « zzqxkw ». Essayez un autre mot.'),
+      page.getByText('Aucun produit trouvé pour « zzqxkw ». Essaie un autre mot.'),
     ).toBeVisible()
     await expect(page.getByLabel('Chercher autre chose')).toHaveValue('zzqxkw')
     expect(searches(fake)).toEqual(['zzqxkw', 'zzqxkws'])
@@ -149,7 +149,7 @@ test.describe('un nouvel ingrédient (phase B)', () => {
 
     // Then
     await expect(
-      page.getByText('Aucun produit trouvé pour « œuf ». Essayez un autre mot.'),
+      page.getByText('Aucun produit trouvé pour « œuf ». Essaie un autre mot.'),
     ).toBeVisible()
     expect(searches(fake)).toEqual(['sel', 'œuf'])
     await page.getByRole('button', { name: 'Annuler l’envoi' }).click()
@@ -203,7 +203,7 @@ test.describe('un produit connu (phase A)', () => {
     await page.getByRole('button', { name: 'Commencer' }).click()
     await expect(page.getByText('Ces produits ne sont plus disponibles')).toBeVisible()
     await expect(
-      page.getByText('Aucun produit trouvé pour « gnocchis ». Essayez un autre mot.'),
+      page.getByText('Aucun produit trouvé pour « gnocchis ». Essaie un autre mot.'),
     ).toBeVisible()
 
     // Then : le libellé et ses trois formes, puis la recherche de l'ingrédient et son singulier ; aucune requête rejouée

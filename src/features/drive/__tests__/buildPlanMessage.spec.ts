@@ -105,7 +105,7 @@ describe('buildPlanMessage', () => {
     expect(() => validatePlan(message)).not.toThrow()
   })
 
-  it('ne change ni une ligne « vous en avez déjà » ni une ligne à choisir qu’on veut « remplacer »', () => {
+  it('ne change ni une ligne « tu en as déjà » ni une ligne à choisir qu’on veut « remplacer »', () => {
     const message = buildPlanMessage(plan(), { sel: 'SKIP', curry: 'REPLACE' }, RUN_ID)
 
     expect(lineOf(message, 'sel')).toEqual({

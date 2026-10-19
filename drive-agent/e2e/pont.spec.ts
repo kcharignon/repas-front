@@ -135,7 +135,7 @@ test('reprend le plan que l’application renvoie à chaque chargement de la pag
 
   // When : la page se recharge ; l'application renvoie le même plan
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Reprendre là où vous en étiez ?' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Reprendre là où tu en étais ?' })).toBeVisible()
   await waitForQuiet(fake)
   await page.getByRole('button', { name: 'Reprendre' }).click()
   await app.received('result')

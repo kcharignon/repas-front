@@ -46,6 +46,6 @@ describe('DesignView (catalogue)', () => {
     const input = wrapper.findAll('input').find((field) => field.element.value === '-2')
 
     expect(input?.attributes('aria-invalid')).toBe('true')
-    expect(wrapper.text()).toContain('Entrez une quantité supérieure à zéro.')
+    expect(wrapper.text()).toContain('Entre une quantité supérieure à zéro.')
   })
 })

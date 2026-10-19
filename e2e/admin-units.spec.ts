@@ -105,7 +105,7 @@ test('l’administrateur renseigne la dimension et le facteur d’une unité, l�
   const sent = bodies.length
   await page.getByLabel('Facteur de base').fill('0')
   await page.getByRole('button', { name: 'Enregistrer' }).click()
-  await expect(page.getByText('Entrez un nombre supérieur à zéro, ou laissez vide.')).toBeVisible()
+  await expect(page.getByText('Entre un nombre supérieur à zéro, ou laisse vide.')).toBeVisible()
   expect(bodies).toHaveLength(sent)
 
   // « Aucune » avec un facteur vide efface la paire

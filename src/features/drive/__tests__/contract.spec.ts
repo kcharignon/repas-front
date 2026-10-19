@@ -298,8 +298,8 @@ describe('les écrans lisent les exemples du back sans erreur', () => {
   it('envoi : les cinq lignes du plan, avec la quantité de l’unité sans symbole', async () => {
     const { wrapper } = await show(DriveSendView, `/drive/envoi/${plan.shoppingListId}`)
 
-    await vi.waitFor(() => expect(wrapper.text()).toContain('Vos articles'))
-    const heading = wrapper.findAll('h2').find((title) => title.text() === 'Vos articles')
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Tes articles'))
+    const heading = wrapper.findAll('h2').find((title) => title.text() === 'Tes articles')
     const items = heading?.element.parentElement?.querySelectorAll(':scope > ul > li') ?? []
     const lines = [...items].map((item) => plain(item.textContent))
     expect(lines).toHaveLength(5)

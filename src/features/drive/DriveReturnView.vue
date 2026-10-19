@@ -72,7 +72,7 @@ const finalizeUrl = computed(() => basketUrl(settings.data.value?.store?.baseUrl
 const saved = computed(() => store.status === 'saved')
 /**
  * Ce que Repas retient VRAIMENT de cet envoi : un produit choisi, un produit à ne plus proposer, un « j'en ai toujours ». Sans cela (tout était
- * déjà choisi, tout est passé, rien n'a pu être mis au panier), « Vos choix sont enregistrés » serait faux : l'écran se tait (DRV-626).
+ * déjà choisi, tout est passé, rien n'a pu être mis au panier), « Tes choix sont enregistrés » serait faux : l'écran se tait (DRV-626).
  */
 const hasChoices = computed(() =>
   result.value ? countChoices(buildChoiceBatches(result.value)) > 0 : false,

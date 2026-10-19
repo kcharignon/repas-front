@@ -88,7 +88,7 @@ const searchUrl = (query: string): string =>
 
 watch(listId, () => (changes.value = {}))
 
-// Sans magasin enregistré, le plan est refusé (409) : on mène à « Choisissez votre magasin », qui nous rend la liste
+// Sans magasin enregistré, le plan est refusé (409) : on mène à « Choisis ton magasin », qui nous rend la liste
 watch(
   () => plan.error.value,
   (error) => {

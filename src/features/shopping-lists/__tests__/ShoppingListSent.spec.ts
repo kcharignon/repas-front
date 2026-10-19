@@ -251,7 +251,7 @@ describe('liste envoyée au drive (page de la liste)', () => {
 
     await vi.waitFor(() =>
       expect(useNotificationsStore().items.map((item) => item.text)).toEqual([
-        'Cette liste n’est plus envoyée au drive. Rien n’a été changé. Ouvrez la liste pour voir où elle en est.',
+        'Cette liste n’est plus envoyée au drive. Rien n’a été changé. Ouvre la liste pour voir où elle en est.',
       ]),
     )
     await vi.waitFor(() =>
@@ -325,7 +325,7 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     button('Envoyer au drive')?.click()
     await vi.waitFor(() =>
       expect(body().textContent).toContain(
-        'La liste ne sera plus modifiable. Vous pourrez la rouvrir.',
+        'La liste ne sera plus modifiable. Tu pourras la rouvrir.',
       ),
     )
     expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/send')
@@ -410,22 +410,22 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     [
       422,
       'SHOPPING_LIST_EMPTY',
-      'La liste est vide : il n’y a rien à envoyer au drive. Votre liste n’a pas changé. Ajoutez des articles, puis envoyez-la.',
+      'La liste est vide : il n’y a rien à envoyer au drive. Ta liste n’a pas changé. Ajoute des articles, puis envoie-la.',
     ],
     [
       409,
       'SHOPPING_LIST_NOT_SENDABLE',
-      'Seule une liste en cours peut être envoyée au drive. Rien n’a été changé. Ouvrez une liste en cours.',
+      'Seule une liste en cours peut être envoyée au drive. Rien n’a été changé. Ouvre une liste en cours.',
     ],
     [
       404,
       'DRIVE_DISABLED',
-      'L’envoi au drive n’est pas disponible pour le moment. Votre liste n’a pas changé. Réessayez plus tard.',
+      'L’envoi au drive n’est pas disponible pour le moment. Ta liste n’a pas changé. Réessaie plus tard.',
     ],
     [
       412,
       'outdated',
-      "Modifié ailleurs entre-temps : la page vient d'être rechargée, refaites votre action.",
+      "Modifié ailleurs entre-temps : la page vient d'être rechargée, refais ton action.",
     ],
   ])(
     'explique le refus %i %s en français simple et reste sur la liste',
@@ -471,7 +471,7 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
 
     await vi.waitFor(() =>
       expect(useNotificationsStore().items.map((item) => item.text)).toEqual([
-        'Cette liste vient d’être envoyée au drive : elle n’est plus modifiable. Rien n’a été changé. Rouvrez-la pour la modifier.',
+        'Cette liste vient d’être envoyée au drive : elle n’est plus modifiable. Rien n’a été changé. Rouvre-la pour la modifier.',
       ]),
     )
     // La ligne est revenue à son état, la liste est relue : lecture seule, avec ses nouvelles actions

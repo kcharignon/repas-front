@@ -94,7 +94,7 @@ describe('entrées du drive dans le compte', () => {
     await menuButton(wrapper)?.trigger('click')
 
     expect(useNotificationsStore().items.map((item) => item.text)).toEqual([
-      'Le menu de l’application n’a pas pu s’ouvrir. Réessayez.',
+      'Le menu de l’application n’a pas pu s’ouvrir. Réessaie.',
     ])
   })
 

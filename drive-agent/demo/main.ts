@@ -58,7 +58,7 @@ const CANDIDATES: PickerItem[] = [
     label2: null,
     details: [],
     promo: null,
-    explain: 'Contenu inconnu : vous choisirez la quantité.',
+    explain: 'Contenu inconnu : tu choisiras la quantité.',
     state: 'ok',
   },
 ]
@@ -106,7 +106,7 @@ const CHOOSER_GONE: ChooserProps = {
     checked: new Set(['2000002']),
     query: 'farine',
     items: CANDIDATES.slice(0, 2),
-    notice: 'Leclerc n’a pas pu mettre ce produit au panier. Choisissez-en un autre.',
+    notice: 'Leclerc n’a pas pu mettre ce produit au panier. Choisis-en un autre.',
   }),
 }
 

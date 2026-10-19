@@ -40,7 +40,7 @@ const canSend = computed(
 )
 
 /**
- * Sans magasin enregistré, l'envoi mène à l'écran « Choisissez votre magasin » (DRV-622) au lieu de la confirmation ; une fois le
+ * Sans magasin enregistré, l'envoi mène à l'écran « Choisis ton magasin » (DRV-622) au lieu de la confirmation ; une fois le
  * magasin enregistré, cet écran nous rend la liste (`retour=liste`) et l'envoi reprend à sa confirmation (`envoyer`).
  */
 function askToSend() {

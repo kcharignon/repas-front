@@ -7,8 +7,8 @@ import { known, planOf, product } from './support/plans'
 import { HOME_HOST, startFakeLeclerc, type FakeLeclerc } from '../fake-leclerc/server'
 
 const PLAN = planOf([known('farine', 'Farine', [product(1000001, 2)])])
-const OPENING = 'Ouverture de votre magasin…'
-const MANUAL = 'Touchez « Commencer mes courses ».'
+const OPENING = 'Ouverture de ton magasin…'
+const MANUAL = 'Touche « Commencer mes courses ».'
 
 /** Le faux site, avec l'accueil de l'enseigne. */
 async function withHome(use: (fake: FakeLeclerc, home: string) => Promise<void>): Promise<void> {
@@ -30,7 +30,7 @@ test('suit « Commencer mes courses » tout seul, puis remplit le panier et rend
     app.answerHello(PLAN)
 
     // When : l'agent le dit, puis suit le lien sans que l'utilisateur touche rien
-    await expect(page.getByRole('heading', { name: 'Ouverture de votre magasin…' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Ouverture de ton magasin…' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Commencer' })).toBeVisible()
 
     // Then : on est dans le magasin, rien n'a été demandé ni écrit avant « Commencer »

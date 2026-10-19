@@ -1,5 +1,5 @@
-// Tous les textes de l'interface de l'agent, en français simple (vouvoiement, phrases courtes, mots du glossaire de principes-produit.md § 5). Aucun texte n'est écrit ailleurs.
-// Le diagnostic et le test automatique sont des outils du mainteneur : exemptés du glossaire, pas du vouvoiement. Gardé par src/i18n/__tests__/voice-and-glossary.spec.ts.
+// Tous les textes de l'interface de l'agent, en français simple (tutoiement, phrases courtes, mots du glossaire de principes-produit.md § 5). Aucun texte n'est écrit ailleurs.
+// Le diagnostic et le test automatique sont des outils du mainteneur : exemptés du glossaire, pas du tutoiement. Gardé par src/i18n/__tests__/voice-and-glossary.spec.ts.
 import type { ErrorCode, LineStatus, Outcome } from '../../protocol'
 import { own } from '../own'
 
@@ -73,7 +73,7 @@ export interface SummaryCounts {
 }
 
 /**
- * La phrase de synthèse de l'écran « Prêt à remplir votre panier » : « 6 articles : 2 sont déjà choisis, 4 sont à choisir sur Leclerc. » C'est
+ * La phrase de synthèse de l'écran « Prêt à remplir ton panier » : « 6 articles : 2 sont déjà choisis, 4 sont à choisir sur Leclerc. » C'est
  * MOT POUR MOT celle de l'écran de l'envoi de Repas (`sendSummary`, `src/features/drive/sendSummary.ts`, textes `driveSend.summary` de `fr.ts`) :
  * `src/features/drive/__tests__/summarySentence.spec.ts` le prouve sur toutes les combinaisons. On n'écrit que ce qui existe (jamais « 0 »), et
  * « j'en ai toujours » et « pas cette fois » se disent ensemble : ni l'un ni l'autre n'ira au panier. Vide quand il n'y a aucun article.
@@ -107,10 +107,10 @@ export function summarySentence(counts: SummaryCounts): string {
 }
 
 export const S = {
-  dialog: 'Repas : envoi de votre liste au drive',
+  dialog: 'Repas : envoi de ta liste au drive',
   welcome: {
-    title: 'Ouvrez d’abord Repas',
-    text: 'Pour remplir votre panier, commencez dans Repas : choisissez votre liste de courses, puis envoyez-la au drive.',
+    title: 'Ouvre d’abord Repas',
+    text: 'Pour remplir ton panier, choisis ta liste dans Repas, puis envoie-la.',
     diagnostic: 'Diagnostic',
     close: 'Fermer',
   },
@@ -127,7 +127,7 @@ export const S = {
       'Ce rapport ne contient ni cookie, ni identifiant de compte, ni adresse, ni nom, ni numéro de magasin complet.',
     copy: 'Copier le rapport',
     copied: 'Rapport copié.',
-    copyFailed: 'Copie impossible : sélectionnez le texte du rapport et copiez-le.',
+    copyFailed: 'Copie impossible : sélectionne le texte du rapport et copie-le.',
     close: 'Fermer',
     badge: { OK: 'OK', KO: 'KO', NOT_TESTED: 'NON TESTÉ', wait: '…' },
     check: {
@@ -353,7 +353,7 @@ export const S = {
     cancel: 'Annuler',
   },
   summary: {
-    title: 'Prêt à remplir votre panier',
+    title: 'Prêt à remplir ton panier',
     /** La phrase de l'écran de l'envoi de Repas, mot pour mot : voir `summarySentence`. L'écran n'écrit jamais un compteur à zéro. */
     sentence: summarySentence,
     list: 'Voir la liste',
@@ -367,7 +367,7 @@ export const S = {
     cancel: 'Annuler',
   },
   resume: {
-    title: 'Reprendre là où vous en étiez ?',
+    title: 'Reprendre là où tu en étais ?',
     text: (done: number, total: number) =>
       `${done} article${done > 1 ? 's' : ''} sur ${total} ${done > 1 ? 'sont déjà faits' : 'est déjà fait'}.`,
     resume: 'Reprendre',
@@ -375,20 +375,20 @@ export const S = {
     cancel: 'Annuler',
   },
   progress: {
-    title: 'Votre panier se remplit',
+    title: 'Ton panier se remplit',
     bar: 'Avancement',
     count: (done: number, total: number) => `${done} sur ${total}`,
     current: (name: string) => `En cours : ${name}`,
     log: 'Dernières actions',
-    keepOpen: 'Gardez l’application ouverte.',
+    keepOpen: 'Garde l’application ouverte.',
     stop: 'Arrêter',
     stopping: 'J’arrête après l’article en cours…',
   },
   quantity: {
-    title: 'Vérifiez la quantité',
+    title: 'Vérifie la quantité',
     text: (product: string, ingredient: string) => `Combien de « ${product} » pour ${ingredient} ?`,
     label: 'Nombre de produits (de 1 à 99)',
-    invalid: 'Entrez un nombre entier de 1 à 99.',
+    invalid: 'Entre un nombre entier de 1 à 99.',
     validate: 'Valider',
     skip: 'Pas cette fois',
   },
@@ -410,8 +410,8 @@ export const S = {
   /** La liste de produits que l'agent affiche dans l'écran de choix (DRV-306). */
   picker: {
     list: 'Produits proposés',
-    need: (asked: string) => `Il vous faut : ${asked}.`,
-    replaces: (product: string) => `Vous remplacez : ${product}.`,
+    need: (asked: string) => `Il te faut : ${asked}.`,
+    replaces: (product: string) => `Tu remplaces : ${product}.`,
     gone: (labels: string) => `Ces produits ne sont plus disponibles : ${labels}.`,
     never: (product: string) => `Ne plus proposer ${product}`,
     searchLabel: 'Chercher autre chose',
@@ -422,30 +422,30 @@ export const S = {
     /** Le nom n'a rien donné : l'agent a essayé une autre forme (« oeuf » pour « œuf ») et dit laquelle a répondu. */
     resultsInstead: (query: string, asked: string) =>
       `Résultats pour « ${query} » (rien trouvé pour « ${asked} »)`,
-    none: (query: string) => `Aucun produit trouvé pour « ${query} ». Essayez un autre mot.`,
-    network: 'Le site ne répond pas. Réessayez dans un instant.',
+    none: (query: string) => `Aucun produit trouvé pour « ${query} ». Essaie un autre mot.`,
+    network: 'Le site ne répond pas. Réessaie dans un instant.',
     /** La requête a dépassé son délai d'attente (ticket K) : Leclerc répond, mais trop lentement. */
-    slow: 'Leclerc met trop de temps à répondre. Réessayez dans un instant.',
+    slow: 'Leclerc met trop de temps à répondre. Réessaie dans un instant.',
     choose: 'Choisir',
     out: 'Indisponible',
     refused: 'Ne plus proposer',
-    refusedHint: 'Déjà écarté de vos choix.',
+    refusedHint: 'Déjà écarté de tes choix.',
     outHint: 'Plus en stock.',
     promo: (price: string) => `En promotion : ${price}`,
-    unknownContent: 'Contenu inconnu : vous choisirez la quantité.',
+    unknownContent: 'Contenu inconnu : tu choisiras la quantité.',
     noLabel: (id: string) => `Produit ${id}`,
-    /** Le nombre à mettre au panier : « 500 g par produit : 2 produits. » (la quantité demandée est dite plus haut : « Il vous faut : 800 g. »). */
+    /** Le nombre à mettre au panier : « 500 g par produit : 2 produits. » (la quantité demandée est dite plus haut : « Il te faut : 800 g. »). */
     pack: (per: string | null, packs: number) =>
       per === null
         ? `À mettre au panier : ${count(packs, 'produit', 'produits')}.`
         : `${per} par produit : ${count(packs, 'produit', 'produits')}.`,
-    cartRefused: 'Leclerc n’a pas pu mettre ce produit au panier. Choisissez-en un autre.',
+    cartRefused: 'Leclerc n’a pas pu mettre ce produit au panier. Choisis-en un autre.',
   },
   /** Le produit choisi n'est pas celui que Repas retenait (DRV-624) : une question, deux réponses. L'ordre des produits reste l'affaire de Repas. */
   placement: {
     title: 'Toujours prendre ce produit ?',
     text: (product: string, ingredient: string) =>
-      `Vous avez choisi « ${product} » pour ${ingredient}.`,
+      `Tu as choisi « ${product} » pour ${ingredient}.`,
     always: 'Toujours prendre celui-ci',
     once: 'Cette fois seulement',
     back: 'Revenir à la liste',
@@ -459,13 +459,12 @@ export const S = {
     title: {
       completed: 'Le panier est rempli',
       partial: 'Le panier est rempli en partie',
-      aborted: 'Vous avez arrêté l’envoi',
+      aborted: 'Tu as arrêté l’envoi',
       error: 'L’envoi s’est arrêté',
     } satisfies Record<Outcome, string>,
     /** Un envoi arrêté avant que rien ne soit mis au panier ni choisi : « en partie » serait faux (DRV-626). Le même mot que le récapitulatif de Repas. */
     notFilled: 'Le panier n’est pas rempli',
-    completed:
-      'Vos produits sont dans votre panier Leclerc. Retournez dans Repas pour le finaliser.',
+    completed: 'Tes produits sont dans ton panier Leclerc. Retourne dans Repas pour le finaliser.',
     /** Ce qui est sauf : rien de ce qui est déjà au panier n'est retiré. */
     safe: 'Ce qui est déjà au panier y reste.',
     /** Ce qui est sauf et ce qu'il reste à ajouter, quand l'envoi s'est arrêté avant la fin. */
@@ -473,7 +472,7 @@ export const S = {
       `Ce qui est déjà au panier y reste : il reste ${count(n, 'article', 'articles')} à ajouter.`,
     stopped: 'L’envoi s’est arrêté avant la fin.',
     notFinished: 'L’envoi n’a pas pu aller au bout.',
-    resume: 'Retournez dans Repas pour reprendre l’envoi.',
+    resume: 'Retourne dans Repas pour reprendre l’envoi.',
     added: (n: number) => `Ajoutés au panier : ${n}`,
     chosen: (n: number) => `Choisis sur Leclerc : ${n}`,
     haveAtHome: (n: number) => `J’en ai toujours : ${n}`,
@@ -482,7 +481,7 @@ export const S = {
     /** Le nombre de produits a été calculé sur le contenu lu sur le site, pas sur celui dont Repas se souvenait (DRV-613) : l'écran dit seulement quoi vérifier. */
     changes: {
       title: 'Quantités changées',
-      text: 'Vérifiez ces articles dans votre panier.',
+      text: 'Vérifie ces articles dans ton panier.',
       item: (name: string, planned: number, live: number) =>
         `${name} : ${live} au lieu de ${planned}`,
     },
@@ -497,7 +496,7 @@ export const S = {
     /** La recherche ne donnait pas la quantité déjà au panier : Repas n'a pas pu s'en assurer (ticket M). */
     unreadable: {
       title: 'Quantité au panier illisible',
-      text: 'Leclerc n’a pas donné la quantité déjà au panier. Vérifiez ces articles dans votre panier.',
+      text: 'Leclerc n’a pas donné la quantité déjà au panier. Vérifie ces articles dans ton panier.',
       item: (name: string, atLeast: number | null) =>
         atLeast === null ? name : `${name} — au moins ${atLeast} gardés`,
     },
@@ -517,14 +516,14 @@ export const S = {
   /** La demande de vérification de l'anti-robot (ticket K) : un bandeau en bas de l'écran, pour que la page reste visible. */
   challenge: {
     title: 'Leclerc demande une vérification',
-    text: 'Faites-la dans la page, puis touchez Reprendre.',
+    text: 'Fais-la dans la page, puis touche Reprendre.',
     resume: 'Reprendre',
     stop: 'Arrêter',
   },
   /** L'entrée dans le magasin (DRV-625) : ce qui se passe, ou le seul geste à faire. Un bandeau, la page reste visible. */
   entry: {
-    opening: 'Ouverture de votre magasin…',
-    manual: 'Touchez « Commencer mes courses ».',
+    opening: 'Ouverture de ton magasin…',
+    manual: 'Touche « Commencer mes courses ».',
   },
   error: {
     close: 'Fermer',
@@ -539,7 +538,7 @@ export const S = {
 export const CAUSE_TEXTS: Readonly<Record<string, { title: string; text: string }>> = {
   PAGE_MOBILE: {
     title: 'Ce n’est pas la version ordinateur du site',
-    text: 'Leclerc affiche son site mobile, et Repas ne travaille que sur la version ordinateur. Ce qui est déjà au panier y reste. Ouvrez « Ouvrir le drive Leclerc » dans le menu de l’application, puis reprenez l’envoi.',
+    text: 'Leclerc affiche son site mobile. Repas ne travaille que sur la version ordinateur. Ce qui est déjà au panier y reste. Ouvre « Ouvrir le drive Leclerc » dans le menu de l’application, puis reprends l’envoi.',
   },
 }
 
@@ -549,44 +548,44 @@ export const CAUSE_TEXTS: Readonly<Record<string, { title: string; text: string 
  */
 const ERROR_PARTS: Record<ErrorCode, { title: string; happened: string; action: string }> = {
   NOT_LOGGED_IN: {
-    title: 'Vous n’êtes pas connecté',
-    happened: 'Vous n’êtes pas connecté à Leclerc.',
-    action: 'Connectez-vous à Leclerc, puis reprenez l’envoi depuis Repas.',
+    title: 'Tu n’es pas connecté',
+    happened: 'Tu n’es pas connecté à Leclerc.',
+    action: 'Connecte-toi à Leclerc, puis reprends l’envoi depuis Repas.',
   },
   STORE_MISMATCH: {
     title: 'Ce n’est pas le bon magasin',
-    happened: 'Repas a préparé votre liste pour un autre magasin.',
-    action: 'Ouvrez votre magasin sur Leclerc, puis reprenez l’envoi depuis Repas.',
+    happened: 'Repas a préparé ta liste pour un autre magasin.',
+    action: 'Ouvre ton magasin sur Leclerc, puis reprends l’envoi depuis Repas.',
   },
   BLOCKED: {
     title: 'Leclerc a ralenti les demandes',
     happened: 'Leclerc a ralenti les demandes.',
-    action: 'Attendez quelques minutes, rechargez la page, puis reprenez l’envoi depuis Repas.',
+    action: 'Attends quelques minutes, recharge la page, puis reprends l’envoi depuis Repas.',
   },
   CONTRACT_CHANGED: {
     title: 'Le site a changé',
     happened: 'Leclerc a changé son site, l’envoi automatique est arrêté.',
-    action: 'Cherchez vos produits à la main sur Leclerc.',
+    action: 'Cherche tes produits à la main sur Leclerc.',
   },
   NETWORK: {
     title: 'Le site ne répond pas',
     happened: 'Le site de Leclerc ne répond pas.',
-    action: 'Vérifiez votre connexion, puis reprenez l’envoi depuis Repas.',
+    action: 'Vérifie ta connexion, puis reprends l’envoi depuis Repas.',
   },
   CANCELLED: {
     title: 'Envoi annulé',
-    happened: 'Vous avez annulé l’envoi.',
-    action: 'Reprenez l’envoi depuis Repas quand vous voulez.',
+    happened: 'Tu as annulé l’envoi.',
+    action: 'Reprends l’envoi depuis Repas quand tu veux.',
   },
   INVALID_MESSAGE: {
     title: 'Liste illisible',
     happened: 'L’application ne comprend pas la liste envoyée par Repas.',
-    action: 'Mettez à jour l’application, puis reprenez l’envoi depuis Repas.',
+    action: 'Mets à jour l’application, puis reprends l’envoi depuis Repas.',
   },
   UNSUPPORTED_PAGE: {
     title: 'Page non prise en charge',
     happened: 'Repas ne peut pas travailler sur cette page de Leclerc.',
-    action: 'Ouvrez la page de votre magasin, puis reprenez l’envoi depuis Repas.',
+    action: 'Ouvre la page de ton magasin, puis reprends l’envoi depuis Repas.',
   },
 }
 

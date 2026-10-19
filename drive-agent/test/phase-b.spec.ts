@@ -321,7 +321,7 @@ describe('un nouvel ingrédient', () => {
 
     await test.start()
 
-    expect(test.user.views[0]?.zone.textContent).toContain('Il vous faut : 800 g.')
+    expect(test.user.views[0]?.zone.textContent).toContain('Il te faut : 800 g.')
     expect(test.user.views[0]?.props).toMatchObject({ ingredient: 'Poivre', position: 1, total: 1 })
   })
 
@@ -373,7 +373,7 @@ describe('le contenu est inconnu', () => {
     await test.start()
 
     // Then
-    // L'écran dit aussi ce que la liste demande (« Il vous faut : 800 g. », DRV-626)
+    // L'écran dit aussi ce que la liste demande (« Il te faut : 800 g. », DRV-626)
     expect(asked).toEqual([
       { ingredient: 'Poivre', productLabel: 'Mélange mystère de test', packs: null, need: '800 g' },
     ])
@@ -397,7 +397,7 @@ describe('le contenu est inconnu', () => {
 
     expect(asked).toHaveLength(1)
     expect(test.user.views[0]?.zone.textContent).toContain(
-      'Contenu inconnu : vous choisirez la quantité.',
+      'Contenu inconnu : tu choisiras la quantité.',
     )
   })
 
@@ -756,7 +756,7 @@ describe('un produit connu devenu indisponible', () => {
 
     expect(test.screens.screens()).toContain('placement')
     expect(test.user.views[0]?.zone.textContent).toContain(
-      'Vous remplacez : Poivre habituel de test.',
+      'Tu remplaces : Poivre habituel de test.',
     )
     expect(test.user.views[0]?.zone.querySelector('.gone')).toBeNull()
     expect(lineOf(test.sent[0])).toMatchObject({ placement: 'ONCE' })
@@ -1157,7 +1157,7 @@ describe('les erreurs du site', () => {
       [
         (view) => {
           expect(view.zone.querySelector('[role="alert"]')?.textContent).toBe(
-            'Le site ne répond pas. Réessayez dans un instant.',
+            'Le site ne répond pas. Réessaie dans un instant.',
           )
           return { kind: 'skip' }
         },
@@ -1231,7 +1231,7 @@ describe('les erreurs du site', () => {
       [
         (view) => {
           expect(view.zone.querySelector('[role="alert"]')?.textContent).toBe(
-            'Leclerc met trop de temps à répondre. Réessayez dans un instant.',
+            'Leclerc met trop de temps à répondre. Réessaie dans un instant.',
           )
           return { kind: 'skip' }
         },
@@ -1529,14 +1529,14 @@ describe('quand la recherche du nom ne répond rien', () => {
     expect(test.adapter.calls).toEqual(['find poivre'])
   })
 
-  it('rien ne répond : « Aucun produit trouvé pour « zzqxkw ». Essayez un autre mot. », au plus 5 requêtes, le champ garde le nom', async () => {
+  it('rien ne répond : « Aucun produit trouvé pour « zzqxkw ». Essaie un autre mot. », au plus 5 requêtes, le champ garde le nom', async () => {
     // Given
     const test = run(
       { ...fresh('zzqxkw'), name: 'Zzqxkw', searchQuery: 'zzqxkw' },
       [
         (view) => {
           expect(statusOf(view.zone)).toBe(
-            'Aucun produit trouvé pour « zzqxkw ». Essayez un autre mot.',
+            'Aucun produit trouvé pour « zzqxkw ». Essaie un autre mot.',
           )
           expect(queryOf(view.zone)).toBe('zzqxkw')
           expect(rows(view.zone)).toHaveLength(0)
@@ -1588,7 +1588,7 @@ describe('quand la recherche du nom ne répond rien', () => {
         type(view, 'tomates')
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(statusOf(view.zone)).toBe(
-          'Aucun produit trouvé pour « tomates ». Essayez un autre mot.',
+          'Aucun produit trouvé pour « tomates ». Essaie un autre mot.',
         )
         return { kind: 'skip' }
       },

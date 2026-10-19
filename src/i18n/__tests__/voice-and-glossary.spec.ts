@@ -1,14 +1,14 @@
 // @vitest-environment node
-// Une seule voix et un seul vocabulaire (DRV-621) : le vouvoiement et le glossaire du produit, gardés sur les TROIS sources de textes que
+// Une seule voix et un seul vocabulaire (DRV-621, puis DRV-627) : le tutoiement et le glossaire du produit, gardés sur les TROIS sources de textes que
 // l'utilisateur lit : le front web (`src/i18n/fr.ts`), l'interface de l'agent (`drive-agent/src/ui/strings.ts`) et l'application Android
 // (`android/app/src/main/res/values/strings.xml`).
 //
 // La référence est `docs/drive/principes-produit.md` (§ 3 règles de texte, § 5 glossaire) du dépôt back `kcharignon/repas`. Un mot
-// interdit qui réapparaît, un « tu » ou un verbe à l'impératif du tutoiement fait échouer ce test. Une décision de vocabulaire se prend
+// interdit qui réapparaît, un « vous », un « votre » ou un verbe à l'impératif du vouvoiement (« ouvrez ») fait échouer ce test. Une décision de vocabulaire se prend
 // d'abord dans le glossaire, puis ici : jamais écran par écran.
 //
 // Exemptions, nommées plus bas : le diagnostic, le test automatique et les entrées de débogage sont des outils du mainteneur. Ils
-// échappent au GLOSSAIRE (ils parlent de « plan », de « requête », de « résultat »), mais pas au vouvoiement de leurs phrases adressées à
+// échappent au GLOSSAIRE (ils parlent de « plan », de « requête », de « résultat »), mais pas au tutoiement de leurs phrases adressées à
 // l'utilisateur.
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -45,12 +45,12 @@ export const FORBIDDEN: readonly Rule[] = [
   { pattern: word('caddies?|carts?'), use: 'panier' },
   // Déjà chez soi, toujours.
   {
-    pattern: word('déjà à la maison|vous en avez (déjà|toujours)|vous avez toujours|HAVE_AT_HOME'),
+    pattern: word('déjà à la maison|tu en as (déjà|toujours)|tu as toujours|HAVE_AT_HOME'),
     use: 'J’en ai toujours',
   },
   // Pas pour cet envoi seulement.
   {
-    // « passés » reste permis comme adjectif (« vos achats passés ») : seuls l'étiquette et la formule du glossaire sont interdites.
+    // « passés » reste permis comme adjectif (« tes achats passés ») : seuls l'étiquette et la formule du glossaire sont interdites.
     pattern:
       /(?<![\p{L}\d_])(?:passer cette fois|passée?s? cette fois)(?![\p{L}\d_])|^\s*passée?s?\s*(?:[:.]|$)|[:—]\s*passée?s?\s*$|(?<![\p{L}\d_])ignorée?s?(?![\p{L}\d_])/iu,
     use: 'Pas cette fois',
@@ -71,7 +71,7 @@ export const FORBIDDEN: readonly Rule[] = [
   },
   // L'écran de fin d'un envoi (« résultats » au pluriel reste permis : ce sont ceux d'une recherche de produits).
   { pattern: word('résumés?|retour du drive|résultat'), use: 'Récapitulatif' },
-  { pattern: word('points? de retrait'), use: 'votre magasin' },
+  { pattern: word('points? de retrait'), use: 'ton magasin' },
   // L'écran du profil et des réglages s'appelle « Moi » (« Créer mon compte » est le bouton d'inscription, un autre sujet).
   { pattern: /(?<!créer )mon compte/iu, use: 'Moi' },
   { pattern: word('modes? assistés?'), use: 'Chercher à la main' },
@@ -81,80 +81,40 @@ export const FORBIDDEN: readonly Rule[] = [
   },
 ]
 
-/** Les pronoms et les élisions du tutoiement : « tu », « ton », « ta », « tes », « toi », « te », « t’étais ». */
-const SECOND_PERSON = /(?<![\p{L}\d_])(?:tu|ton|ta|tes|toi|te)(?![\p{L}\d_])|(?<![\p{L}\d_])t[’']/iu
-
 /**
- * Les verbes de l'impératif à la 2e personne du singulier (« ouvre », « choisis », « touche »…). Un impératif du tutoiement n'a pas de
- * marque que l'on puisse lire sans dictionnaire : la liste dit ceux que l'on emploie ou emploierait dans ces écrans. Un nouveau verbe
- * s'ajoute ici le jour où le tutoiement le ramène ; la relecture reste la barrière pour tous les autres.
+ * Le vouvoiement : « vous », « votre », « vos », « le vôtre », « vous-même ». Repas tutoie partout (DRV-627) ; seules les citations exactes
+ * de Leclerc (`LECLERC_QUOTES`) peuvent garder la voix de l'enseigne.
  */
-const IMPERATIVE_VERBS = [
-  'abandonne',
-  'active',
-  'appuie',
-  'arrête',
-  'attends',
-  'clique',
-  'colle',
-  'confirme',
-  'connecte',
-  'contacte',
-  'continue',
-  'cherche',
-  'donne',
-  'efface',
-  'enregistre',
-  'entre',
-  'envoie',
-  'essaie',
-  'évite',
-  'fais',
-  'ferme',
-  'garde',
-  'installe',
-  'laisse',
-  'lance',
-  'lis',
-  'mets',
-  'ouvre',
-  'patiente',
-  'prends',
-  'recharge',
-  'recommence',
-  'regarde',
-  'reprends',
-  'reviens',
-  'relance',
-  'retire',
-  'retourne',
-  'réessaie',
-  'réinstalle',
-  'rouvre',
-  'saisis',
-  'sélectionne',
-  'supprime',
-  'tape',
-  'télécharge',
-  'termine',
-  'touche',
-  'utilise',
-  'valide',
-  'vérifie',
-]
+const SECOND_PERSON_PLURAL = /(?<![\p{L}\d_])(?:vous|votre|vos|vôtres?)(?![\p{L}\d_])/iu
 
 /**
- * Un impératif en début de phrase ou de proposition : « Ouvre … », « …, puis touche … », « … : vérifie … », « … — vérifie … ».
- * « Choisis » est aussi le participe de « choisi » (« Choisis sur Leclerc », « Choisis : 3 ») : seul « Choisis » suivi d'un complément est un ordre.
+ * Un mot en « -ez » qui n'est pas un verbe : « chez », « assez », « nez »… Tout autre mot en « -ez » est un impératif du vouvoiement
+ * (« ouvrez », « choisissez », « réessayez »), comme « faites » et « dites ».
+ */
+const PLURAL_VERB =
+  '(?!(?:chez|assez|nez|rez|lez)(?![\\p{L}\\d_]))(?:\\p{L}+ez|faites|dites)(?![\\p{L}\\d_])'
+
+/**
+ * Un impératif du vouvoiement en début de phrase ou de proposition : « Ouvrez … », « …, puis touchez … », « … : vérifiez … », « … — vérifiez … »,
+ * « … et copiez-le », « Ne relancez pas … ».
  */
 const IMPERATIVE_AT_START = new RegExp(
-  `(?:^|[.!?:;»«…,(]\\s*|\\s[—–-]\\s|\\spuis\\s)(?:${IMPERATIVE_VERBS.join('|')}|choisis(?!\\s*:|\\s+sur\\b|\\s*$))(?![\\p{L}\\d_])`,
+  `(?:^|[.!?:;»«…,(]\\s*|\\s[—–-]\\s|(?<![\\p{L}\\d_])(?:(?:puis|et|ou|sinon|ni|ne)\\s+|n['’]))${PLURAL_VERB}`,
   'iu',
 )
 
-/** Un impératif suivi de son pronom : « Connecte-toi », « Colle-le », « Fais-la » (« -ez » est le vouvoiement : permis, comme « faites » et « dites »). */
-const IMPERATIVE_WITH_PRONOUN =
-  /(?<![\p{L}\d_])\p{L}+(?<!ez)(?<!ites)-(?:toi|moi|le|la|les|y|en)(?![\p{L}\d_])/iu
+/** Un impératif du vouvoiement suivi de son pronom : « Connectez-vous », « Copiez-le », « Choisissez-en », « Faites-la ». */
+const IMPERATIVE_WITH_PRONOUN = new RegExp(
+  `(?<![\\p{L}\\d_])(?!(?:chez|assez|nez|rez|lez)-)(?:\\p{L}+ez|faites|dites)-(?:vous|moi|nous|le|la|les|y|en)(?![\\p{L}\\d_])`,
+  'iu',
+)
+
+/**
+ * Les citations exactes de Leclerc (boutons ou messages de son site) qui gardent la voix de l'enseigne : retirées du texte avant la lecture de la
+ * voix. Aucune aujourd'hui : « Commencer mes courses » et les autres boutons cités sont des infinitifs. Une citation qui n'est plus dans les
+ * textes doit sortir de cette liste (test plus bas).
+ */
+export const LECLERC_QUOTES: readonly string[] = []
 
 /** Ce que la ligne `text` de la source `where` enfreint, en phrases lisibles. */
 export function violations(where: string, text: string, options: { glossary: boolean }): string[] {
@@ -168,15 +128,16 @@ export function violations(where: string, text: string, options: { glossary: boo
         )
     }
   }
+  const spoken = LECLERC_QUOTES.reduce((rest, quote) => rest.split(quote).join(' '), text)
   for (const [name, pattern] of [
-    ['un pronom du tutoiement', SECOND_PERSON],
-    ['un impératif du tutoiement', IMPERATIVE_AT_START],
-    ['un impératif du tutoiement', IMPERATIVE_WITH_PRONOUN],
+    ['un pronom du vouvoiement', SECOND_PERSON_PLURAL],
+    ['un impératif du vouvoiement', IMPERATIVE_AT_START],
+    ['un impératif du vouvoiement', IMPERATIVE_WITH_PRONOUN],
   ] as const) {
-    const match = pattern.exec(text)
+    const match = pattern.exec(spoken)
     if (match !== null)
       found.push(
-        `${where} : « ${match[0].trim()} » est ${name} (le vouvoiement partout) dans « ${text} »`,
+        `${where} : « ${match[0].trim()} » est ${name} (le tutoiement partout) dans « ${text} »`,
       )
   }
   return found
@@ -188,12 +149,12 @@ export function violations(where: string, text: string, options: { glossary: boo
 interface Entry {
   readonly where: string
   readonly text: string
-  /** Faux pour un outil du mainteneur : exempté du glossaire, jamais du vouvoiement. */
+  /** Faux pour un outil du mainteneur : exempté du glossaire, jamais du tutoiement. */
   readonly glossary: boolean
 }
 
 /**
- * Le front web : les groupes du drive (ticket DRV-621, portée 2). Dans ces groupes aucune exemption : tout y est lu par l'utilisateur.
+ * Le front web : les groupes du drive (ticket DRV-621, portée 2). Dans ces groupes aucune exemption : tout y est lu par l'utilisateur. La voix, elle, est lue dans tout `fr.ts` (DRV-627).
  * Les groupes des recettes, des rayons et de l'administration ne parlent pas du drive : « ingrédient » y est le bon mot.
  */
 const WEB_GROUPS = [
@@ -211,7 +172,7 @@ const WEB_GROUPS = [
 
 /**
  * La seule page où l'on parle des risques et des engagements (DRV-628) : les conditions d'utilisation du drive. Elle s'ouvre si l'on veut
- * (jamais imposée), et elle est lue par le glossaire et le vouvoiement comme le reste.
+ * (jamais imposée), et elle est lue par le glossaire et la voix comme le reste.
  */
 const TERMS_GROUP = 'driveTerms'
 
@@ -238,7 +199,7 @@ function webEntries(): Entry[] {
 
 /**
  * Les parties de `strings.ts` qui sont des outils du mainteneur : le diagnostic et le test automatique (exemptés du glossaire). Les messages
- * de `leclerc/errors.ts` partent dans le résultat envoyé à Repas (jamais affichés tels quels) : exemptés du glossaire aussi, pas du vouvoiement.
+ * de `leclerc/errors.ts` partent dans le résultat envoyé à Repas (jamais affichés tels quels) : exemptés du glossaire aussi, pas du tutoiement.
  */
 const AGENT_EXEMPT_PATHS = [
   ['MESSAGES'],
@@ -344,11 +305,11 @@ describe('le détecteur lui-même (il ne doit pas devenir aveugle)', () => {
     'Passés : 2',
     '3 ignorés',
     'Déjà à la maison',
-    'Vous en avez déjà',
+    'Tu en as déjà',
     'Mon nouveau produit préféré',
     'Produit de secours',
     'Produits retenus, par ordre de préférence',
-    'Vos préférences de produits',
+    'Tes préférences de produits',
     'Une préférence enregistrée',
     'Produits refusés',
     'Produit mémorisé',
@@ -384,9 +345,33 @@ describe('le détecteur lui-même (il ne doit pas devenir aveugle)', () => {
     'Créer mon compte',
     'Chercher à la main',
     'Hors ligne',
-    'Votre magasin',
+    'Ton magasin',
   ])('laisse passer « %s »', (text) => {
     expect(found(text)).toEqual([])
+  })
+
+  it.each([
+    'Ouvrez d’abord Repas',
+    'Choisissez ce produit',
+    'Pour remplir votre panier, commencez dans Repas',
+    'Rien ne part tant que vous n’avez pas touché « Commencer ».',
+    'Connectez-vous à Leclerc',
+    'sélectionnez le texte du rapport et copiez-le.',
+    'Faites-la dans la page, puis touchez Reprendre.',
+    'Reprendre là où vous en étiez ?',
+    'Gardez cet écran ouvert',
+    'Farine — vérifiez dans le panier',
+    'Entrez un nombre entier de 1 à 99.',
+    'Réessayez dans un instant.',
+    'Ne relancez pas l’envoi',
+    'Choisissez-en un autre.',
+    'Dites-le nous',
+    'Mets-les dans la liste, puis envoyez-la.',
+    'Ce n’est pas le vôtre',
+    'Vous-même',
+    'Touche « Commencer », puis patientez.',
+  ])('refuse le vouvoiement de « %s »', (text) => {
+    expect(found(text, false)).not.toEqual([])
   })
 
   it.each([
@@ -397,29 +382,20 @@ describe('le détecteur lui-même (il ne doit pas devenir aveugle)', () => {
     'Connecte-toi à Leclerc',
     'sélectionne le texte du rapport et copie-le.',
     'Fais-la dans la page, puis touche Reprendre.',
-    'Reprendre où tu t’étais arrêté ?',
+    'Reprendre là où tu en étais ?',
     'Garde cet écran ouvert',
     'Farine — vérifie dans le panier',
     'Entre un nombre entier de 1 à 99.',
     'Réessaie dans un instant.',
-  ])('refuse le tutoiement de « %s »', (text) => {
-    expect(found(text, false)).not.toEqual([])
-  })
-
-  it.each([
-    'Ouvrez d’abord Repas',
-    'Pour remplir votre panier, commencez dans Repas',
-    'Connectez-vous à Leclerc',
-    'sélectionnez le texte du rapport et copiez-le.',
-    'Faites-la dans la page, puis touchez Reprendre.',
-    'Choisissez-en un autre.',
     'Choisis sur Leclerc',
     'Choisis : 3',
     'Copie impossible',
+    'Chez Leclerc, c’est assez long',
     'Il entre dans le magasin',
     'Une liste de courses',
     'Les têtes et les en-têtes',
-  ])('laisse passer le vouvoiement de « %s »', (text) => {
+    'Un nez et des idées',
+  ])('laisse passer le tutoiement de « %s »', (text) => {
     expect(found(text, false)).toEqual([])
   })
 })
@@ -445,6 +421,22 @@ describe('les trois sources de textes sont lues en entier', () => {
     const names = sources.android.map((entry) => entry.where.split(' ')[1])
     for (const name of XML_EXEMPT_NAMES) expect(names).toContain(name)
   })
+
+  it('ne garde que des citations de Leclerc qui sont encore dans les textes', () => {
+    const all = [...sources.web, ...sources.agent, ...sources.android].map((entry) => entry.text)
+    for (const quote of LECLERC_QUOTES) expect(all.some((text) => text.includes(quote))).toBe(true)
+  })
+
+  it('parle bien au tutoiement : les écrans du drive disent « tu », « ton », « ta » ou « tes »', () => {
+    const texts = sources.web
+      .filter((entry) => entry.glossary)
+      .map((entry) => entry.text)
+      .join('\n')
+    expect(texts).toMatch(/(?<![\p{L}\d_])tu(?![\p{L}\d_])/iu)
+    expect(texts).toMatch(/(?<![\p{L}\d_])ton(?![\p{L}\d_])/iu)
+    expect(texts).toMatch(/(?<![\p{L}\d_])ta(?![\p{L}\d_])/iu)
+    expect(texts).toMatch(/(?<![\p{L}\d_])tes(?![\p{L}\d_])/iu)
+  })
 })
 
 describe.each([
@@ -452,7 +444,7 @@ describe.each([
   ['l’interface de l’agent (drive-agent/src/ui/strings.ts)', sources.agent],
   ['l’application Android (strings.xml)', sources.android],
 ])('%s', (_name, entries) => {
-  it('vouvoie partout, sans pronom ni impératif du tutoiement', () => {
+  it('tutoie partout, sans pronom ni impératif du vouvoiement', () => {
     const found = entries.flatMap((entry) =>
       violations(entry.where, entry.text, { glossary: false }),
     )
@@ -531,16 +523,16 @@ export function warnings(where: string, text: string): string[] {
 describe('aucun avertissement hors des conditions d’utilisation du drive (DRV-628)', () => {
   it.each([
     'Rien n’est commandé ni payé.',
-    'Repas ne vide pas votre panier Leclerc.',
+    'Repas ne vide pas ton panier Leclerc.',
     'Le panier Leclerc n’est pas vidé par Repas.',
-    'Repas ne voit jamais votre mot de passe.',
+    'Repas ne voit jamais ton mot de passe.',
     'Estimation peu fiable : moins de la moitié des articles ont un prix.',
     'Repas ne devine jamais un prix.',
     'D’après les prix vus le 3 mars.',
     'Leclerc peut suspendre un compte.',
     'Le risque existe.',
-    'Faites attention à votre compte.',
-    'Ne relancez pas l’envoi en boucle.',
+    'Fais attention à ton compte.',
+    'Ne relance pas l’envoi en boucle.',
     'La cagnotte de Tickets E.Leclerc.',
     'Une vérification anti-robot.',
   ])('repère « %s »', (text) => {
@@ -550,8 +542,8 @@ describe('aucun avertissement hors des conditions d’utilisation du drive (DRV-
   it.each([
     'Le panier est rempli',
     'Leclerc a ralenti les demandes.',
-    'La liste ne sera plus modifiable. Vous pourrez la rouvrir.',
-    'Gardez l’application ouverte.',
+    'La liste ne sera plus modifiable. Tu pourras la rouvrir.',
+    'Garde l’application ouverte.',
     'Ce qui est déjà au panier y reste.',
     '6 articles : 2 sont déjà choisis, 4 sont à choisir sur Leclerc.',
   ])('laisse passer « %s »', (text) => {
@@ -604,14 +596,14 @@ describe('aucun avertissement hors des conditions d’utilisation du drive (DRV-
       'suspendre un compte',
       'cagnotte',
       'ne valide jamais de commande',
-      'ne vide jamais votre panier',
+      'ne vide jamais ton panier',
       'ne réduit jamais une quantité',
       'ne voit jamais',
       'ne devine jamais un prix',
       'l’estimation est indicative',
       'touché « commencer »',
       'ne sont pas refaits',
-      'attendez plusieurs heures',
+      'attends plusieurs heures',
     ]) {
       expect(terms.includes(fact), `la page des conditions ne dit plus « ${fact} »`).toBe(true)
     }

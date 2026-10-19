@@ -80,7 +80,7 @@ describe('réglages du compte', () => {
     await inputs[2]?.setValue('autre')
     await forms(wrapper)[1]?.trigger('submit')
 
-    expect(wrapper.text()).toContain('Entrez votre mot de passe actuel.')
+    expect(wrapper.text()).toContain('Entre ton mot de passe actuel.')
     expect(wrapper.text()).toContain('8 caractères au moins.')
     expect(wrapper.text()).toContain('Les deux mots de passe ne correspondent pas.')
     expect(calls(fetchMock).filter((call) => call.startsWith('PUT'))).toEqual([])
@@ -103,7 +103,7 @@ describe('réglages du compte', () => {
     })
     expect(calls(fetchMock)).toContain('POST /api/auth/logout')
     expect(useSessionStore().isAuthenticated).toBe(false)
-    expect(useNotificationsStore().items[0]?.text).toContain('reconnectez-vous')
+    expect(useNotificationsStore().items[0]?.text).toContain('reconnecte-toi')
   })
 
   it('dit que le mot de passe actuel est incorrect', async () => {

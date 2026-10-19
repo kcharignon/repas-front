@@ -46,7 +46,7 @@ const fresh = (slug: string, name: string): DrivePlanLine => ({
 
 /**
  * Une liste de 12 lignes : 8 connues (dont « Farine » à deux produits classés et un refusé, et « Beurre » à vérifier), 3 nouvelles
- * et 1 « vous en avez déjà ».
+ * et 1 « tu en as déjà ».
  */
 export function plan(overrides: Partial<DrivePlan> = {}): DrivePlan {
   const lines: DrivePlanLine[] = [
