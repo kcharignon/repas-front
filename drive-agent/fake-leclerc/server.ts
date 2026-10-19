@@ -28,6 +28,7 @@ import {
   type HomeForm,
   type Session,
 } from './pages.ts'
+import { PHOTO_HOST, photoReply } from './photos.ts'
 
 /** Le faux magasin : son identifiant et son nom d'hôte (le plan de Repas et la page doivent s'accorder dessus). */
 export const STORE = { id: '000001', host: 'courses-test.leclercdrive.fr' } as const
@@ -139,7 +140,7 @@ export interface Behavior {
   visitorAfter?: number | null
 }
 
-export type RequestKind = 'search' | 'cart' | 'page' | 'repas' | 'control' | 'other'
+export type RequestKind = 'search' | 'cart' | 'page' | 'repas' | 'control' | 'image' | 'other'
 
 export interface FakeRequest {
   kind: RequestKind
@@ -287,7 +288,7 @@ export function cartRequestProblem(d: unknown): string | null {
 }
 
 export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeLeclerc> {
-  const hosts = new Set([STORE.host, ...(options.hosts ?? [])])
+  const hosts = new Set([STORE.host, PHOTO_HOST, ...(options.hosts ?? [])])
   let behavior: Behavior = { latencyMs: 0, fault: null, ...options.behavior }
   const cart = new Map<number, number>()
   const log: FakeRequest[] = []
@@ -473,6 +474,17 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       if (loopbackHost) return control(entry, req, res, path)
       entry.status = 404
       return send(res, 404, 'inconnu')
+    }
+    // L'hôte des images (DRV-633) : seulement `image.ashx`, des images synthétiques ; ni cadence, ni défaut simulé (une image n'est pas une requête de l'agent).
+    if (hostnameOf(req.headers.host) === PHOTO_HOST) {
+      entry.kind = 'image'
+      if (path !== '/image.ashx' || req.method !== 'GET') {
+        entry.status = 404
+        return send(res, 404, 'inconnu')
+      }
+      const photo = photoReply(url.search)
+      entry.status = photo.status
+      return send(res, photo.status, photo.body, { 'Content-Type': photo.type })
     }
     if (path === '/drive/retour') {
       entry.kind = 'repas'

@@ -276,6 +276,12 @@ fi
 check "phase B : la quantité demandée est dite en haut de la liste, puis le nombre de produits est calculé (40 g par produit : 2 produits)" ui_has 'Il te faut : 80 g'
 check "phase B : le nombre de produits est calculé (40 g par produit)" ui_has '40 g par produit'
 check "l'agent ne choisit jamais seul : le panier n'a pas changé" cart_is "$CART_KNOWN"
+# DRV-633 : les photos des produits viennent de l'hôte d'images de l'enseigne (le faux), comme celles de la page elle-même.
+if wait_until 30 requested_on photos-test.leclercdrive.fr /image.ashx; then
+  ok "phase B : les photos des produits sont demandées à l'hôte d'images de l'enseigne"
+else
+  ko "phase B : aucune photo n'a été demandée à l'hôte d'images"
+fi
 sleep 1
 screenshot e05-choix
 touch_target 'text="Choisir"' "Choisir (liste de produits)"

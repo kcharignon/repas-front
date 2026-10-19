@@ -101,7 +101,7 @@ describe('searchProducts', () => {
       inCart: 0,
       availability: null,
       comingSoon: false,
-      thumbnailUrl: 'https://photos-test.leclercdrive.fr/image.ashx?id=11&use=l&cat=p',
+      imageUrl: 'https://photos-test.leclercdrive.fr/image.ashx?id=11&use=l&cat=p',
       content: { value: 1000, unit: 'g' },
       contentSource: 'label',
     })
@@ -205,14 +205,19 @@ describe('searchProducts', () => {
     expect(site.calls).toHaveLength(2)
   })
 
-  it('ne garde pas une vignette qui n’est pas une adresse https ou un chemin du site', async () => {
+  it('ne garde la photo que si c’est une adresse https de l’enseigne ; une adresse relative se résout par rapport à la page (DRV-633)', async () => {
     const page =
-      '<script>[{"iIdProduit":1,"sLibelleLigne1":"A","sUrlVignetteProduit":"javascript:alert(1)"},{"iIdProduit":2,"sLibelleLigne1":"B","sUrlVignetteProduit":"/images/b.jpg"}]</script>'
+      '<script>[{"iIdProduit":1,"sLibelleLigne1":"A","sUrlVignetteProduit":"javascript:alert(1)"},{"iIdProduit":2,"sLibelleLigne1":"B","sUrlVignetteProduit":"/images/b.jpg"},{"iIdProduit":3,"sLibelleLigne1":"C","sUrlVignetteProduit":"https://images.autre-site.invalid/c.jpg"},{"iIdProduit":4,"sLibelleLigne1":"D"}]</script>'
     const { adapter } = shop(undefined, { body: page })
 
     const candidates = await adapter.searchProducts('farine')
 
-    expect(candidates.map((candidate) => candidate.thumbnailUrl)).toEqual([null, '/images/b.jpg'])
+    expect(candidates.map((candidate) => candidate.imageUrl)).toEqual([
+      null,
+      'https://fd0-courses.leclercdrive.fr/images/b.jpg',
+      null,
+      null,
+    ])
   })
 })
 

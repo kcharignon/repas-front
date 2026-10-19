@@ -21,6 +21,11 @@ export interface FakeProduct {
   structured?: { unit: 'KG' | 'L' | 'U'; each: number; total: number; totalUnit: 'kg' | 'l' | 'u' }
   /** Le site ne donne aucun contenu net lisible : ni seconde ligne, ni prix à l'unité de mesure (l'agent n'en déduit rien). */
   noContent?: boolean
+  /**
+   * La photo du produit (DRV-633) : par défaut une photo servie par le faux hôte d'images ; `none` (aucune adresse dans le JSON), `foreign` (une
+   * adresse d'un autre hôte, que l'agent doit refuser), `missing` (une adresse correcte dont l'image répond 404).
+   */
+  photo?: 'none' | 'foreign' | 'missing'
   aisle: number
   family: number
 }
@@ -49,12 +54,17 @@ const make = (
 
 export const PRODUCTS: readonly FakeProduct[] = [
   // Farine : un produit en rupture (1000002), un en promotion (1000003), un au contenu structuré (1000005).
+  // Photos (DRV-633) : 1000001 et 1000002 ont une photo ; 1000003 une adresse d'un autre hôte (refusée), 1000004 une photo qui répond 404, 1000005 aucune.
   make('Farine de blé T55 Moulin Imaginaire', '1 kg', 1.29, 1.29, 'kg', 12),
   make('Farine de blé T45 Moulin Imaginaire', '1 kg', 1.45, 1.45, 'kg', 0),
-  make('Farine de blé T65 Meunier Fictif', '2 x 500 g', 2.8, 2.8, 'kg', 5, { promo: 2.49 }),
-  make('Farine de sarrasin Moulin Imaginaire', '500 g', 1.99, 3.98, 'kg', 3),
+  make('Farine de blé T65 Meunier Fictif', '2 x 500 g', 2.8, 2.8, 'kg', 5, {
+    promo: 2.49,
+    photo: 'foreign',
+  }),
+  make('Farine de sarrasin Moulin Imaginaire', '500 g', 1.99, 3.98, 'kg', 3, { photo: 'missing' }),
   make('Farine complète Moulin Imaginaire', null, 2.1, 2.1, 'kg', 8, {
     structured: { unit: 'KG', each: 1, total: 1, totalUnit: 'kg' },
+    photo: 'none',
   }),
   make('Sucre en poudre Épicerie Factice', '1 kg', 1.35, 1.35, 'kg', 20),
   make('Sucre glace Épicerie Factice', '500 g', 1.1, 2.2, 'kg', 7),

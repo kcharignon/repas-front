@@ -1,7 +1,9 @@
 // Le sélecteur de produits (DRV-306, variante P2) : la liste que l'agent affiche lui-même dans la zone de l'écran « chooser ». L'enseigne
 // refuse d'être affichée dans un cadre (décision G1) : l'utilisateur choisit donc dans cette liste, nourrie par la recherche de l'agent.
-// Tout s'affiche par `textContent` (un libellé de l'enseigne n'est jamais du HTML) ; aucune image n'est chargée.
+// Tout s'affiche par `textContent` (un libellé de l'enseigne n'est jamais du HTML). Les photos (DRV-633, `photo.ts`) sont les seules images : 12 au plus,
+// chargées à la demande, depuis les serveurs de l'enseigne comme le fait sa page.
 import { append, clear, h } from './dom'
+import { photoFrame } from './photo'
 import { S } from './strings'
 import type { UnavailableReason } from './types'
 
@@ -15,6 +17,8 @@ export interface PickerItem {
   details: readonly string[]
   /** La promotion, s'il y en a une. */
   promo: string | null
+  /** L'adresse de la photo (DRV-633), `null` s'il n'y en a pas. Revérifiée à l'affichage : une adresse refusée ne montre rien. */
+  photo?: string | null | undefined
   /** « 800 g demandés, 500 g par produit : 2 », ou « contenu inconnu ». */
   explain: string
   /**
@@ -67,6 +71,9 @@ export interface Picker {
 
 const OFF = 'data-off'
 
+/** Les photos ne sont montrées que pour les premiers produits de la liste : pas de rafale d'images vers l'enseigne. */
+export const MAX_PHOTOS = 12
+
 function row(item: PickerItem, index: number, choose: PickerHooks['choose']): HTMLElement {
   const nameId = `produit-${index}`
   // Un produit « Plus en stock » reste à choisir : le panier tranche (DRV-635). Seul un produit écarté par l'utilisateur est grisé.
@@ -86,11 +93,20 @@ function row(item: PickerItem, index: number, choose: PickerHooks['choose']): HT
   return h(
     'li',
     { class: off ? 'candidate off' : 'candidate' },
-    h('p', { class: 'name', text: item.name, attrs: { id: nameId } }),
-    item.label2 ? h('p', { class: 'hint', text: item.label2 }) : null,
-    item.details.length > 0 ? h('p', { text: item.details.join(' · ') }) : null,
-    item.promo ? h('p', { text: item.promo }) : null,
-    h('p', { class: 'hint', text: hint }),
+    h(
+      'div',
+      { class: 'media' },
+      index < MAX_PHOTOS ? photoFrame(item.photo, item.name) : null,
+      h(
+        'div',
+        { class: 'text' },
+        h('p', { class: 'name', text: item.name, attrs: { id: nameId } }),
+        item.label2 ? h('p', { class: 'hint', text: item.label2 }) : null,
+        item.details.length > 0 ? h('p', { text: item.details.join(' · ') }) : null,
+        item.promo ? h('p', { text: item.promo }) : null,
+        h('p', { class: 'hint', text: hint }),
+      ),
+    ),
     button,
   )
 }
