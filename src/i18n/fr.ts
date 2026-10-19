@@ -333,6 +333,45 @@ export default {
     emailNotVerified:
       "Ton adresse e-mail n'est pas encore confirmée. Ouvre le lien reçu par e-mail pour activer ton compte.",
     resendLink: 'Renvoyer le lien de confirmation',
+    // Mot de passe oublié (ADR 0026 du back) : le lien mène à la demande, et la connexion dit que le nouveau mot de passe est prêt
+    forgotPassword: 'Mot de passe oublié ?',
+    passwordChanged: 'Ton nouveau mot de passe est enregistré. Tu peux te connecter.',
+  },
+  // Demande du lien (`/mot-de-passe-oublie`) : le message d'envoi est le même que l'adresse ait un compte ou non (pas d'énumération)
+  forgotPassword: {
+    title: 'Mot de passe oublié',
+    intro: 'Indique ton adresse e-mail. Tu recevras un lien pour choisir un nouveau mot de passe.',
+    submit: 'Envoyer le lien',
+    resend: 'Renvoyer le lien',
+    resendIn: 'Renvoyer le lien dans {seconds} s',
+    sent: 'Si un compte existe pour cette adresse, un lien vient de partir. Il est valable 30 minutes.',
+    invalidEmail: 'Cette adresse e-mail n’est pas valide. Vérifie-la, puis réessaie.',
+    tooMany:
+      'Trop de demandes en peu de temps. Aucun lien n’est parti. Réessaie dans {minutes} minute. | Trop de demandes en peu de temps. Aucun lien n’est parti. Réessaie dans {minutes} minutes.',
+    tooManyLater: 'Trop de demandes en peu de temps. Aucun lien n’est parti. Réessaie plus tard.',
+    unreachable: 'Le serveur est injoignable. Aucun lien n’est parti. Réessaie dans un instant.',
+    signIn: 'Retour à la connexion',
+  },
+  // Nouveau mot de passe (`/mot-de-passe-oublie/confirmation?token=…`) : le lien peut aussi poser un premier mot de passe
+  resetPassword: {
+    title: 'Choisis un nouveau mot de passe',
+    password: 'Nouveau mot de passe',
+    passwordHint: '8 caractères au moins.',
+    confirmation: 'Confirme ton mot de passe',
+    submit: 'Enregistrer mon mot de passe',
+    tooShort: 'Ton mot de passe doit avoir 8 caractères au moins.',
+    mismatch: 'Les deux mots de passe ne sont pas les mêmes.',
+    rejected: 'Ce mot de passe n’est pas accepté. Choisis-en un autre, de 8 caractères au moins.',
+    tooMany:
+      'Trop de demandes en peu de temps. Ton mot de passe n’a pas changé. Réessaie dans {minutes} minute. | Trop de demandes en peu de temps. Ton mot de passe n’a pas changé. Réessaie dans {minutes} minutes.',
+    tooManyLater:
+      'Trop de demandes en peu de temps. Ton mot de passe n’a pas changé. Réessaie plus tard.',
+    unreachable:
+      'Le serveur est injoignable. Ton mot de passe n’a pas changé. Réessaie dans un instant.',
+    invalidTitle: 'Ce lien ne marche plus',
+    invalid: 'Il a déjà servi, ou il a expiré. Ton mot de passe n’a pas changé.',
+    newLink: 'Demander un nouveau lien',
+    signIn: 'Retour à la connexion',
   },
   checkEmail: {
     title: 'Vérifie ta boîte mail',
