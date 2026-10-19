@@ -336,6 +336,14 @@ class OpeningWatchTest {
     }
 
     @Test
+    fun `une page refusee par le site ou qui n'a pas pu charger n'est pas retenue (DRV-629)`() {
+        assertFalse(loaded().refused())
+        assertTrue(OpeningWatch().apply { pageStarted(); httpError(404); pageFinished() }.refused())
+        assertTrue(OpeningWatch().apply { pageStarted(); loadFailed(); pageFinished() }.refused())
+        assertFalse(OpeningWatch().apply { pageStarted(); httpError(404); restart(); pageFinished() }.refused())
+    }
+
+    @Test
     fun `les delais sont raisonnables`() {
         // Assez longs pour une page lente sur un réseau mobile, assez courts pour que l'utilisateur ne reste pas devant un écran muet.
         assertTrue(OpeningWatch.LOAD_TIMEOUT_MS in 15_000L..45_000L)

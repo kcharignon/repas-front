@@ -88,6 +88,15 @@ class DriveActivity : Activity() {
     private var popup: WebView? = null
     private var loadFailed = false
 
+    /**
+     * La page du panier ouverte par « Finaliser sur Leclerc » (DRV-629), tant que le site n'a pas répondu : si il la refuse (404, erreur), l'écran se
+     * replie sur l'accueil du drive ([DriveEntry.fallsBack]). `null` sinon.
+     */
+    private var basketTarget: String? = null
+
+    /** Le repli sur l'accueil vient d'avoir lieu : une fois l'accueil chargé, la page du panier refusée sort de l'historique (le retour ne la montre pas). */
+    private var clearHistoryWhenLoaded = false
+
     private val repasApp get() = application as RepasApp
     private val pass get() = repasApp.pass
 
@@ -118,6 +127,7 @@ class DriveActivity : Activity() {
             }
         }
         webView = createWebView()
+        basketTarget = firstUrl().takeIf { pass.current() == null && DriveEntry.isBasketPage(it) }
         problems = ProblemPanel(this, ::problemMessage) { retry() }
         // Le message d'en-tête (se connecter, choisir ou ouvrir son magasin) et, pour un plan, son issue : ouvrir l'accueil du drive.
         storeBanner = label("", sizeSp = 16f, color = Color.WHITE)
@@ -165,12 +175,11 @@ class DriveActivity : Activity() {
 
     /**
      * La première page : celle du passage en cours ; sinon, pour un lien du drive ouvert depuis Repas (« Finaliser sur Leclerc », DRV-625), la page
-     * demandée, revérifiée ([DriveEntry.target]) ; sinon l'accueil du drive.
+     * demandée, revérifiée ([DriveEntry.startPage]) ; sinon l'accueil du drive.
      */
     private fun firstUrl(): String =
         pass.current()?.request?.startUrl
-            ?: DriveEntry.target(intent?.getStringExtra(EXTRA_START_URL))
-            ?: NavigationPolicy.START_URL
+            ?: DriveEntry.startPage(intent?.getStringExtra(EXTRA_START_URL))
 
     override fun onResume() {
         super.onResume()
@@ -301,6 +310,15 @@ class DriveActivity : Activity() {
         override fun onPageFinished(view: WebView, url: String?) {
             if (!loadFailed) problems.hide()
             watch.pageFinished()
+            if (clearHistoryWhenLoaded && url == NavigationPolicy.START_URL) {
+                clearHistoryWhenLoaded = false
+                view.clearHistory()
+            }
+            // Une page de magasin avec sa ville, que le site n'a pas refusée : « Finaliser sur Leclerc » en bâtira la page du panier (DRV-629).
+            if (!loadFailed && !watch.refused()) {
+                repasApp.storePath.remember(url)
+                if (url == basketTarget) basketTarget = null
+            }
             timers.removeCallbacks(onLoadTimeout)
             agent.onPageFinished(view, url)
             updateStoreBanner(url)
@@ -318,6 +336,15 @@ class DriveActivity : Activity() {
 
         override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
             if (!request.isForMainFrame) return
+            // La page du panier refusée par le site : l'accueil du drive, où le panier est à une touche (DRV-629).
+            if (DriveEntry.fallsBack(basketTarget, request.url.toString(), errorResponse.statusCode)) {
+                basketTarget = null
+                clearHistoryWhenLoaded = true
+                problems.hide()
+                navigationBegins()
+                webView.loadUrl(NavigationPolicy.START_URL)
+                return
+            }
             // Le statut de la page principale (404, 5xx…) : une page d'erreur du site n'est jamais celle du magasin, et ne reçoit pas le plan.
             watch.httpError(errorResponse.statusCode)
             LoadProblems.fromHttpStatus(errorResponse.statusCode)?.let(::showProblem)
@@ -571,6 +598,7 @@ class DriveActivity : Activity() {
     /** Se déconnecter de Leclerc : cookies, stockage du site, cache et historique du drive, puis retour à l'accueil du drive. */
     private fun clearDriveData() {
         DriveProfile.clear(webView)
+        repasApp.storePath.forget()
         problems.hide()
         webView.loadUrl(NavigationPolicy.START_URL)
     }
@@ -604,7 +632,7 @@ class DriveActivity : Activity() {
     private fun toast(message: Int) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 
     companion object {
-        /** La page où ouvrir le drive quand aucun passage n'est en cours (DRV-625), vérifiée par [DriveEntry.target]. */
+        /** La page où ouvrir le drive quand aucun passage n'est en cours (DRV-625), vérifiée par [DriveEntry.startPage]. */
         const val EXTRA_START_URL = "eu.kantin.repas.drive.START_URL"
     }
 }

@@ -14,6 +14,8 @@ class RepasApp : Application() {
      * Le passage du plan et les résultats à livrer (DRV-314) : relus au démarrage du processus s'ils ont moins de 24 h. Les deux écrans y
      * lisent et y écrivent ; seule la coquille parle à la page de Repas.
      */
+    internal val storePath: StorePathMemory by lazy { StorePathMemory(PrefsStorePathStore(this)) }
+
     internal val pass: DrivePass by lazy {
         DrivePass(
             store = PrefsPassStore(this),
@@ -38,5 +40,23 @@ internal class PrefsPassStore(context: Context) : PassStore {
 
     private companion object {
         const val KEY = "state"
+    }
+}
+
+/**
+ * Le [StorePathStore] du téléphone (DRV-629) : une préférence privée de l'application, exclue des sauvegardes (`data_extraction_rules.xml`), qui
+ * ne contient que le chemin du magasin avec sa ville (jamais un cookie ni un identifiant de compte). Effacée avec les données du drive.
+ */
+internal class PrefsStorePathStore(context: Context) : StorePathStore {
+    private val prefs = context.getSharedPreferences("drive-store", Context.MODE_PRIVATE)
+
+    override fun load(): String? = prefs.getString(KEY, null)
+
+    override fun save(value: String?) {
+        prefs.edit().apply { if (value == null) remove(KEY) else putString(KEY, value) }.apply()
+    }
+
+    private companion object {
+        const val KEY = "path"
     }
 }
