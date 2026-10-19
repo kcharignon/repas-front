@@ -571,10 +571,11 @@ export default {
     },
     // Le titre dit le résultat ; le reste, au plus trois phrases : ce qui s'est passé, ce qui est sauf, ce qu'il reste à faire
     safe: 'Ce qui est déjà au panier y reste.',
+    // Le panier est fait : la suite (créneau, paiement) se passe dans l'appli officielle, Repas n'explique rien de plus (DRV-645)
+    basketReady: 'Ton panier est prêt. Retrouve-le dans l’appli {retailer}.',
     outcome: {
       completed: {
         title: 'Le panier est rempli',
-        help: 'Tes produits sont dans le panier Leclerc : il reste à le finaliser.',
       },
       // Un envoi arrêté avant que rien ne soit mis au panier ni choisi : « en partie » serait faux (même titre que l'écran de fin de l'agent)
       notFilled: {
@@ -665,8 +666,7 @@ export default {
       rejected: 'Ne sera plus proposé : {labels}',
     },
     actions: {
-      finalize: 'Finaliser sur Leclerc',
-      finalizeHelp: 'S’ouvre dans un nouvel onglet.',
+      newTab: 'S’ouvre dans un nouvel onglet.',
       manual: 'Chercher à la main sur Leclerc',
       resume: 'Reprendre l’envoi',
       update: 'Mettre à jour l’application',

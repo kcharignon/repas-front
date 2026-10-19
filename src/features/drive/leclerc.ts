@@ -35,3 +35,6 @@ export const finalizeLink = (
     return DRIVE_HOME_URL
   }
 }
+
+/** Le nom de l'application officielle de l'enseigne, dit à l'utilisateur quand son panier est prêt (DRV-645) ; un seul endroit à changer pour une autre enseigne. */
+export const RETAILER_APP_NAME = 'Drive Leclerc'
