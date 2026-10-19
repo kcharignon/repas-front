@@ -196,4 +196,46 @@ test.describe('diagnostic', () => {
     )
     await expect(report).not.toHaveValue(/Tomates|Pommes|Courgettes/)
   })
+
+  test('le rapport dit d’où viennent les libellés de rayons (DRV-647) : le menu replié de la page, la structure de la réponse, la correspondance, sans requête de plus', async ({
+    page,
+    fake,
+    agentCode,
+  }) => {
+    // Given : l'accueil du magasin porte un menu « Rayons » replié (liens de rayon et de famille au numéro dans l'adresse, données inventées)
+    const app = await openWithBridge(page, fake, agentCode)
+    await app.received('hello')
+    await expect(page.getByRole('link', { name: 'Fruits et légumes' })).toBeHidden()
+
+    // When
+    await app.send(DIAGNOSTIC)
+
+    // Then : le menu est lu tel qu'il est (sans clic) : comptes, formes d'adresse, une ligne par rayon avec son numéro et son libellé de catalogue
+    const report = page.getByLabel('Rapport à copier')
+    await expect(report).toHaveValue(
+      /Menu des rayons de la page : titre « Rayons » présent ; liens de la page : 12, dans le bloc du menu : 8 ; liens de rayon : 5 ; liens de famille : 3/,
+    )
+    await expect(report).toHaveValue(
+      /Adresses des liens de rayon et de famille \(motifs\) : \/magasin-N-N-V\/rayon-N-…\.aspx ; \/magasin-N-N-V\/famille-N-…\.aspx/,
+    )
+    await expect(report).toHaveValue(/Lien de rayon 41 : « Fruits et légumes »/)
+    await expect(report).toHaveValue(/Lien de rayon 60 : « Bébé »/)
+    // And : la structure de la réponse « tomate », des noms de clés (rayon et famille avec leur valeur)
+    await expect(report).toHaveValue(
+      /Réponse « tomate », chemin des produits depuis le premier niveau : \?\[\] > lstProduits\[\]/,
+    )
+    await expect(report).toHaveValue(
+      /Réponse « tomate », clés d’un produit \(\d+, noms seulement sauf rayon et famille\) : iIdProduit, sLibelleLigne1, .*iIdRayon = \d+, iIdFamille = \d+/,
+    )
+    // And : la correspondance avec les rayons des produits de « tomate » (15 et 41 ; seul 41 a un lien)
+    await expect(report).toHaveValue(
+      /Rayons de « tomate » avec un lien dans le menu : 1 sur 2 \(sans lien : 15\)/,
+    )
+    await expect(report).toHaveValue(/Familles de « tomate » avec un lien dans le menu : 1 sur 3/)
+    await expect(report).toHaveValue(/\[OK\] Rayons vus : .* ; liens du menu : 1\/2/)
+    // And : aucune requête de plus que DRV-646 (cinq recherches), aucun clic, ni ville ni numéro de magasin, ni libellé de famille
+    expect(fake.paced().map((call) => call.kind)).toEqual(Array(5).fill('search'))
+    await expect(page.getByRole('link', { name: 'Fruits et légumes' })).toBeHidden()
+    await expect(report).not.toHaveValue(/Ville-Test|000001|Tomates|Pommes|Courgettes/)
+  })
 })
