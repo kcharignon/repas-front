@@ -395,7 +395,7 @@ Pour seulement te déconnecter de Leclerc, sans désinstaller : dans l’écran 
 
 ### Sans l’application : chercher à la main
 
-Tu peux préparer tes courses sans l’application. Sur la liste, touche « Envoyer au drive » : Repas montre chaque article avec un lien « Chercher sur Leclerc » qui ouvre le site de Leclerc sur le produit, et tu ajoutes les produits au panier toi-même. Si le bouton n’apparaît pas, l’envoi au drive n’est pas activé pour le moment.
+Dans un navigateur, la liste en cours n’a pas de bouton « Envoyer au drive » (DRV-641) : il verrouillerait la liste sans rien pouvoir envoyer. Une liste déjà envoyée depuis l’application s’y ouvre avec « Reprendre l’envoi » : Repas montre chaque article avec un lien « Chercher sur Leclerc » qui ouvre le site de Leclerc sur le produit, et tu ajoutes les produits au panier toi-même. Dans l’application, si le bouton n’apparaît pas, l’envoi au drive n’est pas activé pour le moment.
 
 ## Version
 

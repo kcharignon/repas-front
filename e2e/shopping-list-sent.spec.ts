@@ -3,6 +3,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page, type Route } from '@playwright/test'
 
+import { fakeApp } from './support/drive'
 import { fakeAppForSetup } from './support/setupApp'
 
 type Status = 'ACTIVE' | 'SENT'
@@ -118,6 +119,7 @@ test('envoyer une liste au drive, la lire sans pouvoir la modifier, puis la rouv
   page,
 }) => {
   const received = await fakeBack(page)
+  await fakeApp(page)
   await page.goto('/liste')
   await expect(page.getByRole('heading', { level: 1, name: 'Courses du week-end' })).toBeVisible()
 
@@ -266,3 +268,46 @@ test('sans magasin : « Choisir mon magasin » le lit, l’enregistre, et l’en
   await expect(page).toHaveURL(/\/drive\/envoi\/l1$/)
   expect(received).toContain('POST /api/v1/shopping-lists/l1/send')
 })
+
+test('dans un navigateur, « Envoyer au drive » n’est pas proposé : rien à verrouiller pour rien (DRV-641)', async ({
+  page,
+}) => {
+  const received = await fakeBack(page)
+  await page.goto('/liste')
+  await expect(page.getByRole('heading', { level: 1, name: 'Courses du week-end' })).toBeVisible()
+  await expect.poll(() => received).toContain('GET /api/v1/drive/settings')
+
+  await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Terminer' })).toBeVisible()
+  expect(received).not.toContain('POST /api/v1/shopping-lists/l1/send')
+})
+
+for (const [label, version] of [
+  ['trop ancienne', '0.1.9'],
+  ['qui ne dit pas sa version', null],
+] as const) {
+  test(`application ${label} : la phrase de mise à jour, aucun verrou (DRV-641)`, async ({
+    page,
+  }) => {
+    const received = await fakeBack(page)
+    await fakeApp(page, 'completed', version)
+    await page.goto('/liste')
+
+    await page.getByRole('button', { name: 'Envoyer au drive' }).click()
+    const update = page.getByRole('dialog')
+    await expect(update).toContainText('Mets à jour l’application pour envoyer ta liste.', {
+      timeout: 6000,
+    })
+    await expect(update).not.toContainText('La liste ne sera plus modifiable')
+    await expect(update.getByRole('link', { name: 'Mettre à jour' })).toHaveAttribute(
+      'href',
+      '/drive/aide',
+    )
+    expect(received).not.toContain('POST /api/v1/shopping-lists/l1/send')
+
+    // La liste reste modifiable
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('button', { name: 'Terminer' })).toBeVisible()
+    await expect(page.getByText('Cette liste est envoyée au drive')).toHaveCount(0)
+  })
+}
