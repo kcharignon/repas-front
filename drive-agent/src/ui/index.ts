@@ -11,6 +11,7 @@ export {
 export {
   CAUSE_TEXTS,
   ERROR_TEXTS,
+  errorParts,
   S,
   count,
   formatContent,

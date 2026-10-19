@@ -114,24 +114,25 @@ describe('retour du drive : un passage réussi', () => {
     ])
     expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
 
-    expect(wrapper.text()).toContain('Le panier est rempli')
+    expect(wrapper.find('h1').text()).toBe('Le panier est rempli')
+    expect(wrapper.find('main [role="status"] p').text()).toBe(
+      'Vos produits sont dans le panier Leclerc : il reste à le finaliser.',
+    )
+    // Seuls les compteurs qui existent : jamais un zéro, jamais « Échecs » ni « Prix lus »
     expect(wrapper.findAll('dl > div').map((cell) => cell.text())).toEqual([
       'Ajoutés au panier8',
       'Choisis sur Leclerc3',
       'J’en ai toujours1',
-      'Pas cette fois0',
-      'Indisponibles0',
-      'Échecs0',
-      'Prix lus0',
     ])
-    expect(wrapper.text()).toContain('Détail (12)')
+    expect(wrapper.find('details > summary').text()).toBe('Détails')
+    expect(wrapper.findAll('details li')).toHaveLength(12)
     expect(wrapper.text()).toContain('Le panier Leclerc n’est pas vidé par Repas.')
   })
 
   it('nomme les ingrédients et les produits d’après le plan, et signale le produit de secours utilisé', async () => {
     const { wrapper } = await open({ kind: 'result', result: result(), draft })
     await saved(wrapper)
-    await vi.waitFor(() => expect(wrapper.findAll('h3')[0]?.text()).toBe('Farine'))
+    await vi.waitFor(() => expect(wrapper.find('main ul > li p')?.text()).toBe('Farine'))
 
     const farine = wrapper.findAll('main ul > li')[0]!
     expect(farine.text().replace(/\s+/g, ' ')).toContain('Farine de blé T45 1 kg · × 2')
@@ -171,7 +172,7 @@ describe('retour du drive : un passage réussi', () => {
     )
     await saved(wrapper)
 
-    expect(wrapper.find('h3').text()).toBe('farine')
+    expect(wrapper.find('main ul > li p').text()).toBe('farine')
     expect(wrapper.find('main ul > li').text().replace(/\s+/g, ' ')).toContain(
       'Produit n° 222333 · × 1 · 1,89 €',
     )
@@ -179,7 +180,8 @@ describe('retour du drive : un passage réussi', () => {
     expect(
       ((await bodyOf(fetchMock, index)) as { choices: { action: string }[] }).choices,
     ).toMatchObject([{ action: 'REFRESH_PRICE' }])
-    expect(wrapper.findAll('dl > div')[6]?.text()).toBe('Prix lus1')
+    // Le prix lu est mémorisé (REFRESH_PRICE), mais ne s'affiche plus comme compteur
+    expect(wrapper.find('dl').text()).not.toContain('Prix lus')
   })
 
   it('n’appelle pas le back quand il n’y a rien à enregistrer, et efface le brouillon', async () => {
@@ -241,9 +243,9 @@ describe('retour du drive : l’enregistrement échoue', () => {
     await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
 
     const message = wrapper.find('[role="alert"]').text()
-    expect(message).toContain('ils sont gardés sur cette page : rien n’est perdu.')
+    expect(message).toContain('Ils sont gardés sur cette page.')
     expect(message).toContain(
-      'Trop de demandes en peu de temps. Attendez une minute, puis réessayez.',
+      'Trop de demandes en peu de temps. Rien n’est perdu. Attendez une minute, puis réessayez.',
     )
     expect(message).not.toContain('Vos choix n’ont pas pu être enregistrés')
     // Le résultat, le brouillon et le bouton sont là ; l'écran n'a pas réessayé tout seul
@@ -255,7 +257,7 @@ describe('retour du drive : l’enregistrement échoue', () => {
     // Toujours refusé : même message, rien de perdu, et c'est encore à l'utilisateur de décider
     await press('Réessayer l’enregistrement')
     expect(attempts).toBe(2)
-    expect(wrapper.find('[role="alert"]').text()).toContain('rien n’est perdu')
+    expect(wrapper.find('[role="alert"]').text()).toContain('Rien n’est perdu')
 
     await press('Réessayer l’enregistrement')
     await saved(wrapper)
@@ -278,7 +280,7 @@ describe('retour du drive : l’enregistrement échoue', () => {
     )
     await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
 
-    expect(wrapper.find('[role="alert"]').text()).toContain('rien n’est perdu')
+    expect(wrapper.find('[role="alert"]').text()).toContain('Rien n’est perdu')
     expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
     expect(localStorage.getItem(DRAFT_KEY)).not.toBeNull()
     expect(wrapper.findAll('main ul > li')).toHaveLength(12)
@@ -330,7 +332,7 @@ describe('retour du drive : chaque issue du passage', () => {
     { ingredientSlug: 'lait', outcome: 'FAILED', error: 'NETWORK' },
   ]
 
-  it('partial : explique, garde ce qui est fait, propose de réessayer les échecs et de reprendre', async () => {
+  it('partial : dit ce qui s’est passé, ce qui est sauf, ce qui reste à faire, et propose de reprendre', async () => {
     const event = {
       kind: 'result',
       draft,
@@ -343,18 +345,24 @@ describe('retour du drive : chaque issue du passage', () => {
     const { wrapper } = await open(event)
     await saved(wrapper)
 
-    expect(wrapper.text()).toContain('L’envoi s’est arrêté avant la fin')
-    expect(wrapper.text()).toContain('Leclerc a bloqué les demandes')
-    expect(wrapper.text()).toContain('Échec : La connexion a été coupée pendant l’envoi.')
-    expect(wrapper.findAll('dl > div').map((cell) => cell.text())).toContain('Échecs2')
-    expect(wrapper.find('a[href="/drive/envoi/l1?lignes=beurre,lait"]').text()).toBe(
-      'Réessayer les échecs',
+    expect(wrapper.find('h1').text()).toBe('Le panier est rempli en partie')
+    expect(wrapper.find('main [role="status"] p').text()).toBe(
+      'Leclerc a ralenti les demandes. Ce qui est déjà au panier y reste : il reste 2 articles à ajouter. Attendez quelques minutes, puis reprenez l’envoi.',
     )
+    // « Échecs » n’est plus un compteur : l’échec se dit dans la phrase, et chaque article dans « Détails »
+    expect(wrapper.findAll('dl > div').map((cell) => cell.text())).toEqual(['Ajoutés au panier1'])
+    expect(wrapper.find('details').text()).toContain(
+      'Pas ajouté au panier. La connexion a été coupée pendant l’envoi.',
+    )
+    // Un seul bouton principal, « Reprendre l’envoi » ; ce qui est déjà au panier se finalise par un lien discret
     expect(wrapper.find('a[href="/drive/envoi/l1"]').text()).toBe('Reprendre l’envoi')
-    expect(wrapper.text()).not.toContain('Le panier est rempli')
+    expect(wrapper.find('a[href="/drive/envoi/l1"]').classes()).toContain('bg-primary')
+    expect(wrapper.find('a[target="_blank"]').classes()).not.toContain('bg-primary')
+    expect(wrapper.find('a[href*="lignes"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Réessayer les échecs')
   })
 
-  it('ne propose de réessayer qu’une fois les choix enregistrés', async () => {
+  it('ne propose de reprendre qu’une fois les choix enregistrés', async () => {
     const { wrapper } = await open(outcomeOf(blocked, 'partial'), {
       'PUT /api/v1/drive/choices': () => new Promise<Response>(() => undefined),
     })
@@ -363,31 +371,96 @@ describe('retour du drive : chaque issue du passage', () => {
     expect(wrapper.find('a[href^="/drive/envoi/"]').exists()).toBe(false)
   })
 
-  it.each([
-    ['aborted', 'Envoi arrêté', undefined],
-    ['error', 'L’envoi a échoué', 'NOT_LOGGED_IN'],
-    ['error', 'L’envoi a échoué', 'STORE_MISMATCH'],
-    ['error', 'L’envoi a échoué', 'CONTRACT_CHANGED'],
-    ['error', 'L’envoi a échoué', 'UNSUPPORTED_PAGE'],
-    ['aborted', 'Envoi arrêté', 'CANCELLED'],
-  ] as const)('%s %s %s', async (outcome, title, code) => {
+  it('aborted : le titre dit ce qui s’est passé, le reste dit ce qui est sauf et l’action', async () => {
+    const { wrapper } = await open(outcomeOf([], 'aborted'))
+    await saved(wrapper)
+
+    expect(wrapper.find('h1').text()).toBe('Vous avez arrêté l’envoi')
+    expect(wrapper.find('main [role="status"] p').text()).toBe(
+      'Ce qui est déjà au panier y reste. Reprenez l’envoi quand vous voulez.',
+    )
+    expect(wrapper.find('a[href="/drive/envoi/l1"]').classes()).toContain('bg-primary')
+    expect(wrapper.find('dl').exists()).toBe(false)
+  })
+
+  it('aborted avec le code d’une annulation : ce n’est pas une panne, le code n’est lu que dans « Détails »', async () => {
     const event = {
       kind: 'result',
       draft,
       result: result({
-        outcome,
+        outcome: 'aborted',
         lines: [],
-        ...(code === undefined ? {} : { error: { code, message: 'x' } }),
+        error: { code: 'CANCELLED', message: 'Envoi annulé' },
       }),
     } as DriveEvent
     const { wrapper } = await open(event)
     await saved(wrapper)
 
-    expect(wrapper.find('h2').text()).toBe(title)
-    expect(wrapper.find('a[href="/drive/envoi/l1"]').exists()).toBe(true)
-    expect(wrapper.find('a[href*="lignes"]').exists()).toBe(false)
-    expect(wrapper.find('section[role="status"] p.font-semibold').exists()).toBe(code !== undefined)
+    expect(wrapper.find('main [role="status"] p').text()).not.toContain('annulé')
+    expect(wrapper.find('details').text()).toContain('Code : CANCELLED')
   })
+
+  it.each([
+    [
+      'NOT_LOGGED_IN',
+      'Vous n’êtes pas connecté à Leclerc. Ce qui est déjà au panier y reste. Connectez-vous à Leclerc, puis reprenez l’envoi.',
+      'Reprendre l’envoi',
+    ],
+    [
+      'STORE_MISMATCH',
+      'Le magasin ouvert sur Leclerc n’est pas le vôtre. Ce qui est déjà au panier y reste. Ouvrez votre magasin sur Leclerc, puis reprenez l’envoi.',
+      'Reprendre l’envoi',
+    ],
+    [
+      'NETWORK',
+      'La connexion a été coupée pendant l’envoi. Ce qui est déjà au panier y reste. Vérifiez votre connexion, puis reprenez l’envoi.',
+      'Reprendre l’envoi',
+    ],
+    [
+      'UNSUPPORTED_PAGE',
+      'Repas ne peut pas travailler sur cette page de Leclerc. Ce qui est déjà au panier y reste. Ouvrez la page de votre magasin, puis reprenez l’envoi.',
+      'Reprendre l’envoi',
+    ],
+    [
+      'CONTRACT_CHANGED',
+      'Leclerc a changé son site, l’envoi automatique est arrêté. Ce qui est déjà au panier y reste. Cherchez vos produits à la main sur Leclerc.',
+      'Chercher à la main sur Leclerc',
+    ],
+    [
+      'INVALID_MESSAGE',
+      'L’application n’a pas compris l’envoi. Ce qui est déjà au panier y reste. Mettez l’application à jour, puis reprenez l’envoi.',
+      'Mettre à jour l’application',
+    ],
+  ] as const)(
+    'error %s : trois phrases, un seul bouton principal, le code seulement dans « Détails »',
+    async (code, sentences, primary) => {
+      const event = {
+        kind: 'result',
+        draft,
+        result: result({
+          outcome: 'error',
+          lines: [],
+          error: { code, message: 'Le site a changé (SEARCH_NO_STATE)' },
+        }),
+      } as DriveEvent
+      const { wrapper } = await open(event)
+      await saved(wrapper)
+
+      expect(wrapper.find('h1').text()).toBe('L’envoi s’est arrêté')
+      expect(wrapper.find('main [role="status"] p').text()).toBe(sentences)
+      const principal = wrapper
+        .find('main')
+        .findAll('a, button')
+        .filter((item) => item.classes().includes('bg-primary'))
+      expect(principal.map((item) => item.text().replace(/\s*\(.*\)$/, ''))).toEqual([primary])
+      expect(wrapper.find('details').text()).toContain('Code : ' + code)
+      expect(wrapper.find('details').text()).toContain('SEARCH_NO_STATE')
+      // Rien n’est au panier : pas de lien « Finaliser » ; reprendre reste possible sans être la première action
+      expect(wrapper.text()).not.toContain('Finaliser sur Leclerc')
+      expect(wrapper.find('a[href="/drive/envoi/l1"]').exists()).toBe(true)
+      expect(wrapper.find('a[href*="lignes"]').exists()).toBe(false)
+    },
+  )
 })
 
 describe('retour du drive : le résultat est recoupé avec le plan envoyé (DRV-614)', () => {
@@ -431,9 +504,12 @@ describe('retour du drive : le résultat est recoupé avec le plan envoyé (DRV-
     expect(body.choices.map((choice) => [choice.ingredientSlug, choice.action])).toEqual([
       ['poivre', 'ADD_PRODUCT'],
     ])
-    expect(wrapper.text()).toContain('3 articles inattendus n’ont pas été pris en compte')
-    expect(wrapper.text()).toContain('Détail (2)')
-    expect(wrapper.findAll('main ul > li').map((item) => item.find('h3').text())).toEqual([
+    // Dit sans jargon, et seulement dans « Détails »
+    expect(wrapper.find('details').text()).toContain(
+      '3 articles ne figuraient pas dans votre liste : Repas les a laissés de côté.',
+    )
+    expect(wrapper.text()).not.toContain('inattendu')
+    expect(wrapper.findAll('main ul > li').map((item) => item.find('p').text())).toEqual([
       'Farine',
       'Poivre',
     ])
@@ -442,13 +518,14 @@ describe('retour du drive : le résultat est recoupé avec le plan envoyé (DRV-
     expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
   })
 
-  it('dit « 1 article inattendu n’a pas été pris en compte » au singulier, et n’appelle pas le back quand plus rien ne reste', async () => {
+  it('dit « 1 article ne figurait pas dans votre liste » au singulier, et n’appelle pas le back quand plus rien ne reste', async () => {
     const { wrapper, fetchMock } = await open(sentOf([chosen('pirate')]))
     await saved(wrapper)
 
-    expect(wrapper.text()).toContain('1 article inattendu n’a pas été pris en compte')
+    expect(wrapper.find('details').text()).toContain(
+      '1 article ne figurait pas dans votre liste : Repas l’a laissé de côté.',
+    )
     expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
-    expect(wrapper.text()).not.toContain('Détail')
     expect(wrapper.findAll('main ul > li')).toHaveLength(0)
   })
 
@@ -456,8 +533,8 @@ describe('retour du drive : le résultat est recoupé avec le plan envoyé (DRV-
     const { wrapper } = await open({ kind: 'result', result: result(), draft: sentDraft })
     await saved(wrapper)
 
-    expect(wrapper.text()).not.toContain('inattendue')
-    expect(wrapper.text()).toContain('Détail (12)')
+    expect(wrapper.text()).not.toContain('ne figurait')
+    expect(wrapper.findAll('details li')).toHaveLength(12)
   })
 
   it('accepte un produit choisi pour une ligne connue que l’utilisateur a remplacée (envoyée « à choisir »)', async () => {
@@ -473,7 +550,7 @@ describe('retour du drive : le résultat est recoupé avec le plan envoyé (DRV-
     expect((await putBody(fetchMock)).choices.map((choice) => choice.action)).toEqual([
       'ADD_PRODUCT',
     ])
-    expect(wrapper.text()).not.toContain('inattendue')
+    expect(wrapper.text()).not.toContain('ne figurait')
   })
 
   it('refuse le même produit choisi pour la même ligne quand elle n’avait pas été remplacée', async () => {
@@ -481,19 +558,23 @@ describe('retour du drive : le résultat est recoupé avec le plan envoyé (DRV-
     await saved(wrapper)
 
     expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
-    expect(wrapper.text()).toContain('1 article inattendu n’a pas été pris en compte')
+    expect(wrapper.text()).toContain('1 article ne figurait pas dans votre liste')
   })
 
-  it('« Réessayer les échecs » ne propose pas une ligne ignorée', async () => {
+  it('ne compte pas, parmi ce qui reste à ajouter, une ligne que le plan n’explique pas', async () => {
     const lines: ResultLine[] = [
       { ingredientSlug: 'beurre', outcome: 'FAILED', error: 'NETWORK' },
       { ingredientSlug: 'pirate', outcome: 'FAILED', error: 'NETWORK' },
     ]
-    const { wrapper } = await open(sentOf(lines))
+    const { wrapper } = await open({
+      kind: 'result',
+      result: result({ lines, outcome: 'partial' }),
+      draft: sentDraft,
+    })
     await saved(wrapper)
 
-    expect(wrapper.find('a[href="/drive/envoi/l1?lignes=beurre"]').exists()).toBe(true)
-    expect(wrapper.find('a[href*="pirate"]').exists()).toBe(false)
+    expect(wrapper.find('main [role="status"] p').text()).toContain('il reste 1 article à ajouter')
+    expect(wrapper.text()).not.toContain('pirate')
   })
 
   describe('brouillon sans les lignes du plan (version plus ancienne) : le plan est relu du back', () => {
@@ -511,7 +592,9 @@ describe('retour du drive : le résultat est recoupé avec le plan envoyé (DRV-
       expect(body.choices.map((choice) => [choice.ingredientSlug, choice.action])).toEqual([
         ['farine', 'REFRESH_PRICE'],
       ])
-      expect(wrapper.text()).toContain('2 articles inattendus n’ont pas été pris en compte')
+      expect(wrapper.find('details').text()).toContain(
+        '2 articles ne figuraient pas dans votre liste : Repas les a laissés de côté.',
+      )
       expect(calls(fetchMock).filter((call) => call.includes('/plans/'))).toHaveLength(1)
     })
 
@@ -548,7 +631,7 @@ describe('retour du drive : ce qui n’est pas le résultat du dernier envoi', (
   it('sans événement : rien à afficher', async () => {
     const { wrapper, fetchMock } = await open(null)
 
-    expect(wrapper.text()).toContain('Aucun récapitulatif à afficher')
+    expect(wrapper.find('h1').text()).toBe('Aucun récapitulatif à afficher')
     expect(
       calls(fetchMock).filter((call) => call.startsWith('PUT') || call.includes('/plans/')),
     ).toEqual([])
@@ -561,7 +644,9 @@ describe('retour du drive : ce qui n’est pas le résultat du dernier envoi', (
       result: result({ runId: '0b6d1a3e-7c1f-4a55-9a8e-2f4d9c3b7e10' }),
     })
 
-    expect(wrapper.text()).toContain('Ce récapitulatif ne correspond pas à votre dernier envoi')
+    expect(wrapper.find('h1').text()).toBe(
+      'Ce récapitulatif ne correspond pas à votre dernier envoi',
+    )
     expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
     expect(localStorage.getItem(DRAFT_KEY)).not.toBeNull()
   })
@@ -569,10 +654,14 @@ describe('retour du drive : ce qui n’est pas le résultat du dernier envoi', (
   it('un refus de l’application : le brouillon de ce passage est effacé et on peut revenir à l’envoi', async () => {
     const { wrapper } = await open({ kind: 'refused', code: 'UNAVAILABLE', runId: RUN })
 
-    expect(wrapper.find('[role="alert"]').text()).toContain('Le drive n’a pas démarré')
-    expect(wrapper.text()).toContain('Code : UNAVAILABLE')
+    expect(wrapper.find('h1').text()).toBe('L’envoi n’a pas démarré')
+    expect(wrapper.find('[role="alert"]').text()).toContain('Rien n’a été mis au panier.')
+    // Le code n’est lu que dans « Détails », replié
+    expect(wrapper.find('details').text()).toContain('Code : UNAVAILABLE')
+    expect(wrapper.find('p.text-lg').text()).not.toContain('UNAVAILABLE')
     expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
     expect(wrapper.find('a[href="/drive/envoi/l1"]').text()).toBe('Revenir à l’envoi')
+    expect(wrapper.find('a[href="/drive/envoi/l1"]').classes()).toContain('bg-primary')
   })
 
   it('un refus d’un autre passage laisse le brouillon', async () => {
@@ -589,7 +678,14 @@ describe('retour du drive : ce qui n’est pas le résultat du dernier envoi', (
   it('une réponse mal formée est signalée sans rien enregistrer', async () => {
     const { wrapper, fetchMock } = await open({ kind: 'invalid', detail: 'lines[0]' })
 
-    expect(wrapper.find('[role="alert"]').text()).toContain('Réponse incomprise')
+    expect(wrapper.find('h1').text()).toBe('Le drive n’a pas répondu comme prévu')
+    expect(wrapper.find('[role="alert"]').text()).toContain(
+      'Rien n’a été perdu. Mettez l’application à jour, puis réessayez.',
+    )
+    expect(wrapper.find('a[href="/drive/aide#mise-a-jour"]').text()).toBe(
+      'Mettre à jour l’application',
+    )
+    expect(wrapper.find('details').text()).toContain('Détail : lines[0]')
     expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
   })
 

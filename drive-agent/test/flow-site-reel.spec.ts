@@ -65,7 +65,7 @@ describe('la cause de l’erreur dans le résultat (ticket A)', () => {
 
     expect(expectConform(sent[0]).error).toEqual({
       code: 'BLOCKED',
-      message: 'Leclerc a ralenti les requêtes',
+      message: 'Leclerc a ralenti les demandes',
     })
   })
 

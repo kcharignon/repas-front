@@ -308,6 +308,16 @@ export async function fakeApp(
   }, mode)
 }
 
+/** La phrase de synthèse de l'écran d'envoi pour le plan de `plan` : 8 connus, 3 à choisir, 1 « j'en ai toujours » (DRV-622). */
+export const SUMMARY_12 =
+  '12 articles : 8 sont déjà choisis, 3 sont à choisir sur Leclerc, 1 ne sera pas mis au panier.'
+
+/** Déplie la liste des articles de l'écran d'envoi : elle est repliée au-delà de 6 articles (DRV-622). */
+export const openArticles = (page: Page) => page.getByText('Voir les articles').click()
+
+/** Déplie « Détails » du récapitulatif : les articles, le code et le reste y sont repliés (DRV-622). */
+export const openDetails = (page: Page) => page.getByText('Détails', { exact: true }).click()
+
 export const scan = (page: Page) =>
   new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])

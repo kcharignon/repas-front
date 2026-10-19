@@ -236,7 +236,7 @@ describe('liste envoyée au drive (page de la liste)', () => {
 
     await vi.waitFor(() =>
       expect(useNotificationsStore().items.map((item) => item.text)).toEqual([
-        'Cette liste n’est plus envoyée au drive.',
+        'Cette liste n’est plus envoyée au drive. Rien n’a été changé. Ouvrez la liste pour voir où elle en est.',
       ]),
     )
     await vi.waitFor(() =>
@@ -395,10 +395,18 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     [
       422,
       'SHOPPING_LIST_EMPTY',
-      'La liste est vide : ajoutez des articles avant de l’envoyer au drive.',
+      'La liste est vide : il n’y a rien à envoyer au drive. Votre liste n’a pas changé. Ajoutez des articles, puis envoyez-la.',
     ],
-    [409, 'SHOPPING_LIST_NOT_SENDABLE', 'Seule une liste en cours peut être envoyée au drive.'],
-    [404, 'DRIVE_DISABLED', 'L’envoi au drive n’est pas disponible pour le moment.'],
+    [
+      409,
+      'SHOPPING_LIST_NOT_SENDABLE',
+      'Seule une liste en cours peut être envoyée au drive. Rien n’a été changé. Ouvrez une liste en cours.',
+    ],
+    [
+      404,
+      'DRIVE_DISABLED',
+      'L’envoi au drive n’est pas disponible pour le moment. Votre liste n’a pas changé. Réessayez plus tard.',
+    ],
     [
       412,
       'outdated',
@@ -448,7 +456,7 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
 
     await vi.waitFor(() =>
       expect(useNotificationsStore().items.map((item) => item.text)).toEqual([
-        'Cette liste vient d’être envoyée au drive : elle n’est plus modifiable.',
+        'Cette liste vient d’être envoyée au drive : elle n’est plus modifiable. Rien n’a été changé. Rouvrez-la pour la modifier.',
       ]),
     )
     // La ligne est revenue à son état, la liste est relue : lecture seule, avec ses nouvelles actions

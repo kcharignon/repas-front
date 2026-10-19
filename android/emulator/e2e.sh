@@ -225,7 +225,7 @@ screenshot e05-choix
 touch_target 'text="Choisir"' "Choisir (liste de produits)"
 touch_target 'text="Pas cette fois"' "Pas cette fois"
 if tap 'text="Choisir"'; then ok "premier produit proposé choisi (poivre moulu)"; else ko "aucun bouton « Choisir » à l'écran"; fi
-if wait_until 60 ui_has 'Panier rempli'; then ok "l'agent annonce « Panier rempli »"; else ko "l'agent n'a pas annoncé la fin"; fi
+if wait_until 60 ui_has 'Le panier est rempli'; then ok "l'agent annonce « Le panier est rempli »"; else ko "l'agent n'a pas annoncé la fin"; fi
 check "le panier du faux Leclerc : farine x3, sucre x1 et le poivre choisi x2" cart_is "$CART_FULL"
 polite_agent
 sleep 1
@@ -249,7 +249,7 @@ say "3. « Annuler » au récapitulatif : rien ne part vers le site"
 RUN_CANCEL=ca4ce100-0000-4000-8000-000000000003
 if open_pass "$RUN_CANCEL" plan-connu.json; then ok "le récapitulatif s'affiche"; else ko "le récapitulatif ne s'est pas affiché"; fi
 if tap 'text="Annuler"'; then ok "« Annuler » touché dans l'interface de l'agent"; else ko "le bouton « Annuler » est introuvable"; fi
-if wait_until 20 ui_has 'Envoi arrêté'; then ok "l'agent annonce « Envoi arrêté »"; else ko "l'agent n'a pas annoncé l'arrêt"; fi
+if wait_until 20 ui_has 'Vous avez arrêté'; then ok "l'agent annonce « Vous avez arrêté l'envoi »"; else ko "l'agent n'a pas annoncé l'arrêt"; fi
 screenshot e08-annule
 if tap 'text="Retourner dans Repas"' && wait_until 20 result_has "$RUN_CANCEL" aborted ''; then
   ok "Repas reçoit un résultat « aborted »"
@@ -318,7 +318,7 @@ if [ "$resumed" = "1" ]; then ok "le drive se rouvre et le plan est renvoyé à 
 tap 'text="Commencer"' || ko "le bouton « Commencer » est introuvable"
 wait_until 60 ui_has 'Il vous faut' || ko "la liste de choix ne s'est pas affichée après la reprise"
 tap 'text="Choisir"' || ko "aucun bouton « Choisir » à l'écran"
-if wait_until 60 ui_has 'Panier rempli'; then ok "le passage repris se termine (« Panier rempli »)"; else ko "le passage repris ne s'est pas terminé"; fi
+if wait_until 60 ui_has 'Le panier est rempli'; then ok "le passage repris se termine (« Le panier est rempli »)"; else ko "le passage repris ne s'est pas terminé"; fi
 check "le panier du faux Leclerc est exact, sans doublon (farine x3, sucre x1, poivre x2)" cart_is "$CART_FULL"
 polite_agent
 if tap 'text="Retourner dans Repas"' && wait_until 20 result_has "$RUN_RESUME" completed ''; then
@@ -340,7 +340,7 @@ start_plan "$RUN_BLOCK" plan-connu.json
 enter_store
 wait_until 70 agent_screen 'Prêt à remplir votre panier' || ko "le récapitulatif ne s'est pas affiché"
 tap 'text="Commencer"' || ko "le bouton « Commencer » est introuvable"
-if wait_until 60 ui_has 'Panier rempli en partie'; then ok "l'agent s'arrête et annonce « Panier rempli en partie »"; else ko "l'agent n'a pas annoncé l'arrêt"; fi
+if wait_until 60 ui_has 'Le panier est rempli en partie'; then ok "l'agent s'arrête et annonce « Le panier est rempli en partie »"; else ko "l'agent n'a pas annoncé l'arrêt"; fi
 sleep 1
 screenshot e11-blocage
 if [ "$(paced_count)" = "3" ]; then
@@ -368,9 +368,9 @@ start_plan "$RUN_CHANGED" plan-connu.json
 enter_store
 wait_until 70 agent_screen 'Prêt à remplir votre panier' || ko "le récapitulatif ne s'est pas affiché"
 tap 'text="Commencer"' || ko "le bouton « Commencer » est introuvable"
-if wait_until 60 ui_has 'Envoi interrompu'; then ok "l'agent s'interrompt : « Envoi interrompu »"; else ko "l'agent n'a pas détecté le changement"; fi
-check "l'agent dit que Leclerc a modifié son site" ui_has 'Leclerc a modifié son site'
-check "le conseil nomme l'application Repas (et non « Repas Drive »)" ui_has "application Repas, puis"
+if wait_until 60 ui_has 'automatique est arrêté'; then ok "l'agent s'arrête : « L'envoi s'est arrêté »"; else ko "l'agent n'a pas détecté le changement"; fi
+check "l'agent dit que Leclerc a changé son site" ui_has 'Leclerc a changé son site'
+check "le conseil est de chercher à la main sur Leclerc" ui_has 'à la main sur Leclerc'
 sleep 1
 screenshot e13-site-change
 if tap 'text="Retourner dans Repas"' && wait_until 20 result_has "$RUN_CHANGED" error ', "errorCode": "CONTRACT_CHANGED"'; then

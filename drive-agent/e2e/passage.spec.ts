@@ -25,7 +25,7 @@ test('remplit le panier à la cadence du chantier, avec des requêtes de la form
   await expect(page.getByRole('heading', { name: 'Prêt à remplir votre panier' })).toBeVisible()
   expect(fake.paced(), 'rien ne part avant « Commencer »').toEqual([])
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
   // Then : le panier du faux site a les quantités absolues du plan, une recherche puis une écriture par ligne
   expect(fake.cart()).toEqual({ 1000001: 3, 1000006: 1 })
@@ -67,7 +67,7 @@ test('prend le produit suivant quand le préféré est en rupture, et le dit à 
   // When
   await openWithFragment(page, fake, agentCode, plan)
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
   // Then : rien n'est écrit pour le produit en rupture ; le suivant est pris, au prix de la promotion
   expect(fake.cart()).toEqual({ 1000003: 2 })
@@ -104,7 +104,7 @@ test('met la quantité demandée au panier même quand il est déjà garni, sans
     planOf([known('farine', 'Farine', [product(1000001, 3)])]),
   )
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
   // Then : la quantité monte à celle du plan (3) et le sel est resté
   expect(fake.cart()).toEqual({ 1000001: 3, 1000009: 5 })
@@ -126,7 +126,7 @@ test('ne réduit jamais une quantité déjà au panier : 5 déjà pour un plan d
     planOf([known('farine', 'Farine', [product(1000001, 2)])]),
   )
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
   // Then : le panier n'a pas bougé, sans une seule écriture, et la fin dit ce qui a été conservé
   expect(fake.cart()).toEqual({ 1000001: 5, 1000009: 5 })
@@ -159,7 +159,7 @@ test('rejouer un envoi déjà fait n’écrit plus rien : le panier a déjà les
     ]),
   )
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
   // Then : une recherche par ligne, aucune écriture, aucune mention
   expect(fake.cart()).toEqual({ 1000001: 3, 1000006: 1 })
@@ -186,7 +186,7 @@ test('demande la quantité quand elle est à vérifier, et passe la ligne si l�
   await page.getByRole('button', { name: 'Valider' }).click()
   await expect(page.getByText('Combien de « Sucre')).toBeVisible()
   await page.getByRole('button', { name: 'Pas cette fois' }).click()
-  await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
   // Then
   expect(fake.cart()).toEqual({ 1000001: 4 })
@@ -218,7 +218,7 @@ test('met au panier le nombre calculé sur le contenu lu sur le site, pas celui 
   // When
   await openWithFragment(page, fake, agentCode, plan)
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
   // Then : 3 farines (le contenu en direct fait foi), 2 sucres (inchangé), sans question ni requête de plus
   expect(fake.cart()).toEqual({ 1000001: 3, 1000006: 2 })
@@ -255,7 +255,7 @@ test('garde le nombre du plan quand le contenu lu sur le site ne se compare pas,
   // When
   await openWithFragment(page, fake, agentCode, plan)
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByRole('heading', { name: 'Panier rempli' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
   // Then : comme avant, le plan fait foi, et rien n'est signalé
   expect(fake.cart()).toEqual({ 1000031: 5, 1000014: 2 })
@@ -276,7 +276,7 @@ test('annule au récapitulatif : rien ne part vers le site, Repas est prévenu',
     planOf([known('farine', 'Farine', [product(1000001, 3)])]),
   )
   await page.getByRole('button', { name: 'Annuler' }).click()
-  await expect(page.getByRole('heading', { name: 'Envoi arrêté' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Vous avez arrêté l’envoi' })).toBeVisible()
   await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
 
   // Then

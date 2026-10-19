@@ -109,7 +109,7 @@ describe('un défi de l’anti-robot pendant le passage (phase A)', () => {
     expect(site.calls).toEqual(['search 1000001', 'cart 1000001 3', 'search 1000003'])
     expect(expectConform(sent[0])).toMatchObject({
       outcome: 'partial',
-      error: { code: 'BLOCKED', message: 'Leclerc a ralenti les requêtes (CHALLENGE)' },
+      error: { code: 'BLOCKED', message: 'Leclerc a ralenti les demandes (CHALLENGE)' },
     })
     expect(
       sent[0]?.lines.map((line) => [line.outcome, 'error' in line ? line.error : null]),
@@ -135,7 +135,7 @@ describe('un défi de l’anti-robot pendant le passage (phase A)', () => {
     expect(screens.screens()).not.toContain('challenge')
     expect(expectConform(sent[0])).toMatchObject({
       outcome: 'partial',
-      error: { code: 'BLOCKED', message: 'Leclerc a ralenti les requêtes' },
+      error: { code: 'BLOCKED', message: 'Leclerc a ralenti les demandes' },
     })
   })
 

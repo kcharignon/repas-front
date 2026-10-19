@@ -184,7 +184,12 @@ test.describe('parcours complet, pont et API simulés', () => {
 
     // 3. L'écran d'envoi : le plan du back, tel quel
     await expect(page).toHaveURL(new RegExp(`/drive/envoi/${LIST}$`))
-    await expect(page.getByRole('heading', { level: 2, name: 'Votre liste (5)' })).toBeVisible()
+    await expect(
+      page.getByText(
+        '5 articles : 3 sont déjà choisis, 1 est à choisir sur Leclerc, 1 ne sera pas mis au panier.',
+      ),
+    ).toBeVisible()
+    await expect(page.getByRole('heading', { level: 2, name: 'Vos articles' })).toBeVisible()
     await expect(page.getByText('À acheter : 6 unité')).toBeVisible()
     expect((await scan(page)).violations).toEqual([])
 
@@ -208,7 +213,7 @@ test.describe('parcours complet, pont et API simulés', () => {
     // 5. L'application répond : l'écran du retour s'ouvre, les choix sont enregistrés en un seul appel
     await expect(page).toHaveURL(/\/drive\/retour$/)
     await expect(
-      page.getByRole('heading', { level: 2, name: 'Le panier est rempli' }),
+      page.getByRole('heading', { level: 1, name: 'Le panier est rempli' }),
     ).toBeVisible()
     await expect(
       page.getByText('Vos choix sont enregistrés pour les prochains envois.'),
@@ -248,9 +253,10 @@ test.describe('parcours complet, pont et API simulés', () => {
     await expect(counts).toContainText('Choisis sur Leclerc1')
     await expect(counts).toContainText('J’en ai toujours1')
     await expect(counts).toContainText('Indisponibles1')
-    await expect(counts).toContainText('Prix lus3')
-    const line = (name: string) =>
-      page.getByRole('listitem').filter({ has: page.getByRole('heading', { name }) })
+    // Les prix lus sont mémorisés (REFRESH_PRICE ci-dessus) mais ne s'affichent plus comme compteur
+    await expect(counts).not.toContainText('Prix lus')
+    await page.getByText('Détails', { exact: true }).click()
+    const line = (name: string) => page.locator('details li').filter({ hasText: name })
     await expect(line('Farine')).toContainText('1,99')
     await expect(line('Lait')).toContainText(
       'Aucun produit disponible : rien n’a été mis au panier.',

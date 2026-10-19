@@ -17,8 +17,11 @@ import type { RunDraft } from './bridge'
 import { buildPlanMessage, effectiveStatus } from './buildPlanMessage'
 import type { LineChange } from './buildPlanMessage'
 import DriveEstimate from './DriveEstimate.vue'
+import DriveFold from './DriveFold.vue'
+import DriveSendFailure from './DriveSendFailure.vue'
 import DriveSendLine from './DriveSendLine.vue'
 import { useDrivePlan } from './queries'
+import { sendSummary } from './sendSummary'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -35,7 +38,7 @@ const driveUsable = ref(true)
 
 const changes = ref<Record<string, LineChange | undefined>>({})
 const draft = ref<RunDraft | null>(driveBridge.loadDraft())
-const failure = ref<string | null>(null)
+const failure = ref<{ text: string; update: boolean } | null>(null)
 const reopening = ref(false)
 
 /** Un passage de cette liste attend son résultat (le brouillon survit à un rechargement de la page). */
@@ -43,7 +46,7 @@ const waiting = computed(() => draft.value !== null && draft.value.listId === li
 /** Un passage d'une autre liste est en cours : un seul à la fois. */
 const elsewhere = computed(() => draft.value !== null && draft.value.listId !== listId.value)
 
-// « Réessayer les échecs » (retour du drive) : seules les lignes nommées dans l'adresse sont reprises
+// Une adresse avec « lignes » ne reprend que les articles nommés. Le récapitulatif ne la propose plus (DRV-622 : « Reprendre l'envoi » reprend toute la liste) ; elle reste lue pour les anciens liens
 const only = computed(() => {
   const names = route.query.lignes
   return typeof names === 'string' && names !== '' ? new Set(names.split(',')) : null
@@ -55,17 +58,22 @@ const visible = computed(() => {
   return { ...data, lines: data.lines.filter((line) => only.value?.has(line.ingredientSlug)) }
 })
 const lines = computed(() => visible.value?.lines ?? [])
-const counts = computed(() => {
+// Une phrase de synthèse construite avec les comptes ; elle suit les choix de l'utilisateur (« Choisir un autre produit », « Pas cette fois »)
+const summary = computed(() => {
   const statuses = lines.value.map((line) => effectiveStatus(line, changes.value))
   const count = (status: string) => statuses.filter((candidate) => candidate === status).length
 
-  return {
+  return sendSummary(t, {
     known: count('KNOWN'),
     new: count('NEW'),
     haveAtHome: count('HAVE_AT_HOME'),
     skipped: count('SKIP'),
-  }
+  })
 })
+/** Au-delà de ce nombre d'articles la liste est repliée : la seule décision de l'écran est « Ouvrir le drive ». */
+const FOLD_ABOVE = 6
+// Hors de l'application la liste EST l'écran (un lien de recherche par article) : elle reste ouverte
+const folded = computed(() => inApp && lines.value.length > FOLD_ABOVE)
 
 const storeName = computed(() => {
   const store = plan.data.value?.store
@@ -132,19 +140,25 @@ const reopenCopy = computed(() =>
       },
 )
 
-function failureText(error: unknown): string {
-  if (!(error instanceof DriveBridgeError)) return t('driveSend.failure.invalidPlan')
+/** Ce qui s'est passé, ce qui est sauf, une action ; `update` : l'action est de mettre l'application à jour, et l'écran en donne le bouton. */
+function failureOf(error: unknown): { text: string; update: boolean } {
+  if (!(error instanceof DriveBridgeError))
+    return { text: t('driveSend.failure.invalidPlan'), update: false }
   switch (error.code) {
     case 'INVALID_PLAN':
-      return error.detail === 'lines'
-        ? t('driveSend.failure.tooManyLines', { max: LIMITS.lines })
-        : t('driveSend.failure.invalidPlan')
+      return {
+        text:
+          error.detail === 'lines'
+            ? t('driveSend.failure.tooManyLines', { max: LIMITS.lines })
+            : t('driveSend.failure.invalidPlan'),
+        update: false,
+      }
     case 'TOO_LARGE':
-      return t('driveSend.failure.tooLarge')
+      return { text: t('driveSend.failure.tooLarge'), update: false }
     case 'SEND_FAILED':
-      return t('driveSend.failure.sendFailed')
+      return { text: t('driveSend.failure.sendFailed'), update: false }
     default:
-      return t('driveSend.failure.appRefused')
+      return { text: t('driveSend.failure.appRefused'), update: true }
   }
 }
 
@@ -159,7 +173,7 @@ function openDrive() {
   } catch (error) {
     if (error instanceof DriveBridgeError && error.code === 'RUN_IN_PROGRESS')
       draft.value = driveBridge.loadDraft()
-    else failure.value = failureText(error)
+    else failure.value = failureOf(error)
   }
 }
 
@@ -255,6 +269,7 @@ function confirmReopenList() {
         </div>
         <p class="text-sm text-muted">{{ t('driveSend.waiting.restartHelp') }}</p>
         <p v-if="!online" class="font-semibold">{{ t('driveSend.offline') }}</p>
+        <DriveSendFailure v-if="failure" :failure="failure" />
       </section>
 
       <template v-else>
@@ -279,38 +294,11 @@ function confirmReopenList() {
             {{ t('driveSend.driveUnusable.aid') }}
           </UiLinkButton>
         </section>
-        <p v-else class="max-w-prose text-muted">{{ t('driveSend.intro') }}</p>
-
-        <dl :aria-label="t('driveSend.counts.label')" class="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <div
-            v-for="key in ['known', 'new', 'haveAtHome', 'skipped'] as const"
-            :key="key"
-            class="flex flex-col-reverse rounded-2xl bg-soft px-4 py-3"
-          >
-            <dt class="text-sm text-muted">{{ t(`driveSend.counts.${key}`) }}</dt>
-            <dd class="font-display text-2xl font-bold">{{ counts[key] }}</dd>
-          </div>
-        </dl>
-
-        <DriveEstimate :list-id="listId" />
-
-        <section class="flex flex-col gap-3">
-          <h2 class="font-display text-xl font-bold">
-            {{ t('driveSend.lines', { count: lines.length }) }}
-          </h2>
-          <p v-if="lines.length === 0" class="text-muted">{{ t('driveSend.emptyPlan') }}</p>
-          <ul class="flex flex-col gap-3">
-            <DriveSendLine
-              v-for="line in lines"
-              :key="line.ingredientSlug"
-              :line="line"
-              :change="changes[line.ingredientSlug]"
-              :assisted="!inApp"
-              :search-url="searchUrl(line.searchQuery)"
-              @change="changes[line.ingredientSlug] = $event"
-            />
-          </ul>
-        </section>
+        <!-- Une phrase de synthèse, une phrase d'explication, l'unique décision : le bouton, visible sans défiler -->
+        <template v-else>
+          <p v-if="summary !== ''" class="max-w-prose text-xl font-semibold">{{ summary }}</p>
+          <p class="max-w-prose text-muted">{{ t('driveSend.intro') }}</p>
+        </template>
 
         <section v-if="inApp" class="flex flex-col items-start gap-3">
           <UiButton
@@ -321,16 +309,42 @@ function confirmReopenList() {
             {{ t('driveSend.open') }}
           </UiButton>
           <p v-if="!online" class="font-semibold">{{ t('driveSend.offline') }}</p>
+          <DriveSendFailure v-if="failure" :failure="failure" />
+        </section>
+
+        <DriveEstimate :list-id="listId" />
+
+        <section class="flex flex-col gap-3">
+          <p v-if="lines.length === 0" class="text-muted">{{ t('driveSend.emptyPlan') }}</p>
+          <DriveFold v-else-if="folded" :label="t('driveSend.showArticles')">
+            <ul class="flex flex-col gap-3">
+              <DriveSendLine
+                v-for="line in lines"
+                :key="line.ingredientSlug"
+                :line="line"
+                :change="changes[line.ingredientSlug]"
+                :assisted="!inApp"
+                :search-url="searchUrl(line.searchQuery)"
+                @change="changes[line.ingredientSlug] = $event"
+              />
+            </ul>
+          </DriveFold>
+          <template v-else>
+            <h2 class="font-display text-xl font-bold">{{ t('driveSend.articles') }}</h2>
+            <ul class="flex flex-col gap-3">
+              <DriveSendLine
+                v-for="line in lines"
+                :key="line.ingredientSlug"
+                :line="line"
+                :change="changes[line.ingredientSlug]"
+                :assisted="!inApp"
+                :search-url="searchUrl(line.searchQuery)"
+                @change="changes[line.ingredientSlug] = $event"
+              />
+            </ul>
+          </template>
         </section>
       </template>
-
-      <p
-        v-if="failure"
-        role="alert"
-        class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
-      >
-        {{ failure }}
-      </p>
     </template>
 
     <template v-else-if="planError !== null">

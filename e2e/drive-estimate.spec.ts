@@ -85,18 +85,21 @@ for (const colorScheme of ['light', 'dark'] as const) {
   })
 }
 
-test('sur l’écran d’envoi : le même bloc, avant la liste des lignes', async ({ page }) => {
+test('sur l’écran d’envoi : le même bloc, après le bouton et avant les articles', async ({
+  page,
+}) => {
   await fakeBack(page)
   await fakeApp(page)
   await page.goto('/drive/envoi/l1')
 
-  await expect(page.getByRole('heading', { level: 2, name: 'Votre liste (12)' })).toBeVisible()
+  await expect(page.getByText('Voir les articles')).toBeVisible()
   const block = page.getByRole('region', { name: 'Estimation du coût' })
   await expect(block).toContainText('3 articles sur 5 estimés')
   const blockBox = await block.boundingBox()
-  const linesBox = await page
-    .getByRole('heading', { level: 2, name: 'Votre liste (12)' })
-    .boundingBox()
+  const buttonBox = await page.getByRole('button', { name: 'Ouvrir le drive' }).boundingBox()
+  const linesBox = await page.getByText('Voir les articles').boundingBox()
+  // Le bouton d'abord, puis l'estimation, puis les articles
+  expect(buttonBox!.y).toBeLessThan(blockBox!.y)
   expect(blockBox!.y).toBeLessThan(linesBox!.y)
   expect((await scan(page)).violations).toEqual([])
 })

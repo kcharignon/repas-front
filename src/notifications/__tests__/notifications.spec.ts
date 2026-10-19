@@ -72,7 +72,7 @@ describe('messageForFailure', () => {
     'DRIVE_RATE_LIMITED (Retry-After %s) : passager, au moins une minute, jamais moins que le délai annoncé',
     (seconds, wait) => {
       expect(messageForFailure(new ApiError(429, 'DRIVE_RATE_LIMITED', seconds))).toBe(
-        `Trop de demandes en peu de temps. Attendez ${wait}, puis réessayez.`,
+        `Trop de demandes en peu de temps. Rien n’est perdu. Attendez ${wait}, puis réessayez.`,
       )
     },
   )
@@ -114,13 +114,21 @@ describe('messageForFailure', () => {
   })
 
   it.each([
-    [404, 'DRIVE_DISABLED', 'L’envoi au drive n’est pas disponible pour le moment.'],
+    [
+      404,
+      'DRIVE_DISABLED',
+      'L’envoi au drive n’est pas disponible pour le moment. Votre liste n’a pas changé. Réessayez plus tard.',
+    ],
     [
       409,
       'SHOPPING_LIST_SENT',
-      'Cette liste vient d’être envoyée au drive : elle n’est plus modifiable.',
+      'Cette liste vient d’être envoyée au drive : elle n’est plus modifiable. Rien n’a été changé. Rouvrez-la pour la modifier.',
     ],
-    [409, 'SHOPPING_LIST_NOT_SENT', 'Cette liste n’est plus envoyée au drive.'],
+    [
+      409,
+      'SHOPPING_LIST_NOT_SENT',
+      'Cette liste n’est plus envoyée au drive. Rien n’a été changé. Ouvrez la liste pour voir où elle en est.',
+    ],
     [
       422,
       'UNIT_MEASURE_INCOMPLETE',
@@ -130,13 +138,17 @@ describe('messageForFailure', () => {
     [
       422,
       'DRIVE_LIMIT_REACHED',
-      'Repas se souvient déjà de trop de produits, ou il y a eu trop d’écritures aujourd’hui : oubliez des produits dans « Mes produits », ou réessayez demain.',
+      'Repas se souvient déjà de trop de produits, ou il y a eu trop d’écritures aujourd’hui. Vos choix déjà enregistrés sont gardés. Oubliez des produits dans « Mes produits », ou réessayez demain.',
     ],
-    [409, 'SHOPPING_LIST_NOT_SENDABLE', 'Seule une liste en cours peut être envoyée au drive.'],
+    [
+      409,
+      'SHOPPING_LIST_NOT_SENDABLE',
+      'Seule une liste en cours peut être envoyée au drive. Rien n’a été changé. Ouvrez une liste en cours.',
+    ],
     [
       422,
       'SHOPPING_LIST_EMPTY',
-      'La liste est vide : ajoutez des articles avant de l’envoyer au drive.',
+      'La liste est vide : il n’y a rien à envoyer au drive. Votre liste n’a pas changé. Ajoutez des articles, puis envoyez-la.',
     ],
   ])('traduit le code du drive %i %s en français simple', (status, code, expected) => {
     expect(messageForFailure(new ApiError(status, code))).toBe(expected)

@@ -385,20 +385,33 @@ export const S = {
     onceHint: 'Repas ne s’en souviendra pas.',
     back: 'Revenir à la liste',
   },
+  /**
+   * L'écran de fin (DRV-622) : les mêmes titres que le récapitulatif de Repas, et la même règle : on n'écrit que ce qui existe (jamais un compteur à
+   * zéro, ni « Échecs » ni « Prix lus »). Le titre dit le résultat ; le texte dit, en trois phrases au plus, ce qui s'est passé, ce qui est sauf et
+   * l'action. La seule action de l'écran est de retourner dans Repas.
+   */
   end: {
     title: {
-      completed: 'Panier rempli',
-      partial: 'Panier rempli en partie',
-      aborted: 'Envoi arrêté',
-      error: 'Envoi interrompu',
+      completed: 'Le panier est rempli',
+      partial: 'Le panier est rempli en partie',
+      aborted: 'Vous avez arrêté l’envoi',
+      error: 'L’envoi s’est arrêté',
     } satisfies Record<Outcome, string>,
-    completedHint: 'Vérifiez votre panier sur Leclerc avant de commander.',
-    added: (n: number) => `Ajoutés : ${n}`,
-    chosen: (n: number) => `Choisis : ${n}`,
+    completed:
+      'Vos produits sont dans votre panier Leclerc. Retournez dans Repas pour le finaliser.',
+    /** Ce qui est sauf : rien de ce qui est déjà au panier n'est retiré. */
+    safe: 'Ce qui est déjà au panier y reste.',
+    /** Ce qui est sauf et ce qu'il reste à ajouter, quand l'envoi s'est arrêté avant la fin. */
+    safeLeft: (n: number) =>
+      `Ce qui est déjà au panier y reste : il reste ${count(n, 'article', 'articles')} à ajouter.`,
+    stopped: 'L’envoi s’est arrêté avant la fin.',
+    notFinished: 'L’envoi n’a pas pu aller au bout.',
+    resume: 'Retournez dans Repas pour reprendre l’envoi.',
+    added: (n: number) => `Ajoutés au panier : ${n}`,
+    chosen: (n: number) => `Choisis sur Leclerc : ${n}`,
     haveAtHome: (n: number) => `J’en ai toujours : ${n}`,
     skipped: (n: number) => `Pas cette fois : ${n}`,
     unavailable: (n: number) => `Indisponibles : ${n}`,
-    failed: (n: number) => `Échecs : ${n}`,
     /** Le nombre de produits a été calculé sur le contenu lu sur le site, pas sur celui dont Repas se souvenait (DRV-613). */
     changes: {
       title: 'Contenu différent de celui dont Repas se souvenait',
@@ -457,42 +470,66 @@ export const S = {
 export const CAUSE_TEXTS: Readonly<Record<string, { title: string; text: string }>> = {
   PAGE_MOBILE: {
     title: 'Ce n’est pas la version ordinateur du site',
-    text: 'Leclerc affiche son site mobile, et Repas ne sait travailler que sur la version ordinateur. Dans l’application Repas, ouvrez « Ouvrir le drive Leclerc » depuis le menu, puis relancez l’envoi depuis Repas.',
+    text: 'Leclerc affiche son site mobile, et Repas ne travaille que sur la version ordinateur. Ce qui est déjà au panier y reste. Ouvrez « Ouvrir le drive Leclerc » dans le menu de l’application, puis reprenez l’envoi.',
   },
 }
 
-/** Le titre et le conseil de chaque erreur du protocole. */
-export const ERROR_TEXTS: Record<ErrorCode, { title: string; text: string }> = {
+/**
+ * Chaque erreur du protocole, en trois phrases (principes-produit.md § 4) : ce qui s'est passé (`happened`), ce qui est sauf (la même phrase
+ * partout : rien de ce qui est déjà au panier n'est retiré) et une action (`action`). Le titre part aussi dans le message du résultat.
+ */
+const ERROR_PARTS: Record<ErrorCode, { title: string; happened: string; action: string }> = {
   NOT_LOGGED_IN: {
     title: 'Vous n’êtes pas connecté',
-    text: 'Connectez-vous à Leclerc, puis relancez l’envoi depuis Repas.',
+    happened: 'Vous n’êtes pas connecté à Leclerc.',
+    action: 'Connectez-vous à Leclerc, puis reprenez l’envoi depuis Repas.',
   },
   STORE_MISMATCH: {
     title: 'Ce n’est pas le bon magasin',
-    text: 'Repas a préparé votre liste pour un autre magasin. Ouvrez le magasin choisi dans Repas, puis relancez l’envoi.',
+    happened: 'Repas a préparé votre liste pour un autre magasin.',
+    action: 'Ouvrez votre magasin sur Leclerc, puis reprenez l’envoi depuis Repas.',
   },
   BLOCKED: {
-    title: 'Leclerc a ralenti les requêtes',
-    text: 'Attendez quelques minutes, puis rechargez la page et relancez l’envoi.',
+    title: 'Leclerc a ralenti les demandes',
+    happened: 'Leclerc a ralenti les demandes.',
+    action: 'Attendez quelques minutes, rechargez la page, puis reprenez l’envoi depuis Repas.',
   },
   CONTRACT_CHANGED: {
     title: 'Le site a changé',
-    text: 'Leclerc a modifié son site. Mettez à jour l’application Repas, puis réessayez.',
+    happened: 'Leclerc a changé son site, l’envoi automatique est arrêté.',
+    action: 'Cherchez vos produits à la main sur Leclerc.',
   },
   NETWORK: {
     title: 'Le site ne répond pas',
-    text: 'Vérifiez votre connexion, puis relancez l’envoi depuis Repas.',
+    happened: 'Le site de Leclerc ne répond pas.',
+    action: 'Vérifiez votre connexion, puis reprenez l’envoi depuis Repas.',
   },
   CANCELLED: {
     title: 'Envoi annulé',
-    text: 'Vous avez annulé l’envoi. Votre panier Leclerc n’a pas été touché.',
+    happened: 'Vous avez annulé l’envoi.',
+    action: 'Reprenez l’envoi depuis Repas quand vous voulez.',
   },
   INVALID_MESSAGE: {
     title: 'Liste illisible',
-    text: 'Repas a envoyé une liste que je ne comprends pas. Relancez l’envoi depuis Repas.',
+    happened: 'L’application ne comprend pas la liste envoyée par Repas.',
+    action: 'Mettez à jour l’application, puis reprenez l’envoi depuis Repas.',
   },
   UNSUPPORTED_PAGE: {
     title: 'Page non prise en charge',
-    text: 'Ouvrez la page d’un magasin sur le drive, puis relancez l’envoi depuis Repas.',
+    happened: 'Repas ne peut pas travailler sur cette page de Leclerc.',
+    action: 'Ouvrez la page de votre magasin, puis reprenez l’envoi depuis Repas.',
   },
+}
+
+/** Le titre et le texte de chaque erreur du protocole : ce qui s'est passé, ce qui est sauf, une action. */
+export const ERROR_TEXTS: Record<ErrorCode, { title: string; text: string }> = Object.fromEntries(
+  Object.entries(ERROR_PARTS).map(([code, { title, happened, action }]) => [
+    code,
+    { title, text: `${happened} ${S.end.safe} ${action}` },
+  ]),
+) as Record<ErrorCode, { title: string; text: string }>
+
+/** Ce qui s'est passé et l'action d'une erreur, pour l'écran de fin qui y ajoute ce qui reste à faire. */
+export function errorParts(code: ErrorCode): { happened: string; action: string } {
+  return ERROR_PARTS[code]
 }
