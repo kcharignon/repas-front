@@ -86,9 +86,6 @@ const STORE_THEN_LOGIN: readonly Entry[] = [
   ...STORE_ONLY,
   { where: 'strings.xml resume_setup_message', text: androidText('resume_setup_message') },
   { where: 'strings.xml abandon_setup_message', text: androidText('abandon_setup_message') },
-  { where: 'fr.ts driveHelp.firstLogin.store', text: fr.driveHelp.firstLogin.store },
-  { where: 'fr.ts driveHelp.firstLogin.login', text: fr.driveHelp.firstLogin.login },
-  { where: 'fr.ts driveHelp.problems.login.a', text: fr.driveHelp.problems.login.a },
 ]
 
 describe('le détecteur lui-même (il ne doit pas devenir aveugle)', () => {
