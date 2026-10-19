@@ -216,19 +216,49 @@ describe('écran d’accueil', () => {
 })
 
 describe('récapitulatif et confirmation', () => {
-  it('annonce les nombres, la liste repliable et le rappel avant « Commencer »', () => {
+  it('dit les comptes en une phrase, la même que l’écran de l’envoi de Repas, la liste repliable et le rappel avant « Commencer »', () => {
     const handle = open()
     void handle.show('summary', SUMMARY)
 
     const text = shadow().textContent ?? ''
-    expect(text).toContain('2 produits connus à mettre au panier')
-    expect(text).toContain('1 nouveau produit à choisir')
-    expect(text).toContain('1 « j’en ai toujours »')
-    expect(text).toContain('0 « pas cette fois »')
+    // « j'en ai toujours » et « pas cette fois » se disent ensemble : ni l'un ni l'autre n'ira au panier
+    expect(shadow().querySelector('.lead')?.textContent).toBe(
+      '4 articles : 2 sont déjà choisis, 1 est à choisir sur Leclerc, 1 ne sera pas mis au panier.',
+    )
+    expect(text).toContain('Rien ne part tant que vous n’avez pas touché « Commencer ».')
     expect(text).toContain('Farine : connu (Farine T55 1 kg)')
     expect(text).toContain('Poivre : à choisir')
     expect(text).toContain('Repas ne vide pas votre panier Leclerc.')
     expect(shadow().querySelector('details')).not.toBeNull()
+  })
+
+  it('n’écrit aucun compteur, aucun zéro, ni « produits connus » ni « nouveaux produits » (DRV-626)', () => {
+    const handle = open()
+    void handle.show('summary', {
+      known: 2,
+      new: 4,
+      haveAtHome: 0,
+      skipped: 0,
+      lines: [{ name: 'Farine', status: 'KNOWN' }],
+    })
+
+    const text = (shadow().textContent ?? '').replace(/Farine : connu/, '')
+    expect(shadow().querySelector('.lead')?.textContent).toBe(
+      '6 articles : 2 sont déjà choisis, 4 sont à choisir sur Leclerc.',
+    )
+    expect(shadow().querySelector('.counts')).toBeNull()
+    expect(text).not.toMatch(/(^|\D)0(\D|$)/)
+    expect(text).not.toMatch(
+      /produits? connus?|nouveaux? produits?|« j’en ai toujours »|« pas cette fois »/,
+    )
+  })
+
+  it('sans aucun article, pas de phrase (jamais « 0 article »)', () => {
+    const handle = open()
+    void handle.show('summary', { known: 0, new: 0, haveAtHome: 0, skipped: 0, lines: [] })
+
+    expect(shadow().querySelector('.lead')).toBeNull()
+    expect(shadow().textContent).not.toContain('0 article')
   })
 
   it.each([
@@ -352,6 +382,98 @@ describe('quantité à vérifier', () => {
     expect(shadow().textContent).toContain('Combien de « Farine T55 1 kg » pour Farine ?')
   })
 
+  describe('le nombre se tape par-dessus le « 1 » prérempli (DRV-626)', () => {
+    /** Les champs sur lesquels `select()` est appelé (jsdom ne sait pas lire la sélection d'un champ numérique). */
+    const watchSelect = () => {
+      const selected: HTMLInputElement[] = []
+      vi.spyOn(HTMLInputElement.prototype, 'select').mockImplementation(function (
+        this: HTMLInputElement,
+      ) {
+        selected.push(this)
+      })
+      return selected
+    }
+
+    it('sélectionne tout le champ à l’ouverture (le focus de l’écran)', () => {
+      const selected = watchSelect()
+      const handle = open()
+      void handle.show('quantity', { ...props, packs: null })
+
+      expect(selected).toEqual([input()])
+    })
+
+    it('le resélectionne quand on le touche tant que rien n’a été tapé (le toucher pose le curseur après le « 1 »)', async () => {
+      vi.useFakeTimers()
+      try {
+        const handle = open()
+        void handle.show('quantity', { ...props, packs: null })
+        const selected = watchSelect()
+
+        input().dispatchEvent(new MouseEvent('click', { bubbles: true }))
+        await vi.advanceTimersByTimeAsync(1)
+
+        expect(selected).toEqual([input()])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('la première frappe re-sélectionne tout juste avant d’insérer (le curseur a pu se placer après le « 1 » depuis)', () => {
+      const handle = open()
+      void handle.show('quantity', { ...props, packs: null })
+      const selected = watchSelect()
+
+      input().dispatchEvent(new KeyboardEvent('keydown', { key: '4', bubbles: true }))
+      input().dispatchEvent(
+        new InputEvent('beforeinput', { data: '4', inputType: 'insertText', bubbles: true }),
+      )
+
+      expect(selected).toEqual([input(), input()])
+    })
+
+    it('ne touche plus à la sélection dès que l’utilisateur a tapé (jamais « 14 » effacé sous ses doigts)', async () => {
+      vi.useFakeTimers()
+      try {
+        const handle = open()
+        void handle.show('quantity', { ...props, packs: null })
+        input().value = '4'
+        input().dispatchEvent(new Event('input', { bubbles: true }))
+        const selected = watchSelect()
+
+        input().dispatchEvent(new MouseEvent('click', { bubbles: true }))
+        input().dispatchEvent(new FocusEvent('focus'))
+        input().dispatchEvent(new KeyboardEvent('keydown', { key: '2', bubbles: true }))
+        input().dispatchEvent(
+          new InputEvent('beforeinput', { data: '2', inputType: 'insertText', bubbles: true }),
+        )
+        await vi.advanceTimersByTimeAsync(1)
+
+        expect(selected).toEqual([])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
+
+  it('dit la quantité demandée par la liste quand l’étape la connaît, comme l’écran de choix', () => {
+    const handle = open()
+    void handle.show('quantity', { ...props, need: '200 g' })
+
+    expect(shadow().textContent).toContain('Il vous faut : 200 g.')
+    // Le texte vient avant le champ : on le lit avant de taper
+    const paragraphs = [...shadow().querySelectorAll('p')].map((p) => p.textContent)
+    expect(paragraphs.indexOf('Il vous faut : 200 g.')).toBeGreaterThan(0)
+  })
+
+  it('n’écrit rien quand la quantité demandée est inconnue', () => {
+    const handle = open()
+    void handle.show('quantity', { ...props, need: null })
+    expect(shadow().textContent).not.toContain('Il vous faut')
+
+    void handle.show('quantity', props)
+    expect(shadow().textContent).not.toContain('Il vous faut')
+  })
+
   it('propose 1 quand le plan ne donne pas de quantité', () => {
     const handle = open()
     void handle.show('quantity', { ...props, packs: null })
@@ -466,7 +588,7 @@ describe('choix de produit (hôte)', () => {
     expect(visibleLabels()).toEqual([
       'Pas cette fois',
       'J’en ai toujours',
-      'Passer les 4 suivants',
+      'Passer ces 4 articles',
       'Chercher',
       'Choisir',
       'Ne plus proposer',
@@ -475,7 +597,7 @@ describe('choix de produit (hôte)', () => {
     const classOf = (label: string) =>
       buttons().find((button) => button.textContent === label)?.className
     expect(classOf('Choisir')).toBe('primary')
-    for (const label of ['Pas cette fois', 'J’en ai toujours', 'Passer les 4 suivants']) {
+    for (const label of ['Pas cette fois', 'J’en ai toujours', 'Passer ces 4 articles']) {
       expect(`${label} : ${classOf(label)}`).toBe(`${label} : secondary`)
     }
     expect(classOf('Chercher')).toBe('secondary')
@@ -531,20 +653,20 @@ describe('choix de produit (hôte)', () => {
     expect(second).toHaveBeenCalledOnce()
   })
 
-  describe('« Passer les n suivants » (DRV-624)', () => {
+  describe('« Passer ces n articles » (DRV-624, DRV-626)', () => {
     const leaves = (position: number, total: number) => {
       const handle = open()
       void handle.show('chooser', { ingredient: 'Poivre', position, total, mount: () => undefined })
-      return visibleLabels().filter((label) => label?.startsWith('Passer les'))
+      return visibleLabels().filter((label) => label?.startsWith('Passer ces'))
     }
 
     it.each([
-      [1, 4, ['Passer les 4 suivants']],
-      [2, 4, ['Passer les 3 suivants']],
-      [3, 4, ['Passer les 2 suivants']],
+      [1, 4, ['Passer ces 4 articles']],
+      [2, 4, ['Passer ces 3 articles']],
+      [3, 4, ['Passer ces 2 articles']],
       [4, 4, []],
       [1, 1, []],
-      [1, 2, ['Passer les 2 suivants']],
+      [1, 2, ['Passer ces 2 articles']],
     ])(
       'au rang %i sur %i, le bouton compte les articles encore à choisir, celui-ci compris, et disparaît quand il n’en reste qu’un',
       (position, total, expected) => {
@@ -556,7 +678,7 @@ describe('choix de produit (hôte)', () => {
       const handle = open()
       const answer = handle.show('chooser', { ...base, mount: () => undefined })
 
-      press('Passer les 4 suivants')
+      press('Passer ces 4 articles')
 
       await expect(answer).resolves.toEqual({ kind: 'rest' })
     })
@@ -570,27 +692,61 @@ describe('choix de produit (hôte)', () => {
         .then(settled)
 
       // When
-      press('Passer les 4 suivants')
+      press('Passer ces 4 articles')
       await Promise.resolve()
 
       // Then : la question prend la place des réponses, elle est annoncée et prend le focus ; rien n'est répondu
       expect(settled).not.toHaveBeenCalled()
-      expect(visibleLabels()).toEqual([
-        'Passer les 4 suivants',
-        'Revenir au choix',
-        'Annuler l’envoi',
-      ])
+      // Un écran à deux boutons : ni la liste de produits, ni la recherche, ni « Annuler l'envoi » (DRV-626)
+      expect(visibleLabels()).toEqual(['Passer ces 4 articles', 'Revenir au choix'])
       const question = shadow().querySelector('.sure')
       expect(question?.textContent).toBe('Ces 4 articles ne seront pas mis au panier.')
       expect(question?.getAttribute('role')).toBe('alert')
       expect(shadow().activeElement).toBe(question)
-      expect(shadow().querySelector('.confirm .primary')?.textContent).toBe('Passer les 4 suivants')
+      expect(shadow().querySelector('.confirm .primary')?.textContent).toBe('Passer ces 4 articles')
     })
 
-    it('« Passer les n suivants » de la confirmation répond `rest`', async () => {
+    it('la confirmation cache la liste de produits et la recherche : deux boutons, une seule décision (DRV-626)', () => {
+      const handle = open()
+      void handle.show('chooser', { ...base, confirmRest: true, mount: mountList })
+      expect(visibleLabels()).toContain('Choisir')
+      expect(visibleLabels()).toContain('Chercher')
+
+      press('Passer ces 4 articles')
+
+      // Aucun « Choisir » vert sous la question, aucune recherche : tout ce qui est dans la liste est caché
+      const hidden = (node: Element | null) => node?.closest('[hidden]') !== null
+      expect(shadow().querySelector('.zone')).not.toBeNull()
+      expect(hidden(shadow().querySelector('.zone'))).toBe(true)
+      expect(hidden(shadow().querySelector('.picker input'))).toBe(true)
+      expect(visibleLabels()).toEqual(['Passer ces 4 articles', 'Revenir au choix'])
+      // La ligne de l'article reste : on voit de quel article il s'agit
+      expect(shadow().querySelector('.head')?.textContent).toBe('Poivre (2 sur 5)')
+      expect(hidden(shadow().querySelector('.head'))).toBe(false)
+    })
+
+    it('« Revenir au choix » remet la liste de produits, la recherche et les réponses', () => {
+      const handle = open()
+      void handle.show('chooser', { ...base, confirmRest: true, mount: mountList })
+      press('Passer ces 4 articles')
+
+      press('Revenir au choix')
+
+      expect(visibleLabels()).toEqual([
+        'Pas cette fois',
+        'J’en ai toujours',
+        'Passer ces 4 articles',
+        'Chercher',
+        'Choisir',
+        'Ne plus proposer',
+        'Annuler l’envoi',
+      ])
+    })
+
+    it('« Passer ces n articles » de la confirmation répond `rest`', async () => {
       const handle = open()
       const answer = handle.show('chooser', { ...base, confirmRest: true, mount: () => undefined })
-      press('Passer les 4 suivants')
+      press('Passer ces 4 articles')
 
       shadow().querySelector<HTMLButtonElement>('.confirm .primary')?.click()
 
@@ -603,7 +759,7 @@ describe('choix de produit (hôte)', () => {
       void handle
         .show('chooser', { ...base, confirmRest: true, mount: () => undefined })
         .then(settled)
-      press('Passer les 4 suivants')
+      press('Passer ces 4 articles')
 
       press('Revenir au choix')
       await Promise.resolve()
@@ -612,9 +768,9 @@ describe('choix de produit (hôte)', () => {
       expect(visibleLabels().slice(0, 3)).toEqual([
         'Pas cette fois',
         'J’en ai toujours',
-        'Passer les 4 suivants',
+        'Passer ces 4 articles',
       ])
-      expect(shadow().activeElement?.textContent).toBe('Passer les 4 suivants')
+      expect(shadow().activeElement?.textContent).toBe('Passer ces 4 articles')
       expect(shadow().querySelector('.confirm')?.hasAttribute('hidden')).toBe(true)
     })
 
@@ -630,6 +786,17 @@ describe('choix de produit (hôte)', () => {
       expect(shadow().querySelector('.confirm')).toBeNull()
       expect(visibleLabels()).toEqual(['Pas cette fois', 'J’en ai toujours', 'Annuler l’envoi'])
     })
+  })
+
+  it('n’affiche pas « (1 sur 1) » quand il n’y a qu’un article à choisir (DRV-626)', () => {
+    const handle = open()
+    void handle.show('chooser', { ...base, position: 1, total: 1, mount: () => undefined })
+
+    expect(shadow().querySelector('.head')?.textContent).toBe('Poivre')
+    expect(shadow().textContent).not.toContain('sur 1')
+    // L'article reste annoncé et reçoit le focus
+    expect(shadow().activeElement).toBe(shadow().querySelector('.head'))
+    expect(shadow().querySelector('.head')?.getAttribute('role')).toBe('status')
   })
 
   describe('focus et annonce', () => {
@@ -657,14 +824,19 @@ describe('choix de produit (hôte)', () => {
     it('quand la question de confirmation est affichée, Tab après le dernier bouton revient au premier bouton visible (jamais à un bouton caché)', () => {
       const handle = open()
       void handle.show('chooser', { ...base, confirmRest: true, mount: () => undefined })
-      press('Passer les 4 suivants')
-      buttons().at(-1)?.focus()
+      press('Passer ces 4 articles')
+      // Le dernier bouton que l'on voit est « Revenir au choix » : la liste et « Annuler l'envoi » sont cachés
+      buttons()
+        .filter((button) => !button.closest('[hidden]'))
+        .at(-1)
+        ?.focus()
+      expect(shadow().activeElement?.textContent).toBe('Revenir au choix')
 
       const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
       shadow().querySelector('.overlay')?.dispatchEvent(event)
 
       expect(event.defaultPrevented).toBe(true)
-      expect(shadow().activeElement?.textContent).toBe('Passer les 4 suivants')
+      expect(shadow().activeElement?.textContent).toBe('Passer ces 4 articles')
       expect(shadow().activeElement?.closest('[hidden]')).toBeNull()
     })
 
@@ -1204,6 +1376,49 @@ describe('fin', () => {
       'Indisponibles : 1',
     ])
   })
+
+  it('arrêté avant que rien ne soit mis au panier ni choisi : « Le panier n’est pas rempli », pas « en partie » (DRV-626)', () => {
+    const handle = open()
+    void handle.show('end', {
+      ...END,
+      outcome: 'partial',
+      error: 'BLOCKED',
+      added: 0,
+      chosen: 0,
+      haveAtHome: 0,
+      failed: 4,
+      unavailable: 2,
+    })
+
+    expect(shadow().querySelector('h1')?.textContent).toBe('Le panier n’est pas rempli')
+    // Le texte reste en trois phrases, et ne contredit plus le titre
+    expect(shadow().querySelector('h1 + p')?.textContent).toBe(
+      'Leclerc a ralenti les demandes. Ce qui est déjà au panier y reste : il reste 6 articles à ajouter. Attendez quelques minutes, rechargez la page, puis reprenez l’envoi depuis Repas.',
+    )
+    expect(shadow().textContent).not.toContain('en partie')
+  })
+
+  it.each([
+    ['un article ajouté', { added: 1, chosen: 0 }],
+    ['un article choisi sur Leclerc', { added: 0, chosen: 1 }],
+  ])('%s : « Le panier est rempli en partie »', (_name, counts) => {
+    const handle = open()
+    void handle.show('end', { ...END, outcome: 'partial', failed: 1, ...counts })
+
+    expect(shadow().querySelector('h1')?.textContent).toBe('Le panier est rempli en partie')
+  })
+
+  it.each(['aborted', 'error'] as const)(
+    'un envoi « %s » garde son propre titre, même sans rien au panier',
+    (outcome) => {
+      const handle = open()
+      void handle.show('end', { ...END, outcome, added: 0, chosen: 0, failed: 1 })
+
+      expect(shadow().querySelector('h1')?.textContent).toBe(
+        outcome === 'aborted' ? 'Vous avez arrêté l’envoi' : 'L’envoi s’est arrêté',
+      )
+    },
+  )
 
   it.each([
     [

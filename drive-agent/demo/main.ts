@@ -181,18 +181,21 @@ const SCREENS: Record<string, () => unknown> = {
       ingredient: 'Farine',
       productLabel: 'Farine de blé T55 de test 1 kg',
       packs: 2,
+      need: '800 g',
     }),
   chooser: () => ui.show('chooser', CHOOSER),
-  // Un article n'a encore aucun produit retenu : « Passer les n suivants » demande une confirmation d'une ligne (DRV-624).
+  // Un article n'a encore aucun produit retenu : « Passer ces n articles » demande une confirmation d'une ligne, sans la liste de produits (DRV-624, DRV-626).
   'chooser-confirm': () => {
     const shown = ui.show('chooser', { ...CHOOSER, confirmRest: true })
     // Le premier bouton de ce nom est celui des réponses ; le second, caché, confirme.
     const buttons = [...(ui.host?.shadowRoot?.querySelectorAll('button') ?? [])]
-    buttons.find((button) => button.textContent === 'Passer les 4 suivants')?.click()
+    buttons.find((button) => button.textContent === 'Passer ces 4 articles')?.click()
     return shown
   },
-  // Le dernier article à choisir : plus de « Passer les suivants ».
+  // Le dernier article à choisir : plus de « Passer ces n articles ».
   'chooser-last': () => ui.show('chooser', { ...CHOOSER, position: 5 }),
+  // Un seul article à choisir : pas de compteur « (1 sur 1) » (DRV-626).
+  'chooser-single': () => ui.show('chooser', { ...CHOOSER, position: 1, total: 1 }),
   'chooser-gone': () => ui.show('chooser', CHOOSER_GONE),
   diagnostic: () =>
     ui.show('diagnostic', {
@@ -284,6 +287,18 @@ const SCREENS: Record<string, () => unknown> = {
       skipped: 0,
       unavailable: 1,
       failed: 3,
+    }),
+  // Arrêté avant que rien ne soit mis au panier ni choisi : « Le panier n'est pas rempli » (DRV-626).
+  'end-none': () =>
+    ui.show('end', {
+      outcome: 'partial',
+      error: 'BLOCKED',
+      added: 0,
+      chosen: 0,
+      haveAtHome: 0,
+      skipped: 0,
+      unavailable: 0,
+      failed: 6,
     }),
   // L'envoi s'est arrêté sur une erreur : trois phrases (ce qui s'est passé, ce qui est sauf, l'action), jamais un code (DRV-622).
   'end-error': () =>

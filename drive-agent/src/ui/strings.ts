@@ -57,6 +57,55 @@ export function listText(names: readonly string[]): string {
   return names.length === 0 ? 'aucun' : names.join(', ')
 }
 
+/** Ce que la liste demande pour un article : « 800 g » (la quantité et son unité), `null` quand le plan ne le dit pas. */
+export function formatNeeded(
+  needed: { quantity: number; unitSymbol: string } | null | undefined,
+): string | null {
+  return needed ? `${formatNumber(needed.quantity)} ${needed.unitSymbol}` : null
+}
+
+/** Les articles de la liste rangés par ce qui leur arrive : ce qu'il faut pour écrire la phrase de synthèse. */
+export interface SummaryCounts {
+  known: number
+  new: number
+  haveAtHome: number
+  skipped: number
+}
+
+/**
+ * La phrase de synthèse de l'écran « Prêt à remplir votre panier » : « 6 articles : 2 sont déjà choisis, 4 sont à choisir sur Leclerc. » C'est
+ * MOT POUR MOT celle de l'écran de l'envoi de Repas (`sendSummary`, `src/features/drive/sendSummary.ts`, textes `driveSend.summary` de `fr.ts`) :
+ * `src/features/drive/__tests__/summarySentence.spec.ts` le prouve sur toutes les combinaisons. On n'écrit que ce qui existe (jamais « 0 »), et
+ * « j'en ai toujours » et « pas cette fois » se disent ensemble : ni l'un ni l'autre n'ira au panier. Vide quand il n'y a aucun article.
+ */
+export function summarySentence(counts: SummaryCounts): string {
+  const other = counts.haveAtHome + counts.skipped
+  const total = counts.known + counts.new + other
+  if (total === 0) return ''
+
+  const part = (n: number, all: string, some: string): string[] =>
+    n === 0 ? [] : [n === total ? all : `${n} ${some}`]
+  const parts = [
+    ...part(
+      counts.known,
+      total === 1 ? 'il est déjà choisi' : 'tous sont déjà choisis',
+      counts.known === 1 ? 'est déjà choisi' : 'sont déjà choisis',
+    ),
+    ...part(
+      counts.new,
+      total === 1 ? 'il est à choisir sur Leclerc' : 'tous sont à choisir sur Leclerc',
+      counts.new === 1 ? 'est à choisir sur Leclerc' : 'sont à choisir sur Leclerc',
+    ),
+    ...part(
+      other,
+      total === 1 ? 'il ne sera pas mis au panier' : 'aucun ne sera mis au panier',
+      other === 1 ? 'ne sera pas mis au panier' : 'ne seront pas mis au panier',
+    ),
+  ]
+
+  return `${count(total, 'article', 'articles')} : ${parts.join(', ')}.`
+}
+
 export const S = {
   dialog: 'Repas : envoi de votre liste au drive',
   welcome: {
@@ -289,12 +338,9 @@ export const S = {
   },
   summary: {
     title: 'Prêt à remplir votre panier',
-    intro:
-      'Voici ce que Repas va faire sur le drive. Rien ne part tant que vous n’avez pas touché « Commencer ».',
-    known: (n: number) => `${count(n, 'produit connu', 'produits connus')} à mettre au panier`,
-    new: (n: number) => `${count(n, 'nouveau produit', 'nouveaux produits')} à choisir`,
-    haveAtHome: (n: number) => `${n} « j’en ai toujours »`,
-    skipped: (n: number) => `${n} « pas cette fois »`,
+    /** La phrase de l'écran de l'envoi de Repas, mot pour mot : voir `summarySentence`. L'écran n'écrit jamais un compteur à zéro. */
+    sentence: summarySentence,
+    intro: 'Rien ne part tant que vous n’avez pas touché « Commencer ».',
     list: 'Voir la liste',
     status: {
       KNOWN: 'connu',
@@ -338,9 +384,12 @@ export const S = {
     counter: (position: number, total: number) => `${position} sur ${total}`,
     skip: 'Pas cette fois',
     haveAtHome: 'J’en ai toujours',
-    /** « Pas cette fois » pour cet article et tous ceux qui restent à choisir (DRV-624) : `n` les compte tous, celui-ci compris. */
-    rest: (n: number) => `Passer les ${n} suivants`,
-    /** La confirmation d'une ligne, quand un des articles passés n'a encore aucun produit retenu. */
+    /**
+     * « Pas cette fois » pour cet article et tous ceux qui restent à choisir (DRV-624) : `n` les compte tous, celui-ci compris, et le bouton le dit
+     * (« Passer ces 4 articles » à « Poivre (1 sur 4) » : le poivre est passé aussi, DRV-626). Le bouton de la confirmation porte le même texte.
+     */
+    rest: (n: number) => `Passer ces ${n} articles`,
+    /** La confirmation d'une ligne, quand un des articles passés n'a encore aucun produit retenu : la même chose que le bouton, au futur. */
     restSure: (n: number) => `Ces ${n} articles ne seront pas mis au panier.`,
     restBack: 'Revenir au choix',
     cancel: 'Annuler l’envoi',
@@ -400,6 +449,8 @@ export const S = {
       aborted: 'Vous avez arrêté l’envoi',
       error: 'L’envoi s’est arrêté',
     } satisfies Record<Outcome, string>,
+    /** Un envoi arrêté avant que rien ne soit mis au panier ni choisi : « en partie » serait faux (DRV-626). Le même mot que le récapitulatif de Repas. */
+    notFilled: 'Le panier n’est pas rempli',
     completed:
       'Vos produits sont dans votre panier Leclerc. Retournez dans Repas pour le finaliser.',
     /** Ce qui est sauf : rien de ce qui est déjà au panier n'est retiré. */

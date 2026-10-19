@@ -118,6 +118,37 @@ test('couverture faible : l’avertissement est en tête du bloc', async ({ page
   expect((await scan(page)).violations).toEqual([])
 })
 
+test('aucun prix connu : une seule phrase, ni compteur, ni avertissement, ni détail (DRV-626)', async ({
+  page,
+}) => {
+  await withList(page)
+  await page.route('**/api/v1/drive/estimates/l1', (route) =>
+    route.fulfill({
+      json: {
+        ...estimate,
+        estimatedTotalCents: 0,
+        estimatedLines: 0,
+        unestimatedLines: 6,
+        coverage: 0,
+        oldestPriceAt: null,
+        newestPriceAt: null,
+        lines: estimate.lines.filter((line) => line.status !== 'ESTIMATED'),
+      },
+    }),
+  )
+  await page.goto('/liste')
+
+  const block = page.getByRole('region', { name: 'Estimation du coût' })
+  await expect(block).toContainText(
+    'Pas encore de prix : Repas les retient à chaque envoi au drive.',
+  )
+  await expect(block.getByRole('paragraph')).toHaveCount(1)
+  await expect(block.getByTestId('low-coverage')).toHaveCount(0)
+  await expect(block.getByText('Voir le détail')).toHaveCount(0)
+  await expect(block).not.toContainText(/estimés|ne sont pas dans le total|Estimation peu fiable/)
+  expect((await scan(page)).violations).toEqual([])
+})
+
 test('drive coupé : pas de bloc sur la liste', async ({ page }) => {
   await withList(page)
   await page.route('**/api/v1/drive/settings', (route) =>

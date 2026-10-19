@@ -25,9 +25,8 @@ for (const kind of ['forbidden', 'too-many-requests'] satisfies FaultKind[]) {
     // When
     await openWithFragment(page, fake, agentCode, THREE_LINES)
     await page.getByRole('button', { name: 'Commencer' }).click()
-    await expect(
-      page.getByRole('heading', { name: 'Le panier est rempli en partie' }),
-    ).toBeVisible()
+    // Rien n'est mis au panier : « Le panier n'est pas rempli », pas « en partie » (DRV-626)
+    await expect(page.getByRole('heading', { name: 'Le panier n’est pas rempli' })).toBeVisible()
 
     // Then : la requête bloquée est retentée UNE fois (après la pause), puis plus rien ne part
     expect(fake.paced().map((call) => call.fault)).toEqual([undefined, kind, kind])

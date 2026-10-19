@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
 import { appContext, calls, json, me, rateLimited, stubApi } from '@/__tests__/helpers'
+import fr from '@/i18n/fr'
 import { useSessionStore } from '@/session/session'
 import DriveEstimate from '../DriveEstimate.vue'
 import { disclaimer, estimate } from './estimateFixtures'
@@ -134,11 +135,41 @@ describe('bloc « Estimation du coût »', () => {
         ),
     })
 
+    // Une seule phrase (DRV-626) : ni total, ni compteur, ni avertissement, ni détail, et rien d'autre que le titre autour
     expect(wrapper.find('dl').exists()).toBe(false)
-    expect(wrapper.text()).toContain('Aucun prix connu pour le moment')
-    expect(wrapper.text()).toContain('0 articles sur 12 estimés')
+    expect(wrapper.find('[data-testid="no-price"]').text()).toBe(
+      'Pas encore de prix : Repas les retient à chaque envoi au drive.',
+    )
+    expect(wrapper.findAll('section > p')).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('0 articles')
+    expect(wrapper.text()).not.toContain('ne sont pas dans le total')
     expect(wrapper.text()).not.toContain('D’après les prix vus')
+    expect(wrapper.text()).not.toContain('Aucun prix connu')
+    expect(wrapper.text()).not.toContain(disclaimer)
+    expect(wrapper.find('[data-testid="low-coverage"]').exists()).toBe(false)
+    expect(wrapper.find('details').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Voir le détail')
+  })
+
+  it('la phrase sans prix tient en 15 mots au plus', () => {
+    expect(
+      fr.driveEstimate.noPrice.split(/\s+/).filter((word) => /[\p{L}\d]/u.test(word)).length,
+    ).toBeLessThanOrEqual(15)
+  })
+
+  it('dès qu’un seul prix existe, le bloc complet revient (total, compteur, détail, avertissement)', async () => {
+    const { wrapper } = await open({
+      'GET /api/v1/drive/estimates/l1': () =>
+        json(estimate({ estimatedLines: 1, unestimatedLines: 11, coverage: 0.0833 })),
+    })
+
+    expect(wrapper.find('[data-testid="no-price"]').exists()).toBe(false)
+    expect(wrapper.find('dd').exists()).toBe(true)
+    expect(wrapper.text()).toContain('1 article sur 12 estimé')
+    expect(wrapper.text()).toContain('11 articles ne sont pas dans le total.')
     expect(wrapper.find('[data-testid="low-coverage"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain(disclaimer)
+    expect(wrapper.find('details').exists()).toBe(true)
   })
 
   it('rien à acheter : le dit, sans total', async () => {

@@ -129,6 +129,10 @@ describe('écran d’envoi au drive, dans l’application', () => {
     expect(beurre.find('ol > li').text().replace(/\s+/g, ' ')).toBe(
       '1. Beurre doux 250 g · quantité à vérifier',
     )
+    // Lu par les lecteurs d'écran avant la liste : le mot de Repas (« produit habituel »), jamais « préférence » (DRV-626)
+    expect(farine.find('p.sr-only').text()).toBe('Produits retenus :')
+    expect(beurre.find('p.sr-only').text()).toBe('Produit habituel :')
+    expect(wrapper.text()).not.toMatch(/préférence/i)
 
     const poivre = wrapper.findAll('main > section ul > li')[8]!
     expect(poivre.text()).toContain('Nouveau : vous choisirez le produit sur Leclerc.')

@@ -199,6 +199,51 @@ test('demande la quantité quand elle est à vérifier, et passe la ligne si l�
   })
 })
 
+test('la quantité se tape par-dessus le « 1 » prérempli (jamais « 14 »), et l’écran dit ce qu’il vous faut (DRV-626)', async ({
+  page,
+  fake,
+  agentCode,
+}) => {
+  // Given : un produit connu dont le nombre est à vérifier, pour 200 g
+  const needed = { quantity: 200, unitSymbol: 'g', dimension: 'WEIGHT', baseFactor: 1 } as const
+  const plan = planOf([known('farine', 'Farine', [product(1000001, null)], { needed })])
+  await openWithFragment(page, fake, agentCode, plan)
+  await page.getByRole('button', { name: 'Commencer' }).click()
+  await expect(page.getByRole('heading', { name: 'Vérifiez la quantité' })).toBeVisible()
+  const input = page.getByLabel('Nombre de produits (de 1 à 99)')
+
+  // Then : la quantité demandée est dite, le champ « 1 » est sélectionné en entier : taper 4 donne « 4 »
+  await expect(page.getByText('Il vous faut : 200 g.')).toBeVisible()
+  await expect(input).toBeFocused()
+  await page.keyboard.type('4')
+  await expect(input).toHaveValue('4')
+
+  // And : on peut aussi passer la ligne
+  await page.getByRole('button', { name: 'Pas cette fois' }).click()
+  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+  expect(fake.cart()).toEqual({})
+})
+
+test('toucher le champ de la quantité avant de taper garde « 1 » sélectionné (DRV-626)', async ({
+  page,
+  fake,
+  agentCode,
+}) => {
+  const plan = planOf([known('farine', 'Farine', [product(1000001, null)])])
+  await openWithFragment(page, fake, agentCode, plan)
+  await page.getByRole('button', { name: 'Commencer' }).click()
+  const input = page.getByLabel('Nombre de produits (de 1 à 99)')
+  await expect(input).toHaveValue('1')
+
+  await input.click()
+  await page.keyboard.type('6')
+
+  await expect(input).toHaveValue('6')
+  await page.getByRole('button', { name: 'Valider' }).click()
+  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+  expect(fake.cart()).toEqual({ 1000001: 6 })
+})
+
 /** Une quantité demandée en poids, dans l'unité de la liste (« 3 kg »), comme le plan du back la porte. */
 const weight = (quantity: number, unitSymbol = 'kg', baseFactor = 1000) =>
   ({ quantity, unitSymbol, dimension: 'WEIGHT', baseFactor }) as const

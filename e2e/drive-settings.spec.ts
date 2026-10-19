@@ -49,6 +49,39 @@ test('sans magasin : enregistrer son adresse, lui donner un nom, puis gérer ses
   await expect(page.getByRole('heading', { level: 1, name: 'Mes produits' })).toBeVisible()
 })
 
+test.describe('à 360 × 640', () => {
+  test.use({ viewport: { width: 360, height: 640 } })
+
+  for (const [name, store] of [
+    ['sans magasin', null],
+    ['avec un magasin', undefined],
+  ] as const) {
+    test(`${name} : la note de vie privée tient en une phrase et « Votre magasin » est visible sans défiler (DRV-626)`, async ({
+      page,
+    }) => {
+      await fakeDriveBack(page, store === null ? { store: null } : {})
+      await page.goto('/drive/reglages')
+
+      await expect(page.getByRole('heading', { level: 2, name: 'Votre vie privée' })).toBeVisible()
+      await expect(
+        page.getByText('Repas ne voit jamais votre mot de passe ni votre panier Leclerc.'),
+      ).toBeVisible()
+      await expect(page.getByRole('link', { name: 'Lisez la note complète' })).toBeVisible()
+      // La note complète n'est plus sur cet écran : elle est à un lien
+      await expect(page.getByText('Attention : Leclerc peut suspendre un compte')).toHaveCount(0)
+
+      // « Votre magasin » est entièrement au-dessus de la barre du bas, sans défiler
+      const heading = page.getByRole('heading', { level: 2, name: 'Votre magasin' })
+      await expect(heading).toBeInViewport({ ratio: 1 })
+      const box = await heading.boundingBox()
+      const bar = await page.getByRole('navigation').last().boundingBox()
+      expect(box!.y + box!.height).toBeLessThanOrEqual(bar!.y)
+      expect(await page.evaluate(() => window.scrollY)).toBe(0)
+      expect((await scan(page)).violations).toEqual([])
+    })
+  }
+})
+
 test('envoyé ici faute de magasin, « Choisissez votre magasin » disparaît une fois le magasin enregistré', async ({
   page,
 }) => {

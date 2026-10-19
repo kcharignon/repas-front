@@ -55,7 +55,7 @@ const packs = (product: DrivePlanLine['products'][number]): string => {
     </p>
     <p v-else-if="status === 'NEW'" class="font-semibold">{{ t('driveSend.statusNew') }}</p>
     <template v-else>
-      <p class="sr-only">{{ t('driveSend.products') }}</p>
+      <p class="sr-only">{{ t('driveSend.products', {}, line.products.length) }}</p>
       <ol class="flex flex-col gap-1">
         <li v-for="product in line.products" :key="product.retailerProductId" class="break-words">
           <span :class="product.rank === 1 ? 'font-semibold' : 'text-muted'">

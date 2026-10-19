@@ -75,8 +75,9 @@ const confirmInDialog = async (label: string) => {
   await flushPromises()
 }
 
-const saved = (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
-  vi.waitFor(() => expect(wrapper.text()).toContain('Vos choix sont enregistrés'))
+// L'enregistrement est fini quand le store le dit : la phrase « Vos choix sont enregistrés » ne s'écrit que s'il y a un choix à enregistrer (DRV-626)
+const saved = (_wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
+  vi.waitFor(() => expect(useDriveReturnStore().status).toBe('saved'))
 
 beforeEach(() => localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)))
 
@@ -362,11 +363,57 @@ describe('retour du drive : chaque issue du passage', () => {
     expect(wrapper.text()).not.toContain('Réessayer les échecs')
   })
 
+  it('partial sans rien au panier ni choisi : « Le panier n’est pas rempli », pas « en partie » (DRV-626)', async () => {
+    const event = {
+      kind: 'result',
+      draft,
+      result: result({
+        outcome: 'partial',
+        lines: [
+          { ingredientSlug: 'farine', outcome: 'FAILED', error: 'BLOCKED' },
+          { ingredientSlug: 'beurre', outcome: 'FAILED', error: 'BLOCKED' },
+          { ingredientSlug: 'lait', outcome: 'UNAVAILABLE' },
+        ],
+        error: { code: 'BLOCKED', message: 'Trop de demandes' },
+      }),
+    } as DriveEvent
+    const { wrapper } = await open(event)
+    await saved(wrapper)
+
+    expect(wrapper.find('h1').text()).toBe('Le panier n’est pas rempli')
+    // Le texte reste en trois phrases : ce qui s'est passé, ce qui est sauf, l'action
+    expect(wrapper.find('main [role="status"] p').text()).toBe(
+      'Leclerc a ralenti les demandes. Ce qui est déjà au panier y reste : il reste 3 articles à ajouter. Attendez quelques minutes, puis reprenez l’envoi.',
+    )
+    // Aucun compteur à zéro : seul ce qui existe
+    expect(wrapper.findAll('dl > div').map((cell) => cell.text())).toEqual(['Indisponibles1'])
+    expect(wrapper.find('a[href="/drive/envoi/l1"]').classes()).toContain('bg-primary')
+  })
+
+  it('un produit choisi sur Leclerc suffit à dire « en partie » : ce qui est choisi est dans le panier', async () => {
+    const choisi: ResultLine = {
+      ingredientSlug: 'poivre',
+      outcome: 'CHOSEN',
+      quantity: 1,
+      placement: 'PRIMARY',
+      product: { id: '555111', label: 'Poivre noir moulu 50 g' },
+    }
+    const { wrapper } = await open(
+      outcomeOf(
+        [choisi, { ingredientSlug: 'beurre', outcome: 'FAILED', error: 'NETWORK' }],
+        'partial',
+      ),
+    )
+    await saved(wrapper)
+
+    expect(wrapper.find('h1').text()).toBe('Le panier est rempli en partie')
+  })
+
   it('ne propose de reprendre qu’une fois les choix enregistrés', async () => {
     const { wrapper } = await open(outcomeOf(blocked, 'partial'), {
       'PUT /api/v1/drive/choices': () => new Promise<Response>(() => undefined),
     })
-    await vi.waitFor(() => expect(wrapper.text()).toContain('Enregistrement de vos choix…'))
+    await vi.waitFor(() => expect(useDriveReturnStore().status).toBe('saving'))
 
     expect(wrapper.find('a[href^="/drive/envoi/"]').exists()).toBe(false)
   })
@@ -627,6 +674,89 @@ describe('retour du drive : le résultat est recoupé avec le plan envoyé (DRV-
   })
 })
 
+describe('retour du drive : « Vos choix sont enregistrés » ne se dit que s’il y a un choix enregistré (DRV-626)', () => {
+  const saidSaved = 'Vos choix sont enregistrés pour les prochains envois.'
+  const chosen: ResultLine = {
+    ingredientSlug: 'poivre',
+    outcome: 'CHOSEN',
+    quantity: 1,
+    placement: 'PRIMARY',
+    product: { id: '555111', label: 'Poivre noir moulu 50 g' },
+  }
+  const priced: ResultLine = {
+    ingredientSlug: 'farine',
+    outcome: 'ADDED',
+    productId: '123456',
+    quantity: 1,
+    usedRank: 1,
+    price: { cents: 189 },
+  }
+
+  it('un produit choisi : la phrase est dite', async () => {
+    const { wrapper, fetchMock } = await open(outcomeOf([chosen]))
+    await saved(wrapper)
+
+    expect(wrapper.text()).toContain(saidSaved)
+    expect(calls(fetchMock)).toContain('PUT /api/v1/drive/choices')
+  })
+
+  it('un « j’en ai toujours » ou un produit à ne plus proposer est un choix aussi', async () => {
+    const { wrapper } = await open(outcomeOf([{ ingredientSlug: 'sel', outcome: 'HAVE_AT_HOME' }]))
+    await saved(wrapper)
+
+    expect(wrapper.text()).toContain(saidSaved)
+  })
+
+  it('un envoi arrêté sans rien choisi (erreur du site, du réseau, de l’application) : la phrase est tue', async () => {
+    const event = {
+      kind: 'result',
+      draft,
+      result: result({
+        outcome: 'error',
+        lines: [],
+        error: { code: 'NOT_LOGGED_IN', message: 'Non connecté' },
+      }),
+    } as DriveEvent
+    const { wrapper } = await open(event)
+    await saved(wrapper)
+
+    expect(wrapper.text()).not.toContain('Vos choix')
+    expect(wrapper.text()).not.toContain('Enregistrement de vos choix')
+  })
+
+  it('tout était déjà choisi : seuls les prix sont relus, aucun choix n’est enregistré, la phrase est tue', async () => {
+    const { wrapper, fetchMock } = await open(outcomeOf([priced]))
+    await saved(wrapper)
+
+    // Le prix lu est bien enregistré (il sert à l'estimation) ; ce n'est pas un choix de l'utilisateur
+    expect(calls(fetchMock)).toContain('PUT /api/v1/drive/choices')
+    expect(wrapper.text()).not.toContain('Vos choix')
+  })
+
+  it('tout est passé ou indisponible : rien à enregistrer, la phrase est tue', async () => {
+    const { wrapper, fetchMock } = await open(
+      outcomeOf([
+        { ingredientSlug: 'farine', outcome: 'SKIPPED' },
+        { ingredientSlug: 'beurre', outcome: 'UNAVAILABLE' },
+      ]),
+    )
+    await saved(wrapper)
+
+    expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
+    expect(wrapper.text()).not.toContain('Vos choix')
+  })
+
+  it('un échec d’enregistrement reste dit, avec « Réessayer l’enregistrement »', async () => {
+    const { wrapper } = await open(outcomeOf([chosen]), {
+      'PUT /api/v1/drive/choices': failure(500, 'Erreur'),
+    })
+    await vi.waitFor(() => expect(wrapper.text()).toContain('n’ont pas pu être enregistrés'))
+
+    expect(wrapper.text()).toContain('Réessayer l’enregistrement')
+    expect(wrapper.text()).not.toContain(saidSaved)
+  })
+})
+
 describe('retour du drive : ce qui n’est pas le résultat du dernier envoi', () => {
   it('sans événement : rien à afficher', async () => {
     const { wrapper, fetchMock } = await open(null)
@@ -635,7 +765,11 @@ describe('retour du drive : ce qui n’est pas le résultat du dernier envoi', (
     expect(
       calls(fetchMock).filter((call) => call.startsWith('PUT') || call.includes('/plans/')),
     ).toEqual([])
-    expect(wrapper.find('a[href="/listes"]').exists()).toBe(true)
+    // Pas une impasse : un seul bouton principal, « Ouvrir mes listes » (DRV-626)
+    const toLists = wrapper.find('main a.bg-primary')
+    expect(toLists.text()).toBe('Ouvrir mes listes')
+    expect(toLists.attributes('href')).toBe('/listes')
+    expect(wrapper.findAll('main a.bg-primary')).toHaveLength(1)
   })
 
   it('un résultat d’un autre envoi est ignoré : rien n’est enregistré, le brouillon reste', async () => {

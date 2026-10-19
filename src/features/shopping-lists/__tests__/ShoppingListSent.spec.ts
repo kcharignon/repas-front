@@ -121,6 +121,23 @@ describe('liste envoyée au drive (page de la liste)', () => {
     )
   })
 
+  it('n’affiche pas la progression des cases cochées : « 0 sur 6 articles dans le panier » contredirait « Le panier est rempli » (DRV-626)', async () => {
+    const { wrapper } = await openSent()
+
+    expect(wrapper.text()).not.toMatch(/articles dans le panier/)
+    expect(wrapper.find('[role="progressbar"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toMatch(/\d+ %/)
+  })
+
+  it('l’affiche toujours sur une liste en cours (la liste se coche en magasin)', async () => {
+    const { wrapper } = await openSent({
+      'GET /api/v1/shopping-lists/l1': () => json(detail('ACTIVE')),
+    })
+
+    expect(wrapper.text()).toMatch(/\d+ sur \d+ articles dans le panier/)
+    expect(wrapper.find('[role="progressbar"]').exists()).toBe(true)
+  })
+
   it('ne propose que reprendre l’envoi, terminer, rouvrir et supprimer', async () => {
     const { wrapper } = await openSent()
 

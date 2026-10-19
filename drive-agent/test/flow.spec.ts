@@ -322,7 +322,8 @@ describe('la quantité à vérifier', () => {
 
     // Then
     expect(screens.propsOf('quantity')).toEqual([
-      { ingredient: 'Farine', productLabel: item.label, packs: item.packs ?? null },
+      // Le plan de ce test ne dit pas ce que la liste demande : pas de « Il vous faut » (DRV-626)
+      { ingredient: 'Farine', productLabel: item.label, packs: item.packs ?? null, need: null },
     ])
     expect(screens.screens()).toEqual(['summary', 'progress', 'quantity', 'progress', 'end'])
     expect(writes).toEqual([{ id: '1000001', quantity: 7 }])
@@ -526,7 +527,8 @@ describe('le contenu lu en direct fait foi (DRV-613)', () => {
 
     // Then : l'utilisateur tranche, rien n'est signalé
     expect(screens.propsOf('quantity')).toEqual([
-      { ingredient: 'Farine', productLabel: 'Produit de test 1000001', packs: null },
+      // La liste demande 1 kg : l'écran le dit (DRV-626)
+      { ingredient: 'Farine', productLabel: 'Produit de test 1000001', packs: null, need: '1 kg' },
     ])
     expect(writes).toEqual([{ id: '1000001', quantity: 6 }])
     expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')

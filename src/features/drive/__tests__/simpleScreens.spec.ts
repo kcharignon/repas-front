@@ -296,9 +296,7 @@ describe('le récapitulatif : aucun compteur à zéro, aucun code visible, un se
     await vi.waitFor(() => expect(wrapper.find('h1').exists()).toBe(true))
     // Un résultat s'enregistre d'abord ; la page du panier est tirée des réglages : l'action principale d'un panier rempli attend qu'ils soient lus
     const isResult = event?.kind === 'result'
-    await vi.waitFor(() =>
-      expect(!isResult || wrapper.text().includes('Vos choix sont enregistrés')).toBe(true),
-    )
+    await vi.waitFor(() => expect(!isResult || useDriveReturnStore().status === 'saved').toBe(true))
     await vi.waitFor(() =>
       expect(!isResult || calls(fetchMock).includes('GET /api/v1/drive/settings')).toBe(true),
     )

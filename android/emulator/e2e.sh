@@ -28,8 +28,10 @@
 #  11. 403 (le défi de l'anti-robot est servi ainsi) : la page reste visible, le bandeau dit de faire la vérification ;
 #  12. « Commencer mes courses » mène à une page 404 (la racine de l'hôte du magasin, ou /magasin-N-N/ sans ville) : le bandeau s'affiche, le plan
 #      ne part pas, et « Ouvrir l'accueil du drive » recharge l'accueil de l'enseigne ;
-#  13. quatre nouveaux articles (DRV-624) : « Choisir » le premier, puis « Passer les 3 suivants » (une confirmation d'une ligne, car aucun n'a de
-#      produit retenu) : deux touches pour le geste, rien n'est cherché ni retenu pour les trois autres.
+#  13. quatre nouveaux articles (DRV-624, DRV-626) : « Choisir » le premier, puis « Passer ces 3 articles » (une confirmation d'une ligne sans la liste
+#      de produits, car aucun n'a de produit retenu) : deux touches pour le geste, rien n'est cherché ni retenu pour les trois autres ;
+#  14. la quantité à vérifier (DRV-626) : un produit au contenu inconnu ouvre « Vérifiez la quantité », qui dit « Il vous faut : 200 g. », le champ
+#      « 1 » est sélectionné : taper 4 donne 4 (pas 14), même après avoir touché le champ.
 # Les captures d'écran et le rapport texte sont dans android/dist/e2e/.
 # Code de sortie : 0 si tous les contrôles passent, 1 sinon, 3 si KVM manque.
 set -u
@@ -192,8 +194,8 @@ fi
 check "le message d'en-tête a disparu" ui_lacks 'touchez « Commencer mes courses'
 check "le faux Leclerc a servi la page du magasin (avec sa ville), sur l'hôte du magasin" requested_on "$FAKE_STORE_HOST" '/magasin-000001-000001-Ville-Test/'
 check "NON-RÉGRESSION : le départ n'est jamais retombé sur la racine de l'hôte du magasin" not_requested_on "$FAKE_STORE_HOST" '/'
-check "récapitulatif : 2 produits connus à mettre au panier" ui_has 'produits connus à mettre'
-check "récapitulatif : 1 nouveau produit à choisir" ui_has 'nouveau produit à choisir'
+check "récapitulatif : une phrase, la même que l'écran de l'envoi de Repas" ui_has '5 articles : 2 sont déjà choisis, 1 est à choisir sur Leclerc, 2 ne seront pas mis au panier.'
+check "récapitulatif : aucun compteur à zéro, ni « produits connus » ni « nouveaux produits »" ui_lacks 'produits connus\|nouveau produit\|text="0 '
 check "l'écran reste allumé pendant le passage" screen_held
 check "rien ne part vers le site avant « Commencer »" nothing_sent
 sleep 1
@@ -343,7 +345,9 @@ start_plan "$RUN_BLOCK" plan-connu.json
 enter_store
 wait_until 70 agent_screen 'Prêt à remplir votre panier' || ko "le récapitulatif ne s'est pas affiché"
 tap 'text="Commencer"' || ko "le bouton « Commencer » est introuvable"
-if wait_until 60 ui_has 'Le panier est rempli en partie'; then ok "l'agent s'arrête et annonce « Le panier est rempli en partie »"; else ko "l'agent n'a pas annoncé l'arrêt"; fi
+# Rien n'est mis au panier : « Le panier n'est pas rempli », pas « en partie » (DRV-626)
+if wait_until 60 ui_has 'Le panier n’est pas rempli'; then ok "l'agent s'arrête et annonce « Le panier n'est pas rempli » (rien n'est au panier)"; else ko "l'agent n'a pas annoncé l'arrêt"; fi
+check "le titre ne dit pas « en partie » quand rien n'est au panier" ui_lacks 'rempli en partie'
 sleep 1
 screenshot e11-blocage
 if [ "$(paced_count)" = "3" ]; then
@@ -548,32 +552,36 @@ back_to_repas || ko "l'écran Repas n'est pas revenu"
 
 # --- 13. Quatre nouveaux articles : choisir le premier, passer les trois suivants ------------------------------------------------------------
 say
-say "13. Quatre nouveaux articles : « Choisir » le premier, puis « Passer les 3 suivants » (confirmation d'une ligne), rien n'est retenu pour les autres"
+say "13. Quatre nouveaux articles : « Choisir » le premier, puis « Passer ces 3 articles » (confirmation d'une ligne), rien n'est retenu pour les autres"
 RUN_REST=be570000-0000-4000-8000-000000000013
 if open_pass "$RUN_REST" plan-nouveaux.json; then ok "le récapitulatif s'affiche (4 nouveaux produits à choisir)"; else ko "le récapitulatif ne s'est pas affiché"; fi
-check "récapitulatif : 4 nouveaux produits à choisir" ui_has '4 nouveaux produits à choisir'
+check "récapitulatif : 4 articles, tous à choisir (la phrase de Repas)" ui_has '4 articles : tous sont à choisir sur Leclerc.'
 tap 'text="Commencer"' || ko "le bouton « Commencer » est introuvable"
 if wait_until 60 ui_has 'Il vous faut : 80 g'; then ok "la liste du poivre s'affiche (1 sur 4)"; else ko "la liste de choix ne s'est pas affichée"; fi
 check "l'écran dit « 1 sur 4 »" ui_has '1 sur 4'
-touch_target 'text="Passer les 4 suivants"' "Passer les 4 suivants"
+check "le bouton compte les 4 articles, celui qui est affiché compris : « Passer ces 4 articles »" ui_has 'text="Passer ces 4 articles"'
+check "la fiche d'un produit ne répète pas sa taille : « Poivre noir moulu » n'a pas de ligne « 40 g » seule" ui_lacks 'text="40 g"'
+touch_target 'text="Passer ces 4 articles"' "Passer ces 4 articles"
 touch_target 'text="J’en ai toujours"' "J’en ai toujours"
 screenshot e21-choix-premier-article
 if tap 'text="Choisir"'; then ok "touche 1 : premier produit proposé choisi (poivre moulu)"; else ko "aucun bouton « Choisir » à l'écran"; fi
 if wait_until 60 ui_has '2 sur 4'; then ok "l'article suivant s'affiche (2 sur 4)"; else ko "le deuxième article ne s'est pas affiché"; fi
-check "le bouton compte les articles qui restent à choisir, celui-ci compris : « Passer les 3 suivants »" ui_has 'text="Passer les 3 suivants"'
-touch_target 'text="Passer les 3 suivants"' "Passer les 3 suivants"
+check "le bouton compte les articles qui restent à choisir, celui-ci compris : « Passer ces 3 articles »" ui_has 'text="Passer ces 3 articles"'
+touch_target 'text="Passer ces 3 articles"' "Passer ces 3 articles"
 screenshot e22-passer-les-suivants
-if tap 'text="Passer les 3 suivants"'; then ok "touche 2 : « Passer les 3 suivants »"; else ko "le bouton « Passer les 3 suivants » est introuvable"; fi
+if tap 'text="Passer ces 3 articles"'; then ok "touche 2 : « Passer ces 3 articles »"; else ko "le bouton « Passer ces 3 articles » est introuvable"; fi
 if wait_until 20 ui_has 'ne seront pas mis au panier'; then
   ok "aucun article n'a de produit retenu : une confirmation d'une ligne s'affiche (« Ces 3 articles ne seront pas mis au panier. »)"
 else
   ko "la confirmation d'une ligne ne s'est pas affichée"
 fi
 sleep 1
+check "la confirmation est un écran à deux boutons : la liste de produits et la recherche sont cachées (aucun « Choisir »)" ui_lacks 'text="Choisir"\|text="Chercher"'
+check "la confirmation propose « Revenir au choix »" ui_has 'text="Revenir au choix"'
 screenshot e23-passer-confirmation
 check "avant la confirmation, rien n'est passé : le poivre est au panier, trois requêtes seulement (recherche, panier, recherche du sel)" cart_is '{"1000021":2}'
 if [ "$(paced_count)" = "3" ]; then ok "trois requêtes avant la confirmation"; else ko "$(paced_count) requêtes avant la confirmation (3 attendues)"; fi
-if tap 'text="Passer les 3 suivants"'; then ok "touche 3 : la confirmation"; else ko "le bouton de confirmation est introuvable"; fi
+if tap 'text="Passer ces 3 articles"'; then ok "touche 3 : la confirmation"; else ko "le bouton de confirmation est introuvable"; fi
 if wait_until 60 ui_has 'Le panier est rempli'; then ok "l'agent annonce « Le panier est rempli »"; else ko "l'agent n'a pas annoncé la fin"; fi
 check "le panier est celui du seul premier choix (poivre x2) et rien n'a été cherché pour les trois autres : 3 requêtes en tout" cart_is '{"1000021":2}'
 if [ "$(paced_count)" = "3" ]; then ok "toujours 3 requêtes : les trois articles passés n'ont pas été cherchés"; else ko "$(paced_count) requêtes en tout (3 attendues)"; fi
@@ -587,9 +595,43 @@ check "le résultat : le poivre choisi, les trois autres « pas cette fois » (n
   result_detail 'poivre:CHOSEN:1000021:2,sel:SKIPPED::,riz:SKIPPED::,huile:SKIPPED::'
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
-# --- 14. Bilan ------------------------------------------------------------------------------------------------------------------------------
+# --- 14. La quantité à vérifier : taper 4 donne 4 ------------------------------------------------------------------------------------------
 say
-say "14. Bilan"
+say "14. Quantité à vérifier : le « 1 » prérempli est sélectionné, taper 4 donne 4 (pas 14), même après avoir touché le champ"
+RUN_QTY=0a117000-0000-4000-8000-000000000014
+if open_pass "$RUN_QTY" plan-quantite.json; then ok "le récapitulatif s'affiche (1 nouveau produit à choisir)"; else ko "le récapitulatif ne s'est pas affiché"; fi
+check "récapitulatif : un seul article, à choisir (jamais de compteur à zéro)" ui_has '1 article : il est à choisir sur Leclerc.'
+tap 'text="Commencer"' || ko "le bouton « Commencer » est introuvable"
+if wait_until 60 ui_has 'Il vous faut : 200 g'; then ok "la liste du cacao s'affiche"; else ko "la liste de choix ne s'est pas affichée"; fi
+check "un seul article à choisir : pas de compteur « (1 sur 1) »" ui_lacks '1 sur 1'
+if tap 'text="Choisir"'; then ok "le produit au contenu inconnu est choisi (cacao maigre)"; else ko "aucun bouton « Choisir » à l'écran"; fi
+if wait_until 60 ui_has 'Vérifiez la quantité'; then ok "l'agent demande la quantité (le contenu du produit est inconnu)"; else ko "l'écran « Vérifiez la quantité » ne s'est pas affiché"; fi
+check "l'écran dit ce qu'il vous faut : « Il vous faut : 200 g. »" ui_has 'Il vous faut : 200 g.'
+sleep 1
+screenshot e24-quantite
+# L'utilisateur touche le champ (le toucher pose le curseur) puis tape 4 : le « 1 » est remplacé, pas complété
+if tap 'class="android.widget.EditText"'; then ok "le champ de la quantité est touché"; else ko "le champ de la quantité est introuvable"; fi
+sleep 1
+adb shell input text 4
+sleep 1
+# (L'arbre d'accessibilité ne donne pas la valeur du champ : la preuve est le panier, plus bas : 4 cacaos, pas 14 ni 41.)
+screenshot e25-quantite-saisie
+adb shell input keyevent KEYCODE_BACK # referme le clavier, s'il est ouvert
+sleep 1
+if tap 'text="Valider"'; then ok "« Valider » touché"; else ko "le bouton « Valider » est introuvable"; fi
+if wait_until 60 ui_has 'Le panier est rempli'; then ok "l'agent annonce « Le panier est rempli »"; else ko "l'agent n'a pas annoncé la fin"; fi
+check "taper 4 a remplacé le « 1 » prérempli : le panier du faux Leclerc a 4 cacaos, pas 14 ni 41" cart_is '{"1000031":4}'
+polite_agent
+if tap 'text="Retourner dans Repas"' && wait_until 20 result_has "$RUN_QTY" completed ''; then
+  ok "Repas reçoit le résultat « completed »"
+else
+  ko "Repas n'a pas reçu le résultat du passage"
+fi
+back_to_repas || ko "l'écran Repas n'est pas revenu"
+
+# --- 15. Bilan ------------------------------------------------------------------------------------------------------------------------------
+say
+say "15. Bilan"
 fake_reset
 final_checks
 conclude "les scénarios complets"

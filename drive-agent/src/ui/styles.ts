@@ -24,6 +24,7 @@ ul{margin:8px 0;padding-left:1.2em}
 .shop{font-size:1.15rem;font-weight:600}
 .notice{margin:12px 0;padding:10px 12px;border:1px solid var(--warnfg);border-radius:10px;background:var(--warn);color:var(--warnfg)}
 .error{color:var(--danger);font-weight:600}
+.lead{font-weight:600}
 .counts{margin:12px 0;padding:0;list-style:none}
 .counts li{padding:6px 0;border-bottom:1px solid var(--line)}
 details{margin:12px 0;border:1px solid var(--line);border-radius:10px;background:var(--card)}

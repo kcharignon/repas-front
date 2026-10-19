@@ -13,7 +13,7 @@ import {
 } from '../../protocol'
 import { LeclercError, type LeclercCause, type RequestStats } from '../leclerc'
 import { own } from '../own'
-import { S, type SummaryProps } from '../ui'
+import { formatNeeded, S, type SummaryProps } from '../ui'
 import { settleKnownLine } from './phase-a'
 import { buildResult, cartsOf, changesOf, endProps, endingOf, resultLines } from './result'
 import { emptyState, RunStore, type RunState } from './run-state'
@@ -291,6 +291,7 @@ export class Flow {
           ingredient: asked.name,
           productLabel: product.label,
           packs: product.packs ?? null,
+          need: formatNeeded(asked.needed),
         })
         this.showProgress(run)
         return answer

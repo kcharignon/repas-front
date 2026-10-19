@@ -108,9 +108,11 @@ test('un faux résultat posté par la page de l’enseigne : seules les lignes d
   await page.getByRole('button', { name: 'Ouvrir le drive' }).click()
 
   await expect(page).toHaveURL(/\/drive\/retour$/)
-  await expect(
-    page.getByText('Vos choix sont enregistrés pour les prochains envois.'),
-  ).toBeVisible()
+  // Seul le prix lu de la farine est enregistré : aucun choix n'a été fait, la phrase « Vos choix sont enregistrés » est tue (DRV-626)
+  await expect.poll(() => received.choices.length).toBe(1)
+  await expect(page.getByText('Vos choix sont enregistrés pour les prochains envois.')).toHaveCount(
+    0,
+  )
   await openDetails(page)
   await expect(
     page.getByText('3 articles ne figuraient pas dans votre liste : Repas les a laissés de côté.'),
