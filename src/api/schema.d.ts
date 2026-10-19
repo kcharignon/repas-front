@@ -732,6 +732,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/password-reset/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fixe un nouveau mot de passe grâce au lien reçu par email (route publique)
+         * @description Le lien est à usage unique et valable 30 minutes. Le nouveau mot de passe remplace l'ancien, quel qu'il soit, et toutes les connexions ouvertes du compte sont fermées : il faut se reconnecter par /api/login_check. Un compte en attente dont l'adresse n'était pas confirmée est confirmé et activé, car le lien prouve la possession de l'adresse. Un compte désactivé reste inchangé et reçoit la même réponse qu'un lien invalide (ADR 0026).
+         */
+        post: operations["post_api_reset_password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/email-verification/send": {
         parameters: {
             query?: never;
@@ -746,6 +766,26 @@ export interface paths {
          * @description Répond 204 que l'adresse ait un compte en attente ou non (compte inconnu, déjà confirmé, désactivé, ou lien envoyé il y a moins d'une minute) : la réponse ne révèle pas quelles adresses sont inscrites (ADR 0020).
          */
         post: operations["post_api_send_email_verification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/password-reset/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Envoie par email le lien pour choisir un nouveau mot de passe (route publique)
+         * @description Répond 204 que l'adresse ait un compte ou non (adresse inconnue, compte désactivé, ou lien envoyé il y a moins d'une minute) : la réponse ne révèle pas quelles adresses sont inscrites (ADR 0026). Le lien est valable 30 minutes et un nouveau lien remplace l'ancien.
+         */
+        post: operations["post_api_send_password_reset"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1074,9 +1114,28 @@ export interface components {
              */
             defaultServing: number;
         };
+        ResetPasswordPayload: {
+            /**
+             * @description Secret du lien reçu par email (paramètre `token` de l'adresse du lien)
+             * @example 3f9c0a5e7d1b4c6a8e2f0b9d7c5a3e1f3f9c0a5e7d1b4c6a8e2f0b9d7c5a3e1f
+             */
+            token: string;
+            /**
+             * @description Nouveau mot de passe en clair (8 caractères au moins, comme à l'inscription)
+             * @example un-mot-de-passe
+             */
+            password: string;
+        };
         SendEmailVerificationPayload: {
             /**
              * @description Adresse email du compte en attente
+             * @example alexiane@example.com
+             */
+            email: string;
+        };
+        SendPasswordResetPayload: {
+            /**
+             * @description Adresse email du compte dont le mot de passe est oublié
              * @example alexiane@example.com
              */
             email: string;
@@ -1199,7 +1258,7 @@ export interface components {
              */
             retailerProductId: string;
             /**
-             * @description Libellé du produit (255 caractères au plus, sans caractère de contrôle ni caractère invisible : saut de ligne, sens de lecture, largeur nulle)
+             * @description Libellé du produit (255 caractères au plus, sans caractère de contrôle ni caractère invisible ou de format : saut de ligne, sens de lecture, largeur nulle, trait d'union conditionnel, sélecteur de variation, remplisseur, tag ; les espaces insécables sont permises)
              * @default null
              * @example Farine de blé T55 Marque Repère 1 kg
              */
@@ -4445,6 +4504,42 @@ export interface operations {
             };
         };
     };
+    post_api_reset_password: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordPayload"];
+            };
+        };
+        responses: {
+            /** @description Mot de passe changé, connexions fermées */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide (mot de passe de moins de 8 caractères), ou lien inconnu, déjà utilisé, expiré ou de compte désactivé (message `INVALID_PASSWORD_RESET_TOKEN`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Trop de demandes depuis cette adresse IP */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     post_api_send_email_verification: {
         parameters: {
             query?: never;
@@ -4455,6 +4550,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SendEmailVerificationPayload"];
+            };
+        };
+        responses: {
+            /** @description Demande prise en compte */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps de la requête invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Trop de demandes depuis cette adresse IP */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    post_api_send_password_reset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendPasswordResetPayload"];
             };
         };
         responses: {
