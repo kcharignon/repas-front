@@ -1279,6 +1279,18 @@ export interface components {
              * @default null
              */
             price: components["schemas"]["ProductPricePayload"] | null;
+            /**
+             * @description Rayon de l'enseigne où le site range le produit (`iIdRayon` chez Leclerc) : entier de 1 à 2147483647. Facultatif : absent ou `null`, la fiche du produit n'est pas modifiée ; une valeur déjà connue n'est jamais remplacée. Sert à apprendre dans quel rayon de l'enseigne chercher les ingrédients d'un rayon de Repas (`rayonHints` du plan)
+             * @default null
+             * @example 4001
+             */
+            rayonId: number | null;
+            /**
+             * @description Famille de l'enseigne, le niveau sous le rayon (`iIdFamille` chez Leclerc) : entier de 1 à 2147483647. Facultatif, mêmes règles que `rayonId`
+             * @default null
+             * @example 4101
+             */
+            familyId: number | null;
         };
         ChoiceIntentPayload: {
             /**
@@ -2134,6 +2146,15 @@ export interface components {
              * @example Farine
              */
             searchQuery: string;
+            /**
+             * @description Rayons de l'enseigne où chercher d'abord cet ingrédient (DRV-642), 3 au plus, du plus choisi au moins choisi : ceux où les utilisateurs ont choisi des produits pour des ingrédients du même rayon de Repas. Ce sont des identifiants de rayon de l'enseigne (`iIdRayon` chez Leclerc), jamais des noms. Vide quand rien n'est encore appris pour ce rayon de Repas, ou quand l'ingrédient n'a pas de rayon. Un classement, pas un filtre : aucun produit n'est écarté. Clé facultative pour le lecteur (un back plus ancien ne l'envoie pas)
+             * @default []
+             * @example [
+             *       4001,
+             *       4002
+             *     ]
+             */
+            rayonHints: number[];
         };
         DrivePlanDTO: {
             /**
