@@ -27,6 +27,8 @@ const { t } = useI18n()
 const router = useRouter()
 const online = useOnline()
 const store = useDriveReturnStore()
+/** Dans l'application, le drive s'ouvre dans son écran (connecté) ; dans un navigateur, dans un nouvel onglet (DRV-625). */
+const inApp = driveBridge.isAvailable()
 
 const event = computed(() => store.event)
 /** Le résultat d'un passage de la liste (et non d'une lecture du magasin). */
@@ -429,8 +431,8 @@ function confirmReopen() {
         <a
           v-if="(primary === 'finalize' || primary === 'manual') && finalizeUrl"
           :href="finalizeUrl"
-          target="_blank"
-          rel="noopener noreferrer"
+          :target="inApp ? undefined : '_blank'"
+          :rel="inApp ? undefined : 'noopener noreferrer'"
           :class="primaryClass"
         >
           {{
@@ -440,7 +442,7 @@ function confirmReopen() {
                 : 'driveReturn.actions.manual',
             )
           }}
-          <span class="sr-only"> ({{ t('driveReturn.actions.finalizeHelp') }})</span>
+          <span v-if="!inApp" class="sr-only"> ({{ t('driveReturn.actions.finalizeHelp') }})</span>
         </a>
         <RouterLink
           v-else-if="primary === 'resume' && listId"
@@ -468,12 +470,14 @@ function confirmReopen() {
           <a
             v-if="showFinalize && finalizeUrl"
             :href="finalizeUrl"
-            target="_blank"
-            rel="noopener noreferrer"
+            :target="inApp ? undefined : '_blank'"
+            :rel="inApp ? undefined : 'noopener noreferrer'"
             :class="linkClass"
           >
             {{ t('driveReturn.actions.finalize') }}
-            <span class="sr-only"> ({{ t('driveReturn.actions.finalizeHelp') }})</span>
+            <span v-if="!inApp" class="sr-only">
+              ({{ t('driveReturn.actions.finalizeHelp') }})</span
+            >
           </a>
           <button
             type="button"

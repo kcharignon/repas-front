@@ -86,4 +86,12 @@ export interface FlowDeps {
 
 /** Les états de la machine : `START → VALIDATED → CONFIRMED → PHASE_A → PHASE_B → DONE`, ou `ABORTED` / `ERROR`. */
 export type Step =
-  'START' | 'VALIDATED' | 'CONFIRMED' | 'PHASE_A' | 'PHASE_B' | 'DONE' | 'ABORTED' | 'ERROR'
+  | 'START'
+  | 'VALIDATED'
+  | 'ENTERING'
+  | 'CONFIRMED'
+  | 'PHASE_A'
+  | 'PHASE_B'
+  | 'DONE'
+  | 'ABORTED'
+  | 'ERROR'

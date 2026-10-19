@@ -304,8 +304,7 @@ describe('un passage : la quantité du panier est gardée et dite à la fin', ()
 
     await flow.start(plan([known('farine', [product('1000001', 2)])]))
 
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('kept')
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('unreadable')
+    expect(screens.screens()).not.toContain('end')
   })
 })
 
@@ -414,8 +413,7 @@ describe('la reprise après un rechargement', () => {
     await flow.start(plan([home('sel')]))
 
     expect(screens.propsOf('resume')).toEqual([{ done: 1, total: 1 }])
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('kept')
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('unreadable')
+    expect(screens.screens()).not.toContain('end')
   })
 
   it.each([
@@ -463,6 +461,6 @@ describe('la reprise après un rechargement', () => {
 
     await flow.start(plan([home('sel')]))
 
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('kept')
+    expect(screens.screens()).not.toContain('end')
   })
 })

@@ -177,7 +177,7 @@ describe('un nouvel ingrédient', () => {
 
     // Then
     expect(test.adapter.calls).toEqual(['find poivre', 'cart 2000001 2'])
-    expect(test.screens.screens()).toEqual(['summary', 'progress', 'chooser', 'progress', 'end'])
+    expect(test.screens.screens()).toEqual(['summary', 'progress', 'chooser', 'progress'])
     expect(expectConform(test.sent[0])).toMatchObject({ outcome: 'completed' })
     expect(lineOf(test.sent[0])).toEqual({
       ingredientSlug: 'poivre',
@@ -949,12 +949,15 @@ describe('« Passer les n suivants »', () => {
     })
   })
 
-  it('l’écran de fin compte les articles passés', async () => {
+  it('le résultat compte les articles passés, et repart tout de suite (rien à lire)', async () => {
     const test = run(pepper(), [rest], { others: four })
 
     await test.start()
 
-    expect(test.screens.propsOf('end')[0]).toMatchObject({ chosen: 0, skipped: 4, haveAtHome: 0 })
+    expect(test.screens.screens()).not.toContain('end')
+    const outcomes = test.sent[0]?.lines.map((line) => line.outcome)
+    expect(outcomes?.filter((outcome) => outcome === 'SKIPPED')).toHaveLength(4)
+    expect(outcomes).not.toContain('CHOSEN')
   })
 })
 
@@ -1285,7 +1288,6 @@ describe('les erreurs du site', () => {
       'progress',
       'chooser',
       'progress',
-      'end',
     ])
     expect(test.adapter.calls).toEqual(['find poivre', 'find sel', 'find poivre', 'cart 2000001 2'])
     expect(expectConform(test.sent[0])).toMatchObject({ outcome: 'completed' })

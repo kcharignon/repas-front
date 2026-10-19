@@ -48,6 +48,8 @@ const SCREENS = [
   'end-cart',
   'end-slow',
   'challenge',
+  'entry-opening',
+  'entry-manual',
   'end-partial',
   'end-none',
   'end-error',

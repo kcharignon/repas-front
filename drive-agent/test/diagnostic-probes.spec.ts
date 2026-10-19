@@ -213,6 +213,40 @@ describe('une page qui n’est pas celle d’un magasin', () => {
   })
 })
 
+describe('les deux liens de la page (DRV-625)', () => {
+  const home = { hostname: 'www.leclercdrive.fr', pathname: '/', protocol: 'https:', port: '' }
+
+  it('l’accueil de l’enseigne : « Commencer mes courses » et le panier, présents ou non, avec la forme de leur adresse', async () => {
+    const { adapter, fake } = site(normal, {
+      location: home,
+      pageText: () =>
+        '<a href="https://fd0-courses.leclercdrive.fr/magasin-000123-000123-Ville-Test/">Commencer mes courses</a><a href="/magasin-000123-000123-Ville-Test/panier.aspx">Mon panier</a>',
+    })
+
+    const { probes } = await runChecks(deps(adapter), () => undefined)
+    const text = probeLines(probes).join('\n')
+
+    expect(text).toContain(
+      'Lien « Commencer mes courses » dans la page : oui, adresse /magasin-N-N-V/, autre hôte leclercdrive.fr',
+    )
+    expect(text).toContain(
+      'Lien du panier dans la page : oui, adresse /magasin-N-N-V/panier.aspx, adresse sans site',
+    )
+    expect(text).not.toContain('000123')
+    expect(fake.calls).toEqual([])
+  })
+
+  it('sans lien : « non »', async () => {
+    const { adapter } = site(normal, { location: home, pageText: () => '<p>Bonjour</p>' })
+
+    const { probes } = await runChecks(deps(adapter), () => undefined)
+    const text = probeLines(probes).join('\n')
+
+    expect(text).toContain('Lien « Commencer mes courses » dans la page : non')
+    expect(text).toContain('Lien du panier dans la page : non')
+  })
+})
+
 describe('aucune valeur du site n’est rapportée (le test de confidentialité du ticket B)', () => {
   const SECRETS = [
     'SESSIONSECRET424242',

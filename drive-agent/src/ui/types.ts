@@ -112,6 +112,14 @@ export interface StoreProps {
 /** La demande de vérification de l'anti-robot (ticket K) : elle n'a pas de donnée, l'écran dit toujours la même chose. */
 export type ChallengeProps = Record<string, never>
 
+/**
+ * L'entrée dans le magasin (DRV-625), un bandeau : `opening` pendant que l'agent suit lui-même « Commencer mes courses », `manual` quand il ne
+ * le peut pas (lien absent, page inattendue, défi de l'anti-robot) et que l'utilisateur touche le bouton du site. Aucune réponse : la page change.
+ */
+export interface EntryProps {
+  stage: 'opening' | 'manual'
+}
+
 export interface ErrorProps {
   code: ErrorCode
   /**
@@ -176,6 +184,8 @@ export interface ScreenMap {
    * l'utilisateur l'a faite, le passage reprend ; `stop` : il arrête.
    */
   challenge: { props: ChallengeProps; answer: 'resume' | 'stop' }
+  /** Un bandeau sans bouton (DRV-625) : sa promesse ne se résout jamais, la page de l'enseigne change ou l'utilisateur touche son bouton. */
+  entry: { props: EntryProps; answer: never }
   error: { props: ErrorProps; answer: 'return' | 'close' }
   end: { props: EndProps; answer: 'return' }
 }

@@ -1,7 +1,7 @@
 // Quand le site ne répond pas comme prévu : blocage (403, 429), page de défi de l'anti-robot (le passage attend la vérification), requête
 // retenue (délai d'attente), site changé, route disparue, compte déconnecté, et reprise après un rechargement de la page. Le faux site
 // simule chaque incident ; l'agent doit s'arrêter proprement ou attendre, sans insister.
-import { openWithFragment, returnedResult } from './support/agent'
+import { openWithFragment, returnedResult, returnsToRepas } from './support/agent'
 import { expectPoliteAgent, waitForQuiet } from './support/cadence'
 import { expect, test } from './support/fixtures'
 import { known, planOf, product, RUN_ID } from './support/plans'
@@ -77,7 +77,7 @@ test.describe('une page de défi de l’anti-robot', () => {
     // When : l'utilisateur fait la vérification (le faux site ne la demande plus), puis touche « Reprendre »
     fake.setBehavior({ fault: null })
     await page.getByRole('button', { name: 'Reprendre', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+    await returnsToRepas(page, fake)
 
     // Then : la ligne en cours est refaite, rien n'a échoué ni été fait deux fois
     expect(fake.cart()).toEqual({ 1000001: 3, 1000006: 1, 1000009: 1 })
@@ -100,7 +100,6 @@ test.describe('une page de défi de l’anti-robot', () => {
       undefined,
     ])
     expectPoliteAgent(fake)
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
     expect(await returnedResult(page, fake)).toMatchObject({
       outcome: 'completed',
       lines: [{ outcome: 'ADDED' }, { outcome: 'ADDED' }, { outcome: 'ADDED' }],
@@ -160,7 +159,7 @@ test.describe('une page de défi de l’anti-robot', () => {
     await expect(page.getByText('1 article sur 3 est déjà fait')).toBeVisible()
     await waitForQuiet(fake)
     await page.getByRole('button', { name: 'Reprendre', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+    await returnsToRepas(page, fake)
 
     // Then : la farine n'est pas refaite
     expect(fake.cart()).toEqual({ 1000001: 3, 1000006: 1, 1000009: 1 })
@@ -382,7 +381,7 @@ test('reprend après un rechargement de la page sans refaire les lignes déjà f
   await expect(page.getByText('1 article sur 3 est déjà fait')).toBeVisible()
   await waitForQuiet(fake)
   await page.getByRole('button', { name: 'Reprendre' }).click()
-  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+  await returnsToRepas(page, fake)
 
   // Then : les deux autres lignes sont faites, la farine n'a pas été cherchée ni écrite une seconde fois
   expect(fake.cart()).toEqual({ 1000001: 3, 1000006: 1, 1000009: 1 })
@@ -390,7 +389,6 @@ test('reprend après un rechargement de la page sans refaire les lignes déjà f
   expect(writes.filter((call) => call.detail?.includes('"1000001"'))).toHaveLength(1)
   expect(fake.paced().filter((call) => call.kind === 'search')).toHaveLength(3)
   expectPoliteAgent(fake)
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
   expect(await returnedResult(page, fake)).toMatchObject({
     outcome: 'completed',
     lines: [{ outcome: 'ADDED' }, { outcome: 'ADDED' }, { outcome: 'ADDED' }],

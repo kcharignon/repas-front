@@ -1,6 +1,6 @@
 // La phase B de bout en bout : l'agent affiche lui-même la liste des produits trouvés par la recherche, l'utilisateur choisit, et seul
 // ce choix met un produit au panier (la page de l'enseigne refuse d'être affichée dans un cadre : décision G1).
-import { openWithFragment, returnedResult } from './support/agent'
+import { openWithFragment, returnedResult, returnsToRepas } from './support/agent'
 import { expectPoliteAgent } from './support/cadence'
 import { expect, test } from './support/fixtures'
 import { fresh, known, planOf, product } from './support/plans'
@@ -24,13 +24,12 @@ test('fait choisir un nouveau produit dans la liste de l’agent, calcule le nom
   await expect(card).toContainText('40 g par produit : 2 produits.')
   expect(fake.cart(), 'l’agent ne choisit jamais seul').toEqual({})
   await card.getByRole('button', { name: 'Choisir' }).click()
-  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+  await returnsToRepas(page, fake)
 
   // Then : 2 produits au panier, le choix revient à Repas avec son prix lu
   expect(fake.cart()).toEqual({ 1000021: 2 })
   expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'cart'])
   expectPoliteAgent(fake)
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
   expect(await returnedResult(page, fake)).toMatchObject({
     outcome: 'completed',
     lines: [
@@ -59,11 +58,10 @@ test('retire les caractères invisibles d’un libellé de l’enseigne : la lis
   const card = page.getByRole('listitem').filter({ hasText: 'Vinaigre de cidre Verger Imaginaire' })
   await expect(card).toContainText('750 ml par produit : 1 produit.')
   await card.getByRole('button', { name: 'Choisir' }).click()
-  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+  await returnsToRepas(page, fake)
 
   // Then : le libellé renvoyé à Repas est propre et le back l'accepterait
   expect(fake.cart()).toEqual({ 1000032: 1 })
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
   const result = await returnedResult(page, fake)
   expect(result).toMatchObject({
     lines: [
@@ -107,12 +105,11 @@ for (const [button, placement] of [
     ])
     await expect(page.getByText(/secours|préféré/i)).toHaveCount(0)
     await page.getByRole('button', { name: button }).click()
-    await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+    await returnsToRepas(page, fake)
 
     // Then : 1 kg demandé, 500 g par produit, donc 2 ; le produit refusé et l'indisponible partent avec le résultat, la réponse dans `placement`
     expect(fake.cart()).toEqual({ 1000004: 2 })
     expectPoliteAgent(fake)
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
     expect(await returnedResult(page, fake)).toMatchObject({
       lines: [
         {
@@ -169,12 +166,11 @@ test('laisse passer une ligne ou dire « j’en ai toujours », même quand la r
   await page.getByRole('button', { name: 'Pas cette fois' }).click()
   await expect(page.getByRole('listitem').filter({ hasText: 'Sel fin' })).toBeVisible()
   await page.getByRole('button', { name: 'J’en ai toujours' }).click()
-  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+  await returnsToRepas(page, fake)
 
   // Then : rien au panier, trois recherches (« gnocchis », son singulier « gnocchi » quand il ne répond rien, puis « sel ») et aucune écriture
   expect(fake.cart()).toEqual({})
   expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'search', 'search'])
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
   expect(await returnedResult(page, fake)).toMatchObject({
     lines: [
       { ingredientSlug: 'gnocchis', outcome: 'SKIPPED' },
@@ -208,12 +204,11 @@ for (const [form, cart] of [
     await page.getByRole('button', { name: 'Pas cette fois' }).click()
     await expect(page.getByRole('listitem').filter({ hasText: 'Sel fin' })).toBeVisible()
     await page.getByRole('button', { name: 'J’en ai toujours' }).click()
-    await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+    await returnsToRepas(page, fake)
 
     // Then : aucune erreur, trois recherches (« gnocchis », « gnocchi », « sel »), aucune écriture, le panier n'a pas bougé
     expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'search', 'search'])
     expect(fake.cart()).toEqual(cart)
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
     const result = await returnedResult(page, fake)
     expect(result).toMatchObject({
       outcome: 'completed',
@@ -287,12 +282,11 @@ test('quatre nouveaux articles : choisir le premier, passer les trois suivants (
   await expect(page.getByRole('button', { name: 'Revenir au choix' })).toBeVisible()
   expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'cart', 'search'])
   await page.getByRole('button', { name: 'Passer ces 3 articles' }).click()
-  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+  await returnsToRepas(page, fake)
 
   // Then : un seul produit au panier, deux recherches (poivre, sel) et une écriture, les trois autres sont passés sans produit ni refus
   expect(fake.cart()).toEqual({ 1000021: 2 })
   expectPoliteAgent(fake)
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
   const result = await returnedResult(page, fake)
   expect(result).toMatchObject({
     outcome: 'completed',
@@ -354,7 +348,7 @@ test('trois articles dont le produit habituel est en rupture : « Passer ces 3 a
 
   // When
   await page.getByRole('button', { name: 'Passer ces 3 articles' }).click()
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+  await returnsToRepas(page, fake)
 
   // Then : rien au panier, rien n'est retenu, aucune question
   expect(fake.cart()).toEqual({})

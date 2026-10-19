@@ -22,6 +22,8 @@ enum class Decision {
 object NavigationPolicy {
     const val START_URL = "https://www.leclercdrive.fr/"
 
+    private const val HOME_HOST = "www.leclercdrive.fr"
+
     private const val ALLOWED_DOMAIN = "leclercdrive.fr"
     private const val HTTPS = "https://"
     private const val HTTP = "http://"
@@ -78,6 +80,19 @@ object NavigationPolicy {
         if (pathStart < 0 || afterScheme[pathStart] != '/') return false
         val path = afterScheme.substring(pathStart).substringBefore('?').substringBefore('#')
         return STORE_PATH.containsMatchIn(path)
+    }
+
+    /**
+     * L'adresse est-elle l'accueil de l'enseigne ([START_URL], DRV-625) : `https://www.leclercdrive.fr/`, sans chemin (la requête et le fragment ne
+     * comptent pas) ? C'est là qu'un plan s'ouvre : session ouverte, la page affiche l'accueil du magasin de l'utilisateur et son bouton « Commencer
+     * mes courses », que l'agent suit lui-même. Ce n'est pas une page de magasin ([isStorePage]).
+     */
+    fun isHomePage(url: String?): Boolean {
+        if (httpsHostOf(url) != HOME_HOST) return false
+        val afterScheme = url!!.substring(HTTPS.length)
+        val pathStart = afterScheme.indexOfAny(charArrayOf('/', '?', '#'))
+        if (pathStart < 0) return true
+        return afterScheme.substring(pathStart).substringBefore('?').substringBefore('#').let { it == "" || it == "/" }
     }
 
     /**

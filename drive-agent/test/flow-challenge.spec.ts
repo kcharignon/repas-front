@@ -50,7 +50,7 @@ describe('un défi de l’anti-robot pendant le passage (phase A)', () => {
     await flow.start(plan(lines()))
 
     // Then : la ligne est refaite, rien n'a échoué, un seul résultat part, à la fin
-    expect(screens.screens()).toEqual(['summary', 'progress', 'challenge', 'progress', 'end'])
+    expect(screens.screens()).toEqual(['summary', 'progress', 'challenge', 'progress'])
     expect(site.calls).toEqual([
       'search 1000001',
       'cart 1000001 3',
@@ -239,6 +239,6 @@ describe('une requête trop lente (délai d’attente dépassé)', () => {
 
     await flow.start(plan(lines()))
 
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('slow')
+    expect(screens.screens()).not.toContain('end')
   })
 })

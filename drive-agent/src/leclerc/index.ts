@@ -1,6 +1,7 @@
 // L'adaptateur E.Leclerc Drive (DRV-303) : tout ce qui est propre à l'enseigne vit dans ce dossier, derrière `RetailerAdapter`.
 export {
   browserDeps,
+  ENTRY_WAIT_MS,
   LeclercAdapter,
   type CartResult,
   type LeclercDeps,
@@ -10,6 +11,15 @@ export { type Candidate, type PricePerMeasure } from './candidate'
 export { contentFromLabel, parseContent, type Content, type ContentSource } from './content'
 export { causeLabel, causeText, type LeclercCause } from './causes'
 export { LeclercError, type LeclercErrorCode } from './errors'
+export {
+  entryFacts,
+  readEntry,
+  type EntryFacts,
+  type EntryReading,
+  type LinkFacts,
+  type LinkWhere,
+  type PageRef,
+} from './entry'
 export {
   JITTER_MS,
   MAX_BLOCKS,

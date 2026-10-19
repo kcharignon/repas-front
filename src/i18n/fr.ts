@@ -627,7 +627,7 @@ export default {
     },
     actions: {
       finalize: 'Finaliser sur Leclerc',
-      finalizeHelp: 'S’ouvre dans le navigateur.',
+      finalizeHelp: 'S’ouvre dans un nouvel onglet.',
       manual: 'Chercher à la main sur Leclerc',
       resume: 'Reprendre l’envoi',
       update: 'Mettre à jour l’application',

@@ -108,15 +108,18 @@ class OpeningWatch {
         status == 403 || status == 429 -> PageTrouble.VERIFICATION
         status >= HTTP_ERROR_FROM -> PageTrouble.HTTP_ERROR
         slow -> PageTrouble.SLOW
-        agentMissing && NavigationPolicy.isStorePage(url) -> PageTrouble.NO_AGENT
+        agentMissing && (NavigationPolicy.isStorePage(url) || NavigationPolicy.isHomePage(url)) -> PageTrouble.NO_AGENT
         else -> PageTrouble.NONE
     }
 
     /**
      * Le message du passage peut-il partir vers l'agent de la page d'adresse [url] ? Seulement sur une page de magasin que le site n'a pas
-     * refusée : sur une page d'erreur, l'agent n'aurait rien à faire (et son message d'erreur ne dirait pas pourquoi).
+     * refusée : sur une page d'erreur, l'agent n'aurait rien à faire (et son message d'erreur ne dirait pas pourquoi). Un plan part aussi de
+     * l'accueil de l'enseigne ([entersStore], DRV-625) : l'agent y suit lui-même « Commencer mes courses » ; la lecture du magasin, elle, attend
+     * toujours une page de magasin (l'utilisateur choisit son magasin).
      */
-    fun canDeliver(url: String?): Boolean = !failed && status < HTTP_ERROR_FROM && NavigationPolicy.isStorePage(url)
+    fun canDeliver(url: String?, entersStore: Boolean = false): Boolean =
+        !failed && status < HTTP_ERROR_FROM && (NavigationPolicy.isStorePage(url) || (entersStore && NavigationPolicy.isHomePage(url)))
 
     companion object {
         /** À partir de ce code HTTP, une réponse de la page principale est une erreur. */

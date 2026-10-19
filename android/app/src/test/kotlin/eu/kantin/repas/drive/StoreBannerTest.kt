@@ -39,11 +39,20 @@ class StoreBannerTest {
      */
     @Test
     fun `sur l'accueil du magasin ou toute page qui n'en est pas une, un plan dit d'ouvrir son magasin, sans alarme ni bouton`() {
-        listOf(storeRoot, enseigne, login, null, "https://courses-test.leclercdrive.fr/autre-page", plan.startUrl).forEach {
+        listOf(storeRoot, login, null, "https://courses-test.leclercdrive.fr/autre-page").forEach {
             assertEquals(it, StoreBanner.OPEN, StoreBanner.of(plan, it))
             assertEquals(it, StoreBanner.OPEN, StoreBanner.of(plan, it, PageTrouble.NONE))
         }
         assertFalse(StoreBanner.OPEN.hasAction)
+    }
+
+    /** DRV-625 : sur l'accueil de l'enseigne, l'agent suit lui-même « Commencer mes courses » (ou dit de le toucher) : le bandeau de l'application se tait. */
+    @Test
+    fun `sur l'accueil de l'enseigne, un plan n'a pas de bandeau, l'agent y parle`() {
+        assertEquals(StoreBanner.NONE, StoreBanner.of(plan, enseigne))
+        assertEquals(StoreBanner.NONE, StoreBanner.of(plan, plan.startUrl))
+        // La lecture du magasin, elle, dit toujours de choisir son magasin
+        assertEquals(StoreBanner.SETUP, StoreBanner.of(setup, enseigne))
     }
 
     @Test
@@ -130,6 +139,6 @@ class StoreBannerTest {
         // Ce que recharge le bouton : la page de départ du plan, l'accueil de l'enseigne, jamais une de ces pages.
         assertEquals(NavigationPolicy.START_URL, plan.startUrl)
         assertFalse(pages404.dropLast(1).contains(plan.startUrl))
-        assertEquals(StoreBanner.OPEN, StoreBanner.of(plan, plan.startUrl))
+        assertEquals(StoreBanner.NONE, StoreBanner.of(plan, plan.startUrl))
     }
 }

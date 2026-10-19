@@ -115,3 +115,7 @@ Une vérification de l'adaptateur qui peut échouer de plus : un code dans `CAUS
 ## 10. Interdits
 
 Contacter Leclerc ; stocker, lire ou journaliser un cookie, un jeton ou un identifiant d'enseigne ; ajouter du code chargé à distance ; valider une commande, choisir un créneau, payer, vider le panier ; dépasser 99 par produit ; recréer un banc d'essai jetable (`lab/`, `android-lab/`, retirés le 2026-10-19) ; `--no-verify`, force-push, push sur `main` ; fusionner une PR dont un contrôle n'est pas vert.
+
+## DRV-625 : entrer dans le magasin sans geste
+
+`leclerc/entry.ts` lit « Commencer mes courses » dans le texte de la page ; `Flow.enterStore` ne le suit (`adapter.followEntry()`, `Pacer.act`) que s'il mène à une page du **magasin du plan**, une seule fois par envoi et par onglet (`RunStore.markEntered`), sinon le bandeau `entry` dit de toucher le bouton. Un envoi terminé sans rien à lire ne montre pas l'écran de fin (`hasSomethingToRead`). Les deux sondes du diagnostic (`entryFacts`) ne disent que des formes. Le protocole ne change pas.

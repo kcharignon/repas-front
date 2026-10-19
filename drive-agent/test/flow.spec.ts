@@ -77,7 +77,7 @@ describe('un passage complet', () => {
       { ingredientSlug: 'sucre', outcome: 'ADDED', productId: '1000003', quantity: 2, usedRank: 1 },
     ])
     expect(flow.history).toEqual(['START', 'VALIDATED', 'CONFIRMED', 'PHASE_A', 'DONE'])
-    expect(screens.screens()).toEqual(['summary', 'progress', 'end'])
+    expect(screens.screens()).toEqual(['summary', 'progress'])
     expect(screens.closed.count).toBe(1)
   })
 
@@ -325,7 +325,7 @@ describe('la quantité à vérifier', () => {
       // Le plan de ce test ne dit pas ce que la liste demande : pas de « Il vous faut » (DRV-626)
       { ingredient: 'Farine', productLabel: item.label, packs: item.packs ?? null, need: null },
     ])
-    expect(screens.screens()).toEqual(['summary', 'progress', 'quantity', 'progress', 'end'])
+    expect(screens.screens()).toEqual(['summary', 'progress', 'quantity', 'progress'])
     expect(writes).toEqual([{ id: '1000001', quantity: 7 }])
     expect(sent[0]?.lines[0]).toMatchObject({ outcome: 'ADDED', quantity: 7 })
   })
@@ -453,7 +453,7 @@ describe('le contenu lu en direct fait foi (DRV-613)', () => {
     // Then : le plan fait foi, comme avant
     const writes = site.calls.filter((call) => call.init.method === 'POST')
     expect(writes.map(sentQuantity)).toEqual([11])
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+    expect(screens.screens()).not.toContain('end')
   })
 
   it('le nombre rendu à Repas est celui que le panier a gardé, pas celui du plan ni celui du calcul', async () => {
@@ -483,7 +483,7 @@ describe('le contenu lu en direct fait foi (DRV-613)', () => {
     // Then
     expect(writes).toEqual([{ id: '1000001', quantity: 2 }])
     expect(expectConform(sent[0]).lines[0]).toMatchObject({ outcome: 'ADDED', quantity: 2 })
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+    expect(screens.screens()).not.toContain('end')
   })
 
   it.each([
@@ -513,7 +513,7 @@ describe('le contenu lu en direct fait foi (DRV-613)', () => {
     expect(writes).toEqual([{ id: '1000001', quantity: 3 }])
     expect(screens.screens()).not.toContain('quantity')
     expect(expectConform(sent[0]).lines[0]).toMatchObject({ outcome: 'ADDED', quantity: 3 })
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+    expect(screens.screens()).not.toContain('end')
   })
 
   it('un nombre à vérifier reste une question pour l’utilisateur, même quand le contenu en direct est lisible', async () => {
@@ -531,7 +531,7 @@ describe('le contenu lu en direct fait foi (DRV-613)', () => {
       { ingredient: 'Farine', productLabel: 'Produit de test 1000001', packs: null, need: '1 kg' },
     ])
     expect(writes).toEqual([{ id: '1000001', quantity: 6 }])
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+    expect(screens.screens()).not.toContain('end')
   })
 
   it('juge chaque produit sur son propre contenu : le produit de secours est recalculé comme le préféré', async () => {
@@ -573,7 +573,7 @@ describe('le contenu lu en direct fait foi (DRV-613)', () => {
     await flow.start(plan([line]))
 
     // Then
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+    expect(screens.screens()).not.toContain('end')
   })
 
   it('la mention survit à un rechargement de la page : elle figure à la fin du passage repris', async () => {
@@ -629,7 +629,7 @@ describe('le contenu lu en direct fait foi (DRV-613)', () => {
 
     // Then
     expect(screens.propsOf('resume')).toEqual([{ done: 1, total: 1 }])
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+    expect(screens.screens()).not.toContain('end')
   })
 
   it.each([
@@ -664,7 +664,7 @@ describe('le contenu lu en direct fait foi (DRV-613)', () => {
     await flow.start(plan([home('sel')]))
 
     // Then
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+    expect(screens.screens()).not.toContain('end')
   })
 })
 
@@ -847,7 +847,7 @@ describe('les erreurs', () => {
 
   it('une erreur imprévue de l’orchestrateur lui-même montre « le site a changé » et ne renvoie rien', async () => {
     const screens = fakeUi({
-      end: () => {
+      summary: () => {
         throw new Error('bug')
       },
     })

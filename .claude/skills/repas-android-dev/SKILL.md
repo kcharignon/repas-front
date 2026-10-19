@@ -111,3 +111,9 @@ Tout est dans `android/PUBLICATION.md`, que l'assistant déroule **une étape à
 ## 8. Interdits
 
 Contacter Leclerc ; exposer un objet natif aux pages ; demander une permission autre qu'Internet ; mettre une clé, un mot de passe ou un secret dans le dépôt, une PR ou le chat ; créer une release de production (`vX.Y.Z`) ou pousser une étiquette `android-vX.Y.Z` (c'est l'utilisateur qui le fait) ; créer, lire ou modifier une vraie clé de signature ou les secrets GitHub (un essai se fait avec une clé jetable hors du dépôt) ; ajouter un déclencheur (PR, `main`, `workflow_dispatch`) ou une variante sans clé à `android-release.yml` ; `--no-verify`, force-push, push sur `main` ; fusionner une PR dont un contrôle n'est pas vert.
+
+## DRV-625 : entrer, revenir et finaliser sans geste
+
+- Le plan part aussi vers l'agent depuis l'**accueil de l'enseigne** (`NavigationPolicy.isHomePage`, `OpeningWatch.canDeliver(url, entersStore = true)` : jamais pour la lecture du magasin) ; l'**agent** y suit « Commencer mes courses » (l'application ne clique toujours jamais), et le bandeau de l'application se tait sur cette page (`StoreBanner` : `NONE`).
+- « Finaliser sur Leclerc » est un lien du front vers le drive : `MainActivity` le confie à `DriveActivity` par `DriveEntry.target` (accueil du drive ou page de magasin, sinon l'accueil) et `EXTRA_START_URL`, jamais au navigateur du téléphone. Aucun message nouveau sur le pont.
+- Un test d'abandon qui compte sur la lenteur du passage donne une latence de 5 s au faux site : un envoi terminé repart seul, sans écran de fin qui attende.
