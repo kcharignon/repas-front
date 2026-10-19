@@ -529,15 +529,17 @@ class DriveActivity : Activity() {
     // Le menu
 
     private fun menuEntries(): List<Pair<Int, () -> Unit>> = buildList {
+        // Les outils de débogage n'existent que dans la variante de débogage, jamais dans l'APK signé (DRV-621).
         if (BuildConfig.DEBUG) add(R.string.menu_selftest to ::startSelftest)
+        if (BuildConfig.DEBUG) add(R.string.menu_debug_plan to ::startDebugPlan)
         pass.current()?.let { add((if (it.request.isSetup) R.string.menu_abandon_setup else R.string.menu_abandon) to ::askAbandon) }
         add(R.string.menu_zoom_in to { zoomPage(PAGE_ZOOM_STEP) })
         add(R.string.menu_zoom_out to { zoomPage(1 / PAGE_ZOOM_STEP) })
         add(R.string.menu_about to { showAbout(repasApp.agentLoad.describe(this@DriveActivity)) })
         add(R.string.menu_logout_drive to { confirmClearDriveData(::clearDriveData) })
-        add(R.string.menu_browser to ::openCurrentPageInBrowser)
         add(R.string.menu_diagnostic to ::openAgentDiagnostic)
-        if (BuildConfig.DEBUG) add(R.string.menu_debug_plan to ::startDebugPlan)
+        // Utile au dépannage, rare pour un proche : toujours en dernier.
+        add(R.string.menu_browser to ::openCurrentPageInBrowser)
     }
 
     /**

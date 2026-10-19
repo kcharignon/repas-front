@@ -22,7 +22,7 @@
 #   6. blocage simulé (403) : l'agent s'arrête sans insister (une seule nouvelle tentative), le dit, Repas reçoit « partial / BLOCKED » ;
 #   7. site changé (contrat modifié) : l'agent s'interrompt, Repas reçoit « error / CONTRACT_CHANGED », rien n'est mis au panier ;
 #   8. un AUTRE magasin que celui du plan : l'agent reçoit le plan sur cette page de magasin et dit « Ce n'est pas le bon magasin » (STORE_MISMATCH) ;
-#   9. page d'ouverture refusée par une page d'erreur (404) : un bandeau dit « Cette page n'est pas celle de ton magasin » et propose « Ouvrir
+#   9. page d'ouverture refusée par une page d'erreur (404) : un bandeau dit « Cette page n'est pas celle de votre magasin » et propose « Ouvrir
 #      l'accueil du drive », l'agent ne reçoit rien, puis le récapitulatif s'affiche dès que l'utilisateur ouvre son magasin ;
 #  10. page d'ouverture trop lente : le bandeau s'affiche au bout de 25 s, l'accueil du drive reste à un geste ;
 #  11. 403 (le défi de l'anti-robot est servi ainsi) : la page reste visible, le bandeau dit de faire la vérification ;
@@ -92,7 +92,7 @@ enter_store() { wait_until 70 ui_has 'text="Commencer mes courses"' && tap 'text
 open_pass() { # open_pass <runId> <fichier de plan>
   fake_reset
   start_plan "$1" "$2"
-  enter_store && wait_until 70 agent_screen 'Prêt à remplir ton panier'
+  enter_store && wait_until 70 agent_screen 'Prêt à remplir votre panier'
 }
 back_to_repas() { # le résultat est livré à Repas, qui est revenu devant
   wait_until 20 ui_has 'drive.result'
@@ -133,7 +133,7 @@ say "1. Lecture du magasin (drive.setup) : le magasin du faux Leclerc, lu par l'
 RUN_SETUP=5e7b0000-0000-4000-8000-000000000001
 fake_reset
 start_setup "$RUN_SETUP"
-if wait_until 40 ui_has 'choisis ton magasin'; then
+if wait_until 40 ui_has 'choisissez votre magasin'; then
   ok "drive.setup ouvre le drive sur l'accueil, avec le message en français simple"
 else
   ko "le drive ne s'est pas ouvert sur l'accueil"
@@ -172,22 +172,22 @@ if wait_until 70 ui_has 'text="Commencer mes courses"'; then
 else
   ko "l'accueil du magasin ne s'est pas affiché"
 fi
-check "un message en haut dit de toucher « Commencer mes courses » (l'attente normale, sans alarme)" ui_has 'touche « Commencer mes courses'
+check "un message en haut dit de toucher « Commencer mes courses » (l'attente normale, sans alarme)" ui_has 'touchez « Commencer mes courses'
 check "ce message ne propose pas « Ouvrir l'accueil du drive » : rien n'est en panne" home_button_absent
 sleep 5
-check "tant que l'utilisateur n'a pas ouvert son magasin, l'agent n'affiche rien" ui_lacks 'Prêt à remplir ton panier'
+check "tant que l'utilisateur n'a pas ouvert son magasin, l'agent n'affiche rien" ui_lacks 'Prêt à remplir votre panier'
 check "rien ne part vers le site avant l'ouverture du magasin" nothing_sent
 check "le faux Leclerc a servi l'accueil de l'enseigne ($SITE_HOST/), la page de départ du plan" requested_on "$SITE_HOST" '/'
 check "NON-RÉGRESSION : jamais la racine de l'hôte du magasin ($FAKE_STORE_HOST/), page 404 du vrai site (recette réelle, application 0.1.3)" not_requested_on "$FAKE_STORE_HOST" '/'
 check "jamais l'adresse /magasin-000001-000001/ (page 404 du vrai site)" not_requested '/magasin-000001-000001/'
 screenshot e04a-accueil-du-magasin
 if tap 'text="Commencer mes courses"'; then ok "l'utilisateur ouvre son magasin (bouton du site touché ; l'application ne clique jamais à sa place)"; else ko "le bouton « Commencer mes courses » est introuvable"; fi
-if wait_until 70 agent_screen 'Prêt à remplir ton panier'; then
-  ok "dès que la page du magasin s'ouvre, l'agent reçoit le plan tout seul et affiche « Prêt à remplir ton panier »"
+if wait_until 70 agent_screen 'Prêt à remplir votre panier'; then
+  ok "dès que la page du magasin s'ouvre, l'agent reçoit le plan tout seul et affiche « Prêt à remplir votre panier »"
 else
   ko "le récapitulatif de l'agent ne s'est pas affiché"
 fi
-check "le message d'en-tête a disparu" ui_lacks 'touche « Commencer mes courses'
+check "le message d'en-tête a disparu" ui_lacks 'touchez « Commencer mes courses'
 check "le faux Leclerc a servi la page du magasin (avec sa ville), sur l'hôte du magasin" requested_on "$FAKE_STORE_HOST" '/magasin-000001-000001-Ville-Test/'
 check "NON-RÉGRESSION : le départ n'est jamais retombé sur la racine de l'hôte du magasin" not_requested_on "$FAKE_STORE_HOST" '/'
 check "récapitulatif : 2 produits connus à mettre au panier" ui_has 'produits connus à mettre'
@@ -223,7 +223,7 @@ check "l'agent ne choisit jamais seul : le panier n'a pas changé" cart_is "$CAR
 sleep 1
 screenshot e05-choix
 touch_target 'text="Choisir"' "Choisir (liste de produits)"
-touch_target 'text="Passer cette fois"' "Passer cette fois"
+touch_target 'text="Pas cette fois"' "Pas cette fois"
 if tap 'text="Choisir"'; then ok "premier produit proposé choisi (poivre moulu)"; else ko "aucun bouton « Choisir » à l'écran"; fi
 if wait_until 60 ui_has 'Panier rempli'; then ok "l'agent annonce « Panier rempli »"; else ko "l'agent n'a pas annoncé la fin"; fi
 check "le panier du faux Leclerc : farine x3, sucre x1 et le poivre choisi x2" cart_is "$CART_FULL"
@@ -268,9 +268,9 @@ fake_reset
 fake_behavior '{"latencyMs":1500}' # le passage dure assez longtemps pour être interrompu au milieu
 start_plan "$RUN_ABANDON" plan-connu.json
 enter_store
-wait_until 70 agent_screen 'Prêt à remplir ton panier' || ko "le récapitulatif ne s'est pas affiché"
+wait_until 70 agent_screen 'Prêt à remplir votre panier' || ko "le récapitulatif ne s'est pas affiché"
 tap 'text="Commencer"' || ko "le bouton « Commencer » est introuvable"
-if wait_until 30 ui_has 'Remplissage du panier'; then ok "le passage est en cours (écran de progression de l'agent)"; else ko "le passage n'a pas commencé"; fi
+if wait_until 30 ui_has 'Votre panier se remplit'; then ok "le passage est en cours (écran de progression de l'agent)"; else ko "le passage n'a pas commencé"; fi
 adb shell input keyevent KEYCODE_BACK
 if wait_until 15 ui_has "Abandonner l.envoi"; then ok "le retour du téléphone demande s'il faut abandonner l'envoi"; else ko "pas de demande d'abandon"; fi
 sleep 1
@@ -308,7 +308,7 @@ enter_store || ko "l'accueil du magasin ne s'est pas affiché après la reprise"
 resumed=0
 until=$((SECONDS + 70))
 while [ "$SECONDS" -lt "$until" ]; do
-  if ui_has 'Prêt à remplir ton panier'; then
+  if ui_has 'Prêt à remplir votre panier'; then
     resumed=1
     break
   fi
@@ -338,7 +338,7 @@ fake_reset
 fake_behavior '{"fault":{"kind":"forbidden","after":1}}' # la première recherche passe, puis tout est refusé
 start_plan "$RUN_BLOCK" plan-connu.json
 enter_store
-wait_until 70 agent_screen 'Prêt à remplir ton panier' || ko "le récapitulatif ne s'est pas affiché"
+wait_until 70 agent_screen 'Prêt à remplir votre panier' || ko "le récapitulatif ne s'est pas affiché"
 tap 'text="Commencer"' || ko "le bouton « Commencer » est introuvable"
 if wait_until 60 ui_has 'Panier rempli en partie'; then ok "l'agent s'arrête et annonce « Panier rempli en partie »"; else ko "l'agent n'a pas annoncé l'arrêt"; fi
 sleep 1
@@ -366,7 +366,7 @@ fake_reset
 fake_behavior '{"fault":{"kind":"contract-changed","on":"search"}}'
 start_plan "$RUN_CHANGED" plan-connu.json
 enter_store
-wait_until 70 agent_screen 'Prêt à remplir ton panier' || ko "le récapitulatif ne s'est pas affiché"
+wait_until 70 agent_screen 'Prêt à remplir votre panier' || ko "le récapitulatif ne s'est pas affiché"
 tap 'text="Commencer"' || ko "le bouton « Commencer » est introuvable"
 if wait_until 60 ui_has 'Envoi interrompu'; then ok "l'agent s'interrompt : « Envoi interrompu »"; else ko "l'agent n'a pas détecté le changement"; fi
 check "l'agent dit que Leclerc a modifié son site" ui_has 'Leclerc a modifié son site'
@@ -411,8 +411,8 @@ RUN_404=e4040000-0000-4000-8000-000000000009
 fake_reset
 fake_behavior '{"homeStatus":404}'
 start_plan "$RUN_404" plan-connu.json
-if wait_until 70 ui_has 'celle de ton magasin'; then
-  ok "page d'erreur 404 : le bandeau « Cette page n'est pas celle de ton magasin » s'affiche, au lieu d'un écran muet"
+if wait_until 70 ui_has 'celle de votre magasin'; then
+  ok "page d'erreur 404 : le bandeau « Cette page n'est pas celle de votre magasin » s'affiche, au lieu d'un écran muet"
 else
   ko "page d'erreur 404 : aucun bandeau, l'utilisateur reste devant un écran muet"
 fi
@@ -420,7 +420,7 @@ check "le bandeau propose le bouton « Ouvrir l'accueil du drive »" home_button
 check "le site a bien été interrogé à l'accueil de l'enseigne (la page de départ du plan)" requested_on "$SITE_HOST" '/'
 check "NON-RÉGRESSION : le repli ne mène pas à la racine de l'hôte du magasin" not_requested_on "$FAKE_STORE_HOST" '/'
 sleep 6
-check "l'agent n'affiche rien et ne reçoit pas le plan sur une page d'erreur" ui_lacks 'Prêt à remplir ton panier'
+check "l'agent n'affiche rien et ne reçoit pas le plan sur une page d'erreur" ui_lacks 'Prêt à remplir votre panier'
 check "rien n'est parti vers le site" nothing_sent
 screenshot e15-page-erreur-404
 fake_behavior '{"homeStatus":null}' # le site répond de nouveau
@@ -430,11 +430,11 @@ if wait_until 40 ui_has 'text="Commencer mes courses"'; then
 else
   ko "l'accueil du magasin ne s'est pas affiché"
 fi
-check "le bandeau dit maintenant de toucher « Commencer mes courses » (plus d'alarme, plus de bouton de l'application)" ui_has 'touche « Commencer mes courses'
+check "le bandeau dit maintenant de toucher « Commencer mes courses » (plus d'alarme, plus de bouton de l'application)" ui_has 'touchez « Commencer mes courses'
 check "plus de bouton « Ouvrir l'accueil du drive » : on y est" home_button_absent
 screenshot e16-accueil-du-magasin
 if tap 'text="Commencer mes courses"'; then ok "l'utilisateur ouvre son magasin (bouton du site touché)"; else ko "le bouton « Commencer mes courses » est introuvable"; fi
-if wait_until 70 agent_screen 'Prêt à remplir ton panier'; then
+if wait_until 70 agent_screen 'Prêt à remplir votre panier'; then
   ok "dès que la page du magasin s'ouvre, l'agent reçoit le plan tout seul et affiche son récapitulatif"
 else
   ko "l'agent n'a pas affiché son récapitulatif sur la page du magasin"
@@ -456,9 +456,9 @@ fake_reset
 fake_behavior '{"homeDelayMs":60000}' # la page n'arrive qu'après une minute
 start_plan "$RUN_SLOW" plan-connu.json
 sleep 10
-check "avant le délai, le bandeau attend l'ouverture du magasin sans alarme" ui_lacks 'celle de ton magasin'
-if wait_until 60 ui_has 'celle de ton magasin'; then
-  ok "page trop lente : le bandeau « Cette page n'est pas celle de ton magasin » s'affiche une fois le délai écoulé"
+check "avant le délai, le bandeau attend l'ouverture du magasin sans alarme" ui_lacks 'celle de votre magasin'
+if wait_until 60 ui_has 'celle de votre magasin'; then
+  ok "page trop lente : le bandeau « Cette page n'est pas celle de votre magasin » s'affiche une fois le délai écoulé"
 else
   ko "page trop lente : aucun bandeau au bout d'une minute"
 fi
@@ -467,7 +467,7 @@ screenshot e17-page-lente
 fake_behavior '{"homeDelayMs":0}'
 if open_home && wait_until 40 ui_has 'text="Commencer mes courses"'; then ok "« Ouvrir l'accueil du drive » recharge l'accueil, qui s'affiche cette fois"; else ko "l'accueil du magasin ne s'est pas affiché"; fi
 tap 'text="Commencer mes courses"' || ko "le bouton « Commencer mes courses » est introuvable"
-if wait_until 70 agent_screen 'Prêt à remplir ton panier'; then ok "l'agent reprend tout seul sur la page du magasin"; else ko "l'agent n'a pas affiché son récapitulatif"; fi
+if wait_until 70 agent_screen 'Prêt à remplir votre panier'; then ok "l'agent reprend tout seul sur la page du magasin"; else ko "l'agent n'a pas affiché son récapitulatif"; fi
 if tap 'text="Annuler"' && tap 'text="Retourner dans Repas"' && wait_until 20 result_has "$RUN_SLOW" aborted ''; then
   ok "« Annuler » : Repas reçoit un résultat « aborted »"
 else
@@ -489,13 +489,13 @@ else
 fi
 check "la page du site reste visible sous le bandeau (c'est là que l'utilisateur passe le défi)" ui_has 'momentanément indisponible'
 check "le bandeau garde une issue : « Ouvrir l'accueil du drive »" home_button
-check "l'agent ne reçoit pas le plan sur la page refusée" ui_lacks 'Prêt à remplir ton panier'
+check "l'agent ne reçoit pas le plan sur la page refusée" ui_lacks 'Prêt à remplir votre panier'
 screenshot e18-verification
 fake_behavior '{"homeStatus":null}'
 open_home || ko "le bouton « Ouvrir l'accueil du drive » est introuvable"
 wait_until 40 ui_has 'text="Commencer mes courses"' || ko "l'accueil du magasin ne s'est pas affiché"
 tap 'text="Commencer mes courses"' || ko "le bouton « Commencer mes courses » est introuvable"
-if wait_until 70 agent_screen 'Prêt à remplir ton panier'; then ok "le défi passé (page de nouveau servie), l'agent reprend tout seul"; else ko "l'agent n'a pas affiché son récapitulatif"; fi
+if wait_until 70 agent_screen 'Prêt à remplir votre panier'; then ok "le défi passé (page de nouveau servie), l'agent reprend tout seul"; else ko "l'agent n'a pas affiché son récapitulatif"; fi
 if tap 'text="Annuler"' && tap 'text="Retourner dans Repas"' && wait_until 20 result_has "$RUN_CHECK" aborted ''; then
   ok "« Annuler » : Repas reçoit un résultat « aborted »"
 else
@@ -511,16 +511,16 @@ fake_reset
 fake_behavior '{"startPath":"/"}' # le bouton « Commencer mes courses » du faux site mène d'abord à la racine de l'hôte du magasin, une page 404
 start_plan "$RUN_DEAD" plan-connu.json
 for dead in '/' '/magasin-000001-000001/'; do
-  if enter_store; then ok "page 404 ($dead) : l'utilisateur touche « Commencer mes courses »"; else ko "page 404 ($dead) : l'accueil de l'enseigne ne s'est pas affiché"; fi
-  if wait_until 40 ui_has 'celle de ton magasin'; then
-    ok "page 404 ($dead) : le bandeau « Cette page n'est pas celle de ton magasin » s'affiche, au lieu d'un écran muet"
+  if enter_store; then ok "page 404 ($dead) : l'utilisateur touchez « Commencer mes courses »"; else ko "page 404 ($dead) : l'accueil de l'enseigne ne s'est pas affiché"; fi
+  if wait_until 40 ui_has 'celle de votre magasin'; then
+    ok "page 404 ($dead) : le bandeau « Cette page n'est pas celle de votre magasin » s'affiche, au lieu d'un écran muet"
   else
     ko "page 404 ($dead) : aucun bandeau, l'utilisateur reste devant un écran muet"
   fi
   sleep 2 # le temps que la page 404 remplace l'accueil à l'écran
   check "le bandeau propose le bouton « Ouvrir l'accueil du drive »" home_button
   check "la page 404 n'a pas le bouton « Commencer mes courses »" ui_lacks 'text="Commencer mes courses"'
-  check "l'agent ne reçoit pas le plan sur une page 404" ui_lacks 'Prêt à remplir ton panier'
+  check "l'agent ne reçoit pas le plan sur une page 404" ui_lacks 'Prêt à remplir votre panier'
   check "rien n'est parti vers le site" nothing_sent
   check "le faux Leclerc a bien servi cette page 404 ($FAKE_STORE_HOST$dead)" requested_on "$FAKE_STORE_HOST" "$dead"
   sleep 1
@@ -535,7 +535,7 @@ for dead in '/' '/magasin-000001-000001/'; do
 done
 # Le dernier rechargement a lu le bon chemin : le bouton mène de nouveau à la page du magasin.
 tap 'text="Commencer mes courses"' || ko "le bouton « Commencer mes courses » est introuvable"
-if wait_until 70 agent_screen 'Prêt à remplir ton panier'; then ok "le chemin retrouvé, l'agent reçoit le plan tout seul"; else ko "l'agent n'a pas affiché son récapitulatif"; fi
+if wait_until 70 agent_screen 'Prêt à remplir votre panier'; then ok "le chemin retrouvé, l'agent reçoit le plan tout seul"; else ko "l'agent n'a pas affiché son récapitulatif"; fi
 if tap 'text="Annuler"' && tap 'text="Retourner dans Repas"' && wait_until 20 result_has "$RUN_DEAD" aborted ''; then
   ok "« Annuler » : Repas reçoit un résultat « aborted »"
 else
