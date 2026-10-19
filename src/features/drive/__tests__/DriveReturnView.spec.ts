@@ -11,6 +11,7 @@ import { buildPlanMessage } from '../buildPlanMessage'
 import DriveReturnView from '../DriveReturnView.vue'
 import { useDriveReturnStore } from '../returnStore'
 import { plan, storeBaseUrl } from './fixtures'
+import { basketUrl, DRIVE_HOME_URL } from '../leclerc'
 import { result, RUN } from './results'
 
 // Données SYNTHÉTIQUES : magasin d'essai, produits et listes inventés.
@@ -200,14 +201,45 @@ describe('retour du drive : un passage réussi', () => {
     expect(wrapper.text()).toContain('Pas cette fois.')
   })
 
-  it('ouvre le panier dans le navigateur', async () => {
+  // DRV-625 : l'adresse du panier du vrai site n'est pas relevée, « Finaliser sur Leclerc » ouvre l'accueil du drive
+  it('dans un navigateur, ouvre l’accueil du drive dans un nouvel onglet', async () => {
     const { wrapper } = await open({ kind: 'result', result: result(), draft })
     await vi.waitFor(() => expect(wrapper.find('a[target="_blank"]').exists()).toBe(true))
 
     expect(wrapper.find('a[target="_blank"]').attributes()).toMatchObject({
-      href: storeBaseUrl,
+      href: DRIVE_HOME_URL,
       rel: 'noopener noreferrer',
     })
+    expect(wrapper.find('a[target="_blank"]').text()).toContain('S’ouvre dans un nouvel onglet.')
+  })
+
+  it('dans l’application, ouvre l’accueil du drive dans l’application : même fenêtre, aucune mention du navigateur', async () => {
+    const native = {
+      postMessage: vi.fn<(text: string) => void>(),
+      addEventListener: vi.fn<() => void>(),
+      removeEventListener: vi.fn<() => void>(),
+    }
+    vi.stubGlobal('repasNative', native)
+    try {
+      const { wrapper } = await open({ kind: 'result', result: result(), draft })
+      await vi.waitFor(() =>
+        expect(wrapper.find(`a[href="${DRIVE_HOME_URL}"]`).exists()).toBe(true),
+      )
+
+      const link = wrapper.find(`a[href="${DRIVE_HOME_URL}"]`)
+      expect(link.attributes('target')).toBeUndefined()
+      expect(link.attributes('rel')).toBeUndefined()
+      expect(link.text()).toBe('Finaliser sur Leclerc')
+      expect(wrapper.text()).not.toContain('navigateur')
+      expect(wrapper.text()).not.toContain('onglet')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('bâtit l’adresse du panier à partir du magasin enregistré, quand son chemin sera relevé', () => {
+    expect(basketUrl(null)).toBeNull()
+    expect(basketUrl(storeBaseUrl)).toBe(DRIVE_HOME_URL)
   })
 })
 

@@ -126,7 +126,8 @@ describe('la page de départ d’un plan dans l’émulateur (recette réelle du
   })
 
   it('joue le repli sur les pages 404 de la recette réelle : la racine de l’hôte du magasin et /magasin-N-N/ sans ville', () => {
-    expect(script).toContain(`for dead in '/' '/magasin-${STORE.id}-${STORE.id}/'; do`)
+    expect(script).toContain("dead_page_checks '/'")
+    expect(script).toContain(`dead_page_checks '/magasin-${STORE.id}-${STORE.id}/'`)
     expect(script).toContain('"startPath"')
   })
 })
