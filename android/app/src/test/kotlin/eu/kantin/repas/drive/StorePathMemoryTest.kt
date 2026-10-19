@@ -1,7 +1,9 @@
 package eu.kantin.repas.drive
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Le chemin du magasin avec sa ville, retenu depuis les pages que le drive a chargees (DRV-629). Adresses SYNTHÉTIQUES. */
@@ -28,8 +30,8 @@ class StorePathMemoryTest {
 
         assertEquals("https://$host/magasin-000000-000000-Ville-Test", store.value)
         assertEquals(
-            "https://$host/magasin-000000-000000-Ville-Test/detail-panier.aspx",
-            memory.basketUrl(host, "000000", "000000"),
+            "https://$host/magasin-000000-000000-Ville-Test",
+            memory.storeHomeUrl(host, "000000", "000000"),
         )
     }
 
@@ -74,24 +76,34 @@ class StorePathMemoryTest {
     }
 
     @Test
-    fun `ne donne la page du panier qu'au meme hote et aux memes numeros`() {
+    fun `ne donne l'accueil du magasin qu'au meme hote et aux memes numeros`() {
         val memory = StorePathMemory(MemoryStore())
         memory.remember("https://$host/magasin-000000-000456-Ville-Test/")
 
         assertEquals(
-            "https://$host/magasin-000000-000456-Ville-Test/detail-panier.aspx",
-            memory.basketUrl(host, "000000", "000456"),
+            "https://$host/magasin-000000-000456-Ville-Test",
+            memory.storeHomeUrl(host, "000000", "000456"),
         )
-        assertNull(memory.basketUrl("autre-courses.leclercdrive.fr", "000000", "000456"))
-        assertNull(memory.basketUrl(host, "000000", "000000"))
-        assertNull(memory.basketUrl(host, "000456", "000456"))
+        assertNull(memory.storeHomeUrl("autre-courses.leclercdrive.fr", "000000", "000456"))
+        assertNull(memory.storeHomeUrl(host, "000000", "000000"))
+        assertNull(memory.storeHomeUrl(host, "000456", "000456"))
     }
 
     @Test
     fun `une valeur gardee qui n'a plus la forme attendue n'est jamais utilisee`() {
         listOf("n'importe quoi", "https://exemple.org/magasin-000000-000000-Ville-Test", "https://$host/magasin-000000-000000").forEach {
-            assertNull(it, StorePathMemory(MemoryStore(it)).basketUrl(host, "000000", "000000"))
+            assertNull(it, StorePathMemory(MemoryStore(it)).storeHomeUrl(host, "000000", "000000"))
         }
+    }
+
+    @Test
+    fun `sait si un chemin est retenu, de n'importe quel magasin`() {
+        val memory = StorePathMemory(MemoryStore())
+        assertFalse(memory.hasPath())
+
+        memory.remember("https://$host/magasin-000000-000456-Ville-Test/")
+
+        assertTrue(memory.hasPath())
     }
 
     @Test
@@ -103,6 +115,6 @@ class StorePathMemoryTest {
         memory.forget()
 
         assertNull(store.value)
-        assertNull(memory.basketUrl(host, "000000", "000000"))
+        assertNull(memory.storeHomeUrl(host, "000000", "000000"))
     }
 }
