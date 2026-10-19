@@ -387,21 +387,28 @@ export default {
     tooMany:
       'Trop de requêtes. Réessayez dans {minutes} minute | Trop de requêtes. Réessayez dans {minutes} minutes',
     // `DRIVE_RATE_LIMITED` (429, DRV-615) : passager, distinct des plafonds de quantité ; `{wait}` vaut au moins une minute
-    driveRateLimited: 'Trop de demandes en peu de temps. Attendez {wait}, puis réessayez.',
+    driveRateLimited:
+      'Trop de demandes en peu de temps. Rien n’est perdu. Attendez {wait}, puis réessayez.',
     driveWait: 'une minute | {minutes} minutes',
-    driveDisabled: 'L’envoi au drive n’est pas disponible pour le moment.',
-    listSent: 'Cette liste vient d’être envoyée au drive : elle n’est plus modifiable.',
-    listNotSent: 'Cette liste n’est plus envoyée au drive.',
-    listNotSendable: 'Seule une liste en cours peut être envoyée au drive.',
-    listEmpty: 'La liste est vide : ajoutez des articles avant de l’envoyer au drive.',
+    driveDisabled:
+      'L’envoi au drive n’est pas disponible pour le moment. Votre liste n’a pas changé. Réessayez plus tard.',
+    listSent:
+      'Cette liste vient d’être envoyée au drive : elle n’est plus modifiable. Rien n’a été changé. Rouvrez-la pour la modifier.',
+    listNotSent:
+      'Cette liste n’est plus envoyée au drive. Rien n’a été changé. Ouvrez la liste pour voir où elle en est.',
+    listNotSendable:
+      'Seule une liste en cours peut être envoyée au drive. Rien n’a été changé. Ouvrez une liste en cours.',
+    listEmpty:
+      'La liste est vide : il n’y a rien à envoyer au drive. Votre liste n’a pas changé. Ajoutez des articles, puis envoyez-la.',
     driveNotConfigured: 'Choisissez d’abord votre magasin dans les réglages du drive.',
     driveChoiceInvalid:
-      'Ce choix n’est pas valable : 5 produits acceptés et 20 à ne plus proposer au plus, et un produit ne peut pas être les deux à la fois.',
-    driveChoiceNotFound: 'Repas ne se souvient plus de produit pour cet article.',
+      'Ce choix n’est pas valable : 5 produits à garder et 20 à ne plus proposer au plus, sans doublon. Rien n’a été enregistré. Corrigez-le, puis réessayez.',
+    driveChoiceNotFound:
+      'Repas ne se souvient plus de produit pour cet article. Rien n’a été changé. Rechargez la page pour voir l’état actuel.',
     driveLimitReached:
-      'Repas se souvient déjà de trop de produits, ou il y a eu trop d’écritures aujourd’hui : oubliez des produits dans « Mes produits », ou réessayez demain.',
+      'Repas se souvient déjà de trop de produits, ou il y a eu trop d’écritures aujourd’hui. Vos choix déjà enregistrés sont gardés. Oubliez des produits dans « Mes produits », ou réessayez demain.',
     driveStoreMismatch:
-      'Votre magasin a changé : la page vient d’être rechargée, refaites votre action.',
+      'Votre magasin a changé : la page vient d’être rechargée. Rien n’a été enregistré. Refaites votre action.',
     unitMeasureIncomplete:
       'La dimension et le facteur de base vont ensemble : renseignez les deux, ou laissez-les vides.',
     unitBaseFactorInvalid: 'Le facteur de base doit être un nombre supérieur à zéro.',
@@ -409,7 +416,7 @@ export default {
       'Cette adresse n’est pas celle d’un magasin Leclerc Drive : vérifiez-la, elle ressemble à https://exemple.leclercdrive.fr/magasin-123456-123456.',
   },
   driveSend: {
-    title: 'Envoi au drive',
+    title: 'Votre liste est prête pour le drive',
     back: 'Retour à la liste',
     store: 'Magasin : {label}',
     storeEnding: 'Magasin …{ending}',
@@ -418,16 +425,21 @@ export default {
     offHelp:
       'Une liste envoyée au drive ne se modifie plus. Vous pouvez la rouvrir pour la modifier.',
     offHelpOffline: 'Hors connexion : la liste se rouvrira quand le réseau sera revenu.',
-    intro:
-      'Vérifiez la liste, puis ouvrez le drive : le panier de Leclerc se remplit avec les produits retenus, puis vous revenez ici avec un récapitulatif. Connectez-vous à Leclerc si besoin.',
-    counts: {
-      label: 'Contenu de l’envoi',
-      known: 'Produits connus',
-      new: 'À choisir',
-      haveAtHome: 'J’en ai toujours',
-      skipped: 'Pas cette fois',
+    // Une phrase de synthèse construite avec les comptes (DRV-622) : « 6 articles : 2 sont déjà choisis, 4 sont à choisir sur Leclerc. »
+    summary: {
+      sentence: '{total} : {parts}.',
+      join: ', ',
+      total: '{count} article | {count} articles',
+      known: '{count} est déjà choisi | {count} sont déjà choisis',
+      allKnown: 'il est déjà choisi | tous sont déjà choisis',
+      new: '{count} est à choisir sur Leclerc | {count} sont à choisir sur Leclerc',
+      allNew: 'il est à choisir sur Leclerc | tous sont à choisir sur Leclerc',
+      other: '{count} ne sera pas mis au panier | {count} ne seront pas mis au panier',
+      allOther: 'il ne sera pas mis au panier | aucun ne sera mis au panier',
     },
-    lines: 'Votre liste ({count})',
+    intro: 'Le panier de Leclerc va se remplir, puis vous revenez ici.',
+    articles: 'Vos articles',
+    showArticles: 'Voir les articles',
     need: 'À acheter : {quantity}',
     statusNew: 'Nouveau : vous choisirez le produit sur Leclerc.',
     statusReplace: 'Vous choisirez un autre produit sur Leclerc, à la place de : {label}.',
@@ -475,87 +487,122 @@ export default {
       search: 'Chercher sur Leclerc',
       searchFor: 'Chercher sur Leclerc : {name} (s’ouvre dans un nouvel onglet)',
     },
+    // Une erreur dit trois choses : ce qui s'est passé, ce qui est sauf, une action (principes-produit.md § 4)
     driveUnusable: {
-      title: 'Le drive n’est pas utilisable sur cet appareil',
-      help: 'Mettez à jour l’application Repas et le composant « Android System WebView », puis revenez ici.',
+      title: 'Le drive ne fonctionne pas sur ce téléphone',
+      help: 'Votre liste n’a pas changé. Mettez à jour l’application Repas et « Android System WebView », puis revenez ici.',
       aid: 'Voir l’aide',
     },
     failure: {
-      invalidPlan: 'Cet envoi n’est pas valide. Rechargez la page et réessayez.',
+      invalidPlan:
+        'Repas n’a pas pu préparer l’envoi. Rien n’a été mis au panier. Rechargez la page, puis réessayez.',
       tooManyLines:
-        'La liste a plus de {max} articles : ce n’est pas possible en un seul envoi. Retirez des articles de la liste, puis renvoyez-la.',
+        'Cette liste a plus de {max} articles : c’est trop pour un seul envoi. Votre liste n’a pas changé. Retirez des articles, puis renvoyez-la.',
       tooLarge:
-        'L’envoi est trop gros pour être transmis à l’application. Choisissez « Pas cette fois » pour quelques articles, ou retirez-en de la liste.',
-      sendFailed: 'L’application n’a pas pu ouvrir le drive. Réessayez.',
-      appRefused: 'L’application ne répond pas comme prévu. Fermez-la, rouvrez-la, puis réessayez.',
+        'Cet envoi est trop gros pour l’application. Rien n’a été mis au panier. Mettez « Pas cette fois » sur quelques articles, puis réessayez.',
+      sendFailed:
+        'L’application n’a pas pu ouvrir le drive. Rien n’a été mis au panier. Réessayez dans un instant.',
+      appRefused:
+        'Le drive n’a pas répondu comme prévu. Rien n’a été perdu. Mettez l’application à jour, puis réessayez.',
+      update: 'Mettre à jour l’application',
     },
   },
   driveReturn: {
-    title: 'Récapitulatif',
     backToList: 'Retour à la liste',
     allLists: 'Mes listes',
     none: {
       title: 'Aucun récapitulatif à afficher',
-      help: 'Le récapitulatif d’un envoi n’est gardé que pendant la visite : si la page a été rechargée, ouvrez la liste pour reprendre l’envoi.',
+      help: 'Un récapitulatif ne se garde pas quand la page est rechargée. Ouvrez la liste pour reprendre l’envoi.',
     },
     stale: {
       title: 'Ce récapitulatif ne correspond pas à votre dernier envoi',
       help: 'Il n’a pas été pris en compte : rien n’a été enregistré.',
     },
+    // Une erreur dit trois choses : ce qui s'est passé, ce qui est sauf, une action. Le code n'est lu que dans « Détails ».
     refused: {
-      title: 'Le drive n’a pas démarré',
-      help: 'L’application n’a pas lancé l’envoi : rien n’a été mis au panier. Mettez l’application à jour si cela se répète.',
-      code: 'Code : {code}',
+      title: 'L’envoi n’a pas démarré',
+      help: 'L’application n’a pas pu lancer l’envoi. Rien n’a été mis au panier. Réessayez depuis l’envoi, ou mettez l’application à jour si cela se répète.',
       backToSend: 'Revenir à l’envoi',
     },
     invalid: {
-      title: 'Réponse incomprise',
-      help: 'L’application a renvoyé une réponse que Repas ne comprend pas. Mettez l’application à jour, puis recommencez.',
+      title: 'Le drive n’a pas répondu comme prévu',
+      help: 'Rien n’a été perdu. Mettez l’application à jour, puis réessayez.',
+      detail: 'Détail : {detail}',
+      update: 'Mettre à jour l’application',
     },
     setup: {
       title: 'Lecture du magasin',
       help: 'Cette réponse est celle d’une lecture du magasin : elle se traite dans les réglages du drive.',
       settings: 'Réglages du drive',
     },
+    // Le titre dit le résultat ; le reste, au plus trois phrases : ce qui s'est passé, ce qui est sauf, ce qu'il reste à faire
+    safe: 'Ce qui est déjà au panier y reste.',
     outcome: {
       completed: {
         title: 'Le panier est rempli',
-        help: 'Les produits retenus sont dans votre panier Leclerc. Il reste à le finaliser sur le site de Leclerc.',
+        help: 'Vos produits sont dans le panier Leclerc : il reste à le finaliser.',
       },
       partial: {
-        title: 'L’envoi s’est arrêté avant la fin',
-        help: 'Ce qui a été fait reste dans le panier. Vous pouvez réessayer le reste.',
+        title: 'Le panier est rempli en partie',
+        lead: 'L’envoi s’est arrêté avant la fin.',
+        safe: 'Ce qui est déjà au panier y reste : il reste {count} article à ajouter. | Ce qui est déjà au panier y reste : il reste {count} articles à ajouter.',
+        action: 'Reprenez l’envoi pour finir.',
       },
       aborted: {
-        title: 'Envoi arrêté',
-        help: 'Vous avez arrêté l’envoi : ce qui était déjà dans le panier y reste.',
+        title: 'Vous avez arrêté l’envoi',
+        action: 'Reprenez l’envoi quand vous voulez.',
       },
       error: {
-        title: 'L’envoi a échoué',
-        help: 'L’envoi n’a pas pu aller au bout. Ce qui était déjà dans le panier y reste.',
+        title: 'L’envoi s’est arrêté',
+        lead: 'L’envoi n’a pas pu aller au bout.',
+        action: 'Reprenez l’envoi dans un moment.',
       },
     },
     errorCode: {
-      NOT_LOGGED_IN: 'Vous n’êtes pas connecté à Leclerc : connectez-vous, puis recommencez.',
-      STORE_MISMATCH: 'Le magasin choisi sur Leclerc n’est pas celui des réglages de Repas.',
-      BLOCKED:
-        'Leclerc a bloqué les demandes (trop de demandes ou contrôle anti-robot). Attendez un moment, puis réessayez.',
-      CONTRACT_CHANGED:
-        'Le site de Leclerc a changé : l’envoi automatique ne fonctionne plus pour l’instant.',
-      NETWORK: 'La connexion a été coupée pendant l’envoi.',
-      CANCELLED: 'L’envoi a été annulé.',
-      INVALID_MESSAGE: 'L’application n’a pas compris l’envoi.',
-      UNSUPPORTED_PAGE: 'Cette page de Leclerc n’est pas prise en charge.',
+      NOT_LOGGED_IN: {
+        happened: 'Vous n’êtes pas connecté à Leclerc.',
+        action: 'Connectez-vous à Leclerc, puis reprenez l’envoi.',
+      },
+      STORE_MISMATCH: {
+        happened: 'Le magasin ouvert sur Leclerc n’est pas le vôtre.',
+        action: 'Ouvrez votre magasin sur Leclerc, puis reprenez l’envoi.',
+      },
+      BLOCKED: {
+        happened: 'Leclerc a ralenti les demandes.',
+        action: 'Attendez quelques minutes, puis reprenez l’envoi.',
+      },
+      CONTRACT_CHANGED: {
+        happened: 'Leclerc a changé son site, l’envoi automatique est arrêté.',
+        action: 'Cherchez vos produits à la main sur Leclerc.',
+      },
+      NETWORK: {
+        happened: 'La connexion a été coupée pendant l’envoi.',
+        action: 'Vérifiez votre connexion, puis reprenez l’envoi.',
+      },
+      CANCELLED: {
+        happened: 'L’envoi a été annulé.',
+        action: 'Reprenez l’envoi quand vous voulez.',
+      },
+      INVALID_MESSAGE: {
+        happened: 'L’application n’a pas compris l’envoi.',
+        action: 'Mettez l’application à jour, puis reprenez l’envoi.',
+      },
+      UNSUPPORTED_PAGE: {
+        happened: 'Repas ne peut pas travailler sur cette page de Leclerc.',
+        action: 'Ouvrez la page de votre magasin, puis reprenez l’envoi.',
+      },
     },
+    details: 'Détails',
+    errorDetails: 'Code : {code}',
     ignored:
-      '{count} article inattendu n’a pas été pris en compte : il ne figure pas dans l’envoi, Repas ne s’en souvient pas. | {count} articles inattendus n’ont pas été pris en compte : ils ne figurent pas dans l’envoi, Repas ne s’en souvient pas.',
+      '{count} article ne figurait pas dans votre liste : Repas l’a laissé de côté. | {count} articles ne figuraient pas dans votre liste : Repas les a laissés de côté.',
     save: {
       saving: 'Enregistrement de vos choix…',
       saved: 'Vos choix sont enregistrés pour les prochains envois.',
-      failed: 'Vos choix n’ont pas pu être enregistrés. {reason}',
+      failed: 'Vos choix n’ont pas pu être enregistrés. Ils sont gardés sur cette page. {reason}',
       // Trop de demandes (429, DRV-615) : le résultat reste en mémoire sur cette page, rien n'est perdu
       rateLimited:
-        'Vos choix ne sont pas encore enregistrés, mais ils sont gardés sur cette page : rien n’est perdu. {reason}',
+        'Vos choix ne sont pas encore enregistrés. Ils sont gardés sur cette page. {reason}',
       retry: 'Réessayer l’enregistrement',
     },
     counts: {
@@ -565,10 +612,7 @@ export default {
       haveAtHome: 'J’en ai toujours',
       skipped: 'Pas cette fois',
       unavailable: 'Indisponibles',
-      failed: 'Échecs',
-      priced: 'Prix lus',
     },
-    lines: 'Détail ({count})',
     quantity: '× {count}',
     unknownProduct: 'Produit n° {id}',
     line: {
@@ -579,14 +623,15 @@ export default {
       haveAtHome: 'J’en ai toujours : Repas s’en souvient.',
       skipped: 'Pas cette fois.',
       unavailable: 'Aucun produit disponible : rien n’a été mis au panier.',
-      failed: 'Échec : {reason}',
+      failed: 'Pas ajouté au panier. {reason}',
       rejected: 'Ne sera plus proposé : {labels}',
     },
     actions: {
       finalize: 'Finaliser sur Leclerc',
       finalizeHelp: 'S’ouvre dans le navigateur.',
-      retryFailed: 'Réessayer les échecs',
+      manual: 'Chercher à la main sur Leclerc',
       resume: 'Reprendre l’envoi',
+      update: 'Mettre à jour l’application',
       complete: 'Terminer la liste',
       completeTitle: 'Terminer la liste ?',
       completeHelp: 'La liste sera terminée. Le panier Leclerc ne sera pas vidé.',

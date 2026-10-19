@@ -176,7 +176,7 @@ test('fonction coupée : « Reprendre l’envoi » dit que l’envoi n’est pas
 
   // L'écran répond « pas disponible » ; ni « Ouvrir le drive » ni « Envoyer au drive », mais « Rouvrir la liste »
   await expect(page.getByRole('alert')).toContainText(
-    'L’envoi au drive n’est pas disponible pour le moment.',
+    'L’envoi au drive n’est pas disponible pour le moment. Votre liste n’a pas changé. Réessayez plus tard.',
   )
   await expect(page.getByRole('button', { name: 'Rouvrir la liste' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Ouvrir le drive' })).toHaveCount(0)

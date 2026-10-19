@@ -2,7 +2,7 @@
 // l'application par un faux installé avant la page. Données inventées (magasin d'essai, produits de test). Joué sur bureau et Pixel 7.
 import { expect, test } from '@playwright/test'
 
-import { BASE, fakeApp, fakeBack, scan } from './support/drive'
+import { BASE, SUMMARY_12, fakeApp, fakeBack, openArticles, scan } from './support/drive'
 
 test('dans l’application : choisir un autre produit, passer une ligne, ouvrir le drive, retrouver l’attente après rechargement', async ({
   page,
@@ -10,8 +10,17 @@ test('dans l’application : choisir un autre produit, passer une ligne, ouvrir 
   await fakeBack(page)
   await fakeApp(page)
   await page.goto('/drive/envoi/l1')
-  await expect(page.getByRole('heading', { level: 1, name: 'Envoi au drive' })).toBeVisible()
-  await expect(page.getByRole('heading', { level: 2, name: 'Votre liste (12)' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Votre liste est prête pour le drive' }),
+  ).toBeVisible()
+  // Une phrase de synthèse, une phrase d'explication, le bouton visible sans défiler ; la liste est repliée (12 articles)
+  await expect(page.getByText(SUMMARY_12)).toBeVisible()
+  await expect(
+    page.getByText('Le panier de Leclerc va se remplir, puis vous revenez ici.'),
+  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ouvrir le drive' })).toBeInViewport()
+  await expect(page.getByRole('listitem').filter({ hasText: 'Farine de blé T55' })).toHaveCount(0)
+  await openArticles(page)
 
   const farine = page.getByRole('listitem').filter({ hasText: 'Farine de blé T55' }).first()
   await expect(farine).toContainText('1. Farine de blé T55 Marque Repère 1 kg')
@@ -24,6 +33,12 @@ test('dans l’application : choisir un autre produit, passer une ligne, ouvrir 
   await page.getByRole('button', { name: 'Choisir un autre produit : Farine' }).click()
   await page.getByRole('button', { name: 'Pas cette fois : Lait' }).click()
   await expect(page.getByText('Vous choisirez un autre produit sur Leclerc')).toBeVisible()
+  // La phrase suit les choix : Farine devient « à choisir », Lait « pas cette fois »
+  await expect(
+    page.getByText(
+      '12 articles : 6 sont déjà choisis, 4 sont à choisir sur Leclerc, 2 ne seront pas mis au panier.',
+    ),
+  ).toBeVisible()
   expect((await scan(page)).violations).toEqual([])
 
   await page.getByRole('button', { name: 'Ouvrir le drive' }).click()
@@ -67,3 +82,21 @@ for (const colorScheme of ['light', 'dark'] as const) {
     expect((await scan(page)).violations).toEqual([])
   })
 }
+
+test('à 360 px de large : « Ouvrir le drive » est visible sans défiler, au-dessus de la barre du bas, sans défilement de côté', async ({
+  page,
+}) => {
+  await fakeBack(page)
+  await fakeApp(page)
+  await page.setViewportSize({ width: 360, height: 640 })
+  await page.goto('/drive/envoi/l1')
+
+  const open = page.getByRole('button', { name: 'Ouvrir le drive' })
+  await expect(open).toBeVisible()
+  const box = await open.boundingBox()
+  const bar = await page.locator('nav').last().boundingBox()
+  // La barre de navigation du bas reste posée sur l'écran : le bouton doit finir au-dessus d'elle
+  expect(box!.y + box!.height).toBeLessThanOrEqual(bar?.y ?? 640)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360)
+  expect((await scan(page)).violations).toEqual([])
+})

@@ -238,7 +238,7 @@ describe('réglages du drive : le magasin', () => {
     await submit(wrapper)
 
     expect(wrapper.find('[role="alert"]').text()).toBe(
-      'Trop de demandes en peu de temps. Attendez une minute, puis réessayez.',
+      'Trop de demandes en peu de temps. Rien n’est perdu. Attendez une minute, puis réessayez.',
     )
     expect(useNotificationsStore().items).toHaveLength(0)
     expect(calls(fetchMock).filter((call) => call === 'PUT /api/v1/drive/settings')).toHaveLength(1)

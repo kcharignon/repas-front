@@ -213,7 +213,7 @@ describe('bloc « Estimation du coût »', () => {
     })
 
     expect(wrapper.find('[role="alert"]').text()).toBe(
-      'Trop de demandes en peu de temps. Attendez une minute, puis réessayez.',
+      'Trop de demandes en peu de temps. Rien n’est perdu. Attendez une minute, puis réessayez.',
     )
     // L'écran n'insiste pas : une seule lecture tant que l'utilisateur ne redemande rien
     await flushPromises()

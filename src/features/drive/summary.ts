@@ -1,4 +1,4 @@
-import type { ErrorCode, ResultLine, ResultMessage } from '@drive-protocol'
+import type { ResultLine, ResultMessage } from '@drive-protocol'
 
 export interface ReturnCounts {
   added: number
@@ -7,13 +7,11 @@ export interface ReturnCounts {
   skipped: number
   unavailable: number
   failed: number
-  /** Lignes dont le prix a été lu pendant le passage. */
-  priced: number
 }
 
-const hasPrice = (line: ResultLine): boolean =>
-  (line.outcome === 'ADDED' && line.price !== undefined) ||
-  (line.outcome === 'CHOSEN' && line.product.price !== undefined)
+/** Les compteurs que l'écran peut montrer. Les échecs se disent dans la phrase du récapitulatif, jamais en chiffre ; les prix lus ne se montrent pas. */
+export const COUNT_KEYS = ['added', 'chosen', 'haveAtHome', 'skipped', 'unavailable'] as const
+export type CountKey = (typeof COUNT_KEYS)[number]
 
 /** Les compteurs du récapitulatif : une ligne du résultat compte pour une issue. */
 export function countOutcomes(result: ResultMessage): ReturnCounts {
@@ -27,16 +25,15 @@ export function countOutcomes(result: ResultMessage): ReturnCounts {
     skipped: count('SKIPPED'),
     unavailable: count('UNAVAILABLE'),
     failed: count('FAILED'),
-    priced: result.lines.filter(hasPrice).length,
   }
 }
 
-/** Les lignes à retenter : celles qui ont échoué (`FAILED`), avec leur code. */
-export function failedLines(result: ResultMessage): { slug: string; error: ErrorCode }[] {
-  return result.lines.flatMap((line) =>
-    line.outcome === 'FAILED' ? [{ slug: line.ingredientSlug, error: line.error }] : [],
-  )
-}
+/** Les compteurs à montrer : seulement ceux qui existent, jamais une ligne à zéro, dans l'ordre de l'écran. */
+export const visibleCounts = (counts: ReturnCounts): { key: CountKey; value: number }[] =>
+  COUNT_KEYS.flatMap((key) => (counts[key] > 0 ? [{ key, value: counts[key] }] : []))
+
+/** Les articles qui devraient être au panier et n'y sont pas : en échec, ou sans produit disponible (ou restés sans choix). */
+export const remaining = (counts: ReturnCounts): number => counts.failed + counts.unavailable
 
 const euros = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' })
 

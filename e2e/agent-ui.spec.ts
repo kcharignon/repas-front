@@ -46,6 +46,7 @@ const SCREENS = [
   'end-slow',
   'challenge',
   'end-partial',
+  'end-error',
   'end-aborted',
   ...ERROR_SCREENS,
 ]

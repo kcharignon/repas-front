@@ -64,8 +64,9 @@ async function open(handlers: Handlers = {}, listId = 'l1', query = '') {
   return { wrapper, context, fetchMock }
 }
 
+// Le plan est lu : le magasin s'affiche sous le titre, quel que soit l'état de l'écran (envoi, attente, hors application)
 const loaded = (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
-  vi.waitFor(() => expect(wrapper.find('dl').exists()).toBe(true))
+  vi.waitFor(() => expect(wrapper.text()).toContain('Magasin'))
 
 const button = (label: string) =>
   [...document.body.querySelectorAll('button')].find(
@@ -79,8 +80,9 @@ const press = async (label: string) => {
   await flushPromises()
 }
 
-const counts = (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
-  wrapper.findAll('dl > div').map((cell) => cell.text())
+/** La phrase de synthèse : construite avec les comptes, elle suit les choix de l'utilisateur. */
+const summary = (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
+  wrapper.find('p.text-xl').text()
 
 const started = (native: ReturnType<typeof fakeNative>) =>
   native.sent.filter((message) => message.type === 'drive.start')
@@ -96,15 +98,23 @@ afterEach(() => {
 })
 
 describe('écran d’envoi au drive, dans l’application', () => {
-  it('affiche toute la liste avec les produits dans l’ordre de priorité, leur nombre, les refusés et les compteurs', async () => {
+  it('dit la liste en une phrase, garde « Ouvrir le drive » avant les articles, qui sont repliés au-delà de 6 lignes', async () => {
     installApp()
     const { wrapper, fetchMock } = await open()
     await loaded(wrapper)
 
     expect(calls(fetchMock)).toContain('GET /api/v1/drive/plans/l1')
-    expect(wrapper.find('h2:nth-of-type(1)').exists()).toBe(true)
+    expect(wrapper.find('h1').text()).toBe('Votre liste est prête pour le drive')
     expect(wrapper.text()).toContain('Magasin …456')
-    expect(wrapper.text()).toContain('Votre liste (12)')
+    expect(summary(wrapper)).toBe(
+      '12 articles : 8 sont déjà choisis, 3 sont à choisir sur Leclerc, 1 ne sera pas mis au panier.',
+    )
+    expect(wrapper.text()).toContain('Le panier de Leclerc va se remplir, puis vous revenez ici.')
+    // Plus de bloc de compteurs ; la liste est repliée et le bouton passe avant elle (et avant l’estimation)
+    expect(wrapper.find('dl').exists()).toBe(false)
+    expect(wrapper.find('details > summary').text()).toBe('Voir les articles')
+    const html = wrapper.html()
+    expect(html.indexOf('Ouvrir le drive')).toBeLessThan(html.indexOf('Voir les articles'))
     expect(wrapper.findAll('main > section ul > li')).toHaveLength(12)
 
     const farine = wrapper.findAll('main > section ul > li')[0]!
@@ -125,16 +135,22 @@ describe('écran d’envoi au drive, dans l’application', () => {
     expect(wrapper.findAll('main > section ul > li')[11]!.text()).toContain(
       'J’en ai toujours : rien à mettre au panier.',
     )
-
-    expect(counts(wrapper)).toEqual([
-      'Produits connus8',
-      'À choisir3',
-      'J’en ai toujours1',
-      'Pas cette fois0',
-    ])
   })
 
-  it('montre l’estimation du coût de la liste entre le résumé et les lignes', async () => {
+  it('ne replie pas une liste de 6 articles ou moins, et dit « tous » quand un seul état reste', async () => {
+    installApp()
+    const six = plan()
+    six.lines = six.lines.slice(0, 6)
+    const { wrapper } = await open({ 'GET /api/v1/drive/plans/l1': () => json(six) })
+    await loaded(wrapper)
+
+    expect(wrapper.find('details').exists()).toBe(false)
+    expect(wrapper.find('h2').text()).toBe('Vos articles')
+    expect(wrapper.findAll('main > section ul > li')).toHaveLength(6)
+    expect(summary(wrapper)).toBe('6 articles : tous sont déjà choisis.')
+  })
+
+  it('montre l’estimation du coût de la liste entre le bouton et les articles', async () => {
     installApp()
     const { wrapper, fetchMock } = await open({
       'GET /api/v1/drive/settings': () =>
@@ -146,8 +162,10 @@ describe('écran d’envoi au drive, dans l’application', () => {
 
     expect(wrapper.text().replace(/\s/g, ' ')).toContain('12,47 €')
     expect(calls(fetchMock)).toContain('GET /api/v1/drive/estimates/l1')
-    const titles = wrapper.findAll('h2').map((title) => title.text())
-    expect(titles.indexOf('Estimation du coût')).toBeLessThan(titles.indexOf('Votre liste (12)'))
+    // Le bouton, puis l'estimation, puis les articles
+    const html = wrapper.html()
+    expect(html.indexOf('Ouvrir le drive')).toBeLessThan(html.indexOf('Estimation du coût'))
+    expect(html.indexOf('Estimation du coût')).toBeLessThan(html.indexOf('Voir les articles'))
   })
 
   it('« Choisir un autre produit » et « Passer cette fois » changent la ligne et les compteurs, et s’annulent', async () => {
@@ -159,15 +177,14 @@ describe('écran d’envoi au drive, dans l’application', () => {
     expect(wrapper.findAll('main > section ul > li')[0]!.text()).toContain(
       'Vous choisirez un autre produit sur Leclerc, à la place de : Farine de blé T55 Marque Repère 1 kg.',
     )
-    expect(counts(wrapper).slice(0, 2)).toEqual(['Produits connus7', 'À choisir4'])
+    expect(summary(wrapper)).toBe(
+      '12 articles : 7 sont déjà choisis, 4 sont à choisir sur Leclerc, 1 ne sera pas mis au panier.',
+    )
 
     await wrapper.find('button[aria-label="Pas cette fois : Lait"]').trigger('click')
-    expect(counts(wrapper)).toEqual([
-      'Produits connus6',
-      'À choisir4',
-      'J’en ai toujours1',
-      'Pas cette fois1',
-    ])
+    expect(summary(wrapper)).toBe(
+      '12 articles : 6 sont déjà choisis, 4 sont à choisir sur Leclerc, 2 ne seront pas mis au panier.',
+    )
     expect(wrapper.findAll('main > section ul > li')[2]!.text()).toContain(
       'Pas cette fois : rien ne sera mis au panier.',
     )
@@ -175,7 +192,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
     // L'annulation : les mêmes boutons, pressés une seconde fois
     await wrapper.find('button[aria-label="Choisir un autre produit : Farine"]').trigger('click')
     await wrapper.find('button[aria-label="Pas cette fois : Lait"]').trigger('click')
-    expect(counts(wrapper)[0]).toBe('Produits connus8')
+    expect(summary(wrapper)).toContain('8 sont déjà choisis')
     expect(wrapper.findAll('main > section ul > li')[0]!.find('ol').exists()).toBe(true)
   })
 
@@ -229,7 +246,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
       listId: 'l1',
     })
     expect(wrapper.text()).toContain('En attente du récapitulatif…')
-    expect(wrapper.find('dl').exists()).toBe(false)
+    expect(wrapper.find('p.text-xl').exists()).toBe(false)
   })
 
   it('retrouve un passage en cours après un rechargement : « Rouvrir le drive » garde le même passage', async () => {
@@ -297,7 +314,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
     await vi.waitFor(() => expect(wrapper.text()).toContain('Un autre envoi est en cours'))
 
     expect(wrapper.find('a[href="/drive/envoi/l2"]').text()).toBe('Voir cet envoi')
-    expect(wrapper.find('dl').exists()).toBe(false)
+    expect(wrapper.find('p.text-xl').exists()).toBe(false)
 
     await press('Abandonner cet envoi')
 
@@ -318,16 +335,15 @@ describe('écran d’envoi au drive, dans l’application', () => {
     expect(wrapper.text()).toContain('En attente du récapitulatif…')
   })
 
-  it('« Réessayer les échecs » : ne reprend que les lignes nommées, le plan envoyé aussi', async () => {
+  it('une adresse avec « lignes » ne reprend que les articles nommés, le plan envoyé aussi', async () => {
     const native = installApp()
     const { wrapper } = await open({}, 'l1', '?lignes=beurre,poivre')
     await loaded(wrapper)
 
     expect(wrapper.findAll('main > section ul > li')).toHaveLength(2)
-    expect(wrapper.text()).toContain('Votre liste (2)')
+    expect(summary(wrapper)).toBe('2 articles : 1 est déjà choisi, 1 est à choisir sur Leclerc.')
     expect(wrapper.text()).toContain('Reprise des articles en échec : 2 articles')
     expect(wrapper.find('a[href="/drive/envoi/l1"]').text()).toBe('Voir toute la liste')
-    expect(counts(wrapper)[0]).toBe('Produits connus1')
 
     await press('Ouvrir le drive')
 
@@ -354,7 +370,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
     const { wrapper } = await open()
 
     await vi.waitFor(() =>
-      expect(wrapper.text()).toContain('Le drive n’est pas utilisable sur cet appareil'),
+      expect(wrapper.text()).toContain('Le drive ne fonctionne pas sur ce téléphone'),
     )
     expect(button('Ouvrir le drive')?.disabled).toBe(true)
     expect(wrapper.find('a[href="/drive/aide"]').exists()).toBe(true)
@@ -410,7 +426,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
 
       await press('Ouvrir le drive')
 
-      expect(wrapper.find('[role="alert"]').text()).toContain('trop gros')
+      expect(wrapper.find('[role="alert"]').text()).toContain('trop gros pour l’application')
       expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
     })
 
@@ -423,7 +439,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
 
       await press('Ouvrir le drive')
 
-      expect(wrapper.find('[role="alert"]').text()).toContain('Cet envoi n’est pas valide')
+      expect(wrapper.find('[role="alert"]').text()).toContain('Repas n’a pas pu préparer l’envoi')
       expect(started(native)).toHaveLength(0)
     })
 
@@ -441,6 +457,44 @@ describe('écran d’envoi au drive, dans l’application', () => {
       expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
     })
 
+    it('une application qui ne répond plus : trois phrases et le bouton pour la mettre à jour', async () => {
+      installApp()
+      const { wrapper } = await open()
+      await loaded(wrapper)
+      delete (globalThis as { repasNative?: unknown }).repasNative
+
+      await press('Ouvrir le drive')
+
+      const alert = wrapper.find('[role="alert"]')
+      expect(alert.find('p').text()).toBe(
+        'Le drive n’a pas répondu comme prévu. Rien n’a été perdu. Mettez l’application à jour, puis réessayez.',
+      )
+      expect(alert.find('a[href="/drive/aide#mise-a-jour"]').text()).toBe(
+        'Mettre à jour l’application',
+      )
+      expect(alert.text()).not.toMatch(/[A-Z]{2,}_[A-Z_]+/)
+    })
+
+    it('un envoi trop gros ou trop long dit quoi faire, sans bouton de plus', async () => {
+      installApp()
+      const many = plan()
+      many.lines = Array.from({ length: 101 }, (_, index) => ({
+        ...many.lines[8]!,
+        ingredientSlug: `article-${index}`,
+        ingredientName: `Article ${index}`,
+      }))
+      const { wrapper } = await open({ 'GET /api/v1/drive/plans/l1': () => json(many) })
+      await loaded(wrapper)
+
+      await press('Ouvrir le drive')
+
+      const alert = wrapper.find('[role="alert"]')
+      expect(alert.text()).toBe(
+        'Cette liste a plus de 100 articles : c’est trop pour un seul envoi. Votre liste n’a pas changé. Retirez des articles, puis renvoyez-la.',
+      )
+      expect(alert.find('a').exists()).toBe(false)
+    })
+
     it('une adresse de magasin illisible est signalée', async () => {
       installApp()
       const broken = plan()
@@ -450,7 +504,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
 
       await press('Ouvrir le drive')
 
-      expect(wrapper.find('[role="alert"]').text()).toContain('Cet envoi n’est pas valide')
+      expect(wrapper.find('[role="alert"]').text()).toContain('Repas n’a pas pu préparer l’envoi')
     })
   })
 })
@@ -499,7 +553,11 @@ describe('lecture du plan', () => {
   })
 
   it.each([
-    [409, 'SHOPPING_LIST_NOT_SENT', 'Cette liste n’est plus envoyée au drive.'],
+    [
+      409,
+      'SHOPPING_LIST_NOT_SENT',
+      'Cette liste n’est plus envoyée au drive. Rien n’a été changé. Ouvrez la liste pour voir où elle en est.',
+    ],
     [403, 'SHOPPING_LIST_FORBIDDEN', 'Vous n’avez pas le droit de faire cela.'],
     [404, 'SHOPPING_LIST_NOT_FOUND', 'Cet élément n’existe plus.'],
   ])('explique le refus %i %s', async (status, code, message) => {
@@ -511,7 +569,7 @@ describe('lecture du plan', () => {
     expect(wrapper.find('[role="alert"]').text().replace(/'/g, '’')).toBe(
       message.replace(/'/g, '’'),
     )
-    expect(wrapper.find('dl').exists()).toBe(false)
+    expect(wrapper.find('p.text-xl').exists()).toBe(false)
   })
 
   it('trop de lectures (429) : le dit comme un refus passager, sans relire tout seul, puis réessaie à la demande', async () => {
@@ -523,9 +581,9 @@ describe('lecture du plan', () => {
     await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
 
     expect(wrapper.find('[role="alert"]').text()).toBe(
-      'Trop de demandes en peu de temps. Attendez une minute, puis réessayez.',
+      'Trop de demandes en peu de temps. Rien n’est perdu. Attendez une minute, puis réessayez.',
     )
-    expect(wrapper.find('dl').exists()).toBe(false)
+    expect(wrapper.find('p.text-xl').exists()).toBe(false)
     await flushPromises()
     expect(calls(fetchMock).filter((call) => call.includes('/drive/plans/'))).toHaveLength(1)
 
@@ -551,11 +609,13 @@ describe('lecture du plan', () => {
 
       await vi.waitFor(() => expect(button('Rouvrir la liste')).toBeDefined())
 
-      expect(alert(wrapper)).toBe('L’envoi au drive n’est pas disponible pour le moment.')
+      expect(alert(wrapper)).toBe(
+        'L’envoi au drive n’est pas disponible pour le moment. Votre liste n’a pas changé. Réessayez plus tard.',
+      )
       expect(wrapper.text()).toContain('Vous pouvez la rouvrir pour la modifier.')
       expect(button('Ouvrir le drive')).toBeUndefined()
       expect(button('Envoyer au drive')).toBeUndefined()
-      expect(wrapper.find('dl').exists()).toBe(false)
+      expect(wrapper.find('p.text-xl').exists()).toBe(false)
     })
 
     it('rouvre la liste avec la confirmation de l’écran de la liste, la version lue, et efface un passage resté en attente', async () => {

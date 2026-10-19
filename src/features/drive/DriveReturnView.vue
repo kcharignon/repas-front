@@ -20,7 +20,8 @@ import { basketUrl } from './leclerc'
 import { useDrivePlan, useDriveSettings, useSaveChoices } from './queries'
 import { expectedFromPlan } from './restrictToPlan'
 import { useDriveReturnStore } from './returnStore'
-import { countOutcomes, failedLines, formatPrice } from './summary'
+import DriveFold from './DriveFold.vue'
+import { countOutcomes, formatPrice, remaining, visibleCounts } from './summary'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -64,9 +65,86 @@ const labels = computed(
 )
 
 const counts = computed(() => (result.value ? countOutcomes(result.value) : null))
-const failed = computed(() => (result.value ? failedLines(result.value) : []))
+const shownCounts = computed(() => (counts.value ? visibleCounts(counts.value) : []))
 const finalizeUrl = computed(() => basketUrl(settings.data.value?.store?.baseUrl))
 const saved = computed(() => store.status === 'saved')
+
+// --- Le titre dit le résultat ; au plus trois phrases : ce qui s'est passé, ce qui est sauf, ce qu'il reste à faire ---
+const headline = computed(() => {
+  const current = event.value
+  if (current === null) return t('driveReturn.none.title')
+  if (current.kind === 'stale') return t('driveReturn.stale.title')
+  if (current.kind === 'refused') return t('driveReturn.refused.title')
+  if (current.kind === 'invalid') return t('driveReturn.invalid.title')
+  if (result.value === null) return t('driveReturn.setup.title')
+
+  return t(`driveReturn.outcome.${result.value.outcome}.title`)
+})
+/** Le code qui a arrêté l'envoi, s'il en dit plus que le titre : un arrêt voulu (`aborted`) n'est pas une panne. */
+const stopCode = computed(() =>
+  result.value?.outcome === 'aborted' ? null : (result.value?.error?.code ?? null),
+)
+const sentences = computed(() => {
+  const current = result.value
+  const known = counts.value
+  if (current === null || known === null) return []
+  if (current.outcome === 'completed') return [t('driveReturn.outcome.completed.help')]
+
+  const code = stopCode.value
+  const left = remaining(known)
+  const safe =
+    current.outcome === 'partial' && left > 0
+      ? t('driveReturn.outcome.partial.safe', { count: left }, left)
+      : t('driveReturn.safe')
+  const lead =
+    code !== null
+      ? t(`driveReturn.errorCode.${code}.happened`)
+      : current.outcome === 'aborted'
+        ? null
+        : t(`driveReturn.outcome.${current.outcome}.lead`)
+  const action =
+    code !== null
+      ? t(`driveReturn.errorCode.${code}.action`)
+      : t(`driveReturn.outcome.${current.outcome}.action`)
+
+  return lead === null ? [safe, action] : [lead, safe, action]
+})
+const alarming = computed(
+  () => result.value?.outcome === 'error' || result.value?.outcome === 'partial',
+)
+
+/**
+ * L'unique bouton principal : finaliser quand le panier est rempli, reprendre l'envoi sinon. Deux pannes que reprendre ne guérit pas ont leur
+ * propre action : le site de Leclerc a changé (chercher à la main) et l'application ne comprend plus Repas (la mettre à jour).
+ */
+const primary = computed<'finalize' | 'manual' | 'update' | 'resume' | null>(() => {
+  const current = result.value
+  if (current === null) return null
+  if (current.outcome === 'completed') return finalizeUrl.value ? 'finalize' : null
+  if (stopCode.value === 'CONTRACT_CHANGED') return finalizeUrl.value ? 'manual' : null
+  if (stopCode.value === 'INVALID_MESSAGE') return 'update'
+
+  return saved.value && listId.value ? 'resume' : null
+})
+const incomplete = computed(() => result.value !== null && result.value.outcome !== 'completed')
+/** Les autres actions restent là, mais discrètes : reprendre quand ce n'est pas l'action principale, finaliser ce qui est déjà au panier. */
+const showResume = computed(
+  () => incomplete.value && primary.value !== 'resume' && saved.value && listId.value !== null,
+)
+const showFinalize = computed(
+  () =>
+    incomplete.value &&
+    primary.value !== 'manual' &&
+    finalizeUrl.value !== null &&
+    counts.value !== null &&
+    counts.value.added + counts.value.chosen > 0,
+)
+const primaryClass =
+  'inline-flex min-h-13 items-center justify-center rounded-xl bg-primary px-7 text-lg font-bold text-on-primary hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary'
+const linkClass =
+  'inline-flex min-h-11 items-center font-bold text-primary underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary'
+// Terminer ou rouvrir la liste : des boutons (ils demandent confirmation) qui se lisent comme les liens discrets autour d'eux
+const linkButtonClass = `${linkClass} cursor-pointer disabled:pointer-events-none disabled:opacity-50`
 
 // Un refus de l'application : le passage n'a pas démarré, son brouillon n'a plus lieu d'être
 const refusedListId = ref<string | null>(null)
@@ -131,7 +209,7 @@ onMounted(() => {
 // --- Une ligne du résultat, en une phrase ---
 const nameOf = (slug: string) => names.value.get(slug) ?? slug
 const productOf = (id: string) => labels.value.get(id) ?? t('driveReturn.unknownProduct', { id })
-const reasonOf = (code: string) => t(`driveReturn.errorCode.${code}`)
+const reasonOf = (code: string) => t(`driveReturn.errorCode.${code}.happened`)
 
 function describe(line: ResultLine) {
   const priced =
@@ -217,16 +295,6 @@ function confirmReopen() {
     { onSuccess: () => leave(id), onSettled: () => (reopening.value = false) },
   )
 }
-
-const countKeys = [
-  'added',
-  'chosen',
-  'haveAtHome',
-  'skipped',
-  'unavailable',
-  'failed',
-  'priced',
-] as const
 </script>
 
 <template>
@@ -234,30 +302,23 @@ const countKeys = [
     <RouterLink
       v-if="listId"
       :to="{ name: 'shopping-list-detail', params: { id: listId } }"
-      class="inline-flex min-h-11 items-center self-start font-bold text-primary underline"
+      :class="linkClass + ' self-start'"
     >
       {{ t('driveReturn.backToList') }}
     </RouterLink>
-    <RouterLink
-      v-else
-      :to="{ name: 'shopping-lists' }"
-      class="inline-flex min-h-11 items-center self-start font-bold text-primary underline"
-    >
+    <RouterLink v-else :to="{ name: 'shopping-lists' }" :class="linkClass + ' self-start'">
       {{ t('driveReturn.allLists') }}
     </RouterLink>
 
-    <h1 class="font-display text-3xl leading-tight font-bold md:text-4xl">
-      {{ t('driveReturn.title') }}
-    </h1>
+    <h1 class="font-display text-3xl leading-tight font-bold md:text-4xl">{{ headline }}</h1>
 
-    <!-- Rien à montrer, résultat d'un autre passage, refus ou réponse mal formée de l'application -->
+    <!-- Rien à montrer, résultat d'un autre envoi, refus ou réponse mal formée de l'application -->
     <section
       v-if="event === null"
       role="status"
       class="flex flex-col items-start gap-3 rounded-2xl bg-soft px-5 py-4"
     >
-      <h2 class="font-display text-xl font-bold">{{ t('driveReturn.none.title') }}</h2>
-      <p class="text-muted">{{ t('driveReturn.none.help') }}</p>
+      <p class="max-w-prose text-muted">{{ t('driveReturn.none.help') }}</p>
     </section>
 
     <section
@@ -265,8 +326,7 @@ const countKeys = [
       role="status"
       class="flex flex-col items-start gap-3 rounded-2xl bg-soft px-5 py-4"
     >
-      <h2 class="font-display text-xl font-bold">{{ t('driveReturn.stale.title') }}</h2>
-      <p class="text-muted">{{ t('driveReturn.stale.help') }}</p>
+      <p class="max-w-prose text-muted">{{ t('driveReturn.stale.help') }}</p>
     </section>
 
     <section
@@ -274,16 +334,17 @@ const countKeys = [
       role="alert"
       class="flex flex-col items-start gap-3 rounded-2xl bg-danger-soft px-5 py-4 text-on-danger-soft"
     >
-      <h2 class="font-display text-xl font-bold">{{ t('driveReturn.refused.title') }}</h2>
-      <p>{{ t('driveReturn.refused.help') }}</p>
-      <p class="text-sm">{{ t('driveReturn.refused.code', { code: event.code }) }}</p>
-      <UiLinkButton
+      <p class="max-w-prose text-lg">{{ t('driveReturn.refused.help') }}</p>
+      <RouterLink
         v-if="refusedListId"
-        variant="secondary"
         :to="{ name: 'drive-send', params: { listId: refusedListId } }"
+        :class="primaryClass"
       >
         {{ t('driveReturn.refused.backToSend') }}
-      </UiLinkButton>
+      </RouterLink>
+      <DriveFold :label="t('driveReturn.details')" class="self-stretch">
+        <p class="text-sm break-words">{{ t('driveReturn.errorDetails', { code: event.code }) }}</p>
+      </DriveFold>
     </section>
 
     <section
@@ -291,8 +352,19 @@ const countKeys = [
       role="alert"
       class="flex flex-col items-start gap-3 rounded-2xl bg-danger-soft px-5 py-4 text-on-danger-soft"
     >
-      <h2 class="font-display text-xl font-bold">{{ t('driveReturn.invalid.title') }}</h2>
-      <p>{{ t('driveReturn.invalid.help') }}</p>
+      <p class="max-w-prose text-lg">{{ t('driveReturn.invalid.help') }}</p>
+      <RouterLink :to="{ name: 'drive-help', hash: '#mise-a-jour' }" :class="primaryClass">
+        {{ t('driveReturn.invalid.update') }}
+      </RouterLink>
+      <DriveFold
+        v-if="event.detail !== null"
+        :label="t('driveReturn.details')"
+        class="self-stretch"
+      >
+        <p class="text-sm break-words">
+          {{ t('driveReturn.invalid.detail', { detail: event.detail }) }}
+        </p>
+      </DriveFold>
     </section>
 
     <section
@@ -300,34 +372,23 @@ const countKeys = [
       role="status"
       class="flex flex-col items-start gap-3 rounded-2xl bg-soft px-5 py-4"
     >
-      <h2 class="font-display text-xl font-bold">{{ t('driveReturn.setup.title') }}</h2>
-      <p class="text-muted">{{ t('driveReturn.setup.help') }}</p>
+      <p class="max-w-prose text-muted">{{ t('driveReturn.setup.help') }}</p>
       <UiLinkButton variant="secondary" :to="{ name: 'drive-settings' }">
         {{ t('driveReturn.setup.settings') }}
       </UiLinkButton>
     </section>
 
-    <!-- Le résultat d'un passage -->
+    <!-- Le résultat d'un envoi : une phrase, une action principale, ce qui existe, puis les détails repliés -->
     <template v-else-if="result && counts">
-      <section
+      <div
         role="status"
         :class="[
-          'flex flex-col items-start gap-2 rounded-2xl px-5 py-4',
-          result.outcome === 'error' || result.outcome === 'partial'
-            ? 'bg-danger-soft text-on-danger-soft'
-            : 'bg-soft',
+          'rounded-2xl px-5 py-4',
+          alarming ? 'bg-danger-soft text-on-danger-soft' : 'bg-soft',
         ]"
       >
-        <h2 class="font-display text-xl font-bold">
-          {{ t(`driveReturn.outcome.${result.outcome}.title`) }}
-        </h2>
-        <p>
-          {{ t(`driveReturn.outcome.${result.outcome}.help`) }}
-        </p>
-        <p v-if="result.error" class="font-semibold">
-          {{ reasonOf(result.error.code) }}
-        </p>
-      </section>
+        <p class="max-w-prose text-lg">{{ sentences.join(' ') }}</p>
+      </div>
 
       <p v-if="store.status === 'saving'" role="status" class="text-muted">
         {{ t('driveReturn.save.saving') }}
@@ -347,79 +408,111 @@ const countKeys = [
         </UiButton>
       </div>
 
-      <p v-if="store.ignored > 0" class="text-sm text-muted">
-        {{ t('driveReturn.ignored', { count: store.ignored }, store.ignored) }}
-      </p>
-
       <section class="flex flex-col items-start gap-3">
-        <div class="flex flex-wrap gap-2">
+        <a
+          v-if="(primary === 'finalize' || primary === 'manual') && finalizeUrl"
+          :href="finalizeUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          :class="primaryClass"
+        >
+          {{
+            t(
+              primary === 'finalize'
+                ? 'driveReturn.actions.finalize'
+                : 'driveReturn.actions.manual',
+            )
+          }}
+          <span class="sr-only"> ({{ t('driveReturn.actions.finalizeHelp') }})</span>
+        </a>
+        <RouterLink
+          v-else-if="primary === 'resume' && listId"
+          :to="{ name: 'drive-send', params: { listId } }"
+          :class="primaryClass"
+        >
+          {{ t('driveReturn.actions.resume') }}
+        </RouterLink>
+        <RouterLink
+          v-else-if="primary === 'update'"
+          :to="{ name: 'drive-help', hash: '#mise-a-jour' }"
+          :class="primaryClass"
+        >
+          {{ t('driveReturn.actions.update') }}
+        </RouterLink>
+
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <RouterLink
+            v-if="showResume && listId"
+            :to="{ name: 'drive-send', params: { listId } }"
+            :class="linkClass"
+          >
+            {{ t('driveReturn.actions.resume') }}
+          </RouterLink>
           <a
-            v-if="finalizeUrl"
+            v-if="showFinalize && finalizeUrl"
             :href="finalizeUrl"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex min-h-13 items-center justify-center rounded-xl bg-primary px-7 text-lg font-bold text-on-primary hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            :class="linkClass"
           >
             {{ t('driveReturn.actions.finalize') }}
             <span class="sr-only"> ({{ t('driveReturn.actions.finalizeHelp') }})</span>
           </a>
-          <UiLinkButton
-            v-if="saved && failed.length > 0 && listId"
-            variant="secondary"
-            :to="{
-              name: 'drive-send',
-              params: { listId },
-              query: { lignes: failed.map((line) => line.slug).join(',') },
-            }"
+          <button
+            type="button"
+            :class="linkButtonClass"
+            :disabled="!online"
+            @click="completing = true"
           >
-            {{ t('driveReturn.actions.retryFailed') }}
-          </UiLinkButton>
-          <UiLinkButton
-            v-if="saved && result.outcome !== 'completed' && listId"
-            variant="secondary"
-            :to="{ name: 'drive-send', params: { listId } }"
-          >
-            {{ t('driveReturn.actions.resume') }}
-          </UiLinkButton>
-        </div>
-        <div class="flex flex-wrap gap-2">
-          <UiButton variant="secondary" :disabled="!online" @click="completing = true">
             {{ t('driveReturn.actions.complete') }}
-          </UiButton>
-          <UiButton
-            variant="ghost"
+          </button>
+          <button
+            type="button"
+            :class="linkButtonClass"
             :disabled="!online || list.data.value === undefined"
             @click="reopening = true"
           >
             {{ t('driveReturn.actions.reopen') }}
-          </UiButton>
+          </button>
         </div>
         <p v-if="!online" class="font-semibold">{{ t('driveReturn.actions.offline') }}</p>
         <p class="text-sm text-muted">{{ t('driveReturn.basketKept') }}</p>
       </section>
 
-      <dl :aria-label="t('driveReturn.counts.label')" class="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <dl
+        v-if="shownCounts.length > 0"
+        :aria-label="t('driveReturn.counts.label')"
+        class="grid grid-cols-2 gap-3 md:grid-cols-4"
+      >
         <div
-          v-for="key in countKeys"
-          :key="key"
+          v-for="count in shownCounts"
+          :key="count.key"
           class="flex flex-col-reverse rounded-2xl bg-soft px-4 py-2"
         >
-          <dt class="text-sm text-muted">{{ t(`driveReturn.counts.${key}`) }}</dt>
-          <dd class="font-display text-xl font-bold">{{ counts[key] }}</dd>
+          <dt class="text-sm text-muted">{{ t(`driveReturn.counts.${count.key}`) }}</dt>
+          <dd class="font-display text-xl font-bold">{{ count.value }}</dd>
         </div>
       </dl>
 
-      <section v-if="rows.length > 0" class="flex flex-col gap-3">
-        <h2 class="font-display text-xl font-bold">
-          {{ t('driveReturn.lines', { count: rows.length }) }}
-        </h2>
-        <ul class="flex flex-col gap-3">
+      <!-- Tout ce qui sert à vérifier ou à dépanner : replié, le code n'est lu que là -->
+      <DriveFold
+        v-if="rows.length > 0 || store.ignored > 0 || result.error"
+        :label="t('driveReturn.details')"
+      >
+        <p v-if="result.error" class="text-sm break-words text-muted">
+          {{ t('driveReturn.errorDetails', { code: result.error.code }) }}
+          <template v-if="result.error.message"> · {{ result.error.message }}</template>
+        </p>
+        <p v-if="store.ignored > 0" class="text-sm text-muted">
+          {{ t('driveReturn.ignored', { count: store.ignored }, store.ignored) }}
+        </p>
+        <ul v-if="rows.length > 0" class="flex flex-col gap-3">
           <li
             v-for="row in rows"
             :key="row.slug"
             class="flex flex-col gap-1 rounded-2xl border border-line bg-surface p-4"
           >
-            <h3 class="font-bold break-words">{{ row.name }}</h3>
+            <p class="font-bold break-words">{{ row.name }}</p>
             <p v-if="row.product" class="break-words">
               {{ row.product }}
               <span v-if="row.quantity" class="text-muted">
@@ -436,7 +529,7 @@ const countKeys = [
             <p v-if="row.rejected" class="text-sm break-words text-muted">{{ row.rejected }}</p>
           </li>
         </ul>
-      </section>
+      </DriveFold>
     </template>
 
     <UiConfirmDialog

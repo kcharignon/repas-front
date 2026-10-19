@@ -2,7 +2,7 @@
 // du drive par un résultat tiré du plan. Parcours complet : envoi, retour, enregistrement des choix, récapitulatif. Bureau et Pixel 7.
 import { expect, test } from '@playwright/test'
 
-import { fakeApp, fakeBack, scan } from './support/drive'
+import { fakeApp, fakeBack, openArticles, openDetails, scan } from './support/drive'
 
 test('un passage réussi : retour automatique, choix enregistrés en un appel, récapitulatif, panier dans le navigateur', async ({
   page,
@@ -10,13 +10,14 @@ test('un passage réussi : retour automatique, choix enregistrés en un appel, r
   const received = await fakeBack(page)
   await fakeApp(page)
   await page.goto('/drive/envoi/l1')
-  await expect(page.getByText('Votre liste (12)')).toBeVisible()
+  await expect(page.getByText('Voir les articles')).toBeVisible()
+  await openArticles(page)
   await page.getByRole('button', { name: 'Choisir un autre produit : Farine' }).click()
   await page.getByRole('button', { name: 'Ouvrir le drive' }).click()
 
   // L'application répond : l'écran du retour s'ouvre tout seul
   await expect(page).toHaveURL(/\/drive\/retour$/)
-  await expect(page.getByRole('heading', { level: 2, name: 'Le panier est rempli' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Le panier est rempli' })).toBeVisible()
   await expect(
     page.getByText('Vos choix sont enregistrés pour les prochains envois.'),
   ).toBeVisible()
@@ -32,15 +33,22 @@ test('un passage réussi : retour automatique, choix enregistrés en un appel, r
   expect(actions.filter((action) => action === 'ADD_PRODUCT')).toHaveLength(4)
   expect(actions.filter((action) => action === 'REFRESH_PRICE')).toHaveLength(7)
 
-  // Le récapitulatif : compteurs et détail, produit de secours signalé
-  await expect(page.getByRole('heading', { level: 2, name: 'Détail (12)' })).toBeVisible()
-  const farine = page
-    .getByRole('listitem')
-    .filter({ has: page.getByRole('heading', { name: 'Farine' }) })
-  await expect(farine).toContainText('produit habituel : Repas s’en souvient')
+  // Le récapitulatif : une phrase, les compteurs qui existent (jamais « Échecs » ni « Prix lus »), un seul bouton principal
   await expect(
-    page.getByRole('listitem').filter({ has: page.getByRole('heading', { name: 'Beurre' }) }),
-  ).toContainText('1,89')
+    page.getByText('Vos produits sont dans le panier Leclerc : il reste à le finaliser.'),
+  ).toBeVisible()
+  await expect(page.getByLabel('Récapitulatif de l’envoi')).not.toContainText(
+    /Échecs|Prix lus|\b0\b/,
+  )
+  await expect(page.getByRole('link', { name: /^Finaliser sur Leclerc/ })).toHaveClass(/bg-primary/)
+  await expect(page.locator('main a.bg-primary, main button.bg-primary')).toHaveCount(1)
+
+  // Les détails sont repliés : chaque article, produit de secours signalé
+  await expect(page.getByText('Choisi sur Leclerc, produit habituel').first()).toBeHidden()
+  await openDetails(page)
+  const farine = page.getByRole('listitem').filter({ hasText: 'Farine' })
+  await expect(farine).toContainText('produit habituel : Repas s’en souvient')
+  await expect(page.getByRole('listitem').filter({ hasText: 'Beurre' })).toContainText('1,89')
   await expect(page.getByText('Le panier Leclerc n’est pas vidé par Repas.')).toBeVisible()
   await expect(page.getByRole('link', { name: /^Finaliser sur Leclerc/ })).toHaveAttribute(
     'target',
@@ -103,8 +111,11 @@ test('un faux résultat posté par la page de l’enseigne : seules les lignes d
   await expect(
     page.getByText('Vos choix sont enregistrés pour les prochains envois.'),
   ).toBeVisible()
-  await expect(page.getByText('3 articles inattendus n’ont pas été pris en compte')).toBeVisible()
-  await expect(page.getByRole('heading', { level: 2, name: 'Détail (1)' })).toBeVisible()
+  await openDetails(page)
+  await expect(
+    page.getByText('3 articles ne figuraient pas dans votre liste : Repas les a laissés de côté.'),
+  ).toBeVisible()
+  await expect(page.locator('details li')).toHaveCount(1)
   await expect(page.getByText('Produit hors liste')).toHaveCount(0)
   await expect(page.getByText('Produit imposé')).toHaveCount(0)
 
@@ -116,7 +127,7 @@ test('un faux résultat posté par la page de l’enseigne : seules les lignes d
   expect((await scan(page)).violations).toEqual([])
 })
 
-test('un passage arrêté par Leclerc : échecs expliqués, on réessaie seulement ce qui a échoué', async ({
+test('un passage arrêté par Leclerc : trois phrases, un seul bouton principal « Reprendre l’envoi », le code replié', async ({
   page,
 }) => {
   await fakeBack(page)
@@ -125,18 +136,29 @@ test('un passage arrêté par Leclerc : échecs expliqués, on réessaie seuleme
   await page.getByRole('button', { name: 'Ouvrir le drive' }).click()
 
   await expect(
-    page.getByRole('heading', { level: 2, name: 'L’envoi s’est arrêté avant la fin' }),
+    page.getByRole('heading', { level: 1, name: 'Le panier est rempli en partie' }),
   ).toBeVisible()
-  await expect(page.getByText('Leclerc a bloqué les demandes').first()).toBeVisible()
-  await expect(page.getByText('Échecs1')).toBeVisible()
+  await expect(
+    page.getByText(
+      'Leclerc a ralenti les demandes. Ce qui est déjà au panier y reste : il reste 1 article à ajouter. Attendez quelques minutes, puis reprenez l’envoi.',
+    ),
+  ).toBeVisible()
+  // Ni « Échecs » ni code à l'écran ; le code n'est lu que dans « Détails »
+  await expect(page.getByLabel('Récapitulatif de l’envoi')).not.toContainText('Échecs')
+  await expect(page.getByText('Code : BLOCKED')).toBeHidden()
+  await expect(page.locator('main a.bg-primary, main button.bg-primary')).toHaveCount(1)
+  await expect(page.getByRole('link', { name: 'Reprendre l’envoi' }).first()).toHaveClass(
+    /bg-primary/,
+  )
+  expect((await scan(page)).violations).toEqual([])
+  await openDetails(page)
+  await expect(page.getByText('Code : BLOCKED')).toBeVisible()
   expect((await scan(page)).violations).toEqual([])
 
-  await page.getByRole('link', { name: 'Réessayer les échecs' }).click()
-  await expect(page).toHaveURL(/\/drive\/envoi\/l1\?lignes=beurre$/)
-  await expect(page.getByText('Votre liste (1)')).toBeVisible()
-  await expect(page.getByText('Reprise des articles en échec : 1 article')).toBeVisible()
-  await page.getByRole('link', { name: 'Voir toute la liste' }).click()
-  await expect(page.getByText('Votre liste (12)')).toBeVisible()
+  // Reprendre l'envoi ramène à l'écran de l'envoi, sur toute la liste
+  await page.getByRole('link', { name: 'Reprendre l’envoi' }).first().click()
+  await expect(page).toHaveURL(/\/drive\/envoi\/l1$/)
+  await expect(page.getByText('Voir les articles')).toBeVisible()
 })
 
 for (const colorScheme of ['light', 'dark'] as const) {
@@ -147,10 +169,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await fakeApp(page)
     await page.emulateMedia({ colorScheme })
     await page.goto('/drive/envoi/l1')
-    await expect(page.getByText('Votre liste (12)')).toBeVisible()
+    await expect(page.getByText('Voir les articles')).toBeVisible()
     await page.getByRole('button', { name: 'Ouvrir le drive' }).click()
     await expect(
-      page.getByRole('heading', { level: 2, name: 'Le panier est rempli' }),
+      page.getByRole('heading', { level: 1, name: 'Le panier est rempli' }),
     ).toBeVisible()
 
     // Un second résultat arrive pour un autre passage (brouillon effacé) : il est expliqué et ignoré
@@ -175,7 +197,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     })
     await expect(
       page.getByRole('heading', {
-        level: 2,
+        level: 1,
         name: 'Ce récapitulatif ne correspond pas à votre dernier envoi',
       }),
     ).toBeVisible()

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { countOutcomes, failedLines, formatPrice } from '../summary'
+import { countOutcomes, formatPrice, remaining, visibleCounts } from '../summary'
 import { result } from './results'
 
 describe('récapitulatif', () => {
@@ -12,30 +12,22 @@ describe('récapitulatif', () => {
       skipped: 0,
       unavailable: 0,
       failed: 0,
-      priced: 0,
     })
   })
 
-  it('compte les prix lus (lignes ajoutées et produits choisis) et chaque issue', () => {
+  it('compte chaque issue', () => {
     const counts = countOutcomes(
       result({
         outcome: 'partial',
         lines: [
-          {
-            ingredientSlug: 'a',
-            outcome: 'ADDED',
-            productId: '1',
-            quantity: 1,
-            usedRank: 1,
-            price: { cents: 100 },
-          },
+          { ingredientSlug: 'a', outcome: 'ADDED', productId: '1', quantity: 1, usedRank: 1 },
           { ingredientSlug: 'b', outcome: 'ADDED', productId: '2', quantity: 1, usedRank: 1 },
           {
             ingredientSlug: 'c',
             outcome: 'CHOSEN',
             quantity: 1,
             placement: 'ONCE',
-            product: { id: '3', label: 'C', price: { cents: 200 } },
+            product: { id: '3', label: 'C' },
           },
           { ingredientSlug: 'd', outcome: 'SKIPPED' },
           { ingredientSlug: 'e', outcome: 'UNAVAILABLE' },
@@ -51,25 +43,42 @@ describe('récapitulatif', () => {
       skipped: 1,
       unavailable: 1,
       failed: 1,
-      priced: 2,
     })
   })
 
-  it('liste les lignes en échec avec leur code', () => {
-    expect(
-      failedLines(
-        result({
-          lines: [
-            { ingredientSlug: 'a', outcome: 'FAILED', error: 'BLOCKED' },
-            { ingredientSlug: 'b', outcome: 'SKIPPED' },
-            { ingredientSlug: 'c', outcome: 'FAILED', error: 'NETWORK' },
-          ],
-        }),
-      ),
-    ).toEqual([
-      { slug: 'a', error: 'BLOCKED' },
-      { slug: 'c', error: 'NETWORK' },
+  it('ne montre que les compteurs qui existent, jamais « Échecs » ni « Prix lus », jamais un zéro', () => {
+    const counts = countOutcomes(
+      result({
+        lines: [
+          { ingredientSlug: 'a', outcome: 'ADDED', productId: '1', quantity: 1, usedRank: 1 },
+          { ingredientSlug: 'b', outcome: 'SKIPPED' },
+          { ingredientSlug: 'f', outcome: 'FAILED', error: 'BLOCKED' },
+        ],
+      }),
+    )
+
+    expect(visibleCounts(counts)).toEqual([
+      { key: 'added', value: 1 },
+      { key: 'skipped', value: 1 },
     ])
+    expect(visibleCounts(countOutcomes(result({ lines: [] })))).toEqual([])
+  })
+
+  it('compte ce qui reste à ajouter : les échecs et les articles sans produit disponible', () => {
+    expect(remaining(countOutcomes(result()))).toBe(0)
+    expect(
+      remaining(
+        countOutcomes(
+          result({
+            lines: [
+              { ingredientSlug: 'e', outcome: 'UNAVAILABLE' },
+              { ingredientSlug: 'f', outcome: 'FAILED', error: 'NETWORK' },
+              { ingredientSlug: 'g', outcome: 'FAILED', error: 'BLOCKED' },
+            ],
+          }),
+        ),
+      ),
+    ).toBe(3)
   })
 
   it('écrit un prix en euros', () => {
