@@ -297,9 +297,9 @@ describe('le texte normalisé de chaque produit lu passe le contrôle du back', 
     // Then
     expect(products).toHaveLength(PRODUCTS.length)
     expectBackAccepts(products)
-    expect(labelOf(toCandidate(products.at(-1) as RawProduct))).toBe(
-      'Vinaigre de cidre Verger Imaginaire 75 cl',
-    )
+    expect(
+      labelOf(toCandidate(products.find((product) => product.id === '1000032') as RawProduct)),
+    ).toBe('Vinaigre de cidre Verger Imaginaire 75 cl')
   })
 
   it.each(REFUSED)(

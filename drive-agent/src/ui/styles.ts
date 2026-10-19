@@ -6,8 +6,8 @@
 // du bouton de menu (⋮, 48 dp et 24 dp de marge) que l'application pose sur le coin bas droit de la page.
 
 export const STYLES = `
-:host{all:initial;color-scheme:light dark;--target:48px;--clear:88px;--bg:#f7f8f6;--fg:#1d2a24;--muted:#4a5850;--card:#fff;--line:#7b8780;--accent:#1e6b4c;--on:#fff;--warn:#fff3d6;--warnfg:#5b3b00;--danger:#a12a2a}
-@media (prefers-color-scheme:dark){:host{--bg:#121a16;--fg:#e8f0eb;--muted:#b4c2b9;--card:#1b2621;--line:#8c9a92;--accent:#7fd6a8;--on:#0b1510;--warn:#3a2f12;--warnfg:#ffe3a3;--danger:#ff9b9b}}
+:host{all:initial;color-scheme:light dark;--target:48px;--clear:88px;--bg:#f7f8f6;--fg:#1d2a24;--muted:#4a5850;--card:#fff;--line:#7b8780;--accent:#1e6b4c;--on:#fff;--warn:#fff3d6;--warnfg:#5b3b00;--danger:#a12a2a;--photo:#fff}
+@media (prefers-color-scheme:dark){:host{--bg:#121a16;--fg:#e8f0eb;--muted:#b4c2b9;--card:#1b2621;--line:#8c9a92;--accent:#7fd6a8;--on:#0b1510;--warn:#3a2f12;--warnfg:#ffe3a3;--danger:#ff9b9b;--photo:#fff}}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 .backdrop{position:absolute;inset:0;background:var(--bg)}
@@ -82,5 +82,9 @@ textarea{width:100%;margin:8px 0;padding:8px 10px;font:.9rem/1.4 ui-monospace,mo
 .candidate .name{font-weight:600}
 .candidate.off .name{color:var(--muted)}
 .candidate>button{width:100%;margin-top:8px}
+.media{display:flex;align-items:flex-start;gap:12px}
+.media .text{flex:1 1 0;min-width:0}
+.photo{flex:none;display:flex;align-items:center;justify-content:center;width:80px;height:80px;padding:4px;border:1px solid var(--line);border-radius:8px;background:var(--photo)}
+.photo img{display:block;width:100%;height:100%;object-fit:contain}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 `

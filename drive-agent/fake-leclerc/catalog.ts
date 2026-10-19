@@ -21,6 +21,11 @@ export interface FakeProduct {
   structured?: { unit: 'KG' | 'L' | 'U'; each: number; total: number; totalUnit: 'kg' | 'l' | 'u' }
   /** Le site ne donne aucun contenu net lisible : ni seconde ligne, ni prix à l'unité de mesure (l'agent n'en déduit rien). */
   noContent?: boolean
+  /**
+   * La photo du produit (DRV-633) : par défaut une photo servie par le faux hôte d'images ; `none` (aucune adresse dans le JSON), `foreign` (une
+   * adresse d'un autre hôte, que l'agent doit refuser), `missing` (une adresse correcte dont l'image répond 404).
+   */
+  photo?: 'none' | 'foreign' | 'missing'
   aisle: number
   family: number
 }
@@ -49,12 +54,17 @@ const make = (
 
 export const PRODUCTS: readonly FakeProduct[] = [
   // Farine : un produit en rupture (1000002), un en promotion (1000003), un au contenu structuré (1000005).
+  // Photos (DRV-633) : 1000001 et 1000002 ont une photo ; 1000003 une adresse d'un autre hôte (refusée), 1000004 une photo qui répond 404, 1000005 aucune.
   make('Farine de blé T55 Moulin Imaginaire', '1 kg', 1.29, 1.29, 'kg', 12),
   make('Farine de blé T45 Moulin Imaginaire', '1 kg', 1.45, 1.45, 'kg', 0),
-  make('Farine de blé T65 Meunier Fictif', '2 x 500 g', 2.8, 2.8, 'kg', 5, { promo: 2.49 }),
-  make('Farine de sarrasin Moulin Imaginaire', '500 g', 1.99, 3.98, 'kg', 3),
+  make('Farine de blé T65 Meunier Fictif', '2 x 500 g', 2.8, 2.8, 'kg', 5, {
+    promo: 2.49,
+    photo: 'foreign',
+  }),
+  make('Farine de sarrasin Moulin Imaginaire', '500 g', 1.99, 3.98, 'kg', 3, { photo: 'missing' }),
   make('Farine complète Moulin Imaginaire', null, 2.1, 2.1, 'kg', 8, {
     structured: { unit: 'KG', each: 1, total: 1, totalUnit: 'kg' },
+    photo: 'none',
   }),
   make('Sucre en poudre Épicerie Factice', '1 kg', 1.35, 1.35, 'kg', 20),
   make('Sucre glace Épicerie Factice', '500 g', 1.1, 2.2, 'kg', 7),
@@ -96,6 +106,10 @@ export const PRODUCTS: readonly FakeProduct[] = [
     'L',
     6,
   ),
+  // DRV-635. Un produit à stock nul dont la fiche dit « Bientôt disponible » : le mode « disponibilité trompeuse » du faux site le fait accepter par le panier, comme le site mobile
+  // de l'enseigne (1000033). Un produit en stock au libellé qui porte une apostrophe, pour le moteur de recherche à apostrophe stricte (1000034).
+  make("Céréales fourrées P'tit Fermier Chocolat noisette", '450 g', 2.19, 4.87, 'kg', 0),
+  make("Gâteaux C'est Nous Pépites", '300 g', 1.85, 6.17, 'kg', 9),
 ]
 
 /** Un texte sans accent ni majuscule : « Œufs » et « oeufs » se valent, comme dans une recherche. */
@@ -104,12 +118,32 @@ export function normalize(text: string): string {
 }
 
 /**
+ * Le moteur « apostrophe stricte » (DRV-635), d'après le relevé du 2026-10-19 sur le vrai site : « c'est » et « cest » retrouvent « C'est », « c est » (l'apostrophe
+ * remplacée par une espace) ne trouve RIEN. Les mots se séparent aux espaces seulement, l'apostrophe est retirée des deux côtés, et un mot cherché est le
+ * début d'un mot du libellé (« est » n'est le début d'aucun mot de « Gâteaux C'est Nous », « cest » l'est). Accents et majuscules sont ignorés.
+ */
+function searchWithStrictApostrophe(query: string): FakeProduct[] {
+  const tokens = (text: string) => normalize(text).replace(/['’]/g, '').split(/\s+/).filter(Boolean)
+  const words = tokens(query)
+  if (words.length === 0) return []
+  return PRODUCTS.filter((product) => {
+    const labelWords = tokens(`${product.label1} ${product.label2 ?? ''}`)
+    return words.every((word) => labelWords.some((labelWord) => labelWord.startsWith(word)))
+  })
+}
+
+/**
  * Les produits dont le libellé contient tous les mots cherchés, dans l'ordre du catalogue. Par défaut la recherche est tolérante (sans accents
  * ni majuscules, `œ` = `oe`). Avec `strict`, elle imite un moteur sensible aux accents, à la ligature et au pluriel (le vrai site, d'après les
  * hypothèses H3 et H7 de l'audit du 2026-10-18) : seules les majuscules sont ignorées, « œuf » ne trouve pas les « Oeufs », « creme » ne trouve
  * pas la « Crème », « spaghettis » ne trouve pas le « Spaghetti » ; un mot cherché est une partie d'un mot du libellé (« oeuf » trouve « Oeufs »).
  */
-export function searchCatalog(query: string, strict = false): FakeProduct[] {
+export function searchCatalog(
+  query: string,
+  strict = false,
+  strictApostrophe = false,
+): FakeProduct[] {
+  if (strictApostrophe) return searchWithStrictApostrophe(query)
   if (strict) {
     const words = query
       .normalize('NFC')

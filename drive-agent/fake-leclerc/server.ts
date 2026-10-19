@@ -22,11 +22,13 @@ import {
   renamedProductsPage,
   repasReturnPage,
   searchPage,
+  type Availability,
   type CartAction,
   type EmptyForm,
   type HomeForm,
   type Session,
 } from './pages.ts'
+import { PHOTO_HOST, photoReply } from './photos.ts'
 
 /** Le faux magasin : son identifiant et son nom d'hôte (le plan de Repas et la page doivent s'accorder dessus). */
 export const STORE = { id: '000001', host: 'courses-test.leclercdrive.fr' } as const
@@ -120,6 +122,17 @@ export interface Behavior {
    */
   strictSearch?: boolean
   /**
+   * Le moteur de recherche à APOSTROPHE STRICTE (DRV-635), relevé sur le vrai site le 2026-10-19 : « c'est » et « cest » retrouvent « C'est », « c est » (l'apostrophe
+   * remplacée par une espace) ne trouve rien. Il sert à éprouver les formes de requête de l'agent (`productSearchForms`). Remplace le moteur tolérant.
+   */
+  strictApostrophe?: boolean
+  /**
+   * La disponibilité des produits à stock nul (DRV-635). Les deux modes ajoutent l'étiquette `eDisponibilite` (1 : disponible, 2 : bientôt disponible) et le texte
+   * « Bientôt disponible » à ces produits : `misleading` (disponibilité trompeuse) : le panier les ACCEPTE, comme le site mobile de l'enseigne ; `real-out` (vraie
+   * rupture) : le panier les REFUSE. Absent : l'ancien comportement (stock nul, panier qui refuse, aucune étiquette de plus).
+   */
+  availability?: Availability
+  /**
    * Le faux site sert la page d'un VISITEUR non connecté (en-tête « Se connecter » / « Créer un compte », pas de « Se déconnecter ») une fois
    * `visitorAfter` recherches et écritures du panier terminées (`0` : dès la première page ; absent ou `null` : jamais). Le catalogue reste
    * public et le panier accepte les écritures d'un visiteur : c'est le danger que l'agent doit détecter (ticket G).
@@ -127,7 +140,7 @@ export interface Behavior {
   visitorAfter?: number | null
 }
 
-export type RequestKind = 'search' | 'cart' | 'page' | 'repas' | 'control' | 'other'
+export type RequestKind = 'search' | 'cart' | 'page' | 'repas' | 'control' | 'image' | 'other'
 
 export interface FakeRequest {
   kind: RequestKind
@@ -275,7 +288,7 @@ export function cartRequestProblem(d: unknown): string | null {
 }
 
 export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeLeclerc> {
-  const hosts = new Set([STORE.host, ...(options.hosts ?? [])])
+  const hosts = new Set([STORE.host, PHOTO_HOST, ...(options.hosts ?? [])])
   let behavior: Behavior = { latencyMs: 0, fault: null, ...options.behavior }
   const cart = new Map<number, number>()
   const log: FakeRequest[] = []
@@ -385,10 +398,11 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
         const session = sessionAfter(pacedCount - 1)
         const page = searchPage(
           query,
-          searchCatalog(query, behavior.strictSearch === true),
+          searchCatalog(query, behavior.strictSearch === true, behavior.strictApostrophe === true),
           cart,
           session,
           behavior.emptySearch ?? 'list',
+          behavior.availability,
         )
         return send(res, 200, page, HTML)
       },
@@ -433,6 +447,9 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
         let after = before
         if (body.eTypeAction === 2) after = 0
         else if (product && product.stock > 0) after = Math.min(body.iQuantite, product.stock)
+        // La disponibilité trompeuse (DRV-635) : la fiche dit stock nul, le panier prend le produit.
+        else if (product && behavior.availability === 'misleading')
+          after = Math.min(body.iQuantite, 99)
         if (after === 0) cart.delete(Number(body.iIdProduit))
         else cart.set(Number(body.iIdProduit), after)
         entry.status = 200
@@ -457,6 +474,17 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       if (loopbackHost) return control(entry, req, res, path)
       entry.status = 404
       return send(res, 404, 'inconnu')
+    }
+    // L'hôte des images (DRV-633) : seulement `image.ashx`, des images synthétiques ; ni cadence, ni défaut simulé (une image n'est pas une requête de l'agent).
+    if (hostnameOf(req.headers.host) === PHOTO_HOST) {
+      entry.kind = 'image'
+      if (path !== '/image.ashx' || req.method !== 'GET') {
+        entry.status = 404
+        return send(res, 404, 'inconnu')
+      }
+      const photo = photoReply(url.search)
+      entry.status = photo.status
+      return send(res, photo.status, photo.body, { 'Content-Type': photo.type })
     }
     if (path === '/drive/retour') {
       entry.kind = 'repas'

@@ -10,6 +10,9 @@ import {
   type PickerProps,
 } from '../src/ui'
 
+// Les photos de la démonstration (DRV-633) : le test (`e2e/agent-ui.spec.ts`) répond lui-même à ces adresses (jamais une vraie image), 404 pour l'identifiant 9999.
+const photo = (id: number) => `https://photos-test.leclercdrive.fr/image.ashx?id=${id}&use=l&cat=p`
+
 const HOSTILE = '<img src=x onerror="window.pwned=1"> <script>window.pwned=1</script>'
 
 // Ouvert pour que les outils de test lisent l'interface ; l'agent, lui, la ferme.
@@ -24,6 +27,7 @@ const CANDIDATES: PickerItem[] = [
     promo: null,
     explain: '50 g par produit : 2 produits.',
     state: 'ok',
+    photo: photo(1001),
   },
   {
     id: '1000002',
@@ -33,6 +37,7 @@ const CANDIDATES: PickerItem[] = [
     promo: 'En promotion : 3,50 €',
     explain: '100 g par produit : 1 produit.',
     state: 'ok',
+    photo: photo(1002),
   },
   {
     id: '1000003',
@@ -42,6 +47,8 @@ const CANDIDATES: PickerItem[] = [
     promo: null,
     explain: '',
     state: 'refused',
+    // Une adresse d'un autre hôte : refusée, la fiche reste en texte.
+    photo: 'https://images.autre-site.invalid/image.ashx?id=1003',
   },
   {
     id: '1000004',
@@ -51,6 +58,8 @@ const CANDIDATES: PickerItem[] = [
     promo: null,
     explain: '',
     state: 'out',
+    // Une photo qui répond 404 : la fiche reste en texte, sans icône d'image cassée.
+    photo: photo(9999),
   },
   {
     id: '1000005',
@@ -99,14 +108,18 @@ const CHOOSER_GONE: ChooserProps = {
     ...PICKER,
     need: '800 g',
     replaces: 'Farine de blé T55 de test 1 kg',
+    // Les trois raisons (DRV-635) : rupture, introuvable (recherche préremplie), refusé par le panier.
     gone: [
-      { id: '2000001', label: 'Farine de blé T55 de test 1 kg' },
-      { id: '2000002', label: 'Farine de blé T45 de test 1 kg' },
+      { id: '2000001', label: 'Farine de blé T55 de test 1 kg', reason: 'OUT_OF_STOCK' },
+      { id: '2000002', label: 'Farine de blé T45 de test 1 kg', reason: 'NOT_FOUND' },
+      { id: '2000003', label: 'Farine de blé T65 de test 1 kg', reason: 'CART_REFUSED' },
     ],
+    prefill: 'farine t45',
     checked: new Set(['2000002']),
     query: 'farine',
     items: CANDIDATES.slice(0, 2),
-    notice: 'Leclerc n’a pas pu mettre ce produit au panier. Choisis-en un autre.',
+    notice:
+      'Leclerc n’a pas pu mettre « Poivre noir moulu de test » au panier. Choisis-en un autre.',
   }),
 }
 
@@ -220,6 +233,12 @@ const SCREENS: Record<string, () => unknown> = {
     ui.show('placement', {
       ingredient: 'Farine de blé',
       productLabel: 'Farine de blé T45 de test 1 kg',
+      photo: photo(1001),
+    }),
+  'placement-text': () =>
+    ui.show('placement', {
+      ingredient: 'Farine de blé',
+      productLabel: 'Farine de blé T45 de test 1 kg',
     }),
   hostile: () => ui.show('quantity', { ingredient: HOSTILE, productLabel: HOSTILE, packs: 1 }),
   'end-completed': () =>
@@ -290,6 +309,22 @@ const SCREENS: Record<string, () => unknown> = {
       skipped: 0,
       unavailable: 1,
       failed: 3,
+    }),
+  // Des articles sans produit, avec la raison de chacun dans « Détails » (DRV-635).
+  'end-reasons': () =>
+    ui.show('end', {
+      outcome: 'partial',
+      added: 2,
+      chosen: 0,
+      haveAtHome: 0,
+      skipped: 0,
+      unavailable: 3,
+      failed: 0,
+      reasons: [
+        { name: 'Farine', reason: 'OUT_OF_STOCK', tried: 1 },
+        { name: 'Œufs', reason: 'NOT_FOUND', tried: 5 },
+        { name: 'Sucre', reason: 'CART_REFUSED', tried: 1 },
+      ],
     }),
   // Arrêté avant que rien ne soit mis au panier ni choisi : « Le panier n'est pas rempli » (DRV-626).
   'end-none': () =>

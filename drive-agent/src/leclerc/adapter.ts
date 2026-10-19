@@ -192,7 +192,7 @@ export class LeclercAdapter implements RetailerAdapter {
     if (reply.status >= 200 && reply.status < 300) this.searchVariant = variant
     this.lastQuery = text
     this.pageTotal = readPageTotal(reply.text)
-    const candidates = products.map(toCandidate)
+    const candidates = products.map((raw) => toCandidate(raw, this.deps.location))
     for (const candidate of candidates) {
       if (candidate.stock !== null) this.stocks.set(candidate.id, candidate.stock)
     }
