@@ -31,6 +31,9 @@ object NavigationPolicy {
     /** Le début du chemin d'une page de magasin : `/magasin-123456-123456`, puis `/`, `-Ville`, ou la fin du chemin. */
     private val STORE_PATH = Regex("^/magasin-[0-9]{1,12}-[0-9]{1,12}(-[^/]*)?(/|$)", RegexOption.IGNORE_CASE)
 
+    /** Le chemin de la page de connexion hors d'un magasin : `/connexion` ou `/connexion.aspx`, éventuellement suivi d'un `/`. */
+    private val LOGIN_PATH = Regex("^/connexion(\\.aspx)?(/|$)", RegexOption.IGNORE_CASE)
+
     /** Le premier nom du site mobile de Leclerc (`m-courses.leclercdrive.fr`) : `m`, ou un nom qui commence par `m-`. */
     private val MOBILE_LABEL = Regex("m(-[a-z0-9-]*)?")
 
@@ -93,6 +96,22 @@ object NavigationPolicy {
         val pathStart = afterScheme.indexOfAny(charArrayOf('/', '?', '#'))
         if (pathStart < 0) return true
         return afterScheme.substring(pathStart).substringBefore('?').substringBefore('#').let { it == "" || it == "/" }
+    }
+
+    /**
+     * L'adresse est-elle celle de la page de connexion de Leclerc **hors d'un magasin** : une page `https` du drive (ni une page de magasin
+     * ([isStorePage]), ni le site mobile ([isMobileSite])) dont le chemin est `/connexion` ou `/connexion.aspx` ? Leclerc exige un magasin choisi
+     * AVANT la connexion (« Avant de vous authentifier, veuillez sélectionner un Drive. ») : on n'arrive là sans magasin qu'en touchant
+     * « Se connecter » trop tôt, et [StoreBanner.STORE_FIRST] ramène alors l'utilisateur au choix du magasin. Une lecture de l'adresse seulement :
+     * l'application ne lit jamais le contenu des pages, et le message rouge de Leclerc n'a pas d'adresse à lui.
+     */
+    fun isLoginPage(url: String?): Boolean {
+        if (!isAllowed(url) || isMobileSite(url) || isStorePage(url)) return false
+        val afterScheme = url!!.substring(HTTPS.length)
+        val pathStart = afterScheme.indexOfAny(charArrayOf('/', '?', '#'))
+        if (pathStart < 0 || afterScheme[pathStart] != '/') return false
+        val path = afterScheme.substring(pathStart).substringBefore('?').substringBefore('#')
+        return LOGIN_PATH.containsMatchIn(path)
     }
 
     /**
