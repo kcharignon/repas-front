@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 
 import { BASKET_PATH } from '../../src/features/drive/leclerc'
 
-const kotlin = join(dirname(fileURLToPath(import.meta.url)), '..', 'app/src/main/kotlin/eu/kantin/repas/drive')
+const kotlin = join(dirname(fileURLToPath(import.meta.url)), '..', 'core/src/main/kotlin/eu/kantin/repas/drive')
 
 describe('la page du panier, des deux côtés', () => {
   it('le front et l’application nomment la même page', () => {

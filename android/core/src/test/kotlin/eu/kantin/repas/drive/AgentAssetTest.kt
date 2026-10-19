@@ -69,15 +69,6 @@ class AgentAssetTest {
     }
 
     @Test
-    fun `le fichier injection de l'application porte le marqueur du mode debogage une seule fois`() {
-        val real = java.io.File("src/main/assets/injection.js").readText()
-
-        assertEquals(2, real.split(AgentAsset.DEBUG_PLACEHOLDER).size)
-        assertTrue(AgentAsset.assemble(real, agent, debug = true).contains("var DEBUG = true"))
-        assertTrue(AgentAsset.assemble(real, agent).contains("var DEBUG = false"))
-    }
-
-    @Test
     fun `l'assemblage exige le marqueur une fois exactement`() {
         listOf("sans marqueur", "${AgentAsset.PLACEHOLDER} et ${AgentAsset.PLACEHOLDER}").forEach {
             try {

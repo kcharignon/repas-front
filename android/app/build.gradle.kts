@@ -196,6 +196,8 @@ tasks.configureEach {
 dependencies {
     // Seule bibliothèque à l'exécution : les indications client (client hints) de la WebView, pour le mode ordinateur.
     implementation("androidx.webkit:webkit:1.17.1")
+    // Le cœur : les règles en Kotlin pur (`android/core`, AUTH-015). Il ne dépend jamais de l'application.
+    implementation(project(":core"))
     testImplementation("junit:junit:4.13.2")
     // Les tests jouent sur la JVM, où `org.json` d'Android n'est qu'une coquille vide : la vraie bibliothèque la remplace.
     testImplementation("org.json:json:20250517")
