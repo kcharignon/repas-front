@@ -120,11 +120,13 @@ class CoreArchitectureTest {
 internal object CoreRules {
     /**
      * Ce que le cœur emprunte à la JVM, et que Kotlin Multiplatform ne fournit pas : `MessageDigest` et `Base64` d'`AgentAsset` (empreinte SHA-384),
-     * `org.json` (le JSON du pont). Chacun se remplace par un `expect`/`actual` ou une bibliothèque multiplateforme (`android/ARCHITECTURE.md`).
+     * `Normalizer` et `Locale` de `DriveEntry` (le titre « introuvable » sans accents ni majuscules, DRV-631), `org.json` (le JSON du pont). Chacun se remplace par un `expect`/`actual` ou une bibliothèque multiplateforme (`android/ARCHITECTURE.md`).
      */
     val BORROWED_FROM_THE_JVM: Set<String> = setOf(
         "java.security.MessageDigest",
+        "java.text.Normalizer",
         "java.util.Base64",
+        "java.util.Locale",
         "org.json.JSONArray",
         "org.json.JSONException",
         "org.json.JSONObject",

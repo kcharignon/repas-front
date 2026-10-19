@@ -97,6 +97,7 @@ Le jour où l'iPhone devient un besoin, ce ne sera pas une réécriture :
 2. remplacer ce que le cœur emprunte à la JVM, la liste fermée de `CoreArchitectureTest` (`CoreRules.BORROWED_FROM_THE_JVM`) :
    - `org.json` (tout le JSON du pont, du plan et des rapports) : une bibliothèque JSON multiplateforme, ou une petite façade ;
    - `java.security.MessageDigest` et `java.util.Base64` (`AgentAsset`, l'empreinte SHA-384) : `expect`/`actual`, ou la `Base64` de la bibliothèque standard de Kotlin ;
+   - `java.text.Normalizer` et `java.util.Locale` (`DriveEntry`, le titre « introuvable » sans accents ni majuscules) : `expect`/`actual` (sur iPhone, la décomposition d'Apple) ;
    - `String.format` (`ResultReport`) et les conversions d'octets (`Charsets`) : leurs équivalents multiplateformes ;
    - JUnit : `kotlin.test` ;
 3. revérifier les expressions régulières du cœur sur Kotlin/Native (les formes d'adresses en dépendent) : les tests les couvrent déjà ;

@@ -19,8 +19,8 @@ kotlin {
 }
 
 dependencies {
-    // `org.json` : Android l'apporte (rien n'est embarqué dans l'APK), la JVM des tests non. Seul emprunt à la JVM avec `MessageDigest` et
-    // `Base64` d'`AgentAsset` : la liste fermée de `CoreArchitectureTest`, et ce qu'il faudra remplacer pour Kotlin Multiplatform (ARCHITECTURE.md).
+    // `org.json` : Android l'apporte (rien n'est embarqué dans l'APK), la JVM des tests non. C'est un des emprunts à la JVM du cœur, avec `MessageDigest`,
+    // `Base64`, `Normalizer` et `Locale` : la liste fermée de `CoreArchitectureTest`, et ce qu'il faudra remplacer pour Kotlin Multiplatform (ARCHITECTURE.md).
     compileOnly("org.json:json:20250517")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20250517")
