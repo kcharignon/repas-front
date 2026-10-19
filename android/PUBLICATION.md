@@ -64,6 +64,8 @@ docker run --rm -it -v "$HOME/repas-cle:/cle:ro" eclipse-temurin:17.0.20_8-jdk-j
 
 Tape le mot de passe quand il le demande. Cherche la ligne qui commence par **`SHA256:`**, par exemple `SHA256: AA:BB:CC:...` (32 groupes de deux caractères séparés par `:`). **Copie cette ligne dans le chat, à l'assistant** : elle n'a rien de secret. Il ouvre alors la PR de l'étape 4.
 
+La même commande affiche aussi une ligne **`SHA1:`** (20 groupes) : publique elle aussi, comme la SHA-256, elle sert à la console Google pour la connexion avec Google (le client « Android », ticket AUTH-002 du dépôt back) ; tu la saisiras toi-même dans la console le moment venu. Jamais celle de la clé de débogage.
+
 ## Étape 3. Poser les quatre secrets dans GitHub (une fois)
 
 **But** : donner la clé au workflow, et à lui seul. GitHub chiffre les secrets : une fois posés, personne ne peut les relire (même pas toi), seul le workflow les utilise.
@@ -185,7 +187,7 @@ Pour recommencer après un correctif dans le code, prends un **nouveau numéro**
 
    L'empreinte affichée (sans les `:`, en minuscules) doit être celle de l'étape 2.
 
-Ce que le workflow a déjà contrôlé avant de publier : agent embarqué = `android/agent.js.sha384`, tests Kotlin verts, signature valide avec le certificat attendu (et jamais la clé de débogage), version et code conformes à l'étiquette, **une seule permission (Internet)**, application **non débogable**, aucun plan d'essai ni menu de débogage (`BuildConfig.DEBUG` faux), origine `https://kantin.eu/`.
+Ce que le workflow a déjà contrôlé avant de publier : agent embarqué = `android/agent.js.sha384`, tests Kotlin verts, signature valide avec le certificat attendu (et jamais la clé de débogage), version et code conformes à l'étiquette, **une seule permission (Internet)**, application **non débogable**, aucun plan d'essai ni menu de débogage (`BuildConfig.DEBUG` faux), origine `https://kantin.eu/`, la vraie connexion avec Google et jamais son fournisseur factice de débogage.
 
 ## Étape 7. Installer sur le téléphone (la première fois)
 
