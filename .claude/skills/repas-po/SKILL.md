@@ -39,3 +39,4 @@ Le ticket contient : le parcours heureux **avant / après** (touches), les écra
 - Une décision de vocabulaire ou de ton se prend **dans le glossaire**, puis par un ticket de balayage : jamais écran par écran.
 - Ne pas poser de question à l'utilisateur quand le choix a un défaut raisonnable (rôle du PO) ; noter la décision et sa raison, elle reste réversible.
 - Le texte d'une erreur du serveur est un contrat avec le front (`errors` dans `fr.ts`) : on reformule le texte, jamais le code.
+- **Le magasin d'abord, la connexion ensuite** : Leclerc refuse la connexion tant qu'aucun magasin n'est choisi (« Avant de vous authentifier, veuillez sélectionner un Drive. », recette réelle du 2026-10-19). Aucun texte qui fait lire ou choisir le magasin (bandeau de l'application, réglages, mode d'emploi, agent) ne parle de connexion avant le magasin : la connexion n'est demandée que par l'agent, quand elle manque. Garde : `src/i18n/__tests__/store-before-login.spec.ts`.

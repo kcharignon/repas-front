@@ -206,7 +206,7 @@ store_report() { # store_report <runId> : Repas a reçu le magasin lu pour cette
 }
 no_setup_yet() { ! has_report '"command": "setup"'; }
 
-say "   a. Se connecter, choisir son magasin, puis l'agent le lit"
+say "   a. Choisir son magasin, puis l'agent le lit"
 reset_reports
 start_setup "$RUN_F"
 if wait_until 40 has_report '"hostname": "www.leclercdrive.fr", "path": "/"'; then
@@ -214,15 +214,15 @@ if wait_until 40 has_report '"hostname": "www.leclercdrive.fr", "path": "/"'; th
 else
   ko "drive.setup n'a pas ouvert l'accueil du drive"
 fi
-if wait_until 10 ui_has 'choisis ton magasin'; then ok "le message en français simple (se connecter, choisir son magasin) est à l'écran"; else ko "le message de la lecture du magasin n'est pas à l'écran"; fi
+if wait_until 10 ui_has 'Choisis ton magasin, puis touche'; then ok "le message en français simple (choisir son magasin, sans parler de connexion) est à l'écran"; else ko "le message de la lecture du magasin n'est pas à l'écran"; fi
 check "l'écran reste allumé pendant la lecture" screen_held
 sleep 6
 check "tant que la page n'est pas celle d'un magasin, rien n'est envoyé à l'agent" no_setup_yet
 screenshot 12-lecture-magasin-accueil
 if tap 'text="Choisir mon magasin de test"'; then ok "magasin choisi sur le faux site (lien touché)"; else ko "le lien du magasin est introuvable à l'écran"; fi
 if wait_until 30 has_report '"command": "setup"'; then ok "sur la page du magasin, l'agent reçoit le message setup par le pont"; else ko "l'agent n'a pas reçu le message setup"; fi
-if wait_until 15 ui_has 'Utiliser ce magasin'; then ok "l'agent demande confirmation (écran « Utiliser ce magasin ? »)"; else ko "l'agent n'a pas affiché sa confirmation"; fi
-check "le message de la lecture du magasin a disparu (l'agent a pris la main)" ui_lacks 'Connecte-toi à Leclerc'
+if wait_until 15 ui_has 'Utiliser ce magasin ?'; then ok "l'agent demande confirmation (écran « Utiliser ce magasin ? »)"; else ko "l'agent n'a pas affiché sa confirmation"; fi
+check "le message de la lecture du magasin a disparu (l'agent a pris la main)" ui_lacks 'Choisis ton magasin, puis touche'
 sleep 1
 screenshot 13-lecture-magasin-confirmation
 if tap 'text="Utiliser ce magasin"'; then ok "« Utiliser ce magasin » touché dans l'interface de l'agent"; else ko "le bouton « Utiliser ce magasin » est introuvable"; fi

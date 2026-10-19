@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
@@ -18,6 +18,8 @@ const session = useSessionStore()
 
 const email = ref('')
 const password = ref('')
+/** Arrivée depuis « Choisis un nouveau mot de passe » : le mot de passe vient d'être changé (ADR 0026 du back). */
+const passwordChanged = computed(() => route.query['mot-de-passe'] === 'change')
 const error = ref<string | null>(null)
 const pending = ref(false)
 /** Mot de passe bon, adresse pas encore confirmée : le back répond 403 `EMAIL_NOT_VERIFIED` (ADR 0020 du back). */
@@ -56,6 +58,13 @@ async function submit() {
 
 <template>
   <AuthLayout :title="t('login.title')">
+    <p
+      v-if="passwordChanged"
+      role="status"
+      class="rounded-xl bg-soft px-4 py-3 text-sm font-semibold text-primary"
+    >
+      {{ t('login.passwordChanged') }}
+    </p>
     <form class="flex flex-col gap-4" @submit.prevent="submit">
       <UiField :label="t('login.email')" v-slot="{ id }">
         <UiTextInput :id="id" v-model="email" type="email" autocomplete="email" required />
@@ -69,6 +78,11 @@ async function submit() {
           required
         />
       </UiField>
+      <RouterLink
+        :to="{ name: 'forgot-password', query: email === '' ? {} : { email } }"
+        class="-mt-2 inline-flex min-h-11 items-center self-start font-bold text-primary underline"
+        >{{ t('login.forgotPassword') }}</RouterLink
+      >
       <p
         v-if="error"
         role="alert"

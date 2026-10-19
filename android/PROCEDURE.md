@@ -15,7 +15,7 @@ Un seul geste lance tout le test. L’application cherche 12 produits courants s
 
 1. **Installer.** Sur ton téléphone, ouvre Chrome et va sur `https://github.com/kcharignon/repas-front/releases` ; ouvre la version la plus récente dont le nom commence par `android-dev-` (étiquette « Pre-release »), puis touche **`repas-drive-debug.apk`** dans **Assets**. Ouvre le fichier téléchargé, autorise l’installation depuis Chrome si Android le demande, touche **Installer** (si Play Protect hésite : **Installer quand même**), puis **Ouvrir**.
 
-2. **Ouvrir le drive et te connecter à Leclerc.** L’application s’ouvre sur Repas (tu peux t’y connecter comme sur le site). Touche le petit bouton rond **⋮** sur le bord droit de l’écran, puis **Ouvrir le drive Leclerc** : le drive s’ouvre sur un second écran. Choisis ton magasin sur le site, puis connecte-toi toi-même (identifiant, mot de passe et, si Leclerc le demande, le code reçu par e-mail). Si un test anti-robot s’affiche, fais-le.
+2. **Ouvrir le drive, choisir ton magasin, puis te connecter à Leclerc.** L’application s’ouvre sur Repas (tu peux t’y connecter comme sur le site). Touche le petit bouton rond **⋮** sur le bord droit de l’écran, puis **Ouvrir le drive Leclerc** : le drive s’ouvre sur un second écran. Choisis d’abord ton magasin sur le site (Leclerc refuse la connexion tant qu’aucun magasin n’est choisi), puis connecte-toi toi-même (identifiant, mot de passe et, si Leclerc le demande, le code reçu par e-mail). Si un test anti-robot s’affiche, fais-le.
 
 3. **Aller sur une page de ton magasin.** Fais une recherche avec la zone de recherche du site (par exemple **farine**) et attends les résultats. Le test a besoin d’une page de magasin, pas de la page d’accueil.
 
