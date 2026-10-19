@@ -330,6 +330,65 @@ Un message d'une autre origine ou d'un cadre secondaire n'est jamais livré à l
 - **Plan d'essai (variante de débogage seulement).** `BuildConfig.DEBUG` ajoute au menu « Plan d'essai (débogage) » : l'application envoie `setup` (l'agent lit le magasin de la page et demande de le confirmer), puis un plan synthétique de quatre ingrédients (`src/debug/assets/debug-plan.json`, validé par `validatePlan` dans `__tests__/debug-plan.spec.ts`, sans produit mémorisé, avec `needed`), puis montre le résultat de l'agent dans un écran de texte copiable (numéro de magasin réduit à ses trois derniers chiffres, ni libellé, ni adresse, ni cookie). L'APK de publication n'a ni ce menu ni ce fichier.
 - **Test automatique (variante de débogage seulement, DRV-318).** « Test automatique (débogage) » remplace la procédure manuelle d'une trentaine d'essais : un seul geste, un seul rapport. L'application vérifie qu'une page du drive est ouverte, envoie la commande `selftest` ; l'agent enchaîne sans autre action le diagnostic (huit contrôles, plus les sondes du site réel du ticket B : formes, noms et nombres seulement, dont le POURQUOI d'une recherche en échec), la lecture du magasin, un lot de 12 recherches en série, puis un essai de 3 produits (premier candidat en stock pour trois exemplaires, hors panier ; quantité 1, puis 3 puis 2 sur le premier, puis retrait de tout et comparaison du panier avant et après), à la cadence normale (800 ms + gigue). Garde-fous : 3 produits au plus, quantité 3 au plus, arrêt immédiat sur blocage, nettoyage toujours tenté. L'agent rend un message `selftest-result` (le rapport en texte) ; `SelftestRun` ne l'accepte que si l'application vient de le demander ; `SelftestReport` le revérifie et masque tout de même adresses, e-mails et numéros de six chiffres ou plus ; `TextPanel` le copie dans le presse-papiers à l'ouverture, avec « Copier » et « Partager ». Mode d'emploi pour l'utilisateur : `PROCEDURE.md`.
 
+## Dépannage de l’installation
+
+La page d’aide de l’application (`/drive/aide`) est volontairement réduite à l’essentiel : la version installée et un bouton vers la page des versions sur GitHub (dans un navigateur, trois courtes étapes d’installation en plus). Tout le reste du mode d’emploi qu’elle contenait (DRV-316) est conservé ici, texte repris tel quel, pour le mainteneur et pour répondre à un proche en difficulté.
+
+### Installer l’application
+
+1. Sur ton téléphone Android, ouvre cette page dans Chrome.
+2. Touche « Télécharger la dernière version ». Sur la page GitHub, repère la version la plus récente dont le nom commence par « android-v » (par exemple « android-v0.1.0 »), puis touche le fichier qui se termine par « .apk » (dans la rubrique « Assets »). Ignore les versions dont le nom contient « dev » ou qui portent la mention « Pre-release » : ce sont des essais réservés aux développeurs.
+3. Android te dit peut-être que ton téléphone n’a pas le droit d’installer des applications inconnues. Touche « Paramètres », active « Autoriser depuis cette source », puis reviens en arrière.
+4. Quand le téléchargement est terminé, touche « Ouvrir » (ou ouvre le fichier depuis les notifications ou le dossier « Téléchargements »), puis « Installer ».
+5. Si Play Protect affiche un avertissement, vois « En cas de problème » plus bas : il suffit de choisir « Installer quand même ».
+6. Touche « Ouvrir », puis connecte-toi à Repas avec ton adresse e-mail et ton mot de passe habituels. Tes recettes et tes listes sont déjà là : tout est sur ton compte.
+
+### Retirer l’ancienne icône
+
+Si tu avais ajouté Repas à ton écran d’accueil depuis Chrome, tu peux retirer cette ancienne icône une fois l’application installée : touche-la sans la relâcher, puis « Désinstaller » (ou « Supprimer »).
+
+Les deux icônes portent le même nom. L’ancienne est en général celle qui porte un petit logo de Chrome dans un coin : en cas de doute, garde les deux.
+
+### Se connecter à Leclerc la première fois
+
+1. La première fois, Repas te demande de choisir ton magasin dans les réglages du drive : suis les indications de cet écran.
+2. Ouvre une liste, touche « Envoyer au drive » puis « Ouvrir le drive ». Le site de Leclerc s’affiche dans l’application.
+3. Une fois ton magasin ouvert, connecte-toi à ton compte E.Leclerc, comme sur le site. Si Leclerc t’envoie un code par e-mail, saisis-le.
+4. Si Leclerc te redemande un jour de te connecter, fais-le de la même façon.
+
+### Lancer un envoi
+
+1. Ouvre la liste de courses et touche « Envoyer au drive ».
+2. Vérifie les articles, puis touche « Ouvrir le drive ». Le site de Leclerc s’ouvre dans l’application.
+3. Garde l’application ouverte.
+4. À la fin, tu reviens dans Repas avec un récapitulatif. Termine ensuite ta commande toi-même sur le site de Leclerc : choix du créneau et paiement.
+
+### Mettre à jour l’application
+
+- Le site se met à jour tout seul. L’application, elle, ne change que de temps en temps (par exemple quand Leclerc modifie son site).
+- Pour la mettre à jour, télécharge la dernière version comme pour l’installation, puis installe-la par-dessus.
+- Pour connaître ta version : dans l’écran du drive, touche « Menu » puis « Version et mode d’emploi », et compare avec le nom de la dernière version sur GitHub.
+
+### Désinstaller l’application
+
+Touche l’icône Repas sans la relâcher, puis « Désinstaller » (ou : Paramètres, Applications, Repas, Désinstaller). La connexion à Leclerc gardée par l’application est effacée avec elle.
+
+Pour seulement te déconnecter de Leclerc, sans désinstaller : dans l’écran du drive, « Menu », puis « Se déconnecter de Leclerc ». Les cookies, les données du site et l’historique du drive sont alors effacés.
+
+### En cas de problème
+
+- **L’installation est bloquée.** Android demande d’autoriser l’installation pour l’application qui a téléchargé le fichier (en général Chrome). Va dans Paramètres, Applications, Chrome, « Installer des applications inconnues », puis active « Autoriser depuis cette source ». Reviens au fichier téléchargé et relance l’installation. Sur un téléphone prêté par une entreprise ou une école, cette option peut être interdite.
+- **Play Protect affiche un avertissement.** Google Play Protect ne connaît pas l’application, car elle ne vient pas de Google Play. Si tu as bien téléchargé le fichier depuis la page GitHub de Repas, touche « Plus de détails », puis « Installer quand même ».
+- **« Application non installée » ou conflit avec une application existante.** Une version d’essai, ou signée autrement, est déjà sur le téléphone. Désinstalle l’ancienne application Repas, puis installe la nouvelle. Tu devras te reconnecter à Leclerc.
+- **Je n’arrive pas à me connecter à Leclerc.** Si Leclerc dit de sélectionner un Drive, choisis d’abord ton magasin, puis connecte-toi. Vérifie aussi que tu peux te connecter au site de Leclerc dans un navigateur. Si l’application ne te reconnaît plus : dans l’écran du drive, « Menu », puis « Se déconnecter de Leclerc », et reconnecte-toi.
+- **« Le site a changé » ou « Leclerc a changé ».** Leclerc a modifié son site et l’envoi automatique s’est arrêté. En attendant une mise à jour de l’application, passe à « Chercher à la main » (voir plus bas) : les liens de la liste te mènent aux produits sur Leclerc. Installe la nouvelle version de l’application dès qu’elle est annoncée.
+- **Leclerc s’affiche en version mobile, ou « Page non prise en charge ».** L’application doit afficher le site de Leclerc en version ordinateur. Dans l’écran du drive, « Menu », puis « Se déconnecter de Leclerc », puis rouvre le drive.
+- **« Le drive n’est pas utilisable sur cet appareil ».** Mets à jour l’application Repas et le composant « Android System WebView » (dans Google Play), puis réessaie.
+
+### Sans l’application : chercher à la main
+
+Tu peux préparer tes courses sans l’application. Sur la liste, touche « Envoyer au drive » : Repas montre chaque article avec un lien « Chercher sur Leclerc » qui ouvre le site de Leclerc sur le produit, et tu ajoutes les produits au panier toi-même. Si le bouton n’apparaît pas, l’envoi au drive n’est pas activé pour le moment.
+
 ## Version
 
 - Le **nom** (`1.2.3`) vient de l'étiquette Git `android-v1.2.3` : variable `ANDROID_VERSION_TAG` (format strict `android-vX.Y.Z`).
