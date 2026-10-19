@@ -1,6 +1,6 @@
 // @vitest-environment node
 // Le contrat du pont natif `repasNative` (DRV-317, DRV-314) entre le front et l'application Android : ce que l'application Kotlin envoie et
-// reçoit est jugé par les validateurs du protocole et par le module `driveBridge` du front. Les fichiers de `app/src/test/resources` sont
+// reçoit est jugé par les validateurs du protocole et par le module `driveBridge` du front. Les fichiers de `core/src/test/resources` sont
 // des copies des exemples du protocole que les tests Kotlin lisent : ils ne doivent pas dériver.
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -19,7 +19,7 @@ import { parseInbound } from '../../src/features/drive/bridge/native'
 import { fakeNative } from '../../src/features/drive/bridge/__tests__/fakeNative'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const resource = (name: string) => readFileSync(join(here, '../app/src/test/resources', name), 'utf8')
+const resource = (name: string) => readFileSync(join(here, '../core/src/test/resources', name), 'utf8')
 const example = (name: string) =>
   readFileSync(join(here, '../../drive-agent/protocol/examples/valid', name), 'utf8')
 

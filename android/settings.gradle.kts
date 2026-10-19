@@ -28,4 +28,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "repas-drive"
 
-include(":app")
+include(":app", ":core")

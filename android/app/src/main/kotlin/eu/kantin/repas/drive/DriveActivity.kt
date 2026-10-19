@@ -71,6 +71,9 @@ class DriveActivity : Activity() {
     private lateinit var selftestRun: SelftestRun
     private val delivery = PlanDelivery()
 
+    /** Les pages qui sortent de l'application s'ouvrent dans le navigateur du téléphone (le service de plateforme du cœur, `LinkOpener`). */
+    private val linkOpener: LinkOpener = AndroidLinkOpener(this)
+
     /** Ce qui cloche avec la page où l'envoi attend la page du magasin (ticket E) : le site la refuse, la détourne, tarde, ou son agent manque. */
     private val watch = OpeningWatch()
     private val timers = Handler(Looper.getMainLooper())
@@ -291,7 +294,7 @@ class DriveActivity : Activity() {
     private fun route(url: String?) {
         when (NavigationPolicy.decide(url)) {
             Decision.ALLOW -> webView.loadUrl(url!!)
-            Decision.OPEN_EXTERNALLY -> openInPhoneBrowser(url!!)
+            Decision.OPEN_EXTERNALLY -> linkOpener.open(url!!)
             Decision.BLOCK -> Unit
         }
     }
@@ -655,7 +658,7 @@ class DriveActivity : Activity() {
 
     /** La page courante dans le navigateur du téléphone (l'accueil du drive si la page n'est pas une page du drive). */
     private fun openCurrentPageInBrowser() {
-        openInPhoneBrowser(webView.url?.takeIf { NavigationPolicy.isAllowed(it) } ?: NavigationPolicy.START_URL)
+        linkOpener.open(webView.url?.takeIf { NavigationPolicy.isAllowed(it) } ?: NavigationPolicy.START_URL)
     }
 
     /** Le diagnostic de l'agent : une commande sur le pont, jamais un fragment d'adresse (un fragment trop long fait échouer le site). */

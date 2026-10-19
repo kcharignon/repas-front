@@ -13,12 +13,6 @@ class ShellNavigationTest {
     private val navigation = ShellNavigation(origin)
 
     @Test
-    fun `l'origine de la construction est une origine valide`() {
-        assertNotNull(RepasOrigin.parse(BuildConfig.REPAS_ORIGIN))
-        assertEquals("https://kantin.eu", RepasOrigin.parse(RepasOrigin.PRODUCTION))
-    }
-
-    @Test
     fun `une origine s'ecrit https hote avec ou sans barre finale`() {
         assertEquals("https://kantin.eu", RepasOrigin.parse("https://kantin.eu"))
         assertEquals("https://kantin.eu", RepasOrigin.parse("https://kantin.eu/"))

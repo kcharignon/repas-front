@@ -8,8 +8,15 @@ import { describe, expect, it } from 'vitest'
 
 import { finalizeLink } from '../../src/features/drive/leclerc'
 
-const kotlin = join(dirname(fileURLToPath(import.meta.url)), '..', 'app/src/main/kotlin/eu/kantin/repas/drive')
-const source = (name: string) => readFileSync(join(kotlin, name), 'utf8')
+// Le Kotlin de l'application est en deux modules (AUTH-015) : le cœur sans Android et l'application ; un fichier se cherche dans les deux.
+const androidDir = join(dirname(fileURLToPath(import.meta.url)), '..')
+const kotlinFiles = ['core', 'app'].flatMap((module) => {
+  const dir = join(androidDir, module, 'src/main/kotlin/eu/kantin/repas/drive')
+  return readdirSync(dir)
+    .filter((name) => name.endsWith('.kt'))
+    .map((name) => ({ name, path: join(dir, name) }))
+})
+const source = (name: string) => readFileSync(kotlinFiles.find((file) => file.name === name)?.path ?? '', 'utf8')
 
 describe('le lien « Finaliser sur Leclerc », des deux côtés', () => {
   it('le front ne fait que le lien du magasin, l’application ne l’ouvre que si c’est cette forme', () => {
@@ -20,7 +27,7 @@ describe('le lien « Finaliser sur Leclerc », des deux côtés', () => {
   })
 
   it('aucune navigation vers la page du panier de Leclerc, nulle part dans l’application', () => {
-    const files = readdirSync(kotlin).filter((name) => name.endsWith('.kt'))
+    const files = kotlinFiles.map((file) => file.name)
 
     expect(files.length).toBeGreaterThan(10)
     expect(files.filter((name) => /detail-panier/i.test(source(name)))).toEqual([])
@@ -43,7 +50,7 @@ describe('le lien « Finaliser sur Leclerc », des deux côtés', () => {
 })
 
 describe('le bandeau de l’arrivée de « Finaliser sur Leclerc »', () => {
-  const strings = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'app/src/main/res/values/strings.xml'), 'utf8')
+  const strings = readFileSync(join(androidDir, 'app/src/main/res/values/strings.xml'), 'utf8')
   const banner = /<string name="basket_banner">([^<]+)<\/string>/.exec(strings)?.[1] ?? ''
 
   it('est court, tutoie et ne contient aucun avertissement', () => {
@@ -53,7 +60,7 @@ describe('le bandeau de l’arrivée de « Finaliser sur Leclerc »', () => {
   })
 
   it('n’a pas de bouton : le bandeau du panier ne porte pas l’action « Ouvrir l’accueil du drive »', () => {
-    const pass = readFileSync(join(kotlin, 'DrivePass.kt'), 'utf8')
+    const pass = source('DrivePass.kt')
 
     expect(pass).toMatch(/val hasAction: Boolean get\(\) = this == PLAN \|\| this == VERIFICATION \|\| this == MOBILE/)
   })

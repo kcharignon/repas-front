@@ -1,31 +1,32 @@
 ---
 name: repas-android-dev
-description: Développer l'application Android « Repas Drive » (`android/` du dépôt `kcharignon/repas-front`, Kotlin) du chantier « envoyer la liste au drive Leclerc » : hôte WebView sécurisé en mode ordinateur, injection de l'agent et pont de messages, variante de débogage, signature, émulateur Docker permanent et test de fumée. À utiliser pour tout ticket DRV-311 à DRV-319, tout changement de `android/`, du script `injection.js`, de la signature ou de l'émulateur, et pour les étapes humaines (clé de signature, `assetlinks.json`, KVM).
+description: Développer l'application Android « Repas Drive » (`android/` du dépôt `kcharignon/repas-front`, Kotlin) du chantier « envoyer la liste au drive Leclerc » : hôte WebView sécurisé en mode ordinateur, injection de l'agent et pont de messages, variante de débogage, signature, émulateur Docker permanent et test de fumée. À utiliser pour tout ticket DRV-311 à DRV-319, tout changement de `android/` (cœur Kotlin sans Android `core/`, application `app/`), du script `injection.js`, de la signature ou de l'émulateur, et pour les étapes humaines (clé de signature, `assetlinks.json`, KVM).
 ---
 
 # repas-android-dev — l'application Android
 
-L'application affiche le drive Leclerc dans une **WebView en mode ordinateur**, y injecte l'agent (`drive-agent/dist/agent.js`) et lui parle par un canal restreint. Kotlin, une activité (`MainActivity`), AndroidX réduit au strict nécessaire, `applicationId` `eu.kantin.repas.drive`, `minSdk` 26, `targetSdk` 36. Tout se construit dans Docker (JDK, Gradle, SDK) : rien à installer sur la machine.
+L'application affiche le drive Leclerc dans une **WebView en mode ordinateur**, y injecte l'agent (`drive-agent/dist/agent.js`) et lui parle par un canal restreint. Kotlin, deux modules : le **cœur** `android/core` (règles en Kotlin sans aucune classe Android) et l'**application** `android/app` (colle d'Android), AndroidX réduit au strict nécessaire, `applicationId` `eu.kantin.repas.drive`, `minSdk` 26, `targetSdk` 36. Tout se construit dans Docker (JDK, Gradle, SDK) : rien à installer sur la machine.
 
 ## 0. Avant toute chose
 
-1. Lire `android/README.md` (commandes, structure, version, signature, émulateur), `android/PROCEDURE.md`, `CLAUDE.md` du front, puis dans le dépôt back `kcharignon/repas` : `docs/drive/pivot-application-android.md`, `docs/drive/spikes/DRV-011-rapport.md` et `DRV-005-decision-g1.md`, `docs/drive/consignes-agents.md` et le ticket `docs/drive/tickets/DRV-31x-*.md` (sections « Réalisation », « Points laissés », « RÉVISION » : contrats pour la suite).
+1. Lire `android/README.md` (commandes, structure, version, signature, émulateur), **`android/ARCHITECTURE.md` (le cœur sans Android et les services de plateforme, § 3c)**, `android/PROCEDURE.md`, `CLAUDE.md` du front, puis dans le dépôt back `kcharignon/repas` : `docs/drive/pivot-application-android.md`, `docs/drive/spikes/DRV-011-rapport.md` et `DRV-005-decision-g1.md`, `docs/drive/consignes-agents.md` et le ticket `docs/drive/tickets/DRV-31x-*.md` (sections « Réalisation », « Points laissés », « RÉVISION » : contrats pour la suite).
 2. Règles transverses (détail : `consignes-agents.md` du back) : **aucun contact avec Leclerc** (aucun test, aucune émulation ouverte sur le vrai site : le vrai site se visite seulement sur le téléphone de l'utilisateur, recette DRV-505) ; aucune donnée réelle (valeurs factices `123456`, `Ville-Test`) ; jamais de déploiement, de release de production ni de secret ; une PR n'est fusionnée que si **tous** les contrôles de la CI sont verts ; commits courts en français **sans `Co-Authored-By`** ; worktree dédié quand d'autres agents travaillent.
-3. État du code (à vérifier avant d'écrire, `android/README.md` fait foi) : en place = coquille Repas et `DriveActivity` (DRV-317), hôte WebView (DRV-312), agent embarqué et pont (DRV-313), pont natif `repasNative` et messages `drive.*` (DRV-314, DRV-320 ; voir § 3b), test automatique de débogage (DRV-318), émulateur, test de fumée et scénarios complets (DRV-319), aide d'installation côté front (DRV-316), **workflow de publication signée par étiquette `android-vX.Y.Z` et contrôle de l'APK (DRV-315, § 5.4)**. **Pas encore** : la vérification « une nouvelle version est disponible » dans l'application (DRV-315, point 3 du ticket ; `version.json` publié avec chaque release est fait pour elle).
+3. État du code (à vérifier avant d'écrire, `android/README.md` fait foi) : en place = coquille Repas et `DriveActivity` (DRV-317), hôte WebView (DRV-312), agent embarqué et pont (DRV-313), pont natif `repasNative` et messages `drive.*` (DRV-314, DRV-320 ; voir § 3b), test automatique de débogage (DRV-318), émulateur, test de fumée et scénarios complets (DRV-319), aide d'installation côté front (DRV-316), **workflow de publication signée par étiquette `android-vX.Y.Z` et contrôle de l'APK (DRV-315, § 5.4)**. **Le cœur Kotlin sans Android `android/core` et les services de plateforme `IdentityProvider`, `LinkOpener` (AUTH-015, § 3c)** ; la connexion avec Google (AUTH-011, `IdentityProvider` côté Android) n'est pas encore écrite. **Pas encore** : la vérification « une nouvelle version est disponible » dans l'application (DRV-315, point 3 du ticket ; `version.json` publié avec chaque release est fait pour elle).
 
 ## 1. Carte du code (chemins vérifiés)
 
 | Sujet | Où |
 |---|---|
 | Activité et WebView | `android/app/src/main/kotlin/eu/kantin/repas/drive/MainActivity.kt` (hôte, retour, marges, panneau d'erreur, menu), `DesktopMode.kt`, `Views.kt` |
-| Règles en Kotlin pur (testées sans téléphone) | `NavigationPolicy.kt`, `UserAgent.kt`, `LoadProblem.kt`, `OpeningWatch.kt` (la page d'ouverture d'un plan : `PageTrouble`), `DrivePass.kt` (`DrivePass`, `PlanDelivery`, `StoreBanner`), `AgentAsset.kt`, `BridgeMessages.kt`, `DebugPlan.kt`, `ResultReport.kt`, `SelftestReport.kt`, `VersionLabel.kt` |
+| **Le cœur** : règles en Kotlin sans Android (testées sans téléphone) | `android/core/src/main/kotlin/eu/kantin/repas/drive/` (même paquet qu'avant) : `NavigationPolicy.kt`, `ShellNavigation.kt`, `DriveEntry.kt`, `FinalizeOutcome.kt`, `StorePathMemory.kt`, `NativeBridge.kt`, `BridgeMessages.kt`, `DrivePlan.kt`, `DrivePass.kt` (`DrivePass`, `PlanDelivery`, `StoreBanner`), `OpeningWatch.kt` (la page d'ouverture d'un plan : `PageTrouble`), `AgentAsset.kt`, `UserAgent.kt`, `LoadProblem.kt`, `VersionLabel.kt`, `DebugPlan.kt`, `ResultReport.kt`, `SelftestReport.kt` |
+| Services de plateforme (interfaces du cœur) | `IdentityProvider.kt` (jeton d'identité, AUTH-011), `LinkOpener.kt` dans le cœur ; leurs implémentations Android dans `app` : `AndroidServices.kt` (`AndroidLinkOpener`), `RepasApp.kt` (`PrefsPassStore`, `PrefsStorePathStore`, `PrefsFinalizeOutcomeStore`) |
 | Colle `androidx.webkit` | `AgentHost.kt` (injection, canal `repasHost`, envoi vers l'agent) |
 | Script injecté | `android/app/src/main/assets/injection.js` (pont gelé, file de messages, `hello`, marqueur `/*__DEBUG__*/false`) |
 | Débogage seulement | `android/app/src/debug/assets/debug-plan.json`, `TextPanel.kt` (copier/partager) |
 | Version et signature | `android/app/build.gradle.kts`, `android/buildSrc/` (`AppVersion` : nom et code de version tirés de l'étiquette), `android/build.sh` (`release`, `verify-release`, `release-selftest`), `android/debug.keystore` (clé de débogage **publique**) |
 | Publication signée (DRV-315) | `.github/workflows/android-release.yml` (étiquette `android-vX.Y.Z` seulement), `android/PUBLICATION.md` (procédure humaine), `android/__tests__/publication.spec.ts` (garde-fous du workflow, forme d'`assetlinks.json`), `public/.well-known/assetlinks.json` (à créer avec l'empreinte du certificat : PR de l'assistant, étape 4 de `PUBLICATION.md`) |
 | Empreinte de l'agent | `android/agent.js.sha384`, `android/agent-digest.ts` (`make android-agent-hash`) |
-| Tests | `android/app/src/test/kotlin/` (JUnit), `android/__tests__/` (Vitest : `hygiene`, `agent-asset`, `debug-plan`, `injection`) |
+| Tests | `android/core/src/test/kotlin/` (JUnit sur la JVM seule, dont `CoreArchitectureTest`), `android/app/src/test/kotlin/` (JUnit de ce qui touche Android ou un actif de l'application), `android/__tests__/` (Vitest : `hygiene`, `agent-asset`, `debug-plan`, `injection`, `core`) |
 | Émulateur | `android/emulator/` (`Dockerfile`, `entrypoint.sh`, `ctl.sh`, `lib.sh` outils communs (dont `touch_target`, `display_measures`), `display.mjs` la mesure d'affichage par le débogage à distance, `smoke.sh`, `e2e.sh` + `e2e/*.json` les plans, `testsite.py` faux sites HTTPS et relais, `testpage.html`, `repaspage.html`), service `android-emulator` de `compose.yaml` (monte `drive-agent/fake-leclerc` : Node l'y exécute) |
 | CI | `.github/workflows/android.yml` (séparé de `make check`) |
 
@@ -33,7 +34,7 @@ L'application affiche le drive Leclerc dans une **WebView en mode ordinateur**, 
 
 | Commande | Rôle |
 |---|---|
-| `make android-test` | tests Kotlin (application + dérivation de la version) |
+| `make android-test` | tests Kotlin (cœur + application + dérivation de la version) |
 | `make android` | APK de débogage `android/dist/repas-drive-debug.apk` (taille, SHA-256) |
 | `make android-release` | APK signé `android/dist/repas-drive.apk` : **refuse sans clé** ni sans `ANDROID_VERSION_TAG` (`android-vX.Y.Z`), dont le code de version est tiré (`X*1 000 000 + Y*1 000 + Z`) |
 | `make android-release-verify` | contrôle l'APK signé juste après sa construction (`ANDROID_VERSION_TAG`, `ANDROID_EXPECTED_CERT_SHA256` publique) : certificat attendu (jamais la clé de débogage), version, une permission, non débogable, agent intact ; écrit `dist/release-facts.env` |
@@ -65,6 +66,17 @@ Chaque commande reconstruit d'abord l'agent (`make agent-build`) ; la constructi
 
 Lire `src/features/drive/bridge/native.ts` et `driveBridge.ts` du front : l'application doit s'y conformer, pas l'inverse. Un objet `repasNative` (`addWebMessageListener`, **origine du front Repas seulement**, constante de construction `REPAS_ORIGIN`, jamais `*`) avec `postMessage(texte)` et des événements `message` dont `data` est du **texte JSON `{"v":1,…}` de 64 Ko au plus** (octets UTF-8). Page vers application : `app.info`, `drive.start` (`plan` = message `plan` du protocole v1), `drive.cancel`. Application vers page : `app.info` (`version`, `versionCode` entier, `drive` booléen : agent intact et WebView assez récente), `drive.result` (`result` = message `result` ou `setup-result` valide), `drive.error` (`code` en majuscules `^[A-Z][A-Z0-9_]{0,63}$`, `runId` uuid ou nul), `error` (`code`, pour un message refusé : par exemple `UNKNOWN_TYPE`). Règles à tenir côté Kotlin : un seul passage à la fois ; le résultat est mis en file si la page s'est rechargée ; la WebView du front ne reçoit **jamais** l'agent ni les cookies de Leclerc (deux WebView séparées, `DriveActivity` pour le drive) ; hôtes du drive autorisés écrits en dur (un plan d’un autre hôte, ou de plus de 64 Ko, est refusé) ; reprise 24 h après interruption (identifiant d'exécution et plan, aucun cookie).
 
+## 3c. Le cœur sans Android et l'application (AUTH-015)
+
+Page de référence : `android/ARCHITECTURE.md`. Décision D5 de l'ADR 0024 du back : pouvoir sortir sur iPhone un jour sans tout réécrire ; aucun code iOS, pas de Kotlin Multiplatform aujourd'hui, seulement un terrain rangé.
+
+- **Règle d'or : le cœur n'importe rien d'Android.** `android/core` est un module Kotlin JVM sans plugin Android ni SDK : ni `android.*`, ni `androidx.*`, ni `BuildConfig`, ni `R`, ni une classe d'activité. Un `import android.…` n'y compile pas (« Unresolved reference ») ; `CoreArchitectureTest` (`make android-test`) et `android/__tests__/core.spec.ts` (`make check`) échouent d'un message clair. `app` dépend de `core` (`implementation(project(":core"))`), jamais l'inverse.
+- **Où mettre un code** : une règle qui se joue sans téléphone, sans WebView et sans `Context` va **dans le cœur**, avec ses tests JUnit ; la colle d'Android (WebView, vue, activité, manifeste) reste dans `app`, aussi mince que possible (le cœur décide, l'application exécute) ; quand le cœur a besoin de la plateforme, **il écrit l'interface** (sans type Android dans ses signatures) et **l'application l'implémente** (`AndroidServices.kt`).
+- **Les interfaces de plateforme** : `IdentityProvider` (`signIn(clientId, nonce, callback)` : jeton d'identité ; contrat dans sa documentation : un seul rappel, jamais après `cancel()`, rien au journal ; `IdentityResult.Token.toString()` ne montre pas le jeton), `LinkOpener` (`open(url)`), et les trois stockages `PassStore`, `StorePathStore` et `FinalizeOutcomeStore`. Pas de `SecureStore` : rien ne garde de secret. Le pont de connexion Google (AUTH-011) s'écrit contre `IdentityProvider`, sans toucher à la WebView.
+- **Les emprunts à la JVM sont une liste fermée** (`CoreRules.BORROWED_FROM_THE_JVM` : `org.json`, `MessageDigest`, `Base64`, `Normalizer`, `Locale`) : c'est ce qu'un module Kotlin Multiplatform devrait remplacer (`ARCHITECTURE.md`, « Ce que Kotlin Multiplatform demandera »). En ajouter un, c'est l'ajouter à cette liste **et** à `ARCHITECTURE.md`, en le sachant.
+- **Ce qui reste dans `app/src/test`** : les tests qui touchent Android (`LoadProblemTest` rapproche les codes d'erreur des constantes de la WebView) ou un actif de l'application (`InjectionAssetTest`, `DebugRunTest`, `BuildOriginTest`). Tout le reste est dans `core/src/test`, avec `src/test/resources` (copies des exemples du protocole que `android/__tests__/` relit).
+- **`android/ARCHITECTURE.md` nomme chaque fichier Kotlin** (`core.spec.ts` le vérifie) : un fichier ajouté, déplacé ou supprimé s'y inscrit dans la même PR, dans la partie du cœur ou de l'application.
+
 ## 4. Émulateur Docker permanent et test de fumée
 
 - **Jamais Leclerc** : le DNS de l'émulateur (`dnsmasq`) envoie `*.leclercdrive.fr` vers un faux site HTTPS local (`10.0.2.2`, `testsite.py`) et ne résout **rien d'autre** ; `make android-smoke` s'arrête avant d'ouvrir quoi que ce soit si ce nom ne pointe pas vers `10.0.2.2`, et le journal du DNS prouve qu'aucune demande n'est partie. Seul le premier lancement va sur Internet (SDK chez Google). Certificat jetable dans le volume, accepté par la WebView par `--ignore-certificate-errors-spki-list` écrit dans l'émulateur seulement (image Google APIs « userdebug », pas Play Store) : l'application n'est pas modifiée.
@@ -79,7 +91,7 @@ Lire `src/features/drive/bridge/native.ts` et `driveBridge.ts` du front : l'appl
 ## 5. Recettes
 
 ### 5.1 Modifier l'application (Kotlin)
-Mettre la règle dans une classe **Kotlin pur** (sans classe Android) avec ses tests JUnit, la coller ensuite dans `MainActivity`/`AgentHost` → `make android-test` → `make android` → `make android-smoke` si le pont, l'injection ou le menu changent → lire les captures. Tout ce qui touche `DesktopMode`/`MainActivity` ne se prouve que sur téléphone : le dire dans « À relire » (recette de l'utilisateur).
+Mettre la règle dans une classe du **cœur** (`android/core`, Kotlin sans classe Android, § 3c) avec ses tests JUnit, la coller ensuite dans `MainActivity`/`AgentHost` (`app`) → `make android-test` → `make android` → `make android-smoke` si le pont, l'injection ou le menu changent → lire les captures. Tout ce qui touche `DesktopMode`/`MainActivity` ne se prouve que sur téléphone : le dire dans « À relire » (recette de l'utilisateur).
 
 ### 5.2 Le pont ou `injection.js` change
 Garder la forme attendue par `drive-agent/src/transport/bridge.ts` (`postMessage(texte)` et `addEventListener('message', …)`), tester dans `android/__tests__/injection.spec.ts` (jsdom, agent réel, faux site), borner (64 Ko) et valider côté Kotlin **et** côté agent. Le message `hello` n'est pas du protocole.
@@ -95,12 +107,14 @@ Tout est dans `android/PUBLICATION.md`, que l'assistant déroule **une étape à
 - [ ] `make android-test` et `make android` verts ; `make check` vert (dont `hygiene` et `agent-asset`) ; `make android-release-selftest` si `build.sh` ou la signature changent
 - [ ] `make android-smoke` et `make android-e2e` joués et leurs captures **lues** si le pont, l'injection, le menu, la WebView, le passage du plan ou l'agent changent (sinon dire pourquoi non)
 - [ ] Aucune permission ajoutée, aucun objet natif exposé, aucune clé ni donnée réelle ; menus de débogage sous `BuildConfig.DEBUG`
+- [ ] Le cœur n'importe rien d'Android (`CoreArchitectureTest` vert) ; `android/ARCHITECTURE.md` nomme les fichiers Kotlin ajoutés ou déplacés
 - [ ] README `android/` à jour (en français, pas à pas pour les étapes humaines) ; PR (Quoi / Vérifié / À relire) ; `gh pr checks` tout vert, puis `gh pr merge --squash --delete-branch`, `gh issue close <n>`
 
 ## 7. Erreurs fréquentes
 
 - Oublier `make android-agent-hash` (la construction échoue) ; donner `ANDROID_VERSION_CODE` en publication (le code vient de l'étiquette, un compteur différent est refusé) ; pousser une étiquette plus basse que la dernière (refusé : plus de mise à jour par-dessus) ; publier avant `assetlinks.json` (le workflow refuse).
 - Ajouter `addJavascriptInterface` « pour aller plus vite », ou un `*` dans les origines.
+- Mettre dans `android/core` un `import android.…`, `BuildConfig` ou `R` « juste cette fois » : le cœur ne compile pas avec ; écrire plutôt une interface dans le cœur et l'implémenter dans `app`. Et l'inverse : ne pas rester dans `MainActivity` une règle qui se jouerait sans téléphone.
 - Passer par `onBackPressed` (jamais appelé en `targetSdk` 36) ou oublier les marges (contenu sous les barres).
 - Laisser une fonction de débogage hors `BuildConfig.DEBUG` ; mélanger APK de débogage et de publication sur le téléphone.
 - Ouvrir le vrai Leclerc dans l'émulateur, ou conclure d'un test de fumée sans regarder les captures.

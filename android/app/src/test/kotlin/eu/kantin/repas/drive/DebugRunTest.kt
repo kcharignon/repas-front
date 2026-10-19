@@ -14,7 +14,8 @@ class DebugRunTest {
     private val runId = "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c"
     private val host = "fd0-courses.leclercdrive.fr"
 
-    // Le même fichier que celui de l'APK de débogage (`src/debug/assets`) ; le test tourne dans le dossier `android/app`.
+    // Le même fichier que celui de l'APK de débogage (`src/debug/assets`, un actif de l'application) : ce test reste donc dans l'application, pas dans le cœur ;
+    // il tourne dans le dossier `android/app`.
     private val template = File("src/debug/assets/debug-plan.json").readText()
 
     @Test
@@ -66,16 +67,6 @@ class DebugRunTest {
         assertNull(DebugPlan.plan("""{"lines":[${List(101) { line }.joinToString(",")}]}""", runId, "1", host))
         assertNotNull(DebugPlan.plan("""{"lines":[${List(100) { line }.joinToString(",")}]}""", runId, "1", host))
         assertNull(DebugPlan.plan("""{"lines":[],"x":"${"a".repeat(BridgeMessages.MAX_BYTES)}"}""", runId, "1", host))
-    }
-
-    @Test
-    fun `le message setup suit le protocole et n'a pas de magasin, l'agent lit celui de la page`() {
-        val golden = JSONObject(File("src/test/resources/setup-message.json").readText())
-
-        val built = JSONObject(DebugPlan.setupMessage(runId))
-
-        assertTrue(sameJson(golden, built))
-        assertFalse(built.has("store"))
     }
 
     // —— le déroulement ————————————————————————————————————————————————————————————————————————————————————————————————

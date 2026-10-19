@@ -2,7 +2,7 @@
 # Lancé DANS le conteneur Docker de construction, par `make android`, `make android-test`, `make android-release` et
 # `make android-release-selftest` (jamais à la main sur la machine : ni JDK, ni SDK Android n'y sont requis).
 #
-#   ./build.sh test              les tests Kotlin (application et dérivation de la version)
+#   ./build.sh test              les tests Kotlin (le cœur `core/`, l'application `app/` et la dérivation de la version)
 #   ./build.sh apk               l'APK de débogage dans dist/repas-drive-debug.apk, avec sa taille et son empreinte SHA-256
 #   ./build.sh release           l'APK signé dans dist/repas-drive.apk ; refuse sans clé de signature ni étiquette de version
 #   ./build.sh verify-release    contrôle l'APK signé (dist/repas-drive.apk, ou le fichier donné en argument) : signature et empreinte du
@@ -39,7 +39,9 @@ report() {
 }
 
 run_tests() {
-  "${GRADLE[@]}" :app:testDebugUnitTest
+  # Le cœur (Kotlin sans Android, AUTH-015) puis l'application : un seul appel de Gradle. Compiler le cœur sans le SDK Android est déjà
+  # un contrôle d'architecture ; `CoreArchitectureTest` le dit en clair.
+  "${GRADLE[@]}" :core:test :app:testDebugUnitTest
   # La dérivation de la version vit dans buildSrc : Gradle ne joue pas ses tests tout seul.
   "${GRADLE[@]}" -p buildSrc test
 }

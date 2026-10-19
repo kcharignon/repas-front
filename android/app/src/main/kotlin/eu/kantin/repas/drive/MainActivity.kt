@@ -50,6 +50,9 @@ class MainActivity : Activity() {
     private val repasOrigin: String = RepasOrigin.parse(BuildConfig.REPAS_ORIGIN) ?: error("REPAS_ORIGIN invalide.")
     private val navigation = ShellNavigation(repasOrigin)
 
+    /** Les liens qui sortent de la coquille s'ouvrent dans le navigateur du téléphone (le service de plateforme du cœur, `LinkOpener`). */
+    private val linkOpener: LinkOpener = AndroidLinkOpener(this)
+
     /**
      * Le canal de réponse vers la page de Repas : celui de son dernier message. Il n'est pas effacé au début d'une page : l'ordre entre
      * `onPageStarted` et le premier message de la page n'est pas garanti (il arrive avant, on l'a mesuré), et effacer le canal d'une page qui
@@ -183,7 +186,7 @@ class MainActivity : Activity() {
             return when (navigation.decide(url)) {
                 Decision.ALLOW -> false
                 Decision.OPEN_EXTERNALLY -> {
-                    openInPhoneBrowser(url)
+                    linkOpener.open(url)
                     true
                 }
                 Decision.BLOCK -> true
