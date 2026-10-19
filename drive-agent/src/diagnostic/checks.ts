@@ -21,7 +21,9 @@ import {
   type ProbedSearch,
   type ProbeFacts,
   SHELF_TERMS,
+  faultText,
   shelfFacts,
+  shelvesRowDetail,
   type ShelfFacts,
 } from './probes'
 
@@ -33,6 +35,7 @@ export const CHECK_IDS = [
   'wakeLock',
   'search',
   'content',
+  'shelves',
   'frame',
 ] as const
 export type CheckId = (typeof CHECK_IDS)[number]
@@ -131,6 +134,8 @@ const STOPS_PROBING = new Set<LeclercErrorCode>([
   'UNSUPPORTED_PAGE',
   'NETWORK',
 ])
+/** Les codes après lesquels aucune recherche de plus n'a de sens, quelle que soit la cause. */
+const HARD_STOPS = new Set<LeclercErrorCode>(['BLOCKED', 'NOT_LOGGED_IN', 'UNSUPPORTED_PAGE'])
 const stopsProbing = (fault: ProbedSearch['fault']): boolean =>
   fault !== null && (STOPS_PROBING.has(fault.code) || (fault.cause?.startsWith('HTTP_') ?? false))
 
@@ -184,17 +189,27 @@ async function probeSearches(
 async function probeShelves(adapter: RetailerAdapter): Promise<ShelfFacts[]> {
   const shelves: ShelfFacts[] = []
   let stopped = false
+  const none = (term: string, fault?: string): ShelfFacts => ({
+    term,
+    products: null,
+    aisles: [],
+    families: [],
+    noAisle: 0,
+    noFamily: 0,
+    ...(fault !== undefined && { fault }),
+  })
   for (const [index, term] of SHELF_TERMS.entries()) {
     if (stopped) {
-      shelves.push({ term, products: null, aisles: [], families: [], noAisle: 0, noFamily: 0 })
+      shelves.push(none(term))
       continue
     }
     try {
       const found = await adapter.searchProducts(term)
       shelves.push({ ...shelfFacts(term, found), ...(index === 0 && { nextPage: null }) })
     } catch (error) {
-      stopped = stopsProbing(probedFault(error))
-      shelves.push({ term, products: null, aisles: [], families: [], noAisle: 0, noFamily: 0 })
+      const fault = probedFault(error)
+      stopped = stopsProbing(fault)
+      shelves.push(none(term, faultText(fault)))
     }
   }
   return shelves
@@ -348,19 +363,34 @@ export async function runChecks(
 
   if (page !== null) probes = await probeSearches(deps.adapter, arrival, commonFault)
   // Les rayons vus par trois recherches de produits frais (DRV-646), si le site répond encore.
-  const shelves =
-    page === null || stopsProbing(commonFault) || stopsProbing(probes.nonsense?.fault ?? null)
-      ? undefined
-      : await probeShelves(deps.adapter)
+  // Les variantes de requête et le mot absurde sont des sondes voulues : leurs échecs HTTP n'empêchent pas les rayons ; seuls un blocage, une session
+  // perdue, une page hors magasin ou une recherche courante en échec les empêchent (le motif est écrit, jamais passé sous silence).
+  const nonsenseFault = probes.nonsense?.fault ?? null
+  const shelvesSkip =
+    page === null
+      ? D.pageSkipped
+      : stopsProbing(commonFault)
+        ? D.shelvesCommonFailed(faultText(commonFault as NonNullable<typeof commonFault>))
+        : nonsenseFault !== null && HARD_STOPS.has(nonsenseFault.code)
+          ? D.shelvesStopped(faultText(nonsenseFault))
+          : null
+  const shelves = shelvesSkip === null ? await probeShelves(deps.adapter) : undefined
   // La disponibilité de l'échantillon et les raisons du dernier envoi (DRV-635) : des nombres et des mots fixes, jamais un libellé.
   probes = {
     ...probes,
     availability,
     ...(shelves && { shelves }),
+    ...(shelvesSkip !== null && { shelvesSkipped: shelvesSkip }),
     lastPass: readLastReasons(deps.storage),
     lastRefusals: readLastRefusals(deps.storage),
   }
 
+  if (shelves === undefined) await push(skipped('shelves', shelvesSkip ?? D.pageSkipped))
+  else {
+    const detail = shelvesRowDetail(shelves)
+    const seen = shelves.some((shelf) => shelf.aisles.length > 0)
+    await push(seen ? ok('shelves', detail) : skipped('shelves', detail))
+  }
   await push(skipped('frame', D.frameSkipped))
   return { results, page, probes, stats: statsSince(before, deps.adapter.stats()) }
 }

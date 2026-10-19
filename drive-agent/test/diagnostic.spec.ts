@@ -74,6 +74,7 @@ describe('en fonctionnement normal', () => {
       ['wakeLock', 'OK'],
       ['search', 'OK'],
       ['content', 'OK'],
+      ['shelves', 'OK'],
       ['frame', 'NOT_TESTED'],
     ])
     expect(by.agent?.detail).toBe('version 0.5.0')
@@ -380,6 +381,7 @@ describe('ce que le rapport laisse voir', () => {
       '[OK] Écran allumé (Wake Lock) : disponible',
       '[KO BLOCKED] Recherche d’un mot courant',
       '[NON TESTÉ] Contenu net des produits : recherche impossible, contenu non analysé',
+      '[NON TESTÉ] Rayons vus : la recherche « sel » a échoué : BLOCKED, HTTP 403',
       '[NON TESTÉ] Cadre de même origine : non utilisé : l’agent affiche lui-même la liste de produits',
       '',
       'Aucune écriture au panier.',
@@ -457,10 +459,11 @@ describe('l’écran du diagnostic', () => {
       'ok',
       'ok',
       'ok',
+      'ok',
       'skip',
     ])
     expect(updates.length).toBe(CHECK_IDS.length + 1)
-    expect(finished[0]?.summary).toBe('Contrôles terminés : 7 réussis, 0 en échec, 1 non testé.')
+    expect(finished[0]?.summary).toBe('Contrôles terminés : 8 réussis, 0 en échec, 1 non testé.')
     expect(finished[0]?.report).toContain('Agent : 0.5.0')
     expect(ui.propsOf('diagnostic')[0]?.copy).toBe(copy)
   })

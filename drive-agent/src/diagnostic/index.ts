@@ -16,6 +16,7 @@ export {
   SHELF_GROUPS,
   SHELF_TERMS,
   shelfFacts,
+  shelvesRowDetail,
 } from './probes'
 export type { AvailabilityFacts, ProbedSearch, ProbeFacts, ShelfFacts, ShelfGroup } from './probes'
 

@@ -54,8 +54,11 @@ export function variantLabel(variant: string): string {
 }
 
 /** Une liste de noms séparés par des virgules, « aucun » si elle est vide. */
+export const LIST_MAX = 40
 export function listText(names: readonly string[]): string {
-  return names.length === 0 ? 'aucun' : names.join(', ')
+  if (names.length === 0) return 'aucun'
+  const shown = names.slice(0, LIST_MAX).join(', ')
+  return names.length > LIST_MAX ? `${shown} (et ${names.length - LIST_MAX} de plus)` : shown
 }
 
 /** Ce que la liste demande pour un article : « 800 g » (la quantité et son unité), `null` quand le plan ne le dit pas. */
@@ -139,6 +142,7 @@ export const S = {
       wakeLock: 'Écran allumé (Wake Lock)',
       search: 'Recherche d’un mot courant',
       content: 'Contenu net des produits',
+      shelves: 'Rayons vus',
       frame: 'Cadre de même origine',
     },
     detail: {
@@ -154,6 +158,8 @@ export const S = {
       wakeLockOk: 'disponible',
       wakeLockKo: 'absent (toléré : l’écran peut s’éteindre)',
       pageSkipped: 'page non prise en charge',
+      shelvesCommonFailed: (fault: string) => `la recherche « sel » a échoué : ${fault}`,
+      shelvesStopped: (fault: string) => `le site s’est arrêté de répondre : ${fault}`,
       searchOk: (term: string, read: number, complete: number) =>
         `« ${term} » : ${read} produits lus, ${complete} avec tous les champs attendus (identifiant, libellé, prix, stock)`,
       searchEmpty: (term: string) => `« ${term} » : aucun produit lu`,
@@ -314,7 +320,9 @@ export const S = {
         missing: number,
       ) =>
         `${title} pour « ${term} » : ${groups} (${products} produit${products > 1 ? 's' : ''}${missing > 0 ? `, ${missing} sans ${kind}` : ''})`,
-      shelvesNone: (term: string) => `Rayons vus pour « ${term} » : recherche non faite`,
+      shelvesNone: (term: string, fault?: string) =>
+        `Rayons vus pour « ${term} » : recherche non faite${fault === undefined ? '' : ` (${fault})`}`,
+      shelvesSkipped: (reason: string) => `Rayons : non lus (${reason})`,
       nextPage: (term: string, products: number, next: string) =>
         `Première réponse pour « ${term} » : ${products} produit${products > 1 ? 's' : ''} ; page suivante : ${next}`,
       /** Les raisons du dernier envoi, par produit habituel écarté, dans l'ordre du passage : un mot fixe et un nombre, jamais un libellé. */

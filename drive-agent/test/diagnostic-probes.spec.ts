@@ -94,6 +94,41 @@ describe('en fonctionnement normal', () => {
     ).toContain('Familles vues pour « tomate » : inconnu (13 produits, 13 sans famille)')
   })
 
+  it('le mot absurde refusé en HTTP 400 (une sonde voulue) n’empêche pas les rayons, et la ligne de contrôle les montre (DRV-646)', async () => {
+    const { adapter } = site((call) => (asked(call, NONSENSE_TERM) ? { status: 400 } : GOOD))
+
+    const { probes, results } = await runChecks(deps(adapter), () => undefined)
+    const text = probeLines(probes).join('\n')
+
+    expect(text).toContain('Rayons vus pour « tomate » : 12:5 (5 produits)')
+    expect(text).not.toContain('Rayons : non lus')
+    expect(results.find((result) => result.id === 'shelves')).toMatchObject({
+      status: 'OK',
+      detail: 'tomate 12:5 (5 produits) ; pomme 12:5 (5 produits) ; courgette 12:5 (5 produits)',
+    })
+  })
+
+  it('les rayons viennent juste après les lignes du mot courant, avant les clés et les en-têtes', async () => {
+    const { adapter } = site(normal)
+
+    const { probes } = await runChecks(deps(adapter), () => undefined)
+    const lines = probeLines(probes)
+
+    const shelves = lines.findIndex((line) => line.includes('Rayons vus pour « tomate »'))
+    expect(shelves).toBeGreaterThan(lines.findIndex((line) => line.includes('Recherche « sel »')))
+    expect(shelves).toBeLessThan(lines.findIndex((line) => line.includes('Clés d’état')))
+  })
+
+  it('une recherche courante bloquée : « Rayons : non lus (motif) »', async () => {
+    const { adapter } = site(() => ({ status: 403 }))
+
+    const { probes } = await runChecks(deps(adapter), () => undefined)
+
+    expect(probeLines(probes).join('\n')).toContain(
+      'Rayons : non lus (la recherche « sel » a échoué : BLOCKED, HTTP 403)',
+    )
+  })
+
   it('un blocage pendant les recherches d’essai arrête la série : les mots restants sont « non faits »', async () => {
     const { adapter, fake } = site((call) =>
       asked(call, 'tomate') ? { status: 403 } : normal(call),
@@ -103,7 +138,7 @@ describe('en fonctionnement normal', () => {
     const text = probeLines(probes).join('\n')
 
     expect(fake.calls.some((call) => asked(call, 'pomme') || asked(call, 'courgette'))).toBe(false)
-    expect(text).toContain('Rayons vus pour « tomate » : recherche non faite')
+    expect(text).toContain('Rayons vus pour « tomate » : recherche non faite (BLOCKED, HTTP 403)')
     expect(text).toContain('Rayons vus pour « courgette » : recherche non faite')
   })
 
