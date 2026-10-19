@@ -1,6 +1,7 @@
 import { CART_HEADERS, cartBody, MAX_QUANTITY, readCartResponse, readPageTotal } from './cart'
 import { type Candidate, toCandidate } from './candidate'
 import { httpCause } from './causes'
+import { entryFacts, readEntry, type EntryReading } from './entry'
 import { LeclercError } from './errors'
 import { type FetchFn, Pacer, type PacerDeps, type Reply, type RequestStats } from './pacer'
 import {
@@ -91,6 +92,17 @@ export interface RetailerAdapter {
    * normale) et rend toutes les tentatives, dans l'ordre des variantes. Ne retient aucune variante et ne lève jamais d'erreur.
    */
   exploreSearchVariants(query: string): Promise<AttemptFacts[]>
+  /**
+   * L'accueil du magasin (DRV-625) : le lien « Commencer mes courses » de la page, vérifié comme menant à une page du magasin `store`. Aucune
+   * requête. Garde l'adresse vérifiée pour `followEntry`.
+   */
+  readEntry(store: { id: string }): EntryReading
+  /**
+   * Suit le lien que `readEntry` vient de vérifier, à la cadence des autres actions (une pause entière d'abord). La page quitte le script :
+   * la promesse ne se résout que si la page est restée là (navigation refusée ou sans effet) après `ENTRY_WAIT_MS`. Sans lien vérifié, ne
+   * fait rien et se résout aussitôt. Aucune écriture.
+   */
+  followEntry(): Promise<void>
 }
 
 export interface LeclercDeps extends PacerDeps {
@@ -105,7 +117,12 @@ export interface LeclercDeps extends PacerDeps {
   navigation?: () => NavigationFacts | null
   /** Les cookies lisibles par la page : un nombre et un oui/non, jamais un nom ni une valeur. */
   cookies?: () => CookieFacts | null
+  /** Ouvre une adresse dans la page (`location.assign`) : suivre le lien « Commencer mes courses ». Absente, `followEntry` ne fait rien. */
+  navigate?: (url: string) => void
 }
+
+/** Le temps laissé à une navigation pour quitter la page avant de la dire sans effet. */
+export const ENTRY_WAIT_MS = 15_000
 
 const PRODUCT_ID = /^[0-9]{1,12}$/
 /** Une redirection vers une page de connexion. */
@@ -123,6 +140,8 @@ export class LeclercAdapter implements RetailerAdapter {
   /** Le chemin avec la ville que la page donne, une fois trouvé (la page ne change pas de magasin pendant la vie de l'agent). */
   private searchBase: SearchBase | null = null
   private facts: SearchFacts | null = null
+  /** L'adresse que `readEntry` a vérifiée en dernier, `null` sans lien sûr : la seule que `followEntry` suive. */
+  private entryUrl: string | null = null
   private readonly stocks = new Map<string, number>()
   /** Les quantités de la dernière réponse du panier lisible (ticket M), `null` avant la première. */
   private cartLines: ReadonlyMap<string, number> | null = null
@@ -250,7 +269,23 @@ export class LeclercAdapter implements RetailerAdapter {
       delivery: deliveryFacts(this.deps.pageText(), storeId),
       cookies,
       searchBase,
+      entry: entryFacts(this.deps.pageText(), this.deps.location),
     }
+  }
+
+  readEntry(store: { id: string }): EntryReading {
+    const reading = readEntry(this.deps.pageText(), this.deps.location, store.id)
+    this.entryUrl = reading.kind === 'LINK' ? reading.url : null
+    return reading
+  }
+
+  async followEntry(): Promise<void> {
+    const url = this.entryUrl
+    const { navigate } = this.deps
+    if (url === null || navigate === undefined) return
+    this.entryUrl = null
+    await this.pacer.act(() => navigate(url))
+    await this.deps.sleep(ENTRY_WAIT_MS)
   }
 
   lastSearchFacts(): SearchFacts | null {
@@ -420,6 +455,7 @@ export function browserDeps(win: Window & typeof globalThis): LeclercDeps {
   return {
     fetch: (input, init) => win.fetch(input, init),
     location: win.location,
+    navigate: (url) => win.location.assign(url),
     pageText: () => new win.XMLSerializer().serializeToString(win.document),
     navigation: () => navigationOf(win),
     cookies: () => cookiesOf(win),

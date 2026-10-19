@@ -163,14 +163,33 @@ export class Pacer {
     return turn
   }
 
-  private async pause(): Promise<void> {
-    if (this.lastEnd === null) return
+  /**
+   * Une action de la page qui n'est pas une requête (suivre un lien, DRV-625), à son tour dans la file et à la même cadence : jamais en
+   * même temps qu'une requête, jamais plus vite qu'elles. Elle attend toujours une pause entière, même la première de la page (`settle`),
+   * pour que l'utilisateur lise ce qui se passe avant que la page change. Refusée une fois le site bloqué.
+   */
+  act<T>(task: () => T): Promise<T> {
+    const turn = this.queue.then(async () => {
+      if (this.stopped) throw new LeclercError('BLOCKED')
+      await this.pause(true)
+      try {
+        return task()
+      } finally {
+        this.lastEnd = this.deps.now()
+      }
+    })
+    this.queue = turn.catch(() => undefined)
+    return turn
+  }
+
+  private async pause(settle = false): Promise<void> {
+    if (this.lastEnd === null && !settle) return
     const gap = Math.min(
       MAX_PAUSE_MS,
       PAUSE_MS + this.extraMs + Math.floor(this.deps.random() * (JITTER_MS + 1)),
     )
     this.counters.peakPauseMs = Math.max(this.counters.peakPauseMs, gap)
-    const wait = gap - (this.deps.now() - this.lastEnd)
+    const wait = this.lastEnd === null ? gap : gap - (this.deps.now() - this.lastEnd)
     if (wait > 0) await this.deps.sleep(wait)
   }
 

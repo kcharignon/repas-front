@@ -74,7 +74,7 @@ describe('la cause de l’erreur dans le résultat (ticket A)', () => {
       {},
       {
         store: () => {
-          throw new LeclercError('UNSUPPORTED_PAGE', null, 'PAGE_PATH')
+          throw new LeclercError('UNSUPPORTED_PAGE', null, 'PAGE_HOST')
         },
       },
     )
@@ -85,7 +85,7 @@ describe('la cause de l’erreur dans le résultat (ticket A)', () => {
 
     expect(expectConform(sent[0]).error).toEqual({
       code: 'UNSUPPORTED_PAGE',
-      message: 'Page non prise en charge (PAGE_PATH)',
+      message: 'Page non prise en charge (PAGE_HOST)',
     })
   })
 

@@ -8,6 +8,7 @@ import type {
   DiagnosticProps,
   DiagnosticRow,
   EndProps,
+  EntryProps,
   ErrorProps,
   PlacementProps,
   ProgressPatch,
@@ -445,6 +446,13 @@ const challenge: Renderer<'challenge'> = (_props: ChallengeProps, answer) => {
   }
 }
 
+/** Un bandeau sans bouton : la phrase seule, annoncée aux lecteurs d'écran (DRV-625). */
+const entry: Renderer<'entry'> = (props: EntryProps) => {
+  const el = screen(title(S.entry[props.stage]))
+  el.setAttribute('role', 'status')
+  return { el, sheet: true }
+}
+
 const error: Renderer<'error'> = (props: ErrorProps, answer) => {
   const close = button(S.error.close, () => answer('close'), props.canReturn ? 'plain' : 'primary')
   const back = button(S.error.back, () => answer('return'), 'primary')
@@ -579,6 +587,7 @@ export const RENDERERS: { [K in ScreenName]: Renderer<K> } = {
   store,
   diagnostic,
   challenge,
+  entry,
   error,
   end,
 }

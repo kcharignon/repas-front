@@ -1,5 +1,6 @@
 // L'orchestrateur du passage (DRV-305) : une machine d'états sans réseau ni DOM propres, tout vient de `FlowDeps`.
 //   START → VALIDATED → CONFIRMED → PHASE_A → PHASE_B → DONE      (+ ABORTED : l'utilisateur arrête ; ERROR : le passage s'interrompt)
+//   START → VALIDATED → ENTERING        (le plan arrive sur l'accueil de l'enseigne, pas dans un magasin : l'agent suit « Commencer mes courses »)
 // Rien n'est envoyé au site avant le « Commencer ». Un seul passage à la fois.
 import {
   LIMITS,
@@ -15,7 +16,15 @@ import { LeclercError, type LeclercCause, type RequestStats } from '../leclerc'
 import { own } from '../own'
 import { formatNeeded, S, type SummaryProps } from '../ui'
 import { settleKnownLine } from './phase-a'
-import { buildResult, cartsOf, changesOf, endProps, endingOf, resultLines } from './result'
+import {
+  buildResult,
+  cartsOf,
+  changesOf,
+  endingOf,
+  endProps,
+  hasSomethingToRead,
+  resultLines,
+} from './result'
 import { emptyState, RunStore, type RunState } from './run-state'
 import type { FlowDeps, LineNotes, PendingLine, Step } from './types'
 import { keepAwake } from './wake-lock'
@@ -166,6 +175,10 @@ export class Flow {
     if (!deps.canReturn) return this.showError('UNSUPPORTED_PAGE', null)
     if (message.type === 'setup') return void (await deps.onSetup?.(message))
     const problem = this.storeProblem(message) ?? this.sessionProblem()
+    // Une page de l'enseigne qui n'est pas celle d'un magasin (l'accueil, où le plan s'ouvre) : l'agent y entre dans le magasin (DRV-625).
+    if (problem?.code === 'UNSUPPORTED_PAGE' && problem.cause === 'PAGE_PATH') {
+      return this.enterStore(message)
+    }
     if (problem) return this.showError(problem.code, message, problem.cause)
 
     const { state, proceed } = await this.confirm(message)
@@ -200,6 +213,33 @@ export class Flow {
       }
     }
     await this.finish(run)
+  }
+
+  /**
+   * Entrer dans le magasin sans geste (DRV-625) : sur l'accueil de l'enseigne, l'agent suit lui-même « Commencer mes courses » (une action de la
+   * page, à la cadence des autres, pendant que le bandeau dit « Ouverture de votre magasin… ») ; la page suivante est celle du magasin et
+   * l'application y renvoie le plan. Une seule tentative par envoi et par onglet : au moindre doute (lien absent, adresse qui n'est pas celle du
+   * magasin du plan, défi de l'anti-robot, page restée là) le bandeau dit de toucher le bouton, sans boucle, sans requête et sans écriture.
+   */
+  private async enterStore(plan: PlanMessage): Promise<void> {
+    const { adapter, ui } = this.deps
+    this.enter('ENTERING')
+    let reading
+    try {
+      reading = adapter.readEntry(plan.store)
+    } catch {
+      reading = { kind: 'NONE' as const }
+    }
+    if (reading.kind === 'LINK' && this.runs.markEntered(plan.runId)) {
+      void ui.show('entry', { stage: 'opening' })
+      try {
+        await adapter.followEntry()
+      } catch {
+        // Le site est bloqué ou la navigation a échoué : le geste manuel reste possible.
+      }
+    }
+    // Ici seulement si le lien manque, a été refusé, a déjà été suivi une fois, ou n'a rien changé : l'utilisateur touche le bouton du site.
+    void ui.show('entry', { stage: 'manual' })
   }
 
   /** Le magasin de la page doit être celui du message. */
@@ -363,16 +403,15 @@ export class Flow {
       ending.outcome === 'aborted' ? 'ABORTED' : ending.outcome === 'error' ? 'ERROR' : 'DONE',
     )
     const result = buildResult(run.plan, lines, ending, agentVersion, this.passStats(run))
-    await ui.show(
-      'end',
-      endProps(
-        lines,
-        ending,
-        changesOf(run.plan, run.state),
-        cartsOf(run.plan, run.state),
-        run.slow,
-      ),
+    const props = endProps(
+      lines,
+      ending,
+      changesOf(run.plan, run.state),
+      cartsOf(run.plan, run.state),
+      run.slow,
     )
+    // Un envoi terminé sans rien à lire repart tout de suite vers Repas (DRV-625) ; l'écran de fin reste pour le reste (partiel, arrêté, erreur).
+    if (hasSomethingToRead(props)) await ui.show('end', props)
     this.runs.remove(run.plan.runId)
     send(result)
     ui.close()

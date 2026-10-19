@@ -15,6 +15,7 @@ import type {
   CartResult,
   Content,
   PricePerMeasure,
+  EntryReading,
   RequestStats,
   RetailerAdapter,
   SessionReading,
@@ -105,6 +106,8 @@ export function fakeUi(scripts: Scripts = {}) {
   const ui: Ui = {
     show(screen, props) {
       shown.push({ screen, props })
+      // Un bandeau sans bouton (DRV-625) : sa promesse ne se résout jamais.
+      if (screen === 'entry') return new Promise(() => undefined)
       if (screen === 'progress') {
         return new Promise((resolve) => stops.push(() => resolve('stop' as never)))
       }
@@ -181,6 +184,10 @@ export function fakeAdapter(
     lastCart?: Record<string, number>
     /** Les compteurs de l'adaptateur (par défaut : une requête par appel, rien d'autre). */
     stats?: () => RequestStats
+    /** Ce que l'accueil de l'enseigne laisse suivre (DRV-625, par défaut : pas de lien « Commencer mes courses »). */
+    entry?: EntryReading
+    /** Appelé quand l'agent suit le lien ; peut ne jamais rendre la main (la page a quitté le script). */
+    onFollow?: () => void | Promise<void>
   } = {},
 ) {
   const calls: string[] = []
@@ -188,6 +195,7 @@ export function fakeAdapter(
   /** Les recherches d'un produit connu par son libellé : la requête et l'identifiant voulu. */
   const searched: { query: string; id: string }[] = []
   const writes: { id: string; quantity: number }[] = []
+  const follows = { count: 0 }
   let inFlight = 0
   let peak = 0
   const adapter: RetailerAdapter = {
@@ -232,6 +240,11 @@ export function fakeAdapter(
       searchBase: null,
     }),
     lastSearchFacts: () => null,
+    readEntry: () => options.entry ?? { kind: 'NONE' },
+    async followEntry() {
+      follows.count += 1
+      await options.onFollow?.()
+    },
     exploreSearchVariants: () => Promise.resolve([]),
     async setCartQuantity(id, quantity): Promise<CartResult> {
       calls.push(`cart ${id} ${quantity}`)
@@ -258,7 +271,7 @@ export function fakeAdapter(
       }
     },
   }
-  return { adapter, calls, searched, writes, maxInFlight: () => peak }
+  return { adapter, calls, searched, writes, follows, maxInFlight: () => peak }
 }
 
 // —— Le stockage, le verrou d'écran, le flux ————————————————————————————————————————————————————————————————————————————————

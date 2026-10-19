@@ -7,6 +7,8 @@ import type { ContentChange } from './phase-a'
 import type { StorageLike } from './types'
 
 export const RUN_PREFIX = 'repas:run:'
+/** La clé de l'envoi dont l'agent a déjà suivi « Commencer mes courses » dans cet onglet (DRV-625) : un identifiant, rien d'autre. */
+export const ENTRY_KEY = 'repas:entry'
 
 /** Une ligne dont le nombre de produits a été recalculé sur le contenu lu en direct (DRV-613), gardée pour l'écran de fin. */
 export interface RecordedChange extends ContentChange {
@@ -152,6 +154,22 @@ export class RunStore {
       this.storage?.removeItem(RUN_PREFIX + runId)
     } catch {
       // Sans importance.
+    }
+  }
+
+  /**
+   * Note que l'agent a suivi « Commencer mes courses » pour cet envoi, et dit si c'est la première fois dans cet onglet (DRV-625). Garde contre
+   * toute boucle : une page qui nous ramène ici, un rechargement, une application qui renvoie le plan une seconde fois. Sans stockage, on ne
+   * suit rien (jamais de boucle possible).
+   */
+  markEntered(runId: string): boolean {
+    try {
+      const storage = this.storage
+      if (!storage || storage.getItem(ENTRY_KEY) === runId) return false
+      storage.setItem(ENTRY_KEY, runId)
+      return true
+    } catch {
+      return false
     }
   }
 

@@ -277,6 +277,9 @@ const SCREENS: Record<string, () => unknown> = {
     }),
   // L'anti-robot demande une vérification : un bandeau, la page reste visible derrière (ticket K).
   challenge: () => ui.show('challenge', {}),
+  // L'entrée dans le magasin (DRV-625) : deux bandeaux sans bouton, la page reste visible derrière.
+  'entry-opening': () => ui.show('entry', { stage: 'opening' }),
+  'entry-manual': () => ui.show('entry', { stage: 'manual' }),
   'end-partial': () =>
     ui.show('end', {
       outcome: 'partial',

@@ -142,6 +142,8 @@ export function shop(shelves: Shelves, options: ShopOptions = {}) {
     }),
     lastSearchFacts: () => null,
     exploreSearchVariants: () => Promise.resolve([]),
+    readEntry: () => ({ kind: 'NONE' }),
+    followEntry: () => Promise.resolve(),
   }
   return {
     adapter,

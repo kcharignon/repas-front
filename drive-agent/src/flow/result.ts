@@ -127,6 +127,20 @@ export function buildResult(
   }
 }
 
+/**
+ * L'écran de fin a-t-il quelque chose à faire lire ? Un envoi terminé (`completed`) sans quantité recalculée, sans panier déjà plus garni et sans
+ * lenteur n'en a pas : le résultat part tout de suite et Repas montre le récapitulatif (DRV-625). Tout le reste (partiel, arrêté, erreur) se lit.
+ */
+export function hasSomethingToRead(props: EndProps): boolean {
+  return (
+    props.outcome !== 'completed' ||
+    (props.changes?.length ?? 0) > 0 ||
+    (props.kept?.length ?? 0) > 0 ||
+    (props.unreadable?.length ?? 0) > 0 ||
+    props.slow === true
+  )
+}
+
 /** Les nombres de l'écran de fin. */
 export function endProps(
   lines: readonly ResultLine[],

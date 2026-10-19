@@ -200,6 +200,24 @@ export const S = {
       inReply: (term: string) => `réponse « ${term} »`,
       address: (shape: string) => `Adresse d’arrivée : ${shape}`,
       city: (value: string) => `Suffixe de ville dans l’adresse de la page : ${value}`,
+      /** Les deux liens de la page (DRV-625) : présents ou non, la forme de leur adresse et où elle mène. Jamais l'adresse. */
+      link: (
+        name: string,
+        link: { present: boolean; shape: string | null; where: string | null },
+      ) =>
+        `${name} : ${link.present ? 'oui' : 'non'}${
+          link.present
+            ? `, adresse ${link.shape ?? 'sans adresse (bouton)'}${link.where === null ? '' : `, ${link.where}`}`
+            : ''
+        }`,
+      startLink: 'Lien « Commencer mes courses » dans la page',
+      basketLink: 'Lien du panier dans la page',
+      where: {
+        RELATIVE: 'adresse sans site',
+        SAME_HOST: 'même hôte que la page',
+        LECLERC_HOST: 'autre hôte leclercdrive.fr',
+        OTHER_SITE: 'autre site',
+      } as Record<string, string>,
       cookies: (count: number, antiBot: string) =>
         `Cookies lisibles par la page : ${count} ; cookie de protection anti-robot : ${antiBot} (les cookies HttpOnly ne sont pas lisibles)`,
       arrival: (redirects: number | null, status: number | null) =>
@@ -502,6 +520,11 @@ export const S = {
     text: 'Faites-la dans la page, puis touchez Reprendre.',
     resume: 'Reprendre',
     stop: 'Arrêter',
+  },
+  /** L'entrée dans le magasin (DRV-625) : ce qui se passe, ou le seul geste à faire. Un bandeau, la page reste visible. */
+  entry: {
+    opening: 'Ouverture de votre magasin…',
+    manual: 'Touchez « Commencer mes courses ».',
   },
   error: {
     close: 'Fermer',

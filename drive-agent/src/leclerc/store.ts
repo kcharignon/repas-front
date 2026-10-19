@@ -17,6 +17,10 @@ export interface StoreInfo {
 export interface LocationLike {
   hostname: string
   pathname: string
+  /** `https:` ; absent d'un faux emplacement de test : la page est alors prise pour une page `https`. */
+  protocol?: string
+  /** Le port, vide pour le port par défaut ; absent d'un faux emplacement de test. */
+  port?: string
 }
 
 /** Le magasin et les chemins qu'on en déduit (relatifs : seul l'hôte de la page est joint). */

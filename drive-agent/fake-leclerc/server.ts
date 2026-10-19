@@ -23,6 +23,7 @@ import {
   searchPage,
   type CartAction,
   type EmptyForm,
+  type HomeForm,
   type Session,
 } from './pages.ts'
 
@@ -85,6 +86,11 @@ export interface Behavior {
    * tombe sur une page 404. Un chemin qui n'est pas fait de lettres, chiffres, `.`, `_`, `~`, `-` et `/` est ignoré. `null` retire le défaut.
    */
   startPath?: string | null
+  /**
+   * L'accueil de l'enseigne : avec le lien « Commencer mes courses » (`link`, par défaut), sans lui, comme la page d'un visiteur (`no-link`), ou avec
+   * lui et un défi de l'anti-robot dans la page (`challenge`). Dans les deux derniers cas l'agent ne suit rien (DRV-625).
+   */
+  homeForm?: HomeForm
   /**
    * La page de recherche sans produit : `list` (liste vide et message du site, par défaut), `no-list` (squelette seul) ou `encoded` (état en
    * entités HTML). Plusieurs formes plausibles d'une page que le vrai site n'a jamais été relevé servir (ticket C).
@@ -466,7 +472,12 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
         behavior.startPath != null && /^\/[\w./~-]*$/.test(behavior.startPath)
           ? behavior.startPath
           : `${PAGE_PATH}/`
-      return send(res, 200, accueilPage(`${origin}${start}`, `${origin}${OTHER_STORE_PATH}/`), HTML)
+      return send(
+        res,
+        200,
+        accueilPage(`${origin}${start}`, `${origin}${OTHER_STORE_PATH}/`, behavior.homeForm),
+        HTML,
+      )
     }
     if (home) {
       // L'enseigne n'a que son accueil ici : les pages d'un magasin sont sur l'hôte du magasin.

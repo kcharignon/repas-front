@@ -98,7 +98,7 @@ describe('avec le pont de l’application', () => {
         { ingredientSlug: 'huile', outcome: 'SKIPPED' },
       ],
     })
-    expect(screens.screens()).toEqual(['summary', 'progress', 'end'])
+    expect(screens.screens()).toEqual(['summary', 'progress'])
   })
 
   it('un message illisible de l’application montre « liste illisible »', async () => {
@@ -465,7 +465,7 @@ describe('la commande de diagnostic de l’application', () => {
 
     // Then
     await vi.waitFor(() => expect(bridge.postMessage).toHaveBeenCalledOnce())
-    expect(screens.screens()).toEqual(['diagnostic', 'summary', 'progress', 'end'])
+    expect(screens.screens()).toEqual(['diagnostic', 'summary', 'progress'])
   })
 })
 

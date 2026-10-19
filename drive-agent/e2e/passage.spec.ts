@@ -1,7 +1,7 @@
 // Le passage de bout en bout (phase A) : l'agent réel dans Chromium mobile, plan reçu par le fragment d'adresse, résultat rendu au faux
 // Repas par navigation. Le faux site juge la cadence (jamais en parallèle, 800 ms au moins entre deux requêtes) et la forme exacte des
 // requêtes du panier.
-import { openWithFragment, returnedResult } from './support/agent'
+import { openWithFragment, returnedResult, returnsToRepas } from './support/agent'
 import { expectPoliteAgent } from './support/cadence'
 import { expect, test } from './support/fixtures'
 import { home, known, planOf, product, RUN_ID, skip } from './support/plans'
@@ -25,7 +25,7 @@ test('remplit le panier à la cadence du chantier, avec des requêtes de la form
   await expect(page.getByRole('heading', { name: 'Prêt à remplir votre panier' })).toBeVisible()
   expect(fake.paced(), 'rien ne part avant « Commencer »').toEqual([])
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+  await returnsToRepas(page, fake)
 
   // Then : le panier du faux site a les quantités absolues du plan, une recherche puis une écriture par ligne
   expect(fake.cart()).toEqual({ 1000001: 3, 1000006: 1 })
@@ -33,7 +33,6 @@ test('remplit le panier à la cadence du chantier, avec des requêtes de la form
   expectPoliteAgent(fake)
 
   // And : le résultat revient au faux Repas, qui l'affiche
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
   const result = await returnedResult(page, fake)
   expect(result).toMatchObject({
     type: 'result',
@@ -67,13 +66,12 @@ test('prend le produit suivant quand le préféré est en rupture, et le dit à 
   // When
   await openWithFragment(page, fake, agentCode, plan)
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+  await returnsToRepas(page, fake)
 
   // Then : rien n'est écrit pour le produit en rupture ; le suivant est pris, au prix de la promotion
   expect(fake.cart()).toEqual({ 1000003: 2 })
   expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'search', 'cart'])
   expectPoliteAgent(fake)
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
   expect(await returnedResult(page, fake)).toMatchObject({
     outcome: 'completed',
     lines: [
@@ -104,7 +102,7 @@ test('met la quantité demandée au panier même quand il est déjà garni, sans
     planOf([known('farine', 'Farine', [product(1000001, 3)])]),
   )
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+  await returnsToRepas(page, fake)
 
   // Then : la quantité monte à celle du plan (3) et le sel est resté
   expect(fake.cart()).toEqual({ 1000001: 3, 1000009: 5 })
@@ -128,7 +126,7 @@ test('ne réduit jamais une quantité déjà au panier : 5 déjà pour un plan d
   await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
-  // Then : le panier n'a pas bougé, sans une seule écriture, et la fin dit ce qui a été conservé
+  // Then : le panier n'a pas bougé, sans une seule écriture, et la fin dit ce qui a été conservé (il y a quelque chose à lire : l'écran de fin reste)
   expect(fake.cart()).toEqual({ 1000001: 5, 1000009: 5 })
   expect(fake.paced().map((call) => call.kind)).toEqual(['search'])
   await expect(page.getByText('Déjà 5 au panier : conservé')).toBeVisible()
@@ -159,7 +157,7 @@ test('rejouer un envoi déjà fait n’écrit plus rien : le panier a déjà les
     ]),
   )
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+  await returnsToRepas(page, fake)
 
   // Then : une recherche par ligne, aucune écriture, aucune mention
   expect(fake.cart()).toEqual({ 1000001: 3, 1000006: 1 })
@@ -186,11 +184,10 @@ test('demande la quantité quand elle est à vérifier, et passe la ligne si l�
   await page.getByRole('button', { name: 'Valider' }).click()
   await expect(page.getByText('Combien de « Sucre')).toBeVisible()
   await page.getByRole('button', { name: 'Pas cette fois' }).click()
-  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+  await returnsToRepas(page, fake)
 
   // Then
   expect(fake.cart()).toEqual({ 1000001: 4 })
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
   expect(await returnedResult(page, fake)).toMatchObject({
     lines: [
       { ingredientSlug: 'farine', outcome: 'ADDED', quantity: 4 },
@@ -220,7 +217,7 @@ test('la quantité se tape par-dessus le « 1 » prérempli (jamais « 14 »), e
 
   // And : on peut aussi passer la ligne
   await page.getByRole('button', { name: 'Pas cette fois' }).click()
-  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+  await returnsToRepas(page, fake)
   expect(fake.cart()).toEqual({})
 })
 
@@ -240,7 +237,7 @@ test('toucher le champ de la quantité avant de taper garde « 1 » sélectionn�
 
   await expect(input).toHaveValue('6')
   await page.getByRole('button', { name: 'Valider' }).click()
-  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+  await returnsToRepas(page, fake)
   expect(fake.cart()).toEqual({ 1000001: 6 })
 })
 
@@ -274,9 +271,9 @@ test('met au panier le nombre calculé sur le contenu lu sur le site, pas celui 
   await expect(page.getByText('Quantités changées')).toBeVisible()
   await expect(page.getByText('Farine : 3 au lieu de 30')).toBeVisible()
   await expect(page.getByText('Sucre :')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
 
   // And : le résultat porte la quantité réellement mise au panier
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
   expect(await returnedResult(page, fake)).toMatchObject({
     outcome: 'completed',
     lines: [
@@ -300,7 +297,7 @@ test('garde le nombre du plan quand le contenu lu sur le site ne se compare pas,
   // When
   await openWithFragment(page, fake, agentCode, plan)
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+  await returnsToRepas(page, fake)
 
   // Then : comme avant, le plan fait foi, et rien n'est signalé
   expect(fake.cart()).toEqual({ 1000031: 5, 1000014: 2 })

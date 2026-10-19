@@ -6,8 +6,10 @@ import type {
   AttemptFacts,
   LeclercCause,
   LeclercErrorCode,
+  LinkFacts,
   SearchFacts,
 } from '../leclerc'
+import { own } from '../own'
 import { S } from '../ui'
 
 /** Le mot qu'aucun produit ne porte : la forme de la réponse d'une recherche sans résultat (hypothèse H2 de l'audit). */
@@ -48,6 +50,15 @@ function cityOf(address: string): string {
   if (/^\/magasin-N-N-V(\/|$)/.test(address)) return S.diagnostic.probe.yes
   if (/^\/magasin-N-N(\/|$)/.test(address)) return S.diagnostic.probe.no
   return S.diagnostic.probe.notApplicable
+}
+
+/** Une ligne de lien du rapport : présent ou non, la forme de l'adresse et où elle mène (DRV-625). */
+function linkLine(name: string, link: LinkFacts): string {
+  return P.link(name, {
+    present: link.present,
+    shape: link.shape,
+    where: link.where === null ? null : (own(P.where, link.where) ?? null),
+  })
 }
 
 const yesNo = (value: boolean | null) => (value === null ? P.unknown : value ? P.yes : P.no)
@@ -102,6 +113,10 @@ export function probeLines(probes: ProbeFacts | null | undefined): string[] {
     if (arrival.cookies)
       lines.push(P.cookies(arrival.cookies.count, yesNo(arrival.cookies.antiBot)))
     lines.push(P.arrival(arrival.redirects, arrival.status))
+    if (arrival.entry) {
+      lines.push(linkLine(P.startLink, arrival.entry.start))
+      lines.push(linkLine(P.basketLink, arrival.entry.basket))
+    }
     lines.push(
       P.delivery(P.inPage, yesNo(arrival.delivery.read), yesNo(arrival.delivery.sameAsAddress)),
     )

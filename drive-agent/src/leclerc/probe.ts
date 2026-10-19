@@ -5,6 +5,7 @@
 // magasin, une ville, une adresse, un point de livraison ni la valeur d'un en-tête. `probe.spec.ts` et `diagnostic.spec.ts` le prouvent avec
 // une page hostile.
 import type { LeclercCause } from './causes'
+import type { EntryFacts } from './entry'
 import { decodeEntities, pageReadings } from './embedded'
 import type { LeclercErrorCode } from './errors'
 import type { Reply } from './pacer'
@@ -333,6 +334,8 @@ export interface ArrivalFacts {
   cookies: CookieFacts | null
   /** Le chemin avec la ville que la page donne (formulaire de recherche, à défaut lien), en motif ; `null` si elle n'en donne pas. */
   searchBase: { shape: string; source: 'FORM' | 'LINK' } | null
+  /** Le lien « Commencer mes courses » et le lien du panier de la page : présents ou non, la forme de leur adresse (DRV-625). */
+  entry?: EntryFacts
 }
 
 /** Ce que le navigateur sait de la navigation qui a amené sur la page (`PerformanceNavigationTiming`) : des nombres, jamais une adresse. */

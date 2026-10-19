@@ -2,7 +2,7 @@
 // ligature « œ », au pluriel et aux noms longs. Le faux site a un mode « moteur strict » qui l'imite (`strictSearch`) ; quand la recherche du
 // nom ne répond rien, l'agent essaie les formes dérivées UNE par UNE, à la cadence normale, au plus 4, jamais deux fois la même, s'arrête à la
 // première qui répond et dit laquelle a répondu. Le faux site juge la cadence : jamais en parallèle, jamais plus vite que 800 ms.
-import { openWithFragment, returnedResult } from './support/agent'
+import { openWithFragment, returnedResult, returnsToRepas } from './support/agent'
 import { expectPoliteAgent, gapsBetween } from './support/cadence'
 import { expect, test } from './support/fixtures'
 import { fresh, known, planOf, product } from './support/plans'
@@ -45,11 +45,10 @@ test.describe('un nouvel ingrédient (phase B)', () => {
 
     // And : le choix de l'utilisateur met le produit au panier
     await card.getByRole('button', { name: 'Choisir' }).click()
-    await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+    await returnsToRepas(page, fake)
     expect(fake.cart()).toEqual({ 1000014: 1 })
     expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'search', 'cart'])
     expectPoliteAgent(fake)
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
     expect(await returnedResult(page, fake)).toMatchObject({
       outcome: 'completed',
       lines: [{ ingredientSlug: 'oeuf', outcome: 'CHOSEN', product: { id: '1000014' } }],
@@ -98,7 +97,7 @@ test.describe('un nouvel ingrédient (phase B)', () => {
     expect(searches(fake)).toEqual(['zzqxkw', 'zzqxkws'])
     expectPoliteAgent(fake)
     await page.getByRole('button', { name: 'Pas cette fois' }).click()
-    await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+    await returnsToRepas(page, fake)
   })
 
   test('un nom long qui ne répond à rien fait cinq requêtes au plus, toutes différentes, chacune après la précédente et à la cadence normale', async ({
@@ -170,7 +169,7 @@ test.describe('un produit connu (phase A)', () => {
 
     // When
     await page.getByRole('button', { name: 'Commencer' }).click()
-    await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+    await returnsToRepas(page, fake)
 
     // Then : le libellé, sa forme en minuscules, sa forme sans ligature (qui retrouve le produit), puis l'écriture
     expect(searches(fake)).toEqual([
@@ -181,7 +180,6 @@ test.describe('un produit connu (phase A)', () => {
     expect(fake.cart()).toEqual({ 1000014: 1 })
     expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'search', 'search', 'cart'])
     expectPoliteAgent(fake)
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
     expect(await returnedResult(page, fake)).toMatchObject({
       lines: [{ ingredientSlug: 'oeufs', outcome: 'ADDED', productId: '1000014', usedRank: 1 }],
     })
@@ -219,7 +217,7 @@ test.describe('un produit connu (phase A)', () => {
     ])
     expectPoliteAgent(fake)
     await page.getByRole('button', { name: 'Pas cette fois' }).click()
-    await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+    await returnsToRepas(page, fake)
     expect(fake.cart()).toEqual({})
   })
 })

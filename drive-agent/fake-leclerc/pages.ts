@@ -127,15 +127,27 @@ ${embedded}
  * l'hôte du magasin, elle, est une page 404. Ce n'est pas une page de magasin pour l'agent (aucune adresse `/magasin-<id>-<id>-<ville>`) : le
  * bouton mène aux vraies pages du magasin (`storeUrl`, avec la ville, sur l'hôte du magasin), et `otherStoreUrl` à un autre magasin.
  */
-export function accueilPage(storeUrl: string, otherStoreUrl?: string): string {
+export function accueilPage(
+  storeUrl: string,
+  otherStoreUrl?: string,
+  form: HomeForm = 'link',
+): string {
+  const start =
+    form === 'no-link'
+      ? '<p><a href="/connexion.aspx">Se connecter</a></p>'
+      : `<p><a id="start-shopping" href="${storeUrl}">Commencer mes courses</a></p>`
+  const challenge =
+    form === 'challenge'
+      ? '<iframe title="Vérification" src="https://geo.captcha-delivery.com/captcha/"></iframe>\n'
+      : ''
   return `<!doctype html>
 <html lang="fr">
 <head>${HEAD}<title>Accueil du magasin (faux site de test)</title></head>
 <body>
 <h1>Faux Leclerc Ville-Test</h1>
 <p>Je peux retirer ma commande</p>
-<p><a id="start-shopping" href="${storeUrl}">Commencer mes courses</a></p>
-${otherStoreUrl === undefined ? '' : `<p><a id="other-store" href="${otherStoreUrl}">Changer de magasin</a></p>\n`}<footer>Faux site Leclerc : données inventées.</footer>
+${start}
+${challenge}${otherStoreUrl === undefined ? '' : `<p><a id="other-store" href="${otherStoreUrl}">Changer de magasin</a></p>\n`}<footer>Faux site Leclerc : données inventées.</footer>
 </body>
 </html>
 `
@@ -232,6 +244,12 @@ export function challengePage(): string {
 </html>
 `
 }
+
+/**
+ * Ce que l'accueil de l'enseigne montre (DRV-625) : le lien « Commencer mes courses » (`link`, par défaut), la page d'un visiteur qui n'a que « Se connecter »
+ * (`no-link`), ou le lien accompagné d'un défi de l'anti-robot (`challenge`) : dans les deux derniers cas l'agent ne suit rien.
+ */
+export type HomeForm = 'link' | 'no-link' | 'challenge'
 
 /** Le faux Repas : la page de retour, qui affiche le fragment `#result=` reçu (décodé) pour que les tests le lisent. */
 export function repasReturnPage(): string {

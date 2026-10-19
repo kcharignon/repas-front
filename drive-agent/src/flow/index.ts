@@ -18,6 +18,7 @@ export {
   changesOf,
   endingOf,
   endProps,
+  hasSomethingToRead,
   resultLines,
   type Ending,
 } from './result'

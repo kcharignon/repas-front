@@ -22,8 +22,7 @@ test('reçoit le plan par le pont, remplit le panier et renvoie le résultat par
 
   // When
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+  await app.received('result')
 
   // Then : le résultat est un message du pont, la page n'a pas bougé et l'interface est retirée
   expect(await app.received('result')).toMatchObject({
@@ -139,7 +138,7 @@ test('reprend le plan que l’application renvoie à chaque chargement de la pag
   await expect(page.getByRole('heading', { name: 'Reprendre là où vous en étiez ?' })).toBeVisible()
   await waitForQuiet(fake)
   await page.getByRole('button', { name: 'Reprendre' }).click()
-  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+  await app.received('result')
 
   // Then
   expect(fake.cart()).toEqual({ 1000001: 1, 1000006: 1 })
