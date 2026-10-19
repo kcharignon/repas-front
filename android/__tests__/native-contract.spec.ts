@@ -111,6 +111,25 @@ describe('ce que l’application répond à la page', () => {
   })
 })
 
+// AUTH-011 : l'application gagne `google.signIn` → `google.result` / `google.error` et le drapeau `app.info.google`. Le front d'aujourd'hui (qui ne
+// connaît pas encore la connexion avec Google, AUTH-012) doit rester indifférent : une application plus récente que le site ne casse rien.
+describe('un front qui ne connaît pas la connexion avec Google, devant une application qui la connaît', () => {
+  it('lit app.info comme avant : le champ google en plus est ignoré', () => {
+    expect(
+      parseInbound('{"v":1,"type":"app.info","version":"1.2.3","versionCode":42,"drive":true,"google":true}'),
+    ).toEqual({ type: 'app.info', info: { version: '1.2.3', versionCode: 42, drive: true } })
+  })
+
+  it.each([
+    '{"v":1,"type":"google.result","idToken":"jeton-synthetique"}',
+    ...['CANCELLED', 'NO_ACCOUNT', 'UNAVAILABLE', 'BUSY', 'INVALID_REQUEST', 'FAILED'].map(
+      (code) => `{"v":1,"type":"google.error","code":"${code}"}`,
+    ),
+  ])('ignore %s, sans erreur', (message) => {
+    expect(parseInbound(message)).toBeNull()
+  })
+})
+
 describe('ce que la page envoie à l’application', () => {
   const memory = () => {
     let value: string | null = null

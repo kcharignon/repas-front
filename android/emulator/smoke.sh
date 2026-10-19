@@ -7,7 +7,8 @@
 # vérifie d'abord, puis une dernière fois dans le journal du DNS.
 #
 # Ce qu'il prouve, dans l'ordre : l'application s'installe et démarre sans planter ; la coquille charge le faux Repas ; celui-ci voit le pont
-# `repasNative`, reçoit la réponse d'`app.info`, et les messages refusés reçoivent une erreur ; le menu s'ouvre (`app.menu`) ; un lien vers un
+# `repasNative`, reçoit la réponse d'`app.info`, et les messages refusés reçoivent une erreur ; `google.signIn` reçoit le jeton du fournisseur
+# factice, `BUSY`, chaque code d'échec et `INVALID_REQUEST`, sans rien au journal d'Android (AUTH-011) ; le menu s'ouvre (`app.menu`) ; un lien vers un
 # autre site ne s'ouvre pas dans la coquille ; le menu ouvre le drive (second écran) sur le faux site, où le script d'injection et le pont
 # `repasHost` ont répondu ; la commande « Diagnostic de l'agent » traverse le pont jusqu'à l'agent ; le test automatique fait l'aller-retour
 # complet et affiche son rapport ; le retour ramène à la coquille, dont la page répond encore. Les captures d'écran et le rapport texte sont
@@ -61,6 +62,49 @@ post_command '{"do":"raw","text":"{\"v\":1,\"type\":\"drive.start\",\"plan\":{}}
 if wait_until 10 has_report '"type": "drive.error", "code": "INVALID_PLAN"'; then ok "un plan invalide reçoit drive.error INVALID_PLAN"; else ko "pas de réponse au plan invalide"; fi
 post_command '{"do":"raw","text":"{\"v\":1,\"type\":\"drive.setup\",\"runId\":\"pas-un-uuid\"}"}'
 if wait_until 10 has_report '"type": "drive.error", "code": "INVALID_SETUP"'; then ok "une lecture du magasin sans identifiant valide reçoit drive.error INVALID_SETUP"; else ko "pas de réponse à drive.setup invalide"; fi
+
+# --- 2b. La connexion avec Google (AUTH-011) ------------------------------------------------------------------------------------------------
+# L'APK de débogage n'a que le fournisseur d'identité factice (FakeGoogleIdentity) : aucune feuille, aucun appel à Google. Il rend un jeton d'essai
+# fixe après 1,5 s, ou l'échec que nomme le début du nonce (CANCELLED-…, NO_ACCOUNT-…, UNAVAILABLE-…, FAILED-…). Valeurs synthétiques.
+say
+say "2b. La connexion avec Google (google.signIn) : le fournisseur factice de l'APK de débogage"
+CLIENT_ID=123456789-exemple0synthetique.apps.googleusercontent.com
+FAKE_ID_TOKEN=jeton-d-essai-de-debogage-jamais-accepte-par-un-vrai-back
+google_sign_in() { post_command "{\"do\":\"google.signIn\",\"clientId\":\"$1\",\"nonce\":\"$2\"}"; } # google_sign_in <ID client> <nonce>
+google_error() { has_report "\"type\": \"google.error\", \"code\": \"$1\""; }
+grep -q '"google": true' <<< "$info" && ok "app.info annonce la connexion avec Google (google: true)" || ko "app.info n'annonce pas la connexion avec Google"
+google_sign_in "$CLIENT_ID" nonce_essai_smoke-0123456789
+if wait_until 15 has_report "\"type\": \"google.result\", \"idToken\": \"$FAKE_ID_TOKEN\""; then
+  ok "une demande valide reçoit google.result avec le jeton du fournisseur factice"
+else
+  ko "pas de google.result pour une demande valide"
+fi
+sleep 1
+screenshot 01b-connexion-google
+# Deux demandes à 0,5 s d'intervalle (le faux Repas prend un ordre par demi-seconde) : la fausse feuille est encore ouverte pour la seconde.
+google_sign_in "$CLIENT_ID" nonce_essai_premiere-0123456789
+google_sign_in "$CLIENT_ID" nonce_essai_seconde-0123456789
+if wait_until 15 google_error BUSY; then ok "une deuxième demande pendant la première reçoit BUSY"; else ko "pas de BUSY pour une deuxième demande"; fi
+if wait_until 15 has_report_count '"type": "google.result"' 2; then ok "la première demande reçoit quand même son jeton"; else ko "la première demande n'a pas reçu son jeton"; fi
+for code in CANCELLED NO_ACCOUNT UNAVAILABLE FAILED; do
+  google_sign_in "$CLIENT_ID" "$code-essai-0123456789"
+  if wait_until 15 google_error "$code"; then ok "le fournisseur répond $code : la page reçoit google.error $code"; else ko "pas de google.error $code"; fi
+done
+check "une annulation ne relance rien : un seul google.error CANCELLED" test "$(reports | grep -o '"type": "google.error", "code": "CANCELLED"' | wc -l)" -eq 1
+google_sign_in "pas-un-id-client" nonce_essai_smoke-0123456789
+google_sign_in "$CLIENT_ID" court
+if wait_until 15 has_report_count '"type": "google.error", "code": "INVALID_REQUEST"' 2; then
+  ok "un ID client ou un nonce mal formé reçoit google.error INVALID_REQUEST"
+else
+  ko "pas d'INVALID_REQUEST pour un ID client ou un nonce mal formé"
+fi
+journal=$(adb logcat -d 2> /dev/null)
+if grep -q -e "$CLIENT_ID" -e "googleusercontent" -e "nonce_essai" -e "essai-0123456789" -e "$FAKE_ID_TOKEN" <<< "$journal"; then
+  ko "le journal d'Android contient l'ID client, un nonce ou le jeton"
+else
+  ok "le journal d'Android ne contient ni l'ID client, ni les nonces, ni le jeton"
+fi
+check "l'application tourne toujours après la connexion avec Google" adb shell pidof "$APP"
 
 # --- 3. Menu de l'application et lien externe ---------------------------------------------------------------------------------------------
 say
