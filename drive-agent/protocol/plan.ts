@@ -79,6 +79,7 @@ const planLine: Check = (list, index) => {
     'searchQuery',
     'replaces',
     'needed',
+    'rayonHints',
   ])
   text(line, 'ingredientSlug', SLUG)
   text(line, 'name')
@@ -96,6 +97,9 @@ const planLine: Check = (list, index) => {
   optional(line, 'searchQuery', text)
   optional(line, 'replaces', productRef)
   optional(line, 'needed', needed)
+  optional(line, 'rayonHints', (parent, name) => {
+    each(parent, name, LIMITS.rayonHints, (ids, rank) => int(ids, rank, 1, LIMITS.catalogId))
+  })
 }
 
 /**

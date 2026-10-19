@@ -2024,3 +2024,285 @@ describe('les photos des produits', () => {
     ])
   })
 })
+
+// —— Chercher dans le bon rayon (DRV-642) ————————————————————————————————————————————————————————————————————————————————————
+
+describe('les rayons conseillés rangent la liste, sans cacher aucun produit (DRV-642)', () => {
+  const FRESH = 41
+  const CANNED = 7
+  const JUICE = 15
+  /** 40 produits « tomate » : les 6 frais sont dispersés parmi 34 conserves, sauces et jus, dans l'ordre du site. */
+  const FRESH_AT = new Set([5, 11, 19, 20, 33, 39])
+  const tomatoes = (count = 40) => {
+    const ids = Array.from({ length: count }, (_value, index) => String(4000001 + index))
+    const shelf: Record<string, ShelfItem> = {}
+    ids.forEach((id, index) => {
+      const fresh = FRESH_AT.has(index)
+      shelf[id] = {
+        label: fresh ? `Tomates fraîches ${index}` : `Sauce tomate ${index}`,
+        content: { value: 500, unit: 'g' },
+        aisle: fresh ? FRESH : index % 3 === 0 ? JUICE : CANNED,
+        family: fresh ? 410 : 520,
+      }
+    })
+    return { ids, shelf, found: { tomate: ids } }
+  }
+  const tomato = (extra: Partial<PlanLine> = {}): PlanLine => ({
+    ...fresh('tomate'),
+    needed: { quantity: 500, unitSymbol: 'g', dimension: 'WEIGHT', baseFactor: 1 },
+    ...extra,
+  })
+  /** Tout ce que la liste contient une fois qu'on a fait défiler jusqu'au bout. */
+  const everything = (view: View): string[] => {
+    for (let step = 0; step < 30; step += 1) view.zone.dispatchEvent(new Event('scroll'))
+    return rows(view.zone).map(nameOf)
+  }
+  const sauce = (index: number) => `Sauce tomate ${index}`
+  const fresher = (index: number) => `Tomates fraîches ${index}`
+
+  it('place d’abord les 6 produits frais, dans l’ordre du site, puis tous les autres dans l’ordre du site : aucun n’est caché', async () => {
+    // Given : 40 produits dont 6 frais, et le rayon frais conseillé
+    const { shelf, found } = tomatoes()
+    let all: string[] = []
+    const test = run(
+      tomato({ rayonHints: [FRESH] }),
+      [
+        (view) => {
+          all = everything(view)
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf, found },
+    )
+    const site = found.tomate.map((id) => shelf[id]?.label)
+
+    // When
+    await test.start()
+
+    // Then : les 6 frais d'abord
+    expect(all).toHaveLength(40)
+    expect(all.slice(0, 6)).toEqual([5, 11, 19, 20, 33, 39].map(fresher))
+    // puis les 34 autres, exactement dans l'ordre du site
+    expect(all.slice(6)).toEqual(site.filter((label) => !label?.startsWith('Tomates fraîches')))
+    expect(new Set(all)).toEqual(new Set(site))
+  })
+
+  it('le premier lot de huit fiches montre déjà les 6 produits frais', async () => {
+    const { shelf, found } = tomatoes()
+    let first: string[] = []
+    const test = run(
+      tomato({ rayonHints: [FRESH] }),
+      [
+        (view) => {
+          first = rows(view.zone).map(nameOf)
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf, found },
+    )
+
+    await test.start()
+
+    expect(first).toHaveLength(8)
+    expect(first.slice(0, 6).every((name) => name.startsWith('Tomates fraîches'))).toBe(true)
+    expect(first.slice(6)).toEqual([sauce(0), sauce(1)])
+  })
+
+  it('sans « rayonHints » ou avec une liste vide : l’ordre du site, comme avant', async () => {
+    const { shelf, found } = tomatoes()
+    const site = found.tomate.map((id) => shelf[id]?.label)
+    const seen: string[][] = []
+    for (const extra of [{}, { rayonHints: [] }]) {
+      const test = run(
+        tomato(extra),
+        [
+          (view) => {
+            seen.push(everything(view))
+            return { kind: 'skip' }
+          },
+        ],
+        { shelf, found },
+      )
+      await test.start()
+    }
+
+    expect(seen).toEqual([site, site])
+  })
+
+  it('un rayon conseillé que la recherche n’a pas : l’ordre du site', async () => {
+    const { shelf, found } = tomatoes()
+    const site = found.tomate.map((id) => shelf[id]?.label)
+    let all: string[] = []
+    const test = run(
+      tomato({ rayonHints: [999999] }),
+      [
+        (view) => {
+          all = everything(view)
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf, found },
+    )
+
+    await test.start()
+
+    expect(all).toEqual(site)
+  })
+
+  it('plusieurs rayons conseillés : par groupes, le plus choisi d’abord', async () => {
+    const { shelf, found } = tomatoes()
+    let all: string[] = []
+    const test = run(
+      tomato({ rayonHints: [JUICE, FRESH] }),
+      [
+        (view) => {
+          all = everything(view)
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf, found },
+    )
+
+    await test.start()
+
+    const juice = found.tomate
+      .map((id) => shelf[id])
+      .filter((item) => item?.aisle === JUICE)
+      .map((item) => item?.label)
+    expect(all.slice(0, juice.length)).toEqual(juice)
+    expect(all.slice(juice.length, juice.length + 6)).toEqual([5, 11, 19, 20, 33, 39].map(fresher))
+    expect(all).toHaveLength(40)
+  })
+
+  it('« Chercher autre chose » est rangé de la même façon', async () => {
+    const { shelf, found } = tomatoes()
+    let all: string[] = []
+    const test = run(
+      tomato({ rayonHints: [FRESH] }),
+      [
+        async (view) => {
+          search(view, 'tomates')
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          all = everything(view)
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf, found: { ...found, tomates: [...found.tomate].reverse() } },
+    )
+
+    await test.start()
+
+    // Dans l'ordre inverse du site, les frais (39, 33, 20, 19, 11, 5) d'abord
+    expect(all.slice(0, 6)).toEqual([39, 33, 20, 19, 11, 5].map(fresher))
+    expect(all).toHaveLength(40)
+    expect(test.adapter.calls.filter((call) => call.startsWith('find'))).toEqual([
+      'find tomate',
+      'find tomates',
+    ])
+  })
+
+  it('le classement précède le plafond technique : un produit frais en fin de page n’est pas perdu', async () => {
+    const count = MAX_CANDIDATES + 40
+    const ids = Array.from({ length: count }, (_value, index) => String(5000001 + index))
+    const shelf: Record<string, ShelfItem> = {}
+    ids.forEach((id, index) => {
+      shelf[id] = { label: `Produit ${index}`, aisle: index >= count - 3 ? FRESH : CANNED }
+    })
+    let all: string[] = []
+    const test = run(
+      tomato({ rayonHints: [FRESH] }),
+      [
+        (view) => {
+          all = everything(view)
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf, found: { tomate: ids } },
+    )
+
+    await test.start()
+
+    expect(all).toHaveLength(MAX_CANDIDATES)
+    expect(all.slice(0, 3)).toEqual([
+      `Produit ${count - 3}`,
+      `Produit ${count - 2}`,
+      `Produit ${count - 1}`,
+    ])
+  })
+
+  it('renvoie le rayon et la famille du produit choisi (faits du catalogue), et lui seul', async () => {
+    const { shelf, found } = tomatoes()
+    const test = run(
+      tomato({ rayonHints: [FRESH] }),
+      [(view) => choose(view.zone, 'Tomates fraîches 5')],
+      { shelf, found },
+    )
+
+    await test.start()
+
+    expect(lineOf(test.sent[0], 'tomate')).toMatchObject({
+      outcome: 'CHOSEN',
+      product: { id: '4000006', rayonId: FRESH, familyId: 410 },
+    })
+    expect(expectConform(test.sent[0])).toBeTruthy()
+  })
+
+  it('renvoie le rayon du produit choisi même sans rayon conseillé : c’est ainsi que Repas l’apprend', async () => {
+    const { shelf, found } = tomatoes()
+    const test = run(tomato(), [(view) => choose(view.zone, 'Sauce tomate 0')], { shelf, found })
+
+    await test.start()
+
+    expect(lineOf(test.sent[0], 'tomate')).toMatchObject({
+      product: { rayonId: JUICE, familyId: 520 },
+    })
+  })
+
+  it('un produit dont le site ne donne ni rayon ni famille (ou des valeurs hors bornes) repart sans ces clés, octet pour octet comme avant', async () => {
+    const plain = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')])
+    const odd = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')], {
+      shelf: { ...SHELF, '2000001': { ...SHELF['2000001'], aisle: 0, family: 2_147_483_648 } },
+    })
+
+    await plain.start()
+    await odd.start()
+
+    expect(JSON.stringify(odd.sent)).toBe(JSON.stringify(plain.sent))
+    expect(JSON.stringify(plain.sent)).not.toMatch(/rayonId|familyId/)
+  })
+
+  it('un produit choisi que le panier ne prend pas est quand même enregistré avec son rayon', async () => {
+    const { shelf, found } = tomatoes()
+    shelf['4000006'] = { ...shelf['4000006'], obtained: () => 0 }
+    const test = run(
+      tomato({ rayonHints: [FRESH] }),
+      [(view) => choose(view.zone, 'Tomates fraîches 5')],
+      { shelf, found },
+    )
+
+    await test.start()
+
+    expect(lineOf(test.sent[0], 'tomate')).toMatchObject({
+      outcome: 'CHOSEN',
+      product: { rayonId: FRESH },
+    })
+  })
+
+  it('le classement ne change ni les requêtes ni l’état de reprise (aucune requête de plus, aucun rayon gardé)', async () => {
+    const { shelf, found } = tomatoes()
+    const hinted = run(
+      tomato({ rayonHints: [FRESH] }),
+      [(view) => choose(view.zone, 'Tomates fraîches 5')],
+      { shelf, found },
+    )
+    const plain = run(tomato(), [(view) => choose(view.zone, 'Tomates fraîches 5')], {
+      shelf,
+      found,
+    })
+
+    await hinted.start()
+    await plain.start()
+
+    expect(hinted.adapter.calls).toEqual(plain.adapter.calls)
+  })
+})

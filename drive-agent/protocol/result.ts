@@ -48,7 +48,13 @@ const price: Check = (scope, key) => {
 
 /** Un produit vu par l'agent ; le produit choisi (`withPrice`) porte aussi son prix. */
 function product(scope: Scope, key: string | number, withPrice: boolean): void {
-  const own = object(scope, key, ['id', 'label', 'ean', 'content', ...(withPrice ? ['price'] : [])])
+  const own = object(scope, key, [
+    'id',
+    'label',
+    'ean',
+    'content',
+    ...(withPrice ? ['price', 'rayonId', 'familyId'] : []),
+  ])
   text(own, 'id', ID)
   text(own, 'label')
   optional(
@@ -58,6 +64,10 @@ function product(scope: Scope, key: string | number, withPrice: boolean): void {
   )
   optional(own, 'content', content)
   optional(own, 'price', price)
+  if (withPrice) {
+    optional(own, 'rayonId', (parent, name) => int(parent, name, 1, LIMITS.catalogId))
+    optional(own, 'familyId', (parent, name) => int(parent, name, 1, LIMITS.catalogId))
+  }
 }
 
 const quantity: Check = (scope, key) => int(scope, key, 1, LIMITS.packsMax)

@@ -100,7 +100,13 @@
         },
         "searchQuery": { "$ref": "#/definitions/label" },
         "replaces": { "$ref": "#/definitions/productRef" },
-        "needed": { "$ref": "#/definitions/needed" }
+        "needed": { "$ref": "#/definitions/needed" },
+        "rayonHints": {
+          "description": "Facultatif (DRV-642) : les rayons de l'enseigne où l'on prend d'habitude cet ingrédient, du plus choisi au moins choisi. Sert à ranger la liste de l'écran de choix ; aucun produit n'est caché.",
+          "type": "array",
+          "maxItems": 3,
+          "items": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+        }
       },
       "allOf": [
         {
