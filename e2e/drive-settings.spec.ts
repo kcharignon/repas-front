@@ -56,19 +56,18 @@ test.describe('à 360 × 640', () => {
     ['sans magasin', null],
     ['avec un magasin', undefined],
   ] as const) {
-    test(`${name} : la note de vie privée tient en une phrase et « Votre magasin » est visible sans défiler (DRV-626)`, async ({
+    test(`${name} : aucune note au-dessus et « Votre magasin » est visible sans défiler (DRV-626, DRV-628)`, async ({
       page,
     }) => {
       await fakeDriveBack(page, store === null ? { store: null } : {})
       await page.goto('/drive/reglages')
 
-      await expect(page.getByRole('heading', { level: 2, name: 'Votre vie privée' })).toBeVisible()
-      await expect(
-        page.getByText('Repas ne voit jamais votre mot de passe ni votre panier Leclerc.'),
-      ).toBeVisible()
-      await expect(page.getByRole('link', { name: 'Lisez la note complète' })).toBeVisible()
-      // La note complète n'est plus sur cet écran : elle est à un lien
-      await expect(page.getByText('Attention : Leclerc peut suspendre un compte')).toHaveCount(0)
+      // Aucune note de vie privée ni mise en garde sur cet écran : elles sont dans les conditions d'utilisation (DRV-628)
+      await expect(page.getByRole('heading', { name: 'Votre vie privée' })).toHaveCount(0)
+      await expect(page.getByText(/ne voit jamais|suspendre/)).toHaveCount(0)
+      await expect(page.getByRole('link', { name: /note complète|Conditions/ })).toHaveCount(0)
+      // « Votre magasin » est le premier bloc
+      await expect(page.getByRole('heading', { level: 2 }).first()).toHaveText('Votre magasin')
 
       // « Votre magasin » est entièrement au-dessus de la barre du bas, sans défiler
       const heading = page.getByRole('heading', { level: 2, name: 'Votre magasin' })

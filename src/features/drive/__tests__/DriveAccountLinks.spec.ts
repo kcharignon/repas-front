@@ -43,9 +43,22 @@ describe('entrées du drive dans le compte', () => {
     expect(wrapper.findAll('a').map((link) => link.attributes('href'))).toEqual([
       '/drive/reglages',
       '/drive/produits',
+      '/drive/conditions',
     ])
     expect(wrapper.text()).toContain('Réglages du drive')
     expect(wrapper.text()).toContain('Mes produits du drive')
+  })
+
+  it('finit par un lien discret vers les conditions d’utilisation du drive (DRV-628)', async () => {
+    const wrapper = await open(true)
+
+    const links = wrapper.findAll('a')
+    const last = links[links.length - 1]
+    expect(last?.text()).toBe('Conditions d’utilisation')
+    expect(last?.attributes('href')).toBe('/drive/conditions')
+    // Discret : un simple lien, jamais une fenêtre ni une case à cocher
+    expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false)
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
   })
 
   it('ne montre rien quand le drive est coupé', async () => {

@@ -14,7 +14,7 @@
     <string name="menu_debug_plan">Plan d’essai (débogage)</string>
     <string name="menu_selftest">Test automatique (débogage)</string>
 
-    <string name="about_manual">Repas affiche vos recettes et vos listes de courses, comme sur le site.\n\nPour envoyer une liste au drive Leclerc, touchez « Envoyer au drive » dans la liste : le drive s’ouvre sur un second écran, l’application y remplit le panier, puis vous revenez ici avec le récapitulatif. Connectez-vous vous-même sur le site de Leclerc : l’application ne lit jamais votre mot de passe ni vos cookies, et ne contacte que Leclerc pour le drive (ses pages font appel à leurs propres services, comme dans un navigateur).\n\n• Le bouton retour du téléphone revient à la page précédente.\n• Un lien vers un autre site s’ouvre dans le navigateur du téléphone.\n• Pour changer de compte Leclerc ou effacer les données du drive : menu, « Se déconnecter de Leclerc ».</string>
+    <string name="about_manual">Repas affiche vos recettes et vos listes de courses, comme sur le site.\n\nPour envoyer une liste au drive Leclerc, touchez « Envoyer au drive » dans la liste : le drive s’ouvre sur un second écran, l’application y remplit le panier, puis vous revenez ici avec le récapitulatif. Connectez-vous vous-même sur le site de Leclerc.\n\n• Le bouton retour du téléphone revient à la page précédente.\n• Un lien vers un autre site s’ouvre dans le navigateur du téléphone.\n• Pour changer de compte Leclerc ou effacer les données du drive : menu, « Se déconnecter de Leclerc ».</string>
 
     <string name="clear_message">Vous serez déconnecté de Leclerc : les cookies, les données du site et l’historique du drive seront effacés de cette application. Votre session Repas reste ouverte.</string>
     <string name="clear_message_shared">Vous serez déconnecté de Leclerc : les cookies, les données du site et l’historique seront effacés de cette application. Sur ce téléphone, Repas et le drive ne sont pas séparés : vous serez déconnecté de Repas aussi.</string>
@@ -59,15 +59,15 @@
 
     <string name="menu_abandon">Abandonner l’envoi</string>
     <string name="abandon_title">Abandonner l’envoi ?</string>
-    <string name="abandon_message">Les produits déjà mis au panier y restent. Repas sera prévenu que l’envoi a été abandonné.</string>
+    <string name="abandon_message">Les produits déjà mis au panier y restent.</string>
     <string name="abandon_confirm">Abandonner</string>
     <string name="abandon_continue">Continuer</string>
-    <string name="setup_banner">Connectez-vous à Leclerc si besoin, puis choisissez votre magasin. Repas le lira ensuite. Le bouton retour du téléphone annule.</string>
-    <string name="plan_banner_open">Ouvrez votre magasin sur Leclerc : connectez-vous si besoin, puis touchez « Commencer mes courses ». Repas reprendra tout seul. Le bouton retour du téléphone annule.</string>
+    <string name="setup_banner">Connectez-vous à Leclerc si besoin, puis choisissez votre magasin. Le bouton retour du téléphone annule.</string>
+    <string name="plan_banner_open">Ouvrez votre magasin sur Leclerc : connectez-vous si besoin, puis touchez « Commencer mes courses ». Le bouton retour du téléphone annule.</string>
     <string name="plan_banner">Cette page n’est pas celle de votre magasin : Leclerc ne l’a pas ouverte ou ne répond pas. Touchez « Ouvrir l’accueil du drive » pour recommencer. Le bouton retour du téléphone annule.</string>
     <string name="plan_banner_action">Ouvrir l’accueil du drive</string>
     <string name="plan_banner_mobile">Leclerc affiche son site mobile : ce n’est pas la version ordinateur du site, et Repas ne peut pas y agir. Touchez « Ouvrir l’accueil du drive » pour recommencer. Le bouton retour du téléphone annule.</string>
-    <string name="plan_banner_verification">Leclerc demande une vérification. Faites-la sur la page : Repas reprendra ensuite. Sinon, touchez « Ouvrir l’accueil du drive ». Le bouton retour du téléphone annule.</string>
+    <string name="plan_banner_verification">Leclerc demande une vérification. Faites-la sur la page. Sinon, touchez « Ouvrir l’accueil du drive ». Le bouton retour du téléphone annule.</string>
     <string name="menu_abandon_setup">Abandonner la lecture du magasin</string>
     <string name="abandon_setup_title">Abandonner la lecture du magasin ?</string>
     <string name="abandon_setup_message">Repas ne retiendra aucun magasin. Vous pourrez recommencer depuis les réglages du drive.</string>

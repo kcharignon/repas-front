@@ -7,7 +7,6 @@ import { ChevronRight } from 'lucide-vue-next'
 import UiLinkButton from '@/design/UiLinkButton.vue'
 import { APP_RELEASES_URL } from './appInstall'
 import { driveBridge } from './bridge'
-import DrivePrivacyFull from './DrivePrivacyFull.vue'
 
 // Aide et installation de l'application Android (DRV-316) : lisible dans un navigateur comme dans l'application. Aucune donnée du
 // back ; le texte est dans `driveHelp` (fr.ts), les clés ci-dessous ne font que l'ordonner.
@@ -41,14 +40,13 @@ const contents = [
   { id: 'desinstaller', label: 'driveHelp.sections.uninstall' },
   { id: 'depannage', label: 'driveHelp.sections.troubleshooting' },
   ...(inApp ? [] : [{ id: 'mode-assiste', label: 'driveHelp.sections.assisted' }]),
-  { id: 'vie-privee', label: 'drivePrivacy.full.title' },
 ]
 
 const sectionClass = 'flex scroll-mt-4 flex-col gap-3 outline-none'
 const linkClass =
   'inline-flex min-h-11 items-center font-bold text-primary underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary'
 
-/** Amène la rubrique nommée par l'adresse (`#vie-privee`) à l'écran et y pose le focus. */
+/** Amène la rubrique nommée par l'adresse (`#envoi`) à l'écran et y pose le focus. */
 function showHash() {
   const target = route.hash === '' ? null : document.getElementById(route.hash.slice(1))
   if (target === null) return
@@ -232,12 +230,17 @@ onMounted(() => {
       </UiLinkButton>
     </section>
 
-    <DrivePrivacyFull />
-
-    <div>
+    <div class="flex flex-col items-start gap-2">
       <UiLinkButton variant="secondary" :to="{ name: 'shopping-list' }">
         {{ t('driveHelp.back') }}
       </UiLinkButton>
+      <!-- Les conditions d'utilisation du drive (DRV-628) : un lien discret, jamais imposé -->
+      <RouterLink
+        :to="{ name: 'drive-terms' }"
+        class="inline-flex min-h-11 items-center text-sm text-muted underline hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
+      >
+        {{ t('driveTerms.link') }}
+      </RouterLink>
     </div>
   </main>
 </template>

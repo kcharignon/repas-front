@@ -493,7 +493,6 @@ function confirmReopen() {
           </button>
         </div>
         <p v-if="!online" class="font-semibold">{{ t('driveReturn.actions.offline') }}</p>
-        <p class="text-sm text-muted">{{ t('driveReturn.basketKept') }}</p>
       </section>
 
       <dl

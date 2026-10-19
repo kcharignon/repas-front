@@ -294,11 +294,8 @@ function confirmReopenList() {
             {{ t('driveSend.driveUnusable.aid') }}
           </UiLinkButton>
         </section>
-        <!-- Une phrase de synthèse, une phrase d'explication, l'unique décision : le bouton, visible sans défiler -->
-        <template v-else>
-          <p v-if="summary !== ''" class="max-w-prose text-xl font-semibold">{{ summary }}</p>
-          <p class="max-w-prose text-muted">{{ t('driveSend.intro') }}</p>
-        </template>
+        <!-- Une phrase de synthèse, l'unique décision : le bouton, visible sans défiler (DRV-628 : plus d'explication) -->
+        <p v-else-if="summary !== ''" class="max-w-prose text-xl font-semibold">{{ summary }}</p>
 
         <section v-if="inApp" class="flex flex-col items-start gap-3">
           <UiButton

@@ -80,11 +80,13 @@ describe('aide et installation de l’application', () => {
   it('couvre la connexion à Leclerc, l’envoi, la mise à jour, la désinstallation et l’ancienne icône', async () => {
     const { wrapper } = await open()
 
-    expect(wrapper.find('#connexion-leclerc').text()).toContain('Repas ne les voit jamais')
+    expect(wrapper.find('#connexion-leclerc').text()).toContain(
+      'Connectez-vous à votre compte E.Leclerc',
+    )
     expect(wrapper.find('#connexion-leclerc a[href="/drive/reglages"]').text()).toBe(
       'Réglages du drive',
     )
-    expect(wrapper.find('#envoi').text()).toContain('Repas ne valide jamais une commande')
+    expect(wrapper.find('#envoi').text()).toContain('Gardez l’application ouverte.')
     expect(wrapper.find('#mise-a-jour').text()).toContain('installez-la par-dessus')
     expect(wrapper.find('#desinstaller').text()).toContain('Désinstaller')
     expect(wrapper.find('#ancienne-icone').text()).toContain('ancienne icône')
@@ -139,30 +141,25 @@ describe('aide et installation de l’application', () => {
     expect(wrapper.find('header').text()).not.toContain('version')
   })
 
-  it('porte la note de vie privée complète, avec l’ancre #vie-privee', async () => {
+  it('ne porte plus la note de vie privée : un lien discret mène aux conditions d’utilisation (DRV-628)', async () => {
     const { wrapper } = await open()
 
-    const note = wrapper.find('#vie-privee')
-    expect(note.find('h2').text()).toBe('Votre vie privée avec le drive')
-    expect(note.findAll('h3').map((title) => title.text())).toEqual([
-      'Comment ça se passe',
-      'Ce que Repas enregistre',
-      'Ce que Repas ne voit et n’enregistre jamais',
-      'Où, et combien de temps',
-      'Comment tout effacer',
-      'Avant d’utiliser l’envoi : ce que vous devez savoir',
-    ])
-    expect(note.text()).toContain('suspendre un compte E.Leclerc')
-    expect(note.text()).toContain('Rien de cela ne passe par les serveurs de Repas')
+    expect(wrapper.find('#vie-privee').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('suspendre')
+    expect(wrapper.text()).not.toContain('jamais')
+    const link = wrapper.find('a[href="/drive/conditions"]')
+    expect(link.text()).toBe('Conditions d’utilisation')
+    // Hors du sommaire et jamais imposé : un simple lien au pied de la page
+    expect(wrapper.find('nav a[href="/drive/conditions"]').exists()).toBe(false)
+    expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false)
   })
 
-  it('dit que les pages de Leclerc font appel à leurs propres services (cookies tiers acceptés par l’application)', async () => {
-    const { wrapper } = await open()
+  it('le lien mène à la page des conditions', async () => {
+    const { wrapper, context } = await open()
 
-    const note = wrapper.find('#vie-privee').text()
-    expect(note).toContain('leurs propres services')
-    expect(note).toContain('mesure d’audience')
-    expect(note).not.toContain('ni avec personne.')
+    await wrapper.find('a[href="/drive/conditions"]').trigger('click')
+    // La page des conditions se charge à la demande : on attend la fin de la navigation
+    await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-terms'))
   })
 
   it('le sommaire mène à la rubrique et y pose le focus', async () => {
@@ -178,10 +175,10 @@ describe('aide et installation de l’application', () => {
   })
 
   it('ouverte sur une ancre, amène la rubrique à l’écran', async () => {
-    await open('/drive/aide#vie-privee')
+    await open('/drive/aide#depannage')
 
     expect(scrollIntoView).toHaveBeenCalledTimes(1)
-    expect(document.activeElement?.id).toBe('vie-privee')
+    expect(document.activeElement?.id).toBe('depannage')
   })
 
   it('ouverte sur une ancre inconnue, ne fait rien', async () => {
@@ -194,7 +191,7 @@ describe('aide et installation de l’application', () => {
     const { wrapper } = await open()
 
     const targets = wrapper.findAll('nav a').map((link) => link.attributes('href')?.split('#')[1])
-    expect(targets).toHaveLength(9)
+    expect(targets).toHaveLength(8)
     for (const id of targets) expect(wrapper.find(`#${id}`).exists()).toBe(true)
   })
 })

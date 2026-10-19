@@ -33,7 +33,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
   })
 }
 
-test('le sommaire mène à la rubrique et l’adresse #vie-privee ouvre la note de vie privée', async ({
+test('le sommaire mène à la rubrique, et un lien discret mène aux conditions d’utilisation du drive', async ({
   page,
 }) => {
   await fakeBack(page)
@@ -43,10 +43,13 @@ test('le sommaire mène à la rubrique et l’adresse #vie-privee ouvre la note 
   await expect(page).toHaveURL(/\/drive\/aide#depannage$/)
   await expect(page.getByRole('heading', { level: 2, name: 'En cas de problème' })).toBeInViewport()
 
-  await page.goto('/drive/aide#vie-privee')
+  // Les conditions ne sont pas dans l'aide : un lien au pied de la page y mène, sans fenêtre ni case à cocher
+  await expect(page.getByText('suspendre un compte E.Leclerc')).toHaveCount(0)
+  await page.getByRole('link', { name: 'Conditions d’utilisation' }).click()
+  await expect(page).toHaveURL(/\/drive\/conditions$/)
   await expect(
-    page.getByRole('heading', { level: 2, name: 'Votre vie privée avec le drive' }),
-  ).toBeInViewport()
+    page.getByRole('heading', { level: 1, name: 'Conditions d’utilisation du drive' }),
+  ).toBeVisible()
   await expect(page.getByText('suspendre un compte E.Leclerc')).toBeVisible()
   expect((await scan(page)).violations).toEqual([])
 })

@@ -16,7 +16,6 @@ import { useNotificationsStore } from '@/notifications/store'
 import { useOnline } from '@/offline/useOnline'
 import { driveBridge } from './bridge'
 import { useDriveChoices } from './choicesQueries'
-import DrivePrivacyNote from './DrivePrivacyNote.vue'
 import { driveKeys, useDriveSettings, useSaveDriveSettings } from './queries'
 import { parseStoreAddress, storeTail } from './storeAddress'
 import { canReadStoreFromApp, readStoreFromApp, StoreReadError } from './storeReader'
@@ -262,8 +261,6 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
     <p v-else-if="!enabled" class="text-muted">{{ t('driveSettings.disabled') }}</p>
 
     <template v-else>
-      <DrivePrivacyNote v-if="!choosing" />
-
       <section class="flex flex-col gap-3" aria-labelledby="store-title">
         <h2
           id="store-title"
@@ -285,9 +282,6 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
             <span v-if="store.label" class="text-sm text-muted">{{
               t('driveSettings.storeNamed', { tail: storeTail(store.id) })
             }}</span>
-          </p>
-          <p v-if="!choosing && !savedTail" class="text-sm text-muted">
-            {{ t('driveSettings.storeHelp') }}
           </p>
 
           <div v-if="canRead" class="flex flex-col items-start gap-2">
@@ -366,8 +360,6 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
           </form>
         </details>
       </section>
-
-      <DrivePrivacyNote v-if="choosing" />
 
       <template v-if="!choosing">
         <section class="flex flex-col gap-3" aria-labelledby="app-title">

@@ -117,7 +117,7 @@ export const S = {
   /** Le diagnostic (DRV-308) : l'écran et le rapport texte copiable. Le rapport ne contient jamais de donnée personnelle. */
   diagnostic: {
     title: 'Diagnostic',
-    intro: 'Je vérifie que le site répond comme prévu. Rien n’est écrit dans votre panier.',
+    intro: 'Je vérifie que le site répond comme prévu.',
     running: 'Contrôles en cours…',
     finished: (ok: number, ko: number, skipped: number) =>
       `Contrôles terminés : ${ok} réussi${ok > 1 ? 's' : ''}, ${ko} en échec, ${skipped} non testé${skipped > 1 ? 's' : ''}.`,
@@ -331,8 +331,6 @@ export const S = {
   store: {
     title: 'Utiliser ce magasin ?',
     unnamed: (id: string) => `Magasin n° ${id}`,
-    notice:
-      'Repas le retiendra pour vos envois. Seul le magasin est transmis : rien de votre compte Leclerc ne quitte cette page.',
     save: 'Utiliser ce magasin',
     cancel: 'Annuler',
   },
@@ -340,7 +338,6 @@ export const S = {
     title: 'Prêt à remplir votre panier',
     /** La phrase de l'écran de l'envoi de Repas, mot pour mot : voir `summarySentence`. L'écran n'écrit jamais un compteur à zéro. */
     sentence: summarySentence,
-    intro: 'Rien ne part tant que vous n’avez pas touché « Commencer ».',
     list: 'Voir la liste',
     status: {
       KNOWN: 'connu',
@@ -348,15 +345,13 @@ export const S = {
       HAVE_AT_HOME: 'j’en ai toujours',
       SKIP: 'pas cette fois',
     } satisfies Record<LineStatus, string>,
-    keepCart: 'Repas ne vide pas votre panier Leclerc.',
-    noOrder: 'Rien n’est commandé ni payé.',
     start: 'Commencer',
     cancel: 'Annuler',
   },
   resume: {
     title: 'Reprendre là où vous en étiez ?',
     text: (done: number, total: number) =>
-      `${done} article${done > 1 ? 's' : ''} sur ${total} ${done > 1 ? 'sont déjà faits' : 'est déjà fait'}. Reprendre ne ${done > 1 ? 'les refait' : 'le refait'} pas.`,
+      `${done} article${done > 1 ? 's' : ''} sur ${total} ${done > 1 ? 'sont déjà faits' : 'est déjà fait'}.`,
     resume: 'Reprendre',
     restart: 'Recommencer',
     cancel: 'Annuler',
@@ -367,7 +362,7 @@ export const S = {
     count: (done: number, total: number) => `${done} sur ${total}`,
     current: (name: string) => `En cours : ${name}`,
     log: 'Dernières actions',
-    keepOpen: 'Gardez cet écran ouvert jusqu’à la fin.',
+    keepOpen: 'Gardez l’application ouverte.',
     stop: 'Arrêter',
     stopping: 'J’arrête après l’article en cours…',
   },
@@ -416,7 +411,7 @@ export const S = {
     choose: 'Choisir',
     out: 'Indisponible',
     refused: 'Ne plus proposer',
-    refusedHint: 'Ce produit est dans « Ne plus proposer » : Repas ne vous le propose plus.',
+    refusedHint: 'Déjà écarté de vos choix.',
     outHint: 'Plus en stock.',
     promo: (price: string) => `En promotion : ${price}`,
     unknownContent: 'Contenu inconnu : vous choisirez la quantité.',
@@ -466,29 +461,27 @@ export const S = {
     haveAtHome: (n: number) => `J’en ai toujours : ${n}`,
     skipped: (n: number) => `Pas cette fois : ${n}`,
     unavailable: (n: number) => `Indisponibles : ${n}`,
-    /** Le nombre de produits a été calculé sur le contenu lu sur le site, pas sur celui dont Repas se souvenait (DRV-613). */
+    /** Le nombre de produits a été calculé sur le contenu lu sur le site, pas sur celui dont Repas se souvenait (DRV-613) : l'écran dit seulement quoi vérifier. */
     changes: {
-      title: 'Contenu différent de celui dont Repas se souvenait',
-      text: 'Le nombre de produits a été calculé sur le contenu lu sur le site. Vérifiez ces articles dans votre panier.',
+      title: 'Quantités changées',
+      text: 'Vérifiez ces articles dans votre panier.',
       item: (name: string, planned: number, live: number) =>
         `${name} : ${live} au lieu de ${planned}`,
     },
-    /** Une requête a dépassé son délai d'attente : l'envoi peut se relancer, ce qui est au panier n'est pas touché (ticket K). */
-    slow: 'Leclerc a mis trop de temps à répondre. Relancez l’envoi dans un moment : ce qui est déjà au panier n’est pas touché.',
-    /** Le panier avait déjà plus que le plan : Repas ne réduit jamais une quantité déjà au panier (ticket M). */
+    /** Une requête a dépassé son délai d'attente (ticket K) : ce qui s'est passé. Ce qui est sauf et l'action sont dans le texte de l'écran, juste au-dessus. */
+    slow: 'Leclerc a mis trop de temps à répondre.',
+    /** Le panier avait déjà plus que le plan : ces articles restent tels quels (ticket M ; le fond est dans les conditions d'utilisation du drive). */
     kept: {
       title: 'Quantités déjà au panier',
-      text: 'Repas ne réduit jamais une quantité déjà au panier : ces articles sont restés tels quels.',
+      text: 'Ces articles sont restés tels quels.',
       item: (name: string, inCart: number) => `${name} — Déjà ${inCart} au panier : conservé`,
     },
     /** La recherche ne donnait pas la quantité déjà au panier : Repas n'a pas pu s'en assurer (ticket M). */
     unreadable: {
       title: 'Quantité au panier illisible',
-      text: 'Leclerc n’a pas dit ce que votre panier contenait déjà pour ces articles. Vérifiez-les dans votre panier.',
+      text: 'Leclerc n’a pas donné la quantité déjà au panier. Vérifiez ces articles dans votre panier.',
       item: (name: string, atLeast: number | null) =>
-        atLeast === null
-          ? `${name} — vérifiez dans votre panier`
-          : `${name} — au moins ${atLeast} gardés, vérifiez dans votre panier`,
+        atLeast === null ? name : `${name} — au moins ${atLeast} gardés`,
     },
     back: 'Retourner dans Repas',
   },
@@ -507,7 +500,6 @@ export const S = {
   challenge: {
     title: 'Leclerc demande une vérification',
     text: 'Faites-la dans la page, puis touchez Reprendre.',
-    reload: 'Si rien ne s’affiche, rechargez la page : votre avancement est gardé.',
     resume: 'Reprendre',
     stop: 'Arrêter',
   },

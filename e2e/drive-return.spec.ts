@@ -49,7 +49,7 @@ test('un passage réussi : retour automatique, choix enregistrés en un appel, r
   const farine = page.getByRole('listitem').filter({ hasText: 'Farine' })
   await expect(farine).toContainText('produit habituel : Repas s’en souvient')
   await expect(page.getByRole('listitem').filter({ hasText: 'Beurre' })).toContainText('1,89')
-  await expect(page.getByText('Le panier Leclerc n’est pas vidé par Repas.')).toBeVisible()
+  await expect(page.getByText(/vidé/)).toHaveCount(0)
   await expect(page.getByRole('link', { name: /^Finaliser sur Leclerc/ })).toHaveAttribute(
     'target',
     '_blank',

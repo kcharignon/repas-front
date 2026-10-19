@@ -98,9 +98,7 @@ const summary: Renderer<'summary'> = (props: SummaryProps, answer) => {
     el: screen(
       title(S.summary.title),
       sentence === '' ? null : h('p', { class: 'lead', text: sentence }),
-      h('p', { text: S.summary.intro }),
       h('details', {}, h('summary', { text: S.summary.list }), h('ul', {}, ...items)),
-      h('p', { class: 'notice', text: `${S.summary.keepCart} ${S.summary.noOrder}` }),
       actions(
         start,
         button(S.summary.cancel, () => answer('cancel')),
@@ -357,7 +355,6 @@ const store: Renderer<'store'> = (props: StoreProps, answer) => {
     el: screen(
       title(S.store.title),
       h('p', { class: 'shop', text: props.label ?? S.store.unnamed(props.id) }),
-      h('p', { class: 'hint', text: S.store.notice }),
       actions(
         save,
         button(S.store.cancel, () => answer('cancel')),
@@ -438,7 +435,6 @@ const challenge: Renderer<'challenge'> = (_props: ChallengeProps, answer) => {
     el: screen(
       title(S.challenge.title),
       h('p', { text: S.challenge.text }),
-      h('p', { class: 'hint', text: S.challenge.reload }),
       actions(
         resume,
         button(S.challenge.stop, () => answer('stop')),

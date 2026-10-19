@@ -198,13 +198,11 @@ describe('Mes produits : la liste des ingrédients', () => {
 })
 
 describe('Mes produits : un ingrédient', () => {
-  it('montre les produits acceptés classés, les refusés et la règle', async () => {
+  it('montre les produits acceptés classés et les refusés, sans phrase de règle (DRV-628)', async () => {
     const { wrapper } = await detail()
 
     expect(wrapper.find('h1').text()).toBe('Farine')
-    expect(wrapper.text()).toContain(
-      'Repas prend le premier produit disponible de la liste. Les produits à ne plus proposer ne sont jamais pris.',
-    )
+    expect(wrapper.text()).not.toContain('premier produit disponible')
     expect(acceptedLabels(wrapper)).toEqual([A.label, B.label])
     const items = wrapper.findAll('ol li')
     expect(items[0]?.text()).toContain('Habituel')
