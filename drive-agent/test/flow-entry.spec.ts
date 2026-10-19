@@ -64,6 +64,52 @@ describe('entrer dans le magasin', () => {
     expect(storage.getItem('repas:entry')).toBe(RUN_ID)
   })
 
+  it('clique le bouton « Commencer mes courses » (le vrai site, DRV-629) : même bandeau, une seule fois, sans écrire', async () => {
+    // Given : un bouton sans adresse ; le clic fait quitter la page (la promesse ne se résout jamais)
+    const { flow, screens, adapter, sent, storage } = home(
+      { kind: 'BUTTON' },
+      { onFollow: () => new Promise(() => undefined) },
+    )
+
+    // When
+    void flow.start(plan(lines()))
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // Then
+    expect(screens.propsOf('entry')).toEqual([{ stage: 'opening' }])
+    expect(adapter.follows.count).toBe(1)
+    expect(sent).toEqual([])
+    expect(adapter.calls).toEqual([])
+    expect(adapter.writes).toEqual([])
+    expect(storage.getItem('repas:entry')).toBe(RUN_ID)
+  })
+
+  it('un clic sans effet (la page reste là) : le bandeau dit de toucher le bouton, et le même envoi ne reclique pas', async () => {
+    const { flow, screens, adapter, sent } = home({ kind: 'BUTTON' })
+
+    await flow.start(plan(lines()))
+    await flow.start(plan(lines()))
+
+    expect(screens.propsOf('entry')).toEqual([
+      { stage: 'opening' },
+      { stage: 'manual' },
+      { stage: 'manual' },
+    ])
+    expect(adapter.follows.count).toBe(1)
+    expect(sent).toEqual([])
+    expect(adapter.writes).toEqual([])
+  })
+
+  it('sans stockage de session, le bouton n’est pas cliqué (aucune boucle possible)', async () => {
+    const { flow, screens, adapter } = home({ kind: 'BUTTON' }, { storage: false })
+
+    await flow.start(plan(lines()))
+
+    expect(screens.propsOf('entry')).toEqual([{ stage: 'manual' }])
+    expect(adapter.follows.count).toBe(0)
+  })
+
   it('si la page reste là après le suivi, le bandeau dit de toucher le bouton, sans suivre une seconde fois', async () => {
     const { flow, screens, adapter, sent } = home(LINK)
 

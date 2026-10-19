@@ -9,10 +9,12 @@
 #
 # Les scénarios, dans l'ordre (chacun repart d'un faux Leclerc remis à neuf) :
 #   1. lecture du magasin (`drive.setup`) : accueil du drive, choix du magasin du faux Leclerc, l'agent le lit, Repas reçoit son numéro et son hôte ;
+#      (Depuis DRV-629 le faux accueil a, comme le vrai site, un BOUTON « Commencer mes courses » sans adresse : l'agent le CLIQUE ; les scénarios 8 et 12
+#      reprennent la forme « lien ».)
 #   2. passage complet : le drive s'ouvre sur l'ACCUEIL DE L'ENSEIGNE (www.leclercdrive.fr, comme la lecture du magasin), qui affiche
 #      l'accueil du magasin de l'utilisateur (constat de la recette réelle du 2026-10-18 : la racine de l'hôte du magasin et /magasin-N-N/ y sont des
 #      pages 404, le faux site les refuse aussi) ; le test ÉCHOUE si le départ retombe sur la racine de l'hôte du magasin (non-régression) ; DRV-625 :
-#      l'AGENT suit lui-même « Commencer mes courses » (aucun toucher), le plan repart vers la page du magasin : récapitulatif, phase A (deux produits
+#      l'AGENT clique lui-même « Commencer mes courses » (aucun toucher), le plan repart vers la page du magasin : récapitulatif, phase A (deux produits
 #      connus, quantités du plan), phase B (un nouveau produit choisi dans la liste de l'agent, nombre calculé), « j'en ai toujours » et « ignoré » ;
 #      Repas reçoit le résultat TOUT SEUL (aucun « Retourner dans Repas » pour un envoi terminé) ; panier du faux Leclerc, cadence, requêtes ;
 #   3. « Annuler » au récapitulatif : rien ne part vers le site, Repas reçoit un résultat « aborted » ;
@@ -33,8 +35,13 @@
 #      de produits, car aucun n'a de produit retenu) : deux touches pour le geste, rien n'est cherché ni retenu pour les trois autres ;
 #  14. la quantité à vérifier (DRV-626) : un produit au contenu inconnu ouvre « Vérifie la quantité », qui dit « Il te faut : 200 g. », le champ
 #      « 1 » est sélectionné : taper 4 donne 4 (pas 14), même après avoir touché le champ.
-#  15. deuxième envoi, tout est connu (DRV-625) : au téléphone, une seule touche dans le drive (« Commencer »), le résultat revient à Repas tout seul,
-#      puis « Finaliser sur Leclerc » (une touche) ouvre le drive DANS l'application (l'accueil du drive, connecté), pas le navigateur du téléphone.
+#  15. deuxième envoi, tout est connu (DRV-625, DRV-629) : au téléphone, une seule touche dans le drive (« Commencer »), le résultat revient à Repas tout seul,
+#      puis « Finaliser sur Leclerc » (une touche) ouvre la PAGE DU PANIER DANS l'application (détail-panier.aspx sous le chemin du magasin AVEC la ville,
+#      que l'application a retenu), connecté, pas le navigateur du téléphone ;
+#  16. la page du panier refusée par le site (404) : « Finaliser sur Leclerc » se replie sur l'accueil du drive ;
+#  17. chemin du magasin inconnu (données de l'application effacées) : « Finaliser sur Leclerc » ouvre l'accueil du drive, sans demander la page du panier ;
+#  18. le site ignore le clic d'un programme (seul un vrai toucher ouvre le magasin) : le clic de l'agent ne fait rien, il dit de toucher « Commencer mes
+#      courses » (une seule tentative, pas de boucle, rien d'écrit), l'utilisateur le touche et l'envoi continue.
 # Les captures d'écran et le rapport texte sont dans android/dist/e2e/.
 # Code de sortie : 0 si tous les contrôles passent, 1 sinon, 3 si KVM manque.
 set -u
@@ -48,8 +55,10 @@ CART_KNOWN='{"1000001":3,"1000006":1}'             # celui de la phase A seule
 
 # --- Le faux Leclerc complet, vu de l'intérieur du conteneur (son pilotage n'est offert qu'aux noms de la boucle locale, jamais à l'émulateur) ---
 fake_state() { emu curl -s "$FAKE_CONTROL/state"; }
-fake_reset() { emu curl -s -X POST "$FAKE_CONTROL/reset" > /dev/null; reset_reports; }
 fake_behavior() { emu curl -s -X POST -H 'Content-Type: application/json' -d "$1" "$FAKE_CONTROL/behavior" > /dev/null; }
+# Remise à neuf : l'accueil de l'enseigne a, comme le VRAI site (constat du 2026-10-19), un bouton « Commencer mes courses » SANS adresse (DRV-629) ;
+# les scénarios du lien (8 et 12) et celui du clic ignoré (18) le changent.
+fake_reset() { emu curl -s -X POST "$FAKE_CONTROL/reset" > /dev/null; fake_behavior '{"homeForm":"button"}'; reset_reports; }
 cart_is() { fake_state | grep -qF "\"cart\":$1,\"behavior\""; } # cart_is '{"1000001":3}'
 no_violations() { fake_state | grep -q '"violations":\[\]'; }
 no_rejected() { ! fake_state | grep -q '"rejected"'; }
@@ -179,7 +188,7 @@ RUN_FULL=f01100c0-0000-4000-8000-000000000002
 fake_reset
 start_plan "$RUN_FULL" plan-complet.json
 if wait_until 70 agent_screen 'Prêt à remplir ton panier'; then
-  ok "drive.start ouvre le drive sur l'accueil de l'enseigne (www) : l'agent y suit « Commencer mes courses » tout seul (aucun toucher) et affiche « Prêt à remplir ton panier »"
+  ok "drive.start ouvre le drive sur l'accueil de l'enseigne (www) : l'agent y clique « Commencer mes courses » tout seul (aucun toucher) et affiche « Prêt à remplir ton panier »"
 else
   ko "le récapitulatif de l'agent ne s'est pas affiché sans que l'utilisateur touche quoi que ce soit"
 fi
@@ -190,7 +199,7 @@ check "aucun bandeau de l'application : l'agent a parlé à sa place (« Ouvertu
 check "aucun bandeau « Touche Commencer mes courses » : l'entrée a réussi" ui_lacks 'Touche « Commencer mes courses »'
 check "le faux Leclerc a servi la page du magasin (avec sa ville), sur l'hôte du magasin" requested_on "$FAKE_STORE_HOST" '/magasin-000001-000001-Ville-Test/'
 check "NON-RÉGRESSION : le départ n'est jamais retombé sur la racine de l'hôte du magasin" not_requested_on "$FAKE_STORE_HOST" '/'
-check "aucune requête de l'agent pour entrer dans le magasin : il a suivi le lien de la page, sans recherche ni panier" nothing_sent
+check "aucune requête de l'agent pour entrer dans le magasin : il a cliqué le bouton de la page, sans recherche ni panier" nothing_sent
 check "récapitulatif : une phrase, la même que l'écran de l'envoi de Repas" ui_has '5 articles : 2 sont déjà choisis, 1 est à choisir sur Leclerc, 2 ne seront pas mis au panier.'
 check "récapitulatif : aucun compteur à zéro, ni « produits connus » ni « nouveaux produits »" ui_lacks 'produits connus\|nouveau produit\|text="0 '
 check "l'écran reste allumé pendant le passage" screen_held
@@ -389,7 +398,7 @@ say
 say "8. L'utilisateur ouvre un AUTRE magasin que celui du plan : l'agent reçoit le plan et dit « Ce n'est pas le bon magasin »"
 RUN_OTHER=07e50000-0000-4000-8000-000000000008
 fake_reset
-fake_behavior '{"startPath":"/magasin-000002-000002-Ville-Test/"}' # le bouton « Commencer mes courses » de l'utilisateur mène à SON magasin, pas à celui du plan
+fake_behavior '{"homeForm":"link","startPath":"/magasin-000002-000002-Ville-Test/"}' # (forme « lien » : l'agent vérifie l'adresse avant de la suivre) le bouton « Commencer mes courses » de l'utilisateur mène à SON magasin, pas à celui du plan
 start_plan "$RUN_OTHER" plan-connu.json
 if wait_until 70 ui_has 'Touche « Commencer mes courses »'; then
   ok "le lien de l'accueil mène à un autre magasin que celui du plan : l'agent ne le suit pas et dit de toucher « Commencer mes courses »"
@@ -505,7 +514,7 @@ say
 say "12. Le lien de l'accueil mène à une page 404 : vers la racine de l'hôte du magasin l'agent ne le suit pas ; vers /magasin-N-N/ (sans ville) il le suit UNE fois et ne recommence pas (pas de boucle)"
 RUN_DEAD=de4d0000-0000-4000-8000-000000000012
 fake_reset
-fake_behavior '{"startPath":"/"}' # le bouton « Commencer mes courses » du faux site mène d'abord à la racine de l'hôte du magasin, une page 404
+fake_behavior '{"homeForm":"link","startPath":"/"}' # (forme « lien » : l'agent vérifie l'adresse avant de la suivre) le bouton « Commencer mes courses » du faux site mène d'abord à la racine de l'hôte du magasin, une page 404
 start_plan "$RUN_DEAD" plan-connu.json
 dead_page_checks() { # dead_page_checks <chemin 404> : le bandeau de l'application, le plan qui ne part pas, rien d'écrit
   local dead=$1
@@ -650,13 +659,21 @@ else
 fi
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 check "dans le drive, une seule touche pour tout l'envoi (« Commencer »)" [ "$touches" = "1" ]
-# « Finaliser sur Leclerc » : un lien du récapitulatif de Repas vers le drive, ouvert dans l'application (jamais le navigateur du téléphone).
+# « Finaliser sur Leclerc » : un lien du récapitulatif de Repas vers le drive, ouvert dans l'application (jamais le navigateur du téléphone), sur la page
+# du panier : le chemin du magasin avec sa ville, que l'application a retenu de la dernière page de magasin vue, puis detail-panier.aspx (DRV-629).
+BASKET_PATH_CITY="/magasin-$FAKE_STORE_ID-$FAKE_STORE_ID-Ville-Test/detail-panier.aspx"
+# Le journal du faux Leclerc repart de zéro (pour prouver qu'aucune autre page n'est demandée), le panier du deuxième envoi est remis.
+fake_reset
+emu curl -s -X POST -d '{"1000001":3,"1000006":1}' "$FAKE_CONTROL/cart" > /dev/null
 if touch 'text="Finaliser sur Leclerc"'; then ok "touche : « Finaliser sur Leclerc »"; else ko "le lien « Finaliser sur Leclerc » est introuvable dans le faux Repas"; fi
-if wait_until 40 ui_has 'text="Commencer mes courses"'; then
-  ok "« Finaliser sur Leclerc » ouvre le drive DANS l'application : l'accueil du drive (connecté), où le panier est à une touche"
+if wait_until 40 ui_has 'text="Mon panier"'; then
+  ok "« Finaliser sur Leclerc » ouvre la page du panier DANS l'application, connecté, sans passer par l'accueil"
 else
-  ko "le drive ne s'est pas ouvert dans l'application"
+  ko "la page du panier ne s'est pas ouverte dans l'application"
 fi
+check "le faux Leclerc a servi la page du panier sous le chemin du magasin AVEC la ville" requested_on "$FAKE_STORE_HOST" "$BASKET_PATH_CITY"
+check "jamais la page du panier sans ville (404 sur le vrai site)" not_requested_on "$FAKE_STORE_HOST" "/magasin-$FAKE_STORE_ID-$FAKE_STORE_ID/detail-panier.aspx"
+check "l'accueil de l'enseigne n'a pas été demandé : aucun détour par l'accueil" not_requested_on "$SITE_HOST" '/'
 check "c'est l'écran du drive de l'application, pas le navigateur du téléphone" focused_is_drive
 check "aucun bandeau d'envoi : ce n'est pas un envoi" ui_lacks 'Touche « Commencer mes courses »'
 check "au total, deux touches pour ce deuxième envoi dans l'application (« Commencer » et « Finaliser »)" [ "$touches" = "2" ]
@@ -665,9 +682,76 @@ screenshot e26-finaliser-dans-l-application
 adb shell input keyevent KEYCODE_BACK
 if wait_until 20 ui_has 'Faux Repas de test'; then ok "retour : l'écran Repas revient"; else ko "l'écran Repas n'est pas revenu"; fi
 
-# --- 16. Bilan ------------------------------------------------------------------------------------------------------------------------------
+# --- 16. La page du panier refusée par le site : l'accueil du drive -----------------------------------------------------------------------------
 say
-say "16. Bilan"
+say "16. La page du panier est refusée par le site (404) : « Finaliser sur Leclerc » se replie sur l'accueil du drive (DRV-629)"
+fake_reset
+fake_behavior '{"basketStatus":404}'
+touch 'text="Finaliser sur Leclerc"' || ko "le lien « Finaliser sur Leclerc » est introuvable dans le faux Repas"
+if wait_until 40 ui_has 'text="Commencer mes courses"'; then
+  ok "la page du panier refusée (404) : l'accueil du drive s'ouvre à la place (son bouton « Commencer mes courses » est là)"
+else
+  ko "le drive ne s'est pas replié sur l'accueil"
+fi
+check "le faux Leclerc a bien été interrogé sur la page du panier d'abord" requested_on "$FAKE_STORE_HOST" "$BASKET_PATH_CITY"
+check "l'accueil de l'enseigne a été servi ensuite" requested_on "$SITE_HOST" '/'
+check "aucun panneau d'erreur : l'utilisateur n'a pas vu la page 404" ui_lacks 'text="Réessayer"'
+check "c'est toujours l'écran du drive de l'application" focused_is_drive
+screenshot e27-finaliser-page-refusee
+adb shell input keyevent KEYCODE_BACK
+wait_until 20 ui_has 'Faux Repas de test' || ko "l'écran Repas n'est pas revenu"
+
+# --- 17. Chemin du magasin inconnu : l'accueil du drive -------------------------------------------------------------------------------------------
+say
+say "17. Chemin du magasin inconnu (données de l'application effacées) : « Finaliser sur Leclerc » ouvre l'accueil du drive, sans demander la page du panier (DRV-629)"
+fake_reset
+adb shell am force-stop "$APP"
+if adb shell run-as "$APP" rm -f shared_prefs/drive-store.xml > /dev/null 2>&1; then ok "le chemin retenu est effacé (préférence « drive-store »)"; else ko "impossible d'effacer le chemin retenu"; fi
+start_app
+wait_until 40 has_report '"page": "repas"' || ko "le faux Repas ne s'est pas chargé"
+touch 'text="Finaliser sur Leclerc"' || ko "le lien « Finaliser sur Leclerc » est introuvable dans le faux Repas"
+if wait_until 40 ui_has 'text="Commencer mes courses"'; then
+  ok "sans chemin connu, l'accueil du drive s'ouvre"
+else
+  ko "le drive ne s'est pas ouvert sur l'accueil"
+fi
+check "la page du panier n'a jamais été demandée (ni avec ni sans ville)" not_requested_on "$FAKE_STORE_HOST" "$BASKET_PATH_CITY"
+check "ni la page du panier sans ville" not_requested_on "$FAKE_STORE_HOST" "/magasin-$FAKE_STORE_ID-$FAKE_STORE_ID/detail-panier.aspx"
+screenshot e28-finaliser-chemin-inconnu
+adb shell input keyevent KEYCODE_BACK
+wait_until 20 ui_has 'Faux Repas de test' || ko "l'écran Repas n'est pas revenu"
+
+# --- 18. Le site ignore le clic d'un programme ---------------------------------------------------------------------------------------------------------
+say
+say "18. Le site ignore le clic d'un programme (seul un vrai toucher ouvre le magasin) : l'agent le dit, une seule tentative, puis l'utilisateur touche le bouton (DRV-629)"
+RUN_HUMAN=a11c0000-0000-4000-8000-000000000018
+fake_reset
+fake_behavior '{"homeForm":"button-human"}'
+start_plan "$RUN_HUMAN" plan-connu.json
+if wait_until 90 ui_has 'Touche « Commencer mes courses »'; then
+  ok "le clic de l'agent n'a rien ouvert : le bandeau dit de toucher « Commencer mes courses »"
+else
+  ko "l'agent n'a pas laissé l'utilisateur toucher le bouton"
+fi
+check "aucune page de magasin demandée, rien d'écrit" not_requested_on "$FAKE_STORE_HOST" '/magasin-000001-000001-Ville-Test/'
+check "aucune requête de l'agent" nothing_sent
+screenshot e29-clic-ignore
+if tap 'text="Commencer mes courses"'; then ok "l'utilisateur touche le bouton du site (un vrai toucher)"; else ko "le bouton « Commencer mes courses » est introuvable"; fi
+if wait_until 70 ui_has 'Prêt à remplir ton panier'; then
+  ok "le magasin s'ouvre, l'agent reçoit le plan et affiche son récapitulatif"
+else
+  ko "le récapitulatif ne s'est pas affiché après le toucher de l'utilisateur"
+fi
+if tap 'text="Annuler"' && tap 'text="Retourner dans Repas"' && wait_until 20 result_has "$RUN_HUMAN" aborted ''; then
+  ok "« Annuler » puis « Retourner dans Repas » : Repas reçoit « aborted »"
+else
+  ko "Repas n'a pas reçu le résultat « aborted »"
+fi
+back_to_repas || ko "l'écran Repas n'est pas revenu"
+
+# --- 19. Bilan ------------------------------------------------------------------------------------------------------------------------------
+say
+say "19. Bilan"
 fake_reset
 final_checks
 conclude "les scénarios complets"

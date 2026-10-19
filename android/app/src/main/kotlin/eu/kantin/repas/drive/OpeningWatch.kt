@@ -102,6 +102,9 @@ class OpeningWatch {
         if (finished && !planSent) agentMissing = true
     }
 
+    /** La page principale en cours a été refusée : le site a répondu une erreur HTTP, ou la WebView n'a pas pu la charger. */
+    fun refused(): Boolean = failed || status >= HTTP_ERROR_FROM
+
     /** Ce qui cloche avec la page d'adresse [url], ou [PageTrouble.NONE]. */
     fun trouble(url: String?): PageTrouble = when {
         failed -> PageTrouble.NONE

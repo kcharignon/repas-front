@@ -1,7 +1,14 @@
 import { CART_HEADERS, cartBody, MAX_QUANTITY, readCartResponse, readPageTotal } from './cart'
 import { type Candidate, toCandidate } from './candidate'
 import { httpCause } from './causes'
-import { entryFacts, readEntry, type EntryReading } from './entry'
+import {
+  entryFacts,
+  findStartButton,
+  readEntry,
+  type EntryFacts,
+  type EntryReading,
+  type StartButton,
+} from './entry'
 import { LeclercError } from './errors'
 import { type FetchFn, Pacer, type PacerDeps, type Reply, type RequestStats } from './pacer'
 import {
@@ -93,14 +100,14 @@ export interface RetailerAdapter {
    */
   exploreSearchVariants(query: string): Promise<AttemptFacts[]>
   /**
-   * L'accueil du magasin (DRV-625) : le lien « Commencer mes courses » de la page, vérifié comme menant à une page du magasin `store`. Aucune
-   * requête. Garde l'adresse vérifiée pour `followEntry`.
+   * L'accueil du magasin (DRV-625, DRV-629) : « Commencer mes courses » dans la page, soit un lien vérifié comme menant à une page du magasin
+   * `store`, soit un bouton sans adresse que le DOM permet de cliquer (`BUTTON`). Aucune requête. Garde ce qu'il faut pour `followEntry`.
    */
   readEntry(store: { id: string }): EntryReading
   /**
-   * Suit le lien que `readEntry` vient de vérifier, à la cadence des autres actions (une pause entière d'abord). La page quitte le script :
-   * la promesse ne se résout que si la page est restée là (navigation refusée ou sans effet) après `ENTRY_WAIT_MS`. Sans lien vérifié, ne
-   * fait rien et se résout aussitôt. Aucune écriture.
+   * Suit le lien que `readEntry` vient de vérifier, ou clique le bouton qu'il vient de trouver, à la cadence des autres actions (une pause
+   * entière d'abord). La page quitte le script : la promesse ne se résout que si la page est restée là (navigation refusée, clic sans effet)
+   * après `ENTRY_WAIT_MS`. Sans lien ni bouton vérifié, ne fait rien et se résout aussitôt. Aucune écriture.
    */
   followEntry(): Promise<void>
 }
@@ -119,6 +126,8 @@ export interface LeclercDeps extends PacerDeps {
   cookies?: () => CookieFacts | null
   /** Ouvre une adresse dans la page (`location.assign`) : suivre le lien « Commencer mes courses ». Absente, `followEntry` ne fait rien. */
   navigate?: (url: string) => void
+  /** Le bouton « Commencer mes courses » sans adresse de la page, à cliquer (DRV-629). Absent, un tel bouton n'est pas touché. */
+  startButton?: () => StartButton | null
 }
 
 /** Le temps laissé à une navigation pour quitter la page avant de la dire sans effet. */
@@ -142,6 +151,8 @@ export class LeclercAdapter implements RetailerAdapter {
   private facts: SearchFacts | null = null
   /** L'adresse que `readEntry` a vérifiée en dernier, `null` sans lien sûr : la seule que `followEntry` suive. */
   private entryUrl: string | null = null
+  /** Le bouton que `readEntry` a trouvé en dernier, `null` sans bouton : le seul que `followEntry` clique. */
+  private entryButton: StartButton | null = null
   private readonly stocks = new Map<string, number>()
   /** Les quantités de la dernière réponse du panier lisible (ticket M), `null` avant la première. */
   private cartLines: ReadonlyMap<string, number> | null = null
@@ -269,22 +280,49 @@ export class LeclercAdapter implements RetailerAdapter {
       delivery: deliveryFacts(this.deps.pageText(), storeId),
       cookies,
       searchBase,
-      entry: entryFacts(this.deps.pageText(), this.deps.location),
+      entry: this.entryFacts(),
+    }
+  }
+
+  /** Les formes de « Commencer mes courses » : le texte de la page, et le DOM pour savoir si le bouton se clique vraiment. */
+  private entryFacts(): EntryFacts {
+    const facts = entryFacts(this.deps.pageText(), this.deps.location)
+    return { ...facts, clickable: facts.clickable && this.findButton() !== null }
+  }
+
+  private findButton(): StartButton | null {
+    try {
+      return this.deps.startButton?.() ?? null
+    } catch {
+      return null
     }
   }
 
   readEntry(store: { id: string }): EntryReading {
-    const reading = readEntry(this.deps.pageText(), this.deps.location, store.id)
+    let reading = readEntry(this.deps.pageText(), this.deps.location, store.id)
     this.entryUrl = reading.kind === 'LINK' ? reading.url : null
+    this.entryButton = null
+    if (reading.kind === 'BUTTON') {
+      // Le texte de la page dit « bouton » : encore faut-il le trouver, cliquable, dans le DOM.
+      this.entryButton = this.findButton()
+      if (this.entryButton === null) reading = { kind: 'REFUSED' }
+    }
     return reading
   }
 
   async followEntry(): Promise<void> {
-    const url = this.entryUrl
     const { navigate } = this.deps
-    if (url === null || navigate === undefined) return
+    const url = this.entryUrl
+    const button = this.entryButton
     this.entryUrl = null
-    await this.pacer.act(() => navigate(url))
+    this.entryButton = null
+    if (button !== null) {
+      await this.pacer.act(() => button.click())
+    } else if (url !== null && navigate !== undefined) {
+      await this.pacer.act(() => navigate(url))
+    } else {
+      return
+    }
     await this.deps.sleep(ENTRY_WAIT_MS)
   }
 
@@ -456,6 +494,7 @@ export function browserDeps(win: Window & typeof globalThis): LeclercDeps {
     fetch: (input, init) => win.fetch(input, init),
     location: win.location,
     navigate: (url) => win.location.assign(url),
+    startButton: () => findStartButton(win.document),
     pageText: () => new win.XMLSerializer().serializeToString(win.document),
     navigation: () => navigationOf(win),
     cookies: () => cookiesOf(win),

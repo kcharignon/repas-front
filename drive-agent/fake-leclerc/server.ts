@@ -15,6 +15,7 @@ import {
   challengePage,
   changedSearchPage,
   accueilPage,
+  basketPage,
   errorPage,
   homePage,
   loginPage,
@@ -91,6 +92,12 @@ export interface Behavior {
    * lui et un défi de l'anti-robot dans la page (`challenge`). Dans les deux derniers cas l'agent ne suit rien (DRV-625).
    */
   homeForm?: HomeForm
+  /**
+   * Le code HTTP (404, 403…) que la page du panier (`<chemin avec la ville>/detail-panier.aspx`, DRV-629) renvoie, avec la page d'erreur générique :
+   * pour essayer le repli de « Finaliser sur Leclerc » sur l'accueil du drive. `null` retire le défaut. Sans ville dans le chemin, la page est
+   * toujours une 404 (comme le vrai site pour les pages du magasin).
+   */
+  basketStatus?: number | null
   /**
    * La page de recherche sans produit : `list` (liste vide et message du site, par défaut), `no-list` (squelette seul) ou `encoded` (état en
    * entités HTML). Plusieurs formes plausibles d'une page que le vrai site n'a jamais été relevé servir (ticket C).
@@ -507,6 +514,14 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       return cartWrite(entry, req, res)
     }
     entry.kind = 'page'
+    if (rest === '/detail-panier.aspx' && req.method === 'GET') {
+      // La page du panier n'existe qu'avec la ville dans le chemin (constat du 2026-10-19) ; `basketStatus` la fait refuser.
+      const code = store[3] === undefined ? 404 : (behavior.basketStatus ?? 200)
+      entry.status = code
+      return code === 200
+        ? send(res, 200, basketPage(cart, sessionAfter(pacedCount)), HTML)
+        : send(res, code, errorPage(), HTML)
+    }
     if (rest === '/connexion.aspx') {
       entry.status = 200
       return send(res, 200, loginPage(), HTML)

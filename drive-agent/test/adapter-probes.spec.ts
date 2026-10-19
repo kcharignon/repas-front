@@ -35,7 +35,7 @@ describe('readArrival : la page d’arrivée, sans aucune requête', () => {
       searchBase: null,
       entry: {
         start: { present: false, shape: null, where: null },
-        basket: { present: false, shape: null, where: null },
+        clickable: false,
       },
     })
     expect(site.calls).toEqual([])

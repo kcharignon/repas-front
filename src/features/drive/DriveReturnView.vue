@@ -16,7 +16,7 @@ import { isRateLimited, messageForFailure } from '@/notifications/failures'
 import { useOnline } from '@/offline/useOnline'
 import { driveBridge } from './bridge'
 import { buildChoiceBatches, countChoices } from './choices'
-import { basketUrl } from './leclerc'
+import { basketUrl, DRIVE_HOME_URL } from './leclerc'
 import { useDrivePlan, useDriveSettings, useSaveChoices } from './queries'
 import { expectedFromPlan } from './restrictToPlan'
 import { useDriveReturnStore } from './returnStore'
@@ -68,7 +68,7 @@ const labels = computed(
 
 const counts = computed(() => (result.value ? countOutcomes(result.value) : null))
 const shownCounts = computed(() => (counts.value ? visibleCounts(counts.value) : []))
-const finalizeUrl = computed(() => basketUrl(settings.data.value?.store?.baseUrl))
+const finalizeUrl = computed(() => basketUrl(settings.data.value?.store?.baseUrl, inApp))
 const saved = computed(() => store.status === 'saved')
 /**
  * Ce que Repas retient VRAIMENT de cet envoi : un produit choisi, un produit à ne plus proposer, un « j'en ai toujours ». Sans cela (tout était
@@ -430,7 +430,7 @@ function confirmReopen() {
       <section class="flex flex-col items-start gap-3">
         <a
           v-if="(primary === 'finalize' || primary === 'manual') && finalizeUrl"
-          :href="finalizeUrl"
+          :href="primary === 'manual' ? DRIVE_HOME_URL : finalizeUrl"
           :target="inApp ? undefined : '_blank'"
           :rel="inApp ? undefined : 'noopener noreferrer'"
           :class="primaryClass"

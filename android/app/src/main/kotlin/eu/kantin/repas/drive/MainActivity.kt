@@ -176,7 +176,7 @@ class MainActivity : Activity() {
             if (!request.isForMainFrame) return false
             val url = request.url.toString()
             // Un lien du drive (« Finaliser sur Leclerc ») s'ouvre dans l'application, connecté, pas dans le navigateur du téléphone (DRV-625).
-            DriveEntry.target(url)?.let {
+            DriveEntry.target(url, repasApp.storePath)?.let {
                 openDrive(it)
                 return true
             }
@@ -369,6 +369,7 @@ class MainActivity : Activity() {
     private fun clearDriveData() {
         val shared = !DriveProfile.isolated
         DriveProfile.clear(if (shared) webView else null)
+        repasApp.storePath.forget()
         if (shared) load("$repasOrigin/")
         toast(R.string.drive_data_cleared)
     }

@@ -13,12 +13,14 @@ export { causeLabel, causeText, type LeclercCause } from './causes'
 export { LeclercError, type LeclercErrorCode } from './errors'
 export {
   entryFacts,
+  findStartButton,
   readEntry,
   type EntryFacts,
   type EntryReading,
   type LinkFacts,
   type LinkWhere,
   type PageRef,
+  type StartButton,
 } from './entry'
 export {
   JITTER_MS,

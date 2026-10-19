@@ -216,10 +216,12 @@ export class Flow {
   }
 
   /**
-   * Entrer dans le magasin sans geste (DRV-625) : sur l'accueil de l'enseigne, l'agent suit lui-même « Commencer mes courses » (une action de la
-   * page, à la cadence des autres, pendant que le bandeau dit « Ouverture de ton magasin… ») ; la page suivante est celle du magasin et
-   * l'application y renvoie le plan. Une seule tentative par envoi et par onglet : au moindre doute (lien absent, adresse qui n'est pas celle du
-   * magasin du plan, défi de l'anti-robot, page restée là) le bandeau dit de toucher le bouton, sans boucle, sans requête et sans écriture.
+   * Entrer dans le magasin sans geste (DRV-625, DRV-629) : sur l'accueil de l'enseigne, l'agent touche lui-même « Commencer mes courses » (il
+   * CLIQUE le bouton du vrai site, ou suit son lien s'il en a un qui mène au magasin du plan : une action de la page, à la cadence des autres,
+   * pendant que le bandeau dit « Ouverture de ton magasin… ») ; la page suivante est celle du magasin, l'application y renvoie le plan et l'agent
+   * y vérifie le magasin. Une seule tentative par envoi et par onglet : au moindre doute (bouton ou lien absent, adresse qui n'est pas celle du
+   * magasin du plan, défi de l'anti-robot, clic sans effet : la page est restée là) le bandeau dit de toucher le bouton, sans boucle, sans
+   * requête et sans écriture.
    */
   private async enterStore(plan: PlanMessage): Promise<void> {
     const { adapter, ui } = this.deps
@@ -230,15 +232,18 @@ export class Flow {
     } catch {
       reading = { kind: 'NONE' as const }
     }
-    if (reading.kind === 'LINK' && this.runs.markEntered(plan.runId)) {
+    if (
+      (reading.kind === 'LINK' || reading.kind === 'BUTTON') &&
+      this.runs.markEntered(plan.runId)
+    ) {
       void ui.show('entry', { stage: 'opening' })
       try {
         await adapter.followEntry()
       } catch {
-        // Le site est bloqué ou la navigation a échoué : le geste manuel reste possible.
+        // Le site est bloqué, la navigation a échoué ou le clic n'a rien fait : le geste manuel reste possible.
       }
     }
-    // Ici seulement si le lien manque, a été refusé, a déjà été suivi une fois, ou n'a rien changé : l'utilisateur touche le bouton du site.
+    // Ici seulement si le bouton ou le lien manque, a été refusé, a déjà été touché une fois, ou n'a rien changé : l'utilisateur touche le bouton du site.
     void ui.show('entry', { stage: 'manual' })
   }
 

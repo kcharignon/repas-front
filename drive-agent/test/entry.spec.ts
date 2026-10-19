@@ -1,8 +1,14 @@
 // L'entrée dans le magasin (DRV-625) : le lien « Commencer mes courses » et le lien du panier, lus dans le texte de la page, sans requête.
 // Le lien n'est suivi que s'il mène à une page de magasin du plan ; le rapport du diagnostic ne dit que des formes. Données inventées.
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ENTRY_WAIT_MS, entryFacts, LeclercAdapter, readEntry } from '../src/leclerc'
+import {
+  ENTRY_WAIT_MS,
+  entryFacts,
+  findStartButton,
+  LeclercAdapter,
+  readEntry,
+} from '../src/leclerc'
 import { fakeSite, type Scripted } from './leclerc-helpers'
 
 const HOME = { hostname: 'www.leclercdrive.fr', pathname: '/', protocol: 'https:', port: '' }
@@ -75,15 +81,50 @@ describe('readEntry : le lien « Commencer mes courses »', () => {
       'un identifiant dans l’adresse',
       'https://nom:secret@fd0-courses.leclercdrive.fr/magasin-000123-000123-Ville-Test/',
     ],
-    ['un script', 'javascript:alert(1)'],
-    ['rien', '#'],
+    ['une adresse de messagerie', 'mailto:moi@exemple.invalid'],
+    ['une page de données', 'data:text/html,x'],
     ['une barre oblique inverse', '/\\exemple.invalid/magasin-000123-000123-V/'],
   ])('REFUSED : %s', (_name, href) => {
     expect(readEntry(START(href), HOME, STORE_ID)).toEqual({ kind: 'REFUSED' })
   })
 
-  it('REFUSED : un bouton sans adresse', () => {
-    expect(readEntry('<a>Commencer mes courses</a>', HOME, STORE_ID)).toEqual({ kind: 'REFUSED' })
+  it.each([
+    ['un lien sans adresse', '<a class="btn">Commencer mes courses</a>'],
+    ['une adresse vide', '<a href="">Commencer mes courses</a>'],
+    ['une ancre', '<a href="#">Commencer mes courses</a>'],
+    ['un script', '<a href="javascript:void(0)">Commencer mes courses</a>'],
+    ['un script en majuscules', '<a href="JavaScript:__doPostBack(1)">Commencer mes courses</a>'],
+    ['un vrai bouton', '<button type="button" class="btn">Commencer mes courses</button>'],
+    ['un bouton de formulaire', '<input type="submit" value="Commencer mes courses">'],
+    [
+      'un bouton à l’étiquette d’accessibilité',
+      '<a role="button" aria-label="Commencer mes courses"><i></i></a>',
+    ],
+  ])('BUTTON : %s (le bouton du vrai site n’a pas d’adresse)', (_name, html) => {
+    expect(readEntry(html, HOME, STORE_ID)).toEqual({ kind: 'BUTTON' })
+  })
+
+  it('BUTTON : sans lien à suivre, quelle que soit l’adresse que le script porte', () => {
+    const html =
+      '<a onclick="location=\'https://exemple.invalid/magasin-000123-000123-V/\'">Commencer mes courses</a>'
+
+    expect(readEntry(html, HOME, STORE_ID)).toEqual({ kind: 'BUTTON' })
+  })
+
+  it('NONE : un bouton d’un autre libellé, un champ de texte, un libellé qui est une phrase', () => {
+    for (const html of [
+      '<button>Continuer</button>',
+      '<input type="text" value="Commencer mes courses">',
+      `<button>${'Commencer mes courses '.repeat(5)}</button>`,
+    ]) {
+      expect(readEntry(html, HOME, STORE_ID)).toEqual({ kind: 'NONE' })
+    }
+  })
+
+  it('CHALLENGE : la page d’un défi de l’anti-robot, même avec un bouton', () => {
+    const page = `<a role="button">Commencer mes courses</a><iframe src="https://geo.captcha-delivery.com/x"></iframe>`
+
+    expect(readEntry(page, HOME, STORE_ID)).toEqual({ kind: 'CHALLENGE' })
   })
 
   it('CHALLENGE : la page d’un défi de l’anti-robot, même avec un lien', () => {
@@ -110,36 +151,33 @@ describe('readEntry : le lien « Commencer mes courses »', () => {
 })
 
 describe('entryFacts : les deux sondes du diagnostic, des formes seulement', () => {
-  it('le lien « Commencer mes courses » : présent, la forme de son adresse, où elle mène', () => {
+  it('le lien « Commencer mes courses » : présent, la forme de son adresse, où elle mène ; pas un bouton', () => {
     const facts = entryFacts(
       START('https://fd0-courses.leclercdrive.fr/magasin-000123-000123-Ville-Test/'),
       HOME,
     )
 
     expect(facts.start).toEqual({ present: true, shape: '/magasin-N-N-V/', where: 'LECLERC_HOST' })
-    expect(facts.basket).toEqual({ present: false, shape: null, where: null })
+    expect(facts.clickable).toBe(false)
   })
 
-  it('le lien du panier : par son adresse ou par son libellé', () => {
-    const byAddress = entryFacts(
-      '<a href="/magasin-000123-000123-Ville-Test/panier.aspx?x=1">Voir</a>',
-      HOME,
-    )
-    const byLabel = entryFacts('<a href="https://autre.invalid/p?a=1">Mon panier (3)</a>', HOME)
-
-    expect(byAddress.basket).toEqual({
-      present: true,
-      shape: '/magasin-N-N-V/panier.aspx',
-      where: 'RELATIVE',
-    })
-    expect(byLabel.basket).toEqual({ present: true, shape: '/…', where: 'OTHER_SITE' })
+  it('un bouton sans adresse est présent, sans forme, et cliquable', () => {
+    for (const html of [
+      '<a>Commencer mes courses</a>',
+      '<a href="javascript:go()">Commencer mes courses</a>',
+      '<button>Commencer mes courses</button>',
+    ]) {
+      expect(entryFacts(html, HOME)).toEqual({
+        start: { present: true, shape: null, where: null },
+        clickable: true,
+      })
+    }
   })
 
-  it('un bouton sans adresse est présent, sans forme', () => {
-    expect(entryFacts('<a>Commencer mes courses</a>', HOME).start).toEqual({
-      present: true,
-      shape: null,
-      where: null,
+  it('absent : ni présent, ni cliquable', () => {
+    expect(entryFacts('<p>Se connecter</p>', HOME)).toEqual({
+      start: { present: false, shape: null, where: null },
+      clickable: false,
     })
   })
 
@@ -154,7 +192,8 @@ describe('entryFacts : les deux sondes du diagnostic, des formes seulement', () 
 
   it('ne dit ni numéro, ni ville, ni nom de dossier, ni libellé : une page hostile', () => {
     const page = `<a href="https://fd0-courses.leclercdrive.fr/magasin-000123-000456-Saint-Exemple-sur-Mer/Rue-Du-Secret-12/accueil.aspx?token=SECRET">Commencer mes courses</a>
-      <a href="/Jean-Dupont-0612345678/panier.aspx?c=COOKIE">Mon panier</a>`
+      <a href="/Jean-Dupont-0612345678/panier.aspx?c=COOKIE">Mon panier</a>
+      <button onclick="go('/Marie-Martin-0698765432')">Mon compte COOKIE</button>`
 
     const text = JSON.stringify(entryFacts(page, HOME))
 
@@ -175,7 +214,7 @@ describe('entryFacts : les deux sondes du diagnostic, des formes seulement', () 
     }
     expect(JSON.parse(text)).toEqual({
       start: { present: true, shape: '/magasin-N-N-V/…/…', where: 'LECLERC_HOST' },
-      basket: { present: true, shape: '/…/…', where: 'RELATIVE' },
+      clickable: false,
     })
   })
 })
@@ -219,15 +258,168 @@ describe('LeclercAdapter : suivre le lien', () => {
     expect(once.navigate).toHaveBeenCalledOnce()
   })
 
-  it('le diagnostic lit les deux sondes, sans requête', () => {
-    const { adapter, site } = page(
-      `${GOOD}<a href="/magasin-000123-000123-Ville-Test/panier.aspx">Panier</a>`,
-    )
+  it('le diagnostic lit « Commencer mes courses », sans requête', () => {
+    const { adapter, site } = page(GOOD)
 
     expect(adapter.readArrival().entry).toEqual({
       start: { present: true, shape: '/magasin-N-N-V/', where: 'LECLERC_HOST' },
-      basket: { present: true, shape: '/magasin-N-N-V/panier.aspx', where: 'RELATIVE' },
+      clickable: false,
     })
     expect(site.calls).toEqual([])
+  })
+})
+
+describe('LeclercAdapter : cliquer le bouton (DRV-629)', () => {
+  const BUTTON = '<a class="btn" role="button">Commencer mes courses</a>'
+  const page = (
+    html: string,
+    startButton: (() => { click: () => void } | null) | undefined,
+    navigate = vi.fn<(url: string) => void>(),
+  ) => {
+    const site = fakeSite(() => ({ body: 'x' }) satisfies Scripted, {
+      location: HOME,
+      pageText: () => html,
+      navigate,
+      ...(startButton && { startButton }),
+    })
+    return { site, navigate, adapter: new LeclercAdapter(site.deps) }
+  }
+
+  it('clique le bouton après une pause entière, puis attend que la page parte', async () => {
+    const click = vi.fn<() => void>()
+    const { adapter, site, navigate } = page(BUTTON, () => ({ click }))
+    expect(adapter.readEntry({ id: STORE_ID })).toEqual({ kind: 'BUTTON' })
+
+    await adapter.followEntry()
+
+    expect(click).toHaveBeenCalledOnce()
+    expect(navigate).not.toHaveBeenCalled()
+    expect(site.sleeps[0]).toBeGreaterThanOrEqual(800)
+    expect(site.sleeps.at(-1)).toBe(ENTRY_WAIT_MS)
+    expect(site.calls).toEqual([])
+  })
+
+  it('ne clique jamais deux fois le même bouton', async () => {
+    const click = vi.fn<() => void>()
+    const { adapter } = page(BUTTON, () => ({ click }))
+    adapter.readEntry({ id: STORE_ID })
+
+    await adapter.followEntry()
+    await adapter.followEntry()
+
+    expect(click).toHaveBeenCalledOnce()
+  })
+
+  it('REFUSED : le texte dit « bouton » mais le DOM n’en donne pas un à toucher (ou ne sait pas)', async () => {
+    for (const startButton of [() => null, undefined]) {
+      const { adapter, site } = page(BUTTON, startButton)
+
+      expect(adapter.readEntry({ id: STORE_ID })).toEqual({ kind: 'REFUSED' })
+      await adapter.followEntry()
+
+      expect(site.sleeps).toEqual([])
+    }
+  })
+
+  it('REFUSED : le DOM qui lève une erreur n’arrête rien', () => {
+    const { adapter } = page(BUTTON, () => {
+      throw new Error('DOM illisible')
+    })
+
+    expect(adapter.readEntry({ id: STORE_ID })).toEqual({ kind: 'REFUSED' })
+  })
+
+  it('un lien vérifié reste suivi par son adresse, pas cliqué', async () => {
+    const click = vi.fn<() => void>()
+    const { adapter, navigate } = page(
+      START('https://fd0-courses.leclercdrive.fr/magasin-000123-000123-Ville-Test/'),
+      () => ({ click }),
+    )
+    expect(adapter.readEntry({ id: STORE_ID }).kind).toBe('LINK')
+
+    await adapter.followEntry()
+
+    expect(navigate).toHaveBeenCalledOnce()
+    expect(click).not.toHaveBeenCalled()
+  })
+
+  it('le diagnostic : cliquable oui quand le DOM donne le bouton, non sinon', () => {
+    const yes = page(BUTTON, () => ({ click: () => undefined }))
+    const no = page(BUTTON, () => null)
+
+    expect(yes.adapter.readArrival().entry).toEqual({
+      start: { present: true, shape: null, where: null },
+      clickable: true,
+    })
+    expect(no.adapter.readArrival().entry?.clickable).toBe(false)
+    expect(yes.site.calls).toEqual([])
+  })
+})
+
+describe('findStartButton : le bouton dans le DOM', () => {
+  const dom = (html: string) => {
+    const root = document.createElement('div')
+    root.innerHTML = html
+    document.body.append(root)
+    return root
+  }
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it.each([
+    ['un lien sans adresse', '<a id="b">Commencer mes courses</a>'],
+    ['une ancre', '<a id="b" href="#">Commencer mes courses</a>'],
+    ['un script', '<a id="b" href="javascript:void(0)">Commencer mes courses</a>'],
+    ['un bouton', '<button id="b" type="button"><span>Commencer</span> mes courses →</button>'],
+    ['un bouton de formulaire', '<input id="b" type="submit" value="COMMENCER MES COURSES">'],
+    [
+      'un élément à rôle de bouton',
+      '<div id="b" role="button" title="Commencer mes courses"></div>',
+    ],
+  ])('trouve %s et le clique', (_name, html) => {
+    const root = dom(html)
+    const clicks = vi.fn<() => void>()
+    root.querySelector('#b')?.addEventListener('click', clicks)
+
+    const button = findStartButton(root)
+    button?.click()
+
+    expect(button).not.toBeNull()
+    expect(clicks).toHaveBeenCalledOnce()
+  })
+
+  it('ne trouve ni un vrai lien, ni un bouton désactivé, ni un autre libellé, ni une phrase', () => {
+    for (const html of [
+      '<a href="https://fd0-courses.leclercdrive.fr/magasin-000123-000123-V/">Commencer mes courses</a>',
+      '<a href="/magasin-000123-000123-V/">Commencer mes courses</a>',
+      '<button disabled>Commencer mes courses</button>',
+      '<button aria-disabled="true">Commencer mes courses</button>',
+      '<button>Continuer</button>',
+      `<div role="button">${'Commencer mes courses '.repeat(4)}</div>`,
+      '<span>Commencer mes courses</span>',
+      '',
+    ]) {
+      expect(findStartButton(dom(html))).toBeNull()
+      document.body.innerHTML = ''
+    }
+  })
+
+  it('de plusieurs, préfère celui qui est affiché', () => {
+    const root = dom(
+      '<a id="cache">Commencer mes courses</a><a id="visible">Commencer mes courses</a>',
+    )
+    const clicked: string[] = []
+    for (const id of ['cache', 'visible']) {
+      const element = root.querySelector<HTMLElement>(`#${id}`)
+      element?.addEventListener('click', () => clicked.push(id))
+      // jsdom ne mesure rien : on dit lequel est affiché
+      if (element)
+        element.getClientRects = () => (id === 'visible' ? [{}] : []) as unknown as DOMRectList
+    }
+
+    findStartButton(root)?.click()
+
+    expect(clicked).toEqual(['visible'])
   })
 })

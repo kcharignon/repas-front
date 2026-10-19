@@ -50,9 +50,13 @@ test('un passage réussi : retour automatique, choix enregistrés en un appel, r
   await expect(farine).toContainText('produit habituel : Repas s’en souvient')
   await expect(page.getByRole('listitem').filter({ hasText: 'Beurre' })).toContainText('1,89')
   await expect(page.getByText(/vidé/)).toHaveCount(0)
-  // Dans l'application, « Finaliser sur Leclerc » ouvre l'accueil du drive dans l'application (même fenêtre), pas le navigateur (DRV-625)
+  // Dans l'application, « Finaliser sur Leclerc » ouvre la page du panier du magasin dans l'application (même fenêtre), pas le navigateur ;
+  // la ville du chemin, l'application la complète (DRV-625, DRV-629)
   const finalize = page.getByRole('link', { name: /^Finaliser sur Leclerc/ })
-  await expect(finalize).toHaveAttribute('href', 'https://www.leclercdrive.fr/')
+  await expect(finalize).toHaveAttribute(
+    'href',
+    /^https:\/\/[a-z0-9.-]+\/magasin-\d+-\d+\/detail-panier\.aspx$/,
+  )
   await expect(finalize).not.toHaveAttribute('target', /.+/)
 
   // Le brouillon est effacé : l'écran d'envoi ne montre plus d'attente
