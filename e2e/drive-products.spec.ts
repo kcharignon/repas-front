@@ -21,10 +21,10 @@ test('classer les produits d’une farine, refuser l’un, accepter l’autre de
   await page.getByRole('link', { name: /Mes produits du drive/ }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Mes produits' })).toBeVisible()
   await expect(page.getByText('J’en ai toujours')).toBeVisible()
-  await page.getByRole('searchbox', { name: 'Rechercher un ingrédient' }).fill('oeuf')
+  await page.getByRole('searchbox', { name: 'Rechercher un article' }).fill('oeuf')
   await expect(page.getByRole('link', { name: /Farine/ })).toHaveCount(0)
   await expect(page.getByRole('link', { name: /Œufs/ })).toBeVisible()
-  await page.getByRole('searchbox', { name: 'Rechercher un ingrédient' }).fill('')
+  await page.getByRole('searchbox', { name: 'Rechercher un article' }).fill('')
   await page.getByRole('link', { name: /Farine/ }).click()
 
   // Le préféré descend, le suivant devient préféré
