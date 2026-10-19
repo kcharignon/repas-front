@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
 import { appContext, calls, json, me, stubApi } from '@/__tests__/helpers'
+import { fakeNative } from '@/features/drive/bridge/__tests__/fakeNative'
 import ShoppingListDetailView from '@/features/shopping-lists/ShoppingListDetailView.vue'
 import ShoppingListView from '@/features/shopping-lists/ShoppingListView.vue'
 import { useNotificationsStore } from '@/notifications/store'
@@ -87,8 +88,28 @@ async function signedIn() {
   return context
 }
 
+/**
+ * Le faux pont de l'application Repas. `version` : celle qu'elle annonce à `app.info` ; `'silent'` : une ancienne application qui ne
+ * répond pas ; `'held'` : elle répond quand le test appelle `release` ; `'browser'` : aucun pont (un navigateur ordinaire).
+ */
+let release: (() => void) | null = null
+function installApp(version: string | 'silent' | 'held' | 'browser' = '1.0.0') {
+  const native = fakeNative((message, reply) => {
+    if (message.type !== 'app.info' || version === 'silent') return
+    const info = (number: string) =>
+      reply({ v: 1, type: 'app.info', version: number, versionCode: 1, drive: true })
+    // `held` : l'application répond quand le test le décide (une application à jour)
+    if (version === 'held') release = () => info('1.0.0')
+    else info(version)
+  })
+  if (version !== 'browser') (globalThis as { repasNative?: unknown }).repasNative = native.bridge
+
+  return native
+}
+
 afterEach(() => {
   vi.unstubAllGlobals()
+  delete (globalThis as { repasNative?: unknown }).repasNative
   document.body.innerHTML = ''
   window.dispatchEvent(new Event('online'))
 })
@@ -268,7 +289,9 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     list = detail('ACTIVE'),
     enabled = true,
     path = '/liste',
+    app: Parameters<typeof installApp>[0] = '1.0.0',
   ) => {
+    const native = installApp(app)
     const fetchMock = stubApi({
       ...session,
       'GET /api/v1/shopping-lists/active/summary': () =>
@@ -285,13 +308,37 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     })
     await vi.waitFor(() => expect(wrapper.find('h1').exists()).toBe(true))
 
-    return { wrapper, context, fetchMock }
+    return { wrapper, context, fetchMock, native }
   }
 
   it('propose « Envoyer au drive » quand la fonction est allumée et la liste non vide', async () => {
     await openActive()
 
     await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+  })
+
+  it('ne le propose pas dans un navigateur, où il ne pourrait rien faire (DRV-641)', async () => {
+    const { fetchMock } = await openActive({}, detail('ACTIVE'), true, '/liste', 'browser')
+
+    await vi.waitFor(() => expect(calls(fetchMock)).toContain('GET /api/v1/drive/settings'))
+    await flushPromises()
+    expect(button('Envoyer au drive')).toBeUndefined()
+    // Les autres actions d'une liste en cours restent là
+    expect(button('Terminer')).toBeDefined()
+  })
+
+  it('dans un navigateur, ignore aussi la reprise « envoyer » : aucune confirmation, aucun envoi', async () => {
+    const { fetchMock } = await openActive(
+      {},
+      detail('ACTIVE'),
+      true,
+      '/liste?envoyer=1',
+      'browser',
+    )
+    await flushPromises()
+
+    expect(body().querySelector('[role="dialog"]')).toBeNull()
+    expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/send')
   })
 
   it('ne le propose pas quand la fonction est coupée', async () => {
@@ -336,6 +383,108 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     expect(send?.headers.get('If-Match')).toBe('"7"')
     expect(context.router.currentRoute.value.params.listId).toBe('l1')
   })
+
+  const tooOldSentence = 'Mets à jour l’application pour envoyer ta liste.'
+
+  it.each([['0.1.9'], ['0.0.9'], ['silent'], ['pas-une-version']])(
+    'application %s : ni verrou ni confirmation, la phrase de mise à jour et son bouton (DRV-641)',
+    async (app) => {
+      const { fetchMock, context } = await openActive(
+        { 'POST /api/v1/shopping-lists/l1/send': noContent },
+        detail('ACTIVE'),
+        true,
+        '/liste',
+        app,
+      )
+      await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+
+      button('Envoyer au drive')?.click()
+      await vi.waitFor(() => expect(body().textContent).toContain(tooOldSentence), {
+        timeout: 6000,
+      })
+
+      expect(body().textContent).not.toContain('La liste ne sera plus modifiable')
+      const update = body().querySelector('[role="dialog"] a[href="/drive/aide"]')
+      expect(update?.textContent.trim()).toBe('Mettre à jour')
+      expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/send')
+      expect(context.router.currentRoute.value.name).not.toBe('drive-settings')
+      // La liste reste modifiable : le bouton est de nouveau disponible
+      await vi.waitFor(() => expect(button('Envoyer au drive')?.disabled).toBe(false))
+    },
+    10000,
+  )
+
+  it('pendant la lecture de la version, le bouton est grisé et rien n’est enregistré', async () => {
+    const { fetchMock } = await openActive(
+      { 'POST /api/v1/shopping-lists/l1/send': noContent },
+      detail('ACTIVE'),
+      true,
+      '/liste',
+      'held',
+    )
+    await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+
+    button('Envoyer au drive')?.click()
+    await vi.waitFor(() => expect(button('Envoyer au drive')?.disabled).toBe(true))
+    expect(body().querySelector('[role="dialog"]')).toBeNull()
+    expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/send')
+
+    release?.()
+    await vi.waitFor(() => expect(body().textContent).toContain('La liste ne sera plus modifiable'))
+    expect(button('Envoyer au drive')?.disabled).toBe(false)
+  })
+
+  it('application trop ancienne et aucun magasin : la phrase d’abord, les réglages jamais', async () => {
+    const { context } = await openActive(
+      { 'GET /api/v1/drive/settings': () => json({ enabled: true, retailer: 'leclerc' }) },
+      detail('ACTIVE'),
+      true,
+      '/liste',
+      '0.1.0',
+    )
+    await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+
+    button('Envoyer au drive')?.click()
+
+    await vi.waitFor(() => expect(body().textContent).toContain(tooOldSentence))
+    expect(context.router.currentRoute.value.name).toBe('shopping-list')
+  })
+
+  it('revenu des réglages avec une application trop ancienne : la phrase, pas de confirmation ni de verrou', async () => {
+    const { fetchMock } = await openActive(
+      { 'POST /api/v1/shopping-lists/l1/send': noContent },
+      detail('ACTIVE'),
+      true,
+      '/liste?envoyer=1',
+      '0.1.0',
+    )
+
+    await vi.waitFor(() => expect(body().textContent).toContain(tooOldSentence))
+    expect(body().textContent).not.toContain('La liste ne sera plus modifiable')
+    expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/send')
+  })
+
+  it.each([['0.1.10'], ['0.2.0'], ['0.0.0-dev']])(
+    'application %s : la confirmation, comme avant',
+    async (app) => {
+      const { fetchMock } = await openActive(
+        { 'POST /api/v1/shopping-lists/l1/send': noContent },
+        detail('ACTIVE'),
+        true,
+        '/liste',
+        app,
+      )
+      await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+
+      button('Envoyer au drive')?.click()
+
+      await vi.waitFor(() =>
+        expect(body().textContent).toContain('La liste ne sera plus modifiable'),
+      )
+      expect(body().textContent).not.toContain(tooOldSentence)
+      expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/send')
+    },
+  )
 
   it('mène aux réglages du drive, sans confirmation, quand aucun magasin n’est enregistré', async () => {
     const { fetchMock, context } = await openActive({

@@ -10,6 +10,8 @@ import UiDialog from '@/design/UiDialog.vue'
 import UiField from '@/design/UiField.vue'
 import UiLinkButton from '@/design/UiLinkButton.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
+import { isDriveAppVersionEnough } from '@/features/drive/appVersion'
+import { driveBridge } from '@/features/drive/bridge'
 import { useDriveSettings } from '@/features/drive/queries'
 import { useOnline } from '@/offline/useOnline'
 import {
@@ -33,17 +35,47 @@ const remove = useDeleteShoppingList()
 const send = useSendShoppingList()
 const reopen = useReopenShoppingList()
 
-// L'envoi n'est proposé que si la fonction est allumée, pour une liste en cours qui a des articles.
+// L'envoi n'est proposé que dans l'application Repas (le pont natif), si la fonction est allumée, pour une liste en cours qui a des
+// articles : dans un navigateur il ne pourrait rien faire, et il verrouillerait la liste pour rien (DRV-641).
+const inApp = driveBridge.isAvailable()
 const settings = useDriveSettings(() => props.list.isActive)
 const canSend = computed(
-  () => props.list.isActive && props.list.rowCount > 0 && settings.data.value?.enabled === true,
+  () =>
+    inApp &&
+    props.list.isActive &&
+    props.list.rowCount > 0 &&
+    settings.data.value?.enabled === true,
 )
+
+const checking = ref(false)
+const updating = ref(false)
+
+/**
+ * L'application est-elle assez récente pour envoyer (même test que l'écran d'envoi) ? Tant que la réponse n'est pas là (3 s au plus),
+ * le bouton est grisé et rien n'est enregistré : une application trop ancienne, ou qui ne répond pas, ne verrouille jamais la liste.
+ * Trop ancienne : la phrase de mise à jour remplace la confirmation.
+ */
+async function appIsEnough(): Promise<boolean> {
+  checking.value = true
+  let enough = false
+  try {
+    enough = isDriveAppVersionEnough((await driveBridge.info()).version)
+  } catch {
+    // Une application qui ne dit pas sa version est trop ancienne
+  } finally {
+    checking.value = false
+  }
+  if (!enough) updating.value = true
+
+  return enough
+}
 
 /**
  * Sans magasin enregistré, l'envoi mène à l'écran « Choisis ton magasin » (DRV-622) au lieu de la confirmation ; une fois le
  * magasin enregistré, cet écran nous rend la liste (`retour=liste`) et l'envoi reprend à sa confirmation (`envoyer`).
  */
-function askToSend() {
+async function askToSend() {
+  if (checking.value || !(await appIsEnough())) return
   if (settings.data.value?.store) sending.value = true
   else
     void router.push({
@@ -63,9 +95,9 @@ watch(
   () => [route.query.envoyer, canSend.value] as const,
   ([resume, can]) => {
     if (resume === undefined || !can) return
-    sending.value = true
     // La demande est consommée : un rechargement ne rouvre pas la confirmation
     void router.replace({ query: { ...route.query, envoyer: undefined } })
+    void appIsEnough().then((enough) => (sending.value = enough))
   },
   { immediate: true },
 )
@@ -167,7 +199,12 @@ const statusLabel = (list: ShoppingList) =>
         >
           {{ t('shoppingList.complete') }}
         </UiButton>
-        <UiButton v-if="canSend" variant="accent" :disabled="!online" @click="askToSend">
+        <UiButton
+          v-if="canSend"
+          variant="accent"
+          :disabled="!online || checking"
+          @click="askToSend"
+        >
           {{ t('shoppingList.send') }}
         </UiButton>
         <UiButton
@@ -197,6 +234,19 @@ const statusLabel = (list: ShoppingList) =>
           }}</UiButton>
         </div>
       </form>
+    </UiDialog>
+
+    <!-- Application trop ancienne : la phrase de l'écran d'envoi et son bouton, aucun envoi n'est enregistré (DRV-641) -->
+    <UiDialog
+      v-model:open="updating"
+      :title="t('shoppingList.send')"
+      :description="t('driveSend.appTooOld.text')"
+    >
+      <div class="flex justify-end">
+        <UiLinkButton :to="{ name: 'drive-help' }">
+          {{ t('driveSend.appTooOld.update') }}
+        </UiLinkButton>
+      </div>
     </UiDialog>
 
     <UiConfirmDialog
