@@ -16,14 +16,26 @@ function stored(): ThemePreference {
   }
 }
 
+/** Pose (ou retire, pour `system`) le thème sur <html> : la feuille de style suit alors `prefers-color-scheme`. */
+function applyTheme(preference: ThemePreference) {
+  const root = document.documentElement
+  if (preference === 'system') root.removeAttribute('data-theme')
+  else root.dataset.theme = preference
+}
+
+/**
+ * Applique le thème enregistré sans attendre le store (qui n'existait qu'une fois l'écran « Moi » ouvert) : appelée au démarrage.
+ * `public/theme-init.js` fait la même lecture avant le premier affichage, pour éviter l'éclair du mauvais thème.
+ */
+export function applyStoredTheme() {
+  applyTheme(stored())
+}
+
 export const useThemeStore = defineStore('theme', () => {
   const preference = ref<ThemePreference>(stored())
 
-  // `system` retire l'attribut : la feuille de style suit alors `prefers-color-scheme`.
   watchEffect(() => {
-    const root = document.documentElement
-    if (preference.value === 'system') root.removeAttribute('data-theme')
-    else root.dataset.theme = preference.value
+    applyTheme(preference.value)
     try {
       localStorage.setItem(KEY, preference.value)
     } catch {
