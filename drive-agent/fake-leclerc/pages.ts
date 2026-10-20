@@ -2,6 +2,10 @@
 // page de recherche = HTML qui embarque un JSON d'initialisation (`widgets`), panier = tableau d'évènements dont `Panier<point>`
 // porte `lstProduitsLight`. Les pages d'erreur et de défi sont minimales : seul compte ce que l'agent y reconnaît.
 import { DELIVERY_POINT, findProduct, paidPrice, type FakeProduct } from './catalog.ts'
+import { photoAddress } from './photos.ts'
+
+/** Le mode de disponibilité des produits à stock nul (DRV-635) : voir `Behavior.availability` du serveur. */
+export type Availability = 'misleading' | 'real-out'
 
 /** Le panier : identifiant du produit, quantité. */
 export type Cart = ReadonlyMap<number, number>
@@ -22,7 +26,52 @@ export function totalsOf(cart: Cart): { items: number; totalCents: number; total
   return { items, totalCents, total: euros(totalCents) }
 }
 
-function productJson(product: FakeProduct, inCart: number): Record<string, unknown> {
+/**
+ * Les textes du rayon que le faux site joint aux produits (DRV-647), de la FORME mesurée sur le vrai site le 2026-10-20 (agent 0.33.0), aux valeurs inventées :
+ * `sLibelleUrlNaviguerRayon` vaut toujours « Voir le rayon » (un texte de lien), `sCategorie` un code (« 40 »), `sUrlVoirRayon` porte le numéro et le nom de la
+ * FAMILLE (`rayon-<iIdFamille>-<Nom>.aspx`) pour les familles de `FAMILY_NAMES`, et un `objFiltreBloc` (dans le produit, `iIdBloc` = la famille) nomme celles de
+ * `FAMILY_FILTERS`. Les autres familles n'ont aucun libellé lisible : l'agent les appelle « Rayon 1 »… (les conserves de « carotte », famille 71).
+ */
+const FAMILY_NAMES: Readonly<Record<number, string>> = {
+  413: 'Legumes-frais',
+  414: 'Legumes',
+  521: 'Jus-de-legumes',
+  410: 'Legumes-fruits',
+  411: 'Fruits-du-verger',
+  412: 'Legumes-verts',
+  345: 'Compotes-et-desserts-de-fruits',
+}
+const FAMILY_FILTERS: Readonly<Record<number, string>> = { 602: 'Légumes surgelés' }
+
+/** Les champs du rayon d'un produit, comme le vrai site les donne. */
+function aisleFieldsOf(product: FakeProduct): Record<string, unknown> {
+  const name = FAMILY_NAMES[product.family]
+  const filter = FAMILY_FILTERS[product.family]
+  return {
+    sLibelleUrlNaviguerRayon: 'Voir le rayon',
+    sCategorie: '40',
+    fVoirRayon: true,
+    ...(name !== undefined && {
+      sUrlVoirRayon: `/magasin-000001-000001-Ville-Test/rayon-${product.family}-${name}.aspx?Filtres=`,
+    }),
+    ...(filter !== undefined && {
+      objFiltreBloc: {
+        iIdBloc: product.family,
+        neTypeBloc: 2,
+        sLibelle: filter,
+        fMultiSelection: true,
+        niNbAffichage: 5,
+        iNbValeursMinimum: 1,
+      },
+    }),
+  }
+}
+
+function productJson(
+  product: FakeProduct,
+  inCart: number,
+  availability?: Availability,
+): Record<string, unknown> {
   const { structured } = product
   return {
     iIdProduit: product.id,
@@ -37,9 +86,16 @@ function productJson(product: FakeProduct, inCart: number): Record<string, unkno
       : `${euros(cents(product.perMeasure))} / ${product.measure}`,
     iQteDisponible: product.stock,
     iQuantitePanier: inCart,
-    sUrlVignetteProduit: `https://photos-test.leclercdrive.fr/image.ashx?id=${product.id - 999000}&use=l&cat=p`,
+    sUrlVignetteProduit: photoAddress(product),
     iIdRayon: product.aisle,
     iIdFamille: product.family,
+    eUnivers: 1,
+    ...aisleFieldsOf(product),
+    // DRV-635 : l'étiquette de disponibilité du site ordinateur (1 : disponible, 2 : bientôt disponible), seulement dans les modes qui l'éprouvent.
+    ...(availability && {
+      eDisponibilite: product.stock === 0 ? 2 : 1,
+      ...(product.stock === 0 && { sLibelleDisponibilite: 'Bientôt disponible' }),
+    }),
     ...(structured && {
       sUniteMesure: structured.unit,
       nrContenanceUnitaire: structured.each,
@@ -127,22 +183,93 @@ ${embedded}
  * l'hôte du magasin, elle, est une page 404. Ce n'est pas une page de magasin pour l'agent (aucune adresse `/magasin-<id>-<id>-<ville>`) : le
  * bouton mène aux vraies pages du magasin (`storeUrl`, avec la ville, sur l'hôte du magasin), et `otherStoreUrl` à un autre magasin.
  */
-export function accueilPage(storeUrl: string, otherStoreUrl?: string): string {
+export function accueilPage(
+  storeUrl: string,
+  otherStoreUrl?: string,
+  form: HomeForm = 'link',
+): string {
+  const button = form === 'button' || form === 'button-human' || form === 'button-inert'
+  // Le clic ouvre le magasin ; `button-human` ignore un clic de programme, `button-inert` n'ouvre rien.
+  const onClick =
+    form === 'button-inert'
+      ? ''
+      : `${form === 'button-human' ? 'if (!event.isTrusted) return;' : ''} location.assign('${storeUrl}');`
+  const start = button
+    ? `<p><a id="start-shopping" class="btn" role="button">Commencer mes courses</a></p>
+<script>
+document.getElementById('start-shopping').addEventListener('click', function (event) {${onClick}});
+</script>`
+    : form === 'no-link'
+      ? '<p><a href="/connexion.aspx">Se connecter</a></p>'
+      : `<p><a id="start-shopping" href="${storeUrl}">Commencer mes courses</a></p>`
+  const challenge =
+    form === 'challenge'
+      ? '<iframe title="Vérification" src="https://geo.captcha-delivery.com/captcha/"></iframe>\n'
+      : ''
   return `<!doctype html>
 <html lang="fr">
 <head>${HEAD}<title>Accueil du magasin (faux site de test)</title></head>
 <body>
 <h1>Faux Leclerc Ville-Test</h1>
 <p>Je peux retirer ma commande</p>
-<p><a id="start-shopping" href="${storeUrl}">Commencer mes courses</a></p>
-${otherStoreUrl === undefined ? '' : `<p><a id="other-store" href="${otherStoreUrl}">Changer de magasin</a></p>\n`}<footer>Faux site Leclerc : données inventées.</footer>
+${start}
+${challenge}${otherStoreUrl === undefined ? '' : `<p><a id="other-store" href="${otherStoreUrl}">Changer de magasin</a></p>\n`}<footer>Faux site Leclerc : données inventées.</footer>
 </body>
 </html>
 `
 }
 
+/**
+ * La page du panier (DRV-629) : `<chemin du magasin avec la ville>/detail-panier.aspx`, la page que « Finaliser sur Leclerc » ouvre. Les lignes du
+ * panier en mémoire du faux site, leur total ; données inventées.
+ */
+export function basketPage(cart: Cart, session: Session = 'member'): string {
+  const { items, total } = totalsOf(cart)
+  const lines = [...cart]
+    .flatMap(([id, quantity]) => {
+      const product = findProduct(id)
+      return product ? [`<li>${quantity} × ${product.label1}</li>`] : []
+    })
+    .join('\n')
+  return storePage(
+    'Mon panier',
+    items === 0 ? 'Votre panier est vide' : `${items} articles, total ${total}`,
+    {},
+    cart,
+    session,
+  ).replace('<footer>', `<ul id="lignes">\n${lines}\n</ul>\n<footer>`)
+}
+
+/**
+ * Le menu « Rayons » de l'accueil du magasin (DRV-647, étape 0) : un bouton replié et, cachés dessous, des liens de rayon et de famille au numéro dans
+ * l'adresse (`rayon-41-….aspx`, `famille-410-….aspx`, relatifs au chemin du magasin). FORME INVENTÉE, plausible, jamais mesurée : c'est ce que le
+ * diagnostic doit mesurer sur le vrai site. Les rayons 41, 12 et 60 sont ceux du catalogue ; le 15 (jus) n'a pas de lien, pour la correspondance.
+ */
+const AISLE_MENU = `<div class="menu-rayons">
+<button type="button" aria-expanded="false">Rayons</button>
+<ul hidden>
+<li><a href="rayon-41-Fruits-et-legumes.aspx">Fruits et légumes</a>
+<ul>
+<li><a href="famille-410-Tomates.aspx">Tomates</a></li>
+<li><a href="famille-411-Pommes.aspx">Pommes</a></li>
+<li><a href="famille-412-Courgettes.aspx">Courgettes</a></li>
+</ul></li>
+<li><a href="rayon-12-Epicerie-salee.aspx">Épicerie salée</a></li>
+<li><a href="rayon-60-Bebe.aspx">Bébé</a></li>
+<li><a href="rayon-70-Boissons.aspx">Boissons</a></li>
+<li><a href="rayon-80-Entretien.aspx">Entretien</a></li>
+</ul>
+</div>
+`
+
 export function homePage(cart: Cart, session: Session = 'member'): string {
-  return storePage('Accueil du magasin', 'Bienvenue dans le faux drive.', {}, cart, session)
+  return storePage(
+    'Accueil du magasin',
+    'Bienvenue dans le faux drive.',
+    {},
+    cart,
+    session,
+  ).replace('<h1>', `${AISLE_MENU}<h1>`)
 }
 
 /**
@@ -150,26 +277,141 @@ export function homePage(cart: Cart, session: Session = 'member'): string {
  * avec le message du site (\`list\`), squelette seul, sans conteneur de produits ni message (\`no-list\`), ou état encodé en entités HTML
  * (\`encoded\`). \`session\` : l'en-tête d'un client connecté ou d'un visiteur (les produits sont les mêmes : le catalogue est public).
  */
+/** Les libellés inventés des rayons de la facette « Rayons » du faux site (DRV-647, agent 0.35.0) ; un rayon absent s'appelle « Rayon inventé N ». */
+const FACET_AISLES: Readonly<Record<number, string>> = {
+  41: 'Fruits et légumes',
+  12: 'Épicerie salée',
+  15: 'Boissons et conserves',
+  60: 'Surgelés',
+  7: 'Conserves',
+}
+/** L'identifiant d'une valeur de rayon de la facette : un espace à part, comme sur le vrai site (relevé du 2026-10-20). */
+export const facetAisleId = (aisle: number): number => 900000 + aisle
+
+const bloc = (id: number, label: string) => ({
+  iIdBloc: id,
+  neTypeBloc: 1,
+  sLibelle: label,
+  fMultiSelection: true,
+  niNbAffichage: 10,
+  iNbValeursMinimum: 1,
+})
+
+/**
+ * La facette de la réponse de recherche (DRV-647), de la FORME relevée sur le vrai site le 2026-10-20 (objets `objFiltreBloc{}`, `iIdBloc`, `iIdValeur`,
+ * `sIdValeurUrl`, `sLibelle`, `niNbReferences`, `lstEnfants[]`, `fEstEnPromotion`), valeurs inventées : le bloc « Rayons » (4), une valeur par rayon des produits
+ * trouvés, ses familles nommées en enfants (leur `iIdValeur` est l'`iIdFamille` des produits), et un bloc « Marques » (2).
+ */
+function facetsOf(found: readonly FakeProduct[], urlBloc = 4): Record<string, unknown>[] {
+  const aisles = [...new Set(found.map((product) => product.aisle))]
+  const value = (
+    id: number,
+    label: string,
+    references: number,
+    children: Record<string, unknown>[],
+    withBloc: boolean,
+  ) => ({
+    ...(withBloc && { objFiltreBloc: bloc(4, 'Rayons') }),
+    iIdBloc: 4,
+    iIdValeur: id,
+    sIdValeurUrl: `${urlBloc}-${id}`,
+    sLibelle: label,
+    niNbReferences: references,
+    lstEnfants: children,
+    fEstEnPromotion: false,
+  })
+  const rayons = aisles.map((aisle) => {
+    const mine = found.filter((product) => product.aisle === aisle)
+    const families = [...new Set(mine.map((product) => product.family))].flatMap((family) => {
+      const name = FAMILY_FILTERS[family] ?? FAMILY_NAMES[family]?.replace(/-/g, ' ')
+      return name === undefined
+        ? []
+        : [
+            value(
+              family,
+              name,
+              mine.filter((product) => product.family === family).length,
+              [],
+              false,
+            ),
+          ]
+    })
+    return value(
+      facetAisleId(aisle),
+      FACET_AISLES[aisle] ?? `Rayon inventé ${aisle}`,
+      mine.length,
+      families,
+      true,
+    )
+  })
+  return found.length === 0
+    ? []
+    : [
+        ...rayons,
+        {
+          objFiltreBloc: bloc(2, 'Marques'),
+          iIdBloc: 2,
+          iIdValeur: 7001,
+          sIdValeurUrl: '2-7001',
+          sLibelle: 'Jardin Inventé',
+          niNbReferences: found.length,
+          lstEnfants: [],
+          fEstEnPromotion: false,
+        },
+      ]
+}
+
+/** Les liens de la facette « Rayons » dans la page de résultats (DRV-647) : une recherche filtrée par valeur, `Filtres=<sIdValeurUrl>`, relative au magasin. */
+function facetLinksOf(query: string, found: readonly FakeProduct[]): string {
+  const aisles = [...new Set(found.map((product) => product.aisle))]
+  if (aisles.length === 0) return ''
+  const links = aisles
+    .map(
+      (aisle) =>
+        `<a href="recherche.aspx?TexteRecherche=${encodeURIComponent(query)}&amp;Filtres=4-${facetAisleId(aisle)}">${FACET_AISLES[aisle] ?? 'Rayon inventé'}</a>`,
+    )
+    .join(' ')
+  return `<nav class="facettes">${links}</nav>\n`
+}
+
 export function searchPage(
   query: string,
   found: readonly FakeProduct[],
   cart: Cart,
   session: Session = 'member',
   empty: EmptyForm = 'list',
+  availability?: Availability,
+  facet: { urlBloc?: number; total?: number } = {},
 ): string {
   const title = `Recherche : ${query.replace(/[<>&"]/g, '')}`
   if (found.length === 0 && empty === 'no-list') return storePage(title, '', {}, cart, session)
-  const products = found.map((product) => productJson(product, cart.get(product.id) ?? 0))
+  const products = found
+    .filter((product) => product.mdd !== true)
+    .map((product) => productJson(product, cart.get(product.id) ?? 0, availability))
+  // DRV-647 (0.38.0) : les produits de marque de distributeur dans une autre liste, de la forme `objContenu` du vrai site (`lstElements[] > objElement`).
+  const mdd = found
+    .filter((product) => product.mdd === true)
+    .map((product) => ({
+      objElement: productJson(product, cart.get(product.id) ?? 0, availability),
+    }))
   const text =
     found.length === 0 ? 'Aucun résultat pour votre recherche' : 'Résultats pour votre recherche'
   return storePage(
     title,
     text,
-    { widgets: [{ nom: 'produits', lstProduits: products }] },
+    {
+      widgets: [{ nom: 'produits', lstProduits: products }],
+      ...(mdd.length > 0 && { objContenuMDD: { iNbElements: mdd.length, lstElements: mdd } }),
+      lstFiltres: facetsOf(found, facet.urlBloc),
+      iNbResultats: found.length,
+      iNbTotalProduits: facet.total ?? found.length,
+      iNbPages: 1,
+      fPageSuivante: false,
+    },
     cart,
     session,
     found.length === 0 && empty === 'encoded',
-  )
+  ).replace('<footer>', `${facetLinksOf(query, found)}<footer>`)
 }
 
 /** Une page de recherche dont les produits ont des champs renommés : le squelette est là, mais l'agent ne sait plus lire les produits. */
@@ -232,6 +474,15 @@ export function challengePage(): string {
 </html>
 `
 }
+
+/**
+ * Ce que l'accueil de l'enseigne montre (DRV-625, DRV-629) : le lien « Commencer mes courses » (`link`, par défaut), la page d'un visiteur qui n'a
+ * que « Se connecter » (`no-link`), ou le lien accompagné d'un défi de l'anti-robot (`challenge`) : dans les deux derniers cas l'agent ne suit
+ * rien. Le vrai site (constat du 2026-10-19) a un BOUTON sans adresse : `button` (un élément sans `href` dont un script ouvre le magasin au clic,
+ * quel qu'il soit), `button-human` (idem, mais le script ignore tout clic qui n'est pas un vrai toucher : `event.isTrusted`, comme le site
+ * qui distingue un clic programmé), `button-inert` (le bouton est là et ne fait rien).
+ */
+export type HomeForm = 'link' | 'no-link' | 'challenge' | 'button' | 'button-human' | 'button-inert'
 
 /** Le faux Repas : la page de retour, qui affiche le fragment `#result=` reçu (décodé) pour que les tests le lisent. */
 export function repasReturnPage(): string {

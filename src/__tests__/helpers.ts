@@ -77,6 +77,7 @@ export const me = {
   roles: ['ROLE_USER'],
   isAdmin: false,
   defaultServing: 4,
+  appUpdate: { latest: null, minimum: null, outdated: false },
 }
 
 /** Corps JSON de la requête n° `index` reçue par le faux back. */

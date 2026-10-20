@@ -98,7 +98,7 @@ describe('avec le pont de l’application', () => {
         { ingredientSlug: 'huile', outcome: 'SKIPPED' },
       ],
     })
-    expect(screens.screens()).toEqual(['summary', 'progress', 'end'])
+    expect(screens.screens()).toEqual(['summary', 'progress'])
   })
 
   it('un message illisible de l’application montre « liste illisible »', async () => {
@@ -160,7 +160,7 @@ describe('le diagnostic', () => {
 
     await vi.waitFor(() => expect(screens.closed.count).toBe(1))
     expect(screens.screens()).toEqual(['welcome', 'diagnostic'])
-    expect(searches).toEqual(['sel', 'zzqxkw'])
+    expect(searches).toEqual(['sel', 'zzqxkw', 'tomate', 'pomme', 'courgette'])
     expect(navigate).not.toHaveBeenCalled()
   })
 
@@ -406,7 +406,9 @@ describe('la commande de diagnostic de l’application', () => {
 
     // When
     receive(COMMAND)
-    await vi.waitFor(() => expect(searches).toEqual(['sel', 'zzqxkw']))
+    await vi.waitFor(() =>
+      expect(searches).toEqual(['sel', 'zzqxkw', 'tomate', 'pomme', 'courgette']),
+    )
     closeDiagnostic()
 
     // Then
@@ -465,7 +467,7 @@ describe('la commande de diagnostic de l’application', () => {
 
     // Then
     await vi.waitFor(() => expect(bridge.postMessage).toHaveBeenCalledOnce())
-    expect(screens.screens()).toEqual(['diagnostic', 'summary', 'progress', 'end'])
+    expect(screens.screens()).toEqual(['diagnostic', 'summary', 'progress'])
   })
 })
 

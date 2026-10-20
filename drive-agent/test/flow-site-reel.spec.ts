@@ -74,7 +74,7 @@ describe('la cause de l’erreur dans le résultat (ticket A)', () => {
       {},
       {
         store: () => {
-          throw new LeclercError('UNSUPPORTED_PAGE', null, 'PAGE_PATH')
+          throw new LeclercError('UNSUPPORTED_PAGE', null, 'PAGE_HOST')
         },
       },
     )
@@ -85,7 +85,7 @@ describe('la cause de l’erreur dans le résultat (ticket A)', () => {
 
     expect(expectConform(sent[0]).error).toEqual({
       code: 'UNSUPPORTED_PAGE',
-      message: 'Page non prise en charge (PAGE_PATH)',
+      message: 'Page non prise en charge (PAGE_HOST)',
     })
   })
 
@@ -268,7 +268,7 @@ describe('le visiteur non connecté est arrêté avant toute écriture (ticket G
     expect(flow.history).toEqual(['START', 'VALIDATED', 'ERROR'])
     expect(expectConform(sent[0])).toMatchObject({
       outcome: 'error',
-      error: { code: 'NOT_LOGGED_IN', message: 'Vous n’êtes pas connecté (SESSION_VISITOR)' },
+      error: { code: 'NOT_LOGGED_IN', message: 'Tu n’es pas connecté (SESSION_VISITOR)' },
       lines: [],
     })
   })
@@ -370,7 +370,7 @@ describe('le visiteur non connecté est arrêté avant toute écriture (ticket G
     expect(writes).toEqual([{ id: '1000001', quantity: 1 }])
     expect(expectConform(sent[0])).toMatchObject({
       outcome: 'error',
-      error: { code: 'NOT_LOGGED_IN', message: 'Vous n’êtes pas connecté (SESSION_VISITOR)' },
+      error: { code: 'NOT_LOGGED_IN', message: 'Tu n’es pas connecté (SESSION_VISITOR)' },
       lines: [{ ingredientSlug: 'farine', outcome: 'ADDED' }],
     })
   })

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
 import { appContext, calls, json, me, rateLimited, stubApi } from '@/__tests__/helpers'
+import fr from '@/i18n/fr'
 import { useSessionStore } from '@/session/session'
 import DriveEstimate from '../DriveEstimate.vue'
 import { disclaimer, estimate } from './estimateFixtures'
@@ -48,30 +49,19 @@ afterEach(() => {
 })
 
 describe('bloc « Estimation du coût »', () => {
-  it('donne le total en euros, la couverture, les dates et l’avertissement du back', async () => {
+  it('donne le total en euros et le nombre d’articles estimés, rien d’autre : ni date, ni réserve, ni avertissement du back (DRV-628)', async () => {
     const { wrapper, fetchMock } = await open()
 
     expect(wrapper.find('h2').text()).toBe('Estimation du coût')
     expect(plain(wrapper.find('dt').text())).toBe('Total estimé')
     expect(plain(wrapper.find('dd').text())).toBe('12,47 €')
     expect(wrapper.text()).toContain('8 articles sur 12 estimés')
-    expect(wrapper.text()).toContain('4 articles ne sont pas dans le total.')
-    expect(wrapper.text()).toContain(
-      'D’après les prix vus entre le 12 octobre 2026 et le 18 octobre 2026.',
-    )
-    expect(wrapper.text()).toContain(disclaimer)
-    expect(wrapper.find('[data-testid="low-coverage"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('ne sont pas dans le total')
+    expect(wrapper.text()).not.toContain('D’après les prix')
+    expect(wrapper.text()).not.toContain(disclaimer)
+    // Le titre, le total, le compteur, le détail replié : quatre éléments, aucune phrase de plus
+    expect(wrapper.findAll('section > p')).toHaveLength(1)
     expect(calls(fetchMock)).toContain('GET /api/v1/drive/estimates/l1')
-  })
-
-  it('une seule date quand tous les prix datent du même jour', async () => {
-    const { wrapper } = await open({
-      'GET /api/v1/drive/estimates/l1': () =>
-        json(estimate({ newestPriceAt: '2026-10-12T18:00:00+02:00' })),
-    })
-
-    expect(wrapper.text()).toContain('D’après les prix vus le 12 octobre 2026.')
-    expect(wrapper.text()).not.toContain('entre le')
   })
 
   it('le détail est replié et range les lignes : non estimées d’abord, jamais devinées', async () => {
@@ -103,19 +93,18 @@ describe('bloc « Estimation du coût »', () => {
     expect(milk).toContain('estimée')
     expect(lines[lines.length - 1]).toContain('Sel')
     expect(lines[lines.length - 1]).toContain('j’en ai toujours')
-    expect(details.text()).toContain('Repas ne devine jamais un prix')
+    expect(details.text()).not.toContain('devine')
   })
 
-  it('en tête, prévient quand la couverture est faible', async () => {
+  it('ne prévient pas quand la couverture est faible : le compteur suffit (DRV-628)', async () => {
     const { wrapper } = await open({
       'GET /api/v1/drive/estimates/l1': () =>
         json(estimate({ estimatedLines: 5, unestimatedLines: 7, coverage: 0.4167 })),
     })
 
-    expect(wrapper.find('[data-testid="low-coverage"]').text()).toContain(
-      'moins de la moitié des articles ont un prix connu',
-    )
-    expect(wrapper.find('section > :nth-child(2)').attributes('data-testid')).toBe('low-coverage')
+    expect(wrapper.text()).toContain('5 articles sur 12 estimés')
+    expect(wrapper.text()).not.toContain('fiable')
+    expect(wrapper.find('[data-testid="low-coverage"]').exists()).toBe(false)
   })
 
   it('sans aucun prix connu : pas de total à 0 euro', async () => {
@@ -134,11 +123,36 @@ describe('bloc « Estimation du coût »', () => {
         ),
     })
 
+    // Une seule phrase (DRV-626) : ni total, ni compteur, ni avertissement, ni détail, et rien d'autre que le titre autour
     expect(wrapper.find('dl').exists()).toBe(false)
-    expect(wrapper.text()).toContain('Aucun prix connu pour le moment')
-    expect(wrapper.text()).toContain('0 articles sur 12 estimés')
+    expect(wrapper.find('[data-testid="no-price"]').text()).toBe('Pas encore de prix connu.')
+    expect(wrapper.findAll('section > p')).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('0 articles')
+    expect(wrapper.text()).not.toContain('ne sont pas dans le total')
     expect(wrapper.text()).not.toContain('D’après les prix vus')
-    expect(wrapper.find('[data-testid="low-coverage"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain(disclaimer)
+    expect(wrapper.find('details').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Voir le détail')
+  })
+
+  it('la phrase sans prix tient en 15 mots au plus', () => {
+    expect(
+      fr.driveEstimate.noPrice.split(/\s+/).filter((word) => /[\p{L}\d]/u.test(word)).length,
+    ).toBeLessThanOrEqual(15)
+  })
+
+  it('dès qu’un seul prix existe, le bloc complet revient (total, compteur, détail)', async () => {
+    const { wrapper } = await open({
+      'GET /api/v1/drive/estimates/l1': () =>
+        json(estimate({ estimatedLines: 1, unestimatedLines: 11, coverage: 0.0833 })),
+    })
+
+    expect(wrapper.find('[data-testid="no-price"]').exists()).toBe(false)
+    expect(wrapper.find('dd').exists()).toBe(true)
+    expect(wrapper.text()).toContain('1 article sur 12 estimé')
+    expect(wrapper.text()).not.toContain('ne sont pas dans le total')
+    expect(wrapper.text()).not.toContain(disclaimer)
+    expect(wrapper.find('details').exists()).toBe(true)
   })
 
   it('rien à acheter : le dit, sans total', async () => {
@@ -160,16 +174,7 @@ describe('bloc « Estimation du coût »', () => {
     expect(wrapper.text()).toContain('Rien à estimer')
     expect(wrapper.find('dl').exists()).toBe(false)
     expect(wrapper.find('details').exists()).toBe(false)
-    expect(wrapper.text()).toContain(disclaimer)
-  })
-
-  it('un seul article non estimé : accord au singulier', async () => {
-    const { wrapper } = await open({
-      'GET /api/v1/drive/estimates/l1': () =>
-        json(estimate({ estimatedLines: 11, unestimatedLines: 1, coverage: 0.9167 })),
-    })
-
-    expect(wrapper.text()).toContain('1 article n’est pas dans le total.')
+    expect(wrapper.text()).not.toContain(disclaimer)
   })
 
   it('affiche le chargement tant que l’estimation arrive', async () => {
@@ -213,7 +218,7 @@ describe('bloc « Estimation du coût »', () => {
     })
 
     expect(wrapper.find('[role="alert"]').text()).toBe(
-      'Trop de demandes en peu de temps. Rien n’est perdu. Attendez une minute, puis réessayez.',
+      'Trop de demandes en peu de temps. Rien n’est perdu. Attends une minute, puis réessaie.',
     )
     // L'écran n'insiste pas : une seule lecture tant que l'utilisateur ne redemande rien
     await flushPromises()
@@ -233,7 +238,7 @@ describe('bloc « Estimation du coût »', () => {
     })
 
     expect(wrapper.find('[role="alert"]').text()).toBe(
-      'Choisissez d’abord votre magasin dans les réglages du drive.',
+      'Choisis d’abord ton magasin dans les réglages du drive.',
     )
     expect(wrapper.find('a').attributes('href')).toBe('/drive/reglages')
     expect(wrapper.find('button').exists()).toBe(false)

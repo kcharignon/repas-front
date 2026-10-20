@@ -35,13 +35,13 @@ describe('notifications', () => {
 
 describe('messageForFailure', () => {
   it.each([
-    [0, 'Le serveur est injoignable. Réessayez dans un instant.'],
-    [401, 'Votre session a expiré : reconnectez-vous.'],
-    [403, "Vous n'avez pas le droit de faire cela."],
+    [0, 'Le serveur est injoignable. Réessaie dans un instant.'],
+    [401, 'Ta session a expiré : reconnecte-toi.'],
+    [403, "Tu n'as pas le droit de faire cela."],
     [404, "Cet élément n'existe plus."],
-    [409, 'Une autre modification est en cours. Réessayez dans un instant.'],
-    [412, "Modifié ailleurs entre-temps : la page vient d'être rechargée, refaites votre action."],
-    [500, 'Une erreur est survenue. Réessayez.'],
+    [409, 'Une autre modification est en cours. Réessaie dans un instant.'],
+    [412, "Modifié ailleurs entre-temps : la page vient d'être rechargée, refais ton action."],
+    [500, 'Une erreur est survenue. Réessaie.'],
   ])('dit clairement un %i', (status, expected) => {
     expect(messageForFailure(new ApiError(status, 'x'))).toBe(expected)
   })
@@ -55,8 +55,8 @@ describe('messageForFailure', () => {
   })
 
   it.each([
-    [30, 'Trop de requêtes. Réessayez dans 1 minute'],
-    [300, 'Trop de requêtes. Réessayez dans 5 minutes'],
+    [30, 'Trop de requêtes. Réessaie dans 1 minute'],
+    [300, 'Trop de requêtes. Réessaie dans 5 minutes'],
   ])('annonce le délai d’un 429 (%i s)', (seconds, expected) => {
     expect(messageForFailure(new ApiError(429, 'x', seconds))).toBe(expected)
   })
@@ -72,7 +72,7 @@ describe('messageForFailure', () => {
     'DRIVE_RATE_LIMITED (Retry-After %s) : passager, au moins une minute, jamais moins que le délai annoncé',
     (seconds, wait) => {
       expect(messageForFailure(new ApiError(429, 'DRIVE_RATE_LIMITED', seconds))).toBe(
-        `Trop de demandes en peu de temps. Rien n’est perdu. Attendez ${wait}, puis réessayez.`,
+        `Trop de demandes en peu de temps. Rien n’est perdu. Attends ${wait}, puis réessaie.`,
       )
     },
   )
@@ -100,7 +100,7 @@ describe('messageForFailure', () => {
   })
 
   it('traite une erreur inconnue comme une erreur générale', () => {
-    expect(messageForFailure(new Error('boom'))).toBe('Une erreur est survenue. Réessayez.')
+    expect(messageForFailure(new Error('boom'))).toBe('Une erreur est survenue. Réessaie.')
   })
 
   it('412 et 409 disent que la ressource est périmée, pas les autres', () => {
@@ -117,38 +117,38 @@ describe('messageForFailure', () => {
     [
       404,
       'DRIVE_DISABLED',
-      'L’envoi au drive n’est pas disponible pour le moment. Votre liste n’a pas changé. Réessayez plus tard.',
+      'L’envoi au drive n’est pas disponible pour le moment. Ta liste n’a pas changé. Réessaie plus tard.',
     ],
     [
       409,
       'SHOPPING_LIST_SENT',
-      'Cette liste vient d’être envoyée au drive : elle n’est plus modifiable. Rien n’a été changé. Rouvrez-la pour la modifier.',
+      'Cette liste vient d’être envoyée au drive : elle n’est plus modifiable. Rien n’a été changé. Rouvre-la pour la modifier.',
     ],
     [
       409,
       'SHOPPING_LIST_NOT_SENT',
-      'Cette liste n’est plus envoyée au drive. Rien n’a été changé. Ouvrez la liste pour voir où elle en est.',
+      'Cette liste n’est plus envoyée au drive. Rien n’a été changé. Ouvre la liste pour voir où elle en est.',
     ],
     [
       422,
       'UNIT_MEASURE_INCOMPLETE',
-      'La dimension et le facteur de base vont ensemble : renseignez les deux, ou laissez-les vides.',
+      'La dimension et le facteur de base vont ensemble : renseigne les deux, ou laisse-les vides.',
     ],
     [422, 'UNIT_BASE_FACTOR_INVALID', 'Le facteur de base doit être un nombre supérieur à zéro.'],
     [
       422,
       'DRIVE_LIMIT_REACHED',
-      'Repas se souvient déjà de trop de produits, ou il y a eu trop d’écritures aujourd’hui. Vos choix déjà enregistrés sont gardés. Oubliez des produits dans « Mes produits », ou réessayez demain.',
+      'Repas se souvient déjà de trop de produits, ou il y a eu trop d’écritures aujourd’hui. Tes choix déjà enregistrés sont gardés. Oublie des produits dans « Mes produits », ou réessaie demain.',
     ],
     [
       409,
       'SHOPPING_LIST_NOT_SENDABLE',
-      'Seule une liste en cours peut être envoyée au drive. Rien n’a été changé. Ouvrez une liste en cours.',
+      'Seule une liste en cours peut être envoyée au drive. Rien n’a été changé. Ouvre une liste en cours.',
     ],
     [
       422,
       'SHOPPING_LIST_EMPTY',
-      'La liste est vide : il n’y a rien à envoyer au drive. Votre liste n’a pas changé. Ajoutez des articles, puis envoyez-la.',
+      'La liste est vide : il n’y a rien à envoyer au drive. Ta liste n’a pas changé. Ajoute des articles, puis envoie-la.',
     ],
   ])('traduit le code du drive %i %s en français simple', (status, code, expected) => {
     expect(messageForFailure(new ApiError(status, code))).toBe(expected)

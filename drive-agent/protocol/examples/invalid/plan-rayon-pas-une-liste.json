@@ -1,0 +1,26 @@
+{
+  "path": "lines[0].rayonHints",
+  "why": "rayonHints est une liste.",
+  "message": {
+    "v": 1,
+    "type": "plan",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "retailer": "leclerc",
+    "store": {
+      "id": "000000",
+      "host": "courses-test.leclercdrive.fr"
+    },
+    "returnPath": "/drive/retour",
+    "lines": [
+      {
+        "ingredientSlug": "tomate",
+        "name": "Tomate",
+        "status": "NEW",
+        "products": [],
+        "rejected": [],
+        "searchQuery": "tomate",
+        "rayonHints": 41
+      }
+    ]
+  }
+}

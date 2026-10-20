@@ -12,8 +12,9 @@ avec axe (WCAG AA, clair et sombre) pour les pages. État : ✅ fait et testé �
 |---|---|---|---|---|
 | `GET\|POST /login` | `/connexion` | connexion (retour à la page demandée, 401, 429 avec délai) | U `AuthViews`, E `session` | ✅ |
 | `ANY /logout` | bouton « Se déconnecter » (`/moi`) | déconnexion, jetons révoqués côté back | U `Account`, E `session` | ✅ |
-| `GET\|POST /registration` | `/inscription` | inscription puis page « Vérifiez votre boîte mail » (409 e-mail pris, 422 du back) | U `AuthViews`, E `session` (axe) | ✅ |
+| `GET\|POST /registration` | `/inscription` | inscription puis page « Vérifie ta boîte mail » (409 e-mail pris, 422 du back) | U `AuthViews`, E `session` (axe) | ✅ |
 | (nouveau) `/verification-email`, `/confirmation-email` | attente du lien reçu par e-mail avec renvoi (1 par minute), confirmation du lien (usage unique, 24 h), connexion refusée tant que l'adresse n'est pas confirmée | U `EmailVerificationViews`, `AuthViews`, E `email-verification` (avec Mailpit), E `session` (axe) | ✅ |
+| (nouveau) `/mot-de-passe-oublie`, `/mot-de-passe-oublie/confirmation?token=…` | « Mot de passe oublié ? » sur la connexion, demande du lien (message identique que le compte existe ou non), nouveau mot de passe deux fois (lien de 30 minutes à usage unique, page d'erreur « Ce lien ne marche plus »), retour à la connexion sans connexion automatique | U `PasswordResetViews`, `AuthViews`, `session`, `guard`, E `password-reset` (simulé, 360 × 640, et avec Mailpit), E `session` (axe) | ✅ |
 | `GET /` | `/` → `/liste` | accueil = liste de courses en cours | U `App`, E `shopping-list` | ✅ |
 | `GET\|POST /user/{id}` | `/moi` | nombre de personnes par défaut, mot de passe (déconnexion ensuite) | U `Account`, E `account` | ✅ |
 

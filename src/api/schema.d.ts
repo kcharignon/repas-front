@@ -732,6 +732,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/password-reset/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fixe un nouveau mot de passe grâce au lien reçu par email (route publique)
+         * @description Le lien est à usage unique et valable 30 minutes. Le nouveau mot de passe remplace l'ancien, quel qu'il soit, et toutes les connexions ouvertes du compte sont fermées : il faut se reconnecter par /api/login_check. Un compte en attente dont l'adresse n'était pas confirmée est confirmé et activé, car le lien prouve la possession de l'adresse. Un compte désactivé reste inchangé et reçoit la même réponse qu'un lien invalide (ADR 0026).
+         */
+        post: operations["post_api_reset_password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/email-verification/send": {
         parameters: {
             query?: never;
@@ -746,6 +766,46 @@ export interface paths {
          * @description Répond 204 que l'adresse ait un compte en attente ou non (compte inconnu, déjà confirmé, désactivé, ou lien envoyé il y a moins d'une minute) : la réponse ne révèle pas quelles adresses sont inscrites (ADR 0020).
          */
         post: operations["post_api_send_email_verification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/password-reset/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Envoie par email le lien pour choisir un nouveau mot de passe (route publique)
+         * @description Répond 204 que l'adresse ait un compte ou non (adresse inconnue, compte désactivé, ou lien envoyé il y a moins d'une minute) : la réponse ne révèle pas quelles adresses sont inscrites (ADR 0026). Le lien est valable 30 minutes et un nouveau lien remplace l'ancien.
+         */
+        post: operations["post_api_send_password_reset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/app-version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Retient la version de l'application installée pour l'utilisateur connecté
+         * @description Une ligne par compte et par plateforme, remplacée à chaque appel (idempotent). Seule la version est retenue, avec l'heure : aucun identifiant d'appareil, aucun modèle de téléphone. Au plus une écriture par minute et par compte : au-delà, la réponse reste `204` et rien n'est écrit. La version ne sert qu'à informer (`appUpdate` de `GET /api/v1/me`, liste des comptes de l'administration), jamais à accorder un droit.
+         */
+        put: operations["put_api_update_user_app_version"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1074,12 +1134,44 @@ export interface components {
              */
             defaultServing: number;
         };
+        ResetPasswordPayload: {
+            /**
+             * @description Secret du lien reçu par email (paramètre `token` de l'adresse du lien)
+             * @example 3f9c0a5e7d1b4c6a8e2f0b9d7c5a3e1f3f9c0a5e7d1b4c6a8e2f0b9d7c5a3e1f
+             */
+            token: string;
+            /**
+             * @description Nouveau mot de passe en clair (8 caractères au moins, comme à l'inscription)
+             * @example un-mot-de-passe
+             */
+            password: string;
+        };
         SendEmailVerificationPayload: {
             /**
              * @description Adresse email du compte en attente
              * @example alexiane@example.com
              */
             email: string;
+        };
+        SendPasswordResetPayload: {
+            /**
+             * @description Adresse email du compte dont le mot de passe est oublié
+             * @example alexiane@example.com
+             */
+            email: string;
+        };
+        UpdateUserAppVersionPayload: {
+            /**
+             * @description Plateforme de l'application installée : `android` seulement
+             * @example android
+             * @enum {string}
+             */
+            platform: "android";
+            /**
+             * @description Version de l'application : trois nombres séparés par des points, 20 caractères au plus (ni suffixe, ni quatrième nombre)
+             * @example 0.1.8
+             */
+            version: string;
         };
         UserSettingsPayload: {
             /**
@@ -1199,7 +1291,7 @@ export interface components {
              */
             retailerProductId: string;
             /**
-             * @description Libellé du produit (255 caractères au plus, sans caractère de contrôle ni caractère invisible : saut de ligne, sens de lecture, largeur nulle)
+             * @description Libellé du produit (255 caractères au plus, sans caractère de contrôle ni caractère invisible ou de format : saut de ligne, sens de lecture, largeur nulle, trait d'union conditionnel, sélecteur de variation, remplisseur, tag ; les espaces insécables sont permises)
              * @default null
              * @example Farine de blé T55 Marque Repère 1 kg
              */
@@ -1220,6 +1312,18 @@ export interface components {
              * @default null
              */
             price: components["schemas"]["ProductPricePayload"] | null;
+            /**
+             * @description Rayon de l'enseigne où le site range le produit (`iIdRayon` chez Leclerc) : entier de 1 à 2147483647. Facultatif : absent ou `null`, la fiche du produit n'est pas modifiée ; une valeur déjà connue n'est jamais remplacée. Sert à apprendre dans quel rayon de l'enseigne chercher les ingrédients d'un rayon de Repas (`rayonHints` du plan)
+             * @default null
+             * @example 4001
+             */
+            rayonId: number | null;
+            /**
+             * @description Famille de l'enseigne, le niveau sous le rayon (`iIdFamille` chez Leclerc) : entier de 1 à 2147483647. Facultatif, mêmes règles que `rayonId`
+             * @default null
+             * @example 4101
+             */
+            familyId: number | null;
         };
         ChoiceIntentPayload: {
             /**
@@ -1764,6 +1868,23 @@ export interface components {
             /** @example pâtes carbonara */
             name: string;
         };
+        AppUpdateDTO: {
+            /**
+             * @description Dernière version publiée de l'application (`APP_LATEST_VERSION` du serveur), `null` si le serveur ne la connaît pas
+             * @example 0.1.10
+             */
+            latest?: string | null;
+            /**
+             * @description Plus ancienne version de l'application encore attendue (`APP_MIN_VERSION` du serveur), `null` si aucune
+             * @example 0.1.9
+             */
+            minimum?: string | null;
+            /**
+             * @description Vrai si la dernière version de l'application vue pour ce compte est plus ancienne que `latest` ou que `minimum` (comparaison nombre par nombre). Faux si aucune version n'est connue pour ce compte (navigateur seul, application qui ne l'a jamais envoyée) ou si le serveur ne connaît ni `latest` ni `minimum`
+             * @example false
+             */
+            outdated: boolean;
+        };
         CurrentUserDTO: {
             /**
              * @description Identifiant de l'utilisateur (UUID)
@@ -1788,6 +1909,7 @@ export interface components {
              * @example 4
              */
             defaultServing: number;
+            appUpdate: components["schemas"]["AppUpdateDTO"];
         };
         UserSummaryDTO: {
             /**
@@ -1832,6 +1954,16 @@ export interface components {
              * @enum {string}
              */
             status: "PENDING" | "ACTIVE" | "DISABLED";
+            /**
+             * @description Dernière version de l'application Android vue pour ce compte (DRV-637), `null` si inconnue (navigateur seul, application qui ne l'a jamais envoyée)
+             * @example 0.1.8
+             */
+            appVersion?: string | null;
+            /**
+             * @description « À mettre à jour » : vrai si `appVersion` est plus ancienne que la dernière version publiée (`APP_LATEST_VERSION`) ou que la minimale (`APP_MIN_VERSION`) ; faux si la version est inconnue ou si le serveur ne connaît aucune des deux
+             * @example false
+             */
+            appOutdated: boolean;
         };
         DriveStoreDTO: {
             /**
@@ -2075,6 +2207,15 @@ export interface components {
              * @example Farine
              */
             searchQuery: string;
+            /**
+             * @description Rayons de l'enseigne où chercher d'abord cet ingrédient (DRV-642), 3 au plus, du plus choisi au moins choisi : ceux où les utilisateurs ont choisi des produits pour des ingrédients du même rayon de Repas. Ce sont des identifiants de rayon de l'enseigne (`iIdRayon` chez Leclerc), jamais des noms. Vide quand rien n'est encore appris pour ce rayon de Repas, ou quand l'ingrédient n'a pas de rayon. Un classement, pas un filtre : aucun produit n'est écarté. Clé facultative pour le lecteur (un back plus ancien ne l'envoie pas)
+             * @default []
+             * @example [
+             *       4001,
+             *       4002
+             *     ]
+             */
+            rayonHints: number[];
         };
         DrivePlanDTO: {
             /**
@@ -4445,6 +4586,42 @@ export interface operations {
             };
         };
     };
+    post_api_reset_password: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordPayload"];
+            };
+        };
+        responses: {
+            /** @description Mot de passe changé, connexions fermées */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide (mot de passe de moins de 8 caractères), ou lien inconnu, déjà utilisé, expiré ou de compte désactivé (message `INVALID_PASSWORD_RESET_TOKEN`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Trop de demandes depuis cette adresse IP */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     post_api_send_email_verification: {
         parameters: {
             query?: never;
@@ -4474,6 +4651,71 @@ export interface operations {
             };
             /** @description Trop de demandes depuis cette adresse IP */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    post_api_send_password_reset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendPasswordResetPayload"];
+            };
+        };
+        responses: {
+            /** @description Demande prise en compte */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps de la requête invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Trop de demandes depuis cette adresse IP */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    put_api_update_user_app_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateUserAppVersionPayload"];
+            };
+        };
+        responses: {
+            /** @description Version retenue (ou ignorée sans erreur : une version a déjà été retenue pour ce compte dans la minute) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide : plateforme autre que `android`, version qui n'est pas trois nombres séparés par des points, ou de plus de 20 caractères */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

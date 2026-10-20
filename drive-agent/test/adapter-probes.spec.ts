@@ -33,6 +33,10 @@ describe('readArrival : la page d’arrivée, sans aucune requête', () => {
       delivery: { read: true, sameAsAddress: false },
       cookies: null,
       searchBase: null,
+      entry: {
+        start: { present: false, shape: null, where: null },
+        clickable: false,
+      },
     })
     expect(site.calls).toEqual([])
   })

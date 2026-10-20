@@ -3,6 +3,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page, type Route } from '@playwright/test'
 
+import { fakeApp } from './support/drive'
 import { fakeAppForSetup } from './support/setupApp'
 
 type Status = 'ACTIVE' | 'SENT'
@@ -118,13 +119,14 @@ test('envoyer une liste au drive, la lire sans pouvoir la modifier, puis la rouv
   page,
 }) => {
   const received = await fakeBack(page)
+  await fakeApp(page)
   await page.goto('/liste')
   await expect(page.getByRole('heading', { level: 1, name: 'Courses du week-end' })).toBeVisible()
 
   // Envoi : confirmation, puis l'écran d'envoi
   await page.getByRole('button', { name: 'Envoyer au drive' }).click()
   const confirm = page.getByRole('dialog')
-  await expect(confirm).toContainText('La liste ne sera plus modifiable. Vous pourrez la rouvrir.')
+  await expect(confirm).toContainText('La liste ne sera plus modifiable. Tu pourras la rouvrir.')
   await confirm.getByRole('button', { name: 'Envoyer au drive' }).click()
   await expect(page).toHaveURL(/\/drive\/envoi\/l1$/)
   expect(received).toContain('POST /api/v1/shopping-lists/l1/send')
@@ -133,15 +135,19 @@ test('envoyer une liste au drive, la lire sans pouvoir la modifier, puis la rouv
   await page.getByRole('link', { name: 'Retour à la liste' }).click()
   await expect(page.getByText('Envoyée au drive le 15 octobre 2026')).toBeVisible()
   await expect(page.getByText('Cette liste est envoyée au drive')).toBeVisible()
+  // Cocher en magasin n'a pas de sens sur une liste envoyée : pas de « 0 sur 2 articles dans le panier » (DRV-626)
+  await expect(page.getByText(/articles dans le panier/)).toHaveCount(0)
+  await expect(page.getByRole('progressbar')).toHaveCount(0)
   await expect(page.getByRole('checkbox')).toHaveCount(2)
   for (const box of await page.getByRole('checkbox').all()) await expect(box).toBeDisabled()
-  await expect(page.getByRole('button', { name: 'Renommer' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Mettre en pause' })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Reprendre l’envoi' })).toBeVisible()
+  // « ⋮ » ne range que la réouverture et la suppression : ni renommer ni mettre en pause
+  await page.getByRole('button', { name: 'Plus d’actions' }).click()
+  await expect(page.getByRole('menuitem')).toHaveText(['Rouvrir la liste', 'Supprimer'])
 
   // Réouverture : confirmation, puis la liste redevient modifiable
-  await page.getByRole('button', { name: 'Rouvrir la liste' }).click()
-  await expect(page.getByRole('dialog')).toContainText('Le panier Leclerc ne sera pas vidé.')
+  await page.getByRole('menuitem', { name: 'Rouvrir la liste' }).click()
+  await expect(page.getByRole('dialog')).toContainText('La liste redevient modifiable.')
   await page.getByRole('dialog').getByRole('button', { name: 'Rouvrir la liste' }).click()
   await expect(page.getByText('En cours')).toBeVisible()
   for (const box of await page.getByRole('checkbox').all()) await expect(box).toBeEnabled()
@@ -156,7 +162,8 @@ test('fonction coupée (retour arrière) : une liste envoyée se rouvre, sans pr
   await expect(page.getByText('Cette liste est envoyée au drive')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toHaveCount(0)
 
-  await page.getByRole('button', { name: 'Rouvrir la liste' }).click()
+  await page.getByRole('button', { name: 'Plus d’actions' }).click()
+  await page.getByRole('menuitem', { name: 'Rouvrir la liste' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Rouvrir la liste' }).click()
 
   await expect(page.getByText('En cours')).toBeVisible()
@@ -176,7 +183,7 @@ test('fonction coupée : « Reprendre l’envoi » dit que l’envoi n’est pas
 
   // L'écran répond « pas disponible » ; ni « Ouvrir le drive » ni « Envoyer au drive », mais « Rouvrir la liste »
   await expect(page.getByRole('alert')).toContainText(
-    'L’envoi au drive n’est pas disponible pour le moment. Votre liste n’a pas changé. Réessayez plus tard.',
+    'L’envoi au drive n’est pas disponible pour le moment. Ta liste n’a pas changé. Réessaie plus tard.',
   )
   await expect(page.getByRole('button', { name: 'Rouvrir la liste' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Ouvrir le drive' })).toHaveCount(0)
@@ -185,7 +192,7 @@ test('fonction coupée : « Reprendre l’envoi » dit que l’envoi n’est pas
 
   // Même confirmation que sur l'écran de la liste, puis retour à la liste, de nouveau modifiable
   await page.getByRole('button', { name: 'Rouvrir la liste' }).click()
-  await expect(page.getByRole('dialog')).toContainText('Le panier Leclerc ne sera pas vidé.')
+  await expect(page.getByRole('dialog')).toContainText('La liste redevient modifiable.')
   await page.getByRole('dialog').getByRole('button', { name: 'Rouvrir la liste' }).click()
   await expect(page).toHaveURL(/\/listes\/l1$/)
   await expect(page.getByText('En cours')).toBeVisible()
@@ -231,7 +238,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
     expect((await scan()).violations).toEqual([])
 
-    await page.getByRole('button', { name: 'Rouvrir la liste' }).click()
+    await page.getByRole('button', { name: 'Plus d’actions' }).click()
+    await expect(page.getByRole('menu')).toBeVisible()
+    expect((await scan()).violations).toEqual([])
+    await page.getByRole('menuitem', { name: 'Rouvrir la liste' }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
     expect((await scan()).violations).toEqual([])
   })
@@ -246,16 +256,14 @@ test('sans magasin : « Choisir mon magasin » le lit, l’enregistre, et l’en
 
   // Un geste : l'écran dit ce qu'il attend et porte le bouton qui fait le travail
   await page.getByRole('button', { name: 'Envoyer au drive' }).click()
-  await expect(
-    page.getByRole('heading', { level: 1, name: 'Choisissez votre magasin' }),
-  ).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Choisis ton magasin' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Retour à la liste' })).toBeVisible()
   expect(received).not.toContain('POST /api/v1/shopping-lists/l1/send')
 
   // Un geste : le magasin est lu dans l'application puis enregistré tout seul, et la liste nous attend à sa confirmation
   await page.getByRole('button', { name: 'Choisir mon magasin' }).click()
   const confirm = page.getByRole('dialog')
-  await expect(confirm).toContainText('La liste ne sera plus modifiable. Vous pourrez la rouvrir.')
+  await expect(confirm).toContainText('La liste ne sera plus modifiable. Tu pourras la rouvrir.')
   await expect(page).toHaveURL(/\/liste$/)
   expect(received.filter((call) => call === 'PUT /api/v1/drive/settings')).toHaveLength(1)
   expect(received).not.toContain('POST /api/v1/shopping-lists/l1/send')
@@ -265,3 +273,46 @@ test('sans magasin : « Choisir mon magasin » le lit, l’enregistre, et l’en
   await expect(page).toHaveURL(/\/drive\/envoi\/l1$/)
   expect(received).toContain('POST /api/v1/shopping-lists/l1/send')
 })
+
+test('dans un navigateur, « Envoyer au drive » n’est pas proposé : rien à verrouiller pour rien (DRV-641)', async ({
+  page,
+}) => {
+  const received = await fakeBack(page)
+  await page.goto('/liste')
+  await expect(page.getByRole('heading', { level: 1, name: 'Courses du week-end' })).toBeVisible()
+  await expect.poll(() => received).toContain('GET /api/v1/drive/settings')
+
+  await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Terminer' })).toBeVisible()
+  expect(received).not.toContain('POST /api/v1/shopping-lists/l1/send')
+})
+
+for (const [label, version] of [
+  ['trop ancienne', '0.1.9'],
+  ['qui ne dit pas sa version', null],
+] as const) {
+  test(`application ${label} : la phrase de mise à jour, aucun verrou (DRV-641)`, async ({
+    page,
+  }) => {
+    const received = await fakeBack(page)
+    await fakeApp(page, 'completed', version)
+    await page.goto('/liste')
+
+    await page.getByRole('button', { name: 'Envoyer au drive' }).click()
+    const update = page.getByRole('dialog')
+    await expect(update).toContainText('Mets à jour l’application pour envoyer ta liste.', {
+      timeout: 6000,
+    })
+    await expect(update).not.toContainText('La liste ne sera plus modifiable')
+    await expect(update.getByRole('link', { name: 'Mettre à jour' })).toHaveAttribute(
+      'href',
+      '/drive/aide',
+    )
+    expect(received).not.toContain('POST /api/v1/shopping-lists/l1/send')
+
+    // La liste reste modifiable
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('button', { name: 'Terminer' })).toBeVisible()
+    await expect(page.getByText('Cette liste est envoyée au drive')).toHaveCount(0)
+  })
+}

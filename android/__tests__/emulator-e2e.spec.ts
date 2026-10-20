@@ -29,8 +29,13 @@ function planOf(file: string): PlanMessage {
 }
 
 describe('les plans des scénarios de l’émulateur', () => {
-  it('en compte au moins un complet (connus, nouveau, à la maison, ignoré), un court et un de quatre nouveaux articles (DRV-624)', () => {
-    expect(planFiles).toEqual(['plan-complet.json', 'plan-connu.json', 'plan-nouveaux.json'])
+  it('en compte au moins un complet (connus, nouveau, à la maison, ignoré), un court , un de quatre nouveaux articles (DRV-624) et un à la quantité à vérifier (DRV-626)', () => {
+    expect(planFiles).toEqual([
+      'plan-complet.json',
+      'plan-connu.json',
+      'plan-nouveaux.json',
+      'plan-quantite.json',
+    ])
     const statuses = new Set(planOf('plan-complet.json').lines.map((line) => line.status))
     expect([...statuses].sort()).toEqual(['HAVE_AT_HOME', 'KNOWN', 'NEW', 'SKIP'])
   })
@@ -94,8 +99,8 @@ describe('la page de départ d’un plan dans l’émulateur (recette réelle du
   const script = read(join(emulatorDir, 'e2e.sh'))
 
   it('est celle de l’application : l’accueil de l’enseigne (NavigationPolicy.START_URL), servi par le faux Leclerc complet sous le même nom', () => {
-    const policy = read(join(androidDir, 'app/src/main/kotlin/eu/kantin/repas/drive/NavigationPolicy.kt'))
-    const plan = read(join(androidDir, 'app/src/main/kotlin/eu/kantin/repas/drive/DrivePlan.kt'))
+    const policy = read(join(androidDir, 'core/src/main/kotlin/eu/kantin/repas/drive/NavigationPolicy.kt'))
+    const plan = read(join(androidDir, 'core/src/main/kotlin/eu/kantin/repas/drive/DrivePlan.kt'))
 
     expect(/const val START_URL = "([^"]+)"/.exec(policy)?.[1]).toBe(`https://${HOME_HOST}/`)
     // La lecture du magasin (SetupRequest) et le plan (DrivePlan) : les deux pages de départ sont celle-là, jamais l'hôte du magasin du plan.
@@ -121,7 +126,8 @@ describe('la page de départ d’un plan dans l’émulateur (recette réelle du
   })
 
   it('joue le repli sur les pages 404 de la recette réelle : la racine de l’hôte du magasin et /magasin-N-N/ sans ville', () => {
-    expect(script).toContain(`for dead in '/' '/magasin-${STORE.id}-${STORE.id}/'; do`)
+    expect(script).toContain("dead_page_checks '/'")
+    expect(script).toContain(`dead_page_checks '/magasin-${STORE.id}-${STORE.id}/'`)
     expect(script).toContain('"startPath"')
   })
 })

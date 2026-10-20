@@ -756,3 +756,43 @@ describe('Pacer : un passage de 200 requêtes reste sous le plafond d’arrêt (
     expect(pacer.stats()).toMatchObject({ requests: 42, blocks: 2 })
   })
 })
+
+describe('Pacer : une action de la page, à la cadence des requêtes (DRV-625)', () => {
+  it('attend une pause entière même la première fois, puis agit', async () => {
+    // Given : une gigue nulle
+    const site = fakeSite(() => ({ body: 'ok' }))
+    site.setRandom(0)
+    const pacer = pacerOf(site)
+    const done: string[] = []
+
+    // When
+    await pacer.act(() => done.push('suivi'))
+
+    // Then
+    expect(site.sleeps).toEqual([PAUSE_MS])
+    expect(done).toEqual(['suivi'])
+  })
+
+  it('passe à son tour : jamais en même temps qu’une requête, ni plus vite après elle', async () => {
+    const site = fakeSite(() => ({ body: 'ok' }))
+    site.setRandom(0)
+    const pacer = pacerOf(site)
+
+    const request = pacer.request('/a', { method: 'GET' })
+    const acted = pacer.act(() => site.clock.now)
+    await request
+    const at = await acted
+
+    // La requête dure 50 ms, l'action vient 800 ms après sa fin
+    expect(at - (site.calls[0]?.at ?? 0)).toBeGreaterThanOrEqual(PAUSE_MS)
+    expect(site.maxInFlight()).toBe(1)
+  })
+
+  it('est refusée une fois le site bloqué', async () => {
+    const site = fakeSite(() => ({ status: 403, body: 'non' }))
+    const pacer = pacerOf(site)
+    await expect(pacer.request('/a', { method: 'GET' })).rejects.toBeInstanceOf(LeclercError)
+
+    await expect(pacer.act(() => 1)).rejects.toMatchObject({ code: 'BLOCKED' })
+  })
+})

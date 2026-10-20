@@ -18,6 +18,7 @@ import {
   home,
   known,
   makeFlow,
+  OUT_OF_STOCK,
   plan,
   product,
   skip,
@@ -77,7 +78,7 @@ describe('un passage complet', () => {
       { ingredientSlug: 'sucre', outcome: 'ADDED', productId: '1000003', quantity: 2, usedRank: 1 },
     ])
     expect(flow.history).toEqual(['START', 'VALIDATED', 'CONFIRMED', 'PHASE_A', 'DONE'])
-    expect(screens.screens()).toEqual(['summary', 'progress', 'end'])
+    expect(screens.screens()).toEqual(['summary', 'progress'])
     expect(screens.closed.count).toBe(1)
   })
 
@@ -143,9 +144,9 @@ describe('un passage complet', () => {
 
 describe('les produits de secours', () => {
   it('prend le second produit sans rien demander quand le préféré est indisponible, avec ses propres packs', async () => {
-    // Given : le préféré a un stock nul
+    // Given : le préféré a un stock nul et le panier ne le garde pas (une vraie rupture)
     const { adapter, writes } = fakeAdapter({
-      '1000001': { stock: 0 },
+      '1000001': OUT_OF_STOCK,
       '1000002': { price: 129, perMeasure: { cents: 129, unit: 'kg' } },
     })
     const screens = fakeUi()
@@ -154,8 +155,11 @@ describe('les produits de secours', () => {
     // When
     await flow.start(plan([known('farine', FARINE)]))
 
-    // Then
-    expect(writes).toEqual([{ id: '1000002', quantity: 2 }])
+    // Then : le préféré est tenté une fois (le panier tranche), puis le second est pris avec ses propres packs
+    expect(writes).toEqual([
+      { id: '1000001', quantity: 1 },
+      { id: '1000002', quantity: 2 },
+    ])
     expect(screens.screens()).not.toContain('quantity')
     expect(expectConform(sent[0]).lines).toEqual([
       {
@@ -220,8 +224,8 @@ describe('les produits de secours', () => {
   it('aucun produit disponible : la ligne attend la phase B avec ses produits indisponibles et ses refusés', async () => {
     // Given
     const { adapter } = fakeAdapter({
-      '1000001': { stock: 0 },
-      '1000002': { stock: 0 },
+      '1000001': OUT_OF_STOCK,
+      '1000002': OUT_OF_STOCK,
       '999000': {},
     })
     const seen: PendingLine[][] = []
@@ -250,6 +254,10 @@ describe('les produits de secours', () => {
         rejected: [{ id: '999000', label: 'Farine refusée' }],
       }),
       unavailable: FARINE,
+      reasons: new Map([
+        ['1000001', 'OUT_OF_STOCK'],
+        ['1000002', 'OUT_OF_STOCK'],
+      ]),
     })
     expect(expectConform(sent[0])).toMatchObject({ outcome: 'completed' })
     expect(sent[0]?.lines[0]?.outcome).toBe('CHOSEN')
@@ -257,7 +265,7 @@ describe('les produits de secours', () => {
   })
 
   it('sans phase B, une ligne sans produit utilisable est signalée « UNAVAILABLE » et le passage est partiel', async () => {
-    const { adapter } = fakeAdapter({ '1000001': { stock: 0 }, '1000002': { stock: 0 } })
+    const { adapter } = fakeAdapter({ '1000001': OUT_OF_STOCK, '1000002': OUT_OF_STOCK })
     const { flow, sent } = makeFlow({ ui: fakeUi().ui, adapter })
 
     await flow.start(plan([known('farine', FARINE), fresh('poivre')]))
@@ -270,14 +278,14 @@ describe('les produits de secours', () => {
   })
 
   it('ne met jamais un produit refusé au panier, même quand tous les produits acceptés sont indisponibles', async () => {
-    const { adapter, calls } = fakeAdapter({ '1000001': { stock: 0 }, '999000': {} })
+    const { adapter, calls } = fakeAdapter({ '1000001': OUT_OF_STOCK, '999000': {} })
     const { flow, sent } = makeFlow({ ui: fakeUi().ui, adapter })
 
     await flow.start(
       plan([known('farine', [product('1000001')], [{ id: '999000', label: 'Farine refusée' }])]),
     )
 
-    expect(calls).toEqual(['search 1000001'])
+    expect(calls).toEqual(['search 1000001', 'cart 1000001 1'])
     expect(sent[0]?.lines).toEqual([
       { ingredientSlug: 'farine', outcome: 'UNAVAILABLE', unavailableIds: ['1000001'] },
     ])
@@ -322,9 +330,10 @@ describe('la quantité à vérifier', () => {
 
     // Then
     expect(screens.propsOf('quantity')).toEqual([
-      { ingredient: 'Farine', productLabel: item.label, packs: item.packs ?? null },
+      // Le plan de ce test ne dit pas ce que la liste demande : pas de « Il te faut » (DRV-626)
+      { ingredient: 'Farine', productLabel: item.label, packs: item.packs ?? null, need: null },
     ])
-    expect(screens.screens()).toEqual(['summary', 'progress', 'quantity', 'progress', 'end'])
+    expect(screens.screens()).toEqual(['summary', 'progress', 'quantity', 'progress'])
     expect(writes).toEqual([{ id: '1000001', quantity: 7 }])
     expect(sent[0]?.lines[0]).toMatchObject({ outcome: 'ADDED', quantity: 7 })
   })
@@ -339,14 +348,18 @@ describe('la quantité à vérifier', () => {
     expect(sent[0]?.lines).toEqual([{ ingredientSlug: 'farine', outcome: 'SKIPPED' }])
   })
 
-  it('ne pose pas la question pour un produit indisponible', async () => {
-    const { adapter } = fakeAdapter({ '1000001': { stock: 0 }, '1000002': {} })
+  it("pose la question même pour un produit à étiquette de rupture (le panier tranche), puis passe au suivant s'il le refuse", async () => {
+    const { adapter, writes } = fakeAdapter({ '1000001': OUT_OF_STOCK, '1000002': {} })
     const screens = fakeUi()
     const { flow } = makeFlow({ ui: screens.ui, adapter })
 
     await flow.start(plan([known('farine', [product('1000001', null), product('1000002', 1)])]))
 
-    expect(screens.screens()).not.toContain('quantity')
+    expect(screens.propsOf('quantity')).toHaveLength(1)
+    expect(writes).toEqual([
+      { id: '1000001', quantity: 1 },
+      { id: '1000002', quantity: 1 },
+    ])
   })
 })
 
@@ -452,7 +465,7 @@ describe('le contenu lu en direct fait foi (DRV-613)', () => {
     // Then : le plan fait foi, comme avant
     const writes = site.calls.filter((call) => call.init.method === 'POST')
     expect(writes.map(sentQuantity)).toEqual([11])
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+    expect(screens.screens()).not.toContain('end')
   })
 
   it('le nombre rendu à Repas est celui que le panier a gardé, pas celui du plan ni celui du calcul', async () => {
@@ -482,7 +495,7 @@ describe('le contenu lu en direct fait foi (DRV-613)', () => {
     // Then
     expect(writes).toEqual([{ id: '1000001', quantity: 2 }])
     expect(expectConform(sent[0]).lines[0]).toMatchObject({ outcome: 'ADDED', quantity: 2 })
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+    expect(screens.screens()).not.toContain('end')
   })
 
   it.each([
@@ -512,7 +525,7 @@ describe('le contenu lu en direct fait foi (DRV-613)', () => {
     expect(writes).toEqual([{ id: '1000001', quantity: 3 }])
     expect(screens.screens()).not.toContain('quantity')
     expect(expectConform(sent[0]).lines[0]).toMatchObject({ outcome: 'ADDED', quantity: 3 })
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+    expect(screens.screens()).not.toContain('end')
   })
 
   it('un nombre à vérifier reste une question pour l’utilisateur, même quand le contenu en direct est lisible', async () => {
@@ -526,20 +539,21 @@ describe('le contenu lu en direct fait foi (DRV-613)', () => {
 
     // Then : l'utilisateur tranche, rien n'est signalé
     expect(screens.propsOf('quantity')).toEqual([
-      { ingredient: 'Farine', productLabel: 'Produit de test 1000001', packs: null },
+      // La liste demande 1 kg : l'écran le dit (DRV-626)
+      { ingredient: 'Farine', productLabel: 'Produit de test 1000001', packs: null, need: '1 kg' },
     ])
     expect(writes).toEqual([{ id: '1000001', quantity: 6 }])
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+    expect(screens.screens()).not.toContain('end')
   })
 
   it('juge chaque produit sur son propre contenu : le produit de secours est recalculé comme le préféré', async () => {
-    // Given : le préféré est en rupture ; le secours, mémorisé à 2 produits, ne contient en fait que 100 g
+    // Given : le préféré est en rupture (le panier le refuse) ; le secours, mémorisé à 2 produits, ne contient en fait que 100 g
     const line = {
       ...known('farine', [product('1000001', 1), product('1000002', 2)]),
       needed: KILO,
     }
     const { adapter, writes } = fakeAdapter({
-      '1000001': { stock: 0, content: GRAMS_500 },
+      '1000001': { ...OUT_OF_STOCK, content: GRAMS_500 },
       '1000002': { content: GRAMS_100 },
     })
     const screens = fakeUi()
@@ -548,8 +562,8 @@ describe('le contenu lu en direct fait foi (DRV-613)', () => {
     // When
     await flow.start(plan([line]))
 
-    // Then
-    expect(writes).toEqual([{ id: '1000002', quantity: 10 }])
+    // Then : une tentative pour le préféré, puis le secours au nombre recalculé
+    expect(writes.at(-1)).toEqual({ id: '1000002', quantity: 10 })
     expect(sent[0]?.lines[0]).toMatchObject({ productId: '1000002', quantity: 10, usedRank: 2 })
     expect(screens.propsOf('end')[0]?.changes).toEqual([{ name: 'Farine', planned: 2, live: 10 }])
   })
@@ -571,7 +585,7 @@ describe('le contenu lu en direct fait foi (DRV-613)', () => {
     await flow.start(plan([line]))
 
     // Then
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+    expect(screens.screens()).not.toContain('end')
   })
 
   it('la mention survit à un rechargement de la page : elle figure à la fin du passage repris', async () => {
@@ -627,7 +641,7 @@ describe('le contenu lu en direct fait foi (DRV-613)', () => {
 
     // Then
     expect(screens.propsOf('resume')).toEqual([{ done: 1, total: 1 }])
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+    expect(screens.screens()).not.toContain('end')
   })
 
   it.each([
@@ -662,7 +676,7 @@ describe('le contenu lu en direct fait foi (DRV-613)', () => {
     await flow.start(plan([home('sel')]))
 
     // Then
-    expect(screens.propsOf('end')[0]).not.toHaveProperty('changes')
+    expect(screens.screens()).not.toContain('end')
   })
 })
 
@@ -713,7 +727,8 @@ describe('les erreurs', () => {
     await flow.start(plan([known('farine', [product('1000002', 1), product('1000001', 3)])]))
 
     // Then
-    expect(site.calls.map((call) => call.init.method)).toEqual(['GET', 'GET', 'POST'])
+    // le produit en rupture est tenté une fois (le panier ne le garde pas), puis le suivant est cherché et mis au panier
+    expect(site.calls.map((call) => call.init.method)).toEqual(['GET', 'POST', 'GET', 'POST'])
     expect(expectConform(sent[0]).lines).toEqual([
       expect.objectContaining({
         outcome: 'ADDED',
@@ -845,7 +860,7 @@ describe('les erreurs', () => {
 
   it('une erreur imprévue de l’orchestrateur lui-même montre « le site a changé » et ne renvoie rien', async () => {
     const screens = fakeUi({
-      end: () => {
+      summary: () => {
         throw new Error('bug')
       },
     })

@@ -45,7 +45,7 @@ describe('le choix automatique du produit', () => {
       label2: null,
       pricePerMeasure: null,
       promo: null,
-      thumbnailUrl: null,
+      imageUrl: null,
       content: null,
       contentSource: null,
     }) as Parameters<typeof pickCandidate>[0][number]
@@ -89,12 +89,15 @@ describe('en fonctionnement normal', () => {
     const data = await play(parts)
 
     // Then : le diagnostic cherche « sel » puis le mot absurde (la forme d'une réponse sans résultat), le lot cherche les douze mots, puis l'essai
-    expect(parts.calls.slice(0, 14)).toEqual([
+    expect(parts.calls.slice(0, 17)).toEqual([
       'search sel',
       'search zzqxkw',
+      'search tomate',
+      'search pomme',
+      'search courgette',
       ...ALL_WORDS.map((w) => `search ${w}`),
     ])
-    expect(parts.calls.slice(14)).toEqual([
+    expect(parts.calls.slice(17)).toEqual([
       'search farine',
       'cart 2000000 1',
       'cart 2000000 3',

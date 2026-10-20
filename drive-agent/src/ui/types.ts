@@ -1,10 +1,23 @@
 // Les écrans de l'interface et ce que chacun reçoit (`props`) et rend (`answer`, la réponse de l'utilisateur).
 import type { ErrorCode, LineStatus, Outcome, Placement } from '../../protocol'
 
+/**
+ * Pourquoi un produit habituel n'a pas été mis au panier (DRV-635). `OUT_OF_STOCK` : le site le dit en rupture (stock nul ou « Bientôt disponible ») ET le
+ * panier en a refusé un ; `NOT_FOUND` : aucune recherche ne l'a retrouvé (ce qui ne prouve rien sur sa disponibilité) ; `CART_REFUSED` : le site le disait
+ * disponible et le panier n'en a rien pris. Seul `OUT_OF_STOCK` se dit « n'est plus disponible ». Un état de l'agent et de son écran, pas du protocole.
+ */
+export type UnavailableReason = 'OUT_OF_STOCK' | 'NOT_FOUND' | 'CART_REFUSED'
+
+/**
+ * Pourquoi un produit CHOISI n'est pas au panier (DRV-644) : `COMING_SOON` (la fiche porte « Bientôt disponible », comme l'application officielle de l'enseigne),
+ * `OUT_OF_STOCK` (la fiche ou la réponse du panier dit un stock nul) ou `CART_REFUSED` (la fiche le disait disponible, le panier n'en a rien pris). Un état de l'agent et de son écran, pas du protocole.
+ */
+export type UnreachedReason = 'OUT_OF_STOCK' | 'COMING_SOON' | 'CART_REFUSED'
+
 export interface SummaryLine {
   name: string
   status: LineStatus
-  /** Le produit préféré d'une ligne connue. */
+  /** Le produit habituel d'une ligne connue. */
   detail?: string
 }
 
@@ -39,15 +52,17 @@ export type ProgressPatch = Partial<Omit<ProgressProps, 'log'>> & { entry?: stri
 export interface QuantityProps {
   ingredient: string
   productLabel: string
-  /** Les `packs` du plan, `null` s'il n'y en a pas : le champ propose alors 1. */
+  /** Les `packs` du plan, `null` s'il n'y en a pas : le champ propose alors 1 (et le sélectionne en entier : on tape le nombre par-dessus). */
   packs: number | null
+  /** La quantité que la liste demande, « 200 g » (comme sur l'écran de choix), quand l'étape la connaît (DRV-626). */
+  need?: string | null
 }
 
 /** Ce que l'utilisateur peut faire pendant le choix d'un produit (phase B, DRV-306). */
 export type ChooserAnswer =
   | { kind: 'skip' }
   | { kind: 'have' }
-  /** « Passer les n suivants » (DRV-624) : « Pas cette fois » pour cet article et tous ceux qui restent à choisir, sans rien retenir. */
+  /** « Passer ces n articles » (DRV-624, DRV-626) : « Pas cette fois » pour cet article et tous ceux qui restent à choisir, sans rien retenir. */
   | { kind: 'rest' }
   | { kind: 'cancel' }
   /** Le contenu de la zone a conclu (un produit choisi…) : `value` est défini par DRV-306. */
@@ -59,8 +74,9 @@ export interface ChooserProps {
   position: number
   total: number
   /**
-   * Vrai : un des articles que « Passer les n suivants » passerait (celui-ci compris) n'a encore aucun produit retenu. L'écran demande alors une
-   * confirmation d'une ligne avant de répondre `rest` (DRV-624). Le bouton lui-même est visible dès qu'il reste plus d'un article à choisir.
+   * Vrai : un des articles que « Passer ces n articles » passerait (celui-ci compris) n'a encore aucun produit retenu. L'écran demande alors une
+   * confirmation d'une ligne avant de répondre `rest` (DRV-624) : un écran à deux boutons, sans la liste de produits ni la recherche (DRV-626).
+   * Le bouton lui-même est visible dès qu'il reste plus d'un article à choisir.
    */
   confirmRest?: boolean
   /**
@@ -74,6 +90,8 @@ export interface ChooserProps {
 export interface PlacementProps {
   ingredient: string
   productLabel: string
+  /** L'adresse de la photo du produit choisi (DRV-633), `null` s'il n'y en a pas ; revérifiée à l'affichage. */
+  photo?: string | null | undefined
 }
 
 /** Une ligne du diagnostic : le contrôle, son résultat en texte (le résultat n'est jamais dit par la seule couleur) et son détail. */
@@ -108,6 +126,14 @@ export interface StoreProps {
 
 /** La demande de vérification de l'anti-robot (ticket K) : elle n'a pas de donnée, l'écran dit toujours la même chose. */
 export type ChallengeProps = Record<string, never>
+
+/**
+ * L'entrée dans le magasin (DRV-625), un bandeau : `opening` pendant que l'agent suit lui-même « Commencer mes courses », `manual` quand il ne
+ * le peut pas (lien absent, page inattendue, défi de l'anti-robot) et que l'utilisateur touche le bouton du site. Aucune réponse : la page change.
+ */
+export interface EntryProps {
+  stage: 'opening' | 'manual'
+}
 
 export interface ErrorProps {
   code: ErrorCode
@@ -150,6 +176,16 @@ export interface EndProps {
    * Absent quand ce n'est pas arrivé.
    */
   slow?: true
+  /**
+   * Les articles restés sans produit dont la phase A sait pourquoi leur produit habituel n'a pas été mis au panier (DRV-635) : la raison et le nombre de
+   * recherches faites, dans un bloc « Détails » replié. Absent (jamais vide) quand aucun.
+   */
+  reasons?: readonly { name: string; reason: UnavailableReason; tried: number }[]
+  /**
+   * Les produits que l'utilisateur a choisis et que le panier n'a pas pris (DRV-644) : le choix est enregistré, le produit n'est pas au panier. Le nom du
+   * produit et pourquoi. Absent (jamais vide) quand aucun.
+   */
+  unreached?: readonly { label: string; reason: UnreachedReason }[]
 }
 
 /** Les écrans : ce que `ui.show(nom, props)` affiche et ce que sa promesse rend. */
@@ -173,6 +209,8 @@ export interface ScreenMap {
    * l'utilisateur l'a faite, le passage reprend ; `stop` : il arrête.
    */
   challenge: { props: ChallengeProps; answer: 'resume' | 'stop' }
+  /** Un bandeau sans bouton (DRV-625) : sa promesse ne se résout jamais, la page de l'enseigne change ou l'utilisateur touche son bouton. */
+  entry: { props: EntryProps; answer: never }
   error: { props: ErrorProps; answer: 'return' | 'close' }
   end: { props: EndProps; answer: 'return' }
 }

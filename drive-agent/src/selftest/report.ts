@@ -142,7 +142,10 @@ export function reportOf(data: SelftestData): string {
     T.duration(seconds(data.durationMs)),
     ...halt,
     '',
-    ...(probeLines(data.probes).length > 0 ? [...probeLines(data.probes), ''] : []),
+    // Sans le relevé DRV-647 (menu des rayons, structure de la réponse) : il est au diagnostic, et ce rapport est borné à 20 000 caractères.
+    ...(probeLines(data.probes, { aisleSource: false }).length > 0
+      ? [...probeLines(data.probes, { aisleSource: false }), '']
+      : []),
     ...block(
       0,
       S.selftest.step.check,

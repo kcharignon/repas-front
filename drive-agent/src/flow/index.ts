@@ -7,27 +7,46 @@ export {
   settleKnownLine,
   type ContentChange,
   type KnownLineDeps,
+  type UnavailableNote,
+  type UnavailableReason,
   type Verdict,
 } from './phase-a'
 export { guidedChoice, labelOf, MAX_CANDIDATES } from './phase-b'
-export { findKnownProduct, searchByName, type NameSearch } from './search-by-name'
-export { MAX_FALLBACKS, searchForms } from './search-forms'
+export {
+  findKnownProduct,
+  lookUpKnownProduct,
+  searchByName,
+  type KnownSearch,
+  type NameSearch,
+} from './search-by-name'
+export { MAX_FALLBACKS, MAX_PRODUCT_FORMS, productSearchForms, searchForms } from './search-forms'
 export {
   buildResult,
   cartsOf,
   changesOf,
   endingOf,
   endProps,
+  hasSomethingToRead,
+  reasonsOf,
+  unreachedOf,
   resultLines,
   type Ending,
 } from './result'
 export { setupHandler, type SetupDeps } from './setup'
 export {
   emptyState,
+  LAST_REASONS_KEY,
+  LAST_REFUSALS_KEY,
+  readLastReasons,
+  readLastRefusals,
   RUN_PREFIX,
   RunStore,
+  type LastReason,
+  type LastRefusal,
   type RecordedCart,
   type RecordedChange,
+  type RecordedReason,
+  type RecordedUnreached,
   type RunState,
 } from './run-state'
 export type {

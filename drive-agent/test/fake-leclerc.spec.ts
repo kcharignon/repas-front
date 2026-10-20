@@ -21,6 +21,7 @@ import {
   startFakeLeclerc,
   type FakeLeclerc,
 } from '../fake-leclerc/server'
+import { FOREIGN_PHOTO_HOST, PHOTO_HOST } from '../fake-leclerc/photos'
 import { BACK_FORBIDDEN, backAcceptsLabel } from './back-label-rules'
 
 interface Reply {
@@ -96,7 +97,7 @@ describe('la page de recherche', () => {
     // When
     const reply = await search('farine')
     const { products } = extractProducts(reply.text)
-    const candidates = products.map(toCandidate)
+    const candidates = products.map((product) => toCandidate(product))
 
     // Then
     expect(reply.status).toBe(200)
@@ -580,6 +581,50 @@ describe('la racine du magasin et la remise à neuf (DRV-319, émulateur Android
     expect((await cartCall('1000001', 1)).status).toBe(200)
   })
 
+  it('sert la page du panier sous le chemin AVEC la ville (DRV-629), une 404 sans ville, et la refuse quand « basketStatus » le demande', async () => {
+    fake.seedCart({ 1000001: 2 })
+
+    const withCity = await call(`${PAGE_PATH}/detail-panier.aspx`)
+    const withoutCity = await call(`${CART_PATH}/detail-panier.aspx`)
+    fake.setBehavior({ basketStatus: 404 })
+    const refused = await call(`${PAGE_PATH}/detail-panier.aspx`)
+    fake.setBehavior({ basketStatus: null })
+
+    expect(withCity.status).toBe(200)
+    expect(withCity.text).toContain('Mon panier')
+    expect(withCity.text).toContain('2 ×')
+    expect(withoutCity.status).toBe(404)
+    expect(refused.status).toBe(404)
+    expect((await call(`${PAGE_PATH}/detail-panier.aspx`)).status).toBe(200)
+  })
+
+  it('refuse l’accueil du magasin avec la ville par un code HTTP, ou le sert « introuvable » sous un statut 200 (DRV-631)', async () => {
+    fake.setBehavior({ storeHomeStatus: 404 })
+    const refused = await call(PAGE_PATH)
+    fake.setBehavior({ storeHomeStatus: null, storeHomeTitle: 'not-found' })
+    const disguised = await call(PAGE_PATH)
+    fake.setBehavior({ storeHomeTitle: null })
+    const normal = await call(PAGE_PATH)
+
+    expect(refused.status).toBe(404)
+    expect(disguised.status).toBe(200)
+    expect(disguised.text).toContain('<title>Page introuvable')
+    expect(normal.status).toBe(200)
+    expect(normal.text).toContain('<title>Accueil du magasin')
+  })
+
+  it('sert l’accueil avec un bouton SANS adresse quand « homeForm » vaut « button » (le vrai site, DRV-629)', async () => {
+    for (const form of ['button', 'button-human', 'button-inert'] as const) {
+      fake.setBehavior({ homeForm: form })
+
+      const text = (await call('/', { host: HOME_HOST })).text
+
+      expect(text).toContain('Commencer mes courses')
+      expect(text).not.toMatch(/<a[^>]*href=[^>]*>Commencer mes courses/)
+      expect(text).toContain("addEventListener('click'")
+    }
+  })
+
   it('sert un autre magasin que celui du plan (pour le message « Ce n’est pas le bon magasin »)', async () => {
     expect(OTHER_STORE_PATH).not.toContain(STORE.id)
     expect((await call(`${OTHER_STORE_PATH}/`)).text).toContain('Accueil du magasin')
@@ -825,5 +870,189 @@ describe('le moteur strict (ticket D de l’audit du 2026-10-18) : sensible aux 
     fake.reset()
 
     expect(await idsOf('œuf')).toEqual(['1000014', '1000015'])
+  })
+})
+
+describe('le moteur à apostrophe stricte (DRV-635) : « c est » ne trouve rien, « c’est » et « cest » oui', () => {
+  const idsOf = async (word: string) =>
+    extractProducts((await search(word)).text).products.map((product) => product.id)
+
+  it('par défaut, le moteur tolérant ne distingue pas les formes de l’apostrophe', async () => {
+    expect(fake.behavior().strictApostrophe).toBeUndefined()
+    expect(await idsOf('gateaux c est nous')).toEqual(['1000034'])
+  })
+
+  it.each([
+    ["gâteaux c'est nous", ['1000034']],
+    ['gateaux C’EST nous', ['1000034']],
+    ['gateaux cest nous', ['1000034']],
+    ['cest', ['1000034']],
+    ["Gâteaux C'est Nous Pépites 300 g", ['1000034']],
+  ])('« %s » retrouve le produit', async (word, ids) => {
+    fake.setBehavior({ strictApostrophe: true })
+
+    expect(await idsOf(word)).toEqual(ids)
+  })
+
+  it.each(['gateaux c est nous', 'c est', 'est', 'gateaux c est'])(
+    '« %s » (l’apostrophe remplacée par une espace) ne trouve rien',
+    async (word) => {
+      fake.setBehavior({ strictApostrophe: true })
+
+      expect(await idsOf(word)).toEqual([])
+    },
+  )
+
+  it('un mot cherché est le début d’un mot du libellé : « oeuf » trouve les « Oeufs », « euf » non', async () => {
+    fake.setBehavior({ strictApostrophe: true })
+
+    expect(await idsOf('oeuf')).toEqual(['1000014', '1000015'])
+    expect(await idsOf('euf')).toEqual([])
+  })
+
+  it('la remise à neuf rend le moteur tolérant', async () => {
+    fake.setBehavior({ strictApostrophe: true })
+    fake.reset()
+
+    expect(await idsOf('gateaux c est nous')).toEqual(['1000034'])
+  })
+})
+
+describe('la disponibilité des produits à stock nul (DRV-635)', () => {
+  const FLOUR_OUT = 1000002
+  const CEREALS = 1000033
+
+  const candidateOf = async (id: number) => {
+    const { text } = await search('farine')
+    const cereals = await search('cereales')
+    return [...extractProducts(text).products, ...extractProducts(cereals.text).products]
+      .map((product) => toCandidate(product))
+      .find((candidate) => candidate.id === String(id))
+  }
+
+  it('par défaut, aucune étiquette de plus : stock nul, panier qui refuse', async () => {
+    const found = await candidateOf(CEREALS)
+
+    expect(found).toMatchObject({ stock: 0, availability: null, comingSoon: false })
+    const reply = await cartCall(String(CEREALS), 2)
+    expect(readCartResponse(reply.text, String(CEREALS)).obtained).toBe(0)
+    expect(fake.cart()).toEqual({})
+  })
+
+  it.each(['misleading', 'real-out'] as const)(
+    '%s : la fiche dit stock nul, « Bientôt disponible » et l’étiquette 2 ; les produits en stock portent l’étiquette 1',
+    async (availability) => {
+      fake.setBehavior({ availability })
+
+      expect(await candidateOf(CEREALS)).toMatchObject({
+        stock: 0,
+        availability: 2,
+        comingSoon: true,
+      })
+      expect(await candidateOf(FLOUR_OUT)).toMatchObject({ availability: 2, comingSoon: true })
+      const stocked = extractProducts((await search('farine')).text).products.map((product) =>
+        toCandidate(product),
+      )
+      expect(stocked.find((candidate) => candidate.id === '1000001')).toMatchObject({
+        stock: 12,
+        availability: 1,
+        comingSoon: false,
+      })
+    },
+  )
+
+  it('misleading (disponibilité trompeuse) : le panier ACCEPTE le produit à stock nul, comme le site mobile', async () => {
+    fake.setBehavior({ availability: 'misleading' })
+
+    const reply = await cartCall(String(CEREALS), 2)
+
+    expect(readCartResponse(reply.text, String(CEREALS)).obtained).toBe(2)
+    expect(fake.cart()).toEqual({ [CEREALS]: 2 })
+  })
+
+  it('real-out (vraie rupture) : le panier REFUSE le produit à stock nul', async () => {
+    fake.setBehavior({ availability: 'real-out' })
+
+    const reply = await cartCall(String(CEREALS), 2)
+
+    expect(readCartResponse(reply.text, String(CEREALS)).obtained).toBe(0)
+    expect(fake.cart()).toEqual({})
+  })
+
+  it('un produit en stock reste plafonné par son stock, quel que soit le mode', async () => {
+    fake.setBehavior({ availability: 'misleading' })
+
+    const reply = await cartCall('1000003', 50)
+
+    expect(readCartResponse(reply.text, '1000003').obtained).toBe(5)
+  })
+
+  it('la remise à neuf efface le mode', async () => {
+    fake.setBehavior({ availability: 'misleading', strictApostrophe: true })
+
+    fake.reset()
+
+    expect(fake.behavior()).toEqual({ latencyMs: 0, fault: null })
+  })
+})
+
+describe('les photos des produits (DRV-633)', () => {
+  const candidatesOf = async () => {
+    const reply = await search('farine')
+    return extractProducts(reply.text).products.map((product) => toCandidate(product, null))
+  }
+
+  it('la recherche donne une adresse de photo sur l’hôte d’images, une autre hôte, ou rien : l’agent ne garde que la première', async () => {
+    const reply = await search('farine')
+    const raw = extractProducts(reply.text).products.map((product) => product.thumbnail)
+
+    expect(raw).toEqual([
+      `https://${PHOTO_HOST}/image.ashx?id=1001&use=l&cat=p`,
+      `https://${PHOTO_HOST}/image.ashx?id=1002&use=l&cat=p`,
+      `https://${FOREIGN_PHOTO_HOST}/image.ashx?id=1003&use=l&cat=p`,
+      `https://${PHOTO_HOST}/image.ashx?id=1004&use=l&cat=p`,
+      null,
+    ])
+    expect((await candidatesOf()).map((candidate) => candidate.imageUrl)).toEqual([
+      `https://${PHOTO_HOST}/image.ashx?id=1001&use=l&cat=p`,
+      `https://${PHOTO_HOST}/image.ashx?id=1002&use=l&cat=p`,
+      null,
+      `https://${PHOTO_HOST}/image.ashx?id=1004&use=l&cat=p`,
+      null,
+    ])
+  })
+
+  it('sert une image synthétique (SVG, sans texte) sur l’hôte d’images, sans cadence ni défaut simulé', async () => {
+    fake.setBehavior({ fault: { kind: 'forbidden' } })
+
+    const reply = await call('/image.ashx?id=1001&use=l&cat=p', { host: PHOTO_HOST })
+
+    expect(reply.status).toBe(200)
+    expect(reply.headers['content-type']).toBe('image/svg+xml')
+    expect(reply.text).toContain('<svg')
+    expect(reply.text).not.toContain('<text')
+    expect(fake.paced()).toEqual([])
+    expect(fake.requests().at(-1)).toMatchObject({ kind: 'image', host: PHOTO_HOST, status: 200 })
+  })
+
+  it('la photo d’un produit dont l’image « manque », ou d’un identifiant inconnu, répond 404', async () => {
+    expect((await call('/image.ashx?id=1004&use=l&cat=p', { host: PHOTO_HOST })).status).toBe(404)
+    expect((await call('/image.ashx?id=999999&use=l&cat=p', { host: PHOTO_HOST })).status).toBe(404)
+    expect((await call('/image.ashx?id=abc', { host: PHOTO_HOST })).status).toBe(404)
+  })
+
+  it('l’hôte d’images ne sert rien d’autre que image.ashx en GET', async () => {
+    expect((await call('/', { host: PHOTO_HOST })).status).toBe(404)
+    expect(
+      (await call(`${PAGE_PATH}/recherche.aspx?TexteRecherche=farine`, { host: PHOTO_HOST }))
+        .status,
+    ).toBe(404)
+    expect((await call('/image.ashx?id=1001', { host: PHOTO_HOST, method: 'POST' })).status).toBe(
+      404,
+    )
+  })
+
+  it('l’hôte « autre site » n’est pas servi : le faux site refuse son nom', async () => {
+    expect((await call('/image.ashx?id=1003', { host: FOREIGN_PHOTO_HOST })).status).toBe(403)
   })
 })

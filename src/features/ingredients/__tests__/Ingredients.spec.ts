@@ -397,7 +397,7 @@ describe('IngredientEditorView', () => {
 
     await wrapper.find('form').trigger('submit')
 
-    expect(wrapper.text()).toContain("Donnez un nom à l'ingrédient.")
+    expect(wrapper.text()).toContain("Donne un nom à l'ingrédient.")
     expect(calls(fetchMock).filter((call) => call.startsWith('POST /api/v1/ingredients'))).toEqual(
       [],
     )

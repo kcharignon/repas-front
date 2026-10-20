@@ -6,8 +6,8 @@
 // du bouton de menu (⋮, 48 dp et 24 dp de marge) que l'application pose sur le coin bas droit de la page.
 
 export const STYLES = `
-:host{all:initial;color-scheme:light dark;--target:48px;--clear:88px;--bg:#f7f8f6;--fg:#1d2a24;--muted:#4a5850;--card:#fff;--line:#7b8780;--accent:#1e6b4c;--on:#fff;--warn:#fff3d6;--warnfg:#5b3b00;--danger:#a12a2a}
-@media (prefers-color-scheme:dark){:host{--bg:#121a16;--fg:#e8f0eb;--muted:#b4c2b9;--card:#1b2621;--line:#8c9a92;--accent:#7fd6a8;--on:#0b1510;--warn:#3a2f12;--warnfg:#ffe3a3;--danger:#ff9b9b}}
+:host{all:initial;color-scheme:light dark;--target:48px;--clear:88px;--bg:#f7f8f6;--fg:#1d2a24;--muted:#4a5850;--card:#fff;--line:#7b8780;--accent:#1e6b4c;--on:#fff;--warn:#fff3d6;--warnfg:#5b3b00;--danger:#a12a2a;--photo:#fff}
+@media (prefers-color-scheme:dark){:host{--bg:#121a16;--fg:#e8f0eb;--muted:#b4c2b9;--card:#1b2621;--line:#8c9a92;--accent:#7fd6a8;--on:#0b1510;--warn:#3a2f12;--warnfg:#ffe3a3;--danger:#ff9b9b;--photo:#fff}}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 .backdrop{position:absolute;inset:0;background:var(--bg)}
@@ -24,6 +24,7 @@ ul{margin:8px 0;padding-left:1.2em}
 .shop{font-size:1.15rem;font-weight:600}
 .notice{margin:12px 0;padding:10px 12px;border:1px solid var(--warnfg);border-radius:10px;background:var(--warn);color:var(--warnfg)}
 .error{color:var(--danger);font-weight:600}
+.lead{font-weight:600}
 .counts{margin:12px 0;padding:0;list-style:none}
 .counts li{padding:6px 0;border-bottom:1px solid var(--line)}
 details{margin:12px 0;border:1px solid var(--line);border-radius:10px;background:var(--card)}
@@ -75,11 +76,19 @@ textarea{width:100%;margin:8px 0;padding:8px 10px;font:.9rem/1.4 ui-monospace,mo
 .gone p{margin:0 0 4px}
 .check{display:flex;align-items:center;gap:10px;min-height:var(--target);margin:0;font-weight:400}
 .check input{flex:none;width:var(--target);height:var(--target);accent-color:var(--accent)}
+.aisles{position:relative;display:flex;gap:8px;margin:4px 0 8px;padding:2px 2px 6px;overflow-x:auto;overscroll-behavior-x:contain;touch-action:pan-x pan-y}
+.aisles>.chip{flex:none;padding:6px 14px;border-color:var(--line);border-radius:24px;white-space:nowrap}
+.aisles>.chip[aria-pressed=true]{border-color:var(--accent);background:var(--accent);color:var(--on);font-weight:600}
 .candidates{margin:8px 0;padding:0;list-style:none}
 .candidate{margin:8px 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
 .candidate p{margin:2px 0}
 .candidate .name{font-weight:600}
 .candidate.off .name{color:var(--muted)}
 .candidate>button{width:100%;margin-top:8px}
+.more{height:1px}
+.media{display:flex;align-items:flex-start;gap:12px}
+.media .text{flex:1 1 0;min-width:0}
+.photo{flex:none;display:flex;align-items:center;justify-content:center;width:80px;height:80px;padding:4px;border:1px solid var(--line);border-radius:8px;background:var(--photo)}
+.photo img{display:block;width:100%;height:100%;object-fit:contain}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 `

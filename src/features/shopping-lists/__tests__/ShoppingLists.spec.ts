@@ -167,7 +167,7 @@ describe('ShoppingListsView', () => {
     const context = await signedIn()
     const wrapper = mount(ShoppingListsView, { global: { plugins: context.plugins } })
 
-    await vi.waitFor(() => expect(wrapper.text()).toContain("Vous n'avez encore aucune liste."))
+    await vi.waitFor(() => expect(wrapper.text()).toContain("Tu n'as encore aucune liste."))
   })
 
   it('signale un back injoignable', async () => {
@@ -213,6 +213,18 @@ describe('ShoppingListDetailView', () => {
       (candidate) => candidate.textContent.trim() === label,
     )
 
+  const menuItem = (label: string) =>
+    [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (item) => item.textContent.trim() === label,
+    )
+
+  /** « ⋮ » (« Plus d'actions »), puis l'action `label` du menu. */
+  async function choose(label: string) {
+    document.body.querySelector<HTMLButtonElement>('button[aria-label="Plus d’actions"]')?.click()
+    await vi.waitFor(() => expect(menuItem(label)).toBeDefined())
+    menuItem(label)?.click()
+  }
+
   it('montre une liste en pause, avec ses actions, sans retrait de recette', async () => {
     const { wrapper } = await open('PAUSED')
 
@@ -221,6 +233,15 @@ describe('ShoppingListDetailView', () => {
     expect(button('Reprendre cette liste')).toBeDefined()
     expect(button('Mettre en pause')).toBeUndefined()
     expect(button('Terminer')).toBeUndefined()
+    // Renommer et supprimer sont rangés dans « ⋮ »
+    document.body.querySelector<HTMLButtonElement>('button[aria-label="Plus d’actions"]')?.click()
+    await vi.waitFor(() =>
+      expect(
+        [...document.body.querySelectorAll('[role="menuitem"]')].map((item) =>
+          item.textContent.trim(),
+        ),
+      ).toEqual(['Renommer', 'Supprimer']),
+    )
     // Retirer une recette ne vaut que pour la liste active (route `active/recipes/{id}` du back)
     expect(wrapper.find('button[aria-label^="Retirer"]').exists()).toBe(false)
   })
@@ -236,18 +257,26 @@ describe('ShoppingListDetailView', () => {
     expect(calls(fetchMock)).toContain('POST /api/v1/shopping-lists/p/activate')
   })
 
-  it.each([
-    ['Mettre en pause', 'pause'],
-    ['Terminer', 'complete'],
-  ])('%s une liste active', async (label, action) => {
+  it('met en pause une liste active depuis « ⋮ »', async () => {
     const { fetchMock } = await open('ACTIVE', {
-      [`POST /api/v1/shopping-lists/p/${action}`]: () => new Response(null, { status: 204 }),
+      'POST /api/v1/shopping-lists/p/pause': () => new Response(null, { status: 204 }),
     })
 
-    button(label)?.click()
+    await choose('Mettre en pause')
+    await vi.waitFor(() =>
+      expect(calls(fetchMock)).toContain('POST /api/v1/shopping-lists/p/pause'),
+    )
+  })
+
+  it('termine une liste active', async () => {
+    const { fetchMock } = await open('ACTIVE', {
+      'POST /api/v1/shopping-lists/p/complete': () => new Response(null, { status: 204 }),
+    })
+
+    button('Terminer')?.click()
     await flushPromises()
 
-    expect(calls(fetchMock)).toContain(`POST /api/v1/shopping-lists/p/${action}`)
+    expect(calls(fetchMock)).toContain('POST /api/v1/shopping-lists/p/complete')
   })
 
   it('renomme avec la version lue, un nom vide rétablit la date', async () => {
@@ -255,7 +284,7 @@ describe('ShoppingListDetailView', () => {
       'PATCH /api/v1/shopping-lists/p': () => new Response(null, { status: 204 }),
     })
 
-    button('Renommer')?.click()
+    await choose('Renommer')
     await vi.waitFor(() => expect(document.body.querySelector('input')).not.toBeNull())
     const input = document.body.querySelector('input') as HTMLInputElement
     expect(input.value).toBe('Dîner entre amis')
@@ -276,7 +305,7 @@ describe('ShoppingListDetailView', () => {
       'DELETE /api/v1/shopping-lists/p': () => new Response(null, { status: 204 }),
     })
 
-    button('Supprimer')?.click()
+    await choose('Supprimer')
     await vi.waitFor(() => expect(document.body.textContent).toContain('Supprimer la liste ?'))
     expect(calls(fetchMock)).not.toContain('DELETE /api/v1/shopping-lists/p')
     const confirm = [...document.body.querySelectorAll('[role="dialog"] button')].find(

@@ -71,6 +71,9 @@ class DriveActivity : Activity() {
     private lateinit var selftestRun: SelftestRun
     private val delivery = PlanDelivery()
 
+    /** Les pages qui sortent de l'application s'ouvrent dans le navigateur du téléphone (le service de plateforme du cœur, `LinkOpener`). */
+    private val linkOpener: LinkOpener = AndroidLinkOpener(this)
+
     /** Ce qui cloche avec la page où l'envoi attend la page du magasin (ticket E) : le site la refuse, la détourne, tarde, ou son agent manque. */
     private val watch = OpeningWatch()
     private val timers = Handler(Looper.getMainLooper())
@@ -87,6 +90,22 @@ class DriveActivity : Activity() {
     /** La fenêtre vide qui reçoit un `window.open` avant que son adresse soit confiée à la WebView principale. */
     private var popup: WebView? = null
     private var loadFailed = false
+
+    /**
+     * L'accueil du magasin (avec la ville) ouvert par « Finaliser sur Leclerc » (DRV-631), tant que le site n'a pas répondu : s'il le refuse (4xx, 5xx)
+     * ou le sert avec un titre « introuvable », l'écran se replie sur l'accueil du drive ([DriveEntry.fallsBack], [DriveEntry.isNotFoundTitle]).
+     * `null` sinon.
+     */
+    private var homeTarget: String? = null
+
+    /** Le titre de la page est surveillé (page d'arrivée de « Finaliser », avant la première navigation) : seul le titre est lu, jamais le contenu. */
+    private var watchTitle = false
+
+    /** Le bandeau « Ton panier est dans l'icône en haut à droite. » : de l'arrivée de « Finaliser sur Leclerc » à la première navigation. */
+    private var basketHint = false
+
+    /** Le repli sur l'accueil vient d'avoir lieu : une fois l'accueil chargé, la page refusée sort de l'historique (le retour ne la montre pas). */
+    private var clearHistoryWhenLoaded = false
 
     private val repasApp get() = application as RepasApp
     private val pass get() = repasApp.pass
@@ -118,6 +137,7 @@ class DriveActivity : Activity() {
             }
         }
         webView = createWebView()
+        beginFinalize()
         problems = ProblemPanel(this, ::problemMessage) { retry() }
         // Le message d'en-tête (se connecter, choisir ou ouvrir son magasin) et, pour un plan, son issue : ouvrir l'accueil du drive.
         storeBanner = label("", sizeSp = 16f, color = Color.WHITE)
@@ -159,9 +179,28 @@ class DriveActivity : Activity() {
         registerBackAction()
 
         navigationBegins()
-        webView.loadUrl(pass.current()?.request?.startUrl ?: NavigationPolicy.START_URL)
+        webView.loadUrl(firstUrl())
         updateStoreBanner(pass.current()?.request?.startUrl)
     }
+
+    /**
+     * La première page : celle du passage en cours ; sinon, pour un lien du drive ouvert depuis Repas (« Finaliser sur Leclerc », DRV-625), la page
+     * demandée, revérifiée ([DriveEntry.startPage]) ; sinon l'accueil du drive.
+     */
+    private fun beginFinalize() {
+        // Seulement l'arrivée de « Finaliser sur Leclerc » hors passage : la forme est retenue, le bandeau posé (DRV-631).
+        val outcome = FinalizeOutcome.parse(intent?.getStringExtra(EXTRA_FINALIZE))?.takeIf { pass.current() == null } ?: return
+        repasApp.finalizeOutcome.record(outcome)
+        basketHint = true
+        if (DriveEntry.isStoreHome(firstUrl())) {
+            homeTarget = firstUrl()
+            watchTitle = true
+        }
+    }
+
+    private fun firstUrl(): String =
+        pass.current()?.request?.startUrl
+            ?: DriveEntry.startPage(intent?.getStringExtra(EXTRA_START_URL))
 
     override fun onResume() {
         super.onResume()
@@ -255,7 +294,7 @@ class DriveActivity : Activity() {
     private fun route(url: String?) {
         when (NavigationPolicy.decide(url)) {
             Decision.ALLOW -> webView.loadUrl(url!!)
-            Decision.OPEN_EXTERNALLY -> openInPhoneBrowser(url!!)
+            Decision.OPEN_EXTERNALLY -> linkOpener.open(url!!)
             Decision.BLOCK -> Unit
         }
     }
@@ -292,6 +331,15 @@ class DriveActivity : Activity() {
         override fun onPageFinished(view: WebView, url: String?) {
             if (!loadFailed) problems.hide()
             watch.pageFinished()
+            if (clearHistoryWhenLoaded && url == NavigationPolicy.START_URL) {
+                clearHistoryWhenLoaded = false
+                view.clearHistory()
+            }
+            // Une page de magasin avec sa ville, que le site n'a pas refusée : « Finaliser sur Leclerc » l'ouvrira (DRV-629, DRV-631).
+            if (!loadFailed && !watch.refused()) {
+                repasApp.storePath.remember(url)
+                if (url == homeTarget) homeTarget = null
+            }
             timers.removeCallbacks(onLoadTimeout)
             agent.onPageFinished(view, url)
             updateStoreBanner(url)
@@ -309,10 +357,20 @@ class DriveActivity : Activity() {
 
         override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
             if (!request.isForMainFrame) return
+            // L'accueil du magasin refusé par le site : l'accueil du drive, où le panier est dans la même icône (DRV-631).
+            if (DriveEntry.fallsBack(homeTarget, request.url.toString(), errorResponse.statusCode)) {
+                fallBackToDriveHome(FinalizeOutcome.ofHttp(errorResponse.statusCode))
+                return
+            }
             // Le statut de la page principale (404, 5xx…) : une page d'erreur du site n'est jamais celle du magasin, et ne reçoit pas le plan.
             watch.httpError(errorResponse.statusCode)
             LoadProblems.fromHttpStatus(errorResponse.statusCode)?.let(::showProblem)
             updateStoreBanner(view.url)
+        }
+
+        // Tout changement de page, y compris par le site lui-même (sans rechargement), est vu ici : le bandeau suit la page où l'on est vraiment.
+        override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+            if (basketHint && !DriveEntry.isArrivalPage(url)) endBasketHint()
         }
 
         override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
@@ -329,6 +387,12 @@ class DriveActivity : Activity() {
     }
 
     private inner class DriveChromeClient : WebChromeClient() {
+        // Une page « introuvable » de Leclerc servie avec un statut 200 (DRV-631) : seul le TITRE est lu, jamais le contenu de la page, et seulement
+        // sur la page d'arrivée de « Finaliser » (avant la première navigation).
+        override fun onReceivedTitle(view: WebView, title: String?) {
+            if (watchTitle && DriveEntry.isStoreHome(view.url) && DriveEntry.isNotFoundTitle(title)) fallBackToDriveHome(FinalizeOutcome.TITRE_INTROUVABLE)
+        }
+
         override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean {
             popup?.destroy()
             val holder = WebView(this@DriveActivity)
@@ -397,7 +461,7 @@ class DriveActivity : Activity() {
     private fun retry() {
         problems.hide()
         navigationBegins()
-        if (webView.url == null) webView.loadUrl(pass.current()?.request?.startUrl ?: NavigationPolicy.START_URL) else webView.reload()
+        if (webView.url == null) webView.loadUrl(firstUrl()) else webView.reload()
     }
 
     // ---------------------------------------------------------------------------------------------------------------
@@ -411,7 +475,7 @@ class DriveActivity : Activity() {
     private fun sendPlan() {
         val request = pass.current()?.request ?: return
         // Pas de message vers une page que le site a refusée ou détournée (ticket E) : le bandeau dit quoi faire à l'utilisateur.
-        if (!watch.canDeliver(webView.url)) return delivery.failed()
+        if (!watch.canDeliver(webView.url, entersStore = !request.isSetup)) return delivery.failed()
         if (agent.send(request.text)) {
             watch.planSent()
             updateStoreBanner(webView.url)
@@ -436,7 +500,7 @@ class DriveActivity : Activity() {
     /** Une page de magasin a fini de charger : si son agent ne s'est pas annoncé (et n'a pas reçu le plan) dans le délai, le bandeau le dit. */
     private fun armAgentTimer(url: String?) {
         timers.removeCallbacks(onAgentTimeout)
-        if (pass.current()?.request?.isSetup == false && watch.canDeliver(url)) timers.postDelayed(onAgentTimeout, OpeningWatch.AGENT_TIMEOUT_MS)
+        if (pass.current()?.request?.isSetup == false && watch.canDeliver(url, entersStore = true)) timers.postDelayed(onAgentTimeout, OpeningWatch.AGENT_TIMEOUT_MS)
     }
 
     /**
@@ -444,18 +508,42 @@ class DriveActivity : Activity() {
      * qu'il tarde ou que l'agent manque), il dit quoi faire ; pour un plan il porte « Ouvrir l'accueil du drive ». Jamais un écran muet.
      */
     private fun updateStoreBanner(url: String?) {
-        val banner = StoreBanner.of(pass.current()?.request, url, watch.trouble(url))
+        val banner = StoreBanner.of(pass.current()?.request, url, watch.trouble(url), basketHint)
         val text = when (banner) {
             StoreBanner.NONE -> null
             StoreBanner.SETUP -> R.string.setup_banner
             StoreBanner.PLAN -> R.string.plan_banner
             StoreBanner.OPEN -> R.string.plan_banner_open
+            StoreBanner.STORE_FIRST -> R.string.store_first_banner
             StoreBanner.VERIFICATION -> R.string.plan_banner_verification
             StoreBanner.MOBILE -> R.string.plan_banner_mobile
+            StoreBanner.BASKET -> R.string.basket_banner
         }
         if (text != null) storeBanner.setText(text)
         bannerAction.visibility = if (banner.hasAction) View.VISIBLE else View.GONE
         bannerBox.visibility = if (text != null) View.VISIBLE else View.GONE
+    }
+
+    /** La première navigation après l'arrivée de « Finaliser » : le bandeau disparaît et l'on ne surveille plus rien (DRV-631). */
+    private fun endBasketHint() {
+        basketHint = false
+        watchTitle = false
+        homeTarget = null
+        updateStoreBanner(webView.url)
+    }
+
+    /**
+     * L'accueil du magasin ouvert par « Finaliser » est refusé ou « introuvable » (DRV-631) : la forme est retenue pour le diagnostic, puis l'accueil
+     * du drive s'ouvre à la place, une seule fois (jamais de boucle). Le bandeau reste : le panier y est dans la même icône.
+     */
+    private fun fallBackToDriveHome(outcome: FinalizeOutcome) {
+        repasApp.finalizeOutcome.record(outcome)
+        homeTarget = null
+        watchTitle = false
+        clearHistoryWhenLoaded = true
+        problems.hide()
+        navigationBegins()
+        webView.loadUrl(NavigationPolicy.START_URL)
     }
 
     /**
@@ -535,7 +623,7 @@ class DriveActivity : Activity() {
         pass.current()?.let { add((if (it.request.isSetup) R.string.menu_abandon_setup else R.string.menu_abandon) to ::askAbandon) }
         add(R.string.menu_zoom_in to { zoomPage(PAGE_ZOOM_STEP) })
         add(R.string.menu_zoom_out to { zoomPage(1 / PAGE_ZOOM_STEP) })
-        add(R.string.menu_about to { showAbout(repasApp.agentLoad.describe(this@DriveActivity)) })
+        add(R.string.menu_about to { showAbout(repasApp.agentLoad.describe(this@DriveActivity), repasApp.finalizeOutcome.last()) })
         add(R.string.menu_logout_drive to { confirmClearDriveData(::clearDriveData) })
         add(R.string.menu_diagnostic to ::openAgentDiagnostic)
         // Utile au dépannage, rare pour un proche : toujours en dernier.
@@ -562,13 +650,15 @@ class DriveActivity : Activity() {
     /** Se déconnecter de Leclerc : cookies, stockage du site, cache et historique du drive, puis retour à l'accueil du drive. */
     private fun clearDriveData() {
         DriveProfile.clear(webView)
+        repasApp.storePath.forget()
+        repasApp.finalizeOutcome.forget()
         problems.hide()
         webView.loadUrl(NavigationPolicy.START_URL)
     }
 
     /** La page courante dans le navigateur du téléphone (l'accueil du drive si la page n'est pas une page du drive). */
     private fun openCurrentPageInBrowser() {
-        openInPhoneBrowser(webView.url?.takeIf { NavigationPolicy.isAllowed(it) } ?: NavigationPolicy.START_URL)
+        linkOpener.open(webView.url?.takeIf { NavigationPolicy.isAllowed(it) } ?: NavigationPolicy.START_URL)
     }
 
     /** Le diagnostic de l'agent : une commande sur le pont, jamais un fragment d'adresse (un fragment trop long fait échouer le site). */
@@ -593,4 +683,12 @@ class DriveActivity : Activity() {
     }
 
     private fun toast(message: Int) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+
+    companion object {
+        /** La page où ouvrir le drive quand aucun passage n'est en cours (DRV-625), vérifiée par [DriveEntry.startPage]. */
+        const val EXTRA_START_URL = "eu.kantin.repas.drive.START_URL"
+
+        /** La forme de « Finaliser sur Leclerc » ([FinalizeOutcome]) : présente seulement quand l'écran s'ouvre pour finaliser (DRV-631), elle pose le bandeau du panier. */
+        const val EXTRA_FINALIZE = "eu.kantin.repas.drive.FINALIZE"
+    }
 }

@@ -108,7 +108,14 @@ export async function openWithBridge(
   page: Page,
   fake: FakeLeclerc,
   agentCode: string,
-  { path = `${PAGE_PATH}/` }: { path?: string } = {},
+  {
+    path = `${PAGE_PATH}/`,
+    origin = fake.leclerc,
+  }: {
+    path?: string
+    /** L'origine de la page ouverte (par défaut celle du faux magasin) : par exemple l'accueil de l'enseigne (DRV-625). */
+    origin?: string
+  } = {},
 ): Promise<FakeApp> {
   const messages: Record<string, unknown>[] = []
   let hello: string | null = null
@@ -131,7 +138,7 @@ export async function openWithBridge(
   await page.addInitScript(OPEN_SHADOW)
   await page.addInitScript(NATIVE_CHANNEL)
   await page.addInitScript({ content: INJECTION.replace('/*__AGENT__*/', () => agentCode) })
-  await page.goto(`${fake.leclerc}${path}`)
+  await page.goto(`${origin}${path}`)
   return {
     messages,
     send: (message) => deliver(JSON.stringify(message)),
@@ -149,4 +156,12 @@ export async function openWithBridge(
       return messages.find((message) => message.type === type) as Record<string, unknown>
     },
   }
+}
+
+/**
+ * Attend que l'agent ait rendu la main à Repas : un envoi terminé qui n'a rien à faire lire repart tout de suite, sans écran de fin ni bouton
+ * (DRV-625). Le résultat se lit ensuite avec `returnedResult`.
+ */
+export async function returnsToRepas(page: Page, fake: FakeLeclerc): Promise<void> {
+  await page.waitForURL((url) => url.origin === fake.repas && url.pathname === '/drive/retour')
 }

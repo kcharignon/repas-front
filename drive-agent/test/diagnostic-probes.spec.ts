@@ -7,10 +7,11 @@ import {
   probeLines,
   reportOf,
   runChecks,
+  shelfFacts,
   type ChecksDeps,
   type ProbeFacts,
 } from '../src/diagnostic'
-import { LeclercAdapter } from '../src/leclerc'
+import { type Candidate, LeclercAdapter } from '../src/leclerc'
 import { fakeStorage, fakeWakeLock } from './flow-helpers'
 import { fakeSite, fixture, PAGE, type Call, type Scripted } from './leclerc-helpers'
 
@@ -36,7 +37,7 @@ const deps = (adapter: LeclercAdapter): ChecksDeps => ({
 })
 
 describe('en fonctionnement normal', () => {
-  it('deux recherches seulement (le mot courant, puis le mot absurde), aucune écriture', async () => {
+  it('cinq recherches seulement (le mot courant, le mot absurde, trois produits frais), aucune écriture', async () => {
     const { adapter, fake } = site(normal)
 
     const { probes } = await runChecks(deps(adapter), () => undefined)
@@ -44,10 +45,107 @@ describe('en fonctionnement normal', () => {
     expect(fake.calls.map((call) => call.url)).toEqual([
       '/magasin-000123-000123-Ville-Test/recherche.aspx?TexteRecherche=sel',
       '/magasin-000123-000123-Ville-Test/recherche.aspx?TexteRecherche=zzqxkw',
+      '/magasin-000123-000123-Ville-Test/recherche.aspx?TexteRecherche=tomate',
+      '/magasin-000123-000123-Ville-Test/recherche.aspx?TexteRecherche=pomme',
+      '/magasin-000123-000123-Ville-Test/recherche.aspx?TexteRecherche=courgette',
     ])
     expect(fake.calls.every((call) => call.init.method === 'GET')).toBe(true)
     expect(probes?.common?.facts?.outcome).toBe('PRODUCTS')
     expect(probes?.nonsense?.facts).toMatchObject({ outcome: 'EMPTY', products: 0, status: 200 })
+  })
+
+  it('rapporte les rayons et familles de trois produits frais : des identifiants et des nombres, jamais un libellé (DRV-646)', async () => {
+    const { adapter } = site(normal)
+
+    const { probes } = await runChecks(deps(adapter), () => undefined)
+    const text = probeLines(probes).join('\n')
+
+    for (const term of ['tomate', 'pomme', 'courgette']) {
+      expect(text).toContain(`Rayons vus pour « ${term} » : 12:5 (5 produits)`)
+      expect(text).toContain(`Familles vues pour « ${term} » : 345:5 (5 produits)`)
+    }
+    expect(text).toContain(
+      'Première réponse pour « tomate » : 5 produits ; page suivante : inconnue',
+    )
+    expect(text).not.toContain('Première réponse pour « pomme »')
+    // Les libellés de catalogue des listes de produits (DRV-647, 0.38.0) sont voulus ; aucun autre.
+    expect(
+      text
+        .split('\n')
+        .filter((line) => !line.includes('Libellés de la liste'))
+        .join('\n'),
+    ).not.toContain('Farine')
+  })
+
+  it('regroupe par identifiant, les plus nombreux d’abord, huit groupes au plus, et compte les produits sans identifiant', () => {
+    const candidate = (aisle: number | null, family: number | null) =>
+      ({ aisle, family }) as Candidate
+    const many = [
+      ...Array.from({ length: 10 }, (_unused, index) => candidate(100 + index, null)),
+      candidate(7, null),
+      candidate(7, null),
+      candidate(9, null),
+    ]
+
+    const facts = shelfFacts('tomate', many)
+
+    expect(facts.aisles).toHaveLength(8)
+    expect(facts.aisles.slice(0, 2)).toEqual([
+      { id: 7, count: 2 },
+      { id: 9, count: 1 },
+    ])
+    expect(facts.noFamily).toBe(13)
+    expect(
+      probeLines({ arrival: null, common: null, nonsense: null, shelves: [facts] }).join('\n'),
+    ).toContain('Familles vues pour « tomate » : inconnu (13 produits, 13 sans famille)')
+  })
+
+  it('le mot absurde refusé en HTTP 400 (une sonde voulue) n’empêche pas les rayons, et la ligne de contrôle les montre (DRV-646)', async () => {
+    const { adapter } = site((call) => (asked(call, NONSENSE_TERM) ? { status: 400 } : GOOD))
+
+    const { probes, results } = await runChecks(deps(adapter), () => undefined)
+    const text = probeLines(probes).join('\n')
+
+    expect(text).toContain('Rayons vus pour « tomate » : 12:5 (5 produits)')
+    expect(text).not.toContain('Rayons : non lus')
+    expect(results.find((result) => result.id === 'shelves')).toMatchObject({
+      status: 'OK',
+      detail: 'tomate 12:5 (5 produits) ; pomme 12:5 (5 produits) ; courgette 12:5 (5 produits)',
+    })
+  })
+
+  it('les rayons viennent juste après les lignes du mot courant, avant les clés et les en-têtes', async () => {
+    const { adapter } = site(normal)
+
+    const { probes } = await runChecks(deps(adapter), () => undefined)
+    const lines = probeLines(probes)
+
+    const shelves = lines.findIndex((line) => line.includes('Rayons vus pour « tomate »'))
+    expect(shelves).toBeGreaterThan(lines.findIndex((line) => line.includes('Recherche « sel »')))
+    expect(shelves).toBeLessThan(lines.findIndex((line) => line.includes('Clés d’état')))
+  })
+
+  it('une recherche courante bloquée : « Rayons : non lus (motif) »', async () => {
+    const { adapter } = site(() => ({ status: 403 }))
+
+    const { probes } = await runChecks(deps(adapter), () => undefined)
+
+    expect(probeLines(probes).join('\n')).toContain(
+      'Rayons : non lus (la recherche « sel » a échoué : BLOCKED, HTTP 403)',
+    )
+  })
+
+  it('un blocage pendant les recherches d’essai arrête la série : les mots restants sont « non faits »', async () => {
+    const { adapter, fake } = site((call) =>
+      asked(call, 'tomate') ? { status: 403 } : normal(call),
+    )
+
+    const { probes } = await runChecks(deps(adapter), () => undefined)
+    const text = probeLines(probes).join('\n')
+
+    expect(fake.calls.some((call) => asked(call, 'pomme') || asked(call, 'courgette'))).toBe(false)
+    expect(text).toContain('Rayons vus pour « tomate » : recherche non faite (BLOCKED, HTTP 403)')
+    expect(text).toContain('Rayons vus pour « courgette » : recherche non faite')
   })
 
   it('rapporte la forme de l’adresse d’arrivée, le point de livraison et les clés connues de la réponse sans résultat', async () => {
@@ -210,6 +308,68 @@ describe('une page qui n’est pas celle d’un magasin', () => {
     expect(fake.calls).toEqual([])
     expect(probeLines(probes).join('\n')).toContain('Adresse d’arrivée : /')
     expect(probes?.common).toBeNull()
+  })
+})
+
+describe('« Commencer mes courses » et la page du panier (DRV-625, DRV-629)', () => {
+  const home = { hostname: 'www.leclercdrive.fr', pathname: '/', protocol: 'https:', port: '' }
+
+  it('un lien : présent, avec la forme de son adresse, sans numéro ni ville', async () => {
+    const { adapter, fake } = site(normal, {
+      location: home,
+      pageText: () =>
+        '<a href="https://fd0-courses.leclercdrive.fr/magasin-000123-000123-Ville-Test/">Commencer mes courses</a>',
+    })
+
+    const { probes } = await runChecks(deps(adapter), () => undefined)
+    const text = probeLines(probes).join('\n')
+
+    expect(text).toContain(
+      'Lien « Commencer mes courses » dans la page : oui, adresse /magasin-N-N-V/, autre hôte leclercdrive.fr',
+    )
+    expect(text).not.toContain('000123')
+    expect(fake.calls).toEqual([])
+  })
+
+  it('le bouton du vrai site : « bouton cliquable : oui » quand le DOM le donne, « non » sinon, jamais une adresse', async () => {
+    const page = '<a class="btn" role="button">Commencer mes courses</a>'
+    const clickable = site(normal, {
+      location: home,
+      pageText: () => page,
+      startButton: () => ({ click: () => undefined }),
+    })
+    const stuck = site(normal, { location: home, pageText: () => page, startButton: () => null })
+
+    const yes = probeLines((await runChecks(deps(clickable.adapter), () => undefined)).probes)
+    const no = probeLines((await runChecks(deps(stuck.adapter), () => undefined)).probes)
+
+    expect(yes).toContain(' - « Commencer mes courses » : bouton cliquable : oui')
+    expect(no).toContain(' - « Commencer mes courses » : bouton cliquable : non')
+    expect(clickable.fake.calls).toEqual([])
+  })
+
+  it('sans bouton ni lien : absent de la page', async () => {
+    const { adapter } = site(normal, { location: home, pageText: () => '<p>Bonjour</p>' })
+
+    const { probes } = await runChecks(deps(adapter), () => undefined)
+
+    expect(probeLines(probes)).toContain(' - « Commencer mes courses » : absent de la page')
+  })
+
+  it('la page du panier : oui sur une page du magasin avec la ville dans le chemin, non sans ville, sans objet ailleurs', async () => {
+    const answer = async (pathname: string) => {
+      const { adapter } = site(normal, {
+        location: { hostname: 'fd0-courses.leclercdrive.fr', pathname },
+        pageText: () => '<p>Bonjour</p>',
+      })
+      const { probes } = await runChecks(deps(adapter), () => undefined)
+      return probeLines(probes).filter((line) => line.includes('Page du panier'))
+    }
+    const label = ' - Page du panier (detail-panier.aspx sous le chemin du magasin) : '
+
+    expect(await answer('/magasin-000123-000123-Ville-Test/')).toEqual([`${label}oui`])
+    expect(await answer('/magasin-000123-000123/')).toEqual([`${label}non`])
+    expect(await answer('/')).toEqual([`${label}sans objet`])
   })
 })
 

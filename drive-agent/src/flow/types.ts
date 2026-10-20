@@ -10,7 +10,8 @@ import type {
 import type { RetailerAdapter } from '../leclerc'
 import type { Ui } from '../ui'
 import type { CartNote } from './keep-cart'
-import type { ContentChange } from './phase-a'
+import type { UnreachedReason } from '../ui'
+import type { ContentChange, UnavailableReason } from './phase-a'
 
 /** Le stockage de session de la page (`sessionStorage`) : l'état de reprise y vit le temps de l'onglet. */
 export interface StorageLike {
@@ -29,8 +30,13 @@ export interface WakeLockLike {
 /** Une ligne qui attend un choix de l'utilisateur : un produit nouveau, ou aucun produit connu n'est plus disponible. */
 export interface PendingLine {
   line: PlanLine
-  /** Les produits connus de la ligne qui ne sont plus disponibles, dans l'ordre de priorité (vide pour une ligne nouvelle). */
+  /** Les produits connus de la ligne que la phase A n'a pas mis au panier, dans l'ordre de priorité (vide pour une ligne nouvelle). */
   unavailable: PlanProduct[]
+  /**
+   * Pourquoi chacun ne l'a pas été, par identifiant de produit (DRV-635) : rupture, introuvable ou refusé par le panier. Un produit absent de la
+   * table est en rupture (texte d'avant).
+   */
+  reasons?: ReadonlyMap<string, UnavailableReason>
 }
 
 /** Ce que l'écran de fin et le journal doivent dire d'une ligne en plus de son issue. */
@@ -41,6 +47,18 @@ export interface LineNotes {
   cart?: CartNote
   /** La ligne a échoué parce que Leclerc a mis trop de temps à répondre (ticket K). */
   slow?: boolean
+  /** Le produit se disait en rupture et le panier l'a pourtant pris (DRV-635) : le journal le note. */
+  accepted?: boolean
+  /**
+   * Le produit choisi n'a pas été pris par le panier (DRV-644) : le choix est enregistré quand même. `label` : son nom, `stock` et `availability` : ce que la
+   * réponse du panier en disait.
+   */
+  unreached?: {
+    reason: UnreachedReason
+    label: string
+    stock: number | null
+    availability: number | null
+  }
 }
 
 /** Ce que la phase B reçoit pour guider l'utilisateur (DRV-306). */
@@ -86,4 +104,12 @@ export interface FlowDeps {
 
 /** Les états de la machine : `START → VALIDATED → CONFIRMED → PHASE_A → PHASE_B → DONE`, ou `ABORTED` / `ERROR`. */
 export type Step =
-  'START' | 'VALIDATED' | 'CONFIRMED' | 'PHASE_A' | 'PHASE_B' | 'DONE' | 'ABORTED' | 'ERROR'
+  | 'START'
+  | 'VALIDATED'
+  | 'ENTERING'
+  | 'CONFIRMED'
+  | 'PHASE_A'
+  | 'PHASE_B'
+  | 'DONE'
+  | 'ABORTED'
+  | 'ERROR'

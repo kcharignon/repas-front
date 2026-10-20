@@ -25,7 +25,7 @@ test('sans magasin : enregistrer son adresse, lui donner un nom, puis gérer ses
   await expect(page.getByText('Aucun magasin enregistré.')).toBeVisible()
 
   // Une adresse qui n'est pas celle d'un magasin est refusée sans appeler le back
-  await page.getByLabel('Adresse de votre magasin').fill('https://exemple.example.com/magasin-1-1')
+  await page.getByLabel('Adresse de ton magasin').fill('https://exemple.example.com/magasin-1-1')
   await page.getByRole('button', { name: 'Enregistrer mon magasin' }).click()
   await expect(
     page.getByText('Cette adresse n’est pas celle d’un magasin Leclerc Drive'),
@@ -33,8 +33,8 @@ test('sans magasin : enregistrer son adresse, lui donner un nom, puis gérer ses
   expect(back.bodies).toEqual([])
 
   // Adresse collée du navigateur (avec une suite) et nom facultatif
-  await page.getByLabel('Adresse de votre magasin').fill(`${address}/accueil?a=1`)
-  await page.getByLabel('Nom de votre magasin (facultatif)').fill('Ville-Test')
+  await page.getByLabel('Adresse de ton magasin').fill(`${address}/accueil?a=1`)
+  await page.getByLabel('Nom de ton magasin (facultatif)').fill('Ville-Test')
   await page.getByRole('button', { name: 'Enregistrer mon magasin' }).click()
   await expect(page.getByText('Magasin enregistré.')).toBeVisible()
   expect(back.bodies).toEqual([
@@ -49,31 +49,61 @@ test('sans magasin : enregistrer son adresse, lui donner un nom, puis gérer ses
   await expect(page.getByRole('heading', { level: 1, name: 'Mes produits' })).toBeVisible()
 })
 
-test('envoyé ici faute de magasin, « Choisissez votre magasin » disparaît une fois le magasin enregistré', async ({
+test.describe('à 360 × 640', () => {
+  test.use({ viewport: { width: 360, height: 640 } })
+
+  for (const [name, store] of [
+    ['sans magasin', null],
+    ['avec un magasin', undefined],
+  ] as const) {
+    test(`${name} : aucune note au-dessus et « Ton magasin » est visible sans défiler (DRV-626, DRV-628)`, async ({
+      page,
+    }) => {
+      await fakeDriveBack(page, store === null ? { store: null } : {})
+      await page.goto('/drive/reglages')
+
+      // Aucune note de vie privée ni mise en garde sur cet écran : elles sont dans les conditions d'utilisation (DRV-628)
+      await expect(page.getByRole('heading', { name: 'Ta vie privée' })).toHaveCount(0)
+      await expect(page.getByText(/ne voit jamais|suspendre/)).toHaveCount(0)
+      await expect(page.getByRole('link', { name: /note complète|Conditions/ })).toHaveCount(0)
+      // « Ton magasin » est le premier bloc
+      await expect(page.getByRole('heading', { level: 2 }).first()).toHaveText('Ton magasin')
+
+      // « Ton magasin » est entièrement au-dessus de la barre du bas, sans défiler
+      const heading = page.getByRole('heading', { level: 2, name: 'Ton magasin' })
+      await expect(heading).toBeInViewport({ ratio: 1 })
+      const box = await heading.boundingBox()
+      const bar = await page.getByRole('navigation').last().boundingBox()
+      expect(box!.y + box!.height).toBeLessThanOrEqual(bar!.y)
+      expect(await page.evaluate(() => window.scrollY)).toBe(0)
+      expect((await scan(page)).violations).toEqual([])
+    })
+  }
+})
+
+test('envoyé ici faute de magasin, « Choisis ton magasin » disparaît une fois le magasin enregistré', async ({
   page,
 }) => {
   await fakeDriveBack(page, { store: null })
   await page.goto('/drive/reglages?magasin=requis')
-  await expect(
-    page.getByRole('heading', { level: 1, name: 'Choisissez votre magasin' }),
-  ).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Choisis ton magasin' })).toBeVisible()
   // Hors de l'application, personne ne peut lire le magasin : la saisie à la main est là, ouverte
   await expect(page.getByRole('button', { name: 'Choisir mon magasin' })).toHaveCount(0)
 
-  await page.getByLabel('Adresse de votre magasin').fill(address)
+  await page.getByLabel('Adresse de ton magasin').fill(address)
   await page.getByRole('button', { name: 'Enregistrer mon magasin' }).click()
 
   await expect(page.getByText('Magasin …321')).toBeVisible()
   await expect(page).toHaveURL(/\/drive\/reglages$/)
-  await expect(page.getByText('Choisissez votre magasin')).toHaveCount(0)
+  await expect(page.getByText('Choisis ton magasin')).toHaveCount(0)
 })
 
 test('hors de l’application : propose de l’installer et mène à l’aide', async ({ page }) => {
   await fakeDriveBack(page)
   await page.goto('/drive/reglages')
 
-  await expect(page.getByText('Vous utilisez Repas dans un navigateur')).toBeVisible()
-  // Sans l'application, personne ne peut lire le magasin pour vous : on le saisit
+  await expect(page.getByText('Tu utilises Repas dans un navigateur')).toBeVisible()
+  // Sans l'application, personne ne peut lire le magasin pour toi : on le saisit
   await expect(
     page.getByRole('button', { name: 'Lire mon magasin dans l’application' }),
   ).toHaveCount(0)
@@ -107,8 +137,8 @@ test('dans l’application : montre sa version et que le drive est prêt', async
   await page.goto('/drive/reglages')
 
   await expect(page.getByText('Version 0.5.0')).toBeVisible()
-  await expect(page.getByText('Le drive est prêt dans cette application.')).toBeVisible()
-  await expect(page.getByText('Vous utilisez Repas dans un navigateur')).toHaveCount(0)
+  await expect(page.getByText('Le drive est prêt dans cette application.')).toHaveCount(0)
+  await expect(page.getByText('Tu utilises Repas dans un navigateur')).toHaveCount(0)
   // Déjà installée : l'aide ne propose pas de l'installer, elle mène à la mise à jour
   await expect(page.getByRole('link', { name: 'Aide d’installation' })).toHaveCount(0)
   await page.getByRole('link', { name: 'Mettre à jour l’application' }).click()
@@ -122,7 +152,7 @@ test('dans l’application : « Lire mon magasin » ouvre le drive, et au retour
   await fakeAppForSetup(page, 'found')
   await page.goto('/drive/reglages')
   // La saisie à la main est repliée : le geste est dans l'application
-  await expect(page.getByLabel('Adresse de votre magasin')).toBeHidden()
+  await expect(page.getByLabel('Adresse de ton magasin')).toBeHidden()
 
   await page.getByRole('button', { name: 'Lire mon magasin dans l’application' }).click()
 
@@ -143,7 +173,7 @@ test('dans l’application : « Lire mon magasin » ouvre le drive, et au retour
 
   // Le nom est facultatif : il se donne, si l'on veut, sous « Saisir l'adresse à la main »
   await page.getByText('Saisir l’adresse à la main').click()
-  await page.getByLabel('Nom de votre magasin (facultatif)').fill('Ville-Test')
+  await page.getByLabel('Nom de ton magasin (facultatif)').fill('Ville-Test')
   await page.getByRole('button', { name: 'Enregistrer mon magasin' }).click()
   await expect(page.getByText('Magasin enregistré.')).toBeVisible()
   expect(back.bodies.at(-1)).toEqual({
@@ -195,8 +225,8 @@ for (const [answer, message] of [
 
     await expect(page.getByRole('alert').filter({ hasText: message })).toBeVisible()
     // Rien n'est enregistré, et la saisie à la main s'ouvre
-    await expect(page.getByLabel('Adresse de votre magasin')).toBeVisible()
-    await expect(page.getByLabel('Adresse de votre magasin')).toHaveValue('')
+    await expect(page.getByLabel('Adresse de ton magasin')).toBeVisible()
+    await expect(page.getByLabel('Adresse de ton magasin')).toHaveValue('')
     await expect(
       page.getByRole('button', { name: 'Lire mon magasin dans l’application' }),
     ).toBeEnabled()
@@ -246,7 +276,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     expect(overflow).toBeLessThanOrEqual(0)
 
     // L'erreur de saisie est lue par les lecteurs d'écran et lisible
-    await page.getByLabel('Adresse de votre magasin').fill('pas une adresse')
+    await page.getByLabel('Adresse de ton magasin').fill('pas une adresse')
     await page.getByRole('button', { name: 'Enregistrer mon magasin' }).click()
     await expect(
       page.getByText('Cette adresse n’est pas celle d’un magasin Leclerc Drive'),

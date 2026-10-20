@@ -52,7 +52,7 @@ async function withList(page: Page) {
 }
 
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`sur la liste : total, couverture, dates, avertissement et détail au clavier, thème ${colorScheme}`, async ({
+  test(`sur la liste : total, couverture et détail au clavier, rien d’autre (DRV-628), thème ${colorScheme}`, async ({
     page,
   }) => {
     await withList(page)
@@ -63,11 +63,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await expect(block.getByText('Total estimé')).toBeVisible()
     await expect(block.getByText(/^5,72\s€$/)).toBeVisible()
     await expect(block).toContainText('3 articles sur 5 estimés')
-    await expect(block).toContainText('2 articles ne sont pas dans le total.')
-    await expect(block).toContainText(
-      'D’après les prix vus entre le 12 octobre 2026 et le 18 octobre 2026.',
-    )
-    await expect(block).toContainText(estimate.disclaimer)
+    // Le total et le nombre d'articles estimés, rien d'autre : ni date, ni réserve, ni avertissement du back
+    await expect(block).not.toContainText(/ne sont pas dans le total|D’après les prix/)
+    await expect(block).not.toContainText(estimate.disclaimer)
     await expect(block.getByTestId('low-coverage')).toHaveCount(0)
 
     // Le détail est replié, se déplie au clavier et nomme les lignes non estimées
@@ -104,7 +102,7 @@ test('sur l’écran d’envoi : le même bloc, après le bouton et avant les ar
   expect((await scan(page)).violations).toEqual([])
 })
 
-test('couverture faible : l’avertissement est en tête du bloc', async ({ page }) => {
+test('couverture faible : le compteur suffit, aucun avertissement (DRV-628)', async ({ page }) => {
   await withList(page)
   await page.route('**/api/v1/drive/estimates/l1', (route) =>
     route.fulfill({
@@ -114,7 +112,38 @@ test('couverture faible : l’avertissement est en tête du bloc', async ({ page
   await page.goto('/liste')
 
   const block = page.getByRole('region', { name: 'Estimation du coût' })
-  await expect(block.getByTestId('low-coverage')).toContainText('moins de la moitié des articles')
+  await expect(block).toContainText('1 article sur 5 estimé')
+  await expect(block).not.toContainText(/fiable|moitié/)
+  await expect(block.getByTestId('low-coverage')).toHaveCount(0)
+  expect((await scan(page)).violations).toEqual([])
+})
+
+test('aucun prix connu : une seule phrase, ni compteur, ni avertissement, ni détail (DRV-626)', async ({
+  page,
+}) => {
+  await withList(page)
+  await page.route('**/api/v1/drive/estimates/l1', (route) =>
+    route.fulfill({
+      json: {
+        ...estimate,
+        estimatedTotalCents: 0,
+        estimatedLines: 0,
+        unestimatedLines: 6,
+        coverage: 0,
+        oldestPriceAt: null,
+        newestPriceAt: null,
+        lines: estimate.lines.filter((line) => line.status !== 'ESTIMATED'),
+      },
+    }),
+  )
+  await page.goto('/liste')
+
+  const block = page.getByRole('region', { name: 'Estimation du coût' })
+  await expect(block).toContainText('Pas encore de prix connu.')
+  await expect(block.getByRole('paragraph')).toHaveCount(1)
+  await expect(block.getByTestId('low-coverage')).toHaveCount(0)
+  await expect(block.getByText('Voir le détail')).toHaveCount(0)
+  await expect(block).not.toContainText(/estimés|ne sont pas dans le total|Estimation peu fiable/)
   expect((await scan(page)).violations).toEqual([])
 })
 

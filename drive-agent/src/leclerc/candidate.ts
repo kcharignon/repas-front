@@ -1,5 +1,7 @@
 import { type Content, type ContentSource, measureReference, parseContent } from './content'
-import type { RawProduct } from './embedded'
+import { photoUrl } from '../photo-url'
+import type { AisleTexts, RawProduct } from './embedded'
+import type { LocationLike } from './store'
 
 /** Le prix à l'unité de mesure, en centimes, ramené au kilo, au litre ou à la pièce (les unités du protocole, décision D22). */
 export interface PricePerMeasure {
@@ -24,12 +26,31 @@ export interface Candidate {
   stock: number | null
   /** `iQuantitePanier` : quantité déjà au panier. */
   inCart: number | null
-  /** Adresse de la vignette (`https://…` ou chemin), jamais un autre schéma. */
-  thumbnailUrl: string | null
+  /**
+   * L'adresse de la photo du produit (`sUrlVignetteProduit`, DRV-633), seulement si elle est affichable : `https` d'un hôte de `leclercdrive.fr`, sans
+   * identifiant ni port (`photo-url.ts`). Sinon `null`. Elle ne sert qu'à l'écran de choix : elle n'est jamais envoyée à Repas.
+   */
+  imageUrl: string | null
+  /** `eDisponibilite` (DRV-635) : l'étiquette de disponibilité du site, mesurée par le diagnostic, jamais un verrou. */
+  availability: number | null
+  /** La fiche dit « Bientôt disponible » (DRV-635). */
+  comingSoon: boolean
+  /** `iIdRayon` et `iIdFamille` (DRV-646) : lus pour le diagnostic seulement, jamais envoyés à Repas. */
+  aisle: number | null
+  family: number | null
+  /** Les textes du rayon lus avec le produit (DRV-647) : la matière du libellé du rayon (`aisle-labels.ts`). Jamais envoyés à Repas. */
+  aisleTexts?: AisleTexts
   content: Content | null
   /** D'où vient `content` ; `prices` est le moins précis (prix arrondis au centime). */
   contentSource: ContentSource | null
 }
+
+/**
+ * Le site dit ce produit en rupture : stock nul ou « Bientôt disponible » (DRV-635). C'est une ÉTIQUETTE, pas un verdict : le site ordinateur et
+ * le site mobile ne disent pas la même chose du stock d'un même produit dans le même magasin ; seule la réponse du panier tranche.
+ */
+export const saysOutOfStock = (candidate: Pick<Candidate, 'stock' | 'comingSoon'>): boolean =>
+  candidate.stock === 0 || candidate.comingSoon
 
 const cents = (euros: number | null): number | null =>
   euros === null ? null : Math.round(euros * 100)
@@ -49,13 +70,8 @@ function promoCents(text: string | null): number | null {
   return found?.[1] ? Math.round(Number(found[1].replace(',', '.')) * 100) : null
 }
 
-/** Une vignette n'est gardée que si c'est une adresse https ou un chemin du site : jamais `javascript:` ni `data:`. */
-function safeUrl(url: string | null): string | null {
-  return url !== null && /^(?:https:)?\/\/|^\/(?!\/)/i.test(url) ? url : null
-}
-
-/** Interprète un produit brut de la page : prix en centimes, contenu net, vignette sûre. */
-export function toCandidate(raw: RawProduct): Candidate {
+/** Interprète un produit brut de la page : prix en centimes, contenu net, photo sûre (`page` : l'emplacement de la page, pour une adresse relative). */
+export function toCandidate(raw: RawProduct, page: LocationLike | null = null): Candidate {
   const parsed = parseContent(
     raw.label2,
     raw.unitPrice,
@@ -71,7 +87,12 @@ export function toCandidate(raw: RawProduct): Candidate {
     promo: promoCents(raw.promoText),
     stock: raw.stock,
     inCart: raw.inCart,
-    thumbnailUrl: safeUrl(raw.thumbnail),
+    availability: raw.availability,
+    comingSoon: raw.comingSoon,
+    aisle: raw.aisle,
+    family: raw.family,
+    ...(raw.aisleTexts && { aisleTexts: raw.aisleTexts }),
+    imageUrl: photoUrl(raw.thumbnail, page),
     content: parsed?.content ?? null,
     contentSource: parsed?.source ?? null,
   }

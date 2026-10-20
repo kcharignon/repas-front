@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import type { ShoppingList } from '@/api'
+import UiActionMenu, { type UiAction } from '@/design/UiActionMenu.vue'
 import UiButton from '@/design/UiButton.vue'
 import UiConfirmDialog from '@/design/UiConfirmDialog.vue'
 import UiDialog from '@/design/UiDialog.vue'
 import UiField from '@/design/UiField.vue'
 import UiLinkButton from '@/design/UiLinkButton.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
+import { useWrappedRow } from '@/design/useWrappedRow'
+import { isDriveAppVersionEnough } from '@/features/drive/appVersion'
+import { driveBridge } from '@/features/drive/bridge'
 import { useDriveSettings } from '@/features/drive/queries'
 import { useOnline } from '@/offline/useOnline'
 import {
@@ -33,17 +37,47 @@ const remove = useDeleteShoppingList()
 const send = useSendShoppingList()
 const reopen = useReopenShoppingList()
 
-// L'envoi n'est proposé que si la fonction est allumée, pour une liste en cours qui a des articles.
+// L'envoi n'est proposé que dans l'application Repas (le pont natif), si la fonction est allumée, pour une liste en cours qui a des
+// articles : dans un navigateur il ne pourrait rien faire, et il verrouillerait la liste pour rien (DRV-641).
+const inApp = driveBridge.isAvailable()
 const settings = useDriveSettings(() => props.list.isActive)
 const canSend = computed(
-  () => props.list.isActive && props.list.rowCount > 0 && settings.data.value?.enabled === true,
+  () =>
+    inApp &&
+    props.list.isActive &&
+    props.list.rowCount > 0 &&
+    settings.data.value?.enabled === true,
 )
 
+const checking = ref(false)
+const updating = ref(false)
+
 /**
- * Sans magasin enregistré, l'envoi mène à l'écran « Choisissez votre magasin » (DRV-622) au lieu de la confirmation ; une fois le
+ * L'application est-elle assez récente pour envoyer (même test que l'écran d'envoi) ? Tant que la réponse n'est pas là (3 s au plus),
+ * le bouton est grisé et rien n'est enregistré : une application trop ancienne, ou qui ne répond pas, ne verrouille jamais la liste.
+ * Trop ancienne : la phrase de mise à jour remplace la confirmation.
+ */
+async function appIsEnough(): Promise<boolean> {
+  checking.value = true
+  let enough = false
+  try {
+    enough = isDriveAppVersionEnough((await driveBridge.info()).version)
+  } catch {
+    // Une application qui ne dit pas sa version est trop ancienne
+  } finally {
+    checking.value = false
+  }
+  if (!enough) updating.value = true
+
+  return enough
+}
+
+/**
+ * Sans magasin enregistré, l'envoi mène à l'écran « Choisis ton magasin » (DRV-622) au lieu de la confirmation ; une fois le
  * magasin enregistré, cet écran nous rend la liste (`retour=liste`) et l'envoi reprend à sa confirmation (`envoyer`).
  */
-function askToSend() {
+async function askToSend() {
+  if (checking.value || !(await appIsEnough())) return
   if (settings.data.value?.store) sending.value = true
   else
     void router.push({
@@ -63,9 +97,9 @@ watch(
   () => [route.query.envoyer, canSend.value] as const,
   ([resume, can]) => {
     if (resume === undefined || !can) return
-    sending.value = true
     // La demande est consommée : un rechargement ne rouvre pas la confirmation
     void router.replace({ query: { ...route.query, envoyer: undefined } })
+    void appIsEnough().then((enough) => (sending.value = enough))
   },
   { immediate: true },
 )
@@ -111,6 +145,65 @@ function confirmReopen() {
   )
 }
 
+// L'action principale prend la place libre sur téléphone ; aucun libellé ne passe à la ligne
+const mainAction = 'flex-1 whitespace-nowrap px-4 md:flex-none md:px-5'
+const sideAction = 'shrink-0 whitespace-nowrap px-4 md:px-5'
+
+const complete = () => status.mutate({ id: props.list.id, action: 'complete' })
+
+// « Terminer » à côté de l'action principale quand celle-ci est l'envoi (le faire ou le reprendre) ; s'il n'y tient pas (320 px,
+// grands caractères), il passe en tête de « ⋮ »
+const completeBeside = computed(() => props.list.isSent || canSend.value)
+const row = useTemplateRef<HTMLElement>('row')
+const sideWrapped = useWrappedRow(row)
+
+/** Ce que range « ⋮ » : ce qui reste permis dans l'état de la liste, hors action principale et action secondaire. */
+const moreActions = computed<UiAction[]>(() => [
+  ...(completeBeside.value && sideWrapped.value
+    ? [
+        {
+          key: 'complete',
+          label: t('shoppingList.complete'),
+          disabled: status.isPending.value,
+          run: complete,
+        },
+      ]
+    : []),
+  ...otherActions.value,
+])
+
+const otherActions = computed<UiAction[]>(() => {
+  const remove: UiAction = {
+    key: 'delete',
+    label: t('common.delete'),
+    tone: 'danger',
+    run: () => (deleting.value = true),
+  }
+  if (props.list.isSent)
+    return [
+      {
+        key: 'reopen',
+        label: t('shoppingList.reopen'),
+        disabled: !online.value,
+        run: () => (reopening.value = true),
+      },
+      remove,
+    ]
+  const renameAction: UiAction = { key: 'rename', label: t('shoppingList.rename'), run: openRename }
+  if (!props.list.isActive) return [renameAction, remove]
+
+  return [
+    renameAction,
+    {
+      key: 'pause',
+      label: t('shoppingList.pause'),
+      disabled: status.isPending.value,
+      run: () => status.mutate({ id: props.list.id, action: 'pause' }),
+    },
+    remove,
+  ]
+})
+
 const statusLabel = (list: ShoppingList) =>
   list.isActive ? 'active' : list.isPaused ? 'paused' : list.isSent ? 'sent' : 'completed'
 </script>
@@ -133,52 +226,61 @@ const statusLabel = (list: ShoppingList) =>
       </p>
     </div>
 
-    <div class="flex flex-wrap gap-2">
-      <!-- Liste envoyée au drive : lecture seule, seules la reprise de l'envoi, la fin, la réouverture et la suppression sont permises. -->
-      <template v-if="list.isSent">
-        <UiLinkButton :to="{ name: 'drive-send', params: { listId: list.id } }">
+    <!--
+      Une seule rangée, même à 320 px : l'action principale de l'état de la liste à gauche, au plus une action secondaire, et le
+      reste dans « ⋮ ». Liste envoyée au drive : lecture seule, seules la reprise de l'envoi, la fin, la réouverture et la
+      suppression sont permises.
+    -->
+    <div class="flex items-center gap-2" data-test="list-actions">
+      <!-- Seule la première ligne se voit : une action secondaire qui n'y tient pas passe dans « ⋮ » (useWrappedRow) -->
+      <div
+        ref="row"
+        class="-m-1 flex h-13 min-w-0 flex-1 flex-wrap gap-x-2 gap-y-4 overflow-hidden p-1 md:flex-none"
+      >
+        <UiLinkButton
+          v-if="list.isSent"
+          :to="{ name: 'drive-send', params: { listId: list.id } }"
+          :class="mainAction"
+        >
           {{ t('shoppingList.resumeSend') }}
         </UiLinkButton>
         <UiButton
-          variant="secondary"
-          :disabled="status.isPending.value"
-          @click="status.mutate({ id: list.id, action: 'complete' })"
+          v-else-if="canSend"
+          variant="accent"
+          :class="mainAction"
+          :disabled="!online || checking"
+          @click="askToSend"
         >
-          {{ t('shoppingList.complete') }}
-        </UiButton>
-        <UiButton variant="secondary" :disabled="!online" @click="reopening = true">
-          {{ t('shoppingList.reopen') }}
-        </UiButton>
-      </template>
-      <template v-else>
-        <UiButton variant="secondary" @click="openRename">{{ t('shoppingList.rename') }}</UiButton>
-        <UiButton
-          v-if="list.isActive"
-          variant="secondary"
-          :disabled="status.isPending.value"
-          @click="status.mutate({ id: list.id, action: 'pause' })"
-        >
-          {{ t('shoppingList.pause') }}
-        </UiButton>
-        <UiButton
-          v-if="list.isActive"
-          :disabled="status.isPending.value"
-          @click="status.mutate({ id: list.id, action: 'complete' })"
-        >
-          {{ t('shoppingList.complete') }}
-        </UiButton>
-        <UiButton v-if="canSend" variant="accent" :disabled="!online" @click="askToSend">
           {{ t('shoppingList.send') }}
         </UiButton>
+        <!-- Sans envoi possible (navigateur, drive coupé, liste vide) : « Terminer » devient l'action principale -->
         <UiButton
-          v-if="!list.isActive"
+          v-else-if="list.isActive"
+          :class="mainAction"
+          :disabled="status.isPending.value"
+          @click="complete"
+        >
+          {{ t('shoppingList.complete') }}
+        </UiButton>
+        <UiButton
+          v-else
+          :class="mainAction"
           :disabled="status.isPending.value"
           @click="status.mutate({ id: list.id, action: 'activate' })"
         >
           {{ t('shoppingList.activate') }}
         </UiButton>
-      </template>
-      <UiButton variant="ghost" @click="deleting = true">{{ t('common.delete') }}</UiButton>
+        <UiButton
+          v-if="completeBeside"
+          variant="secondary"
+          :class="[sideAction, sideWrapped && 'invisible']"
+          :disabled="status.isPending.value"
+          @click="complete"
+        >
+          {{ t('shoppingList.complete') }}
+        </UiButton>
+      </div>
+      <UiActionMenu :label="t('shoppingList.moreActions')" :actions="moreActions" />
     </div>
 
     <UiDialog
@@ -197,6 +299,19 @@ const statusLabel = (list: ShoppingList) =>
           }}</UiButton>
         </div>
       </form>
+    </UiDialog>
+
+    <!-- Application trop ancienne : la phrase de l'écran d'envoi et son bouton, aucun envoi n'est enregistré (DRV-641) -->
+    <UiDialog
+      v-model:open="updating"
+      :title="t('shoppingList.send')"
+      :description="t('driveSend.appTooOld.text')"
+    >
+      <div class="flex justify-end">
+        <UiLinkButton :to="{ name: 'drive-help' }">
+          {{ t('driveSend.appTooOld.update') }}
+        </UiLinkButton>
+      </div>
     </UiDialog>
 
     <UiConfirmDialog

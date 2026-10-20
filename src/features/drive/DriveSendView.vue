@@ -14,6 +14,7 @@ import { messageForFailure } from '@/notifications/failures'
 import { useOnline } from '@/offline/useOnline'
 import { DriveBridgeError, driveBridge } from './bridge'
 import type { RunDraft } from './bridge'
+import { isDriveAppVersionEnough, isRayonHintsAppVersion } from './appVersion'
 import { buildPlanMessage, effectiveStatus } from './buildPlanMessage'
 import type { LineChange } from './buildPlanMessage'
 import DriveEstimate from './DriveEstimate.vue'
@@ -35,6 +36,13 @@ const reopen = useReopenShoppingList()
 // Dans l'application Repas, le pont natif existe ; dans un navigateur ordinaire, seul le mode assisté est possible.
 const inApp = driveBridge.isAvailable()
 const driveUsable = ref(true)
+// La version de l'application (DRV-640) : tant qu'elle n'a pas répondu on attend ; trop ancienne ou inconnue, l'envoi n'est pas proposé
+const appCheck = ref<'checking' | 'enough' | 'tooOld'>(inApp ? 'checking' : 'enough')
+const tooOld = computed(() => appCheck.value === 'tooOld')
+// L'agent de l'application connaît-il les rayons conseillés (DRV-642) ? Sinon le plan part sans eux : un agent plus ancien refuse un plan qui porte une clé qu'il ne connaît pas.
+const agentKnowsRayons = ref(false)
+/** Mode assisté : un lien de recherche par article, sans choix de produit (hors de l'application, ou dans une application trop ancienne). */
+const assisted = computed(() => !inApp || tooOld.value)
 
 const changes = ref<Record<string, LineChange | undefined>>({})
 const draft = ref<RunDraft | null>(driveBridge.loadDraft())
@@ -73,7 +81,7 @@ const summary = computed(() => {
 /** Au-delà de ce nombre d'articles la liste est repliée : la seule décision de l'écran est « Ouvrir le drive ». */
 const FOLD_ABOVE = 6
 // Hors de l'application la liste EST l'écran (un lien de recherche par article) : elle reste ouverte
-const folded = computed(() => inApp && lines.value.length > FOLD_ABOVE)
+const folded = computed(() => !assisted.value && lines.value.length > FOLD_ABOVE)
 
 const storeName = computed(() => {
   const store = plan.data.value?.store
@@ -88,7 +96,7 @@ const searchUrl = (query: string): string =>
 
 watch(listId, () => (changes.value = {}))
 
-// Sans magasin enregistré, le plan est refusé (409) : on mène à « Choisissez votre magasin », qui nous rend la liste
+// Sans magasin enregistré, le plan est refusé (409) : on mène à « Choisis ton magasin », qui nous rend la liste
 watch(
   () => plan.error.value,
   (error) => {
@@ -105,8 +113,13 @@ onMounted(() => {
   if (!inApp) return
   // L'application sait si le drive est utilisable ; si elle ne répond pas, le lancement le dira
   driveBridge.info().then(
-    (info) => (driveUsable.value = info.drive),
-    () => undefined,
+    (info) => {
+      driveUsable.value = info.drive
+      appCheck.value = isDriveAppVersionEnough(info.version) ? 'enough' : 'tooOld'
+      agentKnowsRayons.value = isRayonHintsAppVersion(info.version)
+    },
+    // Une application qui ne dit pas sa version est trop ancienne
+    () => (appCheck.value = 'tooOld'),
   )
 })
 
@@ -169,7 +182,10 @@ function openDrive() {
   failure.value = null
   try {
     const runId = draft.value?.runId ?? crypto.randomUUID()
-    draft.value = driveBridge.startRun(buildPlanMessage(data, changes.value, runId), listId.value)
+    draft.value = driveBridge.startRun(
+      buildPlanMessage(data, changes.value, runId, { rayonHints: agentKnowsRayons.value }),
+      listId.value,
+    )
   } catch (error) {
     if (error instanceof DriveBridgeError && error.code === 'RUN_IN_PROGRESS')
       draft.value = driveBridge.loadDraft()
@@ -283,6 +299,17 @@ function confirmReopenList() {
             {{ t('driveSend.notInApp.install') }}
           </UiLinkButton>
         </section>
+        <!-- Application trop ancienne : on n'ouvre ni Leclerc ni l'agent, une phrase et un bouton ; les liens de recherche restent plus bas -->
+        <section
+          v-else-if="tooOld"
+          role="status"
+          class="flex flex-col items-start gap-3 rounded-2xl bg-soft px-5 py-4"
+        >
+          <p class="max-w-prose text-xl font-semibold">{{ t('driveSend.appTooOld.text') }}</p>
+          <UiLinkButton :to="{ name: 'drive-help' }">
+            {{ t('driveSend.appTooOld.update') }}
+          </UiLinkButton>
+        </section>
         <section
           v-else-if="!driveUsable"
           role="alert"
@@ -294,16 +321,13 @@ function confirmReopenList() {
             {{ t('driveSend.driveUnusable.aid') }}
           </UiLinkButton>
         </section>
-        <!-- Une phrase de synthèse, une phrase d'explication, l'unique décision : le bouton, visible sans défiler -->
-        <template v-else>
-          <p v-if="summary !== ''" class="max-w-prose text-xl font-semibold">{{ summary }}</p>
-          <p class="max-w-prose text-muted">{{ t('driveSend.intro') }}</p>
-        </template>
+        <!-- Une phrase de synthèse, l'unique décision : le bouton, visible sans défiler (DRV-628 : plus d'explication) -->
+        <p v-else-if="summary !== ''" class="max-w-prose text-xl font-semibold">{{ summary }}</p>
 
-        <section v-if="inApp" class="flex flex-col items-start gap-3">
+        <section v-if="inApp && !tooOld" class="flex flex-col items-start gap-3">
           <UiButton
             size="lg"
-            :disabled="!online || !driveUsable || lines.length === 0"
+            :disabled="!online || !driveUsable || appCheck === 'checking' || lines.length === 0"
             @click="openDrive"
           >
             {{ t('driveSend.open') }}
@@ -323,7 +347,7 @@ function confirmReopenList() {
                 :key="line.ingredientSlug"
                 :line="line"
                 :change="changes[line.ingredientSlug]"
-                :assisted="!inApp"
+                :assisted="assisted"
                 :search-url="searchUrl(line.searchQuery)"
                 @change="changes[line.ingredientSlug] = $event"
               />
@@ -337,7 +361,7 @@ function confirmReopenList() {
                 :key="line.ingredientSlug"
                 :line="line"
                 :change="changes[line.ingredientSlug]"
-                :assisted="!inApp"
+                :assisted="assisted"
                 :search-url="searchUrl(line.searchQuery)"
                 @change="changes[line.ingredientSlug] = $event"
               />
