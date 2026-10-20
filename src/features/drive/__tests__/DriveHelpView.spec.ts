@@ -109,7 +109,7 @@ describe('page de l’application', () => {
     expect(app.updateMessages().filter((type) => type === 'update.check')).toHaveLength(2)
   })
 
-  it('une application plus ancienne, qui ne sait pas se mettre à jour : le téléchargement à la main, trois étapes', async () => {
+  it('une application plus ancienne, qui ne sait pas se mettre à jour : le téléchargement à la main, quatre étapes', async () => {
     const native = installApp('1.2.3')
     const { wrapper } = await open()
 
@@ -121,6 +121,7 @@ describe('page de l’application', () => {
       'Ouvre le fichier quand Android le propose.',
       'Autorise l’installation (une seule fois).',
       'Touche « Installer ».',
+      'Si Play Protect s’affiche, touche « Installer sans analyser », puis confirme avec ton empreinte ou ton code.',
     ])
     // Rien d'update n'est envoyé à une application qui ne dit pas le savoir
     expect(native.sent.map((message) => message.type)).toEqual(['app.info'])
@@ -183,7 +184,7 @@ describe('la page publique /installer', () => {
     return mount(InstallView, { attachTo: document.body, global: { plugins: context.plugins } })
   }
 
-  it('un gros bouton vers l’APK de la dernière version, puis trois étapes', async () => {
+  it('un gros bouton vers l’APK de la dernière version, puis quatre étapes', async () => {
     const wrapper = await installPage()
 
     expect(wrapper.find('h1').text()).toBe('Installer l’application Repas')
@@ -197,6 +198,7 @@ describe('la page publique /installer', () => {
       'Ouvre le fichier quand Android le propose.',
       'Autorise l’installation (une seule fois).',
       'Touche « Installer ».',
+      'Si Play Protect s’affiche, touche « Installer sans analyser », puis confirme avec ton empreinte ou ton code.',
     ])
   })
 

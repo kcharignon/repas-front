@@ -10,7 +10,7 @@ const APK =
   'https://github.com/kcharignon/repas-front/releases/download/android-latest/repas-drive.apk'
 
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`dans un navigateur : la page d’aide mène à /installer, un bouton et trois étapes, thème ${colorScheme}`, async ({
+  test(`dans un navigateur : la page d’aide mène à /installer, un bouton et quatre étapes, thème ${colorScheme}`, async ({
     page,
   }) => {
     await fakeBack(page)
@@ -21,7 +21,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await expect(
       page.getByRole('heading', { level: 1, name: 'Installer l’application Repas' }),
     ).toBeVisible()
-    await expect(page.getByRole('listitem')).toHaveCount(3)
+    await expect(page.getByRole('listitem')).toHaveCount(4)
     await expect(page.getByRole('link', { name: 'Télécharger l’application' })).toHaveAttribute(
       'href',
       APK,
@@ -45,7 +45,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     const button = page.getByRole('link', { name: 'Télécharger l’application' })
     await expect(button).toHaveAttribute('href', APK)
     expect((await button.boundingBox())?.height).toBeGreaterThanOrEqual(44)
-    await expect(page.getByRole('listitem')).toHaveCount(3)
+    await expect(page.getByRole('listitem')).toHaveCount(4)
     expect((await scan(page)).violations).toEqual([])
   })
 }
