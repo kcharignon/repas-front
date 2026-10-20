@@ -792,6 +792,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/me/app-version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Retient la version de l'application installée pour l'utilisateur connecté
+         * @description Une ligne par compte et par plateforme, remplacée à chaque appel (idempotent). Seule la version est retenue, avec l'heure : aucun identifiant d'appareil, aucun modèle de téléphone. Au plus une écriture par minute et par compte : au-delà, la réponse reste `204` et rien n'est écrit. La version ne sert qu'à informer (`appUpdate` de `GET /api/v1/me`, liste des comptes de l'administration), jamais à accorder un droit.
+         */
+        put: operations["put_api_update_user_app_version"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/settings": {
         parameters: {
             query?: never;
@@ -1139,6 +1159,19 @@ export interface components {
              * @example alexiane@example.com
              */
             email: string;
+        };
+        UpdateUserAppVersionPayload: {
+            /**
+             * @description Plateforme de l'application installée : `android` seulement
+             * @example android
+             * @enum {string}
+             */
+            platform: "android";
+            /**
+             * @description Version de l'application : trois nombres séparés par des points, 20 caractères au plus (ni suffixe, ni quatrième nombre)
+             * @example 0.1.8
+             */
+            version: string;
         };
         UserSettingsPayload: {
             /**
@@ -1835,6 +1868,23 @@ export interface components {
             /** @example pâtes carbonara */
             name: string;
         };
+        AppUpdateDTO: {
+            /**
+             * @description Dernière version publiée de l'application (`APP_LATEST_VERSION` du serveur), `null` si le serveur ne la connaît pas
+             * @example 0.1.10
+             */
+            latest?: string | null;
+            /**
+             * @description Plus ancienne version de l'application encore attendue (`APP_MIN_VERSION` du serveur), `null` si aucune
+             * @example 0.1.9
+             */
+            minimum?: string | null;
+            /**
+             * @description Vrai si la dernière version de l'application vue pour ce compte est plus ancienne que `latest` ou que `minimum` (comparaison nombre par nombre). Faux si aucune version n'est connue pour ce compte (navigateur seul, application qui ne l'a jamais envoyée) ou si le serveur ne connaît ni `latest` ni `minimum`
+             * @example false
+             */
+            outdated: boolean;
+        };
         CurrentUserDTO: {
             /**
              * @description Identifiant de l'utilisateur (UUID)
@@ -1859,6 +1909,7 @@ export interface components {
              * @example 4
              */
             defaultServing: number;
+            appUpdate: components["schemas"]["AppUpdateDTO"];
         };
         UserSummaryDTO: {
             /**
@@ -1903,6 +1954,16 @@ export interface components {
              * @enum {string}
              */
             status: "PENDING" | "ACTIVE" | "DISABLED";
+            /**
+             * @description Dernière version de l'application Android vue pour ce compte (DRV-637), `null` si inconnue (navigateur seul, application qui ne l'a jamais envoyée)
+             * @example 0.1.8
+             */
+            appVersion?: string | null;
+            /**
+             * @description « À mettre à jour » : vrai si `appVersion` est plus ancienne que la dernière version publiée (`APP_LATEST_VERSION`) ou que la minimale (`APP_MIN_VERSION`) ; faux si la version est inconnue ou si le serveur ne connaît aucune des deux
+             * @example false
+             */
+            appOutdated: boolean;
         };
         DriveStoreDTO: {
             /**
@@ -4626,6 +4687,35 @@ export interface operations {
             };
             /** @description Trop de demandes depuis cette adresse IP */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    put_api_update_user_app_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateUserAppVersionPayload"];
+            };
+        };
+        responses: {
+            /** @description Version retenue (ou ignorée sans erreur : une version a déjà été retenue pour ce compte dans la minute) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide : plateforme autre que `android`, version qui n'est pas trois nombres séparés par des points, ou de plus de 20 caractères */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

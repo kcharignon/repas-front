@@ -68,6 +68,16 @@ describe('conditions d’utilisation du drive', () => {
     expect(text).not.toContain('ni avec personne.')
   })
 
+  it('dit que seule la version de l’application est retenue, sans rien sur le téléphone (DRV-637)', async () => {
+    const { wrapper } = await open()
+
+    const item = wrapper
+      .findAll('li')
+      .find((candidate) => candidate.text().includes('version de l’application'))
+    expect(item?.text()).toContain('Seule la version est retenue')
+    expect(item?.text()).toContain('aucun identifiant de ton téléphone, aucun modèle de téléphone')
+  })
+
   it('ne demande rien : ni case à cocher, ni bouton, ni fenêtre — un lien pour revenir à « Moi »', async () => {
     const { wrapper } = await open()
 

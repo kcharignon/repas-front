@@ -72,6 +72,8 @@ const users = {
       isDisabled: false,
       status: 'ACTIVE',
       isAdmin: true,
+      appVersion: '0.1.8',
+      appOutdated: true,
     },
     {
       id: 'u2',
@@ -84,6 +86,8 @@ const users = {
       isDisabled: true,
       status: 'DISABLED',
       isAdmin: false,
+      appVersion: null,
+      appOutdated: false,
     },
   ],
   totalItems: 2,
@@ -537,6 +541,18 @@ describe('utilisateurs', () => {
     expect(first).toContain('2 recettes, 0 ingrédients, 1 listes')
     expect(first).toContain('inscrit le 1 octobre 2026')
     expect(second).toContain('Désactivé')
+  })
+
+  it('montre la version de l’application de chacun, « — » si inconnue, et qui est à mettre à jour (DRV-637)', async () => {
+    const { wrapper } = await open(UsersAdminView)
+    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+
+    const [first, second] = wrapper.findAll('li').map((item) => item.text())
+
+    expect(first).toContain('Application : 0.1.8')
+    expect(first).toContain('À mettre à jour')
+    expect(second).toContain('Application : —')
+    expect(second).not.toContain('À mettre à jour')
   })
 
   it('montre le statut de chaque compte et laisse choisir parmi les trois', async () => {

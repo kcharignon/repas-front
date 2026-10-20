@@ -2335,6 +2335,34 @@
                 "security": []
             }
         },
+        "/api/v1/users/me/app-version": {
+            "put": {
+                "tags": [
+                    "Current user"
+                ],
+                "summary": "Retient la version de l'application install\u00e9e pour l'utilisateur connect\u00e9",
+                "description": "Une ligne par compte et par plateforme, remplac\u00e9e \u00e0 chaque appel (idempotent). Seule la version est retenue, avec l'heure : aucun identifiant d'appareil, aucun mod\u00e8le de t\u00e9l\u00e9phone. Au plus une \u00e9criture par minute et par compte : au-del\u00e0, la r\u00e9ponse reste `204` et rien n'est \u00e9crit. La version ne sert qu'\u00e0 informer (`appUpdate` de `GET /api/v1/me`, liste des comptes de l'administration), jamais \u00e0 accorder un droit.",
+                "operationId": "put_api_update_user_app_version",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateUserAppVersionPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Version retenue (ou ignor\u00e9e sans erreur : une version a d\u00e9j\u00e0 \u00e9t\u00e9 retenue pour ce compte dans la minute)"
+                    },
+                    "422": {
+                        "description": "Corps invalide : plateforme autre que `android`, version qui n'est pas trois nombres s\u00e9par\u00e9s par des points, ou de plus de 20 caract\u00e8res"
+                    }
+                }
+            }
+        },
         "/api/v1/me/settings": {
             "put": {
                 "tags": [
@@ -3127,6 +3155,30 @@
                         "type": "string",
                         "maxLength": 255,
                         "example": "alexiane@example.com"
+                    }
+                },
+                "type": "object"
+            },
+            "UpdateUserAppVersionPayload": {
+                "required": [
+                    "platform",
+                    "version"
+                ],
+                "properties": {
+                    "platform": {
+                        "description": "Plateforme de l'application install\u00e9e : `android` seulement",
+                        "type": "string",
+                        "enum": [
+                            "android"
+                        ],
+                        "example": "android"
+                    },
+                    "version": {
+                        "description": "Version de l'application : trois nombres s\u00e9par\u00e9s par des points, 20 caract\u00e8res au plus (ni suffixe, ni quatri\u00e8me nombre)",
+                        "type": "string",
+                        "maxLength": 20,
+                        "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+                        "example": "0.1.8"
                     }
                 },
                 "type": "object"
@@ -4367,13 +4419,39 @@
                 },
                 "type": "object"
             },
+            "AppUpdateDTO": {
+                "required": [
+                    "outdated"
+                ],
+                "properties": {
+                    "latest": {
+                        "description": "Derni\u00e8re version publi\u00e9e de l'application (`APP_LATEST_VERSION` du serveur), `null` si le serveur ne la conna\u00eet pas",
+                        "type": "string",
+                        "example": "0.1.10",
+                        "nullable": true
+                    },
+                    "minimum": {
+                        "description": "Plus ancienne version de l'application encore attendue (`APP_MIN_VERSION` du serveur), `null` si aucune",
+                        "type": "string",
+                        "example": "0.1.9",
+                        "nullable": true
+                    },
+                    "outdated": {
+                        "description": "Vrai si la derni\u00e8re version de l'application vue pour ce compte est plus ancienne que `latest` ou que `minimum` (comparaison nombre par nombre). Faux si aucune version n'est connue pour ce compte (navigateur seul, application qui ne l'a jamais envoy\u00e9e) ou si le serveur ne conna\u00eet ni `latest` ni `minimum`",
+                        "type": "boolean",
+                        "example": false
+                    }
+                },
+                "type": "object"
+            },
             "CurrentUserDTO": {
                 "required": [
                     "id",
                     "email",
                     "roles",
                     "isAdmin",
-                    "defaultServing"
+                    "defaultServing",
+                    "appUpdate"
                 ],
                 "properties": {
                     "id": {
@@ -4403,6 +4481,9 @@
                         "description": "Nombre de personnes propos\u00e9 par d\u00e9faut pour une recette",
                         "type": "integer",
                         "example": 4
+                    },
+                    "appUpdate": {
+                        "$ref": "#/components/schemas/AppUpdateDTO"
                     }
                 },
                 "type": "object"
@@ -4418,7 +4499,8 @@
                     "createdAt",
                     "isDisabled",
                     "isAdmin",
-                    "status"
+                    "status",
+                    "appOutdated"
                 ],
                 "properties": {
                     "id": {
@@ -4472,6 +4554,17 @@
                             "DISABLED"
                         ],
                         "example": "ACTIVE"
+                    },
+                    "appVersion": {
+                        "description": "Derni\u00e8re version de l'application Android vue pour ce compte (DRV-637), `null` si inconnue (navigateur seul, application qui ne l'a jamais envoy\u00e9e)",
+                        "type": "string",
+                        "example": "0.1.8",
+                        "nullable": true
+                    },
+                    "appOutdated": {
+                        "description": "\u00ab \u00c0 mettre \u00e0 jour \u00bb : vrai si `appVersion` est plus ancienne que la derni\u00e8re version publi\u00e9e (`APP_LATEST_VERSION`) ou que la minimale (`APP_MIN_VERSION`) ; faux si la version est inconnue ou si le serveur ne conna\u00eet aucune des deux",
+                        "type": "boolean",
+                        "example": false
                     }
                 },
                 "type": "object"
