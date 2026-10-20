@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 
-import { useThemeStore } from '@/design/theme'
+import { applyStoredTheme, useThemeStore } from '@/design/theme'
 
 describe('thème', () => {
   beforeEach(() => {
@@ -45,5 +47,44 @@ describe('thème', () => {
     setActivePinia(createPinia())
     localStorage.setItem('repas.theme', 'violet')
     expect(useThemeStore().preference).toBe('system')
+  })
+
+  describe('au démarrage', () => {
+    const attribute = () => document.documentElement.getAttribute('data-theme')
+    const initScript = readFileSync('public/theme-init.js', 'utf8')
+    const runInitScript = () => new Function(initScript)()
+
+    for (const [stored, expected] of [
+      ['light', 'light'],
+      ['dark', 'dark'],
+      ['system', null],
+      ['violet', null],
+      [null, null],
+    ] as const) {
+      it(`${stored ?? 'rien d’enregistré'} : data-theme vaut ${expected ?? 'absent'}, comme avec le script d’amorçage`, () => {
+        for (const apply of [applyStoredTheme, runInitScript]) {
+          document.documentElement.dataset.theme = 'dark'
+          if (stored === null) localStorage.removeItem('repas.theme')
+          else localStorage.setItem('repas.theme', stored)
+
+          apply()
+
+          expect(attribute()).toBe(expected)
+        }
+      })
+    }
+
+    it('un stockage indisponible laisse le système décider, sans lever', () => {
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+        throw new Error('stockage indisponible')
+      })
+      document.documentElement.dataset.theme = 'dark'
+
+      expect(applyStoredTheme).not.toThrow()
+      expect(attribute()).toBeNull()
+      document.documentElement.dataset.theme = 'dark'
+      expect(runInitScript).not.toThrow()
+      expect(attribute()).toBeNull()
+    })
   })
 })
