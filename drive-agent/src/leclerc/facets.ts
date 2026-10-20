@@ -412,31 +412,127 @@ export interface FacetMatch {
 
 /** La recherche filtrée sondée (une requête) : sur quelle valeur, ce que le site a répondu, les familles, le premier produit. */
 /**
- * Le verdict d'une recherche filtrée (DRV-647, 0.36.0) : filtrée (HTTP 200, au moins un produit, strictement moins que la recherche sans filtre, pas les
- * mêmes produits), ou pourquoi non.
+ * Les formes de la valeur de `Filtres` qu'on peut essayer pour une valeur de facette (DRV-647, 0.37.0), dans l'ordre : (i) son `sIdValeurUrl` tel quel,
+ * (ii) `<iIdBloc>-<iIdValeur>`, (iii) `<iIdValeur>-<iIdBloc>`. Seulement des formes `N-N` bâties À PARTIR DES VALEURS LUES, sans doublon ; jamais une valeur
+ * inventée.
  */
-export type ProbeVerdict = 'FILTERED' | 'IDENTICAL' | 'EMPTY' | 'NOT_SMALLER' | 'HTTP' | 'ERROR'
+export type FilterForm = 'URL_ID' | 'BLOC_ID' | 'ID_BLOC'
+export const FILTER_FORMS: readonly FilterForm[] = ['URL_ID', 'BLOC_ID', 'ID_BLOC']
 
-/** Une tentative de recherche filtrée : la forme de la valeur de `Filtres` (`sIdValeurUrl` lu, ou `iIdBloc-iIdValeur`), ce que le site a répondu. */
+/** La valeur de `Filtres` d'une valeur de facette sous une forme, ou `null` si elle ne se bâtit pas (ou n'a pas la forme `N-N`). */
+export function keyFor(value: FacetValue, form: FilterForm): string | null {
+  const key =
+    form === 'URL_ID'
+      ? value.urlId
+      : value.bloc === null
+        ? null
+        : form === 'BLOC_ID'
+          ? `${value.bloc}-${value.id}`
+          : `${value.id}-${value.bloc}`
+  return key !== null && FILTER_KEY.test(key) ? key : null
+}
+
+/** Les formes distinctes d'une valeur, dans l'ordre (i), (ii), (iii) : trois au plus. */
+export function filterKeys(value: FacetValue): { form: FilterForm; key: string }[] {
+  const out: { form: FilterForm; key: string }[] = []
+  for (const form of FILTER_FORMS) {
+    const key = keyFor(value, form)
+    if (key !== null && !out.some((one) => one.key === key)) out.push({ form, key })
+  }
+  return out
+}
+
+/** La valeur de facette sur laquelle valider le filtre : la plus fournie qui a des enfants lisibles, à défaut la plus fournie. */
+export function validationTarget(values: readonly FacetValue[]): FacetValue | null {
+  const usable = values.filter((value) => filterKeys(value).length > 0)
+  const byRefs = [...usable].sort((a, b) => (b.references ?? 0) - (a.references ?? 0))
+  return (
+    byRefs.find((value) => value.children.some((child) => (child.label ?? '').trim() !== '')) ??
+    byRefs[0] ??
+    null
+  )
+}
+
+/** Pourquoi une recherche filtrée est valide ou non (DRV-647, 0.37.0). */
+export type CoherenceReason =
+  'TOTAL_MATCHES' | 'CHILDREN_MATCH' | 'HTTP' | 'EMPTY' | 'INCOHERENT' | 'ERROR'
+
+export interface Coherence {
+  valid: boolean
+  reason: CoherenceReason
+  /** Le total annoncé change-t-il, et s'approche-t-il du nombre de références de la valeur (±25 % ou ±3) ? `null` : un total manque. */
+  totalChanged: boolean | null
+  totalNear: boolean | null
+  /** La part des produits dont le groupe (famille nommée par `sUrlVoirRayon`) est un enfant de la valeur ; `null` sans enfant lisible. */
+  share: number | null
+}
+
+const folded = (text: string): string =>
+  text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+
+/**
+ * La COHÉRENCE d'une recherche filtrée avec la valeur demandée (DRV-647, 0.37.0 ; mesure réelle : `Filtres=<sIdValeurUrl>` rendait moins de produits, mais pas
+ * ceux du rayon, et le même `iNbTotalProduits`) : valide si (a) le total annoncé CHANGE et s'approche de `niNbReferences` de la valeur (±25 % ou ±3), OU (b) au
+ * moins 80 % des produits ont un groupe qui est un enfant lisible de la valeur (sans accents ni casse). Sans enfant lisible, seul (a) compte.
+ */
+export function coherence(input: {
+  status: number
+  products: number
+  before: number | null
+  after: number | null
+  references: number | null
+  childLabels: readonly string[]
+  groupLabels: readonly (string | null)[]
+}): Coherence {
+  const totalChanged =
+    input.before === null || input.after === null ? null : input.before !== input.after
+  const totalNear =
+    input.after === null || input.references === null
+      ? null
+      : Math.abs(input.after - input.references) <= Math.max(3, input.references * 0.25)
+  const children = new Set(input.childLabels.map(folded).filter((label) => label !== ''))
+  const share =
+    children.size === 0 || input.groupLabels.length === 0
+      ? null
+      : input.groupLabels.filter((label) => label !== null && children.has(folded(label))).length /
+        input.groupLabels.length
+  const base = { totalChanged, totalNear, share }
+  if (input.status !== 200) return { ...base, valid: false, reason: 'HTTP' }
+  if (input.products === 0) return { ...base, valid: false, reason: 'EMPTY' }
+  if (totalChanged === true && totalNear === true)
+    return { ...base, valid: true, reason: 'TOTAL_MATCHES' }
+  if (share !== null && share >= 0.8) return { ...base, valid: true, reason: 'CHILDREN_MATCH' }
+  return { ...base, valid: false, reason: 'INCOHERENT' }
+}
+
+/** Une forme essayée : laquelle, la forme de la valeur envoyée, ce que le site a répondu, et sa cohérence avec la valeur demandée. */
 export interface ProbeAttempt {
-  form: 'URL_ID' | 'BLOC_ID'
+  form: FilterForm
   /** La forme de la valeur envoyée (`N-N`). */
   value: string
   status: number | null
-  /** `iNbTotalProduits` de la réponse. */
+  /** `iNbTotalProduits` sans filtre et avec. */
+  before: number | null
   total: number | null
+  references: number | null
   products: number | null
-  verdict: ProbeVerdict
+  coherence: Coherence | null
   fault?: string
+  /** Les 5 groupes (familles nommées) les plus fournis de la réponse filtrée. */
   families: { id: number; label: string | null; count: number }[]
-  level: 'RAYON' | 'FAMILLE' | null
   first: { label: string | null; fresh: boolean } | null
 }
 
-/** La recherche filtrée sondée par le diagnostic : sur quelle valeur, ses tentatives (deux au plus), la forme de l'adresse de la dernière. */
+/** Les formes essayées sur une valeur (trois au plus), la forme retenue (`null` : aucune), la forme de l'adresse de la dernière. */
 export interface FilteredProbe {
   target: { id: number; label: string | null }
   attempts: ProbeAttempt[]
+  retained: FilterForm | null
   address: string | null
 }
 
@@ -449,21 +545,6 @@ export const FILTER_KEY = /^\d{1,9}-\d{1,12}$/
 export function totalProducts(text: string): number | null {
   const found = /"iNbTotalProduits"\s*:\s*"?(\d{1,9})/.exec(text)
   return found?.[1] === undefined ? null : Number(found[1])
-}
-
-/** Le verdict d'une recherche filtrée face à la recherche sans filtre ([unfiltered] : ses identifiants de produits). */
-export function filterVerdict(
-  status: number,
-  filtered: readonly string[],
-  unfiltered: readonly string[],
-): ProbeVerdict {
-  if (status !== 200) return 'HTTP'
-  if (filtered.length === 0) return 'EMPTY'
-  const before = new Set(unfiltered)
-  if (filtered.length === unfiltered.length && filtered.every((id) => before.has(id)))
-    return 'IDENTICAL'
-  if (filtered.length >= unfiltered.length) return 'NOT_SMALLER'
-  return 'FILTERED'
 }
 
 export interface FacetExploration {

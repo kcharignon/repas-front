@@ -151,6 +151,7 @@ function run(
     aisleLevel?: 'RAYON' | 'FAMILLE'
     /** Les rayons du site et ce que rend leur recherche filtrée (DRV-647, 0.36.0). */
     siteAisles?: NonNullable<Parameters<typeof fakeAdapter>[1]>['siteAisles']
+    siteValid?: boolean
     filtered?: Record<string, string[] | Error>
   } = {},
 ) {
@@ -161,6 +162,7 @@ function run(
     ...(options.aisleLabels && { aisleLabels: options.aisleLabels }),
     ...(options.aisleLevel && { aisleLevel: options.aisleLevel }),
     ...(options.siteAisles && { siteAisles: options.siteAisles }),
+    ...(options.siteValid !== undefined && { siteValid: options.siteValid }),
     ...(options.filtered && { filtered: options.filtered }),
   })
   const user = session(...steps)
@@ -2549,7 +2551,7 @@ describe('le filtre par rayon du site (DRV-647)', () => {
   })
 })
 
-describe('la rangée des rayons du site, tirée de sa facette « Rayons » (DRV-647, 0.36.0)', () => {
+describe('la rangée des rayons du site, tirée de sa facette « Rayons » (DRV-647, 0.36.0, validée par 0.37.0)', () => {
   const FRESH = 41
   const CANNED = 7
   const AISLES = [CANNED, FRESH, CANNED, CANNED, FRESH, CANNED, FRESH, CANNED, FRESH, CANNED]
@@ -2601,9 +2603,11 @@ describe('la rangée des rayons du site, tirée de sa facette « Rayons » (DRV-
   it('montre « Tous » puis les rayons du site par nombre de références ; toucher un rayon fait UNE requête filtrée, gardée ; « Tous » revient sans requête', async () => {
     const seen: Record<string, unknown> = {}
     const test = run(
-      line({ rayonHints: [FRESH] }),
+      line(),
       [
         async (view) => {
+          // La rangée du site ne vient qu'après la validation de la forme du filtre (en tâche de fond).
+          await tick()
           seen.row = shelfTexts(view.zone)
           chipOf(view.zone, 'Fruits Légumes').click()
           expect(view.zone.textContent).toContain('Je cherche…')
@@ -2619,7 +2623,13 @@ describe('la rangée des rayons du site, tirée de sa facette « Rayons » (DRV-
           return { kind: 'skip' }
         },
       ],
-      { shelf, found: { tomate: ids }, siteAisles: SITE, filtered: { '4-2': fresh4 } },
+      {
+        shelf,
+        found: { tomate: ids },
+        siteValid: true,
+        siteAisles: SITE,
+        filtered: { '4-2': fresh4 },
+      },
     )
 
     await test.start()
@@ -2644,6 +2654,8 @@ describe('la rangée des rayons du site, tirée de sa facette « Rayons » (DRV-
       line(),
       [
         async (view) => {
+          // La rangée du site ne vient qu'après la validation de la forme du filtre (en tâche de fond).
+          await tick()
           chipOf(view.zone, 'Fruits Légumes').click()
           await tick()
           ;[...view.zone.querySelectorAll<HTMLButtonElement>('.aisles.sub button')][0]?.click()
@@ -2660,6 +2672,7 @@ describe('la rangée des rayons du site, tirée de sa facette « Rayons » (DRV-
       {
         shelf,
         found: { tomate: ids },
+        siteValid: true,
         siteAisles: SITE,
         filtered: { '4-2': fresh4, '4-21': fresh4.slice(0, 3) },
       },
@@ -2678,12 +2691,20 @@ describe('la rangée des rayons du site, tirée de sa facette « Rayons » (DRV-
       line(),
       [
         async (view) => {
+          // La rangée du site ne vient qu'après la validation de la forme du filtre (en tâche de fond).
+          await tick()
           chipOf(view.zone, 'Fruits Légumes').click()
           await tick()
           choose(view.zone, 'Tomates 4')
         },
       ],
-      { shelf, found: { tomate: ids }, siteAisles: SITE, filtered: { '4-2': fresh4 } },
+      {
+        shelf,
+        found: { tomate: ids },
+        siteValid: true,
+        siteAisles: SITE,
+        filtered: { '4-2': fresh4 },
+      },
     )
 
     await test.start()
@@ -2694,61 +2715,148 @@ describe('la rangée des rayons du site, tirée de sa facette « Rayons » (DRV-
     })
   })
 
-  it.each([
-    ['la forme de l’adresse ne filtre pas (les mêmes produits)', ids],
-    ['le filtre ne rend rien', []],
-    ['le site refuse l’adresse (HTTP 404)', new LeclercError('CONTRACT_CHANGED', 404, 'HTTP_404')],
-  ])(
-    'repli sans message sur la rangée des familles quand %s, pour tout le passage',
-    async (_name, answer) => {
-      const seen: Record<string, unknown> = {}
-      const test = run(
-        line(),
-        [
-          async (view) => {
-            chipOf(view.zone, 'Fruits Légumes').click()
-            await tick()
-            seen.row = shelfTexts(view.zone)
-            seen.list = names(view.zone).length
-            seen.notice = view.zone.querySelector<HTMLElement>('.notice')?.hidden
-            return { kind: 'skip' }
-          },
-          (view) => {
-            seen.next = shelfTexts(view.zone)
-            return { kind: 'skip' }
-          },
-        ],
-        {
-          shelf,
-          found: { tomate: ids, sauce: canned.concat(fresh4) },
-          siteAisles: SITE,
-          filtered: { '4-2': answer },
-          aisleLevel: 'FAMILLE',
-          aisleLabels: { 71: 'Conserves de légumes', 410: 'Tomates rondes' },
-          others: [{ ...line(), ingredientSlug: 'sauce', name: 'sauce' }],
+  const FAMILIES = ['Tous (10) *', 'Conserves de légumes (6)', 'Tomates rondes (3)', 'Rayon 1 (1)']
+  const familyOptions = {
+    aisleLevel: 'FAMILLE' as const,
+    aisleLabels: { 71: 'Conserves de légumes', 410: 'Tomates rondes' },
+  }
+
+  it('tant que la forme du filtre n’est pas validée, la rangée est celle des familles ; aucune forme valide : elle reste, sans message, pour tout le passage, et la validation n’est faite qu’une fois', async () => {
+    const seen: Record<string, unknown> = {}
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          seen.before = shelfTexts(view.zone)
+          await tick()
+          seen.after = shelfTexts(view.zone)
+          seen.notice = view.zone.querySelector<HTMLElement>('.notice')?.hidden
+          return { kind: 'skip' }
         },
-      )
+        async (view) => {
+          await tick()
+          seen.next = shelfTexts(view.zone)
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        shelf,
+        found: { tomate: ids, sauce: canned.concat(fresh4) },
+        siteValid: false,
+        siteAisles: SITE,
+        ...familyOptions,
+        others: [{ ...line(), ingredientSlug: 'sauce', name: 'sauce' }],
+      },
+    )
 
-      await test.start()
+    await test.start()
 
-      expect(seen.row).toEqual([
-        'Tous (10) *',
-        'Conserves de légumes (6)',
-        'Tomates rondes (3)',
-        'Rayon 1 (1)',
-      ])
-      expect(seen.list).toBe(8)
-      expect(seen.notice).toBe(true)
-      // La ligne suivante : la rangée des familles d'emblée, sans nouvelle requête filtrée.
-      expect(seen.next).toEqual([
-        'Tous (10) *',
-        'Conserves de légumes (6)',
-        'Tomates rondes (3)',
-        'Rayon 1 (1)',
-      ])
-      expect(finds(test.adapter.calls)).toEqual(['filter 4-2'])
-    },
-  )
+    expect(seen.before).toEqual(FAMILIES)
+    expect(seen.after).toEqual(FAMILIES)
+    expect(seen.notice).toBe(true)
+    expect(seen.next).toEqual(FAMILIES)
+    expect(test.adapter.calls.filter((call) => call === 'validate')).toHaveLength(1)
+    expect(finds(test.adapter.calls)).toEqual([])
+  })
+
+  it('la validation réussie fait basculer la rangée vers les rayons du site, sans refaire la liste', async () => {
+    const seen: Record<string, unknown> = {}
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          seen.before = shelfTexts(view.zone)
+          const first = rows(view.zone)[0]
+          await tick()
+          seen.after = shelfTexts(view.zone)
+          seen.sameList = rows(view.zone)[0] === first
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf, found: { tomate: ids }, siteValid: true, siteAisles: SITE, ...familyOptions },
+    )
+
+    await test.start()
+
+    expect(seen.before).toEqual(FAMILIES)
+    expect(seen.after).toEqual([
+      'Tous (10) *',
+      'Epicerie salée (6)',
+      'Fruits Légumes (4)',
+      'Rayon 1 (0)',
+    ])
+    expect(seen.sameList).toBe(true)
+  })
+
+  it('une pastille des familles touchée avant la fin de la validation : les familles restent pour ce mot (pas de clignotement)', async () => {
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const seen: Record<string, unknown> = {}
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          chipOf(view.zone, 'Tomates rondes').click()
+          release()
+          await tick()
+          await tick()
+          seen.row = shelfTexts(view.zone)
+          seen.list = names(view.zone).length
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        shelf,
+        found: { tomate: ids },
+        siteValid: true,
+        siteAisles: SITE,
+        ...familyOptions,
+        before: (call) => (call === 'validate' ? gate : undefined),
+      },
+    )
+
+    await test.start()
+
+    expect(seen.row).toEqual([
+      'Tous (10)',
+      'Conserves de légumes (6)',
+      'Tomates rondes (3) *',
+      'Rayon 1 (1)',
+    ])
+    expect(seen.list).toBe(3)
+  })
+
+  it('une recherche filtrée que le site refuse après validation : repli sans message sur les familles', async () => {
+    const seen: Record<string, unknown> = {}
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          await tick()
+          chipOf(view.zone, 'Fruits Légumes').click()
+          await tick()
+          seen.row = shelfTexts(view.zone)
+          seen.notice = view.zone.querySelector<HTMLElement>('.notice')?.hidden
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        shelf,
+        found: { tomate: ids },
+        siteValid: true,
+        siteAisles: SITE,
+        ...familyOptions,
+        filtered: { '4-2': new LeclercError('CONTRACT_CHANGED', 404, 'HTTP_404') },
+      },
+    )
+
+    await test.start()
+
+    expect(seen.row).toEqual(FAMILIES)
+    expect(seen.notice).toBe(true)
+  })
 
   it('une erreur réseau sur un rayon : une phrase, la rangée du site reste, « Tous »', async () => {
     const seen: Record<string, unknown> = {}
@@ -2756,6 +2864,8 @@ describe('la rangée des rayons du site, tirée de sa facette « Rayons » (DRV-
       line(),
       [
         async (view) => {
+          // La rangée du site ne vient qu'après la validation de la forme du filtre (en tâche de fond).
+          await tick()
           chipOf(view.zone, 'Fruits Légumes').click()
           await tick()
           seen.notice = view.zone.querySelector<HTMLElement>('.notice')?.textContent
@@ -2766,6 +2876,7 @@ describe('la rangée des rayons du site, tirée de sa facette « Rayons » (DRV-
       {
         shelf,
         found: { tomate: ids },
+        siteValid: true,
         siteAisles: SITE,
         filtered: { '4-2': new LeclercError('NETWORK', null, 'REQUEST_TIMEOUT') },
       },

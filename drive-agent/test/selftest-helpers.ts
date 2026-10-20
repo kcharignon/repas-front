@@ -157,6 +157,7 @@ export function shop(shelves: Shelves, options: ShopOptions = {}) {
     aisleSamples: () => [],
     exploreFacets: () => Promise.resolve(null),
     siteAisles: () => [],
+    validateSiteFilter: () => Promise.resolve(false),
     searchFiltered: () => Promise.resolve({ candidates: [], total: null }),
     readEntry: () => ({ kind: 'NONE' }),
     followEntry: () => Promise.resolve(),

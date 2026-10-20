@@ -175,121 +175,142 @@ describe('la pagination et les univers : des nombres et des oui/non, jamais un m
   })
 })
 
-describe('le diagnostic dit la facette « Rayons », la forme du filtre et sonde UNE recherche filtrée (DRV-647, 0.35.0)', () => {
-  const FILTERED = reply(false, [product(9, 'Tomates grappe fraîches inventées', 284323, 284351)])
+describe('le diagnostic essaie jusqu’à trois formes de « Filtres » et retient la première COHÉRENTE (DRV-647, 0.37.0)', () => {
+  /** La réponse sans filtre : celle de `reply`, avec un total annoncé de 177 produits. */
+  const UNFILTERED = reply(true).replace(
+    '"iNbResultats":180',
+    '"iNbResultats":180,"iNbTotalProduits":177',
+  )
+  /** Une réponse filtrée : [total] annoncé, des produits dont la famille est nommée (ou non) par `sUrlVoirRayon`. */
+  const filteredReply = (total: number, families: readonly (readonly [number, string | null])[]) =>
+    `<html><body><script>var etat = {"objContenu":{"lstElements":[${families
+      .map(
+        ([family, name], index) =>
+          `{"objElement":{"iIdProduit":${9000 + index},"sLibelleLigne1":"Article inventé ${index}","nrPVUnitaireTTC":2,"iQteDisponible":3,"iIdRayon":284323,"iIdFamille":${family}${
+            name === null
+              ? ''
+              : `,"sUrlVoirRayon":"${STORE}-${CITY}/rayon-${family}-${name}.aspx?Filtres="`
+          }}}`,
+      )
+      .join(',')}]},"iNbTotalProduits":${total}}</script></body></html>`
+  /** Une réponse filtrée INCOHÉRENTE, comme celle du vrai site le 2026-10-20 : moins de produits, le même total, des groupes sans rapport. */
+  const INCOHERENT = filteredReply(177, [
+    [301, 'Sodas-et-Boissons-aux-fruits'],
+    [302, 'Laits-et-Oeufs'],
+    [303, 'Les-chats'],
+  ])
 
-  async function report(
-    withLinks: boolean,
-    filtered: (call: Call) => Scripted = () => ({ body: FILTERED }),
-    unfiltered = reply(withLinks),
-  ) {
+  async function report(filtered: (call: Call) => Scripted, unfiltered = UNFILTERED) {
     const answer = (call: Call): Scripted =>
       call.url.includes('Filtres=') ? filtered(call) : { body: unfiltered }
     const fake = fakeSite(answer)
     const deps: ChecksDeps = {
       adapter: new LeclercAdapter(fake.deps),
-      agentVersion: '0.35.0',
+      agentVersion: '0.37.0',
       storage: fakeStorage(),
       wakeLock: fakeWakeLock().wakeLock,
       originReplaced: null,
     }
     const { probes } = await runChecks(deps, () => undefined)
-    return { text: probeLines(probes).join('\n'), calls: fake.calls }
+    return {
+      text: probeLines(probes).join('\n'),
+      filters: fake.calls.map((call) => call.url).filter((url) => url.includes('Filtres=')),
+      calls: fake.calls,
+    }
   }
 
-  it('les blocs, les rayons du filtre, la valeur fraîche, la correspondance des produits, la forme des liens', async () => {
-    const { text } = await report(true)
+  it('les blocs, les rayons du filtre, la valeur fraîche, la correspondance des produits, la forme des liens (0.35.0)', async () => {
+    const { text } = await report(() => ({ body: INCOHERENT }))
 
     expect(text).toContain(
       'Bloc de filtre 4 « Rayons » de la réponse « tomate » : 3 valeurs de premier niveau',
     )
     expect(text).toContain(
-      'Bloc de filtre 2 « Marques » de la réponse « tomate » : 1 valeur de premier niveau',
-    )
-    expect(text).toContain(
       'Rayon du filtre « Viandes Poissons » : iIdValeur=543815, niNbReferences=12, 2 enfants ; sIdValeurUrl (forme)=« N-N », contient iIdValeur : oui ; enfants : « Boucherie », « Veau »',
-    )
-    expect(text).toContain(
-      'Valeur « fruits / légumes / marché frais » de la facette : « Fruits et légumes » (iIdValeur=543900, niNbReferences=5, premier niveau) ; « Légumes fruits » (iIdValeur=284351, niNbReferences=5, enfant)',
     )
     expect(text).toContain(
       'Correspondance avec la facette d’un produit de « tomate » : iIdRayon=284323 → aucune correspondance ; iIdFamille=284351 → correspond à la valeur 284351 « Légumes fruits » (enfant)',
     )
     expect(text).toContain('Liens à « Filtres » (réponse « tomate ») : 2')
-    expect(text).toContain(
-      'Forme d’un lien à « Filtres » (réponse « tomate », ×2) : /magasin-N-N-V/recherche.aspx ?TexteRecherche&Filtres ; Filtres=N-N',
-    )
-    expect(text).toContain('Liens à « Filtres » (page) : 0')
   })
 
-  it('une seule recherche filtrée (0.36.0), sur la valeur « fruits / légumes », par son sIdValeurUrl, au chemin du magasin sans ville, après celle de « tomate »', async () => {
-    const { text, calls } = await report(true)
+  it('une réponse incohérente (moins de produits, même total, autres groupes) est REFUSÉE ; aucune forme valide : trois formes au plus, puis « aucune »', async () => {
+    const { text, filters } = await report(() => ({ body: INCOHERENT }))
 
-    const urls = calls.map((call) => call.url)
-    expect(urls).toHaveLength(6)
-    expect(urls[3]).toBe(`${STORE}/recherche.aspx?TexteRecherche=tomate&Filtres=4-543900`)
-    expect(urls.filter((url) => url.includes('Filtres='))).toHaveLength(1)
-    expect(calls[3]?.init.method).toBe('GET')
+    // (i) sIdValeurUrl « 4-543815 » ; (ii) iIdBloc-iIdValeur est la même : sautée ; (iii) iIdValeur-iIdBloc.
+    expect(filters).toEqual([
+      `${STORE}/recherche.aspx?TexteRecherche=tomate&Filtres=4-543815`,
+      `${STORE}/recherche.aspx?TexteRecherche=tomate&Filtres=543815-4`,
+    ])
     expect(text).toContain(
-      'Recherche « tomate » filtrée sur « Fruits et légumes » (iIdValeur=543900), Filtres=<sIdValeurUrl> (forme N-N) : HTTP 200, iNbTotalProduits=?, 1 produits lus, groupes au niveau rayon ; premier produit : « Tomates grappe fraîches inventées » (frais : oui) ; verdict : filtrée (moins de produits, pas les mêmes)',
+      'Forme essayée (i) Filtres=<sIdValeurUrl> (forme N-N) sur « Viandes Poissons » : HTTP 200, iNbTotalProduits 177 → 177 (niNbReferences 12), 3 produits, part dans les enfants attendus : 0 % ; verdict : invalide (le total ne correspond pas et les groupes ne sont pas ceux des enfants)',
     )
-    expect(text).toContain('Groupe de la recherche filtrée 284323 (1 produit) : (sans libellé)')
+    expect(text).toContain('Groupe de la forme essayée : « Sodas et Boissons aux fruits » (1)')
+    expect(text).toContain('Forme essayée (iii) Filtres=<iIdValeur-iIdBloc> (forme N-N)')
+    expect(text).toContain('Forme retenue : aucune (la rangée de l’écran reste celle des familles)')
     expect(text).toContain(
-      'Forme finale de l’adresse filtrée : /magasin-N-N/recherche.aspx ?TexteRecherche&Filtres ; Filtres=N-N',
+      'Aucune forme valide : voir plus haut les formes des liens à « Filtres »',
     )
   })
 
-  it('une première forme qui ne filtre pas (les mêmes produits) : UNE seconde avec iIdBloc-iIdValeur, puis rien de plus', async () => {
-    const odd = reply(true).replace('"sIdValeurUrl":"4-543900"', '"sIdValeurUrl":"9-543900"')
-    const { text, calls } = await report(
-      true,
-      (call) => ({ body: call.url.endsWith('Filtres=9-543900') ? odd : FILTERED }),
+  it('le total qui change et s’approche de niNbReferences : la forme est valide, et l’essai s’arrête là', async () => {
+    const { text, filters } = await report(() => ({ body: filteredReply(12, [[543814, null]]) }))
+
+    expect(filters).toHaveLength(1)
+    expect(text).toContain(
+      'HTTP 200, iNbTotalProduits 177 → 12 (niNbReferences 12), 1 produits, part dans les enfants attendus : 0 % ; verdict : valide (le total change et s’approche du nombre de références)',
+    )
+    expect(text).toContain('Forme retenue : (i) Filtres=<sIdValeurUrl>')
+  })
+
+  it('au moins 80 % des produits dans les enfants attendus (sans accents ni casse) : valide, même si le total ne change pas', async () => {
+    const { text } = await report(() => ({
+      body: filteredReply(177, [
+        [543814, 'BOUCHERIE'],
+        [544317, 'Veau'],
+        [544317, 'Veau'],
+        [543814, 'Boucherie'],
+        [999, 'Autre'],
+      ]),
+    }))
+
+    expect(text).toContain(
+      'part dans les enfants attendus : 80 % ; verdict : valide (au moins 80 % des produits sont dans les enfants attendus)',
+    )
+  })
+
+  it('seule la forme (ii) iIdBloc-iIdValeur filtre : elle est retenue après l’échec de (i)', async () => {
+    const odd = UNFILTERED.replace('"sIdValeurUrl":"4-543815"', '"sIdValeurUrl":"9-543815"')
+    const { text, filters } = await report(
+      (call) => ({
+        body: call.url.endsWith('Filtres=4-543815')
+          ? filteredReply(11, [[543814, 'Boucherie']])
+          : INCOHERENT,
+      }),
       odd,
     )
 
-    const filtered = calls.map((call) => call.url).filter((url) => url.includes('Filtres='))
-    expect(filtered).toEqual([
-      `${STORE}/recherche.aspx?TexteRecherche=tomate&Filtres=9-543900`,
-      `${STORE}/recherche.aspx?TexteRecherche=tomate&Filtres=4-543900`,
-    ])
-    expect(text).toContain(
-      'Filtres=<sIdValeurUrl> (forme N-N) : HTTP 200, iNbTotalProduits=?, 2 produits lus',
-    )
-    expect(text).toContain('verdict : les mêmes produits que sans filtre')
-    expect(text).toContain('Filtres=<iIdBloc-iIdValeur> (forme N-N) : HTTP 200')
-    expect(text).toContain('verdict : filtrée (moins de produits, pas les mêmes)')
+    expect(filters.map((url) => url.split('Filtres=')[1])).toEqual(['9-543815', '4-543815'])
+    expect(text).toContain('Forme retenue : (ii) Filtres=<iIdBloc-iIdValeur>')
   })
 
-  it('une réponse HTTP 404 puis une seconde forme identique : une seule tentative, et le verdict', async () => {
-    const { text, calls } = await report(true, () => ({
-      status: 404,
-      body: '<html>introuvable</html>',
-    }))
-
-    expect(calls.filter((call) => call.url.includes('Filtres='))).toHaveLength(1)
-    expect(text).toContain('verdict : réponse HTTP autre que 200')
-  })
-
-  it('un sIdValeurUrl qui n’a pas la forme N-N : aucune requête filtrée, et le rapport dit pourquoi', async () => {
-    const odd = reply(true).replace('"sIdValeurUrl":"4-543900"', '"sIdValeurUrl":"fruits"')
-    const { text, calls } = await report(true, () => ({ body: FILTERED }), odd)
-
-    expect(calls).toHaveLength(5)
-    expect(text).toContain(
-      'Recherche « tomate » filtrée : non faite (le sIdValeurUrl de la valeur n’a pas la forme N-N)',
+  it('des réponses HTTP 404 : chaque forme est essayée, trois requêtes au plus, aucune retenue', async () => {
+    const odd = UNFILTERED.replace('"sIdValeurUrl":"4-543815"', '"sIdValeurUrl":"9-543815"')
+    const { text, filters } = await report(
+      () => ({ status: 404, body: '<html>introuvable</html>' }),
+      odd,
     )
+
+    expect(filters).toHaveLength(3)
+    expect(text).toContain('verdict : invalide (réponse HTTP autre que 200)')
+    expect(text).toContain('Forme retenue : aucune')
   })
 
   it('la pagination, les univers, et rien de personnel', async () => {
-    const { text } = await report(true)
+    const { text } = await report(() => ({ body: INCOHERENT }))
 
-    expect(text).toMatch(
-      /Clés de pagination \(réponse « tomate », nombres et oui\/non seulement\) : .*iNbResultats=180 \(×1\)/,
-    )
     expect(text).toContain('fPageSuivante=true (×1)')
-    expect(text).toContain('eUnivers (réponse « tomate ») : 1 ×2')
     for (const secret of ['000123', CITY, '123456', '12.5']) expect(text).not.toContain(secret)
-    // Les clés du panier ne sont jamais des clés de pagination : leur nom peut paraître ailleurs (comme tout nom de clé), jamais leur valeur.
     expect(text).not.toMatch(/Panier=/)
   })
 })

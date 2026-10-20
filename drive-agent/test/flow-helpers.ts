@@ -222,6 +222,8 @@ export function fakeAdapter(
     aisleLevel?: 'RAYON' | 'FAMILLE'
     /** Les rayons du site de la facette (DRV-647, 0.36.0) ; par défaut aucun. */
     siteAisles?: ReturnType<RetailerAdapter['siteAisles']>
+    /** La validation de la forme du filtre du site (DRV-647, 0.37.0) : son résultat (par défaut : aucune forme valide). */
+    siteValid?: boolean
     /** Ce que rend la recherche filtrée sur une clé : des identifiants du rayon, ou une erreur (par défaut : rien). */
     filtered?: Record<string, string[] | Error>
   } = {},
@@ -303,6 +305,11 @@ export function fakeAdapter(
     aisleSamples: () => [],
     exploreFacets: () => Promise.resolve(null),
     siteAisles: () => options.siteAisles ?? [],
+    async validateSiteFilter() {
+      calls.push('validate')
+      await options.before?.('validate')
+      return options.siteValid ?? false
+    },
     async searchFiltered(_query, key) {
       calls.push(`filter ${key}`)
       await options.before?.(`filter ${key}`)

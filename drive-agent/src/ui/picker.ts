@@ -105,6 +105,11 @@ export interface Picker {
     asked?: string | null,
     aisles?: AisleRow,
   ) => void
+  /**
+   * Remplace la rangée SANS toucher à la liste (DRV-647, 0.37.0 : la rangée des rayons du site, une fois la forme du filtre validée) ; sans effet si un groupe
+   * est déjà chargé (l'appelant ne la remplace pas après un toucher de la personne : pas de clignotement).
+   */
+  replaceAisles: (row: AisleRow) => void
   /** Occupé : plus rien ne se touche et `message` est annoncé ; `null` rend la main. */
   busy: (message: string | null) => void
   /** Cesse d'observer le défilement (l'écran quitte la scène). */
@@ -489,6 +494,17 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
   )
   return {
     results,
+    replaceAisles: (row) => {
+      if (remoteItems !== null) return
+      // Un groupe choisi d'avance (le rayon appris) est levé : la liste revient entière, une seule fois.
+      const filtered = current.selected !== null
+      current = { ...row, selected: null }
+      child = null
+      drawShelf()
+      drawSubShelf()
+      press()
+      if (filtered) fill()
+    },
     busy,
     dispose: () => {
       watcher?.disconnect()

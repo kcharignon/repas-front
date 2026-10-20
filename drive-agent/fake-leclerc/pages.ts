@@ -301,7 +301,7 @@ const bloc = (id: number, label: string) => ({
  * `sIdValeurUrl`, `sLibelle`, `niNbReferences`, `lstEnfants[]`, `fEstEnPromotion`), valeurs inventées : le bloc « Rayons » (4), une valeur par rayon des produits
  * trouvés, ses familles nommées en enfants (leur `iIdValeur` est l'`iIdFamille` des produits), et un bloc « Marques » (2).
  */
-function facetsOf(found: readonly FakeProduct[]): Record<string, unknown>[] {
+function facetsOf(found: readonly FakeProduct[], urlBloc = 4): Record<string, unknown>[] {
   const aisles = [...new Set(found.map((product) => product.aisle))]
   const value = (
     id: number,
@@ -313,7 +313,7 @@ function facetsOf(found: readonly FakeProduct[]): Record<string, unknown>[] {
     ...(withBloc && { objFiltreBloc: bloc(4, 'Rayons') }),
     iIdBloc: 4,
     iIdValeur: id,
-    sIdValeurUrl: `4-${id}`,
+    sIdValeurUrl: `${urlBloc}-${id}`,
     sLibelle: label,
     niNbReferences: references,
     lstEnfants: children,
@@ -380,6 +380,7 @@ export function searchPage(
   session: Session = 'member',
   empty: EmptyForm = 'list',
   availability?: Availability,
+  facet: { urlBloc?: number; total?: number } = {},
 ): string {
   const title = `Recherche : ${query.replace(/[<>&"]/g, '')}`
   if (found.length === 0 && empty === 'no-list') return storePage(title, '', {}, cart, session)
@@ -393,8 +394,9 @@ export function searchPage(
     text,
     {
       widgets: [{ nom: 'produits', lstProduits: products }],
-      lstFiltres: facetsOf(found),
+      lstFiltres: facetsOf(found, facet.urlBloc),
       iNbResultats: found.length,
+      iNbTotalProduits: facet.total ?? found.length,
       iNbPages: 1,
       fPageSuivante: false,
     },

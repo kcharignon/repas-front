@@ -48,11 +48,14 @@ test('avec le rayon frais conseillé, les 6 produits frais passent d’abord, le
   await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByText('Il te faut : 1 kg.')).toBeVisible()
 
-  // Then (DRV-647, 0.36.0) : la rangée est celle des rayons du site, rien n'y est choisi d'avance ; le rayon appris range la liste « Tous »
-  await expect(page.getByRole('button', { name: 'Tous (40)' })).toHaveAttribute(
+  // Then (DRV-647, 0.37.0) : la rangée des familles d'abord, la famille du rayon appris choisie d'avance (un choix : la rangée ne bascule plus vers les
+  // rayons du site pour ce mot) ; « Tous » est à un toucher
+  await expect(page.getByRole('button', { name: 'Legumes frais (6)' })).toHaveAttribute(
     'aria-pressed',
     'true',
   )
+  await expect(cardsOf(page)).toHaveCount(6)
+  await page.getByRole('button', { name: 'Tous (40)' }).click()
 
   // And : le premier lot de huit montre déjà les 6 frais, puis deux autres, dans l'ordre du site
   const cards = cardsOf(page)
@@ -68,7 +71,13 @@ test('avec le rayon frais conseillé, les 6 produits frais passent d’abord, le
   const others = numbers.slice(6)
   expect(others).toEqual([...others].sort((a, b) => a - b))
   expect(others.some((number) => FRESH_NUMBERS.includes(number))).toBe(false)
-  expect(fake.paced().map((call) => call.kind)).toEqual(['search'])
+  // Une seule recherche du mot (la validation de la forme du filtre, en tâche de fond, est à part)
+  expect(
+    fake
+      .paced()
+      .filter((call) => call.filter === undefined)
+      .map((call) => call.kind),
+  ).toEqual(['search'])
   expect(fake.cart()).toEqual({})
 
   // When : on choisit une carotte fraîche

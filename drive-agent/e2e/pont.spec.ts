@@ -197,7 +197,7 @@ test.describe('diagnostic', () => {
     // Aucun nom de produit, sauf le premier produit de la recherche filtrée (0.35.0), demandé pour savoir s'il est frais
     const lines = (await report.inputValue())
       .split('\n')
-      .filter((line) => !line.includes('premier produit :'))
+      .filter((line) => !/premier produit/i.test(line))
     expect(lines.join('\n')).not.toMatch(/Tomates|Pommes|Courgettes/)
   })
 
@@ -290,12 +290,16 @@ test.describe('diagnostic', () => {
       /Adresse d’une recherche filtrée : déduite du lien \/magasin-N-N-V\/recherche\.aspx \?TexteRecherche&Filtres ; Filtres=N-N \(jeton remplacé : sIdValeurUrl\)/,
     )
     await expect(report).toHaveValue(
-      /Recherche « tomate » filtrée sur « Fruits et légumes » \(iIdValeur=900041\), Filtres=<sIdValeurUrl> \(forme N-N\) : HTTP 200, iNbTotalProduits=\?, 1 produits lus, groupes au niveau famille ; premier produit : « Tomates cerises Jardin Inventé » \(frais : oui\) ; verdict : filtrée/,
+      /Forme essayée \(i\) Filtres=<sIdValeurUrl> \(forme N-N\) sur « Fruits et légumes » : HTTP 200, iNbTotalProduits 3 → 1 \(niNbReferences 1\), 1 produits, part dans les enfants attendus : 100 % ; verdict : valide/,
     )
     await expect(report).toHaveValue(
       /Clés de pagination \(réponse « tomate », nombres et oui\/non seulement\) : .*iNbResultats=3 \(×1\)/,
     )
     await expect(report).toHaveValue(/eUnivers \(réponse « tomate »\) : 1 ×3/)
+    await expect(report).toHaveValue(
+      /Premier produit de la forme essayée : « Tomates cerises Jardin Inventé » \(frais : oui\)/,
+    )
+    await expect(report).toHaveValue(/Forme retenue : \(i\) Filtres=<sIdValeurUrl>/)
     await expect(report).toHaveValue(
       /Forme finale de l’adresse filtrée : \/magasin-N-N\/recherche\.aspx \?TexteRecherche&Filtres ; Filtres=N-N/,
     )
