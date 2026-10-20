@@ -290,6 +290,6 @@ test.describe('la page d’aide, dans l’application', () => {
       'href',
       'https://github.com/kcharignon/repas-front/releases/download/android-latest/repas-drive.apk',
     )
-    await expect(page.getByRole('listitem')).toHaveCount(3)
+    await expect(page.getByRole('listitem')).toHaveCount(4)
   })
 })

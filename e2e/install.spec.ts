@@ -1,5 +1,5 @@
 // La page publique d'installation de l'application Android, `/installer` (DRV-639), sans back ni compte : un gros bouton qui télécharge
-// l'APK de la dernière version, puis trois étapes. Joué sur bureau et sur Pixel 7 ; captures à 412 et 360 px, thèmes clair et sombre.
+// l'APK de la dernière version, puis quatre étapes. Joué sur bureau et sur Pixel 7 ; captures à 412 et 360 px, thèmes clair et sombre.
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
@@ -59,6 +59,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
         'Ouvre le fichier quand Android le propose.',
         'Autorise l’installation (une seule fois).',
         'Touche « Installer ».',
+        'Si Play Protect s’affiche, touche « Installer sans analyser », puis confirme avec ton empreinte ou ton code.',
       ])
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
