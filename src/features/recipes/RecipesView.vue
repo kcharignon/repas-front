@@ -114,15 +114,15 @@ function choose(slug: string) {
       <li
         v-for="recipe in shown"
         :key="recipe.id"
-        class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4"
+        class="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4"
       >
         <RouterLink
           :to="{ name: 'recipe', params: { id: recipe.id } }"
-          class="min-w-0 flex-1 text-lg font-bold hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
+          class="min-w-0 flex-1 text-lg font-bold [overflow-wrap:anywhere] hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
         >
           {{ recipe.name }}
         </RouterLink>
-        <PlanButton :recipe-id="recipe.id" :name="recipe.name" />
+        <PlanButton :recipe-id="recipe.id" :name="recipe.name" variant="icon" />
       </li>
     </ul>
   </main>
