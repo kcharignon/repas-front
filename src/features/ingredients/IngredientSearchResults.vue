@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import { hasFailed } from '@/api/query'
-import { imageUrl } from '@/features/shopping-lists/format'
+import UiImage from '@/design/UiImage.vue'
 import { useActiveSummary } from '@/features/shopping-lists/queries'
 import IngredientStepper from './IngredientStepper.vue'
 import { useChangeIngredientQuantity, useSearchIngredients } from './queries'
@@ -56,7 +56,7 @@ const quantityOf = (slug: string) => summary.data.value?.quantityByIngredientSlu
             :aria-label="t('departments.goTo', { name: ingredient.departmentName })"
             class="flex size-11 shrink-0 items-center justify-center rounded-xl hover:bg-soft focus-visible:outline-2 focus-visible:outline-primary"
           >
-            <img :src="imageUrl(ingredient.departmentImage)" alt="" class="size-8 object-contain" />
+            <UiImage :src="ingredient.departmentImage" class="size-8" />
           </RouterLink>
           <span class="min-w-0 flex-1">
             <span class="block font-medium">{{ ingredient.name }}</span>
