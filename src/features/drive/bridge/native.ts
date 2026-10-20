@@ -1,6 +1,8 @@
 import { LIMITS, PROTOCOL_VERSION, ProtocolError, validateResult } from '@drive-protocol'
 
 import type { DriveResult } from './draft'
+import { parseUpdateState } from './update'
+import type { AppUpdateState } from './update'
 
 /**
  * Le pont natif de l'application Repas (DRV-317) : l'objet `repasNative` que `addWebMessageListener` expose à la page. On lui envoie du
@@ -29,6 +31,11 @@ export interface AppInfo {
   versionCode: number
   /** Le drive est utilisable (agent intact, WebView assez récente). */
   drive: boolean
+  /**
+   * L'application sait se mettre à jour elle-même (DRV-639, variante hors Google Play) : la page peut envoyer `update.*`. Absent (ancienne
+   * application, variante de Google Play, construction de débogage) : faux, la page garde l'ancien comportement.
+   */
+  selfUpdate?: boolean
 }
 
 /** Un message de l'application, reconnu et validé. */
@@ -37,6 +44,8 @@ export type Inbound =
   | { type: 'error'; code: string }
   | { type: 'drive.error'; code: string; runId: string | null }
   | { type: 'drive.result'; result: DriveResult }
+  /** L'état de la mise à jour de l'application (DRV-639), à la demande ou à chaque changement. */
+  | { type: 'update.state'; state: AppUpdateState }
   /** Un message du bon type mais mal formé (`detail` : le champ fautif, jamais sa valeur). */
   | { type: 'invalid'; detail: string | null }
 
@@ -74,8 +83,24 @@ export function parseInbound(data: unknown): Inbound | null {
       if (!Number.isSafeInteger(versionCode) || (versionCode as number) < 0)
         return { type: 'invalid', detail: 'versionCode' }
       if (typeof drive !== 'boolean') return { type: 'invalid', detail: 'drive' }
+      // Facultatif : une application qui ne connaît pas la mise à jour n'écrit pas la clé
+      const selfUpdate = message.selfUpdate === true
 
-      return { type: 'app.info', info: { version, versionCode: versionCode as number, drive } }
+      return {
+        type: 'app.info',
+        info: {
+          version,
+          versionCode: versionCode as number,
+          drive,
+          ...(selfUpdate ? { selfUpdate } : {}),
+        },
+      }
+    }
+    case 'update.state': {
+      const state = parseUpdateState(message)
+
+      // Un état mal formé est ignoré (jamais pris pour une réponse à `app.info`) : le dernier état connu reste
+      return state === null ? null : { type: 'update.state', state }
     }
     case 'error':
     case 'drive.error': {

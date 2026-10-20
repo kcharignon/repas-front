@@ -1,30 +1,36 @@
-// Aide et installation de l'application (DRV-316), sans back ni compte : l'API est simulée par `page.route`, et le pont natif
-// `repasNative` de l'application par un faux installé avant la page. Joué sur bureau et sur Pixel 7.
+// Aide et installation de l'application (DRV-316, DRV-639), sans back ni compte : l'API est simulée par `page.route`, et le pont natif
+// `repasNative` de l'application par un faux installé avant la page. Joué sur bureau et sur Pixel 7. La mise à jour faite par l'application
+// elle-même est dans `app-update.spec.ts`, la page publique `/installer` dans `install.spec.ts`.
 import { expect, test } from '@playwright/test'
 
 import { fakeApp, fakeBack, scan } from './support/drive'
 import { fakeDriveBack } from './support/driveBack'
 
+const APK =
+  'https://github.com/kcharignon/repas-front/releases/download/android-latest/repas-drive.apk'
+
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`dans un navigateur : une phrase, trois étapes et le bouton vers GitHub, thème ${colorScheme}`, async ({
+  test(`dans un navigateur : la page d’aide mène à /installer, un bouton et trois étapes, thème ${colorScheme}`, async ({
     page,
   }) => {
     await fakeBack(page)
     await page.emulateMedia({ colorScheme })
     await page.goto('/drive/aide')
 
+    await expect(page).toHaveURL(/\/installer$/)
     await expect(
       page.getByRole('heading', { level: 1, name: 'Installer l’application Repas' }),
     ).toBeVisible()
     await expect(page.getByRole('listitem')).toHaveCount(3)
-    await expect(
-      page.getByRole('link', { name: /^Télécharger la dernière version/ }),
-    ).toHaveAttribute('href', 'https://github.com/kcharignon/repas-front/releases')
+    await expect(page.getByRole('link', { name: 'Télécharger l’application' })).toHaveAttribute(
+      'href',
+      APK,
+    )
     await expect(page.getByRole('heading', { level: 2 })).toHaveCount(0)
     expect((await scan(page)).violations).toEqual([])
   })
 
-  test(`dans l’application : la version installée et le bouton, thème ${colorScheme}`, async ({
+  test(`dans une application qui ne se met pas encore à jour seule : la version installée et le téléchargement, thème ${colorScheme}`, async ({
     page,
   }) => {
     await fakeBack(page)
@@ -36,13 +42,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
       page.getByRole('heading', { level: 1, name: 'Mettre à jour l’application' }),
     ).toBeVisible()
     await expect(page.getByText('Version installée : 1.0.0')).toBeVisible()
-    await expect(page.getByRole('listitem')).toHaveCount(0)
-    const button = page.getByRole('link', { name: /^Télécharger la dernière version/ })
-    await expect(button).toHaveAttribute(
-      'href',
-      'https://github.com/kcharignon/repas-front/releases',
-    )
+    const button = page.getByRole('link', { name: 'Télécharger l’application' })
+    await expect(button).toHaveAttribute('href', APK)
     expect((await button.boundingBox())?.height).toBeGreaterThanOrEqual(44)
+    await expect(page.getByRole('listitem')).toHaveCount(3)
     expect((await scan(page)).violations).toEqual([])
   })
 }
@@ -58,7 +61,7 @@ test('« Moi », dans un navigateur : propose d’installer l’application', as
   expect((await scan(page)).violations).toEqual([])
 
   await entry.click()
-  await expect(page).toHaveURL(/\/drive\/aide$/)
+  await expect(page).toHaveURL(/\/installer$/)
   await expect(
     page.getByRole('heading', { level: 1, name: 'Installer l’application Repas' }),
   ).toBeVisible()

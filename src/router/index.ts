@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 
+import { driveBridge } from '@/features/drive/bridge'
 import { sessionGuard } from '@/session/guard'
 import { legacyRoutes } from './legacy'
 
@@ -56,6 +57,16 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/views/ResetPasswordView.vue'),
     meta: { public: true },
   },
+  {
+    // Installer l'application Android (DRV-639) : publique, pour qu'on puisse envoyer son adresse à un proche. Dans l'application, il n'y a rien
+    // à installer : la page de mise à jour.
+    path: '/installer',
+    name: 'install',
+    component: () => import('@/features/drive/InstallView.vue'),
+    meta: { public: true },
+    beforeEnter: () =>
+      driveBridge.isAvailable() ? { name: 'drive-help', hash: '#mise-a-jour' } : true,
+  },
   ...catalog,
   ...legacyRoutes,
   {
@@ -97,6 +108,8 @@ export const routes: RouteRecordRaw[] = [
         path: 'drive/aide',
         name: 'drive-help',
         component: () => import('@/features/drive/DriveHelpView.vue'),
+        // Dans un navigateur il n'y a rien à mettre à jour : la page publique d'installation (DRV-639)
+        beforeEnter: () => (driveBridge.isAvailable() ? true : { name: 'install' }),
       },
       {
         path: 'drive/conditions',

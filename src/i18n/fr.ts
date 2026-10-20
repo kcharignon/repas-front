@@ -841,6 +841,16 @@ export default {
     tiles: 'Types de recette',
     progressLabel: '{done} sur {total} articles dans le panier',
   },
+  // La page publique d'installation de l'application Android (DRV-639), `/installer` : un gros bouton et trois courtes étapes, sans connexion
+  install: {
+    title: 'Installer l’application Repas',
+    download: 'Télécharger l’application',
+    steps: {
+      open: 'Ouvre le fichier quand Android le propose.',
+      allow: 'Autorise l’installation (une seule fois).',
+      install: 'Touche « Installer ».',
+    },
+  },
   // La page de l'application Android (DRV-316), réduite à l'essentiel : la version installée et un bouton vers GitHub. Le reste du mode
   // d'emploi (installation détaillée, dépannage, désinstallation…) est dans `android/README.md`, section « Dépannage de l'installation ».
   driveHelp: {
@@ -863,6 +873,23 @@ export default {
     updateBanner: {
       text: 'Une nouvelle version de l’application est prête.',
       action: 'Mettre à jour',
+    },
+    // La mise à jour faite par l'application elle-même (DRV-639) : le bandeau de « Moi » et cette page disent la même chose, d'un seul bouton
+    update: {
+      checking: 'Recherche de la dernière version…',
+      upToDate: 'Tu as la dernière version.',
+      downloading: 'Téléchargement de la mise à jour… {percent} %',
+      downloadingLabel: 'Avancement du téléchargement',
+      ready: 'Touche « Installer » dans l’écran d’Android.',
+      retry: 'Réessayer',
+      // Une phrase par cas, jamais un code ni une adresse
+      errors: {
+        OFFLINE: 'Pas de connexion pour le moment.',
+        DIGEST_MISMATCH: 'Le fichier téléchargé n’est pas le bon : rien n’a été installé.',
+        INVALID_PACKAGE: 'Le fichier téléchargé n’est pas le bon : rien n’a été installé.',
+        PERMISSION_DENIED: 'Android n’a pas autorisé l’installation.',
+        generic: 'La mise à jour n’a pas pu se faire. Réessaie un peu plus tard.',
+      },
     },
     download: 'Télécharger la dernière version',
     downloadFor: 'Télécharger la dernière version (s’ouvre dans un nouvel onglet)',

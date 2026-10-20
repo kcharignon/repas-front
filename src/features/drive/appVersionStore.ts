@@ -14,6 +14,8 @@ export type AppVersionStatus = 'idle' | 'reading' | 'known' | 'unknown'
  */
 export const useAppVersionStore = defineStore('appVersion', () => {
   const running = ref<string | null>(null)
+  /** L'application sait se mettre à jour elle-même (DRV-639, `app.info` : `selfUpdate`). Faux tant qu'elle ne l'a pas dit, ou si elle ne le sait pas. */
+  const selfUpdate = ref(false)
   const status = ref<AppVersionStatus>('idle')
   let reading: Promise<string | null> | null = null
   /** Le compte pour qui la version a déjà été envoyée pendant cette session de connexion. */
@@ -32,6 +34,7 @@ export const useAppVersionStore = defineStore('appVersion', () => {
     reading ??= driveBridge.info().then(
       (info) => {
         running.value = info.version
+        selfUpdate.value = info.selfUpdate === true
         status.value = 'known'
 
         return info.version
@@ -67,5 +70,5 @@ export const useAppVersionStore = defineStore('appVersion', () => {
     reportedFor = null
   }
 
-  return { running, status, read, report, forget }
+  return { running, selfUpdate, status, read, report, forget }
 })
