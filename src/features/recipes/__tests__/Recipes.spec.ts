@@ -150,11 +150,17 @@ describe('RecipesView', () => {
       { 'GET /api/v1/shopping-lists/active/summary': () => json(summary(['r2'])) },
       '/recettes?type=plat',
     )
-    await vi.waitFor(() => expect(wrapper.text()).toContain('Dans la liste'))
+    await vi.waitFor(() => expect(wrapper.find('button[aria-pressed="true"]').exists()).toBe(true))
 
     const pressed = wrapper.findAll('li button').map((button) => button.attributes('aria-pressed'))
 
     expect(pressed).toEqual(['false', 'true'])
+    // Sur les cartes le bouton est rond et sans texte : l'état passe par le nom accessible
+    expect(wrapper.find('li button').text()).toBe('')
+    expect(wrapper.findAll('li button').map((button) => button.attributes('aria-label'))).toEqual([
+      'Ajouter Gratin de courgettes à la liste de courses',
+      'Retirer Pâtes carbonara de la liste de courses',
+    ])
   })
 
   it('planifie une recette dans la liste en cours', async () => {
@@ -205,7 +211,13 @@ describe('RecipesView', () => {
       },
       '/recettes?type=plat',
     )
-    await vi.waitFor(() => expect(wrapper.text()).toContain('Dans la liste'))
+    await vi.waitFor(() =>
+      expect(
+        wrapper
+          .find('button[aria-label="Retirer Gratin de courgettes de la liste de courses"]')
+          .exists(),
+      ).toBe(true),
+    )
 
     await wrapper
       .find('button[aria-label="Retirer Gratin de courgettes de la liste de courses"]')

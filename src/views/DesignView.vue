@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { CookingPot, IceCreamCone, Salad } from 'lucide-vue-next'
+import { Check, CookingPot, IceCreamCone, Plus, Salad } from 'lucide-vue-next'
 
 import UiButton from '@/design/UiButton.vue'
 import UiCheckbox from '@/design/UiCheckbox.vue'
@@ -45,10 +45,48 @@ const tile = ref('dish')
       <h2 class="font-display text-2xl font-bold">{{ t('design.buttons') }}</h2>
       <div class="flex flex-wrap items-center gap-3">
         <UiButton>{{ t('design.save') }}</UiButton>
-        <UiButton variant="secondary">{{ t('design.addToList') }}</UiButton>
         <UiButton variant="accent">{{ t('design.newRecipe') }}</UiButton>
         <UiButton variant="ghost">{{ t('design.cancel') }}</UiButton>
         <UiButton variant="danger">{{ t('design.remove') }}</UiButton>
+      </div>
+      <h3 class="font-bold">{{ t('design.planButtons') }}</h3>
+      <div class="flex flex-wrap items-center gap-3">
+        <UiButton
+          variant="secondary"
+          size="icon"
+          class="rounded-full"
+          :aria-label="t('recipes.planNamed', { name: t('design.sampleRecipe') })"
+          :title="t('recipes.planNamed', { name: t('design.sampleRecipe') })"
+        >
+          <Plus class="size-5" aria-hidden="true" />
+        </UiButton>
+        <UiButton
+          variant="ghost"
+          size="icon"
+          class="rounded-full bg-soft text-primary"
+          aria-pressed="true"
+          :aria-label="t('recipes.unplanNamed', { name: t('design.sampleRecipe') })"
+          :title="t('recipes.unplanNamed', { name: t('design.sampleRecipe') })"
+        >
+          <Check class="size-5" aria-hidden="true" />
+        </UiButton>
+        <UiButton
+          variant="secondary"
+          class="rounded-full px-4"
+          :aria-label="t('recipes.planNamed', { name: t('design.sampleRecipe') })"
+        >
+          <Plus class="size-5" aria-hidden="true" />
+          {{ t('recipes.add') }}
+        </UiButton>
+        <UiButton
+          variant="ghost"
+          class="rounded-full bg-soft px-4 text-primary"
+          aria-pressed="true"
+          :aria-label="t('recipes.inListNamed', { name: t('design.sampleRecipe') })"
+        >
+          <Check class="size-5" aria-hidden="true" />
+          {{ t('recipes.inList') }}
+        </UiButton>
       </div>
     </section>
 
