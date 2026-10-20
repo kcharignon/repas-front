@@ -849,6 +849,8 @@ export default {
       open: 'Ouvre le fichier quand Android le propose.',
       allow: 'Autorise l’installation (une seule fois).',
       install: 'Touche « Installer ».',
+      protect:
+        'Si Play Protect s’affiche, touche « Installer sans analyser », puis confirme avec ton empreinte ou ton code.',
     },
   },
   // La page de l'application Android (DRV-316), réduite à l'essentiel : la version installée et un bouton vers GitHub. Le reste du mode
@@ -881,6 +883,8 @@ export default {
       downloading: 'Téléchargement de la mise à jour… {percent} %',
       downloadingLabel: 'Avancement du téléchargement',
       ready: 'Touche « Installer » dans l’écran d’Android.',
+      readyProtect:
+        'Si Play Protect s’affiche, touche « Installer sans analyser », puis confirme avec ton empreinte ou ton code.',
       retry: 'Réessayer',
       // Une phrase par cas, jamais un code ni une adresse
       errors: {

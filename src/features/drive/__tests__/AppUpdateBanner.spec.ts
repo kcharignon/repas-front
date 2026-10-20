@@ -171,6 +171,7 @@ describe('la mise à jour faite par l’application elle-même (DRV-639)', () =>
     app.say({ state: 'pretAInstaller', version: '0.1.30' })
     await flushPromises()
     expect(banner(wrapper).text()).toContain('Touche « Installer » dans l’écran d’Android.')
+    expect(banner(wrapper).text()).toContain('Installer sans analyser')
     expect(banner(wrapper).find('button').exists()).toBe(false)
   })
 

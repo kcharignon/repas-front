@@ -4,11 +4,11 @@ import { useI18n } from 'vue-i18n'
 import { APP_APK_URL } from './appInstall'
 
 // Installer l'application à la main (DRV-639), le plus court possible pour des proches qui ne sont pas à l'aise : un gros bouton qui
-// télécharge l'APK de la dernière version, puis trois étapes. Servi par la page publique `/installer` et, dans une application qui ne sait
+// télécharge l'APK de la dernière version, puis quatre étapes. Servi par la page publique `/installer` et, dans une application qui ne sait
 // pas encore se mettre à jour toute seule, par la page d'aide.
 const { t } = useI18n()
 
-const steps = ['open', 'allow', 'install'] as const
+const steps = ['open', 'allow', 'install', 'protect'] as const
 </script>
 
 <template>

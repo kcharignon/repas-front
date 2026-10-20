@@ -49,9 +49,10 @@ const offersUpdate = computed(() => state.value.status === 'miseAJourDisponible'
       <p>{{ t('driveHelp.update.downloading', { percent }) }}</p>
       <UiProgressBar :value="percent" :max="100" :label="t('driveHelp.update.downloadingLabel')" />
     </template>
-    <p v-else-if="state.status === 'pretAInstaller'" role="status" class="font-semibold">
-      {{ t('driveHelp.update.ready') }}
-    </p>
+    <div v-else-if="state.status === 'pretAInstaller'" role="status" class="flex flex-col gap-2">
+      <p class="font-semibold">{{ t('driveHelp.update.ready') }}</p>
+      <p>{{ t('driveHelp.update.readyProtect') }}</p>
+    </div>
     <template v-else>
       <p role="alert" class="font-semibold">{{ errorText }}</p>
       <UiButton
