@@ -323,6 +323,14 @@ export default {
     rejectedNow: '{name} ne sera plus proposé.',
     acceptedAgain: '{name} est de nouveau accepté, en dernier.',
     cancelled: 'Modifications annulées.',
+    // La contenance d'un produit dans l'unité de la liste (DRV-652) : « Contenu : 20 tranches »
+    packSize: 'Contenu : {size}',
+    packSizeFix: 'Corriger',
+    packSizeQuestion: 'Combien de {units} y a-t-il dans ce produit ?',
+    packSizeSave: 'Enregistrer',
+    packSizeCancel: 'Annuler',
+    packSizeInvalid: 'Entre un nombre, par exemple 20 ou 12,5.',
+    packSizeSaved: 'Contenu enregistré.',
   },
   auth: {
     pitch: 'Tes recettes, tes courses, sans oublier le basilic.',
@@ -861,7 +869,9 @@ export default {
       products:
         'Pour chaque produit : son numéro chez Leclerc, son nom, son contenu (par exemple 1 kg), et son prix avec la date où il a été vu.',
       searches:
-        'La recherche qui t’a fait trouver un produit : le texte que tu as tapé pour le trouver sur le site (par exemple « céréales coussins »), pour chercher un remplaçant avec ce texte quand le produit n’est plus disponible. Elle est gardée avec l’article, pour ton magasin Leclerc seulement. Elle n’est jamais envoyée ailleurs et personne d’autre ne la voit.',
+        'La recherche qui t’a fait trouver un produit : le texte que tu as tapé pour le trouver sur le site (par exemple « céréales coussins »), pour chercher un remplaçant avec ce texte quand le produit n’est plus disponible. Elle est gardée avec l’article, pour ton magasin Leclerc seulement. Elle n’est jamais envoyée ailleurs et personne d’autre ne la voit. Elle est gardée aussi quand tu prends un produit « Pas mon habituel » : le produit n’est pas retenu, mais le texte qui l’a fait trouver l’est.',
+      packSizes:
+        'Combien il y en a dans un produit, quand ta liste compte autrement qu’en poids ou en volume : si ta liste dit « 15 tranches », Repas ne sait pas combien de tranches tient dans un produit. Il te le demande une fois, et retient ta réponse (par exemple « 20 tranches ») pour calculer le nombre de produits la fois suivante, sans te le redemander. Elle est gardée avec ce produit-là, dans ton article, pour ton magasin Leclerc seulement. Elle n’est jamais envoyée ailleurs et personne d’autre ne la voit.',
       estimate:
         'Les prix servent à estimer le coût d’une liste. L’estimation est indicative : elle est faite d’après les derniers prix vus, avec leur date, et le vrai prix est toujours celui de Leclerc. Elle ne compte que les articles dont le prix est connu, elle est peu fiable quand moins de la moitié en ont un, et Repas ne devine jamais un prix.',
       lists:

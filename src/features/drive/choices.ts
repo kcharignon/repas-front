@@ -12,7 +12,7 @@ import {
   type ResultMessage,
 } from '@drive-protocol'
 
-import type { ChoiceIntent, DrivePlan } from '@/api'
+import type { ChoiceIntent, DriveChoiceProduct, DrivePlan } from '@/api'
 
 /** Intentions par appel `PUT /api/v1/drive/choices` (borne du back). */
 export const MAX_INTENTS = 200
@@ -97,6 +97,36 @@ function packSizeOf(line: AddedLine | ChosenLine): PackSizeValue | undefined {
   if (line.outcome === 'CHOSEN' && line.placement === 'ONCE') return undefined
 
   return toPackSize(line.packSize) ?? undefined
+}
+
+/**
+ * La correction à la main de la contenance d'un produit accepté (« Mes produits », DRV-652) : un `ADD_PRODUCT` « de secours » du même produit, qui ne change ni
+ * son rang ni les autres produits mais REMPLACE sa contenance (`PRIMARY` le ferait passer en tête). `null` quand la contenance n'est pas valide : rien n'est
+ * alors envoyé (le back refuse une contenance hors bornes, ou d'une unité qui n'existe pas, et la correction est perdue avec). Jamais de clé `null` : oublier
+ * une contenance n'est pas ce geste-là.
+ */
+export function packSizeCorrection(
+  ingredientSlug: string,
+  product: DriveChoiceProduct,
+  packSize: unknown,
+): ChoiceIntent | null {
+  const size = toPackSize(packSize)
+  if (size === null) return null
+  const intent: Intent = {
+    ingredientSlug,
+    action: 'ADD_PRODUCT',
+    placement: 'FALLBACK',
+    product: {
+      retailerProductId: product.retailerProductId,
+      label: cleanText(product.label) || product.retailerProductId,
+      ean: product.ean ?? null,
+      content: product.content ?? null,
+      price: null,
+      packSize: size,
+    },
+  }
+
+  return intent as ChoiceIntent
 }
 
 /** Ce que le plan envoyé sait d'un produit déjà connu : de quoi le redécrire à Repas quand la personne en donne la contenance (DRV-652). */

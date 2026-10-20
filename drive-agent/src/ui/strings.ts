@@ -1,8 +1,11 @@
 // Tous les textes de l'interface de l'agent, en français simple (tutoiement, phrases courtes, mots du glossaire de principes-produit.md § 5). Aucun texte n'est écrit ailleurs.
 // Le diagnostic et le test automatique sont des outils du mainteneur : exemptés du glossaire, pas du tutoiement. Gardé par src/i18n/__tests__/voice-and-glossary.spec.ts.
 import type { ErrorCode, LineStatus, Outcome } from '../../protocol'
+import { pluralOf, unitFor } from '../../protocol'
 import { own } from '../own'
 import type { UnavailableReason, UnreachedReason } from './types'
+
+export { pluralOf, unitFor }
 
 /** « 1 produit », « 3 produits » : le nombre suivi du bon mot. */
 export function count(n: number, one: string, many: string): string {
@@ -12,29 +15,6 @@ export function count(n: number, one: string, many: string): string {
 /** Un nombre à la française : virgule décimale, deux décimales au plus (« 1,5 »). */
 export function formatNumber(value: number): string {
   return String(Math.round(value * 100) / 100).replace('.', ',')
-}
-
-/**
- * Le nom d'une unité mis au pluriel (« tranche » donne « tranches », « cuillère à soupe » donne « cuillères à soupe ») : le premier mot seul prend la marque
- * du pluriel. Le nom vient de Repas, au singulier (`needed.unitName`) ; ni exception de grammaire ni dictionnaire, les cas courants seulement (s, x, z qui ne
- * changent pas ; « -eau » et « -au » prennent un x, « -al » devient « -aux »).
- */
-export function pluralOf(name: string): string {
-  const [head = '', ...tail] = name.trim().split(/\s+/)
-  const plural = /[sxz]$/i.test(head)
-    ? head
-    : /(eau|au)$/i.test(head)
-      ? `${head}x`
-      : /al$/i.test(head)
-        ? `${head.slice(0, -2)}aux`
-        : `${head}s`
-
-  return [plural, ...tail].join(' ')
-}
-
-/** Le nom de l'unité accordé à la quantité : singulier en dessous de 2 (« 1 tranche », « 1,5 tranche »), pluriel au-delà (« 15 tranches »). */
-export function unitFor(name: string, quantity: number): string {
-  return quantity >= 2 ? pluralOf(name) : name.trim()
 }
 
 /** Un prix en centimes : « 2,58 € ». */

@@ -4,7 +4,15 @@ export { decodeMessage, encodeMessage } from './codec'
 export { HOST as STORE_HOST } from './check'
 export { cleanSearchQuery, cleanText } from './clean-text'
 export { ProtocolError } from './error'
-export { isPackValue, packsFromSize, parsePackValue, toPackSize, UNIT_SLUG } from './pack-size'
+export {
+  isPackValue,
+  packsFromSize,
+  parsePackValue,
+  pluralOf,
+  toPackSize,
+  unitFor,
+  UNIT_SLUG,
+} from './pack-size'
 export { validateCommand } from './command'
 export { validatePlan } from './plan'
 export { validateResult } from './result'

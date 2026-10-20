@@ -77,10 +77,6 @@ const saved = computed(() => store.status === 'saved')
 const hasChoices = computed(() =>
   result.value ? countChoices(buildChoiceBatches(result.value)) > 0 : false,
 )
-/** Les produits connus du plan, de quoi redécrire à Repas un produit dont la personne a donné la contenance (DRV-652). */
-const knownProducts = computed(() =>
-  plan.data.value === undefined ? new Map() : knownProductsOf(plan.data.value),
-)
 
 // --- Le titre dit le résultat ; au plus trois phrases : ce qui s'est passé, ce qui est sauf, ce qu'il reste à faire ---
 const headline = computed(() => {
@@ -182,13 +178,15 @@ const saveFailure = computed(() =>
  * Les lignes que le résultat doit pouvoir expliquer, quand le brouillon n'a pas gardé le plan envoyé : le plan relu du back (celui que
  * l'écran lit déjà pour les noms). Une lecture qui échoue arrête l'enregistrement : sans plan, rien n'est mémorisé (DRV-614).
  */
-async function expectedLines() {
+async function planData() {
   const data =
     plan.data.value ?? (await plan.refetch({ cancelRefetch: false, throwOnError: true })).data
   if (data === undefined) throw new Error('plan')
 
-  return expectedFromPlan(data)
+  return data
 }
+
+const expectedLines = async () => expectedFromPlan(await planData())
 
 async function persist() {
   const first = run.value
@@ -202,11 +200,13 @@ async function persist() {
     if (!store.checked) store.check(await expectedLines())
     const current = run.value
     if (current === null) return
-    await save.mutateAsync({
-      storeId,
-      // Le plan est lu : `expectedLines()` l'a attendu
-      batches: buildChoiceBatches(current.result, knownProducts.value),
-    })
+    // Le libellé et le contenu d'un produit connu dont la personne a donné la contenance (DRV-652) viennent du plan : il n'est lu que pour cela
+    const known = current.result.lines.some(
+      (line) => line.outcome === 'ADDED' && line.packSize !== undefined,
+    )
+      ? knownProductsOf(await planData())
+      : undefined
+    await save.mutateAsync({ storeId, batches: buildChoiceBatches(current.result, known) })
     driveBridge.clearDraft()
     store.saved()
   } catch (error) {

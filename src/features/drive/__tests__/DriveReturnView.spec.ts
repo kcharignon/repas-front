@@ -632,6 +632,143 @@ describe('retour du drive : la recherche qui a fait trouver le produit (DRV-650)
   })
 })
 
+describe('retour du drive : la contenance du produit et la recherche d’un « Pas mon habituel » (DRV-652, DRV-653)', () => {
+  // Le plan envoyé à un agent qui connaît l'unité de la ligne : le brouillon en garde le slug
+  const withUnits = {
+    ...draft,
+    lines: sentLinesOf(buildPlanMessage(plan(), {}, RUN, { packSize: true })),
+  }
+  const eventOf = (lines: ResultLine[], from = withUnits) =>
+    ({ kind: 'result', result: result({ lines }), draft: from }) as DriveEvent
+  const SIZE = { value: 20, unitSlug: 'gramme' }
+  const addedFarine = (extra: Record<string, unknown> = {}) =>
+    ({
+      ingredientSlug: 'farine',
+      outcome: 'ADDED',
+      productId: '123456',
+      quantity: 1,
+      usedRank: 1,
+      ...extra,
+    }) as ResultLine
+  const chosenPoivre = (extra: Record<string, unknown> = {}) =>
+    ({
+      ingredientSlug: 'poivre',
+      outcome: 'CHOSEN',
+      quantity: 1,
+      placement: 'PRIMARY',
+      product: { id: '555999', label: 'Poivre de test' },
+      ...extra,
+    }) as ResultLine
+  const intents = async (fetchMock: ReturnType<typeof stubApi>) =>
+    (
+      (await bodyOf(fetchMock, calls(fetchMock).indexOf('PUT /api/v1/drive/choices'))) as {
+        choices: Record<string, unknown>[]
+      }
+    ).choices
+
+  it('un produit connu dont la personne a donné la contenance : un ADD_PRODUCT « de secours » avec le libellé et le contenu du plan', async () => {
+    const { wrapper, fetchMock } = await open(eventOf([addedFarine({ packSize: SIZE })]))
+    await saved(wrapper)
+
+    expect(await intents(fetchMock)).toEqual([
+      {
+        ingredientSlug: 'farine',
+        action: 'ADD_PRODUCT',
+        placement: 'FALLBACK',
+        product: {
+          retailerProductId: '123456',
+          label: 'Farine de blé T55 Marque Repère 1 kg',
+          ean: null,
+          content: { value: 1000, unit: 'g' },
+          price: null,
+          packSize: SIZE,
+        },
+      },
+    ])
+  })
+
+  it('un produit choisi : la contenance part dans son produit, et rien d’autre ne change', async () => {
+    const pieces = { value: 20, unitSlug: 'piece' }
+    const { wrapper, fetchMock } = await open(eventOf([chosenPoivre({ packSize: pieces })]))
+    await saved(wrapper)
+
+    const [intent] = await intents(fetchMock)
+    expect(intent).toMatchObject({
+      action: 'ADD_PRODUCT',
+      placement: 'PRIMARY',
+      product: { retailerProductId: '555999', packSize: pieces },
+    })
+  })
+
+  it('sans réponse de la personne, aucune clé : jamais « null », qui effacerait la contenance mémorisée', async () => {
+    const { wrapper, fetchMock } = await open(eventOf([chosenPoivre(), addedFarine()]))
+    await saved(wrapper)
+
+    expect(JSON.stringify(await intents(fetchMock))).not.toContain('packSize')
+  })
+
+  it('une contenance dans une autre unité que celle de la ligne envoyée est retirée (la page de l’enseigne peut poster un faux résultat)', async () => {
+    const { wrapper, fetchMock } = await open(
+      eventOf([chosenPoivre({ packSize: { value: 5, unitSlug: 'kilo' } })]),
+    )
+    await saved(wrapper)
+
+    const [intent] = await intents(fetchMock)
+    expect(intent).toMatchObject({ action: 'ADD_PRODUCT', placement: 'PRIMARY' })
+    expect(JSON.stringify(intent)).not.toContain('packSize')
+  })
+
+  it('un brouillon sans l’unité de la ligne (un agent qui ne la connaissait pas) : aucune contenance ne part', async () => {
+    const { wrapper, fetchMock } = await open(
+      eventOf([chosenPoivre({ packSize: SIZE })], sentDraft as typeof withUnits),
+    )
+    await saved(wrapper)
+
+    expect(JSON.stringify(await intents(fetchMock))).not.toContain('packSize')
+  })
+
+  it('une contenance hors bornes ne part pas : le produit choisi, lui, part (le back refuserait tout le lot)', async () => {
+    const { wrapper, fetchMock } = await open(
+      eventOf([chosenPoivre({ packSize: { value: 10_000, unitSlug: 'gramme' } })]),
+    )
+    await saved(wrapper)
+
+    const [intent] = await intents(fetchMock)
+    expect(intent).toMatchObject({ action: 'ADD_PRODUCT' })
+    expect(JSON.stringify(intent)).not.toContain('packSize')
+  })
+
+  it('« Pas mon habituel » avec une recherche : un NOTE_SEARCH sans produit ni placement', async () => {
+    const { wrapper, fetchMock } = await open(
+      eventOf([chosenPoivre({ placement: 'ONCE', searchQuery: '  poivre\u200B   noir ' })]),
+    )
+    await saved(wrapper)
+
+    expect(await intents(fetchMock)).toEqual([
+      {
+        ingredientSlug: 'poivre',
+        action: 'NOTE_SEARCH',
+        placement: null,
+        product: null,
+        searchQuery: 'poivre noir',
+      },
+    ])
+  })
+
+  it('« Pas mon habituel » sans recherche exploitable : aucune intention, donc aucun appel (jamais d’intention vide)', async () => {
+    const { wrapper, fetchMock } = await open(
+      eventOf([
+        chosenPoivre({ placement: 'ONCE', searchQuery: 'x' }),
+        chosenPoivre({ placement: 'ONCE' }),
+      ]),
+    )
+    await vi.waitFor(() => expect(useDriveReturnStore().status).toBe('saved'))
+
+    expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
+    expect(wrapper.text()).not.toContain('NOTE_SEARCH')
+  })
+})
+
 describe('retour du drive : le résultat est recoupé avec le plan envoyé (DRV-614)', () => {
   const chosen = (slug: string): ResultLine => ({
     ingredientSlug: slug,

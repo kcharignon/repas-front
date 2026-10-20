@@ -6,9 +6,9 @@ import { ChevronRight, Search } from 'lucide-vue-next'
 
 import { hasFailed } from '@/api/query'
 import type { DriveChoice } from '@/api'
-import { useDriveChoices } from './choicesQueries'
+import { useDriveChoices, useUnitNames } from './choicesQueries'
 import { useDriveSettings } from './queries'
-import { plain } from './productFormat'
+import { packSizeLabel, plain } from './productFormat'
 
 const { t } = useI18n()
 
@@ -36,6 +36,16 @@ function summary(choice: DriveChoice): string {
     parts.push(t('driveProducts.rejectedCount', choice.rejected.length))
 
   return parts.join(' · ')
+}
+
+const unitNames = useUnitNames()
+
+/** La contenance du produit habituel dans l'unité de la liste (« 20 tranches »), quand la personne l'a donnée (DRV-652). */
+const packSizeOf = (choice: DriveChoice): string | null => {
+  const size = (choice.accepted.find((entry) => entry.rank === 1) ?? choice.accepted[0])?.product
+    .packSize
+
+  return size ? packSizeLabel(size, unitNames.value) : null
 }
 
 const preferred = (choice: DriveChoice) =>
@@ -113,6 +123,12 @@ const preferred = (choice: DriveChoice) =>
                   ? t('driveProducts.preferred', { label: preferred(choice) })
                   : t('driveProducts.nothingAccepted')
               }}</span>
+              <span
+                v-if="!choice.haveAtHome && packSizeOf(choice)"
+                data-testid="pack-size"
+                class="text-sm break-words text-muted"
+                >{{ t('driveProducts.packSize', { size: packSizeOf(choice) }) }}</span
+              >
               <span
                 v-if="choice.searchQuery"
                 data-testid="searched-as"

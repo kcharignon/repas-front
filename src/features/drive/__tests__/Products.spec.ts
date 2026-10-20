@@ -64,6 +64,31 @@ const oeufs = {
   updatedAt: '2026-10-18T10:00:00+02:00',
 }
 
+// DRV-652 : un fromage que la liste compte en tranches, dont la personne a donné la contenance (20 tranches)
+const E = {
+  productId: 'p-e',
+  retailerProductId: '555701',
+  ean: null,
+  label: 'Fromage cheddar en tranches 20 Tranches - 340g',
+  content: { value: 340, unit: 'g' },
+  packSize: { value: 20, unitSlug: 'tranche' },
+}
+const cheddar = {
+  ingredientSlug: 'cheddar',
+  ingredientName: 'Cheddar en tranche',
+  haveAtHome: false,
+  accepted: [
+    { rank: 1, product: E },
+    { rank: 2, product: { ...B, packSize: null } },
+  ],
+  rejected: [],
+  updatedAt: '2026-10-18T10:00:00+02:00',
+}
+const unitList = [
+  { slug: 'tranche', name: 'tranche', symbol: '', dimension: null, baseFactor: null },
+  { slug: 'gramme', name: 'gramme', symbol: 'g', dimension: 'WEIGHT', baseFactor: 1 },
+]
+
 const store = { id: '123456', baseUrl: 'https://exemple.leclercdrive.fr/magasin-123456-123456' }
 const settings = { enabled: true, retailer: 'leclerc', store }
 
@@ -95,6 +120,7 @@ async function open(
     ...session,
     'GET /api/v1/drive/settings': () => json(settings),
     'GET /api/v1/drive/choices': list(farine, sel, oeufs),
+    'GET /api/v1/units': list(...unitList),
     ...handlers,
   })
   const context = await signedIn()
@@ -555,5 +581,175 @@ describe('Mes produits : un ingrédient', () => {
     const { wrapper } = await detail({}, 'oeufs')
 
     expect(wrapper.find('ol li').text()).toContain('6 pièces')
+  })
+})
+
+describe('Mes produits : la contenance d’un produit dans l’unité de la liste (DRV-652)', () => {
+  const withSize = { 'GET /api/v1/drive/choices': list(cheddar, farine) }
+  const field = (wrapper: Wrapper) =>
+    wrapper.find<HTMLInputElement>('[data-testid="pack-size"] input')
+
+  it('la liste dit « Contenu : 20 tranches » sous l’article, seulement quand le produit habituel en a une', async () => {
+    const { wrapper } = await open(ProductsView, '/drive/produits', withSize)
+
+    const rows = wrapper.findAll('li a')
+    expect(rows[0]?.find('[data-testid="pack-size"]').text()).toBe('Contenu : 20 tranches')
+    expect(rows[1]?.find('[data-testid="pack-size"]').exists()).toBe(false)
+  })
+
+  it('la liste ne dit rien pour « J’en ai toujours » ni sans contenance', async () => {
+    const { wrapper } = await open(ProductsView, '/drive/produits')
+
+    expect(wrapper.find('[data-testid="pack-size"]').exists()).toBe(false)
+  })
+
+  it('une unité absente de la liste des unités se dit par son slug lisible, un pluriel au-dessus de 1', async () => {
+    const odd = {
+      ...cheddar,
+      accepted: [
+        { rank: 1, product: { ...E, packSize: { value: 1, unitSlug: 'cuillere-a-soupe' } } },
+      ],
+    }
+    const { wrapper } = await open(ProductsView, '/drive/produits', {
+      'GET /api/v1/drive/choices': list(odd),
+      'GET /api/v1/units': list(),
+    })
+
+    expect(wrapper.find('[data-testid="pack-size"]').text()).toBe('Contenu : 1 cuillere a soupe')
+  })
+
+  it('la fiche dit la contenance du produit qui en a une, et rien pour les autres', async () => {
+    const { wrapper } = await detail(withSize, 'cheddar')
+
+    const items = wrapper.findAll('ol li')
+    expect(items[0]?.find('[data-testid="pack-size"]').text()).toContain('Contenu : 20 tranches')
+    expect(items[1]?.find('[data-testid="pack-size"]').exists()).toBe(false)
+    // Rien à régler avant : pas de champ tant qu’on ne touche pas « Corriger »
+    expect(field(wrapper).exists()).toBe(false)
+  })
+
+  it('« Corriger » ouvre un champ prérempli ; enregistrer envoie UN ADD_PRODUCT de secours du même produit avec la contenance remplacée, rien d’autre', async () => {
+    const { wrapper, fetchMock } = await detail(
+      { ...withSize, 'PUT /api/v1/drive/choices': noContent },
+      'cheddar',
+    )
+
+    await press(wrapper, 'Corriger')
+    expect(field(wrapper).element.value).toBe('20')
+    expect(wrapper.text()).toContain('Combien de tranches y a-t-il dans ce produit ?')
+    expect(document.activeElement).toBe(field(wrapper).element)
+    // Tant que le nombre n’a pas changé, rien à enregistrer
+    expect(
+      buttonsOf(wrapper, 'Enregistrer')
+        .find((b) => b.element.closest('form'))
+        ?.attributes('disabled'),
+    ).toBeDefined()
+    await field(wrapper).setValue('12,5')
+    await wrapper.find('[data-testid="pack-size"] form').trigger('submit')
+    await flushPromises()
+
+    const index = puts(fetchMock)
+    expect(await bodyOf(fetchMock, index)).toEqual({
+      retailer: 'leclerc',
+      storeId: '123456',
+      choices: [
+        {
+          ingredientSlug: 'cheddar',
+          action: 'ADD_PRODUCT',
+          placement: 'FALLBACK',
+          product: {
+            retailerProductId: '555701',
+            label: E.label,
+            ean: null,
+            content: { value: 340, unit: 'g' },
+            price: null,
+            packSize: { value: 12.5, unitSlug: 'tranche' },
+          },
+        },
+      ],
+    })
+    expect(useNotificationsStore().items.map((item) => item.text)).toContain('Contenu enregistré.')
+    expect(field(wrapper).exists()).toBe(false)
+  })
+
+  it.each([[''], ['0'], ['abc'], ['10000'], ['1,2345'], ['1 000']])(
+    'refuse « %s » : « Enregistrer » inactif, rien ne part',
+    async (typed) => {
+      const { wrapper, fetchMock } = await detail(
+        { ...withSize, 'PUT /api/v1/drive/choices': noContent },
+        'cheddar',
+      )
+      await press(wrapper, 'Corriger')
+
+      await field(wrapper).setValue(typed)
+      await wrapper.find('[data-testid="pack-size"] form').trigger('submit')
+      await flushPromises()
+
+      const save = buttonsOf(wrapper, 'Enregistrer').find((b) => b.element.closest('form'))
+      expect(save?.attributes('disabled')).toBeDefined()
+      expect(puts(fetchMock)).toBe(-1)
+    },
+  )
+
+  it('un nombre mal formé est dit en une phrase', async () => {
+    const { wrapper } = await detail(withSize, 'cheddar')
+    await press(wrapper, 'Corriger')
+
+    await field(wrapper).setValue('vingt')
+
+    expect(wrapper.find('[data-testid="pack-size"]').text()).toContain(
+      'Entre un nombre, par exemple 20 ou 12,5.',
+    )
+  })
+
+  it('un refus du back s’affiche à côté du champ, la saisie reste', async () => {
+    const { wrapper } = await detail(
+      { ...withSize, 'PUT /api/v1/drive/choices': failure(422, 'DRIVE_PACK_SIZE_INVALID') },
+      'cheddar',
+    )
+    await press(wrapper, 'Corriger')
+    await field(wrapper).setValue('8')
+
+    await wrapper.find('[data-testid="pack-size"] form').trigger('submit')
+    await flushPromises()
+
+    expect(field(wrapper).element.value).toBe('8')
+    expect(wrapper.find('[data-testid="pack-size"] [id$="-error"]').exists()).toBe(true)
+  })
+
+  it('« Annuler » referme le champ sans rien envoyer', async () => {
+    const { wrapper, fetchMock } = await detail(withSize, 'cheddar')
+    await press(wrapper, 'Corriger')
+    await field(wrapper).setValue('8')
+
+    await wrapper
+      .findAll('[data-testid="pack-size"] button')
+      .find((button) => button.text() === 'Annuler')
+      ?.trigger('click')
+
+    expect(field(wrapper).exists()).toBe(false)
+    expect(puts(fetchMock)).toBe(-1)
+  })
+
+  it('le produit refusé puis accepté de nouveau dans le brouillon n’a pas de contenance à corriger (rien d’enregistré pour lui)', async () => {
+    const refused = {
+      ...cheddar,
+      accepted: [{ rank: 1, product: E }],
+      rejected: [{ ...B, packSize: null }],
+    }
+    const { wrapper } = await detail({ 'GET /api/v1/drive/choices': list(refused) }, 'cheddar')
+
+    await press(wrapper, 'Accepter de nouveau')
+
+    expect(wrapper.findAll('ol li')).toHaveLength(2)
+    expect(wrapper.findAll('[data-testid="pack-size"]')).toHaveLength(1)
+  })
+
+  it('hors connexion, « Corriger » est inactif', async () => {
+    const { wrapper } = await detail(withSize, 'cheddar')
+    window.dispatchEvent(new Event('offline'))
+    await flushPromises()
+
+    expect(buttonsOf(wrapper, 'Corriger')[0]?.attributes('disabled')).toBeDefined()
   })
 })
