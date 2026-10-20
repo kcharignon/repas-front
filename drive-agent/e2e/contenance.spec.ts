@@ -3,6 +3,7 @@
 // « Vérifie la quantité » demande donc combien de tranches y a-t-il dans le produit, d'où le nombre de produits ; la réponse revient à Repas avec la ligne.
 import type { Page } from '@playwright/test'
 
+import { PHOTO_HOST, photoReply } from '../fake-leclerc/photos'
 import { openWithFragment, returnedResult, returnsToRepas } from './support/agent'
 import { expectPoliteAgent } from './support/cadence'
 import { expect, test } from './support/fixtures'
@@ -280,6 +281,159 @@ test.describe('la recherche d’un produit pris « Pas mon habituel » (DRV-653)
   })
 })
 
+/** Le navigateur de test n'a aucune adresse pour l'hôte d'images : on répond nous-mêmes avec l'image synthétique du faux site. */
+async function servePhotos(page: Page): Promise<void> {
+  await page.route(`https://${PHOTO_HOST}/**`, async (route) => {
+    const photo = photoReply(new URL(route.request().url()).search)
+    await route.fulfill({ status: photo.status, contentType: photo.type, body: photo.body })
+  })
+}
+
+test.describe('le produit montré à l’écran « Vérifie la quantité » (DRV-652)', () => {
+  const shown = (page: Page) => page.locator('.product')
+
+  test('la photo à gauche (décorative), le nom complet, le contenu et le prix, avant la question', async ({
+    page,
+    fake,
+    agentCode,
+  }) => {
+    await servePhotos(page)
+    await openWithFragment(page, fake, agentCode, planOf([cheddar()]))
+    await card(page, '20 Tranches').getByRole('button', { name: 'Choisir' }).click()
+    await expect(field(page)).toBeVisible()
+
+    await expect(shown(page)).toContainText(TWENTY_LABEL.replace(' 20 Tranches - 340g', ''))
+    await expect(shown(page)).toContainText('20 Tranches - 340g')
+    await expect(shown(page)).toContainText('2,99 €')
+    await expect(shown(page)).toContainText('8,79 € / kg')
+    const image = shown(page).locator('img')
+    await expect(image).toHaveCount(1)
+    await expect(image).toHaveAttribute('alt', '')
+    await expect
+      .poll(() => image.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0))
+      .toBe(true)
+    // La photo est à gauche du texte, la question et le champ dessous
+    const photo = await shown(page).locator('.photo').boundingBox()
+    const text = await shown(page).locator('.text').boundingBox()
+    const label = await page.getByText(/^Combien de tranches/).boundingBox()
+    expect(photo && text && photo.x < text.x).toBe(true)
+    expect(text && label && label.y >= text.y + text.height - 1).toBe(true)
+    expectPoliteAgent(fake)
+  })
+
+  test('un produit sans photo : le nom et les détails, ni trou ni image cassée', async ({
+    page,
+    fake,
+    agentCode,
+  }) => {
+    await servePhotos(page)
+    await openWithFragment(page, fake, agentCode, planOf([cheddar()]))
+    await card(page, 'fondu').getByRole('button', { name: 'Choisir' }).click()
+    await expect(field(page)).toHaveValue('10')
+
+    await expect(shown(page)).toContainText('Fromage cheddar fondu en tranches')
+    await expect(shown(page)).toContainText('1,49 €')
+    await expect(shown(page).locator('img, .photo')).toHaveCount(0)
+  })
+
+  test('une photo qui ne charge pas se retire : la carte reste lisible', async ({
+    page,
+    fake,
+    agentCode,
+  }) => {
+    await page.route(/photos-test|image\.ashx/, (route) => route.abort())
+    await openWithFragment(page, fake, agentCode, planOf([cheddar()]))
+    await card(page, '20 Tranches').getByRole('button', { name: 'Choisir' }).click()
+
+    await expect(field(page)).toBeVisible()
+    await expect(shown(page).locator('.photo')).toHaveCount(0)
+    await expect(shown(page)).toContainText('2,99 €')
+  })
+
+  test('« Pas mon habituel » montre le même produit', async ({ page, fake, agentCode }) => {
+    await servePhotos(page)
+    await openWithFragment(page, fake, agentCode, planOf([cheddar()]))
+    await card(page, '8 Tranches').getByRole('button', { name: 'Pas mon habituel' }).click()
+
+    await expect(shown(page)).toContainText('8 Tranches - 150g')
+  })
+
+  test('un produit connu repris par la phase A : la fiche lue sur la recherche, sans requête de plus', async ({
+    page,
+    fake,
+    agentCode,
+  }) => {
+    const plan = planOf([
+      known('cheddar', 'Cheddar en tranche', [product(TWENTY, null)], { needed: SLICES }),
+    ])
+    await servePhotos(page)
+    await openWithFragment(page, fake, agentCode, plan)
+
+    await expect(field(page)).toHaveValue('20')
+    await expect(shown(page)).toContainText('2,99 €')
+    await expect(shown(page).locator('img')).toHaveCount(1)
+    await page.getByRole('button', { name: 'Valider' }).click()
+    await returnsToRepas(page, fake)
+    // Une recherche pour retrouver le produit, rien d'autre : la fiche vient de cette réponse
+    expect(fake.paced().filter((call) => call.kind === 'search').length).toBe(1)
+  })
+})
+
+test.describe('une unité de pièces : 1 par produit proposé (DRV-652)', () => {
+  const UNITS = {
+    quantity: 2.5,
+    unitSymbol: 'unité',
+    dimension: 'COUNT',
+    baseFactor: 1,
+    unitSlug: 'unite',
+    unitName: 'unité',
+  } as const
+
+  test('« Combien d’unités y a-t-il dans … ? », 1 déjà dans le champ, « 2,5 unités : 3 produits », un seul clic', async ({
+    page,
+    fake,
+    agentCode,
+  }) => {
+    await openWithFragment(
+      page,
+      fake,
+      agentCode,
+      planOf([fresh('tomate', 'Tomates grappe', { needed: UNITS, searchQuery: 'tomates grappe' })]),
+    )
+    await card(page, 'Tomates grappe Jardin')
+      .first()
+      .getByRole('button', { name: 'Choisir' })
+      .click()
+
+    await expect(page.getByText(/^Combien d’unités y a-t-il dans/)).toBeVisible()
+    await expect(page.getByText('Combien de unités')).toHaveCount(0)
+    const input = page.getByLabel(/^Combien d’unités y a-t-il dans/)
+    await expect(input).toHaveValue('1')
+    await expect(
+      page.getByText('Il te faut 2,5 unités : 3 produits', { exact: true }),
+    ).toBeVisible()
+    await page.getByRole('button', { name: 'Valider' }).click()
+    await returnsToRepas(page, fake)
+
+    expect(Object.values(fake.cart())).toEqual([3])
+    expect(await lineOf(page, fake, 'tomate')).toMatchObject({
+      quantity: 3,
+      packSize: { value: 1, unitSlug: 'unite' },
+    })
+  })
+
+  test('une tranche (sans dimension) dont le libellé ne dit aucun nombre : le champ reste vide', async ({
+    page,
+    fake,
+    agentCode,
+  }) => {
+    await openWithFragment(page, fake, agentCode, planOf([cheddar()]))
+    await card(page, 'râpé').getByRole('button', { name: 'Choisir' }).click()
+
+    await expect(field(page)).toHaveValue('')
+  })
+})
+
 // —— Captures de l'écran « Vérifie la quantité » (à lire avant de conclure) ———————————————————————————————————————————————————————
 
 for (const [name, viewport] of [
@@ -295,6 +449,7 @@ for (const [name, viewport] of [
         fake,
         agentCode,
       }, info) => {
+        await servePhotos(page)
         await openWithFragment(page, fake, agentCode, planOf([cheddar()]))
         await card(page, '20 Tranches').getByRole('button', { name: 'Choisir' }).click()
         await expect(field(page)).toHaveValue('20')
@@ -304,6 +459,13 @@ for (const [name, viewport] of [
           ratio: 0.99,
         })
         await page.screenshot({ path: info.outputPath(`contenance-${name}-${scheme}.png`) })
+
+        // Le clavier ouvert (la fenêtre ne garde que ~340 px de haut) : le champ reste visible
+        await page.setViewportSize({ width: viewport.width, height: 340 })
+        await field(page).focus()
+        await expect(field(page)).toBeInViewport({ ratio: 0.99 })
+        await page.screenshot({ path: info.outputPath(`contenance-${name}-${scheme}-clavier.png`) })
+        await page.setViewportSize(viewport)
 
         // Le champ vide : « Valider » inactif
         await field(page).fill('')
