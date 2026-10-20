@@ -40,7 +40,7 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Token JWT (dur\u00e9e de vie 3600 s). Pose aussi le cookie `repas_refresh` (HttpOnly, SameSite=Strict, `Path=/api/auth`), \u00e0 \u00e9changer contre un nouveau JWT par `POST /api/auth/refresh` (ADR 0015)",
+                        "description": "Token JWT (dur\u00e9e de vie 3600 s). Pose aussi le cookie `repas_refresh` (HttpOnly, SameSite=Strict, `Path=/api/auth`), \u00e0 \u00e9changer contre un nouveau JWT par `POST /api/auth/refresh` (ADR 0015). Une connexion r\u00e9ussie fait avancer la derni\u00e8re connexion du compte que voit l'administrateur (`lastLoginAt` de `GET /api/v1/users`), au plus une fois toutes les 10 minutes ; une connexion refus\u00e9e n'\u00e9crit rien",
                         "headers": {
                             "Set-Cookie": {
                                 "description": "Refresh token, `HttpOnly; Secure; SameSite=Strict; Path=/api/auth`",
@@ -92,7 +92,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "Recherche d'ingr\u00e9dients par nom, du plus pertinent au moins pertinent, avec leur rayon : communs et ceux de l'utilisateur authentifi\u00e9",
+                "summary": "Recherche d'ingr\u00e9dients par nom, du plus pertinent au moins pertinent, avec leur rayon : ceux de l'utilisateur authentifi\u00e9 et les communs qu'il n'a pas adopt\u00e9s (un commun adopt\u00e9 est remplac\u00e9 par sa copie, qui est \u00e0 lui)",
                 "operationId": "get_api_search_ingredients",
                 "parameters": [
                     {
@@ -201,7 +201,7 @@
                 "tags": [
                     "Shopping lists"
                 ],
-                "summary": "Ajoute 1 \u00e0 la quantit\u00e9 d'un ingr\u00e9dient dans la liste active de l'utilisateur",
+                "summary": "Ajoute 1 \u00e0 la quantit\u00e9 d'un ingr\u00e9dient dans la liste active de l'utilisateur. Le slug d'un commun que l'utilisateur a adopt\u00e9 d\u00e9signe sa copie, qui est celle de la liste ; un utilisateur qui a d\u00e9j\u00e0 adopt\u00e9 des communs adopte \u00e0 la vol\u00e9e celui qu'il utilise pour la premi\u00e8re fois",
                 "operationId": "post_api_increase_ingredient",
                 "parameters": [
                     {
@@ -416,7 +416,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "Ingr\u00e9dients que l'utilisateur authentifi\u00e9 peut utiliser (communs et les siens), tri\u00e9s par nom : choix des recettes",
+                "summary": "Ingr\u00e9dients que l'utilisateur authentifi\u00e9 peut utiliser, tri\u00e9s par nom : les siens et les communs qu'il n'a pas adopt\u00e9s (un commun adopt\u00e9 est remplac\u00e9 par sa copie, qui est \u00e0 lui) ; choix des recettes",
                 "operationId": "get_api_list_available_ingredients",
                 "parameters": [
                     {
@@ -504,7 +504,7 @@
                 "tags": [
                     "Recipes"
                 ],
-                "summary": "Cr\u00e9e une recette de l'utilisateur connect\u00e9",
+                "summary": "Cr\u00e9e une recette de l'utilisateur connect\u00e9. Le slug d'un commun que l'utilisateur a adopt\u00e9 est remplac\u00e9 par celui de sa copie ; un utilisateur qui a d\u00e9j\u00e0 adopt\u00e9 des communs adopte \u00e0 la vol\u00e9e celui qu'il utilise pour la premi\u00e8re fois",
                 "operationId": "post_api_create_recipe",
                 "requestBody": {
                     "required": true,
@@ -927,7 +927,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "D\u00e9tail d'un ingr\u00e9dient commun ou cr\u00e9\u00e9 par l'utilisateur (un administrateur voit tous les ingr\u00e9dients)",
+                "summary": "D\u00e9tail d'un ingr\u00e9dient commun ou cr\u00e9\u00e9 par l'utilisateur (un administrateur voit tous les ingr\u00e9dients). Un commun que l'utilisateur a adopt\u00e9 se lit encore, en lecture seule (`canEdit` faux) : une page ouverte avant l'adoption peut s'afficher",
                 "operationId": "get_api_get_ingredient",
                 "parameters": [
                     {
@@ -1075,7 +1075,7 @@
                 "tags": [
                     "Recipes"
                 ],
-                "summary": "Remplace une recette de l'utilisateur : nom, personnes, type et lignes (les lignes absentes du corps sont supprim\u00e9es)",
+                "summary": "Remplace une recette de l'utilisateur : nom, personnes, type et lignes (les lignes absentes du corps sont supprim\u00e9es). Le slug d'un commun que l'auteur a adopt\u00e9 est remplac\u00e9 par celui de sa copie, comme \u00e0 la cr\u00e9ation",
                 "operationId": "put_api_update_recipe",
                 "parameters": [
                     {
@@ -1482,7 +1482,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "Ingr\u00e9dients communs et ingr\u00e9dients de l'utilisateur authentifi\u00e9 dans un rayon, tri\u00e9s par nom",
+                "summary": "Ingr\u00e9dients de l'utilisateur authentifi\u00e9 dans un rayon, tri\u00e9s par nom : les siens et les communs qu'il n'a pas adopt\u00e9s (un commun adopt\u00e9 est remplac\u00e9 par sa copie, qui est \u00e0 lui)",
                 "operationId": "get_api_list_ingredients_by_department",
                 "parameters": [
                     {
@@ -1710,7 +1710,7 @@
                 "tags": [
                     "Shopping lists"
                 ],
-                "summary": "Retire 1 \u00e0 la quantit\u00e9 d'un ingr\u00e9dient dans la liste active de l'utilisateur (la ligne dispara\u00eet \u00e0 z\u00e9ro)",
+                "summary": "Retire 1 \u00e0 la quantit\u00e9 d'un ingr\u00e9dient dans la liste active de l'utilisateur (la ligne dispara\u00eet \u00e0 z\u00e9ro). Le slug d'un commun que l'utilisateur a adopt\u00e9 d\u00e9signe sa copie, qui est celle de la liste",
                 "operationId": "post_api_decrease_ingredient",
                 "parameters": [
                     {
@@ -2203,7 +2203,7 @@
                     "Auth"
                 ],
                 "summary": "Obtenir un nouveau JWT avec le cookie de rafra\u00eechissement",
-                "description": "Public : le JWT est expir\u00e9, l'identit\u00e9 vient du seul cookie `repas_refresh` (HttpOnly, SameSite=Strict, `Path=/api/auth`), pos\u00e9 \u00e0 la connexion. Le jeton est \u00e0 usage unique : la r\u00e9ponse en pose un nouveau (rotation). Pr\u00e9senter un jeton d\u00e9j\u00e0 utilis\u00e9 r\u00e9voque toute la connexion (ADR 0015).",
+                "description": "Public : le JWT est expir\u00e9, l'identit\u00e9 vient du seul cookie `repas_refresh` (HttpOnly, SameSite=Strict, `Path=/api/auth`), pos\u00e9 \u00e0 la connexion. Le jeton est \u00e0 usage unique : la r\u00e9ponse en pose un nouveau (rotation). Pr\u00e9senter un jeton d\u00e9j\u00e0 utilis\u00e9 r\u00e9voque toute la connexion (ADR 0015). Un \u00e9change r\u00e9ussi compte comme une connexion : il fait avancer la derni\u00e8re connexion du compte que voit l'administrateur (`lastLoginAt` de `GET /api/v1/users`), au plus une fois toutes les 10 minutes ; un refus n'\u00e9crit rien.",
                 "operationId": "post_api_auth_refresh",
                 "responses": {
                     "200": {
@@ -2427,7 +2427,7 @@
                 "tags": [
                     "Drive"
                 ],
-                "summary": "Remplace d'un coup la pr\u00e9f\u00e9rence de l'utilisateur connect\u00e9 pour un ingr\u00e9dient : produits accept\u00e9s dans l'ordre, produits refus\u00e9s, ou \u00ab j'en ai toujours \u00bb (sans produit ni \u00ab j'en ai toujours \u00bb, la pr\u00e9f\u00e9rence est supprim\u00e9e)",
+                "summary": "Remplace d'un coup la pr\u00e9f\u00e9rence de l'utilisateur connect\u00e9 pour un ingr\u00e9dient : produits accept\u00e9s dans l'ordre, produits refus\u00e9s, ou \u00ab j'en ai toujours \u00bb (sans produit ni \u00ab j'en ai toujours \u00bb, la pr\u00e9f\u00e9rence est supprim\u00e9e). Le slug d'un commun que l'utilisateur a adopt\u00e9 d\u00e9signe sa copie : la pr\u00e9f\u00e9rence est toujours celle de la copie",
                 "operationId": "put_api_replace_ingredient_preference",
                 "parameters": [
                     {
@@ -2474,7 +2474,7 @@
                 "tags": [
                     "Drive"
                 ],
-                "summary": "Oublie toute la pr\u00e9f\u00e9rence de l'utilisateur connect\u00e9 pour un ingr\u00e9dient : produits accept\u00e9s et refus\u00e9s, ou \u00ab j'en ai toujours \u00bb (les produits restent connus)",
+                "summary": "Oublie toute la pr\u00e9f\u00e9rence de l'utilisateur connect\u00e9 pour un ingr\u00e9dient : produits accept\u00e9s et refus\u00e9s, ou \u00ab j'en ai toujours \u00bb (les produits restent connus). Le slug d'un commun que l'utilisateur a adopt\u00e9 d\u00e9signe sa copie",
                 "operationId": "delete_api_forget_choice",
                 "parameters": [
                     {
@@ -2731,7 +2731,7 @@
                 "tags": [
                     "Drive"
                 ],
-                "summary": "M\u00e9morise un lot d'intentions de l'agent (produits choisis, refus\u00e9s, \u00ab j'en ai toujours \u00bb) dans les pr\u00e9f\u00e9rences de l'utilisateur connect\u00e9. La fiche d'un produit d\u00e9j\u00e0 connu (commune au magasin) n'est compl\u00e9t\u00e9e que l\u00e0 o\u00f9 elle est vide : libell\u00e9, contenu et code-barres ne sont jamais r\u00e9\u00e9crits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte d\u00e9j\u00e0. Un `ADD_PRODUCT` peut porter la recherche qui a fait trouver le produit (`searchQuery`, m\u00e9moris\u00e9e avec la pr\u00e9f\u00e9rence de cette enseigne et de ce magasin ; cl\u00e9 absente : gard\u00e9e, `null` : effac\u00e9e) ; l'intention `NOTE_SEARCH` (DRV-653) m\u00e9morise cette recherche seule, sans produit, quand le produit n'est pas m\u00e9moris\u00e9 (pris pour cette fois seulement) et la contenance du produit dans l'unit\u00e9 de la liste (`product.packSize`, DRV-652, priv\u00e9e \u00e0 l'utilisateur et propre \u00e0 ce produit ; cl\u00e9 absente : gard\u00e9e pour le m\u00eame produit, `null` : effac\u00e9e)",
+                "summary": "M\u00e9morise un lot d'intentions de l'agent (produits choisis, refus\u00e9s, \u00ab j'en ai toujours \u00bb) dans les pr\u00e9f\u00e9rences de l'utilisateur connect\u00e9. Le slug d'un commun que l'utilisateur a adopt\u00e9 est remplac\u00e9 par celui de sa copie : aucune pr\u00e9f\u00e9rence n'est cr\u00e9\u00e9e sous un commun masqu\u00e9. La fiche d'un produit d\u00e9j\u00e0 connu (commune au magasin) n'est compl\u00e9t\u00e9e que l\u00e0 o\u00f9 elle est vide : libell\u00e9, contenu et code-barres ne sont jamais r\u00e9\u00e9crits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte d\u00e9j\u00e0. Un `ADD_PRODUCT` peut porter la recherche qui a fait trouver le produit (`searchQuery`, m\u00e9moris\u00e9e avec la pr\u00e9f\u00e9rence de cette enseigne et de ce magasin ; cl\u00e9 absente : gard\u00e9e, `null` : effac\u00e9e) ; l'intention `NOTE_SEARCH` (DRV-653) m\u00e9morise cette recherche seule, sans produit, quand le produit n'est pas m\u00e9moris\u00e9 (pris pour cette fois seulement) et la contenance du produit dans l'unit\u00e9 de la liste (`product.packSize`, DRV-652, priv\u00e9e \u00e0 l'utilisateur et propre \u00e0 ce produit ; cl\u00e9 absente : gard\u00e9e pour le m\u00eame produit, `null` : effac\u00e9e)",
                 "operationId": "put_api_save_product_choices",
                 "requestBody": {
                     "required": true,
@@ -2843,9 +2843,9 @@
                 ],
                 "properties": {
                     "name": {
-                        "description": "Nom de l'ingr\u00e9dient",
+                        "description": "Nom de l'ingr\u00e9dient (200 caract\u00e8res au plus)",
                         "type": "string",
-                        "maxLength": 255,
+                        "maxLength": 200,
                         "example": "Pralin\u00e9"
                     },
                     "departmentSlug": {
@@ -4539,6 +4539,7 @@
                     "ingredientCount",
                     "shoppingListCount",
                     "createdAt",
+                    "lastLoginAt",
                     "isDisabled",
                     "isAdmin",
                     "status",
@@ -4578,6 +4579,12 @@
                         "description": "Date d'inscription (ATOM), vide si inconnue",
                         "type": "string",
                         "example": "2026-10-13T08:56:40+02:00"
+                    },
+                    "lastLoginAt": {
+                        "description": "Derni\u00e8re connexion du compte (ATOM, UTC) : la derni\u00e8re authentification r\u00e9ussie, par mot de passe ou par renouvellement de la session ouverte (une session reste active des jours : ce n'est pas la seule connexion par mot de passe). `null` : jamais vu depuis que Repas retient cette date. Retenue au plus toutes les 10 minutes, donc en retard de 10 minutes au plus ; r\u00e9serv\u00e9e \u00e0 l'administration (ni `GET /api/v1/me`, ni aucun autre endpoint)",
+                        "type": "string",
+                        "example": "2026-10-20T08:30:12+00:00",
+                        "nullable": true
                     },
                     "isDisabled": {
                         "description": "Le compte est d\u00e9sactiv\u00e9",

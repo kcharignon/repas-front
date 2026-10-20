@@ -102,28 +102,29 @@ test.describe('administration', () => {
   }) => {
     const demo = 'user@repas.fr'
     const row = () => page.getByRole('listitem').filter({ hasText: demo })
-    const status = (label: string) => row().getByRole('button', { name: label, exact: true })
+    const more = () => row().getByRole('button', { name: `Plus d’actions pour ${demo}` })
     try {
       await signIn(page, '/admin/utilisateurs')
       await expect(row()).toBeVisible()
-      await expect(status('Actif')).toHaveAttribute('aria-pressed', 'true')
+      await expect(row()).toContainText('Actif')
 
-      await status('Désactivé').click()
+      await more().click()
+      await page.getByRole('menuitem', { name: 'Désactiver' }).click()
 
-      await expect(status('Désactivé')).toHaveAttribute('aria-pressed', 'true')
-      await expect(row().getByText('Désactivé', { exact: true })).toHaveCount(2)
+      await expect(row()).toContainText('Désactivé')
       await expect(
         page.getByRole('status').filter({ hasText: `Statut de ${demo} modifié.` }),
       ).toBeVisible()
 
-      await status('Actif').click()
+      await row()
+        .getByRole('button', { name: `Réactiver ${demo}` })
+        .click()
 
-      await expect(status('Actif')).toHaveAttribute('aria-pressed', 'true')
+      await expect(row()).toContainText('Actif')
 
       // La suppression est irréversible : on voit la confirmation, on annule, rien n'est supprimé
-      await row()
-        .getByRole('button', { name: `Supprimer ${demo}` })
-        .click()
+      await more().click()
+      await page.getByRole('menuitem', { name: 'Supprimer' }).click()
       await expect(page.getByRole('dialog')).toContainText('irréversible')
       await page.getByRole('button', { name: 'Annuler' }).click()
       await expect(page.getByRole('dialog')).toHaveCount(0)
@@ -137,7 +138,12 @@ test.describe('administration', () => {
   test("l'administrateur ne peut pas supprimer son propre compte", async ({ page }) => {
     await signIn(page, '/admin/utilisateurs')
 
-    await expect(page.getByRole('button', { name: `Supprimer ${email}` })).toBeDisabled()
+    await page.getByRole('button', { name: `Plus d’actions pour ${email}` }).click()
+
+    await expect(page.getByRole('menuitem', { name: /Supprimer/ })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
   })
 
   test("un utilisateur ordinaire n'accède pas à l'administration", async ({ page }) => {
