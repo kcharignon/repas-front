@@ -18,6 +18,27 @@ import {
   type ShownFacet,
 } from './aisle-labels'
 import { type Candidate, toCandidate } from './candidate'
+import {
+  aisleBloc,
+  allValues,
+  countKeys,
+  filteredSearchPath,
+  filterHrefsIn,
+  filterLinks,
+  filterLinkShape,
+  filterLinkShapes,
+  filterTemplate,
+  freshValues,
+  FRESH_PRODUCT,
+  readFacets,
+  universes,
+  valueShape,
+  type FacetExploration,
+  type FacetMatch,
+  type FacetValue,
+  type FilteredProbe,
+} from './facets'
+import { cleanText } from '../text'
 import { extractProducts } from './embedded'
 import { httpCause } from './causes'
 import {
@@ -161,6 +182,13 @@ export interface RetailerAdapter {
    * leur rayon (`objFiltreBloc`, `sUrlVoirRayon`, `sCategorie`), rendu sûr. Aucune requête.
    */
   aisleSamples(candidates: readonly Candidate[], max: number): AisleSample[]
+  /**
+   * Pour le diagnostic (DRV-647, agent 0.35.0) : la facette « Rayons » de la dernière réponse (celle de [term], dont [candidates] sont les produits), la
+   * correspondance de ses valeurs avec les rayons et familles de produits échantillons, la forme du paramètre `Filtres` dans les liens déjà reçus, la
+   * pagination et les univers ; puis, SEULEMENT si un lien de recherche filtrée montre la forme de l'adresse, UNE recherche de [term] filtrée sur la valeur
+   * « fruits / légumes » de la facette (à défaut la première), à la cadence normale, lecture seule. Jamais deux requêtes ; aucune erreur n'en sort.
+   */
+  exploreFacets(term: string, candidates: readonly Candidate[]): Promise<FacetExploration | null>
 }
 
 /** Ce que la dernière réponse de recherche laisse voir de sa structure (DRV-647) : des noms de clés et des nombres. */
@@ -445,6 +473,171 @@ export class LeclercAdapter implements RetailerAdapter {
 
   aisleSamples(candidates: readonly Candidate[], max: number): AisleSample[] {
     return aisleSamples(candidates, max, this.city())
+  }
+
+  async exploreFacets(
+    term: string,
+    candidates: readonly Candidate[],
+  ): Promise<FacetExploration | null> {
+    const text = this.lastReplyText
+    if (text === null) return null
+    const city = this.city()
+    const safe = (label: string | null): string | null => {
+      const shown = shownAisleText(label, city)
+      return shown.kind === 'TEXT' ? shown.text : null
+    }
+    let pageText = ''
+    try {
+      pageText = this.deps.pageText()
+    } catch {
+      // La page ne se laisse pas lire.
+    }
+    const tree = readFacets(text)
+    const rayons = aisleBloc(tree)
+    const known = allValues(tree.values)
+    const matchOf = (id: number | null): FacetMatch | null => {
+      if (id === null) return null
+      const found = known.find(({ value }) => value.id === id)
+      return found === undefined ? null : { id, label: safe(found.value.label), depth: found.depth }
+    }
+    const seen = new Set<string>()
+    const samples: FacetExploration['samples'] = []
+    for (const candidate of candidates) {
+      const pair = `${candidate.aisle}|${candidate.family}`
+      if (samples.length >= 6 || seen.has(pair)) continue
+      seen.add(pair)
+      samples.push({
+        aisle: candidate.aisle,
+        family: candidate.family,
+        aisleMatch: matchOf(candidate.aisle),
+        familyMatch: matchOf(candidate.family),
+      })
+    }
+    const { hostname, pathname } = this.deps.location
+    let pageHrefs: string[] = []
+    try {
+      pageHrefs = (this.deps.pageLinks?.().links ?? []).map((link) => link.href)
+    } catch {
+      // Le DOM ne se laisse pas lire.
+    }
+    const pageLinks = filterLinks(pageHrefs, hostname, pathname)
+    const replyLinks = filterLinks(filterHrefsIn(text), hostname, pathname)
+    let cartPath = ''
+    try {
+      cartPath = this.paths().cartPath
+    } catch {
+      // Hors d'un magasin.
+    }
+    const values = rayons?.values ?? []
+    const template = filterTemplate(
+      [...replyLinks, ...pageLinks],
+      values.length > 0 ? values : tree.values,
+      cartPath,
+    )
+    const fresh = freshValues(values)
+    const target = fresh[0]?.value ?? values[0] ?? null
+    let probe: FacetExploration['probe']
+    if ('miss' in template) probe = { skipped: template.miss }
+    else if (target === null)
+      probe = { skipped: tree.values.length === 0 ? 'NO_FACET' : 'NO_TARGET' }
+    else {
+      const path = filteredSearchPath(template, target, term)
+      probe = path === null ? { skipped: 'NO_PATH' } : await this.probeFiltered(path, target, safe)
+    }
+    return {
+      blocs: tree.blocs.map((bloc) => ({
+        id: bloc.id,
+        label: safe(bloc.label),
+        values: bloc.values,
+      })),
+      aisleBloc:
+        rayons === null
+          ? null
+          : {
+              id: rayons.bloc.id,
+              label: safe(rayons.bloc.label),
+              total: rayons.values.length,
+              values: rayons.values.slice(0, 40).map((value, index) => ({
+                id: value.id,
+                label: safe(value.label),
+                references: value.references,
+                children: value.children.length,
+                ...(index < 5 && {
+                  urlId: value.urlId === null ? null : valueShape(value.urlId, city),
+                  urlHasId: value.urlId !== null && value.urlId.includes(String(value.id)),
+                  childLabels: value.children.slice(0, 6).map((child) => safe(child.label)),
+                }),
+              })),
+            },
+      fresh: fresh.slice(0, 5).map(({ value, depth }) => ({
+        id: value.id,
+        label: safe(value.label),
+        references: value.references,
+        depth,
+      })),
+      samples,
+      links: {
+        page: { count: pageLinks.length, shapes: filterLinkShapes(pageLinks, city) },
+        reply: { count: replyLinks.length, shapes: filterLinkShapes(replyLinks, city) },
+      },
+      urlIdShapes: [
+        ...new Set(
+          values.flatMap((value) => (value.urlId === null ? [] : [valueShape(value.urlId, city)])),
+        ),
+      ].slice(0, 5),
+      template:
+        'miss' in template
+          ? template
+          : { shape: filterLinkShape(template.link, city), kind: template.kind },
+      probe,
+      pagination: { reply: countKeys(text), page: countKeys(pageText) },
+      universes: { reply: universes(text), page: universes(pageText) },
+    }
+  }
+
+  /** La recherche filtrée sondée : une requête à la cadence normale, avec les en-têtes de la forme de recherche retenue ; jamais une erreur. */
+  private async probeFiltered(
+    path: string,
+    target: FacetValue,
+    safe: (label: string | null) => string | null,
+  ): Promise<FilteredProbe> {
+    const base: FilteredProbe = {
+      target: { id: target.id, label: safe(target.label) },
+      status: null,
+      products: null,
+      families: [],
+      level: null,
+      first: null,
+    }
+    try {
+      const { init } = buildSearch(this.searchVariant ?? 'a', this.searchContext(this.paths()), 'x')
+      const reply = await this.pacer.request(path, init)
+      if (reply.status < 200 || reply.status >= 300) {
+        return { ...base, status: reply.status, fault: httpCause(reply.status) }
+      }
+      const candidates = readSearchPage(reply).map((raw) => toCandidate(raw, this.deps.location))
+      const grouping = aisleChoices(candidates, { city: this.city() })
+      const first = candidates[0]
+      const label = first === undefined ? null : safe(cleanText(first.label).slice(0, 60))
+      return {
+        ...base,
+        status: reply.status,
+        products: candidates.length,
+        level: grouping.level,
+        families: grouping.choices
+          .slice(0, 8)
+          .map(({ id, label: name, count }) => ({ id, label: name, count })),
+        first: first === undefined ? null : { label, fresh: FRESH_PRODUCT.test(first.label) },
+      }
+    } catch (error) {
+      return {
+        ...base,
+        fault:
+          error instanceof LeclercError
+            ? `${error.code}${error.cause === null ? '' : ` (${error.cause})`}`
+            : 'EXCEPTION',
+      }
+    }
   }
 
   /** La ville du chemin de la page (`/magasin-N-N-<Ville>`), `null` sans elle. */

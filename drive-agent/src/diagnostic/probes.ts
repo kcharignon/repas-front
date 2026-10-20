@@ -14,6 +14,9 @@ import type {
   ArrivalFacts,
   AttemptFacts,
   Candidate,
+  CountKey,
+  FacetExploration,
+  FacetMatch,
   KeyShape,
   LeclercCause,
   LeclercErrorCode,
@@ -60,6 +63,8 @@ export interface ProbeFacts {
   reply?: { term: string; facts: ReplyFacts } | null
   /** Étape 1 (DRV-647) : les rayons les plus fournis de la première recherche d'essai, leur libellé résolu et sa source (8 au plus). */
   aisleLabels?: readonly AisleLabelFacts[] | null
+  /** La facette « Rayons » et la forme du filtre de la première recherche d'essai (DRV-647, agent 0.35.0). */
+  facets?: FacetExploration | null
   /** Pourquoi le dernier envoi n'a pas mis des produits habituels au panier (DRV-635), dans l'ordre du passage. */
   lastPass?: readonly LastReason[]
   /** Ce que le panier a répondu aux produits choisis qu'il n'a pas pris, au dernier envoi (DRV-644). */
@@ -200,6 +205,7 @@ export function availabilityFacts(candidates: readonly Candidate[]): Availabilit
 }
 
 const P = S.diagnostic.probe
+const F = S.diagnostic.facet
 
 /** « BLOCKED, HTTP 403 » ou « CONTRACT_CHANGED (HTTP_400) » : le code d'erreur, sa cause et le code HTTP s'il y en a un. */
 export function faultText(fault: {
@@ -514,9 +520,122 @@ function labelLines(probes: ProbeFacts): string[] {
   return lines
 }
 
+/** « « Fruits et légumes » » ou « (sans libellé) » : un libellé de facette rendu sûr par l'adaptateur. */
+const facetLabel = (label: string | null): string => (label === null ? F.noLabel : `« ${label} »`)
+
+const matchText = (id: number | null, match: FacetMatch | null): string =>
+  `${id ?? '?'} → ${match === null ? F.noMatch : F.match(match.id, facetLabel(match.label), match.depth === 0 ? F.top : F.child)}`
+
+const countKeysText = (keys: readonly CountKey[]): string =>
+  keys.length === 0
+    ? F.none
+    : keys.map(({ name, values, count }) => `${name}=${values.join('|')} (×${count})`).join(', ')
+
+const universesText = (list: readonly { value: number; count: number }[]): string =>
+  list.length === 0 ? P.absent : list.map(({ value, count }) => `${value} ×${count}`).join(', ')
+
+/**
+ * Le relevé de la facette « Rayons » (DRV-647, agent 0.35.0) pour la première recherche d'essai : les blocs de filtre, les valeurs du bloc « Rayons », la valeur
+ * « fruits / légumes », la correspondance des produits échantillons, la forme du paramètre `Filtres`, la recherche filtrée sondée, la pagination et les univers.
+ */
+function facetLines(term: string, facets: FacetExploration): string[] {
+  const lines: string[] = []
+  if (facets.blocs.length === 0) lines.push(F.noBlocs(term))
+  for (const bloc of facets.blocs)
+    lines.push(F.bloc(term, bloc.id, facetLabel(bloc.label), bloc.values))
+  const rayons = facets.aisleBloc
+  if (rayons === null) lines.push(F.noAisleBloc(term))
+  else {
+    for (const value of rayons.values) {
+      const extra =
+        value.childLabels === undefined
+          ? ''
+          : F.firstExtra(
+              value.urlId === null || value.urlId === undefined ? P.absent : `« ${value.urlId} »`,
+              value.urlHasId === true ? P.yes : P.no,
+              value.childLabels.length === 0
+                ? F.none
+                : value.childLabels.map(facetLabel).join(', '),
+            )
+      lines.push(
+        F.value(facetLabel(value.label), value.id, value.references, value.children) + extra,
+      )
+    }
+    if (rayons.total > rayons.values.length) lines.push(F.more(rayons.total - rayons.values.length))
+  }
+  lines.push(
+    facets.fresh.length === 0
+      ? F.noFresh
+      : F.fresh(
+          facets.fresh
+            .map(({ id, label, references, depth }) =>
+              F.freshItem(facetLabel(label), id, references, depth === 0 ? F.top : F.child),
+            )
+            .join(' ; '),
+        ),
+  )
+  for (const sample of facets.samples) {
+    lines.push(
+      F.sample(
+        term,
+        matchText(sample.aisle, sample.aisleMatch),
+        matchText(sample.family, sample.familyMatch),
+      ),
+    )
+  }
+  for (const [where, found] of [
+    [F.inPage, facets.links.page],
+    [F.inReply(term), facets.links.reply],
+  ] as const) {
+    lines.push(F.links(where, found.count))
+    for (const { shape, count } of found.shapes) lines.push(F.linkShape(where, count, shape))
+  }
+  lines.push(F.urlIds(facets.urlIdShapes.length === 0 ? P.absent : facets.urlIdShapes.join(' ; ')))
+  const { template, probe } = facets
+  lines.push(
+    'miss' in template
+      ? F.templateMiss(own(F.miss, template.miss) ?? template.miss)
+      : F.template(template.shape, template.kind === 'URL_ID' ? 'sIdValeurUrl' : 'iIdValeur'),
+  )
+  if ('skipped' in probe)
+    lines.push(F.probeSkipped(term, own(F.miss, probe.skipped) ?? probe.skipped))
+  else {
+    const head = F.probeHead(term, facetLabel(probe.target.label), probe.target.id)
+    lines.push(
+      probe.fault !== undefined
+        ? `${head}${F.probeFault(probe.fault)}`
+        : `${head}${F.probeReply(
+            probe.status,
+            probe.products,
+            probe.level === 'FAMILLE' ? 'famille' : 'rayon',
+            probe.first === null
+              ? F.none
+              : `« ${probe.first.label ?? F.noLabel} » (frais : ${probe.first.fresh ? P.yes : P.no})`,
+          )}`,
+    )
+    for (const family of probe.families) {
+      lines.push(
+        F.probeGroup(
+          family.id,
+          family.count,
+          family.label === null ? F.noLabel : `« ${family.label} »`,
+        ),
+      )
+    }
+  }
+  lines.push(F.pagination(F.inReply(term), countKeysText(facets.pagination.reply)))
+  lines.push(F.pagination(F.inPage, countKeysText(facets.pagination.page)))
+  lines.push(F.universes(F.inReply(term), universesText(facets.universes.reply)))
+  lines.push(F.universes(F.inPage, universesText(facets.universes.page)))
+  return lines
+}
+
 /** Le relevé DRV-647 : menu de la page, structure de la réponse, et correspondance des rayons de la première recherche d'essai avec le menu. */
 function aisleSourceLines(probes: ProbeFacts): string[] {
-  const lines: string[] = [...labelLines(probes)]
+  const lines: string[] = [
+    ...(probes.facets ? facetLines(SHELF_TERMS[0], probes.facets) : []),
+    ...labelLines(probes),
+  ]
   if (probes.aisleMenu) lines.push(...menuLines(probes.aisleMenu))
   if (probes.reply) lines.push(...replyLines(probes.reply.term, probes.reply.facts))
   const first = probes.shelves?.[0]

@@ -21,6 +21,7 @@ import {
   loginPage,
   renamedProductsPage,
   repasReturnPage,
+  facetAisleId,
   searchPage,
   type Availability,
   type CartAction,
@@ -401,9 +402,19 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       () => {
         entry.status = 200
         const session = sessionAfter(pacedCount - 1)
+        // DRV-647 : `Filtres=4-<iIdValeur>` ne garde que le rayon (valeur 900000 + rayon) ou la famille (valeur = famille) de la facette.
+        const filter = /^4-(\d+)$/.exec(url.searchParams.get('Filtres') ?? '')?.[1]
+        const all = searchCatalog(
+          query,
+          behavior.strictSearch === true,
+          behavior.strictApostrophe === true,
+        )
+        const id = filter === undefined ? null : Number(filter)
         const page = searchPage(
           query,
-          searchCatalog(query, behavior.strictSearch === true, behavior.strictApostrophe === true),
+          id === null
+            ? all
+            : all.filter((product) => facetAisleId(product.aisle) === id || product.family === id),
           cart,
           session,
           behavior.emptySearch ?? 'list',

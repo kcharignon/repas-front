@@ -430,6 +430,67 @@ export const S = {
       object: 'objet',
       listOf: (size: number) => `liste de ${size}, premier élément`,
     },
+    /**
+     * DRV-647 (agent 0.35.0) : la facette « Rayons » de la réponse de recherche (libellés et nombres du catalogue public), la forme du paramètre `Filtres`,
+     * la recherche filtrée sondée (une requête au plus), la pagination et les univers. Pour le mainteneur : le diagnostic est exempté du glossaire.
+     */
+    facet: {
+      none: 'aucune',
+      noLabel: '(sans libellé)',
+      top: 'premier niveau',
+      child: 'enfant',
+      inPage: 'page',
+      inReply: (term: string) => `réponse « ${term} »`,
+      noBlocs: (term: string) => `Blocs de filtre de la réponse « ${term} » : aucun`,
+      bloc: (term: string, id: number | null, label: string, values: number) =>
+        `Bloc de filtre ${id ?? '?'} ${label} de la réponse « ${term} » : ${values} valeur${values > 1 ? 's' : ''} de premier niveau`,
+      noAisleBloc: (term: string) => `Bloc « Rayons » de la réponse « ${term} » : absent`,
+      value: (label: string, id: number, references: number | null, children: number) =>
+        `Rayon du filtre ${label} : iIdValeur=${id}, niNbReferences=${references ?? '?'}, ${children} enfant${children > 1 ? 's' : ''}`,
+      firstExtra: (urlId: string, hasId: string, children: string) =>
+        ` ; sIdValeurUrl (forme)=${urlId}, contient iIdValeur : ${hasId} ; enfants : ${children}`,
+      more: (hidden: number) => `Rayons du filtre non montrés : ${hidden} (40 au plus)`,
+      noFresh: 'Valeur « fruits / légumes / marché frais » de la facette : aucune',
+      fresh: (list: string) => `Valeur « fruits / légumes / marché frais » de la facette : ${list}`,
+      freshItem: (label: string, id: number, references: number | null, depth: string) =>
+        `${label} (iIdValeur=${id}, niNbReferences=${references ?? '?'}, ${depth})`,
+      noMatch: 'aucune correspondance',
+      match: (id: number, label: string, depth: string) =>
+        `correspond à la valeur ${id} ${label} (${depth})`,
+      sample: (term: string, aisle: string, family: string) =>
+        `Correspondance avec la facette d’un produit de « ${term} » : iIdRayon=${aisle} ; iIdFamille=${family}`,
+      links: (where: string, count: number) => `Liens à « Filtres » (${where}) : ${count}`,
+      linkShape: (where: string, count: number, shape: string) =>
+        `Forme d’un lien à « Filtres » (${where}, ×${count}) : ${shape}`,
+      urlIds: (list: string) => `sIdValeurUrl du bloc « Rayons » (formes) : ${list}`,
+      template: (shape: string, token: string) =>
+        `Adresse d’une recherche filtrée : déduite du lien ${shape} (jeton remplacé : ${token})`,
+      templateMiss: (why: string) => `Adresse d’une recherche filtrée : non déduite (${why})`,
+      probeSkipped: (term: string, why: string) =>
+        `Recherche « ${term} » filtrée : non faite (${why})`,
+      probeHead: (term: string, label: string, id: number) =>
+        `Recherche « ${term} » filtrée sur ${label} (iIdValeur=${id}) : `,
+      probeFault: (fault: string) => `erreur ${fault}`,
+      probeReply: (status: number | null, products: number | null, level: string, first: string) =>
+        `HTTP ${status ?? '?'}, ${products ?? '?'} produits, groupes au niveau ${level} ; premier produit : ${first}`,
+      probeGroup: (id: number, count: number, label: string) =>
+        `Groupe de la recherche filtrée ${id} (${count} produit${count > 1 ? 's' : ''}) : ${label}`,
+      pagination: (where: string, list: string) =>
+        `Clés de pagination (${where}, nombres et oui/non seulement) : ${list}`,
+      universes: (where: string, list: string) => `eUnivers (${where}) : ${list}`,
+      miss: {
+        NO_FILTER_LINK: 'aucun lien à « Filtres » dans la page ni dans la réponse',
+        NO_SEARCH_LINK:
+          'aucun lien à « Filtres » n’est une recherche (recherche.aspx avec TexteRecherche)',
+        EMPTY_FILTER: 'les liens de recherche à « Filtres » ont une valeur vide',
+        NO_KNOWN_VALUE:
+          'aucune valeur de « Filtres » ne contient un sIdValeurUrl ni un iIdValeur de la facette',
+        OTHER_STORE: 'les liens de recherche à « Filtres » visent un autre magasin',
+        NO_TARGET: 'aucune valeur dans le bloc « Rayons »',
+        NO_FACET: 'aucune facette dans la réponse',
+        NO_PATH: 'adresse impossible à bâtir',
+      } as Record<string, string>,
+    },
   },
   /** Le test automatique de la variante de débogage (DRV-318) : l'écran de progression et le rapport texte copiable. */
   selftest: {
