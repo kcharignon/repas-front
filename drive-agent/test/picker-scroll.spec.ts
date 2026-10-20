@@ -175,13 +175,14 @@ describe('avec un observateur de défilement', () => {
     reach()
 
     const buttons = [...zone.querySelectorAll('li.candidate button')]
-    expect(buttons).toHaveLength(2 * BATCH_SIZE)
+    // Deux gestes par fiche (« Choisir », « Pas mon habituel »), un seul bouton grisé pour le produit écarté.
+    expect(buttons).toHaveLength(2 * (2 * BATCH_SIZE - 1) + 1)
     expect(buttons.every((button) => (button as HTMLButtonElement).disabled)).toBe(true)
     picker.busy(null)
     const enabled = [...zone.querySelectorAll('li.candidate button')].filter(
       (button) => !(button as HTMLButtonElement).disabled,
     )
-    expect(enabled).toHaveLength(2 * BATCH_SIZE - 1)
+    expect(enabled).toHaveLength(2 * (2 * BATCH_SIZE - 1))
     expect(zone.querySelector('[data-off]')?.textContent).toBe('Ne plus proposer')
   })
 

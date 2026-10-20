@@ -176,7 +176,6 @@ test.describe('« Bientôt disponible » : le panier tranche', () => {
     await expect(card).toContainText('Plus en stock.')
     await expect(card).not.toContainText('À mettre au panier')
     await card.getByRole('button', { name: 'Choisir' }).click()
-    await page.getByRole('button', { name: 'Toujours prendre celui-ci' }).click()
 
     // Then : le passage continue (l'article suivant), sans bandeau ni demande de choisir autre chose
     await expect(page.getByText('Il te faut : 900 g.')).toBeVisible()

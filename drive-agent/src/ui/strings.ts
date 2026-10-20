@@ -729,6 +729,10 @@ export const S = {
     /** La requête a dépassé son délai d'attente (ticket K) : Leclerc répond, mais trop lentement. */
     slow: 'Leclerc met trop de temps à répondre. Réessaie dans un instant.',
     choose: 'Choisir',
+    /** Le second geste de la fiche (0.41.0) : le produit est pris cette fois, il n'est pas l'habituel ; Repas redemandera. « Habituel » est le mot du glossaire (pas « préféré »). */
+    notUsual: 'Pas mon habituel',
+    chooseNamed: (product: string) => `Choisir : ${product}`,
+    notUsualNamed: (product: string) => `Pas mon habituel : ${product}`,
     refused: 'Ne plus proposer',
     refusedHint: 'Déjà écarté de tes choix.',
     outHint: 'Plus en stock.',
@@ -746,15 +750,6 @@ export const S = {
     /** Aucune recherche n'a retrouvé ce produit habituel (DRV-635) : il n'est pas dit indisponible, la recherche est préremplie. */
     notFound: (product: string) =>
       `Je ne retrouve pas « ${product} » : cherche-le ou choisis-en un autre.`,
-  },
-  /** Le produit choisi n'est pas celui que Repas retenait (DRV-624) : une question, deux réponses. L'ordre des produits reste l'affaire de Repas. */
-  placement: {
-    title: 'Toujours prendre ce produit ?',
-    text: (product: string, ingredient: string) =>
-      `Tu as choisi « ${product} » pour ${ingredient}.`,
-    always: 'Toujours prendre celui-ci',
-    once: 'Cette fois seulement',
-    back: 'Revenir à la liste',
   },
   /**
    * L'écran de fin (DRV-622) : les mêmes titres que le récapitulatif de Repas, et la même règle : on n'écrit que ce qui existe (jamais un compteur à

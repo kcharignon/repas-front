@@ -77,10 +77,10 @@ test('retire les caractères invisibles d’un libellé de l’enseigne : la lis
 })
 
 for (const [button, placement] of [
-  ['Toujours prendre celui-ci', 'PRIMARY'],
-  ['Cette fois seulement', 'ONCE'],
+  ['Choisir', 'PRIMARY'],
+  ['Pas mon habituel', 'ONCE'],
 ] as const) {
-  test(`remplace un produit devenu indisponible : nouvelle recherche, « Ne plus proposer », une question à deux réponses (« ${button} »)`, async ({
+  test(`remplace un produit devenu indisponible : nouvelle recherche, « Ne plus proposer », un seul geste sur la fiche (« ${button} »)`, async ({
     page,
     fake,
     agentCode,
@@ -90,24 +90,15 @@ for (const [button, placement] of [
     await openWithFragment(page, fake, agentCode, plan)
     await expect(page.getByText('Ces produits ne sont plus disponibles')).toBeVisible()
 
-    // When : l'utilisateur ne veut plus de ce produit, cherche autre chose, choisit le sarrasin et répond à l'unique question
+    // When : l'utilisateur ne veut plus de ce produit, cherche autre chose, puis touche UN bouton de la fiche du sarrasin
     await page.getByLabel('Ne plus proposer Farine de blé T45').check()
     await page.getByLabel('Chercher autre chose').fill('farine sarrasin')
     await page.getByRole('button', { name: 'Chercher', exact: true }).click()
     await expect(page.getByText('Résultats pour « farine sarrasin »')).toBeVisible()
-    await page.getByRole('button', { name: 'Choisir' }).click()
-    await expect(page.getByRole('heading', { name: 'Toujours prendre ce produit ?' })).toBeVisible()
-    // Deux réponses seulement (la sortie « Revenir à la liste » n'en est pas une), jamais un mot de l'ordre de préférence
-    await expect(page.locator('.overlay').getByRole('button')).toHaveText([
-      'Toujours prendre celui-ci',
-      'Cette fois seulement',
-      'Revenir à la liste',
-    ])
-    await expect(page.getByText(/secours|préféré/i)).toHaveCount(0)
-    await page.getByRole('button', { name: button }).click()
+    await page.getByRole('button', { name: new RegExp(`^${button} : `) }).click()
     await returnsToRepas(page, fake)
 
-    // Then : 1 kg demandé, 500 g par produit, donc 2 ; le produit refusé et l'indisponible partent avec le résultat, la réponse dans `placement`
+    // Then : 1 kg demandé, 500 g par produit, donc 2 ; aucune question ensuite ; la réponse est dans `placement`, avec le refus et l'indisponible
     expect(fake.cart()).toEqual({ 1000004: 2 })
     expectPoliteAgent(fake)
     expect(await returnedResult(page, fake)).toMatchObject({
@@ -125,25 +116,60 @@ for (const [button, placement] of [
   })
 }
 
-test('« Revenir à la liste » sur la question ne met rien au panier : la liste revient avec la recherche', async ({
+for (const width of [412, 360]) {
+  test(`la fiche d’un produit a deux boutons côte à côte à ${width} px, de 44 px au moins, aux noms complets, sans jamais poser « Toujours prendre ce produit ? »`, async ({
+    page,
+    fake,
+    agentCode,
+  }) => {
+    // Given : du poivre, jamais acheté, sur un écran de ${width} px
+    await page.setViewportSize({ width, height: 800 })
+    await openWithFragment(page, fake, agentCode, planOf([fresh('poivre', 'Poivre')]))
+    const card = page.getByRole('listitem').filter({ hasText: 'Poivre noir moulu' })
+
+    // Then : « Choisir » et « Pas mon habituel » nomment le produit, sur la même ligne, assez grands pour le doigt, sans défilement horizontal
+    const choose = card.getByRole('button', { name: /^Choisir : Poivre noir moulu/ })
+    const once = card.getByRole('button', { name: /^Pas mon habituel : Poivre noir moulu/ })
+    await expect(choose).toBeVisible()
+    await expect(once).toBeVisible()
+    const [a, b] = [await choose.boundingBox(), await once.boundingBox()]
+    expect(a && b && Math.abs(a.y - b.y) < 2, 'les deux boutons sont côte à côte').toBe(true)
+    expect(a && b && Math.min(a.height, b.height) >= 44 && Math.min(a.width, b.width) >= 44).toBe(
+      true,
+    )
+    // La page de l'enseigne est affichée à l'échelle d'un site de bureau : on compare à la fiche, pas à la fenêtre
+    const frame = await card.boundingBox()
+    expect(
+      a && b && frame && a.x + a.width <= b.x && b.x + b.width <= frame.x + frame.width,
+      'les deux boutons restent dans la fiche',
+    ).toBe(true)
+    await expect(page.getByText(/Toujours prendre ce produit/)).toHaveCount(0)
+    await expect(page.getByText(/secours|préféré/i)).toHaveCount(0)
+  })
+}
+
+test('« Pas mon habituel » sur un article sans produit retenu : le produit est au panier, ONCE, aucune question, rien à retenir', async ({
   page,
   fake,
   agentCode,
 }) => {
-  // Given : le seul produit connu de la farine est en rupture, l'utilisateur choisit le sarrasin
-  const plan = planOf([known('farine', 'Farine', [product(1000002)], { needed: KILO })])
-  await openWithFragment(page, fake, agentCode, plan)
-  await page.getByLabel('Chercher autre chose').fill('farine sarrasin')
-  await page.getByRole('button', { name: 'Chercher', exact: true }).click()
-  await expect(page.getByText('Résultats pour « farine sarrasin »')).toBeVisible()
-  await page.getByRole('button', { name: 'Choisir' }).click()
+  // Given : du poivre, jamais acheté
+  const needed = { quantity: 80, unitSymbol: 'g', dimension: 'WEIGHT', baseFactor: 1 } as const
+  await openWithFragment(page, fake, agentCode, planOf([fresh('poivre', 'Poivre', { needed })]))
+  const card = page.getByRole('listitem').filter({ hasText: 'Poivre noir moulu' })
 
-  // When
-  await page.getByRole('button', { name: 'Revenir à la liste' }).click()
+  // When : un seul geste
+  await card.getByRole('button', { name: /^Pas mon habituel : / }).click()
+  await returnsToRepas(page, fake)
 
-  // Then : la liste est revenue, le panier n'a pas bougé
-  await expect(page.getByText('Résultats pour « farine sarrasin »')).toBeVisible()
-  expect(fake.cart()).toEqual({})
+  // Then : 2 produits au panier, la ligne dit ONCE et ne porte aucune recherche à retenir
+  expect(fake.cart()).toEqual({ 1000021: 2 })
+  const result = await returnedResult(page, fake)
+  expect(result).toMatchObject({
+    outcome: 'completed',
+    lines: [{ ingredientSlug: 'poivre', outcome: 'CHOSEN', placement: 'ONCE', quantity: 2 }],
+  })
+  expect(JSON.stringify(result)).not.toContain('searchQuery')
 })
 
 test('laisse passer une ligne ou dire « j’en ai toujours », même quand la recherche ne trouve rien', async ({
@@ -447,36 +473,6 @@ test('montre la photo des produits qui en ont une, et laisse les autres en texte
   const result = await returnedResult(page, fake)
   expect(JSON.stringify(result)).not.toMatch(/photo|image|leclercdrive/i)
   expect(result).toMatchObject({ lines: [{ outcome: 'CHOSEN', product: { id: '1000001' } }] })
-})
-
-test('la question « Toujours prendre ce produit ? » montre la photo du produit choisi', async ({
-  page,
-  fake,
-  agentCode,
-}) => {
-  // Given : le seul produit connu de la farine est en rupture ; on choisit la farine T55, qui a une photo
-  await servePhotos(page)
-  const plan = planOf([known('farine', 'Farine', [product(1000002)], { needed: KILO })])
-  await openWithFragment(page, fake, agentCode, plan)
-  await expect(page.getByText('Ces produits ne sont plus disponibles')).toBeVisible()
-
-  // When
-  await page
-    .getByRole('listitem')
-    .filter({ hasText: 'Farine de blé T55' })
-    .getByRole('button', { name: 'Choisir' })
-    .click()
-
-  // Then : la photo est à côté du libellé du produit choisi
-  await expect(page.getByRole('heading', { name: 'Toujours prendre ce produit ?' })).toBeVisible()
-  const image = page.locator('.overlay img')
-  await expect(image).toHaveCount(1)
-  await expect(image).toHaveAttribute('alt', /Farine de blé T55/)
-  await expect
-    .poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth))
-    .toBeGreaterThan(0)
-  await page.getByRole('button', { name: 'Cette fois seulement' }).click()
-  await returnsToRepas(page, fake)
 })
 
 // —— Tous les résultats de la recherche, en défilant (DRV-643) ————————————————————————————————————————————————————————————————

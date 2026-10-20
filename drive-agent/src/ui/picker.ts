@@ -87,7 +87,8 @@ export interface PickerProps {
 }
 
 export interface PickerHooks {
-  choose: (id: string) => void
+  /** Le geste de la fiche : `PRIMARY` (« Choisir », le produit devient l'habituel) ou `ONCE` (« Pas mon habituel », cette fois seulement). */
+  choose: (id: string, placement: 'PRIMARY' | 'ONCE') => void
   search: (query: string) => void
   never: (id: string, on: boolean) => void
   /** Le rayon choisi dans la rangée a changé (DRV-647), `null` : « Tous ». Aucune requête : la liste se filtre d'elle-même. */
@@ -139,13 +140,32 @@ function row(
     out: S.picker.outHint,
     refused: S.picker.refusedHint,
   }[item.state]
-  const button = h('button', {
-    text: off ? S.picker.refused : S.picker.choose,
-    class: off ? '' : 'primary',
-    disabled: off || waiting,
-    attrs: { type: 'button', 'aria-describedby': nameId, ...(off && { [OFF]: '1' }) },
-    on: { click: () => choose(item.id) },
-  })
+  // Deux gestes par fiche (0.41.0, une intention = un clic) : « Choisir » retient le produit, « Pas mon habituel » le prend cette fois seulement.
+  // Le nom accessible commence par le texte visible et nomme le produit (« Choisir : Farine de blé 1 kg »), sans dépendre de la fiche voisine.
+  const buttons = off
+    ? [
+        h('button', {
+          text: S.picker.refused,
+          disabled: true,
+          attrs: { type: 'button', 'aria-describedby': nameId, [OFF]: '1' },
+        }),
+      ]
+    : [
+        h('button', {
+          text: S.picker.choose,
+          class: 'primary',
+          disabled: waiting,
+          attrs: { type: 'button', 'aria-label': S.picker.chooseNamed(item.name) },
+          on: { click: () => choose(item.id, 'PRIMARY') },
+        }),
+        h('button', {
+          text: S.picker.notUsual,
+          class: 'secondary',
+          disabled: waiting,
+          attrs: { type: 'button', 'aria-label': S.picker.notUsualNamed(item.name) },
+          on: { click: () => choose(item.id, 'ONCE') },
+        }),
+      ]
   return h(
     'li',
     { class: off ? 'candidate off' : 'candidate' },
@@ -163,7 +183,7 @@ function row(
         h('p', { class: 'hint', text: hint }),
       ),
     ),
-    button,
+    h('div', { class: 'pick' }, ...buttons),
   )
 }
 
