@@ -167,31 +167,35 @@ Pour recommencer après un correctif dans le code, prends un **nouveau numéro**
 
 ## Étape 6. Vérifier la release (à chaque version)
 
-1. Sur `https://github.com/kcharignon/repas-front/releases` : la release « Repas Android 0.1.0 » est là, **sans** la mention « Pre-release », avec trois fichiers : `repas-drive.apk`, `repas-drive.apk.sha256` et `version.json`. Ses notes donnent l'empreinte SHA-256 de l'APK, la version de l'agent embarqué et l'empreinte du certificat (la même que dans `assetlinks.json`).
+1. Sur `https://github.com/kcharignon/repas-front/releases` : la release « Repas Android 0.1.0 » est là, **sans** la mention « Pre-release », avec cinq fichiers : **`repas-drive-X.Y.Z.apk`** (le numéro de version est dans le nom : c'est le fichier à donner aux proches) et son `.sha256`, `repas-drive.apk` et son `.sha256` (le **même** fichier, octet pour octet, sous un nom qui ne change jamais : pour les liens et la documentation), et `version.json`. Ses notes donnent l'empreinte SHA-256 de l'APK, la version de l'agent embarqué et l'empreinte du certificat (la même que dans `assetlinks.json`).
 2. Sur ton PC, vérifie que le fichier téléchargé est intact :
 
    ```bash
    mkdir -p ~/telechargements-repas && cd ~/telechargements-repas
    gh release download android-v0.1.0 -R kcharignon/repas-front
-   sha256sum -c repas-drive.apk.sha256        # attendu : repas-drive.apk: OK
+   sha256sum -c repas-drive-0.1.0.apk.sha256  # attendu : repas-drive-0.1.0.apk: OK
+   sha256sum -c repas-drive.apk.sha256        # attendu : repas-drive.apk: OK (le même fichier)
+   cmp repas-drive-0.1.0.apk repas-drive.apk  # attendu : aucune sortie (identiques)
    ```
 
 3. (Facultatif) le certificat, après avoir construit l'image une fois avec `make android-test` :
 
    ```bash
    docker run --rm -v "$HOME/telechargements-repas:/d:ro" --entrypoint bash repas-front-android:latest \
-     -c '$ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs /d/repas-drive.apk | grep SHA-256'
+     -c '$ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs /d/repas-drive-0.1.0.apk | grep SHA-256'
    ```
 
    L'empreinte affichée (sans les `:`, en minuscules) doit être celle de l'étape 2.
 
 Ce que le workflow a déjà contrôlé avant de publier : agent embarqué = `android/agent.js.sha384`, tests Kotlin verts, signature valide avec le certificat attendu (et jamais la clé de débogage), version et code conformes à l'étiquette, **une seule permission (Internet)**, application **non débogable**, aucun plan d'essai ni menu de débogage (`BuildConfig.DEBUG` faux), origine `https://kantin.eu/`.
 
+> **Deux noms pour le même fichier.** Chaque release joint l'APK signé sous **deux noms** : `repas-drive-X.Y.Z.apk` (le nom dit la version ; **c'est celui qu'on donne aux proches** et celui que la page d'aide de Repas désigne) et `repas-drive.apk` (nom **stable**, jamais renommé : il reste pour les liens existants, la documentation et le futur outil de mise à jour, et `version.json` y pointe). C'est une copie octet pour octet faite par le workflow **après** la signature et le contrôle, jamais une seconde construction : les deux ont la même empreinte SHA-256. Les releases antérieures n'ont que `repas-drive.apk`. Attention : `releases/latest/download/…` ne mène pas à l'application, car « Latest » est réservé aux releases du site (`--latest=false`).
+
 ## Étape 7. Installer sur le téléphone (la première fois)
 
 **À savoir d'abord** : si une **pré-version** `android-dev-…` ou l'ancienne « Repas Drive » est installée, **désinstalle-la d'abord** (appui long sur l'icône, « Infos sur l'appli », « Désinstaller ») : elle est signée d'une autre clé, Android refuse de mettre la nouvelle par-dessus. Cela efface la connexion à Leclerc dans l'application : tu la referas. Tes recettes et tes listes sont sur ton compte Repas, elles ne bougent pas.
 
-1. Sur le téléphone, dans **Chrome**, va sur `https://github.com/kcharignon/repas-front/releases` (tape l'adresse toi-même), ouvre la version la plus récente dont le nom commence par **`android-v`** et **sans** « Pre-release », puis touche **`repas-drive.apk`** dans « Assets ». (L'aide de Repas, « Moi » puis « Installer l'application Android », explique la même chose.)
+1. Sur le téléphone, dans **Chrome**, va sur `https://github.com/kcharignon/repas-front/releases` (tape l'adresse toi-même), ouvre la version la plus récente dont le nom commence par **`android-v`** et **sans** « Pre-release », puis touche **`repas-drive-X.Y.Z.apk`** dans « Assets » (le fichier dont le nom se termine par le numéro de version : Chrome ne le confond plus avec un téléchargement précédent, et le plus grand numéro est le plus récent). (L'aide de Repas, « Moi » puis « Installer l'application Android », explique la même chose.)
 2. Quand le téléchargement est fini, touche « Ouvrir ». Si Android dit qu'il ne peut pas installer d'applications inconnues depuis Chrome, touche « Paramètres », active « Autoriser depuis cette source », reviens en arrière, puis « Installer ».
 3. Si **Play Protect** avertit que l'application ne vient pas de Google Play : « Plus de détails » puis « Installer quand même » (seulement si tu as pris le fichier sur la page GitHub ci-dessus).
 4. Touche « Ouvrir », connecte-toi à Repas.
@@ -201,7 +205,7 @@ Ce que le workflow a déjà contrôlé avant de publier : agent embarqué = `and
 ## Étape 8. Mettre à jour par-dessus (à chaque version suivante)
 
 1. L'assistant et toi : si le protocole a changé, le site est déjà déployé (étape 5, « Ordre quand le protocole change ») ; nouvelle étiquette plus grande (étape 5), release vérifiée (étape 6).
-2. Sur le téléphone : télécharge le nouveau `repas-drive.apk` comme à l'étape 7 et installe-le **sans désinstaller** : Android propose « Mettre à jour » et **garde tout** (connexion à Repas, connexion à Leclerc).
+2. Sur le téléphone : télécharge le nouveau `repas-drive-X.Y.Z.apk` (le plus grand numéro) comme à l'étape 7 et installe-le **sans désinstaller** : Android propose « Mettre à jour » et **garde tout** (connexion à Repas, connexion à Leclerc).
 3. Vérifie le numéro de version (étape 7, point 5).
 4. « Application non installée » ou conflit : la version installée n'est pas signée de ta clé (une pré-version de débogage). Désinstalle-la, puis installe la nouvelle. Si c'est bien la tienne, vérifie que le numéro de la nouvelle version est **plus grand** que celui installé.
 5. **Une fois la release publiée** (pas avant : sinon les téléphones seraient invités à une version qui n'existe pas encore), l'assistant dit au serveur quelle est la dernière version : `APP_LATEST_VERSION`, écrit par le script `ecrire-app-version.sh` du skill `repas-ops` (dépôt back), comme `DRIVE_ENABLED`. Les personnes dont l'application est plus ancienne voient alors, en haut de « Moi », « Une nouvelle version de l'application est prête. » et un bouton « Mettre à jour » vers le mode d'emploi (DRV-637) ; l'administrateur les voit « À mettre à jour » dans la liste des comptes. Rien n'est bloqué.

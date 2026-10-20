@@ -10,6 +10,8 @@ name: Android release
 #     avec `make android-release` (agent embarqué vérifié par android/agent.js.sha384, BuildConfig.DEBUG faux, code de version tiré de l'étiquette)
 #     puis le contrôle (`make android-release-verify` : certificat de signature attendu, une seule permission, rien de débogage) ;
 #   - « publish » (écriture) n'a aucun secret : il publie l'APK contrôlé, son empreinte et `version.json`, puis relit ce qui est publié.
+#     L'APK est publié sous deux noms, octet pour octet le même fichier : `repas-drive.apk` (nom stable, pour les liens) et
+#     `repas-drive-X.Y.Z.apk` (le nom dit la version, c'est celui qu'on donne aux proches), copié APRÈS la signature et le contrôle.
 # L'empreinte du certificat attendu est celle que le site publie dans public/.well-known/assetlinks.json (publique, relue en PR) : une
 # mauvaise clé dans les secrets arrête tout avant la publication. Aucune valeur secrète n'est affichée : aucune commande n'écrit un secret.
 on:
@@ -143,15 +145,24 @@ jobs:
           cp android/dist/repas-drive.apk release/repas-drive.apk
           (cd release && sha256sum repas-drive.apk > repas-drive.apk.sha256)
           [ "$(cut -d' ' -f1 release/repas-drive.apk.sha256)" = "$sha256" ] || { echo "::error::L'empreinte du fichier ne correspond pas au contrôle."; exit 1; }
+          # Le même fichier sous un nom qui dit la version (repas-drive-X.Y.Z.apk) : une COPIE de l'APK déjà signé et contrôlé ci-dessus, jamais une
+          # seconde construction ni une seconde signature. Le nom stable repas-drive.apk reste publié tel quel (liens, aide, version.json).
+          version="${TAG#android-v}"
+          [ "$version" = "$name" ] || { echo "::error::La version de l'étiquette ($version) n'est pas celle de l'APK contrôlé ($name)."; exit 1; }
+          versioned="repas-drive-${version}.apk"
+          cp release/repas-drive.apk "release/${versioned}"
+          cmp release/repas-drive.apk "release/${versioned}"
+          (cd release && sha256sum "${versioned}" > "${versioned}.sha256")
+          [ "$(cut -d' ' -f1 "release/${versioned}.sha256")" = "$sha256" ] || { echo "::error::L'empreinte du fichier nommé par sa version ne correspond pas au contrôle."; exit 1; }
           jq -n --arg versionName "$name" --argjson versionCode "$code" \
             --arg apkUrl "https://github.com/${REPO}/releases/download/${TAG}/repas-drive.apk" --arg sha256 "$sha256" \
             '{versionName: $versionName, versionCode: $versionCode, apkUrl: $apkUrl, sha256: $sha256, minAndroid: 26}' > release/version.json
           cat > release/notes.md <<NOTES
           Application Android « Repas » ${name} (numéro de version ${code}), signée de la clé de publication.
 
-          **Installer** : sur le téléphone, télécharger \`repas-drive.apk\` (rubrique « Assets » plus bas), l'ouvrir et autoriser l'installation depuis Chrome ; **mettre à jour** : même geste, par-dessus. Pas à pas : https://github.com/${REPO}/blob/${GITHUB_SHA}/android/PUBLICATION.md
+          **Installer** : sur le téléphone, télécharger \`${versioned}\` (rubrique « Assets » plus bas ; le numéro de version est dans le nom du fichier), l'ouvrir et autoriser l'installation depuis Chrome ; **mettre à jour** : même geste, par-dessus. \`repas-drive.apk\` est le même fichier sous un nom qui ne change pas (pour les liens). Pas à pas : https://github.com/${REPO}/blob/${GITHUB_SHA}/android/PUBLICATION.md
 
-          - Empreinte SHA-256 de \`repas-drive.apk\` : \`${sha256}\` (\`sha256sum -c repas-drive.apk.sha256\` la vérifie)
+          - Empreinte SHA-256 de \`${versioned}\` et de \`repas-drive.apk\` (identiques) : \`${sha256}\` (\`sha256sum -c ${versioned}.sha256\` la vérifie)
           - Agent du drive embarqué : version ${agent_version}, empreinte SHA-384 \`${agent_sha}\`
           - Certificat de signature, empreinte SHA-256 : \`${cert}\` (celle de \`/.well-known/assetlinks.json\`)
           - Construit depuis le commit \`${GITHUB_SHA}\`
@@ -166,6 +177,8 @@ jobs:
           path: |
             release/repas-drive.apk
             release/repas-drive.apk.sha256
+            release/repas-drive-*.apk
+            release/repas-drive-*.apk.sha256
             release/version.json
             release/notes.md
           if-no-files-found: error
@@ -191,8 +204,11 @@ jobs:
           set -euo pipefail
           # Le fichier téléchargé est bien celui que le travail précédent a construit et contrôlé.
           sha256sum -c repas-drive.apk.sha256
+          versioned="repas-drive-${TAG#android-v}.apk"
+          sha256sum -c "${versioned}.sha256"
+          cmp repas-drive.apk "${versioned}"
           # Une release « normale » : ni brouillon ni pré-version, et sans prendre l'étiquette « Latest » aux versions du site (vX.Y.Z).
-          gh release create "$TAG" repas-drive.apk repas-drive.apk.sha256 version.json \
+          gh release create "$TAG" repas-drive.apk repas-drive.apk.sha256 "${versioned}" "${versioned}.sha256" version.json \
             --verify-tag \
             --title "Repas Android ${TAG#android-v}" \
             --notes-file notes.md \
@@ -201,7 +217,8 @@ jobs:
           [ "$(gh release view "$TAG" --json isDraft,isPrerelease --jq '.isDraft or .isPrerelease')" = "false" ] \
             || { echo "::error::La release $TAG est un brouillon ou une pré-version."; exit 1; }
           mkdir published
-          gh release download "$TAG" --dir published --pattern repas-drive.apk --pattern repas-drive.apk.sha256
-          (cd published && sha256sum -c repas-drive.apk.sha256)
+          gh release download "$TAG" --dir published --pattern repas-drive.apk --pattern repas-drive.apk.sha256 --pattern "${versioned}" --pattern "${versioned}.sha256"
+          (cd published && sha256sum -c repas-drive.apk.sha256 && sha256sum -c "${versioned}.sha256")
           cmp repas-drive.apk published/repas-drive.apk
+          cmp repas-drive.apk "published/${versioned}"
           echo "Release : https://github.com/${GH_REPO}/releases/tag/${TAG}" >> "$GITHUB_STEP_SUMMARY"
