@@ -542,7 +542,13 @@ test('une recherche de 45 produits : huit fiches d’abord, la suite en défilan
   })
   await expect(cards.last()).toBeVisible()
   await expect(page.getByRole('button', { name: 'Annuler l’envoi' })).toBeVisible()
-  expect(fake.paced().map((call) => call.kind)).toEqual(['search'])
+  // Une seule recherche du mot (la validation du filtre du site, en tâche de fond, est à part : DRV-647, 0.37.0)
+  expect(
+    fake
+      .paced()
+      .filter((call) => call.filter === undefined)
+      .map((call) => call.kind),
+  ).toEqual(['search'])
   expect(fake.cart()).toEqual({})
   // Les photos suivent les fiches : une fois au bout, 45 images demandées au plus (jamais une rafale avant d'y arriver)
   await expect.poll(() => requested.length).toBeGreaterThan(8)
@@ -554,6 +560,11 @@ test('une recherche de 45 produits : huit fiches d’abord, la suite en défilan
   await page.getByRole('button', { name: 'Valider' }).click()
   await returnsToRepas(page, fake)
   expect(fake.cart()).toEqual({ 1000079: 1 })
-  expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'cart'])
+  expect(
+    fake
+      .paced()
+      .filter((call) => call.filter === undefined)
+      .map((call) => call.kind),
+  ).toEqual(['search', 'cart'])
   expectPoliteAgent(fake)
 })

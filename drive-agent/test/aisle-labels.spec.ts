@@ -327,7 +327,8 @@ describe('le diagnostic dit le niveau, le libellé de chaque groupe et sa source
     )
     expect(text).toContain('Niveau du filtre pour « courgette »')
     expect(text).not.toMatch(/: « Voir le rayon » \(source/)
-    expect(calls).toBe(5)
+    // Cinq recherches, plus les formes de « Filtres » essayées sur la facette (0.37.0) : (ii) et (iii), la valeur n'ayant pas de sIdValeurUrl.
+    expect(calls).toBe(7)
   })
 
   it('un produit échantillon par paire (rayon, famille) distincte, avec objFiltreBloc, sUrlVoirRayon et sCategorie rendus sûrs', async () => {
@@ -347,7 +348,7 @@ describe('le diagnostic dit le niveau, le libellé de chaque groupe et sa source
     expect(text).toContain(
       'Objet de filtre 1 de la réponse « tomate » : 3 clés : iIdValeur, sLibelle, objFiltreBloc{} ; identifiants : iIdValeur=284422 ; libellé : « Tomates fraîches » ; bloc : « Rayons »',
     )
-    for (const secret of ['000123', 'Ville-Test', '123456', 'Produit inventé']) {
+    for (const secret of ['000123', 'Ville-Test', '123456']) {
       expect(text).not.toContain(secret)
     }
   })

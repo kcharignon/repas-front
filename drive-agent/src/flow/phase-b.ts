@@ -29,6 +29,7 @@ import {
   S,
   type AisleChip,
   type AisleRow,
+  type Picker,
   type PickerItem,
 } from '../ui'
 import { putInCart } from './keep-cart'
@@ -72,14 +73,38 @@ interface Search {
   familyRow: AisleRow
   /** Les produits déjà chargés de chaque rayon du site, par clé de filtre : un rayon n'est jamais redemandé pour la même recherche. */
   siteCache: Map<string, Candidate[]>
+  /** La rangée des rayons du site de cette recherche (DRV-647, 0.37.0), montrée seulement une fois la forme du filtre validée ; `null` sans facette lisible. */
+  siteRow: AisleRow | null
+  /** La personne a touché une pastille de la rangée des familles pour ce mot : la rangée ne bascule plus vers les rayons du site. */
+  touched: boolean
 }
 
 /**
- * La rangée des rayons du site (DRV-647, 0.36.0) est-elle utilisable pendant ce passage : pas encore essayée (`UNKNOWN` : la première requête filtrée la
- * valide), validée (`OK`), ou écartée (`OFF` : la forme de l'adresse ne filtre pas ; la rangée des familles la remplace pour tout le passage).
+ * La rangée des rayons du site (DRV-647, 0.37.0) est-elle utilisable pendant ce passage : pas encore essayée (`UNKNOWN`), en cours de validation en tâche de
+ * fond (`CHECKING` : jusqu'à trois formes de `Filtres`, par `validateSiteFilter`), validée (`OK`), ou écartée (`OFF` : aucune forme n'est cohérente ; la
+ * rangée des familles reste pour tout le passage, sans message). `listeners` : ce qui attend la fin de la validation (l'écran affiché).
  */
 export interface SiteAisleState {
-  state: 'UNKNOWN' | 'OK' | 'OFF'
+  state: 'UNKNOWN' | 'CHECKING' | 'OK' | 'OFF'
+  listeners: Set<() => void>
+}
+
+/** Lance UNE fois par passage la validation de la forme du filtre du site, sur la réponse de [query] ; jamais une erreur. */
+function startValidation(adapter: RetailerAdapter, site: SiteAisleState, query: string): void {
+  if (site.state !== 'UNKNOWN') return
+  site.state = 'CHECKING'
+  const done = (ok: boolean) => {
+    site.state = ok ? 'OK' : 'OFF'
+    for (const listener of site.listeners) listener()
+  }
+  let check: Promise<boolean>
+  try {
+    check = adapter.validateSiteFilter(query)
+  } catch {
+    done(false)
+    return
+  }
+  check.then(done, () => done(false))
 }
 
 /**
@@ -87,11 +112,7 @@ export interface SiteAisleState {
  * (`niNbReferences`), chacun avec ses enfants ; un rayon sans libellé lisible devient « Rayon N ». `null` si la facette a moins de deux rayons ou si la
  * rangée est écartée pour ce passage. Le rayon appris (DRV-642) ne choisit rien d'avance ici (un autre espace d'identifiants). Aucune requête.
  */
-export function siteAisleRow(
-  adapter: Pick<RetailerAdapter, 'siteAisles'>,
-  site: SiteAisleState,
-): AisleRow | null {
-  if (site.state === 'OFF') return null
+export function siteAisleRow(adapter: Pick<RetailerAdapter, 'siteAisles'>): AisleRow | null {
   let aisles: ReturnType<RetailerAdapter['siteAisles']> = []
   try {
     aisles = adapter.siteAisles()
@@ -108,11 +129,6 @@ export function siteAisleRow(
   })
   const chips = [...aisles].sort((a, b) => (b.count ?? 0) - (a.count ?? 0)).map(chipOf)
   return { chips, selected: null, remote: true }
-}
-
-/** Une recherche filtrée qui filtre vraiment : au moins un produit, et strictement moins que sans filtre (donc pas les mêmes). */
-function filters(filtered: readonly Candidate[], all: readonly Candidate[]): boolean {
-  return filtered.length > 0 && filtered.length < all.length
 }
 
 /** Ce que la liste de produits rend à l'écran de choix. */
@@ -292,7 +308,7 @@ async function load(
   query: string,
   hints: readonly number[] | undefined,
   derived = false,
-  site: SiteAisleState = { state: 'OFF' },
+  site: SiteAisleState = { state: 'OFF', listeners: new Set() },
 ): Promise<void> {
   search.query = query
   search.asked = null
@@ -308,8 +324,11 @@ async function load(
     search.familyRow = row
     search.groupKey = key
     search.siteCache = new Map()
-    // La rangée des rayons du site si la facette est lisible et la forme du filtre pas écartée ; sinon celle des familles (0.34.0).
-    search.aisles = siteAisleRow(adapter, site) ?? row
+    // Une famille choisie d'avance (le rayon appris) compte comme un choix : la rangée ne bascule pas pour ce mot (pas de clignotement de la liste).
+    search.touched = row.selected !== null
+    // La rangée des rayons du site seulement quand la forme du filtre est VALIDÉE (0.37.0) ; sinon, et en attendant, celle des familles (0.34.0).
+    search.siteRow = site.state === 'OFF' ? null : siteAisleRow(adapter)
+    search.aisles = site.state === 'OK' ? (search.siteRow ?? row) : row
     search.notice = null
   } catch (error) {
     if (!(error instanceof LeclercError) || error.code !== 'NETWORK') throw error
@@ -340,7 +359,7 @@ async function settleLine(
   total: number,
   left: readonly PendingLine[],
   context: PhaseBContext,
-  site: SiteAisleState = { state: 'OFF' },
+  site: SiteAisleState = { state: 'OFF', listeners: new Set() },
 ): Promise<'done' | 'cancelled' | 'rest'> {
   const { adapter, ui, record } = context
   const slug = line.ingredientSlug
@@ -355,227 +374,254 @@ async function settleLine(
     groupKey: 'aisle',
     familyRow: { chips: [], selected: null },
     siteCache: new Map(),
+    siteRow: null,
+    touched: false,
   }
-  const itemsOf = (candidates: readonly Candidate[]) =>
-    candidates.map((candidate) => itemOf(line, candidate, refused, search.groupKey))
-  /** Un produit de la liste de la recherche ou d'un rayon du site déjà chargé. */
-  const findCandidate = (id: string): Candidate | undefined =>
-    search.candidates.find((found) => found.id === id) ??
-    [...search.siteCache.values()].flat().find((found) => found.id === id)
-  const items = () =>
-    search.candidates.map((candidate) => itemOf(line, candidate, refused, search.groupKey))
-  /** Les produits indisponibles dont l'utilisateur ne veut plus jamais : ils partent avec l'issue de la ligne, quelle qu'elle soit. */
-  const rejected = () => {
-    const list = unavailable.filter((product) => never.has(product.id)).map(refusedOf)
-    return list.length > 0 ? { rejected: list } : {}
+  /** L'écran de choix affiché, pour y faire basculer la rangée quand la validation réussit. */
+  let shown: Picker | null = null
+  // La validation réussie : la rangée bascule vers les rayons du site, sauf si la personne a déjà touché une pastille des familles pour ce mot.
+  const onValidated = () => {
+    if (
+      site.state !== 'OK' ||
+      search.touched ||
+      search.siteRow === null ||
+      search.aisles.remote === true
+    )
+      return
+    search.aisles = search.siteRow
+    shown?.replaceAisles(search.siteRow)
+  }
+  site.listeners.add(onValidated)
+  try {
+    return await settle()
+  } finally {
+    site.listeners.delete(onValidated)
   }
 
-  ui.update({ current: line.name })
-  await load(search, adapter, line.searchQuery ?? line.name, line.rayonHints, true, site)
+  async function settle(): Promise<'done' | 'cancelled' | 'rest'> {
+    const itemsOf = (candidates: readonly Candidate[]) =>
+      candidates.map((candidate) => itemOf(line, candidate, refused, search.groupKey))
+    /** Un produit de la liste de la recherche ou d'un rayon du site déjà chargé. */
+    const findCandidate = (id: string): Candidate | undefined =>
+      search.candidates.find((found) => found.id === id) ??
+      [...search.siteCache.values()].flat().find((found) => found.id === id)
+    const items = () =>
+      search.candidates.map((candidate) => itemOf(line, candidate, refused, search.groupKey))
+    /** Les produits indisponibles dont l'utilisateur ne veut plus jamais : ils partent avec l'issue de la ligne, quelle qu'elle soit. */
+    const rejected = () => {
+      const list = unavailable.filter((product) => never.has(product.id)).map(refusedOf)
+      return list.length > 0 ? { rejected: list } : {}
+    }
 
-  for (;;) {
-    const notice = search.notice
-    search.notice = null
-    const answer = await ui.show('chooser', {
-      ingredient: line.name,
-      position,
-      total,
-      confirmRest: left.some(isFirstChoice),
-      mount: (zone, conclude) => {
-        let live = true
-        const picker = renderPicker(
-          zone,
+    ui.update({ current: line.name })
+    await load(search, adapter, line.searchQuery ?? line.name, line.rayonHints, true, site)
+    // Dès la première réponse du passage : la validation de la forme du filtre, en tâche de fond (DRV-647, 0.37.0).
+    if (search.siteRow !== null) startValidation(adapter, site, search.query)
+
+    for (;;) {
+      const notice = search.notice
+      search.notice = null
+      const answer = await ui.show('chooser', {
+        ingredient: line.name,
+        position,
+        total,
+        confirmRest: left.some(isFirstChoice),
+        mount: (zone, conclude) => {
+          let live = true
+          const picker = renderPicker(
+            zone,
+            {
+              need: formatNeeded(line.needed),
+              replaces: line.replaces?.label ?? null,
+              gone: unavailable.map((product) => {
+                const reason = reasons?.get(product.id)
+                return { id: product.id, label: product.label, ...(reason && { reason }) }
+              }),
+              prefill: prefillOf(unavailable, reasons),
+              checked: never,
+              query: search.query,
+              asked: search.asked,
+              items: items(),
+              notice,
+              aisles: search.aisles,
+            },
+            {
+              choose: (id) => conclude({ type: 'choose', id } satisfies Picked),
+              never: (id, on) => void (on ? never.add(id) : never.delete(id)),
+              aisle: (id) => {
+                if (search.aisles.remote !== true) search.touched = true
+                search.aisles = { ...search.aisles, selected: id }
+              },
+              // Un rayon du site (DRV-647, 0.36.0) : UNE requête filtrée, gardée pour cette recherche ; la première du passage valide la forme du filtre.
+              loadAisle: async (id) => {
+                const key = String(id)
+                const cached = search.siteCache.get(key)
+                if (cached !== undefined) return { items: itemsOf(cached) }
+                const fallback = () => {
+                  site.state = 'OFF'
+                  search.aisles = search.familyRow
+                  return { fallback: search.familyRow }
+                }
+                try {
+                  const { candidates } = await adapter.searchFiltered(search.query, key)
+                  const kept = candidates.slice(0, MAX_CANDIDATES)
+                  search.siteCache.set(key, kept)
+                  return { items: itemsOf(kept) }
+                } catch (error) {
+                  if (error instanceof LeclercError && error.code === 'NETWORK') {
+                    return {
+                      notice: error.cause === 'REQUEST_TIMEOUT' ? S.picker.slow : S.picker.network,
+                    }
+                  }
+                  // Une réponse que le site refuse : repli sans message sur les familles, pour le reste du passage.
+                  if (error instanceof LeclercError && error.code === 'CONTRACT_CHANGED')
+                    return fallback()
+                  if (live) conclude({ type: 'failure', error } satisfies Picked)
+                  return { notice: '' }
+                }
+              },
+              search: (query) => {
+                picker.busy(S.picker.searching)
+                load(search, adapter, query, line.rayonHints, false, site).then(
+                  () => {
+                    if (!live) return
+                    picker.results(
+                      search.query,
+                      items(),
+                      search.notice,
+                      search.asked,
+                      search.aisles,
+                    )
+                    picker.busy(null)
+                  },
+                  (error: unknown) => {
+                    if (live) conclude({ type: 'failure', error } satisfies Picked)
+                  },
+                )
+              },
+            },
+          )
+          shown = picker
+          return () => {
+            live = false
+            if (shown === picker) shown = null
+            picker.dispose()
+          }
+        },
+      })
+
+      if (answer.kind === 'cancel') return 'cancelled'
+      if (answer.kind === 'skip' || answer.kind === 'rest') {
+        record({ ingredientSlug: slug, outcome: 'SKIPPED', ...rejected() })
+        return answer.kind === 'rest' ? 'rest' : 'done'
+      }
+      if (answer.kind === 'have') {
+        record({ ingredientSlug: slug, outcome: 'HAVE_AT_HOME', ...rejected() })
+        return 'done'
+      }
+      if (!isPicked(answer.value)) continue
+      if (answer.value.type === 'failure') throw answer.value.error
+
+      const id = answer.value.id
+      const candidate = findCandidate(id)
+      // Défense en profondeur : la liste ne propose pas les produits écartés, un message ne doit pas pouvoir les imposer. Un produit « Plus en stock »
+      // se choisit : le panier tranche (DRV-635).
+      if (!candidate || refused.has(id)) {
+        search.notice = S.picker.cartRefused(candidate ? cleanText(candidate.label) : '')
+        continue
+      }
+
+      const computed = packsFor(line.needed, candidate.content)
+      let packs = computed.status === 'COMPUTED' ? computed.packs : null
+      if (packs === null) {
+        packs = await ui.show('quantity', {
+          ingredient: line.name,
+          productLabel: labelOf(candidate),
+          packs: computed.packs,
+          need: formatNeeded(line.needed),
+        })
+        if (packs === null) continue
+      }
+
+      // Un article qui n'avait aucun produit retenu : le produit devient son produit habituel, sans question. Sinon une seule question, à deux
+      // réponses (DRV-624) : « Toujours prendre celui-ci » (`PRIMARY` : Repas le met en tête et garde les anciens à sa suite) ou « Cette fois
+      // seulement » (`ONCE` : rien n'est retenu). L'agent n'émet plus `FALLBACK`, que le protocole accepte toujours.
+      let placement: Placement = 'PRIMARY'
+      if (unavailable.length > 0 || line.replaces) {
+        const role = await ui.show('placement', {
+          ingredient: line.name,
+          productLabel: labelOf(candidate),
+          photo: candidate.imageUrl,
+        })
+        if (role === null) continue
+        placement = role
+      }
+
+      context.showProgress()
+      let settled
+      try {
+        settled = await putInCart(adapter, candidate, packs)
+      } catch (error) {
+        if (!(error instanceof LeclercError) || error.code !== 'NETWORK') throw error
+        record(
+          { ingredientSlug: slug, outcome: 'FAILED', error: 'NETWORK', ...rejected() },
+          error.cause === 'REQUEST_TIMEOUT' ? { slow: true } : undefined,
+        )
+        return 'done'
+      }
+      if (settled.obtained < 1) {
+        // Le panier n'a rien pris (DRV-644) : c'est quand même le produit que la personne veut, en priorité. Le choix est enregistré (la même ligne `CHOSEN`
+        // qu'un choix pris au panier, aucune clé de plus), le passage continue, et la fin dit en une phrase que le produit n'est pas au panier, et pourquoi.
+        const facts = settled.facts ?? null
+        record(
           {
-            need: formatNeeded(line.needed),
-            replaces: line.replaces?.label ?? null,
-            gone: unavailable.map((product) => {
-              const reason = reasons?.get(product.id)
-              return { id: product.id, label: product.label, ...(reason && { reason }) }
+            ingredientSlug: slug,
+            outcome: 'CHOSEN',
+            product: chosenProduct(candidate),
+            quantity: Math.min(packs, LIMITS.packsMax),
+            placement,
+            ...(unavailable.length > 0 && {
+              unavailableIds: unavailable.map((product) => product.id).slice(0, LIMITS.products),
             }),
-            prefill: prefillOf(unavailable, reasons),
-            checked: never,
-            query: search.query,
-            asked: search.asked,
-            items: items(),
-            notice,
-            aisles: search.aisles,
+            ...rejected(),
           },
           {
-            choose: (id) => conclude({ type: 'choose', id } satisfies Picked),
-            never: (id, on) => void (on ? never.add(id) : never.delete(id)),
-            aisle: (id) => {
-              search.aisles = { ...search.aisles, selected: id }
-            },
-            // Un rayon du site (DRV-647, 0.36.0) : UNE requête filtrée, gardée pour cette recherche ; la première du passage valide la forme du filtre.
-            loadAisle: async (id) => {
-              const key = String(id)
-              const cached = search.siteCache.get(key)
-              if (cached !== undefined) return { items: itemsOf(cached) }
-              const fallback = () => {
-                site.state = 'OFF'
-                search.aisles = search.familyRow
-                return { fallback: search.familyRow }
-              }
-              try {
-                const { candidates } = await adapter.searchFiltered(search.query, key)
-                const kept = candidates.slice(0, MAX_CANDIDATES)
-                if (site.state === 'UNKNOWN') {
-                  if (!filters(kept, search.candidates)) return fallback()
-                  site.state = 'OK'
-                }
-                search.siteCache.set(key, kept)
-                return { items: itemsOf(kept) }
-              } catch (error) {
-                if (error instanceof LeclercError && error.code === 'NETWORK') {
-                  return {
-                    notice: error.cause === 'REQUEST_TIMEOUT' ? S.picker.slow : S.picker.network,
-                  }
-                }
-                // Une réponse que le site refuse à la première requête filtrée : la forme ne marche pas, repli sans message.
-                if (
-                  error instanceof LeclercError &&
-                  error.code === 'CONTRACT_CHANGED' &&
-                  site.state === 'UNKNOWN'
-                ) {
-                  return fallback()
-                }
-                if (live) conclude({ type: 'failure', error } satisfies Picked)
-                return { notice: '' }
-              }
-            },
-            search: (query) => {
-              picker.busy(S.picker.searching)
-              load(search, adapter, query, line.rayonHints, false, site).then(
-                () => {
-                  if (!live) return
-                  picker.results(search.query, items(), search.notice, search.asked, search.aisles)
-                  picker.busy(null)
-                },
-                (error: unknown) => {
-                  if (live) conclude({ type: 'failure', error } satisfies Picked)
-                },
-              )
+            unreached: {
+              // « Bientôt disponible » se dit avec les mots de Leclerc (l'application officielle n'a pas non plus de bouton d'ajout) ; un stock nul, la rupture.
+              reason: candidate.comingSoon
+                ? 'COMING_SOON'
+                : candidate.stock === 0 || facts?.stock === 0
+                  ? 'OUT_OF_STOCK'
+                  : 'CART_REFUSED',
+              label: cut(cleanText(candidate.label) || S.picker.noLabel(candidate.id)),
+              stock: readCount(facts?.stock),
+              availability: readCount(facts?.availability),
             },
           },
         )
-        return () => {
-          live = false
-          picker.dispose()
-        }
-      },
-    })
-
-    if (answer.kind === 'cancel') return 'cancelled'
-    if (answer.kind === 'skip' || answer.kind === 'rest') {
-      record({ ingredientSlug: slug, outcome: 'SKIPPED', ...rejected() })
-      return answer.kind === 'rest' ? 'rest' : 'done'
-    }
-    if (answer.kind === 'have') {
-      record({ ingredientSlug: slug, outcome: 'HAVE_AT_HOME', ...rejected() })
-      return 'done'
-    }
-    if (!isPicked(answer.value)) continue
-    if (answer.value.type === 'failure') throw answer.value.error
-
-    const id = answer.value.id
-    const candidate = findCandidate(id)
-    // Défense en profondeur : la liste ne propose pas les produits écartés, un message ne doit pas pouvoir les imposer. Un produit « Plus en stock »
-    // se choisit : le panier tranche (DRV-635).
-    if (!candidate || refused.has(id)) {
-      search.notice = S.picker.cartRefused(candidate ? cleanText(candidate.label) : '')
-      continue
-    }
-
-    const computed = packsFor(line.needed, candidate.content)
-    let packs = computed.status === 'COMPUTED' ? computed.packs : null
-    if (packs === null) {
-      packs = await ui.show('quantity', {
-        ingredient: line.name,
-        productLabel: labelOf(candidate),
-        packs: computed.packs,
-        need: formatNeeded(line.needed),
-      })
-      if (packs === null) continue
-    }
-
-    // Un article qui n'avait aucun produit retenu : le produit devient son produit habituel, sans question. Sinon une seule question, à deux
-    // réponses (DRV-624) : « Toujours prendre celui-ci » (`PRIMARY` : Repas le met en tête et garde les anciens à sa suite) ou « Cette fois
-    // seulement » (`ONCE` : rien n'est retenu). L'agent n'émet plus `FALLBACK`, que le protocole accepte toujours.
-    let placement: Placement = 'PRIMARY'
-    if (unavailable.length > 0 || line.replaces) {
-      const role = await ui.show('placement', {
-        ingredient: line.name,
-        productLabel: labelOf(candidate),
-        photo: candidate.imageUrl,
-      })
-      if (role === null) continue
-      placement = role
-    }
-
-    context.showProgress()
-    let settled
-    try {
-      settled = await putInCart(adapter, candidate, packs)
-    } catch (error) {
-      if (!(error instanceof LeclercError) || error.code !== 'NETWORK') throw error
-      record(
-        { ingredientSlug: slug, outcome: 'FAILED', error: 'NETWORK', ...rejected() },
-        error.cause === 'REQUEST_TIMEOUT' ? { slow: true } : undefined,
-      )
-      return 'done'
-    }
-    if (settled.obtained < 1) {
-      // Le panier n'a rien pris (DRV-644) : c'est quand même le produit que la personne veut, en priorité. Le choix est enregistré (la même ligne `CHOSEN`
-      // qu'un choix pris au panier, aucune clé de plus), le passage continue, et la fin dit en une phrase que le produit n'est pas au panier, et pourquoi.
-      const facts = settled.facts ?? null
+        return 'done'
+      }
       record(
         {
           ingredientSlug: slug,
           outcome: 'CHOSEN',
           product: chosenProduct(candidate),
-          quantity: Math.min(packs, LIMITS.packsMax),
+          quantity: Math.min(settled.obtained, LIMITS.packsMax),
           placement,
           ...(unavailable.length > 0 && {
             unavailableIds: unavailable.map((product) => product.id).slice(0, LIMITS.products),
           }),
           ...rejected(),
         },
-        {
-          unreached: {
-            // « Bientôt disponible » se dit avec les mots de Leclerc (l'application officielle n'a pas non plus de bouton d'ajout) ; un stock nul, la rupture.
-            reason: candidate.comingSoon
-              ? 'COMING_SOON'
-              : candidate.stock === 0 || facts?.stock === 0
-                ? 'OUT_OF_STOCK'
-                : 'CART_REFUSED',
-            label: cut(cleanText(candidate.label) || S.picker.noLabel(candidate.id)),
-            stock: readCount(facts?.stock),
-            availability: readCount(facts?.availability),
-          },
-        },
+        settled.note || saysOutOfStock(candidate)
+          ? {
+              ...(settled.note && { cart: settled.note }),
+              ...(saysOutOfStock(candidate) && { accepted: true }),
+            }
+          : undefined,
       )
       return 'done'
     }
-    record(
-      {
-        ingredientSlug: slug,
-        outcome: 'CHOSEN',
-        product: chosenProduct(candidate),
-        quantity: Math.min(settled.obtained, LIMITS.packsMax),
-        placement,
-        ...(unavailable.length > 0 && {
-          unavailableIds: unavailable.map((product) => product.id).slice(0, LIMITS.products),
-        }),
-        ...rejected(),
-      },
-      settled.note || saysOutOfStock(candidate)
-        ? {
-            ...(settled.note && { cart: settled.note }),
-            ...(saysOutOfStock(candidate) && { accepted: true }),
-          }
-        : undefined,
-    )
-    return 'done'
   }
 }
 
@@ -585,7 +631,7 @@ async function settleLine(
  */
 export const guidedChoice: PhaseB = async (context) => {
   // La rangée des rayons du site, pour tout le passage : la première requête filtrée la valide ou l'écarte (DRV-647, 0.36.0).
-  const site: SiteAisleState = { state: 'UNKNOWN' }
+  const site: SiteAisleState = { state: 'UNKNOWN', listeners: new Set() }
   const { pending } = context
   for (const [index, item] of pending.entries()) {
     if (context.stopRequested()) return 'cancelled'

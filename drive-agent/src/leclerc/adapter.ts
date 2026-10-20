@@ -11,6 +11,7 @@ import {
   aisleChoices,
   aisleSamples,
   plausibleLabel,
+  urlAisle,
   shownAisleText,
   shownAisleTexts,
   type AisleGrouping,
@@ -24,7 +25,11 @@ import {
   allValues,
   countKeys,
   FILTER_KEY,
-  filterVerdict,
+  coherence,
+  filterKeys,
+  keyFor,
+  validationTarget,
+  type FilterForm,
   totalProducts,
   type ProbeAttempt,
   filterHrefsIn,
@@ -206,6 +211,11 @@ export interface RetailerAdapter {
     query: string,
     key: string,
   ): Promise<{ candidates: Candidate[]; total: number | null }>
+  /**
+   * Valide la forme de `Filtres` (DRV-647, 0.37.0) sur la facette de la dernière réponse de [query] : trois formes au plus, la première COHÉRENTE avec la
+   * valeur demandée est retenue pour le reste du passage. Une seule fois par adaptateur ; les appels suivants rendent le même résultat. Jamais une erreur.
+   */
+  validateSiteFilter(query: string): Promise<boolean>
 }
 
 /** Un rayon du site, lu dans sa facette « Rayons » (DRV-647, 0.36.0). */
@@ -273,6 +283,12 @@ export class LeclercAdapter implements RetailerAdapter {
   private facts: SearchFacts | null = null
   /** Le texte de la dernière réponse de recherche, gardé en mémoire seulement pour `describeLastReply` (remplacé à chaque recherche). */
   private lastReplyText: string | null = null
+  /** La validation de la forme de `Filtres` (DRV-647, 0.37.0) : lancée une fois, gardée pour la vie de l'adaptateur (le passage). */
+  private filterCheck: Promise<boolean> | null = null
+  /** La forme de `Filtres` validée, `null` : aucune (ou pas encore). */
+  private filterForm: FilterForm | null = null
+  /** Les valeurs de facette des rayons proposés, par clé de la rangée. */
+  private readonly siteValues = new Map<string, FacetValue>()
   /** Les libellés de rayon lus hors des produits dans la dernière réponse (DRV-647), calculés une fois par réponse, à la demande. */
   private replyFacets: { text: string; labels: Map<number, string[]> } | null = null
   /** Ceux de la page (DRV-647) : la page ne change pas pendant la vie de l'agent, ils sont lus une fois, à la demande. */
@@ -561,12 +577,13 @@ export class LeclercAdapter implements RetailerAdapter {
       cartPath,
     )
     const fresh = freshValues(values)
-    const target = fresh[0]?.value ?? values[0] ?? null
+    // La même valeur que la validation de l'écran (0.37.0) : la plus fournie qui a des enfants lisibles, à défaut la plus fournie.
+    const target = validationTarget(values)
     let probe: FacetExploration['probe']
-    if (target === null) probe = { skipped: tree.values.length === 0 ? 'NO_FACET' : 'NO_TARGET' }
-    else if (target.urlId === null || !FILTER_KEY.test(target.urlId))
-      probe = { skipped: 'NO_FILTER_KEY' }
-    else probe = await this.probeFiltered(term, target, candidates, safe)
+    if (values.length === 0)
+      probe = { skipped: tree.values.length === 0 ? 'NO_FACET' : 'NO_TARGET' }
+    else if (target === null) probe = { skipped: 'NO_FILTER_KEY' }
+    else probe = await this.probeFiltered(term, target, totalProducts(text), safe)
     return {
       blocs: tree.blocs.map((bloc) => ({
         id: bloc.id,
@@ -618,37 +635,48 @@ export class LeclercAdapter implements RetailerAdapter {
     }
   }
 
-  /**
-   * La recherche filtrée sondée par le diagnostic (DRV-647, 0.36.0) : d'abord `Filtres=<sIdValeurUrl>` (lu tel quel, de la forme `N-N`) ; si elle ne filtre pas
-   * (HTTP autre que 200, aucun produit, pas moins de produits ou les mêmes que sans filtre), UNE seconde avec `Filtres=<iIdBloc>-<iIdValeur>` si elle diffère ;
-   * puis rien de plus. Chaque tentative passe par le `Pacer` (cadence normale, en-têtes de la recherche retenue). Jamais une erreur.
-   */
+  /** Le diagnostic (DRV-647, 0.37.0) : les formes essayées sur [target], comme la validation de l'écran, sans rien retenir pour le passage. */
   private async probeFiltered(
     term: string,
     target: FacetValue,
-    unfiltered: readonly Candidate[],
+    before: number | null,
     safe: (label: string | null) => string | null,
   ): Promise<FilteredProbe> {
-    const forms: { form: ProbeAttempt['form']; key: string }[] = [
-      { form: 'URL_ID', key: target.urlId ?? '' },
-    ]
-    const blocKey = target.bloc === null ? null : `${target.bloc}-${target.id}`
-    if (blocKey !== null && blocKey !== target.urlId) forms.push({ form: 'BLOC_ID', key: blocKey })
+    const { attempts, retained, address } = await this.tryForms(term, target, before, safe)
+    return { target: { id: target.id, label: safe(target.label) }, attempts, retained, address }
+  }
+
+  /**
+   * Les formes de `Filtres` essayées sur [target] (DRV-647, 0.37.0), dans l'ordre (i) `sIdValeurUrl`, (ii) `iIdBloc-iIdValeur`, (iii) `iIdValeur-iIdBloc` (formes
+   * distinctes bâties sur les valeurs lues), en s'arrêtant à la première COHÉRENTE avec la valeur (`coherence`) ou à une erreur du site : trois requêtes au
+   * plus, par le `Pacer`. [before] : `iNbTotalProduits` de la recherche sans filtre. Jamais une erreur.
+   */
+  private async tryForms(
+    term: string,
+    target: FacetValue,
+    before: number | null,
+    safe: (label: string | null) => string | null,
+  ): Promise<{ attempts: ProbeAttempt[]; retained: FilterForm | null; address: string | null }> {
     const attempts: ProbeAttempt[] = []
     let address: string | null = null
-    const before = unfiltered.map((candidate) => candidate.id)
-    for (const { form, key } of forms) {
+    const city = this.city()
+    const childLabels = target.children.flatMap((child) =>
+      child.label === null || child.label.trim() === '' ? [] : [child.label],
+    )
+    for (const { form, key } of filterKeys(target)) {
       const attempt: ProbeAttempt = {
         form,
-        value: valueShape(key, this.city()),
+        value: valueShape(key, city),
         status: null,
+        before,
         total: null,
+        references: target.references,
         products: null,
-        verdict: 'ERROR',
+        coherence: null,
         families: [],
-        level: null,
         first: null,
       }
+      attempts.push(attempt)
       try {
         const { url, reply } = await this.filteredRequest(term, key)
         address = filterLinkShape(
@@ -657,48 +685,69 @@ export class LeclercAdapter implements RetailerAdapter {
             params: new URLSearchParams(url.split('?')[1] ?? ''),
             filtres: key,
           },
-          this.city(),
+          city,
         )
         attempt.status = reply.status
         attempt.total = totalProducts(reply.text)
-        if (reply.status >= 200 && reply.status < 300) {
-          const candidates = readSearchPage(reply).map((raw) =>
-            toCandidate(raw, this.deps.location),
-          )
-          const grouping = aisleChoices(candidates, { city: this.city() })
-          const first = candidates[0]
-          attempt.products = candidates.length
-          attempt.level = grouping.level
-          attempt.families = grouping.choices
-            .slice(0, 8)
-            .map(({ id, label, count }) => ({ id, label, count }))
-          attempt.first =
-            first === undefined
-              ? null
-              : {
-                  label: safe(cleanText(first.label).slice(0, 60)),
-                  fresh: FRESH_PRODUCT.test(first.label),
-                }
-          attempt.verdict = filterVerdict(
-            reply.status,
-            candidates.map((candidate) => candidate.id),
-            before,
-          )
-        } else {
-          attempt.verdict = 'HTTP'
-          attempt.fault = httpCause(reply.status)
-        }
+        const ok = reply.status >= 200 && reply.status < 300
+        const candidates = ok
+          ? readSearchPage(reply).map((raw) => toCandidate(raw, this.deps.location))
+          : []
+        const groupLabels = candidates.map((candidate) => {
+          const found = urlAisle(candidate.aisleTexts?.url, city)
+          return found !== null && found.id === candidate.family ? found.label : null
+        })
+        const grouping = aisleChoices(candidates, { city })
+        const first = candidates[0]
+        attempt.products = candidates.length
+        attempt.families = grouping.choices
+          .slice(0, 5)
+          .map(({ id, label, count }) => ({ id, label, count }))
+        attempt.first =
+          first === undefined
+            ? null
+            : {
+                label: safe(cleanText(first.label).slice(0, 60)),
+                fresh: FRESH_PRODUCT.test(first.label),
+              }
+        attempt.coherence = coherence({
+          status: reply.status,
+          products: candidates.length,
+          before,
+          after: attempt.total,
+          references: target.references,
+          childLabels,
+          groupLabels,
+        })
+        if (!ok) attempt.fault = httpCause(reply.status)
+        if (attempt.coherence.valid) return { attempts, retained: form, address }
       } catch (error) {
         attempt.fault =
           error instanceof LeclercError
             ? `${error.code}${error.cause === null ? '' : ` (${error.cause})`}`
             : 'EXCEPTION'
+        // Une erreur du site (blocage, réseau) arrête l'essai des formes.
+        break
       }
-      attempts.push(attempt)
-      // Une erreur du site (blocage, réseau) arrête la sonde : pas de seconde tentative.
-      if (attempt.verdict === 'FILTERED' || attempt.verdict === 'ERROR') break
     }
-    return { target: { id: target.id, label: safe(target.label) }, attempts, address }
+    return { attempts, retained: null, address }
+  }
+
+  async validateSiteFilter(query: string): Promise<boolean> {
+    if (this.filterCheck !== null) return this.filterCheck
+    const text = this.lastReplyText
+    const target =
+      text === null ? null : validationTarget(aisleBloc(readFacets(text))?.values ?? [])
+    if (text === null || target === null) return false
+    const before = totalProducts(text)
+    this.filterCheck = this.tryForms(query.trim(), target, before, (label) => label).then(
+      ({ retained }) => {
+        this.filterForm = retained
+        return retained !== null
+      },
+      () => false,
+    )
+    return this.filterCheck
   }
 
   /**
@@ -720,8 +769,13 @@ export class LeclercAdapter implements RetailerAdapter {
 
   async searchFiltered(
     query: string,
-    key: string,
+    aisle: string,
   ): Promise<{ candidates: Candidate[]; total: number | null }> {
+    // La forme validée pour ce passage, appliquée à la valeur de facette du rayon : sans forme validée, aucune requête filtrée.
+    const value = this.siteValues.get(aisle)
+    const key =
+      value === undefined || this.filterForm === null ? null : keyFor(value, this.filterForm)
+    if (key === null) throw new LeclercError('CONTRACT_CHANGED', null, 'EXCEPTION')
     const { reply } = await this.filteredRequest(query.trim(), key)
     this.assertUsable(reply)
     const candidates = this.readSearch(reply).map((raw) => toCandidate(raw, this.deps.location))
@@ -737,18 +791,20 @@ export class LeclercAdapter implements RetailerAdapter {
     const rayons = aisleBloc(readFacets(text))
     const city = this.city()
     const shown = (values: readonly FacetValue[]): SiteAisle[] =>
-      values.flatMap((value) =>
-        value.urlId === null || !FILTER_KEY.test(value.urlId)
-          ? []
-          : [
-              {
-                key: value.urlId,
-                label: plausibleLabel(value.label, city),
-                count: value.references,
-                children: shown(value.children),
-              },
-            ],
-      )
+      values.flatMap((value) => {
+        if (filterKeys(value).length === 0) return []
+        // La clé d'un rayon de la rangée : la valeur de la facette (la forme de `Filtres` vient de la validation du passage).
+        const key = `${value.bloc ?? ''}|${value.id}`
+        this.siteValues.set(key, value)
+        return [
+          {
+            key,
+            label: plausibleLabel(value.label, city),
+            count: value.references,
+            children: shown(value.children),
+          },
+        ]
+      })
     return shown(rayons?.values ?? [])
   }
 

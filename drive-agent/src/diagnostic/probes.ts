@@ -600,40 +600,54 @@ function facetLines(term: string, facets: FacetExploration): string[] {
   if ('skipped' in probe)
     lines.push(F.probeSkipped(term, own(F.miss, probe.skipped) ?? probe.skipped))
   else {
+    const target = facetLabel(probe.target.label)
     for (const attempt of probe.attempts) {
-      const head = F.probeHead(
-        term,
-        facetLabel(probe.target.label),
-        probe.target.id,
-        attempt.form === 'URL_ID' ? 'sIdValeurUrl' : 'iIdBloc-iIdValeur',
+      const head = F.formHead(
+        F.formRank[attempt.form] ?? '?',
+        F.formName[attempt.form] ?? attempt.form,
         attempt.value,
+        target,
       )
-      const verdict = own(F.verdict, attempt.verdict) ?? attempt.verdict
+      const result = attempt.coherence
       lines.push(
-        attempt.status === null
+        attempt.status === null || result === null
           ? `${head}${F.probeFault(attempt.fault ?? 'EXCEPTION')}`
-          : `${head}${F.probeReply(
+          : `${head}${F.formReply(
               attempt.status,
+              attempt.before,
               attempt.total,
+              attempt.references,
               attempt.products,
-              attempt.level === 'FAMILLE' ? 'famille' : 'rayon',
-              attempt.first === null
-                ? F.none
-                : `« ${attempt.first.label ?? F.noLabel} » (frais : ${attempt.first.fresh ? P.yes : P.no})`,
-              verdict,
+              result.share === null ? F.noChildren : `${Math.round(result.share * 100)} %`,
+              result.valid ? F.valid : F.invalid,
+              own(F.reason, result.reason) ?? result.reason,
             )}`,
       )
       for (const family of attempt.families) {
         lines.push(
-          F.probeGroup(
-            family.id,
-            family.count,
-            family.label === null ? F.noLabel : `« ${family.label} »`,
+          F.formGroup(family.label === null ? F.noLabel : `« ${family.label} »`, family.count),
+        )
+      }
+      if (attempt.first !== null) {
+        lines.push(
+          F.formFirst(
+            `« ${attempt.first.label ?? F.noLabel} »`,
+            attempt.first.fresh ? P.yes : P.no,
           ),
         )
       }
     }
     lines.push(F.address(probe.address ?? P.absent))
+    lines.push(
+      probe.retained === null
+        ? F.retainedNone
+        : F.retained(
+            F.formRank[probe.retained] ?? '?',
+            F.formName[probe.retained] ?? probe.retained,
+          ),
+    )
+    // Aucune forme valide : ce qui pourrait dire la bonne (des formes seulement), pour la prochaine mesure.
+    if (probe.retained === null) lines.push(F.noneHint)
   }
   lines.push(F.pagination(F.inReply(term), countKeysText(facets.pagination.reply)))
   lines.push(F.pagination(F.inPage, countKeysText(facets.pagination.page)))

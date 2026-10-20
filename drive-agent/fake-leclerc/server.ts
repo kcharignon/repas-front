@@ -131,7 +131,14 @@ export interface Behavior {
    * Le filtre par rayon du site (DRV-647, 0.36.0) : par défaut `Filtres=4-<iIdValeur>` ne garde que les produits de la valeur ; `ignored` : le paramètre est
    * ignoré (la recherche rend tout, comme une forme d'adresse qui ne filtre pas) ; `not-found` : une recherche à `Filtres` répond 404.
    */
-  facetFilter?: 'ignored' | 'not-found' | null
+  facetFilter?: 'ignored' | 'not-found' | 'none' | null
+  /**
+   * DRV-647 (0.37.0) : `other` donne aux valeurs de la facette un `sIdValeurUrl` en `9-<iIdValeur>` (que le filtre n'accepte pas : seule la forme (ii)
+   * `4-<iIdValeur>` filtre) ; `facetDecoy` : une valeur de `Filtres` non acceptée rend MOINS de produits, mais d'autres rayons, et le même total (le
+   * piège relevé sur le vrai site le 2026-10-20) ; sans lui, elle rend tout.
+   */
+  facetUrlId?: 'other' | null
+  facetDecoy?: boolean | null
   /**
    * La disponibilité des produits à stock nul (DRV-635). Les deux modes ajoutent l'étiquette `eDisponibilite` (1 : disponible, 2 : bientôt disponible) et le texte
    * « Bientôt disponible » à ces produits : `misleading` (disponibilité trompeuse) : le panier les ACCEPTE, comme le site mobile de l'enseigne ; `real-out` (vraie
@@ -416,23 +423,40 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
           entry.status = 404
           return send(res, 404, errorPage(), HTML)
         }
-        const filter =
-          behavior.facetFilter === 'ignored' ? undefined : /^4-(\d+)$/.exec(filtres ?? '')?.[1]
         const all = searchCatalog(
           query,
           behavior.strictSearch === true,
           behavior.strictApostrophe === true,
         )
-        const id = filter === undefined ? null : Number(filter)
+        const accepted =
+          behavior.facetFilter === 'ignored' || behavior.facetFilter === 'none'
+            ? undefined
+            : /^4-(\d+)$/.exec(filtres ?? '')?.[1]
+        let shown = all
+        if (filtres !== null && accepted !== undefined) {
+          const id = Number(accepted)
+          shown = all.filter(
+            (product) => facetAisleId(product.aisle) === id || product.family === id,
+          )
+        } else if (filtres !== null && behavior.facetDecoy === true) {
+          // La valeur visée : le plus grand nombre de `Filtres` (l'identifiant de valeur, quelle que soit la forme).
+          const id = Math.max(0, ...(filtres.match(/\d+/g) ?? []).map(Number))
+          shown = all
+            .filter((product) => facetAisleId(product.aisle) !== id && product.family !== id)
+            .slice(0, 3)
+        }
         const page = searchPage(
           query,
-          id === null
-            ? all
-            : all.filter((product) => facetAisleId(product.aisle) === id || product.family === id),
+          shown,
           cart,
           session,
           behavior.emptySearch ?? 'list',
           behavior.availability,
+          {
+            urlBloc: behavior.facetUrlId === 'other' ? 9 : 4,
+            // Un filtre accepté annonce son propre total ; sinon (ignoré, leurre) le total de la recherche entière.
+            total: filtres !== null && accepted !== undefined ? shown.length : all.length,
+          },
         )
         return send(res, 200, page, HTML)
       },

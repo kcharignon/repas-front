@@ -481,6 +481,45 @@ export const S = {
       ) =>
         `HTTP ${status}, iNbTotalProduits=${total ?? '?'}, ${products ?? '?'} produits lus, groupes au niveau ${level} ; premier produit : ${first} ; verdict : ${verdict}`,
       address: (shape: string) => `Forme finale de l’adresse filtrée : ${shape}`,
+      /** DRV-647 (0.37.0) : chaque forme de `Filtres` essayée, sa cohérence avec la valeur demandée, la forme retenue. */
+      formRank: { URL_ID: 'i', BLOC_ID: 'ii', ID_BLOC: 'iii' } as Record<string, string>,
+      formName: {
+        URL_ID: 'sIdValeurUrl',
+        BLOC_ID: 'iIdBloc-iIdValeur',
+        ID_BLOC: 'iIdValeur-iIdBloc',
+      } as Record<string, string>,
+      formHead: (rank: string, name: string, value: string, target: string) =>
+        `Forme essayée (${rank}) Filtres=<${name}> (forme ${value}) sur ${target} : `,
+      formReply: (
+        status: number,
+        before: number | null,
+        after: number | null,
+        references: number | null,
+        products: number | null,
+        share: string,
+        verdict: string,
+        reason: string,
+      ) =>
+        `HTTP ${status}, iNbTotalProduits ${before ?? '?'} → ${after ?? '?'} (niNbReferences ${references ?? '?'}), ${products ?? '?'} produits, part dans les enfants attendus : ${share} ; verdict : ${verdict} (${reason})`,
+      formGroup: (label: string, count: number) =>
+        `Groupe de la forme essayée : ${label} (${count})`,
+      formFirst: (label: string, fresh: string) =>
+        `Premier produit de la forme essayée : ${label} (frais : ${fresh})`,
+      noChildren: 'sans enfant lisible',
+      valid: 'valide',
+      invalid: 'invalide',
+      reason: {
+        TOTAL_MATCHES: 'le total change et s’approche du nombre de références',
+        CHILDREN_MATCH: 'au moins 80 % des produits sont dans les enfants attendus',
+        HTTP: 'réponse HTTP autre que 200',
+        EMPTY: 'aucun produit',
+        INCOHERENT: 'le total ne correspond pas et les groupes ne sont pas ceux des enfants',
+        ERROR: 'erreur',
+      } as Record<string, string>,
+      retained: (rank: string, name: string) => `Forme retenue : (${rank}) Filtres=<${name}>`,
+      retainedNone: 'Forme retenue : aucune (la rangée de l’écran reste celle des familles)',
+      noneHint:
+        'Aucune forme valide : voir plus haut les formes des liens à « Filtres » (page et réponse) et les valeurs de eUnivers',
       verdict: {
         FILTERED: 'filtrée (moins de produits, pas les mêmes)',
         IDENTICAL: 'les mêmes produits que sans filtre',

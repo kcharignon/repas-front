@@ -14,7 +14,8 @@ const ONE = { quantity: 1, unitSymbol: 'boîte', dimension: 'PACKAGE', baseFacto
 const searches = (fake: FakeLeclerc): string[] =>
   fake
     .paced()
-    .filter((call) => call.kind === 'search')
+    // Les recherches du mot ; la validation de la forme du filtre du site (DRV-647, 0.37.0, en tâche de fond) est à part.
+    .filter((call) => call.kind === 'search' && call.filter === undefined)
     .map((call) => call.detail ?? '')
 
 test.describe('un nouvel ingrédient (phase B)', () => {
