@@ -2,8 +2,8 @@
 // produits, elle, est la vraie (elle se monte dans un nœud de jsdom) pour éprouver ce que l'utilisateur voit et touche. Aucun réseau.
 import { afterEach, describe, expect, it } from 'vitest'
 
-import type { PlanLine, ResultLine } from '../protocol'
-import { guidedChoice, labelOf, MAX_CANDIDATES } from '../src/flow'
+import type { PlanLine, ProductRef, ResultLine } from '../protocol'
+import { guidedChoice, labelOf, MAX_CANDIDATES, productSearchForms } from '../src/flow'
 import { LeclercError } from '../src/leclerc'
 import type { ChooserAnswer, ChooserProps, PlacementProps, QuantityProps } from '../src/ui'
 import {
@@ -15,6 +15,7 @@ import {
   home,
   known,
   makeFlow,
+  OUT_OF_STOCK,
   plan,
   product,
   type ShelfItem,
@@ -98,6 +99,14 @@ const buttonOf = (zone: HTMLElement, name: string) => {
   return button
 }
 const choose = (zone: HTMLElement, name: string) => buttonOf(zone, name).click()
+/** Le bouton de la rangée des rayons (DRV-647) dont le texte commence par [text]. */
+const chipOf = (zone: HTMLElement, text: string): HTMLButtonElement => {
+  const chip = [...zone.querySelectorAll<HTMLButtonElement>('.aisles button')].find((button) =>
+    button.textContent?.startsWith(text),
+  )
+  if (!chip) throw new Error(`Pas de rayon « ${text} » dans la rangée`)
+  return chip
+}
 /** « Chercher autre chose » : écrit `query` dans le champ de recherche de la liste et le soumet. */
 const search = (view: View, query: string) => {
   const input = view.zone.querySelector<HTMLInputElement>('#chercher')
@@ -136,12 +145,27 @@ function run(
     placementAnswer?: 'PRIMARY' | 'ONCE' | null
     /** La réponse de l'utilisateur devant la demande de vérification de l'anti-robot (ticket K). */
     challenge?: () => 'resume' | 'stop'
+    /** Le libellé de chaque rayon que l'adaptateur sait lire (DRV-647). */
+    aisleLabels?: Record<number, string>
+    /** Le niveau où la rangée filtre (DRV-647). */
+    aisleLevel?: 'RAYON' | 'FAMILLE'
+    /** Les rayons du site et ce que rend leur recherche filtrée (DRV-647, 0.36.0). */
+    siteAisles?: NonNullable<Parameters<typeof fakeAdapter>[1]>['siteAisles']
+    siteValid?: boolean
+    filtered?: Record<string, string[] | Error>
+    incoherent?: string[]
   } = {},
 ) {
   const placements: PlacementProps[] = []
   const adapter = fakeAdapter(options.shelf ?? SHELF, {
     found: options.found ?? FOUND,
     ...(options.before && { before: options.before }),
+    ...(options.aisleLabels && { aisleLabels: options.aisleLabels }),
+    ...(options.aisleLevel && { aisleLevel: options.aisleLevel }),
+    ...(options.siteAisles && { siteAisles: options.siteAisles }),
+    ...(options.siteValid !== undefined && { siteValid: options.siteValid }),
+    ...(options.incoherent && { incoherent: options.incoherent }),
+    ...(options.filtered && { filtered: options.filtered }),
   })
   const user = session(...steps)
   const screens = fakeUi({
@@ -177,7 +201,7 @@ describe('un nouvel ingrédient', () => {
 
     // Then
     expect(test.adapter.calls).toEqual(['find poivre', 'cart 2000001 2'])
-    expect(test.screens.screens()).toEqual(['summary', 'progress', 'chooser', 'progress', 'end'])
+    expect(test.screens.screens()).toEqual(['summary', 'progress', 'chooser', 'progress'])
     expect(expectConform(test.sent[0])).toMatchObject({ outcome: 'completed' })
     expect(lineOf(test.sent[0])).toEqual({
       ingredientSlug: 'poivre',
@@ -224,12 +248,121 @@ describe('un nouvel ingrédient', () => {
     expect(first?.textContent).not.toContain('demandé')
   })
 
+  it('pas de ligne « En promotion » pour une promotion à zéro, et « Plus en stock. » sans nombre de produits (DRV-644)', async () => {
+    const shelf = {
+      ...SHELF,
+      '2000001': { ...SHELF['2000001'], promo: 0 },
+    }
+    const test = run(pepper(), [() => ({ kind: 'skip' })], { shelf })
+
+    await test.start()
+
+    const [first, , out] = rows(test.user.views[0]?.zone ?? document.createElement('div'))
+    expect(first?.textContent).not.toContain('En promotion')
+    expect(first?.textContent).toContain('500 g par produit : 2 produits.')
+    expect(out?.textContent).toContain('Plus en stock.')
+    expect(out?.textContent).not.toContain('À mettre au panier')
+    expect(out?.textContent).not.toContain('par produit')
+  })
+
+  describe('la taille ne s’affiche qu’une fois par produit (DRV-626)', () => {
+    /** Les lignes de texte d'un produit de la liste, une par paragraphe. */
+    const linesOf = (row: HTMLElement | undefined) =>
+      [...(row?.querySelectorAll('p') ?? [])].map((paragraph) => paragraph.textContent)
+
+    it('retire la seconde ligne du libellé quand elle ne fait que redire la taille', async () => {
+      const test = run(pepper(), [() => ({ kind: 'skip' })])
+
+      await test.start()
+
+      const [first, second] = rows(test.user.views[0]?.zone ?? document.createElement('div'))
+      // Le nom, la ligne du prix (avec la taille), le nombre de produits : rien d'autre
+      expect(linesOf(first)).toEqual([
+        'Poivre noir moulu de test',
+        '500 g · 2,58 € · 5,16 € / kg',
+        '500 g par produit : 2 produits.',
+      ])
+      expect(linesOf(second)).toEqual([
+        'Poivre blanc de test',
+        '1 kg · 4,99 €',
+        'En promotion : 4,50 €',
+        '1 kg par produit : 1 produit.',
+      ])
+    })
+
+    it.each([['40g'], ['40 G'], ['40\u00a0g'], ['40 g ']])(
+      'la reconnaît sous une autre écriture (« %s »)',
+      async (second) => {
+        const shelf = {
+          '5000001': {
+            label: 'Poivre de test',
+            label2: second,
+            content: { value: 40, unit: 'g' as const },
+            price: 180,
+          },
+        }
+        const test = run(pepper(), [() => ({ kind: 'skip' })], {
+          shelf,
+          found: { poivre: ['5000001'] },
+        })
+
+        await test.start()
+
+        expect(linesOf(rows(test.user.views[0]?.zone ?? document.createElement('div'))[0])).toEqual(
+          ['Poivre de test', '40 g · 1,80 €', '40 g par produit : 20 produits.'],
+        )
+      },
+    )
+
+    it('garde la seconde ligne quand elle dit autre chose que la taille', async () => {
+      const shelf = {
+        '5000002': {
+          label: 'Poivre de test',
+          label2: 'Lot de 2 sachets',
+          content: { value: 40, unit: 'g' as const },
+          price: 180,
+        },
+        '5000003': {
+          label: 'Poivre de test bis',
+          label2: '45 g',
+          content: { value: 40, unit: 'g' as const },
+          price: 180,
+        },
+      }
+      const test = run(pepper(), [() => ({ kind: 'skip' })], {
+        shelf,
+        found: { poivre: ['5000002', '5000003'] },
+      })
+
+      await test.start()
+
+      const [first, second] = rows(test.user.views[0]?.zone ?? document.createElement('div'))
+      expect(linesOf(first)).toContain('Lot de 2 sachets')
+      // Une autre taille n'est pas une répétition : elle reste (le contenu lu et le libellé se contredisent, l'utilisateur le voit)
+      expect(linesOf(second)).toContain('45 g')
+    })
+
+    it('garde la seconde ligne quand le contenu est inconnu : elle est alors la seule à donner la taille', async () => {
+      const shelf = { '5000004': { label: 'Poivre de test', label2: '40 g', price: 180 } }
+      const test = run(pepper(), [() => ({ kind: 'skip' })], {
+        shelf,
+        found: { poivre: ['5000004'] },
+      })
+
+      await test.start()
+
+      expect(linesOf(rows(test.user.views[0]?.zone ?? document.createElement('div'))[0])).toContain(
+        '40 g',
+      )
+    })
+  })
+
   it('montre la quantité demandée en haut de la liste', async () => {
     const test = run(pepper(), [() => ({ kind: 'skip' })])
 
     await test.start()
 
-    expect(test.user.views[0]?.zone.textContent).toContain('Il vous faut : 800 g.')
+    expect(test.user.views[0]?.zone.textContent).toContain('Il te faut : 800 g.')
     expect(test.user.views[0]?.props).toMatchObject({ ingredient: 'Poivre', position: 1, total: 1 })
   })
 
@@ -254,15 +387,56 @@ describe('un nouvel ingrédient', () => {
     expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', quantity: 1 })
   })
 
-  it('affiche au plus huit produits', async () => {
-    const ids = Array.from({ length: 12 }, (_value, index) => String(3000001 + index))
-    const test = run(pepper(), [() => ({ kind: 'skip' })], { found: { poivre: ids }, shelf: {} })
+  it('affiche tous les produits de la recherche, huit d’abord puis la suite en défilant, sans aucune requête de plus (DRV-643)', async () => {
+    const ids = Array.from({ length: 30 }, (_value, index) => String(3000001 + index))
+    const counts: number[] = []
+    const test = run(
+      pepper(),
+      [
+        (view) => {
+          counts.push(rows(view.zone).length)
+          // La personne fait défiler : la sentinelle approche, le lot suivant s'ajoute (huit par huit), les premières fiches ne bougent pas.
+          const first = rows(view.zone)[0]
+          for (let step = 0; step < 4; step += 1) {
+            view.zone.dispatchEvent(new Event('scroll'))
+            counts.push(rows(view.zone).length)
+          }
+          expect(rows(view.zone)[0]).toBe(first)
+          return { kind: 'skip' }
+        },
+      ],
+      { found: { poivre: ids }, shelf: {} },
+    )
 
     await test.start()
 
-    expect(rows(test.user.views[0]?.zone ?? document.createElement('div'))).toHaveLength(
-      MAX_CANDIDATES,
+    // Sans IntersectionObserver (jsdom) tout ce qui est « près » de la fenêtre s'ajoute d'un coup : le défilement dit seulement que la suite est demandée.
+    expect(counts[0]).toBe(8)
+    expect(counts.at(-1)).toBe(30)
+    expect(test.adapter.calls.filter((call) => call.startsWith('find'))).toEqual(['find poivre'])
+  })
+
+  it('garde au plus MAX_CANDIDATES produits : un plafond technique, pas un choix d’affichage', async () => {
+    const ids = Array.from({ length: MAX_CANDIDATES + 40 }, (_value, index) =>
+      String(3000001 + index),
     )
+    let total = 0
+    const test = run(
+      pepper(),
+      [
+        (view) => {
+          view.zone.dispatchEvent(new Event('scroll'))
+          total = rows(view.zone).length
+          return { kind: 'skip' }
+        },
+      ],
+      { found: { poivre: ids }, shelf: {} },
+    )
+
+    await test.start()
+
+    expect(MAX_CANDIDATES).toBe(200)
+    expect(total).toBe(MAX_CANDIDATES)
   })
 })
 
@@ -281,8 +455,9 @@ describe('le contenu est inconnu', () => {
     await test.start()
 
     // Then
+    // L'écran dit aussi ce que la liste demande (« Il te faut : 800 g. », DRV-626)
     expect(asked).toEqual([
-      { ingredient: 'Poivre', productLabel: 'Mélange mystère de test', packs: null },
+      { ingredient: 'Poivre', productLabel: 'Mélange mystère de test', packs: null, need: '800 g' },
     ])
     expect(test.adapter.calls).toEqual(['find poivre', 'cart 2000004 3'])
     expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', quantity: 3 })
@@ -304,7 +479,7 @@ describe('le contenu est inconnu', () => {
 
     expect(asked).toHaveLength(1)
     expect(test.user.views[0]?.zone.textContent).toContain(
-      'Contenu inconnu : vous choisirez la quantité.',
+      'Contenu inconnu : tu choisiras la quantité.',
     )
   })
 
@@ -450,16 +625,20 @@ describe('les produits refusés et indisponibles', () => {
     expect(test.adapter.writes).toEqual([])
     expect(test.user.views).toHaveLength(2)
     expect(test.user.views[1]?.zone.textContent).toContain(
-      'Leclerc n’a pas pu mettre ce produit au panier',
+      'Leclerc n’a pas pu mettre « Poivre blanc de test » au panier. Choisis-en un autre.',
     )
   })
 
-  it('un produit en rupture de stock est grisé et ne se choisit pas', async () => {
+  it('un produit « Plus en stock » se choisit : le bouton est actif et la fiche reste honnête (DRV-635)', async () => {
     const test = run(pepper(), [
       (view) => {
+        const card = [...view.zone.querySelectorAll('li')].find((item) =>
+          item.textContent.includes('Poivre en grains'),
+        )
         const button = buttonOf(view.zone, 'Poivre en grains')
-        expect(button.disabled).toBe(true)
-        expect(button.textContent).toBe('Indisponible')
+        expect(button.disabled).toBe(false)
+        expect(button.textContent).toBe('Choisir')
+        expect(card?.textContent).toContain('Plus en stock.')
         return { kind: 'skip' }
       },
     ])
@@ -467,6 +646,96 @@ describe('les produits refusés et indisponibles', () => {
     await test.start()
 
     expect(test.adapter.writes).toEqual([])
+  })
+
+  it('un produit « Plus en stock » que le panier accepte est au panier, comme un autre (le panier tranche)', async () => {
+    const test = run(pepper(), [(view) => choose(view.zone, 'Poivre en grains')])
+
+    await test.start()
+
+    expect(test.adapter.writes).toEqual([{ id: '2000003', quantity: 4 }])
+    expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', product: { id: '2000003' } })
+  })
+
+  it('un produit « Plus en stock » que le panier refuse : le choix est enregistré (ligne CHOSEN), le passage continue, la fin dit pourquoi (DRV-644)', async () => {
+    const shelf = { ...SHELF, '2000003': { ...SHELF['2000003'], obtained: () => 0 } }
+    const test = run(pepper(), [(view) => choose(view.zone, 'Poivre en grains')], { shelf })
+
+    await test.start()
+
+    // Une seule liste montrée : ni bandeau, ni retour à la liste ; le panier n'a rien pris, mais le choix part comme un choix ordinaire
+    expect(test.user.views).toHaveLength(1)
+    expect(test.adapter.writes).toEqual([{ id: '2000003', quantity: 4 }])
+    expect(lineOf(test.sent[0])).toEqual({
+      ingredientSlug: 'poivre',
+      outcome: 'CHOSEN',
+      product: expect.objectContaining({ id: '2000003', label: 'Poivre en grains de test' }),
+      quantity: 4,
+      placement: 'PRIMARY',
+    })
+    expect(test.screens.propsOf('end')[0]?.unreached).toEqual([
+      { label: 'Poivre en grains de test', reason: 'OUT_OF_STOCK' },
+    ])
+  })
+
+  it('une fiche « Bientôt disponible » que le panier refuse : la raison est dite avec les mots de Leclerc', async () => {
+    const shelf = {
+      ...SHELF,
+      '2000003': { ...SHELF['2000003'], obtained: () => 0, comingSoon: true },
+    }
+    const test = run(pepper(), [(view) => choose(view.zone, 'Poivre en grains')], { shelf })
+
+    await test.start()
+
+    expect(test.screens.propsOf('end')[0]?.unreached).toEqual([
+      { label: 'Poivre en grains de test', reason: 'COMING_SOON' },
+    ])
+  })
+
+  it('une fiche disponible que le panier ne prend pas, sans rien en dire : « CART_REFUSED », le choix est enregistré', async () => {
+    const shelf = {
+      ...SHELF,
+      '2000001': {
+        ...SHELF['2000001'],
+        obtained: () => 0,
+        cartFacts: { stock: 12, availability: 1 },
+      },
+    }
+    const test = run(pepper(), [(view) => choose(view.zone, 'Poivre noir')], { shelf })
+
+    await test.start()
+
+    expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', product: { id: '2000001' } })
+    expect(test.screens.propsOf('end')[0]?.unreached).toEqual([
+      { label: 'Poivre noir moulu de test', reason: 'CART_REFUSED' },
+    ])
+  })
+
+  it('une fiche disponible dont la réponse du panier dit un stock nul : la raison est la rupture (le motif lu)', async () => {
+    const shelf = {
+      ...SHELF,
+      '2000001': {
+        ...SHELF['2000001'],
+        obtained: () => 0,
+        cartFacts: { stock: 0, availability: 2 },
+      },
+    }
+    const test = run(pepper(), [(view) => choose(view.zone, 'Poivre noir')], { shelf })
+
+    await test.start()
+
+    expect(test.screens.propsOf('end')[0]?.unreached).toEqual([
+      { label: 'Poivre noir moulu de test', reason: 'OUT_OF_STOCK' },
+    ])
+  })
+
+  it('un produit pris au panier ne laisse aucune mention « pas dans ton panier »', async () => {
+    const test = run(pepper(), [(view) => choose(view.zone, 'Poivre noir')])
+
+    await test.start()
+
+    expect(test.screens.propsOf('end')).toEqual([])
+    expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', quantity: 2 })
   })
 
   it('un produit inconnu de la liste (message forgé) ne met rien au panier', async () => {
@@ -499,8 +768,8 @@ describe('un produit connu devenu indisponible', () => {
   ]
   const shelf: Record<string, ShelfItem> = {
     ...SHELF,
-    '1000001': { stock: 0 },
-    '1000002': { stock: 0 },
+    '1000001': OUT_OF_STOCK,
+    '1000002': OUT_OF_STOCK,
   }
   const flour = (extra: Partial<PlanLine> = {}) => ({
     ...known('farine', FARINE),
@@ -519,7 +788,13 @@ describe('un produit connu devenu indisponible', () => {
       'Ces produits ne sont plus disponibles : Farine de test A, Farine de test B.',
     )
     expect(zone?.textContent).toContain('Ne plus proposer Farine de test A')
-    expect(test.adapter.calls.slice(0, 2)).toEqual(['search 1000001', 'search 1000002'])
+    // chaque produit est cherché puis tenté une seule fois au panier (le panier tranche), avant la phase B
+    expect(test.adapter.calls.slice(0, 4)).toEqual([
+      'search 1000001',
+      'cart 1000001 1',
+      'search 1000002',
+      'cart 1000002 2',
+    ])
   })
 
   it.each([
@@ -539,7 +814,7 @@ describe('un produit connu devenu indisponible', () => {
 
       // Then
       expect(test.placements).toEqual([
-        { ingredient: 'Farine', productLabel: 'Poivre noir moulu de test 500 g' },
+        { ingredient: 'Farine', productLabel: 'Poivre noir moulu de test 500 g', photo: null },
       ])
       expect(lineOf(expectConform(test.sent[0]), 'farine')).toMatchObject({
         outcome: 'CHOSEN',
@@ -563,7 +838,11 @@ describe('un produit connu devenu indisponible', () => {
 
     await test.start()
 
-    expect(test.adapter.writes).toEqual([])
+    // seules les deux tentatives de la phase A ont écrit : le produit de la liste n'est pas mis au panier
+    expect(test.adapter.writes).toEqual([
+      { id: '1000001', quantity: 1 },
+      { id: '1000002', quantity: 2 },
+    ])
     expect(test.user.views).toHaveLength(2)
   })
 
@@ -587,6 +866,38 @@ describe('un produit connu devenu indisponible', () => {
       outcome: 'CHOSEN',
       rejected: [{ id: '1000001', label: 'Farine de test A', content: { value: 1000, unit: 'g' } }],
     })
+  })
+
+  it('nettoie le libellé du produit refusé : une fiche enregistrée avant le durcissement du back ne fait pas refuser tout le lot', async () => {
+    // Given : deux fiches mémorisées avec des invisibles que le back refuse aujourd'hui (trait d'union conditionnel, opérateur invisible),
+    // la seconde n'étant faite que de cela
+    const legacy = [
+      {
+        ...product('1000001', 1, 'Fari\u00ADne de\u2061 test A'),
+        content: { value: 1000, unit: 'g' as const },
+      },
+      product('1000002', 2, '\u200B\u00AD'),
+    ]
+    const test = run(
+      flour({ products: legacy }),
+      [
+        (view) => {
+          view.zone.querySelector<HTMLInputElement>('#jamais-0')?.click()
+          view.zone.querySelector<HTMLInputElement>('#jamais-1')?.click()
+          choose(view.zone, 'Poivre noir')
+        },
+      ],
+      { shelf },
+    )
+
+    // When
+    await test.start()
+
+    // Then : les libellés repartent nettoyés (ou, vides, « Produit <id> ») et le back les accepterait
+    const rejected = (lineOf(expectConform(test.sent[0]), 'farine') as { rejected: ProductRef[] })
+      .rejected
+    expect(rejected.map((item) => item.label)).toEqual(['Farine de test A', 'Produit 1000002'])
+    for (const item of rejected) expect(backAcceptsLabel(item.label)).toBe(true)
   })
 
   it('une case cochée puis décochée ne refuse rien', async () => {
@@ -663,7 +974,7 @@ describe('un produit connu devenu indisponible', () => {
 
     expect(test.screens.screens()).toContain('placement')
     expect(test.user.views[0]?.zone.textContent).toContain(
-      'Vous remplacez : Poivre habituel de test.',
+      'Tu remplaces : Poivre habituel de test.',
     )
     expect(test.user.views[0]?.zone.querySelector('.gone')).toBeNull()
     expect(lineOf(test.sent[0])).toMatchObject({ placement: 'ONCE' })
@@ -745,8 +1056,8 @@ describe('« Passer les n suivants »', () => {
     }
     const shelf: Record<string, ShelfItem> = {
       ...SHELF,
-      '1000001': { stock: 0 },
-      '1000002': { stock: 0 },
+      '1000001': OUT_OF_STOCK,
+      '1000002': OUT_OF_STOCK,
     }
     const test = run(
       flour,
@@ -790,9 +1101,9 @@ describe('« Passer les n suivants »', () => {
   describe('la confirmation d’une ligne', () => {
     const gone: Record<string, ShelfItem> = {
       ...SHELF,
-      '1000001': { stock: 0 },
-      '1000002': { stock: 0 },
-      '1000003': { stock: 0 },
+      '1000001': OUT_OF_STOCK,
+      '1000002': OUT_OF_STOCK,
+      '1000003': OUT_OF_STOCK,
     }
     /** Un article dont l'unique produit retenu n'est plus en stock (`id`), cherché sous « poivre ». */
     const flourGone = (slug: string, id = '1000001'): PlanLine => ({
@@ -856,12 +1167,15 @@ describe('« Passer les n suivants »', () => {
     })
   })
 
-  it('l’écran de fin compte les articles passés', async () => {
+  it('le résultat compte les articles passés, et repart tout de suite (rien à lire)', async () => {
     const test = run(pepper(), [rest], { others: four })
 
     await test.start()
 
-    expect(test.screens.propsOf('end')[0]).toMatchObject({ chosen: 0, skipped: 4, haveAtHome: 0 })
+    expect(test.screens.screens()).not.toContain('end')
+    const outcomes = test.sent[0]?.lines.map((line) => line.outcome)
+    expect(outcomes?.filter((outcome) => outcome === 'SKIPPED')).toHaveLength(4)
+    expect(outcomes).not.toContain('CHOSEN')
   })
 })
 
@@ -901,7 +1215,7 @@ describe('un produit retenu et disponible', () => {
   })
 
   it('même quand le produit habituel manque : le suivant disponible est pris, sans écran de choix', async () => {
-    const stock: Record<string, ShelfItem> = { ...shelf, '1000001': { stock: 0 } }
+    const stock: Record<string, ShelfItem> = { ...shelf, '1000001': OUT_OF_STOCK }
     const adapter = fakeAdapter(stock, { found: FOUND })
     const screens = fakeUi({ chooser: () => Promise.reject(new Error('aucun choix attendu')) })
     const { flow, sent } = makeFlow({
@@ -923,8 +1237,8 @@ describe('un produit retenu et disponible', () => {
   it('seul un article dont plus aucun produit retenu n’est disponible ouvre l’écran de choix', async () => {
     const stock: Record<string, ShelfItem> = {
       ...shelf,
-      '1000001': { stock: 0 },
-      '1000002': { stock: 0 },
+      '1000001': OUT_OF_STOCK,
+      '1000002': OUT_OF_STOCK,
     }
     const adapter = fakeAdapter(stock, { found: { farine: ['2000001'] } })
     const user = session(() => ({ kind: 'skip' }))
@@ -1061,7 +1375,7 @@ describe('les erreurs du site', () => {
       [
         (view) => {
           expect(view.zone.querySelector('[role="alert"]')?.textContent).toBe(
-            'Le site ne répond pas. Réessayez dans un instant.',
+            'Le site ne répond pas. Réessaie dans un instant.',
           )
           return { kind: 'skip' }
         },
@@ -1135,7 +1449,7 @@ describe('les erreurs du site', () => {
       [
         (view) => {
           expect(view.zone.querySelector('[role="alert"]')?.textContent).toBe(
-            'Leclerc met trop de temps à répondre. Réessayez dans un instant.',
+            'Leclerc met trop de temps à répondre. Réessaie dans un instant.',
           )
           return { kind: 'skip' }
         },
@@ -1192,7 +1506,6 @@ describe('les erreurs du site', () => {
       'progress',
       'chooser',
       'progress',
-      'end',
     ])
     expect(test.adapter.calls).toEqual(['find poivre', 'find sel', 'find poivre', 'cart 2000001 2'])
     expect(expectConform(test.sent[0])).toMatchObject({ outcome: 'completed' })
@@ -1261,20 +1574,17 @@ describe('les erreurs du site', () => {
     })
   })
 
-  it('un panier qui refuse le produit (quantité nulle) ramène à la liste avec un message', async () => {
+  it('un panier qui refuse le produit (quantité nulle) n’empêche pas de l’enregistrer : le passage continue avec l’article suivant', async () => {
     const shelf = { ...SHELF, '2000001': { ...SHELF['2000001'], obtained: () => 0 } }
-    const test = run(
-      pepper(),
-      [(view) => choose(view.zone, 'Poivre noir'), (view) => choose(view.zone, 'Poivre blanc')],
-      { shelf },
-    )
+    const test = run(pepper(), [(view) => choose(view.zone, 'Poivre noir')], {
+      shelf,
+      others: [{ ...fresh('sel'), name: 'Sel' }],
+    })
 
     await test.start()
 
-    expect(test.user.views[1]?.zone.querySelector('[role="alert"]')?.textContent).toContain(
-      'Leclerc n’a pas pu mettre ce produit au panier',
-    )
-    expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', product: { id: '2000002' } })
+    expect(test.user.views).toHaveLength(2)
+    expect(test.sent[0]?.lines.map((item) => item.outcome)).toEqual(['CHOSEN', 'UNAVAILABLE'])
   })
 })
 
@@ -1344,6 +1654,17 @@ describe('le libellé d’un produit pour Repas', () => {
     })
 
     expect(label).toBe('Sel fin de test 1 kg')
+    expect(backAcceptsLabel(label)).toBe(true)
+  })
+
+  it('retire aussi le trait d’union conditionnel et les opérateurs invisibles, que le back refuse depuis sa PR #198', () => {
+    const label = labelOf({
+      ...candidate('1'),
+      label: 'Fro\u00ADmage ra\u00ADpé\u2061',
+      label2: '2\u2062 x 100\u2063 g\u2064',
+    })
+
+    expect(label).toBe('Fromage rapé 2 x 100 g')
     expect(backAcceptsLabel(label)).toBe(true)
   })
 
@@ -1434,14 +1755,14 @@ describe('quand la recherche du nom ne répond rien', () => {
     expect(test.adapter.calls).toEqual(['find poivre'])
   })
 
-  it('rien ne répond : « Aucun produit trouvé pour « zzqxkw ». Essayez un autre mot. », au plus 5 requêtes, le champ garde le nom', async () => {
+  it('rien ne répond : « Aucun produit trouvé pour « zzqxkw ». Essaie un autre mot. », au plus 5 requêtes, le champ garde le nom', async () => {
     // Given
     const test = run(
       { ...fresh('zzqxkw'), name: 'Zzqxkw', searchQuery: 'zzqxkw' },
       [
         (view) => {
           expect(statusOf(view.zone)).toBe(
-            'Aucun produit trouvé pour « zzqxkw ». Essayez un autre mot.',
+            'Aucun produit trouvé pour « zzqxkw ». Essaie un autre mot.',
           )
           expect(queryOf(view.zone)).toBe('zzqxkw')
           expect(rows(view.zone)).toHaveLength(0)
@@ -1493,7 +1814,7 @@ describe('quand la recherche du nom ne répond rien', () => {
         type(view, 'tomates')
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(statusOf(view.zone)).toBe(
-          'Aucun produit trouvé pour « tomates ». Essayez un autre mot.',
+          'Aucun produit trouvé pour « tomates ». Essaie un autre mot.',
         )
         return { kind: 'skip' }
       },
@@ -1518,5 +1839,1093 @@ describe('quand la recherche du nom ne répond rien', () => {
 
     expect(test.adapter.calls).toEqual(['find œuf', 'find oeuf'])
     expect(test.sent[0]).toMatchObject({ outcome: 'partial' })
+  })
+})
+
+// —— Introuvable n'est pas indisponible (DRV-635) ————————————————————————————————————————————————————————————————————————————
+
+const SHELF_OUT: Record<string, ShelfItem> = {
+  ...SHELF,
+  '1000001': OUT_OF_STOCK,
+  '1000002': OUT_OF_STOCK,
+}
+
+describe('la raison de chaque produit habituel écarté (DRV-635)', () => {
+  const LABEL_A = "Gâteaux C'est Nous Pépites 300 g"
+  const PRODUCTS = [
+    { ...product('1000001', 1, LABEL_A), content: { value: 300, unit: 'g' as const } },
+    product('1000002', 1, 'Farine de test B'),
+    product('1000003', 1, 'Sucre de test C'),
+  ]
+  const mixed = (): PlanLine => ({
+    ...known('gateaux', PRODUCTS),
+    searchQuery: 'poivre',
+  })
+  /** A est introuvable, B est refusé par le panier, C est en rupture : trois raisons dans la même ligne. */
+  const shelf: Record<string, ShelfItem> = {
+    ...SHELF,
+    '1000001': {},
+    '1000002': { stock: 10, obtained: () => 0 },
+    '1000003': OUT_OF_STOCK,
+  }
+  const sees = (_query: string, id: string) => id !== '1000001'
+
+  function runMixed(steps: Step[]) {
+    const adapter = fakeAdapter(shelf, { found: FOUND, sees })
+    const user = session(...steps)
+    const screens = fakeUi({ chooser: user.chooser, placement: () => 'ONCE' })
+    const { flow, sent } = makeFlow({
+      ui: screens.ui,
+      adapter: adapter.adapter,
+      phaseB: guidedChoice,
+    })
+    return { start: () => flow.start(plan([mixed()])), adapter, user, sent }
+  }
+
+  it('chaque raison a sa phrase : la rupture se dit « plus disponible », le reste ne le dit jamais', async () => {
+    const test = runMixed([() => ({ kind: 'skip' })])
+
+    await test.start()
+
+    const text = test.user.views[0]?.zone.textContent ?? ''
+    expect(text).toContain('Ces produits ne sont plus disponibles : Sucre de test C.')
+    expect(text).toContain(`Je ne retrouve pas « ${LABEL_A} » : cherche-le ou choisis-en un autre.`)
+    expect(text).toContain(
+      'Leclerc n’a pas pu mettre « Farine de test B » au panier. Choisis-en un autre.',
+    )
+    // « plus disponible » ne qualifie ni le produit introuvable ni celui que le panier a refusé
+    expect(text).not.toContain('Farine de test B, ')
+    expect(text).not.toMatch(/plus disponibles : [^.]*(Gâteaux|Farine)/)
+  })
+
+  it('la recherche est préremplie avec la forme la plus simple du produit introuvable, sans être lancée', async () => {
+    const test = runMixed([() => ({ kind: 'skip' })])
+
+    await test.start()
+
+    const input = test.user.views[0]?.zone.querySelector<HTMLInputElement>('#chercher')
+    expect(input?.value).toBe(productSearchForms(LABEL_A).at(-1))
+    expect(input?.value).toBe('gateaux pepites')
+    // la liste montre toujours les résultats de la recherche de l’article : rien n’a été cherché de plus
+    expect(test.adapter.calls.filter((call) => call.startsWith('find '))).toEqual(['find poivre'])
+  })
+
+  it('sans produit introuvable, la recherche garde le nom de l’article', async () => {
+    const gone = {
+      ...known('farine', [
+        product('1000001', 1, 'Farine de test A'),
+        product('1000002', 2, 'Farine de test B'),
+      ]),
+      searchQuery: 'poivre',
+    }
+    const test = run(gone, [() => ({ kind: 'skip' })], { shelf: SHELF_OUT })
+
+    await test.start()
+
+    expect(test.user.views[0]?.zone.querySelector<HTMLInputElement>('#chercher')?.value).toBe(
+      'poivre',
+    )
+  })
+
+  it('« Ne plus proposer » est décochée pour chacun, et rien n’est retiré de la mémoire sans un geste', async () => {
+    const test = runMixed([(view) => choose(view.zone, 'Poivre noir')])
+
+    await test.start()
+
+    const boxes = [
+      ...(test.user.views[0]?.zone.querySelectorAll<HTMLInputElement>('input[type="checkbox"]') ??
+        []),
+    ]
+    expect(boxes).toHaveLength(3)
+    expect(boxes.every((box) => !box.checked)).toBe(true)
+    expect(lineOf(test.sent[0], 'gateaux')).toMatchObject({
+      outcome: 'CHOSEN',
+      unavailableIds: ['1000001', '1000002', '1000003'],
+    })
+    expect(lineOf(test.sent[0], 'gateaux')).not.toHaveProperty('rejected')
+  })
+
+  it('cocher « Ne plus proposer » sur un produit introuvable est un geste de l’utilisateur : il part dans « rejected »', async () => {
+    const test = runMixed([
+      (view) => {
+        view.zone.querySelector<HTMLInputElement>('#jamais-0')?.click()
+        choose(view.zone, 'Poivre noir')
+      },
+    ])
+
+    await test.start()
+
+    expect(lineOf(test.sent[0], 'gateaux')).toMatchObject({
+      rejected: [{ id: '1000001', label: LABEL_A }],
+    })
+  })
+})
+
+// —— Les photos (DRV-633) ————————————————————————————————————————————————————————————————————————————————————————————————————
+
+describe('les photos des produits', () => {
+  const PHOTO = (id: string) =>
+    `https://photos-test.leclercdrive.fr/image.ashx?id=${id}&use=l&cat=p`
+  const withPhotos = (shelf: Record<string, ShelfItem>): Record<string, ShelfItem> =>
+    Object.fromEntries(
+      Object.entries(shelf).map(([id, entry]) => [id, { ...entry, image: PHOTO(id) }]),
+    )
+
+  it('chaque fiche reçoit l’adresse de la photo de son produit ; un produit sans photo n’en a pas', async () => {
+    const shelf = { ...withPhotos(SHELF), '2000002': { ...SHELF['2000002'], image: null } }
+    const test = run(pepper(), [() => ({ kind: 'skip' })], { shelf })
+
+    await test.start()
+
+    const zone = test.user.views[0]?.zone ?? document.createElement('div')
+    expect(rows(zone).map((row) => row.querySelector('img')?.getAttribute('src') ?? null)).toEqual([
+      PHOTO('2000001'),
+      null,
+      PHOTO('2000003'),
+      PHOTO('2000004'),
+    ])
+    expect(rows(zone)[0]?.querySelector('img')?.getAttribute('alt')).toBe(
+      'Poivre noir moulu de test',
+    )
+  })
+
+  it('le résultat renvoyé à Repas est le même, octet pour octet, avec ou sans photos : aucune adresse d’image ne part', async () => {
+    const without = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')])
+    const photos = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')], {
+      shelf: withPhotos(SHELF),
+    })
+
+    await without.start()
+    await photos.start()
+
+    expect(JSON.stringify(photos.sent)).toBe(JSON.stringify(without.sent))
+    expect(JSON.stringify(photos.sent)).not.toMatch(/photo|image|leclercdrive/i)
+    expect(photos.adapter.calls).toEqual(without.adapter.calls)
+  })
+
+  it('l’état de reprise ne garde aucune adresse de photo', async () => {
+    const test = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')], {
+      shelf: withPhotos(SHELF),
+    })
+
+    await test.start()
+
+    const stored = JSON.stringify(
+      Object.fromEntries(
+        Array.from({ length: sessionStorage.length }, (_, index) => {
+          const key = sessionStorage.key(index) ?? ''
+          return [key, sessionStorage.getItem(key)]
+        }),
+      ),
+    )
+    expect(stored).not.toMatch(/image\.ashx|leclercdrive|photo/i)
+  })
+
+  it('la question « Toujours prendre ce produit ? » reçoit la photo du produit choisi', async () => {
+    const FARINE = [
+      {
+        ...product('1000001', 1, 'Farine de test A'),
+        content: { value: 1000, unit: 'g' as const },
+      },
+    ]
+    const shelf = { ...withPhotos(SHELF), '1000001': OUT_OF_STOCK }
+    const line = {
+      ...known('farine', FARINE),
+      searchQuery: 'poivre',
+      needed: { quantity: 800, unitSymbol: 'g', dimension: 'WEIGHT' as const, baseFactor: 1 },
+    }
+    const test = run(line, [(view) => choose(view.zone, 'Poivre noir')], { shelf })
+
+    await test.start()
+
+    expect(test.placements).toEqual([
+      {
+        ingredient: 'Farine',
+        productLabel: 'Poivre noir moulu de test 500 g',
+        photo: PHOTO('2000001'),
+      },
+    ])
+  })
+})
+
+// —— Chercher dans le bon rayon (DRV-642) ————————————————————————————————————————————————————————————————————————————————————
+
+describe('les rayons conseillés rangent la liste, sans cacher aucun produit (DRV-642)', () => {
+  const FRESH = 41
+  const CANNED = 7
+  const JUICE = 15
+  /** 40 produits « tomate » : les 6 frais sont dispersés parmi 34 conserves, sauces et jus, dans l'ordre du site. */
+  const FRESH_AT = new Set([5, 11, 19, 20, 33, 39])
+  const tomatoes = (count = 40) => {
+    const ids = Array.from({ length: count }, (_value, index) => String(4000001 + index))
+    const shelf: Record<string, ShelfItem> = {}
+    ids.forEach((id, index) => {
+      const fresh = FRESH_AT.has(index)
+      shelf[id] = {
+        label: fresh ? `Tomates fraîches ${index}` : `Sauce tomate ${index}`,
+        content: { value: 500, unit: 'g' },
+        aisle: fresh ? FRESH : index % 3 === 0 ? JUICE : CANNED,
+        family: fresh ? 410 : 520,
+      }
+    })
+    return { ids, shelf, found: { tomate: ids } }
+  }
+  const tomato = (extra: Partial<PlanLine> = {}): PlanLine => ({
+    ...fresh('tomate'),
+    needed: { quantity: 500, unitSymbol: 'g', dimension: 'WEIGHT', baseFactor: 1 },
+    ...extra,
+  })
+  /** Tout ce que la liste contient une fois qu'on a fait défiler jusqu'au bout. */
+  const everything = (view: View): string[] => {
+    for (let step = 0; step < 30; step += 1) view.zone.dispatchEvent(new Event('scroll'))
+    return rows(view.zone).map(nameOf)
+  }
+  const sauce = (index: number) => `Sauce tomate ${index}`
+  /** DRV-647 : un rayon appris est choisi d'avance dans la rangée ; « Tous » montre de nouveau toute la liste, rangée par DRV-642. */
+  const showAll = (view: View) => chipOf(view.zone, 'Tous').click()
+  const fresher = (index: number) => `Tomates fraîches ${index}`
+
+  it('place d’abord les 6 produits frais, dans l’ordre du site, puis tous les autres dans l’ordre du site : aucun n’est caché', async () => {
+    // Given : 40 produits dont 6 frais, et le rayon frais conseillé
+    const { shelf, found } = tomatoes()
+    let all: string[] = []
+    const test = run(
+      tomato({ rayonHints: [FRESH] }),
+      [
+        (view) => {
+          showAll(view)
+          all = everything(view)
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf, found },
+    )
+    const site = found.tomate.map((id) => shelf[id]?.label)
+
+    // When
+    await test.start()
+
+    // Then : les 6 frais d'abord
+    expect(all).toHaveLength(40)
+    expect(all.slice(0, 6)).toEqual([5, 11, 19, 20, 33, 39].map(fresher))
+    // puis les 34 autres, exactement dans l'ordre du site
+    expect(all.slice(6)).toEqual(site.filter((label) => !label?.startsWith('Tomates fraîches')))
+    expect(new Set(all)).toEqual(new Set(site))
+  })
+
+  it('le premier lot de huit fiches montre déjà les 6 produits frais', async () => {
+    const { shelf, found } = tomatoes()
+    let first: string[] = []
+    const test = run(
+      tomato({ rayonHints: [FRESH] }),
+      [
+        (view) => {
+          showAll(view)
+          first = rows(view.zone).map(nameOf)
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf, found },
+    )
+
+    await test.start()
+
+    expect(first).toHaveLength(8)
+    expect(first.slice(0, 6).every((name) => name.startsWith('Tomates fraîches'))).toBe(true)
+    expect(first.slice(6)).toEqual([sauce(0), sauce(1)])
+  })
+
+  it('sans « rayonHints » ou avec une liste vide : l’ordre du site, comme avant', async () => {
+    const { shelf, found } = tomatoes()
+    const site = found.tomate.map((id) => shelf[id]?.label)
+    const seen: string[][] = []
+    for (const extra of [{}, { rayonHints: [] }]) {
+      const test = run(
+        tomato(extra),
+        [
+          (view) => {
+            seen.push(everything(view))
+            return { kind: 'skip' }
+          },
+        ],
+        { shelf, found },
+      )
+      await test.start()
+    }
+
+    expect(seen).toEqual([site, site])
+  })
+
+  it('un rayon conseillé que la recherche n’a pas : l’ordre du site', async () => {
+    const { shelf, found } = tomatoes()
+    const site = found.tomate.map((id) => shelf[id]?.label)
+    let all: string[] = []
+    const test = run(
+      tomato({ rayonHints: [999999] }),
+      [
+        (view) => {
+          showAll(view)
+          all = everything(view)
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf, found },
+    )
+
+    await test.start()
+
+    expect(all).toEqual(site)
+  })
+
+  it('plusieurs rayons conseillés : par groupes, le plus choisi d’abord', async () => {
+    const { shelf, found } = tomatoes()
+    let all: string[] = []
+    const test = run(
+      tomato({ rayonHints: [JUICE, FRESH] }),
+      [
+        (view) => {
+          showAll(view)
+          all = everything(view)
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf, found },
+    )
+
+    await test.start()
+
+    const juice = found.tomate
+      .map((id) => shelf[id])
+      .filter((item) => item?.aisle === JUICE)
+      .map((item) => item?.label)
+    expect(all.slice(0, juice.length)).toEqual(juice)
+    expect(all.slice(juice.length, juice.length + 6)).toEqual([5, 11, 19, 20, 33, 39].map(fresher))
+    expect(all).toHaveLength(40)
+  })
+
+  it('« Chercher autre chose » est rangé de la même façon', async () => {
+    const { shelf, found } = tomatoes()
+    let all: string[] = []
+    const test = run(
+      tomato({ rayonHints: [FRESH] }),
+      [
+        async (view) => {
+          search(view, 'tomates')
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          showAll(view)
+          all = everything(view)
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf, found: { ...found, tomates: [...found.tomate].reverse() } },
+    )
+
+    await test.start()
+
+    // Dans l'ordre inverse du site, les frais (39, 33, 20, 19, 11, 5) d'abord
+    expect(all.slice(0, 6)).toEqual([39, 33, 20, 19, 11, 5].map(fresher))
+    expect(all).toHaveLength(40)
+    expect(test.adapter.calls.filter((call) => call.startsWith('find'))).toEqual([
+      'find tomate',
+      'find tomates',
+    ])
+  })
+
+  it('le classement précède le plafond technique : un produit frais en fin de page n’est pas perdu', async () => {
+    const count = MAX_CANDIDATES + 40
+    const ids = Array.from({ length: count }, (_value, index) => String(5000001 + index))
+    const shelf: Record<string, ShelfItem> = {}
+    ids.forEach((id, index) => {
+      shelf[id] = { label: `Produit ${index}`, aisle: index >= count - 3 ? FRESH : CANNED }
+    })
+    let all: string[] = []
+    const test = run(
+      tomato({ rayonHints: [FRESH] }),
+      [
+        (view) => {
+          showAll(view)
+          all = everything(view)
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf, found: { tomate: ids } },
+    )
+
+    await test.start()
+
+    expect(all).toHaveLength(MAX_CANDIDATES)
+    expect(all.slice(0, 3)).toEqual([
+      `Produit ${count - 3}`,
+      `Produit ${count - 2}`,
+      `Produit ${count - 1}`,
+    ])
+  })
+
+  it('renvoie le rayon et la famille du produit choisi (faits du catalogue), et lui seul', async () => {
+    const { shelf, found } = tomatoes()
+    const test = run(
+      tomato({ rayonHints: [FRESH] }),
+      [(view) => choose(view.zone, 'Tomates fraîches 5')],
+      { shelf, found },
+    )
+
+    await test.start()
+
+    expect(lineOf(test.sent[0], 'tomate')).toMatchObject({
+      outcome: 'CHOSEN',
+      product: { id: '4000006', rayonId: FRESH, familyId: 410 },
+    })
+    expect(expectConform(test.sent[0])).toBeTruthy()
+  })
+
+  it('renvoie le rayon du produit choisi même sans rayon conseillé : c’est ainsi que Repas l’apprend', async () => {
+    const { shelf, found } = tomatoes()
+    const test = run(tomato(), [(view) => choose(view.zone, 'Sauce tomate 0')], { shelf, found })
+
+    await test.start()
+
+    expect(lineOf(test.sent[0], 'tomate')).toMatchObject({
+      product: { rayonId: JUICE, familyId: 520 },
+    })
+  })
+
+  it('un produit dont le site ne donne ni rayon ni famille (ou des valeurs hors bornes) repart sans ces clés, octet pour octet comme avant', async () => {
+    const plain = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')])
+    const odd = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')], {
+      shelf: { ...SHELF, '2000001': { ...SHELF['2000001'], aisle: 0, family: 2_147_483_648 } },
+    })
+
+    await plain.start()
+    await odd.start()
+
+    expect(JSON.stringify(odd.sent)).toBe(JSON.stringify(plain.sent))
+    expect(JSON.stringify(plain.sent)).not.toMatch(/rayonId|familyId/)
+  })
+
+  it('un produit choisi que le panier ne prend pas est quand même enregistré avec son rayon', async () => {
+    const { shelf, found } = tomatoes()
+    shelf['4000006'] = { ...shelf['4000006'], obtained: () => 0 }
+    const test = run(
+      tomato({ rayonHints: [FRESH] }),
+      [(view) => choose(view.zone, 'Tomates fraîches 5')],
+      { shelf, found },
+    )
+
+    await test.start()
+
+    expect(lineOf(test.sent[0], 'tomate')).toMatchObject({
+      outcome: 'CHOSEN',
+      product: { rayonId: FRESH },
+    })
+  })
+
+  it('le classement ne change ni les requêtes ni l’état de reprise (aucune requête de plus, aucun rayon gardé)', async () => {
+    const { shelf, found } = tomatoes()
+    const hinted = run(
+      tomato({ rayonHints: [FRESH] }),
+      [(view) => choose(view.zone, 'Tomates fraîches 5')],
+      { shelf, found },
+    )
+    const plain = run(tomato(), [(view) => choose(view.zone, 'Tomates fraîches 5')], {
+      shelf,
+      found,
+    })
+
+    await hinted.start()
+    await plain.start()
+
+    expect(hinted.adapter.calls).toEqual(plain.adapter.calls)
+  })
+})
+
+describe('le filtre par rayon du site (DRV-647)', () => {
+  const FRESH = 41
+  const CANNED = 7
+  const JUICE = 15
+  /** 12 produits « tomate » : 6 conserves, 4 frais, 2 jus, mêlés dans l'ordre du site. */
+  const AISLES = [
+    CANNED,
+    FRESH,
+    CANNED,
+    JUICE,
+    CANNED,
+    FRESH,
+    CANNED,
+    FRESH,
+    CANNED,
+    JUICE,
+    CANNED,
+    FRESH,
+  ]
+  const ids = AISLES.map((_aisle, index) => String(6000001 + index))
+  const shelf: Record<string, ShelfItem> = Object.fromEntries(
+    ids.map((id, index) => [
+      id,
+      {
+        label: `${AISLES[index] === FRESH ? 'Tomates' : AISLES[index] === JUICE ? 'Jus' : 'Conserve'} ${index}`,
+        content: { value: 500, unit: 'g' },
+        aisle: AISLES[index] ?? null,
+        family: 400 + (AISLES[index] ?? 0),
+      },
+    ]),
+  )
+  const found = { tomate: ids }
+  const labels = { [FRESH]: 'Fruits et légumes', [CANNED]: 'Conserves' }
+  const line = (extra: Partial<PlanLine> = {}): PlanLine => ({
+    ...fresh('tomate'),
+    needed: { quantity: 500, unitSymbol: 'g', dimension: 'WEIGHT', baseFactor: 1 },
+    ...extra,
+  })
+  const chips = (zone: HTMLElement) =>
+    [...zone.querySelectorAll<HTMLButtonElement>('.aisles button')].map((button) => ({
+      text: button.textContent,
+      pressed: button.getAttribute('aria-pressed'),
+    }))
+  const names = (zone: HTMLElement) => rows(zone).map(nameOf)
+
+  it('montre « Tous » puis les rayons présents, du plus fourni au moins fourni, avec leur libellé et le repli « Rayon 1 » ; un toucher filtre sans requête', async () => {
+    let before: { text: string | null; pressed: string | null }[] = []
+    let onlyFresh: string[] = []
+    let again: string[] = []
+    let finds = 0
+    const test = run(
+      line(),
+      [
+        (view) => {
+          before = chips(view.zone)
+          finds = test.adapter.calls.length
+          chipOf(view.zone, 'Fruits et légumes').click()
+          onlyFresh = names(view.zone)
+          // Retoucher le rayon choisi revient à « Tous ».
+          chipOf(view.zone, 'Fruits et légumes').click()
+          again = names(view.zone)
+          expect(test.adapter.calls).toHaveLength(finds)
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf, found, aisleLabels: labels },
+    )
+
+    await test.start()
+
+    expect(before).toEqual([
+      { text: 'Tous (12)', pressed: 'true' },
+      { text: 'Conserves (6)', pressed: 'false' },
+      { text: 'Fruits et légumes (4)', pressed: 'false' },
+      { text: 'Rayon 1 (2)', pressed: 'false' },
+    ])
+    expect(onlyFresh).toEqual(['Tomates 1', 'Tomates 5', 'Tomates 7', 'Tomates 11'])
+    // Toute la liste revient, par lots : le premier lot de huit.
+    expect(again).toHaveLength(8)
+  })
+
+  it('le rayon appris (« rayonHints ») est choisi d’avance, « Tous » est à un toucher, et le produit choisi garde son rayon', async () => {
+    let first: string[] = []
+    let pressed: (string | null)[] = []
+    let all: string[] = []
+    const test = run(
+      line({ rayonHints: [FRESH] }),
+      [
+        (view) => {
+          first = names(view.zone)
+          pressed = chips(view.zone).map((chip) => chip.pressed)
+          chipOf(view.zone, 'Tous').click()
+          all = names(view.zone)
+          chipOf(view.zone, 'Fruits et légumes').click()
+          choose(view.zone, 'Tomates 5')
+        },
+      ],
+      { shelf, found, aisleLabels: labels },
+    )
+
+    await test.start()
+
+    expect(first).toEqual(['Tomates 1', 'Tomates 5', 'Tomates 7', 'Tomates 11'])
+    // Le rayon appris passe juste après « Tous ».
+    expect(pressed).toEqual(['false', 'true', 'false', 'false'])
+    expect(all).toHaveLength(8)
+    expect(all[0]).toBe('Tomates 1')
+    expect(lineOf(test.sent[0], 'tomate')).toMatchObject({
+      outcome: 'CHOSEN',
+      product: { id: '6000006', rayonId: FRESH },
+    })
+    expect(test.adapter.calls.filter((call) => call.startsWith('find'))).toEqual(['find tomate'])
+  })
+
+  it('au niveau de la famille : chaque famille est un groupe, et la famille du rayon appris est choisie d’avance quand il n’en a qu’une', async () => {
+    let pressed: (string | null)[] = []
+    let texts: (string | null)[] = []
+    let shown: string[] = []
+    const test = run(
+      line({ rayonHints: [FRESH] }),
+      [
+        (view) => {
+          texts = chips(view.zone).map((chip) => chip.text)
+          pressed = chips(view.zone).map((chip) => chip.pressed)
+          shown = names(view.zone)
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        shelf,
+        found,
+        aisleLevel: 'FAMILLE',
+        aisleLabels: { 441: 'Tomates fraîches', 407: 'Conserves' },
+      },
+    )
+
+    await test.start()
+
+    expect(texts).toEqual(['Tous (12)', 'Tomates fraîches (4)', 'Conserves (6)', 'Rayon 1 (2)'])
+    expect(pressed).toEqual(['false', 'true', 'false', 'false'])
+    expect(shown).toEqual(['Tomates 1', 'Tomates 5', 'Tomates 7', 'Tomates 11'])
+  })
+
+  it('au niveau de la famille, un rayon appris réparti sur deux familles ne choisit rien d’avance', async () => {
+    let pressed: (string | null)[] = []
+    const split = Object.fromEntries(
+      Object.entries(shelf).map(([id, item], index) => [
+        id,
+        item.aisle === FRESH ? { ...item, family: index < 6 ? 441 : 442 } : item,
+      ]),
+    )
+    const test = run(
+      line({ rayonHints: [FRESH] }),
+      [
+        (view) => {
+          pressed = chips(view.zone).map((chip) => chip.pressed)
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf: split, found, aisleLevel: 'FAMILLE' },
+    )
+
+    await test.start()
+
+    expect(pressed[0]).toBe('true')
+    expect(pressed.slice(1).every((value) => value === 'false')).toBe(true)
+  })
+
+  it('un seul rayon dans les résultats : pas de rangée', async () => {
+    let count = -1
+    const one = Object.fromEntries(
+      ids.slice(0, 3).map((id) => [id, { ...shelf[id], aisle: FRESH }]),
+    )
+    const test = run(
+      line(),
+      [
+        (view) => {
+          count = view.zone.querySelectorAll('.aisles button').length
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf: one, found: { tomate: ids.slice(0, 3) } },
+    )
+
+    await test.start()
+
+    expect(count).toBe(0)
+  })
+
+  it('« Chercher autre chose » refait la rangée pour les nouveaux résultats', async () => {
+    let after: (string | null)[] = []
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          chipOf(view.zone, 'Conserves').click()
+          search(view, 'jus tomate')
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          after = chips(view.zone).map((chip) => chip.text)
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        shelf,
+        found: { ...found, 'jus tomate': [ids[3] ?? '', ids[9] ?? '', ids[1] ?? ''] },
+        aisleLabels: labels,
+      },
+    )
+
+    await test.start()
+
+    expect(after).toEqual(['Tous (3)', 'Rayon 1 (2)', 'Fruits et légumes (1)'])
+  })
+})
+
+describe('la rangée des rayons du site, tirée de sa facette « Rayons » (DRV-647, 0.36.0, validée par 0.37.0)', () => {
+  const FRESH = 41
+  const CANNED = 7
+  const AISLES = [CANNED, FRESH, CANNED, CANNED, FRESH, CANNED, FRESH, CANNED, FRESH, CANNED]
+  const ids = AISLES.map((_aisle, index) => String(7000001 + index))
+  const shelf: Record<string, ShelfItem> = Object.fromEntries(
+    ids.map((id, index) => [
+      id,
+      {
+        label: `${AISLES[index] === FRESH ? 'Tomates' : 'Sauce'} ${index}`,
+        content: { value: 500, unit: 'g' },
+        aisle: AISLES[index] ?? null,
+        family: AISLES[index] === FRESH ? 410 + (index % 2) : 71,
+      },
+    ]),
+  )
+  const fresh4 = ids.filter((_id, index) => AISLES[index] === FRESH)
+  const canned = ids.filter((_id, index) => AISLES[index] === CANNED)
+  const SITE = [
+    { key: '4-1', label: 'Epicerie salée', count: 6, children: [] },
+    {
+      key: '4-2',
+      label: 'Fruits Légumes',
+      count: 4,
+      children: [
+        { key: '4-21', label: 'Légumes', count: 3, children: [] },
+        { key: '4-22', label: 'Jus de fruits et légumes frais', count: 1, children: [] },
+      ],
+    },
+    { key: '4-3', label: null, count: 0, children: [] },
+  ]
+  const line = (extra: Partial<PlanLine> = {}): PlanLine => ({
+    ...fresh('tomate'),
+    needed: { quantity: 500, unitSymbol: 'g', dimension: 'WEIGHT', baseFactor: 1 },
+    ...extra,
+  })
+  const shelfTexts = (zone: HTMLElement, sub = false) =>
+    [
+      ...zone.querySelectorAll<HTMLButtonElement>(
+        sub ? '.aisles.sub button' : '.aisles:not(.sub) button',
+      ),
+    ].map(
+      (button) =>
+        `${button.textContent}${button.getAttribute('aria-pressed') === 'true' ? ' *' : ''}`,
+    )
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+  const names = (zone: HTMLElement) => rows(zone).map(nameOf)
+  const finds = (calls: readonly string[]) => calls.filter((call) => call.startsWith('filter'))
+
+  it('montre « Tous » puis les rayons du site par nombre de références ; toucher un rayon fait UNE requête filtrée, gardée ; « Tous » revient sans requête', async () => {
+    const seen: Record<string, unknown> = {}
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          // La rangée du site ne vient qu'après la validation de la forme du filtre (en tâche de fond).
+          await tick()
+          seen.row = shelfTexts(view.zone)
+          chipOf(view.zone, 'Fruits Légumes').click()
+          expect(view.zone.textContent).toContain('Je cherche…')
+          await tick()
+          seen.fresh = names(view.zone)
+          seen.children = shelfTexts(view.zone, true)
+          chipOf(view.zone, 'Tous').click()
+          seen.all = names(view.zone).length
+          chipOf(view.zone, 'Fruits Légumes').click()
+          await tick()
+          seen.again = names(view.zone)
+          seen.filters = finds(test.adapter.calls)
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        shelf,
+        found: { tomate: ids },
+        siteValid: true,
+        siteAisles: SITE,
+        filtered: { '4-2': fresh4 },
+      },
+    )
+
+    await test.start()
+
+    // Le rayon appris (DRV-642) ne choisit rien d'avance dans la rangée du site ; « Rayon 1 » pour un rayon sans libellé.
+    expect(seen.row).toEqual([
+      'Tous (10) *',
+      'Epicerie salée (6)',
+      'Fruits Légumes (4)',
+      'Rayon 1 (0)',
+    ])
+    expect(seen.fresh).toEqual(['Tomates 1', 'Tomates 4', 'Tomates 6', 'Tomates 8'])
+    expect(seen.children).toEqual(['Légumes (3)', 'Jus de fruits et légumes frais (1)'])
+    expect(seen.all).toBe(8)
+    expect(seen.again).toEqual(seen.fresh)
+    expect(seen.filters).toEqual(['filter 4-2'])
+  })
+
+  it('un enfant du rayon choisi : ses produits, et le retoucher revient au rayon sans requête', async () => {
+    const seen: Record<string, unknown> = {}
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          // La rangée du site ne vient qu'après la validation de la forme du filtre (en tâche de fond).
+          await tick()
+          chipOf(view.zone, 'Fruits Légumes').click()
+          await tick()
+          ;[...view.zone.querySelectorAll<HTMLButtonElement>('.aisles.sub button')][0]?.click()
+          await tick()
+          seen.child = names(view.zone)
+          seen.pressed = shelfTexts(view.zone, true)
+          ;[...view.zone.querySelectorAll<HTMLButtonElement>('.aisles.sub button')][0]?.click()
+          await tick()
+          seen.back = names(view.zone)
+          seen.filters = finds(test.adapter.calls)
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        shelf,
+        found: { tomate: ids },
+        siteValid: true,
+        siteAisles: SITE,
+        filtered: { '4-2': fresh4, '4-21': fresh4.slice(0, 3) },
+      },
+    )
+
+    await test.start()
+
+    expect(seen.child).toEqual(['Tomates 1', 'Tomates 4', 'Tomates 6'])
+    expect(seen.pressed).toEqual(['Légumes (3) *', 'Jus de fruits et légumes frais (1)'])
+    expect(seen.back).toHaveLength(4)
+    expect(seen.filters).toEqual(['filter 4-2', 'filter 4-21'])
+  })
+
+  it('un produit choisi dans un rayon du site renvoie son rayonId et sa familyId, comme avant', async () => {
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          // La rangée du site ne vient qu'après la validation de la forme du filtre (en tâche de fond).
+          await tick()
+          chipOf(view.zone, 'Fruits Légumes').click()
+          await tick()
+          choose(view.zone, 'Tomates 4')
+        },
+      ],
+      {
+        shelf,
+        found: { tomate: ids },
+        siteValid: true,
+        siteAisles: SITE,
+        filtered: { '4-2': fresh4 },
+      },
+    )
+
+    await test.start()
+
+    expect(lineOf(test.sent[0], 'tomate')).toMatchObject({
+      outcome: 'CHOSEN',
+      product: { id: '7000005', rayonId: FRESH, familyId: 410 },
+    })
+  })
+
+  const FAMILIES = ['Tous (10) *', 'Conserves de légumes (6)', 'Tomates rondes (3)', 'Rayon 1 (1)']
+  const familyOptions = {
+    aisleLevel: 'FAMILLE' as const,
+    aisleLabels: { 71: 'Conserves de légumes', 410: 'Tomates rondes' },
+  }
+
+  it('tant que la forme du filtre n’est pas validée, la rangée est celle des familles ; aucune forme valide : elle reste, sans message, pour tout le passage, et la validation n’est faite qu’une fois', async () => {
+    const seen: Record<string, unknown> = {}
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          seen.before = shelfTexts(view.zone)
+          await tick()
+          seen.after = shelfTexts(view.zone)
+          seen.notice = view.zone.querySelector<HTMLElement>('.notice')?.hidden
+          return { kind: 'skip' }
+        },
+        async (view) => {
+          await tick()
+          seen.next = shelfTexts(view.zone)
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        shelf,
+        found: { tomate: ids, sauce: canned.concat(fresh4) },
+        siteValid: false,
+        siteAisles: SITE,
+        ...familyOptions,
+        others: [{ ...line(), ingredientSlug: 'sauce', name: 'sauce' }],
+      },
+    )
+
+    await test.start()
+
+    expect(seen.before).toEqual(FAMILIES)
+    expect(seen.after).toEqual(FAMILIES)
+    expect(seen.notice).toBe(true)
+    expect(seen.next).toEqual(FAMILIES)
+    expect(test.adapter.calls.filter((call) => call === 'validate')).toHaveLength(1)
+    expect(finds(test.adapter.calls)).toEqual([])
+  })
+
+  it('la validation réussie fait basculer la rangée vers les rayons du site, sans refaire la liste', async () => {
+    const seen: Record<string, unknown> = {}
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          seen.before = shelfTexts(view.zone)
+          const first = rows(view.zone)[0]
+          await tick()
+          seen.after = shelfTexts(view.zone)
+          seen.sameList = rows(view.zone)[0] === first
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf, found: { tomate: ids }, siteValid: true, siteAisles: SITE, ...familyOptions },
+    )
+
+    await test.start()
+
+    expect(seen.before).toEqual(FAMILIES)
+    expect(seen.after).toEqual([
+      'Tous (10) *',
+      'Epicerie salée (6)',
+      'Fruits Légumes (4)',
+      'Rayon 1 (0)',
+    ])
+    expect(seen.sameList).toBe(true)
+  })
+
+  it('une pastille des familles touchée avant la fin de la validation : les familles restent pour ce mot (pas de clignotement)', async () => {
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const seen: Record<string, unknown> = {}
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          chipOf(view.zone, 'Tomates rondes').click()
+          release()
+          await tick()
+          await tick()
+          seen.row = shelfTexts(view.zone)
+          seen.list = names(view.zone).length
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        shelf,
+        found: { tomate: ids },
+        siteValid: true,
+        siteAisles: SITE,
+        ...familyOptions,
+        before: (call) => (call === 'validate' ? gate : undefined),
+      },
+    )
+
+    await test.start()
+
+    expect(seen.row).toEqual([
+      'Tous (10)',
+      'Conserves de légumes (6)',
+      'Tomates rondes (3) *',
+      'Rayon 1 (1)',
+    ])
+    expect(seen.list).toBe(3)
+  })
+
+  it('un rayon touché dont le résultat n’est pas le sien (0.38.0) : « Tous », la rangée des familles et une phrase sobre ; plus aucune requête filtrée', async () => {
+    const seen: Record<string, unknown> = {}
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          await tick()
+          chipOf(view.zone, 'Fruits Légumes').click()
+          await tick()
+          seen.row = shelfTexts(view.zone)
+          seen.notice = view.zone.querySelector<HTMLElement>('.notice')?.textContent
+          seen.list = names(view.zone).length
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        shelf,
+        found: { tomate: ids },
+        siteValid: true,
+        siteAisles: SITE,
+        ...familyOptions,
+        filtered: { '4-2': canned.slice(0, 3) },
+        incoherent: ['4-2'],
+      },
+    )
+
+    await test.start()
+
+    expect(seen.row).toEqual(FAMILIES)
+    expect(seen.notice).toBe('Ce rayon ne répond pas comme prévu.')
+    expect(seen.list).toBe(8)
+    expect(finds(test.adapter.calls)).toEqual(['filter 4-2'])
+  })
+
+  it('une recherche filtrée que le site refuse après validation : repli sans message sur les familles', async () => {
+    const seen: Record<string, unknown> = {}
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          await tick()
+          chipOf(view.zone, 'Fruits Légumes').click()
+          await tick()
+          seen.row = shelfTexts(view.zone)
+          seen.notice = view.zone.querySelector<HTMLElement>('.notice')?.hidden
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        shelf,
+        found: { tomate: ids },
+        siteValid: true,
+        siteAisles: SITE,
+        ...familyOptions,
+        filtered: { '4-2': new LeclercError('CONTRACT_CHANGED', 404, 'HTTP_404') },
+      },
+    )
+
+    await test.start()
+
+    expect(seen.row).toEqual(FAMILIES)
+    expect(seen.notice).toBe(true)
+  })
+
+  it('une erreur réseau sur un rayon : une phrase, la rangée du site reste, « Tous »', async () => {
+    const seen: Record<string, unknown> = {}
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          // La rangée du site ne vient qu'après la validation de la forme du filtre (en tâche de fond).
+          await tick()
+          chipOf(view.zone, 'Fruits Légumes').click()
+          await tick()
+          seen.notice = view.zone.querySelector<HTMLElement>('.notice')?.textContent
+          seen.row = shelfTexts(view.zone)
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        shelf,
+        found: { tomate: ids },
+        siteValid: true,
+        siteAisles: SITE,
+        filtered: { '4-2': new LeclercError('NETWORK', null, 'REQUEST_TIMEOUT') },
+      },
+    )
+
+    await test.start()
+
+    expect(seen.notice).toBe('Leclerc met trop de temps à répondre. Réessaie dans un instant.')
+    expect(seen.row).toEqual([
+      'Tous (10) *',
+      'Epicerie salée (6)',
+      'Fruits Légumes (4)',
+      'Rayon 1 (0)',
+    ])
   })
 })

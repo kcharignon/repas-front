@@ -1,13 +1,9 @@
 package eu.kantin.repas.drive
 
-import android.app.Activity
-import android.content.ActivityNotFoundException
 import android.content.Context
-import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.net.Uri
 import android.os.Build
 import android.util.TypedValue
 import android.view.Gravity
@@ -17,7 +13,6 @@ import android.view.WindowInsets
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.Toast
 
 /** De petits outils pour construire les écrans sans AndroidX : les couleurs sont celles de `res/values/colors.xml`. */
 internal val BASIL = 0xFF1E6B4C.toInt()
@@ -79,15 +74,6 @@ internal fun keepClearOfSystemBars(root: View) {
         } else {
             insets
         }
-    }
-}
-
-/** Une page web dans le navigateur du téléphone. */
-internal fun Activity.openInPhoneBrowser(url: String) {
-    try {
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE))
-    } catch (_: ActivityNotFoundException) {
-        Toast.makeText(this, R.string.no_browser, Toast.LENGTH_LONG).show()
     }
 }
 

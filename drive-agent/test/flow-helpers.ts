@@ -10,11 +10,13 @@ import {
   type SetupResultMessage,
 } from '../protocol'
 import { Flow, type FlowDeps, type StorageLike } from '../src/flow'
+import { countAisles } from '../src/leclerc'
 import type {
   Candidate,
   CartResult,
   Content,
   PricePerMeasure,
+  EntryReading,
   RequestStats,
   RetailerAdapter,
   SessionReading,
@@ -23,6 +25,20 @@ import type { ProgressPatch, ScreenAnswer, ScreenName, ScreenProps, Ui } from '.
 
 export const RUN_ID = '8f14e45f-ceea-467a-9575-8e6b8c0a1b2c'
 export const STORE = { id: '000123', host: 'fd0-courses.leclercdrive.fr' }
+
+/** Une page sans menu des rayons (DRV-647) : ce que les adaptateurs simulés rendent. */
+export const NO_MENU: ReturnType<RetailerAdapter['readAisleMenu']> = {
+  menu: false,
+  links: 0,
+  menuLinks: 0,
+  aisles: [],
+  aisleCount: 0,
+  families: 0,
+  aisleIds: [],
+  familyIds: [],
+  shapes: [],
+  vocabulary: [],
+}
 
 // —— Les plans ————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
@@ -105,6 +121,8 @@ export function fakeUi(scripts: Scripts = {}) {
   const ui: Ui = {
     show(screen, props) {
       shown.push({ screen, props })
+      // Un bandeau sans bouton (DRV-625) : sa promesse ne se résout jamais.
+      if (screen === 'entry') return new Promise(() => undefined)
       if (screen === 'progress') {
         return new Promise((resolve) => stops.push(() => resolve('stop' as never)))
       }
@@ -141,8 +159,17 @@ export interface ShelfItem {
   promo?: number | null
   /** Ce que le panier garde d'une demande de `quantity` (par défaut tout). */
   obtained?: (quantity: number) => number
+  /** Ce que la réponse du panier dit de la disponibilité du produit (DRV-644) ; absent : rien. */
+  cartFacts?: { stock: number | null; availability: number | null }
   /** La quantité déjà au panier que la recherche lit (par défaut 0 : le site la donne toujours) ; `null` : illisible. */
   inCart?: number | null
+  /** L'adresse de la photo, déjà validée par l'adaptateur (par défaut : aucune). */
+  image?: string | null
+  /** La fiche dit « Bientôt disponible » (DRV-635). */
+  comingSoon?: boolean
+  /** Le rayon et la famille du produit chez l'enseigne (DRV-642) ; par défaut : non lus. */
+  aisle?: number | null
+  family?: number | null
 }
 
 export function candidate(id: string, item: ShelfItem = {}): Candidate {
@@ -155,7 +182,11 @@ export function candidate(id: string, item: ShelfItem = {}): Candidate {
     promo: item.promo ?? null,
     stock: item.stock === undefined ? 10 : item.stock,
     inCart: item.inCart === undefined ? 0 : item.inCart,
-    thumbnailUrl: null,
+    imageUrl: item.image ?? null,
+    availability: null,
+    comingSoon: item.comingSoon ?? false,
+    aisle: item.aisle ?? null,
+    family: item.family ?? null,
     content: item.content ?? null,
     contentSource: item.content ? 'label' : null,
   }
@@ -181,6 +212,22 @@ export function fakeAdapter(
     lastCart?: Record<string, number>
     /** Les compteurs de l'adaptateur (par défaut : une requête par appel, rien d'autre). */
     stats?: () => RequestStats
+    /** Ce que l'accueil de l'enseigne laisse suivre (DRV-625, par défaut : pas de lien « Commencer mes courses »). */
+    entry?: EntryReading
+    /** Appelé quand l'agent suit le lien ; peut ne jamais rendre la main (la page a quitté le script). */
+    onFollow?: () => void | Promise<void>
+    /** Le libellé de chaque rayon (DRV-647) ; un rayon absent n'a pas de libellé lisible. */
+    aisleLabels?: Record<number, string>
+    /** Le niveau où la rangée filtre (DRV-647) : le rayon par défaut, ou la famille. */
+    aisleLevel?: 'RAYON' | 'FAMILLE'
+    /** Les rayons du site de la facette (DRV-647, 0.36.0) ; par défaut aucun. */
+    siteAisles?: ReturnType<RetailerAdapter['siteAisles']>
+    /** La validation de la forme du filtre du site (DRV-647, 0.37.0) : son résultat (par défaut : aucune forme valide). */
+    siteValid?: boolean
+    /** Les rayons du site dont la recherche filtrée n'est pas cohérente avec la valeur (DRV-647, 0.38.0). */
+    incoherent?: string[]
+    /** Ce que rend la recherche filtrée sur une clé : des identifiants du rayon, ou une erreur (par défaut : rien). */
+    filtered?: Record<string, string[] | Error>
   } = {},
 ) {
   const calls: string[] = []
@@ -188,6 +235,7 @@ export function fakeAdapter(
   /** Les recherches d'un produit connu par son libellé : la requête et l'identifiant voulu. */
   const searched: { query: string; id: string }[] = []
   const writes: { id: string; quantity: number }[] = []
+  const follows = { count: 0 }
   let inFlight = 0
   let peak = 0
   const adapter: RetailerAdapter = {
@@ -232,7 +280,50 @@ export function fakeAdapter(
       searchBase: null,
     }),
     lastSearchFacts: () => null,
+    readEntry: () => options.entry ?? { kind: 'NONE' },
+    async followEntry() {
+      follows.count += 1
+      await options.onFollow?.()
+    },
     exploreSearchVariants: () => Promise.resolve([]),
+    readAisleMenu: () => NO_MENU,
+    describeLastReply: () => null,
+    aisleChoices: (candidates) => {
+      // Au niveau de la famille (DRV-647) : les groupes sont les familles des produits.
+      const family = options.aisleLevel === 'FAMILLE'
+      const groups = countAisles(
+        family ? candidates.map((one) => ({ ...one, aisle: one.family })) : candidates,
+      )
+      return {
+        level: family ? 'FAMILLE' : 'RAYON',
+        key: family ? 'family' : 'aisle',
+        choices: groups.map(({ id, count }) => {
+          const label = options.aisleLabels?.[id] ?? null
+          return { id, count, label, source: label === null ? null : 'FILTER' }
+        }),
+        coverage: { RAYON: 0, FAMILLE: 0 },
+      }
+    },
+    aisleSamples: () => [],
+    exploreFacets: () => Promise.resolve(null),
+    siteAisles: () => options.siteAisles ?? [],
+    describeProductLists: () => null,
+    async validateSiteFilter() {
+      calls.push('validate')
+      await options.before?.('validate')
+      return options.siteValid ?? false
+    },
+    async searchFiltered(_query, key) {
+      calls.push(`filter ${key}`)
+      await options.before?.(`filter ${key}`)
+      const answer = options.filtered?.[key] ?? []
+      if (answer instanceof Error) throw answer
+      return {
+        candidates: answer.map((id) => candidate(id, shelf[id])),
+        total: answer.length,
+        coherent: !(options.incoherent ?? []).includes(key),
+      }
+    },
     async setCartQuantity(id, quantity): Promise<CartResult> {
       calls.push(`cart ${id} ${quantity}`)
       inFlight += 1
@@ -251,6 +342,7 @@ export function fakeAdapter(
           ok: obtained === quantity,
           items: null,
           totalCents: null,
+          ...(shelf[id]?.cartFacts && { product: shelf[id]?.cartFacts }),
           status: 200,
         }
       } finally {
@@ -258,7 +350,7 @@ export function fakeAdapter(
       }
     },
   }
-  return { adapter, calls, searched, writes, maxInFlight: () => peak }
+  return { adapter, calls, searched, writes, follows, maxInFlight: () => peak }
 }
 
 // —— Le stockage, le verrou d'écran, le flux ————————————————————————————————————————————————————————————————————————————————
@@ -322,3 +414,6 @@ export function expectConform(message: ResultMessage | undefined): ResultMessage
   validateResult(JSON.parse(JSON.stringify(message)))
   return message
 }
+
+/** Une vraie rupture (DRV-635) : la fiche dit stock 0 ET le panier ne garde rien. Seul ce produit est « plus disponible ». */
+export const OUT_OF_STOCK: ShelfItem = { stock: 0, obtained: () => 0 }

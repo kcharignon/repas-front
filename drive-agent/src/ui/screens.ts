@@ -1,6 +1,7 @@
 // Les écrans : chacun reçoit ses données et un rappel `answer`, et rend ses nœuds. Aucune logique d'envoi ici.
 import { append, clear, h, type Child } from './dom'
 import { own } from '../own'
+import { photoFrame } from './photo'
 import { CAUSE_TEXTS, ERROR_TEXTS, errorParts, S } from './strings'
 import type {
   ChallengeProps,
@@ -8,6 +9,7 @@ import type {
   DiagnosticProps,
   DiagnosticRow,
   EndProps,
+  EntryProps,
   ErrorProps,
   PlacementProps,
   ProgressPatch,
@@ -92,20 +94,13 @@ const summary: Renderer<'summary'> = (props: SummaryProps, answer) => {
     }),
   )
   const start = button(S.summary.start, () => answer('start'), 'primary')
+  // Une phrase, la même que sur l'écran de l'envoi de Repas : jamais une liste de compteurs, jamais un zéro (DRV-626).
+  const sentence = S.summary.sentence(props)
   return {
     el: screen(
       title(S.summary.title),
-      h('p', { text: S.summary.intro }),
-      h(
-        'ul',
-        { class: 'counts' },
-        h('li', { text: S.summary.known(props.known) }),
-        h('li', { text: S.summary.new(props.new) }),
-        h('li', { text: S.summary.haveAtHome(props.haveAtHome) }),
-        h('li', { text: S.summary.skipped(props.skipped) }),
-      ),
+      sentence === '' ? null : h('p', { class: 'lead', text: sentence }),
       h('details', {}, h('summary', { text: S.summary.list }), h('ul', {}, ...items)),
-      h('p', { class: 'notice', text: `${S.summary.keepCart} ${S.summary.noOrder}` }),
       actions(
         start,
         button(S.summary.cancel, () => answer('cancel')),
@@ -185,6 +180,19 @@ const quantity: Renderer<'quantity'> = (props: QuantityProps, answer) => {
     value: String(props.packs ?? 1),
     attrs: { id: 'quantite', type: 'number', min: '1', max: '99', step: '1', inputmode: 'numeric' },
   })
+  // Le champ est prérempli : on tape le nombre PAR-DESSUS (taper 4 donne « 4 », pas « 14 »). Tout est donc sélectionné à l'ouverture, au focus et au
+  // toucher, tant que rien n'a été tapé : un toucher pose le curseur après le « 1 » et désélectionnerait, parfois APRÈS le toucher (le curseur se
+  // place de façon asynchrone). La première frappe re-sélectionne donc elle-même juste avant d'insérer (`beforeinput`, `keydown`) : quoi qu'ait
+  // fait le curseur, le premier chiffre remplace le « 1 » (DRV-626).
+  let pristine = true
+  const selectAll = () => {
+    if (pristine) input.select()
+  }
+  input.addEventListener('focus', selectAll)
+  input.addEventListener('click', () => setTimeout(selectAll, 0))
+  input.addEventListener('keydown', selectAll)
+  input.addEventListener('beforeinput', selectAll)
+  input.addEventListener('input', () => (pristine = false))
   const problem = h('p', { class: 'error', attrs: { role: 'alert' } })
   const form = h(
     'form',
@@ -218,6 +226,7 @@ const quantity: Renderer<'quantity'> = (props: QuantityProps, answer) => {
     el: screen(
       title(S.quantity.title),
       h('p', { text: S.quantity.text(props.productLabel, props.ingredient) }),
+      props.need ? h('p', { text: S.picker.need(props.need) }) : null,
       form,
     ),
     focus: input,
@@ -226,25 +235,33 @@ const quantity: Renderer<'quantity'> = (props: QuantityProps, answer) => {
 
 /**
  * L'écran de choix d'un produit (phase B). En haut : l'article et son compteur, puis les autres réponses possibles (« Pas cette fois »,
- * « J'en ai toujours », « Passer les n suivants »). Au milieu : la liste de produits, dont chaque « Choisir » est le geste principal. Tout en bas
+ * « J'en ai toujours », « Passer ces n articles »). Au milieu : la liste de produits, dont chaque « Choisir » est le geste principal. Tout en bas
  * de la liste, discret : « Annuler l'envoi » (le menu de l'application laisse la place de le faire défiler jusque-là, `--clear`).
  */
 const chooser: Renderer<'chooser'> = (props: ChooserProps, answer) => {
   const zone = h('div', { class: 'zone' })
-  // Les articles encore à choisir, celui-ci compris : « Passer les n suivants » les passe tous (« Pas cette fois »), sans rien retenir.
+  // Les articles encore à choisir, celui-ci compris : « Passer ces n articles » les passe tous (« Pas cette fois »), sans rien retenir.
   const left = props.total - props.position + 1
   // Le focus arrive sur l'article (jamais sur un bouton : un « Entrée » tenu ne doit pas répondre à l'article suivant) et sa ligne est une zone
   // annoncée (`role="status"`) : « Poivre (2 sur 4) » se lit d'une traite. Le compteur reste du texte de cette ligne : posé dans un `span` à part,
   // la WebView d'Android ne l'exposait pas (relevé dans l'émulateur).
+  // Un seul article à choisir : pas de compteur (« (1 sur 1) » ne dit rien).
   const head = h(
     'p',
     { class: 'head', attrs: { tabindex: '-1', role: 'status' } },
     h('strong', { text: props.ingredient, attrs: { id: 'titre' } }),
-    ` (${S.chooser.counter(props.position, props.total)})`,
+    props.total > 1 ? ` (${S.chooser.counter(props.position, props.total)})` : null,
   )
   const skip = button(S.chooser.skip, () => answer({ kind: 'skip' }), 'secondary')
   const have = button(S.chooser.haveAtHome, () => answer({ kind: 'have' }), 'secondary')
   const choices = actions(skip, have)
+  // Le bas de l'écran : la recherche et la liste de produits, puis « Annuler l'envoi ». La confirmation de « Passer ces n articles » les cache.
+  const foot = h(
+    'div',
+    { class: 'foot' },
+    button(S.chooser.cancel, () => answer({ kind: 'cancel' }), 'quiet'),
+  )
+  const scroll = h('div', { class: 'scroll' }, zone, foot)
   const bar = h(
     'div',
     { class: 'bar', attrs: { role: 'group', 'aria-label': S.chooser.group } },
@@ -252,7 +269,8 @@ const chooser: Renderer<'chooser'> = (props: ChooserProps, answer) => {
     choices,
   )
   if (left > 1) {
-    // La confirmation d'une ligne : seulement quand un des articles passés n'a encore aucun produit retenu. Elle prend la place des réponses.
+    // La confirmation d'une ligne : seulement quand un des articles passés n'a encore aucun produit retenu. Elle prend la place des réponses ET de
+    // la liste de produits : deux boutons, une seule décision à l'écran (DRV-626).
     const confirm = h('div', { class: 'confirm', hidden: true })
     const sure = h('p', {
       class: 'sure',
@@ -264,6 +282,7 @@ const chooser: Renderer<'chooser'> = (props: ChooserProps, answer) => {
       () => {
         if (props.confirmRest !== true) return answer({ kind: 'rest' })
         choices.hidden = true
+        scroll.hidden = true
         confirm.hidden = false
         sure.focus({ preventScroll: true })
       },
@@ -278,6 +297,7 @@ const chooser: Renderer<'chooser'> = (props: ChooserProps, answer) => {
           S.chooser.restBack,
           () => {
             confirm.hidden = true
+            scroll.hidden = false
             choices.hidden = false
             rest.focus({ preventScroll: true })
           },
@@ -288,17 +308,12 @@ const chooser: Renderer<'chooser'> = (props: ChooserProps, answer) => {
     choices.appendChild(rest)
     bar.appendChild(confirm)
   }
-  const foot = h(
-    'div',
-    { class: 'foot' },
-    button(S.chooser.cancel, () => answer({ kind: 'cancel' }), 'quiet'),
-  )
   let dispose: (() => void) | void
   const el = h(
     'section',
     { class: 'screen fill', attrs: { 'aria-labelledby': 'titre' } },
     bar,
-    h('div', { class: 'scroll' }, zone, foot),
+    scroll,
   )
   return {
     el,
@@ -319,7 +334,16 @@ const placement: Renderer<'placement'> = (props: PlacementProps, answer) => {
   return {
     el: screen(
       title(S.placement.title),
-      h('p', { text: S.placement.text(props.productLabel, props.ingredient) }),
+      h(
+        'div',
+        { class: 'media' },
+        photoFrame(props.photo, props.productLabel),
+        h(
+          'div',
+          { class: 'text' },
+          h('p', { text: S.placement.text(props.productLabel, props.ingredient) }),
+        ),
+      ),
       h(
         'div',
         { class: 'stack' },
@@ -342,7 +366,6 @@ const store: Renderer<'store'> = (props: StoreProps, answer) => {
     el: screen(
       title(S.store.title),
       h('p', { class: 'shop', text: props.label ?? S.store.unnamed(props.id) }),
-      h('p', { class: 'hint', text: S.store.notice }),
       actions(
         save,
         button(S.store.cancel, () => answer('cancel')),
@@ -423,7 +446,6 @@ const challenge: Renderer<'challenge'> = (_props: ChallengeProps, answer) => {
     el: screen(
       title(S.challenge.title),
       h('p', { text: S.challenge.text }),
-      h('p', { class: 'hint', text: S.challenge.reload }),
       actions(
         resume,
         button(S.challenge.stop, () => answer('stop')),
@@ -432,6 +454,13 @@ const challenge: Renderer<'challenge'> = (_props: ChallengeProps, answer) => {
     focus: resume,
     sheet: true,
   }
+}
+
+/** Un bandeau sans bouton : la phrase seule, annoncée aux lecteurs d'écran (DRV-625). */
+const entry: Renderer<'entry'> = (props: EntryProps) => {
+  const el = screen(title(S.entry[props.stage]))
+  el.setAttribute('role', 'status')
+  return { el, sheet: true }
 }
 
 const error: Renderer<'error'> = (props: ErrorProps, answer) => {
@@ -456,7 +485,9 @@ const error: Renderer<'error'> = (props: ErrorProps, answer) => {
  * s'il y en a un, ne change rien au texte.
  */
 function endText(props: EndProps): string {
-  if (props.outcome === 'completed') return S.end.completed
+  // Des produits choisis n'ont pas été pris par le panier (DRV-644) : « Tes produits sont dans ton panier » serait faux, la phrase de chaque produit suit.
+  if (props.outcome === 'completed')
+    return (props.unreached?.length ?? 0) > 0 ? S.end.completedSome : S.end.completed
   const code = props.outcome === 'aborted' ? undefined : props.error
   const left = props.failed + props.unavailable
   const safe = props.outcome === 'partial' && left > 0 ? S.end.safeLeft(left) : S.end.safe
@@ -472,6 +503,18 @@ function endText(props: EndProps): string {
         : null
 
   return [lead, safe, S.end.resume].filter((sentence) => sentence !== null).join(' ')
+}
+
+/**
+ * Le titre dit le résultat : un envoi arrêté avant que rien ne soit mis au panier ni choisi n'est pas « rempli en partie » (le texte dit « il reste
+ * 6 articles à ajouter »), c'est « Le panier n'est pas rempli » : le même titre que le récapitulatif de Repas (DRV-626).
+ */
+function endTitle(props: EndProps): string {
+  if (props.outcome === 'completed' && (props.unreached?.length ?? 0) > 0)
+    return S.end.title.partial
+  return props.outcome === 'partial' && props.added + props.chosen === 0
+    ? S.end.notFilled
+    : S.end.title[props.outcome]
 }
 
 /** Les compteurs qui existent, dans l'ordre de l'écran : jamais un zéro, jamais « Échecs » (le texte dit ce qui reste à ajouter). */
@@ -490,7 +533,7 @@ const end: Renderer<'end'> = (props: EndProps, answer) => {
   const counts = endCounts(props)
   return {
     el: screen(
-      title(S.end.title[props.outcome]),
+      title(endTitle(props)),
       h('p', { text: endText(props) }),
       counts.length > 0
         ? h('ul', { class: 'counts' }, ...counts.map((text) => h('li', { text })))
@@ -522,6 +565,35 @@ const end: Renderer<'end'> = (props: EndProps, answer) => {
               {},
               ...props.kept.map((line) =>
                 h('li', { text: S.end.kept.item(line.name, line.inCart) }),
+              ),
+            ),
+          )
+        : null,
+      props.unreached && props.unreached.length > 0
+        ? h(
+            'div',
+            { class: 'notice' },
+            ...props.unreached.map((line) =>
+              h('p', { text: S.end.unreached.item(line.label, S.end.unreached.why[line.reason]) }),
+            ),
+          )
+        : null,
+      props.reasons && props.reasons.length > 0
+        ? h(
+            'details',
+            {},
+            h('summary', { text: S.end.reasons.title }),
+            h(
+              'ul',
+              {},
+              ...props.reasons.map((line) =>
+                h('li', {
+                  text: S.end.reasons.item(
+                    line.name,
+                    S.end.reasons.reason[line.reason],
+                    line.tried,
+                  ),
+                }),
               ),
             ),
           )
@@ -558,6 +630,7 @@ export const RENDERERS: { [K in ScreenName]: Renderer<K> } = {
   store,
   diagnostic,
   challenge,
+  entry,
   error,
   end,
 }

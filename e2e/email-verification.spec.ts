@@ -53,7 +53,7 @@ test.describe('confirmation de l’adresse e-mail, avec le back', () => {
     await page.getByRole('button', { name: 'Créer mon compte' }).click()
     await expect(page).toHaveURL(/\/verification-email\?email=/)
     await expect(
-      page.getByRole('heading', { level: 1, name: 'Vérifiez votre boîte mail' }),
+      page.getByRole('heading', { level: 1, name: 'Vérifie ta boîte mail' }),
     ).toBeVisible()
     await expect(page.getByText(`Un lien de confirmation a été envoyé à ${address}`)).toBeVisible()
 
@@ -68,7 +68,7 @@ test.describe('confirmation de l’adresse e-mail, avec le back', () => {
     // Le lien reçu par e-mail active le compte, à usage unique
     const link = new URL(await linkSentTo(request, address))
     await page.goto(`${link.pathname}${link.search}`)
-    await expect(page.getByText('votre compte est activé')).toBeVisible()
+    await expect(page.getByText('ton compte est activé')).toBeVisible()
     await page.goto(`${link.pathname}${link.search}`)
     await expect(page.getByRole('alert')).toContainText(/Ce lien n.est plus valable/)
 

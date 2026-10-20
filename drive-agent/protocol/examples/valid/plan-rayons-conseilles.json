@@ -1,0 +1,45 @@
+{
+  "v": 1,
+  "type": "plan",
+  "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+  "retailer": "leclerc",
+  "store": {
+    "id": "000000",
+    "host": "courses-test.leclercdrive.fr"
+  },
+  "returnPath": "/drive/retour",
+  "lines": [
+    {
+      "ingredientSlug": "tomate",
+      "name": "Tomate",
+      "status": "NEW",
+      "products": [],
+      "rejected": [],
+      "searchQuery": "tomate",
+      "rayonHints": [41, 12, 60]
+    },
+    {
+      "ingredientSlug": "pomme",
+      "name": "Pomme",
+      "status": "NEW",
+      "rayonHints": [41]
+    },
+    {
+      "ingredientSlug": "courgette",
+      "name": "Courgette",
+      "status": "NEW",
+      "rayonHints": []
+    },
+    {
+      "ingredientSlug": "sel",
+      "name": "Sel",
+      "status": "NEW"
+    },
+    {
+      "ingredientSlug": "lait",
+      "name": "Lait",
+      "status": "NEW",
+      "rayonHints": [1, 2147483647]
+    }
+  ]
+}

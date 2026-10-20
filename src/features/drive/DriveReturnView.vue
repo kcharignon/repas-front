@@ -15,8 +15,8 @@ import {
 import { isRateLimited, messageForFailure } from '@/notifications/failures'
 import { useOnline } from '@/offline/useOnline'
 import { driveBridge } from './bridge'
-import { buildChoiceBatches } from './choices'
-import { basketUrl } from './leclerc'
+import { buildChoiceBatches, countChoices } from './choices'
+import { finalizeLink, DRIVE_HOME_URL, RETAILER_APP_NAME } from './leclerc'
 import { useDrivePlan, useDriveSettings, useSaveChoices } from './queries'
 import { expectedFromPlan } from './restrictToPlan'
 import { useDriveReturnStore } from './returnStore'
@@ -27,6 +27,8 @@ const { t } = useI18n()
 const router = useRouter()
 const online = useOnline()
 const store = useDriveReturnStore()
+/** Dans l'application, le drive s'ouvre dans son écran (connecté) ; dans un navigateur, dans un nouvel onglet (DRV-625). */
+const inApp = driveBridge.isAvailable()
 
 const event = computed(() => store.event)
 /** Le résultat d'un passage de la liste (et non d'une lecture du magasin). */
@@ -66,8 +68,15 @@ const labels = computed(
 
 const counts = computed(() => (result.value ? countOutcomes(result.value) : null))
 const shownCounts = computed(() => (counts.value ? visibleCounts(counts.value) : []))
-const finalizeUrl = computed(() => basketUrl(settings.data.value?.store?.baseUrl))
+const finalizeUrl = computed(() => finalizeLink(settings.data.value?.store?.baseUrl, inApp))
 const saved = computed(() => store.status === 'saved')
+/**
+ * Ce que Repas retient VRAIMENT de cet envoi : un produit choisi, un produit à ne plus proposer, un « j'en ai toujours ». Sans cela (tout était
+ * déjà choisi, tout est passé, rien n'a pu être mis au panier), « Tes choix sont enregistrés » serait faux : l'écran se tait (DRV-626).
+ */
+const hasChoices = computed(() =>
+  result.value ? countChoices(buildChoiceBatches(result.value)) > 0 : false,
+)
 
 // --- Le titre dit le résultat ; au plus trois phrases : ce qui s'est passé, ce qui est sauf, ce qu'il reste à faire ---
 const headline = computed(() => {
@@ -77,6 +86,9 @@ const headline = computed(() => {
   if (current.kind === 'refused') return t('driveReturn.refused.title')
   if (current.kind === 'invalid') return t('driveReturn.invalid.title')
   if (result.value === null) return t('driveReturn.setup.title')
+  // Arrêté avant que rien ne soit mis au panier ni choisi : « rempli en partie » serait faux
+  const none = counts.value !== null && counts.value.added + counts.value.chosen === 0
+  if (result.value.outcome === 'partial' && none) return t('driveReturn.outcome.notFilled.title')
 
   return t(`driveReturn.outcome.${result.value.outcome}.title`)
 })
@@ -88,7 +100,8 @@ const sentences = computed(() => {
   const current = result.value
   const known = counts.value
   if (current === null || known === null) return []
-  if (current.outcome === 'completed') return [t('driveReturn.outcome.completed.help')]
+  if (current.outcome === 'completed')
+    return [t('driveReturn.basketReady', { retailer: RETAILER_APP_NAME })]
 
   const code = stopCode.value
   const left = remaining(known)
@@ -114,35 +127,38 @@ const alarming = computed(
 )
 
 /**
- * L'unique bouton principal : finaliser quand le panier est rempli, reprendre l'envoi sinon. Deux pannes que reprendre ne guérit pas ont leur
+ * L'unique bouton principal : reprendre l'envoi quand il est incomplet (panier prêt : c'est « Terminer la liste »). Deux pannes que reprendre ne guérit pas ont leur
  * propre action : le site de Leclerc a changé (chercher à la main) et l'application ne comprend plus Repas (la mettre à jour).
  */
-const primary = computed<'finalize' | 'manual' | 'update' | 'resume' | null>(() => {
+const primary = computed<'manual' | 'update' | 'resume' | null>(() => {
   const current = result.value
   if (current === null) return null
-  if (current.outcome === 'completed') return finalizeUrl.value ? 'finalize' : null
+  if (current.outcome === 'completed') return null
   if (stopCode.value === 'CONTRACT_CHANGED') return finalizeUrl.value ? 'manual' : null
   if (stopCode.value === 'INVALID_MESSAGE') return 'update'
 
   return saved.value && listId.value ? 'resume' : null
 })
 const incomplete = computed(() => result.value !== null && result.value.outcome !== 'completed')
-/** Les autres actions restent là, mais discrètes : reprendre quand ce n'est pas l'action principale, finaliser ce qui est déjà au panier. */
+/** Les autres actions restent là, mais discrètes : reprendre quand ce n'est pas l'action principale. */
 const showResume = computed(
   () => incomplete.value && primary.value !== 'resume' && saved.value && listId.value !== null,
 )
-const showFinalize = computed(
+/** Un envoi incomplet qui a pourtant mis ou choisi des produits : le panier existe, la phrase le dit à part (l'envoi terminé le dit déjà en tête). */
+const showBasketReady = computed(
   () =>
     incomplete.value &&
     primary.value !== 'manual' &&
-    finalizeUrl.value !== null &&
     counts.value !== null &&
     counts.value.added + counts.value.chosen > 0,
 )
+/** Panier prêt : plus rien à faire sur Leclerc depuis Repas, « Terminer la liste » devient l'action principale. */
+const completeReady = computed(() => result.value?.outcome === 'completed')
 const primaryClass =
   'inline-flex min-h-13 items-center justify-center rounded-xl bg-primary px-7 text-lg font-bold text-on-primary hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary'
 const linkClass =
   'inline-flex min-h-11 items-center font-bold text-primary underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary'
+const primaryButtonClass = `${primaryClass} cursor-pointer disabled:pointer-events-none disabled:opacity-50`
 // Terminer ou rouvrir la liste : des boutons (ils demandent confirmation) qui se lisent comme les liens discrets autour d'eux
 const linkButtonClass = `${linkClass} cursor-pointer disabled:pointer-events-none disabled:opacity-50`
 
@@ -319,6 +335,9 @@ function confirmReopen() {
       class="flex flex-col items-start gap-3 rounded-2xl bg-soft px-5 py-4"
     >
       <p class="max-w-prose text-muted">{{ t('driveReturn.none.help') }}</p>
+      <RouterLink :to="{ name: 'shopping-lists' }" :class="primaryClass">
+        {{ t('driveReturn.none.open') }}
+      </RouterLink>
     </section>
 
     <section
@@ -390,10 +409,18 @@ function confirmReopen() {
         <p class="max-w-prose text-lg">{{ sentences.join(' ') }}</p>
       </div>
 
-      <p v-if="store.status === 'saving'" role="status" class="text-muted">
+      <p v-if="showBasketReady" class="max-w-prose text-lg font-semibold">
+        {{ t('driveReturn.basketReady', { retailer: RETAILER_APP_NAME }) }}
+      </p>
+
+      <p v-if="store.status === 'saving' && hasChoices" role="status" class="text-muted">
         {{ t('driveReturn.save.saving') }}
       </p>
-      <p v-else-if="store.status === 'saved'" role="status" class="font-semibold text-primary">
+      <p
+        v-else-if="store.status === 'saved' && hasChoices"
+        role="status"
+        class="font-semibold text-primary"
+      >
         {{ t('driveReturn.save.saved') }}
       </p>
       <div v-else-if="store.status === 'failed'" class="flex flex-col items-start gap-3">
@@ -410,20 +437,14 @@ function confirmReopen() {
 
       <section class="flex flex-col items-start gap-3">
         <a
-          v-if="(primary === 'finalize' || primary === 'manual') && finalizeUrl"
-          :href="finalizeUrl"
-          target="_blank"
-          rel="noopener noreferrer"
+          v-if="primary === 'manual' && finalizeUrl"
+          :href="DRIVE_HOME_URL"
+          :target="inApp ? undefined : '_blank'"
+          :rel="inApp ? undefined : 'noopener noreferrer'"
           :class="primaryClass"
         >
-          {{
-            t(
-              primary === 'finalize'
-                ? 'driveReturn.actions.finalize'
-                : 'driveReturn.actions.manual',
-            )
-          }}
-          <span class="sr-only"> ({{ t('driveReturn.actions.finalizeHelp') }})</span>
+          {{ t('driveReturn.actions.manual') }}
+          <span v-if="!inApp" class="sr-only"> ({{ t('driveReturn.actions.newTab') }})</span>
         </a>
         <RouterLink
           v-else-if="primary === 'resume' && listId"
@@ -448,19 +469,9 @@ function confirmReopen() {
           >
             {{ t('driveReturn.actions.resume') }}
           </RouterLink>
-          <a
-            v-if="showFinalize && finalizeUrl"
-            :href="finalizeUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            :class="linkClass"
-          >
-            {{ t('driveReturn.actions.finalize') }}
-            <span class="sr-only"> ({{ t('driveReturn.actions.finalizeHelp') }})</span>
-          </a>
           <button
             type="button"
-            :class="linkButtonClass"
+            :class="completeReady ? primaryButtonClass : linkButtonClass"
             :disabled="!online"
             @click="completing = true"
           >
@@ -476,7 +487,6 @@ function confirmReopen() {
           </button>
         </div>
         <p v-if="!online" class="font-semibold">{{ t('driveReturn.actions.offline') }}</p>
-        <p class="text-sm text-muted">{{ t('driveReturn.basketKept') }}</p>
       </section>
 
       <dl

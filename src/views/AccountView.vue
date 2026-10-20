@@ -7,6 +7,7 @@ import UiChip from '@/design/UiChip.vue'
 import { useThemeStore } from '@/design/theme'
 import SettingsForms from '@/features/account/SettingsForms.vue'
 import AppHelpLink from '@/features/drive/AppHelpLink.vue'
+import AppUpdateBanner from '@/features/drive/AppUpdateBanner.vue'
 import DriveAccountLinks from '@/features/drive/DriveAccountLinks.vue'
 import { useSessionStore } from '@/session/session'
 
@@ -27,6 +28,8 @@ async function logout() {
       <h1 class="font-display text-4xl leading-tight font-bold">{{ t('account.title') }}</h1>
       <p class="mt-1 text-muted">{{ session.user?.email }}</p>
     </header>
+
+    <AppUpdateBanner />
 
     <SettingsForms />
 

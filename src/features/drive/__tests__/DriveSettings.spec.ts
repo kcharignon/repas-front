@@ -133,28 +133,29 @@ describe('réglages du drive : le magasin', () => {
 
     expect(wrapper.find('h1').text()).toBe('Réglages du drive')
     expect(wrapper.text()).toContain('Aucun magasin enregistré.')
-    expect(wrapper.text()).not.toContain('Choisissez votre magasin')
+    expect(wrapper.text()).not.toContain('Choisis ton magasin')
     expect(
-      wrapper.find(`#${CSS.escape(field(wrapper, 'Adresse de votre magasin') ?? '')}`).element,
+      wrapper.find(`#${CSS.escape(field(wrapper, 'Adresse de ton magasin') ?? '')}`).element,
     ).toHaveProperty('value', '')
-    expect(wrapper.text()).toContain('Vous n’avez pas encore enregistré votre magasin')
+    expect(wrapper.text()).toContain('Tu n’as pas encore enregistré ton magasin')
   })
 
-  it('envoyé ici faute de magasin : « Choisissez votre magasin » et rien d’autre à décider (DRV-622)', async () => {
+  it('envoyé ici faute de magasin : « Choisis ton magasin » et rien d’autre à décider (DRV-622)', async () => {
     const { wrapper } = await open(
       {},
       '/drive/reglages?magasin=requis&retour=liste',
       settingsOf(null),
     )
 
-    expect(wrapper.find('h1').text()).toBe('Choisissez votre magasin')
+    expect(wrapper.find('h1').text()).toBe('Choisis ton magasin')
     expect(wrapper.text()).toContain(
-      'Pour envoyer votre liste, Repas doit connaître votre magasin Leclerc.',
+      'Pour envoyer ta liste, Repas doit connaître ton magasin Leclerc.',
     )
-    // Pas de réglage à côté : ni l'application, ni les produits ; la note de vie privée reste, après l'action
+    // Pas de réglage à côté : ni l'application, ni les produits, ni note de vie privée (DRV-628)
     expect(wrapper.text()).not.toContain('Application Repas')
     expect(wrapper.text()).not.toContain('Produits dont Repas se souvient')
-    expect(wrapper.find('#drive-privacy-note-title').exists()).toBe(true)
+    expect(wrapper.find('#drive-privacy-note-title').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('vie privée')
     // Le retour mène à la liste, pas à « Moi »
     expect(wrapper.find('a[href="/liste"]').text()).toBe('Retour à la liste')
     expect(wrapper.find('a[href="/moi"]').exists()).toBe(false)
@@ -178,8 +179,8 @@ describe('réglages du drive : le magasin', () => {
       settingsOf(null),
     )
 
-    await type(wrapper, 'Adresse de votre magasin', `  ${base}/accueil?x=1 `)
-    await type(wrapper, 'Nom de votre magasin (facultatif)', ' Ville-Test ')
+    await type(wrapper, 'Adresse de ton magasin', `  ${base}/accueil?x=1 `)
+    await type(wrapper, 'Nom de ton magasin (facultatif)', ' Ville-Test ')
     await submit(wrapper)
 
     const index = fetchMock.mock.calls.findIndex(([input]) => (input as Request).method === 'PUT')
@@ -198,7 +199,7 @@ describe('réglages du drive : le magasin', () => {
   it('enregistre un magasin sans nom : le nom est vide (null)', async () => {
     const { wrapper, fetchMock } = await open({ 'PUT /api/v1/drive/settings': noContent })
 
-    await type(wrapper, 'Nom de votre magasin (facultatif)', '   ')
+    await type(wrapper, 'Nom de ton magasin (facultatif)', '   ')
     await submit(wrapper)
 
     const index = fetchMock.mock.calls.findIndex(([input]) => (input as Request).method === 'PUT')
@@ -208,7 +209,7 @@ describe('réglages du drive : le magasin', () => {
   it('refuse tout de suite une adresse qui n’est pas celle d’un magasin', async () => {
     const { wrapper, fetchMock } = await open({}, '/drive/reglages', settingsOf(null))
 
-    await type(wrapper, 'Adresse de votre magasin', 'https://exemple.example.com/magasin-1-1')
+    await type(wrapper, 'Adresse de ton magasin', 'https://exemple.example.com/magasin-1-1')
     await submit(wrapper)
 
     expect(wrapper.text()).toContain('Cette adresse n’est pas celle d’un magasin Leclerc Drive')
@@ -238,7 +239,7 @@ describe('réglages du drive : le magasin', () => {
     await submit(wrapper)
 
     expect(wrapper.find('[role="alert"]').text()).toBe(
-      'Trop de demandes en peu de temps. Rien n’est perdu. Attendez une minute, puis réessayez.',
+      'Trop de demandes en peu de temps. Rien n’est perdu. Attends une minute, puis réessaie.',
     )
     expect(useNotificationsStore().items).toHaveLength(0)
     expect(calls(fetchMock).filter((call) => call === 'PUT /api/v1/drive/settings')).toHaveLength(1)
@@ -252,16 +253,16 @@ describe('réglages du drive : le magasin', () => {
 
   it('prévient quand l’adresse saisie est celle d’un autre magasin', async () => {
     const { wrapper } = await open()
-    expect(wrapper.text()).not.toContain('Ce n’est pas votre magasin actuel')
+    expect(wrapper.text()).not.toContain('Ce n’est pas ton magasin actuel')
 
     await type(
       wrapper,
-      'Adresse de votre magasin',
+      'Adresse de ton magasin',
       'https://exemple.leclercdrive.fr/magasin-999000-999000',
     )
 
     expect(wrapper.text()).toContain(
-      'Ce n’est pas votre magasin actuel. Les produits habituels de l’ancien magasin ne seront plus proposés. Vous les choisirez de nouveau.',
+      'Ce n’est pas ton magasin actuel. Les produits habituels de l’ancien magasin ne seront plus proposés. Tu les choisiras de nouveau.',
     )
   })
 
@@ -343,7 +344,7 @@ describe('réglages du drive : la lecture du magasin par l’application (un seu
       },
     })
     expect(wrapper.text()).toContain('Magasin …000 enregistré.')
-    expect(wrapper.text()).not.toContain('Vérifiez, puis enregistrez')
+    expect(wrapper.text()).not.toContain('Vérifie, puis enregistre')
     // Le même geste, désormais, sert à changer de magasin
     expect(button(wrapper, 'Changer de magasin')).toBeDefined()
     expect(button(wrapper, 'Lire mon magasin dans l’application')).toBeUndefined()
@@ -442,7 +443,7 @@ describe('réglages du drive : la lecture du magasin par l’application (un seu
     const dialog = body().querySelector('[role="dialog"]')?.textContent ?? ''
     expect(dialog).toContain('Utiliser le magasin …000 ?')
     expect(dialog).toContain(
-      'Ce n’est pas votre magasin actuel. Les produits habituels de l’ancien magasin ne seront plus proposés. Vous les choisirez de nouveau.',
+      'Ce n’est pas ton magasin actuel. Les produits habituels de l’ancien magasin ne seront plus proposés. Tu les choisiras de nouveau.',
     )
     expect(dialogButton('Garder l’ancien')).toBeDefined()
 
@@ -493,7 +494,7 @@ describe('réglages du drive : la lecture du magasin par l’application (un seu
     await flushPromises()
 
     expect(wrapper.find('[role="alert"]').text()).toBe(
-      'Repas n’a pas pu utiliser ce magasin. Rien n’est enregistré. Réessayez, ou saisissez l’adresse à la main.',
+      'Repas n’a pas pu utiliser ce magasin. Rien n’est enregistré. Réessaie, ou saisis l’adresse à la main.',
     )
     expect(wrapper.text()).toContain('Aucun magasin enregistré.')
     expect(wrapper.text()).not.toContain('enregistré.Changer')
@@ -516,7 +517,7 @@ describe('réglages du drive : la lecture du magasin par l’application (un seu
     await flushPromises()
 
     expect(wrapper.find('[role="alert"]').text()).toBe(
-      'Trop de demandes en peu de temps. Rien n’est perdu. Attendez une minute, puis réessayez.',
+      'Trop de demandes en peu de temps. Rien n’est perdu. Attends une minute, puis réessaie.',
     )
     expect(wrapper.text()).toContain('Aucun magasin enregistré.')
   })
@@ -524,23 +525,23 @@ describe('réglages du drive : la lecture du magasin par l’application (un seu
   it.each([
     [
       'BUSY',
-      'Un envoi au drive est déjà en cours dans l’application. Rien n’est enregistré. Terminez-le ou abandonnez-le, puis réessayez.',
+      'Un envoi au drive est déjà en cours dans l’application. Rien n’est enregistré. Termine-le ou abandonne-le, puis réessaie.',
     ],
     [
       'CANCELLED',
-      'Aucun magasin choisi. Rien n’est enregistré. Réessayez, ou saisissez l’adresse à la main.',
+      'Aucun magasin choisi. Rien n’est enregistré. Réessaie, ou saisis l’adresse à la main.',
     ],
     [
       'NOT_FOUND',
-      'L’application n’a pas trouvé de magasin sur la page. Rien n’est enregistré. Choisissez-en un sur le site du drive, puis réessayez.',
+      'L’application n’a pas trouvé de magasin sur la page. Rien n’est enregistré. Choisis-en un sur le site du drive, puis réessaie.',
     ],
     [
       'UNAVAILABLE',
-      'L’application ne peut pas lire votre magasin pour le moment. Rien n’est enregistré. Saisissez son adresse à la main.',
+      'L’application ne peut pas lire ton magasin pour le moment. Rien n’est enregistré. Saisis son adresse à la main.',
     ],
     [
       'FAILED',
-      'La lecture a échoué. Rien n’est enregistré. Réessayez, ou saisissez l’adresse à la main.',
+      'La lecture a échoué. Rien n’est enregistré. Réessaie, ou saisis l’adresse à la main.',
     ],
   ] as const)(
     'dit pourquoi la lecture a échoué (%s), en trois phrases, sans rien enregistrer',
@@ -599,7 +600,7 @@ describe('réglages du drive : l’application et les produits', () => {
   it('hors de l’application, propose de l’installer et mène à l’aide', async () => {
     const { wrapper } = await open()
 
-    expect(wrapper.text()).toContain('Vous utilisez Repas dans un navigateur')
+    expect(wrapper.text()).toContain('Tu utilises Repas dans un navigateur')
     expect(wrapper.find('a[href="/drive/aide"]').text()).toBe('Aide d’installation')
   })
 
@@ -612,7 +613,8 @@ describe('réglages du drive : l’application et les produits', () => {
     const { wrapper } = await open()
     await vi.waitFor(() => expect(wrapper.text()).toContain('Version 0.5.0'))
 
-    expect(wrapper.text()).toContain('Le drive est prêt dans cette application.')
+    // Rien à faire : « prêt » n'est pas dit (DRV-628)
+    expect(wrapper.text()).not.toContain('prêt')
     expect(wrapper.text()).not.toContain('navigateur')
     // Déjà installée : l'aide ne propose pas de l'installer, elle mène à la mise à jour
     const help = wrapper.find('a[href="/drive/aide#mise-a-jour"]')
@@ -629,7 +631,7 @@ describe('réglages du drive : l’application et les produits', () => {
     const { wrapper } = await open()
 
     await vi.waitFor(() => expect(wrapper.text()).toContain('Version 0.1.0'))
-    expect(wrapper.text()).toContain('mettez-la à jour')
+    expect(wrapper.text()).toContain('mets-la à jour')
   })
 
   it('dit quand l’application ne répond pas comme prévu', async () => {
@@ -651,6 +653,38 @@ describe('réglages du drive : l’application et les produits', () => {
     expect(wrapper.find('a[href="/drive/produits"]').text()).toBe('Gérer mes produits')
   })
 
+  it('n’écrit jamais un compteur à zéro : seulement ce qui existe (DRV-628)', async () => {
+    const { wrapper } = await open({
+      'GET /api/v1/drive/choices': () =>
+        json({
+          member: [
+            {
+              ingredientSlug: 'sel',
+              ingredientName: 'Sel',
+              haveAtHome: true,
+              accepted: [],
+              rejected: [],
+            },
+          ],
+          totalItems: 1,
+        }),
+    })
+
+    expect(wrapper.findAll('dd').map((value) => value.text())).toEqual(['1'])
+    expect(wrapper.text()).toContain('J’en ai toujours')
+    expect(wrapper.text()).not.toContain('Articles avec des produits')
+    expect(wrapper.text()).not.toContain('à ne plus proposer')
+  })
+
+  it('sans aucun produit retenu, ne garde que le lien « Gérer mes produits »', async () => {
+    const { wrapper } = await open({
+      'GET /api/v1/drive/choices': () => json({ member: [], totalItems: 0 }),
+    })
+
+    expect(wrapper.find('dl').exists()).toBe(false)
+    expect(wrapper.find('a[href="/drive/produits"]').text()).toBe('Gérer mes produits')
+  })
+
   it('sans magasin, ne lit pas les produits', async () => {
     const { wrapper, fetchMock } = await open({}, '/drive/reglages', settingsOf(null))
 
@@ -666,31 +700,29 @@ describe('réglages du drive : l’application et les produits', () => {
   })
 })
 
-describe('réglages du drive : la note de vie privée', () => {
-  it('s’affiche au-dessus de la section du magasin et mène à la note complète de l’aide', async () => {
-    const { wrapper, context } = await open()
+describe('réglages du drive : « Ton magasin » en premier (DRV-628)', () => {
+  it('est le premier bloc, sans note de vie privée au-dessus ni lien vers les conditions', async () => {
+    const { wrapper } = await open()
 
-    const note = wrapper.find('#drive-privacy-note-title')
-    const store = wrapper.find('#store-title')
-    expect(note.text()).toBe('Votre vie privée')
-    expect(
-      note.element.compareDocumentPosition(store.element) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
-
-    const link = wrapper.find('a[href="/drive/aide#vie-privee"]')
-    expect(link.text()).toBe('Lisez la note complète')
-    await link.trigger('click')
-    // La page d'aide se charge à la demande : on attend la fin de la navigation
-    await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-help'))
-    expect(context.router.currentRoute.value.hash).toBe('#vie-privee')
+    // Le premier titre de section est « Ton magasin » : rien avant lui que le retour et le titre de la page
+    expect(wrapper.find('h2').text()).toBe('Ton magasin')
+    expect(wrapper.find('#drive-privacy-note-title').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('vie privée')
+    expect(wrapper.text()).not.toContain('jamais')
+    expect(wrapper.find('a[href="/drive/conditions"]').exists()).toBe(false)
   })
 
-  it('reste là sans magasin enregistré (avant la première activation), mais pas quand le drive est coupé', async () => {
+  it('reste ainsi sans magasin enregistré (avant la première activation)', async () => {
     const empty = await open({}, '/drive/reglages', settingsOf(null))
-    expect(empty.wrapper.find('#drive-privacy-note-title').exists()).toBe(true)
-    document.body.innerHTML = ''
 
-    const off = await open({}, '/drive/reglages', settingsOf(null, false))
-    expect(off.wrapper.find('#drive-privacy-note-title').exists()).toBe(false)
+    expect(empty.wrapper.find('h2').text()).toBe('Ton magasin')
+    expect(empty.wrapper.text()).not.toContain('vie privée')
+  })
+
+  it('ne dit rien du magasin au-delà de son nom : ni explication, ni mécanisme', async () => {
+    const { wrapper } = await open()
+
+    expect(wrapper.text()).not.toContain('Repas remplit le panier de ce magasin')
+    expect(wrapper.text()).not.toContain('propres à ce magasin')
   })
 })

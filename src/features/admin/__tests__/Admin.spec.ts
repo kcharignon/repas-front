@@ -72,6 +72,8 @@ const users = {
       isDisabled: false,
       status: 'ACTIVE',
       isAdmin: true,
+      appVersion: '0.1.8',
+      appOutdated: true,
     },
     {
       id: 'u2',
@@ -84,6 +86,8 @@ const users = {
       isDisabled: true,
       status: 'DISABLED',
       isAdmin: false,
+      appVersion: null,
+      appOutdated: false,
     },
   ],
   totalItems: 2,
@@ -316,15 +320,11 @@ describe('unités', () => {
 
     type(field('Facteur de base'), '0')
     await submitDialog()
-    expect(document.body.textContent).toContain(
-      'Entrez un nombre supérieur à zéro, ou laissez vide.',
-    )
+    expect(document.body.textContent).toContain('Entre un nombre supérieur à zéro, ou laisse vide.')
     type(field('Facteur de base'), '-2')
     await submitDialog()
 
-    expect(document.body.textContent).toContain(
-      'Entrez un nombre supérieur à zéro, ou laissez vide.',
-    )
+    expect(document.body.textContent).toContain('Entre un nombre supérieur à zéro, ou laisse vide.')
     expect(calls(fetchMock).filter((call) => call.startsWith('PUT /api/v1/units'))).toEqual([])
   })
 
@@ -348,7 +348,7 @@ describe('unités', () => {
         baseFactor: factor === '' ? null : Number(factor),
       })
       expect(document.body.querySelector('[role="dialog"] [role="alert"]')?.textContent).toBe(
-        'La dimension et le facteur de base vont ensemble : renseignez les deux, ou laissez-les vides.',
+        'La dimension et le facteur de base vont ensemble : renseigne les deux, ou laisse-les vides.',
       )
     },
   )
@@ -377,7 +377,7 @@ describe('unités', () => {
     await vi.waitFor(() => expect(field('Nom')).not.toBeNull())
 
     await submitDialog()
-    expect(document.body.textContent).toContain('Donnez un nom.')
+    expect(document.body.textContent).toContain('Donne un nom.')
     expect(calls(fetchMock).filter((call) => call.startsWith('POST /api/v1/units'))).toEqual([])
 
     type(field('Nom'), 'Gramme')
@@ -400,7 +400,7 @@ describe('rayons', () => {
     button('Nouveau rayon')?.click()
     await vi.waitFor(() => expect(field('Nom')).not.toBeNull())
     await submitDialog()
-    expect(document.body.textContent).toContain('Indiquez une image.')
+    expect(document.body.textContent).toContain('Indique une image.')
     type(field('Nom'), 'Frais')
     type(field('Image'), 'images/frais.png')
     await submitDialog()
@@ -433,7 +433,7 @@ describe('types de recette', () => {
     button('Nouveau type de recette')?.click()
     await vi.waitFor(() => expect(field('Nom')).not.toBeNull())
     await submitDialog()
-    expect(document.body.textContent).toContain('Indiquez un ordre.')
+    expect(document.body.textContent).toContain('Indique un ordre.')
     type(field('Nom'), 'Boisson')
     type(field('Image'), 'images/boisson.png')
     type(field("Ordre d'affichage"), '5')
@@ -496,8 +496,8 @@ describe('conversions', () => {
 
     await submitDialog()
 
-    expect(document.body.textContent).toContain('Choisissez deux unités différentes.')
-    expect(document.body.textContent).toContain('Entrez un nombre supérieur à zéro.')
+    expect(document.body.textContent).toContain('Choisis deux unités différentes.')
+    expect(document.body.textContent).toContain('Entre un nombre supérieur à zéro.')
     expect(calls(fetchMock).filter((call) => call.startsWith('POST /api/v1/conversions'))).toEqual(
       [],
     )
@@ -541,6 +541,18 @@ describe('utilisateurs', () => {
     expect(first).toContain('2 recettes, 0 ingrédients, 1 listes')
     expect(first).toContain('inscrit le 1 octobre 2026')
     expect(second).toContain('Désactivé')
+  })
+
+  it('montre la version de l’application de chacun, « — » si inconnue, et qui est à mettre à jour (DRV-637)', async () => {
+    const { wrapper } = await open(UsersAdminView)
+    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+
+    const [first, second] = wrapper.findAll('li').map((item) => item.text())
+
+    expect(first).toContain('Application : 0.1.8')
+    expect(first).toContain('À mettre à jour')
+    expect(second).toContain('Application : —')
+    expect(second).not.toContain('À mettre à jour')
   })
 
   it('montre le statut de chaque compte et laisse choisir parmi les trois', async () => {

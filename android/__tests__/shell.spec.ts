@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 const androidDir = join(dirname(fileURLToPath(import.meta.url)), '..')
 const srcDir = join(androidDir, '..', 'src')
 const kotlinDir = join(androidDir, 'app', 'src', 'main', 'kotlin')
+const coreKotlinDir = join(androidDir, 'core', 'src', 'main', 'kotlin')
 
 const read = (path: string) => readFileSync(path, 'utf8')
 const manifest = read(join(androidDir, 'app', 'src', 'main', 'AndroidManifest.xml'))
@@ -49,10 +50,13 @@ describe('le mode d’emploi de l’application', () => {
   const strings = read(join(androidDir, 'app', 'src', 'main', 'res', 'values', 'strings.xml'))
 
   // Les pages de Leclerc chargent leurs propres services (anti-robot, mesure) et la WebView du drive accepte leurs cookies : ne pas dire
-  // que l'application « ne parle qu'à leclercdrive.fr ».
+  // que l'application « ne parle qu'à leclercdrive.fr ». Le mode d'emploi ne dit plus rien de ce fond (DRV-628) ; il est dit, honnêtement,
+  // dans les conditions d'utilisation du drive.
   it('ne prétend pas que le drive ne contacte que leclercdrive.fr', () => {
     expect(strings).not.toContain('ne parle qu’à leclercdrive.fr')
-    expect(strings).toContain('ses pages font appel à leurs propres services')
+    expect(strings).not.toContain('ne contacte que Leclerc')
+    const terms = read(join(srcDir, 'i18n', 'fr.ts'))
+    expect(terms).toContain('les pages de Leclerc font appel à leurs propres services')
   })
 })
 
@@ -73,7 +77,7 @@ describe('l’origine de Repas', () => {
 })
 
 describe('le pont natif', () => {
-  const sources = files(kotlinDir, /\.kt$/).map((path) => ({ path, text: read(path) }))
+  const sources = [...files(kotlinDir, /\.kt$/), ...files(coreKotlinDir, /\.kt$/)].map((path) => ({ path, text: read(path) }))
 
   it('n’expose aucun objet natif aux pages (pas de addJavascriptInterface)', () => {
     expect(sources.filter(({ text }) => text.includes('addJavascriptInterface(')).map(({ path }) => path)).toEqual([])

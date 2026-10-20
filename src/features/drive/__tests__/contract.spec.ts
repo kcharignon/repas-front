@@ -276,9 +276,10 @@ describe('les écrans lisent les exemples du back sans erreur', () => {
 
     expect(plain(wrapper.find('dd').text())).toBe('1,99 €')
     expect(text).toContain('1 article sur 4 estimé')
-    expect(text).toContain('3 articles ne sont pas dans le total.')
-    expect(text).toContain('Estimation peu fiable')
-    expect(text).toContain(estimate.disclaimer)
+    // Le total et le nombre d'articles estimés, rien d'autre (DRV-628) : le texte du back n'est plus affiché
+    expect(text).not.toContain('ne sont pas dans le total')
+    expect(text).not.toContain('Estimation peu fiable')
+    expect(text).not.toContain(estimate.disclaimer)
     expect(wrapper.findAll('h3').map((title) => title.text())).toEqual([
       'Non estimées (3)',
       'Estimées (1)',
@@ -297,8 +298,8 @@ describe('les écrans lisent les exemples du back sans erreur', () => {
   it('envoi : les cinq lignes du plan, avec la quantité de l’unité sans symbole', async () => {
     const { wrapper } = await show(DriveSendView, `/drive/envoi/${plan.shoppingListId}`)
 
-    await vi.waitFor(() => expect(wrapper.text()).toContain('Vos articles'))
-    const heading = wrapper.findAll('h2').find((title) => title.text() === 'Vos articles')
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Tes articles'))
+    const heading = wrapper.findAll('h2').find((title) => title.text() === 'Tes articles')
     const items = heading?.element.parentElement?.querySelectorAll(':scope > ul > li') ?? []
     const lines = [...items].map((item) => plain(item.textContent))
     expect(lines).toHaveLength(5)

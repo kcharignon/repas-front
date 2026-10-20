@@ -2239,6 +2239,38 @@
                 "security": []
             }
         },
+        "/api/v1/users/password-reset/confirm": {
+            "post": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Fixe un nouveau mot de passe gr\u00e2ce au lien re\u00e7u par email (route publique)",
+                "description": "Le lien est \u00e0 usage unique et valable 30 minutes. Le nouveau mot de passe remplace l'ancien, quel qu'il soit, et toutes les connexions ouvertes du compte sont ferm\u00e9es : il faut se reconnecter par /api/login_check. Un compte en attente dont l'adresse n'\u00e9tait pas confirm\u00e9e est confirm\u00e9 et activ\u00e9, car le lien prouve la possession de l'adresse. Un compte d\u00e9sactiv\u00e9 reste inchang\u00e9 et re\u00e7oit la m\u00eame r\u00e9ponse qu'un lien invalide (ADR 0026).",
+                "operationId": "post_api_reset_password",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ResetPasswordPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Mot de passe chang\u00e9, connexions ferm\u00e9es"
+                    },
+                    "422": {
+                        "description": "Corps invalide (mot de passe de moins de 8 caract\u00e8res), ou lien inconnu, d\u00e9j\u00e0 utilis\u00e9, expir\u00e9 ou de compte d\u00e9sactiv\u00e9 (message `INVALID_PASSWORD_RESET_TOKEN`)"
+                    },
+                    "429": {
+                        "description": "Trop de demandes depuis cette adresse IP"
+                    }
+                },
+                "security": []
+            }
+        },
         "/api/v1/users/email-verification/send": {
             "post": {
                 "tags": [
@@ -2269,6 +2301,66 @@
                     }
                 },
                 "security": []
+            }
+        },
+        "/api/v1/users/password-reset/send": {
+            "post": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Envoie par email le lien pour choisir un nouveau mot de passe (route publique)",
+                "description": "R\u00e9pond 204 que l'adresse ait un compte ou non (adresse inconnue, compte d\u00e9sactiv\u00e9, ou lien envoy\u00e9 il y a moins d'une minute) : la r\u00e9ponse ne r\u00e9v\u00e8le pas quelles adresses sont inscrites (ADR 0026). Le lien est valable 30 minutes et un nouveau lien remplace l'ancien.",
+                "operationId": "post_api_send_password_reset",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SendPasswordResetPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Demande prise en compte"
+                    },
+                    "422": {
+                        "description": "Corps de la requ\u00eate invalide"
+                    },
+                    "429": {
+                        "description": "Trop de demandes depuis cette adresse IP"
+                    }
+                },
+                "security": []
+            }
+        },
+        "/api/v1/users/me/app-version": {
+            "put": {
+                "tags": [
+                    "Current user"
+                ],
+                "summary": "Retient la version de l'application install\u00e9e pour l'utilisateur connect\u00e9",
+                "description": "Une ligne par compte et par plateforme, remplac\u00e9e \u00e0 chaque appel (idempotent). Seule la version est retenue, avec l'heure : aucun identifiant d'appareil, aucun mod\u00e8le de t\u00e9l\u00e9phone. Au plus une \u00e9criture par minute et par compte : au-del\u00e0, la r\u00e9ponse reste `204` et rien n'est \u00e9crit. La version ne sert qu'\u00e0 informer (`appUpdate` de `GET /api/v1/me`, liste des comptes de l'administration), jamais \u00e0 accorder un droit.",
+                "operationId": "put_api_update_user_app_version",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateUserAppVersionPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Version retenue (ou ignor\u00e9e sans erreur : une version a d\u00e9j\u00e0 \u00e9t\u00e9 retenue pour ce compte dans la minute)"
+                    },
+                    "422": {
+                        "description": "Corps invalide : plateforme autre que `android`, version qui n'est pas trois nombres s\u00e9par\u00e9s par des points, ou de plus de 20 caract\u00e8res"
+                    }
+                }
             }
         },
         "/api/v1/me/settings": {
@@ -3017,6 +3109,28 @@
                 },
                 "type": "object"
             },
+            "ResetPasswordPayload": {
+                "required": [
+                    "token",
+                    "password"
+                ],
+                "properties": {
+                    "token": {
+                        "description": "Secret du lien re\u00e7u par email (param\u00e8tre `token` de l'adresse du lien)",
+                        "type": "string",
+                        "maxLength": 256,
+                        "example": "3f9c0a5e7d1b4c6a8e2f0b9d7c5a3e1f3f9c0a5e7d1b4c6a8e2f0b9d7c5a3e1f"
+                    },
+                    "password": {
+                        "description": "Nouveau mot de passe en clair (8 caract\u00e8res au moins, comme \u00e0 l'inscription)",
+                        "type": "string",
+                        "maxLength": 4096,
+                        "minLength": 8,
+                        "example": "un-mot-de-passe"
+                    }
+                },
+                "type": "object"
+            },
             "SendEmailVerificationPayload": {
                 "required": [
                     "email"
@@ -3027,6 +3141,44 @@
                         "type": "string",
                         "maxLength": 255,
                         "example": "alexiane@example.com"
+                    }
+                },
+                "type": "object"
+            },
+            "SendPasswordResetPayload": {
+                "required": [
+                    "email"
+                ],
+                "properties": {
+                    "email": {
+                        "description": "Adresse email du compte dont le mot de passe est oubli\u00e9",
+                        "type": "string",
+                        "maxLength": 255,
+                        "example": "alexiane@example.com"
+                    }
+                },
+                "type": "object"
+            },
+            "UpdateUserAppVersionPayload": {
+                "required": [
+                    "platform",
+                    "version"
+                ],
+                "properties": {
+                    "platform": {
+                        "description": "Plateforme de l'application install\u00e9e : `android` seulement",
+                        "type": "string",
+                        "enum": [
+                            "android"
+                        ],
+                        "example": "android"
+                    },
+                    "version": {
+                        "description": "Version de l'application : trois nombres s\u00e9par\u00e9s par des points, 20 caract\u00e8res au plus (ni suffixe, ni quatri\u00e8me nombre)",
+                        "type": "string",
+                        "maxLength": 20,
+                        "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+                        "example": "0.1.8"
                     }
                 },
                 "type": "object"
@@ -3301,7 +3453,7 @@
                         "example": "123456"
                     },
                     "label": {
-                        "description": "Libell\u00e9 du produit (255 caract\u00e8res au plus, sans caract\u00e8re de contr\u00f4le ni caract\u00e8re invisible : saut de ligne, sens de lecture, largeur nulle)",
+                        "description": "Libell\u00e9 du produit (255 caract\u00e8res au plus, sans caract\u00e8re de contr\u00f4le ni caract\u00e8re invisible ou de format : saut de ligne, sens de lecture, largeur nulle, trait d'union conditionnel, s\u00e9lecteur de variation, remplisseur, tag ; les espaces ins\u00e9cables sont permises)",
                         "type": "string",
                         "default": null,
                         "maxLength": 255,
@@ -3335,6 +3487,24 @@
                                 "$ref": "#/components/schemas/ProductPricePayload"
                             }
                         ]
+                    },
+                    "rayonId": {
+                        "description": "Rayon de l'enseigne o\u00f9 le site range le produit (`iIdRayon` chez Leclerc) : entier de 1 \u00e0 2147483647. Facultatif : absent ou `null`, la fiche du produit n'est pas modifi\u00e9e ; une valeur d\u00e9j\u00e0 connue n'est jamais remplac\u00e9e. Sert \u00e0 apprendre dans quel rayon de l'enseigne chercher les ingr\u00e9dients d'un rayon de Repas (`rayonHints` du plan)",
+                        "type": "integer",
+                        "default": null,
+                        "maximum": 2147483647,
+                        "minimum": 1,
+                        "example": 4001,
+                        "nullable": true
+                    },
+                    "familyId": {
+                        "description": "Famille de l'enseigne, le niveau sous le rayon (`iIdFamille` chez Leclerc) : entier de 1 \u00e0 2147483647. Facultatif, m\u00eames r\u00e8gles que `rayonId`",
+                        "type": "integer",
+                        "default": null,
+                        "maximum": 2147483647,
+                        "minimum": 1,
+                        "example": 4101,
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -4249,13 +4419,39 @@
                 },
                 "type": "object"
             },
+            "AppUpdateDTO": {
+                "required": [
+                    "outdated"
+                ],
+                "properties": {
+                    "latest": {
+                        "description": "Derni\u00e8re version publi\u00e9e de l'application (`APP_LATEST_VERSION` du serveur), `null` si le serveur ne la conna\u00eet pas",
+                        "type": "string",
+                        "example": "0.1.10",
+                        "nullable": true
+                    },
+                    "minimum": {
+                        "description": "Plus ancienne version de l'application encore attendue (`APP_MIN_VERSION` du serveur), `null` si aucune",
+                        "type": "string",
+                        "example": "0.1.9",
+                        "nullable": true
+                    },
+                    "outdated": {
+                        "description": "Vrai si la derni\u00e8re version de l'application vue pour ce compte est plus ancienne que `latest` ou que `minimum` (comparaison nombre par nombre). Faux si aucune version n'est connue pour ce compte (navigateur seul, application qui ne l'a jamais envoy\u00e9e) ou si le serveur ne conna\u00eet ni `latest` ni `minimum`",
+                        "type": "boolean",
+                        "example": false
+                    }
+                },
+                "type": "object"
+            },
             "CurrentUserDTO": {
                 "required": [
                     "id",
                     "email",
                     "roles",
                     "isAdmin",
-                    "defaultServing"
+                    "defaultServing",
+                    "appUpdate"
                 ],
                 "properties": {
                     "id": {
@@ -4285,6 +4481,9 @@
                         "description": "Nombre de personnes propos\u00e9 par d\u00e9faut pour une recette",
                         "type": "integer",
                         "example": 4
+                    },
+                    "appUpdate": {
+                        "$ref": "#/components/schemas/AppUpdateDTO"
                     }
                 },
                 "type": "object"
@@ -4300,7 +4499,8 @@
                     "createdAt",
                     "isDisabled",
                     "isAdmin",
-                    "status"
+                    "status",
+                    "appOutdated"
                 ],
                 "properties": {
                     "id": {
@@ -4354,6 +4554,17 @@
                             "DISABLED"
                         ],
                         "example": "ACTIVE"
+                    },
+                    "appVersion": {
+                        "description": "Derni\u00e8re version de l'application Android vue pour ce compte (DRV-637), `null` si inconnue (navigateur seul, application qui ne l'a jamais envoy\u00e9e)",
+                        "type": "string",
+                        "example": "0.1.8",
+                        "nullable": true
+                    },
+                    "appOutdated": {
+                        "description": "\u00ab \u00c0 mettre \u00e0 jour \u00bb : vrai si `appVersion` est plus ancienne que la derni\u00e8re version publi\u00e9e (`APP_LATEST_VERSION`) ou que la minimale (`APP_MIN_VERSION`) ; faux si la version est inconnue ou si le serveur ne conna\u00eet aucune des deux",
+                        "type": "boolean",
+                        "example": false
                     }
                 },
                 "type": "object"
@@ -4747,6 +4958,21 @@
                         "description": "Texte \u00e0 chercher sur le site de l'enseigne : le nom de l'ingr\u00e9dient",
                         "type": "string",
                         "example": "Farine"
+                    },
+                    "rayonHints": {
+                        "description": "Rayons de l'enseigne o\u00f9 chercher d'abord cet ingr\u00e9dient (DRV-642), 3 au plus, du plus choisi au moins choisi : ceux o\u00f9 les utilisateurs ont choisi des produits pour des ingr\u00e9dients du m\u00eame rayon de Repas. Ce sont des identifiants de rayon de l'enseigne (`iIdRayon` chez Leclerc), jamais des noms. Vide quand rien n'est encore appris pour ce rayon de Repas, ou quand l'ingr\u00e9dient n'a pas de rayon. Un classement, pas un filtre : aucun produit n'est \u00e9cart\u00e9. Cl\u00e9 facultative pour le lecteur (un back plus ancien ne l'envoie pas)",
+                        "type": "array",
+                        "items": {
+                            "type": "integer",
+                            "maximum": 2147483647,
+                            "minimum": 1
+                        },
+                        "default": [],
+                        "maxItems": 3,
+                        "example": [
+                            4001,
+                            4002
+                        ]
                     }
                 },
                 "type": "object"

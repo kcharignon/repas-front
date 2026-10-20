@@ -207,7 +207,7 @@ describe('ShoppingListView', () => {
     await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
 
     expect(wrapper.find('[role="alert"]').text()).toBe(
-      'Le serveur est injoignable. Réessayez dans un instant.',
+      'Le serveur est injoignable. Réessaie dans un instant.',
     )
   })
 
@@ -342,7 +342,7 @@ describe('ShoppingListView', () => {
 
       await vi.waitFor(() =>
         expect(useNotificationsStore().items.map((item) => item.text)).toEqual([
-          "Modifié ailleurs entre-temps : la page vient d'être rechargée, refaites votre action.",
+          "Modifié ailleurs entre-temps : la page vient d'être rechargée, refais ton action.",
         ]),
       )
       await vi.waitFor(() =>

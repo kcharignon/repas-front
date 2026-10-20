@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { cva } from 'class-variance-authority'
+import type { ClassValue } from 'clsx'
 import { RouterLink } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
 
@@ -19,14 +20,19 @@ const link = cva(
   },
 )
 
-withDefaults(
-  defineProps<{ to: RouteLocationRaw; variant?: 'primary' | 'secondary' | 'accent' }>(),
-  {
-    variant: 'primary',
-  },
+const props = withDefaults(
+  defineProps<{
+    to: RouteLocationRaw
+    variant?: 'primary' | 'secondary' | 'accent'
+    /** Classes de l'appelant, fusionnées : elles l'emportent sur celles de la variante. */
+    class?: ClassValue
+  }>(),
+  { variant: 'primary', class: undefined },
 )
 </script>
 
 <template>
-  <RouterLink :to="to" :class="cn(link({ variant }))"><slot /></RouterLink>
+  <RouterLink :to="props.to" :class="cn(link({ variant: props.variant }), props.class)"
+    ><slot
+  /></RouterLink>
 </template>

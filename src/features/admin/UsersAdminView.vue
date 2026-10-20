@@ -104,6 +104,19 @@ function confirmDelete() {
             }}
             · {{ t('admin.since', { date: d(new Date(user.createdAt), 'long') }) }}
           </p>
+          <p class="flex flex-wrap items-center gap-2 text-sm text-muted">
+            <span>{{
+              t('admin.appVersion', {
+                version: user.appVersion ?? t('admin.appVersionUnknown'),
+              })
+            }}</span>
+            <span
+              v-if="user.appOutdated"
+              class="rounded-full border border-line px-2.5 py-0.5 text-xs font-bold text-ink"
+            >
+              {{ t('admin.appOutdated') }}
+            </span>
+          </p>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">

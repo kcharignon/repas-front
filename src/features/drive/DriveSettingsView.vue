@@ -16,7 +16,6 @@ import { useNotificationsStore } from '@/notifications/store'
 import { useOnline } from '@/offline/useOnline'
 import { driveBridge } from './bridge'
 import { useDriveChoices } from './choicesQueries'
-import DrivePrivacyNote from './DrivePrivacyNote.vue'
 import { driveKeys, useDriveSettings, useSaveDriveSettings } from './queries'
 import { parseStoreAddress, storeTail } from './storeAddress'
 import { canReadStoreFromApp, readStoreFromApp, StoreReadError } from './storeReader'
@@ -220,6 +219,16 @@ const summary = computed(() => {
     haveAtHome: member.filter((choice) => choice.haveAtHome).length,
   }
 })
+// Les lignes du résumé qui existent (un compteur à zéro n'est pas écrit)
+const summaryRows = computed(() => {
+  const counts = summary.value
+
+  return [
+    { label: 'driveSettings.productsWith', count: counts.withProducts },
+    { label: 'driveSettings.productsRejected', count: counts.withRejected },
+    { label: 'driveSettings.productsHome', count: counts.haveAtHome },
+  ].filter((row) => row.count > 0)
+})
 
 const card = 'flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4'
 const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
@@ -262,8 +271,6 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
     <p v-else-if="!enabled" class="text-muted">{{ t('driveSettings.disabled') }}</p>
 
     <template v-else>
-      <DrivePrivacyNote v-if="!choosing" />
-
       <section class="flex flex-col gap-3" aria-labelledby="store-title">
         <h2
           id="store-title"
@@ -285,9 +292,6 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
             <span v-if="store.label" class="text-sm text-muted">{{
               t('driveSettings.storeNamed', { tail: storeTail(store.id) })
             }}</span>
-          </p>
-          <p v-if="!choosing && !savedTail" class="text-sm text-muted">
-            {{ t('driveSettings.storeHelp') }}
           </p>
 
           <div v-if="canRead" class="flex flex-col items-start gap-2">
@@ -367,8 +371,6 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
         </details>
       </section>
 
-      <DrivePrivacyNote v-if="choosing" />
-
       <template v-if="!choosing">
         <section class="flex flex-col gap-3" aria-labelledby="app-title">
           <h2 id="app-title" class="font-display text-2xl font-bold">
@@ -386,12 +388,9 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
                 <p class="font-bold">
                   {{ t('driveSettings.appVersion', { version: app.data.value.version }) }}
                 </p>
-                <p :class="app.data.value.drive ? 'text-muted' : 'font-semibold text-danger'">
-                  {{
-                    app.data.value.drive
-                      ? t('driveSettings.appReady')
-                      : t('driveSettings.appDriveOff')
-                  }}
+                <!-- Seulement quand il y a quelque chose à faire : « prêt » n'est pas dit (DRV-628) -->
+                <p v-if="!app.data.value.drive" class="font-semibold text-danger">
+                  {{ t('driveSettings.appDriveOff') }}
                 </p>
               </template>
             </template>
@@ -418,13 +417,15 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
             <p v-else-if="hasFailed(choices)" role="alert" class="font-semibold text-danger">
               {{ t('errors.unreachable') }}
             </p>
-            <dl v-else class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1.5">
-              <dt>{{ t('driveSettings.productsWith') }}</dt>
-              <dd class="text-right font-bold">{{ summary.withProducts }}</dd>
-              <dt>{{ t('driveSettings.productsRejected') }}</dt>
-              <dd class="text-right font-bold">{{ summary.withRejected }}</dd>
-              <dt>{{ t('driveSettings.productsHome') }}</dt>
-              <dd class="text-right font-bold">{{ summary.haveAtHome }}</dd>
+            <!-- Seulement ce qui existe : jamais un compteur à zéro (DRV-628) -->
+            <dl
+              v-else-if="summaryRows.length > 0"
+              class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1.5"
+            >
+              <template v-for="row in summaryRows" :key="row.label">
+                <dt>{{ t(row.label) }}</dt>
+                <dd class="text-right font-bold">{{ row.count }}</dd>
+              </template>
             </dl>
             <div>
               <UiLinkButton variant="secondary" :to="{ name: 'drive-products' }">{{

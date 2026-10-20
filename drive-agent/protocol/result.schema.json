@@ -81,6 +81,12 @@
     "label": { "type": "string", "minLength": 1, "maxLength": 255 },
     "storeId": { "type": "string", "pattern": "^[0-9]{1,12}$" },
     "counter": { "type": "integer", "minimum": 0, "maximum": 100000 },
+    "catalogId": {
+      "description": "Facultatif (DRV-642) : le rayon ou la famille du produit choisi chez l'enseigne.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
     "productId": { "type": "string", "pattern": "^[0-9]{1,12}$" },
     "errorCode": {
       "enum": [
@@ -150,7 +156,9 @@
         "label": { "$ref": "#/definitions/label" },
         "ean": { "$ref": "#/definitions/ean" },
         "content": { "$ref": "#/definitions/content" },
-        "price": { "$ref": "#/definitions/price" }
+        "price": { "$ref": "#/definitions/price" },
+        "rayonId": { "$ref": "#/definitions/catalogId" },
+        "familyId": { "$ref": "#/definitions/catalogId" }
       }
     },
     "line": {

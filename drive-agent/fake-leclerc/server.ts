@@ -15,16 +15,21 @@ import {
   challengePage,
   changedSearchPage,
   accueilPage,
+  basketPage,
   errorPage,
   homePage,
   loginPage,
   renamedProductsPage,
   repasReturnPage,
+  facetAisleId,
   searchPage,
+  type Availability,
   type CartAction,
   type EmptyForm,
+  type HomeForm,
   type Session,
 } from './pages.ts'
+import { PHOTO_HOST, photoReply } from './photos.ts'
 
 /** Le faux magasin : son identifiant et son nom d'hôte (le plan de Repas et la page doivent s'accorder dessus). */
 export const STORE = { id: '000001', host: 'courses-test.leclercdrive.fr' } as const
@@ -72,6 +77,16 @@ export interface Behavior {
   latencyMs: number
   fault: Fault | null
   /**
+   * Le code HTTP (404, 500…) que l'accueil du magasin AVEC la ville (`/magasin-N-N-Ville`, la page que « Finaliser sur Leclerc » ouvre, DRV-631)
+   * renvoie, avec la page d'erreur générique : pour essayer le repli sur l'accueil du drive. `null` retire le défaut.
+   */
+  storeHomeStatus?: number | null
+  /**
+   * `not-found` : l'accueil du magasin AVEC la ville répond 200 mais porte le titre « Page introuvable » (une page « introuvable » déguisée, DRV-631).
+   * `null` retire le défaut.
+   */
+  storeHomeTitle?: 'not-found' | null
+  /**
    * Le code HTTP (404, 403, 503…) que le faux site renvoie, avec sa page d'erreur générique, à la racine de l'enseigne (`HOME_HOST`) : la page où
    * l'application ouvre un plan (ticket E de l'audit du 2026-10-18), refusée par le site (page d'erreur, défi anti-robot servi en 403). Le reste
    * du site répond. `null` retire le défaut.
@@ -86,6 +101,17 @@ export interface Behavior {
    */
   startPath?: string | null
   /**
+   * L'accueil de l'enseigne : avec le lien « Commencer mes courses » (`link`, par défaut), sans lui, comme la page d'un visiteur (`no-link`), ou avec
+   * lui et un défi de l'anti-robot dans la page (`challenge`). Dans les deux derniers cas l'agent ne suit rien (DRV-625).
+   */
+  homeForm?: HomeForm
+  /**
+   * Le code HTTP (404, 403…) que la page du panier (`<chemin avec la ville>/detail-panier.aspx`, DRV-629) renvoie, avec la page d'erreur générique :
+   * pour essayer le repli de « Finaliser sur Leclerc » sur l'accueil du drive. `null` retire le défaut. Sans ville dans le chemin, la page est
+   * toujours une 404 (comme le vrai site pour les pages du magasin).
+   */
+  basketStatus?: number | null
+  /**
    * La page de recherche sans produit : `list` (liste vide et message du site, par défaut), `no-list` (squelette seul) ou `encoded` (état en
    * entités HTML). Plusieurs formes plausibles d'une page que le vrai site n'a jamais été relevé servir (ticket C).
    */
@@ -97,6 +123,36 @@ export interface Behavior {
    */
   strictSearch?: boolean
   /**
+   * Le moteur de recherche à APOSTROPHE STRICTE (DRV-635), relevé sur le vrai site le 2026-10-19 : « c'est » et « cest » retrouvent « C'est », « c est » (l'apostrophe
+   * remplacée par une espace) ne trouve rien. Il sert à éprouver les formes de requête de l'agent (`productSearchForms`). Remplace le moteur tolérant.
+   */
+  strictApostrophe?: boolean
+  /**
+   * Le filtre par rayon du site (DRV-647, 0.36.0) : par défaut `Filtres=4-<iIdValeur>` ne garde que les produits de la valeur ; `ignored` : le paramètre est
+   * ignoré (la recherche rend tout, comme une forme d'adresse qui ne filtre pas) ; `not-found` : une recherche à `Filtres` répond 404.
+   */
+  facetFilter?: 'ignored' | 'not-found' | 'none' | null
+  /**
+   * DRV-647 (0.37.0) : `other` donne aux valeurs de la facette un `sIdValeurUrl` en `9-<iIdValeur>` (que le filtre n'accepte pas : seule la forme (ii)
+   * `4-<iIdValeur>` filtre) ; `facetDecoy` : une valeur de `Filtres` non acceptée rend MOINS de produits, mais d'autres rayons, et le même total (le
+   * piège relevé sur le vrai site le 2026-10-20) ; sans lui, elle rend tout.
+   */
+  facetUrlId?: 'other' | null
+  facetDecoy?: boolean | null
+  /** DRV-647 (0.38.0) : les produits frais de marque de distributeur (`mdd` du catalogue) sont trouvés, et rangés dans `objContenuMDD`. */
+  mddList?: boolean | null
+  /**
+   * La disponibilité des produits à stock nul (DRV-635). Les deux modes ajoutent l'étiquette `eDisponibilite` (1 : disponible, 2 : bientôt disponible) et le texte
+   * « Bientôt disponible » à ces produits : `misleading` (disponibilité trompeuse) : le panier les ACCEPTE, comme le site mobile de l'enseigne ; `real-out` (vraie
+   * rupture) : le panier les REFUSE. Absent : l'ancien comportement (stock nul, panier qui refuse, aucune étiquette de plus).
+   */
+  availability?: Availability
+  /**
+   * Les produits (identifiants) que le panier REFUSE alors que la fiche les dit en stock (DRV-644) : le cas « disponible mais pas pris, sans raison donnée ». La réponse
+   * du panier dit alors `iQteDisponible` avec le stock de la fiche, donc aucun signe de rupture.
+   */
+  refuseCart?: number[]
+  /**
    * Le faux site sert la page d'un VISITEUR non connecté (en-tête « Se connecter » / « Créer un compte », pas de « Se déconnecter ») une fois
    * `visitorAfter` recherches et écritures du panier terminées (`0` : dès la première page ; absent ou `null` : jamais). Le catalogue reste
    * public et le panier accepte les écritures d'un visiteur : c'est le danger que l'agent doit détecter (ticket G).
@@ -104,7 +160,7 @@ export interface Behavior {
   visitorAfter?: number | null
 }
 
-export type RequestKind = 'search' | 'cart' | 'page' | 'repas' | 'control' | 'other'
+export type RequestKind = 'search' | 'cart' | 'page' | 'repas' | 'control' | 'image' | 'other'
 
 export interface FakeRequest {
   kind: RequestKind
@@ -122,6 +178,8 @@ export interface FakeRequest {
   rejected?: string
   /** Le mot cherché (recherche) ou le champ `d` décodé (panier). */
   detail?: string
+  /** La valeur du paramètre `Filtres` d'une recherche filtrée (DRV-647, 0.36.0). */
+  filter?: string
 }
 
 export interface Violation {
@@ -252,7 +310,7 @@ export function cartRequestProblem(d: unknown): string | null {
 }
 
 export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeLeclerc> {
-  const hosts = new Set([STORE.host, ...(options.hosts ?? [])])
+  const hosts = new Set([STORE.host, PHOTO_HOST, ...(options.hosts ?? [])])
   let behavior: Behavior = { latencyMs: 0, fault: null, ...options.behavior }
   const cart = new Map<number, number>()
   const log: FakeRequest[] = []
@@ -335,7 +393,17 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
     if (kind === 'challenge') return send(res, 200, challengePage(), HTML)
     if (kind === 'products-renamed') {
       const query = entry.detail ?? ''
-      return send(res, 200, renamedProductsPage(searchCatalog(query), cart), HTML)
+      return send(
+        res,
+        200,
+        renamedProductsPage(
+          searchCatalog(query).filter(
+            (product) => behavior.mddList === true || product.mdd !== true,
+          ),
+          cart,
+        ),
+        HTML,
+      )
     }
     if (kind === 'contract-changed') {
       return scope === 'search'
@@ -360,12 +428,47 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       () => {
         entry.status = 200
         const session = sessionAfter(pacedCount - 1)
+        // DRV-647 : `Filtres=4-<iIdValeur>` ne garde que le rayon (valeur 900000 + rayon) ou la famille (valeur = famille) de la facette.
+        const filtres = url.searchParams.get('Filtres')
+        if (filtres !== null) entry.filter = filtres
+        if (filtres !== null && behavior.facetFilter === 'not-found') {
+          entry.status = 404
+          return send(res, 404, errorPage(), HTML)
+        }
+        const all = searchCatalog(
+          query,
+          behavior.strictSearch === true,
+          behavior.strictApostrophe === true,
+        ).filter((product) => behavior.mddList === true || product.mdd !== true)
+        const accepted =
+          behavior.facetFilter === 'ignored' || behavior.facetFilter === 'none'
+            ? undefined
+            : /^4-(\d+)$/.exec(filtres ?? '')?.[1]
+        let shown = all
+        if (filtres !== null && accepted !== undefined) {
+          const id = Number(accepted)
+          shown = all.filter(
+            (product) => facetAisleId(product.aisle) === id || product.family === id,
+          )
+        } else if (filtres !== null && behavior.facetDecoy === true) {
+          // La valeur visée : le plus grand nombre de `Filtres` (l'identifiant de valeur, quelle que soit la forme).
+          const id = Math.max(0, ...(filtres.match(/\d+/g) ?? []).map(Number))
+          shown = all
+            .filter((product) => facetAisleId(product.aisle) !== id && product.family !== id)
+            .slice(0, 3)
+        }
         const page = searchPage(
           query,
-          searchCatalog(query, behavior.strictSearch === true),
+          shown,
           cart,
           session,
           behavior.emptySearch ?? 'list',
+          behavior.availability,
+          {
+            urlBloc: behavior.facetUrlId === 'other' ? 9 : 4,
+            // Un filtre accepté annonce son propre total ; sinon (ignoré, leurre) le total de la recherche entière.
+            total: filtres !== null && accepted !== undefined ? shown.length : all.length,
+          },
         )
         return send(res, 200, page, HTML)
       },
@@ -409,7 +512,11 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
         const before = cart.get(Number(body.iIdProduit)) ?? 0
         let after = before
         if (body.eTypeAction === 2) after = 0
+        else if (product && behavior.refuseCart?.includes(product.id)) after = before
         else if (product && product.stock > 0) after = Math.min(body.iQuantite, product.stock)
+        // La disponibilité trompeuse (DRV-635) : la fiche dit stock nul, le panier prend le produit.
+        else if (product && behavior.availability === 'misleading')
+          after = Math.min(body.iQuantite, 99)
         if (after === 0) cart.delete(Number(body.iIdProduit))
         else cart.set(Number(body.iIdProduit), after)
         entry.status = 200
@@ -434,6 +541,17 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       if (loopbackHost) return control(entry, req, res, path)
       entry.status = 404
       return send(res, 404, 'inconnu')
+    }
+    // L'hôte des images (DRV-633) : seulement `image.ashx`, des images synthétiques ; ni cadence, ni défaut simulé (une image n'est pas une requête de l'agent).
+    if (hostnameOf(req.headers.host) === PHOTO_HOST) {
+      entry.kind = 'image'
+      if (path !== '/image.ashx' || req.method !== 'GET') {
+        entry.status = 404
+        return send(res, 404, 'inconnu')
+      }
+      const photo = photoReply(url.search)
+      entry.status = photo.status
+      return send(res, photo.status, photo.body, { 'Content-Type': photo.type })
     }
     if (path === '/drive/retour') {
       entry.kind = 'repas'
@@ -466,7 +584,12 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
         behavior.startPath != null && /^\/[\w./~-]*$/.test(behavior.startPath)
           ? behavior.startPath
           : `${PAGE_PATH}/`
-      return send(res, 200, accueilPage(`${origin}${start}`, `${origin}${OTHER_STORE_PATH}/`), HTML)
+      return send(
+        res,
+        200,
+        accueilPage(`${origin}${start}`, `${origin}${OTHER_STORE_PATH}/`, behavior.homeForm),
+        HTML,
+      )
     }
     if (home) {
       // L'enseigne n'a que son accueil ici : les pages d'un magasin sont sur l'hôte du magasin.
@@ -496,6 +619,14 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       return cartWrite(entry, req, res)
     }
     entry.kind = 'page'
+    if (rest === '/detail-panier.aspx' && req.method === 'GET') {
+      // La page du panier n'existe qu'avec la ville dans le chemin (constat du 2026-10-19) ; `basketStatus` la fait refuser.
+      const code = store[3] === undefined ? 404 : (behavior.basketStatus ?? 200)
+      entry.status = code
+      return code === 200
+        ? send(res, 200, basketPage(cart, sessionAfter(pacedCount)), HTML)
+        : send(res, code, errorPage(), HTML)
+    }
     if (rest === '/connexion.aspx') {
       entry.status = 200
       return send(res, 200, loginPage(), HTML)
@@ -506,8 +637,23 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
         entry.status = 404
         return send(res, 404, errorPage(), HTML)
       }
+      if (behavior.storeHomeStatus != null) {
+        entry.status = behavior.storeHomeStatus
+        return send(res, behavior.storeHomeStatus, errorPage(), HTML)
+      }
       entry.status = 200
-      return send(res, 200, homePage(cart, sessionAfter(pacedCount)), HTML)
+      const home = homePage(cart, sessionAfter(pacedCount))
+      return send(
+        res,
+        200,
+        behavior.storeHomeTitle === 'not-found'
+          ? home.replace(
+              /<title>[^<]*<\/title>/,
+              '<title>Page introuvable (faux site de test)</title>',
+            )
+          : home,
+        HTML,
+      )
     }
     entry.status = 404
     return send(res, 404, errorPage(), HTML)

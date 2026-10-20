@@ -108,4 +108,37 @@ describe('sessionGuard', () => {
 
     expect(app.currentRoute.value.name).toBe('design')
   })
+
+  describe('mot de passe oublié', () => {
+    it.each([
+      ['/mot-de-passe-oublie', 'forgot-password'],
+      ['/mot-de-passe-oublie/confirmation?token=le-secret', 'reset-password'],
+    ])('laisse un visiteur sans compte ouvrir %s, sans aucun appel', async (path, name) => {
+      const fetchMock = stubApi({})
+      const app = router()
+
+      await app.push(path)
+
+      expect(app.currentRoute.value.name).toBe(name)
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('renvoie un utilisateur connecté de la demande du lien vers l’accueil', async () => {
+      authenticated()
+      const app = router()
+
+      await app.push('/mot-de-passe-oublie')
+
+      expect(app.currentRoute.value.name).toBe('shopping-list')
+    })
+
+    it('laisse un utilisateur connecté ouvrir le lien reçu par e-mail', async () => {
+      authenticated()
+      const app = router()
+
+      await app.push('/mot-de-passe-oublie/confirmation?token=le-secret')
+
+      expect(app.currentRoute.value.name).toBe('reset-password')
+    })
+  })
 })

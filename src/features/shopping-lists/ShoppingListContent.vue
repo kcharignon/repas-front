@@ -51,7 +51,8 @@ const stepClass =
       </UiButton>
     </section>
 
-    <div class="flex flex-col gap-2">
+    <!-- Sur une liste envoyée au drive, cocher en magasin n'a pas de sens : « 0 sur 6 articles dans le panier » contredirait « Le panier est rempli » -->
+    <div v-if="!list.isSent" class="flex flex-col gap-2">
       <div class="flex items-baseline justify-between text-sm text-muted">
         <span>
           <strong class="text-base text-ink">{{

@@ -27,7 +27,7 @@ describe('CheckEmailView', () => {
   it("annonce l'envoi du lien à l'adresse de l'inscription", async () => {
     const { wrapper } = await mountView(CheckEmailView, '/verification-email?email=a%40example.com')
 
-    expect(wrapper.find('h1').text()).toBe('Vérifiez votre boîte mail')
+    expect(wrapper.find('h1').text()).toBe('Vérifie ta boîte mail')
     expect(wrapper.text()).toContain('Un lien de confirmation a été envoyé à a@example.com.')
     expect(wrapper.find('input').exists()).toBe(false)
   })
@@ -58,7 +58,7 @@ describe('CheckEmailView', () => {
     const fetchMock = stubApi({ [send]: () => new Response(null, { status: 204 }) })
     const { wrapper } = await mountView(CheckEmailView, '/verification-email')
 
-    expect(wrapper.text()).toContain("Saisissez l'adresse de votre compte")
+    expect(wrapper.text()).toContain("Saisis l'adresse de ton compte")
     await wrapper.find('input[type=email]').setValue('b@example.com')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
@@ -67,9 +67,9 @@ describe('CheckEmailView', () => {
   })
 
   it.each([
-    [429, 'Trop de demandes. Réessayez plus tard.'],
+    [429, 'Trop de demandes. Réessaie plus tard.'],
     [422, "Cette adresse e-mail n'est pas valide."],
-    [500, 'Le serveur est injoignable. Réessayez dans un instant.'],
+    [500, 'Le serveur est injoignable. Réessaie dans un instant.'],
   ])("explique un refus de l'API (%i) sans bloquer le bouton", async (status, expected) => {
     stubApi({ [send]: () => json({ error: { message: 'x' } }, { status }) })
     const { wrapper } = await mountView(CheckEmailView, '/verification-email?email=a%40example.com')
@@ -99,7 +99,7 @@ describe('ConfirmEmailView', () => {
     expect(calls(fetchMock)).toEqual([confirm])
     expect(await bodyOf(fetchMock, 0)).toEqual({ token: 'le-secret' })
     expect(wrapper.find('[role="status"]').text()).toBe(
-      'Votre adresse est confirmée : votre compte est activé.',
+      'Ton adresse est confirmée : ton compte est activé.',
     )
     expect(wrapper.find('a[href="/connexion"]').text()).toBe('Se connecter')
   })
@@ -150,12 +150,12 @@ describe('ConfirmEmailView', () => {
     await flushPromises()
 
     expect(wrapper.find('[role="alert"]').text()).toBe(
-      'Le serveur est injoignable. Réessayez dans un instant.',
+      'Le serveur est injoignable. Réessaie dans un instant.',
     )
 
     await wrapper.find('button').trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('[role="status"]').text()).toContain('votre compte est activé')
+    expect(wrapper.find('[role="status"]').text()).toContain('ton compte est activé')
   })
 })

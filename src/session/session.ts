@@ -169,6 +169,21 @@ export const useSessionStore = defineStore('session', () => {
     await unwrap(api.POST('/api/v1/users/email-verification/confirm', { body: { token } }))
   }
 
+  /** Demande le lien de réinitialisation ; le back répond 204 que l'adresse ait un compte ou non (ADR 0026 du back). */
+  async function sendPasswordReset(email: string) {
+    await unwrap(api.POST('/api/v1/users/password-reset/send', { body: { email } }))
+  }
+
+  /**
+   * Fixe le nouveau mot de passe avec le secret du lien reçu : 422 `INVALID_PASSWORD_RESET_TOKEN` si le lien est inconnu, déjà
+   * utilisé ou expiré. Le back ferme toutes les sessions du compte et n'en ouvre aucune (ADR 0026 du back) : la copie locale de
+   * la session, devenue périmée, est effacée pour que la page de connexion qui suit ne renvoie pas à l'accueil.
+   */
+  async function resetPassword(token: string, password: string) {
+    await unwrap(api.POST('/api/v1/users/password-reset/confirm', { body: { token, password } }))
+    clear()
+  }
+
   /** Révoque la connexion côté back (cookie compris) ; l'utilisateur est déconnecté même si le back est injoignable. */
   async function logout() {
     try {
@@ -192,6 +207,8 @@ export const useSessionStore = defineStore('session', () => {
     register,
     sendEmailVerification,
     confirmEmail,
+    sendPasswordReset,
+    resetPassword,
     logout,
   }
 })

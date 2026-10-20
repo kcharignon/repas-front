@@ -53,7 +53,7 @@ test('par-dessus un site de bureau affiché sur un téléphone, l’interface es
 
   // When
   await openWithFragment(page, fake, agentCode, plan)
-  await expect(page.getByRole('heading', { name: 'Prêt à remplir votre panier' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Prêt à remplir ton panier' })).toBeVisible()
   const view = await seen(page)
 
   // Then : la fenêtre est celle d'un ordinateur (980 px) sur un écran de téléphone, et l'interface compense

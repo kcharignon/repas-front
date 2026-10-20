@@ -19,7 +19,7 @@ Rôle de Product Owner : le produit se juge au **premier envoi d'un proche, seul
 2. **Quelle est la seule décision de cet écran ?** Un bouton principal, visible sans défiler à 360 px.
 3. **Que demande-t-on qu'on sait déjà ?** (magasin, produit retenu, quantité calculée) : le supprimer.
 4. **Que dit l'écran si ça se passe mal ?** Erreur en trois phrases (ce qui s'est passé, ce qui est sauf, une action), jamais de code visible.
-5. **Les mots sont-ils ceux du glossaire ?** Vouvoiement, phrases de 15 mots au plus, un mot par chose, aucun terme d'architecture (plan, passage, agent, pont, code d'erreur).
+5. **Les mots sont-ils ceux du glossaire ?** Tutoiement (« tu », « ton », « ouvre » ; jamais « vous » ni « ouvrez »), phrases de 15 mots au plus, un mot par chose, aucun terme d'architecture (plan, passage, agent, pont, code d'erreur).
 6. **Un proche dirait-il cette phrase à voix haute ?** Sinon, la réécrire.
 
 ## 2. Écrire ou relire un ticket d'interface
@@ -30,7 +30,7 @@ Le ticket contient : le parcours heureux **avant / après** (touches), les écra
 
 - Les six questions ont une réponse dans « À relire » (touches avant / après comprises).
 - Les **captures ont été lues** (Chromium pour le web, émulateur pour l'agent et l'application) ; le texte tient à 360 px et reste lisible dans le site de Leclerc en mode ordinateur.
-- Le test de glossaire de DRV-621 passe (il échoue si un mot interdit ou un « tu » réapparaît).
+- Le test de glossaire de DRV-621 passe (il échoue si un mot interdit, un « vous », un « votre » ou un impératif en « -ez » réapparaît).
 - Aucun libellé n'a été changé sans mettre à jour ses sélecteurs (`android/emulator/e2e.sh`, `fake-leclerc/`, tests Playwright) ni `docs/drive/recette.md` (par l'assistant, après fusion).
 
 ## 4. Pièges
@@ -39,3 +39,4 @@ Le ticket contient : le parcours heureux **avant / après** (touches), les écra
 - Une décision de vocabulaire ou de ton se prend **dans le glossaire**, puis par un ticket de balayage : jamais écran par écran.
 - Ne pas poser de question à l'utilisateur quand le choix a un défaut raisonnable (rôle du PO) ; noter la décision et sa raison, elle reste réversible.
 - Le texte d'une erreur du serveur est un contrat avec le front (`errors` dans `fr.ts`) : on reformule le texte, jamais le code.
+- **Le magasin d'abord, la connexion ensuite** : Leclerc refuse la connexion tant qu'aucun magasin n'est choisi (« Avant de vous authentifier, veuillez sélectionner un Drive. », recette réelle du 2026-10-19). Aucun texte qui fait lire ou choisir le magasin (bandeau de l'application, réglages, mode d'emploi, agent) ne parle de connexion avant le magasin : la connexion n'est demandée que par l'agent, quand elle manque. Garde : `src/i18n/__tests__/store-before-login.spec.ts`.

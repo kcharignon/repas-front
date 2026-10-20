@@ -1,7 +1,7 @@
 // Quand le site ne répond pas comme prévu : blocage (403, 429), page de défi de l'anti-robot (le passage attend la vérification), requête
 // retenue (délai d'attente), site changé, route disparue, compte déconnecté, et reprise après un rechargement de la page. Le faux site
 // simule chaque incident ; l'agent doit s'arrêter proprement ou attendre, sans insister.
-import { openWithFragment, returnedResult } from './support/agent'
+import { openWithFragment, returnedResult, returnsToRepas } from './support/agent'
 import { expectPoliteAgent, waitForQuiet } from './support/cadence'
 import { expect, test } from './support/fixtures'
 import { known, planOf, product, RUN_ID } from './support/plans'
@@ -25,9 +25,8 @@ for (const kind of ['forbidden', 'too-many-requests'] satisfies FaultKind[]) {
     // When
     await openWithFragment(page, fake, agentCode, THREE_LINES)
     await page.getByRole('button', { name: 'Commencer' }).click()
-    await expect(
-      page.getByRole('heading', { name: 'Le panier est rempli en partie' }),
-    ).toBeVisible()
+    // Rien n'est mis au panier : « Le panier n'est pas rempli », pas « en partie » (DRV-626)
+    await expect(page.getByRole('heading', { name: 'Le panier n’est pas rempli' })).toBeVisible()
 
     // Then : la requête bloquée est retentée UNE fois (après la pause), puis plus rien ne part
     expect(fake.paced().map((call) => call.fault)).toEqual([undefined, kind, kind])
@@ -68,7 +67,7 @@ test.describe('une page de défi de l’anti-robot', () => {
     await expect(
       page.getByRole('heading', { name: 'Leclerc demande une vérification' }),
     ).toBeVisible()
-    await expect(page.getByText('Faites-la dans la page, puis touchez Reprendre.')).toBeVisible()
+    await expect(page.getByText('Fais-la dans la page, puis touche Reprendre.')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Arrêter' })).toBeVisible()
     expect(fake.cart()).toEqual({ 1000001: 3 })
 
@@ -78,7 +77,7 @@ test.describe('une page de défi de l’anti-robot', () => {
     // When : l'utilisateur fait la vérification (le faux site ne la demande plus), puis touche « Reprendre »
     fake.setBehavior({ fault: null })
     await page.getByRole('button', { name: 'Reprendre', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+    await returnsToRepas(page, fake)
 
     // Then : la ligne en cours est refaite, rien n'a échoué ni été fait deux fois
     expect(fake.cart()).toEqual({ 1000001: 3, 1000006: 1, 1000009: 1 })
@@ -101,7 +100,6 @@ test.describe('une page de défi de l’anti-robot', () => {
       undefined,
     ])
     expectPoliteAgent(fake)
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
     expect(await returnedResult(page, fake)).toMatchObject({
       outcome: 'completed',
       lines: [{ outcome: 'ADDED' }, { outcome: 'ADDED' }, { outcome: 'ADDED' }],
@@ -155,13 +153,11 @@ test.describe('une page de défi de l’anti-robot', () => {
     // When : la vérification faite, la page se recharge (le plan est toujours dans l'adresse)
     fake.setBehavior({ fault: null })
     await page.reload()
-    await expect(
-      page.getByRole('heading', { name: 'Reprendre là où vous en étiez ?' }),
-    ).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Reprendre là où tu en étais ?' })).toBeVisible()
     await expect(page.getByText('1 article sur 3 est déjà fait')).toBeVisible()
     await waitForQuiet(fake)
     await page.getByRole('button', { name: 'Reprendre', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+    await returnsToRepas(page, fake)
 
     // Then : la farine n'est pas refaite
     expect(fake.cart()).toEqual({ 1000001: 3, 1000006: 1, 1000009: 1 })
@@ -308,7 +304,7 @@ test('s’arrête aussitôt quand le compte n’est plus connecté', async ({ pa
   await page.getByRole('button', { name: 'Commencer' }).click()
 
   // Then : une seule requête est partie, le conseil est de se reconnecter
-  await expect(page.getByText('Connectez-vous à Leclerc')).toBeVisible()
+  await expect(page.getByText('Connecte-toi à Leclerc')).toBeVisible()
   expect(fake.paced()).toHaveLength(1)
   await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
   expect(await returnedResult(page, fake)).toMatchObject({
@@ -328,16 +324,16 @@ test('refuse de commencer devant la page d’un visiteur non connecté : rien n�
   // When
   await openWithFragment(page, fake, agentCode, THREE_LINES)
 
-  // Then : « Connectez-vous à Leclerc, puis reprenez l'envoi », pas de récapitulatif, aucune requête, panier intact
-  await expect(page.getByRole('heading', { name: 'Vous n’êtes pas connecté' })).toBeVisible()
-  await expect(page.getByText('Connectez-vous à Leclerc, puis reprenez l’envoi')).toBeVisible()
+  // Then : « Connecte-toi à Leclerc, puis reprends l'envoi », pas de récapitulatif, aucune requête, panier intact
+  await expect(page.getByRole('heading', { name: 'Tu n’es pas connecté' })).toBeVisible()
+  await expect(page.getByText('Connecte-toi à Leclerc, puis reprends l’envoi')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Commencer' })).toHaveCount(0)
   expect(fake.paced()).toEqual([])
   expect(fake.cart()).toEqual({})
   await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
   expect(await returnedResult(page, fake)).toMatchObject({
     outcome: 'error',
-    error: { code: 'NOT_LOGGED_IN', message: 'Vous n’êtes pas connecté (SESSION_VISITOR)' },
+    error: { code: 'NOT_LOGGED_IN', message: 'Tu n’es pas connecté (SESSION_VISITOR)' },
     lines: [],
   })
 })
@@ -353,7 +349,7 @@ test('un client connecté qui devient visiteur en cours de passage : la recherch
   // When
   await openWithFragment(page, fake, agentCode, THREE_LINES)
   await page.getByRole('button', { name: 'Commencer' }).click()
-  await expect(page.getByText('Connectez-vous à Leclerc')).toBeVisible()
+  await expect(page.getByText('Connecte-toi à Leclerc')).toBeVisible()
 
   // Then : la farine est au panier, la ligne suivante a été cherchée puis refusée, rien d'autre n'est parti
   expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'cart', 'search'])
@@ -361,7 +357,7 @@ test('un client connecté qui devient visiteur en cours de passage : la recherch
   await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
   expect(await returnedResult(page, fake)).toMatchObject({
     outcome: 'error',
-    error: { code: 'NOT_LOGGED_IN', message: 'Vous n’êtes pas connecté (SESSION_VISITOR)' },
+    error: { code: 'NOT_LOGGED_IN', message: 'Tu n’es pas connecté (SESSION_VISITOR)' },
     lines: [{ ingredientSlug: 'farine', outcome: 'ADDED' }],
   })
 })
@@ -379,11 +375,11 @@ test('reprend après un rechargement de la page sans refaire les lignes déjà f
 
   // When : la page se recharge (le plan est toujours dans l'adresse) ; l'utilisateur reprend un instant plus tard
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Reprendre là où vous en étiez ?' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Reprendre là où tu en étais ?' })).toBeVisible()
   await expect(page.getByText('1 article sur 3 est déjà fait')).toBeVisible()
   await waitForQuiet(fake)
   await page.getByRole('button', { name: 'Reprendre' }).click()
-  await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
+  await returnsToRepas(page, fake)
 
   // Then : les deux autres lignes sont faites, la farine n'a pas été cherchée ni écrite une seconde fois
   expect(fake.cart()).toEqual({ 1000001: 3, 1000006: 1, 1000009: 1 })
@@ -391,7 +387,6 @@ test('reprend après un rechargement de la page sans refaire les lignes déjà f
   expect(writes.filter((call) => call.detail?.includes('"1000001"'))).toHaveLength(1)
   expect(fake.paced().filter((call) => call.kind === 'search')).toHaveLength(3)
   expectPoliteAgent(fake)
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
   expect(await returnedResult(page, fake)).toMatchObject({
     outcome: 'completed',
     lines: [{ outcome: 'ADDED' }, { outcome: 'ADDED' }, { outcome: 'ADDED' }],

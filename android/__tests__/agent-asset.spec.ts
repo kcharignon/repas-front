@@ -14,7 +14,8 @@ import { buildAgent, digestOf, writeBuild } from '../../drive-agent/scripts/buil
 import { expectedDigest } from '../agent-digest'
 
 const androidDir = join(dirname(fileURLToPath(import.meta.url)), '..')
-const KOTLIN = join(androidDir, 'app/src/main/kotlin/eu/kantin/repas/drive')
+// Le cœur (Kotlin sans Android, AUTH-015) porte les règles que ces tests recoupent avec l'agent et le front.
+const KOTLIN = join(androidDir, 'core/src/main/kotlin/eu/kantin/repas/drive')
 const INJECTION = readFileSync(join(androidDir, 'app/src/main/assets/injection.js'), 'utf8')
 const read = (path: string) => readFileSync(join(androidDir, path), 'utf8')
 
@@ -68,7 +69,7 @@ describe('le script injecté dans les pages', () => {
 
   it('contient le marqueur de l’agent une seule fois, et Kotlin cherche le même', () => {
     expect(INJECTION.split(PLACEHOLDER)).toHaveLength(2)
-    expect(read('app/src/main/kotlin/eu/kantin/repas/drive/AgentAsset.kt')).toContain(
+    expect(read('core/src/main/kotlin/eu/kantin/repas/drive/AgentAsset.kt')).toContain(
       `PLACEHOLDER = "${PLACEHOLDER}"`,
     )
   })
@@ -105,7 +106,7 @@ describe('les messages que l’application envoie à l’agent suivent le protoc
   })
 
   it('le message setup de l’essai (fichier de référence du test Kotlin) est un setup valide', () => {
-    const setup = JSON.parse(read('app/src/test/resources/setup-message.json')) as unknown
+    const setup = JSON.parse(read('core/src/test/resources/setup-message.json')) as unknown
 
     expect(validatePlan(setup)).toMatchObject({ type: 'setup' })
   })

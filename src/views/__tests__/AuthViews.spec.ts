@@ -36,7 +36,10 @@ describe('LoginView', () => {
       'input[type=password]': 'secret',
     })
     await wrapper.find('form').trigger('submit')
-    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('account'))
+    // La page « Moi » est chargée à la demande, comme celle de la liste ci-dessous : plus d'une seconde sous charge et sous couverture.
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('account'), {
+      timeout: 5000,
+    })
   })
 
   it('va à la liste de courses sans page demandée', async () => {
@@ -76,7 +79,7 @@ describe('LoginView', () => {
     await flushPromises()
 
     expect(wrapper.find('[role="alert"]').text()).toBe(
-      "Votre adresse e-mail n'est pas encore confirmée. Ouvrez le lien reçu par e-mail pour activer votre compte.",
+      "Ton adresse e-mail n'est pas encore confirmée. Ouvre le lien reçu par e-mail pour activer ton compte.",
     )
     const resend = wrapper.find('a[href^="/verification-email"]')
     expect(resend.text()).toBe('Renvoyer le lien de confirmation')
@@ -98,8 +101,8 @@ describe('LoginView', () => {
   })
 
   it.each([
-    [60, 'Trop de tentatives. Réessayez dans 1 minute'],
-    [600, 'Trop de tentatives. Réessayez dans 10 minutes'],
+    [60, 'Trop de tentatives. Réessaie dans 1 minute'],
+    [600, 'Trop de tentatives. Réessaie dans 10 minutes'],
   ])('annonce le délai d’un 429 (Retry-After %i s)', async (seconds, expected) => {
     stubApi({
       'POST /api/login_check': () =>
@@ -127,7 +130,7 @@ describe('LoginView', () => {
     await flushPromises()
 
     expect(wrapper.find('[role="alert"]').text()).toBe(
-      'Le serveur est injoignable. Réessayez dans un instant.',
+      'Le serveur est injoignable. Réessaie dans un instant.',
     )
   })
 
@@ -135,6 +138,39 @@ describe('LoginView', () => {
     const { wrapper } = await mountView(LoginView, '/connexion')
 
     expect(wrapper.find('a[href="/inscription"]').text()).toBe('Créer un compte')
+  })
+
+  it('propose « Mot de passe oublié ? », qui mène à la demande du lien', async () => {
+    const { wrapper } = await mountView(LoginView, '/connexion')
+
+    const forgot = wrapper.find('a[href="/mot-de-passe-oublie"]')
+    expect(forgot.text()).toBe('Mot de passe oublié ?')
+    // Un lien, pas un second bouton : « Se connecter » reste la seule décision de l'écran
+    expect(wrapper.findAll('button')).toHaveLength(1)
+  })
+
+  it('transmet l’adresse déjà saisie à la demande du lien', async () => {
+    const { wrapper } = await mountView(LoginView, '/connexion')
+
+    await fill(wrapper, { 'input[type=email]': 'alexiane@example.com' })
+
+    expect(wrapper.find('a[href^="/mot-de-passe-oublie"]').attributes('href')).toBe(
+      '/mot-de-passe-oublie?email=alexiane@example.com',
+    )
+  })
+
+  it('annonce que le nouveau mot de passe est enregistré, après la réinitialisation', async () => {
+    const { wrapper } = await mountView(LoginView, '/connexion?mot-de-passe=change')
+
+    expect(wrapper.find('[role="status"]').text()).toBe(
+      'Ton nouveau mot de passe est enregistré. Tu peux te connecter.',
+    )
+  })
+
+  it('n’annonce rien sans la réinitialisation', async () => {
+    const { wrapper } = await mountView(LoginView, '/connexion')
+
+    expect(wrapper.find('[role="status"]').exists()).toBe(false)
   })
 })
 
@@ -195,8 +231,8 @@ describe('RegisterView', () => {
   })
 
   it.each([
-    [429, "Trop d'inscriptions depuis cette adresse. Réessayez plus tard."],
-    [500, 'Le serveur est injoignable. Réessayez dans un instant.'],
+    [429, "Trop d'inscriptions depuis cette adresse. Réessaie plus tard."],
+    [500, 'Le serveur est injoignable. Réessaie dans un instant.'],
   ])('répond clairement à un %i', async (status, expected) => {
     stubApi({ 'POST /api/v1/users': () => json({ error: { message: 'x' } }, { status }) })
     const { wrapper } = await mountView(RegisterView, '/inscription')

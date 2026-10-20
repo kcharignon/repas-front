@@ -1,7 +1,8 @@
-// Tous les textes de l'interface de l'agent, en français simple (vouvoiement, phrases courtes, mots du glossaire de principes-produit.md § 5). Aucun texte n'est écrit ailleurs.
-// Le diagnostic et le test automatique sont des outils du mainteneur : exemptés du glossaire, pas du vouvoiement. Gardé par src/i18n/__tests__/voice-and-glossary.spec.ts.
+// Tous les textes de l'interface de l'agent, en français simple (tutoiement, phrases courtes, mots du glossaire de principes-produit.md § 5). Aucun texte n'est écrit ailleurs.
+// Le diagnostic et le test automatique sont des outils du mainteneur : exemptés du glossaire, pas du tutoiement. Gardé par src/i18n/__tests__/voice-and-glossary.spec.ts.
 import type { ErrorCode, LineStatus, Outcome } from '../../protocol'
 import { own } from '../own'
+import type { UnavailableReason, UnreachedReason } from './types'
 
 /** « 1 produit », « 3 produits » : le nombre suivi du bon mot. */
 export function count(n: number, one: string, many: string): string {
@@ -53,22 +54,74 @@ export function variantLabel(variant: string): string {
 }
 
 /** Une liste de noms séparés par des virgules, « aucun » si elle est vide. */
+export const LIST_MAX = 40
 export function listText(names: readonly string[]): string {
-  return names.length === 0 ? 'aucun' : names.join(', ')
+  if (names.length === 0) return 'aucun'
+  const shown = names.slice(0, LIST_MAX).join(', ')
+  return names.length > LIST_MAX ? `${shown} (et ${names.length - LIST_MAX} de plus)` : shown
+}
+
+/** Ce que la liste demande pour un article : « 800 g » (la quantité et son unité), `null` quand le plan ne le dit pas. */
+export function formatNeeded(
+  needed: { quantity: number; unitSymbol: string } | null | undefined,
+): string | null {
+  return needed ? `${formatNumber(needed.quantity)} ${needed.unitSymbol}` : null
+}
+
+/** Les articles de la liste rangés par ce qui leur arrive : ce qu'il faut pour écrire la phrase de synthèse. */
+export interface SummaryCounts {
+  known: number
+  new: number
+  haveAtHome: number
+  skipped: number
+}
+
+/**
+ * La phrase de synthèse de l'écran « Prêt à remplir ton panier » : « 6 articles : 2 sont déjà choisis, 4 sont à choisir sur Leclerc. » C'est
+ * MOT POUR MOT celle de l'écran de l'envoi de Repas (`sendSummary`, `src/features/drive/sendSummary.ts`, textes `driveSend.summary` de `fr.ts`) :
+ * `src/features/drive/__tests__/summarySentence.spec.ts` le prouve sur toutes les combinaisons. On n'écrit que ce qui existe (jamais « 0 »), et
+ * « j'en ai toujours » et « pas cette fois » se disent ensemble : ni l'un ni l'autre n'ira au panier. Vide quand il n'y a aucun article.
+ */
+export function summarySentence(counts: SummaryCounts): string {
+  const other = counts.haveAtHome + counts.skipped
+  const total = counts.known + counts.new + other
+  if (total === 0) return ''
+
+  const part = (n: number, all: string, some: string): string[] =>
+    n === 0 ? [] : [n === total ? all : `${n} ${some}`]
+  const parts = [
+    ...part(
+      counts.known,
+      total === 1 ? 'il est déjà choisi' : 'tous sont déjà choisis',
+      counts.known === 1 ? 'est déjà choisi' : 'sont déjà choisis',
+    ),
+    ...part(
+      counts.new,
+      total === 1 ? 'il est à choisir sur Leclerc' : 'tous sont à choisir sur Leclerc',
+      counts.new === 1 ? 'est à choisir sur Leclerc' : 'sont à choisir sur Leclerc',
+    ),
+    ...part(
+      other,
+      total === 1 ? 'il ne sera pas mis au panier' : 'aucun ne sera mis au panier',
+      other === 1 ? 'ne sera pas mis au panier' : 'ne seront pas mis au panier',
+    ),
+  ]
+
+  return `${count(total, 'article', 'articles')} : ${parts.join(', ')}.`
 }
 
 export const S = {
-  dialog: 'Repas : envoi de votre liste au drive',
+  dialog: 'Repas : envoi de ta liste au drive',
   welcome: {
-    title: 'Ouvrez d’abord Repas',
-    text: 'Pour remplir votre panier, commencez dans Repas : choisissez votre liste de courses, puis envoyez-la au drive.',
+    title: 'Ouvre d’abord Repas',
+    text: 'Pour remplir ton panier, choisis ta liste dans Repas, puis envoie-la.',
     diagnostic: 'Diagnostic',
     close: 'Fermer',
   },
   /** Le diagnostic (DRV-308) : l'écran et le rapport texte copiable. Le rapport ne contient jamais de donnée personnelle. */
   diagnostic: {
     title: 'Diagnostic',
-    intro: 'Je vérifie que le site répond comme prévu. Rien n’est écrit dans votre panier.',
+    intro: 'Je vérifie que le site répond comme prévu.',
     running: 'Contrôles en cours…',
     finished: (ok: number, ko: number, skipped: number) =>
       `Contrôles terminés : ${ok} réussi${ok > 1 ? 's' : ''}, ${ko} en échec, ${skipped} non testé${skipped > 1 ? 's' : ''}.`,
@@ -78,7 +131,7 @@ export const S = {
       'Ce rapport ne contient ni cookie, ni identifiant de compte, ni adresse, ni nom, ni numéro de magasin complet.',
     copy: 'Copier le rapport',
     copied: 'Rapport copié.',
-    copyFailed: 'Copie impossible : sélectionnez le texte du rapport et copiez-le.',
+    copyFailed: 'Copie impossible : sélectionne le texte du rapport et copie-le.',
     close: 'Fermer',
     badge: { OK: 'OK', KO: 'KO', NOT_TESTED: 'NON TESTÉ', wait: '…' },
     check: {
@@ -89,6 +142,7 @@ export const S = {
       wakeLock: 'Écran allumé (Wake Lock)',
       search: 'Recherche d’un mot courant',
       content: 'Contenu net des produits',
+      shelves: 'Rayons vus',
       frame: 'Cadre de même origine',
     },
     detail: {
@@ -104,6 +158,8 @@ export const S = {
       wakeLockOk: 'disponible',
       wakeLockKo: 'absent (toléré : l’écran peut s’éteindre)',
       pageSkipped: 'page non prise en charge',
+      shelvesCommonFailed: (fault: string) => `la recherche « sel » a échoué : ${fault}`,
+      shelvesStopped: (fault: string) => `le site s’est arrêté de répondre : ${fault}`,
       searchOk: (term: string, read: number, complete: number) =>
         `« ${term} » : ${read} produits lus, ${complete} avec tous les champs attendus (identifiant, libellé, prix, stock)`,
       searchEmpty: (term: string) => `« ${term} » : aucun produit lu`,
@@ -151,6 +207,31 @@ export const S = {
       inReply: (term: string) => `réponse « ${term} »`,
       address: (shape: string) => `Adresse d’arrivée : ${shape}`,
       city: (value: string) => `Suffixe de ville dans l’adresse de la page : ${value}`,
+      /** Un lien de la page (DRV-625) : présent ou non, la forme de son adresse et où il mène. Jamais l'adresse. */
+      link: (
+        name: string,
+        link: { present: boolean; shape: string | null; where: string | null },
+      ) =>
+        `${name} : ${link.present ? 'oui' : 'non'}${
+          link.present
+            ? `, adresse ${link.shape ?? 'sans adresse (bouton)'}${link.where === null ? '' : `, ${link.where}`}`
+            : ''
+        }`,
+      startLink: 'Lien « Commencer mes courses » dans la page',
+      /** « Commencer mes courses » : absent, ou un bouton sans adresse que l'agent sait cliquer (oui / non). Jamais d'adresse. */
+      start: (present: boolean, clickable: boolean) =>
+        present
+          ? `« Commencer mes courses » : bouton cliquable : ${clickable ? 'oui' : 'non'}`
+          : '« Commencer mes courses » : absent de la page',
+      /** La page du panier (`detail-panier.aspx` sous le chemin du magasin) : connue quand la page montre le chemin du magasin avec la ville. */
+      basketPage: (known: string) =>
+        `Page du panier (detail-panier.aspx sous le chemin du magasin) : ${known}`,
+      where: {
+        RELATIVE: 'adresse sans site',
+        SAME_HOST: 'même hôte que la page',
+        LECLERC_HOST: 'autre hôte leclercdrive.fr',
+        OTHER_SITE: 'autre site',
+      } as Record<string, string>,
       cookies: (count: number, antiBot: string) =>
         `Cookies lisibles par la page : ${count} ; cookie de protection anti-robot : ${antiBot} (les cookies HttpOnly ne sont pas lisibles)`,
       arrival: (redirects: number | null, status: number | null) =>
@@ -219,6 +300,277 @@ export const S = {
         }) : ${listText(keys.present)} ; connues absentes : ${listText(keys.absent)} ; liées à la connexion : ${listText(keys.session)}`,
       headers: (term: string, names: readonly string[]) =>
         `En-têtes de la réponse « ${term} » (noms seulement) : ${listText(names)}`,
+      /** DRV-635 : le stock et l'étiquette de disponibilité d'un échantillon de résultats (12 au plus), des nombres seulement, jamais un libellé. */
+      availability: (a: {
+        sampled: number
+        zeroStock: number
+        stocked: number
+        unreadable: number
+      }) =>
+        `Disponibilité de l’échantillon (${a.sampled} produits) : iQteDisponible à 0 : ${a.zeroStock}, positif : ${a.stocked}, illisible : ${a.unreadable}`,
+      availabilityLabels: (values: string, unread: number, soon: number) =>
+        `eDisponibilite (valeur : produits) : ${values} ; absente ou illisible : ${unread} ; « Bientôt disponible » : ${soon}`,
+      /** DRV-646 : les rayons et familles vus par une recherche d'essai (« 12:5 14:2 » : identifiant, nombre de produits), des nombres seulement. */
+      shelves: (
+        title: string,
+        kind: string,
+        term: string,
+        groups: string,
+        products: number,
+        missing: number,
+      ) =>
+        `${title} pour « ${term} » : ${groups} (${products} produit${products > 1 ? 's' : ''}${missing > 0 ? `, ${missing} sans ${kind}` : ''})`,
+      shelvesNone: (term: string, fault?: string) =>
+        `Rayons vus pour « ${term} » : recherche non faite${fault === undefined ? '' : ` (${fault})`}`,
+      shelvesSkipped: (reason: string) => `Rayons : non lus (${reason})`,
+      nextPage: (term: string, products: number, next: string) =>
+        `Première réponse pour « ${term} » : ${products} produit${products > 1 ? 's' : ''} ; page suivante : ${next}`,
+      /** Les raisons du dernier envoi, par produit habituel écarté, dans l'ordre du passage : un mot fixe et un nombre, jamais un libellé. */
+      lastPass: (list: string) => `Dernier envoi, produits habituels écartés : ${list}`,
+      /** Les raisons, pour le mainteneur (le diagnostic est exempté du glossaire) : les mots de DRV-635. */
+      reason: {
+        OUT_OF_STOCK: 'en rupture',
+        NOT_FOUND: 'introuvable',
+        CART_REFUSED: 'refusé par le panier',
+      } satisfies Record<UnavailableReason, string>,
+      /** DRV-644 : ce que la réponse du panier a dit des produits choisis qu'il n'a pas pris : des nombres lus tels quels (`iQteDisponible`, `eDisponibilite`), jamais un nom. */
+      lastRefusals: (list: string) =>
+        `Dernier envoi, produits choisis non pris par le panier : ${list}`,
+      /** Les raisons d'un refus du panier, pour le mainteneur (le diagnostic est exempté du glossaire). */
+      refusal: {
+        OUT_OF_STOCK: 'en rupture',
+        COMING_SOON: 'bientôt disponible',
+        CART_REFUSED: 'refusé par le panier',
+      } satisfies Record<UnreachedReason, string>,
+      lastRefusalItem: (
+        rank: number,
+        reason: string,
+        stock: number | null,
+        availability: number | null,
+      ) =>
+        `${rank} : ${reason} (iQteDisponible : ${stock ?? 'absent'}, eDisponibilite : ${availability ?? 'absente'})`,
+      lastPassItem: (rank: number, reason: string, tried: number) =>
+        `${rank} : ${reason} (${tried} recherche${tried > 1 ? 's' : ''})`,
+      /**
+       * DRV-647 (étape 0) : d'où viennent les libellés de rayons. Le menu « Rayons » de la page (lu dans le DOM, sans clic) : des nombres, les formes
+       * des adresses, l'identifiant lu dans l'adresse et le libellé du rayon, un texte du catalogue public.
+       */
+      menu: (m: {
+        menu: boolean
+        links: number
+        menuLinks: number
+        aisles: number
+        families: number
+      }) =>
+        `Menu des rayons de la page : titre « Rayons » ${m.menu ? 'présent' : 'absent'} ; liens de la page : ${m.links}, dans le bloc du menu : ${m.menuLinks} ; liens de rayon : ${m.aisles} ; liens de famille : ${m.families}`,
+      menuShapes: (list: string) => `Adresses des liens de rayon et de famille (motifs) : ${list}`,
+      menuAisle: (kind: 'RAYON' | 'MENU', id: number | null, label: string | null) =>
+        `${kind === 'RAYON' ? 'Lien de rayon' : 'Lien du menu'} ${id ?? '(sans numéro)'} : ${
+          label === null ? '(libellé écarté)' : `« ${label} »`
+        }`,
+      menuMore: (hidden: number, max: number) =>
+        `Liens de rayon non montrés : ${hidden} (${max} au plus)`,
+      menuKeys: (list: string) => `Clés de rayon ou de filtre dans l’état de la page : ${list}`,
+      replyPath: (term: string, path: string) =>
+        `Réponse « ${term} », chemin des produits depuis le premier niveau : ${path}`,
+      replyTop: (term: string, total: number, list: string) =>
+        `Réponse « ${term} », clés du premier niveau (${total}, noms seulement) : ${list}`,
+      replyProduct: (term: string, total: number, list: string) =>
+        `Réponse « ${term} », clés d’un produit (${total}, noms seulement sauf rayon et famille) : ${list}`,
+      replyNoProduct: (term: string) => `Réponse « ${term} » : état des produits non délimité`,
+      replyKeys: (term: string, list: string) =>
+        `Réponse « ${term} », clés de rayon ou de filtre : ${list}`,
+      coverage: (
+        kind: 'Rayons' | 'Familles',
+        term: string,
+        found: number,
+        seen: number,
+        missing: string,
+      ) =>
+        `${kind} de « ${term} » avec un lien dans le menu : ${found} sur ${seen}${missing === '' ? '' : ` (sans lien : ${missing})`}`,
+      coverageNone: (kind: 'Rayons' | 'Familles', term: string) =>
+        `${kind} de « ${term} » avec un lien dans le menu : aucun lien numéroté dans la page`,
+      /** DRV-647 (étape 1) : le libellé que l'écran de choix montre pour un rayon, et d'où il vient. */
+      aisleLevel: (term: string, level: string, rayon: number, famille: number, products: number) =>
+        `Niveau du filtre pour « ${term} » : ${level} (produits nommés : ${rayon} au niveau rayon, ${famille} au niveau famille, sur ${products})`,
+      aisleLabel: (one: string, id: number, count: number, label: string, source: string) =>
+        `Libellé ${one} ${id} (${count} produit${count > 1 ? 's' : ''}) : « ${label} » (source : ${source})`,
+      aisleLabelNone: (one: string, id: number, count: number, fallback: string) =>
+        `Libellé ${one} ${id} (${count} produit${count > 1 ? 's' : ''}) : aucun texte lisible (repli : « ${fallback} »)`,
+      sample: (
+        term: string,
+        aisle: number | null,
+        family: number | null,
+        filter: string,
+        url: string,
+        category: string,
+      ) =>
+        `Produit échantillon de « ${term} » : iIdRayon=${aisle ?? '?'} iIdFamille=${family ?? '?'} ; objFiltreBloc : ${filter} ; sUrlVoirRayon : ${url} ; sCategorie=${category}`,
+      sampleFilter: (path: string, label: string, block: number | null, type: number | null) =>
+        `(chemin ${path}) sLibelle=${label}, iIdBloc=${block ?? '?'}, neTypeBloc=${type ?? '?'}`,
+      sampleUrl: (id: number | null, level: string | null, name: string) =>
+        `id=${id ?? '?'} (${level ?? 'ni le rayon ni la famille du produit'}) nom=${name}`,
+      inProduct: 'dans le produit',
+      inElement: 'dans l’élément qui englobe le produit',
+      facet: (
+        term: string,
+        rank: number,
+        keys: string,
+        ids: string,
+        label: string,
+        block: string,
+      ) =>
+        `Objet de filtre ${rank} de la réponse « ${term} » : ${keys} ; identifiants : ${ids} ; libellé : ${label} ; bloc : ${block}`,
+      firstAisleText: (term: string, field: string, value: string) =>
+        `Premier produit de « ${term} », ${field} : ${value}`,
+      namedKeys: (where: string, name: string, keys: string) =>
+        `Clés de ${name} (${where}, noms seulement) : ${keys}`,
+      absent: 'absent',
+      hidden: '(écarté : ressemble à une donnée personnelle)',
+      object: 'objet',
+      listOf: (size: number) => `liste de ${size}, premier élément`,
+    },
+    /**
+     * DRV-647 (agent 0.35.0) : la facette « Rayons » de la réponse de recherche (libellés et nombres du catalogue public), la forme du paramètre `Filtres`,
+     * la recherche filtrée sondée (une requête au plus), la pagination et les univers. Pour le mainteneur : le diagnostic est exempté du glossaire.
+     */
+    facet: {
+      none: 'aucune',
+      noLabel: '(sans libellé)',
+      top: 'premier niveau',
+      child: 'enfant',
+      inPage: 'page',
+      inReply: (term: string) => `réponse « ${term} »`,
+      noBlocs: (term: string) => `Blocs de filtre de la réponse « ${term} » : aucun`,
+      bloc: (term: string, id: number | null, label: string, values: number) =>
+        `Bloc de filtre ${id ?? '?'} ${label} de la réponse « ${term} » : ${values} valeur${values > 1 ? 's' : ''} de premier niveau`,
+      noAisleBloc: (term: string) => `Bloc « Rayons » de la réponse « ${term} » : absent`,
+      value: (label: string, id: number, references: number | null, children: number) =>
+        `Rayon du filtre ${label} : iIdValeur=${id}, niNbReferences=${references ?? '?'}, ${children} enfant${children > 1 ? 's' : ''}`,
+      firstExtra: (urlId: string, hasId: string, children: string) =>
+        ` ; sIdValeurUrl (forme)=${urlId}, contient iIdValeur : ${hasId} ; enfants : ${children}`,
+      more: (hidden: number) => `Rayons du filtre non montrés : ${hidden} (40 au plus)`,
+      noFresh: 'Valeur « fruits / légumes / marché frais » de la facette : aucune',
+      fresh: (list: string) => `Valeur « fruits / légumes / marché frais » de la facette : ${list}`,
+      freshItem: (label: string, id: number, references: number | null, depth: string) =>
+        `${label} (iIdValeur=${id}, niNbReferences=${references ?? '?'}, ${depth})`,
+      noMatch: 'aucune correspondance',
+      match: (id: number, label: string, depth: string) =>
+        `correspond à la valeur ${id} ${label} (${depth})`,
+      sample: (term: string, aisle: string, family: string) =>
+        `Correspondance avec la facette d’un produit de « ${term} » : iIdRayon=${aisle} ; iIdFamille=${family}`,
+      links: (where: string, count: number) => `Liens à « Filtres » (${where}) : ${count}`,
+      linkShape: (where: string, count: number, shape: string) =>
+        `Forme d’un lien à « Filtres » (${where}, ×${count}) : ${shape}`,
+      urlIds: (list: string) => `sIdValeurUrl du bloc « Rayons » (formes) : ${list}`,
+      template: (shape: string, token: string) =>
+        `Adresse d’une recherche filtrée : déduite du lien ${shape} (jeton remplacé : ${token})`,
+      templateMiss: (why: string) => `Adresse d’une recherche filtrée : non déduite (${why})`,
+      probeSkipped: (term: string, why: string) =>
+        `Recherche « ${term} » filtrée : non faite (${why})`,
+      probeHead: (term: string, label: string, id: number, form: string, value: string) =>
+        `Recherche « ${term} » filtrée sur ${label} (iIdValeur=${id}), Filtres=<${form}> (forme ${value}) : `,
+      probeFault: (fault: string) => `erreur ${fault}`,
+      probeReply: (
+        status: number,
+        total: number | null,
+        products: number | null,
+        level: string,
+        first: string,
+        verdict: string,
+      ) =>
+        `HTTP ${status}, iNbTotalProduits=${total ?? '?'}, ${products ?? '?'} produits lus, groupes au niveau ${level} ; premier produit : ${first} ; verdict : ${verdict}`,
+      address: (shape: string) => `Forme finale de l’adresse filtrée : ${shape}`,
+      /** DRV-647 (0.37.0) : chaque forme de `Filtres` essayée, sa cohérence avec la valeur demandée, la forme retenue. */
+      formRank: { URL_ID: 'i', BLOC_ID: 'ii', ID_BLOC: 'iii' } as Record<string, string>,
+      formName: {
+        URL_ID: 'sIdValeurUrl',
+        BLOC_ID: 'iIdBloc-iIdValeur',
+        ID_BLOC: 'iIdValeur-iIdBloc',
+      } as Record<string, string>,
+      formHead: (rank: string, name: string, value: string, target: string) =>
+        `Forme essayée (${rank}) Filtres=<${name}> (forme ${value}) sur ${target} : `,
+      formReply: (
+        status: number,
+        before: number | null,
+        after: number | null,
+        references: number | null,
+        products: number | null,
+        share: string,
+        verdict: string,
+        reason: string,
+      ) =>
+        `HTTP ${status}, iNbTotalProduits ${before ?? '?'} → ${after ?? '?'} (niNbReferences ${references ?? '?'}), ${products ?? '?'} produits, part dans les enfants attendus : ${share} ; verdict : ${verdict} (${reason})`,
+      formGroup: (label: string, count: number) =>
+        `Groupe de la forme essayée : ${label} (${count})`,
+      formFirst: (label: string, fresh: string) =>
+        `Premier produit de la forme essayée : ${label} (frais : ${fresh})`,
+      noChildren: 'sans enfant lisible',
+      valid: 'valide',
+      invalid: 'invalide',
+      reason: {
+        TOTAL_MATCHES: 'le total change et s’approche du nombre de références',
+        CHILDREN_MATCH: 'au moins 80 % des produits sont dans les enfants attendus',
+        HTTP: 'réponse HTTP autre que 200',
+        EMPTY: 'aucun produit',
+        INCOHERENT: 'le total ne correspond pas et les groupes ne sont pas ceux des enfants',
+        ERROR: 'erreur',
+      } as Record<string, string>,
+      formLists: (list: string) => `Produits par liste de la forme essayée : ${list}`,
+      freshProbe: (label: string) =>
+        `Sonde sur la valeur « fruits / légumes » ${label} avec la forme retenue :`,
+      /** DRV-647 (0.38.0) : les listes de produits de premier niveau de la réponse (`objContenu`, `objContenuMDD`, variantes…). */
+      listsHead: (term: string, total: number | null, sum: number, facet: string) =>
+        `Listes de produits de la réponse « ${term} » : iNbTotalProduits=${total ?? '?'}, produits lus dans les listes : ${sum} ; ${facet}`,
+      freshFacet: (label: string, references: number | null, children: string) =>
+        `facette ${label} : ${references ?? '?'} références${children === '' ? '' : ` (${children})`}`,
+      noFreshFacet: 'facette « fruits / légumes » : absente',
+      list: (
+        name: string,
+        term: string,
+        kind: string,
+        keys: string,
+        occurrences: number,
+        products: number,
+        span: number,
+        noLabel: number,
+        aisles: string,
+        families: string,
+        fresh: string,
+      ) =>
+        `Liste ${name} (« ${term} ») : ${kind}, clés : ${keys} ; iIdProduit vus : ${occurrences}, produits lus : ${products} (non lus : ${span} objet trop grand, ${noLabel} sans libellé) ; rayons : ${aisles} ; familles : ${families} ; légumes ou fruits : ${fresh}`,
+      listLabels: (name: string, term: string, labels: string) =>
+        `Libellés de la liste ${name} (« ${term} ») : ${labels}`,
+      retained: (rank: string, name: string) => `Forme retenue : (${rank}) Filtres=<${name}>`,
+      retainedNone: 'Forme retenue : aucune (la rangée de l’écran reste celle des familles)',
+      noneHint:
+        'Aucune forme valide : voir plus haut les formes des liens à « Filtres » (page et réponse) et les valeurs de eUnivers',
+      verdict: {
+        FILTERED: 'filtrée (moins de produits, pas les mêmes)',
+        IDENTICAL: 'les mêmes produits que sans filtre',
+        EMPTY: 'aucun produit',
+        NOT_SMALLER: 'pas moins de produits que sans filtre',
+        HTTP: 'réponse HTTP autre que 200',
+        ERROR: 'erreur',
+      } as Record<string, string>,
+      probeGroup: (id: number, count: number, label: string) =>
+        `Groupe de la recherche filtrée ${id} (${count} produit${count > 1 ? 's' : ''}) : ${label}`,
+      pagination: (where: string, list: string) =>
+        `Clés de pagination (${where}, nombres et oui/non seulement) : ${list}`,
+      universes: (where: string, list: string) => `eUnivers (${where}) : ${list}`,
+      miss: {
+        NO_FILTER_LINK: 'aucun lien à « Filtres » dans la page ni dans la réponse',
+        NO_SEARCH_LINK:
+          'aucun lien à « Filtres » n’est une recherche (recherche.aspx avec TexteRecherche)',
+        EMPTY_FILTER: 'les liens de recherche à « Filtres » ont une valeur vide',
+        NO_KNOWN_VALUE:
+          'aucune valeur de « Filtres » ne contient un sIdValeurUrl ni un iIdValeur de la facette',
+        OTHER_STORE: 'les liens de recherche à « Filtres » visent un autre magasin',
+        NO_TARGET: 'aucune valeur dans le bloc « Rayons »',
+        NO_FACET: 'aucune facette dans la réponse',
+        NO_PATH: 'adresse impossible à bâtir',
+        NO_FILTER_KEY: 'le sIdValeurUrl de la valeur n’a pas la forme N-N',
+      } as Record<string, string>,
     },
   },
   /** Le test automatique de la variante de débogage (DRV-318) : l'écran de progression et le rapport texte copiable. */
@@ -282,19 +634,13 @@ export const S = {
   store: {
     title: 'Utiliser ce magasin ?',
     unnamed: (id: string) => `Magasin n° ${id}`,
-    notice:
-      'Repas le retiendra pour vos envois. Seul le magasin est transmis : rien de votre compte Leclerc ne quitte cette page.',
     save: 'Utiliser ce magasin',
     cancel: 'Annuler',
   },
   summary: {
-    title: 'Prêt à remplir votre panier',
-    intro:
-      'Voici ce que Repas va faire sur le drive. Rien ne part tant que vous n’avez pas touché « Commencer ».',
-    known: (n: number) => `${count(n, 'produit connu', 'produits connus')} à mettre au panier`,
-    new: (n: number) => `${count(n, 'nouveau produit', 'nouveaux produits')} à choisir`,
-    haveAtHome: (n: number) => `${n} « j’en ai toujours »`,
-    skipped: (n: number) => `${n} « pas cette fois »`,
+    title: 'Prêt à remplir ton panier',
+    /** La phrase de l'écran de l'envoi de Repas, mot pour mot : voir `summarySentence`. L'écran n'écrit jamais un compteur à zéro. */
+    sentence: summarySentence,
     list: 'Voir la liste',
     status: {
       KNOWN: 'connu',
@@ -302,34 +648,32 @@ export const S = {
       HAVE_AT_HOME: 'j’en ai toujours',
       SKIP: 'pas cette fois',
     } satisfies Record<LineStatus, string>,
-    keepCart: 'Repas ne vide pas votre panier Leclerc.',
-    noOrder: 'Rien n’est commandé ni payé.',
     start: 'Commencer',
     cancel: 'Annuler',
   },
   resume: {
-    title: 'Reprendre là où vous en étiez ?',
+    title: 'Reprendre là où tu en étais ?',
     text: (done: number, total: number) =>
-      `${done} article${done > 1 ? 's' : ''} sur ${total} ${done > 1 ? 'sont déjà faits' : 'est déjà fait'}. Reprendre ne ${done > 1 ? 'les refait' : 'le refait'} pas.`,
+      `${done} article${done > 1 ? 's' : ''} sur ${total} ${done > 1 ? 'sont déjà faits' : 'est déjà fait'}.`,
     resume: 'Reprendre',
     restart: 'Recommencer',
     cancel: 'Annuler',
   },
   progress: {
-    title: 'Votre panier se remplit',
+    title: 'Ton panier se remplit',
     bar: 'Avancement',
     count: (done: number, total: number) => `${done} sur ${total}`,
     current: (name: string) => `En cours : ${name}`,
     log: 'Dernières actions',
-    keepOpen: 'Gardez cet écran ouvert jusqu’à la fin.',
+    keepOpen: 'Garde l’application ouverte.',
     stop: 'Arrêter',
     stopping: 'J’arrête après l’article en cours…',
   },
   quantity: {
-    title: 'Vérifiez la quantité',
+    title: 'Vérifie la quantité',
     text: (product: string, ingredient: string) => `Combien de « ${product} » pour ${ingredient} ?`,
     label: 'Nombre de produits (de 1 à 99)',
-    invalid: 'Entrez un nombre entier de 1 à 99.',
+    invalid: 'Entre un nombre entier de 1 à 99.',
     validate: 'Valider',
     skip: 'Pas cette fois',
   },
@@ -338,9 +682,12 @@ export const S = {
     counter: (position: number, total: number) => `${position} sur ${total}`,
     skip: 'Pas cette fois',
     haveAtHome: 'J’en ai toujours',
-    /** « Pas cette fois » pour cet article et tous ceux qui restent à choisir (DRV-624) : `n` les compte tous, celui-ci compris. */
-    rest: (n: number) => `Passer les ${n} suivants`,
-    /** La confirmation d'une ligne, quand un des articles passés n'a encore aucun produit retenu. */
+    /**
+     * « Pas cette fois » pour cet article et tous ceux qui restent à choisir (DRV-624) : `n` les compte tous, celui-ci compris, et le bouton le dit
+     * (« Passer ces 4 articles » à « Poivre (1 sur 4) » : le poivre est passé aussi, DRV-626). Le bouton de la confirmation porte le même texte.
+     */
+    rest: (n: number) => `Passer ces ${n} articles`,
+    /** La confirmation d'une ligne, quand un des articles passés n'a encore aucun produit retenu : la même chose que le bouton, au futur. */
     restSure: (n: number) => `Ces ${n} articles ne seront pas mis au panier.`,
     restBack: 'Revenir au choix',
     cancel: 'Annuler l’envoi',
@@ -348,10 +695,20 @@ export const S = {
   /** La liste de produits que l'agent affiche dans l'écran de choix (DRV-306). */
   picker: {
     list: 'Produits proposés',
-    need: (asked: string) => `Il vous faut : ${asked}.`,
-    replaces: (product: string) => `Vous remplacez : ${product}.`,
+    need: (asked: string) => `Il te faut : ${asked}.`,
+    replaces: (product: string) => `Tu remplaces : ${product}.`,
     gone: (labels: string) => `Ces produits ne sont plus disponibles : ${labels}.`,
     never: (product: string) => `Ne plus proposer ${product}`,
+    /** La rangée de filtres par rayon du site (DRV-647) : « Tous (40) », « Fruits et légumes (6) », et « Rayon 2 » pour un rayon sans libellé lisible. */
+    aisles: 'Rayons',
+    allAisles: (count: number) => `Tous (${count})`,
+    aisleChip: (label: string, count: number) => `${label} (${count})`,
+    aisleFallback: (rank: number) => `Rayon ${rank}`,
+    /** DRV-647 (0.36.0) : la requête d'un rayon du site en cours, et la seconde rangée des enfants du rayon choisi. */
+    searchingAisle: 'Je cherche…',
+    /** Un rayon du site dont la recherche filtrée ne rend pas ses produits (DRV-647, 0.38.0) : la liste revient entière, rangée des familles. */
+    aisleUnexpected: 'Ce rayon ne répond pas comme prévu.',
+    subAisles: (label: string) => `Rayons de « ${label} »`,
     searchLabel: 'Chercher autre chose',
     searchButton: 'Chercher',
     searching: 'Recherche en cours…',
@@ -360,30 +717,34 @@ export const S = {
     /** Le nom n'a rien donné : l'agent a essayé une autre forme (« oeuf » pour « œuf ») et dit laquelle a répondu. */
     resultsInstead: (query: string, asked: string) =>
       `Résultats pour « ${query} » (rien trouvé pour « ${asked} »)`,
-    none: (query: string) => `Aucun produit trouvé pour « ${query} ». Essayez un autre mot.`,
-    network: 'Le site ne répond pas. Réessayez dans un instant.',
+    none: (query: string) => `Aucun produit trouvé pour « ${query} ». Essaie un autre mot.`,
+    network: 'Le site ne répond pas. Réessaie dans un instant.',
     /** La requête a dépassé son délai d'attente (ticket K) : Leclerc répond, mais trop lentement. */
-    slow: 'Leclerc met trop de temps à répondre. Réessayez dans un instant.',
+    slow: 'Leclerc met trop de temps à répondre. Réessaie dans un instant.',
     choose: 'Choisir',
-    out: 'Indisponible',
     refused: 'Ne plus proposer',
-    refusedHint: 'Ce produit est dans « Ne plus proposer » : Repas ne vous le propose plus.',
+    refusedHint: 'Déjà écarté de tes choix.',
     outHint: 'Plus en stock.',
     promo: (price: string) => `En promotion : ${price}`,
-    unknownContent: 'Contenu inconnu : vous choisirez la quantité.',
+    unknownContent: 'Contenu inconnu : tu choisiras la quantité.',
     noLabel: (id: string) => `Produit ${id}`,
-    /** Le nombre à mettre au panier : « 500 g par produit : 2 produits. » (la quantité demandée est dite plus haut : « Il vous faut : 800 g. »). */
+    /** Le nombre à mettre au panier : « 500 g par produit : 2 produits. » (la quantité demandée est dite plus haut : « Il te faut : 800 g. »). */
     pack: (per: string | null, packs: number) =>
       per === null
         ? `À mettre au panier : ${count(packs, 'produit', 'produits')}.`
         : `${per} par produit : ${count(packs, 'produit', 'produits')}.`,
-    cartRefused: 'Leclerc n’a pas pu mettre ce produit au panier. Choisissez-en un autre.',
+    /** Le panier n'a rien pris de ce produit (DRV-635) : on le nomme, la liste reste affichée. */
+    cartRefused: (product: string) =>
+      `Leclerc n’a pas pu mettre « ${product} » au panier. Choisis-en un autre.`,
+    /** Aucune recherche n'a retrouvé ce produit habituel (DRV-635) : il n'est pas dit indisponible, la recherche est préremplie. */
+    notFound: (product: string) =>
+      `Je ne retrouve pas « ${product} » : cherche-le ou choisis-en un autre.`,
   },
   /** Le produit choisi n'est pas celui que Repas retenait (DRV-624) : une question, deux réponses. L'ordre des produits reste l'affaire de Repas. */
   placement: {
     title: 'Toujours prendre ce produit ?',
     text: (product: string, ingredient: string) =>
-      `Vous avez choisi « ${product} » pour ${ingredient}.`,
+      `Tu as choisi « ${product} » pour ${ingredient}.`,
     always: 'Toujours prendre celui-ci',
     once: 'Cette fois seulement',
     back: 'Revenir à la liste',
@@ -397,11 +758,14 @@ export const S = {
     title: {
       completed: 'Le panier est rempli',
       partial: 'Le panier est rempli en partie',
-      aborted: 'Vous avez arrêté l’envoi',
+      aborted: 'Tu as arrêté l’envoi',
       error: 'L’envoi s’est arrêté',
     } satisfies Record<Outcome, string>,
-    completed:
-      'Vos produits sont dans votre panier Leclerc. Retournez dans Repas pour le finaliser.',
+    /** Un envoi arrêté avant que rien ne soit mis au panier ni choisi : « en partie » serait faux (DRV-626). Le même mot que le récapitulatif de Repas. */
+    notFilled: 'Le panier n’est pas rempli',
+    completed: 'Tes produits sont dans ton panier Leclerc. Retourne dans Repas pour le finaliser.',
+    /** Des produits choisis n'ont pas été pris par le panier (DRV-644) : seule l'action, chaque produit a sa phrase. */
+    completedSome: 'Retourne dans Repas pour le finaliser.',
     /** Ce qui est sauf : rien de ce qui est déjà au panier n'est retiré. */
     safe: 'Ce qui est déjà au panier y reste.',
     /** Ce qui est sauf et ce qu'il reste à ajouter, quand l'envoi s'est arrêté avant la fin. */
@@ -409,35 +773,56 @@ export const S = {
       `Ce qui est déjà au panier y reste : il reste ${count(n, 'article', 'articles')} à ajouter.`,
     stopped: 'L’envoi s’est arrêté avant la fin.',
     notFinished: 'L’envoi n’a pas pu aller au bout.',
-    resume: 'Retournez dans Repas pour reprendre l’envoi.',
+    resume: 'Retourne dans Repas pour reprendre l’envoi.',
     added: (n: number) => `Ajoutés au panier : ${n}`,
     chosen: (n: number) => `Choisis sur Leclerc : ${n}`,
     haveAtHome: (n: number) => `J’en ai toujours : ${n}`,
     skipped: (n: number) => `Pas cette fois : ${n}`,
     unavailable: (n: number) => `Indisponibles : ${n}`,
-    /** Le nombre de produits a été calculé sur le contenu lu sur le site, pas sur celui dont Repas se souvenait (DRV-613). */
+    /** Le nombre de produits a été calculé sur le contenu lu sur le site, pas sur celui dont Repas se souvenait (DRV-613) : l'écran dit seulement quoi vérifier. */
     changes: {
-      title: 'Contenu différent de celui dont Repas se souvenait',
-      text: 'Le nombre de produits a été calculé sur le contenu lu sur le site. Vérifiez ces articles dans votre panier.',
+      title: 'Quantités changées',
+      text: 'Vérifie ces articles dans ton panier.',
       item: (name: string, planned: number, live: number) =>
         `${name} : ${live} au lieu de ${planned}`,
     },
-    /** Une requête a dépassé son délai d'attente : l'envoi peut se relancer, ce qui est au panier n'est pas touché (ticket K). */
-    slow: 'Leclerc a mis trop de temps à répondre. Relancez l’envoi dans un moment : ce qui est déjà au panier n’est pas touché.',
-    /** Le panier avait déjà plus que le plan : Repas ne réduit jamais une quantité déjà au panier (ticket M). */
+    /** Une requête a dépassé son délai d'attente (ticket K) : ce qui s'est passé. Ce qui est sauf et l'action sont dans le texte de l'écran, juste au-dessus. */
+    slow: 'Leclerc a mis trop de temps à répondre.',
+    /** Le panier avait déjà plus que le plan : ces articles restent tels quels (ticket M ; le fond est dans les conditions d'utilisation du drive). */
     kept: {
       title: 'Quantités déjà au panier',
-      text: 'Repas ne réduit jamais une quantité déjà au panier : ces articles sont restés tels quels.',
+      text: 'Ces articles sont restés tels quels.',
       item: (name: string, inCart: number) => `${name} — Déjà ${inCart} au panier : conservé`,
     },
     /** La recherche ne donnait pas la quantité déjà au panier : Repas n'a pas pu s'en assurer (ticket M). */
     unreadable: {
       title: 'Quantité au panier illisible',
-      text: 'Leclerc n’a pas dit ce que votre panier contenait déjà pour ces articles. Vérifiez-les dans votre panier.',
+      text: 'Leclerc n’a pas donné la quantité déjà au panier. Vérifie ces articles dans ton panier.',
       item: (name: string, atLeast: number | null) =>
-        atLeast === null
-          ? `${name} — vérifiez dans votre panier`
-          : `${name} — au moins ${atLeast} gardés, vérifiez dans votre panier`,
+        atLeast === null ? name : `${name} — au moins ${atLeast} gardés`,
+    },
+    /** Pourquoi des articles n'ont pas de produit (DRV-635), dans un bloc « Détails » replié : la raison et le nombre de recherches faites. */
+    reasons: {
+      title: 'Détails',
+      reason: {
+        OUT_OF_STOCK: 'en rupture',
+        NOT_FOUND: 'introuvable',
+        CART_REFUSED: 'pas pris par le panier',
+      } satisfies Record<UnavailableReason, string>,
+      item: (name: string, reason: string, tried: number) =>
+        `${name} — ${reason}, ${count(tried, 'recherche', 'recherches')}`,
+    },
+    /** Un produit choisi que le panier n'a pas pris (DRV-644) : le choix est enregistré, une phrase par produit, et pourquoi. */
+    unreached: {
+      item: (product: string, why: string) =>
+        `« ${product} » est enregistré, mais pas dans ton panier${why}`,
+      /** La suite de la phrase : la raison, avec les mots de Leclerc quand c'est lui qui les dit. */
+      why: {
+        OUT_OF_STOCK: ' : Leclerc le dit en rupture dans ton magasin.',
+        COMING_SOON:
+          '. Leclerc indique « Bientôt disponible » : tu ne peux pas le commander pour l’instant.',
+        CART_REFUSED: ' : Leclerc n’a pas voulu le mettre au panier, sans en donner la raison.',
+      } satisfies Record<UnreachedReason, string>,
     },
     back: 'Retourner dans Repas',
   },
@@ -450,15 +835,25 @@ export const S = {
     toChoose: (name: string) => `${name} : à choisir ensuite`,
     unavailable: (name: string) => `${name} : plus disponible, à choisir ensuite`,
     failed: (name: string) => `${name} : échec`,
+    notFound: (name: string) => `${name} : produit introuvable, à choisir ensuite`,
+    cartRefused: (name: string) => `${name} : pas pris par le panier, à choisir ensuite`,
+    /** Le site disait ce produit en rupture et le panier l'a pourtant pris (DRV-635). */
+    acceptedAnyway: (name: string) => `${name} : ajouté, Leclerc l’a accepté`,
+    /** Le produit choisi n'est pas au panier, mais le choix est enregistré (DRV-644). */
+    savedNotInCart: (name: string) => `${name} : enregistré, pas dans le panier`,
     slow: (name: string) => `${name} : Leclerc met trop de temps à répondre`,
   },
   /** La demande de vérification de l'anti-robot (ticket K) : un bandeau en bas de l'écran, pour que la page reste visible. */
   challenge: {
     title: 'Leclerc demande une vérification',
-    text: 'Faites-la dans la page, puis touchez Reprendre.',
-    reload: 'Si rien ne s’affiche, rechargez la page : votre avancement est gardé.',
+    text: 'Fais-la dans la page, puis touche Reprendre.',
     resume: 'Reprendre',
     stop: 'Arrêter',
+  },
+  /** L'entrée dans le magasin (DRV-625) : ce qui se passe, ou le seul geste à faire. Un bandeau, la page reste visible. */
+  entry: {
+    opening: 'Ouverture de ton magasin…',
+    manual: 'Touche « Commencer mes courses ».',
   },
   error: {
     close: 'Fermer',
@@ -473,7 +868,7 @@ export const S = {
 export const CAUSE_TEXTS: Readonly<Record<string, { title: string; text: string }>> = {
   PAGE_MOBILE: {
     title: 'Ce n’est pas la version ordinateur du site',
-    text: 'Leclerc affiche son site mobile, et Repas ne travaille que sur la version ordinateur. Ce qui est déjà au panier y reste. Ouvrez « Ouvrir le drive Leclerc » dans le menu de l’application, puis reprenez l’envoi.',
+    text: 'Leclerc affiche son site mobile. Repas ne travaille que sur la version ordinateur. Ce qui est déjà au panier y reste. Ouvre « Ouvrir le drive Leclerc » dans le menu de l’application, puis reprends l’envoi.',
   },
 }
 
@@ -483,44 +878,44 @@ export const CAUSE_TEXTS: Readonly<Record<string, { title: string; text: string 
  */
 const ERROR_PARTS: Record<ErrorCode, { title: string; happened: string; action: string }> = {
   NOT_LOGGED_IN: {
-    title: 'Vous n’êtes pas connecté',
-    happened: 'Vous n’êtes pas connecté à Leclerc.',
-    action: 'Connectez-vous à Leclerc, puis reprenez l’envoi depuis Repas.',
+    title: 'Tu n’es pas connecté',
+    happened: 'Tu n’es pas connecté à Leclerc.',
+    action: 'Connecte-toi à Leclerc, puis reprends l’envoi depuis Repas.',
   },
   STORE_MISMATCH: {
     title: 'Ce n’est pas le bon magasin',
-    happened: 'Repas a préparé votre liste pour un autre magasin.',
-    action: 'Ouvrez votre magasin sur Leclerc, puis reprenez l’envoi depuis Repas.',
+    happened: 'Repas a préparé ta liste pour un autre magasin.',
+    action: 'Ouvre ton magasin sur Leclerc, puis reprends l’envoi depuis Repas.',
   },
   BLOCKED: {
     title: 'Leclerc a ralenti les demandes',
     happened: 'Leclerc a ralenti les demandes.',
-    action: 'Attendez quelques minutes, rechargez la page, puis reprenez l’envoi depuis Repas.',
+    action: 'Attends quelques minutes, recharge la page, puis reprends l’envoi depuis Repas.',
   },
   CONTRACT_CHANGED: {
     title: 'Le site a changé',
     happened: 'Leclerc a changé son site, l’envoi automatique est arrêté.',
-    action: 'Cherchez vos produits à la main sur Leclerc.',
+    action: 'Cherche tes produits à la main sur Leclerc.',
   },
   NETWORK: {
     title: 'Le site ne répond pas',
     happened: 'Le site de Leclerc ne répond pas.',
-    action: 'Vérifiez votre connexion, puis reprenez l’envoi depuis Repas.',
+    action: 'Vérifie ta connexion, puis reprends l’envoi depuis Repas.',
   },
   CANCELLED: {
     title: 'Envoi annulé',
-    happened: 'Vous avez annulé l’envoi.',
-    action: 'Reprenez l’envoi depuis Repas quand vous voulez.',
+    happened: 'Tu as annulé l’envoi.',
+    action: 'Reprends l’envoi depuis Repas quand tu veux.',
   },
   INVALID_MESSAGE: {
     title: 'Liste illisible',
     happened: 'L’application ne comprend pas la liste envoyée par Repas.',
-    action: 'Mettez à jour l’application, puis reprenez l’envoi depuis Repas.',
+    action: 'Mets à jour l’application, puis reprends l’envoi depuis Repas.',
   },
   UNSUPPORTED_PAGE: {
     title: 'Page non prise en charge',
     happened: 'Repas ne peut pas travailler sur cette page de Leclerc.',
-    action: 'Ouvrez la page de votre magasin, puis reprenez l’envoi depuis Repas.',
+    action: 'Ouvre la page de ton magasin, puis reprends l’envoi depuis Repas.',
   },
 }
 

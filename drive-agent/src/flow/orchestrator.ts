@@ -1,5 +1,6 @@
 // L'orchestrateur du passage (DRV-305) : une machine d'états sans réseau ni DOM propres, tout vient de `FlowDeps`.
 //   START → VALIDATED → CONFIRMED → PHASE_A → PHASE_B → DONE      (+ ABORTED : l'utilisateur arrête ; ERROR : le passage s'interrompt)
+//   START → VALIDATED → ENTERING        (le plan arrive sur l'accueil de l'enseigne, pas dans un magasin : l'agent suit « Commencer mes courses »)
 // Rien n'est envoyé au site avant le « Commencer ». Un seul passage à la fois.
 import {
   LIMITS,
@@ -13,9 +14,19 @@ import {
 } from '../../protocol'
 import { LeclercError, type LeclercCause, type RequestStats } from '../leclerc'
 import { own } from '../own'
-import { S, type SummaryProps } from '../ui'
-import { settleKnownLine } from './phase-a'
-import { buildResult, cartsOf, changesOf, endProps, endingOf, resultLines } from './result'
+import { formatNeeded, S, type SummaryProps } from '../ui'
+import { settleKnownLine, type UnavailableNote } from './phase-a'
+import {
+  buildResult,
+  cartsOf,
+  changesOf,
+  endingOf,
+  endProps,
+  hasSomethingToRead,
+  reasonsOf,
+  resultLines,
+  unreachedOf,
+} from './result'
 import { emptyState, RunStore, type RunState } from './run-state'
 import type { FlowDeps, LineNotes, PendingLine, Step } from './types'
 import { keepAwake } from './wake-lock'
@@ -41,6 +52,8 @@ interface Run {
   base: ResultStats
   /** Les compteurs de l'adaptateur au début de cette page : le passage ne compte que ce qui part ensuite. */
   start: RequestStats
+  /** Les produits à étiquette de rupture que le panier a refusés dans cet envoi : une seule tentative d'écriture chacun (DRV-635). */
+  declined: Set<string>
   release: () => Promise<void>
 }
 
@@ -166,6 +179,10 @@ export class Flow {
     if (!deps.canReturn) return this.showError('UNSUPPORTED_PAGE', null)
     if (message.type === 'setup') return void (await deps.onSetup?.(message))
     const problem = this.storeProblem(message) ?? this.sessionProblem()
+    // Une page de l'enseigne qui n'est pas celle d'un magasin (l'accueil, où le plan s'ouvre) : l'agent y entre dans le magasin (DRV-625).
+    if (problem?.code === 'UNSUPPORTED_PAGE' && problem.cause === 'PAGE_PATH') {
+      return this.enterStore(message)
+    }
     if (problem) return this.showError(problem.code, message, problem.cause)
 
     const { state, proceed } = await this.confirm(message)
@@ -181,6 +198,7 @@ export class Flow {
       slow: false,
       base: { ...state.stats },
       start: deps.adapter.stats(),
+      declined: new Set(),
       release: () => Promise.resolve(),
     }
     if (proceed) {
@@ -200,6 +218,38 @@ export class Flow {
       }
     }
     await this.finish(run)
+  }
+
+  /**
+   * Entrer dans le magasin sans geste (DRV-625, DRV-629) : sur l'accueil de l'enseigne, l'agent touche lui-même « Commencer mes courses » (il
+   * CLIQUE le bouton du vrai site, ou suit son lien s'il en a un qui mène au magasin du plan : une action de la page, à la cadence des autres,
+   * pendant que le bandeau dit « Ouverture de ton magasin… ») ; la page suivante est celle du magasin, l'application y renvoie le plan et l'agent
+   * y vérifie le magasin. Une seule tentative par envoi et par onglet : au moindre doute (bouton ou lien absent, adresse qui n'est pas celle du
+   * magasin du plan, défi de l'anti-robot, clic sans effet : la page est restée là) le bandeau dit de toucher le bouton, sans boucle, sans
+   * requête et sans écriture.
+   */
+  private async enterStore(plan: PlanMessage): Promise<void> {
+    const { adapter, ui } = this.deps
+    this.enter('ENTERING')
+    let reading
+    try {
+      reading = adapter.readEntry(plan.store)
+    } catch {
+      reading = { kind: 'NONE' as const }
+    }
+    if (
+      (reading.kind === 'LINK' || reading.kind === 'BUTTON') &&
+      this.runs.markEntered(plan.runId)
+    ) {
+      void ui.show('entry', { stage: 'opening' })
+      try {
+        await adapter.followEntry()
+      } catch {
+        // Le site est bloqué, la navigation a échoué ou le clic n'a rien fait : le geste manuel reste possible.
+      }
+    }
+    // Ici seulement si le bouton ou le lien manque, a été refusé, a déjà été touché une fois, ou n'a rien changé : l'utilisateur touche le bouton du site.
+    void ui.show('entry', { stage: 'manual' })
   }
 
   /** Le magasin de la page doit être celui du message. */
@@ -283,24 +333,27 @@ export class Flow {
   private async settle(run: Run, line: PlanLine): Promise<void> {
     const fixed = staticOutcome(line)
     if (fixed) return this.record(run, fixed)
-    if (line.status === 'NEW') return this.wait(run, line, [])
+    if (line.status === 'NEW') return this.wait(run, line, [], [])
     const verdict = await settleKnownLine(line, {
       adapter: this.deps.adapter,
+      declined: run.declined,
       askQuantity: async (asked, product) => {
         const answer = await this.deps.ui.show('quantity', {
           ingredient: asked.name,
           productLabel: product.label,
           packs: product.packs ?? null,
+          need: formatNeeded(asked.needed),
         })
         this.showProgress(run)
         return answer
       },
     })
-    if (verdict.kind === 'waiting') this.wait(run, line, verdict.unavailable)
+    if (verdict.kind === 'waiting') this.wait(run, line, verdict.unavailable, verdict.notes)
     else {
       this.record(run, verdict.line, {
         ...(verdict.change && { change: verdict.change }),
         ...(verdict.cart && { cart: verdict.cart }),
+        ...(verdict.accepted && { accepted: true }),
       })
     }
   }
@@ -362,16 +415,20 @@ export class Flow {
       ending.outcome === 'aborted' ? 'ABORTED' : ending.outcome === 'error' ? 'ERROR' : 'DONE',
     )
     const result = buildResult(run.plan, lines, ending, agentVersion, this.passStats(run))
-    await ui.show(
-      'end',
-      endProps(
-        lines,
-        ending,
-        changesOf(run.plan, run.state),
-        cartsOf(run.plan, run.state),
-        run.slow,
-      ),
+    const props = endProps(
+      lines,
+      ending,
+      changesOf(run.plan, run.state),
+      cartsOf(run.plan, run.state),
+      run.slow,
+      reasonsOf(run.plan, run.state),
+      unreachedOf(run.plan, run.state),
     )
+    // Les raisons de cet envoi restent pour le diagnostic (DRV-635) : des mots fixes et des nombres, sans libellé.
+    this.runs.keepReasons(run.state.reasons)
+    this.runs.keepRefusals(run.state.unreached)
+    // Un envoi terminé sans rien à lire repart tout de suite vers Repas (DRV-625) ; l'écran de fin reste pour le reste (partiel, arrêté, erreur).
+    if (hasSomethingToRead(props)) await ui.show('end', props)
     this.runs.remove(run.plan.runId)
     send(result)
     ui.close()
@@ -408,8 +465,17 @@ export class Flow {
     return run.plan.lines.flatMap((line) => {
       const ids = own(run.state.waiting, line.ingredientSlug)
       if (!ids) return []
+      const reasons = new Map(
+        run.state.reasons
+          .filter((note) => note.ingredientSlug === line.ingredientSlug)
+          .map((note) => [note.id, note.reason] as const),
+      )
       return [
-        { line, unavailable: (line.products ?? []).filter((product) => ids.includes(product.id)) },
+        {
+          line,
+          unavailable: (line.products ?? []).filter((product) => ids.includes(product.id)),
+          reasons,
+        },
       ]
     })
   }
@@ -419,11 +485,25 @@ export class Flow {
    * recalculé sur le contenu lu en direct (DRV-613), à rappeler à l'écran de fin. `cart` : la quantité déjà au panier est conservée ou
    * illisible (ticket M), à rappeler aussi. `slow` : la ligne a échoué parce que Leclerc a mis trop de temps à répondre (ticket K).
    */
-  private record(run: Run, line: ResultLine, { change, cart, slow }: LineNotes = {}): void {
-    const { slug, entry } = this.describe(run, line, slow === true)
+  private record(
+    run: Run,
+    line: ResultLine,
+    { change, cart, slow, accepted, unreached }: LineNotes = {},
+  ): void {
+    const { slug, entry } = this.describe(run, line, {
+      slow: slow === true,
+      accepted: accepted === true,
+      unreached: unreached !== undefined,
+    })
     if (slow) run.slow = true
     if (change) run.state.changes.push({ ingredientSlug: slug, ...change })
     if (cart) run.state.carts.push({ ingredientSlug: slug, ...cart })
+    if (unreached) {
+      run.state.unreached = [
+        ...run.state.unreached.filter((note) => note.ingredientSlug !== slug),
+        { ingredientSlug: slug, ...unreached },
+      ]
+    }
     run.state.done[slug] = line
     delete run.state.waiting[slug]
     this.touch(run)
@@ -431,12 +511,30 @@ export class Flow {
     this.deps.ui.update({ done: Object.keys(run.state.done).length, entry })
   }
 
-  /** Une ligne qui attend la phase B. */
-  private wait(run: Run, line: PlanLine, unavailable: string[]): void {
+  /** Une ligne qui attend la phase B, avec la raison de chacun de ses produits habituels écartés (DRV-635). */
+  private wait(
+    run: Run,
+    line: PlanLine,
+    unavailable: string[],
+    notes: readonly UnavailableNote[],
+  ): void {
     const name = line.name
     run.state.waiting[line.ingredientSlug] = unavailable
+    run.state.reasons = [
+      ...run.state.reasons.filter((note) => note.ingredientSlug !== line.ingredientSlug),
+      ...notes.map((note) => ({ ...note, ingredientSlug: line.ingredientSlug })),
+    ]
     this.touch(run)
-    const entry = unavailable.length > 0 ? S.log.unavailable(name) : S.log.toChoose(name)
+    // Le produit préféré donne le ton : rupture, introuvable ou refusé par le panier.
+    const first = notes[0]?.reason
+    const entry =
+      first === undefined
+        ? S.log.toChoose(name)
+        : first === 'NOT_FOUND'
+          ? S.log.notFound(name)
+          : first === 'CART_REFUSED'
+            ? S.log.cartRefused(name)
+            : S.log.unavailable(name)
     run.log.push(entry)
     this.deps.ui.update({ entry })
   }
@@ -462,14 +560,32 @@ export class Flow {
     this.runs.save(run.state)
   }
 
-  private describe(run: Run, line: ResultLine, slow = false): { slug: string; entry: string } {
+  private describe(
+    run: Run,
+    line: ResultLine,
+    { slow, accepted, unreached }: { slow: boolean; accepted: boolean; unreached: boolean },
+  ): { slug: string; entry: string } {
     const slug = line.ingredientSlug
     const name = run.names.get(slug) ?? slug
     switch (line.outcome) {
       case 'ADDED':
-        return { slug, entry: line.usedRank > 1 ? S.log.addedBackup(name) : S.log.added(name) }
+        return {
+          slug,
+          entry: accepted
+            ? S.log.acceptedAnyway(name)
+            : line.usedRank > 1
+              ? S.log.addedBackup(name)
+              : S.log.added(name),
+        }
       case 'CHOSEN':
-        return { slug, entry: S.log.added(name) }
+        return {
+          slug,
+          entry: unreached
+            ? S.log.savedNotInCart(name)
+            : accepted
+              ? S.log.acceptedAnyway(name)
+              : S.log.added(name),
+        }
       case 'HAVE_AT_HOME':
         return { slug, entry: S.log.haveAtHome(name) }
       case 'SKIPPED':

@@ -1,15 +1,76 @@
 // L'adaptateur E.Leclerc Drive (DRV-303) : tout ce qui est propre à l'enseigne vit dans ce dossier, derrière `RetailerAdapter`.
 export {
   browserDeps,
+  ENTRY_WAIT_MS,
   LeclercAdapter,
   type CartResult,
   type LeclercDeps,
+  type ReplyFacts,
   type RetailerAdapter,
 } from './adapter'
-export { type Candidate, type PricePerMeasure } from './candidate'
+export { catalogId, countAisles, rankByAisle } from './aisle'
+export {
+  aisleChoices,
+  humanize,
+  labelFromUrl,
+  MAX_AISLE_LABEL,
+  plausibleLabel,
+  type AisleChoice,
+  type AisleLabelSource,
+  aisleSamples,
+  isGenericLabel,
+  urlAisle,
+  type AisleGrouping,
+  type AisleLevel,
+  type AisleSample,
+  type ShownFacet,
+  shownAisleText,
+  shownAisleTexts,
+  shownAisleUrl,
+  type ShownAisleTexts,
+  type ShownText,
+} from './aisle-labels'
+export type { AisleTexts, FilterBlock } from './embedded'
+export {
+  aisleMenuFacts,
+  MAX_LABEL,
+  MAX_MENU_AISLES,
+  readPageLinks,
+  safeAisleLabel,
+  type AisleMenuFacts,
+  type MenuAisle,
+  type PageLink,
+  type PageLinks,
+} from './aisle-menu'
+export {
+  aisleVocabulary,
+  facetLabels,
+  facetObjects,
+  type FacetObject,
+  namedObjectKeys,
+  type NamedObjectKeys,
+  replyShape,
+  type KeyShape,
+  type PathStep,
+  type ReplyShape,
+  type VocabularyKey,
+} from './reply-shape'
+export { saysOutOfStock, type Candidate, type PricePerMeasure } from './candidate'
+export type { CartProductFacts } from './cart'
 export { contentFromLabel, parseContent, type Content, type ContentSource } from './content'
 export { causeLabel, causeText, type LeclercCause } from './causes'
 export { LeclercError, type LeclercErrorCode } from './errors'
+export {
+  entryFacts,
+  findStartButton,
+  readEntry,
+  type EntryFacts,
+  type EntryReading,
+  type LinkFacts,
+  type LinkWhere,
+  type PageRef,
+  type StartButton,
+} from './entry'
 export {
   JITTER_MS,
   MAX_BLOCKS,
@@ -46,3 +107,32 @@ export {
   type StateKeys,
 } from './probe'
 export { buildSearch, FALLBACK_ORDER, SEARCH_VARIANTS, type SearchVariant } from './search-request'
+export {
+  aisleBloc,
+  allValues,
+  countKeys,
+  filteredSearchPath,
+  filterHrefsIn,
+  filterLinks,
+  filterLinkShape,
+  filterLinkShapes,
+  filterTemplate,
+  freshValues,
+  FRESH_PRODUCT,
+  readFacets,
+  universes,
+  valueShape,
+  type CountKey,
+  type FacetBloc,
+  type FacetExploration,
+  type FacetMatch,
+  type FacetTree,
+  type FacetValue,
+  type FilteredProbe,
+  type FilterLink,
+  type FilterTemplate,
+  type ProbeAttempt,
+  type ProbeSkip,
+  type ShownFacetValue,
+  type TemplateMiss,
+} from './facets'

@@ -8,7 +8,7 @@ import {
   type SessionReading,
 } from '../src/leclerc'
 import { PASSAGE_WORDS } from '../src/selftest'
-import { fakeStorage, fakeWakeLock } from './flow-helpers'
+import { fakeStorage, fakeWakeLock, NO_MENU } from './flow-helpers'
 
 export const NOW = Date.UTC(2026, 9, 18, 14, 3, 27)
 
@@ -95,7 +95,11 @@ export function shop(shelves: Shelves, options: ShopOptions = {}) {
         promo: null,
         stock: stocks.get(item.id) ?? null,
         inCart: cart.get(item.id) ?? 0,
-        thumbnailUrl: null,
+        availability: null,
+        comingSoon: false,
+        aisle: null,
+        family: null,
+        imageUrl: null,
         content: { value: 1000, unit: 'g' },
         contentSource: 'label',
       }))
@@ -142,6 +146,22 @@ export function shop(shelves: Shelves, options: ShopOptions = {}) {
     }),
     lastSearchFacts: () => null,
     exploreSearchVariants: () => Promise.resolve([]),
+    readAisleMenu: () => NO_MENU,
+    describeLastReply: () => null,
+    aisleChoices: () => ({
+      level: 'RAYON',
+      key: 'aisle',
+      choices: [],
+      coverage: { RAYON: 0, FAMILLE: 0 },
+    }),
+    aisleSamples: () => [],
+    exploreFacets: () => Promise.resolve(null),
+    siteAisles: () => [],
+    validateSiteFilter: () => Promise.resolve(false),
+    searchFiltered: () => Promise.resolve({ candidates: [], total: null, coherent: true }),
+    describeProductLists: () => null,
+    readEntry: () => ({ kind: 'NONE' }),
+    followEntry: () => Promise.resolve(),
   }
   return {
     adapter,

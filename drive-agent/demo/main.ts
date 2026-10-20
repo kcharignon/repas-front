@@ -10,6 +10,9 @@ import {
   type PickerProps,
 } from '../src/ui'
 
+// Les photos de la démonstration (DRV-633) : le test (`e2e/agent-ui.spec.ts`) répond lui-même à ces adresses (jamais une vraie image), 404 pour l'identifiant 9999.
+const photo = (id: number) => `https://photos-test.leclercdrive.fr/image.ashx?id=${id}&use=l&cat=p`
+
 const HOSTILE = '<img src=x onerror="window.pwned=1"> <script>window.pwned=1</script>'
 
 // Ouvert pour que les outils de test lisent l'interface ; l'agent, lui, la ferme.
@@ -24,6 +27,7 @@ const CANDIDATES: PickerItem[] = [
     promo: null,
     explain: '50 g par produit : 2 produits.',
     state: 'ok',
+    photo: photo(1001),
   },
   {
     id: '1000002',
@@ -33,6 +37,7 @@ const CANDIDATES: PickerItem[] = [
     promo: 'En promotion : 3,50 €',
     explain: '100 g par produit : 1 produit.',
     state: 'ok',
+    photo: photo(1002),
   },
   {
     id: '1000003',
@@ -42,6 +47,8 @@ const CANDIDATES: PickerItem[] = [
     promo: null,
     explain: '',
     state: 'refused',
+    // Une adresse d'un autre hôte : refusée, la fiche reste en texte.
+    photo: 'https://images.autre-site.invalid/image.ashx?id=1003',
   },
   {
     id: '1000004',
@@ -51,6 +58,8 @@ const CANDIDATES: PickerItem[] = [
     promo: null,
     explain: '',
     state: 'out',
+    // Une photo qui répond 404 : la fiche reste en texte, sans icône d'image cassée.
+    photo: photo(9999),
   },
   {
     id: '1000005',
@@ -58,10 +67,22 @@ const CANDIDATES: PickerItem[] = [
     label2: null,
     details: [],
     promo: null,
-    explain: 'Contenu inconnu : vous choisirez la quantité.',
+    explain: 'Contenu inconnu : tu choisiras la quantité.',
     state: 'ok',
   },
 ]
+
+// DRV-643 : une recherche aux nombreux résultats (60 produits), affichés par lots en défilant ; chaque fiche a sa photo (identifiants 2001 à 2060).
+const MANY: PickerItem[] = Array.from({ length: 60 }, (_unused, index) => ({
+  id: String(1002000 + index),
+  name: `Biscuit sablé de test n° ${index + 1}`,
+  label2: `${150 + index} g`,
+  details: [`${150 + index} g`, '1,90 €', '12,60 € / kg'],
+  promo: null,
+  explain: `${150 + index} g par produit : 1 produit.`,
+  state: index === 20 ? 'out' : 'ok',
+  photo: photo(2001 + index),
+}))
 
 const PICKER: PickerProps = {
   need: '100 g',
@@ -90,6 +111,44 @@ const CHOOSER: ChooserProps = {
   mount: mounting(PICKER),
 }
 
+// DRV-647 : la rangée des rayons du site au-dessus des résultats (« Tous » puis les rayons présents, le rayon appris choisi d'avance), des libellés
+// inventés, dont un très long, et le repli « Rayon 1 » d'un rayon sans libellé lisible.
+const AISLE_OF = [41, 7, 41, 15, 7, 41, 60, 7]
+const AISLE_ITEMS: PickerItem[] = Array.from({ length: 8 }, (_unused, index) => ({
+  id: String(1003000 + index),
+  name:
+    AISLE_OF[index] === 41
+      ? `Tomates de test n° ${index + 1}`
+      : `Sauce tomate de test n° ${index + 1}`,
+  label2: '500 g',
+  details: ['500 g', '2,10 €', '4,20 € / kg'],
+  promo: null,
+  explain: '500 g par produit : 1 produit.',
+  state: 'ok',
+  photo: photo(3001 + index),
+  aisle: AISLE_OF[index] ?? null,
+}))
+const CHOOSER_AISLES: ChooserProps = {
+  ingredient: 'Tomate',
+  position: 1,
+  total: 4,
+  mount: mounting({
+    ...PICKER,
+    need: '500 g',
+    query: 'tomate',
+    items: AISLE_ITEMS,
+    aisles: {
+      chips: [
+        { id: 41, label: 'Fruits et légumes', count: 3 },
+        { id: 7, label: 'Conserves', count: 3 },
+        { id: 15, label: 'Épicerie salée, sauces et condiments', count: 1 },
+        { id: 60, label: 'Rayon 1', count: 1 },
+      ],
+      selected: 41,
+    },
+  }),
+}
+
 // Un ingrédient dont le produit habituel n'est plus disponible : bandeau, cases « Ne plus proposer », message du site.
 const CHOOSER_GONE: ChooserProps = {
   ingredient: 'Farine de blé',
@@ -99,14 +158,18 @@ const CHOOSER_GONE: ChooserProps = {
     ...PICKER,
     need: '800 g',
     replaces: 'Farine de blé T55 de test 1 kg',
+    // Les trois raisons (DRV-635) : rupture, introuvable (recherche préremplie), refusé par le panier.
     gone: [
-      { id: '2000001', label: 'Farine de blé T55 de test 1 kg' },
-      { id: '2000002', label: 'Farine de blé T45 de test 1 kg' },
+      { id: '2000001', label: 'Farine de blé T55 de test 1 kg', reason: 'OUT_OF_STOCK' },
+      { id: '2000002', label: 'Farine de blé T45 de test 1 kg', reason: 'NOT_FOUND' },
+      { id: '2000003', label: 'Farine de blé T65 de test 1 kg', reason: 'CART_REFUSED' },
     ],
+    prefill: 'farine t45',
     checked: new Set(['2000002']),
     query: 'farine',
     items: CANDIDATES.slice(0, 2),
-    notice: 'Leclerc n’a pas pu mettre ce produit au panier. Choisissez-en un autre.',
+    notice:
+      'Leclerc n’a pas pu mettre « Poivre noir moulu de test » au panier. Choisis-en un autre.',
   }),
 }
 
@@ -181,19 +244,28 @@ const SCREENS: Record<string, () => unknown> = {
       ingredient: 'Farine',
       productLabel: 'Farine de blé T55 de test 1 kg',
       packs: 2,
+      need: '800 g',
     }),
   chooser: () => ui.show('chooser', CHOOSER),
-  // Un article n'a encore aucun produit retenu : « Passer les n suivants » demande une confirmation d'une ligne (DRV-624).
+  // Un article n'a encore aucun produit retenu : « Passer ces n articles » demande une confirmation d'une ligne, sans la liste de produits (DRV-624, DRV-626).
   'chooser-confirm': () => {
     const shown = ui.show('chooser', { ...CHOOSER, confirmRest: true })
     // Le premier bouton de ce nom est celui des réponses ; le second, caché, confirme.
     const buttons = [...(ui.host?.shadowRoot?.querySelectorAll('button') ?? [])]
-    buttons.find((button) => button.textContent === 'Passer les 4 suivants')?.click()
+    buttons.find((button) => button.textContent === 'Passer ces 4 articles')?.click()
     return shown
   },
-  // Le dernier article à choisir : plus de « Passer les suivants ».
+  // Le dernier article à choisir : plus de « Passer ces n articles ».
   'chooser-last': () => ui.show('chooser', { ...CHOOSER, position: 5 }),
+  // Un seul article à choisir : pas de compteur « (1 sur 1) » (DRV-626).
+  'chooser-single': () => ui.show('chooser', { ...CHOOSER, position: 1, total: 1 }),
+  'chooser-long': () =>
+    ui.show('chooser', {
+      ...CHOOSER,
+      mount: mounting({ ...PICKER, query: 'biscuit', items: MANY }),
+    }),
   'chooser-gone': () => ui.show('chooser', CHOOSER_GONE),
+  'chooser-aisles': () => ui.show('chooser', CHOOSER_AISLES),
   diagnostic: () =>
     ui.show('diagnostic', {
       copy: () => Promise.resolve(true),
@@ -214,6 +286,12 @@ const SCREENS: Record<string, () => unknown> = {
   store: () => ui.show('store', { id: '123456', label: null }),
   'store-label': () => ui.show('store', { id: '123456', label: 'Magasin de test, Ville-Test' }),
   placement: () =>
+    ui.show('placement', {
+      ingredient: 'Farine de blé',
+      productLabel: 'Farine de blé T45 de test 1 kg',
+      photo: photo(1001),
+    }),
+  'placement-text': () =>
     ui.show('placement', {
       ingredient: 'Farine de blé',
       productLabel: 'Farine de blé T45 de test 1 kg',
@@ -274,6 +352,9 @@ const SCREENS: Record<string, () => unknown> = {
     }),
   // L'anti-robot demande une vérification : un bandeau, la page reste visible derrière (ticket K).
   challenge: () => ui.show('challenge', {}),
+  // L'entrée dans le magasin (DRV-625) : deux bandeaux sans bouton, la page reste visible derrière.
+  'entry-opening': () => ui.show('entry', { stage: 'opening' }),
+  'entry-manual': () => ui.show('entry', { stage: 'manual' }),
   'end-partial': () =>
     ui.show('end', {
       outcome: 'partial',
@@ -284,6 +365,50 @@ const SCREENS: Record<string, () => unknown> = {
       skipped: 0,
       unavailable: 1,
       failed: 3,
+    }),
+  // Des articles sans produit, avec la raison de chacun dans « Détails » (DRV-635).
+  'end-reasons': () =>
+    ui.show('end', {
+      outcome: 'partial',
+      added: 2,
+      chosen: 0,
+      haveAtHome: 0,
+      skipped: 0,
+      unavailable: 3,
+      failed: 0,
+      reasons: [
+        { name: 'Farine', reason: 'OUT_OF_STOCK', tried: 1 },
+        { name: 'Œufs', reason: 'NOT_FOUND', tried: 5 },
+        { name: 'Sucre', reason: 'CART_REFUSED', tried: 1 },
+      ],
+    }),
+  // Des produits choisis que le panier n'a pas pris : le choix est enregistré, une phrase par produit et pourquoi (DRV-644).
+  'end-unreached': () =>
+    ui.show('end', {
+      outcome: 'completed',
+      added: 2,
+      chosen: 3,
+      haveAtHome: 0,
+      skipped: 0,
+      unavailable: 0,
+      failed: 0,
+      unreached: [
+        { label: 'Sirop de test Fraise 60cl', reason: 'COMING_SOON' },
+        { label: 'Farine de test', reason: 'OUT_OF_STOCK' },
+        { label: 'Biscuit sablé de test', reason: 'CART_REFUSED' },
+      ],
+    }),
+  // Arrêté avant que rien ne soit mis au panier ni choisi : « Le panier n'est pas rempli » (DRV-626).
+  'end-none': () =>
+    ui.show('end', {
+      outcome: 'partial',
+      error: 'BLOCKED',
+      added: 0,
+      chosen: 0,
+      haveAtHome: 0,
+      skipped: 0,
+      unavailable: 0,
+      failed: 6,
     }),
   // L'envoi s'est arrêté sur une erreur : trois phrases (ce qui s'est passé, ce qui est sauf, l'action), jamais un code (DRV-622).
   'end-error': () =>

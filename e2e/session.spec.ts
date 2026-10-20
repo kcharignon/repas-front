@@ -6,6 +6,9 @@ for (const path of [
   '/inscription',
   '/verification-email?email=a%40example.com',
   '/confirmation-email',
+  '/mot-de-passe-oublie',
+  '/mot-de-passe-oublie/confirmation?token=le-secret',
+  '/mot-de-passe-oublie/confirmation',
 ]) {
   for (const colorScheme of ['light', 'dark'] as const) {
     test(`${path} est accessible (WCAG AA), thème ${colorScheme}`, async ({ page }) => {

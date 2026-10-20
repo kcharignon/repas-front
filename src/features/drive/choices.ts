@@ -1,9 +1,11 @@
-import type {
-  ChosenProduct,
-  ProductPrice,
-  RejectedProduct,
-  ResultLine,
-  ResultMessage,
+import {
+  cleanText,
+  LIMITS,
+  type ChosenProduct,
+  type ProductPrice,
+  type RejectedProduct,
+  type ResultLine,
+  type ResultMessage,
 } from '@drive-protocol'
 
 import type { ChoiceIntent } from '@/api'
@@ -14,7 +16,22 @@ export const MAX_INTENTS = 200
 /** Le back refuse un prix de plus de 1 000 000 centimes (le protocole va jusqu'à 100 000 000) : un prix plus haut n'est pas gardé. */
 const MAX_CENTS = 1_000_000
 
-type Product = NonNullable<ChoiceIntent['product']>
+/** Un identifiant de rayon ou de famille que le protocole accepte : un entier de 1 à 2 147 483 647. Sinon `null`. */
+export function catalogIdOf(value: unknown): number | null {
+  return typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 1 &&
+    value <= LIMITS.catalogId
+    ? value
+    : null
+}
+
+/** Le produit d'une intention, avec son rayon et sa famille (DRV-642), présents seulement quand l'agent les a donnés. */
+type WireProduct = NonNullable<ChoiceIntent['product']>
+/** Le contrat marque `rayonId` et `familyId` requis (défaut `null`) ; le back accepte aussi leur absence, qu'on garde quand l'agent n'en dit rien. */
+type Product = Omit<WireProduct, 'rayonId' | 'familyId'> &
+  Partial<Pick<WireProduct, 'rayonId' | 'familyId'>>
+type Intent = Omit<ChoiceIntent, 'product'> & { product?: Product | null }
 type Price = NonNullable<Product['price']>
 
 function priceOf(price: ProductPrice | undefined): Price | null {
@@ -27,14 +44,25 @@ function priceOf(price: ProductPrice | undefined): Price | null {
   }
 }
 
-/** Un produit à mémoriser : identifiant en chaîne (`id` du protocole), libellé et contenu tels que l'agent les a lus. */
+/**
+ * Un produit à mémoriser : identifiant en chaîne (`id` du protocole), libellé et contenu tels que l'agent les a lus. Le libellé est nettoyé une
+ * seconde fois (`cleanText`, la fonction de l'agent) : un agent plus ancien, embarqué dans une application pas encore mise à jour, peut laisser
+ * passer un caractère invisible que le back refuse, et le back rejette alors tout le lot (`422 DRIVE_CHOICE_INVALID`). Un libellé qui n'était
+ * fait que d'invisibles redevient l'identifiant du produit : le back exige un libellé. Le rayon et la famille d'un produit choisi (DRV-642) ne
+ * partent que s'ils sont valides, et seulement quand l'agent les a donnés : un agent ancien n'en dit rien, la clé est alors absente.
+ */
 function productOf(product: RejectedProduct | ChosenProduct): Product {
+  const rayonId = 'rayonId' in product ? catalogIdOf(product.rayonId) : null
+  const familyId = 'familyId' in product ? catalogIdOf(product.familyId) : null
+
   return {
     retailerProductId: product.id,
-    label: product.label,
+    label: cleanText(product.label) || product.id,
     ean: product.ean ?? null,
     content: product.content ?? null,
     price: 'price' in product ? priceOf(product.price) : null,
+    ...(rayonId !== null && { rayonId }),
+    ...(familyId !== null && { familyId }),
   }
 }
 
@@ -44,7 +72,7 @@ function productOf(product: RejectedProduct | ChosenProduct): Product {
  */
 function intentsOf(line: ResultLine): ChoiceIntent[] {
   const slug = line.ingredientSlug
-  const intents: ChoiceIntent[] = []
+  const intents: Intent[] = []
   // Un produit à la fois ajouté et refusé donnerait 422 sur tout le lot : l'ajout, explicite, l'emporte
   const added = line.outcome === 'CHOSEN' && line.placement !== 'ONCE' ? line.product.id : null
   for (const product of line.rejected ?? []) {
@@ -99,8 +127,15 @@ function intentsOf(line: ResultLine): ChoiceIntent[] {
       break
   }
 
-  return intents
+  return intents as ChoiceIntent[]
 }
+
+/**
+ * Les choix que ces intentions enregistrent vraiment : un produit retenu ou refusé, un « j'en ai toujours ». Rafraîchir un prix n'en est pas un :
+ * l'utilisateur n'a rien choisi.
+ */
+export const countChoices = (batches: ChoiceIntent[][]): number =>
+  batches.flat().filter((intent) => intent.action !== 'REFRESH_PRICE').length
 
 /**
  * Ce que le résultat d'un passage apprend à Repas, en lots de 200 intentions au plus (un seul, presque toujours). Les intentions d'une

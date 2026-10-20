@@ -57,6 +57,15 @@ export function cartBody(request: CartRequest): string {
   return `d=${encodeURIComponent(cartPayload(request))}`
 }
 
+/**
+ * Ce que l'évènement du PRODUIT dit de sa disponibilité dans la réponse du panier (DRV-644) : des nombres lus tels quels (`iQteDisponible`,
+ * `eDisponibilite`), `null` quand la réponse ne les donne pas. Ils servent à dire POURQUOI un produit n'est pas au panier, et au diagnostic.
+ */
+export interface CartProductFacts {
+  stock: number | null
+  availability: number | null
+}
+
 /** Ce que le site dit du panier après une écriture. */
 export interface CartReading {
   /** Quantité du produit au panier (`iQtePanier` de `lstProduitsLight`) ; 0 s'il n'y figure plus. */
@@ -71,6 +80,8 @@ export interface CartReading {
    * Une `Map`, pas un objet : l'identifiant vient de la page.
    */
   quantities: ReadonlyMap<string, number>
+  /** La disponibilité que l'évènement du produit donne (DRV-644), `null` si la réponse n'a pas d'évènement pour ce produit. */
+  product: CartProductFacts | null
 }
 
 /** « 12,34 € » (ou « 1 234,56 € ») donne 1234 ; tout autre texte, `null` (le total ne sert qu'à comparer deux états du panier). */
@@ -167,6 +178,21 @@ function findCartEvent(events: readonly unknown[]): Record<string, unknown> | nu
   return named ?? typed.find((record) => findKey(record, 'lstProduitsLight') !== undefined) ?? null
 }
 
+/** Les évènements du produit : ajout (101), changement (104), retrait (102). */
+const PRODUCT_EVENTS: readonly unknown[] = [101, 102, 104]
+
+/** L'évènement du produit écrit (`Produit<id>`, ou portant son `iIdProduit`), et ce qu'il dit de sa disponibilité. */
+function productFacts(events: readonly unknown[], productId: string): CartProductFacts | null {
+  const found = events.map(asRecord).find((record) => {
+    if (!record || !PRODUCT_EVENTS.includes(record.eTypeEvenement)) return false
+    return record.sIdUnique === `Produit${productId}` || String(record.iIdProduit) === productId
+  })
+  if (!found) return null
+  const stock = asNumber(found.iQteDisponible)
+  const availability = asNumber(found.eDisponibilite)
+  return stock === null && availability === null ? null : { stock, availability }
+}
+
 /**
  * Lit la réponse d'une écriture au panier : la quantité obtenue du produit et le nombre d'articles.
  *
@@ -194,5 +220,6 @@ export function readCartResponse(text: string, productId: string): CartReading {
     items: asNumber(findKey(event, 'iQuantitePanier')),
     totalCents: parseTotal(findKey(event, 'sTotalAPayer')),
     quantities: quantitiesOf(list),
+    product: productFacts(events, productId),
   }
 }

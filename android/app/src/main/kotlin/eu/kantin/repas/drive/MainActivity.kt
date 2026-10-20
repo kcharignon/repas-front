@@ -35,7 +35,7 @@ import androidx.webkit.WebViewFeature
  * (`BuildConfig.REPAS_ORIGIN`). Le drive est un second écran ([DriveActivity]).
  *
  * - **Navigation** : seule l'origine de Repas reste dans la WebView ([ShellNavigation]) ; tout autre lien s'ouvre dans le navigateur du
- *   téléphone, `*.leclercdrive.fr` compris. Les liens `https://kantin.eu/…` reçus d'une autre application (courriel de confirmation)
+ *   téléphone, sauf un lien du drive (`*.leclercdrive.fr`, « Finaliser sur Leclerc »), ouvert dans l'écran du drive de l'application ([DriveEntry]). Les liens `https://kantin.eu/…` reçus d'une autre application (courriel de confirmation)
  *   arrivent ici.
  * - **Données** : cookies (dont celui de rafraîchissement du jeton, `HttpOnly`), stockage du site et service worker restent dans le profil
  *   par défaut de la WebView. Le drive a le sien ([DriveProfile]) : la WebView de Repas ne reçoit ni l'agent Leclerc ni les cookies de Leclerc.
@@ -49,6 +49,9 @@ class MainActivity : Activity() {
     private lateinit var problems: ProblemPanel
     private val repasOrigin: String = RepasOrigin.parse(BuildConfig.REPAS_ORIGIN) ?: error("REPAS_ORIGIN invalide.")
     private val navigation = ShellNavigation(repasOrigin)
+
+    /** Les liens qui sortent de la coquille s'ouvrent dans le navigateur du téléphone (le service de plateforme du cœur, `LinkOpener`). */
+    private val linkOpener: LinkOpener = AndroidLinkOpener(this)
 
     /**
      * Le canal de réponse vers la page de Repas : celui de son dernier message. Il n'est pas effacé au début d'une page : l'ordre entre
@@ -175,10 +178,15 @@ class MainActivity : Activity() {
             // Seule la page principale est limitée à Repas : les cadres restent libres de charger.
             if (!request.isForMainFrame) return false
             val url = request.url.toString()
+            // Un lien du drive (« Finaliser sur Leclerc ») s'ouvre dans l'application, connecté, pas dans le navigateur du téléphone (DRV-625).
+            DriveEntry.resolve(url, repasApp.storePath)?.let {
+                openDrive(it.page, it.outcome)
+                return true
+            }
             return when (navigation.decide(url)) {
                 Decision.ALLOW -> false
                 Decision.OPEN_EXTERNALLY -> {
-                    openInPhoneBrowser(url)
+                    linkOpener.open(url)
                     true
                 }
                 Decision.BLOCK -> true
@@ -273,7 +281,14 @@ class MainActivity : Activity() {
         resumeDialog?.dismiss()
     }
 
-    private fun openDrive() = startActivity(Intent(this, DriveActivity::class.java))
+    /** Ouvre l'écran du drive ; sans passage en cours il s'ouvre sur [startUrl] (DRV-625 : la page de « Finaliser sur Leclerc », DRV-631 : sa forme), sinon sur l'accueil du drive. */
+    private fun openDrive(startUrl: String? = null, finalize: FinalizeOutcome? = null) =
+        startActivity(
+            Intent(this, DriveActivity::class.java).apply {
+                startUrl?.let { putExtra(DriveActivity.EXTRA_START_URL, it) }
+                finalize?.let { putExtra(DriveActivity.EXTRA_FINALIZE, it.name) }
+            },
+        )
 
     /**
      * Livre à la page de Repas les `drive.result` en attente, si elle a un canal de réponse (sinon ils restent gardés pour la prochaine
@@ -352,8 +367,8 @@ class MainActivity : Activity() {
     private fun openMenu() = showMenu(
         listOf(
             R.string.menu_drive_settings to { load("$repasOrigin$DRIVE_SETTINGS_PATH") },
-            R.string.menu_open_drive to ::openDrive,
-            R.string.menu_about to { showAbout(repasApp.agentLoad.describe(this)) },
+            R.string.menu_open_drive to { openDrive() },
+            R.string.menu_about to { showAbout(repasApp.agentLoad.describe(this), repasApp.finalizeOutcome.last()) },
             R.string.menu_logout_drive to { confirmClearDriveData(::clearDriveData) },
         ),
     )
@@ -362,6 +377,7 @@ class MainActivity : Activity() {
     private fun clearDriveData() {
         val shared = !DriveProfile.isolated
         DriveProfile.clear(if (shared) webView else null)
+        repasApp.storePath.forget()
         if (shared) load("$repasOrigin/")
         toast(R.string.drive_data_cleared)
     }

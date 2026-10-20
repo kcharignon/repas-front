@@ -196,6 +196,68 @@ describe('session', () => {
     })
   })
 
+  describe('mot de passe oublié', () => {
+    const send = 'POST /api/v1/users/password-reset/send'
+    const confirm = 'POST /api/v1/users/password-reset/confirm'
+
+    it('demande le lien pour une adresse, sans ouvrir de session', async () => {
+      const fetchMock = stubApi({ [send]: () => new Response(null, { status: 204 }) })
+      const session = useSessionStore()
+
+      await session.sendPasswordReset('alexiane@example.com')
+
+      expect(calls(fetchMock)).toEqual([send])
+      expect(await bodyOf(fetchMock, 0)).toEqual({ email: 'alexiane@example.com' })
+      expect(session.isAuthenticated).toBe(false)
+    })
+
+    it('fixe le mot de passe avec le secret du lien, sans ouvrir de session', async () => {
+      const fetchMock = stubApi({ [confirm]: () => new Response(null, { status: 204 }) })
+      const session = useSessionStore()
+
+      await session.resetPassword('le-secret', 'un nouveau mot de passe')
+
+      expect(calls(fetchMock)).toEqual([confirm])
+      expect(await bodyOf(fetchMock, 0)).toEqual({
+        token: 'le-secret',
+        password: 'un nouveau mot de passe',
+      })
+      expect(session.isAuthenticated).toBe(false)
+    })
+
+    it('oublie la session locale : le back vient de fermer toutes celles du compte', async () => {
+      stubApi({
+        'POST /api/login_check': () => json({ token: 'jeton' }),
+        'GET /api/v1/me': () => json(me),
+        [confirm]: () => new Response(null, { status: 204 }),
+      })
+      const session = useSessionStore()
+      await session.login('alexiane@example.com', 'ancien')
+
+      await session.resetPassword('le-secret', 'un nouveau mot de passe')
+
+      expect(session.isAuthenticated).toBe(false)
+      expect(localStorage.getItem('repas.session')).toBeNull()
+      expect(localStorage.getItem('repas.user')).toBeNull()
+    })
+
+    it('garde la session quand le lien est refusé (422)', async () => {
+      stubApi({
+        'POST /api/login_check': () => json({ token: 'jeton' }),
+        'GET /api/v1/me': () => json(me),
+        [confirm]: () =>
+          json({ error: { message: 'INVALID_PASSWORD_RESET_TOKEN' } }, { status: 422 }),
+      })
+      const session = useSessionStore()
+      await session.login('alexiane@example.com', 'ancien')
+
+      await expect(session.resetPassword('vieux', 'un nouveau mot de passe')).rejects.toMatchObject(
+        { status: 422, message: 'INVALID_PASSWORD_RESET_TOKEN' },
+      )
+      expect(session.isAuthenticated).toBe(true)
+    })
+  })
+
   describe('logout', () => {
     it('révoque la connexion côté back et oublie le jeton', async () => {
       const fetchMock = stubApi({

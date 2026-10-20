@@ -43,6 +43,19 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/views/ConfirmEmailView.vue'),
     meta: { public: true },
   },
+  {
+    path: '/mot-de-passe-oublie',
+    name: 'forgot-password',
+    component: () => import('@/views/ForgotPasswordView.vue'),
+    meta: { guestOnly: true },
+  },
+  {
+    // Le lien reçu par e-mail (`?token=…`, ADR 0026 du back) : ouvert à tous, même depuis un navigateur déjà connecté.
+    path: '/mot-de-passe-oublie/confirmation',
+    name: 'reset-password',
+    component: () => import('@/views/ResetPasswordView.vue'),
+    meta: { public: true },
+  },
   ...catalog,
   ...legacyRoutes,
   {
@@ -84,6 +97,11 @@ export const routes: RouteRecordRaw[] = [
         path: 'drive/aide',
         name: 'drive-help',
         component: () => import('@/features/drive/DriveHelpView.vue'),
+      },
+      {
+        path: 'drive/conditions',
+        name: 'drive-terms',
+        component: () => import('@/features/drive/DriveTermsView.vue'),
       },
       {
         path: 'drive/produits',

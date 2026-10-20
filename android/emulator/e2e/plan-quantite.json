@@ -1,0 +1,19 @@
+{
+  "v": 1,
+  "type": "plan",
+  "runId": "__RUN_ID__",
+  "retailer": "leclerc",
+  "store": { "id": "000001", "host": "courses-test.leclercdrive.fr" },
+  "returnPath": "/drive/retour",
+  "lines": [
+    {
+      "ingredientSlug": "cacao",
+      "name": "Cacao",
+      "status": "NEW",
+      "products": [],
+      "rejected": [],
+      "searchQuery": "cacao",
+      "needed": { "quantity": 200, "unitSymbol": "g", "dimension": "WEIGHT", "baseFactor": 1 }
+    }
+  ]
+}
