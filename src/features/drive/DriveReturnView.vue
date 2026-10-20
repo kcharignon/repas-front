@@ -448,7 +448,7 @@ function confirmReopen() {
         </a>
         <RouterLink
           v-else-if="primary === 'resume' && listId"
-          :to="{ name: 'drive-send', params: { listId } }"
+          :to="{ name: 'drive-send', params: { listId }, query: { ouvrir: '1' } }"
           :class="primaryClass"
         >
           {{ t('driveReturn.actions.resume') }}
@@ -464,7 +464,7 @@ function confirmReopen() {
         <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
           <RouterLink
             v-if="showResume && listId"
-            :to="{ name: 'drive-send', params: { listId } }"
+            :to="{ name: 'drive-send', params: { listId }, query: { ouvrir: '1' } }"
             :class="linkClass"
           >
             {{ t('driveReturn.actions.resume') }}

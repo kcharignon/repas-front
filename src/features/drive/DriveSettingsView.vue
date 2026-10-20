@@ -75,7 +75,11 @@ async function leave() {
   if (origin.value?.kind === 'list') {
     await router.replace({ name: 'shopping-list', query: { envoyer: '1' } })
   } else if (origin.value?.kind === 'send') {
-    await router.replace({ name: 'drive-send', params: { listId: origin.value.id } })
+    await router.replace({
+      name: 'drive-send',
+      params: { listId: origin.value.id },
+      query: { ouvrir: '1' },
+    })
   } else if (route.query.magasin !== undefined) {
     await router.replace({ name: 'drive-settings' })
   }

@@ -3,7 +3,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page, type Route } from '@playwright/test'
 
-import { fakeApp } from './support/drive'
+import { fakeApp, plan, trackTaps } from './support/drive'
 import { fakeAppForSetup } from './support/setupApp'
 
 type Status = 'ACTIVE' | 'SENT'
@@ -99,7 +99,9 @@ async function fakeBack(page: Page, initial: Status = 'ACTIVE', enabled = true, 
           return reply(route)
         case 'GET /api/v1/drive/plans/l1':
           // Interrupteur coupé : toutes les routes du drive répondent 404 DRIVE_DISABLED (hors réouverture d'une liste)
-          return reply(route, { error: { message: enabled ? 'inconnu' : 'DRIVE_DISABLED' } }, 404)
+          return enabled
+            ? reply(route, plan)
+            : reply(route, { error: { message: 'DRIVE_DISABLED' } }, 404)
         case 'POST /api/v1/shopping-lists/l1/send':
           status = 'SENT'
           return reply(route)
@@ -119,17 +121,26 @@ test('envoyer une liste au drive, la lire sans pouvoir la modifier, puis la rouv
   page,
 }) => {
   const received = await fakeBack(page)
-  await fakeApp(page)
+  // Le drive s'ouvre et l'utilisateur n'est pas encore revenu : l'application ne rend aucun résultat
+  await fakeApp(page, 'silent')
+  const taps = await trackTaps(page)
   await page.goto('/liste')
   await expect(page.getByRole('heading', { level: 1, name: 'Courses du week-end' })).toBeVisible()
 
-  // Envoi : confirmation, puis l'écran d'envoi
+  // Envoi : « Envoyer au drive », sa confirmation (les deux seuls gestes), puis le drive s'ouvre TOUT SEUL
   await page.getByRole('button', { name: 'Envoyer au drive' }).click()
   const confirm = page.getByRole('dialog')
   await expect(confirm).toContainText('La liste ne sera plus modifiable. Tu pourras la rouvrir.')
   await confirm.getByRole('button', { name: 'Envoyer au drive' }).click()
   await expect(page).toHaveURL(/\/drive\/envoi\/l1$/)
   expect(received).toContain('POST /api/v1/shopping-lists/l1/send')
+  await expect
+    .poll(() => page.evaluate(() => window.__sent.filter((m) => m.type === 'drive.start').length))
+    .toBe(1)
+  await expect(page.getByText('En attente du récapitulatif…')).toBeVisible()
+  // Pas de « Ouvrir le drive » à toucher : deux gestes en tout, et aucun de plus après la confirmation
+  await expect(page.getByRole('button', { name: 'Ouvrir le drive', exact: true })).toHaveCount(0)
+  expect(await taps.total()).toBe(2)
 
   // La liste envoyée : lecture seule
   await page.getByRole('link', { name: 'Retour à la liste' }).click()
@@ -186,7 +197,7 @@ test('fonction coupée : « Reprendre l’envoi » dit que l’envoi n’est pas
     'L’envoi au drive n’est pas disponible pour le moment. Ta liste n’a pas changé. Réessaie plus tard.',
   )
   await expect(page.getByRole('button', { name: 'Rouvrir la liste' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Ouvrir le drive' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Ouvrir le drive', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toHaveCount(0)
   expect(received).not.toContain('POST /api/v1/shopping-lists/l1/reopen')
 

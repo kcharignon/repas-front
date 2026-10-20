@@ -9,7 +9,7 @@ import type { Page, Route } from '@playwright/test'
 
 import { validatePlan, validateResult } from '../drive-agent/protocol'
 import type { PlanMessage, ResultMessage } from '../drive-agent/protocol'
-import { fakeApp, scan } from './support/drive'
+import { fakeApp, scan, trackTaps } from './support/drive'
 
 const sample = (name: string) =>
   JSON.parse(
@@ -159,6 +159,7 @@ test.describe('parcours complet, pont et API simulés', () => {
       validateResult({ ...result, runId: '8f14e45f-ceea-467a-9575-8e6b8c0a1b2c' }),
     ).not.toThrow()
     await fakeApp(page, result)
+    const taps = await trackTaps(page)
 
     // 1. Les réglages : magasin du back, résumé des produits mémorisés
     await page.goto('/drive/reglages')
@@ -178,10 +179,8 @@ test.describe('parcours complet, pont et API simulés', () => {
     const estimation = page.getByRole('region', { name: 'Estimation du coût' })
     await expect(estimation).toContainText('1,99')
     await expect(estimation).toContainText('1 article sur 4 estimé')
-    await page.getByRole('link', { name: 'Reprendre l’envoi' }).click()
-
-    // 3. L'écran d'envoi : le plan du back, tel quel
-    await expect(page).toHaveURL(new RegExp(`/drive/envoi/${LIST}$`))
+    // 3. L'écran d'envoi, ouvert à la main : le plan du back, tel quel (c'est l'écran qui reste pour une décision ou une explication)
+    await page.goto(`/drive/envoi/${LIST}`)
     await expect(
       page.getByText(
         '5 articles : 3 sont déjà choisis, 1 est à choisir sur Leclerc, 1 ne sera pas mis au panier.',
@@ -191,8 +190,16 @@ test.describe('parcours complet, pont et API simulés', () => {
     await expect(page.getByText('À acheter : 6 unité')).toBeVisible()
     expect((await scan(page)).violations).toEqual([])
 
-    // 4. Le drive : le plan envoyé à l'application est valide pour l'agent, nom, identifiants et quantités compris
-    await page.getByRole('button', { name: 'Ouvrir le drive' }).click()
+    // 4. « Reprendre l'envoi » est l'intention : un seul geste, et le drive s'ouvre tout seul. Le plan envoyé à l'application est valide pour
+    // l'agent, nom, identifiants et quantités compris
+    await page.goto(`/listes/${LIST}`)
+    const before = await taps.total()
+    await page.getByRole('link', { name: 'Reprendre l’envoi' }).click()
+    await expect
+      .poll(() => page.evaluate(() => window.__sent.some((m) => m.type === 'drive.start')))
+      .toBe(true)
+    expect(await taps.total()).toBe(before + 1)
+    await expect(page.getByRole('button', { name: 'Ouvrir le drive', exact: true })).toHaveCount(0)
     const start = await page.evaluate(() => window.__sent.find((m) => m.type === 'drive.start'))
     const sent = start?.plan as unknown as PlanMessage
     expect(() => validatePlan(sent)).not.toThrow()

@@ -413,8 +413,8 @@ describe('retour du drive : chaque issue du passage', () => {
     )
     // Un seul bouton principal, « Reprendre l’envoi » ; ce qui est déjà au panier se dit en une ligne, sans lien
     expect(wrapper.text()).toContain('Ton panier est prêt. Retrouve-le dans l’appli Drive Leclerc.')
-    expect(wrapper.find('a[href="/drive/envoi/l1"]').text()).toBe('Reprendre l’envoi')
-    expect(wrapper.find('a[href="/drive/envoi/l1"]').classes()).toContain('bg-primary')
+    expect(wrapper.find('a[href="/drive/envoi/l1?ouvrir=1"]').text()).toBe('Reprendre l’envoi')
+    expect(wrapper.find('a[href="/drive/envoi/l1?ouvrir=1"]').classes()).toContain('bg-primary')
     expect(wrapper.find('a[target="_blank"]').exists()).toBe(false)
     expect(wrapper.find('a[href*="lignes"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Réessayer les échecs')
@@ -445,7 +445,7 @@ describe('retour du drive : chaque issue du passage', () => {
     )
     // Aucun compteur à zéro : seul ce qui existe
     expect(wrapper.findAll('dl > div').map((cell) => cell.text())).toEqual(['Indisponibles1'])
-    expect(wrapper.find('a[href="/drive/envoi/l1"]').classes()).toContain('bg-primary')
+    expect(wrapper.find('a[href="/drive/envoi/l1?ouvrir=1"]').classes()).toContain('bg-primary')
   })
 
   it('un produit choisi sur Leclerc suffit à dire « en partie » : ce qui est choisi est dans le panier', async () => {
@@ -484,7 +484,7 @@ describe('retour du drive : chaque issue du passage', () => {
     expect(wrapper.find('main [role="status"] p').text()).toBe(
       'Ce qui est déjà au panier y reste. Reprends l’envoi quand tu veux.',
     )
-    expect(wrapper.find('a[href="/drive/envoi/l1"]').classes()).toContain('bg-primary')
+    expect(wrapper.find('a[href="/drive/envoi/l1?ouvrir=1"]').classes()).toContain('bg-primary')
     expect(wrapper.find('dl').exists()).toBe(false)
   })
 
@@ -562,7 +562,7 @@ describe('retour du drive : chaque issue du passage', () => {
       expect(wrapper.find('details').text()).toContain('SEARCH_NO_STATE')
       // Rien n’est au panier : pas de « Ton panier est prêt » ; reprendre reste possible sans être la première action
       expect(wrapper.text()).not.toContain('Ton panier est prêt')
-      expect(wrapper.find('a[href="/drive/envoi/l1"]').exists()).toBe(true)
+      expect(wrapper.find('a[href="/drive/envoi/l1?ouvrir=1"]').exists()).toBe(true)
       expect(wrapper.find('a[href*="lignes"]').exists()).toBe(false)
     },
   )

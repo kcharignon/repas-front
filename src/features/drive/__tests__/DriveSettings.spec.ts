@@ -385,6 +385,8 @@ describe('réglages du drive : la lecture du magasin par l’application (un seu
     await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-send'))
 
     expect(context.router.currentRoute.value.params.listId).toBe('l1')
+    // L'envoi attendait le magasin : une fois enregistré, l'écran d'envoi ouvre le drive sans redemander
+    expect(context.router.currentRoute.value.query.ouvrir).toBe('1')
   })
 
   it('le même magasin relu : rien n’est écrit, aucun écran de plus', async () => {
