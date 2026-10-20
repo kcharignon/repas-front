@@ -10,6 +10,10 @@ import UiField from '@/design/UiField.vue'
 import UiSelect from '@/design/UiSelect.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
 import { messageForFailure, notifyDeleteFailure } from '@/notifications/failures'
+import { useSessionStore } from '@/session/session'
+import MergeConfirmSheet from './MergeConfirmSheet.vue'
+import MergePickerSheet from './MergePickerSheet.vue'
+import { usageText } from './mergeText'
 import {
   useDeleteIngredient,
   useDepartments,
@@ -21,6 +25,7 @@ import {
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const session = useSessionStore()
 
 // Création (`/ingredients/nouveau?rayon=…`) ou modification (`/ingredients/:slug/modifier`) : le même formulaire.
 const slug = computed(() => (typeof route.params.slug === 'string' ? route.params.slug : null))
@@ -44,6 +49,12 @@ const failure = ref<string | null>(null)
 const deleting = ref(false)
 
 let loaded = false
+// « Modifier » un autre ingrédient depuis la fusion garde cette vue montée : le formulaire se recharge pour le nouveau
+watch(slug, () => {
+  loaded = false
+  submitted.value = false
+  failure.value = null
+})
 watch(
   () => existing.data.value,
   (ingredient) => {
@@ -125,6 +136,41 @@ function confirmDelete() {
       notifyDeleteFailure(error, t('ingredients.inUse'))
     },
   })
+}
+
+// Fusionner (ING-007) : seulement un ingrédient à soi, jamais un commun ni un nouvel ingrédient
+const canMerge = computed(() => {
+  const ingredient = existing.data.value
+  const userId = session.user?.id
+
+  return (
+    editing.value &&
+    ingredient !== undefined &&
+    userId !== undefined &&
+    ingredient.creatorId != null &&
+    ingredient.creatorId === userId
+  )
+})
+const usage = computed(() => {
+  const ingredient = existing.data.value
+  const text = ingredient === undefined ? '' : usageText(t, ingredient)
+
+  return text === ''
+    ? t('ingredients.merge.usedNowhere')
+    : t('ingredients.merge.usedIn', { usage: text })
+})
+const picking = ref(false)
+const candidate = ref<{ slug: string; name: string } | null>(null)
+const confirming = computed({
+  get: () => candidate.value !== null,
+  set: (value) => {
+    if (!value) candidate.value = null
+  },
+})
+
+// Après la fusion le slug de cet ingrédient n'existe plus : on repart du rayon de celui qu'on a gardé
+function merged(departmentSlug: string) {
+  void router.push({ name: 'department', params: { slug: departmentSlug || form.departmentSlug } })
 }
 
 const back = computed(() =>
@@ -254,6 +300,31 @@ const back = computed(() =>
         </div>
       </div>
     </form>
+
+    <section
+      v-if="canMerge"
+      class="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4"
+    >
+      <p class="text-[15px] text-muted" data-testid="ingredient-usage">{{ usage }}</p>
+      <UiButton variant="secondary" class="min-h-12" @click="picking = true">{{
+        t('ingredients.merge.action')
+      }}</UiButton>
+    </section>
+
+    <MergePickerSheet
+      v-if="picking && canMerge"
+      v-model:open="picking"
+      :absorbed="{ slug: slug ?? '', name: existing.data.value?.name ?? form.name }"
+      @pick="candidate = { slug: $event.slug, name: $event.name }"
+    />
+    <MergeConfirmSheet
+      v-if="candidate"
+      v-model:open="confirming"
+      :absorbed="{ slug: slug ?? '', name: existing.data.value?.name ?? form.name }"
+      :kept="candidate"
+      @merged="merged"
+      @gone="candidate = null"
+    />
 
     <UiConfirmDialog
       v-model:open="deleting"

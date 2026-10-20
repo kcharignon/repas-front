@@ -162,6 +162,11 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/features/ingredients/DepartmentView.vue'),
       },
       {
+        path: 'ingredients/doublons',
+        name: 'ingredient-duplicates',
+        component: () => import('@/features/ingredients/DuplicatesView.vue'),
+      },
+      {
         path: 'ingredients/nouveau',
         name: 'ingredient-new',
         component: () => import('@/features/ingredients/IngredientEditorView.vue'),
