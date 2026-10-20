@@ -7,7 +7,7 @@ import UiButton from '@/design/UiButton.vue'
 import UiField from '@/design/UiField.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
 import { useDepartments } from '@/features/ingredients/queries'
-import { imageUrl } from '@/features/shopping-lists/format'
+import UiImage from '@/design/UiImage.vue'
 import { messageForFailure } from '@/notifications/failures'
 import AdminFormDialog from './AdminFormDialog.vue'
 import AdminPage from './AdminPage.vue'
@@ -64,7 +64,7 @@ function submit() {
         :key="department.slug"
         class="flex min-h-14 items-center gap-3"
       >
-        <img :src="imageUrl(department.image)" alt="" class="size-8 shrink-0 object-contain" />
+        <UiImage :src="department.image" class="size-8 shrink-0" />
         <span class="flex-1 font-medium">{{ department.name }}</span>
         <UiButton
           variant="ghost"

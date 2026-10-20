@@ -315,6 +315,12 @@ describe('RecipeDetailView', () => {
     ])
   })
 
+  it("n'affiche aucune image d'ingrédient, même quand le back en fournit", async () => {
+    const { wrapper } = await open([])
+
+    expect(wrapper.findAll('li img')).toHaveLength(0)
+  })
+
   it("ne propose de supprimer qu'une recette à soi", async () => {
     const other = await open([])
     expect(other.wrapper.findAll('button').some((button) => button.text() === 'Supprimer')).toBe(

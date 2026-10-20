@@ -5,7 +5,7 @@ import { RouterLink } from 'vue-router'
 import { Search } from 'lucide-vue-next'
 
 import { hasFailed } from '@/api/query'
-import { imageUrl } from '@/features/shopping-lists/format'
+import UiImage from '@/design/UiImage.vue'
 import IngredientSearchResults from './IngredientSearchResults.vue'
 import { MIN_SEARCH_LENGTH, useDepartments } from './queries'
 import { useDebounced } from './useDebounced'
@@ -67,7 +67,7 @@ const term = computed(() => searched.value.trim())
             :to="{ name: 'department', params: { slug: department.slug } }"
             class="flex min-h-32 flex-col items-center justify-center gap-3 rounded-2xl border border-line bg-surface p-4 text-center font-bold hover:border-primary focus-visible:outline-2 focus-visible:outline-primary"
           >
-            <img :src="imageUrl(department.image)" alt="" class="size-12 object-contain" />
+            <UiImage :src="department.image" class="size-12" />
             {{ department.name }}
           </RouterLink>
         </li>

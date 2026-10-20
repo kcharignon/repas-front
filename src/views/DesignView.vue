@@ -3,9 +3,11 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Check, CookingPot, IceCreamCone, Plus, Salad } from 'lucide-vue-next'
 
+import logo from '@/assets/logo.png'
 import UiButton from '@/design/UiButton.vue'
 import UiCheckbox from '@/design/UiCheckbox.vue'
 import UiChip from '@/design/UiChip.vue'
+import UiImage from '@/design/UiImage.vue'
 import UiField from '@/design/UiField.vue'
 import UiProgressBar from '@/design/UiProgressBar.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
@@ -114,6 +116,24 @@ const tile = ref('dish')
             :invalid="invalid"
           />
         </UiField>
+      </div>
+    </section>
+
+    <section class="flex flex-col gap-2">
+      <h2 class="font-display text-2xl font-bold">{{ t('design.images') }}</h2>
+      <div class="flex items-center gap-4">
+        <figure class="flex flex-col items-center gap-1">
+          <UiImage :src="logo" class="size-12" />
+          <figcaption class="text-sm text-muted">{{ t('design.imageOk') }}</figcaption>
+        </figure>
+        <figure class="flex flex-col items-center gap-1">
+          <UiImage src="images/introuvable.png" class="size-12" />
+          <figcaption class="text-sm text-muted">{{ t('design.imageBroken') }}</figcaption>
+        </figure>
+        <figure class="flex flex-col items-center gap-1">
+          <UiImage src="" class="size-12" />
+          <figcaption class="text-sm text-muted">{{ t('design.imageEmpty') }}</figcaption>
+        </figure>
       </div>
     </section>
 

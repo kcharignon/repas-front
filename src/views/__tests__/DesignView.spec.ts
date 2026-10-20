@@ -20,9 +20,11 @@ describe('DesignView (catalogue)', () => {
     expect(wrapper.findAll('h2').map((title) => title.text())).toEqual([
       'Boutons',
       'Champs',
+      'Images',
       'Choix',
       'Progression',
     ])
+    expect(wrapper.findAll('[data-testid="image-fallback"]')).toHaveLength(1)
     expect(wrapper.findAll('button').length).toBeGreaterThanOrEqual(10)
     expect(wrapper.find('[role="progressbar"]').attributes('aria-label')).toBe(
       '4 sur 11 articles dans le panier',

@@ -7,7 +7,7 @@ import UiButton from '@/design/UiButton.vue'
 import UiField from '@/design/UiField.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
 import { useRecipeTypes } from '@/features/recipes/queries'
-import { imageUrl } from '@/features/shopping-lists/format'
+import UiImage from '@/design/UiImage.vue'
 import { messageForFailure } from '@/notifications/failures'
 import AdminFormDialog from './AdminFormDialog.vue'
 import AdminPage from './AdminPage.vue'
@@ -65,7 +65,7 @@ function submit() {
       class="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface px-4"
     >
       <li v-for="type in items" :key="type.slug" class="flex min-h-14 items-center gap-3">
-        <img :src="imageUrl(type.image)" alt="" class="size-8 shrink-0 object-contain" />
+        <UiImage :src="type.image" class="size-8 shrink-0" />
         <span class="flex-1 font-medium">{{ type.name }}</span>
         <span class="text-sm text-muted">{{ t('admin.orderN', { n: type.order }) }}</span>
         <UiButton

@@ -9,7 +9,7 @@ import { notifyDeleteFailure } from '@/notifications/failures'
 import UiButton from '@/design/UiButton.vue'
 import UiConfirmDialog from '@/design/UiConfirmDialog.vue'
 import UiLinkButton from '@/design/UiLinkButton.vue'
-import { formatQuantity, imageUrl } from '@/features/shopping-lists/format'
+import { formatQuantity } from '@/features/shopping-lists/format'
 import PlanButton from './PlanButton.vue'
 import { useDeleteRecipe, useRecipe, useRecipesByType } from './queries'
 
@@ -88,11 +88,7 @@ function confirmDelete() {
             :key="row.ingredientSlug"
             class="flex min-h-14 items-center gap-3"
           >
-            <img
-              :src="imageUrl(row.ingredientImage)"
-              alt=""
-              class="size-8 shrink-0 object-contain"
-            />
+            <!-- L'image de l'ingrédient (row.ingredientImage) n'est pas affichée : trop d'ingrédients n'en ont pas encore. -->
             <span class="flex-1 font-medium">{{ row.ingredientName }}</span>
             <span class="text-sm font-semibold text-muted">{{
               formatQuantity(row.quantity, row.unitSymbol)
