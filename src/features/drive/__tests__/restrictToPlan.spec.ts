@@ -155,12 +155,14 @@ describe('expectedFromPlan : le plan relu du back', () => {
       ingredientSlug: 'farine',
       status: 'KNOWN',
       products: ['123456', '222333'],
+      unitSlug: 'gramme',
       replaceable: true,
     })
     expect(lines.find((line) => line.ingredientSlug === 'poivre')).toEqual({
       ingredientSlug: 'poivre',
       status: 'NEW',
       products: [],
+      unitSlug: 'piece',
     })
     expect(lines.find((line) => line.ingredientSlug === 'sel')?.status).toBe('HAVE_AT_HOME')
   })
@@ -169,5 +171,62 @@ describe('expectedFromPlan : le plan relu du back', () => {
     expect(restrict([chosen('farine')], lines).ignored).toBe(0)
     expect(restrict([added('farine', '999999')], lines).ignored).toBe(1)
     expect(restrict([chosen('sel')], lines).ignored).toBe(1)
+  })
+})
+
+describe('la contenance d’un produit (DRV-652) ne vaut que dans l’unité de la ligne envoyée', () => {
+  const sized: ExpectedLine[] = [
+    { ingredientSlug: 'cheddar', status: 'KNOWN', products: ['555701'], unitSlug: 'tranche' },
+    { ingredientSlug: 'emmental', status: 'NEW', products: [], unitSlug: 'tranche' },
+    { ingredientSlug: 'sel', status: 'KNOWN', products: ['555401'] },
+  ]
+  const SIZE = { value: 20, unitSlug: 'tranche' }
+  const packSizeOf = (line: ResultLine | undefined) =>
+    line !== undefined && 'packSize' in line ? line.packSize : undefined
+
+  it('la garde dans l’unité de la ligne, pour un produit ajouté comme pour un produit choisi', () => {
+    const restricted = restrict(
+      [
+        { ...added('cheddar', '555701'), packSize: SIZE } as ResultLine,
+        chosen('emmental', { packSize: SIZE } as Partial<ResultLine>),
+      ],
+      sized,
+    )
+
+    expect(restricted.ignored).toBe(0)
+    expect(restricted.result.lines.map(packSizeOf)).toEqual([SIZE, SIZE])
+  })
+
+  it('la retire, sans retirer la ligne, quand l’unité n’est pas celle de la ligne (une page de l’enseigne peut poster un faux résultat)', () => {
+    const restricted = restrict(
+      [
+        {
+          ...added('cheddar', '555701'),
+          packSize: { value: 20, unitSlug: 'gramme' },
+        } as ResultLine,
+        chosen('emmental', { packSize: { value: 20, unitSlug: 'Tranche' } } as Partial<ResultLine>),
+      ],
+      sized,
+    )
+
+    expect(restricted.ignored).toBe(0)
+    expect(restricted.result.lines.map((line) => line.outcome)).toEqual(['ADDED', 'CHOSEN'])
+    expect(restricted.result.lines.map(packSizeOf)).toEqual([undefined, undefined])
+  })
+
+  it('la retire quand le plan envoyé ne disait pas l’unité de la ligne (un agent qui ne la connaît pas n’en rend jamais)', () => {
+    const restricted = restrict(
+      [{ ...added('sel', '555401'), packSize: SIZE } as ResultLine],
+      sized,
+    )
+
+    expect(restricted.slugs).toEqual(['sel'])
+    expect(packSizeOf(restricted.result.lines[0])).toBeUndefined()
+  })
+
+  it('ne touche pas une ligne qui n’en porte pas', () => {
+    const line = added('cheddar', '555701')
+
+    expect(restrict([line], sized).result.lines).toEqual([line])
   })
 })

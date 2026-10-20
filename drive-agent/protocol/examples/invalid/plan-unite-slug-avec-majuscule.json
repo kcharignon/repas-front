@@ -1,0 +1,31 @@
+{
+  "path": "lines[0].needed.unitSlug",
+  "why": "unitSlug est un slug : minuscules, chiffres et tirets.",
+  "message": {
+    "v": 1,
+    "type": "plan",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "retailer": "leclerc",
+    "store": {
+      "id": "000000",
+      "host": "courses-test.leclercdrive.fr"
+    },
+    "returnPath": "/drive/retour",
+    "lines": [
+      {
+        "ingredientSlug": "cheddar",
+        "name": "Cheddar en tranche",
+        "status": "NEW",
+        "searchQuery": "cheddar tranche",
+        "needed": {
+          "quantity": 15,
+          "unitSymbol": "tranche",
+          "dimension": null,
+          "baseFactor": null,
+          "unitSlug": "Tranche",
+          "unitName": "tranche"
+        }
+      }
+    ]
+  }
+}

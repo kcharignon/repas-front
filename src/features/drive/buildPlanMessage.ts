@@ -1,5 +1,12 @@
-import type { NeededQuantity, PlanLine, PlanMessage } from '@drive-protocol'
-import { LIMITS, PROTOCOL_VERSION, RETURN_PATH } from '@drive-protocol'
+import type { PlanLine, PlanMessage } from '@drive-protocol'
+import {
+  cleanText,
+  LIMITS,
+  PROTOCOL_VERSION,
+  RETURN_PATH,
+  toPackSize,
+  UNIT_SLUG,
+} from '@drive-protocol'
 
 import type { DrivePlan, DrivePlanLine } from '@/api'
 import { catalogIdOf } from './choices'
@@ -37,23 +44,41 @@ export function effectiveStatus(line: DrivePlanLine, changes: LineChanges): Plan
   return line.status
 }
 
-/** Ce que le plan envoyé contient en plus (DRV-642) : les rayons conseillés, seulement si l'agent de l'application les connaît. */
+/**
+ * Ce que le plan envoyé contient en plus, seulement si l'agent de l'application le connaît (un agent plus ancien rejette le plan entier à la moindre
+ * clé inconnue) : les rayons conseillés (DRV-642) et, pour la contenance d'un produit dans l'unité de la liste (DRV-652), le slug et le nom de l'unité de
+ * chaque ligne (`needed.unitSlug`, `needed.unitName`) et la contenance déjà donnée de chaque produit (`packSize`).
+ */
 export interface PlanOptions {
   rayonHints?: boolean
+  packSize?: boolean
 }
 
+type Needed = NonNullable<PlanLine['needed']>
+
 /**
- * La quantité demandée, par liste blanche : seules les clés que le protocole connaît partent à l'agent, jamais l'objet du back en bloc
- * (le validateur refuse toute clé inconnue et le back en ajoute sans prévenir : `unitSlug`, `unitName`…). Le plan ne renvoie jamais
- * de symbole vide (le nom de l'unité à défaut).
+ * La quantité demandée d'une ligne, sans copier ce que le back ajoute un jour (une clé inconnue de l'agent ferait rejeter tout le plan) : les quatre clés du
+ * protocole d'avant, plus le slug et le nom de l'unité (DRV-652) quand l'agent de l'application les connaît et que le back les a donnés tels que le protocole
+ * les accepte (un slug d'unité, un nom propre de 1 à 255 caractères). L'un sans l'autre n'est pas envoyé : l'agent redemande alors le nombre de produits.
  */
-function neededOf(needed: DrivePlanLine['needed']): NeededQuantity {
-  return {
-    quantity: needed.quantity,
-    unitSymbol: needed.unitSymbol,
-    ...(needed.dimension === undefined ? {} : { dimension: needed.dimension }),
-    ...(needed.baseFactor === undefined ? {} : { baseFactor: needed.baseFactor }),
+function neededOf(needed: DrivePlanLine['needed'], options: PlanOptions): Needed {
+  const { quantity, unitSymbol, dimension, baseFactor } = needed
+  const base: Needed = {
+    quantity,
+    unitSymbol,
+    ...(dimension === undefined ? {} : { dimension }),
+    ...(baseFactor === undefined ? {} : { baseFactor }),
   }
+  if (options.packSize !== true) return base
+  const slug: unknown = needed.unitSlug
+  const name = typeof needed.unitName === 'string' ? cleanText(needed.unitName) : ''
+  const named =
+    typeof slug === 'string' &&
+    UNIT_SLUG.test(slug) &&
+    name !== '' &&
+    [...name].length <= LIMITS.label
+
+  return named ? { ...base, unitSlug: slug, unitName: name } : base
 }
 
 function translate(line: DrivePlanLine, changes: LineChanges, options: PlanOptions): PlanLine {
@@ -65,7 +90,13 @@ function translate(line: DrivePlanLine, changes: LineChanges, options: PlanOptio
     id: retailerProductId,
     label,
   }))
-  const common = { ...head, rejected, searchQuery: line.searchQuery, needed: neededOf(line.needed) }
+  // La quantité demandée, par liste blanche : le plan ne renvoie jamais de symbole vide (le nom de l'unité à défaut)
+  const common = {
+    ...head,
+    rejected,
+    searchQuery: line.searchQuery,
+    needed: neededOf(line.needed, options),
+  }
   // Les rayons conseillés rangent la liste de l'écran de choix : ils ne servent qu'aux lignes que l'utilisateur choisit sur le site
   const hints = options.rayonHints === true ? rayonHintsOf(line) : []
   const rayons = hints.length > 0 ? { rayonHints: hints } : {}
@@ -96,6 +127,8 @@ function translate(line: DrivePlanLine, changes: LineChanges, options: PlanOptio
         ...(product.content ? { content: product.content } : {}),
         packs: product.packs ?? null,
         packsStatus: product.packsStatus,
+        // La contenance déjà donnée pour ce produit (DRV-652) : l'agent ne repose pas la question et n'écrase pas le calcul du plan par le contenu lu
+        ...(options.packSize === true && { packSize: toPackSize(product.packSize) }),
       })),
   }
 }

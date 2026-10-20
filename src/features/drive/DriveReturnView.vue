@@ -15,7 +15,7 @@ import {
 import { isRateLimited, messageForFailure } from '@/notifications/failures'
 import { useOnline } from '@/offline/useOnline'
 import { driveBridge } from './bridge'
-import { buildChoiceBatches, countChoices } from './choices'
+import { buildChoiceBatches, countChoices, knownProductsOf } from './choices'
 import { finalizeLink, DRIVE_HOME_URL, RETAILER_APP_NAME } from './leclerc'
 import { useDrivePlan, useDriveSettings, useSaveChoices } from './queries'
 import { expectedFromPlan } from './restrictToPlan'
@@ -76,6 +76,10 @@ const saved = computed(() => store.status === 'saved')
  */
 const hasChoices = computed(() =>
   result.value ? countChoices(buildChoiceBatches(result.value)) > 0 : false,
+)
+/** Les produits connus du plan, de quoi redécrire à Repas un produit dont la personne a donné la contenance (DRV-652). */
+const knownProducts = computed(() =>
+  plan.data.value === undefined ? new Map() : knownProductsOf(plan.data.value),
 )
 
 // --- Le titre dit le résultat ; au plus trois phrases : ce qui s'est passé, ce qui est sauf, ce qu'il reste à faire ---
@@ -200,7 +204,8 @@ async function persist() {
     if (current === null) return
     await save.mutateAsync({
       storeId,
-      batches: buildChoiceBatches(current.result),
+      // Le plan est lu : `expectedLines()` l'a attendu
+      batches: buildChoiceBatches(current.result, knownProducts.value),
     })
     driveBridge.clearDraft()
     store.saved()

@@ -1,0 +1,27 @@
+{
+  "path": "lines[0].packSize",
+  "why": "packSize n'est jamais null dans un résultat (effacer une contenance n'est pas l'affaire de l'agent).",
+  "message": {
+    "v": 1,
+    "type": "result",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "agentVersion": "1.0.0",
+    "outcome": "completed",
+    "store": {
+      "id": "000000"
+    },
+    "lines": [
+      {
+        "ingredientSlug": "cheddar",
+        "outcome": "CHOSEN",
+        "quantity": 1,
+        "placement": "PRIMARY",
+        "product": {
+          "id": "555701",
+          "label": "Fromage Cheddar Burger 20 Tranches - 340g"
+        },
+        "packSize": null
+      }
+    ]
+  }
+}

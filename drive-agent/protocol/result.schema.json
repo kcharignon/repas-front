@@ -107,6 +107,16 @@
       "minLength": 2,
       "maxLength": 80
     },
+    "packSize": {
+      "description": "Facultatif (DRV-652), sur une ligne ADDED ou CHOSEN : la contenance du produit dans l'unité de la ligne du plan (needed.unitSlug), donnée par la personne à l'écran « Vérifie la quantité ». Valeur de 0,001 à 9999, trois décimales au plus (le schéma ne sait pas le dire, les validateurs le vérifient). Pour un CHOSEN, seulement en PRIMARY.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unitSlug"],
+      "properties": {
+        "value": { "type": "number", "minimum": 0.001, "maximum": 9999 },
+        "unitSlug": { "type": "string", "pattern": "^[a-z0-9-]{1,255}$" }
+      }
+    },
     "unavailableIds": {
       "description": "Au plus 4 pour ADDED (le produit mis au panier n'en fait pas partie), 5 sinon.",
       "type": "array",
@@ -194,6 +204,7 @@
             "quantity": { "$ref": "#/definitions/quantity" },
             "usedRank": { "type": "integer", "minimum": 1, "maximum": 5 },
             "price": { "$ref": "#/definitions/price" },
+            "packSize": { "$ref": "#/definitions/packSize" },
             "unavailableIds": {
               "allOf": [
                 { "$ref": "#/definitions/unavailableIds" },
@@ -213,6 +224,7 @@
             "quantity": { "$ref": "#/definitions/quantity" },
             "placement": { "enum": ["PRIMARY", "FALLBACK", "ONCE"] },
             "searchQuery": { "$ref": "#/definitions/searchQuery" },
+            "packSize": { "$ref": "#/definitions/packSize" },
             "unavailableIds": { "$ref": "#/definitions/unavailableIds" }
           }
         },

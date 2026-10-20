@@ -20,6 +20,7 @@ export function expectedFromPlan(plan: DrivePlan): ExpectedLine[] {
     ingredientSlug: line.ingredientSlug,
     status: line.status,
     products: line.products.map((product) => product.retailerProductId),
+    ...(typeof line.needed.unitSlug === 'string' && { unitSlug: line.needed.unitSlug }),
     ...(line.status === 'KNOWN' ? { replaceable: true } : {}),
   }))
 }
@@ -50,6 +51,20 @@ function isExpected(line: ResultLine, sent: ExpectedLine | undefined): boolean {
 }
 
 /**
+ * Une contenance (DRV-652) ne vaut que dans l'unité de la ligne envoyée : celle d'une autre unité, ou pour une ligne dont le plan ne disait pas l'unité (un
+ * agent qui ne la connaît pas n'en rend jamais), est retirée de la ligne, qui reste. Le back accepte n'importe quelle unité qui existe ; une unité qui n'est pas
+ * celle de la ligne ne servirait à rien et faussait le calcul des paquets d'une autre liste.
+ */
+function inItsUnit(line: ResultLine, sent: ExpectedLine | undefined): ResultLine {
+  if ((line.outcome !== 'ADDED' && line.outcome !== 'CHOSEN') || line.packSize === undefined)
+    return line
+  if (sent?.unitSlug !== undefined && line.packSize.unitSlug === sent.unitSlug) return line
+  const { packSize: _removed, ...rest } = line
+
+  return rest
+}
+
+/**
  * Ne retient d'un résultat que ce que le plan envoyé demandait (DRV-614, revue de sécurité C1) : la page de l'enseigne partage le monde
  * JavaScript de l'agent et peut poster un faux résultat. Une ligne dont le slug n'est pas dans le plan, ou dont l'issue n'est pas
  * possible pour la ligne du plan (produit ajouté qui n'est pas l'un des siens, produit choisi pour une ligne qui n'était pas à choisir),
@@ -60,7 +75,9 @@ export function restrictToPlan(
   expected: readonly ExpectedLine[],
 ): { result: ResultMessage; ignored: number } {
   const bySlug = new Map(expected.map((line) => [line.ingredientSlug, line]))
-  const lines = result.lines.filter((line) => isExpected(line, bySlug.get(line.ingredientSlug)))
+  const lines = result.lines
+    .filter((line) => isExpected(line, bySlug.get(line.ingredientSlug)))
+    .map((line) => inItsUnit(line, bySlug.get(line.ingredientSlug)))
 
   return { result: { ...result, lines }, ignored: result.lines.length - lines.length }
 }

@@ -251,3 +251,102 @@ describe('buildPlanMessage : les rayons conseillés (DRV-642)', () => {
     expect(lineOf(message, 'sel')).not.toHaveProperty('rayonHints')
   })
 })
+
+describe('buildPlanMessage : la contenance d’un produit dans l’unité de la liste (DRV-652)', () => {
+  const neededOf = (message: ReturnType<typeof buildPlanMessage>, slug: string) =>
+    lineOf(message, slug).needed
+  const sized = () => {
+    const base = plan()
+    const farine = base.lines[0]!
+    farine.products[0] = { ...farine.products[0]!, packSize: { value: 20, unitSlug: 'gramme' } }
+
+    return base
+  }
+
+  it('sans option, rien ne part que l’agent d’avant ne connaisse : ni le slug ni le nom de l’unité, ni la contenance', () => {
+    const message = buildPlanMessage(sized(), {}, RUN_ID)
+
+    expect(neededOf(message, 'farine')).toEqual({
+      quantity: 800,
+      unitSymbol: 'g',
+      dimension: 'WEIGHT',
+      baseFactor: 1,
+    })
+    expect(JSON.stringify(message)).not.toMatch(/unitSlug|unitName|packSize/)
+    expect(() => validatePlan(message)).not.toThrow()
+  })
+
+  it('ne recopie pas une clé que le back ajoute un jour : l’agent rejetterait le plan entier', () => {
+    const base = plan()
+    ;(base.lines[0]!.needed as Record<string, unknown>).demain = 1
+    ;(base.lines[0]!.products[0] as Record<string, unknown>).demain = 1
+
+    const message = buildPlanMessage(base, {}, RUN_ID, { packSize: true })
+
+    expect(JSON.stringify(message)).not.toContain('demain')
+    expect(() => validatePlan(message)).not.toThrow()
+  })
+
+  it('avec l’option : le slug et le nom de l’unité de chaque ligne, la contenance de chaque produit (null sans réponse)', () => {
+    const message = buildPlanMessage(sized(), {}, RUN_ID, { packSize: true })
+
+    expect(neededOf(message, 'farine')).toMatchObject({ unitSlug: 'gramme', unitName: 'gramme' })
+    expect(neededOf(message, 'poivre')).toMatchObject({ unitSlug: 'piece', unitName: 'pièce' })
+    const [first, second] = lineOf(message, 'farine').products ?? []
+    expect(first?.packSize).toEqual({ value: 20, unitSlug: 'gramme' })
+    expect(second?.packSize).toBeNull()
+    expect(() => validatePlan(message)).not.toThrow()
+  })
+
+  it('un back plus ancien (sans les clés) : le plan part comme avant, même avec l’option', () => {
+    const old = plan()
+    for (const line of old.lines) {
+      const needed = line.needed as Record<string, unknown>
+      delete needed.unitSlug
+      delete needed.unitName
+      for (const product of line.products) delete (product as Record<string, unknown>).packSize
+    }
+
+    const message = buildPlanMessage(old, {}, RUN_ID, { packSize: true })
+
+    expect(neededOf(message, 'farine')).toEqual({
+      quantity: 800,
+      unitSymbol: 'g',
+      dimension: 'WEIGHT',
+      baseFactor: 1,
+    })
+    expect(() => validatePlan(message)).not.toThrow()
+  })
+
+  it.each([
+    ['un slug mal formé', { unitSlug: 'Gramme', unitName: 'gramme' }],
+    ['un nom vide', { unitSlug: 'gramme', unitName: '' }],
+    ['un nom fait d’invisibles', { unitSlug: 'gramme', unitName: '\u200B\u00AD' }],
+    ['un nom trop long', { unitSlug: 'gramme', unitName: 'x'.repeat(256) }],
+  ])(
+    '%s : ni le slug ni le nom ne partent (l’agent retombe sur « Nombre de produits »)',
+    (_name, unit) => {
+      const base = plan()
+      Object.assign(base.lines[0]!.needed, unit)
+
+      const message = buildPlanMessage(base, {}, RUN_ID, { packSize: true })
+
+      expect(neededOf(message, 'farine')).not.toHaveProperty('unitSlug')
+      expect(neededOf(message, 'farine')).not.toHaveProperty('unitName')
+      expect(() => validatePlan(message)).not.toThrow()
+    },
+  )
+
+  it('une contenance que le protocole refuserait ne part pas (null) : le plan reste valide', () => {
+    const base = plan()
+    base.lines[0]!.products[0] = {
+      ...base.lines[0]!.products[0]!,
+      packSize: { value: 12.3456, unitSlug: 'gramme' },
+    }
+
+    const message = buildPlanMessage(base, {}, RUN_ID, { packSize: true })
+
+    expect(lineOf(message, 'farine').products?.[0]?.packSize).toBeNull()
+    expect(() => validatePlan(message)).not.toThrow()
+  })
+})

@@ -1,0 +1,91 @@
+{
+  "v": 1,
+  "type": "plan",
+  "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+  "retailer": "leclerc",
+  "store": {
+    "id": "000000",
+    "host": "courses-test.leclercdrive.fr"
+  },
+  "returnPath": "/drive/retour",
+  "lines": [
+    {
+      "ingredientSlug": "cheddar",
+      "name": "Cheddar en tranche",
+      "status": "KNOWN",
+      "products": [
+        {
+          "id": "555701",
+          "label": "Fromage Cheddar Burger 20 Tranches - 340g",
+          "content": {
+            "value": 340,
+            "unit": "g"
+          },
+          "packs": null,
+          "packsStatus": "TO_CHECK",
+          "packSize": null
+        }
+      ],
+      "searchQuery": "cheddar tranche",
+      "needed": {
+        "quantity": 15,
+        "unitSymbol": "tranche",
+        "dimension": null,
+        "baseFactor": null,
+        "unitSlug": "tranche",
+        "unitName": "tranche"
+      }
+    },
+    {
+      "ingredientSlug": "emmental",
+      "name": "Emmental en tranche",
+      "status": "KNOWN",
+      "products": [
+        {
+          "id": "555702",
+          "label": "Fromage Cheddar Burger 20 Tranches - 340g",
+          "content": {
+            "value": 340,
+            "unit": "g"
+          },
+          "packs": 2,
+          "packsStatus": "COMPUTED",
+          "packSize": {
+            "value": 20,
+            "unitSlug": "tranche"
+          }
+        }
+      ],
+      "searchQuery": "cheddar tranche",
+      "needed": {
+        "quantity": 25,
+        "unitSymbol": "tranche",
+        "unitSlug": "tranche",
+        "unitName": "tranche"
+      }
+    },
+    {
+      "ingredientSlug": "sel",
+      "name": "Sel",
+      "status": "NEW",
+      "needed": {
+        "quantity": 2,
+        "unitSymbol": "cuillère à soupe",
+        "dimension": null,
+        "baseFactor": null,
+        "unitSlug": "cuillere-a-soupe",
+        "unitName": "cuillère à soupe"
+      }
+    },
+    {
+      "ingredientSlug": "poivre",
+      "name": "Poivre",
+      "status": "NEW",
+      "needed": {
+        "quantity": 1,
+        "unitSymbol": "g",
+        "unitSlug": "gramme"
+      }
+    }
+  ]
+}

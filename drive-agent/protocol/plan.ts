@@ -12,6 +12,7 @@ import {
   oneOf,
   optional,
   orNull,
+  packSize,
   productRef,
   root,
   text,
@@ -19,6 +20,7 @@ import {
   at,
   type Check,
 } from './check'
+import { UNIT_SLUG } from './pack-size'
 import {
   DIMENSIONS,
   LIMITS,
@@ -34,7 +36,14 @@ export const SLUG = /^[a-z0-9-]{1,100}$/
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const planProduct: Check = (list, index) => {
-  const product = object(list, index, ['id', 'label', 'content', 'packs', 'packsStatus'])
+  const product = object(list, index, [
+    'id',
+    'label',
+    'content',
+    'packs',
+    'packsStatus',
+    'packSize',
+  ])
   text(product, 'id', ID)
   text(product, 'label')
   optional(product, 'content', content)
@@ -48,6 +57,7 @@ const planProduct: Check = (list, index) => {
     'packsStatus',
     orNull((scope, key) => oneOf(scope, key, PACKS_STATUSES)),
   )
+  optional(product, 'packSize', orNull(packSize))
 }
 
 /** Un nombre strictement positif, fini, d'au plus `LIMITS.quantity`. */
@@ -58,9 +68,19 @@ const positive: Check = (scope, key) => {
 }
 
 const needed: Check = (scope, key) => {
-  const own = object(scope, key, ['quantity', 'unitSymbol', 'dimension', 'baseFactor'])
+  const own = object(scope, key, [
+    'quantity',
+    'unitSymbol',
+    'dimension',
+    'baseFactor',
+    'unitSlug',
+    'unitName',
+  ])
   positive(own, 'quantity')
   text(own, 'unitSymbol', undefined, LIMITS.unitSymbol)
+  // DRV-652 : l'agent ne pose la question « combien de tranches » qu'avec l'un ET l'autre ; l'un sans l'autre est valide, il retombe sur le nombre de produits
+  optional(own, 'unitSlug', (parent, name) => text(parent, name, UNIT_SLUG, LIMITS.unitSlug))
+  optional(own, 'unitName', text)
   optional(
     own,
     'dimension',

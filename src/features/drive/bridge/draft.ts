@@ -1,4 +1,4 @@
-import { LIMITS, LINE_STATUSES } from '@drive-protocol'
+import { LIMITS, LINE_STATUSES, UNIT_SLUG } from '@drive-protocol'
 import type { LineStatus, PlanMessage, ResultMessage, SetupResultMessage } from '@drive-protocol'
 
 /** La clé du brouillon de passage dans `localStorage`. */
@@ -25,6 +25,11 @@ export interface SentLine {
   ingredientSlug: string
   status: LineStatus
   products: string[]
+  /**
+   * Le slug de l'unité de la ligne envoyée (`needed.unitSlug`, DRV-652), absent quand le plan n'en portait pas (agent ou back plus ancien). Une contenance
+   * que le résultat rend pour cette ligne n'est retenue que dans cette unité (`restrictToPlan`) : la page de l'enseigne peut poster un faux résultat.
+   */
+  unitSlug?: string
 }
 
 /**
@@ -48,6 +53,7 @@ export function sentLinesOf(plan: PlanMessage): SentLine[] {
     ingredientSlug: line.ingredientSlug,
     status: line.status,
     products: (line.products ?? []).map((product) => product.id),
+    ...(line.needed?.unitSlug !== undefined && { unitSlug: line.needed.unitSlug }),
   }))
 }
 
@@ -108,9 +114,17 @@ function parseLines(value: unknown): SentLine[] | null {
   const lines: SentLine[] = []
   const slugs = new Set<string>()
   for (const item of value as unknown[]) {
-    if (!isRecord(item) || Object.keys(item).sort().join() !== 'ingredientSlug,products,status')
+    // `unitSlug` (DRV-652) est facultatif : un brouillon écrit par une version d'avant n'en a pas
+    const shape = isRecord(item) ? Object.keys(item).sort().join() : ''
+    if (
+      !isRecord(item) ||
+      (shape !== 'ingredientSlug,products,status' &&
+        shape !== 'ingredientSlug,products,status,unitSlug')
+    )
       return null
-    const { ingredientSlug, status, products } = item
+    const { ingredientSlug, status, products, unitSlug } = item
+    if (unitSlug !== undefined && (typeof unitSlug !== 'string' || !UNIT_SLUG.test(unitSlug)))
+      return null
     if (typeof ingredientSlug !== 'string' || !SLUG.test(ingredientSlug)) return null
     if (slugs.has(ingredientSlug)) return null
     if (!(LINE_STATUSES as readonly unknown[]).includes(status)) return null
@@ -125,6 +139,7 @@ function parseLines(value: unknown): SentLine[] | null {
       ingredientSlug,
       status: status as LineStatus,
       products: products as string[],
+      ...(typeof unitSlug === 'string' && { unitSlug }),
     })
   }
 

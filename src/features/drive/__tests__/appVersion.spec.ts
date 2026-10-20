@@ -5,8 +5,10 @@ import {
   RAYON_HINTS_APP_VERSION,
   compareVersions,
   isDriveAppVersionEnough,
+  isPackSizeAppVersion,
   isRayonHintsAppVersion,
   isReportableAppVersion,
+  PACK_SIZE_APP_VERSION,
   offersAppUpdate,
 } from '../appVersion'
 
@@ -155,5 +157,31 @@ describe('offersAppUpdate (DRV-637 : le bandeau de « Moi »)', () => {
 
   it('une construction de développement est le code courant : pas de bandeau', () => {
     expect(offersAppUpdate('0.0.0-dev', facts('0.1.10', '0.1.9', true))).toBe(false)
+  })
+})
+
+describe('isPackSizeAppVersion (DRV-652)', () => {
+  it.each([PACK_SIZE_APP_VERSION, '0.1.26', '0.2.0', '1.0.0', '0.0.0-dev'])(
+    '%s connaît la contenance d’un produit',
+    (version) => {
+      expect(isPackSizeAppVersion(version)).toBe(true)
+    },
+  )
+
+  it.each(['0.1.24', '0.1.23', '0.1.15', '0.1.10', null, undefined, '', 'abc'])(
+    '%s ne la connaît pas : le plan part sans les clés que son agent refuserait',
+    (version) => {
+      expect(isPackSizeAppVersion(version)).toBe(false)
+    },
+  )
+
+  it('compare nombre par nombre, jamais en texte', () => {
+    expect(isPackSizeAppVersion('0.1.100')).toBe(true)
+  })
+
+  it('n’est jamais plus bas que la version qui connaît les rayons conseillés', () => {
+    expect(compareVersions(PACK_SIZE_APP_VERSION, RAYON_HINTS_APP_VERSION)).toBeGreaterThanOrEqual(
+      0,
+    )
   })
 })
