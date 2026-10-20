@@ -15,7 +15,8 @@
                         "content": {
                             "value": 1,
                             "unit": "kg"
-                        }
+                        },
+                        "packSize": null
                     }
                 },
                 {
@@ -28,7 +29,8 @@
                         "content": {
                             "value": 500,
                             "unit": "g"
-                        }
+                        },
+                        "packSize": null
                     }
                 }
             ],
@@ -51,7 +53,8 @@
                         "content": {
                             "value": 50,
                             "unit": "cl"
-                        }
+                        },
+                        "packSize": null
                     }
                 }
             ],
@@ -64,7 +67,8 @@
                     "content": {
                         "value": 1,
                         "unit": "l"
-                    }
+                    },
+                    "packSize": null
                 }
             ],
             "updatedAt": "2026-10-18T09:20:00+00:00",
@@ -85,6 +89,24 @@
                         "content": {
                             "value": 1,
                             "unit": "kg"
+                        },
+                        "packSize": null
+                    }
+                },
+                {
+                    "rank": 2,
+                    "product": {
+                        "productId": "5e335da5-631e-5452-b9e6-f6fa9ff4c988",
+                        "retailerProductId": "555402",
+                        "ean": null,
+                        "label": "Sel fin 250 g",
+                        "content": {
+                            "value": 250,
+                            "unit": "g"
+                        },
+                        "packSize": {
+                            "value": 14,
+                            "unitSlug": "cuillere-a-soupe"
                         }
                     }
                 }

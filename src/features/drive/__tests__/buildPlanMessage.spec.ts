@@ -68,6 +68,42 @@ describe('buildPlanMessage', () => {
     })
   })
 
+  it('ne recopie que les clés du protocole : une clé ajoutée par le back, à tous les niveaux, ne casse jamais l’envoi', () => {
+    // La forme actuelle du back (DRV-652 : `unitSlug`, `unitName`, `packSize`) plus une clé inventée à chaque niveau
+    const future = plan() as unknown as { lines: Record<string, unknown>[] }
+    for (const line of future.lines) {
+      line.futureLineKey = 'x'
+      Object.assign(line.needed as object, { futureNeededKey: 1 })
+      for (const product of line.products as object[])
+        Object.assign(product, {
+          packSize: { value: 20, unitSlug: 'tranche' },
+          futureProductKey: 'x',
+        })
+      for (const rejected of line.rejected as object[])
+        Object.assign(rejected, { futureRejectedKey: 'x' })
+    }
+
+    for (const changes of [{}, { farine: 'REPLACE', lait: 'SKIP' } as const]) {
+      const message = buildPlanMessage(
+        future as unknown as ReturnType<typeof plan>,
+        changes,
+        RUN_ID,
+        {
+          rayonHints: true,
+        },
+      )
+
+      expect(() => validatePlan(message)).not.toThrow()
+      expect(JSON.stringify(message)).not.toMatch(/future|unitSlug|unitName|packSize/)
+    }
+    expect(lineOf(buildPlanMessage(plan(), {}, RUN_ID), 'farine').needed).toEqual({
+      quantity: 800,
+      unitSymbol: 'g',
+      dimension: 'WEIGHT',
+      baseFactor: 1,
+    })
+  })
+
   it('transmet « à vérifier » : packs nul et statut TO_CHECK', () => {
     const [beurre] = (lineOf(buildPlanMessage(plan(), {}, RUN_ID), 'beurre').products ?? []) as {
       packs: number | null

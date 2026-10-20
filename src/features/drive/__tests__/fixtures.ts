@@ -16,6 +16,7 @@ const product = (
   content: { value: 1000, unit: 'g' },
   packs: 1,
   packsStatus: 'COMPUTED',
+  packSize: null,
   ...extra,
 })
 
@@ -27,7 +28,14 @@ const known = (
 ): DrivePlanLine => ({
   ingredientSlug: slug,
   ingredientName: name,
-  needed: { quantity: 800, unitSymbol: 'g', dimension: 'WEIGHT', baseFactor: 1 },
+  needed: {
+    quantity: 800,
+    unitSymbol: 'g',
+    dimension: 'WEIGHT',
+    baseFactor: 1,
+    unitSlug: 'gramme',
+    unitName: 'gramme',
+  },
   status: 'KNOWN',
   products,
   rejected,
@@ -38,7 +46,14 @@ const known = (
 const fresh = (slug: string, name: string): DrivePlanLine => ({
   ingredientSlug: slug,
   ingredientName: name,
-  needed: { quantity: 2, unitSymbol: 'pièce', dimension: 'COUNT', baseFactor: 1 },
+  needed: {
+    quantity: 2,
+    unitSymbol: 'pièce',
+    dimension: 'COUNT',
+    baseFactor: 1,
+    unitSlug: 'piece',
+    unitName: 'pièce',
+  },
   status: 'NEW',
   products: [],
   rejected: [],

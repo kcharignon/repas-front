@@ -1,4 +1,4 @@
-import type { PlanLine, PlanMessage } from '@drive-protocol'
+import type { NeededQuantity, PlanLine, PlanMessage } from '@drive-protocol'
 import { LIMITS, PROTOCOL_VERSION, RETURN_PATH } from '@drive-protocol'
 
 import type { DrivePlan, DrivePlanLine } from '@/api'
@@ -42,6 +42,20 @@ export interface PlanOptions {
   rayonHints?: boolean
 }
 
+/**
+ * La quantité demandée, par liste blanche : seules les clés que le protocole connaît partent à l'agent, jamais l'objet du back en bloc
+ * (le validateur refuse toute clé inconnue et le back en ajoute sans prévenir : `unitSlug`, `unitName`…). Le plan ne renvoie jamais
+ * de symbole vide (le nom de l'unité à défaut).
+ */
+function neededOf(needed: DrivePlanLine['needed']): NeededQuantity {
+  return {
+    quantity: needed.quantity,
+    unitSymbol: needed.unitSymbol,
+    ...(needed.dimension === undefined ? {} : { dimension: needed.dimension }),
+    ...(needed.baseFactor === undefined ? {} : { baseFactor: needed.baseFactor }),
+  }
+}
+
 function translate(line: DrivePlanLine, changes: LineChanges, options: PlanOptions): PlanLine {
   const status = effectiveStatus(line, changes)
   const head = { ingredientSlug: line.ingredientSlug, name: line.ingredientName }
@@ -51,8 +65,7 @@ function translate(line: DrivePlanLine, changes: LineChanges, options: PlanOptio
     id: retailerProductId,
     label,
   }))
-  // La quantité demandée est recopiée telle quelle : le plan ne renvoie jamais de symbole vide (le nom de l'unité à défaut)
-  const common = { ...head, rejected, searchQuery: line.searchQuery, needed: line.needed }
+  const common = { ...head, rejected, searchQuery: line.searchQuery, needed: neededOf(line.needed) }
   // Les rayons conseillés rangent la liste de l'écran de choix : ils ne servent qu'aux lignes que l'utilisateur choisit sur le site
   const hints = options.rayonHints === true ? rayonHintsOf(line) : []
   const rayons = hints.length > 0 ? { rayonHints: hints } : {}

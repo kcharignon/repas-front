@@ -13,8 +13,16 @@ const product = (rank: number, id: string, label: string, packs: number | null =
   content: { value: 1000, unit: 'g' },
   packs,
   packsStatus: packs === null ? 'TO_CHECK' : 'COMPUTED',
+  packSize: null,
 })
-const need = { quantity: 800, unitSymbol: 'g', dimension: 'WEIGHT', baseFactor: 1 }
+const need = {
+  quantity: 800,
+  unitSymbol: 'g',
+  dimension: 'WEIGHT',
+  baseFactor: 1,
+  unitSlug: 'gramme',
+  unitName: 'gramme',
+}
 const known = (slug: string, name: string, products: unknown[], rejected: unknown[] = []) => ({
   ingredientSlug: slug,
   ingredientName: name,
@@ -27,7 +35,13 @@ const known = (slug: string, name: string, products: unknown[], rejected: unknow
 const fresh = (slug: string, name: string, status = 'NEW') => ({
   ingredientSlug: slug,
   ingredientName: name,
-  needed: { ...need, unitSymbol: 'pièce', dimension: 'COUNT' },
+  needed: {
+    ...need,
+    unitSymbol: 'pièce',
+    dimension: 'COUNT',
+    unitSlug: 'piece',
+    unitName: 'pièce',
+  },
   status,
   products: [],
   rejected: [],
