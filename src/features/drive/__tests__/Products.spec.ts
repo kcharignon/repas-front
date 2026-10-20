@@ -87,6 +87,8 @@ const cheddar = {
 const unitList = [
   { slug: 'tranche', name: 'tranche', symbol: '', dimension: null, baseFactor: null },
   { slug: 'gramme', name: 'gramme', symbol: 'g', dimension: 'WEIGHT', baseFactor: 1 },
+  { slug: 'unite', name: 'unité', symbol: '', dimension: 'COUNT', baseFactor: 1 },
+  { slug: 'oeuf', name: 'œuf', symbol: '', dimension: 'COUNT', baseFactor: 1 },
 ]
 
 const store = { id: '123456', baseUrl: 'https://exemple.leclercdrive.fr/magasin-123456-123456' }
@@ -751,5 +753,23 @@ describe('Mes produits : la contenance d’un produit dans l’unité de la list
     await flushPromises()
 
     expect(buttonsOf(wrapper, 'Corriger')[0]?.attributes('disabled')).toBeDefined()
+  })
+
+  it.each([
+    ['unite', 'Combien d’unités y a-t-il dans ce produit ?'],
+    ['oeuf', 'Combien d’œufs y a-t-il dans ce produit ?'],
+    ['tranche', 'Combien de tranches y a-t-il dans ce produit ?'],
+    ['gramme', 'Combien de grammes y a-t-il dans ce produit ?'],
+  ])('la question de « Corriger » élide « de » : %s', async (unitSlug, question) => {
+    const choice = {
+      ...cheddar,
+      accepted: [{ rank: 1, product: { ...E, packSize: { value: 6, unitSlug } } }],
+    }
+    const { wrapper } = await detail({ 'GET /api/v1/drive/choices': list(choice) }, 'cheddar')
+
+    await press(wrapper, 'Corriger')
+
+    expect(wrapper.text()).toContain(question)
+    expect(wrapper.text()).not.toContain('Combien de unités')
   })
 })

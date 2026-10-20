@@ -6,6 +6,7 @@ export { cleanSearchQuery, cleanText } from './clean-text'
 export { ProtocolError } from './error'
 export {
   isPackValue,
+  ofUnits,
   packsFromSize,
   parsePackValue,
   pluralOf,

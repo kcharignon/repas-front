@@ -3,7 +3,15 @@
 // bornes fait refuser TOUT le lot de choix : ces règles sont éprouvées à la table.
 import { describe, expect, it } from 'vitest'
 
-import { isPackValue, packsFromSize, parsePackValue, toPackSize, UNIT_SLUG } from '../protocol'
+import {
+  isPackValue,
+  ofUnits,
+  packsFromSize,
+  parsePackValue,
+  pluralOf,
+  toPackSize,
+  UNIT_SLUG,
+} from '../protocol'
 
 describe('isPackValue : de 0,001 à 9 999, trois décimales au plus', () => {
   it.each([0.001, 0.5, 1, 12.5, 12.345, 20, 340, 9998.999, 9999])('accepte %s', (value) => {
@@ -143,5 +151,55 @@ describe('packsFromSize : ceil(quantité ÷ contenance), tolérance 1e-9, de 1 �
     [15, Number.POSITIVE_INFINITY],
   ])('%s pour %s : pas de calcul', (quantity, size) => {
     expect(packsFromSize(quantity, size)).toBeNull()
+  })
+})
+
+describe('ofUnits : « de » devant un nom d’unité, élidé devant une voyelle et un « h » muet', () => {
+  it.each([
+    ['tranches', 'de tranches'],
+    ['sachets', 'de sachets'],
+    ['grammes', 'de grammes'],
+    ['pièces', 'de pièces'],
+    ['cuillères à soupe', 'de cuillères à soupe'],
+    ['boîtes', 'de boîtes'],
+    ['kilos', 'de kilos'],
+    ['unités', 'd’unités'],
+    ['œufs', 'd’œufs'],
+    ['Œufs', 'd’Œufs'],
+    ['oeufs', 'd’oeufs'],
+    ['oignons', 'd’oignons'],
+    ['assiettes', 'd’assiettes'],
+    ['épis', 'd’épis'],
+    ['écorces', 'd’écorces'],
+    ['îlots', 'd’îlots'],
+    ['ampoules', 'd’ampoules'],
+    ['yaourts', 'd’yaourts'],
+    ['heures', 'd’heures'],
+    ['herbes', 'd’herbes'],
+    ['huîtres', 'd’huîtres'],
+    ['hôtes', 'd’hôtes'],
+    ['hachis', 'de hachis'],
+    ['haricots', 'de haricots'],
+    ['hamburgers', 'de hamburgers'],
+    ['homards', 'de homards'],
+    ['hâtes', 'de hâtes'],
+    ['  unités  ', 'd’unités'],
+  ])('« %s » : « %s »', (units, expected) => {
+    expect(ofUnits(units)).toBe(expected)
+  })
+
+  it('la question ne dit jamais « de » devant une voyelle', () => {
+    for (const unit of [
+      'unité',
+      'œuf',
+      'oignon',
+      'assiette',
+      'épi',
+      'yaourt',
+      'heure',
+      'ampoule',
+    ]) {
+      expect(ofUnits(pluralOf(unit))).toMatch(/^d’/)
+    }
   })
 })
