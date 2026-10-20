@@ -20,11 +20,9 @@ test('remplit le panier à la cadence du chantier, avec des requêtes de la form
     skip('huile', 'Huile'),
   ])
 
-  // When : l'utilisateur lit le récapitulatif, puis commence
+  // When : le plan arrive ; l'agent démarre tout seul, sans écran de confirmation ni geste de l'utilisateur
   await openWithFragment(page, fake, agentCode, plan)
-  await expect(page.getByRole('heading', { name: 'Prêt à remplir ton panier' })).toBeVisible()
-  expect(fake.paced(), 'rien ne part avant « Commencer »').toEqual([])
-  await page.getByRole('button', { name: 'Commencer' }).click()
+  await expect(page.getByRole('button', { name: 'Commencer' })).toHaveCount(0)
   await returnsToRepas(page, fake)
 
   // Then : le panier du faux site a les quantités absolues du plan, une recherche puis une écriture par ligne
@@ -65,7 +63,6 @@ test('prend le produit suivant quand le préféré est en rupture, et le dit à 
 
   // When
   await openWithFragment(page, fake, agentCode, plan)
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await returnsToRepas(page, fake)
 
   // Then : le produit en rupture est tenté une seule fois (le panier le refuse, DRV-635), puis le suivant est pris, au prix de la promotion
@@ -101,7 +98,6 @@ test('met la quantité demandée au panier même quand il est déjà garni, sans
     agentCode,
     planOf([known('farine', 'Farine', [product(1000001, 3)])]),
   )
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await returnsToRepas(page, fake)
 
   // Then : la quantité monte à celle du plan (3) et le sel est resté
@@ -123,7 +119,6 @@ test('ne réduit jamais une quantité déjà au panier : 5 déjà pour un plan d
     agentCode,
     planOf([known('farine', 'Farine', [product(1000001, 2)])]),
   )
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
   // Then : le panier n'a pas bougé, sans une seule écriture, et la fin dit ce qui a été conservé (il y a quelque chose à lire : l'écran de fin reste)
@@ -156,7 +151,6 @@ test('rejouer un envoi déjà fait n’écrit plus rien : le panier a déjà les
       known('sucre', 'Sucre', [product(1000006, 1)]),
     ]),
   )
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await returnsToRepas(page, fake)
 
   // Then : une recherche par ligne, aucune écriture, aucune mention
@@ -178,7 +172,6 @@ test('demande la quantité quand elle est à vérifier, et passe la ligne si l�
 
   // When : 4 farines, puis on passe le sucre
   await openWithFragment(page, fake, agentCode, plan)
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByRole('heading', { name: 'Vérifie la quantité' })).toBeVisible()
   await page.getByLabel('Nombre de produits (de 1 à 99)').fill('4')
   await page.getByRole('button', { name: 'Valider' }).click()
@@ -205,7 +198,6 @@ test('la quantité se tape par-dessus le « 1 » prérempli (jamais « 14 »), e
   const needed = { quantity: 200, unitSymbol: 'g', dimension: 'WEIGHT', baseFactor: 1 } as const
   const plan = planOf([known('farine', 'Farine', [product(1000001, null)], { needed })])
   await openWithFragment(page, fake, agentCode, plan)
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByRole('heading', { name: 'Vérifie la quantité' })).toBeVisible()
   const input = page.getByLabel('Nombre de produits (de 1 à 99)')
 
@@ -228,7 +220,6 @@ test('toucher le champ de la quantité avant de taper garde « 1 » sélectionn�
 }) => {
   const plan = planOf([known('farine', 'Farine', [product(1000001, null)])])
   await openWithFragment(page, fake, agentCode, plan)
-  await page.getByRole('button', { name: 'Commencer' }).click()
   const input = page.getByLabel('Nombre de produits (de 1 à 99)')
   await expect(input).toHaveValue('1')
 
@@ -259,7 +250,6 @@ test('met au panier le nombre calculé sur le contenu lu sur le site, pas celui 
 
   // When
   await openWithFragment(page, fake, agentCode, plan)
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByRole('heading', { name: 'Le panier est rempli' })).toBeVisible()
 
   // Then : 3 farines (le contenu en direct fait foi), 2 sucres (inchangé), sans question ni requête de plus
@@ -296,7 +286,6 @@ test('garde le nombre du plan quand le contenu lu sur le site ne se compare pas,
 
   // When
   await openWithFragment(page, fake, agentCode, plan)
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await returnsToRepas(page, fake)
 
   // Then : comme avant, le plan fait foi, et rien n'est signalé
@@ -305,26 +294,33 @@ test('garde le nombre du plan quand le contenu lu sur le site ne se compare pas,
   expectPoliteAgent(fake)
 })
 
-test('annule au récapitulatif : rien ne part vers le site, Repas est prévenu', async ({
+test('« Arrêter » pendant le passage : l’agent finit l’article en cours, puis Repas est prévenu', async ({
   page,
   fake,
   agentCode,
 }) => {
+  // Given : un site lent, pour que l'écran de progression reste affiché
+  fake.setBehavior({ latencyMs: 1500 })
+
   // When
   await openWithFragment(
     page,
     fake,
     agentCode,
-    planOf([known('farine', 'Farine', [product(1000001, 3)])]),
+    planOf([
+      known('farine', 'Farine', [product(1000001, 3)]),
+      known('sucre', 'Sucre', [product(1000006, 1)]),
+    ]),
   )
-  await page.getByRole('button', { name: 'Annuler' }).click()
-  await expect(page.getByRole('heading', { name: 'Tu as arrêté l’envoi' })).toBeVisible()
+  await page.getByRole('button', { name: 'Arrêter' }).click()
+  await expect(page.getByRole('heading', { name: 'Tu as arrêté l’envoi' })).toBeVisible({
+    timeout: 30_000,
+  })
   await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
 
-  // Then
-  expect(await returnedResult(page, fake)).toMatchObject({ outcome: 'aborted', lines: [] })
-  expect(fake.paced()).toEqual([])
-  expect(fake.cart()).toEqual({})
+  // Then : le second article n'a pas été touché
+  expect(await returnedResult(page, fake)).toMatchObject({ outcome: 'aborted' })
+  expect(fake.cart()).not.toHaveProperty('1000006')
 })
 
 for (const [name, message] of [

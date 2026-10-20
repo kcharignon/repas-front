@@ -272,6 +272,19 @@ export class RunStore {
     }
   }
 
+  /**
+   * L'agent a-t-il déjà suivi « Commencer mes courses » pour cet envoi dans cet onglet (ou ne peut-il pas le noter, sans stockage) ? Une lecture,
+   * qui ne note rien : `markEntered` reste le seul geste qui autorise un clic.
+   */
+  hasEntered(runId: string): boolean {
+    try {
+      const storage = this.storage
+      return !storage || storage.getItem(ENTRY_KEY) === runId
+    } catch {
+      return true
+    }
+  }
+
   /** Garde les raisons de cet envoi pour le diagnostic, à la place de celles du précédent. */
   keepReasons(reasons: readonly LastReason[]): void {
     try {

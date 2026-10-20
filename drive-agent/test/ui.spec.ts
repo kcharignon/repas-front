@@ -334,6 +334,20 @@ describe('progression', () => {
     expect(shadow().textContent).not.toContain('Ton panier se remplit')
   })
 
+  it('porte la phrase de synthèse sous le titre quand le passage la donne, et rien sinon (plus d’écran de confirmation)', () => {
+    const handle = open()
+    const lead = '2 articles : 1 est déjà choisi, 1 est à choisir sur Leclerc.'
+    void handle.show('progress', { ...props, lead })
+
+    expect(shadow().querySelector('p.lead')?.textContent).toBe(lead)
+    expect(shadow().querySelector('h1')?.nextElementSibling?.textContent).toBe(lead)
+    expect(buttons().map((button) => button.textContent)).toEqual(['Arrêter'])
+
+    void handle.show('progress', props)
+
+    expect(shadow().querySelector('p.lead')).toBeNull()
+  })
+
   it('se met à jour sans refaire l’écran et ne garde que les cinq dernières actions', () => {
     const handle = open()
     void handle.show('progress', props)

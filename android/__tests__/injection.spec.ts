@@ -281,7 +281,7 @@ describe('de bout en bout avec l’agent réel dans jsdom', () => {
       JSON.parse(channel.postMessage.mock.calls[1]?.[0] ?? ''),
     ) as ResultMessage
     expect(result).toMatchObject({ type: 'result', outcome: 'completed' })
-    expect(screens.screens()).toEqual(['summary', 'progress'])
+    expect(screens.screens()).toEqual(['progress'])
   })
 
   it('la commande de diagnostic de l’application ouvre le diagnostic, sans rien renvoyer', async () => {

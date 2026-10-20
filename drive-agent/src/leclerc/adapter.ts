@@ -277,8 +277,8 @@ export interface LeclercDeps extends PacerDeps {
   pageLinks?: () => PageLinks
 }
 
-/** Le temps laissé à une navigation pour quitter la page avant de la dire sans effet. */
-export const ENTRY_WAIT_MS = 15_000
+/** Le temps laissé à une navigation pour quitter la page avant de la dire sans effet (le clic ou le lien d'entrée, 0.39.0 : l'utilisateur ne doit pas attendre davantage). */
+export const ENTRY_WAIT_MS = 3_000
 
 const PRODUCT_ID = /^[0-9]{1,12}$/
 /** La ville du chemin du magasin (`/magasin-N-N-<Ville>`) : un libellé de rayon qui la porte est écarté. */
@@ -450,7 +450,12 @@ export class LeclercAdapter implements RetailerAdapter {
   /** Les formes de « Commencer mes courses » : le texte de la page, et le DOM pour savoir si le bouton se clique vraiment. */
   private entryFacts(): EntryFacts {
     const facts = entryFacts(this.deps.pageText(), this.deps.location)
-    return { ...facts, clickable: facts.clickable && this.findButton() !== null }
+    const button = this.findButton() !== null
+    // Le texte de la page ne montre pas toujours un bouton que le DOM a (attributs très longs, élément qui n'est ni lien ni bouton) : le DOM tranche.
+    if (!facts.start.present && button) {
+      return { start: { present: true, shape: null, where: null }, clickable: true }
+    }
+    return { ...facts, clickable: facts.clickable && button }
   }
 
   private findButton(): StartButton | null {
@@ -469,6 +474,10 @@ export class LeclercAdapter implements RetailerAdapter {
       // Le texte de la page dit « bouton » : encore faut-il le trouver, cliquable, dans le DOM.
       this.entryButton = this.findButton()
       if (this.entryButton === null) reading = { kind: 'REFUSED' }
+    } else if (reading.kind === 'NONE') {
+      // Le texte de la page n'en montre pas (élément qui n'est ni lien ni bouton, attributs très longs) : le DOM peut avoir le bouton à toucher.
+      this.entryButton = this.findButton()
+      if (this.entryButton !== null) reading = { kind: 'BUTTON' }
     }
     return reading
   }

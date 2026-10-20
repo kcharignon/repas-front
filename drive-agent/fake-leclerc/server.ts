@@ -27,6 +27,7 @@ import {
   type CartAction,
   type EmptyForm,
   type HomeForm,
+  type WelcomeForm,
   type Session,
 } from './pages.ts'
 import { PHOTO_HOST, photoReply } from './photos.ts'
@@ -86,6 +87,11 @@ export interface Behavior {
    * `null` retire le défaut.
    */
   storeHomeTitle?: 'not-found' | null
+  /**
+   * La fenêtre d'accueil du magasin sur sa page (« <magasin> vous propose le(s) service(s) » et « Commencer mes courses ») : `button` (le bouton la ferme),
+   * `human` (idem, mais un clic de programme est ignoré : `event.isTrusted`) ou `inert` (le bouton ne fait rien). `null` ou absent : pas de fenêtre.
+   */
+  storeWelcome?: WelcomeForm | null
   /**
    * Le code HTTP (404, 403, 503…) que le faux site renvoie, avec sa page d'erreur générique, à la racine de l'enseigne (`HOME_HOST`) : la page où
    * l'application ouvre un plan (ticket E de l'audit du 2026-10-18), refusée par le site (page d'erreur, défi anti-robot servi en 403). Le reste
@@ -642,7 +648,7 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
         return send(res, behavior.storeHomeStatus, errorPage(), HTML)
       }
       entry.status = 200
-      const home = homePage(cart, sessionAfter(pacedCount))
+      const home = homePage(cart, sessionAfter(pacedCount), behavior.storeWelcome ?? null)
       return send(
         res,
         200,

@@ -24,7 +24,6 @@ for (const kind of ['forbidden', 'too-many-requests'] satisfies FaultKind[]) {
 
     // When
     await openWithFragment(page, fake, agentCode, THREE_LINES)
-    await page.getByRole('button', { name: 'Commencer' }).click()
     // Rien n'est mis au panier : « Le panier n'est pas rempli », pas « en partie » (DRV-626)
     await expect(page.getByRole('heading', { name: 'Le panier n’est pas rempli' })).toBeVisible()
 
@@ -61,7 +60,6 @@ test.describe('une page de défi de l’anti-robot', () => {
     await openWithFragment(page, fake, agentCode, THREE_LINES)
 
     // When
-    await page.getByRole('button', { name: 'Commencer' }).click()
 
     // Then : le message dit quoi faire, sans rien rendre à Repas
     await expect(
@@ -113,7 +111,6 @@ test.describe('une page de défi de l’anti-robot', () => {
   }) => {
     fake.setBehavior({ fault: CHALLENGE })
     await openWithFragment(page, fake, agentCode, THREE_LINES)
-    await page.getByRole('button', { name: 'Commencer' }).click()
     await expect(
       page.getByRole('heading', { name: 'Leclerc demande une vérification' }),
     ).toBeVisible()
@@ -145,7 +142,6 @@ test.describe('une page de défi de l’anti-robot', () => {
     // Given : le passage attend devant le défi, la farine est faite
     fake.setBehavior({ fault: CHALLENGE })
     await openWithFragment(page, fake, agentCode, THREE_LINES)
-    await page.getByRole('button', { name: 'Commencer' }).click()
     await expect(
       page.getByRole('heading', { name: 'Leclerc demande une vérification' }),
     ).toBeVisible()
@@ -187,7 +183,6 @@ test('interrompt une requête que le site retient (20 s, une reprise), dit que L
   )
 
   // When
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByRole('heading', { name: 'Le panier est rempli en partie' })).toBeVisible({
     timeout: 100_000,
   })
@@ -280,7 +275,6 @@ for (const [name, fault, cause] of [
       agentCode,
       planOf([known('farine', 'Farine', [product(1000001, 3)])]),
     )
-    await page.getByRole('button', { name: 'Commencer' }).click()
 
     // Then : un 404 n'est pas un blocage (aucune seconde tentative) et rien n'est mis au panier
     await expect(page.getByRole('heading', { name: 'L’envoi s’est arrêté' })).toBeVisible()
@@ -301,7 +295,6 @@ test('s’arrête aussitôt quand le compte n’est plus connecté', async ({ pa
 
   // When
   await openWithFragment(page, fake, agentCode, THREE_LINES)
-  await page.getByRole('button', { name: 'Commencer' }).click()
 
   // Then : une seule requête est partie, le conseil est de se reconnecter
   await expect(page.getByText('Connecte-toi à Leclerc')).toBeVisible()
@@ -348,7 +341,6 @@ test('un client connecté qui devient visiteur en cours de passage : la recherch
 
   // When
   await openWithFragment(page, fake, agentCode, THREE_LINES)
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByText('Connecte-toi à Leclerc')).toBeVisible()
 
   // Then : la farine est au panier, la ligne suivante a été cherchée puis refusée, rien d'autre n'est parti
@@ -369,7 +361,6 @@ test('reprend après un rechargement de la page sans refaire les lignes déjà f
 }) => {
   // Given : un passage en cours, la première ligne est faite
   await openWithFragment(page, fake, agentCode, THREE_LINES)
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByText('Farine : ajouté')).toBeVisible()
   expect(fake.cart()).toEqual({ 1000001: 3 })
 

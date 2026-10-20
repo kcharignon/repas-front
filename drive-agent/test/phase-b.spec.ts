@@ -201,7 +201,7 @@ describe('un nouvel ingrédient', () => {
 
     // Then
     expect(test.adapter.calls).toEqual(['find poivre', 'cart 2000001 2'])
-    expect(test.screens.screens()).toEqual(['summary', 'progress', 'chooser', 'progress'])
+    expect(test.screens.screens()).toEqual(['progress', 'chooser', 'progress'])
     expect(expectConform(test.sent[0])).toMatchObject({ outcome: 'completed' })
     expect(lineOf(test.sent[0])).toEqual({
       ingredientSlug: 'poivre',
@@ -1499,7 +1499,6 @@ describe('les erreurs du site', () => {
     // Then : la demande a été faite une fois, la ligne est de nouveau cherchée et choisie ; rien n'a échoué
     expect(asked).toEqual(['challenge'])
     expect(test.screens.screens()).toEqual([
-      'summary',
       'progress',
       'chooser',
       'challenge',

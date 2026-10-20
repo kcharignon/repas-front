@@ -165,3 +165,27 @@ export async function openWithBridge(
 export async function returnsToRepas(page: Page, fake: FakeLeclerc): Promise<void> {
   await page.waitForURL((url) => url.origin === fake.repas && url.pathname === '/drive/retour')
 }
+
+/**
+ * Compte les gestes de l'utilisateur dans la page (toucher, clic, touche du clavier : tout événement de confiance, `isTrusted`) depuis l'appel,
+ * y compris après un changement de page. À appeler AVANT d'ouvrir la page. Un clic fait par le script de l'agent n'est pas de confiance : il
+ * ne compte pas, comme dans la vraie page. C'est la preuve de « une intention = un clic » : de l'arrivée du plan à l'écran de choix d'un
+ * produit, le compte reste zéro.
+ */
+export async function trackInteractions(page: Page): Promise<{ count: () => number }> {
+  let count = 0
+  await page.exposeFunction('__repasInteraction', () => void (count += 1))
+  await page.addInitScript(() => {
+    for (const type of ['click', 'keydown']) {
+      document.addEventListener(
+        type,
+        (event) => {
+          if (event.isTrusted)
+            (window as unknown as { __repasInteraction(): void }).__repasInteraction()
+        },
+        true,
+      )
+    }
+  })
+  return { count: () => count }
+}

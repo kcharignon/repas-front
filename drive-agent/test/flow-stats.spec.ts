@@ -78,16 +78,10 @@ describe('les compteurs du résultat', () => {
     expect(sent[0]?.stats).toEqual({ requests: 6, errors: 1, blocks: 1 })
   })
 
-  it('manquent quand aucune requête n’est partie : annulation au récapitulatif, lignes sans action', async () => {
-    const cancelled = makeFlow({
-      ui: fakeUi({ summary: () => 'cancel' }).ui,
-      adapter: fakeAdapter(SHELF).adapter,
-    })
-    await cancelled.flow.start(plan(lines()))
+  it('manquent quand aucune requête n’est partie : lignes sans action', async () => {
     const quiet = makeFlow({ ui: fakeUi().ui, adapter: fakeAdapter().adapter })
     await quiet.flow.start(plan([home('sel')]))
 
-    expect(cancelled.sent[0]).not.toHaveProperty('stats')
     expect(quiet.sent[0]).not.toHaveProperty('stats')
   })
 
@@ -175,7 +169,7 @@ describe('les compteurs d’un passage repris après un rechargement', () => {
 
     await flow.start(plan([home('sel')]))
 
-    expect(screens.screens()[0]).toBe('summary')
+    expect(screens.screens()[0]).toBe('progress')
   })
 })
 

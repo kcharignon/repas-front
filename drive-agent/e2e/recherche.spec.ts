@@ -34,7 +34,6 @@ test.describe('un nouvel ingrédient (phase B)', () => {
     )
 
     // When
-    await page.getByRole('button', { name: 'Commencer' }).click()
 
     // Then : la liste vient de la recherche « oeuf », et le dit ; « Chercher autre chose » est toujours là
     await expect(page.getByText('Résultats pour « oeuf » (rien trouvé pour « œuf »)')).toBeVisible()
@@ -66,7 +65,6 @@ test.describe('un nouvel ingrédient (phase B)', () => {
     await openWithFragment(page, fake, agentCode, planOf([fresh('sel', 'Sel')]))
 
     // When
-    await page.getByRole('button', { name: 'Commencer' }).click()
 
     // Then
     await expect(page.getByText('Résultats pour « sel »', { exact: true })).toBeVisible()
@@ -88,7 +86,6 @@ test.describe('un nouvel ingrédient (phase B)', () => {
     )
 
     // When
-    await page.getByRole('button', { name: 'Commencer' }).click()
 
     // Then
     await expect(
@@ -116,7 +113,6 @@ test.describe('un nouvel ingrédient (phase B)', () => {
     )
 
     // When
-    await page.getByRole('button', { name: 'Commencer' }).click()
     await expect(page.getByText(`Aucun produit trouvé pour « ${name} ».`)).toBeVisible()
 
     // Then : le nom, puis ses quatre formes dans l'ordre (minuscules, singulier, sans « de », premier mot)
@@ -141,7 +137,6 @@ test.describe('un nouvel ingrédient (phase B)', () => {
     // Given : le moteur strict ; l'utilisateur tape « œuf », qu'il pense bien écrit
     fake.setBehavior({ strictSearch: true })
     await openWithFragment(page, fake, agentCode, planOf([fresh('sel', 'Sel')]))
-    await page.getByRole('button', { name: 'Commencer' }).click()
     await expect(page.getByText('Résultats pour « sel »', { exact: true })).toBeVisible()
 
     // When
@@ -169,7 +164,6 @@ test.describe('un produit connu (phase A)', () => {
     await openWithFragment(page, fake, agentCode, planOf([known('oeufs', 'Oeufs', [eggs])]))
 
     // When
-    await page.getByRole('button', { name: 'Commencer' }).click()
     await returnsToRepas(page, fake)
 
     // Then : le libellé tel quel, sa forme sans accents ni ligature (qui retrouve le produit), puis l'écriture
@@ -200,7 +194,6 @@ test.describe('un produit connu (phase A)', () => {
     )
 
     // When
-    await page.getByRole('button', { name: 'Commencer' }).click()
     await expect(
       page.getByText(
         'Je ne retrouve pas « Raviolis frais maison » : cherche-le ou choisis-en un autre.',

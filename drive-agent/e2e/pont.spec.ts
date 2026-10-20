@@ -21,7 +21,6 @@ test('reçoit le plan par le pont, remplit le panier et renvoie le résultat par
   await app.send(planOf([known('farine', 'Farine', [product(1000001, 2)])]))
 
   // When
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await app.received('result')
 
   // Then : le résultat est un message du pont, la page n'a pas bougé et l'interface est retirée
@@ -130,7 +129,6 @@ test('reprend le plan que l’application renvoie à chaque chargement de la pag
       known('sucre', 'Sucre', [product(1000006, 1)]),
     ]),
   )
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByText('Farine : ajouté')).toBeVisible()
 
   // When : la page se recharge ; l'application renvoie le même plan

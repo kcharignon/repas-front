@@ -29,14 +29,8 @@ const FARINE = [product('1000001', 1), product('1000002', 2)]
 describe('un passage complet', () => {
   it('met au panier les produits connus, en série, et rend leurs issues dans l’ordre du plan', async () => {
     // Given : 2 lignes connues, une « j'en ai toujours », une ignorée
-    const { adapter, writes, maxInFlight, calls } = fakeAdapter({ '1000001': {}, '1000003': {} })
-    const confirmed: string[][] = []
-    const screens = fakeUi({
-      summary: () => {
-        confirmed.push([...calls])
-        return 'start'
-      },
-    })
+    const { adapter, writes, maxInFlight } = fakeAdapter({ '1000001': {}, '1000003': {} })
+    const screens = fakeUi()
     const { flow, sent } = makeFlow({ ui: screens.ui, adapter })
 
     // When
@@ -50,7 +44,6 @@ describe('un passage complet', () => {
     )
 
     // Then
-    expect(confirmed).toEqual([[]])
     expect(writes).toEqual([
       { id: '1000001', quantity: 3 },
       { id: '1000003', quantity: 2 },
@@ -78,14 +71,14 @@ describe('un passage complet', () => {
       { ingredientSlug: 'sucre', outcome: 'ADDED', productId: '1000003', quantity: 2, usedRank: 1 },
     ])
     expect(flow.history).toEqual(['START', 'VALIDATED', 'CONFIRMED', 'PHASE_A', 'DONE'])
-    expect(screens.screens()).toEqual(['summary', 'progress'])
+    expect(screens.screens()).toEqual(['progress'])
     expect(screens.closed.count).toBe(1)
   })
 
-  it('montre au récapitulatif les nombres du plan, et rien n’est envoyé avant « Commencer »', async () => {
-    const { adapter, calls } = fakeAdapter({ '1000001': {} })
-    const screens = fakeUi({ summary: () => 'cancel' })
-    const { flow, sent } = makeFlow({ ui: screens.ui, adapter })
+  it('démarre sans rien demander : aucun écran de confirmation, la phrase de synthèse ouvre l’écran de progression', async () => {
+    const { adapter } = fakeAdapter({ '1000001': {} })
+    const screens = fakeUi()
+    const { flow } = makeFlow({ ui: screens.ui, adapter })
 
     await flow.start(
       plan([
@@ -96,33 +89,11 @@ describe('un passage complet', () => {
       ]),
     )
 
-    expect(screens.propsOf('summary')[0]).toEqual({
-      known: 1,
-      new: 1,
-      haveAtHome: 1,
-      skipped: 1,
-      lines: [
-        { name: 'Farine', status: 'KNOWN', detail: 'Farine de test 1 kg' },
-        { name: 'Poivre', status: 'NEW' },
-        { name: 'sel', status: 'HAVE_AT_HOME' },
-        { name: 'huile', status: 'SKIP' },
-      ],
+    expect(screens.screens()[0]).toBe('progress')
+    expect(screens.screens()).not.toContain('summary')
+    expect(screens.propsOf('progress')[0]).toMatchObject({
+      lead: '4 articles : 1 est déjà choisi, 1 est à choisir sur Leclerc, 2 ne seront pas mis au panier.',
     })
-    expect(calls).toEqual([])
-    expect(sent[0]?.outcome).toBe('aborted')
-  })
-
-  it('annuler au récapitulatif rend un résultat « aborted » sans ligne, après « Retourner dans Repas »', async () => {
-    const { adapter, calls } = fakeAdapter({ '1000001': {} })
-    const screens = fakeUi({ summary: () => 'cancel' })
-    const { flow, sent } = makeFlow({ ui: screens.ui, adapter })
-
-    await flow.start(plan([known('farine', [product('1000001')])]))
-
-    expect(calls).toEqual([])
-    expect(expectConform(sent[0])).toMatchObject({ outcome: 'aborted', lines: [] })
-    expect(screens.screens()).toEqual(['summary', 'end'])
-    expect(flow.history).toEqual(['START', 'VALIDATED', 'ABORTED'])
   })
 
   it('journalise chaque ligne et fait avancer la progression', async () => {
@@ -333,7 +304,7 @@ describe('la quantité à vérifier', () => {
       // Le plan de ce test ne dit pas ce que la liste demande : pas de « Il te faut » (DRV-626)
       { ingredient: 'Farine', productLabel: item.label, packs: item.packs ?? null, need: null },
     ])
-    expect(screens.screens()).toEqual(['summary', 'progress', 'quantity', 'progress'])
+    expect(screens.screens()).toEqual(['progress', 'quantity', 'progress'])
     expect(writes).toEqual([{ id: '1000001', quantity: 7 }])
     expect(sent[0]?.lines[0]).toMatchObject({ outcome: 'ADDED', quantity: 7 })
   })
@@ -660,7 +631,7 @@ describe('le contenu lu en direct fait foi (DRV-613)', () => {
 
     await flow.start(plan([home('sel')]))
 
-    expect(screens.screens()[0]).toBe('summary')
+    expect(screens.screens()[0]).toBe('progress')
   })
 
   it('une mention d’un ingrédient qui n’est pas dans le plan n’est pas affichée', async () => {
@@ -859,12 +830,14 @@ describe('les erreurs', () => {
   })
 
   it('une erreur imprévue de l’orchestrateur lui-même montre « le site a changé » et ne renvoie rien', async () => {
-    const screens = fakeUi({
-      summary: () => {
+    const screens = fakeUi()
+    const { flow, sent } = makeFlow({
+      ui: screens.ui,
+      adapter: fakeAdapter().adapter,
+      now: () => {
         throw new Error('bug')
       },
     })
-    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: fakeAdapter().adapter })
 
     await flow.start(plan([home('sel')]))
 
@@ -1121,7 +1094,7 @@ describe('la reprise après un rechargement', () => {
 
     // Then
     expect(screens.propsOf('resume')).toEqual([{ done: 2, total: 3 }])
-    expect(screens.screens()).not.toContain('summary')
+    expect(screens.screens()).toEqual(['resume', 'progress'])
     expect(writes).toEqual([{ id: '1000004', quantity: 1 }])
     expect(expectConform(sent[0])).toMatchObject({
       outcome: 'completed',
@@ -1134,7 +1107,7 @@ describe('la reprise après un rechargement', () => {
     expect(storage.data.size).toBe(0)
   })
 
-  it('« Recommencer » oublie l’état et refait tout après le récapitulatif', async () => {
+  it('« Recommencer » oublie l’état et refait tout, sans autre question', async () => {
     const storage = await interruptedAfterTwo()
     const { adapter, writes } = fakeAdapter({ '1000001': {}, '1000003': {}, '1000004': {} })
     const screens = fakeUi({ resume: () => 'restart' })
@@ -1142,7 +1115,7 @@ describe('la reprise après un rechargement', () => {
 
     await flow.start(plan(lines()))
 
-    expect(screens.screens().slice(0, 2)).toEqual(['resume', 'summary'])
+    expect(screens.screens().slice(0, 2)).toEqual(['resume', 'progress'])
     expect(writes.map((write) => write.id)).toEqual(['1000001', '1000003', '1000004'])
   })
 
@@ -1274,7 +1247,7 @@ describe('la reprise après un rechargement', () => {
 
     await flow.start(plan([home('sel')]))
 
-    expect(screens.screens()[0]).toBe('summary')
+    expect(screens.screens()[0]).toBe('progress')
   })
 
   it('un état sans aucune ligne faite n’est pas proposé à la reprise', async () => {
@@ -1293,7 +1266,7 @@ describe('la reprise après un rechargement', () => {
 
     await flow.start(plan([home('sel')]))
 
-    expect(screens.screens()[0]).toBe('summary')
+    expect(screens.screens()[0]).toBe('progress')
   })
 
   it('supprime l’état à la fin', async () => {

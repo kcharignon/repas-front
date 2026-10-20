@@ -153,6 +153,8 @@ describe('le vrai agent construit, avec un plan', () => {
         addEventListener: (_type: string, listener: typeof receive) => (receive = listener),
       },
     })
+    // Le site ne répond jamais : le passage reste en cours, son interface reste affichée.
+    Object.assign(dom.window, { fetch: () => new Promise(() => undefined) })
     const names = Object.getOwnPropertyNames(dom.window)
     dom.window.eval(agent.code)
     expect(dom.window.document.documentElement.children).toHaveLength(2)
@@ -166,12 +168,21 @@ describe('le vrai agent construit, avec un plan', () => {
         retailer: 'leclerc',
         store: { id: '000123', host: 'fd0-courses.leclercdrive.fr' },
         returnPath: '/drive/retour',
-        lines: [{ ingredientSlug: 'sel', name: 'Sel', status: 'HAVE_AT_HOME' }],
+        lines: [
+          {
+            ingredientSlug: 'sel',
+            name: 'Sel',
+            status: 'KNOWN',
+            products: [{ id: '1000001', label: 'Sel fin', packs: 1, packsStatus: 'COMPUTED' }],
+            rejected: [],
+            searchQuery: 'sel',
+          },
+        ],
       }),
     })
     await new Promise((resolve) => setTimeout(resolve, 20))
 
-    // Then : un conteneur de plus, que la page ne peut pas lire, et rien d'envoyé avant la confirmation
+    // Then : un conteneur de plus, que la page ne peut pas lire, et rien d'envoyé avant la fin du passage
     const host = dom.window.document.documentElement.lastElementChild as HTMLElement
     expect(host.tagName).toBe('DIV')
     expect(host.shadowRoot).toBeNull()

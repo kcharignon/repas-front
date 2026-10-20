@@ -45,7 +45,6 @@ test('avec le rayon frais conseillé, les 6 produits frais passent d’abord, le
   )
 
   // When
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByText('Il te faut : 1 kg.')).toBeVisible()
 
   // Then (DRV-647, 0.37.0) : la rangée des familles d'abord, la famille du rayon appris choisie d'avance (un choix : la rangée ne bascule plus vers les
@@ -114,7 +113,6 @@ test('sans rayon conseillé, l’ordre est celui du site, et le produit choisi r
   )
 
   // When
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByText('Il te faut : 1 kg.')).toBeVisible()
 
   // Then : fiche 01, 02, 03… dans l'ordre du site
@@ -142,7 +140,6 @@ test('« Chercher autre chose » est rangé de la même façon', async ({ page, 
       fresh('legume', 'Légume', { needed: KILO, searchQuery: 'légume', rayonHints: [FRESH_AISLE] }),
     ]),
   )
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByLabel('Chercher autre chose')).toBeVisible()
 
   // When : la personne cherche « carotte »

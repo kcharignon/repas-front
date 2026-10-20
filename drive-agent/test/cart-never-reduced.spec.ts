@@ -446,7 +446,7 @@ describe('la reprise après un rechargement', () => {
 
     await flow.start(plan([home('sel')]))
 
-    expect(screens.screens()[0]).toBe('summary')
+    expect(screens.screens()[0]).toBe('progress')
   })
 
   it('une mention d’un ingrédient qui n’est pas dans le plan n’est pas affichée', async () => {

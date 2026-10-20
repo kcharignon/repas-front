@@ -152,6 +152,7 @@ const progress: Renderer<'progress'> = (props: ProgressProps, answer) => {
   return {
     el: screen(
       title(props.title ?? S.progress.title),
+      props.lead ? h('p', { class: 'lead', text: props.lead }) : null,
       bar,
       count,
       // Une seule zone annoncée par les lecteurs d'écran : l'ingrédient en cours et les dernières actions.

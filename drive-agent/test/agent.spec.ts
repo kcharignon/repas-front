@@ -13,10 +13,13 @@ import {
 } from '../protocol'
 import { run } from '../src/agent'
 import type { DiagnosticProps } from '../src/ui'
-import { fakeAdapter, fakeUi, home, plan, skip } from './flow-helpers'
+import { fakeAdapter, fakeUi, home, known, plan, product, skip } from './flow-helpers'
 import { runDeps, shop, standardShelves } from './selftest-helpers'
 
 const PLAN = plan([home('sel'), skip('huile')])
+/** Un passage qui reste en cours : sa première recherche ne rend jamais la main. */
+const RUNNING = plan([known('farine', [product('1000001')])])
+const stuck = () => fakeAdapter({ '1000001': {} }, { before: () => new Promise(() => undefined) })
 const ORIGIN = 'https://repas.exemple.invalid'
 
 afterEach(() => {
@@ -98,7 +101,7 @@ describe('avec le pont de l’application', () => {
         { ingredientSlug: 'huile', outcome: 'SKIPPED' },
       ],
     })
-    expect(screens.screens()).toEqual(['summary', 'progress'])
+    expect(screens.screens()).toEqual(['progress'])
   })
 
   it('un message illisible de l’application montre « liste illisible »', async () => {
@@ -434,19 +437,19 @@ describe('la commande de diagnostic de l’application', () => {
   })
 
   it('est ignorée pendant un passage ; le passage, lui, n’est pas touché', async () => {
-    // Given : un passage arrêté sur son récapitulatif
+    // Given : un passage en cours (son écran de progression)
     const { receive } = withBridge()
-    const screens = fakeUi({ summary: () => new Promise<'start'>(() => undefined) })
-    run(window, { flow: { ui: screens.ui } })
-    receive(PLAN)
-    await vi.waitFor(() => expect(screens.screens()).toEqual(['summary']))
+    const screens = fakeUi()
+    run(window, { flow: { ui: screens.ui, adapter: stuck().adapter } })
+    receive(RUNNING)
+    await vi.waitFor(() => expect(screens.screens()).toEqual(['progress']))
 
     // When
     receive(COMMAND)
     await new Promise((resolve) => setTimeout(resolve, 20))
 
     // Then
-    expect(screens.screens()).toEqual(['summary'])
+    expect(screens.screens()).toEqual(['progress'])
   })
 
   it('un passage est ignoré pendant le diagnostic, puis repart une fois celui-ci fermé', async () => {
@@ -467,7 +470,7 @@ describe('la commande de diagnostic de l’application', () => {
 
     // Then
     await vi.waitFor(() => expect(bridge.postMessage).toHaveBeenCalledOnce())
-    expect(screens.screens()).toEqual(['diagnostic', 'summary', 'progress'])
+    expect(screens.screens()).toEqual(['diagnostic', 'progress'])
   })
 })
 
@@ -559,17 +562,17 @@ describe('la commande « selftest » de l’application (DRV-318)', () => {
 
   it('est ignorée pendant un passage ; le passage, lui, n’est pas touché', async () => {
     const { bridge, receive } = withBridge(true)
-    const { adapter, calls } = fakeAdapter()
-    const screens = fakeUi({ summary: () => new Promise<'start'>(() => undefined) })
+    const { adapter, calls } = stuck()
+    const screens = fakeUi()
     run(window, { flow: { ui: screens.ui, adapter } })
-    receive(PLAN)
-    await vi.waitFor(() => expect(screens.screens()).toEqual(['summary']))
+    receive(RUNNING)
+    await vi.waitFor(() => expect(screens.screens()).toEqual(['progress']))
 
     receive(COMMAND)
     await new Promise((resolve) => setTimeout(resolve, 30))
 
-    expect(screens.screens()).toEqual(['summary'])
-    expect(calls).toEqual([])
+    expect(screens.screens()).toEqual(['progress'])
+    expect(calls).toEqual(['search 1000001'])
     expect(bridge.postMessage).not.toHaveBeenCalled()
   })
 

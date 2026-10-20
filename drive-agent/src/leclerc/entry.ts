@@ -182,28 +182,95 @@ export interface StartButton {
 
 const CLICKABLE = 'a, button, input[type="button"], input[type="submit"], [role="button"]'
 
+/** Les éléments qui ne sont ni lien ni bouton mais que le site peut rendre cliquables (un `div` ou un `span` à gestionnaire de clic). */
+const LOOKS_CLICKABLE = '[onclick], [tabindex], div, span, label, li, p'
+
+/** Le texte, `aria-label`, `title` et `value` d'un élément, comparables. */
+const labelsOfElement = (element: Element): string[] =>
+  [
+    element.textContent,
+    element.getAttribute('aria-label'),
+    element.getAttribute('title'),
+    element.getAttribute('value'),
+  ].map((label) => trimLabel(fold(label ?? '')))
+
+const hasStartLabel = (element: Element): boolean =>
+  labelsOfElement(element).some((label) => label.length <= MAX_LABEL && label === START_LABEL)
+
+const isDisabled = (element: Element): boolean =>
+  element.hasAttribute('disabled') || element.getAttribute('aria-disabled') === 'true'
+
+/** Un élément que le site a rendu cliquable sans en faire un lien ni un bouton : gestionnaire de clic, ordre de tabulation ou curseur « main ». */
+function isPointer(element: HTMLElement): boolean {
+  if (element.hasAttribute('onclick') || element.hasAttribute('tabindex')) return true
+  try {
+    return element.ownerDocument.defaultView?.getComputedStyle(element).cursor === 'pointer'
+  } catch {
+    return false
+  }
+}
+
+const firstShown = (list: HTMLElement[]): HTMLElement | null =>
+  list.find((element) => element.getClientRects().length > 0) ?? list[0] ?? null
+
 /**
  * Le bouton « Commencer mes courses » SANS adresse navigable dans la page (le DOM, pas son texte : c'est lui qu'on touche). Même libellé que
  * `readEntry` : le texte, `aria-label`, `title` ou `value` ; un élément désactivé ou qui est un vrai lien (adresse `http`) n'en est pas un. De
- * plusieurs, le premier qui est affiché. `null` sans bouton.
+ * plusieurs, le premier qui est affiché. Faute de lien ou de bouton, l'élément le plus profond dont le libellé est exactement celui-là et que
+ * le site a rendu cliquable (`onclick`, `tabindex` ou curseur « main ») : ce que toucherait un doigt. `null` sans bouton.
  */
 export function findStartButton(root: ParentNode): StartButton | null {
   const found: HTMLElement[] = []
   for (const element of root.querySelectorAll<HTMLElement>(CLICKABLE)) {
-    if (element.hasAttribute('disabled') || element.getAttribute('aria-disabled') === 'true')
-      continue
+    if (isDisabled(element)) continue
     if (element.tagName === 'A' && !isAddressless(element.getAttribute('href')?.trim() ?? null))
       continue
-    const labels = [
-      element.textContent,
-      element.getAttribute('aria-label'),
-      element.getAttribute('title'),
-      element.getAttribute('value'),
-    ].map((label) => trimLabel(fold(label ?? '')))
-    if (labels.some((label) => label.length <= MAX_LABEL && label === START_LABEL))
-      found.push(element)
+    if (hasStartLabel(element)) found.push(element)
   }
-  return found.find((element) => element.getClientRects().length > 0) ?? found[0] ?? null
+  const button = firstShown(found)
+  if (button !== null) return button
+  const loose: HTMLElement[] = []
+  for (const element of root.querySelectorAll<HTMLElement>(LOOKS_CLICKABLE)) {
+    if (isDisabled(element) || element.closest(CLICKABLE) !== null) continue
+    // Le plus profond : un conteneur dont un enfant porte déjà le libellé n'est pas touché à la place de cet enfant.
+    if (Array.from(element.children).some(hasStartLabel)) continue
+    if (hasStartLabel(element) && isPointer(element)) loose.push(element)
+  }
+  return firstShown(loose)
+}
+
+/**
+ * Le chemin de l'accueil d'un magasin AVEC sa ville : `/magasin-N-N-Ville`, une barre finale permise, rien d'autre (ni page du magasin, ni
+ * panier, ni mentions légales). Le groupe 1 est le premier numéro.
+ */
+const STORE_HOME_PATH = /^\/magasin-([0-9]{1,12})-[0-9]{1,12}-[^/?#]+\/?$/i
+
+/**
+ * Un lien de la page qui mène à l'ACCUEIL du magasin du plan (« Mon magasin », un magasin choisi dans la liste) : le même magasin que le plan
+ * (premier numéro identique), sur un hôte `*.leclercdrive.fr` qui n'est pas le site mobile, avec le même schéma et le même port que la page,
+ * sans identifiant. Rend l'adresse complète, `null` sans lien sûr. Jamais un autre magasin, jamais une page autre que l'accueil du magasin.
+ */
+function findStoreHomeLink(pageText: string, page: PageRef, storeId: string): string | null {
+  for (const anchor of anchorsOf(pageText)) {
+    if (anchor.href === null) continue
+    const url = resolve(anchor.href, page)
+    if (url === null) continue
+    const found = STORE_HOME_PATH.exec(url.pathname)
+    const host = url.hostname.toLowerCase()
+    if (
+      found?.[1] === storeId &&
+      url.protocol === protocolOf(page) &&
+      url.port === portOf(page) &&
+      url.username === '' &&
+      url.password === '' &&
+      url.search === '' &&
+      url.hash === '' &&
+      STORE_HOST.test(host) &&
+      !isMobileHost(host)
+    )
+      return url.href
+  }
+  return null
 }
 
 /** `/magasin-<id>-<id>` suivi de `-Ville`, de `/` ou de la fin du chemin : le même motif que `readStorePaths`. */
@@ -218,7 +285,11 @@ const STORE_PATH = /^\/magasin-([0-9]{1,12})-([0-9]{1,12})(?:-[^/?#]*)?(?=\/|$)/
 export function readEntry(pageText: string, page: PageRef, storeId: string): EntryReading {
   if (isChallenge(pageText.replace(INVISIBLE, ' '))) return { kind: 'CHALLENGE' }
   const anchor = anchorsOf(pageText).find(isStart)
-  if (anchor === undefined) return { kind: 'NONE' }
+  if (anchor === undefined) {
+    // Pas de « Commencer mes courses » (l'étape « choisir mon magasin » de l'accueil) : un lien vers l'accueil du magasin du plan va droit au but.
+    const home = findStoreHomeLink(pageText, page, storeId)
+    return home === null ? { kind: 'NONE' } : { kind: 'LINK', url: home }
+  }
   if (isAddressless(anchor.href)) return { kind: 'BUTTON' }
   const url = resolve(anchor.href ?? '', page)
   if (url === null) return { kind: 'REFUSED' }

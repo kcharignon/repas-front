@@ -106,7 +106,6 @@ type Scripts = {
 
 /** Les réponses d'un utilisateur qui confirme tout, sauf ce que le test écrit à la place. */
 const DEFAULT_SCRIPTS: Scripts = {
-  summary: () => 'start',
   resume: () => 'resume',
   quantity: (props) => props.packs ?? 1,
   error: () => 'close',
@@ -213,7 +212,7 @@ export function fakeAdapter(
     /** Les compteurs de l'adaptateur (par défaut : une requête par appel, rien d'autre). */
     stats?: () => RequestStats
     /** Ce que l'accueil de l'enseigne laisse suivre (DRV-625, par défaut : pas de lien « Commencer mes courses »). */
-    entry?: EntryReading
+    entry?: EntryReading | (() => EntryReading)
     /** Appelé quand l'agent suit le lien ; peut ne jamais rendre la main (la page a quitté le script). */
     onFollow?: () => void | Promise<void>
     /** Le libellé de chaque rayon (DRV-647) ; un rayon absent n'a pas de libellé lisible. */
@@ -280,7 +279,10 @@ export function fakeAdapter(
       searchBase: null,
     }),
     lastSearchFacts: () => null,
-    readEntry: () => options.entry ?? { kind: 'NONE' },
+    readEntry: () => {
+      const entry = options.entry ?? { kind: 'NONE' as const }
+      return typeof entry === 'function' ? entry() : entry
+    },
     async followEntry() {
       follows.count += 1
       await options.onFollow?.()
@@ -403,6 +405,7 @@ export function makeFlow(parts: Partial<FlowDeps> & Pick<FlowDeps, 'ui'>) {
     now: () => (clock += 1000),
     agentVersion: '0.2.0',
     canReturn: true,
+    sleep: () => Promise.resolve(),
     ...parts,
   }
   return { flow: new Flow(deps), sent, setups }

@@ -150,6 +150,50 @@ describe('readEntry : le lien « Commencer mes courses »', () => {
   })
 })
 
+describe('readEntry : « choisir mon magasin » (aller droit à l’accueil du magasin du plan)', () => {
+  const STORE = 'https://fd0-courses.leclercdrive.fr/magasin-000123-000123-Ville-Test/'
+  const link = (href: string, label = 'Mon magasin') => `<a href="${href}">${label}</a>`
+
+  it('suit un lien vers l’accueil du magasin du plan, même sans « Commencer mes courses »', () => {
+    expect(readEntry(link(STORE), HOME, STORE_ID)).toEqual({ kind: 'LINK', url: STORE })
+    expect(readEntry(link('/magasin-000123-000456-Autre-Ville'), HOME, STORE_ID)).toEqual({
+      kind: 'LINK',
+      url: 'https://www.leclercdrive.fr/magasin-000123-000456-Autre-Ville',
+    })
+  })
+
+  it.each([
+    [
+      'un autre magasin',
+      link('https://fd0-courses.leclercdrive.fr/magasin-000002-000002-Ville-Test/'),
+    ],
+    [
+      'un magasin sans ville (page 404 du vrai site)',
+      link('https://fd0-courses.leclercdrive.fr/magasin-000123-000123/'),
+    ],
+    ['une page du magasin qui n’est pas son accueil', link(`${STORE}panier.aspx`)],
+    ['une adresse avec paramètres', link(`${STORE}?x=1`)],
+    ['un autre site', link('https://exemple.invalid/magasin-000123-000123-Ville-Test/')],
+    ['le site mobile', link('https://m-courses.leclercdrive.fr/magasin-000123-000123-Ville-Test/')],
+    [
+      'une adresse avec identifiant',
+      link('https://u:p@fd0-courses.leclercdrive.fr/magasin-000123-000123-Ville-Test/'),
+    ],
+    [
+      'un script',
+      '<script>var a = "<a href=\'/magasin-000123-000123-Ville-Test/\'>x</a>"</script>',
+    ],
+  ])('ne suit pas %s', (_name, html) => {
+    expect(readEntry(html, HOME, STORE_ID)).toEqual({ kind: 'NONE' })
+  })
+
+  it('« Commencer mes courses » garde la priorité sur un lien de magasin', () => {
+    const html = `${link(STORE)}<a>Commencer mes courses</a>`
+
+    expect(readEntry(html, HOME, STORE_ID)).toEqual({ kind: 'BUTTON' })
+  })
+})
+
 describe('entryFacts : les deux sondes du diagnostic, des formes seulement', () => {
   it('le lien « Commencer mes courses » : présent, la forme de son adresse, où elle mène ; pas un bouton', () => {
     const facts = entryFacts(
@@ -266,6 +310,36 @@ describe('LeclercAdapter : suivre le lien', () => {
       clickable: false,
     })
     expect(site.calls).toEqual([])
+  })
+})
+
+describe('LeclercAdapter : un bouton que seul le DOM montre', () => {
+  it('le texte de la page n’en montre pas, le DOM oui : BUTTON, cliqué comme les autres', async () => {
+    const click = vi.fn<() => void>()
+    const site = fakeSite(() => ({ body: 'x' }) satisfies Scripted, {
+      location: HOME,
+      pageText: () => '<p>Bonjour</p>',
+      startButton: () => ({ click }),
+    })
+    const adapter = new LeclercAdapter(site.deps)
+
+    expect(adapter.readEntry({ id: STORE_ID })).toEqual({ kind: 'BUTTON' })
+    await adapter.followEntry()
+
+    expect(click).toHaveBeenCalledOnce()
+    expect(site.sleeps.at(-1)).toBe(ENTRY_WAIT_MS)
+    expect(ENTRY_WAIT_MS).toBeLessThanOrEqual(3_000)
+    expect(site.calls).toEqual([])
+  })
+
+  it('ni le texte ni le DOM : NONE', () => {
+    const site = fakeSite(() => ({ body: 'x' }) satisfies Scripted, {
+      location: HOME,
+      pageText: () => '<p>Bonjour</p>',
+      startButton: () => null,
+    })
+
+    expect(new LeclercAdapter(site.deps).readEntry({ id: STORE_ID })).toEqual({ kind: 'NONE' })
   })
 })
 
@@ -403,6 +477,43 @@ describe('findStartButton : le bouton dans le DOM', () => {
       expect(findStartButton(dom(html))).toBeNull()
       document.body.innerHTML = ''
     }
+  })
+
+  it.each([
+    ['un div à gestionnaire de clic', '<div id="b" onclick="void 0">Commencer mes courses</div>'],
+    ['un span qui prend le focus', '<span id="b" tabindex="0">Commencer mes courses</span>'],
+    [
+      'un élément au curseur « main »',
+      '<p id="b" style="cursor:pointer">Commencer mes courses</p>',
+    ],
+  ])('trouve %s, faute de lien ou de bouton, et le clique', (_name, html) => {
+    const root = dom(html)
+    const clicks = vi.fn<() => void>()
+    root.querySelector('#b')?.addEventListener('click', clicks)
+
+    findStartButton(root)?.click()
+
+    expect(clicks).toHaveBeenCalledOnce()
+  })
+
+  it('touche l’élément le plus profond, jamais son conteneur, et jamais un élément sans signe de clic', () => {
+    const root = dom(
+      '<div id="o" onclick="void 0"><span id="b" style="cursor:pointer">Commencer mes courses</span></div>',
+    )
+    const clicked: string[] = []
+    for (const id of ['o', 'b']) {
+      root.querySelector(`#${id}`)?.addEventListener('click', (event) => {
+        if (event.target === event.currentTarget) clicked.push(id)
+      })
+    }
+
+    findStartButton(root)?.click()
+
+    expect(clicked).toEqual(['b'])
+    document.body.innerHTML = ''
+    expect(
+      findStartButton(dom('<div><span>Commencer mes courses</span><p>Autre chose</p></div>')),
+    ).toBeNull()
   })
 
   it('de plusieurs, préfère celui qui est affiché', () => {

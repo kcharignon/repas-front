@@ -48,12 +48,13 @@ test('par-dessus un site de bureau affiché sur un téléphone, l’interface es
   fake,
   agentCode,
 }) => {
-  // Given : un plan qui affiche le récapitulatif, sur une page du faux site sans balise viewport (fenêtre de bureau)
+  // Given : un plan dont l'écran de progression reste affiché (le site tarde), sur une page du faux site sans balise viewport (fenêtre de bureau)
+  fake.setBehavior({ latencyMs: 5000 })
   const plan = planOf([known('farine', 'Farine', [product(1000001, 3)]), home('sel', 'Sel')])
 
   // When
   await openWithFragment(page, fake, agentCode, plan)
-  await expect(page.getByRole('heading', { name: 'Prêt à remplir ton panier' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Ton panier se remplit' })).toBeVisible()
   const view = await seen(page)
 
   // Then : la fenêtre est celle d'un ordinateur (980 px) sur un écran de téléphone, et l'interface compense
@@ -68,7 +69,7 @@ test('par-dessus un site de bureau affiché sur un téléphone, l’interface es
   // And : le texte courant fait 16 dp, comme sur une page de téléphone (6,7 dp avant), et chaque cible tactile au moins 44 dp
   expect(view.fontDp).toBeGreaterThan(15)
   expect(view.fontDp).toBeLessThan(17)
-  expect(view.buttons.length).toBeGreaterThan(2)
+  expect(view.buttons.length).toBeGreaterThan(0)
   for (const button of view.buttons) {
     expect(button.heightDp, `${button.label} : hauteur en dp`).toBeGreaterThanOrEqual(44)
     expect(button.rightDp, `${button.label} : tient dans l’écran`).toBeLessThanOrEqual(
@@ -88,7 +89,6 @@ test('l’écran de choix de produit, le plus chargé, tient lui aussi dans l’
 
   // When
   await openWithFragment(page, fake, agentCode, plan)
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByRole('button', { name: 'Choisir' }).first()).toBeVisible()
   const view = await seen(page)
 

@@ -1,7 +1,8 @@
 // L'orchestrateur du passage (DRV-305) : une machine d'états sans réseau ni DOM propres, tout vient de `FlowDeps`.
 //   START → VALIDATED → CONFIRMED → PHASE_A → PHASE_B → DONE      (+ ABORTED : l'utilisateur arrête ; ERROR : le passage s'interrompt)
 //   START → VALIDATED → ENTERING        (le plan arrive sur l'accueil de l'enseigne, pas dans un magasin : l'agent suit « Commencer mes courses »)
-// Rien n'est envoyé au site avant le « Commencer ». Un seul passage à la fois.
+// Aucun écran de confirmation (0.39.0) : « Envoyer au drive » et sa fenêtre, dans Repas, ont déjà donné l'intention ; le passage démarre dès que le
+// plan est validé et que la page est celle du bon magasin. Rien n'est envoyé au site avant cela. Un seul passage à la fois.
 import {
   LIMITS,
   ProtocolError,
@@ -12,9 +13,9 @@ import {
   type ResultLine,
   type ResultStats,
 } from '../../protocol'
-import { LeclercError, type LeclercCause, type RequestStats } from '../leclerc'
+import { LeclercError, type EntryReading, type LeclercCause, type RequestStats } from '../leclerc'
 import { own } from '../own'
-import { formatNeeded, S, type SummaryProps } from '../ui'
+import { formatNeeded, S, summarySentence } from '../ui'
 import { settleKnownLine, type UnavailableNote } from './phase-a'
 import {
   buildResult,
@@ -58,6 +59,9 @@ interface Run {
 }
 
 const LOG_SIZE = 5
+/** Combien de temps l'accueil a pour montrer « Commencer mes courses » (il se dessine parfois après l'arrivée du plan), et à quel rythme on le relit. */
+const ENTRY_APPEAR_MS = 4_000
+const ENTRY_POLL_MS = 500
 
 /** Ce qui interrompt un passage : le code d'erreur du protocole, et la vérification précise qui a échoué quand on la connaît. */
 interface Fault {
@@ -92,19 +96,16 @@ const failed = (line: PlanLine, error: ErrorCode): ResultLine => ({
   error,
 })
 
-function summaryOf(plan: PlanMessage): SummaryProps {
+/** La phrase qui ouvre l'écran de progression, la même que sur l'écran d'envoi de Repas : « 6 articles : 2 sont déjà choisis, 4 sont à choisir sur Leclerc. » */
+function leadOf(plan: PlanMessage): string {
   const count = (status: PlanLine['status']) =>
     plan.lines.filter((line) => line.status === status).length
-  return {
+  return summarySentence({
     known: count('KNOWN'),
     new: count('NEW'),
     haveAtHome: count('HAVE_AT_HOME'),
     skipped: count('SKIP'),
-    lines: plan.lines.map((line) => {
-      const preferred = line.status === 'KNOWN' ? line.products?.[0]?.label : undefined
-      return { name: line.name, status: line.status, ...(preferred && { detail: preferred }) }
-    }),
-  }
+  })
 }
 
 export class Flow {
@@ -184,6 +185,8 @@ export class Flow {
       return this.enterStore(message)
     }
     if (problem) return this.showError(problem.code, message, problem.cause)
+    // La fenêtre d'accueil du magasin (« Commencer mes courses ») sur la page même du magasin du plan : l'agent la ferme comme le ferait un doigt.
+    await this.dismissWelcome(message)
 
     const { state, proceed } = await this.confirm(message)
     const run: Run = {
@@ -231,25 +234,73 @@ export class Flow {
   private async enterStore(plan: PlanMessage): Promise<void> {
     const { adapter, ui } = this.deps
     this.enter('ENTERING')
-    let reading
-    try {
-      reading = adapter.readEntry(plan.store)
-    } catch {
-      reading = { kind: 'NONE' as const }
-    }
-    if (
-      (reading.kind === 'LINK' || reading.kind === 'BUTTON') &&
-      this.runs.markEntered(plan.runId)
-    ) {
-      void ui.show('entry', { stage: 'opening' })
-      try {
-        await adapter.followEntry()
-      } catch {
-        // Le site est bloqué, la navigation a échoué ou le clic n'a rien fait : le geste manuel reste possible.
+    // Déjà tenté pour cet envoi (ou aucun moyen de le noter) : pas de seconde tentative, le geste manuel tout de suite.
+    if (!this.runs.hasEntered(plan.runId)) {
+      const { reading, announced } = await this.awaitEntry(plan)
+      if (
+        (reading.kind === 'LINK' || reading.kind === 'BUTTON') &&
+        this.runs.markEntered(plan.runId)
+      ) {
+        if (!announced) void ui.show('entry', { stage: 'opening' })
+        try {
+          await adapter.followEntry()
+        } catch {
+          // Le site est bloqué, la navigation a échoué ou le clic n'a rien fait : le geste manuel reste possible.
+        }
       }
     }
     // Ici seulement si le bouton ou le lien manque, a été refusé, a déjà été touché une fois, ou n'a rien changé : l'utilisateur touche le bouton du site.
     void ui.show('entry', { stage: 'manual' })
+  }
+
+  /**
+   * Ce que l'accueil laisse suivre : la page de l'enseigne peut finir de s'afficher après l'arrivée du plan (la fenêtre « Commencer mes courses »
+   * n'est pas là au premier regard). On relit donc la page jusqu'à ENTRY_APPEAR_MS tant qu'elle ne montre ni bouton, ni lien sûr, ni défi : des
+   * lectures du DOM, aucune requête. Un défi de l'anti-robot ou un lien refusé arrête l'attente tout de suite. Le bandeau « Ouverture de ton
+   * magasin… » s'affiche dès qu'on attend (`announced`) : l'utilisateur ne regarde pas une page muette.
+   */
+  private async awaitEntry(
+    plan: PlanMessage,
+  ): Promise<{ reading: EntryReading; announced: boolean }> {
+    const sleep =
+      this.deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
+    let announced = false
+    for (let waited = 0; ; waited += ENTRY_POLL_MS) {
+      let reading: EntryReading
+      try {
+        reading = this.deps.adapter.readEntry(plan.store)
+      } catch {
+        reading = { kind: 'NONE' }
+      }
+      if (reading.kind !== 'NONE' || waited >= ENTRY_APPEAR_MS) return { reading, announced }
+      if (!announced) {
+        announced = true
+        void this.deps.ui.show('entry', { stage: 'opening' })
+      }
+      await sleep(ENTRY_POLL_MS)
+    }
+  }
+
+  /**
+   * Sur la page du magasin du plan, la fenêtre d'accueil du site (« <magasin> vous propose… » et son « Commencer mes courses ») peut être là :
+   * l'agent appuie sur ce bouton, comme le ferait un doigt, une seule fois par envoi et par onglet. Rien d'autre n'est touché. Si la page
+   * change, elle reçoit de nouveau le plan ; sinon le passage continue. Un bouton absent, un lien ou le moindre doute : on passe.
+   */
+  private async dismissWelcome(plan: PlanMessage): Promise<void> {
+    const { adapter, ui } = this.deps
+    let reading: EntryReading
+    try {
+      reading = adapter.readEntry(plan.store)
+    } catch {
+      return
+    }
+    if (reading.kind !== 'BUTTON' || !this.runs.markEntered(plan.runId)) return
+    void ui.show('entry', { stage: 'opening' })
+    try {
+      await adapter.followEntry()
+    } catch {
+      // Le clic n'a rien fait : le passage continue sur la page telle qu'elle est.
+    }
   }
 
   /** Le magasin de la page doit être celui du message. */
@@ -280,7 +331,7 @@ export class Flow {
     }
   }
 
-  /** Reprise éventuelle, puis récapitulatif : rien ne part avant « Commencer » (ou « Reprendre », déjà confirmé). */
+  /** Reprise éventuelle (un rechargement en plein passage : la seule question encore posée), sinon un passage neuf qui démarre sans confirmation. */
   private async confirm(plan: PlanMessage): Promise<{ state: RunState; proceed: boolean }> {
     const { ui, now } = this.deps
     const saved = this.runs.load(plan.runId)
@@ -294,8 +345,7 @@ export class Flow {
       }
       this.runs.remove(plan.runId)
     }
-    const answer = await ui.show('summary', summaryOf(plan))
-    return { state: emptyState(plan.runId, now()), proceed: answer === 'start' }
+    return { state: emptyState(plan.runId, now()), proceed: true }
   }
 
   private async phaseA(run: Run): Promise<void> {
@@ -599,6 +649,7 @@ export class Flow {
   private showProgress(run: Run): void {
     void this.deps.ui
       .show('progress', {
+        lead: leadOf(run.plan),
         total: run.plan.lines.length,
         done: Object.keys(run.state.done).length,
         current: run.current,

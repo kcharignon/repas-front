@@ -21,7 +21,6 @@ test('fait choisir un nouveau produit dans la liste de l’agent, calcule le nom
   await openWithFragment(page, fake, agentCode, planOf([fresh('poivre', 'Poivre', { needed })]))
 
   // When : la recherche affiche les produits ; on choisit le poivre moulu de 40 g
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByText('Il te faut : 80 g.')).toBeVisible()
   const card = page.getByRole('listitem').filter({ hasText: 'Poivre noir moulu' })
   await expect(card).toContainText('40 g par produit : 2 produits.')
@@ -57,7 +56,6 @@ test('retire les caractères invisibles d’un libellé de l’enseigne : la lis
   await openWithFragment(page, fake, agentCode, planOf([fresh('vinaigre', 'Vinaigre', { needed })]))
 
   // When : la liste montre le produit (son libellé se lit d'une traite), on le choisit
-  await page.getByRole('button', { name: 'Commencer' }).click()
   const card = page.getByRole('listitem').filter({ hasText: 'Vinaigre de cidre Verger Imaginaire' })
   await expect(card).toContainText('750 ml par produit : 1 produit.')
   await card.getByRole('button', { name: 'Choisir' }).click()
@@ -90,7 +88,6 @@ for (const [button, placement] of [
     // Given : le seul produit connu de la farine est en rupture
     const plan = planOf([known('farine', 'Farine', [product(1000002)], { needed: KILO })])
     await openWithFragment(page, fake, agentCode, plan)
-    await page.getByRole('button', { name: 'Commencer' }).click()
     await expect(page.getByText('Ces produits ne sont plus disponibles')).toBeVisible()
 
     // When : l'utilisateur ne veut plus de ce produit, cherche autre chose, choisit le sarrasin et répond à l'unique question
@@ -136,7 +133,6 @@ test('« Revenir à la liste » sur la question ne met rien au panier : la liste
   // Given : le seul produit connu de la farine est en rupture, l'utilisateur choisit le sarrasin
   const plan = planOf([known('farine', 'Farine', [product(1000002)], { needed: KILO })])
   await openWithFragment(page, fake, agentCode, plan)
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await page.getByLabel('Chercher autre chose').fill('farine sarrasin')
   await page.getByRole('button', { name: 'Chercher', exact: true }).click()
   await expect(page.getByText('Résultats pour « farine sarrasin »')).toBeVisible()
@@ -164,7 +160,6 @@ test('laisse passer une ligne ou dire « j’en ai toujours », même quand la r
   )
 
   // When
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByText('Aucun produit trouvé pour « gnocchis »')).toBeVisible()
   await page.getByRole('button', { name: 'Pas cette fois' }).click()
   await expect(page.getByRole('listitem').filter({ hasText: 'Sel fin' })).toBeVisible()
@@ -202,7 +197,6 @@ for (const [form, cart] of [
     )
 
     // When
-    await page.getByRole('button', { name: 'Commencer' }).click()
     await expect(page.getByText('Aucun produit trouvé pour « gnocchis »')).toBeVisible()
     await page.getByRole('button', { name: 'Pas cette fois' }).click()
     await expect(page.getByRole('listitem').filter({ hasText: 'Sel fin' })).toBeVisible()
@@ -231,7 +225,6 @@ test('annule le passage depuis le choix : la ligne reste à choisir et Repas le 
 }) => {
   // Given
   await openWithFragment(page, fake, agentCode, planOf([fresh('poivre', 'Poivre')]))
-  await page.getByRole('button', { name: 'Commencer' }).click()
 
   // When
   await page.getByRole('button', { name: 'Annuler l’envoi' }).click()
@@ -266,7 +259,6 @@ test('quatre nouveaux articles : choisir le premier, passer les trois suivants (
       fresh('huile', 'Huile'),
     ]),
   )
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.locator('.head')).toHaveText('Poivre (1 sur 4)')
 
   // When : on choisit le premier ; sur le deuxième écran, un bouton passe les trois qui restent
@@ -315,7 +307,6 @@ test('« Revenir au choix » sur la confirmation garde l’article et sa liste, 
     agentCode,
     planOf([fresh('poivre', 'Poivre'), fresh('sel', 'Sel')]),
   )
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await page.getByRole('button', { name: 'Passer ces 2 articles' }).click()
   await expect(page.getByText('Ces 2 articles ne seront pas mis au panier.')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Choisir' })).toHaveCount(0)
@@ -346,7 +337,6 @@ test('trois articles dont le produit habituel est en rupture : « Passer ces 3 a
       known('lait', 'Lait', [product(1000013)]),
     ]),
   )
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByText('Ces produits ne sont plus disponibles')).toBeVisible()
 
   // When
@@ -380,7 +370,6 @@ test('un produit retenu et disponible n’ouvre jamais l’écran de choix : la 
   )
 
   // When
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByRole('button', { name: 'Choisir' }).first()).toBeVisible()
 
   // Then : l'écran de choix est celui du sel, seul (ni « (1 sur 1) », ni « Passer ces n articles »), et la farine est déjà au panier
@@ -424,7 +413,6 @@ test('montre la photo des produits qui en ont une, et laisse les autres en texte
   )
 
   // When : la liste s'affiche
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByText('Il te faut : 1 kg.')).toBeVisible()
   const card = (name: string) => page.getByRole('listitem').filter({ hasText: name })
 
@@ -470,7 +458,6 @@ test('la question « Toujours prendre ce produit ? » montre la photo du produit
   await servePhotos(page)
   const plan = planOf([known('farine', 'Farine', [product(1000002)], { needed: KILO })])
   await openWithFragment(page, fake, agentCode, plan)
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByText('Ces produits ne sont plus disponibles')).toBeVisible()
 
   // When
@@ -509,7 +496,6 @@ test('une recherche de 45 produits : huit fiches d’abord, la suite en défilan
   )
 
   // When : la liste s'affiche
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByText('Il te faut : 1 kg.')).toBeVisible()
 
   // Then : un premier lot seulement, dans l'ordre du site, et ses photos seulement
