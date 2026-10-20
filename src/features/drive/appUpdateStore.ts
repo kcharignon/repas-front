@@ -31,10 +31,6 @@ export const useAppUpdateStore = defineStore('appUpdate', () => {
   const supported = computed(() => versions.selfUpdate)
   /** L'application a dit qu'elle a trouvé une version plus récente (ou qu'elle la télécharge). */
   const offered = computed(() => OFFERED.some((status) => status === state.value.status))
-  /** L'état est connu : l'application a répondu à la recherche (autre chose que « inconnu » et « vérification »). */
-  const settled = computed(
-    () => state.value.status !== 'inconnu' && state.value.status !== 'verification',
-  )
 
   function receive(next: AppUpdateState) {
     state.value = next
@@ -64,10 +60,11 @@ export const useAppUpdateStore = defineStore('appUpdate', () => {
     return attaching
   }
 
-  /** Attend que l'application ait répondu à une recherche (état autre que « inconnu » et « vérification »), ou le délai. */
-  function untilSettled(): Promise<void> {
-    if (settled.value) return Promise.resolve()
-
+  /**
+   * Attend le PROCHAIN état « connu » que l'application dit (autre chose que « inconnu » et « vérification »), ou le délai. À poser avant d'envoyer
+   * la demande : l'application peut répondre aussitôt.
+   */
+  function nextSettled(): Promise<void> {
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         waiters.delete(done)
@@ -87,15 +84,13 @@ export const useAppUpdateStore = defineStore('appUpdate', () => {
     if (!(await attach())) return
     // Un téléchargement ou une installation en cours n'est pas interrompu par une recherche
     if (state.value.status === 'telechargement' || state.value.status === 'pretAInstaller') return
+    const answered = nextSettled()
     try {
-      if (state.value.status !== 'verification') state.value = { status: 'verification' }
       driveBridge.checkForUpdate()
     } catch {
       receive({ status: 'erreur', code: 'CHECK_FAILED', version: null })
-
-      return
     }
-    await untilSettled()
+    await answered
   }
 
   /**
@@ -107,11 +102,7 @@ export const useAppUpdateStore = defineStore('appUpdate', () => {
     if (!(await attach())) return false
     engaged.value = true
     const retryable = state.value.status === 'erreur' && state.value.version !== null
-    if (state.value.status !== 'miseAJourDisponible' && !retryable) {
-      // `settled` doit repartir de zéro pour attendre la réponse à CETTE recherche
-      state.value = { status: 'verification' }
-      await check()
-    }
+    if (state.value.status !== 'miseAJourDisponible' && !retryable) await check()
     const now = state.value
     if (now.status === 'miseAJourDisponible' || (now.status === 'erreur' && now.version !== null)) {
       try {
@@ -124,5 +115,5 @@ export const useAppUpdateStore = defineStore('appUpdate', () => {
     return true
   }
 
-  return { state, engaged, supported, offered, settled, attach, check, start }
+  return { state, engaged, supported, offered, attach, check, start }
 })

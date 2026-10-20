@@ -107,6 +107,7 @@ Le module `app` a deux **variantes de distribution** (`flavorDimensions` : `dist
 - Le code commun ne connaît que l'interface `SelfUpdate` et la fonction `createSelfUpdate` que chaque variante définit. `MainActivity` lui passe les messages `update.*` du pont et lit `supported` pour `app.info` (clé `selfUpdate`).
 - `./build.sh test` (donc `make android-test`, la CI) construit les deux variantes et **échoue** si la variante `play` porte la permission, le fournisseur de fichiers ou une classe de mise à jour, ou si la permission est dans le manifeste commun (`check_distributions`) ; `android/__tests__/shell.spec.ts` le dit aussi dans `make check`. `make android-release-verify` exige, sur l'APK publié, exactement Internet et `REQUEST_INSTALL_PACKAGES`.
 - La logique pure de la mise à jour (adresses permises, version, empreinte, états, effacement) est dans le **cœur**, commune aux deux builds mais inerte : sans permission ni écran d'installation elle ne peut rien installer, et la variante `play` n'a aucun port de plateforme branché dessus. Ce qui télécharge, écrit un fichier et ouvre l'installateur est dans `src/direct`, nulle part ailleurs.
+- Un APK de débogage (`src/directDebug/AndroidManifest.xml`) retire la permission et le fournisseur de fichiers : il ne se met jamais à jour lui-même (sa clé de signature est publique, `SelfUpdate.supported` est faux sous `BuildConfig.DEBUG`) et n'a que la permission Internet.
 - Le jour où le build Play existe : `bundlePlayRelease` (tâche de la variante `play`) ; rien d'autre à retirer.
 
 ## Où mettre un nouveau code

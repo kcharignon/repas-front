@@ -52,26 +52,44 @@ run_tests() {
 
 # Les deux variantes de distribution (DRV-639) : la permission d'installer des applications et le code de la mise à jour dans l'application ne
 # sont que dans `direct` (l'APK de la release GitHub). La variante `play` (Google Play, à venir : Google interdit à une application distribuée par
-# Play de s'installer ailleurs) n'en contient NI l'un NI l'autre : on construit son manifeste et ses classes, et on les lit.
+# Play de s'installer ailleurs) n'en contient NI l'un NI l'autre, ni l'APK de débogage : on construit leurs manifestes et leurs classes, et on les lit.
 check_distributions() {
+  # Les manifestes de PUBLICATION (release) sont ceux qui comptent. Gradle refuse de les traiter sans clé : on lui en donne une factice, qui ne
+  # signe rien (seul le manifeste est fusionné ; le fichier est effacé en sortie).
+  local dummy
+  dummy=$(mktemp)
   "${GRADLE[@]}" :app:processDirectDebugManifest :app:processPlayDebugManifest :app:compileDirectDebugKotlin :app:compilePlayDebugKotlin
-  local direct_manifest play_manifest direct_classes play_classes installer_classes
-  direct_manifest=$(find app/build/intermediates/merged_manifests/directDebug -name AndroidManifest.xml | head -n 1)
-  play_manifest=$(find app/build/intermediates/merged_manifests/playDebug -name AndroidManifest.xml | head -n 1)
+  env ANDROID_KEYSTORE_FILE="$dummy" ANDROID_KEYSTORE_PASSWORD=factice ANDROID_KEY_ALIAS=factice ANDROID_KEY_PASSWORD=factice ANDROID_VERSION_TAG=android-v0.0.1 \
+    "${GRADLE[@]}" :app:processDirectReleaseManifest :app:processPlayReleaseManifest
+  rm -f "$dummy"
+  local direct_release play_release direct_debug play_debug direct_classes play_classes installer_classes
+  manifest_of() { find "app/build/intermediates/merged_manifests/$1" -name AndroidManifest.xml | head -n 1; }
+  direct_release=$(manifest_of directRelease)
+  play_release=$(manifest_of playRelease)
+  direct_debug=$(manifest_of directDebug)
+  play_debug=$(manifest_of playDebug)
   direct_classes=app/build/tmp/kotlin-classes/directDebug
   play_classes=app/build/tmp/kotlin-classes/playDebug
-  [ -f "$direct_manifest" ] && [ -f "$play_manifest" ] || fail "les manifestes des variantes direct et play sont introuvables après leur construction."
-  grep -q 'android.permission.INTERNET' "$direct_manifest" || fail "la variante direct n'a pas la permission Internet."
-  grep -q 'android.permission.REQUEST_INSTALL_PACKAGES' "$direct_manifest" || fail "la variante direct (qui se met à jour elle-même) doit déclarer REQUEST_INSTALL_PACKAGES."
-  grep -q 'androidx.core.content.FileProvider' "$direct_manifest" || fail "la variante direct doit déclarer son fournisseur de fichiers privé."
-  grep -q 'android.permission.INTERNET' "$play_manifest" || fail "la variante play n'a pas la permission Internet."
-  ! grep -q 'REQUEST_INSTALL_PACKAGES' "$play_manifest" || fail "la variante play (Google Play) contient la permission REQUEST_INSTALL_PACKAGES : elle ne doit pas s'installer elle-même."
-  ! grep -q 'FileProvider' "$play_manifest" || fail "la variante play contient un fournisseur de fichiers de mise à jour."
+  [ -f "$direct_release" ] && [ -f "$play_release" ] && [ -f "$direct_debug" ] && [ -f "$play_debug" ] || fail "les manifestes des variantes direct et play sont introuvables après leur construction."
+  # direct (l'APK publié) : Internet, la permission d'installer sa mise à jour et son fournisseur de fichiers privé
+  grep -q 'android.permission.INTERNET' "$direct_release" || fail "la variante direct n'a pas la permission Internet."
+  grep -q 'android.permission.REQUEST_INSTALL_PACKAGES' "$direct_release" || fail "la variante direct (qui se met à jour elle-même) doit déclarer REQUEST_INSTALL_PACKAGES."
+  grep -q 'androidx.core.content.FileProvider' "$direct_release" || fail "la variante direct doit déclarer son fournisseur de fichiers privé."
+  # play (Google Play, à venir) : ni la permission d'installer ni le fournisseur de fichiers
+  grep -q 'android.permission.INTERNET' "$play_release" || fail "la variante play n'a pas la permission Internet."
+  ! grep -q 'REQUEST_INSTALL_PACKAGES' "$play_release" || fail "la variante play (Google Play) contient la permission REQUEST_INSTALL_PACKAGES : elle ne doit pas s'installer elle-même."
+  ! grep -q 'FileProvider' "$play_release" || fail "la variante play contient un fournisseur de fichiers de mise à jour."
+  # les APK de débogage ne se mettent jamais à jour eux-mêmes : Internet seulement
+  for manifest in "$direct_debug" "$play_debug"; do
+    ! grep -q 'REQUEST_INSTALL_PACKAGES' "$manifest" || fail "un APK de débogage contient la permission d'installer : il ne se met jamais à jour lui-même ($manifest)."
+    ! grep -q 'FileProvider' "$manifest" || fail "un APK de débogage contient le fournisseur de fichiers de mise à jour ($manifest)."
+  done
   ! grep -q 'REQUEST_INSTALL_PACKAGES' app/src/main/AndroidManifest.xml || fail "la permission d'installer ne va pas dans le manifeste commun, seulement dans app/src/direct."
+  # le code : seul direct contient celui qui télécharge, écrit et ouvre l'installateur
   installer_classes='DirectSelfUpdate|HttpsHop|PrivateUpdateStorage|AndroidUpdatePlatform'
   find "$direct_classes" -name '*.class' | grep -qE "$installer_classes" || fail "la variante direct ne contient pas le code de mise à jour."
   ! find "$play_classes" -name '*.class' | grep -qE "$installer_classes" || fail "la variante play contient du code de mise à jour dans l'application."
-  echo "   variantes : direct (permission d'installer, fournisseur de fichiers, code de mise à jour), play (aucun des trois)."
+  echo "   variantes : direct (permission d'installer, fournisseur de fichiers, code de mise à jour), play et débogage (aucun des trois)."
 }
 
 build_debug() {

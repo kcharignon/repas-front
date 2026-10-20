@@ -186,6 +186,13 @@ describe('les deux variantes de distribution', () => {
     expect(permissions(read('app/src/direct/AndroidManifest.xml'))).toEqual(['android.permission.REQUEST_INSTALL_PACKAGES'])
   })
 
+  it('l’APK de débogage (direct) retire la permission et le fournisseur : il ne se met jamais à jour lui-même', () => {
+    const debug = read('app/src/directDebug/AndroidManifest.xml')
+
+    expect(debug).toContain('<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />')
+    expect(debug).toContain('<provider android:name="androidx.core.content.FileProvider" tools:node="remove" />')
+  })
+
   it('la variante play n’a ni manifeste, ni ressource, ni fournisseur, ni autre code que son remplaçant', () => {
     const play = src('play')
     const all = files(play, /.*/).map((path) => relative(play, path))
