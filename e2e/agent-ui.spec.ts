@@ -39,8 +39,6 @@ const SCREENS = [
   'chooser-gone',
   'chooser-long',
   'chooser-aisles',
-  'placement',
-  'placement-text',
   'store',
   'store-label',
   'diagnostic',
@@ -239,6 +237,10 @@ async function cardsOf(page: Page) {
         image: box(image),
         text: box(card.querySelector('.text')),
         button: box(card.querySelector('button')),
+        buttons: [...card.querySelectorAll('button')].map((button) => ({
+          ...box(button),
+          label: button.textContent,
+        })),
         background: frame ? getComputedStyle(frame).backgroundColor : null,
         fit: image ? getComputedStyle(image).objectFit : null,
         broken: image ? image.naturalWidth === 0 : false,
@@ -249,7 +251,7 @@ async function cardsOf(page: Page) {
 }
 
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`l’écran de choix montre la photo à gauche du libellé, le bouton « Choisir » en dessous (${colorScheme}, 360×640)`, async ({
+  test(`l’écran de choix montre la photo à gauche du libellé, les boutons « Choisir » et « Pas mon habituel » côte à côte en dessous (${colorScheme}, 360×640)`, async ({
     page,
   }, testInfo) => {
     await page.emulateMedia({ colorScheme })
@@ -267,10 +269,19 @@ for (const colorScheme of ['light', 'dark'] as const) {
       expect(card?.background).toBe('rgb(255, 255, 255)')
       expect(card?.broken).toBe(false)
       expect(card?.frame?.x).toBeLessThan(card?.text?.x ?? 0)
-      // Le bouton passe sous la fiche, sur toute sa largeur, et se touche (44 px).
-      expect(card?.button?.y).toBeGreaterThan((card?.text?.y ?? 0) + (card?.text?.height ?? 0) - 1)
-      expect(card?.button?.width).toBeGreaterThan(280)
-      expect(card?.button?.height).toBeGreaterThanOrEqual(44)
+      // Les deux boutons passent sous la fiche, côte à côte, chacun sur la moitié de sa largeur, et se touchent (44 px).
+      const [choose, once] = card?.buttons ?? []
+      expect(card?.buttons.map((button) => button.label)).toEqual(['Choisir', 'Pas mon habituel'])
+      expect(choose?.y).toBeGreaterThan((card?.text?.y ?? 0) + (card?.text?.height ?? 0) - 1)
+      expect(Math.abs((once?.y ?? 0) - (choose?.y ?? 0))).toBeLessThan(2)
+      expect((once?.x ?? 0) + 1).toBeGreaterThan((choose?.x ?? 0) + (choose?.width ?? 0))
+      expect((once?.x ?? 0) + (once?.width ?? 0)).toBeLessThanOrEqual(
+        (card?.card?.x ?? 0) + (card?.card?.width ?? 0),
+      )
+      expect(choose?.width).toBeGreaterThan(130)
+      expect(once?.width).toBeGreaterThan(130)
+      expect(choose?.height).toBeGreaterThanOrEqual(44)
+      expect(once?.height).toBeGreaterThanOrEqual(44)
     }
     expect(first?.alt).toBe('Poivre noir moulu de test')
     // Adresse refusée (autre hôte), photo en 404, pas de photo : la fiche reste en texte, sans cadre ni icône d'image cassée.
@@ -290,7 +301,6 @@ test('seule l’adresse d’images de l’enseigne est demandée, jamais l’adr
 
   await show(page, 'chooser')
   await show(page, 'chooser-gone')
-  await show(page, 'placement')
 
   const requested = requestedByPage(page)
   expect(requested.length).toBeGreaterThan(0)
@@ -299,44 +309,6 @@ test('seule l’adresse d’images de l’enseigne est demandée, jamais l’adr
   expect(new Set(requested.map((address) => new URL(address).searchParams.get('id')))).toEqual(
     new Set(['1001', '1002', '9999']),
   )
-})
-
-test('« Toujours prendre ce produit ? » montre la photo du produit choisi à côté de son libellé', async ({
-  page,
-}, testInfo) => {
-  await openPage(page)
-
-  await show(page, 'placement')
-
-  const shown = await page.evaluate(() => {
-    const root = (document.documentElement.lastElementChild as HTMLElement).shadowRoot as ShadowRoot
-    const frame = root.querySelector('.media .photo')?.getBoundingClientRect()
-    const text = root.querySelector('.media .text')?.getBoundingClientRect()
-    return {
-      alt: root.querySelector('.media img')?.getAttribute('alt') ?? null,
-      width: frame?.width ?? 0,
-      sideBySide: frame !== undefined && text !== undefined && frame.right <= text.left + 1,
-      buttons: [...root.querySelectorAll('button')].map((button) => button.textContent),
-    }
-  })
-  expect(shown.alt).toBe('Farine de blé T45 de test 1 kg')
-  expect(shown.width).toBeCloseTo(80, 0)
-  expect(shown.sideBySide).toBe(true)
-  expect(shown.buttons).toEqual([
-    'Toujours prendre celui-ci',
-    'Cette fois seulement',
-    'Revenir à la liste',
-  ])
-  await page.screenshot({ path: testInfo.outputPath('photos-question.png') })
-})
-
-test('sans photo, la question et la liste n’ont aucune balise img ni cadre', async ({ page }) => {
-  await openPage(page)
-
-  await show(page, 'placement-text')
-
-  await expect(page.locator('.overlay img')).toHaveCount(0)
-  expect(requestedByPage(page)).toEqual([])
 })
 
 // —— Tous les résultats de la recherche, en défilant (DRV-643) ————————————————————————————————————————————————————————————————————
