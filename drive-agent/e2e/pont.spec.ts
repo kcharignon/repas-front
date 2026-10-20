@@ -197,7 +197,7 @@ test.describe('diagnostic', () => {
     // Aucun nom de produit, sauf le premier produit de la recherche filtrée (0.35.0), demandé pour savoir s'il est frais
     const lines = (await report.inputValue())
       .split('\n')
-      .filter((line) => !/premier produit/i.test(line))
+      .filter((line) => !/premier produit|Libellés de la liste/i.test(line))
     expect(lines.join('\n')).not.toMatch(/Tomates|Pommes|Courgettes/)
   })
 
@@ -308,6 +308,37 @@ test.describe('diagnostic', () => {
     expect(searches).toHaveLength(6)
     expect(fake.cart()).toEqual({})
     expectPoliteAgent(fake)
+    await expect(report).not.toHaveValue(/Ville-Test|000001/)
+  })
+
+  test('le rapport dit les listes de produits de la réponse, dont une liste de marque de distributeur aux produits frais (DRV-647, 0.38.0)', async ({
+    page,
+    fake,
+    agentCode,
+  }) => {
+    // Given : des produits frais rangés dans `objContenuMDD` (forme inventée)
+    fake.setBehavior({ mddList: true })
+    const app = await openWithBridge(page, fake, agentCode)
+    await app.received('hello')
+
+    // When
+    await app.send(DIAGNOSTIC)
+
+    // Then : chaque liste, ses produits vus et lus, ses familles, ses libellés ; la somme face au total ; la sonde « fruits / légumes » par liste
+    const report = page.getByLabel('Rapport à copier')
+    await expect(report).toHaveValue(
+      /Listes de produits de la réponse « tomate » : iNbTotalProduits=5, produits lus dans les listes : 5 ; facette « Fruits et légumes » : 3 références/,
+    )
+    await expect(report).toHaveValue(
+      /Liste objContenuMDD \(« tomate »\) : objet, clés : iNbElements, lstElements\[2\] ; iIdProduit vus : 2, produits lus : 2 \(non lus : 0 objet trop grand, 0 sans libellé\) ; rayons : 41:2 ; familles : « Legumes » \(2\) ; légumes ou fruits : oui/,
+    )
+    await expect(report).toHaveValue(
+      /Libellés de la liste objContenuMDD \(« tomate »\) : « Tomates rondes Nos Régions Inventées 1 kg »/,
+    )
+    await expect(report).toHaveValue(/Listes de produits de la réponse « courgette »/)
+    await expect(report).toHaveValue(
+      /Produits par liste de la forme essayée : \? 1, objContenuMDD 2/,
+    )
     await expect(report).not.toHaveValue(/Ville-Test|000001/)
   })
 })

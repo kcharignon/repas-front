@@ -224,6 +224,8 @@ export function fakeAdapter(
     siteAisles?: ReturnType<RetailerAdapter['siteAisles']>
     /** La validation de la forme du filtre du site (DRV-647, 0.37.0) : son résultat (par défaut : aucune forme valide). */
     siteValid?: boolean
+    /** Les rayons du site dont la recherche filtrée n'est pas cohérente avec la valeur (DRV-647, 0.38.0). */
+    incoherent?: string[]
     /** Ce que rend la recherche filtrée sur une clé : des identifiants du rayon, ou une erreur (par défaut : rien). */
     filtered?: Record<string, string[] | Error>
   } = {},
@@ -305,6 +307,7 @@ export function fakeAdapter(
     aisleSamples: () => [],
     exploreFacets: () => Promise.resolve(null),
     siteAisles: () => options.siteAisles ?? [],
+    describeProductLists: () => null,
     async validateSiteFilter() {
       calls.push('validate')
       await options.before?.('validate')
@@ -315,7 +318,11 @@ export function fakeAdapter(
       await options.before?.(`filter ${key}`)
       const answer = options.filtered?.[key] ?? []
       if (answer instanceof Error) throw answer
-      return { candidates: answer.map((id) => candidate(id, shelf[id])), total: answer.length }
+      return {
+        candidates: answer.map((id) => candidate(id, shelf[id])),
+        total: answer.length,
+        coherent: !(options.incoherent ?? []).includes(key),
+      }
     },
     async setCartQuantity(id, quantity): Promise<CartResult> {
       calls.push(`cart ${id} ${quantity}`)

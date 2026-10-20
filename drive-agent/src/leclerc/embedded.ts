@@ -153,7 +153,11 @@ function readField(text: string, name: string): string | null {
 /** « Bientôt disponible », avec ou sans accent (le texte est décodé avant : `ô` et `&ocirc;` y sont déjà « ô »). */
 const COMING_SOON = /bient[oô]t\s+disponible/i
 
-const MAX_SPAN = 6000
+/**
+ * Jusqu'où chercher l'objet d'un produit autour de son identifiant (DRV-647, 0.38.0 : 40 000 au lieu de 6 000 ; un produit du vrai site a 73 clés, dont des
+ * objets imbriqués, et un objet plus grand que la borne était perdu sans bruit).
+ */
+const MAX_SPAN = 40_000
 
 /** Plus petit objet `{…}` qui contient la position donnée, ou `null` si on ne le délimite pas. */
 function enclosingObject(text: string, index: number): { start: number; end: number } | null {
@@ -191,6 +195,41 @@ function enclosingObject(text: string, index: number): { start: number; end: num
 }
 
 /** Les objets autour d'un identifiant, du plus petit au plus grand, tant qu'ils ne contiennent que ce produit. */
+/**
+ * Le texte d'un objet réduit à son premier niveau : les objets et listes imbriqués sont vidés (`{}`, `[]`), les chaînes gardées. Sert à lire les champs
+ * DIRECTS d'un produit qui en contient d'autres (un groupe de variantes, des produits liés : DRV-647, 0.38.0), sans prendre ceux d'un produit imbriqué.
+ */
+export function directLevel(slice: string): string {
+  let out = ''
+  let depth = 0
+  let quote: string | null = null
+  for (let p = 0; p < slice.length; p++) {
+    const c = slice[p] ?? ''
+    if (quote !== null) {
+      if (depth <= 1) out += c
+      if (c === '\\') {
+        p++
+        if (depth <= 1) out += slice[p] ?? ''
+      } else if (c === quote) quote = null
+      continue
+    }
+    if (c === '"' || c === "'") {
+      quote = c
+      if (depth <= 1) out += c
+    } else if (c === '{' || c === '[') {
+      depth++
+      if (depth <= 2) out += c
+    } else if (c === '}' || c === ']') {
+      if (depth <= 2) out += c
+      depth--
+    } else if (depth <= 1) out += c
+  }
+  return out
+}
+
+/** Pourquoi un identifiant de produit n'a pas donné de produit (DRV-647, 0.38.0, pour le diagnostic). */
+export type UnreadReason = 'SPAN' | 'NO_LABEL'
+
 function candidateSlices(text: string, index: number): string[] {
   const slices: string[] = []
   let position = index
@@ -198,7 +237,14 @@ function candidateSlices(text: string, index: number): string[] {
     const span = enclosingObject(text, position)
     if (!span) break
     const slice = text.slice(span.start, span.end)
-    if (countIds(slice) !== 1) break
+    if (countIds(slice) !== 1) {
+      // L'objet du produit en contient d'autres (variantes, produits liés) : ses champs directs seulement, et l'on s'arrête là.
+      if (level === 0) {
+        const direct = directLevel(slice)
+        if (countIds(direct) === 1) slices.push(direct)
+      }
+      break
+    }
     slices.push(slice)
     if (span.start === 0) break
     position = span.start - 1
@@ -332,16 +378,63 @@ export function extractProducts(page: string): EmbeddedProducts {
     }
   }
 
-  const byId = new Map<string, RawProduct>()
-  for (const found of best.matchAll(ID_PATTERN)) {
+  const { products, ids } = located(best)
+  // La liste principale (`objContenu`) d'abord, puis les autres listes de la réponse (`objContenuMDD`, variantes…), chacune dans l'ordre de la page.
+  const main = mainSpan(best)
+  const inMain = (at: number) => main !== null && at >= main.start && at <= main.end
+  const read = products.filter(({ raw }) => raw.label1 !== null)
+  return {
+    products: [...read.filter(({ at }) => inMain(at)), ...read.filter(({ at }) => !inMain(at))].map(
+      ({ raw }) => raw,
+    ),
+    ids,
+  }
+}
+
+/** Chaque identifiant distinct de [text], à sa première place utile, et le produit qu'il donne (un produit sans libellé n'est pas un résultat). */
+function located(text: string): { products: { raw: RawProduct; at: number }[]; ids: number } {
+  const byId = new Map<string, { raw: RawProduct; at: number }>()
+  for (const found of text.matchAll(ID_PATTERN)) {
     const id = found[1]
     if (!id || found.index === undefined) continue
-    const product = buildProduct(id, candidateSlices(best, found.index))
+    const raw = buildProduct(id, candidateSlices(text, found.index))
     const known = byId.get(id)
-    if (!known || (known.label1 === null && product.label1 !== null)) byId.set(id, product)
+    if (!known || (known.raw.label1 === null && raw.label1 !== null))
+      byId.set(id, { raw, at: found.index })
   }
-  return {
-    products: [...byId.values()].filter((product) => product.label1 !== null),
-    ids: byId.size,
+  return { products: [...byId.values()], ids: byId.size }
+}
+
+/** L'objet `objContenu` de la réponse (la liste principale des résultats, relevé du 2026-10-20), `null` s'il n'y est pas. */
+function mainSpan(text: string): { start: number; end: number } | null {
+  const found = /"objContenu"\s*:\s*\{/.exec(text)
+  if (found === null) return null
+  const start = found.index + found[0].length - 1
+  const end = objectEnd(text, start)
+  return end < 0 ? null : { start, end }
+}
+
+/**
+ * Pour le diagnostic (DRV-647, 0.38.0) : la lecture retenue de la page, et chaque identifiant de produit distinct avec sa place, le produit lu (`null` : pas
+ * de libellé) et, s'il n'est pas lu, pourquoi (`SPAN` : l'objet autour n'a pas pu être délimité ; `NO_LABEL` : pas de `sLibelleLigne1`).
+ */
+export function locateProducts(page: string): {
+  text: string
+  ids: { id: string; at: number; raw: RawProduct | null; why?: UnreadReason }[]
+} {
+  let best = page
+  let bestCount = -1
+  for (const reading of pageReadings(page)) {
+    const count = distinctIds(reading).length
+    if (count > bestCount) {
+      best = reading
+      bestCount = count
+    }
   }
+  const ids = located(best).products.map(({ raw, at }) => {
+    if (raw.label1 !== null) return { id: raw.id, at, raw }
+    const why: UnreadReason = enclosingObject(best, at) === null ? 'SPAN' : 'NO_LABEL'
+    return { id: raw.id, at, raw: null, why }
+  })
+  return { text: best, ids }
 }

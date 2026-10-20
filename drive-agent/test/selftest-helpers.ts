@@ -158,7 +158,8 @@ export function shop(shelves: Shelves, options: ShopOptions = {}) {
     exploreFacets: () => Promise.resolve(null),
     siteAisles: () => [],
     validateSiteFilter: () => Promise.resolve(false),
-    searchFiltered: () => Promise.resolve({ candidates: [], total: null }),
+    searchFiltered: () => Promise.resolve({ candidates: [], total: null, coherent: true }),
+    describeProductLists: () => null,
     readEntry: () => ({ kind: 'NONE' }),
     followEntry: () => Promise.resolve(),
   }

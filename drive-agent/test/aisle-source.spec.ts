@@ -398,11 +398,17 @@ describe('le diagnostic dit d’où viennent les libellés de rayons (DRV-647)',
       '987654',
       '555444',
       '000123',
-      'Farine de blé',
     ]) {
       expect(report).not.toContain(secret)
       expect(JSON.stringify(probes)).not.toContain(secret)
     }
+    // Les libellés de produit ne paraissent que dans les lignes des listes de produits (DRV-647, 0.38.0, catalogue public).
+    expect(
+      report
+        .split('\n')
+        .filter((line) => !line.includes('Libellés de la liste'))
+        .join('\n'),
+    ).not.toContain('Farine de blé')
     expect(report).toContain('Lien de rayon 1 : (libellé écarté)')
     expect(report).toContain('?noPL&idRayon')
   })

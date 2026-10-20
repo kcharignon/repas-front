@@ -463,7 +463,9 @@ async function settleLine(
                   return { fallback: search.familyRow }
                 }
                 try {
-                  const { candidates } = await adapter.searchFiltered(search.query, key)
+                  const { candidates, coherent } = await adapter.searchFiltered(search.query, key)
+                  // Un résultat qui n'est pas celui de CE rayon (0.38.0) : « Tous », la rangée des familles pour le passage, une phrase sobre.
+                  if (!coherent) return { ...fallback(), notice: S.picker.aisleUnexpected }
                   const kept = candidates.slice(0, MAX_CANDIDATES)
                   search.siteCache.set(key, kept)
                   return { items: itemsOf(kept) }

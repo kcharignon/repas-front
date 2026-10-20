@@ -25,8 +25,12 @@ import {
   allValues,
   countKeys,
   FILTER_KEY,
+  chipCoherent,
   coherence,
   filterKeys,
+  listCounts,
+  productLists,
+  type ProductLists,
   keyFor,
   validationTarget,
   type FilterForm,
@@ -210,7 +214,20 @@ export interface RetailerAdapter {
   searchFiltered(
     query: string,
     key: string,
-  ): Promise<{ candidates: Candidate[]; total: number | null }>
+  ): Promise<{ candidates: Candidate[]; total: number | null; coherent: boolean }>
+  /**
+   * Pour le diagnostic (DRV-647, 0.38.0) : les listes de produits de premier niveau de la dernière réponse (`objContenu`, `objContenuMDD`,
+   * `objContenuGroupeVariantes`, `lstTrade`…), ce qu'elles contiennent, et la valeur « fruits / légumes » de la facette. Aucune requête.
+   */
+  describeProductLists():
+    | (ProductLists & {
+        freshFacet: {
+          label: string | null
+          references: number | null
+          children: { label: string | null; references: number | null }[]
+        } | null
+      })
+    | null
   /**
    * Valide la forme de `Filtres` (DRV-647, 0.37.0) sur la facette de la dernière réponse de [query] : trois formes au plus, la première COHÉRENTE avec la
    * valeur demandée est retenue pour le reste du passage. Une seule fois par adaptateur ; les appels suivants rendent le même résultat. Jamais une erreur.
@@ -584,6 +601,24 @@ export class LeclercAdapter implements RetailerAdapter {
       probe = { skipped: tree.values.length === 0 ? 'NO_FACET' : 'NO_TARGET' }
     else if (target === null) probe = { skipped: 'NO_FILTER_KEY' }
     else probe = await this.probeFiltered(term, target, totalProducts(text), safe)
+    // UNE requête de plus (0.38.0) : la valeur « fruits / légumes » avec la forme retenue, si elle n'est pas déjà celle de la validation.
+    const freshTarget = fresh.find(({ depth }) => depth === 0)?.value ?? null
+    let freshProbe: FilteredProbe | null = null
+    if (
+      'retained' in probe &&
+      probe.retained !== null &&
+      freshTarget !== null &&
+      freshTarget.id !== target?.id
+    ) {
+      const tried = await this.tryForms(
+        term,
+        freshTarget,
+        totalProducts(text),
+        safe,
+        probe.retained,
+      )
+      freshProbe = { target: { id: freshTarget.id, label: safe(freshTarget.label) }, ...tried }
+    }
     return {
       blocs: tree.blocs.map((bloc) => ({
         id: bloc.id,
@@ -630,6 +665,7 @@ export class LeclercAdapter implements RetailerAdapter {
           ? template
           : { shape: filterLinkShape(template.link, city), kind: template.kind },
       probe,
+      freshProbe,
       pagination: { reply: countKeys(text), page: countKeys(pageText) },
       universes: { reply: universes(text), page: universes(pageText) },
     }
@@ -656,6 +692,7 @@ export class LeclercAdapter implements RetailerAdapter {
     target: FacetValue,
     before: number | null,
     safe: (label: string | null) => string | null,
+    only?: FilterForm,
   ): Promise<{ attempts: ProbeAttempt[]; retained: FilterForm | null; address: string | null }> {
     const attempts: ProbeAttempt[] = []
     let address: string | null = null
@@ -663,7 +700,9 @@ export class LeclercAdapter implements RetailerAdapter {
     const childLabels = target.children.flatMap((child) =>
       child.label === null || child.label.trim() === '' ? [] : [child.label],
     )
-    for (const { form, key } of filterKeys(target)) {
+    for (const { form, key } of filterKeys(target).filter(
+      (one) => only === undefined || one.form === only,
+    )) {
       const attempt: ProbeAttempt = {
         form,
         value: valueShape(key, city),
@@ -700,6 +739,8 @@ export class LeclercAdapter implements RetailerAdapter {
         const grouping = aisleChoices(candidates, { city })
         const first = candidates[0]
         attempt.products = candidates.length
+        // D'où viennent les produits de la réponse filtrée (DRV-647, 0.38.0) : leur nombre dans chaque liste.
+        attempt.lists = ok ? listCounts(reply.text) : []
         attempt.families = grouping.choices
           .slice(0, 5)
           .map(({ id, label, count }) => ({ id, label, count }))
@@ -770,7 +811,7 @@ export class LeclercAdapter implements RetailerAdapter {
   async searchFiltered(
     query: string,
     aisle: string,
-  ): Promise<{ candidates: Candidate[]; total: number | null }> {
+  ): Promise<{ candidates: Candidate[]; total: number | null; coherent: boolean }> {
     // La forme validée pour ce passage, appliquée à la valeur de facette du rayon : sans forme validée, aucune requête filtrée.
     const value = this.siteValues.get(aisle)
     const key =
@@ -782,7 +823,46 @@ export class LeclercAdapter implements RetailerAdapter {
     for (const candidate of candidates) {
       if (candidate.stock !== null) this.stocks.set(candidate.id, candidate.stock)
     }
-    return { candidates, total: totalProducts(reply.text) }
+    // Le résultat est-il celui de CE rayon (0.38.0) : la moitié des produits dans ses enfants, ou un nombre proche de ses références ?
+    const city = this.city()
+    const coherent = chipCoherent({
+      products: candidates.length,
+      references: value?.references ?? null,
+      childLabels: (value?.children ?? []).flatMap((child) =>
+        child.label === null ? [] : [child.label],
+      ),
+      groupLabels: candidates.map((candidate) => {
+        const found = urlAisle(candidate.aisleTexts?.url, city)
+        return found !== null && found.id === candidate.family ? found.label : null
+      }),
+    })
+    return { candidates, total: totalProducts(reply.text), coherent }
+  }
+
+  describeProductLists(): ReturnType<RetailerAdapter['describeProductLists']> {
+    const text = this.lastReplyText
+    if (text === null) return null
+    const city = this.city()
+    const safe = (label: string | null): string | null => {
+      const shown = shownAisleText(label, city)
+      return shown.kind === 'TEXT' ? shown.text : null
+    }
+    const fresh =
+      freshValues(aisleBloc(readFacets(text))?.values ?? []).find(({ depth }) => depth === 0)
+        ?.value ?? null
+    return {
+      ...productLists(text, city, safe),
+      freshFacet:
+        fresh === null
+          ? null
+          : {
+              label: safe(fresh.label),
+              references: fresh.references,
+              children: fresh.children
+                .slice(0, 6)
+                .map((child) => ({ label: safe(child.label), references: child.references })),
+            },
+    }
   }
 
   siteAisles(): SiteAisle[] {

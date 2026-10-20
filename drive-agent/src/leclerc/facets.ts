@@ -4,16 +4,20 @@
 // références, dans un espace d'identifiants à part. Ce fichier les lit (des valeurs du catalogue public), cherche dans les liens déjà reçus la FORME du
 // paramètre `Filtres`, et n'en déduit l'adresse d'une recherche filtrée que si un lien de recherche filtrée la montre (jamais deviné). Aucune requête ici.
 import { cleanText } from '../text'
-import { pageReadings } from './embedded'
+import { urlAisle } from './aisle-labels'
+import { locateProducts, pageReadings } from './embedded'
 import { addressShape } from './probe'
 import {
+  closing,
   entriesOf,
   integerAt,
   objectAround,
   PRODUCT_ID,
   SITE_STYLE,
   stringAt,
+  topObjectOf,
   type Entry,
+  type KeyShape,
 } from './reply-shape'
 
 /** Une valeur d'un bloc de filtre : son identifiant, le fragment d'adresse du site, son libellé, son nombre de références, ses enfants. */
@@ -526,6 +530,8 @@ export interface ProbeAttempt {
   /** Les 5 groupes (familles nommées) les plus fournis de la réponse filtrée. */
   families: { id: number; label: string | null; count: number }[]
   first: { label: string | null; fresh: boolean } | null
+  /** Le nombre de produits lus de chaque liste de la réponse filtrée (0.38.0). */
+  lists?: { name: string; products: number }[]
 }
 
 /** Les formes essayées sur une valeur (trois au plus), la forme retenue (`null` : aucune), la forme de l'adresse de la dernière. */
@@ -569,6 +575,8 @@ export interface FacetExploration {
   urlIdShapes: string[]
   template: { shape: string; kind: 'URL_ID' | 'ID' } | { miss: TemplateMiss }
   probe: FilteredProbe | { skipped: ProbeSkip }
+  /** La valeur « fruits / légumes » sondée avec la forme retenue (0.38.0), `null` si elle n'a pas lieu. */
+  freshProbe?: FilteredProbe | null
   pagination: { reply: CountKey[]; page: CountKey[] }
   universes: { reply: { value: number; count: number }[]; page: { value: number; count: number }[] }
 }
@@ -576,3 +584,160 @@ export interface FacetExploration {
 /** Ce qui ressemble à un produit frais dans un libellé de produit : frais, vrac, au kilo, à la pièce, en barquette, en grappe… */
 export const FRESH_PRODUCT =
   /\bfra[iî]ch|\bvrac\b|\bbarquette\b|\bgrappe\b|\bcerise|\bau kg\b|\bla pi[eè]ce\b|\bcat[ée]gorie 1\b/i
+
+// —— Les listes de produits de la réponse (DRV-647, 0.38.0) ————————————————————————————————————————————————————————————————————
+
+/** Une liste de produits de premier niveau de l'état (`objContenu`, `objContenuMDD`, `objContenuGroupeVariantes`, `lstTrade`…) et ce qu'elle contient. */
+export interface ProductList {
+  /** Le nom de la clé (`?` s'il n'a pas le style du site). */
+  name: string
+  kind: 'OBJECT' | 'LIST'
+  /** Les clés de l'objet (ou du premier élément d'une liste), 12 au plus, et la taille d'une liste. */
+  keys: KeyShape[]
+  size?: number
+  /** Les identifiants de produit distincts vus dans la liste, ceux qui donnent un produit lu, et pourquoi les autres ne le donnent pas. */
+  occurrences: number
+  products: number
+  unread: { span: number; noLabel: number }
+  /** Les rayons (`iIdRayon`) les plus fournis, 8 au plus. */
+  aisles: { id: number; count: number }[]
+  /** Les familles (nommées par `sUrlVoirRayon` quand son numéro est la famille), 8 au plus. */
+  families: { id: number; label: string | null; count: number }[]
+  /** Les 8 premiers libellés de produit (deux lignes, catalogue public, rendus sûrs par l'appelant). */
+  labels: string[]
+  /** Une famille ou un libellé de produit parle de légumes ou de fruits. */
+  fresh: boolean
+}
+
+/** Les listes de l'état, le total annoncé, et la somme de leurs produits lus. */
+export interface ProductLists {
+  lists: ProductList[]
+  total: number | null
+  sum: number
+}
+
+/** Ce qui parle de légumes ou de fruits (sans accents ni casse). */
+const FRESH_WORDS = /legume|fruit/
+
+const WATCHED = new Set(['objContenu', 'objContenuMDD', 'objContenuGroupeVariantes', 'lstTrade'])
+
+/**
+ * Les listes de produits de premier niveau de [page] (DRV-647, 0.38.0) : l'objet de premier niveau de l'état qui contient le premier produit (à défaut
+ * celui qui porte `objContenu`), et chacune de ses clés qui contient au moins un identifiant de produit, ou qui s'appelle `objContenu`, `objContenuMDD`,
+ * `objContenuGroupeVariantes` ou `lstTrade`. [safe] rend un libellé sûr (ou `null`). Des noms, des nombres et des libellés de catalogue.
+ */
+export function productLists(
+  page: string,
+  city: string | null,
+  safe: (label: string | null) => string | null,
+): ProductLists {
+  const { text, ids } = locateProducts(page)
+  const anchor = ids[0]?.at ?? /"objContenu"\s*:/.exec(text)?.index ?? -1
+  const top = anchor < 0 ? null : topObjectOf(text, anchor)
+  const lists: ProductList[] = []
+  let sum = 0
+  if (top !== null) {
+    for (const entry of entriesOf(text, top.start, top.end)) {
+      if (entry.kind === 'VALUE') continue
+      const inside = ids.filter(({ at }) => at >= entry.from && at <= entry.to)
+      if (inside.length === 0 && !WATCHED.has(entry.name)) continue
+      const read = inside.flatMap(({ raw }) => (raw === null ? [] : [raw]))
+      sum += read.length
+      let keys: Entry[] = []
+      if (entry.kind === 'OBJECT') keys = entriesOf(text, entry.from, entry.to)
+      else {
+        const first = /^\[\s*\{/.exec(text.slice(entry.from, entry.from + 200))
+        const start = first === null ? -1 : entry.from + first[0].length - 1
+        const end = start < 0 ? -1 : closing(text, start)
+        if (end > 0) keys = entriesOf(text, start, end)
+      }
+      const count = <K>(values: readonly K[]) => {
+        const counts = new Map<K, number>()
+        for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1)
+        return [...counts].sort((a, b) => b[1] - a[1]).slice(0, 8)
+      }
+      const familyLabel = new Map<number, string | null>()
+      for (const raw of read) {
+        const found = urlAisle(raw.aisleTexts?.url, city)
+        if (
+          raw.family !== null &&
+          found !== null &&
+          found.id === raw.family &&
+          !familyLabel.get(raw.family)
+        ) {
+          familyLabel.set(raw.family, found.label)
+        }
+      }
+      const families = count(read.flatMap((raw) => (raw.family === null ? [] : [raw.family]))).map(
+        ([id, n]) => ({
+          id,
+          label: familyLabel.get(id) ?? null,
+          count: n,
+        }),
+      )
+      const labels = read
+        .slice(0, 8)
+        .map(
+          (raw) =>
+            safe([raw.label1, raw.label2].filter(Boolean).join(' ').slice(0, 60)) ?? '(écarté)',
+        )
+      lists.push({
+        name: SITE_STYLE.test(entry.name) ? entry.name : '?',
+        kind: entry.kind,
+        keys: keys.slice(0, 12).map((one) => ({
+          name: SITE_STYLE.test(one.name) ? one.name : null,
+          kind: one.kind,
+          ...(one.size !== undefined && { size: one.size }),
+        })),
+        ...(entry.kind === 'LIST' && entry.size !== undefined && { size: entry.size }),
+        occurrences: inside.length,
+        products: read.length,
+        unread: {
+          span: inside.filter(({ why }) => why === 'SPAN').length,
+          noLabel: inside.filter(({ why }) => why === 'NO_LABEL').length,
+        },
+        aisles: count(read.flatMap((raw) => (raw.aisle === null ? [] : [raw.aisle]))).map(
+          ([id, n]) => ({ id, count: n }),
+        ),
+        families,
+        labels,
+        fresh:
+          families.some(({ label }) => label !== null && FRESH_WORDS.test(fold(label))) ||
+          read.some((raw) => FRESH_WORDS.test(fold(`${raw.label1 ?? ''} ${raw.label2 ?? ''}`))),
+      })
+    }
+  }
+  return { lists, total: totalProducts(text), sum }
+}
+
+/** Le nombre de produits lus de chaque liste de [page] : pour savoir d'où viennent les produits d'une réponse filtrée. */
+export function listCounts(page: string): { name: string; products: number }[] {
+  return productLists(page, null, () => null).lists.map(({ name, products }) => ({
+    name,
+    products,
+  }))
+}
+
+/**
+ * Le résultat d'un rayon touché est-il cohérent avec CETTE valeur (DRV-647, 0.38.0) : au moins 50 % des produits ont pour groupe un enfant lisible de la
+ * valeur, ou leur nombre s'approche de son `niNbReferences` (±25 % ou ±3). Plus jamais un sirop dans « Fruits Légumes ».
+ */
+export function chipCoherent(input: {
+  products: number
+  references: number | null
+  childLabels: readonly string[]
+  groupLabels: readonly (string | null)[]
+}): boolean {
+  if (input.products === 0) return false
+  const children = new Set(input.childLabels.map(folded).filter((label) => label !== ''))
+  if (children.size > 0 && input.groupLabels.length > 0) {
+    const share =
+      input.groupLabels.filter((label) => label !== null && children.has(folded(label))).length /
+      input.groupLabels.length
+    if (share >= 0.5) return true
+  }
+  return (
+    input.references !== null &&
+    Math.abs(input.products - input.references) <= Math.max(3, input.references * 0.25)
+  )
+}

@@ -426,3 +426,19 @@ export function facetObjects(text: string, max: number): FacetObject[] {
   }
   return out
 }
+
+/**
+ * L'objet de premier niveau de l'état qui contient la position [index] (DRV-647, 0.38.0) : on remonte les objets englobants tant qu'ils ressemblent à des
+ * données (un corps de fonction arrête la remontée). `null` si rien ne se délimite.
+ */
+export function topObjectOf(text: string, index: number): { start: number; end: number } | null {
+  let top: { start: number; end: number } | null = null
+  let position = index
+  for (let level = 0; level < MAX_LEVELS && position >= 0; level++) {
+    const span = objectAround(text, position)
+    if (span === null || !looksLikeData(text, span.start)) break
+    top = span
+    position = span.start - 1
+  }
+  return top
+}

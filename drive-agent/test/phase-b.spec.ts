@@ -153,6 +153,7 @@ function run(
     siteAisles?: NonNullable<Parameters<typeof fakeAdapter>[1]>['siteAisles']
     siteValid?: boolean
     filtered?: Record<string, string[] | Error>
+    incoherent?: string[]
   } = {},
 ) {
   const placements: PlacementProps[] = []
@@ -163,6 +164,7 @@ function run(
     ...(options.aisleLevel && { aisleLevel: options.aisleLevel }),
     ...(options.siteAisles && { siteAisles: options.siteAisles }),
     ...(options.siteValid !== undefined && { siteValid: options.siteValid }),
+    ...(options.incoherent && { incoherent: options.incoherent }),
     ...(options.filtered && { filtered: options.filtered }),
   })
   const user = session(...steps)
@@ -2826,6 +2828,40 @@ describe('la rangée des rayons du site, tirée de sa facette « Rayons » (DRV-
       'Rayon 1 (1)',
     ])
     expect(seen.list).toBe(3)
+  })
+
+  it('un rayon touché dont le résultat n’est pas le sien (0.38.0) : « Tous », la rangée des familles et une phrase sobre ; plus aucune requête filtrée', async () => {
+    const seen: Record<string, unknown> = {}
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          await tick()
+          chipOf(view.zone, 'Fruits Légumes').click()
+          await tick()
+          seen.row = shelfTexts(view.zone)
+          seen.notice = view.zone.querySelector<HTMLElement>('.notice')?.textContent
+          seen.list = names(view.zone).length
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        shelf,
+        found: { tomate: ids },
+        siteValid: true,
+        siteAisles: SITE,
+        ...familyOptions,
+        filtered: { '4-2': canned.slice(0, 3) },
+        incoherent: ['4-2'],
+      },
+    )
+
+    await test.start()
+
+    expect(seen.row).toEqual(FAMILIES)
+    expect(seen.notice).toBe('Ce rayon ne répond pas comme prévu.')
+    expect(seen.list).toBe(8)
+    expect(finds(test.adapter.calls)).toEqual(['filter 4-2'])
   })
 
   it('une recherche filtrée que le site refuse après validation : repli sans message sur les familles', async () => {
