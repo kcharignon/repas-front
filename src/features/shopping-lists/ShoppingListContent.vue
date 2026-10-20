@@ -9,7 +9,8 @@ import UiButton from '@/design/UiButton.vue'
 import UiCheckbox from '@/design/UiCheckbox.vue'
 import UiProgressBar from '@/design/UiProgressBar.vue'
 import DriveEstimate from '@/features/drive/DriveEstimate.vue'
-import { formatQuantity, imageUrl } from './format'
+import UiImage from '@/design/UiImage.vue'
+import { formatQuantity } from './format'
 import { useChangeServing, useToggleRow, useUnplanRecipe } from './queries'
 
 const props = defineProps<{ list: ShoppingList; startingNew?: boolean }>()
@@ -86,7 +87,7 @@ const stepClass =
           <h2
             class="mb-1.5 flex items-center gap-2 px-0.5 text-xs font-bold tracking-wider text-muted uppercase"
           >
-            <img :src="imageUrl(department.image)" alt="" class="size-6 object-contain" />
+            <UiImage :src="department.image" class="size-6" />
             {{ department.name }}
           </h2>
           <ul
@@ -118,7 +119,7 @@ const stepClass =
           <h2
             class="mb-1.5 flex items-center gap-2 px-0.5 text-xs font-bold tracking-wider text-muted uppercase"
           >
-            <img :src="imageUrl(type.image)" alt="" class="size-6 object-contain" />
+            <UiImage :src="type.image" class="size-6" />
             {{ type.name }}
           </h2>
           <ul class="flex flex-col gap-3">

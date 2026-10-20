@@ -7,7 +7,7 @@ import { Search } from 'lucide-vue-next'
 import { hasFailed } from '@/api/query'
 import UiLinkButton from '@/design/UiLinkButton.vue'
 import UiTile from '@/design/UiTile.vue'
-import { imageUrl } from '@/features/shopping-lists/format'
+import UiImage from '@/design/UiImage.vue'
 import PlanButton from './PlanButton.vue'
 import { useRecipeTypes, useRecipesByType } from './queries'
 
@@ -86,7 +86,7 @@ function choose(slug: string) {
         @update:pressed="choose(type.slug)"
       >
         <template #icon>
-          <img :src="imageUrl(type.image)" alt="" class="size-8 object-contain" />
+          <UiImage :src="type.image" class="size-8" />
         </template>
         {{ capitalized(type.name) }}
       </UiTile>
