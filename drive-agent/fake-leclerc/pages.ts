@@ -34,6 +34,7 @@ export function totalsOf(cart: Cart): { items: number; totalCents: number; total
  */
 const FAMILY_NAMES: Readonly<Record<number, string>> = {
   413: 'Legumes-frais',
+  414: 'Legumes',
   521: 'Jus-de-legumes',
   410: 'Legumes-fruits',
   411: 'Fruits-du-verger',
@@ -384,9 +385,15 @@ export function searchPage(
 ): string {
   const title = `Recherche : ${query.replace(/[<>&"]/g, '')}`
   if (found.length === 0 && empty === 'no-list') return storePage(title, '', {}, cart, session)
-  const products = found.map((product) =>
-    productJson(product, cart.get(product.id) ?? 0, availability),
-  )
+  const products = found
+    .filter((product) => product.mdd !== true)
+    .map((product) => productJson(product, cart.get(product.id) ?? 0, availability))
+  // DRV-647 (0.38.0) : les produits de marque de distributeur dans une autre liste, de la forme `objContenu` du vrai site (`lstElements[] > objElement`).
+  const mdd = found
+    .filter((product) => product.mdd === true)
+    .map((product) => ({
+      objElement: productJson(product, cart.get(product.id) ?? 0, availability),
+    }))
   const text =
     found.length === 0 ? 'Aucun résultat pour votre recherche' : 'Résultats pour votre recherche'
   return storePage(
@@ -394,6 +401,7 @@ export function searchPage(
     text,
     {
       widgets: [{ nom: 'produits', lstProduits: products }],
+      ...(mdd.length > 0 && { objContenuMDD: { iNbElements: mdd.length, lstElements: mdd } }),
       lstFiltres: facetsOf(found, facet.urlBloc),
       iNbResultats: found.length,
       iNbTotalProduits: facet.total ?? found.length,

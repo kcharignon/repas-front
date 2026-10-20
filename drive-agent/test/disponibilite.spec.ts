@@ -431,6 +431,12 @@ describe('la mesure de la disponibilité (diagnostic)', () => {
     expect(text).toContain(
       'Dernier envoi, produits habituels écartés : 1 : introuvable (5 recherches) ; 2 : en rupture (1 recherche)',
     )
-    expect(text).not.toContain('Farine')
+    // Les libellés de catalogue des listes de produits (DRV-647, 0.38.0) sont voulus ; aucun autre.
+    expect(
+      text
+        .split('\n')
+        .filter((line) => !line.includes('Libellés de la liste'))
+        .join('\n'),
+    ).not.toContain('Farine')
   })
 })

@@ -28,6 +28,11 @@ export interface FakeProduct {
   photo?: 'none' | 'foreign' | 'missing'
   aisle: number
   family: number
+  /**
+   * DRV-647 (0.38.0) : un produit de marque de distributeur, que la page de recherche range dans une AUTRE liste (`objContenuMDD`) que les résultats
+   * (`widgets`), comme le vrai site semble le faire pour les produits frais ; il n'est cherché que si le faux site a le mode `mddList`.
+   */
+  mdd?: boolean
 }
 
 /** Les rangs, dans la recherche « carotte », des 6 produits frais (DRV-642). */
@@ -164,6 +169,27 @@ export const PRODUCTS: readonly FakeProduct[] = [
       12,
       { aisle: aisle as number, family: family as number },
     )
+  }),
+  // DRV-647 (0.38.0). Des produits frais de marque de distributeur (1000128 à 1000131), rangés dans `objContenuMDD` : rayon 41, famille 414 « Legumes ».
+  make('Tomates rondes Nos Régions Inventées', '1 kg', 2.49, 2.49, 'kg', 20, {
+    aisle: 41,
+    family: 414,
+    mdd: true,
+  }),
+  make('Tomates grappe Marque Repère Inventée', '500 g', 1.99, 3.98, 'kg', 12, {
+    aisle: 41,
+    family: 414,
+    mdd: true,
+  }),
+  make('Courgettes Nos Régions Inventées', '1 kg', 1.89, 1.89, 'kg', 15, {
+    aisle: 41,
+    family: 414,
+    mdd: true,
+  }),
+  make('Carottes Nos Régions Inventées', '1 kg', 1.29, 1.29, 'kg', 25, {
+    aisle: 41,
+    family: 414,
+    mdd: true,
   }),
 ]
 

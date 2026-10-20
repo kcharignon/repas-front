@@ -57,7 +57,7 @@ export interface AisleRow {
 
 /** Ce que rend le chargement d'un rayon du site : ses produits, ou la rangée de repli (les familles, sans message), ou une phrase d'erreur. */
 export type AisleLoad =
-  { items: readonly PickerItem[] } | { fallback: AisleRow } | { notice: string }
+  { items: readonly PickerItem[] } | { fallback: AisleRow; notice?: string } | { notice: string }
 
 const NO_ROW: AisleRow = { chips: [], selected: null }
 
@@ -360,6 +360,11 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
           remoteItems = null
           child = null
           drawShelf()
+          // Une phrase seulement quand un rayon touché n'a pas rendu ses produits (0.38.0) ; un repli à la validation reste muet.
+          if (answer.notice !== undefined) {
+            note.textContent = answer.notice
+            note.hidden = false
+          }
         } else {
           current = { ...current, selected: null }
           remoteItems = null

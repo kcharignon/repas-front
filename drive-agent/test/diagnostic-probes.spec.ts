@@ -68,7 +68,13 @@ describe('en fonctionnement normal', () => {
       'Première réponse pour « tomate » : 5 produits ; page suivante : inconnue',
     )
     expect(text).not.toContain('Première réponse pour « pomme »')
-    expect(text).not.toContain('Farine')
+    // Les libellés de catalogue des listes de produits (DRV-647, 0.38.0) sont voulus ; aucun autre.
+    expect(
+      text
+        .split('\n')
+        .filter((line) => !line.includes('Libellés de la liste'))
+        .join('\n'),
+    ).not.toContain('Farine')
   })
 
   it('regroupe par identifiant, les plus nombreux d’abord, huit groupes au plus, et compte les produits sans identifiant', () => {

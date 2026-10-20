@@ -516,6 +516,31 @@ export const S = {
         INCOHERENT: 'le total ne correspond pas et les groupes ne sont pas ceux des enfants',
         ERROR: 'erreur',
       } as Record<string, string>,
+      formLists: (list: string) => `Produits par liste de la forme essayée : ${list}`,
+      freshProbe: (label: string) =>
+        `Sonde sur la valeur « fruits / légumes » ${label} avec la forme retenue :`,
+      /** DRV-647 (0.38.0) : les listes de produits de premier niveau de la réponse (`objContenu`, `objContenuMDD`, variantes…). */
+      listsHead: (term: string, total: number | null, sum: number, facet: string) =>
+        `Listes de produits de la réponse « ${term} » : iNbTotalProduits=${total ?? '?'}, produits lus dans les listes : ${sum} ; ${facet}`,
+      freshFacet: (label: string, references: number | null, children: string) =>
+        `facette ${label} : ${references ?? '?'} références${children === '' ? '' : ` (${children})`}`,
+      noFreshFacet: 'facette « fruits / légumes » : absente',
+      list: (
+        name: string,
+        term: string,
+        kind: string,
+        keys: string,
+        occurrences: number,
+        products: number,
+        span: number,
+        noLabel: number,
+        aisles: string,
+        families: string,
+        fresh: string,
+      ) =>
+        `Liste ${name} (« ${term} ») : ${kind}, clés : ${keys} ; iIdProduit vus : ${occurrences}, produits lus : ${products} (non lus : ${span} objet trop grand, ${noLabel} sans libellé) ; rayons : ${aisles} ; familles : ${families} ; légumes ou fruits : ${fresh}`,
+      listLabels: (name: string, term: string, labels: string) =>
+        `Libellés de la liste ${name} (« ${term} ») : ${labels}`,
       retained: (rank: string, name: string) => `Forme retenue : (${rank}) Filtres=<${name}>`,
       retainedNone: 'Forme retenue : aucune (la rangée de l’écran reste celle des familles)',
       noneHint:
@@ -681,6 +706,8 @@ export const S = {
     aisleFallback: (rank: number) => `Rayon ${rank}`,
     /** DRV-647 (0.36.0) : la requête d'un rayon du site en cours, et la seconde rangée des enfants du rayon choisi. */
     searchingAisle: 'Je cherche…',
+    /** Un rayon du site dont la recherche filtrée ne rend pas ses produits (DRV-647, 0.38.0) : la liste revient entière, rangée des familles. */
+    aisleUnexpected: 'Ce rayon ne répond pas comme prévu.',
     subAisles: (label: string) => `Rayons de « ${label} »`,
     searchLabel: 'Chercher autre chose',
     searchButton: 'Chercher',

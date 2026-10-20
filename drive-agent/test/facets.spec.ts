@@ -256,7 +256,8 @@ describe('le diagnostic essaie jusqu’à trois formes de « Filtres » et retie
   it('le total qui change et s’approche de niNbReferences : la forme est valide, et l’essai s’arrête là', async () => {
     const { text, filters } = await report(() => ({ body: filteredReply(12, [[543814, null]]) }))
 
-    expect(filters).toHaveLength(1)
+    // La forme (i) valide ; puis la valeur « fruits / légumes » sondée avec elle (0.38.0).
+    expect(filters.map((url) => url.split('Filtres=')[1])).toEqual(['4-543815', '4-543900'])
     expect(text).toContain(
       'HTTP 200, iNbTotalProduits 177 → 12 (niNbReferences 12), 1 produits, part dans les enfants attendus : 0 % ; verdict : valide (le total change et s’approche du nombre de références)',
     )

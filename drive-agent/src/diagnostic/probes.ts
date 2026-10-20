@@ -17,6 +17,8 @@ import type {
   CountKey,
   FacetExploration,
   FacetMatch,
+  ProbeAttempt,
+  RetailerAdapter,
   KeyShape,
   LeclercCause,
   LeclercErrorCode,
@@ -65,6 +67,8 @@ export interface ProbeFacts {
   aisleLabels?: readonly AisleLabelFacts[] | null
   /** La facette « Rayons » et la forme du filtre de la première recherche d'essai (DRV-647, agent 0.35.0). */
   facets?: FacetExploration | null
+  /** Les listes de produits des réponses « tomate » et « courgette » (DRV-647, 0.38.0). */
+  productLists?: readonly { term: string; report: ProductListsReport }[]
   /** Pourquoi le dernier envoi n'a pas mis des produits habituels au panier (DRV-635), dans l'ordre du passage. */
   lastPass?: readonly LastReason[]
   /** Ce que le panier a répondu aux produits choisis qu'il n'a pas pris, au dernier envoi (DRV-644). */
@@ -85,6 +89,9 @@ export interface AvailabilityFacts {
   /** Produits dont la fiche dit « Bientôt disponible ». */
   comingSoon: number
 }
+
+/** Les listes de produits d'une réponse (DRV-647, 0.38.0), telles que l'adaptateur les décrit. */
+export type ProductListsReport = NonNullable<ReturnType<RetailerAdapter['describeProductLists']>>
 
 /** Le relevé des libellés d'une recherche d'essai (DRV-647) : le niveau retenu, les groupes les plus fournis, des produits échantillons. */
 export interface AisleLabelFacts {
@@ -534,6 +541,96 @@ const countKeysText = (keys: readonly CountKey[]): string =>
 const universesText = (list: readonly { value: number; count: number }[]): string =>
   list.length === 0 ? P.absent : list.map(({ value, count }) => `${value} ×${count}`).join(', ')
 
+/** Les lignes d'une forme essayée (0.37.0) : la réponse et sa cohérence, ses groupes, son premier produit, et (0.38.0) ses produits par liste. */
+function attemptLines(attempt: ProbeAttempt, target: string): string[] {
+  const lines: string[] = []
+  const head = F.formHead(
+    F.formRank[attempt.form] ?? '?',
+    F.formName[attempt.form] ?? attempt.form,
+    attempt.value,
+    target,
+  )
+  const result = attempt.coherence
+  lines.push(
+    attempt.status === null || result === null
+      ? `${head}${F.probeFault(attempt.fault ?? 'EXCEPTION')}`
+      : `${head}${F.formReply(
+          attempt.status,
+          attempt.before,
+          attempt.total,
+          attempt.references,
+          attempt.products,
+          result.share === null ? F.noChildren : `${Math.round(result.share * 100)} %`,
+          result.valid ? F.valid : F.invalid,
+          own(F.reason, result.reason) ?? result.reason,
+        )}`,
+  )
+  for (const family of attempt.families) {
+    lines.push(F.formGroup(family.label === null ? F.noLabel : `« ${family.label} »`, family.count))
+  }
+  if (attempt.first !== null) {
+    lines.push(
+      F.formFirst(`« ${attempt.first.label ?? F.noLabel} »`, attempt.first.fresh ? P.yes : P.no),
+    )
+  }
+  if (attempt.lists !== undefined && attempt.lists.length > 0) {
+    lines.push(
+      F.formLists(attempt.lists.map(({ name, products }) => `${name} ${products}`).join(', ')),
+    )
+  }
+  return lines
+}
+
+/** Les lignes des listes de produits d'une réponse (DRV-647, 0.38.0) : la somme face au total et à la facette, puis chaque liste et ses libellés. */
+function listLines(term: string, report: ProductListsReport): string[] {
+  const fresh = report.freshFacet
+  const lines = [
+    F.listsHead(
+      term,
+      report.total,
+      report.sum,
+      fresh === null
+        ? F.noFreshFacet
+        : F.freshFacet(
+            facetLabel(fresh.label),
+            fresh.references,
+            fresh.children
+              .map((child) => `${facetLabel(child.label)} ${child.references ?? '?'}`)
+              .join(', '),
+          ),
+    ),
+  ]
+  for (const list of report.lists) {
+    lines.push(
+      F.list(
+        list.name,
+        term,
+        list.kind === 'LIST' ? P.listOf(list.size ?? 0) : P.object,
+        keysText(list.keys),
+        list.occurrences,
+        list.products,
+        list.unread.span,
+        list.unread.noLabel,
+        list.aisles.length === 0
+          ? F.none
+          : list.aisles.map(({ id, count }) => `${id}:${count}`).join(' '),
+        list.families.length === 0
+          ? F.none
+          : list.families
+              .map(({ id, label, count }) => `${label === null ? id : `« ${label} »`} (${count})`)
+              .join(', '),
+        list.fresh ? P.yes : P.no,
+      ),
+    )
+    if (list.labels.length > 0) {
+      lines.push(
+        F.listLabels(list.name, term, list.labels.map((label) => `« ${label} »`).join(' ; ')),
+      )
+    }
+  }
+  return lines
+}
+
 /**
  * Le relevé de la facette « Rayons » (DRV-647, agent 0.35.0) pour la première recherche d'essai : les blocs de filtre, les valeurs du bloc « Rayons », la valeur
  * « fruits / légumes », la correspondance des produits échantillons, la forme du paramètre `Filtres`, la recherche filtrée sondée, la pagination et les univers.
@@ -601,42 +698,7 @@ function facetLines(term: string, facets: FacetExploration): string[] {
     lines.push(F.probeSkipped(term, own(F.miss, probe.skipped) ?? probe.skipped))
   else {
     const target = facetLabel(probe.target.label)
-    for (const attempt of probe.attempts) {
-      const head = F.formHead(
-        F.formRank[attempt.form] ?? '?',
-        F.formName[attempt.form] ?? attempt.form,
-        attempt.value,
-        target,
-      )
-      const result = attempt.coherence
-      lines.push(
-        attempt.status === null || result === null
-          ? `${head}${F.probeFault(attempt.fault ?? 'EXCEPTION')}`
-          : `${head}${F.formReply(
-              attempt.status,
-              attempt.before,
-              attempt.total,
-              attempt.references,
-              attempt.products,
-              result.share === null ? F.noChildren : `${Math.round(result.share * 100)} %`,
-              result.valid ? F.valid : F.invalid,
-              own(F.reason, result.reason) ?? result.reason,
-            )}`,
-      )
-      for (const family of attempt.families) {
-        lines.push(
-          F.formGroup(family.label === null ? F.noLabel : `« ${family.label} »`, family.count),
-        )
-      }
-      if (attempt.first !== null) {
-        lines.push(
-          F.formFirst(
-            `« ${attempt.first.label ?? F.noLabel} »`,
-            attempt.first.fresh ? P.yes : P.no,
-          ),
-        )
-      }
-    }
+    for (const attempt of probe.attempts) lines.push(...attemptLines(attempt, target))
     lines.push(F.address(probe.address ?? P.absent))
     lines.push(
       probe.retained === null
@@ -648,6 +710,13 @@ function facetLines(term: string, facets: FacetExploration): string[] {
     )
     // Aucune forme valide : ce qui pourrait dire la bonne (des formes seulement), pour la prochaine mesure.
     if (probe.retained === null) lines.push(F.noneHint)
+    // La valeur « fruits / légumes » sondée avec la forme retenue (0.38.0) : d'où viennent ses produits.
+    if (facets.freshProbe) {
+      lines.push(F.freshProbe(facetLabel(facets.freshProbe.target.label)))
+      for (const attempt of facets.freshProbe.attempts) {
+        lines.push(...attemptLines(attempt, facetLabel(facets.freshProbe.target.label)))
+      }
+    }
   }
   lines.push(F.pagination(F.inReply(term), countKeysText(facets.pagination.reply)))
   lines.push(F.pagination(F.inPage, countKeysText(facets.pagination.page)))
@@ -659,6 +728,7 @@ function facetLines(term: string, facets: FacetExploration): string[] {
 /** Le relevé DRV-647 : menu de la page, structure de la réponse, et correspondance des rayons de la première recherche d'essai avec le menu. */
 function aisleSourceLines(probes: ProbeFacts): string[] {
   const lines: string[] = [
+    ...(probes.productLists ?? []).flatMap(({ term, report }) => listLines(term, report)),
     ...(probes.facets ? facetLines(SHELF_TERMS[0], probes.facets) : []),
     ...labelLines(probes),
   ]

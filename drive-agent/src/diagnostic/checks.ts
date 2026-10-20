@@ -19,6 +19,7 @@ import {
   attemptsText,
   availabilityFacts,
   type AisleLabelFacts,
+  type ProductListsReport,
   type AvailabilityFacts,
   NONSENSE_TERM,
   type ProbedSearch,
@@ -196,11 +197,13 @@ async function probeShelves(adapter: RetailerAdapter): Promise<{
   reply: Exclude<ProbeFacts['reply'], undefined>
   aisleLabels: AisleLabelFacts[]
   facets: FacetExploration | null
+  productLists: { term: string; report: ProductListsReport }[]
 }> {
   const shelves: ShelfFacts[] = []
   let reply: Exclude<ProbeFacts['reply'], undefined> = null
   const aisleLabels: AisleLabelFacts[] = []
   let facets: FacetExploration | null = null
+  const productLists: { term: string; report: ProductListsReport }[] = []
   let stopped = false
   const none = (term: string, fault?: string): ShelfFacts => ({
     term,
@@ -223,6 +226,15 @@ async function probeShelves(adapter: RetailerAdapter): Promise<{
         ...(index === 0 && { nextPage: null, ...shelfIds(found) }),
       })
       // La structure de la première réponse (DRV-647) : des noms de clés, lus dans la réponse déjà reçue, sans requête de plus.
+      // Les listes de produits de la réponse (DRV-647, 0.38.0) : « tomate » et « courgette », lues dans la réponse reçue, sans requête.
+      if (term === 'tomate' || term === 'courgette') {
+        try {
+          const report = adapter.describeProductLists()
+          if (report !== null) productLists.push({ term, report })
+        } catch {
+          // Une réponse qui ne se lit pas : pas de ligne.
+        }
+      }
       if (index === 0) {
         reply = replyOf(adapter, term)
         // La facette « Rayons » et la forme du filtre (DRV-647, 0.35.0) : lues dans la réponse reçue ; au plus UNE recherche filtrée, si sa forme est sûre.
@@ -240,7 +252,7 @@ async function probeShelves(adapter: RetailerAdapter): Promise<{
       shelves.push(none(term, faultText(fault)))
     }
   }
-  return { shelves, reply, aisleLabels, facets }
+  return { shelves, reply, aisleLabels, facets, productLists }
 }
 
 /** Le relevé de la facette « Rayons » d'une recherche (DRV-647), ou `null` s'il ne se fait pas ; aucune erreur n'en sort. */
@@ -474,6 +486,7 @@ export async function runChecks(
     reply: measured?.reply ?? commonReply,
     aisleLabels: measured?.aisleLabels ?? [],
     facets: measured?.facets ?? null,
+    productLists: measured?.productLists ?? [],
     lastPass: readLastReasons(deps.storage),
     lastRefusals: readLastRefusals(deps.storage),
   }

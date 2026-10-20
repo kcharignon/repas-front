@@ -208,3 +208,57 @@ test('une pastille des familles touchée avant la fin de la validation : les fam
   )
   await expect(cardsOf(page)).toHaveCount(6)
 })
+
+test('les produits frais d’une AUTRE liste de la réponse (`objContenuMDD`, 0.38.0) : lus, comptés par « Tous » et par la facette, et trouvés par le filtre « Fruits et légumes »', async ({
+  page,
+  fake,
+  agentCode,
+}, testInfo) => {
+  // Given : « tomate », dont deux produits frais de marque de distributeur sont rangés dans `objContenuMDD`, pas dans les résultats
+  fake.setBehavior({ mddList: true })
+  await openWithFragment(
+    page,
+    fake,
+    agentCode,
+    planOf([fresh('tomate', 'Tomate', { needed: KILO })]),
+  )
+  await page.getByRole('button', { name: 'Commencer' }).click()
+
+  // Then : ils sont dans la liste (après les résultats principaux) et comptés par « Tous » et par la facette
+  await expect(rowOf(page).getByRole('button')).toHaveText([
+    'Tous (5)',
+    'Fruits et légumes (3)',
+    'Boissons et conserves (2)',
+  ])
+  const all = await cardsOf(page).locator('.name').allTextContents()
+  expect(all.slice(-2)).toEqual([
+    'Tomates rondes Nos Régions Inventées',
+    'Tomates grappe Marque Repère Inventée',
+  ])
+
+  // When : le rayon « Fruits et légumes »
+  await rowOf(page).getByRole('button', { name: 'Fruits et légumes (3)' }).click()
+
+  // Then : ses 3 produits frais, dont les deux de l'autre liste, et ses enfants « Legumes fruits » et « Legumes »
+  await expect(cardsOf(page)).toHaveCount(3)
+  await expect(cardsOf(page).locator('.name')).toHaveText([
+    'Tomates cerises Jardin Inventé',
+    'Tomates rondes Nos Régions Inventées',
+    'Tomates grappe Marque Repère Inventée',
+  ])
+  await expect(subRowOf(page).getByRole('button')).toHaveText(['Legumes fruits (1)', 'Legumes (2)'])
+  await page.screenshot({ path: testInfo.outputPath('rayon-frais-mdd-360.png') })
+
+  // When : choisir une tomate de l'autre liste
+  await cardsOf(page)
+    .filter({ hasText: 'Tomates rondes Nos Régions Inventées' })
+    .getByRole('button', { name: 'Choisir' })
+    .click()
+  await returnsToRepas(page, fake)
+
+  // Then : au panier, et son rayon et sa famille repartent comme avant
+  expect(await returnedResult(page, fake)).toMatchObject({
+    lines: [{ outcome: 'CHOSEN', product: { id: '1000128', rayonId: 41, familyId: 414 } }],
+  })
+  expectPoliteAgent(fake)
+})

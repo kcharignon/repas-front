@@ -139,6 +139,8 @@ export interface Behavior {
    */
   facetUrlId?: 'other' | null
   facetDecoy?: boolean | null
+  /** DRV-647 (0.38.0) : les produits frais de marque de distributeur (`mdd` du catalogue) sont trouvés, et rangés dans `objContenuMDD`. */
+  mddList?: boolean | null
   /**
    * La disponibilité des produits à stock nul (DRV-635). Les deux modes ajoutent l'étiquette `eDisponibilite` (1 : disponible, 2 : bientôt disponible) et le texte
    * « Bientôt disponible » à ces produits : `misleading` (disponibilité trompeuse) : le panier les ACCEPTE, comme le site mobile de l'enseigne ; `real-out` (vraie
@@ -391,7 +393,17 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
     if (kind === 'challenge') return send(res, 200, challengePage(), HTML)
     if (kind === 'products-renamed') {
       const query = entry.detail ?? ''
-      return send(res, 200, renamedProductsPage(searchCatalog(query), cart), HTML)
+      return send(
+        res,
+        200,
+        renamedProductsPage(
+          searchCatalog(query).filter(
+            (product) => behavior.mddList === true || product.mdd !== true,
+          ),
+          cart,
+        ),
+        HTML,
+      )
     }
     if (kind === 'contract-changed') {
       return scope === 'search'
@@ -427,7 +439,7 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
           query,
           behavior.strictSearch === true,
           behavior.strictApostrophe === true,
-        )
+        ).filter((product) => behavior.mddList === true || product.mdd !== true)
         const accepted =
           behavior.facetFilter === 'ignored' || behavior.facetFilter === 'none'
             ? undefined

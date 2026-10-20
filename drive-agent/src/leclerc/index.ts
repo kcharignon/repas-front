@@ -131,6 +131,7 @@ export {
   type FilteredProbe,
   type FilterLink,
   type FilterTemplate,
+  type ProbeAttempt,
   type ProbeSkip,
   type ShownFacetValue,
   type TemplateMiss,
