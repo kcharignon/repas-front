@@ -88,6 +88,7 @@ function productJson(
     sUrlVignetteProduit: photoAddress(product),
     iIdRayon: product.aisle,
     iIdFamille: product.family,
+    eUnivers: 1,
     ...aisleFieldsOf(product),
     // DRV-635 : l'étiquette de disponibilité du site ordinateur (1 : disponible, 2 : bientôt disponible), seulement dans les modes qui l'éprouvent.
     ...(availability && {
@@ -275,6 +276,103 @@ export function homePage(cart: Cart, session: Session = 'member'): string {
  * avec le message du site (\`list\`), squelette seul, sans conteneur de produits ni message (\`no-list\`), ou état encodé en entités HTML
  * (\`encoded\`). \`session\` : l'en-tête d'un client connecté ou d'un visiteur (les produits sont les mêmes : le catalogue est public).
  */
+/** Les libellés inventés des rayons de la facette « Rayons » du faux site (DRV-647, agent 0.35.0) ; un rayon absent s'appelle « Rayon inventé N ». */
+const FACET_AISLES: Readonly<Record<number, string>> = {
+  41: 'Fruits et légumes',
+  12: 'Épicerie salée',
+  15: 'Boissons et conserves',
+  60: 'Surgelés',
+  7: 'Conserves',
+}
+/** L'identifiant d'une valeur de rayon de la facette : un espace à part, comme sur le vrai site (relevé du 2026-10-20). */
+export const facetAisleId = (aisle: number): number => 900000 + aisle
+
+const bloc = (id: number, label: string) => ({
+  iIdBloc: id,
+  neTypeBloc: 1,
+  sLibelle: label,
+  fMultiSelection: true,
+  niNbAffichage: 10,
+  iNbValeursMinimum: 1,
+})
+
+/**
+ * La facette de la réponse de recherche (DRV-647), de la FORME relevée sur le vrai site le 2026-10-20 (objets `objFiltreBloc{}`, `iIdBloc`, `iIdValeur`,
+ * `sIdValeurUrl`, `sLibelle`, `niNbReferences`, `lstEnfants[]`, `fEstEnPromotion`), valeurs inventées : le bloc « Rayons » (4), une valeur par rayon des produits
+ * trouvés, ses familles nommées en enfants (leur `iIdValeur` est l'`iIdFamille` des produits), et un bloc « Marques » (2).
+ */
+function facetsOf(found: readonly FakeProduct[]): Record<string, unknown>[] {
+  const aisles = [...new Set(found.map((product) => product.aisle))]
+  const value = (
+    id: number,
+    label: string,
+    references: number,
+    children: Record<string, unknown>[],
+    withBloc: boolean,
+  ) => ({
+    ...(withBloc && { objFiltreBloc: bloc(4, 'Rayons') }),
+    iIdBloc: 4,
+    iIdValeur: id,
+    sIdValeurUrl: `4-${id}`,
+    sLibelle: label,
+    niNbReferences: references,
+    lstEnfants: children,
+    fEstEnPromotion: false,
+  })
+  const rayons = aisles.map((aisle) => {
+    const mine = found.filter((product) => product.aisle === aisle)
+    const families = [...new Set(mine.map((product) => product.family))].flatMap((family) => {
+      const name = FAMILY_FILTERS[family] ?? FAMILY_NAMES[family]?.replace(/-/g, ' ')
+      return name === undefined
+        ? []
+        : [
+            value(
+              family,
+              name,
+              mine.filter((product) => product.family === family).length,
+              [],
+              false,
+            ),
+          ]
+    })
+    return value(
+      facetAisleId(aisle),
+      FACET_AISLES[aisle] ?? `Rayon inventé ${aisle}`,
+      mine.length,
+      families,
+      true,
+    )
+  })
+  return found.length === 0
+    ? []
+    : [
+        ...rayons,
+        {
+          objFiltreBloc: bloc(2, 'Marques'),
+          iIdBloc: 2,
+          iIdValeur: 7001,
+          sIdValeurUrl: '2-7001',
+          sLibelle: 'Jardin Inventé',
+          niNbReferences: found.length,
+          lstEnfants: [],
+          fEstEnPromotion: false,
+        },
+      ]
+}
+
+/** Les liens de la facette « Rayons » dans la page de résultats (DRV-647) : une recherche filtrée par valeur, `Filtres=<sIdValeurUrl>`, relative au magasin. */
+function facetLinksOf(query: string, found: readonly FakeProduct[]): string {
+  const aisles = [...new Set(found.map((product) => product.aisle))]
+  if (aisles.length === 0) return ''
+  const links = aisles
+    .map(
+      (aisle) =>
+        `<a href="recherche.aspx?TexteRecherche=${encodeURIComponent(query)}&amp;Filtres=4-${facetAisleId(aisle)}">${FACET_AISLES[aisle] ?? 'Rayon inventé'}</a>`,
+    )
+    .join(' ')
+  return `<nav class="facettes">${links}</nav>\n`
+}
+
 export function searchPage(
   query: string,
   found: readonly FakeProduct[],
@@ -293,11 +391,17 @@ export function searchPage(
   return storePage(
     title,
     text,
-    { widgets: [{ nom: 'produits', lstProduits: products }] },
+    {
+      widgets: [{ nom: 'produits', lstProduits: products }],
+      lstFiltres: facetsOf(found),
+      iNbResultats: found.length,
+      iNbPages: 1,
+      fPageSuivante: false,
+    },
     cart,
     session,
     found.length === 0 && empty === 'encoded',
-  )
+  ).replace('<footer>', `${facetLinksOf(query, found)}<footer>`)
 }
 
 /** Une page de recherche dont les produits ont des champs renommés : le squelette est là, mais l'agent ne sait plus lire les produits. */

@@ -3,6 +3,7 @@
 // des phrases fixes : jamais un cookie, un identifiant, une adresse ni un morceau de page.
 import {
   type ArrivalFacts,
+  type FacetExploration,
   describeSession,
   isMobileHost,
   LeclercError,
@@ -194,10 +195,12 @@ async function probeShelves(adapter: RetailerAdapter): Promise<{
   shelves: ShelfFacts[]
   reply: Exclude<ProbeFacts['reply'], undefined>
   aisleLabels: AisleLabelFacts[]
+  facets: FacetExploration | null
 }> {
   const shelves: ShelfFacts[] = []
   let reply: Exclude<ProbeFacts['reply'], undefined> = null
   const aisleLabels: AisleLabelFacts[] = []
+  let facets: FacetExploration | null = null
   let stopped = false
   const none = (term: string, fault?: string): ShelfFacts => ({
     term,
@@ -220,7 +223,11 @@ async function probeShelves(adapter: RetailerAdapter): Promise<{
         ...(index === 0 && { nextPage: null, ...shelfIds(found) }),
       })
       // La structure de la première réponse (DRV-647) : des noms de clés, lus dans la réponse déjà reçue, sans requête de plus.
-      if (index === 0) reply = replyOf(adapter, term)
+      if (index === 0) {
+        reply = replyOf(adapter, term)
+        // La facette « Rayons » et la forme du filtre (DRV-647, 0.35.0) : lues dans la réponse reçue ; au plus UNE recherche filtrée, si sa forme est sûre.
+        facets = await facetsOf(adapter, term, found)
+      }
       // Les libellés et des produits échantillons (DRV-647) : « tomate » (12 paires rayon-famille), « courgette » (6), sans requête de plus.
       const samples = own(SAMPLE_COUNTS, term)
       if (samples !== undefined) {
@@ -233,7 +240,20 @@ async function probeShelves(adapter: RetailerAdapter): Promise<{
       shelves.push(none(term, faultText(fault)))
     }
   }
-  return { shelves, reply, aisleLabels }
+  return { shelves, reply, aisleLabels, facets }
+}
+
+/** Le relevé de la facette « Rayons » d'une recherche (DRV-647), ou `null` s'il ne se fait pas ; aucune erreur n'en sort. */
+async function facetsOf(
+  adapter: RetailerAdapter,
+  term: string,
+  found: Awaited<ReturnType<RetailerAdapter['searchProducts']>>,
+): Promise<FacetExploration | null> {
+  try {
+    return await adapter.exploreFacets(term, found)
+  } catch {
+    return null
+  }
 }
 
 /** Combien de produits échantillons le diagnostic montre par recherche d'essai (DRV-647) ; un mot absent n'en montre pas. */
@@ -453,6 +473,7 @@ export async function runChecks(
     aisleMenu,
     reply: measured?.reply ?? commonReply,
     aisleLabels: measured?.aisleLabels ?? [],
+    facets: measured?.facets ?? null,
     lastPass: readLastReasons(deps.storage),
     lastRefusals: readLastRefusals(deps.storage),
   }

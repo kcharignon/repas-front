@@ -297,6 +297,7 @@ export function fakeAdapter(
       }
     },
     aisleSamples: () => [],
+    exploreFacets: () => Promise.resolve(null),
     async setCartQuantity(id, quantity): Promise<CartResult> {
       calls.push(`cart ${id} ${quantity}`)
       inFlight += 1

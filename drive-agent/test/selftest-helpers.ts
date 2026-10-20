@@ -155,6 +155,7 @@ export function shop(shelves: Shelves, options: ShopOptions = {}) {
       coverage: { RAYON: 0, FAMILLE: 0 },
     }),
     aisleSamples: () => [],
+    exploreFacets: () => Promise.resolve(null),
     readEntry: () => ({ kind: 'NONE' }),
     followEntry: () => Promise.resolve(),
   }

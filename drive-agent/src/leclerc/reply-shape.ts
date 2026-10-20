@@ -53,7 +53,7 @@ const KEY_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,59}$/
 const AISLE_VOCABULARY = /rayon|famil|filtr|facet|categ|univers|rubriq|menu|navig|arbo/i
 /** Une clé JSON entre guillemets, juste après `{` ou `,` (voir `stateKeys` de `probe.ts`). */
 const QUOTED_KEY = /(?<=[{,]\s{0,16})"([A-Za-z_][A-Za-z0-9_]{0,59})"\s*:/g
-const PRODUCT_ID = /(?<![A-Za-z0-9_])["']?iIdProduit["']?\s*[:=]\s*["']?\d{1,12}(?!\d)/
+export const PRODUCT_ID = /(?<![A-Za-z0-9_])["']?iIdProduit["']?\s*[:=]\s*["']?\d{1,12}(?!\d)/
 
 /** Jusqu'où remonter, puis descendre, pour délimiter un objet : une page de recherche peut faire plusieurs centaines de milliers de caractères. */
 const BACK_SPAN = 400_000
@@ -76,7 +76,7 @@ function stringEnd(text: string, start: number, limit: number): number {
 }
 
 /** La position du `}` ou du `]` qui ferme l'ouvrant en [open], en sautant les chaînes ; -1 si on ne le trouve pas. */
-function closing(text: string, open: number): number {
+export function closing(text: string, open: number): number {
   const limit = Math.min(text.length, open + AHEAD_SPAN)
   let depth = 0
   for (let p = open; p < limit; p++) {
@@ -95,7 +95,7 @@ function closing(text: string, open: number): number {
 }
 
 /** Le plus petit objet `{…}` qui commence avant [index] et le contient, ou `null`. La remontée compte les accolades ; la descente saute les chaînes. */
-function objectAround(text: string, index: number): { start: number; end: number } | null {
+export function objectAround(text: string, index: number): { start: number; end: number } | null {
   let depth = 0
   for (let p = index; p >= 0 && index - p < BACK_SPAN; p--) {
     const c = text[p]
@@ -115,7 +115,7 @@ function objectAround(text: string, index: number): { start: number; end: number
 const looksLikeData = (text: string, start: number): boolean =>
   /^\{\s*(["'}])/.test(text.slice(start, start + 200))
 
-interface Entry {
+export interface Entry {
   name: string
   kind: KeyShape['kind']
   size?: number
@@ -149,7 +149,7 @@ function itemsOf(text: string, open: number, close: number): number {
 }
 
 /** Les clés directes de l'objet qui va de [start] (`{`) à [end] (`}`), dans l'ordre, avec la sorte de leur valeur. */
-function entriesOf(text: string, start: number, end: number): Entry[] {
+export function entriesOf(text: string, start: number, end: number): Entry[] {
   const entries: Entry[] = []
   for (let p = start + 1; p < end; p++) {
     const c = text[p]
@@ -361,7 +361,7 @@ export interface FacetObject {
 }
 
 /** Le texte d'une valeur de chaîne directe, décodé ; `null` si la valeur n'est pas une chaîne. */
-function stringAt(text: string, entry: Entry): string | null {
+export function stringAt(text: string, entry: Entry): string | null {
   const quote = text[entry.from]
   if (entry.kind !== 'VALUE' || (quote !== '"' && quote !== "'")) return null
   const end = stringEnd(text, entry.from, Math.min(text.length, entry.from + 400))
@@ -371,7 +371,7 @@ function stringAt(text: string, entry: Entry): string | null {
 }
 
 /** Un nombre entier direct (écrit tel quel ou entre guillemets), `null` sinon. */
-function integerAt(text: string, entry: Entry): number | null {
+export function integerAt(text: string, entry: Entry): number | null {
   if (entry.kind !== 'VALUE') return null
   const found = /^["']?(\d{1,9})["']?(?=\s*[,}\]])/.exec(text.slice(entry.from, entry.from + 16))
   return found?.[1] === undefined ? null : Number(found[1])

@@ -2,7 +2,7 @@
 // canal natif. Le plan arrive par le pont (pas par le fragment d'adresse) et le résultat repart par le pont (pas de navigation).
 // Couvre aussi le mode configuration (lire le magasin de la page) et le diagnostic (commande de l'application).
 import { openWithBridge } from './support/agent'
-import { waitForQuiet } from './support/cadence'
+import { expectPoliteAgent, waitForQuiet } from './support/cadence'
 import { expect, test } from './support/fixtures'
 import { known, planOf, product, RUN_ID, SETUP } from './support/plans'
 import type { Fault } from '../fake-leclerc/server'
@@ -194,7 +194,11 @@ test.describe('diagnostic', () => {
     await expect(report).toHaveValue(
       /Première réponse pour « tomate » : 3 produits ; page suivante : inconnue/,
     )
-    await expect(report).not.toHaveValue(/Tomates|Pommes|Courgettes/)
+    // Aucun nom de produit, sauf le premier produit de la recherche filtrée (0.35.0), demandé pour savoir s'il est frais
+    const lines = (await report.inputValue())
+      .split('\n')
+      .filter((line) => !line.includes('premier produit :'))
+    expect(lines.join('\n')).not.toMatch(/Tomates|Pommes|Courgettes/)
   })
 
   test('le rapport dit d’où viennent les libellés de rayons (DRV-647) : le menu replié de la page, la structure de la réponse, la correspondance, sans requête de plus', async ({
@@ -245,9 +249,58 @@ test.describe('diagnostic', () => {
     )
     await expect(report).toHaveValue(/Familles de « tomate » avec un lien dans le menu : 1 sur 3/)
     await expect(report).toHaveValue(/\[OK\] Rayons vus : .* ; liens du menu : 1\/2/)
-    // And : aucune requête de plus que DRV-646 (cinq recherches), aucun clic, ni ville ni numéro de magasin, ni libellé de famille
-    expect(fake.paced().map((call) => call.kind)).toEqual(Array(5).fill('search'))
+    // And : les cinq recherches de DRV-646, plus UNE recherche « tomate » filtrée (0.35.0), aucun clic, ni ville ni numéro de magasin
+    expect(fake.paced().map((call) => call.kind)).toEqual(Array(6).fill('search'))
     await expect(page.getByRole('link', { name: 'Fruits et légumes' })).toBeHidden()
-    await expect(report).not.toHaveValue(/Ville-Test|000001|Tomates|Pommes|Courgettes/)
+    await expect(report).not.toHaveValue(/Ville-Test|000001/)
+  })
+
+  test('le rapport lit la facette « Rayons » de la réponse, la forme du filtre, et sonde UNE recherche « tomate » filtrée (DRV-647, 0.35.0)', async ({
+    page,
+    fake,
+    agentCode,
+  }) => {
+    // Given : la réponse de recherche du faux site porte une facette « Rayons » et ses liens de recherche filtrée (forme inventée)
+    const app = await openWithBridge(page, fake, agentCode)
+    await app.received('hello')
+
+    // When
+    await app.send(DIAGNOSTIC)
+
+    // Then : les blocs, les rayons du filtre (libellé, iIdValeur, références, enfants), la valeur fraîche, la correspondance des produits
+    const report = page.getByLabel('Rapport à copier')
+    await expect(report).toHaveValue(
+      /Bloc de filtre 4 « Rayons » de la réponse « tomate » : 2 valeurs de premier niveau/,
+    )
+    await expect(report).toHaveValue(
+      /Bloc de filtre 2 « Marques » de la réponse « tomate » : 1 valeur de premier niveau/,
+    )
+    await expect(report).toHaveValue(
+      /Rayon du filtre « Fruits et légumes » : iIdValeur=900041, niNbReferences=1, 1 enfant ; sIdValeurUrl \(forme\)=« N-N », contient iIdValeur : oui ; enfants : « Legumes fruits »/,
+    )
+    await expect(report).toHaveValue(
+      /Valeur « fruits \/ légumes \/ marché frais » de la facette : « Fruits et légumes » \(iIdValeur=900041/,
+    )
+    await expect(report).toHaveValue(
+      /Correspondance avec la facette d’un produit de « tomate » : iIdRayon=41 → aucune correspondance ; iIdFamille=410 → correspond à la valeur 410 « Legumes fruits » \(enfant\)/,
+    )
+    // And : la forme des liens à « Filtres », l'adresse déduite, et la recherche filtrée sondée
+    await expect(report).toHaveValue(/Liens à « Filtres » \(réponse « tomate »\) : 3/)
+    await expect(report).toHaveValue(
+      /Adresse d’une recherche filtrée : déduite du lien \/magasin-N-N-V\/recherche\.aspx \?TexteRecherche&Filtres ; Filtres=N-N \(jeton remplacé : sIdValeurUrl\)/,
+    )
+    await expect(report).toHaveValue(
+      /Recherche « tomate » filtrée sur « Fruits et légumes » \(iIdValeur=900041\) : HTTP 200, 1 produits, groupes au niveau famille ; premier produit : « Tomates cerises Jardin Inventé » \(frais : oui\)/,
+    )
+    await expect(report).toHaveValue(
+      /Clés de pagination \(réponse « tomate », nombres et oui\/non seulement\) : .*iNbResultats=3 \(×1\)/,
+    )
+    await expect(report).toHaveValue(/eUnivers \(réponse « tomate »\) : 1 ×3/)
+    // And : la requête filtrée est la quatrième, une seule, à la cadence normale ; rien au panier
+    const searches = fake.paced().map((call) => call.detail ?? '')
+    expect(searches).toHaveLength(6)
+    expect(fake.cart()).toEqual({})
+    expectPoliteAgent(fake)
+    await expect(report).not.toHaveValue(/Ville-Test|000001/)
   })
 })
