@@ -218,6 +218,8 @@ export function fakeAdapter(
     onFollow?: () => void | Promise<void>
     /** Le libellé de chaque rayon (DRV-647) ; un rayon absent n'a pas de libellé lisible. */
     aisleLabels?: Record<number, string>
+    /** Le niveau où la rangée filtre (DRV-647) : le rayon par défaut, ou la famille. */
+    aisleLevel?: 'RAYON' | 'FAMILLE'
   } = {},
 ) {
   const calls: string[] = []
@@ -278,11 +280,23 @@ export function fakeAdapter(
     exploreSearchVariants: () => Promise.resolve([]),
     readAisleMenu: () => NO_MENU,
     describeLastReply: () => null,
-    aisleChoices: (candidates) =>
-      countAisles(candidates).map(({ id, count }) => {
-        const label = options.aisleLabels?.[id] ?? null
-        return { id, count, label, source: label === null ? null : 'NAVIGATE' }
-      }),
+    aisleChoices: (candidates) => {
+      // Au niveau de la famille (DRV-647) : les groupes sont les familles des produits.
+      const family = options.aisleLevel === 'FAMILLE'
+      const groups = countAisles(
+        family ? candidates.map((one) => ({ ...one, aisle: one.family })) : candidates,
+      )
+      return {
+        level: family ? 'FAMILLE' : 'RAYON',
+        key: family ? 'family' : 'aisle',
+        choices: groups.map(({ id, count }) => {
+          const label = options.aisleLabels?.[id] ?? null
+          return { id, count, label, source: label === null ? null : 'FILTER' }
+        }),
+        coverage: { RAYON: 0, FAMILLE: 0 },
+      }
+    },
+    aisleSamples: () => [],
     async setCartQuantity(id, quantity): Promise<CartResult> {
       calls.push(`cart ${id} ${quantity}`)
       inFlight += 1

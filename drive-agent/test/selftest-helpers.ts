@@ -148,7 +148,13 @@ export function shop(shelves: Shelves, options: ShopOptions = {}) {
     exploreSearchVariants: () => Promise.resolve([]),
     readAisleMenu: () => NO_MENU,
     describeLastReply: () => null,
-    aisleChoices: () => [],
+    aisleChoices: () => ({
+      level: 'RAYON',
+      key: 'aisle',
+      choices: [],
+      coverage: { RAYON: 0, FAMILLE: 0 },
+    }),
+    aisleSamples: () => [],
     readEntry: () => ({ kind: 'NONE' }),
     followEntry: () => Promise.resolve(),
   }

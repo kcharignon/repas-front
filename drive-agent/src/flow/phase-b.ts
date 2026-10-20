@@ -65,6 +65,8 @@ interface Search {
   notice: string | null
   /** La rangée de filtres par rayon du site (DRV-647) et le rayon choisi : recalculée à chaque recherche, gardée quand l'écran se rouvre. */
   aisles: AisleRow
+  /** Le niveau de la rangée : le rayon ou la famille de chaque produit (DRV-647). */
+  groupKey: GroupKey
 }
 
 /** Ce que la liste de produits rend à l'écran de choix. */
@@ -142,7 +144,12 @@ const squash = (text: string): string =>
     .replace(/[\s\u00a0\u202f]+/gu, '')
     .replace(',', '.')
 
-function itemOf(line: PlanLine, candidate: Candidate, refused: ReadonlySet<string>): PickerItem {
+function itemOf(
+  line: PlanLine,
+  candidate: Candidate,
+  refused: ReadonlySet<string>,
+  key: GroupKey = 'aisle',
+): PickerItem {
   const { content, price, pricePerMeasure, promo } = candidate
   const size = content ? formatContent(content.value, content.unit) : null
   const details = [
@@ -163,43 +170,67 @@ function itemOf(line: PlanLine, candidate: Candidate, refused: ReadonlySet<strin
     photo: candidate.imageUrl,
     explain: explain(line, candidate),
     state: refused.has(candidate.id) ? 'refused' : saysOutOfStock(candidate) ? 'out' : 'ok',
-    aisle: catalogId(candidate.aisle),
+    aisle: catalogId(key === 'family' ? candidate.family : candidate.aisle),
   }
 }
 
+/** Le champ du produit qui porte l'identifiant du groupe de la rangée : son rayon ou sa famille (DRV-647). */
+export type GroupKey = 'aisle' | 'family'
+
 /**
- * La rangée de filtres d'une recherche (DRV-647) : les rayons présents, du plus fourni au moins fourni, avec leur libellé du site (l'adaptateur le
- * lit dans ce qui est déjà reçu) ; un rayon sans libellé lisible devient « Rayon 1 », « Rayon 2 »…, jamais un identifiant nu. Le premier rayon appris
- * (`rayonHints`, DRV-642) qui est présent est choisi d'avance et placé juste après « Tous » ; sinon « Tous ». Aucune requête.
+ * La rangée de filtres d'une recherche (DRV-647) : les groupes présents, au niveau (rayon ou famille) où l'adaptateur trouve leurs libellés, du plus fourni au
+ * moins fourni ; un groupe sans libellé lisible devient « Rayon 1 », « Rayon 2 »…, jamais un identifiant nu. Le rayon appris (`rayonHints`, DRV-642) présent
+ * est choisi d'avance et placé juste après « Tous » : au niveau du rayon, ce rayon ; au niveau de la famille, la famille de ce rayon s'il n'en a qu'une dans
+ * les résultats (sinon rien n'est choisi d'avance, plutôt que de se tromper). Aucune requête.
  */
 export function aisleRowOf(
   adapter: Pick<RetailerAdapter, 'aisleChoices'>,
   candidates: readonly Candidate[],
   hints: readonly number[] | undefined,
-): AisleRow {
-  let choices: ReturnType<RetailerAdapter['aisleChoices']> = []
+): { row: AisleRow; key: GroupKey } {
+  let grouping: ReturnType<RetailerAdapter['aisleChoices']> | null = null
   try {
-    choices = adapter.aisleChoices(candidates)
+    grouping = adapter.aisleChoices(candidates)
   } catch {
     // Un libellé illisible ne doit jamais empêcher de choisir : pas de rangée.
   }
+  if (grouping === null) return { row: { chips: [], selected: null }, key: 'aisle' }
+  const { key } = grouping
   let rank = 0
-  const chips = choices.map(({ id, label, count }) => ({
+  const chips = grouping.choices.map(({ id, label, count }) => ({
     id,
     count,
     label: label ?? S.picker.aisleFallback(++rank),
   }))
-  const learned = (hints ?? [])
+  const aisle = (hints ?? [])
     .map((hint) => catalogId(hint))
-    .find((id) => id !== null && chips.some((chip) => chip.id === id))
-  if (learned === undefined || learned === null) return { chips, selected: null }
-  // Le rayon appris passe juste après « Tous » : choisi d'avance, il se voit sans faire défiler la rangée, et « Tous » reste à un toucher.
+    .find((id) => id !== null && candidates.some((candidate) => candidate.aisle === id))
+  let learned: number | null = null
+  if (aisle !== undefined && aisle !== null) {
+    if (key === 'aisle') learned = aisle
+    else {
+      const families = new Set(
+        candidates
+          .filter((candidate) => candidate.aisle === aisle)
+          .map((candidate) => catalogId(candidate.family)),
+      )
+      const [only] = families
+      learned = families.size === 1 && only !== undefined ? only : null
+    }
+  }
+  if (learned === null || !chips.some((chip) => chip.id === learned)) {
+    return { row: { chips, selected: null }, key }
+  }
+  // Le groupe appris passe juste après « Tous » : choisi d'avance, il se voit sans faire défiler la rangée, et « Tous » reste à un toucher.
   return {
-    chips: [
-      ...chips.filter((chip) => chip.id === learned),
-      ...chips.filter((chip) => chip.id !== learned),
-    ],
-    selected: learned,
+    row: {
+      chips: [
+        ...chips.filter((chip) => chip.id === learned),
+        ...chips.filter((chip) => chip.id !== learned),
+      ],
+      selected: learned,
+    },
+    key,
   }
 }
 
@@ -226,7 +257,9 @@ async function load(
     search.asked = found.query === query ? null : query
     // Les rayons conseillés d'abord (DRV-642), AVANT le plafond : un produit d'un rayon conseillé ne tombe jamais sous le plafond au profit d'un autre.
     search.candidates = rankByAisle(found.candidates, hints).slice(0, MAX_CANDIDATES)
-    search.aisles = aisleRowOf(adapter, search.candidates, hints)
+    const { row, key } = aisleRowOf(adapter, search.candidates, hints)
+    search.aisles = row
+    search.groupKey = key
     search.notice = null
   } catch (error) {
     if (!(error instanceof LeclercError) || error.code !== 'NETWORK') throw error
@@ -268,8 +301,10 @@ async function settleLine(
     candidates: [],
     notice: null,
     aisles: { chips: [], selected: null },
+    groupKey: 'aisle',
   }
-  const items = () => search.candidates.map((candidate) => itemOf(line, candidate, refused))
+  const items = () =>
+    search.candidates.map((candidate) => itemOf(line, candidate, refused, search.groupKey))
   /** Les produits indisponibles dont l'utilisateur ne veut plus jamais : ils partent avec l'issue de la ligne, quelle qu'elle soit. */
   const rejected = () => {
     const list = unavailable.filter((product) => never.has(product.id)).map(refusedOf)

@@ -1,11 +1,12 @@
-// Le libellé des rayons du site (DRV-647, étape 1) : l'ordre des sources, l'humanisation, ce qui est écarté, le repli, et ce que le diagnostic en
-// montre. Les valeurs réelles n'ont jamais été vues : chaque forme plausible est éprouvée. Données INVENTÉES.
+// Le libellé des groupes de la rangée (DRV-647) d'après la mesure réelle du 2026-10-20 : jamais un texte de lien (« Voir le rayon »), le libellé au niveau
+// (rayon ou famille) où son identifiant correspond, le repli, et ce que le diagnostic en montre. Données INVENTÉES, de la forme mesurée.
 import { describe, expect, it } from 'vitest'
 
 import { probeLines, runChecks, type ChecksDeps } from '../src/diagnostic'
 import {
   aisleChoices,
   facetLabels,
+  facetObjects,
   humanize,
   labelFromUrl,
   LeclercAdapter,
@@ -16,18 +17,11 @@ import {
   type AisleTexts,
   type Candidate,
 } from '../src/leclerc'
+import { extractProducts } from '../src/leclerc/embedded'
 import { fakeStorage, fakeWakeLock } from './flow-helpers'
-import { fakeSite, PAGE, type Call, type Scripted } from './leclerc-helpers'
+import { fakeSite, type Call, type Scripted } from './leclerc-helpers'
 
 const CITY = 'Ville-Test'
-
-const product = (aisle: number | null, texts: Partial<AisleTexts> = {}): Candidate =>
-  ({
-    aisle,
-    ...(Object.keys(texts).length > 0 && {
-      aisleTexts: { navigate: null, url: null, category: null, ...texts },
-    }),
-  }) as Candidate
 
 describe('humanize et plausibleLabel : un texte du site rendu lisible, ou écarté', () => {
   it.each([
@@ -48,6 +42,13 @@ describe('humanize et plausibleLabel : un texte du site rendu lisible, ou écart
     ['un e-mail', 'jean.dupont@exemple.fr'],
     ['la ville', 'Promotions de Ville Test'],
     ['un seul signe', '-'],
+    ['un texte de lien', 'Voir le rayon'],
+    ['un texte de lien en capitales', 'VOIR LE RAYON'],
+    ['« Voir tout »', 'Voir tout'],
+    ['« Tout voir »', 'Tout voir'],
+    ['« Voir la famille »', 'voir-la-famille'],
+    ['un mot seul', 'Rayon'],
+    ['un code', '40'],
     ['vide', '   '],
   ])('écarte %s', (_name, raw) => {
     expect(plausibleLabel(raw, CITY)).toBeNull()
@@ -68,71 +69,158 @@ describe('humanize et plausibleLabel : un texte du site rendu lisible, ou écart
   })
 })
 
-describe('aisleChoices : la première source qui donne un texte plausible l’emporte', () => {
-  it('sLibelleUrlNaviguerRayon, puis sUrlVoirRayon, puis sCategorie, puis un objet de rayon de la réponse, de la page, sinon rien', () => {
+describe('aisleChoices : jamais un texte de lien, le libellé au niveau où son identifiant correspond', () => {
+  /** Un produit au rayon [aisle] et à la famille [family], avec les textes que le vrai site joint (« Voir le rayon » partout, mesure du 2026-10-20). */
+  const item = (aisle: number, family: number, texts: Partial<AisleTexts> = {}): Candidate =>
+    ({
+      aisle,
+      family,
+      aisleTexts: { navigate: 'Voir le rayon', url: null, category: '40', ...texts },
+    }) as Candidate
+
+  it('la forme réelle : sLibelleUrlNaviguerRayon « Voir le rayon » partout, sUrlVoirRayon au numéro de la FAMILLE : filtre par famille, nommée par l’adresse', () => {
     const candidates = [
-      product(1, { navigate: 'Fruits et légumes', url: 'rayon-1-autre.aspx', category: 'Frais' }),
-      product(2, {
-        navigate: '/x?y=1',
-        url: '/magasin-1-1-Ville-Test/rayon-2-boissons-sans-alcool.aspx',
+      item(284319, 288378, {
+        url: '/magasin-1-1-Ville-Test/rayon-288378-Bouillons-Fonds-et-Sauces.aspx',
       }),
-      product(3, { category: 'Épicerie salée' }),
-      product(4),
-      product(5),
-      product(6),
-      product(null),
+      item(284319, 288378, {
+        url: '/magasin-1-1-Ville-Test/rayon-288378-Bouillons-Fonds-et-Sauces.aspx',
+      }),
+      item(284319, 284421, { url: 'rayon-284421-Tomates-pelees-et-concassees.aspx' }),
+      item(315989, 284422, {}),
     ]
 
-    const choices = aisleChoices(candidates, {
-      city: CITY,
-      reply: new Map([[4, ['Surgelés']]]),
-      page: new Map([
-        [4, ['Ignoré']],
-        [5, ['Bébé']],
-      ]),
-    })
+    const grouping = aisleChoices(candidates, { city: CITY })
 
-    expect(choices).toEqual([
-      { id: 1, label: 'Fruits et légumes', count: 1, source: 'NAVIGATE' },
-      { id: 2, label: 'Boissons sans alcool', count: 1, source: 'URL' },
-      { id: 3, label: 'Épicerie salée', count: 1, source: 'CATEGORY' },
-      { id: 4, label: 'Surgelés', count: 1, source: 'REPLY' },
-      { id: 5, label: 'Bébé', count: 1, source: 'PAGE' },
-      { id: 6, label: null, count: 1, source: null },
-    ])
+    expect(grouping).toEqual({
+      level: 'FAMILLE',
+      key: 'family',
+      coverage: { RAYON: 0, FAMILLE: 3 },
+      choices: [
+        { id: 288378, label: 'Bouillons Fonds et Sauces', count: 2, source: 'URL' },
+        { id: 284421, label: 'Tomates pelees et concassees', count: 1, source: 'URL' },
+        { id: 284422, label: null, count: 1, source: null },
+      ],
+    })
+    expect(JSON.stringify(grouping)).not.toMatch(/Voir le rayon|"40"/)
   })
 
-  it('une adresse dans sLibelleUrlNaviguerRayon donne le nom du rayon qu’elle porte', () => {
-    const [choice] = aisleChoices(
-      [product(9, { navigate: '/magasin-1-1-Ville-Test/rayon-9-cremerie.aspx' })],
+  it('un objFiltreBloc dont iIdBloc est le rayon du produit : filtre par rayon, nommé par son sLibelle, avant l’adresse', () => {
+    const candidates = [
+      item(41, 410, {
+        filter: { label: 'Fruits et légumes', block: 41, type: 1, path: 'ELEMENT' },
+        url: 'rayon-410-Tomates.aspx',
+      }),
+      item(41, 411, {
+        filter: { label: 'Fruits et légumes', block: 41, type: 1, path: 'ELEMENT' },
+      }),
+      item(7, 71, { filter: { label: 'Conserves', block: 7, type: 1, path: 'ELEMENT' } }),
+    ]
+
+    expect(aisleChoices(candidates, { city: CITY })).toMatchObject({
+      level: 'RAYON',
+      key: 'aisle',
+      choices: [
+        { id: 41, label: 'Fruits et légumes', count: 2, source: 'FILTER' },
+        { id: 7, label: 'Conserves', count: 1, source: 'FILTER' },
+      ],
+    })
+  })
+
+  it('un sLibelle d’objFiltreBloc au numéro sans rapport vaut au niveau où il est cohérent (ici la famille)', () => {
+    const loose = (label: string) => ({ label, block: 999, type: 2, path: 'PRODUCT' as const })
+    const candidates = [
+      item(41, 410, { filter: loose('Tomates rondes') }),
+      item(41, 410, { filter: loose('Tomates rondes') }),
+      item(41, 411, { filter: loose('Tomates cerises') }),
+      item(41, 411, { filter: loose('Tomates cerises') }),
+    ]
+
+    expect(aisleChoices(candidates, { city: CITY })).toMatchObject({
+      level: 'FAMILLE',
+      choices: [
+        { id: 410, label: 'Tomates rondes', source: 'FILTER' },
+        { id: 411, label: 'Tomates cerises', source: 'FILTER' },
+      ],
+    })
+  })
+
+  it('un même libellé pour tous les groupes ne nomme rien : repli partout', () => {
+    const block = { label: 'Marques', block: 5, type: 3, path: 'ELEMENT' as const }
+    const candidates = [
+      item(41, 410, { filter: { ...block, block: 41 } }),
+      item(7, 71, { filter: { ...block, block: 7 } }),
+    ]
+
+    const grouping = aisleChoices(candidates, { city: CITY })
+
+    expect(grouping.choices.map((choice) => choice.label)).toEqual([null, null])
+    expect(grouping.level).toBe('RAYON')
+  })
+
+  it('une adresse dont le numéro n’est ni le rayon ni la famille du produit est ignorée', () => {
+    const grouping = aisleChoices(
+      [item(41, 410, { url: 'rayon-123-Ailleurs.aspx' }), item(7, 71)],
       { city: CITY },
     )
-    expect(choice).toMatchObject({ label: 'Cremerie', source: 'NAVIGATE' })
+
+    expect(grouping).toMatchObject({ level: 'RAYON', coverage: { RAYON: 0, FAMILLE: 0 } })
+    expect(grouping.choices.every((choice) => choice.label === null)).toBe(true)
   })
 
-  it('du plus fourni au moins fourni ; plusieurs libellés pour un rayon : le plus fréquent', () => {
-    const choices = aisleChoices(
+  it('un objet de filtre hors des produits nomme le groupe dont il porte l’identifiant', () => {
+    const grouping = aisleChoices([item(41, 410), item(41, 410), item(7, 71)], {
+      city: CITY,
+      reply: new Map([[410, ['Tomates fraîches']]]),
+    })
+
+    expect(grouping).toMatchObject({
+      level: 'FAMILLE',
+      choices: [
+        { id: 410, label: 'Tomates fraîches', count: 2, source: 'FACET' },
+        { id: 71, label: null },
+      ],
+    })
+  })
+
+  it('du plus fourni au moins fourni ; plusieurs libellés pour un groupe : le plus fréquent', () => {
+    const at = (url: string) => ({ url })
+    const grouping = aisleChoices(
       [
-        product(7, { navigate: 'Conserves' }),
-        product(8, { navigate: 'Légumes' }),
-        product(8, { navigate: 'Légumes frais' }),
-        product(8, { navigate: 'Légumes frais' }),
+        item(1, 7, at('rayon-7-Conserves.aspx')),
+        item(1, 8, at('rayon-8-Legumes.aspx')),
+        item(1, 8, at('rayon-8-Legumes-frais.aspx')),
+        item(1, 8, at('rayon-8-Legumes-frais.aspx')),
       ],
       { city: CITY },
     )
 
-    expect(choices).toEqual([
-      { id: 8, label: 'Légumes frais', count: 3, source: 'NAVIGATE' },
-      { id: 7, label: 'Conserves', count: 1, source: 'NAVIGATE' },
+    expect(grouping.choices).toEqual([
+      { id: 8, label: 'Legumes frais', count: 3, source: 'URL' },
+      { id: 7, label: 'Conserves', count: 1, source: 'URL' },
     ])
   })
+})
 
-  it('un libellé écarté laisse la source suivante répondre', () => {
-    const [choice] = aisleChoices(
-      [product(3, { navigate: 'Offre 123456', category: 'Boulangerie' })],
-      { city: CITY },
-    )
-    expect(choice).toMatchObject({ label: 'Boulangerie', source: 'CATEGORY' })
+describe('l’objFiltreBloc d’un produit : dans le produit ou dans l’élément qui l’englobe', () => {
+  it('lit son libellé, son identifiant, son type et son chemin', () => {
+    const page = `<script>var e = {"objContenu":{"lstElements":[
+      {"objElement":{"iIdProduit":1,"sLibelleLigne1":"Pain inventé","iIdRayon":3,"iIdFamille":30},"objFiltreBloc":{"iIdBloc":3,"neTypeBloc":1,"sLibelle":"Boulangerie"}},
+      {"objElement":{"iIdProduit":2,"sLibelleLigne1":"Lait inventé","iIdRayon":4,"iIdFamille":40,"objFiltreBloc":{"iIdBloc":40,"neTypeBloc":2,"sLibelle":"Lait"}}},
+      {"objElement":{"iIdProduit":3,"sLibelleLigne1":"Sel inventé","iIdRayon":5,"iIdFamille":50}}
+    ]}}</script>`
+
+    const [pain, lait, sel] = extractProducts(page).products
+
+    expect(pain?.aisleTexts?.filter).toEqual({
+      label: 'Boulangerie',
+      block: 3,
+      type: 1,
+      path: 'ELEMENT',
+    })
+    expect(lait?.aisleTexts?.filter).toEqual({ label: 'Lait', block: 40, type: 2, path: 'PRODUCT' })
+    expect(sel?.aisleTexts).toBeUndefined()
+    expect(facetObjects(page, 8)).toEqual([])
   })
 })
 
@@ -199,24 +287,24 @@ describe('ce que le diagnostic montre des textes du rayon : rien de personnel', 
   })
 })
 
-describe('le diagnostic dit le libellé de chaque rayon et sa source (DRV-647, étape 1)', () => {
-  const productJson = (id: number, aisle: number, extra: string) =>
-    `{"iIdProduit":${id},"sLibelleLigne1":"Produit inventé ${id}","nrPVUnitaireTTC":1.5,"iQteDisponible":3,"iIdRayon":${aisle},"iIdFamille":${aisle * 10}${extra}}`
+describe('le diagnostic dit le niveau, le libellé de chaque groupe et sa source, et des produits échantillons (DRV-647)', () => {
+  const productJson = (id: number, aisle: number, family: number, extra: string) =>
+    `{"iIdProduit":${id},"sLibelleLigne1":"Produit inventé ${id}","nrPVUnitaireTTC":1.5,"iQteDisponible":3,"iIdRayon":${aisle},"iIdFamille":${family},"sLibelleUrlNaviguerRayon":"Voir le rayon","sCategorie":"40"${extra}}`
+  const url = (family: number, name: string) =>
+    `,"sUrlVoirRayon":"/magasin-000123-000123-Ville-Test/rayon-${family}-${name}.aspx?Filtres="`
   const REPLY = `<html><body><script>var etat = {"sNoPointLivraison":"123456","objContenu":{"lstElements":[
-    ${productJson(1, 284319, ',"sLibelleUrlNaviguerRayon":"fruits-et-legumes","sUrlVoirRayon":"/magasin-000123-000123-Ville-Test/rayon-284319-fruits-et-legumes.aspx","sCategorie":"Frais"')},
-    ${productJson(2, 284319, ',"sLibelleUrlNaviguerRayon":"fruits-et-legumes"')},
-    ${productJson(3, 315989, ',"sUrlVoirRayon":"rayon-315989-conserves.aspx"')},
-    ${productJson(4, 284311, '')}
-  ]},"lstFiltres":[{"objFiltreBloc":{"iIdRayon":284311,"sLibelle":"Sauces","iNbProduits":1}}]}</script></body></html>`
-  const PAGE_TEXT =
-    '<script>var p = {"sNoPointLivraison":"555123","objNavigationRayonFamille":{"lstRayons":[{"iIdRayon":1,"sLibelle":"A"}],"iVersion":2}}</script>'
+    {"objElement":${productJson(1, 284319, 288378, url(288378, 'Bouillons-Fonds-et-Sauces'))},"objFiltreBloc":{"iIdBloc":3,"neTypeBloc":2,"sLibelle":"Marques","fMultiSelection":true,"niNbAffichage":5,"iNbValeursMinimum":1}},
+    {"objElement":${productJson(2, 284319, 288378, url(288378, 'Bouillons-Fonds-et-Sauces'))}},
+    {"objElement":${productJson(3, 284319, 284421, url(284421, 'Tomates-pelees'))}},
+    {"objElement":${productJson(4, 315989, 284422, '')}}
+  ]},"lstFiltres":[{"iIdValeur":284422,"sLibelle":"Tomates fraîches","objFiltreBloc":{"iIdBloc":1,"sLibelle":"Rayons"}}]}</script></body></html>`
 
   async function report(): Promise<{ text: string; calls: number }> {
     const reply: (call: Call) => Scripted = () => ({ body: REPLY })
-    const fake = fakeSite(reply, { pageText: () => PAGE_TEXT })
+    const fake = fakeSite(reply)
     const deps: ChecksDeps = {
       adapter: new LeclercAdapter(fake.deps),
-      agentVersion: '0.33.0',
+      agentVersion: '0.34.0',
       storage: fakeStorage(),
       wakeLock: fakeWakeLock().wakeLock,
       originReplaced: null,
@@ -225,54 +313,42 @@ describe('le diagnostic dit le libellé de chaque rayon et sa source (DRV-647, �
     return { text: probeLines(probes).join('\n'), calls: fake.calls.length }
   }
 
-  it('une ligne par rayon le plus fourni de « tomate », avec le libellé résolu et sa source, ou le repli', async () => {
+  it('le niveau retenu et pourquoi, puis chaque groupe avec son libellé et sa source ; jamais « Voir le rayon » comme libellé', async () => {
     const { text, calls } = await report()
 
     expect(text).toContain(
-      'Libellé du rayon 284319 (2 produits) : « Fruits et legumes » (source : sLibelleUrlNaviguerRayon)',
+      'Niveau du filtre pour « tomate » : famille (produits nommés : 0 au niveau rayon, 4 au niveau famille, sur 4)',
     )
     expect(text).toContain(
-      'Libellé du rayon 315989 (1 produit) : « Conserves » (source : sUrlVoirRayon)',
+      'Libellé de la famille 288378 (2 produits) : « Bouillons Fonds et Sauces » (source : sUrlVoirRayon)',
     )
     expect(text).toContain(
-      'Libellé du rayon 284311 (1 produit) : « Sauces » (source : objet de rayon de la réponse)',
+      'Libellé de la famille 284422 (1 produit) : « Tomates fraîches » (source : objet de filtre de la réponse ou de la page)',
     )
-    // Aucune requête de plus que l'étape 0 : cinq recherches.
+    expect(text).toContain('Niveau du filtre pour « courgette »')
+    expect(text).not.toMatch(/: « Voir le rayon » \(source/)
     expect(calls).toBe(5)
   })
 
-  it('les valeurs des textes du rayon du premier produit, rendues sûres, et les NOMS des clés des objets de filtre et de navigation', async () => {
+  it('un produit échantillon par paire (rayon, famille) distincte, avec objFiltreBloc, sUrlVoirRayon et sCategorie rendus sûrs', async () => {
     const { text } = await report()
+    const samples = text
+      .split('\n')
+      .filter((line) => line.includes('Produit échantillon de « tomate »'))
 
-    expect(text).toContain(
-      'Premier produit de « tomate », sLibelleUrlNaviguerRayon : « fruits-et-legumes »',
+    expect(samples).toHaveLength(3)
+    expect(samples[0]).toContain(
+      'Produit échantillon de « tomate » : iIdRayon=284319 iIdFamille=288378 ; objFiltreBloc : (chemin dans l’élément qui englobe le produit) sLibelle=« Marques », iIdBloc=3, neTypeBloc=2 ; sUrlVoirRayon : id=288378 (famille) nom=« Bouillons-Fonds-et-Sauces » ; sCategorie=« 40 »',
     )
+    expect(samples[2]).toContain('objFiltreBloc : absent ; sUrlVoirRayon : absent')
+    expect(
+      text.split('\n').filter((line) => line.includes('Produit échantillon de « courgette »')),
+    ).toHaveLength(3)
     expect(text).toContain(
-      'Premier produit de « tomate », sUrlVoirRayon : « /magasin-N-N-V/rayon-284319-fruits-et-legumes.aspx »',
+      'Objet de filtre 1 de la réponse « tomate » : 3 clés : iIdValeur, sLibelle, objFiltreBloc{} ; identifiants : iIdValeur=284422 ; libellé : « Tomates fraîches » ; bloc : « Rayons »',
     )
-    expect(text).toContain('Premier produit de « tomate », sCategorie : « Frais »')
-    expect(text).toContain(
-      'Clés de objFiltreBloc (réponse « tomate », noms seulement) : objet ; 3 clés : iIdRayon, sLibelle, iNbProduits',
-    )
-    expect(text).toContain(
-      'Clés de objNavigationRayonFamille (page, noms seulement) : objet ; 2 clés : lstRayons[1], iVersion',
-    )
-    for (const secret of ['000123', 'Ville-Test', '123456', '555123', 'Produit inventé']) {
+    for (const secret of ['000123', 'Ville-Test', '123456', 'Produit inventé']) {
       expect(text).not.toContain(secret)
     }
-  })
-
-  it('le repli « Rayon 1 » quand aucun texte n’est lisible', async () => {
-    const fake = fakeSite(() => ({ body: REPLY.replace(/"sLibelle":"Sauces",/, '') }))
-    const adapter = new LeclercAdapter(fake.deps)
-    const found = await adapter.searchProducts('tomate')
-
-    expect(adapter.aisleChoices(found).at(-1)).toEqual({
-      id: 284311,
-      label: null,
-      count: 1,
-      source: null,
-    })
-    expect(PAGE.pathname).toContain(CITY)
   })
 })

@@ -9,9 +9,13 @@ import {
 import { aisleMenuFacts, type AisleMenuFacts, type PageLinks, readPageLinks } from './aisle-menu'
 import {
   aisleChoices,
+  aisleSamples,
+  shownAisleText,
   shownAisleTexts,
-  type AisleChoice,
+  type AisleGrouping,
+  type AisleSample,
   type ShownAisleTexts,
+  type ShownFacet,
 } from './aisle-labels'
 import { type Candidate, toCandidate } from './candidate'
 import { extractProducts } from './embedded'
@@ -42,6 +46,7 @@ import {
 import {
   aisleVocabulary,
   facetLabels,
+  facetObjects,
   namedObjectKeys,
   replyShape,
   type NamedObjectKeys,
@@ -147,10 +152,15 @@ export interface RetailerAdapter {
    */
   describeLastReply(): ReplyFacts | null
   /**
-   * Les rayons présents dans ces produits (DRV-647, étape 1), du plus fourni au moins fourni : identifiant, libellé du site (`null` s'il n'en a pas de
+   * Les groupes présents dans ces produits (DRV-647), au niveau (rayon ou famille) où le site les nomme, du plus fourni au moins fourni : identifiant, libellé (`null` s'il n'en a pas de
    * lisible) et nombre de produits. Lu dans ce qui est déjà reçu (les produits, la dernière réponse, la page) : aucune requête.
    */
-  aisleChoices(candidates: readonly Candidate[]): AisleChoice[]
+  aisleChoices(candidates: readonly Candidate[]): AisleGrouping
+  /**
+   * Pour le diagnostic (DRV-647) : jusqu'à [max] produits de [candidates] aux paires (rayon, famille) distinctes, avec ce que le site leur joint pour nommer
+   * leur rayon (`objFiltreBloc`, `sUrlVoirRayon`, `sCategorie`), rendu sûr. Aucune requête.
+   */
+  aisleSamples(candidates: readonly Candidate[], max: number): AisleSample[]
 }
 
 /** Ce que la dernière réponse de recherche laisse voir de sa structure (DRV-647) : des noms de clés et des nombres. */
@@ -162,6 +172,8 @@ export interface ReplyFacts {
   /** Les NOMS des clés d'un `objFiltreBloc` de la réponse et du premier niveau de `objNavigationRayonFamille` de la page. */
   filterBlock?: NamedObjectKeys | null
   pageNavigation?: NamedObjectKeys | null
+  /** Les objets de filtre ou de rayon de la réponse, hors des produits (8 au plus) : clés, identifiants, libellés rendus sûrs. */
+  facets?: ShownFacet[]
 }
 
 export interface LeclercDeps extends PacerDeps {
@@ -421,7 +433,18 @@ export class LeclercAdapter implements RetailerAdapter {
         firstProduct === undefined ? null : shownAisleTexts(firstProduct.aisleTexts, this.city()),
       filterBlock: namedObjectKeys(text, 'objFiltreBloc'),
       pageNavigation,
+      facets: facetObjects(text, 8).map((facet): ShownFacet => ({
+        keys: facet.keys,
+        total: facet.total,
+        ids: facet.ids,
+        label: shownAisleText(facet.label, this.city()),
+        block: shownAisleText(facet.block, this.city()),
+      })),
     }
+  }
+
+  aisleSamples(candidates: readonly Candidate[], max: number): AisleSample[] {
+    return aisleSamples(candidates, max, this.city())
   }
 
   /** La ville du chemin de la page (`/magasin-N-N-<Ville>`), `null` sans elle. */
@@ -429,7 +452,7 @@ export class LeclercAdapter implements RetailerAdapter {
     return STORE_CITY.exec(this.deps.location.pathname)?.[1] ?? null
   }
 
-  aisleChoices(candidates: readonly Candidate[]): AisleChoice[] {
+  aisleChoices(candidates: readonly Candidate[]): AisleGrouping {
     const text = this.lastReplyText
     if (text !== null && this.replyFacets?.text !== text) {
       this.replyFacets = { text, labels: facetLabels(text) }

@@ -27,29 +27,43 @@ export function totalsOf(cart: Cart): { items: number; totalCents: number; total
 }
 
 /**
- * Les textes du rayon que le faux site joint aux produits (DRV-647, étape 1) : les NOMS des champs sont ceux mesurés sur le vrai site par le diagnostic 0.32.0,
- * les VALEURS sont inventées (jamais vues). Chaque source de libellé de l'agent est éprouvée par un rayon : 41 par `sLibelleUrlNaviguerRayon` (texte lisible),
- * 15 par `sUrlVoirRayon` (le nom dans l'adresse), 12 par `sCategorie`, 60 par un `objFiltreBloc` de la réponse (`AISLE_FILTERS`) ; le 7 (conserves) n'a
- * aucun libellé lisible : l'agent l'appelle « Rayon 1 ».
+ * Les textes du rayon que le faux site joint aux produits (DRV-647), de la FORME mesurée sur le vrai site le 2026-10-20 (agent 0.33.0), aux valeurs inventées :
+ * `sLibelleUrlNaviguerRayon` vaut toujours « Voir le rayon » (un texte de lien), `sCategorie` un code (« 40 »), `sUrlVoirRayon` porte le numéro et le nom de la
+ * FAMILLE (`rayon-<iIdFamille>-<Nom>.aspx`) pour les familles de `FAMILY_NAMES`, et un `objFiltreBloc` (dans le produit, `iIdBloc` = la famille) nomme celles de
+ * `FAMILY_FILTERS`. Les autres familles n'ont aucun libellé lisible : l'agent les appelle « Rayon 1 »… (les conserves de « carotte », famille 71).
  */
-const AISLE_TEXTS: Readonly<Record<number, Record<string, string>>> = {
-  41: { sLibelleUrlNaviguerRayon: 'Fruits et légumes', fVoirRayon: '1' },
-  15: { sLibelleUrlNaviguerRayon: '', sUrlVoirRayon: 'rayon-15-Boissons-sans-alcool.aspx' },
-  12: { sCategorie: 'Épicerie salée' },
-  7: { sLibelleUrlNaviguerRayon: '/rayon.aspx?Filtres=7' },
+const FAMILY_NAMES: Readonly<Record<number, string>> = {
+  413: 'Legumes-frais',
+  521: 'Jus-de-legumes',
+  410: 'Legumes-fruits',
+  411: 'Fruits-du-verger',
+  412: 'Legumes-verts',
+  345: 'Compotes-et-desserts-de-fruits',
 }
+const FAMILY_FILTERS: Readonly<Record<number, string>> = { 602: 'Légumes surgelés' }
 
-/** Les libellés de rayon que porte la liste de filtres de la réponse (DRV-647) : un `objFiltreBloc` par rayon, forme inventée. */
-const AISLE_FILTERS: Readonly<Record<number, string>> = { 60: 'Surgelés' }
-
-/** Les filtres de rayon d'une réponse : ceux des rayons présents dans les produits trouvés, avec leur nombre. */
-function filtersOf(found: readonly FakeProduct[]): Record<string, unknown>[] {
-  return Object.entries(AISLE_FILTERS).flatMap(([aisle, label]) => {
-    const count = found.filter((product) => product.aisle === Number(aisle)).length
-    return count === 0
-      ? []
-      : [{ objFiltreBloc: { iIdRayon: Number(aisle), sLibelle: label, iNbProduits: count } }]
-  })
+/** Les champs du rayon d'un produit, comme le vrai site les donne. */
+function aisleFieldsOf(product: FakeProduct): Record<string, unknown> {
+  const name = FAMILY_NAMES[product.family]
+  const filter = FAMILY_FILTERS[product.family]
+  return {
+    sLibelleUrlNaviguerRayon: 'Voir le rayon',
+    sCategorie: '40',
+    fVoirRayon: true,
+    ...(name !== undefined && {
+      sUrlVoirRayon: `/magasin-000001-000001-Ville-Test/rayon-${product.family}-${name}.aspx?Filtres=`,
+    }),
+    ...(filter !== undefined && {
+      objFiltreBloc: {
+        iIdBloc: product.family,
+        neTypeBloc: 2,
+        sLibelle: filter,
+        fMultiSelection: true,
+        niNbAffichage: 5,
+        iNbValeursMinimum: 1,
+      },
+    }),
+  }
 }
 
 function productJson(
@@ -74,7 +88,7 @@ function productJson(
     sUrlVignetteProduit: photoAddress(product),
     iIdRayon: product.aisle,
     iIdFamille: product.family,
-    ...AISLE_TEXTS[product.aisle],
+    ...aisleFieldsOf(product),
     // DRV-635 : l'étiquette de disponibilité du site ordinateur (1 : disponible, 2 : bientôt disponible), seulement dans les modes qui l'éprouvent.
     ...(availability && {
       eDisponibilite: product.stock === 0 ? 2 : 1,
@@ -279,7 +293,7 @@ export function searchPage(
   return storePage(
     title,
     text,
-    { widgets: [{ nom: 'produits', lstProduits: products }], lstFiltres: filtersOf(found) },
+    { widgets: [{ nom: 'produits', lstProduits: products }] },
     cart,
     session,
     found.length === 0 && empty === 'encoded',

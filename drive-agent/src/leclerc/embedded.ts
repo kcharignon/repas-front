@@ -17,13 +17,27 @@ export interface StructuredContent {
 }
 
 /**
- * Les textes du rayon que le site joint à un produit (noms mesurés par le diagnostic 0.32.0, DRV-647 ; valeurs jamais vues) : `sLibelleUrlNaviguerRayon`,
- * `sUrlVoirRayon` et `sCategorie`, bornés à [MAX_AISLE_TEXT] caractères, chacun `null` s'il manque.
+ * L'`objFiltreBloc` joint à un produit (mesure du 2026-10-20, agent 0.33.0 : six clés `iIdBloc`, `neTypeBloc`, `sLibelle`, `fMultiSelection`, `niNbAffichage`,
+ * `iNbValeursMinimum`, valeurs jamais vues) : son libellé, son identifiant, son type, et OÙ il est : dans l'objet du produit (`PRODUCT`) ou dans un objet
+ * qui l'englobe et ne porte que ce produit (`ELEMENT`, l'élément de `lstElements[]`).
+ */
+export interface FilterBlock {
+  label: string | null
+  block: number | null
+  type: number | null
+  path: 'PRODUCT' | 'ELEMENT'
+}
+
+/**
+ * Les textes du rayon que le site joint à un produit (noms mesurés par le diagnostic 0.32.0, DRV-647) : `sLibelleUrlNaviguerRayon` (mesuré : toujours
+ * « Voir le rayon », un texte de lien), `sUrlVoirRayon` (mesuré : `/magasin-…/rayon-<id>-<Nom>.aspx`, l'identifiant étant celui d'une FAMILLE), `sCategorie`
+ * (mesuré : un code, « 40 ») et l'`objFiltreBloc`, bornés à [MAX_AISLE_TEXT] caractères, chacun `null` s'il manque.
  */
 export interface AisleTexts {
   navigate: string | null
   url: string | null
   category: string | null
+  filter?: FilterBlock | null
 }
 
 const MAX_AISLE_TEXT = 300
@@ -192,6 +206,48 @@ function candidateSlices(text: string, index: number): string[] {
   return slices
 }
 
+/** La fin de l'objet qui s'ouvre en [open] (`{`), en sautant les chaînes ; -1 si on ne la trouve pas. */
+function objectEnd(text: string, open: number): number {
+  let depth = 0
+  let quote: string | null = null
+  for (let p = open; p < text.length && p - open < MAX_SPAN; p++) {
+    const c = text[p]
+    if (quote !== null) {
+      if (c === '\\') p++
+      else if (c === quote) quote = null
+    } else if (c === '"' || c === "'") quote = c
+    else if (c === '{') depth++
+    else if (c === '}') {
+      depth--
+      if (depth === 0) return p
+    }
+  }
+  return -1
+}
+
+const FILTER_BLOCK = /(?<![A-Za-z0-9_])["']?objFiltreBloc["']?\s*:\s*\{/
+
+/** L'`objFiltreBloc` du produit (DRV-647) : cherché dans l'objet du produit, puis dans les objets qui l'englobent sans porter un autre produit. */
+function filterBlockOf(slices: readonly string[]): FilterBlock | null {
+  for (const [level, slice] of slices.entries()) {
+    const found = FILTER_BLOCK.exec(slice)
+    if (found === null) continue
+    const open = found.index + found[0].length - 1
+    const end = objectEnd(slice, open)
+    if (end < 0) return null
+    const block = slice.slice(open, end + 1)
+    const id = parseLooseNumber(readField(block, 'iIdBloc'))
+    const type = parseLooseNumber(readField(block, 'neTypeBloc'))
+    return {
+      label: readField(block, 'sLibelle')?.slice(0, MAX_AISLE_TEXT) ?? null,
+      block: id !== null && Number.isSafeInteger(id) ? id : null,
+      type: type !== null && Number.isSafeInteger(type) ? type : null,
+      path: level === 0 ? 'PRODUCT' : 'ELEMENT',
+    }
+  }
+  return null
+}
+
 function buildProduct(id: string, slices: string[]): RawProduct {
   const first = <T>(read: (slice: string) => T | null): T | null => {
     for (const slice of slices) {
@@ -204,10 +260,12 @@ function buildProduct(id: string, slices: string[]): RawProduct {
   const number = (name: string) => first((slice) => parseLooseNumber(readField(slice, name)))
   const measureText = text('sPrixParUniteDeMesure')
   const bounded = (name: string) => text(name)?.slice(0, MAX_AISLE_TEXT) ?? null
+  const filter = filterBlockOf(slices)
   const aisleTexts: AisleTexts = {
     navigate: bounded('sLibelleUrlNaviguerRayon'),
     url: bounded('sUrlVoirRayon'),
     category: bounded('sCategorie'),
+    ...(filter && { filter }),
   }
   const structured: StructuredContent = {
     unitMeasure: text('sUniteMesure'),
@@ -230,7 +288,9 @@ function buildProduct(id: string, slices: string[]): RawProduct {
     thumbnail: text('sUrlVignetteProduit'),
     aisle: number('iIdRayon'),
     family: number('iIdFamille'),
-    ...(Object.values(aisleTexts).some((value) => value !== null) && { aisleTexts }),
+    ...(Object.values(aisleTexts).some((value) => value !== null && value !== undefined) && {
+      aisleTexts,
+    }),
     ...(Object.values(structured).some((value) => value !== null) ? { structured } : {}),
   }
 }

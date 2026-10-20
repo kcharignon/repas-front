@@ -332,38 +332,97 @@ const FACET_LABEL_KEYS = [
 const MAX_FACETS = 2000
 
 /**
- * Les libellés de rayon que l'état de [page] porte HORS des produits (DRV-647, source 4 : une facette de `objFiltreBloc`, un nœud de
- * `objNavigationRayonFamille`) : un objet qui a lui-même une clé `iIdRayon` numérique et une clé de libellé de [FACET_LABEL_KEYS], sans `iIdProduit`
- * (le libellé d'un produit n'est jamais pris pour celui de son rayon). Par rayon, les textes lus (bruts, décodés), dans l'ordre de la page.
+ * Les libellés que l'état de [page] porte HORS des produits (DRV-647, source « objet de filtre ») : chaque objet de `facetObjects` (une valeur de filtre qui
+ * porte un `objFiltreBloc`, un nœud de rayon) donne son libellé direct à chacun de ses identifiants (`iIdRayon`, `iIdFamille`, `iId…`), qui ne vaut que si
+ * l'identifiant est celui d'un groupe des produits. Le libellé d'un produit n'est jamais pris. Par identifiant, les textes lus, dans l'ordre de la page.
  */
 export function facetLabels(page: string): Map<number, string[]> {
   const labels = new Map<number, string[]>()
-  const seen = new Set<number>()
   for (const text of pageReadings(page)) {
-    let read = 0
-    for (const match of text.matchAll(/"iIdRayon"\s*:\s*"?(\d{1,9})(?!\d)/g)) {
-      if (++read > MAX_FACETS || match.index === undefined) break
-      const span = objectAround(text, match.index)
-      if (span === null || seen.has(span.start)) continue
-      seen.add(span.start)
-      const entries = entriesOf(text, span.start, span.end)
-      if (entries.some((entry) => entry.name === 'iIdProduit')) continue
-      const id = Number(match[1])
-      // La clé `iIdRayon` doit être une clé directe de cet objet, pas celle d'un enfant.
-      if (!entries.some((entry) => entry.name === 'iIdRayon')) continue
-      for (const key of FACET_LABEL_KEYS) {
-        const entry = entries.find((one) => one.name === key && one.kind === 'VALUE')
-        const quote = entry === undefined ? undefined : text[entry.from]
-        if (entry === undefined || (quote !== '"' && quote !== "'")) continue
-        const end = stringEnd(text, entry.from, Math.min(text.length, entry.from + 400))
-        if (end < 0) continue
-        const value = decodeJsString(text.slice(entry.from + 1, end))
-        if (value === '') continue
-        labels.set(id, [...(labels.get(id) ?? []), value])
-        break
-      }
+    for (const facet of facetObjects(text, MAX_FACETS)) {
+      if (facet.label === null) continue
+      for (const { value } of facet.ids)
+        labels.set(value, [...(labels.get(value) ?? []), facet.label])
     }
     if (labels.size > 0) break
   }
   return labels
+}
+
+/** Un objet de filtre ou de rayon hors des produits (DRV-647) : ses clés, ses identifiants (nom et valeur), son libellé et celui de son `objFiltreBloc`. */
+export interface FacetObject {
+  keys: KeyShape[]
+  total: number
+  ids: { name: string; value: number }[]
+  /** Le libellé direct (`sLibelle`, `sLibelleRayon`…), brut et décodé, `null` sans lui. */
+  label: string | null
+  /** Le `sLibelle` de l'`objFiltreBloc` de l'objet, s'il en a un. */
+  block: string | null
+}
+
+/** Le texte d'une valeur de chaîne directe, décodé ; `null` si la valeur n'est pas une chaîne. */
+function stringAt(text: string, entry: Entry): string | null {
+  const quote = text[entry.from]
+  if (entry.kind !== 'VALUE' || (quote !== '"' && quote !== "'")) return null
+  const end = stringEnd(text, entry.from, Math.min(text.length, entry.from + 400))
+  if (end < 0) return null
+  const value = decodeJsString(text.slice(entry.from + 1, end))
+  return value === '' ? null : value
+}
+
+/** Un nombre entier direct (écrit tel quel ou entre guillemets), `null` sinon. */
+function integerAt(text: string, entry: Entry): number | null {
+  if (entry.kind !== 'VALUE') return null
+  const found = /^["']?(\d{1,9})["']?(?=\s*[,}\]])/.exec(text.slice(entry.from, entry.from + 16))
+  return found?.[1] === undefined ? null : Number(found[1])
+}
+
+/**
+ * Les objets de [text] qui portent eux-mêmes une clé `iIdRayon` ou `objFiltreBloc` et pas d'`iIdProduit` (une facette, une valeur de filtre, un nœud de rayon),
+ * dans l'ordre de la page, [max] au plus. Leurs identifiants sont les clés directes au style du site dont le nom contient `Id` et dont la valeur est un entier.
+ */
+export function facetObjects(text: string, max: number): FacetObject[] {
+  const out: FacetObject[] = []
+  const seen = new Set<number>()
+  let read = 0
+  for (const match of text.matchAll(/"(?:iIdRayon|objFiltreBloc)"\s*:/g)) {
+    if (out.length >= max || ++read > MAX_FACETS * 4 || match.index === undefined) break
+    const span = objectAround(text, match.index)
+    if (span === null || seen.has(span.start)) continue
+    seen.add(span.start)
+    const entries = entriesOf(text, span.start, span.end)
+    // Un objet qui porte un produit, même plus bas (l'élément de `lstElements[]` autour de `objElement`), n'est pas une facette.
+    if (PRODUCT_ID.test(text.slice(span.start, span.end + 1))) continue
+    if (!entries.some((entry) => entry.name === 'iIdRayon' || entry.name === 'objFiltreBloc'))
+      continue
+    let label: string | null = null
+    for (const key of FACET_LABEL_KEYS) {
+      const entry = entries.find((one) => one.name === key)
+      label = entry === undefined ? null : stringAt(text, entry)
+      if (label !== null) break
+    }
+    const blockEntry = entries.find(
+      (entry) => entry.name === 'objFiltreBloc' && entry.kind === 'OBJECT',
+    )
+    let block: string | null = null
+    if (blockEntry !== undefined) {
+      const inner = entriesOf(text, blockEntry.from, blockEntry.to).find(
+        (entry) => entry.name === 'sLibelle',
+      )
+      block = inner === undefined ? null : stringAt(text, inner)
+    }
+    const ids = entries.flatMap((entry) => {
+      if (!SITE_STYLE.test(entry.name) || !/Id/.test(entry.name)) return []
+      const value = integerAt(text, entry)
+      return value === null || value < 1 ? [] : [{ name: entry.name, value }]
+    })
+    out.push({
+      keys: entries.slice(0, MAX_SHAPE_KEYS).map(shapeOf),
+      total: entries.length,
+      ids,
+      label,
+      block,
+    })
+  }
+  return out
 }

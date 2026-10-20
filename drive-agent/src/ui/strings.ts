@@ -391,10 +391,36 @@ export const S = {
       coverageNone: (kind: 'Rayons' | 'Familles', term: string) =>
         `${kind} de « ${term} » avec un lien dans le menu : aucun lien numéroté dans la page`,
       /** DRV-647 (étape 1) : le libellé que l'écran de choix montre pour un rayon, et d'où il vient. */
-      aisleLabel: (id: number, count: number, label: string, source: string) =>
-        `Libellé du rayon ${id} (${count} produit${count > 1 ? 's' : ''}) : « ${label} » (source : ${source})`,
-      aisleLabelNone: (id: number, count: number, fallback: string) =>
-        `Libellé du rayon ${id} (${count} produit${count > 1 ? 's' : ''}) : aucun texte lisible (repli : « ${fallback} »)`,
+      aisleLevel: (term: string, level: string, rayon: number, famille: number, products: number) =>
+        `Niveau du filtre pour « ${term} » : ${level} (produits nommés : ${rayon} au niveau rayon, ${famille} au niveau famille, sur ${products})`,
+      aisleLabel: (one: string, id: number, count: number, label: string, source: string) =>
+        `Libellé ${one} ${id} (${count} produit${count > 1 ? 's' : ''}) : « ${label} » (source : ${source})`,
+      aisleLabelNone: (one: string, id: number, count: number, fallback: string) =>
+        `Libellé ${one} ${id} (${count} produit${count > 1 ? 's' : ''}) : aucun texte lisible (repli : « ${fallback} »)`,
+      sample: (
+        term: string,
+        aisle: number | null,
+        family: number | null,
+        filter: string,
+        url: string,
+        category: string,
+      ) =>
+        `Produit échantillon de « ${term} » : iIdRayon=${aisle ?? '?'} iIdFamille=${family ?? '?'} ; objFiltreBloc : ${filter} ; sUrlVoirRayon : ${url} ; sCategorie=${category}`,
+      sampleFilter: (path: string, label: string, block: number | null, type: number | null) =>
+        `(chemin ${path}) sLibelle=${label}, iIdBloc=${block ?? '?'}, neTypeBloc=${type ?? '?'}`,
+      sampleUrl: (id: number | null, level: string | null, name: string) =>
+        `id=${id ?? '?'} (${level ?? 'ni le rayon ni la famille du produit'}) nom=${name}`,
+      inProduct: 'dans le produit',
+      inElement: 'dans l’élément qui englobe le produit',
+      facet: (
+        term: string,
+        rank: number,
+        keys: string,
+        ids: string,
+        label: string,
+        block: string,
+      ) =>
+        `Objet de filtre ${rank} de la réponse « ${term} » : ${keys} ; identifiants : ${ids} ; libellé : ${label} ; bloc : ${block}`,
       firstAisleText: (term: string, field: string, value: string) =>
         `Premier produit de « ${term} », ${field} : ${value}`,
       namedKeys: (where: string, name: string, keys: string) =>
