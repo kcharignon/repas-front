@@ -98,12 +98,12 @@ test.describe('ce que l’agent rend à Repas avec le produit choisi', () => {
     expect(Object.keys(line)).not.toContain('searchQuery')
   })
 
-  test('« Cette fois seulement » ne mémorise rien : aucune recherche ne repart', async ({
+  test('« Pas mon habituel » ne mémorise rien : aucune recherche ne repart', async ({
     page,
     fake,
     agentCode,
   }) => {
-    // Given : un produit habituel perdu, donc la question « Toujours prendre celui-ci ? »
+    // Given : un produit habituel perdu
     fake.setBehavior({ availability: 'real-out' })
     await openWithFragment(
       page,
@@ -113,15 +113,14 @@ test.describe('ce que l’agent rend à Repas avec le produit choisi', () => {
     )
     await expect(page.getByText('Ces produits ne sont plus disponibles')).toBeVisible()
 
-    // When : la personne tape une autre recherche, choisit, puis « Cette fois seulement »
+    // When : la personne tape une autre recherche, puis prend le produit sans en faire son habituel
     await page.getByLabel('Chercher autre chose').fill('poivre noir')
     await page.getByRole('button', { name: 'Chercher', exact: true }).click()
     await page
       .getByRole('listitem')
       .filter({ hasText: 'Poivre noir moulu' })
-      .getByRole('button', { name: 'Choisir' })
+      .getByRole('button', { name: /^Pas mon habituel/ })
       .click()
-    await page.getByRole('button', { name: 'Cette fois seulement' }).click()
     await returnsToRepas(page, fake)
 
     // Then
@@ -170,7 +169,6 @@ test.describe('un produit habituel devenu indisponible : la recherche du plan, p
       .filter({ hasText: 'Céréales fourrées' })
       .getByRole('button', { name: 'Choisir' })
       .click()
-    await page.getByRole('button', { name: 'Toujours prendre celui-ci' }).click()
     // Le panier refuse ce produit (vraie rupture) : le choix est enregistré quand même, et la fin le dit (DRV-644)
     await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
     await returnsToRepas(page, fake)
@@ -212,7 +210,6 @@ test.describe('un produit habituel devenu indisponible : la recherche du plan, p
       .filter({ hasText: 'Céréales fourrées' })
       .getByRole('button', { name: 'Choisir' })
       .click()
-    await page.getByRole('button', { name: 'Toujours prendre celui-ci' }).click()
     // Le panier refuse ce produit (vraie rupture) : le choix est enregistré quand même, et la fin le dit (DRV-644)
     await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
     await returnsToRepas(page, fake)

@@ -1,5 +1,5 @@
 // Les écrans de l'interface et ce que chacun reçoit (`props`) et rend (`answer`, la réponse de l'utilisateur).
-import type { ErrorCode, LineStatus, Outcome, Placement } from '../../protocol'
+import type { ErrorCode, LineStatus, Outcome } from '../../protocol'
 
 /**
  * Pourquoi un produit habituel n'a pas été mis au panier (DRV-635). `OUT_OF_STOCK` : le site le dit en rupture (stock nul ou « Bientôt disponible ») ET le
@@ -86,14 +86,6 @@ export interface ChooserProps {
    * donnée. Rend, si besoin, la fonction qui nettoie quand l'écran est remplacé.
    */
   mount: (zone: HTMLElement, answer: (value: unknown) => void) => (() => void) | void
-}
-
-/** « Toujours prendre ce produit ? » : le produit choisi n'est pas celui que Repas retenait pour l'article (phase B, DRV-306, DRV-624). */
-export interface PlacementProps {
-  ingredient: string
-  productLabel: string
-  /** L'adresse de la photo du produit choisi (DRV-633), `null` s'il n'y en a pas ; revérifiée à l'affichage. */
-  photo?: string | null | undefined
 }
 
 /** Une ligne du diagnostic : le contrôle, son résultat en texte (le résultat n'est jamais dit par la seule couleur) et son détail. */
@@ -201,11 +193,6 @@ export interface ScreenMap {
   chooser: { props: ChooserProps; answer: ChooserAnswer }
   store: { props: StoreProps; answer: 'save' | 'cancel' }
   diagnostic: { props: DiagnosticProps; answer: 'close' }
-  /**
-   * `PRIMARY` (« Toujours prendre celui-ci ») ou `ONCE` (« Cette fois seulement »), ou `null` pour revenir à la liste de produits. L'écran ne
-   * rend plus `FALLBACK` (DRV-624) : le protocole l'accepte toujours, l'agent ne l'émet plus.
-   */
-  placement: { props: PlacementProps; answer: Exclude<Placement, 'FALLBACK'> | null }
   /**
    * Le site demande une vérification (page de défi de l'anti-robot, ticket K) : un bandeau, la page reste visible et touchable derrière. `resume` :
    * l'utilisateur l'a faite, le passage reprend ; `stop` : il arrête.

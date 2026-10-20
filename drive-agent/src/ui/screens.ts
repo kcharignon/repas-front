@@ -1,7 +1,6 @@
 // Les écrans : chacun reçoit ses données et un rappel `answer`, et rend ses nœuds. Aucune logique d'envoi ici.
 import { append, clear, h, type Child } from './dom'
 import { own } from '../own'
-import { photoFrame } from './photo'
 import { CAUSE_TEXTS, ERROR_TEXTS, errorParts, S } from './strings'
 import type {
   ChallengeProps,
@@ -11,7 +10,6 @@ import type {
   EndProps,
   EntryProps,
   ErrorProps,
-  PlacementProps,
   ProgressPatch,
   ProgressProps,
   QuantityProps,
@@ -326,41 +324,6 @@ const chooser: Renderer<'chooser'> = (props: ChooserProps, answer) => {
   }
 }
 
-/**
- * Le produit choisi n'est pas celui que Repas retenait (DRV-624) : une question, deux réponses. L'ordre des produits (le nouveau en tête, les
- * anciens à sa suite) est l'affaire de Repas : l'écran ne le montre pas. `Revenir à la liste` n'est pas une réponse, c'est la sortie discrète.
- */
-const placement: Renderer<'placement'> = (props: PlacementProps, answer) => {
-  const always = button(S.placement.always, () => answer('PRIMARY'), 'primary')
-  return {
-    el: screen(
-      title(S.placement.title),
-      h(
-        'div',
-        { class: 'media' },
-        photoFrame(props.photo, props.productLabel),
-        h(
-          'div',
-          { class: 'text' },
-          h('p', { text: S.placement.text(props.productLabel, props.ingredient) }),
-        ),
-      ),
-      h(
-        'div',
-        { class: 'stack' },
-        always,
-        button(S.placement.once, () => answer('ONCE')),
-      ),
-      h(
-        'div',
-        { class: 'foot' },
-        button(S.placement.back, () => answer(null), 'quiet'),
-      ),
-    ),
-    focus: always,
-  }
-}
-
 const store: Renderer<'store'> = (props: StoreProps, answer) => {
   const save = button(S.store.save, () => answer('save'), 'primary')
   return {
@@ -627,7 +590,6 @@ export const RENDERERS: { [K in ScreenName]: Renderer<K> } = {
   progress,
   quantity,
   chooser,
-  placement,
   store,
   diagnostic,
   challenge,

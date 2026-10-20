@@ -84,7 +84,8 @@ textarea{width:100%;margin:8px 0;padding:8px 10px;font:.9rem/1.4 ui-monospace,mo
 .candidate p{margin:2px 0}
 .candidate .name{font-weight:600}
 .candidate.off .name{color:var(--muted)}
-.candidate>button{width:100%;margin-top:8px}
+.pick{display:flex;gap:8px;margin-top:8px}
+.pick>button{flex:1 1 0;min-width:0;overflow-wrap:anywhere}
 .more{height:1px}
 .media{display:flex;align-items:flex-start;gap:12px}
 .media .text{flex:1 1 0;min-width:0}

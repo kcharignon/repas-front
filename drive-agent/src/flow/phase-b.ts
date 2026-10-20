@@ -1,7 +1,7 @@
 // Phase B (DRV-306, variante P2 retenue à G1) : pour chaque ligne à choisir, l'agent cherche le nom de l'ingrédient, affiche les produits
-// dans l'écran de choix, et l'utilisateur en choisit un. L'agent ne choisit jamais seul : l'ajout au panier vient d'un bouton « Choisir ».
+// dans l'écran de choix, et l'utilisateur en choisit un. L'agent ne choisit jamais seul : l'ajout au panier vient d'un bouton de la fiche (« Choisir » ou « Pas mon habituel »).
 //   ligne -> recherche -> liste (choisir | chercher autre chose | passer | passer les suivants | j'en ai toujours | annuler)
-//         -> [quantité à vérifier] -> [« toujours ce produit ? »] -> panier -> issue `CHOSEN`
+//         -> [quantité à vérifier] -> panier -> issue `CHOSEN` (placement `PRIMARY` ou `ONCE`, selon le bouton de la fiche)
 // Jamais un produit refusé (grisé, non sélectionnable), jamais plus que le stock (l'adaptateur plafonne), requêtes en série.
 import {
   LIMITS,
@@ -137,8 +137,12 @@ export function siteAisleRow(adapter: Pick<RetailerAdapter, 'siteAisles'>): Aisl
   return { chips, selected: null, remote: true }
 }
 
+/** Les deux gestes d'une fiche (0.41.0) : « Choisir » retient le produit (`PRIMARY`), « Pas mon habituel » le prend cette fois seulement (`ONCE`). */
+type ChosenPlacement = Exclude<Placement, 'FALLBACK'>
+
 /** Ce que la liste de produits rend à l'écran de choix. */
-type Picked = { type: 'choose'; id: string } | { type: 'failure'; error: unknown }
+type Picked =
+  { type: 'choose'; id: string; placement: ChosenPlacement } | { type: 'failure'; error: unknown }
 
 const isPicked = (value: unknown): value is Picked => {
   const type = (value as { type?: unknown } | null)?.type
@@ -462,7 +466,8 @@ async function settleLine(
               aisles: search.aisles,
             },
             {
-              choose: (id) => conclude({ type: 'choose', id } satisfies Picked),
+              choose: (id, placement) =>
+                conclude({ type: 'choose', id, placement } satisfies Picked),
               never: (id, on) => void (on ? never.add(id) : never.delete(id)),
               aisle: (id) => {
                 if (search.aisles.remote !== true) search.touched = true
@@ -561,19 +566,10 @@ async function settleLine(
         if (packs === null) continue
       }
 
-      // Un article qui n'avait aucun produit retenu : le produit devient son produit habituel, sans question. Sinon une seule question, à deux
-      // réponses (DRV-624) : « Toujours prendre celui-ci » (`PRIMARY` : Repas le met en tête et garde les anciens à sa suite) ou « Cette fois
-      // seulement » (`ONCE` : rien n'est retenu). L'agent n'émet plus `FALLBACK`, que le protocole accepte toujours.
-      let placement: Placement = 'PRIMARY'
-      if (unavailable.length > 0 || line.replaces) {
-        const role = await ui.show('placement', {
-          ingredient: line.name,
-          productLabel: labelOf(candidate),
-          photo: candidate.imageUrl,
-        })
-        if (role === null) continue
-        placement = role
-      }
+      // Le bouton de la fiche dit tout (une intention = un clic), aucune question ensuite : « Choisir » retient le produit (`PRIMARY` : Repas le met
+      // en tête et garde les anciens à sa suite), « Pas mon habituel » le prend cette fois seulement (`ONCE` : rien n'est retenu, l'article sera
+      // redemandé). L'agent n'émet plus `FALLBACK`, que le protocole accepte toujours.
+      const placement: Placement = answer.value.placement
 
       // La recherche qui a fait apparaître ce produit (DRV-650), rendue seulement pour un produit retenu (`PRIMARY`) et si elle diffère de celle du plan.
       const memo = placement === 'PRIMARY' ? rememberedSearch(line, search.listed) : null

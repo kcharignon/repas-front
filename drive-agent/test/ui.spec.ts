@@ -615,6 +615,7 @@ describe('choix de produit (hôte)', () => {
       'Passer ces 4 articles',
       'Chercher',
       'Choisir',
+      'Pas mon habituel',
       'Ne plus proposer',
       'Annuler l’envoi',
     ])
@@ -624,6 +625,7 @@ describe('choix de produit (hôte)', () => {
     for (const label of ['Pas cette fois', 'J’en ai toujours', 'Passer ces 4 articles']) {
       expect(`${label} : ${classOf(label)}`).toBe(`${label} : secondary`)
     }
+    expect(classOf('Pas mon habituel')).toBe('secondary')
     expect(classOf('Chercher')).toBe('secondary')
     expect(classOf('Annuler l’envoi')).toBe('quiet')
     // Rien n'est rouge : annuler n'est plus un bouton d'alarme.
@@ -762,6 +764,7 @@ describe('choix de produit (hôte)', () => {
         'Passer ces 4 articles',
         'Chercher',
         'Choisir',
+        'Pas mon habituel',
         'Ne plus proposer',
         'Annuler l’envoi',
       ])
@@ -1032,53 +1035,114 @@ describe('utiliser le magasin (mode configuration, DRV-623)', () => {
   })
 })
 
-describe('« Toujours prendre ce produit ? » (DRV-624)', () => {
-  const props = { ingredient: 'Farine', productLabel: 'Farine de test 1 kg' }
+describe('les deux gestes d’une fiche de produit (0.41.0)', () => {
+  const item = (id: string, name: string, state: 'ok' | 'refused' = 'ok') => ({
+    id,
+    name,
+    label2: null,
+    details: [],
+    promo: null,
+    explain: '',
+    state,
+  })
+  const props = {
+    need: null,
+    replaces: null,
+    gone: [],
+    checked: new Set<string>(),
+    query: 'farine',
+    items: [item('111', 'Farine de test 1 kg'), item('222', 'Farine écartée', 'refused')],
+    notice: null,
+  }
+  const mountPicker = (zone: HTMLElement, done: (value: unknown) => void) =>
+    void renderPicker(zone, props, {
+      choose: (id, placement) => done({ id, placement }),
+      search: () => undefined,
+      never: () => undefined,
+    })
+  const show = () =>
+    open().show('chooser', { ingredient: 'Farine', position: 1, total: 1, mount: mountPicker })
+  const card = () => shadow().querySelector('.candidate')
 
-  it('pose une question, avec deux réponses en boutons, la première par défaut, et une sortie discrète', () => {
-    const handle = open()
-    void handle.show('placement', props)
+  it('« Choisir » est le principal, « Pas mon habituel » est le secondaire, côte à côte sous la fiche', () => {
+    void show()
 
-    expect(shadow().querySelector('h1')?.textContent).toBe('Toujours prendre ce produit ?')
-    expect(shadow().querySelector('section p')?.textContent).toBe(
-      'Tu as choisi « Farine de test 1 kg » pour Farine.',
-    )
-    expect(labels()).toEqual([
-      'Toujours prendre celui-ci',
-      'Cette fois seulement',
-      'Revenir à la liste',
+    const pair = [...(card()?.querySelectorAll<HTMLButtonElement>('.pick > button') ?? [])]
+    expect(pair.map((button) => [button.textContent, button.className])).toEqual([
+      ['Choisir', 'primary'],
+      ['Pas mon habituel', 'secondary'],
     ])
-    expect(shadow().activeElement?.textContent).toBe('Toujours prendre celui-ci')
-    const classes = buttons().map((button) => button.className)
-    expect(classes).toEqual(['primary', '', 'quiet'])
+    expect(card()?.lastElementChild?.className).toBe('pick')
   })
 
-  it('ne parle ni de « secours », ni de « préféré », ni de produit de remplacement', () => {
-    const handle = open()
-    void handle.show('placement', props)
+  it('les noms accessibles commencent par le texte visible et nomment le produit', () => {
+    void show()
 
-    expect(shadow().textContent).not.toMatch(/secours|préfér|remplacement|habituel/i)
+    const names = [...(card()?.querySelectorAll('button') ?? [])].map((button) =>
+      button.getAttribute('aria-label'),
+    )
+    expect(names).toEqual([
+      'Choisir : Farine de test 1 kg',
+      'Pas mon habituel : Farine de test 1 kg',
+    ])
   })
 
-  it.each([
-    ['Toujours prendre celui-ci', 'PRIMARY'],
-    ['Cette fois seulement', 'ONCE'],
-    ['Revenir à la liste', null],
-  ])('« %s » rend %s', async (label, expected) => {
-    const handle = open()
-    const answer = handle.show('placement', props)
+  it('« Choisir » rend PRIMARY, sans autre écran', async () => {
+    const answer = show()
 
-    press(label)
+    press('Choisir')
 
-    await expect(answer).resolves.toBe(expected)
+    await expect(answer).resolves.toEqual({
+      kind: 'content',
+      value: { id: '111', placement: 'PRIMARY' },
+    })
+    expect(shadow().textContent).not.toContain('Toujours prendre')
   })
 
-  it('affiche tel quel un libellé qui contient du HTML', () => {
-    const handle = open()
-    void handle.show('placement', { ingredient: HOSTILE, productLabel: HOSTILE })
+  it('« Pas mon habituel » rend ONCE', async () => {
+    const answer = show()
 
-    expect(shadow().querySelector('section')?.textContent).toContain(HOSTILE)
-    expect(shadow().querySelector('img, script')).toBeNull()
+    press('Pas mon habituel')
+
+    await expect(answer).resolves.toEqual({
+      kind: 'content',
+      value: { id: '111', placement: 'ONCE' },
+    })
+  })
+
+  it('un produit écarté n’a qu’un bouton, grisé : « Ne plus proposer »', () => {
+    void show()
+
+    const refused = shadow().querySelectorAll('.candidate')[1]
+    expect(
+      [...(refused?.querySelectorAll<HTMLButtonElement>('button') ?? [])].map((button) => [
+        button.textContent,
+        button.disabled,
+      ]),
+    ).toEqual([['Ne plus proposer', true]])
+  })
+
+  it('ne parle ni de « secours », ni de « préféré », ni de remplacement, et ne pose plus « Toujours prendre ce produit ? »', () => {
+    void show()
+
+    expect(shadow().textContent).not.toMatch(/secours|préfér|remplacement|Toujours prendre/i)
+    expect(shadow().textContent).not.toContain('Cette fois seulement')
+  })
+
+  it('affiche tel quel un libellé qui contient du HTML, y compris dans le nom accessible', () => {
+    const zone = document.body.appendChild(document.createElement('div'))
+    renderPicker(
+      zone,
+      { ...props, items: [item('111', HOSTILE)] },
+      { choose: () => undefined, search: () => undefined, never: () => undefined },
+    )
+
+    expect(zone.querySelector('.name')?.textContent).toBe(HOSTILE)
+    expect(zone.querySelector('.pick button')?.getAttribute('aria-label')).toBe(
+      `Choisir : ${HOSTILE}`,
+    )
+    expect(zone.querySelector('img, script')).toBeNull()
+    zone.remove()
   })
 })
 
@@ -1137,6 +1201,7 @@ describe('liste de produits dans l’écran de choix', () => {
       ]),
     ).toEqual([
       ['Choisir', false],
+      ['Pas mon habituel', false],
       ['Ne plus proposer', true],
     ])
     press('Choisir')

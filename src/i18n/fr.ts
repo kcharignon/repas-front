@@ -665,7 +665,7 @@ export default {
       fallback: 'Produit de remplacement utilisé : le produit habituel n’était pas disponible.',
       chosenPrimary: 'Choisi sur Leclerc, produit habituel : Repas s’en souvient.',
       chosenFallback: 'Choisi sur Leclerc, produit de remplacement : Repas s’en souvient.',
-      chosenOnce: 'Choisi sur Leclerc pour cette fois seulement.',
+      chosenOnce: 'Choisi sur Leclerc pour cette fois seulement : Repas ne s’en souvient pas.',
       haveAtHome: 'J’en ai toujours : Repas s’en souvient.',
       skipped: 'Pas cette fois.',
       unavailable: 'Aucun produit disponible : rien n’a été mis au panier.',

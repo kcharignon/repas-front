@@ -151,7 +151,9 @@ describe('retour du drive : un passage réussi', () => {
       'produit de remplacement : Repas s’en souvient',
     )
     const moutarde = lines.find((line) => line.startsWith('Moutarde'))
-    expect(moutarde).toContain('Choisi sur Leclerc pour cette fois seulement.')
+    expect(moutarde).toContain(
+      'Choisi sur Leclerc pour cette fois seulement : Repas ne s’en souvient pas.',
+    )
     expect(moutarde).toContain('Ne sera plus proposé : Moutarde forte 200 g')
     expect(lines.find((line) => line.startsWith('Sel'))).toContain(
       'J’en ai toujours : Repas s’en souvient.',

@@ -1,8 +1,8 @@
-// Les photos des produits dans l'écran de choix et dans « Toujours prendre ce produit ? » (DRV-633). jsdom, sans réseau : on lit les balises créées,
+// Les photos des produits dans l'écran de choix (DRV-633). jsdom, sans réseau : on lit les balises créées,
 // leurs attributs et ce qui se passe quand l'image ne charge pas.
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createUi, renderPicker, type PickerItem, type UiHandle } from '../src/ui'
+import { renderPicker, type PickerItem } from '../src/ui'
 import { BATCH_SIZE } from '../src/ui/picker'
 import { photoFrame } from '../src/ui/photo'
 
@@ -63,11 +63,15 @@ describe('la photo d’une fiche', () => {
     for (const name of ['referrerpolicy', 'crossorigin', 'srcset', 'sizes', 'fetchpriority']) {
       expect([name, image?.hasAttribute(name)]).toEqual([name, false])
     }
-    // La photo précède le texte dans la ligne ; le bouton « Choisir » reste sous la fiche, sur toute sa largeur.
+    // La photo précède le texte dans la ligne ; les deux boutons (« Choisir », « Pas mon habituel ») restent sous la fiche, côte à côte.
     const media = row?.querySelector('.media')
     expect(media?.firstElementChild?.classList.contains('photo')).toBe(true)
     expect(media?.lastElementChild?.classList.contains('text')).toBe(true)
-    expect(row?.lastElementChild?.tagName).toBe('BUTTON')
+    expect(row?.lastElementChild?.classList.contains('pick')).toBe(true)
+    expect([...(row?.querySelectorAll('.pick > button') ?? [])].map((b) => b.textContent)).toEqual([
+      'Choisir',
+      'Pas mon habituel',
+    ])
   })
 
   it('le libellé hostile n’est que du texte : dans le texte alternatif comme dans la fiche', () => {
@@ -173,41 +177,5 @@ describe('photoFrame', () => {
     expect(frame?.className).toBe('photo')
     expect(image?.getAttributeNames().filter((name) => name.startsWith('on'))).toEqual([])
     expect(frame?.outerHTML).not.toContain('onerror')
-  })
-})
-
-describe('« Toujours prendre ce produit ? »', () => {
-  let ui: UiHandle | null = null
-  afterEach(() => {
-    ui?.close()
-    ui = null
-  })
-  const shadow = () => (ui?.host?.shadowRoot ?? null) as ShadowRoot
-
-  it('montre la photo du produit choisi à côté de son libellé', () => {
-    ui = createUi({ mode: 'open' })
-    void ui.show('placement', {
-      ingredient: 'Farine',
-      productLabel: 'Farine de test 1 kg',
-      photo: GOOD,
-    })
-
-    const image = shadow().querySelector('.media img')
-    expect(image?.getAttribute('src')).toBe(GOOD)
-    expect(image?.getAttribute('alt')).toBe('Farine de test 1 kg')
-    expect(shadow().querySelector('.media .text')?.textContent).toContain('Farine de test 1 kg')
-  })
-
-  it.each([
-    undefined,
-    null,
-    'https://images.autre-site.invalid/a.jpg',
-    'data:image/png;base64,AA==',
-  ])('sans photo ou avec une adresse refusée (%s) : la question reste en texte', (photo) => {
-    ui = createUi({ mode: 'open' })
-    void ui.show('placement', { ingredient: 'Farine', productLabel: 'Farine de test 1 kg', photo })
-
-    expect(shadow().querySelector('img')).toBeNull()
-    expect(shadow().querySelector('h1')?.textContent).toBe('Toujours prendre ce produit ?')
   })
 })

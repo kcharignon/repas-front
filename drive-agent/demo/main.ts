@@ -97,7 +97,7 @@ const PICKER: PickerProps = {
 function mounting(props: PickerProps): ChooserProps['mount'] {
   return (zone, answer) => {
     renderPicker(zone, props, {
-      choose: (id) => answer({ type: 'choose', id }),
+      choose: (id, placement) => answer({ type: 'choose', id, placement }),
       search: (query) => answer({ query }),
       never: () => undefined,
     })
@@ -286,17 +286,6 @@ const SCREENS: Record<string, () => unknown> = {
     }),
   store: () => ui.show('store', { id: '123456', label: null }),
   'store-label': () => ui.show('store', { id: '123456', label: 'Magasin de test, Ville-Test' }),
-  placement: () =>
-    ui.show('placement', {
-      ingredient: 'Farine de blé',
-      productLabel: 'Farine de blé T45 de test 1 kg',
-      photo: photo(1001),
-    }),
-  'placement-text': () =>
-    ui.show('placement', {
-      ingredient: 'Farine de blé',
-      productLabel: 'Farine de blé T45 de test 1 kg',
-    }),
   hostile: () => ui.show('quantity', { ingredient: HOSTILE, productLabel: HOSTILE, packs: 1 }),
   'end-completed': () =>
     ui.show('end', {
