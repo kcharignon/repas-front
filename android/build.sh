@@ -2,11 +2,14 @@
 # Lancé DANS le conteneur Docker de construction, par `make android`, `make android-test`, `make android-release` et
 # `make android-release-selftest` (jamais à la main sur la machine : ni JDK, ni SDK Android n'y sont requis).
 #
-#   ./build.sh test              les tests Kotlin (le cœur `core/`, l'application `app/` et la dérivation de la version)
-#   ./build.sh apk               l'APK de débogage dans dist/repas-drive-debug.apk, avec sa taille et son empreinte SHA-256
+#   ./build.sh test              les tests Kotlin (le cœur `core/`, l'application `app/` et la dérivation de la version), puis le contrôle des deux
+#                                variantes de distribution : `direct` (APK GitHub, se met à jour elle-même) a la permission d'installer et le code
+#                                de mise à jour, `play` (Google Play, à venir) n'en a ni l'une ni l'autre (DRV-639)
+#   ./build.sh apk              l'APK de débogage dans dist/repas-drive-debug.apk, avec sa taille et son empreinte SHA-256
 #   ./build.sh release           l'APK signé dans dist/repas-drive.apk ; refuse sans clé de signature ni étiquette de version
 #   ./build.sh verify-release    contrôle l'APK signé (dist/repas-drive.apk, ou le fichier donné en argument) : signature et empreinte du
-#                                certificat, version tirée de l'étiquette, une seule permission, ni débogage ni plan d'essai, agent intact ;
+#                                certificat, version tirée de l'étiquette, deux permissions (Internet et l'installation de la mise à jour), ni
+#                                débogage ni plan d'essai, agent intact ;
 #                                écrit dist/release-facts.env (version, empreintes) pour les notes de la release (DRV-315)
 #   ./build.sh release-selftest  prouve le refus sans clé, la réussite avec une clé jetable créée à l'instant et les refus du contrôle
 #
@@ -41,17 +44,42 @@ report() {
 run_tests() {
   # Le cœur (Kotlin sans Android, AUTH-015) puis l'application : un seul appel de Gradle. Compiler le cœur sans le SDK Android est déjà
   # un contrôle d'architecture ; `CoreArchitectureTest` le dit en clair.
-  "${GRADLE[@]}" :core:test :app:testDebugUnitTest
+  "${GRADLE[@]}" :core:test :app:testDirectDebugUnitTest :app:testPlayDebugUnitTest
   # La dérivation de la version vit dans buildSrc : Gradle ne joue pas ses tests tout seul.
   "${GRADLE[@]}" -p buildSrc test
+  check_distributions
+}
+
+# Les deux variantes de distribution (DRV-639) : la permission d'installer des applications et le code de la mise à jour dans l'application ne
+# sont que dans `direct` (l'APK de la release GitHub). La variante `play` (Google Play, à venir : Google interdit à une application distribuée par
+# Play de s'installer ailleurs) n'en contient NI l'un NI l'autre : on construit son manifeste et ses classes, et on les lit.
+check_distributions() {
+  "${GRADLE[@]}" :app:processDirectDebugManifest :app:processPlayDebugManifest :app:compileDirectDebugKotlin :app:compilePlayDebugKotlin
+  local direct_manifest play_manifest direct_classes play_classes installer_classes
+  direct_manifest=$(find app/build/intermediates/merged_manifests/directDebug -name AndroidManifest.xml | head -n 1)
+  play_manifest=$(find app/build/intermediates/merged_manifests/playDebug -name AndroidManifest.xml | head -n 1)
+  direct_classes=app/build/tmp/kotlin-classes/directDebug
+  play_classes=app/build/tmp/kotlin-classes/playDebug
+  [ -f "$direct_manifest" ] && [ -f "$play_manifest" ] || fail "les manifestes des variantes direct et play sont introuvables après leur construction."
+  grep -q 'android.permission.INTERNET' "$direct_manifest" || fail "la variante direct n'a pas la permission Internet."
+  grep -q 'android.permission.REQUEST_INSTALL_PACKAGES' "$direct_manifest" || fail "la variante direct (qui se met à jour elle-même) doit déclarer REQUEST_INSTALL_PACKAGES."
+  grep -q 'androidx.core.content.FileProvider' "$direct_manifest" || fail "la variante direct doit déclarer son fournisseur de fichiers privé."
+  grep -q 'android.permission.INTERNET' "$play_manifest" || fail "la variante play n'a pas la permission Internet."
+  ! grep -q 'REQUEST_INSTALL_PACKAGES' "$play_manifest" || fail "la variante play (Google Play) contient la permission REQUEST_INSTALL_PACKAGES : elle ne doit pas s'installer elle-même."
+  ! grep -q 'FileProvider' "$play_manifest" || fail "la variante play contient un fournisseur de fichiers de mise à jour."
+  ! grep -q 'REQUEST_INSTALL_PACKAGES' app/src/main/AndroidManifest.xml || fail "la permission d'installer ne va pas dans le manifeste commun, seulement dans app/src/direct."
+  installer_classes='DirectSelfUpdate|HttpsHop|PrivateUpdateStorage|AndroidUpdatePlatform'
+  find "$direct_classes" -name '*.class' | grep -qE "$installer_classes" || fail "la variante direct ne contient pas le code de mise à jour."
+  ! find "$play_classes" -name '*.class' | grep -qE "$installer_classes" || fail "la variante play contient du code de mise à jour dans l'application."
+  echo "   variantes : direct (permission d'installer, fournisseur de fichiers, code de mise à jour), play (aucun des trois)."
 }
 
 build_debug() {
-  "${GRADLE[@]}" :app:assembleDebug
+  "${GRADLE[@]}" :app:assembleDirectDebug
   mkdir -p "$DIST"
   # ANDROID_APK_NAME : un autre nom de fichier (le test de l'émulateur construit un APK qui vise un faux Repas local, sans écraser le vrai).
   local name="${ANDROID_APK_NAME:-repas-drive-debug.apk}"
-  cp app/build/outputs/apk/debug/app-debug.apk "$DIST/$name"
+  cp app/build/outputs/apk/direct/debug/app-direct-debug.apk "$DIST/$name"
   report "$DIST/$name"
 }
 
@@ -74,9 +102,9 @@ build_release() {
   trap "rm -f '$keystore'" EXIT
   printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$keystore" || fail "ANDROID_KEYSTORE_BASE64 n'est pas du base64 valide."
   # Gradle reçoit le chemin du fichier ; les mots de passe restent dans l'environnement.
-  ANDROID_KEYSTORE_FILE="$keystore" "${GRADLE[@]}" :app:assembleRelease
+  ANDROID_KEYSTORE_FILE="$keystore" "${GRADLE[@]}" :app:assembleDirectRelease
   mkdir -p "$DIST"
-  cp app/build/outputs/apk/release/app-release.apk "$DIST/repas-drive.apk"
+  cp app/build/outputs/apk/direct/release/app-direct-release.apk "$DIST/repas-drive.apk"
   report "$DIST/repas-drive.apk"
 }
 
@@ -92,7 +120,7 @@ normalize_fingerprint() { printf '%s' "$1" | tr -d ': \t\r\n' | tr 'A-F' 'a-f'; 
 #   - signé d'une seule clé, de signature valide, dont le certificat a l'une des empreintes attendues (ANDROID_EXPECTED_CERT_SHA256) et n'est
 #     jamais celui de la clé de débogage publique ;
 #   - paquet, nom et code de version conformes à l'étiquette (le code est recalculé ici, indépendamment du Kotlin), minSdk 26, targetSdk 36 ;
-#   - une seule permission (Internet), non débogable, `BuildConfig.DEBUG` faux, origine de Repas de production, aucun plan d'essai ;
+#   - deux permissions seulement (Internet, et REQUEST_INSTALL_PACKAGES pour la mise à jour dans l'application, DRV-639), non débogable, `BuildConfig.DEBUG` faux, origine de Repas de production, aucun plan d'essai ;
 #   - l'agent embarqué est celui de android/agent.js.sha384.
 verify_release() {
   local apk=${1:-$DIST/repas-drive.apk}
@@ -140,8 +168,9 @@ verify_release() {
   ! grep -q '^application-debuggable' <<<"$badging" || fail "l'APK est débogable."
   local permissions
   permissions=$(sed -n "s/^uses-permission: name='\([^']*\)'.*/\1/p" <<<"$badging" | sort | tr '\n' ' ')
-  [ "$permissions" = "android.permission.INTERNET " ] || fail "permissions de l'APK inattendues (seule android.permission.INTERNET est permise) : $permissions"
-  echo "   $APP_ID $want_name (code $want_code), minSdk 26, targetSdk 36, non débogable, une seule permission (Internet)."
+  [ "$permissions" = "android.permission.INTERNET android.permission.REQUEST_INSTALL_PACKAGES " ] \
+    || fail "permissions de l'APK inattendues (seules android.permission.INTERNET et android.permission.REQUEST_INSTALL_PACKAGES sont permises) : $permissions"
+  echo "   $APP_ID $want_name (code $want_code), minSdk 26, targetSdk 36, non débogable, deux permissions (Internet, installation de la mise à jour)."
 
   # 3. Le contenu : l'agent intact, ni plan d'essai ni origine de test, BuildConfig.DEBUG faux.
   local listing agent_actual agent_expected
@@ -153,7 +182,7 @@ verify_release() {
   agent_expected=$(tr -d ' \t\r\n' < agent.js.sha384)
   [ "$agent_actual" = "$agent_expected" ] || fail "l'agent embarqué n'a pas l'empreinte de android/agent.js.sha384 (embarqué : $agent_actual)."
   ! unzip -p "$apk" 'classes*.dex' | grep -aq 'repas\.test' || fail "l'APK contient l'origine du faux Repas des essais (repas.test)."
-  local config=app/build/generated/source/buildConfig/release/eu/kantin/repas/drive/BuildConfig.java
+  local config=app/build/generated/source/buildConfig/direct/release/eu/kantin/repas/drive/BuildConfig.java
   [ -f "$config" ] || fail "la configuration de construction ($config) manque : contrôler l'APK juste après make android-release."
   grep -q 'boolean DEBUG = false;' "$config" || fail "BuildConfig.DEBUG n'est pas faux : le menu de débogage serait dans l'APK."
   grep -qF 'REPAS_ORIGIN = "https://kantin.eu/";' "$config" || fail "l'origine de Repas de l'APK n'est pas celle de la production."
@@ -200,7 +229,7 @@ $(tail -n 25 <<<"$warmup")"
   grep -q "pas de clé de signature" <<<"$output" || fail "le refus sans clé n'a pas le message attendu : $(tail -n 25 <<<"$output")"
   [ ! -e dist/selftest/repas-drive.apk ] || fail "un APK a été produit sans clé de signature."
   # Seconde ligne de défense : Gradle, appelé directement sans passer par ce script, refuse lui aussi.
-  if output=$("${clean_env[@]}" "${GRADLE[@]}" :app:assembleRelease 2>&1); then
+  if output=$("${clean_env[@]}" "${GRADLE[@]}" :app:assembleDirectRelease 2>&1); then
     fail "Gradle a construit une publication sans clé de signature."
   fi
   # Gradle doit s'arrêter sur le refus de la clé. S'il s'arrête avant (réseau, dépôt de plugins…), la fin de sa sortie dit pourquoi : rien de secret

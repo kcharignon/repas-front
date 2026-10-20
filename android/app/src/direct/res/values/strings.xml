@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- La mise à jour dans l'application (DRV-639), variante « direct » seulement. Une seule phrase avant les réglages d'Android. -->
+    <string name="update_permission_title">Autoriser la mise à jour</string>
+    <string name="update_permission_message">Pour se mettre à jour, Repas a besoin que tu l’autorises, une seule fois, à installer des applications.</string>
+    <string name="update_permission_continue">Continuer</string>
+    <string name="update_permission_later">Plus tard</string>
+</resources>

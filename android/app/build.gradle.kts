@@ -93,6 +93,19 @@ android {
         resValue("string", "build_commit", buildCommit)
     }
 
+    // Deux façons de distribuer la même application (DRV-639, ADR 0025 du back) :
+    //  - `direct` : l'APK de la release GitHub, installé à la main. Seul à savoir se mettre à jour lui-même : il déclare la permission
+    //    « installer des applications » (REQUEST_INSTALL_PACKAGES), le fournisseur de fichiers et le code qui télécharge, vérifie et ouvre
+    //    l'installateur d'Android (`app/src/direct`) ;
+    //  - `play` : la version de Google Play (à venir, tickets STORE) : Google interdit à une application distribuée par Play de s'installer ailleurs.
+    //    Elle ne contient NI la permission NI ce code (`app/src/play` n'a qu'un remplaçant qui répond « non » à tout). `build.sh test`
+    //    construit les deux et échoue si la variante `play` porte l'un ou l'autre.
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("direct") { dimension = "distribution" }
+        create("play") { dimension = "distribution" }
+    }
+
     buildFeatures {
         resValues = true
         // BuildConfig.DEBUG : le menu « Plan d'essai (débogage) » n'existe que dans l'APK de débogage.
@@ -187,8 +200,9 @@ val verifyReleaseInputs by tasks.registering {
     }
 }
 
+// Une tâche de publication (de n'importe quelle variante : `direct`, `play`) demande les entrées d'abord.
 tasks.configureEach {
-    if (name == "preReleaseBuild" || name == "validateSigningRelease") {
+    if (Regex("""^pre\w*ReleaseBuild$""").matches(name) || Regex("""^validateSigning\w*Release$""").matches(name)) {
         dependsOn(verifyReleaseInputs)
     }
 }

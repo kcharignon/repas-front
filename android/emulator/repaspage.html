@@ -96,6 +96,7 @@
       item.version = m.version
       item.versionCode = m.versionCode
       item.drive = m.drive
+      item.selfUpdate = m.selfUpdate
       show('info', 'app.info : version ' + m.version + ', numéro ' + m.versionCode + ', drive ' + m.drive, true)
     } else if (m.type === 'drive.result') {
       item.runId = m.result && m.result.runId

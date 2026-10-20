@@ -48,6 +48,13 @@ if wait_until 15 has_report '"type": "app.info"'; then ok "app.info a reçu sa r
 info=$(reports | grep -o '{[^{}]*"type": "app.info"[^{}]*}' | head -n 1)
 say "      réponse : ${info:-aucune}"
 grep -q '"drive": true' <<< "$info" && ok "app.info annonce que le drive est utilisable" || ko "app.info n'annonce pas le drive"
+# DRV-639 : l'APK de débogage est signé d'une clé PUBLIQUE, les versions publiées ne s'installeraient pas par-dessus : il ne propose jamais de se
+# mettre à jour lui-même (« selfUpdate » absent de app.info, et les messages update.* reçoivent UNKNOWN_TYPE comme d'une ancienne application).
+# La mise à jour réelle ne se joue que sur un APK signé de la clé de publication : android/PUBLICATION.md, « Essai de la mise à jour sur le téléphone ».
+if grep -q '"selfUpdate"' <<< "$info"; then ko "app.info annonce la mise à jour dans l'application dans l'APK de débogage"; else ok "app.info ne propose pas la mise à jour dans l'application (APK de débogage)"; fi
+before=$(reports | grep -o '"type": "error", "code": "UNKNOWN_TYPE"' | wc -l)
+post_command '{"do":"raw","text":"{\"v\":1,\"type\":\"update.start\"}"}'
+if wait_until 10 has_report_count '"type": "error", "code": "UNKNOWN_TYPE"' $((before + 1)); then ok "update.start reçoit UNKNOWN_TYPE dans l'APK de débogage : rien n'est téléchargé ni installé"; else ko "update.start n'a pas reçu UNKNOWN_TYPE dans l'APK de débogage"; fi
 sleep 2
 screenshot 01-coquille-repas
 
