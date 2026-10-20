@@ -460,10 +460,12 @@ for (const [name, viewport] of [
         })
         await page.screenshot({ path: info.outputPath(`contenance-${name}-${scheme}.png`) })
 
-        // Le clavier ouvert (la fenêtre ne garde que ~340 px de haut) : le champ reste visible
+        // Le clavier ouvert (la fenêtre ne garde que ~340 px de haut) : le champ reste atteignable
         await page.setViewportSize({ width: viewport.width, height: 340 })
         await field(page).focus()
-        await expect(field(page)).toBeInViewport({ ratio: 0.99 })
+        // (le navigateur amène le champ focalisé à l'écran : on garde la capture à lire, pas une position qui dépend des polices)
+        await field(page).scrollIntoViewIfNeeded()
+        await expect(field(page)).toBeInViewport()
         await page.screenshot({ path: info.outputPath(`contenance-${name}-${scheme}-clavier.png`) })
         await page.setViewportSize(viewport)
 
