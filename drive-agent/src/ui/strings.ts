@@ -1,8 +1,11 @@
 // Tous les textes de l'interface de l'agent, en français simple (tutoiement, phrases courtes, mots du glossaire de principes-produit.md § 5). Aucun texte n'est écrit ailleurs.
 // Le diagnostic et le test automatique sont des outils du mainteneur : exemptés du glossaire, pas du tutoiement. Gardé par src/i18n/__tests__/voice-and-glossary.spec.ts.
 import type { ErrorCode, LineStatus, Outcome } from '../../protocol'
+import { pluralOf, unitFor } from '../../protocol'
 import { own } from '../own'
 import type { UnavailableReason, UnreachedReason } from './types'
+
+export { pluralOf, unitFor }
 
 /** « 1 produit », « 3 produits » : le nombre suivi du bon mot. */
 export function count(n: number, one: string, many: string): string {
@@ -675,6 +678,19 @@ export const S = {
     keepOpen: 'Garde l’application ouverte.',
     stop: 'Arrêter',
     stopping: 'J’arrête après l’article en cours…',
+  },
+  packSize: {
+    title: 'Vérifie la quantité',
+    /** « Combien de tranches y a-t-il dans « Fromage… 20 Tranches - 340g » ? » : toujours au pluriel, la question demande un nombre. */
+    question: (units: string, product: string) =>
+      `Combien de ${units} y a-t-il dans « ${product} »\u00a0?`,
+    /** « Il te faut 15 tranches » : la quantité de la liste, dans son unité. */
+    need: (quantity: number, units: string) => `Il te faut ${formatNumber(quantity)} ${units}`,
+    /** L'aperçu en direct, une fois le nombre valide : « Il te faut 15 tranches : 1 produit ». */
+    preview: (need: string, packs: number) => `${need} : ${count(packs, 'produit', 'produits')}`,
+    invalid: 'Entre un nombre, par exemple 20 ou 12,5.',
+    validate: 'Valider',
+    skip: 'Pas cette fois',
   },
   quantity: {
     title: 'Vérifie la quantité',

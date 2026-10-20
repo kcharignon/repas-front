@@ -6,6 +6,7 @@ import { useSessionStore } from '@/session/session'
 import { DRAFT_KEY } from '../bridge'
 import { fakeNative } from '../bridge/__tests__/fakeNative'
 import type { SentMessage } from '../bridge/__tests__/fakeNative'
+import { PACK_SIZE_APP_VERSION } from '../appVersion'
 import DriveSendView from '../DriveSendView.vue'
 import { estimate } from './estimateFixtures'
 import { plan, storeBaseUrl } from './fixtures'
@@ -909,6 +910,50 @@ describe('écran d’envoi au drive, rayons conseillés (DRV-642)', () => {
 
       expect(message?.lines.length).toBeGreaterThan(0)
       expect(JSON.stringify(message)).not.toContain('rayonHints')
+    },
+  )
+})
+
+describe('écran d’envoi au drive, contenance d’un produit dans l’unité de la liste (DRV-652)', () => {
+  function installVersion(version: string) {
+    const native = fakeNative((message, reply) => {
+      if (message.type === 'app.info')
+        reply({ v: 1, type: 'app.info', version, versionCode: 1, drive: true })
+    })
+    ;(globalThis as { repasNative?: unknown }).repasNative = native.bridge
+
+    return native
+  }
+
+  async function send(version: string) {
+    const native = installVersion(version)
+    const { wrapper } = await open()
+    await loaded(wrapper)
+    await vi.waitFor(() => expect(native.sent.map((m) => m.type)).toContain('app.info'))
+    await flushPromises()
+    await press('Ouvrir le drive')
+
+    return started(native)[0]?.plan
+  }
+
+  it.each([PACK_SIZE_APP_VERSION, '0.2.0', '1.0.0', '0.0.0-dev'])(
+    'une application %s (agent à jour) : le slug et le nom de l’unité, et la contenance des produits, partent avec le plan',
+    async (version) => {
+      const message = await send(version)
+
+      const farine = message?.lines.find((item) => item.ingredientSlug === 'farine')
+      expect(farine?.needed).toMatchObject({ unitSlug: 'gramme', unitName: 'gramme' })
+      expect(farine?.products?.[0]).toHaveProperty('packSize', null)
+    },
+  )
+
+  it.each(['0.1.10', '0.1.15', '0.1.23', '0.1.24'])(
+    'une application %s (agent plus ancien) : le plan part sans ces clés, un agent ancien le refuserait en bloc',
+    async (version) => {
+      const message = await send(version)
+
+      expect(message?.lines.length).toBeGreaterThan(0)
+      expect(JSON.stringify(message)).not.toMatch(/unitSlug|unitName|packSize/)
     },
   )
 })

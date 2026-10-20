@@ -8,6 +8,8 @@ interface Product {
   ean: null
   label: string
   content: { value: number; unit: string } | null
+  /** La contenance dans l'unité de la liste (DRV-652), `null` quand la personne n'en a pas donné. */
+  packSize?: { value: number; unitSlug: string } | null
 }
 interface Choice {
   ingredientSlug: string
@@ -44,6 +46,13 @@ const choice = (
   rejected,
   updatedAt: '2026-10-18T10:00:00+02:00',
 })
+
+/** Un fromage que la liste compte en tranches, dont la personne a donné la contenance (DRV-652). */
+export const cheddar = {
+  ...product('5', 'Fromage cheddar en tranches 20 Tranches - 340g', { value: 340, unit: 'g' }),
+  packSize: { value: 20, unitSlug: 'tranche' },
+}
+export const cheddarChoice = choice('cheddar', 'Cheddar en tranche', [cheddar])
 
 export const farineA = product('1', 'Farine de blé T55 Marque Repère 1 kg')
 export const farineB = product('2', 'Farine T45 Marque Test 1 kg')
@@ -131,6 +140,35 @@ export async function fakeDriveBack(
       }
       if (key === 'GET /api/v1/drive/choices')
         return reply(route, { member: back.choices, totalItems: back.choices.length })
+      if (key === 'GET /api/v1/units')
+        return reply(route, {
+          member: [
+            { slug: 'tranche', name: 'tranche', symbol: '', dimension: null, baseFactor: null },
+            { slug: 'gramme', name: 'gramme', symbol: 'g', dimension: 'WEIGHT', baseFactor: 1 },
+          ],
+          totalItems: 2,
+        })
+      // La contenance d'un produit corrigée (DRV-652) : un ADD_PRODUCT du même produit, qui remplace sa contenance
+      if (key === 'PUT /api/v1/drive/choices') {
+        const body = request.postDataJSON() as {
+          choices: {
+            ingredientSlug: string
+            action: string
+            product: { retailerProductId: string; packSize?: Product['packSize'] }
+          }[]
+        }
+        back.bodies.push(body)
+        for (const intent of body.choices) {
+          const accepted = find(intent.ingredientSlug)?.accepted ?? []
+          const known = accepted.find(
+            (entry) => entry.product.retailerProductId === intent.product.retailerProductId,
+          )
+          if (known && intent.product.packSize !== undefined)
+            known.product.packSize = intent.product.packSize
+        }
+
+        return reply(route)
+      }
       if (slug !== undefined && request.method() === 'PUT') {
         const body = request.postDataJSON() as {
           haveAtHome: boolean

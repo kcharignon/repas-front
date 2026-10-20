@@ -5,7 +5,9 @@
 // Jamais un produit refusé (grisé, non sélectionnable), jamais plus que le stock (l'adaptateur plafonne), requêtes en série.
 import {
   LIMITS,
+  packsFromSize,
   type ChosenLine,
+  type PackSize,
   type Placement,
   type PlanLine,
   type PlanProduct,
@@ -33,6 +35,7 @@ import {
   type PickerItem,
 } from '../ui'
 import { putInCart } from './keep-cart'
+import { askPacks, givenSize } from './pack-size'
 import { packsFor } from './packs'
 import { priceOf } from './phase-a'
 import { searchInOrder, type SearchStep } from './search-by-name'
@@ -554,25 +557,38 @@ async function settleLine(
         continue
       }
 
-      const computed = packsFor(line.needed, candidate.content)
-      let packs = computed.status === 'COMPUTED' ? computed.packs : null
-      if (packs === null) {
-        packs = await ui.show('quantity', {
-          ingredient: line.name,
-          productLabel: labelOf(candidate),
-          packs: computed.packs,
-          need: formatNeeded(line.needed),
-        })
-        if (packs === null) continue
-      }
-
-      // Le bouton de la fiche dit tout (une intention = un clic), aucune question ensuite : « Choisir » retient le produit (`PRIMARY` : Repas le met
-      // en tête et garde les anciens à sa suite), « Pas mon habituel » le prend cette fois seulement (`ONCE` : rien n'est retenu, l'article sera
+      // Le bouton de la fiche dit tout (une intention = un clic), aucune question sur la façon de retenir : « Choisir » retient le produit (`PRIMARY` : Repas
+      // le met en tête et garde les anciens à sa suite), « Pas mon habituel » le prend cette fois seulement (`ONCE` : rien n'est retenu, l'article sera
       // redemandé). L'agent n'émet plus `FALLBACK`, que le protocole accepte toujours.
       const placement: Placement = answer.value.placement
 
-      // La recherche qui a fait apparaître ce produit (DRV-650), rendue seulement pour un produit retenu (`PRIMARY`) et si elle diffère de celle du plan.
-      const memo = placement === 'PRIMARY' ? rememberedSearch(line, search.listed) : null
+      // Le nombre de produits : calculé quand le contenu du produit le permet, ou quand la personne a déjà donné la contenance de CE produit (un produit
+      // connu que le panier avait refusé, DRV-652) ; sinon demandé (DRV-652 : « combien de tranches y a-t-il dans ce produit ? » quand le plan dit l'unité).
+      const known = unavailable.find((product) => product.id === candidate.id)
+      const given = known === undefined ? null : givenSize(known, line.needed)
+      const computed = packsFor(line.needed, candidate.content)
+      let packs = computed.status === 'COMPUTED' ? computed.packs : null
+      let packSize: PackSize | undefined
+      if (given !== null && line.needed) {
+        packs = packsFromSize(line.needed.quantity, given.value)
+      }
+      if (packs === null) {
+        const asked = await askPacks(ui, {
+          ingredient: line.name,
+          productLabel: labelOf(candidate),
+          needed: line.needed,
+          need: formatNeeded(line.needed),
+          packs: computed.packs,
+        })
+        if (asked === null) continue
+        packs = asked.packs
+        // Repas ne retient la contenance que d'un produit retenu : « Pas mon habituel » ne garde rien de ce produit
+        if (asked.packSize && placement !== 'ONCE') packSize = asked.packSize
+      }
+
+      // La recherche qui a fait apparaître ce produit (DRV-650), rendue pour un produit retenu (`PRIMARY`) comme pour « Pas mon habituel » (`ONCE`, DRV-653 :
+      // le produit n'est pas retenu, la recherche l'est) et si elle diffère de celle du plan.
+      const memo = rememberedSearch(line, search.listed)
       context.showProgress()
       let settled
       try {
@@ -597,6 +613,7 @@ async function settleLine(
             quantity: Math.min(packs, LIMITS.packsMax),
             placement,
             ...(memo !== null && { searchQuery: memo }),
+            ...(packSize && { packSize }),
             ...(unavailable.length > 0 && {
               unavailableIds: unavailable.map((product) => product.id).slice(0, LIMITS.products),
             }),
@@ -626,6 +643,7 @@ async function settleLine(
           quantity: Math.min(settled.obtained, LIMITS.packsMax),
           placement,
           ...(memo !== null && { searchQuery: memo }),
+          ...(packSize && { packSize }),
           ...(unavailable.length > 0 && {
             unavailableIds: unavailable.map((product) => product.id).slice(0, LIMITS.products),
           }),

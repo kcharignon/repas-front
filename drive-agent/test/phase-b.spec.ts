@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { PlanLine, ProductRef, ResultLine } from '../protocol'
 import { guidedChoice, labelOf, MAX_CANDIDATES, productSearchForms, searchForms } from '../src/flow'
 import { LeclercError } from '../src/leclerc'
-import type { ChooserAnswer, ChooserProps, QuantityProps } from '../src/ui'
+import type { ChooserAnswer, ChooserProps, PackSizeProps, QuantityProps } from '../src/ui'
 import {
   candidate,
   expectConform,
@@ -150,6 +150,7 @@ function run(
     shelf?: Record<string, ShelfItem>
     before?: (call: string) => void | Promise<void>
     quantity?: (props: QuantityProps) => number | null
+    packSize?: (props: PackSizeProps) => number | null
     others?: PlanLine[]
     /** La réponse de l'utilisateur devant la demande de vérification de l'anti-robot (ticket K). */
     challenge?: () => 'resume' | 'stop'
@@ -181,6 +182,7 @@ function run(
   const screens = fakeUi({
     chooser: user.chooser,
     ...(options.quantity && { quantity: options.quantity }),
+    ...(options.packSize && { packSize: options.packSize }),
     ...(options.challenge && { challenge: options.challenge }),
   })
   const { flow, sent } = makeFlow({
@@ -2983,7 +2985,7 @@ describe('la recherche qui a fait trouver le produit est rendue à Repas (DRV-65
     expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', searchQuery: 'poivre vert' })
   })
 
-  it('un produit placé « cette fois seulement » (ONCE) ne mémorise rien : aucune clé', async () => {
+  it('un produit placé « cette fois seulement » (ONCE) : le produit n’est pas retenu, mais la recherche qui l’a fait trouver l’est (DRV-653)', async () => {
     const test = run(
       pepper({ replaces: { id: '1000009', label: 'Poivre de test habituel' } }),
       [typeThenChoose('poivre vert', chooseOnce)],
@@ -2992,8 +2994,59 @@ describe('la recherche qui a fait trouver le produit est rendue à Repas (DRV-65
 
     await test.start()
 
-    expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', placement: 'ONCE' })
-    expect(JSON.stringify(test.sent[0])).not.toContain('searchQuery')
+    expect(lineOf(test.sent[0])).toMatchObject({
+      outcome: 'CHOSEN',
+      placement: 'ONCE',
+      searchQuery: 'poivre vert',
+    })
+    expect(expectConform(test.sent[0])).toBeTruthy()
+  })
+
+  it('« Pas mon habituel » sans recherche tapée, ou la même que celle du plan : aucune clé', async () => {
+    const plain = run(pepper(), [(view) => chooseOnce(view.zone, 'Poivre noir moulu')])
+    await plain.start()
+    const same = run(pepper(), [typeThenChoose(' poivre ', chooseOnce)], {
+      found: answer('poivre'),
+    })
+    await same.start()
+
+    expect(lineOf(plain.sent[0])).toMatchObject({ outcome: 'CHOSEN', placement: 'ONCE' })
+    expect(JSON.stringify(plain.sent[0])).not.toContain('searchQuery')
+    expect(JSON.stringify(same.sent[0])).not.toContain('searchQuery')
+  })
+
+  it('« Pas mon habituel » : la recherche est nettoyée comme pour un produit retenu, et rien si moins de 2 caractères', async () => {
+    const typed = 'poivre\u200b  vert\u00a0bio'
+    const dirty = run(pepper(), [typeThenChoose(typed, chooseOnce)], { found: answer(typed) })
+    await dirty.start()
+    const tiny = run(pepper(), [typeThenChoose('x', chooseOnce)], { found: answer('x') })
+    await tiny.start()
+
+    expect(lineOf(dirty.sent[0])).toMatchObject({
+      placement: 'ONCE',
+      searchQuery: 'poivre vert bio',
+    })
+    expect(JSON.stringify(tiny.sent[0])).not.toContain('searchQuery')
+  })
+
+  it('« Pas mon habituel » après plusieurs recherches : la dernière dont la liste est affichée', async () => {
+    const test = run(
+      pepper(),
+      [
+        async (view) => {
+          search(view, 'sel')
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          search(view, 'poivre vert')
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          chooseOnce(view.zone, 'Poivre blanc')
+        },
+      ],
+      { found: answer('poivre vert') },
+    )
+
+    await test.start()
+
+    expect(lineOf(test.sent[0])).toMatchObject({ placement: 'ONCE', searchQuery: 'poivre vert' })
   })
 
   it('une ligne sans recherche dans le plan compare avec le nom de l’ingrédient', async () => {
@@ -3214,5 +3267,195 @@ describe('la recherche qui a fait trouver le produit est rendue à Repas (DRV-65
       expect(zone?.querySelector('script')).toBeNull()
       expect((window as unknown as { pwned?: number }).pwned).toBeUndefined()
     })
+  })
+})
+
+// —— La contenance du produit dans l'unité de la liste (DRV-652) ——————————————————————————————————————————————————————————————
+
+describe('la contenance du produit dans l’unité de la liste (DRV-652)', () => {
+  const SLICES: ShelfItem = {
+    label: 'Fromage Cheddar Burger Les Croisés 20 Tranches - 340g',
+    price: 299,
+  }
+  const SLICE_SHELF = {
+    ...SHELF,
+    '3000001': SLICES,
+    '3000002': { label: 'Fromage en tranches de test' },
+  }
+  const FOUND_SLICES = {
+    cheddar: ['3000001', '3000002'],
+    'cheddar en tranche': ['3000001', '3000002'],
+  }
+  const cheddar = (extra: Partial<PlanLine> = {}): PlanLine => ({
+    ...fresh('cheddar'),
+    name: 'Cheddar en tranche',
+    needed: {
+      quantity: 15,
+      unitSymbol: 'tranche',
+      dimension: null,
+      baseFactor: null,
+      unitSlug: 'tranche',
+      unitName: 'tranche',
+    },
+    ...extra,
+  })
+  const asked: PackSizeProps[] = []
+  const answering = (value: number | null) => (props: PackSizeProps) => {
+    asked.push(props)
+    return value
+  }
+  afterEach(() => {
+    asked.length = 0
+  })
+  const go = (line: PlanLine, steps: Step[], packSize: ReturnType<typeof answering>) =>
+    run(line, steps, { shelf: SLICE_SHELF, found: FOUND_SLICES, packSize })
+
+  it('pose la question en unités de la liste, avec le nombre du libellé en proposition, puis met le nombre de produits au panier', async () => {
+    // Given : 15 tranches voulues, un produit « 20 Tranches - 340g » dont le contenu net (g) ne dit rien des tranches
+    const test = go(cheddar(), [(view) => choose(view.zone, 'Fromage Cheddar')], answering(20))
+
+    // When
+    await test.start()
+
+    // Then
+    expect(asked).toEqual([
+      {
+        ingredient: 'Cheddar en tranche',
+        productLabel: 'Fromage Cheddar Burger Les Croisés 20 Tranches - 340g',
+        quantity: 15,
+        unitName: 'tranche',
+        prefill: 20,
+      },
+    ])
+    expect(test.screens.screens()).not.toContain('quantity')
+    expect(test.adapter.calls).toContain('cart 3000001 1')
+    expect(lineOf(test.sent[0], 'cheddar')).toMatchObject({
+      outcome: 'CHOSEN',
+      placement: 'PRIMARY',
+      quantity: 1,
+      packSize: { value: 20, unitSlug: 'tranche' },
+    })
+    expect(expectConform(test.sent[0])).toBeTruthy()
+  })
+
+  it.each([
+    [10, 2],
+    [15, 1],
+    [14.5, 2],
+    [0.5, 30],
+    [3, 5],
+  ])('un produit de %s tranches pour 15 voulues : %s produits', async (size, packs) => {
+    const test = go(cheddar(), [(view) => choose(view.zone, 'Fromage Cheddar')], answering(size))
+
+    await test.start()
+
+    expect(test.adapter.calls).toContain(`cart 3000001 ${packs}`)
+    expect(lineOf(test.sent[0], 'cheddar')).toMatchObject({
+      quantity: packs,
+      packSize: { value: size, unitSlug: 'tranche' },
+    })
+  })
+
+  it('un libellé sans le nombre de tranches : le champ est vide (aucune proposition)', async () => {
+    const test = go(cheddar(), [(view) => choose(view.zone, 'Fromage en tranches')], answering(8))
+
+    await test.start()
+
+    expect(asked[0]?.prefill).toBeNull()
+  })
+
+  it('« Pas mon habituel » (ONCE) : la question est posée (le nombre de produits en dépend), mais aucune contenance n’est rendue', async () => {
+    const test = go(cheddar(), [(view) => chooseOnce(view.zone, 'Fromage Cheddar')], answering(20))
+
+    await test.start()
+
+    expect(asked).toHaveLength(1)
+    const line = lineOf(test.sent[0], 'cheddar')
+    expect(line).toMatchObject({ outcome: 'CHOSEN', placement: 'ONCE', quantity: 1 })
+    expect(JSON.stringify(line)).not.toContain('packSize')
+  })
+
+  it('« Pas cette fois » sur la question revient à la liste : rien au panier, rien de mémorisé', async () => {
+    const test = go(
+      cheddar(),
+      [(view) => choose(view.zone, 'Fromage Cheddar'), () => ({ kind: 'skip' })],
+      answering(null),
+    )
+
+    await test.start()
+
+    expect(test.adapter.calls.filter((call) => call.startsWith('cart'))).toEqual([])
+    expect(JSON.stringify(test.sent[0])).not.toContain('packSize')
+  })
+
+  it('le plan ne dit pas l’unité de la ligne (back ou application plus anciens) : « Nombre de produits », et aucune contenance rendue', async () => {
+    const { unitSlug: _slug, unitName: _name, ...old } = cheddar().needed!
+    const test = run(cheddar({ needed: old }), [(view) => choose(view.zone, 'Fromage Cheddar')], {
+      shelf: SLICE_SHELF,
+      found: FOUND_SLICES,
+      quantity: () => 2,
+    })
+
+    await test.start()
+
+    expect(asked).toEqual([])
+    expect(test.screens.screens()).toContain('quantity')
+    expect(test.screens.screens()).not.toContain('packSize')
+    expect(lineOf(test.sent[0], 'cheddar')).toMatchObject({ outcome: 'CHOSEN', quantity: 2 })
+    expect(JSON.stringify(test.sent[0])).not.toContain('packSize')
+  })
+
+  it('un nom d’unité sans slug (ou l’inverse) : retombe sur « Nombre de produits »', async () => {
+    const half = { quantity: 15, unitSymbol: 'tranche', unitName: 'tranche' }
+    const test = run(cheddar({ needed: half }), [(view) => choose(view.zone, 'Fromage Cheddar')], {
+      shelf: SLICE_SHELF,
+      found: FOUND_SLICES,
+      quantity: () => 1,
+    })
+
+    await test.start()
+
+    expect(test.screens.screens()).toContain('quantity')
+    expect(test.screens.screens()).not.toContain('packSize')
+  })
+
+  it('un contenu net qui permet le calcul : aucune question (le calcul de Repas reste le même)', async () => {
+    const test = run(
+      { ...pepper(), needed: { ...pepper().needed!, unitSlug: 'gramme', unitName: 'gramme' } },
+      [(view) => choose(view.zone, 'Poivre noir moulu')],
+      { packSize: answering(1) },
+    )
+
+    await test.start()
+
+    expect(asked).toEqual([])
+    expect(JSON.stringify(test.sent[0])).not.toContain('packSize')
+  })
+
+  it('un produit connu que le panier avait refusé, dont la contenance est déjà donnée : choisi de nouveau, aucune question', async () => {
+    // Given : le produit habituel (20 tranches mémorisées) est introuvable ; la personne le choisit quand même dans la liste
+    const line = {
+      ...known('cheddar', [
+        {
+          ...product('3000001', 1, 'Fromage Cheddar Burger Les Croisés 20 Tranches - 340g'),
+          packSize: { value: 20, unitSlug: 'tranche' },
+        },
+      ]),
+      name: 'Cheddar en tranche',
+      needed: cheddar().needed!,
+    }
+    const test = run(line, [(view) => choose(view.zone, 'Fromage Cheddar')], {
+      shelf: { ...SLICE_SHELF, '3000001': { ...SLICES, ...OUT_OF_STOCK } },
+      found: FOUND_SLICES,
+      packSize: answering(1),
+    })
+
+    // When
+    await test.start()
+
+    // Then : 15 tranches / 20 = 1, sans question, et rien n'est rendu (Repas la garde déjà)
+    expect(asked).toEqual([])
+    expect(lineOf(test.sent[0], 'cheddar')).toMatchObject({ quantity: 1 })
+    expect(JSON.stringify(test.sent[0])).not.toContain('packSize')
   })
 })

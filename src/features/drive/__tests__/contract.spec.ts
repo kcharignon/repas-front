@@ -173,11 +173,12 @@ describe('le plan du back, traduit par buildPlanMessage, est valide pour l’age
   it('garde needed pour toutes les lignes à mettre au panier, clés du protocole seulement : l’unité sans symbole porte son nom', () => {
     const { lines } = buildPlanMessage(plan, {}, RUN_ID)
 
-    // `unitSlug` et `unitName` (DRV-652) sont des clés du back que le protocole v1 ne connaît pas : elles ne partent pas à l'agent
+    // Le back écrit aussi le slug et le nom de l'unité (DRV-652) : un agent qui ne les connaît pas rejetterait le plan entier, ils ne partent donc pas
     for (const source of plan.lines.filter((line) => line.status !== 'HAVE_AT_HOME')) {
-      const { unitSlug, unitName, ...known } = source.needed
-      expect([unitSlug, unitName]).not.toContain(undefined)
-      expect(lineOf(lines, source.ingredientSlug).needed).toEqual(known)
+      const { unitSlug, unitName, ...before } = source.needed
+      expect(unitSlug).toBeTypeOf('string')
+      expect(unitName).toBeTypeOf('string')
+      expect(lineOf(lines, source.ingredientSlug).needed).toEqual(before)
     }
     expect(lineOf(lines, 'oeuf').needed).toEqual({
       quantity: 6,
@@ -212,6 +213,40 @@ describe('le plan du back, traduit par buildPlanMessage, est valide pour l’age
       replaces: { id: '555101' },
     })
     expect(lineOf(message.lines, 'lait').status).toBe('SKIP')
+  })
+})
+
+describe('le plan du back pour un agent qui connaît la contenance (DRV-652)', () => {
+  const message = buildPlanMessage(plan, {}, RUN_ID, { packSize: true })
+
+  it('est valide pour le validateur et le schéma, avec le slug et le nom de l’unité de chaque ligne', () => {
+    expect(() => validatePlan(message)).not.toThrow()
+    expect(protocol(message)).toBe(true)
+    for (const source of plan.lines.filter((line) => line.status !== 'HAVE_AT_HOME'))
+      expect(lineOf(message.lines, source.ingredientSlug).needed).toEqual({
+        quantity: source.needed.quantity,
+        unitSymbol: source.needed.unitSymbol,
+        dimension: source.needed.dimension ?? null,
+        baseFactor: source.needed.baseFactor ?? null,
+        unitSlug: source.needed.unitSlug,
+        unitName: source.needed.unitName,
+      })
+    expect(lineOf(message.lines, 'sel').needed).toMatchObject({
+      unitSlug: 'cuillere-a-soupe',
+      unitName: 'cuillère à soupe',
+    })
+  })
+
+  it('porte la contenance déjà donnée de chaque produit, null quand il n’y en a pas', () => {
+    const [first, second] = lineOf(message.lines, 'sel').products ?? []
+
+    expect(first).toMatchObject({ id: '555401', packSize: null })
+    expect(second).toMatchObject({
+      id: '555402',
+      packs: 1,
+      packsStatus: 'COMPUTED',
+      packSize: { value: 14, unitSlug: 'cuillere-a-soupe' },
+    })
   })
 })
 

@@ -108,6 +108,7 @@ type Scripts = {
 const DEFAULT_SCRIPTS: Scripts = {
   resume: () => 'resume',
   quantity: (props) => props.packs ?? 1,
+  packSize: (props) => props.prefill ?? 1,
   error: () => 'close',
   end: () => 'return',
 }

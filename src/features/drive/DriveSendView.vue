@@ -14,7 +14,7 @@ import { messageForFailure } from '@/notifications/failures'
 import { useOnline } from '@/offline/useOnline'
 import { DriveBridgeError, driveBridge } from './bridge'
 import type { RunDraft } from './bridge'
-import { isDriveAppVersionEnough, isRayonHintsAppVersion } from './appVersion'
+import { isDriveAppVersionEnough, isPackSizeAppVersion, isRayonHintsAppVersion } from './appVersion'
 import { buildPlanMessage, effectiveStatus } from './buildPlanMessage'
 import type { LineChange } from './buildPlanMessage'
 import DriveEstimate from './DriveEstimate.vue'
@@ -41,6 +41,8 @@ const appCheck = ref<'checking' | 'enough' | 'tooOld'>(inApp ? 'checking' : 'eno
 const tooOld = computed(() => appCheck.value === 'tooOld')
 // L'agent de l'application connaît-il les rayons conseillés (DRV-642) ? Sinon le plan part sans eux : un agent plus ancien refuse un plan qui porte une clé qu'il ne connaît pas.
 const agentKnowsRayons = ref(false)
+/** L'agent de l'application connaît-il la contenance d'un produit dans l'unité de la liste (DRV-652) ? Sinon le plan ne la porte pas. */
+const agentKnowsPackSize = ref(false)
 /** Mode assisté : un lien de recherche par article, sans choix de produit (hors de l'application, ou dans une application trop ancienne). */
 const assisted = computed(() => !inApp || tooOld.value)
 
@@ -127,6 +129,7 @@ onMounted(() => {
       driveUsable.value = info.drive
       appCheck.value = isDriveAppVersionEnough(info.version) ? 'enough' : 'tooOld'
       agentKnowsRayons.value = isRayonHintsAppVersion(info.version)
+      agentKnowsPackSize.value = isPackSizeAppVersion(info.version)
     },
     // Une application qui ne dit pas sa version est trop ancienne
     () => (appCheck.value = 'tooOld'),
@@ -222,7 +225,10 @@ function openDrive() {
   try {
     const runId = draft.value?.runId ?? crypto.randomUUID()
     draft.value = driveBridge.startRun(
-      buildPlanMessage(data, changes.value, runId, { rayonHints: agentKnowsRayons.value }),
+      buildPlanMessage(data, changes.value, runId, {
+        rayonHints: agentKnowsRayons.value,
+        packSize: agentKnowsPackSize.value,
+      }),
       listId.value,
     )
   } catch (error) {

@@ -1,7 +1,8 @@
 // Les écrans : chacun reçoit ses données et un rappel `answer`, et rend ses nœuds. Aucune logique d'envoi ici.
 import { append, clear, h, type Child } from './dom'
 import { own } from '../own'
-import { CAUSE_TEXTS, ERROR_TEXTS, errorParts, S } from './strings'
+import { packsFromSize, parsePackValue } from '../../protocol'
+import { CAUSE_TEXTS, ERROR_TEXTS, errorParts, pluralOf, S, unitFor } from './strings'
 import type {
   ChallengeProps,
   ChooserProps,
@@ -11,6 +12,7 @@ import type {
   EntryProps,
   ErrorProps,
   ProgressPatch,
+  PackSizeProps,
   ProgressProps,
   QuantityProps,
   ResumeProps,
@@ -174,15 +176,13 @@ const progress: Renderer<'progress'> = (props: ProgressProps, answer) => {
   }
 }
 
-const quantity: Renderer<'quantity'> = (props: QuantityProps, answer) => {
-  const input = h('input', {
-    value: String(props.packs ?? 1),
-    attrs: { id: 'quantite', type: 'number', min: '1', max: '99', step: '1', inputmode: 'numeric' },
-  })
-  // Le champ est prérempli : on tape le nombre PAR-DESSUS (taper 4 donne « 4 », pas « 14 »). Tout est donc sélectionné à l'ouverture, au focus et au
-  // toucher, tant que rien n'a été tapé : un toucher pose le curseur après le « 1 » et désélectionnerait, parfois APRÈS le toucher (le curseur se
-  // place de façon asynchrone). La première frappe re-sélectionne donc elle-même juste avant d'insérer (`beforeinput`, `keydown`) : quoi qu'ait
-  // fait le curseur, le premier chiffre remplace le « 1 » (DRV-626).
+/**
+ * Le champ est prérempli : on tape le nombre PAR-DESSUS (taper 4 donne « 4 », pas « 14 »). Tout est donc sélectionné à l'ouverture, au focus et au
+ * toucher, tant que rien n'a été tapé : un toucher pose le curseur après le « 1 » et désélectionnerait, parfois APRÈS le toucher (le curseur se
+ * place de façon asynchrone). La première frappe re-sélectionne donc elle-même juste avant d'insérer (`beforeinput`, `keydown`) : quoi qu'ait
+ * fait le curseur, le premier chiffre remplace le « 1 » (DRV-626).
+ */
+function selectOnFirstTouch(input: HTMLInputElement): void {
   let pristine = true
   const selectAll = () => {
     if (pristine) input.select()
@@ -192,6 +192,14 @@ const quantity: Renderer<'quantity'> = (props: QuantityProps, answer) => {
   input.addEventListener('keydown', selectAll)
   input.addEventListener('beforeinput', selectAll)
   input.addEventListener('input', () => (pristine = false))
+}
+
+const quantity: Renderer<'quantity'> = (props: QuantityProps, answer) => {
+  const input = h('input', {
+    value: String(props.packs ?? 1),
+    attrs: { id: 'quantite', type: 'number', min: '1', max: '99', step: '1', inputmode: 'numeric' },
+  })
+  selectOnFirstTouch(input)
   const problem = h('p', { class: 'error', attrs: { role: 'alert' } })
   const form = h(
     'form',
@@ -230,6 +238,89 @@ const quantity: Renderer<'quantity'> = (props: QuantityProps, answer) => {
     ),
     focus: input,
   }
+}
+
+/**
+ * « Vérifie la quantité » quand le plan dit l'unité de la liste (DRV-652) : « Combien de tranches y a-t-il dans « … » ? », un champ qui prend la virgule
+ * française, et un aperçu en direct (« Il te faut 15 tranches : 1 produit ») avec le même arrondi que Repas. « Valider » reste inactif tant que le champ ne
+ * porte pas un nombre valide (de 0,001 à 9 999, trois décimales au plus) : Repas refuserait sinon tout le lot de choix. Le champ est prérempli quand le
+ * libellé du produit annonce le nombre (« 20 Tranches »), sinon vide.
+ */
+const packSize: Renderer<'packSize'> = (props: PackSizeProps, answer) => {
+  const input = h('input', {
+    value: props.prefill === null ? '' : String(props.prefill).replace('.', ','),
+    attrs: {
+      id: 'contenance',
+      type: 'text',
+      inputmode: 'decimal',
+      autocomplete: 'off',
+      'aria-describedby': 'apercu',
+    },
+  })
+  selectOnFirstTouch(input)
+  const need = S.packSize.need(props.quantity, unitFor(props.unitName, props.quantity))
+  const preview = h('p', {
+    text: `${need}.`,
+    attrs: { id: 'apercu', 'aria-live': 'polite' },
+  })
+  const problem = h('p', { class: 'error', attrs: { role: 'alert' } })
+  const validate = h('button', {
+    text: S.packSize.validate,
+    class: 'primary',
+    attrs: { type: 'submit' },
+    disabled: true,
+  })
+  const refresh = () => {
+    const value = parsePackValue(input.value)
+    const packs = value === null ? null : packsFromSize(props.quantity, value)
+    preview.textContent = packs === null ? `${need}.` : S.packSize.preview(need, packs)
+    validate.disabled = packs === null
+    if (packs !== null) {
+      problem.textContent = ''
+      input.removeAttribute('aria-invalid')
+    }
+  }
+  const complain = () => {
+    problem.textContent = S.packSize.invalid
+    input.setAttribute('aria-invalid', 'true')
+  }
+  input.addEventListener('input', refresh)
+  input.addEventListener('blur', () => {
+    if (input.value.trim() !== '' && parsePackValue(input.value) === null) complain()
+  })
+  refresh()
+  const form = h(
+    'form',
+    {
+      attrs: { novalidate: '' },
+      on: {
+        submit: (event) => {
+          event.preventDefault()
+          const value = parsePackValue(input.value)
+          if (value === null) {
+            complain()
+            input.focus()
+            return
+          }
+          answer(value)
+        },
+      },
+    },
+    h('label', {
+      text: S.packSize.question(pluralOf(props.unitName), props.productLabel),
+      attrs: { for: 'contenance' },
+    }),
+    input,
+    preview,
+    problem,
+    h(
+      'div',
+      { class: 'actions' },
+      validate,
+      button(S.packSize.skip, () => answer(null)),
+    ),
+  )
+  return { el: screen(title(S.packSize.title), form), focus: input }
 }
 
 /**
@@ -589,6 +680,7 @@ export const RENDERERS: { [K in ScreenName]: Renderer<K> } = {
   resume,
   progress,
   quantity,
+  packSize,
   chooser,
   store,
   diagnostic,

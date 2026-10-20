@@ -13,6 +13,7 @@ import {
   oneOf,
   optional,
   orNull,
+  packSize,
   root,
   text,
   type Check,
@@ -105,11 +106,13 @@ const resultLine: Check = (list, index) => {
     ...(withUnavailable ? ['unavailableIds'] : []),
     ...(outcome === 'ADDED' ? ['price'] : []),
     ...(outcome === 'CHOSEN' ? ['searchQuery'] : []),
+    ...(outcome === 'ADDED' || outcome === 'CHOSEN' ? ['packSize'] : []),
   ])
   text(line, 'ingredientSlug', SLUG)
   for (const [key, check] of Object.entries(required)) check(line, key)
   optional(line, 'price', price)
   optional(line, 'searchQuery', searchQuery)
+  optional(line, 'packSize', packSize)
   const max = outcome === 'ADDED' ? LIMITS.unavailableAdded : LIMITS.products
   optional(line, 'unavailableIds', (parent, name) => {
     distinct(each(parent, name, max, (ids, rank) => text(ids, rank as never, ID)))

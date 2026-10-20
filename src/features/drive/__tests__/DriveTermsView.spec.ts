@@ -87,7 +87,18 @@ describe('conditions d’utilisation du drive', () => {
         candidate.text().startsWith('La recherche qui t’a fait trouver un produit'),
       )
     expect(item?.text()).toBe(
-      'La recherche qui t’a fait trouver un produit : le texte que tu as tapé pour le trouver sur le site (par exemple « céréales coussins »), pour chercher un remplaçant avec ce texte quand le produit n’est plus disponible. Elle est gardée avec l’article, pour ton magasin Leclerc seulement. Elle n’est jamais envoyée ailleurs et personne d’autre ne la voit.',
+      'La recherche qui t’a fait trouver un produit : le texte que tu as tapé pour le trouver sur le site (par exemple « céréales coussins »), pour chercher un remplaçant avec ce texte quand le produit n’est plus disponible. Elle est gardée avec l’article, pour ton magasin Leclerc seulement. Elle n’est jamais envoyée ailleurs et personne d’autre ne la voit. Elle est gardée aussi quand tu prends un produit « Pas mon habituel » : le produit n’est pas retenu, mais le texte qui l’a fait trouver l’est.',
+    )
+  })
+
+  it('dit combien il y en a dans un produit quand la liste compte autrement qu’en poids ou en volume, gardé pour ce produit et ce magasin (DRV-652, phrase de la note de vie privée du back)', async () => {
+    const { wrapper } = await open()
+
+    const item = wrapper
+      .findAll('li')
+      .find((candidate) => candidate.text().startsWith('Combien il y en a dans un produit'))
+    expect(item?.text()).toBe(
+      'Combien il y en a dans un produit, quand ta liste compte autrement qu’en poids ou en volume : si ta liste dit « 15 tranches », Repas ne sait pas combien de tranches tient dans un produit. Il te le demande une fois, et retient ta réponse (par exemple « 20 tranches ») pour calculer le nombre de produits la fois suivante, sans te le redemander. Elle est gardée avec ce produit-là, dans ton article, pour ton magasin Leclerc seulement. Elle n’est jamais envoyée ailleurs et personne d’autre ne la voit.',
     )
   })
 

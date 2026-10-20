@@ -15,7 +15,7 @@ import {
 import { isRateLimited, messageForFailure } from '@/notifications/failures'
 import { useOnline } from '@/offline/useOnline'
 import { driveBridge } from './bridge'
-import { buildChoiceBatches, countChoices } from './choices'
+import { buildChoiceBatches, countChoices, knownProductsOf } from './choices'
 import { finalizeLink, DRIVE_HOME_URL, RETAILER_APP_NAME } from './leclerc'
 import { useDrivePlan, useDriveSettings, useSaveChoices } from './queries'
 import { expectedFromPlan } from './restrictToPlan'
@@ -178,13 +178,15 @@ const saveFailure = computed(() =>
  * Les lignes que le résultat doit pouvoir expliquer, quand le brouillon n'a pas gardé le plan envoyé : le plan relu du back (celui que
  * l'écran lit déjà pour les noms). Une lecture qui échoue arrête l'enregistrement : sans plan, rien n'est mémorisé (DRV-614).
  */
-async function expectedLines() {
+async function planData() {
   const data =
     plan.data.value ?? (await plan.refetch({ cancelRefetch: false, throwOnError: true })).data
   if (data === undefined) throw new Error('plan')
 
-  return expectedFromPlan(data)
+  return data
 }
+
+const expectedLines = async () => expectedFromPlan(await planData())
 
 async function persist() {
   const first = run.value
@@ -198,10 +200,13 @@ async function persist() {
     if (!store.checked) store.check(await expectedLines())
     const current = run.value
     if (current === null) return
-    await save.mutateAsync({
-      storeId,
-      batches: buildChoiceBatches(current.result),
-    })
+    // Le libellé et le contenu d'un produit connu dont la personne a donné la contenance (DRV-652) viennent du plan : il n'est lu que pour cela
+    const known = current.result.lines.some(
+      (line) => line.outcome === 'ADDED' && line.packSize !== undefined,
+    )
+      ? knownProductsOf(await planData())
+      : undefined
+    await save.mutateAsync({ storeId, batches: buildChoiceBatches(current.result, known) })
     driveBridge.clearDraft()
     store.saved()
   } catch (error) {

@@ -2,6 +2,7 @@
 // dont le chemin désigne ce champ. Tous ont la même forme `(scope, key, …)`, ce qui garde les validateurs courts : l'agent est un
 // seul fichier qui doit rester petit. La racine du message est la clé vide d'un conteneur, d'où un chemin vide.
 import { ProtocolError } from './error'
+import { isPackValue, UNIT_SLUG } from './pack-size'
 import { CONTENT_UNITS, LIMITS } from './types'
 
 export type Box = Record<string | number, unknown>
@@ -121,6 +122,13 @@ export const content: Check = (scope, key) => {
     fail(at(own.p, 'value'))
   }
   oneOf(own, 'unit', CONTENT_UNITS)
+}
+
+/** Une contenance dans l'unité de la liste (DRV-652) : `{value, unitSlug}`, la valeur de 0,001 à 9 999 avec trois décimales au plus, l'unité un slug. */
+export const packSize: Check = (scope, key) => {
+  const own = object(scope, key, ['value', 'unitSlug'])
+  if (!isPackValue(own.v.value)) fail(at(own.p, 'value'))
+  text(own, 'unitSlug', UNIT_SLUG, LIMITS.unitSlug)
 }
 
 export const productRef: Check = (scope, key) => {

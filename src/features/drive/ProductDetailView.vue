@@ -14,7 +14,8 @@ import { useNotificationsStore } from '@/notifications/store'
 import { useOnline } from '@/offline/useOnline'
 import * as choiceDraft from './choiceDraft'
 import type { ChoiceDraft } from './choiceDraft'
-import { useDriveChoices, useForgetChoice, useReplaceChoice } from './choicesQueries'
+import { useDriveChoices, useForgetChoice, useReplaceChoice, useUnitNames } from './choicesQueries'
+import ProductPackSize from './ProductPackSize.vue'
 import { useDriveSettings } from './queries'
 import { contentLabel } from './productFormat'
 
@@ -26,6 +27,8 @@ const notifications = useNotificationsStore()
 const online = useOnline()
 
 const slug = computed(() => String(route.params.slug))
+// Le nom des unités de Repas (« tranche ») pour dire la contenance d'un produit ; à défaut, le slug lisible
+const unitNames = useUnitNames()
 const settings = useDriveSettings()
 const enabled = computed(() => settings.data.value?.enabled === true)
 const store = computed(() => settings.data.value?.store ?? null)
@@ -33,6 +36,9 @@ const choices = useDriveChoices(() => enabled.value && store.value !== null)
 const choice = computed(() =>
   choices.data.value?.member?.find((candidate) => candidate.ingredientSlug === slug.value),
 )
+/** Le produit tel que Repas l'a enregistré : la contenance se corrige sur lui, pas sur le brouillon d'ordre en cours. */
+const savedProduct = (productId: string) =>
+  choice.value?.accepted.find((entry) => entry.product.productId === productId)?.product
 
 // Le brouillon : les modifications restent locales jusqu'à « Enregistrer ». Une relecture (retour sur l'onglet) ne l'écrase pas.
 const draft = ref<ChoiceDraft | null>(null)
@@ -281,6 +287,14 @@ const rowClass = 'flex flex-col gap-3 rounded-2xl border border-line bg-surface 
                       }}</span
                     >
                   </p>
+                  <ProductPackSize
+                    v-if="savedProduct(product.productId)?.packSize && store !== null"
+                    :ingredient-slug="slug"
+                    :product="savedProduct(product.productId)!"
+                    :store-id="store.id"
+                    :unit-names="unitNames"
+                    :disabled="locked"
+                  />
                 </div>
               </div>
               <div class="flex flex-wrap gap-2">

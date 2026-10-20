@@ -60,6 +60,21 @@ export interface QuantityProps {
   need?: string | null
 }
 
+/**
+ * L'écran « Vérifie la quantité » quand le plan dit l'unité de la liste (DRV-652) : au lieu de « combien de produits ? », « combien de tranches y a-t-il dans
+ * ce produit ? ». L'agent en tire le nombre de produits, et Repas retient la réponse pour ne plus poser la question.
+ */
+export interface PackSizeProps {
+  ingredient: string
+  productLabel: string
+  /** La quantité que la liste demande, dans l'unité de la ligne (15 pour « 15 tranches »). */
+  quantity: number
+  /** Le nom de l'unité de la ligne au singulier (« tranche »), tel que le plan le donne. */
+  unitName: string
+  /** Le nombre que le libellé du produit annonce (« 20 Tranches » donne 20), ou `null` : le champ est alors vide. */
+  prefill: number | null
+}
+
 /** Ce que l'utilisateur peut faire pendant le choix d'un produit (phase B, DRV-306). */
 export type ChooserAnswer =
   | { kind: 'skip' }
@@ -190,6 +205,8 @@ export interface ScreenMap {
   progress: { props: ProgressProps; answer: 'stop' }
   /** Le nombre choisi, ou `null` pour « Passer ». */
   quantity: { props: QuantityProps; answer: number | null }
+  /** La contenance du produit dans l'unité de la liste (DRV-652), ou `null` pour « Pas cette fois ». */
+  packSize: { props: PackSizeProps; answer: number | null }
   chooser: { props: ChooserProps; answer: ChooserAnswer }
   store: { props: StoreProps; answer: 'save' | 'cancel' }
   diagnostic: { props: DiagnosticProps; answer: 'close' }

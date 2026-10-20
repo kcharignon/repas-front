@@ -247,6 +247,14 @@ const SCREENS: Record<string, () => unknown> = {
       packs: 2,
       need: '800 g',
     }),
+  packSize: () =>
+    ui.show('packSize', {
+      ingredient: 'Cheddar en tranche',
+      productLabel: 'Fromage cheddar en tranches de test 20 Tranches - 340g',
+      quantity: 15,
+      unitName: 'tranche',
+      prefill: 20,
+    }),
   chooser: () => ui.show('chooser', CHOOSER),
   // Un article n'a encore aucun produit retenu : « Passer ces n articles » demande une confirmation d'une ligne, sans la liste de produits (DRV-624, DRV-626).
   'chooser-confirm': () => {

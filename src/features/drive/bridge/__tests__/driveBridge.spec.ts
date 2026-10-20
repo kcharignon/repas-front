@@ -533,6 +533,43 @@ describe('driveBridge', () => {
       ])
     })
 
+    it('garde le slug de l’unité de la ligne quand le plan le portait (DRV-652), et le relit', () => {
+      const { bridge } = setup()
+      const lines: PlanMessage['lines'] = [
+        {
+          ...farine(),
+          needed: { quantity: 15, unitSymbol: 'tranche', unitSlug: 'tranche', unitName: 'tranche' },
+        },
+        { ingredientSlug: 'poivre', name: 'Poivre', status: 'NEW', products: [] },
+      ]
+
+      const draft = bridge.startRun(plan(RUN, lines), 'l1')
+
+      expect(draft.lines).toEqual([
+        {
+          ingredientSlug: 'farine',
+          status: 'KNOWN',
+          products: ['111', '222'],
+          unitSlug: 'tranche',
+        },
+        { ingredientSlug: 'poivre', status: 'NEW', products: [] },
+      ])
+      expect(bridge.loadDraft()).toEqual(draft)
+    })
+
+    it('refuse un brouillon dont le slug d’unité est mal formé', () => {
+      const { bridge } = setup()
+      const bad = {
+        runId: RUN,
+        listId: 'l1',
+        startedAt: NOW.toISOString(),
+        lines: [{ ingredientSlug: 'farine', status: 'KNOWN', products: [], unitSlug: 'Tranche' }],
+      }
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(bad))
+
+      expect(bridge.loadDraft()).toBeNull()
+    })
+
     it('relit un brouillon sans lignes, écrit par une version plus ancienne', () => {
       const { bridge } = setup()
       const old = { runId: RUN, listId: 'l1', startedAt: NOW.toISOString() }

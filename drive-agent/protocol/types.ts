@@ -39,6 +39,15 @@ export const LIMITS = {
   searchQueryMax: 80,
   /** Un identifiant de rayon ou de famille de l'enseigne (DRV-642) : un entier de 1 à cette valeur (le plus grand entier 32 bits). */
   catalogId: 2_147_483_647,
+  /**
+   * La contenance d'un produit dans l'unité de la liste (DRV-652) : un nombre de 0,001 à 9 999, trois décimales au plus. Les bornes du back
+   * (`PackSize`) : une valeur hors de ces bornes fait refuser TOUT le lot de choix (`422 DRIVE_PACK_SIZE_INVALID`).
+   */
+  packSizeMin: 0.001,
+  packSizeMax: 9_999,
+  packSizeDecimals: 3,
+  /** Le slug d'une unité de Repas (`needed.unitSlug`, `packSize.unitSlug`), en caractères : `^[a-z0-9-]{1,255}$`. */
+  unitSlug: 255,
 } as const
 
 /** Le seul chemin de retour permis, sur l'origine de Repas écrite en dur dans l'agent. */
@@ -107,6 +116,20 @@ export interface PlanProduct extends ProductRef {
   content?: ProductContent
   packs?: number | null
   packsStatus?: PacksStatus | null
+  /**
+   * Facultatif (DRV-652) : la contenance que la personne a donnée pour CE produit, dans l'unité de la ligne (`needed.unitSlug`) ; `null` quand elle n'a rien
+   * répondu. Quand elle est là, `packs` est déjà calculé avec elle (`COMPUTED`) et l'agent ne pose pas la question. Un récepteur qui ne connaît pas la clé rejette
+   * le plan : le site ne l'envoie qu'à une application dont l'agent est de la version 0.42.0 ou plus (`PACK_SIZE_APP_VERSION`).
+   */
+  packSize?: PackSize | null
+}
+
+/** Combien d'unités de la liste (`unitSlug`, « tranche ») tiennent dans un produit : « 20 tranches » est `{value: 20, unitSlug: 'tranche'}`. */
+export interface PackSize {
+  /** De `LIMITS.packSizeMin` à `LIMITS.packSizeMax`, trois décimales au plus. */
+  value: number
+  /** Le slug de l'unité de la ligne du plan (`needed.unitSlug`), jamais déduit d'un symbole ni d'un libellé. */
+  unitSlug: string
 }
 
 /**
@@ -119,6 +142,13 @@ export interface NeededQuantity {
   unitSymbol: string
   dimension?: Dimension | null
   baseFactor?: number | null
+  /**
+   * Facultatifs (DRV-652), les deux ou aucun : le slug de l'unité de la ligne et son nom au singulier (« tranche »), de quoi demander « Combien de tranches y
+   * a-t-il dans ce produit ? » sans rien deviner du symbole. Absents d'un back plus ancien ou d'une application qui ne les connaît pas : l'agent demande alors
+   * le nombre de produits. Un récepteur qui ne connaît pas ces clés rejette le plan (même règle que `rayonHints`).
+   */
+  unitSlug?: string
+  unitName?: string
 }
 
 export interface PlanLine {
@@ -206,6 +236,12 @@ export interface AddedLine extends LineBase {
   usedRank: number
   unavailableIds?: string[]
   price?: ProductPrice
+  /**
+   * Facultatif (DRV-652) : la contenance du produit mis au panier dans l'unité de la ligne, donnée par la personne à l'écran « Vérifie la quantité » (le plan
+   * ne savait pas calculer le nombre de produits). Absente quand elle a répondu par le nombre de produits ou qu'il n'y avait rien à demander. Repas la mémorise
+   * pour ne plus poser la question. Un récepteur qui ne connaît pas la clé rejette le résultat.
+   */
+  packSize?: PackSize
 }
 
 /** L'utilisateur a choisi un produit sur le site, ajouté au panier. */
@@ -216,11 +252,19 @@ export interface ChosenLine extends LineBase {
   placement: Placement
   /**
    * Facultatif (DRV-650) : la recherche qui a fait apparaître le produit choisi sur le site de l'enseigne (le texte du plan, ou celui que la personne a
-   * tapé dans « Chercher autre chose »), de 2 à 80 caractères, déjà nettoyée. Émise seulement quand le produit est placé en `PRIMARY` ET que cette
+   * tapé dans « Chercher autre chose »), de 2 à 80 caractères, déjà nettoyée. Émise seulement quand le produit est placé en `PRIMARY` ou `ONCE` ET que cette
    * recherche diffère de la `searchQuery` de la ligne du plan (sinon la valeur mémorisée par Repas est gardée). Repas la mémorise pour l'enseigne et le
    * magasin du passage, afin de chercher un remplaçant avec elle quand le produit n'est plus disponible. Absente chez les agents d'avant.
+   * DRV-653 : pour un produit pris « Pas mon habituel » (`ONCE`), le produit n'est pas retenu mais la recherche qui l'a fait trouver l'est (Repas la mémorise
+   * seule, sans produit : intention `NOTE_SEARCH`).
    */
   searchQuery?: string
+  /**
+   * Facultatif (DRV-652) : la contenance du produit choisi dans l'unité de la ligne, donnée par la personne à l'écran « Vérifie la quantité ». Émise seulement
+   * pour un produit retenu (`PRIMARY`), jamais pour « Pas mon habituel » (`ONCE`) : rien n'est gardé de ce produit. Absente quand elle a répondu par le
+   * nombre de produits, et chez les agents d'avant.
+   */
+  packSize?: PackSize
   unavailableIds?: string[]
 }
 

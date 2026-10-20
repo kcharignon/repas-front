@@ -553,6 +553,191 @@ describe('quantité à vérifier', () => {
   })
 })
 
+describe('contenance du produit dans l’unité de la liste (DRV-652)', () => {
+  const props = {
+    ingredient: 'Cheddar en tranche',
+    productLabel: 'Fromage Cheddar Burger Les Croisés 20 Tranches - 340g',
+    quantity: 15,
+    unitName: 'tranche',
+    prefill: 20 as number | null,
+  }
+  const input = () => shadow().querySelector('input') as HTMLInputElement
+  const submit = () => (shadow().querySelector('form') as HTMLFormElement).requestSubmit()
+  const validate = () => buttons().find((button) => button.textContent === 'Valider')
+  const type = (value: string) => {
+    input().value = value
+    input().dispatchEvent(new Event('input', { bubbles: true }))
+  }
+  const preview = () => shadow().querySelector('#apercu')?.textContent
+
+  it('demande combien de tranches y a-t-il dans le produit, au pluriel, avec le focus dans le champ', () => {
+    const handle = open()
+    void handle.show('packSize', props)
+
+    expect(shadow().querySelector('label')?.textContent).toBe(
+      'Combien de tranches y a-t-il dans « Fromage Cheddar Burger Les Croisés 20 Tranches - 340g »\u00a0?',
+    )
+    expect(shadow().querySelector('label')?.getAttribute('for')).toBe(input().id)
+    expect(shadow().activeElement).toBe(input())
+    expect(shadow().textContent).not.toContain('Nombre de produits')
+  })
+
+  it('prérempli avec le nombre du libellé, et l’aperçu le dit tout de suite : « Il te faut 15 tranches : 1 produit »', () => {
+    const handle = open()
+    void handle.show('packSize', props)
+
+    expect(input().value).toBe('20')
+    expect(preview()).toBe('Il te faut 15 tranches : 1 produit')
+    expect(validate()?.disabled).toBe(false)
+  })
+
+  it('sans proposition, le champ est vide, « Valider » est inactif et l’aperçu ne dit que la quantité', () => {
+    const handle = open()
+    void handle.show('packSize', { ...props, prefill: null })
+
+    expect(input().value).toBe('')
+    expect(validate()?.disabled).toBe(true)
+    expect(preview()).toBe('Il te faut 15 tranches.')
+  })
+
+  it('une proposition décimale s’écrit avec la virgule française', () => {
+    const handle = open()
+    void handle.show('packSize', { ...props, prefill: 12.5 })
+
+    expect(input().value).toBe('12,5')
+  })
+
+  it.each([
+    ['20', 'Il te faut 15 tranches : 1 produit'],
+    ['15', 'Il te faut 15 tranches : 1 produit'],
+    ['14', 'Il te faut 15 tranches : 2 produits'],
+    ['10', 'Il te faut 15 tranches : 2 produits'],
+    ['7,5', 'Il te faut 15 tranches : 2 produits'],
+    ['7,4', 'Il te faut 15 tranches : 3 produits'],
+    ['1', 'Il te faut 15 tranches : 15 produits'],
+    ['0,001', 'Il te faut 15 tranches : 99 produits'],
+  ])('l’aperçu suit la frappe en direct : « %s » donne « %s »', (typed, expected) => {
+    const handle = open()
+    void handle.show('packSize', { ...props, prefill: null })
+
+    type(typed)
+
+    expect(preview()).toBe(expected)
+    expect(validate()?.disabled).toBe(false)
+  })
+
+  it('l’unité s’accorde à la quantité demandée : 1 tranche, 1,5 tranche, 2 tranches', () => {
+    for (const [quantity, expected] of [
+      [1, 'Il te faut 1 tranche : 1 produit'],
+      [1.5, 'Il te faut 1,5 tranche : 1 produit'],
+      [2, 'Il te faut 2 tranches : 1 produit'],
+    ] as const) {
+      const handle = open()
+      void handle.show('packSize', { ...props, quantity })
+      expect(preview()).toBe(expected)
+      ui?.close()
+    }
+  })
+
+  it('une unité de plusieurs mots met le premier au pluriel : « cuillères à soupe »', () => {
+    const handle = open()
+    void handle.show('packSize', {
+      ...props,
+      unitName: 'cuillère à soupe',
+      quantity: 2,
+      prefill: null,
+    })
+
+    expect(shadow().querySelector('label')?.textContent).toContain(
+      'Combien de cuillères à soupe y a-t-il',
+    )
+    expect(preview()).toBe('Il te faut 2 cuillères à soupe.')
+  })
+
+  it.each([
+    [''],
+    ['  '],
+    ['0'],
+    ['0,0004'],
+    ['10000'],
+    ['12,3456'],
+    ['-3'],
+    ['vingt'],
+    ['1e3'],
+    ['1 000'],
+  ])(
+    'refuse « %s » : « Valider » inactif, aucun aperçu en produits, rien ne part',
+    async (value) => {
+      const handle = open()
+      const settled = vi.fn<() => void>()
+      void handle.show('packSize', props).then(settled)
+
+      type(value)
+      submit()
+      await Promise.resolve()
+
+      expect(validate()?.disabled).toBe(true)
+      expect(preview()).toBe('Il te faut 15 tranches.')
+      expect(settled).not.toHaveBeenCalled()
+      expect(shadow().querySelector('[role="alert"]')?.textContent).toBe(
+        'Entre un nombre, par exemple 20 ou 12,5.',
+      )
+      expect(input().getAttribute('aria-invalid')).toBe('true')
+    },
+  )
+
+  it('le message d’erreur disparaît dès que le nombre est valide', () => {
+    const handle = open()
+    void handle.show('packSize', props)
+    type('abc')
+    submit()
+    expect(shadow().querySelector('[role="alert"]')?.textContent).not.toBe('')
+
+    type('12,5')
+
+    expect(shadow().querySelector('[role="alert"]')?.textContent).toBe('')
+    expect(input().hasAttribute('aria-invalid')).toBe(false)
+    expect(validate()?.disabled).toBe(false)
+  })
+
+  it('« Valider » rend le nombre tapé, virgule française comprise', async () => {
+    const handle = open()
+    const answer = handle.show('packSize', { ...props, prefill: null })
+    type('12,5')
+
+    press('Valider')
+
+    await expect(answer).resolves.toBe(12.5)
+  })
+
+  it('la touche Entrée valide la proposition', async () => {
+    const handle = open()
+    const answer = handle.show('packSize', props)
+
+    submit()
+
+    await expect(answer).resolves.toBe(20)
+  })
+
+  it('« Pas cette fois » rend null', async () => {
+    const handle = open()
+    const answer = handle.show('packSize', props)
+
+    press('Pas cette fois')
+
+    await expect(answer).resolves.toBeNull()
+  })
+
+  it('le libellé du produit et le nom de l’unité sont du texte, jamais du HTML', () => {
+    const handle = open()
+    void handle.show('packSize', { ...props, productLabel: HOSTILE, unitName: HOSTILE })
+
+    expect(shadow().querySelector('img, script')).toBeNull()
+    expect(shadow().textContent).toContain(HOSTILE.split(' ')[0])
+    expect((window as unknown as { pwned?: number }).pwned).toBeUndefined()
+  })
+})
+
 describe('choix de produit (hôte)', () => {
   const base = { ingredient: 'Poivre', position: 2, total: 5 }
   /** Une liste de deux produits, un qui se choisit et un que l'utilisateur ne veut plus. */

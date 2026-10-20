@@ -63,7 +63,21 @@
           }
         },
         "packs": { "type": ["integer", "null"], "minimum": 1, "maximum": 99 },
-        "packsStatus": { "enum": ["COMPUTED", "TO_CHECK", null] }
+        "packsStatus": { "enum": ["COMPUTED", "TO_CHECK", null] },
+        "packSize": {
+          "description": "Facultatif (DRV-652) : la contenance que la personne a donnée pour CE produit dans l'unité de la ligne (needed.unitSlug), null si elle n'a rien répondu. Quand elle est là, packs est déjà calculé avec elle.",
+          "oneOf": [{ "$ref": "#/definitions/packSize" }, { "type": "null" }]
+        }
+      }
+    },
+    "packSize": {
+      "description": "Combien d'unités de la liste tiennent dans un produit : « 20 tranches » est {value: 20, unitSlug: 'tranche'}. Trois décimales au plus (le schéma ne sait pas le dire, les validateurs le vérifient).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unitSlug"],
+      "properties": {
+        "value": { "type": "number", "minimum": 0.001, "maximum": 9999 },
+        "unitSlug": { "type": "string", "pattern": "^[a-z0-9-]{1,255}$" }
       }
     },
     "needed": {
@@ -75,7 +89,16 @@
         "quantity": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
         "unitSymbol": { "type": "string", "minLength": 1, "maxLength": 32 },
         "dimension": { "enum": ["WEIGHT", "VOLUME", "COUNT", "PACKAGE", null] },
-        "baseFactor": { "type": ["number", "null"], "exclusiveMinimum": 0, "maximum": 1000000 }
+        "baseFactor": { "type": ["number", "null"], "exclusiveMinimum": 0, "maximum": 1000000 },
+        "unitSlug": {
+          "description": "Facultatif (DRV-652) : le slug de l'unité de la ligne, dans lequel une contenance se compte.",
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,255}$"
+        },
+        "unitName": {
+          "description": "Facultatif (DRV-652) : le nom de l'unité de la ligne, au singulier (« tranche »). L'agent ne pose la question « combien de tranches » qu'avec unitSlug ET unitName.",
+          "$ref": "#/definitions/label"
+        }
       }
     },
     "line": {

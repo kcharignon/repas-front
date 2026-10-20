@@ -15,6 +15,14 @@ export const MIN_DRIVE_APP_VERSION = '0.1.10'
  */
 export const RAYON_HINTS_APP_VERSION = '0.1.15'
 
+/**
+ * La première version de l'application dont l'agent embarqué connaît la contenance d'un produit dans l'unité de la liste (DRV-652, agent 0.42.0) : les clés
+ * `needed.unitSlug`, `needed.unitName` et `packSize` d'un produit du plan, et `packSize` des lignes du résultat. Un agent plus ancien refuse en bloc un plan
+ * qui porte une clé qu'il ne connaît pas : le site ne les envoie qu'à partir de cette version (en dessous, l'écran « Vérifie la quantité » demande le nombre
+ * de produits, comme avant). À fixer sur la première version Android publiée avec l'agent 0.42.0 ou plus (`android/agent.js.sha384`) ; jamais plus bas.
+ */
+export const PACK_SIZE_APP_VERSION = '0.1.25'
+
 /** Le nom des constructions de développement (`AppVersion.DEV_NAME`, côté Android) : le code courant, jamais une ancienne version. */
 const DEV_BUILD = '0.0.0-dev'
 
@@ -96,6 +104,15 @@ export function isRayonHintsAppVersion(version: string | null | undefined): bool
   if (version === DEV_BUILD) return true
 
   const order = compareVersions(version, RAYON_HINTS_APP_VERSION)
+
+  return order !== null && order >= 0
+}
+
+/** L'agent de cette application connaît-il la contenance d'un produit dans l'unité de la liste ? Une version inconnue ou mal formée ne la connaît pas. */
+export function isPackSizeAppVersion(version: string | null | undefined): boolean {
+  if (version === DEV_BUILD) return true
+
+  const order = compareVersions(version, PACK_SIZE_APP_VERSION)
 
   return order !== null && order >= 0
 }

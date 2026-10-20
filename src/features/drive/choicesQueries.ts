@@ -2,7 +2,8 @@ import { computed } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { unwrap } from '@/api'
-import type { DriveChoicePayload } from '@/api'
+import { useUnits } from '@/features/ingredients/queries'
+import type { ChoiceIntent, DriveChoicePayload } from '@/api'
 import { useSessionStore } from '@/session/session'
 
 export const choiceKeys = {
@@ -60,4 +61,33 @@ export function useForgetChoice(slug: () => string) {
     meta: { silent: true },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: choiceKeys.all }),
   })
+}
+
+/**
+ * Enregistre la contenance corrigée d'un produit (`PUT /drive/choices`, une intention `ADD_PRODUCT` : `packSizeCorrection`). L'échec s'affiche à côté du champ
+ * (`silent`) ; en cas de succès les préférences sont relues, pour que l'écran montre l'état enregistré.
+ */
+export function useCorrectPackSize() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ storeId, intent }: { storeId: string; intent: ChoiceIntent }) =>
+      unwrap(
+        api.PUT('/api/v1/drive/choices', {
+          body: { retailer: 'leclerc', storeId, choices: [intent] },
+        }),
+      ),
+    meta: { silent: true },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: choiceKeys.all }),
+  })
+}
+
+/** Le nom des unités de Repas par slug, au singulier (« tranche ») : de quoi dire la contenance d'un produit (DRV-652). Vide tant que la liste n'est pas lue. */
+export function useUnitNames() {
+  const units = useUnits()
+
+  return computed(
+    () => new Map((units.data.value?.member ?? []).map((unit) => [unit.slug, unit.name] as const)),
+  )
 }
