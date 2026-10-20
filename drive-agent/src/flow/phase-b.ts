@@ -24,7 +24,6 @@ import {
 import { cleanText } from '../text'
 import {
   formatContent,
-  formatMeasure,
   formatNeeded,
   formatPrice,
   renderPicker,
@@ -34,6 +33,7 @@ import {
   type Picker,
   type PickerItem,
 } from '../ui'
+import { cardOf } from './card'
 import { putInCart } from './keep-cart'
 import { askPacks, givenSize } from './pack-size'
 import { packsFor } from './packs'
@@ -212,37 +212,22 @@ function explain(line: PlanLine, candidate: Candidate): string {
 const isFirstChoice = ({ line, unavailable }: PendingLine): boolean =>
   unavailable.length === 0 && !line.replaces
 
-/** Un libellé sans espaces ni casse, virgule décimale en point : « 40 g », « 40g » et « 40 G » se valent. */
-const squash = (text: string): string =>
-  text
-    .toLowerCase()
-    .replace(/[\s\u00a0\u202f]+/gu, '')
-    .replace(',', '.')
-
 function itemOf(
   line: PlanLine,
   candidate: Candidate,
   refused: ReadonlySet<string>,
   key: GroupKey = 'aisle',
 ): PickerItem {
-  const { content, price, pricePerMeasure, promo } = candidate
-  const size = content ? formatContent(content.value, content.unit) : null
-  const details = [
-    size,
-    price === null ? null : formatPrice(price),
-    pricePerMeasure ? formatMeasure(pricePerMeasure.cents, pricePerMeasure.unit) : null,
-  ].filter((detail): detail is string => detail !== null)
-  const second = cleanText(candidate.label2 ?? '')
-  // La seconde ligne du libellé qui ne fait que redire la taille (« 40 g ») est retirée : la ligne du prix la dit déjà (DRV-626).
-  const repeatsSize = size !== null && squash(second) === squash(size)
+  const { promo } = candidate
+  const { name, label2, details, photo } = cardOf(candidate)
   return {
     id: candidate.id,
-    name: cleanText(candidate.label) || S.picker.noLabel(candidate.id),
-    label2: second === '' || repeatsSize ? null : second,
+    name,
+    label2,
     details,
     // Une promotion à zéro n'existe pas (DRV-632, DRV-644) : pas de ligne « En promotion : 0,00 € ».
     promo: promo === null || !(promo > 0) ? null : S.picker.promo(formatPrice(promo)),
-    photo: candidate.imageUrl,
+    photo,
     explain: explain(line, candidate),
     state: refused.has(candidate.id) ? 'refused' : saysOutOfStock(candidate) ? 'out' : 'ok',
     aisle: catalogId(key === 'family' ? candidate.family : candidate.aisle),
@@ -579,6 +564,7 @@ async function settleLine(
           needed: line.needed,
           need: formatNeeded(line.needed),
           packs: computed.packs,
+          product: cardOf(candidate),
         })
         if (asked === null) continue
         packs = asked.packs

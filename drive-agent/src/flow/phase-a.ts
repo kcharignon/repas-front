@@ -81,7 +81,7 @@ export interface KnownLineDeps {
    * L'écran « Vérifier la quantité » : le nombre de produits choisi et, quand le plan dit l'unité de la ligne, la contenance du produit dans cette unité
    * (DRV-652) ; `null` pour passer la ligne.
    */
-  askQuantity: (line: PlanLine, product: PlanProduct) => Promise<PackAnswer | null>
+  askQuantity: (line: PlanLine, product: PlanProduct, seen: Candidate) => Promise<PackAnswer | null>
   /**
    * Les produits à étiquette de rupture que le panier a déjà refusés dans cet envoi (DRV-635) : une seule tentative d'écriture par produit et par
    * envoi, même s'il figure sur deux lignes. Le passage la remplit ; absente, chaque ligne tente pour son compte.
@@ -144,7 +144,7 @@ export async function settleKnownLine(line: PlanLine, deps: KnownLineDeps): Prom
     let packs = change ? change.live : planned
     let answered: PackAnswer | null = null
     if (packs === null) {
-      answered = await deps.askQuantity(line, product)
+      answered = await deps.askQuantity(line, product, seen)
       if (answered === null)
         return { kind: 'done', line: { ingredientSlug: line.ingredientSlug, outcome: 'SKIPPED' } }
       packs = answered.packs

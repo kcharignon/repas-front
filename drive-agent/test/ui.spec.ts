@@ -575,7 +575,7 @@ describe('contenance du produit dans l’unité de la liste (DRV-652)', () => {
     void handle.show('packSize', props)
 
     expect(shadow().querySelector('label')?.textContent).toBe(
-      'Combien de tranches y a-t-il dans « Fromage Cheddar Burger Les Croisés 20 Tranches - 340g »\u00a0?',
+      'Combien de tranches y a-t-il dans «\u00a0Fromage Cheddar Burger Les Croisés 20 Tranches - 340g\u00a0»\u00a0?',
     )
     expect(shadow().querySelector('label')?.getAttribute('for')).toBe(input().id)
     expect(shadow().activeElement).toBe(input())
@@ -734,6 +734,120 @@ describe('contenance du produit dans l’unité de la liste (DRV-652)', () => {
 
     expect(shadow().querySelector('img, script')).toBeNull()
     expect(shadow().textContent).toContain(HOSTILE.split(' ')[0])
+    expect((window as unknown as { pwned?: number }).pwned).toBeUndefined()
+  })
+})
+
+describe('le produit montré à l’écran « Vérifie la quantité » (DRV-652)', () => {
+  const preview = () => shadow().querySelector('#apercu')?.textContent
+  const PHOTO = 'https://photos-test.leclercdrive.fr/image.ashx?id=11&use=l&cat=p'
+  const card = {
+    name: 'Tomates cerises mélangées Barquette',
+    label2: '400 g',
+    details: ['400 g', '2,58 € ', '6,45 € / kg'].map((text) => text.trim()),
+    photo: PHOTO,
+  }
+  const base = {
+    ingredient: 'Tomate',
+    productLabel: card.name,
+    quantity: 2.5,
+    unitName: 'unité',
+    prefill: 1,
+  }
+  const media = () => shadow().querySelector('.product')
+
+  it('montre la photo à gauche (décorative : texte alternatif vide), puis le nom, la seconde ligne et « 400 g · 2,58 € · 6,45 € / kg »', () => {
+    const handle = open()
+    void handle.show('packSize', { ...base, product: card })
+
+    expect(media()?.firstElementChild?.classList.contains('photo')).toBe(true)
+    const image = media()?.querySelector('img')
+    expect(image?.getAttribute('alt')).toBe('')
+    expect(image?.getAttribute('src')).toBe(PHOTO)
+    expect(media()?.querySelector('.name')?.textContent).toBe('Tomates cerises mélangées Barquette')
+    expect(media()?.textContent).toContain('400 g')
+    expect(media()?.textContent).toContain('2,58 € · 6,45 € / kg')
+    // Avant la question et le champ : on regarde le produit, puis on répond
+    const order = [...shadow().querySelectorAll('.product, label, input')].map((el) => el.tagName)
+    expect(order).toEqual(['DIV', 'LABEL', 'INPUT'])
+  })
+
+  it('la question élide « de » devant une voyelle : « Combien d’unités », jamais « Combien de unités »', () => {
+    const handle = open()
+    void handle.show('packSize', { ...base, product: card })
+
+    expect(shadow().querySelector('label')?.textContent).toBe(
+      'Combien d’unités y a-t-il dans «\u00a0Tomates cerises mélangées Barquette\u00a0»\u00a0?',
+    )
+    expect(shadow().textContent).not.toContain('de unités')
+    expect(preview()).toBe('Il te faut 2,5 unités : 3 produits')
+  })
+
+  it.each([
+    ['sans photo', { ...card, photo: null }],
+    ['avec une adresse refusée', { ...card, photo: 'http://photos-test.leclercdrive.fr/a.jpg' }],
+    ['sans photo (adresse d’un autre hôte)', { ...card, photo: 'https://exemple.invalid/a.jpg' }],
+  ])('%s : aucune image, aucune trace, le nom et les détails restent', (_name, product) => {
+    const handle = open()
+    void handle.show('packSize', { ...base, product })
+
+    expect(media()?.querySelector('img, .photo')).toBeNull()
+    expect(media()?.querySelector('.name')?.textContent).toBe(card.name)
+    expect(media()?.textContent).toContain('400 g')
+  })
+
+  it('une photo qui ne charge pas se retire sans laisser de trou', () => {
+    const handle = open()
+    void handle.show('packSize', { ...base, product: card })
+
+    media()?.querySelector('img')?.dispatchEvent(new Event('error'))
+
+    expect(media()?.querySelector('.photo')).toBeNull()
+    expect(media()?.querySelector('.name')?.textContent).toBe(card.name)
+  })
+
+  it('sans prix ni contenu ni seconde ligne : seulement le nom, aucune ligne vide', () => {
+    const handle = open()
+    void handle.show('packSize', {
+      ...base,
+      product: { name: card.name, label2: null, details: [], photo: null },
+    })
+
+    expect([...(media()?.querySelectorAll('p') ?? [])].map((p) => p.textContent)).toEqual([
+      card.name,
+    ])
+  })
+
+  it('sans produit (écran appelé comme avant) : rien de plus que la question', () => {
+    const handle = open()
+    void handle.show('packSize', base)
+
+    expect(media()).toBeNull()
+  })
+
+  it('« Nombre de produits » montre aussi le produit', () => {
+    const handle = open()
+    void handle.show('quantity', {
+      ingredient: 'Farine',
+      productLabel: 'Farine T55 1 kg',
+      packs: 1,
+      product: card,
+    })
+
+    expect(media()?.querySelector('.name')?.textContent).toBe(card.name)
+    expect(media()?.querySelector('img')?.getAttribute('alt')).toBe('')
+  })
+
+  it('le nom, la seconde ligne et les détails sont du texte, jamais du HTML', () => {
+    const handle = open()
+    void handle.show('packSize', {
+      ...base,
+      product: { name: HOSTILE, label2: HOSTILE, details: [HOSTILE], photo: null },
+    })
+
+    expect(media()?.querySelector('script')).toBeNull()
+    expect(media()?.querySelectorAll('img')).toHaveLength(0)
+    expect(media()?.textContent).toContain('<img src=x')
     expect((window as unknown as { pwned?: number }).pwned).toBeUndefined()
   })
 })

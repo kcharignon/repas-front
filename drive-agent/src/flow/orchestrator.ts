@@ -16,6 +16,7 @@ import {
 import { LeclercError, type EntryReading, type LeclercCause, type RequestStats } from '../leclerc'
 import { own } from '../own'
 import { formatNeeded, S, summarySentence } from '../ui'
+import { cardOf } from './card'
 import { askPacks } from './pack-size'
 import { settleKnownLine, type UnavailableNote } from './phase-a'
 import {
@@ -388,13 +389,15 @@ export class Flow {
     const verdict = await settleKnownLine(line, {
       adapter: this.deps.adapter,
       declined: run.declined,
-      askQuantity: async (asked, product) => {
+      askQuantity: async (asked, product, seen) => {
         const answer = await askPacks(this.deps.ui, {
           ingredient: asked.name,
           productLabel: product.label,
           needed: asked.needed,
           need: formatNeeded(asked.needed),
           packs: product.packs ?? null,
+          // Ce que l'agent vient de lire sur la page de recherche pour ce produit : photo, contenu, prix (aucune requête de plus)
+          product: cardOf(seen),
         })
         this.showProgress(run)
         return answer

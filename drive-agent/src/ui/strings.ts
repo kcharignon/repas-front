@@ -681,9 +681,12 @@ export const S = {
   },
   packSize: {
     title: 'Vérifie la quantité',
-    /** « Combien de tranches y a-t-il dans « Fromage… 20 Tranches - 340g » ? » : toujours au pluriel, la question demande un nombre. */
-    question: (units: string, product: string) =>
-      `Combien de ${units} y a-t-il dans « ${product} »\u00a0?`,
+    /**
+     * « Combien de tranches y a-t-il dans « Fromage… 20 Tranches - 340g » ? » : toujours au pluriel, la question demande un nombre. `ofUnits` est le nom de
+     * l'unité avec son « de » élidé (« de tranches », « d'unités ») : jamais « Combien de unités ».
+     */
+    question: (ofUnits: string, product: string) =>
+      `Combien ${ofUnits} y a-t-il dans «\u00a0${product}\u00a0»\u00a0?`,
     /** « Il te faut 15 tranches » : la quantité de la liste, dans son unité. */
     need: (quantity: number, units: string) => `Il te faut ${formatNumber(quantity)} ${units}`,
     /** L'aperçu en direct, une fois le nombre valide : « Il te faut 15 tranches : 1 produit ». */

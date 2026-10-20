@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { pluralOf, parsePackValue } from '@drive-protocol'
+import { ofUnits, parsePackValue, pluralOf } from '@drive-protocol'
 
 import type { DriveChoiceProduct } from '@/api'
 import UiButton from '@/design/UiButton.vue'
@@ -42,7 +42,8 @@ const unitWord = computed(() => {
   const slug = size.value?.unitSlug ?? ''
   const name = props.unitNames.get(slug) ?? slug.replace(/-/g, ' ')
 
-  return pluralOf(name.toLowerCase())
+  // « de tranches », « d’unités » : l'élision est faite ici, le texte dit « Combien {units} y a-t-il »
+  return ofUnits(pluralOf(name.toLowerCase()))
 })
 
 const editing = ref(false)

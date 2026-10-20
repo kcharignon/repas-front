@@ -254,6 +254,26 @@ const SCREENS: Record<string, () => unknown> = {
       quantity: 15,
       unitName: 'tranche',
       prefill: 20,
+      product: {
+        name: 'Fromage cheddar en tranches de test',
+        label2: '20 Tranches - 340g',
+        details: ['340 g', '2,99 €', '8,79 € / kg'],
+        photo: 'https://photos-test.leclercdrive.fr/image.ashx?id=1&use=l&cat=p',
+      },
+    }),
+  'packSize-count': () =>
+    ui.show('packSize', {
+      ingredient: 'Tomate',
+      productLabel: 'Tomates cerises mélangées Barquette 400g',
+      quantity: 2.5,
+      unitName: 'unité',
+      prefill: 1,
+      product: {
+        name: 'Tomates cerises mélangées Barquette',
+        label2: null,
+        details: ['400 g'],
+        photo: null,
+      },
     }),
   chooser: () => ui.show('chooser', CHOOSER),
   // Un article n'a encore aucun produit retenu : « Passer ces n articles » demande une confirmation d'une ligne, sans la liste de produits (DRV-624, DRV-626).

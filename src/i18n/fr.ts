@@ -326,7 +326,7 @@ export default {
     // La contenance d'un produit dans l'unité de la liste (DRV-652) : « Contenu : 20 tranches »
     packSize: 'Contenu : {size}',
     packSizeFix: 'Corriger',
-    packSizeQuestion: 'Combien de {units} y a-t-il dans ce produit ?',
+    packSizeQuestion: 'Combien {units} y a-t-il dans ce produit ?',
     packSizeSave: 'Enregistrer',
     packSizeCancel: 'Annuler',
     packSizeInvalid: 'Entre un nombre, par exemple 20 ou 12,5.',

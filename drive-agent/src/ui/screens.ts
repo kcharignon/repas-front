@@ -1,7 +1,8 @@
 // Les écrans : chacun reçoit ses données et un rappel `answer`, et rend ses nœuds. Aucune logique d'envoi ici.
 import { append, clear, h, type Child } from './dom'
 import { own } from '../own'
-import { packsFromSize, parsePackValue } from '../../protocol'
+import { ofUnits, packsFromSize, parsePackValue } from '../../protocol'
+import { photoFrame } from './photo'
 import { CAUSE_TEXTS, ERROR_TEXTS, errorParts, pluralOf, S, unitFor } from './strings'
 import type {
   ChallengeProps,
@@ -13,6 +14,7 @@ import type {
   ErrorProps,
   ProgressPatch,
   PackSizeProps,
+  ProductCard,
   ProgressProps,
   QuantityProps,
   ResumeProps,
@@ -194,6 +196,28 @@ function selectOnFirstTouch(input: HTMLInputElement): void {
   input.addEventListener('input', () => (pristine = false))
 }
 
+/**
+ * Le produit dont on vérifie la quantité, comme sur la carte de l'écran de choix : la photo à gauche (décorative : son texte alternatif est vide, le nom est
+ * juste à côté), le nom complet, la seconde ligne du libellé et « 400 g · 2,58 € · 6,45 € / kg » à droite. Rien n'est écrit pour ce qui manque, et une photo qui
+ * ne charge pas se retire sans laisser de trou ni d'icône d'image cassée (`photoFrame`).
+ */
+function productBlock(card: ProductCard | undefined): HTMLElement | null {
+  if (card === undefined) return null
+
+  return h(
+    'div',
+    { class: 'media product' },
+    photoFrame(card.photo, '', 'small'),
+    h(
+      'div',
+      { class: 'text' },
+      h('p', { class: 'name', text: card.name }),
+      card.label2 ? h('p', { class: 'hint', text: card.label2 }) : null,
+      card.details.length > 0 ? h('p', { text: card.details.join(' · ') }) : null,
+    ),
+  )
+}
+
 const quantity: Renderer<'quantity'> = (props: QuantityProps, answer) => {
   const input = h('input', {
     value: String(props.packs ?? 1),
@@ -232,6 +256,7 @@ const quantity: Renderer<'quantity'> = (props: QuantityProps, answer) => {
   return {
     el: screen(
       title(S.quantity.title),
+      productBlock(props.product),
       h('p', { text: S.quantity.text(props.productLabel, props.ingredient) }),
       props.need ? h('p', { text: S.picker.need(props.need) }) : null,
       form,
@@ -307,7 +332,7 @@ const packSize: Renderer<'packSize'> = (props: PackSizeProps, answer) => {
       },
     },
     h('label', {
-      text: S.packSize.question(pluralOf(props.unitName), props.productLabel),
+      text: S.packSize.question(ofUnits(pluralOf(props.unitName)), props.productLabel),
       attrs: { for: 'contenance' },
     }),
     input,
@@ -320,7 +345,7 @@ const packSize: Renderer<'packSize'> = (props: PackSizeProps, answer) => {
       button(S.packSize.skip, () => answer(null)),
     ),
   )
-  return { el: screen(title(S.packSize.title), form), focus: input }
+  return { el: screen(title(S.packSize.title), productBlock(props.product), form), focus: input }
 }
 
 /**

@@ -80,3 +80,21 @@ export function pluralOf(name: string): string {
 export function unitFor(name: string, quantity: number): string {
   return quantity >= 2 ? pluralOf(name) : name.trim()
 }
+
+/** Les mots qui commencent par un « h » aspiré : pas d'élision devant eux (« de hachis »). Les cas qu'un nom d'unité ou de produit peut raisonnablement porter. */
+const ASPIRATED_H =
+  /^h(ache|achis|aie|aine|alte|amac|amburger|anche|andicap|angar|areng|aricot|arpe|asard|ate|ausse|aut|avre|erisson|eron|eros|ibou|ockey|omard|onte|oquet|oublon|ousse|uit|utte)s?$/
+
+/**
+ * « de » devant un nom d'unité, avec l'élision du français : « de tranches », « de sachets », mais « d'unités », « d'œufs », « d'heures » (« h » muet) et
+ * « de hachis » (« h » aspiré). La question « Combien d'unités y a-t-il dans ce produit ? » : jamais « Combien de unités ». Sans accent ni casse pour juger la
+ * première lettre ; une apostrophe typographique, comme le reste des textes.
+ */
+export function ofUnits(units: string): string {
+  const name = units.trim()
+  const first = name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  const vowel = /^[aeiouy]/.test(first) || /^[œæ]/i.test(name)
+  const mute = first.startsWith('h') && !ASPIRATED_H.test(first.split(/\s+/)[0] ?? '')
+
+  return vowel || mute ? `d’${name}` : `de ${name}`
+}

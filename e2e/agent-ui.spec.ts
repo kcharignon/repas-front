@@ -33,6 +33,7 @@ const SCREENS = [
   'progress',
   'quantity',
   'packSize',
+  'packSize-count',
   'chooser',
   'chooser-confirm',
   'chooser-last',
