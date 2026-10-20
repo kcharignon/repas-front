@@ -91,5 +91,9 @@ textarea{width:100%;margin:8px 0;padding:8px 10px;font:.9rem/1.4 ui-monospace,mo
 .media .text{flex:1 1 0;min-width:0}
 .photo{flex:none;display:flex;align-items:center;justify-content:center;width:80px;height:80px;padding:4px;border:1px solid var(--line);border-radius:8px;background:var(--photo)}
 .photo img{display:block;width:100%;height:100%;object-fit:contain}
+.photo.small{width:64px;height:64px;padding:3px}
+.product{margin:8px 0 12px}
+.product p{margin:2px 0}
+.product .name{font-weight:600}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 `

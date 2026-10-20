@@ -105,7 +105,13 @@ describe('sizeInLabel : le nombre que le libellé annonce pour l’unité de la 
 
 describe('unitOf et givenSize', () => {
   it('l’unité de la ligne, avec la quantité demandée', () => {
-    expect(unitOf(SLICES)).toEqual({ slug: 'tranche', name: 'tranche', quantity: 15 })
+    expect(unitOf(SLICES)).toEqual({
+      slug: 'tranche',
+      name: 'tranche',
+      quantity: 15,
+      counts: false,
+    })
+    expect(unitOf({ ...SLICES, dimension: 'COUNT' })?.counts).toBe(true)
     expect(unitOf({ ...SLICES, unitName: '  tranche ' })?.name).toBe('tranche')
   })
 
@@ -130,6 +136,70 @@ describe('unitOf et givenSize', () => {
     expect(givenSize({ packSize: size }, undefined)).toBeNull()
     expect(givenSize({ packSize: size }, { quantity: 15, unitSymbol: 'tranche' })).toBeNull()
   })
+})
+
+describe('askPacks : le nombre proposé dans le champ', () => {
+  const ask = { ingredient: 'Tomate', need: null, packs: null }
+  const UNITS = {
+    quantity: 2.5,
+    unitSymbol: 'unité',
+    dimension: 'COUNT',
+    baseFactor: 1,
+    unitSlug: 'unite',
+    unitName: 'unité',
+  } as const
+  const proposed = async (productLabel: string, needed: PlanLine['needed']) => {
+    const screens = fakeUi({ packSize: () => null })
+    await askPacks(screens.ui, { ...ask, productLabel, needed })
+
+    return screens.propsOf('packSize')[0]?.prefill
+  }
+
+  it('une unité de pièces (« unité ») dont le libellé ne dit aucun nombre : 1, un produit = une pièce', async () => {
+    expect(await proposed('Tomates cerises mélangées Barquette 400g', UNITS)).toBe(1)
+    expect(await proposed('Tomates', { ...UNITS, unitSlug: 'piece', unitName: 'pièce' })).toBe(1)
+  })
+
+  it('« 2,5 unités » avec 1 par produit : 3 produits', async () => {
+    const screens = fakeUi({ packSize: (props) => props.prefill })
+
+    const answer = await askPacks(screens.ui, {
+      ...ask,
+      productLabel: 'Tomates cerises Barquette 400g',
+      needed: UNITS,
+    })
+
+    expect(answer).toEqual({ packs: 3, packSize: { value: 1, unitSlug: 'unite' } })
+  })
+
+  it('le libellé qui dit le nombre l’emporte sur le 1 : « 6 unités » donne 6', async () => {
+    expect(await proposed('Oeufs plein air 6 unités', UNITS)).toBe(6)
+  })
+
+  it.each([
+    ['deux nombres différents', 'Lot 4 unités ou 6 unités'],
+    ['un lot', 'Lot 2 x 6 unités'],
+  ])('%s : pas de nombre sans ambiguïté, donc 1 pour une unité de pièces', async (_name, label) => {
+    expect(await proposed(label, UNITS)).toBe(1)
+  })
+
+  it.each([
+    [
+      'la tranche (sans dimension)',
+      { ...UNITS, dimension: null, unitSlug: 'tranche', unitName: 'tranche' },
+    ],
+    [
+      'la cuillère (sans dimension)',
+      { quantity: 2.5, unitSymbol: 'cuillère', unitSlug: 'cuillere', unitName: 'cuillère' },
+    ],
+    ['le gramme', { ...UNITS, dimension: 'WEIGHT', unitSlug: 'gramme', unitName: 'gramme' }],
+    ['le paquet', { ...UNITS, dimension: 'PACKAGE', unitSlug: 'paquet', unitName: 'paquet' }],
+  ] as const)(
+    '%s dont le libellé ne dit aucun nombre : le champ reste vide',
+    async (_name, needed) => {
+      expect(await proposed('Tomates cerises mélangées Barquette 400g', needed)).toBeNull()
+    },
+  )
 })
 
 describe('askPacks', () => {
@@ -186,7 +256,16 @@ describe('un produit connu dont le plan ne sait pas calculer le nombre de produi
 
   it('pose la question en unités, met le nombre déduit au panier et rend la contenance avec la ligne ADDED', async () => {
     // Given : 15 tranches voulues, le produit en contient 20 (le contenu net lu en direct est en grammes : sans rapport)
-    const { adapter, writes } = fakeAdapter({ '1000001': { content: { value: 340, unit: 'g' } } })
+    const { adapter, writes, calls } = fakeAdapter({
+      '1000001': {
+        content: { value: 340, unit: 'g' },
+        price: 299,
+        perMeasure: { cents: 879, unit: 'kg' },
+        label: 'Fromage cheddar en tranches',
+        label2: '20 Tranches',
+        image: 'https://photos-test.leclercdrive.fr/image.ashx?id=1&use=l&cat=p',
+      },
+    })
     const screens = fakeUi({ packSize: () => 20 })
     const { flow, sent } = makeFlow({ ui: screens.ui, adapter })
 
@@ -202,8 +281,16 @@ describe('un produit connu dont le plan ne sait pas calculer le nombre de produi
         quantity: 15,
         unitName: 'tranche',
         prefill: 20,
+        // Ce que l'agent a lu sur la page de recherche, sans requête de plus : photo, nom, contenu, prix et prix au kilo
+        product: {
+          name: 'Fromage cheddar en tranches',
+          label2: '20 Tranches',
+          details: ['340 g', '2,99 €', '8,79 € / kg'],
+          photo: 'https://photos-test.leclercdrive.fr/image.ashx?id=1&use=l&cat=p',
+        },
       },
     ])
+    expect(calls.filter((call) => call.startsWith('search'))).toEqual(['search 1000001'])
     expect(writes).toEqual([{ id: '1000001', quantity: 1 }])
     expect(expectConform(sent[0]).lines[0]).toEqual({
       ingredientSlug: 'cheddar',
@@ -212,6 +299,7 @@ describe('un produit connu dont le plan ne sait pas calculer le nombre de produi
       quantity: 1,
       usedRank: 1,
       packSize: { value: 20, unitSlug: 'tranche' },
+      price: { cents: 299, perMeasure: { cents: 879, unit: 'kg' } },
     })
   })
 
@@ -333,5 +421,32 @@ describe('un produit connu dont le plan ne sait pas calculer le nombre de produi
     await flow.start(plan([cheddar(toCheck)]))
 
     expect(JSON.stringify(sent[0])).not.toContain('packSize')
+  })
+})
+
+describe('askPacks : le produit montré à l’écran de quantité (DRV-652)', () => {
+  const card = {
+    name: 'Fromage cheddar en tranches',
+    label2: '20 Tranches',
+    details: ['340 g', '2,99 €', '8,79 € / kg'],
+    photo: 'https://photos-test.leclercdrive.fr/image.ashx?id=1&use=l&cat=p',
+  }
+
+  it('la fiche du produit passe à la question en unités comme à « Nombre de produits »', async () => {
+    const withUnit = fakeUi({ packSize: () => 20 })
+    const without = fakeUi({ quantity: () => 2 })
+    const base = {
+      ingredient: 'Cheddar',
+      productLabel: CHEDDAR,
+      need: null,
+      packs: null,
+      product: card,
+    }
+
+    await askPacks(withUnit.ui, { ...base, needed: SLICES })
+    await askPacks(without.ui, { ...base, needed: { quantity: 15, unitSymbol: 'tranche' } })
+
+    expect(withUnit.propsOf('packSize')[0]?.product).toEqual(card)
+    expect(without.propsOf('quantity')[0]?.product).toEqual(card)
   })
 })

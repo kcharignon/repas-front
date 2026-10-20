@@ -9,7 +9,7 @@ import {
   type PackSize,
   type PlanProduct,
 } from '../../protocol'
-import { pluralOf, type Ui } from '../ui'
+import { pluralOf, type ProductCard, type Ui } from '../ui'
 
 /** Ce que la personne a répondu : le nombre de produits à mettre au panier et, si elle l'a donnée, la contenance du produit dans l'unité de la liste. */
 export interface PackAnswer {
@@ -54,13 +54,19 @@ export function sizeInLabel(label: string, unitName: string): number | null {
 /** Le plan dit-il l'unité de la ligne ? Les deux clés ensemble, et une quantité demandée : sinon l'agent retombe sur le nombre de produits. */
 export function unitOf(
   needed: NeededQuantity | undefined,
-): { slug: string; name: string; quantity: number } | null {
+): { slug: string; name: string; quantity: number; counts: boolean } | null {
   if (!needed || !(needed.quantity > 0)) return null
   const { unitSlug, unitName } = needed
   if (typeof unitSlug !== 'string' || !UNIT_SLUG.test(unitSlug)) return null
   if (typeof unitName !== 'string' || unitName.trim() === '') return null
 
-  return { slug: unitSlug, name: unitName.trim(), quantity: needed.quantity }
+  return {
+    slug: unitSlug,
+    name: unitName.trim(),
+    quantity: needed.quantity,
+    // Une unité de pièces (« unité », « pièce ») : un produit en contient une, sauf si son libellé dit autre chose
+    counts: needed.dimension === 'COUNT',
+  }
 }
 
 /**
@@ -89,6 +95,8 @@ export async function askPacks(
     needed: NeededQuantity | undefined
     need: string | null
     packs: number | null
+    /** Le produit, avec sa photo, son contenu et son prix (DRV-652) : la personne estime mieux en le voyant. */
+    product?: ProductCard | undefined
   },
 ): Promise<PackAnswer | null> {
   const unit = unitOf(ask.needed)
@@ -98,6 +106,7 @@ export async function askPacks(
       productLabel: ask.productLabel,
       packs: ask.packs,
       need: ask.need,
+      product: ask.product,
     })
 
     return packs === null ? null : { packs }
@@ -107,7 +116,9 @@ export async function askPacks(
     productLabel: ask.productLabel,
     quantity: unit.quantity,
     unitName: unit.name,
-    prefill: sizeInLabel(ask.productLabel, unit.name),
+    // Le nombre que le libellé annonce ; sinon, pour une unité de pièces, 1 (un produit = une pièce : « 2,5 unités » donne 3 produits) ; sinon rien
+    prefill: sizeInLabel(ask.productLabel, unit.name) ?? (unit.counts ? 1 : null),
+    product: ask.product,
   })
   if (value === null) return null
   const packs = packsFromSize(unit.quantity, value)

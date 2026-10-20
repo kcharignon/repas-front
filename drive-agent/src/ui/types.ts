@@ -51,6 +51,20 @@ export interface ProgressProps {
 /** Ce que `ui.update` change sur l'écran de progression ; `entry` ajoute une ligne au journal. */
 export type ProgressPatch = Partial<Omit<ProgressProps, 'log'>> & { entry?: string }
 
+/**
+ * Le produit dont on vérifie la quantité, tel que la carte de l'écran de choix le montre : photo, nom complet, contenu net et prix. Tout vient de ce que
+ * l'agent a déjà lu sur la page de recherche (aucune requête de plus) ; une partie absente ne laisse ni trou ni image cassée.
+ */
+export interface ProductCard {
+  name: string
+  /** La seconde ligne du libellé, s'il y en a une. */
+  label2: string | null
+  /** Contenu, prix, prix à l'unité de mesure, déjà formatés (« 400 g », « 2,58 € », « 6,45 € / kg »). */
+  details: readonly string[]
+  /** L'adresse de la photo, `null` s'il n'y en a pas ; revérifiée à l'affichage. */
+  photo: string | null
+}
+
 export interface QuantityProps {
   ingredient: string
   productLabel: string
@@ -58,6 +72,8 @@ export interface QuantityProps {
   packs: number | null
   /** La quantité que la liste demande, « 200 g » (comme sur l'écran de choix), quand l'étape la connaît (DRV-626). */
   need?: string | null
+  /** Le produit, avec sa photo et ses détails (DRV-652) ; absent, l'écran ne montre que son libellé dans la question. */
+  product?: ProductCard | undefined
 }
 
 /**
@@ -73,6 +89,8 @@ export interface PackSizeProps {
   unitName: string
   /** Le nombre que le libellé du produit annonce (« 20 Tranches » donne 20), ou `null` : le champ est alors vide. */
   prefill: number | null
+  /** Le produit, avec sa photo et ses détails ; absent, l'écran ne montre que son libellé dans la question. */
+  product?: ProductCard | undefined
 }
 
 /** Ce que l'utilisateur peut faire pendant le choix d'un produit (phase B, DRV-306). */

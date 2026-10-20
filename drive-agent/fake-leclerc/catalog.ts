@@ -203,6 +203,18 @@ export const PRODUCTS: readonly FakeProduct[] = [
   ),
   make('Fromage cheddar en tranches Fromagerie Fictive', '8 Tranches - 150g', 1.89, 12.6, 'kg', 9),
   make('Fromage cheddar râpé Fromagerie Fictive', '200 g', 1.75, 8.75, 'kg', 14),
+  // Un fromage en tranches sans photo (1000135) : l'écran de quantité ne laisse ni trou ni image cassée.
+  make(
+    'Fromage cheddar fondu en tranches Fromagerie Fictive',
+    '10 Tranches - 200g',
+    1.49,
+    7.45,
+    'kg',
+    8,
+    {
+      photo: 'none',
+    },
+  ),
 ]
 
 /** Un texte sans accent ni majuscule : « Œufs » et « oeufs » se valent, comme dans une recherche. */

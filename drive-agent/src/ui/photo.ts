@@ -6,15 +6,20 @@ import { photoUrl } from '../photo-url'
 import { h } from './dom'
 
 /**
- * Le cadre de la photo, ou `null` si l'adresse est absente ou refusée. `alt` : le libellé du produit. Le cadre se retire tout seul si l'image ne charge
+ * Le cadre de la photo, ou `null` si l'adresse est absente ou refusée. `alt` : le libellé du produit (vide quand la photo est décorative, à côté du nom). Le cadre se retire tout seul si l'image ne charge
  * pas ; aucun `referrerpolicy` ni `crossorigin` : la requête est celle d'une image de la page elle-même.
  */
-export function photoFrame(address: string | null | undefined, alt: string): HTMLElement | null {
+export function photoFrame(
+  address: string | null | undefined,
+  alt: string,
+  size: 'normal' | 'small' = 'normal',
+): HTMLElement | null {
   const src = photoUrl(address)
   if (src === null) return null
-  const frame = h('span', { class: 'photo' })
+  const frame = h('span', { class: size === 'small' ? 'photo small' : 'photo' })
+  const side = size === 'small' ? '64' : '80'
   const image = h('img', {
-    attrs: { alt, loading: 'lazy', decoding: 'async', width: '80', height: '80' },
+    attrs: { alt, loading: 'lazy', decoding: 'async', width: side, height: side },
     on: { error: () => frame.remove() },
   })
   // `src` en dernier : l'écouteur d'erreur est déjà posé quand le chargement commence.

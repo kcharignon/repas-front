@@ -465,7 +465,14 @@ describe('le contenu est inconnu', () => {
     // Then
     // L'écran dit aussi ce que la liste demande (« Il te faut : 800 g. », DRV-626)
     expect(asked).toEqual([
-      { ingredient: 'Poivre', productLabel: 'Mélange mystère de test', packs: null, need: '800 g' },
+      {
+        ingredient: 'Poivre',
+        productLabel: 'Mélange mystère de test',
+        packs: null,
+        need: '800 g',
+        // La fiche du produit choisi dans la liste (DRV-652)
+        product: { name: 'Mélange mystère de test', label2: null, details: [], photo: null },
+      },
     ])
     expect(test.adapter.calls).toEqual(['find poivre', 'cart 2000004 3'])
     expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', quantity: 3 })
@@ -3325,6 +3332,13 @@ describe('la contenance du produit dans l’unité de la liste (DRV-652)', () =>
         quantity: 15,
         unitName: 'tranche',
         prefill: 20,
+        // Le produit choisi, comme la carte de la liste le montre : nom, contenu net (ici aucun), prix
+        product: {
+          name: 'Fromage Cheddar Burger Les Croisés 20 Tranches - 340g',
+          label2: null,
+          details: ['2,99 €'],
+          photo: null,
+        },
       },
     ])
     expect(test.screens.screens()).not.toContain('quantity')
