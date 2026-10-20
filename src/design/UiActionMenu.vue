@@ -19,6 +19,8 @@ export interface UiAction {
   run: () => void
   disabled?: boolean
   tone?: 'danger'
+  /** Une courte raison, écrite sous le libellé : pourquoi l'action est grisée. */
+  hint?: string
 }
 
 defineProps<{
@@ -83,7 +85,10 @@ function onCloseAutoFocus(event: Event) {
           "
           @select="choose(action)"
         >
-          {{ action.label }}
+          <span class="flex flex-col">
+            <span>{{ action.label }}</span>
+            <span v-if="action.hint" class="text-sm font-normal">{{ action.hint }}</span>
+          </span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenuPortal>

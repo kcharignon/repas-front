@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
@@ -59,38 +59,54 @@ const conversions = {
   ],
   totalItems: 2,
 }
+// « Maintenant » des tests de la vue des utilisateurs : mardi 20 octobre 2026, 14 h (heure locale, comme les dates relatives)
+const NOW = new Date(2026, 9, 20, 14, 0)
+const at = (year: number, month: number, day: number, hour: number, minute: number) =>
+  new Date(year, month, day, hour, minute).toISOString()
+const account = (fields: Record<string, unknown>) => ({
+  defaultServing: 2,
+  recipeCount: 0,
+  ingredientCount: 0,
+  shoppingListCount: 0,
+  createdAt: at(2026, 8, 1, 10, 0),
+  isDisabled: false,
+  status: 'ACTIVE',
+  isAdmin: false,
+  appVersion: null,
+  appOutdated: false,
+  lastLoginAt: null,
+  ...fields,
+})
 const users = {
   member: [
-    {
+    account({
       id: 'u1',
       email: 'admin@repas.fr',
-      defaultServing: 4,
-      recipeCount: 2,
-      ingredientCount: 0,
-      shoppingListCount: 1,
-      createdAt: '2026-10-01T10:00:00+02:00',
-      isDisabled: false,
-      status: 'ACTIVE',
+      recipeCount: 12,
+      ingredientCount: 9,
+      shoppingListCount: 3,
+      createdAt: at(2026, 9, 1, 10, 0),
       isAdmin: true,
       appVersion: '0.1.8',
       appOutdated: true,
-    },
-    {
+      lastLoginAt: at(2026, 9, 20, 12, 0),
+    }),
+    account({
       id: 'u2',
       email: 'gone@repas.fr',
-      defaultServing: 2,
-      recipeCount: 0,
-      ingredientCount: 0,
-      shoppingListCount: 0,
-      createdAt: '2026-09-01T10:00:00+02:00',
       isDisabled: true,
       status: 'DISABLED',
-      isAdmin: false,
-      appVersion: null,
-      appOutdated: false,
-    },
+      lastLoginAt: at(2026, 8, 2, 9, 0),
+    }),
+    account({ id: 'u3', email: 'attente@repas.fr', status: 'PENDING', ingredientCount: 1 }),
+    account({
+      id: 'u4',
+      email: 'hier@repas.fr',
+      shoppingListCount: 1,
+      lastLoginAt: at(2026, 9, 19, 9, 0),
+    }),
   ],
-  totalItems: 2,
+  totalItems: 4,
 }
 
 const base = (user = admin) => ({
@@ -524,117 +540,289 @@ describe('conversions', () => {
 })
 
 describe('utilisateurs', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'], now: NOW })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const rows = (wrapper: ReturnType<typeof mount>) => wrapper.findAll('li')
+  /** Le texte d'une carte tel qu'on le lit : espaces fusionnés. */
+  const textOf = (row: { text: () => string }) => row.text().replace(/\s+/g, ' ')
   const rowOf = (wrapper: ReturnType<typeof mount>, email: string) =>
-    wrapper.findAll('li').find((item) => item.text().includes(email))!
-  const statusButton = (row: ReturnType<typeof rowOf>, label: string) =>
-    row.findAll('button').find((candidate) => candidate.text() === label)!
+    rows(wrapper).find((item) => item.text().includes(email))!
   const notifications = () => useNotificationsStore().items.map((item) => item.text)
+  const ready = async (handlers: Parameters<typeof stubApi>[0] = {}) => {
+    const opened = await open(UsersAdminView, handlers)
+    await vi.waitFor(() => expect(rows(opened.wrapper)).toHaveLength(4))
 
-  it('liste les utilisateurs avec leur rôle, leur état et leurs chiffres', async () => {
-    const { wrapper } = await open(UsersAdminView)
-    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+    return opened
+  }
+  const menuItems = () => [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+  const menuItem = (label: string) =>
+    menuItems().find((candidate) => candidate.textContent.trim().startsWith(label))!
+  const openMenu = async (row: ReturnType<typeof rowOf>) => {
+    ;(row.find('button[aria-haspopup="menu"]').element as HTMLElement).click()
+    await vi.waitFor(() => expect(menuItems().length).toBeGreaterThan(0))
+    // Le menu écoute les clics extérieurs au tour suivant
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+  const visibleButtons = (row: ReturnType<typeof rowOf>) =>
+    row.findAll('button').filter((candidate) => candidate.attributes('aria-haspopup') !== 'menu')
 
-    const [first, second] = wrapper.findAll('li').map((item) => item.text())
+  it('résume les comptes et ceux qui attendent', async () => {
+    const { wrapper } = await ready()
 
-    expect(first).toContain('admin@repas.fr')
-    expect(first).toContain('Administrateur')
-    expect(first).toContain('2 recettes, 0 ingrédients, 1 listes')
-    expect(first).toContain('inscrit le 1 octobre 2026')
-    expect(second).toContain('Désactivé')
+    expect(wrapper.find('main p').text()).toBe('4 comptes · 1 en attente')
   })
 
-  it('montre la version de l’application de chacun, « — » si inconnue, et qui est à mettre à jour (DRV-637)', async () => {
-    const { wrapper } = await open(UsersAdminView)
-    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+  it('trie les comptes en attente d’abord, puis les plus récemment vus, ceux jamais vus à la fin', async () => {
+    const { wrapper } = await ready()
 
-    const [first, second] = wrapper.findAll('li').map((item) => item.text())
-
-    expect(first).toContain('Application : 0.1.8')
-    expect(first).toContain('À mettre à jour')
-    expect(second).toContain('Application : —')
-    expect(second).not.toContain('À mettre à jour')
-  })
-
-  it('montre le statut de chaque compte et laisse choisir parmi les trois', async () => {
-    const { wrapper } = await open(UsersAdminView)
-    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
-
-    const active = rowOf(wrapper, 'admin@repas.fr')
-    const disabled = rowOf(wrapper, 'gone@repas.fr')
-
-    expect(active.findAll('[aria-pressed]').map((button) => button.text())).toEqual([
-      'En attente',
-      'Actif',
-      'Désactivé',
+    expect(rows(wrapper).map((item) => item.find('p').text())).toEqual([
+      'attente@repas.fr',
+      'admin@repas.fr',
+      'hier@repas.fr',
+      'gone@repas.fr',
     ])
-    expect(statusButton(active, 'Actif').attributes('aria-pressed')).toBe('true')
-    expect(statusButton(active, 'Désactivé').attributes('aria-pressed')).toBe('false')
-    expect(statusButton(disabled, 'Désactivé').attributes('aria-pressed')).toBe('true')
   })
 
-  it('fixe le statut choisi, relit la liste et le dit', async () => {
-    const { wrapper, fetchMock } = await open(UsersAdminView, {
-      'PUT /api/v1/users/u2/status': () => new Response(null, { status: 204 }),
-    })
-    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+  it('montre pour chaque compte son rôle, son statut en pastille, son activité et son inscription', async () => {
+    const { wrapper } = await ready()
 
-    await statusButton(rowOf(wrapper, 'gone@repas.fr'), 'Actif').trigger('click')
+    const admin = textOf(rowOf(wrapper, 'admin@repas.fr'))
+    expect(admin).toContain('Administrateur')
+    expect(admin).toContain('Actif')
+    for (const part of ['12 recettes', '9 ingrédients', '3 listes']) expect(admin).toContain(part)
+    expect(admin).toContain('Inscrit le 1 octobre 2026')
+    expect(rowOf(wrapper, 'attente@repas.fr').text()).toContain('En attente')
+    expect(textOf(rowOf(wrapper, 'attente@repas.fr'))).toContain('aucune recette')
+    expect(textOf(rowOf(wrapper, 'attente@repas.fr'))).toContain('1 ingrédient')
+    expect(rowOf(wrapper, 'gone@repas.fr').text()).toContain('Désactivé')
+    expect(rowOf(wrapper, 'attente@repas.fr').text()).not.toContain('Administrateur')
+  })
+
+  it('dit quand chacun s’est connecté pour la dernière fois, date exacte lisible', async () => {
+    const { wrapper } = await ready()
+
+    const admin = rowOf(wrapper, 'admin@repas.fr')
+    expect(textOf(admin)).toContain('Dernière connexion : il y a 2 h')
+    const time = admin.find('time')
+    expect(time.text()).toBe('il y a 2 h')
+    expect(time.attributes('title')).toBe('20 octobre 2026 à 12:00')
+    expect(admin.find('.sr-only').text()).toBe('(20 octobre 2026 à 12:00)')
+    expect(textOf(rowOf(wrapper, 'hier@repas.fr'))).toContain('Dernière connexion : hier')
+    expect(rowOf(wrapper, 'gone@repas.fr').text()).toContain('2 septembre 2026')
+    expect(rowOf(wrapper, 'attente@repas.fr').text()).toContain('Pas encore vu')
+    expect(rowOf(wrapper, 'attente@repas.fr').find('time').exists()).toBe(false)
+  })
+
+  it('montre la version de l’application de chacun, « inconnue » sinon, et qui est à mettre à jour (DRV-637)', async () => {
+    const { wrapper } = await ready()
+
+    expect(textOf(rowOf(wrapper, 'admin@repas.fr'))).toContain('Application 0.1.8')
+    expect(rowOf(wrapper, 'admin@repas.fr').text()).toContain('À mettre à jour')
+    expect(textOf(rowOf(wrapper, 'gone@repas.fr'))).toContain('Application inconnue')
+    expect(rowOf(wrapper, 'gone@repas.fr').text()).not.toContain('À mettre à jour')
+  })
+
+  it('filtre par statut avec des puces qui disent leur état et leur nombre', async () => {
+    const { wrapper } = await ready()
+    const chips = () => wrapper.findAll('[role="group"] button')
+
+    expect(chips().map((chip) => chip.text())).toEqual([
+      'Tous',
+      'En attente (1)',
+      'Actifs (2)',
+      'Désactivés (1)',
+    ])
+    expect(chips().map((chip) => chip.attributes('aria-pressed'))).toEqual([
+      'true',
+      'false',
+      'false',
+      'false',
+    ])
+
+    await chips()[2]!.trigger('click')
+
+    expect(rows(wrapper).map((item) => item.find('p').text())).toEqual([
+      'admin@repas.fr',
+      'hier@repas.fr',
+    ])
+    expect(chips()[2]!.attributes('aria-pressed')).toBe('true')
+    expect(chips()[0]!.attributes('aria-pressed')).toBe('false')
+
+    // Cliquer sur la puce déjà choisie ne la défait pas
+    await chips()[2]!.trigger('click')
+    expect(chips()[2]!.attributes('aria-pressed')).toBe('true')
+
+    await chips()[1]!.trigger('click')
+    expect(rows(wrapper)).toHaveLength(1)
+  })
+
+  it('dit quand aucun compte ne correspond au filtre', async () => {
+    const onlyActive = {
+      member: users.member.filter((user) => user.status === 'ACTIVE'),
+      totalItems: 2,
+    }
+    const { wrapper } = await open(UsersAdminView, { 'GET /api/v1/users': () => json(onlyActive) })
+    await vi.waitFor(() => expect(rows(wrapper)).toHaveLength(2))
+
+    await wrapper.findAll('[role="group"] button')[1]!.trigger('click')
+
+    expect(rows(wrapper)).toHaveLength(0)
+    expect(wrapper.text()).toContain('Aucun compte dans cette catégorie.')
+  })
+
+  it('compte en attente : « Activer » visible, le reste dans le menu', async () => {
+    const { wrapper } = await ready()
+    const row = rowOf(wrapper, 'attente@repas.fr')
+
+    expect(visibleButtons(row).map((candidate) => candidate.text())).toEqual(['Activer'])
+    expect(row.find('button[aria-haspopup="menu"]').attributes('aria-label')).toBe(
+      'Plus d’actions pour attente@repas.fr',
+    )
+
+    await openMenu(row)
+
+    expect(menuItems().map((candidate) => candidate.textContent.trim())).toEqual([
+      'Désactiver',
+      'Supprimer',
+    ])
+  })
+
+  it('compte actif : rien de visible, le menu propose attente, désactivation et suppression', async () => {
+    const { wrapper } = await ready()
+    const row = rowOf(wrapper, 'hier@repas.fr')
+
+    expect(visibleButtons(row)).toHaveLength(0)
+
+    await openMenu(row)
+
+    expect(menuItems().map((candidate) => candidate.textContent.trim())).toEqual([
+      'Mettre en attente',
+      'Désactiver',
+      'Supprimer',
+    ])
+    expect(menuItem('Supprimer').classList).toContain('text-danger')
+  })
+
+  it('compte désactivé : « Réactiver » visible, le menu propose attente et suppression', async () => {
+    const { wrapper } = await ready()
+    const row = rowOf(wrapper, 'gone@repas.fr')
+
+    expect(visibleButtons(row).map((candidate) => candidate.text())).toEqual(['Réactiver'])
+
+    await openMenu(row)
+
+    expect(menuItems().map((candidate) => candidate.textContent.trim())).toEqual([
+      'Mettre en attente',
+      'Supprimer',
+    ])
+  })
+
+  it('n’a jamais trois boutons de statut côte à côte', async () => {
+    const { wrapper } = await ready()
+
+    for (const row of rows(wrapper)) expect(visibleButtons(row).length).toBeLessThanOrEqual(1)
+  })
+
+  it('active le compte en attente, relit la liste et le dit', async () => {
+    const { wrapper, fetchMock } = await ready({
+      'PUT /api/v1/users/u3/status': () => new Response(null, { status: 204 }),
+    })
+
+    await visibleButtons(rowOf(wrapper, 'attente@repas.fr'))[0]!.trigger('click')
     await flushPromises()
 
-    const index = calls(fetchMock).indexOf('PUT /api/v1/users/u2/status')
+    const index = calls(fetchMock).indexOf('PUT /api/v1/users/u3/status')
     expect(index).toBeGreaterThan(-1)
     expect(await bodyOf(fetchMock, index)).toEqual({ status: 'ACTIVE' })
     expect(calls(fetchMock).filter((call) => call === 'GET /api/v1/users')).toHaveLength(2)
-    expect(notifications()).toContain('Statut de gone@repas.fr modifié.')
+    expect(notifications()).toContain('Statut de attente@repas.fr modifié.')
   })
 
-  it("n'appelle rien quand on choisit le statut que le compte a déjà", async () => {
-    const { wrapper, fetchMock } = await open(UsersAdminView)
-    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+  it('réactive un compte désactivé', async () => {
+    const { wrapper, fetchMock } = await ready({
+      'PUT /api/v1/users/u2/status': () => new Response(null, { status: 204 }),
+    })
 
-    await statusButton(rowOf(wrapper, 'gone@repas.fr'), 'Désactivé').trigger('click')
+    await visibleButtons(rowOf(wrapper, 'gone@repas.fr'))[0]!.trigger('click')
     await flushPromises()
 
-    expect(calls(fetchMock).filter((call) => call.startsWith('PUT'))).toEqual([])
+    const index = calls(fetchMock).indexOf('PUT /api/v1/users/u2/status')
+    expect(await bodyOf(fetchMock, index)).toEqual({ status: 'ACTIVE' })
   })
 
-  it('explique le refus du compte protégé sans changer son statut', async () => {
-    const { wrapper } = await open(UsersAdminView, {
+  it('désactive un compte actif par le menu, et le remet en attente', async () => {
+    const { wrapper, fetchMock } = await ready({
+      'PUT /api/v1/users/u4/status': () => new Response(null, { status: 204 }),
+    })
+
+    await openMenu(rowOf(wrapper, 'hier@repas.fr'))
+    menuItem('Désactiver').click()
+    await vi.waitFor(() => expect(calls(fetchMock)).toContain('PUT /api/v1/users/u4/status'))
+    expect(
+      await bodyOf(fetchMock, calls(fetchMock).indexOf('PUT /api/v1/users/u4/status')),
+    ).toEqual({
+      status: 'DISABLED',
+    })
+
+    await flushPromises()
+    await openMenu(rowOf(wrapper, 'hier@repas.fr'))
+    menuItem('Mettre en attente').click()
+    await vi.waitFor(() =>
+      expect(calls(fetchMock).filter((call) => call.startsWith('PUT'))).toHaveLength(2),
+    )
+    expect(
+      await bodyOf(fetchMock, calls(fetchMock).lastIndexOf('PUT /api/v1/users/u4/status')),
+    ).toEqual({
+      status: 'PENDING',
+    })
+  })
+
+  it('explique le refus du compte protégé', async () => {
+    const { wrapper } = await ready({
       'PUT /api/v1/users/u2/status': () =>
         json({ error: { message: 'PROTECTED_ACCOUNT' } }, { status: 422 }),
     })
-    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
 
-    await statusButton(rowOf(wrapper, 'gone@repas.fr'), 'En attente').trigger('click')
+    await visibleButtons(rowOf(wrapper, 'gone@repas.fr'))[0]!.trigger('click')
     await flushPromises()
 
     expect(notifications()).toContain(
       'Ce compte est protégé : il reste actif et ne se supprime pas.',
     )
-    expect(
-      statusButton(rowOf(wrapper, 'gone@repas.fr'), 'Désactivé').attributes('aria-pressed'),
-    ).toBe('true')
+    expect(rowOf(wrapper, 'gone@repas.fr').text()).toContain('Désactivé')
   })
 
-  it('ne propose pas de supprimer son propre compte', async () => {
-    const { wrapper } = await open(UsersAdminView)
-    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+  it('ne propose pas de supprimer son propre compte, et dit pourquoi', async () => {
+    const { wrapper } = await ready()
 
-    const own = rowOf(wrapper, 'admin@repas.fr').find('button[aria-label^="Supprimer"]')
-    const other = rowOf(wrapper, 'gone@repas.fr').find('button[aria-label^="Supprimer"]')
+    await openMenu(rowOf(wrapper, 'admin@repas.fr'))
+    expect(menuItem('Supprimer').getAttribute('aria-disabled')).toBe('true')
+    expect(menuItem('Supprimer').textContent).toContain('C’est ton compte')
+    document.body.innerHTML = ''
 
-    expect(own.attributes('disabled')).toBeDefined()
-    expect(other.attributes('disabled')).toBeUndefined()
+    const other = await ready()
+    await openMenu(rowOf(other.wrapper, 'gone@repas.fr'))
+    expect(menuItem('Supprimer').getAttribute('aria-disabled')).toBeNull()
   })
+
+  const confirmDialog = (label: string) =>
+    [...document.body.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+      (candidate) => candidate.textContent.trim() === label,
+    )
 
   it('demande confirmation avant de supprimer, puis relit la liste', async () => {
-    const { wrapper, fetchMock } = await open(UsersAdminView, {
+    const { wrapper, fetchMock } = await ready({
       'DELETE /api/v1/users/u2': () => new Response(null, { status: 204 }),
     })
-    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
 
-    await rowOf(wrapper, 'gone@repas.fr').find('button[aria-label^="Supprimer"]').trigger('click')
-    await flushPromises()
+    await openMenu(rowOf(wrapper, 'gone@repas.fr'))
+    menuItem('Supprimer').click()
+    await vi.waitFor(() => expect(document.body.querySelector('[role="dialog"]')).not.toBeNull())
 
     // Rien n'est supprimé tant qu'on n'a pas confirmé, et le texte dit ce qui disparaît
     expect(calls(fetchMock).filter((call) => call.startsWith('DELETE'))).toEqual([])
@@ -642,9 +830,7 @@ describe('utilisateurs', () => {
     expect(dialog.textContent).toContain('gone@repas.fr')
     expect(dialog.textContent).toContain('irréversible')
 
-    ;[...dialog.querySelectorAll<HTMLButtonElement>('button')]
-      .find((candidate) => candidate.textContent.trim() === 'Supprimer')
-      ?.click()
+    confirmDialog('Supprimer')?.click()
     await flushPromises()
 
     expect(calls(fetchMock)).toContain('DELETE /api/v1/users/u2')
@@ -653,31 +839,27 @@ describe('utilisateurs', () => {
   })
 
   it('annuler la confirmation ne supprime rien', async () => {
-    const { wrapper, fetchMock } = await open(UsersAdminView)
-    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+    const { wrapper, fetchMock } = await ready()
 
-    await rowOf(wrapper, 'gone@repas.fr').find('button[aria-label^="Supprimer"]').trigger('click')
-    await flushPromises()
-    ;[...document.body.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')]
-      .find((candidate) => candidate.textContent.trim() === 'Annuler')
-      ?.click()
+    await openMenu(rowOf(wrapper, 'gone@repas.fr'))
+    menuItem('Supprimer').click()
+    await vi.waitFor(() => expect(document.body.querySelector('[role="dialog"]')).not.toBeNull())
+    confirmDialog('Annuler')?.click()
     await flushPromises()
 
     expect(calls(fetchMock).filter((call) => call.startsWith('DELETE'))).toEqual([])
   })
 
   it('explique le refus de supprimer le compte protégé', async () => {
-    const { wrapper } = await open(UsersAdminView, {
+    const { wrapper } = await ready({
       'DELETE /api/v1/users/u2': () =>
         json({ error: { message: 'PROTECTED_ACCOUNT' } }, { status: 422 }),
     })
-    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
 
-    await rowOf(wrapper, 'gone@repas.fr').find('button[aria-label^="Supprimer"]').trigger('click')
-    await flushPromises()
-    ;[...document.body.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')]
-      .find((candidate) => candidate.textContent.trim() === 'Supprimer')
-      ?.click()
+    await openMenu(rowOf(wrapper, 'gone@repas.fr'))
+    menuItem('Supprimer').click()
+    await vi.waitFor(() => expect(document.body.querySelector('[role="dialog"]')).not.toBeNull())
+    confirmDialog('Supprimer')?.click()
     await flushPromises()
 
     expect(notifications()).toContain(

@@ -10,6 +10,13 @@ export const i18n = createI18n({
   datetimeFormats: {
     fr: {
       long: { day: 'numeric', month: 'long', year: 'numeric' },
+      full: {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      },
       short: { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' },
     },
   },

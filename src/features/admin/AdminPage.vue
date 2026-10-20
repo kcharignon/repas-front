@@ -4,7 +4,14 @@ import { RouterLink } from 'vue-router'
 
 import UiButton from '@/design/UiButton.vue'
 
-defineProps<{ title: string; loading?: boolean; failed?: boolean; createLabel?: string }>()
+defineProps<{
+  title: string
+  loading?: boolean
+  failed?: boolean
+  createLabel?: string
+  /** Une page à tableau, plus large que les listes de référentiels. */
+  wide?: boolean
+}>()
 
 const emit = defineEmits<{ create: [] }>()
 
@@ -12,7 +19,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <main class="mx-auto flex max-w-4xl flex-col gap-5 px-4 py-6">
+  <main :class="['mx-auto flex flex-col gap-5 px-4 py-6', wide ? 'max-w-6xl' : 'max-w-4xl']">
     <RouterLink :to="{ name: 'admin' }" class="self-start font-bold text-primary underline">
       {{ t('admin.title') }}
     </RouterLink>

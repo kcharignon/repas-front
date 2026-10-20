@@ -7,7 +7,8 @@ const trigger = () =>
   document.body.querySelector<HTMLButtonElement>('button[aria-label="Plus d’actions"]')!
 const menu = () => document.body.querySelector<HTMLElement>('[role="menu"]')
 const items = () => [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-const item = (label: string) => items().find((candidate) => candidate.textContent.trim() === label)!
+const item = (label: string) =>
+  items().find((candidate) => candidate.textContent.trim().startsWith(label))!
 
 const key = (target: Element, name: string) =>
   target.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }))
@@ -94,6 +95,14 @@ describe('UiActionMenu', () => {
 
     expect(runs.pause).not.toHaveBeenCalled()
     expect(menu()).not.toBeNull()
+  })
+
+  it('écrit sous le libellé la raison d’une action désactivée', async () => {
+    mountMenu([{}, { disabled: true, hint: 'Pas maintenant' }])
+    await open()
+
+    expect(item('Mettre en pause').textContent).toContain('Pas maintenant')
+    expect(item('Renommer').textContent.trim()).toBe('Renommer')
   })
 
   it('au clavier : Entrée ouvre sur la première action, les flèches circulent, Échap ferme et rend le focus', async () => {

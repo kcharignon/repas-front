@@ -1,18 +1,28 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AdminPage from './AdminPage.vue'
 import { useChangeUserStatus, useDeleteUser, useUsers } from './queries'
+import UserRow from './UserRow.vue'
+import {
+  countByStatus,
+  filterUsers,
+  sortUsers,
+  userFilters,
+  usersGrid,
+  type AdminUser,
+  type UserFilter,
+} from './users'
 import { ApiError, type UserStatus, type UserSummary } from '@/api'
 import { hasFailed } from '@/api/query'
-import UiButton from '@/design/UiButton.vue'
+import UiChip from '@/design/UiChip.vue'
 import UiConfirmDialog from '@/design/UiConfirmDialog.vue'
 import { messageForFailure } from '@/notifications/failures'
 import { useNotificationsStore } from '@/notifications/store'
 import { useSessionStore } from '@/session/session'
 
-const { t, d } = useI18n()
+const { t } = useI18n()
 const session = useSessionStore()
 const notifications = useNotificationsStore()
 
@@ -20,8 +30,15 @@ const users = useUsers()
 const changeStatus = useChangeUserStatus()
 const remove = useDeleteUser()
 
-const items = computed(() => users.data.value?.member ?? [])
-const statuses: readonly UserStatus[] = ['PENDING', 'ACTIVE', 'DISABLED']
+const items = computed<AdminUser[]>(() => users.data.value?.member ?? [])
+const filter = ref<UserFilter>('ALL')
+const counts = computed(() => countByStatus(items.value))
+const shown = computed(() => filterUsers(sortUsers(items.value), filter.value))
+
+// Les dates relatives (« il y a 2 h ») se remettent à l'heure toutes les minutes
+const now = ref(new Date())
+const timer = setInterval(() => (now.value = new Date()), 60_000)
+onBeforeUnmount(() => clearInterval(timer))
 
 const deleting = ref<UserSummary | null>(null)
 const confirming = computed({
@@ -70,83 +87,58 @@ function confirmDelete() {
 </script>
 
 <template>
-  <AdminPage :title="t('admin.users')" :loading="users.isPending.value" :failed="hasFailed(users)">
+  <AdminPage
+    :title="t('admin.users')"
+    :loading="users.isPending.value"
+    :failed="hasFailed(users)"
+    wide
+  >
     <p v-if="items.length === 0" class="text-muted">{{ t('admin.none') }}</p>
-    <ul v-else class="flex flex-col gap-3">
-      <li
-        v-for="user in items"
-        :key="user.id"
-        class="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4"
-      >
-        <div class="flex flex-col gap-1">
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="font-bold">{{ user.email }}</span>
-            <span
-              v-if="user.isAdmin"
-              class="rounded-full bg-soft px-2.5 py-0.5 text-xs font-bold text-primary"
-            >
-              {{ t('admin.administrator') }}
-            </span>
-            <span
-              v-if="user.status !== 'ACTIVE'"
-              class="rounded-full border border-line px-2.5 py-0.5 text-xs font-bold text-muted"
-            >
-              {{ t(`admin.status.${user.status}`) }}
-            </span>
-          </div>
-          <p class="text-sm text-muted">
-            {{
-              t('admin.userStats', {
-                recipes: user.recipeCount,
-                ingredients: user.ingredientCount,
-                lists: user.shoppingListCount,
-              })
-            }}
-            · {{ t('admin.since', { date: d(new Date(user.createdAt), 'long') }) }}
-          </p>
-          <p class="flex flex-wrap items-center gap-2 text-sm text-muted">
-            <span>{{
-              t('admin.appVersion', {
-                version: user.appVersion ?? t('admin.appVersionUnknown'),
-              })
-            }}</span>
-            <span
-              v-if="user.appOutdated"
-              class="rounded-full border border-line px-2.5 py-0.5 text-xs font-bold text-ink"
-            >
-              {{ t('admin.appOutdated') }}
-            </span>
-          </p>
-        </div>
+    <template v-else>
+      <p class="text-muted">
+        {{ t('admin.summary', counts.ALL)
+        }}<template v-if="counts.PENDING > 0">
+          · {{ t('admin.summaryPending', { n: counts.PENDING }) }}</template
+        >
+      </p>
 
-        <div class="flex flex-wrap items-center gap-2">
-          <div
-            role="group"
-            :aria-label="t('admin.statusOf', { email: user.email })"
-            class="flex flex-wrap gap-2"
-          >
-            <UiButton
-              v-for="status in statuses"
-              :key="status"
-              :variant="user.status === status ? 'primary' : 'secondary'"
-              :aria-pressed="user.status === status"
-              :disabled="changeStatus.isPending.value"
-              @click="setStatus(user, status)"
-            >
-              {{ t(`admin.status.${status}`) }}
-            </UiButton>
-          </div>
-          <UiButton
-            variant="ghost"
-            :disabled="user.id === session.user?.id"
-            :aria-label="t('admin.deleteNamed', { email: user.email })"
-            @click="deleting = user"
-          >
-            {{ t('common.delete') }}
-          </UiButton>
+      <div role="group" :aria-label="t('admin.filtersLabel')" class="flex flex-wrap gap-2">
+        <UiChip
+          v-for="option in userFilters"
+          :key="option"
+          :pressed="filter === option"
+          @update:pressed="filter = option"
+        >
+          {{ t(`admin.filters.${option}`, { n: counts[option] }) }}
+        </UiChip>
+      </div>
+
+      <p v-if="shown.length === 0" class="text-muted">{{ t('admin.noneInFilter') }}</p>
+      <div v-else class="flex flex-col gap-3">
+        <div
+          aria-hidden="true"
+          :class="['hidden gap-x-3 px-4 text-sm font-bold text-muted xl:grid', usersGrid]"
+        >
+          <span>{{ t('admin.columns.user') }}</span>
+          <span>{{ t('admin.columns.lastLogin') }}</span>
+          <span>{{ t('admin.columns.activity') }}</span>
+          <span>{{ t('admin.columns.app') }}</span>
+          <span>{{ t('admin.columns.status') }}</span>
         </div>
-      </li>
-    </ul>
+        <ul class="flex flex-col gap-3">
+          <UserRow
+            v-for="user in shown"
+            :key="user.id"
+            :user="user"
+            :now="now"
+            :self="user.id === session.user?.id"
+            :busy="changeStatus.isPending.value"
+            @status="setStatus(user, $event)"
+            @remove="deleting = user"
+          />
+        </ul>
+      </div>
+    </template>
 
     <UiConfirmDialog
       v-model:open="confirming"

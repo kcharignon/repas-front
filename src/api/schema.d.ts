@@ -28,7 +28,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Recherche d'ingrédients par nom, du plus pertinent au moins pertinent, avec leur rayon : communs et ceux de l'utilisateur authentifié */
+        /** Recherche d'ingrédients par nom, du plus pertinent au moins pertinent, avec leur rayon : ceux de l'utilisateur authentifié et les communs qu'il n'a pas adoptés (un commun adopté est remplacé par sa copie, qui est à lui) */
         get: operations["get_api_search_ingredients"];
         put?: never;
         post?: never;
@@ -81,7 +81,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ajoute 1 à la quantité d'un ingrédient dans la liste active de l'utilisateur */
+        /** Ajoute 1 à la quantité d'un ingrédient dans la liste active de l'utilisateur. Le slug d'un commun que l'utilisateur a adopté désigne sa copie, qui est celle de la liste ; un utilisateur qui a déjà adopté des communs adopte à la volée celui qu'il utilise pour la première fois */
         post: operations["post_api_increase_ingredient"];
         delete?: never;
         options?: never;
@@ -149,7 +149,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Ingrédients que l'utilisateur authentifié peut utiliser (communs et les siens), triés par nom : choix des recettes */
+        /** Ingrédients que l'utilisateur authentifié peut utiliser, triés par nom : les siens et les communs qu'il n'a pas adoptés (un commun adopté est remplacé par sa copie, qui est à lui) ; choix des recettes */
         get: operations["get_api_list_available_ingredients"];
         put?: never;
         /** Crée un ingrédient : personnalisé pour un utilisateur, commun à tous pour un administrateur */
@@ -169,7 +169,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Crée une recette de l'utilisateur connecté */
+        /** Crée une recette de l'utilisateur connecté. Le slug d'un commun que l'utilisateur a adopté est remplacé par celui de sa copie ; un utilisateur qui a déjà adopté des communs adopte à la volée celui qu'il utilise pour la première fois */
         post: operations["post_api_create_recipe"];
         delete?: never;
         options?: never;
@@ -308,7 +308,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Détail d'un ingrédient commun ou créé par l'utilisateur (un administrateur voit tous les ingrédients) */
+        /** Détail d'un ingrédient commun ou créé par l'utilisateur (un administrateur voit tous les ingrédients). Un commun que l'utilisateur a adopté se lit encore, en lecture seule (`canEdit` faux) : une page ouverte avant l'adoption peut s'afficher */
         get: operations["get_api_get_ingredient"];
         /** Remplace un ingrédient de l'utilisateur (un ingrédient commun n'est modifiable que par un administrateur) ; son image est conservée */
         put: operations["put_api_update_ingredient"];
@@ -329,7 +329,7 @@ export interface paths {
         };
         /** Détail d'une recette et de ses ingrédients (lisible par tout utilisateur authentifié, comme sur le site) */
         get: operations["get_api_get_recipe"];
-        /** Remplace une recette de l'utilisateur : nom, personnes, type et lignes (les lignes absentes du corps sont supprimées) */
+        /** Remplace une recette de l'utilisateur : nom, personnes, type et lignes (les lignes absentes du corps sont supprimées). Le slug d'un commun que l'auteur a adopté est remplacé par celui de sa copie, comme à la création */
         put: operations["put_api_update_recipe"];
         post?: never;
         /** Supprime une recette de l'utilisateur, avec ses lignes */
@@ -421,7 +421,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Ingrédients communs et ingrédients de l'utilisateur authentifié dans un rayon, triés par nom */
+        /** Ingrédients de l'utilisateur authentifié dans un rayon, triés par nom : les siens et les communs qu'il n'a pas adoptés (un commun adopté est remplacé par sa copie, qui est à lui) */
         get: operations["get_api_list_ingredients_by_department"];
         put?: never;
         post?: never;
@@ -509,7 +509,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Retire 1 à la quantité d'un ingrédient dans la liste active de l'utilisateur (la ligne disparaît à zéro) */
+        /** Retire 1 à la quantité d'un ingrédient dans la liste active de l'utilisateur (la ligne disparaît à zéro). Le slug d'un commun que l'utilisateur a adopté désigne sa copie, qui est celle de la liste */
         post: operations["post_api_decrease_ingredient"];
         delete?: never;
         options?: never;
@@ -723,7 +723,7 @@ export interface paths {
         put?: never;
         /**
          * Obtenir un nouveau JWT avec le cookie de rafraîchissement
-         * @description Public : le JWT est expiré, l'identité vient du seul cookie `repas_refresh` (HttpOnly, SameSite=Strict, `Path=/api/auth`), posé à la connexion. Le jeton est à usage unique : la réponse en pose un nouveau (rotation). Présenter un jeton déjà utilisé révoque toute la connexion (ADR 0015).
+         * @description Public : le JWT est expiré, l'identité vient du seul cookie `repas_refresh` (HttpOnly, SameSite=Strict, `Path=/api/auth`), posé à la connexion. Le jeton est à usage unique : la réponse en pose un nouveau (rotation). Présenter un jeton déjà utilisé révoque toute la connexion (ADR 0015). Un échange réussi compte comme une connexion : il fait avancer la dernière connexion du compte que voit l'administrateur (`lastLoginAt` de `GET /api/v1/users`), au plus une fois toutes les 10 minutes ; un refus n'écrit rien.
          */
         post: operations["post_api_auth_refresh"];
         delete?: never;
@@ -857,10 +857,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Remplace d'un coup la préférence de l'utilisateur connecté pour un ingrédient : produits acceptés dans l'ordre, produits refusés, ou « j'en ai toujours » (sans produit ni « j'en ai toujours », la préférence est supprimée) */
+        /** Remplace d'un coup la préférence de l'utilisateur connecté pour un ingrédient : produits acceptés dans l'ordre, produits refusés, ou « j'en ai toujours » (sans produit ni « j'en ai toujours », la préférence est supprimée). Le slug d'un commun que l'utilisateur a adopté désigne sa copie : la préférence est toujours celle de la copie */
         put: operations["put_api_replace_ingredient_preference"];
         post?: never;
-        /** Oublie toute la préférence de l'utilisateur connecté pour un ingrédient : produits acceptés et refusés, ou « j'en ai toujours » (les produits restent connus) */
+        /** Oublie toute la préférence de l'utilisateur connecté pour un ingrédient : produits acceptés et refusés, ou « j'en ai toujours » (les produits restent connus). Le slug d'un commun que l'utilisateur a adopté désigne sa copie */
         delete: operations["delete_api_forget_choice"];
         options?: never;
         head?: never;
@@ -928,7 +928,7 @@ export interface paths {
         };
         /** Préférences de produits de l'utilisateur connecté dans son magasin courant, par ingrédient : produits acceptés classés, produits refusés, « j'en ai toujours » */
         get: operations["get_api_list_choices"];
-        /** Mémorise un lot d'intentions de l'agent (produits choisis, refusés, « j'en ai toujours ») dans les préférences de l'utilisateur connecté. La fiche d'un produit déjà connu (commune au magasin) n'est complétée que là où elle est vide : libellé, contenu et code-barres ne sont jamais réécrits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte déjà. Un `ADD_PRODUCT` peut porter la recherche qui a fait trouver le produit (`searchQuery`, mémorisée avec la préférence de cette enseigne et de ce magasin ; clé absente : gardée, `null` : effacée) ; l'intention `NOTE_SEARCH` (DRV-653) mémorise cette recherche seule, sans produit, quand le produit n'est pas mémorisé (pris pour cette fois seulement) et la contenance du produit dans l'unité de la liste (`product.packSize`, DRV-652, privée à l'utilisateur et propre à ce produit ; clé absente : gardée pour le même produit, `null` : effacée) */
+        /** Mémorise un lot d'intentions de l'agent (produits choisis, refusés, « j'en ai toujours ») dans les préférences de l'utilisateur connecté. Le slug d'un commun que l'utilisateur a adopté est remplacé par celui de sa copie : aucune préférence n'est créée sous un commun masqué. La fiche d'un produit déjà connu (commune au magasin) n'est complétée que là où elle est vide : libellé, contenu et code-barres ne sont jamais réécrits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte déjà. Un `ADD_PRODUCT` peut porter la recherche qui a fait trouver le produit (`searchQuery`, mémorisée avec la préférence de cette enseigne et de ce magasin ; clé absente : gardée, `null` : effacée) ; l'intention `NOTE_SEARCH` (DRV-653) mémorise cette recherche seule, sans produit, quand le produit n'est pas mémorisé (pris pour cette fois seulement) et la contenance du produit dans l'unité de la liste (`product.packSize`, DRV-652, privée à l'utilisateur et propre à ce produit ; clé absente : gardée pour le même produit, `null` : effacée) */
         put: operations["put_api_save_product_choices"];
         post?: never;
         delete?: never;
@@ -982,7 +982,7 @@ export interface components {
         };
         IngredientPayload: {
             /**
-             * @description Nom de l'ingrédient
+             * @description Nom de l'ingrédient (200 caractères au plus)
              * @example Praliné
              */
             name: string;
@@ -1968,6 +1968,11 @@ export interface components {
              * @example 2026-10-13T08:56:40+02:00
              */
             createdAt: string;
+            /**
+             * @description Dernière connexion du compte (ATOM, UTC) : la dernière authentification réussie, par mot de passe ou par renouvellement de la session ouverte (une session reste active des jours : ce n'est pas la seule connexion par mot de passe). `null` : jamais vu depuis que Repas retient cette date. Retenue au plus toutes les 10 minutes, donc en retard de 10 minutes au plus ; réservée à l'administration (ni `GET /api/v1/me`, ni aucun autre endpoint)
+             * @example 2026-10-20T08:30:12+00:00
+             */
+            lastLoginAt: string | null;
             /** @description Le compte est désactivé */
             isDisabled: boolean;
             /** @description L'utilisateur est administrateur */
@@ -2439,7 +2444,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Token JWT (durée de vie 3600 s). Pose aussi le cookie `repas_refresh` (HttpOnly, SameSite=Strict, `Path=/api/auth`), à échanger contre un nouveau JWT par `POST /api/auth/refresh` (ADR 0015) */
+            /** @description Token JWT (durée de vie 3600 s). Pose aussi le cookie `repas_refresh` (HttpOnly, SameSite=Strict, `Path=/api/auth`), à échanger contre un nouveau JWT par `POST /api/auth/refresh` (ADR 0015). Une connexion réussie fait avancer la dernière connexion du compte que voit l'administrateur (`lastLoginAt` de `GET /api/v1/users`), au plus une fois toutes les 10 minutes ; une connexion refusée n'écrit rien */
             200: {
                 headers: {
                     /** @description Refresh token, `HttpOnly; Secure; SameSite=Strict; Path=/api/auth` */
