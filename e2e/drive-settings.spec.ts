@@ -98,7 +98,9 @@ test('envoyé ici faute de magasin, « Choisis ton magasin » disparaît une foi
   await expect(page.getByText('Choisis ton magasin')).toHaveCount(0)
 })
 
-test('hors de l’application : propose de l’installer et mène à l’aide', async ({ page }) => {
+test('hors de l’application : propose de l’installer et mène à la page d’installation', async ({
+  page,
+}) => {
   await fakeDriveBack(page)
   await page.goto('/drive/reglages')
 
@@ -108,7 +110,8 @@ test('hors de l’application : propose de l’installer et mène à l’aide', 
     page.getByRole('button', { name: 'Lire mon magasin dans l’application' }),
   ).toHaveCount(0)
   await page.getByRole('link', { name: 'Aide d’installation' }).click()
-  await expect(page).toHaveURL(/\/drive\/aide$/)
+  // La page d'aide d'un navigateur est la page publique d'installation (DRV-639)
+  await expect(page).toHaveURL(/\/installer$/)
 })
 
 test('dans l’application : montre sa version et que le drive est prêt', async ({ page }) => {
