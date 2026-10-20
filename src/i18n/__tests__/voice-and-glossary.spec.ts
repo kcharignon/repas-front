@@ -624,3 +624,42 @@ describe('aucun avertissement hors des conditions d’utilisation du drive (DRV-
     }
   })
 })
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Fusionner deux ingrédients (ING-007)
+//
+// « Ingrédient » est ici le bon mot (le glossaire du drive le réserve à l'article d'une liste, pas aux recettes ni aux rayons) : ces deux
+// groupes sont donc lus par la voix (tout `fr.ts` l'est déjà) et par la règle « aucun avertissement », avec une phrase de 15 mots au plus.
+
+const MERGE_GROUPS = ['ingredients.duplicates', 'ingredients.merge'] as const
+
+describe('fusionner deux ingrédients (ING-007)', () => {
+  const lues = sources.web.filter((entry) =>
+    MERGE_GROUPS.some((group) => entry.where.includes(` ${group}.`)),
+  )
+
+  it('lit les deux groupes de textes', () => {
+    expect(lues.length).toBeGreaterThan(50)
+  })
+
+  it('ne dit aucun avertissement ni rassurance de trop', () => {
+    expect(lues.flatMap((entry) => warnings(entry.where, entry.text))).toEqual([])
+  })
+
+  it('tient chaque phrase en 15 mots au plus', () => {
+    const trop = lues.flatMap((entry) =>
+      entry.text
+        // Les mots entre accolades sont des noms ou des listes, ils ne comptent pas
+        .replace(/\{[^}]+\}/g, 'x')
+        .split(/(?<=[.!?…])\s+/)
+        .filter((sentence) => sentence.trim().split(/\s+/).length > 15)
+        .map((sentence) => `${entry.where} : « ${sentence} »`),
+    )
+    expect(trop).toEqual([])
+  })
+
+  it('dit « Fusionner » pour le geste, sans synonyme', () => {
+    const verbes = lues.filter((entry) => /regroup|assembl|joindre/iu.test(entry.text))
+    expect(verbes.map((entry) => entry.where)).toEqual([])
+  })
+})
