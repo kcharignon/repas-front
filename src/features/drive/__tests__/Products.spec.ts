@@ -46,6 +46,7 @@ const farine = {
   rejected: [C],
   updatedAt: '2026-10-18T10:00:00+02:00',
 }
+const farineWithSearch = { ...farine, searchQuery: 'farine de blé t55' }
 const sel = {
   ingredientSlug: 'sel',
   ingredientName: 'Sel',
@@ -151,6 +152,33 @@ describe('Mes produits : la liste des ingrédients', () => {
     expect(query.get('retailer')).toBe('leclerc')
   })
 
+  it('montre en lecture seule la recherche mémorisée de l’article, seulement quand il y en a une (DRV-650)', async () => {
+    const { wrapper } = await open(ProductsView, '/drive/produits', {
+      'GET /api/v1/drive/choices': list(farineWithSearch, { ...sel, searchQuery: null }, oeufs),
+    })
+
+    const rows = wrapper.findAll('li a')
+    expect(rows[0]?.text()).toContain('Recherche sur le drive : farine de blé t55')
+    expect(rows[1]?.text()).not.toContain('Recherche sur le drive')
+    expect(rows[2]?.text()).not.toContain('Recherche sur le drive')
+    expect(wrapper.findAll('[data-testid="searched-as"]')).toHaveLength(1)
+    expect(wrapper.find('li a input, li a textarea').exists()).toBe(false)
+  })
+
+  it('affiche la recherche mémorisée comme du texte, jamais comme du HTML', async () => {
+    const hostile = '<img src=x onerror="window.pwned=1"><b>gras</b>'
+    const { wrapper } = await open(ProductsView, '/drive/produits', {
+      'GET /api/v1/drive/choices': list({ ...farine, searchQuery: hostile }),
+    })
+
+    expect(wrapper.find('[data-testid="searched-as"]').text()).toBe(
+      `Recherche sur le drive : ${hostile}`,
+    )
+    expect(wrapper.find('li a img').exists()).toBe(false)
+    expect(wrapper.find('li a b').exists()).toBe(false)
+    expect((window as unknown as { pwned?: number }).pwned).toBeUndefined()
+  })
+
   it('cherche par nom, sans tenir compte des accents ni des majuscules', async () => {
     const { wrapper } = await open(ProductsView, '/drive/produits')
 
@@ -213,6 +241,24 @@ describe('Mes produits : un ingrédient', () => {
     expect(items[1]?.text()).toContain('Produit 2 sur 2')
     expect(wrapper.text()).toContain(C.label)
     expect(wrapper.find('ol').attributes('aria-label')).toBe('Produits acceptés')
+  })
+
+  it('montre en lecture seule la recherche mémorisée de l’article, sans champ ni bouton pour la corriger (DRV-650)', async () => {
+    const { wrapper } = await detail({ 'GET /api/v1/drive/choices': list(farineWithSearch) })
+
+    const line = wrapper.find('[data-testid="searched-as"]')
+    expect(line.text()).toBe('Recherche sur le drive : farine de blé t55')
+    expect(wrapper.find('h1').element.parentElement?.contains(line.element)).toBe(true)
+    expect(wrapper.find('input[type="text"], input[type="search"], textarea').exists()).toBe(false)
+  })
+
+  it('n’en dit rien quand aucune recherche n’est mémorisée ou pour « J’en ai toujours »', async () => {
+    const withoutOne = await detail({
+      'GET /api/v1/drive/choices': list({ ...farine, searchQuery: null }),
+    })
+    expect(withoutOne.wrapper.find('[data-testid="searched-as"]').exists()).toBe(false)
+    const atHome = await detail({ 'GET /api/v1/drive/choices': list(sel) }, 'sel')
+    expect(atHome.wrapper.find('[data-testid="searched-as"]').exists()).toBe(false)
   })
 
   it('descend le préféré puis enregistre : l’ordre voulu part au back', async () => {

@@ -206,6 +206,13 @@ const rowClass = 'flex flex-col gap-3 rounded-2xl border border-line bg-surface 
         <h1 class="font-display text-3xl leading-tight font-bold md:text-4xl">
           {{ choice.ingredientName }}
         </h1>
+        <p
+          v-if="choice.searchQuery"
+          data-testid="searched-as"
+          class="text-sm break-words text-muted"
+        >
+          {{ t('driveProducts.searchedAs', { query: choice.searchQuery }) }}
+        </p>
       </header>
 
       <p class="sr-only" role="status">{{ announcement }}</p>

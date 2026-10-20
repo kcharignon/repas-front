@@ -113,6 +113,12 @@ const preferred = (choice: DriveChoice) =>
                   ? t('driveProducts.preferred', { label: preferred(choice) })
                   : t('driveProducts.nothingAccepted')
               }}</span>
+              <span
+                v-if="choice.searchQuery"
+                data-testid="searched-as"
+                class="text-sm break-words text-muted"
+                >{{ t('driveProducts.searchedAs', { query: choice.searchQuery }) }}</span
+              >
               <span class="text-sm text-muted">{{ summary(choice) }}</span>
             </span>
             <ChevronRight class="size-5 shrink-0 text-muted" aria-hidden="true" />
