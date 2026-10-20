@@ -63,7 +63,17 @@ const quantityOf = (ingredientSlug: string) =>
         :key="ingredient.slug"
         class="flex min-h-16 flex-wrap items-center gap-3 py-2"
       >
-        <span class="min-w-0 flex-1 font-medium">{{ ingredient.name }}</span>
+        <span class="min-w-0 flex-1">
+          <span class="font-medium">{{ ingredient.name }}</span>
+          <!-- Seul le propriétaire du catalogue reçoit `isBase` vrai (ING-015) ; absent d'un ancien back : pas de pastille -->
+          <template v-if="ingredient.isBase === true">
+            <span class="sr-only">, </span>
+            <span
+              class="ml-2 inline-block rounded-full border border-line bg-soft px-2.5 py-0.5 align-middle text-xs font-semibold whitespace-nowrap text-muted"
+              >{{ t('ingredients.baseBadge') }}</span
+            >
+          </template>
+        </span>
         <RouterLink
           v-if="ingredient.canEdit"
           :to="{ name: 'ingredient-edit', params: { slug: ingredient.slug } }"

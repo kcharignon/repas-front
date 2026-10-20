@@ -21,6 +21,8 @@ const driveCodes = new Map([
   // Unités (DRV-409) : la dimension et le facteur de base vont ensemble, le facteur est strictement positif
   ['UNIT_MEASURE_INCOMPLETE', 'errors.unitMeasureIncomplete'],
   ['UNIT_BASE_FACTOR_INVALID', 'errors.unitBaseFactorInvalid'],
+  // Ingrédient de base (ING-015) : seul le propriétaire du catalogue le règle
+  ['INGREDIENT_BASE_FORBIDDEN', 'errors.ingredientBaseForbidden'],
 ])
 
 /**

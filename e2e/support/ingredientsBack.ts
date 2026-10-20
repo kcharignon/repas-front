@@ -79,6 +79,12 @@ export interface PreviewOverride {
 }
 
 export interface Options {
+  /**
+   * L'ingrédient de base (ING-015) : le rayon « Fruit & légume » liste « Tomates » (à soi) et « Sel » (sans créateur), et le marqueur de
+   * « Tomates » suit les `PUT`. `owner` : le lecteur est le propriétaire du catalogue (le back lui rend `isBase` et `canSetBase`) ; sinon
+   * le back rend toujours faux, et refuse (`403`) un `isBase` différent de l'actuel.
+   */
+  base?: { owner: boolean; isBase?: boolean }
   pairs?: Pair[]
   /** Le verdict de l'aperçu de `absorbé>gardé`, sinon une fusion possible. */
   previews?: Record<string, PreviewOverride>
@@ -94,6 +100,9 @@ const find = (pairs: Pair[], slug: string) =>
 export async function fakeIngredientsBack(page: Page, options: Options = {}) {
   let pairs = options.pairs ?? productionPairs()
   const mergeAnswers = [...(options.mergeAnswers ?? [])]
+  const owner = options.base?.owner === true
+  // Le marqueur de « Tomates » : seul le propriétaire du catalogue le lit vrai, quoi qu'il y ait en base
+  let marked = options.base?.isBase === true
   const received: { key: string; body: unknown; query: string }[] = []
   await page.addInitScript(() => localStorage.setItem('repas.session', '1'))
 
@@ -145,8 +154,36 @@ export async function fakeIngredientsBack(page: Page, options: Options = {}) {
           member: [{ slug: 'kilo', name: 'Kilo', symbol: 'kg' }],
           totalItems: 1,
         })
-      if (url.pathname.endsWith('/ingredients') && url.pathname.startsWith('/api/v1/departments/'))
-        return reply(route, { member: [], totalItems: 0 })
+      if (
+        url.pathname.endsWith('/ingredients') &&
+        url.pathname.startsWith('/api/v1/departments/')
+      ) {
+        if (options.base === undefined || slug !== 'fruit-et-legume')
+          return reply(route, { member: [], totalItems: 0 })
+        const row = (rowSlug: string, name: string, canEdit: boolean, isBase: boolean) => ({
+          slug: rowSlug,
+          name,
+          purchaseUnitSymbol: 'kg',
+          canEdit,
+          isBase,
+        })
+
+        return reply(route, {
+          member: [
+            row('tomates', 'Tomates', true, owner && marked),
+            row('sel', 'Sel', false, false),
+          ],
+          totalItems: 2,
+        })
+      }
+
+      if (key === 'PUT /api/v1/ingredients/tomates') {
+        const { isBase } = request.postDataJSON() as { isBase?: boolean }
+        if (isBase !== undefined && !owner && isBase !== marked)
+          return reply(route, { error: { message: 'INGREDIENT_BASE_FORBIDDEN' } }, 403)
+        if (isBase !== undefined) marked = isBase
+        return reply(route)
+      }
 
       if (key === 'GET /api/v1/ingredients/duplicates') {
         if (options.slowDuplicates !== undefined)
@@ -254,6 +291,8 @@ export async function fakeIngredientsBack(page: Page, options: Options = {}) {
           canEdit: !common,
           recipeCount: common ? 0 : 7,
           listCount: common ? 0 : 2,
+          isBase: !common && owner && marked,
+          canSetBase: !common && owner,
         })
       }
 

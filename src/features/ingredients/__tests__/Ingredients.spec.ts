@@ -280,6 +280,31 @@ describe('DepartmentView', () => {
     )
   })
 
+  // ING-015 : le back ne renvoie `isBase` vrai qu'au propriétaire du catalogue ; l'écran n'a rien à deviner
+  it('marque de « de base » les seuls ingrédients dont isBase est vrai', async () => {
+    const { wrapper } = await show({
+      'GET /api/v1/departments/legumes/ingredients': () =>
+        json({
+          member: [
+            { ...ingredients.member[0], isBase: false },
+            { ...ingredients.member[1], isBase: true },
+          ],
+          totalItems: 2,
+        }),
+    })
+
+    const rows = wrapper.findAll('li')
+    expect(rows[0]?.text()).not.toContain('de base')
+    expect(rows[1]?.text()).toContain('de base')
+    expect(rows[1]?.find('.font-medium').text()).toBe('ma sauce')
+  })
+
+  it("ne montre aucune pastille quand le back n'envoie pas isBase (ancien back)", async () => {
+    const { wrapper } = await show()
+
+    expect(wrapper.text()).not.toContain('de base')
+  })
+
   it('ajoute un et retire un', async () => {
     const { wrapper, fetchMock } = await show({
       'POST /api/v1/shopping-lists/active/ingredients/courgette/increase': () =>
@@ -509,6 +534,169 @@ describe('IngredientEditorView', () => {
         'Impossible : cet ingrédient est utilisé dans une recette ou une liste de courses.',
       ]),
     )
+  })
+
+  describe('ingrédient de base (ING-015)', () => {
+    const baseSwitch = (wrapper: Awaited<ReturnType<typeof edit>>['wrapper']) =>
+      wrapper.find('button[role="switch"]')
+    const loaded = (wrapper: Awaited<ReturnType<typeof edit>>['wrapper']) =>
+      vi.waitFor(() =>
+        expect((nameInput(wrapper).element as HTMLInputElement).value).toBe('ma sauce'),
+      )
+    const putBody = async (fetchMock: ReturnType<typeof stubApi>) => {
+      const request = fetchMock.mock.calls
+        .map(([call]) => call as Request)
+        .find((call) => call.method === 'PUT' && call.url.endsWith('/ingredients/ma-sauce'))
+
+      return (await request?.json()) as Record<string, unknown>
+    }
+    const owner = { ...detail, isBase: false, canSetBase: true }
+    const handlers = (reply: object = owner) => ({
+      'GET /api/v1/ingredients/ma-sauce': () => json(reply),
+      'PUT /api/v1/ingredients/ma-sauce': () => new Response(null, { status: 204 }),
+    })
+
+    it("montre l'interrupteur, éteint, au propriétaire du catalogue", async () => {
+      const { wrapper } = await edit('/ingredients/ma-sauce/modifier', handlers())
+      await loaded(wrapper)
+
+      const toggle = baseSwitch(wrapper)
+      expect(toggle.exists()).toBe(true)
+      expect(toggle.attributes('aria-checked')).toBe('false')
+      expect(wrapper.text()).toContain('Ingrédient de base')
+      expect(wrapper.text()).toContain('Copié dans les nouveaux comptes.')
+    })
+
+    it("reflète un ingrédient déjà de base et n'envoie pas isBase tant qu'on n'y touche pas", async () => {
+      const { wrapper, fetchMock } = await edit(
+        '/ingredients/ma-sauce/modifier',
+        handlers({ ...owner, isBase: true }),
+      )
+      await loaded(wrapper)
+      expect(baseSwitch(wrapper).attributes('aria-checked')).toBe('true')
+
+      await nameInput(wrapper).setValue('ma sauce maison')
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      expect(await putBody(fetchMock)).not.toHaveProperty('isBase')
+    })
+
+    it("envoie isBase quand on l'a changé, avec le reste du formulaire", async () => {
+      const { wrapper, context, fetchMock } = await edit(
+        '/ingredients/ma-sauce/modifier',
+        handlers(),
+      )
+      await loaded(wrapper)
+
+      await baseSwitch(wrapper).trigger('click')
+      expect(baseSwitch(wrapper).attributes('aria-checked')).toBe('true')
+      await wrapper.find('form').trigger('submit')
+      await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('department'))
+
+      expect(await putBody(fetchMock)).toEqual({
+        name: 'ma sauce',
+        departmentSlug: 'legumes',
+        defaultCookingUnitSlug: 'gramme',
+        defaultPurchaseUnitSlug: 'kilo',
+        coefficient: 1000,
+        isBase: true,
+      })
+    })
+
+    it('envoie false quand on retire le marqueur', async () => {
+      const { wrapper, context, fetchMock } = await edit(
+        '/ingredients/ma-sauce/modifier',
+        handlers({ ...owner, isBase: true }),
+      )
+      await loaded(wrapper)
+
+      await baseSwitch(wrapper).trigger('click')
+      await wrapper.find('form').trigger('submit')
+      await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('department'))
+
+      expect((await putBody(fetchMock)).isBase).toBe(false)
+    })
+
+    it("n'envoie rien quand on bascule puis qu'on revient à la valeur de départ", async () => {
+      const { wrapper, fetchMock } = await edit('/ingredients/ma-sauce/modifier', handlers())
+      await loaded(wrapper)
+
+      await baseSwitch(wrapper).trigger('click')
+      await baseSwitch(wrapper).trigger('click')
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      expect(await putBody(fetchMock)).not.toHaveProperty('isBase')
+    })
+
+    it("n'a ni interrupteur ni isBase quand canSetBase est faux, même si isBase est vrai", async () => {
+      const { wrapper, fetchMock } = await edit(
+        '/ingredients/ma-sauce/modifier',
+        handlers({ ...detail, isBase: true, canSetBase: false }),
+      )
+      await loaded(wrapper)
+
+      expect(baseSwitch(wrapper).exists()).toBe(false)
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      expect(await putBody(fetchMock)).not.toHaveProperty('isBase')
+    })
+
+    it("tolère un ancien back : sans isBase ni canSetBase, ni interrupteur ni isBase dans l'envoi", async () => {
+      const { wrapper, fetchMock } = await edit('/ingredients/ma-sauce/modifier', handlers(detail))
+      await loaded(wrapper)
+
+      expect(baseSwitch(wrapper).exists()).toBe(false)
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      expect(await putBody(fetchMock)).toEqual({
+        name: 'ma sauce',
+        departmentSlug: 'legumes',
+        defaultCookingUnitSlug: 'gramme',
+        defaultPurchaseUnitSlug: 'kilo',
+        coefficient: 1000,
+      })
+    })
+
+    it("n'en propose pas à la création", async () => {
+      const { wrapper, fetchMock } = await edit('/ingredients/nouveau?rayon=legumes', {
+        'POST /api/v1/ingredients': () =>
+          new Response(null, { status: 201, headers: { Location: '/api/v1/ingredients/praline' } }),
+      })
+      await ready(wrapper)
+
+      expect(baseSwitch(wrapper).exists()).toBe(false)
+      await nameInput(wrapper).setValue('Praliné')
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      const post = fetchMock.mock.calls
+        .map(([call]) => call as Request)
+        .find((request) => request.method === 'POST' && request.url.endsWith('/ingredients'))
+      expect(await post?.json()).not.toHaveProperty('isBase')
+    })
+
+    it('dit en deux phrases que le réglage est refusé (403) sans casser le formulaire', async () => {
+      const { wrapper } = await edit('/ingredients/ma-sauce/modifier', {
+        ...handlers(),
+        'PUT /api/v1/ingredients/ma-sauce': () =>
+          json({ error: { message: 'INGREDIENT_BASE_FORBIDDEN' } }, { status: 403 }),
+      })
+      await loaded(wrapper)
+
+      await baseSwitch(wrapper).trigger('click')
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      const alert = wrapper.find('[role="alert"]')
+      expect(alert.text()).toBe('Ce réglage n’est pas pour ton compte. Rien n’a changé.')
+      expect(alert.text()).not.toContain('INGREDIENT_BASE_FORBIDDEN')
+      expect((nameInput(wrapper).element as HTMLInputElement).value).toBe('ma sauce')
+      expect(wrapper.find('button[type="submit"]').attributes('disabled')).toBeUndefined()
+    })
   })
 
   it("dit qu'un ingrédient inconnu n'existe plus", async () => {

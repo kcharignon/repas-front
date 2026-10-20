@@ -171,6 +171,10 @@ export default {
     deleteTitle: "Supprimer l'ingrédient ?",
     deleteHelp: '« {name} » sera supprimé avec ses conversions.',
     inUse: 'Impossible : cet ingrédient est utilisé dans une recette ou une liste de courses.',
+    // Ingrédient de base (ING-015) : l'interrupteur de la fiche et la pastille du rayon, pour le seul propriétaire du catalogue
+    baseSwitch: 'Ingrédient de base',
+    baseHint: 'Copié dans les nouveaux comptes.',
+    baseBadge: 'de base',
     // Doublons possibles et fusion de deux ingrédients (ING-007)
     duplicates: {
       title: 'Doublons possibles',
@@ -561,6 +565,8 @@ export default {
     unitMeasureIncomplete:
       'La dimension et le facteur de base vont ensemble : renseigne les deux, ou laisse-les vides.',
     unitBaseFactorInvalid: 'Le facteur de base doit être un nombre supérieur à zéro.',
+    // `INGREDIENT_BASE_FORBIDDEN` (403, ING-015) : un écran périmé insiste, rien n'est enregistré
+    ingredientBaseForbidden: 'Ce réglage n’est pas pour ton compte. Rien n’a changé.',
     driveStoreInvalid:
       'Cette adresse n’est pas celle d’un magasin Leclerc Drive : vérifie-la, elle ressemble à https://exemple.leclercdrive.fr/magasin-123456-123456.',
   },
