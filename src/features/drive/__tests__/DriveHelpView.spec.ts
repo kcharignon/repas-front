@@ -51,6 +51,9 @@ describe('page de l’application', () => {
     expect(steps).toHaveLength(3)
     // Les pré-versions de débogage s'appellent « android-dev-… » : seules les versions « android-v… » sont à installer
     expect(steps[0]).toContain('commence par « android-v »')
+    // Le nom du fichier dit la version (repas-drive-X.Y.Z.apk) : on prend celui qui a le plus grand numéro
+    expect(steps[0]).toContain('se termine par le numéro de version')
+    expect(steps[0]).toContain('le plus grand numéro')
     expect(steps[1]).toBe('Ouvre le fichier téléchargé.')
     expect(steps[2]).toBe('Touche « Installer ».')
     const download = wrapper.find(`a[href="${APP_RELEASES_URL}"]`)

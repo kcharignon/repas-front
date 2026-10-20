@@ -868,7 +868,7 @@ export default {
     downloadFor: 'Télécharger la dernière version (s’ouvre dans un nouvel onglet)',
     steps: {
       download:
-        'Touche « Télécharger la dernière version », puis le fichier « .apk » de la version dont le nom commence par « android-v ».',
+        'Touche « Télécharger la dernière version », puis, dans la version dont le nom commence par « android-v », le fichier « .apk » dont le nom se termine par le numéro de version : prends celui qui a le plus grand numéro.',
       open: 'Ouvre le fichier téléchargé.',
       install: 'Touche « Installer ».',
     },
