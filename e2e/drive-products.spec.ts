@@ -178,3 +178,27 @@ test('la contenance d’un produit dans l’unité de la liste s’affiche, et s
   ])
   expect(back.received.filter((call) => call.startsWith('PUT /api/v1/drive/choices/'))).toEqual([])
 })
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  for (const width of [412, 360]) {
+    test(`la contenance d’un produit tient à ${width} px, thème ${colorScheme} (captures)`, async ({
+      page,
+    }, info) => {
+      await page.emulateMedia({ colorScheme })
+      await page.setViewportSize({ width, height: 780 })
+      await fakeDriveBack(page, { choices: [cheddarChoice] })
+
+      await page.goto('/drive/produits')
+      await expect(page.getByText('Contenu : 20 tranches')).toBeVisible()
+      await page.screenshot({ path: info.outputPath(`liste-${width}-${colorScheme}.png`) })
+      await page.getByRole('link', { name: /Cheddar en tranche/ }).click()
+      await page.getByRole('button', { name: /Corriger/ }).click()
+      await page.getByLabel('Combien de tranches y a-t-il dans ce produit ?').fill('8,5')
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+      ).toBeLessThanOrEqual(0)
+      expect((await scan(page)).violations).toEqual([])
+      await page.screenshot({ path: info.outputPath(`fiche-${width}-${colorScheme}.png`) })
+    })
+  }
+}

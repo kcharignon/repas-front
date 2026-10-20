@@ -275,4 +275,96 @@ test.describe('parcours complet, pont et API simulés', () => {
     expect(await page.evaluate(() => localStorage.getItem('repas.drive.run'))).toBeNull()
     expect((await scan(page)).violations).toEqual([])
   })
+
+  test('une application à jour : le plan porte l’unité de chaque ligne, et la contenance donnée comme la recherche d’un « Pas mon habituel » reviennent au back (DRV-652, DRV-653)', async ({
+    page,
+  }) => {
+    // Ce que l'agent 0.42.0 aurait rendu : le sel (produit connu, compté en cuillères) avec sa contenance, les œufs pris « Pas mon habituel » avec la
+    // recherche tapée, la farine mise au panier sans rien demander
+    const sized: Omit<ResultMessage, 'runId'> = {
+      v: 1,
+      type: 'result',
+      agentVersion: '0.42.0',
+      outcome: 'completed',
+      store: { id: '123456' },
+      lines: [
+        {
+          ingredientSlug: 'farine',
+          outcome: 'ADDED',
+          productId: '555101',
+          quantity: 1,
+          usedRank: 1,
+        },
+        {
+          ingredientSlug: 'oeuf',
+          outcome: 'CHOSEN',
+          quantity: 1,
+          placement: 'ONCE',
+          product: { id: '555301', label: 'Œufs plein air x6' },
+          searchQuery: 'oeufs plein air',
+        },
+        {
+          ingredientSlug: 'sel',
+          outcome: 'ADDED',
+          productId: '555401',
+          quantity: 1,
+          usedRank: 1,
+          packSize: { value: 12.5, unitSlug: 'cuillere-a-soupe' },
+        },
+      ],
+    }
+    expect(() =>
+      validateResult({ ...sized, runId: '8f14e45f-ceea-467a-9575-8e6b8c0a1b2c' }),
+    ).not.toThrow()
+    const back = await fakeBackFromSamples(page)
+    await fakeApp(page, sized, '0.1.25')
+
+    await page.goto(`/listes/${LIST}`)
+    await page.getByRole('link', { name: 'Reprendre l’envoi' }).click()
+    await expect(page).toHaveURL(/\/drive\/retour$/)
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Le panier est rempli' }),
+    ).toBeVisible()
+
+    // Le plan envoyé à l'agent : valide, avec l'unité de chaque ligne et la contenance des produits (null sans réponse)
+    const start = await page.evaluate(() => window.__sent.find((m) => m.type === 'drive.start'))
+    const sent = start?.plan as unknown as PlanMessage
+    expect(() => validatePlan(sent)).not.toThrow()
+    const sel = sent.lines.find((line) => line.ingredientSlug === 'sel')
+    expect(sel?.needed).toMatchObject({
+      unitSlug: 'cuillere-a-soupe',
+      unitName: 'cuillère à soupe',
+    })
+    expect(sel?.products?.map((product) => product.packSize)).toEqual([
+      null,
+      { value: 14, unitSlug: 'cuillere-a-soupe' },
+    ])
+
+    // Les intentions : la contenance dans le produit du sel (« de secours » : son rang ne bouge pas), la recherche seule pour les œufs, jamais null
+    expect(back.choices).toHaveLength(1)
+    const [body] = back.choices as { choices: Record<string, unknown>[] }[]
+    expect(body?.choices).toEqual([
+      {
+        ingredientSlug: 'oeuf',
+        action: 'NOTE_SEARCH',
+        placement: null,
+        product: null,
+        searchQuery: 'oeufs plein air',
+      },
+      {
+        ingredientSlug: 'sel',
+        action: 'ADD_PRODUCT',
+        placement: 'FALLBACK',
+        product: {
+          retailerProductId: '555401',
+          label: expect.any(String) as unknown,
+          ean: null,
+          content: expect.anything() as unknown,
+          price: null,
+          packSize: { value: 12.5, unitSlug: 'cuillere-a-soupe' },
+        },
+      },
+    ])
+    expect(JSON.stringify(body)).not.toContain('"packSize":null')
+  })
 })
