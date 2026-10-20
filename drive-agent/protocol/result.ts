@@ -72,6 +72,12 @@ function product(scope: Scope, key: string | number, withPrice: boolean): void {
 
 const quantity: Check = (scope, key) => int(scope, key, 1, LIMITS.packsMax)
 
+/** Une recherche mémorisée (DRV-650) : de 2 à 80 caractères, au sens d'Unicode (le texte propre est l'affaire de `cleanSearchQuery`, côté agent et côté site). */
+const searchQuery: Check = (scope, key) => {
+  if ([...text(scope, key, undefined, LIMITS.searchQueryMax)].length < LIMITS.searchQueryMin)
+    fail(at(scope.p, key))
+}
+
 /** Ce que chaque issue de ligne exige, en plus de `ingredientSlug` et `outcome`. */
 const REQUIRED: Record<string, Record<string, Check>> = {
   ADDED: {
@@ -98,10 +104,12 @@ const resultLine: Check = (list, index) => {
     ...Object.keys(required),
     ...(withUnavailable ? ['unavailableIds'] : []),
     ...(outcome === 'ADDED' ? ['price'] : []),
+    ...(outcome === 'CHOSEN' ? ['searchQuery'] : []),
   ])
   text(line, 'ingredientSlug', SLUG)
   for (const [key, check] of Object.entries(required)) check(line, key)
   optional(line, 'price', price)
+  optional(line, 'searchQuery', searchQuery)
   const max = outcome === 'ADDED' ? LIMITS.unavailableAdded : LIMITS.products
   optional(line, 'unavailableIds', (parent, name) => {
     distinct(each(parent, name, max, (ids, rank) => text(ids, rank as never, ID)))

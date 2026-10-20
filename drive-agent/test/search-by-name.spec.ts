@@ -11,6 +11,7 @@ import {
   productSearchForms,
   searchByName,
   searchForms,
+  searchInOrder,
 } from '../src/flow'
 import { LeclercAdapter, LeclercError, PAUSE_MS, type Candidate } from '../src/leclerc'
 import { candidate } from './flow-helpers'
@@ -300,5 +301,83 @@ describe('findKnownProduct : le libellé tel quel d’abord, ses formes ensuite,
     expect(MAX_PRODUCT_FORMS).toBeLessThanOrEqual(MAX_FALLBACKS)
     expect(new Set(site.queries).size).toBe(site.queries.length)
     expect(site.peak()).toBe(1)
+  })
+})
+
+describe('searchInOrder : la recherche du plan, puis le libellé, puis le nom (DRV-650)', () => {
+  const steps = [
+    { text: 'Céréales Coussins Choco 500 g', forms: false },
+    { text: 'Céréale coussin', forms: true },
+  ]
+
+  it('la recherche du plan répond : une requête, rien d’autre', async () => {
+    const site = engine({ 'céréales coussins': ['1000001'] })
+
+    const found = await searchInOrder(site.adapter, 'céréales coussins', steps)
+
+    expect(site.queries).toEqual(['céréales coussins'])
+    expect(found.query).toBe('céréales coussins')
+  })
+
+  it('la recherche du plan et ses formes ne répondent rien : le libellé du produit, tel quel, une requête', async () => {
+    const site = engine({ 'Céréales Coussins Choco 500 g': ['1000001'] })
+
+    const found = await searchInOrder(site.adapter, 'cereales coussins', steps)
+
+    expect(site.queries).toEqual([
+      'cereales coussins',
+      ...searchForms('cereales coussins'),
+      'Céréales Coussins Choco 500 g',
+    ])
+    expect(found).toMatchObject({ query: 'Céréales Coussins Choco 500 g' })
+    expect(found.candidates).toHaveLength(1)
+  })
+
+  it('puis le nom de l’ingrédient, avec ses formes', async () => {
+    const site = engine({ 'cereale coussin': ['1000001'] })
+
+    const found = await searchInOrder(site.adapter, 'cereales coussins', steps)
+
+    expect(found.query).toBe('cereale coussin')
+    expect(site.queries.at(-1)).toBe('cereale coussin')
+    expect(new Set(site.queries).size).toBe(site.queries.length)
+  })
+
+  it('rien ne répond : la recherche du plan reste celle qu’on dit, jamais deux requêtes identiques, en série', async () => {
+    const site = engine({})
+
+    const found = await searchInOrder(site.adapter, 'Céréale coussin', steps)
+
+    expect(found).toEqual({ query: 'Céréale coussin', candidates: [] })
+    expect(new Set(site.queries).size).toBe(site.queries.length)
+    expect(site.queries).not.toContain('Céréale Coussin')
+    // le nom est la recherche du plan, à la casse près : l’étape du nom est écartée avec ses formes
+    expect(site.queries).toEqual([
+      'Céréale coussin',
+      ...searchForms('Céréale coussin'),
+      'Céréales Coussins Choco 500 g',
+    ])
+    expect(site.peak()).toBe(1)
+  })
+
+  it('une forme partagée par deux étapes n’est cherchée qu’une fois', async () => {
+    const site = engine({})
+
+    await searchInOrder(site.adapter, 'oeuf bio', [{ text: 'œuf bio', forms: true }])
+
+    expect(new Set(site.queries).size).toBe(site.queries.length)
+  })
+
+  it('une erreur du site remonte telle quelle et arrête la suite', async () => {
+    const queries: string[] = []
+    const adapter = {
+      async searchProducts(query: string): Promise<Candidate[]> {
+        queries.push(query)
+        throw new LeclercError('BLOCKED', 403)
+      },
+    }
+
+    await expect(searchInOrder(adapter, 'a b', steps)).rejects.toBeInstanceOf(LeclercError)
+    expect(queries).toEqual(['a b'])
   })
 })

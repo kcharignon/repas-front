@@ -16,9 +16,12 @@ export {
   findKnownProduct,
   lookUpKnownProduct,
   searchByName,
+  searchInOrder,
   type KnownSearch,
   type NameSearch,
+  type SearchStep,
 } from './search-by-name'
+export { fallbackSteps, rememberedSearch } from './search-memory'
 export { MAX_FALLBACKS, MAX_PRODUCT_FORMS, productSearchForms, searchForms } from './search-forms'
 export {
   buildResult,

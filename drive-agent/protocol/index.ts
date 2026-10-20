@@ -2,7 +2,7 @@
 // Partagé par l'agent (`drive-agent/src`, import relatif) et par le front (`@drive-protocol`). Aucune dépendance d'exécution.
 export { decodeMessage, encodeMessage } from './codec'
 export { HOST as STORE_HOST } from './check'
-export { cleanText } from './clean-text'
+export { cleanSearchQuery, cleanText } from './clean-text'
 export { ProtocolError } from './error'
 export { validateCommand } from './command'
 export { validatePlan } from './plan'

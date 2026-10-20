@@ -34,6 +34,9 @@ export const LIMITS = {
   requests: 100_000,
   /** Rayons conseillés pour une ligne du plan (DRV-642), du plus choisi au moins choisi. */
   rayonHints: 3,
+  /** La recherche mémorisée d'un produit choisi (DRV-650), en POINTS DE CODE (pas en unités UTF-16) : de 2 à 80 caractères. Les bornes du back. */
+  searchQueryMin: 2,
+  searchQueryMax: 80,
   /** Un identifiant de rayon ou de famille de l'enseigne (DRV-642) : un entier de 1 à cette valeur (le plus grand entier 32 bits). */
   catalogId: 2_147_483_647,
 } as const
@@ -211,6 +214,13 @@ export interface ChosenLine extends LineBase {
   product: ChosenProduct
   quantity: number
   placement: Placement
+  /**
+   * Facultatif (DRV-650) : la recherche qui a fait apparaître le produit choisi sur le site de l'enseigne (le texte du plan, ou celui que la personne a
+   * tapé dans « Chercher autre chose »), de 2 à 80 caractères, déjà nettoyée. Émise seulement quand le produit est placé en `PRIMARY` ET que cette
+   * recherche diffère de la `searchQuery` de la ligne du plan (sinon la valeur mémorisée par Repas est gardée). Repas la mémorise pour l'enseigne et le
+   * magasin du passage, afin de chercher un remplaçant avec elle quand le produit n'est plus disponible. Absente chez les agents d'avant.
+   */
+  searchQuery?: string
   unavailableIds?: string[]
 }
 
