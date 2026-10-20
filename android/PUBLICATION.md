@@ -2,7 +2,7 @@
 
 Procédure **pour l'utilisateur**, une étape à la fois (l'assistant te guide et vérifie après chaque étape). Elle sert **une fois** (clé, secrets, `assetlinks.json`), puis à chaque nouvelle version (étapes 5 à 8). Ticket DRV-315, workflow [`android-release.yml`](../.github/workflows/android-release.yml).
 
-> **Mise à jour du 2026-10-20 (phase bêta, jusqu'à la 1.0.0).** Le déploiement du site n'a plus d'approbation manuelle (plus de « Approve and deploy ») et l'assistant principal crée lui-même les releases du site et pousse l'étiquette `android-vX.Y.Z`, une fois le back et le site déployés quand le protocole change. Les passages ci-dessous où c'est « toi » qui publies, pousses ou approuves décrivent l'ancien régime. Inchangé : la clé de signature et les secrets restent à toi, jamais dans le chat ; les sous-agents ne publient rien ; le passage à la 1.0.0 remettra une approbation. Détail : `CLAUDE.md`, « Livrer en production ».
+> **Mise à jour du 2026-10-20 (phase bêta, jusqu'à la 1.0.0).** Le déploiement du site n'a plus d'approbation manuelle (plus de « Approve and deploy ») et l'assistant principal crée lui-même les releases du site et pousse l'étiquette `android-vX.Y.Z`, une fois le back et le site déployés quand le protocole change. Les passages où c'est « toi » qui publies, pousses ou approuves sont corrigés ; s'il en reste un, il décrit l'ancien régime. La dernière version est toujours à des adresses fixes, celles de la release roulante `android-latest` (`releases/download/android-latest/{version.json,repas-drive.apk}`, voir plus bas). Inchangé : la clé de signature et les secrets restent à toi, jamais dans le chat ; les sous-agents ne publient rien ; le passage à la 1.0.0 remettra une approbation. Détail : `CLAUDE.md`, « Livrer en production ».
 
 ## Ce qu'il faut savoir avant de commencer
 
@@ -10,7 +10,7 @@ Procédure **pour l'utilisateur**, une étape à la fois (l'assistant te guide e
 - **Ta clé de signature est la chose la plus importante** : si tu la perds, plus aucune version ne peut s'installer par-dessus l'ancienne (il faudrait désinstaller puis réinstaller, et refaire la connexion à Leclerc). Fais **deux copies** (étape 1).
 - **Jamais de clé, de mot de passe ni de secret dans le chat avec l'assistant, dans un commit ou dans une PR** (le dépôt est public). L'assistant ne les voit jamais : tu les tapes toi-même dans ton terminal.
 - **Les pré-versions `android-dev-…` (essais de débogage) et les anciennes `android-lab-…` (banc d'essai, retiré) s'il en reste ne s'installent jamais sur le téléphone des courses.** Elles sont signées d'une **clé de débogage publique** (n'importe qui peut fabriquer un fichier qui s'installe par-dessus), l'application est débogable et porte des menus d'essai. Seule une release dont le nom commence par `android-v` **sans** la mention « Pre-release » est la bonne.
-- Seul **toi** pousses l'étiquette `android-vX.Y.Z` qui déclenche la publication. Le workflow ne se déclenche ni sur une PR, ni sur `main`, ni à la main, et refuse de publier sans clé.
+- Seule l'étiquette `android-vX.Y.Z` déclenche la publication ; depuis le 2026-10-20 (phase bêta), c'est l'assistant principal qui la pousse (jamais un sous-agent, qui s'arrête à la PR verte). Le workflow ne se déclenche ni sur une PR, ni sur `main`, ni à la main, et refuse de publier sans clé.
 
 ## Vue d'ensemble
 
@@ -19,8 +19,8 @@ Procédure **pour l'utilisateur**, une étape à la fois (l'assistant te guide e
 | 1 | toi | créer la clé de signature et la sauvegarder | une fois |
 | 2 | toi | noter l'empreinte (publique) du certificat et la donner à l'assistant | une fois |
 | 3 | toi | poser les 4 secrets GitHub | une fois |
-| 4 | l'assistant (PR) puis toi (release du site) | publier `assetlinks.json` sur `kantin.eu` | une fois, **avant** la première version |
-| 5 | toi | pousser l'étiquette `android-vX.Y.Z` | à chaque version |
+| 4 | l'assistant (PR, puis release du site) | publier `assetlinks.json` sur `kantin.eu` | une fois, **avant** la première version |
+| 5 | l'assistant (phase bêta) | pousser l'étiquette `android-vX.Y.Z` | à chaque version |
 | 6 | toi | vérifier la release | à chaque version |
 | 7 | toi | installer sur le téléphone | la première fois |
 | 8 | toi | mettre à jour par-dessus | à chaque version suivante |
@@ -114,7 +114,7 @@ Pour les deux mots de passe, `gh` te demande la valeur (elle ne s'affiche pas qu
 **Ce que fait l'assistant** (toi, tu n'as rien à écrire) :
 
 1. Il crée le fichier avec **ton** empreinte, dans une PR du dépôt front (un test vérifie la forme du fichier, qu'il ne déclare que `eu.kantin.repas.drive` et **jamais** l'empreinte de la clé de débogage), puis il la fusionne.
-2. **Toi** : tu publies une version du site, comme d'habitude (`gh release create vX.Y.Z --target main --generate-notes`, puis « Approve and deploy » sur la page du run, l'assistant te guide).
+2. **L'assistant** publie une version du site (`gh release create vX.Y.Z --target main --generate-notes`) ; depuis le 2026-10-20 (phase bêta), le déploiement part seul quand la CI est verte, sans « Approve and deploy ».
 
 **Comment c'est servi** (rien à changer ailleurs) : Vite recopie `public/` tel quel dans l'image du site ; le Caddy du front (`docker/Caddyfile`) sert d'abord le fichier s'il existe (`try_files {path} /index.html`), avec le type `application/json` ; la bordure Caddy du back (`deploy/Caddyfile`) envoie tout ce qui n'est ni `/api` ni `/images` vers le front, **sans redirection**. Aucun changement n'est nécessaire dans `deploy/` du back.
 
@@ -131,7 +131,7 @@ La troisième commande demande à Google de lire le fichier comme le fera Androi
 
 ## Étape 5. Pousser l'étiquette (à chaque version)
 
-**But** : c'est ce geste, et lui seul, qui lance la publication. L'étiquette doit être de la forme `android-vX.Y.Z` (X, Y, Z : des nombres) et le numéro **ne doit jamais baisser** : le code de version de l'application en est tiré (`android-v1.2.3` donne 1 002 003), et Android refuse une version plus basse que celle installée. Le workflow refuse une étiquette plus ancienne que la dernière publiée.
+**But** : c'est ce geste, et lui seul, qui lance la publication. Depuis le 2026-10-20 (phase bêta), l'assistant principal le fait ; un sous-agent ne le fait jamais. L'étiquette doit être de la forme `android-vX.Y.Z` (X, Y, Z : des nombres) et le numéro **ne doit jamais baisser** : le code de version de l'application en est tiré (`android-v1.2.3` donne 1 002 003), et Android refuse une version plus basse que celle installée. Le workflow refuse une étiquette plus ancienne que la dernière publiée.
 
 - Première version : `android-v0.1.0`. Ensuite : `android-v0.1.1` (petit correctif), `android-v0.2.0` (nouveauté ou changement de l'agent), `android-v1.0.0` quand la version est jugée stable.
 - **Ne réutilise jamais un numéro déjà publié.**
