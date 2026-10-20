@@ -33,18 +33,31 @@ export interface PickerItem {
   aisle?: number | null
 }
 
-/** Un rayon de la rangée de filtres (DRV-647) : son identifiant, son libellé à afficher (déjà replié par l'appelant) et son nombre de produits. */
+/** L'identifiant d'un groupe de la rangée : un nombre (rayon ou famille des produits) ou la clé de filtre d'un rayon du site (`sIdValeurUrl`). */
+export type AisleId = number | string
+
+/** Un groupe de la rangée de filtres (DRV-647) : son identifiant, son libellé à afficher (déjà replié par l'appelant), son nombre de produits, ses enfants. */
 export interface AisleChip {
-  id: number
+  id: AisleId
   label: string
   count: number
+  /** Les enfants d'un rayon du site (0.36.0) : une seconde rangée quand ce rayon est choisi. */
+  children?: readonly AisleChip[]
 }
 
-/** La rangée de filtres (DRV-647) : les rayons présents, du plus fourni au moins fourni, et celui qui est choisi (`null` : « Tous »). */
+/**
+ * La rangée de filtres (DRV-647) : les groupes, du plus fourni au moins fourni, et celui qui est choisi (`null` : « Tous »). `remote` (0.36.0) : ce sont les
+ * rayons du site (sa facette « Rayons ») ; toucher l'un d'eux charge ses produits par `PickerHooks.loadAisle` (une requête, ou le cache de l'appelant).
+ */
 export interface AisleRow {
   chips: readonly AisleChip[]
-  selected: number | null
+  selected: AisleId | null
+  remote?: boolean
 }
+
+/** Ce que rend le chargement d'un rayon du site : ses produits, ou la rangée de repli (les familles, sans message), ou une phrase d'erreur. */
+export type AisleLoad =
+  { items: readonly PickerItem[] } | { fallback: AisleRow } | { notice: string }
 
 const NO_ROW: AisleRow = { chips: [], selected: null }
 
@@ -79,6 +92,8 @@ export interface PickerHooks {
   never: (id: string, on: boolean) => void
   /** Le rayon choisi dans la rangée a changé (DRV-647), `null` : « Tous ». Aucune requête : la liste se filtre d'elle-même. */
   aisle?: (id: number | null) => void
+  /** Les produits d'un rayon du site ou d'un de ses enfants (DRV-647, 0.36.0) : une requête filtrée, ou le cache. */
+  loadAisle?: (id: AisleId) => Promise<AisleLoad>
 }
 
 export interface Picker {
@@ -205,6 +220,8 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
     hidden: true,
     attrs: { role: 'group', 'aria-label': S.picker.aisles },
   })
+  // La seconde rangée (DRV-647, 0.36.0) : les enfants du rayon du site choisi.
+  const subShelf = h('div', { class: 'aisles sub', hidden: true, attrs: { role: 'group' } })
 
   const gone =
     props.gone.length === 0
@@ -232,6 +249,12 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
   /** Les produits que la liste montre : tous, ou ceux du rayon choisi. */
   let visible: readonly PickerItem[] = []
   let current: AisleRow = NO_ROW
+  /** Les produits du rayon du site (ou de son enfant) chargés par le crochet, `null` : la liste de la recherche. */
+  let remoteItems: readonly PickerItem[] | null = null
+  /** L'enfant choisi du rayon du site, `null` : le rayon entier. */
+  let child: AisleId | null = null
+  /** Le numéro du dernier chargement : une réponse plus ancienne est ignorée. */
+  let tickets = 0
   let shown = 0
   let waiting = false
   const watcher =
@@ -269,73 +292,171 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
   const root = watcher === null ? zone.getRootNode() : null
   root?.addEventListener('scroll', scrolled, true)
 
-  /** Refait la liste depuis le début avec les produits du rayon choisi (ou tous). */
+  /** Refait la liste depuis le début : les produits du rayon du site chargé, ou ceux du groupe local choisi, ou tous. */
   function fill(): void {
     clear(list)
     visible =
-      current.selected === null ? all : all.filter((item) => item.aisle === current.selected)
+      remoteItems !== null
+        ? remoteItems
+        : current.remote === true || current.selected === null
+          ? all
+          : all.filter((item) => item.aisle === current.selected)
     shown = 0
     showMore()
   }
-  /** Le bouton choisi est enfoncé (`aria-pressed`), les autres non. */
+  const same = (a: AisleId | null, b: AisleId | null) =>
+    a !== null && b !== null && String(a) === String(b)
+  /** Les boutons choisis sont enfoncés (`aria-pressed`), les autres non : « Tous » quand rien n'est choisi, le rayon, l'enfant. */
   function press(): void {
     for (const button of shelf.querySelectorAll<HTMLElement>('button')) {
-      const id = button.dataset.aisle === undefined ? null : Number(button.dataset.aisle)
-      button.setAttribute('aria-pressed', current.selected === id ? 'true' : 'false')
+      const id = button.dataset.aisle ?? null
+      button.setAttribute(
+        'aria-pressed',
+        (id === null ? current.selected === null : same(id, current.selected)) ? 'true' : 'false',
+      )
+    }
+    for (const button of subShelf.querySelectorAll<HTMLElement>('button')) {
+      button.setAttribute(
+        'aria-pressed',
+        same(button.dataset.aisle ?? null, child) ? 'true' : 'false',
+      )
     }
   }
-  /** Redessine la rangée : rien sous deux rayons ; sinon « Tous » et chaque rayon, celui qui est choisi enfoncé (`aria-pressed`). */
+  const chipButton = (id: AisleId | null, text: string, onClick: () => void) =>
+    h('button', {
+      text,
+      class: 'chip',
+      disabled: waiting,
+      attrs: {
+        type: 'button',
+        'aria-pressed': 'false',
+        ...(id !== null && { 'data-aisle': String(id) }),
+      },
+      on: { click: onClick },
+    })
+  /**
+   * Charge les produits d'un rayon du site (DRV-647, 0.36.0) par le crochet de l'appelant : « Je cherche… » pendant la requête ; une réponse périmée (un autre
+   * toucher entre-temps) est ignorée ; un repli remplace la rangée par celle des familles (sans message) ; une erreur se dit en une phrase et revient à « Tous ».
+   */
+  function load(id: AisleId): void {
+    const loader = hooks.loadAisle
+    if (loader === undefined) return
+    const ticket = ++tickets
+    busy(S.picker.searchingAisle)
+    loader(id).then(
+      (answer) => {
+        if (ticket !== tickets) return
+        busy(null)
+        if ('items' in answer) {
+          remoteItems = answer.items
+          note.hidden = true
+        } else if ('fallback' in answer) {
+          current = answer.fallback
+          remoteItems = null
+          child = null
+          drawShelf()
+        } else {
+          current = { ...current, selected: null }
+          remoteItems = null
+          child = null
+          note.textContent = answer.notice
+          note.hidden = false
+        }
+        drawSubShelf()
+        press()
+        fill()
+      },
+      () => {
+        if (ticket === tickets) busy(null)
+      },
+    )
+  }
+  /** Le toucher d'un groupe de la rangée : local, la liste se filtre d'elle-même ; rayon du site, une requête (ou le cache de l'appelant). */
+  function choose(id: AisleId | null): void {
+    // Retoucher le groupe choisi, ou « Tous », revient à la liste complète, sans requête.
+    const next = id === null || same(current.selected, id) ? null : id
+    if (next === null && current.selected === null) return
+    current = { ...current, selected: next }
+    child = null
+    hooks.aisle?.(typeof next === 'number' || next === null ? next : null)
+    if (current.remote === true && next !== null) {
+      drawSubShelf()
+      press()
+      load(next)
+      return
+    }
+    remoteItems = null
+    tickets++
+    drawSubShelf()
+    press()
+    fill()
+  }
+  /** Le toucher d'un enfant du rayon choisi : ses produits ; le retoucher revient au rayon. */
+  function chooseChild(id: AisleId): void {
+    const parent = current.selected
+    if (parent === null) return
+    child = same(child, id) ? null : id
+    press()
+    load(child ?? parent)
+  }
+  /** Redessine la rangée : rien sous deux groupes ; sinon « Tous » et chaque groupe. */
   function drawShelf(): void {
     clear(shelf)
+    // Une rangée nouvelle (autres résultats, repli sur les familles) repart du début : « Tous » se voit.
+    shelf.scrollLeft = 0
     shelf.hidden = current.chips.length < 2
     if (shelf.hidden) return
-    const chip = (id: number | null, text: string) =>
-      h('button', {
-        text,
-        class: 'chip',
-        disabled: waiting,
-        attrs: {
-          type: 'button',
-          'aria-pressed': current.selected === id ? 'true' : 'false',
-          ...(id !== null && { 'data-aisle': String(id) }),
-        },
-        on: {
-          click: () => {
-            // Retoucher le rayon choisi revient à « Tous ».
-            const next = id === null || current.selected === id ? null : id
-            if (next === current.selected) return
-            current = { ...current, selected: next }
-            hooks.aisle?.(next)
-            press()
-            fill()
-          },
-        },
-      })
     append(
       shelf,
-      chip(null, S.picker.allAisles(all.length)),
-      ...current.chips.map(({ id, label, count }) => chip(id, S.picker.aisleChip(label, count))),
+      chipButton(null, S.picker.allAisles(all.length), () => choose(null)),
+      ...current.chips.map(({ id, label, count }) =>
+        chipButton(id, S.picker.aisleChip(label, count), () => choose(id)),
+      ),
+    )
+  }
+  /** La seconde rangée : les enfants lisibles du rayon du site choisi (« Légumes », « Jus de fruits et légumes frais »), rien sinon. */
+  function drawSubShelf(): void {
+    clear(subShelf)
+    const selected = current.chips.find((chip) => same(chip.id, current.selected))
+    const children = current.remote === true ? (selected?.children ?? []) : []
+    subShelf.hidden = children.length === 0
+    if (subShelf.hidden || selected === undefined) return
+    subShelf.setAttribute('aria-label', S.picker.subAisles(selected.label))
+    append(
+      subShelf,
+      ...children.map(({ id, label, count }) =>
+        chipButton(id, S.picker.aisleChip(label, count), () => chooseChild(id)),
+      ),
     )
   }
 
+  let lastStatus = ''
   const results: Picker['results'] = (query, items, notice, asked = null, aisles = NO_ROW) => {
     all = items
-    // Un rayon choisi qui n'est pas dans ces résultats ne filtre rien : « Tous ».
+    tickets++
+    remoteItems = null
+    child = null
+    // Un groupe choisi qui n'est pas dans ces résultats ne filtre rien : « Tous ». Un rayon du site n'est jamais choisi d'avance.
     const present =
-      aisles.chips.length >= 2 && aisles.chips.some(({ id }) => id === aisles.selected)
-    current = { chips: aisles.chips, selected: present ? aisles.selected : null }
+      aisles.remote !== true &&
+      aisles.chips.length >= 2 &&
+      aisles.chips.some(({ id }) => same(id, aisles.selected))
+    current = { ...aisles, selected: present ? aisles.selected : null }
     drawShelf()
+    drawSubShelf()
+    press()
     fill()
-    status.textContent =
+    lastStatus =
       items.length === 0
         ? S.picker.none(query)
         : asked === null
           ? S.picker.results(query)
           : S.picker.resultsInstead(query, asked)
+    status.textContent = lastStatus
     note.textContent = notice ?? ''
     note.hidden = notice === null
   }
-  const busy: Picker['busy'] = (message) => {
+  function busy(message: string | null): void {
     const on = message !== null
     input.disabled = on
     go.disabled = on
@@ -344,7 +465,8 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
       button.disabled = on || button.hasAttribute(OFF)
     }
     for (const button of shelf.querySelectorAll('button')) button.disabled = on
-    if (on) status.textContent = message
+    for (const button of subShelf.querySelectorAll('button')) button.disabled = on
+    status.textContent = on ? message : lastStatus
   }
 
   results(props.query, props.items, props.notice, props.asked, props.aisles)
@@ -359,6 +481,7 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
       form,
       status,
       shelf,
+      subShelf,
       note,
       list,
       more,

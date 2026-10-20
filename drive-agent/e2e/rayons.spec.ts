@@ -48,13 +48,11 @@ test('avec le rayon frais conseillé, les 6 produits frais passent d’abord, le
   await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByText('Il te faut : 1 kg.')).toBeVisible()
 
-  // Then (DRV-647) : le rayon frais appris est choisi d'avance dans la rangée : seuls ses 6 produits ; « Tous » est à un toucher
-  await expect(page.getByRole('button', { name: 'Legumes frais (6)' })).toHaveAttribute(
+  // Then (DRV-647, 0.36.0) : la rangée est celle des rayons du site, rien n'y est choisi d'avance ; le rayon appris range la liste « Tous »
+  await expect(page.getByRole('button', { name: 'Tous (40)' })).toHaveAttribute(
     'aria-pressed',
     'true',
   )
-  await expect(cardsOf(page)).toHaveCount(6)
-  await page.getByRole('button', { name: 'Tous (40)' }).click()
 
   // And : le premier lot de huit montre déjà les 6 frais, puis deux autres, dans l'ordre du site
   const cards = cardsOf(page)

@@ -149,6 +149,9 @@ function run(
     aisleLabels?: Record<number, string>
     /** Le niveau où la rangée filtre (DRV-647). */
     aisleLevel?: 'RAYON' | 'FAMILLE'
+    /** Les rayons du site et ce que rend leur recherche filtrée (DRV-647, 0.36.0). */
+    siteAisles?: NonNullable<Parameters<typeof fakeAdapter>[1]>['siteAisles']
+    filtered?: Record<string, string[] | Error>
   } = {},
 ) {
   const placements: PlacementProps[] = []
@@ -157,6 +160,8 @@ function run(
     ...(options.before && { before: options.before }),
     ...(options.aisleLabels && { aisleLabels: options.aisleLabels }),
     ...(options.aisleLevel && { aisleLevel: options.aisleLevel }),
+    ...(options.siteAisles && { siteAisles: options.siteAisles }),
+    ...(options.filtered && { filtered: options.filtered }),
   })
   const user = session(...steps)
   const screens = fakeUi({
@@ -2541,5 +2546,239 @@ describe('le filtre par rayon du site (DRV-647)', () => {
     await test.start()
 
     expect(after).toEqual(['Tous (3)', 'Rayon 1 (2)', 'Fruits et légumes (1)'])
+  })
+})
+
+describe('la rangée des rayons du site, tirée de sa facette « Rayons » (DRV-647, 0.36.0)', () => {
+  const FRESH = 41
+  const CANNED = 7
+  const AISLES = [CANNED, FRESH, CANNED, CANNED, FRESH, CANNED, FRESH, CANNED, FRESH, CANNED]
+  const ids = AISLES.map((_aisle, index) => String(7000001 + index))
+  const shelf: Record<string, ShelfItem> = Object.fromEntries(
+    ids.map((id, index) => [
+      id,
+      {
+        label: `${AISLES[index] === FRESH ? 'Tomates' : 'Sauce'} ${index}`,
+        content: { value: 500, unit: 'g' },
+        aisle: AISLES[index] ?? null,
+        family: AISLES[index] === FRESH ? 410 + (index % 2) : 71,
+      },
+    ]),
+  )
+  const fresh4 = ids.filter((_id, index) => AISLES[index] === FRESH)
+  const canned = ids.filter((_id, index) => AISLES[index] === CANNED)
+  const SITE = [
+    { key: '4-1', label: 'Epicerie salée', count: 6, children: [] },
+    {
+      key: '4-2',
+      label: 'Fruits Légumes',
+      count: 4,
+      children: [
+        { key: '4-21', label: 'Légumes', count: 3, children: [] },
+        { key: '4-22', label: 'Jus de fruits et légumes frais', count: 1, children: [] },
+      ],
+    },
+    { key: '4-3', label: null, count: 0, children: [] },
+  ]
+  const line = (extra: Partial<PlanLine> = {}): PlanLine => ({
+    ...fresh('tomate'),
+    needed: { quantity: 500, unitSymbol: 'g', dimension: 'WEIGHT', baseFactor: 1 },
+    ...extra,
+  })
+  const shelfTexts = (zone: HTMLElement, sub = false) =>
+    [
+      ...zone.querySelectorAll<HTMLButtonElement>(
+        sub ? '.aisles.sub button' : '.aisles:not(.sub) button',
+      ),
+    ].map(
+      (button) =>
+        `${button.textContent}${button.getAttribute('aria-pressed') === 'true' ? ' *' : ''}`,
+    )
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+  const names = (zone: HTMLElement) => rows(zone).map(nameOf)
+  const finds = (calls: readonly string[]) => calls.filter((call) => call.startsWith('filter'))
+
+  it('montre « Tous » puis les rayons du site par nombre de références ; toucher un rayon fait UNE requête filtrée, gardée ; « Tous » revient sans requête', async () => {
+    const seen: Record<string, unknown> = {}
+    const test = run(
+      line({ rayonHints: [FRESH] }),
+      [
+        async (view) => {
+          seen.row = shelfTexts(view.zone)
+          chipOf(view.zone, 'Fruits Légumes').click()
+          expect(view.zone.textContent).toContain('Je cherche…')
+          await tick()
+          seen.fresh = names(view.zone)
+          seen.children = shelfTexts(view.zone, true)
+          chipOf(view.zone, 'Tous').click()
+          seen.all = names(view.zone).length
+          chipOf(view.zone, 'Fruits Légumes').click()
+          await tick()
+          seen.again = names(view.zone)
+          seen.filters = finds(test.adapter.calls)
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf, found: { tomate: ids }, siteAisles: SITE, filtered: { '4-2': fresh4 } },
+    )
+
+    await test.start()
+
+    // Le rayon appris (DRV-642) ne choisit rien d'avance dans la rangée du site ; « Rayon 1 » pour un rayon sans libellé.
+    expect(seen.row).toEqual([
+      'Tous (10) *',
+      'Epicerie salée (6)',
+      'Fruits Légumes (4)',
+      'Rayon 1 (0)',
+    ])
+    expect(seen.fresh).toEqual(['Tomates 1', 'Tomates 4', 'Tomates 6', 'Tomates 8'])
+    expect(seen.children).toEqual(['Légumes (3)', 'Jus de fruits et légumes frais (1)'])
+    expect(seen.all).toBe(8)
+    expect(seen.again).toEqual(seen.fresh)
+    expect(seen.filters).toEqual(['filter 4-2'])
+  })
+
+  it('un enfant du rayon choisi : ses produits, et le retoucher revient au rayon sans requête', async () => {
+    const seen: Record<string, unknown> = {}
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          chipOf(view.zone, 'Fruits Légumes').click()
+          await tick()
+          ;[...view.zone.querySelectorAll<HTMLButtonElement>('.aisles.sub button')][0]?.click()
+          await tick()
+          seen.child = names(view.zone)
+          seen.pressed = shelfTexts(view.zone, true)
+          ;[...view.zone.querySelectorAll<HTMLButtonElement>('.aisles.sub button')][0]?.click()
+          await tick()
+          seen.back = names(view.zone)
+          seen.filters = finds(test.adapter.calls)
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        shelf,
+        found: { tomate: ids },
+        siteAisles: SITE,
+        filtered: { '4-2': fresh4, '4-21': fresh4.slice(0, 3) },
+      },
+    )
+
+    await test.start()
+
+    expect(seen.child).toEqual(['Tomates 1', 'Tomates 4', 'Tomates 6'])
+    expect(seen.pressed).toEqual(['Légumes (3) *', 'Jus de fruits et légumes frais (1)'])
+    expect(seen.back).toHaveLength(4)
+    expect(seen.filters).toEqual(['filter 4-2', 'filter 4-21'])
+  })
+
+  it('un produit choisi dans un rayon du site renvoie son rayonId et sa familyId, comme avant', async () => {
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          chipOf(view.zone, 'Fruits Légumes').click()
+          await tick()
+          choose(view.zone, 'Tomates 4')
+        },
+      ],
+      { shelf, found: { tomate: ids }, siteAisles: SITE, filtered: { '4-2': fresh4 } },
+    )
+
+    await test.start()
+
+    expect(lineOf(test.sent[0], 'tomate')).toMatchObject({
+      outcome: 'CHOSEN',
+      product: { id: '7000005', rayonId: FRESH, familyId: 410 },
+    })
+  })
+
+  it.each([
+    ['la forme de l’adresse ne filtre pas (les mêmes produits)', ids],
+    ['le filtre ne rend rien', []],
+    ['le site refuse l’adresse (HTTP 404)', new LeclercError('CONTRACT_CHANGED', 404, 'HTTP_404')],
+  ])(
+    'repli sans message sur la rangée des familles quand %s, pour tout le passage',
+    async (_name, answer) => {
+      const seen: Record<string, unknown> = {}
+      const test = run(
+        line(),
+        [
+          async (view) => {
+            chipOf(view.zone, 'Fruits Légumes').click()
+            await tick()
+            seen.row = shelfTexts(view.zone)
+            seen.list = names(view.zone).length
+            seen.notice = view.zone.querySelector<HTMLElement>('.notice')?.hidden
+            return { kind: 'skip' }
+          },
+          (view) => {
+            seen.next = shelfTexts(view.zone)
+            return { kind: 'skip' }
+          },
+        ],
+        {
+          shelf,
+          found: { tomate: ids, sauce: canned.concat(fresh4) },
+          siteAisles: SITE,
+          filtered: { '4-2': answer },
+          aisleLevel: 'FAMILLE',
+          aisleLabels: { 71: 'Conserves de légumes', 410: 'Tomates rondes' },
+          others: [{ ...line(), ingredientSlug: 'sauce', name: 'sauce' }],
+        },
+      )
+
+      await test.start()
+
+      expect(seen.row).toEqual([
+        'Tous (10) *',
+        'Conserves de légumes (6)',
+        'Tomates rondes (3)',
+        'Rayon 1 (1)',
+      ])
+      expect(seen.list).toBe(8)
+      expect(seen.notice).toBe(true)
+      // La ligne suivante : la rangée des familles d'emblée, sans nouvelle requête filtrée.
+      expect(seen.next).toEqual([
+        'Tous (10) *',
+        'Conserves de légumes (6)',
+        'Tomates rondes (3)',
+        'Rayon 1 (1)',
+      ])
+      expect(finds(test.adapter.calls)).toEqual(['filter 4-2'])
+    },
+  )
+
+  it('une erreur réseau sur un rayon : une phrase, la rangée du site reste, « Tous »', async () => {
+    const seen: Record<string, unknown> = {}
+    const test = run(
+      line(),
+      [
+        async (view) => {
+          chipOf(view.zone, 'Fruits Légumes').click()
+          await tick()
+          seen.notice = view.zone.querySelector<HTMLElement>('.notice')?.textContent
+          seen.row = shelfTexts(view.zone)
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        shelf,
+        found: { tomate: ids },
+        siteAisles: SITE,
+        filtered: { '4-2': new LeclercError('NETWORK', null, 'REQUEST_TIMEOUT') },
+      },
+    )
+
+    await test.start()
+
+    expect(seen.notice).toBe('Leclerc met trop de temps à répondre. Réessaie dans un instant.')
+    expect(seen.row).toEqual([
+      'Tous (10) *',
+      'Epicerie salée (6)',
+      'Fruits Légumes (4)',
+      'Rayon 1 (0)',
+    ])
   })
 })

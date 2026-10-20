@@ -27,6 +27,7 @@ import {
   formatPrice,
   renderPicker,
   S,
+  type AisleChip,
   type AisleRow,
   type PickerItem,
 } from '../ui'
@@ -67,6 +68,51 @@ interface Search {
   aisles: AisleRow
   /** Le niveau de la rangée : le rayon ou la famille de chaque produit (DRV-647). */
   groupKey: GroupKey
+  /** La rangée des familles (0.34.0), gardée comme repli quand la rangée des rayons du site est montrée (DRV-647, 0.36.0). */
+  familyRow: AisleRow
+  /** Les produits déjà chargés de chaque rayon du site, par clé de filtre : un rayon n'est jamais redemandé pour la même recherche. */
+  siteCache: Map<string, Candidate[]>
+}
+
+/**
+ * La rangée des rayons du site (DRV-647, 0.36.0) est-elle utilisable pendant ce passage : pas encore essayée (`UNKNOWN` : la première requête filtrée la
+ * valide), validée (`OK`), ou écartée (`OFF` : la forme de l'adresse ne filtre pas ; la rangée des familles la remplace pour tout le passage).
+ */
+export interface SiteAisleState {
+  state: 'UNKNOWN' | 'OK' | 'OFF'
+}
+
+/**
+ * La rangée des rayons du site (DRV-647, 0.36.0), tirée de la facette « Rayons » de la réponse : « Tous » puis ses rayons, du plus fourni au moins fourni
+ * (`niNbReferences`), chacun avec ses enfants ; un rayon sans libellé lisible devient « Rayon N ». `null` si la facette a moins de deux rayons ou si la
+ * rangée est écartée pour ce passage. Le rayon appris (DRV-642) ne choisit rien d'avance ici (un autre espace d'identifiants). Aucune requête.
+ */
+export function siteAisleRow(
+  adapter: Pick<RetailerAdapter, 'siteAisles'>,
+  site: SiteAisleState,
+): AisleRow | null {
+  if (site.state === 'OFF') return null
+  let aisles: ReturnType<RetailerAdapter['siteAisles']> = []
+  try {
+    aisles = adapter.siteAisles()
+  } catch {
+    return null
+  }
+  if (aisles.length < 2) return null
+  let rank = 0
+  const chipOf = (aisle: (typeof aisles)[number]): AisleChip => ({
+    id: aisle.key,
+    label: aisle.label ?? S.picker.aisleFallback(++rank),
+    count: aisle.count ?? 0,
+    children: aisle.children.filter((child) => child.label !== null).map(chipOf),
+  })
+  const chips = [...aisles].sort((a, b) => (b.count ?? 0) - (a.count ?? 0)).map(chipOf)
+  return { chips, selected: null, remote: true }
+}
+
+/** Une recherche filtrée qui filtre vraiment : au moins un produit, et strictement moins que sans filtre (donc pas les mêmes). */
+function filters(filtered: readonly Candidate[], all: readonly Candidate[]): boolean {
+  return filtered.length > 0 && filtered.length < all.length
 }
 
 /** Ce que la liste de produits rend à l'écran de choix. */
@@ -246,6 +292,7 @@ async function load(
   query: string,
   hints: readonly number[] | undefined,
   derived = false,
+  site: SiteAisleState = { state: 'OFF' },
 ): Promise<void> {
   search.query = query
   search.asked = null
@@ -258,8 +305,11 @@ async function load(
     // Les rayons conseillés d'abord (DRV-642), AVANT le plafond : un produit d'un rayon conseillé ne tombe jamais sous le plafond au profit d'un autre.
     search.candidates = rankByAisle(found.candidates, hints).slice(0, MAX_CANDIDATES)
     const { row, key } = aisleRowOf(adapter, search.candidates, hints)
-    search.aisles = row
+    search.familyRow = row
     search.groupKey = key
+    search.siteCache = new Map()
+    // La rangée des rayons du site si la facette est lisible et la forme du filtre pas écartée ; sinon celle des familles (0.34.0).
+    search.aisles = siteAisleRow(adapter, site) ?? row
     search.notice = null
   } catch (error) {
     if (!(error instanceof LeclercError) || error.code !== 'NETWORK') throw error
@@ -290,6 +340,7 @@ async function settleLine(
   total: number,
   left: readonly PendingLine[],
   context: PhaseBContext,
+  site: SiteAisleState = { state: 'OFF' },
 ): Promise<'done' | 'cancelled' | 'rest'> {
   const { adapter, ui, record } = context
   const slug = line.ingredientSlug
@@ -302,7 +353,15 @@ async function settleLine(
     notice: null,
     aisles: { chips: [], selected: null },
     groupKey: 'aisle',
+    familyRow: { chips: [], selected: null },
+    siteCache: new Map(),
   }
+  const itemsOf = (candidates: readonly Candidate[]) =>
+    candidates.map((candidate) => itemOf(line, candidate, refused, search.groupKey))
+  /** Un produit de la liste de la recherche ou d'un rayon du site déjà chargé. */
+  const findCandidate = (id: string): Candidate | undefined =>
+    search.candidates.find((found) => found.id === id) ??
+    [...search.siteCache.values()].flat().find((found) => found.id === id)
   const items = () =>
     search.candidates.map((candidate) => itemOf(line, candidate, refused, search.groupKey))
   /** Les produits indisponibles dont l'utilisateur ne veut plus jamais : ils partent avec l'issue de la ligne, quelle qu'elle soit. */
@@ -312,7 +371,7 @@ async function settleLine(
   }
 
   ui.update({ current: line.name })
-  await load(search, adapter, line.searchQuery ?? line.name, line.rayonHints, true)
+  await load(search, adapter, line.searchQuery ?? line.name, line.rayonHints, true, site)
 
   for (;;) {
     const notice = search.notice
@@ -347,9 +406,46 @@ async function settleLine(
             aisle: (id) => {
               search.aisles = { ...search.aisles, selected: id }
             },
+            // Un rayon du site (DRV-647, 0.36.0) : UNE requête filtrée, gardée pour cette recherche ; la première du passage valide la forme du filtre.
+            loadAisle: async (id) => {
+              const key = String(id)
+              const cached = search.siteCache.get(key)
+              if (cached !== undefined) return { items: itemsOf(cached) }
+              const fallback = () => {
+                site.state = 'OFF'
+                search.aisles = search.familyRow
+                return { fallback: search.familyRow }
+              }
+              try {
+                const { candidates } = await adapter.searchFiltered(search.query, key)
+                const kept = candidates.slice(0, MAX_CANDIDATES)
+                if (site.state === 'UNKNOWN') {
+                  if (!filters(kept, search.candidates)) return fallback()
+                  site.state = 'OK'
+                }
+                search.siteCache.set(key, kept)
+                return { items: itemsOf(kept) }
+              } catch (error) {
+                if (error instanceof LeclercError && error.code === 'NETWORK') {
+                  return {
+                    notice: error.cause === 'REQUEST_TIMEOUT' ? S.picker.slow : S.picker.network,
+                  }
+                }
+                // Une réponse que le site refuse à la première requête filtrée : la forme ne marche pas, repli sans message.
+                if (
+                  error instanceof LeclercError &&
+                  error.code === 'CONTRACT_CHANGED' &&
+                  site.state === 'UNKNOWN'
+                ) {
+                  return fallback()
+                }
+                if (live) conclude({ type: 'failure', error } satisfies Picked)
+                return { notice: '' }
+              }
+            },
             search: (query) => {
               picker.busy(S.picker.searching)
-              load(search, adapter, query, line.rayonHints).then(
+              load(search, adapter, query, line.rayonHints, false, site).then(
                 () => {
                   if (!live) return
                   picker.results(search.query, items(), search.notice, search.asked, search.aisles)
@@ -382,7 +478,7 @@ async function settleLine(
     if (answer.value.type === 'failure') throw answer.value.error
 
     const id = answer.value.id
-    const candidate = search.candidates.find((found) => found.id === id)
+    const candidate = findCandidate(id)
     // Défense en profondeur : la liste ne propose pas les produits écartés, un message ne doit pas pouvoir les imposer. Un produit « Plus en stock »
     // se choisit : le panier tranche (DRV-635).
     if (!candidate || refused.has(id)) {
@@ -488,10 +584,19 @@ async function settleLine(
  * celles qui restent : une issue `SKIPPED` chacune, comme « Pas cette fois », donc rien n'est retenu (ni « j'en ai toujours », ni refus).
  */
 export const guidedChoice: PhaseB = async (context) => {
+  // La rangée des rayons du site, pour tout le passage : la première requête filtrée la valide ou l'écarte (DRV-647, 0.36.0).
+  const site: SiteAisleState = { state: 'UNKNOWN' }
   const { pending } = context
   for (const [index, item] of pending.entries()) {
     if (context.stopRequested()) return 'cancelled'
-    const settled = await settleLine(item, index + 1, pending.length, pending.slice(index), context)
+    const settled = await settleLine(
+      item,
+      index + 1,
+      pending.length,
+      pending.slice(index),
+      context,
+      site,
+    )
     if (settled === 'cancelled') return 'cancelled'
     if (settled === 'rest') {
       for (const { line } of pending.slice(index + 1)) {

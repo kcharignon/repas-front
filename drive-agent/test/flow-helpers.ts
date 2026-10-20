@@ -220,6 +220,10 @@ export function fakeAdapter(
     aisleLabels?: Record<number, string>
     /** Le niveau où la rangée filtre (DRV-647) : le rayon par défaut, ou la famille. */
     aisleLevel?: 'RAYON' | 'FAMILLE'
+    /** Les rayons du site de la facette (DRV-647, 0.36.0) ; par défaut aucun. */
+    siteAisles?: ReturnType<RetailerAdapter['siteAisles']>
+    /** Ce que rend la recherche filtrée sur une clé : des identifiants du rayon, ou une erreur (par défaut : rien). */
+    filtered?: Record<string, string[] | Error>
   } = {},
 ) {
   const calls: string[] = []
@@ -298,6 +302,14 @@ export function fakeAdapter(
     },
     aisleSamples: () => [],
     exploreFacets: () => Promise.resolve(null),
+    siteAisles: () => options.siteAisles ?? [],
+    async searchFiltered(_query, key) {
+      calls.push(`filter ${key}`)
+      await options.before?.(`filter ${key}`)
+      const answer = options.filtered?.[key] ?? []
+      if (answer instanceof Error) throw answer
+      return { candidates: answer.map((id) => candidate(id, shelf[id])), total: answer.length }
+    },
     async setCartQuantity(id, quantity): Promise<CartResult> {
       calls.push(`cart ${id} ${quantity}`)
       inFlight += 1

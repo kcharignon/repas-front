@@ -600,28 +600,40 @@ function facetLines(term: string, facets: FacetExploration): string[] {
   if ('skipped' in probe)
     lines.push(F.probeSkipped(term, own(F.miss, probe.skipped) ?? probe.skipped))
   else {
-    const head = F.probeHead(term, facetLabel(probe.target.label), probe.target.id)
-    lines.push(
-      probe.fault !== undefined
-        ? `${head}${F.probeFault(probe.fault)}`
-        : `${head}${F.probeReply(
-            probe.status,
-            probe.products,
-            probe.level === 'FAMILLE' ? 'famille' : 'rayon',
-            probe.first === null
-              ? F.none
-              : `« ${probe.first.label ?? F.noLabel} » (frais : ${probe.first.fresh ? P.yes : P.no})`,
-          )}`,
-    )
-    for (const family of probe.families) {
-      lines.push(
-        F.probeGroup(
-          family.id,
-          family.count,
-          family.label === null ? F.noLabel : `« ${family.label} »`,
-        ),
+    for (const attempt of probe.attempts) {
+      const head = F.probeHead(
+        term,
+        facetLabel(probe.target.label),
+        probe.target.id,
+        attempt.form === 'URL_ID' ? 'sIdValeurUrl' : 'iIdBloc-iIdValeur',
+        attempt.value,
       )
+      const verdict = own(F.verdict, attempt.verdict) ?? attempt.verdict
+      lines.push(
+        attempt.status === null
+          ? `${head}${F.probeFault(attempt.fault ?? 'EXCEPTION')}`
+          : `${head}${F.probeReply(
+              attempt.status,
+              attempt.total,
+              attempt.products,
+              attempt.level === 'FAMILLE' ? 'famille' : 'rayon',
+              attempt.first === null
+                ? F.none
+                : `« ${attempt.first.label ?? F.noLabel} » (frais : ${attempt.first.fresh ? P.yes : P.no})`,
+              verdict,
+            )}`,
+      )
+      for (const family of attempt.families) {
+        lines.push(
+          F.probeGroup(
+            family.id,
+            family.count,
+            family.label === null ? F.noLabel : `« ${family.label} »`,
+          ),
+        )
+      }
     }
+    lines.push(F.address(probe.address ?? P.absent))
   }
   lines.push(F.pagination(F.inReply(term), countKeysText(facets.pagination.reply)))
   lines.push(F.pagination(F.inPage, countKeysText(facets.pagination.page)))

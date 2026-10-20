@@ -128,6 +128,11 @@ export interface Behavior {
    */
   strictApostrophe?: boolean
   /**
+   * Le filtre par rayon du site (DRV-647, 0.36.0) : par défaut `Filtres=4-<iIdValeur>` ne garde que les produits de la valeur ; `ignored` : le paramètre est
+   * ignoré (la recherche rend tout, comme une forme d'adresse qui ne filtre pas) ; `not-found` : une recherche à `Filtres` répond 404.
+   */
+  facetFilter?: 'ignored' | 'not-found' | null
+  /**
    * La disponibilité des produits à stock nul (DRV-635). Les deux modes ajoutent l'étiquette `eDisponibilite` (1 : disponible, 2 : bientôt disponible) et le texte
    * « Bientôt disponible » à ces produits : `misleading` (disponibilité trompeuse) : le panier les ACCEPTE, comme le site mobile de l'enseigne ; `real-out` (vraie
    * rupture) : le panier les REFUSE. Absent : l'ancien comportement (stock nul, panier qui refuse, aucune étiquette de plus).
@@ -164,6 +169,8 @@ export interface FakeRequest {
   rejected?: string
   /** Le mot cherché (recherche) ou le champ `d` décodé (panier). */
   detail?: string
+  /** La valeur du paramètre `Filtres` d'une recherche filtrée (DRV-647, 0.36.0). */
+  filter?: string
 }
 
 export interface Violation {
@@ -403,7 +410,14 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
         entry.status = 200
         const session = sessionAfter(pacedCount - 1)
         // DRV-647 : `Filtres=4-<iIdValeur>` ne garde que le rayon (valeur 900000 + rayon) ou la famille (valeur = famille) de la facette.
-        const filter = /^4-(\d+)$/.exec(url.searchParams.get('Filtres') ?? '')?.[1]
+        const filtres = url.searchParams.get('Filtres')
+        if (filtres !== null) entry.filter = filtres
+        if (filtres !== null && behavior.facetFilter === 'not-found') {
+          entry.status = 404
+          return send(res, 404, errorPage(), HTML)
+        }
+        const filter =
+          behavior.facetFilter === 'ignored' ? undefined : /^4-(\d+)$/.exec(filtres ?? '')?.[1]
         const all = searchCatalog(
           query,
           behavior.strictSearch === true,
