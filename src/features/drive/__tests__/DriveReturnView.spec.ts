@@ -568,6 +568,68 @@ describe('retour du drive : chaque issue du passage', () => {
   )
 })
 
+describe('retour du drive : la recherche qui a fait trouver le produit (DRV-650)', () => {
+  const chosen = (slug: string, extra: Partial<Extract<ResultLine, { outcome: 'CHOSEN' }>> = {}) =>
+    ({
+      ingredientSlug: slug,
+      outcome: 'CHOSEN',
+      quantity: 1,
+      placement: 'PRIMARY',
+      product: { id: '555999', label: 'Produit de test' },
+      ...extra,
+    }) as ResultLine
+  const sentOf = (lines: ResultLine[]) =>
+    ({ kind: 'result', result: result({ lines }), draft: sentDraft }) as DriveEvent
+  const putChoices = async (fetchMock: ReturnType<typeof stubApi>) => {
+    const body = (await bodyOf(
+      fetchMock,
+      calls(fetchMock).indexOf('PUT /api/v1/drive/choices'),
+    )) as {
+      choices: { ingredientSlug: string; action: string; searchQuery?: unknown }[]
+    }
+
+    return { body, text: JSON.stringify(body) }
+  }
+
+  it('part avec l’ajout du produit (ADD_PRODUCT), nettoyée, et seulement pour cet ajout', async () => {
+    const { wrapper, fetchMock } = await open(
+      sentOf([
+        chosen('poivre', { searchQuery: '  poivre\u200B   noir ' }),
+        chosen('curry', { placement: 'FALLBACK', searchQuery: 'curry doux' }),
+      ]),
+    )
+    await saved(wrapper)
+
+    const { body } = await putChoices(fetchMock)
+    expect(body.choices.map((c) => [c.ingredientSlug, c.action, c.searchQuery])).toEqual([
+      ['poivre', 'ADD_PRODUCT', 'poivre noir'],
+      ['curry', 'ADD_PRODUCT', undefined],
+    ])
+  })
+
+  it('sans recherche dans le résultat, la clé n’est pas envoyée : jamais « null », qui effacerait la recherche mémorisée', async () => {
+    const { wrapper, fetchMock } = await open(
+      sentOf([chosen('poivre'), chosen('curry', { searchQuery: 'x' })]),
+    )
+    await saved(wrapper)
+
+    const { text } = await putChoices(fetchMock)
+    expect(text).toContain('ADD_PRODUCT')
+    expect(text).not.toContain('searchQuery')
+  })
+
+  it('le texte de la personne ne figure dans aucune adresse', async () => {
+    const { wrapper, fetchMock } = await open(
+      sentOf([chosen('poivre', { searchQuery: 'poivre noir secret' })]),
+    )
+    await saved(wrapper)
+
+    for (const [input] of fetchMock.mock.calls) {
+      expect(decodeURIComponent((input as Request).url)).not.toContain('secret')
+    }
+  })
+})
+
 describe('retour du drive : le résultat est recoupé avec le plan envoyé (DRV-614)', () => {
   const chosen = (slug: string): ResultLine => ({
     ingredientSlug: slug,

@@ -9,7 +9,10 @@ const { t } = useI18n()
 
 const sections = [
   { key: 'how', items: ['start', 'session', 'local', 'resume', 'order'] },
-  { key: 'saves', items: ['store', 'choices', 'products', 'estimate', 'lists', 'appVersion'] },
+  {
+    key: 'saves',
+    items: ['store', 'choices', 'products', 'searches', 'estimate', 'lists', 'appVersion'],
+  },
   { key: 'never', items: ['credentials', 'cookies', 'address', 'basket', 'photos'] },
   { key: 'where', items: ['server', 'duration', 'backups', 'phone', 'sheets'] },
   { key: 'erase', items: ['product', 'store', 'all', 'rights'] },

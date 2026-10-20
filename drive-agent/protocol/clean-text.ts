@@ -3,6 +3,8 @@
 // retire à la lecture de la page ; le front les retire une seconde fois avant d'écrire, pour un agent plus ancien (l'APK ne se met pas à jour en
 // même temps que le site). Une seule fonction pour les deux : le protocole la partage. Elle ne change pas le format des messages.
 
+import { LIMITS } from './types'
+
 /** Ce qui sépare deux mots sans être une espace : le texte reste lisible, on y met une espace. */
 const LINE_BREAKS = /[\t\n\v\f\r\u0085\u2028\u2029]/g
 
@@ -32,4 +34,17 @@ const FORBIDDEN =
  */
 export function cleanText(text: string): string {
   return text.replace(LINE_BREAKS, ' ').replace(FORBIDDEN, '').replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Une recherche à mémoriser (DRV-650) : le texte que la personne a tapé (ou que l'agent a cherché) pour trouver un produit sur le site de l'enseigne.
+ * Le back la refuse EN BLOC avec tout le lot de choix (`422 DRIVE_SEARCH_QUERY_INVALID`, les produits choisis du passage seraient perdus avec elle) si
+ * elle n'a pas de 2 à 80 caractères (POINTS DE CODE, pas unités UTF-16) une fois les espaces réduites, ou si elle porte un caractère de contrôle, de
+ * format ou un séparateur de ligne ou de paragraphe. Elle est donc nettoyée comme un libellé (`cleanText`), coupée à 80 points de code (jamais au milieu
+ * d'une paire de substitution : le JSON serait refusé), rognée de nouveau, et `null` quand il en reste moins de 2 : rien n'est alors envoyé (une clé
+ * absente garde l'ancienne recherche, `null` l'effacerait). Fait par l'agent avant d'émettre, puis par le site avant d'envoyer (un agent plus ancien).
+ */
+export function cleanSearchQuery(text: string): string | null {
+  const cleaned = [...cleanText(text)].slice(0, LIMITS.searchQueryMax).join('').trim()
+  return [...cleaned].length >= LIMITS.searchQueryMin ? cleaned : null
 }

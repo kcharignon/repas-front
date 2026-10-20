@@ -3,4 +3,4 @@
 // EN BLOC les choix de tout le passage (`422 DRIVE_CHOICE_INVALID` sur `PUT /drive/choices`, revue de sécurité du back, défaut D2). L'agent
 // les retire donc à la lecture. La fonction et la liste des caractères refusés sont dans le protocole (`../protocol/clean-text.ts`), que le
 // front partage : il les retire aussi avant d'écrire, pour un agent plus ancien.
-export { cleanText } from '../protocol/clean-text'
+export { cleanSearchQuery, cleanText } from '../protocol/clean-text'

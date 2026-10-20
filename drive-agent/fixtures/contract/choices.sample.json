@@ -33,7 +33,8 @@
                 }
             ],
             "rejected": [],
-            "updatedAt": "2026-10-18T09:20:00+00:00"
+            "updatedAt": "2026-10-18T09:20:00+00:00",
+            "searchQuery": "farine de blé t55"
         },
         {
             "ingredientSlug": "lait",
@@ -66,7 +67,8 @@
                     }
                 }
             ],
-            "updatedAt": "2026-10-18T09:20:00+00:00"
+            "updatedAt": "2026-10-18T09:20:00+00:00",
+            "searchQuery": null
         },
         {
             "ingredientSlug": "sel",
@@ -88,7 +90,8 @@
                 }
             ],
             "rejected": [],
-            "updatedAt": "2026-10-18T09:20:00+00:00"
+            "updatedAt": "2026-10-18T09:20:00+00:00",
+            "searchQuery": null
         },
         {
             "ingredientSlug": "sucre",
@@ -96,7 +99,8 @@
             "haveAtHome": true,
             "accepted": [],
             "rejected": [],
-            "updatedAt": "2026-10-18T09:20:00+00:00"
+            "updatedAt": "2026-10-18T09:20:00+00:00",
+            "searchQuery": null
         }
     ],
     "totalItems": 4
