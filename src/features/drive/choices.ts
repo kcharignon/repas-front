@@ -1,6 +1,8 @@
 import {
+  cleanSearchQuery,
   cleanText,
   LIMITS,
+  type ChosenLine,
   type ChosenProduct,
   type ProductPrice,
   type RejectedProduct,
@@ -31,7 +33,14 @@ type WireProduct = NonNullable<ChoiceIntent['product']>
 /** Le contrat marque `rayonId` et `familyId` requis (défaut `null`) ; le back accepte aussi leur absence, qu'on garde quand l'agent n'en dit rien. */
 type Product = Omit<WireProduct, 'rayonId' | 'familyId'> &
   Partial<Pick<WireProduct, 'rayonId' | 'familyId'>>
-type Intent = Omit<ChoiceIntent, 'product'> & { product?: Product | null }
+/**
+ * Le contrat marque aussi `searchQuery` (DRV-650) requis, avec `null` pour défaut : un artefact du générateur. Une clé absente garde la recherche déjà
+ * mémorisée, `null` l'EFFACE : l'intention ne la porte donc que lorsque l'agent en a rendu une, jamais `null`.
+ */
+type Intent = Omit<ChoiceIntent, 'product' | 'searchQuery'> & {
+  product?: Product | null
+  searchQuery?: string
+}
 type Price = NonNullable<Product['price']>
 
 function priceOf(price: ProductPrice | undefined): Price | null {
@@ -67,6 +76,19 @@ function productOf(product: RejectedProduct | ChosenProduct): Product {
 }
 
 /**
+ * La recherche qui a fait trouver le produit choisi (DRV-650), prête pour le back, ou `null` : rien n'est alors envoyé (le back garde la recherche
+ * déjà mémorisée ; `null` l'effacerait). Le back refuse un texte mal formé EN BLOC avec tout le lot (`422 DRIVE_SEARCH_QUERY_INVALID`, les produits
+ * choisis du passage seraient perdus avec elle) : elle est nettoyée une seconde fois (`cleanSearchQuery`, la fonction de l'agent : caractères de
+ * contrôle et invisibles retirés, espaces réduites, 80 points de code, au moins 2) pour un agent plus ancien. Seule celle du produit placé en
+ * `PRIMARY` part, jamais celle d'un produit de secours. Une donnée de la personne : jamais dans une adresse, un journal ni un message d'erreur.
+ */
+function searchQueryOf(line: ChosenLine): string | null {
+  if (line.placement !== 'PRIMARY' || line.searchQuery === undefined) return null
+
+  return cleanSearchQuery(line.searchQuery)
+}
+
+/**
  * Les intentions d'une ligne, dans l'ordre qu'exige le back : les produits refusés d'abord, puis `HAVE_AT_HOME` (un `REJECT_PRODUCT`
  * ou un `ADD_PRODUCT` sur un ingrédient « j'en ai toujours » le fait redevenir une préférence de produits).
  */
@@ -88,13 +110,16 @@ function intentsOf(line: ResultLine): ChoiceIntent[] {
   switch (line.outcome) {
     case 'CHOSEN':
       // `ONCE` : cette fois seulement, rien à mémoriser
-      if (line.placement !== 'ONCE')
+      if (line.placement !== 'ONCE') {
+        const searchQuery = searchQueryOf(line)
         intents.push({
           ingredientSlug: slug,
           action: 'ADD_PRODUCT',
           placement: line.placement,
           product: productOf(line.product),
+          ...(searchQuery !== null && { searchQuery }),
         })
+      }
       break
     case 'ADDED': {
       // Le prix lu pendant le passage rafraîchit celui du produit connu

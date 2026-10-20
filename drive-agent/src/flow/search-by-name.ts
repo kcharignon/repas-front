@@ -30,6 +30,53 @@ export async function searchByName(
   return { query: name, candidates: first }
 }
 
+/** Un texte à chercher : `forms` dit si ses formes dérivées sont essayées aussi (un nom : oui ; le libellé d'un produit : non, il a ses propres formes). */
+export interface SearchStep {
+  text: string
+  forms: boolean
+}
+
+/** Le texte d'une requête, espaces réduites : deux requêtes qui ne diffèrent que par les espaces sont la même. */
+const spaced = (text: string): string => text.replace(/\s+/g, ' ').trim()
+
+/** Deux étapes qui ne diffèrent que par la casse ou les espaces sont la même étape (et leurs formes dérivées, les mêmes). */
+const sameStep = (text: string): string => spaced(text).toLowerCase()
+
+/**
+ * La pré-recherche d'une ligne (DRV-650) : `first` (la `searchQuery` du plan : la recherche mémorisée de l'article quand il y en a une, sinon son nom) avec
+ * ses formes dérivées, puis, SI elle ne rend aucun produit, chaque étape de `then` dans l'ordre (le libellé du produit mémorisé, puis le nom de
+ * l'ingrédient), et s'arrête à la première qui rend au moins un produit. Une requête n'est jamais envoyée deux fois, même si deux étapes partagent une
+ * forme dérivée. Si rien ne répond, `query` reste `first` et la liste est vide.
+ * @throws {LeclercError} l'erreur de l'adaptateur, à traiter par l'appelant.
+ */
+export async function searchInOrder(
+  adapter: Pick<RetailerAdapter, 'searchProducts'>,
+  first: string,
+  then: readonly SearchStep[],
+): Promise<NameSearch> {
+  const sent = new Set<string>()
+  const once = {
+    searchProducts: async (query: string): Promise<Candidate[]> => {
+      const key = spaced(query)
+      if (sent.has(key)) return []
+      sent.add(key)
+      return adapter.searchProducts(query)
+    },
+  }
+  const answer = await searchByName(once, first)
+  if (answer.candidates.length > 0) return answer
+  const seen = new Set([sameStep(first)])
+  for (const { text, forms } of then) {
+    if (seen.has(sameStep(text))) continue
+    seen.add(sameStep(text))
+    const found = forms
+      ? await searchByName(once, text)
+      : { query: text, candidates: await once.searchProducts(text) }
+    if (found.candidates.length > 0) return found
+  }
+  return answer
+}
+
 /** Ce que la recherche d'un produit habituel a donné : le produit retrouvé (ou `null`) et le nombre de recherches faites pour le retrouver. */
 export interface KnownSearch {
   product: Candidate | null

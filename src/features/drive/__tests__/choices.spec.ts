@@ -298,3 +298,92 @@ describe('buildChoiceBatches : le rayon et la famille du produit choisi (DRV-642
     expect(batchOf([chosen({ rayonId: 41 }, 'ONCE')])).toEqual([])
   })
 })
+
+describe('la recherche qui a fait trouver le produit (DRV-650)', () => {
+  const chosen = (
+    searchQuery: string | undefined,
+    placement: 'PRIMARY' | 'FALLBACK' | 'ONCE' = 'PRIMARY',
+  ): ResultLine => ({
+    ingredientSlug: 'cereale',
+    outcome: 'CHOSEN',
+    quantity: 1,
+    placement,
+    product: { id: '555101', label: 'Céréales coussins chocolat 500 g' },
+    ...(searchQuery !== undefined && { searchQuery }),
+  })
+  const intentOf = (line: ResultLine) => batchOf([line])[0]?.[0]
+
+  it('part avec l’ajout du produit, en texte', () => {
+    const intent = intentOf(chosen('céréales coussins'))
+
+    expect(intent).toMatchObject({ action: 'ADD_PRODUCT', searchQuery: 'céréales coussins' })
+  })
+
+  it('une clé absente reste absente : le back garde la recherche déjà mémorisée, jamais « null » (qui l’effacerait)', () => {
+    const batches = buildChoiceBatches(result())
+
+    expect(intentOf(chosen(undefined))).not.toHaveProperty('searchQuery')
+    expect(JSON.stringify(batches)).not.toContain('searchQuery')
+  })
+
+  it('n’est jamais envoyée en « null », ni pour une recherche trop courte une fois nettoyée', () => {
+    for (const text of ['', ' ', 'x', ' \u200bx\u200b ', '🥚']) {
+      const intent = intentOf(chosen(text))
+
+      expect(intent).not.toHaveProperty('searchQuery')
+      expect(JSON.stringify(intent)).not.toContain('"searchQuery"')
+    }
+  })
+
+  it('est nettoyée une seconde fois, pour un agent plus ancien : le back refuse le lot entier sur un caractère invisible', () => {
+    const intent = intentOf(chosen('  cé\u00adréales\u200b   coussins\u00a0choco\n'))
+
+    expect(intent).toMatchObject({ searchQuery: 'céréales coussins choco' })
+  })
+
+  it('est coupée à 80 points de code, jamais au milieu d’une paire de substitution', () => {
+    const intent = intentOf(chosen(`${'a'.repeat(79)}🥚suite`))
+
+    expect(intent?.searchQuery).toBe(`${'a'.repeat(79)}🥚`)
+    expect([...(intent?.searchQuery ?? '')]).toHaveLength(80)
+    expect(() => new TextEncoder().encode(JSON.stringify(intent))).not.toThrow()
+    expect(JSON.stringify(intent)).not.toMatch(/\\ud[89ab]/i)
+  })
+
+  it('80 emojis : 80 points de code, 160 unités UTF-16, gardés', () => {
+    expect(intentOf(chosen('🥚'.repeat(90)))?.searchQuery).toBe('🥚'.repeat(80))
+  })
+
+  it('le texte de la personne reste du texte : un libellé HTML part tel quel, sans être interprété', () => {
+    const intent = intentOf(chosen('<img src=x onerror=alert(1)>'))
+
+    expect(intent?.searchQuery).toBe('<img src=x onerror=alert(1)>')
+  })
+
+  it.each(['FALLBACK', 'ONCE'] as const)(
+    'ne part pas pour un produit placé en %s (celle d’un produit de secours n’est pas celle de l’article)',
+    (placement) => {
+      const intents = batchOf([chosen('céréales coussins', placement)]).flat()
+
+      expect(JSON.stringify(intents)).not.toContain('searchQuery')
+    },
+  )
+
+  it('jamais sur un produit refusé, un rafraîchissement de prix ni « j’en ai toujours » (le back répondrait 422 pour tout le lot)', () => {
+    const batch = batchOf([
+      { ...chosen('céréales coussins'), rejected: [{ id: '9', label: 'Autre céréale' }] },
+      {
+        ingredientSlug: 'lait',
+        outcome: 'ADDED',
+        productId: '3',
+        quantity: 1,
+        usedRank: 1,
+        price: { cents: 99 },
+      },
+      { ingredientSlug: 'sel', outcome: 'HAVE_AT_HOME' },
+    ]).flat()
+
+    const withQuery = batch.filter((intent) => 'searchQuery' in intent)
+    expect(withQuery.map((intent) => intent.action)).toEqual(['ADD_PRODUCT'])
+  })
+})

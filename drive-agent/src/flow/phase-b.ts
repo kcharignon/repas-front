@@ -35,7 +35,8 @@ import {
 import { putInCart } from './keep-cart'
 import { packsFor } from './packs'
 import { priceOf } from './phase-a'
-import { searchByName } from './search-by-name'
+import { searchInOrder, type SearchStep } from './search-by-name'
+import { fallbackSteps, rememberedSearch } from './search-memory'
 import { productSearchForms } from './search-forms'
 import type { PendingLine, PhaseB, PhaseBContext } from './types'
 
@@ -60,6 +61,11 @@ const readCount = (value: number | null | undefined): number | null =>
 interface Search {
   /** La recherche dont la liste montre les produits (le nom, ou la forme dérivée qui a répondu : ticket D). */
   query: string
+  /**
+   * La recherche dont la liste affichée est la réponse (DRV-650), `null` tant qu'aucune n'a répondu : celle qui est retenue avec le produit choisi. Elle ne
+   * bouge pas quand une recherche échoue (la liste reste celle d'avant), contrairement à `query`.
+   */
+  listed: string | null
   /** Le nom cherché au départ quand c'est une de ses formes qui a répondu (« œuf » quand c'est « oeuf »), sinon `null`. */
   asked: string | null
   candidates: Candidate[]
@@ -298,25 +304,27 @@ export function aisleRowOf(
 
 /**
  * Cherche `query` ; une erreur réseau (déjà retentée une fois par l'adaptateur) n'abîme pas la ligne : elle devient un message et
- * l'utilisateur peut réessayer ou passer. Toute autre erreur remonte et arrête le passage. Avec `derived` (le nom de l'ingrédient, cherché
- * par l'agent) et si le nom ne répond rien, ses formes dérivées sont essayées une par une (`searchByName`, ticket D) ; ce que l'utilisateur
- * tape lui-même est cherché tel quel.
+ * l'utilisateur peut réessayer ou passer. Toute autre erreur remonte et arrête le passage. Avec `then` (la recherche que l'agent fait lui-même : la
+ * `searchQuery` du plan) et si elle ne répond rien, ses formes dérivées sont essayées une par une (ticket D), puis les étapes de `then` (DRV-650 : le
+ * libellé du produit mémorisé, puis le nom de l'ingrédient) ; `null` : ce que l'utilisateur tape lui-même est cherché tel quel.
  */
 async function load(
   search: Search,
   adapter: RetailerAdapter,
   query: string,
   hints: readonly number[] | undefined,
-  derived = false,
+  then: readonly SearchStep[] | null = null,
   site: SiteAisleState = { state: 'OFF', listeners: new Set() },
 ): Promise<void> {
   search.query = query
   search.asked = null
   try {
-    const found = derived
-      ? await searchByName(adapter, query)
-      : { query, candidates: await adapter.searchProducts(query) }
+    const found =
+      then !== null
+        ? await searchInOrder(adapter, query, then)
+        : { query, candidates: await adapter.searchProducts(query) }
     search.query = found.query
+    search.listed = found.query
     search.asked = found.query === query ? null : query
     // Les rayons conseillés d'abord (DRV-642), AVANT le plafond : un produit d'un rayon conseillé ne tombe jamais sous le plafond au profit d'un autre.
     search.candidates = rankByAisle(found.candidates, hints).slice(0, MAX_CANDIDATES)
@@ -367,6 +375,7 @@ async function settleLine(
   const never = new Set<string>()
   const search: Search = {
     query: '',
+    listed: null,
     asked: null,
     candidates: [],
     notice: null,
@@ -414,7 +423,14 @@ async function settleLine(
     }
 
     ui.update({ current: line.name })
-    await load(search, adapter, line.searchQuery ?? line.name, line.rayonHints, true, site)
+    await load(
+      search,
+      adapter,
+      line.searchQuery ?? line.name,
+      line.rayonHints,
+      fallbackSteps(line, unavailable, reasons),
+      site,
+    )
     // Dès la première réponse du passage : la validation de la forme du filtre, en tâche de fond (DRV-647, 0.37.0).
     if (search.siteRow !== null) startValidation(adapter, site, search.query)
 
@@ -484,7 +500,7 @@ async function settleLine(
               },
               search: (query) => {
                 picker.busy(S.picker.searching)
-                load(search, adapter, query, line.rayonHints, false, site).then(
+                load(search, adapter, query, line.rayonHints, null, site).then(
                   () => {
                     if (!live) return
                     picker.results(
@@ -559,6 +575,8 @@ async function settleLine(
         placement = role
       }
 
+      // La recherche qui a fait apparaître ce produit (DRV-650), rendue seulement pour un produit retenu (`PRIMARY`) et si elle diffère de celle du plan.
+      const memo = placement === 'PRIMARY' ? rememberedSearch(line, search.listed) : null
       context.showProgress()
       let settled
       try {
@@ -582,6 +600,7 @@ async function settleLine(
             product: chosenProduct(candidate),
             quantity: Math.min(packs, LIMITS.packsMax),
             placement,
+            ...(memo !== null && { searchQuery: memo }),
             ...(unavailable.length > 0 && {
               unavailableIds: unavailable.map((product) => product.id).slice(0, LIMITS.products),
             }),
@@ -610,6 +629,7 @@ async function settleLine(
           product: chosenProduct(candidate),
           quantity: Math.min(settled.obtained, LIMITS.packsMax),
           placement,
+          ...(memo !== null && { searchQuery: memo }),
           ...(unavailable.length > 0 && {
             unavailableIds: unavailable.map((product) => product.id).slice(0, LIMITS.products),
           }),

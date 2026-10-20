@@ -2731,7 +2731,7 @@
                 "tags": [
                     "Drive"
                 ],
-                "summary": "M\u00e9morise un lot d'intentions de l'agent (produits choisis, refus\u00e9s, \u00ab j'en ai toujours \u00bb) dans les pr\u00e9f\u00e9rences de l'utilisateur connect\u00e9. La fiche d'un produit d\u00e9j\u00e0 connu (commune au magasin) n'est compl\u00e9t\u00e9e que l\u00e0 o\u00f9 elle est vide : libell\u00e9, contenu et code-barres ne sont jamais r\u00e9\u00e9crits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte d\u00e9j\u00e0",
+                "summary": "M\u00e9morise un lot d'intentions de l'agent (produits choisis, refus\u00e9s, \u00ab j'en ai toujours \u00bb) dans les pr\u00e9f\u00e9rences de l'utilisateur connect\u00e9. La fiche d'un produit d\u00e9j\u00e0 connu (commune au magasin) n'est compl\u00e9t\u00e9e que l\u00e0 o\u00f9 elle est vide : libell\u00e9, contenu et code-barres ne sont jamais r\u00e9\u00e9crits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte d\u00e9j\u00e0. Un `ADD_PRODUCT` peut porter la recherche qui a fait trouver le produit (`searchQuery`, m\u00e9moris\u00e9e avec la pr\u00e9f\u00e9rence de cette enseigne et de ce magasin ; cl\u00e9 absente : gard\u00e9e, `null` : effac\u00e9e)",
                 "operationId": "put_api_save_product_choices",
                 "requestBody": {
                     "required": true,
@@ -2754,7 +2754,7 @@
                         "description": "Pas de magasin enregistr\u00e9 (message `DRIVE_NOT_CONFIGURED`), ou `storeId` n'est pas le magasin courant (message `DRIVE_STORE_MISMATCH`)"
                     },
                     "422": {
-                        "description": "Corps invalide, ou intention refus\u00e9e (message `DRIVE_CHOICE_INVALID`) : identifiant, libell\u00e9, contenu ou prix hors des bornes, plus de 200 intentions, plus de 5 produits accept\u00e9s ou 20 refus\u00e9s pour un ingr\u00e9dient, produit \u00e0 la fois choisi et refus\u00e9 pour un ingr\u00e9dient ; ou plafond atteint (message `DRIVE_LIMIT_REACHED`) : plus de 5 000 \u00e9critures de produits dans la journ\u00e9e UTC, ou plus de 1 000 pr\u00e9f\u00e9rences dans le magasin. Rien n'est enregistr\u00e9"
+                        "description": "Corps invalide, ou intention refus\u00e9e (message `DRIVE_CHOICE_INVALID`) : identifiant, libell\u00e9, contenu ou prix hors des bornes, plus de 200 intentions, plus de 5 produits accept\u00e9s ou 20 refus\u00e9s pour un ingr\u00e9dient, produit \u00e0 la fois choisi et refus\u00e9 pour un ingr\u00e9dient, recherche m\u00e9moris\u00e9e sur une autre action que `ADD_PRODUCT` ; ou recherche m\u00e9moris\u00e9e refus\u00e9e (message `DRIVE_SEARCH_QUERY_INVALID`) : moins de 2 ou plus de 80 caract\u00e8res une fois les espaces r\u00e9duites, caract\u00e8re de contr\u00f4le ou invisible ; ou plafond atteint (message `DRIVE_LIMIT_REACHED`) : plus de 5 000 \u00e9critures de produits dans la journ\u00e9e UTC, ou plus de 1 000 pr\u00e9f\u00e9rences dans le magasin. Rien n'est enregistr\u00e9"
                     },
                     "429": {
                         "$ref": "#/components/responses/DriveWriteRateLimited"
@@ -3548,6 +3548,14 @@
                                 "$ref": "#/components/schemas/ProductPayload"
                             }
                         ]
+                    },
+                    "searchQuery": {
+                        "description": "Le texte qui a fait trouver le produit sur le site de l'enseigne (DRV-650), pour `ADD_PRODUCT` seulement : espaces de bord retir\u00e9es et suites d'espaces r\u00e9duites \u00e0 une seule, 2 \u00e0 80 caract\u00e8res, aucun caract\u00e8re de contr\u00f4le ni invisible (sinon `422` `DRIVE_SEARCH_QUERY_INVALID`, et rien n'est enregistr\u00e9). **Cl\u00e9 absente : la recherche d\u00e9j\u00e0 m\u00e9moris\u00e9e est gard\u00e9e** (une application qui ne conna\u00eet pas ce champ n'efface rien ; le `default: null` que le g\u00e9n\u00e9rateur \u00e9crit ici est un artefact, une cl\u00e9 absente n'est pas `null`). **`null` : elle est effac\u00e9e.** Un texte : elle est remplac\u00e9e. La recherche est propre \u00e0 l'enseigne, au magasin et \u00e0 l'ingr\u00e9dient de ce choix, et n'est jamais reprise d'ailleurs. Sur une autre action, la mentionner (texte ou `null`) est `422` `DRIVE_CHOICE_INVALID`",
+                        "type": "string",
+                        "default": null,
+                        "maxLength": 80,
+                        "example": "c\u00e9r\u00e9ales coussins chocolat",
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -4955,7 +4963,7 @@
                         }
                     },
                     "searchQuery": {
-                        "description": "Texte \u00e0 chercher sur le site de l'enseigne : le nom de l'ingr\u00e9dient",
+                        "description": "Texte \u00e0 chercher sur le site de l'enseigne : la recherche qui a fait trouver le produit choisi pour cet ingr\u00e9dient (DRV-650, m\u00e9moris\u00e9e pour cette enseigne et ce magasin, voir `searchQuery` de `GET /drive/choices`), sinon le nom de l'ingr\u00e9dient. `ingredientName` reste le nom affich\u00e9",
                         "type": "string",
                         "example": "Farine"
                     },
@@ -5158,6 +5166,12 @@
                         "description": "Derni\u00e8re modification de la pr\u00e9f\u00e9rence (ISO 8601)",
                         "type": "string",
                         "example": "2026-10-18T10:00:00+02:00"
+                    },
+                    "searchQuery": {
+                        "description": "Le texte qui a fait trouver le produit choisi sur le site de l'enseigne (DRV-650), propre \u00e0 cette enseigne et \u00e0 ce magasin : le plan le cherche en premier pour remplacer ce produit s'il n'est plus disponible. `null` quand rien n'est m\u00e9moris\u00e9 (et toujours pour \u00ab j'en ai toujours \u00bb). Texte tap\u00e9 par l'utilisateur : \u00e0 afficher comme du texte, jamais comme du HTML",
+                        "type": "string",
+                        "example": "c\u00e9r\u00e9ales coussins chocolat",
+                        "nullable": true
                     }
                 },
                 "type": "object"

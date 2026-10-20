@@ -283,6 +283,7 @@ export default {
     noMatch: 'Aucun article ne correspond à ta recherche.',
     haveAtHome: 'J’en ai toujours',
     preferred: 'Produit habituel : {label}',
+    searchedAs: 'Recherche sur le drive : {query}',
     nothingAccepted: 'Aucun produit accepté',
     fallbacks: '{n} produit de remplacement | {n} produits de remplacement',
     rejectedCount: '{n} produit à ne plus proposer | {n} produits à ne plus proposer',
@@ -859,6 +860,8 @@ export default {
         'Les produits dont Repas se souvient, article par article : ton produit habituel, tes produits de remplacement (5 au plus), les produits à ne plus proposer (20 au plus) et les articles « J’en ai toujours ». Ces produits sont propres à ton magasin.',
       products:
         'Pour chaque produit : son numéro chez Leclerc, son nom, son contenu (par exemple 1 kg), et son prix avec la date où il a été vu.',
+      searches:
+        'La recherche qui t’a fait trouver un produit : le texte que tu as tapé pour le trouver sur le site (par exemple « céréales coussins »), pour chercher un remplaçant avec ce texte quand le produit n’est plus disponible. Elle est gardée avec l’article, pour ton magasin Leclerc seulement. Elle n’est jamais envoyée ailleurs et personne d’autre ne la voit.',
       estimate:
         'Les prix servent à estimer le coût d’une liste. L’estimation est indicative : elle est faite d’après les derniers prix vus, avec leur date, et le vrai prix est toujours celui de Leclerc. Elle ne compte que les articles dont le prix est connu, elle est peu fiable quand moins de la moitié en ont un, et Repas ne devine jamais un prix.',
       lists:

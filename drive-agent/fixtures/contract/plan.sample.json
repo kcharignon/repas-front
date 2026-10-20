@@ -51,7 +51,10 @@
                 }
             ],
             "rejected": [],
-            "searchQuery": "Farine"
+            "searchQuery": "farine de blé t55",
+            "rayonHints": [
+                4001
+            ]
         },
         {
             "ingredientSlug": "lait",
@@ -83,7 +86,10 @@
                     "label": "Lait entier UHT 1 l"
                 }
             ],
-            "searchQuery": "Lait"
+            "searchQuery": "Lait",
+            "rayonHints": [
+                4002
+            ]
         },
         {
             "ingredientSlug": "oeuf",
@@ -97,7 +103,10 @@
             "status": "NEW",
             "products": [],
             "rejected": [],
-            "searchQuery": "Œufs"
+            "searchQuery": "Œufs",
+            "rayonHints": [
+                4002
+            ]
         },
         {
             "ingredientSlug": "sel",
@@ -124,7 +133,8 @@
                 }
             ],
             "rejected": [],
-            "searchQuery": "Sel"
+            "searchQuery": "Sel",
+            "rayonHints": []
         },
         {
             "ingredientSlug": "sucre",
@@ -138,7 +148,10 @@
             "status": "HAVE_AT_HOME",
             "products": [],
             "rejected": [],
-            "searchQuery": "Sucre"
+            "searchQuery": "Sucre",
+            "rayonHints": [
+                4001
+            ]
         }
     ]
 }

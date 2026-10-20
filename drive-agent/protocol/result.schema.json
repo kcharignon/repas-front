@@ -101,6 +101,12 @@
       ]
     },
     "quantity": { "type": "integer", "minimum": 1, "maximum": 99 },
+    "searchQuery": {
+      "description": "Facultatif (DRV-650), sur une ligne CHOSEN : la recherche qui a fait apparaître le produit choisi, de 2 à 80 caractères (points de code). Le nettoyage (caractères de contrôle et invisibles, espaces) est fait par l'agent et revérifié par le site.",
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 80
+    },
     "unavailableIds": {
       "description": "Au plus 4 pour ADDED (le produit mis au panier n'en fait pas partie), 5 sinon.",
       "type": "array",
@@ -206,6 +212,7 @@
             "product": { "$ref": "#/definitions/chosenProduct" },
             "quantity": { "$ref": "#/definitions/quantity" },
             "placement": { "enum": ["PRIMARY", "FALLBACK", "ONCE"] },
+            "searchQuery": { "$ref": "#/definitions/searchQuery" },
             "unavailableIds": { "$ref": "#/definitions/unavailableIds" }
           }
         },

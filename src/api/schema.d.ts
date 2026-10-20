@@ -928,7 +928,7 @@ export interface paths {
         };
         /** Préférences de produits de l'utilisateur connecté dans son magasin courant, par ingrédient : produits acceptés classés, produits refusés, « j'en ai toujours » */
         get: operations["get_api_list_choices"];
-        /** Mémorise un lot d'intentions de l'agent (produits choisis, refusés, « j'en ai toujours ») dans les préférences de l'utilisateur connecté. La fiche d'un produit déjà connu (commune au magasin) n'est complétée que là où elle est vide : libellé, contenu et code-barres ne sont jamais réécrits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte déjà */
+        /** Mémorise un lot d'intentions de l'agent (produits choisis, refusés, « j'en ai toujours ») dans les préférences de l'utilisateur connecté. La fiche d'un produit déjà connu (commune au magasin) n'est complétée que là où elle est vide : libellé, contenu et code-barres ne sont jamais réécrits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte déjà. Un `ADD_PRODUCT` peut porter la recherche qui a fait trouver le produit (`searchQuery`, mémorisée avec la préférence de cette enseigne et de ce magasin ; clé absente : gardée, `null` : effacée) */
         put: operations["put_api_save_product_choices"];
         post?: never;
         delete?: never;
@@ -1344,6 +1344,12 @@ export interface components {
              * @default null
              */
             product: components["schemas"]["ProductPayload"] | null;
+            /**
+             * @description Le texte qui a fait trouver le produit sur le site de l'enseigne (DRV-650), pour `ADD_PRODUCT` seulement : espaces de bord retirées et suites d'espaces réduites à une seule, 2 à 80 caractères, aucun caractère de contrôle ni invisible (sinon `422` `DRIVE_SEARCH_QUERY_INVALID`, et rien n'est enregistré). **Clé absente : la recherche déjà mémorisée est gardée** (une application qui ne connaît pas ce champ n'efface rien ; le `default: null` que le générateur écrit ici est un artefact, une clé absente n'est pas `null`). **`null` : elle est effacée.** Un texte : elle est remplacée. La recherche est propre à l'enseigne, au magasin et à l'ingrédient de ce choix, et n'est jamais reprise d'ailleurs. Sur une autre action, la mentionner (texte ou `null`) est `422` `DRIVE_CHOICE_INVALID`
+             * @default null
+             * @example céréales coussins chocolat
+             */
+            searchQuery: string | null;
         };
         SaveProductChoicesPayload: {
             retailer: components["schemas"]["Retailer"];
@@ -2203,7 +2209,7 @@ export interface components {
             /** @description Produits que l'utilisateur ne veut jamais, 20 au plus (aussi pour une ligne `NEW`) ; vide pour `HAVE_AT_HOME` */
             rejected: components["schemas"]["DrivePlanRejectedDTO"][];
             /**
-             * @description Texte à chercher sur le site de l'enseigne : le nom de l'ingrédient
+             * @description Texte à chercher sur le site de l'enseigne : la recherche qui a fait trouver le produit choisi pour cet ingrédient (DRV-650, mémorisée pour cette enseigne et ce magasin, voir `searchQuery` de `GET /drive/choices`), sinon le nom de l'ingrédient. `ingredientName` reste le nom affiché
              * @example Farine
              */
             searchQuery: string;
@@ -2316,6 +2322,11 @@ export interface components {
              * @example 2026-10-18T10:00:00+02:00
              */
             updatedAt: string;
+            /**
+             * @description Le texte qui a fait trouver le produit choisi sur le site de l'enseigne (DRV-650), propre à cette enseigne et à ce magasin : le plan le cherche en premier pour remplacer ce produit s'il n'est plus disponible. `null` quand rien n'est mémorisé (et toujours pour « j'en ai toujours »). Texte tapé par l'utilisateur : à afficher comme du texte, jamais comme du HTML
+             * @example céréales coussins chocolat
+             */
+            searchQuery?: string | null;
         };
     };
     responses: {
@@ -5126,7 +5137,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Corps invalide, ou intention refusée (message `DRIVE_CHOICE_INVALID`) : identifiant, libellé, contenu ou prix hors des bornes, plus de 200 intentions, plus de 5 produits acceptés ou 20 refusés pour un ingrédient, produit à la fois choisi et refusé pour un ingrédient ; ou plafond atteint (message `DRIVE_LIMIT_REACHED`) : plus de 5 000 écritures de produits dans la journée UTC, ou plus de 1 000 préférences dans le magasin. Rien n'est enregistré */
+            /** @description Corps invalide, ou intention refusée (message `DRIVE_CHOICE_INVALID`) : identifiant, libellé, contenu ou prix hors des bornes, plus de 200 intentions, plus de 5 produits acceptés ou 20 refusés pour un ingrédient, produit à la fois choisi et refusé pour un ingrédient, recherche mémorisée sur une autre action que `ADD_PRODUCT` ; ou recherche mémorisée refusée (message `DRIVE_SEARCH_QUERY_INVALID`) : moins de 2 ou plus de 80 caractères une fois les espaces réduites, caractère de contrôle ou invisible ; ou plafond atteint (message `DRIVE_LIMIT_REACHED`) : plus de 5 000 écritures de produits dans la journée UTC, ou plus de 1 000 préférences dans le magasin. Rien n'est enregistré */
             422: {
                 headers: {
                     [name: string]: unknown;

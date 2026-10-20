@@ -390,3 +390,73 @@ describe('les rayons du produit (DRV-642) : des ajouts facultatifs du protocole 
     expect(pathOf(() => validateResult(result(product)))).toBe(path)
   })
 })
+
+describe('la recherche mémorisée du produit choisi (DRV-650) : un ajout facultatif du protocole v1', () => {
+  const result = (extra: object, outcome: 'CHOSEN' | 'ADDED' = 'CHOSEN') => ({
+    v: 1,
+    type: 'result',
+    runId: '8f14e45f-ceea-467a-9575-8e6b8c0a1b2c',
+    agentVersion: '1.0.0',
+    outcome: 'completed',
+    lines: [
+      outcome === 'CHOSEN'
+        ? {
+            ingredientSlug: 'cereale',
+            outcome,
+            quantity: 1,
+            placement: 'PRIMARY',
+            product: { id: '555101', label: 'Céréales coussins de test' },
+            ...extra,
+          }
+        : {
+            ingredientSlug: 'cereale',
+            outcome,
+            productId: '555101',
+            quantity: 1,
+            usedRank: 1,
+            ...extra,
+          },
+    ],
+  })
+
+  it('les bornes du module sont celles du back : 2 à 80 points de code', () => {
+    expect(LIMITS.searchQueryMin).toBe(2)
+    expect(LIMITS.searchQueryMax).toBe(80)
+  })
+
+  it('un résultat sans « searchQuery » reste valide et repart octet pour octet', () => {
+    const before = encodeMessage(result({}))
+
+    expect(encodeMessage(validateResult(decodeMessage(before)))).toBe(before)
+    expect(JSON.stringify(decodeMessage(before))).not.toContain('searchQuery')
+  })
+
+  it.each([
+    ['deux caractères', 'ab'],
+    ['une recherche courante', 'céréales coussins'],
+    ['80 caractères', 'x'.repeat(80)],
+    ['80 points de code dont des emojis (plus de 80 unités UTF-16)', '🥚'.repeat(80)],
+  ])('accepte %s', (_name, searchQuery) => {
+    expect(validateResult(result({ searchQuery }))).toBeTruthy()
+  })
+
+  it.each([
+    ['vide', ''],
+    ['un caractère', 'a'],
+    ['un emoji seul', '🥚'],
+    ['81 caractères', 'x'.repeat(81)],
+    ['81 emojis', '🥚'.repeat(81)],
+    ['null (il effacerait la recherche mémorisée : l’agent n’envoie rien)', null],
+    ['un nombre', 42],
+    ['une liste', ['ab']],
+    ['un objet', { a: 'ab' }],
+  ])('refuse %s', (_name, searchQuery) => {
+    expect(pathOf(() => validateResult(result({ searchQuery })))).toBe('lines[0].searchQuery')
+  })
+
+  it('refuse la clé sur une autre issue qu’un choix', () => {
+    expect(pathOf(() => validateResult(result({ searchQuery: 'ab' }, 'ADDED')))).toBe(
+      'lines[0].searchQuery',
+    )
+  })
+})

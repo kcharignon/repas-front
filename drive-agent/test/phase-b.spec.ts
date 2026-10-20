@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { PlanLine, ProductRef, ResultLine } from '../protocol'
-import { guidedChoice, labelOf, MAX_CANDIDATES, productSearchForms } from '../src/flow'
+import { guidedChoice, labelOf, MAX_CANDIDATES, productSearchForms, searchForms } from '../src/flow'
 import { LeclercError } from '../src/leclerc'
 import type { ChooserAnswer, ChooserProps, PlacementProps, QuantityProps } from '../src/ui'
 import {
@@ -154,6 +154,8 @@ function run(
     siteValid?: boolean
     filtered?: Record<string, string[] | Error>
     incoherent?: string[]
+    /** La recherche d'un produit connu par son libellé : vrai si le moteur le retrouve (par défaut : toujours, s'il est au rayon). */
+    sees?: (query: string, id: string) => boolean
   } = {},
 ) {
   const placements: PlacementProps[] = []
@@ -166,6 +168,7 @@ function run(
     ...(options.siteValid !== undefined && { siteValid: options.siteValid }),
     ...(options.incoherent && { incoherent: options.incoherent }),
     ...(options.filtered && { filtered: options.filtered }),
+    ...(options.sees && { sees: options.sees }),
   })
   const user = session(...steps)
   const screens = fakeUi({
@@ -2926,5 +2929,316 @@ describe('la rangée des rayons du site, tirée de sa facette « Rayons » (DRV-
       'Fruits Légumes (4)',
       'Rayon 1 (0)',
     ])
+  })
+})
+
+// —— La recherche mémorisée (DRV-650) ————————————————————————————————————————————————————————————————————————————————————————
+
+describe('la recherche qui a fait trouver le produit est rendue à Repas (DRV-650)', () => {
+  const answer = (query: string, ids: string[] = ['2000002']) => ({ ...FOUND, [query]: ids })
+  const typeThenChoose =
+    (query: string): Step =>
+    async (view) => {
+      search(view, query)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      choose(view.zone, 'Poivre blanc')
+    }
+
+  it('une recherche tapée dans « Chercher autre chose » puis un produit choisi : la ligne porte cette recherche', async () => {
+    // Given
+    const test = run(pepper(), [typeThenChoose('  poivre   vert ')], {
+      found: answer('poivre   vert'),
+    })
+
+    // When
+    await test.start()
+
+    // Then : nettoyée comme le back l'attend (espaces réduites, rognée)
+    expect(lineOf(test.sent[0])).toMatchObject({
+      outcome: 'CHOSEN',
+      placement: 'PRIMARY',
+      searchQuery: 'poivre vert',
+    })
+  })
+
+  it('la recherche du plan inchangée : aucune clé, la valeur mémorisée par Repas est gardée', async () => {
+    const test = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')])
+
+    await test.start()
+
+    expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN' })
+    expect(JSON.stringify(test.sent[0])).not.toContain('searchQuery')
+  })
+
+  it('la recherche tapée est la même que celle du plan, aux espaces près : aucune clé', async () => {
+    const test = run(pepper(), [typeThenChoose(' poivre ')], { found: answer('poivre') })
+
+    await test.start()
+
+    expect(JSON.stringify(test.sent[0])).not.toContain('searchQuery')
+  })
+
+  it('plusieurs recherches : la dernière dont la liste est affichée, une recherche en échec ne compte pas', async () => {
+    // Given : « sel » ne répond rien, « poivre vert » répond, « poivre rose » échoue (le site ne répond pas) : la liste reste celle de « poivre vert »
+    const test = run(
+      pepper(),
+      [
+        async (view) => {
+          search(view, 'sel')
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          search(view, 'poivre vert')
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          search(view, 'poivre rose')
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          expect(view.zone.querySelector('[role="alert"]')?.textContent).toContain(
+            'Le site ne répond pas',
+          )
+          choose(view.zone, 'Poivre blanc')
+        },
+      ],
+      {
+        found: answer('poivre vert'),
+        before: (call) => {
+          if (call === 'find poivre rose') throw new LeclercError('NETWORK')
+        },
+      },
+    )
+
+    await test.start()
+
+    expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', searchQuery: 'poivre vert' })
+  })
+
+  it('un produit placé « cette fois seulement » (ONCE) ne mémorise rien : aucune clé', async () => {
+    const test = run(
+      pepper({ replaces: { id: '1000009', label: 'Poivre de test habituel' } }),
+      [typeThenChoose('poivre vert')],
+      { found: answer('poivre vert'), placementAnswer: 'ONCE' },
+    )
+
+    await test.start()
+
+    expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', placement: 'ONCE' })
+    expect(JSON.stringify(test.sent[0])).not.toContain('searchQuery')
+  })
+
+  it('une ligne sans recherche dans le plan compare avec le nom de l’ingrédient', async () => {
+    const { searchQuery: _unused, ...withoutQuery } = pepper()
+    const test = run(withoutQuery, [(view) => choose(view.zone, 'Poivre noir moulu')], {
+      found: { Poivre: ['2000001'] },
+    })
+
+    await test.start()
+
+    expect(test.adapter.calls[0]).toBe('find Poivre')
+    expect(JSON.stringify(test.sent[0])).not.toContain('searchQuery')
+  })
+
+  describe('nettoyée et coupée comme le back l’exige, sinon rien', () => {
+    const cases: [string, string, string | null][] = [
+      [
+        'des caractères invisibles et des espaces insécables',
+        'poivre\u200b  vert\u00a0bio\u00ad',
+        'poivre vert bio',
+      ],
+      [
+        '79 caractères et un emoji : 80 points de code, l’emoji reste entier',
+        `${'a'.repeat(79)}😀z`,
+        `${'a'.repeat(79)}😀`,
+      ],
+      ['80 caractères exactement', 'b'.repeat(80), 'b'.repeat(80)],
+      [
+        '81 caractères : coupée à 80, l’espace de bord laissée par la coupe est rognée',
+        `${'c'.repeat(79)} d`,
+        'c'.repeat(79),
+      ],
+      ['un seul caractère : rien', 'x', null],
+      ['un seul caractère visible entre invisibles : rien', '\u200bx\u200b', null],
+    ]
+    const sentLine = async (typed: string) => {
+      const test = run(pepper(), [typeThenChoose(typed.trim())], { found: answer(typed.trim()) })
+      await test.start()
+
+      return {
+        sent: test.sent[0],
+        line: lineOf(test.sent[0]) as ResultLine & { searchQuery?: string },
+      }
+    }
+    const kept = cases.filter((one): one is [string, string, string] => one[2] !== null)
+    const dropped = cases.filter((one) => one[2] === null)
+
+    it.each(kept)('%s', async (_name, typed, expected) => {
+      const { line } = await sentLine(typed)
+
+      expect(line.outcome).toBe('CHOSEN')
+      expect(line.searchQuery).toBe(expected)
+      expect([...expected].length).toBeLessThanOrEqual(80)
+      // le JSON qui part contient une paire de substitution entière ou aucune
+      expect(JSON.stringify(line)).not.toMatch(/\\ud[89ab][0-9a-f]{2}(?!\\ud[c-f])/i)
+    })
+
+    it.each(dropped)('%s', async (_name, typed) => {
+      const { line, sent } = await sentLine(typed)
+
+      expect(line.outcome).toBe('CHOSEN')
+      expect(JSON.stringify(sent)).not.toContain('searchQuery')
+    })
+  })
+
+  describe('pré-recherche d’un produit connu devenu indisponible : la recherche du plan, puis le libellé, puis le nom', () => {
+    const FARINE = [
+      product('1000001', 1, 'Farine de test A'),
+      product('1000002', 2, 'Farine de test B'),
+    ]
+    const stock: Record<string, ShelfItem> = {
+      ...SHELF,
+      '1000001': OUT_OF_STOCK,
+      '1000002': OUT_OF_STOCK,
+    }
+    const flour = (extra: Partial<PlanLine> = {}): PlanLine => ({
+      ...known('farine', FARINE),
+      needed: { quantity: 800, unitSymbol: 'g', dimension: 'WEIGHT', baseFactor: 1 },
+      ...extra,
+    })
+    const finds = (test: { adapter: { calls: string[] } }) =>
+      test.adapter.calls.filter((call) => call.startsWith('find ')).map((call) => call.slice(5))
+    const inputOf = (test: { user: { views: View[] } }) =>
+      test.user.views[0]?.zone.querySelector<HTMLInputElement>('#chercher')?.value
+
+    it('la recherche mémorisée répond : une seule requête, elle reste dans le champ, le besoin reste le nom', async () => {
+      // Given : « farine de blé » est le mot du drive pour l’ingrédient « Farine »
+      const test = run(flour({ searchQuery: 'farine de blé' }), [() => ({ kind: 'skip' })], {
+        shelf: stock,
+        found: { 'farine de blé': ['2000001'] },
+      })
+
+      // When
+      await test.start()
+
+      // Then
+      expect(finds(test)).toEqual(['farine de blé'])
+      expect(inputOf(test)).toBe('farine de blé')
+      const zone = test.user.views[0]?.zone
+      expect(zone?.textContent).toContain('Poivre noir moulu de test')
+      expect(test.user.views[0]?.props.ingredient).toBe('Farine')
+    })
+
+    it('la recherche mémorisée ne répond rien : le libellé du produit mémorisé, tel quel, une seule requête', async () => {
+      const test = run(flour({ searchQuery: 'memoire' }), [() => ({ kind: 'skip' })], {
+        shelf: stock,
+        found: { 'Farine de test A': ['2000001'] },
+      })
+
+      await test.start()
+
+      expect(finds(test)).toEqual(['memoire', ...searchForms('memoire'), 'Farine de test A'])
+      expect(inputOf(test)).toBe('Farine de test A')
+      expect(test.user.views[0]?.zone.textContent).toContain('rien trouvé pour « memoire »')
+    })
+
+    it('ni la recherche mémorisée ni le libellé ne répondent : le nom de l’ingrédient, avec ses formes', async () => {
+      const test = run(flour({ searchQuery: 'memoire' }), [() => ({ kind: 'skip' })], {
+        shelf: stock,
+        found: { Farine: ['2000002'] },
+      })
+
+      await test.start()
+
+      expect(finds(test)).toEqual([
+        'memoire',
+        ...searchForms('memoire'),
+        'Farine de test A',
+        'Farine',
+      ])
+      expect(inputOf(test)).toBe('Farine')
+      expect(new Set(finds(test)).size).toBe(finds(test).length)
+    })
+
+    it('rien ne répond nulle part : « Aucun produit trouvé » dit la recherche du plan, jamais deux fois la même requête', async () => {
+      const test = run(flour({ searchQuery: 'memoire' }), [() => ({ kind: 'skip' })], {
+        shelf: stock,
+        found: {},
+      })
+
+      await test.start()
+
+      expect(test.user.views[0]?.zone.textContent).toContain(
+        'Aucun produit trouvé pour « memoire »',
+      )
+      expect(new Set(finds(test)).size).toBe(finds(test).length)
+    })
+
+    it('un produit INTROUVABLE a déjà été cherché par son libellé en phase A : il n’est pas redemandé', async () => {
+      const test = run(flour({ searchQuery: 'memoire' }), [() => ({ kind: 'skip' })], {
+        shelf: { ...stock, '1000001': {}, '1000002': {} },
+        found: { Farine: ['2000002'] },
+        // aucun produit n’est retrouvé par son libellé : introuvable (DRV-635)
+        sees: () => false,
+      })
+      await test.start()
+
+      expect(finds(test)).not.toContain('Farine de test A')
+      expect(finds(test)).not.toContain('Farine de test B')
+      expect(finds(test).at(-1)).toBe('Farine')
+    })
+
+    it('un produit à remplacer, sans produit mémorisé indisponible : son libellé sert de deuxième recherche', async () => {
+      const test = run(
+        pepper({
+          searchQuery: 'memoire',
+          replaces: { id: '1000009', label: 'Poivre de test habituel' },
+        }),
+        [() => ({ kind: 'skip' })],
+        { found: { 'Poivre de test habituel': ['2000001'] } },
+      )
+
+      await test.start()
+
+      expect(finds(test)).toEqual(['memoire', ...searchForms('memoire'), 'Poivre de test habituel'])
+    })
+
+    it('le produit choisi après le libellé rend la recherche qui l’a fait apparaître', async () => {
+      const test = run(
+        flour({ searchQuery: 'memoire' }),
+        [(view) => choose(view.zone, 'Poivre noir moulu')],
+        { shelf: stock, found: { 'Farine de test A': ['2000001'] } },
+      )
+
+      await test.start()
+
+      expect(lineOf(test.sent[0], 'farine')).toMatchObject({
+        outcome: 'CHOSEN',
+        placement: 'PRIMARY',
+        searchQuery: 'Farine de test A',
+      })
+    })
+
+    it('le produit choisi dans la liste de la recherche mémorisée ne la renvoie pas', async () => {
+      const test = run(
+        flour({ searchQuery: 'farine de blé' }),
+        [(view) => choose(view.zone, 'Poivre noir moulu')],
+        { shelf: stock, found: { 'farine de blé': ['2000001'] } },
+      )
+
+      await test.start()
+
+      expect(lineOf(test.sent[0], 'farine')).toMatchObject({ outcome: 'CHOSEN' })
+      expect(JSON.stringify(test.sent[0])).not.toContain('"searchQuery"')
+    })
+
+    it('une recherche hostile reste du texte : dans le champ, jamais du HTML', async () => {
+      const test = run(flour({ searchQuery: HOSTILE }), [() => ({ kind: 'skip' })], {
+        shelf: stock,
+        found: { [HOSTILE]: ['2000001'] },
+      })
+
+      await test.start()
+
+      const zone = test.user.views[0]?.zone
+      expect(inputOf(test)).toBe(HOSTILE)
+      expect(zone?.querySelector('img')).toBeNull()
+      expect(zone?.querySelector('script')).toBeNull()
+      expect((window as unknown as { pwned?: number }).pwned).toBeUndefined()
+    })
   })
 })

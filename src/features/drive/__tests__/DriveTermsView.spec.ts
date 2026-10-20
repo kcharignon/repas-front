@@ -78,6 +78,19 @@ describe('conditions d’utilisation du drive', () => {
     expect(item?.text()).toContain('aucun identifiant de ton téléphone, aucun modèle de téléphone')
   })
 
+  it('dit ce qu’est la recherche mémorisée, pour quel magasin, et qu’elle reste privée (DRV-650, phrase de la note de vie privée du back)', async () => {
+    const { wrapper } = await open()
+
+    const item = wrapper
+      .findAll('li')
+      .find((candidate) =>
+        candidate.text().startsWith('La recherche qui t’a fait trouver un produit'),
+      )
+    expect(item?.text()).toBe(
+      'La recherche qui t’a fait trouver un produit : le texte que tu as tapé pour le trouver sur le site (par exemple « céréales coussins »), pour chercher un remplaçant avec ce texte quand le produit n’est plus disponible. Elle est gardée avec l’article, pour ton magasin Leclerc seulement. Elle n’est jamais envoyée ailleurs et personne d’autre ne la voit.',
+    )
+  })
+
   it('ne demande rien : ni case à cocher, ni bouton, ni fenêtre — un lien pour revenir à « Moi »', async () => {
     const { wrapper } = await open()
 
