@@ -189,6 +189,42 @@ class NativeBridgeTest {
     }
 
     @Test
+    fun `la reponse a app info ne parle de la mise a jour que si l'application sait la faire`() {
+        val without = JSONObject(NativeBridge.appInfo("1.2.3", 42, drive = true))
+        assertFalse("comme avant : aucune clé de plus", without.has("selfUpdate"))
+        assertEquals(setOf("v", "type", "version", "versionCode", "drive"), without.keys().asSequence().toSet())
+
+        val with = JSONObject(NativeBridge.appInfo("1.2.3", 42, drive = true, selfUpdate = true))
+        assertTrue(with.getBoolean("selfUpdate"))
+        assertEquals(setOf("v", "type", "version", "versionCode", "drive", "selfUpdate"), with.keys().asSequence().toSet())
+    }
+
+    @Test
+    fun `les messages update sont reconnus et ne portent rien`() {
+        assertEquals(NativeRequest.UpdateStatus, screen("""{"v":1,"type":"update.status"}"""))
+        assertEquals(NativeRequest.UpdateCheck, screen("""{"v":1,"type":"update.check"}"""))
+        assertEquals(NativeRequest.UpdateStart, screen("""{"v":1,"type":"update.start"}"""))
+        assertEquals(NativeRequest.UpdateCancel, screen("""{"v":1,"type":"update.cancel"}"""))
+    }
+
+    @Test
+    fun `un message update ne peut pas donner d'adresse, tout champ en plus est ignore`() {
+        // La page ne choisit rien : ni adresse, ni version, ni empreinte. Un message qui en porte est lu comme le message nu.
+        assertEquals(
+            NativeRequest.UpdateStart,
+            screen("""{"v":1,"type":"update.start","url":"https://evil.example/x.apk","sha256":"00","version":"9.9.9"}"""),
+        )
+    }
+
+    @Test
+    fun `un message update d'une autre origine ou d'un cadre secondaire est ignore`() {
+        listOf("update.status", "update.check", "update.start", "update.cancel").forEach {
+            assertEquals(Rejection.ORIGIN, (screen("""{"v":1,"type":"$it"}""", from = "https://evil.example") as NativeRequest.Ignored).reason)
+            assertEquals(Rejection.NOT_MAIN_FRAME, (screen("""{"v":1,"type":"$it"}""", main = false) as NativeRequest.Ignored).reason)
+        }
+    }
+
+    @Test
     fun `une erreur du drive porte son code et au besoin le passage`() {
         val plain = JSONObject(NativeBridge.driveError("UNAVAILABLE"))
         assertEquals("drive.error", plain.getString("type"))
