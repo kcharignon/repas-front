@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La variante « direct » (l'APK de la release GitHub, installé à la main) ajoute ce que la mise à jour dans l'application demande (DRV-639).
+     Rien de ceci n'existe dans la variante « play » (Google Play), ni dans le manifeste commun : build.sh test le vérifie.
+     - REQUEST_INSTALL_PACKAGES : la permission d'ouvrir l'installateur d'Android pour une application ; l'utilisateur l'accorde une fois
+       dans les réglages d'Android (« Installer des applications inconnues »), l'application ne l'obtient jamais d'elle-même ;
+     - un fournisseur de fichiers PRIVÉ (non exporté) qui ne montre à l'installateur que le dossier « update » de l'application. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <application>
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_file_paths" />
+        </provider>
+    </application>
+</manifest>

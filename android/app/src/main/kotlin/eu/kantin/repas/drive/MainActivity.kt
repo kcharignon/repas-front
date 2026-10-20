@@ -67,6 +67,12 @@ class MainActivity : Activity() {
 
     private val repasApp get() = application as RepasApp
 
+    /**
+     * La mise à jour de l'application par elle-même (DRV-639) : réelle dans la variante hors Google Play (`app/src/direct`), un remplaçant qui
+     * répond « non » dans celle de Google Play. Créée dans `onCreate` ; elle envoie ses états à la page par [post].
+     */
+    private lateinit var selfUpdate: SelfUpdate
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Le débogage à distance de la WebView n'existe que dans la version de débogage.
@@ -90,6 +96,8 @@ class MainActivity : Activity() {
         setContentView(root)
         registerBackAction()
 
+        // Le démarrage de la coquille efface ce qu'une mise à jour précédente a laissé (variante hors Google Play).
+        selfUpdate = createSelfUpdate(this, ::post)
         webView.loadUrl(navigation.entryUrl(intent?.dataString) ?: "$repasOrigin/")
     }
 
@@ -106,6 +114,15 @@ class MainActivity : Activity() {
         // Un résultat arrivé pendant que l'écran du drive était devant, ou un passage interrompu par la fermeture de l'application.
         flushOutbox()
         askResumeIfInterrupted()
+        // Retour des réglages d'Android où l'utilisateur autorisait l'installation (DRV-639).
+        selfUpdate.onResume()
+    }
+
+    /** L'écran d'installation d'Android s'est refermé (DRV-639) : le fichier téléchargé est effacé, installé ou non. */
+    @Suppress("OVERRIDE_DEPRECATION", "DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        selfUpdate.onInstallerResult(requestCode, resultCode)
     }
 
     override fun onPause() {
@@ -116,6 +133,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        selfUpdate.close()
         resumeDialog?.dismiss()
         (webView.parent as? ViewGroup)?.removeView(webView)
         webView.destroy()
@@ -252,15 +270,24 @@ class MainActivity : Activity() {
             }
             NativeRequest.AppInfo -> {
                 val version = installedVersion()
-                post(NativeBridge.appInfo(version.name, version.code, repasApp.agentLoad.status == AgentStatus.READY))
+                post(NativeBridge.appInfo(version.name, version.code, repasApp.agentLoad.status == AgentStatus.READY, selfUpdate.supported))
             }
             NativeRequest.AppMenu -> openMenu()
+            NativeRequest.UpdateStatus -> updateOrRefuse(selfUpdate::status)
+            NativeRequest.UpdateCheck -> updateOrRefuse(selfUpdate::check)
+            NativeRequest.UpdateStart -> updateOrRefuse(selfUpdate::start)
+            NativeRequest.UpdateCancel -> updateOrRefuse(selfUpdate::cancel)
             is NativeRequest.DriveStart -> startPass(request.plan)
             is NativeRequest.DriveSetup -> startPass(request.setup)
             is NativeRequest.DriveCancel -> cancelPass(request.runId)
         }
         // Après la réponse : la page a un écouteur (elle vient de nous écrire), un résultat en attente peut lui être livré.
         flushOutbox(pageIsAlive = true)
+    }
+
+    /** `update.*` (DRV-639) : une construction qui ne sait pas se mettre à jour répond comme une application qui ne connaît pas ces messages. */
+    private fun updateOrRefuse(action: () -> Unit) {
+        if (selfUpdate.supported) action() else post(NativeBridge.error(NativeBridge.UNKNOWN_TYPE))
     }
 
     /**

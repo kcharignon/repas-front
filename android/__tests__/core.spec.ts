@@ -11,6 +11,9 @@ const androidDir = join(dirname(fileURLToPath(import.meta.url)), '..')
 const coreMain = join(androidDir, 'core', 'src', 'main', 'kotlin')
 const coreTest = join(androidDir, 'core', 'src', 'test', 'kotlin')
 const appMain = join(androidDir, 'app', 'src', 'main', 'kotlin')
+// Les deux variantes de distribution (DRV-639) : `direct` (l'APK de la release GitHub, qui se met à jour elle-même) et `play` (Google Play)
+const appDirect = join(androidDir, 'app', 'src', 'direct', 'kotlin')
+const appPlay = join(androidDir, 'app', 'src', 'play', 'kotlin')
 
 const read = (path: string) => readFileSync(path, 'utf8')
 
@@ -27,7 +30,7 @@ function codeOf(text: string): string {
 }
 
 const coreFiles = kotlinFiles(coreMain)
-const appFiles = kotlinFiles(appMain)
+const appFiles = [...kotlinFiles(appMain), ...kotlinFiles(appDirect), ...kotlinFiles(appPlay)]
 
 describe('le cœur de l’application n’importe rien d’Android', () => {
   // `CoreArchitectureTest` donne des exemples d’imports d’Android : il est le seul fichier que la règle ne lit pas.

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- L'APK de débogage (variante « direct ») ne se met jamais à jour lui-même (DRV-639) : sa clé de signature est publique, une version publiée ne
+     s'installerait pas par-dessus (`SelfUpdate.supported` est faux sous BuildConfig.DEBUG). Il ne porte donc ni la permission d'installer ni le
+     fournisseur de fichiers que la variante « direct » ajoute : il n'a que la permission Internet, comme avant. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />
+
+    <application>
+        <provider android:name="androidx.core.content.FileProvider" tools:node="remove" />
+    </application>
+</manifest>

@@ -11,6 +11,18 @@ sealed interface NativeRequest {
     /** `app.menu` : ouvrir le menu de l'application (version, mode d'emploi, déconnexion du drive). */
     data object AppMenu : NativeRequest
 
+    /** `update.status` : dire où en est la mise à jour de l'application (DRV-639). Sans effet de bord : la réponse est `update.state`. */
+    data object UpdateStatus : NativeRequest
+
+    /** `update.check` : chercher une version plus récente (DRV-639). L'état revient par `update.state`. */
+    data object UpdateCheck : NativeRequest
+
+    /** `update.start` : télécharger, vérifier puis ouvrir l'installateur d'Android (DRV-639). L'état revient par `update.state`. */
+    data object UpdateStart : NativeRequest
+
+    /** `update.cancel` : arrêter le téléchargement en cours et effacer le fichier (DRV-639). */
+    data object UpdateCancel : NativeRequest
+
     /** `drive.start` : lancer le passage de ce plan (DRV-314). Le plan est valide dans sa forme et son hôte. */
     class DriveStart(val plan: DrivePlan) : NativeRequest
 
@@ -69,6 +81,10 @@ object NativeBridge {
         return when (val type = json.optString("type")) {
             "app.info" -> NativeRequest.AppInfo
             "app.menu" -> NativeRequest.AppMenu
+            "update.status" -> NativeRequest.UpdateStatus
+            "update.check" -> NativeRequest.UpdateCheck
+            "update.start" -> NativeRequest.UpdateStart
+            "update.cancel" -> NativeRequest.UpdateCancel
             "drive.start" -> DrivePlan.parse(json.optJSONObject("plan"))?.let { NativeRequest.DriveStart(it) }
                 ?: refused(driveError(INVALID_PLAN), Rejection.NOT_PROTOCOL)
             "drive.setup" -> SetupRequest.of(json.opt("runId"))?.let { NativeRequest.DriveSetup(it) }
@@ -90,11 +106,16 @@ object NativeBridge {
     // ---------------------------------------------------------------------------------------------------------------
     // Les réponses de l'application à la page
 
-    /** Réponse à `app.info`. `drive` : le drive est utilisable (agent intact, WebView assez récente). */
-    fun appInfo(version: String, versionCode: Long, drive: Boolean): String = message("app.info") {
+    /**
+     * Réponse à `app.info`. `drive` : le drive est utilisable (agent intact, WebView assez récente). `selfUpdate` : l'application sait se mettre
+     * à jour elle-même (DRV-639, variante hors Google Play seulement) ; la clé n'est écrite que si c'est vrai, pour qu'une application sans cette
+     * fonction réponde exactement comme avant.
+     */
+    fun appInfo(version: String, versionCode: Long, drive: Boolean, selfUpdate: Boolean = false): String = message("app.info") {
         put("version", version)
         put("versionCode", versionCode)
         put("drive", drive)
+        if (selfUpdate) put("selfUpdate", true)
     }
 
     /**

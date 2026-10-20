@@ -6,11 +6,12 @@ import { ChevronRight } from 'lucide-vue-next'
 import { driveBridge } from './bridge'
 
 // L'entrée « Application Android » de « Moi » (DRV-316) : toujours là, drive allumé ou non, car l'application contient tout Repas.
-// Dans un navigateur elle propose d'installer l'application ; dans l'application elle-même, installer n'aurait pas de sens : elle mène à la
-// rubrique « Mettre à jour l'application » de la même page d'aide.
+// Dans un navigateur elle propose d'installer l'application (page publique `/installer`) ; dans l'application elle-même, installer n'aurait pas
+// de sens : elle mène à la rubrique « Mettre à jour l'application » de la page d'aide.
 const { t } = useI18n()
 const inApp = driveBridge.isAvailable()
-const to = inApp ? { name: 'drive-help', hash: '#mise-a-jour' } : { name: 'drive-help' }
+// Dans un navigateur : la page publique d'installation (DRV-639) ; dans l'application : la mise à jour
+const to = inApp ? { name: 'drive-help', hash: '#mise-a-jour' } : { name: 'install' }
 </script>
 
 <template>

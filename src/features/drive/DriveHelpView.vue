@@ -2,26 +2,30 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { APP_RELEASES_URL } from './appInstall'
+import AppUpdateControl from './AppUpdateControl.vue'
+import InstallApp from './InstallApp.vue'
+import { useAppUpdateStore } from './appUpdateStore'
+import { useAppVersionStore } from './appVersionStore'
 import { driveBridge } from './bridge'
 
-// La page de l'application Android (DRV-316), réduite à l'essentiel : dans l'application, la version installée et un bouton vers la
-// page des versions sur GitHub ; dans un navigateur, la même chose et trois courtes étapes. Le mode d'emploi détaillé et le dépannage
-// sont dans `android/README.md`. Aucune donnée du back ; les textes sont dans `driveHelp` (fr.ts).
+// La page de l'application Android (DRV-316), réduite à l'essentiel. Dans l'application : la version installée et UN bouton, « Mettre à jour »,
+// qui fait tout sans passer par GitHub (DRV-639) ; une application qui ne sait pas encore se mettre à jour toute seule (ancienne, construction de
+// débogage) garde le téléchargement à la main. Dans un navigateur, la route mène à la page publique `/installer` (`router/index.ts`) ; si
+// la vue est montée quand même, elle montre la même chose. Le mode d'emploi détaillé et le dépannage sont dans `android/README.md`.
+// Aucune donnée du back ; les textes sont dans `driveHelp` et `install` (fr.ts).
 const { t } = useI18n()
+const versions = useAppVersionStore()
+const updates = useAppUpdateStore()
 
 const inApp = driveBridge.isAvailable()
 const version = ref<string | null>(null)
 
-const steps = ['download', 'open', 'install'] as const
-
-onMounted(() => {
+onMounted(async () => {
   if (!inApp) return
   // L'application donne sa version ; si elle ne répond pas, la page s'en passe
-  driveBridge.info().then(
-    (info) => (version.value = info.version),
-    () => undefined,
-  )
+  version.value = await versions.read()
+  // Une application qui sait se mettre à jour cherche elle-même s'il y a une version plus récente
+  if (versions.selfUpdate) void updates.check()
 })
 </script>
 
@@ -38,18 +42,7 @@ onMounted(() => {
     <p v-if="inApp && version !== null" class="rounded-xl bg-soft px-4 py-3 font-semibold">
       {{ t('driveHelp.version', { version }) }}
     </p>
-    <p v-if="!inApp" class="max-w-prose text-muted">{{ t('driveHelp.intro') }}</p>
-    <ol v-if="!inApp" class="flex max-w-prose list-decimal flex-col gap-3 pl-6">
-      <li v-for="step in steps" :key="step">{{ t(`driveHelp.steps.${step}`) }}</li>
-    </ol>
-    <a
-      :href="APP_RELEASES_URL"
-      target="_blank"
-      rel="noopener noreferrer"
-      :aria-label="t('driveHelp.downloadFor')"
-      class="flex min-h-11 w-fit items-center justify-center rounded-xl bg-primary px-5 font-bold text-on-primary hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-    >
-      {{ t('driveHelp.download') }}
-    </a>
+    <AppUpdateControl v-if="inApp && updates.supported" class="max-w-prose" />
+    <InstallApp v-else class="max-w-prose" />
   </main>
 </template>

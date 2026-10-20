@@ -51,8 +51,13 @@ Le cœur : `android/core/src/main/kotlin/eu/kantin/repas/drive/` (le paquet n'a 
 | `DebugPlan.kt`, `ResultReport.kt`, `SelftestReport.kt` | (débogage) le plan d'essai, le rapport du résultat, le rapport du test automatique |
 | `IdentityProvider.kt` | le service de plateforme « obtenir un jeton d'identité » (AUTH-011) : `IdentityProvider`, `IdentityResult`, `IdentityError`, `Cancellation` |
 | `LinkOpener.kt` | le service de plateforme « ouvrir une page web dans le navigateur du système » |
+| `UpdateSource.kt` | la mise à jour de l'application (DRV-639) : les SEULES adresses qu'elle contacte (écrites en dur), les hôtes de redirection permis, les bornes de taille |
+| `ReleaseInfo.kt` | `version.json` lu avec méfiance (quatre champs, code cohérent avec le nom) et la règle « strictement plus récent » |
+| `UpdateState.kt` | l'état de la mise à jour (`inconnu`, `aJour`, `miseAJourDisponible`, `telechargement`, `pretAInstaller`, `erreur`), ses codes d'erreur et le message `update.state` |
+| `UpdateTransfer.kt` | le téléchargement à travers les règles d'adresses (`SafeFetcher` : redirections jugées une à une, taille bornée, annulation) et le port HTTP `HttpHop` |
+| `UpdateFlow.kt` | la mise à jour pas à pas (chercher, télécharger, vérifier l'empreinte SHA-256, effacer dans tous les cas) et les ports `UpdateStorage`, `UpdatePlatform` |
 
-L'application : `android/app/src/main/kotlin/eu/kantin/repas/drive/`, tout ce qui touche à Android.
+L'application : `android/app/src/main/kotlin/eu/kantin/repas/drive/` (commun aux variantes) et, pour la mise à jour dans l'application, `android/app/src/direct/kotlin/…` et `android/app/src/play/kotlin/…` (une par variante de distribution), tout ce qui touche à Android.
 
 | Fichier | Ce qu'il porte |
 |---|---|
@@ -65,6 +70,10 @@ L'application : `android/app/src/main/kotlin/eu/kantin/repas/drive/`, tout ce qu
 | `AndroidServices.kt` | les services de plateforme d'Android derrière les interfaces du cœur (`AndroidLinkOpener`) |
 | `InstalledVersion.kt` | la version installée, lue dans le gestionnaire de paquets |
 | `Dialogs.kt`, `Views.kt`, `TextPanel.kt` | fenêtres, vues, écran de texte |
+| `SelfUpdate.kt` | ce que la coquille attend de la mise à jour dans l'application : une interface, réalisée par chaque variante de distribution (voir plus bas) |
+| `SelfUpdateDirect.kt` | (variante `direct`) la mise à jour : fil de travail, fenêtre d'autorisation, intention d'installation, effacement du fichier |
+| `UpdateServices.kt` | (variante `direct`) les services d'Android derrière les ports de la mise à jour : `HttpsHop`, `PrivateUpdateStorage`, `AndroidUpdatePlatform` |
+| `SelfUpdatePlay.kt` | (variante `play`) le remplaçant qui répond « non » à tout : `NoSelfUpdate` |
 
 Les tests suivent : `core/src/test` pour tout ce qui se joue sur la JVM seule ; `app/src/test` pour ce qui touche à Android ou à un actif de l'application (`LoadProblemTest` rapproche le classement des constantes de la WebView, `BuildOriginTest` lit `BuildConfig`, `InjectionAssetTest` lit `injection.js`, `DebugRunTest` joue le vrai `debug-plan.json`).
 
@@ -79,9 +88,27 @@ Quand le cœur a besoin de quelque chose que seule la plateforme sait faire, il 
 | `PassStore` | garder une valeur texte : le passage non terminé et les résultats à livrer | `PrefsPassStore` (préférence privée, hors sauvegarde) | hors portée |
 | `StorePathStore` | garder le chemin du magasin | `PrefsStorePathStore` | hors portée |
 | `FinalizeOutcomeStore` | garder la forme du dernier « Finaliser » | `PrefsFinalizeOutcomeStore` | hors portée |
+| `HttpHop` | UNE demande `GET` en `https`, sans suivre de redirection (DRV-639) | `HttpsHop` (`HttpsURLConnection`) | hors portée |
+| `UpdateStorage` | le dossier privé où l'APK téléchargé attend, seul (DRV-639) | `PrivateUpdateStorage` (`files/update/`) | hors portée |
+| `UpdatePlatform` | l'autorisation d'installer et le contrôle du fichier posé (paquet, code, certificat) | `AndroidUpdatePlatform` | hors portée |
 
 - **Pas de `SecureStore`** : rien ne garde de secret aujourd'hui (la connexion Google ne garde pas le jeton). Le jour où quelque chose en aura besoin, on l'ajoute au cœur avec son implémentation.
 - **Pas encore d'interface** pour l'écran allumé (`FLAG_KEEP_SCREEN_ON`), la WebView elle-même (injection, pont, profil, mode ordinateur) ni les fenêtres : il n'y a qu'une plateforme, on n'invente pas l'interface avant le second besoin. Les *règles* de ces morceaux sont déjà dans le cœur, c'est ce qui compte.
+
+## Deux variantes de distribution (DRV-639)
+
+Le module `app` a deux **variantes de distribution** (`flavorDimensions` : `distribution`), qui partagent tout le code de `src/main` :
+
+| Variante | Pour qui | Mise à jour dans l'application | Permission `REQUEST_INSTALL_PACKAGES` |
+|---|---|---|---|
+| `direct` | l'APK de la release GitHub, installé à la main (aujourd'hui, et jusqu'en 2027 au moins) | **oui** : `src/direct` (manifeste, fournisseur de fichiers, `SelfUpdateDirect.kt`, `UpdateServices.kt`) | **oui**, déclarée dans `src/direct/AndroidManifest.xml` seulement |
+| `play` | la version de Google Play (à venir, tickets STORE-xxx) : Google interdit à une application distribuée par Play de s'installer ailleurs | **non** : `src/play` n'a que `NoSelfUpdate`, qui répond « non » | **non** |
+
+- Le code commun ne connaît que l'interface `SelfUpdate` et la fonction `createSelfUpdate` que chaque variante définit. `MainActivity` lui passe les messages `update.*` du pont et lit `supported` pour `app.info` (clé `selfUpdate`).
+- `./build.sh test` (donc `make android-test`, la CI) construit les deux variantes et **échoue** si la variante `play` porte la permission, le fournisseur de fichiers ou une classe de mise à jour, ou si la permission est dans le manifeste commun (`check_distributions`) ; `android/__tests__/shell.spec.ts` le dit aussi dans `make check`. `make android-release-verify` exige, sur l'APK publié, exactement Internet et `REQUEST_INSTALL_PACKAGES`.
+- La logique pure de la mise à jour (adresses permises, version, empreinte, états, effacement) est dans le **cœur**, commune aux deux builds mais inerte : sans permission ni écran d'installation elle ne peut rien installer, et la variante `play` n'a aucun port de plateforme branché dessus. Ce qui télécharge, écrit un fichier et ouvre l'installateur est dans `src/direct`, nulle part ailleurs.
+- Un APK de débogage (`src/directDebug/AndroidManifest.xml`) retire la permission et le fournisseur de fichiers : il ne se met jamais à jour lui-même (sa clé de signature est publique, `SelfUpdate.supported` est faux sous `BuildConfig.DEBUG`) et n'a que la permission Internet.
+- Le jour où le build Play existe : `bundlePlayRelease` (tâche de la variante `play`) ; rien d'autre à retirer.
 
 ## Où mettre un nouveau code
 

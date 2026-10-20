@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Une seule permission : Internet, pour afficher Repas et le drive. Jamais d'autre (DRV-312, DRV-317) : le front n'envoie ni fichier ni photo, donc
-     pas de sélecteur de fichiers ni d'accès au stockage. -->
+     pas de sélecteur de fichiers ni d'accès au stockage. Seule la variante « direct » (l'APK de la release GitHub) y ajoute, par son propre
+     manifeste (app/src/direct), la permission d'installer sa mise à jour (DRV-639) : jamais ici, la variante de Google Play n'en a pas. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />

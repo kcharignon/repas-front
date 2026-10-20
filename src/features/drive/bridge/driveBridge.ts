@@ -6,6 +6,7 @@ import type { DraftStorage, DriveResult, RunDraft } from './draft'
 import { DriveBridgeError } from './errors'
 import { byteLength, findNativeBridge, parseInbound } from './native'
 import type { AppInfo, Inbound, NativeBridge } from './native'
+import type { AppUpdateState } from './update'
 
 /** Ce que le pont annonce aux écrans (`onEvent`). */
 export type DriveEvent =
@@ -47,6 +48,8 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
   )
 
   const listeners = new Set<(event: DriveEvent) => void>()
+  /** Ceux qui écoutent la mise à jour de l'application (DRV-639). */
+  const updateListeners = new Set<(state: AppUpdateState) => void>()
   const buffered: DriveEvent[] = []
   let listening: NativeBridge | null = null
   let infoInFlight: Promise<AppInfo> | null = null
@@ -123,6 +126,10 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
           return
 
         return publish({ kind: 'refused', code: inbound.code, runId: inbound.runId })
+      case 'update.state':
+        for (const listener of updateListeners) listener(inbound.state)
+
+        return
       case 'invalid':
         // Une réponse mal formée à `app.info` ne doit pas laisser l'appel en attente
         settleInfo((pending) =>
@@ -273,6 +280,38 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
     /** Ouvre le menu de l'application (`app.menu` : version, mode d'emploi, déconnexion de Leclerc). Sans réponse. */
     openMenu(): void {
       send(requireNative(), { v: PROTOCOL_VERSION, type: 'app.menu' })
+    },
+
+    /**
+     * La mise à jour de l'application par elle-même (DRV-639). À n'appeler que si `info()` a dit `selfUpdate` : une application qui ne connaît pas ces
+     * messages répond `error UNKNOWN_TYPE`. La page ne donne ni adresse, ni version, ni empreinte : l'application ne lit que les siennes. Les états
+     * arrivent par `onUpdate` ; `updateStatus` redemande l'état actuel (après un rechargement de la page).
+     */
+    updateStatus(): void {
+      send(requireNative(), { v: PROTOCOL_VERSION, type: 'update.status' })
+    },
+
+    /** Demande à l'application de chercher une version plus récente (`update.check`). L'état revient par `onUpdate`. */
+    checkForUpdate(): void {
+      send(requireNative(), { v: PROTOCOL_VERSION, type: 'update.check' })
+    },
+
+    /** Demande à l'application de télécharger, vérifier puis installer la version proposée (`update.start`). L'état revient par `onUpdate`. */
+    startUpdate(): void {
+      send(requireNative(), { v: PROTOCOL_VERSION, type: 'update.start' })
+    },
+
+    /** Arrête le téléchargement en cours (`update.cancel`). */
+    cancelUpdate(): void {
+      send(requireNative(), { v: PROTOCOL_VERSION, type: 'update.cancel' })
+    },
+
+    /** Écoute les états de la mise à jour. Rend la fonction qui arrête l'écoute. */
+    onUpdate(listener: (state: AppUpdateState) => void): () => void {
+      connect()
+      updateListeners.add(listener)
+
+      return () => updateListeners.delete(listener)
     },
 
     /**

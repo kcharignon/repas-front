@@ -166,6 +166,8 @@ const WEB_GROUPS = [
   'driveSettings',
   'driveAccount',
   'driveHelp',
+  // La page publique d'installation de l'application (DRV-639)
+  'install',
   'driveTerms',
   'driveEstimate',
   // Mot de passe oublié : deux écrans neufs, lus par le glossaire et par la règle « aucun avertissement » comme le reste
@@ -279,8 +281,17 @@ const XML_EXEMPT_NAMES = [
   'report_copied',
 ] as const
 
+/** Les fichiers de textes de l'application : ceux de tous les cas (`main`) et ceux de la variante qui se met à jour elle-même (`direct`, DRV-639). */
+const XML_FILES = [
+  'android/app/src/main/res/values/strings.xml',
+  'android/app/src/direct/res/values/strings.xml',
+] as const
+
 function xmlEntries(): Entry[] {
-  const file = 'android/app/src/main/res/values/strings.xml'
+  return XML_FILES.flatMap(xmlFileEntries)
+}
+
+function xmlFileEntries(file: string): Entry[] {
   const xml = readFileSync(join(root, file), 'utf8')
   return [...xml.matchAll(/<string name="([^"]+)"[^>]*>([\s\S]*?)<\/string>/g)].map((match) => ({
     where: `${file} ${match[1]}`,
