@@ -3,7 +3,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 
-import { farineA, farineB, fakeDriveBack } from './support/driveBack'
+import { cheddar, cheddarChoice, farineA, farineB, fakeDriveBack } from './support/driveBack'
 
 const scan = (page: Page) =>
   new AxeBuilder({ page })
@@ -121,3 +121,60 @@ for (const colorScheme of ['light', 'dark'] as const) {
     expect((await scan(page)).violations).toEqual([])
   })
 }
+
+test('la contenance d’un produit dans l’unité de la liste s’affiche, et se corrige sur place (DRV-652)', async ({
+  page,
+}) => {
+  const back = await fakeDriveBack(page, { choices: [cheddarChoice] })
+
+  // La liste le dit sous l'article, la fiche aussi
+  await page.goto('/drive/produits')
+  await expect(page.getByRole('link', { name: /Cheddar en tranche/ })).toContainText(
+    'Contenu : 20 tranches',
+  )
+  await page.getByRole('link', { name: /Cheddar en tranche/ }).click()
+  await expect(page.getByText('Contenu : 20 tranches')).toBeVisible()
+
+  // « Corriger » : un champ prérempli, une question, « Enregistrer » inactif tant que rien n'a changé ou que le nombre est faux
+  await page.getByRole('button', { name: /Corriger/ }).click()
+  const field = page.getByLabel('Combien de tranches y a-t-il dans ce produit ?')
+  await expect(field).toHaveValue('20')
+  await expect(field).toBeFocused()
+  const save = page.locator('[data-testid="pack-size"] form').getByRole('button', {
+    name: 'Enregistrer',
+  })
+  await expect(save).toBeDisabled()
+  await field.fill('vingt')
+  await expect(page.getByText('Entre un nombre, par exemple 20 ou 12,5.')).toBeVisible()
+  await expect(save).toBeDisabled()
+  expect((await scan(page)).violations).toEqual([])
+
+  // La virgule française se comprend ; un seul appel part, qui remplace la contenance sans rien changer d'autre
+  await field.fill('8,5')
+  await expect(save).toBeEnabled()
+  await save.click()
+  await expect(page.getByText('Contenu enregistré.')).toBeVisible()
+  await expect(page.getByText('Contenu : 8,5 tranches')).toBeVisible()
+  expect(back.bodies).toEqual([
+    {
+      retailer: 'leclerc',
+      storeId: '123456',
+      choices: [
+        {
+          ingredientSlug: 'cheddar',
+          action: 'ADD_PRODUCT',
+          placement: 'FALLBACK',
+          product: {
+            retailerProductId: '500000',
+            label: cheddar.label,
+            ean: null,
+            content: { value: 340, unit: 'g' },
+            price: null,
+            packSize: { value: 8.5, unitSlug: 'tranche' },
+          },
+        },
+      ],
+    },
+  ])
+  expect(back.received.filter((call) => call.startsWith('PUT /api/v1/drive/choices/'))).toEqual([])
+})
