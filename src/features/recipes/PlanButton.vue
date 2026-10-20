@@ -7,7 +7,15 @@ import UiButton from '@/design/UiButton.vue'
 import { useActiveSummary } from '@/features/shopping-lists/queries'
 import { usePlanRecipe } from './queries'
 
-const props = defineProps<{ recipeId: string; name: string }>()
+const props = withDefaults(
+  defineProps<{
+    recipeId: string
+    name: string
+    /** `icon` : rond de 44 px sans texte (cartes de la liste) ; `label` : pastille courte avec texte (fiche). */
+    variant?: 'icon' | 'label'
+  }>(),
+  { variant: 'label' },
+)
 
 const { t } = useI18n()
 const summary = useActiveSummary()
@@ -16,6 +24,15 @@ const plan = usePlanRecipe()
 const planned = computed(
   () => summary.data.value?.plannedRecipeIds.includes(props.recipeId) === true,
 )
+// Le nom complet reste celui des lecteurs d'écran, même quand le texte visible est court ou absent. Avec un texte visible
+// (pastille), le nom le contient (WCAG 2.5.3, commande vocale) : « Dans la liste, retirer … ».
+const fullLabel = computed(() => {
+  if (!planned.value) return t('recipes.planNamed', { name: props.name })
+
+  return t(props.variant === 'label' ? 'recipes.inListNamed' : 'recipes.unplanNamed', {
+    name: props.name,
+  })
+})
 
 function toggle() {
   plan.mutate({
@@ -29,14 +46,22 @@ function toggle() {
 <template>
   <UiButton
     :variant="planned ? 'ghost' : 'secondary'"
+    :size="variant === 'icon' ? 'icon' : 'md'"
     :aria-pressed="planned"
-    :aria-label="t(planned ? 'recipes.unplanNamed' : 'recipes.planNamed', { name })"
+    :aria-label="fullLabel"
+    :title="variant === 'icon' ? fullLabel : undefined"
     :disabled="plan.isPending.value || summary.isPending.value"
-    :class="planned ? 'bg-soft text-primary' : ''"
+    :class="[
+      'rounded-full',
+      variant === 'icon' ? 'shrink-0' : 'px-4',
+      planned ? 'bg-soft text-primary' : '',
+    ]"
     @click="toggle"
   >
     <Check v-if="planned" class="size-5" aria-hidden="true" />
     <Plus v-else class="size-5" aria-hidden="true" />
-    {{ t(planned ? 'recipes.inList' : 'recipes.addToList') }}
+    <template v-if="variant === 'label'">{{
+      t(planned ? 'recipes.inList' : 'recipes.add')
+    }}</template>
   </UiButton>
 </template>
