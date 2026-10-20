@@ -178,10 +178,13 @@ describe('la pagination et les univers : des nombres et des oui/non, jamais un m
 describe('le diagnostic dit la facette « Rayons », la forme du filtre et sonde UNE recherche filtrée (DRV-647, 0.35.0)', () => {
   const FILTERED = reply(false, [product(9, 'Tomates grappe fraîches inventées', 284323, 284351)])
 
-  async function report(withLinks: boolean) {
-    const answer = (call: Call): Scripted => ({
-      body: call.url.includes('Filtres=') ? FILTERED : reply(withLinks),
-    })
+  async function report(
+    withLinks: boolean,
+    filtered: (call: Call) => Scripted = () => ({ body: FILTERED }),
+    unfiltered = reply(withLinks),
+  ) {
+    const answer = (call: Call): Scripted =>
+      call.url.includes('Filtres=') ? filtered(call) : { body: unfiltered }
     const fake = fakeSite(answer)
     const deps: ChecksDeps = {
       adapter: new LeclercAdapter(fake.deps),
@@ -219,29 +222,61 @@ describe('le diagnostic dit la facette « Rayons », la forme du filtre et sonde
     expect(text).toContain('Liens à « Filtres » (page) : 0')
   })
 
-  it('une seule recherche filtrée, sur la valeur « fruits / légumes », après celle de « tomate » et avant les suivantes', async () => {
+  it('une seule recherche filtrée (0.36.0), sur la valeur « fruits / légumes », par son sIdValeurUrl, au chemin du magasin sans ville, après celle de « tomate »', async () => {
     const { text, calls } = await report(true)
 
     const urls = calls.map((call) => call.url)
     expect(urls).toHaveLength(6)
-    expect(urls[3]).toBe(`${STORE}-${CITY}/recherche.aspx?TexteRecherche=tomate&Filtres=4-543900`)
+    expect(urls[3]).toBe(`${STORE}/recherche.aspx?TexteRecherche=tomate&Filtres=4-543900`)
     expect(urls.filter((url) => url.includes('Filtres='))).toHaveLength(1)
     expect(calls[3]?.init.method).toBe('GET')
     expect(text).toContain(
-      'Adresse d’une recherche filtrée : déduite du lien /magasin-N-N-V/recherche.aspx ?TexteRecherche&Filtres ; Filtres=N-N (jeton remplacé : sIdValeurUrl)',
-    )
-    expect(text).toContain(
-      'Recherche « tomate » filtrée sur « Fruits et légumes » (iIdValeur=543900) : HTTP 200, 1 produits, groupes au niveau rayon ; premier produit : « Tomates grappe fraîches inventées » (frais : oui)',
+      'Recherche « tomate » filtrée sur « Fruits et légumes » (iIdValeur=543900), Filtres=<sIdValeurUrl> (forme N-N) : HTTP 200, iNbTotalProduits=?, 1 produits lus, groupes au niveau rayon ; premier produit : « Tomates grappe fraîches inventées » (frais : oui) ; verdict : filtrée (moins de produits, pas les mêmes)',
     )
     expect(text).toContain('Groupe de la recherche filtrée 284323 (1 produit) : (sans libellé)')
+    expect(text).toContain(
+      'Forme finale de l’adresse filtrée : /magasin-N-N/recherche.aspx ?TexteRecherche&Filtres ; Filtres=N-N',
+    )
   })
 
-  it('sans lien de recherche filtrée : aucune requête de plus, et le rapport dit pourquoi', async () => {
-    const { text, calls } = await report(false)
+  it('une première forme qui ne filtre pas (les mêmes produits) : UNE seconde avec iIdBloc-iIdValeur, puis rien de plus', async () => {
+    const odd = reply(true).replace('"sIdValeurUrl":"4-543900"', '"sIdValeurUrl":"9-543900"')
+    const { text, calls } = await report(
+      true,
+      (call) => ({ body: call.url.endsWith('Filtres=9-543900') ? odd : FILTERED }),
+      odd,
+    )
+
+    const filtered = calls.map((call) => call.url).filter((url) => url.includes('Filtres='))
+    expect(filtered).toEqual([
+      `${STORE}/recherche.aspx?TexteRecherche=tomate&Filtres=9-543900`,
+      `${STORE}/recherche.aspx?TexteRecherche=tomate&Filtres=4-543900`,
+    ])
+    expect(text).toContain(
+      'Filtres=<sIdValeurUrl> (forme N-N) : HTTP 200, iNbTotalProduits=?, 2 produits lus',
+    )
+    expect(text).toContain('verdict : les mêmes produits que sans filtre')
+    expect(text).toContain('Filtres=<iIdBloc-iIdValeur> (forme N-N) : HTTP 200')
+    expect(text).toContain('verdict : filtrée (moins de produits, pas les mêmes)')
+  })
+
+  it('une réponse HTTP 404 puis une seconde forme identique : une seule tentative, et le verdict', async () => {
+    const { text, calls } = await report(true, () => ({
+      status: 404,
+      body: '<html>introuvable</html>',
+    }))
+
+    expect(calls.filter((call) => call.url.includes('Filtres='))).toHaveLength(1)
+    expect(text).toContain('verdict : réponse HTTP autre que 200')
+  })
+
+  it('un sIdValeurUrl qui n’a pas la forme N-N : aucune requête filtrée, et le rapport dit pourquoi', async () => {
+    const odd = reply(true).replace('"sIdValeurUrl":"4-543900"', '"sIdValeurUrl":"fruits"')
+    const { text, calls } = await report(true, () => ({ body: FILTERED }), odd)
 
     expect(calls).toHaveLength(5)
     expect(text).toContain(
-      'Recherche « tomate » filtrée : non faite (aucun lien à « Filtres » dans la page ni dans la réponse)',
+      'Recherche « tomate » filtrée : non faite (le sIdValeurUrl de la valeur n’a pas la forme N-N)',
     )
   })
 

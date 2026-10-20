@@ -411,17 +411,60 @@ export interface FacetMatch {
 }
 
 /** La recherche filtrée sondée (une requête) : sur quelle valeur, ce que le site a répondu, les familles, le premier produit. */
-export interface FilteredProbe {
-  target: { id: number; label: string | null }
+/**
+ * Le verdict d'une recherche filtrée (DRV-647, 0.36.0) : filtrée (HTTP 200, au moins un produit, strictement moins que la recherche sans filtre, pas les
+ * mêmes produits), ou pourquoi non.
+ */
+export type ProbeVerdict = 'FILTERED' | 'IDENTICAL' | 'EMPTY' | 'NOT_SMALLER' | 'HTTP' | 'ERROR'
+
+/** Une tentative de recherche filtrée : la forme de la valeur de `Filtres` (`sIdValeurUrl` lu, ou `iIdBloc-iIdValeur`), ce que le site a répondu. */
+export interface ProbeAttempt {
+  form: 'URL_ID' | 'BLOC_ID'
+  /** La forme de la valeur envoyée (`N-N`). */
+  value: string
   status: number | null
+  /** `iNbTotalProduits` de la réponse. */
+  total: number | null
   products: number | null
+  verdict: ProbeVerdict
   fault?: string
   families: { id: number; label: string | null; count: number }[]
   level: 'RAYON' | 'FAMILLE' | null
   first: { label: string | null; fresh: boolean } | null
 }
 
-export type ProbeSkip = TemplateMiss | 'NO_TARGET' | 'NO_FACET' | 'NO_PATH'
+/** La recherche filtrée sondée par le diagnostic : sur quelle valeur, ses tentatives (deux au plus), la forme de l'adresse de la dernière. */
+export interface FilteredProbe {
+  target: { id: number; label: string | null }
+  attempts: ProbeAttempt[]
+  address: string | null
+}
+
+export type ProbeSkip = 'NO_TARGET' | 'NO_FACET' | 'NO_FILTER_KEY'
+
+/** La forme d'une clé de filtre du site, lue dans `sIdValeurUrl` (relevé du 2026-10-20 : `N-N`, le bloc puis la valeur) : rien d'autre n'est envoyé. */
+export const FILTER_KEY = /^\d{1,9}-\d{1,12}$/
+
+/** `iNbTotalProduits` d'une réponse de recherche, `null` s'il n'y est pas. */
+export function totalProducts(text: string): number | null {
+  const found = /"iNbTotalProduits"\s*:\s*"?(\d{1,9})/.exec(text)
+  return found?.[1] === undefined ? null : Number(found[1])
+}
+
+/** Le verdict d'une recherche filtrée face à la recherche sans filtre ([unfiltered] : ses identifiants de produits). */
+export function filterVerdict(
+  status: number,
+  filtered: readonly string[],
+  unfiltered: readonly string[],
+): ProbeVerdict {
+  if (status !== 200) return 'HTTP'
+  if (filtered.length === 0) return 'EMPTY'
+  const before = new Set(unfiltered)
+  if (filtered.length === unfiltered.length && filtered.every((id) => before.has(id)))
+    return 'IDENTICAL'
+  if (filtered.length >= unfiltered.length) return 'NOT_SMALLER'
+  return 'FILTERED'
+}
 
 export interface FacetExploration {
   blocs: { id: number | null; label: string | null; values: number }[]

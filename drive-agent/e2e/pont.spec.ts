@@ -290,12 +290,15 @@ test.describe('diagnostic', () => {
       /Adresse d’une recherche filtrée : déduite du lien \/magasin-N-N-V\/recherche\.aspx \?TexteRecherche&Filtres ; Filtres=N-N \(jeton remplacé : sIdValeurUrl\)/,
     )
     await expect(report).toHaveValue(
-      /Recherche « tomate » filtrée sur « Fruits et légumes » \(iIdValeur=900041\) : HTTP 200, 1 produits, groupes au niveau famille ; premier produit : « Tomates cerises Jardin Inventé » \(frais : oui\)/,
+      /Recherche « tomate » filtrée sur « Fruits et légumes » \(iIdValeur=900041\), Filtres=<sIdValeurUrl> \(forme N-N\) : HTTP 200, iNbTotalProduits=\?, 1 produits lus, groupes au niveau famille ; premier produit : « Tomates cerises Jardin Inventé » \(frais : oui\) ; verdict : filtrée/,
     )
     await expect(report).toHaveValue(
       /Clés de pagination \(réponse « tomate », nombres et oui\/non seulement\) : .*iNbResultats=3 \(×1\)/,
     )
     await expect(report).toHaveValue(/eUnivers \(réponse « tomate »\) : 1 ×3/)
+    await expect(report).toHaveValue(
+      /Forme finale de l’adresse filtrée : \/magasin-N-N\/recherche\.aspx \?TexteRecherche&Filtres ; Filtres=N-N/,
+    )
     // And : la requête filtrée est la quatrième, une seule, à la cadence normale ; rien au panier
     const searches = fake.paced().map((call) => call.detail ?? '')
     expect(searches).toHaveLength(6)

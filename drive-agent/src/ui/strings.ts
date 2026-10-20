@@ -468,11 +468,27 @@ export const S = {
       templateMiss: (why: string) => `Adresse d’une recherche filtrée : non déduite (${why})`,
       probeSkipped: (term: string, why: string) =>
         `Recherche « ${term} » filtrée : non faite (${why})`,
-      probeHead: (term: string, label: string, id: number) =>
-        `Recherche « ${term} » filtrée sur ${label} (iIdValeur=${id}) : `,
+      probeHead: (term: string, label: string, id: number, form: string, value: string) =>
+        `Recherche « ${term} » filtrée sur ${label} (iIdValeur=${id}), Filtres=<${form}> (forme ${value}) : `,
       probeFault: (fault: string) => `erreur ${fault}`,
-      probeReply: (status: number | null, products: number | null, level: string, first: string) =>
-        `HTTP ${status ?? '?'}, ${products ?? '?'} produits, groupes au niveau ${level} ; premier produit : ${first}`,
+      probeReply: (
+        status: number,
+        total: number | null,
+        products: number | null,
+        level: string,
+        first: string,
+        verdict: string,
+      ) =>
+        `HTTP ${status}, iNbTotalProduits=${total ?? '?'}, ${products ?? '?'} produits lus, groupes au niveau ${level} ; premier produit : ${first} ; verdict : ${verdict}`,
+      address: (shape: string) => `Forme finale de l’adresse filtrée : ${shape}`,
+      verdict: {
+        FILTERED: 'filtrée (moins de produits, pas les mêmes)',
+        IDENTICAL: 'les mêmes produits que sans filtre',
+        EMPTY: 'aucun produit',
+        NOT_SMALLER: 'pas moins de produits que sans filtre',
+        HTTP: 'réponse HTTP autre que 200',
+        ERROR: 'erreur',
+      } as Record<string, string>,
       probeGroup: (id: number, count: number, label: string) =>
         `Groupe de la recherche filtrée ${id} (${count} produit${count > 1 ? 's' : ''}) : ${label}`,
       pagination: (where: string, list: string) =>
@@ -489,6 +505,7 @@ export const S = {
         NO_TARGET: 'aucune valeur dans le bloc « Rayons »',
         NO_FACET: 'aucune facette dans la réponse',
         NO_PATH: 'adresse impossible à bâtir',
+        NO_FILTER_KEY: 'le sIdValeurUrl de la valeur n’a pas la forme N-N',
       } as Record<string, string>,
     },
   },
@@ -623,6 +640,9 @@ export const S = {
     allAisles: (count: number) => `Tous (${count})`,
     aisleChip: (label: string, count: number) => `${label} (${count})`,
     aisleFallback: (rank: number) => `Rayon ${rank}`,
+    /** DRV-647 (0.36.0) : la requête d'un rayon du site en cours, et la seconde rangée des enfants du rayon choisi. */
+    searchingAisle: 'Je cherche…',
+    subAisles: (label: string) => `Rayons de « ${label} »`,
     searchLabel: 'Chercher autre chose',
     searchButton: 'Chercher',
     searching: 'Recherche en cours…',

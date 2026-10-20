@@ -10,6 +10,7 @@ import { aisleMenuFacts, type AisleMenuFacts, type PageLinks, readPageLinks } fr
 import {
   aisleChoices,
   aisleSamples,
+  plausibleLabel,
   shownAisleText,
   shownAisleTexts,
   type AisleGrouping,
@@ -22,7 +23,10 @@ import {
   aisleBloc,
   allValues,
   countKeys,
-  filteredSearchPath,
+  FILTER_KEY,
+  filterVerdict,
+  totalProducts,
+  type ProbeAttempt,
   filterHrefsIn,
   filterLinks,
   filterLinkShape,
@@ -189,6 +193,28 @@ export interface RetailerAdapter {
    * « fruits / légumes » de la facette (à défaut la première), à la cadence normale, lecture seule. Jamais deux requêtes ; aucune erreur n'en sort.
    */
   exploreFacets(term: string, candidates: readonly Candidate[]): Promise<FacetExploration | null>
+  /**
+   * Les rayons du site que la facette « Rayons » de la dernière réponse de recherche propose (DRV-647, 0.36.0) : clé de filtre (`sIdValeurUrl`, forme
+   * `N-N`), libellé du site, nombre de références, enfants. Vide sans facette lisible. Aucune requête.
+   */
+  siteAisles(): SiteAisle[]
+  /**
+   * UNE recherche de [query] filtrée sur le rayon du site [key] (une clé de `siteAisles`), à la cadence normale ; ne change pas ce que l'adaptateur retient
+   * de la dernière recherche. @throws {LeclercError} comme `searchProducts`.
+   */
+  searchFiltered(
+    query: string,
+    key: string,
+  ): Promise<{ candidates: Candidate[]; total: number | null }>
+}
+
+/** Un rayon du site, lu dans sa facette « Rayons » (DRV-647, 0.36.0). */
+export interface SiteAisle {
+  /** La clé de filtre du site (`sIdValeurUrl`). */
+  key: string
+  label: string | null
+  count: number | null
+  children: SiteAisle[]
 }
 
 /** Ce que la dernière réponse de recherche laisse voir de sa structure (DRV-647) : des noms de clés et des nombres. */
@@ -537,13 +563,10 @@ export class LeclercAdapter implements RetailerAdapter {
     const fresh = freshValues(values)
     const target = fresh[0]?.value ?? values[0] ?? null
     let probe: FacetExploration['probe']
-    if ('miss' in template) probe = { skipped: template.miss }
-    else if (target === null)
-      probe = { skipped: tree.values.length === 0 ? 'NO_FACET' : 'NO_TARGET' }
-    else {
-      const path = filteredSearchPath(template, target, term)
-      probe = path === null ? { skipped: 'NO_PATH' } : await this.probeFiltered(path, target, safe)
-    }
+    if (target === null) probe = { skipped: tree.values.length === 0 ? 'NO_FACET' : 'NO_TARGET' }
+    else if (target.urlId === null || !FILTER_KEY.test(target.urlId))
+      probe = { skipped: 'NO_FILTER_KEY' }
+    else probe = await this.probeFiltered(term, target, candidates, safe)
     return {
       blocs: tree.blocs.map((bloc) => ({
         id: bloc.id,
@@ -595,49 +618,138 @@ export class LeclercAdapter implements RetailerAdapter {
     }
   }
 
-  /** La recherche filtrée sondée : une requête à la cadence normale, avec les en-têtes de la forme de recherche retenue ; jamais une erreur. */
+  /**
+   * La recherche filtrée sondée par le diagnostic (DRV-647, 0.36.0) : d'abord `Filtres=<sIdValeurUrl>` (lu tel quel, de la forme `N-N`) ; si elle ne filtre pas
+   * (HTTP autre que 200, aucun produit, pas moins de produits ou les mêmes que sans filtre), UNE seconde avec `Filtres=<iIdBloc>-<iIdValeur>` si elle diffère ;
+   * puis rien de plus. Chaque tentative passe par le `Pacer` (cadence normale, en-têtes de la recherche retenue). Jamais une erreur.
+   */
   private async probeFiltered(
-    path: string,
+    term: string,
     target: FacetValue,
+    unfiltered: readonly Candidate[],
     safe: (label: string | null) => string | null,
   ): Promise<FilteredProbe> {
-    const base: FilteredProbe = {
-      target: { id: target.id, label: safe(target.label) },
-      status: null,
-      products: null,
-      families: [],
-      level: null,
-      first: null,
-    }
-    try {
-      const { init } = buildSearch(this.searchVariant ?? 'a', this.searchContext(this.paths()), 'x')
-      const reply = await this.pacer.request(path, init)
-      if (reply.status < 200 || reply.status >= 300) {
-        return { ...base, status: reply.status, fault: httpCause(reply.status) }
+    const forms: { form: ProbeAttempt['form']; key: string }[] = [
+      { form: 'URL_ID', key: target.urlId ?? '' },
+    ]
+    const blocKey = target.bloc === null ? null : `${target.bloc}-${target.id}`
+    if (blocKey !== null && blocKey !== target.urlId) forms.push({ form: 'BLOC_ID', key: blocKey })
+    const attempts: ProbeAttempt[] = []
+    let address: string | null = null
+    const before = unfiltered.map((candidate) => candidate.id)
+    for (const { form, key } of forms) {
+      const attempt: ProbeAttempt = {
+        form,
+        value: valueShape(key, this.city()),
+        status: null,
+        total: null,
+        products: null,
+        verdict: 'ERROR',
+        families: [],
+        level: null,
+        first: null,
       }
-      const candidates = readSearchPage(reply).map((raw) => toCandidate(raw, this.deps.location))
-      const grouping = aisleChoices(candidates, { city: this.city() })
-      const first = candidates[0]
-      const label = first === undefined ? null : safe(cleanText(first.label).slice(0, 60))
-      return {
-        ...base,
-        status: reply.status,
-        products: candidates.length,
-        level: grouping.level,
-        families: grouping.choices
-          .slice(0, 8)
-          .map(({ id, label: name, count }) => ({ id, label: name, count })),
-        first: first === undefined ? null : { label, fresh: FRESH_PRODUCT.test(first.label) },
-      }
-    } catch (error) {
-      return {
-        ...base,
-        fault:
+      try {
+        const { url, reply } = await this.filteredRequest(term, key)
+        address = filterLinkShape(
+          {
+            path: url.split('?', 1)[0] ?? '',
+            params: new URLSearchParams(url.split('?')[1] ?? ''),
+            filtres: key,
+          },
+          this.city(),
+        )
+        attempt.status = reply.status
+        attempt.total = totalProducts(reply.text)
+        if (reply.status >= 200 && reply.status < 300) {
+          const candidates = readSearchPage(reply).map((raw) =>
+            toCandidate(raw, this.deps.location),
+          )
+          const grouping = aisleChoices(candidates, { city: this.city() })
+          const first = candidates[0]
+          attempt.products = candidates.length
+          attempt.level = grouping.level
+          attempt.families = grouping.choices
+            .slice(0, 8)
+            .map(({ id, label, count }) => ({ id, label, count }))
+          attempt.first =
+            first === undefined
+              ? null
+              : {
+                  label: safe(cleanText(first.label).slice(0, 60)),
+                  fresh: FRESH_PRODUCT.test(first.label),
+                }
+          attempt.verdict = filterVerdict(
+            reply.status,
+            candidates.map((candidate) => candidate.id),
+            before,
+          )
+        } else {
+          attempt.verdict = 'HTTP'
+          attempt.fault = httpCause(reply.status)
+        }
+      } catch (error) {
+        attempt.fault =
           error instanceof LeclercError
             ? `${error.code}${error.cause === null ? '' : ` (${error.cause})`}`
-            : 'EXCEPTION',
+            : 'EXCEPTION'
       }
+      attempts.push(attempt)
+      // Une erreur du site (blocage, réseau) arrête la sonde : pas de seconde tentative.
+      if (attempt.verdict === 'FILTERED' || attempt.verdict === 'ERROR') break
     }
+    return { target: { id: target.id, label: safe(target.label) }, attempts, address }
+  }
+
+  /**
+   * La requête d'une recherche filtrée (DRV-647, 0.36.0) : le chemin du magasin SANS ville (la forme de recherche `e1`, qui répond sur le vrai site),
+   * `TexteRecherche` puis `Filtres`, avec les en-têtes de la forme de recherche retenue, par le `Pacer`. [key] est une clé de filtre lue dans la réponse
+   * (`FILTER_KEY` : `N-N`), jamais une donnée de l'utilisateur. Ne change rien de ce que l'adaptateur retient de la dernière recherche.
+   */
+  private async filteredRequest(
+    query: string,
+    key: string,
+  ): Promise<{ url: string; reply: Reply }> {
+    if (!FILTER_KEY.test(key)) throw new LeclercError('CONTRACT_CHANGED', null, 'EXCEPTION')
+    const context = this.searchContext(this.paths())
+    const base = buildSearch('e1', context, query).url
+    const { init } = buildSearch(this.searchVariant ?? 'a', context, query)
+    const url = `${base}&Filtres=${encodeURIComponent(key)}`
+    return { url, reply: await this.pacer.request(url, init) }
+  }
+
+  async searchFiltered(
+    query: string,
+    key: string,
+  ): Promise<{ candidates: Candidate[]; total: number | null }> {
+    const { reply } = await this.filteredRequest(query.trim(), key)
+    this.assertUsable(reply)
+    const candidates = this.readSearch(reply).map((raw) => toCandidate(raw, this.deps.location))
+    for (const candidate of candidates) {
+      if (candidate.stock !== null) this.stocks.set(candidate.id, candidate.stock)
+    }
+    return { candidates, total: totalProducts(reply.text) }
+  }
+
+  siteAisles(): SiteAisle[] {
+    const text = this.lastReplyText
+    if (text === null) return []
+    const rayons = aisleBloc(readFacets(text))
+    const city = this.city()
+    const shown = (values: readonly FacetValue[]): SiteAisle[] =>
+      values.flatMap((value) =>
+        value.urlId === null || !FILTER_KEY.test(value.urlId)
+          ? []
+          : [
+              {
+                key: value.urlId,
+                label: plausibleLabel(value.label, city),
+                count: value.references,
+                children: shown(value.children),
+              },
+            ],
+      )
+    return shown(rayons?.values ?? [])
   }
 
   /** La ville du chemin de la page (`/magasin-N-N-<Ville>`), `null` sans elle. */

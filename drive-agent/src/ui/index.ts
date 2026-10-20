@@ -5,6 +5,8 @@ export {
   renderPicker,
   type AisleChip,
   type AisleRow,
+  type AisleId,
+  type AisleLoad,
   type Picker,
   type PickerHooks,
   type PickerItem,
