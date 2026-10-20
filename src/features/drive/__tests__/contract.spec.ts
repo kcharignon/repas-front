@@ -166,14 +166,19 @@ describe('le plan du back, traduit par buildPlanMessage, est valide pour l’age
     expect(lineOf(lines, 'oeuf')).toMatchObject({ products: [], rejected: [] })
     expect(lineOf(lines, 'sel').products).toEqual([
       expect.objectContaining({ id: '555401', packs: null, packsStatus: 'TO_CHECK' }),
+      expect.objectContaining({ id: '555402', packs: 1, packsStatus: 'COMPUTED' }),
     ])
   })
 
-  it('garde needed pour toutes les lignes à mettre au panier, mot pour mot : l’unité sans symbole porte son nom', () => {
+  it('garde needed pour toutes les lignes à mettre au panier, clés du protocole seulement : l’unité sans symbole porte son nom', () => {
     const { lines } = buildPlanMessage(plan, {}, RUN_ID)
 
-    for (const source of plan.lines.filter((line) => line.status !== 'HAVE_AT_HOME'))
-      expect(lineOf(lines, source.ingredientSlug).needed).toEqual(source.needed)
+    // `unitSlug` et `unitName` (DRV-652) sont des clés du back que le protocole v1 ne connaît pas : elles ne partent pas à l'agent
+    for (const source of plan.lines.filter((line) => line.status !== 'HAVE_AT_HOME')) {
+      const { unitSlug, unitName, ...known } = source.needed
+      expect([unitSlug, unitName]).not.toContain(undefined)
+      expect(lineOf(lines, source.ingredientSlug).needed).toEqual(known)
+    }
     expect(lineOf(lines, 'oeuf').needed).toEqual({
       quantity: 6,
       unitSymbol: 'unité',

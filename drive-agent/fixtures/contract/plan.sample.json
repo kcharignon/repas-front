@@ -21,7 +21,9 @@
                 "quantity": 300,
                 "unitSymbol": "g",
                 "dimension": "WEIGHT",
-                "baseFactor": 1
+                "baseFactor": 1,
+                "unitSlug": "gramme",
+                "unitName": "gramme"
             },
             "status": "KNOWN",
             "products": [
@@ -35,7 +37,8 @@
                         "unit": "kg"
                     },
                     "packs": 1,
-                    "packsStatus": "COMPUTED"
+                    "packsStatus": "COMPUTED",
+                    "packSize": null
                 },
                 {
                     "rank": 2,
@@ -47,7 +50,8 @@
                         "unit": "g"
                     },
                     "packs": 1,
-                    "packsStatus": "COMPUTED"
+                    "packsStatus": "COMPUTED",
+                    "packSize": null
                 }
             ],
             "rejected": [],
@@ -63,7 +67,9 @@
                 "quantity": 1.5,
                 "unitSymbol": "l",
                 "dimension": "VOLUME",
-                "baseFactor": 1000
+                "baseFactor": 1000,
+                "unitSlug": "litre",
+                "unitName": "litre"
             },
             "status": "KNOWN",
             "products": [
@@ -77,7 +83,8 @@
                         "unit": "cl"
                     },
                     "packs": 3,
-                    "packsStatus": "COMPUTED"
+                    "packsStatus": "COMPUTED",
+                    "packSize": null
                 }
             ],
             "rejected": [
@@ -98,7 +105,9 @@
                 "quantity": 6,
                 "unitSymbol": "unité",
                 "dimension": "COUNT",
-                "baseFactor": 1
+                "baseFactor": 1,
+                "unitSlug": "unite",
+                "unitName": "unité"
             },
             "status": "NEW",
             "products": [],
@@ -115,7 +124,9 @@
                 "quantity": 2,
                 "unitSymbol": "cuillère à soupe",
                 "dimension": null,
-                "baseFactor": null
+                "baseFactor": null,
+                "unitSlug": "cuillere-a-soupe",
+                "unitName": "cuillère à soupe"
             },
             "status": "KNOWN",
             "products": [
@@ -129,7 +140,24 @@
                         "unit": "kg"
                     },
                     "packs": null,
-                    "packsStatus": "TO_CHECK"
+                    "packsStatus": "TO_CHECK",
+                    "packSize": null
+                },
+                {
+                    "rank": 2,
+                    "retailerProductId": "555402",
+                    "ean": null,
+                    "label": "Sel fin 250 g",
+                    "content": {
+                        "value": 250,
+                        "unit": "g"
+                    },
+                    "packs": 1,
+                    "packsStatus": "COMPUTED",
+                    "packSize": {
+                        "value": 14,
+                        "unitSlug": "cuillere-a-soupe"
+                    }
                 }
             ],
             "rejected": [],
@@ -143,7 +171,9 @@
                 "quantity": 1,
                 "unitSymbol": "kg",
                 "dimension": "WEIGHT",
-                "baseFactor": 1000
+                "baseFactor": 1000,
+                "unitSlug": "kilo",
+                "unitName": "kilo"
             },
             "status": "HAVE_AT_HOME",
             "products": [],

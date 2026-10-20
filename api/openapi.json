@@ -2731,7 +2731,7 @@
                 "tags": [
                     "Drive"
                 ],
-                "summary": "M\u00e9morise un lot d'intentions de l'agent (produits choisis, refus\u00e9s, \u00ab j'en ai toujours \u00bb) dans les pr\u00e9f\u00e9rences de l'utilisateur connect\u00e9. La fiche d'un produit d\u00e9j\u00e0 connu (commune au magasin) n'est compl\u00e9t\u00e9e que l\u00e0 o\u00f9 elle est vide : libell\u00e9, contenu et code-barres ne sont jamais r\u00e9\u00e9crits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte d\u00e9j\u00e0. Un `ADD_PRODUCT` peut porter la recherche qui a fait trouver le produit (`searchQuery`, m\u00e9moris\u00e9e avec la pr\u00e9f\u00e9rence de cette enseigne et de ce magasin ; cl\u00e9 absente : gard\u00e9e, `null` : effac\u00e9e)",
+                "summary": "M\u00e9morise un lot d'intentions de l'agent (produits choisis, refus\u00e9s, \u00ab j'en ai toujours \u00bb) dans les pr\u00e9f\u00e9rences de l'utilisateur connect\u00e9. La fiche d'un produit d\u00e9j\u00e0 connu (commune au magasin) n'est compl\u00e9t\u00e9e que l\u00e0 o\u00f9 elle est vide : libell\u00e9, contenu et code-barres ne sont jamais r\u00e9\u00e9crits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte d\u00e9j\u00e0. Un `ADD_PRODUCT` peut porter la recherche qui a fait trouver le produit (`searchQuery`, m\u00e9moris\u00e9e avec la pr\u00e9f\u00e9rence de cette enseigne et de ce magasin ; cl\u00e9 absente : gard\u00e9e, `null` : effac\u00e9e) ; l'intention `NOTE_SEARCH` (DRV-653) m\u00e9morise cette recherche seule, sans produit, quand le produit n'est pas m\u00e9moris\u00e9 (pris pour cette fois seulement) et la contenance du produit dans l'unit\u00e9 de la liste (`product.packSize`, DRV-652, priv\u00e9e \u00e0 l'utilisateur et propre \u00e0 ce produit ; cl\u00e9 absente : gard\u00e9e pour le m\u00eame produit, `null` : effac\u00e9e)",
                 "operationId": "put_api_save_product_choices",
                 "requestBody": {
                     "required": true,
@@ -2754,7 +2754,7 @@
                         "description": "Pas de magasin enregistr\u00e9 (message `DRIVE_NOT_CONFIGURED`), ou `storeId` n'est pas le magasin courant (message `DRIVE_STORE_MISMATCH`)"
                     },
                     "422": {
-                        "description": "Corps invalide, ou intention refus\u00e9e (message `DRIVE_CHOICE_INVALID`) : identifiant, libell\u00e9, contenu ou prix hors des bornes, plus de 200 intentions, plus de 5 produits accept\u00e9s ou 20 refus\u00e9s pour un ingr\u00e9dient, produit \u00e0 la fois choisi et refus\u00e9 pour un ingr\u00e9dient, recherche m\u00e9moris\u00e9e sur une autre action que `ADD_PRODUCT` ; ou recherche m\u00e9moris\u00e9e refus\u00e9e (message `DRIVE_SEARCH_QUERY_INVALID`) : moins de 2 ou plus de 80 caract\u00e8res une fois les espaces r\u00e9duites, caract\u00e8re de contr\u00f4le ou invisible ; ou plafond atteint (message `DRIVE_LIMIT_REACHED`) : plus de 5 000 \u00e9critures de produits dans la journ\u00e9e UTC, ou plus de 1 000 pr\u00e9f\u00e9rences dans le magasin. Rien n'est enregistr\u00e9"
+                        "description": "Corps invalide, ou intention refus\u00e9e (message `DRIVE_CHOICE_INVALID`) : identifiant, libell\u00e9, contenu ou prix hors des bornes, plus de 200 intentions, plus de 5 produits accept\u00e9s ou 20 refus\u00e9s pour un ingr\u00e9dient, produit \u00e0 la fois choisi et refus\u00e9 pour un ingr\u00e9dient, recherche m\u00e9moris\u00e9e sur une autre action que `ADD_PRODUCT` ou `NOTE_SEARCH` (m\u00eame `null`), `NOTE_SEARCH` sans recherche (cl\u00e9 absente ou `null`), avec un produit ou un placement, ou sur un ingr\u00e9dient \u00ab j'en ai toujours \u00bb, contenance (`product.packSize`, m\u00eame `null`) sur une autre action que `ADD_PRODUCT` ; ou recherche m\u00e9moris\u00e9e refus\u00e9e (message `DRIVE_SEARCH_QUERY_INVALID`) : moins de 2 ou plus de 80 caract\u00e8res une fois les espaces r\u00e9duites, caract\u00e8re de contr\u00f4le ou invisible ; ou contenance refus\u00e9e (message `DRIVE_PACK_SIZE_INVALID`) : valeur hors de 0,001 \u00e0 9 999 ou avec plus de trois d\u00e9cimales, slug d'unit\u00e9 mal form\u00e9 ou qui n'existe pas ; ou plafond atteint (message `DRIVE_LIMIT_REACHED`) : plus de 5 000 \u00e9critures de produits dans la journ\u00e9e UTC, ou plus de 1 000 pr\u00e9f\u00e9rences dans le magasin. Rien n'est enregistr\u00e9"
                     },
                     "429": {
                         "$ref": "#/components/responses/DriveWriteRateLimited"
@@ -3354,7 +3354,8 @@
                     "ADD_PRODUCT",
                     "REJECT_PRODUCT",
                     "HAVE_AT_HOME",
-                    "REFRESH_PRICE"
+                    "REFRESH_PRICE",
+                    "NOTE_SEARCH"
                 ]
             },
             "Placement": {
@@ -3441,6 +3442,29 @@
                 },
                 "type": "object"
             },
+            "PackSizePayload": {
+                "required": [
+                    "value",
+                    "unitSlug"
+                ],
+                "properties": {
+                    "value": {
+                        "description": "Combien d'unit\u00e9s de la liste tiennent dans le produit : de 0,001 \u00e0 9 999, trois d\u00e9cimales au plus",
+                        "type": "number",
+                        "format": "float",
+                        "maximum": 9999,
+                        "minimum": 0.001,
+                        "example": 20
+                    },
+                    "unitSlug": {
+                        "description": "Slug de l'unit\u00e9 de la liste dans laquelle la valeur est compt\u00e9e (`needed.unitSlug` de la ligne du plan) : une unit\u00e9 qui existe dans Repas",
+                        "type": "string",
+                        "pattern": "^[a-z0-9-]{1,255}$",
+                        "example": "tranche"
+                    }
+                },
+                "type": "object"
+            },
             "ProductPayload": {
                 "required": [
                     "retailerProductId"
@@ -3505,6 +3529,16 @@
                         "minimum": 1,
                         "example": 4101,
                         "nullable": true
+                    },
+                    "packSize": {
+                        "description": "La contenance du produit dans l'unit\u00e9 de la liste de courses (DRV-652), pour `ADD_PRODUCT` seulement : combien d'unit\u00e9s de la liste (20 tranches) tiennent dans ce produit, r\u00e9pondu par la personne quand l'unit\u00e9 de la liste n'a pas de dimension (tranche, cuill\u00e8re\u2026) et que le contenu net ne permet pas de calculer le nombre de produits. Priv\u00e9e \u00e0 l'utilisateur et propre \u00e0 CE produit dans sa pr\u00e9f\u00e9rence : changer de produit ne la reprend jamais. L'unit\u00e9 doit exister, sinon `422` `DRIVE_PACK_SIZE_INVALID` (comme une valeur hors de 0,001 \u00e0 9 999 ou avec plus de trois d\u00e9cimales), et rien n'est enregistr\u00e9. **Cl\u00e9 absente : la contenance d\u00e9j\u00e0 m\u00e9moris\u00e9e pour ce produit est gard\u00e9e** (une application qui ne conna\u00eet pas ce champ n'efface rien, un produit nouveau n'en a pas ; le `default: null` que le g\u00e9n\u00e9rateur \u00e9crit ici est un artefact, une cl\u00e9 absente n'est pas `null`). **`null` : elle est effac\u00e9e.** Un objet : elle est remplac\u00e9e. Sur une autre action, la mentionner (objet ou `null`) est `422` `DRIVE_CHOICE_INVALID`",
+                        "default": null,
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/PackSizePayload"
+                            }
+                        ]
                     }
                 },
                 "type": "object"
@@ -3550,7 +3584,7 @@
                         ]
                     },
                     "searchQuery": {
-                        "description": "Le texte qui a fait trouver le produit sur le site de l'enseigne (DRV-650), pour `ADD_PRODUCT` seulement : espaces de bord retir\u00e9es et suites d'espaces r\u00e9duites \u00e0 une seule, 2 \u00e0 80 caract\u00e8res, aucun caract\u00e8re de contr\u00f4le ni invisible (sinon `422` `DRIVE_SEARCH_QUERY_INVALID`, et rien n'est enregistr\u00e9). **Cl\u00e9 absente : la recherche d\u00e9j\u00e0 m\u00e9moris\u00e9e est gard\u00e9e** (une application qui ne conna\u00eet pas ce champ n'efface rien ; le `default: null` que le g\u00e9n\u00e9rateur \u00e9crit ici est un artefact, une cl\u00e9 absente n'est pas `null`). **`null` : elle est effac\u00e9e.** Un texte : elle est remplac\u00e9e. La recherche est propre \u00e0 l'enseigne, au magasin et \u00e0 l'ingr\u00e9dient de ce choix, et n'est jamais reprise d'ailleurs. Sur une autre action, la mentionner (texte ou `null`) est `422` `DRIVE_CHOICE_INVALID`",
+                        "description": "Le texte qui a fait trouver le produit sur le site de l'enseigne (DRV-650), pour `ADD_PRODUCT` et `NOTE_SEARCH` seulement : espaces de bord retir\u00e9es et suites d'espaces r\u00e9duites \u00e0 une seule, 2 \u00e0 80 caract\u00e8res, aucun caract\u00e8re de contr\u00f4le ni invisible (sinon `422` `DRIVE_SEARCH_QUERY_INVALID`, et rien n'est enregistr\u00e9). **Cl\u00e9 absente : la recherche d\u00e9j\u00e0 m\u00e9moris\u00e9e est gard\u00e9e** (une application qui ne conna\u00eet pas ce champ n'efface rien ; le `default: null` que le g\u00e9n\u00e9rateur \u00e9crit ici est un artefact, une cl\u00e9 absente n'est pas `null`). **`null` : elle est effac\u00e9e.** Un texte : elle est remplac\u00e9e. La recherche est propre \u00e0 l'enseigne, au magasin et \u00e0 l'ingr\u00e9dient de ce choix, et n'est jamais reprise d'ailleurs. **Obligatoire (un texte) pour `NOTE_SEARCH`** : absente ou `null` y est `422` `DRIVE_CHOICE_INVALID`. Sur une autre action, la mentionner (texte ou `null`) est `422` `DRIVE_CHOICE_INVALID`",
                         "type": "string",
                         "default": null,
                         "maxLength": 80,
@@ -4773,7 +4807,9 @@
             "DrivePlanNeededDTO": {
                 "required": [
                     "quantity",
-                    "unitSymbol"
+                    "unitSymbol",
+                    "unitSlug",
+                    "unitName"
                 ],
                 "properties": {
                     "quantity": {
@@ -4805,6 +4841,16 @@
                         "format": "float",
                         "example": 1,
                         "nullable": true
+                    },
+                    "unitSlug": {
+                        "description": "Slug de l'unit\u00e9 d'achat (DRV-652) : c'est dans cette unit\u00e9 qu'une contenance (`packSize` d'un produit) se compte et se compare. Le m\u00eame que `unitSlug` d'une ligne de la liste de courses",
+                        "type": "string",
+                        "example": "tranche"
+                    },
+                    "unitName": {
+                        "description": "Nom de l'unit\u00e9 d'achat (DRV-652), au singulier, tel que Repas l'\u00e9crit : de quoi demander \u00ab Combien de tranches y a-t-il dans ce produit ? \u00bb sans deviner le nom depuis son symbole",
+                        "type": "string",
+                        "example": "tranche"
                     }
                 },
                 "type": "object"
@@ -4833,6 +4879,26 @@
                             "piece"
                         ],
                         "example": "g"
+                    }
+                },
+                "type": "object"
+            },
+            "PackSizeDTO": {
+                "required": [
+                    "value",
+                    "unitSlug"
+                ],
+                "properties": {
+                    "value": {
+                        "description": "Combien de l'unit\u00e9 ci-dessous tient dans le produit : de 0,001 \u00e0 9 999, trois d\u00e9cimales au plus",
+                        "type": "number",
+                        "format": "float",
+                        "example": 20
+                    },
+                    "unitSlug": {
+                        "description": "Slug de l'unit\u00e9 de la liste dans laquelle la personne a compt\u00e9 le produit (`unitSlug` d'une ligne du plan)",
+                        "type": "string",
+                        "example": "tranche"
                     }
                 },
                 "type": "object"
@@ -4876,7 +4942,7 @@
                         ]
                     },
                     "packs": {
-                        "description": "Nombre de produits \u00e0 mettre au panier pour la quantit\u00e9 demand\u00e9e (1 \u00e0 99), calcul\u00e9 avec le contenu de ce produit ; `null` quand il ne se calcule pas",
+                        "description": "Nombre de produits \u00e0 mettre au panier pour la quantit\u00e9 demand\u00e9e (1 \u00e0 99), calcul\u00e9 avec la contenance m\u00e9moris\u00e9e de ce produit si elle est dans l'unit\u00e9 de la ligne (DRV-652), sinon avec son contenu net ; `null` quand il ne se calcule pas",
                         "type": "integer",
                         "maximum": 99,
                         "minimum": 1,
@@ -4891,6 +4957,15 @@
                             "TO_CHECK"
                         ],
                         "example": "COMPUTED"
+                    },
+                    "packSize": {
+                        "description": "La contenance que la personne a donn\u00e9e pour CE produit, dans l'unit\u00e9 de la liste (DRV-652), ou `null` si elle n'en a pas donn\u00e9. Quand son `unitSlug` est celui de la ligne (`needed.unitSlug`), `packs` est calcul\u00e9 avec elle et vaut `COMPUTED`, sans question ; une contenance dans une autre unit\u00e9 est ignor\u00e9e par le calcul (mais reste renvoy\u00e9e)",
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/PackSizeDTO"
+                            }
+                        ]
                     }
                 },
                 "type": "object"
@@ -5100,6 +5175,15 @@
                         "oneOf": [
                             {
                                 "$ref": "#/components/schemas/ProductContentDTO"
+                            }
+                        ]
+                    },
+                    "packSize": {
+                        "description": "Combien d'unit\u00e9s de la liste tiennent dans ce produit, tel que la personne l'a r\u00e9pondu (DRV-652) : \u00ab 20 tranches \u00bb pour un cheddar que la liste compte en tranches. Propre \u00e0 l'utilisateur et \u00e0 ce produit dans cette pr\u00e9f\u00e9rence ; `null` si elle n'a rien r\u00e9pondu (et toujours pour un produit refus\u00e9). Elle ne sert au calcul que pour la m\u00eame unit\u00e9 : si la liste change d'unit\u00e9, elle est ignor\u00e9e",
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/PackSizeDTO"
                             }
                         ]
                     }

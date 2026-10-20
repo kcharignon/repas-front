@@ -30,9 +30,12 @@ export function catalogIdOf(value: unknown): number | null {
 
 /** Le produit d'une intention, avec son rayon et sa famille (DRV-642), présents seulement quand l'agent les a donnés. */
 type WireProduct = NonNullable<ChoiceIntent['product']>
-/** Le contrat marque `rayonId` et `familyId` requis (défaut `null`) ; le back accepte aussi leur absence, qu'on garde quand l'agent n'en dit rien. */
-type Product = Omit<WireProduct, 'rayonId' | 'familyId'> &
-  Partial<Pick<WireProduct, 'rayonId' | 'familyId'>>
+/**
+ * Le contrat marque `rayonId`, `familyId` et `packSize` (DRV-652) requis (défaut `null`) ; le back accepte aussi leur absence, qu'on garde quand
+ * l'agent n'en dit rien. `packSize` absent garde la contenance déjà mémorisée, `null` l'EFFACERAIT : cet envoi ne la porte jamais.
+ */
+type Product = Omit<WireProduct, 'rayonId' | 'familyId' | 'packSize'> &
+  Partial<Pick<WireProduct, 'rayonId' | 'familyId' | 'packSize'>>
 /**
  * Le contrat marque aussi `searchQuery` (DRV-650) requis, avec `null` pour défaut : un artefact du générateur. Une clé absente garde la recherche déjà
  * mémorisée, `null` l'EFFACE : l'intention ne la porte donc que lorsque l'agent en a rendu une, jamais `null`.

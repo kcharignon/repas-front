@@ -928,7 +928,7 @@ export interface paths {
         };
         /** Préférences de produits de l'utilisateur connecté dans son magasin courant, par ingrédient : produits acceptés classés, produits refusés, « j'en ai toujours » */
         get: operations["get_api_list_choices"];
-        /** Mémorise un lot d'intentions de l'agent (produits choisis, refusés, « j'en ai toujours ») dans les préférences de l'utilisateur connecté. La fiche d'un produit déjà connu (commune au magasin) n'est complétée que là où elle est vide : libellé, contenu et code-barres ne sont jamais réécrits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte déjà. Un `ADD_PRODUCT` peut porter la recherche qui a fait trouver le produit (`searchQuery`, mémorisée avec la préférence de cette enseigne et de ce magasin ; clé absente : gardée, `null` : effacée) */
+        /** Mémorise un lot d'intentions de l'agent (produits choisis, refusés, « j'en ai toujours ») dans les préférences de l'utilisateur connecté. La fiche d'un produit déjà connu (commune au magasin) n'est complétée que là où elle est vide : libellé, contenu et code-barres ne sont jamais réécrits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte déjà. Un `ADD_PRODUCT` peut porter la recherche qui a fait trouver le produit (`searchQuery`, mémorisée avec la préférence de cette enseigne et de ce magasin ; clé absente : gardée, `null` : effacée) ; l'intention `NOTE_SEARCH` (DRV-653) mémorise cette recherche seule, sans produit, quand le produit n'est pas mémorisé (pris pour cette fois seulement) et la contenance du produit dans l'unité de la liste (`product.packSize`, DRV-652, privée à l'utilisateur et propre à ce produit ; clé absente : gardée pour le même produit, `null` : effacée) */
         put: operations["put_api_save_product_choices"];
         post?: never;
         delete?: never;
@@ -1248,7 +1248,7 @@ export interface components {
             store: components["schemas"]["DriveStorePayload"];
         };
         /** @enum {string} */
-        ChoiceAction: "ADD_PRODUCT" | "REJECT_PRODUCT" | "HAVE_AT_HOME" | "REFRESH_PRICE";
+        ChoiceAction: "ADD_PRODUCT" | "REJECT_PRODUCT" | "HAVE_AT_HOME" | "REFRESH_PRICE" | "NOTE_SEARCH";
         /** @enum {string} */
         Placement: "PRIMARY" | "FALLBACK";
         /** @enum {string} */
@@ -1283,6 +1283,19 @@ export interface components {
              * @default null
              */
             perMeasure: components["schemas"]["PricePerMeasurePayload"] | null;
+        };
+        PackSizePayload: {
+            /**
+             * Format: float
+             * @description Combien d'unités de la liste tiennent dans le produit : de 0,001 à 9 999, trois décimales au plus
+             * @example 20
+             */
+            value: number;
+            /**
+             * @description Slug de l'unité de la liste dans laquelle la valeur est comptée (`needed.unitSlug` de la ligne du plan) : une unité qui existe dans Repas
+             * @example tranche
+             */
+            unitSlug: string;
         };
         ProductPayload: {
             /**
@@ -1324,6 +1337,11 @@ export interface components {
              * @example 4101
              */
             familyId: number | null;
+            /**
+             * @description La contenance du produit dans l'unité de la liste de courses (DRV-652), pour `ADD_PRODUCT` seulement : combien d'unités de la liste (20 tranches) tiennent dans ce produit, répondu par la personne quand l'unité de la liste n'a pas de dimension (tranche, cuillère…) et que le contenu net ne permet pas de calculer le nombre de produits. Privée à l'utilisateur et propre à CE produit dans sa préférence : changer de produit ne la reprend jamais. L'unité doit exister, sinon `422` `DRIVE_PACK_SIZE_INVALID` (comme une valeur hors de 0,001 à 9 999 ou avec plus de trois décimales), et rien n'est enregistré. **Clé absente : la contenance déjà mémorisée pour ce produit est gardée** (une application qui ne connaît pas ce champ n'efface rien, un produit nouveau n'en a pas ; le `default: null` que le générateur écrit ici est un artefact, une clé absente n'est pas `null`). **`null` : elle est effacée.** Un objet : elle est remplacée. Sur une autre action, la mentionner (objet ou `null`) est `422` `DRIVE_CHOICE_INVALID`
+             * @default null
+             */
+            packSize: components["schemas"]["PackSizePayload"] | null;
         };
         ChoiceIntentPayload: {
             /**
@@ -1345,7 +1363,7 @@ export interface components {
              */
             product: components["schemas"]["ProductPayload"] | null;
             /**
-             * @description Le texte qui a fait trouver le produit sur le site de l'enseigne (DRV-650), pour `ADD_PRODUCT` seulement : espaces de bord retirées et suites d'espaces réduites à une seule, 2 à 80 caractères, aucun caractère de contrôle ni invisible (sinon `422` `DRIVE_SEARCH_QUERY_INVALID`, et rien n'est enregistré). **Clé absente : la recherche déjà mémorisée est gardée** (une application qui ne connaît pas ce champ n'efface rien ; le `default: null` que le générateur écrit ici est un artefact, une clé absente n'est pas `null`). **`null` : elle est effacée.** Un texte : elle est remplacée. La recherche est propre à l'enseigne, au magasin et à l'ingrédient de ce choix, et n'est jamais reprise d'ailleurs. Sur une autre action, la mentionner (texte ou `null`) est `422` `DRIVE_CHOICE_INVALID`
+             * @description Le texte qui a fait trouver le produit sur le site de l'enseigne (DRV-650), pour `ADD_PRODUCT` et `NOTE_SEARCH` seulement : espaces de bord retirées et suites d'espaces réduites à une seule, 2 à 80 caractères, aucun caractère de contrôle ni invisible (sinon `422` `DRIVE_SEARCH_QUERY_INVALID`, et rien n'est enregistré). **Clé absente : la recherche déjà mémorisée est gardée** (une application qui ne connaît pas ce champ n'efface rien ; le `default: null` que le générateur écrit ici est un artefact, une clé absente n'est pas `null`). **`null` : elle est effacée.** Un texte : elle est remplacée. La recherche est propre à l'enseigne, au magasin et à l'ingrédient de ce choix, et n'est jamais reprise d'ailleurs. **Obligatoire (un texte) pour `NOTE_SEARCH`** : absente ou `null` y est `422` `DRIVE_CHOICE_INVALID`. Sur une autre action, la mentionner (texte ou `null`) est `422` `DRIVE_CHOICE_INVALID`
              * @default null
              * @example céréales coussins chocolat
              */
@@ -2124,6 +2142,16 @@ export interface components {
              * @example 1
              */
             baseFactor?: number | null;
+            /**
+             * @description Slug de l'unité d'achat (DRV-652) : c'est dans cette unité qu'une contenance (`packSize` d'un produit) se compte et se compare. Le même que `unitSlug` d'une ligne de la liste de courses
+             * @example tranche
+             */
+            unitSlug: string;
+            /**
+             * @description Nom de l'unité d'achat (DRV-652), au singulier, tel que Repas l'écrit : de quoi demander « Combien de tranches y a-t-il dans ce produit ? » sans deviner le nom depuis son symbole
+             * @example tranche
+             */
+            unitName: string;
         };
         ProductContentDTO: {
             /**
@@ -2138,6 +2166,19 @@ export interface components {
              * @enum {string}
              */
             unit: "g" | "kg" | "ml" | "cl" | "l" | "piece";
+        };
+        PackSizeDTO: {
+            /**
+             * Format: float
+             * @description Combien de l'unité ci-dessous tient dans le produit : de 0,001 à 9 999, trois décimales au plus
+             * @example 20
+             */
+            value: number;
+            /**
+             * @description Slug de l'unité de la liste dans laquelle la personne a compté le produit (`unitSlug` d'une ligne du plan)
+             * @example tranche
+             */
+            unitSlug: string;
         };
         DrivePlanProductDTO: {
             /**
@@ -2163,7 +2204,7 @@ export interface components {
             /** @description Contenu net, `null` si inconnu */
             content?: components["schemas"]["ProductContentDTO"] | null;
             /**
-             * @description Nombre de produits à mettre au panier pour la quantité demandée (1 à 99), calculé avec le contenu de ce produit ; `null` quand il ne se calcule pas
+             * @description Nombre de produits à mettre au panier pour la quantité demandée (1 à 99), calculé avec la contenance mémorisée de ce produit si elle est dans l'unité de la ligne (DRV-652), sinon avec son contenu net ; `null` quand il ne se calcule pas
              * @example 1
              */
             packs?: number | null;
@@ -2173,6 +2214,8 @@ export interface components {
              * @enum {string}
              */
             packsStatus: "COMPUTED" | "TO_CHECK";
+            /** @description La contenance que la personne a donnée pour CE produit, dans l'unité de la liste (DRV-652), ou `null` si elle n'en a pas donné. Quand son `unitSlug` est celui de la ligne (`needed.unitSlug`), `packs` est calculé avec elle et vaut `COMPUTED`, sans question ; une contenance dans une autre unité est ignorée par le calcul (mais reste renvoyée) */
+            packSize?: components["schemas"]["PackSizeDTO"] | null;
         };
         DrivePlanRejectedDTO: {
             /**
@@ -2288,6 +2331,8 @@ export interface components {
             label: string;
             /** @description Contenu net, `null` si inconnu */
             content?: components["schemas"]["ProductContentDTO"] | null;
+            /** @description Combien d'unités de la liste tiennent dans ce produit, tel que la personne l'a répondu (DRV-652) : « 20 tranches » pour un cheddar que la liste compte en tranches. Propre à l'utilisateur et à ce produit dans cette préférence ; `null` si elle n'a rien répondu (et toujours pour un produit refusé). Elle ne sert au calcul que pour la même unité : si la liste change d'unité, elle est ignorée */
+            packSize?: components["schemas"]["PackSizeDTO"] | null;
         };
         AcceptedProductDTO: {
             /**
@@ -5137,7 +5182,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Corps invalide, ou intention refusée (message `DRIVE_CHOICE_INVALID`) : identifiant, libellé, contenu ou prix hors des bornes, plus de 200 intentions, plus de 5 produits acceptés ou 20 refusés pour un ingrédient, produit à la fois choisi et refusé pour un ingrédient, recherche mémorisée sur une autre action que `ADD_PRODUCT` ; ou recherche mémorisée refusée (message `DRIVE_SEARCH_QUERY_INVALID`) : moins de 2 ou plus de 80 caractères une fois les espaces réduites, caractère de contrôle ou invisible ; ou plafond atteint (message `DRIVE_LIMIT_REACHED`) : plus de 5 000 écritures de produits dans la journée UTC, ou plus de 1 000 préférences dans le magasin. Rien n'est enregistré */
+            /** @description Corps invalide, ou intention refusée (message `DRIVE_CHOICE_INVALID`) : identifiant, libellé, contenu ou prix hors des bornes, plus de 200 intentions, plus de 5 produits acceptés ou 20 refusés pour un ingrédient, produit à la fois choisi et refusé pour un ingrédient, recherche mémorisée sur une autre action que `ADD_PRODUCT` ou `NOTE_SEARCH` (même `null`), `NOTE_SEARCH` sans recherche (clé absente ou `null`), avec un produit ou un placement, ou sur un ingrédient « j'en ai toujours », contenance (`product.packSize`, même `null`) sur une autre action que `ADD_PRODUCT` ; ou recherche mémorisée refusée (message `DRIVE_SEARCH_QUERY_INVALID`) : moins de 2 ou plus de 80 caractères une fois les espaces réduites, caractère de contrôle ou invisible ; ou contenance refusée (message `DRIVE_PACK_SIZE_INVALID`) : valeur hors de 0,001 à 9 999 ou avec plus de trois décimales, slug d'unité mal formé ou qui n'existe pas ; ou plafond atteint (message `DRIVE_LIMIT_REACHED`) : plus de 5 000 écritures de produits dans la journée UTC, ou plus de 1 000 préférences dans le magasin. Rien n'est enregistré */
             422: {
                 headers: {
                     [name: string]: unknown;
