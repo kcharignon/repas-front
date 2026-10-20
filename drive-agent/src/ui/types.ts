@@ -38,6 +38,8 @@ export interface ResumeProps {
 export interface ProgressProps {
   /** Le titre de l'écran, `S.progress.title` s'il manque (le test automatique en met un autre, DRV-318). */
   title?: string
+  /** Une phrase sous le titre : ce qui part au panier (« 6 articles : … »), la même que sur l'écran d'envoi de Repas. Absente, rien. */
+  lead?: string
   total: number
   done: number
   /** L'ingrédient en cours. */

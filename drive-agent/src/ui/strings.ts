@@ -143,6 +143,7 @@ export const S = {
       search: 'Recherche d’un mot courant',
       content: 'Contenu net des produits',
       shelves: 'Rayons vus',
+      startButton: 'Bouton de démarrage trouvé',
       frame: 'Cadre de même origine',
     },
     detail: {
@@ -172,6 +173,12 @@ export const S = {
       contentOk: (known: number, read: number) => `${known} produits sur ${read}`,
       contentKo: (known: number, read: number) => `seulement ${known} produits sur ${read}`,
       frameSkipped: 'non utilisé : l’agent affiche lui-même la liste de produits',
+      startButtonOk:
+        'le bouton « Commencer mes courses » est dans la page, l’agent peut le toucher',
+      startButtonLink: 'un lien « Commencer mes courses » est dans la page, l’agent peut le suivre',
+      startButtonKo:
+        'la page montre « Commencer mes courses », mais l’agent n’en trouve pas l’élément à toucher',
+      startButtonNone: 'pas de fenêtre « Commencer mes courses » sur cette page',
     },
     /** Les lignes du rapport copiable. */
     text: {

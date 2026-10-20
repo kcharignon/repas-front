@@ -42,6 +42,7 @@ export const CHECK_IDS = [
   'search',
   'content',
   'shelves',
+  'startButton',
   'frame',
 ] as const
 export type CheckId = (typeof CHECK_IDS)[number]
@@ -342,6 +343,19 @@ const complete = (candidate: Awaited<ReturnType<RetailerAdapter['searchProducts'
 const D = S.diagnostic.detail
 
 /**
+ * « Bouton de démarrage trouvé » (0.39.0) : l'agent appuie lui-même sur « Commencer mes courses » ; ce contrôle dit s'il le trouve dans la page.
+ * Lecture seule, sans clic. `OK` : le bouton se touche (ou c'est un lien) ; `KO` : la page parle de « Commencer mes courses » mais l'agent n'en
+ * trouve pas l'élément à toucher ; `NON TESTÉ` : la page n'a pas cette fenêtre (une page de magasin ordinaire).
+ */
+function startButtonCheck(arrival: ArrivalFacts | null): CheckResult {
+  const entry = arrival?.entry
+  if (entry === undefined || !entry.start.present) return skipped('startButton', D.startButtonNone)
+  if (entry.clickable) return ok('startButton', D.startButtonOk)
+  if (entry.start.shape !== null) return ok('startButton', D.startButtonLink)
+  return ko('startButton', D.startButtonKo)
+}
+
+/**
  * Joue les contrôles dans l'ordre et rend chaque résultat dès qu'il est connu (`onResult`), pour que l'écran avance. Aucune exception
  * n'en sort. Le site n'est interrogé qu'une fois ; après un blocage ou une page non prise en charge, il ne l'est pas du tout.
  */
@@ -497,6 +511,7 @@ export async function runChecks(
     const seen = shelves.some((shelf) => shelf.aisles.length > 0)
     await push(seen ? ok('shelves', detail) : skipped('shelves', detail))
   }
+  await push(startButtonCheck(arrival))
   await push(skipped('frame', D.frameSkipped))
   return { results, page, probes, stats: statsSince(before, deps.adapter.stats()) }
 }

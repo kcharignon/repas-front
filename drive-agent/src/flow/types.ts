@@ -100,6 +100,8 @@ export interface FlowDeps {
   phaseB?: PhaseB
   /** Un message `setup` (DRV-307) : l'orchestrateur le valide puis le passe ici. */
   onSetup?: (message: SetupMessage) => void | Promise<void>
+  /** Une pause (ms) : l'attente du bouton « Commencer mes courses » sur l'accueil (0.39.0). Par défaut le temps réel. */
+  sleep?: (ms: number) => Promise<void>
 }
 
 /** Les états de la machine : `START → VALIDATED → CONFIRMED → PHASE_A → PHASE_B → DONE`, ou `ABORTED` / `ERROR`. */

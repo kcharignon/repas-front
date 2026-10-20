@@ -912,3 +912,186 @@ describe('écran d’envoi au drive, rayons conseillés (DRV-642)', () => {
     },
   )
 })
+
+// « Une intention = un clic » : « Envoyer au drive » (et sa fenêtre) ou « Reprendre l'envoi » ont déjà dit que la liste part ; l'écran ouvre le
+// drive tout seul, une seule fois (`?ouvrir=1`, consommé), et garde l'écran pour tout ce qui demande une décision ou une explication.
+describe('écran d’envoi au drive, ouverture automatique', () => {
+  const OPEN = '?ouvrir=1'
+
+  it('ouvre le drive dès que le plan est prêt, sans aucun clic, et consomme la demande', async () => {
+    const native = installApp()
+    const { wrapper, context } = await open({}, 'l1', OPEN)
+
+    await vi.waitFor(() => expect(started(native)).toHaveLength(1))
+    await vi.waitFor(() => expect(wrapper.text()).toContain('En attente du récapitulatif…'))
+
+    // Le plan complet est parti, avec le brouillon, et l'adresse ne porte plus la demande (un rechargement n'ouvrira rien)
+    expect(started(native)[0]?.plan?.lines).toHaveLength(12)
+    expect(JSON.parse(localStorage.getItem(DRAFT_KEY) ?? 'null')).toMatchObject({ listId: 'l1' })
+    expect(context.router.currentRoute.value.query.ouvrir).toBeUndefined()
+    expect(context.router.currentRoute.value.fullPath).toBe('/drive/envoi/l1')
+  })
+
+  it('montre « Ouverture du drive… » pendant qu’il prépare, jamais le plan ni le bouton', async () => {
+    installApp()
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    const { wrapper } = await open(
+      {
+        'GET /api/v1/drive/plans/l1': async () => {
+          await gate
+          return json(plan())
+        },
+      },
+      'l1',
+      OPEN,
+    )
+
+    expect(wrapper.text()).toContain('Ouverture du drive…')
+    expect(wrapper.text()).not.toContain('Préparation de l’envoi…')
+    expect(button('Ouvrir le drive')).toBeUndefined()
+    release()
+    await vi.waitFor(() => expect(wrapper.text()).toContain('En attente du récapitulatif…'))
+  })
+
+  it('un rechargement (l’adresse sans la demande) n’ouvre rien : l’écran du plan, avec son bouton', async () => {
+    const native = installApp()
+    const { wrapper } = await open()
+    await loaded(wrapper)
+
+    expect(started(native)).toHaveLength(0)
+    expect(button('Ouvrir le drive')).toBeDefined()
+  })
+
+  it('ne l’ouvre qu’une fois : le plan relu ou l’écran qui se redessine ne relance rien', async () => {
+    const native = installApp()
+    const { wrapper } = await open({}, 'l1', OPEN)
+    await vi.waitFor(() => expect(started(native)).toHaveLength(1))
+    await flushPromises()
+    window.dispatchEvent(new Event('online'))
+    await flushPromises()
+
+    expect(started(native)).toHaveLength(1)
+    expect(wrapper.text()).toContain('En attente du récapitulatif…')
+  })
+
+  it('un passage de cette liste qui attend déjà son résultat est rouvert avec le même numéro (« Reprendre l’envoi »)', async () => {
+    localStorage.setItem(DRAFT_KEY, draftOf('l1'))
+    const native = installApp()
+    await open({}, 'l1', OPEN)
+
+    await vi.waitFor(() => expect(started(native)).toHaveLength(1))
+
+    expect(started(native)[0]?.plan?.runId).toBe(RUN)
+  })
+
+  describe('l’écran reste, avec sa raison, quand il y a quelque chose à décider ou à lire', () => {
+    it('application trop ancienne', async () => {
+      const native = fakeNative((message, reply) => {
+        if (message.type === 'app.info')
+          reply({ v: 1, type: 'app.info', version: '0.1.8', versionCode: 1, drive: true })
+      })
+      ;(globalThis as { repasNative?: unknown }).repasNative = native.bridge
+      const { wrapper } = await open({}, 'l1', OPEN)
+
+      await vi.waitFor(() =>
+        expect(wrapper.text()).toContain('Mets à jour l’application pour envoyer ta liste.'),
+      )
+      expect(started(native)).toHaveLength(0)
+    })
+
+    it('drive inutilisable sur ce téléphone', async () => {
+      const native = installApp(false)
+      const { wrapper } = await open({}, 'l1', OPEN)
+
+      await vi.waitFor(() =>
+        expect(wrapper.text()).toContain('Le drive ne fonctionne pas sur ce téléphone'),
+      )
+      expect(started(native)).toHaveLength(0)
+    })
+
+    it('hors de l’application (liens de recherche)', async () => {
+      const { wrapper } = await open({}, 'l1', OPEN)
+
+      await vi.waitFor(() =>
+        expect(wrapper.text()).toContain('L’envoi automatique n’est pas disponible ici'),
+      )
+      expect(wrapper.text()).not.toContain('Ouverture du drive…')
+    })
+
+    it('un autre envoi en cours', async () => {
+      localStorage.setItem(DRAFT_KEY, draftOf('l2', OTHER_RUN))
+      const native = installApp()
+      const { wrapper } = await open({}, 'l1', OPEN)
+
+      await vi.waitFor(() => expect(wrapper.text()).toContain('Un autre envoi est en cours'))
+      expect(started(native)).toHaveLength(0)
+    })
+
+    it('le plan ne se lit pas : l’erreur et « Réessayer », sans ouvrir ensuite tout seul', async () => {
+      const native = installApp()
+      let healthy = false
+      const { wrapper } = await open(
+        {
+          'GET /api/v1/drive/plans/l1': () =>
+            healthy ? json(plan()) : failure(409, 'SHOPPING_LIST_NOT_SENT')(),
+        },
+        'l1',
+        OPEN,
+      )
+      await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
+
+      healthy = true
+      await press('Réessayer')
+      await loaded(wrapper)
+
+      expect(started(native)).toHaveLength(0)
+      expect(button('Ouvrir le drive')).toBeDefined()
+    })
+
+    it('une liste sans article', async () => {
+      const native = installApp()
+      const { wrapper } = await open(
+        {
+          'GET /api/v1/drive/plans/l1': () =>
+            json(plan({ lines: [], counts: { known: 0, new: 0, haveAtHome: 0 } })),
+        },
+        'l1',
+        OPEN,
+      )
+
+      await vi.waitFor(() =>
+        expect(wrapper.text()).toContain('Cette liste n’a aucun article à envoyer.'),
+      )
+      expect(started(native)).toHaveLength(0)
+    })
+
+    it('hors connexion', async () => {
+      const native = installApp()
+      window.dispatchEvent(new Event('offline'))
+      const { wrapper } = await open({}, 'l1', OPEN)
+      await loaded(wrapper)
+
+      expect(started(native)).toHaveLength(0)
+      expect(wrapper.text()).toContain('Hors connexion')
+    })
+
+    it('le lancement échoue (plan trop gros pour un envoi) : la raison s’affiche, avec « Ouvrir le drive » pour réessayer', async () => {
+      const native = installApp()
+      const many = plan()
+      many.lines = Array.from({ length: 101 }, (_, index) => ({
+        ...many.lines[8]!,
+        ingredientSlug: `article-${index}`,
+        ingredientName: `Article ${index}`,
+      }))
+      const { wrapper } = await open({ 'GET /api/v1/drive/plans/l1': () => json(many) }, 'l1', OPEN)
+
+      await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
+
+      expect(wrapper.find('[role="alert"]').text()).toContain('plus de 100 articles')
+      expect(wrapper.text()).not.toContain('Ouverture du drive…')
+      expect(button('Ouvrir le drive')).toBeDefined()
+      expect(started(native)).toHaveLength(0)
+    })
+  })
+})

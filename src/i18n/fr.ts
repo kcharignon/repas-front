@@ -492,7 +492,7 @@ export default {
     skipFor: 'Pas cette fois : {name}',
     open: 'Ouvrir le drive',
     reopenDrive: 'Rouvrir le drive',
-    opening: 'Ouverture…',
+    opening: 'Ouverture du drive…',
     offline:
       'Hors connexion : l’envoi au drive est impossible tant que le réseau n’est pas revenu.',
     emptyPlan: 'Cette liste n’a aucun article à envoyer.',

@@ -226,10 +226,11 @@ declare global {
  * mis au panier, un produit de secours, des prix) ou `partial` (le beurre échoue, `BLOCKED`). Avec un résultat tout fait (sans son
  * `runId`, celui du plan reçu y est mis), il le renvoie tel quel : le parcours choisit alors lui-même ce que l'agent a fait. `version` est
  * celle que l'application annonce à `app.info` (`null` : elle ne répond pas), pour essayer une application trop ancienne (DRV-640).
+ * `silent` : le drive est ouvert et l'utilisateur n'est pas encore revenu, l'application ne rend aucun résultat.
  */
 export async function fakeApp(
   page: Page,
-  mode: 'completed' | 'partial' | Record<string, unknown> = 'completed',
+  mode: 'completed' | 'partial' | 'silent' | Record<string, unknown> = 'completed',
   version: string | null = '1.0.0',
 ) {
   await page.addInitScript(
@@ -252,7 +253,9 @@ export async function fakeApp(
             })
             setTimeout(() => emit(data), 0)
           }
-          if (message.type === 'drive.start' && typeof mode === 'object') {
+          if (message.type === 'drive.start' && mode === 'silent') {
+            // Le drive est ouvert, pas de retour pour l'instant
+          } else if (message.type === 'drive.start' && typeof mode === 'object') {
             const result = { ...mode, runId: message.plan.runId }
             setTimeout(() => emit(JSON.stringify({ v: 1, type: 'drive.result', result })), 100)
           } else if (message.type === 'drive.start') {
@@ -312,6 +315,27 @@ export async function fakeApp(
     },
     [mode, version] as const,
   )
+}
+
+/**
+ * Compte les gestes de l'utilisateur dans la page : un clic ou une touche de clavier de confiance (`isTrusted`, donc jamais un clic fait par le
+ * code de la page). À appeler avant d'ouvrir la page. C'est la preuve de « une intention = un clic » : entre la confirmation de l'envoi et
+ * l'ouverture du drive, le compte ne bouge plus.
+ */
+export async function trackTaps(page: Page): Promise<{ total: () => Promise<number> }> {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __taps: number }
+    w.__taps = 0
+    for (const type of ['click', 'keydown'])
+      document.addEventListener(
+        type,
+        (event) => {
+          if (event.isTrusted) w.__taps += 1
+        },
+        true,
+      )
+  })
+  return { total: () => page.evaluate(() => (window as unknown as { __taps: number }).__taps) }
 }
 
 /** La phrase de synthèse de l'écran d'envoi pour le plan de `plan` : 8 connus, 3 à choisir, 1 « j'en ai toujours » (DRV-622). */

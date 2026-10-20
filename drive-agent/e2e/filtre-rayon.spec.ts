@@ -65,7 +65,6 @@ async function openCarrots(
     agentCode,
     planOf([fresh('carotte', 'Carotte', { needed: KILO, ...(rayonHints && { rayonHints }) })]),
   )
-  await page.getByRole('button', { name: 'Commencer' }).click()
   await expect(page.getByText('Il te faut : 1 kg.')).toBeVisible()
 }
 
@@ -222,7 +221,6 @@ test('les produits frais d’une AUTRE liste de la réponse (`objContenuMDD`, 0.
     agentCode,
     planOf([fresh('tomate', 'Tomate', { needed: KILO })]),
   )
-  await page.getByRole('button', { name: 'Commencer' }).click()
 
   // Then : ils sont dans la liste (après les résultats principaux) et comptés par « Tous » et par la facette
   await expect(rowOf(page).getByRole('button')).toHaveText([

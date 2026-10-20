@@ -189,7 +189,7 @@ describe('liste envoyée au drive (page de la liste)', () => {
 
     // Une rangée : la reprise de l'envoi, « Terminer », puis « ⋮ » qui range la réouverture et la suppression
     expect(rowActions()).toEqual(['Reprendre l’envoi', 'Terminer', 'Plus d’actions'])
-    expect(wrapper.find('header a').attributes('href')).toBe('/drive/envoi/l1')
+    expect(wrapper.find('header a').attributes('href')).toBe('/drive/envoi/l1?ouvrir=1')
     await openMenu('Rouvrir la liste')
     expect(menuItems()).toEqual(['Rouvrir la liste', 'Supprimer'])
   })
@@ -515,6 +515,8 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     const [send] = requests(fetchMock, 'POST', '/send')
     expect(send?.headers.get('If-Match')).toBe('"7"')
     expect(context.router.currentRoute.value.params.listId).toBe('l1')
+    // La confirmation a donné l'intention : l'écran d'envoi ouvre le drive sans autre clic (`ouvrir`, consommé par l'écran)
+    expect(context.router.currentRoute.value.query.ouvrir).toBe('1')
   })
 
   const tooOldSentence = 'Mets à jour l’application pour envoyer ta liste.'

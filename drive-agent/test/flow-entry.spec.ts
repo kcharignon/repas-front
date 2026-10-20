@@ -25,7 +25,7 @@ const LINK = {
 const lines = () => [known('farine', [product('1000001', 2)])]
 
 function home(
-  entry: EntryReading,
+  entry: EntryReading | (() => EntryReading),
   options: { storage?: boolean; onFollow?: () => void | Promise<void> } = {},
 ) {
   const adapter = fakeAdapter(
@@ -138,13 +138,46 @@ describe('entrer dans le magasin', () => {
 
       await flow.start(plan(lines()))
 
-      expect(screens.propsOf('entry')).toEqual([{ stage: 'manual' }])
+      // Sans rien à suivre : on a attendu que la fenêtre s'affiche (bandeau « Ouverture… ») avant de rendre la main à l'utilisateur
+      expect(screens.propsOf('entry')).toEqual(
+        entry.kind === 'NONE' ? [{ stage: 'opening' }, { stage: 'manual' }] : [{ stage: 'manual' }],
+      )
       expect(adapter.follows.count).toBe(0)
       expect(screens.screens()).not.toContain('error')
       expect(sent).toEqual([])
       expect(adapter.calls).toEqual([])
     },
   )
+
+  it('la fenêtre se dessine après l’arrivée du plan : l’agent relit la page, puis clique le bouton une fois qu’il est là', async () => {
+    // Given : rien aux deux premières lectures, le bouton à la troisième
+    let reads = 0
+    const { flow, screens, adapter } = home(
+      () => (++reads < 3 ? { kind: 'NONE' } : { kind: 'BUTTON' }),
+      { onFollow: () => new Promise(() => undefined) },
+    )
+
+    // When
+    void flow.start(plan(lines()))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    // Then : un seul bandeau d'ouverture, un seul clic
+    expect(reads).toBe(3)
+    expect(screens.propsOf('entry')).toEqual([{ stage: 'opening' }])
+    expect(adapter.follows.count).toBe(1)
+  })
+
+  it('une page qui ne montre jamais rien : l’attente est bornée, puis le geste manuel', async () => {
+    let reads = 0
+    const { flow, screens, adapter } = home(() => (reads++, { kind: 'NONE' }))
+
+    await flow.start(plan(lines()))
+
+    // 4 s d'attente à 500 ms : neuf lectures au plus, pas une de plus
+    expect(reads).toBe(9)
+    expect(screens.propsOf('entry')).toEqual([{ stage: 'opening' }, { stage: 'manual' }])
+    expect(adapter.follows.count).toBe(0)
+  })
 
   it('sans stockage de session, rien n’est suivi (aucune boucle possible)', async () => {
     const { flow, screens, adapter } = home(LINK, { storage: false })
@@ -195,6 +228,68 @@ describe('entrer dans le magasin', () => {
   })
 })
 
+describe('la fenêtre d’accueil sur la page du magasin du plan', () => {
+  const onStorePage = (
+    entry: EntryReading,
+    options: { onFollow?: () => void | Promise<void> } = {},
+  ) => {
+    // La page est celle du magasin du plan (le magasin lu est le bon) : le passage peut démarrer
+    const adapter = fakeAdapter(
+      { '1000001': {} },
+      { entry, ...(options.onFollow && { onFollow: options.onFollow }) },
+    )
+    const screens = fakeUi()
+    const { flow, sent } = makeFlow({
+      ui: screens.ui,
+      adapter: adapter.adapter,
+      storage: fakeStorage(),
+    })
+    return { flow, sent, screens, adapter }
+  }
+
+  it('l’agent appuie sur « Commencer mes courses » une fois, puis le passage continue si la page reste là', async () => {
+    const { flow, screens, adapter, sent } = onStorePage({ kind: 'BUTTON' })
+
+    await flow.start(plan(lines()))
+    await flow.start(plan(lines(), RUN_ID))
+
+    expect(adapter.follows.count).toBe(1)
+    expect(screens.propsOf('entry')).toEqual([{ stage: 'opening' }])
+    expect(screens.screens()).toContain('progress')
+    // Les deux passages vont à leur terme (le second ne reclique pas : une fois par envoi)
+    expect(sent.map((result) => result.outcome)).toEqual(['completed', 'completed'])
+  })
+
+  it('si la page change au clic, le passage ne démarre pas ici : le plan revient sur la nouvelle page', async () => {
+    const { flow, screens, adapter, sent } = onStorePage(
+      { kind: 'BUTTON' },
+      { onFollow: () => new Promise(() => undefined) },
+    )
+
+    void flow.start(plan(lines()))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(adapter.follows.count).toBe(1)
+    expect(screens.screens()).toEqual(['entry'])
+    expect(sent).toEqual([])
+    expect(adapter.writes).toEqual([])
+  })
+
+  it.each([
+    ['un lien', { kind: 'LINK', url: LINK.url }],
+    ['aucun bouton', { kind: 'NONE' }],
+    ['un défi de l’anti-robot', { kind: 'CHALLENGE' }],
+  ] as const)('%s : rien n’est touché, le passage démarre', async (_name, entry) => {
+    const { flow, screens, adapter, sent } = onStorePage(entry)
+
+    await flow.start(plan(lines()))
+
+    expect(adapter.follows.count).toBe(0)
+    expect(screens.screens()).not.toContain('entry')
+    expect(expectConform(sent[0]).outcome).toBe('completed')
+  })
+})
+
 describe('revenir sans geste', () => {
   const run = async (shelf: Parameters<typeof fakeAdapter>[0], l = lines()) => {
     const adapter = fakeAdapter(shelf)
@@ -207,7 +302,7 @@ describe('revenir sans geste', () => {
   it('un envoi terminé poste son résultat tout de suite : pas d’écran de fin', async () => {
     const { screens, sent } = await run({ '1000001': {} })
 
-    expect(screens.screens()).toEqual(['summary', 'progress'])
+    expect(screens.screens()).toEqual(['progress'])
     expect(expectConform(sent[0]).outcome).toBe('completed')
     expect(screens.closed.count).toBe(1)
   })
@@ -215,7 +310,7 @@ describe('revenir sans geste', () => {
   it('un envoi partiel garde l’écran de fin (il y a quelque chose à lire)', async () => {
     const { screens, sent } = await run({})
 
-    expect(screens.screens()).toEqual(['summary', 'progress', 'end'])
+    expect(screens.screens()).toEqual(['progress', 'end'])
     expect(expectConform(sent[0]).outcome).toBe('partial')
   })
 

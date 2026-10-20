@@ -170,5 +170,6 @@ describe('le code actuel de l’agent', () => {
 
     expect(results.length).toBeGreaterThan(0)
     expect(results.flatMap((result) => result.messages)).toEqual([])
-  })
+    // ESLint lit tout le code de l'agent : sous la couverture, 5 s (le défaut) ne suffisent pas toujours
+  }, 60_000)
 })

@@ -1,6 +1,6 @@
 // Les sondes du diagnostic (ticket B de l'audit du 2026-10-18) : ce que le rapport dit du site réel, et la garantie qu'il ne contient AUCUNE valeur du
 // site (libellé, cookie, numéro de magasin, ville, adresse, point de livraison, valeur d'en-tête). Le site est un faux `fetch` aux pages INVENTÉES.
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   NONSENSE_TERM,
@@ -442,5 +442,52 @@ describe('aucune valeur du site n’est rapportée (le test de confidentialité 
     const raw = JSON.stringify(probes as ProbeFacts)
 
     for (const secret of SECRETS) expect(raw).not.toContain(secret)
+  })
+})
+
+// « Bouton de démarrage trouvé » (0.39.0) : l'agent appuie lui-même sur « Commencer mes courses » ; ce contrôle dit s'il le trouve.
+describe('le contrôle « Bouton de démarrage trouvé »', () => {
+  const home = { hostname: 'www.leclercdrive.fr', pathname: '/', protocol: 'https:', port: '' }
+  const checkOf = async (extra: Parameters<typeof site>[1]) => {
+    const { adapter, fake } = site(normal, { location: home, ...extra })
+    const { results } = await runChecks(deps(adapter), () => undefined)
+    return { check: results.find((result) => result.id === 'startButton'), fake }
+  }
+
+  it('OK quand le bouton se touche, sans clic ni requête', async () => {
+    const click = vi.fn<() => void>()
+    const { check, fake } = await checkOf({
+      pageText: () => '<a class="btn" role="button">Commencer mes courses</a>',
+      startButton: () => ({ click }),
+    })
+
+    expect(check).toMatchObject({ status: 'OK' })
+    expect(click).not.toHaveBeenCalled()
+    expect(fake.calls).toEqual([])
+  })
+
+  it('OK aussi quand le texte de la page ne le montre pas mais que le DOM l’a (un élément qui n’est ni lien ni bouton)', async () => {
+    const { check } = await checkOf({
+      pageText: () => '<p>Bonjour</p>',
+      startButton: () => ({ click: () => undefined }),
+    })
+
+    expect(check).toMatchObject({ status: 'OK' })
+  })
+
+  it('KO quand la page le montre mais que l’agent n’en trouve pas l’élément à toucher', async () => {
+    const { check } = await checkOf({
+      pageText: () => '<a class="btn" role="button">Commencer mes courses</a>',
+      startButton: () => null,
+    })
+
+    expect(check).toMatchObject({ status: 'KO' })
+    expect(check?.detail).toContain('n’en trouve pas l’élément à toucher')
+  })
+
+  it('NON TESTÉ quand la page n’a pas cette fenêtre', async () => {
+    const { check } = await checkOf({ pageText: () => '<p>Bonjour</p>' })
+
+    expect(check).toMatchObject({ status: 'NOT_TESTED' })
   })
 })

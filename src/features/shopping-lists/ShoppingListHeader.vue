@@ -131,7 +131,12 @@ function confirmSend() {
     {
       onSuccess: async () => {
         sending.value = false
-        await router.push({ name: 'drive-send', params: { listId: props.list.id } })
+        // La confirmation a donné l'intention : l'écran d'envoi ouvre le drive tout seul (`ouvrir`)
+        await router.push({
+          name: 'drive-send',
+          params: { listId: props.list.id },
+          query: { ouvrir: '1' },
+        })
       },
       onError: () => (sending.value = false),
     },
@@ -239,7 +244,7 @@ const statusLabel = (list: ShoppingList) =>
       >
         <UiLinkButton
           v-if="list.isSent"
-          :to="{ name: 'drive-send', params: { listId: list.id } }"
+          :to="{ name: 'drive-send', params: { listId: list.id }, query: { ouvrir: '1' } }"
           :class="mainAction"
         >
           {{ t('shoppingList.resumeSend') }}

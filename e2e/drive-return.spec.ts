@@ -156,10 +156,13 @@ test('un passage arrêté par Leclerc : trois phrases, un seul bouton principal 
   await expect(page.getByText('Code : BLOCKED')).toBeVisible()
   expect((await scan(page)).violations).toEqual([])
 
-  // Reprendre l'envoi ramène à l'écran de l'envoi, sur toute la liste
+  // « Reprendre l'envoi » est l'intention : le drive se rouvre tout seul, sur toute la liste (pas de second « Ouvrir le drive »)
   await page.getByRole('link', { name: 'Reprendre l’envoi' }).first().click()
-  await expect(page).toHaveURL(/\/drive\/envoi\/l1$/)
-  await expect(page.getByText('Voir les articles')).toBeVisible()
+  await expect
+    .poll(() => page.evaluate(() => window.__sent.filter((m) => m.type === 'drive.start').length))
+    .toBe(2)
+  const [, again] = await page.evaluate(() => window.__sent.filter((m) => m.type === 'drive.start'))
+  expect(again?.plan?.lines).toHaveLength(12)
 })
 
 for (const colorScheme of ['light', 'dark'] as const) {

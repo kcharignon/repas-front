@@ -229,6 +229,7 @@ const SCREENS: Record<string, () => unknown> = {
   resume: () => ui.show('resume', { done: 3, total: 8 }),
   progress: () =>
     ui.show('progress', {
+      lead: '8 articles : 5 sont déjà choisis, 2 sont à choisir sur Leclerc, 1 ne sera pas mis au panier.',
       total: 8,
       done: 3,
       current: 'Farine de blé',

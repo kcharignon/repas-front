@@ -44,6 +44,16 @@ const agentKnowsRayons = ref(false)
 /** Mode assisté : un lien de recherche par article, sans choix de produit (hors de l'application, ou dans une application trop ancienne). */
 const assisted = computed(() => !inApp || tooOld.value)
 
+/**
+ * « Une intention = un clic » : arrivé ici par « Envoyer au drive » (et sa fenêtre de confirmation) ou par « Reprendre l'envoi », l'utilisateur a
+ * déjà dit qu'il veut remplir son panier. L'adresse porte alors `ouvrir` : le drive s'ouvre dès que le plan est prêt, sans redemander. La demande est
+ * CONSOMMÉE tout de suite (retirée de l'adresse) : un rechargement ou un retour arrière n'ouvre rien, et il n'y a pas de boucle possible. Tout ce
+ * qui demande une décision ou une explication (erreur, hors connexion, hors application, application trop ancienne, drive inutilisable, autre
+ * envoi en cours, liste sans article) garde l'écran.
+ */
+const opening = ref(route.query.ouvrir !== undefined)
+if (opening.value) void router.replace({ query: { ...route.query, ouvrir: undefined } })
+
 const changes = ref<Record<string, LineChange | undefined>>({})
 const draft = ref<RunDraft | null>(driveBridge.loadDraft())
 const failure = ref<{ text: string; update: boolean } | null>(null)
@@ -175,6 +185,35 @@ function failureOf(error: unknown): { text: string; update: boolean } {
   }
 }
 
+// Le plan est prêt, l'application a répondu : on ouvre le drive, une seule fois ; au moindre obstacle on garde l'écran (la raison s'y lit).
+watch(
+  () =>
+    [
+      opening.value,
+      inApp,
+      online.value,
+      elsewhere.value,
+      hasFailed(plan),
+      visible.value,
+      appCheck.value,
+      driveUsable.value,
+    ] as const,
+  ([wanted, app, isOnline, other, failed, data, check, usable]) => {
+    if (!wanted) return
+    // Un obstacle déjà connu : l'écran reste, avec sa raison
+    if (!app || !isOnline || other || failed) {
+      opening.value = false
+      return
+    }
+    // Pas encore de plan ni de réponse de l'application : on attend
+    if (data === undefined || check === 'checking') return
+    opening.value = false
+    if (check === 'tooOld' || !usable || data.lines.length === 0) return
+    openDrive()
+  },
+  { immediate: true },
+)
+
 /** Lance le drive ; en attente d'un résultat, rouvre le même passage (même `runId`). */
 function openDrive() {
   const data = visible.value
@@ -234,9 +273,12 @@ function confirmReopenList() {
       {{ t('driveSend.title') }}
     </h1>
 
+    <!-- L'intention est donnée (« Envoyer au drive », « Reprendre l'envoi ») : le drive s'ouvre sans autre geste -->
+    <p v-if="opening" role="status" class="text-xl font-semibold">{{ t('driveSend.opening') }}</p>
+
     <!-- Un passage d'une autre liste n'est pas terminé -->
     <section
-      v-if="elsewhere && draft"
+      v-else-if="elsewhere && draft"
       role="status"
       class="flex flex-col items-start gap-3 rounded-2xl bg-soft px-5 py-4"
     >

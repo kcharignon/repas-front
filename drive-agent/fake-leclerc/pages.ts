@@ -199,9 +199,30 @@ export function accueilPage(
 <script>
 document.getElementById('start-shopping').addEventListener('click', function (event) {${onClick}});
 </script>`
-    : form === 'no-link'
-      ? '<p><a href="/connexion.aspx">Se connecter</a></p>'
-      : `<p><a id="start-shopping" href="${storeUrl}">Commencer mes courses</a></p>`
+    : form === 'div'
+      ? // Ni lien ni bouton : un `div` que le script rend cliquable (curseur « main »).
+        `<div id="start-shopping" style="cursor:pointer">Commencer mes courses</div>
+<script>
+document.getElementById('start-shopping').addEventListener('click', function () { location.assign('${storeUrl}'); });
+</script>`
+      : form === 'late'
+        ? // La fenêtre se dessine 1,5 s après le chargement de la page (le plan est déjà arrivé).
+          `<div id="slot"></div>
+<script>
+setTimeout(function () {
+  var button = document.createElement('a');
+  button.id = 'start-shopping'; button.className = 'btn'; button.setAttribute('role', 'button');
+  button.textContent = 'Commencer mes courses';
+  button.addEventListener('click', function () { location.assign('${storeUrl}'); });
+  document.getElementById('slot').appendChild(button);
+}, 1500);
+</script>`
+        : form === 'store-link'
+          ? // L'étape « choisir mon magasin » : pas de « Commencer mes courses », un lien vers l'accueil du magasin.
+            `<p><a id="my-store" href="${storeUrl}">Mon magasin</a></p>`
+          : form === 'no-link'
+            ? '<p><a href="/connexion.aspx">Se connecter</a></p>'
+            : `<p><a id="start-shopping" href="${storeUrl}">Commencer mes courses</a></p>`
   const challenge =
     form === 'challenge'
       ? '<iframe title="Vérification" src="https://geo.captcha-delivery.com/captcha/"></iframe>\n'
@@ -262,14 +283,30 @@ const AISLE_MENU = `<div class="menu-rayons">
 </div>
 `
 
-export function homePage(cart: Cart, session: Session = 'member'): string {
-  return storePage(
-    'Accueil du magasin',
-    'Bienvenue dans le faux drive.',
-    {},
-    cart,
-    session,
-  ).replace('<h1>', `${AISLE_MENU}<h1>`)
+/** La forme de la fenêtre d'accueil du magasin (« <magasin> vous propose le(s) service(s) ») : le bouton la ferme ; `human` ignore un clic de programme, `inert` ne fait rien. */
+export type WelcomeForm = 'button' | 'human' | 'inert'
+
+export function homePage(
+  cart: Cart,
+  session: Session = 'member',
+  welcome: WelcomeForm | null = null,
+): string {
+  const dialog =
+    welcome === null
+      ? ''
+      : `<div id="welcome" role="dialog" aria-label="Services du magasin" style="position:fixed;inset:0;background:#fff;z-index:5">
+<p>Faux Leclerc Ville-Test vous propose le(s) service(s) : Drive.</p>
+<p><a id="start-shopping" class="btn" role="button">Commencer mes courses</a></p>
+</div>
+<script>
+document.getElementById('start-shopping').addEventListener('click', function (event) {
+  ${welcome === 'inert' ? '' : welcome === 'human' ? 'if (!event.isTrusted) return;' : ''}
+  ${welcome === 'inert' ? '' : "document.getElementById('welcome').remove(); document.documentElement.setAttribute('data-welcome-closed', '1');"}
+});
+</script>`
+  return storePage('Accueil du magasin', 'Bienvenue dans le faux drive.', {}, cart, session)
+    .replace('<h1>', `${AISLE_MENU}<h1>`)
+    .replace('</body>', `${dialog}</body>`)
 }
 
 /**
@@ -482,7 +519,16 @@ export function challengePage(): string {
  * quel qu'il soit), `button-human` (idem, mais le script ignore tout clic qui n'est pas un vrai toucher : `event.isTrusted`, comme le site
  * qui distingue un clic programmé), `button-inert` (le bouton est là et ne fait rien).
  */
-export type HomeForm = 'link' | 'no-link' | 'challenge' | 'button' | 'button-human' | 'button-inert'
+export type HomeForm =
+  | 'link'
+  | 'no-link'
+  | 'challenge'
+  | 'button'
+  | 'button-human'
+  | 'button-inert'
+  | 'div'
+  | 'late'
+  | 'store-link'
 
 /** Le faux Repas : la page de retour, qui affiche le fragment `#result=` reçu (décodé) pour que les tests le lisent. */
 export function repasReturnPage(): string {

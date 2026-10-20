@@ -35,7 +35,6 @@ test.describe('la recherche d’un libellé qui porte une apostrophe (moteur à 
     )
 
     // When
-    await page.getByRole('button', { name: 'Commencer' }).click()
     await returnsToRepas(page, fake)
 
     // Then
@@ -62,7 +61,6 @@ test.describe('la recherche d’un libellé qui porte une apostrophe (moteur à 
     await openWithFragment(page, fake, agentCode, planOf([known('gateaux', 'Gâteaux', [stale])]))
 
     // When
-    await page.getByRole('button', { name: 'Commencer' }).click()
     await returnsToRepas(page, fake)
 
     // Then : le libellé, ses quatre formes (la dernière le retrouve), puis l'écriture
@@ -107,7 +105,6 @@ test.describe('« Bientôt disponible » : le panier tranche', () => {
     )
 
     // When
-    await page.getByRole('button', { name: 'Commencer' }).click()
     await returnsToRepas(page, fake)
 
     // Then : la quantité calculée de d'habitude, une recherche et une écriture
@@ -135,7 +132,6 @@ test.describe('« Bientôt disponible » : le panier tranche', () => {
     )
 
     // When
-    await page.getByRole('button', { name: 'Commencer' }).click()
     const card = page.getByRole('listitem').filter({ hasText: 'Céréales fourrées' })
     await expect(card).toContainText('Plus en stock.')
     await expect(card.getByRole('button', { name: 'Choisir' })).toBeEnabled()
@@ -172,7 +168,6 @@ test.describe('« Bientôt disponible » : le panier tranche', () => {
     )
 
     // When : la phase A tente une fois l'écriture, le panier la refuse
-    await page.getByRole('button', { name: 'Commencer' }).click()
     await expect(page.getByText('Ces produits ne sont plus disponibles')).toBeVisible()
     expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'cart', 'search'])
 
@@ -235,7 +230,6 @@ test.describe('« Bientôt disponible » : le panier tranche', () => {
     )
 
     // When : l'utilisateur choisit ce gâteau
-    await page.getByRole('button', { name: 'Commencer' }).click()
     const card = page.getByRole('listitem').filter({ hasText: 'Pépites' })
     await card.getByRole('button', { name: 'Choisir' }).click()
 
@@ -270,7 +264,6 @@ test.describe('introuvable n’est pas indisponible', () => {
     )
 
     // When
-    await page.getByRole('button', { name: 'Commencer' }).click()
 
     // Then
     await expect(
