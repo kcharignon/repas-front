@@ -185,6 +185,51 @@ describe("l'APK est aussi publié sous un nom qui dit la version (repas-drive-X.
   })
 })
 
+describe("la release roulante android-latest : des adresses fixes vers la dernière version, sans mélange de deux versions", () => {
+  const rolling = publishJob!.slice(publishJob!.indexOf('name: Mettre à jour la release roulante android-latest'))
+  const published = publishJob!.slice(0, publishJob!.indexOf('name: Mettre à jour la release roulante android-latest'))
+
+  it("est un pas du travail de publication, après la release de la version et sa relecture, avec le seul droit d'écrire déjà accordé", () => {
+    expect(published).toContain('gh release create "$TAG"')
+    expect(published).toContain('cmp repas-drive.apk "published/${versioned}"')
+    expect(rolling).toContain('rolling=android-latest')
+    expect(code.match(/contents: write/g)).toHaveLength(1)
+    expect(rolling).not.toContain('secrets.')
+  })
+
+  it("a une étiquette qui ne déclenche pas le workflow et que le déploiement du site ignore", () => {
+    expect('android-latest').not.toMatch(/^android-v[0-9]+\.[0-9]+\.[0-9]+$/)
+    expect(read('.github', 'workflows', 'release.yml')).toContain("!startsWith(github.event.release.tag_name, 'android-')")
+    expect(rolling).not.toMatch(/git (tag|push)/)
+  })
+
+  it("n'est jamais « Latest » ni un brouillon, et le vérifie", () => {
+    expect(rolling.match(/--latest=false/g)!.length).toBeGreaterThanOrEqual(2)
+    expect(rolling).not.toMatch(/--draft|--prerelease/)
+    expect(rolling).toContain('releases/latest')
+    expect(rolling).toContain('--json isDraft')
+  })
+
+  it("remplace les fichiers un à un dans l'ordre : noms nouveaux, nom stable, version.json en dernier, puis retire les anciens", () => {
+    const upload = (file: string) => rolling.indexOf(`gh release upload "$rolling" ${file} --clobber`)
+    const order = ['"${versioned}"', '"${versioned}.sha256"', 'repas-drive.apk', 'repas-drive.apk.sha256', 'version.json'].map(upload)
+    expect(order.every((index) => index >= 0)).toBe(true)
+    expect(order).toEqual([...order].sort((a, b) => a - b))
+    expect(rolling.indexOf('gh release delete-asset')).toBeGreaterThan(order[4]!)
+    expect(rolling.indexOf('gh release edit')).toBeGreaterThan(rolling.indexOf('gh release delete-asset'))
+  })
+
+  it("relit ce qui est publié : exactement les cinq fichiers, mêmes empreintes, mêmes octets, et l'adresse fixe répond", () => {
+    expect(rolling).toContain('"$expected"')
+    expect(rolling).toContain('sha256sum -c repas-drive.apk.sha256 && sha256sum -c "${versioned}.sha256"')
+    expect(rolling).toContain('cmp "$file" "published-latest/$file"')
+    expect(rolling).toContain('releases/download/${rolling}/${file}')
+    expect(rolling).toContain('cmp -s "$file" "fixed-address/$file"')
+    // Rien n'est construit, signé ni re-signé ici
+    expect(rolling).not.toMatch(/make android|apksigner|gradle|keystore|ANDROID_KEY/i)
+  })
+})
+
 describe("les autres workflows Android ne publient pas d'APK signé et avertissent", () => {
   it.each(['android.yml'])("%s prévient de ne pas installer la pré-version sur le téléphone des courses", (name) => {
     const text = read('.github', 'workflows', name)

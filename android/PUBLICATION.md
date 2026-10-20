@@ -191,6 +191,49 @@ Ce que le workflow a déjà contrôlé avant de publier : agent embarqué = `and
 
 > **Deux noms pour le même fichier.** Chaque release joint l'APK signé sous **deux noms** : `repas-drive-X.Y.Z.apk` (le nom dit la version ; **c'est celui qu'on donne aux proches** et celui que la page d'aide de Repas désigne) et `repas-drive.apk` (nom **stable**, jamais renommé : il reste pour les liens existants, la documentation et le futur outil de mise à jour, et `version.json` y pointe). C'est une copie octet pour octet faite par le workflow **après** la signature et le contrôle, jamais une seconde construction : les deux ont la même empreinte SHA-256. Les releases antérieures n'ont que `repas-drive.apk`. Attention : `releases/latest/download/…` ne mène pas à l'application, car « Latest » est réservé aux releases du site (`--latest=false`).
 
+## Adresses fixes vers la dernière version : la release « android-latest »
+
+Les numéros changent à chaque version ; l'application (mise à jour) et le site (page d'installation) ont besoin d'une adresse qui ne change pas. À chaque publication, après la release de la version, le workflow met à jour une seconde release, d'étiquette **`android-latest`** (titre « Repas Android, dernière version (adresses fixes) »). Elle contient **toujours et seulement** les cinq fichiers de la dernière version, les mêmes octets que la release `android-vX.Y.Z` :
+
+```text
+https://github.com/kcharignon/repas-front/releases/download/android-latest/repas-drive.apk
+https://github.com/kcharignon/repas-front/releases/download/android-latest/repas-drive.apk.sha256
+https://github.com/kcharignon/repas-front/releases/download/android-latest/repas-drive-X.Y.Z.apk      (X.Y.Z : la dernière version)
+https://github.com/kcharignon/repas-front/releases/download/android-latest/repas-drive-X.Y.Z.apk.sha256
+https://github.com/kcharignon/repas-front/releases/download/android-latest/version.json
+```
+
+L'adresse **sans numéro** à retenir : `…/releases/download/android-latest/repas-drive.apk` (et `version.json` pour connaître la version). `releases/latest/download/…` ne sert à rien ici : « Latest » reste aux releases du site.
+
+- **Elle ne lance rien** : l'étiquette `android-latest` ne ressemble pas à `android-vX.Y.Z` (le seul déclencheur), `release.yml` (le site) ignore toute étiquette `android-`, et elle n'est jamais « Latest » (`--latest=false`, vérifié). Le travail n'a besoin d'aucun droit de plus que celui d'écrire des releases, qu'il avait déjà, et d'aucun secret.
+- **Ordre de la mise à jour** (GitHub ne remplace pas plusieurs fichiers d'un coup) : 1. `repas-drive-X.Y.Z.apk` puis son `.sha256` (noms nouveaux, personne ne les attend encore) ; 2. `repas-drive.apk` puis `repas-drive.apk.sha256` ; 3. `version.json`, **en dernier** (c'est lui qui annonce la version : il ne change que quand tout le reste est en place) ; 4. retrait des fichiers versionnés des versions précédentes ; 5. titre et notes. Remplacer un fichier le supprime puis le renvoie : pendant quelques secondes, un téléchargeur peut voir un fichier absent (404) ou une empreinte qui ne correspond pas encore à l'APK ; il n'a qu'à recommencer, et un outil qui compare l'APK à l'empreinte de `version.json` refuse un fichier incohérent au lieu de l'installer. La première fois, la release est créée avec les cinq fichiers d'un coup.
+- **Contrôle fait par le workflow** : exactement les cinq fichiers, `sha256sum -c` des deux empreintes, `cmp` de chaque fichier avec celui de la release de la version, et les adresses fixes de `repas-drive.apk` et de `version.json` téléchargées avec les mêmes octets.
+- **Si la publication échoue à moitié** (la release `android-vX.Y.Z` est bonne mais le dernier pas est rouge, ou la release roulante est incomplète) : relancer le run (`gh run rerun <numéro> -R kcharignon/repas-front --failed`) ou, à la main, le bloc ci-dessous, qui sert aussi à **amorcer** la release roulante à partir d'une version déjà publiée. Il part de la release `android-vX.Y.Z` (déjà signée, jamais reconstruite), recrée les fichiers au nom versionné par copie, vérifie, puis remplace dans le même ordre que le workflow :
+
+```bash
+VERSION=0.1.26                      # la dernière version publiée (sans « android-v »)
+R=kcharignon/repas-front
+cd "$(mktemp -d)"
+gh release download "android-v$VERSION" -R "$R" --pattern repas-drive.apk --pattern repas-drive.apk.sha256 --pattern version.json
+sha256sum -c repas-drive.apk.sha256
+cp repas-drive.apk "repas-drive-$VERSION.apk" && sha256sum "repas-drive-$VERSION.apk" > "repas-drive-$VERSION.apk.sha256"
+if gh release view android-latest -R "$R" > /dev/null 2>&1; then
+  for f in "repas-drive-$VERSION.apk" "repas-drive-$VERSION.apk.sha256" repas-drive.apk repas-drive.apk.sha256 version.json; do
+    gh release upload android-latest "$f" -R "$R" --clobber
+  done
+  gh release view android-latest -R "$R" --json assets --jq '.assets[].name' | grep -vF -e "repas-drive-$VERSION.apk" -e repas-drive.apk -e version.json \
+    | while read -r old; do gh release delete-asset android-latest "$old" -R "$R" --yes; done
+else
+  gh release create android-latest repas-drive.apk repas-drive.apk.sha256 "repas-drive-$VERSION.apk" "repas-drive-$VERSION.apk.sha256" version.json -R "$R" \
+    --target "$(gh api "repos/$R/commits/android-v$VERSION" --jq .sha)" --latest=false \
+    --title "Repas Android, dernière version (adresses fixes)" \
+    --notes "Cette release contient toujours les fichiers de la dernière version de l'application Android (actuellement $VERSION), à des adresses qui ne changent pas. Release de la version : https://github.com/$R/releases/tag/android-v$VERSION"
+fi
+gh release view android-latest -R "$R" --json assets,isDraft --jq '.isDraft, (.assets[].name)'   # attendu : false, puis les cinq noms
+curl -fsSL https://github.com/$R/releases/download/android-latest/version.json                 # attendu : la version $VERSION
+curl -fsSL https://github.com/$R/releases/download/android-latest/repas-drive.apk | sha256sum   # attendu : l'empreinte de repas-drive.apk.sha256
+```
+
 ## Étape 7. Installer sur le téléphone (la première fois)
 
 **À savoir d'abord** : si une **pré-version** `android-dev-…` ou l'ancienne « Repas Drive » est installée, **désinstalle-la d'abord** (appui long sur l'icône, « Infos sur l'appli », « Désinstaller ») : elle est signée d'une autre clé, Android refuse de mettre la nouvelle par-dessus. Cela efface la connexion à Leclerc dans l'application : tu la referas. Tes recettes et tes listes sont sur ton compte Repas, elles ne bougent pas.
