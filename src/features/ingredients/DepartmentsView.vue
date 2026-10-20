@@ -2,12 +2,12 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { Search } from 'lucide-vue-next'
+import { ChevronRight, Search } from 'lucide-vue-next'
 
 import { hasFailed } from '@/api/query'
 import UiImage from '@/design/UiImage.vue'
 import IngredientSearchResults from './IngredientSearchResults.vue'
-import { MIN_SEARCH_LENGTH, useDepartments } from './queries'
+import { DUPLICATES_LIMIT, MIN_SEARCH_LENGTH, useDepartments, useDuplicates } from './queries'
 import { useDebounced } from './useDebounced'
 
 const { t } = useI18n()
@@ -20,6 +20,16 @@ const search = ref('')
 const isSearching = computed(() => search.value.trim().length >= MIN_SEARCH_LENGTH)
 const searched = useDebounced(search)
 const term = computed(() => searched.value.trim())
+
+// Le lien des doublons possibles (ING-007) n'existe que s'il y en a ; si la lecture échoue, on ne le montre pas
+const duplicates = useDuplicates()
+const duplicateCount = computed(() => duplicates.data.value?.member?.length ?? 0)
+// Le back rend 50 paires au plus : à ce plafond le compte exact n'est pas connu
+const duplicateLabel = computed(() =>
+  duplicateCount.value >= DUPLICATES_LIMIT
+    ? t('ingredients.duplicates.linkMany', { max: DUPLICATES_LIMIT - 1 })
+    : t('ingredients.duplicates.link', { count: duplicateCount.value }, duplicateCount.value),
+)
 </script>
 
 <template>
@@ -49,6 +59,15 @@ const term = computed(() => searched.value.trim())
     <IngredientSearchResults v-if="isSearching" :search="term" />
 
     <template v-else>
+      <RouterLink
+        v-if="duplicateCount > 0"
+        :to="{ name: 'ingredient-duplicates' }"
+        class="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-line bg-surface px-4 font-bold text-primary hover:border-primary focus-visible:outline-2 focus-visible:outline-primary"
+      >
+        {{ duplicateLabel }}
+        <ChevronRight class="size-5 shrink-0" aria-hidden="true" />
+      </RouterLink>
+
       <p
         v-if="hasFailed(departments)"
         role="alert"
