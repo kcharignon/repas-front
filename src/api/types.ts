@@ -12,6 +12,7 @@ export type ShoppingListSummary = Schemas['ShoppingListDTO']
 export type ActiveShoppingListSummary = Schemas['ActiveShoppingListSummaryDTO']
 export type Ingredient = Schemas['IngredientDTO']
 export type IngredientOption = Schemas['IngredientOptionDTO']
+export type IngredientPayload = Schemas['IngredientPayload']
 
 // Ingrédients : doublons possibles et fusion (ING-005, ING-006, ING-007)
 export type DuplicatePair = Schemas['DuplicateIngredientDTO']

@@ -521,6 +521,9 @@
                             }
                         }
                     },
+                    "403": {
+                        "description": "`INGREDIENT_BASE_FORBIDDEN` : `isBase` est vrai alors que l'utilisateur n'est pas le propri\u00e9taire du catalogue ; rien n'est cr\u00e9\u00e9"
+                    },
                     "404": {
                         "description": "Rayon ou unit\u00e9 inconnu"
                     },
@@ -994,6 +997,7 @@
                     "Ingredients"
                 ],
                 "summary": "Remplace un ingr\u00e9dient de l'utilisateur (un ingr\u00e9dient commun n'est modifiable que par un administrateur) ; son image est conserv\u00e9e",
+                "description": "Le champ facultatif `isBase` pose le marqueur \u00ab ingr\u00e9dient de base \u00bb : absent ou `null`, il reste inchang\u00e9. Seul le propri\u00e9taire du catalogue peut le changer, sur un ingr\u00e9dient \u00e0 lui : toute autre valeur que l'actuelle venant d'un autre compte donne `403` `INGREDIENT_BASE_FORBIDDEN`, et rien n'est \u00e9crit.",
                 "operationId": "put_api_update_ingredient",
                 "parameters": [
                     {
@@ -3097,6 +3101,13 @@
                         "exclusiveMinimum": true,
                         "example": 1000,
                         "nullable": true
+                    },
+                    "isBase": {
+                        "description": "Marqueur \u00ab ingr\u00e9dient de base \u00bb : l'ingr\u00e9dient est copi\u00e9 aux nouveaux comptes. Facultatif : absent ou `null`, il reste inchang\u00e9 (`PUT`) ou faux (`POST`). Seul le propri\u00e9taire du catalogue peut le changer, sur un ingr\u00e9dient \u00e0 lui : tout autre compte re\u00e7oit `403` `INGREDIENT_BASE_FORBIDDEN` quand la valeur envoy\u00e9e diff\u00e8re de l'actuelle",
+                        "type": "boolean",
+                        "default": null,
+                        "example": false,
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -4321,7 +4332,9 @@
                     "hasSameUnit",
                     "canEdit",
                     "recipeCount",
-                    "listCount"
+                    "listCount",
+                    "isBase",
+                    "canSetBase"
                 ],
                 "properties": {
                     "slug": {
@@ -4399,6 +4412,14 @@
                         "description": "Nombre de listes de courses de l'utilisateur qui utilisent cet ingr\u00e9dient (une ligne ou un ingr\u00e9dient ajout\u00e9 \u00e0 la main), toujours renseign\u00e9 ; 0 si aucune, ou si l'ingr\u00e9dient est \u00e0 quelqu'un d'autre",
                         "type": "integer",
                         "example": 2
+                    },
+                    "isBase": {
+                        "description": "Marqueur \u00ab ingr\u00e9dient de base \u00bb : l'ingr\u00e9dient est copi\u00e9 aux nouveaux comptes. Toujours \u00e9crit, jamais `null` ; vrai seulement pour le propri\u00e9taire du catalogue qui lit un ingr\u00e9dient de son catalogue, faux pour tout autre lecteur",
+                        "type": "boolean"
+                    },
+                    "canSetBase": {
+                        "description": "Le lecteur peut poser le marqueur \u00ab de base \u00bb sur cet ingr\u00e9dient : il est le propri\u00e9taire du catalogue et l'ingr\u00e9dient est \u00e0 lui. Toujours \u00e9crit, jamais `null` : le front s'appuie sur ce champ, pas sur le r\u00f4le administrateur",
+                        "type": "boolean"
                     }
                 },
                 "type": "object"
@@ -4890,7 +4911,8 @@
                     "slug",
                     "name",
                     "purchaseUnitSymbol",
-                    "canEdit"
+                    "canEdit",
+                    "isBase"
                 ],
                 "properties": {
                     "slug": {
@@ -4909,6 +4931,10 @@
                     },
                     "canEdit": {
                         "description": "L'utilisateur peut modifier cet ingr\u00e9dient : le sien, ou un ingr\u00e9dient commun s'il est administrateur",
+                        "type": "boolean"
+                    },
+                    "isBase": {
+                        "description": "Marqueur \u00ab ingr\u00e9dient de base \u00bb : l'ingr\u00e9dient est copi\u00e9 aux nouveaux comptes. Toujours \u00e9crit, jamais `null` ; vrai seulement pour le propri\u00e9taire du catalogue, faux pour tout autre lecteur",
                         "type": "boolean"
                     }
                 },

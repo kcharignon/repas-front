@@ -330,7 +330,10 @@ export interface paths {
         };
         /** Détail d'un ingrédient commun ou créé par l'utilisateur (un administrateur voit tous les ingrédients). Un commun que l'utilisateur a adopté se lit encore, en lecture seule (`canEdit` faux) : une page ouverte avant l'adoption peut s'afficher */
         get: operations["get_api_get_ingredient"];
-        /** Remplace un ingrédient de l'utilisateur (un ingrédient commun n'est modifiable que par un administrateur) ; son image est conservée */
+        /**
+         * Remplace un ingrédient de l'utilisateur (un ingrédient commun n'est modifiable que par un administrateur) ; son image est conservée
+         * @description Le champ facultatif `isBase` pose le marqueur « ingrédient de base » : absent ou `null`, il reste inchangé. Seul le propriétaire du catalogue peut le changer, sur un ingrédient à lui : toute autre valeur que l'actuelle venant d'un autre compte donne `403` `INGREDIENT_BASE_FORBIDDEN`, et rien n'est écrit.
+         */
         put: operations["put_api_update_ingredient"];
         post?: never;
         /** Supprime un ingrédient de l'utilisateur, avec ses conversions (un ingrédient commun n'est supprimable que par un administrateur) */
@@ -1096,6 +1099,12 @@ export interface components {
              * @example 1000
              */
             coefficient: number | null;
+            /**
+             * @description Marqueur « ingrédient de base » : l'ingrédient est copié aux nouveaux comptes. Facultatif : absent ou `null`, il reste inchangé (`PUT`) ou faux (`POST`). Seul le propriétaire du catalogue peut le changer, sur un ingrédient à lui : tout autre compte reçoit `403` `INGREDIENT_BASE_FORBIDDEN` quand la valeur envoyée diffère de l'actuelle
+             * @default null
+             * @example false
+             */
+            isBase: boolean | null;
         };
         RecipeRowPayload: {
             /**
@@ -1808,6 +1817,10 @@ export interface components {
              * @example 2
              */
             listCount: number;
+            /** @description Marqueur « ingrédient de base » : l'ingrédient est copié aux nouveaux comptes. Toujours écrit, jamais `null` ; vrai seulement pour le propriétaire du catalogue qui lit un ingrédient de son catalogue, faux pour tout autre lecteur */
+            isBase: boolean;
+            /** @description Le lecteur peut poser le marqueur « de base » sur cet ingrédient : il est le propriétaire du catalogue et l'ingrédient est à lui. Toujours écrit, jamais `null` : le front s'appuie sur ce champ, pas sur le rôle administrateur */
+            canSetBase: boolean;
         };
         MergeIngredientDTO: {
             /**
@@ -2101,6 +2114,8 @@ export interface components {
             purchaseUnitSymbol: string;
             /** @description L'utilisateur peut modifier cet ingrédient : le sien, ou un ingrédient commun s'il est administrateur */
             canEdit: boolean;
+            /** @description Marqueur « ingrédient de base » : l'ingrédient est copié aux nouveaux comptes. Toujours écrit, jamais `null` ; vrai seulement pour le propriétaire du catalogue, faux pour tout autre lecteur */
+            isBase: boolean;
         };
         MergeCandidateDTO: {
             /**
@@ -3132,6 +3147,13 @@ export interface operations {
                 headers: {
                     /** @description URL de l'ingrédient créé */
                     Location?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `INGREDIENT_BASE_FORBIDDEN` : `isBase` est vrai alors que l'utilisateur n'est pas le propriétaire du catalogue ; rien n'est créé */
+            403: {
+                headers: {
                     [name: string]: unknown;
                 };
                 content?: never;

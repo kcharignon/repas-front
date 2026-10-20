@@ -8,6 +8,7 @@ import UiButton from '@/design/UiButton.vue'
 import UiConfirmDialog from '@/design/UiConfirmDialog.vue'
 import UiField from '@/design/UiField.vue'
 import UiSelect from '@/design/UiSelect.vue'
+import UiSwitch from '@/design/UiSwitch.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
 import { messageForFailure, notifyDeleteFailure } from '@/notifications/failures'
 import { useSessionStore } from '@/session/session'
@@ -43,6 +44,7 @@ const form = reactive({
   cookingUnit: '',
   purchaseUnit: '',
   coefficient: '' as string | number,
+  isBase: false,
 })
 const submitted = ref(false)
 const failure = ref<string | null>(null)
@@ -65,6 +67,7 @@ watch(
     form.cookingUnit = ingredient.cookingUnitSlug
     form.purchaseUnit = ingredient.purchaseUnitSlug
     form.coefficient = ingredient.coefficient ?? ''
+    form.isBase = ingredient.isBase === true
   },
   { immediate: true },
 )
@@ -81,6 +84,13 @@ watch(
       form.purchaseUnit = unitList.member[0].slug
   },
   { immediate: true },
+)
+
+// Le marqueur « de base » (ING-015) : seul le back sait qui peut le régler (`canSetBase`, absent d'un ancien back : faux). Il part
+// avec le reste du formulaire, et seulement s'il a changé : sinon le corps est celui d'avant.
+const canSetBase = computed(() => editing.value && existing.data.value?.canSetBase === true)
+const baseChanged = computed(
+  () => canSetBase.value && form.isBase !== (existing.data.value?.isBase === true),
 )
 
 // Deux unités différentes : il faut dire combien l'une vaut de l'autre (sauf si le back connaît déjà la conversion).
@@ -114,6 +124,7 @@ function submit() {
         defaultPurchaseUnitSlug: form.purchaseUnit,
         coefficient:
           needsCoefficient.value && form.coefficient !== '' ? Number(form.coefficient) : null,
+        ...(baseChanged.value ? { isBase: form.isBase } : {}),
       },
     },
     {
@@ -280,6 +291,13 @@ const back = computed(() =>
           :invalid="invalid"
         />
       </UiField>
+
+      <UiSwitch
+        v-if="canSetBase"
+        v-model="form.isBase"
+        :label="t('ingredients.baseSwitch')"
+        :hint="t('ingredients.baseHint')"
+      />
 
       <p
         v-if="failure"

@@ -663,3 +663,43 @@ describe('fusionner deux ingrédients (ING-007)', () => {
     expect(verbes.map((entry) => entry.where)).toEqual([])
   })
 })
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// L'ingrédient de base (ING-015)
+//
+// L'interrupteur de la fiche, sa pastille dans le rayon et le refus du back : trois phrases courtes, au tutoiement, sans avertissement,
+// et sans l'ancienne distinction « commun / personnel », qui n'existe plus dans le produit.
+
+const BASE_KEYS = [
+  'ingredients.baseSwitch',
+  'ingredients.baseHint',
+  'ingredients.baseBadge',
+  'errors.ingredientBaseForbidden',
+] as const
+
+describe("l'ingrédient de base (ING-015)", () => {
+  const lues = sources.web.filter((entry) =>
+    BASE_KEYS.some((key) => entry.where.endsWith(` ${key}`)),
+  )
+
+  it('lit les quatre textes', () => {
+    expect(lues.map((entry) => entry.where.split(' ').pop()).sort()).toEqual([...BASE_KEYS].sort())
+  })
+
+  it('ne dit aucun avertissement et tient chaque phrase en 15 mots au plus', () => {
+    expect(lues.flatMap((entry) => warnings(entry.where, entry.text))).toEqual([])
+    const trop = lues.flatMap((entry) =>
+      entry.text
+        .split(/(?<=[.!?…])\s+/)
+        .filter((sentence) => sentence.trim().split(/\s+/).length > 15),
+    )
+    expect(trop).toEqual([])
+  })
+
+  it('ne parle ni de « commun », ni de catalogue, ni de rôle', () => {
+    const interdits = lues.filter((entry) =>
+      /commun|catalogue|administrateur|propriétaire/iu.test(entry.text),
+    )
+    expect(interdits.map((entry) => entry.where)).toEqual([])
+  })
+})

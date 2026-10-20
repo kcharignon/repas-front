@@ -2,7 +2,7 @@ import { computed } from 'vue'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { ApiError, unwrap } from '@/api'
-import type { DuplicatePair } from '@/api'
+import type { DuplicatePair, IngredientPayload } from '@/api'
 import { choiceKeys } from '@/features/drive/choicesQueries'
 import { driveKeys } from '@/features/drive/queries'
 import { recipeKeys } from '@/features/recipes/queries'
@@ -119,6 +119,11 @@ export interface IngredientForm {
   defaultCookingUnitSlug: string
   defaultPurchaseUnitSlug: string
   coefficient: number | null
+  /**
+   * Le marqueur « de base » (ING-015) : à n'envoyer que pour le propriétaire du catalogue, quand il l'a changé. Absent, le back
+   * le laisse tel quel ; jamais `null`.
+   */
+  isBase?: boolean
 }
 
 /** Crée un ingrédient (rend son slug, en-tête `Location`) ou remplace celui de l'utilisateur ; les erreurs vont dans le formulaire. */
@@ -136,13 +141,19 @@ export function useSaveIngredient() {
       form: IngredientForm
     }): Promise<string> => {
       if (slug === null) {
-        const { response, error } = await api.POST('/api/v1/ingredients', { body: form })
+        const { response, error } = await api.POST('/api/v1/ingredients', {
+          body: form as IngredientPayload,
+        })
         if (!response.ok) throw ApiError.fromResponse(response, error)
 
         return response.headers.get('Location')?.split('/').pop() ?? ''
       }
       await unwrap(
-        api.PUT('/api/v1/ingredients/{slug}', { params: { path: { slug } }, body: form }),
+        api.PUT('/api/v1/ingredients/{slug}', {
+          params: { path: { slug } },
+          // Le contrat généré rend `isBase` obligatoire (défaut `null`) alors que le back l'accepte absent
+          body: form as IngredientPayload,
+        }),
       )
 
       return slug
