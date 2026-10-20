@@ -6,8 +6,10 @@
 // Étape 1 (DRV-647) : le libellé résolu de chaque rayon et les textes du rayon du premier produit (catalogue public, rendus sûrs par l'adaptateur :
 // ni numéro de magasin, ni ville, ni e-mail).
 import type {
-  AisleChoice,
+  AisleGrouping,
   AisleLabelSource,
+  AisleLevel,
+  AisleSample,
   AisleMenuFacts,
   ArrivalFacts,
   AttemptFacts,
@@ -57,7 +59,7 @@ export interface ProbeFacts {
   /** La structure d'une réponse de recherche (DRV-647) : le mot cherché, les noms de ses clés. */
   reply?: { term: string; facts: ReplyFacts } | null
   /** Étape 1 (DRV-647) : les rayons les plus fournis de la première recherche d'essai, leur libellé résolu et sa source (8 au plus). */
-  aisleLabels?: { term: string; choices: readonly AisleChoice[] } | null
+  aisleLabels?: readonly AisleLabelFacts[] | null
   /** Pourquoi le dernier envoi n'a pas mis des produits habituels au panier (DRV-635), dans l'ordre du passage. */
   lastPass?: readonly LastReason[]
   /** Ce que le panier a répondu aux produits choisis qu'il n'a pas pris, au dernier envoi (DRV-644). */
@@ -77,6 +79,14 @@ export interface AvailabilityFacts {
   noLabel: number
   /** Produits dont la fiche dit « Bientôt disponible ». */
   comingSoon: number
+}
+
+/** Le relevé des libellés d'une recherche d'essai (DRV-647) : le niveau retenu, les groupes les plus fournis, des produits échantillons. */
+export interface AisleLabelFacts {
+  term: string
+  products: number
+  grouping: AisleGrouping
+  samples: readonly AisleSample[]
 }
 
 /** Les mots d'essai des produits frais dont on mesure les rayons (DRV-646). */
@@ -391,11 +401,14 @@ function coverageLine(
 }
 
 const SOURCE_FIELDS: Record<NonNullable<AisleLabelSource>, string> = {
-  NAVIGATE: 'sLibelleUrlNaviguerRayon',
+  FILTER: 'objFiltreBloc.sLibelle',
   URL: 'sUrlVoirRayon',
-  CATEGORY: 'sCategorie',
-  REPLY: 'objet de rayon de la réponse',
-  PAGE: 'objet de rayon de la page',
+  FACET: 'objet de filtre de la réponse ou de la page',
+}
+
+const LEVEL_TEXT: Record<AisleLevel, { one: string; level: string }> = {
+  RAYON: { one: 'du rayon', level: 'rayon' },
+  FAMILLE: { one: 'de la famille', level: 'famille' },
 }
 
 const shownText = (shown: ShownText): string =>
@@ -406,22 +419,63 @@ const namedKeysText = (keys: NamedObjectKeys | null | undefined): string =>
     ? P.absent
     : `${keys.kind === 'LIST' ? P.listOf(keys.size ?? 0) : P.object} ; ${keys.total} clés : ${keysText(keys.keys)}`
 
+/** « Produit échantillon de « tomate » : iIdRayon=… iIdFamille=… ; objFiltreBloc (…) : … ; sUrlVoirRayon : … ; sCategorie=… ». */
+function sampleLine(term: string, sample: AisleSample): string {
+  const { filter, url } = sample
+  const filterText =
+    filter === null
+      ? P.absent
+      : P.sampleFilter(
+          filter.path === 'PRODUCT' ? P.inProduct : P.inElement,
+          shownText(filter.label),
+          filter.block,
+          filter.type,
+        )
+  const urlText =
+    url === null
+      ? P.absent
+      : P.sampleUrl(
+          url.id,
+          url.level === null ? null : LEVEL_TEXT[url.level].level,
+          shownText(url.name),
+        )
+  return P.sample(
+    term,
+    sample.aisle,
+    sample.family,
+    filterText,
+    urlText,
+    shownText(sample.category),
+  )
+}
+
 /**
- * Le relevé DRV-647, étape 1 : le libellé résolu de chaque rayon le plus fourni de la première recherche d'essai et sa source, les textes du rayon du
- * premier produit (rendus sûrs par l'adaptateur), les NOMS des clés d'un `objFiltreBloc` et de `objNavigationRayonFamille`.
+ * Le relevé DRV-647 : pour chaque recherche d'essai mesurée, le niveau retenu (rayon ou famille) et pourquoi, le libellé de chaque groupe le plus fourni et sa
+ * source, des produits échantillons aux paires (rayon, famille) distinctes ; puis les textes du premier produit, les objets de filtre de la réponse, les NOMS
+ * des clés d'un `objFiltreBloc` et de `objNavigationRayonFamille`.
  */
 function labelLines(probes: ProbeFacts): string[] {
   const lines: string[] = []
-  const labels = probes.aisleLabels
-  if (labels) {
+  for (const { term, products, grouping, samples } of probes.aisleLabels ?? []) {
+    lines.push(
+      P.aisleLevel(
+        term,
+        LEVEL_TEXT[grouping.level].level,
+        grouping.coverage.RAYON,
+        grouping.coverage.FAMILLE,
+        products,
+      ),
+    )
     let rank = 0
-    for (const { id, label, count, source } of labels.choices) {
+    for (const { id, label, count, source } of grouping.choices) {
+      const one = LEVEL_TEXT[grouping.level].one
       lines.push(
         label === null || source === null
-          ? P.aisleLabelNone(id, count, S.picker.aisleFallback(++rank))
-          : P.aisleLabel(id, count, label, SOURCE_FIELDS[source]),
+          ? P.aisleLabelNone(one, id, count, S.picker.aisleFallback(++rank))
+          : P.aisleLabel(one, id, count, label, SOURCE_FIELDS[source]),
       )
     }
+    for (const sample of samples) lines.push(sampleLine(term, sample))
   }
   const facts = probes.reply?.facts
   if (facts && probes.reply) {
@@ -435,6 +489,20 @@ function labelLines(probes: ProbeFacts): string[] {
     if (facts.filterBlock !== undefined) {
       lines.push(
         P.namedKeys(`réponse « ${term} »`, 'objFiltreBloc', namedKeysText(facts.filterBlock)),
+      )
+    }
+    for (const [index, facet] of (facts.facets ?? []).entries()) {
+      lines.push(
+        P.facet(
+          term,
+          index + 1,
+          `${facet.total} clés : ${keysText(facet.keys)}`,
+          facet.ids.length === 0
+            ? P.absent
+            : facet.ids.map(({ name, value }) => `${name}=${value}`).join(' '),
+          shownText(facet.label),
+          shownText(facet.block),
+        ),
       )
     }
     if (facts.pageNavigation !== undefined) {

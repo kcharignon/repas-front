@@ -11,11 +11,13 @@ import {
   type RequestStats,
   type RetailerAdapter,
 } from '../leclerc'
+import { own } from '../own'
 import { S } from '../ui'
 import { readLastReasons, readLastRefusals, type StorageLike, type WakeLockLike } from '../flow'
 import {
   attemptsText,
   availabilityFacts,
+  type AisleLabelFacts,
   type AvailabilityFacts,
   NONSENSE_TERM,
   type ProbedSearch,
@@ -191,11 +193,11 @@ async function probeSearches(
 async function probeShelves(adapter: RetailerAdapter): Promise<{
   shelves: ShelfFacts[]
   reply: Exclude<ProbeFacts['reply'], undefined>
-  aisleLabels: Exclude<ProbeFacts['aisleLabels'], undefined>
+  aisleLabels: AisleLabelFacts[]
 }> {
   const shelves: ShelfFacts[] = []
   let reply: Exclude<ProbeFacts['reply'], undefined> = null
-  let aisleLabels: Exclude<ProbeFacts['aisleLabels'], undefined> = null
+  const aisleLabels: AisleLabelFacts[] = []
   let stopped = false
   const none = (term: string, fault?: string): ShelfFacts => ({
     term,
@@ -218,9 +220,12 @@ async function probeShelves(adapter: RetailerAdapter): Promise<{
         ...(index === 0 && { nextPage: null, ...shelfIds(found) }),
       })
       // La structure de la première réponse (DRV-647) : des noms de clés, lus dans la réponse déjà reçue, sans requête de plus.
-      if (index === 0) {
-        reply = replyOf(adapter, term)
-        aisleLabels = labelsOf(adapter, term, found)
+      if (index === 0) reply = replyOf(adapter, term)
+      // Les libellés et des produits échantillons (DRV-647) : « tomate » (12 paires rayon-famille), « courgette » (6), sans requête de plus.
+      const samples = own(SAMPLE_COUNTS, term)
+      if (samples !== undefined) {
+        const labels = labelsOf(adapter, term, found, samples)
+        if (labels !== null) aisleLabels.push(labels)
       }
     } catch (error) {
       const fault = probedFault(error)
@@ -231,14 +236,24 @@ async function probeShelves(adapter: RetailerAdapter): Promise<{
   return { shelves, reply, aisleLabels }
 }
 
-/** Le libellé résolu des rayons les plus fournis d'une recherche (DRV-647, étape 1) : ce que l'écran de choix montrerait, sans requête. */
+/** Combien de produits échantillons le diagnostic montre par recherche d'essai (DRV-647) ; un mot absent n'en montre pas. */
+const SAMPLE_COUNTS: Readonly<Record<string, number>> = { tomate: 12, courgette: 6 }
+
+/** Le niveau et le libellé des groupes les plus fournis d'une recherche (DRV-647) : ce que l'écran de choix montrerait, et des produits échantillons. */
 function labelsOf(
   adapter: RetailerAdapter,
   term: string,
   found: Awaited<ReturnType<RetailerAdapter['searchProducts']>>,
-): Exclude<ProbeFacts['aisleLabels'], undefined> {
+  samples: number,
+): AisleLabelFacts | null {
   try {
-    return { term, choices: adapter.aisleChoices(found).slice(0, SHELF_GROUPS) }
+    const grouping = adapter.aisleChoices(found)
+    return {
+      term,
+      products: found.length,
+      grouping: { ...grouping, choices: grouping.choices.slice(0, SHELF_GROUPS) },
+      samples: adapter.aisleSamples(found, samples),
+    }
   } catch {
     return null
   }
@@ -437,7 +452,7 @@ export async function runChecks(
     // D'où viennent les libellés de rayons (DRV-647) : le menu de la page, la structure de la réponse « tomate » (à défaut celle de « sel »).
     aisleMenu,
     reply: measured?.reply ?? commonReply,
-    aisleLabels: measured?.aisleLabels ?? null,
+    aisleLabels: measured?.aisleLabels ?? [],
     lastPass: readLastReasons(deps.storage),
     lastRefusals: readLastRefusals(deps.storage),
   }

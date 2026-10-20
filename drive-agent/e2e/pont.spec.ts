@@ -219,6 +219,18 @@ test.describe('diagnostic', () => {
       /Adresses des liens de rayon et de famille \(motifs\) : \/magasin-N-N-V\/rayon-N-…\.aspx ; \/magasin-N-N-V\/famille-N-…\.aspx/,
     )
     await expect(report).toHaveValue(/Lien de rayon 41 : « Fruits et légumes »/)
+    // And (correctif DRV-647) : le niveau du filtre, le libellé de chaque groupe et sa source, des produits échantillons ; jamais « Voir le rayon » comme libellé
+    await expect(report).toHaveValue(
+      /Niveau du filtre pour « tomate » : famille \(produits nommés : 0 au niveau rayon, 1 au niveau famille, sur 3\)/,
+    )
+    await expect(report).toHaveValue(
+      /Libellé de la famille 410 \(1 produit\) : « Legumes fruits » \(source : sUrlVoirRayon\)/,
+    )
+    await expect(report).toHaveValue(
+      /Produit échantillon de « tomate » : iIdRayon=41 iIdFamille=410 ; objFiltreBloc : absent ; sUrlVoirRayon : id=410 \(famille\) nom=« Legumes-fruits » ; sCategorie=« 40 »/,
+    )
+    await expect(report).toHaveValue(/Produit échantillon de « courgette »/)
+    await expect(report).not.toHaveValue(/« Voir le rayon » \(source/)
     await expect(report).toHaveValue(/Lien de rayon 60 : « Bébé »/)
     // And : la structure de la réponse « tomate », des noms de clés (rayon et famille avec leur valeur)
     await expect(report).toHaveValue(

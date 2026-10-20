@@ -1,7 +1,8 @@
-// Filtrer le choix par rayon du site, de bout en bout (DRV-647, étape 1) : la recherche « carotte » du faux site rend 40 produits de quatre rayons
-// (jus 15, conserves 7, surgelés 60, frais 41). La rangée montre « Tous » puis les rayons présents, du plus fourni au moins fourni, avec le libellé que
-// l'agent lit dans les données reçues (sLibelleUrlNaviguerRayon, sUrlVoirRayon, objFiltreBloc) ou le repli « Rayon 1 » ; toucher un rayon ne montre que
-// ses produits, sans requête ; le rayon appris est choisi d'avance. Données inventées ; le faux site ne prouve pas le vrai.
+// Filtrer le choix par rayon du site, de bout en bout (DRV-647) : la recherche « carotte » du faux site rend 40 produits de quatre rayons et quatre familles,
+// avec les champs de la FORME mesurée sur le vrai site le 2026-10-20 : « Voir le rayon » partout dans sLibelleUrlNaviguerRayon, sUrlVoirRayon au numéro de la
+// FAMILLE, un objFiltreBloc pour une famille. La rangée filtre donc par famille, ne montre jamais « Voir le rayon », nomme les familles par l'adresse ou le
+// bloc et les autres « Rayon 1 » ; toucher un groupe ne montre que ses produits, sans requête ; la famille du rayon appris est choisie d'avance.
+// Données inventées ; le faux site ne prouve pas le vrai.
 import type { Page } from '@playwright/test'
 
 import { openWithFragment, returnedResult, returnsToRepas } from './support/agent'
@@ -53,20 +54,21 @@ test('la rangée montre « Tous » et les rayons présents avec leur nombre ; to
   const chips = rowOf(page).getByRole('button')
   await expect(chips).toHaveText([
     'Tous (40)',
-    'Boissons sans alcool (12)',
+    'Jus de legumes (12)',
     'Rayon 1 (12)',
-    'Surgelés (10)',
-    'Fruits et légumes (6)',
+    'Légumes surgelés (10)',
+    'Legumes frais (6)',
   ])
   await expect(chips.first()).toHaveAttribute('aria-pressed', 'true')
+  await expect(rowOf(page)).not.toContainText('Voir le rayon')
   await page.screenshot({ path: testInfo.outputPath('rangee-tous-360.png') })
   const searches = fake.paced().length
 
-  // When : toucher « Surgelés »
-  await rowOf(page).getByRole('button', { name: 'Surgelés (10)' }).click()
+  // When : toucher « Légumes surgelés »
+  await rowOf(page).getByRole('button', { name: 'Légumes surgelés (10)' }).click()
 
   // Then : ses 10 produits seulement, et aucune requête de plus
-  await expect(rowOf(page).getByRole('button', { name: 'Surgelés (10)' })).toHaveAttribute(
+  await expect(rowOf(page).getByRole('button', { name: 'Légumes surgelés (10)' })).toHaveAttribute(
     'aria-pressed',
     'true',
   )
@@ -74,10 +76,10 @@ test('la rangée montre « Tous » et les rayons présents avec leur nombre ; to
   expect(frozen.every((title) => title.startsWith('Poêlée de carottes surgelée'))).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('rangee-surgeles-360.png') })
 
-  // When : retoucher « Surgelés », puis « Fruits et légumes », puis « Tous »
-  await rowOf(page).getByRole('button', { name: 'Surgelés (10)' }).click()
+  // When : retoucher « Légumes surgelés », puis « Legumes frais », puis « Tous »
+  await rowOf(page).getByRole('button', { name: 'Légumes surgelés (10)' }).click()
   await expect(chips.first()).toHaveAttribute('aria-pressed', 'true')
-  await rowOf(page).getByRole('button', { name: 'Fruits et légumes (6)' }).click()
+  await rowOf(page).getByRole('button', { name: 'Legumes frais (6)' }).click()
   await expect(cardsOf(page)).toHaveCount(6)
   await rowOf(page).getByRole('button', { name: 'Tous (40)' }).click()
 
@@ -103,8 +105,8 @@ test('le rayon appris est choisi d’avance, « Tous » est à un toucher, et le
   )
   await page.getByRole('button', { name: 'Commencer' }).click()
 
-  // Then : « Fruits et légumes » choisi d'avance, ses 6 produits seulement
-  const freshChip = rowOf(page).getByRole('button', { name: 'Fruits et légumes (6)' })
+  // Then : « Legumes frais » choisi d'avance, ses 6 produits seulement
+  const freshChip = rowOf(page).getByRole('button', { name: 'Legumes frais (6)' })
   await expect(freshChip).toHaveAttribute('aria-pressed', 'true')
   await expect(cardsOf(page)).toHaveCount(6)
   await page.screenshot({ path: testInfo.outputPath('rangee-appris-360.png') })

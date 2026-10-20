@@ -147,6 +147,8 @@ function run(
     challenge?: () => 'resume' | 'stop'
     /** Le libellé de chaque rayon que l'adaptateur sait lire (DRV-647). */
     aisleLabels?: Record<number, string>
+    /** Le niveau où la rangée filtre (DRV-647). */
+    aisleLevel?: 'RAYON' | 'FAMILLE'
   } = {},
 ) {
   const placements: PlacementProps[] = []
@@ -154,6 +156,7 @@ function run(
     found: options.found ?? FOUND,
     ...(options.before && { before: options.before }),
     ...(options.aisleLabels && { aisleLabels: options.aisleLabels }),
+    ...(options.aisleLevel && { aisleLevel: options.aisleLevel }),
   })
   const user = session(...steps)
   const screens = fakeUi({
@@ -2438,6 +2441,60 @@ describe('le filtre par rayon du site (DRV-647)', () => {
       product: { id: '6000006', rayonId: FRESH },
     })
     expect(test.adapter.calls.filter((call) => call.startsWith('find'))).toEqual(['find tomate'])
+  })
+
+  it('au niveau de la famille : chaque famille est un groupe, et la famille du rayon appris est choisie d’avance quand il n’en a qu’une', async () => {
+    let pressed: (string | null)[] = []
+    let texts: (string | null)[] = []
+    let shown: string[] = []
+    const test = run(
+      line({ rayonHints: [FRESH] }),
+      [
+        (view) => {
+          texts = chips(view.zone).map((chip) => chip.text)
+          pressed = chips(view.zone).map((chip) => chip.pressed)
+          shown = names(view.zone)
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        shelf,
+        found,
+        aisleLevel: 'FAMILLE',
+        aisleLabels: { 441: 'Tomates fraîches', 407: 'Conserves' },
+      },
+    )
+
+    await test.start()
+
+    expect(texts).toEqual(['Tous (12)', 'Tomates fraîches (4)', 'Conserves (6)', 'Rayon 1 (2)'])
+    expect(pressed).toEqual(['false', 'true', 'false', 'false'])
+    expect(shown).toEqual(['Tomates 1', 'Tomates 5', 'Tomates 7', 'Tomates 11'])
+  })
+
+  it('au niveau de la famille, un rayon appris réparti sur deux familles ne choisit rien d’avance', async () => {
+    let pressed: (string | null)[] = []
+    const split = Object.fromEntries(
+      Object.entries(shelf).map(([id, item], index) => [
+        id,
+        item.aisle === FRESH ? { ...item, family: index < 6 ? 441 : 442 } : item,
+      ]),
+    )
+    const test = run(
+      line({ rayonHints: [FRESH] }),
+      [
+        (view) => {
+          pressed = chips(view.zone).map((chip) => chip.pressed)
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf: split, found, aisleLevel: 'FAMILLE' },
+    )
+
+    await test.start()
+
+    expect(pressed[0]).toBe('true')
+    expect(pressed.slice(1).every((value) => value === 'false')).toBe(true)
   })
 
   it('un seul rayon dans les résultats : pas de rangée', async () => {

@@ -17,13 +17,20 @@ export {
   plausibleLabel,
   type AisleChoice,
   type AisleLabelSource,
+  aisleSamples,
+  isGenericLabel,
+  urlAisle,
+  type AisleGrouping,
+  type AisleLevel,
+  type AisleSample,
+  type ShownFacet,
   shownAisleText,
   shownAisleTexts,
   shownAisleUrl,
   type ShownAisleTexts,
   type ShownText,
 } from './aisle-labels'
-export type { AisleTexts } from './embedded'
+export type { AisleTexts, FilterBlock } from './embedded'
 export {
   aisleMenuFacts,
   MAX_LABEL,
@@ -38,6 +45,8 @@ export {
 export {
   aisleVocabulary,
   facetLabels,
+  facetObjects,
+  type FacetObject,
   namedObjectKeys,
   type NamedObjectKeys,
   replyShape,
