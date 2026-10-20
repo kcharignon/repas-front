@@ -87,6 +87,39 @@
                 "security": []
             }
         },
+        "/api/v1/ingredients/duplicates": {
+            "get": {
+                "tags": [
+                    "Ingredients"
+                ],
+                "summary": "Les doublons possibles de l'utilisateur : des paires de SES ingr\u00e9dients (jamais un commun, jamais ceux d'un autre), du m\u00eame rayon, dont les noms se ressemblent (m\u00eame nom une fois normalis\u00e9, \u00e0 une faute de frappe pr\u00e8s, ou assez proche : score de 0,90 au moins) et qu'il n'a pas \u00e9cart\u00e9es par \u00ab Pas le m\u00eame \u00bb. Tri\u00e9es de la plus probable \u00e0 la moins probable, 50 au plus, le m\u00eame ordre \u00e0 chaque appel. Chaque paire porte de quoi afficher sa carte (les deux ingr\u00e9dients avec leurs nombres de recettes et de listes, l'ingr\u00e9dient \u00e0 garder par d\u00e9faut). Vide pour un compte sans ingr\u00e9dient personnel, un administrateur compris. Ce que la fusion ferait exactement : `GET \u2026/merge-preview`",
+                "operationId": "get_api_list_duplicate_ingredients",
+                "responses": {
+                    "200": {
+                        "description": "Doublons possibles",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "member": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/DuplicateIngredientDTO"
+                                            }
+                                        },
+                                        "totalItems": {
+                                            "type": "integer",
+                                            "example": 3
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/ingredients/search": {
             "get": {
                 "tags": [
@@ -234,7 +267,8 @@
                 "tags": [
                     "Recipes"
                 ],
-                "summary": "Copie une recette dans celles de l'utilisateur connect\u00e9, avec les ingr\u00e9dients personnalis\u00e9s et leurs conversions",
+                "summary": "Copie une recette dans celles de l'utilisateur connect\u00e9",
+                "description": "Chaque ingr\u00e9dient de la recette est rapproch\u00e9 de ceux que l'utilisateur poss\u00e8de d\u00e9j\u00e0 (ce qu'il a adopt\u00e9, puis le m\u00eame nom dans le m\u00eame rayon, avec une unit\u00e9 compatible) ; \u00e0 d\u00e9faut, il re\u00e7oit une copie de l'ingr\u00e9dient avec ses conversions propres. Un ingr\u00e9dient existant de l'utilisateur n'est jamais modifi\u00e9.",
                 "operationId": "post_api_copy_recipe",
                 "parameters": [
                     {
@@ -1028,6 +1062,54 @@
                 }
             }
         },
+        "/api/v1/ingredients/{slug}/merge-preview": {
+            "get": {
+                "tags": [
+                    "Ingredients"
+                ],
+                "summary": "Ce que la fusion de l'ingr\u00e9dient de l'URL (absorb\u00e9) dans `into` (gard\u00e9) ferait, sans rien \u00e9crire : recettes, listes et choix du drive concern\u00e9s, unit\u00e9s qui manquent, pourquoi elle serait refus\u00e9e. M\u00eame verdict que `POST \u2026/merge`. Toujours 200 quand les deux ingr\u00e9dients sont \u00e0 l'utilisateur ou communs : un refus de r\u00e8gle est dans `blockedBy`",
+                "operationId": "get_api_get_merge_preview",
+                "parameters": [
+                    {
+                        "name": "into",
+                        "in": "query",
+                        "description": "Slug de l'ingr\u00e9dient \u00e0 garder",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 255
+                        },
+                        "example": "tomate-0a1b2c3d"
+                    },
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Ce que la fusion ferait",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MergePreviewDTO"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Un des deux ingr\u00e9dients est inconnu ou appartient \u00e0 un autre utilisateur (m\u00eame pour un administrateur)"
+                    },
+                    "422": {
+                        "description": "Param\u00e8tre `into` absent ou trop long"
+                    }
+                }
+            }
+        },
         "/api/v1/recipes/{id}": {
             "get": {
                 "tags": [
@@ -1526,6 +1608,66 @@
                 }
             }
         },
+        "/api/v1/ingredients/{slug}/merge-candidates": {
+            "get": {
+                "tags": [
+                    "Ingredients"
+                ],
+                "summary": "Les ingr\u00e9dients de l'utilisateur (les siens, jamais un commun) avec lesquels l'ingr\u00e9dient de l'URL peut \u00eatre fusionn\u00e9, 30 au plus : ceux du m\u00eame rayon d'abord, les plus ressemblants en t\u00eate, puis les autres rayons. Choix de l'ingr\u00e9dient \u00e0 garder",
+                "operationId": "get_api_list_merge_candidates",
+                "parameters": [
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "description": "Ne garde que les ingr\u00e9dients dont le nom contient ce texte (sans tenir compte de la casse ni des accents), 100 caract\u00e8res au plus",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 100
+                        },
+                        "example": "tom"
+                    },
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Candidats \u00e0 la fusion",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "member": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/MergeCandidateDTO"
+                                            }
+                                        },
+                                        "totalItems": {
+                                            "type": "integer",
+                                            "example": 12
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "L'ingr\u00e9dient est inconnu ou appartient \u00e0 un autre utilisateur (m\u00eame pour un administrateur)"
+                    },
+                    "422": {
+                        "description": "Param\u00e8tre `q` invalide (trop long), ou `CANNOT_MERGE_COMMON_INGREDIENT` : l'ingr\u00e9dient est un commun"
+                    }
+                }
+            }
+        },
         "/api/v1/recipes/other-people": {
             "get": {
                 "tags": [
@@ -1604,6 +1746,89 @@
                     },
                     "404": {
                         "description": "Type de recette inconnu"
+                    }
+                }
+            }
+        },
+        "/api/v1/ingredients/{slug}/distinct-from": {
+            "post": {
+                "tags": [
+                    "Ingredients"
+                ],
+                "summary": "\u00ab Pas le m\u00eame \u00bb : l'utilisateur dit que l'ingr\u00e9dient de l'URL et `other` ne sont pas un doublon. La paire (dans un sens ou dans l'autre) n'est plus jamais propos\u00e9e par `GET /ingredients/duplicates`, m\u00eame apr\u00e8s un renommage. Rien d'autre ne change : aucun ingr\u00e9dient, aucune recette, aucune liste. Rejou\u00e9e, elle r\u00e9pond 204 sans rien faire. Les deux ingr\u00e9dients doivent \u00eatre \u00e0 l'utilisateur, jamais un commun, m\u00eame pour un administrateur",
+                "operationId": "post_api_mark_ingredients_distinct",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/MarkIngredientsDistinctPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Paire m\u00e9moris\u00e9e, ou d\u00e9j\u00e0 m\u00e9moris\u00e9e"
+                    },
+                    "404": {
+                        "description": "Un des deux ingr\u00e9dients est inconnu, commun, ou appartient \u00e0 un autre utilisateur (m\u00eame pour un administrateur)"
+                    },
+                    "422": {
+                        "description": "Corps invalide, ou `CANNOT_BE_DISTINCT_FROM_ITSELF` : les deux ingr\u00e9dients sont le m\u00eame"
+                    }
+                }
+            }
+        },
+        "/api/v1/ingredients/{slug}/merge": {
+            "post": {
+                "tags": [
+                    "Ingredients"
+                ],
+                "summary": "Fusionne deux ingr\u00e9dients de l'utilisateur : celui de l'URL dispara\u00eet, `into` est gard\u00e9. Ses recettes, ses listes de courses et ses choix du drive qui utilisaient le premier utilisent le second ; les anciens slugs restent r\u00e9solus. Les deux ingr\u00e9dients doivent \u00eatre \u00e0 l'utilisateur, jamais un commun, m\u00eame pour un administrateur. Rejou\u00e9e apr\u00e8s un succ\u00e8s, elle r\u00e9pond 204 sans rien faire. Aper\u00e7u sans \u00e9criture : `GET \u2026/merge-preview`",
+                "operationId": "post_api_merge_ingredients",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/MergeIngredientsPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Fusion faite, ou rejeu d'une fusion d\u00e9j\u00e0 faite : rien de plus \u00e0 faire"
+                    },
+                    "404": {
+                        "description": "Un des deux ingr\u00e9dients est inconnu ou appartient \u00e0 un autre utilisateur (m\u00eame pour un administrateur), ou l'ingr\u00e9dient de l'URL n'existe plus et n'a pas \u00e9t\u00e9 fusionn\u00e9 dans `into`"
+                    },
+                    "409": {
+                        "description": "`INGREDIENT_IN_SENT_LIST` : une liste envoy\u00e9e au drive utilise l'un des deux (la rouvrir ou la terminer d'abord) ; `INGREDIENT_USED_BY_ANOTHER_USER` : une ligne d'un autre utilisateur utilise l'ingr\u00e9dient de l'URL (donn\u00e9e h\u00e9rit\u00e9e) ; `INGREDIENT_MERGE_CONFLICT` : une \u00e9criture concurrente a pos\u00e9 une r\u00e9f\u00e9rence sur l'ingr\u00e9dient de l'URL, rien n'a chang\u00e9, r\u00e9essayer"
+                    },
+                    "422": {
+                        "description": "Corps invalide ; `CANNOT_MERGE_INTO_ITSELF` : les deux ingr\u00e9dients sont le m\u00eame ; `CANNOT_MERGE_COMMON_INGREDIENT` : l'un des deux est un commun ; `MERGE_UNIT_MISSING` : une unit\u00e9 de l'ingr\u00e9dient de l'URL ne se convertit pas dans l'unit\u00e9 d'achat de `into`, rien n'a chang\u00e9"
                     }
                 }
             }
@@ -3022,6 +3247,18 @@
                 },
                 "type": "object"
             },
+            "GetMergePreviewRequestQuery": {
+                "required": [
+                    "into"
+                ],
+                "properties": {
+                    "into": {
+                        "type": "string",
+                        "maxLength": 255
+                    }
+                },
+                "type": "object"
+            },
             "ListAvailableIngredientsRequestQuery": {
                 "properties": {
                     "q": {
@@ -3029,6 +3266,45 @@
                         "default": null,
                         "maxLength": 100,
                         "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "ListMergeCandidatesRequestQuery": {
+                "properties": {
+                    "q": {
+                        "type": "string",
+                        "default": null,
+                        "maxLength": 100,
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "MarkIngredientsDistinctPayload": {
+                "required": [
+                    "other"
+                ],
+                "properties": {
+                    "other": {
+                        "description": "Slug de l'autre ingr\u00e9dient de la paire",
+                        "type": "string",
+                        "maxLength": 255,
+                        "example": "tomates-0a1b2c3d"
+                    }
+                },
+                "type": "object"
+            },
+            "MergeIngredientsPayload": {
+                "required": [
+                    "into"
+                ],
+                "properties": {
+                    "into": {
+                        "description": "Slug de l'ingr\u00e9dient \u00e0 garder : celui de l'URL dispara\u00eet et tout ce qui l'utilisait utilise celui-ci",
+                        "type": "string",
+                        "maxLength": 255,
+                        "example": "tomate-0a1b2c3d"
                     }
                 },
                 "type": "object"
@@ -3621,6 +3897,92 @@
                 },
                 "type": "object"
             },
+            "DuplicateIngredientSideDTO": {
+                "required": [
+                    "slug",
+                    "name",
+                    "departmentSlug",
+                    "departmentName",
+                    "purchaseUnitName",
+                    "recipeCount",
+                    "listCount"
+                ],
+                "properties": {
+                    "slug": {
+                        "description": "Identifiant de l'ingr\u00e9dient (slug)",
+                        "type": "string",
+                        "example": "tomate-0a1b2c3d"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Tomate"
+                    },
+                    "departmentSlug": {
+                        "description": "Identifiant du rayon (slug) : le m\u00eame pour les deux ingr\u00e9dients de la proposition",
+                        "type": "string",
+                        "example": "fruit-et-legume"
+                    },
+                    "departmentName": {
+                        "type": "string",
+                        "example": "Fruit & l\u00e9gume"
+                    },
+                    "purchaseUnitName": {
+                        "description": "Nom de l'unit\u00e9 d'achat",
+                        "type": "string",
+                        "example": "kilo"
+                    },
+                    "recipeCount": {
+                        "description": "Nombre de recettes de l'utilisateur qui utilisent cet ingr\u00e9dient (0 s'il n'en a aucune)",
+                        "type": "integer",
+                        "example": 12
+                    },
+                    "listCount": {
+                        "description": "Nombre de listes de courses de l'utilisateur qui utilisent cet ingr\u00e9dient (0 s'il n'en a aucune)",
+                        "type": "integer",
+                        "example": 3
+                    }
+                },
+                "type": "object"
+            },
+            "DuplicateIngredientDTO": {
+                "required": [
+                    "first",
+                    "second",
+                    "score",
+                    "level",
+                    "suggestedKeep"
+                ],
+                "properties": {
+                    "first": {
+                        "$ref": "#/components/schemas/DuplicateIngredientSideDTO"
+                    },
+                    "second": {
+                        "$ref": "#/components/schemas/DuplicateIngredientSideDTO"
+                    },
+                    "score": {
+                        "description": "Ressemblance des noms normalis\u00e9s, de 0,90 \u00e0 1 (Jaro-Winkler, 1 pour deux noms identiques une fois normalis\u00e9s)",
+                        "type": "number",
+                        "format": "float",
+                        "example": 1
+                    },
+                    "level": {
+                        "description": "`EXACT` : le m\u00eame nom une fois normalis\u00e9 (casse, accents, pluriel, mots vides) ; `TYPO` : \u00e0 une faute de frappe pr\u00e8s (0,97 au moins) ; `SUGGESTION` : assez proche pour demander (de 0,90 \u00e0 0,97). Tol\u00e9rer une valeur inconnue",
+                        "type": "string",
+                        "enum": [
+                            "EXACT",
+                            "TYPO",
+                            "SUGGESTION"
+                        ],
+                        "example": "EXACT"
+                    },
+                    "suggestedKeep": {
+                        "description": "Slug de celui des deux \u00e0 garder par d\u00e9faut : le plus utilis\u00e9 en recettes, puis en listes, puis le nom le plus court, puis l'ordre alphab\u00e9tique. `first.slug` ou `second.slug`",
+                        "type": "string",
+                        "example": "tomate-0a1b2c3d"
+                    }
+                },
+                "type": "object"
+            },
             "IngredientSearchResultDTO": {
                 "required": [
                     "slug",
@@ -3957,7 +4319,9 @@
                     "purchaseUnitName",
                     "purchaseUnitSymbol",
                     "hasSameUnit",
-                    "canEdit"
+                    "canEdit",
+                    "recipeCount",
+                    "listCount"
                 ],
                 "properties": {
                     "slug": {
@@ -4024,6 +4388,137 @@
                     },
                     "canEdit": {
                         "description": "L'utilisateur peut modifier cet ingr\u00e9dient : le sien, ou un ingr\u00e9dient commun s'il est administrateur",
+                        "type": "boolean"
+                    },
+                    "recipeCount": {
+                        "description": "Nombre de recettes de l'utilisateur qui utilisent cet ingr\u00e9dient (\u00ab Utilis\u00e9 dans 7 recettes \u00b7 2 listes \u00bb), toujours renseign\u00e9 ; 0 si aucune, ou si l'ingr\u00e9dient est \u00e0 quelqu'un d'autre",
+                        "type": "integer",
+                        "example": 7
+                    },
+                    "listCount": {
+                        "description": "Nombre de listes de courses de l'utilisateur qui utilisent cet ingr\u00e9dient (une ligne ou un ingr\u00e9dient ajout\u00e9 \u00e0 la main), toujours renseign\u00e9 ; 0 si aucune, ou si l'ingr\u00e9dient est \u00e0 quelqu'un d'autre",
+                        "type": "integer",
+                        "example": 2
+                    }
+                },
+                "type": "object"
+            },
+            "MergeIngredientDTO": {
+                "required": [
+                    "slug",
+                    "name",
+                    "departmentSlug",
+                    "departmentName",
+                    "purchaseUnitName"
+                ],
+                "properties": {
+                    "slug": {
+                        "description": "Identifiant de l'ingr\u00e9dient (slug)",
+                        "type": "string",
+                        "example": "tomate"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Tomate"
+                    },
+                    "departmentSlug": {
+                        "description": "Identifiant du rayon (slug)",
+                        "type": "string",
+                        "example": "fruit-et-legume"
+                    },
+                    "departmentName": {
+                        "type": "string",
+                        "example": "Fruit & l\u00e9gume"
+                    },
+                    "purchaseUnitName": {
+                        "description": "Nom de l'unit\u00e9 d'achat",
+                        "type": "string",
+                        "example": "kilo"
+                    }
+                },
+                "type": "object"
+            },
+            "MergeUnitDTO": {
+                "required": [
+                    "slug",
+                    "name"
+                ],
+                "properties": {
+                    "slug": {
+                        "description": "Identifiant de l'unit\u00e9 (slug)",
+                        "type": "string",
+                        "example": "tranche"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "tranche"
+                    }
+                },
+                "type": "object"
+            },
+            "MergePreviewDTO": {
+                "required": [
+                    "keep",
+                    "absorbed",
+                    "recipeCount",
+                    "listCount",
+                    "driveChoiceCount",
+                    "departmentChanges",
+                    "listQuantitiesConverted",
+                    "missingUnits",
+                    "canMerge"
+                ],
+                "properties": {
+                    "keep": {
+                        "$ref": "#/components/schemas/MergeIngredientDTO"
+                    },
+                    "absorbed": {
+                        "$ref": "#/components/schemas/MergeIngredientDTO"
+                    },
+                    "recipeCount": {
+                        "description": "Nombre de recettes de l'utilisateur qui utilisent l'ingr\u00e9dient absorb\u00e9 (elles passent sur le gard\u00e9)",
+                        "type": "integer",
+                        "example": 7
+                    },
+                    "listCount": {
+                        "description": "Nombre de listes de courses de l'utilisateur qui utilisent l'ingr\u00e9dient absorb\u00e9 (elles passent sur le gard\u00e9)",
+                        "type": "integer",
+                        "example": 2
+                    },
+                    "driveChoiceCount": {
+                        "description": "Nombre de choix du drive de l'ingr\u00e9dient absorb\u00e9 qui passent sur le gard\u00e9, toutes enseignes et tous magasins ; pas ceux qui sont supprim\u00e9s parce que le gard\u00e9 a d\u00e9j\u00e0 le sien dans le m\u00eame magasin",
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "departmentChanges": {
+                        "description": "Le rayon de l'ingr\u00e9dient absorb\u00e9 n'est pas celui du gard\u00e9 : le rayon du gard\u00e9 l'emporte",
+                        "type": "boolean"
+                    },
+                    "listQuantitiesConverted": {
+                        "description": "Des quantit\u00e9s de listes de courses sont r\u00e9-exprim\u00e9es dans l'unit\u00e9 d'achat de l'ingr\u00e9dient gard\u00e9 (les unit\u00e9s d'achat diff\u00e8rent) ; les quantit\u00e9s des recettes ne changent jamais",
+                        "type": "boolean"
+                    },
+                    "missingUnits": {
+                        "description": "Les unit\u00e9s de l'ingr\u00e9dient absorb\u00e9 que l'ingr\u00e9dient gard\u00e9 ne sait pas convertir en son unit\u00e9 d'achat ; vide si rien ne manque. Renseign\u00e9e m\u00eame quand un autre refus passe avant",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/MergeUnitDTO"
+                        }
+                    },
+                    "blockedBy": {
+                        "description": "Pourquoi la fusion serait refus\u00e9e (le premier cas dans l'ordre de la liste), null si elle est possible. SAME_INGREDIENT : les deux ingr\u00e9dients sont le m\u00eame. COMMON_INGREDIENT : l'un est un ingr\u00e9dient commun. USED_BY_ANOTHER_USER : une ligne d'un autre utilisateur utilise l'ingr\u00e9dient absorb\u00e9. IN_SENT_LIST : une liste envoy\u00e9e au drive utilise l'un des deux. UNIT_MISSING : voir missingUnits",
+                        "type": "string",
+                        "enum": [
+                            "SAME_INGREDIENT",
+                            "COMMON_INGREDIENT",
+                            "USED_BY_ANOTHER_USER",
+                            "IN_SENT_LIST",
+                            "UNIT_MISSING"
+                        ],
+                        "nullable": true
+                    },
+                    "canMerge": {
+                        "description": "La fusion est possible : blockedBy est null",
                         "type": "boolean"
                     }
                 },
@@ -4414,6 +4909,63 @@
                     },
                     "canEdit": {
                         "description": "L'utilisateur peut modifier cet ingr\u00e9dient : le sien, ou un ingr\u00e9dient commun s'il est administrateur",
+                        "type": "boolean"
+                    }
+                },
+                "type": "object"
+            },
+            "MergeCandidateDTO": {
+                "required": [
+                    "slug",
+                    "name",
+                    "departmentSlug",
+                    "departmentName",
+                    "purchaseUnitName",
+                    "recipeCount",
+                    "listCount",
+                    "sameDepartment",
+                    "veryClose"
+                ],
+                "properties": {
+                    "slug": {
+                        "description": "Identifiant de l'ingr\u00e9dient (slug)",
+                        "type": "string",
+                        "example": "tomate"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Tomate"
+                    },
+                    "departmentSlug": {
+                        "description": "Identifiant du rayon (slug)",
+                        "type": "string",
+                        "example": "fruit-et-legume"
+                    },
+                    "departmentName": {
+                        "type": "string",
+                        "example": "Fruit & l\u00e9gume"
+                    },
+                    "purchaseUnitName": {
+                        "description": "Nom de l'unit\u00e9 d'achat",
+                        "type": "string",
+                        "example": "kilo"
+                    },
+                    "recipeCount": {
+                        "description": "Nombre de recettes de l'utilisateur qui utilisent cet ingr\u00e9dient",
+                        "type": "integer",
+                        "example": 12
+                    },
+                    "listCount": {
+                        "description": "Nombre de listes de courses de l'utilisateur qui utilisent cet ingr\u00e9dient",
+                        "type": "integer",
+                        "example": 3
+                    },
+                    "sameDepartment": {
+                        "description": "Le rayon est celui de l'ingr\u00e9dient qu'on veut fusionner",
+                        "type": "boolean"
+                    },
+                    "veryClose": {
+                        "description": "Le nom est le m\u00eame (casse, accents, pluriel) ou \u00e0 une faute de frappe pr\u00e8s : le meilleur choix probable",
                         "type": "boolean"
                     }
                 },

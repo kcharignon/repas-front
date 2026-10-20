@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingredients/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Les doublons possibles de l'utilisateur : des paires de SES ingrédients (jamais un commun, jamais ceux d'un autre), du même rayon, dont les noms se ressemblent (même nom une fois normalisé, à une faute de frappe près, ou assez proche : score de 0,90 au moins) et qu'il n'a pas écartées par « Pas le même ». Triées de la plus probable à la moins probable, 50 au plus, le même ordre à chaque appel. Chaque paire porte de quoi afficher sa carte (les deux ingrédients avec leurs nombres de recettes et de listes, l'ingrédient à garder par défaut). Vide pour un compte sans ingrédient personnel, un administrateur compris. Ce que la fusion ferait exactement : `GET …/merge-preview` */
+        get: operations["get_api_list_duplicate_ingredients"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ingredients/search": {
         parameters: {
             query?: never;
@@ -98,7 +115,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Copie une recette dans celles de l'utilisateur connecté, avec les ingrédients personnalisés et leurs conversions */
+        /**
+         * Copie une recette dans celles de l'utilisateur connecté
+         * @description Chaque ingrédient de la recette est rapproché de ceux que l'utilisateur possède déjà (ce qu'il a adopté, puis le même nom dans le même rayon, avec une unité compatible) ; à défaut, il reçoit une copie de l'ingrédient avec ses conversions propres. Un ingrédient existant de l'utilisateur n'est jamais modifié.
+         */
         post: operations["post_api_copy_recipe"];
         delete?: never;
         options?: never;
@@ -320,6 +340,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingredients/{slug}/merge-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ce que la fusion de l'ingrédient de l'URL (absorbé) dans `into` (gardé) ferait, sans rien écrire : recettes, listes et choix du drive concernés, unités qui manquent, pourquoi elle serait refusée. Même verdict que `POST …/merge`. Toujours 200 quand les deux ingrédients sont à l'utilisateur ou communs : un refus de règle est dans `blockedBy` */
+        get: operations["get_api_get_merge_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/recipes/{id}": {
         parameters: {
             query?: never;
@@ -431,6 +468,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingredients/{slug}/merge-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Les ingrédients de l'utilisateur (les siens, jamais un commun) avec lesquels l'ingrédient de l'URL peut être fusionné, 30 au plus : ceux du même rayon d'abord, les plus ressemblants en tête, puis les autres rayons. Choix de l'ingrédient à garder */
+        get: operations["get_api_list_merge_candidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/recipes/other-people": {
         parameters: {
             query?: never;
@@ -459,6 +513,40 @@ export interface paths {
         get: operations["get_api_list_recipes_by_type"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingredients/{slug}/distinct-from": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** « Pas le même » : l'utilisateur dit que l'ingrédient de l'URL et `other` ne sont pas un doublon. La paire (dans un sens ou dans l'autre) n'est plus jamais proposée par `GET /ingredients/duplicates`, même après un renommage. Rien d'autre ne change : aucun ingrédient, aucune recette, aucune liste. Rejouée, elle répond 204 sans rien faire. Les deux ingrédients doivent être à l'utilisateur, jamais un commun, même pour un administrateur */
+        post: operations["post_api_mark_ingredients_distinct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingredients/{slug}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fusionne deux ingrédients de l'utilisateur : celui de l'URL disparaît, `into` est gardé. Ses recettes, ses listes de courses et ses choix du drive qui utilisaient le premier utilisent le second ; les anciens slugs restent résolus. Les deux ingrédients doivent être à l'utilisateur, jamais un commun, même pour un administrateur. Rejouée après un succès, elle répond 204 sans rien faire. Aperçu sans écriture : `GET …/merge-preview` */
+        post: operations["post_api_merge_ingredients"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1090,9 +1178,30 @@ export interface components {
              */
             baseFactor: number | null;
         };
+        GetMergePreviewRequestQuery: {
+            into: string;
+        };
         ListAvailableIngredientsRequestQuery: {
             /** @default null */
             q: string | null;
+        };
+        ListMergeCandidatesRequestQuery: {
+            /** @default null */
+            q: string | null;
+        };
+        MarkIngredientsDistinctPayload: {
+            /**
+             * @description Slug de l'autre ingrédient de la paire
+             * @example tomates-0a1b2c3d
+             */
+            other: string;
+        };
+        MergeIngredientsPayload: {
+            /**
+             * @description Slug de l'ingrédient à garder : celui de l'URL disparaît et tout ce qui l'utilisait utilise celui-ci
+             * @example tomate-0a1b2c3d
+             */
+            into: string;
         };
         UpdateServingMealPayload: {
             /**
@@ -1379,6 +1488,58 @@ export interface components {
             /** @description Intentions, 200 au plus, appliquées dans l'ordre reçu pour un même ingrédient */
             choices: components["schemas"]["ChoiceIntentPayload"][];
         };
+        DuplicateIngredientSideDTO: {
+            /**
+             * @description Identifiant de l'ingrédient (slug)
+             * @example tomate-0a1b2c3d
+             */
+            slug: string;
+            /** @example Tomate */
+            name: string;
+            /**
+             * @description Identifiant du rayon (slug) : le même pour les deux ingrédients de la proposition
+             * @example fruit-et-legume
+             */
+            departmentSlug: string;
+            /** @example Fruit & légume */
+            departmentName: string;
+            /**
+             * @description Nom de l'unité d'achat
+             * @example kilo
+             */
+            purchaseUnitName: string;
+            /**
+             * @description Nombre de recettes de l'utilisateur qui utilisent cet ingrédient (0 s'il n'en a aucune)
+             * @example 12
+             */
+            recipeCount: number;
+            /**
+             * @description Nombre de listes de courses de l'utilisateur qui utilisent cet ingrédient (0 s'il n'en a aucune)
+             * @example 3
+             */
+            listCount: number;
+        };
+        DuplicateIngredientDTO: {
+            first: components["schemas"]["DuplicateIngredientSideDTO"];
+            second: components["schemas"]["DuplicateIngredientSideDTO"];
+            /**
+             * Format: float
+             * @description Ressemblance des noms normalisés, de 0,90 à 1 (Jaro-Winkler, 1 pour deux noms identiques une fois normalisés)
+             * @example 1
+             */
+            score: number;
+            /**
+             * @description `EXACT` : le même nom une fois normalisé (casse, accents, pluriel, mots vides) ; `TYPO` : à une faute de frappe près (0,97 au moins) ; `SUGGESTION` : assez proche pour demander (de 0,90 à 0,97). Tolérer une valeur inconnue
+             * @example EXACT
+             * @enum {string}
+             */
+            level: "EXACT" | "TYPO" | "SUGGESTION";
+            /**
+             * @description Slug de celui des deux à garder par défaut : le plus utilisé en recettes, puis en listes, puis le nom le plus court, puis l'ordre alphabétique. `first.slug` ou `second.slug`
+             * @example tomate-0a1b2c3d
+             */
+            suggestedKeep: string;
+        };
         IngredientSearchResultDTO: {
             /**
              * @description Identifiant de l'ingrédient (slug)
@@ -1637,6 +1798,78 @@ export interface components {
             creatorId?: string | null;
             /** @description L'utilisateur peut modifier cet ingrédient : le sien, ou un ingrédient commun s'il est administrateur */
             canEdit: boolean;
+            /**
+             * @description Nombre de recettes de l'utilisateur qui utilisent cet ingrédient (« Utilisé dans 7 recettes · 2 listes »), toujours renseigné ; 0 si aucune, ou si l'ingrédient est à quelqu'un d'autre
+             * @example 7
+             */
+            recipeCount: number;
+            /**
+             * @description Nombre de listes de courses de l'utilisateur qui utilisent cet ingrédient (une ligne ou un ingrédient ajouté à la main), toujours renseigné ; 0 si aucune, ou si l'ingrédient est à quelqu'un d'autre
+             * @example 2
+             */
+            listCount: number;
+        };
+        MergeIngredientDTO: {
+            /**
+             * @description Identifiant de l'ingrédient (slug)
+             * @example tomate
+             */
+            slug: string;
+            /** @example Tomate */
+            name: string;
+            /**
+             * @description Identifiant du rayon (slug)
+             * @example fruit-et-legume
+             */
+            departmentSlug: string;
+            /** @example Fruit & légume */
+            departmentName: string;
+            /**
+             * @description Nom de l'unité d'achat
+             * @example kilo
+             */
+            purchaseUnitName: string;
+        };
+        MergeUnitDTO: {
+            /**
+             * @description Identifiant de l'unité (slug)
+             * @example tranche
+             */
+            slug: string;
+            /** @example tranche */
+            name: string;
+        };
+        MergePreviewDTO: {
+            keep: components["schemas"]["MergeIngredientDTO"];
+            absorbed: components["schemas"]["MergeIngredientDTO"];
+            /**
+             * @description Nombre de recettes de l'utilisateur qui utilisent l'ingrédient absorbé (elles passent sur le gardé)
+             * @example 7
+             */
+            recipeCount: number;
+            /**
+             * @description Nombre de listes de courses de l'utilisateur qui utilisent l'ingrédient absorbé (elles passent sur le gardé)
+             * @example 2
+             */
+            listCount: number;
+            /**
+             * @description Nombre de choix du drive de l'ingrédient absorbé qui passent sur le gardé, toutes enseignes et tous magasins ; pas ceux qui sont supprimés parce que le gardé a déjà le sien dans le même magasin
+             * @example 1
+             */
+            driveChoiceCount: number;
+            /** @description Le rayon de l'ingrédient absorbé n'est pas celui du gardé : le rayon du gardé l'emporte */
+            departmentChanges: boolean;
+            /** @description Des quantités de listes de courses sont ré-exprimées dans l'unité d'achat de l'ingrédient gardé (les unités d'achat diffèrent) ; les quantités des recettes ne changent jamais */
+            listQuantitiesConverted: boolean;
+            /** @description Les unités de l'ingrédient absorbé que l'ingrédient gardé ne sait pas convertir en son unité d'achat ; vide si rien ne manque. Renseignée même quand un autre refus passe avant */
+            missingUnits: components["schemas"]["MergeUnitDTO"][];
+            /**
+             * @description Pourquoi la fusion serait refusée (le premier cas dans l'ordre de la liste), null si elle est possible. SAME_INGREDIENT : les deux ingrédients sont le même. COMMON_INGREDIENT : l'un est un ingrédient commun. USED_BY_ANOTHER_USER : une ligne d'un autre utilisateur utilise l'ingrédient absorbé. IN_SENT_LIST : une liste envoyée au drive utilise l'un des deux. UNIT_MISSING : voir missingUnits
+             * @enum {string|null}
+             */
+            blockedBy?: "SAME_INGREDIENT" | "COMMON_INGREDIENT" | "USED_BY_ANOTHER_USER" | "IN_SENT_LIST" | "UNIT_MISSING" | null;
+            /** @description La fusion est possible : blockedBy est null */
+            canMerge: boolean;
         };
         RecipeRowDTO: {
             /**
@@ -1868,6 +2101,41 @@ export interface components {
             purchaseUnitSymbol: string;
             /** @description L'utilisateur peut modifier cet ingrédient : le sien, ou un ingrédient commun s'il est administrateur */
             canEdit: boolean;
+        };
+        MergeCandidateDTO: {
+            /**
+             * @description Identifiant de l'ingrédient (slug)
+             * @example tomate
+             */
+            slug: string;
+            /** @example Tomate */
+            name: string;
+            /**
+             * @description Identifiant du rayon (slug)
+             * @example fruit-et-legume
+             */
+            departmentSlug: string;
+            /** @example Fruit & légume */
+            departmentName: string;
+            /**
+             * @description Nom de l'unité d'achat
+             * @example kilo
+             */
+            purchaseUnitName: string;
+            /**
+             * @description Nombre de recettes de l'utilisateur qui utilisent cet ingrédient
+             * @example 12
+             */
+            recipeCount: number;
+            /**
+             * @description Nombre de listes de courses de l'utilisateur qui utilisent cet ingrédient
+             * @example 3
+             */
+            listCount: number;
+            /** @description Le rayon est celui de l'ingrédient qu'on veut fusionner */
+            sameDepartment: boolean;
+            /** @description Le nom est le même (casse, accents, pluriel) ou à une faute de frappe près : le meilleur choix probable */
+            veryClose: boolean;
         };
         OtherPeopleRecipeDTO: {
             /**
@@ -2468,6 +2736,30 @@ export interface operations {
                             /** @example Invalid credentials. */
                             message?: string;
                         };
+                    };
+                };
+            };
+        };
+    };
+    get_api_list_duplicate_ingredients: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Doublons possibles */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        member?: components["schemas"]["DuplicateIngredientDTO"][];
+                        /** @example 3 */
+                        totalItems?: number;
                     };
                 };
             };
@@ -3395,6 +3687,48 @@ export interface operations {
             };
         };
     };
+    get_api_get_merge_preview: {
+        parameters: {
+            query: {
+                /**
+                 * @description Slug de l'ingrédient à garder
+                 * @example tomate-0a1b2c3d
+                 */
+                into: string;
+            };
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ce que la fusion ferait */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergePreviewDTO"];
+                };
+            };
+            /** @description Un des deux ingrédients est inconnu ou appartient à un autre utilisateur (même pour un administrateur) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paramètre `into` absent ou trop long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_api_get_recipe: {
         parameters: {
             query?: never;
@@ -3881,6 +4215,52 @@ export interface operations {
             };
         };
     };
+    get_api_list_merge_candidates: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Ne garde que les ingrédients dont le nom contient ce texte (sans tenir compte de la casse ni des accents), 100 caractères au plus
+                 * @example tom
+                 */
+                q?: string;
+            };
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Candidats à la fusion */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        member?: components["schemas"]["MergeCandidateDTO"][];
+                        /** @example 12 */
+                        totalItems?: number;
+                    };
+                };
+            };
+            /** @description L'ingrédient est inconnu ou appartient à un autre utilisateur (même pour un administrateur) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paramètre `q` invalide (trop long), ou `CANNOT_MERGE_COMMON_INGREDIENT` : l'ingrédient est un commun */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_api_list_other_people_recipes: {
         parameters: {
             query?: never;
@@ -3932,6 +4312,89 @@ export interface operations {
             };
             /** @description Type de recette inconnu */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    post_api_mark_ingredients_distinct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkIngredientsDistinctPayload"];
+            };
+        };
+        responses: {
+            /** @description Paire mémorisée, ou déjà mémorisée */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Un des deux ingrédients est inconnu, commun, ou appartient à un autre utilisateur (même pour un administrateur) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide, ou `CANNOT_BE_DISTINCT_FROM_ITSELF` : les deux ingrédients sont le même */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    post_api_merge_ingredients: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeIngredientsPayload"];
+            };
+        };
+        responses: {
+            /** @description Fusion faite, ou rejeu d'une fusion déjà faite : rien de plus à faire */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Un des deux ingrédients est inconnu ou appartient à un autre utilisateur (même pour un administrateur), ou l'ingrédient de l'URL n'existe plus et n'a pas été fusionné dans `into` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `INGREDIENT_IN_SENT_LIST` : une liste envoyée au drive utilise l'un des deux (la rouvrir ou la terminer d'abord) ; `INGREDIENT_USED_BY_ANOTHER_USER` : une ligne d'un autre utilisateur utilise l'ingrédient de l'URL (donnée héritée) ; `INGREDIENT_MERGE_CONFLICT` : une écriture concurrente a posé une référence sur l'ingrédient de l'URL, rien n'a changé, réessayer */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide ; `CANNOT_MERGE_INTO_ITSELF` : les deux ingrédients sont le même ; `CANNOT_MERGE_COMMON_INGREDIENT` : l'un des deux est un commun ; `MERGE_UNIT_MISSING` : une unité de l'ingrédient de l'URL ne se convertit pas dans l'unité d'achat de `into`, rien n'a changé */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
