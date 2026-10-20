@@ -16,7 +16,6 @@ const ago = (hours: number, minutes = 0, seconds = 0) =>
 describe('lastLoginAge', () => {
   it('« Pas encore vu » sans date, ou avec une date illisible', () => {
     expect(lastLoginAge(null, now)).toEqual({ unit: 'never' })
-    expect(lastLoginAge(undefined, now)).toEqual({ unit: 'never' })
     expect(lastLoginAge('pas une date', now)).toEqual({ unit: 'never' })
   })
 
@@ -58,7 +57,7 @@ describe('lastLoginAge', () => {
   })
 })
 
-const user = (email: string, status: AdminUser['status'], lastLoginAt?: string | null) =>
+const user = (email: string, status: AdminUser['status'], lastLoginAt: string | null = null) =>
   ({ email, status, lastLoginAt }) as AdminUser
 
 describe('sortUsers', () => {
@@ -70,7 +69,6 @@ describe('sortUsers', () => {
       user('a@x.fr', 'ACTIVE', null),
       user('z@x.fr', 'PENDING', ago(1)),
       user('y@x.fr', 'PENDING', null),
-      user('e@x.fr', 'ACTIVE', undefined),
     ])
 
     expect(sorted.map((candidate) => candidate.email)).toEqual([
@@ -80,7 +78,6 @@ describe('sortUsers', () => {
       'c@x.fr',
       'a@x.fr',
       'd@x.fr',
-      'e@x.fr',
     ])
   })
 

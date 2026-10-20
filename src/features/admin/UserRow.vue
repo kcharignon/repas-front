@@ -2,14 +2,14 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { lastLoginAge, type AdminUser } from './users'
+import { lastLoginAge, usersGrid, type AdminUser } from './users'
 import type { UserStatus } from '@/api'
 import UiActionMenu, { type UiAction } from '@/design/UiActionMenu.vue'
 import UiButton from '@/design/UiButton.vue'
 
 /*
  * Un compte : une carte sur téléphone et tablette, une ligne de tableau dès `xl` (le menu latéral prend 256 px dès `md` : il faut
- * environ 1000 px de large pour six colonnes). `columns` décrit les colonnes, celles de l'en-tête de `UsersAdminView`. Les libellés
+ * environ 1000 px de large pour six colonnes). `usersGrid` décrit les colonnes, celles de l'en-tête de `UsersAdminView`. Les libellés
  * des champs restent dans la ligne, cachés à l'œil dès `xl` (l'en-tête les porte) mais lus par les lecteurs d'écran.
  */
 const props = defineProps<{
@@ -18,9 +18,6 @@ const props = defineProps<{
   /** Le compte de l'administrateur connecté : il ne peut pas le supprimer. */
   self: boolean
   busy: boolean
-  /** Classes de la grille de `xl`, avec ou sans colonne « Dernière connexion ». */
-  columns: string
-  showLastLogin: boolean
 }>()
 
 const emit = defineEmits<{ status: [status: UserStatus]; remove: [] }>()
@@ -101,7 +98,7 @@ const pill = 'inline-flex items-center whitespace-nowrap rounded-full px-3 py-0.
     :data-status="user.status"
     :class="[
       'grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 rounded-2xl border border-line bg-surface p-4 xl:items-center',
-      columns,
+      usersGrid,
     ]"
   >
     <div class="col-span-2 min-w-0 xl:col-span-1 xl:col-start-1 xl:row-start-1">
@@ -114,7 +111,7 @@ const pill = 'inline-flex items-center whitespace-nowrap rounded-full px-3 py-0.
     <div
       :class="[
         'col-span-2 flex flex-wrap items-center gap-2 xl:col-span-1 xl:flex-col xl:items-start xl:row-start-1',
-        showLastLogin ? 'xl:col-start-5' : 'xl:col-start-4',
+        'xl:col-start-5',
       ]"
     >
       <span v-if="user.isAdmin" :class="[pill, 'bg-primary text-on-primary']">
@@ -125,10 +122,7 @@ const pill = 'inline-flex items-center whitespace-nowrap rounded-full px-3 py-0.
       </span>
     </div>
 
-    <p
-      v-if="showLastLogin"
-      class="col-span-2 text-sm xl:col-span-1 xl:col-start-2 xl:row-start-1 xl:text-base"
-    >
+    <p class="col-span-2 text-sm xl:col-span-1 xl:col-start-2 xl:row-start-1 xl:text-base">
       <span class="text-muted xl:sr-only">{{ t('admin.lastLoginLabel') }}</span>
       {{ ' ' }}
       <span v-if="lastLoginExact === null" class="text-muted">{{ lastLogin }}</span>
@@ -143,7 +137,7 @@ const pill = 'inline-flex items-center whitespace-nowrap rounded-full px-3 py-0.
     <p
       :class="[
         'col-span-2 flex flex-wrap gap-x-1.5 text-sm text-muted xl:col-span-1 xl:row-start-1 xl:flex-col xl:text-base',
-        showLastLogin ? 'xl:col-start-3' : 'xl:col-start-2',
+        'xl:col-start-3',
       ]"
     >
       <span>{{ t('admin.recipeCount', user.recipeCount) }}</span>
@@ -156,7 +150,7 @@ const pill = 'inline-flex items-center whitespace-nowrap rounded-full px-3 py-0.
     <p
       :class="[
         'flex flex-wrap items-center gap-2 text-sm text-muted xl:row-start-1 xl:text-base',
-        showLastLogin ? 'xl:col-start-4' : 'xl:col-start-3',
+        'xl:col-start-4',
       ]"
     >
       <span>
@@ -168,12 +162,7 @@ const pill = 'inline-flex items-center whitespace-nowrap rounded-full px-3 py-0.
       </span>
     </p>
 
-    <div
-      :class="[
-        'flex items-center justify-end gap-2 xl:row-start-1',
-        showLastLogin ? 'xl:col-start-6' : 'xl:col-start-5',
-      ]"
-    >
+    <div :class="['flex items-center justify-end gap-2 xl:row-start-1', 'xl:col-start-6']">
       <UiButton
         v-if="primary"
         :disabled="busy"

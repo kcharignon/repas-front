@@ -618,20 +618,6 @@ describe('utilisateurs', () => {
     expect(rowOf(wrapper, 'attente@repas.fr').find('time').exists()).toBe(false)
   })
 
-  it('ne montre pas de colonne « Dernière connexion » quand le back ne la donne pas encore', async () => {
-    const withoutLogin = {
-      ...users,
-      member: users.member.map(({ lastLoginAt: _unused, ...rest }) => rest),
-    }
-    const { wrapper } = await open(UsersAdminView, {
-      'GET /api/v1/users': () => json(withoutLogin),
-    })
-    await vi.waitFor(() => expect(rows(wrapper)).toHaveLength(4))
-
-    expect(wrapper.text()).not.toContain('Dernière connexion')
-    expect(wrapper.text()).not.toContain('Pas encore vu')
-  })
-
   it('montre la version de l’application de chacun, « inconnue » sinon, et qui est à mettre à jour (DRV-637)', async () => {
     const { wrapper } = await ready()
 

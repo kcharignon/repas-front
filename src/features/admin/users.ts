@@ -1,10 +1,10 @@
 import type { UserStatus, UserSummary } from '@/api'
 
-/**
- * `lastLoginAt` (date ATOM, `null` : pas encore vu) vient du back avec le suivi des connexions. Tant que le contrat figé ne le
- * décrit pas, on ne l'invente pas dans les types générés : on le lit ici, de façon facultative.
- */
-export type AdminUser = UserSummary & { lastLoginAt?: string | null }
+export type AdminUser = UserSummary
+
+/** Les colonnes du tableau (dès `xl`), les mêmes pour l'en-tête et chaque ligne : utilisateur, dernière connexion, activité, application, statut, actions. */
+export const usersGrid =
+  'xl:grid-cols-[minmax(0,2.2fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_7.5rem_11.5rem]'
 
 export type UserFilter = 'ALL' | UserStatus
 
@@ -31,7 +31,7 @@ function calendarDays(from: Date, to: Date): number {
   return Math.round((startOfDay(to) - startOfDay(from)) / (24 * HOUR))
 }
 
-export function lastLoginAge(iso: string | null | undefined, now: Date): LastLoginAge {
+export function lastLoginAge(iso: string | null, now: Date): LastLoginAge {
   const date = iso == null ? null : new Date(iso)
   if (date === null || Number.isNaN(date.getTime())) return { unit: 'never' }
 

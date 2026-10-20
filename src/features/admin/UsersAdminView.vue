@@ -10,6 +10,7 @@ import {
   filterUsers,
   sortUsers,
   userFilters,
+  usersGrid,
   type AdminUser,
   type UserFilter,
 } from './users'
@@ -34,19 +35,10 @@ const filter = ref<UserFilter>('ALL')
 const counts = computed(() => countByStatus(items.value))
 const shown = computed(() => filterUsers(sortUsers(items.value), filter.value))
 
-/** Sans le champ dans la réponse du back, la colonne « Dernière connexion » n'existe pas (ni vide, ni inventée). */
-const showLastLogin = computed(() => items.value.some((user) => user.lastLoginAt !== undefined))
-
 // Les dates relatives (« il y a 2 h ») se remettent à l'heure toutes les minutes
 const now = ref(new Date())
 const timer = setInterval(() => (now.value = new Date()), 60_000)
 onBeforeUnmount(() => clearInterval(timer))
-
-// Les colonnes du tableau (dès `xl`), identiques pour l'en-tête et chaque ligne : utilisateur, [dernière connexion], activité, application, statut, actions
-const columnsWithLogin =
-  'xl:grid-cols-[minmax(0,2.2fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_7.5rem_11.5rem]'
-const columnsWithoutLogin =
-  'xl:grid-cols-[minmax(0,2.2fr)_minmax(0,1.3fr)_minmax(0,1.3fr)_7.5rem_11.5rem]'
 
 const deleting = ref<UserSummary | null>(null)
 const confirming = computed({
@@ -125,13 +117,10 @@ function confirmDelete() {
       <div v-else class="flex flex-col gap-3">
         <div
           aria-hidden="true"
-          :class="[
-            'hidden gap-x-3 px-4 text-sm font-bold text-muted xl:grid',
-            showLastLogin ? columnsWithLogin : columnsWithoutLogin,
-          ]"
+          :class="['hidden gap-x-3 px-4 text-sm font-bold text-muted xl:grid', usersGrid]"
         >
           <span>{{ t('admin.columns.user') }}</span>
-          <span v-if="showLastLogin">{{ t('admin.columns.lastLogin') }}</span>
+          <span>{{ t('admin.columns.lastLogin') }}</span>
           <span>{{ t('admin.columns.activity') }}</span>
           <span>{{ t('admin.columns.app') }}</span>
           <span>{{ t('admin.columns.status') }}</span>
@@ -144,8 +133,6 @@ function confirmDelete() {
             :now="now"
             :self="user.id === session.user?.id"
             :busy="changeStatus.isPending.value"
-            :columns="showLastLogin ? columnsWithLogin : columnsWithoutLogin"
-            :show-last-login="showLastLogin"
             @status="setStatus(user, $event)"
             @remove="deleting = user"
           />
