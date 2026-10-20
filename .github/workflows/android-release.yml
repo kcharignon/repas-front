@@ -12,6 +12,8 @@ name: Android release
 #   - « publish » (écriture) n'a aucun secret : il publie l'APK contrôlé, son empreinte et `version.json`, puis relit ce qui est publié.
 #     L'APK est publié sous deux noms, octet pour octet le même fichier : `repas-drive.apk` (nom stable, pour les liens) et
 #     `repas-drive-X.Y.Z.apk` (le nom dit la version, c'est celui qu'on donne aux proches), copié APRÈS la signature et le contrôle.
+#     Puis il tient à jour la release « android-latest » (adresses fixes vers la dernière version : elle contient toujours les cinq fichiers de
+#     la dernière version et jamais un mélange de deux ; jamais « Latest »). Le droit d'écrire du travail suffit, aucun secret de plus.
 # L'empreinte du certificat attendu est celle que le site publie dans public/.well-known/assetlinks.json (publique, relue en PR) : une
 # mauvaise clé dans les secrets arrête tout avant la publication. Aucune valeur secrète n'est affichée : aucune commande n'écrit un secret.
 on:
@@ -222,3 +224,82 @@ jobs:
           cmp repas-drive.apk published/repas-drive.apk
           cmp repas-drive.apk "published/${versioned}"
           echo "Release : https://github.com/${GH_REPO}/releases/tag/${TAG}" >> "$GITHUB_STEP_SUMMARY"
+      - name: Mettre à jour la release roulante android-latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # Des adresses FIXES vers « la dernière version », sans connaître son numéro (mise à jour dans l'application, page /installer) :
+          #   https://github.com/<dépôt>/releases/download/android-latest/<fichier>
+          # La release « android-latest » ne ressemble pas au déclencheur (android-vX.Y.Z) : elle ne relance rien, et release.yml ignore tout `android-`.
+          # Elle n'est jamais « Latest ». Aucune signature ni construction ici : on ne copie que les fichiers déjà signés, contrôlés et publiés ci-dessus.
+          rolling=android-latest
+          version="${TAG#android-v}"
+          versioned="repas-drive-${version}.apk"
+          sha256sum -c repas-drive.apk.sha256
+          sha256sum -c "${versioned}.sha256"
+          cmp repas-drive.apk "${versioned}"
+          expected=$(printf '%s\n' repas-drive.apk repas-drive.apk.sha256 "${versioned}" "${versioned}.sha256" version.json | sort)
+          title="Repas Android, dernière version (adresses fixes)"
+          cat > notes-latest.md <<NOTES
+          Cette release est mise à jour à chaque nouvelle version de l'application Android « Repas » : elle contient toujours les fichiers de la dernière (actuellement **${version}**), pour des adresses qui ne changent pas. Pour installer à la main, prends plutôt la release de la version : https://github.com/${GH_REPO}/releases/tag/${TAG}
+
+          - \`https://github.com/${GH_REPO}/releases/download/${rolling}/repas-drive.apk\`
+          - \`https://github.com/${GH_REPO}/releases/download/${rolling}/repas-drive.apk.sha256\`
+          - \`https://github.com/${GH_REPO}/releases/download/${rolling}/${versioned}\`
+          - \`https://github.com/${GH_REPO}/releases/download/${rolling}/${versioned}.sha256\`
+          - \`https://github.com/${GH_REPO}/releases/download/${rolling}/version.json\`
+
+          Mêmes fichiers, octet pour octet, que la release ${TAG}. Construit depuis le commit \`${COMMIT}\`.
+          NOTES
+          if ! gh release view "$rolling" > /dev/null 2>&1; then
+            # Première fois : tout d'un coup. L'étiquette est créée sur ce commit (une étiquette créée par le jeton du workflow ne lance aucun workflow).
+            gh release create "$rolling" repas-drive.apk repas-drive.apk.sha256 "${versioned}" "${versioned}.sha256" version.json \
+              --target "$COMMIT" --title "$title" --notes-file notes-latest.md --latest=false
+          else
+            # Ordre : d'abord les fichiers au nom nouveau (personne ne les attend encore), puis le nom stable (l'APK puis son empreinte), et
+            # version.json EN DERNIER (c'est lui qui annonce la version : il ne change que quand tout le reste est en place). Un téléchargeur
+            # qui tombe entre deux envois voit au pire une empreinte qui ne correspond pas ou un fichier absent quelques secondes (`--clobber`
+            # supprime puis envoie chaque fichier) : il recommence, il ne reçoit jamais un APK qu'une empreinte annoncerait autrement sans le dire.
+            gh release upload "$rolling" "${versioned}" --clobber
+            gh release upload "$rolling" "${versioned}.sha256" --clobber
+            gh release upload "$rolling" repas-drive.apk --clobber
+            gh release upload "$rolling" repas-drive.apk.sha256 --clobber
+            gh release upload "$rolling" version.json --clobber
+            # Les fichiers versionnés des versions précédentes sont retirés : la release ne mélange jamais deux versions.
+            gh release view "$rolling" --json assets --jq '.assets[].name' | while read -r asset; do
+              if ! grep -qxF "$asset" <<<"$expected"; then
+                gh release delete-asset "$rolling" "$asset" --yes
+              fi
+            done
+            gh release edit "$rolling" --title "$title" --notes-file notes-latest.md --latest=false
+          fi
+          # On relit ce qui est publié : exactement les cinq fichiers, ni brouillon ni « Latest » du site, et les mêmes octets que ceux contrôlés.
+          [ "$(gh release view "$rolling" --json assets --jq '.assets[].name' | sort)" = "$expected" ] \
+            || { echo "::error::La release $rolling ne contient pas exactement les cinq fichiers de la version ${version}."; exit 1; }
+          [ "$(gh release view "$rolling" --json isDraft --jq '.isDraft')" = "false" ] \
+            || { echo "::error::La release $rolling est un brouillon."; exit 1; }
+          [ "$(gh api "repos/${GH_REPO}/releases/latest" --jq '.tag_name')" != "$rolling" ] \
+            || { echo "::error::La release $rolling a pris l'étiquette « Latest » aux versions du site."; exit 1; }
+          mkdir published-latest
+          gh release download "$rolling" --dir published-latest
+          (cd published-latest && sha256sum -c repas-drive.apk.sha256 && sha256sum -c "${versioned}.sha256")
+          for file in repas-drive.apk repas-drive.apk.sha256 "${versioned}" "${versioned}.sha256" version.json; do
+            cmp "$file" "published-latest/$file"
+          done
+          # Et l'adresse fixe, celle que l'application et le site liront, répond avec ces octets-là (quelques essais : le temps que le relais se mette à jour).
+          mkdir fixed-address
+          for file in repas-drive.apk version.json; do
+            ok=false
+            for _ in 1 2 3 4 5 6; do
+              if curl -fsSL --retry 3 -o "fixed-address/$file" "https://github.com/${GH_REPO}/releases/download/${rolling}/${file}" && cmp -s "$file" "fixed-address/$file"; then
+                ok=true; break
+              fi
+              sleep 10
+            done
+            "$ok" || { echo "::error::L'adresse fixe https://github.com/${GH_REPO}/releases/download/${rolling}/${file} ne répond pas avec le bon fichier."; exit 1; }
+          done
+          echo "Release roulante : https://github.com/${GH_REPO}/releases/tag/${rolling} (version ${version})" >> "$GITHUB_STEP_SUMMARY"
