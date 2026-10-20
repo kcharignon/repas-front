@@ -13,6 +13,7 @@ import { type Candidate, type Content, type RetailerAdapter, saysOutOfStock } fr
 import type { UnavailableReason } from '../ui'
 import { type CartNote, putInCart } from './keep-cart'
 import { packsFor } from './packs'
+import { givenSize, type PackAnswer } from './pack-size'
 import { lookUpKnownProduct } from './search-by-name'
 
 export type { UnavailableReason } from '../ui'
@@ -76,8 +77,11 @@ function livePacks(needed: NeededQuantity | undefined, content: Content | null):
 
 export interface KnownLineDeps {
   adapter: RetailerAdapter
-  /** L'écran « Quantité à vérifier » : le nombre choisi, ou `null` pour passer la ligne. */
-  askQuantity: (line: PlanLine, product: PlanProduct) => Promise<number | null>
+  /**
+   * L'écran « Vérifier la quantité » : le nombre de produits choisi et, quand le plan dit l'unité de la ligne, la contenance du produit dans cette unité
+   * (DRV-652) ; `null` pour passer la ligne.
+   */
+  askQuantity: (line: PlanLine, product: PlanProduct) => Promise<PackAnswer | null>
   /**
    * Les produits à étiquette de rupture que le panier a déjà refusés dans cet envoi (DRV-635) : une seule tentative d'écriture par produit et par
    * envoi, même s'il figure sur deux lignes. Le passage la remplit ; absente, chaque ligne tente pour son compte.
@@ -131,13 +135,19 @@ export async function settleKnownLine(line: PlanLine, deps: KnownLineDeps): Prom
       continue
     }
     const planned = product.packsStatus === 'TO_CHECK' ? null : (product.packs ?? null)
-    const live = planned === null ? null : livePacks(line.needed, seen.content)
+    // Une contenance donnée par la personne pour CE produit (DRV-652) fait le calcul du plan : le contenu lu en direct ne le défait pas
+    const live =
+      planned === null || givenSize(product, line.needed) !== null
+        ? null
+        : livePacks(line.needed, seen.content)
     const change = planned !== null && live !== null && live !== planned ? { planned, live } : null
     let packs = change ? change.live : planned
+    let answered: PackAnswer | null = null
     if (packs === null) {
-      packs = await deps.askQuantity(line, product)
-      if (packs === null)
+      answered = await deps.askQuantity(line, product)
+      if (answered === null)
         return { kind: 'done', line: { ingredientSlug: line.ingredientSlug, outcome: 'SKIPPED' } }
+      packs = answered.packs
     }
     const settled = await putInCart(deps.adapter, seen, packs)
     if (settled.obtained < 1) {
@@ -156,6 +166,8 @@ export async function settleKnownLine(line: PlanLine, deps: KnownLineDeps): Prom
         usedRank: index + 1,
         ...(unavailable.length > 0 && { unavailableIds: unavailable }),
         ...(price && { price }),
+        // La contenance que la personne vient de donner pour ce produit (DRV-652) : Repas la retient, la question ne sera plus posée
+        ...(answered?.packSize && { packSize: answered.packSize }),
       },
       ...(change && { change }),
       ...(settled.note && { cart: settled.note }),

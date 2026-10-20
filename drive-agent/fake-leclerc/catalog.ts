@@ -191,6 +191,18 @@ export const PRODUCTS: readonly FakeProduct[] = [
     family: 414,
     mdd: true,
   }),
+  // DRV-652. Un article que la liste compte en tranches : le contenu net est en grammes (rien à convertir en tranches), mais le libellé dit le nombre de
+  // tranches (1000132 : 20, 1000133 : 8, 1000134 : aucun nombre de tranches), de quoi préremplir « Combien de tranches y a-t-il dans ce produit ? ».
+  make(
+    'Fromage cheddar en tranches Fromagerie Fictive',
+    '20 Tranches - 340g',
+    2.99,
+    8.79,
+    'kg',
+    12,
+  ),
+  make('Fromage cheddar en tranches Fromagerie Fictive', '8 Tranches - 150g', 1.89, 12.6, 'kg', 9),
+  make('Fromage cheddar râpé Fromagerie Fictive', '200 g', 1.75, 8.75, 'kg', 14),
 ]
 
 /** Un texte sans accent ni majuscule : « Œufs » et « oeufs » se valent, comme dans une recherche. */

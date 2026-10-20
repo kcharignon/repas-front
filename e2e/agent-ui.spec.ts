@@ -32,6 +32,7 @@ const SCREENS = [
   'resume',
   'progress',
   'quantity',
+  'packSize',
   'chooser',
   'chooser-confirm',
   'chooser-last',
@@ -120,6 +121,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
   test(`chaque écran est accessible (WCAG AA), thème ${colorScheme} du système`, async ({
     page,
   }, testInfo) => {
+    // Une trentaine d'écrans, chacun contrôlé par axe : de la marge quand la machine est chargée
+    test.setTimeout(90 * 1000)
     await page.emulateMedia({ colorScheme })
     await openPage(page)
 

@@ -98,7 +98,7 @@ test.describe('ce que l’agent rend à Repas avec le produit choisi', () => {
     expect(Object.keys(line)).not.toContain('searchQuery')
   })
 
-  test('« Pas mon habituel » ne mémorise rien : aucune recherche ne repart', async ({
+  test('« Pas mon habituel » ne retient pas le produit, mais la recherche qui l’a fait trouver repart (DRV-653)', async ({
     page,
     fake,
     agentCode,
@@ -125,8 +125,11 @@ test.describe('ce que l’agent rend à Repas avec le produit choisi', () => {
 
     // Then
     const line = await chosenLine(page, fake)
-    expect(line).toMatchObject({ outcome: 'CHOSEN', placement: 'ONCE' })
-    expect(Object.keys(line)).not.toContain('searchQuery')
+    expect(line).toMatchObject({
+      outcome: 'CHOSEN',
+      placement: 'ONCE',
+      searchQuery: 'poivre noir',
+    })
   })
 })
 

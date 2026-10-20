@@ -23,7 +23,9 @@ export {
   formatNeeded,
   formatNumber,
   formatPrice,
+  pluralOf,
   summarySentence,
+  unitFor,
   type SummaryCounts,
 } from './strings'
 export { createUi, type UiHandle, type UiOptions } from './ui'
