@@ -233,11 +233,11 @@ test.describe('version de l’application connue du serveur (DRV-637)', () => {
 
       await page.goto('/admin/utilisateurs')
       const row = (email: string) => page.getByRole('listitem').filter({ hasText: email })
-      await expect(row('alexiane@example.com')).toContainText('Application : 0.1.18')
+      await expect(row('alexiane@example.com')).toContainText('Application 0.1.18')
       await expect(row('alexiane@example.com').getByText('À mettre à jour')).toHaveCount(0)
-      await expect(row('camille@example.com')).toContainText('Application : 0.1.8')
+      await expect(row('camille@example.com')).toContainText('Application 0.1.8')
       await expect(row('camille@example.com').getByText('À mettre à jour')).toBeVisible()
-      await expect(row('dominique@example.com')).toContainText('Application : —')
+      await expect(row('dominique@example.com')).toContainText('Application inconnue')
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
       ).toBeLessThanOrEqual(0)
