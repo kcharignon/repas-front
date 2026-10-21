@@ -76,6 +76,13 @@ export interface PreviewOverride {
   missingUnits?: { slug: string; name: string }[]
   departmentChanges?: boolean
   listQuantitiesConverted?: boolean
+  /** Le total d'après (par défaut la somme des deux ingrédients : aucune recette ni liste ne les utilise tous les deux). */
+  resultRecipeCount?: number
+  resultListCount?: number
+  /** Les conversions que le gardé reçoit de l'absorbé (par défaut aucune). */
+  recoveredConversionCount?: number
+  /** Un back d'avant le total : ces trois clés ne sont pas écrites. */
+  withoutResult?: boolean
 }
 
 export interface Options {
@@ -195,7 +202,14 @@ export async function fakeIngredientsBack(page: Page, options: Options = {}) {
         const into = url.searchParams.get('into') ?? ''
         const absorbed = find(pairs, slug)
         const kept = find(pairs, into)
-        const override = options.previews?.[`${slug}>${into}`] ?? {}
+        const { withoutResult, ...override } = options.previews?.[`${slug}>${into}`] ?? {}
+        const total = withoutResult
+          ? {}
+          : {
+              resultRecipeCount: (kept?.recipeCount ?? 0) + (absorbed?.recipeCount ?? 0),
+              resultListCount: (kept?.listCount ?? 0) + (absorbed?.listCount ?? 0),
+              recoveredConversionCount: 0,
+            }
         return reply(route, {
           keep: sideOf(kept ?? side(into, into, 0, 0)),
           absorbed: sideOf(absorbed ?? side(slug, slug, 0, 0)),
@@ -207,6 +221,7 @@ export async function fakeIngredientsBack(page: Page, options: Options = {}) {
           missingUnits: [],
           blockedBy: null,
           canMerge: true,
+          ...total,
           ...override,
         })
       }

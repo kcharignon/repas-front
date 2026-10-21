@@ -74,8 +74,23 @@ export const preview = (overrides: Partial<MergePreview> = {}): MergePreview => 
   missingUnits: [],
   blockedBy: null,
   canMerge: true,
+  resultRecipeCount: 19,
+  resultListCount: 5,
+  recoveredConversionCount: 0,
   ...overrides,
 })
+
+/** La réponse d'un back qui n'envoie pas encore le total ni les conversions récupérées (avant la v0.6.20 du back). */
+export const oldPreview = (overrides: Partial<MergePreview> = {}): MergePreview => {
+  const {
+    resultRecipeCount: _recipes,
+    resultListCount: _lists,
+    recoveredConversionCount: _conversions,
+    ...rest
+  } = preview(overrides)
+
+  return rest as MergePreview
+}
 
 export const candidate = (
   slug: string,

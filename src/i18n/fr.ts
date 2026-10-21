@@ -203,6 +203,10 @@ export default {
       and: 'et',
       moves: '{what} passe sur « {name} ». | {what} passent sur « {name} ».',
       uses: '{what} utilisera « {name} ». | {what} utiliseront « {name} ».',
+      total: '« {name} » sera utilisé dans {usage}.',
+      replaced: '« {absorbed} » est remplacé par « {kept} » dans {usage}.',
+      conversions:
+        '{count} conversion de « {absorbed} » est ajoutée à « {kept} ». | {count} conversions de « {absorbed} » sont ajoutées à « {kept} ».',
       unused: '« {name} » n’est utilisé nulle part.',
       usedIn: 'Utilisé dans {usage}',
       usedNowhere: 'Utilisé nulle part',
