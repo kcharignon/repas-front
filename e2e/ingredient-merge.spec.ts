@@ -4,7 +4,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 
-import { fakeIngredientsBack, productionPairs } from './support/ingredientsBack'
+import { fakeIngredientsBack, productionPairs, type Pair } from './support/ingredientsBack'
 
 const shots = process.env.E2E_SHOTS
 
@@ -23,6 +23,15 @@ const noHorizontalScroll = async (page: Page) =>
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   )
+
+/** Les deux « Melon » du retour de l'utilisateur : chacun est utilisé dans UNE recette. */
+const twoMelons = (): Pair[] => [
+  {
+    ...productionPairs()[0]!,
+    first: { ...productionPairs()[0]!.first, recipeCount: 1, listCount: 0 },
+    second: { ...productionPairs()[0]!.second, recipeCount: 1, listCount: 0 },
+  },
+]
 
 const cards = (page: Page) => page.getByTestId('duplicate-card')
 
@@ -258,6 +267,87 @@ test.describe('la confirmation de la fusion', () => {
     ).toBeVisible()
   })
 
+  test('deux « Melon », chacun dans une recette : le Melon gardé sera utilisé dans DEUX recettes', async ({
+    page,
+  }) => {
+    await fakeIngredientsBack(page, { pairs: twoMelons() })
+    await page.goto('/ingredients/doublons')
+    await cards(page)
+      .first()
+      .getByRole('button', { name: /^Fusionner/ })
+      .click()
+
+    const sheet = page.getByRole('dialog', { name: 'Fusionner « Melon » dans « Melon » ?' })
+    await expect(sheet.getByRole('listitem')).toHaveText([
+      '« Melon » sera utilisé dans 2 recettes.',
+      '« Melon » est remplacé par « Melon » dans 1 recette.',
+      'Tes quantités ne changent pas.',
+      '« Melon » est supprimé. Tu ne pourras pas le retrouver.',
+    ])
+    await expect(sheet).not.toContainText('utiliseront')
+    await shot(page, 'confirmation-deux-melon')
+  })
+
+  test('les conversions de l’absorbé sont ajoutées au gardé, sans bloquer la fusion', async ({
+    page,
+  }) => {
+    const back = await fakeIngredientsBack(page, {
+      pairs: twoMelons(),
+      previews: { 'melon-2>melon': { recoveredConversionCount: 2 } },
+    })
+    await page.goto('/ingredients/doublons')
+    await cards(page)
+      .first()
+      .getByRole('button', { name: /^Fusionner/ })
+      .click()
+
+    const sheet = page.getByRole('dialog', { name: 'Fusionner « Melon » dans « Melon » ?' })
+    await expect(sheet.getByRole('listitem')).toHaveText([
+      '« Melon » sera utilisé dans 2 recettes.',
+      '« Melon » est remplacé par « Melon » dans 1 recette.',
+      '2 conversions de « Melon » sont ajoutées à « Melon ».',
+      'Tes quantités ne changent pas.',
+      '« Melon » est supprimé. Tu ne pourras pas le retrouver.',
+    ])
+    await expect(sheet.getByText(/ne connaît pas toutes les unités/)).toHaveCount(0)
+    await shot(page, 'confirmation-conversions')
+    await sheet.getByRole('button', { name: 'Fusionner', exact: true }).click()
+    await expect(sheet).toBeHidden()
+    expect(back.bodyOf('POST /api/v1/ingredients/melon-2/merge')).toEqual({ into: 'melon' })
+  })
+
+  test('une seule conversion se dit au singulier', async ({ page }) => {
+    await fakeIngredientsBack(page, {
+      pairs: twoMelons(),
+      previews: { 'melon-2>melon': { recoveredConversionCount: 1 } },
+    })
+    await page.goto('/ingredients/doublons')
+    await cards(page)
+      .first()
+      .getByRole('button', { name: /^Fusionner/ })
+      .click()
+
+    await expect(
+      page.getByRole('dialog').getByText('1 conversion de « Melon » est ajoutée à « Melon ».'),
+    ).toBeVisible()
+  })
+
+  test('avec un back d’avant le total : l’ancienne phrase, sans erreur', async ({ page }) => {
+    await fakeIngredientsBack(page, {
+      pairs: twoMelons(),
+      previews: { 'melon-2>melon': { withoutResult: true } },
+    })
+    await page.goto('/ingredients/doublons')
+    await cards(page)
+      .first()
+      .getByRole('button', { name: /^Fusionner/ })
+      .click()
+
+    const sheet = page.getByRole('dialog')
+    await expect(sheet.getByText('1 recette utilisera « Melon ».')).toBeVisible()
+    await expect(sheet.getByRole('listitem')).toHaveCount(3)
+  })
+
   test('dit la conversion des quantités en liste', async ({ page }) => {
     await fakeIngredientsBack(page, {
       previews: { 'melon-2>melon': { listQuantitiesConverted: true } },
@@ -413,6 +503,39 @@ for (const width of [360, 412]) {
 }
 
 for (const colorScheme of ['light', 'dark'] as const) {
+  for (const width of [360, 412]) {
+    for (const withConversions of [false, true]) {
+      const name = withConversions ? 'conversions' : 'deux-melon'
+      test(`à ${width} px, thème ${colorScheme} : la confirmation ${withConversions ? 'la plus longue (total, remplacé, conversions, quantités)' : 'des deux « Melon »'} tient sans défilement horizontal`, async ({
+        page,
+      }) => {
+        await page.setViewportSize({ width, height: 740 })
+        await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' })
+        await fakeIngredientsBack(page, {
+          pairs: twoMelons(),
+          previews: {
+            'melon-2>melon': withConversions
+              ? { recoveredConversionCount: 2, listQuantitiesConverted: true }
+              : {},
+          },
+        })
+        await page.goto('/ingredients/doublons')
+        await cards(page)
+          .first()
+          .getByRole('button', { name: /^Fusionner/ })
+          .click()
+        const sheet = page.getByRole('dialog')
+        await expect(sheet.getByRole('listitem')).toHaveCount(withConversions ? 5 : 4)
+        await noHorizontalScroll(page)
+        await expect(sheet.getByRole('button', { name: 'Fusionner', exact: true })).toBeInViewport()
+        expect((await scan(page)).violations).toEqual([])
+        await shot(page, `${name}-${colorScheme}-${width}`)
+      })
+    }
+  }
+}
+
+for (const colorScheme of ['light', 'dark'] as const) {
   for (const width of [360, 1280]) {
     test(`accessibilité (WCAG A/AA), thème ${colorScheme}, ${width} px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 })
@@ -424,6 +547,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
             canMerge: false,
             missingUnits: [{ slug: 'tranche', name: 'tranche' }],
           },
+          'pate-2>pate': { recoveredConversionCount: 2 },
         },
       })
 
@@ -463,6 +587,20 @@ for (const colorScheme of ['light', 'dark'] as const) {
       ).toBeVisible()
       expect((await scan(page)).violations).toEqual([])
       await shot(page, `unite-${colorScheme}-${width}`)
+
+      // La confirmation avec les trois lignes d'effets : le total, le remplacé, les conversions
+      await page.goto('/ingredients/doublons')
+      await cards(page)
+        .nth(2)
+        .getByRole('button', { name: /^Voir et fusionner/ })
+        .click()
+      await cards(page)
+        .nth(2)
+        .getByRole('button', { name: /^Fusionner/ })
+        .click()
+      await expect(page.getByRole('dialog').getByText(/sont ajoutées à/)).toBeVisible()
+      expect((await scan(page)).violations).toEqual([])
+      await shot(page, `conversions-${colorScheme}-${width}`)
 
       // La feuille de choix de la fiche
       await page.goto('/ingredients/tomates/modifier')

@@ -55,7 +55,7 @@ export function effectSentence(
   return t('ingredients.merge.moves', { what: items, name: kept.name }, total)
 }
 
-/** La première ligne de la confirmation : « 7 recettes et 2 listes de courses utiliseront « Tomate ». » */
+/** La première ligne de la confirmation d'un ancien back, sans total : « 7 recettes et 2 listes de courses utiliseront « Tomate ». » */
 export function usesSentence(
   t: Translate,
   preview: Pick<MergePreview, 'recipeCount' | 'listCount'> & { absorbedName: string },
@@ -66,6 +66,72 @@ export function usesSentence(
   const total = preview.recipeCount + preview.listCount
 
   return t('ingredients.merge.uses', { what: items, name: keptName }, total)
+}
+
+/** Ce que l'aperçu dit des compteurs ; les trois clés d'après la fusion manquent chez un ancien back (`MergePreview` les écrit toujours). */
+type EffectCounts = Pick<MergePreview, 'recipeCount' | 'listCount'> &
+  Partial<Pick<MergePreview, 'resultRecipeCount' | 'resultListCount' | 'recoveredConversionCount'>>
+
+export interface MergeEffects {
+  /** Combien de recettes et de listes utiliseront l'ingrédient gardé APRÈS la fusion. */
+  total: string
+  /** Ce qui est remplacé (les recettes et les listes de l'absorbé) ; absent quand l'absorbé n'est utilisé nulle part. */
+  replaced: string | null
+  /** Les conversions que le gardé reçoit de l'absorbé ; absent quand il n'en reçoit aucune. */
+  conversions: string | null
+}
+
+const isCount = (value: unknown): value is number => typeof value === 'number'
+
+/**
+ * Les trois premières lignes de la confirmation (`docs/ingredients/fusion.md` § 9.3) : le TOTAL d'après (`resultRecipeCount`,
+ * `resultListCount` : l'union, une recette qui avait déjà les deux compte une fois), ce qui est remplacé (`recipeCount`, `listCount` :
+ * ce qui se déplace), les conversions récupérées. Un back qui n'envoie pas encore le total : l'ancienne phrase, calculée sur ce qui se
+ * déplace, et rien d'autre.
+ */
+export function mergeEffects(
+  t: Translate,
+  preview: EffectCounts,
+  names: { absorbed: string; kept: string },
+): MergeEffects {
+  const { resultRecipeCount, resultListCount } = preview
+  if (!isCount(resultRecipeCount) || !isCount(resultListCount))
+    return {
+      total: usesSentence(t, { ...preview, absorbedName: names.absorbed }, names.kept),
+      replaced: null,
+      conversions: null,
+    }
+
+  const after = countedItems(
+    t,
+    { recipeCount: resultRecipeCount, listCount: resultListCount },
+    'listsFull',
+  )
+  const moved = countedItems(t, preview, 'listsFull')
+  const recovered = preview.recoveredConversionCount
+
+  return {
+    total:
+      after === ''
+        ? t('ingredients.merge.unused', { name: names.kept })
+        : t('ingredients.merge.total', { name: names.kept, usage: after }),
+    replaced:
+      moved === ''
+        ? null
+        : t('ingredients.merge.replaced', {
+            absorbed: names.absorbed,
+            kept: names.kept,
+            usage: moved,
+          }),
+    conversions:
+      isCount(recovered) && recovered > 0
+        ? t(
+            'ingredients.merge.conversions',
+            { count: recovered, absorbed: names.absorbed, kept: names.kept },
+            recovered,
+          )
+        : null,
+  }
 }
 
 /** « « tranche » », « « tranche » et « pincée » » : les noms des unités qui manquent, entre guillemets. */

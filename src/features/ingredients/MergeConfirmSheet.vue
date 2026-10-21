@@ -10,7 +10,7 @@ import UiSheet from '@/design/UiSheet.vue'
 import { messageForFailure } from '@/notifications/failures'
 import { useNotificationsStore } from '@/notifications/store'
 import { useMergeIngredients, useMergePreview } from './queries'
-import { blockKey, unitList, usesSentence } from './mergeText'
+import { blockKey, mergeEffects, unitList } from './mergeText'
 
 /**
  * La confirmation commune des deux entrées (les doublons et la fiche) : ce que la fusion de `absorbed` dans `kept` ferait, d'après
@@ -68,11 +68,11 @@ const kind = computed<Kind | null>(() => {
   const value = data.value
   if (value === undefined) return null
   const blockedBy = value.blockedBy ?? null
-  if (blockedBy === 'UNIT_MISSING' || (blockedBy === null && value.missingUnits.length > 0))
-    return 'unit'
-  if (blockedBy !== null || !value.canMerge) return 'blocked'
+  // Le verdict est `canMerge` : une unité que seul l'absorbé sait convertir est récupérée par la fusion et ne bloque plus
+  if (value.canMerge && blockedBy === null) return 'ok'
+  if (blockedBy === 'UNIT_MISSING' && value.missingUnits.length > 0) return 'unit'
 
-  return 'ok'
+  return 'blocked'
 })
 const loading = computed(
   () => data.value === undefined && (preview.isPending.value || preview.isFetching.value),
@@ -87,18 +87,11 @@ const title = computed(() =>
     : t('ingredients.merge.title', { absorbed: props.absorbed.name, kept: props.kept.name }),
 )
 
-const uses = computed(() =>
+// Le total d'après, ce qui est remplacé, les conversions récupérées (les deux dernières seulement quand elles ont lieu)
+const effects = computed(() =>
   data.value === undefined
-    ? ''
-    : usesSentence(
-        t,
-        {
-          recipeCount: data.value.recipeCount,
-          listCount: data.value.listCount,
-          absorbedName: props.absorbed.name,
-        },
-        props.kept.name,
-      ),
+    ? null
+    : mergeEffects(t, data.value, { absorbed: props.absorbed.name, kept: props.kept.name }),
 )
 
 // Une seule de ces trois phrases, par priorité : le rayon, puis la conversion des listes, puis « rien ne change »
@@ -217,7 +210,15 @@ function confirm() {
       <ul class="flex flex-col gap-3" data-testid="merge-effects">
         <li class="flex items-start gap-3">
           <Check class="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
-          <span>{{ uses }}</span>
+          <span data-testid="merge-total">{{ effects?.total }}</span>
+        </li>
+        <li v-if="effects?.replaced" class="flex items-start gap-3">
+          <Check class="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
+          <span data-testid="merge-replaced">{{ effects.replaced }}</span>
+        </li>
+        <li v-if="effects?.conversions" class="flex items-start gap-3">
+          <Check class="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
+          <span data-testid="merge-conversions">{{ effects.conversions }}</span>
         </li>
         <li class="flex items-start gap-3">
           <Check class="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />

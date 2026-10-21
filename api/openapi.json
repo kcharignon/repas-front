@@ -497,7 +497,8 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "Cr\u00e9e un ingr\u00e9dient : personnalis\u00e9 pour un utilisateur, commun \u00e0 tous pour un administrateur",
+                "summary": "Cr\u00e9e un ingr\u00e9dient de l'utilisateur",
+                "description": "L'ingr\u00e9dient appartient \u00e0 l'utilisateur du jeton, administrateur compris : aucun autre compte ne le voit.",
                 "operationId": "post_api_create_ingredient",
                 "requestBody": {
                     "required": true,
@@ -528,7 +529,7 @@
                         "description": "Rayon ou unit\u00e9 inconnu"
                     },
                     "409": {
-                        "description": "Un ingr\u00e9dient de ce nom existe d\u00e9j\u00e0"
+                        "description": "L'utilisateur a d\u00e9j\u00e0 un ingr\u00e9dient de ce nom (m\u00eame nom une fois normalis\u00e9 : casse, accents, ponctuation)"
                     },
                     "422": {
                         "description": "Corps invalide, ou coefficient manquant alors que les unit\u00e9s diff\u00e8rent sans conversion connue"
@@ -1071,7 +1072,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "Ce que la fusion de l'ingr\u00e9dient de l'URL (absorb\u00e9) dans `into` (gard\u00e9) ferait, sans rien \u00e9crire : recettes, listes et choix du drive concern\u00e9s, unit\u00e9s qui manquent, pourquoi elle serait refus\u00e9e. M\u00eame verdict que `POST \u2026/merge`. Toujours 200 quand les deux ingr\u00e9dients sont \u00e0 l'utilisateur ou communs : un refus de r\u00e8gle est dans `blockedBy`",
+                "summary": "Ce que la fusion de l'ingr\u00e9dient de l'URL (absorb\u00e9) dans `into` (gard\u00e9) ferait, sans rien \u00e9crire : recettes, listes et choix du drive qui se d\u00e9placent, nombre de recettes et de listes qui utiliseront le gard\u00e9 APR\u00c8S la fusion, conversions que le gard\u00e9 r\u00e9cup\u00e9rerait, unit\u00e9s qui manqueraient encore, pourquoi elle serait refus\u00e9e. M\u00eame verdict que `POST \u2026/merge`. Toujours 200 quand les deux ingr\u00e9dients sont \u00e0 l'utilisateur ou communs : un refus de r\u00e8gle est dans `blockedBy`",
                 "operationId": "get_api_get_merge_preview",
                 "parameters": [
                     {
@@ -1799,7 +1800,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "Fusionne deux ingr\u00e9dients de l'utilisateur : celui de l'URL dispara\u00eet, `into` est gard\u00e9. Ses recettes, ses listes de courses et ses choix du drive qui utilisaient le premier utilisent le second ; les anciens slugs restent r\u00e9solus. Les deux ingr\u00e9dients doivent \u00eatre \u00e0 l'utilisateur, jamais un commun, m\u00eame pour un administrateur. Rejou\u00e9e apr\u00e8s un succ\u00e8s, elle r\u00e9pond 204 sans rien faire. Aper\u00e7u sans \u00e9criture : `GET \u2026/merge-preview`",
+                "summary": "Fusionne deux ingr\u00e9dients de l'utilisateur : celui de l'URL dispara\u00eet, `into` est gard\u00e9. Ses recettes, ses listes de courses et ses choix du drive qui utilisaient le premier utilisent le second, qui r\u00e9cup\u00e8re aussi les conversions du premier qui lui manquent (les siennes gagnent en cas de conflit) ; les anciens slugs restent r\u00e9solus. Les deux ingr\u00e9dients doivent \u00eatre \u00e0 l'utilisateur, jamais un commun, m\u00eame pour un administrateur. Rejou\u00e9e apr\u00e8s un succ\u00e8s, elle r\u00e9pond 204 sans rien faire. Aper\u00e7u sans \u00e9criture : `GET \u2026/merge-preview`",
                 "operationId": "post_api_merge_ingredients",
                 "parameters": [
                     {
@@ -1832,7 +1833,7 @@
                         "description": "`INGREDIENT_IN_SENT_LIST` : une liste envoy\u00e9e au drive utilise l'un des deux (la rouvrir ou la terminer d'abord) ; `INGREDIENT_USED_BY_ANOTHER_USER` : une ligne d'un autre utilisateur utilise l'ingr\u00e9dient de l'URL (donn\u00e9e h\u00e9rit\u00e9e) ; `INGREDIENT_MERGE_CONFLICT` : une \u00e9criture concurrente a pos\u00e9 une r\u00e9f\u00e9rence sur l'ingr\u00e9dient de l'URL, rien n'a chang\u00e9, r\u00e9essayer"
                     },
                     "422": {
-                        "description": "Corps invalide ; `CANNOT_MERGE_INTO_ITSELF` : les deux ingr\u00e9dients sont le m\u00eame ; `CANNOT_MERGE_COMMON_INGREDIENT` : l'un des deux est un commun ; `MERGE_UNIT_MISSING` : une unit\u00e9 de l'ingr\u00e9dient de l'URL ne se convertit pas dans l'unit\u00e9 d'achat de `into`, rien n'a chang\u00e9"
+                        "description": "Corps invalide ; `CANNOT_MERGE_INTO_ITSELF` : les deux ingr\u00e9dients sont le m\u00eame ; `CANNOT_MERGE_COMMON_INGREDIENT` : l'un des deux est un commun ; `MERGE_UNIT_MISSING` : une unit\u00e9 de l'ingr\u00e9dient de l'URL ne se convertit pas dans l'unit\u00e9 d'achat de `into`, m\u00eame apr\u00e8s avoir r\u00e9cup\u00e9r\u00e9 les conversions de l'ingr\u00e9dient de l'URL, rien n'a chang\u00e9"
                     }
                 }
             }
@@ -4487,7 +4488,10 @@
                     "departmentChanges",
                     "listQuantitiesConverted",
                     "missingUnits",
-                    "canMerge"
+                    "canMerge",
+                    "resultRecipeCount",
+                    "resultListCount",
+                    "recoveredConversionCount"
                 ],
                 "properties": {
                     "keep": {
@@ -4497,12 +4501,12 @@
                         "$ref": "#/components/schemas/MergeIngredientDTO"
                     },
                     "recipeCount": {
-                        "description": "Nombre de recettes de l'utilisateur qui utilisent l'ingr\u00e9dient absorb\u00e9 (elles passent sur le gard\u00e9)",
+                        "description": "Nombre de recettes de l'utilisateur qui utilisent l'ingr\u00e9dient absorb\u00e9 (elles passent sur le gard\u00e9). Ce n'est PAS le total d'apr\u00e8s la fusion : voir resultRecipeCount",
                         "type": "integer",
                         "example": 7
                     },
                     "listCount": {
-                        "description": "Nombre de listes de courses de l'utilisateur qui utilisent l'ingr\u00e9dient absorb\u00e9 (elles passent sur le gard\u00e9)",
+                        "description": "Nombre de listes de courses de l'utilisateur qui utilisent l'ingr\u00e9dient absorb\u00e9 (elles passent sur le gard\u00e9). Ce n'est PAS le total d'apr\u00e8s la fusion : voir resultListCount",
                         "type": "integer",
                         "example": 2
                     },
@@ -4520,7 +4524,7 @@
                         "type": "boolean"
                     },
                     "missingUnits": {
-                        "description": "Les unit\u00e9s de l'ingr\u00e9dient absorb\u00e9 que l'ingr\u00e9dient gard\u00e9 ne sait pas convertir en son unit\u00e9 d'achat ; vide si rien ne manque. Renseign\u00e9e m\u00eame quand un autre refus passe avant",
+                        "description": "Les unit\u00e9s de l'ingr\u00e9dient absorb\u00e9 que l'ingr\u00e9dient gard\u00e9 ne sait pas convertir en son unit\u00e9 d'achat, M\u00caME APR\u00c8S avoir r\u00e9cup\u00e9r\u00e9 les conversions de l'absorb\u00e9 (recoveredConversionCount) : une vraie impossibilit\u00e9 ; vide si rien ne manque. Renseign\u00e9e m\u00eame quand un autre refus passe avant",
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/MergeUnitDTO"
@@ -4541,6 +4545,21 @@
                     "canMerge": {
                         "description": "La fusion est possible : blockedBy est null",
                         "type": "boolean"
+                    },
+                    "resultRecipeCount": {
+                        "description": "Nombre de recettes DISTINCTES de l'utilisateur qui utiliseront l'ingr\u00e9dient gard\u00e9 APR\u00c8S la fusion : celles qui l'utilisent d\u00e9j\u00e0, plus celles de l'ingr\u00e9dient absorb\u00e9 ; une recette qui utilisait d\u00e9j\u00e0 les deux compte une fois. C'est le total \u00e0 annoncer (\"sera utilis\u00e9 dans N recettes\"), alors que recipeCount ne compte que ce qui se d\u00e9place. Toujours renseign\u00e9 (0 quand les deux ingr\u00e9dients sont le m\u00eame ou qu'un commun est en jeu : rien n'est lu)",
+                        "type": "integer",
+                        "example": 8
+                    },
+                    "resultListCount": {
+                        "description": "Nombre de listes de courses DISTINCTES de l'utilisateur qui utiliseront l'ingr\u00e9dient gard\u00e9 APR\u00c8S la fusion (une ligne ou un ingr\u00e9dient ajout\u00e9 \u00e0 la main ; une liste qui avait d\u00e9j\u00e0 les deux compte une fois). Toujours renseign\u00e9, comme resultRecipeCount",
+                        "type": "integer",
+                        "example": 3
+                    },
+                    "recoveredConversionCount": {
+                        "description": "Nombre de conversions de l'ingr\u00e9dient absorb\u00e9 que l'ingr\u00e9dient gard\u00e9 n'avait pas et qui lui sont copi\u00e9es par la fusion : celles dont les deux unit\u00e9s ne sont pas encore reli\u00e9es chez lui ; si elles le sont, celles du gard\u00e9 gagnent et rien n'est copi\u00e9. Toujours 0 quand la fusion est refus\u00e9e (canMerge faux) : rien n'est \u00e9crit",
+                        "type": "integer",
+                        "example": 1
                     }
                 },
                 "type": "object"

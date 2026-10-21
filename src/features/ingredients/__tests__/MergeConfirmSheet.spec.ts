@@ -6,7 +6,7 @@ import type { MergePreview } from '@/api'
 import MergeConfirmSheet from '@/features/ingredients/MergeConfirmSheet.vue'
 import { useNotificationsStore } from '@/notifications/store'
 import { useSessionStore } from '@/session/session'
-import { preview } from './mergeFixtures'
+import { oldPreview, preview } from './mergeFixtures'
 
 const base = {
   'POST /api/auth/refresh': () => json({ token: 'jeton' }),
@@ -16,7 +16,10 @@ const base = {
 const absorbed = { slug: 'tomates', name: 'Tomates' }
 const kept = { slug: 'tomate', name: 'Tomate' }
 
-async function open(handlers: Parameters<typeof stubApi>[0] = {}) {
+async function open(
+  handlers: Parameters<typeof stubApi>[0] = {},
+  names: { absorbed: typeof absorbed; kept: typeof kept } = { absorbed, kept },
+) {
   const fetchMock = stubApi({ ...base, ...handlers })
   localStorage.setItem('repas.session', '1')
   const context = appContext()
@@ -26,8 +29,7 @@ async function open(handlers: Parameters<typeof stubApi>[0] = {}) {
   const wrapper = mount(MergeConfirmSheet, {
     attachTo: document.body,
     props: {
-      absorbed,
-      kept,
+      ...names,
       open: true,
       'onUpdate:open': (value: boolean) => void wrapper.setProps({ open: value }),
     },
@@ -74,16 +76,18 @@ describe('MergeConfirmSheet', () => {
     expect(url.searchParams.get('into')).toBe('tomate')
   })
 
-  it('dit les trois effets du cas normal', async () => {
+  const effects = () =>
+    [...(sheet()?.querySelectorAll('[data-testid="merge-effects"] li') ?? [])].map((item) =>
+      item.textContent?.trim(),
+    )
+
+  it('dit les quatre effets du cas normal : le total d’après, ce qui est remplacé, les quantités, la suppression', async () => {
     await open(previewOf())
     await ready()
 
-    expect(
-      [...(sheet()?.querySelectorAll('[data-testid="merge-effects"] li') ?? [])].map((item) =>
-        item.textContent?.trim(),
-      ),
-    ).toEqual([
-      '7 recettes et 2 listes de courses utiliseront « Tomate ».',
+    expect(effects()).toEqual([
+      '« Tomate » sera utilisé dans 19 recettes et 5 listes de courses.',
+      '« Tomates » est remplacé par « Tomate » dans 7 recettes et 2 listes de courses.',
       'Tes quantités ne changent pas.',
       '« Tomates » est supprimé. Tu ne pourras pas le retrouver.',
     ])
@@ -91,11 +95,148 @@ describe('MergeConfirmSheet', () => {
     expect(labelled('Annuler')).toBeDefined()
   })
 
-  it('dit « nulle part » quand l’absorbé ne sert à rien', async () => {
-    await open(previewOf({ recipeCount: 0, listCount: 0 }))
+  describe('le cas des deux « Melon », chacun dans une recette', () => {
+    const melons = {
+      'GET /api/v1/ingredients/tomates/merge-preview': () =>
+        json(
+          preview({
+            keep: { ...preview().keep, name: 'Melon' },
+            absorbed: { ...preview().absorbed, name: 'Melon' },
+            recipeCount: 1,
+            listCount: 0,
+            resultRecipeCount: 2,
+            resultListCount: 0,
+          }),
+        ),
+    }
+
+    it('dit que le Melon gardé sera utilisé dans DEUX recettes et que l’autre est remplacé dans une', async () => {
+      await open(melons, {
+        absorbed: { slug: 'tomates', name: 'Melon' },
+        kept: { slug: 'melon', name: 'Melon' },
+      })
+      await ready()
+
+      expect(effects()).toEqual([
+        '« Melon » sera utilisé dans 2 recettes.',
+        '« Melon » est remplacé par « Melon » dans 1 recette.',
+        'Tes quantités ne changent pas.',
+        '« Melon » est supprimé. Tu ne pourras pas le retrouver.',
+      ])
+      expect(text()).not.toContain('utiliseront')
+    })
+  })
+
+  it('compte une fois la recette qui utilisait déjà les deux', async () => {
+    await open(
+      previewOf({ recipeCount: 3, resultRecipeCount: 5, listCount: 0, resultListCount: 0 }),
+    )
     await ready()
 
-    expect(text()).toContain('« Tomates » n’est utilisé nulle part.')
+    expect(effects()?.slice(0, 2)).toEqual([
+      '« Tomate » sera utilisé dans 5 recettes.',
+      '« Tomates » est remplacé par « Tomate » dans 3 recettes.',
+    ])
+  })
+
+  it('dit « nulle part » quand rien ne sera utilisé, sans la ligne du remplacement', async () => {
+    await open(
+      previewOf({ recipeCount: 0, listCount: 0, resultRecipeCount: 0, resultListCount: 0 }),
+    )
+    await ready()
+
+    expect(effects()?.slice(0, 2)).toEqual([
+      '« Tomate » n’est utilisé nulle part.',
+      'Tes quantités ne changent pas.',
+    ])
+  })
+
+  it('garde la ligne du total, sans celle du remplacement, quand l’absorbé ne sert à rien', async () => {
+    await open(
+      previewOf({ recipeCount: 0, listCount: 0, resultRecipeCount: 4, resultListCount: 1 }),
+    )
+    await ready()
+
+    expect(effects()?.slice(0, 2)).toEqual([
+      '« Tomate » sera utilisé dans 4 recettes et 1 liste de courses.',
+      'Tes quantités ne changent pas.',
+    ])
+    expect(text()).not.toContain('est remplacé')
+  })
+
+  describe('les conversions récupérées', () => {
+    it('ne disent rien à zéro', async () => {
+      await open(previewOf({ recoveredConversionCount: 0 }))
+      await ready()
+
+      expect(sheet()?.querySelector('[data-testid="merge-conversions"]')).toBeNull()
+      expect(text()).not.toContain('conversion')
+    })
+
+    it('disent une conversion au singulier, en troisième ligne', async () => {
+      await open(previewOf({ recoveredConversionCount: 1 }))
+      await ready()
+
+      expect(effects()?.[2]).toBe('1 conversion de « Tomates » est ajoutée à « Tomate ».')
+    })
+
+    it('disent plusieurs conversions au pluriel', async () => {
+      await open(previewOf({ recoveredConversionCount: 3 }))
+      await ready()
+
+      expect(effects()?.[2]).toBe('3 conversions de « Tomates » sont ajoutées à « Tomate ».')
+      expect(labelled('Fusionner')).toBeDefined()
+    })
+
+    it('laissent fusionner une unité que seul l’absorbé sait convertir : aucun blocage', async () => {
+      await open(previewOf({ recoveredConversionCount: 2, missingUnits: [] }))
+      await ready()
+
+      expect(text()).not.toContain('ne connaît pas toutes les unités')
+      expect(labelled('Fusionner')?.hasAttribute('disabled')).toBe(false)
+    })
+  })
+
+  describe('avec un back qui n’envoie pas encore le total (compatibilité)', () => {
+    it('retombe sur l’ancienne phrase, sans ligne de remplacement ni de conversions', async () => {
+      await open({
+        'GET /api/v1/ingredients/tomates/merge-preview': () => json(oldPreview()),
+      })
+      await ready()
+
+      expect(effects()).toEqual([
+        '7 recettes et 2 listes de courses utiliseront « Tomate ».',
+        'Tes quantités ne changent pas.',
+        '« Tomates » est supprimé. Tu ne pourras pas le retrouver.',
+      ])
+    })
+
+    it('dit « nulle part » comme avant quand l’absorbé ne sert à rien', async () => {
+      await open({
+        'GET /api/v1/ingredients/tomates/merge-preview': () =>
+          json(oldPreview({ recipeCount: 0, listCount: 0 })),
+      })
+      await ready()
+
+      expect(text()).toContain('« Tomates » n’est utilisé nulle part.')
+    })
+
+    it('bloque encore une unité qui manque', async () => {
+      await open({
+        'GET /api/v1/ingredients/tomates/merge-preview': () =>
+          json(
+            oldPreview({
+              blockedBy: 'UNIT_MISSING',
+              canMerge: false,
+              missingUnits: [{ slug: 'tranche', name: 'tranche' }],
+            }),
+          ),
+      })
+      await ready()
+
+      expect(text()).toContain('« Tomate » ne connaît pas toutes les unités.')
+      expect(labelled('Fusionner')).toBeUndefined()
+    })
   })
 
   it('dit le changement de rayon à la place de « rien ne change »', async () => {
@@ -140,6 +281,25 @@ describe('MergeConfirmSheet', () => {
       expect(labelled('Modifier « Tomate »')?.getAttribute('href')).toBe(
         '/ingredients/tomate/modifier',
       )
+    })
+
+    it('ne montre aucun total ni aucune conversion : la fusion n’aura pas lieu', async () => {
+      await open(missing(['tranche']))
+      await ready()
+
+      expect(text()).not.toContain('sera utilisé')
+      expect(text()).not.toContain('est remplacé')
+      expect(text()).not.toContain('conversion')
+    })
+
+    it('ne bloque que si le back refuse : une unité listée mais `canMerge` vrai laisse fusionner', async () => {
+      await open(
+        previewOf({ missingUnits: [{ slug: 'tranche', name: 'tranche' }], canMerge: true }),
+      )
+      await ready()
+
+      expect(text()).not.toContain('ne connaît pas toutes les unités')
+      expect(labelled('Fusionner')).toBeDefined()
     })
 
     it('accorde la phrase avec plusieurs unités', async () => {

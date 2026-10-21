@@ -172,7 +172,10 @@ export interface paths {
         /** Ingrédients que l'utilisateur authentifié peut utiliser, triés par nom : les siens et les communs qu'il n'a pas adoptés (un commun adopté est remplacé par sa copie, qui est à lui) ; choix des recettes */
         get: operations["get_api_list_available_ingredients"];
         put?: never;
-        /** Crée un ingrédient : personnalisé pour un utilisateur, commun à tous pour un administrateur */
+        /**
+         * Crée un ingrédient de l'utilisateur
+         * @description L'ingrédient appartient à l'utilisateur du jeton, administrateur compris : aucun autre compte ne le voit.
+         */
         post: operations["post_api_create_ingredient"];
         delete?: never;
         options?: never;
@@ -350,7 +353,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Ce que la fusion de l'ingrédient de l'URL (absorbé) dans `into` (gardé) ferait, sans rien écrire : recettes, listes et choix du drive concernés, unités qui manquent, pourquoi elle serait refusée. Même verdict que `POST …/merge`. Toujours 200 quand les deux ingrédients sont à l'utilisateur ou communs : un refus de règle est dans `blockedBy` */
+        /** Ce que la fusion de l'ingrédient de l'URL (absorbé) dans `into` (gardé) ferait, sans rien écrire : recettes, listes et choix du drive qui se déplacent, nombre de recettes et de listes qui utiliseront le gardé APRÈS la fusion, conversions que le gardé récupérerait, unités qui manqueraient encore, pourquoi elle serait refusée. Même verdict que `POST …/merge`. Toujours 200 quand les deux ingrédients sont à l'utilisateur ou communs : un refus de règle est dans `blockedBy` */
         get: operations["get_api_get_merge_preview"];
         put?: never;
         post?: never;
@@ -548,7 +551,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Fusionne deux ingrédients de l'utilisateur : celui de l'URL disparaît, `into` est gardé. Ses recettes, ses listes de courses et ses choix du drive qui utilisaient le premier utilisent le second ; les anciens slugs restent résolus. Les deux ingrédients doivent être à l'utilisateur, jamais un commun, même pour un administrateur. Rejouée après un succès, elle répond 204 sans rien faire. Aperçu sans écriture : `GET …/merge-preview` */
+        /** Fusionne deux ingrédients de l'utilisateur : celui de l'URL disparaît, `into` est gardé. Ses recettes, ses listes de courses et ses choix du drive qui utilisaient le premier utilisent le second, qui récupère aussi les conversions du premier qui lui manquent (les siennes gagnent en cas de conflit) ; les anciens slugs restent résolus. Les deux ingrédients doivent être à l'utilisateur, jamais un commun, même pour un administrateur. Rejouée après un succès, elle répond 204 sans rien faire. Aperçu sans écriture : `GET …/merge-preview` */
         post: operations["post_api_merge_ingredients"];
         delete?: never;
         options?: never;
@@ -1856,12 +1859,12 @@ export interface components {
             keep: components["schemas"]["MergeIngredientDTO"];
             absorbed: components["schemas"]["MergeIngredientDTO"];
             /**
-             * @description Nombre de recettes de l'utilisateur qui utilisent l'ingrédient absorbé (elles passent sur le gardé)
+             * @description Nombre de recettes de l'utilisateur qui utilisent l'ingrédient absorbé (elles passent sur le gardé). Ce n'est PAS le total d'après la fusion : voir resultRecipeCount
              * @example 7
              */
             recipeCount: number;
             /**
-             * @description Nombre de listes de courses de l'utilisateur qui utilisent l'ingrédient absorbé (elles passent sur le gardé)
+             * @description Nombre de listes de courses de l'utilisateur qui utilisent l'ingrédient absorbé (elles passent sur le gardé). Ce n'est PAS le total d'après la fusion : voir resultListCount
              * @example 2
              */
             listCount: number;
@@ -1874,7 +1877,7 @@ export interface components {
             departmentChanges: boolean;
             /** @description Des quantités de listes de courses sont ré-exprimées dans l'unité d'achat de l'ingrédient gardé (les unités d'achat diffèrent) ; les quantités des recettes ne changent jamais */
             listQuantitiesConverted: boolean;
-            /** @description Les unités de l'ingrédient absorbé que l'ingrédient gardé ne sait pas convertir en son unité d'achat ; vide si rien ne manque. Renseignée même quand un autre refus passe avant */
+            /** @description Les unités de l'ingrédient absorbé que l'ingrédient gardé ne sait pas convertir en son unité d'achat, MÊME APRÈS avoir récupéré les conversions de l'absorbé (recoveredConversionCount) : une vraie impossibilité ; vide si rien ne manque. Renseignée même quand un autre refus passe avant */
             missingUnits: components["schemas"]["MergeUnitDTO"][];
             /**
              * @description Pourquoi la fusion serait refusée (le premier cas dans l'ordre de la liste), null si elle est possible. SAME_INGREDIENT : les deux ingrédients sont le même. COMMON_INGREDIENT : l'un est un ingrédient commun. USED_BY_ANOTHER_USER : une ligne d'un autre utilisateur utilise l'ingrédient absorbé. IN_SENT_LIST : une liste envoyée au drive utilise l'un des deux. UNIT_MISSING : voir missingUnits
@@ -1883,6 +1886,21 @@ export interface components {
             blockedBy?: "SAME_INGREDIENT" | "COMMON_INGREDIENT" | "USED_BY_ANOTHER_USER" | "IN_SENT_LIST" | "UNIT_MISSING" | null;
             /** @description La fusion est possible : blockedBy est null */
             canMerge: boolean;
+            /**
+             * @description Nombre de recettes DISTINCTES de l'utilisateur qui utiliseront l'ingrédient gardé APRÈS la fusion : celles qui l'utilisent déjà, plus celles de l'ingrédient absorbé ; une recette qui utilisait déjà les deux compte une fois. C'est le total à annoncer ("sera utilisé dans N recettes"), alors que recipeCount ne compte que ce qui se déplace. Toujours renseigné (0 quand les deux ingrédients sont le même ou qu'un commun est en jeu : rien n'est lu)
+             * @example 8
+             */
+            resultRecipeCount: number;
+            /**
+             * @description Nombre de listes de courses DISTINCTES de l'utilisateur qui utiliseront l'ingrédient gardé APRÈS la fusion (une ligne ou un ingrédient ajouté à la main ; une liste qui avait déjà les deux compte une fois). Toujours renseigné, comme resultRecipeCount
+             * @example 3
+             */
+            resultListCount: number;
+            /**
+             * @description Nombre de conversions de l'ingrédient absorbé que l'ingrédient gardé n'avait pas et qui lui sont copiées par la fusion : celles dont les deux unités ne sont pas encore reliées chez lui ; si elles le sont, celles du gardé gagnent et rien n'est copié. Toujours 0 quand la fusion est refusée (canMerge faux) : rien n'est écrit
+             * @example 1
+             */
+            recoveredConversionCount: number;
         };
         RecipeRowDTO: {
             /**
@@ -3165,7 +3183,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Un ingrédient de ce nom existe déjà */
+            /** @description L'utilisateur a déjà un ingrédient de ce nom (même nom une fois normalisé : casse, accents, ponctuation) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4415,7 +4433,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Corps invalide ; `CANNOT_MERGE_INTO_ITSELF` : les deux ingrédients sont le même ; `CANNOT_MERGE_COMMON_INGREDIENT` : l'un des deux est un commun ; `MERGE_UNIT_MISSING` : une unité de l'ingrédient de l'URL ne se convertit pas dans l'unité d'achat de `into`, rien n'a changé */
+            /** @description Corps invalide ; `CANNOT_MERGE_INTO_ITSELF` : les deux ingrédients sont le même ; `CANNOT_MERGE_COMMON_INGREDIENT` : l'un des deux est un commun ; `MERGE_UNIT_MISSING` : une unité de l'ingrédient de l'URL ne se convertit pas dans l'unité d'achat de `into`, même après avoir récupéré les conversions de l'ingrédient de l'URL, rien n'a changé */
             422: {
                 headers: {
                     [name: string]: unknown;
