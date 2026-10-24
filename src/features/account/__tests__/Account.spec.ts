@@ -44,6 +44,21 @@ describe('réglages du compte', () => {
     expect(wrapper.find('input').element).toHaveProperty('value', '4')
   })
 
+  it('crédite Flaticon et renvoie vers la licence des icônes', async () => {
+    const { wrapper } = await open()
+
+    const credits = wrapper.get('[data-testid="account-credits"]')
+    expect(credits.text()).toContain('Crédits')
+    expect(credits.text()).toContain('créées par leurs auteurs')
+    expect(credits.findAll('a').map((link) => link.attributes('href'))).toEqual([
+      'https://www.flaticon.com',
+      '/images/ingredient/license/license.html',
+    ])
+    expect(
+      credits.findAll('a').every((link) => link.attributes('rel') === 'noopener noreferrer'),
+    ).toBe(true)
+  })
+
   it('enregistre le nombre de personnes sans toucher au mot de passe', async () => {
     const { wrapper, fetchMock } = await open()
 
