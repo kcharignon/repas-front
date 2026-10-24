@@ -5,6 +5,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import UiButton from '@/design/UiButton.vue'
 import UiChip from '@/design/UiChip.vue'
 import { useThemeStore } from '@/design/theme'
+import AccountCredits from '@/features/account/AccountCredits.vue'
 import SettingsForms from '@/features/account/SettingsForms.vue'
 import AppHelpLink from '@/features/drive/AppHelpLink.vue'
 import AppUpdateBanner from '@/features/drive/AppUpdateBanner.vue'
@@ -58,6 +59,8 @@ async function logout() {
     >
       {{ t('account.administration') }}
     </RouterLink>
+
+    <AccountCredits />
 
     <div>
       <UiButton variant="secondary" @click="logout">{{ t('account.logout') }}</UiButton>

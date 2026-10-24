@@ -377,6 +377,12 @@ export default {
     },
     logout: 'Se déconnecter',
     administration: 'Administration',
+    credits: {
+      title: 'Crédits',
+      icons: 'Icônes des rayons et des ingrédients, créées par leurs auteurs :',
+      site: 'Flaticon',
+      license: 'Licence et auteurs',
+    },
   },
   driveProducts: {
     title: 'Mes produits',
