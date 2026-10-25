@@ -28,7 +28,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Les doublons possibles de l'utilisateur : des paires de SES ingrédients (jamais un commun, jamais ceux d'un autre), du même rayon, dont les noms se ressemblent (même nom une fois normalisé, à une faute de frappe près, ou assez proche : score de 0,90 au moins) et qu'il n'a pas écartées par « Pas le même ». Triées de la plus probable à la moins probable, 50 au plus, le même ordre à chaque appel. Chaque paire porte de quoi afficher sa carte (les deux ingrédients avec leurs nombres de recettes et de listes, l'ingrédient à garder par défaut). Vide pour un compte sans ingrédient personnel, un administrateur compris. Ce que la fusion ferait exactement : `GET …/merge-preview` */
+        /** Les doublons possibles de l'utilisateur : des paires de SES ingrédients (jamais ceux d'un autre, un administrateur compris), du même rayon, dont les noms se ressemblent (même nom une fois normalisé, à une faute de frappe près, ou assez proche : score de 0,90 au moins) et qu'il n'a pas écartées par « Pas le même ». Triées de la plus probable à la moins probable, 50 au plus, le même ordre à chaque appel. Chaque paire porte de quoi afficher sa carte (les deux ingrédients avec leurs nombres de recettes et de listes, l'ingrédient à garder par défaut). Vide pour un compte qui n'a pas deux ingrédients. Ce que la fusion ferait exactement : `GET …/merge-preview` */
         get: operations["get_api_list_duplicate_ingredients"];
         put?: never;
         post?: never;
@@ -45,7 +45,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Recherche d'ingrédients par nom, du plus pertinent au moins pertinent, avec leur rayon : ceux de l'utilisateur authentifié et les communs qu'il n'a pas adoptés (un commun adopté est remplacé par sa copie, qui est à lui) */
+        /** Recherche d'ingrédients par nom, du plus pertinent au moins pertinent, avec leur rayon : ceux de l'utilisateur authentifié, jamais ceux d'un autre (un administrateur compris) */
         get: operations["get_api_search_ingredients"];
         put?: never;
         post?: never;
@@ -98,7 +98,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ajoute 1 à la quantité d'un ingrédient dans la liste active de l'utilisateur. Le slug d'un commun que l'utilisateur a adopté désigne sa copie, qui est celle de la liste ; un utilisateur qui a déjà adopté des communs adopte à la volée celui qu'il utilise pour la première fois */
+        /** Ajoute 1 à la quantité d'un ingrédient dans la liste active de l'utilisateur. Un ancien slug (ancien commun dont l'utilisateur a reçu une copie, ingrédient fusionné) désigne son ingrédient actuel, qui est celui de la liste ; l'ingrédient d'un autre utilisateur est inconnu */
         post: operations["post_api_increase_ingredient"];
         delete?: never;
         options?: never;
@@ -133,10 +133,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Conversions entre unités (administrateur), triées par ingrédient puis par unité de départ */
+        /** Conversions entre unités (administrateur), triées par ingrédient puis par unité de départ : les conversions générales et celles de SES ingrédients, jamais celles des ingrédients d'un autre utilisateur */
         get: operations["get_api_list_conversions"];
         put?: never;
-        /** Crée une conversion entre deux unités (administrateur), propre à un ingrédient ou commune à tous */
+        /** Crée une conversion entre deux unités (administrateur), propre à l'un de SES ingrédients ou générale (commune à tous les ingrédients) */
         post: operations["post_api_create_conversion"];
         delete?: never;
         options?: never;
@@ -169,7 +169,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Ingrédients que l'utilisateur authentifié peut utiliser, triés par nom : les siens et les communs qu'il n'a pas adoptés (un commun adopté est remplacé par sa copie, qui est à lui) ; choix des recettes */
+        /** Ingrédients que l'utilisateur authentifié peut utiliser, triés par nom : les siens seulement, jamais ceux d'un autre (un administrateur compris) ; choix des recettes */
         get: operations["get_api_list_available_ingredients"];
         put?: never;
         /**
@@ -192,7 +192,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Crée une recette de l'utilisateur connecté. Le slug d'un commun que l'utilisateur a adopté est remplacé par celui de sa copie ; un utilisateur qui a déjà adopté des communs adopte à la volée celui qu'il utilise pour la première fois */
+        /** Crée une recette de l'utilisateur connecté. Un ancien slug (ancien commun dont l'utilisateur a reçu une copie, ingrédient fusionné) est remplacé par celui de son ingrédient actuel ; l'ingrédient d'un autre utilisateur est inconnu */
         post: operations["post_api_create_recipe"];
         delete?: never;
         options?: never;
@@ -295,9 +295,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Détail d'une conversion entre unités (administrateur) */
+        /** Détail d'une conversion entre unités (administrateur) : une conversion générale ou celle de l'un de SES ingrédients */
         get: operations["get_api_get_conversion"];
-        /** Remplace une conversion entre unités (administrateur) */
+        /** Remplace une conversion entre unités (administrateur) : une conversion générale ou celle de l'un de SES ingrédients */
         put: operations["put_api_update_conversion"];
         post?: never;
         delete?: never;
@@ -331,15 +331,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Détail d'un ingrédient commun ou créé par l'utilisateur (un administrateur voit tous les ingrédients). Un commun que l'utilisateur a adopté se lit encore, en lecture seule (`canEdit` faux) : une page ouverte avant l'adoption peut s'afficher */
+        /** Détail d'un ingrédient de l'utilisateur authentifié. Celui d'un autre utilisateur, un administrateur compris, est inconnu (404) ; un ancien slug (commun adopté, ingrédient fusionné) ne se lit plus */
         get: operations["get_api_get_ingredient"];
         /**
-         * Remplace un ingrédient de l'utilisateur (un ingrédient commun n'est modifiable que par un administrateur) ; son image est conservée
+         * Remplace un ingrédient de l'utilisateur (seul son propriétaire le modifie, un administrateur compris) ; son image est conservée
          * @description Le champ facultatif `isBase` pose le marqueur « ingrédient de base » : absent ou `null`, il reste inchangé. Seul le propriétaire du catalogue peut le changer, sur un ingrédient à lui : toute autre valeur que l'actuelle venant d'un autre compte donne `403` `INGREDIENT_BASE_FORBIDDEN`, et rien n'est écrit.
          */
         put: operations["put_api_update_ingredient"];
         post?: never;
-        /** Supprime un ingrédient de l'utilisateur, avec ses conversions (un ingrédient commun n'est supprimable que par un administrateur) */
+        /** Supprime un ingrédient de l'utilisateur, avec ses conversions (seul son propriétaire le supprime, un administrateur compris) */
         delete: operations["delete_api_remove_ingredient"];
         options?: never;
         head?: never;
@@ -353,7 +353,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Ce que la fusion de l'ingrédient de l'URL (absorbé) dans `into` (gardé) ferait, sans rien écrire : recettes, listes et choix du drive qui se déplacent, nombre de recettes et de listes qui utiliseront le gardé APRÈS la fusion, conversions que le gardé récupérerait, unités qui manqueraient encore, pourquoi elle serait refusée. Même verdict que `POST …/merge`. Toujours 200 quand les deux ingrédients sont à l'utilisateur ou communs : un refus de règle est dans `blockedBy` */
+        /** Ce que la fusion de l'ingrédient de l'URL (absorbé) dans `into` (gardé) ferait, sans rien écrire : recettes, listes et choix du drive qui se déplacent, nombre de recettes et de listes qui utiliseront le gardé APRÈS la fusion, conversions que le gardé récupérerait, unités qui manqueraient encore, pourquoi elle serait refusée. Même verdict que `POST …/merge`. Toujours 200 quand les deux ingrédients sont à l'utilisateur : un refus de règle est dans `blockedBy` */
         get: operations["get_api_get_merge_preview"];
         put?: never;
         post?: never;
@@ -372,7 +372,7 @@ export interface paths {
         };
         /** Détail d'une recette et de ses ingrédients (lisible par tout utilisateur authentifié, comme sur le site) */
         get: operations["get_api_get_recipe"];
-        /** Remplace une recette de l'utilisateur : nom, personnes, type et lignes (les lignes absentes du corps sont supprimées). Le slug d'un commun que l'auteur a adopté est remplacé par celui de sa copie, comme à la création */
+        /** Remplace une recette de l'utilisateur : nom, personnes, type et lignes (les lignes absentes du corps sont supprimées). Un ancien slug est remplacé par celui de l'ingrédient actuel de l'auteur, comme à la création */
         put: operations["put_api_update_recipe"];
         post?: never;
         /** Supprime une recette de l'utilisateur, avec ses lignes */
@@ -464,7 +464,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Ingrédients de l'utilisateur authentifié dans un rayon, triés par nom : les siens et les communs qu'il n'a pas adoptés (un commun adopté est remplacé par sa copie, qui est à lui) */
+        /** Ingrédients de l'utilisateur authentifié dans un rayon, triés par nom : les siens seulement, jamais ceux d'un autre (un administrateur compris) */
         get: operations["get_api_list_ingredients_by_department"];
         put?: never;
         post?: never;
@@ -481,7 +481,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Les ingrédients de l'utilisateur (les siens, jamais un commun) avec lesquels l'ingrédient de l'URL peut être fusionné, 30 au plus : ceux du même rayon d'abord, les plus ressemblants en tête, puis les autres rayons. Choix de l'ingrédient à garder */
+        /** Les ingrédients de l'utilisateur (les siens) avec lesquels l'ingrédient de l'URL peut être fusionné, 30 au plus : ceux du même rayon d'abord, les plus ressemblants en tête, puis les autres rayons. Choix de l'ingrédient à garder */
         get: operations["get_api_list_merge_candidates"];
         put?: never;
         post?: never;
@@ -534,7 +534,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** « Pas le même » : l'utilisateur dit que l'ingrédient de l'URL et `other` ne sont pas un doublon. La paire (dans un sens ou dans l'autre) n'est plus jamais proposée par `GET /ingredients/duplicates`, même après un renommage. Rien d'autre ne change : aucun ingrédient, aucune recette, aucune liste. Rejouée, elle répond 204 sans rien faire. Les deux ingrédients doivent être à l'utilisateur, jamais un commun, même pour un administrateur */
+        /** « Pas le même » : l'utilisateur dit que l'ingrédient de l'URL et `other` ne sont pas un doublon. La paire (dans un sens ou dans l'autre) n'est plus jamais proposée par `GET /ingredients/duplicates`, même après un renommage. Rien d'autre ne change : aucun ingrédient, aucune recette, aucune liste. Rejouée, elle répond 204 sans rien faire. Les deux ingrédients doivent être à l'utilisateur, même pour un administrateur */
         post: operations["post_api_mark_ingredients_distinct"];
         delete?: never;
         options?: never;
@@ -551,7 +551,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Fusionne deux ingrédients de l'utilisateur : celui de l'URL disparaît, `into` est gardé. Ses recettes, ses listes de courses et ses choix du drive qui utilisaient le premier utilisent le second, qui récupère aussi les conversions du premier qui lui manquent (les siennes gagnent en cas de conflit) ; les anciens slugs restent résolus. Les deux ingrédients doivent être à l'utilisateur, jamais un commun, même pour un administrateur. Rejouée après un succès, elle répond 204 sans rien faire. Aperçu sans écriture : `GET …/merge-preview` */
+        /** Fusionne deux ingrédients de l'utilisateur : celui de l'URL disparaît, `into` est gardé. Ses recettes, ses listes de courses et ses choix du drive qui utilisaient le premier utilisent le second, qui récupère aussi les conversions du premier qui lui manquent (les siennes gagnent en cas de conflit) ; les anciens slugs restent résolus. Les deux ingrédients doivent être à l'utilisateur, même pour un administrateur. Rejouée après un succès, elle répond 204 sans rien faire. Aperçu sans écriture : `GET …/merge-preview` */
         post: operations["post_api_merge_ingredients"];
         delete?: never;
         options?: never;
@@ -603,7 +603,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Retire 1 à la quantité d'un ingrédient dans la liste active de l'utilisateur (la ligne disparaît à zéro). Le slug d'un commun que l'utilisateur a adopté désigne sa copie, qui est celle de la liste */
+        /** Retire 1 à la quantité d'un ingrédient dans la liste active de l'utilisateur (la ligne disparaît à zéro). Un ancien slug (ancien commun dont l'utilisateur a reçu une copie, ingrédient fusionné) désigne son ingrédient actuel, qui est celui de la liste */
         post: operations["post_api_decrease_ingredient"];
         delete?: never;
         options?: never;
@@ -951,10 +951,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Remplace d'un coup la préférence de l'utilisateur connecté pour un ingrédient : produits acceptés dans l'ordre, produits refusés, ou « j'en ai toujours » (sans produit ni « j'en ai toujours », la préférence est supprimée). Le slug d'un commun que l'utilisateur a adopté désigne sa copie : la préférence est toujours celle de la copie */
+        /** Remplace d'un coup la préférence de l'utilisateur connecté pour un ingrédient : produits acceptés dans l'ordre, produits refusés, ou « j'en ai toujours » (sans produit ni « j'en ai toujours », la préférence est supprimée). Un ancien slug (ancien commun dont l'utilisateur a reçu une copie, ingrédient fusionné) désigne son ingrédient actuel : la préférence est toujours celle de l'ingrédient actuel */
         put: operations["put_api_replace_ingredient_preference"];
         post?: never;
-        /** Oublie toute la préférence de l'utilisateur connecté pour un ingrédient : produits acceptés et refusés, ou « j'en ai toujours » (les produits restent connus). Le slug d'un commun que l'utilisateur a adopté désigne sa copie */
+        /** Oublie toute la préférence de l'utilisateur connecté pour un ingrédient : produits acceptés et refusés, ou « j'en ai toujours » (les produits restent connus). Un ancien slug (ancien commun dont l'utilisateur a reçu une copie, ingrédient fusionné) désigne son ingrédient actuel */
         delete: operations["delete_api_forget_choice"];
         options?: never;
         head?: never;
@@ -1022,10 +1022,84 @@ export interface paths {
         };
         /** Préférences de produits de l'utilisateur connecté dans son magasin courant, par ingrédient : produits acceptés classés, produits refusés, « j'en ai toujours » */
         get: operations["get_api_list_choices"];
-        /** Mémorise un lot d'intentions de l'agent (produits choisis, refusés, « j'en ai toujours ») dans les préférences de l'utilisateur connecté. Le slug d'un commun que l'utilisateur a adopté est remplacé par celui de sa copie : aucune préférence n'est créée sous un commun masqué. La fiche d'un produit déjà connu (commune au magasin) n'est complétée que là où elle est vide : libellé, contenu et code-barres ne sont jamais réécrits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte déjà. Un `ADD_PRODUCT` peut porter la recherche qui a fait trouver le produit (`searchQuery`, mémorisée avec la préférence de cette enseigne et de ce magasin ; clé absente : gardée, `null` : effacée) ; l'intention `NOTE_SEARCH` (DRV-653) mémorise cette recherche seule, sans produit, quand le produit n'est pas mémorisé (pris pour cette fois seulement) et la contenance du produit dans l'unité de la liste (`product.packSize`, DRV-652, privée à l'utilisateur et propre à ce produit ; clé absente : gardée pour le même produit, `null` : effacée) */
+        /** Mémorise un lot d'intentions de l'agent (produits choisis, refusés, « j'en ai toujours ») dans les préférences de l'utilisateur connecté. Un ancien slug (ancien commun dont l'utilisateur a reçu une copie, ingrédient fusionné) est remplacé par celui de son ingrédient actuel : aucune préférence n'est créée sous un ancien slug. La fiche d'un produit déjà connu (commune au magasin) n'est complétée que là où elle est vide : libellé, contenu et code-barres ne sont jamais réécrits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte déjà. Un `ADD_PRODUCT` peut porter la recherche qui a fait trouver le produit (`searchQuery`, mémorisée avec la préférence de cette enseigne et de ce magasin ; clé absente : gardée, `null` : effacée) ; l'intention `NOTE_SEARCH` (DRV-653) mémorise cette recherche seule, sans produit, quand le produit n'est pas mémorisé (pris pour cette fois seulement) et la contenance du produit dans l'unité de la liste (`product.packSize`, DRV-652, privée à l'utilisateur et propre à ce produit ; clé absente : gardée pour le même produit, `null` : effacée) */
         put: operations["put_api_save_product_choices"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/voice/oauth/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Point d'accès aux jetons de la liaison de compte (OAuth 2.0) : échange le code d'autorisation, ou le jeton de rafraîchissement, contre des jetons (route publique, appelée par Amazon)
+         * @description Corps `application/x-www-form-urlencoded` (RFC 6749). Le client est authentifié par `client_id` et `client_secret` dans le corps, ou par `Authorization: Basic` ; le secret est comparé à l'empreinte `ALEXA_OAUTH_CLIENT_SECRET_HASH` (vide : tout client est refusé). `grant_type=authorization_code` demande `code`, `redirect_uri` (la même qu'à l'autorisation) et `code_verifier` (PKCE S256) ; `grant_type=refresh_token` demande `refresh_token`. Les jetons sont opaques ; le jeton d'accès vaut 3600 s, le jeton de rafraîchissement 90 jours et ne sert qu'une fois : chaque échange en rend un nouveau (rotation), et présenter un jeton de rafraîchissement déjà échangé, ou un code déjà échangé, révoque la liaison. Les erreurs suivent la RFC 6749 5.2 (`{"error": "…"}`), sans dire pourquoi un échange est refusé : `invalid_grant` pour un code ou un jeton refusé quelle qu'en soit la raison (Alexa déconnecte alors le compte), `invalid_client` pour un client inconnu ou un secret faux, `invalid_request` pour un paramètre manquant, `unsupported_grant_type` pour un autre type. 30 appels par heure et par adresse IP. Jamais de mise en cache.
+         */
+        post: operations["post_api_voice_oauth_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/voice/alexa/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Autorise Alexa à agir sur les courses de l'utilisateur connecté : émet le code d'autorisation de la liaison de compte (OAuth 2.0, code + PKCE)
+         * @description Appelée par la page `/alexa/lier` du front quand l'utilisateur, connecté, touche « Autoriser ». Le corps reprend les paramètres de la demande d'Alexa. La réponse donne l'adresse où envoyer l'utilisateur : l'adresse de retour (`redirectUri`, choisie dans la configuration) suivie de `code` et `state`. Le code est opaque, valable 10 minutes, à usage unique ; Repas n'en garde que le haché. Refus sans dire pourquoi (client inconnu, adresse de retour qui n'est pas exactement l'une des adresses autorisées, méthode autre que `S256`, défi ou `state` mal formé) : `422 VOICE_AUTHORIZATION_REFUSED`, et le front ne redirige alors nulle part. 20 émissions par heure et par utilisateur.
+         */
+        post: operations["post_api_issue_voice_authorization_code"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/voice/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Les liaisons de l'utilisateur connecté avec un assistant vocal (Alexa), pour l'écran « Moi » : la plus récente d'abord. Une liaison retirée n'y figure plus. Jamais de jeton. */
+        get: operations["get_api_list_voice_links"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/voice/links/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Retire la liaison de l'utilisateur avec Alexa : la liaison et tous ses jetons. Le jeton d'accès qu'Alexa tenait ne résout plus rien. Idempotent. Propriétaire seul, administrateur compris. */
+        delete: operations["delete_api_revoke_voice_link"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1111,7 +1185,7 @@ export interface components {
         };
         RecipeRowPayload: {
             /**
-             * @description Slug de l'ingrédient (commun, ou personnalisé par l'auteur de la recette)
+             * @description Slug de l'ingrédient (un ingrédient de l'auteur de la recette)
              * @example pate
              */
             ingredientSlug: string;
@@ -1500,6 +1574,33 @@ export interface components {
             /** @description Intentions, 200 au plus, appliquées dans l'ordre reçu pour un même ingrédient */
             choices: components["schemas"]["ChoiceIntentPayload"][];
         };
+        IssueAuthorizationCodePayload: {
+            /**
+             * @description Paramètre `client_id` de la demande d'Alexa : l'identifiant du client OAuth (`ALEXA_OAUTH_CLIENT_ID`)
+             * @example repas-alexa
+             */
+            clientId: string;
+            /**
+             * @description Paramètre `redirect_uri` de la demande d'Alexa : doit être EXACTEMENT l'une des adresses autorisées (`ALEXA_REDIRECT_URIS`)
+             * @example https://pitangui.amazon.com/api/skill/link/M2AAAAAAAAAAAA
+             */
+            redirectUri: string;
+            /**
+             * @description Paramètre `state` de la demande d'Alexa, rendu tel quel dans l'adresse de retour (1024 caractères imprimables au plus)
+             * @example xyz123
+             */
+            state: string;
+            /**
+             * @description Paramètre `code_challenge` : SHA-256 du vérificateur en base64url sans remplissage (43 caractères)
+             * @example E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM
+             */
+            codeChallenge: string;
+            /**
+             * @description Paramètre `code_challenge_method` : `S256` seul est accepté (`plain` est refusé)
+             * @example S256
+             */
+            codeChallengeMethod: string;
+        };
         DuplicateIngredientSideDTO: {
             /**
              * @description Identifiant de l'ingrédient (slug)
@@ -1565,7 +1666,7 @@ export interface components {
              * @example g
              */
             purchaseUnitSymbol: string;
-            /** @description L'utilisateur peut modifier cet ingrédient : le sien, ou un ingrédient commun s'il est administrateur */
+            /** @description Toujours vrai : l'ingrédient est à l'utilisateur. Le champ reste pour les clients existants */
             canEdit: boolean;
             /**
              * @description Identifiant du rayon de l'ingrédient (slug)
@@ -1596,7 +1697,7 @@ export interface components {
             ingredientSlug?: string | null;
             /** @example beurre */
             ingredientName?: string | null;
-            /** @description Email du créateur de l'ingrédient, null pour un ingrédient commun ou une conversion commune */
+            /** @description Email du propriétaire de l'ingrédient (toujours le lecteur), null pour une conversion générale */
             creatorEmail?: string | null;
             /**
              * @description Identifiant de l'unité de départ (slug)
@@ -1806,9 +1907,9 @@ export interface components {
              * @example 250
              */
             coefficient?: number | null;
-            /** @description Identifiant du créateur, null pour un ingrédient commun */
+            /** @description Identifiant du propriétaire de l'ingrédient (le lecteur) */
             creatorId?: string | null;
-            /** @description L'utilisateur peut modifier cet ingrédient : le sien, ou un ingrédient commun s'il est administrateur */
+            /** @description Toujours vrai : l'ingrédient est à l'utilisateur. Le champ reste pour les clients existants */
             canEdit: boolean;
             /**
              * @description Nombre de recettes de l'utilisateur qui utilisent cet ingrédient (« Utilisé dans 7 recettes · 2 listes »), toujours renseigné ; 0 si aucune, ou si l'ingrédient est à quelqu'un d'autre
@@ -1880,7 +1981,7 @@ export interface components {
             /** @description Les unités de l'ingrédient absorbé que l'ingrédient gardé ne sait pas convertir en son unité d'achat, MÊME APRÈS avoir récupéré les conversions de l'absorbé (recoveredConversionCount) : une vraie impossibilité ; vide si rien ne manque. Renseignée même quand un autre refus passe avant */
             missingUnits: components["schemas"]["MergeUnitDTO"][];
             /**
-             * @description Pourquoi la fusion serait refusée (le premier cas dans l'ordre de la liste), null si elle est possible. SAME_INGREDIENT : les deux ingrédients sont le même. COMMON_INGREDIENT : l'un est un ingrédient commun. USED_BY_ANOTHER_USER : une ligne d'un autre utilisateur utilise l'ingrédient absorbé. IN_SENT_LIST : une liste envoyée au drive utilise l'un des deux. UNIT_MISSING : voir missingUnits
+             * @description Pourquoi la fusion serait refusée (le premier cas dans l'ordre de la liste), null si elle est possible. SAME_INGREDIENT : les deux ingrédients sont le même. COMMON_INGREDIENT : n'est plus rendu (il n'y a plus d'ingrédient commun), déclaré pour les clients existants. USED_BY_ANOTHER_USER : une ligne d'un autre utilisateur utilise l'ingrédient absorbé. IN_SENT_LIST : une liste envoyée au drive utilise l'un des deux. UNIT_MISSING : voir missingUnits
              * @enum {string|null}
              */
             blockedBy?: "SAME_INGREDIENT" | "COMMON_INGREDIENT" | "USED_BY_ANOTHER_USER" | "IN_SENT_LIST" | "UNIT_MISSING" | null;
@@ -2130,7 +2231,7 @@ export interface components {
              * @example g
              */
             purchaseUnitSymbol: string;
-            /** @description L'utilisateur peut modifier cet ingrédient : le sien, ou un ingrédient commun s'il est administrateur */
+            /** @description Toujours vrai : l'ingrédient est à l'utilisateur. Le champ reste pour les clients existants */
             canEdit: boolean;
             /** @description Marqueur « ingrédient de base » : l'ingrédient est copié aux nouveaux comptes. Toujours écrit, jamais `null` ; vrai seulement pour le propriétaire du catalogue, faux pour tout autre lecteur */
             isBase: boolean;
@@ -2679,6 +2780,12 @@ export interface components {
              */
             searchQuery?: string | null;
         };
+        VoiceLinkDTO: {
+            id: string;
+            provider: string;
+            createdAt: string;
+            lastUsedAt?: string | null;
+        };
     };
     responses: {
         /** @description Trop d'écritures du drive de cet utilisateur : plus de 60 par minute (compteur commun à `PUT /drive/settings`, `PUT /drive/choices`, `PUT` et `DELETE /drive/choices/{ingredientSlug}`). Message `DRIVE_RATE_LIMITED`, rien n'a été enregistré ; patienter au moins le délai de `Retry-After`, sans réessayer en boucle. */
@@ -2708,6 +2815,38 @@ export interface components {
                 "application/json": {
                     error?: {
                         /** @example DRIVE_RATE_LIMITED */
+                        message?: string;
+                    };
+                };
+            };
+        };
+        /** @description Trop d'échanges de jetons depuis cette adresse IP : plus de 30 par heure (`POST /api/voice/oauth/token`, route publique). Message `VOICE_RATE_LIMITED` ; patienter au moins le délai de `Retry-After`. */
+        VoiceTokenRateLimited: {
+            headers: {
+                /** @description Secondes à attendre au minimum avant de réessayer */
+                "Retry-After"?: number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    error?: {
+                        /** @example VOICE_RATE_LIMITED */
+                        message?: string;
+                    };
+                };
+            };
+        };
+        /** @description Trop de codes d'autorisation émis par cet utilisateur : plus de 20 par heure (`POST /api/v1/voice/alexa/authorize`). Message `VOICE_RATE_LIMITED` ; patienter au moins le délai de `Retry-After`. */
+        VoiceAuthorizeRateLimited: {
+            headers: {
+                /** @description Secondes à attendre au minimum avant de réessayer */
+                "Retry-After"?: number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    error?: {
+                        /** @example VOICE_RATE_LIMITED */
                         message?: string;
                     };
                 };
@@ -3025,7 +3164,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Unité ou ingrédient inconnu */
+            /** @description Unité ou ingrédient inconnu, ou ingrédient d'un autre utilisateur (un administrateur n'a pas de passe-droit) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3484,7 +3623,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Conversion inconnue */
+            /** @description Conversion inconnue, ou propre à l'ingrédient d'un autre utilisateur (un administrateur n'a pas de passe-droit) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3522,7 +3661,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Conversion, unité ou ingrédient inconnu */
+            /** @description Conversion, unité ou ingrédient inconnu, ou conversion ou ingrédient d'un autre utilisateur (un administrateur n'a pas de passe-droit) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3632,7 +3771,7 @@ export interface operations {
                     "application/json": components["schemas"]["IngredientDTO"];
                 };
             };
-            /** @description Ingrédient inconnu, ou créé par un autre utilisateur */
+            /** @description Ingrédient inconnu, ou à un autre utilisateur (un administrateur n'a pas de passe-droit) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3663,7 +3802,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description L'ingrédient appartient à un autre utilisateur, ou il est commun */
+            /** @description L'ingrédient appartient à un autre utilisateur (un administrateur n'a pas de passe-droit) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3704,7 +3843,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description L'ingrédient appartient à un autre utilisateur, ou il est commun */
+            /** @description L'ingrédient appartient à un autre utilisateur (un administrateur n'a pas de passe-droit) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4232,7 +4371,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Le rayon et ses ingrédients (collection `member`) ; `canEdit` indique si l'utilisateur peut modifier l'ingrédient */
+            /** @description Le rayon et ses ingrédients (collection `member`) ; `canEdit` est toujours vrai (l'ingrédient est à l'utilisateur) ; le champ reste pour les clients existants */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4292,7 +4431,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Paramètre `q` invalide (trop long), ou `CANNOT_MERGE_COMMON_INGREDIENT` : l'ingrédient est un commun */
+            /** @description Paramètre `q` invalide (trop long). `CANNOT_MERGE_COMMON_INGREDIENT` n'est plus renvoyé (il n'y a plus d'ingrédient commun), gardé pour les clients existants */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4381,7 +4520,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Un des deux ingrédients est inconnu, commun, ou appartient à un autre utilisateur (même pour un administrateur) */
+            /** @description Un des deux ingrédients est inconnu, ou appartient à un autre utilisateur (même pour un administrateur) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4433,7 +4572,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Corps invalide ; `CANNOT_MERGE_INTO_ITSELF` : les deux ingrédients sont le même ; `CANNOT_MERGE_COMMON_INGREDIENT` : l'un des deux est un commun ; `MERGE_UNIT_MISSING` : une unité de l'ingrédient de l'URL ne se convertit pas dans l'unité d'achat de `into`, même après avoir récupéré les conversions de l'ingrédient de l'URL, rien n'a changé */
+            /** @description Corps invalide ; `CANNOT_MERGE_INTO_ITSELF` : les deux ingrédients sont le même ; `CANNOT_MERGE_COMMON_INGREDIENT` : n'est plus renvoyé (il n'y a plus d'ingrédient commun), gardé pour les clients existants ; `MERGE_UNIT_MISSING` : une unité de l'ingrédient de l'URL ne se convertit pas dans l'unité d'achat de `into`, même après avoir récupéré les conversions de l'ingrédient de l'URL, rien n'a changé */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5698,6 +5837,201 @@ export interface operations {
                 content?: never;
             };
             429: components["responses"]["DriveWriteRateLimited"];
+        };
+    };
+    post_api_voice_oauth_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    /** @enum {string} */
+                    grant_type: "authorization_code" | "refresh_token";
+                    /** @description Avec `authorization_code` : le code reçu à l'autorisation */
+                    code?: string;
+                    /** @description Avec `authorization_code` : l'adresse de retour de l'autorisation, la même */
+                    redirect_uri?: string;
+                    /** @description Avec `authorization_code` : le vérificateur PKCE (43 à 128 caractères) dont le SHA-256 est le `code_challenge` de l'autorisation */
+                    code_verifier?: string;
+                    /** @description Avec `refresh_token` : le jeton de rafraîchissement reçu en dernier */
+                    refresh_token?: string;
+                    /** @description Authentification dans le corps (ou `Authorization: Basic`) */
+                    client_id?: string;
+                    /** @description Authentification dans le corps (ou `Authorization: Basic`) */
+                    client_secret?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Une paire de jetons. `Cache-Control: no-store` */
+            200: {
+                headers: {
+                    /** @description `no-store` */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 3Qa5mVq1xT0Zb8nWc2YpLkR7sHdJ9eUfGhAoIiNtBvM */
+                        access_token?: string;
+                        /** @example Bearer */
+                        token_type?: string;
+                        /** @example 3600 */
+                        expires_in?: number;
+                        /** @example Zt4Lw9RkEoPq2YhXn6VbGcJdUaSf8MiH1TgNyQr0eKs */
+                        refresh_token?: string;
+                    };
+                };
+            };
+            /** @description Erreur OAuth `{"error": "invalid_request" | "invalid_grant" | "unsupported_grant_type"}` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example invalid_grant */
+                        error?: string;
+                    };
+                };
+            };
+            /** @description Erreur OAuth `{"error": "invalid_client"}` : client inconnu, secret faux ou absent */
+            401: {
+                headers: {
+                    /** @description `Basic realm="Repas"` */
+                    "WWW-Authenticate"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example invalid_client */
+                        error?: string;
+                    };
+                };
+            };
+            /** @description Commande vocale coupée (message `VOICE_DISABLED`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["VoiceTokenRateLimited"];
+        };
+    };
+    post_api_issue_voice_authorization_code: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueAuthorizationCodePayload"];
+            };
+        };
+        responses: {
+            /** @description Où renvoyer l'utilisateur : `redirectUri?state=…&code=…`. `Cache-Control: no-store` */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example https://pitangui.amazon.com/api/skill/link/M2AAAAAAAAAAAA?state=xyz123&code=3Qa5mVq1xT0Zb8nWc2YpLkR7sHdJ9eUfGhAoIiNtBvM */
+                        redirectUrl?: string;
+                    };
+                };
+            };
+            /** @description Commande vocale coupée (message `VOICE_DISABLED`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide, ou demande d'autorisation refusée (message `VOICE_AUTHORIZATION_REFUSED`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["VoiceAuthorizeRateLimited"];
+        };
+    };
+    get_api_list_voice_links: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Les liaisons de l'utilisateur (liste vide tant qu'il n'a pas relié Alexa) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        member?: components["schemas"]["VoiceLinkDTO"][];
+                        /** @example 1 */
+                        totalItems?: number;
+                    };
+                };
+            };
+            /** @description Commande vocale coupée (message `VOICE_DISABLED`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_api_revoke_voice_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Identifiant de la liaison (celui de `GET /voice/links`)
+                 * @example 4f1c0a5e-7d1b-4c6a-8e2f-0b9d7c5a3e1f
+                 */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Liaison retirée, jetons effacés */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La liaison n'est pas à l'utilisateur (aucun passe-droit administrateur) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Commande vocale coupée (message `VOICE_DISABLED`), ou liaison inconnue (message `VOICE_LINK_NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
 }
