@@ -10,6 +10,7 @@ import SettingsForms from '@/features/account/SettingsForms.vue'
 import AppHelpLink from '@/features/drive/AppHelpLink.vue'
 import AppUpdateBanner from '@/features/drive/AppUpdateBanner.vue'
 import DriveAccountLinks from '@/features/drive/DriveAccountLinks.vue'
+import VoiceAssistantSection from '@/features/voice/VoiceAssistantSection.vue'
 import { useSessionStore } from '@/session/session'
 
 const { t } = useI18n()
@@ -51,6 +52,8 @@ async function logout() {
     <AppHelpLink />
 
     <DriveAccountLinks />
+
+    <VoiceAssistantSection />
 
     <RouterLink
       v-if="session.isAdmin"

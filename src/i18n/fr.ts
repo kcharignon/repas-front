@@ -895,6 +895,18 @@ export default {
     disabled: 'Cette fonction n’est pas encore disponible.',
     home: 'Retour à l’accueil',
   },
+  // L'assistant vocal dans « Moi » (VOX-402) : `{skill}` est le nom du skill (`ALEXA_SKILL_NAME`, un seul endroit)
+  voice: {
+    title: 'Assistant vocal',
+    linked: 'Alexa est liée. Dis : « Alexa, demande à {skill} d’ajouter du pain ».',
+    notLinked: 'Pour lier Alexa, ouvre l’application Alexa, Skills, {skill}.',
+    help: 'Alexa ne voit pas ta liste de courses d’Amazon : dis bien le nom du skill.',
+    unlink: 'Délier Alexa',
+    unlinkTitle: 'Délier Alexa ?',
+    unlinkDescription:
+      'Alexa ne pourra plus ajouter de produits à ta liste. Tu pourras la lier de nouveau.',
+    unlinkConfirm: 'Délier',
+  },
   // Les entrées de l’application dans « Moi » (DRV-320)
   driveAccount: {
     appMenu: 'Menu de l’application',
