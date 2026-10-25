@@ -884,6 +884,17 @@ export default {
     productsHome: 'Articles « J’en ai toujours »',
     manage: 'Gérer mes produits',
   },
+  // Liaison d'Alexa (VOX-401) : la page que l'application Alexa ouvre (`/alexa/lier`), une phrase et deux boutons
+  alexaLink: {
+    title: 'Alexa veut ajouter des produits à ta liste de courses.',
+    titleFailed: 'Lier Alexa',
+    authorize: 'Autoriser',
+    invalid: 'Ce lien ne marche pas. Reprends depuis l’application Alexa.',
+    refused: 'Alexa ne peut pas être liée avec ce lien. Reprends depuis l’application Alexa.',
+    tooMany: 'Trop d’essais pour le moment. Réessaie dans quelques minutes.',
+    disabled: 'Cette fonction n’est pas encore disponible.',
+    home: 'Retour à l’accueil',
+  },
   // Les entrées de l’application dans « Moi » (DRV-320)
   driveAccount: {
     appMenu: 'Menu de l’application',

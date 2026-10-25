@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+
+it('garde la requête OAuth entière dans une adresse de retour du site', () => {
+  const address =
+    '/alexa/lier?client_id=repas-alexa&redirect_uri=https%3A%2F%2Fpitangui.amazon.com%2Fx&state=a%26b&code_challenge=c&code_challenge_method=S256'
+
+  expect(safeRedirect(address)).toBe(address)
+})
 import { createPinia, setActivePinia } from 'pinia'
 
 import { json, me, stubApi } from '@/__tests__/helpers'
@@ -107,6 +114,61 @@ describe('sessionGuard', () => {
     vi.useRealTimers()
 
     expect(app.currentRoute.value.name).toBe('design')
+  })
+
+  describe('liaison d’Alexa', () => {
+    const address =
+      '/alexa/lier?client_id=repas-alexa&redirect_uri=https%3A%2F%2Fpitangui.amazon.com%2Fx&state=a%26b&code_challenge=c&code_challenge_method=S256&response_type=code'
+
+    it('renvoie un anonyme vers la connexion avec l’adresse complète, requête comprise', async () => {
+      vi.useFakeTimers()
+      anonymous()
+      const app = router()
+
+      const navigation = app.push(address)
+      await vi.advanceTimersByTimeAsync(400)
+      await navigation
+      vi.useRealTimers()
+
+      expect(app.currentRoute.value.name).toBe('login')
+      expect(app.currentRoute.value.query.redirect).toBe(address)
+    })
+
+    it('ramène l’utilisateur sur la page avec les mêmes paramètres après la connexion', async () => {
+      vi.useFakeTimers()
+      anonymous()
+      const app = router()
+      const navigation = app.push(address)
+      await vi.advanceTimersByTimeAsync(400)
+      await navigation
+      vi.useRealTimers()
+      const back = safeRedirect(app.currentRoute.value.query.redirect)
+
+      setActivePinia(createPinia())
+      authenticated()
+      await app.push(back)
+
+      expect(app.currentRoute.value.name).toBe('alexa-link')
+      expect(app.currentRoute.value.query).toMatchObject({
+        client_id: 'repas-alexa',
+        redirect_uri: 'https://pitangui.amazon.com/x',
+        state: 'a&b',
+        code_challenge: 'c',
+        code_challenge_method: 'S256',
+      })
+    })
+
+    it('laisse un utilisateur connecté ouvrir la page, sans aucun appel de plus', async () => {
+      const fetchMock = authenticated()
+      const app = router()
+
+      await app.push(address)
+
+      expect(app.currentRoute.value.name).toBe('alexa-link')
+      expect(fetchMock.mock.calls.map(([call]) => new URL((call as Request).url).pathname)).toEqual(
+        ['/api/auth/refresh', '/api/v1/me'],
+      )
+    })
   })
 
   describe('mot de passe oublié', () => {
