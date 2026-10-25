@@ -68,8 +68,8 @@ async function fakeBack(page: Page, options: Options = {}) {
 }
 
 const section = (page: Page) => page.locator('section', { hasText: 'Assistant vocal' })
-const phrase = 'Alexa est liée. Dis : « Alexa, demande à mes courses d’ajouter du pain ».'
-const toLink = 'Pour lier Alexa, ouvre l’application Alexa, Skills, mes courses.'
+const phrase = 'Alexa est liée. Dis : « Alexa, demande à Jarvis d’ajouter du pain ».'
+const toLink = 'Pour lier Alexa, ouvre l’application Alexa, Skills, Jarvis.'
 const help = 'Alexa ne voit pas ta liste de courses d’Amazon : dis bien le nom du skill.'
 
 test.describe('« Moi », assistant vocal, parcours simulé', () => {
