@@ -26,6 +26,13 @@ const TEXT_FILE = /\.(ts|vue|kt|kts|md|json|xml|yml|yaml|html|sh|js|mjs|py|txt)$
  */
 const COPIES_OF_THE_BACK = new Set(['api/openapi.json', 'src/api/schema.d.ts'])
 
+/**
+ * La SEULE adresse de messagerie réelle que le dépôt porte : le contact public de la politique de confidentialité (`/confidentialite`, STORE-010,
+ * décision D2 du propriétaire le 2026-10-25). Elle est affichée à tous sur cette page (`privacy.address` de `fr.ts`, tests de la page) : exception
+ * nommée, exacte, jamais un motif. Toute autre adresse d'un particulier reste interdite.
+ */
+const PUBLISHED_CONTACT = 'kantin.charignon@gmail.com'
+
 /** Les numéros de magasin inventés du chantier (et les formes volontairement fausses des tests d'adresse). */
 const FICTIONAL_STORES = new Set([
   '000000',
@@ -75,7 +82,9 @@ describe('les données du dépôt public sont inventées', () => {
           ...text.matchAll(
             /[\w.+-]+@(?:gmail|googlemail|hotmail|outlook|live|yahoo|icloud|orange|free|laposte|sfr|wanadoo)\.[a-z.]+/gi,
           ),
-        ].map((found) => `${path} : ${found[0].replace(/^[^@]*/, '…')}`),
+        ]
+          .filter((found) => found[0].toLowerCase() !== PUBLISHED_CONTACT)
+          .map((found) => `${path} : ${found[0].replace(/^[^@]*/, '…')}`),
       )
 
     expect(addresses).toEqual([])

@@ -243,3 +243,16 @@ describe('RegisterView', () => {
     expect(wrapper.find('[role="alert"]').text()).toBe(expected)
   })
 })
+
+// La confidentialité (STORE-010) : un lien discret sur les écrans d'authentification, lisible sans connexion
+describe('lien « Confidentialité » des écrans de connexion et d’inscription', () => {
+  it.each([
+    ['la connexion', LoginView, '/connexion'],
+    ['l’inscription', RegisterView, '/inscription'],
+  ] as const)('est sur l’écran de %s et mène à /confidentialite', async (_name, view, path) => {
+    const { wrapper } = await mountView(view, path)
+
+    const link = wrapper.findAll('a').find((candidate) => candidate.text() === 'Confidentialité')
+    expect(link?.attributes('href')).toBe('/confidentialite')
+  })
+})

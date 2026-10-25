@@ -1012,13 +1012,110 @@ export default {
       install: 'Touche « Installer ».',
     },
   },
-  // Les conditions d'utilisation du drive (DRV-504 puis DRV-628) : la SEULE page qui parle des risques, de la vie privée et des engagements.
+  // La politique de confidentialité PUBLIQUE de tout Repas, `/confidentialite` (STORE-010) : donnée à Google Play et à Amazon (skill Alexa). Chaque
+  // phrase a sa source dans le code du back (tables `user`, `refresh_token`, `user_app_version`, `voice_*`, `spoken_phrase_choice`, `drive_*`) ;
+  // la date de mise à jour change avec le texte. L'éditeur et l'adresse viennent du propriétaire (D2 de STORE-001) : nulle part ailleurs.
+  // Le jargon (jeton, OAuth, identité) n'y figure pas (privacy.spec.ts).
+  privacy: {
+    title: 'Confidentialité',
+    link: 'Confidentialité',
+    back: 'Retour à Repas',
+    updated: 'Dernière mise à jour : 25 octobre 2026.',
+    address: "kantin.charignon{'@'}gmail.com",
+    intro: 'Cette page dit ce que Repas retient sur toi, pourquoi, et comment tout effacer.',
+    who: {
+      title: 'Qui édite Repas',
+      publisher: 'Repas est édité par Kantin.',
+      contact: 'Pour toute question sur tes données, écris à cette adresse :',
+    },
+    keeps: {
+      title: 'Ce que Repas retient de toi',
+      email: 'Ton adresse e-mail, pour te connecter et t’envoyer les liens de confirmation.',
+      password: 'Ton mot de passe, sous une forme que personne ne peut relire.',
+      settings: 'Tes réglages, comme le nombre de personnes par défaut.',
+      status: 'L’état de ton compte : en attente, actif ou désactivé.',
+      counters: 'Deux compteurs : tes recettes créées et tes ingrédients créés.',
+      login: 'La date de ta dernière connexion. Seule la personne qui gère Repas peut la voir.',
+      session: 'Pour rester connecté, un cookie réservé à Repas garde ta session ouverte.',
+      content: 'Tes recettes, tes ingrédients, tes repas planifiés et tes listes de courses.',
+      others:
+        'Les autres comptes peuvent voir le nom de tes recettes et en copier une. Ton adresse e-mail ne leur est jamais montrée.',
+      app: 'Dans l’application Android : sa version, et la date à laquelle Repas l’a vue. Rien d’autre sur ton téléphone.',
+    },
+    drive: {
+      title: 'Si tu utilises l’envoi au drive',
+      store: 'Ton magasin Leclerc : son numéro, son adresse et le nom que tu lui donnes.',
+      products: 'Les produits que tu choisis, avec leur prix vu et la date.',
+      search: 'Les mots que tu as tapés pour trouver un produit.',
+      lists: 'Pour chaque liste : si elle est envoyée, et la date d’envoi.',
+      never: 'Repas ne voit ni ton identifiant Leclerc, ni ton mot de passe, ni ton panier.',
+      own: 'L’envoi se fait dans l’application, avec ta propre connexion à Leclerc.',
+      terms: 'Le détail est dans les conditions d’utilisation du drive, depuis « Moi ».',
+    },
+    voice: {
+      title: 'La commande vocale avec Alexa',
+      intro: 'Une fois liée à ton compte, Alexa ajoute des produits à ta liste.',
+      link: 'Repas retient la liaison avec ton compte Alexa et son identifiant. Il retient aussi sa date de création et celle du dernier usage.',
+      access:
+        'Repas donne à Alexa un droit d’ajouter à ta liste. Repas ne le garde que sous une forme illisible.',
+      items: 'Les produits que tu dictes sont ajoutés à ta liste, comme si tu les tapais.',
+      phrases:
+        'Si tu choisis une proposition d’Alexa, Repas retient ta phrase, simplifiée, pour ce produit.',
+      create: 'Si tu demandes un nouveau produit, il est créé dans tes ingrédients.',
+      not: 'Repas ne garde aucun enregistrement de ta voix. Il ne garde pas non plus le texte complet de ce que tu dis. Ni l’identifiant de ton appareil Alexa.',
+      amazon: 'Ta voix est traitée par Amazon, selon sa propre politique de confidentialité.',
+      amazonLink: 'Lire la politique d’Amazon',
+      unlink: 'Tu retires la liaison quand tu veux, dans « Moi », rubrique « Assistant vocal ».',
+    },
+    never: {
+      title: 'Ce que Repas ne fait pas',
+      ads: 'Repas ne montre aucune publicité et ne mesure pas l’audience de ses pages.',
+      sell: 'Repas ne vend pas tes données.',
+      sensors: 'Il ne lit ni ta position, ni tes contacts, ni tes photos.',
+    },
+    share: {
+      title: 'Qui reçoit des données',
+      host: 'Le serveur de Repas est hébergé chez DigitalOcean.',
+      mail: 'Les e-mails de confirmation et de mot de passe oublié passent par Brevo.',
+      amazon: 'Amazon reçoit ce que tu dis à Alexa, comme pour toute demande.',
+      logs: 'Comme tout serveur, Repas note l’heure, l’adresse Internet et la page de chaque demande. Ce journal sert à réparer les pannes.',
+      nobody: 'Personne d’autre ne reçoit tes données.',
+    },
+    duration: {
+      title: 'Combien de temps',
+      while: 'Tes données restent tant que ton compte existe.',
+      erase:
+        'Quand ton compte est supprimé, tout part avec lui : recettes, listes, produits, liaisons Alexa.',
+      copies: 'Une recette que quelqu’un a copiée reste chez lui, sans lien avec toi.',
+      shared:
+        'Les descriptions de produits Leclerc, communes à tous, restent sans aucun lien avec toi.',
+      backups:
+        'Une sauvegarde est faite chaque nuit, et les 14 dernières sont gardées. Une donnée effacée peut y rester environ deux semaines.',
+    },
+    rights: {
+      title: 'Tes droits',
+      ask: 'Tu peux demander à voir, corriger ou effacer tes données.',
+      delete: 'Pour supprimer ton compte et tout ce qu’il contient, écris à Kantin.',
+      self: 'Tu peux déjà retirer toi-même une liaison Alexa, une recette ou une liste.',
+    },
+    children: {
+      title: 'Les enfants',
+      text: 'Repas ne s’adresse pas aux enfants de moins de 13 ans.',
+    },
+    changes: {
+      title: 'Quand ce texte change',
+      date: 'La date de la dernière mise à jour est en haut de cette page.',
+      why: 'Ce texte change quand Repas retient de nouvelles données.',
+    },
+  },
+  // Les conditions d'utilisation du drive (DRV-504 puis DRV-628) : la SEULE page qui parle des risques et des engagements du drive (la politique de confidentialité de tout Repas, `privacy`, est une autre page, publique).
   // Les écrans du parcours n'en disent rien (voice-and-glossary.spec.ts échoue sinon) ; on l'ouvre si on le veut, depuis « Moi » et l'aide.
   // À garder identique au fond à `docs/drive/note-vie-privee.md` du dépôt back.
   driveTerms: {
     title: 'Conditions d’utilisation du drive',
     link: 'Conditions d’utilisation',
     back: 'Moi',
+    privacyLink: 'Confidentialité de tout Repas',
     intro:
       'Envoyer ta liste au drive, c’est Repas qui prépare la liste et l’application qui la met dans ton panier Leclerc, avec ta connexion à toi. Voici comment cela se passe, ce que Repas garde, ce qu’il ne voit pas, les risques, et comment tout effacer.',
     how: {

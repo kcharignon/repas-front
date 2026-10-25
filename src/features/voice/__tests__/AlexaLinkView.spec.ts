@@ -113,7 +113,7 @@ describe("page d'autorisation d'Alexa", () => {
       const { wrapper, fetchMock } = await open(search)
 
       expect(wrapper.find('[role="alert"]').text()).toBe(text)
-      expect(wrapper.find('a').attributes('href')).toBe('/')
+      expect(wrapper.find('main a').attributes('href')).toBe('/')
       expect(wrapper.find('button').exists()).toBe(false)
       expect(calls(fetchMock)).toEqual([])
     },
@@ -144,7 +144,7 @@ describe("page d'autorisation d'Alexa", () => {
       await flushPromises()
 
       expect(wrapper.find('[role="alert"]').text()).toBe(text)
-      expect(wrapper.find('a').attributes('href')).toBe('/')
+      expect(wrapper.find('main a').attributes('href')).toBe('/')
       expect(wrapper.find('button').exists()).toBe(false)
       expect(assign).not.toHaveBeenCalled()
     },
