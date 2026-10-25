@@ -32,6 +32,17 @@ describe('vues de l’application connectée', () => {
     expect(useSessionStore().isAuthenticated).toBe(false)
   })
 
+  it('« Moi » a un lien discret vers la confidentialité (STORE-010)', async () => {
+    stubApi(signedIn)
+    const { plugins, router } = appContext()
+    await router.push('/moi')
+    await useSessionStore().login('alexiane@example.com', 'x')
+    const wrapper = mount(AccountView, { global: { plugins } })
+
+    const link = wrapper.findAll('a').find((candidate) => candidate.text() === 'Confidentialité')
+    expect(link?.attributes('href')).toBe('/confidentialite')
+  })
+
   it('la coque propose la navigation et marque la page courante', async () => {
     const { plugins, router } = appContext()
     await router.push('/moi')

@@ -65,6 +65,14 @@ async function logout() {
 
     <AccountCredits />
 
+    <!-- La confidentialité de tout Repas (STORE-010) : un lien discret, la page est publique -->
+    <RouterLink
+      :to="{ name: 'privacy' }"
+      class="inline-flex min-h-11 items-center self-start text-sm text-muted underline hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
+    >
+      {{ t('privacy.link') }}
+    </RouterLink>
+
     <div>
       <UiButton variant="secondary" @click="logout">{{ t('account.logout') }}</UiButton>
     </div>

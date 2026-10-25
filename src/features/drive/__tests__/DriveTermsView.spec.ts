@@ -102,6 +102,15 @@ describe('conditions d’utilisation du drive', () => {
     )
   })
 
+  it('renvoie à la confidentialité de tout Repas (STORE-010), une page publique', async () => {
+    const { wrapper } = await open()
+
+    const link = wrapper
+      .findAll('a')
+      .find((candidate) => candidate.text() === 'Confidentialité de tout Repas')
+    expect(link?.attributes('href')).toBe('/confidentialite')
+  })
+
   it('ne demande rien : ni case à cocher, ni bouton, ni fenêtre — un lien pour revenir à « Moi »', async () => {
     const { wrapper } = await open()
 

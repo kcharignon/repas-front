@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { RouterLink } from 'vue-router'
 
 import logo from '@/assets/logo.png'
 
@@ -19,6 +20,12 @@ const { t } = useI18n()
       <div
         class="pointer-events-none absolute -bottom-24 right-10 size-44 rounded-full bg-accent/25"
       />
+      <!-- La confidentialité (STORE-010) : un lien discret dans l'angle, il ne prend aucune hauteur (le bouton principal reste visible à 360 × 640) -->
+      <RouterLink
+        :to="{ name: 'privacy' }"
+        class="absolute top-1 right-2 z-10 inline-flex min-h-11 items-center px-2 text-sm text-white/90 underline hover:text-white focus-visible:outline-2 focus-visible:outline-white"
+        >{{ t('privacy.link') }}</RouterLink
+      >
       <!-- Sur téléphone le logo et le nom tiennent sur une ligne : le bouton principal du formulaire se voit sans défiler à 360 × 640 -->
       <div class="relative flex items-center gap-3 md:block">
         <img :src="logo" alt="" class="h-12 w-[54px] object-contain md:h-[75px] md:w-[84px]" />

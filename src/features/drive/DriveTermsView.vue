@@ -56,5 +56,12 @@ const sections = [
         </li>
       </ul>
     </section>
+    <!-- Les conditions du drive et la confidentialité de tout Repas (STORE-010) se renvoient l'une à l'autre -->
+    <RouterLink
+      :to="{ name: 'privacy' }"
+      class="inline-flex min-h-11 items-center self-start font-bold text-primary underline focus-visible:outline-2 focus-visible:outline-primary"
+    >
+      {{ t('driveTerms.privacyLink') }}
+    </RouterLink>
   </main>
 </template>
