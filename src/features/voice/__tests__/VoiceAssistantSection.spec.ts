@@ -46,7 +46,7 @@ describe('section « Assistant vocal » de « Moi »', () => {
   })
 
   it('le nom du skill vient d’une seule constante', () => {
-    expect(ALEXA_SKILL_NAME).toBe('mes courses')
+    expect(ALEXA_SKILL_NAME).toBe('Jarvis')
   })
 
   it('est invisible quand la fonction est coupée (404 VOICE_DISABLED), sans erreur', async () => {
@@ -82,7 +82,7 @@ describe('section « Assistant vocal » de « Moi »', () => {
 
     expect(wrapper.find('h2').text()).toBe('Assistant vocal')
     expect(wrapper.findAll('p').map((p) => p.text())).toEqual([
-      'Pour lier Alexa, ouvre l’application Alexa, Skills, mes courses.',
+      'Pour lier Alexa, ouvre l’application Alexa, Skills, Jarvis.',
       'Alexa ne voit pas ta liste de courses d’Amazon : dis bien le nom du skill.',
     ])
     expect(wrapper.find('button').exists()).toBe(false)
@@ -92,7 +92,7 @@ describe('section « Assistant vocal » de « Moi »', () => {
     const { wrapper } = await open({ [links]: () => json({ member: [link], totalItems: 1 }) })
 
     expect(wrapper.findAll('p').map((p) => p.text())).toEqual([
-      'Alexa est liée. Dis : « Alexa, demande à mes courses d’ajouter du pain ».',
+      'Alexa est liée. Dis : « Alexa, demande à Jarvis d’ajouter du pain ».',
       'Alexa ne voit pas ta liste de courses d’Amazon : dis bien le nom du skill.',
     ])
     expect(wrapper.find('button').text()).toBe('Délier Alexa')
@@ -121,9 +121,7 @@ describe('section « Assistant vocal » de « Moi »', () => {
     await flushPromises()
 
     expect(calls(fetchMock)).toContain(unlink('l1'))
-    expect(wrapper.text()).toContain(
-      'Pour lier Alexa, ouvre l’application Alexa, Skills, mes courses.',
-    )
+    expect(wrapper.text()).toContain('Pour lier Alexa, ouvre l’application Alexa, Skills, Jarvis.')
     expect(wrapper.text()).not.toContain('Alexa est liée')
     expect(body()).not.toContain('Délier Alexa ?')
   })
