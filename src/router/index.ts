@@ -69,6 +69,14 @@ export const routes: RouteRecordRaw[] = [
   },
   ...catalog,
   {
+    // La politique de confidentialité de tout Repas (STORE-010) : publique, SANS redirection, car son adresse est donnée à Google Play et à Amazon
+    // (skill Alexa). Une page rendue par le navigateur : le Caddy du front renvoie `index.html` (200) pour cette adresse.
+    path: '/confidentialite',
+    name: 'privacy',
+    component: () => import('@/views/PrivacyView.vue'),
+    meta: { public: true },
+  },
+  {
     // La liaison du compte pour Alexa (VOX-401) : l'application Alexa ouvre cette page ; sans session, la garde renvoie à la connexion
     // avec l'adresse complète (requête comprise) et la connexion ramène ici.
     path: '/alexa/lier',
