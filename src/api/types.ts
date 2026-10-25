@@ -47,3 +47,7 @@ export type DriveEstimate = Schemas['DriveEstimateDTO']
 export type DriveEstimateLine = Schemas['DriveEstimateLineDTO']
 export type DriveEstimateStatus = DriveEstimateLine['status']
 export type DriveStorePayload = Schemas['DriveStorePayload']
+
+// Commande vocale Alexa : la liaison du compte (VOX-401) et les liaisons de l'utilisateur (VOX-402)
+export type AlexaAuthorizationPayload = Schemas['IssueAuthorizationCodePayload']
+export type VoiceLink = Schemas['VoiceLinkDTO']

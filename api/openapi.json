@@ -92,7 +92,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "Les doublons possibles de l'utilisateur : des paires de SES ingr\u00e9dients (jamais un commun, jamais ceux d'un autre), du m\u00eame rayon, dont les noms se ressemblent (m\u00eame nom une fois normalis\u00e9, \u00e0 une faute de frappe pr\u00e8s, ou assez proche : score de 0,90 au moins) et qu'il n'a pas \u00e9cart\u00e9es par \u00ab Pas le m\u00eame \u00bb. Tri\u00e9es de la plus probable \u00e0 la moins probable, 50 au plus, le m\u00eame ordre \u00e0 chaque appel. Chaque paire porte de quoi afficher sa carte (les deux ingr\u00e9dients avec leurs nombres de recettes et de listes, l'ingr\u00e9dient \u00e0 garder par d\u00e9faut). Vide pour un compte sans ingr\u00e9dient personnel, un administrateur compris. Ce que la fusion ferait exactement : `GET \u2026/merge-preview`",
+                "summary": "Les doublons possibles de l'utilisateur : des paires de SES ingr\u00e9dients (jamais ceux d'un autre, un administrateur compris), du m\u00eame rayon, dont les noms se ressemblent (m\u00eame nom une fois normalis\u00e9, \u00e0 une faute de frappe pr\u00e8s, ou assez proche : score de 0,90 au moins) et qu'il n'a pas \u00e9cart\u00e9es par \u00ab Pas le m\u00eame \u00bb. Tri\u00e9es de la plus probable \u00e0 la moins probable, 50 au plus, le m\u00eame ordre \u00e0 chaque appel. Chaque paire porte de quoi afficher sa carte (les deux ingr\u00e9dients avec leurs nombres de recettes et de listes, l'ingr\u00e9dient \u00e0 garder par d\u00e9faut). Vide pour un compte qui n'a pas deux ingr\u00e9dients. Ce que la fusion ferait exactement : `GET \u2026/merge-preview`",
                 "operationId": "get_api_list_duplicate_ingredients",
                 "responses": {
                     "200": {
@@ -125,7 +125,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "Recherche d'ingr\u00e9dients par nom, du plus pertinent au moins pertinent, avec leur rayon : ceux de l'utilisateur authentifi\u00e9 et les communs qu'il n'a pas adopt\u00e9s (un commun adopt\u00e9 est remplac\u00e9 par sa copie, qui est \u00e0 lui)",
+                "summary": "Recherche d'ingr\u00e9dients par nom, du plus pertinent au moins pertinent, avec leur rayon : ceux de l'utilisateur authentifi\u00e9, jamais ceux d'un autre (un administrateur compris)",
                 "operationId": "get_api_search_ingredients",
                 "parameters": [
                     {
@@ -234,7 +234,7 @@
                 "tags": [
                     "Shopping lists"
                 ],
-                "summary": "Ajoute 1 \u00e0 la quantit\u00e9 d'un ingr\u00e9dient dans la liste active de l'utilisateur. Le slug d'un commun que l'utilisateur a adopt\u00e9 d\u00e9signe sa copie, qui est celle de la liste ; un utilisateur qui a d\u00e9j\u00e0 adopt\u00e9 des communs adopte \u00e0 la vol\u00e9e celui qu'il utilise pour la premi\u00e8re fois",
+                "summary": "Ajoute 1 \u00e0 la quantit\u00e9 d'un ingr\u00e9dient dans la liste active de l'utilisateur. Un ancien slug (ancien commun dont l'utilisateur a re\u00e7u une copie, ingr\u00e9dient fusionn\u00e9) d\u00e9signe son ingr\u00e9dient actuel, qui est celui de la liste ; l'ingr\u00e9dient d'un autre utilisateur est inconnu",
                 "operationId": "post_api_increase_ingredient",
                 "parameters": [
                     {
@@ -303,7 +303,7 @@
                 "tags": [
                     "Conversions"
                 ],
-                "summary": "Conversions entre unit\u00e9s (administrateur), tri\u00e9es par ingr\u00e9dient puis par unit\u00e9 de d\u00e9part",
+                "summary": "Conversions entre unit\u00e9s (administrateur), tri\u00e9es par ingr\u00e9dient puis par unit\u00e9 de d\u00e9part : les conversions g\u00e9n\u00e9rales et celles de SES ingr\u00e9dients, jamais celles des ingr\u00e9dients d'un autre utilisateur",
                 "operationId": "get_api_list_conversions",
                 "responses": {
                     "200": {
@@ -337,7 +337,7 @@
                 "tags": [
                     "Conversions"
                 ],
-                "summary": "Cr\u00e9e une conversion entre deux unit\u00e9s (administrateur), propre \u00e0 un ingr\u00e9dient ou commune \u00e0 tous",
+                "summary": "Cr\u00e9e une conversion entre deux unit\u00e9s (administrateur), propre \u00e0 l'un de SES ingr\u00e9dients ou g\u00e9n\u00e9rale (commune \u00e0 tous les ingr\u00e9dients)",
                 "operationId": "post_api_create_conversion",
                 "requestBody": {
                     "required": true,
@@ -365,7 +365,7 @@
                         "description": "R\u00e9serv\u00e9 aux administrateurs"
                     },
                     "404": {
-                        "description": "Unit\u00e9 ou ingr\u00e9dient inconnu"
+                        "description": "Unit\u00e9 ou ingr\u00e9dient inconnu, ou ingr\u00e9dient d'un autre utilisateur (un administrateur n'a pas de passe-droit)"
                     },
                     "422": {
                         "description": "Corps de la requ\u00eate invalide"
@@ -450,7 +450,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "Ingr\u00e9dients que l'utilisateur authentifi\u00e9 peut utiliser, tri\u00e9s par nom : les siens et les communs qu'il n'a pas adopt\u00e9s (un commun adopt\u00e9 est remplac\u00e9 par sa copie, qui est \u00e0 lui) ; choix des recettes",
+                "summary": "Ingr\u00e9dients que l'utilisateur authentifi\u00e9 peut utiliser, tri\u00e9s par nom : les siens seulement, jamais ceux d'un autre (un administrateur compris) ; choix des recettes",
                 "operationId": "get_api_list_available_ingredients",
                 "parameters": [
                     {
@@ -542,7 +542,7 @@
                 "tags": [
                     "Recipes"
                 ],
-                "summary": "Cr\u00e9e une recette de l'utilisateur connect\u00e9. Le slug d'un commun que l'utilisateur a adopt\u00e9 est remplac\u00e9 par celui de sa copie ; un utilisateur qui a d\u00e9j\u00e0 adopt\u00e9 des communs adopte \u00e0 la vol\u00e9e celui qu'il utilise pour la premi\u00e8re fois",
+                "summary": "Cr\u00e9e une recette de l'utilisateur connect\u00e9. Un ancien slug (ancien commun dont l'utilisateur a re\u00e7u une copie, ingr\u00e9dient fusionn\u00e9) est remplac\u00e9 par celui de son ingr\u00e9dient actuel ; l'ingr\u00e9dient d'un autre utilisateur est inconnu",
                 "operationId": "post_api_create_recipe",
                 "requestBody": {
                     "required": true,
@@ -812,7 +812,7 @@
                 "tags": [
                     "Conversions"
                 ],
-                "summary": "D\u00e9tail d'une conversion entre unit\u00e9s (administrateur)",
+                "summary": "D\u00e9tail d'une conversion entre unit\u00e9s (administrateur) : une conversion g\u00e9n\u00e9rale ou celle de l'un de SES ingr\u00e9dients",
                 "operationId": "get_api_get_conversion",
                 "parameters": [
                     {
@@ -839,7 +839,7 @@
                         "description": "R\u00e9serv\u00e9 aux administrateurs"
                     },
                     "404": {
-                        "description": "Conversion inconnue"
+                        "description": "Conversion inconnue, ou propre \u00e0 l'ingr\u00e9dient d'un autre utilisateur (un administrateur n'a pas de passe-droit)"
                     }
                 }
             },
@@ -847,7 +847,7 @@
                 "tags": [
                     "Conversions"
                 ],
-                "summary": "Remplace une conversion entre unit\u00e9s (administrateur)",
+                "summary": "Remplace une conversion entre unit\u00e9s (administrateur) : une conversion g\u00e9n\u00e9rale ou celle de l'un de SES ingr\u00e9dients",
                 "operationId": "put_api_update_conversion",
                 "parameters": [
                     {
@@ -877,7 +877,7 @@
                         "description": "R\u00e9serv\u00e9 aux administrateurs"
                     },
                     "404": {
-                        "description": "Conversion, unit\u00e9 ou ingr\u00e9dient inconnu"
+                        "description": "Conversion, unit\u00e9 ou ingr\u00e9dient inconnu, ou conversion ou ingr\u00e9dient d'un autre utilisateur (un administrateur n'a pas de passe-droit)"
                     },
                     "422": {
                         "description": "Corps de la requ\u00eate invalide"
@@ -965,7 +965,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "D\u00e9tail d'un ingr\u00e9dient commun ou cr\u00e9\u00e9 par l'utilisateur (un administrateur voit tous les ingr\u00e9dients). Un commun que l'utilisateur a adopt\u00e9 se lit encore, en lecture seule (`canEdit` faux) : une page ouverte avant l'adoption peut s'afficher",
+                "summary": "D\u00e9tail d'un ingr\u00e9dient de l'utilisateur authentifi\u00e9. Celui d'un autre utilisateur, un administrateur compris, est inconnu (404) ; un ancien slug (commun adopt\u00e9, ingr\u00e9dient fusionn\u00e9) ne se lit plus",
                 "operationId": "get_api_get_ingredient",
                 "parameters": [
                     {
@@ -989,7 +989,7 @@
                         }
                     },
                     "404": {
-                        "description": "Ingr\u00e9dient inconnu, ou cr\u00e9\u00e9 par un autre utilisateur"
+                        "description": "Ingr\u00e9dient inconnu, ou \u00e0 un autre utilisateur (un administrateur n'a pas de passe-droit)"
                     }
                 }
             },
@@ -997,7 +997,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "Remplace un ingr\u00e9dient de l'utilisateur (un ingr\u00e9dient commun n'est modifiable que par un administrateur) ; son image est conserv\u00e9e",
+                "summary": "Remplace un ingr\u00e9dient de l'utilisateur (seul son propri\u00e9taire le modifie, un administrateur compris) ; son image est conserv\u00e9e",
                 "description": "Le champ facultatif `isBase` pose le marqueur \u00ab ingr\u00e9dient de base \u00bb : absent ou `null`, il reste inchang\u00e9. Seul le propri\u00e9taire du catalogue peut le changer, sur un ingr\u00e9dient \u00e0 lui : toute autre valeur que l'actuelle venant d'un autre compte donne `403` `INGREDIENT_BASE_FORBIDDEN`, et rien n'est \u00e9crit.",
                 "operationId": "put_api_update_ingredient",
                 "parameters": [
@@ -1025,7 +1025,7 @@
                         "description": "Ingr\u00e9dient modifi\u00e9"
                     },
                     "403": {
-                        "description": "L'ingr\u00e9dient appartient \u00e0 un autre utilisateur, ou il est commun"
+                        "description": "L'ingr\u00e9dient appartient \u00e0 un autre utilisateur (un administrateur n'a pas de passe-droit)"
                     },
                     "404": {
                         "description": "Ingr\u00e9dient, rayon ou unit\u00e9 inconnu"
@@ -1039,7 +1039,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "Supprime un ingr\u00e9dient de l'utilisateur, avec ses conversions (un ingr\u00e9dient commun n'est supprimable que par un administrateur)",
+                "summary": "Supprime un ingr\u00e9dient de l'utilisateur, avec ses conversions (seul son propri\u00e9taire le supprime, un administrateur compris)",
                 "operationId": "delete_api_remove_ingredient",
                 "parameters": [
                     {
@@ -1056,7 +1056,7 @@
                         "description": "Ingr\u00e9dient supprim\u00e9"
                     },
                     "403": {
-                        "description": "L'ingr\u00e9dient appartient \u00e0 un autre utilisateur, ou il est commun"
+                        "description": "L'ingr\u00e9dient appartient \u00e0 un autre utilisateur (un administrateur n'a pas de passe-droit)"
                     },
                     "404": {
                         "description": "Ingr\u00e9dient inconnu"
@@ -1072,7 +1072,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "Ce que la fusion de l'ingr\u00e9dient de l'URL (absorb\u00e9) dans `into` (gard\u00e9) ferait, sans rien \u00e9crire : recettes, listes et choix du drive qui se d\u00e9placent, nombre de recettes et de listes qui utiliseront le gard\u00e9 APR\u00c8S la fusion, conversions que le gard\u00e9 r\u00e9cup\u00e9rerait, unit\u00e9s qui manqueraient encore, pourquoi elle serait refus\u00e9e. M\u00eame verdict que `POST \u2026/merge`. Toujours 200 quand les deux ingr\u00e9dients sont \u00e0 l'utilisateur ou communs : un refus de r\u00e8gle est dans `blockedBy`",
+                "summary": "Ce que la fusion de l'ingr\u00e9dient de l'URL (absorb\u00e9) dans `into` (gard\u00e9) ferait, sans rien \u00e9crire : recettes, listes et choix du drive qui se d\u00e9placent, nombre de recettes et de listes qui utiliseront le gard\u00e9 APR\u00c8S la fusion, conversions que le gard\u00e9 r\u00e9cup\u00e9rerait, unit\u00e9s qui manqueraient encore, pourquoi elle serait refus\u00e9e. M\u00eame verdict que `POST \u2026/merge`. Toujours 200 quand les deux ingr\u00e9dients sont \u00e0 l'utilisateur : un refus de r\u00e8gle est dans `blockedBy`",
                 "operationId": "get_api_get_merge_preview",
                 "parameters": [
                     {
@@ -1162,7 +1162,7 @@
                 "tags": [
                     "Recipes"
                 ],
-                "summary": "Remplace une recette de l'utilisateur : nom, personnes, type et lignes (les lignes absentes du corps sont supprim\u00e9es). Le slug d'un commun que l'auteur a adopt\u00e9 est remplac\u00e9 par celui de sa copie, comme \u00e0 la cr\u00e9ation",
+                "summary": "Remplace une recette de l'utilisateur : nom, personnes, type et lignes (les lignes absentes du corps sont supprim\u00e9es). Un ancien slug est remplac\u00e9 par celui de l'ingr\u00e9dient actuel de l'auteur, comme \u00e0 la cr\u00e9ation",
                 "operationId": "put_api_update_recipe",
                 "parameters": [
                     {
@@ -1569,7 +1569,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "Ingr\u00e9dients de l'utilisateur authentifi\u00e9 dans un rayon, tri\u00e9s par nom : les siens et les communs qu'il n'a pas adopt\u00e9s (un commun adopt\u00e9 est remplac\u00e9 par sa copie, qui est \u00e0 lui)",
+                "summary": "Ingr\u00e9dients de l'utilisateur authentifi\u00e9 dans un rayon, tri\u00e9s par nom : les siens seulement, jamais ceux d'un autre (un administrateur compris)",
                 "operationId": "get_api_list_ingredients_by_department",
                 "parameters": [
                     {
@@ -1583,7 +1583,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Le rayon et ses ingr\u00e9dients (collection `member`) ; `canEdit` indique si l'utilisateur peut modifier l'ingr\u00e9dient",
+                        "description": "Le rayon et ses ingr\u00e9dients (collection `member`) ; `canEdit` est toujours vrai (l'ingr\u00e9dient est \u00e0 l'utilisateur) ; le champ reste pour les clients existants",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1618,7 +1618,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "Les ingr\u00e9dients de l'utilisateur (les siens, jamais un commun) avec lesquels l'ingr\u00e9dient de l'URL peut \u00eatre fusionn\u00e9, 30 au plus : ceux du m\u00eame rayon d'abord, les plus ressemblants en t\u00eate, puis les autres rayons. Choix de l'ingr\u00e9dient \u00e0 garder",
+                "summary": "Les ingr\u00e9dients de l'utilisateur (les siens) avec lesquels l'ingr\u00e9dient de l'URL peut \u00eatre fusionn\u00e9, 30 au plus : ceux du m\u00eame rayon d'abord, les plus ressemblants en t\u00eate, puis les autres rayons. Choix de l'ingr\u00e9dient \u00e0 garder",
                 "operationId": "get_api_list_merge_candidates",
                 "parameters": [
                     {
@@ -1668,7 +1668,7 @@
                         "description": "L'ingr\u00e9dient est inconnu ou appartient \u00e0 un autre utilisateur (m\u00eame pour un administrateur)"
                     },
                     "422": {
-                        "description": "Param\u00e8tre `q` invalide (trop long), ou `CANNOT_MERGE_COMMON_INGREDIENT` : l'ingr\u00e9dient est un commun"
+                        "description": "Param\u00e8tre `q` invalide (trop long). `CANNOT_MERGE_COMMON_INGREDIENT` n'est plus renvoy\u00e9 (il n'y a plus d'ingr\u00e9dient commun), gard\u00e9 pour les clients existants"
                     }
                 }
             }
@@ -1760,7 +1760,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "\u00ab Pas le m\u00eame \u00bb : l'utilisateur dit que l'ingr\u00e9dient de l'URL et `other` ne sont pas un doublon. La paire (dans un sens ou dans l'autre) n'est plus jamais propos\u00e9e par `GET /ingredients/duplicates`, m\u00eame apr\u00e8s un renommage. Rien d'autre ne change : aucun ingr\u00e9dient, aucune recette, aucune liste. Rejou\u00e9e, elle r\u00e9pond 204 sans rien faire. Les deux ingr\u00e9dients doivent \u00eatre \u00e0 l'utilisateur, jamais un commun, m\u00eame pour un administrateur",
+                "summary": "\u00ab Pas le m\u00eame \u00bb : l'utilisateur dit que l'ingr\u00e9dient de l'URL et `other` ne sont pas un doublon. La paire (dans un sens ou dans l'autre) n'est plus jamais propos\u00e9e par `GET /ingredients/duplicates`, m\u00eame apr\u00e8s un renommage. Rien d'autre ne change : aucun ingr\u00e9dient, aucune recette, aucune liste. Rejou\u00e9e, elle r\u00e9pond 204 sans rien faire. Les deux ingr\u00e9dients doivent \u00eatre \u00e0 l'utilisateur, m\u00eame pour un administrateur",
                 "operationId": "post_api_mark_ingredients_distinct",
                 "parameters": [
                     {
@@ -1787,7 +1787,7 @@
                         "description": "Paire m\u00e9moris\u00e9e, ou d\u00e9j\u00e0 m\u00e9moris\u00e9e"
                     },
                     "404": {
-                        "description": "Un des deux ingr\u00e9dients est inconnu, commun, ou appartient \u00e0 un autre utilisateur (m\u00eame pour un administrateur)"
+                        "description": "Un des deux ingr\u00e9dients est inconnu, ou appartient \u00e0 un autre utilisateur (m\u00eame pour un administrateur)"
                     },
                     "422": {
                         "description": "Corps invalide, ou `CANNOT_BE_DISTINCT_FROM_ITSELF` : les deux ingr\u00e9dients sont le m\u00eame"
@@ -1800,7 +1800,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "Fusionne deux ingr\u00e9dients de l'utilisateur : celui de l'URL dispara\u00eet, `into` est gard\u00e9. Ses recettes, ses listes de courses et ses choix du drive qui utilisaient le premier utilisent le second, qui r\u00e9cup\u00e8re aussi les conversions du premier qui lui manquent (les siennes gagnent en cas de conflit) ; les anciens slugs restent r\u00e9solus. Les deux ingr\u00e9dients doivent \u00eatre \u00e0 l'utilisateur, jamais un commun, m\u00eame pour un administrateur. Rejou\u00e9e apr\u00e8s un succ\u00e8s, elle r\u00e9pond 204 sans rien faire. Aper\u00e7u sans \u00e9criture : `GET \u2026/merge-preview`",
+                "summary": "Fusionne deux ingr\u00e9dients de l'utilisateur : celui de l'URL dispara\u00eet, `into` est gard\u00e9. Ses recettes, ses listes de courses et ses choix du drive qui utilisaient le premier utilisent le second, qui r\u00e9cup\u00e8re aussi les conversions du premier qui lui manquent (les siennes gagnent en cas de conflit) ; les anciens slugs restent r\u00e9solus. Les deux ingr\u00e9dients doivent \u00eatre \u00e0 l'utilisateur, m\u00eame pour un administrateur. Rejou\u00e9e apr\u00e8s un succ\u00e8s, elle r\u00e9pond 204 sans rien faire. Aper\u00e7u sans \u00e9criture : `GET \u2026/merge-preview`",
                 "operationId": "post_api_merge_ingredients",
                 "parameters": [
                     {
@@ -1833,7 +1833,7 @@
                         "description": "`INGREDIENT_IN_SENT_LIST` : une liste envoy\u00e9e au drive utilise l'un des deux (la rouvrir ou la terminer d'abord) ; `INGREDIENT_USED_BY_ANOTHER_USER` : une ligne d'un autre utilisateur utilise l'ingr\u00e9dient de l'URL (donn\u00e9e h\u00e9rit\u00e9e) ; `INGREDIENT_MERGE_CONFLICT` : une \u00e9criture concurrente a pos\u00e9 une r\u00e9f\u00e9rence sur l'ingr\u00e9dient de l'URL, rien n'a chang\u00e9, r\u00e9essayer"
                     },
                     "422": {
-                        "description": "Corps invalide ; `CANNOT_MERGE_INTO_ITSELF` : les deux ingr\u00e9dients sont le m\u00eame ; `CANNOT_MERGE_COMMON_INGREDIENT` : l'un des deux est un commun ; `MERGE_UNIT_MISSING` : une unit\u00e9 de l'ingr\u00e9dient de l'URL ne se convertit pas dans l'unit\u00e9 d'achat de `into`, m\u00eame apr\u00e8s avoir r\u00e9cup\u00e9r\u00e9 les conversions de l'ingr\u00e9dient de l'URL, rien n'a chang\u00e9"
+                        "description": "Corps invalide ; `CANNOT_MERGE_INTO_ITSELF` : les deux ingr\u00e9dients sont le m\u00eame ; `CANNOT_MERGE_COMMON_INGREDIENT` : n'est plus renvoy\u00e9 (il n'y a plus d'ingr\u00e9dient commun), gard\u00e9 pour les clients existants ; `MERGE_UNIT_MISSING` : une unit\u00e9 de l'ingr\u00e9dient de l'URL ne se convertit pas dans l'unit\u00e9 d'achat de `into`, m\u00eame apr\u00e8s avoir r\u00e9cup\u00e9r\u00e9 les conversions de l'ingr\u00e9dient de l'URL, rien n'a chang\u00e9"
                     }
                 }
             }
@@ -1940,7 +1940,7 @@
                 "tags": [
                     "Shopping lists"
                 ],
-                "summary": "Retire 1 \u00e0 la quantit\u00e9 d'un ingr\u00e9dient dans la liste active de l'utilisateur (la ligne dispara\u00eet \u00e0 z\u00e9ro). Le slug d'un commun que l'utilisateur a adopt\u00e9 d\u00e9signe sa copie, qui est celle de la liste",
+                "summary": "Retire 1 \u00e0 la quantit\u00e9 d'un ingr\u00e9dient dans la liste active de l'utilisateur (la ligne dispara\u00eet \u00e0 z\u00e9ro). Un ancien slug (ancien commun dont l'utilisateur a re\u00e7u une copie, ingr\u00e9dient fusionn\u00e9) d\u00e9signe son ingr\u00e9dient actuel, qui est celui de la liste",
                 "operationId": "post_api_decrease_ingredient",
                 "parameters": [
                     {
@@ -2657,7 +2657,7 @@
                 "tags": [
                     "Drive"
                 ],
-                "summary": "Remplace d'un coup la pr\u00e9f\u00e9rence de l'utilisateur connect\u00e9 pour un ingr\u00e9dient : produits accept\u00e9s dans l'ordre, produits refus\u00e9s, ou \u00ab j'en ai toujours \u00bb (sans produit ni \u00ab j'en ai toujours \u00bb, la pr\u00e9f\u00e9rence est supprim\u00e9e). Le slug d'un commun que l'utilisateur a adopt\u00e9 d\u00e9signe sa copie : la pr\u00e9f\u00e9rence est toujours celle de la copie",
+                "summary": "Remplace d'un coup la pr\u00e9f\u00e9rence de l'utilisateur connect\u00e9 pour un ingr\u00e9dient : produits accept\u00e9s dans l'ordre, produits refus\u00e9s, ou \u00ab j'en ai toujours \u00bb (sans produit ni \u00ab j'en ai toujours \u00bb, la pr\u00e9f\u00e9rence est supprim\u00e9e). Un ancien slug (ancien commun dont l'utilisateur a re\u00e7u une copie, ingr\u00e9dient fusionn\u00e9) d\u00e9signe son ingr\u00e9dient actuel : la pr\u00e9f\u00e9rence est toujours celle de l'ingr\u00e9dient actuel",
                 "operationId": "put_api_replace_ingredient_preference",
                 "parameters": [
                     {
@@ -2704,7 +2704,7 @@
                 "tags": [
                     "Drive"
                 ],
-                "summary": "Oublie toute la pr\u00e9f\u00e9rence de l'utilisateur connect\u00e9 pour un ingr\u00e9dient : produits accept\u00e9s et refus\u00e9s, ou \u00ab j'en ai toujours \u00bb (les produits restent connus). Le slug d'un commun que l'utilisateur a adopt\u00e9 d\u00e9signe sa copie",
+                "summary": "Oublie toute la pr\u00e9f\u00e9rence de l'utilisateur connect\u00e9 pour un ingr\u00e9dient : produits accept\u00e9s et refus\u00e9s, ou \u00ab j'en ai toujours \u00bb (les produits restent connus). Un ancien slug (ancien commun dont l'utilisateur a re\u00e7u une copie, ingr\u00e9dient fusionn\u00e9) d\u00e9signe son ingr\u00e9dient actuel",
                 "operationId": "delete_api_forget_choice",
                 "parameters": [
                     {
@@ -2961,7 +2961,7 @@
                 "tags": [
                     "Drive"
                 ],
-                "summary": "M\u00e9morise un lot d'intentions de l'agent (produits choisis, refus\u00e9s, \u00ab j'en ai toujours \u00bb) dans les pr\u00e9f\u00e9rences de l'utilisateur connect\u00e9. Le slug d'un commun que l'utilisateur a adopt\u00e9 est remplac\u00e9 par celui de sa copie : aucune pr\u00e9f\u00e9rence n'est cr\u00e9\u00e9e sous un commun masqu\u00e9. La fiche d'un produit d\u00e9j\u00e0 connu (commune au magasin) n'est compl\u00e9t\u00e9e que l\u00e0 o\u00f9 elle est vide : libell\u00e9, contenu et code-barres ne sont jamais r\u00e9\u00e9crits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte d\u00e9j\u00e0. Un `ADD_PRODUCT` peut porter la recherche qui a fait trouver le produit (`searchQuery`, m\u00e9moris\u00e9e avec la pr\u00e9f\u00e9rence de cette enseigne et de ce magasin ; cl\u00e9 absente : gard\u00e9e, `null` : effac\u00e9e) ; l'intention `NOTE_SEARCH` (DRV-653) m\u00e9morise cette recherche seule, sans produit, quand le produit n'est pas m\u00e9moris\u00e9 (pris pour cette fois seulement) et la contenance du produit dans l'unit\u00e9 de la liste (`product.packSize`, DRV-652, priv\u00e9e \u00e0 l'utilisateur et propre \u00e0 ce produit ; cl\u00e9 absente : gard\u00e9e pour le m\u00eame produit, `null` : effac\u00e9e)",
+                "summary": "M\u00e9morise un lot d'intentions de l'agent (produits choisis, refus\u00e9s, \u00ab j'en ai toujours \u00bb) dans les pr\u00e9f\u00e9rences de l'utilisateur connect\u00e9. Un ancien slug (ancien commun dont l'utilisateur a re\u00e7u une copie, ingr\u00e9dient fusionn\u00e9) est remplac\u00e9 par celui de son ingr\u00e9dient actuel : aucune pr\u00e9f\u00e9rence n'est cr\u00e9\u00e9e sous un ancien slug. La fiche d'un produit d\u00e9j\u00e0 connu (commune au magasin) n'est compl\u00e9t\u00e9e que l\u00e0 o\u00f9 elle est vide : libell\u00e9, contenu et code-barres ne sont jamais r\u00e9\u00e9crits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte d\u00e9j\u00e0. Un `ADD_PRODUCT` peut porter la recherche qui a fait trouver le produit (`searchQuery`, m\u00e9moris\u00e9e avec la pr\u00e9f\u00e9rence de cette enseigne et de ce magasin ; cl\u00e9 absente : gard\u00e9e, `null` : effac\u00e9e) ; l'intention `NOTE_SEARCH` (DRV-653) m\u00e9morise cette recherche seule, sans produit, quand le produit n'est pas m\u00e9moris\u00e9 (pris pour cette fois seulement) et la contenance du produit dans l'unit\u00e9 de la liste (`product.packSize`, DRV-652, priv\u00e9e \u00e0 l'utilisateur et propre \u00e0 ce produit ; cl\u00e9 absente : gard\u00e9e pour le m\u00eame produit, `null` : effac\u00e9e)",
                 "operationId": "put_api_save_product_choices",
                 "requestBody": {
                     "required": true,
@@ -2988,6 +2988,263 @@
                     },
                     "429": {
                         "$ref": "#/components/responses/DriveWriteRateLimited"
+                    }
+                }
+            }
+        },
+        "/api/voice/oauth/token": {
+            "post": {
+                "tags": [
+                    "Voice"
+                ],
+                "summary": "Point d'acc\u00e8s aux jetons de la liaison de compte (OAuth 2.0) : \u00e9change le code d'autorisation, ou le jeton de rafra\u00eechissement, contre des jetons (route publique, appel\u00e9e par Amazon)",
+                "description": "Corps `application/x-www-form-urlencoded` (RFC 6749). Le client est authentifi\u00e9 par `client_id` et `client_secret` dans le corps, ou par `Authorization: Basic` ; le secret est compar\u00e9 \u00e0 l'empreinte `ALEXA_OAUTH_CLIENT_SECRET_HASH` (vide : tout client est refus\u00e9). `grant_type=authorization_code` demande `code`, `redirect_uri` (la m\u00eame qu'\u00e0 l'autorisation) et `code_verifier` (PKCE S256) ; `grant_type=refresh_token` demande `refresh_token`. Les jetons sont opaques ; le jeton d'acc\u00e8s vaut 3600 s, le jeton de rafra\u00eechissement 90 jours et ne sert qu'une fois : chaque \u00e9change en rend un nouveau (rotation), et pr\u00e9senter un jeton de rafra\u00eechissement d\u00e9j\u00e0 \u00e9chang\u00e9, ou un code d\u00e9j\u00e0 \u00e9chang\u00e9, r\u00e9voque la liaison. Les erreurs suivent la RFC 6749 5.2 (`{\"error\": \"\u2026\"}`), sans dire pourquoi un \u00e9change est refus\u00e9 : `invalid_grant` pour un code ou un jeton refus\u00e9 quelle qu'en soit la raison (Alexa d\u00e9connecte alors le compte), `invalid_client` pour un client inconnu ou un secret faux, `invalid_request` pour un param\u00e8tre manquant, `unsupported_grant_type` pour un autre type. 30 appels par heure et par adresse IP. Jamais de mise en cache.",
+                "operationId": "post_api_voice_oauth_token",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "required": [
+                                    "grant_type"
+                                ],
+                                "properties": {
+                                    "grant_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "authorization_code",
+                                            "refresh_token"
+                                        ]
+                                    },
+                                    "code": {
+                                        "description": "Avec `authorization_code` : le code re\u00e7u \u00e0 l'autorisation",
+                                        "type": "string"
+                                    },
+                                    "redirect_uri": {
+                                        "description": "Avec `authorization_code` : l'adresse de retour de l'autorisation, la m\u00eame",
+                                        "type": "string"
+                                    },
+                                    "code_verifier": {
+                                        "description": "Avec `authorization_code` : le v\u00e9rificateur PKCE (43 \u00e0 128 caract\u00e8res) dont le SHA-256 est le `code_challenge` de l'autorisation",
+                                        "type": "string"
+                                    },
+                                    "refresh_token": {
+                                        "description": "Avec `refresh_token` : le jeton de rafra\u00eechissement re\u00e7u en dernier",
+                                        "type": "string"
+                                    },
+                                    "client_id": {
+                                        "description": "Authentification dans le corps (ou `Authorization: Basic`)",
+                                        "type": "string"
+                                    },
+                                    "client_secret": {
+                                        "description": "Authentification dans le corps (ou `Authorization: Basic`)",
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Une paire de jetons. `Cache-Control: no-store`",
+                        "headers": {
+                            "Cache-Control": {
+                                "description": "`no-store`",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "access_token": {
+                                            "type": "string",
+                                            "example": "3Qa5mVq1xT0Zb8nWc2YpLkR7sHdJ9eUfGhAoIiNtBvM"
+                                        },
+                                        "token_type": {
+                                            "type": "string",
+                                            "example": "Bearer"
+                                        },
+                                        "expires_in": {
+                                            "type": "integer",
+                                            "example": 3600
+                                        },
+                                        "refresh_token": {
+                                            "type": "string",
+                                            "example": "Zt4Lw9RkEoPq2YhXn6VbGcJdUaSf8MiH1TgNyQr0eKs"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Erreur OAuth `{\"error\": \"invalid_request\" | \"invalid_grant\" | \"unsupported_grant_type\"}`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "invalid_grant"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Erreur OAuth `{\"error\": \"invalid_client\"}` : client inconnu, secret faux ou absent",
+                        "headers": {
+                            "WWW-Authenticate": {
+                                "description": "`Basic realm=\"Repas\"`",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "invalid_client"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Commande vocale coup\u00e9e (message `VOICE_DISABLED`)"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/VoiceTokenRateLimited"
+                    }
+                },
+                "security": []
+            }
+        },
+        "/api/v1/voice/alexa/authorize": {
+            "post": {
+                "tags": [
+                    "Voice"
+                ],
+                "summary": "Autorise Alexa \u00e0 agir sur les courses de l'utilisateur connect\u00e9 : \u00e9met le code d'autorisation de la liaison de compte (OAuth 2.0, code + PKCE)",
+                "description": "Appel\u00e9e par la page `/alexa/lier` du front quand l'utilisateur, connect\u00e9, touche \u00ab Autoriser \u00bb. Le corps reprend les param\u00e8tres de la demande d'Alexa. La r\u00e9ponse donne l'adresse o\u00f9 envoyer l'utilisateur : l'adresse de retour (`redirectUri`, choisie dans la configuration) suivie de `code` et `state`. Le code est opaque, valable 10 minutes, \u00e0 usage unique ; Repas n'en garde que le hach\u00e9. Refus sans dire pourquoi (client inconnu, adresse de retour qui n'est pas exactement l'une des adresses autoris\u00e9es, m\u00e9thode autre que `S256`, d\u00e9fi ou `state` mal form\u00e9) : `422 VOICE_AUTHORIZATION_REFUSED`, et le front ne redirige alors nulle part. 20 \u00e9missions par heure et par utilisateur.",
+                "operationId": "post_api_issue_voice_authorization_code",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/IssueAuthorizationCodePayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "O\u00f9 renvoyer l'utilisateur : `redirectUri?state=\u2026&code=\u2026`. `Cache-Control: no-store`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "redirectUrl": {
+                                            "type": "string",
+                                            "example": "https://pitangui.amazon.com/api/skill/link/M2AAAAAAAAAAAA?state=xyz123&code=3Qa5mVq1xT0Zb8nWc2YpLkR7sHdJ9eUfGhAoIiNtBvM"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Commande vocale coup\u00e9e (message `VOICE_DISABLED`)"
+                    },
+                    "422": {
+                        "description": "Corps invalide, ou demande d'autorisation refus\u00e9e (message `VOICE_AUTHORIZATION_REFUSED`)"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/VoiceAuthorizeRateLimited"
+                    }
+                }
+            }
+        },
+        "/api/v1/voice/links": {
+            "get": {
+                "tags": [
+                    "Voice"
+                ],
+                "summary": "Les liaisons de l'utilisateur connect\u00e9 avec un assistant vocal (Alexa), pour l'\u00e9cran \u00ab Moi \u00bb : la plus r\u00e9cente d'abord. Une liaison retir\u00e9e n'y figure plus. Jamais de jeton.",
+                "operationId": "get_api_list_voice_links",
+                "responses": {
+                    "200": {
+                        "description": "Les liaisons de l'utilisateur (liste vide tant qu'il n'a pas reli\u00e9 Alexa)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "member": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/VoiceLinkDTO"
+                                            }
+                                        },
+                                        "totalItems": {
+                                            "type": "integer",
+                                            "example": 1
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Commande vocale coup\u00e9e (message `VOICE_DISABLED`)"
+                    }
+                }
+            }
+        },
+        "/api/v1/voice/links/{id}": {
+            "delete": {
+                "tags": [
+                    "Voice"
+                ],
+                "summary": "Retire la liaison de l'utilisateur avec Alexa : la liaison et tous ses jetons. Le jeton d'acc\u00e8s qu'Alexa tenait ne r\u00e9sout plus rien. Idempotent. Propri\u00e9taire seul, administrateur compris.",
+                "operationId": "delete_api_revoke_voice_link",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Identifiant de la liaison (celui de `GET /voice/links`)",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9-]{1,36}$"
+                        },
+                        "example": "4f1c0a5e-7d1b-4c6a-8e2f-0b9d7c5a3e1f"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Liaison retir\u00e9e, jetons effac\u00e9s"
+                    },
+                    "403": {
+                        "description": "La liaison n'est pas \u00e0 l'utilisateur (aucun passe-droit administrateur)"
+                    },
+                    "404": {
+                        "description": "Commande vocale coup\u00e9e (message `VOICE_DISABLED`), ou liaison inconnue (message `VOICE_LINK_NOT_FOUND`)"
                     }
                 }
             }
@@ -3121,7 +3378,7 @@
                 ],
                 "properties": {
                     "ingredientSlug": {
-                        "description": "Slug de l'ingr\u00e9dient (commun, ou personnalis\u00e9 par l'auteur de la recette)",
+                        "description": "Slug de l'ingr\u00e9dient (un ingr\u00e9dient de l'auteur de la recette)",
                         "type": "string",
                         "example": "pate"
                     },
@@ -3909,6 +4166,48 @@
                 },
                 "type": "object"
             },
+            "IssueAuthorizationCodePayload": {
+                "required": [
+                    "clientId",
+                    "redirectUri",
+                    "state",
+                    "codeChallenge",
+                    "codeChallengeMethod"
+                ],
+                "properties": {
+                    "clientId": {
+                        "description": "Param\u00e8tre `client_id` de la demande d'Alexa : l'identifiant du client OAuth (`ALEXA_OAUTH_CLIENT_ID`)",
+                        "type": "string",
+                        "maxLength": 100,
+                        "example": "repas-alexa"
+                    },
+                    "redirectUri": {
+                        "description": "Param\u00e8tre `redirect_uri` de la demande d'Alexa : doit \u00eatre EXACTEMENT l'une des adresses autoris\u00e9es (`ALEXA_REDIRECT_URIS`)",
+                        "type": "string",
+                        "maxLength": 2048,
+                        "example": "https://pitangui.amazon.com/api/skill/link/M2AAAAAAAAAAAA"
+                    },
+                    "state": {
+                        "description": "Param\u00e8tre `state` de la demande d'Alexa, rendu tel quel dans l'adresse de retour (1024 caract\u00e8res imprimables au plus)",
+                        "type": "string",
+                        "maxLength": 1024,
+                        "example": "xyz123"
+                    },
+                    "codeChallenge": {
+                        "description": "Param\u00e8tre `code_challenge` : SHA-256 du v\u00e9rificateur en base64url sans remplissage (43 caract\u00e8res)",
+                        "type": "string",
+                        "maxLength": 128,
+                        "example": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+                    },
+                    "codeChallengeMethod": {
+                        "description": "Param\u00e8tre `code_challenge_method` : `S256` seul est accept\u00e9 (`plain` est refus\u00e9)",
+                        "type": "string",
+                        "maxLength": 16,
+                        "example": "S256"
+                    }
+                },
+                "type": "object"
+            },
             "DuplicateIngredientSideDTO": {
                 "required": [
                     "slug",
@@ -4021,7 +4320,7 @@
                         "example": "g"
                     },
                     "canEdit": {
-                        "description": "L'utilisateur peut modifier cet ingr\u00e9dient : le sien, ou un ingr\u00e9dient commun s'il est administrateur",
+                        "description": "Toujours vrai : l'ingr\u00e9dient est \u00e0 l'utilisateur. Le champ reste pour les clients existants",
                         "type": "boolean"
                     },
                     "departmentSlug": {
@@ -4069,7 +4368,7 @@
                         "nullable": true
                     },
                     "creatorEmail": {
-                        "description": "Email du cr\u00e9ateur de l'ingr\u00e9dient, null pour un ingr\u00e9dient commun ou une conversion commune",
+                        "description": "Email du propri\u00e9taire de l'ingr\u00e9dient (toujours le lecteur), null pour une conversion g\u00e9n\u00e9rale",
                         "type": "string",
                         "nullable": true
                     },
@@ -4396,12 +4695,12 @@
                         "nullable": true
                     },
                     "creatorId": {
-                        "description": "Identifiant du cr\u00e9ateur, null pour un ingr\u00e9dient commun",
+                        "description": "Identifiant du propri\u00e9taire de l'ingr\u00e9dient (le lecteur)",
                         "type": "string",
                         "nullable": true
                     },
                     "canEdit": {
-                        "description": "L'utilisateur peut modifier cet ingr\u00e9dient : le sien, ou un ingr\u00e9dient commun s'il est administrateur",
+                        "description": "Toujours vrai : l'ingr\u00e9dient est \u00e0 l'utilisateur. Le champ reste pour les clients existants",
                         "type": "boolean"
                     },
                     "recipeCount": {
@@ -4531,7 +4830,7 @@
                         }
                     },
                     "blockedBy": {
-                        "description": "Pourquoi la fusion serait refus\u00e9e (le premier cas dans l'ordre de la liste), null si elle est possible. SAME_INGREDIENT : les deux ingr\u00e9dients sont le m\u00eame. COMMON_INGREDIENT : l'un est un ingr\u00e9dient commun. USED_BY_ANOTHER_USER : une ligne d'un autre utilisateur utilise l'ingr\u00e9dient absorb\u00e9. IN_SENT_LIST : une liste envoy\u00e9e au drive utilise l'un des deux. UNIT_MISSING : voir missingUnits",
+                        "description": "Pourquoi la fusion serait refus\u00e9e (le premier cas dans l'ordre de la liste), null si elle est possible. SAME_INGREDIENT : les deux ingr\u00e9dients sont le m\u00eame. COMMON_INGREDIENT : n'est plus rendu (il n'y a plus d'ingr\u00e9dient commun), d\u00e9clar\u00e9 pour les clients existants. USED_BY_ANOTHER_USER : une ligne d'un autre utilisateur utilise l'ingr\u00e9dient absorb\u00e9. IN_SENT_LIST : une liste envoy\u00e9e au drive utilise l'un des deux. UNIT_MISSING : voir missingUnits",
                         "type": "string",
                         "enum": [
                             "SAME_INGREDIENT",
@@ -4949,7 +5248,7 @@
                         "example": "g"
                     },
                     "canEdit": {
-                        "description": "L'utilisateur peut modifier cet ingr\u00e9dient : le sien, ou un ingr\u00e9dient commun s'il est administrateur",
+                        "description": "Toujours vrai : l'ingr\u00e9dient est \u00e0 l'utilisateur. Le champ reste pour les clients existants",
                         "type": "boolean"
                     },
                     "isBase": {
@@ -5863,6 +6162,29 @@
                     }
                 },
                 "type": "object"
+            },
+            "VoiceLinkDTO": {
+                "required": [
+                    "id",
+                    "provider",
+                    "createdAt"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "provider": {
+                        "type": "string"
+                    },
+                    "createdAt": {
+                        "type": "string"
+                    },
+                    "lastUsedAt": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
             }
         },
         "responses": {
@@ -5918,6 +6240,68 @@
                                         "message": {
                                             "type": "string",
                                             "example": "DRIVE_RATE_LIMITED"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "type": "object"
+                        }
+                    }
+                }
+            },
+            "VoiceTokenRateLimited": {
+                "description": "Trop d'\u00e9changes de jetons depuis cette adresse IP : plus de 30 par heure (`POST /api/voice/oauth/token`, route publique). Message `VOICE_RATE_LIMITED` ; patienter au moins le d\u00e9lai de `Retry-After`.",
+                "headers": {
+                    "Retry-After": {
+                        "description": "Secondes \u00e0 attendre au minimum avant de r\u00e9essayer",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "example": 120
+                        }
+                    }
+                },
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "properties": {
+                                "error": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "VOICE_RATE_LIMITED"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "type": "object"
+                        }
+                    }
+                }
+            },
+            "VoiceAuthorizeRateLimited": {
+                "description": "Trop de codes d'autorisation \u00e9mis par cet utilisateur : plus de 20 par heure (`POST /api/v1/voice/alexa/authorize`). Message `VOICE_RATE_LIMITED` ; patienter au moins le d\u00e9lai de `Retry-After`.",
+                "headers": {
+                    "Retry-After": {
+                        "description": "Secondes \u00e0 attendre au minimum avant de r\u00e9essayer",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "example": 120
+                        }
+                    }
+                },
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "properties": {
+                                "error": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "VOICE_RATE_LIMITED"
                                         }
                                     },
                                     "type": "object"
@@ -5990,6 +6374,9 @@
         },
         {
             "name": "Drive"
+        },
+        {
+            "name": "Voice"
         }
     ]
 }

@@ -68,6 +68,13 @@ export const routes: RouteRecordRaw[] = [
       driveBridge.isAvailable() ? { name: 'drive-help', hash: '#mise-a-jour' } : true,
   },
   ...catalog,
+  {
+    // La liaison du compte pour Alexa (VOX-401) : l'application Alexa ouvre cette page ; sans session, la garde renvoie à la connexion
+    // avec l'adresse complète (requête comprise) et la connexion ramène ici.
+    path: '/alexa/lier',
+    name: 'alexa-link',
+    component: () => import('@/features/voice/AlexaLinkView.vue'),
+  },
   ...legacyRoutes,
   {
     path: '/',
