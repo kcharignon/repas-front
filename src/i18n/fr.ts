@@ -1020,7 +1020,7 @@ export default {
     title: 'Confidentialité',
     link: 'Confidentialité',
     back: 'Retour à Repas',
-    updated: 'Dernière mise à jour : 25 octobre 2026.',
+    updated: 'Dernière mise à jour : 26 octobre 2026.',
     address: "kantin.charignon{'@'}gmail.com",
     intro: 'Cette page dit ce que Repas retient sur toi, pourquoi, et comment tout effacer.',
     who: {
@@ -1054,11 +1054,11 @@ export default {
     },
     voice: {
       title: 'La commande vocale avec Alexa',
-      intro: 'Une fois liée à ton compte, Alexa ajoute des produits à ta liste.',
+      intro: 'Une fois liée, Alexa ajoute, retire et lit les produits de ta liste.',
       link: 'Repas retient la liaison avec ton compte Alexa et son identifiant. Il retient aussi sa date de création et celle du dernier usage.',
       access:
-        'Repas donne à Alexa un droit d’ajouter à ta liste. Repas ne le garde que sous une forme illisible.',
-      items: 'Les produits que tu dictes sont ajoutés à ta liste, comme si tu les tapais.',
+        'Repas donne à Alexa un droit de lire et de modifier ta liste. Repas ne le garde que sous une forme illisible.',
+      items: 'Les produits que tu dictes sont ajoutés ou retirés de ta liste.',
       phrases:
         'Si tu choisis une proposition d’Alexa, Repas retient ta phrase, simplifiée, pour ce produit.',
       create: 'Si tu demandes un nouveau produit, il est créé dans tes ingrédients.',
