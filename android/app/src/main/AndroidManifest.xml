@@ -33,8 +33,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Les liens vers Repas (courriel de confirmation d'adresse…) s'ouvrent dans l'application. autoVerify demande que
-                 https://<hôte>/.well-known/assetlinks.json déclare ce paquet et l'empreinte de la clé de signature : étape humaine, android/README.md. -->
+            <!-- Seuls les deux liens que Repas ENVOIE par courriel s'ouvrent dans l'application : la confirmation d'adresse et le mot de passe oublié
+                 (les chemins exacts, `android:path`, de src/router/index.ts ; `MailerEmailVerificationNotifier` et `MailerPasswordResetNotifier` du back).
+                 JAMAIS tout l'hôte : « https://kantin.eu/alexa/lier » (la liaison d'Alexa, ouverte par l'application Alexa), la confidentialité et les
+                 pages publiques doivent rester dans le navigateur (VOX-501, constat du 2026-10-26 : l'application avalait la page de liaison d'Alexa).
+                 Un chemin de plus à capturer = une ligne <data> ici ET dans android/__tests__/shell.spec.ts.
+                 autoVerify demande que https://<hôte>/.well-known/assetlinks.json déclare ce paquet et l'empreinte de la clé de signature :
+                 étape humaine, android/README.md. Les éléments <data> d'un même filtre se combinent : hôte https, puis l'un des chemins. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -42,6 +47,8 @@
                 <data
                     android:scheme="https"
                     android:host="${repasHost}" />
+                <data android:path="/confirmation-email" />
+                <data android:path="/mot-de-passe-oublie/confirmation" />
             </intent-filter>
         </activity>
 
