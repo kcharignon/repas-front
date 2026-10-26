@@ -60,7 +60,7 @@ describe('la page de confidentialité', () => {
     const { wrapper } = await open()
 
     expect(wrapper.find('h1').text()).toBe('Confidentialité')
-    expect(wrapper.text()).toContain('Dernière mise à jour : 25 octobre 2026.')
+    expect(wrapper.text()).toContain('Dernière mise à jour : 26 octobre 2026.')
     expect(wrapper.findAll('h2').map((title) => title.text())).toEqual([
       'Qui édite Repas',
       'Ce que Repas retient de toi',
@@ -171,6 +171,6 @@ describe('les textes de la politique (STORE-010)', () => {
   })
 
   it('donnent une date de mise à jour qui est celle du texte', () => {
-    expect(fr.privacy.updated).toBe('Dernière mise à jour : 25 octobre 2026.')
+    expect(fr.privacy.updated).toBe('Dernière mise à jour : 26 octobre 2026.')
   })
 })
