@@ -1054,13 +1054,15 @@ export default {
     },
     voice: {
       title: 'La commande vocale avec Alexa',
-      intro: 'Une fois liée, Alexa ajoute, retire et lit les produits de ta liste.',
+      intro:
+        'Une fois liée, Alexa ajoute, retire et lit les produits de ta liste. Elle planifie aussi tes repas.',
       link: 'Repas retient la liaison avec ton compte Alexa et son identifiant. Il retient aussi sa date de création et celle du dernier usage.',
       access:
         'Repas donne à Alexa un droit de lire et de modifier ta liste. Repas ne le garde que sous une forme illisible.',
-      items: 'Les produits que tu dictes sont ajoutés ou retirés de ta liste.',
+      items:
+        'Les produits que tu dictes sont ajoutés ou retirés de ta liste. Les repas que tu dictes y sont planifiés.',
       phrases:
-        'Si tu choisis une proposition d’Alexa, Repas retient ta phrase, simplifiée, pour ce produit.',
+        'Si tu choisis une proposition d’Alexa, Repas retient ta phrase, simplifiée. Elle sert pour ce produit ou cette recette.',
       create: 'Si tu demandes un nouveau produit, il est créé dans tes ingrédients.',
       not: 'Repas ne garde aucun enregistrement de ta voix. Il ne garde pas non plus le texte complet de ce que tu dis. Ni l’identifiant de ton appareil Alexa.',
       amazon: 'Ta voix est traitée par Amazon, selon sa propre politique de confidentialité.',

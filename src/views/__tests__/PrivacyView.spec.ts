@@ -90,7 +90,11 @@ describe('la page de confidentialité', () => {
     const text = wrapper.text()
     expect(text).toContain('la liaison avec ton compte Alexa et son identifiant')
     expect(text).toContain('Repas ne le garde que sous une forme illisible')
-    expect(text).toContain('Repas retient ta phrase, simplifiée, pour ce produit')
+    expect(text).toContain(
+      'Repas retient ta phrase, simplifiée. Elle sert pour ce produit ou cette recette',
+    )
+    expect(text).toContain('Elle planifie aussi tes repas')
+    expect(text).toContain('Les repas que tu dictes y sont planifiés')
     expect(text).toContain('Repas ne garde aucun enregistrement de ta voix')
     expect(text).toContain('Il ne garde pas non plus le texte complet de ce que tu dis')
     expect(text).toContain('Ni l’identifiant de ton appareil Alexa')
