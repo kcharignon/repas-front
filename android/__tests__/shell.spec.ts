@@ -37,6 +37,51 @@ describe('le manifeste de l’application', () => {
     expect(manifest.match(/android:autoVerify=/g)).toHaveLength(1)
   })
 
+  // VOX-501 (constat du 2026-10-26) : avec un filtre sur tout l'hôte, l'application Repas avalait la page de liaison d'Alexa
+  // (« https://kantin.eu/alexa/lier », ouverte par l'application Alexa) au lieu du navigateur. Seuls les liens envoyés par courriel entrent.
+  describe('les liens que l’application capture (VOX-501)', () => {
+    const filter = /<intent-filter android:autoVerify="true">([\s\S]*?)<\/intent-filter>/.exec(manifest)?.[1] ?? ''
+    const dataElements = [...filter.matchAll(/<data\b([^>]*?)\/>/g)].map((match) => match[1] ?? '')
+    const hostElements = dataElements.filter((element) => element.includes('android:host='))
+    const pathElements = dataElements.filter((element) => !element.includes('android:host='))
+    const paths = pathElements.map((element) => /android:path="([^"]+)"/.exec(element)?.[1] ?? '')
+    // Les liens que le back envoie par courriel : MailerEmailVerificationNotifier (« /confirmation-email?token=… »)
+    // et MailerPasswordResetNotifier::CONFIRMATION_PATH (« /mot-de-passe-oublie/confirmation?token=… »)
+    const emailedLinks = ['/confirmation-email', '/mot-de-passe-oublie/confirmation']
+    const router = readFileSync(join(srcDir, 'router', 'index.ts'), 'utf8')
+
+    /** Ce que fait Android d'un lien https vers l'hôte de Repas : il n'entre dans l'application que si son chemin est l'un des chemins du filtre. */
+    const captured = (path: string) => paths.includes(path)
+
+    it('garde l’hôte sur un seul élément, et ne capture que des chemins exacts, jamais tout l’hôte', () => {
+      expect(hostElements).toHaveLength(1)
+      expect(hostElements[0]).toContain('android:scheme="https"')
+      expect(hostElements[0]).not.toMatch(/android:(path|pathPrefix|pathPattern|pathAdvancedPattern|pathSuffix)=/)
+      // Au moins un chemin : sans lui, le filtre prend tout l'hôte
+      expect(pathElements.length).toBeGreaterThan(0)
+      for (const element of pathElements) {
+        expect(element).toMatch(/^\s*android:path="\/[^"]+"\s*$/)
+      }
+      expect(manifest).not.toMatch(/android:(pathPrefix|pathPattern|pathAdvancedPattern|pathSuffix)=/)
+    })
+
+    it('capture exactement les liens envoyés par courriel, et ils sont des routes du site', () => {
+      expect([...paths].sort()).toEqual([...emailedLinks].sort())
+      for (const path of emailedLinks) {
+        expect(captured(path)).toBe(true)
+        expect(router).toContain(`path: '${path}'`)
+      }
+    })
+
+    it('laisse au navigateur la liaison d’Alexa et toutes les autres pages', () => {
+      for (const path of ['/alexa/lier', '/alexa', '/alexa/lier/', '/confidentialite', '/connexion', '/inscription', '/installer', '/mot-de-passe-oublie', '/verification-email', '/liste', '/moi', '/']) {
+        expect(`${path} : ${captured(path)}`).toBe(`${path} : false`)
+      }
+      // Hors des commentaires qui expliquent la règle, le manifeste ne nomme jamais Alexa
+      expect(manifest.replace(/<!--[\s\S]*?-->/g, '')).not.toMatch(/alexa/i)
+    })
+  })
+
   it('ne laisse lancer le drive que par la coquille', () => {
     expect(/<activity[^>]*android:name="\.DriveActivity"[^>]*android:exported="false"/s.test(manifest)).toBe(true)
   })
