@@ -120,6 +120,28 @@
                 }
             }
         },
+        "/api/v1/ingredients/to-fix": {
+            "get": {
+                "tags": [
+                    "Ingredients"
+                ],
+                "summary": "Les ingr\u00e9dients de l'utilisateur \u00e0 r\u00e9gler : ceux dont l'unit\u00e9 des recettes ne se convertit pas en l'unit\u00e9 d'achat",
+                "description": "Seuls SES ingr\u00e9dients sont jug\u00e9s (jamais ceux d'un autre, un administrateur compris). Un ingr\u00e9dient est \u00e0 r\u00e9gler quand aucune conversion, propre ou universelle, ni aucune suite de conversions ne relie son unit\u00e9 des recettes \u00e0 son unit\u00e9 d'achat, le m\u00eame calcul que `convertible` d'une ligne de recette. Tri\u00e9s par nom, 200 au plus (`totalItems` donne le vrai nombre), le m\u00eame ordre \u00e0 chaque appel. Pour en r\u00e9gler un : `POST \u2026/ingredients/{slug}/conversions`.",
+                "operationId": "get_api_list_ingredients_to_fix",
+                "responses": {
+                    "200": {
+                        "description": "Ingr\u00e9dients \u00e0 r\u00e9gler",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IngredientsToFixDTO"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/ingredients/search": {
             "get": {
                 "tags": [
@@ -4628,6 +4650,73 @@
                         "description": "Slug de celui des deux \u00e0 garder par d\u00e9faut : le plus utilis\u00e9 en recettes, puis en listes, puis le nom le plus court, puis l'ordre alphab\u00e9tique. `first.slug` ou `second.slug`",
                         "type": "string",
                         "example": "tomate-0a1b2c3d"
+                    }
+                },
+                "type": "object"
+            },
+            "IngredientToFixDTO": {
+                "required": [
+                    "slug",
+                    "name",
+                    "departmentName",
+                    "cookingUnitSlug",
+                    "cookingUnitName",
+                    "purchaseUnitSlug",
+                    "purchaseUnitName"
+                ],
+                "properties": {
+                    "slug": {
+                        "description": "Identifiant de l'ingr\u00e9dient (slug)",
+                        "type": "string",
+                        "example": "biscotte-1a2b3c"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "biscotte"
+                    },
+                    "departmentName": {
+                        "description": "Nom du rayon de l'ingr\u00e9dient",
+                        "type": "string",
+                        "example": "\u00c9picerie"
+                    },
+                    "cookingUnitSlug": {
+                        "description": "Unit\u00e9 des recettes de l'ingr\u00e9dient (slug)",
+                        "type": "string",
+                        "example": "unite"
+                    },
+                    "cookingUnitName": {
+                        "type": "string",
+                        "example": "unit\u00e9"
+                    },
+                    "purchaseUnitSlug": {
+                        "description": "Unit\u00e9 d'achat de l'ingr\u00e9dient (slug)",
+                        "type": "string",
+                        "example": "paquet"
+                    },
+                    "purchaseUnitName": {
+                        "type": "string",
+                        "example": "paquet"
+                    }
+                },
+                "type": "object"
+            },
+            "IngredientsToFixDTO": {
+                "required": [
+                    "member",
+                    "totalItems"
+                ],
+                "properties": {
+                    "member": {
+                        "description": "Les ingr\u00e9dients \u00e0 r\u00e9gler, tri\u00e9s par nom (puis par identifiant), 200 au plus",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/IngredientToFixDTO"
+                        }
+                    },
+                    "totalItems": {
+                        "description": "Le nombre r\u00e9el d'ingr\u00e9dients \u00e0 r\u00e9gler (peut d\u00e9passer le nombre de `member`)",
+                        "type": "integer",
+                        "example": 3
                     }
                 },
                 "type": "object"
