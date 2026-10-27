@@ -635,8 +635,36 @@ export default {
     conversionExists: 'Cette conversion existe déjà : modifie-la.',
     conversionRequired:
       'Cette conversion relie l’unité de ta recette à celle du magasin : change d’abord l’unité.',
+    // `DRIVE_INGREDIENT_NOT_FOUND` (404) : le choix portait sur un article qui n'est plus à l'utilisateur
+    driveIngredientNotFound:
+      'Repas ne retrouve pas cet article. Rien n’a été enregistré. Rouvre ta liste, puis réessaie.',
+    // `WRITE_RATE_LIMITED` (429) : passager, l'action n'a pas été enregistrée ; `{wait}` vaut « un instant » ou un nombre de minutes
+    writeRateLimited:
+      'Trop d’actions en peu de temps. Cette action n’a pas été enregistrée. Attends {wait}, puis réessaie.',
+    writeWaitShort: 'un instant',
+    // `PASSWORD_RATE_LIMITED` (429) : trop de mots de passe actuels refusés, `{wait}` vaut au moins une minute
+    passwordRateLimited:
+      'Trop de mots de passe actuels incorrects. Rien n’a été changé. Patiente {wait}, puis réessaie.',
     driveStoreInvalid:
       'Cette adresse n’est pas celle d’un magasin Leclerc Drive : vérifie-la, elle ressemble à https://exemple.leclercdrive.fr/magasin-123456-123456.',
+  },
+  // Les plafonds et les bornes de l'API (422) : chaque message dit la limite vraie et quoi faire. Groupe à part du glossaire du drive : « ingrédient » est le bon mot ici.
+  limits: {
+    recipeLimitReached:
+      'Tu as déjà 1 000 recettes : c’est le maximum. Supprime-en une, puis réessaie.',
+    ingredientLimitReached:
+      'Tu as déjà 2 000 ingrédients : c’est le maximum. Supprime ou fusionne-en, puis réessaie.',
+    listLimitReached:
+      'Tu as déjà 1 000 listes en cours : c’est le maximum. Termine ou supprime une liste, puis réessaie.',
+    listMealLimitReached:
+      'Cette liste a déjà 500 repas : c’est le maximum. Retire-en un, puis réessaie.',
+    recipeRowsLimitReached: 'Une recette a 100 ingrédients au plus. Retire-en un, puis réessaie.',
+    conversionLimitReached:
+      'Cet ingrédient a déjà 50 conversions : c’est le maximum. Supprime-en une, puis réessaie.',
+    quantityInvalid:
+      'Cette quantité n’est pas valable : choisis un nombre plus grand que 0, jusqu’à 1 000 000.',
+    servingInvalid: 'Le nombre de personnes doit être de 1 à 100.',
+    coefficientInvalid: 'Ce nombre n’est pas valable : choisis un nombre de 0,000001 à 1 000 000.',
   },
   driveSend: {
     title: 'Ta liste est prête pour le drive',

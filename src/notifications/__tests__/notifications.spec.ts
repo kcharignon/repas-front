@@ -58,6 +58,85 @@ describe('messageForFailure', () => {
     expect(messageForFailure(new ApiError(status, code))).toBe(expected)
   })
 
+  it.each([
+    [
+      'RECIPE_LIMIT_REACHED',
+      'Tu as déjà 1 000 recettes : c’est le maximum. Supprime-en une, puis réessaie.',
+    ],
+    [
+      'INGREDIENT_LIMIT_REACHED',
+      'Tu as déjà 2 000 ingrédients : c’est le maximum. Supprime ou fusionne-en, puis réessaie.',
+    ],
+    [
+      'SHOPPING_LIST_LIMIT_REACHED',
+      'Tu as déjà 1 000 listes en cours : c’est le maximum. Termine ou supprime une liste, puis réessaie.',
+    ],
+    [
+      'SHOPPING_LIST_MEAL_LIMIT_REACHED',
+      'Cette liste a déjà 500 repas : c’est le maximum. Retire-en un, puis réessaie.',
+    ],
+    [
+      'RECIPE_ROWS_LIMIT_REACHED',
+      'Une recette a 100 ingrédients au plus. Retire-en un, puis réessaie.',
+    ],
+    [
+      'CONVERSION_LIMIT_REACHED',
+      'Cet ingrédient a déjà 50 conversions : c’est le maximum. Supprime-en une, puis réessaie.',
+    ],
+    [
+      'RECIPE_QUANTITY_INVALID',
+      'Cette quantité n’est pas valable : choisis un nombre plus grand que 0, jusqu’à 1 000 000.',
+    ],
+    [
+      'SHOPPING_LIST_QUANTITY_INVALID',
+      'Cette quantité n’est pas valable : choisis un nombre plus grand que 0, jusqu’à 1 000 000.',
+    ],
+    ['RECIPE_SERVING_INVALID', 'Le nombre de personnes doit être de 1 à 100.'],
+    ['MEAL_SERVING_INVALID', 'Le nombre de personnes doit être de 1 à 100.'],
+    ['USER_SERVING_INVALID', 'Le nombre de personnes doit être de 1 à 100.'],
+    [
+      'CONVERSION_COEFFICIENT_INVALID',
+      'Ce nombre n’est pas valable : choisis un nombre de 0,000001 à 1 000 000.',
+    ],
+  ])('dit la limite ou la borne au lieu du code (422 %s)', (code, expected) => {
+    expect(messageForFailure(new ApiError(422, code))).toBe(expected)
+  })
+
+  it('DRIVE_INGREDIENT_NOT_FOUND (404) invite à rouvrir la liste et à réessayer', () => {
+    expect(messageForFailure(new ApiError(404, 'DRIVE_INGREDIENT_NOT_FOUND'))).toBe(
+      'Repas ne retrouve pas cet article. Rien n’a été enregistré. Rouvre ta liste, puis réessaie.',
+    )
+  })
+
+  it.each([
+    [null, 'un instant'],
+    [1, 'un instant'],
+    [60, 'un instant'],
+    [61, '2 minutes'],
+  ])('WRITE_RATE_LIMITED (Retry-After %s) : trop d’actions, réessayer dans %s', (seconds, wait) => {
+    expect(messageForFailure(new ApiError(429, 'WRITE_RATE_LIMITED', seconds))).toBe(
+      `Trop d’actions en peu de temps. Cette action n’a pas été enregistrée. Attends ${wait}, puis réessaie.`,
+    )
+  })
+
+  it.each([
+    [null, 'une minute'],
+    [30, 'une minute'],
+    [300, '5 minutes'],
+    [900, '15 minutes'],
+  ])('PASSWORD_RATE_LIMITED (Retry-After %s) : patienter %s', (seconds, wait) => {
+    expect(messageForFailure(new ApiError(429, 'PASSWORD_RATE_LIMITED', seconds))).toBe(
+      `Trop de mots de passe actuels incorrects. Rien n’a été changé. Patiente ${wait}, puis réessaie.`,
+    )
+  })
+
+  it('un 429 d’écriture est passager : pas de relecture forcée', () => {
+    const error = new ApiError(429, 'WRITE_RATE_LIMITED', 1)
+
+    expect(isRateLimited(error)).toBe(true)
+    expect(isStale(error)).toBe(false)
+  })
+
   it('rend tel quel le message de validation du back (422)', () => {
     expect(
       messageForFailure(

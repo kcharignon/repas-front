@@ -159,6 +159,30 @@ describe('ShoppingListView', () => {
     )
   })
 
+  it('annule la coche et le dit quand le back répond trop d’actions (429)', async () => {
+    backWith({
+      'POST /api/v1/shopping-list-rows/r1/tick': () =>
+        json(
+          { error: { message: 'WRITE_RATE_LIMITED' } },
+          { status: 429, headers: { 'Retry-After': '2' } },
+        ),
+    })
+    const wrapper = await mountList()
+
+    await checkbox(wrapper, 'Courgettes')?.trigger('click')
+
+    await vi.waitFor(() =>
+      expect(useNotificationsStore().items.map((item) => item.text)).toEqual([
+        'Trop d’actions en peu de temps. Cette action n’a pas été enregistrée. Attends un instant, puis réessaie.',
+      ]),
+    )
+    // La coche revient à son état, la case reste utilisable
+    await vi.waitFor(() =>
+      expect(checkbox(wrapper, 'Courgettes')?.attributes('aria-checked')).toBe('false'),
+    )
+    expect(checkbox(wrapper, 'Courgettes')?.attributes('disabled')).toBeUndefined()
+  })
+
   it("explique qu'il n'y a rien à acheter", async () => {
     backWith({}, detail([]))
 
