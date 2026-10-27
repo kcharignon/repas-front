@@ -150,7 +150,7 @@ agent-fake: ## Start the fake Leclerc site by hand on 127.0.0.1:8099 with the No
 	@npm run --silent agent:fake
 
 ## —— Android 📱 (Repas Drive) ———————————————————————————————————————————————
-.PHONY: android android-test android-release android-release-verify android-release-selftest android-agent-hash
+.PHONY: android android-test android-release android-release-verify android-release-selftest android-agent-hash android-verification-metadata
 
 # L'application « Repas Drive » (DRV-311, android/) se construit dans une image à part (JDK, Gradle, SDK Android), avec l'identifiant de
 # l'utilisateur pour que les fichiers produits ne soient pas à root. Elle ne contacte aucun site Leclerc. Les variables de version et de
@@ -184,6 +184,10 @@ android-release-selftest: $(ANDROID_AGENT) ## Prove that the release build refus
 
 android-agent-hash: ## Note the SHA-384 of the built drive agent in android/agent.js.sha384 (after a deliberate change of the agent)
 	@$(RUN) npm run --silent android:agent-hash -- --write
+
+android-verification-metadata: $(ANDROID_AGENT) ## Rewrite android/gradle/verification-metadata.xml (SHA-256 of every Gradle dependency and plugin the build resolves) after a version bump; re-downloads what it records
+	$(ANDROID_PREPARE)
+	@$(ANDROID_APP_RUN) ./build.sh verification-metadata
 
 ## —— Android emulator 🤖 ————————————————————————————————————————————————————
 .PHONY: android-emulator-up android-emulator-down android-emulator-status android-smoke android-e2e

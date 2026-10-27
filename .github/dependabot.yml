@@ -32,3 +32,39 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     labels: [dependencies]
+  # L'application Android (android/) : plugins et bibliothèques de Gradle, en une seule proposition à la fois. Chaque montée change l'empreinte
+  # d'une dépendance : `make android-verification-metadata` réécrit android/gradle/verification-metadata.xml, à commiter avec elle.
+  - package-ecosystem: gradle
+    directory: /android
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+    labels: [dependencies]
+    groups:
+      android:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+  # Les images des Dockerfile : le site, la construction de l'application Android et son émulateur de test.
+  - package-ecosystem: docker
+    directories:
+      - /
+      - /android
+      - /android/emulator
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    commit-message:
+      prefix: "chore(deps)"
+    labels: [dependencies]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

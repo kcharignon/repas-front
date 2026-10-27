@@ -12,6 +12,7 @@
 #                                débogage ni plan d'essai, agent intact ;
 #                                écrit dist/release-facts.env (version, empreintes) pour les notes de la release (DRV-315)
 #   ./build.sh release-selftest  prouve le refus sans clé, la réussite avec une clé jetable créée à l'instant et les refus du contrôle
+#   ./build.sh verification-metadata  réécrit gradle/verification-metadata.xml : l'empreinte SHA-256 de chaque dépendance et plugin de Gradle (à lancer après une montée de version)
 #
 # Variables d'environnement (voir README.md) : ANDROID_VERSION_TAG, ANDROID_COMMIT, et pour `release`
 # ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD ; pour `verify-release`
@@ -303,6 +304,25 @@ $(tail -n 25 <<<"$output")"
   echo "   accepté avec le bon certificat ; refusé avec un autre, sans empreinte attendue, avec une autre version et avec la clé de débogage."
 }
 
+# Réécrit gradle/verification-metadata.xml : l'empreinte SHA-256 de chaque dépendance et de chaque plugin que la construction résout. Gradle refuse
+# ensuite un fichier dont l'empreinte diffère, ou qui n'y figure pas. Le fichier est refait de zéro, en retéléchargeant ce qu'il écrit (pas
+# seulement ce que le cache contient), à partir des tâches des commandes de ce script : tests, APK de débogage, publication (clé jetable créée
+# ici). À lancer après toute montée de version d'un plugin ou d'une bibliothèque, puis à relire et à commiter avec elle.
+write_verification_metadata() {
+  local work password
+  work=$(mktemp -d)
+  trap "rm -rf '$work'" EXIT
+  password=$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')
+  keytool -genkeypair -keystore "$work/test.p12" -storetype PKCS12 -alias test -keyalg RSA -keysize 2048 -validity 2 \
+    -storepass "$password" -keypass "$password" -dname "CN=Cle de test jetable" > /dev/null 2>&1
+  rm -f gradle/verification-metadata.xml
+  env ANDROID_KEYSTORE_FILE="$work/test.p12" ANDROID_KEYSTORE_PASSWORD="$password" ANDROID_KEY_ALIAS=test ANDROID_KEY_PASSWORD="$password" \
+    ANDROID_VERSION_TAG=android-v0.0.1 \
+    "${GRADLE[@]}" --write-verification-metadata sha256 --refresh-dependencies \
+    :core:test :app:testDirectDebugUnitTest :app:testPlayDebugUnitTest \
+    :app:assembleDirectDebug :app:assemblePlayDebug :app:assembleDirectRelease :app:assemblePlayRelease
+}
+
 # L'agent du drive est un actif de l'application (DRV-313) : construit par Node avant Gradle (`make agent-build`), monté dans ../drive-agent/dist.
 require_agent() {
   [ -f ../drive-agent/dist/agent.js ] || fail "l'agent du drive manque (drive-agent/dist/agent.js) : lance d'abord make agent-build."
@@ -314,8 +334,9 @@ case "${1:-apk}" in
   release) require_agent; build_release ;;
   verify-release) verify_release "${2:-}" ;;
   release-selftest) release_selftest ;;
+  verification-metadata) require_agent; write_verification_metadata ;;
   *)
-    echo "Usage : build.sh test|apk|release|verify-release [apk]|release-selftest" >&2
+    echo "Usage : build.sh test|apk|release|verify-release [apk]|release-selftest|verification-metadata" >&2
     exit 2
     ;;
 esac
