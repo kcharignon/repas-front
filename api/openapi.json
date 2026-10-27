@@ -2,7 +2,7 @@
     "openapi": "3.0.0",
     "info": {
         "title": "Repas API",
-        "description": "API JSON de l'application Repas (recettes, ingr\u00e9dients, listes de courses). Voir docs/adr/0007-api-rest-v1.md.",
+        "description": "API JSON de l'application Repas (recettes, ingr\u00e9dients, listes de courses). Voir docs/adr/0007-api-rest-v1.md. Les \u00e9critures de Repas (POST, PUT, PATCH et DELETE ; pas celles du drive, des comptes ni de la commande vocale) sont limit\u00e9es \u00e0 300 par minute et par utilisateur : au-del\u00e0, 429 avec le message `WRITE_RATE_LIMITED` et l'en-t\u00eate `Retry-After`, rien n'est enregistr\u00e9.",
         "version": "1.0.0"
     },
     "paths": {
@@ -26,7 +26,7 @@
                                     "email": {
                                         "type": "string",
                                         "format": "email",
-                                        "example": "alexiane.sichi@gmail.com"
+                                        "example": "alexiane@example.com"
                                     },
                                     "password": {
                                         "type": "string",
@@ -390,7 +390,7 @@
                         "description": "Unit\u00e9 ou ingr\u00e9dient inconnu, ou ingr\u00e9dient d'un autre utilisateur (un administrateur n'a pas de passe-droit)"
                     },
                     "422": {
-                        "description": "Corps de la requ\u00eate invalide"
+                        "description": "Corps de la requ\u00eate invalide, ou l'ingr\u00e9dient a d\u00e9j\u00e0 50 conversions propres (`CONVERSION_LIMIT_REACHED`)"
                     }
                 }
             }
@@ -597,7 +597,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "Ajoute une conversion PROPRE \u00e0 un ingr\u00e9dient de l'utilisateur (\u00ab 1 unit\u00e9 de d\u00e9part = coefficient unit\u00e9s d'arriv\u00e9e \u00bb), vers n'importe quelle unit\u00e9 et sans limite de nombre",
+                "summary": "Ajoute une conversion PROPRE \u00e0 un ingr\u00e9dient de l'utilisateur (\u00ab 1 unit\u00e9 de d\u00e9part = coefficient unit\u00e9s d'arriv\u00e9e \u00bb), vers n'importe quelle unit\u00e9, 50 au plus par ingr\u00e9dient",
                 "description": "Seul le propri\u00e9taire de l'ingr\u00e9dient l'\u00e9crit, un administrateur compris. Jamais une conversion universelle (l'administrateur les \u00e9crit par `/api/v1/conversions`). `Location` est l'adresse de la conversion cr\u00e9\u00e9e (modifiable et supprimable).",
                 "operationId": "post_api_create_ingredient_conversion",
                 "parameters": [
@@ -642,7 +642,7 @@
                         "description": "L'ingr\u00e9dient a d\u00e9j\u00e0 sa propre conversion entre ces deux unit\u00e9s, dans un sens ou dans l'autre (`CONVERSION_ALREADY_EXISTS`) : on modifie celle qui existe"
                     },
                     "422": {
-                        "description": "Corps invalide : unit\u00e9s identiques (`CONVERSION_SAME_UNIT`), coefficient qui n'est pas un nombre strictement positif"
+                        "description": "Corps invalide : unit\u00e9s identiques (`CONVERSION_SAME_UNIT`), coefficient qui n'est pas un nombre strictement positif, ou l'ingr\u00e9dient a d\u00e9j\u00e0 50 conversions propres (`CONVERSION_LIMIT_REACHED`)"
                     }
                 }
             }
@@ -1085,7 +1085,7 @@
                         "description": "Conversion, unit\u00e9 ou ingr\u00e9dient inconnu, ou conversion ou ingr\u00e9dient d'un autre utilisateur (un administrateur n'a pas de passe-droit)"
                     },
                     "422": {
-                        "description": "Corps de la requ\u00eate invalide, ou conversion universelle (sans ingr\u00e9dient) dont le corps change la paire d'unit\u00e9s ou l'ingr\u00e9dient : seul son coefficient se corrige (`UNIVERSAL_CONVERSION_IS_FIXED`)"
+                        "description": "Corps de la requ\u00eate invalide, ou conversion universelle (sans ingr\u00e9dient) dont le corps change la paire d'unit\u00e9s ou l'ingr\u00e9dient : seul son coefficient se corrige (`UNIVERSAL_CONVERSION_IS_FIXED`), ou rattachement \u00e0 un ingr\u00e9dient qui a d\u00e9j\u00e0 50 conversions propres (`CONVERSION_LIMIT_REACHED`)"
                     }
                 }
             }
@@ -1884,29 +1884,47 @@
                     "Recipes"
                 ],
                 "summary": "Recettes des autres utilisateurs que l'utilisateur authentifi\u00e9 n'a pas encore copi\u00e9es, tri\u00e9es par slug",
+                "description": "200 recettes au plus par r\u00e9ponse, les premi\u00e8res dans l'ordre du slug (`totalItems` donne le vrai nombre). Sans param\u00e8tre, la premi\u00e8re page de 200 : `limit` et `offset` facultatifs lisent la suite.",
                 "operationId": "get_api_list_other_people_recipes",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Nombre de recettes de la page, de 1 \u00e0 200",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 200,
+                            "maximum": 200,
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "name": "offset",
+                        "in": "query",
+                        "description": "Nombre de recettes saut\u00e9es, dans l'ordre du slug",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 0,
+                            "maximum": 1000000,
+                            "minimum": 0
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "Recettes des autres",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "properties": {
-                                        "member": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/components/schemas/OtherPeopleRecipeDTO"
-                                            }
-                                        },
-                                        "totalItems": {
-                                            "type": "integer",
-                                            "example": 12
-                                        }
-                                    },
-                                    "type": "object"
+                                    "$ref": "#/components/schemas/OtherPeopleRecipesDTO"
                                 }
                             }
                         }
+                    },
+                    "422": {
+                        "description": "Param\u00e8tre `limit` ou `offset` hors de ses bornes"
                     }
                 }
             }
@@ -2601,6 +2619,9 @@
                     "409": {
                         "description": "Cette adresse email est d\u00e9j\u00e0 utilis\u00e9e"
                     },
+                    "429": {
+                        "description": "Trop d'inscriptions depuis cette adresse IP, ou trop d'emails demand\u00e9s au total dans l'heure (100, toutes adresses confondues)"
+                    },
                     "422": {
                         "description": "Corps de la requ\u00eate invalide"
                     }
@@ -2732,7 +2753,7 @@
                         "description": "Corps de la requ\u00eate invalide"
                     },
                     "429": {
-                        "description": "Trop de demandes depuis cette adresse IP"
+                        "description": "Trop de demandes depuis cette adresse IP, ou trop d'emails demand\u00e9s au total dans l'heure (100, toutes adresses confondues)"
                     }
                 },
                 "security": []
@@ -2764,7 +2785,7 @@
                         "description": "Corps de la requ\u00eate invalide"
                     },
                     "429": {
-                        "description": "Trop de demandes depuis cette adresse IP"
+                        "description": "Trop de demandes depuis cette adresse IP, ou trop d'emails demand\u00e9s au total dans l'heure (100, toutes adresses confondues)"
                     }
                 },
                 "security": []
@@ -2821,6 +2842,17 @@
                     },
                     "422": {
                         "description": "Corps invalide, ou mot de passe actuel absent ou erron\u00e9 avec un nouveau mot de passe"
+                    },
+                    "429": {
+                        "description": "Trop de mots de passe actuels refus\u00e9s pour cet utilisateur (5 par 15 minutes) : message `PASSWORD_RATE_LIMITED`, rien n'a \u00e9t\u00e9 compar\u00e9 ni enregistr\u00e9 ; patienter au moins le d\u00e9lai de `Retry-After`. Un mot de passe juste ne compte pas.",
+                        "headers": {
+                            "Retry-After": {
+                                "description": "D\u00e9lai d'attente en secondes",
+                                "schema": {
+                                    "type": "integer"
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -2892,7 +2924,7 @@
                         "description": "Pr\u00e9f\u00e9rence remplac\u00e9e (cr\u00e9\u00e9e si elle n'existait pas, supprim\u00e9e si le corps est vide)"
                     },
                     "404": {
-                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`)"
+                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`), ou un ingr\u00e9dient qui n'est pas \u00e0 l'utilisateur (message `DRIVE_INGREDIENT_NOT_FOUND`) : un choix ne se pose que sur un ingr\u00e9dient de l'utilisateur (ou sur l'ancien slug de l'un d'eux), et rien n'est enregistr\u00e9"
                     },
                     "409": {
                         "description": "Pas de magasin enregistr\u00e9 (message `DRIVE_NOT_CONFIGURED`), ou `storeId` n'est pas le magasin courant (message `DRIVE_STORE_MISMATCH`)"
@@ -3183,7 +3215,7 @@
                         "description": "Pr\u00e9f\u00e9rences enregistr\u00e9es (tout ou rien)"
                     },
                     "404": {
-                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`)"
+                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`), ou un ingr\u00e9dient qui n'est pas \u00e0 l'utilisateur (message `DRIVE_INGREDIENT_NOT_FOUND`) : un choix ne se pose que sur un ingr\u00e9dient de l'utilisateur (ou sur l'ancien slug de l'un d'eux), et rien n'est enregistr\u00e9"
                     },
                     "409": {
                         "description": "Pas de magasin enregistr\u00e9 (message `DRIVE_NOT_CONFIGURED`), ou `storeId` n'est pas le magasin courant (message `DRIVE_STORE_MISMATCH`)"
@@ -3614,11 +3646,11 @@
                         "example": "gramme"
                     },
                     "coefficient": {
-                        "description": "Une unit\u00e9 de d\u00e9part vaut ce nombre d'unit\u00e9s d'arriv\u00e9e",
+                        "description": "Une unit\u00e9 de d\u00e9part vaut ce nombre d'unit\u00e9s d'arriv\u00e9e, de 0,000001 \u00e0 1 000 000",
                         "type": "number",
                         "format": "float",
-                        "minimum": 0,
-                        "exclusiveMinimum": true,
+                        "maximum": 1000000,
+                        "minimum": 1.0e-6,
                         "example": 250
                     },
                     "ingredientSlug": {
@@ -3683,12 +3715,12 @@
                         "example": "kilo"
                     },
                     "coefficient": {
-                        "description": "Une unit\u00e9 d'achat vaut ce nombre d'unit\u00e9s de recette ; obligatoire quand les deux unit\u00e9s diff\u00e8rent et qu'aucune conversion ne les relie d\u00e9j\u00e0",
+                        "description": "Une unit\u00e9 d'achat vaut ce nombre d'unit\u00e9s de recette, de 0,000001 \u00e0 1 000 000 ; obligatoire quand les deux unit\u00e9s diff\u00e8rent et qu'aucune conversion ne les relie d\u00e9j\u00e0",
                         "type": "number",
                         "format": "float",
                         "default": null,
-                        "minimum": 0,
-                        "exclusiveMinimum": true,
+                        "maximum": 1000000,
+                        "minimum": 1.0e-6,
                         "example": 1000,
                         "nullable": true
                     },
@@ -3720,11 +3752,11 @@
                         "example": "gramme"
                     },
                     "coefficient": {
-                        "description": "1 unit\u00e9 de d\u00e9part = ce nombre d'unit\u00e9s d'arriv\u00e9e",
+                        "description": "1 unit\u00e9 de d\u00e9part = ce nombre d'unit\u00e9s d'arriv\u00e9e, de 0,000001 \u00e0 1 000 000",
                         "type": "number",
                         "format": "float",
-                        "minimum": 0,
-                        "exclusiveMinimum": true,
+                        "maximum": 1000000,
+                        "minimum": 1.0e-6,
                         "example": 10
                     }
                 },
@@ -3748,9 +3780,10 @@
                         "example": "gramme"
                     },
                     "quantity": {
-                        "description": "Quantit\u00e9, dans cette unit\u00e9, pour le nombre de personnes de la recette",
+                        "description": "Quantit\u00e9, dans cette unit\u00e9, pour le nombre de personnes de la recette : strictement positive, un million au plus",
                         "type": "number",
                         "format": "float",
+                        "maximum": 1000000,
                         "minimum": 0,
                         "exclusiveMinimum": true,
                         "example": 500
@@ -3773,7 +3806,7 @@
                         "example": "P\u00e2tes carbonara"
                     },
                     "serving": {
-                        "description": "Nombre de personnes",
+                        "description": "Nombre de personnes, de 1 \u00e0 100",
                         "type": "integer",
                         "maximum": 100,
                         "minimum": 1,
@@ -3785,11 +3818,12 @@
                         "example": "plat"
                     },
                     "rows": {
-                        "description": "Lignes de la recette, au moins une",
+                        "description": "Lignes de la recette, de une \u00e0 cent",
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/RecipeRowPayload"
                         },
+                        "maxItems": 100,
                         "minItems": 1
                     }
                 },
@@ -3864,12 +3898,12 @@
                         ]
                     },
                     "baseFactor": {
-                        "description": "Combien d'unit\u00e9s de base (g, ml, pi\u00e8ce) vaut une unit\u00e9, strictement positif : 1000 pour le kilo. Va avec `dimension` ; sans importance pour `PACKAGE` (1).",
+                        "description": "Combien d'unit\u00e9s de base (g, ml, pi\u00e8ce) vaut une unit\u00e9, de 0,000001 \u00e0 1 000 000 : 1000 pour le kilo. Va avec `dimension` ; sans importance pour `PACKAGE` (1).",
                         "type": "number",
                         "format": "float",
                         "default": null,
-                        "minimum": 0,
-                        "exclusiveMinimum": true,
+                        "maximum": 1000000,
+                        "minimum": 1.0e-6,
                         "example": 1000,
                         "nullable": true
                     }
@@ -3910,6 +3944,23 @@
                 },
                 "type": "object"
             },
+            "ListOtherPeopleRecipesRequestQuery": {
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "default": 200,
+                        "maximum": 200,
+                        "minimum": 1
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "default": 0,
+                        "maximum": 1000000,
+                        "minimum": 0
+                    }
+                },
+                "type": "object"
+            },
             "MarkIngredientsDistinctPayload": {
                 "required": [
                     "other"
@@ -3944,7 +3995,7 @@
                 ],
                 "properties": {
                     "serving": {
-                        "description": "Nombre de personnes du repas",
+                        "description": "Nombre de personnes du repas, de 1 \u00e0 100",
                         "type": "integer",
                         "maximum": 100,
                         "minimum": 1,
@@ -5879,6 +5930,27 @@
                 },
                 "type": "object"
             },
+            "OtherPeopleRecipesDTO": {
+                "required": [
+                    "member",
+                    "totalItems"
+                ],
+                "properties": {
+                    "member": {
+                        "description": "Les recettes de cette page, tri\u00e9es par slug, 200 au plus",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/OtherPeopleRecipeDTO"
+                        }
+                    },
+                    "totalItems": {
+                        "description": "Le nombre r\u00e9el de recettes des autres, toutes pages confondues (peut d\u00e9passer le nombre de `member`)",
+                        "type": "integer",
+                        "example": 12
+                    }
+                },
+                "type": "object"
+            },
             "RecipeSummaryDTO": {
                 "required": [
                     "id",
@@ -5939,7 +6011,7 @@
                     },
                     "email": {
                         "type": "string",
-                        "example": "alexiane.sichi@gmail.com"
+                        "example": "alexiane@example.com"
                     },
                     "roles": {
                         "type": "array",

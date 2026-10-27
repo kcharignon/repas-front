@@ -266,6 +266,48 @@ describe('OtherRecipesView', () => {
     expect(calls(fetchMock)).toContain('POST /api/v1/recipes/o1/copy')
   })
 
+  it('charge la page suivante par « Voir plus » quand le total dépasse ce qui est affiché', async () => {
+    const offsets: (string | null)[] = []
+    stubApi({
+      ...session,
+      'GET /api/v1/recipes/other-people': (request) => {
+        const offset = new URL(request.url).searchParams.get('offset')
+        offsets.push(offset)
+
+        return json(
+          offset === null
+            ? { member: [{ id: 'o1', name: 'Ramen', typeName: 'Plat' }], totalItems: 2 }
+            : { member: [{ id: 'o2', name: 'Tarte', typeName: 'Dessert' }], totalItems: 2 },
+        )
+      },
+    })
+    const context = await signedIn('/recettes/autres')
+    const wrapper = mount(OtherRecipesView, { global: { plugins: context.plugins } })
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Ramen'))
+    expect(wrapper.text()).not.toContain('Tarte')
+
+    const more = wrapper.findAll('button').find((button) => button.text() === 'Voir plus')
+    await more?.trigger('click')
+
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Tarte'))
+    expect(wrapper.text()).toContain('Ramen')
+    expect(offsets).toEqual([null, '1'])
+    // Tout est affiché : plus de bouton
+    expect(wrapper.findAll('button').some((button) => button.text() === 'Voir plus')).toBe(false)
+  })
+
+  it('ne propose pas « Voir plus » quand tout est affiché', async () => {
+    stubApi({
+      ...session,
+      'GET /api/v1/recipes/other-people': () => json(others),
+    })
+    const context = await signedIn('/recettes/autres')
+    const wrapper = mount(OtherRecipesView, { global: { plugins: context.plugins } })
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Ramen'))
+
+    expect(wrapper.text()).not.toContain('Voir plus')
+  })
+
   it("dit qu'il n'y a rien à copier", async () => {
     stubApi({
       ...session,

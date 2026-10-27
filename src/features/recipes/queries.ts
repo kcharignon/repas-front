@@ -1,5 +1,5 @@
 import { computed } from 'vue'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { ApiError, ifMatch, unwrap } from '@/api'
 import { shoppingListKeys } from '@/features/shopping-lists/queries'
@@ -39,13 +39,27 @@ export function useRecipesByType(slug: () => string | null) {
   })
 }
 
-/** Les recettes des autres utilisateurs que celui-ci n'a pas encore copiées. */
+/**
+ * Les recettes des autres utilisateurs que celui-ci n'a pas encore copiées, par pages de 200 au plus (`offset`) : `totalItems`
+ * est le vrai nombre, la page suivante se charge à la demande.
+ */
 export function useOtherPeopleRecipes() {
   const { api } = useSessionStore()
 
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: recipeKeys.others,
-    queryFn: () => unwrap(api.GET('/api/v1/recipes/other-people')),
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      unwrap(
+        api.GET('/api/v1/recipes/other-people', {
+          params: { query: pageParam > 0 ? { offset: pageParam } : {} },
+        }),
+      ),
+    getNextPageParam: (lastPage, pages) => {
+      const loaded = pages.reduce((count, page) => count + page.member.length, 0)
+
+      return lastPage.member.length > 0 && loaded < lastPage.totalItems ? loaded : undefined
+    },
   })
 }
 

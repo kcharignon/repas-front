@@ -15,6 +15,7 @@ const driveCodes = new Map([
   ['DRIVE_NOT_CONFIGURED', 'errors.driveNotConfigured'],
   ['DRIVE_CHOICE_INVALID', 'errors.driveChoiceInvalid'],
   ['DRIVE_CHOICE_NOT_FOUND', 'errors.driveChoiceNotFound'],
+  ['DRIVE_INGREDIENT_NOT_FOUND', 'errors.driveIngredientNotFound'],
   ['DRIVE_LIMIT_REACHED', 'errors.driveLimitReached'],
   ['DRIVE_STORE_MISMATCH', 'errors.driveStoreMismatch'],
   ['DRIVE_STORE_INVALID', 'errors.driveStoreInvalid'],
@@ -30,6 +31,22 @@ const conversionCodes = new Map([
   ['CONVERSION_ALREADY_EXISTS', 'errors.conversionExists'],
   ['CONVERSION_SAME_UNIT', 'conversion.errors.sameUnit'],
   ['CONVERSION_REQUIRED_BY_INGREDIENT', 'errors.conversionRequired'],
+])
+
+/** Les plafonds et les bornes des recettes, ingrédients, listes et conversions (422) : chacun dit sa limite, au lieu du code brut. */
+const limitCodes = new Map([
+  ['RECIPE_LIMIT_REACHED', 'limits.recipeLimitReached'],
+  ['INGREDIENT_LIMIT_REACHED', 'limits.ingredientLimitReached'],
+  ['SHOPPING_LIST_LIMIT_REACHED', 'limits.listLimitReached'],
+  ['SHOPPING_LIST_MEAL_LIMIT_REACHED', 'limits.listMealLimitReached'],
+  ['RECIPE_ROWS_LIMIT_REACHED', 'limits.recipeRowsLimitReached'],
+  ['CONVERSION_LIMIT_REACHED', 'limits.conversionLimitReached'],
+  ['RECIPE_QUANTITY_INVALID', 'limits.quantityInvalid'],
+  ['SHOPPING_LIST_QUANTITY_INVALID', 'limits.quantityInvalid'],
+  ['RECIPE_SERVING_INVALID', 'limits.servingInvalid'],
+  ['MEAL_SERVING_INVALID', 'limits.servingInvalid'],
+  ['USER_SERVING_INVALID', 'limits.servingInvalid'],
+  ['CONVERSION_COEFFICIENT_INVALID', 'limits.coefficientInvalid'],
 ])
 
 /**
@@ -51,11 +68,34 @@ function driveRateLimited(error: ApiError): string {
   return t('errors.driveRateLimited', { wait })
 }
 
+/**
+ * `WRITE_RATE_LIMITED` : trop d'actions en peu de temps, rien n'a été enregistré. Le délai est court : jusqu'à une minute on dit « un instant ».
+ * `PASSWORD_RATE_LIMITED` : trop de mots de passe actuels refusés ; `Retry-After` est exact, on le dit en minutes (au moins une).
+ */
+function rateLimitedByCode(code: string, error: ApiError): string | null {
+  const minutes = Math.max(1, Math.ceil((error.retryAfter ?? 60) / 60))
+  const minutesText = i18n.global.t('errors.driveWait', { minutes }, minutes)
+  if (code === 'WRITE_RATE_LIMITED') {
+    const wait = (error.retryAfter ?? 0) <= 60 ? t('errors.writeWaitShort') : minutesText
+
+    return t('errors.writeRateLimited', { wait })
+  }
+  if (code === 'PASSWORD_RATE_LIMITED')
+    return t('errors.passwordRateLimited', { wait: minutesText })
+
+  return null
+}
+
 /** Le message que lit l'utilisateur pour un échec d'écriture, selon le code renvoyé par le back (ADR 0007, 0016). */
 export function messageForFailure(error: unknown): string {
   if (!(error instanceof ApiError)) return t('errors.generic')
   if (error.message === 'DRIVE_RATE_LIMITED') return driveRateLimited(error)
-  const code = driveCodes.get(error.message) ?? conversionCodes.get(error.message)
+  const rateLimited = rateLimitedByCode(error.message, error)
+  if (rateLimited !== null) return rateLimited
+  const code =
+    driveCodes.get(error.message) ??
+    conversionCodes.get(error.message) ??
+    limitCodes.get(error.message)
   if (code !== undefined) return t(code)
 
   switch (error.status) {

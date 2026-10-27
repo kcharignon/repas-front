@@ -13,7 +13,7 @@ const router = useRouter()
 
 const others = useOtherPeopleRecipes()
 const copy = useCopyRecipe()
-const items = computed(() => others.data.value?.member ?? [])
+const items = computed(() => others.data.value?.pages.flatMap((page) => page.member) ?? [])
 
 function copyRecipe(id: string) {
   copy.mutate(id, {
@@ -69,5 +69,14 @@ function copyRecipe(id: string) {
         </UiButton>
       </li>
     </ul>
+    <UiButton
+      v-if="others.hasNextPage.value"
+      variant="secondary"
+      class="self-center"
+      :disabled="others.isFetchingNextPage.value"
+      @click="others.fetchNextPage()"
+    >
+      {{ t('recipes.othersMore') }}
+    </UiButton>
   </main>
 </template>
