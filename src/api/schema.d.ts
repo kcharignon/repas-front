@@ -217,7 +217,7 @@ export interface paths {
         get: operations["get_api_list_ingredient_conversions"];
         put?: never;
         /**
-         * Ajoute une conversion PROPRE à un ingrédient de l'utilisateur (« 1 unité de départ = coefficient unités d'arrivée »), vers n'importe quelle unité et sans limite de nombre
+         * Ajoute une conversion PROPRE à un ingrédient de l'utilisateur (« 1 unité de départ = coefficient unités d'arrivée »), vers n'importe quelle unité, 50 au plus par ingrédient
          * @description Seul le propriétaire de l'ingrédient l'écrit, un administrateur compris. Jamais une conversion universelle (l'administrateur les écrit par `/api/v1/conversions`). `Location` est l'adresse de la conversion créée (modifiable et supprimable).
          */
         post: operations["post_api_create_ingredient_conversion"];
@@ -566,7 +566,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Recettes des autres utilisateurs que l'utilisateur authentifié n'a pas encore copiées, triées par slug */
+        /**
+         * Recettes des autres utilisateurs que l'utilisateur authentifié n'a pas encore copiées, triées par slug
+         * @description 200 recettes au plus par réponse, les premières dans l'ordre du slug (`totalItems` donne le vrai nombre). Sans paramètre, la première page de 200 : `limit` et `offset` facultatifs lisent la suite.
+         */
         get: operations["get_api_list_other_people_recipes"];
         put?: never;
         post?: never;
@@ -1213,7 +1216,7 @@ export interface components {
             endUnitSlug: string;
             /**
              * Format: float
-             * @description Une unité de départ vaut ce nombre d'unités d'arrivée
+             * @description Une unité de départ vaut ce nombre d'unités d'arrivée, de 0,000001 à 1 000 000
              * @example 250
              */
             coefficient: number;
@@ -1259,7 +1262,7 @@ export interface components {
             defaultPurchaseUnitSlug: string;
             /**
              * Format: float
-             * @description Une unité d'achat vaut ce nombre d'unités de recette ; obligatoire quand les deux unités diffèrent et qu'aucune conversion ne les relie déjà
+             * @description Une unité d'achat vaut ce nombre d'unités de recette, de 0,000001 à 1 000 000 ; obligatoire quand les deux unités diffèrent et qu'aucune conversion ne les relie déjà
              * @default null
              * @example 1000
              */
@@ -1284,7 +1287,7 @@ export interface components {
             endUnitSlug: string;
             /**
              * Format: float
-             * @description 1 unité de départ = ce nombre d'unités d'arrivée
+             * @description 1 unité de départ = ce nombre d'unités d'arrivée, de 0,000001 à 1 000 000
              * @example 10
              */
             coefficient: number;
@@ -1302,7 +1305,7 @@ export interface components {
             unitSlug: string;
             /**
              * Format: float
-             * @description Quantité, dans cette unité, pour le nombre de personnes de la recette
+             * @description Quantité, dans cette unité, pour le nombre de personnes de la recette : strictement positive, un million au plus
              * @example 500
              */
             quantity: number;
@@ -1314,7 +1317,7 @@ export interface components {
              */
             name: string;
             /**
-             * @description Nombre de personnes
+             * @description Nombre de personnes, de 1 à 100
              * @example 4
              */
             serving: number;
@@ -1323,7 +1326,7 @@ export interface components {
              * @example plat
              */
             typeSlug: string;
-            /** @description Lignes de la recette, au moins une */
+            /** @description Lignes de la recette, de une à cent */
             rows: components["schemas"]["RecipeRowPayload"][];
         };
         RecipeTypePayload: {
@@ -1364,7 +1367,7 @@ export interface components {
             dimension: components["schemas"]["Dimension"] | null;
             /**
              * Format: float
-             * @description Combien d'unités de base (g, ml, pièce) vaut une unité, strictement positif : 1000 pour le kilo. Va avec `dimension` ; sans importance pour `PACKAGE` (1).
+             * @description Combien d'unités de base (g, ml, pièce) vaut une unité, de 0,000001 à 1 000 000 : 1000 pour le kilo. Va avec `dimension` ; sans importance pour `PACKAGE` (1).
              * @default null
              * @example 1000
              */
@@ -1380,6 +1383,12 @@ export interface components {
         ListMergeCandidatesRequestQuery: {
             /** @default null */
             q: string | null;
+        };
+        ListOtherPeopleRecipesRequestQuery: {
+            /** @default 200 */
+            limit: number;
+            /** @default 0 */
+            offset: number;
         };
         MarkIngredientsDistinctPayload: {
             /**
@@ -1397,7 +1406,7 @@ export interface components {
         };
         UpdateServingMealPayload: {
             /**
-             * @description Nombre de personnes du repas
+             * @description Nombre de personnes du repas, de 1 à 100
              * @example 6
              */
             serving: number;
@@ -2501,6 +2510,15 @@ export interface components {
              */
             typeName: string;
         };
+        OtherPeopleRecipesDTO: {
+            /** @description Les recettes de cette page, triées par slug, 200 au plus */
+            member: components["schemas"]["OtherPeopleRecipeDTO"][];
+            /**
+             * @description Le nombre réel de recettes des autres, toutes pages confondues (peut dépasser le nombre de `member`)
+             * @example 12
+             */
+            totalItems: number;
+        };
         RecipeSummaryDTO: {
             /**
              * @description Identifiant de la recette
@@ -2533,7 +2551,7 @@ export interface components {
              * @example 0b7a6f0e-5c1d-4c52-9f0e-3f3c1d8b2a11
              */
             id: string;
-            /** @example alexiane.sichi@gmail.com */
+            /** @example alexiane@example.com */
             email: string;
             /**
              * @example [
@@ -3109,7 +3127,7 @@ export interface operations {
                 "application/json": {
                     /**
                      * Format: email
-                     * @example alexiane.sichi@gmail.com
+                     * @example alexiane@example.com
                      */
                     email: string;
                     /** Format: password */
@@ -3425,7 +3443,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Corps de la requête invalide */
+            /** @description Corps de la requête invalide, ou l'ingrédient a déjà 50 conversions propres (`CONVERSION_LIMIT_REACHED`) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3666,7 +3684,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Corps invalide : unités identiques (`CONVERSION_SAME_UNIT`), coefficient qui n'est pas un nombre strictement positif */
+            /** @description Corps invalide : unités identiques (`CONVERSION_SAME_UNIT`), coefficient qui n'est pas un nombre strictement positif, ou l'ingrédient a déjà 50 conversions propres (`CONVERSION_LIMIT_REACHED`) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4100,7 +4118,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Corps de la requête invalide, ou conversion universelle (sans ingrédient) dont le corps change la paire d'unités ou l'ingrédient : seul son coefficient se corrige (`UNIVERSAL_CONVERSION_IS_FIXED`) */
+            /** @description Corps de la requête invalide, ou conversion universelle (sans ingrédient) dont le corps change la paire d'unités ou l'ingrédient : seul son coefficient se corrige (`UNIVERSAL_CONVERSION_IS_FIXED`), ou rattachement à un ingrédient qui a déjà 50 conversions propres (`CONVERSION_LIMIT_REACHED`) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4874,7 +4892,12 @@ export interface operations {
     };
     get_api_list_other_people_recipes: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Nombre de recettes de la page, de 1 à 200 */
+                limit?: number;
+                /** @description Nombre de recettes sautées, dans l'ordre du slug */
+                offset?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4887,12 +4910,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        member?: components["schemas"]["OtherPeopleRecipeDTO"][];
-                        /** @example 12 */
-                        totalItems?: number;
-                    };
+                    "application/json": components["schemas"]["OtherPeopleRecipesDTO"];
                 };
+            };
+            /** @description Paramètre `limit` ou `offset` hors de ses bornes */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -5661,6 +5687,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Trop d'inscriptions depuis cette adresse IP, ou trop d'emails demandés au total dans l'heure (100, toutes adresses confondues) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     post_api_auth_logout: {
@@ -5784,7 +5817,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Trop de demandes depuis cette adresse IP */
+            /** @description Trop de demandes depuis cette adresse IP, ou trop d'emails demandés au total dans l'heure (100, toutes adresses confondues) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -5820,7 +5853,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Trop de demandes depuis cette adresse IP */
+            /** @description Trop de demandes depuis cette adresse IP, ou trop d'emails demandés au total dans l'heure (100, toutes adresses confondues) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -5881,6 +5914,15 @@ export interface operations {
             /** @description Corps invalide, ou mot de passe actuel absent ou erroné avec un nouveau mot de passe */
             422: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Trop de mots de passe actuels refusés pour cet utilisateur (5 par 15 minutes) : message `PASSWORD_RATE_LIMITED`, rien n'a été comparé ni enregistré ; patienter au moins le délai de `Retry-After`. Un mot de passe juste ne compte pas. */
+            429: {
+                headers: {
+                    /** @description Délai d'attente en secondes */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -5949,7 +5991,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Fonction drive coupée (message `DRIVE_DISABLED`) */
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`), ou un ingrédient qui n'est pas à l'utilisateur (message `DRIVE_INGREDIENT_NOT_FOUND`) : un choix ne se pose que sur un ingrédient de l'utilisateur (ou sur l'ancien slug de l'un d'eux), et rien n'est enregistré */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6247,7 +6289,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Fonction drive coupée (message `DRIVE_DISABLED`) */
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`), ou un ingrédient qui n'est pas à l'utilisateur (message `DRIVE_INGREDIENT_NOT_FOUND`) : un choix ne se pose que sur un ingrédient de l'utilisateur (ou sur l'ancien slug de l'un d'eux), et rien n'est enregistré */
             404: {
                 headers: {
                     [name: string]: unknown;
