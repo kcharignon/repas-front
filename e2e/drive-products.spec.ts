@@ -1,7 +1,7 @@
 // « Mes produits » (DRV-410), sans back ni compte : l'API est simulée (`e2e/support/driveBack.ts`).
 // Jouée sur bureau et sur Pixel 7 : parcours du compte à l'enregistrement d'un nouvel ordre, accessibilité en clair et en sombre.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './support/test'
 
 import { cheddar, cheddarChoice, farineA, farineB, fakeDriveBack } from './support/driveBack'
 

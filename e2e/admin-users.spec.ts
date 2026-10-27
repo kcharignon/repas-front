@@ -2,7 +2,7 @@
 // changements de statut et les suppressions. Jouée sur bureau (tableau) et sur Pixel 7 (cartes). Données inventées.
 // SHOTS_DIR=<dossier> : garde une capture de chaque état (clair et sombre) pour la relire.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page, type Route } from '@playwright/test'
+import { expect, test, type Page, type Route } from './support/test'
 
 type Status = 'PENDING' | 'ACTIVE' | 'DISABLED'
 interface FakeUser {

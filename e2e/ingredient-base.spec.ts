@@ -3,7 +3,7 @@
 // tout autre compte ne voit ni l'un ni l'autre. Jouée sur bureau et sur Pixel 7 (412 px), puis à 360 px, en clair et en sombre.
 // `E2E_SHOTS=<dossier>` garde des captures à lire.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './support/test'
 
 import { fakeIngredientsBack } from './support/ingredientsBack'
 

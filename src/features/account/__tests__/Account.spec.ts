@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
 import { appContext, calls, json, me, stubApi } from '@/__tests__/helpers'
@@ -162,5 +162,73 @@ describe('réglages du compte', () => {
       .find((button) => button.text() === 'Se déconnecter')
       ?.trigger('click')
     await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('login'))
+  })
+})
+
+// Le décor d'Halloween (ADR 0010) : un interrupteur sous le choix du thème, visible du 15 octobre au 1er novembre seulement.
+// Hors de ces tests, la suite tourne le 15 juin (src/__tests__/setup.ts).
+describe('décor d’Halloween', () => {
+  const switchOf = (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
+    wrapper.find('[role="switch"]')
+
+  beforeEach(() => {
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-season')
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-season')
+  })
+
+  it('hors saison : aucun interrupteur, aucun thème saisonnier', async () => {
+    const { wrapper } = await open()
+
+    expect(switchOf(wrapper).exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Halloween')
+    expect(document.documentElement.hasAttribute('data-season')).toBe(false)
+  })
+
+  it('en saison : l’interrupteur est là, juste sous le choix du thème, et activé par défaut', async () => {
+    vi.setSystemTime(new Date(2026, 9, 27, 12))
+
+    const { wrapper } = await open()
+
+    const toggle = switchOf(wrapper)
+    expect(toggle.exists()).toBe(true)
+    expect(toggle.attributes('aria-checked')).toBe('true')
+    expect(wrapper.text()).toContain('Décor d’Halloween')
+    expect(document.documentElement.dataset.season).toBe('halloween')
+    const section = toggle.element.closest('section')
+    expect(section?.querySelector('h2')?.textContent).toBe('Thème')
+  })
+
+  it('le couper retire le thème saisonnier et se retient ; le rallumer le remet', async () => {
+    vi.setSystemTime(new Date(2026, 9, 27, 12))
+    const { wrapper } = await open()
+
+    await switchOf(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(switchOf(wrapper).attributes('aria-checked')).toBe('false')
+    expect(document.documentElement.hasAttribute('data-season')).toBe(false)
+    expect(localStorage.getItem('repas.season')).toBe('off')
+
+    await switchOf(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(switchOf(wrapper).attributes('aria-checked')).toBe('true')
+    expect(document.documentElement.dataset.season).toBe('halloween')
+    expect(localStorage.getItem('repas.season')).toBeNull()
+  })
+
+  it('un décor coupé auparavant s’affiche coupé', async () => {
+    vi.setSystemTime(new Date(2026, 9, 27, 12))
+    localStorage.setItem('repas.season', 'off')
+
+    const { wrapper } = await open()
+
+    expect(switchOf(wrapper).attributes('aria-checked')).toBe('false')
+    expect(document.documentElement.hasAttribute('data-season')).toBe(false)
   })
 })

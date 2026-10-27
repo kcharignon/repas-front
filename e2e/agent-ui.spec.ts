@@ -2,7 +2,7 @@
 // d'au moins 44 px, isolation de la page hôte, échappement du HTML, clavier. Autonome : la page de démonstration (`drive-agent/demo/`) est
 // construite ici et posée dans une page vide, sans serveur ni back. Aucune requête réseau.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './support/test'
 
 import { buildAgent } from '../drive-agent/scripts/build.mjs'
 

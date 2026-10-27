@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './support/test'
 
 // Ces tests parlent au VRAI back de développement, à travers le proxy du front (même origine que l'application) :
 // `make e2e` les joue (E2E_WITH_BACK est posé par compose). La CI, sans back, les ignore.

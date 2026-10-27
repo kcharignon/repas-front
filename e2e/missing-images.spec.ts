@@ -3,7 +3,7 @@
 // SHOTS=<dossier> garde une capture de chaque cas.
 import process from 'node:process'
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page, type Route } from '@playwright/test'
+import { expect, test, type Page, type Route } from './support/test'
 
 const json = (route: Route, body: unknown) =>
   route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })

@@ -1,6 +1,6 @@
 // Les crédits de « Moi » (back #53) : Flaticon est nommé et la licence des icônes est à un clic. Sans back ni compte : l'API est simulée
 // par `page.route`. Joué sur bureau et sur Pixel 7, thèmes clair et sombre.
-import { expect, test } from '@playwright/test'
+import { expect, test } from './support/test'
 
 import { fakeBack, scan } from './support/drive'
 

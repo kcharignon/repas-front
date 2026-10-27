@@ -1,7 +1,7 @@
 // Liste envoyée au drive (DRV-401), sans back ni compte : l'API est simulée par `page.route`, avec un état qui suit les envois.
 // Jouée sur bureau et sur Pixel 7 : envoyer, lire en lecture seule, rouvrir.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page, type Route } from '@playwright/test'
+import { expect, test, type Page, type Route } from './support/test'
 
 import { fakeApp, plan, trackTaps } from './support/drive'
 import { fakeAppForSetup } from './support/setupApp'

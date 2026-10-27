@@ -2,7 +2,7 @@
 // quelque chose à régler, l'écran liste les ingrédients, « Régler » ouvre la feuille « 1 [unité d'achat] = ? [unité des recettes] » et
 // l'ingrédient disparaît une fois la conversion enregistrée. Jouée à 390 px, en clair et en sombre. `E2E_SHOTS=<dossier>` garde des captures.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './support/test'
 
 const shots = process.env.E2E_SHOTS
 

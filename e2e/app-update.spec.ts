@@ -2,7 +2,7 @@
 // pont `repasNative` qui joue la machine à états de la vraie (recherche, téléchargement avec progression, vérification, installateur
 // d'Android). Ni GitHub, ni installation : la page ne fait que demander et afficher. Captures à 412 et 360 px, thèmes clair et sombre.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from '@playwright/test'
+import { expect, test } from './support/test'
 import type { Page, Route } from '@playwright/test'
 
 const BANNER = 'Une nouvelle version de l’application est prête.'

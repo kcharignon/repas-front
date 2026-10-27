@@ -2,7 +2,7 @@
 // action secondaire, et « ⋮ » (« Plus d'actions ») pour le reste. Sans back : l'API est simulée par `page.route`. Captures (360 et
 // 320 px, clair et sombre, menu fermé et ouvert) dans test-results/, à lire avant de fusionner.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page, type Route } from '@playwright/test'
+import { expect, test, type Page, type Route } from './support/test'
 
 import { fakeApp } from './support/drive'
 

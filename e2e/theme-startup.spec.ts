@@ -1,5 +1,5 @@
 // Le thème enregistré s'applique dès l'ouverture, sans passer par « Moi » (ni back ni compte : l'API est simulée par `page.route`).
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './support/test'
 
 async function fakeBack(page: Page) {
   await page.addInitScript(() => localStorage.setItem('repas.session', '1'))

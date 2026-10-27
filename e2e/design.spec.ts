@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from '@playwright/test'
+import { expect, test } from './support/test'
 
 for (const colorScheme of ['light', 'dark'] as const) {
   test(`le catalogue est accessible (WCAG AA), thème ${colorScheme} du système`, async ({

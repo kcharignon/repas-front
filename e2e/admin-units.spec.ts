@@ -1,7 +1,7 @@
 // Administration des unités (DRV-409), sans back ni compte : l'API est simulée par `page.route`, avec une unité qui garde ce qu'on y
 // enregistre. Jouée sur bureau et sur Pixel 7 : dimension et facteur de base, accessibilité (axe) en thème clair et sombre.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page, type Route } from '@playwright/test'
+import { expect, test, type Page, type Route } from './support/test'
 
 type Unit = {
   slug: string

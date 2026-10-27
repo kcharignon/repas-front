@@ -1,7 +1,7 @@
 // La version de l'application connue du serveur (DRV-637), sans back ni compte : l'API est simulée par `page.route`, l'application par un
 // faux pont `repasNative` posé avant le chargement. Envoi de la version une fois par session, bandeau de « Moi », administration des comptes.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page, type Route } from '@playwright/test'
+import { expect, test, type Page, type Route } from './support/test'
 
 const BANNER = 'Une nouvelle version de l’application est prête.'
 
