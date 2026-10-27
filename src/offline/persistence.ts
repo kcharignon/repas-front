@@ -4,13 +4,14 @@ import type { DehydratedState, Query, QueryClient } from '@tanstack/vue-query'
 
 import { shoppingListKeys } from '@/features/shopping-lists/queries'
 import { hasSessionHint, useSessionStore } from '@/session/session'
+import { eraseOfflineCopy, OFFLINE_COPY_KEY } from './offlineCopy'
 
 /**
  * Lecture hors-ligne de la liste de courses en cours (plan du front, phase 5) : seule la liste active, résumé et détail, est
  * gardée dans le navigateur, **au nom de l'utilisateur** ; elle disparaît à la déconnexion et n'est jamais montrée à quelqu'un
  * d'autre. L'édition hors-ligne reste hors périmètre : une écriture sans réseau échoue clairement.
  */
-const KEY = 'repas.cache'
+const KEY = OFFLINE_COPY_KEY
 const MAX_AGE_MS = 7 * 24 * 3600 * 1000
 const THROTTLE_MS = 1000
 
@@ -38,14 +39,6 @@ function read(): Envelope | null {
   }
 }
 
-function erase() {
-  try {
-    storage()?.removeItem(KEY)
-  } catch {
-    // Stockage indisponible : rien n'a été gardé.
-  }
-}
-
 /** Les requêtes qu'on garde : le résumé de la liste active et le détail de cette liste. */
 const keptBy = (client: QueryClient) => {
   const activeId = client.getQueryData<{ shoppingListId?: string | null }>(
@@ -65,13 +58,13 @@ const keptBy = (client: QueryClient) => {
 function save(client: QueryClient, userId: string) {
   // Une autre fenêtre a pu mettre fin à la session depuis l'écriture demandée : la copie ne se réécrit pas, elle s'efface.
   if (!hasSessionHint()) {
-    erase()
+    eraseOfflineCopy()
 
     return
   }
   const state = dehydrate(client, { shouldDehydrateQuery: keptBy(client) })
   try {
-    if (state.queries.length === 0) erase()
+    if (state.queries.length === 0) eraseOfflineCopy()
     else
       storage()?.setItem(
         KEY,
@@ -105,7 +98,7 @@ export function keepActiveListOffline(client: QueryClient) {
       stop()
       if (previous !== null && previous !== undefined) {
         client.clear()
-        erase()
+        eraseOfflineCopy()
       }
       if (userId === null) return
 
@@ -115,7 +108,7 @@ export function keepActiveListOffline(client: QueryClient) {
         // La copie est montrée tout de suite, mais jamais crue : elle date d'avant le rechargement (la liste a pu changer, ou
         // l'écriture différée n'a pas eu lieu), donc le premier écran la relit même si elle est « fraîche » (staleTime).
         void client.invalidateQueries({ queryKey: shoppingListKeys.all })
-      } else erase()
+      } else eraseOfflineCopy()
 
       unsubscribe = client.getQueryCache().subscribe(() => {
         timer ??= setTimeout(() => {
