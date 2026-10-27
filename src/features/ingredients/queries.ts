@@ -2,7 +2,7 @@ import { computed } from 'vue'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { ApiError, unwrap } from '@/api'
-import type { DuplicatePair, IngredientPayload } from '@/api'
+import type { DuplicatePair, IngredientConversionPayload, IngredientPayload } from '@/api'
 import { choiceKeys } from '@/features/drive/choicesQueries'
 import { driveKeys } from '@/features/drive/queries'
 import { recipeKeys } from '@/features/recipes/queries'
@@ -14,6 +14,7 @@ export const ingredientKeys = {
   departments: ['departments'] as const,
   inDepartment: (slug: string) => ['departments', slug, 'ingredients'] as const,
   detail: (slug: string) => ['ingredients', 'detail', slug] as const,
+  conversions: (slug: string) => ['ingredients', 'conversions', slug] as const,
   search: (search: string) => ['ingredients', 'search', search] as const,
   duplicates: ['ingredients', 'duplicates'] as const,
   mergeCandidates: (slug: string, search: string) =>
@@ -74,12 +75,91 @@ export function useIngredient(slug: () => string) {
   })
 }
 
-export function useUnits() {
+/** Les conversions de l'ingrédient : les siennes (`member`) et celles de tout le monde (`common`, en lecture seule). */
+export function useIngredientConversions(slug: () => string) {
+  const { api } = useSessionStore()
+
+  return useQuery({
+    queryKey: computed(() => ingredientKeys.conversions(slug())),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/ingredients/{slug}/conversions', { params: { path: { slug: slug() } } }),
+      ),
+    enabled: computed(() => slug() !== ''),
+  })
+}
+
+/**
+ * Ce que change une conversion d'ingrédient : la liste de ses conversions, sa fiche (unités compatibles), les unités qu'une ligne de
+ * recette peut prendre, et les recettes (`convertible` de chaque ligne).
+ */
+function invalidateConversionReaders(queryClient: ReturnType<typeof useQueryClient>, slug: string) {
+  void queryClient.invalidateQueries({ queryKey: ingredientKeys.conversions(slug) })
+  void queryClient.invalidateQueries({ queryKey: ingredientKeys.detail(slug) })
+  void queryClient.invalidateQueries({ queryKey: ['ingredients', 'units', slug] })
+  void queryClient.invalidateQueries({ queryKey: recipeKeys.all })
+}
+
+/** Ajoute (`id` absent) ou remplace une conversion PROPRE de l'ingrédient ; les refus du back (409, 422) vont dans la feuille. */
+export function useSaveIngredientConversion() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    meta: { silent: true },
+    mutationFn: async ({
+      slug,
+      id,
+      body,
+    }: {
+      slug: string
+      id: string | null
+      body: IngredientConversionPayload
+    }) => {
+      if (id === null) {
+        const { response, error } = await api.POST('/api/v1/ingredients/{slug}/conversions', {
+          params: { path: { slug } },
+          body,
+        })
+        if (!response.ok) throw ApiError.fromResponse(response, error)
+
+        return
+      }
+      await unwrap(
+        api.PUT('/api/v1/ingredients/{slug}/conversions/{conversionId}', {
+          params: { path: { slug, conversionId: id } },
+          body,
+        }),
+      )
+    },
+    onSettled: (_data, _error, { slug }) => invalidateConversionReaders(queryClient, slug),
+  })
+}
+
+export function useDeleteIngredientConversion() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    meta: { silent: true },
+    mutationFn: ({ slug, id }: { slug: string; id: string }) =>
+      unwrap(
+        api.DELETE('/api/v1/ingredients/{slug}/conversions/{conversionId}', {
+          params: { path: { slug, conversionId: id } },
+        }),
+      ),
+    onSettled: (_data, _error, { slug }) => invalidateConversionReaders(queryClient, slug),
+  })
+}
+
+/** Les unités ; `enabled` laisse un écran qui n'en a besoin que parfois ne les lire qu'à ce moment-là (la liste est gardée cinq minutes). */
+export function useUnits(enabled: () => boolean = () => true) {
   const { api } = useSessionStore()
 
   return useQuery({
     queryKey: ingredientKeys.units,
     queryFn: () => unwrap(api.GET('/api/v1/units')),
+    enabled: computed(enabled),
     staleTime: 5 * 60_000,
   })
 }

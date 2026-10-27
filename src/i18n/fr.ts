@@ -28,11 +28,13 @@ export default {
     equals: 'égale',
     swap: 'Inverser les deux côtés',
     waiting: 'Écris les deux nombres : la conversion se lit ici.',
+    choose: 'Choisis une unité',
     sentence: '1 {start} = {end}, et 1 {reverseStart} = {reverseEnd}.',
     sentenceNamed: '{name} : 1 {start} = {end}, et 1 {reverseStart} = {reverseEnd}.',
     errors: {
       number: 'Entre un nombre supérieur à zéro.',
       sameUnit: 'Choisis deux unités différentes.',
+      noUnit: 'Choisis les deux unités.',
     },
   },
   notFound: {
@@ -186,6 +188,24 @@ export default {
     baseSwitch: 'Ingrédient de base',
     baseHint: 'Copié dans les nouveaux comptes.',
     baseBadge: 'de base',
+    // Les conversions propres à un ingrédient (fiche de l'ingrédient) : « 1 tasse = 125 g », ajoutées, modifiées, retirées par son propriétaire
+    conversions: {
+      title: 'Conversions de {name}',
+      none: 'Aucune conversion à toi pour l’instant.',
+      line: '1 {start} = {end}',
+      editNamed: 'Modifier : {line}',
+      removeNamed: 'Supprimer : {line}',
+      universal: 'Pour tout le monde : {line}',
+      showAll: 'Voir tout',
+      showLess: 'Voir moins',
+      add: 'Ajouter une conversion',
+      newTitle: 'Nouvelle conversion',
+      editTitle: 'Modifier la conversion',
+      deleteTitle: 'Supprimer cette conversion ?',
+      deleteHelp: '« {line} » sera supprimée.',
+      canConvert: 'La recette peut se convertir en {unit}.',
+      missing: 'Il manque une conversion entre {cooking} et {purchase}.',
+    },
     // Doublons possibles et fusion de deux ingrédients (ING-007)
     duplicates: {
       title: 'Doublons possibles',
@@ -278,6 +298,13 @@ export default {
     inListNamed: 'Dans la liste, retirer {name}',
     unplanNamed: 'Retirer {name} de la liste de courses',
     ingredients: 'Ingrédients',
+    // Un ingrédient qui ne se convertit pas dans l'unité du magasin : repéré sur sa ligne, réglé par l'auteur de la recette
+    toFix: '{count} à régler',
+    toFixHint: 'Va au premier ingrédient à régler',
+    cannotConvert: 'Je ne sais pas convertir en {unit}',
+    fix: 'Régler',
+    fixNamed: 'Régler la conversion de {name}',
+    blockedHint: 'Règle d’abord les ingrédients signalés.',
     forPeople: 'Pour {count} personne | Pour {count} personnes',
     new: 'Nouvelle recette',
     edit: 'Modifier',
@@ -587,6 +614,10 @@ export default {
     unitBaseFactorInvalid: 'Le facteur de base doit être un nombre supérieur à zéro.',
     // `INGREDIENT_BASE_FORBIDDEN` (403, ING-015) : un écran périmé insiste, rien n'est enregistré
     ingredientBaseForbidden: 'Ce réglage n’est pas pour ton compte. Rien n’a changé.',
+    // Les conversions propres à un ingrédient (CONVERSION_ALREADY_EXISTS, CONVERSION_REQUIRED_BY_INGREDIENT)
+    conversionExists: 'Cette conversion existe déjà : modifie-la.',
+    conversionRequired:
+      'Cette conversion relie l’unité de ta recette à celle du magasin : change d’abord l’unité.',
     driveStoreInvalid:
       'Cette adresse n’est pas celle d’un magasin Leclerc Drive : vérifie-la, elle ressemble à https://exemple.leclercdrive.fr/magasin-123456-123456.',
   },

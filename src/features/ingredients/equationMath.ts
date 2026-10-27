@@ -21,7 +21,7 @@ export interface EquationValue {
   right: string | number
 }
 
-export type EquationProblem = 'sameUnit' | 'left' | 'right' | null
+export type EquationProblem = 'sameUnit' | 'noUnit' | 'left' | 'right' | null
 
 // Un nom qui contient une préposition (cuillère à soupe, boîte de conserve) s'accorde sur son premier mot
 const COMPOUND = /^(\S+)(\s+(?:(?:à|de|du|des|au|aux|en)\s|d['’]).*)$/i
@@ -94,11 +94,13 @@ export function coefficientOf(left: string | number, right: string | number): nu
 }
 
 /**
- * Ce qui empêche d'enregistrer. Un nombre vide n'est une erreur qu'à l'enregistrement (`requireNumbers`) ; un nombre écrit mais nul
- * ou négatif, et deux unités identiques, sont signalés tout de suite.
+ * Ce qui empêche d'enregistrer. Un nombre vide ou une unité pas encore choisie ne sont une erreur qu'à l'enregistrement
+ * (`requireNumbers`) ; un nombre écrit mais nul ou négatif, et deux unités identiques, sont signalés tout de suite.
  */
 export function equationProblem(value: EquationValue, requireNumbers = false): EquationProblem {
   if (value.start !== '' && value.start === value.end) return 'sameUnit'
+  // Une unité pas encore choisie (une nouvelle conversion qui laisse l'arrivée à choisir) : à l'enregistrement seulement
+  if (requireNumbers && (value.start === '' || value.end === '')) return 'noUnit'
 
   for (const side of ['left', 'right'] as const) {
     const text = String(value[side]).trim()
@@ -143,4 +145,37 @@ export function inUnit(quantity: number, from: EquationUnit, to: EquationUnit): 
   return Number(
     ((quantity * (from.baseFactor as number)) / (to.baseFactor as number)).toPrecision(12),
   )
+}
+
+/**
+ * Un nombre à lire dans une phrase, avec la séparation des milliers (« 1 000 ») : pour l'affichage, jamais pour remplir un champ. Une
+ * espace insécable ordinaire plutôt que l'espace fine du français, que la police du site ne dessine pas (« 1000 »).
+ */
+export function formatDisplayNumber(value: number): string {
+  return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 4 })
+    .format(value)
+    .replace(/\u202f/g, '\u00a0')
+}
+
+/** Une unité telle qu'on la lit dans une phrase courte : son symbole quand il dit autre chose que son nom (« g », « kg »), sinon son nom accordé. */
+export function unitText(unit: { name: string; symbol?: string | null }, quantity: number): string {
+  const symbol = unit.symbol?.trim() ?? ''
+  if (symbol !== '' && symbol.toLowerCase() !== unit.name.trim().toLowerCase()) return symbol
+
+  return unitLabel(unit.name, quantity)
+}
+
+/**
+ * Où commence l'équation d'une conversion qui manque : à gauche l'unité de la ligne ou des recettes (`startSlug`), à droite l'unité
+ * d'achat ou, si elle mesure un poids ou un volume, sa petite unité (« 1 cuillère à soupe = ? gramme »). Jamais la même unité des deux côtés.
+ */
+export function suggestedEnd(
+  startSlug: string,
+  purchase: EquationUnit | undefined,
+  units: EquationUnit[],
+): string {
+  if (purchase === undefined) return ''
+  const small = baseUnitOf(purchase, units)
+
+  return small !== undefined && small.slug !== startSlug ? small.slug : purchase.slug
 }

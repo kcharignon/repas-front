@@ -64,6 +64,16 @@ const base = {
   'GET /api/v1/departments': () => json(departments),
   'GET /api/v1/units': () => json(units),
   'GET /api/v1/ingredients/duplicates': () => json({ member: [], totalItems: 0 }),
+  // La section « Conversions de … » de la fiche d'un ingrédient à soi
+  'GET /api/v1/ingredients/ma-sauce/conversions': () =>
+    json({
+      member: [],
+      common: [],
+      totalItems: 0,
+      convertible: true,
+      cookingUnitSlug: 'gramme',
+      purchaseUnitSlug: 'kilo',
+    }),
   'GET /api/v1/departments/legumes/ingredients': () => json(ingredients),
   'GET /api/v1/shopping-lists/active/summary': () => json(summary({ courgette: 2 })),
 }

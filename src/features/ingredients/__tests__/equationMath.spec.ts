@@ -4,13 +4,16 @@ import {
   baseUnitOf,
   coefficientOf,
   equationProblem,
+  formatDisplayNumber,
   formatNumber,
   inUnit,
   inputNumber,
   parseNumber,
   quantityLabel,
   sameMeasureUnits,
+  suggestedEnd,
   unitLabel,
+  unitText,
   type EquationUnit,
 } from '../equationMath'
 
@@ -145,6 +148,12 @@ describe('equationProblem', () => {
     expect(equationProblem({ ...base, right: 'abc' })).toBe('right')
   })
 
+  it('demande de choisir une unité pas encore choisie, à l’enregistrement seulement', () => {
+    expect(equationProblem({ ...base, end: '' })).toBeNull()
+    expect(equationProblem({ ...base, end: '' }, true)).toBe('noUnit')
+    expect(equationProblem({ ...base, start: '' }, true)).toBe('noUnit')
+  })
+
   it('ne se plaint d’un nombre vide qu’à l’enregistrement', () => {
     expect(equationProblem({ ...base, right: '' })).toBeNull()
     expect(equationProblem({ ...base, right: '' }, true)).toBe('right')
@@ -175,5 +184,33 @@ describe('petites unités', () => {
     expect(inUnit(10, gramme, kilo)).toBe(0.01)
     expect(inUnit(5, kilo, kilo)).toBe(5)
     expect(inUnit(5, gramme, cuillere)).toBe(5)
+  })
+})
+
+describe('pour dire une conversion à voix haute', () => {
+  it('sépare les milliers à l’affichage, avec la virgule des décimales', () => {
+    expect(formatDisplayNumber(1000).replace(/\s/g, ' ')).toBe('1 000')
+    expect(formatDisplayNumber(0.125)).toBe('0,125')
+    expect(formatDisplayNumber(10)).toBe('10')
+  })
+
+  it('écrit le symbole quand il dit autre chose que le nom, sinon le nom accordé', () => {
+    expect(unitText({ name: 'gramme', symbol: 'g' }, 125)).toBe('g')
+    expect(unitText({ name: 'kilo', symbol: 'kg' }, 1)).toBe('kg')
+    expect(unitText({ name: 'tasse', symbol: 'tasse' }, 1)).toBe('tasse')
+    expect(unitText({ name: 'tasse', symbol: 'Tasse' }, 3)).toBe('tasses')
+    expect(unitText({ name: 'cuillère à soupe', symbol: '' }, 2)).toBe('cuillères à soupe')
+    expect(unitText({ name: 'paquet' }, 1)).toBe('paquet')
+  })
+
+  it('commence « 1 cuillère à soupe = ? » par le gramme quand l’unité d’achat est le kilo', () => {
+    expect(suggestedEnd('cuillere-a-soupe', kilo, all)).toBe('gramme')
+    expect(suggestedEnd('cuillere-a-soupe', litre, all)).toBe('millilitre')
+  })
+
+  it('garde l’unité d’achat quand elle n’a pas de petite unité, ou que la ligne est déjà dans celle-là', () => {
+    expect(suggestedEnd('cuillere-a-soupe', paquet, all)).toBe('paquet')
+    expect(suggestedEnd('gramme', kilo, all)).toBe('kilo')
+    expect(suggestedEnd('cuillere-a-soupe', undefined, all)).toBe('')
   })
 })

@@ -46,6 +46,18 @@ describe('messageForFailure', () => {
     expect(messageForFailure(new ApiError(status, 'x'))).toBe(expected)
   })
 
+  it.each([
+    [409, 'CONVERSION_ALREADY_EXISTS', 'Cette conversion existe déjà : modifie-la.'],
+    [422, 'CONVERSION_SAME_UNIT', 'Choisis deux unités différentes.'],
+    [
+      422,
+      'CONVERSION_REQUIRED_BY_INGREDIENT',
+      'Cette conversion relie l’unité de ta recette à celle du magasin : change d’abord l’unité.',
+    ],
+  ])('dit le refus d’une conversion (%i %s)', (status, code, expected) => {
+    expect(messageForFailure(new ApiError(status, code))).toBe(expected)
+  })
+
   it('rend tel quel le message de validation du back (422)', () => {
     expect(
       messageForFailure(
