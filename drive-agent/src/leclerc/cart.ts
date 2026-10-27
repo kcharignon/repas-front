@@ -1,5 +1,6 @@
 // Le panier du magasin : `POST panier.aspx?op=1`, un champ de formulaire `d` contenant du JSON (recherche.md § 2 et DRV-007 du dépôt
 // back, forme relevée sur le site le 2026-10-17). La quantité est **absolue** dans les deux sens : rejouer une requête ne double rien.
+import { parseJson as parseJsonStrict, stringifyJson } from '../primitives'
 import { LeclercError } from './errors'
 
 /** Les en-têtes du site pour le panier : le navigateur ajoute les siens (`Origin`, `Referer`, cookies…). `zcwb` est obligatoire. */
@@ -30,14 +31,14 @@ export interface CartRequest {
  */
 export function cartPayload(request: CartRequest): string {
   if (request.quantity === 0) {
-    return JSON.stringify({
+    return stringifyJson({
       eTypeAction: 2,
       iIdProduit: request.productId,
       iQuantite: 0,
       sNoPointLivraison: request.deliveryPoint,
     })
   }
-  return JSON.stringify({
+  return stringifyJson({
     eTypeAction: 1,
     iIdProduit: request.productId,
     iQuantite: request.quantity,
@@ -119,7 +120,7 @@ function asNumber(value: unknown): number | null {
 
 function parseJson(text: string): unknown {
   try {
-    return JSON.parse(text)
+    return parseJsonStrict(text)
   } catch {
     return undefined
   }

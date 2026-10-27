@@ -30,6 +30,7 @@ drive-agent/
     index.ts          point d'entrée : exécute l'agent au chargement (rien n'est exporté)
     agent.ts          ce que fait l'agent quand l'application l'injecte
     version.ts        AGENT_VERSION (semver)
+    primitives.ts     `JSON.parse`, `JSON.stringify` et l'encodeur de texte (pris au chargement du fichier), `fetch` et `attachShadow` (pris au démarrage de `run`) : l'agent ne les relit plus par leur nom, `drive-agent/src` n'appelle JSON qu'ici (règle ESLint)
     text.ts           `cleanText` : tout texte lu sur la page de l'enseigne en passe par là (caractères invisibles et de contrôle retirés, espaces resserrées) ; la fonction vit dans `protocol/clean-text.ts`, que le front partage
     transport/        comment le message arrive et repart : `fragmentTransport` (fragment d'adresse) et `bridgeTransport` (pont de l'application)
     leclerc/          tout ce qui est propre à E.Leclerc Drive, derrière `RetailerAdapter` : magasin, recherche, panier, erreurs, cadence (voir plus bas)
@@ -218,6 +219,7 @@ L'agent tourne dans la page d'une enseigne, avec les droits de l'utilisateur. Da
 - `eval`, `new Function`, `setTimeout("code")`, les adresses `javascript:` et l'import dynamique : **aucun code distant** ;
 - `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`, la balise `script` : afficher avec `textContent` et `createElement` ;
 - un `fetch` vers une adresse absolue (seul l'hôte de la page est permis : chemin relatif), `XMLHttpRequest`, `WebSocket`, `EventSource`, `Worker`, `sendBeacon` ;
+- `JSON.parse` et `JSON.stringify` hors de `src/primitives.ts` (`parseJson`, `stringifyJson`) : l'agent les prend au chargement, avant les scripts de la page, et un script qui les remplace ensuite n'est pas appelé avec les messages de l'application ;
 - tout import qui n'est pas un fichier relatif (`src/`, ou `protocol/` par `../../protocol`) : **aucune dépendance à l'exécution**. Les mêmes règles couvrent `protocol/`.
 
 `test/rules.spec.ts` éprouve chaque règle sur un code qui l'enfreint. TypeScript est strict, avec un `tsconfig` dédié (`tsconfig.agent.json`, DOM seul, aucun type de Node). Les tests utilisent des données synthétiques : jamais de HTML brut d'une enseigne, de vrai numéro de magasin, de nom de ville, de cookie, de jeton, d'identifiant ni d'e-mail (le dépôt est public).

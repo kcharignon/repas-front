@@ -114,6 +114,9 @@ class DriveActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        // Le compte de l'utilisateur chez l'enseigne est à l'écran : l'aperçu des applications récentes et les captures d'écran ne montrent pas ce drive.
+        // Pas dans l'APK de débogage : les essais de l'émulateur et la recette sur téléphone s'appuient sur ses captures d'écran.
+        if (!BuildConfig.DEBUG) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         // Le débogage à distance de la WebView n'existe que dans la version de débogage.
         if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) WebView.setWebContentsDebuggingEnabled(true)
 

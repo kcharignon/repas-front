@@ -1,7 +1,8 @@
 // @vitest-environment-options {"url": "https://fd0-courses.leclercdrive.fr/magasin-000123-000123-Ville-Test/recherche.aspx"}
 // L'injection de l'agent par l'application Android (DRV-313), éprouvée dans jsdom : le petit script `injection.js` met en place le pont
-// `window.repasHost` à la forme exacte qu'attend l'agent (`bridgeTransport`), puis l'agent réel s'en sert. Le canal natif de la
-// WebView est simulé : mêmes méthodes que l'objet de `addWebMessageListener` (`postMessage`, `addEventListener('message')`).
+// `window.repasHost` à la forme exacte qu'attend l'agent (`bridgeTransport`), l'agent réel s'en sert, puis `window.repasHost` est retiré de
+// la page. Le canal natif de la WebView est simulé : mêmes méthodes que l'objet de `addWebMessageListener` (`postMessage`,
+// `addEventListener('message')`). Chaque essai a sa propre « page » (voir `newPage`) : une fois l'agent démarré, `repasHost` y est non reconfigurable.
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -34,29 +35,60 @@ class NativeChannel extends EventTarget {
   }
 }
 
-function withNative(): NativeChannel {
-  const channel = new NativeChannel()
-  Object.defineProperty(window, 'repasHost', { value: channel, configurable: true, writable: true })
-  return channel
-}
-
-/** Évalue `injection.js` avec un « agent » donné (un texte JavaScript) dans la page de jsdom ; `debug` comme dans l'APK de débogage. */
-function inject(agent: string, debug = false): void {
-  new Function(
-    INJECTION.replace(DEBUG_MARKER, String(debug)).replace('/*__AGENT__*/', () => agent),
-  )()
-}
-
 /** Le pont tel que l'agent le voit (la forme de `Bridge` dans drive-agent/src/transport/bridge.ts). */
 interface PageBridge {
   postMessage(value: unknown): void
   addEventListener(type: string, listener: (event: { data: unknown }) => void): void
   removeEventListener(type: string, listener: unknown): void
 }
-const bridgeOf = () => (window as unknown as { repasHost: PageBridge }).repasHost
 
-const COUNTER = 'window.__starts = (window.__starts || 0) + 1'
-const starts = () => (window as unknown as { __starts?: number }).__starts ?? 0
+/** Ce que l'« agent » d'un essai laisse sur la page : son compteur de démarrages, le pont qu'il a lu, de quoi lancer le vrai agent. */
+type Page = Window &
+  typeof globalThis & {
+    repasHost?: unknown
+    __starts?: number
+    __bridge?: PageBridge
+    __start?: () => void
+  }
+
+/**
+ * Une page neuve : la fenêtre de jsdom, dont elle hérite tout (document, horloge, `fetch`), mais avec son propre `top` et son propre
+ * `repasHost`. Une fois l'agent démarré, `injection.js` rend `repasHost` non reconfigurable : une fenêtre partagée entre les essais n'en
+ * accepterait plus un second.
+ */
+function newPage(): Page {
+  const fresh = Object.create(window) as Page
+  Object.defineProperty(fresh, 'top', { value: fresh })
+  return fresh
+}
+
+let page: Page = newPage()
+
+function withNative(): NativeChannel {
+  const channel = new NativeChannel()
+  Object.defineProperty(page, 'repasHost', { value: channel, configurable: true, writable: true })
+  return channel
+}
+
+/** Évalue `injection.js` avec un « agent » donné (un texte JavaScript) dans la page de l'essai ; `debug` comme dans l'APK de débogage. */
+function inject(agent: string, debug = false): void {
+  new Function(
+    'window',
+    INJECTION.replace(DEBUG_MARKER, String(debug)).replace('/*__AGENT__*/', () => agent),
+  )(page)
+}
+
+/** Injecte `injection.js` et lance le vrai `run` de l'agent (avec ses doubles) au moment où l'agent démarre, comme le fait `agent.js`. */
+function injectRun(start: () => void, debug = false): void {
+  page.__start = start
+  inject('window.__start()', debug)
+}
+
+/** Le pont que l'« agent » de l'essai a lu en démarrant : la page, elle, ne l'a plus ensuite. */
+const bridgeOf = (): PageBridge => page.__bridge as PageBridge
+
+const COUNTER = 'window.__starts = (window.__starts || 0) + 1; window.__bridge = window.repasHost'
+const starts = () => page.__starts ?? 0
 
 // Le diagnostic lance une vraie recherche (chemin relatif, à l'hôte de la page) : aucun réseau dans ces tests.
 let fetchSpy = vi.fn<typeof fetch>()
@@ -83,6 +115,7 @@ async function untilQuiet(requests: () => number): Promise<void> {
 // passage laissé en vie par un test (une recherche attend la cadence du site) retomberait sinon dans le faux `fetch` du test suivant : 27
 // requêtes au lieu de 25 quand la machine est chargée. À la fin du test, ce qui attend l'horloge est jeté : l'agent resté en suspens ne reprend jamais.
 beforeEach(() => {
+  page = newPage()
   vi.useFakeTimers()
   fetchSpy = vi.fn<typeof fetch>().mockRejectedValue(new Error('pas de réseau dans les tests'))
   vi.stubGlobal('fetch', fetchSpy)
@@ -93,8 +126,6 @@ afterEach(async () => {
   vi.clearAllTimers()
   vi.useRealTimers()
   vi.unstubAllGlobals()
-  Reflect.deleteProperty(window, 'repasHost')
-  Reflect.deleteProperty(window, '__starts')
   window.sessionStorage.clear()
   document.documentElement.innerHTML = '<head></head><body></body>'
 })
@@ -113,12 +144,12 @@ describe('le pont vu par l’agent', () => {
     expect(starts()).toBe(1)
   })
 
-  it('ne laisse pas la page atteindre le canal natif : repasHost n’est plus l’objet natif', () => {
+  it('ne donne pas le canal natif à l’agent : il reçoit un pont qui n’est pas l’objet natif', () => {
     const channel = withNative()
 
     inject(COUNTER)
 
-    expect((window as unknown as { repasHost: unknown }).repasHost).not.toBe(channel)
+    expect(bridgeOf()).not.toBe(channel)
   })
 
   it('transmet à l’application seulement des textes', () => {
@@ -169,6 +200,103 @@ describe('le pont vu par l’agent', () => {
   })
 })
 
+describe('le pont une fois l’agent démarré', () => {
+  const descriptor = () => Object.getOwnPropertyDescriptor(page, 'repasHost')
+
+  it('n’est plus à la page : repasHost est vide et ne peut plus être redéfini ni supprimé', () => {
+    const channel = withNative()
+
+    inject(COUNTER)
+
+    expect(page.repasHost).toBeUndefined()
+    expect(descriptor()).toMatchObject({ value: undefined, configurable: false, writable: false })
+    expect(Reflect.defineProperty(page, 'repasHost', { value: channel })).toBe(false)
+    expect(Reflect.deleteProperty(page, 'repasHost')).toBe(false)
+    expect(page.repasHost).toBeUndefined()
+  })
+
+  it('reste à l’agent : le pont lu au démarrage reçoit les messages de l’application et lui répond', () => {
+    const channel = withNative()
+    const received: unknown[] = []
+    injectRun(() => {
+      const bridge = page.repasHost as unknown as PageBridge
+      bridge.addEventListener('message', (event) => received.push(event.data))
+      bridge.postMessage('{"v":1,"type":"result"}')
+    })
+
+    channel.fromApp('{"v":1,"type":"plan"}')
+
+    expect(received).toEqual(['{"v":1,"type":"plan"}'])
+    expect(channel.postMessage.mock.calls.map(([text]) => text)).toEqual([
+      HELLO,
+      '{"v":1,"type":"result"}',
+    ])
+  })
+
+  it('ne laisse à un script de la page ni les messages de l’application, ni l’envoi d’un message', () => {
+    const channel = withNative()
+    const received: unknown[] = []
+    inject(COUNTER)
+
+    // Un script de la page, exécuté après le démarrage de l'agent
+    const reach = new Function(
+      'window',
+      'received',
+      `const host = window.repasHost
+       if (host) { host.addEventListener('message', (event) => received.push(event.data)); host.postMessage('{"v":1,"type":"result"}') }`,
+    )
+    reach(page, received)
+    channel.fromApp('{"v":1,"type":"plan"}')
+
+    expect(received).toEqual([])
+    expect(channel.postMessage).toHaveBeenCalledExactlyOnceWith(HELLO)
+  })
+
+  it('est retiré aussi quand l’agent échoue en démarrant', () => {
+    withNative()
+
+    expect(() => inject('throw new Error("démarrage en échec")')).toThrow('démarrage en échec')
+
+    expect(page.repasHost).toBeUndefined()
+    expect(descriptor()).toMatchObject({ configurable: false })
+  })
+
+  it('n’appelle aucune méthode de tableau pour relayer un message : une page qui en remplace une ne le voit pas', () => {
+    const channel = withNative()
+    const received: unknown[] = []
+    injectRun(() => {
+      ;(page.repasHost as unknown as PageBridge).addEventListener('message', (event) => received.push(event.data))
+    })
+    const seen: unknown[] = []
+    const names = ['forEach', 'slice', 'push', 'splice', 'indexOf', 'concat', 'map', 'filter'] as const
+    const originals = names.map((name) => Object.getOwnPropertyDescriptor(Array.prototype, name))
+    const listen = Array.prototype.indexOf
+    try {
+      for (const name of names) {
+        const original = Array.prototype[name] as (...args: unknown[]) => unknown
+        Object.defineProperty(Array.prototype, name, {
+          configurable: true,
+          writable: true,
+          value: function (this: unknown[], ...args: unknown[]) {
+            if (Reflect.apply(listen, this, ['{"v":1,"type":"plan"}']) >= 0) seen.push(name)
+            return Reflect.apply(original, this, args)
+          },
+        })
+      }
+
+      channel.fromApp('{"v":1,"type":"plan"}')
+    } finally {
+      names.forEach((name, i) => {
+        const original = originals[i]
+        if (original) Object.defineProperty(Array.prototype, name, original)
+      })
+    }
+
+    expect(received).toEqual(['{"v":1,"type":"plan"}'])
+    expect(seen).toEqual([])
+  })
+})
+
 describe('le mode débogage (DRV-318)', () => {
   it('le fichier porte le marqueur du mode débogage une seule fois, à `false` tel quel', () => {
     expect(INJECTION.split(DEBUG_MARKER)).toHaveLength(2)
@@ -205,11 +333,11 @@ describe('le démarrage de l’agent', () => {
     inject(COUNTER)
 
     expect(starts()).toBe(0)
-    expect('repasHost' in window).toBe(false)
+    expect('repasHost' in page).toBe(false)
   })
 
   it('n’a pas lieu si repasHost n’est pas un canal de messages', () => {
-    Object.defineProperty(window, 'repasHost', {
+    Object.defineProperty(page, 'repasHost', {
       value: { postMessage: 'non' },
       configurable: true,
     })
@@ -266,9 +394,8 @@ describe('de bout en bout avec l’agent réel dans jsdom', () => {
   it('un plan de l’application déroule le passage et le résultat repart vers l’application', async () => {
     // Given : le pont mis en place par l'injection, puis l'agent (interface simulée, comme dans les tests de l'agent)
     const channel = withNative()
-    inject('/* l’agent démarre ci-dessous */')
     const screens = fakeUi()
-    run(window, { flow: { ui: screens.ui } })
+    injectRun(() => run(page, { flow: { ui: screens.ui } }))
 
     // When : l'application envoie un plan
     channel.fromApp(JSON.stringify(plan([home('sel'), skip('huile')])))
@@ -286,7 +413,6 @@ describe('de bout en bout avec l’agent réel dans jsdom', () => {
 
   it('la commande de diagnostic de l’application ouvre le diagnostic, sans rien renvoyer', async () => {
     const channel = withNative()
-    inject('/* l’agent démarre ci-dessous */')
     const diagnostic = fakeUi({
       diagnostic: (props) =>
         new Promise<'close'>((resolve) => {
@@ -294,7 +420,7 @@ describe('de bout en bout avec l’agent réel dans jsdom', () => {
           setTimeout(() => resolve('close'), 0)
         }),
     })
-    run(window, { flow: { ui: diagnostic.ui } })
+    injectRun(() => run(page, { flow: { ui: diagnostic.ui } }))
 
     channel.fromApp('{"v":1,"type":"command","command":"diagnostic"}')
 
@@ -336,6 +462,80 @@ describe('le fichier agent.js réel, tel que l’application l’injecte', () =>
     expect(fetchSpy).toHaveBeenCalled()
     expect(fetchSpy.mock.calls.every(([url]) => String(url).startsWith('/'))).toBe(true)
     expect(channel.postMessage).toHaveBeenCalledTimes(1)
+  }, 30_000)
+})
+
+// Une page qui remplace `JSON`, l'encodeur de texte, `fetch` ou `attachShadow` APRÈS le démarrage de l'agent : l'agent a pris les siens en
+// démarrant (drive-agent/src/primitives.ts), la page n'est appelée ni avec les messages de l'application, ni avec les requêtes de l'agent, ni
+// avec son interface.
+describe('les primitives du navigateur que la page remplace après le démarrage de l’agent', () => {
+  /** Remplace `target[name]` par une fonction qui note ses appels puis appelle l'ancienne ; rend de quoi défaire. */
+  function spyOnPage(target: object, name: string, calls: unknown[][]): () => void {
+    const original = Object.getOwnPropertyDescriptor(target, name)
+    const previous = Reflect.get(target, name) as (...args: unknown[]) => unknown
+    Object.defineProperty(target, name, {
+      configurable: true,
+      writable: true,
+      value: function (this: unknown, ...args: unknown[]) {
+        calls.push(args)
+        return Reflect.apply(previous, this, args)
+      },
+    })
+    return () => {
+      if (original) Object.defineProperty(target, name, original)
+    }
+  }
+
+  it('le diagnostic lit la commande, interroge le site et monte son interface sans rien montrer à la page', async () => {
+    // Given : l'agent construit, démarré derrière le pont de l'injection
+    const { buildAgent } = await import('../../drive-agent/scripts/build.mjs')
+    const built = await buildAgent()
+    const channel = withNative()
+    inject(built.code)
+    const before = document.documentElement.outerHTML
+
+    // When : la page remplace les primitives, puis l'application demande le diagnostic
+    const parsed: unknown[][] = []
+    const stringified: unknown[][] = []
+    const shadows: unknown[][] = []
+    const requests: unknown[][] = []
+    let encoders = 0
+    class ReplacementEncoder extends TextEncoder {
+      constructor() {
+        super()
+        encoders += 1
+      }
+    }
+    const undo = [
+      spyOnPage(JSON, 'parse', parsed),
+      spyOnPage(JSON, 'stringify', stringified),
+      spyOnPage(Element.prototype, 'attachShadow', shadows),
+    ]
+    vi.stubGlobal('TextEncoder', ReplacementEncoder)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>((...args) => {
+        requests.push(args)
+        return Promise.reject(new Error('pas de réseau dans les tests'))
+      }),
+    )
+    try {
+      channel.fromApp('{"v":1,"type":"command","command":"diagnostic"}')
+      await advance(() => document.documentElement.outerHTML !== before)
+      await untilQuiet(() => fetchSpy.mock.calls.length)
+    } finally {
+      for (const restore of undo) restore()
+    }
+
+    // Then : l'interface est montée (fermée), le diagnostic a interrogé le site par le fetch d'origine, la page n'a rien reçu
+    expect(document.documentElement.outerHTML).not.toBe(before)
+    expect((document.documentElement.lastElementChild as HTMLElement).shadowRoot).toBeNull()
+    expect(fetchSpy).toHaveBeenCalled()
+    expect(requests).toEqual([])
+    expect(shadows).toEqual([])
+    expect(encoders).toBe(0)
+    expect(parsed.filter(([text]) => String(text).includes('"v":1'))).toEqual([])
+    expect(stringified).toEqual([])
   }, 30_000)
 })
 

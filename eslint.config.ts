@@ -120,5 +120,24 @@ export default defineConfigWithVueTs(
     },
   },
 
+  // JSON ne s'appelle que dans drive-agent/src/primitives.ts, qui prend `JSON.parse` et `JSON.stringify` au chargement de l'agent : une page qui les
+  // remplace ensuite ne reçoit rien de ce que l'agent lit ou écrit (le codec de `protocol/`, partagé avec le front, n'est pas concerné).
+  // `drive-agent/test/rules.spec.ts` éprouve la règle.
+  {
+    name: 'drive-agent/src/json',
+    files: ['drive-agent/src/**/*.ts'],
+    ignores: ['drive-agent/src/primitives.ts'],
+    rules: {
+      'no-restricted-properties': [
+        'error',
+        ...['parse', 'stringify'].map((property) => ({
+          object: 'JSON',
+          property,
+          message: 'Pas de JSON.parse ni JSON.stringify dans l\'agent : passer par parseJson et stringifyJson (drive-agent/src/primitives.ts).',
+        })),
+      ],
+    },
+  },
+
   skipFormatting,
 )
