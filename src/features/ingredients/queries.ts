@@ -17,6 +17,7 @@ export const ingredientKeys = {
   conversions: (slug: string) => ['ingredients', 'conversions', slug] as const,
   search: (search: string) => ['ingredients', 'search', search] as const,
   duplicates: ['ingredients', 'duplicates'] as const,
+  toFix: ['ingredients', 'to-fix'] as const,
   mergeCandidates: (slug: string, search: string) =>
     ['ingredients', 'merge-candidates', slug, search] as const,
   mergePreview: (slug: string, into: string) =>
@@ -91,13 +92,14 @@ export function useIngredientConversions(slug: () => string) {
 
 /**
  * Ce que change une conversion d'ingrédient : la liste de ses conversions, sa fiche (unités compatibles), les unités qu'une ligne de
- * recette peut prendre, et les recettes (`convertible` de chaque ligne).
+ * recette peut prendre, les recettes (`convertible` de chaque ligne) et la liste des ingrédients à régler.
  */
 function invalidateConversionReaders(queryClient: ReturnType<typeof useQueryClient>, slug: string) {
   void queryClient.invalidateQueries({ queryKey: ingredientKeys.conversions(slug) })
   void queryClient.invalidateQueries({ queryKey: ingredientKeys.detail(slug) })
   void queryClient.invalidateQueries({ queryKey: ['ingredients', 'units', slug] })
   void queryClient.invalidateQueries({ queryKey: recipeKeys.all })
+  void queryClient.invalidateQueries({ queryKey: ingredientKeys.toFix })
 }
 
 /** Ajoute (`id` absent) ou remplace une conversion PROPRE de l'ingrédient ; les refus du back (409, 422) vont dans la feuille. */
@@ -270,6 +272,24 @@ export function useDuplicates() {
   return useQuery({
     queryKey: ingredientKeys.duplicates,
     queryFn: () => unwrap(api.GET('/api/v1/ingredients/duplicates')),
+    staleTime: 60_000,
+  })
+}
+
+/** Le back rend 200 ingrédients à régler au plus : au-delà, `totalItems` dit combien il en reste. */
+export const TO_FIX_LIMIT = 200
+
+/**
+ * Les ingrédients de l'utilisateur dont l'unité des recettes ne se convertit pas en unité d'achat (une lecture pour la ligne des Rayons et
+ * pour l'écran « Ingrédients à régler »). Elle se relit après toute écriture de conversion, de fusion ou d'ingrédient : sa clé est sous
+ * `ingredients`, donc `ingredientKeys.all` la renouvelle.
+ */
+export function useIngredientsToFix() {
+  const { api } = useSessionStore()
+
+  return useQuery({
+    queryKey: ingredientKeys.toFix,
+    queryFn: () => unwrap(api.GET('/api/v1/ingredients/to-fix')),
     staleTime: 60_000,
   })
 }

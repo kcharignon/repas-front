@@ -2,12 +2,18 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { ChevronRight, Search } from 'lucide-vue-next'
+import { ChevronRight, Search, TriangleAlert } from 'lucide-vue-next'
 
 import { hasFailed } from '@/api/query'
 import UiImage from '@/design/UiImage.vue'
 import IngredientSearchResults from './IngredientSearchResults.vue'
-import { DUPLICATES_LIMIT, MIN_SEARCH_LENGTH, useDepartments, useDuplicates } from './queries'
+import {
+  DUPLICATES_LIMIT,
+  MIN_SEARCH_LENGTH,
+  useDepartments,
+  useDuplicates,
+  useIngredientsToFix,
+} from './queries'
 import { useDebounced } from './useDebounced'
 
 const { t } = useI18n()
@@ -20,6 +26,10 @@ const search = ref('')
 const isSearching = computed(() => search.value.trim().length >= MIN_SEARCH_LENGTH)
 const searched = useDebounced(search)
 const term = computed(() => searched.value.trim())
+
+// La ligne « N ingrédients à régler » n'existe que s'il y en a ; pendant le chargement ou si la lecture échoue, on ne la montre pas
+const toFix = useIngredientsToFix()
+const toFixCount = computed(() => toFix.data.value?.totalItems ?? 0)
 
 // Le lien des doublons possibles (ING-007) n'existe que s'il y en a ; si la lecture échoue, on ne le montre pas
 const duplicates = useDuplicates()
@@ -59,6 +69,18 @@ const duplicateLabel = computed(() =>
     <IngredientSearchResults v-if="isSearching" :search="term" />
 
     <template v-else>
+      <RouterLink
+        v-if="toFixCount > 0"
+        :to="{ name: 'ingredients-to-fix' }"
+        class="flex min-h-12 items-center justify-between gap-2 rounded-xl bg-warning-soft px-4 font-bold text-on-warning-soft focus-visible:outline-2 focus-visible:outline-primary"
+      >
+        <span class="flex items-center gap-2">
+          <TriangleAlert class="size-5 shrink-0" aria-hidden="true" />
+          {{ t('ingredients.toFix.link', { count: toFixCount }, toFixCount) }}
+        </span>
+        <ChevronRight class="size-5 shrink-0" aria-hidden="true" />
+      </RouterLink>
+
       <RouterLink
         v-if="duplicateCount > 0"
         :to="{ name: 'ingredient-duplicates' }"

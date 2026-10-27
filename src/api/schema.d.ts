@@ -38,6 +38,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingredients/to-fix": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Les ingrédients de l'utilisateur à régler : ceux dont l'unité des recettes ne se convertit pas en l'unité d'achat
+         * @description Seuls SES ingrédients sont jugés (jamais ceux d'un autre, un administrateur compris). Un ingrédient est à régler quand aucune conversion, propre ou universelle, ni aucune suite de conversions ne relie son unité des recettes à son unité d'achat, le même calcul que `convertible` d'une ligne de recette. Triés par nom, 200 au plus (`totalItems` donne le vrai nombre), le même ordre à chaque appel. Pour en régler un : `POST …/ingredients/{slug}/conversions`.
+         */
+        get: operations["get_api_list_ingredients_to_fix"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ingredients/search": {
         parameters: {
             query?: never;
@@ -1739,6 +1759,43 @@ export interface components {
              */
             suggestedKeep: string;
         };
+        IngredientToFixDTO: {
+            /**
+             * @description Identifiant de l'ingrédient (slug)
+             * @example biscotte-1a2b3c
+             */
+            slug: string;
+            /** @example biscotte */
+            name: string;
+            /**
+             * @description Nom du rayon de l'ingrédient
+             * @example Épicerie
+             */
+            departmentName: string;
+            /**
+             * @description Unité des recettes de l'ingrédient (slug)
+             * @example unite
+             */
+            cookingUnitSlug: string;
+            /** @example unité */
+            cookingUnitName: string;
+            /**
+             * @description Unité d'achat de l'ingrédient (slug)
+             * @example paquet
+             */
+            purchaseUnitSlug: string;
+            /** @example paquet */
+            purchaseUnitName: string;
+        };
+        IngredientsToFixDTO: {
+            /** @description Les ingrédients à régler, triés par nom (puis par identifiant), 200 au plus */
+            member: components["schemas"]["IngredientToFixDTO"][];
+            /**
+             * @description Le nombre réel d'ingrédients à régler (peut dépasser le nombre de `member`)
+             * @example 3
+             */
+            totalItems: number;
+        };
         IngredientSearchResultDTO: {
             /**
              * @description Identifiant de l'ingrédient (slug)
@@ -3110,6 +3167,26 @@ export interface operations {
                         /** @example 3 */
                         totalItems?: number;
                     };
+                };
+            };
+        };
+    };
+    get_api_list_ingredients_to_fix: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ingrédients à régler */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngredientsToFixDTO"];
                 };
             };
         };

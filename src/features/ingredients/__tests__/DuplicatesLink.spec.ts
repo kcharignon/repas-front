@@ -23,6 +23,7 @@ async function open(duplicates: () => Response) {
     'GET /api/v1/me': () => json(me),
     'GET /api/v1/departments': () => json(departments),
     'GET /api/v1/ingredients/duplicates': duplicates,
+    'GET /api/v1/ingredients/to-fix': () => json({ member: [], totalItems: 0 }),
   })
   localStorage.setItem('repas.session', '1')
   const context = appContext()

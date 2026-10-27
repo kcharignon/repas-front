@@ -26,6 +26,10 @@ export type IngredientConversion = Schemas['IngredientConversionDTO']
 export type IngredientConversions = Schemas['IngredientConversionsDTO']
 export type IngredientConversionPayload = Schemas['IngredientConversionPayload']
 
+// Ingrédients à régler : l'unité des recettes ne se convertit pas en unité d'achat (back #301)
+export type IngredientToFix = Schemas['IngredientToFixDTO']
+export type IngredientsToFix = Schemas['IngredientsToFixDTO']
+
 export type Department = Schemas['DepartmentDTO']
 export type Unit = Schemas['UnitDTO']
 export type UnitPayload = Schemas['UnitPayload']
