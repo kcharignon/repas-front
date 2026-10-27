@@ -652,7 +652,7 @@ export default {
   // Les plafonds et les bornes de l'API (422) : chaque message dit la limite vraie et quoi faire. Groupe à part du glossaire du drive : « ingrédient » est le bon mot ici.
   limits: {
     recipeLimitReached:
-      'Tu as déjà 1 000 recettes : c’est le maximum. Supprime-en une, puis réessaie.',
+      'Tu as atteint le nombre maximum de recettes. Supprime-en une, puis réessaie.',
     ingredientLimitReached:
       'Tu as déjà 2 000 ingrédients : c’est le maximum. Supprime ou fusionne-en, puis réessaie.',
     listLimitReached:
