@@ -333,6 +333,7 @@ export default {
     othersTitle: 'Recettes des autres',
     othersHelp: 'Copie une recette dans les tiennes pour la planifier et la modifier.',
     othersNone: 'Rien de nouveau à copier pour le moment.',
+    othersMore: 'Voir plus',
     copy: 'Copier',
     copyNamed: 'Copier {name} dans mes recettes',
   },
