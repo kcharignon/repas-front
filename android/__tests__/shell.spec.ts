@@ -86,8 +86,26 @@ describe('le manifeste de l’application', () => {
     expect(/<activity[^>]*android:name="\.DriveActivity"[^>]*android:exported="false"/s.test(manifest)).toBe(true)
   })
 
+  it('masque le drive dans l’aperçu des applications récentes et les captures d’écran, sauf dans l’APK de débogage', () => {
+    // Les essais de l’émulateur (captures lues avant de conclure) et la recette sur téléphone s’appuient sur les captures de l’APK de débogage.
+    const drive = read(join(kotlinDir, 'eu', 'kantin', 'repas', 'drive', 'DriveActivity.kt'))
+
+    expect(drive).toContain('if (!BuildConfig.DEBUG) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)')
+  })
+
   it('n’autorise pas le trafic en clair', () => {
     expect(manifest).toContain('android:usesCleartextTraffic="false"')
+  })
+
+  it('ne rattache aucun de ses deux écrans à une tâche par un nom d’affinité', () => {
+    const activities = [...manifest.matchAll(/<activity\b[^>]*>/gs)].map((match) => match[0])
+
+    expect(activities.map((tag) => /android:name="([^"]+)"/.exec(tag)?.[1])).toEqual([
+      '.MainActivity',
+      '.DriveActivity',
+    ])
+    for (const tag of activities) expect(tag).toMatch(/android:taskAffinity=""/)
+    expect(manifest).not.toMatch(/android:taskAffinity="[^"]/)
   })
 })
 

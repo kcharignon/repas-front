@@ -24,11 +24,13 @@
 
         <!-- configChanges : tourner l'écran ne recrée pas l'activité, donc ne recharge pas la page. -->
         <!-- singleTask : un lien https://kantin.eu/… ouvert depuis une autre application arrive dans la coquille déjà ouverte (onNewIntent). -->
+        <!-- taskAffinity="" : les deux écrans ne se rattachent à une tâche que par leur activité racine, jamais par un nom d'affinité. -->
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|locale|layoutDirection"
             android:exported="true"
-            android:launchMode="singleTask">
+            android:launchMode="singleTask"
+            android:taskAffinity="">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -56,6 +58,7 @@
         <activity
             android:name=".DriveActivity"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|locale|layoutDirection"
-            android:exported="false" />
+            android:exported="false"
+            android:taskAffinity="" />
     </application>
 </manifest>
