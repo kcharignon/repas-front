@@ -64,6 +64,7 @@ const base = {
   'GET /api/v1/departments': () => json(departments),
   'GET /api/v1/units': () => json(units),
   'GET /api/v1/ingredients/duplicates': () => json({ member: [], totalItems: 0 }),
+  'GET /api/v1/ingredients/to-fix': () => json({ member: [], totalItems: 0 }),
   // La section « Conversions de … » de la fiche d'un ingrédient à soi
   'GET /api/v1/ingredients/ma-sauce/conversions': () =>
     json({

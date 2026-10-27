@@ -208,6 +208,21 @@ export default {
       canConvert: 'La recette peut se convertir en {unit}.',
       missing: 'Il manque une conversion entre {cooking} et {purchase}.',
     },
+    // Ingrédients à régler : pas de conversion entre l'unité des recettes et celle du magasin
+    toFix: {
+      title: 'Ingrédients à régler',
+      help: 'Ces ingrédients n’ont pas de conversion entre l’unité de tes recettes et celle du magasin : Alexa et ta liste ne peuvent pas calculer leurs quantités.',
+      link: '{count} ingrédient à régler | {count} ingrédients à régler',
+      count: '{count} ingrédient à régler | {count} ingrédients à régler',
+      units: 'Recettes : {cooking} · Magasin : {purchase}',
+      fix: 'Régler',
+      fixNamed: 'Régler la conversion de {name}',
+      openNamed: 'Ouvrir la fiche de {name}',
+      more: 'et {count} autre | et {count} autres',
+      none: 'Tout est réglé.',
+      failed: 'Les ingrédients à régler ne se sont pas affichés. Rien n’a changé.',
+      retry: 'Réessayer',
+    },
     // Doublons possibles et fusion de deux ingrédients (ING-007)
     duplicates: {
       title: 'Doublons possibles',

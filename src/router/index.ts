@@ -182,6 +182,11 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/features/ingredients/DuplicatesView.vue'),
       },
       {
+        path: 'ingredients/a-regler',
+        name: 'ingredients-to-fix',
+        component: () => import('@/features/ingredients/IngredientsToFixView.vue'),
+      },
+      {
         path: 'ingredients/nouveau',
         name: 'ingredient-new',
         component: () => import('@/features/ingredients/IngredientEditorView.vue'),

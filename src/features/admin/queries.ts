@@ -120,7 +120,8 @@ export interface ConversionForm {
 
 export function useSaveConversion() {
   const { api } = useSessionStore()
-  const refresh = useRefresh([adminKeys.conversions])
+  // Une conversion de l'administrateur peut régler d'un coup des ingrédients que la liste « à régler » montrait
+  const refresh = useRefresh([adminKeys.conversions, ingredientKeys.toFix])
 
   return useMutation({
     meta: { silent: true },

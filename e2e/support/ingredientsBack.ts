@@ -192,6 +192,10 @@ export async function fakeIngredientsBack(page: Page, options: Options = {}) {
         return reply(route)
       }
 
+      // Aucun ingrédient à régler dans ces scénarios : la ligne des Rayons n'apparaît pas
+      if (key === 'GET /api/v1/ingredients/to-fix')
+        return reply(route, { member: [], totalItems: 0 })
+
       if (key === 'GET /api/v1/ingredients/duplicates') {
         if (options.slowDuplicates !== undefined)
           await new Promise((resolve) => setTimeout(resolve, options.slowDuplicates))
