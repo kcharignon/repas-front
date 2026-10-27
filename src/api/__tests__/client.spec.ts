@@ -74,6 +74,17 @@ describe('createAuthFetch', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  it('échoue comme un réseau coupé, pas comme un 401, quand le renouvellement n’a pas dit si la session tient', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => json({}, { status: 401 }))
+    const provider = { ...auth('périmé', null), unreachable: () => true }
+    const request = createAuthFetch({ auth: provider, fetch: fetchMock })
+
+    await expect(request(new Request('http://localhost/api/v1/me'))).rejects.toBeInstanceOf(
+      TypeError,
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it.each(['/api/login_check', '/api/auth/refresh', '/api/auth/logout'])(
     'ne tente pas de refresh sur %s (un 401 y veut dire identifiants refusés)',
     async (path) => {

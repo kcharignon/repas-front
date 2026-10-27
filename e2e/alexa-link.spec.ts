@@ -1,5 +1,6 @@
 // Liaison d'Alexa (VOX-401) : la page `/alexa/lier` que l'application Alexa ouvre, sans back ni compte (l'API est simulée par `page.route`).
-//  - parcours : connecté, déconnecté (connexion puis retour avec les mêmes paramètres), « Annuler », refus du back ;
+//  - parcours : connecté (compte et site du retour affichés), déconnecté (connexion puis retour avec les mêmes paramètres), « Ce n'est pas toi ? »,
+//    « Annuler », refus du back ;
 //  - une décision par écran à 360 × 640 : le bouton principal se voit sans défiler, accessibilité (WCAG AA), captures claires et sombres.
 // Aucune vraie adresse : uniquement des valeurs inventées ; la redirection vers « Amazon » est interceptée, rien ne sort du test.
 import AxeBuilder from '@axe-core/playwright'
@@ -72,6 +73,8 @@ async function fakeBack(page: Page, options: { signedIn?: boolean; authorize?: A
           return json({ token: 'jeton' })
         case 'GET /api/v1/me':
           return json(me)
+        case 'POST /api/auth/logout':
+          return route.fulfill({ status: 204 })
         case 'POST /api/v1/voice/alexa/authorize': {
           const answer = options.authorize ?? { status: 200 }
           if (answer.status === 200) return json({ redirectUrl: returned })
@@ -95,19 +98,27 @@ const authorizeCalls = (received: Received[]) =>
   received.filter((call) => call.key === 'POST /api/v1/voice/alexa/authorize')
 
 test.describe('liaison d’Alexa, parcours simulé', () => {
-  test('connecté : une phrase, deux boutons, rien d’envoyé avant « Autoriser », puis retour vers l’adresse du back', async ({
+  test('connecté : ce qu’Alexa pourra faire, le compte et le site du retour, rien d’envoyé avant « Autoriser », puis retour vers l’adresse du back', async ({
     page,
   }) => {
     const received = await fakeBack(page)
     await page.goto(address)
 
     await expect(
-      page.getByRole('heading', {
-        level: 1,
-        name: 'Alexa veut ajouter des produits à ta liste de courses.',
-      }),
+      page.getByRole('heading', { level: 1, name: 'Lier Alexa à ton compte ?' }),
     ).toBeVisible()
-    await expect(page.getByRole('button')).toHaveText(['Autoriser', 'Annuler'])
+    await expect(
+      page.getByText(
+        'Alexa pourra lire ta liste, ajouter ou retirer des produits, et planifier des repas.',
+      ),
+    ).toBeVisible()
+    await expect(page.getByTestId('alexa-account')).toHaveText('alexiane@example.com')
+    await expect(page.getByTestId('alexa-host')).toHaveText('pitangui.amazon.com')
+    await expect(page.getByRole('button')).toHaveText([
+      'Ce n’est pas toi ?',
+      'Autoriser',
+      'Annuler',
+    ])
     expect(authorizeCalls(received)).toEqual([])
 
     await page.getByRole('button', { name: 'Autoriser' }).click()
@@ -140,7 +151,33 @@ test.describe('liaison d’Alexa, parcours simulé', () => {
     await page.getByRole('button', { name: 'Se connecter' }).click()
 
     await expect(
-      page.getByRole('heading', { level: 1, name: /Alexa veut ajouter des produits/ }),
+      page.getByRole('heading', { level: 1, name: /Lier Alexa à ton compte/ }),
+    ).toBeVisible()
+    const back = new URL(page.url())
+    expect(back.pathname).toBe('/alexa/lier')
+    expect(Object.fromEntries(back.searchParams)).toEqual(
+      Object.fromEntries(new URLSearchParams(query)),
+    )
+    expect(authorizeCalls(received)).toEqual([])
+  })
+
+  test('« Ce n’est pas toi ? » ferme la session, puis la connexion ramène sur la page avec les mêmes paramètres', async ({
+    page,
+  }) => {
+    const received = await fakeBack(page)
+    await page.goto(address)
+
+    await page.getByRole('button', { name: 'Ce n’est pas toi ?' }).click()
+
+    await expect(page).toHaveURL(/\/connexion\?redirect=/)
+    expect(received.map((call) => call.key)).toContain('POST /api/auth/logout')
+    expect(authorizeCalls(received)).toEqual([])
+    await page.getByLabel('Adresse e-mail').fill('autre@example.com')
+    await page.getByLabel('Mot de passe').fill('un mot de passe')
+    await page.getByRole('button', { name: 'Se connecter' }).click()
+
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Lier Alexa à ton compte ?' }),
     ).toBeVisible()
     const back = new URL(page.url())
     expect(back.pathname).toBe('/alexa/lier')
@@ -332,7 +369,7 @@ test.describe('liaison d’Alexa, avec le back', () => {
     await signIn(page, address)
 
     await expect(
-      page.getByRole('heading', { level: 1, name: /Alexa veut ajouter des produits/ }),
+      page.getByRole('heading', { level: 1, name: /Lier Alexa à ton compte/ }),
     ).toBeVisible()
     expect(Object.fromEntries(new URL(page.url()).searchParams)).toEqual(
       Object.fromEntries(new URLSearchParams(query)),

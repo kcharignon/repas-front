@@ -3,7 +3,7 @@ import { dehydrate, hydrate } from '@tanstack/vue-query'
 import type { DehydratedState, Query, QueryClient } from '@tanstack/vue-query'
 
 import { shoppingListKeys } from '@/features/shopping-lists/queries'
-import { useSessionStore } from '@/session/session'
+import { hasSessionHint, useSessionStore } from '@/session/session'
 
 /**
  * Lecture hors-ligne de la liste de courses en cours (plan du front, phase 5) : seule la liste active, résumé et détail, est
@@ -63,6 +63,12 @@ const keptBy = (client: QueryClient) => {
 }
 
 function save(client: QueryClient, userId: string) {
+  // Une autre fenêtre a pu mettre fin à la session depuis l'écriture demandée : la copie ne se réécrit pas, elle s'efface.
+  if (!hasSessionHint()) {
+    erase()
+
+    return
+  }
   const state = dehydrate(client, { shouldDehydrateQuery: keptBy(client) })
   try {
     if (state.queries.length === 0) erase()

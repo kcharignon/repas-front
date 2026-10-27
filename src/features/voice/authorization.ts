@@ -35,6 +35,20 @@ export function readAuthorizationRequest(query: LocationQuery): AuthorizationReq
 }
 
 /**
+ * Le nom d'hôte seul de l'adresse de retour (`pitangui.amazon.com`), tel que le navigateur le lira : ni schéma, ni chemin, ni paramètres,
+ * ni identifiants, et un nom écrit avec des lettres hors de l'alphabet latin apparaît dans sa forme ASCII (`xn--…`). `null` si ce n'est
+ * pas une adresse web : la page n'a alors rien à faire lire à la personne et ne lui demande pas d'autoriser.
+ */
+export function redirectHost(value: string): string | null {
+  if (!isWebAddress(value)) return null
+  try {
+    return new URL(value).hostname || null
+  } catch {
+    return null
+  }
+}
+
+/**
  * L'adresse de retour reçue du back n'est suivie que si c'est une adresse web : jamais `javascript:` ni `data:`, même si le back se
  * trompait un jour (il ne renvoie qu'une adresse autorisée, `ALEXA_REDIRECT_URIS`).
  */

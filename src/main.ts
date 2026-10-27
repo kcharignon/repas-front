@@ -9,6 +9,7 @@ import { createQueryClient } from './api/query'
 import { i18n } from './i18n'
 import { keepActiveListOffline } from './offline/persistence'
 import { createAppRouter } from './router'
+import { followSessionAcrossTabs } from './session/crossTab'
 
 applyStoredTheme()
 
@@ -21,7 +22,9 @@ useThemeStore()
 app.use(VueQueryPlugin, { queryClient })
 app.use(i18n)
 keepActiveListOffline(queryClient)
-app.use(createAppRouter())
+const router = createAppRouter()
+app.use(router)
+followSessionAcrossTabs(router)
 
 app.mount('#app')
 

@@ -2,10 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient } from '@tanstack/vue-query'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
 
-import { me } from '@/__tests__/helpers'
+import { calls, json, me, stubApi } from '@/__tests__/helpers'
 import { keepActiveListOffline } from '@/offline/persistence'
+import { followSessionAcrossTabs } from '@/session/crossTab'
 import { useSessionStore } from '@/session/session'
+import { routes } from '@/router'
 import { shoppingListKeys } from '@/features/shopping-lists/queries'
 
 const KEY = 'repas.cache'
@@ -19,6 +22,9 @@ const seed = (client: QueryClient) => {
 
 const saved = () => JSON.parse(localStorage.getItem(KEY) ?? 'null')
 
+/** Ce qu'une fenêtre connectée laisse dans le navigateur : l'indice de session, que les copies hors-ligne vérifient avant d'écrire. */
+const HINT = 'repas.session'
+
 describe('liste en cours gardée hors-ligne', () => {
   let client: QueryClient
 
@@ -28,9 +34,17 @@ describe('liste en cours gardée hors-ligne', () => {
     setActivePinia(createPinia())
     client = new QueryClient()
   })
-  afterEach(() => vi.useRealTimers())
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
 
   const signIn = async (id = me.id) => {
+    try {
+      localStorage.setItem(HINT, '1')
+    } catch {
+      // Stockage refusé (test de la navigation privée) : l'indice n'existe pas, la copie non plus
+    }
     const session = useSessionStore()
     session.user = { ...me, id }
     await nextTick()
@@ -176,6 +190,137 @@ describe('liste en cours gardée hors-ligne', () => {
     await vi.advanceTimersByTimeAsync(1100)
 
     expect(localStorage.getItem(KEY)).toBeNull()
+  })
+
+  it('garde la copie quand le renouvellement de la session est refusé (429, 5xx) ou le réseau coupé', async () => {
+    const first = new QueryClient()
+    keepActiveListOffline(first)
+    await signIn()
+    seed(first)
+    await vi.advanceTimersByTimeAsync(1100)
+    localStorage.setItem('repas.user', JSON.stringify({ ...me, id: me.id }))
+
+    for (const refused of [
+      () => json({ error: { message: 'x' } }, { status: 429 }),
+      () => json({ error: { message: 'x' } }, { status: 503 }),
+      () => {
+        throw new TypeError('Failed to fetch')
+      },
+    ]) {
+      const restarted = new QueryClient()
+      setActivePinia(createPinia())
+      stubApi({ 'POST /api/auth/refresh': refused })
+      keepActiveListOffline(restarted)
+
+      await useSessionStore().restore()
+
+      expect(useSessionStore().isAuthenticated).toBe(true)
+      expect(restarted.getQueryData(shoppingListKeys.detail('list-1'))).toEqual(list)
+      expect(saved().userId).toBe(me.id)
+    }
+  })
+
+  it("n'écrit pas la copie quand l'indice de session a disparu du navigateur, même sans événement reçu", async () => {
+    keepActiveListOffline(client)
+    await signIn()
+    seed(client)
+    await vi.advanceTimersByTimeAsync(1100)
+    expect(saved()).not.toBeNull()
+
+    // Une autre fenêtre met fin à la session : elle efface l'indice et la copie, celle-ci ne l'a pas encore su
+    client.setQueryData(shoppingListKeys.detail('list-1'), {
+      ...list,
+      displayName: 'Modifiée après',
+    })
+    localStorage.removeItem(HINT)
+    localStorage.removeItem(KEY)
+    await vi.advanceTimersByTimeAsync(1100)
+
+    expect(localStorage.getItem(KEY)).toBeNull()
+  })
+
+  describe('deux fenêtres', () => {
+    const logoutRoute = 'POST /api/auth/logout'
+
+    /** Deux fenêtres du même navigateur (même stockage), chacune avec son store de session et sa copie hors-ligne. */
+    async function twoWindows() {
+      const windowB = createPinia()
+      setActivePinia(windowB)
+      const clientB = new QueryClient()
+      keepActiveListOffline(clientB)
+      const router = createRouter({ history: createMemoryHistory(), routes })
+      await router.push('/liste')
+      const stopFollowing = followSessionAcrossTabs(router)
+      await signIn()
+      const sessionB = useSessionStore()
+
+      const windowA = createPinia()
+      setActivePinia(windowA)
+      const clientA = new QueryClient()
+      keepActiveListOffline(clientA)
+      const sessionA = useSessionStore()
+      sessionA.user = { ...me }
+      await nextTick()
+
+      return { clientB, sessionA, sessionB, router, stopFollowing }
+    }
+
+    /** L'événement que le navigateur envoie aux AUTRES fenêtres quand l'une efface l'indice de session. */
+    const signedOutEvent = () =>
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: HINT,
+          oldValue: '1',
+          newValue: null,
+          storageArea: localStorage,
+        }),
+      )
+
+    it("une fenêtre se déconnecte pendant que l'autre écrit : la seconde ne réécrit rien", async () => {
+      stubApi({ [logoutRoute]: () => new Response(null, { status: 204 }) })
+      const { clientB, sessionA, sessionB, stopFollowing } = await twoWindows()
+      seed(clientB)
+      await vi.advanceTimersByTimeAsync(1100)
+      expect(saved()).not.toBeNull()
+
+      // La fenêtre B change la liste : son écriture est en attente (1 s)
+      clientB.setQueryData(shoppingListKeys.detail('list-1'), {
+        ...list,
+        displayName: 'Écrite par B',
+      })
+      // La fenêtre A se déconnecte : indice, copie de l'utilisateur et copie hors-ligne partent du navigateur
+      await sessionA.logout()
+      expect(localStorage.getItem(KEY)).toBeNull()
+
+      await vi.advanceTimersByTimeAsync(1100)
+      expect(localStorage.getItem(KEY)).toBeNull()
+
+      signedOutEvent()
+      expect(sessionB.isAuthenticated).toBe(false)
+      expect(clientB.getQueryData(shoppingListKeys.detail('list-1'))).toBeUndefined()
+
+      // Plus aucune écriture ensuite, même si la fenêtre B reçoit encore des données
+      seed(clientB)
+      await vi.advanceTimersByTimeAsync(1100)
+      expect(localStorage.getItem(KEY)).toBeNull()
+      stopFollowing()
+    })
+
+    it("l'événement de stockage met fin à la session de l'autre fenêtre et à sa copie en mémoire", async () => {
+      const fetchMock = stubApi({ [logoutRoute]: () => new Response(null, { status: 204 }) })
+      const { clientB, sessionA, sessionB, stopFollowing } = await twoWindows()
+      seed(clientB)
+      await vi.advanceTimersByTimeAsync(1100)
+
+      await sessionA.logout()
+      signedOutEvent()
+
+      expect(sessionB.isAuthenticated).toBe(false)
+      expect(clientB.getQueryData(shoppingListKeys.detail('list-1'))).toBeUndefined()
+      expect(localStorage.getItem(KEY)).toBeNull()
+      expect(calls(fetchMock)).toEqual([logoutRoute])
+      stopFollowing()
+    })
   })
 
   it("marche sans stockage (navigation privée) : l'application n'en souffre pas", async () => {

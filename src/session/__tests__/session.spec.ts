@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 
 import { ApiError } from '@/api'
 import { bodyOf, calls, json, me, stubApi } from '@/__tests__/helpers'
+import { useDriveReturnStore } from '@/features/drive/returnStore'
 import { useSessionStore } from '@/session/session'
 
 describe('session', () => {
@@ -94,6 +95,119 @@ describe('session', () => {
       expect(calls(fetchMock)).toEqual(['POST /api/auth/refresh', 'POST /api/auth/refresh'])
     })
 
+    it('retrouve la session au second essai quand le premier est refusé (course entre onglets)', async () => {
+      vi.useFakeTimers()
+      let attempts = 0
+      const fetchMock = stubApi({
+        'POST /api/auth/refresh': () =>
+          ++attempts === 1
+            ? json({ error: { message: 'x' } }, { status: 401 })
+            : json({ token: 'neuf' }),
+        'GET /api/v1/me': () => json(me),
+      })
+      const session = useSessionStore()
+
+      const restoring = session.restore()
+      await vi.advanceTimersByTimeAsync(400)
+      await restoring
+      vi.useRealTimers()
+
+      expect(session.isAuthenticated).toBe(true)
+      expect(calls(fetchMock)).toEqual([
+        'POST /api/auth/refresh',
+        'POST /api/auth/refresh',
+        'GET /api/v1/me',
+      ])
+    })
+
+    it.each([
+      [429, 'trop de renouvellements'],
+      [500, 'erreur du serveur'],
+      [502, 'serveur en cours de redéploiement'],
+      [503, 'serveur indisponible'],
+      [504, 'délai dépassé'],
+    ])(
+      'un refus %i du renouvellement (%s) garde la session, l’indice et la copie de l’utilisateur, sans réessayer',
+      async (status) => {
+        localStorage.setItem('repas.user', JSON.stringify(me))
+        localStorage.setItem('repas.cache', '{"copie":"hors-ligne"}')
+        const fetchMock = stubApi({
+          'POST /api/auth/refresh': () => json({ error: { message: 'x' } }, { status }),
+        })
+        const session = useSessionStore()
+
+        await session.restore()
+
+        expect(session.user).toEqual(me)
+        expect(session.isAuthenticated).toBe(true)
+        expect(session.restored).toBe(true)
+        expect(localStorage.getItem('repas.session')).toBe('1')
+        expect(JSON.parse(localStorage.getItem('repas.user') ?? 'null')).toEqual(me)
+        expect(localStorage.getItem('repas.cache')).toBe('{"copie":"hors-ligne"}')
+        expect(calls(fetchMock)).toEqual(['POST /api/auth/refresh'])
+      },
+    )
+
+    it('une réponse 200 sans jeton ne met pas fin à la session', async () => {
+      localStorage.setItem('repas.user', JSON.stringify(me))
+      stubApi({ 'POST /api/auth/refresh': () => json({}) })
+      const session = useSessionStore()
+
+      await session.restore()
+
+      expect(session.isAuthenticated).toBe(true)
+      expect(localStorage.getItem('repas.session')).toBe('1')
+    })
+
+    it('une erreur de réseau garde l’indice et la copie de l’utilisateur', async () => {
+      localStorage.setItem('repas.user', JSON.stringify(me))
+      stubApi({
+        'POST /api/auth/refresh': () => {
+          throw new TypeError('Failed to fetch')
+        },
+      })
+      const session = useSessionStore()
+
+      await session.restore()
+
+      expect(session.user).toEqual(me)
+      expect(localStorage.getItem('repas.session')).toBe('1')
+      expect(localStorage.getItem('repas.user')).not.toBeNull()
+    })
+
+    it('garde la session quand la lecture de l’utilisateur répond 429 ou 5xx après un jeton valide', async () => {
+      localStorage.setItem('repas.user', JSON.stringify(me))
+      stubApi({
+        'POST /api/auth/refresh': () => json({ token: 'jeton' }),
+        'GET /api/v1/me': () => json({ error: { message: 'x' } }, { status: 503 }),
+      })
+      const session = useSessionStore()
+
+      await session.restore()
+
+      expect(session.user).toEqual(me)
+      expect(localStorage.getItem('repas.session')).toBe('1')
+    })
+
+    it('met fin à la session quand la lecture de l’utilisateur répond 401 après un jeton valide', async () => {
+      localStorage.setItem('repas.user', JSON.stringify(me))
+      stubApi({
+        'POST /api/auth/refresh': () => json({ token: 'jeton' }),
+        'GET /api/v1/me': () => json({ error: { message: 'x' } }, { status: 401 }),
+      })
+      vi.useFakeTimers()
+      const session = useSessionStore()
+
+      const restoring = session.restore()
+      await vi.advanceTimersByTimeAsync(400)
+      await restoring
+      vi.useRealTimers()
+
+      expect(session.isAuthenticated).toBe(false)
+      expect(localStorage.getItem('repas.session')).toBeNull()
+      expect(localStorage.getItem('repas.user')).toBeNull()
+    })
+
     it('reste anonyme sans réessayer quand le back est injoignable', async () => {
       const fetchMock = vi.fn<typeof fetch>(async () => {
         throw new TypeError('Failed to fetch')
@@ -132,6 +246,134 @@ describe('session', () => {
 
     expect(calls(fetchMock).filter((call) => call === 'POST /api/auth/refresh')).toHaveLength(1)
     expect(responses.map(({ response }) => response.status)).toEqual([200, 200, 200])
+  })
+
+  describe('renouvellement refusé sans que la session soit perdue', () => {
+    const refresh = 'POST /api/auth/refresh'
+    const expiredToken = () => json({ error: { message: 'Expired JWT Token' } }, { status: 401 })
+
+    /** Une session ouverte dont le jeton a expiré : chaque appel de l'API passe par le renouvellement. */
+    async function openSession(answers: (attempt: number) => Response | Promise<Response>) {
+      let attempts = 0
+      let expired = false
+      const fetchMock = stubApi({
+        'POST /api/login_check': () => json({ token: 'jeton' }),
+        'GET /api/v1/me': (request) =>
+          expired && request.headers.get('Authorization') !== 'Bearer neuf'
+            ? expiredToken()
+            : json(me),
+        [refresh]: () => answers(++attempts),
+      })
+      const session = useSessionStore()
+      await session.login('a@b.fr', 'x')
+      expired = true
+      fetchMock.mockClear()
+
+      return { session, fetchMock }
+    }
+
+    afterEach(() => vi.useRealTimers())
+
+    /** Un appel de l'API : son statut, ou l'erreur levée quand le renouvellement n'a pas dit si la session tient. */
+    const read = (session: ReturnType<typeof useSessionStore>) =>
+      session.api.GET('/api/v1/me').then(
+        ({ response }) => response.status,
+        (error: unknown) => error,
+      )
+
+    it('ne se déconnecte pas sur un 429 : l’utilisateur, l’indice et sa copie restent', async () => {
+      vi.useFakeTimers()
+      const { session } = await openSession(() => json({}, { status: 429 }))
+
+      const outcome = await read(session)
+
+      // La requête échoue comme un réseau coupé (« injoignable »), pas comme une session perdue
+      expect(outcome).toBeInstanceOf(TypeError)
+      // Pour un écran, c'est l'erreur « injoignable » (statut 0), jamais « session expirée » (401)
+      await expect(session.reloadUser()).rejects.toMatchObject({ status: 0 })
+      expect(session.isAuthenticated).toBe(true)
+      expect(localStorage.getItem('repas.session')).toBe('1')
+      expect(localStorage.getItem('repas.user')).not.toBeNull()
+    })
+
+    it('ne redemande pas tant que le délai d’attente court, puis redemande une fois qu’il est passé', async () => {
+      vi.useFakeTimers()
+      const { session, fetchMock } = await openSession(() => json({}, { status: 503 }))
+
+      await read(session)
+      await read(session)
+      await read(session)
+
+      expect(calls(fetchMock).filter((call) => call === refresh)).toHaveLength(1)
+
+      await vi.advanceTimersByTimeAsync(2_100)
+      await read(session)
+
+      expect(calls(fetchMock).filter((call) => call === refresh)).toHaveLength(2)
+      expect(session.isAuthenticated).toBe(true)
+    })
+
+    it('allonge le délai à chaque échec de suite, sans dépasser 30 secondes', async () => {
+      vi.useFakeTimers()
+      const { session, fetchMock } = await openSession(() => json({}, { status: 502 }))
+      const refreshes = () => calls(fetchMock).filter((call) => call === refresh).length
+
+      // Délais attendus : 2 s, 4 s, 8 s, 16 s, 30 s, 30 s
+      for (const [index, delay] of [2_000, 4_000, 8_000, 16_000, 30_000, 30_000].entries()) {
+        await read(session)
+        expect(refreshes()).toBe(index + 1)
+        await vi.advanceTimersByTimeAsync(delay - 100)
+        await read(session)
+        expect(refreshes(), `avant ${delay} ms`).toBe(index + 1)
+        await vi.advanceTimersByTimeAsync(200)
+      }
+    })
+
+    it('suit le Retry-After du back (au plus une minute)', async () => {
+      vi.useFakeTimers()
+      const { session, fetchMock } = await openSession(() =>
+        json({}, { status: 429, headers: { 'Retry-After': '45' } }),
+      )
+      const refreshes = () => calls(fetchMock).filter((call) => call === refresh).length
+
+      await read(session)
+      await vi.advanceTimersByTimeAsync(40_000)
+      await read(session)
+      expect(refreshes()).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(6_000)
+      await read(session)
+      expect(refreshes()).toBe(2)
+    })
+
+    it('reprend dès qu’un renouvellement aboutit : jeton neuf, délai oublié', async () => {
+      vi.useFakeTimers()
+      const { session, fetchMock } = await openSession((attempt) =>
+        attempt === 1 ? json({}, { status: 503 }) : json({ token: 'neuf' }),
+      )
+
+      await read(session)
+      await vi.advanceTimersByTimeAsync(2_100)
+      const outcome = await read(session)
+
+      expect(outcome).toBe(200)
+      expect(calls(fetchMock).filter((call) => call === refresh)).toHaveLength(2)
+      expect(session.isAuthenticated).toBe(true)
+    })
+
+    it('met fin à la session sur un 401 du renouvellement, après un second essai', async () => {
+      vi.useFakeTimers()
+      const { session, fetchMock } = await openSession(() => expiredToken())
+
+      const request = session.api.GET('/api/v1/me')
+      await vi.advanceTimersByTimeAsync(400)
+      await request
+
+      expect(calls(fetchMock).filter((call) => call === refresh)).toHaveLength(2)
+      expect(session.isAuthenticated).toBe(false)
+      expect(localStorage.getItem('repas.session')).toBeNull()
+      expect(localStorage.getItem('repas.user')).toBeNull()
+    })
   })
 
   describe('register', () => {
@@ -273,6 +515,43 @@ describe('session', () => {
       expect(session.isAuthenticated).toBe(false)
       expect(localStorage.getItem('repas.session')).toBeNull()
       expect(calls(fetchMock)).toContain('POST /api/auth/logout')
+    })
+
+    it('efface aussi le brouillon du drive et le résultat du dernier envoi', async () => {
+      stubApi({
+        'POST /api/login_check': () => json({ token: 'jeton' }),
+        'GET /api/v1/me': () => json(me),
+        'POST /api/auth/logout': () => new Response(null, { status: 204 }),
+      })
+      const session = useSessionStore()
+      await session.login('a@b.fr', 'x')
+      localStorage.setItem('repas.drive.run', '{"runId":"x"}')
+      const driveReturn = useDriveReturnStore()
+      driveReturn.receive({ kind: 'invalid', detail: 'champ' })
+      expect(driveReturn.event).not.toBeNull()
+
+      await session.logout()
+
+      expect(localStorage.getItem('repas.drive.run')).toBeNull()
+      expect(driveReturn.event).toBeNull()
+      expect(driveReturn.status).toBe('idle')
+    })
+
+    it('efface le brouillon du drive même si le back est injoignable', async () => {
+      stubApi({
+        'POST /api/login_check': () => json({ token: 'jeton' }),
+        'GET /api/v1/me': () => json(me),
+        'POST /api/auth/logout': () => {
+          throw new TypeError('Failed to fetch')
+        },
+      })
+      const session = useSessionStore()
+      await session.login('a@b.fr', 'x')
+      localStorage.setItem('repas.drive.run', '{"runId":"x"}')
+
+      await session.logout()
+
+      expect(localStorage.getItem('repas.drive.run')).toBeNull()
     })
 
     it('déconnecte quand même si le back est injoignable', async () => {
