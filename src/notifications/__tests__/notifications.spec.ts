@@ -61,7 +61,7 @@ describe('messageForFailure', () => {
   it.each([
     [
       'RECIPE_LIMIT_REACHED',
-      'Tu as déjà 1 000 recettes : c’est le maximum. Supprime-en une, puis réessaie.',
+      'Tu as atteint le nombre maximum de recettes. Supprime-en une, puis réessaie.',
     ],
     [
       'INGREDIENT_LIMIT_REACHED',

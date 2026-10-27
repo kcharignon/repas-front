@@ -652,7 +652,7 @@ export default {
   // Les plafonds et les bornes de l'API (422) : chaque message dit la limite vraie et quoi faire. Groupe à part du glossaire du drive : « ingrédient » est le bon mot ici.
   limits: {
     recipeLimitReached:
-      'Tu as déjà 1 000 recettes : c’est le maximum. Supprime-en une, puis réessaie.',
+      'Tu as atteint le nombre maximum de recettes. Supprime-en une, puis réessaie.',
     ingredientLimitReached:
       'Tu as déjà 2 000 ingrédients : c’est le maximum. Supprime ou fusionne-en, puis réessaie.',
     listLimitReached:
@@ -974,7 +974,8 @@ export default {
   // Liaison d'Alexa (VOX-401) : la page que l'application Alexa ouvre (`/alexa/lier`), une phrase et deux boutons
   alexaLink: {
     title: 'Lier Alexa à ton compte ?',
-    scope: 'Alexa pourra lire ta liste, ajouter ou retirer des produits, et planifier des repas.',
+    scope:
+      'Alexa pourra lire ta liste, ajouter, créer et retirer des produits, et gérer tes repas.',
     account: 'Ton compte',
     returnTo: 'Retour sur',
     notYou: 'Ce n’est pas toi ?',

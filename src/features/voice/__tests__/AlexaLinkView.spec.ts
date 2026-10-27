@@ -46,7 +46,7 @@ describe("page d'autorisation d'Alexa", () => {
 
     expect(wrapper.find('h1').text()).toBe('Lier Alexa à ton compte ?')
     expect(wrapper.find('main p').text()).toBe(
-      'Alexa pourra lire ta liste, ajouter ou retirer des produits, et planifier des repas.',
+      'Alexa pourra lire ta liste, ajouter, créer et retirer des produits, et gérer tes repas.',
     )
     expect(wrapper.find('[data-testid="alexa-account"]').text()).toBe(me.email)
     // Le nom d'hôte seul : ni schéma, ni chemin, ni paramètres

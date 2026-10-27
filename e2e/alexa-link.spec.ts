@@ -109,7 +109,7 @@ test.describe('liaison d’Alexa, parcours simulé', () => {
     ).toBeVisible()
     await expect(
       page.getByText(
-        'Alexa pourra lire ta liste, ajouter ou retirer des produits, et planifier des repas.',
+        'Alexa pourra lire ta liste, ajouter, créer et retirer des produits, et gérer tes repas.',
       ),
     ).toBeVisible()
     await expect(page.getByTestId('alexa-account')).toHaveText('alexiane@example.com')

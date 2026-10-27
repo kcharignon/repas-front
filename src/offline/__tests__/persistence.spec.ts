@@ -239,6 +239,70 @@ describe('liste en cours gardée hors-ligne', () => {
     expect(localStorage.getItem(KEY)).toBeNull()
   })
 
+  describe('fin de session sur une page fraîche (aucun utilisateur déjà connu)', () => {
+    const stored = JSON.stringify({ userId: me.id, savedAt: Date.now(), state: { queries: [] } })
+    const freshPage = () => {
+      localStorage.setItem(HINT, '1')
+      localStorage.setItem('repas.user', JSON.stringify(me))
+      localStorage.setItem(KEY, stored)
+      setActivePinia(createPinia())
+      keepActiveListOffline(new QueryClient())
+    }
+
+    it('efface la copie quand le renouvellement répond 401 au chargement de la page', async () => {
+      stubApi({
+        'POST /api/auth/refresh': () => json({ error: { message: 'x' } }, { status: 401 }),
+      })
+      freshPage()
+
+      const restoring = useSessionStore().restore()
+      await vi.advanceTimersByTimeAsync(400)
+      await restoring
+
+      expect(useSessionStore().isAuthenticated).toBe(false)
+      expect(localStorage.getItem(KEY)).toBeNull()
+    })
+
+    it('efface la copie quand le mot de passe est changé depuis une page fraîche', async () => {
+      stubApi({
+        'POST /api/v1/users/password-reset/confirm': () => new Response(null, { status: 204 }),
+      })
+      freshPage()
+
+      await useSessionStore().resetPassword('le-secret', 'un nouveau mot de passe')
+
+      expect(localStorage.getItem(KEY)).toBeNull()
+    })
+
+    it('efface la copie à la déconnexion depuis une page fraîche', async () => {
+      stubApi({ 'POST /api/auth/logout': () => new Response(null, { status: 204 }) })
+      freshPage()
+
+      await useSessionStore().logout()
+
+      expect(localStorage.getItem(KEY)).toBeNull()
+    })
+
+    it.each([
+      ['429', () => json({ error: { message: 'x' } }, { status: 429 })],
+      ['503', () => json({ error: { message: 'x' } }, { status: 503 })],
+      [
+        'réseau coupé',
+        () => {
+          throw new TypeError('Failed to fetch')
+        },
+      ],
+    ])('garde la copie quand le renouvellement échoue (%s)', async (_label, refused) => {
+      stubApi({ 'POST /api/auth/refresh': refused })
+      freshPage()
+
+      await useSessionStore().restore()
+
+      expect(useSessionStore().isAuthenticated).toBe(true)
+      expect(localStorage.getItem(KEY)).toBe(stored)
+    })
+  })
+
   describe('deux fenêtres', () => {
     const logoutRoute = 'POST /api/auth/logout'
 
