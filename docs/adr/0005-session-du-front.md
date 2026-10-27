@@ -14,7 +14,8 @@
    (`createAuthFetch`, ADR 0002). Un refresh en `401` est retenté **une fois** après 300 ms (course entre onglets, ADR 0015 §5 du back),
    puis la session est perdue. **Seul un `401` met fin à la session** : un `429`, une réponse `5xx` ou une erreur de réseau la laissent telle quelle (indice,
    utilisateur et copie hors-ligne gardés) ; le rafraîchissement n'est alors pas redemandé avant un délai d'attente (2 s, doublé à chaque échec de suite,
-   30 s au plus ; le `Retry-After` du back est suivi jusqu'à une minute), et un appel qui arrive pendant ce délai n'en lance pas un autre.
+   30 s au plus ; le `Retry-After` du back est suivi jusqu'à une minute), et un appel qui arrive pendant ce délai n'en lance pas un autre ; la requête dont le jeton a expiré échoue alors comme un réseau
+   coupé (« injoignable »), pas comme une session perdue.
 4. **Connexion, inscription, déconnexion** : `login` (`POST /api/login_check`), `register` (`POST /api/v1/users` seul : le compte attend la confirmation de son adresse, pas de session), `sendEmailVerification` et `confirmEmail` (routes publiques de confirmation d'adresse, ADR 0020 du back), `logout`
    (`POST /api/auth/logout`, le jeton est oublié même si le back est injoignable).
    **Mot de passe oublié** (ADR 0026 du back) : `sendPasswordReset` (`POST /api/v1/users/password-reset/send`, `204` que l'adresse ait un compte ou non) et `resetPassword`

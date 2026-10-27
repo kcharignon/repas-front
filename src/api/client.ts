@@ -8,6 +8,11 @@ export interface AuthProvider {
   token(): string | null
   /** Échange le cookie de rafraîchissement contre un nouveau jeton ; `null` si la session est perdue. */
   refresh(): Promise<string | null>
+  /**
+   * Le dernier renouvellement n'a pas dit si la session tient (réseau, 429, 5xx) : la requête échoue alors comme un réseau coupé
+   * (« injoignable »), pas comme une session perdue (401).
+   */
+  unreachable?(): boolean
 }
 
 export interface ApiClientOptions {
@@ -43,8 +48,10 @@ export function createAuthFetch({
       return first
 
     const token = await auth.refresh()
+    if (token !== null) return baseFetch(withBearer(replay, token))
+    if (auth.unreachable?.() === true) throw new TypeError('Session injoignable')
 
-    return token === null ? first : baseFetch(withBearer(replay, token))
+    return first
   }
 }
 

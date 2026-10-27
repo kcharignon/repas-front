@@ -274,13 +274,23 @@ describe('session', () => {
 
     afterEach(() => vi.useRealTimers())
 
+    /** Un appel de l'API : son statut, ou l'erreur levée quand le renouvellement n'a pas dit si la session tient. */
+    const read = (session: ReturnType<typeof useSessionStore>) =>
+      session.api.GET('/api/v1/me').then(
+        ({ response }) => response.status,
+        (error: unknown) => error,
+      )
+
     it('ne se déconnecte pas sur un 429 : l’utilisateur, l’indice et sa copie restent', async () => {
       vi.useFakeTimers()
       const { session } = await openSession(() => json({}, { status: 429 }))
 
-      const { response } = await session.api.GET('/api/v1/me')
+      const outcome = await read(session)
 
-      expect(response.status).toBe(401)
+      // La requête échoue comme un réseau coupé (« injoignable »), pas comme une session perdue
+      expect(outcome).toBeInstanceOf(TypeError)
+      // Pour un écran, c'est l'erreur « injoignable » (statut 0), jamais « session expirée » (401)
+      await expect(session.reloadUser()).rejects.toMatchObject({ status: 0 })
       expect(session.isAuthenticated).toBe(true)
       expect(localStorage.getItem('repas.session')).toBe('1')
       expect(localStorage.getItem('repas.user')).not.toBeNull()
@@ -290,14 +300,14 @@ describe('session', () => {
       vi.useFakeTimers()
       const { session, fetchMock } = await openSession(() => json({}, { status: 503 }))
 
-      await session.api.GET('/api/v1/me')
-      await session.api.GET('/api/v1/me')
-      await session.api.GET('/api/v1/me')
+      await read(session)
+      await read(session)
+      await read(session)
 
       expect(calls(fetchMock).filter((call) => call === refresh)).toHaveLength(1)
 
       await vi.advanceTimersByTimeAsync(2_100)
-      await session.api.GET('/api/v1/me')
+      await read(session)
 
       expect(calls(fetchMock).filter((call) => call === refresh)).toHaveLength(2)
       expect(session.isAuthenticated).toBe(true)
@@ -310,10 +320,10 @@ describe('session', () => {
 
       // Délais attendus : 2 s, 4 s, 8 s, 16 s, 30 s, 30 s
       for (const [index, delay] of [2_000, 4_000, 8_000, 16_000, 30_000, 30_000].entries()) {
-        await session.api.GET('/api/v1/me')
+        await read(session)
         expect(refreshes()).toBe(index + 1)
         await vi.advanceTimersByTimeAsync(delay - 100)
-        await session.api.GET('/api/v1/me')
+        await read(session)
         expect(refreshes(), `avant ${delay} ms`).toBe(index + 1)
         await vi.advanceTimersByTimeAsync(200)
       }
@@ -326,13 +336,13 @@ describe('session', () => {
       )
       const refreshes = () => calls(fetchMock).filter((call) => call === refresh).length
 
-      await session.api.GET('/api/v1/me')
+      await read(session)
       await vi.advanceTimersByTimeAsync(40_000)
-      await session.api.GET('/api/v1/me')
+      await read(session)
       expect(refreshes()).toBe(1)
 
       await vi.advanceTimersByTimeAsync(6_000)
-      await session.api.GET('/api/v1/me')
+      await read(session)
       expect(refreshes()).toBe(2)
     })
 
@@ -342,11 +352,11 @@ describe('session', () => {
         attempt === 1 ? json({}, { status: 503 }) : json({ token: 'neuf' }),
       )
 
-      await session.api.GET('/api/v1/me')
+      await read(session)
       await vi.advanceTimersByTimeAsync(2_100)
-      const { response } = await session.api.GET('/api/v1/me')
+      const outcome = await read(session)
 
-      expect(response.status).toBe(200)
+      expect(outcome).toBe(200)
       expect(calls(fetchMock).filter((call) => call === refresh)).toHaveLength(2)
       expect(session.isAuthenticated).toBe(true)
     })

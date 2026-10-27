@@ -158,7 +158,9 @@ export const useSessionStore = defineStore('session', () => {
     return null
   }
 
-  const api = createApiClient({ auth: { token: () => token.value, refresh } })
+  const api = createApiClient({
+    auth: { token: () => token.value, refresh, unreachable: () => unreachable },
+  })
 
   /** Met fin à la session de ce navigateur : jeton, utilisateur, indice, copie de l'utilisateur et ce que le drive gardait pour lui. */
   function clear() {
