@@ -70,6 +70,7 @@ L'image de production ne contient ni nom de domaine ni secret ; ne jamais en ajo
 
 - **Pas de bruit** : un `console.warn` / `console.error` pendant un test fait échouer le test (`src/__tests__/setup.ts`).
 - **Design** : composants dans `src/design/` (préfixe `Ui`), jetons dans `src/design/theme.css`, catalogue sur `/design` ([ADR 0003](docs/adr/0003-design-system-basilic-et-safran.md)) ; toute couleur passe par un jeton, jamais un hexadécimal dans un composant.
+- **Thème saisonnier** ([ADR 0010](docs/adr/0010-theme-saisonnier-halloween.md)) : « Citrouille & nuit » du 15 octobre au 1er novembre (`data-season` sur `<html>`, `src/design/season.ts`, `public/theme-init.js`) ; la citrouille (`accent`) ne porte jamais de texte ; **toute la suite est indépendante de la date** (vitest figé au 15 juin par `src/__tests__/setup.ts`, Playwright par `e2e/support/test.ts` : les specs importent `test` de là, jamais de `@playwright/test`).
 - **Pas de chaîne en dur** dans un composant : textes dans `vue-i18n` (français seul).
 - **Pas de logique métier** dans les composants : elle reste dans le back. Le front affiche, saisit, appelle l'API et relit l'état.
 - **Types de l'API générés, jamais écrits à la main** : un changement de contrat doit casser la compilation, pas la production.

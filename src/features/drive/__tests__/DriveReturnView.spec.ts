@@ -17,8 +17,8 @@ import { result, RUN } from './results'
 // Données SYNTHÉTIQUES : magasin d'essai, produits et listes inventés.
 type Handlers = Parameters<typeof stubApi>[0]
 
-// Un brouillon écrit par une version plus ancienne n'a pas les lignes du plan : l'écran relit le plan du back
-const draft = { runId: RUN, listId: 'l1', startedAt: new Date().toISOString() }
+// Le brouillon date d'une heure avant le jour figé des tests (`src/__tests__/setup.ts` ; il est écrit à l'import, avant le décalage de l'horloge)
+const draft = { runId: RUN, listId: 'l1', startedAt: new Date(2026, 5, 15, 11, 0).toISOString() }
 // Le brouillon d'aujourd'hui garde les lignes du plan envoyé (ici le plan du back, sans rien remplacer ni passer)
 const sentLines = sentLinesOf(buildPlanMessage(plan(), {}, RUN))
 const sentDraft = { ...draft, lines: sentLines }

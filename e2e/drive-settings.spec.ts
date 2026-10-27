@@ -1,7 +1,7 @@
 // Réglages du drive (DRV-403), sans back ni compte : l'API est simulée (`e2e/support/driveBack.ts`). Hors de l'application Repas : le
 // pont natif est absent, le magasin se saisit à la main. Jouée sur bureau et sur Pixel 7.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './support/test'
 
 import { fakeDriveBack } from './support/driveBack'
 import { fakeAppForSetup } from './support/setupApp'

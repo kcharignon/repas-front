@@ -1,6 +1,6 @@
 // Estimation du coût d'une liste (DRV-612) sur la liste de courses et sur l'écran d'envoi, sans back ni compte : l'API est simulée par
 // `page.route`. Données inventées. Joué sur bureau et sur Pixel 7.
-import { expect, test } from '@playwright/test'
+import { expect, test } from './support/test'
 import type { Page } from '@playwright/test'
 
 import { estimate, fakeApp, fakeBack, scan } from './support/drive'

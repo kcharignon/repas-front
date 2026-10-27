@@ -4,7 +4,7 @@
 //  - une décision par écran à 360 × 640 : le bouton principal se voit sans défiler, accessibilité (WCAG AA), captures claires et sombres.
 // Aucune vraie adresse : uniquement des valeurs inventées ; la redirection vers « Amazon » est interceptée, rien ne sort du test.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from '@playwright/test'
+import { expect, test } from './support/test'
 import type { Page } from '@playwright/test'
 
 import { hasSession, signIn } from './support/session'

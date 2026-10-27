@@ -4,7 +4,7 @@
 // résultat est construit avec les types et le validateur du protocole. Données inventées (magasin `123456`, `Ville-Test`).
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { expect, test } from '@playwright/test'
+import { expect, test } from './support/test'
 import type { Page, Route } from '@playwright/test'
 
 import { validatePlan, validateResult } from '../drive-agent/protocol'

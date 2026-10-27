@@ -3,7 +3,7 @@
 //  - la seconde joue le parcours complet contre le VRAI back et sa boîte de développement Mailpit (`make e2e`).
 // Aucune vraie adresse : uniquement `@example.com`, et les comptes et messages du test sont supprimés à la fin.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from '@playwright/test'
+import { expect, test } from './support/test'
 import type { APIRequestContext, Page } from '@playwright/test'
 
 import { apiToken, hasSession } from './support/session'

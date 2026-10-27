@@ -25,6 +25,8 @@
   /* Avertissement : ce qui n'est pas une erreur mais demande un geste (une conversion qui manque). Texte sur fond doux ET sur la surface : AA (9,1 et 10,2). */
   --warning-soft: #fdf1d3;
   --on-warning-soft: #5c3a00;
+  /* Bandeau de connexion et pastille du logo (texte blanc dessus) : le même vert en clair et en sombre. */
+  --brand: #1e6b4c;
   color-scheme: light;
 }
 
@@ -66,6 +68,71 @@
   color-scheme: dark;
 }
 
+/*
+ * Thème saisonnier « Citrouille & nuit » (ADR 0010) : `data-season="halloween"` sur <html>, posé du 15 octobre au 1er novembre
+ * (src/design/season.ts, public/theme-init.js). Il vient APRÈS les blocs de base et dans cet ordre : clair, puis sombre selon le
+ * système, puis sombre forcé (à égalité de spécificité le dernier gagne ; les blocs sombres sont plus spécifiques). Ce qu'il ne
+ * surcharge pas (--warning-soft, --on-warning-soft) reste celui du thème de base du mode. La citrouille (--accent) ne porte jamais
+ * de texte : elle ne sert que de fond, avec --on-accent. Contrastes gardés par src/design/__tests__/seasonContrast.spec.ts.
+ */
+:root[data-season='halloween'] {
+  --bg: #f7f2ea;
+  --surface: #ffffff;
+  --ink: #1d1530;
+  --muted: #5b5070;
+  --line: #d9cfe3;
+  --soft: #eee6f5;
+  --primary: #5a2d8c;
+  --on-primary: #ffffff;
+  --accent: #f58a1f;
+  --on-accent: #2b1400;
+  --danger: #b3261e;
+  --on-danger: #ffffff;
+  --danger-soft: #fbe1dd;
+  --on-danger-soft: #7a1a12;
+  --brand: #43206b;
+  /* La lune du décor de connexion (ni texte ni fond de texte). */
+  --moon: #f9d98a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-season='halloween']:not([data-theme='light']) {
+    --bg: #110b1b;
+    --surface: #1b1229;
+    --ink: #efe9f7;
+    --muted: #b0a3c4;
+    --line: #3a2c55;
+    --soft: #251a3a;
+    --primary: #b48cf2;
+    --on-primary: #1a0b2e;
+    --accent: #ff9d3d;
+    --on-accent: #2b1400;
+    --danger: #f0705a;
+    --on-danger: #2a0c06;
+    --danger-soft: #3a1a14;
+    --on-danger-soft: #f6b8ab;
+    --brand: #2d1850;
+  }
+}
+
+:root[data-season='halloween'][data-theme='dark'] {
+  --bg: #110b1b;
+  --surface: #1b1229;
+  --ink: #efe9f7;
+  --muted: #b0a3c4;
+  --line: #3a2c55;
+  --soft: #251a3a;
+  --primary: #b48cf2;
+  --on-primary: #1a0b2e;
+  --accent: #ff9d3d;
+  --on-accent: #2b1400;
+  --danger: #f0705a;
+  --on-danger: #2a0c06;
+  --danger-soft: #3a1a14;
+  --on-danger-soft: #f6b8ab;
+  --brand: #2d1850;
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -83,6 +150,8 @@
   --color-on-danger-soft: var(--on-danger-soft);
   --color-warning-soft: var(--warning-soft);
   --color-on-warning-soft: var(--on-warning-soft);
+  --color-brand: var(--brand);
+  --color-moon: var(--moon);
   --font-sans: 'Figtree Variable', system-ui, sans-serif;
   --font-display: 'Bricolage Grotesque Variable', 'Figtree Variable', system-ui, sans-serif;
 }

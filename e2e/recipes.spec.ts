@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from '@playwright/test'
+import { expect, test } from './support/test'
 import type { APIRequestContext } from '@playwright/test'
 
 import { apiToken, hasSession, signIn } from './support/session'

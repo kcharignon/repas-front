@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from '@playwright/test'
+import { expect, test } from './support/test'
 
 test("une adresse inconnue montre une page claire, qui ramène à l'application", async ({
   page,

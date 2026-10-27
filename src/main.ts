@@ -4,6 +4,7 @@ import { VueQueryPlugin } from '@tanstack/vue-query'
 
 import './design/theme.css'
 import App from './App.vue'
+import { applySeason, followSeason } from './design/season'
 import { applyStoredTheme, useThemeStore } from './design/theme'
 import { createQueryClient } from './api/query'
 import { i18n } from './i18n'
@@ -12,6 +13,7 @@ import { createAppRouter } from './router'
 import { followSessionAcrossTabs } from './session/crossTab'
 
 applyStoredTheme()
+applySeason()
 
 const app = createApp(App)
 const queryClient = createQueryClient()
@@ -19,6 +21,8 @@ const queryClient = createQueryClient()
 app.use(createPinia())
 // Le thème choisi suit aussi ses changements en cours de session, pas seulement une fois « Moi » ouvert.
 useThemeStore()
+// Le thème saisonnier suit la date : à minuit et quand l'onglet redevient visible, sans rechargement.
+followSeason()
 app.use(VueQueryPlugin, { queryClient })
 app.use(i18n)
 keepActiveListOffline(queryClient)

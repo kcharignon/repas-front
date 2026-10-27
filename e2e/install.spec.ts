@@ -1,7 +1,7 @@
 // La page publique d'installation de l'application Android, `/installer` (DRV-639), sans back ni compte : un gros bouton qui télécharge
 // l'APK de la dernière version, puis quatre étapes. Joué sur bureau et sur Pixel 7 ; captures à 412 et 360 px, thèmes clair et sombre.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from '@playwright/test'
+import { expect, test } from './support/test'
 import type { Page } from '@playwright/test'
 
 import { fakeBack } from './support/drive'

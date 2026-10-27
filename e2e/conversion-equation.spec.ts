@@ -3,7 +3,7 @@
 // en direct, et le coefficient que le back garde part inchangé. Jouée sur bureau et sur Pixel 7, en clair et en sombre.
 // `E2E_SHOTS=<dossier>` garde des captures à lire.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './support/test'
 
 const shots = process.env.E2E_SHOTS
 

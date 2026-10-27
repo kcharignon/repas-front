@@ -1,7 +1,7 @@
 // La session d'un onglet à l'autre : deux onglets du même navigateur partagent le stockage et le cookie de session. Sans back ni compte
 // (l'API est simulée par `context.route`). Quand l'un se déconnecte, l'autre l'apprend par l'événement `storage` du navigateur (jamais
 // émis dans l'onglet qui écrit : il faut bien deux onglets), oublie ses copies et mène à la connexion, sans clic.
-import { expect, test } from '@playwright/test'
+import { expect, test } from './support/test'
 
 const me = {
   id: 'u1',

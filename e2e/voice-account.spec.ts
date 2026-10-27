@@ -3,7 +3,7 @@
 //  - sans liaison, avec une liaison, « Délier Alexa » (confirmation, retour à « aucune liaison » sans recharger) ;
 //  - captures à 360 × 640 et au bureau, clair et sombre, accessibilité (WCAG AA) ; une lecture contre le VRAI back (`make e2e`).
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from '@playwright/test'
+import { expect, test } from './support/test'
 import type { Page } from '@playwright/test'
 
 import { hasSession, signIn } from './support/session'

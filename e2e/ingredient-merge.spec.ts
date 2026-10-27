@@ -2,7 +2,7 @@
 // avec les cas réels de la production (« Melon » en double, « Épice guacamole », « Pâte » et « Pâte-2 »), des noms inventés.
 // Jouée sur bureau et sur Pixel 7 (412 px) ; les parcours sont aussi rejoués à 360 px. `E2E_SHOTS=<dossier>` garde des captures à lire.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './support/test'
 
 import { fakeIngredientsBack, productionPairs, type Pair } from './support/ingredientsBack'
 
