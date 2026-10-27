@@ -974,7 +974,8 @@ export default {
   // Liaison d'Alexa (VOX-401) : la page que l'application Alexa ouvre (`/alexa/lier`), une phrase et deux boutons
   alexaLink: {
     title: 'Lier Alexa à ton compte ?',
-    scope: 'Alexa pourra lire ta liste, ajouter ou retirer des produits, et planifier des repas.',
+    scope:
+      'Alexa pourra lire ta liste, ajouter, créer et retirer des produits, et gérer tes repas.',
     account: 'Ton compte',
     returnTo: 'Retour sur',
     notYou: 'Ce n’est pas toi ?',
