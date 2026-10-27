@@ -12,6 +12,7 @@ import { validateCommand, type SelftestResultMessage } from '../protocol'
 import { showDiagnostic, type DiagnosticDeps } from './diagnostic'
 import { Flow, guidedChoice, setupHandler, type FlowDeps, type StorageLike } from './flow'
 import { browserDeps, LeclercAdapter } from './leclerc'
+import { stringifyJson, takeWindowPrimitives } from './primitives'
 import { bridgeTransport, type Bridge } from './transport/bridge'
 import { fragmentTransport } from './transport/fragment'
 import type { Transport } from './transport/transport'
@@ -30,7 +31,10 @@ const ORIGIN_SHAPE = /^https?:\/\/[a-z0-9.-]+(?::\d+)?$/i
 /** Le fragment d'adresse qui ouvre l'écran d'accueil de l'agent (et, de là, le diagnostic). */
 export const DIAGNOSTIC_HASH = '#repas-diagnostic'
 
-/** Le pont de l'application (`addWebMessageListener`, DRV-313) tel que la page le voit, s'il existe. */
+/**
+ * Le pont de l'application (`addWebMessageListener`, DRV-313) tel que la page le voit, s'il existe. Il n'est lu qu'une fois, au démarrage de `run` :
+ * le script d'injection de l'application retire ensuite `window.repasHost` de la page, l'agent garde seul sa référence.
+ */
 function bridgeOf(win: Window): Bridge | undefined {
   return (win as unknown as { repasHost?: Bridge }).repasHost
 }
@@ -65,8 +69,10 @@ export function run(win: Window & typeof globalThis = window, options: AgentOpti
         },
         origin,
       )
-  const adapter = new LeclercAdapter(browserDeps(win))
-  const ui = createUi({ win })
+  // `fetch` et `attachShadow` de la page, pris maintenant : `run` s'exécute au chargement de l'agent, avant les scripts de la page.
+  const primitives = takeWindowPrimitives(win)
+  const adapter = new LeclercAdapter(browserDeps(win, primitives))
+  const ui = createUi({ win, attachShadow: primitives.attachShadow })
   const send = (message: Parameters<Transport['send']>[0]) => transport.send(message)
   const deps: FlowDeps = {
     adapter,
@@ -94,7 +100,7 @@ export function run(win: Window & typeof globalThis = window, options: AgentOpti
     bridge?.isDebug === true
       ? (): SelftestDeps => ({
           ...diagnosticDeps(),
-          send: (message: SelftestResultMessage) => bridge.postMessage(JSON.stringify(message)),
+          send: (message: SelftestResultMessage) => bridge.postMessage(stringifyJson(message)),
         })
       : null
   transport.listen(

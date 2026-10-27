@@ -52,6 +52,7 @@ import {
   type FilteredProbe,
 } from './facets'
 import { cleanText } from '../text'
+import { stringifyJson, takeWindowPrimitives, type WindowPrimitives } from '../primitives'
 import { extractProducts } from './embedded'
 import { httpCause } from './causes'
 import {
@@ -382,7 +383,7 @@ export class LeclercAdapter implements RetailerAdapter {
       if (!applicable(variant, context)) continue
       const { url, init } = buildSearch(variant, context, text)
       // Deux formes qui donnent la même requête (une adresse sans ville : e1 et e2 sont la requête courante) ne sont pas rejouées.
-      const key = `${url}\n${JSON.stringify(init)}`
+      const key = `${url}\n${stringifyJson(init)}`
       if (seen.has(key)) continue
       seen.add(key)
       const reply = await this.pacer.request(url, init)
@@ -931,14 +932,14 @@ export class LeclercAdapter implements RetailerAdapter {
       const seen = new Set(
         facts.attempts.map((attempt) => {
           const { url, init } = buildSearch(attempt.variant, context, text)
-          return `${url}\n${JSON.stringify(init)}`
+          return `${url}\n${stringifyJson(init)}`
         }),
       )
       for (const variant of SEARCH_VARIANTS) {
         if (facts.attempts.some((attempt) => attempt.variant === variant)) continue
         if (!applicable(variant, context)) continue
         const { url, init } = buildSearch(variant, context, text)
-        const key = `${url}\n${JSON.stringify(init)}`
+        const key = `${url}\n${stringifyJson(init)}`
         if (seen.has(key)) continue
         seen.add(key)
         const reply = await this.pacer.request(url, init)
@@ -1081,9 +1082,12 @@ function safePath(url: string): string {
 }
 
 /** Les dépendances du navigateur : la page courante (lue en lecture seule), son `fetch` et l'horloge réelle. */
-export function browserDeps(win: Window & typeof globalThis): LeclercDeps {
+export function browserDeps(
+  win: Window & typeof globalThis,
+  primitives: WindowPrimitives = takeWindowPrimitives(win),
+): LeclercDeps {
   return {
-    fetch: (input, init) => win.fetch(input, init),
+    fetch: primitives.fetch,
     location: win.location,
     navigate: (url) => win.location.assign(url),
     startButton: () => findStartButton(win.document),

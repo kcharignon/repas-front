@@ -14,6 +14,8 @@ export interface UiOptions {
    * traverse pas un Shadow DOM fermé.
    */
   mode?: 'closed' | 'open'
+  /** Comment poser le Shadow DOM sur le conteneur : l'`attachShadow` pris au démarrage de l'agent (`primitives.ts`) ; à défaut, celui du conteneur. */
+  attachShadow?: (host: Element, init: ShadowRootInit) => ShadowRoot
 }
 
 /** L'interface, et son conteneur dans la page (`null` tant qu'aucun écran n'est affiché). */
@@ -75,6 +77,7 @@ function installStyles(win: Window & typeof globalThis, root: ShadowRoot): void 
 export function createUi(options: UiOptions = {}): UiHandle {
   const win = options.win ?? window
   const mode = options.mode ?? 'closed'
+  const attach = options.attachShadow ?? ((target, init) => target.attachShadow(init))
   let view: {
     host: HTMLElement
     root: ShadowRoot
@@ -93,7 +96,7 @@ export function createUi(options: UiOptions = {}): UiHandle {
     if (view) return view
     const host = h('div')
     pin(host)
-    const root = host.attachShadow({ mode })
+    const root = attach(host, { mode })
     installStyles(win, root)
     const overlay = h('div', {
       class: 'overlay',

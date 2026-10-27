@@ -2,6 +2,7 @@
 // Aucune donnée personnelle : des identifiants de lignes et de produits, rien d'autre. Une erreur du stockage (plein, interdit) ne gêne
 // jamais le passage : on perd seulement la reprise.
 import { LIMITS, LINE_OUTCOMES, type ResultLine, type ResultStats } from '../../protocol'
+import { parseJson, stringifyJson } from '../primitives'
 import type { CartNote } from './keep-cart'
 import type { UnreachedReason } from '../ui'
 import type { ContentChange, UnavailableNote } from './phase-a'
@@ -188,7 +189,7 @@ export type LastReason = Pick<UnavailableNote, 'reason' | 'tried'>
 export function readLastRefusals(storage: StorageLike | null): LastRefusal[] {
   try {
     const raw = storage?.getItem(LAST_REFUSALS_KEY)
-    const list: unknown = raw ? JSON.parse(raw) : []
+    const list: unknown = raw ? parseJson(raw) : []
     return Array.isArray(list)
       ? list.filter((item): item is LastRefusal =>
           isUnreached({ ingredientSlug: '', label: '-', ...(item as object) }),
@@ -203,7 +204,7 @@ export function readLastRefusals(storage: StorageLike | null): LastRefusal[] {
 export function readLastReasons(storage: StorageLike | null): LastReason[] {
   try {
     const raw = storage?.getItem(LAST_REASONS_KEY)
-    const list: unknown = raw ? JSON.parse(raw) : []
+    const list: unknown = raw ? parseJson(raw) : []
     return Array.isArray(list)
       ? list.filter((item): item is LastReason =>
           isReason({ ingredientSlug: '', id: '', ...(item as object) }),
@@ -224,7 +225,7 @@ export class RunStore {
   load(runId: string): RunState | null {
     try {
       const raw = this.storage?.getItem(RUN_PREFIX + runId)
-      const state: unknown = raw ? JSON.parse(raw) : null
+      const state: unknown = raw ? parseJson(raw) : null
       return isState(state, runId)
         ? {
             ...state,
@@ -242,7 +243,7 @@ export class RunStore {
 
   save(state: RunState): void {
     try {
-      this.storage?.setItem(RUN_PREFIX + state.runId, JSON.stringify(state))
+      this.storage?.setItem(RUN_PREFIX + state.runId, stringifyJson(state))
     } catch {
       // Stockage plein ou interdit : le passage continue, sans reprise possible.
     }
@@ -293,7 +294,7 @@ export class RunStore {
         return
       }
       const kept = reasons.slice(0, 100).map(({ reason, tried }) => ({ reason, tried }))
-      this.storage?.setItem(LAST_REASONS_KEY, JSON.stringify(kept))
+      this.storage?.setItem(LAST_REASONS_KEY, stringifyJson(kept))
     } catch {
       // Stockage plein ou interdit : le diagnostic n'aura pas ces lignes.
     }
@@ -309,7 +310,7 @@ export class RunStore {
       const kept = unreached
         .slice(0, 100)
         .map(({ reason, stock, availability }) => ({ reason, stock, availability }))
-      this.storage?.setItem(LAST_REFUSALS_KEY, JSON.stringify(kept))
+      this.storage?.setItem(LAST_REFUSALS_KEY, stringifyJson(kept))
     } catch {
       // Stockage plein ou interdit : le diagnostic n'aura pas ces lignes.
     }

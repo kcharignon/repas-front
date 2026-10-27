@@ -1,4 +1,5 @@
 import { LIMITS, ProtocolError } from '../../protocol'
+import { byteLength, parseJson, stringifyJson } from '../primitives'
 import type { Transport } from './transport'
 
 /**
@@ -24,10 +25,10 @@ export function bridgeTransport(bridge: Bridge): Transport {
         try {
           const { data } = event
           if (typeof data !== 'string') throw new ProtocolError('', 'texte attendu')
-          if (new TextEncoder().encode(data).length > LIMITS.messageBytes) {
+          if (byteLength(data) > LIMITS.messageBytes) {
             throw new ProtocolError('', 'message trop volumineux')
           }
-          message = JSON.parse(data)
+          message = parseJson(data)
         } catch (error) {
           return onInvalid(
             error instanceof ProtocolError ? error : new ProtocolError('', 'JSON invalide'),
@@ -37,8 +38,8 @@ export function bridgeTransport(bridge: Bridge): Transport {
       })
     },
     send(message) {
-      const text = JSON.stringify(message)
-      if (new TextEncoder().encode(text).length > LIMITS.messageBytes) {
+      const text = stringifyJson(message)
+      if (byteLength(text) > LIMITS.messageBytes) {
         throw new ProtocolError('', 'message trop volumineux')
       }
       bridge.postMessage(text)

@@ -104,6 +104,13 @@ const forbidden: [string, string, string][] = [
     'import x from "@exemple/paquet"\nexport default x',
     'no-restricted-imports',
   ],
+  ['JSON.parse', 'const value = JSON.parse("{}"); void value', 'no-restricted-properties'],
+  ['JSON.stringify', 'const text = JSON.stringify({}); void text', 'no-restricted-properties'],
+  [
+    'JSON.parse en crochets',
+    'const value = JSON["parse"]("{}"); void value',
+    'no-restricted-properties',
+  ],
 ]
 
 describe('ce que l’agent s’interdit', () => {
@@ -157,9 +164,25 @@ describe('ce que l’agent permet', () => {
     ).toEqual([])
   })
 
+  it('lit et écrit du JSON par primitives.ts, qui est seul à appeler JSON', async () => {
+    const code = 'export const read = (text: string): unknown => JSON.parse(text)'
+
+    expect(await violations(code, 'drive-agent/src/primitives.ts')).toEqual([])
+    expect(await violations(code, 'drive-agent/src/transport/probe.ts')).not.toEqual([])
+    expect(
+      await violations(
+        'import { parseJson } from "../primitives"\nexport const read = parseJson',
+        'drive-agent/src/transport/probe.ts',
+      ),
+    ).toEqual([])
+  })
+
   it('ne s’applique qu’au code de l’agent, pas aux tests', async () => {
     expect(
       await violations('document.body.innerHTML = "<b>x</b>"', 'drive-agent/test/probe.ts'),
+    ).toEqual([])
+    expect(
+      await violations('export const read = JSON.parse("{}")', 'drive-agent/test/probe.ts'),
     ).toEqual([])
   })
 })
