@@ -4,6 +4,8 @@ import { RouterLink, useRouter } from 'vue-router'
 
 import UiButton from '@/design/UiButton.vue'
 import UiChip from '@/design/UiChip.vue'
+import UiSwitch from '@/design/UiSwitch.vue'
+import { useSeasonStore } from '@/design/season'
 import { useThemeStore } from '@/design/theme'
 import AccountCredits from '@/features/account/AccountCredits.vue'
 import SettingsForms from '@/features/account/SettingsForms.vue'
@@ -17,6 +19,7 @@ const { t } = useI18n()
 const router = useRouter()
 const session = useSessionStore()
 const theme = useThemeStore()
+const season = useSeasonStore()
 
 async function logout() {
   await session.logout()
@@ -47,6 +50,8 @@ async function logout() {
           {{ t(`theme.${preference}`) }}
         </UiChip>
       </div>
+      <!-- Le décor saisonnier (ADR 0010) : l'interrupteur n'existe que du 15 octobre au 1er novembre -->
+      <UiSwitch v-if="season.inSeason" v-model="season.enabled" :label="t('season.halloween')" />
     </section>
 
     <AppHelpLink />
