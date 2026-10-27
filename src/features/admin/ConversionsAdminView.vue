@@ -5,9 +5,13 @@ import { useI18n } from 'vue-i18n'
 import { hasFailed } from '@/api/query'
 import UiButton from '@/design/UiButton.vue'
 import UiCombobox from '@/design/UiCombobox.vue'
-import UiField from '@/design/UiField.vue'
-import UiSelect from '@/design/UiSelect.vue'
-import UiTextInput from '@/design/UiTextInput.vue'
+import ConversionEquation from '@/features/ingredients/ConversionEquation.vue'
+import {
+  coefficientOf,
+  equationProblem,
+  inputNumber,
+  type EquationValue,
+} from '@/features/ingredients/equationMath'
 import { useUnits } from '@/features/ingredients/queries'
 import { useIngredientOptions } from '@/features/recipes/queries'
 import { messageForFailure } from '@/notifications/failures'
@@ -36,23 +40,24 @@ const options = computed(() => [
   })),
 ])
 
+// L'équation s'écrit « [gauche] [départ] = [droite] [arrivée] » ; le back garde « 1 départ = coefficient arrivée » (droite ÷ gauche)
 const dialog = useResourceDialog(() => ({
   start: '',
   end: '',
-  coefficient: '' as string | number,
+  left: '1' as string | number,
+  right: '' as string | number,
   ingredient: ALL,
 }))
 
-const errors = computed(() => ({
-  units:
-    dialog.submitted.value && dialog.form.start !== '' && dialog.form.start === dialog.form.end
-      ? t('admin.errors.sameUnit')
-      : undefined,
-  coefficient:
-    dialog.submitted.value && !(Number(dialog.form.coefficient) > 0)
-      ? t('admin.errors.coefficient')
-      : undefined,
-}))
+const equation = computed<EquationValue>({
+  get: () => ({
+    start: dialog.form.start,
+    end: dialog.form.end,
+    left: dialog.form.left,
+    right: dialog.form.right,
+  }),
+  set: (value) => Object.assign(dialog.form, value),
+})
 
 function openCreate() {
   dialog.create()
@@ -63,7 +68,8 @@ function openCreate() {
 function submit() {
   dialog.submitted.value = true
   dialog.error.value = null
-  if (errors.value.units || errors.value.coefficient) return
+  const coefficient = coefficientOf(dialog.form.left, dialog.form.right)
+  if (equationProblem(equation.value, true) !== null || coefficient === null) return
 
   save.mutate(
     {
@@ -71,7 +77,7 @@ function submit() {
       form: {
         startUnitSlug: dialog.form.start,
         endUnitSlug: dialog.form.end,
-        coefficient: Number(dialog.form.coefficient),
+        coefficient,
         ingredientSlug: dialog.form.ingredient === ALL ? null : dialog.form.ingredient,
       },
     },
@@ -126,7 +132,8 @@ function submit() {
             dialog.edit(conversion.id, {
               start: conversion.startUnitSlug,
               end: conversion.endUnitSlug,
-              coefficient: conversion.coefficient,
+              left: '1',
+              right: inputNumber(conversion.coefficient),
               ingredient: conversion.ingredientSlug ?? ALL,
             })
           "
@@ -144,48 +151,7 @@ function submit() {
     :error="dialog.error.value"
     @submit="submit"
   >
-    <div class="grid gap-4 sm:grid-cols-2">
-      <UiField :label="t('admin.startUnit')" v-slot="{ id }">
-        <UiSelect :id="id" v-model="dialog.form.start">
-          <option v-for="unit in unitList" :key="unit.slug" :value="unit.slug">
-            {{ unit.name }}
-          </option>
-        </UiSelect>
-      </UiField>
-      <UiField
-        :label="t('admin.endUnit')"
-        :error="errors.units"
-        v-slot="{ id, describedby, invalid }"
-      >
-        <UiSelect
-          :id="id"
-          v-model="dialog.form.end"
-          :aria-describedby="describedby"
-          :invalid="invalid"
-        >
-          <option v-for="unit in unitList" :key="unit.slug" :value="unit.slug">
-            {{ unit.name }}
-          </option>
-        </UiSelect>
-      </UiField>
-    </div>
-    <UiField
-      :label="t('admin.coefficient')"
-      :hint="t('admin.coefficientHint')"
-      :error="errors.coefficient"
-      v-slot="{ id, describedby, invalid }"
-    >
-      <UiTextInput
-        :id="id"
-        v-model="dialog.form.coefficient"
-        type="number"
-        inputmode="decimal"
-        min="0"
-        step="any"
-        :aria-describedby="describedby"
-        :invalid="invalid"
-      />
-    </UiField>
+    <ConversionEquation v-model="equation" :units="unitList" :submitted="dialog.submitted.value" />
     <div class="flex flex-col gap-1.5">
       <span class="text-sm font-semibold">{{ t('admin.ingredient') }}</span>
       <UiCombobox

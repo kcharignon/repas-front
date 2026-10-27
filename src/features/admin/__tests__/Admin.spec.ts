@@ -147,6 +147,9 @@ const field = (label: string) => {
   return document.body.querySelector(`#${target?.getAttribute('for') ?? 'absent'}`) as
     HTMLInputElement | HTMLSelectElement
 }
+// Les champs de l'équation d'une conversion n'ont pas d'étiquette visible : ils se trouvent par leur nom accessible
+const named = (label: string) =>
+  document.body.querySelector(`[aria-label="${label}"]`) as HTMLInputElement | HTMLSelectElement
 const type = (input: HTMLInputElement | HTMLSelectElement, value: string) => {
   input.value = value
   input.dispatchEvent(new Event(input instanceof HTMLSelectElement ? 'change' : 'input'))
@@ -491,8 +494,8 @@ describe('conversions', () => {
     await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
 
     button('Nouvelle conversion')?.click()
-    await vi.waitFor(() => expect(field("Unité d'arrivée")).not.toBeNull())
-    type(field('Coefficient'), '1000')
+    await vi.waitFor(() => expect(named("Unité d'arrivée")).not.toBeNull())
+    type(named("Quantité d'arrivée"), '1000')
     await submitDialog()
 
     expect(await body(fetchMock, 'POST', '/conversions')).toEqual({
@@ -503,17 +506,58 @@ describe('conversions', () => {
     })
   })
 
-  it('refuse deux unités identiques et un coefficient nul', async () => {
+  it("écrit l'équation et la lit en direct : 8 grammes = 1 kilo vaut 0,125 kilo par gramme", async () => {
+    const { wrapper, fetchMock } = await open(ConversionsAdminView, {
+      'POST /api/v1/conversions': () =>
+        new Response(null, { status: 201, headers: { Location: '/api/v1/conversions/c3' } }),
+    })
+    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+
+    button('Nouvelle conversion')?.click()
+    await vi.waitFor(() => expect(named("Unité d'arrivée")).not.toBeNull())
+    type(named('Quantité de départ'), '8')
+    await flushPromises()
+    type(named("Quantité d'arrivée"), '1')
+    await flushPromises()
+
+    expect(document.body.querySelector('[aria-live="polite"]')?.textContent).toBe(
+      '1 Gramme = 0,125 Kilo, et 1 Kilo = 8 Grammes.',
+    )
+    await submitDialog()
+
+    expect(await body(fetchMock, 'POST', '/conversions')).toMatchObject({ coefficient: 0.125 })
+  })
+
+  it('refuse un nombre vide ou nul sans appeler le back', async () => {
     const { wrapper, fetchMock } = await open(ConversionsAdminView)
     await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
     button('Nouvelle conversion')?.click()
-    await vi.waitFor(() => expect(field("Unité d'arrivée")).not.toBeNull())
-    type(field("Unité d'arrivée"), 'gramme')
+    await vi.waitFor(() => expect(named("Unité d'arrivée")).not.toBeNull())
+
+    await submitDialog()
+    expect(document.body.textContent).toContain('Entre un nombre supérieur à zéro.')
+
+    type(named("Quantité d'arrivée"), '0')
+    await submitDialog()
+
+    expect(document.body.textContent).toContain('Entre un nombre supérieur à zéro.')
+    expect(calls(fetchMock).filter((call) => call.startsWith('POST /api/v1/conversions'))).toEqual(
+      [],
+    )
+  })
+
+  it('refuse deux unités identiques', async () => {
+    const { wrapper, fetchMock } = await open(ConversionsAdminView)
+    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
+    button('Nouvelle conversion')?.click()
+    await vi.waitFor(() => expect(named("Unité d'arrivée")).not.toBeNull())
+    type(named("Unité d'arrivée"), 'gramme')
+    await flushPromises()
+    expect(document.body.textContent).toContain('Choisis deux unités différentes.')
 
     await submitDialog()
 
     expect(document.body.textContent).toContain('Choisis deux unités différentes.')
-    expect(document.body.textContent).toContain('Entre un nombre supérieur à zéro.')
     expect(calls(fetchMock).filter((call) => call.startsWith('POST /api/v1/conversions'))).toEqual(
       [],
     )
@@ -526,8 +570,9 @@ describe('conversions', () => {
     await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
 
     button('Modifier Kilo → Gramme')?.click()
-    await vi.waitFor(() => expect(field('Coefficient').value).toBe('1000'))
-    type(field('Coefficient'), '1100')
+    await vi.waitFor(() => expect(named("Quantité d'arrivée").value).toBe('1000'))
+    expect(named('Quantité de départ').value).toBe('1')
+    type(named("Quantité d'arrivée"), '1100')
     await submitDialog()
 
     expect(await body(fetchMock, 'PUT', '/conversions/c1')).toEqual({
