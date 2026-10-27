@@ -7,10 +7,13 @@ import ConversionEquation from '../ConversionEquation.vue'
 import type { EquationUnit, EquationValue } from '../equationMath'
 
 const units: EquationUnit[] = [
-  { slug: 'tasse', name: 'tasse', dimension: null, baseFactor: null },
-  { slug: 'cuillere', name: 'cuillère à soupe', dimension: null, baseFactor: null },
-  { slug: 'gramme', name: 'gramme', dimension: 'WEIGHT', baseFactor: 1 },
-  { slug: 'kilo', name: 'kilo', dimension: 'WEIGHT', baseFactor: 1000 },
+  { slug: 'tasse', name: 'tasse' },
+  { slug: 'cuillere', name: 'cuillère à soupe' },
+  { slug: 'gramme', name: 'gramme' },
+  { slug: 'kilo', name: 'kilo' },
+  { slug: 'bouteille', name: 'bouteille' },
+  { slug: 'centilitre', name: 'centilitre' },
+  { slug: 'unite', name: 'unité' },
 ]
 
 type Props = {
@@ -18,6 +21,8 @@ type Props = {
   submitted?: boolean
   startUnits?: EquationUnit[]
   endUnits?: EquationUnit[]
+  focusRight?: boolean
+  hint?: string
 }
 
 // Un parent qui garde la valeur, comme un écran : le composant s'édite lui-même par v-model
@@ -52,12 +57,79 @@ describe('ConversionEquation', () => {
     )
   })
 
-  it('met le nom de l’ingrédient devant la phrase, avec une majuscule', () => {
-    const { wrapper } = mountEquation(start, { ingredientName: 'farine' })
+  describe('pour un ingrédient', () => {
+    const bottle = { start: 'bouteille', end: 'centilitre', left: '1', right: '30' }
 
-    expect(wrapper.find('[aria-live="polite"]').text()).toBe(
-      'Farine : 1 tasse = 0,125 kilo, et 1 kilo = 8 tasses.',
-    )
+    it('dit UNE phrase, dans le sens où l’équation est écrite, avec le nom en majuscule', () => {
+      const { wrapper } = mountEquation(bottle, { ingredientName: 'vin rouge' })
+
+      expect(wrapper.find('[aria-live="polite"]').text()).toBe(
+        'Vin rouge : 1 bouteille = 30 centilitres.',
+      )
+      // Jamais la réciproque (« 1 centilitre = 0,0333 bouteille ») : c’est la question complexe à répondre
+      expect(wrapper.text()).not.toContain('0,0333')
+      expect(wrapper.text()).not.toContain('et 1 centilitre')
+    })
+
+    it('pose la question avec les noms réels des unités choisies, au bon nombre', async () => {
+      const { wrapper } = mountEquation(bottle, { ingredientName: 'vin' })
+      expect(wrapper.text()).toContain('Dans 1 bouteille, combien de centilitres ?')
+
+      await wrapper.find('input[aria-label="Quantité de départ"]').setValue('2')
+      expect(wrapper.text()).toContain('Dans 2 bouteilles, combien de centilitres ?')
+      expect(wrapper.find('[aria-live="polite"]').text()).toBe(
+        'Vin : 2 bouteilles = 30 centilitres.',
+      )
+    })
+
+    it('élide « de » devant une voyelle et accorde un nom composé', async () => {
+      const { wrapper } = mountEquation(
+        { start: 'kilo', end: 'unite', left: '1', right: '10' },
+        { ingredientName: 'pomme' },
+      )
+      expect(wrapper.text()).toContain("Dans 1 kilo, combien d'unités ?")
+
+      await wrapper.find('select[aria-label="Unité d\'arrivée"]').setValue('cuillere')
+      expect(wrapper.text()).toContain('Dans 1 kilo, combien de cuillères à soupe ?')
+    })
+
+    it('ne pose pas la question quand ce n’est pas un ingrédient (administration)', () => {
+      const { wrapper } = mountEquation(bottle)
+
+      expect(wrapper.text()).not.toContain('combien')
+    })
+
+    it('dit « elles se convertissent déjà » quand il n’y a pas de nombre à droite, si l’écran le sait', () => {
+      const { wrapper } = mountEquation(
+        { ...bottle, right: '' },
+        { ingredientName: 'vin', hint: 'Elles se convertissent déjà ; tu peux préciser.' },
+      )
+
+      expect(wrapper.find('[aria-live="polite"]').text()).toBe(
+        'Elles se convertissent déjà ; tu peux préciser.',
+      )
+    })
+
+    it('donne le focus au nombre de droite à l’affichage quand l’écran le demande', async () => {
+      const { wrapper } = mountEquation(
+        { ...bottle, right: '' },
+        { ingredientName: 'vin', focusRight: true },
+      )
+
+      await new Promise((resolve) => setTimeout(resolve, 10))
+
+      expect(document.activeElement).toBe(
+        wrapper.find('input[aria-label="Quantité d\'arrivée"]').element,
+      )
+    })
+
+    it('ne vole pas le focus sans en avoir reçu la demande', async () => {
+      mountEquation({ ...bottle, right: '' }, { ingredientName: 'vin' })
+
+      await new Promise((resolve) => setTimeout(resolve, 10))
+
+      expect(document.activeElement).toBe(document.body)
+    })
   })
 
   it('suit chaque frappe : le nombre et l’unité changent la phrase', async () => {

@@ -1,40 +1,18 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  baseUnitOf,
   coefficientOf,
+  displayOrientation,
   equationProblem,
   formatDisplayNumber,
   formatNumber,
-  inUnit,
   inputNumber,
   parseNumber,
   quantityLabel,
-  sameMeasureUnits,
-  suggestedEnd,
   unitLabel,
   unitText,
-  type EquationUnit,
+  withDe,
 } from '../equationMath'
-
-const gramme: EquationUnit = { slug: 'gramme', name: 'gramme', dimension: 'WEIGHT', baseFactor: 1 }
-const kilo: EquationUnit = { slug: 'kilo', name: 'kilo', dimension: 'WEIGHT', baseFactor: 1000 }
-const litre: EquationUnit = { slug: 'litre', name: 'litre', dimension: 'VOLUME', baseFactor: 1000 }
-const millilitre: EquationUnit = {
-  slug: 'millilitre',
-  name: 'millilitre',
-  dimension: 'VOLUME',
-  baseFactor: 1,
-}
-const paquet: EquationUnit = { slug: 'paquet', name: 'paquet', dimension: 'PACKAGE', baseFactor: 1 }
-const boite: EquationUnit = { slug: 'boite', name: 'boîte', dimension: 'PACKAGE', baseFactor: 1 }
-const cuillere: EquationUnit = {
-  slug: 'cuillere-a-soupe',
-  name: 'cuillère à soupe',
-  dimension: null,
-  baseFactor: null,
-}
-const all = [gramme, kilo, litre, millilitre, paquet, boite, cuillere]
 
 describe('unitLabel', () => {
   it('laisse le nom au singulier sous 2 (y compris 1,5, 0 et le négatif)', () => {
@@ -161,29 +139,80 @@ describe('equationProblem', () => {
   })
 })
 
-describe('petites unités', () => {
-  it('propose le gramme pour le kilo et le millilitre pour le litre', () => {
-    expect(baseUnitOf(kilo, all)?.slug).toBe('gramme')
-    expect(baseUnitOf(litre, all)?.slug).toBe('millilitre')
+describe('displayOrientation', () => {
+  const stored = (start: string, end: string, coefficient: number) => ({
+    startUnitSlug: start,
+    endUnitSlug: end,
+    coefficient,
   })
 
-  it('n’en propose pas pour un conditionnement, une unité sans dimension ou la petite unité elle-même', () => {
-    expect(baseUnitOf(paquet, all)).toBeUndefined()
-    expect(baseUnitOf(cuillere, all)).toBeUndefined()
-    expect(baseUnitOf(gramme, all)).toBeUndefined()
+  it('garde « 1 bouteille = 30 centilitres » tel qu’enregistré quand l’unité d’achat est à gauche', () => {
+    expect(displayOrientation(stored('bouteille', 'centilitre', 30), 'bouteille')).toEqual({
+      startSlug: 'bouteille',
+      endSlug: 'centilitre',
+      value: 30,
+      reversed: false,
+    })
   })
 
-  it('liste les unités qui se convertissent en l’unité d’achat par leur facteur de base', () => {
-    expect(sameMeasureUnits(kilo, all).map((unit) => unit.slug)).toEqual(['gramme', 'kilo'])
-    expect(sameMeasureUnits(paquet, all)).toEqual([paquet])
-    expect(sameMeasureUnits(cuillere, all)).toEqual([cuillere])
+  it('retourne « 1 centilitre = 0,0333 bouteille » en « 1 bouteille = 30 centilitres » : l’unité d’achat à gauche', () => {
+    expect(displayOrientation(stored('centilitre', 'bouteille', 1 / 30), 'bouteille')).toEqual({
+      startSlug: 'bouteille',
+      endSlug: 'centilitre',
+      value: 30,
+      reversed: true,
+    })
   })
 
-  it('exprime une quantité dans une autre unité de la même mesure', () => {
-    expect(inUnit(0.001, kilo, gramme)).toBe(1)
-    expect(inUnit(10, gramme, kilo)).toBe(0.01)
-    expect(inUnit(5, kilo, kilo)).toBe(5)
-    expect(inUnit(5, gramme, cuillere)).toBe(5)
+  it('garde l’unité d’achat à gauche même quand le nombre vaut moins de 1', () => {
+    expect(displayOrientation(stored('kilo', 'sac', 0.5), 'kilo')).toMatchObject({
+      startSlug: 'kilo',
+      value: 0.5,
+      reversed: false,
+    })
+    expect(displayOrientation(stored('sac', 'kilo', 2), 'kilo')).toMatchObject({
+      startSlug: 'kilo',
+      endSlug: 'sac',
+      value: 0.5,
+      reversed: true,
+    })
+  })
+
+  it('sans unité d’achat dans la conversion, retourne ce qui vaut moins de 1', () => {
+    expect(displayOrientation(stored('gramme', 'kilo', 0.001), 'bouteille')).toEqual({
+      startSlug: 'kilo',
+      endSlug: 'gramme',
+      value: 1000,
+      reversed: true,
+    })
+    expect(displayOrientation(stored('kilo', 'gramme', 1000), undefined)).toMatchObject({
+      startSlug: 'kilo',
+      reversed: false,
+    })
+    expect(displayOrientation(stored('sachet', 'paquet', 1), undefined).reversed).toBe(false)
+  })
+
+  it('n’invente rien d’un coefficient inutilisable', () => {
+    expect(displayOrientation(stored('a', 'b', 0), 'b').reversed).toBe(false)
+    expect(displayOrientation(stored('a', 'b', Number.NaN), 'b').reversed).toBe(false)
+  })
+
+  it('rend un nombre sans erreur d’arrondi, qui remplit un champ sans bruit', () => {
+    const way = displayOrientation(
+      stored('centilitre', 'bouteille', 0.03333333333333333),
+      'bouteille',
+    )
+    expect(way.value).toBe(30)
+    expect(inputNumber(way.value)).toBe('30')
+  })
+})
+
+describe('withDe', () => {
+  it('élide « de » devant une voyelle', () => {
+    expect(withDe('centilitres')).toBe('de centilitres')
+    expect(withDe('unités')).toBe("d'unités")
+    expect(withDe('œufs')).toBe("d'œufs")
+    expect(withDe('cuillères à soupe')).toBe('de cuillères à soupe')
   })
 })
 
@@ -201,16 +230,5 @@ describe('pour dire une conversion à voix haute', () => {
     expect(unitText({ name: 'tasse', symbol: 'Tasse' }, 3)).toBe('tasses')
     expect(unitText({ name: 'cuillère à soupe', symbol: '' }, 2)).toBe('cuillères à soupe')
     expect(unitText({ name: 'paquet' }, 1)).toBe('paquet')
-  })
-
-  it('commence « 1 cuillère à soupe = ? » par le gramme quand l’unité d’achat est le kilo', () => {
-    expect(suggestedEnd('cuillere-a-soupe', kilo, all)).toBe('gramme')
-    expect(suggestedEnd('cuillere-a-soupe', litre, all)).toBe('millilitre')
-  })
-
-  it('garde l’unité d’achat quand elle n’a pas de petite unité, ou que la ligne est déjà dans celle-là', () => {
-    expect(suggestedEnd('cuillere-a-soupe', paquet, all)).toBe('paquet')
-    expect(suggestedEnd('gramme', kilo, all)).toBe('kilo')
-    expect(suggestedEnd('cuillere-a-soupe', undefined, all)).toBe('')
   })
 })

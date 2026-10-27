@@ -67,9 +67,18 @@ const base = {
   // La section « Conversions de … » de la fiche d'un ingrédient à soi
   'GET /api/v1/ingredients/ma-sauce/conversions': () =>
     json({
-      member: [],
+      member: [
+        {
+          id: 'c-kilo',
+          startUnitSlug: 'kilo',
+          startUnitName: 'Kilo',
+          endUnitSlug: 'gramme',
+          endUnitName: 'Gramme',
+          coefficient: 1000,
+        },
+      ],
       common: [],
-      totalItems: 0,
+      totalItems: 1,
       convertible: true,
       cookingUnitSlug: 'gramme',
       purchaseUnitSlug: 'kilo',
@@ -415,7 +424,7 @@ describe('IngredientEditorView', () => {
       .map((select) => (select.element as HTMLSelectElement).value)
 
     expect(values).toEqual(['boucherie', 'gramme', 'gramme'])
-    expect(wrapper.text()).not.toContain('Combien ça fait ?')
+    expect(wrapper.text()).not.toContain('combien de')
   })
 
   it('ne demande la conversion que lorsque les deux unités diffèrent', async () => {
@@ -424,7 +433,8 @@ describe('IngredientEditorView', () => {
 
     await wrapper.findAll('select')[2]?.setValue('kilo')
 
-    expect(wrapper.text()).toContain('Combien ça fait ?')
+    // La question facile à répondre : combien d'unités de recette dans UNE unité d'achat
+    expect(wrapper.text()).toContain('Dans 1 Kilo, combien de Grammes ?')
     expect(wrapper.find('[role="group"]').attributes('aria-label')).toBe('La conversion')
   })
 
@@ -449,9 +459,9 @@ describe('IngredientEditorView', () => {
 
     await nameInput(wrapper).setValue('  Praliné ')
     await wrapper.findAll('select')[2]?.setValue('kilo')
-    // « 1 gramme = 0,001 kilo » : le back garde « 1 kilo = 1000 grammes »
-    await wrapper.find('input[aria-label="Quantité d\'arrivée"]').setValue('0,001')
-    expect(wrapper.find('[aria-live="polite"]').text()).toContain('Praliné : 1 Gramme = 0,001 Kilo')
+    // « 1 kilo = 1000 grammes » : le nombre de droite EST le coefficient du back
+    await wrapper.find('input[aria-label="Quantité d\'arrivée"]').setValue('1000')
+    expect(wrapper.find('[aria-live="polite"]').text()).toBe('Praliné : 1 Kilo = 1000 Grammes.')
     await wrapper.find('form').trigger('submit')
     await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('department'))
 
@@ -490,10 +500,15 @@ describe('IngredientEditorView', () => {
       expect((nameInput(wrapper).element as HTMLInputElement).value).toBe('ma sauce'),
     )
 
-    // « 1 kilo = 1000 grammes » s'écrit « 1 gramme = 0,001 kilo » ; sans y toucher, le coefficient d'origine repart tel quel
+    // « 1 kilo = 1000 grammes » se rouvre tel quel, dans le sens « 1 unité d'achat = N unités de recette »
+    await vi.waitFor(() =>
+      expect(
+        (wrapper.find('input[aria-label="Quantité d\'arrivée"]').element as HTMLInputElement).value,
+      ).toBe('1000'),
+    )
     expect(
-      (wrapper.find('input[aria-label="Quantité d\'arrivée"]').element as HTMLInputElement).value,
-    ).toBe('0,001')
+      (wrapper.find('input[aria-label="Quantité de départ"]').element as HTMLInputElement).value,
+    ).toBe('1')
     await nameInput(wrapper).setValue('ma sauce maison')
     await wrapper.find('form').trigger('submit')
     await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('department'))
@@ -502,22 +517,17 @@ describe('IngredientEditorView', () => {
     const put = fetchMock.mock.calls
       .map(([call]) => call as Request)
       .find((request) => request.method === 'PUT')
-    expect(await put?.json()).toMatchObject({ coefficient: 1000 })
+    // Équation intacte : rien n'est réécrit (le back connaît déjà la conversion)
+    expect(await put?.json()).toMatchObject({ name: 'ma sauce maison', coefficient: null })
   })
 
   describe("l'équation de conversion", () => {
     const measured = {
       member: [
-        {
-          slug: 'cuillere',
-          name: 'cuillère à soupe',
-          symbol: '',
-          dimension: null,
-          baseFactor: null,
-        },
-        { slug: 'gramme', name: 'gramme', symbol: 'g', dimension: 'WEIGHT', baseFactor: 1 },
-        { slug: 'kilo', name: 'kilo', symbol: 'kg', dimension: 'WEIGHT', baseFactor: 1000 },
-        { slug: 'pot', name: 'pot', symbol: '', dimension: 'PACKAGE', baseFactor: 1 },
+        { slug: 'cuillere', name: 'cuillère à soupe', symbol: '' },
+        { slug: 'gramme', name: 'gramme', symbol: 'g' },
+        { slug: 'kilo', name: 'kilo', symbol: 'kg' },
+        { slug: 'pot', name: 'pot', symbol: '' },
       ],
       totalItems: 4,
     }
@@ -545,27 +555,28 @@ describe('IngredientEditorView', () => {
     const rightInput = (wrapper: Awaited<ReturnType<typeof edit>>['wrapper']) =>
       wrapper.find('input[aria-label="Quantité d\'arrivée"]')
 
-    it('propose la petite unité du poids à droite : « 1 cuillère à soupe = ? gramme » plutôt que kilo', async () => {
+    it('écrit « 1 [unité d’achat] = ? [unité des recettes] » avec les deux unités du formulaire, sans les faire choisir', async () => {
       const { wrapper, fetchMock } = await edit('/ingredients/nouveau?rayon=legumes', withUnits)
       await pick(wrapper, 'cuillere', 'kilo')
 
-      const end = wrapper.find('select[aria-label="Unité d\'arrivée"]')
-      expect((end.element as HTMLSelectElement).value).toBe('gramme')
-      expect(end.findAll('option').map((option) => option.attributes('value'))).toEqual([
-        'gramme',
-        'kilo',
-      ])
+      // Les deux unités sont celles d’au-dessus, écrites ; l’unité d’achat à gauche, avec 1, le nombre à dire à droite
       expect(wrapper.find('select[aria-label="Unité de départ"]').exists()).toBe(false)
+      expect(wrapper.find('select[aria-label="Unité d\'arrivée"]').exists()).toBe(false)
+      expect(wrapper.text()).toContain('Dans 1 kilo, combien de cuillères à soupe ?')
+      expect(
+        (wrapper.find('input[aria-label="Quantité de départ"]').element as HTMLInputElement).value,
+      ).toBe('1')
+      expect((rightInput(wrapper).element as HTMLInputElement).value).toBe('')
 
       await nameInput(wrapper).setValue('Farine')
-      await rightInput(wrapper).setValue('10')
+      await rightInput(wrapper).setValue('100')
+      // Une seule phrase, jamais la réciproque (« 1 cuillère à soupe = 0,01 kilo »)
       expect(wrapper.find('[aria-live="polite"]').text()).toBe(
-        'Farine : 1 cuillère à soupe = 10 grammes, et 1 gramme = 0,1 cuillère à soupe.',
+        'Farine : 1 kilo = 100 cuillères à soupe.',
       )
       await wrapper.find('form').trigger('submit')
       await flushPromises()
 
-      // 1 cuillère = 10 g = 0,01 kilo, donc 1 kilo = 100 cuillères
       expect(await postBody(fetchMock)).toMatchObject({
         defaultCookingUnitSlug: 'cuillere',
         defaultPurchaseUnitSlug: 'kilo',
@@ -573,32 +584,29 @@ describe('IngredientEditorView', () => {
       })
     })
 
-    it('accepte « 8 cuillères = 1 kilo » en changeant le nombre de gauche', async () => {
+    it('accepte « 2 kilos = 200 cuillères » en changeant le nombre de gauche : le coefficient est droite ÷ gauche', async () => {
       const { wrapper, fetchMock } = await edit('/ingredients/nouveau?rayon=legumes', withUnits)
       await pick(wrapper, 'cuillere', 'kilo')
       await nameInput(wrapper).setValue('Farine')
 
-      await wrapper.find('select[aria-label="Unité d\'arrivée"]').setValue('kilo')
-      await wrapper.find('input[aria-label="Quantité de départ"]').setValue('8')
-      await rightInput(wrapper).setValue('1')
+      await wrapper.find('input[aria-label="Quantité de départ"]').setValue('2')
+      await rightInput(wrapper).setValue('200')
+      expect(wrapper.text()).toContain('Dans 2 kilos, combien de cuillères à soupe ?')
       await wrapper.find('form').trigger('submit')
       await flushPromises()
 
-      expect((await postBody(fetchMock))?.coefficient).toBe(8)
+      expect((await postBody(fetchMock))?.coefficient).toBe(100)
     })
 
-    it("n'offre qu'une unité à droite pour un conditionnement, sans petite unité", async () => {
+    it('« 1 pot = 125 grammes » : le coefficient du back est 125', async () => {
       const { wrapper, fetchMock } = await edit('/ingredients/nouveau?rayon=legumes', withUnits)
       await pick(wrapper, 'gramme', 'pot')
       await nameInput(wrapper).setValue('Yaourt')
 
-      expect(wrapper.find('select[aria-label="Unité d\'arrivée"]').exists()).toBe(false)
-      await wrapper.find('input[aria-label="Quantité de départ"]').setValue('125')
-      await rightInput(wrapper).setValue('1')
+      await rightInput(wrapper).setValue('125')
       await wrapper.find('form').trigger('submit')
       await flushPromises()
 
-      // 125 g = 1 pot, donc 1 pot = 125 g
       expect((await postBody(fetchMock))?.coefficient).toBe(125)
     })
 
@@ -636,6 +644,126 @@ describe('IngredientEditorView', () => {
       await wrapper.findAll('select')[2]?.setValue('pot')
 
       expect((rightInput(wrapper).element as HTMLInputElement).value).toBe('')
+    })
+  })
+
+  describe("rouvre l'équation dans le sens « 1 unité d'achat = N unités de recette »", () => {
+    const wine = {
+      ...detail,
+      slug: 'vin',
+      name: 'vin',
+      cookingUnitSlug: 'centilitre',
+      cookingUnitName: 'centilitre',
+      purchaseUnitSlug: 'bouteille',
+      purchaseUnitName: 'bouteille',
+      purchaseUnitSymbol: '',
+    }
+    const wineUnits = {
+      member: [
+        { slug: 'bouteille', name: 'bouteille', symbol: '' },
+        { slug: 'centilitre', name: 'centilitre', symbol: 'cl' },
+      ],
+      totalItems: 2,
+    }
+    const stored = (start: string, end: string, coefficient: number) => ({
+      id: 'c1',
+      startUnitSlug: start,
+      startUnitName: start,
+      endUnitSlug: end,
+      endUnitName: end,
+      coefficient,
+    })
+    const list = (member: object[], convertible = true) => ({
+      member,
+      common: [],
+      totalItems: member.length,
+      convertible,
+      cookingUnitSlug: 'centilitre',
+      purchaseUnitSlug: 'bouteille',
+    })
+    const editWine = (conversions: object, ficheCoefficient: number | null) =>
+      edit('/ingredients/vin/modifier', {
+        'GET /api/v1/units': () => json(wineUnits),
+        'GET /api/v1/ingredients/vin': () => json({ ...wine, coefficient: ficheCoefficient }),
+        'GET /api/v1/ingredients/vin/conversions': () => json(conversions),
+        'PUT /api/v1/ingredients/vin': () => new Response(null, { status: 204 }),
+      })
+    const field = (wrapper: Awaited<ReturnType<typeof edit>>['wrapper'], label: string) =>
+      wrapper.find(`input[aria-label="${label}"]`).element as HTMLInputElement
+    const putBody = async (fetchMock: ReturnType<typeof stubApi>) => {
+      const request = fetchMock.mock.calls
+        .map(([call]) => call as Request)
+        .find((call) => call.method === 'PUT' && call.url.endsWith('/ingredients/vin'))
+
+      return (await request?.json()) as Record<string, unknown>
+    }
+
+    it('« 1 bouteille = 30 centilitres » enregistrée dans ce sens se relit « 1 bouteille = 30 centilitres »', async () => {
+      const { wrapper, fetchMock } = await editWine(
+        list([stored('bouteille', 'centilitre', 30)]),
+        30,
+      )
+
+      await vi.waitFor(() => expect(field(wrapper, "Quantité d'arrivée").value).toBe('30'))
+      expect(field(wrapper, 'Quantité de départ').value).toBe('1')
+      expect(wrapper.text()).toContain('Dans 1 bouteille, combien de centilitres ?')
+      expect(wrapper.find('[aria-live="polite"]').text()).toBe(
+        'Vin : 1 bouteille = 30 centilitres.',
+      )
+
+      // Rien touché : rien n'est réécrit
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+      expect(await putBody(fetchMock)).toMatchObject({ coefficient: null })
+    })
+
+    it("la même conversion enregistrée dans l'AUTRE sens (« 1 centilitre = 0,0333 bouteille ») se relit aussi « 1 bouteille = 30 centilitres »", async () => {
+      // Le back ne rend `coefficient` que pour « achat vers recettes » : ici il est nul, la liste porte la conversion
+      const { wrapper, fetchMock } = await editWine(
+        list([stored('centilitre', 'bouteille', 1 / 30)]),
+        null,
+      )
+
+      await vi.waitFor(() => expect(field(wrapper, "Quantité d'arrivée").value).toBe('30'))
+      expect(field(wrapper, 'Quantité de départ').value).toBe('1')
+      expect(wrapper.find('[aria-live="polite"]').text()).toBe(
+        'Vin : 1 bouteille = 30 centilitres.',
+      )
+      expect(wrapper.text()).not.toContain('0,0333')
+
+      // Rien touché : la conversion enregistrée dans l'autre sens ne bouge pas, aucun doublon écrit
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+      expect(await putBody(fetchMock)).toMatchObject({ coefficient: null })
+    })
+
+    it('envoie le nombre de droite, tel quel, quand on le change', async () => {
+      const { wrapper, fetchMock } = await editWine(
+        list([stored('centilitre', 'bouteille', 1 / 30)]),
+        null,
+      )
+      await vi.waitFor(() => expect(field(wrapper, "Quantité d'arrivée").value).toBe('30'))
+
+      await wrapper.find('input[aria-label="Quantité d\'arrivée"]').setValue('75')
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      expect(await putBody(fetchMock)).toMatchObject({ coefficient: 75 })
+    })
+
+    it('sans conversion directe mais avec les unités déjà reliées : pas de valeur inventée, « elles se convertissent déjà »', async () => {
+      const { wrapper, fetchMock } = await editWine(list([]), null)
+
+      await vi.waitFor(() =>
+        expect(wrapper.find('[aria-live="polite"]').text()).toBe(
+          'Elles se convertissent déjà ; tu peux préciser.',
+        ),
+      )
+      expect(field(wrapper, "Quantité d'arrivée").value).toBe('')
+
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+      expect(await putBody(fetchMock)).toMatchObject({ coefficient: null })
     })
   })
 
@@ -753,7 +881,7 @@ describe('IngredientEditorView', () => {
         departmentSlug: 'legumes',
         defaultCookingUnitSlug: 'gramme',
         defaultPurchaseUnitSlug: 'kilo',
-        coefficient: 1000,
+        coefficient: null,
         isBase: true,
       })
     })
@@ -811,7 +939,7 @@ describe('IngredientEditorView', () => {
         departmentSlug: 'legumes',
         defaultCookingUnitSlug: 'gramme',
         defaultPurchaseUnitSlug: 'kilo',
-        coefficient: 1000,
+        coefficient: null,
       })
     })
 

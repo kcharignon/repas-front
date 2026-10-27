@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import UiSelect from '@/design/UiSelect.vue'
@@ -11,15 +11,20 @@ import {
   parseNumber,
   quantityLabel,
   unitLabel,
+  withDe,
   type EquationUnit,
   type EquationValue,
 } from './equationMath'
 
 /**
  * L'équation d'une conversion, que l'on modifie elle-même : `[nombre] [unité] = [nombre] [unité]`, et dessous la phrase qui la
- * redit à chaque frappe (« 1 tasse = 0,125 kilo, et 1 kilo = 8 tasses. »). Les noms d'unités s'accordent avec le nombre. Le
- * coefficient du back est `droite ÷ gauche` (`coefficientOf`) : le composant n'envoie rien, l'écran qui l'héberge le lit.
- * Quand une seule unité est permise d'un côté (la fiche d'un ingrédient a déjà choisi la sienne), elle est écrite, pas choisie.
+ * redit à chaque frappe. Les noms d'unités s'accordent avec le nombre. Le coefficient du back est `droite ÷ gauche` (`coefficientOf`) :
+ * le composant n'envoie rien, l'écran qui l'héberge le lit. Quand une seule unité est permise d'un côté (la fiche d'un ingrédient a
+ * déjà choisi les siennes), elle est écrite, pas choisie.
+ *
+ * Deux voix. Sans `ingredientName` (l'administration ; vide, c'est un ingrédient pas encore nommé) : « 1 tasse = 0,125 kilo, et 1 kilo = 8 tasses. ». Avec (un ingrédient) : la
+ * question « Dans 1 kilo, combien de cuillères à soupe ? » et UNE phrase, dans le sens où l'équation est écrite : « Farine : 1 kilo =
+ * 100 cuillères à soupe. » (jamais la réciproque, qui est justement la question complexe à répondre).
  */
 const props = defineProps<{
   /** Toutes les unités connues : proposées des deux côtés, sauf si `startUnits` / `endUnits` restreignent un côté. */
@@ -30,6 +35,10 @@ const props = defineProps<{
   ingredientName?: string
   /** L'écran a essayé d'enregistrer : un nombre encore vide devient une erreur. */
   submitted?: boolean
+  /** Le focus va au nombre de droite à l'affichage (une feuille qui s'ouvre avec « 1 » à gauche : reste à dire le nombre). */
+  focusRight?: boolean
+  /** Ce que la phrase dit quand il n'y a pas de nombre à droite mais que les unités se convertissent déjà (fiche d'un ingrédient). */
+  hint?: string
 }>()
 
 const model = defineModel<EquationValue>({ required: true })
@@ -69,7 +78,8 @@ const problemText = computed(() => {
   return null
 })
 
-// La phrase ramène l'équation à « 1 unité de départ » (ce que le back garde) et la redit dans l'autre sens
+// Administration : la phrase ramène l'équation à « 1 unité de départ » (ce que le back garde) et la redit dans l'autre sens.
+// Ingrédient : une seule phrase, dans le sens où l'équation est écrite, avec les nombres tels qu'écrits.
 const sentence = computed(() => {
   const start = startUnit.value
   const end = endUnit.value
@@ -77,22 +87,58 @@ const sentence = computed(() => {
   if (start === undefined || end === undefined || coefficient === null || start.slug === end.slug)
     return null
 
+  if (props.ingredientName !== undefined) {
+    const sides = {
+      left: quantityLabel(parseNumber(model.value.left) ?? 1, start.name),
+      right: quantityLabel(parseNumber(model.value.right) ?? 1, end.name),
+    }
+
+    // Un ingrédient qui n'a pas encore de nom (création) : la phrase se lit sans lui
+    return props.ingredientName.trim() === ''
+      ? t('conversion.sentenceOwn', sides)
+      : t('conversion.sentenceNamed', { ...sides, name: capitalized(props.ingredientName.trim()) })
+  }
+
   const reverse = 1 / coefficient
-  const values = {
+
+  return t('conversion.sentence', {
     start: start.name,
     end: quantityLabel(coefficient, end.name),
     reverseStart: end.name,
     reverseEnd: formatNumber(reverse) === '0' ? '…' : quantityLabel(reverse, start.name),
-  }
+  })
+})
 
-  return props.ingredientName
-    ? t('conversion.sentenceNamed', { ...values, name: capitalized(props.ingredientName) })
-    : t('conversion.sentence', values)
+// La question d'un ingrédient, avec les noms réels des unités choisies : « Dans 1 kilo, combien de cuillères à soupe ? »
+const question = computed(() => {
+  const start = startUnit.value
+  const end = endUnit.value
+  if (
+    props.ingredientName === undefined ||
+    start === undefined ||
+    end === undefined ||
+    start.slug === end.slug
+  )
+    return null
+
+  return t('conversion.question', {
+    left: quantityLabel(parseNumber(model.value.left) ?? 1, start.name),
+    unit: withDe(unitLabel(end.name, 2)),
+  })
 })
 
 function capitalized(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
+
+const rightInput = ref<InstanceType<typeof UiTextInput> | null>(null)
+// Après l'ouverture de la feuille : le piège à focus de la boîte de dialogue donne d'abord le focus au premier champ
+onMounted(() => {
+  if (props.focusRight !== true) return
+  void nextTick(() =>
+    setTimeout(() => (rightInput.value?.$el as HTMLInputElement | undefined)?.focus(), 0),
+  )
+})
 </script>
 
 <template>
@@ -101,6 +147,7 @@ function capitalized(text: string): string {
     :aria-label="t('conversion.legend')"
     class="flex flex-col gap-2 rounded-2xl bg-soft p-3.5"
   >
+    <p v-if="question" class="text-[15px] font-semibold text-ink">{{ question }}</p>
     <div class="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-2">
       <UiTextInput
         :model-value="model.left"
@@ -132,6 +179,7 @@ function capitalized(text: string): string {
 
     <div class="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-2">
       <UiTextInput
+        ref="rightInput"
         :model-value="model.right"
         :aria-label="t('conversion.endQuantity')"
         :invalid="problem === 'right'"
@@ -172,6 +220,7 @@ function capitalized(text: string): string {
         {{ problemText }}
       </p>
       <p v-else-if="sentence" class="font-medium text-ink">{{ sentence }}</p>
+      <p v-else-if="hint" class="text-muted">{{ hint }}</p>
       <p v-else class="text-muted">{{ t('conversion.waiting') }}</p>
     </div>
   </div>

@@ -227,11 +227,14 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'Régler la conversion de farine' }).click()
       const dialog = page.getByRole('dialog')
       await expect(dialog).toBeVisible()
-      await expect(dialog.getByLabel('Unité de départ')).toHaveValue('cuillere-a-soupe')
-      await expect(dialog.getByLabel(/Unité d.arrivée/)).toHaveValue('gramme')
-      await dialog.getByLabel(/Quantité d.arrivée/).fill('10')
+      // « 1 kilo = ? cuillères à soupe » : l'unité d'achat à gauche avec 1, l'unité de la ligne à droite, le focus sur le nombre à dire
+      await expect(dialog.getByLabel('Unité de départ')).toHaveValue('kilo')
+      await expect(dialog.getByLabel(/Unité d.arrivée/)).toHaveValue('cuillere-a-soupe')
+      await expect(dialog).toContainText('Dans 1 kilo, combien de cuillères à soupe ?')
+      await expect(dialog.getByLabel(/Quantité d.arrivée/)).toBeFocused()
+      await dialog.getByLabel(/Quantité d.arrivée/).fill('100')
       await expect(dialog.locator('[aria-live="polite"]')).toHaveText(
-        'Farine : 1 cuillère à soupe = 10 grammes, et 1 gramme = 0,1 cuillère à soupe.',
+        'Farine : 1 kilo = 100 cuillères à soupe.',
       )
       await shot(page, `recette-regler-${colorScheme}`)
       expect((await scan(page)).violations).toEqual([])
@@ -241,9 +244,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(farine).not.toContainText('Je ne sais pas')
       await expect(page.getByRole('button', { name: '1 à régler' })).toBeVisible()
       expect(back.bodyOf('POST /api/v1/ingredients/farine/conversions')).toEqual({
-        startUnitSlug: 'cuillere-a-soupe',
-        endUnitSlug: 'gramme',
-        coefficient: 10,
+        startUnitSlug: 'kilo',
+        endUnitSlug: 'cuillere-a-soupe',
+        coefficient: 100,
       })
       await expect(farine).toBeFocused()
     })
@@ -276,17 +279,19 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
       await section.getByRole('button', { name: 'Ajouter une conversion' }).click()
       const dialog = page.getByRole('dialog')
-      await expect(dialog.getByLabel('Unité de départ')).toHaveValue('cuillere-a-soupe')
+      // L'unité d'achat à gauche avec 1, l'unité des recettes à droite : on change l'arrivée pour « 1 kilo = 8 tasses »
+      await expect(dialog.getByLabel('Unité de départ')).toHaveValue('kilo')
+      await expect(dialog.getByLabel(/Unité d.arrivée/)).toHaveValue('cuillere-a-soupe')
       await dialog.getByLabel(/Unité d.arrivée/).selectOption('tasse')
-      await dialog.getByLabel(/Quantité d.arrivée/).fill('0,1')
+      await dialog.getByLabel(/Quantité d.arrivée/).fill('8')
       await shot(page, `fiche-ajouter-${colorScheme}`)
       expect((await scan(page)).violations).toEqual([])
       await dialog.getByRole('button', { name: 'Enregistrer' }).click()
       await expect(dialog).toBeHidden()
       expect(back.bodyOf('POST /api/v1/ingredients/farine/conversions')).toEqual({
-        startUnitSlug: 'cuillere-a-soupe',
+        startUnitSlug: 'kilo',
         endUnitSlug: 'tasse',
-        coefficient: 0.1,
+        coefficient: 8,
       })
 
       await section.getByRole('button', { name: 'Supprimer : 1 tasse = 125 g' }).click()

@@ -20,6 +20,14 @@ const units = {
   ],
   totalItems: 4,
 }
+const withBottle = {
+  member: [
+    ...units.member,
+    { slug: 'bouteille', name: 'bouteille', symbol: 'bouteille' },
+    { slug: 'centilitre', name: 'centilitre', symbol: 'cl' },
+  ],
+  totalItems: 6,
+}
 const detail = (overrides: Record<string, unknown> = {}) => ({
   slug: 'farine',
   name: 'farine',
@@ -183,13 +191,13 @@ describe('Conversions de l’ingrédient', () => {
     expect(calls(fetchMock)).not.toContain('GET /api/v1/ingredients/farine/conversions')
   })
 
-  it('ajoute une conversion : l’unité des recettes à gauche, l’arrivée à choisir, un seul POST', async () => {
+  it('ajoute une conversion : « 1 [unité d’achat] = ? [unité des recettes] », le nombre à dire, un seul POST', async () => {
     let created = false
     const { fetchMock } = await open({
       'GET /api/v1/ingredients/farine/conversions': () =>
         json(
           created
-            ? list({ member: [spoon, cup, conversion('c3', 'cuillere-a-soupe', 'tasse', 0.1)] })
+            ? list({ member: [spoon, cup, conversion('c3', 'kilo', 'cuillere-a-soupe', 100)] })
             : list(),
         ),
       'POST /api/v1/ingredients/farine/conversions': () => {
@@ -202,17 +210,27 @@ describe('Conversions de l’ingrédient', () => {
     buttonIn(section(), 'Ajouter une conversion')?.dispatchEvent(new Event('click'))
     await vi.waitFor(() => expect(sheet()).not.toBeNull())
     expect(sheet()?.textContent).toContain('Nouvelle conversion')
+    // L'unité d'achat à gauche avec 1, l'unité des recettes à droite : reste le nombre
     expect(
       sheet()?.querySelector<HTMLSelectElement>('select[aria-label="Unité de départ"]')?.value,
-    ).toBe('cuillere-a-soupe')
+    ).toBe('kilo')
     expect(
       sheet()?.querySelector<HTMLSelectElement>('select[aria-label="Unité d\'arrivée"]')?.value,
-    ).toBe('')
+    ).toBe('cuillere-a-soupe')
+    expect(
+      sheet()?.querySelector<HTMLInputElement>('input[aria-label="Quantité de départ"]')?.value,
+    ).toBe('1')
+    expect(sheet()?.textContent).toContain('Dans 1 kilo, combien de cuillères à soupe ?')
+    // Le focus est au nombre à dire
+    await vi.waitFor(() =>
+      expect(document.activeElement?.getAttribute('aria-label')).toBe("Quantité d'arrivée"),
+    )
 
-    chosen('select[aria-label="Unité d\'arrivée"]', 'tasse')
+    typed('input[aria-label="Quantité d\'arrivée"]', '100')
     await flushPromises()
-    typed('input[aria-label="Quantité d\'arrivée"]', '0,1')
-    await flushPromises()
+    expect(sheet()?.querySelector('[aria-live="polite"]')?.textContent).toBe(
+      'Farine : 1 kilo = 100 cuillères à soupe.',
+    )
     await submit()
 
     const index = fetchMock.mock.calls.findIndex(
@@ -220,18 +238,43 @@ describe('Conversions de l’ingrédient', () => {
         (input as Request).method === 'POST' && (input as Request).url.includes('/conversions'),
     )
     expect(await bodyOf(fetchMock, index)).toEqual({
-      startUnitSlug: 'cuillere-a-soupe',
-      endUnitSlug: 'tasse',
-      coefficient: 0.1,
+      startUnitSlug: 'kilo',
+      endUnitSlug: 'cuillere-a-soupe',
+      coefficient: 100,
     })
     await vi.waitFor(() => expect(sheet()).toBeNull())
-    await vi.waitFor(() => expect(lines()).toContain('1 cuillère à soupe = 0,1 tasse'))
+    await vi.waitFor(() => expect(lines()).toContain('1 kg = 100 cuillères à soupe'))
   })
 
-  it('demande de choisir l’unité d’arrivée avant d’écrire', async () => {
+  it('refuse deux unités identiques avant d’écrire', async () => {
     const { fetchMock } = await open()
     buttonIn(section(), 'Ajouter une conversion')?.dispatchEvent(new Event('click'))
     await vi.waitFor(() => expect(sheet()).not.toBeNull())
+    chosen('select[aria-label="Unité d\'arrivée"]', 'kilo')
+    await flushPromises()
+    typed('input[aria-label="Quantité d\'arrivée"]', '10')
+    await flushPromises()
+
+    await submit()
+
+    expect(
+      calls(fetchMock).some((call) => call.startsWith('POST /api/v1/ingredients/farine')),
+    ).toBe(false)
+    expect(sheet()?.querySelector('[aria-live="polite"]')?.textContent).toBe(
+      'Choisis deux unités différentes.',
+    )
+  })
+
+  it('demande de choisir l’unité d’arrivée quand l’ingrédient a la même unité d’achat et de recette', async () => {
+    const { fetchMock } = await open({
+      'GET /api/v1/ingredients/farine/conversions': () =>
+        json(list({ cookingUnitSlug: 'kilo', purchaseUnitSlug: 'kilo' })),
+    })
+    buttonIn(section(), 'Ajouter une conversion')?.dispatchEvent(new Event('click'))
+    await vi.waitFor(() => expect(sheet()).not.toBeNull())
+    expect(
+      sheet()?.querySelector<HTMLSelectElement>('select[aria-label="Unité d\'arrivée"]')?.value,
+    ).toBe('')
     typed('input[aria-label="Quantité d\'arrivée"]', '10')
     await flushPromises()
 
@@ -274,6 +317,95 @@ describe('Conversions de l’ingrédient', () => {
       coefficient: 130,
     })
     await vi.waitFor(() => expect(sheet()).toBeNull())
+  })
+
+  it('n’écrit rien quand on rouvre une conversion et qu’on enregistre sans y toucher', async () => {
+    const { fetchMock } = await open()
+
+    buttonIn(section(), 'Modifier : 1 tasse = 125 g')?.dispatchEvent(new Event('click'))
+    await vi.waitFor(() => expect(sheet()).not.toBeNull())
+    await submit()
+
+    await vi.waitFor(() => expect(sheet()).toBeNull())
+    expect(calls(fetchMock).some((call) => call.startsWith('PUT '))).toBe(false)
+  })
+
+  describe('une conversion enregistrée à l’envers se lit et se rouvre « 1 unité d’achat = N unités de recette »', () => {
+    // « 1 centilitre = 0,0333 bouteille » est enregistrée ; l’ingrédient s’achète à la bouteille et se compte en centilitres
+    const wine = list({
+      member: [conversion('c9', 'centilitre', 'bouteille', 1 / 30)],
+      common: [],
+      totalItems: 1,
+      cookingUnitSlug: 'centilitre',
+      purchaseUnitSlug: 'bouteille',
+    })
+    const withWine = {
+      'GET /api/v1/units': () => json(withBottle),
+      'GET /api/v1/ingredients/farine/conversions': () => json(wine),
+    }
+
+    it('la ligne dit « 1 bouteille = 30 cl », jamais « 1 cl = 0,0333 bouteille »', async () => {
+      await open(withWine)
+
+      expect(lines()).toEqual(['1 bouteille = 30 cl'])
+      expect(section()?.textContent).not.toContain('0,0333')
+    })
+
+    it('la feuille de modification se rouvre « 1 bouteille = 30 centilitres », sans rien écrire si on n’y touche pas', async () => {
+      const { fetchMock } = await open(withWine)
+
+      buttonIn(section(), 'Modifier : 1 bouteille = 30 cl')?.dispatchEvent(new Event('click'))
+      await vi.waitFor(() => expect(sheet()).not.toBeNull())
+      expect(
+        sheet()?.querySelector<HTMLSelectElement>('select[aria-label="Unité de départ"]')?.value,
+      ).toBe('bouteille')
+      expect(
+        sheet()?.querySelector<HTMLSelectElement>('select[aria-label="Unité d\'arrivée"]')?.value,
+      ).toBe('centilitre')
+      expect(
+        sheet()?.querySelector<HTMLInputElement>('input[aria-label="Quantité d\'arrivée"]')?.value,
+      ).toBe('30')
+      expect(sheet()?.querySelector('[aria-live="polite"]')?.textContent).toBe(
+        'Farine : 1 bouteille = 30 centilitres.',
+      )
+
+      await submit()
+
+      await vi.waitFor(() => expect(sheet()).toBeNull())
+      expect(calls(fetchMock).some((call) => call.startsWith('PUT '))).toBe(false)
+    })
+
+    it('enregistre dans le sens où on l’a lue quand on change le nombre', async () => {
+      const { fetchMock } = await open({
+        ...withWine,
+        'PUT /api/v1/ingredients/farine/conversions/c9': () => new Response(null, { status: 204 }),
+      })
+
+      buttonIn(section(), 'Modifier : 1 bouteille = 30 cl')?.dispatchEvent(new Event('click'))
+      await vi.waitFor(() => expect(sheet()).not.toBeNull())
+      typed('input[aria-label="Quantité d\'arrivée"]', '33')
+      await flushPromises()
+      await submit()
+
+      const index = fetchMock.mock.calls.findIndex(
+        ([input]) =>
+          (input as Request).method === 'PUT' && (input as Request).url.includes('/conversions/c9'),
+      )
+      expect(await bodyOf(fetchMock, index)).toEqual({
+        startUnitSlug: 'bouteille',
+        endUnitSlug: 'centilitre',
+        coefficient: 33,
+      })
+    })
+
+    it('met l’unité d’achat à gauche d’une conversion universelle enregistrée à l’envers', async () => {
+      await open({
+        'GET /api/v1/ingredients/farine/conversions': () =>
+          json(list({ common: [conversion('u2', 'gramme', 'kilo', 0.001)] })),
+      })
+
+      expect(lines()).toContain('Pour tout le monde : 1 kg = 1 000 g')
+    })
   })
 
   it('retire une conversion après confirmation, et rend le focus à « Ajouter une conversion »', async () => {

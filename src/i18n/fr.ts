@@ -30,7 +30,10 @@ export default {
     waiting: 'Écris les deux nombres : la conversion se lit ici.',
     choose: 'Choisis une unité',
     sentence: '1 {start} = {end}, et 1 {reverseStart} = {reverseEnd}.',
-    sentenceNamed: '{name} : 1 {start} = {end}, et 1 {reverseStart} = {reverseEnd}.',
+    sentenceNamed: '{name} : {left} = {right}.',
+    sentenceOwn: '{left} = {right}.',
+    question: 'Dans {left}, combien {unit} ?',
+    alreadyConvertible: 'Elles se convertissent déjà ; tu peux préciser.',
     errors: {
       number: 'Entre un nombre supérieur à zéro.',
       sameUnit: 'Choisis deux unités différentes.',
@@ -178,9 +181,8 @@ export default {
     cookingUnitHint: 'Celle dans laquelle tes recettes le comptent.',
     purchaseUnit: "Unité d'achat",
     purchaseUnitHint: 'Celle de la liste de courses.',
-    conversion: 'Combien ça fait ?',
     conversionHint:
-      'Par exemple 1 cuillère à soupe = 10 grammes. Laisse le deuxième nombre vide si la conversion existe déjà.',
+      'Par exemple : 1 bouteille = 75 centilitres. Laisse le nombre de droite vide si les deux unités se convertissent déjà.',
     deleteTitle: "Supprimer l'ingrédient ?",
     deleteHelp: '« {name} » sera supprimé avec ses conversions.',
     inUse: 'Impossible : cet ingrédient est utilisé dans une recette ou une liste de courses.',

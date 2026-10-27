@@ -23,9 +23,15 @@ const units = [
   { slug: 'gramme', name: 'gramme', symbol: 'g', dimension: 'WEIGHT', baseFactor: 1 },
   { slug: 'kilo', name: 'kilo', symbol: 'kg', dimension: 'WEIGHT', baseFactor: 1000 },
   { slug: 'tasse', name: 'tasse', symbol: 'tasse', dimension: null },
+  { slug: 'bouteille', name: 'bouteille', symbol: 'bouteille', dimension: null },
+  { slug: 'centilitre', name: 'centilitre', symbol: 'cl', dimension: null },
 ]
 
-async function fakeBack(page: Page) {
+// La conversion de « vin » (une bouteille, des centilitres), telle que le back la garde : dans le sens « 1 bouteille = 30 centilitres » ou à l'envers
+type Stored = { start: string; end: string; coefficient: number }
+
+async function fakeBack(page: Page, wineAs: Stored | null = null) {
+  let wine: Stored | null = wineAs
   const posts: { key: string; body: unknown }[] = []
   await page.addInitScript(() => localStorage.setItem('repas.session', '1'))
   await page.route(
@@ -82,12 +88,59 @@ async function fakeBack(page: Page) {
         return route.fulfill({ status: 201, headers: { Location: '/api/v1/conversions/c2' } })
       if (key === 'POST /api/v1/ingredients')
         return route.fulfill({ status: 201, headers: { Location: '/api/v1/ingredients/farine' } })
+      if (key === 'GET /api/v1/ingredients/vin')
+        return reply({
+          slug: 'vin',
+          name: 'vin',
+          image: '',
+          departmentSlug: 'epicerie',
+          departmentName: 'Épicerie',
+          cookingUnitSlug: 'centilitre',
+          cookingUnitName: 'centilitre',
+          purchaseUnitSlug: 'bouteille',
+          purchaseUnitName: 'bouteille',
+          purchaseUnitSymbol: '',
+          hasSameUnit: false,
+          // Le back ne rend le coefficient que pour « achat vers recettes »
+          coefficient: wine?.start === 'bouteille' ? wine.coefficient : null,
+          creatorId: 'u1',
+          canEdit: true,
+        })
+      if (key === 'GET /api/v1/ingredients/vin/conversions')
+        return reply({
+          member:
+            wine === null
+              ? []
+              : [
+                  {
+                    id: 'c1',
+                    startUnitSlug: wine.start,
+                    startUnitName: wine.start,
+                    endUnitSlug: wine.end,
+                    endUnitName: wine.end,
+                    coefficient: wine.coefficient,
+                  },
+                ],
+          common: [],
+          totalItems: wine === null ? 0 : 1,
+          convertible: wine !== null,
+          cookingUnitSlug: 'centilitre',
+          purchaseUnitSlug: 'bouteille',
+        })
+      if (key === 'PUT /api/v1/ingredients/vin') return reply()
 
       return reply({ error: { message: `Appel non prévu : ${key}` } }, 500)
     },
   )
 
-  return { posts, bodyOf: (key: string) => posts.find((entry) => entry.key === key)?.body }
+  return {
+    posts,
+    bodyOf: (key: string) => posts.find((entry) => entry.key === key)?.body,
+    // Ce que le back garde : « 1 bouteille = 30 centilitres » (sens du formulaire) ou « 1 centilitre = 1/30 bouteille »
+    keepWine: (value: Stored) => {
+      wine = value
+    },
+  }
 }
 
 const phrase = (page: Page) => page.locator('[aria-live="polite"]')
@@ -148,7 +201,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       expect((await scan(page)).violations).toEqual([])
     })
 
-    test('la fiche d’un ingrédient propose le gramme et envoie le coefficient du kilo', async ({
+    test('la fiche d’un ingrédient demande « 1 kilo = ? cuillères à soupe » et envoie ce nombre tel quel', async ({
       page,
     }) => {
       const back = await fakeBack(page)
@@ -157,24 +210,64 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.getByLabel('Unité des recettes').selectOption('cuillere-a-soupe')
       await page.getByLabel(/Unité d.achat/).selectOption('kilo')
 
-      await expect(page.getByText('Combien ça fait ?')).toBeVisible()
-      await expect(page.getByLabel(/Unité d.arrivée/)).toHaveValue('gramme')
+      // L'unité d'achat à gauche avec 1, l'unité des recettes à droite : les deux sont écrites, reste le nombre
+      await expect(page.getByText('Dans 1 kilo, combien de cuillères à soupe ?')).toBeVisible()
+      await expect(page.getByLabel(/Unité d.arrivée/)).toHaveCount(0)
       await expect(page.getByLabel('Unité de départ')).toHaveCount(0)
-      await page.getByLabel(/Quantité d.arrivée/).fill('10')
-      await expect(phrase(page)).toHaveText(
-        'Farine : 1 cuillère à soupe = 10 grammes, et 1 gramme = 0,1 cuillère à soupe.',
-      )
+      await expect(page.getByLabel(/Quantité d.arrivée/)).toHaveValue('')
+      await page.getByLabel(/Quantité d.arrivée/).fill('100')
+      await expect(phrase(page)).toHaveText('Farine : 1 kilo = 100 cuillères à soupe.')
       await shot(page, `ingredient-equation-${colorScheme}`)
       expect((await scan(page)).violations).toEqual([])
 
       await page.getByRole('button', { name: 'Enregistrer' }).click()
       await expect.poll(() => back.bodyOf('POST /api/v1/ingredients')).toBeTruthy()
-      // 1 cuillère = 10 g = 0,01 kilo : 1 kilo = 100 cuillères
+      // 1 kilo = 100 cuillères : le nombre de droite est le coefficient du back
       expect(back.bodyOf('POST /api/v1/ingredients')).toMatchObject({
         defaultCookingUnitSlug: 'cuillere-a-soupe',
         defaultPurchaseUnitSlug: 'kilo',
         coefficient: 100,
       })
     })
+
+    for (const [how, stored] of [
+      ['dans le sens du formulaire', { start: 'bouteille', end: 'centilitre', coefficient: 30 }],
+      ['à l’envers', { start: 'centilitre', end: 'bouteille', coefficient: 1 / 30 }],
+    ] as const) {
+      test(`« 1 bouteille = 30 centilitres » enregistrée ${how} se rouvre « 1 bouteille = 30 centilitres »`, async ({
+        page,
+      }) => {
+        const back = await fakeBack(page)
+        // On l'enregistre par la fiche : 1 bouteille = 30 centilitres
+        await page.goto('/ingredients/nouveau?rayon=epicerie')
+        await page.getByLabel(/Nom de l.ingrédient/).fill('Vin')
+        await page.getByLabel('Unité des recettes').selectOption('centilitre')
+        await page.getByLabel(/Unité d.achat/).selectOption('bouteille')
+        await page.getByLabel(/Quantité d.arrivée/).fill('30')
+        await page.getByRole('button', { name: 'Enregistrer' }).click()
+        await expect.poll(() => back.bodyOf('POST /api/v1/ingredients')).toBeTruthy()
+        expect(back.bodyOf('POST /api/v1/ingredients')).toMatchObject({ coefficient: 30 })
+
+        // Le back la garde ${how}, puis on revient sur l'ingrédient
+        back.keepWine(stored)
+        await page.goto('/ingredients/vin/modifier')
+
+        await expect(page.getByLabel(/Quantité d.arrivée/)).toHaveValue('30')
+        await expect(page.getByLabel('Quantité de départ')).toHaveValue('1')
+        await expect(page.getByText('Dans 1 bouteille, combien de centilitres ?')).toBeVisible()
+        // La fiche porte aussi la section « Conversions de vin », qui a sa propre ligne d'état : on lit celle de l'équation
+        await expect(phrase(page.getByRole('group', { name: 'La conversion' }))).toHaveText(
+          'Vin : 1 bouteille = 30 centilitres.',
+        )
+        await expect(page.getByText('0,033')).toHaveCount(0)
+        await shot(page, `ingredient-rouvert-${colorScheme}`)
+        expect((await scan(page)).violations).toEqual([])
+
+        // Rien touché : le back ne reçoit aucun coefficient
+        await page.getByRole('button', { name: 'Enregistrer' }).click()
+        await expect.poll(() => back.bodyOf('PUT /api/v1/ingredients/vin')).toBeTruthy()
+        expect(back.bodyOf('PUT /api/v1/ingredients/vin')).toMatchObject({ coefficient: null })
+      })
+    }
   })
 }

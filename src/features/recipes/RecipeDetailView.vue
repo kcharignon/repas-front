@@ -11,7 +11,7 @@ import { notifyDeleteFailure } from '@/notifications/failures'
 import UiButton from '@/design/UiButton.vue'
 import UiConfirmDialog from '@/design/UiConfirmDialog.vue'
 import UiLinkButton from '@/design/UiLinkButton.vue'
-import { suggestedEnd, type EquationValue } from '@/features/ingredients/equationMath'
+import type { EquationValue } from '@/features/ingredients/equationMath'
 import OwnConversionSheet from '@/features/ingredients/OwnConversionSheet.vue'
 import { useUnits } from '@/features/ingredients/queries'
 import { formatQuantity } from '@/features/shopping-lists/format'
@@ -52,17 +52,14 @@ const fixing = reactive<{ open: boolean; slug: string; name: string; initial: Eq
   initial: { start: '', end: '', left: '1', right: '' },
 })
 
-// « 1 [unité de la ligne] = ? [unité d'achat, ou sa petite unité] » : l'équation attend seulement le nombre
+// « 1 [unité d'achat] = ? [unité de la ligne] » : la question facile à répondre (« 1 kilo = ? cuillères à soupe »), l'équation
+// n'attend que le nombre
 function openFix(row: RecipeRow) {
   fixing.slug = row.ingredientSlug
   fixing.name = row.ingredientName
   fixing.initial = {
-    start: row.unitSlug,
-    end: suggestedEnd(
-      row.unitSlug,
-      unitList.value.find((unit) => unit.slug === row.purchaseUnitSlug),
-      unitList.value,
-    ),
+    start: row.purchaseUnitSlug ?? '',
+    end: row.unitSlug,
     left: '1',
     right: '',
   }

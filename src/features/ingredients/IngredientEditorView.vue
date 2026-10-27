@@ -17,12 +17,10 @@ import IngredientConversionsSection from './IngredientConversionsSection.vue'
 import MergeConfirmSheet from './MergeConfirmSheet.vue'
 import MergePickerSheet from './MergePickerSheet.vue'
 import {
-  baseUnitOf,
   coefficientOf,
+  displayOrientation,
   equationProblem,
-  formatNumber,
-  inUnit,
-  sameMeasureUnits,
+  inputNumber,
   type EquationUnit,
   type EquationValue,
 } from './equationMath'
@@ -31,6 +29,7 @@ import {
   useDeleteIngredient,
   useDepartments,
   useIngredient,
+  useIngredientConversions,
   useSaveIngredient,
   useUnits,
 } from './queries'
@@ -108,84 +107,101 @@ const needsCoefficient = computed(
   () => form.cookingUnit !== '' && form.cookingUnit !== form.purchaseUnit,
 )
 
-// L'équation « 1 [unité des recettes] = ? [unité d'achat] » : à gauche l'unité des recettes, à droite l'unité d'achat ou, si elle mesure
-// un poids ou un volume, une plus petite (« 1 cuillère à soupe = 10 grammes » se dit mieux que « 0,01 kilo »). Le back garde le
-// coefficient « 1 unité d'achat = N unités de recette » : `apiCoefficient` le recalcule.
+// L'équation d'un ingrédient se pose TOUJOURS dans le même sens, le plus facile à répondre : « 1 [unité d'achat] = ? [unité des
+// recettes] » (« 1 bouteille = 30 centilitres », pas « 1 centilitre = 0,0333 bouteille »). Les deux unités sont celles du formulaire,
+// écrites et non choisies ; reste le nombre de droite, qui est exactement le coefficient du back (« 1 unité d'achat = N unités de recette »).
 const unitList = computed<EquationUnit[]>(() => units.data.value?.member ?? [])
 const unitBySlug = (slug: string) => unitList.value.find((unit) => unit.slug === slug)
-const purchaseUnitFull = computed(() => unitBySlug(form.purchaseUnit))
-const endUnits = computed(() =>
-  purchaseUnitFull.value ? sameMeasureUnits(purchaseUnitFull.value, unitList.value) : [],
-)
-const eqEnd = ref('')
+const startUnits = computed(() => {
+  const unit = unitBySlug(form.purchaseUnit)
+
+  return unit === undefined ? [] : [unit]
+})
+const endUnits = computed(() => {
+  const unit = unitBySlug(form.cookingUnit)
+
+  return unit === undefined ? [] : [unit]
+})
 const eqLeft = ref<string | number>('1')
 const eqRight = ref<string | number>('')
 const eqTouched = ref(false)
 
 const equation = computed<EquationValue>({
   get: () => ({
-    start: form.cookingUnit,
-    end: eqEnd.value,
+    start: form.purchaseUnit,
+    end: form.cookingUnit,
     left: eqLeft.value,
     right: eqRight.value,
   }),
   set: (value) => {
-    eqEnd.value = value.end
     eqLeft.value = value.left
     eqRight.value = value.right
     eqTouched.value = true
   },
 })
 
-// Le coefficient déjà enregistré vaut pour les unités enregistrées : changer l'une d'elles repart d'une équation vide
-const knownCoefficient = computed(() => {
-  const ingredient = existing.data.value
+// Les conversions de l'ingrédient (les siennes, puis celles de tout le monde) : celle qui relie l'unité d'achat et l'unité des recettes,
+// enregistrée dans un sens ou dans l'autre, se rouvre toujours « 1 unité d'achat = N unités de recette ».
+const conversions = useIngredientConversions(() =>
+  editing.value && existing.data.value?.canEdit === true ? (slug.value ?? '') : '',
+)
+const savedPair = computed(
+  () =>
+    editing.value &&
+    existing.data.value?.cookingUnitSlug === form.cookingUnit &&
+    existing.data.value?.purchaseUnitSlug === form.purchaseUnit,
+)
+const knownValue = computed<number | null>(() => {
+  if (!editing.value || form.cookingUnit === '' || form.purchaseUnit === '') return null
 
-  return editing.value &&
-    ingredient?.coefficient != null &&
-    ingredient.cookingUnitSlug === form.cookingUnit &&
-    ingredient.purchaseUnitSlug === form.purchaseUnit
-    ? ingredient.coefficient
-    : null
+  const data = conversions.data.value
+  if (data === undefined) {
+    // La liste n'est pas encore là : la fiche donne la conversion « achat vers recettes » de la paire enregistrée
+    const known = existing.data.value?.coefficient
+
+    return savedPair.value && known != null ? known : null
+  }
+
+  const direct = [...(data.member ?? []), ...(data.common ?? [])].find(
+    (conversion) =>
+      (conversion.startUnitSlug === form.purchaseUnit &&
+        conversion.endUnitSlug === form.cookingUnit) ||
+      (conversion.startUnitSlug === form.cookingUnit &&
+        conversion.endUnitSlug === form.purchaseUnit),
+  )
+
+  return direct === undefined ? null : displayOrientation(direct, form.purchaseUnit).value
 })
+// Les deux unités se convertissent déjà (une universelle, plusieurs étapes) sans conversion directe : rien à inventer, on peut préciser
+const alreadyConvertible = computed(
+  () =>
+    needsCoefficient.value &&
+    savedPair.value &&
+    knownValue.value === null &&
+    conversions.data.value?.convertible === true,
+)
 
 function resetEquation() {
-  const purchase = purchaseUnitFull.value
-  if (purchase === undefined) return
-
-  const small = baseUnitOf(purchase, unitList.value)
-  const end = small !== undefined && small.slug !== form.cookingUnit ? small : purchase
-  eqEnd.value = end.slug
   eqLeft.value = '1'
-  eqRight.value =
-    knownCoefficient.value === null
-      ? ''
-      : formatNumber(inUnit(1 / knownCoefficient.value, purchase, end))
+  eqRight.value = knownValue.value === null ? '' : inputNumber(knownValue.value)
   eqTouched.value = false
 }
-watch(
-  () =>
-    [form.cookingUnit, form.purchaseUnit, unitList.value.length, knownCoefficient.value].join('|'),
-  resetEquation,
-  { immediate: true },
-)
+watch(() => [form.cookingUnit, form.purchaseUnit, knownValue.value].join('|'), resetEquation, {
+  immediate: true,
+})
 
 const rightFilled = computed(() => String(eqRight.value).trim() !== '')
 const equationError = computed(
   () =>
     needsCoefficient.value && rightFilled.value && equationProblem(equation.value, true) !== null,
 )
-// Rien tapé à droite : pas de coefficient (le back connaît déjà la conversion, sinon il le dira). Équation intacte : celui d'origine.
+// Rien tapé à droite : pas de coefficient (le back connaît déjà la conversion, sinon il le dira). Équation intacte : rien n'est
+// renvoyé, ce qui est enregistré (dans le sens où il l'est) ne bouge pas.
 const apiCoefficient = computed<number | null>(() => {
   if (!needsCoefficient.value || !rightFilled.value) return null
-  if (!eqTouched.value && knownCoefficient.value !== null) return knownCoefficient.value
+  if (!eqTouched.value && knownValue.value !== null) return null
 
-  const perUnit = coefficientOf(eqLeft.value, eqRight.value)
-  const purchase = purchaseUnitFull.value
-  const end = unitBySlug(eqEnd.value)
-  if (perUnit === null || purchase === undefined || end === undefined) return null
-
-  return Number((1 / inUnit(perUnit, end, purchase)).toPrecision(12))
+  return coefficientOf(eqLeft.value, eqRight.value)
 })
 
 const errors = computed(() => ({
@@ -356,14 +372,14 @@ const back = computed(() =>
         </UiField>
       </div>
       <div v-if="needsCoefficient" class="flex flex-col gap-1.5">
-        <p class="text-sm font-semibold">{{ t('ingredients.conversion') }}</p>
         <ConversionEquation
           v-model="equation"
           :units="unitList"
-          :start-units="unitList.filter((unit) => unit.slug === form.cookingUnit)"
+          :start-units="startUnits"
           :end-units="endUnits"
           :ingredient-name="form.name.trim()"
           :submitted="submitted && rightFilled"
+          :hint="alreadyConvertible ? t('conversion.alreadyConvertible') : undefined"
         />
         <p class="text-sm text-muted">{{ t('ingredients.conversionHint') }}</p>
       </div>

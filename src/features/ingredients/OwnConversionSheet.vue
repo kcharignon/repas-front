@@ -11,6 +11,7 @@ import {
   equationProblem,
   type EquationUnit,
   type EquationValue,
+  type StoredConversion,
 } from './equationMath'
 import { useSaveIngredientConversion } from './queries'
 
@@ -28,6 +29,8 @@ const props = defineProps<{
   initial: EquationValue
   /** Une modification : l'identifiant de la conversion remplacée ; absent, c'est une nouvelle conversion. */
   conversionId?: string | null
+  /** Une modification : la conversion telle qu'elle est enregistrée (l'équation peut être rouverte à l'envers). */
+  original?: StoredConversion | null
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
@@ -52,9 +55,23 @@ watch(open, (value) => {
   failure.value = null
 })
 
+function sameEquation(a: EquationValue, b: EquationValue): boolean {
+  return (
+    a.start === b.start &&
+    a.end === b.end &&
+    String(a.left).trim() === String(b.left).trim() &&
+    String(a.right).trim() === String(b.right).trim()
+  )
+}
+
 function submit() {
   submitted.value = true
   failure.value = null
+  // Rouverte à l'envers ou non, une équation que personne n'a touchée ne réécrit rien : ce qui est enregistré garde son sens
+  if (props.conversionId && props.original && sameEquation(equation.value, props.initial)) {
+    open.value = false
+    return
+  }
   const coefficient = coefficientOf(equation.value.left, equation.value.right)
   if (equationProblem(equation.value, true) !== null || coefficient === null) return
 
@@ -94,6 +111,7 @@ function submit() {
         :units="units"
         :ingredient-name="ingredientName"
         :submitted="submitted"
+        focus-right
       />
 
       <p
