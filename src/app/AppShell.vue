@@ -6,6 +6,7 @@ import { BookOpen, LayoutGrid, ShoppingBasket, User } from 'lucide-vue-next'
 import OfflineBanner from '@/app/OfflineBanner.vue'
 import logo from '@/assets/logo.png'
 import { cn } from '@/design/cn'
+import HalloweenDecor from '@/design/HalloweenDecor.vue'
 
 const { t } = useI18n()
 
@@ -24,15 +25,16 @@ const link =
 <template>
   <div class="flex min-h-dvh flex-col md:flex-row">
     <aside
-      class="hidden shrink-0 border-r border-line bg-surface p-4 md:flex md:w-64 md:flex-col md:gap-1.5"
+      class="hidden shrink-0 border-r border-line bg-surface p-4 relative md:flex md:w-64 md:flex-col md:gap-1.5"
     >
-      <div class="flex items-center gap-3 px-2 pb-5">
-        <span class="flex size-11 items-center justify-center rounded-2xl bg-[#1e6b4c]">
+      <HalloweenDecor variant="web" />
+      <div class="relative flex items-center gap-3 px-2 pb-5">
+        <span class="flex size-11 items-center justify-center rounded-2xl bg-brand">
           <img :src="logo" alt="" class="h-6 w-7 object-contain" />
         </span>
         <span class="font-display text-2xl font-bold">{{ t('app.name') }}</span>
       </div>
-      <nav :aria-label="t('nav.label')" class="flex flex-col gap-1.5">
+      <nav :aria-label="t('nav.label')" class="relative flex flex-col gap-1.5">
         <RouterLink
           v-for="item in nav"
           :key="item.name"

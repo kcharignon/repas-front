@@ -3,16 +3,19 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import logo from '@/assets/logo.png'
+import HalloweenDecor from '@/design/HalloweenDecor.vue'
+import { useSeasonStore } from '@/design/season'
 
 defineProps<{ title: string }>()
 
 const { t } = useI18n()
+const season = useSeasonStore()
 </script>
 
 <template>
   <div class="flex min-h-dvh flex-col bg-bg md:flex-row">
     <header
-      class="relative overflow-hidden bg-[#1e6b4c] px-7 pt-6 pb-5 text-white md:flex md:w-1/2 md:flex-col md:justify-center md:px-16 md:pt-12 md:pb-10"
+      class="relative overflow-hidden bg-brand px-7 pt-6 pb-5 text-white md:flex md:w-1/2 md:flex-col md:justify-center md:px-16 md:pt-12 md:pb-10"
     >
       <div
         class="pointer-events-none absolute -top-14 -right-16 size-64 rounded-full bg-white/10"
@@ -20,6 +23,7 @@ const { t } = useI18n()
       <div
         class="pointer-events-none absolute -bottom-24 right-10 size-44 rounded-full bg-accent/25"
       />
+      <HalloweenDecor variant="banner" />
       <!-- La confidentialité (STORE-010) : un lien discret dans l'angle, il ne prend aucune hauteur (le bouton principal reste visible à 360 × 640) -->
       <RouterLink
         :to="{ name: 'privacy' }"
@@ -34,7 +38,7 @@ const { t } = useI18n()
         </p>
       </div>
       <p class="relative mt-3 max-w-72 text-base leading-snug md:mt-2 md:text-lg">
-        {{ t('auth.pitch') }}
+        {{ t(season.active ? 'auth.pitchHalloween' : 'auth.pitch') }}
       </p>
     </header>
 
