@@ -41,15 +41,92 @@ describe("page d'autorisation d'Alexa", () => {
     localStorage.clear()
   })
 
-  it('ne dit qu’une phrase, avec deux boutons, et n’appelle rien avant le geste', async () => {
+  it('dit ce qu’Alexa pourra faire, le compte connecté et le site du retour, et n’appelle rien avant le geste', async () => {
     const { wrapper, fetchMock } = await open(`?${query}`)
 
-    expect(wrapper.find('h1').text()).toBe('Alexa veut ajouter des produits à ta liste de courses.')
+    expect(wrapper.find('h1').text()).toBe('Lier Alexa à ton compte ?')
+    expect(wrapper.find('main p').text()).toBe(
+      'Alexa pourra lire ta liste, ajouter ou retirer des produits, et planifier des repas.',
+    )
+    expect(wrapper.find('[data-testid="alexa-account"]').text()).toBe(me.email)
+    // Le nom d'hôte seul : ni schéma, ni chemin, ni paramètres
+    expect(wrapper.find('[data-testid="alexa-host"]').text()).toBe('pitangui.amazon.com')
+    expect(wrapper.text()).not.toContain('/api/skill/link')
     expect(wrapper.findAll('button').map((button) => button.text())).toEqual([
+      'Ce n’est pas toi ?',
       'Autoriser',
       'Annuler',
     ])
     expect(calls(fetchMock)).toEqual([])
+    expect(assign).not.toHaveBeenCalled()
+  })
+
+  it('chaque phrase de l’écran tient en 15 mots au plus', async () => {
+    const { wrapper } = await open(`?${query}`)
+
+    const sentences = wrapper
+      .findAll('main p, main dt, main button')
+      .map((node) => node.text())
+      .flatMap((text) => text.split(/(?<=[.!?])\s+/))
+
+    expect(sentences.filter((sentence) => sentence.split(/\s+/).length > 15)).toEqual([])
+  })
+
+  it.each([
+    ['https://pitangui.amazon.com:8443/a/b?x=1#y', 'pitangui.amazon.com'],
+    ['https://user:secret@layla.amazon.com/skill', 'layla.amazon.com'],
+    ['https://аmazon.com/skill', 'xn--mazon-3ve.com'],
+    ['HTTPS://Pitangui.Amazon.COM/', 'pitangui.amazon.com'],
+  ])('écrit le nom d’hôte seul de %s', async (uri, host) => {
+    const search = `?${query.replace(/redirect_uri=[^&]+/, `redirect_uri=${encodeURIComponent(uri)}`)}`
+    const { wrapper } = await open(search)
+
+    expect(wrapper.find('[data-testid="alexa-host"]').text()).toBe(host)
+    expect(wrapper.text()).not.toContain('secret')
+  })
+
+  it.each([
+    ['javascript:alert(1)'],
+    ['data:text/html,x'],
+    ['pas une adresse'],
+    ['/api/skill/link'],
+  ])(
+    'une adresse de retour qui n’est pas une adresse web (%s) : une phrase et l’accueil, aucun appel',
+    async (uri) => {
+      const search = `?${query.replace(/redirect_uri=[^&]+/, `redirect_uri=${encodeURIComponent(uri)}`)}`
+      const { wrapper, fetchMock } = await open(search)
+
+      expect(wrapper.find('[role="alert"]').text()).toBe(
+        'Ce lien ne marche pas. Reprends depuis l’application Alexa.',
+      )
+      expect(wrapper.find('button').exists()).toBe(false)
+      expect(calls(fetchMock)).toEqual([])
+    },
+  )
+
+  it('« Ce n’est pas toi ? » ferme la session puis revient à la connexion avec les mêmes paramètres', async () => {
+    const { wrapper, context, fetchMock } = await open(`?${query}`, {
+      'POST /api/auth/logout': () => new Response(null, { status: 204 }),
+    })
+    localStorage.setItem('repas.drive.run', '{"runId":"x"}')
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Ce n’est pas toi ?')!
+      .trigger('click')
+    await flushPromises()
+
+    expect(calls(fetchMock)).toEqual(['POST /api/auth/logout'])
+    expect(useSessionStore().isAuthenticated).toBe(false)
+    expect(localStorage.getItem('repas.session')).toBeNull()
+    expect(localStorage.getItem('repas.drive.run')).toBeNull()
+    await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('login'), {
+      timeout: 5000,
+    })
+    const target = context.router.currentRoute.value
+    expect(target.query.redirect).toBe(`/alexa/lier?${query}`)
+    // Rien n'a été demandé à Alexa ni envoyé à son site
+    expect(calls(fetchMock)).not.toContain(authorize)
     expect(assign).not.toHaveBeenCalled()
   })
 
@@ -91,7 +168,10 @@ describe("page d'autorisation d'Alexa", () => {
   it('« Annuler » mène à l’accueil sans rien envoyer', async () => {
     const { wrapper, context, fetchMock } = await open(`?${query}`)
 
-    await wrapper.findAll('button')[1]!.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Annuler')!
+      .trigger('click')
     await flushPromises()
 
     await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('shopping-list'), {
