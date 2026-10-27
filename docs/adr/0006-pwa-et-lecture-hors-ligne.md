@@ -22,9 +22,10 @@ résolution de conflits avec `If-Match`) est un autre chantier, hors périmètre
 3. **La copie de la liste vit dans l'application, au nom de l'utilisateur** (`src/offline/persistence.ts`) : seuls le résumé de la liste active et
    le détail de cette liste sont gardés (`localStorage`, clé `repas.cache`, avec l'identifiant de l'utilisateur et la date, au plus 7 jours,
    écriture groupée par seconde). Relue seulement pour **le même utilisateur** ; **à la fin de la session** (déconnexion, session perdue) le
-   cache des requêtes en mémoire est vidé et la copie effacée. (Avant, le cache mémoire survivait à un changement d'utilisateur dans
+   cache des requêtes en mémoire est vidé et la copie effacée ; elle ne s'écrit que tant que l'indice de session est présent dans le navigateur (une autre fenêtre
+   qui se déconnecte l'efface, ADR 0005 §7). (Avant, le cache mémoire survivait à un changement d'utilisateur dans
    l'onglet : corrigé au passage.)
-4. **Reprise de session sans réseau** : un échec **réseau** (et non un `401`) au rafraîchissement ne perd pas la session (l'indice
+4. **Reprise de session sans réseau** : un échec **réseau**, un `429` ou un `5xx` (et non un `401`) au rafraîchissement ne perd pas la session (l'indice
    `repas.session` est gardé) et l'utilisateur est repris depuis sa copie (`repas.user`, sans jeton, effacée avec la session). Le jeton
    revient au premier appel réussi (le `401` déclenche le rafraîchissement, ADR 0005).
 5. **Lire sans réseau, échouer clairement en écriture** : le client de requêtes passe en `networkMode: 'always'` (une lecture ou une écriture

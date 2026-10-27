@@ -3,19 +3,41 @@ import { defineStore } from 'pinia'
 
 import { ApiError, createApiClient, unwrap } from '@/api'
 import type { CurrentUser } from '@/api'
+import { forgetAccountData } from './accountData'
 
 /** ADR 0015 §5 (back) : deux onglets qui rafraîchissent ensemble envoient le même cookie, le second perd la course. */
 const RETRY_DELAY_MS = 300
 
+/**
+ * Un renouvellement qui n'a pas abouti sans que la session soit perdue (réseau, 429, 5xx) n'est pas redemandé tout de suite : les appels
+ * qui arrivent pendant ce délai n'en lancent pas un autre. Le délai double à chaque échec de suite, de 2 s à 30 s.
+ */
+const HOLD_OFF_BASE_MS = 2_000
+const HOLD_OFF_MAX_MS = 30_000
+/** Le délai que le back annonce (`Retry-After`) est suivi, jusqu'à cette limite. */
+const RETRY_AFTER_MAX_MS = 60_000
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+/** Une réponse qui ne dit rien de la session : le back est injoignable, occupé ou en cours de redéploiement (réseau, 429, 5xx). */
+const isUnreachable = (status: number): boolean => status === 0 || status === 429 || status >= 500
+
+/** Le délai demandé par `Retry-After` (en secondes), en millisecondes ; 0 s'il manque ou s'il est illisible. */
+function retryAfterMs(response: Response | null): number {
+  const seconds = Number(response?.headers.get('Retry-After'))
+
+  return Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds * 1000, RETRY_AFTER_MAX_MS) : 0
+}
 
 /**
  * Indice « une session a existé sur ce navigateur » (pas un secret, aucun jeton) : sans lui, un visiteur qui ne s'est jamais
- * connecté ne sollicite pas `POST /api/auth/refresh` à chaque page (le back plafonne cette route par adresse IP).
+ * connecté ne sollicite pas `POST /api/auth/refresh` à chaque page (le back plafonne cette route par adresse IP). Les autres
+ * fenêtres le relisent : quand l'une met fin à la session, il disparaît et toutes les autres suivent (`crossTab.ts`).
  */
-const HINT = 'repas.session'
+export const SESSION_HINT_KEY = 'repas.session'
+const HINT = SESSION_HINT_KEY
 
-const hasHint = (): boolean => {
+export const hasSessionHint = (): boolean => {
   try {
     return localStorage.getItem(HINT) === '1'
   } catch {
@@ -66,11 +88,19 @@ export const useSessionStore = defineStore('session', () => {
   const user = ref<CurrentUser | null>(null)
   const restored = ref(false)
   let refreshing: Promise<string | null> | null = null
-  /** Le dernier rafraîchissement a échoué faute de réseau (et non parce que la session est perdue). */
+  /** Le dernier rafraîchissement n'a pas abouti sans que la session soit perdue (réseau, 429, 5xx : le back ne dit rien d'elle). */
   let unreachable = false
+  /** Pas de nouvelle demande de rafraîchissement avant cet instant (`Date.now()`) : voir `holdOff`. */
+  let holdOffUntil = 0
+  let failuresInARow = 0
 
-  /** Un seul rafraîchissement à la fois : dix requêtes en 401 n'en déclenchent qu'un. */
+  /** Un seul rafraîchissement à la fois : dix requêtes en 401 n'en déclenchent qu'un, et pas un de plus pendant un délai d'attente. */
   function refresh(): Promise<string | null> {
+    if (refreshing === null && Date.now() < holdOffUntil) {
+      unreachable = true
+
+      return Promise.resolve(null)
+    }
     refreshing ??= requestToken().finally(() => {
       refreshing = null
     })
@@ -78,21 +108,46 @@ export const useSessionStore = defineStore('session', () => {
     return refreshing
   }
 
+  /** La session n'est pas perdue : on garde l'indice, l'utilisateur et la copie hors-ligne, et on ne redemande qu'après un délai. */
+  function holdOff(response: Response | null) {
+    unreachable = true
+    failuresInARow = Math.min(failuresInARow + 1, 10)
+    const backoff = Math.min(HOLD_OFF_BASE_MS * 2 ** (failuresInARow - 1), HOLD_OFF_MAX_MS)
+    holdOffUntil = Date.now() + Math.max(backoff, retryAfterMs(response))
+  }
+
+  function stopHoldingOff() {
+    holdOffUntil = 0
+    failuresInARow = 0
+  }
+
+  /**
+   * Échange le cookie contre un jeton neuf. Seule une réponse 401 dit que la session est perdue (cookie absent, expiré, déjà utilisé,
+   * compte désactivé : elle est retentée une fois, course entre onglets) ; toute autre réponse (429, 5xx, réseau) laisse la session
+   * telle quelle.
+   */
   async function requestToken(): Promise<string | null> {
     unreachable = false
     for (let attempt = 0; attempt < 2; attempt++) {
+      let response: Response
       try {
-        const { data, response } = await api.POST('/api/auth/refresh')
-        if (response.ok && data?.token) {
-          token.value = data.token
+        const answer = await api.POST('/api/auth/refresh')
+        response = answer.response
+        if (response.ok && answer.data?.token) {
+          token.value = answer.data.token
           setHint(true)
+          stopHoldingOff()
 
           return token.value
         }
-        if (response.status !== 401) break
       } catch {
         // Pas de réseau : la session n'est pas perdue pour autant, on la garde pour le retour de la connexion.
-        unreachable = true
+        holdOff(null)
+
+        return null
+      }
+      if (response.status !== 401) {
+        holdOff(response)
 
         return null
       }
@@ -105,11 +160,25 @@ export const useSessionStore = defineStore('session', () => {
 
   const api = createApiClient({ auth: { token: () => token.value, refresh } })
 
+  /** Met fin à la session de ce navigateur : jeton, utilisateur, indice, copie de l'utilisateur et ce que le drive gardait pour lui. */
   function clear() {
     token.value = null
     user.value = null
+    stopHoldingOff()
     setHint(false)
     writeSnapshot(null)
+    forgetAccountData()
+  }
+
+  /**
+   * Une autre fenêtre a mis fin à la session (l'indice a disparu du navigateur) : celle-ci y met fin aussi, sans attendre sa prochaine
+   * requête. Rend vrai quand elle vient de le faire.
+   */
+  function endIfSignedOutElsewhere(): boolean {
+    if (hasSessionHint() || (token.value === null && user.value === null)) return false
+    clear()
+
+    return true
   }
 
   async function loadUser() {
@@ -130,7 +199,7 @@ export const useSessionStore = defineStore('session', () => {
   /** Au démarrage de l'application : retrouve la session grâce au cookie de rafraîchissement, une seule fois. */
   async function restore() {
     if (restored.value) return
-    if (!hasHint()) {
+    if (!hasSessionHint()) {
       restored.value = true
 
       return
@@ -139,7 +208,7 @@ export const useSessionStore = defineStore('session', () => {
       if ((await refresh()) !== null) await loadUser()
       else if (unreachable) resumeOffline()
     } catch (error) {
-      if (error instanceof ApiError && error.status === 0) resumeOffline()
+      if (error instanceof ApiError && isUnreachable(error.status)) resumeOffline()
       else clear()
     } finally {
       restored.value = true
@@ -149,6 +218,7 @@ export const useSessionStore = defineStore('session', () => {
   async function login(email: string, password: string) {
     const data = await unwrap(api.POST('/api/login_check', { body: { email, password } }))
     token.value = data.token ?? null
+    stopHoldingOff()
     await loadUser()
     setHint(true)
     restored.value = true
@@ -202,6 +272,7 @@ export const useSessionStore = defineStore('session', () => {
     isAuthenticated: computed(() => user.value !== null),
     isAdmin: computed(() => user.value?.isAdmin === true),
     restore,
+    endIfSignedOutElsewhere,
     reloadUser,
     login,
     register,
