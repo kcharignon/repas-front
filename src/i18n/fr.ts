@@ -507,6 +507,7 @@ export default {
   },
   auth: {
     pitch: 'Tes recettes, tes courses, sans oublier le basilic.',
+    pitchHalloween: 'Tes recettes, tes courses, sans oublier la citrouille.',
   },
   login: {
     title: 'Se connecter',
@@ -1004,6 +1005,9 @@ export default {
     appMenu: 'Menu de l’application',
     appMenuHelp: 'Version, mode d’emploi et déconnexion de Leclerc.',
     appMenuFailed: 'Le menu de l’application n’a pas pu s’ouvrir. Réessaie.',
+  },
+  season: {
+    halloween: 'Décor d’Halloween',
   },
   theme: {
     label: 'Thème',
