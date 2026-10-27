@@ -12,8 +12,19 @@ import UiSwitch from '@/design/UiSwitch.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
 import { messageForFailure, notifyDeleteFailure } from '@/notifications/failures'
 import { useSessionStore } from '@/session/session'
+import ConversionEquation from './ConversionEquation.vue'
 import MergeConfirmSheet from './MergeConfirmSheet.vue'
 import MergePickerSheet from './MergePickerSheet.vue'
+import {
+  baseUnitOf,
+  coefficientOf,
+  equationProblem,
+  formatNumber,
+  inUnit,
+  sameMeasureUnits,
+  type EquationUnit,
+  type EquationValue,
+} from './equationMath'
 import { usageText } from './mergeText'
 import {
   useDeleteIngredient,
@@ -43,7 +54,6 @@ const form = reactive({
   departmentSlug: typeof route.query.rayon === 'string' ? route.query.rayon : '',
   cookingUnit: '',
   purchaseUnit: '',
-  coefficient: '' as string | number,
   isBase: false,
 })
 const submitted = ref(false)
@@ -66,7 +76,6 @@ watch(
     form.departmentSlug = ingredient.departmentSlug
     form.cookingUnit = ingredient.cookingUnitSlug
     form.purchaseUnit = ingredient.purchaseUnitSlug
-    form.coefficient = ingredient.coefficient ?? ''
     form.isBase = ingredient.isBase === true
   },
   { immediate: true },
@@ -98,21 +107,94 @@ const needsCoefficient = computed(
   () => form.cookingUnit !== '' && form.cookingUnit !== form.purchaseUnit,
 )
 
+// L'équation « 1 [unité des recettes] = ? [unité d'achat] » : à gauche l'unité des recettes, à droite l'unité d'achat ou, si elle mesure
+// un poids ou un volume, une plus petite (« 1 cuillère à soupe = 10 grammes » se dit mieux que « 0,01 kilo »). Le back garde le
+// coefficient « 1 unité d'achat = N unités de recette » : `apiCoefficient` le recalcule.
+const unitList = computed<EquationUnit[]>(() => units.data.value?.member ?? [])
+const unitBySlug = (slug: string) => unitList.value.find((unit) => unit.slug === slug)
+const purchaseUnitFull = computed(() => unitBySlug(form.purchaseUnit))
+const endUnits = computed(() =>
+  purchaseUnitFull.value ? sameMeasureUnits(purchaseUnitFull.value, unitList.value) : [],
+)
+const eqEnd = ref('')
+const eqLeft = ref<string | number>('1')
+const eqRight = ref<string | number>('')
+const eqTouched = ref(false)
+
+const equation = computed<EquationValue>({
+  get: () => ({
+    start: form.cookingUnit,
+    end: eqEnd.value,
+    left: eqLeft.value,
+    right: eqRight.value,
+  }),
+  set: (value) => {
+    eqEnd.value = value.end
+    eqLeft.value = value.left
+    eqRight.value = value.right
+    eqTouched.value = true
+  },
+})
+
+// Le coefficient déjà enregistré vaut pour les unités enregistrées : changer l'une d'elles repart d'une équation vide
+const knownCoefficient = computed(() => {
+  const ingredient = existing.data.value
+
+  return editing.value &&
+    ingredient?.coefficient != null &&
+    ingredient.cookingUnitSlug === form.cookingUnit &&
+    ingredient.purchaseUnitSlug === form.purchaseUnit
+    ? ingredient.coefficient
+    : null
+})
+
+function resetEquation() {
+  const purchase = purchaseUnitFull.value
+  if (purchase === undefined) return
+
+  const small = baseUnitOf(purchase, unitList.value)
+  const end = small !== undefined && small.slug !== form.cookingUnit ? small : purchase
+  eqEnd.value = end.slug
+  eqLeft.value = '1'
+  eqRight.value =
+    knownCoefficient.value === null
+      ? ''
+      : formatNumber(inUnit(1 / knownCoefficient.value, purchase, end))
+  eqTouched.value = false
+}
+watch(
+  () =>
+    [form.cookingUnit, form.purchaseUnit, unitList.value.length, knownCoefficient.value].join('|'),
+  resetEquation,
+  { immediate: true },
+)
+
+const rightFilled = computed(() => String(eqRight.value).trim() !== '')
+const equationError = computed(
+  () =>
+    needsCoefficient.value && rightFilled.value && equationProblem(equation.value, true) !== null,
+)
+// Rien tapé à droite : pas de coefficient (le back connaît déjà la conversion, sinon il le dira). Équation intacte : celui d'origine.
+const apiCoefficient = computed<number | null>(() => {
+  if (!needsCoefficient.value || !rightFilled.value) return null
+  if (!eqTouched.value && knownCoefficient.value !== null) return knownCoefficient.value
+
+  const perUnit = coefficientOf(eqLeft.value, eqRight.value)
+  const purchase = purchaseUnitFull.value
+  const end = unitBySlug(eqEnd.value)
+  if (perUnit === null || purchase === undefined || end === undefined) return null
+
+  return Number((1 / inUnit(perUnit, end, purchase)).toPrecision(12))
+})
+
 const errors = computed(() => ({
   name: submitted.value && form.name.trim() === '' ? t('ingredients.errors.name') : undefined,
-  coefficient:
-    submitted.value &&
-    needsCoefficient.value &&
-    form.coefficient !== '' &&
-    Number(form.coefficient) <= 0
-      ? t('ingredients.errors.coefficient')
-      : undefined,
 }))
 
 function submit() {
   submitted.value = true
   failure.value = null
-  if (form.name.trim() === '' || errors.value.coefficient !== undefined) return
+  if (form.name.trim() === '' || equationError.value) return
 
   save.mutate(
     {
@@ -122,8 +204,7 @@ function submit() {
         departmentSlug: form.departmentSlug,
         defaultCookingUnitSlug: form.cookingUnit,
         defaultPurchaseUnitSlug: form.purchaseUnit,
-        coefficient:
-          needsCoefficient.value && form.coefficient !== '' ? Number(form.coefficient) : null,
+        coefficient: apiCoefficient.value,
         ...(baseChanged.value ? { isBase: form.isBase } : {}),
       },
     },
@@ -273,24 +354,18 @@ const back = computed(() =>
           </UiSelect>
         </UiField>
       </div>
-      <UiField
-        v-if="needsCoefficient"
-        :label="t('ingredients.coefficient')"
-        :hint="t('ingredients.coefficientHint')"
-        :error="errors.coefficient"
-        v-slot="{ id, describedby, invalid }"
-      >
-        <UiTextInput
-          :id="id"
-          v-model="form.coefficient"
-          type="number"
-          inputmode="decimal"
-          min="0"
-          step="any"
-          :aria-describedby="describedby"
-          :invalid="invalid"
+      <div v-if="needsCoefficient" class="flex flex-col gap-1.5">
+        <p class="text-sm font-semibold">{{ t('ingredients.conversion') }}</p>
+        <ConversionEquation
+          v-model="equation"
+          :units="unitList"
+          :start-units="unitList.filter((unit) => unit.slug === form.cookingUnit)"
+          :end-units="endUnits"
+          :ingredient-name="form.name.trim()"
+          :submitted="submitted && rightFilled"
         />
-      </UiField>
+        <p class="text-sm text-muted">{{ t('ingredients.conversionHint') }}</p>
+      </div>
 
       <UiSwitch
         v-if="canSetBase"

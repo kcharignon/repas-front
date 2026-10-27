@@ -405,16 +405,17 @@ describe('IngredientEditorView', () => {
       .map((select) => (select.element as HTMLSelectElement).value)
 
     expect(values).toEqual(['boucherie', 'gramme', 'gramme'])
-    expect(wrapper.text()).not.toContain('Une unité d’achat vaut combien')
+    expect(wrapper.text()).not.toContain('Combien ça fait ?')
   })
 
-  it('ne demande le coefficient que lorsque les deux unités diffèrent', async () => {
+  it('ne demande la conversion que lorsque les deux unités diffèrent', async () => {
     const { wrapper } = await edit('/ingredients/nouveau?rayon=legumes')
     await ready(wrapper)
 
     await wrapper.findAll('select')[2]?.setValue('kilo')
 
-    expect(wrapper.text()).toContain('Une unité d’achat vaut combien')
+    expect(wrapper.text()).toContain('Combien ça fait ?')
+    expect(wrapper.find('[role="group"]').attributes('aria-label')).toBe('La conversion')
   })
 
   it('refuse un nom vide sans appeler le back', async () => {
@@ -438,7 +439,9 @@ describe('IngredientEditorView', () => {
 
     await nameInput(wrapper).setValue('  Praliné ')
     await wrapper.findAll('select')[2]?.setValue('kilo')
-    await wrapper.find('input[type="number"]').setValue('1000')
+    // « 1 gramme = 0,001 kilo » : le back garde « 1 kilo = 1000 grammes »
+    await wrapper.find('input[aria-label="Quantité d\'arrivée"]').setValue('0,001')
+    expect(wrapper.find('[aria-live="polite"]').text()).toContain('Praliné : 1 Gramme = 0,001 Kilo')
     await wrapper.find('form').trigger('submit')
     await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('department'))
 
@@ -477,12 +480,153 @@ describe('IngredientEditorView', () => {
       expect((nameInput(wrapper).element as HTMLInputElement).value).toBe('ma sauce'),
     )
 
-    expect((wrapper.find('input[type="number"]').element as HTMLInputElement).value).toBe('1000')
+    // « 1 kilo = 1000 grammes » s'écrit « 1 gramme = 0,001 kilo » ; sans y toucher, le coefficient d'origine repart tel quel
+    expect(
+      (wrapper.find('input[aria-label="Quantité d\'arrivée"]').element as HTMLInputElement).value,
+    ).toBe('0,001')
     await nameInput(wrapper).setValue('ma sauce maison')
     await wrapper.find('form').trigger('submit')
     await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('department'))
 
     expect(calls(fetchMock)).toContain('PUT /api/v1/ingredients/ma-sauce')
+    const put = fetchMock.mock.calls
+      .map(([call]) => call as Request)
+      .find((request) => request.method === 'PUT')
+    expect(await put?.json()).toMatchObject({ coefficient: 1000 })
+  })
+
+  describe("l'équation de conversion", () => {
+    const measured = {
+      member: [
+        {
+          slug: 'cuillere',
+          name: 'cuillère à soupe',
+          symbol: '',
+          dimension: null,
+          baseFactor: null,
+        },
+        { slug: 'gramme', name: 'gramme', symbol: 'g', dimension: 'WEIGHT', baseFactor: 1 },
+        { slug: 'kilo', name: 'kilo', symbol: 'kg', dimension: 'WEIGHT', baseFactor: 1000 },
+        { slug: 'pot', name: 'pot', symbol: '', dimension: 'PACKAGE', baseFactor: 1 },
+      ],
+      totalItems: 4,
+    }
+    const withUnits = {
+      'GET /api/v1/units': () => json(measured),
+      'POST /api/v1/ingredients': () =>
+        new Response(null, { status: 201, headers: { Location: '/api/v1/ingredients/farine' } }),
+    }
+    const postBody = async (fetchMock: Awaited<ReturnType<typeof edit>>['fetchMock']) =>
+      fetchMock.mock.calls
+        .map(([call]) => call as Request)
+        .find((request) => request.method === 'POST' && request.url.endsWith('/ingredients'))
+        ?.json()
+    const pick = async (
+      wrapper: Awaited<ReturnType<typeof edit>>['wrapper'],
+      cooking: string,
+      purchase: string,
+    ) => {
+      await vi.waitFor(() =>
+        expect(wrapper.findAll('select')[1]?.findAll('option').length).toBeGreaterThan(1),
+      )
+      await wrapper.findAll('select')[1]?.setValue(cooking)
+      await wrapper.findAll('select')[2]?.setValue(purchase)
+    }
+    const rightInput = (wrapper: Awaited<ReturnType<typeof edit>>['wrapper']) =>
+      wrapper.find('input[aria-label="Quantité d\'arrivée"]')
+
+    it('propose la petite unité du poids à droite : « 1 cuillère à soupe = ? gramme » plutôt que kilo', async () => {
+      const { wrapper, fetchMock } = await edit('/ingredients/nouveau?rayon=legumes', withUnits)
+      await pick(wrapper, 'cuillere', 'kilo')
+
+      const end = wrapper.find('select[aria-label="Unité d\'arrivée"]')
+      expect((end.element as HTMLSelectElement).value).toBe('gramme')
+      expect(end.findAll('option').map((option) => option.attributes('value'))).toEqual([
+        'gramme',
+        'kilo',
+      ])
+      expect(wrapper.find('select[aria-label="Unité de départ"]').exists()).toBe(false)
+
+      await nameInput(wrapper).setValue('Farine')
+      await rightInput(wrapper).setValue('10')
+      expect(wrapper.find('[aria-live="polite"]').text()).toBe(
+        'Farine : 1 cuillère à soupe = 10 grammes, et 1 gramme = 0,1 cuillère à soupe.',
+      )
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      // 1 cuillère = 10 g = 0,01 kilo, donc 1 kilo = 100 cuillères
+      expect(await postBody(fetchMock)).toMatchObject({
+        defaultCookingUnitSlug: 'cuillere',
+        defaultPurchaseUnitSlug: 'kilo',
+        coefficient: 100,
+      })
+    })
+
+    it('accepte « 8 cuillères = 1 kilo » en changeant le nombre de gauche', async () => {
+      const { wrapper, fetchMock } = await edit('/ingredients/nouveau?rayon=legumes', withUnits)
+      await pick(wrapper, 'cuillere', 'kilo')
+      await nameInput(wrapper).setValue('Farine')
+
+      await wrapper.find('select[aria-label="Unité d\'arrivée"]').setValue('kilo')
+      await wrapper.find('input[aria-label="Quantité de départ"]').setValue('8')
+      await rightInput(wrapper).setValue('1')
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      expect((await postBody(fetchMock))?.coefficient).toBe(8)
+    })
+
+    it("n'offre qu'une unité à droite pour un conditionnement, sans petite unité", async () => {
+      const { wrapper, fetchMock } = await edit('/ingredients/nouveau?rayon=legumes', withUnits)
+      await pick(wrapper, 'gramme', 'pot')
+      await nameInput(wrapper).setValue('Yaourt')
+
+      expect(wrapper.find('select[aria-label="Unité d\'arrivée"]').exists()).toBe(false)
+      await wrapper.find('input[aria-label="Quantité de départ"]').setValue('125')
+      await rightInput(wrapper).setValue('1')
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      // 125 g = 1 pot, donc 1 pot = 125 g
+      expect((await postBody(fetchMock))?.coefficient).toBe(125)
+    })
+
+    it('laisse le nombre de droite vide : pas de coefficient (le back connaît déjà la conversion)', async () => {
+      const { wrapper, fetchMock } = await edit('/ingredients/nouveau?rayon=legumes', withUnits)
+      await pick(wrapper, 'gramme', 'kilo')
+      await nameInput(wrapper).setValue('Farine')
+
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      expect(await postBody(fetchMock)).toMatchObject({ coefficient: null })
+    })
+
+    it('refuse un nombre nul à droite sans appeler le back et le dit', async () => {
+      const { wrapper, fetchMock } = await edit('/ingredients/nouveau?rayon=legumes', withUnits)
+      await pick(wrapper, 'cuillere', 'kilo')
+      await nameInput(wrapper).setValue('Farine')
+      await rightInput(wrapper).setValue('0')
+
+      expect(wrapper.find('[aria-live="polite"]').text()).toBe('Entre un nombre supérieur à zéro.')
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      expect(
+        calls(fetchMock).filter((call) => call.startsWith('POST /api/v1/ingredients')),
+      ).toEqual([])
+    })
+
+    it("repart d'une équation vide quand on change l'unité d'achat", async () => {
+      const { wrapper } = await edit('/ingredients/nouveau?rayon=legumes', withUnits)
+      await pick(wrapper, 'cuillere', 'kilo')
+      await rightInput(wrapper).setValue('10')
+
+      await wrapper.findAll('select')[2]?.setValue('pot')
+
+      expect((rightInput(wrapper).element as HTMLInputElement).value).toBe('')
+    })
   })
 
   it('supprime après confirmation', async () => {
