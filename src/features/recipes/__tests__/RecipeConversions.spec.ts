@@ -176,24 +176,30 @@ describe('RecipeDetailView : ingrédients à régler', () => {
     expect(calls(busy.fetchMock)).toContain('GET /api/v1/units')
   })
 
-  it('ouvre « Nouvelle conversion » prête à recevoir un seul nombre : 1 unité de la ligne = ? petite unité du magasin', async () => {
+  it('ouvre « Nouvelle conversion » prête à recevoir un seul nombre : 1 unité d’achat = ? unité de la ligne', async () => {
     const { wrapper } = await open([row(), farine])
 
     await buttonLabelled(wrapper, 'Régler')?.trigger('click')
     await vi.waitFor(() => expect(sheet()).not.toBeNull())
 
     expect(sheet()?.textContent).toContain('Nouvelle conversion')
+    // « 1 kilo = ? cuillères à soupe » : l'unité d'achat à gauche avec 1, l'unité de la ligne à droite (jamais la petite unité du magasin)
     expect(
       sheet()?.querySelector<HTMLSelectElement>('select[aria-label="Unité de départ"]')?.value,
-    ).toBe('cuillere-a-soupe')
+    ).toBe('kilo')
     expect(
       sheet()?.querySelector<HTMLSelectElement>('select[aria-label="Unité d\'arrivée"]')?.value,
-    ).toBe('gramme')
+    ).toBe('cuillere-a-soupe')
     expect(
       sheet()?.querySelector<HTMLInputElement>('input[aria-label="Quantité de départ"]')?.value,
     ).toBe('1')
+    expect(sheet()?.textContent).toContain('Dans 1 kilo, combien de cuillères à soupe ?')
     expect(sheet()?.querySelector('[aria-live="polite"]')?.textContent).toBe(
       'Écris les deux nombres : la conversion se lit ici.',
+    )
+    // Le focus est au nombre à dire
+    await vi.waitFor(() =>
+      expect(document.activeElement?.getAttribute('aria-label')).toBe("Quantité d'arrivée"),
     )
   })
 
@@ -213,7 +219,7 @@ describe('RecipeDetailView : ingrédients à régler', () => {
     })
     await buttonLabelled(wrapper, 'Régler')?.trigger('click')
     await vi.waitFor(() => expect(sheet()).not.toBeNull())
-    typed('input[aria-label="Quantité d\'arrivée"]', '10')
+    typed('input[aria-label="Quantité d\'arrivée"]', '100')
     await flushPromises()
 
     sheet()
@@ -225,10 +231,11 @@ describe('RecipeDetailView : ingrédients à régler', () => {
       ([input]) =>
         (input as Request).method === 'POST' && (input as Request).url.includes('/conversions'),
     )
+    // « 1 kilo = 100 cuillères à soupe » : 1 kilo, c'est l'unité d'achat de la ligne
     expect(await bodyOf(fetchMock, index)).toEqual({
-      startUnitSlug: 'cuillere-a-soupe',
-      endUnitSlug: 'gramme',
-      coefficient: 10,
+      startUnitSlug: 'kilo',
+      endUnitSlug: 'cuillere-a-soupe',
+      coefficient: 100,
     })
     await vi.waitFor(() => expect(sheet()).toBeNull())
     expect(wrapper.text()).not.toContain('à régler')

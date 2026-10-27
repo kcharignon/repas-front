@@ -5,12 +5,10 @@
  * (administration, fiche d'ingrédient) en tirent le coefficient à envoyer.
  */
 
-/** Une unité telle que la liste `GET /api/v1/units` la donne (la mesure aide à proposer la petite unité). */
+/** Une unité telle que la liste `GET /api/v1/units` la donne. */
 export interface EquationUnit {
   slug: string
   name: string
-  dimension?: string | null
-  baseFactor?: number | null
 }
 
 /** Ce que le composant édite : les deux unités et les deux nombres, tels que tapés (on accepte la virgule). */
@@ -111,43 +109,6 @@ export function equationProblem(value: EquationValue, requireNumbers = false): E
 }
 
 /**
- * La petite unité de la même dimension (gramme pour kilo, millilitre pour litre) : « 1 cuillère à soupe = ? gramme » se pose plus
- * naturellement que « ? kilo ». Seulement pour le poids et le volume, jamais pour un conditionnement ; undefined s'il n'y en a pas.
- */
-export function baseUnitOf(unit: EquationUnit, units: EquationUnit[]): EquationUnit | undefined {
-  if (unit.dimension !== 'WEIGHT' && unit.dimension !== 'VOLUME') return undefined
-
-  return units.find(
-    (candidate) =>
-      candidate.slug !== unit.slug &&
-      candidate.dimension === unit.dimension &&
-      candidate.baseFactor === 1,
-  )
-}
-
-/** Les unités qui se convertissent en `unit` par leur facteur de base (même dimension de poids ou de volume), `unit` comprise. */
-export function sameMeasureUnits(unit: EquationUnit, units: EquationUnit[]): EquationUnit[] {
-  if ((unit.dimension !== 'WEIGHT' && unit.dimension !== 'VOLUME') || !((unit.baseFactor ?? 0) > 0))
-    return [unit]
-
-  return units.filter(
-    (candidate) =>
-      candidate.slug === unit.slug ||
-      (candidate.dimension === unit.dimension && (candidate.baseFactor ?? 0) > 0),
-  )
-}
-
-/** Quantité exprimée en `to` quand elle vaut `quantity` en `from` (même dimension, facteurs de base connus) ; sinon la quantité telle quelle. */
-export function inUnit(quantity: number, from: EquationUnit, to: EquationUnit): number {
-  if (from.slug === to.slug) return quantity
-  if (!((from.baseFactor ?? 0) > 0) || !((to.baseFactor ?? 0) > 0)) return quantity
-
-  return Number(
-    ((quantity * (from.baseFactor as number)) / (to.baseFactor as number)).toPrecision(12),
-  )
-}
-
-/**
  * Un nombre à lire dans une phrase, avec la séparation des milliers (« 1 000 ») : pour l'affichage, jamais pour remplir un champ. Une
  * espace insécable ordinaire plutôt que l'espace fine du français, que la police du site ne dessine pas (« 1000 »).
  */
@@ -165,17 +126,58 @@ export function unitText(unit: { name: string; symbol?: string | null }, quantit
   return unitLabel(unit.name, quantity)
 }
 
-/**
- * Où commence l'équation d'une conversion qui manque : à gauche l'unité de la ligne ou des recettes (`startSlug`), à droite l'unité
- * d'achat ou, si elle mesure un poids ou un volume, sa petite unité (« 1 cuillère à soupe = ? gramme »). Jamais la même unité des deux côtés.
- */
-export function suggestedEnd(
-  startSlug: string,
-  purchase: EquationUnit | undefined,
-  units: EquationUnit[],
-): string {
-  if (purchase === undefined) return ''
-  const small = baseUnitOf(purchase, units)
+/** « de centilitres », « d'unités » : la préposition « de » s'élide devant une voyelle. */
+export function withDe(word: string): string {
+  const trimmed = word.trim()
 
-  return small !== undefined && small.slug !== startSlug ? small.slug : purchase.slug
+  return /^[aeiouyàâäéèêëîïôöùûüœ]/i.test(trimmed) ? `d'${trimmed}` : `de ${trimmed}`
+}
+
+/** Une conversion enregistrée, telle que le back la donne : « 1 départ = coefficient arrivée ». */
+export interface StoredConversion {
+  startUnitSlug: string
+  endUnitSlug: string
+  coefficient: number
+}
+
+/** Une conversion telle qu'on la LIT et qu'on la rouvre : « 1 `startSlug` = `value` `endSlug` ». `reversed` : on l'a retournée par rapport à ce qui est enregistré. */
+export interface OrientedConversion {
+  startSlug: string
+  endSlug: string
+  value: number
+  reversed: boolean
+}
+
+/**
+ * Le sens dans lequel une conversion s'affiche et se rouvre, quel que soit le sens où elle est enregistrée. L'unité d'achat de
+ * l'ingrédient est TOUJOURS à gauche quand la conversion la porte (« 1 bouteille = 30 centilitres », jamais « 1 centilitre =
+ * 0,0333 bouteille »), même si le nombre est alors inférieur à 1 (« 1 kilo = 0,5 sac »). Sans unité d'achat dans la conversion, c'est le
+ * nombre qui décide : on retourne ce qui vaut moins de 1 (« 1 gramme = 0,001 kilo » se lit « 1 kilo = 1 000 grammes »).
+ * Retourner n'écrit rien : l'enregistrement garde ce qu'il avait tant que l'utilisateur ne modifie pas l'équation.
+ */
+export function displayOrientation(
+  conversion: StoredConversion,
+  purchaseSlug: string | undefined,
+): OrientedConversion {
+  const { startUnitSlug, endUnitSlug, coefficient } = conversion
+  const kept: OrientedConversion = {
+    startSlug: startUnitSlug,
+    endSlug: endUnitSlug,
+    value: coefficient,
+    reversed: false,
+  }
+  if (!(coefficient > 0) || !Number.isFinite(coefficient)) return kept
+
+  const purchaseOnStart = purchaseSlug !== undefined && startUnitSlug === purchaseSlug
+  const purchaseOnEnd = purchaseSlug !== undefined && endUnitSlug === purchaseSlug
+  const reverse = purchaseOnEnd || (!purchaseOnStart && coefficient < 1)
+  if (!reverse) return kept
+
+  // 12 chiffres significatifs : 1 ÷ (1 ÷ 30) vaut 30, pas 30,000000000000004
+  return {
+    startSlug: endUnitSlug,
+    endSlug: startUnitSlug,
+    value: Number((1 / coefficient).toPrecision(12)),
+    reversed: true,
+  }
 }

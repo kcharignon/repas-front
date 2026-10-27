@@ -7,7 +7,14 @@ import type { IngredientConversion } from '@/api'
 import UiButton from '@/design/UiButton.vue'
 import UiConfirmDialog from '@/design/UiConfirmDialog.vue'
 import { messageForFailure } from '@/notifications/failures'
-import { formatDisplayNumber, inputNumber, unitText, type EquationValue } from './equationMath'
+import {
+  displayOrientation,
+  formatDisplayNumber,
+  inputNumber,
+  unitText,
+  type EquationValue,
+  type StoredConversion,
+} from './equationMath'
 import OwnConversionSheet from './OwnConversionSheet.vue'
 import { useDeleteIngredientConversion, useIngredientConversions, useUnits } from './queries'
 
@@ -38,14 +45,22 @@ const unitOf = (slug: string, name: string): { name: string; symbol?: string | n
   unitList.value.find((unit) => unit.slug === slug) ?? { name }
 const unitName = (slug: string) => unitList.value.find((unit) => unit.slug === slug)?.name ?? slug
 
-/** « 1 tasse = 125 g » : le symbole quand l'unité en a un qui dit autre chose que son nom, sinon son nom accordé. */
+// Le sens où une conversion se lit, quel que soit celui où elle est enregistrée : l'unité d'achat à gauche (« 1 bouteille = 30 cl »)
+const purchaseSlug = computed(() => conversions.data.value?.purchaseUnitSlug)
+const oriented = (conversion: IngredientConversion) =>
+  displayOrientation(conversion, purchaseSlug.value)
+const nameIn = (conversion: IngredientConversion, slug: string) =>
+  slug === conversion.startUnitSlug ? conversion.startUnitName : conversion.endUnitName
+
+/** « 1 bouteille = 30 cl » : le symbole quand l'unité en a un qui dit autre chose que son nom, sinon son nom accordé. */
 function line(conversion: IngredientConversion): string {
-  const start = unitOf(conversion.startUnitSlug, conversion.startUnitName)
-  const end = unitOf(conversion.endUnitSlug, conversion.endUnitName)
+  const way = oriented(conversion)
+  const start = unitOf(way.startSlug, nameIn(conversion, way.startSlug))
+  const end = unitOf(way.endSlug, nameIn(conversion, way.endSlug))
 
   return t('ingredients.conversions.line', {
     start: unitText(start, 1),
-    end: `${formatDisplayNumber(conversion.coefficient)} ${unitText(end, conversion.coefficient)}`,
+    end: `${formatDisplayNumber(way.value)} ${unitText(end, way.value)}`,
   })
 }
 
@@ -53,19 +68,29 @@ const failure = ref<string | null>(null)
 const addButton = ref<InstanceType<typeof UiButton> | null>(null)
 
 // La feuille : une seule, pour l'ajout comme pour la modification
-const sheet = reactive<{ open: boolean; id: string | null; initial: EquationValue }>({
+const sheet = reactive<{
+  open: boolean
+  id: string | null
+  initial: EquationValue
+  original: StoredConversion | null
+}>({
   open: false,
   id: null,
   initial: { start: '', end: '', left: '1', right: '' },
+  original: null,
 })
 
 function openAdd() {
   failure.value = null
   sheet.id = null
-  // L'unité des recettes à gauche, l'arrivée à choisir
+  sheet.original = null
+  // « 1 [unité d'achat] = ? [unité des recettes] » : l'unité d'achat à gauche avec 1, l'unité des recettes à droite, le nombre à dire.
+  // Les deux unités sont les mêmes : l'arrivée est à choisir.
+  const purchase = conversions.data.value?.purchaseUnitSlug ?? ''
+  const cooking = conversions.data.value?.cookingUnitSlug ?? ''
   sheet.initial = {
-    start: conversions.data.value?.cookingUnitSlug ?? '',
-    end: '',
+    start: purchase,
+    end: cooking === purchase ? '' : cooking,
     left: '1',
     right: '',
   }
@@ -75,11 +100,18 @@ function openAdd() {
 function openEdit(conversion: IngredientConversion) {
   failure.value = null
   sheet.id = conversion.id
+  // Ce qui est enregistré ne change pas tant que l'équation n'est pas modifiée, même rouverte à l'envers
+  sheet.original = {
+    startUnitSlug: conversion.startUnitSlug,
+    endUnitSlug: conversion.endUnitSlug,
+    coefficient: conversion.coefficient,
+  }
+  const way = oriented(conversion)
   sheet.initial = {
-    start: conversion.startUnitSlug,
-    end: conversion.endUnitSlug,
+    start: way.startSlug,
+    end: way.endSlug,
     left: '1',
-    right: inputNumber(conversion.coefficient),
+    right: inputNumber(way.value),
   }
   sheet.open = true
 }
@@ -244,6 +276,7 @@ const cookingName = computed(() => unitName(conversions.data.value?.cookingUnitS
       :ingredient-name="name"
       :units="unitList"
       :initial="sheet.initial"
+      :original="sheet.original"
       :conversion-id="sheet.id"
     />
 
