@@ -74,7 +74,7 @@ describe("page d'autorisation d'Alexa", () => {
 
   it.each([
     ['https://pitangui.amazon.com:8443/a/b?x=1#y', 'pitangui.amazon.com'],
-    ['https://user:secret@layla.amazon.com/skill', 'layla.amazon.com'],
+    ['https://nom:mdp@layla.amazon.com/skill', 'layla.amazon.com'],
     ['https://аmazon.com/skill', 'xn--mazon-3ve.com'],
     ['HTTPS://Pitangui.Amazon.COM/', 'pitangui.amazon.com'],
   ])('écrit le nom d’hôte seul de %s', async (uri, host) => {
@@ -82,7 +82,7 @@ describe("page d'autorisation d'Alexa", () => {
     const { wrapper } = await open(search)
 
     expect(wrapper.find('[data-testid="alexa-host"]').text()).toBe(host)
-    expect(wrapper.text()).not.toContain('secret')
+    expect(wrapper.text()).not.toContain('mdp')
   })
 
   it.each([

@@ -57,7 +57,7 @@ describe('redirectHost', () => {
   it.each([
     ['https://pitangui.amazon.com/api/skill/link/M2AAAAAAAAAAAA?state=a', 'pitangui.amazon.com'],
     ['https://layla.amazon.com:8443/x#y', 'layla.amazon.com'],
-    ['https://user:secret@layla.amazon.com/x', 'layla.amazon.com'],
+    ['https://nom:mdp@layla.amazon.com/x', 'layla.amazon.com'],
     ['http://localhost:8080/x', 'localhost'],
   ])('rend le nom d’hôte seul de %s', (value, host) => expect(redirectHost(value)).toBe(host))
 
