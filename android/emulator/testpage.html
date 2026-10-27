@@ -46,50 +46,33 @@
     }
   }
 
-  var host = window.repasHost
+  // Le pont n'est plus à la page une fois l'agent démarré : `repasHost` y est vide et ne peut plus être redéfini. Ce que l'agent a reçu de
+  // l'application se lit donc à ce qu'il fait dans la page (son interface), jamais à un message que la page aurait vu passer.
+  var hostProperty = Object.getOwnPropertyDescriptor(window, 'repasHost')
   var facts = {
     kind: 'load',
     hostname: location.hostname,
     path: location.pathname,
     topFrame: window.top === window,
-    bridge: !!host && host.isRepasBridge === true,
-    debug: !!host && host.isDebug === true,
-    frozen: !!host && Object.isFrozen(host),
+    hostHidden: window.repasHost === undefined,
+    hostLocked: !!hostProperty && hostProperty.configurable === false && hostProperty.value === undefined,
     desktopAgent: !/Mobile/i.test(navigator.userAgent),
   }
-  show('bridge', 'Le pont repasHost est en place (injection.js)', facts.bridge)
-  show('debug', 'Le pont annonce la variante de débogage', facts.debug)
-  show('frozen', 'Le pont est gelé', facts.frozen)
+  show('hidden', 'Le pont repasHost est retiré de la page', facts.hostHidden)
+  show('locked', 'La propriété repasHost ne peut plus être redéfinie', facts.hostLocked)
   show('desktop', 'Mode ordinateur (agent utilisateur sans « Mobile »)', facts.desktopAgent)
-  show('message', 'Un message de l’application est arrivé', null)
   show('agent', 'L’agent a affiché son interface', null)
   report(facts)
 
-  if (facts.bridge) {
-    var baseline = document.documentElement.children.length
-    host.addEventListener('message', function (event) {
-      var command = ''
-      try {
-        var parsed = JSON.parse(event.data)
-        command = String(parsed.command || parsed.type || '')
-      } catch (e) {
-        command = '?'
-      }
-      show('message', 'Un message de l’application est arrivé', true, command)
-      report({ kind: 'message', command: command })
-      // L'agent monte son interface (un élément ajouté à la page, au contenu fermé) à la première commande qui en demande une.
-      var tries = 0
-      var timer = setInterval(function () {
-        tries += 1
-        var mounted = document.documentElement.children.length > baseline
-        if (mounted || tries >= 20) {
-          clearInterval(timer)
-          show('agent', 'L’agent a affiché son interface', mounted)
-          report({ kind: 'agent-ui', mounted: mounted })
-        }
-      }, 250)
-    })
-  }
+  // L'agent monte son interface (un élément ajouté à la page, au contenu fermé) au premier message de l'application qui en demande une.
+  var baseline = document.documentElement.children.length
+  var watcher = new MutationObserver(function () {
+    if (document.documentElement.children.length <= baseline) return
+    watcher.disconnect()
+    show('agent', 'L’agent a affiché son interface', true)
+    report({ kind: 'agent-ui', mounted: true })
+  })
+  watcher.observe(document.documentElement, { childList: true })
 })()
 </script>
 </body>

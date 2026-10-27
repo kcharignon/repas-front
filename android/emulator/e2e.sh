@@ -208,7 +208,7 @@ else
   ko "le bandeau « Choisis d'abord ton magasin » ne s'est pas affiché sur la page de connexion"
 fi
 check "le bandeau ne parle pas de connexion et ne propose pas de bouton" ui_lacks 'Connecte-toi\|Ouvrir l’accueil du drive'
-check "rien n'est parti vers l'agent : la page de connexion n'est pas une page de magasin" not_reported '"command": "setup"'
+check "rien n'est parti vers l'agent : la page de connexion n'est pas une page de magasin" ui_lacks 'Utiliser ce magasin'
 sleep 1
 screenshot e03b-connexion-avant-magasin
 adb shell input keyevent KEYCODE_BACK

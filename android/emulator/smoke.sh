@@ -8,8 +8,9 @@
 #
 # Ce qu'il prouve, dans l'ordre : l'application s'installe et démarre sans planter ; la coquille charge le faux Repas ; celui-ci voit le pont
 # `repasNative`, reçoit la réponse d'`app.info`, et les messages refusés reçoivent une erreur ; le menu s'ouvre (`app.menu`) ; un lien vers un
-# autre site ne s'ouvre pas dans la coquille ; le menu ouvre le drive (second écran) sur le faux site, où le script d'injection et le pont
-# `repasHost` ont répondu ; la commande « Diagnostic de l'agent » traverse le pont jusqu'à l'agent ; le test automatique fait l'aller-retour
+# autre site ne s'ouvre pas dans la coquille ; le menu ouvre le drive (second écran) sur le faux site, où le script d'injection a retiré le pont
+# `repasHost` de la page (elle ne le voit plus, elle voit seulement ce que l'agent fait) ; la commande « Diagnostic de l'agent » traverse le pont
+# jusqu'à l'agent ; le test automatique fait l'aller-retour
 # complet et affiche son rapport ; le retour ramène à la coquille, dont la page répond encore. Les captures d'écran et le rapport texte sont
 # dans android/dist/smoke/.
 # Code de sortie : 0 si tous les contrôles passent, 1 sinon, 3 si KVM manque.
@@ -109,7 +110,7 @@ open_home() { # open_home <runId> : drive.start, puis le drive s'ouvre sur l'acc
   start_pass "$1"
   wait_until 40 has_report '"hostname": "www.leclercdrive.fr", "path": "/"' && wait_until 20 ui_has 'Commencer mes courses'
 }
-open_store() { tap 'text="Choisir mon magasin de test"' && wait_until 30 has_report '"command": "plan"'; } # l'utilisateur touche son magasin : le plan part vers l'agent
+open_store() { tap 'text="Choisir mon magasin de test"' && wait_until 30 has_report '"path": "/magasin-123456-123456-Ville-Test/accueil.aspx"'; } # l'utilisateur touche son magasin : la page du magasin se charge, le plan part vers l'agent
 open_pass() { # open_pass <runId> : drive.start, l'accueil, le magasin ouvert, le plan reçu par l'agent
   open_home "$1" && open_store
 }
@@ -121,10 +122,10 @@ else
   ko "drive.start n'a pas ouvert l'accueil du drive avec son message"
 fi
 check "le drive ne s'est jamais ouvert sur /magasin-123456-123456/ (page 404 du vrai site)" not_reported '"path": "/magasin-123456-123456/"'
-check "tant que l'utilisateur n'a pas ouvert son magasin, l'agent ne reçoit rien" not_reported '"command": "plan"'
+check "tant que l'utilisateur n'a pas ouvert son magasin, l'agent n'affiche pas encore le récapitulatif du plan" ui_lacks 'Prêt à remplir ton panier'
 screenshot 03a-accueil-du-drive
 if open_store; then
-  ok "l'utilisateur touche son magasin (lien touché) : le plan arrive à l'agent par le pont, tout seul"
+  ok "l'utilisateur touche son magasin (lien touché) : la page du magasin se charge"
 else
   ko "le plan n'est pas arrivé à l'agent une fois le magasin ouvert"
 fi
@@ -177,8 +178,8 @@ if wait_until 15 has_report_count "\"type\": \"drive.error\", \"code\": \"BUSY\"
 else
   ko "la lecture du magasin pendant un passage n'a pas reçu BUSY"
 fi
-if tap 'text="Reprendre"' && wait_until 40 ui_has 'Commencer mes courses' && tap 'text="Choisir mon magasin de test"' && wait_until 40 has_report_count '"command": "plan"' 2; then
-  ok "« Reprendre » rouvre le drive sur l'accueil ; une fois le magasin ouvert, le plan est renvoyé à l'agent"
+if tap 'text="Reprendre"' && wait_until 40 ui_has 'Commencer mes courses' && tap 'text="Choisir mon magasin de test"' && wait_until 40 has_report_count '"path": "/magasin-123456-123456-Ville-Test/accueil.aspx"' 2 && wait_until 20 has_report_count '"kind": "agent-ui", "mounted": true' 4; then
+  ok "« Reprendre » rouvre le drive sur l'accueil ; une fois le magasin ouvert, le plan est renvoyé à l'agent, qui monte son interface sur chaque page"
 else
   ko "« Reprendre » n'a pas renvoyé le plan"
 fi
@@ -211,7 +212,7 @@ start_setup() { post_command "{\"do\":\"drive.setup\",\"runId\":\"$1\"}"; }
 store_report() { # store_report <runId> : Repas a reçu le magasin lu pour cette lecture (identifiant et hôte du faux site)
   reports | grep -q "\"runId\": \"$1\", \"resultType\": \"setup-result\", \"lines\": -1, \"hasStore\": true, \"storeId\": \"123456\", \"storeHost\": \"$SITE_HOST\""
 }
-no_setup_yet() { ! has_report '"command": "setup"'; }
+no_setup_yet() { ! has_report '"kind": "agent-ui", "mounted": true'; }
 
 say "   a. Choisir son magasin, puis l'agent le lit"
 reset_reports
@@ -227,7 +228,7 @@ sleep 6
 check "tant que la page n'est pas celle d'un magasin, rien n'est envoyé à l'agent" no_setup_yet
 screenshot 12-lecture-magasin-accueil
 if tap 'text="Choisir mon magasin de test"'; then ok "magasin choisi sur le faux site (lien touché)"; else ko "le lien du magasin est introuvable à l'écran"; fi
-if wait_until 30 has_report '"command": "setup"'; then ok "sur la page du magasin, l'agent reçoit le message setup par le pont"; else ko "l'agent n'a pas reçu le message setup"; fi
+if wait_until 30 has_report '"kind": "agent-ui", "mounted": true'; then ok "sur la page du magasin, l'agent reçoit le message setup par le pont et monte son interface"; else ko "l'agent n'a pas reçu le message setup"; fi
 if wait_until 15 ui_has 'Utiliser ce magasin ?'; then ok "l'agent demande confirmation (écran « Utiliser ce magasin ? »)"; else ko "l'agent n'a pas affiché sa confirmation"; fi
 check "le message de la lecture du magasin a disparu (l'agent a pris la main)" ui_lacks 'Choisis ton magasin, puis touche'
 sleep 1
@@ -268,7 +269,7 @@ open_drive() {
 }
 if open_drive; then ok "« Ouvrir le drive Leclerc » ouvre l'écran du drive, qui a chargé la page locale"; else ko "l'écran du drive ne s'est pas ouvert"; fi
 loaded=$(reports)
-for fact in '"topFrame": true' '"bridge": true' '"debug": true' '"frozen": true' '"desktopAgent": true'; do
+for fact in '"topFrame": true' '"hostHidden": true' '"hostLocked": true' '"desktopAgent": true'; do
   if grep -q "$fact" <<< "$loaded"; then ok "relevé du drive : $fact"; else ko "relevé du drive manquant : $fact"; fi
 done
 sleep 2
@@ -315,15 +316,10 @@ check "le menu du drive propose aussi « Plan d'essai (débogage) »" ui_has "Pl
 sleep 1
 screenshot 08-menu-drive
 if tap 'text="Diagnostic de l.agent"'; then ok "entrée « Diagnostic de l'agent » touchée"; else ko "entrée « Diagnostic de l'agent » introuvable"; fi
-if wait_until 15 has_report '"kind": "message", "command": "diagnostic"'; then
-  ok "la page a reçu la commande « diagnostic » par le pont"
-else
-  ko "la page n'a pas reçu la commande « diagnostic »"
-fi
 if wait_until 15 has_report '"kind": "agent-ui", "mounted": true'; then
-  ok "l'agent injecté a monté son interface dans la page"
+  ok "la commande « diagnostic » a traversé le pont : l'agent injecté a monté son interface dans la page"
 else
-  ko "l'agent n'a pas monté son interface"
+  ko "l'agent n'a pas monté son interface après la commande « diagnostic »"
 fi
 sleep 3
 screenshot 09-diagnostic-agent
