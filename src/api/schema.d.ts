@@ -183,6 +183,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingredients/{slug}/conversions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Conversions d'un ingrédient de l'utilisateur : les siennes (`member`, qu'il écrit) et les universelles qui touchent ses unités (`common`, lecture seule)
+         * @description L'ingrédient d'un autre utilisateur, un administrateur compris, est inconnu (404). `convertible` dit si l'unité des recettes de l'ingrédient se convertit en son unité d'achat.
+         */
+        get: operations["get_api_list_ingredient_conversions"];
+        put?: never;
+        /**
+         * Ajoute une conversion PROPRE à un ingrédient de l'utilisateur (« 1 unité de départ = coefficient unités d'arrivée »), vers n'importe quelle unité et sans limite de nombre
+         * @description Seul le propriétaire de l'ingrédient l'écrit, un administrateur compris. Jamais une conversion universelle (l'administrateur les écrit par `/api/v1/conversions`). `Location` est l'adresse de la conversion créée (modifiable et supprimable).
+         */
+        post: operations["post_api_create_ingredient_conversion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/recipes": {
         parameters: {
             query?: never;
@@ -249,6 +273,30 @@ export interface paths {
         /** Crée une unité (administrateur) */
         post: operations["post_api_create_unit"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingredients/{slug}/conversions/{conversionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Remplace une conversion PROPRE d'un ingrédient de l'utilisateur
+         * @description Seul le propriétaire de l'ingrédient la modifie, un administrateur compris. Une conversion universelle ou d'un autre ingrédient est inconnue (404). Refusé (422 `CONVERSION_REQUIRED_BY_INGREDIENT`, rien n'est écrit) si l'unité des recettes de l'ingrédient ne se convertissait plus alors en son unité d'achat.
+         */
+        put: operations["put_api_update_ingredient_conversion"];
+        post?: never;
+        /**
+         * Supprime une conversion PROPRE d'un ingrédient de l'utilisateur
+         * @description Seul le propriétaire de l'ingrédient la supprime, un administrateur compris. Une conversion universelle ne se supprime jamais (404). Refusé (422 `CONVERSION_REQUIRED_BY_INGREDIENT`, rien n'est écrit) si l'unité des recettes de l'ingrédient ne se convertirait plus en son unité d'achat. Les lignes de recettes qui ne se convertissent plus sont signalées par `convertible: false` à la lecture de la recette.
+         */
+        delete: operations["delete_api_delete_ingredient_conversion"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1042,9 +1090,29 @@ export interface paths {
         put?: never;
         /**
          * Point d'accès aux jetons de la liaison de compte (OAuth 2.0) : échange le code d'autorisation, ou le jeton de rafraîchissement, contre des jetons (route publique, appelée par Amazon)
-         * @description Corps `application/x-www-form-urlencoded` (RFC 6749). Le client est authentifié par `client_id` et `client_secret` dans le corps, ou par `Authorization: Basic` ; le secret est comparé à l'empreinte `ALEXA_OAUTH_CLIENT_SECRET_HASH` (vide : tout client est refusé). `grant_type=authorization_code` demande `code`, `redirect_uri` (la même qu'à l'autorisation) et `code_verifier` (PKCE S256) ; `grant_type=refresh_token` demande `refresh_token`. Les jetons sont opaques ; le jeton d'accès vaut 3600 s, le jeton de rafraîchissement 90 jours et ne sert qu'une fois : chaque échange en rend un nouveau (rotation), et présenter un jeton de rafraîchissement déjà échangé, ou un code déjà échangé, révoque la liaison. Les erreurs suivent la RFC 6749 5.2 (`{"error": "…"}`), sans dire pourquoi un échange est refusé : `invalid_grant` pour un code ou un jeton refusé quelle qu'en soit la raison (Alexa déconnecte alors le compte), `invalid_client` pour un client inconnu ou un secret faux, `invalid_request` pour un paramètre manquant, `unsupported_grant_type` pour un autre type. 30 appels par heure et par adresse IP. Jamais de mise en cache.
+         * @description Corps `application/x-www-form-urlencoded` (RFC 6749). Le client est authentifié par `client_id` et `client_secret` dans le corps, ou par `Authorization: Basic` ; le secret est comparé à l'empreinte `ALEXA_OAUTH_CLIENT_SECRET_HASH` (vide : tout client est refusé). `grant_type=authorization_code` demande `code`, `redirect_uri` (la même qu'à l'autorisation) et `code_verifier` (PKCE S256) ; `grant_type=refresh_token` demande `refresh_token`. Les jetons sont opaques ; le jeton d'accès vaut 3600 s, le jeton de rafraîchissement 180 jours et ne sert qu'une fois : chaque échange en rend un nouveau (rotation), et présenter un jeton de rafraîchissement déjà échangé, ou un code déjà échangé, révoque la liaison. Les erreurs suivent la RFC 6749 5.2 (`{"error": "…"}`), sans dire pourquoi un échange est refusé : `invalid_grant` pour un code ou un jeton refusé quelle qu'en soit la raison (Alexa déconnecte alors le compte), `invalid_client` pour un client inconnu ou un secret faux, `invalid_request` pour un paramètre manquant, `unsupported_grant_type` pour un autre type. 30 appels par heure et par adresse IP. Jamais de mise en cache.
          */
         post: operations["post_api_voice_oauth_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/voice/alexa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Webhook du skill Alexa « Jarvis » : reçoit une requête d'Alexa et répond par une réponse vocale (route publique, appelée par Amazon)
+         * @description Le corps est la requête JSON d'un skill personnalisé (`LaunchRequest`, `IntentRequest`, `SessionEndedRequest`), signée par Amazon : les en-têtes `SignatureCertChainUrl` et `Signature-256` sont vérifiés avant tout traitement (chaîne de certificats d'Amazon, signature du corps brut, horodatage à 150 s, identifiant du skill `ALEXA_SKILL_ID`). Une requête qui ne le prouve pas reçoit `400 INVALID_ALEXA_REQUEST`, sans autre détail. Une requête authentique reçoit TOUJOURS `200` et une réponse vocale (`outputSpeech` de type `PlainText`, `shouldEndSession`) : intentions `AddItemIntent` (créneau `item` : l'article est ajouté à la liste de courses de l'utilisateur, une liste est créée s'il n'en a pas d'active ; créneau facultatif `quantity` (type `QUANTITY`, l'identifiant est le nombre, entier de 1 à 99, 1 par défaut ; un nombre inutilisable n'écrit rien et reçoit la réponse « Combien ? ») et créneau facultatif `unit` (type `UNIT`, l'identifiant est le slug de l'unité), utilisée seulement si l'ingrédient la connaît ; un article déjà dans la liste reçoit la quantité en plus et la réponse dit le total ; un produit inconnu ouvre un dialogue, des ingrédients qui se valent aussi : Alexa demande le rayon), `RemoveItemIntent` (mêmes créneaux : la quantité dite est retirée de la ligne de la liste ACTIVE, la ligne disparaît quand elle est épuisée ; jamais de liste créée, jamais de produit créé ; deux lignes qui se valent : Alexa demande le rayon), `CheckItemIntent` (créneau `item` : dit si le produit est dans la liste active et combien, lecture seule), `RemoveMealIntent` (créneau `recipe` et créneau facultatif `servings`, type `QUANTITY` : le repas planifié de la liste ACTIVE est retiré, ou son nombre de personnes baisse du nombre dit ; `RemoveItemIntent` dont la phrase commence par « repas » ou « recette » est traité de même ; un repas ou un produit absent de la liste ouvre un dialogue de trois propositions tirées de la liste, jamais de création), `AddMealIntent` (créneau `recipe` et créneau facultatif `servings`, type `QUANTITY` : la recette de l'utilisateur est planifiée dans la liste de courses, pour le nombre de personnes dit ou celui du compte ; une liste est créée s'il n'en a pas d'active ; une recette déjà dans la liste n'y est jamais deux fois, Alexa demande le nouveau total ; une recette inconnue ouvre un dialogue de trois propositions, sans jamais créer de recette ; `AddItemIntent` dont la phrase commence par « repas » ou « recette » est traité de même), `ChooseOptionIntent` (créneau `rank`, 1 à 3), `CreateItemIntent`, `AnswerDepartmentIntent` (créneau `department`), `AnswerUnitIntent` (créneau `unit`), `ListChoicesIntent` (« lesquels ? » : lit les rayons ou les unités possibles pendant le dialogue), `ChooseKindIntent` (créneau `kind` : « une recette » ou « un produit », aiguille un produit ou une recette non compris vers l'autre recherche), `AnswerServingsIntent` (créneau `servings` : le nouveau total de personnes d'un repas déjà planifié), `KeepMealIntent` (« ne change rien »), `AMAZON.YesIntent`, `AMAZON.NoIntent`, `AMAZON.HelpIntent`, `AMAZON.StopIntent`, `AMAZON.CancelIntent`, `AMAZON.FallbackIntent` ; l'état du dialogue d'un produit inconnu (trois propositions, création guidée : rayon, unité, confirmation) voyage dans les attributs de séance (`session.attributes.dialogue` à l'aller, `sessionAttributes.dialogue` au retour, rien n'est écrit en base hors l'article, le produit créé et la mémoire de phrase), lu comme une entrée non fiable ; seule la langue `fr-FR` est servie ; `SessionEndedRequest` reçoit une réponse sans parole. L'utilisateur est celui du jeton d'accès de la liaison de compte (`session.user.accessToken`, à défaut `context.System.user.accessToken`) ; sans jeton valable (absent, inconnu, expiré, liaison retirée ou compte inactif : on ne les distingue pas) la réponse porte la carte `LinkAccount`. Plafonds : 60 requêtes par minute et par adresse IP (`429`), puis 60 par minute et par liaison (réponse vocale « Un instant, réessaie dans une minute. »). Le corps (la voix transcrite) n'est jamais journalisé.
+         */
+        post: operations["post_api_voice_alexa"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1182,6 +1250,24 @@ export interface components {
              * @example false
              */
             isBase: boolean | null;
+        };
+        IngredientConversionPayload: {
+            /**
+             * @description Slug de l'unité de départ
+             * @example cuillere-a-soupe
+             */
+            startUnitSlug: string;
+            /**
+             * @description Slug de l'unité d'arrivée (différente de celle de départ)
+             * @example gramme
+             */
+            endUnitSlug: string;
+            /**
+             * Format: float
+             * @description 1 unité de départ = ce nombre d'unités d'arrivée
+             * @example 10
+             */
+            coefficient: number;
         };
         RecipeRowPayload: {
             /**
@@ -1586,7 +1672,7 @@ export interface components {
              */
             redirectUri: string;
             /**
-             * @description Paramètre `state` de la demande d'Alexa, rendu tel quel dans l'adresse de retour (1024 caractères imprimables au plus)
+             * @description Paramètre `state` de la demande d'Alexa, rendu tel quel dans l'adresse de retour (4096 caractères imprimables au plus ; celui d'Alexa en fait environ 1100)
              * @example xyz123
              */
             state: string;
@@ -1742,6 +1828,59 @@ export interface components {
             slug: string;
             /** @example œuf */
             name: string;
+        };
+        IngredientConversionDTO: {
+            /**
+             * @description Identifiant de la conversion
+             * @example 9967014a-7c8b-423f-9b96-04fc13943a05
+             */
+            id: string;
+            /**
+             * @description Identifiant de l'unité de départ (slug)
+             * @example cuillere-a-soupe
+             */
+            startUnitSlug: string;
+            /** @example cuillère à soupe */
+            startUnitName: string;
+            /**
+             * @description Identifiant de l'unité d'arrivée (slug)
+             * @example gramme
+             */
+            endUnitSlug: string;
+            /** @example gramme */
+            endUnitName: string;
+            /**
+             * Format: float
+             * @description 1 unité de départ = ce nombre d'unités d'arrivée
+             * @example 10
+             */
+            coefficient: number;
+        };
+        IngredientConversionsDTO: {
+            /** @description Les conversions PROPRES de l'ingrédient, triées par nom d'unité de départ puis d'arrivée */
+            member: components["schemas"]["IngredientConversionDTO"][];
+            /** @description Les conversions UNIVERSELLES (communes à tous les ingrédients, lecture seule) dont au moins une unité est celle de l'ingrédient (ses unités des recettes et d'achat, ou une unité de ses conversions propres) */
+            common: components["schemas"]["IngredientConversionDTO"][];
+            /**
+             * @description Nombre de conversions propres (`member`)
+             * @example 2
+             */
+            totalItems: number;
+            /**
+             * @description L'unité des recettes de l'ingrédient se convertit en son unité d'achat (toujours vrai pour un ingrédient enregistré : retirer ou changer la conversion qui le garantit est refusé)
+             * @example true
+             */
+            convertible: boolean;
+            /**
+             * @description Unité des recettes de l'ingrédient (slug)
+             * @example cuillere-a-soupe
+             */
+            cookingUnitSlug: string;
+            /**
+             * @description Unité d'achat de l'ingrédient (slug)
+             * @example kilo
+             */
+            purchaseUnitSlug: string;
         };
         RecipeTypeDTO: {
             /**
@@ -2032,6 +2171,26 @@ export interface components {
              * @example g
              */
             unitSymbol: string;
+            /**
+             * @description Nom de l'unité de la ligne
+             * @example cuillère à soupe
+             */
+            unitName: string;
+            /**
+             * @description Identifiant de l'unité d'achat de l'ingrédient (slug)
+             * @example kilo
+             */
+            purchaseUnitSlug: string;
+            /**
+             * @description Nom de l'unité d'achat de l'ingrédient
+             * @example kilo
+             */
+            purchaseUnitName: string;
+            /**
+             * @description L'unité de la ligne se convertit en l'unité d'achat de l'ingrédient (ses conversions propres et les universelles, comme à la planification) ; faux : la recette ne peut pas être planifiée tant que la conversion manque
+             * @example true
+             */
+            convertible: boolean;
         };
         RecipeDTO: {
             /**
@@ -2820,8 +2979,26 @@ export interface components {
                 };
             };
         };
-        /** @description Trop d'échanges de jetons depuis cette adresse IP : plus de 30 par heure (`POST /api/voice/oauth/token`, route publique). Message `VOICE_RATE_LIMITED` ; patienter au moins le délai de `Retry-After`. */
+        /** @description Trop d'échanges de jetons depuis cette adresse IP : plus de 30 par heure (`POST /api/voice/oauth/token`, route publique ; une adresse IPv6 compte par son préfixe /64). Message `VOICE_RATE_LIMITED` au format du dépôt (`{error:{message}}`), pas celui d'OAuth ; patienter au moins le délai de `Retry-After`. Jamais de mise en cache. */
         VoiceTokenRateLimited: {
+            headers: {
+                /** @description Secondes à attendre au minimum avant de réessayer */
+                "Retry-After"?: number;
+                /** @description `no-store` */
+                "Cache-Control"?: string;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    error?: {
+                        /** @example VOICE_RATE_LIMITED */
+                        message?: string;
+                    };
+                };
+            };
+        };
+        /** @description Trop de codes d'autorisation émis par cet utilisateur : plus de 20 par heure (`POST /api/v1/voice/alexa/authorize`). Message `VOICE_RATE_LIMITED` ; patienter au moins le délai de `Retry-After`. */
+        VoiceAuthorizeRateLimited: {
             headers: {
                 /** @description Secondes à attendre au minimum avant de réessayer */
                 "Retry-After"?: number;
@@ -2836,8 +3013,8 @@ export interface components {
                 };
             };
         };
-        /** @description Trop de codes d'autorisation émis par cet utilisateur : plus de 20 par heure (`POST /api/v1/voice/alexa/authorize`). Message `VOICE_RATE_LIMITED` ; patienter au moins le délai de `Retry-After`. */
-        VoiceAuthorizeRateLimited: {
+        /** @description Trop de requêtes depuis cette adresse IP : plus de 60 par minute (`POST /api/voice/alexa`, route publique, plafond posé AVANT la vérification de la signature ; une adresse IPv6 compte par son préfixe /64). Message `VOICE_RATE_LIMITED` ; patienter au moins le délai de `Retry-After`. Le plafond par liaison, lui, ne donne jamais d'erreur HTTP : Alexa répond « Un instant, réessaie dans une minute. ». */
+        VoiceWebhookRateLimited: {
             headers: {
                 /** @description Secondes à attendre au minimum avant de réessayer */
                 "Retry-After"?: number;
@@ -3338,6 +3515,89 @@ export interface operations {
             };
         };
     };
+    get_api_list_ingredient_conversions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Conversions de l'ingrédient */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngredientConversionsDTO"];
+                };
+            };
+            /** @description Ingrédient inconnu, ou à un autre utilisateur (un administrateur n'a pas de passe-droit) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    post_api_create_ingredient_conversion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IngredientConversionPayload"];
+            };
+        };
+        responses: {
+            /** @description Conversion créée */
+            201: {
+                headers: {
+                    /** @description URL de la conversion créée */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description L'ingrédient appartient à un autre utilisateur (un administrateur n'a pas de passe-droit) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ingrédient ou unité inconnu */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description L'ingrédient a déjà sa propre conversion entre ces deux unités, dans un sens ou dans l'autre (`CONVERSION_ALREADY_EXISTS`) : on modifie celle qui existe */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide : unités identiques (`CONVERSION_SAME_UNIT`), coefficient qui n'est pas un nombre strictement positif */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     post_api_create_recipe: {
         parameters: {
             query?: never;
@@ -3558,6 +3818,101 @@ export interface operations {
             };
         };
     };
+    put_api_update_ingredient_conversion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                conversionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IngredientConversionPayload"];
+            };
+        };
+        responses: {
+            /** @description Conversion modifiée */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description L'ingrédient appartient à un autre utilisateur (un administrateur n'a pas de passe-droit) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ingrédient ou unité inconnu, ou conversion inconnue, universelle ou propre à un autre ingrédient */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description L'ingrédient a déjà une autre conversion propre entre ces deux unités, dans un sens ou dans l'autre (`CONVERSION_ALREADY_EXISTS`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide (unités identiques `CONVERSION_SAME_UNIT`, coefficient qui n'est pas un nombre strictement positif), ou conversion nécessaire à l'ingrédient (`CONVERSION_REQUIRED_BY_INGREDIENT`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_api_delete_ingredient_conversion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                conversionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Conversion supprimée */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description L'ingrédient appartient à un autre utilisateur (un administrateur n'a pas de passe-droit) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ingrédient inconnu, ou conversion inconnue, universelle ou propre à un autre ingrédient */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conversion nécessaire à l'ingrédient : sans elle, son unité des recettes ne se convertirait plus en son unité d'achat (`CONVERSION_REQUIRED_BY_INGREDIENT`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     put_api_ensure_active_shopping_list: {
         parameters: {
             query?: never;
@@ -3668,7 +4023,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Corps de la requête invalide */
+            /** @description Corps de la requête invalide, ou conversion universelle (sans ingrédient) dont le corps change la paire d'unités ou l'ingrédient : seul son coefficient se corrige (`UNIVERSAL_CONVERSION_IS_FIXED`) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3816,7 +4171,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Corps invalide, ou coefficient manquant alors que les unités diffèrent */
+            /** @description Corps invalide, ou coefficient manquant alors que les unités diffèrent sans conversion connue (le coefficient est facultatif quand le graphe de conversion de l'ingrédient les relie déjà), ou unité des recettes qui ne se convertirait pas en unité d'achat */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5921,6 +6276,96 @@ export interface operations {
                 content?: never;
             };
             429: components["responses"]["VoiceTokenRateLimited"];
+        };
+    };
+    post_api_voice_alexa: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Adresse de la chaîne de certificats d'Amazon (`https://s3.amazonaws.com/echo.api/…`) */
+                SignatureCertChainUrl: string;
+                /** @description Signature RSA SHA-256 du corps brut, en base64 */
+                "Signature-256": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description La requête d'Alexa, telle qu'Amazon l'envoie (non modélisée ici : seuls `request.type`, `request.locale`, `request.intent` (et ses créneaux), `session.new`, `session.attributes.dialogue`, `session.user` et le jeton d'accès sont lus) */
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "version": "1.0",
+                 *       "session": {
+                 *         "new": true,
+                 *         "user": {
+                 *           "userId": "amzn1.ask.account.EXAMPLE",
+                 *           "accessToken": "3Qa5mVq1xT0Zb8nWc2YpLkR7sHdJ9eUfGhAoIiNtBvM"
+                 *         }
+                 *       },
+                 *       "request": {
+                 *         "type": "IntentRequest",
+                 *         "locale": "fr-FR",
+                 *         "timestamp": "2026-10-25T12:00:00Z",
+                 *         "intent": {
+                 *           "name": "AddItemIntent",
+                 *           "slots": {
+                 *             "item": {
+                 *               "name": "item",
+                 *               "value": "du pain"
+                 *             }
+                 *           }
+                 *         }
+                 *       }
+                 *     }
+                 */
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description La réponse vocale d'Alexa (`SessionEndedRequest` : `response` vide). Avec la carte `LinkAccount` quand le compte n'est pas lié */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 1.0 */
+                        version?: string;
+                        /** @description Seulement quand la séance reste ouverte : l'état du dialogue d'un produit inconnu (`dialogue`), `{}` quand il n'y en a pas. Alexa le rend dans `session.attributes` à la requête suivante */
+                        sessionAttributes?: Record<string, never>;
+                        response?: {
+                            outputSpeech?: {
+                                /** @example PlainText */
+                                type?: string;
+                                /** @example C'est noté : pain. */
+                                text?: string;
+                            };
+                            /** @description Seulement quand la séance reste ouverte : ce qu'Alexa répète après un silence */
+                            reprompt?: Record<string, never>;
+                            /** @description `{"type": "LinkAccount"}` quand le compte n'est pas lié */
+                            card?: Record<string, never>;
+                            /** @example true */
+                            shouldEndSession?: boolean;
+                        };
+                    };
+                };
+            };
+            /** @description Requête qui ne prouve pas venir d'Alexa ou ne vise pas ce skill (message `INVALID_ALEXA_REQUEST`, sans autre détail) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Commande vocale coupée (message `VOICE_DISABLED`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["VoiceWebhookRateLimited"];
         };
     };
     post_api_issue_voice_authorization_code: {
