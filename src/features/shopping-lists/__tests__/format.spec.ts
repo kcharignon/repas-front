@@ -9,6 +9,11 @@ describe('formatQuantity', () => {
     [0.5, 'l', '0,5 l'],
     [1 / 3, 'kg', '0,33 kg'],
     [1500, 'g', '1 500 g'],
+    [4, 'tasse', '4 tasses'],
+    [1, 'tasse', '1 tasse'],
+    [1.5, 'paquet', '1,5 paquet'],
+    [3, 'cuillère à soupe', '3 cuillères à soupe'],
+    [2, 'cl', '2 cl'],
   ])('%s + « %s » donne « %s »', (value, unit, expected) => {
     // Intl insère une espace insécable fine : on compare sans tenir compte du type d'espace
     expect(formatQuantity(value, unit).replace(/\s/g, ' ')).toBe(expected)
