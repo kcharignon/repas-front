@@ -25,6 +25,13 @@ const driveCodes = new Map([
   ['INGREDIENT_BASE_FORBIDDEN', 'errors.ingredientBaseForbidden'],
 ])
 
+/** Les conversions propres à un ingrédient : chaque refus du back a sa phrase, quel que soit le statut (un 409 n'est pas un « autre modification en cours »). */
+const conversionCodes = new Map([
+  ['CONVERSION_ALREADY_EXISTS', 'errors.conversionExists'],
+  ['CONVERSION_SAME_UNIT', 'conversion.errors.sameUnit'],
+  ['CONVERSION_REQUIRED_BY_INGREDIENT', 'errors.conversionRequired'],
+])
+
 /**
  * Trop de requêtes en peu de temps (`429`) : un refus passager, qui ne dit rien de la requête elle-même (le drive plafonne le débit par
  * utilisateur, DRV-615, et n'a rien enregistré). On ne le rejoue jamais tout seul.
@@ -48,7 +55,7 @@ function driveRateLimited(error: ApiError): string {
 export function messageForFailure(error: unknown): string {
   if (!(error instanceof ApiError)) return t('errors.generic')
   if (error.message === 'DRIVE_RATE_LIMITED') return driveRateLimited(error)
-  const code = driveCodes.get(error.message)
+  const code = driveCodes.get(error.message) ?? conversionCodes.get(error.message)
   if (code !== undefined) return t(code)
 
   switch (error.status) {

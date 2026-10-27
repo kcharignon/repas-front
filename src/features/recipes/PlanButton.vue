@@ -13,8 +13,14 @@ const props = withDefaults(
     name: string
     /** `icon` : rond de 44 px sans texte (cartes de la liste) ; `label` : pastille courte avec texte (fiche). */
     variant?: 'icon' | 'label'
+    /**
+     * La recette a un ingrédient que le back ne sait pas convertir : on ne l'ajoute pas à la liste tant qu'il n'est pas réglé (la planification
+     * échouerait). Elle peut toujours être retirée. `describedby` : le texte qui dit pourquoi le bouton est grisé.
+     */
+    blocked?: boolean
+    describedby?: string
   }>(),
-  { variant: 'label' },
+  { variant: 'label', blocked: false, describedby: undefined },
 )
 
 const { t } = useI18n()
@@ -34,6 +40,8 @@ const fullLabel = computed(() => {
   })
 })
 
+const mustWait = computed(() => props.blocked && !planned.value)
+
 function toggle() {
   plan.mutate({
     recipeId: props.recipeId,
@@ -49,8 +57,9 @@ function toggle() {
     :size="variant === 'icon' ? 'icon' : 'md'"
     :aria-pressed="planned"
     :aria-label="fullLabel"
+    :aria-describedby="mustWait ? describedby : undefined"
     :title="variant === 'icon' ? fullLabel : undefined"
-    :disabled="plan.isPending.value || summary.isPending.value"
+    :disabled="plan.isPending.value || summary.isPending.value || mustWait"
     :class="[
       'rounded-full',
       variant === 'icon' ? 'shrink-0' : 'px-4',

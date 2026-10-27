@@ -155,4 +155,25 @@ describe('ConversionEquation', () => {
     for (const label of ['Unité de départ', "Unité d'arrivée"])
       expect(wrapper.find(`select[aria-label="${label}"]`).exists()).toBe(true)
   })
+
+  it('propose « Choisis une unité » tant qu’un côté n’en a pas, et le dit à l’enregistrement', () => {
+    const { wrapper } = mountEquation(
+      { start: 'tasse', end: '', left: '1', right: '125' },
+      { submitted: true },
+    )
+
+    const select = wrapper.find('select[aria-label="Unité d\'arrivée"]')
+    expect(select.find('option[value=""]').text()).toBe('Choisis une unité')
+    expect(select.attributes('aria-invalid')).toBe('true')
+    expect(wrapper.find('[aria-live="polite"]').text()).toBe('Choisis les deux unités.')
+    expect(
+      wrapper.find('select[aria-label="Unité de départ"]').attributes('aria-invalid'),
+    ).toBeUndefined()
+  })
+
+  it('n’affiche pas ce choix quand l’unité est déjà là', () => {
+    const { wrapper } = mountEquation(start)
+
+    expect(wrapper.find('option[value=""]').exists()).toBe(false)
+  })
 })

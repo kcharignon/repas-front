@@ -63,6 +63,7 @@ function swap() {
 const problem = computed(() => equationProblem(model.value, props.submitted === true))
 const problemText = computed(() => {
   if (problem.value === 'sameUnit') return t('conversion.errors.sameUnit')
+  if (problem.value === 'noUnit') return t('conversion.errors.noUnit')
   if (problem.value !== null) return t('conversion.errors.number')
 
   return null
@@ -114,9 +115,10 @@ function capitalized(text: string): string {
         v-if="startList.length > 1"
         :model-value="model.start"
         :aria-label="t('conversion.startUnit')"
-        :invalid="problem === 'sameUnit'"
+        :invalid="problem === 'sameUnit' || (problem === 'noUnit' && model.start === '')"
         @update:model-value="update({ start: $event })"
       >
+        <option v-if="model.start === ''" value="" disabled>{{ t('conversion.choose') }}</option>
         <option v-for="unit in startList" :key="unit.slug" :value="unit.slug">
           {{ startLabel(unit) }}
         </option>
@@ -142,9 +144,10 @@ function capitalized(text: string): string {
         v-if="endList.length > 1"
         :model-value="model.end"
         :aria-label="t('conversion.endUnit')"
-        :invalid="problem === 'sameUnit'"
+        :invalid="problem === 'sameUnit' || (problem === 'noUnit' && model.end === '')"
         @update:model-value="update({ end: $event })"
       >
+        <option v-if="model.end === ''" value="" disabled>{{ t('conversion.choose') }}</option>
         <option v-for="unit in endList" :key="unit.slug" :value="unit.slug">
           {{ endLabel(unit) }}
         </option>

@@ -22,6 +22,9 @@
   --on-danger: #ffffff;
   --danger-soft: #fbe4de;
   --on-danger-soft: #7a2314;
+  /* Avertissement : ce qui n'est pas une erreur mais demande un geste (une conversion qui manque). Texte sur fond doux ET sur la surface : AA (9,1 et 10,2). */
+  --warning-soft: #fdf1d3;
+  --on-warning-soft: #5c3a00;
   color-scheme: light;
 }
 
@@ -39,6 +42,8 @@
     --on-danger: #2a0c06;
     --danger-soft: #3a1a14;
     --on-danger-soft: #f6b8ab;
+    --warning-soft: #33270a;
+    --on-warning-soft: #f6d98f;
     color-scheme: dark;
   }
 }
@@ -56,6 +61,8 @@
   --on-danger: #2a0c06;
   --danger-soft: #3a1a14;
   --on-danger-soft: #f6b8ab;
+  --warning-soft: #33270a;
+  --on-warning-soft: #f6d98f;
   color-scheme: dark;
 }
 
@@ -74,6 +81,8 @@
   --color-on-danger: var(--on-danger);
   --color-danger-soft: var(--danger-soft);
   --color-on-danger-soft: var(--on-danger-soft);
+  --color-warning-soft: var(--warning-soft);
+  --color-on-warning-soft: var(--on-warning-soft);
   --font-sans: 'Figtree Variable', system-ui, sans-serif;
   --font-display: 'Bricolage Grotesque Variable', 'Figtree Variable', system-ui, sans-serif;
 }

@@ -112,4 +112,41 @@ describe('PlanButton', () => {
       expect(calls(fetchMock)).toContain('DELETE /api/v1/shopping-lists/active/recipes/r1')
     },
   )
+
+  describe('quand un ingrédient de la recette ne se convertit pas', () => {
+    const mountBlocked = async (planned: string[]) => {
+      stubApi({
+        'POST /api/auth/refresh': () => json({ token: 'jeton' }),
+        'GET /api/v1/me': () => json(me),
+        'GET /api/v1/shopping-lists/active/summary': () => json(summary(planned)),
+      })
+      localStorage.setItem('repas.session', '1')
+      const context = appContext()
+      await useSessionStore().restore()
+      const wrapper = mount(PlanButton, {
+        props: { recipeId: 'r1', name: 'Gratin', blocked: true, describedby: 'pourquoi' },
+        global: { plugins: context.plugins },
+      })
+      await vi.waitFor(() =>
+        expect(wrapper.find('button').attributes('aria-pressed')).toBeDefined(),
+      )
+      await flushPromises()
+
+      return wrapper
+    }
+
+    it('grise le bouton et le relie au texte qui dit pourquoi', async () => {
+      const button = (await mountBlocked([])).find('button')
+
+      expect(button.attributes('disabled')).toBeDefined()
+      expect(button.attributes('aria-describedby')).toBe('pourquoi')
+    })
+
+    it('laisse retirer une recette déjà dans la liste', async () => {
+      const button = (await mountBlocked(['r1'])).find('button')
+
+      expect(button.attributes('disabled')).toBeUndefined()
+      expect(button.attributes('aria-describedby')).toBeUndefined()
+    })
+  })
 })

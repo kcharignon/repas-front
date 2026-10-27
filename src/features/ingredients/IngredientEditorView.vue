@@ -13,6 +13,7 @@ import UiTextInput from '@/design/UiTextInput.vue'
 import { messageForFailure, notifyDeleteFailure } from '@/notifications/failures'
 import { useSessionStore } from '@/session/session'
 import ConversionEquation from './ConversionEquation.vue'
+import IngredientConversionsSection from './IngredientConversionsSection.vue'
 import MergeConfirmSheet from './MergeConfirmSheet.vue'
 import MergePickerSheet from './MergePickerSheet.vue'
 import {
@@ -393,6 +394,13 @@ const back = computed(() =>
         </div>
       </div>
     </form>
+
+    <!-- Les conversions propres de l'ingrédient (planche L1) : seulement pour celui qui peut le modifier -->
+    <IngredientConversionsSection
+      v-if="editing && existing.data.value?.canEdit === true"
+      :slug="slug ?? ''"
+      :name="existing.data.value.name"
+    />
 
     <section
       v-if="canMerge"

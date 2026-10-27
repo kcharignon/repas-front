@@ -21,6 +21,11 @@ export type MergeCandidate = Schemas['MergeCandidateDTO']
 export type MergePreview = Schemas['MergePreviewDTO']
 export type MergeUnit = Schemas['MergeUnitDTO']
 
+// Ingrédients : les conversions propres à un ingrédient et les conversions de tous (lecture seule)
+export type IngredientConversion = Schemas['IngredientConversionDTO']
+export type IngredientConversions = Schemas['IngredientConversionsDTO']
+export type IngredientConversionPayload = Schemas['IngredientConversionPayload']
+
 export type Department = Schemas['DepartmentDTO']
 export type Unit = Schemas['UnitDTO']
 export type UnitPayload = Schemas['UnitPayload']
