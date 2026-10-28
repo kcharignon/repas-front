@@ -29,7 +29,7 @@ personne ait rien à faire et sans rien changer aux gestes ni à la mise en page
 6. **Texte** : une phrase (`auth.pitchHalloween`) à la place de `auth.pitch` sur la connexion, en saison seulement.
 7. **Interrupteur** « Décor d'Halloween » (`season.halloween`) dans « Moi », sous le choix du thème, **visible en saison seulement**,
    activé par défaut. Coupé, jamais de thème saisonnier : préférence `localStorage` `repas.season` = `off` (absente = activé ; conservée
-   hors saison, elle revient l'année suivante).
+   hors saison, elle revient l'année suivante). Amendé par [0011](0011-theme-saisonnier-noel.md) : la préférence est désormais par saison, `off` se lit `halloween`.
 8. **Tests indépendants de la date** : la suite ne doit jamais dépendre du jour où elle tourne. Vitest décale l'horloge au 15 juin 2026
    (`src/__tests__/setup.ts`, la date avance toujours) ; Playwright installe `page.clock` hors saison par défaut (`e2e/support/test.ts`,
    dont les specs importent `test`). Un test de saison pose sa date (`vi.setSystemTime`, `page.clock.setSystemTime(IN_SEASON)`).
