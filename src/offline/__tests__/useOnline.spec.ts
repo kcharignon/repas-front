@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
+import { createPinia } from 'pinia'
+
 import { i18n } from '@/i18n'
 import OfflineBanner from '@/app/OfflineBanner.vue'
 import { useOnline } from '@/offline/useOnline'
@@ -18,7 +20,7 @@ describe('connexion', () => {
   })
 
   it("le bandeau n'apparaît que hors connexion", async () => {
-    const wrapper = mount(OfflineBanner, { global: { plugins: [i18n] } })
+    const wrapper = mount(OfflineBanner, { global: { plugins: [createPinia(), i18n] } })
     expect(wrapper.find('[role="status"]').exists()).toBe(false)
 
     window.dispatchEvent(new Event('offline'))

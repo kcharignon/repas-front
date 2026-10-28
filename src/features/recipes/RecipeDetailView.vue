@@ -11,6 +11,7 @@ import { notifyDeleteFailure } from '@/notifications/failures'
 import UiButton from '@/design/UiButton.vue'
 import UiConfirmDialog from '@/design/UiConfirmDialog.vue'
 import UiLinkButton from '@/design/UiLinkButton.vue'
+import SeasonArt from '@/design/season/SeasonArt.vue'
 import type { EquationValue } from '@/features/ingredients/equationMath'
 import OwnConversionSheet from '@/features/ingredients/OwnConversionSheet.vue'
 import { useUnits } from '@/features/ingredients/queries'
@@ -121,17 +122,25 @@ function confirmDelete() {
     </RouterLink>
 
     <template v-if="recipe.data.value">
-      <header class="flex flex-col gap-1">
-        <p class="text-sm font-bold text-primary">{{ recipe.data.value.typeName }}</p>
-        <h1 class="font-display text-3xl leading-tight font-bold md:text-4xl">
-          {{ recipe.data.value.name }}
-        </h1>
-        <p class="text-muted">
-          {{
-            t('recipes.forPeople', { count: recipe.data.value.serving }, recipe.data.value.serving)
-          }}
-        </p>
-      </header>
+      <!-- Une recette n'a pas de photo : en saison, une pièce de la saison tient la place de la vignette (ADR 0012) -->
+      <div class="flex items-center gap-4">
+        <SeasonArt name="recipe-placeholder" class="size-20" />
+        <header class="flex min-w-0 flex-col gap-1">
+          <p class="text-sm font-bold text-primary">{{ recipe.data.value.typeName }}</p>
+          <h1 class="font-display text-3xl leading-tight font-bold md:text-4xl">
+            {{ recipe.data.value.name }}
+          </h1>
+          <p class="text-muted">
+            {{
+              t(
+                'recipes.forPeople',
+                { count: recipe.data.value.serving },
+                recipe.data.value.serving,
+              )
+            }}
+          </p>
+        </header>
+      </div>
 
       <div class="flex flex-wrap gap-2">
         <PlanButton

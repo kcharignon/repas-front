@@ -54,3 +54,9 @@ mécanisme, sans rien changer aux gestes ni à la mise en page.
 - Un thème « d'hiver » sur toute la saison froide : il ne dit pas la fête, et les dates seraient arbitraires.
 - Un seul interrupteur « décor saisonnier » pour toutes les saisons : couper Halloween couperait Noël, que l'utilisateur n'a pas encore vu.
 - Dupliquer le mécanisme de saison : la généralisation de `season.ts` suffit.
+
+## Amendement du 2026-10-28
+
+Les motifs de la décision 5 (`ChristmasDecor.vue`, `SeasonDecor.vue`) et le jeton `--star` sont remplacés par le pack d'illustrations de
+saison ([ADR 0012](0012-illustrations-de-saison.md)). Le reste (dates, jetons de couleur, contrastes, interrupteur, préférence par saison)
+est inchangé.

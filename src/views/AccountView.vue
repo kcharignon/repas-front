@@ -5,6 +5,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import UiButton from '@/design/UiButton.vue'
 import UiChip from '@/design/UiChip.vue'
 import UiSwitch from '@/design/UiSwitch.vue'
+import SeasonArt from '@/design/season/SeasonArt.vue'
 import { useSeasonStore } from '@/design/season'
 import { useThemeStore } from '@/design/theme'
 import AccountCredits from '@/features/account/AccountCredits.vue'
@@ -30,7 +31,11 @@ async function logout() {
 <template>
   <main class="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-8">
     <header>
-      <h1 class="font-display text-4xl leading-tight font-bold">{{ t('account.title') }}</h1>
+      <h1 class="font-display text-4xl leading-tight font-bold">
+        <SeasonArt name="title-account" class="mr-2 size-9 align-middle md:size-10" />{{
+          t('account.title')
+        }}
+      </h1>
       <p class="mt-1 text-muted">{{ session.user?.email }}</p>
     </header>
 

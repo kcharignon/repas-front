@@ -10,6 +10,7 @@ import UiCheckbox from '@/design/UiCheckbox.vue'
 import UiProgressBar from '@/design/UiProgressBar.vue'
 import DriveEstimate from '@/features/drive/DriveEstimate.vue'
 import UiImage from '@/design/UiImage.vue'
+import SeasonEmpty from '@/design/season/SeasonEmpty.vue'
 import { formatQuantity } from './format'
 import { useChangeServing, useToggleRow, useUnplanRecipe } from './queries'
 
@@ -82,7 +83,9 @@ const stepClass =
       </TabsList>
 
       <TabsContent value="ingredients" class="flex flex-col gap-4">
-        <p v-if="rows.length === 0" class="text-muted">{{ t('shoppingList.emptyIngredients') }}</p>
+        <SeasonEmpty v-if="rows.length === 0" name="empty-list">
+          <p class="text-muted">{{ t('shoppingList.emptyIngredients') }}</p>
+        </SeasonEmpty>
         <section v-for="department in list.departments" :key="department.slug">
           <h2
             class="mb-1.5 flex items-center gap-2 px-0.5 text-xs font-bold tracking-wider text-muted uppercase"
@@ -114,7 +117,9 @@ const stepClass =
       </TabsContent>
 
       <TabsContent value="recipes" class="flex flex-col gap-4">
-        <p v-if="meals.length === 0" class="text-muted">{{ t('shoppingList.emptyRecipes') }}</p>
+        <SeasonEmpty v-if="meals.length === 0" name="empty-list">
+          <p class="text-muted">{{ t('shoppingList.emptyRecipes') }}</p>
+        </SeasonEmpty>
         <section v-for="type in list.recipeTypes" :key="type.slug">
           <h2
             class="mb-1.5 flex items-center gap-2 px-0.5 text-xs font-bold tracking-wider text-muted uppercase"

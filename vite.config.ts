@@ -38,11 +38,19 @@ export default defineConfig({
         icons: [
           { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          {
+            src: '/icons/icon-maskable-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
         ],
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,woff2,png,ico,svg}'],
+        // Les illustrations de saison (ADR 0012) sont chargées à la demande : hors saison, aucun octet de décor n'est téléchargé, pas
+        // même par le service worker. Elles se gardent à la première vue (ci-dessous), donc restent disponibles hors ligne ensuite.
+        globIgnores: ['**/assets/season/**'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/images\//],
         cleanupOutdatedCaches: true,
@@ -53,14 +61,33 @@ export default defineConfig({
         clientsClaim: true,
         runtimeCaching: [
           {
+            urlPattern: ({ url }) => url.pathname.startsWith('/assets/season/'),
+            handler: 'CacheFirst',
+            options: { cacheName: 'season-art', expiration: { maxEntries: 40 } },
+          },
+          {
             urlPattern: ({ url }) => url.pathname.startsWith('/images/'),
             handler: 'StaleWhileRevalidate',
-            options: { cacheName: 'images', expiration: { maxEntries: 120, maxAgeSeconds: 30 * 24 * 3600 } },
+            options: {
+              cacheName: 'images',
+              expiration: { maxEntries: 120, maxAgeSeconds: 30 * 24 * 3600 },
+            },
           },
         ],
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // Une illustration de saison est un module à part (`art/<saison>/<pièce>.svg`) : son propre dossier la distingue au service worker.
+        chunkFileNames: (chunk) =>
+          chunk.facadeModuleId?.includes('/season/art/')
+            ? 'assets/season/[name]-[hash].js'
+            : 'assets/[name]-[hash].js',
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

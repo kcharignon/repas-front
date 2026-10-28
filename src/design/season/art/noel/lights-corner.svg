@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" fill="none">
+<path d="M0 6Q22 28 48 14T100 18 160 8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+<g stroke-linecap="round"><path d="M24 19v4M60 22v4M100 18v4M122 16v4" stroke="currentColor" stroke-width="2"/></g>
+<g><circle cx="24" cy="30" r="12" fill="#e24a5c" opacity=".25"/><circle cx="24" cy="30" r="6.4" fill="#e24a5c"/><circle cx="22.4" cy="28.4" r="1.8" fill="#fff" opacity=".8"/>
+<circle cx="60" cy="33" r="12" fill="#ffd35c" opacity=".25"/><circle cx="60" cy="33" r="6.4" fill="#ffd35c"/><circle cx="58.4" cy="31.4" r="1.8" fill="#fff" opacity=".8"/>
+<circle cx="100" cy="29" r="12" fill="#4a90c8" opacity=".25"/><circle cx="100" cy="29" r="6.4" fill="#4a90c8"/><circle cx="98.4" cy="27.4" r="1.8" fill="#fff" opacity=".8"/>
+<circle cx="122" cy="27" r="12" fill="#2f9a63" opacity=".25"/><circle cx="122" cy="27" r="6.4" fill="#2f9a63"/><circle cx="120.4" cy="25.4" r="1.8" fill="#fff" opacity=".8"/></g>
+<g transform="translate(-9 0)"><path d="M147 8v40" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+<rect x="142" y="46" width="10" height="7" rx="2" fill="#e9a92a"/>
+<circle cx="147" cy="70" r="14" fill="#9e1b2f"/><circle cx="145.5" cy="68.5" r="13" fill="#c8283c"/>
+<path d="M134 68c6 4 11 4 16 2s9-3 11-1" fill="none" stroke="#ffd35c" stroke-width="3.4" stroke-linecap="round"/>
+<ellipse cx="139" cy="63" rx="3" ry="5" fill="#fff" opacity=".45" transform="rotate(28 138 66)"/>
+</g>
+<path d="M86 52l2 5 5 2-5 2-2 5-2-5-5-2 5-2zM116 90l1.6 4 4 1.6-4 1.6-1.6 4-1.6-4-4-1.6 4-1.6z" fill="#ffd35c" opacity=".9"/>
+</svg>

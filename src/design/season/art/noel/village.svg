@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" preserveAspectRatio="xMidYMax slice">
+<circle cx="316" cy="58" r="36" fill="#f9d98a"/><circle cx="304" cy="48" r="6" fill="#f2c96e"/><circle cx="328" cy="68" r="4.4" fill="#f2c96e"/>
+<g fill="#ffe9a8"><path d="M60 40l2.4 6 6 2.4-6 2.4-2.4 6-2.4-6-6-2.4 6-2.4z"/><path d="M150 24l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/><path d="M230 70l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/><path d="M372 120l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/></g>
+<path d="M-10 240V176C60 146 130 150 210 170c70 14 130-6 200 6v64z" fill="#b9ccd8"/>
+<path d="M-10 240V206c80-16 160-10 230-4 70 6 130-2 190 4v34z" fill="#dfeaf0"/>
+<!-- sapins -->
+<g stroke-linejoin="round" stroke-width="5"><polygon points="40,100 66,150 14,150" fill="#1f7a4d" stroke="#1f7a4d"/><polygon points="40,128 72,184 8,184" fill="#2f9a63" stroke="#2f9a63"/><polygon points="40,128 72,184 40,184" fill="#1f7a4d" stroke="#1f7a4d"/>
+<polygon points="352,110 374,152 330,152" fill="#1f7a4d" stroke="#1f7a4d"/><polygon points="352,134 380,184 324,184" fill="#2f9a63" stroke="#2f9a63"/><polygon points="352,134 380,184 352,184" fill="#1f7a4d" stroke="#1f7a4d"/></g>
+<rect x="36" y="184" width="8" height="12" fill="#8a5a2b"/><rect x="348" y="184" width="8" height="12" fill="#8a5a2b"/>
+<!-- chalets -->
+<rect x="112" y="150" width="70" height="46" rx="3" fill="#b87c3f"/><path d="M104 154l43-34 43 34z" fill="#9e1b2f"/><path d="M108 155l39-29 39 29-5 3-34-25-34 25z" fill="#fff"/><rect x="124" y="164" width="16" height="16" rx="2" fill="#ffd35c"/><rect x="154" y="170" width="16" height="26" rx="8" fill="#5e3a1a"/><rect x="166" y="124" width="10" height="20" fill="#8a5a2b"/>
+<rect x="222" y="164" width="58" height="36" rx="3" fill="#b87c3f"/><path d="M214 168l37-30 37 30z" fill="#7a1530"/><path d="M218 169l33-25 33 25-4 3-29-22-29 22z" fill="#fff"/><rect x="234" y="176" width="14" height="14" rx="2" fill="#ffd35c"/><rect x="256" y="180" width="14" height="20" rx="7" fill="#5e3a1a"/>
+<!-- bonhomme de neige -->
+<circle cx="298" cy="212" r="14" fill="#fff"/><circle cx="298" cy="192" r="10" fill="#fff"/><path d="M290 186c0-11 16-11 16 0z" fill="#c8283c"/><path d="M296 193l8 1.6-8 1.6z" fill="#ff8a3d"/>
+<circle cx="288" cy="206" r="0" fill="none"/>
+</svg>

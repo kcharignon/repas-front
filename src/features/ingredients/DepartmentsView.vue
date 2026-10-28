@@ -5,6 +5,9 @@ import { RouterLink } from 'vue-router'
 import { ChevronRight, Search, TriangleAlert } from 'lucide-vue-next'
 
 import { hasFailed } from '@/api/query'
+import LoadError from '@/design/LoadError.vue'
+import SeasonArt from '@/design/season/SeasonArt.vue'
+import SeasonEmpty from '@/design/season/SeasonEmpty.vue'
 import UiImage from '@/design/UiImage.vue'
 import IngredientSearchResults from './IngredientSearchResults.vue'
 import {
@@ -46,7 +49,9 @@ const duplicateLabel = computed(() =>
   <main class="mx-auto flex max-w-4xl flex-col gap-5 px-4 py-6">
     <header>
       <h1 class="font-display text-3xl leading-tight font-bold md:text-4xl">
-        {{ t('departments.title') }}
+        <SeasonArt name="title-aisles" class="mr-2 size-9 align-middle md:size-10" />{{
+          t('departments.title')
+        }}
       </h1>
       <p class="mt-1 text-muted">{{ t('departments.help') }}</p>
     </header>
@@ -90,17 +95,13 @@ const duplicateLabel = computed(() =>
         <ChevronRight class="size-5 shrink-0" aria-hidden="true" />
       </RouterLink>
 
-      <p
-        v-if="hasFailed(departments)"
-        role="alert"
-        class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
-      >
-        {{ t('errors.unreachable') }}
-      </p>
+      <LoadError v-if="hasFailed(departments)" />
       <p v-else-if="departments.isPending.value" class="text-muted" role="status">
         {{ t('common.loading') }}
       </p>
-      <p v-else-if="items.length === 0" class="text-muted">{{ t('departments.none') }}</p>
+      <SeasonEmpty v-else-if="items.length === 0" name="empty-recipes">
+        <p class="text-muted">{{ t('departments.none') }}</p>
+      </SeasonEmpty>
 
       <ul v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
         <li v-for="department in items" :key="department.slug">

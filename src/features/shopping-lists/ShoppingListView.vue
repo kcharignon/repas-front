@@ -3,6 +3,8 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import { hasFailed } from '@/api/query'
+import LoadError from '@/design/LoadError.vue'
+import SeasonArt from '@/design/season/SeasonArt.vue'
 import UiButton from '@/design/UiButton.vue'
 import { useOnline } from '@/offline/useOnline'
 import ShoppingListContent from './ShoppingListContent.vue'
@@ -24,15 +26,10 @@ function createList() {
   <main class="mx-auto flex max-w-4xl flex-col gap-5 px-4 py-6">
     <p v-if="summary.isPending.value" class="text-muted" role="status">{{ t('common.loading') }}</p>
 
-    <p
-      v-else-if="hasFailed(summary)"
-      role="alert"
-      class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
-    >
-      {{ t('errors.unreachable') }}
-    </p>
+    <LoadError v-else-if="hasFailed(summary)" />
 
     <section v-else-if="id === null" class="flex flex-col items-start gap-4 py-10">
+      <SeasonArt name="empty-list" class="size-32 md:size-40" />
       <h1 class="font-display text-3xl leading-tight font-bold">
         {{ t('shoppingList.noneTitle') }}
       </h1>
@@ -68,13 +65,7 @@ function createList() {
       </RouterLink>
     </template>
 
-    <p
-      v-else-if="hasFailed(detail)"
-      role="alert"
-      class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
-    >
-      {{ t('errors.unreachable') }}
-    </p>
+    <LoadError v-else-if="hasFailed(detail)" />
     <p v-else class="text-muted" role="status">{{ t('common.loading') }}</p>
   </main>
 </template>

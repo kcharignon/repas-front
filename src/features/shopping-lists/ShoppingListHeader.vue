@@ -6,6 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 import type { ShoppingList } from '@/api'
 import UiActionMenu, { type UiAction } from '@/design/UiActionMenu.vue'
 import UiButton from '@/design/UiButton.vue'
+import SeasonArt from '@/design/season/SeasonArt.vue'
 import UiConfirmDialog from '@/design/UiConfirmDialog.vue'
 import UiDialog from '@/design/UiDialog.vue'
 import UiField from '@/design/UiField.vue'
@@ -224,7 +225,9 @@ const statusLabel = (list: ShoppingList) =>
         }}
       </p>
       <h1 class="font-display text-3xl leading-tight font-bold md:text-4xl">
-        {{ list.displayName }}
+        <SeasonArt name="title-list" class="mr-2 size-9 align-middle md:size-10" />{{
+          list.displayName
+        }}
       </h1>
       <p v-if="list.name" class="mt-1 text-muted">
         {{ t('shoppingList.dateLabel', { date: list.dateLabel }) }}

@@ -6,7 +6,7 @@ import { BookOpen, LayoutGrid, ShoppingBasket, User } from 'lucide-vue-next'
 import OfflineBanner from '@/app/OfflineBanner.vue'
 import logo from '@/assets/logo.png'
 import { cn } from '@/design/cn'
-import SeasonDecor from '@/design/SeasonDecor.vue'
+import SeasonArt from '@/design/season/SeasonArt.vue'
 
 const { t } = useI18n()
 
@@ -27,7 +27,8 @@ const link =
     <aside
       class="hidden shrink-0 border-r border-line bg-surface p-4 relative md:flex md:w-64 md:flex-col md:gap-1.5"
     >
-      <SeasonDecor variant="web" />
+      <!-- Un motif discret dans l'angle du menu, pendant la saison (ADR 0012) -->
+      <SeasonArt name="aside" class="absolute top-3 right-3 size-14 text-line" />
       <div class="relative flex items-center gap-3 px-2 pb-5">
         <span class="flex size-11 items-center justify-center rounded-2xl bg-brand">
           <img :src="logo" alt="" class="h-6 w-7 object-contain" />
@@ -47,14 +48,15 @@ const link =
       </nav>
     </aside>
 
-    <div class="min-w-0 flex-1 pb-20 md:pb-0">
+    <!-- Au-dessus du coin de saison : le texte et les cartes passent devant ses traits (ADR 0012) -->
+    <div class="relative z-10 min-w-0 flex-1 pb-20 md:pb-0">
       <OfflineBanner />
       <RouterView />
     </div>
 
     <nav
       :aria-label="t('nav.label')"
-      class="fixed inset-x-0 bottom-0 flex gap-1 border-t border-line bg-surface px-2 pt-2 pb-3 md:hidden"
+      class="fixed inset-x-0 bottom-0 z-20 flex gap-1 border-t border-line bg-surface px-2 pt-2 pb-3 md:hidden"
     >
       <RouterLink
         v-for="item in nav"

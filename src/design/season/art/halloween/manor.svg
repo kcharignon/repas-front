@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" preserveAspectRatio="xMidYMax slice">
+<circle cx="316" cy="62" r="38" fill="#f9d98a"/>
+<circle cx="302" cy="52" r="7" fill="#f2c96e"/><circle cx="330" cy="74" r="5" fill="#f2c96e"/><circle cx="326" cy="44" r="3.5" fill="#f2c96e"/>
+<g fill="#2d1850"><path d="M70 40q6-10 14-4 4-6 10 0-6 0-10 8-6-6-14-4z" transform="translate(0 0)"/><path d="M190 30q6-10 14-4 4-6 10 0-6 0-10 8-6-6-14-4z"/><path d="M262 96q5-8 11-3 3-5 8 0-5 0-8 6-5-5-11-3z"/></g>
+<path d="M-10 240V192C50 172 120 176 200 184c70 8 130-8 210 8v48z" fill="#5a2d8c"/>
+<path d="M-10 240V214c80-12 160-6 230-2 70 4 130-6 190 2v26z" fill="#43206b"/>
+<!-- arbre -->
+<path d="M52 214c3-30-2-56 6-84M56 170c-12-8-20-20-22-34M58 150c10-6 18-14 20-26M57 132c-4-8-4-16-2-24" fill="none" stroke="#2d1850" stroke-width="7" stroke-linecap="round"/>
+<path d="M34 136c-6-2-10-6-12-12M78 124c6-2 10-6 12-12M55 108c-6-2-9-6-10-11" fill="none" stroke="#2d1850" stroke-width="4" stroke-linecap="round"/>
+<!-- manoir -->
+<rect x="150" y="128" width="112" height="62" fill="#2d1850"/>
+<path d="M142 130l64-46 64 46z" fill="#43206b"/>
+<rect x="116" y="102" width="36" height="88" fill="#2d1850"/><path d="M110 104l24-46 24 46z" fill="#43206b"/>
+<rect x="258" y="108" width="32" height="82" fill="#2d1850"/><path d="M252 110l22-42 22 42z" fill="#43206b"/>
+<rect x="190" y="98" width="32" height="34" fill="#2d1850"/><path d="M184 100l22-34 22 34z" fill="#43206b"/>
+<path d="M134 58v-14M274 68V52M206 66V50" stroke="#2d1850" stroke-width="3" stroke-linecap="round"/>
+<path d="M134 44l12 4-12 4z" fill="#f58a1f"/>
+<g fill="#ffd35c"><path d="M127 128h14v16h-14z M127 150h14v14h-14z M267 130h14v16h-14z M267 152h14v14h-14z M199 106h14v14h-14z"/><path d="M127 128a7 7 0 0 1 14 0zM267 130a7 7 0 0 1 14 0zM199 106a7 7 0 0 1 14 0z"/>
+<path d="M160 140h16v18h-16z M236 140h16v18h-16z"/><path d="M160 140a8 8 0 0 1 16 0zM236 140a8 8 0 0 1 16 0z"/></g>
+<path d="M194 190v-30a12 12 0 0 1 24 0v30z" fill="#8a5a2b"/><path d="M204 190v-34a2 2 0 0 1 4 0v34z" fill="#5e3a1a"/>
+<rect x="188" y="188" width="36" height="5" rx="2" fill="#6e3fa8"/>
+<!-- clôture et tombes -->
+<g fill="#7a4cb0"><rect x="316" y="196" width="22" height="26" rx="10"/><rect x="346" y="204" width="18" height="20" rx="8"/><rect x="296" y="208" width="14" height="16" rx="6"/></g>
+<path d="M322 204v10M318 208h8" stroke="#5a2d8c" stroke-width="3" stroke-linecap="round"/>
+<!-- citrouilles -->
+<ellipse cx="96" cy="216" rx="14" ry="11" fill="#f58a1f"/><ellipse cx="88" cy="216" rx="8" ry="10.5" fill="#d96d0a"/><ellipse cx="104" cy="216" rx="8" ry="10.5" fill="#d96d0a"/><ellipse cx="96" cy="216" rx="9" ry="11" fill="#f58a1f"/><rect x="94" y="203" width="4" height="6" rx="2" fill="#4fb54a"/>
+<ellipse cx="124" cy="222" rx="9" ry="7" fill="#f58a1f"/><ellipse cx="124" cy="222" rx="5" ry="7" fill="#ffb25c" opacity=".6"/><rect x="122.4" y="213" width="3.2" height="4" rx="1.6" fill="#4fb54a"/>
+</svg>

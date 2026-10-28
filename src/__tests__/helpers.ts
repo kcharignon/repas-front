@@ -90,3 +90,6 @@ export async function bodyOf(
 
   return (call[0] as Request).json()
 }
+
+/** Attend (5 s au plus) que la condition tienne : les illustrations de saison se chargent à la demande, par import dynamique. */
+export const eventually = <T>(check: () => T) => vi.waitFor(check, { timeout: 5000 })
