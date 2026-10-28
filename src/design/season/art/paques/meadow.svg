@@ -1,17 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" preserveAspectRatio="xMidYMax slice">
-<circle cx="330" cy="54" r="34" fill="#ffd35c"/><circle cx="318" cy="44" r="6" fill="#ffe9a8"/>
-<g fill="#fff"><ellipse cx="72" cy="46" rx="34" ry="11"/><circle cx="58" cy="38" r="12"/><circle cx="82" cy="36" r="14"/><ellipse cx="206" cy="30" rx="26" ry="8"/><circle cx="198" cy="24" r="9"/><circle cx="214" cy="23" r="10"/></g>
 <path d="M-10 240V170C60 140 140 144 220 164c70 16 130-4 190 6v70z" fill="#a8e08a"/>
 <path d="M-10 240V206c80-16 160-10 230-4 70 6 130-2 190 4v34z" fill="#6cc070"/>
-<!-- arbre en fleurs -->
+<!-- arbre en fleurs (décalé : sur téléphone seule la zone centrale se voit) -->
+<g transform="translate(55 0)">
 <rect x="42" y="132" width="10" height="46" rx="4" fill="#8a5a2b"/>
 <g fill="#ff9fbd"><circle cx="47" cy="112" r="30"/><circle cx="26" cy="128" r="20"/><circle cx="68" cy="126" r="22"/></g>
 <g fill="#ff7aa5"><circle cx="40" cy="106" r="5"/><circle cx="60" cy="116" r="5"/><circle cx="30" cy="128" r="5"/><circle cx="52" cy="92" r="4"/><circle cx="72" cy="130" r="4"/></g>
+</g>
 <!-- chaumière -->
 <rect x="150" y="146" width="84" height="54" rx="4" fill="#fff6d6"/><path d="M142 152l50-40 50 40z" fill="#ff9fbd"/><path d="M192 112l50 40h-24l-26-22z" fill="#f27fa6"/>
 <rect x="206" y="166" width="16" height="34" rx="8" fill="#8b6fd6"/><rect x="164" y="162" width="20" height="20" rx="3" fill="#8fd0f5"/><path d="M174 162v20M164 172h20" stroke="#fff" stroke-width="2.400"/><rect x="214" y="120" width="10" height="20" fill="#c98a4b"/>
 <!-- oeufs et tulipes -->
-<g><ellipse cx="290" cy="212" rx="12" ry="8" fill="#ffd35c"/><path d="M279 210q5-4 11 0t11 0" stroke="#ff7aa5" stroke-width="2.400" fill="none" stroke-linecap="round"/><ellipse cx="116" cy="216" rx="10" ry="7" fill="#b79bf0"/><circle cx="111" cy="215" r="2" fill="#fff"/><circle cx="120" cy="217" r="2" fill="#fff"/><ellipse cx="350" cy="210" rx="10" ry="7" fill="#ff9fbd"/><path d="M341 209h18" stroke="#fff" stroke-width="2.400" stroke-linecap="round"/></g>
-<g fill="none" stroke="#3f9a4a" stroke-width="3" stroke-linecap="round"><path d="M256 202v-20M268 204v-26M372 204v-22M96 206v-18"/></g>
-<g stroke-linejoin="round" stroke-width="2"><path d="M249 170l4 5 3-8 3 8 4-5c1 13-2 19-7 19s-8-6-7-19z" fill="#ff5c8a" stroke="#ff5c8a"/><path d="M262 164l4 5 3-8 3 8 4-5c1 13-2 19-7 19s-8-6-7-19z" fill="#ffd35c" stroke="#ffd35c"/><path d="M365 169l4 5 3-8 3 8 4-5c1 12-2 18-7 18s-8-6-7-18z" fill="#b79bf0" stroke="#b79bf0"/><path d="M89 175l4 5 3-8 3 8 4-5c1 11-2 17-7 17s-8-6-7-17z" fill="#ff5c8a" stroke="#ff5c8a"/></g>
+<g><ellipse cx="290" cy="212" rx="12" ry="8" fill="#ffd35c"/><path d="M279 210q5-4 11 0t11 0" stroke="#ff7aa5" stroke-width="2.400" fill="none" stroke-linecap="round"/><ellipse cx="116" cy="216" rx="10" ry="7" fill="#b79bf0"/><circle cx="111" cy="215" r="2" fill="#fff"/><circle cx="120" cy="217" r="2" fill="#fff"/><ellipse cx="180" cy="212" rx="10" ry="7" fill="#ff9fbd"/><path d="M171 211h18" stroke="#fff" stroke-width="2.400" stroke-linecap="round"/></g>
+<g fill="none" stroke="#3f9a4a" stroke-width="3" stroke-linecap="round"><path d="M256 202v-20M268 204v-26M312 204v-22M130 206v-18"/></g>
+<g stroke-linejoin="round" stroke-width="2"><path d="M249 170l4 5 3-8 3 8 4-5c1 13-2 19-7 19s-8-6-7-19z" fill="#ff5c8a" stroke="#ff5c8a"/><path d="M262 164l4 5 3-8 3 8 4-5c1 13-2 19-7 19s-8-6-7-19z" fill="#ffd35c" stroke="#ffd35c"/><path d="M305 169l4 5 3-8 3 8 4-5c1 12-2 18-7 18s-8-6-7-18z" fill="#b79bf0" stroke="#b79bf0"/><path d="M123 175l4 5 3-8 3 8 4-5c1 11-2 17-7 17s-8-6-7-17z" fill="#ff5c8a" stroke="#ff5c8a"/></g>
 </svg>
