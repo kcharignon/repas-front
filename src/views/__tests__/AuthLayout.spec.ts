@@ -13,6 +13,8 @@ const PITCH = 'Tes recettes, tes courses, sans oublier le basilic.'
 const PITCH_HALLOWEEN = 'Tes recettes, tes courses, sans oublier la citrouille.'
 const PITCH_GALETTE = 'Tes recettes, tes courses, sans oublier la galette.'
 const PITCH_VALENTIN = 'Tes recettes, tes courses, sans oublier le dîner à deux.'
+const PITCH_ETE = 'Tes recettes, tes courses, sans oublier le barbecue.'
+const PITCH_AUTOMNE = 'Tes recettes, tes courses, sans oublier la tarte aux pommes.'
 const PITCH_PAQUES = 'Tes recettes, tes courses, sans oublier le chocolat.'
 const PITCH_NOEL = 'Tes recettes, tes courses, sans oublier la bûche.'
 
@@ -125,6 +127,39 @@ describe('écran de connexion, thème saisonnier', () => {
       [new Date(2027, 1, 7, 0, 0, 0), PITCH_VALENTIN],
       [new Date(2027, 1, 14, 23, 59, 59), PITCH_VALENTIN],
       [new Date(2027, 1, 15, 0, 0, 0), PITCH],
+    ] as const) {
+      vi.setSystemTime(date)
+
+      expect(mountLayout().text()).toContain(pitch)
+    }
+  })
+
+  it.each([
+    ['l’été', new Date(2027, 6, 15, 12), PITCH_ETE, 'ete'],
+    ['l’automne', new Date(2027, 8, 20, 12), PITCH_AUTOMNE, 'automne'],
+  ] as const)(
+    'en saison de %s : la phrase de la saison et son héros',
+    async (_, date, pitch, season) => {
+      vi.setSystemTime(date)
+
+      const wrapper = mountLayout()
+
+      expect(wrapper.text()).toContain(pitch)
+      expect(wrapper.text()).not.toContain(PITCH)
+      await eventually(() => expect(wrapper.find('header svg').exists()).toBe(true))
+      expect(wrapper.get('header [aria-hidden="true"]').html()).toContain('viewBox="0 0 280 220"')
+      expect(document.documentElement.dataset.season).toBe(season)
+    },
+  )
+
+  it('les bornes de l’été et de l’automne : le 20 juin le basilic, du 21 juin au 31 août l’été, du 1er septembre au 14 octobre l’automne, le 15 octobre Halloween', () => {
+    for (const [date, pitch] of [
+      [new Date(2027, 5, 20, 23, 59, 59), PITCH],
+      [new Date(2027, 5, 21, 0, 0, 0), PITCH_ETE],
+      [new Date(2027, 7, 31, 23, 59, 59), PITCH_ETE],
+      [new Date(2027, 8, 1, 0, 0, 0), PITCH_AUTOMNE],
+      [new Date(2027, 9, 14, 23, 59, 59), PITCH_AUTOMNE],
+      [new Date(2027, 9, 15, 0, 0, 0), PITCH_HALLOWEEN],
     ] as const) {
       vi.setSystemTime(date)
 

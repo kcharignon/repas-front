@@ -14,6 +14,8 @@ const NOEL = new Date(2026, 11, 20, 12)
 const GALETTE = new Date(2027, 0, 15, 12)
 const VALENTIN = new Date(2027, 1, 12, 12)
 const PAQUES = new Date(2027, 2, 20, 12)
+const ETE = new Date(2027, 6, 15, 12)
+const AUTOMNE = new Date(2027, 8, 20, 12)
 
 async function render(
   component: typeof SeasonArt | typeof SeasonCorner | typeof SeasonScene | typeof SeasonEmpty,
@@ -88,6 +90,20 @@ describe('SeasonArt', () => {
 
     expect(valentin).toContain('viewBox="0 0 120 120"')
     expect(valentin).not.toBe(other)
+  })
+
+  it.each([
+    ['de l’été', ETE],
+    ['de l’automne', AUTOMNE],
+  ] as const)('en saison %s : la pièce est celle de la saison', async (_, date) => {
+    vi.setSystemTime(date)
+    const piece = (await rendered(SeasonArt, { name: 'empty-list' })).html()
+    vi.setSystemTime(HALLOWEEN)
+    localStorage.clear()
+    const other = (await rendered(SeasonArt, { name: 'empty-list' })).html()
+
+    expect(piece).toContain('viewBox="0 0 120 120"')
+    expect(piece).not.toBe(other)
   })
 
   it('en saison de Pâques : la pièce est celle de Pâques', async () => {
@@ -175,6 +191,8 @@ describe('SeasonCorner et SeasonScene', () => {
     ['la galette', GALETTE],
     ['la Saint-Valentin', VALENTIN],
     ['Pâques', PAQUES],
+    ['l’été', ETE],
+    ['l’automne', AUTOMNE],
     ['Halloween', HALLOWEEN],
     ['Noël', NOEL],
   ] as const) {

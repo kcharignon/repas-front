@@ -19,6 +19,8 @@ const NOEL = new Date(2026, 11, 20, 12)
 const GALETTE = new Date(2027, 0, 15, 12)
 const VALENTIN = new Date(2027, 1, 12, 12)
 const PAQUES = new Date(2027, 2, 20, 12)
+const ETE = new Date(2027, 6, 15, 12)
+const AUTOMNE = new Date(2027, 8, 20, 12)
 const pieces = (wrapper: ReturnType<typeof mount>) => wrapper.findAll('svg[focusable="false"]')
 
 const session = {
@@ -63,6 +65,8 @@ describe('écrans illustrés en saison', () => {
     ['la galette', GALETTE],
     ['la Saint-Valentin', VALENTIN],
     ['Pâques', PAQUES],
+    ['l’été', ETE],
+    ['l’automne', AUTOMNE],
     ['Halloween', HALLOWEEN],
     ['Noël', NOEL],
   ] as const) {

@@ -4,6 +4,8 @@
 import AxeBuilder from '@axe-core/playwright'
 import {
   expect,
+  IN_AUTOMNE,
+  IN_ETE,
   IN_GALETTE,
   IN_NOEL,
   IN_PAQUES,
@@ -17,6 +19,8 @@ const PITCH = 'Tes recettes, tes courses, sans oublier le basilic.'
 const PITCH_HALLOWEEN = 'Tes recettes, tes courses, sans oublier la citrouille.'
 const PITCH_GALETTE = 'Tes recettes, tes courses, sans oublier la galette.'
 const PITCH_VALENTIN = 'Tes recettes, tes courses, sans oublier le dîner à deux.'
+const PITCH_ETE = 'Tes recettes, tes courses, sans oublier le barbecue.'
+const PITCH_AUTOMNE = 'Tes recettes, tes courses, sans oublier la tarte aux pommes.'
 const PITCH_PAQUES = 'Tes recettes, tes courses, sans oublier le chocolat.'
 const PITCH_NOEL = 'Tes recettes, tes courses, sans oublier la bûche.'
 
@@ -33,6 +37,12 @@ const ROSE_DARK = 'rgb(125, 35, 80)'
 // Pâques : violet, plus sombre en mode sombre.
 const VIOLET = 'rgb(106, 80, 176)'
 const VIOLET_DARK = 'rgb(74, 54, 127)'
+// L'été : orange brûlé, plus sombre en mode sombre.
+const BURNT = 'rgb(184, 70, 15)'
+const BURNT_DARK = 'rgb(138, 50, 9)'
+// L'automne : olive, plus sombre en mode sombre.
+const OLIVE = 'rgb(77, 90, 22)'
+const OLIVE_DARK = 'rgb(58, 68, 16)'
 // Noël : bordeaux, plus sombre en mode sombre.
 const BURGUNDY = 'rgb(122, 21, 48)'
 const BURGUNDY_DARK = 'rgb(90, 18, 38)'
@@ -124,7 +134,7 @@ test.describe('écran de connexion', () => {
   }) => {
     await page.clock.setSystemTime(new Date(2026, 9, 14, 23, 59, 30))
     await page.goto('/connexion')
-    await expect(page.getByText(PITCH)).toBeVisible()
+    await expect(page.getByText(PITCH_AUTOMNE)).toBeVisible()
 
     await page.clock.fastForward('01:00')
 
@@ -322,6 +332,141 @@ test.describe('écran de connexion, Pâques', () => {
     await expect(page.locator('html')).not.toHaveAttribute('data-season', /.*/)
     await expect(banner(page)).toHaveCSS('background-color', GREEN)
   })
+})
+
+test.describe('écran de connexion, l’été', () => {
+  test('le 15 juillet 2027 : soleil et mer, bandeau orange brûlé, décor, barre du navigateur orange', async ({
+    page,
+  }) => {
+    await page.clock.setSystemTime(IN_ETE)
+    await page.goto('/connexion')
+
+    await expect(page.locator('html')).toHaveAttribute('data-season', 'ete')
+    await expect(page.getByText(PITCH_ETE)).toBeVisible()
+    await expect(page.getByText(PITCH, { exact: true })).toHaveCount(0)
+    await expect(banner(page)).toHaveCSS('background-color', BURNT)
+    // Le héros illustré (la plage) est dans le bandeau
+    await expect(banner(page).locator('svg[focusable="false"]')).toHaveCount(1)
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#b8460f')
+  })
+
+  test('en sombre : le bandeau est brun brûlé et le fond nuit de mer', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await page.clock.setSystemTime(IN_ETE)
+    await page.goto('/connexion')
+
+    await expect(banner(page)).toHaveCSS('background-color', BURNT_DARK)
+    expect(await background(page)).toBe('rgb(10, 30, 36)')
+  })
+
+  for (const [label, date, season] of [
+    ['le 21 juin à 00:00:00 (début)', new Date(2027, 5, 21, 0, 0, 0), 'ete'],
+    ['le 31 août à 23:59:59 (fin)', new Date(2027, 7, 31, 23, 59, 59), 'ete'],
+    ['le 20 juin à 23:59:59 (la veille)', new Date(2027, 5, 20, 23, 59, 59), null],
+    [
+      'le 1er septembre à 00:00:00 (le lendemain, l’automne)',
+      new Date(2027, 8, 1, 0, 0, 0),
+      'automne',
+    ],
+  ] as const) {
+    test(`${label}`, async ({ page }) => {
+      await page.clock.setSystemTime(date)
+      await page.goto('/connexion')
+
+      if (season) await expect(page.locator('html')).toHaveAttribute('data-season', season)
+      else await expect(page.locator('html')).not.toHaveAttribute('data-season', /.*/)
+    })
+  }
+
+  test('le décor de l’été coupé : comme hors saison, sans couper l’automne', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('repas.season', 'ete'))
+    await page.clock.setSystemTime(IN_ETE)
+    await page.goto('/connexion')
+
+    await expect(page.getByText(PITCH)).toBeVisible()
+    await expect(page.locator('html')).not.toHaveAttribute('data-season', /.*/)
+    await expect(banner(page)).toHaveCSS('background-color', GREEN)
+  })
+})
+
+test.describe('écran de connexion, l’automne', () => {
+  test('le 20 septembre 2027 : forêt et feuilles, bandeau olive, décor, barre du navigateur olive', async ({
+    page,
+  }) => {
+    await page.clock.setSystemTime(IN_AUTOMNE)
+    await page.goto('/connexion')
+
+    await expect(page.locator('html')).toHaveAttribute('data-season', 'automne')
+    await expect(page.getByText(PITCH_AUTOMNE)).toBeVisible()
+    await expect(page.getByText(PITCH, { exact: true })).toHaveCount(0)
+    await expect(banner(page)).toHaveCSS('background-color', OLIVE)
+    // Le héros illustré (le hérisson et l’écureuil) est dans le bandeau
+    await expect(banner(page).locator('svg[focusable="false"]')).toHaveCount(1)
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#4d5a16')
+  })
+
+  test('en sombre : le bandeau est olive foncé et le fond sous-bois', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await page.clock.setSystemTime(IN_AUTOMNE)
+    await page.goto('/connexion')
+
+    await expect(banner(page)).toHaveCSS('background-color', OLIVE_DARK)
+    expect(await background(page)).toBe('rgb(23, 22, 12)')
+  })
+
+  for (const [label, date, season] of [
+    ['le 1er septembre à 00:00:00 (début)', new Date(2027, 8, 1, 0, 0, 0), 'automne'],
+    ['le 14 octobre à 23:59:59 (fin)', new Date(2027, 9, 14, 23, 59, 59), 'automne'],
+    ['le 31 août à 23:59:59 (la veille, l’été)', new Date(2027, 7, 31, 23, 59, 59), 'ete'],
+    [
+      'le 15 octobre à 00:00:00 (le lendemain, Halloween)',
+      new Date(2027, 9, 15, 0, 0, 0),
+      'halloween',
+    ],
+  ] as const) {
+    test(`${label}`, async ({ page }) => {
+      await page.clock.setSystemTime(date)
+      await page.goto('/connexion')
+
+      await expect(page.locator('html')).toHaveAttribute('data-season', season)
+    })
+  }
+
+  test('le décor de l’automne coupé : comme hors saison, sans couper Halloween', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => localStorage.setItem('repas.season', 'automne'))
+    await page.clock.setSystemTime(IN_AUTOMNE)
+    await page.goto('/connexion')
+
+    await expect(page.getByText(PITCH)).toBeVisible()
+    await expect(page.locator('html')).not.toHaveAttribute('data-season', /.*/)
+    await expect(banner(page)).toHaveCSS('background-color', GREEN)
+  })
+})
+
+// Les bandeaux orange brûlé et olive sont hauts : à 360 × 640 le bouton de connexion reste entier à l'écran, et le décor ne le couvre pas.
+test.describe('écran de connexion, téléphone étroit, été et automne', () => {
+  for (const [label, date] of [
+    ['l’été', IN_ETE],
+    ['l’automne', IN_AUTOMNE],
+  ] as const)
+    for (const colorScheme of ['light', 'dark'] as const)
+      test(`${label}, ${colorScheme} : le bouton principal reste visible`, async ({ page }) => {
+        await page.emulateMedia({ colorScheme })
+        await page.setViewportSize({ width: 360, height: 640 })
+        await page.clock.setSystemTime(date)
+        await page.goto('/connexion')
+
+        const button = page.getByRole('button', { name: 'Se connecter' })
+        await expect(button).toBeInViewport({ ratio: 1 })
+        const box = (await button.boundingBox())!
+        const hit = await page.evaluate(
+          ({ x, y }) => document.elementFromPoint(x, y)?.closest('button')?.textContent?.trim(),
+          { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+        )
+        expect(hit).toBe('Se connecter')
+      })
 })
 
 test.describe('écran de connexion, Noël', () => {
@@ -621,6 +766,8 @@ test.describe('écran « Moi »', () => {
   for (const [label, date, name] of [
     ['la galette', IN_GALETTE, 'Décor de la galette'],
     ['la Saint-Valentin', IN_VALENTIN, 'Décor de la Saint-Valentin'],
+    ['l’été', IN_ETE, 'Décor d’été'],
+    ['l’automne', IN_AUTOMNE, 'Décor d’automne'],
   ] as const)
     for (const colorScheme of ['light', 'dark'] as const) {
       test(`pour ${label}, l’écran est accessible (WCAG AA), thème ${colorScheme} du système`, async ({

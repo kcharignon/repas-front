@@ -436,3 +436,131 @@
     }
   }
 }
+
+/*
+ * Thème saisonnier « Soleil & mer » (ADR 0016) : `data-season="ete"` sur <html>, posé du 21 juin au 31 août inclus (src/design/season.ts,
+ * public/theme-init.js). Même ordre que les autres saisons : clair (sable), sombre selon le système, sombre forcé (nuit de mer).
+ * L'or du soleil (--accent) ne porte jamais de texte : il ne sert que de fond, avec --on-accent. Le danger reste celui du thème de base. Contrastes gardés par src/design/__tests__/seasonContrast.spec.ts.
+ */
+:root[data-season='ete'] {
+  --bg: #fffaf0;
+  --surface: #ffffff;
+  --ink: #1d2a2e;
+  --muted: #4a5c61;
+  --line: #e6dcc0;
+  --soft: #fdeccb;
+  --primary: #0b6f84;
+  --on-primary: #ffffff;
+  --accent: #ffc933;
+  --on-accent: #2a2000;
+  --danger: #b3261e;
+  --on-danger: #ffffff;
+  --danger-soft: #fbe1dd;
+  --on-danger-soft: #7a1a12;
+  --brand: #b8460f;
+  --scene-opacity: 0.15;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-season='ete']:not([data-theme='light']) {
+    --bg: #0a1e24;
+    --surface: #10303a;
+    --ink: #eef8f8;
+    --muted: #9fc0c6;
+    --line: #1f4a55;
+    --soft: #123845;
+    --primary: #5fd4e6;
+    --on-primary: #04222a;
+    --accent: #ffd34d;
+    --on-accent: #2a2000;
+    --danger: #f0705a;
+    --on-danger: #2a0c06;
+    --danger-soft: #3a1a14;
+    --on-danger-soft: #f6b8ab;
+    --brand: #8a3209;
+    --scene-opacity: 0.2;
+  }
+}
+
+:root[data-season='ete'][data-theme='dark'] {
+  --bg: #0a1e24;
+  --surface: #10303a;
+  --ink: #eef8f8;
+  --muted: #9fc0c6;
+  --line: #1f4a55;
+  --soft: #123845;
+  --primary: #5fd4e6;
+  --on-primary: #04222a;
+  --accent: #ffd34d;
+  --on-accent: #2a2000;
+  --danger: #f0705a;
+  --on-danger: #2a0c06;
+  --danger-soft: #3a1a14;
+  --on-danger-soft: #f6b8ab;
+  --brand: #8a3209;
+  --scene-opacity: 0.2;
+}
+
+/*
+ * Thème saisonnier « Forêt & feuilles » (ADR 0016) : `data-season="automne"` sur <html>, posé du 1er septembre au 14 octobre inclus (src/design/season.ts,
+ * public/theme-init.js). Même ordre que les autres saisons : clair (parchemin), sombre selon le système, sombre forcé (sous-bois).
+ * L'orange (--accent) ne porte jamais de texte : il ne sert que de fond, avec --on-accent. Le danger reste celui du thème de base. Contrastes gardés par src/design/__tests__/seasonContrast.spec.ts.
+ */
+:root[data-season='automne'] {
+  --bg: #faf3e3;
+  --surface: #ffffff;
+  --ink: #2a2112;
+  --muted: #5b4f38;
+  --line: #e2d4b2;
+  --soft: #f1e4c6;
+  --primary: #5b6b1c;
+  --on-primary: #ffffff;
+  --accent: #e8801f;
+  --on-accent: #2a1500;
+  --danger: #b3261e;
+  --on-danger: #ffffff;
+  --danger-soft: #fbe1dd;
+  --on-danger-soft: #7a1a12;
+  --brand: #4d5a16;
+  --scene-opacity: 0.15;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-season='automne']:not([data-theme='light']) {
+    --bg: #17160c;
+    --surface: #211f10;
+    --ink: #f3edd6;
+    --muted: #bdb48f;
+    --line: #3d3a1c;
+    --soft: #2a2812;
+    --primary: #c3d35a;
+    --on-primary: #1a1f03;
+    --accent: #f0a13a;
+    --on-accent: #2a1500;
+    --danger: #f0705a;
+    --on-danger: #2a0c06;
+    --danger-soft: #3a1a14;
+    --on-danger-soft: #f6b8ab;
+    --brand: #3a4410;
+    --scene-opacity: 0.2;
+  }
+}
+
+:root[data-season='automne'][data-theme='dark'] {
+  --bg: #17160c;
+  --surface: #211f10;
+  --ink: #f3edd6;
+  --muted: #bdb48f;
+  --line: #3d3a1c;
+  --soft: #2a2812;
+  --primary: #c3d35a;
+  --on-primary: #1a1f03;
+  --accent: #f0a13a;
+  --on-accent: #2a1500;
+  --danger: #f0705a;
+  --on-danger: #2a0c06;
+  --danger-soft: #3a1a14;
+  --on-danger-soft: #f6b8ab;
+  --brand: #3a4410;
+  --scene-opacity: 0.2;
+}

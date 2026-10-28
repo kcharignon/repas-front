@@ -81,6 +81,28 @@ const DEFINITIONS = [
     },
   },
   {
+    key: 'ete',
+    color: '#b8460f',
+    // Du 21 juin 00:00:00 (le solstice) au 31 août 23:59:59.
+    includes: (date) => {
+      const month = date.getMonth()
+      const day = date.getDate()
+
+      return (month === 5 && day >= 21) || month === 6 || month === 7
+    },
+  },
+  {
+    key: 'automne',
+    color: '#4d5a16',
+    // Du 1er septembre 00:00:00 au 14 octobre 23:59:59 (la veille d'Halloween).
+    includes: (date) => {
+      const month = date.getMonth()
+      const day = date.getDate()
+
+      return month === 8 || (month === 9 && day <= 14)
+    },
+  },
+  {
     key: 'halloween',
     color: '#43206b',
     // Du 15 octobre 00:00:00 au 1er novembre 23:59:59.
