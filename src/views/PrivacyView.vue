@@ -45,7 +45,7 @@ const linkClass =
 </script>
 
 <template>
-  <main class="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6">
+  <main class="relative z-10 mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6">
     <RouterLink
       :to="{ name: 'home' }"
       class="inline-flex min-h-11 items-center self-start font-bold text-primary underline focus-visible:outline-2 focus-visible:outline-primary"

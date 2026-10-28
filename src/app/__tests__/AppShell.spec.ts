@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
-import { appContext } from '@/__tests__/helpers'
+import { appContext, eventually } from '@/__tests__/helpers'
 import AppShell from '@/app/AppShell.vue'
 
-// Le menu latéral du bureau porte un petit motif de la saison (ADR 0010, 0011) ; la navigation du téléphone n'en porte jamais.
+// Le menu latéral du bureau porte un petit motif de la saison (ADR 0010, 0011, 0012) ; la navigation du téléphone n'en porte jamais.
 // Hors de ces tests, la suite tourne le 15 juin (src/__tests__/setup.ts).
 
 async function mountShell() {
@@ -26,7 +26,7 @@ describe('menu latéral, décor de saison', () => {
   it('hors saison : aucun motif', async () => {
     const wrapper = await mountShell()
 
-    expect(wrapper.findAll('svg[aria-hidden="true"].pointer-events-none')).toHaveLength(0)
+    expect(wrapper.findAll('svg[focusable="false"]')).toHaveLength(0)
   })
 
   it('en saison d’Halloween : la toile, dans le menu seulement', async () => {
@@ -34,19 +34,22 @@ describe('menu latéral, décor de saison', () => {
 
     const wrapper = await mountShell()
 
-    const decor = wrapper.findAll('svg.pointer-events-none')
-    expect(decor).toHaveLength(1)
-    expect(wrapper.get('aside').element.contains(decor[0]!.element)).toBe(true)
+    await eventually(() => expect(wrapper.find('svg[focusable="false"]').exists()).toBe(true))
+    expect(wrapper.findAll('aside svg[focusable="false"]')).toHaveLength(1)
+    expect(
+      wrapper.get('svg[focusable="false"]').element.closest('[aria-hidden="true"]'),
+    ).not.toBeNull()
   })
 
-  it('en saison de Noël : un flocon, dans le menu seulement, sans texte', async () => {
+  it('en saison de Noël : un motif, dans le menu seulement, sans texte', async () => {
     vi.setSystemTime(new Date(2026, 11, 20, 12))
 
     const wrapper = await mountShell()
 
-    const decor = wrapper.findAll('svg.pointer-events-none')
+    await eventually(() => expect(wrapper.find('svg[focusable="false"]').exists()).toBe(true))
+    const decor = wrapper.findAll('aside svg[focusable="false"]')
     expect(decor).toHaveLength(1)
-    expect(decor[0]!.attributes('aria-hidden')).toBe('true')
+    expect(decor[0]!.attributes('focusable')).toBe('false')
     expect(decor[0]!.text()).toBe('')
     expect(wrapper.get('aside').element.contains(decor[0]!.element)).toBe(true)
   })
@@ -57,6 +60,6 @@ describe('menu latéral, décor de saison', () => {
 
     const wrapper = await mountShell()
 
-    expect(wrapper.findAll('svg.pointer-events-none')).toHaveLength(0)
+    expect(wrapper.findAll('aside svg[focusable="false"]')).toHaveLength(0)
   })
 })

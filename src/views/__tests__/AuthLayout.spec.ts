@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 
-import { appContext } from '@/__tests__/helpers'
-import ChristmasDecor from '@/design/ChristmasDecor.vue'
-import HalloweenDecor from '@/design/HalloweenDecor.vue'
+import { appContext, eventually } from '@/__tests__/helpers'
+import { cornerOnBanner } from '@/design/season/cornerTone'
 import AuthLayout from '@/views/AuthLayout.vue'
 
-// Les thèmes saisonniers (ADR 0010, 0011) sur l'écran de connexion : la phrase et le décor n'existent que du 15 octobre au 1er novembre
+// Les thèmes saisonniers (ADR 0010, 0011, 0012) sur l'écran de connexion : la phrase et le héros illustré n'existent que du 15 octobre au 1er novembre
 // et du 15 novembre au 5 janvier.
 // Hors de ces tests, la suite tourne le 15 juin (src/__tests__/setup.ts).
 
@@ -18,12 +17,6 @@ function mountLayout() {
   const { plugins } = appContext()
 
   return mount(AuthLayout, { props: { title: 'Se connecter' }, global: { plugins } })
-}
-
-function mountDecor(variant: 'banner' | 'web', component: typeof HalloweenDecor = HalloweenDecor) {
-  const { plugins } = appContext()
-
-  return mount(component, { props: { variant }, global: { plugins } })
 }
 
 describe('écran de connexion, thème saisonnier', () => {
@@ -42,7 +35,7 @@ describe('écran de connexion, thème saisonnier', () => {
     expect(wrapper.get('header').classes()).toContain('bg-brand')
   })
 
-  it('en saison : la phrase de la citrouille et le décor, sans rien dire de plus', () => {
+  it('en saison : la phrase de la citrouille et le héros (la sorcière), sans rien dire de plus', async () => {
     vi.setSystemTime(new Date(2026, 9, 27, 12))
 
     const wrapper = mountLayout()
@@ -50,9 +43,11 @@ describe('écran de connexion, thème saisonnier', () => {
     expect(wrapper.text()).toContain(PITCH_HALLOWEEN)
     expect(wrapper.text()).not.toContain(PITCH)
     expect(wrapper.text()).not.toContain('bûche')
-    // La toile, la lune et deux chauves-souris : décoratives, cachées des lecteurs d'écran, sans événement de souris.
-    const decor = wrapper.get('header [aria-hidden="true"].pointer-events-none')
-    expect(decor.findAll('svg')).toHaveLength(4)
+    // Le héros : décoratif, caché des lecteurs d'écran, sans événement de souris, dans le bandeau.
+    await eventually(() => expect(wrapper.find('header svg').exists()).toBe(true))
+    const hero = wrapper.get('header [aria-hidden="true"].pointer-events-none')
+    expect(hero.html()).toContain('viewBox="0 0 280 220"')
+    expect(hero.text()).toBe('')
   })
 
   it('en saison mais décor coupé par l’utilisateur : comme hors saison', () => {
@@ -71,7 +66,7 @@ describe('écran de connexion, thème saisonnier', () => {
     expect(mountLayout().text()).toContain(PITCH)
   })
 
-  it('en saison de Noël : la phrase de la bûche et le décor de Noël, rien d’Halloween', () => {
+  it('en saison de Noël : la phrase de la bûche et le héros de Noël, rien d’Halloween', async () => {
     vi.setSystemTime(new Date(2026, 11, 20, 12))
 
     const wrapper = mountLayout()
@@ -79,10 +74,8 @@ describe('écran de connexion, thème saisonnier', () => {
     expect(wrapper.text()).toContain(PITCH_NOEL)
     expect(wrapper.text()).not.toContain(PITCH)
     expect(wrapper.text()).not.toContain('citrouille')
-    // Trois flocons, l'étoile et neuf sapins : décoratifs, cachés des lecteurs d'écran, sans événement de souris.
-    const decor = wrapper.get('header [aria-hidden="true"].pointer-events-none')
-    expect(decor.findAll('svg')).toHaveLength(13)
-    expect(decor.html()).toContain('fill-star')
+    await eventually(() => expect(wrapper.find('header svg').exists()).toBe(true))
+    expect(wrapper.get('header [aria-hidden="true"]').html()).not.toContain('#a5e072')
     expect(document.documentElement.dataset.season).toBe('noel')
   })
 
@@ -112,51 +105,24 @@ describe('écran de connexion, thème saisonnier', () => {
     expect(wrapper.findAll('svg')).toHaveLength(0)
   })
 
-  it('le décor ne porte ni texte ni élément interactif', () => {
+  it('hors saison, le coin de saison reste clair-sur-bandeau seulement tant que l’écran de connexion est ouvert', () => {
+    const wrapper = mountLayout()
+    expect(cornerOnBanner.value).toBe(true)
+
+    wrapper.unmount()
+
+    expect(cornerOnBanner.value).toBe(false)
+  })
+
+  it('le héros ne porte ni texte ni élément interactif ni animation', async () => {
     vi.setSystemTime(new Date(2026, 9, 27, 12))
 
-    const wrapper = mountDecor('banner')
+    const wrapper = mountLayout()
+    await eventually(() => expect(wrapper.find('header svg').exists()).toBe(true))
+    await flushPromises()
 
-    expect(wrapper.text()).toBe('')
-    expect(wrapper.findAll('a, button, input')).toHaveLength(0)
-  })
-
-  it('le décor de Noël ne porte ni texte, ni animation, ni élément interactif', () => {
-    vi.setSystemTime(new Date(2026, 11, 20, 12))
-
-    const wrapper = mountDecor('banner', ChristmasDecor)
-
-    expect(wrapper.text()).toBe('')
-    expect(wrapper.findAll('a, button, input, animate, animateTransform, style')).toHaveLength(0)
-    expect(wrapper.html()).not.toMatch(/animate|transition/)
-  })
-
-  it('chaque décor reste muet en dehors de sa saison', () => {
-    vi.setSystemTime(new Date(2026, 11, 20, 12))
-    expect(mountDecor('banner', HalloweenDecor).findAll('svg')).toHaveLength(0)
-
-    vi.setSystemTime(new Date(2026, 9, 27, 12))
-    expect(mountDecor('banner', ChristmasDecor).findAll('svg')).toHaveLength(0)
-  })
-})
-
-describe('menu latéral, thème saisonnier', () => {
-  it('un flocon discret en saison de Noël seulement', () => {
-    expect(mountDecor('web', ChristmasDecor).find('svg').exists()).toBe(false)
-
-    vi.setSystemTime(new Date(2026, 11, 20, 12))
-    const web = mountDecor('web', ChristmasDecor).get('svg')
-    expect(web.attributes('aria-hidden')).toBe('true')
-    expect(web.classes()).toContain('pointer-events-none')
-    expect(mountDecor('web', HalloweenDecor).find('svg').exists()).toBe(false)
-  })
-
-  it('une toile discrète en saison seulement', () => {
-    expect(mountDecor('web').find('svg').exists()).toBe(false)
-
-    vi.setSystemTime(new Date(2026, 9, 27, 12))
-    const web = mountDecor('web').get('svg')
-    expect(web.attributes('aria-hidden')).toBe('true')
-    expect(web.classes()).toContain('pointer-events-none')
+    const hero = wrapper.get('header [aria-hidden="true"].pointer-events-none')
+    expect(hero.findAll('a, button, input, animate, animateTransform, style')).toHaveLength(0)
+    expect(hero.html()).not.toMatch(/animate|transition/)
   })
 })

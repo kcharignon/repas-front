@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import { hasFailed } from '@/api/query'
+import LoadError from '@/design/LoadError.vue'
+import SeasonEmpty from '@/design/season/SeasonEmpty.vue'
 import UiImage from '@/design/UiImage.vue'
 import { useActiveSummary } from '@/features/shopping-lists/queries'
 import IngredientStepper from './IngredientStepper.vue'
@@ -25,19 +27,15 @@ const quantityOf = (slug: string) => summary.data.value?.quantityByIngredientSlu
 
 <template>
   <section :aria-label="t('departments.results')" class="flex flex-col gap-3">
-    <p
-      v-if="hasFailed(results)"
-      role="alert"
-      class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
-    >
-      {{ t('errors.unreachable') }}
-    </p>
+    <LoadError v-if="hasFailed(results)" />
     <p v-else-if="results.isPending.value" class="text-muted" role="status">
       {{ t('common.loading') }}
     </p>
-    <p v-else-if="items.length === 0" class="text-muted" role="status">
-      {{ t('departments.noMatch', { search }) }}
-    </p>
+    <SeasonEmpty v-else-if="items.length === 0" name="empty-search">
+      <p class="text-muted" role="status">
+        {{ t('departments.noMatch', { search }) }}
+      </p>
+    </SeasonEmpty>
 
     <template v-else>
       <p class="sr-only" role="status">

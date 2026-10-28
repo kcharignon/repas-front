@@ -5,6 +5,8 @@ import { RouterLink, useRouter } from 'vue-router'
 import { Copy } from 'lucide-vue-next'
 
 import { hasFailed } from '@/api/query'
+import LoadError from '@/design/LoadError.vue'
+import SeasonEmpty from '@/design/season/SeasonEmpty.vue'
 import UiButton from '@/design/UiButton.vue'
 import { useCopyRecipe, useOtherPeopleRecipes } from './queries'
 
@@ -37,14 +39,10 @@ function copyRecipe(id: string) {
     </header>
 
     <p v-if="others.isPending.value" class="text-muted" role="status">{{ t('common.loading') }}</p>
-    <p
-      v-else-if="hasFailed(others)"
-      role="alert"
-      class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
-    >
-      {{ t('errors.unreachable') }}
-    </p>
-    <p v-else-if="items.length === 0" class="text-muted">{{ t('recipes.othersNone') }}</p>
+    <LoadError v-else-if="hasFailed(others)" />
+    <SeasonEmpty v-else-if="items.length === 0" name="empty-recipes">
+      <p class="text-muted">{{ t('recipes.othersNone') }}</p>
+    </SeasonEmpty>
 
     <ul v-else class="flex flex-col gap-3">
       <li

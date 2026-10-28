@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
 
 import { hasFailed } from '@/api/query'
+import LoadError from '@/design/LoadError.vue'
+import SeasonEmpty from '@/design/season/SeasonEmpty.vue'
 import UiButton from '@/design/UiButton.vue'
 import { useCreateShoppingList, useShoppingLists } from './queries'
 
@@ -46,16 +48,10 @@ const label = {
     </header>
 
     <p v-if="lists.isPending.value" class="text-muted" role="status">{{ t('common.loading') }}</p>
-    <p
-      v-else-if="hasFailed(lists)"
-      role="alert"
-      class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
-    >
-      {{ t('errors.unreachable') }}
-    </p>
-    <p v-else-if="items.length === 0" class="text-muted">
-      {{ t('shoppingList.noList') }}
-    </p>
+    <LoadError v-else-if="hasFailed(lists)" />
+    <SeasonEmpty v-else-if="items.length === 0" name="empty-list">
+      <p class="text-muted">{{ t('shoppingList.noList') }}</p>
+    </SeasonEmpty>
 
     <ul v-else class="flex flex-col gap-3">
       <li v-for="list in items" :key="list.id">

@@ -5,7 +5,10 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Search } from 'lucide-vue-next'
 
 import { hasFailed } from '@/api/query'
+import LoadError from '@/design/LoadError.vue'
+import SeasonEmpty from '@/design/season/SeasonEmpty.vue'
 import UiLinkButton from '@/design/UiLinkButton.vue'
+import SeasonArt from '@/design/season/SeasonArt.vue'
 import UiTile from '@/design/UiTile.vue'
 import UiImage from '@/design/UiImage.vue'
 import PlanButton from './PlanButton.vue'
@@ -49,7 +52,9 @@ function choose(slug: string) {
   <main class="mx-auto flex max-w-4xl flex-col gap-5 px-4 py-6">
     <header class="flex flex-wrap items-end justify-between gap-3">
       <h1 class="font-display text-3xl leading-tight font-bold md:text-4xl">
-        {{ t('recipes.title') }}
+        <SeasonArt name="title-recipes" class="mr-2 size-9 align-middle md:size-10" />{{
+          t('recipes.title')
+        }}
       </h1>
       <div class="flex flex-wrap items-center gap-3">
         <RouterLink :to="{ name: 'recipes-others' }" class="font-bold text-primary underline">
@@ -92,13 +97,7 @@ function choose(slug: string) {
       </UiTile>
     </div>
 
-    <p
-      v-if="hasFailed(types) || hasFailed(recipes)"
-      role="alert"
-      class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
-    >
-      {{ t('errors.unreachable') }}
-    </p>
+    <LoadError v-if="hasFailed(types) || hasFailed(recipes)" />
     <p
       v-else-if="types.isPending.value || recipes.isPending.value"
       class="text-muted"
@@ -106,9 +105,14 @@ function choose(slug: string) {
     >
       {{ t('common.loading') }}
     </p>
-    <p v-else-if="shown.length === 0" class="text-muted">
-      {{ search.trim() === '' ? t('recipes.none') : t('recipes.noMatch') }}
-    </p>
+    <SeasonEmpty
+      v-else-if="shown.length === 0"
+      :name="search.trim() === '' ? 'empty-recipes' : 'empty-search'"
+    >
+      <p class="text-muted">
+        {{ search.trim() === '' ? t('recipes.none') : t('recipes.noMatch') }}
+      </p>
+    </SeasonEmpty>
 
     <ul v-else class="flex flex-col gap-3">
       <li

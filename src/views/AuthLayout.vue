@@ -1,38 +1,48 @@
 <script setup lang="ts">
+import { onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import logo from '@/assets/logo.png'
-import SeasonDecor from '@/design/SeasonDecor.vue'
 import { useSeasonStore } from '@/design/season'
+import SeasonArt from '@/design/season/SeasonArt.vue'
+import { cornerOnBanner } from '@/design/season/cornerTone'
 
 defineProps<{ title: string }>()
 
 const { t } = useI18n()
 const season = useSeasonStore()
 
+// Le coin de saison (posé à la racine) passe au clair tant que le bandeau de marque est à l'écran (ADR 0012)
+cornerOnBanner.value = true
+onBeforeUnmount(() => (cornerOnBanner.value = false))
+
 // La phrase du bandeau : une par saison, la phrase de base hors saison.
 const PITCH = { halloween: 'auth.pitchHalloween', noel: 'auth.pitchNoel' } as const
 </script>
 
 <template>
-  <div class="flex min-h-dvh flex-col bg-bg md:flex-row">
+  <!-- Pas de fond plein page : celui de la page est celui de <html>, la scène de saison passe derrière (ADR 0012) -->
+  <div class="flex min-h-dvh flex-col md:flex-row">
     <header
       class="relative overflow-hidden bg-brand px-7 pt-6 pb-5 text-white md:flex md:w-1/2 md:flex-col md:justify-center md:px-16 md:pt-12 md:pb-10"
     >
       <div
         class="pointer-events-none absolute -top-14 -right-16 size-64 rounded-full bg-white/10"
       />
-      <!-- Le disque doré jurerait sur le bordeaux de Noël : le bandeau y garde ses seuls flocons, son étoile et ses sapins -->
+      <!-- Le disque doré jurerait sur le bordeaux de Noël -->
       <div
         v-if="season.activeSeason !== 'noel'"
         class="pointer-events-none absolute -bottom-24 right-10 size-44 rounded-full bg-accent/25"
       />
-      <SeasonDecor variant="banner" />
       <!-- La confidentialité (STORE-010) : un lien discret dans l'angle, il ne prend aucune hauteur (le bouton principal reste visible à 360 × 640) -->
       <RouterLink
         :to="{ name: 'privacy' }"
-        class="absolute top-1 right-2 z-10 inline-flex min-h-11 items-center px-2 text-sm text-white/90 underline hover:text-white focus-visible:outline-2 focus-visible:outline-white"
+        :class="[
+          'absolute top-1 right-2 z-10 inline-flex min-h-11 items-center px-2 text-sm text-white/90 underline hover:text-white focus-visible:outline-2 focus-visible:outline-white',
+          // Le coin de saison passe derrière (ADR 0012) : sur téléphone, une pastille de la couleur du bandeau garde le lien lisible
+          season.activeSeason && 'max-md:rounded-full max-md:bg-brand',
+        ]"
         >{{ t('privacy.link') }}</RouterLink
       >
       <!-- Sur téléphone le logo et le nom tiennent sur une ligne : le bouton principal du formulaire se voit sans défiler à 360 × 640 -->
@@ -42,12 +52,22 @@ const PITCH = { halloween: 'auth.pitchHalloween', noel: 'auth.pitchNoel' } as co
           {{ t('app.name') }}
         </p>
       </div>
-      <p class="relative mt-3 max-w-72 text-base leading-snug md:mt-2 md:text-lg">
+      <p
+        :class="[
+          'relative mt-3 max-w-72 text-base leading-snug md:mt-2 md:text-lg',
+          season.activeSeason && 'max-w-[14rem] md:max-w-72',
+        ]"
+      >
         {{ t(season.activeSeason ? PITCH[season.activeSeason] : 'auth.pitch') }}
       </p>
+      <!-- Le héros de la saison (ADR 0012) : à droite du bandeau sur téléphone (il reste court), sous la phrase sur le bureau -->
+      <SeasonArt
+        name="hero"
+        class="absolute right-2 bottom-1 z-0 h-auto w-32 md:static md:mt-8 md:block md:w-full md:max-w-sm"
+      />
     </header>
 
-    <main class="flex flex-1 flex-col justify-center px-6 py-8 md:px-16">
+    <main class="relative z-10 flex flex-1 flex-col justify-center px-6 py-8 md:px-16">
       <div class="mx-auto flex w-full max-w-md flex-col gap-4">
         <h1 class="font-display text-2xl font-bold">{{ title }}</h1>
         <slot />

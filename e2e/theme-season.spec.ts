@@ -64,7 +64,8 @@ test.describe('écran de connexion', () => {
     await expect(page.getByText(PITCH_HALLOWEEN)).toBeVisible()
     await expect(page.getByText(PITCH, { exact: true })).toHaveCount(0)
     await expect(banner(page)).toHaveCSS('background-color', PURPLE)
-    await expect(banner(page).locator('[aria-hidden="true"] svg')).toHaveCount(4)
+    // Le héros illustré (la sorcière) est dans le bandeau
+    await expect(banner(page).locator('svg[focusable="false"]')).toHaveCount(1)
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#43206b')
   })
 
@@ -159,7 +160,8 @@ test.describe('écran de connexion, Noël', () => {
     await expect(page.getByText(PITCH, { exact: true })).toHaveCount(0)
     await expect(page.getByText('citrouille')).toHaveCount(0)
     await expect(banner(page)).toHaveCSS('background-color', BURGUNDY)
-    await expect(banner(page).locator('[aria-hidden="true"] svg')).toHaveCount(13)
+    // Le héros illustré (la cabane) est dans le bandeau
+    await expect(banner(page).locator('svg[focusable="false"]')).toHaveCount(1)
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#7a1530')
   })
 
