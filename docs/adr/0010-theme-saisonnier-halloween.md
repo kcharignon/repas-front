@@ -47,3 +47,9 @@ personne ait rien à faire et sans rien changer aux gestes ni à la mise en page
 
 - Une préférence « thème » de plus à choisir : contraire à la simplicité voulue (le thème s'active seul).
 - Piloter la saison par le back : une requête de plus au démarrage pour une décision purement visuelle.
+
+## Amendement du 2026-10-28
+
+Le décor de l'angle (`HalloweenDecor.vue`, `SeasonDecor.vue`) et le jeton `--moon` sont remplacés par le pack d'illustrations de saison
+([ADR 0012](0012-illustrations-de-saison.md)) : coin, scène de fond, héros du bandeau et pièces d'accueil. Le reste (dates, jetons de
+couleur, contrastes, interrupteur) est inchangé.
