@@ -143,6 +143,10 @@ test.describe('administration des utilisateurs', () => {
     await page.goto('/admin/utilisateurs')
 
     await expect(page.getByRole('main')).toContainText('5 comptes · 1 en attente')
+    // Un compte inscrit par son adresse seule n'a pas de mot de passe : l'activer à la main n'en pose pas
+    await expect(page.getByRole('main')).toContainText(
+      'Un compte activé ici peut être sans mot de passe. La personne en choisit un avec « Mot de passe oublié ? ».',
+    )
     await expect(page.getByRole('listitem').first()).toContainText('nouveau@exemple.test')
     await expect(
       rowOf(page, 'nouveau@exemple.test').getByRole('button', { name: /^Activer/ }),
