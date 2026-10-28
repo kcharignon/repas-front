@@ -50,8 +50,12 @@ async function logout() {
           {{ t(`theme.${preference}`) }}
         </UiChip>
       </div>
-      <!-- Le décor saisonnier (ADR 0010) : l'interrupteur n'existe que du 15 octobre au 1er novembre -->
-      <UiSwitch v-if="season.inSeason" v-model="season.enabled" :label="t('season.halloween')" />
+      <!-- Le décor saisonnier (ADR 0010, 0011) : l'interrupteur n'existe qu'en saison, son libellé suit la saison -->
+      <UiSwitch
+        v-if="season.season"
+        v-model="season.enabled"
+        :label="t(`season.${season.season}`)"
+      />
     </section>
 
     <AppHelpLink />

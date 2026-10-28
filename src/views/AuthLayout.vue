@@ -3,13 +3,16 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import logo from '@/assets/logo.png'
-import HalloweenDecor from '@/design/HalloweenDecor.vue'
+import SeasonDecor from '@/design/SeasonDecor.vue'
 import { useSeasonStore } from '@/design/season'
 
 defineProps<{ title: string }>()
 
 const { t } = useI18n()
 const season = useSeasonStore()
+
+// La phrase du bandeau : une par saison, la phrase de base hors saison.
+const PITCH = { halloween: 'auth.pitchHalloween', noel: 'auth.pitchNoel' } as const
 </script>
 
 <template>
@@ -20,10 +23,12 @@ const season = useSeasonStore()
       <div
         class="pointer-events-none absolute -top-14 -right-16 size-64 rounded-full bg-white/10"
       />
+      <!-- Le disque doré jurerait sur le bordeaux de Noël : le bandeau y garde ses seuls flocons, son étoile et ses sapins -->
       <div
+        v-if="season.activeSeason !== 'noel'"
         class="pointer-events-none absolute -bottom-24 right-10 size-44 rounded-full bg-accent/25"
       />
-      <HalloweenDecor variant="banner" />
+      <SeasonDecor variant="banner" />
       <!-- La confidentialité (STORE-010) : un lien discret dans l'angle, il ne prend aucune hauteur (le bouton principal reste visible à 360 × 640) -->
       <RouterLink
         :to="{ name: 'privacy' }"
@@ -38,7 +43,7 @@ const season = useSeasonStore()
         </p>
       </div>
       <p class="relative mt-3 max-w-72 text-base leading-snug md:mt-2 md:text-lg">
-        {{ t(season.active ? 'auth.pitchHalloween' : 'auth.pitch') }}
+        {{ t(season.activeSeason ? PITCH[season.activeSeason] : 'auth.pitch') }}
       </p>
     </header>
 

@@ -508,6 +508,7 @@ export default {
   auth: {
     pitch: 'Tes recettes, tes courses, sans oublier le basilic.',
     pitchHalloween: 'Tes recettes, tes courses, sans oublier la citrouille.',
+    pitchNoel: 'Tes recettes, tes courses, sans oublier la bûche.',
   },
   login: {
     title: 'Se connecter',
@@ -1008,6 +1009,7 @@ export default {
   },
   season: {
     halloween: 'Décor d’Halloween',
+    noel: 'Décor de Noël',
   },
   theme: {
     label: 'Thème',

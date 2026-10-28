@@ -12,5 +12,6 @@
 | [0008](0008-envoi-de-la-liste-au-drive.md) | Envoi de la liste de courses au drive : application Android, pont natif, agent embarqué | Accepted |
 | [0009](0009-mise-a-jour-de-l-application.md) | L'application Android se met à jour elle-même (variante hors Google Play), page `/installer` | Accepted |
 | [0010](0010-theme-saisonnier-halloween.md) | Thème saisonnier « Citrouille & nuit » (Halloween), du 15 octobre au 1er novembre | Accepted |
+| [0011](0011-theme-saisonnier-noel.md) | Thème saisonnier « Houx & neige » (Noël), du 15 novembre au 5 janvier | Accepted |
 
 Une décision nouvelle = un nouvel ADR (numéro suivant) dans le même commit que le code qui l'applique.

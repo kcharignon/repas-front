@@ -6,7 +6,7 @@ import { BookOpen, LayoutGrid, ShoppingBasket, User } from 'lucide-vue-next'
 import OfflineBanner from '@/app/OfflineBanner.vue'
 import logo from '@/assets/logo.png'
 import { cn } from '@/design/cn'
-import HalloweenDecor from '@/design/HalloweenDecor.vue'
+import SeasonDecor from '@/design/SeasonDecor.vue'
 
 const { t } = useI18n()
 
@@ -27,7 +27,7 @@ const link =
     <aside
       class="hidden shrink-0 border-r border-line bg-surface p-4 relative md:flex md:w-64 md:flex-col md:gap-1.5"
     >
-      <HalloweenDecor variant="web" />
+      <SeasonDecor variant="web" />
       <div class="relative flex items-center gap-3 px-2 pb-5">
         <span class="flex size-11 items-center justify-center rounded-2xl bg-brand">
           <img :src="logo" alt="" class="h-6 w-7 object-contain" />
