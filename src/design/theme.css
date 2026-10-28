@@ -133,6 +133,73 @@
   --brand: #2d1850;
 }
 
+/*
+ * Thème saisonnier « Houx & neige » (ADR 0011) : `data-season="noel"` sur <html>, posé du 15 novembre au 5 janvier
+ * (src/design/season.ts, public/theme-init.js). Même ordre que pour Halloween : clair, sombre selon le système, sombre forcé. Il ne
+ * chevauche jamais Halloween (un seul `data-season` à la fois). L'or (--accent) ne porte jamais de texte : il ne sert que de fond,
+ * avec --on-accent. Le danger reste un rouge distinct du bordeaux du bandeau (--brand). --warning-soft et --on-warning-soft restent
+ * ceux du thème de base. Contrastes gardés par src/design/__tests__/seasonContrast.spec.ts.
+ */
+:root[data-season='noel'] {
+  --bg: #f3f6f7;
+  --surface: #ffffff;
+  --ink: #13231b;
+  --muted: #4f605a;
+  --line: #cdd9dc;
+  --soft: #e2ecee;
+  --primary: #17573a;
+  --on-primary: #ffffff;
+  --accent: #e9a92a;
+  --on-accent: #2b1d00;
+  --danger: #b3261e;
+  --on-danger: #ffffff;
+  --danger-soft: #fbe1dd;
+  --on-danger-soft: #7a1a12;
+  --brand: #7a1530;
+  /* L'étoile du décor de connexion (ni texte ni fond de texte). */
+  --star: #f9d98a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-season='noel']:not([data-theme='light']) {
+    --bg: #0b1520;
+    --surface: #122030;
+    --ink: #edf3f2;
+    --muted: #a4b6bd;
+    --line: #2b4152;
+    --soft: #183044;
+    --primary: #6fd3a0;
+    --on-primary: #06170e;
+    --accent: #f2c14e;
+    --on-accent: #2b1d00;
+    --danger: #f0705a;
+    --on-danger: #2a0c06;
+    --danger-soft: #3a1a14;
+    --on-danger-soft: #f6b8ab;
+    --brand: #5a1226;
+    --star: #f9d98a;
+  }
+}
+
+:root[data-season='noel'][data-theme='dark'] {
+  --bg: #0b1520;
+  --surface: #122030;
+  --ink: #edf3f2;
+  --muted: #a4b6bd;
+  --line: #2b4152;
+  --soft: #183044;
+  --primary: #6fd3a0;
+  --on-primary: #06170e;
+  --accent: #f2c14e;
+  --on-accent: #2b1d00;
+  --danger: #f0705a;
+  --on-danger: #2a0c06;
+  --danger-soft: #3a1a14;
+  --on-danger-soft: #f6b8ab;
+  --brand: #5a1226;
+  --star: #f9d98a;
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -152,6 +219,7 @@
   --color-on-warning-soft: var(--on-warning-soft);
   --color-brand: var(--brand);
   --color-moon: var(--moon);
+  --color-star: var(--star);
   --font-sans: 'Figtree Variable', system-ui, sans-serif;
   --font-display: 'Bricolage Grotesque Variable', 'Figtree Variable', system-ui, sans-serif;
 }
