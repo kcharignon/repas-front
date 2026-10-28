@@ -30,6 +30,8 @@ const COLORS: Record<Season, string> = {
   galette: '#223b86',
   valentin: '#a8326a',
   paques: '#6a50b0',
+  ete: '#b8460f',
+  automne: '#4d5a16',
   halloween: '#43206b',
   noel: '#7a1530',
 }
@@ -113,6 +115,48 @@ const CASES: Record<
       at(2026, 12, 25, 12),
     ],
   },
+  // Du 21 juin au 31 août inclus ; l'année ne compte pas (le solstice tombe le 20 ou le 21 juin : la règle est fixe).
+  ete: {
+    bounds: [
+      bounds('2026', [2026, 6, 21], [2026, 8, 31]),
+      bounds('2028, bissextile', [2028, 6, 21], [2028, 8, 31]),
+      bounds('2031', [2031, 6, 21], [2031, 8, 31]),
+    ],
+    inside: [
+      at(2027, 7, 15, 12),
+      at(2027, 8, 1, 8),
+      at(2027, 6, 30, 23, 59, 59),
+      at(2028, 7, 4, 12),
+    ],
+    outside: [
+      at(2027, 6, 20, 12),
+      at(2027, 9, 1, 12),
+      at(2027, 6, 15, 12),
+      at(2028, 2, 29, 12),
+      at(2026, 12, 25, 12),
+    ],
+  },
+  // Du 1er septembre au 14 octobre inclus (la veille d'Halloween) ; l'année ne compte pas.
+  automne: {
+    bounds: [
+      bounds('2026', [2026, 9, 1], [2026, 10, 14]),
+      bounds('2028, bissextile', [2028, 9, 1], [2028, 10, 14]),
+      bounds('2031', [2031, 9, 1], [2031, 10, 14]),
+    ],
+    inside: [
+      at(2027, 9, 20, 12),
+      at(2027, 9, 30, 23, 59, 59),
+      at(2027, 10, 1, 8),
+      at(2028, 10, 10, 12),
+    ],
+    outside: [
+      at(2027, 8, 31, 12),
+      at(2027, 10, 15, 12),
+      at(2027, 6, 15, 12),
+      at(2028, 2, 29, 12),
+      at(2026, 12, 25, 12),
+    ],
+  },
   // Du 15 octobre au 1er novembre inclus ; l'année ne compte pas.
   halloween: {
     bounds: [
@@ -168,7 +212,15 @@ function everyDay(): Date[] {
 describe('thème saisonnier : la règle de dates, saison par saison', () => {
   it('la table couvre toutes les saisons et le registre est dans l’ordre de l’année', () => {
     expect(Object.keys(CASES).sort()).toEqual([...SEASONS].sort())
-    expect(SEASONS).toEqual(['galette', 'valentin', 'paques', 'halloween', 'noel'])
+    expect(SEASONS).toEqual([
+      'galette',
+      'valentin',
+      'paques',
+      'ete',
+      'automne',
+      'halloween',
+      'noel',
+    ])
     expect(Object.keys(COLORS).sort()).toEqual([...SEASONS].sort())
   })
 
@@ -224,6 +276,8 @@ describe('thème saisonnier : la règle de dates, saison par saison', () => {
     expect([isPaquesSeason(), isHalloweenSeason(), isNoelSeason()]).toEqual([true, false, false])
     expect(currentSeason(at(2027, 1, 15, 9))).toBe('galette')
     expect(currentSeason(at(2027, 2, 12, 9))).toBe('valentin')
+    expect(currentSeason(at(2027, 7, 15, 9))).toBe('ete')
+    expect(currentSeason(at(2027, 9, 20, 9))).toBe('automne')
 
     vi.setSystemTime(at(2026, 10, 20, 9))
     expect([isPaquesSeason(), isHalloweenSeason(), isNoelSeason()]).toEqual([false, true, false])
@@ -410,6 +464,33 @@ describe('thème saisonnier : application', () => {
     expect(html.hasAttribute('data-season')).toBe(false)
   })
 
+  it('en saison de l’été : data-season="ete" et barre du navigateur orange brûlé, du 21 juin au 31 août', () => {
+    expect(applySeason(at(2027, 7, 15))).toBe('ete')
+
+    expect(html.dataset.season).toBe('ete')
+    expect(meta()).toBe('#b8460f')
+
+    applySeason(at(2027, 6, 20))
+    expect(html.hasAttribute('data-season')).toBe(false)
+    expect(meta()).toBe('#1E6B4C')
+  })
+
+  it('en saison de l’automne : data-season="automne" et barre du navigateur olive, du 1er septembre au 14 octobre', () => {
+    expect(applySeason(at(2027, 9, 20))).toBe('automne')
+
+    expect(html.dataset.season).toBe('automne')
+    expect(meta()).toBe('#4d5a16')
+
+    // L'été finit le 31 août, l'automne le 14 octobre, et Halloween prend le relais le 15.
+    applySeason(at(2027, 8, 31))
+    expect(html.dataset.season).toBe('ete')
+    applySeason(at(2027, 10, 14))
+    expect(html.dataset.season).toBe('automne')
+    applySeason(at(2027, 10, 15))
+    expect(html.dataset.season).toBe('halloween')
+    expect(meta()).toBe('#43206b')
+  })
+
   it('de Halloween à Noël puis à la galette, la saison et la couleur suivent', () => {
     applySeason(at(2026, 10, 20))
     applySeason(at(2026, 11, 20))
@@ -508,6 +589,36 @@ describe('thème saisonnier : application', () => {
       season.enabled = false
       await nextTick()
       expect(localStorage.getItem('repas.season')).toBe('galette,valentin')
+    })
+
+    it('en saison de l’été : actif, data-season="ete", couper l’automne ne la coupe pas', async () => {
+      vi.setSystemTime(at(2027, 7, 15))
+      localStorage.setItem('repas.season', 'automne')
+
+      const season = useSeasonStore()
+
+      expect(season.season).toBe('ete')
+      expect(season.activeSeason).toBe('ete')
+      expect(html.dataset.season).toBe('ete')
+
+      season.enabled = false
+      await nextTick()
+      expect(localStorage.getItem('repas.season')).toBe('ete,automne')
+    })
+
+    it('en saison de l’automne : actif, data-season="automne", sans couper les autres saisons', async () => {
+      vi.setSystemTime(at(2027, 9, 20))
+      localStorage.setItem('repas.season', 'ete,halloween')
+
+      const season = useSeasonStore()
+
+      expect(season.season).toBe('automne')
+      expect(season.activeSeason).toBe('automne')
+      expect(html.dataset.season).toBe('automne')
+
+      season.enabled = false
+      await nextTick()
+      expect(localStorage.getItem('repas.season')).toBe('ete,automne,halloween')
     })
 
     it('hors saison : inactif, rien sur <html>', () => {
@@ -636,25 +747,25 @@ describe('thème saisonnier : application', () => {
     afterEach(() => stop())
 
     it('réévalue quand l’onglet redevient visible', async () => {
-      vi.setSystemTime(at(2026, 10, 14, 12))
+      vi.setSystemTime(at(2027, 6, 20, 12))
       const season = useSeasonStore()
       stop = followSeason()
       expect(season.active).toBe(false)
 
-      vi.setSystemTime(at(2026, 10, 20, 12))
+      vi.setSystemTime(at(2027, 7, 15, 12))
       document.dispatchEvent(new Event('visibilitychange'))
 
       await nextTick()
       expect(season.active).toBe(true)
-      expect(html.dataset.season).toBe('halloween')
+      expect(html.dataset.season).toBe('ete')
     })
 
     it('ne fait rien tant que l’onglet est caché', () => {
-      vi.setSystemTime(at(2026, 10, 14, 12))
+      vi.setSystemTime(at(2027, 6, 20, 12))
       const season = useSeasonStore()
       stop = followSeason()
 
-      vi.setSystemTime(at(2026, 10, 20, 12))
+      vi.setSystemTime(at(2027, 7, 15, 12))
       visibility.mockReturnValue('hidden')
       document.dispatchEvent(new Event('visibilitychange'))
 
@@ -662,7 +773,7 @@ describe('thème saisonnier : application', () => {
     })
 
     it('change de thème à minuit, sans rechargement : entrée dans la saison', async () => {
-      vi.setSystemTime(at(2026, 10, 14, 23, 59, 0))
+      vi.setSystemTime(at(2027, 6, 20, 23, 59, 0))
       const season = useSeasonStore()
       stop = followSeason()
       expect(season.active).toBe(false)
@@ -673,7 +784,7 @@ describe('thème saisonnier : application', () => {
       await vi.advanceTimersByTimeAsync(31 * 1000)
       await nextTick()
       expect(season.active).toBe(true)
-      expect(html.dataset.season).toBe('halloween')
+      expect(html.dataset.season).toBe('ete')
     })
 
     it('change de thème à minuit : sortie de la saison, puis le minuit suivant est réarmé', async () => {
@@ -713,12 +824,12 @@ describe('thème saisonnier : application', () => {
     })
 
     it('l’arrêt retire l’écoute et la minuterie', () => {
-      vi.setSystemTime(at(2026, 10, 14, 12))
+      vi.setSystemTime(at(2027, 6, 20, 12))
       const season = useSeasonStore()
       stop = followSeason()
 
       stop()
-      vi.setSystemTime(at(2026, 10, 20, 12))
+      vi.setSystemTime(at(2027, 7, 15, 12))
       document.dispatchEvent(new Event('visibilitychange'))
 
       expect(season.active).toBe(false)
@@ -864,6 +975,26 @@ describe('thème saisonnier : au démarrage', () => {
     vi.setSystemTime(at(2027, 1, 15))
     runInitScript()
     expect(state()).toEqual({ season: 'galette', color: '#223b86' })
+  })
+
+  it('une préférence « ete » ne coupe que l’été, et « automne » que l’automne, au démarrage aussi', () => {
+    localStorage.setItem('repas.season', 'ete')
+
+    vi.setSystemTime(at(2027, 7, 15))
+    runInitScript()
+    expect(state()).toEqual({ season: null, color: '#1E6B4C' })
+
+    vi.setSystemTime(at(2027, 9, 20))
+    runInitScript()
+    expect(state()).toEqual({ season: 'automne', color: '#4d5a16' })
+
+    localStorage.setItem('repas.season', 'automne')
+    runInitScript()
+    expect(state()).toEqual({ season: null, color: '#1E6B4C' })
+
+    vi.setSystemTime(at(2027, 10, 15))
+    runInitScript()
+    expect(state()).toEqual({ season: 'halloween', color: '#43206b' })
   })
 
   it('une préférence « galette » ne coupe que la galette, au démarrage aussi', () => {

@@ -2,6 +2,8 @@
 // (`page.clock`). Ni back ni compte : l'API est simulée par `page.route`.
 import {
   expect,
+  IN_AUTOMNE,
+  IN_ETE,
   IN_GALETTE,
   IN_NOEL,
   IN_PAQUES,
@@ -121,6 +123,28 @@ for (const viewport of [PHONE, DESKTOP]) {
       await expect(corner(page).locator('svg')).toBeVisible()
       await expect(scene(page).locator('svg')).toBeVisible()
       await expect(page.locator('html')).toHaveAttribute('data-season', 'valentin')
+      await expect(corner(page)).toHaveCSS('pointer-events', 'none')
+    })
+
+    test('l’été : le coin (le soleil) et la scène (le bord de mer) sont là', async ({ page }) => {
+      await page.clock.setSystemTime(IN_ETE)
+      await page.goto('/connexion')
+
+      await expect(corner(page).locator('svg')).toBeVisible()
+      await expect(scene(page).locator('svg')).toBeVisible()
+      await expect(page.locator('html')).toHaveAttribute('data-season', 'ete')
+      await expect(corner(page)).toHaveCSS('pointer-events', 'none')
+    })
+
+    test('l’automne : le coin (les feuilles) et la scène (le sous-bois) sont là', async ({
+      page,
+    }) => {
+      await page.clock.setSystemTime(IN_AUTOMNE)
+      await page.goto('/connexion')
+
+      await expect(corner(page).locator('svg')).toBeVisible()
+      await expect(scene(page).locator('svg')).toBeVisible()
+      await expect(page.locator('html')).toHaveAttribute('data-season', 'automne')
       await expect(corner(page)).toHaveCSS('pointer-events', 'none')
     })
 

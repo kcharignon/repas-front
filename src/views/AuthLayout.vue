@@ -22,6 +22,8 @@ const PITCH = {
   galette: 'auth.pitchGalette',
   valentin: 'auth.pitchValentin',
   paques: 'auth.pitchPaques',
+  ete: 'auth.pitchEte',
+  automne: 'auth.pitchAutomne',
   halloween: 'auth.pitchHalloween',
   noel: 'auth.pitchNoel',
 } as const satisfies Record<Season, string>

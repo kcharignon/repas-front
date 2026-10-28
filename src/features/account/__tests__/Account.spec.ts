@@ -330,15 +330,30 @@ describe('aperçu des thèmes', () => {
       'Galette & crêpes',
       'Saint-Valentin',
       'Pâques',
+      'Été',
+      'Automne',
       'Halloween',
       'Noël',
     ])
     expect(chips[0]!.attributes('aria-pressed')).toBe('true')
 
-    await chips[6]!.trigger('click')
-    await flushPromises()
-    expect(document.documentElement.dataset.season).toBe('noel')
-    expect(previewGroup(wrapper).findAll('button')[6]!.attributes('aria-pressed')).toBe('true')
+    // Chaque saison du registre a sa pastille, dans l'ordre de l'année, et chaque pastille pose sa saison.
+    for (const [index, season] of [
+      [2, 'galette'],
+      [3, 'valentin'],
+      [4, 'paques'],
+      [5, 'ete'],
+      [6, 'automne'],
+      [7, 'halloween'],
+      [8, 'noel'],
+    ] as const) {
+      await chips[index]!.trigger('click')
+      await flushPromises()
+      expect(document.documentElement.dataset.season).toBe(season)
+      expect(previewGroup(wrapper).findAll('button')[index]!.attributes('aria-pressed')).toBe(
+        'true',
+      )
+    }
 
     await chips[1]!.trigger('click')
     await flushPromises()
