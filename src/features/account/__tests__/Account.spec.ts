@@ -298,3 +298,53 @@ describe('décor saisonnier', () => {
     })
   })
 })
+
+// L'aperçu des thèmes (ADR 0013) : une section réservée à l'administrateur, une pastille par saison de `SEASONS`.
+describe('aperçu des thèmes', () => {
+  const admin = { ...me, roles: ['ROLE_USER', 'ROLE_ADMIN'], isAdmin: true }
+  const previewGroup = (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
+    wrapper.find('[role="group"][aria-label="Aperçu des thèmes"]')
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-season')
+  })
+
+  it('un utilisateur ordinaire ne voit pas la section', async () => {
+    const { wrapper } = await open()
+
+    expect(wrapper.text()).not.toContain('Aperçu des thèmes')
+    expect(previewGroup(wrapper).exists()).toBe(false)
+  })
+
+  it('l’administrateur choisit un thème, et revient au thème du moment, sans rien écrire', async () => {
+    const { wrapper } = await open({ 'GET /api/v1/me': () => json(admin) })
+    const group = previewGroup(wrapper)
+    const chips = group.findAll('button')
+    const written = JSON.stringify({ ...localStorage })
+
+    expect(chips.map((chip) => chip.text())).toEqual([
+      'Thème du moment',
+      'Sans décor',
+      'Halloween',
+      'Noël',
+    ])
+    expect(chips[0]!.attributes('aria-pressed')).toBe('true')
+
+    await chips[3]!.trigger('click')
+    await flushPromises()
+    expect(document.documentElement.dataset.season).toBe('noel')
+    expect(previewGroup(wrapper).findAll('button')[3]!.attributes('aria-pressed')).toBe('true')
+
+    await chips[1]!.trigger('click')
+    await flushPromises()
+    expect(document.documentElement.hasAttribute('data-season')).toBe(false)
+
+    await chips[0]!.trigger('click')
+    await flushPromises()
+    expect(document.documentElement.hasAttribute('data-season')).toBe(false)
+    expect(chips[0]!.attributes('aria-pressed')).toBe('true')
+    expect(JSON.stringify({ ...localStorage })).toBe(written)
+  })
+})

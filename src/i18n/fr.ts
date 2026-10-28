@@ -1010,6 +1010,17 @@ export default {
   season: {
     halloween: 'Décor d’Halloween',
     noel: 'Décor de Noël',
+    // L'aperçu des thèmes de l'administrateur (ADR 0013) : une clé de nom par saison, ajoutée avec la saison
+    preview: {
+      title: 'Aperçu des thèmes',
+      help: 'Seulement pour toi : le thème change ici et redevient normal dès que tu quittes l’onglet.',
+      current: 'Thème du moment',
+      none: 'Sans décor',
+    },
+    name: {
+      halloween: 'Halloween',
+      noel: 'Noël',
+    },
   },
   theme: {
     label: 'Thème',
