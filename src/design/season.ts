@@ -4,18 +4,91 @@ import { defineStore } from 'pinia'
 import { useSessionStore } from '@/session/session'
 
 /**
- * Thèmes saisonniers (ADR 0010 « Citrouille & nuit », ADR 0011 « Houx & neige »), jour local de l'appareil, chaque année :
- * Halloween du 15 octobre au 1er novembre inclus, Noël du 15 novembre au 5 janvier inclus. Les deux ne se chevauchent jamais.
+ * Thèmes saisonniers (ADR 0010 « Citrouille & nuit », ADR 0011 « Houx & neige », ADR 0014 « Prairie & œufs » et le registre), jour
+ * local de l'appareil, chaque année : Pâques du dimanche de Pâques moins 21 jours au lundi de Pâques inclus (date calculée), Halloween
+ * du 15 octobre au 1er novembre inclus, Noël du 15 novembre au 5 janvier inclus. Les saisons ne se chevauchent jamais.
  * `public/theme-init.js` applique les mêmes règles avant le premier affichage ; un test garde les deux d'accord.
  */
 
-export type Season = 'halloween' | 'noel'
+/** Une saison : sa clé (`data-season`), la couleur de la barre du navigateur (le `--brand` clair) et sa règle de dates. */
+interface SeasonDefinition {
+  readonly key: string
+  readonly color: string
+  /** Vrai pour ce jour LOCAL ; l'année ne compte que pour les fêtes mobiles. */
+  readonly includes: (date: Date) => boolean
+}
+
+/** Le dimanche de Pâques de cette année (calendrier grégorien : Meeus, Jones et Butcher), à minuit, heure locale. */
+export function easterSunday(year: number): Date {
+  const a = year % 19
+  const b = Math.floor(year / 100)
+  const c = year % 100
+  const d = Math.floor(b / 4)
+  const e = b % 4
+  const f = Math.floor((b + 8) / 25)
+  const g = Math.floor((b - f + 1) / 3)
+  const h = (19 * a + b - d - g + 15) % 30
+  const i = Math.floor(c / 4)
+  const k = c % 4
+  const l = (32 + 2 * e + 2 * i - h - k) % 7
+  const m = Math.floor((a + 11 * h + 22 * l) / 451)
+  const month = Math.floor((h + l - 7 * m + 114) / 31)
+  const day = ((h + l - 7 * m + 114) % 31) + 1
+
+  return new Date(year, month - 1, day)
+}
+
+/**
+ * LES SAISONS, dans l'ordre chronologique de l'année (aperçu de l'administrateur, préférence écrite). Une saison nouvelle ajoute une
+ * entrée ici et dans `public/theme-init.js`, ses fichiers (`art/<clé>/`), ses blocs de `theme.css` et ses libellés : le reste en dérive.
+ */
+const DEFINITIONS = [
+  {
+    key: 'paques',
+    color: '#6a50b0',
+    // Du dimanche de Pâques moins 21 jours (00:00) au lundi de Pâques (23:59:59). Les jours sont reconstruits (`new Date(a, m, j ± n)`),
+    // jamais additionnés en millisecondes : un changement d'heure décalerait la borne.
+    includes: (date) => {
+      const year = date.getFullYear()
+      const sunday = easterSunday(year)
+      const day = new Date(year, date.getMonth(), date.getDate()).getTime()
+      const from = new Date(year, sunday.getMonth(), sunday.getDate() - 21).getTime()
+      const to = new Date(year, sunday.getMonth(), sunday.getDate() + 1).getTime()
+
+      return day >= from && day <= to
+    },
+  },
+  {
+    key: 'halloween',
+    color: '#43206b',
+    // Du 15 octobre 00:00:00 au 1er novembre 23:59:59.
+    includes: (date) => {
+      const month = date.getMonth()
+      const day = date.getDate()
+
+      return (month === 9 && day >= 15) || (month === 10 && day === 1)
+    },
+  },
+  {
+    key: 'noel',
+    color: '#7a1530',
+    // Du 15 novembre 00:00:00 au 5 janvier 23:59:59 ; la période enjambe le nouvel an.
+    includes: (date) => {
+      const month = date.getMonth()
+      const day = date.getDate()
+
+      return (month === 10 && day >= 15) || month === 11 || (month === 0 && day <= 5)
+    },
+  },
+] as const satisfies readonly SeasonDefinition[]
+
+export type Season = (typeof DEFINITIONS)[number]['key']
 
 /** L'aperçu de l'administrateur (ADR 0013) : une saison, `none` (le thème de base, sans décor) ou rien (le thème du moment). */
 export type SeasonPreview = Season | 'none'
 
-/** L'ordre fixe des saisons : celui de la préférence écrite. */
-export const SEASONS: readonly Season[] = ['halloween', 'noel']
+/** L'ordre fixe des saisons (celui de l'année) : celui de la préférence écrite. */
+export const SEASONS: readonly Season[] = DEFINITIONS.map((definition) => definition.key)
 
 const KEY = 'repas.season'
 /** L'ancienne valeur (version d'Halloween seule) : « décor coupé », lue comme `halloween`. */
@@ -23,27 +96,33 @@ const LEGACY_OFF = 'off'
 
 /** La couleur de la barre du navigateur : celle de `index.html` hors saison. */
 const BASE_COLOR = '#1E6B4C'
-const SEASON_COLOR: Record<Season, string> = { halloween: '#43206b', noel: '#7a1530' }
+const SEASON_COLOR = Object.fromEntries(
+  DEFINITIONS.map((definition) => [definition.key, definition.color]),
+) as Record<Season, string>
+
+/** Ce jour local est-il dans cette saison ? La règle de chaque saison, écrite une seule fois. */
+export function seasonIncludes(season: Season, date: Date = new Date()): boolean {
+  return DEFINITIONS.find((definition) => definition.key === season)!.includes(date)
+}
+
+/** Du dimanche de Pâques moins 21 jours au lundi de Pâques inclus, en heure locale ; la date de Pâques est calculée. */
+export function isPaquesSeason(date: Date = new Date()): boolean {
+  return seasonIncludes('paques', date)
+}
 
 /** Du 15 octobre 00:00:00 au 1er novembre 23:59:59, en heure locale ; l'année ne compte pas. */
 export function isHalloweenSeason(date: Date = new Date()): boolean {
-  const month = date.getMonth()
-  const day = date.getDate()
-  return (month === 9 && day >= 15) || (month === 10 && day === 1)
+  return seasonIncludes('halloween', date)
 }
 
 /** Du 15 novembre 00:00:00 au 5 janvier 23:59:59, en heure locale ; la période enjambe le nouvel an, l'année ne compte pas. */
 export function isNoelSeason(date: Date = new Date()): boolean {
-  const month = date.getMonth()
-  const day = date.getDate()
-  return (month === 10 && day >= 15) || month === 11 || (month === 0 && day <= 5)
+  return seasonIncludes('noel', date)
 }
 
 /** La saison en cours pour ce jour local, ou `null`. */
 export function currentSeason(date: Date = new Date()): Season | null {
-  if (isHalloweenSeason(date)) return 'halloween'
-  if (isNoelSeason(date)) return 'noel'
-  return null
+  return SEASONS.find((season) => seasonIncludes(season, date)) ?? null
 }
 
 /**
