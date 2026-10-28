@@ -478,6 +478,24 @@ describe('IngredientEditorView', () => {
     })
   })
 
+  it('met en majuscule le nom tapé et envoie la majuscule', async () => {
+    const { wrapper, context, fetchMock } = await edit('/ingredients/nouveau?rayon=legumes', {
+      'POST /api/v1/ingredients': () =>
+        new Response(null, { status: 201, headers: { Location: '/api/v1/ingredients/oeufs' } }),
+    })
+    await ready(wrapper)
+
+    await nameInput(wrapper).setValue('œufs de caille')
+    expect((nameInput(wrapper).element as HTMLInputElement).value).toBe('Œufs de caille')
+    await wrapper.find('form').trigger('submit')
+    await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('department'))
+
+    const post = fetchMock.mock.calls
+      .map(([call]) => call as Request)
+      .find((request) => request.method === 'POST' && request.url.endsWith('/ingredients'))
+    expect(await post?.json()).toMatchObject({ name: 'Œufs de caille' })
+  })
+
   it('affiche le message du back quand il refuse (422)', async () => {
     const { wrapper } = await edit('/ingredients/nouveau?rayon=legumes', {
       'POST /api/v1/ingredients': () =>
@@ -519,7 +537,7 @@ describe('IngredientEditorView', () => {
       .map(([call]) => call as Request)
       .find((request) => request.method === 'PUT')
     // Équation intacte : rien n'est réécrit (le back connaît déjà la conversion)
-    expect(await put?.json()).toMatchObject({ name: 'ma sauce maison', coefficient: null })
+    expect(await put?.json()).toMatchObject({ name: 'Ma sauce maison', coefficient: null })
   })
 
   describe("l'équation de conversion", () => {
@@ -878,7 +896,7 @@ describe('IngredientEditorView', () => {
       await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('department'))
 
       expect(await putBody(fetchMock)).toEqual({
-        name: 'ma sauce',
+        name: 'Ma sauce',
         departmentSlug: 'legumes',
         defaultCookingUnitSlug: 'gramme',
         defaultPurchaseUnitSlug: 'kilo',
@@ -936,7 +954,7 @@ describe('IngredientEditorView', () => {
       await flushPromises()
 
       expect(await putBody(fetchMock)).toEqual({
-        name: 'ma sauce',
+        name: 'Ma sauce',
         departmentSlug: 'legumes',
         defaultCookingUnitSlug: 'gramme',
         defaultPurchaseUnitSlug: 'kilo',

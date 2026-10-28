@@ -155,6 +155,50 @@ describe('RecipeEditorView', () => {
       })
     })
 
+    it('met la première lettre du nom en majuscule dans le champ et dans la requête', async () => {
+      const { wrapper, fetchMock } = await edit({
+        'PUT /api/v1/recipes/r1': () => new Response(null, { status: 204 }),
+      })
+
+      await nameInput(wrapper).setValue('gratin de courgettes au chèvre')
+      expect((nameInput(wrapper).element as HTMLInputElement).value).toBe(
+        'Gratin de courgettes au chèvre',
+      )
+      await submit(wrapper)
+      await vi.waitFor(() =>
+        expect(fetchMock.mock.calls.some(([call]) => (call as Request).method === 'PUT')).toBe(
+          true,
+        ),
+      )
+
+      const put = fetchMock.mock.calls
+        .map(([call]) => call as Request)
+        .find((request) => request.method === 'PUT')
+      expect(await put?.json()).toMatchObject({ name: 'Gratin de courgettes au chèvre' })
+    })
+
+    it("envoie la majuscule même pour un nom lu en minuscules qu'on n'a pas retapé", async () => {
+      const { wrapper, fetchMock } = await open('/recettes/r1/modifier', {
+        'GET /api/v1/recipes/r1': () => json({ ...recipe, name: 'œufs cocotte' }),
+        'PUT /api/v1/recipes/r1': () => new Response(null, { status: 204 }),
+      })
+      await vi.waitFor(() =>
+        expect((nameInput(wrapper).element as HTMLInputElement).value).toBe('œufs cocotte'),
+      )
+
+      await submit(wrapper)
+      await vi.waitFor(() =>
+        expect(fetchMock.mock.calls.some(([call]) => (call as Request).method === 'PUT')).toBe(
+          true,
+        ),
+      )
+
+      const put = fetchMock.mock.calls
+        .map(([call]) => call as Request)
+        .find((request) => request.method === 'PUT')
+      expect(await put?.json()).toMatchObject({ name: 'Œufs cocotte' })
+    })
+
     it('retire une ligne et en ajoute une vide', async () => {
       const { wrapper } = await edit()
       await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(2))
@@ -237,6 +281,15 @@ describe('RecipeEditorView', () => {
       await vi.waitFor(() =>
         expect((wrapper.find('select').element as HTMLSelectElement).value).toBe('entree'),
       )
+    })
+
+    it('met le nom tapé en majuscule dès la première lettre', async () => {
+      const { wrapper } = await open('/recettes/nouvelle')
+      await vi.waitFor(() => expect(wrapper.find('select').exists()).toBe(true))
+
+      await nameInput(wrapper).setValue('pâtes carbonara')
+
+      expect((nameInput(wrapper).element as HTMLInputElement).value).toBe('Pâtes carbonara')
     })
   })
 })
