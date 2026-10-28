@@ -17,6 +17,7 @@ export default {
     cancel: 'Annuler',
     save: 'Enregistrer',
     delete: 'Supprimer',
+    clearSearch: 'Effacer la recherche',
   },
   // L'équation d'une conversion (ConversionEquation.vue) : « 8 tasses = 1 kilo », la phrase se lit en direct
   conversion: {
@@ -335,6 +336,10 @@ export default {
     othersTitle: 'Recettes des autres',
     othersHelp: 'Copie une recette dans les tiennes pour la planifier et la modifier.',
     othersNone: 'Rien de nouveau à copier pour le moment.',
+    othersSearch: 'Rechercher une recette des autres',
+    othersResults: 'Résultats de la recherche',
+    othersCount: '{count} recette | {count} recettes',
+    othersNoMatch: 'Aucune recette ne ressemble à « {search} ».',
     othersMore: 'Voir plus',
     copy: 'Copier',
     copyNamed: 'Copier {name} dans mes recettes',

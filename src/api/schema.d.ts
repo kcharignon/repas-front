@@ -567,8 +567,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Recettes des autres utilisateurs que l'utilisateur authentifié n'a pas encore copiées, triées par slug
-         * @description 200 recettes au plus par réponse, les premières dans l'ordre du slug (`totalItems` donne le vrai nombre). Sans paramètre, la première page de 200 : `limit` et `offset` facultatifs lisent la suite.
+         * Recettes des autres utilisateurs que l'utilisateur authentifié n'a pas encore copiées : triées par catégorie, ou cherchées par nom du plus pertinent au moins pertinent
+         * @description Sans `q`, les recettes sont triées par catégorie (l'ordre des types de recette), puis par nom, puis par identifiant. Avec `q`, seules les recettes dont le nom correspond sont rendues, du plus pertinent au moins pertinent (Jaro-Winkler, ADR 0019), à pertinence égale par nom puis par identifiant, toutes catégories confondues ; chaque recette porte sa catégorie (`typeSlug`, `typeName`). 200 recettes au plus par réponse (`totalItems` donne le vrai nombre). Sans autre paramètre, la première page de 200 : `limit` et `offset` facultatifs lisent la suite.
          */
         get: operations["get_api_list_other_people_recipes"];
         put?: never;
@@ -1244,7 +1244,7 @@ export interface components {
         };
         IngredientPayload: {
             /**
-             * @description Nom de l'ingrédient (200 caractères au plus)
+             * @description Nom de l'ingrédient (200 caractères au plus). La première lettre est mise en majuscule par le serveur (le reste du nom est conservé tel quel) : le nom enregistré, renvoyé par les lectures, peut donc différer de celui envoyé
              * @example Praliné
              */
             name: string;
@@ -1315,7 +1315,7 @@ export interface components {
         };
         RecipePayload: {
             /**
-             * @description Nom de la recette
+             * @description Nom de la recette. La première lettre est mise en majuscule par le serveur (le reste du nom est conservé tel quel) : le nom enregistré, renvoyé par les lectures, peut donc différer de celui envoyé
              * @example Pâtes carbonara
              */
             name: string;
@@ -1392,6 +1392,8 @@ export interface components {
             limit: number;
             /** @default 0 */
             offset: number;
+            /** @default null */
+            q: string | null;
         };
         MarkIngredientsDistinctPayload: {
             /**
@@ -2510,16 +2512,21 @@ export interface components {
             /** @example pâtes carbonara */
             name: string;
             /**
-             * @description Nom du type de recette
+             * @description Nom du type de recette (la catégorie)
              * @example plat
              */
             typeName: string;
+            /**
+             * @description Identifiant stable du type de recette, pour grouper les recettes par catégorie
+             * @example plat
+             */
+            typeSlug: string;
         };
         OtherPeopleRecipesDTO: {
-            /** @description Les recettes de cette page, triées par slug, 200 au plus */
+            /** @description Les recettes de cette page, 200 au plus : sans recherche triées par catégorie (l'ordre des types) puis par nom, avec une recherche par pertinence décroissante, toutes catégories confondues */
             member: components["schemas"]["OtherPeopleRecipeDTO"][];
             /**
-             * @description Le nombre réel de recettes des autres, toutes pages confondues (peut dépasser le nombre de `member`)
+             * @description Le nombre réel de recettes des autres (ou de correspondances, avec une recherche), toutes pages confondues ; peut dépasser le nombre de `member`
              * @example 12
              */
             totalItems: number;
@@ -4907,8 +4914,13 @@ export interface operations {
             query?: {
                 /** @description Nombre de recettes de la page, de 1 à 200 */
                 limit?: number;
-                /** @description Nombre de recettes sautées, dans l'ordre du slug */
+                /** @description Nombre de recettes sautées, dans l'ordre de la réponse */
                 offset?: number;
+                /**
+                 * @description Texte cherché dans le nom des recettes, 100 caractères au plus ; ni la casse ni les accents ne comptent et une faute de frappe est tolérée. Absent ou vide : pas de recherche. Un texte sans lettre ni chiffre ne trouve rien (liste vide)
+                 * @example carbonnara
+                 */
+                q?: string;
             };
             header?: never;
             path?: never;
@@ -4925,7 +4937,7 @@ export interface operations {
                     "application/json": components["schemas"]["OtherPeopleRecipesDTO"];
                 };
             };
-            /** @description Paramètre `limit` ou `offset` hors de ses bornes */
+            /** @description Paramètre `limit`, `offset` ou `q` hors de ses bornes */
             422: {
                 headers: {
                     [name: string]: unknown;

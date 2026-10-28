@@ -9,7 +9,7 @@ export const recipeKeys = {
   all: ['recipes'] as const,
   types: ['recipes', 'types'] as const,
   byType: (slug: string) => ['recipes', 'type', slug] as const,
-  others: ['recipes', 'others'] as const,
+  others: (search: string) => ['recipes', 'others', search] as const,
   detail: (id: string) => ['recipes', 'detail', id] as const,
 }
 
@@ -39,27 +39,46 @@ export function useRecipesByType(slug: () => string | null) {
   })
 }
 
+/** Longueur minimale d'une recherche de recette des autres : en dessous, la liste n'est pas filtrée (comme la recherche d'ingrédients). */
+export const MIN_OTHERS_SEARCH_LENGTH = 2
+
 /**
  * Les recettes des autres utilisateurs que celui-ci n'a pas encore copiées, par pages de 200 au plus (`offset`) : `totalItems`
- * est le vrai nombre, la page suivante se charge à la demande.
+ * est le vrai nombre, la page suivante se charge à la demande. Sans recherche, le back les trie par catégorie ; avec `search`
+ * (2 caractères au moins, sinon elle est ignorée), il rend les correspondances par pertinence, toutes catégories confondues.
+ * Pendant qu'une recherche s'affine, les résultats de la précédente restent affichés (jamais ceux de la liste par catégories).
  */
-export function useOtherPeopleRecipes() {
+export function useOtherPeopleRecipes(search: () => string = () => '') {
   const { api } = useSessionStore()
+  const term = () => {
+    const trimmed = search().trim()
+
+    return trimmed.length >= MIN_OTHERS_SEARCH_LENGTH ? trimmed : ''
+  }
 
   return useInfiniteQuery({
-    queryKey: recipeKeys.others,
+    queryKey: computed(() => recipeKeys.others(term())),
     initialPageParam: 0,
-    queryFn: ({ pageParam }) =>
-      unwrap(
+    queryFn: ({ queryKey, pageParam, signal }) => {
+      // La recherche de la clé, pas celle d'aujourd'hui : « Voir plus » continue la liste qu'il a sous les yeux
+      const q = queryKey[2]
+
+      return unwrap(
         api.GET('/api/v1/recipes/other-people', {
-          params: { query: pageParam > 0 ? { offset: pageParam } : {} },
+          params: {
+            query: { ...(q !== '' ? { q } : {}), ...(pageParam > 0 ? { offset: pageParam } : {}) },
+          },
+          signal,
         }),
-      ),
+      )
+    },
     getNextPageParam: (lastPage, pages) => {
       const loaded = pages.reduce((count, page) => count + page.member.length, 0)
 
       return lastPage.member.length > 0 && loaded < lastPage.totalItems ? loaded : undefined
     },
+    placeholderData: (previous, previousQuery) =>
+      term() !== '' && previousQuery?.queryKey[2] !== '' ? previous : undefined,
   })
 }
 

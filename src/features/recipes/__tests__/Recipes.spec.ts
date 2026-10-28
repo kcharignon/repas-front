@@ -247,7 +247,10 @@ describe('RecipesView', () => {
 describe('OtherRecipesView', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  const others = { member: [{ id: 'o1', name: 'Ramen', typeName: 'Plat' }], totalItems: 1 }
+  const others = {
+    member: [{ id: 'o1', name: 'Ramen', typeName: 'Plat', typeSlug: 'plat' }],
+    totalItems: 1,
+  }
 
   it('liste les recettes à copier et ouvre la copie', async () => {
     const fetchMock = stubApi({
@@ -276,8 +279,14 @@ describe('OtherRecipesView', () => {
 
         return json(
           offset === null
-            ? { member: [{ id: 'o1', name: 'Ramen', typeName: 'Plat' }], totalItems: 2 }
-            : { member: [{ id: 'o2', name: 'Tarte', typeName: 'Dessert' }], totalItems: 2 },
+            ? {
+                member: [{ id: 'o1', name: 'Ramen', typeName: 'Plat', typeSlug: 'plat' }],
+                totalItems: 2,
+              }
+            : {
+                member: [{ id: 'o2', name: 'Tarte', typeName: 'Dessert', typeSlug: 'dessert' }],
+                totalItems: 2,
+              },
         )
       },
     })
