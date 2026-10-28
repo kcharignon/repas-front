@@ -16,6 +16,7 @@ import AccountView from '@/views/AccountView.vue'
 
 const HALLOWEEN = new Date(2026, 9, 20, 12)
 const NOEL = new Date(2026, 11, 20, 12)
+const GALETTE = new Date(2027, 0, 15, 12)
 const PAQUES = new Date(2027, 2, 20, 12)
 const pieces = (wrapper: ReturnType<typeof mount>) => wrapper.findAll('svg[focusable="false"]')
 
@@ -58,6 +59,7 @@ describe('écrans illustrés en saison', () => {
   })
 
   for (const [label, date] of [
+    ['la galette', GALETTE],
     ['Pâques', PAQUES],
     ['Halloween', HALLOWEEN],
     ['Noël', NOEL],

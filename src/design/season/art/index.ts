@@ -29,6 +29,23 @@ export type Slot = (typeof SLOTS)[number]
 
 /** Emplacement → nom du fichier (sans `.svg`). Une pièce ne tient jamais deux emplacements d'un même écran. */
 export const PACKS: Record<Season, Record<Slot, string>> = {
+  galette: {
+    hero: 'feast',
+    corner: 'crown-garland',
+    scene: 'kitchen',
+    aside: 'star',
+    'empty-list': 'pan',
+    'empty-recipes': 'galette',
+    'empty-search': 'lemon',
+    offline: 'mug',
+    'not-found': 'bean',
+    error: 'crepe',
+    'title-list': 'crown',
+    'title-recipes': 'whisk',
+    'title-aisles': 'jam',
+    'title-account': 'crown',
+    'recipe-placeholder': 'crepe-stack',
+  },
   paques: {
     hero: 'bunny-basket',
     corner: 'blossom-corner',
@@ -90,6 +107,7 @@ export const PRELOADED_SLOTS: readonly Slot[] = ['offline']
 
 /** Les pièces laissées libres exprès (dessinées, pas encore posées) : le test de la table les connaît. */
 export const FREE_PIECES: Record<Season, readonly string[]> = {
+  galette: [],
   paques: [],
   halloween: [],
   noel: [],

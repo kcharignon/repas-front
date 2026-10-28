@@ -16,5 +16,6 @@
 | [0012](0012-illustrations-de-saison.md) | Illustrations de saison : coin, scène de fond, héros et pièces d'accueil (pack de saison) | Accepted |
 | [0013](0013-apercu-des-themes-par-l-administrateur.md) | Aperçu des thèmes par l'administrateur : en mémoire, jamais écrit, effacé en quittant la page | Accepted |
 | [0014](0014-theme-saisonnier-paques-et-registre-de-saisons.md) | Thème saisonnier « Prairie & œufs » (Pâques, date calculée) et registre de saisons | Accepted |
+| [0015](0015-themes-de-la-galette-et-de-la-saint-valentin.md) | Thèmes « Or & bleu roi » (galette et crêpes, 6 janvier au 2 février) et « Rose & cœur » (Saint-Valentin, 7 au 14 février) | Accepted |
 
 Une décision nouvelle = un nouvel ADR (numéro suivant) dans le même commit que le code qui l'applique.

@@ -4,9 +4,9 @@ import { defineStore } from 'pinia'
 import { useSessionStore } from '@/session/session'
 
 /**
- * Thèmes saisonniers (ADR 0010 « Citrouille & nuit », ADR 0011 « Houx & neige », ADR 0014 « Prairie & œufs » et le registre), jour
- * local de l'appareil, chaque année : Pâques du dimanche de Pâques moins 21 jours au lundi de Pâques inclus (date calculée), Halloween
- * du 15 octobre au 1er novembre inclus, Noël du 15 novembre au 5 janvier inclus. Les saisons ne se chevauchent jamais.
+ * Thèmes saisonniers (ADR 0010 « Citrouille & nuit », ADR 0011 « Houx & neige », ADR 0014 « Prairie & œufs » et le registre, ADR 0015
+ * « Or & bleu roi »), jour local de l'appareil, chaque année : la galette du 6 janvier au 2 février inclus, Pâques du dimanche de Pâques moins 21 jours au lundi de Pâques inclus (date calculée),
+ * Halloween du 15 octobre au 1er novembre inclus, Noël du 15 novembre au 5 janvier inclus. Les saisons ne se chevauchent jamais.
  * `public/theme-init.js` applique les mêmes règles avant le premier affichage ; un test garde les deux d'accord.
  */
 
@@ -43,6 +43,17 @@ export function easterSunday(year: number): Date {
  * entrée ici et dans `public/theme-init.js`, ses fichiers (`art/<clé>/`), ses blocs de `theme.css` et ses libellés : le reste en dérive.
  */
 const DEFINITIONS = [
+  {
+    key: 'galette',
+    color: '#223b86',
+    // Du 6 janvier 00:00:00 (l'Épiphanie) au 2 février 23:59:59 (la Chandeleur).
+    includes: (date) => {
+      const month = date.getMonth()
+      const day = date.getDate()
+
+      return (month === 0 && day >= 6) || (month === 1 && day <= 2)
+    },
+  },
   {
     key: 'paques',
     color: '#6a50b0',

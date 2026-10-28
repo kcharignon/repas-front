@@ -19,6 +19,7 @@ onBeforeUnmount(() => (cornerOnBanner.value = false))
 
 // La phrase du bandeau : une par saison, la phrase de base hors saison.
 const PITCH = {
+  galette: 'auth.pitchGalette',
   paques: 'auth.pitchPaques',
   halloween: 'auth.pitchHalloween',
   noel: 'auth.pitchNoel',

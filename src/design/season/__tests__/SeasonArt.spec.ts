@@ -11,6 +11,7 @@ import SeasonEmpty from '../SeasonEmpty.vue'
 
 const HALLOWEEN = new Date(2026, 9, 20, 12)
 const NOEL = new Date(2026, 11, 20, 12)
+const GALETTE = new Date(2027, 0, 15, 12)
 const PAQUES = new Date(2027, 2, 20, 12)
 
 async function render(
@@ -64,6 +65,17 @@ describe('SeasonArt', () => {
 
     expect(noel).not.toBe('')
     expect(noel).not.toBe(other.html())
+  })
+
+  it('en saison de la galette : la pièce est celle de la galette', async () => {
+    vi.setSystemTime(GALETTE)
+    const galette = (await rendered(SeasonArt, { name: 'empty-list' })).html()
+    vi.setSystemTime(HALLOWEEN)
+    localStorage.clear()
+    const other = (await rendered(SeasonArt, { name: 'empty-list' })).html()
+
+    expect(galette).toContain('viewBox="0 0 120 120"')
+    expect(galette).not.toBe(other)
   })
 
   it('en saison de Pâques : la pièce est celle de Pâques', async () => {
@@ -148,6 +160,7 @@ describe('SeasonCorner et SeasonScene', () => {
   })
 
   for (const [label, date] of [
+    ['la galette', GALETTE],
     ['Pâques', PAQUES],
     ['Halloween', HALLOWEEN],
     ['Noël', NOEL],

@@ -2,10 +2,11 @@
 // au 5 janvier), jour du navigateur. L'horloge est posée par
 // chaque test (`page.clock`) : rien ne dépend du jour où la suite tourne. Ni back ni compte : l'API est simulée par `page.route`.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, IN_NOEL, IN_PAQUES, IN_SEASON, test, type Page } from './support/test'
+import { expect, IN_GALETTE, IN_NOEL, IN_PAQUES, IN_SEASON, test, type Page } from './support/test'
 
 const PITCH = 'Tes recettes, tes courses, sans oublier le basilic.'
 const PITCH_HALLOWEEN = 'Tes recettes, tes courses, sans oublier la citrouille.'
+const PITCH_GALETTE = 'Tes recettes, tes courses, sans oublier la galette.'
 const PITCH_PAQUES = 'Tes recettes, tes courses, sans oublier le chocolat.'
 const PITCH_NOEL = 'Tes recettes, tes courses, sans oublier la bûche.'
 
@@ -13,6 +14,9 @@ const PITCH_NOEL = 'Tes recettes, tes courses, sans oublier la bûche.'
 const GREEN = 'rgb(30, 107, 76)'
 const PURPLE = 'rgb(67, 32, 107)'
 const PURPLE_DARK = 'rgb(45, 24, 80)'
+// La galette : bleu roi, plus sombre en mode sombre.
+const ROYAL = 'rgb(34, 59, 134)'
+const ROYAL_DARK = 'rgb(26, 42, 102)'
 // Pâques : violet, plus sombre en mode sombre.
 const VIOLET = 'rgb(106, 80, 176)'
 const VIOLET_DARK = 'rgb(74, 54, 127)'
@@ -152,6 +156,57 @@ test.describe('écran de connexion', () => {
   }
 })
 
+test.describe('écran de connexion, la galette', () => {
+  test('le 15 janvier 2027 : or et bleu roi, bandeau bleu roi, décor, barre du navigateur bleu roi', async ({
+    page,
+  }) => {
+    await page.clock.setSystemTime(IN_GALETTE)
+    await page.goto('/connexion')
+
+    await expect(page.locator('html')).toHaveAttribute('data-season', 'galette')
+    await expect(page.getByText(PITCH_GALETTE)).toBeVisible()
+    await expect(page.getByText(PITCH, { exact: true })).toHaveCount(0)
+    await expect(banner(page)).toHaveCSS('background-color', ROYAL)
+    // Le héros illustré (la galette couronnée et les crêpes) est dans le bandeau
+    await expect(banner(page).locator('svg[focusable="false"]')).toHaveCount(1)
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#223b86')
+  })
+
+  test('en sombre : le bandeau est bleu nuit et le fond indigo', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await page.clock.setSystemTime(IN_GALETTE)
+    await page.goto('/connexion')
+
+    await expect(banner(page)).toHaveCSS('background-color', ROYAL_DARK)
+    expect(await background(page)).toBe('rgb(17, 24, 50)')
+  })
+
+  for (const [label, date, season] of [
+    ['le 6 janvier à 00:00:00 (début)', new Date(2027, 0, 6, 0, 0, 0), 'galette'],
+    ['le 2 février à 23:59:59 (la Chandeleur, fin)', new Date(2027, 1, 2, 23, 59, 59), 'galette'],
+    ['le 5 janvier à 23:59:59 (la veille, Noël)', new Date(2027, 0, 5, 23, 59, 59), 'noel'],
+    ['le 3 février à 00:00:00 (le lendemain)', new Date(2027, 1, 3, 0, 0, 0), null],
+  ] as const) {
+    test(`${label}`, async ({ page }) => {
+      await page.clock.setSystemTime(date)
+      await page.goto('/connexion')
+
+      if (season) await expect(page.locator('html')).toHaveAttribute('data-season', season)
+      else await expect(page.locator('html')).not.toHaveAttribute('data-season', /.*/)
+    })
+  }
+
+  test('le décor de la galette coupé : comme hors saison', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('repas.season', 'galette'))
+    await page.clock.setSystemTime(IN_GALETTE)
+    await page.goto('/connexion')
+
+    await expect(page.getByText(PITCH)).toBeVisible()
+    await expect(page.locator('html')).not.toHaveAttribute('data-season', /.*/)
+    await expect(banner(page)).toHaveCSS('background-color', GREEN)
+  })
+})
+
 test.describe('écran de connexion, Pâques', () => {
   test('le 20 mars 2027 : prairie et œufs, bandeau violet, décor, barre du navigateur violette', async ({
     page,
@@ -252,7 +307,6 @@ test.describe('écran de connexion, Noël', () => {
   }
 
   for (const [label, date] of [
-    ['le 6 janvier (lendemain de la saison)', new Date(2027, 0, 6, 0, 0, 0)],
     ['le 14 novembre (veille de la saison)', new Date(2026, 10, 14, 23, 59, 59)],
   ] as const) {
     test(`${label} : thème de base`, async ({ page }) => {
@@ -441,7 +495,9 @@ test.describe('écran « Moi »', () => {
     await expect(page.locator('html')).toHaveAttribute('data-season', 'noel')
   })
 
-  test('le 1er janvier : l’interrupteur est là, le 6 janvier non', async ({ page }) => {
+  test('le 1er janvier : l’interrupteur de Noël est là, le 6 janvier non (la galette prend le relais)', async ({
+    page,
+  }) => {
     await fakeBack(page)
     await page.clock.setSystemTime(new Date(2027, 0, 1, 12, 0, 0))
     await page.goto('/moi')

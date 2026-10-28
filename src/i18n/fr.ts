@@ -507,6 +507,7 @@ export default {
   },
   auth: {
     pitch: 'Tes recettes, tes courses, sans oublier le basilic.',
+    pitchGalette: 'Tes recettes, tes courses, sans oublier la galette.',
     pitchPaques: 'Tes recettes, tes courses, sans oublier le chocolat.',
     pitchHalloween: 'Tes recettes, tes courses, sans oublier la citrouille.',
     pitchNoel: 'Tes recettes, tes courses, sans oublier la bûche.',
@@ -1009,6 +1010,7 @@ export default {
     appMenuFailed: 'Le menu de l’application n’a pas pu s’ouvrir. Réessaie.',
   },
   season: {
+    galette: 'Décor de la galette',
     paques: 'Décor de Pâques',
     halloween: 'Décor d’Halloween',
     noel: 'Décor de Noël',
@@ -1020,6 +1022,7 @@ export default {
       none: 'Sans décor',
     },
     name: {
+      galette: 'Galette & crêpes',
       paques: 'Pâques',
       halloween: 'Halloween',
       noel: 'Noël',
