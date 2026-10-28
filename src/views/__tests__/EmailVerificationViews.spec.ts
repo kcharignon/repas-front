@@ -14,7 +14,8 @@ async function mountView(view: typeof CheckEmailView | typeof ConfirmEmailView, 
   return { wrapper, router }
 }
 
-const send = 'POST /api/v1/users/email-verification/send'
+// Renvoyer le lien, c'est redemander l'inscription : la même route, la même réponse `204` pour toute adresse
+const send = 'POST /api/v1/users'
 const confirm = 'POST /api/v1/users/email-verification/confirm'
 
 describe('CheckEmailView', () => {
@@ -28,8 +29,16 @@ describe('CheckEmailView', () => {
     const { wrapper } = await mountView(CheckEmailView, '/verification-email?email=a%40example.com')
 
     expect(wrapper.find('h1').text()).toBe('Vérifie ta boîte mail')
-    expect(wrapper.text()).toContain('Un lien de confirmation a été envoyé à a@example.com.')
+    expect(wrapper.text()).toContain(
+      'Un message vient de partir à a@example.com. Ouvre-le pour continuer.',
+    )
     expect(wrapper.find('input').exists()).toBe(false)
+  })
+
+  it('ne dit jamais qu’un compte vient d’être créé : la réponse est la même pour toute adresse', async () => {
+    const { wrapper } = await mountView(CheckEmailView, '/verification-email?email=a%40example.com')
+
+    expect(wrapper.text()).not.toMatch(/créé|activé|inscri/i)
   })
 
   it("renvoie le lien, annonce l'envoi et attend une minute avant le suivant", async () => {
@@ -40,9 +49,7 @@ describe('CheckEmailView', () => {
     await flushPromises()
 
     expect(await bodyOf(fetchMock, 0)).toEqual({ email: 'a@example.com' })
-    expect(wrapper.find('[role="status"]').text()).toBe(
-      "Si un compte attend cette adresse, un nouveau lien vient d'être envoyé.",
-    )
+    expect(wrapper.find('[role="status"]').text()).toBe('Un nouveau message vient de partir.')
     const button = wrapper.find('button[type=submit]')
     expect(button.text()).toBe('Renvoyer le lien dans 60 s')
     expect(button.attributes('disabled')).toBeDefined()
@@ -58,7 +65,7 @@ describe('CheckEmailView', () => {
     const fetchMock = stubApi({ [send]: () => new Response(null, { status: 204 }) })
     const { wrapper } = await mountView(CheckEmailView, '/verification-email')
 
-    expect(wrapper.text()).toContain("Saisis l'adresse de ton compte")
+    expect(wrapper.text()).toContain('Indique ton adresse e-mail pour recevoir un nouveau lien.')
     await wrapper.find('input[type=email]').setValue('b@example.com')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
@@ -91,17 +98,19 @@ describe('CheckEmailView', () => {
 describe('ConfirmEmailView', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('confirme avec le secret du lien dès l’ouverture et mène à la connexion', async () => {
+  it('confirme avec le secret du lien dès l’ouverture et propose de choisir le mot de passe', async () => {
     const fetchMock = stubApi({ [confirm]: () => new Response(null, { status: 204 }) })
     const { wrapper } = await mountView(ConfirmEmailView, '/confirmation-email?token=le-secret')
     await flushPromises()
 
     expect(calls(fetchMock)).toEqual([confirm])
     expect(await bodyOf(fetchMock, 0)).toEqual({ token: 'le-secret' })
+    // Le compte est actif sans mot de passe : il se choisit par « mot de passe oublié », pas à la connexion
     expect(wrapper.find('[role="status"]').text()).toBe(
-      'Ton adresse est confirmée : ton compte est activé.',
+      'Ton adresse est confirmée. Il te reste à choisir ton mot de passe.',
     )
-    expect(wrapper.find('a[href="/connexion"]').text()).toBe('Se connecter')
+    expect(wrapper.find('a[href="/mot-de-passe-oublie"]').text()).toBe('Choisir mon mot de passe')
+    expect(wrapper.find('a[href="/connexion"]').exists()).toBe(false)
   })
 
   it('annonce la confirmation en cours tant que le back n’a pas répondu', async () => {
@@ -156,6 +165,6 @@ describe('ConfirmEmailView', () => {
     await wrapper.find('button').trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('[role="status"]').text()).toContain('ton compte est activé')
+    expect(wrapper.find('[role="status"]').text()).toContain('Ton adresse est confirmée')
   })
 })

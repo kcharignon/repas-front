@@ -20,6 +20,8 @@ const email = ref('')
 const password = ref('')
 /** Arrivée depuis « Choisis un nouveau mot de passe » : le mot de passe vient d'être changé (ADR 0026 du back). */
 const passwordChanged = computed(() => route.query['mot-de-passe'] === 'change')
+/** Arrivée depuis « Choisis ton mot de passe » : le premier mot de passe vient d'être choisi, le compte est prêt. */
+const accountReady = computed(() => route.query.compte === 'pret')
 const error = ref<string | null>(null)
 const pending = ref(false)
 /** Mot de passe bon, adresse pas encore confirmée : le back répond 403 `EMAIL_NOT_VERIFIED` (ADR 0020 du back). */
@@ -59,11 +61,11 @@ async function submit() {
 <template>
   <AuthLayout :title="t('login.title')">
     <p
-      v-if="passwordChanged"
+      v-if="passwordChanged || accountReady"
       role="status"
       class="rounded-xl bg-soft px-4 py-3 text-sm font-semibold text-primary"
     >
-      {{ t('login.passwordChanged') }}
+      {{ t(accountReady ? 'login.accountReady' : 'login.passwordChanged') }}
     </p>
     <form class="flex flex-col gap-4" @submit.prevent="submit">
       <UiField :label="t('login.email')" v-slot="{ id }">

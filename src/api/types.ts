@@ -37,6 +37,8 @@ export type Dimension = Schemas['Dimension']
 export type CurrentUser = Schemas['CurrentUserDTO']
 export type UserSummary = Schemas['UserSummaryDTO']
 export type UserStatus = UserSummary['status']
+// Inscription par la seule adresse : le générateur type en « obligatoires » les champs qui ont une valeur par défaut (voir `register`)
+export type RegisterPayload = Schemas['RegisterNewUserPayload']
 export type DriveSettings = Schemas['DriveSettingsDTO']
 export type DrivePlan = Schemas['DrivePlanDTO']
 export type DrivePlanLine = Schemas['DrivePlanLineDTO']

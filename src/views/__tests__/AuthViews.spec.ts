@@ -167,6 +167,20 @@ describe('LoginView', () => {
     )
   })
 
+  it('annonce que le compte est prêt, une fois le premier mot de passe choisi', async () => {
+    const { wrapper } = await mountView(LoginView, '/connexion?compte=pret')
+
+    expect(wrapper.find('[role="status"]').text()).toBe(
+      'Ton compte est prêt. Connecte-toi avec ton mot de passe.',
+    )
+  })
+
+  it('ne confond pas la fin de l’inscription avec un mot de passe changé', async () => {
+    const { wrapper } = await mountView(LoginView, '/connexion?compte=pret')
+
+    expect(wrapper.text()).not.toContain('nouveau mot de passe')
+  })
+
   it('n’annonce rien sans la réinitialisation', async () => {
     const { wrapper } = await mountView(LoginView, '/connexion')
 
@@ -177,70 +191,81 @@ describe('LoginView', () => {
 describe('RegisterView', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('inscrit avec le nombre de personnes choisi et mène à la vérification de la boîte mail', async () => {
+  it('ne demande que l’adresse e-mail, avec un seul bouton principal', async () => {
+    const { wrapper } = await mountView(RegisterView, '/inscription')
+
+    expect(wrapper.find('h1').text()).toBe('Créer un compte')
+    expect(wrapper.text()).toContain('Tu recevras un lien pour choisir ton mot de passe.')
+    const inputs = wrapper.findAll('input')
+    expect(inputs).toHaveLength(1)
+    expect(inputs[0]!.attributes('type')).toBe('email')
+    expect(wrapper.findAll('button')).toHaveLength(1)
+    expect(wrapper.find('button[type=submit]').text()).toBe('Créer mon compte')
+  })
+
+  it('envoie l’adresse seule et mène à « Vérifie ta boîte mail »', async () => {
     const fetchMock = stubApi({
-      'POST /api/v1/users': () => new Response(null, { status: 201 }),
+      'POST /api/v1/users': () => new Response(null, { status: 204 }),
     })
     const { wrapper, router } = await mountView(RegisterView, '/inscription')
 
-    await fill(wrapper, {
-      'input[type=email]': 'alexiane@example.com',
-      'input[type=password]': 'un-mot-de-passe',
-      'input[type=number]': '2',
-    })
+    await fill(wrapper, { 'input[type=email]': 'alexiane@example.com' })
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
-    expect(calls(fetchMock)[0]).toBe('POST /api/v1/users')
-    expect(await bodyOf(fetchMock, 0)).toEqual({
-      email: 'alexiane@example.com',
-      password: 'un-mot-de-passe',
-      defaultServing: 2,
-    })
-    // Pas de connexion : le compte attend la confirmation de l'adresse
+    // Pas de connexion, pas d'autre appel : la réponse est la même pour toute adresse
     expect(calls(fetchMock)).toEqual(['POST /api/v1/users'])
+    // Ni mot de passe ni nombre de personnes : le mot de passe se choisit après le clic sur le lien reçu
+    expect(await bodyOf(fetchMock, 0)).toEqual({ email: 'alexiane@example.com' })
     // Les routes sont chargées en différé : on attend l'arrivée
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('check-email'))
     expect(router.currentRoute.value.query.email).toBe('alexiane@example.com')
   })
 
-  it('explique un e-mail déjà pris (409)', async () => {
+  it('affiche une adresse refusée par le back (422) avec une phrase claire', async () => {
     stubApi({
       'POST /api/v1/users': () =>
-        json({ error: { message: 'Email already used' } }, { status: 409 }),
+        json({ error: { message: 'email: Cette valeur n’est pas valide.' } }, { status: 422 }),
     })
-    const { wrapper } = await mountView(RegisterView, '/inscription')
+    const { wrapper, router } = await mountView(RegisterView, '/inscription')
 
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
-    expect(wrapper.find('[role="alert"]').text()).toBe('Cette adresse e-mail est déjà utilisée.')
-  })
-
-  it('affiche tel quel le message de validation du back (422)', async () => {
-    stubApi({
-      'POST /api/v1/users': () =>
-        json({ error: { message: 'password: Cette chaîne est trop courte.' } }, { status: 422 }),
-    })
-    const { wrapper } = await mountView(RegisterView, '/inscription')
-
-    await wrapper.find('form').trigger('submit')
-    await flushPromises()
-
-    expect(wrapper.find('[role="alert"]').text()).toBe('password: Cette chaîne est trop courte.')
+    expect(wrapper.find('[role="alert"]').text()).toBe(
+      'Cette adresse e-mail n’est pas valide. Vérifie-la, puis réessaie.',
+    )
+    expect(router.currentRoute.value.name).toBe('register')
   })
 
   it.each([
-    [429, "Trop d'inscriptions depuis cette adresse. Réessaie plus tard."],
-    [500, 'Le serveur est injoignable. Réessaie dans un instant.'],
-  ])('répond clairement à un %i', async (status, expected) => {
-    stubApi({ 'POST /api/v1/users': () => json({ error: { message: 'x' } }, { status }) })
+    [429, null, 'Trop de demandes en peu de temps. Aucun message n’est parti. Réessaie plus tard.'],
+    [
+      429,
+      '60',
+      'Trop de demandes en peu de temps. Aucun message n’est parti. Réessaie dans 1 minute.',
+    ],
+    [
+      429,
+      '1800',
+      'Trop de demandes en peu de temps. Aucun message n’est parti. Réessaie dans 30 minutes.',
+    ],
+    [500, null, 'Le serveur est injoignable. Réessaie dans un instant.'],
+  ])('répond clairement à un %i (Retry-After %s)', async (status, retryAfter, expected) => {
+    stubApi({
+      'POST /api/v1/users': () =>
+        json(
+          { error: { message: 'x' } },
+          { status, headers: retryAfter === null ? {} : { 'Retry-After': retryAfter } },
+        ),
+    })
     const { wrapper } = await mountView(RegisterView, '/inscription')
 
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
     expect(wrapper.find('[role="alert"]').text()).toBe(expected)
+    expect(wrapper.find('button[type=submit]').attributes('disabled')).toBeUndefined()
   })
 })
 

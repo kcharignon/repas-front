@@ -622,6 +622,27 @@ describe('utilisateurs', () => {
     expect(wrapper.find('main p').text()).toBe('4 comptes · 1 en attente')
   })
 
+  it('dit qu’un compte activé ici peut être sans mot de passe, tant qu’un compte attend', async () => {
+    const { wrapper } = await ready()
+
+    expect(wrapper.text()).toContain(
+      'Un compte activé ici peut être sans mot de passe. La personne en choisit un avec « Mot de passe oublié ? ».',
+    )
+  })
+
+  it('n’ajoute pas cette phrase quand aucun compte n’attend', async () => {
+    const withoutPending = {
+      member: users.member.filter((user) => user.status !== 'PENDING'),
+      totalItems: 3,
+    }
+    const { wrapper } = await open(UsersAdminView, {
+      'GET /api/v1/users': () => json(withoutPending),
+    })
+    await vi.waitFor(() => expect(rows(wrapper)).toHaveLength(3))
+
+    expect(wrapper.text()).not.toContain('sans mot de passe')
+  })
+
   it('trie les comptes en attente d’abord, puis les plus récemment vus, ceux jamais vus à la fin', async () => {
     const { wrapper } = await ready()
 

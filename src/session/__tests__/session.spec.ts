@@ -377,45 +377,32 @@ describe('session', () => {
   })
 
   describe('register', () => {
-    it("inscrit sans connecter : le compte attend la confirmation de l'adresse", async () => {
+    it("inscrit sans connecter : l'adresse seule part, le mot de passe se choisit après le clic sur le lien", async () => {
       const fetchMock = stubApi({
-        'POST /api/v1/users': () => new Response(null, { status: 201 }),
+        'POST /api/v1/users': () => new Response(null, { status: 204 }),
       })
       const session = useSessionStore()
 
-      await session.register('alexiane@example.com', 'un-mot-de-passe', 4)
+      await session.register('alexiane@example.com')
 
       expect(calls(fetchMock)).toEqual(['POST /api/v1/users'])
+      expect(await bodyOf(fetchMock, 0)).toEqual({ email: 'alexiane@example.com' })
       expect(session.isAuthenticated).toBe(false)
     })
 
-    it("n'ouvre pas de session quand l'inscription est refusée (409)", async () => {
+    it("n'ouvre pas de session quand l'inscription est refusée (422)", async () => {
       stubApi({
         'POST /api/v1/users': () =>
-          json({ error: { message: 'Email already used' } }, { status: 409 }),
+          json({ error: { message: 'email: invalide' } }, { status: 422 }),
       })
       const session = useSessionStore()
 
-      await expect(session.register('a@b.fr', 'un-mot-de-passe', 4)).rejects.toMatchObject({
-        status: 409,
-      })
+      await expect(session.register('a@b.fr')).rejects.toMatchObject({ status: 422 })
       expect(session.isAuthenticated).toBe(false)
     })
   })
 
   describe("confirmation de l'adresse", () => {
-    it('demande un nouveau lien pour une adresse', async () => {
-      const fetchMock = stubApi({
-        'POST /api/v1/users/email-verification/send': () => new Response(null, { status: 204 }),
-      })
-      const session = useSessionStore()
-
-      await session.sendEmailVerification('alexiane@example.com')
-
-      expect(calls(fetchMock)).toEqual(['POST /api/v1/users/email-verification/send'])
-      expect(await bodyOf(fetchMock, 0)).toEqual({ email: 'alexiane@example.com' })
-    })
-
     it('confirme avec le secret du lien', async () => {
       const fetchMock = stubApi({
         'POST /api/v1/users/email-verification/confirm': () => new Response(null, { status: 204 }),

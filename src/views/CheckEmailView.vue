@@ -10,7 +10,7 @@ import UiTextInput from '@/design/UiTextInput.vue'
 import { useSessionStore } from '@/session/session'
 import AuthLayout from '@/views/AuthLayout.vue'
 
-/** Le back n'envoie qu'un lien par minute et par compte (ADR 0020) : le bouton attend autant. */
+/** Le back limite les envois par adresse (6 par heure) : le bouton attend une minute entre deux. */
 const COOLDOWN_SECONDS = 60
 
 const { t } = useI18n()
@@ -53,7 +53,8 @@ async function resend() {
   error.value = null
   pending.value = true
   try {
-    await session.sendEmailVerification(email.value)
+    // Renvoyer le lien, c'est redemander l'inscription : même route, même réponse pour toute adresse
+    await session.register(email.value)
     message.value = t('checkEmail.resent')
     startCooldown()
   } catch (failure) {

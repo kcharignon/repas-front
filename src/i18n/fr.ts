@@ -147,6 +147,8 @@ export default {
     activateNamed: 'Activer {email}',
     reactivateNamed: 'Réactiver {email}',
     ownAccountHint: 'C’est ton compte',
+    pendingHint:
+      'Un compte activé ici peut être sans mot de passe. La personne en choisit un avec « Mot de passe oublié ? ».',
     appOutdated: 'À mettre à jour',
     errors: {
       name: 'Donne un nom.',
@@ -531,6 +533,8 @@ export default {
     // Mot de passe oublié (ADR 0026 du back) : le lien mène à la demande, et la connexion dit que le nouveau mot de passe est prêt
     forgotPassword: 'Mot de passe oublié ?',
     passwordChanged: 'Ton nouveau mot de passe est enregistré. Tu peux te connecter.',
+    // Fin de l'inscription : le premier mot de passe vient d'être choisi (`/connexion?compte=pret`)
+    accountReady: 'Ton compte est prêt. Connecte-toi avec ton mot de passe.',
   },
   // Demande du lien (`/mot-de-passe-oublie`) : le message d'envoi est le même que l'adresse ait un compte ou non (pas d'énumération)
   forgotPassword: {
@@ -570,12 +574,13 @@ export default {
   },
   checkEmail: {
     title: 'Vérifie ta boîte mail',
-    sent: 'Un lien de confirmation a été envoyé à {email}. Ouvre-le pour activer ton compte.',
-    askAddress: "Saisis l'adresse de ton compte pour recevoir un nouveau lien de confirmation.",
+    // La réponse du back est la même pour toute adresse : aucun texte ne dit qu'un compte vient d'être créé
+    sent: 'Un message vient de partir à {email}. Ouvre-le pour continuer.',
+    askAddress: 'Indique ton adresse e-mail pour recevoir un nouveau lien.',
     spam: 'Rien reçu ? Regarde dans tes courriers indésirables, puis demande un nouveau lien.',
     resend: 'Renvoyer le lien',
     resendIn: 'Renvoyer le lien dans {seconds} s',
-    resent: "Si un compte attend cette adresse, un nouveau lien vient d'être envoyé.",
+    resent: 'Un nouveau message vient de partir.',
     tooMany: 'Trop de demandes. Réessaie plus tard.',
     invalidEmail: "Cette adresse e-mail n'est pas valide.",
     signIn: 'Retour à la connexion',
@@ -583,23 +588,39 @@ export default {
   confirmEmail: {
     title: "Confirmation de l'adresse",
     confirming: 'Confirmation en cours…',
-    done: 'Ton adresse est confirmée : ton compte est activé.',
+    done: 'Ton adresse est confirmée. Il te reste à choisir ton mot de passe.',
+    choosePassword: 'Choisir mon mot de passe',
     signIn: 'Se connecter',
     invalid: "Ce lien n'est plus valable : il a déjà servi ou il a expiré.",
     invalidHelp: 'Si ton adresse est déjà confirmée, connecte-toi. Sinon, demande un nouveau lien.',
     newLink: 'Recevoir un nouveau lien',
     retry: 'Réessayer',
   },
+  // Inscription (`/inscription`) : l'adresse seule ; le mot de passe se choisit après le clic sur le lien reçu par e-mail (`welcome`)
   register: {
     title: 'Créer un compte',
+    intro: 'Indique ton adresse e-mail. Tu recevras un lien pour choisir ton mot de passe.',
     submit: 'Créer mon compte',
+    // Aussi l'aide du nouveau mot de passe de « Moi » (`account.newPassword`)
     passwordHint: '8 caractères au moins.',
-    serving: 'Nombre de personnes par défaut',
-    servingHint: 'Proposé pour chaque recette, modifiable ensuite.',
-    emailTaken: 'Cette adresse e-mail est déjà utilisée.',
-    tooMany: "Trop d'inscriptions depuis cette adresse. Réessaie plus tard.",
+    invalidEmail: 'Cette adresse e-mail n’est pas valide. Vérifie-la, puis réessaie.',
+    tooMany:
+      'Trop de demandes en peu de temps. Aucun message n’est parti. Réessaie dans {minutes} minute. | Trop de demandes en peu de temps. Aucun message n’est parti. Réessaie dans {minutes} minutes.',
+    tooManyLater:
+      'Trop de demandes en peu de temps. Aucun message n’est parti. Réessaie plus tard.',
     haveAccount: 'Déjà un compte ?',
     signIn: 'Se connecter',
+  },
+  // Bienvenue (`/mot-de-passe-oublie/confirmation?token=…&bienvenue=1`) : le lien de l'e-mail d'inscription fait choisir le premier mot de passe
+  welcome: {
+    title: 'Choisis ton mot de passe',
+    intro: 'Dernière étape pour ouvrir ton compte.',
+    password: 'Mot de passe',
+    invalid:
+      'Il a déjà servi, ou il a expiré. Demande-en un nouveau pour choisir ton mot de passe.',
+    tooMany:
+      'Trop de demandes en peu de temps. Réessaie dans {minutes} minute. | Trop de demandes en peu de temps. Réessaie dans {minutes} minutes.',
+    tooManyLater: 'Trop de demandes en peu de temps. Réessaie plus tard.',
   },
   errors: {
     unreachable: 'Le serveur est injoignable. Réessaie dans un instant.',

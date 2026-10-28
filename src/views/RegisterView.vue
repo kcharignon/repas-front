@@ -15,16 +15,18 @@ const router = useRouter()
 const session = useSessionStore()
 
 const email = ref('')
-const password = ref('')
-const serving = ref<string | number>(4)
 const error = ref<string | null>(null)
 const pending = ref(false)
 
 function messageFor(failure: unknown): string {
-  if (failure instanceof ApiError && failure.status === 409) return t('register.emailTaken')
-  // Le back valide le corps (422) et l'explique : on l'affiche tel quel.
-  if (failure instanceof ApiError && failure.status === 422) return failure.message
-  if (failure instanceof ApiError && failure.status === 429) return t('register.tooMany')
+  // L'adresse est le seul champ : un corps refusé (422) ne peut que la concerner.
+  if (failure instanceof ApiError && failure.status === 422) return t('register.invalidEmail')
+  if (failure instanceof ApiError && failure.status === 429) {
+    if (failure.retryAfter === null) return t('register.tooManyLater')
+    const minutes = Math.max(1, Math.ceil(failure.retryAfter / 60))
+
+    return t('register.tooMany', { minutes }, minutes)
+  }
 
   return t('errors.unreachable')
 }
@@ -33,8 +35,8 @@ async function submit() {
   error.value = null
   pending.value = true
   try {
-    await session.register(email.value, password.value, Number(serving.value))
-    // Le compte attend la confirmation de l'adresse : le back vient d'envoyer le lien (ADR 0020 du back)
+    await session.register(email.value)
+    // Le back répond pareil pour toute adresse et envoie le lien où choisir le mot de passe : aucune session, rien d'autre à dire.
     await router.push({ name: 'check-email', query: { email: email.value } })
   } catch (failure) {
     error.value = messageFor(failure)
@@ -46,38 +48,16 @@ async function submit() {
 
 <template>
   <AuthLayout :title="t('register.title')">
+    <p>{{ t('register.intro') }}</p>
     <form class="flex flex-col gap-4" @submit.prevent="submit">
       <UiField :label="t('login.email')" v-slot="{ id }">
-        <UiTextInput :id="id" v-model="email" type="email" autocomplete="email" required />
-      </UiField>
-      <UiField
-        :label="t('login.password')"
-        :hint="t('register.passwordHint')"
-        v-slot="{ id, describedby }"
-      >
         <UiTextInput
           :id="id"
-          v-model="password"
-          type="password"
-          autocomplete="new-password"
-          minlength="8"
+          v-model="email"
+          type="email"
+          autocomplete="email"
+          maxlength="255"
           required
-          :aria-describedby="describedby"
-        />
-      </UiField>
-      <UiField
-        :label="t('register.serving')"
-        :hint="t('register.servingHint')"
-        v-slot="{ id, describedby }"
-      >
-        <UiTextInput
-          :id="id"
-          v-model="serving"
-          type="number"
-          inputmode="numeric"
-          min="1"
-          required
-          :aria-describedby="describedby"
         />
       </UiField>
       <p

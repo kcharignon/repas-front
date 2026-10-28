@@ -40,7 +40,10 @@ onMounted(() => {
     <p v-if="state === 'confirming'" role="status">{{ t('confirmEmail.confirming') }}</p>
     <template v-else-if="state === 'confirmed'">
       <p role="status">{{ t('confirmEmail.done') }}</p>
-      <UiLinkButton :to="{ name: 'login' }">{{ t('confirmEmail.signIn') }}</UiLinkButton>
+      <!-- Le compte est actif sans mot de passe (back, ADR 0020 amendé) : « mot de passe oublié » le fait choisir -->
+      <UiLinkButton :to="{ name: 'forgot-password' }">{{
+        t('confirmEmail.choosePassword')
+      }}</UiLinkButton>
     </template>
     <template v-else-if="state === 'invalid'">
       <p role="alert">{{ t('confirmEmail.invalid') }}</p>

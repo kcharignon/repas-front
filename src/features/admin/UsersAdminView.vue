@@ -101,6 +101,10 @@ function confirmDelete() {
           · {{ t('admin.summaryPending', { n: counts.PENDING }) }}</template
         >
       </p>
+      <!-- Un compte inscrit par son adresse seule n'a pas de mot de passe : l'activer à la main n'en pose pas -->
+      <p v-if="counts.PENDING > 0" class="-mt-2 text-sm text-muted">
+        {{ t('admin.pendingHint') }}
+      </p>
 
       <div role="group" :aria-label="t('admin.filtersLabel')" class="flex flex-wrap gap-2">
         <UiChip
