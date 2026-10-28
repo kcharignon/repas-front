@@ -1,6 +1,6 @@
 ---
 name: repas-designer
-description: Designer de Repas : thèmes saisonniers (Halloween, Noël, les suivants), illustrations plates façon Duolingo, décor de fond, ornement de coin, icônes d'accueil et d'états vides, maquettes Claude Design. À utiliser pour créer ou retoucher une saison, dessiner ou placer une illustration, ou dès que « ça fait vide » dans l'interface ; à lire en plus de `repas-front-dev` et `repas-po`.
+description: Designer de Repas : thèmes saisonniers (Pâques, Halloween, Noël, les suivants), illustrations plates façon Duolingo, décor de fond, ornement de coin, icônes d'accueil et d'états vides, maquettes Claude Design. À utiliser pour créer ou retoucher une saison, dessiner ou placer une illustration, ou dès que « ça fait vide » dans l'interface ; à lire en plus de `repas-front-dev` et `repas-po`.
 ---
 
 # Repas : designer
@@ -28,11 +28,11 @@ Une saison sans ornement de coin, sans scène et sans illustrations d'accueil n'
 
 ## 2. Mécanique (ne pas la réinventer)
 
-- `<html data-season="halloween|noel">`, posé par `public/theme-init.js` AVANT le premier affichage (la CSP interdit les scripts en ligne) puis par `applySeason()` / `useSeasonStore` ; réévalué quand l'onglet redevient visible et à chaque minuit local (`followSeason`). Les deux implémentations de la règle de dates sont gardées d'accord par un test qui parcourt tous les jours de l'année.
-- Règle de dates : jours locaux de l'appareil, l'année ne compte pas, la période peut enjamber le nouvel an. Deux saisons ne se chevauchent jamais.
+- `<html data-season="paques|halloween|noel">`, posé par `public/theme-init.js` AVANT le premier affichage (la CSP interdit les scripts en ligne) puis par `applySeason()` / `useSeasonStore` ; réévalué quand l'onglet redevient visible et à chaque minuit local (`followSeason`). Les deux implémentations de la règle de dates sont gardées d'accord par un test qui parcourt tous les jours de 2024 à 2040. Les saisons sont un **registre** (`DEFINITIONS` de `season.ts`, tableau équivalent de `theme-init.js`, ADR 0014) : une saison nouvelle ajoute une entrée à chacun, une ligne à la table de `season.spec.ts` (veille, premier jour, dernier jour, lendemain) et l'entrée de `COLORS` ; `SEASONS` est dans l'ordre de l'année.
+- Règle de dates : jours locaux de l'appareil, l'année ne compte pas (sauf Pâques, fête mobile : date calculée, du dimanche moins 21 jours au lundi de Pâques), la période peut enjamber le nouvel an. Deux saisons ne se chevauchent jamais.
 - Palette : trois blocs après les blocs de base de `theme.css`, dans cet ordre (clair ; sombre selon le système avec `:not([data-theme='light'])` ; sombre forcé). Ce qu'une saison ne redéfinit pas reste celui du thème de base. `seasonContrast.spec.ts` impose le contraste AA (4,5:1) de chaque paire texte/fond.
 - L'accent (citrouille, or…) **ne porte jamais de texte** : fonds, pastilles et illustrations seulement. Le danger reste un rouge distinct de toute couleur de fête.
-- Préférence : `repas.season` = liste des saisons COUPÉES (`halloween,noel`), l'ancienne valeur `off` valant `halloween`. Couper une saison ne coupe pas la suivante.
+- Préférence : `repas.season` = liste des saisons COUPÉES, dans l'ordre de `SEASONS` (`paques,halloween,noel`), l'ancienne valeur `off` valant `halloween`. Couper une saison ne coupe pas la suivante.
 - **Piège des tests** : la saison est active selon la vraie date. Vitest fige l'horloge au 15 juin 2026 (`src/__tests__/setup.ts`), Playwright installe une horloge hors saison (`e2e/support/test.ts`, `IN_SEASON` / `OFF_SEASON`). Tout test de saison fixe sa date explicitement.
 - Le manifeste PWA et la barre système d'Android restent ceux du thème de base (limite connue).
 
@@ -73,6 +73,7 @@ Décor ≠ bruit. Poser avec mesure :
 ## 6. Palettes d'illustration
 
 Halloween : violets `#5a2d8c` `#43206b` `#2d1850` `#7a4cb0` `#b48cf2`, citrouille `#f58a1f` `#d96d0a` `#ffb25c`, lune `#f9d98a` `#f2c96e`, lumière `#ffd35c`, potion `#7ed957` `#4fb54a` `#b6f08a`, peau de sorcière `#a5e072`, fantôme `#ffffff` `#e1d6f3`, chat `#4a3a70` `#5b4a86`, joues `#ff9fbd`, bois `#8a5a2b`.
+Pâques : bandeau violet `#6a50b0` (clair) `#4a367f` (sombre), pièces en violet `#8b6fd6` `#b79bf0`, roses `#ff9fbd` `#ff7aa5` `#ff5c8a`, jaune `#ffd35c` `#f5b72a`, lavande `#d9cfe6`, vert `#5cb85c` `#3f9a4a`, bois `#a96d34`, trait sombre `#1a1310` ; fond clair prairie `#f7f8ee`, fond sombre chocolat `#1a1310`.
 Noël : sapin `#17573a` et vert clair, bordeaux `#7a1530`, or `#e9a92a` `#f9d98a`, neige `#ffffff` `#dfeaf0`, nuit `#0b1520` `#122030`, rouge de fête distinct du rouge de danger, bois `#8a5a2b`, joues `#ff9fbd`.
 Une nouvelle saison pose sa palette ici (5 à 8 couleurs) AVANT de dessiner.
 

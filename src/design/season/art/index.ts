@@ -29,6 +29,23 @@ export type Slot = (typeof SLOTS)[number]
 
 /** Emplacement → nom du fichier (sans `.svg`). Une pièce ne tient jamais deux emplacements d'un même écran. */
 export const PACKS: Record<Season, Record<Slot, string>> = {
+  paques: {
+    hero: 'bunny-basket',
+    corner: 'blossom-corner',
+    scene: 'meadow',
+    aside: 'tulip',
+    'empty-list': 'basket',
+    'empty-recipes': 'chick',
+    'empty-search': 'bunny',
+    offline: 'lamb',
+    'not-found': 'bunny',
+    error: 'egg-cracked',
+    'title-list': 'carrot',
+    'title-recipes': 'egg',
+    'title-aisles': 'bell',
+    'title-account': 'butterfly',
+    'recipe-placeholder': 'cupcake',
+  },
   halloween: {
     hero: 'witch',
     corner: 'cobweb-corner',
@@ -72,7 +89,11 @@ export const PACKS: Record<Season, Record<Slot, string>> = {
 export const PRELOADED_SLOTS: readonly Slot[] = ['offline']
 
 /** Les pièces laissées libres exprès (dessinées, pas encore posées) : le test de la table les connaît. */
-export const FREE_PIECES: Record<Season, readonly string[]> = { halloween: [], noel: [] }
+export const FREE_PIECES: Record<Season, readonly string[]> = {
+  paques: [],
+  halloween: [],
+  noel: [],
+}
 
 // Un fichier par pièce, chargé À LA DEMANDE : hors saison (ou décor coupé), aucun octet de décor n'est téléchargé.
 // Le contenu vient de NOS fichiers versionnés, jamais d'une donnée de l'utilisateur.

@@ -63,7 +63,7 @@ export default defineConfig({
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/assets/season/'),
             handler: 'CacheFirst',
-            options: { cacheName: 'season-art', expiration: { maxEntries: 40 } },
+            options: { cacheName: 'season-art', expiration: { maxEntries: 120 } },
           },
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/images/'),

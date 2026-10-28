@@ -5,12 +5,17 @@ import { nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 
 import {
+  SEASONS,
   applySeason,
   currentSeason,
+  easterSunday,
   followSeason,
   isHalloweenSeason,
   isNoelSeason,
+  isPaquesSeason,
+  seasonIncludes,
   useSeasonStore,
+  type Season,
 } from '@/design/season'
 
 const html = document.documentElement
@@ -20,99 +25,255 @@ const meta = () => document.querySelector('meta[name="theme-color"]')!.getAttrib
 const at = (year: number, month: number, day: number, h = 0, m = 0, s = 0) =>
   new Date(year, month - 1, day, h, m, s)
 
-describe('thème saisonnier : la règle de dates', () => {
-  it.each([
-    ['le 14 octobre à 23:59:59', at(2026, 10, 14, 23, 59, 59), false],
-    ['le 15 octobre à 00:00:00', at(2026, 10, 15, 0, 0, 0), true],
-    ['le 27 octobre', at(2026, 10, 27, 12), true],
-    ['le 31 octobre', at(2026, 10, 31, 12), true],
-    ['le 1er novembre à 23:59:59', at(2026, 11, 1, 23, 59, 59), true],
-    ['le 2 novembre à 00:00:00', at(2026, 11, 2, 0, 0, 0), false],
-    ['en juin', at(2026, 6, 15, 12), false],
-    ['le 1er octobre', at(2026, 10, 1, 12), false],
-    ['le 30 novembre', at(2026, 11, 30, 12), false],
-    ['le 31 décembre', at(2026, 12, 31, 23, 59, 59), false],
-    ['le 1er janvier', at(2026, 1, 1, 0, 0, 0), false],
-    // Une année bissextile ne décale rien : février compte un jour de plus, octobre et novembre non.
-    ['le 29 février d’une année bissextile', at(2028, 2, 29, 12), false],
-    ['le 15 octobre d’une année bissextile', at(2028, 10, 15, 0, 0, 0), true],
-    ['le 2 novembre d’une année bissextile', at(2028, 11, 2, 0, 0, 0), false],
-    // L'année ne compte pas : chaque année a sa saison.
-    ['le 20 octobre 2027', at(2027, 10, 20, 12), true],
-    ['le 20 octobre 2031', at(2031, 10, 20, 12), true],
-    ['le 14 octobre 2027', at(2027, 10, 14, 12), false],
-    ['le 1er novembre 2030', at(2030, 11, 1, 12), true],
-  ])('%s : %s', (_, date, expected) => {
-    expect(isHalloweenSeason(date)).toBe(expected)
+/** La couleur de la barre du navigateur de chaque saison (le `--brand` clair), écrite ici pour attraper une divergence des deux registres. */
+const COLORS: Record<Season, string> = { paques: '#6a50b0', halloween: '#43206b', noel: '#7a1530' }
+const BASE_COLOR = '#1E6B4C'
+
+/** Les quatre instants qui bornent une période : la veille à 23:59:59, le premier jour à 00:00:00, le dernier jour à 23:59:59, le lendemain à 00:00:00. */
+type Bounds = readonly [label: string, eve: Date, first: Date, last: Date, next: Date]
+const bounds = (
+  label: string,
+  [fromYear, fromMonth, fromDay]: readonly [number, number, number],
+  [toYear, toMonth, toDay]: readonly [number, number, number],
+): Bounds => [
+  label,
+  new Date(fromYear, fromMonth - 1, fromDay - 1, 23, 59, 59),
+  at(fromYear, fromMonth, fromDay, 0, 0, 0),
+  at(toYear, toMonth, toDay, 23, 59, 59),
+  new Date(toYear, toMonth - 1, toDay + 1, 0, 0, 0),
+]
+
+/**
+ * LA TABLE des règles de dates : une entrée par saison (le type l'exige). Les périodes bornées (veille, premier jour, dernier jour,
+ * lendemain) et quelques jours à l'intérieur et à l'extérieur. Une saison nouvelle ajoute ses lignes ici, rien d'autre.
+ */
+const CASES: Record<
+  Season,
+  { bounds: readonly Bounds[]; inside: readonly Date[]; outside: readonly Date[] }
+> = {
+  // Du dimanche de Pâques moins 21 jours au lundi de Pâques inclus : les fenêtres de plusieurs années, Pâques extrêmes comprises
+  // (2035 : le 25 mars, 2038 : le 25 avril), une année bissextile (2028) et le début de mars (2024).
+  paques: {
+    bounds: [
+      bounds('2024 (Pâques le 31 mars)', [2024, 3, 10], [2024, 4, 1]),
+      bounds('2026 (Pâques le 5 avril)', [2026, 3, 15], [2026, 4, 6]),
+      bounds('2027 (Pâques le 28 mars)', [2027, 3, 7], [2027, 3, 29]),
+      bounds('2028, bissextile (Pâques le 16 avril)', [2028, 3, 26], [2028, 4, 17]),
+      bounds('2029 (Pâques le 1er avril)', [2029, 3, 11], [2029, 4, 2]),
+      bounds('2030 (Pâques le 21 avril)', [2030, 3, 31], [2030, 4, 22]),
+      bounds('2032 (Pâques le 28 mars)', [2032, 3, 7], [2032, 3, 29]),
+      bounds('2035, Pâques précoce (le 25 mars)', [2035, 3, 4], [2035, 3, 26]),
+      bounds('2038, Pâques tardive (le 25 avril)', [2038, 4, 4], [2038, 4, 26]),
+      bounds('2040 (Pâques le 1er avril)', [2040, 3, 11], [2040, 4, 2]),
+    ],
+    inside: [at(2027, 3, 20, 12), at(2027, 3, 28, 12), at(2028, 4, 9, 12), at(2030, 4, 15, 8)],
+    outside: [
+      at(2027, 4, 5, 12),
+      at(2027, 3, 1, 12),
+      at(2026, 6, 15, 12),
+      at(2028, 2, 29, 12),
+      at(2026, 12, 25, 12),
+    ],
+  },
+  // Du 15 octobre au 1er novembre inclus ; l'année ne compte pas.
+  halloween: {
+    bounds: [
+      bounds('2026', [2026, 10, 15], [2026, 11, 1]),
+      bounds('2028, bissextile', [2028, 10, 15], [2028, 11, 1]),
+      bounds('2031', [2031, 10, 15], [2031, 11, 1]),
+    ],
+    inside: [at(2026, 10, 27, 12), at(2026, 10, 31, 12), at(2027, 10, 20, 12)],
+    outside: [
+      at(2026, 10, 1, 12),
+      at(2026, 11, 30, 12),
+      at(2026, 12, 31, 23, 59, 59),
+      at(2026, 1, 1),
+      at(2026, 6, 15, 12),
+      at(2028, 2, 29, 12),
+    ],
+  },
+  // Du 15 novembre au 5 janvier inclus ; la période enjambe le nouvel an.
+  noel: {
+    bounds: [
+      bounds('2026-2027', [2026, 11, 15], [2027, 1, 5]),
+      bounds('2028-2029, année bissextile au départ', [2028, 11, 15], [2029, 1, 5]),
+      bounds('2031-2032', [2031, 11, 15], [2032, 1, 5]),
+    ],
+    inside: [
+      at(2026, 11, 30, 12),
+      at(2026, 12, 24, 20),
+      at(2026, 12, 31, 23, 59, 59),
+      at(2027, 1, 1),
+      at(2028, 12, 31, 12),
+      at(2028, 1, 5, 23, 59, 59),
+    ],
+    outside: [
+      at(2026, 11, 2, 12),
+      at(2026, 6, 15, 12),
+      at(2026, 10, 20, 12),
+      at(2028, 2, 29, 12),
+      at(2027, 1, 6),
+    ],
+  },
+}
+
+/** Tous les jours de 2024 à 2040 (midi). */
+function everyDay(): Date[] {
+  const days: Date[] = []
+  for (let year = 2024; year <= 2040; year++)
+    for (let day = new Date(year, 0, 1); day.getFullYear() === year; day.setDate(day.getDate() + 1))
+      days.push(new Date(year, day.getMonth(), day.getDate(), 12))
+
+  return days
+}
+
+describe('thème saisonnier : la règle de dates, saison par saison', () => {
+  it('la table couvre toutes les saisons et le registre est dans l’ordre de l’année', () => {
+    expect(Object.keys(CASES).sort()).toEqual([...SEASONS].sort())
+    expect(SEASONS).toEqual(['paques', 'halloween', 'noel'])
+    expect(Object.keys(COLORS).sort()).toEqual([...SEASONS].sort())
   })
 
-  it('lit le jour de l’appareil, pas celui du méridien de Greenwich', () => {
-    // 23 h 59 min 59 s le 1er novembre, heure locale : encore la saison, quel que soit le décalage horaire de l'appareil.
-    expect(isHalloweenSeason(new Date(2026, 10, 1, 23, 59, 59, 999))).toBe(true)
-    expect(isHalloweenSeason(new Date(2026, 9, 15, 0, 0, 0, 0))).toBe(true)
+  describe.each(SEASONS)('%s', (season) => {
+    it.each(CASES[season].bounds)(
+      '%s : la veille hors saison, le premier et le dernier jour en saison, le lendemain hors saison',
+      (_, eve, first, last, next) => {
+        expect([eve, first, last, next].map((date) => seasonIncludes(season, date))).toEqual([
+          false,
+          true,
+          true,
+          false,
+        ])
+        expect([currentSeason(first), currentSeason(last)]).toEqual([season, season])
+      },
+    )
+
+    it.each(CASES[season].inside.map((date) => [date.toString(), date] as const))(
+      'en saison le %s',
+      (_, date) => {
+        expect(seasonIncludes(season, date)).toBe(true)
+        expect(currentSeason(date)).toBe(season)
+      },
+    )
+
+    it.each(CASES[season].outside.map((date) => [date.toString(), date] as const))(
+      'hors saison le %s',
+      (_, date) => {
+        expect(seasonIncludes(season, date)).toBe(false)
+      },
+    )
+
+    it('lit le jour de l’appareil, pas celui du méridien de Greenwich', () => {
+      const [, , first, last] = CASES[season].bounds[0]!
+      // La première et la dernière milliseconde du jour local : quel que soit le décalage horaire de l'appareil.
+      expect(
+        seasonIncludes(
+          season,
+          new Date(first.getFullYear(), first.getMonth(), first.getDate(), 0, 0, 0, 0),
+        ),
+      ).toBe(true)
+      expect(
+        seasonIncludes(
+          season,
+          new Date(last.getFullYear(), last.getMonth(), last.getDate(), 23, 59, 59, 999),
+        ),
+      ).toBe(true)
+    })
   })
 
-  it('sans argument, prend la date du jour', () => {
+  it('les noms historiques lisent la même règle que le registre, et sans argument prennent la date du jour', () => {
+    vi.setSystemTime(at(2027, 3, 20, 9))
+    expect([isPaquesSeason(), isHalloweenSeason(), isNoelSeason()]).toEqual([true, false, false])
+
     vi.setSystemTime(at(2026, 10, 20, 9))
-    expect(isHalloweenSeason()).toBe(true)
+    expect([isPaquesSeason(), isHalloweenSeason(), isNoelSeason()]).toEqual([false, true, false])
+
+    vi.setSystemTime(at(2026, 12, 20, 9))
+    expect([isPaquesSeason(), isHalloweenSeason(), isNoelSeason()]).toEqual([false, false, true])
+    expect(currentSeason()).toBe('noel')
 
     vi.setSystemTime(at(2026, 6, 20, 9))
-    expect(isHalloweenSeason()).toBe(false)
+    expect(currentSeason()).toBeNull()
+  })
+
+  it('les saisons ne se chevauchent jamais : tous les jours de 2024 à 2040, au plus une est vraie', () => {
+    const overlaps: string[] = []
+    for (const day of everyDay())
+      for (const [hour, minute, second] of [
+        [0, 0, 0],
+        [23, 59, 59],
+      ] as const) {
+        const date = new Date(
+          day.getFullYear(),
+          day.getMonth(),
+          day.getDate(),
+          hour,
+          minute,
+          second,
+        )
+        const on = SEASONS.filter((season) => seasonIncludes(season, date))
+        if (on.length > 1) overlaps.push(`${date.toString()} : ${on.join(', ')}`)
+        if (currentSeason(date) !== (on[0] ?? null))
+          overlaps.push(`currentSeason ${date.toString()}`)
+      }
+
+    expect(overlaps).toEqual([])
+  })
+
+  it('chaque saison a des jours chaque année de 2024 à 2040', () => {
+    const days = everyDay()
+    for (const season of SEASONS)
+      for (let year = 2024; year <= 2040; year++)
+        expect(
+          days.some((day) => day.getFullYear() === year && seasonIncludes(season, day)),
+          `${season} ${year}`,
+        ).toBe(true)
   })
 })
 
-describe('thème de Noël : la règle de dates', () => {
+describe('la date de Pâques', () => {
   it.each([
-    ['le 14 novembre à 23:59:59', at(2026, 11, 14, 23, 59, 59), false],
-    ['le 15 novembre à 00:00:00', at(2026, 11, 15, 0, 0, 0), true],
-    ['le 30 novembre', at(2026, 11, 30, 12), true],
-    ['le 24 décembre', at(2026, 12, 24, 20), true],
-    ['le 31 décembre à 23:59:59', at(2026, 12, 31, 23, 59, 59), true],
-    ['le 1er janvier à 00:00:00', at(2027, 1, 1, 0, 0, 0), true],
-    ['le 5 janvier à 23:59:59', at(2027, 1, 5, 23, 59, 59), true],
-    ['le 6 janvier à 00:00:00', at(2027, 1, 6, 0, 0, 0), false],
-    ['le 2 novembre', at(2026, 11, 2, 12), false],
-    ['le 14 novembre', at(2026, 11, 14, 12), false],
-    ['en juin', at(2026, 6, 15, 12), false],
-    ['le 20 octobre', at(2026, 10, 20, 12), false],
-    ['le 29 février d’une année bissextile', at(2028, 2, 29, 12), false],
-    ['le 31 décembre d’une année bissextile', at(2028, 12, 31, 12), true],
-    ['le 5 janvier d’une année bissextile', at(2028, 1, 5, 23, 59, 59), true],
-    ['le 20 décembre 2031', at(2031, 12, 20, 12), true],
-    ['le 3 janvier 2032', at(2032, 1, 3, 12), true],
-  ])('%s : %s', (_, date, expected) => {
-    expect(isNoelSeason(date)).toBe(expected)
+    [2024, 3, 31],
+    [2025, 4, 20],
+    [2026, 4, 5],
+    [2027, 3, 28],
+    [2028, 4, 16],
+    [2029, 4, 1],
+    [2030, 4, 21],
+    [2031, 4, 13],
+    [2032, 3, 28],
+    [2033, 4, 17],
+    [2034, 4, 9],
+    [2035, 3, 25],
+    [2036, 4, 13],
+    [2037, 4, 5],
+    [2038, 4, 25],
+    [2040, 4, 1],
+    // Les extrêmes du calendrier grégorien : le 22 mars (1818) et le 25 avril (1943).
+    [1818, 3, 22],
+    [1943, 4, 25],
+  ])('en %s, le dimanche de Pâques est le %s/%s', (year, month, day) => {
+    const sunday = easterSunday(year)
+
+    expect([
+      sunday.getFullYear(),
+      sunday.getMonth() + 1,
+      sunday.getDate(),
+      sunday.getDay(),
+    ]).toEqual([year, month, day, 0])
   })
 
-  it('lit le jour de l’appareil, pas celui du méridien de Greenwich', () => {
-    expect(isNoelSeason(new Date(2027, 0, 5, 23, 59, 59, 999))).toBe(true)
-    expect(isNoelSeason(new Date(2026, 10, 15, 0, 0, 0, 0))).toBe(true)
-  })
-
-  it('les deux saisons ne se chevauchent jamais, et currentSeason les distingue', () => {
-    expect(currentSeason(at(2026, 11, 1, 23, 59, 59))).toBe('halloween')
-    expect(currentSeason(at(2026, 11, 2))).toBeNull()
-    expect(currentSeason(at(2026, 11, 14, 23, 59, 59))).toBeNull()
-    expect(currentSeason(at(2026, 11, 15))).toBe('noel')
-    expect(currentSeason(at(2027, 1, 5, 23, 59, 59))).toBe('noel')
-    expect(currentSeason(at(2027, 1, 6))).toBeNull()
-    expect(currentSeason(at(2026, 10, 14))).toBeNull()
-    expect(currentSeason(at(2026, 10, 15))).toBe('halloween')
-
-    for (const year of [2028, 2029]) {
-      for (
-        let time = new Date(year, 0, 1);
-        time.getFullYear() === year;
-        time.setDate(time.getDate() + 1)
-      ) {
-        expect(isHalloweenSeason(time) && isNoelSeason(time)).toBe(false)
-      }
-    }
-  })
-
-  it('sans argument, prend la date du jour', () => {
-    vi.setSystemTime(at(2026, 12, 20, 9))
-    expect(currentSeason()).toBe('noel')
+  it('la fenêtre de 2027 va du 7 au 29 mars, celle de 2030 du 31 mars au 22 avril', () => {
+    expect(
+      [at(2027, 3, 6, 12), at(2027, 3, 7, 12), at(2027, 3, 29, 12), at(2027, 3, 30, 12)].map(
+        isPaquesSeason,
+      ),
+    ).toEqual([false, true, true, false])
+    expect(
+      [at(2030, 3, 30, 12), at(2030, 3, 31, 12), at(2030, 4, 22, 12), at(2030, 4, 23, 12)].map(
+        isPaquesSeason,
+      ),
+    ).toEqual([false, true, true, false])
   })
 })
 
@@ -172,6 +333,17 @@ describe('thème saisonnier : application', () => {
     expect(meta()).toBe('#7a1530')
   })
 
+  it('en saison de Pâques : data-season="paques" et barre du navigateur violette', () => {
+    expect(applySeason(at(2027, 3, 20))).toBe('paques')
+
+    expect(html.dataset.season).toBe('paques')
+    expect(meta()).toBe('#6a50b0')
+
+    applySeason(at(2027, 3, 30))
+    expect(html.hasAttribute('data-season')).toBe(false)
+    expect(meta()).toBe('#1E6B4C')
+  })
+
   it('de Halloween à Noël, la saison et la couleur suivent', () => {
     applySeason(at(2026, 10, 20))
     applySeason(at(2026, 11, 20))
@@ -227,6 +399,16 @@ describe('thème saisonnier : application', () => {
       expect(html.dataset.season).toBe('noel')
     })
 
+    it('en saison de Pâques : actif, data-season="paques"', () => {
+      vi.setSystemTime(at(2027, 3, 20))
+
+      const season = useSeasonStore()
+
+      expect(season.season).toBe('paques')
+      expect(season.activeSeason).toBe('paques')
+      expect(html.dataset.season).toBe('paques')
+    })
+
     it('hors saison : inactif, rien sur <html>', () => {
       const season = useSeasonStore()
 
@@ -278,6 +460,28 @@ describe('thème saisonnier : application', () => {
       await nextTick()
       expect(localStorage.getItem('repas.season')).toBe('halloween')
       expect(html.dataset.season).toBe('noel')
+    })
+
+    it('couper Pâques garde Halloween et Noël, et se retient dans l’ordre de l’année', async () => {
+      vi.setSystemTime(at(2027, 3, 20))
+      const season = useSeasonStore()
+      season.enabled = false
+      await nextTick()
+      expect(localStorage.getItem('repas.season')).toBe('paques')
+      expect(html.hasAttribute('data-season')).toBe(false)
+
+      vi.setSystemTime(at(2026, 12, 20))
+      season.refresh()
+      season.enabled = false
+      await nextTick()
+      expect(localStorage.getItem('repas.season')).toBe('paques,noel')
+
+      vi.setSystemTime(at(2026, 10, 20))
+      season.refresh()
+      season.enabled = false
+      await nextTick()
+      // L'ordre écrit est celui de SEASONS, quel que soit l'ordre des clics.
+      expect(localStorage.getItem('repas.season')).toBe('paques,halloween,noel')
     })
 
     it('hors saison, l’interrupteur ne change rien', async () => {
@@ -423,7 +627,8 @@ describe('thème saisonnier : application', () => {
 
 describe('thème saisonnier : au démarrage', () => {
   const initScript = readFileSync('public/theme-init.js', 'utf8')
-  const runInitScript = () => new Function(initScript)()
+  const initFunction = new Function(initScript)
+  const runInitScript = () => initFunction()
 
   const state = () => ({ season: html.getAttribute('data-season'), color: meta() })
 
@@ -445,34 +650,40 @@ describe('thème saisonnier : au démarrage', () => {
     return state()
   }
 
-  const preferences = [null, 'on', 'inconnu', 'off', 'noel', 'halloween', 'halloween,noel'] as const
+  const preferences = [
+    null,
+    'on',
+    'inconnu',
+    'off',
+    ...SEASONS,
+    'halloween,noel',
+    SEASONS.join(','),
+  ] as const
   const expectedState = (date: Date, stored: string | null) => {
     const names = (stored ?? '').split(',').map((name) => (name === 'off' ? 'halloween' : name))
     const season = currentSeason(date)
     const on = season !== null && !names.includes(season)
 
-    return {
-      season: on ? season : null,
-      color: on ? (season === 'noel' ? '#7a1530' : '#43206b') : '#1E6B4C',
-    }
+    return { season: on ? season : null, color: on ? COLORS[season] : BASE_COLOR }
   }
 
+  // Les bornes de chaque saison (veille, premier jour, dernier jour, lendemain) : générique sur le registre.
+  const boundaryDates = SEASONS.flatMap((season) =>
+    CASES[season].bounds.flatMap(
+      ([label, eve, first, last, next]) =>
+        [
+          [`${season} ${label}, la veille`, eve],
+          [`${season} ${label}, le premier jour`, first],
+          [`${season} ${label}, le dernier jour`, last],
+          [`${season} ${label}, le lendemain`, next],
+        ] as const,
+    ),
+  )
+
   for (const [label, date] of [
-    ['14 octobre 23:59:59', at(2026, 10, 14, 23, 59, 59)],
-    ['15 octobre 00:00:00', at(2026, 10, 15)],
-    ['31 octobre', at(2026, 10, 31, 12)],
-    ['1er novembre 23:59:59', at(2026, 11, 1, 23, 59, 59)],
-    ['2 novembre 00:00:00', at(2026, 11, 2)],
-    ['14 novembre 23:59:59', at(2026, 11, 14, 23, 59, 59)],
-    ['15 novembre 00:00:00', at(2026, 11, 15)],
-    ['20 décembre', at(2026, 12, 20, 12)],
-    ['31 décembre 23:59:59', at(2026, 12, 31, 23, 59, 59)],
-    ['1er janvier 00:00:00', at(2027, 1, 1)],
-    ['5 janvier 23:59:59', at(2027, 1, 5, 23, 59, 59)],
-    ['6 janvier 00:00:00', at(2027, 1, 6)],
+    ...boundaryDates,
     ['juin', at(2026, 6, 15, 12)],
-    ['15 octobre 2028 (bissextile)', at(2028, 10, 15)],
-    ['2 novembre 2028 (bissextile)', at(2028, 11, 2)],
+    ['29 février 2028', at(2028, 2, 29, 12)],
   ] as const) {
     for (const stored of preferences) {
       it(`${label}, préférence ${stored ?? 'absente'} : le script d’amorçage et applySeason posent la même chose`, () => {
@@ -486,28 +697,30 @@ describe('thème saisonnier : au démarrage', () => {
     }
   }
 
-  // Tous les jours d'une année bissextile (2028) et de la suivante : les deux implémentations ne divergent jamais.
-  for (const stored of preferences) {
-    it(`chaque jour de 2028 et de 2029, préférence ${stored ?? 'absente'} : le script d’amorçage et applySeason sont d’accord`, () => {
+  // Tous les jours de 2024 à 2040 (années bissextiles comprises), au premier et au dernier instant du jour : les deux implémentations ne
+  // divergent jamais, saison par saison.
+  for (const stored of [null, 'off', 'paques', 'halloween,noel'] as const) {
+    it(`chaque jour de 2024 à 2040, préférence ${stored ?? 'absente'} : le script d’amorçage et applySeason sont d’accord`, () => {
       const divergences: string[] = []
-      for (const year of [2028, 2029]) {
+      for (const day of everyDay()) {
         for (const [hour, minute, second] of [
           [0, 0, 0],
           [23, 59, 59],
         ] as const) {
-          for (
-            let day = new Date(year, 0, 1);
-            day.getFullYear() === year;
-            day.setDate(day.getDate() + 1)
-          ) {
-            const date = new Date(year, day.getMonth(), day.getDate(), hour, minute, second)
-            vi.setSystemTime(date)
-            const app = run(() => applySeason(), stored)
-            const init = run(runInitScript, stored)
-            if (JSON.stringify(app) !== JSON.stringify(init)) divergences.push(date.toString())
-            if (JSON.stringify(init) !== JSON.stringify(expectedState(date, stored)))
-              divergences.push(`attendu ${date.toString()}`)
-          }
+          const date = new Date(
+            day.getFullYear(),
+            day.getMonth(),
+            day.getDate(),
+            hour,
+            minute,
+            second,
+          )
+          vi.setSystemTime(date)
+          const app = run(() => applySeason(), stored)
+          const init = run(runInitScript, stored)
+          if (JSON.stringify(app) !== JSON.stringify(init)) divergences.push(date.toString())
+          if (JSON.stringify(init) !== JSON.stringify(expectedState(date, stored)))
+            divergences.push(`attendu ${date.toString()}`)
         }
       }
 
@@ -515,13 +728,28 @@ describe('thème saisonnier : au démarrage', () => {
     })
   }
 
-  it('une préférence « halloween » ne coupe pas Noël, y compris au démarrage', () => {
-    vi.setSystemTime(at(2026, 12, 20))
+  it('une préférence « halloween » ne coupe pas Noël ni Pâques, y compris au démarrage', () => {
     localStorage.setItem('repas.season', 'halloween')
 
+    vi.setSystemTime(at(2026, 12, 20))
     runInitScript()
-
     expect(state()).toEqual({ season: 'noel', color: '#7a1530' })
+
+    vi.setSystemTime(at(2027, 3, 20))
+    runInitScript()
+    expect(state()).toEqual({ season: 'paques', color: '#6a50b0' })
+  })
+
+  it('une préférence « paques » ne coupe que Pâques', () => {
+    localStorage.setItem('repas.season', 'paques')
+
+    vi.setSystemTime(at(2027, 3, 20))
+    runInitScript()
+    expect(state()).toEqual({ season: null, color: '#1E6B4C' })
+
+    vi.setSystemTime(at(2026, 10, 20))
+    runInitScript()
+    expect(state()).toEqual({ season: 'halloween', color: '#43206b' })
   })
 
   it('la valeur historique « off » ne coupe que le décor d’Halloween', () => {
@@ -534,6 +762,10 @@ describe('thème saisonnier : au démarrage', () => {
     vi.setSystemTime(at(2026, 12, 20))
     runInitScript()
     expect(state()).toEqual({ season: 'noel', color: '#7a1530' })
+
+    vi.setSystemTime(at(2027, 3, 20))
+    runInitScript()
+    expect(state()).toEqual({ season: 'paques', color: '#6a50b0' })
   })
 
   it('un stockage indisponible laisse le décor activé, sans lever', () => {
@@ -554,13 +786,17 @@ describe('thème saisonnier : au démarrage', () => {
     expect(html.dataset.season).toBe('halloween')
   })
 
-  it('un stockage indisponible laisse aussi Noël activé, sans lever', () => {
-    vi.setSystemTime(at(2026, 12, 20))
+  it('un stockage indisponible laisse aussi Noël et Pâques activés, sans lever', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('stockage indisponible')
     })
 
+    vi.setSystemTime(at(2026, 12, 20))
     expect(runInitScript).not.toThrow()
     expect(html.dataset.season).toBe('noel')
+
+    vi.setSystemTime(at(2027, 3, 20))
+    expect(runInitScript).not.toThrow()
+    expect(html.dataset.season).toBe('paques')
   })
 })

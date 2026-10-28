@@ -2,16 +2,20 @@
 // au 5 janvier), jour du navigateur. L'horloge est posée par
 // chaque test (`page.clock`) : rien ne dépend du jour où la suite tourne. Ni back ni compte : l'API est simulée par `page.route`.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, IN_NOEL, IN_SEASON, test, type Page } from './support/test'
+import { expect, IN_NOEL, IN_PAQUES, IN_SEASON, test, type Page } from './support/test'
 
 const PITCH = 'Tes recettes, tes courses, sans oublier le basilic.'
 const PITCH_HALLOWEEN = 'Tes recettes, tes courses, sans oublier la citrouille.'
+const PITCH_PAQUES = 'Tes recettes, tes courses, sans oublier le chocolat.'
 const PITCH_NOEL = 'Tes recettes, tes courses, sans oublier la bûche.'
 
 // Les couleurs du bandeau (jeton --brand) : vert hors saison, violet nuit en saison, plus sombre en mode sombre.
 const GREEN = 'rgb(30, 107, 76)'
 const PURPLE = 'rgb(67, 32, 107)'
 const PURPLE_DARK = 'rgb(45, 24, 80)'
+// Pâques : violet, plus sombre en mode sombre.
+const VIOLET = 'rgb(106, 80, 176)'
+const VIOLET_DARK = 'rgb(74, 54, 127)'
 // Noël : bordeaux, plus sombre en mode sombre.
 const BURGUNDY = 'rgb(122, 21, 48)'
 const BURGUNDY_DARK = 'rgb(90, 18, 38)'
@@ -146,6 +150,57 @@ test.describe('écran de connexion', () => {
       expect(violations).toEqual([])
     })
   }
+})
+
+test.describe('écran de connexion, Pâques', () => {
+  test('le 20 mars 2027 : prairie et œufs, bandeau violet, décor, barre du navigateur violette', async ({
+    page,
+  }) => {
+    await page.clock.setSystemTime(IN_PAQUES)
+    await page.goto('/connexion')
+
+    await expect(page.locator('html')).toHaveAttribute('data-season', 'paques')
+    await expect(page.getByText(PITCH_PAQUES)).toBeVisible()
+    await expect(page.getByText(PITCH, { exact: true })).toHaveCount(0)
+    await expect(banner(page)).toHaveCSS('background-color', VIOLET)
+    // Le héros illustré (le lapin et son panier) est dans le bandeau
+    await expect(banner(page).locator('svg[focusable="false"]')).toHaveCount(1)
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#6a50b0')
+  })
+
+  test('en sombre : le bandeau est violet nuit et le fond chocolat', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await page.clock.setSystemTime(IN_PAQUES)
+    await page.goto('/connexion')
+
+    await expect(banner(page)).toHaveCSS('background-color', VIOLET_DARK)
+    expect(await background(page)).toBe('rgb(26, 19, 16)')
+  })
+
+  for (const [label, date, season] of [
+    ['le 7 mars à 00:00:00 (début)', new Date(2027, 2, 7, 0, 0, 0), 'paques'],
+    ['le lundi de Pâques, 29 mars à 23:59:59', new Date(2027, 2, 29, 23, 59, 59), 'paques'],
+    ['le 6 mars à 23:59:59 (la veille)', new Date(2027, 2, 6, 23, 59, 59), null],
+    ['le 30 mars à 00:00:00 (le lendemain)', new Date(2027, 2, 30, 0, 0, 0), null],
+  ] as const) {
+    test(`${label}`, async ({ page }) => {
+      await page.clock.setSystemTime(date)
+      await page.goto('/connexion')
+
+      if (season) await expect(page.locator('html')).toHaveAttribute('data-season', season)
+      else await expect(page.locator('html')).not.toHaveAttribute('data-season', /.*/)
+    })
+  }
+
+  test('le décor de Pâques coupé : comme hors saison, sans couper Halloween', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('repas.season', 'paques'))
+    await page.clock.setSystemTime(IN_PAQUES)
+    await page.goto('/connexion')
+
+    await expect(page.getByText(PITCH)).toBeVisible()
+    await expect(page.locator('html')).not.toHaveAttribute('data-season', /.*/)
+    await expect(banner(page)).toHaveCSS('background-color', GREEN)
+  })
 })
 
 test.describe('écran de connexion, Noël', () => {

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+<ellipse cx="60" cy="113" rx="34" ry="4.5" fill="#1a1310" opacity=".16"/>
+<circle cx="62" cy="56" r="29" fill="#f2b93a"/><circle cx="60" cy="54" r="28.500" fill="#ffd75a"/>
+<path d="M52 24q-2-9 3-12M60 23q0-10 6-12M68 25q3-8 9-8" fill="none" stroke="#ffd75a" stroke-width="5" stroke-linecap="round"/>
+<ellipse cx="32" cy="64" rx="7" ry="11" fill="#f2b93a" transform="rotate(14 32 64)"/><ellipse cx="88" cy="64" rx="7" ry="11" fill="#f2b93a" transform="rotate(-14 88 64)"/>
+<circle cx="49" cy="50" r="4" fill="#2a1a10"/><circle cx="71" cy="50" r="4" fill="#2a1a10"/><circle cx="50.300" cy="48.600" r="1.300" fill="#fff"/><circle cx="72.300" cy="48.600" r="1.300" fill="#fff"/>
+<ellipse cx="41" cy="61" rx="5" ry="3.200" fill="#ff9fbd"/><ellipse cx="79" cy="61" rx="5" ry="3.200" fill="#ff9fbd"/>
+<path d="M53 58h14l-7 9z" fill="#ff8a3d" stroke="#ff8a3d" stroke-width="2.400" stroke-linejoin="round"/>
+<path d="M24 86l7-9 7 9 7-9 7 9 7-9 7 9 7-9 7 9 7-9 7 9c0 20-13 28-30 28S24 106 24 86z" fill="#cdbcf3" stroke="#cdbcf3" stroke-width="2" stroke-linejoin="round"/>
+<path d="M24 86l7-9 7 9 7-9 7 9 7-9 7 9 7-9 7 9 7-9 7 9c0 20-13 28-30 28S24 106 24 86z" fill="#e4d8fb" transform="translate(-1.500 -1.500)"/>
+<path d="M34 98c0-5 4-7 8-6M80 100c4-2 8 0 8 4" fill="none" stroke="#b79bf0" stroke-width="3" stroke-linecap="round"/>
+</svg>

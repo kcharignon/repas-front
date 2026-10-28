@@ -507,6 +507,7 @@ export default {
   },
   auth: {
     pitch: 'Tes recettes, tes courses, sans oublier le basilic.',
+    pitchPaques: 'Tes recettes, tes courses, sans oublier le chocolat.',
     pitchHalloween: 'Tes recettes, tes courses, sans oublier la citrouille.',
     pitchNoel: 'Tes recettes, tes courses, sans oublier la bûche.',
   },
@@ -1008,6 +1009,7 @@ export default {
     appMenuFailed: 'Le menu de l’application n’a pas pu s’ouvrir. Réessaie.',
   },
   season: {
+    paques: 'Décor de Pâques',
     halloween: 'Décor d’Halloween',
     noel: 'Décor de Noël',
     // L'aperçu des thèmes de l'administrateur (ADR 0013) : une clé de nom par saison, ajoutée avec la saison
@@ -1018,6 +1020,7 @@ export default {
       none: 'Sans décor',
     },
     name: {
+      paques: 'Pâques',
       halloween: 'Halloween',
       noel: 'Noël',
     },
