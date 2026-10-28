@@ -34,7 +34,8 @@ describe('menu latéral, décor de saison', () => {
 
     const wrapper = await mountShell()
 
-    await eventually(() => expect(wrapper.find('svg[focusable="false"]').exists()).toBe(true))
+    // Le motif du menu (et non le héros de l'écran de connexion, que la route /connexion monte dans le même arbre et qui se charge plus vite)
+    await eventually(() => expect(wrapper.find('aside svg[focusable="false"]').exists()).toBe(true))
     expect(wrapper.findAll('aside svg[focusable="false"]')).toHaveLength(1)
     expect(
       wrapper.get('svg[focusable="false"]').element.closest('[aria-hidden="true"]'),
@@ -46,7 +47,8 @@ describe('menu latéral, décor de saison', () => {
 
     const wrapper = await mountShell()
 
-    await eventually(() => expect(wrapper.find('svg[focusable="false"]').exists()).toBe(true))
+    // Le motif du menu (et non le héros de l'écran de connexion, que la route /connexion monte dans le même arbre et qui se charge plus vite)
+    await eventually(() => expect(wrapper.find('aside svg[focusable="false"]').exists()).toBe(true))
     const decor = wrapper.findAll('aside svg[focusable="false"]')
     expect(decor).toHaveLength(1)
     expect(decor[0]!.attributes('focusable')).toBe('false')

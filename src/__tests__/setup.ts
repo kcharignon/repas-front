@@ -28,7 +28,11 @@ beforeEach(() => {
   vi.spyOn(console, 'error')
 })
 
-afterEach(() => {
+afterEach(async () => {
+  // Les imports dynamiques lancés par un test synchrone (vues paresseuses du routeur de `appContext()`, illustrations de saison) se
+  // terminent AVANT la fin du fichier : sinon ils s'achèvent après la fermeture de l'environnement (`EnvironmentTeardownError`, surtout
+  // sur une machine lente). Avant le relevé de la console : un import qui échoue est vu par ce test, pas par le suivant.
+  await vi.dynamicImportSettled()
   const noisy = [...vi.mocked(console.warn).mock.calls, ...vi.mocked(console.error).mock.calls]
   vi.restoreAllMocks()
   vi.useRealTimers()
