@@ -15,5 +15,6 @@
 | [0011](0011-theme-saisonnier-noel.md) | Thème saisonnier « Houx & neige » (Noël), du 15 novembre au 5 janvier | Accepted |
 | [0012](0012-illustrations-de-saison.md) | Illustrations de saison : coin, scène de fond, héros et pièces d'accueil (pack de saison) | Accepted |
 | [0013](0013-apercu-des-themes-par-l-administrateur.md) | Aperçu des thèmes par l'administrateur : en mémoire, jamais écrit, effacé en quittant la page | Accepted |
+| [0014](0014-theme-saisonnier-paques-et-registre-de-saisons.md) | Thème saisonnier « Prairie & œufs » (Pâques, date calculée) et registre de saisons | Accepted |
 
 Une décision nouvelle = un nouvel ADR (numéro suivant) dans le même commit que le code qui l'applique.

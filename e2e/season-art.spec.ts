@@ -1,6 +1,6 @@
 // Les illustrations de saison (ADR 0012) : coin, scène de fond, héros et pièces d'accueil. L'horloge est posée par chaque test
 // (`page.clock`). Ni back ni compte : l'API est simulée par `page.route`.
-import { expect, IN_NOEL, IN_SEASON, test, type Page } from './support/test'
+import { expect, IN_NOEL, IN_PAQUES, IN_SEASON, test, type Page } from './support/test'
 
 const PHONE = { width: 360, height: 640 }
 const DESKTOP = { width: 1280, height: 800 }
@@ -89,6 +89,16 @@ for (const viewport of [PHONE, DESKTOP]) {
       await expect(page).toHaveURL(/\/confidentialite/)
       // Et le coin est aussi sur cette page (404, confidentialité : tous les écrans)
       await expect(corner(page).locator('svg')).toBeVisible()
+    })
+
+    test('Pâques : le coin (les fleurs) et la scène (la prairie) sont là', async ({ page }) => {
+      await page.clock.setSystemTime(IN_PAQUES)
+      await page.goto('/connexion')
+
+      await expect(corner(page).locator('svg')).toBeVisible()
+      await expect(scene(page).locator('svg')).toBeVisible()
+      await expect(page.locator('html')).toHaveAttribute('data-season', 'paques')
+      await expect(corner(page)).toHaveCSS('pointer-events', 'none')
     })
 
     test('Noël : le coin (la guirlande) et la scène (le village) sont là', async ({ page }) => {
