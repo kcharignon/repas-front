@@ -26,7 +26,13 @@ const at = (year: number, month: number, day: number, h = 0, m = 0, s = 0) =>
   new Date(year, month - 1, day, h, m, s)
 
 /** La couleur de la barre du navigateur de chaque saison (le `--brand` clair), écrite ici pour attraper une divergence des deux registres. */
-const COLORS: Record<Season, string> = { paques: '#6a50b0', halloween: '#43206b', noel: '#7a1530' }
+const COLORS: Record<Season, string> = {
+  galette: '#223b86',
+  valentin: '#a8326a',
+  paques: '#6a50b0',
+  halloween: '#43206b',
+  noel: '#7a1530',
+}
 const BASE_COLOR = '#1E6B4C'
 
 /** Les quatre instants qui bornent une période : la veille à 23:59:59, le premier jour à 00:00:00, le dernier jour à 23:59:59, le lendemain à 00:00:00. */
@@ -51,6 +57,38 @@ const CASES: Record<
   Season,
   { bounds: readonly Bounds[]; inside: readonly Date[]; outside: readonly Date[] }
 > = {
+  // Du 6 janvier au 2 février inclus (la Chandeleur) ; l'année ne compte pas, le 29 février d'une année bissextile n'en fait pas partie.
+  galette: {
+    bounds: [
+      bounds('2027', [2027, 1, 6], [2027, 2, 2]),
+      bounds('2028, bissextile', [2028, 1, 6], [2028, 2, 2]),
+      bounds('2031', [2031, 1, 6], [2031, 2, 2]),
+    ],
+    inside: [at(2027, 1, 15, 12), at(2027, 1, 31, 12), at(2027, 2, 1, 8), at(2028, 1, 20, 12)],
+    outside: [
+      at(2027, 1, 5, 12),
+      at(2027, 2, 3, 12),
+      at(2028, 2, 29, 12),
+      at(2026, 6, 15, 12),
+      at(2026, 12, 25, 12),
+    ],
+  },
+  // Du 7 au 14 février inclus ; l'année ne compte pas, le 29 février d'une année bissextile n'en fait pas partie.
+  valentin: {
+    bounds: [
+      bounds('2027', [2027, 2, 7], [2027, 2, 14]),
+      bounds('2028, bissextile', [2028, 2, 7], [2028, 2, 14]),
+      bounds('2031', [2031, 2, 7], [2031, 2, 14]),
+    ],
+    inside: [at(2027, 2, 12, 12), at(2027, 2, 14, 8), at(2028, 2, 10, 12)],
+    outside: [
+      at(2027, 2, 6, 12),
+      at(2027, 2, 15, 12),
+      at(2028, 2, 29, 12),
+      at(2027, 2, 2, 12),
+      at(2026, 6, 15, 12),
+    ],
+  },
   // Du dimanche de Pâques moins 21 jours au lundi de Pâques inclus : les fenêtres de plusieurs années, Pâques extrêmes comprises
   // (2035 : le 25 mars, 2038 : le 25 avril), une année bissextile (2028) et le début de mars (2024).
   paques: {
@@ -130,7 +168,7 @@ function everyDay(): Date[] {
 describe('thème saisonnier : la règle de dates, saison par saison', () => {
   it('la table couvre toutes les saisons et le registre est dans l’ordre de l’année', () => {
     expect(Object.keys(CASES).sort()).toEqual([...SEASONS].sort())
-    expect(SEASONS).toEqual(['paques', 'halloween', 'noel'])
+    expect(SEASONS).toEqual(['galette', 'valentin', 'paques', 'halloween', 'noel'])
     expect(Object.keys(COLORS).sort()).toEqual([...SEASONS].sort())
   })
 
@@ -184,6 +222,8 @@ describe('thème saisonnier : la règle de dates, saison par saison', () => {
   it('les noms historiques lisent la même règle que le registre, et sans argument prennent la date du jour', () => {
     vi.setSystemTime(at(2027, 3, 20, 9))
     expect([isPaquesSeason(), isHalloweenSeason(), isNoelSeason()]).toEqual([true, false, false])
+    expect(currentSeason(at(2027, 1, 15, 9))).toBe('galette')
+    expect(currentSeason(at(2027, 2, 12, 9))).toBe('valentin')
 
     vi.setSystemTime(at(2026, 10, 20, 9))
     expect([isPaquesSeason(), isHalloweenSeason(), isNoelSeason()]).toEqual([false, true, false])
@@ -344,14 +384,45 @@ describe('thème saisonnier : application', () => {
     expect(meta()).toBe('#1E6B4C')
   })
 
-  it('de Halloween à Noël, la saison et la couleur suivent', () => {
+  it('en saison de la galette : data-season="galette" et barre du navigateur bleu roi, jusqu’à la Chandeleur', () => {
+    expect(applySeason(at(2027, 1, 15))).toBe('galette')
+
+    expect(html.dataset.season).toBe('galette')
+    expect(meta()).toBe('#223b86')
+
+    applySeason(at(2027, 2, 3))
+    expect(html.hasAttribute('data-season')).toBe(false)
+    expect(meta()).toBe('#1E6B4C')
+  })
+
+  it('en saison de la Saint-Valentin : data-season="valentin" et barre du navigateur rose, du 7 au 14 février', () => {
+    expect(applySeason(at(2027, 2, 12))).toBe('valentin')
+
+    expect(html.dataset.season).toBe('valentin')
+    expect(meta()).toBe('#a8326a')
+
+    // La galette finit le 2 février, la Saint-Valentin commence le 7 : entre les deux, le thème de base.
+    applySeason(at(2027, 2, 5))
+    expect(html.hasAttribute('data-season')).toBe(false)
+    expect(meta()).toBe('#1E6B4C')
+
+    applySeason(at(2027, 2, 15))
+    expect(html.hasAttribute('data-season')).toBe(false)
+  })
+
+  it('de Halloween à Noël puis à la galette, la saison et la couleur suivent', () => {
     applySeason(at(2026, 10, 20))
     applySeason(at(2026, 11, 20))
 
     expect(html.dataset.season).toBe('noel')
     expect(meta()).toBe('#7a1530')
 
+    // Le 6 janvier, la galette prend le relais de Noël ; la Chandeleur passée, le thème de base revient.
     applySeason(at(2027, 1, 6))
+    expect(html.dataset.season).toBe('galette')
+    expect(meta()).toBe('#223b86')
+
+    applySeason(at(2027, 2, 3))
     expect(html.hasAttribute('data-season')).toBe(false)
     expect(meta()).toBe('#1E6B4C')
   })
@@ -407,6 +478,36 @@ describe('thème saisonnier : application', () => {
       expect(season.season).toBe('paques')
       expect(season.activeSeason).toBe('paques')
       expect(html.dataset.season).toBe('paques')
+    })
+
+    it('en saison de la galette : actif, data-season="galette", sans couper les autres saisons', async () => {
+      vi.setSystemTime(at(2027, 1, 15))
+      localStorage.setItem('repas.season', 'halloween,noel')
+
+      const season = useSeasonStore()
+
+      expect(season.season).toBe('galette')
+      expect(season.activeSeason).toBe('galette')
+      expect(html.dataset.season).toBe('galette')
+
+      season.enabled = false
+      await nextTick()
+      expect(localStorage.getItem('repas.season')).toBe('galette,halloween,noel')
+    })
+
+    it('en saison de la Saint-Valentin : actif, couper la galette ne la coupe pas', async () => {
+      vi.setSystemTime(at(2027, 2, 12))
+      localStorage.setItem('repas.season', 'galette')
+
+      const season = useSeasonStore()
+
+      expect(season.season).toBe('valentin')
+      expect(season.activeSeason).toBe('valentin')
+      expect(html.dataset.season).toBe('valentin')
+
+      season.enabled = false
+      await nextTick()
+      expect(localStorage.getItem('repas.season')).toBe('galette,valentin')
     })
 
     it('hors saison : inactif, rien sur <html>', () => {
@@ -605,9 +706,10 @@ describe('thème saisonnier : application', () => {
       await nextTick()
       expect(html.dataset.season).toBe('noel')
 
+      // Minuit passé : la galette prend le relais de Noël.
       await vi.advanceTimersByTimeAsync(62 * 1000)
       await nextTick()
-      expect(html.hasAttribute('data-season')).toBe(false)
+      expect(html.dataset.season).toBe('galette')
     })
 
     it('l’arrêt retire l’écoute et la minuterie', () => {
@@ -750,6 +852,30 @@ describe('thème saisonnier : au démarrage', () => {
     vi.setSystemTime(at(2026, 10, 20))
     runInitScript()
     expect(state()).toEqual({ season: 'halloween', color: '#43206b' })
+  })
+
+  it('une préférence « valentin » ne coupe que la Saint-Valentin, au démarrage aussi', () => {
+    localStorage.setItem('repas.season', 'valentin')
+
+    vi.setSystemTime(at(2027, 2, 12))
+    runInitScript()
+    expect(state()).toEqual({ season: null, color: '#1E6B4C' })
+
+    vi.setSystemTime(at(2027, 1, 15))
+    runInitScript()
+    expect(state()).toEqual({ season: 'galette', color: '#223b86' })
+  })
+
+  it('une préférence « galette » ne coupe que la galette, au démarrage aussi', () => {
+    localStorage.setItem('repas.season', 'galette')
+
+    vi.setSystemTime(at(2027, 1, 15))
+    runInitScript()
+    expect(state()).toEqual({ season: null, color: '#1E6B4C' })
+
+    vi.setSystemTime(at(2027, 3, 20))
+    runInitScript()
+    expect(state()).toEqual({ season: 'paques', color: '#6a50b0' })
   })
 
   it('la valeur historique « off » ne coupe que le décor d’Halloween', () => {

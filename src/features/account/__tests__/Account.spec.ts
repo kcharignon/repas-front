@@ -191,8 +191,8 @@ describe('décor saisonnier', () => {
     expect(document.documentElement.hasAttribute('data-season')).toBe(false)
   })
 
-  it('le 14 novembre et le 6 janvier : aucun interrupteur', async () => {
-    for (const date of [new Date(2026, 10, 14, 12), new Date(2027, 0, 6, 12)]) {
+  it('le 14 novembre et le 3 février : aucun interrupteur', async () => {
+    for (const date of [new Date(2026, 10, 14, 12), new Date(2027, 1, 3, 12)]) {
       vi.setSystemTime(date)
 
       const { wrapper } = await open()
@@ -327,16 +327,18 @@ describe('aperçu des thèmes', () => {
     expect(chips.map((chip) => chip.text())).toEqual([
       'Thème du moment',
       'Sans décor',
+      'Galette & crêpes',
+      'Saint-Valentin',
       'Pâques',
       'Halloween',
       'Noël',
     ])
     expect(chips[0]!.attributes('aria-pressed')).toBe('true')
 
-    await chips[4]!.trigger('click')
+    await chips[6]!.trigger('click')
     await flushPromises()
     expect(document.documentElement.dataset.season).toBe('noel')
-    expect(previewGroup(wrapper).findAll('button')[4]!.attributes('aria-pressed')).toBe('true')
+    expect(previewGroup(wrapper).findAll('button')[6]!.attributes('aria-pressed')).toBe('true')
 
     await chips[1]!.trigger('click')
     await flushPromises()

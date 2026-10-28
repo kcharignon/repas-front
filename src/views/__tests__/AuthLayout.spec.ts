@@ -11,6 +11,8 @@ import AuthLayout from '@/views/AuthLayout.vue'
 
 const PITCH = 'Tes recettes, tes courses, sans oublier le basilic.'
 const PITCH_HALLOWEEN = 'Tes recettes, tes courses, sans oublier la citrouille.'
+const PITCH_GALETTE = 'Tes recettes, tes courses, sans oublier la galette.'
+const PITCH_VALENTIN = 'Tes recettes, tes courses, sans oublier le dîner à deux.'
 const PITCH_PAQUES = 'Tes recettes, tes courses, sans oublier le chocolat.'
 const PITCH_NOEL = 'Tes recettes, tes courses, sans oublier la bûche.'
 
@@ -80,6 +82,56 @@ describe('écran de connexion, thème saisonnier', () => {
     expect(document.documentElement.dataset.season).toBe('noel')
   })
 
+  it('en saison de la galette : la phrase de la galette et le héros de la galette, rien des autres saisons', async () => {
+    vi.setSystemTime(new Date(2027, 0, 15, 12))
+
+    const wrapper = mountLayout()
+
+    expect(wrapper.text()).toContain(PITCH_GALETTE)
+    expect(wrapper.text()).not.toContain(PITCH)
+    await eventually(() => expect(wrapper.find('header svg').exists()).toBe(true))
+    expect(wrapper.get('header [aria-hidden="true"]').html()).toContain('viewBox="0 0 280 220"')
+    expect(document.documentElement.dataset.season).toBe('galette')
+  })
+
+  it('le 6 janvier et le 2 février : la galette ; le 5 janvier : Noël ; le 3 février : le basilic', () => {
+    for (const [date, pitch] of [
+      [new Date(2027, 0, 5, 23, 59, 59), PITCH_NOEL],
+      [new Date(2027, 0, 6, 0, 0, 0), PITCH_GALETTE],
+      [new Date(2027, 1, 2, 23, 59, 59), PITCH_GALETTE],
+      [new Date(2027, 1, 3, 0, 0, 0), PITCH],
+    ] as const) {
+      vi.setSystemTime(date)
+
+      expect(mountLayout().text()).toContain(pitch)
+    }
+  })
+
+  it('en saison de la Saint-Valentin : la phrase du dîner à deux et le héros de la Saint-Valentin', async () => {
+    vi.setSystemTime(new Date(2027, 1, 12, 12))
+
+    const wrapper = mountLayout()
+
+    expect(wrapper.text()).toContain(PITCH_VALENTIN)
+    expect(wrapper.text()).not.toContain(PITCH)
+    await eventually(() => expect(wrapper.find('header svg').exists()).toBe(true))
+    expect(wrapper.get('header [aria-hidden="true"]').html()).toContain('viewBox="0 0 280 220"')
+    expect(document.documentElement.dataset.season).toBe('valentin')
+  })
+
+  it('le 7 et le 14 février : la Saint-Valentin ; le 6 et le 15 février : le basilic', () => {
+    for (const [date, pitch] of [
+      [new Date(2027, 1, 6, 23, 59, 59), PITCH],
+      [new Date(2027, 1, 7, 0, 0, 0), PITCH_VALENTIN],
+      [new Date(2027, 1, 14, 23, 59, 59), PITCH_VALENTIN],
+      [new Date(2027, 1, 15, 0, 0, 0), PITCH],
+    ] as const) {
+      vi.setSystemTime(date)
+
+      expect(mountLayout().text()).toContain(pitch)
+    }
+  })
+
   it('en saison de Pâques : la phrase du chocolat et le héros de Pâques, rien d’Halloween ni de Noël', async () => {
     vi.setSystemTime(new Date(2027, 2, 20, 12))
 
@@ -105,11 +157,10 @@ describe('écran de connexion, thème saisonnier', () => {
     }
   })
 
-  it('le 1er janvier et le 5 janvier : Noël ; le 6 janvier et le 14 novembre : le basilic', () => {
+  it('le 1er janvier et le 5 janvier : Noël ; le 14 novembre : le basilic', () => {
     for (const [date, pitch] of [
       [new Date(2027, 0, 1, 12), PITCH_NOEL],
       [new Date(2027, 0, 5, 23, 59, 59), PITCH_NOEL],
-      [new Date(2027, 0, 6, 0, 0, 0), PITCH],
       [new Date(2026, 10, 14, 23, 59, 59), PITCH],
     ] as const) {
       vi.setSystemTime(date)

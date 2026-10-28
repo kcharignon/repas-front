@@ -22,8 +22,9 @@
     // Stockage indisponible : le décor reste activé.
   }
   // LES SAISONS, dans l'ordre de l'année, comme `DEFINITIONS` de src/design/season.ts (même clé, même couleur de barre, même règle) :
-  // Pâques du dimanche de Pâques moins 21 jours au lundi de Pâques inclus (date calculée), Halloween du 15 octobre au 1er novembre,
-  // Noël du 15 novembre au 5 janvier. Jour local de l'appareil, l'année ne compte que pour Pâques. Une saison nouvelle s'ajoute ici.
+  // la galette du 6 janvier au 2 février, la Saint-Valentin du 7 au 14 février, Pâques du dimanche de Pâques moins 21 jours au lundi de
+  // Pâques inclus (date calculée), Halloween du 15 octobre au 1er novembre, Noël du 15 novembre au 5 janvier. Jour local de l'appareil,
+  // l'année ne compte que pour Pâques. Une saison nouvelle s'ajoute ici.
   // Le dimanche de Pâques (calendrier grégorien : Meeus, Jones et Butcher), à minuit, heure locale.
   function easterSunday(year) {
     var a = year % 19
@@ -42,6 +43,24 @@
     return new Date(year, month - 1, ((h + l - 7 * m + 114) % 31) + 1)
   }
   var seasons = [
+    {
+      key: 'galette',
+      color: '#223b86',
+      includes: function (date) {
+        var month = date.getMonth()
+        var day = date.getDate()
+        return (month === 0 && day >= 6) || (month === 1 && day <= 2)
+      },
+    },
+    {
+      key: 'valentin',
+      color: '#a8326a',
+      includes: function (date) {
+        var month = date.getMonth()
+        var day = date.getDate()
+        return month === 1 && day >= 7 && day <= 14
+      },
+    },
     {
       key: 'paques',
       color: '#6a50b0',

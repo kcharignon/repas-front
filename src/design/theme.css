@@ -201,6 +201,137 @@
 }
 
 /*
+ * Thème saisonnier « Or & bleu roi » (ADR 0015) : `data-season="galette"` sur <html>, posé du 6 janvier au 2 février inclus (src/design/season.ts,
+ * public/theme-init.js). Même ordre que les autres saisons : clair (crème), sombre selon le système, sombre forcé (indigo). L'or
+ * (--accent) ne porte jamais de texte : il ne sert que de fond, avec --on-accent. Le danger reste celui du thème de base, un rouge
+ * distinct du bleu roi du bandeau (--brand). Contrastes gardés par src/design/__tests__/seasonContrast.spec.ts.
+ */
+:root[data-season='galette'] {
+  --bg: #fbf6e8;
+  --surface: #ffffff;
+  --ink: #231d12;
+  --muted: #5a5037;
+  --line: #e4d9bb;
+  --soft: #f4ead0;
+  --primary: #2a4a9a;
+  --on-primary: #ffffff;
+  --accent: #f2b632;
+  --on-accent: #2a1d00;
+  --danger: #b3261e;
+  --on-danger: #ffffff;
+  --danger-soft: #fbe1dd;
+  --on-danger-soft: #7a1a12;
+  --brand: #223b86;
+  --scene-opacity: 0.15;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-season='galette']:not([data-theme='light']) {
+    --bg: #111832;
+    --surface: #1a2347;
+    --ink: #f4efe0;
+    --muted: #b3b8d4;
+    --line: #2f3b6b;
+    --soft: #202b57;
+    --primary: #a9bdf5;
+    --on-primary: #0b1233;
+    --accent: #f5c44a;
+    --on-accent: #2a1d00;
+    --danger: #f0705a;
+    --on-danger: #2a0c06;
+    --danger-soft: #3a1a14;
+    --on-danger-soft: #f6b8ab;
+    --brand: #1a2a66;
+    --scene-opacity: 0.2;
+  }
+}
+
+:root[data-season='galette'][data-theme='dark'] {
+  --bg: #111832;
+  --surface: #1a2347;
+  --ink: #f4efe0;
+  --muted: #b3b8d4;
+  --line: #2f3b6b;
+  --soft: #202b57;
+  --primary: #a9bdf5;
+  --on-primary: #0b1233;
+  --accent: #f5c44a;
+  --on-accent: #2a1d00;
+  --danger: #f0705a;
+  --on-danger: #2a0c06;
+  --danger-soft: #3a1a14;
+  --on-danger-soft: #f6b8ab;
+  --brand: #1a2a66;
+  --scene-opacity: 0.2;
+}
+
+/*
+ * Thème saisonnier « Rose & cœur » (ADR 0015) : `data-season="valentin"` sur <html>, posé du 7 au 14 février inclus (src/design/season.ts,
+ * public/theme-init.js). Même ordre que les autres saisons : clair (blush), sombre selon le système, sombre forcé (vin). Le rose clair
+ * (--accent) ne porte jamais de texte : il ne sert que de fond, avec --on-accent. Le danger reste celui du thème de base, un ROUGE
+ * distinct du rose du décor : le rouge de danger n'est jamais utilisé dans les illustrations. Contrastes gardés par
+ * src/design/__tests__/seasonContrast.spec.ts.
+ */
+:root[data-season='valentin'] {
+  --bg: #fff6f7;
+  --surface: #ffffff;
+  --ink: #2a1520;
+  --muted: #6a4a58;
+  --line: #f0d3da;
+  --soft: #fde7ec;
+  --primary: #a8326a;
+  --on-primary: #ffffff;
+  --accent: #ff8fb3;
+  --on-accent: #3a0f22;
+  --danger: #b3261e;
+  --on-danger: #ffffff;
+  --danger-soft: #fbe1dd;
+  --on-danger-soft: #7a1a12;
+  --brand: #a8326a;
+  --scene-opacity: 0.15;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-season='valentin']:not([data-theme='light']) {
+    --bg: #1d0f17;
+    --surface: #2a1621;
+    --ink: #fbeef2;
+    --muted: #d0a9b8;
+    --line: #4d2a3b;
+    --soft: #35192a;
+    --primary: #ff9fc2;
+    --on-primary: #2a0b1a;
+    --accent: #ff8fb3;
+    --on-accent: #3a0f22;
+    --danger: #f0705a;
+    --on-danger: #2a0c06;
+    --danger-soft: #3a1a14;
+    --on-danger-soft: #f6b8ab;
+    --brand: #7d2350;
+    --scene-opacity: 0.2;
+  }
+}
+
+:root[data-season='valentin'][data-theme='dark'] {
+  --bg: #1d0f17;
+  --surface: #2a1621;
+  --ink: #fbeef2;
+  --muted: #d0a9b8;
+  --line: #4d2a3b;
+  --soft: #35192a;
+  --primary: #ff9fc2;
+  --on-primary: #2a0b1a;
+  --accent: #ff8fb3;
+  --on-accent: #3a0f22;
+  --danger: #f0705a;
+  --on-danger: #2a0c06;
+  --danger-soft: #3a1a14;
+  --on-danger-soft: #f6b8ab;
+  --brand: #7d2350;
+  --scene-opacity: 0.2;
+}
+
+/*
  * Thème saisonnier « Prairie & œufs » (ADR 0014) : `data-season="paques"` sur <html>, posé du dimanche de Pâques moins 21 jours au lundi de
  * Pâques inclus (date calculée : src/design/season.ts, public/theme-init.js). Même ordre que les autres saisons : clair (prairie), sombre
  * selon le système, sombre forcé (chocolat). Le jaune (--accent) ne porte jamais de texte : il ne sert que de fond, avec --on-accent. Le

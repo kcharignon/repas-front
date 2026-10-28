@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 
 /**
- * Le jour des tests : le 15 juin 2026, midi, HORS des saisons de Pâques (trois semaines avant Pâques, ADR 0014), d’Halloween (15 octobre au 1er
+ * Le jour des tests : le 15 juin 2026, midi, HORS des saisons de la galette (6 janvier au 2 février, ADR 0015), de la Saint-Valentin (7 au 14 février, ADR 0015), de Pâques (trois semaines avant Pâques, ADR 0014), d’Halloween (15 octobre au 1er
  * novembre, ADR 0010) et de Noël (15 novembre au 5 janvier, ADR 0011). La suite ne dépend ainsi jamais du jour où on la lance. L'horloge est seulement décalée : elle continue d'avancer à son rythme (les durées
  * mesurées restent justes) et les minuteries sont réelles. Un test de saison pose sa propre date par
  * `vi.setSystemTime(new Date(2026, 9, 20))`, et un test qui fait `vi.useFakeTimers()` part de ce jour.
