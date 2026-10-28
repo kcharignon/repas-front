@@ -5,12 +5,13 @@ import { appContext, eventually } from '@/__tests__/helpers'
 import { cornerOnBanner } from '@/design/season/cornerTone'
 import AuthLayout from '@/views/AuthLayout.vue'
 
-// Les thèmes saisonniers (ADR 0010, 0011, 0012) sur l'écran de connexion : la phrase et le héros illustré n'existent que du 15 octobre au 1er novembre
-// et du 15 novembre au 5 janvier.
+// Les thèmes saisonniers (ADR 0010, 0011, 0012, 0014) sur l'écran de connexion : la phrase et le héros illustré n'existent que dans les dates de la saison
+// (Pâques, du 15 octobre au 1er novembre, du 15 novembre au 5 janvier).
 // Hors de ces tests, la suite tourne le 15 juin (src/__tests__/setup.ts).
 
 const PITCH = 'Tes recettes, tes courses, sans oublier le basilic.'
 const PITCH_HALLOWEEN = 'Tes recettes, tes courses, sans oublier la citrouille.'
+const PITCH_PAQUES = 'Tes recettes, tes courses, sans oublier le chocolat.'
 const PITCH_NOEL = 'Tes recettes, tes courses, sans oublier la bûche.'
 
 function mountLayout() {
@@ -77,6 +78,31 @@ describe('écran de connexion, thème saisonnier', () => {
     await eventually(() => expect(wrapper.find('header svg').exists()).toBe(true))
     expect(wrapper.get('header [aria-hidden="true"]').html()).not.toContain('#a5e072')
     expect(document.documentElement.dataset.season).toBe('noel')
+  })
+
+  it('en saison de Pâques : la phrase du chocolat et le héros de Pâques, rien d’Halloween ni de Noël', async () => {
+    vi.setSystemTime(new Date(2027, 2, 20, 12))
+
+    const wrapper = mountLayout()
+
+    expect(wrapper.text()).toContain(PITCH_PAQUES)
+    expect(wrapper.text()).not.toContain(PITCH)
+    await eventually(() => expect(wrapper.find('header svg').exists()).toBe(true))
+    expect(wrapper.get('header [aria-hidden="true"]').html()).toContain('viewBox="0 0 280 220"')
+    expect(document.documentElement.dataset.season).toBe('paques')
+  })
+
+  it('le lundi de Pâques : Pâques ; le lendemain : le basilic ; la veille du début : le basilic', () => {
+    for (const [date, pitch] of [
+      [new Date(2027, 2, 29, 23, 59, 59), PITCH_PAQUES],
+      [new Date(2027, 2, 30, 0, 0, 0), PITCH],
+      [new Date(2027, 2, 7, 0, 0, 0), PITCH_PAQUES],
+      [new Date(2027, 2, 6, 23, 59, 59), PITCH],
+    ] as const) {
+      vi.setSystemTime(date)
+
+      expect(mountLayout().text()).toContain(pitch)
+    }
   })
 
   it('le 1er janvier et le 5 janvier : Noël ; le 6 janvier et le 14 novembre : le basilic', () => {

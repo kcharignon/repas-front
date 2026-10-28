@@ -3,6 +3,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { SEASONS, type Season } from '../season'
 import { PACKS } from '../season/art'
 
 // Les contrastes des thèmes « Citrouille & nuit » (ADR 0010) et « Houx & neige » (ADR 0011), lus dans la feuille de style elle-même : WCAG AA, 4,5:1 pour du texte.
@@ -35,7 +36,7 @@ function contrast(a: string, b: string): number {
   return (light + 0.05) / (dark + 0.05)
 }
 
-const seasons = ['halloween', 'noel'] as const
+const seasons = SEASONS
 const palettes = Object.fromEntries(
   seasons.map((season) => [
     season,
@@ -45,10 +46,7 @@ const palettes = Object.fromEntries(
       darkForced: tokens(`:root[data-season='${season}'][data-theme='dark']`),
     },
   ]),
-) as Record<
-  (typeof seasons)[number],
-  Record<'light' | 'darkSystem' | 'darkForced', Record<string, string>>
->
+) as Record<Season, Record<'light' | 'darkSystem' | 'darkForced', Record<string, string>>>
 
 const pairs = [
   ['ink', 'bg'],

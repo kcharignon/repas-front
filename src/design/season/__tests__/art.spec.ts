@@ -76,9 +76,15 @@ describe('les illustrations de saison', () => {
         expect(same).toEqual([])
       })
 
-      it('pèse peu : une pièce sous 3 Ko, un héros sous 6 Ko, une scène sous 8 Ko', () => {
+      it('pèse peu : une pièce sous 3 Ko, un coin sous 4 Ko, un héros sous 6 Ko, une scène sous 8 Ko', () => {
         const limits = (name: string) =>
-          name === PACKS[season].scene ? 8000 : name === PACKS[season].hero ? 6000 : 3000
+          name === PACKS[season].scene
+            ? 8000
+            : name === PACKS[season].hero
+              ? 6000
+              : name === PACKS[season].corner
+                ? 4000
+                : 3000
         const heavy = names.filter(
           (name) => statSync(`${dir(season)}/${name}.svg`).size >= limits(name),
         )

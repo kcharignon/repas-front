@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import logo from '@/assets/logo.png'
-import { useSeasonStore } from '@/design/season'
+import { useSeasonStore, type Season } from '@/design/season'
 import SeasonArt from '@/design/season/SeasonArt.vue'
 import { cornerOnBanner } from '@/design/season/cornerTone'
 
@@ -18,7 +18,11 @@ cornerOnBanner.value = true
 onBeforeUnmount(() => (cornerOnBanner.value = false))
 
 // La phrase du bandeau : une par saison, la phrase de base hors saison.
-const PITCH = { halloween: 'auth.pitchHalloween', noel: 'auth.pitchNoel' } as const
+const PITCH = {
+  paques: 'auth.pitchPaques',
+  halloween: 'auth.pitchHalloween',
+  noel: 'auth.pitchNoel',
+} as const satisfies Record<Season, string>
 </script>
 
 <template>
