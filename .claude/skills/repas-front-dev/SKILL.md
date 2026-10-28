@@ -81,6 +81,9 @@ Ajouter la clé dans `fr.ts`, brancher le code dans `driveCodes` de `failures.ts
 ### 4.3 Changement de format du plan ou du résultat
 Ne se fait pas dans le front seul : schémas `drive-agent/protocol/*.schema.json`, validateurs, exemples, `drive-agent/protocol/README.md` et `architecture.md` § 8 du back changent **dans le même commit** (voir `repas-agent-dev`).
 
+### 4.4 Un champ « nom » de recette ou d'ingrédient
+Utiliser `<UiTextInput capitalize-first …/>` (ADR 0018) : la première lettre passe en majuscule à la saisie, et le nom envoyé passe par `capitalizeFirst` (`src/design/capitalizeFirst.ts`) dans la mutation, jamais dans le composant seul. Pas sur un champ de recherche, ni sur une unité, un rayon, une liste ou un magasin.
+
 ## 5. Definition of Done
 
 - [ ] `make check` vert (lint, format, `api-check`, types, tests) ; `make quality` avant la PR ; couverture ≥ 80 % non abaissée

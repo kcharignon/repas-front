@@ -19,5 +19,6 @@
 | [0015](0015-themes-de-la-galette-et-de-la-saint-valentin.md) | Thèmes « Or & bleu roi » (galette et crêpes, 6 janvier au 2 février) et « Rose & cœur » (Saint-Valentin, 7 au 14 février) | Accepted |
 | [0016](0016-themes-de-l-ete-et-de-l-automne.md) | Thèmes « Soleil & mer » (été, 21 juin au 31 août) et « Forêt & feuilles » (automne, 1er septembre au 14 octobre) | Accepted |
 | [0017](0017-recettes-des-autres-par-categorie-et-recherche.md) | Recettes des autres : sections par catégorie, recherche par nom (liste simple par pertinence) | Accepted |
+| [0018](0018-premiere-lettre-des-noms-en-majuscule.md) | La première lettre d'un nom de recette ou d'ingrédient est une majuscule (`capitalizeFirst`, option `capitalize-first` du champ) | Accepted |
 
 Une décision nouvelle = un nouvel ADR (numéro suivant) dans le même commit que le code qui l'applique.
