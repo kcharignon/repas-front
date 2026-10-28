@@ -14,5 +14,6 @@
 | [0010](0010-theme-saisonnier-halloween.md) | Thème saisonnier « Citrouille & nuit » (Halloween), du 15 octobre au 1er novembre | Accepted |
 | [0011](0011-theme-saisonnier-noel.md) | Thème saisonnier « Houx & neige » (Noël), du 15 novembre au 5 janvier | Accepted |
 | [0012](0012-illustrations-de-saison.md) | Illustrations de saison : coin, scène de fond, héros et pièces d'accueil (pack de saison) | Accepted |
+| [0013](0013-apercu-des-themes-par-l-administrateur.md) | Aperçu des thèmes par l'administrateur : en mémoire, jamais écrit, effacé en quittant la page | Accepted |
 
 Une décision nouvelle = un nouvel ADR (numéro suivant) dans le même commit que le code qui l'applique.
