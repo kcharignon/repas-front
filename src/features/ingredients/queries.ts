@@ -3,6 +3,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { ApiError, unwrap } from '@/api'
 import type { DuplicatePair, IngredientConversionPayload, IngredientPayload } from '@/api'
+import { capitalizeFirst } from '@/design/capitalizeFirst'
 import { choiceKeys } from '@/features/drive/choicesQueries'
 import { driveKeys } from '@/features/drive/queries'
 import { recipeKeys } from '@/features/recipes/queries'
@@ -222,9 +223,11 @@ export function useSaveIngredient() {
       slug: string | null
       form: IngredientForm
     }): Promise<string> => {
+      // Le nom part toujours avec sa majuscule, quel que soit le chemin qui a rempli le formulaire (le back la met aussi)
+      const sent = { ...form, name: capitalizeFirst(form.name.trim()) }
       if (slug === null) {
         const { response, error } = await api.POST('/api/v1/ingredients', {
-          body: form as IngredientPayload,
+          body: sent as IngredientPayload,
         })
         if (!response.ok) throw ApiError.fromResponse(response, error)
 
@@ -234,7 +237,7 @@ export function useSaveIngredient() {
         api.PUT('/api/v1/ingredients/{slug}', {
           params: { path: { slug } },
           // Le contrat généré rend `isBase` obligatoire (défaut `null`) alors que le back l'accepte absent
-          body: form as IngredientPayload,
+          body: sent as IngredientPayload,
         }),
       )
 

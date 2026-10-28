@@ -2,6 +2,7 @@ import { computed } from 'vue'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { ApiError, ifMatch, unwrap } from '@/api'
+import { capitalizeFirst } from '@/design/capitalizeFirst'
 import { shoppingListKeys } from '@/features/shopping-lists/queries'
 import { useSessionStore } from '@/session/session'
 
@@ -199,8 +200,10 @@ export function useSaveRecipe() {
       version: number | null
       form: RecipeForm
     }): Promise<string> => {
+      // Le nom part toujours avec sa majuscule, quel que soit le chemin qui a rempli le formulaire (le back la met aussi)
+      const sent = { ...form, name: capitalizeFirst(form.name.trim()) }
       if (id === null) {
-        const { response, error } = await api.POST('/api/v1/recipes', { body: form })
+        const { response, error } = await api.POST('/api/v1/recipes', { body: sent })
         if (!response.ok) throw ApiError.fromResponse(response, error)
 
         return response.headers.get('Location')?.split('/').pop() ?? ''
@@ -208,7 +211,7 @@ export function useSaveRecipe() {
       await unwrap(
         api.PUT('/api/v1/recipes/{id}', {
           params: { path: { id }, header: ifMatch(version) },
-          body: form,
+          body: sent,
         }),
       )
 

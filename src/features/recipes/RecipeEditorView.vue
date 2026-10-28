@@ -175,6 +175,7 @@ function submit() {
             <UiTextInput
               :id="id"
               v-model="form.name"
+              capitalize-first
               autocomplete="off"
               :aria-describedby="describedby"
               :invalid="invalid"
