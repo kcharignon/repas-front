@@ -6,7 +6,7 @@ import UiButton from '@/design/UiButton.vue'
 import UiChip from '@/design/UiChip.vue'
 import UiSwitch from '@/design/UiSwitch.vue'
 import SeasonArt from '@/design/season/SeasonArt.vue'
-import { useSeasonStore } from '@/design/season'
+import { SEASONS, useSeasonStore } from '@/design/season'
 import { useThemeStore } from '@/design/theme'
 import AccountCredits from '@/features/account/AccountCredits.vue'
 import SettingsForms from '@/features/account/SettingsForms.vue'
@@ -61,6 +61,28 @@ async function logout() {
         v-model="season.enabled"
         :label="t(`season.${season.season}`)"
       />
+    </section>
+
+    <!-- L'aperçu des thèmes (ADR 0013) : administrateur seulement, en mémoire, jamais retenu -->
+    <section v-if="session.isAdmin" class="flex flex-col gap-3">
+      <h2 class="font-display text-2xl font-bold">{{ t('season.preview.title') }}</h2>
+      <p class="text-muted">{{ t('season.preview.help') }}</p>
+      <div role="group" :aria-label="t('season.preview.title')" class="flex flex-wrap gap-2">
+        <UiChip :pressed="season.preview === null" @update:pressed="season.setPreview(null)">
+          {{ t('season.preview.current') }}
+        </UiChip>
+        <UiChip :pressed="season.preview === 'none'" @update:pressed="season.setPreview('none')">
+          {{ t('season.preview.none') }}
+        </UiChip>
+        <UiChip
+          v-for="name in SEASONS"
+          :key="name"
+          :pressed="season.preview === name"
+          @update:pressed="season.setPreview(name)"
+        >
+          {{ t(`season.name.${name}`) }}
+        </UiChip>
+      </div>
     </section>
 
     <AppHelpLink />

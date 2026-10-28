@@ -91,6 +91,7 @@ Une nouvelle saison pose sa palette ici (5 à 8 couleurs) AVANT de dessiner.
 - [ ] Ornement de coin, scène, héros, 6 à 10 pièces d'accueil (§ 3), planche de contact claire et sombre.
 - [ ] Phrase du bandeau et libellé de l'interrupteur (i18n, tutoiement, une ligne).
 - [ ] Préférence par saison et son test.
+- [ ] Aperçu administrateur (ADR 0013) : la pastille vient de `SEASONS`, ajouter seulement la clé `season.name.<saison>` dans `src/i18n/fr.ts` (`seasonPreview.spec.ts` l'exige).
 - [ ] Emplacements (§ 4) : états vides, titres, vignette sans photo, 404, hors-ligne.
 - [ ] Tests (vitest et e2e avec horloge explicite), captures lues, ADR, `CLAUDE.md`, ce skill (palette § 6).
 - [ ] Release du site assez tôt avant le début de la saison.

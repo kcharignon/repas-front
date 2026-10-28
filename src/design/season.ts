@@ -1,6 +1,8 @@
 import { computed, ref, watch, watchEffect } from 'vue'
 import { defineStore } from 'pinia'
 
+import { useSessionStore } from '@/session/session'
+
 /**
  * Thèmes saisonniers (ADR 0010 « Citrouille & nuit », ADR 0011 « Houx & neige »), jour local de l'appareil, chaque année :
  * Halloween du 15 octobre au 1er novembre inclus, Noël du 15 novembre au 5 janvier inclus. Les deux ne se chevauchent jamais.
@@ -8,6 +10,9 @@ import { defineStore } from 'pinia'
  */
 
 export type Season = 'halloween' | 'noel'
+
+/** L'aperçu de l'administrateur (ADR 0013) : une saison, `none` (le thème de base, sans décor) ou rien (le thème du moment). */
+export type SeasonPreview = Season | 'none'
 
 /** L'ordre fixe des saisons : celui de la préférence écrite. */
 export const SEASONS: readonly Season[] = ['halloween', 'noel']
@@ -97,8 +102,18 @@ export const useSeasonStore = defineStore('season', () => {
     },
   })
   const active = computed(() => inSeason.value && enabled.value)
+  /**
+   * L'aperçu de l'administrateur (ADR 0013) : en MÉMOIRE seulement, jamais écrit (ni stockage, ni cookie, ni adresse). Posé, il passe
+   * avant le calendrier et l'interrupteur du décor ; un rechargement ou une page cachée le ramène au thème du moment.
+   */
+  const preview = ref<SeasonPreview | null>(null)
+  const session = useSessionStore()
   /** La saison dont le thème est posé, ou `null`. */
-  const activeSeason = computed<Season | null>(() => (active.value ? season.value : null))
+  const activeSeason = computed<Season | null>(() => {
+    if (preview.value !== null) return preview.value === 'none' ? null : preview.value
+
+    return active.value ? season.value : null
+  })
 
   watchEffect(() => paint(activeSeason.value))
   watch(disabled, (value) => {
@@ -115,7 +130,36 @@ export const useSeasonStore = defineStore('season', () => {
     season.value = currentSeason()
   }
 
-  return { enabled, season, inSeason, active, activeSeason, refresh }
+  /** Pose l'aperçu ; ignoré pour qui n'est pas administrateur (la vue masquée ne suffit pas). `null` revient au thème du moment. */
+  function setPreview(value: SeasonPreview | null) {
+    if (value !== null && !session.isAdmin) return
+    preview.value = value
+  }
+
+  function clearPreview() {
+    preview.value = null
+  }
+
+  // Plus d'administrateur (déconnexion, droit retiré) : plus d'aperçu.
+  watch(
+    () => session.isAdmin,
+    (admin) => {
+      if (!admin) clearPreview()
+    },
+    { flush: 'sync' },
+  )
+
+  return {
+    enabled,
+    season,
+    inSeason,
+    active,
+    activeSeason,
+    preview,
+    refresh,
+    setPreview,
+    clearPreview,
+  }
 })
 
 /** Le délai jusqu'au prochain minuit local (le changement d'heure d'été compris : la date est reconstruite, pas additionnée). */
@@ -125,7 +169,8 @@ function untilNextMidnight(now: Date): number {
 
 /**
  * Réévalue la saison quand l'onglet redevient visible et à chaque minuit local. Renvoie la fonction qui arrête le suivi.
- * Appelée une fois au démarrage, après l'installation de Pinia.
+ * Appelée une fois au démarrage, après l'installation de Pinia. Quitter la page (onglet caché, `pagehide`) efface l'aperçu de
+ * l'administrateur (ADR 0013) ; réévaluer le calendrier ne touche jamais à un aperçu posé.
  */
 export function followSeason(): () => void {
   const season = useSeasonStore()
@@ -142,6 +187,7 @@ export function followSeason(): () => void {
     )
   }
   const onVisible = () => {
+    if (document.visibilityState === 'hidden') season.clearPreview()
     if (document.visibilityState !== 'visible') return
     season.refresh()
     // L'appareil a pu dormir : le minuit attendu est peut-être passé, on le recalcule.
@@ -149,11 +195,15 @@ export function followSeason(): () => void {
     arm()
   }
 
+  const onLeave = () => season.clearPreview()
+
   document.addEventListener('visibilitychange', onVisible)
+  window.addEventListener('pagehide', onLeave)
   arm()
 
   return () => {
     document.removeEventListener('visibilitychange', onVisible)
+    window.removeEventListener('pagehide', onLeave)
     clearTimeout(timer)
   }
 }
