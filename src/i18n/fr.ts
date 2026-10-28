@@ -508,6 +508,7 @@ export default {
   auth: {
     pitch: 'Tes recettes, tes courses, sans oublier le basilic.',
     pitchGalette: 'Tes recettes, tes courses, sans oublier la galette.',
+    pitchValentin: 'Tes recettes, tes courses, sans oublier le dîner à deux.',
     pitchPaques: 'Tes recettes, tes courses, sans oublier le chocolat.',
     pitchHalloween: 'Tes recettes, tes courses, sans oublier la citrouille.',
     pitchNoel: 'Tes recettes, tes courses, sans oublier la bûche.',
@@ -1011,6 +1012,7 @@ export default {
   },
   season: {
     galette: 'Décor de la galette',
+    valentin: 'Décor de la Saint-Valentin',
     paques: 'Décor de Pâques',
     halloween: 'Décor d’Halloween',
     noel: 'Décor de Noël',
@@ -1023,6 +1025,7 @@ export default {
     },
     name: {
       galette: 'Galette & crêpes',
+      valentin: 'Saint-Valentin',
       paques: 'Pâques',
       halloween: 'Halloween',
       noel: 'Noël',

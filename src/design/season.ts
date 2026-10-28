@@ -5,7 +5,7 @@ import { useSessionStore } from '@/session/session'
 
 /**
  * Thèmes saisonniers (ADR 0010 « Citrouille & nuit », ADR 0011 « Houx & neige », ADR 0014 « Prairie & œufs » et le registre, ADR 0015
- * « Or & bleu roi »), jour local de l'appareil, chaque année : la galette du 6 janvier au 2 février inclus, Pâques du dimanche de Pâques moins 21 jours au lundi de Pâques inclus (date calculée),
+ * « Or & bleu roi » et « Rose & cœur »), jour local de l'appareil, chaque année : la galette du 6 janvier au 2 février inclus, la Saint-Valentin du 7 au 14 février inclus, Pâques du dimanche de Pâques moins 21 jours au lundi de Pâques inclus (date calculée),
  * Halloween du 15 octobre au 1er novembre inclus, Noël du 15 novembre au 5 janvier inclus. Les saisons ne se chevauchent jamais.
  * `public/theme-init.js` applique les mêmes règles avant le premier affichage ; un test garde les deux d'accord.
  */
@@ -52,6 +52,17 @@ const DEFINITIONS = [
       const day = date.getDate()
 
       return (month === 0 && day >= 6) || (month === 1 && day <= 2)
+    },
+  },
+  {
+    key: 'valentin',
+    color: '#a8326a',
+    // Du 7 février 00:00:00 au 14 février 23:59:59.
+    includes: (date) => {
+      const month = date.getMonth()
+      const day = date.getDate()
+
+      return month === 1 && day >= 7 && day <= 14
     },
   },
   {

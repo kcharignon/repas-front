@@ -1,6 +1,15 @@
 // Les illustrations de saison (ADR 0012) : coin, scène de fond, héros et pièces d'accueil. L'horloge est posée par chaque test
 // (`page.clock`). Ni back ni compte : l'API est simulée par `page.route`.
-import { expect, IN_GALETTE, IN_NOEL, IN_PAQUES, IN_SEASON, test, type Page } from './support/test'
+import {
+  expect,
+  IN_GALETTE,
+  IN_NOEL,
+  IN_PAQUES,
+  IN_SEASON,
+  IN_VALENTIN,
+  test,
+  type Page,
+} from './support/test'
 
 const PHONE = { width: 360, height: 640 }
 const DESKTOP = { width: 1280, height: 800 }
@@ -100,6 +109,18 @@ for (const viewport of [PHONE, DESKTOP]) {
       await expect(corner(page).locator('svg')).toBeVisible()
       await expect(scene(page).locator('svg')).toBeVisible()
       await expect(page.locator('html')).toHaveAttribute('data-season', 'galette')
+      await expect(corner(page)).toHaveCSS('pointer-events', 'none')
+    })
+
+    test('la Saint-Valentin : le coin (les cœurs) et la scène (les toits) sont là', async ({
+      page,
+    }) => {
+      await page.clock.setSystemTime(IN_VALENTIN)
+      await page.goto('/connexion')
+
+      await expect(corner(page).locator('svg')).toBeVisible()
+      await expect(scene(page).locator('svg')).toBeVisible()
+      await expect(page.locator('html')).toHaveAttribute('data-season', 'valentin')
       await expect(corner(page)).toHaveCSS('pointer-events', 'none')
     })
 

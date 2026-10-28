@@ -46,6 +46,23 @@ export const PACKS: Record<Season, Record<Slot, string>> = {
     'title-account': 'crown',
     'recipe-placeholder': 'crepe-stack',
   },
+  valentin: {
+    hero: 'dinner',
+    corner: 'hearts-garland',
+    scene: 'rooftops',
+    aside: 'candle',
+    'empty-list': 'envelope',
+    'empty-recipes': 'cake',
+    'empty-search': 'heart-arrow',
+    offline: 'balloon',
+    'not-found': 'lovebirds',
+    error: 'heart',
+    'title-list': 'rose',
+    'title-recipes': 'chocolates',
+    'title-aisles': 'ring',
+    'title-account': 'teddy',
+    'recipe-placeholder': 'cake',
+  },
   paques: {
     hero: 'bunny-basket',
     corner: 'blossom-corner',
@@ -108,6 +125,7 @@ export const PRELOADED_SLOTS: readonly Slot[] = ['offline']
 /** Les pièces laissées libres exprès (dessinées, pas encore posées) : le test de la table les connaît. */
 export const FREE_PIECES: Record<Season, readonly string[]> = {
   galette: [],
+  valentin: [],
   paques: [],
   halloween: [],
   noel: [],

@@ -28,6 +28,7 @@ const at = (year: number, month: number, day: number, h = 0, m = 0, s = 0) =>
 /** La couleur de la barre du navigateur de chaque saison (le `--brand` clair), écrite ici pour attraper une divergence des deux registres. */
 const COLORS: Record<Season, string> = {
   galette: '#223b86',
+  valentin: '#a8326a',
   paques: '#6a50b0',
   halloween: '#43206b',
   noel: '#7a1530',
@@ -70,6 +71,22 @@ const CASES: Record<
       at(2028, 2, 29, 12),
       at(2026, 6, 15, 12),
       at(2026, 12, 25, 12),
+    ],
+  },
+  // Du 7 au 14 février inclus ; l'année ne compte pas, le 29 février d'une année bissextile n'en fait pas partie.
+  valentin: {
+    bounds: [
+      bounds('2027', [2027, 2, 7], [2027, 2, 14]),
+      bounds('2028, bissextile', [2028, 2, 7], [2028, 2, 14]),
+      bounds('2031', [2031, 2, 7], [2031, 2, 14]),
+    ],
+    inside: [at(2027, 2, 12, 12), at(2027, 2, 14, 8), at(2028, 2, 10, 12)],
+    outside: [
+      at(2027, 2, 6, 12),
+      at(2027, 2, 15, 12),
+      at(2028, 2, 29, 12),
+      at(2027, 2, 2, 12),
+      at(2026, 6, 15, 12),
     ],
   },
   // Du dimanche de Pâques moins 21 jours au lundi de Pâques inclus : les fenêtres de plusieurs années, Pâques extrêmes comprises
@@ -151,7 +168,7 @@ function everyDay(): Date[] {
 describe('thème saisonnier : la règle de dates, saison par saison', () => {
   it('la table couvre toutes les saisons et le registre est dans l’ordre de l’année', () => {
     expect(Object.keys(CASES).sort()).toEqual([...SEASONS].sort())
-    expect(SEASONS).toEqual(['galette', 'paques', 'halloween', 'noel'])
+    expect(SEASONS).toEqual(['galette', 'valentin', 'paques', 'halloween', 'noel'])
     expect(Object.keys(COLORS).sort()).toEqual([...SEASONS].sort())
   })
 
@@ -206,6 +223,7 @@ describe('thème saisonnier : la règle de dates, saison par saison', () => {
     vi.setSystemTime(at(2027, 3, 20, 9))
     expect([isPaquesSeason(), isHalloweenSeason(), isNoelSeason()]).toEqual([true, false, false])
     expect(currentSeason(at(2027, 1, 15, 9))).toBe('galette')
+    expect(currentSeason(at(2027, 2, 12, 9))).toBe('valentin')
 
     vi.setSystemTime(at(2026, 10, 20, 9))
     expect([isPaquesSeason(), isHalloweenSeason(), isNoelSeason()]).toEqual([false, true, false])
@@ -377,6 +395,21 @@ describe('thème saisonnier : application', () => {
     expect(meta()).toBe('#1E6B4C')
   })
 
+  it('en saison de la Saint-Valentin : data-season="valentin" et barre du navigateur rose, du 7 au 14 février', () => {
+    expect(applySeason(at(2027, 2, 12))).toBe('valentin')
+
+    expect(html.dataset.season).toBe('valentin')
+    expect(meta()).toBe('#a8326a')
+
+    // La galette finit le 2 février, la Saint-Valentin commence le 7 : entre les deux, le thème de base.
+    applySeason(at(2027, 2, 5))
+    expect(html.hasAttribute('data-season')).toBe(false)
+    expect(meta()).toBe('#1E6B4C')
+
+    applySeason(at(2027, 2, 15))
+    expect(html.hasAttribute('data-season')).toBe(false)
+  })
+
   it('de Halloween à Noël puis à la galette, la saison et la couleur suivent', () => {
     applySeason(at(2026, 10, 20))
     applySeason(at(2026, 11, 20))
@@ -460,6 +493,21 @@ describe('thème saisonnier : application', () => {
       season.enabled = false
       await nextTick()
       expect(localStorage.getItem('repas.season')).toBe('galette,halloween,noel')
+    })
+
+    it('en saison de la Saint-Valentin : actif, couper la galette ne la coupe pas', async () => {
+      vi.setSystemTime(at(2027, 2, 12))
+      localStorage.setItem('repas.season', 'galette')
+
+      const season = useSeasonStore()
+
+      expect(season.season).toBe('valentin')
+      expect(season.activeSeason).toBe('valentin')
+      expect(html.dataset.season).toBe('valentin')
+
+      season.enabled = false
+      await nextTick()
+      expect(localStorage.getItem('repas.season')).toBe('galette,valentin')
     })
 
     it('hors saison : inactif, rien sur <html>', () => {
@@ -804,6 +852,18 @@ describe('thème saisonnier : au démarrage', () => {
     vi.setSystemTime(at(2026, 10, 20))
     runInitScript()
     expect(state()).toEqual({ season: 'halloween', color: '#43206b' })
+  })
+
+  it('une préférence « valentin » ne coupe que la Saint-Valentin, au démarrage aussi', () => {
+    localStorage.setItem('repas.season', 'valentin')
+
+    vi.setSystemTime(at(2027, 2, 12))
+    runInitScript()
+    expect(state()).toEqual({ season: null, color: '#1E6B4C' })
+
+    vi.setSystemTime(at(2027, 1, 15))
+    runInitScript()
+    expect(state()).toEqual({ season: 'galette', color: '#223b86' })
   })
 
   it('une préférence « galette » ne coupe que la galette, au démarrage aussi', () => {

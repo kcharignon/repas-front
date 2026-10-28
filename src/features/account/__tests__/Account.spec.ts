@@ -328,16 +328,17 @@ describe('aperçu des thèmes', () => {
       'Thème du moment',
       'Sans décor',
       'Galette & crêpes',
+      'Saint-Valentin',
       'Pâques',
       'Halloween',
       'Noël',
     ])
     expect(chips[0]!.attributes('aria-pressed')).toBe('true')
 
-    await chips[5]!.trigger('click')
+    await chips[6]!.trigger('click')
     await flushPromises()
     expect(document.documentElement.dataset.season).toBe('noel')
-    expect(previewGroup(wrapper).findAll('button')[5]!.attributes('aria-pressed')).toBe('true')
+    expect(previewGroup(wrapper).findAll('button')[6]!.attributes('aria-pressed')).toBe('true')
 
     await chips[1]!.trigger('click')
     await flushPromises()

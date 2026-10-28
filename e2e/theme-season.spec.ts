@@ -2,11 +2,21 @@
 // au 5 janvier), jour du navigateur. L'horloge est posée par
 // chaque test (`page.clock`) : rien ne dépend du jour où la suite tourne. Ni back ni compte : l'API est simulée par `page.route`.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, IN_GALETTE, IN_NOEL, IN_PAQUES, IN_SEASON, test, type Page } from './support/test'
+import {
+  expect,
+  IN_GALETTE,
+  IN_NOEL,
+  IN_PAQUES,
+  IN_SEASON,
+  IN_VALENTIN,
+  test,
+  type Page,
+} from './support/test'
 
 const PITCH = 'Tes recettes, tes courses, sans oublier le basilic.'
 const PITCH_HALLOWEEN = 'Tes recettes, tes courses, sans oublier la citrouille.'
 const PITCH_GALETTE = 'Tes recettes, tes courses, sans oublier la galette.'
+const PITCH_VALENTIN = 'Tes recettes, tes courses, sans oublier le dîner à deux.'
 const PITCH_PAQUES = 'Tes recettes, tes courses, sans oublier le chocolat.'
 const PITCH_NOEL = 'Tes recettes, tes courses, sans oublier la bûche.'
 
@@ -17,6 +27,9 @@ const PURPLE_DARK = 'rgb(45, 24, 80)'
 // La galette : bleu roi, plus sombre en mode sombre.
 const ROYAL = 'rgb(34, 59, 134)'
 const ROYAL_DARK = 'rgb(26, 42, 102)'
+// La Saint-Valentin : rose, plus sombre en mode sombre.
+const ROSE = 'rgb(168, 50, 106)'
+const ROSE_DARK = 'rgb(125, 35, 80)'
 // Pâques : violet, plus sombre en mode sombre.
 const VIOLET = 'rgb(106, 80, 176)'
 const VIOLET_DARK = 'rgb(74, 54, 127)'
@@ -199,6 +212,59 @@ test.describe('écran de connexion, la galette', () => {
   test('le décor de la galette coupé : comme hors saison', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('repas.season', 'galette'))
     await page.clock.setSystemTime(IN_GALETTE)
+    await page.goto('/connexion')
+
+    await expect(page.getByText(PITCH)).toBeVisible()
+    await expect(page.locator('html')).not.toHaveAttribute('data-season', /.*/)
+    await expect(banner(page)).toHaveCSS('background-color', GREEN)
+  })
+})
+
+test.describe('écran de connexion, la Saint-Valentin', () => {
+  test('le 12 février 2027 : rose et cœur, bandeau rose, décor, barre du navigateur rose', async ({
+    page,
+  }) => {
+    await page.clock.setSystemTime(IN_VALENTIN)
+    await page.goto('/connexion')
+
+    await expect(page.locator('html')).toHaveAttribute('data-season', 'valentin')
+    await expect(page.getByText(PITCH_VALENTIN)).toBeVisible()
+    await expect(page.getByText(PITCH, { exact: true })).toHaveCount(0)
+    await expect(banner(page)).toHaveCSS('background-color', ROSE)
+    // Le héros illustré (la table pour deux) est dans le bandeau
+    await expect(banner(page).locator('svg[focusable="false"]')).toHaveCount(1)
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#a8326a')
+  })
+
+  test('en sombre : le bandeau est rose vin et le fond vin', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await page.clock.setSystemTime(IN_VALENTIN)
+    await page.goto('/connexion')
+
+    await expect(banner(page)).toHaveCSS('background-color', ROSE_DARK)
+    expect(await background(page)).toBe('rgb(29, 15, 23)')
+  })
+
+  for (const [label, date, season] of [
+    ['le 7 février à 00:00:00 (début)', new Date(2027, 1, 7, 0, 0, 0), 'valentin'],
+    ['le 14 février à 23:59:59 (fin)', new Date(2027, 1, 14, 23, 59, 59), 'valentin'],
+    ['le 6 février à 23:59:59 (la veille)', new Date(2027, 1, 6, 23, 59, 59), null],
+    ['le 15 février à 00:00:00 (le lendemain)', new Date(2027, 1, 15, 0, 0, 0), null],
+  ] as const) {
+    test(`${label}`, async ({ page }) => {
+      await page.clock.setSystemTime(date)
+      await page.goto('/connexion')
+
+      if (season) await expect(page.locator('html')).toHaveAttribute('data-season', season)
+      else await expect(page.locator('html')).not.toHaveAttribute('data-season', /.*/)
+    })
+  }
+
+  test('le décor de la Saint-Valentin coupé : comme hors saison, sans couper la galette', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => localStorage.setItem('repas.season', 'valentin'))
+    await page.clock.setSystemTime(IN_VALENTIN)
     await page.goto('/connexion')
 
     await expect(page.getByText(PITCH)).toBeVisible()
@@ -551,6 +617,29 @@ test.describe('écran « Moi »', () => {
       expect(violations).toEqual([])
     })
   }
+
+  for (const [label, date, name] of [
+    ['la galette', IN_GALETTE, 'Décor de la galette'],
+    ['la Saint-Valentin', IN_VALENTIN, 'Décor de la Saint-Valentin'],
+  ] as const)
+    for (const colorScheme of ['light', 'dark'] as const) {
+      test(`pour ${label}, l’écran est accessible (WCAG AA), thème ${colorScheme} du système`, async ({
+        page,
+      }) => {
+        await fakeBack(page)
+        await page.emulateMedia({ colorScheme })
+        await page.clock.setSystemTime(date)
+        await page.goto('/moi')
+        await expect(page.getByRole('switch', { name })).toBeVisible()
+
+        const { violations } = await new AxeBuilder({ page })
+          .exclude('.vue-devtools__anchor-btn')
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+          .analyze()
+
+        expect(violations).toEqual([])
+      })
+    }
 
   for (const colorScheme of ['light', 'dark'] as const) {
     test(`en saison, l’écran est accessible (WCAG AA), thème ${colorScheme} du système`, async ({
