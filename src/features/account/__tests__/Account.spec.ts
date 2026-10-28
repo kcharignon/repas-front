@@ -165,9 +165,10 @@ describe('réglages du compte', () => {
   })
 })
 
-// Le décor d'Halloween (ADR 0010) : un interrupteur sous le choix du thème, visible du 15 octobre au 1er novembre seulement.
-// Hors de ces tests, la suite tourne le 15 juin (src/__tests__/setup.ts).
-describe('décor d’Halloween', () => {
+// Le décor saisonnier (ADR 0010, 0011) : un interrupteur sous le choix du thème, visible en saison seulement (du 15 octobre au
+// 1er novembre, du 15 novembre au 5 janvier), dont le libellé suit la saison. Hors de ces tests, la suite tourne le 15 juin
+// (src/__tests__/setup.ts).
+describe('décor saisonnier', () => {
   const switchOf = (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
     wrapper.find('[role="switch"]')
 
@@ -186,7 +187,18 @@ describe('décor d’Halloween', () => {
 
     expect(switchOf(wrapper).exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Halloween')
+    expect(wrapper.text()).not.toContain('Noël')
     expect(document.documentElement.hasAttribute('data-season')).toBe(false)
+  })
+
+  it('le 14 novembre et le 6 janvier : aucun interrupteur', async () => {
+    for (const date of [new Date(2026, 10, 14, 12), new Date(2027, 0, 6, 12)]) {
+      vi.setSystemTime(date)
+
+      const { wrapper } = await open()
+
+      expect(switchOf(wrapper).exists()).toBe(false)
+    }
   })
 
   it('en saison : l’interrupteur est là, juste sous le choix du thème, et activé par défaut', async () => {
@@ -212,7 +224,7 @@ describe('décor d’Halloween', () => {
 
     expect(switchOf(wrapper).attributes('aria-checked')).toBe('false')
     expect(document.documentElement.hasAttribute('data-season')).toBe(false)
-    expect(localStorage.getItem('repas.season')).toBe('off')
+    expect(localStorage.getItem('repas.season')).toBe('halloween')
 
     await switchOf(wrapper).trigger('click')
     await flushPromises()
@@ -230,5 +242,59 @@ describe('décor d’Halloween', () => {
 
     expect(switchOf(wrapper).attributes('aria-checked')).toBe('false')
     expect(document.documentElement.hasAttribute('data-season')).toBe(false)
+  })
+
+  describe('Noël', () => {
+    it('le libellé suit la saison : « Décor de Noël », sous le choix du thème, activé par défaut', async () => {
+      vi.setSystemTime(new Date(2026, 11, 20, 12))
+
+      const { wrapper } = await open()
+
+      const toggle = switchOf(wrapper)
+      expect(toggle.attributes('aria-checked')).toBe('true')
+      expect(wrapper.text()).toContain('Décor de Noël')
+      expect(wrapper.text()).not.toContain('Halloween')
+      expect(document.documentElement.dataset.season).toBe('noel')
+      expect(toggle.element.closest('section')?.querySelector('h2')?.textContent).toBe('Thème')
+    })
+
+    it('le couper retire le thème de Noël et se retient ; le rallumer le remet', async () => {
+      vi.setSystemTime(new Date(2027, 0, 1, 12))
+      const { wrapper } = await open()
+
+      await switchOf(wrapper).trigger('click')
+      await flushPromises()
+
+      expect(switchOf(wrapper).attributes('aria-checked')).toBe('false')
+      expect(document.documentElement.hasAttribute('data-season')).toBe(false)
+      expect(localStorage.getItem('repas.season')).toBe('noel')
+
+      await switchOf(wrapper).trigger('click')
+      await flushPromises()
+
+      expect(document.documentElement.dataset.season).toBe('noel')
+      expect(localStorage.getItem('repas.season')).toBeNull()
+    })
+
+    it('couper Halloween ne coupe pas Noël : l’interrupteur est activé', async () => {
+      vi.setSystemTime(new Date(2026, 11, 20, 12))
+      localStorage.setItem('repas.season', 'halloween')
+
+      const { wrapper } = await open()
+
+      expect(switchOf(wrapper).attributes('aria-checked')).toBe('true')
+      expect(document.documentElement.dataset.season).toBe('noel')
+    })
+
+    it('couper Noël garde Halloween coupé ou non selon la préférence', async () => {
+      vi.setSystemTime(new Date(2026, 11, 20, 12))
+      localStorage.setItem('repas.season', 'off')
+      const { wrapper } = await open()
+
+      await switchOf(wrapper).trigger('click')
+      await flushPromises()
+
+      expect(localStorage.getItem('repas.season')).toBe('halloween,noel')
+    })
   })
 })
