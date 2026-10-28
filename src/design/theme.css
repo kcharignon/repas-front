@@ -91,8 +91,7 @@
   --danger-soft: #fbe1dd;
   --on-danger-soft: #7a1a12;
   --brand: #43206b;
-  /* La lune du décor de connexion (ni texte ni fond de texte). */
-  --moon: #f9d98a;
+  --scene-opacity: 0.16;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -112,6 +111,7 @@
     --danger-soft: #3a1a14;
     --on-danger-soft: #f6b8ab;
     --brand: #2d1850;
+    --scene-opacity: 0.2;
   }
 }
 
@@ -131,6 +131,7 @@
   --danger-soft: #3a1a14;
   --on-danger-soft: #f6b8ab;
   --brand: #2d1850;
+  --scene-opacity: 0.2;
 }
 
 /*
@@ -156,8 +157,7 @@
   --danger-soft: #fbe1dd;
   --on-danger-soft: #7a1a12;
   --brand: #7a1530;
-  /* L'étoile du décor de connexion (ni texte ni fond de texte). */
-  --star: #f9d98a;
+  --scene-opacity: 0.15;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -177,7 +177,7 @@
     --danger-soft: #3a1a14;
     --on-danger-soft: #f6b8ab;
     --brand: #5a1226;
-    --star: #f9d98a;
+    --scene-opacity: 0.17;
   }
 }
 
@@ -197,7 +197,7 @@
   --danger-soft: #3a1a14;
   --on-danger-soft: #f6b8ab;
   --brand: #5a1226;
-  --star: #f9d98a;
+  --scene-opacity: 0.17;
 }
 
 @theme inline {
@@ -218,8 +218,6 @@
   --color-warning-soft: var(--warning-soft);
   --color-on-warning-soft: var(--on-warning-soft);
   --color-brand: var(--brand);
-  --color-moon: var(--moon);
-  --color-star: var(--star);
   --font-sans: 'Figtree Variable', system-ui, sans-serif;
   --font-display: 'Bricolage Grotesque Variable', 'Figtree Variable', system-ui, sans-serif;
 }

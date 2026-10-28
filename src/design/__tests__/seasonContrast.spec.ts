@@ -3,6 +3,8 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { PACKS } from '../season/art'
+
 // Les contrastes des thèmes « Citrouille & nuit » (ADR 0010) et « Houx & neige » (ADR 0011), lus dans la feuille de style elle-même : WCAG AA, 4,5:1 pour du texte.
 
 const css = readFileSync('src/design/theme.css', 'utf8')
@@ -47,8 +49,6 @@ const palettes = Object.fromEntries(
   (typeof seasons)[number],
   Record<'light' | 'darkSystem' | 'darkForced', Record<string, string>>
 >
-/** Les jetons de décor, qui ne portent ni texte ni fond de texte et ne changent pas avec le mode. */
-const decorTokens = ['moon', 'star']
 
 const pairs = [
   ['ink', 'bg'],
@@ -94,9 +94,8 @@ for (const season of seasons) {
       expect(darkSystem).toEqual(darkForced)
     })
 
-    it('définit les mêmes jetons en clair et en sombre (sauf ceux du décor, qui ne changent pas)', () => {
-      const names = (palette: Record<string, string>) =>
-        Object.keys(palette).filter((n) => !decorTokens.includes(n))
+    it('définit les mêmes jetons en clair et en sombre', () => {
+      const names = (palette: Record<string, string>) => Object.keys(palette)
 
       expect(names(darkForced).sort()).toEqual(names(light).sort())
     })
@@ -127,12 +126,6 @@ const hue = (hex: string) => {
 
 describe('thème de Noël : les choix de la maquette', () => {
   const { light, darkForced } = palettes.noel
-
-  it('l’étoile du décor est la même en clair et en sombre', () => {
-    expect(light.star).toBe('#f9d98a')
-    expect(darkForced.star).toBe('#f9d98a')
-    expect(light.moon).toBeUndefined()
-  })
 
   it('le bandeau est bordeaux et le danger reste un rouge qui s’en distingue', () => {
     for (const palette of [light, darkForced]) {
@@ -167,4 +160,65 @@ describe('thèmes saisonniers : la couleur d’accent', () => {
 
     expect(offenders).toEqual([])
   })
+})
+
+/** L'opacité de la scène de fond (`--scene-opacity`) du bloc qui suit exactement ce sélecteur. */
+function sceneOpacity(selector: string): number {
+  const start = css.indexOf(`${selector} {`)
+  const body = css.slice(css.indexOf('{', start) + 1, css.indexOf('}', start))
+  const found = /--scene-opacity:\s*([0-9.]+);/.exec(body)
+  if (!found) throw new Error(`--scene-opacity absent de ${selector}`)
+
+  return Number(found[1])
+}
+
+/** Mélange `front` sur `back` à l'opacité donnée (ce que l'œil voit d'un calque translucide posé sur le fond de la page). */
+function mix(front: string, back: string, opacity: number): string {
+  const part = (start: number) =>
+    Math.round(
+      parseInt(front.slice(start, start + 2), 16) * opacity +
+        parseInt(back.slice(start, start + 2), 16) * (1 - opacity),
+    )
+      .toString(16)
+      .padStart(2, '0')
+
+  return `#${part(1)}${part(3)}${part(5)}`
+}
+
+// ADR 0012 : la scène de fond est posée sous le texte courant. Chaque couleur du fichier, mélangée au fond de la page à l'opacité
+// du jeton, doit laisser `ink` et `muted` à 4,5:1 : le pire pixel possible de la scène.
+describe('scène de fond des thèmes saisonniers : le texte reste lisible sur son pire pixel', () => {
+  const selectors = {
+    clair: (season: string) => `:root[data-season='${season}']`,
+    'sombre (système)': (season: string) =>
+      `:root[data-season='${season}']:not([data-theme='light'])`,
+    'sombre (forcé)': (season: string) => `:root[data-season='${season}'][data-theme='dark']`,
+  } as const
+
+  for (const season of seasons) {
+    const svg = readFileSync(`src/design/season/art/${season}/${PACKS[season].scene}.svg`, 'utf8')
+    const colors = [...new Set([...svg.matchAll(/#[0-9a-f]{6}/gi)].map((m) => m[0].toLowerCase()))]
+
+    it(`${season} : la scène a des couleurs à vérifier`, () => {
+      expect(colors.length).toBeGreaterThan(3)
+    })
+
+    for (const [mode, selector] of Object.entries(selectors)) {
+      const palette = tokens(selector(season))
+      const opacity = sceneOpacity(selector(season))
+
+      it(`${season}, ${mode} : opacité ${opacity}, ink et muted gardent 4,5:1`, () => {
+        expect(opacity).toBeGreaterThan(0)
+        expect(opacity).toBeLessThanOrEqual(0.25)
+        for (const color of colors) {
+          const worst = mix(color, palette.bg!, opacity)
+          for (const text of ['ink', 'muted'] as const)
+            expect(
+              contrast(palette[text]!, worst),
+              `${text} sur ${color} à ${opacity} sur ${palette.bg}`,
+            ).toBeGreaterThanOrEqual(4.5)
+        }
+      })
+    }
+  }
 })
