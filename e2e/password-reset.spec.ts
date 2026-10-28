@@ -291,7 +291,7 @@ for (const { label, size } of viewports) {
 
 const mailpit = process.env.E2E_MAILPIT_URL ?? 'http://mailer:8025'
 
-/** Le lien du dernier e-mail reçu par `address` dont l'adresse a ce chemin (le compte reçoit aussi sa confirmation d'adresse). */
+/** Le lien du dernier e-mail reçu par `address` dont l'adresse a ce chemin (le compte reçoit aussi le lien de bienvenue de son inscription). */
 async function linkSentTo(
   request: APIRequestContext,
   address: string,
@@ -359,16 +359,14 @@ test.describe('mot de passe oublié, avec le back', () => {
     const freshPassword = 'Un tout nouveau mot de passe 2!'
 
     try {
-      // Un compte actif : inscription, puis confirmation de l'adresse par le lien de l'e-mail (par l'API)
-      const registered = await request.post('/api/v1/users', {
-        data: { email: address, password: oldPassword, defaultServing: 4 },
+      // Un compte actif : inscription par l'adresse seule, puis premier mot de passe choisi par le lien de bienvenue (par l'API)
+      const registered = await request.post('/api/v1/users', { data: { email: address } })
+      expect(registered.status()).toBe(204)
+      const welcomeLink = await linkSentTo(request, address, '/mot-de-passe-oublie/confirmation')
+      const chosen = await request.post('/api/v1/users/password-reset/confirm', {
+        data: { token: new URL(welcomeLink).searchParams.get('token'), password: oldPassword },
       })
-      expect(registered.status()).toBe(201)
-      const confirmationLink = new URL(await linkSentTo(request, address, '/confirmation-email'))
-      const verified = await request.post('/api/v1/users/email-verification/confirm', {
-        data: { token: confirmationLink.searchParams.get('token') },
-      })
-      expect(verified.status()).toBe(204)
+      expect(chosen.status()).toBe(204)
 
       // Mot de passe oublié : depuis la connexion, l'adresse saisie est reprise
       await page.goto('/connexion')
@@ -385,7 +383,11 @@ test.describe('mot de passe oublié, avec le back', () => {
       await expect(page.getByRole('status')).toHaveText(neutralMessage)
 
       // Le lien reçu : nouveau mot de passe, puis la connexion annonce que c'est fait
-      const link = new URL(await linkSentTo(request, address, '/mot-de-passe-oublie/confirmation'))
+      const link = new URL(
+        await linkSentTo(request, address, '/mot-de-passe-oublie/confirmation', {
+          notIn: [welcomeLink],
+        }),
+      )
       expect(link.pathname).toBe('/mot-de-passe-oublie/confirmation')
       await page.goto(`${link.pathname}${link.search}`)
       await newPassword(page).fill(freshPassword)

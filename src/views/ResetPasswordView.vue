@@ -25,6 +25,8 @@ const form = useTemplateRef<HTMLFormElement>('form')
 /** Le secret est dans l'adresse du lien reçu par e-mail (`?token=…`) ; sans lui, c'est un lien qui ne marche plus. */
 const token = typeof route.query.token === 'string' ? route.query.token : ''
 const invalid = ref(token === '' || token.length > TOKEN_MAX)
+/** Le lien de l'e-mail d'inscription ajoute `bienvenue=1` : il fait choisir le PREMIER mot de passe du compte, pas un nouveau. */
+const welcome = route.query.bienvenue === '1'
 
 const password = ref('')
 const confirmation = ref('')
@@ -37,14 +39,15 @@ watch(password, () => (passwordError.value = null))
 watch(confirmation, () => (confirmationError.value = null))
 
 function messageFor(failure: unknown): string {
+  const group = welcome ? 'welcome' : 'resetPassword'
   if (failure instanceof ApiError && failure.status === 429) {
-    if (failure.retryAfter === null) return t('resetPassword.tooManyLater')
+    if (failure.retryAfter === null) return t(`${group}.tooManyLater`)
     const minutes = Math.max(1, Math.ceil(failure.retryAfter / 60))
 
-    return t('resetPassword.tooMany', { minutes }, minutes)
+    return t(`${group}.tooMany`, { minutes }, minutes)
   }
 
-  return t('resetPassword.unreachable')
+  return welcome ? t('errors.unreachable') : t('resetPassword.unreachable')
 }
 
 /** Le premier champ en erreur reçoit le focus : le lecteur d'écran en lit le message, le clavier y reste. */
@@ -64,7 +67,10 @@ async function submit() {
   try {
     await session.resetPassword(token, password.value)
     // Aucune session n'est ouverte (ADR 0026 du back, décision 7) : retour à la connexion, avec la bonne nouvelle.
-    await router.push({ name: 'login', query: { 'mot-de-passe': 'change' } })
+    await router.push({
+      name: 'login',
+      query: welcome ? { compte: 'pret' } : { 'mot-de-passe': 'change' },
+    })
   } catch (failure) {
     if (failure instanceof ApiError && failure.status === 422) {
       // Le lien est inconnu, déjà utilisé ou expiré ; tout autre 422 est le refus du mot de passe, le lien reste valable.
@@ -82,7 +88,7 @@ async function submit() {
 
 <template>
   <AuthLayout v-if="invalid" :title="t('resetPassword.invalidTitle')">
-    <p role="alert">{{ t('resetPassword.invalid') }}</p>
+    <p role="alert">{{ t(welcome ? 'welcome.invalid' : 'resetPassword.invalid') }}</p>
     <UiLinkButton :to="{ name: 'forgot-password' }">{{ t('resetPassword.newLink') }}</UiLinkButton>
     <p class="text-center text-muted">
       <RouterLink :to="{ name: 'login' }" class="font-bold text-primary underline">{{
@@ -90,10 +96,11 @@ async function submit() {
       }}</RouterLink>
     </p>
   </AuthLayout>
-  <AuthLayout v-else :title="t('resetPassword.title')">
+  <AuthLayout v-else :title="t(welcome ? 'welcome.title' : 'resetPassword.title')">
+    <p v-if="welcome">{{ t('welcome.intro') }}</p>
     <form ref="form" class="flex flex-col gap-4" novalidate @submit.prevent="submit">
       <UiField
-        :label="t('resetPassword.password')"
+        :label="t(welcome ? 'welcome.password' : 'resetPassword.password')"
         :hint="passwordError === null ? t('resetPassword.passwordHint') : undefined"
         :error="passwordError"
         v-slot="{ id, describedby, invalid: fieldInvalid }"

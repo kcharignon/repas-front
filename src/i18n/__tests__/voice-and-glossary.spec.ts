@@ -174,6 +174,11 @@ const WEB_GROUPS = [
   'login',
   'forgotPassword',
   'resetPassword',
+  // Inscription par la seule adresse : le formulaire, « Vérifie ta boîte mail », l'ancien lien de confirmation et la bienvenue (premier mot de passe)
+  'register',
+  'checkEmail',
+  'confirmEmail',
+  'welcome',
 ] as const
 
 /**

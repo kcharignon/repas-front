@@ -2,7 +2,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { ApiError, createApiClient, unwrap } from '@/api'
-import type { CurrentUser } from '@/api'
+import type { CurrentUser, RegisterPayload } from '@/api'
 import { forgetAccountData } from './accountData'
 
 /** ADR 0015 §5 (back) : deux onglets qui rafraîchissent ensemble envoient le même cookie, le second perd la course. */
@@ -226,14 +226,16 @@ export const useSessionStore = defineStore('session', () => {
     restored.value = true
   }
 
-  /** Crée le compte, en attente : le back envoie un lien de confirmation, la connexion n'est possible qu'après (ADR 0020 du back). */
-  async function register(email: string, password: string, defaultServing: number) {
-    await unwrap(api.POST('/api/v1/users', { body: { email, password, defaultServing } }))
-  }
-
-  /** Renvoie le lien de confirmation ; le back répond 204 sans dire si l'adresse a un compte en attente. */
-  async function sendEmailVerification(email: string) {
-    await unwrap(api.POST('/api/v1/users/email-verification/send', { body: { email } }))
+  /**
+   * Inscrit une adresse, ou en renvoie le lien : le back répond `204` pour toute adresse, nouvelle, déjà connue, en attente ou
+   * désactivée, sans rien dire d'un compte existant. Il envoie un e-mail : le lien où la personne choisit son mot de passe (ou le rappel
+   * qu'elle a déjà un compte). Aucune session n'est ouverte et le mot de passe n'est plus envoyé : il se choisit après le clic sur le lien.
+   *
+   * Le contrat donne une valeur par défaut au nombre de personnes (4) et à l'ancien `password` : le générateur de types les rend
+   * obligatoires alors que le back les accepte absents. Le corps ne porte que l'adresse.
+   */
+  async function register(email: string) {
+    await unwrap(api.POST('/api/v1/users', { body: { email } as RegisterPayload }))
   }
 
   /** Confirme l'adresse avec le secret du lien reçu : 422 si le lien est inconnu, déjà utilisé ou expiré. */
@@ -278,7 +280,6 @@ export const useSessionStore = defineStore('session', () => {
     reloadUser,
     login,
     register,
-    sendEmailVerification,
     confirmEmail,
     sendPasswordReset,
     resetPassword,

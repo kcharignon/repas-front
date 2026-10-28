@@ -424,9 +424,149 @@ describe('ResetPasswordView', () => {
   })
 })
 
+// Le lien de l'e-mail d'inscription : le même écran, pour choisir le PREMIER mot de passe
+describe('ResetPasswordView, à la bienvenue', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    document.body.innerHTML = ''
+  })
+
+  const welcome = '/mot-de-passe-oublie/confirmation?token=le-secret&bienvenue=1'
+  const fillBoth = async (
+    wrapper: Awaited<ReturnType<typeof mountView>>['wrapper'],
+    value: string,
+  ) => {
+    const [password, confirmation] = wrapper.findAll('input')
+    await password!.setValue(value)
+    await confirmation!.setValue(value)
+  }
+
+  it('demande de choisir son mot de passe, sans parler d’un nouveau mot de passe', async () => {
+    const fetchMock = stubApi({})
+    const { wrapper } = await mountView(ResetPasswordView, welcome)
+
+    expect(wrapper.find('h1').text()).toBe('Choisis ton mot de passe')
+    expect(wrapper.text()).toContain('Dernière étape pour ouvrir ton compte.')
+    expect(wrapper.text()).toContain('Mot de passe')
+    expect(wrapper.text()).toContain('Confirme ton mot de passe')
+    expect(wrapper.text()).toContain('8 caractères au moins.')
+    expect(wrapper.text()).not.toMatch(/nouveau mot de passe|Nouveau/)
+    expect(wrapper.findAll('input')).toHaveLength(2)
+    expect(wrapper.findAll('button')).toHaveLength(1)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('garde le titre habituel sans « bienvenue » dans l’adresse', async () => {
+    const { wrapper } = await mountView(
+      ResetPasswordView,
+      '/mot-de-passe-oublie/confirmation?token=le-secret',
+    )
+
+    expect(wrapper.find('h1').text()).toBe('Choisis un nouveau mot de passe')
+    expect(wrapper.text()).not.toContain('Dernière étape')
+  })
+
+  it.each(['0', 'oui', ''])(
+    'ne prend pas « bienvenue=%s » pour un premier mot de passe',
+    async (value) => {
+      const { wrapper } = await mountView(
+        ResetPasswordView,
+        `/mot-de-passe-oublie/confirmation?token=le-secret&bienvenue=${value}`,
+      )
+
+      expect(wrapper.find('h1').text()).toBe('Choisis un nouveau mot de passe')
+    },
+  )
+
+  it('enregistre avec le secret du lien, sans connexion, puis dit que le compte est prêt', async () => {
+    const fetchMock = stubApi({ [confirm]: sent204 })
+    const { wrapper, router } = await mountView(ResetPasswordView, welcome)
+
+    await fillBoth(wrapper, 'un premier mot de passe')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(calls(fetchMock)).toEqual([confirm])
+    expect(await bodyOf(fetchMock, 0)).toEqual({
+      token: 'le-secret',
+      password: 'un premier mot de passe',
+    })
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('login'))
+    expect(router.currentRoute.value.query).toEqual({ compte: 'pret' })
+  })
+
+  it('refuse un mot de passe de moins de 8 caractères, comme ailleurs', async () => {
+    const fetchMock = stubApi({})
+    const { wrapper } = await mountView(ResetPasswordView, welcome)
+
+    await fillBoth(wrapper, '1234567')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('Ton mot de passe doit avoir 8 caractères au moins.')
+  })
+
+  it('propose un nouveau lien quand celui-ci a déjà servi ou a expiré (422)', async () => {
+    stubApi({ [confirm]: invalidToken })
+    const { wrapper } = await mountView(ResetPasswordView, welcome)
+    await fillBoth(wrapper, 'un premier mot de passe')
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('h1').text()).toBe('Ce lien ne marche plus')
+    expect(wrapper.find('[role="alert"]').text()).toBe(
+      'Il a déjà servi, ou il a expiré. Demande-en un nouveau pour choisir ton mot de passe.',
+    )
+    expect(wrapper.find('a[href="/mot-de-passe-oublie"]').text()).toBe('Demander un nouveau lien')
+  })
+
+  it('montre la même page d’erreur sans secret dans l’adresse, sans appeler l’API', async () => {
+    const fetchMock = stubApi({})
+    const { wrapper } = await mountView(
+      ResetPasswordView,
+      '/mot-de-passe-oublie/confirmation?bienvenue=1',
+    )
+    await flushPromises()
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(wrapper.find('h1').text()).toBe('Ce lien ne marche plus')
+    expect(wrapper.find('[role="alert"]').text()).toContain('Demande-en un nouveau')
+  })
+
+  it.each([
+    [429, '600', 'Trop de demandes en peu de temps. Réessaie dans 10 minutes.'],
+    [429, null, 'Trop de demandes en peu de temps. Réessaie plus tard.'],
+    [500, null, 'Le serveur est injoignable. Réessaie dans un instant.'],
+  ])(
+    'garde le formulaire rempli sur un refus passager (%i, Retry-After %s), sans parler d’un mot de passe qui n’a pas changé',
+    async (status, retryAfter, expected) => {
+      stubApi({
+        [confirm]: () =>
+          json(
+            { error: { message: 'x' } },
+            { status, headers: retryAfter === null ? {} : { 'Retry-After': retryAfter } },
+          ),
+      })
+      const { wrapper } = await mountView(ResetPasswordView, welcome)
+      await fillBoth(wrapper, 'un premier mot de passe')
+
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      expect(wrapper.find('[role="alert"]').text()).toBe(expected)
+      expect(wrapper.findAll('input')).toHaveLength(2)
+      expect((wrapper.findAll('input')[0]!.element as HTMLInputElement).value).toBe(
+        'un premier mot de passe',
+      )
+    },
+  )
+})
+
 // Les textes de ces écrans suivent `docs/drive/principes-produit.md` (§ 3) : des phrases de 15 mots au plus. Le tutoiement, le glossaire et
 // l'absence d'avertissement sont gardés par `voice-and-glossary.spec.ts`, qui lit ces groupes.
-describe('les textes du mot de passe oublié', () => {
+describe('les textes du mot de passe oublié et de l’inscription', () => {
   const sentences = (text: string) =>
     text
       .split(/\s*\|\s*|(?<=[.?!])\s+/)
@@ -437,9 +577,17 @@ describe('les textes du mot de passe oublié', () => {
   const groups: [string, Record<string, string>][] = [
     ['forgotPassword', fr.forgotPassword],
     ['resetPassword', fr.resetPassword],
+    ['welcome', fr.welcome],
+    ['register', fr.register],
+    ['checkEmail', fr.checkEmail],
+    ['confirmEmail', fr.confirmEmail],
     [
       'login',
-      { forgotPassword: fr.login.forgotPassword, passwordChanged: fr.login.passwordChanged },
+      {
+        forgotPassword: fr.login.forgotPassword,
+        passwordChanged: fr.login.passwordChanged,
+        accountReady: fr.login.accountReady,
+      },
     ],
   ]
 

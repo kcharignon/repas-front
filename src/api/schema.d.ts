@@ -849,7 +849,10 @@ export interface paths {
         /** Utilisateurs et leurs statistiques (administrateur), triés par email */
         get: operations["get_api_list_users"];
         put?: never;
-        /** Inscrit un utilisateur (route publique) ; il se connecte ensuite par /api/login_check */
+        /**
+         * Inscrit un utilisateur avec sa seule adresse (route publique)
+         * @description Un email part vers l'adresse : le lien de bienvenue qui fait choisir le mot de passe (adresse nouvelle ou compte encore en attente), ou le rappel qu'un compte existe déjà (compte actif). Un compte désactivé ne reçoit rien. La réponse est la même dans tous les cas : elle ne dit rien d'un compte existant. Le compte ne peut se connecter qu'après le choix du mot de passe (POST /api/v1/users/password-reset/confirm avec le secret du lien).
+         */
         post: operations["post_api_register_new_user"];
         delete?: never;
         options?: never;
@@ -1434,15 +1437,17 @@ export interface components {
              */
             email: string;
             /**
-             * @description Mot de passe en clair (8 caractères au moins)
-             * @example un-mot-de-passe
-             */
-            password: string;
-            /**
-             * @description Nombre de personnes proposé par défaut pour une recette
+             * @description Nombre de personnes proposé par défaut pour une recette ; 4 si le champ est absent
+             * @default 4
              * @example 4
              */
             defaultServing: number;
+            /**
+             * @deprecated
+             * @description Ignoré : le mot de passe se choisit après le clic sur le lien reçu par email. Accepté (quelle que soit sa valeur) pour les anciens clients, jamais stocké.
+             * @default null
+             */
+            password: string | null;
         };
         ResetPasswordPayload: {
             /**
@@ -3369,6 +3374,13 @@ export interface operations {
             };
             /** @description Recette inconnue */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description L'utilisateur a déjà 2 000 recettes, copies comprises (`RECIPE_LIMIT_REACHED`) */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5664,17 +5676,8 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Créé */
-            201: {
-                headers: {
-                    /** @description URL du compte créé (lisible par lui-même une fois connecté) */
-                    Location?: string;
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Cette adresse email est déjà utilisée */
-            409: {
+            /** @description Demande prise en compte, quel que soit l'état de l'adresse */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5687,7 +5690,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Trop d'inscriptions depuis cette adresse IP, ou trop d'emails demandés au total dans l'heure (100, toutes adresses confondues) */
+            /** @description Trop d'inscriptions depuis cette adresse IP, trop d'emails demandés pour cette même adresse email (6 par heure, que le compte existe ou non), ou trop d'emails demandés au total dans l'heure (100, toutes adresses confondues) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -5817,7 +5820,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Trop de demandes depuis cette adresse IP, ou trop d'emails demandés au total dans l'heure (100, toutes adresses confondues) */
+            /** @description Trop de demandes depuis cette adresse IP, trop d'emails demandés pour cette même adresse email (6 par heure, que le compte existe ou non), ou trop d'emails demandés au total dans l'heure (100, toutes adresses confondues) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -5853,7 +5856,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Trop de demandes depuis cette adresse IP, ou trop d'emails demandés au total dans l'heure (100, toutes adresses confondues) */
+            /** @description Trop de demandes depuis cette adresse IP, trop d'emails demandés pour cette même adresse email (6 par heure, que le compte existe ou non), ou trop d'emails demandés au total dans l'heure (100, toutes adresses confondues) */
             429: {
                 headers: {
                     [name: string]: unknown;
