@@ -316,6 +316,9 @@
                     },
                     "404": {
                         "description": "Recette inconnue"
+                    },
+                    "422": {
+                        "description": "L'utilisateur a d\u00e9j\u00e0 2 000 recettes, copies comprises (`RECIPE_LIMIT_REACHED`)"
                     }
                 }
             }
@@ -2592,7 +2595,8 @@
                 "tags": [
                     "Users"
                 ],
-                "summary": "Inscrit un utilisateur (route publique) ; il se connecte ensuite par /api/login_check",
+                "summary": "Inscrit un utilisateur avec sa seule adresse (route publique)",
+                "description": "Un email part vers l'adresse : le lien de bienvenue qui fait choisir le mot de passe (adresse nouvelle ou compte encore en attente), ou le rappel qu'un compte existe d\u00e9j\u00e0 (compte actif). Un compte d\u00e9sactiv\u00e9 ne re\u00e7oit rien. La r\u00e9ponse est la m\u00eame dans tous les cas : elle ne dit rien d'un compte existant. Le compte ne peut se connecter qu'apr\u00e8s le choix du mot de passe (POST /api/v1/users/password-reset/confirm avec le secret du lien).",
                 "operationId": "post_api_register_new_user",
                 "requestBody": {
                     "required": true,
@@ -2605,22 +2609,11 @@
                     }
                 },
                 "responses": {
-                    "201": {
-                        "description": "Cr\u00e9\u00e9",
-                        "headers": {
-                            "Location": {
-                                "description": "URL du compte cr\u00e9\u00e9 (lisible par lui-m\u00eame une fois connect\u00e9)",
-                                "schema": {
-                                    "type": "string"
-                                }
-                            }
-                        }
-                    },
-                    "409": {
-                        "description": "Cette adresse email est d\u00e9j\u00e0 utilis\u00e9e"
+                    "204": {
+                        "description": "Demande prise en compte, quel que soit l'\u00e9tat de l'adresse"
                     },
                     "429": {
-                        "description": "Trop d'inscriptions depuis cette adresse IP, ou trop d'emails demand\u00e9s au total dans l'heure (100, toutes adresses confondues)"
+                        "description": "Trop d'inscriptions depuis cette adresse IP, trop d'emails demand\u00e9s pour cette m\u00eame adresse email (6 par heure, que le compte existe ou non), ou trop d'emails demand\u00e9s au total dans l'heure (100, toutes adresses confondues)"
                     },
                     "422": {
                         "description": "Corps de la requ\u00eate invalide"
@@ -2753,7 +2746,7 @@
                         "description": "Corps de la requ\u00eate invalide"
                     },
                     "429": {
-                        "description": "Trop de demandes depuis cette adresse IP, ou trop d'emails demand\u00e9s au total dans l'heure (100, toutes adresses confondues)"
+                        "description": "Trop de demandes depuis cette adresse IP, trop d'emails demand\u00e9s pour cette m\u00eame adresse email (6 par heure, que le compte existe ou non), ou trop d'emails demand\u00e9s au total dans l'heure (100, toutes adresses confondues)"
                     }
                 },
                 "security": []
@@ -2785,7 +2778,7 @@
                         "description": "Corps de la requ\u00eate invalide"
                     },
                     "429": {
-                        "description": "Trop de demandes depuis cette adresse IP, ou trop d'emails demand\u00e9s au total dans l'heure (100, toutes adresses confondues)"
+                        "description": "Trop de demandes depuis cette adresse IP, trop d'emails demand\u00e9s pour cette m\u00eame adresse email (6 par heure, que le compte existe ou non), ou trop d'emails demand\u00e9s au total dans l'heure (100, toutes adresses confondues)"
                     }
                 },
                 "security": []
@@ -4037,9 +4030,7 @@
             },
             "RegisterNewUserPayload": {
                 "required": [
-                    "email",
-                    "password",
-                    "defaultServing"
+                    "email"
                 ],
                 "properties": {
                     "email": {
@@ -4048,19 +4039,20 @@
                         "maxLength": 255,
                         "example": "alexiane@example.com"
                     },
-                    "password": {
-                        "description": "Mot de passe en clair (8 caract\u00e8res au moins)",
-                        "type": "string",
-                        "maxLength": 4096,
-                        "minLength": 8,
-                        "example": "un-mot-de-passe"
-                    },
                     "defaultServing": {
-                        "description": "Nombre de personnes propos\u00e9 par d\u00e9faut pour une recette",
+                        "description": "Nombre de personnes propos\u00e9 par d\u00e9faut pour une recette ; 4 si le champ est absent",
                         "type": "integer",
+                        "default": 4,
                         "maximum": 100,
                         "minimum": 1,
                         "example": 4
+                    },
+                    "password": {
+                        "description": "Ignor\u00e9 : le mot de passe se choisit apr\u00e8s le clic sur le lien re\u00e7u par email. Accept\u00e9 (quelle que soit sa valeur) pour les anciens clients, jamais stock\u00e9.",
+                        "type": "string",
+                        "default": null,
+                        "nullable": true,
+                        "deprecated": true
                     }
                 },
                 "type": "object"
