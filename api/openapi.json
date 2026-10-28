@@ -3698,7 +3698,7 @@
                 ],
                 "properties": {
                     "name": {
-                        "description": "Nom de l'ingr\u00e9dient (200 caract\u00e8res au plus)",
+                        "description": "Nom de l'ingr\u00e9dient (200 caract\u00e8res au plus). La premi\u00e8re lettre est mise en majuscule par le serveur (le reste du nom est conserv\u00e9 tel quel) : le nom enregistr\u00e9, renvoy\u00e9 par les lectures, peut donc diff\u00e9rer de celui envoy\u00e9",
                         "type": "string",
                         "maxLength": 200,
                         "example": "Pralin\u00e9"
@@ -3804,7 +3804,7 @@
                 ],
                 "properties": {
                     "name": {
-                        "description": "Nom de la recette",
+                        "description": "Nom de la recette. La premi\u00e8re lettre est mise en majuscule par le serveur (le reste du nom est conserv\u00e9 tel quel) : le nom enregistr\u00e9, renvoy\u00e9 par les lectures, peut donc diff\u00e9rer de celui envoy\u00e9",
                         "type": "string",
                         "maxLength": 255,
                         "example": "P\u00e2tes carbonara"

@@ -1244,7 +1244,7 @@ export interface components {
         };
         IngredientPayload: {
             /**
-             * @description Nom de l'ingrédient (200 caractères au plus)
+             * @description Nom de l'ingrédient (200 caractères au plus). La première lettre est mise en majuscule par le serveur (le reste du nom est conservé tel quel) : le nom enregistré, renvoyé par les lectures, peut donc différer de celui envoyé
              * @example Praliné
              */
             name: string;
@@ -1315,7 +1315,7 @@ export interface components {
         };
         RecipePayload: {
             /**
-             * @description Nom de la recette
+             * @description Nom de la recette. La première lettre est mise en majuscule par le serveur (le reste du nom est conservé tel quel) : le nom enregistré, renvoyé par les lectures, peut donc différer de celui envoyé
              * @example Pâtes carbonara
              */
             name: string;
