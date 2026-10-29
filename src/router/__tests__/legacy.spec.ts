@@ -1,3 +1,4 @@
+// Reste en jsdom, sans l'annotation d'environnement `node` des tests purs : le routeur charge les vues `.vue` à la demande, et en `node` Vitest les compile pour le rendu serveur, ce qui fausse la couverture mesurée de ces fichiers.
 import { describe, expect, it } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 

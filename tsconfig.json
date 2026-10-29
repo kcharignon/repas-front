@@ -18,6 +18,9 @@
     },
     {
       "path": "./tsconfig.agent-test.json"
+    },
+    {
+      "path": "./tsconfig.e2e.json"
     }
   ]
 }

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Ticket K de l'audit du 2026-10-18 (H13 et H15) : devant la page de défi de l'anti-robot, le passage se SUSPEND (au lieu de se terminer) et
 // dit quoi faire ; l'état du passage est gardé (sessionStorage), « Reprendre » refait la ligne en cours, « Arrêter » rend la main comme avant.
 // Une requête qui dépasse son délai d'attente est une erreur réseau, dite comme telle (« Leclerc met trop de temps à répondre »), distincte du

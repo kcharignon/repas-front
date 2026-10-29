@@ -1,3 +1,4 @@
+// @vitest-environment node
 // La facette « Rayons » et la forme du filtre du site (DRV-647, agent 0.35.0, diagnostic seulement) : lecture de l'arbre des valeurs, valeur « fruits /
 // légumes », forme du paramètre `Filtres`, adresse d'une recherche filtrée déduite SANS deviner, une seule requête de sondage, pagination et univers, rien
 // de personnel. Données INVENTÉES, de la forme relevée sur le vrai site le 2026-10-20.

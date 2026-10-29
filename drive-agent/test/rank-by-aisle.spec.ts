@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Le classement des produits d'une recherche selon les rayons conseillés (DRV-642) : une fonction pure, stable, qui ne perd jamais un produit.
 import { describe, expect, it } from 'vitest'
 

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Ticket D de l'audit du 2026-10-18 (H3) puis DRV-635 : en phase A, un produit connu se cherche par son libellé TEL QUEL ; si cette recherche ne le
 // retrouve pas, l'agent essaie les formes du libellé (`productSearchForms`), une par une, au plus 4, et ne le déclare jamais « indisponible » parce
 // qu'il est introuvable. Un produit retrouvé en une requête ne change rien. L'étiquette de rupture (stock nul, « Bientôt disponible ») n'est pas un

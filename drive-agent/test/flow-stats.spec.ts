@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Ticket L de l'audit du 2026-10-18 (H12) : le résultat d'un passage dit combien de requêtes sont parties, combien ont échoué et combien ont été
 // refusées par l'anti-robot (des nombres), cumulés sur tout le passage, même repris après un rechargement. L'interface, l'adaptateur et le stockage
 // sont simulés : aucun réseau.

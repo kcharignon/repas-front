@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Le mode configuration (DRV-307) : lire le magasin de la page et le donner à Repas. Le magasin est inventé, l'adaptateur est le vrai
 // (sur une adresse simulée) ou un double ; aucun réseau.
 import { describe, expect, it } from 'vitest'

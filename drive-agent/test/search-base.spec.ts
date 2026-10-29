@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Le chemin AVEC la ville d'un magasin, tiré de la page (recette réelle du 2026-10-18 : la recherche répond HTTP 400 depuis l'accueil du magasin atteint
 // par « Commencer mes courses », et réussit depuis la page de résultats du site, dont l'adresse a la ville). L'agent lit ce chemin dans la page : l'action
 // du formulaire de recherche du site en premier, à défaut le premier lien qui commence par `/magasin-<id>-<id>-`. Pages INVENTÉES, aucun réseau.

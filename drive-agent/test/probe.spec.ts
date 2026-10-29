@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Les sondes du site réel (ticket B de l'audit du 2026-10-18) : ce que l'agent peut dire d'une adresse, d'une réponse et d'une page SANS en
 // rapporter la moindre valeur. Chaque fonction ne rend que des formes (`N`, `V`), des noms de clés ou d'en-têtes et des nombres. Données inventées.
 import { describe, expect, it } from 'vitest'

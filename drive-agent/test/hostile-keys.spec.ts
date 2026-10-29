@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Revue de sécurité du drive : une donnée venue de la page de l'enseigne ou du plan (un nom d'unité, une entité HTML, un identifiant
 // d'ingrédient) ne doit jamais retrouver un attribut hérité de `Object.prototype` (`constructor`, `__proto__`). Valeurs INVENTÉES.
 import { describe, expect, it } from 'vitest'

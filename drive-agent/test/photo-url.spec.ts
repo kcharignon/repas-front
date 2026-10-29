@@ -1,3 +1,4 @@
+// @vitest-environment node
 // L'adresse de la photo d'un produit (DRV-633) : du texte venu de la page de l'enseigne, donc non fiable. Une adresse n'est montrée que si elle est en
 // https, d'un hôte de `leclercdrive.fr`, sans identifiant ni port, d'au plus 2 000 caractères ; sinon `null` (la fiche reste en texte, sans erreur).
 import { describe, expect, it } from 'vitest'

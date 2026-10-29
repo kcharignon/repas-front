@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Le visiteur non connecté (ticket G) : jamais mesuré sur le vrai site (DRV-002 et DRV-011 ont été faits compte connecté), donc lu par
 // PLUSIEURS signes cumulés dans les liens et boutons de la page, et seulement quand ils s'accordent. Les libellés ci-dessous sont
 // plausibles, pas mesurés ; en cas de doute, l'état est « inconnu » et l'agent n'arrête rien (les détections de redirection et de 401

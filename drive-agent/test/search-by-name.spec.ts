@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Ticket D de l'audit du 2026-10-18 (H3, H7) : quand le moteur de Leclerc ne répond rien au nom d'un ingrédient, l'agent essaie ses formes
 // dérivées UNE par UNE, à la cadence normale, au plus 4, jamais deux fois la même, et s'arrête à la première qui répond. Ici le repli est
 // éprouvé sur des adaptateurs simulés (ordre, arrêt, bornes, erreurs) puis sur le vrai adaptateur avec un faux `fetch` (cadence, absence de parallélisme).

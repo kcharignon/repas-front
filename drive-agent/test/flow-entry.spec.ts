@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Entrer dans le magasin, revenir sans geste (DRV-625) : le plan arrive sur l'accueil de l'enseigne, l'agent suit « Commencer mes courses » lui-même,
 // une seule fois par envoi ; au moindre doute il laisse l'utilisateur toucher le bouton. Un envoi terminé repart sans écran de fin.
 import { describe, expect, it } from 'vitest'

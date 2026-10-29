@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { validateResult } from '@drive-protocol'
 import type { ResultLine } from '@drive-protocol'

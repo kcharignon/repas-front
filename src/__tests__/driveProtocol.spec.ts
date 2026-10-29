@@ -1,3 +1,4 @@
+// @vitest-environment node
 // L'alias `@drive-protocol` : le front importe le protocole de l'agent du drive (DRV-302) sans chemin relatif.
 import { describe, expect, it } from 'vitest'
 

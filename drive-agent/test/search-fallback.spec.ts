@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Le repli d'un HTTP 400 sur la recherche (recette réelle du 2026-10-18) : l'adaptateur retente la même recherche autrement, une requête à la fois
 // à la cadence normale, garde la forme qui passe, et dit dans ses faits (`lastSearchFacts`) laquelle a répondu quoi. Faux `fetch`, aucun réseau.
 import { describe, expect, it } from 'vitest'

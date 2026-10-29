@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Le test automatique de la variante de débogage (DRV-318) : les étapes, leurs bornes et garde-fous, le nettoyage et le rapport. Le
 // magasin est simulé (`selftest-helpers.ts`), l'horloge fausse ; aucun réseau, aucune attente.
 import { describe, expect, it, vi } from 'vitest'

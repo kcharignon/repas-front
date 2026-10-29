@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Ticket D de l'audit du 2026-10-18 (H7) : les formes dérivées d'un nom d'ingrédient que l'agent essaie, une par une, quand le moteur de
 // Leclerc ne répond rien au nom tel qu'il est dans Repas. Fonction pure, aucune requête : l'ordre, les doublons, la borne de 4 et les
 // cas limites (vide, un seul caractère, Unicode composé ou décomposé) se prouvent ici.

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // DRV-635 : les formes de requête d'un produit habituel. Relevé sur le vrai site (2026-10-19, « Oeufs C'est Qui Le Patron Plein Air x6 ») : « c'est » et
 // « cest » le retrouvent, « c est » (l'apostrophe remplacée par une espace) ne trouve RIEN. Les signes se RETIRENT donc, ils ne se remplacent jamais par une
 // espace ; le libellé tel quel est toujours la première requête (c'est `lookUpKnownProduct` qui la fait : ces formes viennent après) ; cinq requêtes au plus.

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Ce que l'adaptateur retient de la page d'arrivée et des réponses de recherche pour le diagnostic (ticket B de l'audit du 2026-10-18) : des formes,
 // des noms et des nombres, jamais une valeur du site. Faux `fetch`, aucun réseau.
 import { describe, expect, it } from 'vitest'

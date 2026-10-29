@@ -1,3 +1,4 @@
+// @vitest-environment node
 // L'agent et l'écran de l'envoi de Repas disent la MÊME phrase de synthèse (DRV-626) : « 6 articles : 2 sont déjà choisis, 4 sont à choisir sur
 // Leclerc. » Deux constructions (l'agent n'a pas vue-i18n et ne partage aucun code avec le front, ADR de l'agent), un seul texte : ce test les
 // compare sur toutes les combinaisons de comptes, pluriels et accords compris.
