@@ -1,8 +1,9 @@
 // Écran d'envoi au drive (DRV-404), sans back ni compte : l'API est simulée par `page.route`, et le pont natif `repasNative` de
-// l'application par un faux installé avant la page. Données inventées (magasin d'essai, produits de test). Jouée sur le téléphone (Pixel 7) ; le bureau seulement pour les tests étiquetés (playwright.config.ts).
+// l'application par un faux installé avant la page. Données inventées (magasin d'essai, produits de test). Jouée sur le téléphone (Pixel 7) seulement : aucun test n'est étiqueté (playwright.config.ts). `E2E_SHOTS=<dossier>` garde des captures.
 import { expect, test } from './support/test'
 
-import { BASE, SUMMARY_12, fakeApp, fakeBack, openArticles, scan } from './support/drive'
+import { BASE, SUMMARY_12, fakeApp, fakeBack, openArticles, scan, shot } from './support/drive'
+import { switchTheme } from './support/screen'
 
 test('dans l’application : choisir un autre produit, passer une ligne, ouvrir le drive, retrouver l’attente après rechargement', async ({
   page,
@@ -58,28 +59,29 @@ test('dans l’application : choisir un autre produit, passer une ligne, ouvrir 
   expect((await scan(page)).violations).toEqual([])
 })
 
-for (const colorScheme of ['light', 'dark'] as const) {
-  test(`hors de l’application : message, installation et recherche par ligne, thème ${colorScheme}`, async ({
-    page,
-  }) => {
-    await fakeBack(page)
-    await page.emulateMedia({ colorScheme })
-    await page.goto('/drive/envoi/l1')
+// Hors de l'application : le texte et les liens une fois, le contraste dans les deux thèmes (fonctionnel : `DriveSendView.spec.ts`)
+test('hors de l’application : message, installation et recherche par ligne, accessible en clair et en sombre', async ({
+  page,
+}) => {
+  await fakeBack(page)
+  await page.goto('/drive/envoi/l1')
 
-    await expect(page.getByText('L’envoi automatique n’est pas disponible ici')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Ouvrir le drive' })).toHaveCount(0)
-    await expect(page.getByRole('link', { name: 'Installer l’application' })).toHaveAttribute(
-      'href',
-      '/drive/aide',
-    )
-    await expect(page.getByRole('link', { name: /^Chercher sur Leclerc/ })).toHaveCount(11)
-    await expect(page.getByRole('link', { name: /Chercher sur Leclerc : Farine/ })).toHaveAttribute(
-      'href',
-      `${BASE}/recherche.aspx?TexteRecherche=Farine`,
-    )
-    expect((await scan(page)).violations).toEqual([])
-  })
-}
+  await expect(page.getByText('L’envoi automatique n’est pas disponible ici')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ouvrir le drive' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Installer l’application' })).toHaveAttribute(
+    'href',
+    '/drive/aide',
+  )
+  await expect(page.getByRole('link', { name: /^Chercher sur Leclerc/ })).toHaveCount(11)
+  await expect(page.getByRole('link', { name: /Chercher sur Leclerc : Farine/ })).toHaveAttribute(
+    'href',
+    `${BASE}/recherche.aspx?TexteRecherche=Farine`,
+  )
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await switchTheme(page, colorScheme)
+    expect((await scan(page)).violations, colorScheme).toEqual([])
+  }
+})
 
 test('à 360 px de large : « Ouvrir le drive » est visible sans défiler, au-dessus de la barre du bas, sans défilement de côté', async ({
   page,
@@ -100,63 +102,33 @@ test('à 360 px de large : « Ouvrir le drive » est visible sans défiler, au-d
 })
 
 // Une application trop ancienne pour le drive (DRV-640) : le web est à jour, l'application non. Une phrase, « Mettre à jour », ni le
-// drive ni l'agent, et les recherches à la main restent. 360×640, thèmes clair et sombre.
+// drive ni l'agent, et les recherches à la main restent. 360×640, thèmes clair et sombre. Le détail des versions (0.1.9, sans réponse,
+// 0.1.10 et au-dessus, navigateur) est dans `DriveSendView.spec.ts` ; ici ce qu'un navigateur est seul à prouver : la cible de 44 px, la
+// largeur, le contraste dans les deux thèmes et le clic vers l'aide.
 const TOO_OLD = 'Mets à jour l’application pour envoyer ta liste.'
 
-for (const [label, version] of [
-  ['0.1.8', '0.1.8'],
-  ['0.1.9', '0.1.9'],
-  ['sans version', null],
-] as const) {
-  for (const colorScheme of ['light', 'dark'] as const) {
-    test(`application ${label} : mise à jour demandée, recherche à la main gardée, thème ${colorScheme}`, async ({
-      page,
-    }, testInfo) => {
-      await fakeBack(page)
-      await fakeApp(page, 'completed', version)
-      await page.emulateMedia({ colorScheme })
-      await page.setViewportSize({ width: 360, height: 640 })
-      await page.goto('/drive/envoi/l1')
-
-      await expect(page.getByText(TOO_OLD)).toBeVisible({ timeout: 8000 })
-      await expect(page.getByRole('button', { name: 'Ouvrir le drive' })).toHaveCount(0)
-      const update = page.getByRole('link', { name: 'Mettre à jour' })
-      await expect(update).toHaveAttribute('href', '/drive/aide')
-      expect((await update.boundingBox())!.height).toBeGreaterThanOrEqual(44)
-      await expect(page.getByRole('link', { name: /^Chercher sur Leclerc/ })).toHaveCount(11)
-      expect(await page.evaluate(() => window.__sent.some((m) => m.type === 'drive.start'))).toBe(
-        false,
-      )
-      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
-        360,
-      )
-      expect((await scan(page)).violations).toEqual([])
-      if (version === '0.1.8')
-        await page.screenshot({ path: testInfo.outputPath(`trop-ancienne-${colorScheme}.png`) })
-
-      await update.click()
-      await expect(page).toHaveURL(/\/drive\/aide/)
-    })
-  }
-}
-
-test('application 0.1.10 : « Ouvrir le drive » comme avant, sans la phrase', async ({ page }) => {
-  await fakeBack(page)
-  await fakeApp(page, 'completed', '0.1.10')
-  await page.goto('/drive/envoi/l1')
-
-  await expect(page.getByText(SUMMARY_12)).toBeVisible()
-  await expect(page.getByText(TOO_OLD)).toHaveCount(0)
-  await page.getByRole('button', { name: 'Ouvrir le drive' }).click()
-  await expect(page.getByText('En attente du récapitulatif…')).toBeVisible()
-})
-
-test('dans un navigateur : le message « installe l’application » ne change pas', async ({
+test('application 0.1.8 : mise à jour demandée, recherche à la main gardée, accessible en clair et en sombre', async ({
   page,
 }) => {
   await fakeBack(page)
+  await fakeApp(page, 'completed', '0.1.8')
+  await page.setViewportSize({ width: 360, height: 640 })
   await page.goto('/drive/envoi/l1')
 
-  await expect(page.getByText('L’envoi automatique n’est pas disponible ici')).toBeVisible()
-  await expect(page.getByText(TOO_OLD)).toHaveCount(0)
+  await expect(page.getByText(TOO_OLD)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ouvrir le drive' })).toHaveCount(0)
+  const update = page.getByRole('link', { name: 'Mettre à jour' })
+  await expect(update).toHaveAttribute('href', '/drive/aide')
+  expect((await update.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  await expect(page.getByRole('link', { name: /^Chercher sur Leclerc/ })).toHaveCount(11)
+  expect(await page.evaluate(() => window.__sent.some((m) => m.type === 'drive.start'))).toBe(false)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360)
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await switchTheme(page, colorScheme)
+    expect((await scan(page)).violations, colorScheme).toEqual([])
+    await shot(page, `trop-ancienne-${colorScheme}`)
+  }
+
+  await update.click()
+  await expect(page).toHaveURL(/\/drive\/aide/)
 })
