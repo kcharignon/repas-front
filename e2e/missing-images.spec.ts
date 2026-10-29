@@ -1,9 +1,11 @@
 // Images manquantes : un faux back (page.route), des images de type de recette présentes ou introuvables.
 // La fiche d'une recette n'affiche aucune image d'ingrédient ; les autres images laissent une icône par défaut, jamais une icône cassée.
-// SHOTS=<dossier> garde une capture de chaque cas.
-import process from 'node:process'
-import AxeBuilder from '@axe-core/playwright'
+// Un test par état des images (présentes, introuvables) : la liste des recettes puis la fiche d'une recette, l'accessibilité (WCAG AA,
+// contraste compris) de chacune dans les DEUX thèmes de la même visite. Le chemin nominal d'une image est un test de composant
+// (`UiImage.spec.ts`, `Recipes.spec.ts`) ; seul le navigateur déclenche un vrai `error` sur un 404, d'où le test « introuvables ».
+// `E2E_SHOTS=<dossier>` garde une capture de chaque thème.
 import { expect, test, type Page, type Route } from './support/test'
+import { axeBothThemes } from './support/screen'
 
 const json = (route: Route, body: unknown) =>
   route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
@@ -93,57 +95,35 @@ async function fakeBack(page: Page, imagesExist: boolean) {
   )
 }
 
-async function shot(page: Page, name: string) {
-  const dir = process.env.SHOTS
-  if (dir) await page.screenshot({ path: `${dir}/${name}.png` })
-}
+for (const { imagesExist, state, label, images, fallbacks } of [
+  { imagesExist: true, state: 'présentes', label: 'ok', images: 2, fallbacks: 0 },
+  { imagesExist: false, state: 'introuvables', label: '404', images: 0, fallbacks: 2 },
+]) {
+  test(`la liste des recettes et la fiche d'une recette sont accessibles dans les deux thèmes (images ${state})`, async ({
+    page,
+  }) => {
+    await fakeBack(page, imagesExist)
 
-for (const imagesExist of [true, false]) {
-  for (const colorScheme of ['light', 'dark'] as const) {
-    const label = `${imagesExist ? 'images présentes' : 'images introuvables'}, ${colorScheme}`
+    // La liste : l'image de chaque type, ou l'icône par défaut quand elle est introuvable
+    await page.goto('/recettes')
+    await expect(page.getByText('Gratin de courgettes')).toBeVisible()
+    const tiles = page.getByRole('group').getByRole('button')
+    await expect(tiles).toHaveCount(2)
+    // Aucune image cassée : soit l'image est chargée, soit l'icône par défaut a pris sa place
+    await expect(page.locator('[role="group"] img')).toHaveCount(images)
+    await expect(page.getByTestId('image-fallback')).toHaveCount(fallbacks)
+    await axeBothThemes(page, `recettes-${label}`)
 
-    test(`la fiche d'une recette n'affiche aucune image d'ingrédient (${label})`, async ({
-      page,
-    }) => {
-      await page.emulateMedia({ colorScheme })
-      await fakeBack(page, imagesExist)
-      await page.goto('/recettes/r1')
-      await expect(
-        page.getByRole('heading', { level: 1, name: 'Gratin de courgettes' }),
-      ).toBeVisible()
-
-      await expect(page.getByText('courgette', { exact: true })).toBeVisible()
-      await expect(page.locator('li img')).toHaveCount(0)
-      await expect(page.locator('li svg')).toHaveCount(0)
-      await shot(page, `fiche-${imagesExist ? 'ok' : '404'}-${colorScheme}`)
-      const { violations } = await new AxeBuilder({ page })
-        .exclude('.vue-devtools__anchor-btn')
-        .withTags(['wcag2a', 'wcag2aa'])
-        .analyze()
-      expect(violations).toEqual([])
-    })
-
-    test(`la liste des recettes remplace l'image d'un type introuvable par une icône (${label})`, async ({
-      page,
-    }) => {
-      await page.emulateMedia({ colorScheme })
-      await fakeBack(page, imagesExist)
-      await page.goto('/recettes')
-      await expect(page.getByText('Gratin de courgettes')).toBeVisible()
-
-      const tiles = page.getByRole('group').getByRole('button')
-      await expect(tiles).toHaveCount(2)
-      // Aucune image cassée : soit l'image est chargée, soit l'icône par défaut a pris sa place
-      await expect(page.locator('[role="group"] img')).toHaveCount(imagesExist ? 2 : 0)
-      await expect(page.getByTestId('image-fallback')).toHaveCount(imagesExist ? 0 : 2)
-      await shot(page, `recettes-${imagesExist ? 'ok' : '404'}-${colorScheme}`)
-      const { violations } = await new AxeBuilder({ page })
-        .exclude('.vue-devtools__anchor-btn')
-        .withTags(['wcag2a', 'wcag2aa'])
-        .analyze()
-      expect(violations).toEqual([])
-    })
-  }
+    // La fiche : aucune image d'ingrédient, présente ou non
+    await page.goto('/recettes/r1')
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Gratin de courgettes' }),
+    ).toBeVisible()
+    await expect(page.getByText('courgette', { exact: true })).toBeVisible()
+    await expect(page.locator('li img')).toHaveCount(0)
+    await expect(page.locator('li svg')).toHaveCount(0)
+    await axeBothThemes(page, `fiche-${label}`)
+  })
 }
 
 test('le catalogue montre une image présente, introuvable et sans chemin', async ({ page }) => {
@@ -151,6 +131,4 @@ test('le catalogue montre une image présente, introuvable et sans chemin', asyn
 
   await expect(page.getByRole('heading', { name: 'Images' })).toBeVisible()
   await expect(page.getByTestId('image-fallback')).toHaveCount(2)
-  await page.getByRole('heading', { name: 'Images' }).scrollIntoViewIfNeeded()
-  await shot(page, 'catalogue')
 })

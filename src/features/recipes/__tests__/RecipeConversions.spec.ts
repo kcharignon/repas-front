@@ -132,6 +132,24 @@ describe('RecipeDetailView : ingrédients à régler', () => {
     expect(buttonLabelled(wrapper, '2 à régler')).toBeDefined()
   })
 
+  it('mène à la première ligne à régler quand on touche la pastille : la ligne est centrée et prend le focus', async () => {
+    const scrolled = vi.fn<(options?: ScrollIntoViewOptions) => void>()
+    HTMLElement.prototype.scrollIntoView = scrolled
+    try {
+      const { wrapper } = await open([row(), farine, creme])
+
+      await buttonLabelled(wrapper, '2 à régler')?.trigger('click')
+
+      // La première ligne signalée (la farine), pas la dernière ni une ligne sans avertissement
+      const target = wrapper.find('[data-row="farine"] button[data-fix]').element
+      expect(document.activeElement).toBe(target)
+      expect(scrolled.mock.contexts[0]).toBe(target)
+      expect(scrolled).toHaveBeenCalledExactlyOnceWith({ block: 'center' })
+    } finally {
+      Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+    }
+  })
+
   it('grise « Ajouter » et dit pourquoi tant qu’il reste une ligne à régler', async () => {
     const { wrapper } = await open([row(), farine])
 

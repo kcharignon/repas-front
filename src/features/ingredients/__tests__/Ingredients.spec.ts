@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { RouterView } from 'vue-router'
 
 import { appContext, calls, json, me, stubApi } from '@/__tests__/helpers'
 import DepartmentView from '@/features/ingredients/DepartmentView.vue'
@@ -978,6 +979,48 @@ describe('IngredientEditorView', () => {
         .map(([call]) => call as Request)
         .find((request) => request.method === 'POST' && request.url.endsWith('/ingredients'))
       expect(await post?.json()).not.toHaveProperty('isBase')
+    })
+
+    // Le parcours entier avec le vrai routeur : rayon, fiche, enregistrement, retour au rayon. Seul ce test voit que le rayon est RELU
+    // après l'enregistrement (sinon la pastille n'apparaît qu'au rechargement de la page).
+    it('du rayon à la fiche et retour : la pastille « de base » suit l’enregistrement, dans les deux sens', async () => {
+      let isBase = false
+      const { context, fetchMock } = await open('/rayons/legumes', {
+        'GET /api/v1/departments/legumes/ingredients': () =>
+          json({ member: [{ ...ingredients.member[1], isBase }], totalItems: 1 }),
+        'GET /api/v1/ingredients/ma-sauce': () => json({ ...owner, isBase }),
+        'PUT /api/v1/ingredients/ma-sauce': async (request) => {
+          const sent = (await request.json()) as { isBase?: boolean }
+          isBase = sent.isBase ?? isBase
+
+          return new Response(null, { status: 204 })
+        },
+      })
+      const wrapper = mount(
+        { components: { RouterView }, template: '<RouterView />' },
+        { attachTo: document.body, global: { plugins: context.plugins } },
+      )
+      const pill = () => wrapper.findAll('li').filter((item) => item.text().includes('de base'))
+      const toggle = () => wrapper.find('button[role="switch"]')
+      await vi.waitFor(() => expect(wrapper.find('li').exists()).toBe(true))
+      expect(pill()).toHaveLength(0)
+
+      await context.router.push('/ingredients/ma-sauce/modifier')
+      await vi.waitFor(() => expect(toggle().attributes('aria-checked')).toBe('false'))
+      await toggle().trigger('click')
+      await wrapper.find('form').trigger('submit')
+      await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('department'))
+      await vi.waitFor(() => expect(pill()).toHaveLength(1))
+
+      await context.router.push('/ingredients/ma-sauce/modifier')
+      await vi.waitFor(() => expect(toggle().attributes('aria-checked')).toBe('true'))
+      await toggle().trigger('click')
+      await wrapper.find('form').trigger('submit')
+      await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('department'))
+      await vi.waitFor(() => expect(pill()).toHaveLength(0))
+      expect(
+        calls(fetchMock).filter((call) => call === 'PUT /api/v1/ingredients/ma-sauce'),
+      ).toHaveLength(2)
     })
 
     it('dit en deux phrases que le réglage est refusé (403) sans casser le formulaire', async () => {

@@ -317,6 +317,28 @@ describe('unités', () => {
     expect(await puts[1]?.json()).toMatchObject({ dimension: 'PACKAGE', baseFactor: 0.5 })
   })
 
+  it('relit la liste après l’enregistrement : la dimension et le facteur choisis s’y lisent', async () => {
+    let stored = units.member.map((unit) => ({ ...unit }))
+    const { wrapper } = await unitsView({
+      'GET /api/v1/units': () => json({ member: stored, totalItems: stored.length }),
+      'PUT /api/v1/units/unite': async (request) => {
+        const sent = (await request.json()) as Record<string, unknown>
+        stored = stored.map((unit) => (unit.slug === 'unite' ? { ...unit, ...sent } : unit))
+
+        return new Response(null, { status: 204 })
+      },
+    })
+    await openForm(wrapper, 'Modifier Unité')
+    expect(wrapper.findAll('li')[2]?.text()).not.toContain('×')
+
+    type(field('Ce que l’unité mesure'), 'COUNT')
+    type(field('Facteur de base'), '1')
+    await submitDialog()
+
+    await vi.waitFor(() => expect(wrapper.findAll('li')[2]?.text()).toContain('Nombre de pièces'))
+    expect(wrapper.findAll('li')[2]?.text().replace(/\s+/g, ' ')).toContain('× 1')
+  })
+
   it('efface la dimension et le facteur d’une unité quand on choisit « Aucune » et vide le facteur', async () => {
     const { wrapper, fetchMock } = await unitsView()
     await openForm(wrapper, 'Modifier Gramme')

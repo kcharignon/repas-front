@@ -1,10 +1,20 @@
 // Les actions de l'en-tête d'une liste tiennent sur UNE rangée, même à 320 px : l'action principale de l'état de la liste, au plus une
-// action secondaire, et « ⋮ » (« Plus d'actions ») pour le reste. Sans back : l'API est simulée par `page.route`. Captures (360 et
-// 320 px, clair et sombre, menu fermé et ouvert) dans test-results/, à lire avant de fusionner.
-import AxeBuilder from '@axe-core/playwright'
+// action secondaire, et « ⋮ » (« Plus d'actions ») pour le reste. Sans back : l'API est simulée par `page.route`.
+// Il ne reste ici que ce qui exige un vrai navigateur : la mise en page de la rangée et du menu (largeurs, débordement, cibles de 44 px,
+// grands caractères), le clavier réel (Tab, focus) et l'accessibilité (contraste, WCAG AA) dans les DEUX thèmes. Les actions de chaque
+// état, les appels qu'elles font, la confirmation de suppression et le menu lui-même sont prouvés en jsdom (ShoppingListSent.spec.ts,
+// ShoppingLists.spec.ts, UiActionMenu.spec.ts). `E2E_SHOTS=<dossier>` garde des captures de chaque étape.
 import { expect, test, type Page, type Route, BUREAU_SEUL } from './support/test'
 
 import { fakeApp } from './support/drive'
+import { axeBothThemes, switchTheme, violations } from './support/screen'
+
+const shots = process.env.E2E_SHOTS
+
+async function shot(page: Page, name: string, width: number) {
+  if (shots === undefined) return
+  await page.screenshot({ path: `${shots}/${name}.png`, clip: { x: 0, y: 0, width, height: 420 } })
+}
 
 type Status = 'ACTIVE' | 'PAUSED' | 'SENT' | 'COMPLETED'
 
@@ -103,12 +113,6 @@ async function fakeBack(page: Page, initial: Status) {
   return received
 }
 
-const scan = (page: Page) =>
-  new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    .exclude('.vue-devtools__anchor-btn')
-    .analyze()
-
 const more = (page: Page) => page.getByRole('button', { name: 'Plus d’actions' })
 
 /** Les actions visibles de la rangée, dans l'ordre : leur nom, leur boîte, et si leur libellé déborde. */
@@ -185,111 +189,109 @@ const scenarios = [
   narrow?: { actions: readonly string[]; menu: readonly string[] }
 }[]
 
-for (const width of [360, 320]) {
-  for (const colorScheme of ['light', 'dark'] as const) {
-    for (const scenario of scenarios) {
-      test(`${scenario.name}, ${width} px, thème ${colorScheme} : une rangée, rien ne passe à la ligne, le menu tient dans l’écran`, async ({
-        page,
-      }, testInfo) => {
-        await page.setViewportSize({ width, height: 700 })
-        await page.emulateMedia({ colorScheme })
-        const expected = width < 360 && 'narrow' in scenario ? scenario.narrow : scenario
-        await fakeBack(page, scenario.status)
-        if (scenario.app) await fakeApp(page)
-        await page.goto('/listes/l1')
-        await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-        if (scenario.actions[0] === 'Envoyer au drive')
-          await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toBeVisible()
-        else await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toHaveCount(0)
-
-        // Une seule rangée : même hauteur de ligne pour toutes les actions, aucune ne déborde, la page ne défile pas de côté
-        await expect
-          .poll(async () => (await rowOf(page)).map((action) => action.name))
-          .toEqual([...expected.actions])
-        const row = await rowOf(page)
-        for (const action of row) {
-          expect(Math.abs(action.top - row[0]!.top)).toBeLessThan(1)
-          expect(action.height).toBeLessThanOrEqual(48)
-          expect(action.overflows).toBe(false)
-          expect(action.right).toBeLessThanOrEqual(width - 16 + 0.5)
-        }
-        expect(row.at(-1)!.width).toBeGreaterThanOrEqual(44)
-        expect(row.at(-1)!.height).toBeGreaterThanOrEqual(44)
-        expect(
-          await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-        ).toBe(true)
-        expect((await scan(page)).violations).toEqual([])
-        await page.screenshot({
-          path: testInfo.outputPath(`${scenario.name}-${width}-${colorScheme}.png`),
-          clip: { x: 0, y: 0, width, height: 420 },
-        })
-
-        // Le menu : ouvert vers le bas, aligné à droite, dans l'écran
-        await more(page).click()
-        const menu = page.getByRole('menu')
-        await expect(menu).toBeVisible()
-        await expect(menu.getByRole('menuitem')).toHaveText([...expected.menu])
-        const box = (await menu.boundingBox())!
-        const trigger = (await more(page).boundingBox())!
-        expect(box.x).toBeGreaterThanOrEqual(0)
-        expect(box.x + box.width).toBeLessThanOrEqual(width)
-        expect(box.y).toBeGreaterThan(trigger.y + trigger.height - 1)
-        expect(
-          await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-        ).toBe(true)
-        expect((await scan(page)).violations).toEqual([])
-        await page.screenshot({
-          path: testInfo.outputPath(`${scenario.name}-${width}-${colorScheme}-menu.png`),
-          clip: { x: 0, y: 0, width, height: 420 },
-        })
-      })
-    }
-  }
-}
-
-for (const colorScheme of ['light', 'dark'] as const) {
-  test(
-    `bureau, thème ${colorScheme} : les actions se suivent à gauche, « ⋮ » juste après`,
-    { tag: BUREAU_SEUL },
-    async ({ page }, testInfo) => {
-      await page.emulateMedia({ colorScheme })
-      await fakeBack(page, 'ACTIVE')
-      await fakeApp(page)
-      await page.goto('/listes/l1')
-      await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toBeVisible()
-
-      const row = await rowOf(page)
-      expect(row.map((action) => action.name)).toEqual([
-        'Envoyer au drive',
-        'Terminer',
-        'Plus d’actions',
-      ])
-      for (const action of row) expect(Math.abs(action.top - row[0]!.top)).toBeLessThan(1)
-      await more(page).click()
-      await expect(page.getByRole('menu')).toBeVisible()
-      expect((await scan(page)).violations).toEqual([])
-      await page.screenshot({
-        path: testInfo.outputPath(`bureau-${colorScheme}-menu.png`),
-        clip: { x: 0, y: 0, width: 1280, height: 420 },
-      })
-    },
+const noHorizontalScroll = async (page: Page) =>
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
   )
+
+/** Une seule rangée : même hauteur de ligne pour toutes les actions, aucune ne déborde de son libellé ni de l'écran, « ⋮ » fait 44 px. */
+async function checkRow(page: Page, expected: readonly string[], width: number) {
+  await expect
+    .poll(async () => (await rowOf(page)).map((action) => action.name))
+    .toEqual([...expected])
+  const row = await rowOf(page)
+  for (const action of row) {
+    expect(Math.abs(action.top - row[0]!.top)).toBeLessThan(1)
+    expect(action.height).toBeLessThanOrEqual(48)
+    expect(action.overflows).toBe(false)
+    expect(action.right).toBeLessThanOrEqual(width - 16 + 0.5)
+  }
+  expect(row.at(-1)!.width).toBeGreaterThanOrEqual(44)
+  expect(row.at(-1)!.height).toBeGreaterThanOrEqual(44)
+  await noHorizontalScroll(page)
 }
 
-test('à 320 px, « Terminer » rangé dans « ⋮ » termine la liste', async ({ page }) => {
-  const received = await fakeBack(page, 'ACTIVE')
-  await fakeApp(page)
-  await page.setViewportSize({ width: 320, height: 700 })
-  await page.goto('/listes/l1')
-  await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Terminer' })).toHaveCount(0)
-
+/** Ouvre « ⋮ » : ses actions, dans l'ordre, ouvert vers le bas, aligné à droite, dans l'écran. */
+async function checkMenu(page: Page, expected: readonly string[], width: number) {
   await more(page).click()
-  await page.getByRole('menuitem', { name: 'Terminer' }).click()
+  const menu = page.getByRole('menu')
+  await expect(menu).toBeVisible()
+  await expect(menu.getByRole('menuitem')).toHaveText([...expected])
+  const box = (await menu.boundingBox())!
+  const trigger = (await more(page).boundingBox())!
+  expect(box.x).toBeGreaterThanOrEqual(0)
+  expect(box.x + box.width).toBeLessThanOrEqual(width)
+  expect(box.y).toBeGreaterThan(trigger.y + trigger.height - 1)
+  await noHorizontalScroll(page)
+}
 
-  await expect(page.getByText('Terminée', { exact: true })).toBeVisible()
-  expect(received).toContain('POST /api/v1/shopping-lists/l1/complete')
-})
+// Un état de la liste = un test, une seule visite : 360 px puis 320 px (la rangée se remesure quand la largeur change), thème clair puis
+// thème sombre (la page ne se recharge pas). La mise en page ne dépend pas du thème et les couleurs ne dépendent pas de la largeur : ni
+// l'une ni l'autre n'a besoin d'être rejouée dans l'autre. L'axe passe fermé et menu ouvert, dans les deux thèmes.
+for (const scenario of scenarios) {
+  test(`${scenario.name} : une rangée à 360 et à 320 px, rien ne passe à la ligne, le menu tient dans l’écran, accessible dans les deux thèmes`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 700 })
+    await page.emulateMedia({ colorScheme: 'light' })
+    await fakeBack(page, scenario.status)
+    if (scenario.app) await fakeApp(page)
+    await page.goto('/listes/l1')
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    if (scenario.actions[0] === 'Envoyer au drive')
+      await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toBeVisible()
+    else await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toHaveCount(0)
+
+    // 360 px, thème clair
+    await checkRow(page, scenario.actions, 360)
+    expect(await violations(page), 'rangée fermée, 360 px, thème clair').toEqual([])
+    await shot(page, `${scenario.name}-360-light`, 360)
+    await checkMenu(page, scenario.menu, 360)
+    expect(await violations(page), 'menu ouvert, 360 px, thème clair').toEqual([])
+    await shot(page, `${scenario.name}-360-light-menu`, 360)
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('menu')).toHaveCount(0)
+
+    // 320 px, le pire cas : certaines actions passent dans « ⋮ »
+    const narrow = 'narrow' in scenario ? scenario.narrow : scenario
+    await page.setViewportSize({ width: 320, height: 700 })
+    await checkRow(page, narrow.actions, 320)
+    await shot(page, `${scenario.name}-320-light`, 320)
+    await checkMenu(page, narrow.menu, 320)
+
+    // Thème sombre, à 320 px : menu ouvert, puis la rangée fermée
+    await switchTheme(page, 'dark')
+    expect(await violations(page), 'menu ouvert, 320 px, thème sombre').toEqual([])
+    await shot(page, `${scenario.name}-320-dark-menu`, 320)
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('menu')).toHaveCount(0)
+    expect(await violations(page), 'rangée fermée, 320 px, thème sombre').toEqual([])
+    await shot(page, `${scenario.name}-320-dark`, 320)
+  })
+}
+
+test(
+  'bureau : les actions se suivent à gauche, « ⋮ » juste après, le menu est accessible dans les deux thèmes',
+  { tag: BUREAU_SEUL },
+  async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light' })
+    await fakeBack(page, 'ACTIVE')
+    await fakeApp(page)
+    await page.goto('/listes/l1')
+    await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toBeVisible()
+
+    const row = await rowOf(page)
+    expect(row.map((action) => action.name)).toEqual([
+      'Envoyer au drive',
+      'Terminer',
+      'Plus d’actions',
+    ])
+    for (const action of row) expect(Math.abs(action.top - row[0]!.top)).toBeLessThan(1)
+    await more(page).click()
+    await expect(page.getByRole('menu')).toBeVisible()
+    await axeBothThemes(page, 'liste-bureau-menu')
+  },
+)
 
 test('grands caractères du téléphone (125 %) à 360 px : toujours une rangée, « Terminer » passe dans « ⋮ »', async ({
   page,
@@ -342,47 +344,4 @@ test('le menu au clavier : flèches, Échap rend le focus à « ⋮ », Tab en s
   await page.keyboard.press('Tab')
   await expect(page.getByRole('menu')).toHaveCount(0)
   await expect(more(page)).not.toBeFocused()
-})
-
-test('un clic ailleurs ferme le menu', async ({ page }) => {
-  await fakeBack(page, 'ACTIVE')
-  await page.goto('/listes/l1')
-
-  await more(page).click()
-  await expect(page.getByRole('menu')).toBeVisible()
-  await page.getByRole('heading', { level: 1 }).click()
-
-  await expect(page.getByRole('menu')).toHaveCount(0)
-  await expect(more(page)).toHaveAttribute('aria-expanded', 'false')
-})
-
-test('« Supprimer » du menu ouvre sa confirmation ; l’annuler rend le focus à « ⋮ »', async ({
-  page,
-}) => {
-  await fakeBack(page, 'ACTIVE')
-  await page.goto('/listes/l1')
-
-  await more(page).click()
-  await page.getByRole('menuitem', { name: 'Supprimer' }).click()
-  const confirm = page.getByRole('dialog')
-  await expect(confirm).toContainText('Supprimer la liste ?')
-  await expect(confirm.locator(':focus')).toHaveCount(1)
-
-  await confirm.getByRole('button', { name: 'Annuler' }).click()
-  await expect(confirm).toHaveCount(0)
-  await expect(more(page)).toBeFocused()
-})
-
-test('« Mettre en pause » du menu met la liste en pause, qui propose alors de la reprendre', async ({
-  page,
-}) => {
-  const received = await fakeBack(page, 'ACTIVE')
-  await page.goto('/listes/l1')
-
-  await more(page).click()
-  await page.getByRole('menuitem', { name: 'Mettre en pause' }).click()
-
-  await expect(page.getByText('En pause')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Reprendre cette liste' })).toBeVisible()
-  expect(received).toContain('POST /api/v1/shopping-lists/l1/pause')
 })

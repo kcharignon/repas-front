@@ -218,6 +218,14 @@ describe('ShoppingListDetailView', () => {
       (item) => item.textContent.trim() === label,
     )
 
+  /** Les actions visibles de la rangée : libellé, ou nom accessible pour « ⋮ ». */
+  const rowActions = () =>
+    [
+      ...document.body.querySelectorAll(
+        '[data-test="list-actions"] a, [data-test="list-actions"] button',
+      ),
+    ].map((action) => action.getAttribute('aria-label') ?? action.textContent.trim())
+
   /** « ⋮ » (« Plus d'actions »), puis l'action `label` du menu. */
   async function choose(label: string) {
     document.body.querySelector<HTMLButtonElement>('button[aria-label="Plus d’actions"]')?.click()
@@ -230,6 +238,7 @@ describe('ShoppingListDetailView', () => {
 
     expect(wrapper.find('h1').text()).toBe('Dîner entre amis')
     expect(wrapper.text()).toContain('En pause')
+    expect(rowActions()).toEqual(['Reprendre cette liste', 'Plus d’actions'])
     expect(button('Reprendre cette liste')).toBeDefined()
     expect(button('Mettre en pause')).toBeUndefined()
     expect(button('Terminer')).toBeUndefined()
@@ -243,6 +252,22 @@ describe('ShoppingListDetailView', () => {
       ).toEqual(['Renommer', 'Supprimer']),
     )
     // Retirer une recette ne vaut que pour la liste active (route `active/recipes/{id}` du back)
+    expect(wrapper.find('button[aria-label^="Retirer"]').exists()).toBe(false)
+  })
+
+  it('montre une liste terminée : on peut la reprendre, la renommer ou la supprimer, rien d’autre', async () => {
+    const { wrapper } = await open('COMPLETED')
+
+    expect(wrapper.text()).toContain('Terminée')
+    expect(rowActions()).toEqual(['Reprendre cette liste', 'Plus d’actions'])
+    document.body.querySelector<HTMLButtonElement>('button[aria-label="Plus d’actions"]')?.click()
+    await vi.waitFor(() =>
+      expect(
+        [...document.body.querySelectorAll('[role="menuitem"]')].map((item) =>
+          item.textContent.trim(),
+        ),
+      ).toEqual(['Renommer', 'Supprimer']),
+    )
     expect(wrapper.find('button[aria-label^="Retirer"]').exists()).toBe(false)
   })
 

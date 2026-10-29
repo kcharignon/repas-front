@@ -209,6 +209,31 @@ describe('DuplicatesView', () => {
       await vi.waitFor(() => expect(document.activeElement?.tagName).toBe('H1'))
     })
 
+    it('ferme la feuille, prévient et relit la liste quand un des deux a disparu pendant la fusion (404)', async () => {
+      let gone = false
+      const { wrapper, fetchMock } = await merging({
+        'GET /api/v1/ingredients/duplicates': () =>
+          json(gone ? { member: duplicates.member.slice(1), totalItems: 2 } : duplicates),
+        'POST /api/v1/ingredients/melon-2/merge': () => {
+          gone = true
+
+          return json({ error: { message: 'Ingrédient introuvable' } }, { status: 404 })
+        },
+      })
+      await vi.waitFor(() => expect(cards(wrapper)).toHaveLength(3))
+      await cards(wrapper)[0]?.findAll('button')[0]?.trigger('click')
+      await vi.waitFor(() => expect(document.body.textContent).toContain('Tes quantités'))
+
+      button('Fusionner')?.click()
+
+      await vi.waitFor(() => expect(cards(wrapper)).toHaveLength(2))
+      expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+      expect(useNotificationsStore().items.map((item) => item.text)).toContain(
+        'Cet ingrédient n’existe plus. La liste est à jour.',
+      )
+      expect(calls(fetchMock).filter((call) => call.endsWith('/duplicates'))).toHaveLength(2)
+    })
+
     it('fusionne dans l’ingrédient choisi quand on a basculé « À garder »', async () => {
       const { wrapper, fetchMock } = await merging({
         'GET /api/v1/ingredients/melon/merge-preview': () => json(preview()),
@@ -226,6 +251,52 @@ describe('DuplicatesView', () => {
 
       const index = calls(fetchMock).indexOf('POST /api/v1/ingredients/melon/merge')
       expect(await bodyOf(fetchMock, index)).toEqual({ into: 'melon-2' })
+    })
+  })
+
+  describe('l’autre ligne d’une carte', () => {
+    it('se choisit en touchant son nom : la phrase d’effet, puis l’aperçu et la confirmation suivent ce choix', async () => {
+      const { wrapper, fetchMock } = await open({
+        'GET /api/v1/ingredients/epice-pour-guacamole/merge-preview': () => json(preview()),
+      })
+      await vi.waitFor(() => expect(cards(wrapper)).toHaveLength(3))
+      await cards(wrapper)[1]?.find('button')?.trigger('click')
+      const card = () => cards(wrapper)[1]!
+      const effect = () => card().find('[data-testid="duplicate-effect"]').text()
+      // Le back suggère « Épice pour guacamole » (5 recettes) : l'autre passe dessus
+      expect(effect()).toBe('2 recettes et 1 liste passent sur « Épice pour guacamole ».')
+      const before = fetchMock.mock.calls.length
+
+      const name = card()
+        .findAll('span')
+        .find((candidate) => candidate.text() === 'Épice guacamole')
+      await name?.trigger('click')
+
+      expect(effect()).toBe('5 recettes et 2 listes passent sur « Épice guacamole ».')
+      expect(
+        (card().find('input[value="epice-guacamole"]').element as HTMLInputElement).checked,
+      ).toBe(true)
+      expect(
+        (card().find('input[value="epice-pour-guacamole"]').element as HTMLInputElement).checked,
+      ).toBe(false)
+      expect(
+        card()
+          .text()
+          .match(/À garder/g),
+      ).toHaveLength(1)
+      expect(fetchMock.mock.calls.length).toBe(before)
+
+      await card().findAll('button')[0]?.trigger('click')
+      await vi.waitFor(() =>
+        expect(document.body.textContent).toContain(
+          'Fusionner « Épice pour guacamole » dans « Épice guacamole » ?',
+        ),
+      )
+      const url = fetchMock.mock.calls
+        .map(([input]) => new URL((input as Request).url))
+        .find((candidate) => candidate.pathname.endsWith('/merge-preview'))
+      expect(url?.pathname).toBe('/api/v1/ingredients/epice-pour-guacamole/merge-preview')
+      expect(url?.searchParams.get('into')).toBe('epice-guacamole')
     })
   })
 

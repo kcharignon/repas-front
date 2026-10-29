@@ -139,6 +139,7 @@ describe('UiActionMenu', () => {
     await vi.waitFor(() => expect(menu()).toBeNull())
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(document.activeElement).toBe(outside)
+    expect(trigger().getAttribute('aria-expanded')).toBe('false')
     expect(Object.values(runs).every((run) => run.mock.calls.length === 0)).toBe(true)
   })
 })
