@@ -39,6 +39,15 @@ export default defineConfigWithVueTs(
     rules: { 'playwright/valid-test-tags': 'off' },
   },
 
+  // `checkScreen` (e2e/support/screen.ts) porte les assertions d'un écran : mise en page et accessibilité dans les deux thèmes.
+  {
+    name: 'e2e/assertion-helpers',
+    files: ['e2e/**/*.spec.ts'],
+    rules: {
+      'playwright/expect-expect': ['warn', { assertFunctionNames: ['expect', 'checkScreen', 'checkSection', 'axeBothThemes'] }],
+    },
+  },
+
   {
     ...pluginVitest.configs.recommended,
     files: [

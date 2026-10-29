@@ -260,12 +260,17 @@ describe('RegisterView', () => {
         ),
     })
     const { wrapper } = await mountView(RegisterView, '/inscription')
+    await fill(wrapper, { 'input[type=email]': 'alexiane@example.com' })
 
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
     expect(wrapper.find('[role="alert"]').text()).toBe(expected)
     expect(wrapper.find('button[type=submit]').attributes('disabled')).toBeUndefined()
+    // Rien n'est perdu : l'adresse saisie reste dans le champ pour réessayer
+    expect(wrapper.find<HTMLInputElement>('input[type=email]').element.value).toBe(
+      'alexiane@example.com',
+    )
   })
 })
 

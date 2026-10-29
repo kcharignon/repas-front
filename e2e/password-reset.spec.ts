@@ -1,12 +1,13 @@
 // Mot de passe oublié (issue 31, ADR 0026 du back) : demande du lien, nouveau mot de passe, retour à la connexion.
-//  - la première partie simule l'API (`page.route`) : parcours, une décision par écran à 360 × 640, accessibilité, captures ;
+//  - la première partie simule l'API (`page.route`) : le parcours, et les deux écrans propres à ce parcours à 360 × 640, accessibles dans les
+//    deux thèmes (`e2e/support/screen.ts`) ; les refus et les liens périmés sont des tests de composant (`PasswordResetViews.spec.ts`) ;
 //  - la seconde joue le parcours complet contre le VRAI back et sa boîte de développement Mailpit (`make e2e`).
 // Aucune vraie adresse : uniquement `@example.com`, et les comptes et messages du test sont supprimés à la fin.
-import AxeBuilder from '@axe-core/playwright'
-import { expect, test, viewportTag } from './support/test'
+import { expect, test } from './support/test'
 import type { APIRequestContext, Page } from '@playwright/test'
 
 import { apiToken, hasSession } from './support/session'
+import { checkScreen, type Screen } from './support/screen'
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Un faux back
@@ -58,8 +59,6 @@ const confirmation = (page: Page) => page.getByLabel('Confirme ton mot de passe'
 const neutralMessage =
   'Si un compte existe pour cette adresse, un lien vient de partir. Il est valable 30 minutes.'
 
-const invalidToken: Answer = { status: 422, message: 'INVALID_PASSWORD_RESET_TOKEN' }
-
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Parcours simulé
 
@@ -104,79 +103,12 @@ test.describe('mot de passe oublié, parcours simulé', () => {
     })
     expect(received.map((call) => call.path)).not.toContain('/api/login_check')
   })
-
-  test('un mot de passe trop court ou deux saisies différentes sont expliqués sous le champ', async ({
-    page,
-  }) => {
-    const received = await fakeBack(page)
-    await page.goto('/mot-de-passe-oublie/confirmation?token=le-secret')
-
-    await newPassword(page).fill('court')
-    await confirmation(page).fill('court')
-    await page.getByRole('button', { name: 'Enregistrer mon mot de passe' }).click()
-    await expect(page.getByText('Ton mot de passe doit avoir 8 caractères au moins.')).toBeVisible()
-    await expect(newPassword(page)).toBeFocused()
-
-    await newPassword(page).fill('un nouveau mot de passe')
-    await confirmation(page).fill('un autre mot de passe')
-    await page.getByRole('button', { name: 'Enregistrer mon mot de passe' }).click()
-    await expect(page.getByText('Les deux mots de passe ne sont pas les mêmes.')).toBeVisible()
-    await expect(confirmation(page)).toBeFocused()
-
-    expect(received).toEqual([])
-  })
-
-  test('un lien périmé mène à « Demander un nouveau lien »', async ({ page }) => {
-    await fakeBack(page, { confirm: invalidToken })
-    await page.goto('/mot-de-passe-oublie/confirmation?token=vieux')
-    await newPassword(page).fill('un nouveau mot de passe')
-    await confirmation(page).fill('un nouveau mot de passe')
-    await page.getByRole('button', { name: 'Enregistrer mon mot de passe' }).click()
-
-    await expect(
-      page.getByRole('heading', { level: 1, name: 'Ce lien ne marche plus' }),
-    ).toBeVisible()
-    await expect(page.getByRole('alert')).toHaveText(
-      'Il a déjà servi, ou il a expiré. Ton mot de passe n’a pas changé.',
-    )
-    await page.getByRole('link', { name: 'Demander un nouveau lien' }).click()
-    await expect(page).toHaveURL(/\/mot-de-passe-oublie$/)
-  })
-
-  test('une adresse sans secret montre la même page d’erreur', async ({ page }) => {
-    const received = await fakeBack(page)
-    await page.goto('/mot-de-passe-oublie/confirmation')
-
-    await expect(
-      page.getByRole('heading', { level: 1, name: 'Ce lien ne marche plus' }),
-    ).toBeVisible()
-    expect(received).toEqual([])
-  })
-
-  test('trop de demandes : le délai est annoncé et rien n’est perdu', async ({ page }) => {
-    await fakeBack(page, { send: { status: 429, retryAfter: '600' } })
-    await page.goto('/mot-de-passe-oublie')
-    await page.getByLabel('Adresse e-mail').fill('alexiane@example.com')
-    await page.getByRole('button', { name: 'Envoyer le lien' }).click()
-
-    await expect(page.getByRole('alert')).toHaveText(
-      'Trop de demandes en peu de temps. Aucun lien n’est parti. Réessaie dans 10 minutes.',
-    )
-    await expect(page.getByRole('button', { name: 'Envoyer le lien' })).toBeEnabled()
-  })
 })
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Une décision par écran, à 360 × 640, clair et sombre
 
-const screens: { name: string; prepare: (page: Page) => Promise<void>; primary: string }[] = [
-  {
-    name: 'connexion',
-    prepare: async (page) => {
-      await page.goto('/connexion?mot-de-passe=change')
-    },
-    primary: 'Se connecter',
-  },
+const screens: Screen[] = [
   {
     name: 'demande',
     prepare: async (page) => {
@@ -184,6 +116,7 @@ const screens: { name: string; prepare: (page: Page) => Promise<void>; primary: 
     },
     primary: 'Envoyer le lien',
   },
+  // Le statut « Un lien vient de partir » et le bouton « Renvoyer le lien dans… », grisé pendant l'attente
   {
     name: 'demande-envoyee',
     prepare: async (page) => {
@@ -193,98 +126,24 @@ const screens: { name: string; prepare: (page: Page) => Promise<void>; primary: 
     },
     primary: 'Renvoyer le lien dans',
   },
-  {
-    name: 'demande-trop-de-demandes',
-    prepare: async (page) => {
-      await page.route('**/api/v1/users/password-reset/send', (route) =>
-        route.fulfill({
-          status: 429,
-          headers: { 'Retry-After': '1800' },
-          contentType: 'application/json',
-          body: JSON.stringify({ error: { message: 'Too many' } }),
-        }),
-      )
-      await page.goto('/mot-de-passe-oublie?email=alexiane%40example.com')
-      await page.getByRole('button', { name: 'Envoyer le lien' }).click()
-      await page.getByRole('alert').waitFor()
-    },
-    primary: 'Envoyer le lien',
-  },
-  {
-    name: 'nouveau-mot-de-passe',
-    prepare: async (page) => {
-      await page.goto('/mot-de-passe-oublie/confirmation?token=le-secret')
-    },
-    primary: 'Enregistrer mon mot de passe',
-  },
-  {
-    name: 'nouveau-mot-de-passe-refuse',
-    prepare: async (page) => {
-      await page.goto('/mot-de-passe-oublie/confirmation?token=le-secret')
-      await newPassword(page).fill('court')
-      await confirmation(page).fill('court')
-      await page.getByRole('button', { name: 'Enregistrer mon mot de passe' }).click()
-      await page.getByText('Ton mot de passe doit avoir').waitFor()
-    },
-    primary: 'Enregistrer mon mot de passe',
-  },
-  {
-    name: 'lien-perime',
-    prepare: async (page) => {
-      await page.goto('/mot-de-passe-oublie/confirmation')
-    },
-    primary: 'Demander un nouveau lien',
-  },
 ]
 
-const viewports = [
-  { label: '360 × 640', size: { width: 360, height: 640 } },
-  { label: 'bureau 1280 × 800', size: { width: 1280, height: 800 } },
-]
+// Les autres écrans de ce parcours sont ceux de l'inscription (même `ResetPasswordView`, même alerte, même connexion : seuls les textes
+// changent) et sont jugés dans `registration.spec.ts` ; la mise en page large d'`AuthLayout` aussi.
+const phone = { width: 360, height: 640 }
 
-for (const { label, size } of viewports) {
-  test.describe(`mot de passe oublié, ${label}`, { tag: viewportTag(size) }, () => {
-    test.use({ viewport: size })
+test.describe('mot de passe oublié, 360 × 640', () => {
+  test.use({ viewport: phone })
 
-    for (const colorScheme of ['light', 'dark'] as const) {
-      test(`chaque écran tient en une décision, sans défiler, et reste accessible (WCAG AA), thème ${colorScheme}`, async ({
-        page,
-      }, testInfo) => {
-        await page.emulateMedia({ colorScheme })
-        await fakeBack(page)
-
-        for (const screen of screens) {
-          await screen.prepare(page)
-          await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-
-          // Le bouton principal se voit sans défiler, et rien ne déborde sur le côté
-          const primary = page
-            .getByRole('button', { name: screen.primary })
-            .or(page.getByRole('link', { name: screen.primary }))
-            .first()
-          const box = await primary.boundingBox()
-          expect(box, `${screen.name} : le bouton principal est affiché`).not.toBeNull()
-          expect(
-            box!.y + box!.height,
-            `${screen.name} : le bouton principal se voit sans défiler`,
-          ).toBeLessThanOrEqual(size.height)
-          expect(box!.height, `${screen.name} : cible d’au moins 44 px`).toBeGreaterThanOrEqual(44)
-          const overflow = await page.evaluate(
-            () => document.documentElement.scrollWidth - window.innerWidth,
-          )
-          expect(overflow, `${screen.name} : pas de défilement horizontal`).toBeLessThanOrEqual(0)
-
-          const { violations } = await new AxeBuilder({ page })
-            .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-            .exclude('.vue-devtools__anchor-btn')
-            .analyze()
-          expect(violations, screen.name).toEqual([])
-          await page.screenshot({ path: testInfo.outputPath(`${colorScheme}-${screen.name}.png`) })
-        }
-      })
-    }
-  })
-}
+  for (const screen of screens) {
+    test(`${screen.name} : une décision, sans défiler, accessible (WCAG AA) en clair et en sombre`, async ({
+      page,
+    }) => {
+      await fakeBack(page)
+      await checkScreen(page, screen, phone)
+    })
+  }
+})
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Parcours complet contre le vrai back et Mailpit
