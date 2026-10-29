@@ -53,8 +53,15 @@ export async function switchTheme(page: Page, colorScheme: ColorScheme) {
       .poll(() => background(page), { message: 'le fond du thème sombre est posé' })
       .not.toBe(before)
   }
+  // Une animation qui tourne sans fin (un indicateur de chargement) ne finit jamais, une animation annulée en cours de route (la fin d'un
+  // chargement) rejette sa promesse : ni l'une ni l'autre ne doit bloquer ou faire échouer l'attente.
   await page.evaluate(() =>
-    Promise.all(document.getAnimations().map((animation) => animation.finished)),
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+        .map((animation) => animation.finished.catch(() => undefined)),
+    ),
   )
 }
 
