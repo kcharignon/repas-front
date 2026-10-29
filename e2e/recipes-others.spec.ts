@@ -1,22 +1,11 @@
 // « Recettes des autres », sans back ni compte : l'API est simulée par `page.route`. Sans recherche, la liste est rangée par catégorie
-// (une section chacune) ; avec une recherche (le champ attend une pause dans la frappe), une liste simple par pertinence où chaque ligne dit
-// sa catégorie ; le bouton d'effacement revient aux sections. Jouée en clair et en sombre, au téléphone (le bureau : largeur 1280 et axe étiqueté), axe sans violation.
-// `E2E_SHOTS=<dossier>` garde des captures (360, 390 et 1280 px).
-import AxeBuilder from '@axe-core/playwright'
-import { expect, IN_SEASON, test, type Page, viewportTag, BUREAU } from './support/test'
-
-const shots = process.env.E2E_SHOTS
-
-async function shot(page: Page, name: string) {
-  if (shots === undefined) return
-  await page.screenshot({ path: `${shots}/${name}.png`, fullPage: true })
-}
-
-const scan = (page: Page) =>
-  new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    .exclude('.vue-devtools__anchor-btn')
-    .analyze()
+// (une section chacune) ; avec une recherche, une liste simple par pertinence où chaque ligne dit sa catégorie ; sans résultat, une phrase
+// courte. Un seul test, au téléphone (360 px) : le parcours catégories -> recherche -> sans résultat, et à chaque étape l'accessibilité
+// (WCAG AA, contraste compris) dans les DEUX thèmes de la même visite et l'absence de défilement horizontal. Le reste (délai de la frappe,
+// une seule requête par pause, effacement, pagination, illustration de saison) est dans `OtherRecipes.spec.ts` et `UiSearchField.spec.ts`.
+// `E2E_SHOTS=<dossier>` garde une capture de chaque thème.
+import { expect, test, type Page } from './support/test'
+import { axeBothThemes } from './support/screen'
 
 async function expectNoHorizontalScroll(page: Page) {
   const overflow = await page.evaluate(
@@ -42,7 +31,6 @@ const byCategory = [
 const found = [byCategory[5]!, byCategory[4]!]
 
 async function fakeBack(page: Page) {
-  const asked: string[] = []
   await page.addInitScript(() => localStorage.setItem('repas.session', '1'))
   await page.route(
     (url) => url.pathname.startsWith('/api/'),
@@ -65,7 +53,6 @@ async function fakeBack(page: Page) {
       if (key === 'GET /api/v1/shopping-lists/active/summary')
         return reply({ shoppingListId: null, quantityByIngredientSlug: {}, plannedRecipeIds: [] })
       if (key === 'GET /api/v1/recipes/other-people') {
-        asked.push(url.search)
         const q = url.searchParams.get('q')
         const member = q === null ? byCategory : q === 'zzz' ? [] : found
 
@@ -79,123 +66,45 @@ async function fakeBack(page: Page) {
       })
     },
   )
-
-  return { asked }
 }
 
-for (const colorScheme of ['light', 'dark'] as const) {
-  test.describe(`recettes des autres, thème ${colorScheme}`, () => {
-    test.beforeEach(async ({ page }) => {
-      await page.emulateMedia({ colorScheme })
-    })
+test('la liste par catégorie, la recherche et le sans résultat sont accessibles dans les deux thèmes, sans défilement horizontal', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 800 })
+  await fakeBack(page)
+  await page.goto('/recettes/autres')
 
-    test(
-      'la liste est rangée par catégorie, sans violation axe',
-      { tag: BUREAU },
-      async ({ page }) => {
-        await fakeBack(page)
-        await page.goto('/recettes/autres')
+  // 1. Sans recherche : une section par catégorie
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText(['Entrée', 'Plat', 'Dessert'])
+  await expect(
+    page.getByRole('region', { name: 'Plat' }).getByRole('link', { name: 'Tarte flambée' }),
+  ).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  await axeBothThemes(page, 'autres-par-categorie')
 
-        await expect(page.getByRole('heading', { level: 2 })).toHaveText([
-          'Entrée',
-          'Plat',
-          'Dessert',
-        ])
-        await expect(
-          page.getByRole('region', { name: 'Plat' }).getByRole('link', { name: 'Tarte flambée' }),
-        ).toBeVisible()
-        await shot(page, `autres-par-categorie-${colorScheme}`)
-        expect((await scan(page)).violations).toEqual([])
-      },
-    )
+  // 2. Une recherche : une liste simple, la catégorie sur chaque ligne
+  const field = page.getByRole('searchbox', { name: 'Rechercher une recette des autres' })
+  await field.fill('tarte')
+  const results = page.getByRole('list', { name: 'Résultats de la recherche' })
+  await expect(results.getByRole('listitem')).toHaveCount(2)
+  await expect(results.getByRole('listitem').first()).toContainText('Tarte aux pommes')
+  await expect(results.getByRole('listitem').first()).toContainText('Dessert')
+  await expect(page.getByRole('heading', { level: 2 })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Effacer la recherche' })).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  await axeBothThemes(page, 'autres-recherche')
 
-    test('une recherche : liste simple, catégorie sur chaque ligne ; effacer revient aux sections', async ({
-      page,
-    }) => {
-      const { asked } = await fakeBack(page)
-      await page.goto('/recettes/autres')
-      await expect(page.getByRole('heading', { level: 2 })).toHaveCount(3)
+  // 3. Effacer revient aux sections et rend le focus au champ
+  await page.getByRole('button', { name: 'Effacer la recherche' }).click()
+  await expect(field).toHaveValue('')
+  await expect(field).toBeFocused()
+  await expect(page.getByRole('heading', { level: 2 })).toHaveCount(3)
 
-      const field = page.getByRole('searchbox', { name: 'Rechercher une recette des autres' })
-      await field.pressSequentially('tarte', { delay: 30 })
-
-      const results = page.getByRole('list', { name: 'Résultats de la recherche' })
-      await expect(results.getByRole('listitem')).toHaveCount(2)
-      await expect(results.getByRole('listitem').first()).toContainText('Tarte aux pommes')
-      await expect(results.getByRole('listitem').first()).toContainText('Dessert')
-      await expect(results.getByRole('listitem').last()).toContainText('Plat')
-      await expect(page.getByRole('heading', { level: 2 })).toHaveCount(0)
-      // Une seule requête de recherche malgré cinq lettres tapées
-      expect(asked.filter((search) => search.includes('q='))).toEqual(['?q=tarte'])
-      await shot(page, `autres-recherche-${colorScheme}`)
-      expect((await scan(page)).violations).toEqual([])
-
-      await page.getByRole('button', { name: 'Effacer la recherche' }).click()
-      await expect(field).toHaveValue('')
-      await expect(field).toBeFocused()
-      await expect(page.getByRole('heading', { level: 2 })).toHaveCount(3)
-      await expect(page.getByRole('button', { name: 'Effacer la recherche' })).toHaveCount(0)
-    })
-
-    test('sans résultat : une phrase courte et l’illustration, le champ reste', async ({
-      page,
-    }) => {
-      await fakeBack(page)
-      await page.goto('/recettes/autres')
-      const field = page.getByRole('searchbox', { name: 'Rechercher une recette des autres' })
-      await field.fill('zzz')
-
-      await expect(page.getByText('Aucune recette ne ressemble à « zzz ».')).toBeVisible()
-      await expect(field).toBeVisible()
-      await shot(page, `autres-sans-resultat-${colorScheme}`)
-      expect((await scan(page)).violations).toEqual([])
-    })
-
-    test('champ rempli : le bouton d’effacer est visible', async ({ page }) => {
-      await fakeBack(page)
-      await page.goto('/recettes/autres')
-      await page.getByRole('searchbox').fill('tarte')
-
-      await expect(page.getByRole('button', { name: 'Effacer la recherche' })).toBeVisible()
-      await expect(page.getByRole('listitem').first()).toContainText('Dessert')
-      await shot(page, `autres-champ-rempli-${colorScheme}`)
-    })
-  })
-}
-
-test.describe('trois largeurs, sans défilement horizontal (captures avec E2E_SHOTS)', () => {
-  for (const width of [360, 390, 1280]) {
-    test(`${width} px`, { tag: viewportTag({ width }) }, async ({ page }) => {
-      await page.setViewportSize({ width, height: 800 })
-      await fakeBack(page)
-      for (const colorScheme of ['light', 'dark'] as const) {
-        await page.emulateMedia({ colorScheme })
-        await page.goto('/recettes/autres')
-        await expect(page.getByRole('heading', { level: 2 })).toHaveCount(3)
-        await shot(page, `w${width}-categories-${colorScheme}`)
-        await expectNoHorizontalScroll(page)
-        await page.getByRole('searchbox').fill('tarte')
-        await expect(page.getByRole('listitem')).toHaveCount(2)
-        await shot(page, `w${width}-recherche-${colorScheme}`)
-        await expectNoHorizontalScroll(page)
-        await page.getByRole('searchbox').fill('zzz')
-        await expect(page.getByText('Aucune recette ne ressemble')).toBeVisible()
-        await shot(page, `w${width}-vide-${colorScheme}`)
-      }
-    })
-  }
-})
-
-test.describe('en saison', () => {
-  test('sans résultat, l’illustration de recherche vide de la saison est là', async ({ page }) => {
-    await fakeBack(page)
-    await page.clock.setSystemTime(IN_SEASON)
-    await page.goto('/recettes/autres')
-    await page.getByRole('searchbox').fill('zzz')
-
-    await expect(page.getByText('Aucune recette ne ressemble à « zzz ».')).toBeVisible()
-    await expect(page.locator('main svg[aria-hidden="true"]').first()).toBeVisible()
-    await shot(page, 'autres-sans-resultat-saison')
-    expect((await scan(page)).violations).toEqual([])
-  })
+  // 4. Sans résultat : une phrase courte, le champ reste
+  await field.fill('zzz')
+  await expect(page.getByText('Aucune recette ne ressemble à « zzz ».')).toBeVisible()
+  await expect(field).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  await axeBothThemes(page, 'autres-sans-resultat')
 })

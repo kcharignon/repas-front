@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
-import { appContext, json, me, stubApi } from '@/__tests__/helpers'
+import { appContext, eventually, json, me, stubApi } from '@/__tests__/helpers'
 import OtherRecipesView from '@/features/recipes/OtherRecipesView.vue'
 import { groupByType } from '@/features/recipes/otherRecipeGroups'
 import { useSessionStore } from '@/session/session'
@@ -229,6 +229,51 @@ describe('OtherRecipesView : recherche', () => {
     expect(wrapper.text()).not.toContain('Rien de nouveau à copier')
     expect(field(wrapper).exists()).toBe(true)
     expect(wrapper.find('section').exists()).toBe(false)
+  })
+
+  const noMatch = {
+    'GET /api/v1/recipes/other-people': (request: Request) =>
+      json(new URL(request.url).searchParams.has('q') ? { member: [], totalItems: 0 } : byCategory),
+  }
+
+  it('hors saison, sans résultat : la phrase seule, sans illustration', async () => {
+    vi.useFakeTimers()
+    const { wrapper } = await open(noMatch)
+    await vi.advanceTimersByTimeAsync(0)
+    await flushPromises()
+
+    await field(wrapper).setValue('zzz')
+    await vi.advanceTimersByTimeAsync(300)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Aucune recette ne ressemble à « zzz ».')
+    // La loupe du champ est aussi un svg décoratif : on cherche l'illustration de la saison, qui est dans un conteneur caché
+    expect(wrapper.find('main span[aria-hidden="true"] svg').exists()).toBe(false)
+  })
+
+  it('en saison, sans résultat : l’illustration de recherche vide de la saison est au-dessus de la phrase', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 9, 27, 12))
+    const { wrapper } = await open(noMatch)
+    await vi.advanceTimersByTimeAsync(0)
+    await flushPromises()
+
+    await field(wrapper).setValue('zzz')
+    await vi.advanceTimersByTimeAsync(300)
+    await flushPromises()
+    await eventually(() =>
+      expect(wrapper.find('main span[aria-hidden="true"] svg').exists()).toBe(true),
+    )
+
+    // L'illustration est décorative (cachée des lecteurs d'écran) et précède la phrase, qui reste le seul texte
+    const art = wrapper.find('main span[aria-hidden="true"] svg').element.parentElement!
+    expect(art.getAttribute('aria-hidden')).toBe('true')
+    const phrase = wrapper.find('p[role="status"]')
+    expect(phrase.text()).toBe('Aucune recette ne ressemble à « zzz ».')
+    expect(
+      art.compareDocumentPosition(phrase.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(field(wrapper).exists()).toBe(true)
   })
 
   it('pagine la recherche : « Voir plus » garde le même texte cherché', async () => {

@@ -1,23 +1,13 @@
 // Les conversions d'un ingrédient, sans back ni compte : l'API est simulée par `page.route`. Deux écrans : la recette dont la farine ne se
 // convertit pas en kilo (la ligne le dit, l'auteur règle sans quitter la page) et la fiche de la farine (ses conversions propres : ajouter,
-// modifier, retirer). Jouée sur le téléphone (Pixel 7) ; le bureau seulement pour les tests étiquetés (playwright.config.ts), en clair et en sombre, à 390 px de large. `E2E_SHOTS=<dossier>` garde des captures.
-import AxeBuilder from '@axe-core/playwright'
+// retirer). Deux tests à 390 px (Pixel 7), chacun dans les DEUX thèmes de la même visite : le parcours en vrai navigateur (clics, focus) et à
+// chaque étape l'accessibilité (WCAG AA, contraste compris). Le détail de chaque état (lignes signalées, « Ajouter » grisé, feuille,
+// pastille qui mène à la première ligne, focus rendu, phrases) est dans `RecipeConversions.spec.ts` et `IngredientConversions.spec.ts`.
+// `E2E_SHOTS=<dossier>` garde une capture de chaque thème.
 import { expect, test, type Page } from './support/test'
-
-const shots = process.env.E2E_SHOTS
+import { axeBothThemes } from './support/screen'
 
 test.use({ viewport: { width: 390, height: 844 } })
-
-async function shot(page: Page, name: string) {
-  if (shots === undefined) return
-  await page.screenshot({ path: `${shots}/${name}.png`, fullPage: false })
-}
-
-const scan = (page: Page) =>
-  new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    .exclude('.vue-devtools__anchor-btn')
-    .analyze()
 
 const units = [
   {
@@ -198,109 +188,86 @@ async function fakeBack(page: Page) {
   return { sent, bodyOf: (key: string) => sent.find((entry) => entry.key === key)?.body }
 }
 
-for (const colorScheme of ['light', 'dark'] as const) {
-  test.describe(`conversions d'un ingrédient, thème ${colorScheme}`, () => {
-    test.beforeEach(async ({ page }) => {
-      await page.emulateMedia({ colorScheme })
-    })
+test('la recette dit quelle ligne ne se convertit pas et l’auteur la règle sans quitter la page', async ({
+  page,
+}) => {
+  const back = await fakeBack(page)
+  await page.goto('/recettes/r1')
 
-    test('la recette dit quelle ligne ne se convertit pas et l’auteur la règle sans quitter la page', async ({
-      page,
-    }) => {
-      const back = await fakeBack(page)
-      await page.goto('/recettes/r1')
+  const farine = page.getByRole('listitem').filter({ hasText: 'farine' })
+  await expect(farine).toContainText('Je ne sais pas convertir en kilo')
+  await expect(page.getByRole('listitem').filter({ hasText: 'crème fraîche' })).toContainText(
+    'Je ne sais pas convertir en pot',
+  )
+  await expect(page.getByRole('listitem').filter({ hasText: 'veau' })).not.toContainText(
+    'Je ne sais pas',
+  )
+  await expect(page.getByRole('button', { name: /^Ajouter Blanquette de veau/ })).toBeDisabled()
+  await expect(page.getByText('Règle d’abord les ingrédients signalés.')).toBeVisible()
+  await axeBothThemes(page, 'recette-a-regler')
 
-      const farine = page.getByRole('listitem').filter({ hasText: 'farine' })
-      await expect(farine).toContainText('Je ne sais pas convertir en kilo')
-      await expect(page.getByRole('listitem').filter({ hasText: 'crème fraîche' })).toContainText(
-        'Je ne sais pas convertir en pot',
-      )
-      await expect(page.getByRole('listitem').filter({ hasText: 'veau' })).not.toContainText(
-        'Je ne sais pas',
-      )
-      await expect(page.getByRole('button', { name: '2 à régler' })).toBeVisible()
-      await expect(page.getByRole('button', { name: /^Ajouter Blanquette de veau/ })).toBeDisabled()
-      await expect(page.getByText('Règle d’abord les ingrédients signalés.')).toBeVisible()
-      await shot(page, `recette-a-regler-${colorScheme}`)
-      expect((await scan(page)).violations).toEqual([])
+  // La pastille mène à la première ligne à régler (vrai focus, vrai défilement)
+  await page.getByRole('button', { name: '2 à régler' }).click()
+  await expect(page.getByRole('button', { name: 'Régler la conversion de farine' })).toBeFocused()
 
-      await page.getByRole('button', { name: 'Régler la conversion de farine' }).click()
-      const dialog = page.getByRole('dialog')
-      await expect(dialog).toBeVisible()
-      // « 1 kilo = ? cuillères à soupe » : l'unité d'achat à gauche avec 1, l'unité de la ligne à droite, le focus sur le nombre à dire
-      await expect(dialog.getByLabel('Unité de départ')).toHaveValue('kilo')
-      await expect(dialog.getByLabel(/Unité d.arrivée/)).toHaveValue('cuillere-a-soupe')
-      await expect(dialog).toContainText('Dans 1 kilo, combien de cuillères à soupe ?')
-      await expect(dialog.getByLabel(/Quantité d.arrivée/)).toBeFocused()
-      await dialog.getByLabel(/Quantité d.arrivée/).fill('100')
-      await expect(dialog.locator('[aria-live="polite"]')).toHaveText(
-        'Farine : 1 kilo = 100 cuillères à soupe.',
-      )
-      await shot(page, `recette-regler-${colorScheme}`)
-      expect((await scan(page)).violations).toEqual([])
+  await page.getByRole('button', { name: 'Régler la conversion de farine' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  // « 1 kilo = ? cuillères à soupe » : l'unité d'achat à gauche avec 1, l'unité de la ligne à droite, le focus sur le nombre à dire
+  await expect(dialog.getByLabel('Unité de départ')).toHaveValue('kilo')
+  await expect(dialog.getByLabel(/Unité d.arrivée/)).toHaveValue('cuillere-a-soupe')
+  await expect(dialog).toContainText('Dans 1 kilo, combien de cuillères à soupe ?')
+  await expect(dialog.getByLabel(/Quantité d.arrivée/)).toBeFocused()
+  await dialog.getByLabel(/Quantité d.arrivée/).fill('100')
+  await expect(dialog.locator('[aria-live="polite"]')).toHaveText(
+    'Farine : 1 kilo = 100 cuillères à soupe.',
+  )
+  await axeBothThemes(page, 'recette-regler')
 
-      await dialog.getByRole('button', { name: 'Enregistrer' }).click()
-      await expect(dialog).toBeHidden()
-      await expect(farine).not.toContainText('Je ne sais pas')
-      await expect(page.getByRole('button', { name: '1 à régler' })).toBeVisible()
-      expect(back.bodyOf('POST /api/v1/ingredients/farine/conversions')).toEqual({
-        startUnitSlug: 'kilo',
-        endUnitSlug: 'cuillere-a-soupe',
-        coefficient: 100,
-      })
-      await expect(farine).toBeFocused()
-    })
-
-    test('la pastille mène à la première ligne à régler', async ({ page }) => {
-      await fakeBack(page)
-      await page.goto('/recettes/r1')
-
-      await page.getByRole('button', { name: '2 à régler' }).click()
-
-      await expect(
-        page.getByRole('button', { name: 'Régler la conversion de farine' }),
-      ).toBeFocused()
-    })
-
-    test('la fiche de la farine liste ses conversions, en ajoute et en retire', async ({
-      page,
-    }) => {
-      const back = await fakeBack(page)
-      await page.goto('/ingredients/farine/modifier')
-
-      const section = page.getByRole('region', { name: 'Conversions de farine' })
-      await expect(section.getByText('1 cuillère à soupe = 10 g')).toBeVisible()
-      await expect(section.getByText('1 tasse = 125 g')).toBeVisible()
-      await expect(section.getByText('Pour tout le monde : 1 kg = 1 000 g')).toBeVisible()
-      await expect(section.getByText('La recette peut se convertir en kilo.')).toBeVisible()
-      await section.scrollIntoViewIfNeeded()
-      await shot(page, `fiche-conversions-${colorScheme}`)
-      expect((await scan(page)).violations).toEqual([])
-
-      await section.getByRole('button', { name: 'Ajouter une conversion' }).click()
-      const dialog = page.getByRole('dialog')
-      // L'unité d'achat à gauche avec 1, l'unité des recettes à droite : on change l'arrivée pour « 1 kilo = 8 tasses »
-      await expect(dialog.getByLabel('Unité de départ')).toHaveValue('kilo')
-      await expect(dialog.getByLabel(/Unité d.arrivée/)).toHaveValue('cuillere-a-soupe')
-      await dialog.getByLabel(/Unité d.arrivée/).selectOption('tasse')
-      await dialog.getByLabel(/Quantité d.arrivée/).fill('8')
-      await shot(page, `fiche-ajouter-${colorScheme}`)
-      expect((await scan(page)).violations).toEqual([])
-      await dialog.getByRole('button', { name: 'Enregistrer' }).click()
-      await expect(dialog).toBeHidden()
-      expect(back.bodyOf('POST /api/v1/ingredients/farine/conversions')).toEqual({
-        startUnitSlug: 'kilo',
-        endUnitSlug: 'tasse',
-        coefficient: 8,
-      })
-
-      await section.getByRole('button', { name: 'Supprimer : 1 tasse = 125 g' }).click()
-      const confirmation = page.getByRole('dialog')
-      await expect(confirmation).toContainText('Supprimer cette conversion ?')
-      await shot(page, `fiche-supprimer-${colorScheme}`)
-      await confirmation.getByRole('button', { name: 'Supprimer' }).click()
-      await expect(section.getByText('1 tasse = 125 g')).toHaveCount(0)
-      await expect(section.getByRole('button', { name: 'Ajouter une conversion' })).toBeFocused()
-    })
+  await dialog.getByRole('button', { name: 'Enregistrer' }).click()
+  await expect(dialog).toBeHidden()
+  await expect(farine).not.toContainText('Je ne sais pas')
+  await expect(page.getByRole('button', { name: '1 à régler' })).toBeVisible()
+  expect(back.bodyOf('POST /api/v1/ingredients/farine/conversions')).toEqual({
+    startUnitSlug: 'kilo',
+    endUnitSlug: 'cuillere-a-soupe',
+    coefficient: 100,
   })
-}
+  await expect(farine).toBeFocused()
+})
+
+test('la fiche de la farine liste ses conversions, en ajoute et en retire', async ({ page }) => {
+  const back = await fakeBack(page)
+  await page.goto('/ingredients/farine/modifier')
+
+  const section = page.getByRole('region', { name: 'Conversions de farine' })
+  await expect(section.getByText('1 cuillère à soupe = 10 g')).toBeVisible()
+  await expect(section.getByText('1 tasse = 125 g')).toBeVisible()
+  await expect(section.getByText('Pour tout le monde : 1 kg = 1 000 g')).toBeVisible()
+  await expect(section.getByText('La recette peut se convertir en kilo.')).toBeVisible()
+  await section.scrollIntoViewIfNeeded()
+  await axeBothThemes(page, 'fiche-conversions')
+
+  await section.getByRole('button', { name: 'Ajouter une conversion' }).click()
+  const dialog = page.getByRole('dialog')
+  // L'unité d'achat à gauche avec 1, l'unité des recettes à droite : on change l'arrivée pour « 1 kilo = 8 tasses »
+  await expect(dialog.getByLabel('Unité de départ')).toHaveValue('kilo')
+  await expect(dialog.getByLabel(/Unité d.arrivée/)).toHaveValue('cuillere-a-soupe')
+  await dialog.getByLabel(/Unité d.arrivée/).selectOption('tasse')
+  await dialog.getByLabel(/Quantité d.arrivée/).fill('8')
+  await axeBothThemes(page, 'fiche-ajouter')
+  await dialog.getByRole('button', { name: 'Enregistrer' }).click()
+  await expect(dialog).toBeHidden()
+  expect(back.bodyOf('POST /api/v1/ingredients/farine/conversions')).toEqual({
+    startUnitSlug: 'kilo',
+    endUnitSlug: 'tasse',
+    coefficient: 8,
+  })
+
+  await section.getByRole('button', { name: 'Supprimer : 1 tasse = 125 g' }).click()
+  const confirmation = page.getByRole('dialog')
+  await expect(confirmation).toContainText('Supprimer cette conversion ?')
+  await confirmation.getByRole('button', { name: 'Supprimer' }).click()
+  await expect(section.getByText('1 tasse = 125 g')).toHaveCount(0)
+  await expect(section.getByRole('button', { name: 'Ajouter une conversion' })).toBeFocused()
+})

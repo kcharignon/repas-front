@@ -1,23 +1,13 @@
 // L'écran « Ingrédients à régler », sans back ni compte : l'API est simulée par `page.route`. La ligne ambre des Rayons le montre quand il y a
 // quelque chose à régler, l'écran liste les ingrédients, « Régler » ouvre la feuille « 1 [unité d'achat] = ? [unité des recettes] » et
-// l'ingrédient disparaît une fois la conversion enregistrée. Jouée à 390 px, en clair et en sombre. `E2E_SHOTS=<dossier>` garde des captures.
-import AxeBuilder from '@axe-core/playwright'
+// l'ingrédient disparaît une fois la conversion enregistrée. Un seul test, à 390 px : le parcours entier des Rayons jusqu'à « Tout est réglé. »
+// (vrais clics, vraie touche Entrée, focus) et à chaque écran l'accessibilité (WCAG AA, contraste compris) dans les DEUX thèmes de la même
+// visite. Les textes, l'absence de la ligne quand tout est réglé et le détail de chaque état sont des tests de composant
+// (`IngredientsToFix.spec.ts`). `E2E_SHOTS=<dossier>` garde une capture de chaque thème.
 import { expect, test, type Page } from './support/test'
-
-const shots = process.env.E2E_SHOTS
+import { axeBothThemes } from './support/screen'
 
 test.use({ viewport: { width: 390, height: 844 } })
-
-async function shot(page: Page, name: string) {
-  if (shots === undefined) return
-  await page.screenshot({ path: `${shots}/${name}.png`, fullPage: false })
-}
-
-const scan = (page: Page) =>
-  new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    .exclude('.vue-devtools__anchor-btn')
-    .analyze()
 
 const units = [
   { slug: 'unite', name: 'unité', symbol: '', dimension: 'COUNT', baseFactor: 1 },
@@ -111,87 +101,61 @@ const vin = item('vin', 'vin', {
 })
 const biscotte = item('biscotte', 'biscotte')
 
-for (const colorScheme of ['light', 'dark'] as const) {
-  test.describe(`ingrédients à régler, thème ${colorScheme}`, () => {
-    test.beforeEach(async ({ page }) => {
-      await page.emulateMedia({ colorScheme })
-    })
+const heading = (page: Page) =>
+  page.getByRole('heading', { name: 'Ingrédients à régler', level: 1 })
 
-    test('la ligne des Rayons dit combien il y en a et mène à l’écran', async ({ page }) => {
-      await fakeBack(page, [biscotte, farine, vin])
-      await page.goto('/rayons')
+test('on règle les ingrédients depuis les Rayons jusqu’à « Tout est réglé. », accessible dans les deux thèmes à chaque écran', async ({
+  page,
+}) => {
+  const back = await fakeBack(page, [biscotte, farine, vin])
 
-      const line = page.getByRole('link', { name: '3 ingrédients à régler' })
-      await expect(line).toBeVisible()
-      await shot(page, `rayons-a-regler-${colorScheme}`)
-      expect((await scan(page)).violations).toEqual([])
+  // 1. La ligne des Rayons dit combien il y en a et mène à l'écran
+  await page.goto('/rayons')
+  const line = page.getByRole('link', { name: '3 ingrédients à régler' })
+  await expect(line).toBeVisible()
+  await axeBothThemes(page, 'rayons-a-regler')
+  await line.click()
+  await expect(heading(page)).toBeVisible()
+  await expect(page.getByTestId('to-fix-card')).toHaveCount(3)
+  await expect(page.getByText('Recettes : cuillère à soupe · Magasin : kilo')).toBeVisible()
+  await axeBothThemes(page, 'a-regler-liste')
 
-      await line.click()
-      await expect(
-        page.getByRole('heading', { name: 'Ingrédients à régler', level: 1 }),
-      ).toBeVisible()
-      await expect(page.getByTestId('to-fix-card')).toHaveCount(3)
-    })
-
-    test('la ligne n’existe pas quand tout est réglé', async ({ page }) => {
-      await fakeBack(page, [])
-      await page.goto('/rayons')
-
-      await expect(page.getByRole('link', { name: 'Épicerie' })).toBeVisible()
-      await expect(page.getByRole('link', { name: /à régler/ })).toHaveCount(0)
-    })
-
-    test('on règle un ingrédient depuis la liste : il disparaît, le focus revient au titre', async ({
-      page,
-    }) => {
-      const back = await fakeBack(page, [biscotte, farine, vin])
-      await page.goto('/ingredients/a-regler')
-
-      await expect(page.getByTestId('to-fix-card')).toHaveCount(3)
-      await expect(page.getByText('Recettes : cuillère à soupe · Magasin : kilo')).toBeVisible()
-      await shot(page, `a-regler-liste-${colorScheme}`)
-      expect((await scan(page)).violations).toEqual([])
-
-      await page.getByRole('button', { name: 'Régler la conversion de vin' }).click()
-      const dialog = page.getByRole('dialog')
-      await expect(dialog).toBeVisible()
-      // « 1 bouteille = ? centilitres » : l'unité d'achat à gauche avec 1, le nombre à dire à droite, le focus dessus
-      await expect(dialog.getByLabel('Unité de départ')).toHaveValue('bouteille')
-      await expect(dialog.getByLabel(/Unité d.arrivée/)).toHaveValue('centilitre')
-      await expect(dialog).toContainText('Dans 1 bouteille, combien de centilitres ?')
-      await expect(dialog.getByLabel(/Quantité d.arrivée/)).toBeFocused()
-      await dialog.getByLabel(/Quantité d.arrivée/).fill('75')
-      await shot(page, `a-regler-feuille-${colorScheme}`)
-      expect((await scan(page)).violations).toEqual([])
-
-      await dialog.getByRole('button', { name: 'Enregistrer' }).click()
-      await expect(dialog).toBeHidden()
-      await expect(page.getByTestId('to-fix-card')).toHaveCount(2)
-      await expect(page.getByTestId('to-fix-card').filter({ hasText: 'vin' })).toHaveCount(0)
-      await expect(page.getByText('2 ingrédients à régler')).toBeVisible()
-      expect(back.bodyOf('POST /api/v1/ingredients/vin/conversions')).toEqual({
-        startUnitSlug: 'bouteille',
-        endUnitSlug: 'centilitre',
-        coefficient: 75,
-      })
-      await expect(
-        page.getByRole('heading', { name: 'Ingrédients à régler', level: 1 }),
-      ).toBeFocused()
-    })
-
-    test('« Tout est réglé. » quand la dernière carte disparaît', async ({ page }) => {
-      await fakeBack(page, [biscotte])
-      await page.goto('/ingredients/a-regler')
-
-      await page.getByRole('button', { name: 'Régler la conversion de biscotte' }).click()
-      const dialog = page.getByRole('dialog')
-      await dialog.getByLabel(/Quantité d.arrivée/).fill('12')
-      await dialog.getByRole('button', { name: 'Enregistrer' }).click()
-
-      await expect(page.getByText('Tout est réglé.')).toBeVisible()
-      await shot(page, `a-regler-vide-${colorScheme}`)
-      expect((await scan(page)).violations).toEqual([])
-      await expect(page.getByRole('main').getByRole('link', { name: 'Rayons' })).toBeVisible()
-    })
+  // 2. On règle le vin : la feuille « 1 bouteille = ? centilitres », le nombre, Entrée ; la carte disparaît, le focus revient au titre
+  await page.getByRole('button', { name: 'Régler la conversion de vin' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByLabel('Unité de départ')).toHaveValue('bouteille')
+  await expect(dialog.getByLabel(/Unité d.arrivée/)).toHaveValue('centilitre')
+  await expect(dialog).toContainText('Dans 1 bouteille, combien de centilitres ?')
+  await expect(dialog.getByLabel(/Quantité d.arrivée/)).toBeFocused()
+  await dialog.getByLabel(/Quantité d.arrivée/).fill('75')
+  await axeBothThemes(page, 'a-regler-feuille')
+  await dialog.getByRole('button', { name: 'Enregistrer' }).click()
+  await expect(dialog).toBeHidden()
+  await expect(page.getByTestId('to-fix-card')).toHaveCount(2)
+  await expect(page.getByTestId('to-fix-card').filter({ hasText: 'vin' })).toHaveCount(0)
+  await expect(page.getByText('2 ingrédients à régler')).toBeVisible()
+  expect(back.bodyOf('POST /api/v1/ingredients/vin/conversions')).toEqual({
+    startUnitSlug: 'bouteille',
+    endUnitSlug: 'centilitre',
+    coefficient: 75,
   })
-}
+  await expect(heading(page)).toBeFocused()
+
+  // 3. Les deux autres : « Tout est réglé. » quand la dernière carte disparaît
+  for (const [name, coefficient] of [
+    ['farine', '100'],
+    ['biscotte', '12'],
+  ] as const) {
+    await page.getByRole('button', { name: `Régler la conversion de ${name}` }).click()
+    await page
+      .getByRole('dialog')
+      .getByLabel(/Quantité d.arrivée/)
+      .fill(coefficient)
+    await page.getByRole('dialog').getByRole('button', { name: 'Enregistrer' }).click()
+    await expect(page.getByRole('dialog')).toBeHidden()
+  }
+  await expect(page.getByText('Tout est réglé.')).toBeVisible()
+  await expect(page.getByRole('main').getByRole('link', { name: 'Rayons' })).toBeVisible()
+  await axeBothThemes(page, 'a-regler-vide')
+})
