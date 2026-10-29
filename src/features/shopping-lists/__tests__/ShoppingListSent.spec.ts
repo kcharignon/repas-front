@@ -423,6 +423,23 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     expect(calls(fetchMock).some((request) => request.startsWith('DELETE'))).toBe(false)
   })
 
+  it('« Supprimer » : la confirmation garde le focus, et l’annuler le rend à « ⋮ » sans rien supprimer', async () => {
+    const { fetchMock } = await fromMenu('Supprimer')
+    await vi.waitFor(() => expect(body().textContent).toContain('Supprimer la liste ?'))
+    const dialog = body().querySelector('[role="dialog"]')
+    await vi.waitFor(() => expect(dialog?.contains(document.activeElement)).toBe(true))
+
+    dialogButton('Annuler').click()
+
+    await vi.waitFor(() => expect(body().querySelector('[role="dialog"]')).toBeNull())
+    await vi.waitFor(() =>
+      expect(document.activeElement).toBe(
+        body().querySelector('button[aria-label="Plus d’actions"]'),
+      ),
+    )
+    expect(calls(fetchMock).some((request) => request.startsWith('DELETE'))).toBe(false)
+  })
+
   describe('quand « Terminer » ne tient pas sur la rangée (320 px, grands caractères)', () => {
     // jsdom ne fait aucune mise en page : « Terminer » est placé sur une deuxième ligne, cachée par la rangée
     const offsetTop = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetTop')!
