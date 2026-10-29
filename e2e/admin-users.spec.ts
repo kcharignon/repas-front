@@ -1,8 +1,11 @@
-// Administration des utilisateurs, sans back ni compte : l'API est simulée par `page.route`, avec un état qui suit les
-// changements de statut et les suppressions. Jouée sur le téléphone (cartes) et sur le bureau (tableau), étiquette BUREAU. Données inventées.
-// SHOTS_DIR=<dossier> : garde une capture de chaque état (clair et sombre) pour la relire.
-import AxeBuilder from '@axe-core/playwright'
+// Administration des utilisateurs, sans back ni compte : l'API est simulée par `page.route`. Jouée sur le téléphone (cartes) ET sur le bureau
+// (tableau dès 1280 px : le DOM n'est pas le même), étiquette BUREAU : c'est le seul test qui porte l'accessibilité du bureau (menu latéral
+// compris) pour les pages d'administration. Un test : la mise en page (pas de défilement horizontal, cibles de 44 px), puis l'accessibilité
+// (WCAG AA, contraste compris) de la liste et de son menu ouvert au clavier dans les DEUX thèmes de la même visite. Tri, filtres, activation,
+// désactivation, suppression et leurs messages sont des tests de composant (`Admin.spec.ts`, `users.spec.ts`, `UiActionMenu.spec.ts`,
+// `AppToasts.spec.ts`). Données inventées. `E2E_SHOTS=<dossier>` garde une capture de chaque thème.
 import { expect, test, type Page, type Route, BUREAU } from './support/test'
+import { axeBothThemes } from './support/screen'
 
 type Status = 'PENDING' | 'ACTIVE' | 'DISABLED'
 interface FakeUser {
@@ -81,10 +84,9 @@ const reply = (route: Route, body?: unknown, status = body === undefined ? 204 :
       : { status, contentType: 'application/json', body: JSON.stringify(body) },
   )
 
-async function fakeBack(page: Page, colorScheme: 'light' | 'dark' = 'light') {
-  let users = initialUsers()
-  const received: string[] = []
-  await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' })
+async function fakeBack(page: Page) {
+  const users = initialUsers()
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' })
   await page.clock.install({ time: NOW })
   await page.addInitScript(() => localStorage.setItem('repas.session', '1'))
   await page.route(
@@ -92,7 +94,6 @@ async function fakeBack(page: Page, colorScheme: 'light' | 'dark' = 'light') {
     (route) => {
       const request = route.request()
       const path = new URL(request.url()).pathname
-      received.push(`${request.method()} ${path}`)
       if (path === '/api/auth/refresh') return reply(route, { token: 'jeton' })
       if (path === '/api/v1/me')
         return reply(route, {
@@ -104,173 +105,24 @@ async function fakeBack(page: Page, colorScheme: 'light' | 'dark' = 'light') {
         })
       if (path === '/api/v1/users' && request.method() === 'GET')
         return reply(route, { member: users, totalItems: users.length })
-      const status = /^\/api\/v1\/users\/([^/]+)\/status$/.exec(path)
-      if (status && request.method() === 'PUT') {
-        const body = request.postDataJSON() as { status: Status }
-        users = users.map((user) =>
-          user.id === status[1] ? { ...user, status: body.status } : user,
-        )
-
-        return reply(route)
-      }
-      const one = /^\/api\/v1\/users\/([^/]+)$/.exec(path)
-      if (one && request.method() === 'DELETE') {
-        users = users.filter((user) => user.id !== one[1])
-
-        return reply(route)
-      }
-
       return reply(route, { error: { message: 'NOT_FOUND' } }, 404)
     },
   )
-
-  return received
-}
-
-const shot = async (page: Page, name: string) => {
-  const dir = process.env.SHOTS_DIR
-  if (dir) await page.screenshot({ path: `${dir}/${name}.png`, fullPage: true })
 }
 
 const rowOf = (page: Page, email: string) =>
   page.getByRole('listitem').filter({ hasText: email, has: page.locator('p', { hasText: email }) })
 
 test.describe('administration des utilisateurs', { tag: BUREAU }, () => {
-  test('les comptes en attente passent en premier, avec une action visible et une dernière connexion lisible', async ({
+  test('la liste et son menu sont accessibles dans les deux thèmes, sans défilement horizontal, avec des cibles de 44 px', async ({
     page,
   }) => {
     await fakeBack(page)
     await page.goto('/admin/utilisateurs')
-
     await expect(page.getByRole('main')).toContainText('5 comptes · 1 en attente')
-    // Un compte inscrit par son adresse seule n'a pas de mot de passe : l'activer à la main n'en pose pas
-    await expect(page.getByRole('main')).toContainText(
-      'Un compte activé ici peut être sans mot de passe. La personne en choisit un avec « Mot de passe oublié ? ».',
-    )
     await expect(page.getByRole('listitem').first()).toContainText('nouveau@exemple.test')
-    await expect(
-      rowOf(page, 'nouveau@exemple.test').getByRole('button', { name: /^Activer/ }),
-    ).toBeVisible()
-    await expect(rowOf(page, 'nouveau@exemple.test')).toContainText('Pas encore vu')
-    await expect(rowOf(page, 'admin@exemple.test')).toContainText('il y a 5 min')
-    await expect(rowOf(page, 'admin@exemple.test').locator('time')).toHaveAttribute(
-      'title',
-      '20 octobre 2026 à 13:55',
-    )
-    await expect(rowOf(page, 'ancien@exemple.test')).toContainText('2 septembre 2026')
-    await expect(
-      rowOf(page, 'ancien@exemple.test').getByRole('button', { name: /^Réactiver/ }),
-    ).toBeVisible()
-    await shot(page, 'liste')
-  })
 
-  test('active un compte en attente en un clic', async ({ page }) => {
-    const received = await fakeBack(page)
-    await page.goto('/admin/utilisateurs')
-
-    await rowOf(page, 'nouveau@exemple.test')
-      .getByRole('button', { name: /^Activer/ })
-      .click()
-
-    await expect(
-      page.getByRole('status').filter({ hasText: 'Statut de nouveau@exemple.test modifié.' }),
-    ).toBeVisible()
-    await expect(
-      rowOf(page, 'nouveau@exemple.test').getByRole('button', { name: /^Activer/ }),
-    ).toHaveCount(0)
-    await expect(page.getByRole('main')).not.toContainText('en attente')
-    expect(received).toContain('PUT /api/v1/users/u2/status')
-  })
-
-  test('désactive un compte par le menu « Plus d’actions », au clavier', async ({ page }) => {
-    const received = await fakeBack(page)
-    await page.goto('/admin/utilisateurs')
-    const row = rowOf(page, 'jamais@exemple.test')
-
-    await expect(row.getByRole('button', { name: /^Activer|^Réactiver/ })).toHaveCount(0)
-    const more = row.getByRole('button', { name: 'Plus d’actions pour jamais@exemple.test' })
-    await more.focus()
-    await page.keyboard.press('Enter')
-    await expect(page.getByRole('menuitem')).toHaveText([
-      'Mettre en attente',
-      'Désactiver',
-      'Supprimer',
-    ])
-    await shot(page, 'menu')
-    await page.getByRole('menuitem', { name: 'Désactiver' }).click()
-
-    await expect(row.getByRole('button', { name: /^Réactiver/ })).toBeVisible()
-    expect(received).toContain('PUT /api/v1/users/u5/status')
-  })
-
-  test('le menu du compte connecté grise « Supprimer » et dit pourquoi', async ({ page }) => {
-    await fakeBack(page)
-    await page.goto('/admin/utilisateurs')
-
-    await rowOf(page, 'admin@exemple.test')
-      .getByRole('button', { name: 'Plus d’actions pour admin@exemple.test' })
-      .click()
-
-    await expect(page.getByRole('menuitem', { name: /Supprimer/ })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    )
-    await expect(page.getByRole('menuitem', { name: /Supprimer/ })).toContainText(
-      'C’est ton compte',
-    )
-  })
-
-  test('supprime un compte après confirmation, et annuler ne supprime rien', async ({ page }) => {
-    const received = await fakeBack(page)
-    await page.goto('/admin/utilisateurs')
-    const more = () =>
-      rowOf(page, 'jamais@exemple.test').getByRole('button', {
-        name: 'Plus d’actions pour jamais@exemple.test',
-      })
-
-    await more().click()
-    await page.getByRole('menuitem', { name: 'Supprimer' }).click()
-    await expect(page.getByRole('dialog')).toContainText('irréversible')
-    await shot(page, 'confirmation')
-    await page.getByRole('button', { name: 'Annuler' }).click()
-    await expect(page.getByRole('dialog')).toHaveCount(0)
-    await expect(rowOf(page, 'jamais@exemple.test')).toBeVisible()
-    expect(received.filter((call) => call.startsWith('DELETE'))).toEqual([])
-
-    await more().click()
-    await page.getByRole('menuitem', { name: 'Supprimer' }).click()
-    await page.getByRole('dialog').getByRole('button', { name: 'Supprimer' }).click()
-
-    await expect(rowOf(page, 'jamais@exemple.test')).toHaveCount(0)
-    await expect(page.getByRole('main')).toContainText('4 comptes')
-    expect(received).toContain('DELETE /api/v1/users/u5')
-  })
-
-  test('les puces filtrent les comptes', async ({ page }) => {
-    await fakeBack(page)
-    await page.goto('/admin/utilisateurs')
-    const chip = (name: string) => page.getByRole('button', { name })
-
-    await expect(chip('Tous')).toHaveAttribute('aria-pressed', 'true')
-    await chip('Actifs (3)').click()
-    await expect(page.getByRole('listitem')).toHaveCount(3)
-    await expect(chip('Actifs (3)')).toHaveAttribute('aria-pressed', 'true')
-    await expect(chip('Tous')).toHaveAttribute('aria-pressed', 'false')
-    await shot(page, 'filtre-actifs')
-
-    await chip('Désactivés (1)').click()
-    await expect(page.getByRole('listitem')).toHaveCount(1)
-    await expect(page.getByRole('listitem')).toContainText('ancien@exemple.test')
-
-    await chip('En attente (1)').click()
-    await expect(page.getByRole('listitem')).toContainText('nouveau@exemple.test')
-  })
-
-  test('pas de défilement horizontal, cibles de 44 px', async ({ page }) => {
-    await fakeBack(page)
-    await page.goto('/admin/utilisateurs')
-    await expect(page.getByRole('listitem').first()).toBeVisible()
-
+    // La mise en page (elle ne dépend pas du thème) : rien ne déborde, chaque bouton se touche du pouce
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     )
@@ -284,28 +136,19 @@ test.describe('administration des utilisateurs', { tag: BUREAU }, () => {
       expect(box?.height).toBeGreaterThanOrEqual(43.5)
       expect(box?.width).toBeGreaterThanOrEqual(43.5)
     }
-  })
+    await axeBothThemes(page, 'admin-utilisateurs')
 
-  for (const colorScheme of ['light', 'dark'] as const) {
-    test(`la vue est accessible (WCAG AA), thème ${colorScheme}`, async ({ page }) => {
-      await fakeBack(page, colorScheme)
-      await page.goto('/admin/utilisateurs')
-      await expect(page.getByRole('listitem').first()).toBeVisible()
-      const scan = () =>
-        new AxeBuilder({ page })
-          .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-          .exclude('.vue-devtools__anchor-btn')
-          .analyze()
-
-      expect((await scan()).violations).toEqual([])
-      await shot(page, `vue-${colorScheme}`)
-
-      await rowOf(page, 'jamais@exemple.test')
-        .getByRole('button', { name: /Plus d’actions/ })
-        .click()
-      await expect(page.getByRole('menu')).toBeVisible()
-      expect((await scan()).violations).toEqual([])
-      await shot(page, `menu-${colorScheme}`)
+    // Le menu « Plus d'actions » s'ouvre au clavier (vrai focus, vraie touche Entrée) sur ses trois actions
+    const more = rowOf(page, 'jamais@exemple.test').getByRole('button', {
+      name: 'Plus d’actions pour jamais@exemple.test',
     })
-  }
+    await more.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('menuitem')).toHaveText([
+      'Mettre en attente',
+      'Désactiver',
+      'Supprimer',
+    ])
+    await axeBothThemes(page, 'admin-utilisateurs-menu')
+  })
 })

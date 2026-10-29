@@ -1,21 +1,11 @@
 // La première lettre d'un nom de recette ou d'ingrédient passe en majuscule dès qu'elle est tapée, et le nom envoyé au back l'a toujours,
-// sans back ni compte : l'API est simulée par `page.route`. Le reste du nom reste tel qu'il est tapé ; un champ de recherche n'est pas touché.
-// Jouée au téléphone (390 px), en clair et en sombre, axe sans violation. `E2E_SHOTS=<dossier>` garde des captures.
-import AxeBuilder from '@axe-core/playwright'
+// sans back ni compte : l'API est simulée par `page.route`. Deux tests au téléphone (Pixel 7), chacun dans les DEUX thèmes de la même
+// visite (axe WCAG AA, contraste compris) : « créer une recette » (le seul parcours de création d'une recette avec un faux back en CI :
+// frappe réelle, ingrédient, quantité, enregistrer, redirection) et « un ingrédient » (vrai clavier, vrai curseur de Chromium, que jsdom
+// ne rejoue pas). La règle (majuscule, texte collé, curseur par `setSelectionRange`, recherche non touchée) est dans `UiTextInput.spec.ts`,
+// `UiSearchField.spec.ts`, `RecipeEditor.spec.ts` et `Ingredients.spec.ts`. `E2E_SHOTS=<dossier>` garde une capture de chaque thème.
 import { expect, test, type Page } from './support/test'
-
-const shots = process.env.E2E_SHOTS
-
-async function shot(page: Page, name: string) {
-  if (shots === undefined) return
-  await page.screenshot({ path: `${shots}/${name}.png`, fullPage: true })
-}
-
-const scan = (page: Page) =>
-  new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    .exclude('.vue-devtools__anchor-btn')
-    .analyze()
+import { axeBothThemes } from './support/screen'
 
 const detail = {
   id: 'r1',
@@ -79,13 +69,6 @@ async function fakeBack(page: Page) {
         return route.fulfill({ status: 201, headers: { Location: '/api/v1/ingredients/oeufs' } })
       if (url.pathname.endsWith('/ingredients') && url.pathname.startsWith('/api/v1/departments/'))
         return reply({ member: [], totalItems: 0 })
-      if (key === 'GET /api/v1/recipes/other-people')
-        return reply({
-          member: [
-            { id: 'a1', name: 'Velouté de potimarron', typeName: 'entrée', typeSlug: 'entree' },
-          ],
-          totalItems: 1,
-        })
       if (key === 'GET /api/v1/ingredients/to-fix') return reply({ member: [], totalItems: 0 })
 
       return reply({ error: { message: `Appel non prévu : ${key}` } }, 500)
@@ -95,80 +78,54 @@ async function fakeBack(page: Page) {
   return { sent }
 }
 
-for (const colorScheme of ['light', 'dark'] as const) {
-  test.describe(`première lettre en majuscule, thème ${colorScheme}`, () => {
-    test.beforeEach(async ({ page }) => {
-      await page.emulateMedia({ colorScheme })
-    })
+test('créer une recette : le nom tapé en minuscules passe en majuscule, et la recette part ainsi', async ({
+  page,
+}) => {
+  const back = await fakeBack(page)
+  await page.goto('/recettes/nouvelle')
+  const name = page.getByLabel('Nom de la recette')
 
-    test('une recette : le nom tapé en minuscules passe en majuscule, et part ainsi', async ({
-      page,
-    }) => {
-      const back = await fakeBack(page)
-      await page.goto('/recettes/nouvelle')
-      const name = page.getByLabel('Nom de la recette')
+  await name.pressSequentially('pâtes carbonara')
+  await expect(name).toHaveValue('Pâtes carbonara')
+  await axeBothThemes(page, 'recette-nom')
 
-      await name.pressSequentially('pâtes carbonara')
-      await expect(name).toHaveValue('Pâtes carbonara')
-      await shot(page, `recette-${colorScheme}`)
-      expect((await scan(page)).violations).toEqual([])
+  await page.getByLabel('Nombre de personnes').fill('4')
+  await page.getByRole('combobox', { name: 'Ingrédient 1', exact: true }).fill('sel')
+  await page.getByRole('option', { name: 'Sel', exact: true }).click()
+  await page.getByLabel("Quantité de l'ingrédient 1").fill('5')
+  await expect(page.getByLabel("Unité de l'ingrédient 1")).not.toHaveValue('')
+  await page.getByRole('button', { name: 'Enregistrer' }).click()
 
-      await page.getByLabel('Nombre de personnes').fill('4')
-      await page.getByRole('combobox', { name: 'Ingrédient 1', exact: true }).fill('sel')
-      await page.getByRole('option', { name: 'Sel', exact: true }).click()
-      await page.getByLabel("Quantité de l'ingrédient 1").fill('5')
-      await expect(page.getByLabel("Unité de l'ingrédient 1")).not.toHaveValue('')
-      await page.getByRole('button', { name: 'Enregistrer' }).click()
-
-      await expect(page).toHaveURL(/\/recettes\/r1$/)
-      expect(back.sent.find((call) => call.key === 'POST /api/v1/recipes')?.body).toMatchObject({
-        name: 'Pâtes carbonara',
-      })
-    })
-
-    test('un ingrédient : « œufs » devient « Œufs », le curseur reste où il était', async ({
-      page,
-    }) => {
-      const back = await fakeBack(page)
-      await page.goto('/ingredients/nouveau?rayon=epicerie')
-      const name = page.getByLabel("Nom de l'ingrédient")
-
-      await name.pressSequentially('œufs de caille')
-      await expect(name).toHaveValue('Œufs de caille')
-
-      // Une lettre ajoutée au milieu : rien ne saute, et la suite du nom n'est pas touchée
-      await name.press('Home')
-      await name.press('ArrowRight')
-      await name.press('ArrowRight')
-      await name.pressSequentially('X')
-      await expect(name).toHaveValue('ŒuXfs de caille')
-      await name.fill('')
-      await name.pressSequentially('éclair')
-      await expect(name).toHaveValue('Éclair')
-      await shot(page, `ingredient-${colorScheme}`)
-      expect((await scan(page)).violations).toEqual([])
-
-      await page.getByRole('button', { name: 'Enregistrer' }).click()
-      await expect(page).toHaveURL(/\/rayons\/epicerie$/)
-      expect(back.sent.find((call) => call.key === 'POST /api/v1/ingredients')?.body).toMatchObject(
-        { name: 'Éclair' },
-      )
-    })
-
-    test("coller un nom en minuscules le met en majuscule ; une recherche n'est pas touchée", async ({
-      page,
-    }) => {
-      await fakeBack(page)
-      await page.goto('/ingredients/nouveau?rayon=epicerie')
-      const name = page.getByLabel("Nom de l'ingrédient")
-
-      await name.fill('de la farine T55')
-      await expect(name).toHaveValue('De la farine T55')
-
-      await page.goto('/recettes/autres')
-      const search = page.getByRole('searchbox')
-      await search.fill('pâtes')
-      await expect(search).toHaveValue('pâtes')
-    })
+  await expect(page).toHaveURL(/\/recettes\/r1$/)
+  expect(back.sent.find((call) => call.key === 'POST /api/v1/recipes')?.body).toMatchObject({
+    name: 'Pâtes carbonara',
   })
-}
+})
+
+test('un ingrédient : « œufs » devient « Œufs », le curseur reste où il était', async ({
+  page,
+}) => {
+  const back = await fakeBack(page)
+  await page.goto('/ingredients/nouveau?rayon=epicerie')
+  const name = page.getByLabel("Nom de l'ingrédient")
+
+  await name.pressSequentially('œufs de caille')
+  await expect(name).toHaveValue('Œufs de caille')
+
+  // Une lettre ajoutée au milieu : rien ne saute, et la suite du nom n'est pas touchée
+  await name.press('Home')
+  await name.press('ArrowRight')
+  await name.press('ArrowRight')
+  await name.pressSequentially('X')
+  await expect(name).toHaveValue('ŒuXfs de caille')
+  await name.fill('')
+  await name.pressSequentially('éclair')
+  await expect(name).toHaveValue('Éclair')
+  await axeBothThemes(page, 'ingredient-nom')
+
+  await page.getByRole('button', { name: 'Enregistrer' }).click()
+  await expect(page).toHaveURL(/\/rayons\/epicerie$/)
+  expect(back.sent.find((call) => call.key === 'POST /api/v1/ingredients')?.body).toMatchObject({
+    name: 'Éclair',
+  })
+})
