@@ -16,6 +16,8 @@ const external = process.env.E2E_BASE_URL
 const visual = Boolean(process.env.E2E_VISUAL)
 const prod = process.env.E2E_PROD_URL
 const offlineSpec = /offline\.spec\.ts/
+// E2E_PORT change le port du serveur de la suite (deux suites côte à côte, par exemple dans deux copies de travail) ; par défaut 4173 en CI, 5173 en local.
+const port = Number(process.env.E2E_PORT) || (process.env.CI ? 4173 : 5173)
 
 export default defineConfig({
   testDir: './e2e',
@@ -32,7 +34,7 @@ export default defineConfig({
   workers: external ? 1 : process.env.CI ? 4 : undefined,
   reporter: [process.env.CI ? ['github'] : ['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: external ?? (process.env.CI ? 'http://localhost:4173' : 'http://localhost:5173'),
+    baseURL: external ?? `http://localhost:${port}`,
     trace: visual ? 'on' : 'on-first-retry',
     screenshot: visual ? 'on' : 'only-on-failure',
     video: visual ? 'on' : 'retain-on-failure',
@@ -63,8 +65,10 @@ export default defineConfig({
   webServer: external
     ? undefined
     : {
-        command: process.env.CI ? 'npm run preview -- --port 4173 --strictPort' : 'npm run dev',
-        port: process.env.CI ? 4173 : 5173,
+        command: process.env.CI
+          ? `npm run preview -- --port ${port} --strictPort`
+          : `npm run dev -- --port ${port} --strictPort`,
+        port,
         reuseExistingServer: !process.env.CI,
       },
 })
