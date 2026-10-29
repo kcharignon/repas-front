@@ -1,5 +1,6 @@
 import { driveBridge } from '@/features/drive/bridge'
 import { useDriveReturnStore } from '@/features/drive/returnStore'
+import { useCopiedRecipesStore } from '@/features/recipes/copiedRecipes'
 import { eraseOfflineCopy } from '@/offline/offlineCopy'
 
 /**
@@ -14,5 +15,6 @@ import { eraseOfflineCopy } from '@/offline/offlineCopy'
 export function forgetAccountData() {
   driveBridge.clearDraft()
   useDriveReturnStore().clear()
+  useCopiedRecipesStore().clear()
   eraseOfflineCopy()
 }

@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
 import { appContext, calls, json, me, stubApi } from '@/__tests__/helpers'
+import { useNotificationsStore } from '@/notifications/store'
+import { useCopiedRecipesStore } from '@/features/recipes/copiedRecipes'
 import OtherRecipesView from '@/features/recipes/OtherRecipesView.vue'
 import RecipeDetailView from '@/features/recipes/RecipeDetailView.vue'
 import RecipesView from '@/features/recipes/RecipesView.vue'
@@ -252,21 +254,15 @@ describe('OtherRecipesView', () => {
     totalItems: 1,
   }
 
-  it('liste les recettes à copier et ouvre la copie', async () => {
-    const fetchMock = stubApi({
-      ...session,
-      'GET /api/v1/recipes/other-people': () => json(others),
-      'POST /api/v1/recipes/o1/copy': () =>
-        new Response(null, { status: 201, headers: { Location: '/api/v1/recipes/copie-1' } }),
-    })
+  it('liste les recettes à copier, chacune avec son bouton « Copier »', async () => {
+    stubApi({ ...session, 'GET /api/v1/recipes/other-people': () => json(others) })
     const context = await signedIn('/recettes/autres')
     const wrapper = mount(OtherRecipesView, { global: { plugins: context.plugins } })
     await vi.waitFor(() => expect(wrapper.text()).toContain('Ramen'))
 
-    await wrapper.find('button[aria-label="Copier Ramen dans mes recettes"]').trigger('click')
-    await vi.waitFor(() => expect(context.router.currentRoute.value.params.id).toBe('copie-1'))
-
-    expect(calls(fetchMock)).toContain('POST /api/v1/recipes/o1/copy')
+    expect(wrapper.find('button[aria-label="Copier Ramen dans mes recettes"]').text()).toBe(
+      'Copier',
+    )
   })
 
   it('charge la page suivante par « Voir plus » quand le total dépasse ce qui est affiché', async () => {
@@ -337,7 +333,11 @@ describe('RecipeDetailView', () => {
     document.body.innerHTML = ''
   })
 
-  const open = async (mineIds: string[], handlers: Parameters<typeof stubApi>[0] = {}) => {
+  const open = async (
+    mineIds: string[],
+    handlers: Parameters<typeof stubApi>[0] = {},
+    beforeMount: () => void = () => {},
+  ) => {
     const fetchMock = stubApi({
       ...session,
       'GET /api/v1/recipes/r1': () => json(recipe),
@@ -346,6 +346,7 @@ describe('RecipeDetailView', () => {
       ...handlers,
     })
     const context = await signedIn('/recettes/r1')
+    beforeMount()
     const wrapper = mount(RecipeDetailView, {
       attachTo: document.body,
       global: { plugins: context.plugins },
@@ -370,6 +371,127 @@ describe('RecipeDetailView', () => {
     const { wrapper } = await open([])
 
     expect(wrapper.findAll('li img')).toHaveLength(0)
+  })
+
+  const buttonNames = (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
+    wrapper.findAll('main button, main a[href*="modifier"]').map((node) => node.text())
+  const copyButton = (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
+    wrapper.find('button[aria-label="Copier Gratin de courgettes dans mes recettes"]')
+  const planButton = (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
+    wrapper.find('button[aria-label="Ajouter Gratin de courgettes à la liste de courses"]')
+  const copyRoute = {
+    'POST /api/v1/recipes/r1/copy': () =>
+      new Response(null, { status: 201, headers: { Location: '/api/v1/recipes/copie-1' } }),
+  }
+
+  it('à soi : ajouter à la liste, modifier et supprimer, jamais « Copier »', async () => {
+    const { wrapper } = await open(['r1'])
+    await vi.waitFor(() => expect(planButton(wrapper).exists()).toBe(true))
+
+    expect(buttonNames(wrapper)).toEqual(['Ajouter', 'Modifier', 'Supprimer'])
+    expect(copyButton(wrapper).exists()).toBe(false)
+    expect(wrapper.find('main > a').attributes('href')).toBe('/recettes')
+  })
+
+  it("d'un autre : « Copier » seulement, ni ajout à la liste, ni modifier, ni supprimer", async () => {
+    const { wrapper } = await open([])
+    await vi.waitFor(() => expect(copyButton(wrapper).exists()).toBe(true))
+
+    expect(buttonNames(wrapper)).toEqual(['Copier'])
+    expect(planButton(wrapper).exists()).toBe(false)
+    // Le lien de retour ramène à « Recettes des autres »
+    expect(wrapper.find('main > a').attributes('href')).toBe('/recettes/autres')
+    expect(wrapper.find('main > a').text()).toBe('Recettes des autres')
+  })
+
+  it("d'un autre : copier reste sur la fiche, le dit, et grise « Copiée »", async () => {
+    const { wrapper, context, fetchMock } = await open([], copyRoute)
+    await vi.waitFor(() => expect(copyButton(wrapper).exists()).toBe(true))
+
+    const push = vi.spyOn(context.router, 'push')
+    await copyButton(wrapper).trigger('click')
+    await vi.waitFor(() =>
+      expect(
+        wrapper
+          .find('button[aria-label="Copiée : Gratin de courgettes est dans tes recettes"]')
+          .exists(),
+      ).toBe(true),
+    )
+
+    expect(calls(fetchMock).filter((call) => call === 'POST /api/v1/recipes/r1/copy')).toHaveLength(
+      1,
+    )
+    expect(push).not.toHaveBeenCalled()
+    expect(context.router.currentRoute.value.name).toBe('recipe')
+    expect(context.router.currentRoute.value.params.id).toBe('r1')
+    expect(useNotificationsStore().items.map((item) => [item.kind, item.text])).toEqual([
+      ['success', '« Gratin de courgettes » est dans tes recettes.'],
+    ])
+    const done = wrapper.find('button[aria-label^="Copiée"]')
+    expect(done.text()).toBe('Copiée')
+    expect(done.attributes('disabled')).toBeDefined()
+    expect(copyButton(wrapper).exists()).toBe(false)
+    expect(planButton(wrapper).exists()).toBe(false)
+  })
+
+  it("d'un autre : un refus du back laisse « Copier » et ne dit pas que c'est copié", async () => {
+    const { wrapper } = await open([], {
+      'POST /api/v1/recipes/r1/copy': () => json({ error: { message: 'x' } }, { status: 500 }),
+    })
+    await vi.waitFor(() => expect(copyButton(wrapper).exists()).toBe(true))
+
+    await copyButton(wrapper).trigger('click')
+    await vi.waitFor(() =>
+      expect(useNotificationsStore().items.map((item) => item.kind)).toEqual(['error']),
+    )
+
+    expect(copyButton(wrapper).attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('button[aria-label^="Copiée"]').exists()).toBe(false)
+    expect(useCopiedRecipesStore().has('r1')).toBe(false)
+  })
+
+  it("d'un autre : « Copiée » dès l'ouverture quand la liste vient de la copier", async () => {
+    const { wrapper } = await open([], {}, () => useCopiedRecipesStore().add('r1'))
+
+    await vi.waitFor(() => expect(wrapper.find('button[aria-label^="Copiée"]').exists()).toBe(true))
+
+    expect(copyButton(wrapper).exists()).toBe(false)
+  })
+
+  it('propriété inconnue (ses recettes pas encore lues) : aucune action, puis le bon jeu', async () => {
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    const { wrapper } = await open(['r1'], {
+      'GET /api/v1/recipe-types/plat/recipes': async () => {
+        await gate
+
+        return json({ member: [{ id: 'r1', name: 'x' }], totalItems: 1 })
+      },
+    })
+
+    // La recette est affichée, la liste des siennes ne l'est pas encore : rien à cliquer, et la place est réservée
+    expect(wrapper.find('h1').text()).toBe('Gratin de courgettes')
+    expect(buttonNames(wrapper)).toEqual([])
+    expect(wrapper.find('main > div.min-h-11').exists()).toBe(true)
+    expect(wrapper.find('main > a').attributes('href')).toBe('/recettes')
+
+    release()
+    await vi.waitFor(() =>
+      expect(buttonNames(wrapper)).toEqual(['Ajouter', 'Modifier', 'Supprimer']),
+    )
+  })
+
+  it('propriété inconnue (ses recettes en erreur) : aucune action, ni « Copier » ni « Ajouter »', async () => {
+    const { wrapper, fetchMock } = await open([], {
+      'GET /api/v1/recipe-types/plat/recipes': () =>
+        json({ error: { message: 'x' } }, { status: 500 }),
+    })
+    await vi.waitFor(() =>
+      expect(calls(fetchMock)).toContain('GET /api/v1/recipe-types/plat/recipes'),
+    )
+    await flushPromises()
+
+    expect(buttonNames(wrapper)).toEqual([])
   })
 
   it("ne propose de supprimer qu'une recette à soi", async () => {

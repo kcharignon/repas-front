@@ -74,12 +74,21 @@ test.describe('recettes', () => {
     await expect(page.getByRole('listitem').filter({ hasText: /œuf|oeuf/i })).toBeVisible()
   })
 
-  test("copier la recette d'un autre l'ajoute à ses recettes", async ({ page }) => {
+  test("copier la recette d'un autre l'ajoute à ses recettes, sans quitter la liste", async ({
+    page,
+  }) => {
     await signIn(page, '/recettes/autres')
     await page.getByRole('button', { name: 'Copier Pâtes carbonara dans mes recettes' }).click()
 
-    await expect(page.getByRole('heading', { level: 1, name: 'Pâtes carbonara' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Supprimer' })).toBeVisible()
+    await expect(page.getByText('« Pâtes carbonara » est dans tes recettes.')).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: 'Copiée : Pâtes carbonara est dans tes recettes' }),
+    ).toBeDisabled()
+    await expect(page).toHaveURL(/\/recettes\/autres$/)
+
+    // La copie est bien dans ses recettes (le back la supprime en fin de test)
+    await page.goto('/recettes?type=plat')
+    await expect(page.getByRole('link', { name: 'Pâtes carbonara' })).toBeVisible()
   })
 
   for (const colorScheme of ['light', 'dark'] as const) {

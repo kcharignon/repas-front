@@ -2,7 +2,7 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { TriangleAlert } from 'lucide-vue-next'
+import { Check, Copy, TriangleAlert } from 'lucide-vue-next'
 
 import { hasFailed } from '@/api/query'
 import { ApiError } from '@/api'
@@ -18,6 +18,7 @@ import { useUnits } from '@/features/ingredients/queries'
 import { formatQuantity } from '@/features/shopping-lists/format'
 import PlanButton from './PlanButton.vue'
 import { useDeleteRecipe, useRecipe, useRecipesByType } from './queries'
+import { useCopyRecipeAction } from './useCopyRecipeAction'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -27,11 +28,20 @@ const recipe = useRecipe(() => String(route.params.id))
 const mine = useRecipesByType(() => recipe.data.value?.typeSlug ?? null)
 const remove = useDeleteRecipe()
 
-// Le détail d'une recette est lisible par tous ; on ne propose de la modifier ou de la supprimer que si elle est à soi
-// (le back refuse de toute façon : 403).
-const isMine = computed(
-  () => mine.data.value?.member?.some((candidate) => candidate.id === route.params.id) === true,
-)
+// Le détail d'une recette est lisible par tous, mais le contrat ne dit pas à qui elle est : on le déduit de la liste de SES recettes
+// du même type. Tant qu'elle n'est pas lue (ou en erreur) on ne sait pas : `unknown`, et la zone des actions reste vide (réservée,
+// sans saut de mise en page) au lieu de proposer un jeu d'actions qui changerait aussitôt.
+//  - `mine` : Ajouter à la liste, Modifier, Supprimer (le back refuse de toute façon les écritures d'un autre : 403) ;
+//  - `other` : « Copier » seulement. Pas d'ajout à la liste : on copie d'abord, puis on planifie sa propre recette.
+type Ownership = 'mine' | 'other' | 'unknown'
+const ownership = computed<Ownership>(() => {
+  const members = mine.data.value?.member
+  if (members === undefined) return 'unknown'
+
+  return members.some((candidate) => candidate.id === route.params.id) ? 'mine' : 'other'
+})
+const isMine = computed(() => ownership.value === 'mine')
+const copying = useCopyRecipeAction()
 const deleting = ref(false)
 
 // Un ingrédient que le back ne sait pas convertir dans son unité d'achat (`convertible` faux) : repéré sur sa ligne, et réglé ici par
@@ -117,8 +127,12 @@ function confirmDelete() {
 
 <template>
   <main class="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-6">
-    <RouterLink :to="{ name: 'recipes' }" class="self-start font-bold text-primary underline">
-      {{ t('recipes.title') }}
+    <!-- Venu de « Recettes des autres » par le nom : le lien de retour y ramène -->
+    <RouterLink
+      :to="{ name: ownership === 'other' ? 'recipes-others' : 'recipes' }"
+      class="self-start font-bold text-primary underline"
+    >
+      {{ ownership === 'other' ? t('recipes.othersTitle') : t('recipes.title') }}
     </RouterLink>
 
     <template v-if="recipe.data.value">
@@ -142,23 +156,43 @@ function confirmDelete() {
         </header>
       </div>
 
-      <div class="flex flex-wrap gap-2">
-        <PlanButton
-          :recipe-id="recipe.data.value.id"
-          :name="recipe.data.value.name"
-          :blocked="blocked"
-          describedby="plan-blocked-hint"
-        />
-        <UiLinkButton
-          v-if="isMine"
-          variant="secondary"
-          :to="{ name: 'recipe-edit', params: { id: recipe.data.value.id } }"
-        >
-          {{ t('recipes.edit') }}
-        </UiLinkButton>
-        <UiButton v-if="isMine" variant="ghost" @click="deleting = true">{{
-          t('common.delete')
-        }}</UiButton>
+      <!-- La place des actions est réservée même quand on ne sait pas encore à qui est la recette -->
+      <div class="flex min-h-11 flex-wrap gap-2" :aria-busy="ownership === 'unknown'">
+        <template v-if="ownership === 'mine'">
+          <PlanButton
+            :recipe-id="recipe.data.value.id"
+            :name="recipe.data.value.name"
+            :blocked="blocked"
+            describedby="plan-blocked-hint"
+          />
+          <UiLinkButton
+            variant="secondary"
+            :to="{ name: 'recipe-edit', params: { id: recipe.data.value.id } }"
+          >
+            {{ t('recipes.edit') }}
+          </UiLinkButton>
+          <UiButton variant="ghost" @click="deleting = true">{{ t('common.delete') }}</UiButton>
+        </template>
+        <template v-else-if="ownership === 'other'">
+          <UiButton
+            v-if="copying.isCopied(recipe.data.value.id)"
+            variant="ghost"
+            class="bg-soft text-primary disabled:opacity-100"
+            :aria-label="t('recipes.copiedNamed', { name: recipe.data.value.name })"
+            disabled
+          >
+            <Check class="size-5" aria-hidden="true" />{{ t('recipes.copied') }}
+          </UiButton>
+          <UiButton
+            v-else
+            variant="secondary"
+            :aria-label="t('recipes.copyNamed', { name: recipe.data.value.name })"
+            :disabled="copying.pending.value"
+            @click="copying.copy(recipe.data.value)"
+          >
+            <Copy class="size-5" aria-hidden="true" />{{ t('recipes.copy') }}
+          </UiButton>
+        </template>
       </div>
 
       <p
