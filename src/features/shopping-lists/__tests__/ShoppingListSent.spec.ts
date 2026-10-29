@@ -523,38 +523,54 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
 
   const tooOldSentence = 'Mets à jour l’application pour envoyer ta liste.'
 
-  // Une application `silent` ne répond jamais à `app.info` : le pont abandonne après son délai (INFO_TIMEOUT_MS), joué avec de fausses minuteries
-  it.each([['0.1.9'], ['0.0.9'], ['silent'], ['pas-une-version']])(
+  /** L'envoi demandé avec une application trop ancienne : la phrase et son bouton, ni verrou ni confirmation (`beforeSentence` : ce qui se passe avant la réponse). */
+  async function sendWithOldApp(app: string, beforeSentence?: () => Promise<void>) {
+    const { fetchMock, context } = await openActive(
+      { 'POST /api/v1/shopping-lists/l1/send': noContent },
+      detail('ACTIVE'),
+      true,
+      '/liste',
+      app,
+    )
+    await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+
+    button('Envoyer au drive')?.click()
+    await beforeSentence?.()
+    await vi.waitFor(() => expect(body().textContent).toContain(tooOldSentence))
+
+    expect(body().textContent).not.toContain('La liste ne sera plus modifiable')
+    const update = body().querySelector('[role="dialog"] a[href="/drive/aide"]')
+    expect(update?.textContent.trim()).toBe('Mettre à jour')
+    expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/send')
+    expect(context.router.currentRoute.value.name).not.toBe('drive-settings')
+    // La liste reste modifiable : le bouton est de nouveau disponible
+    await vi.waitFor(() => expect(button('Envoyer au drive')?.disabled).toBe(false))
+
+    return fetchMock
+  }
+
+  it.each([['0.1.9'], ['0.0.9'], ['pas-une-version']])(
     'application %s : ni verrou ni confirmation, la phrase de mise à jour et son bouton (DRV-641)',
     async (app) => {
-      if (app === 'silent') vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-      const { fetchMock, context } = await openActive(
-        { 'POST /api/v1/shopping-lists/l1/send': noContent },
-        detail('ACTIVE'),
-        true,
-        '/liste',
-        app,
-      )
-      await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+      const fetchMock = await sendWithOldApp(app)
 
-      button('Envoyer au drive')?.click()
-      if (app === 'silent') {
-        // Tant que le délai court, le bouton attend la réponse : grisé, ni confirmation ni phrase
-        await vi.advanceTimersByTimeAsync(INFO_TIMEOUT_MS - 500)
-        expect(body().textContent).not.toContain(tooOldSentence)
-        await vi.advanceTimersByTimeAsync(500)
-      }
-      await vi.waitFor(() => expect(body().textContent).toContain(tooOldSentence))
-
-      expect(body().textContent).not.toContain('La liste ne sera plus modifiable')
-      const update = body().querySelector('[role="dialog"] a[href="/drive/aide"]')
-      expect(update?.textContent.trim()).toBe('Mettre à jour')
-      expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/send')
-      expect(context.router.currentRoute.value.name).not.toBe('drive-settings')
-      // La liste reste modifiable : le bouton est de nouveau disponible
-      await vi.waitFor(() => expect(button('Envoyer au drive')?.disabled).toBe(false))
+      expect(requests(fetchMock, 'POST', '/send')).toHaveLength(0)
     },
   )
+
+  // Une application muette ne répond jamais à `app.info` : le pont abandonne après son délai (INFO_TIMEOUT_MS), joué avec de fausses minuteries
+  it('application muette : le bouton attend la réponse, puis ni verrou ni confirmation, la phrase de mise à jour et son bouton (DRV-641)', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+
+    const fetchMock = await sendWithOldApp('silent', async () => {
+      // Tant que le délai court, rien n'est dit : ni phrase, ni confirmation
+      await vi.advanceTimersByTimeAsync(INFO_TIMEOUT_MS - 500)
+      expect(body().textContent).not.toContain(tooOldSentence)
+      await vi.advanceTimersByTimeAsync(500)
+    })
+
+    expect(requests(fetchMock, 'POST', '/send')).toHaveLength(0)
+  })
 
   it('pendant la lecture de la version, le bouton est grisé et rien n’est enregistré', async () => {
     const { fetchMock } = await openActive(

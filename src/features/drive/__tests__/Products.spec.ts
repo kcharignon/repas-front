@@ -299,9 +299,11 @@ describe('Mes produits : un ingrédient', () => {
     await press(wrapper, 'Descendre')
     expect(acceptedLabels(wrapper)).toEqual([B.label, A.label])
     expect(wrapper.text()).toContain('Modifications non enregistrées')
-    // Le focus suit le bouton déplacé, et la modification est annoncée
+    // La modification est annoncée, et le focus suit le produit déplacé : son bouton « Monter » (le texte de <body> contient « Monter » aussi)
     expect(wrapper.find('[role="status"]').text()).toContain('position 2 sur 2')
-    expect(document.activeElement?.textContent).toContain('Monter')
+    const focused = document.activeElement as HTMLElement
+    expect(focused.getAttribute('data-action')).toBe('up')
+    expect(focused.closest('li')?.getAttribute('data-product')).toBe(A.productId)
 
     await press(wrapper, 'Enregistrer')
 
