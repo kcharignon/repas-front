@@ -1,5 +1,5 @@
 // La politique de confidentialité publique, `/confidentialite` (STORE-010), sans back ni compte : donnée à Google Play et à Amazon (skill Alexa).
-// Jouée sur bureau et sur Pixel 7 ; captures à 412 et 360 px, thèmes clair et sombre ; le lien discret de l'écran de connexion.
+// Jouée sur le téléphone (Pixel 7) ; le bureau seulement pour les tests étiquetés (playwright.config.ts) ; captures à 412 et 360 px, thèmes clair et sombre ; le lien discret de l'écran de connexion.
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from './support/test'
 import type { Page } from '@playwright/test'

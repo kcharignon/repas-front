@@ -6,7 +6,7 @@
 //  - la seconde joue le parcours complet contre le VRAI back et sa boîte de développement Mailpit (`make e2e`).
 // Aucune vraie adresse : uniquement `@example.com`, et les comptes et messages du test sont supprimés à la fin.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from './support/test'
+import { expect, test, viewportTag } from './support/test'
 import type { APIRequestContext, Page } from '@playwright/test'
 
 import { apiToken, hasSession } from './support/session'
@@ -273,7 +273,7 @@ const viewports = [
 ]
 
 for (const { label, size } of viewports) {
-  test.describe(`inscription par l’adresse, ${label}`, () => {
+  test.describe(`inscription par l’adresse, ${label}`, { tag: viewportTag(size) }, () => {
     test.use({ viewport: size })
 
     for (const colorScheme of ['light', 'dark'] as const) {
@@ -376,10 +376,8 @@ test.describe('inscription par l’adresse, avec le back', () => {
   test('adresse seule, connexion impossible, lien de bienvenue, mot de passe choisi, connexion', async ({
     page,
     request,
-  }, testInfo) => {
-    // Le back plafonne les inscriptions (10 par heure et par IP) : un seul projet joue le parcours.
-    // eslint-disable-next-line playwright/no-skipped-test
-    test.skip(testInfo.project.name !== 'chromium', 'jouer le parcours une fois suffit')
+  }) => {
+    // Le back plafonne les inscriptions (10 par heure et par IP) : ce parcours n’est joué qu’une fois (sur le téléphone).
     const address = `e2e-${Date.now()}@example.com`
     const password = 'Un mot de passe 1 solide!'
 

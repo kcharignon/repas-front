@@ -1,7 +1,7 @@
 // Administration des unités (DRV-409), sans back ni compte : l'API est simulée par `page.route`, avec une unité qui garde ce qu'on y
-// enregistre. Jouée sur bureau et sur Pixel 7 : dimension et facteur de base, accessibilité (axe) en thème clair et sombre.
+// enregistre. Jouée sur le téléphone (le bureau : tests étiquetés, playwright.config.ts) : dimension et facteur de base, accessibilité (axe) en thème clair et sombre.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page, type Route } from './support/test'
+import { expect, test, type Page, type Route, BUREAU } from './support/test'
 
 type Unit = {
   slug: string
@@ -117,17 +117,19 @@ test('l’administrateur renseigne la dimension et le facteur d’une unité, l�
 })
 
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`la liste et le formulaire des unités sont accessibles, thème ${colorScheme}`, async ({
-    page,
-  }) => {
-    await fakeBack(page)
-    await page.emulateMedia({ colorScheme })
-    await page.goto('/admin/unites')
-    await expect(page.getByRole('listitem').filter({ hasText: 'Kilo' })).toBeVisible()
-    expect((await scan(page)).violations).toEqual([])
+  test(
+    `la liste et le formulaire des unités sont accessibles, thème ${colorScheme}`,
+    { tag: BUREAU },
+    async ({ page }) => {
+      await fakeBack(page)
+      await page.emulateMedia({ colorScheme })
+      await page.goto('/admin/unites')
+      await expect(page.getByRole('listitem').filter({ hasText: 'Kilo' })).toBeVisible()
+      expect((await scan(page)).violations).toEqual([])
 
-    await page.getByRole('button', { name: 'Modifier Kilo', exact: true }).click()
-    await expect(page.getByLabel('Facteur de base')).toHaveValue('1000')
-    expect((await scan(page)).violations).toEqual([])
-  })
+      await page.getByRole('button', { name: 'Modifier Kilo', exact: true }).click()
+      await expect(page.getByLabel('Facteur de base')).toHaveValue('1000')
+      expect((await scan(page)).violations).toEqual([])
+    },
+  )
 }

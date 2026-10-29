@@ -1,6 +1,6 @@
 // Les conversions d'un ingrédient, sans back ni compte : l'API est simulée par `page.route`. Deux écrans : la recette dont la farine ne se
 // convertit pas en kilo (la ligne le dit, l'auteur règle sans quitter la page) et la fiche de la farine (ses conversions propres : ajouter,
-// modifier, retirer). Jouée sur bureau et sur Pixel 7, en clair et en sombre, à 390 px de large. `E2E_SHOTS=<dossier>` garde des captures.
+// modifier, retirer). Jouée sur le téléphone (Pixel 7) ; le bureau seulement pour les tests étiquetés (playwright.config.ts), en clair et en sombre, à 390 px de large. `E2E_SHOTS=<dossier>` garde des captures.
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from './support/test'
 

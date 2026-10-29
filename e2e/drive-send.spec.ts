@@ -1,5 +1,5 @@
 // Écran d'envoi au drive (DRV-404), sans back ni compte : l'API est simulée par `page.route`, et le pont natif `repasNative` de
-// l'application par un faux installé avant la page. Données inventées (magasin d'essai, produits de test). Joué sur bureau et Pixel 7.
+// l'application par un faux installé avant la page. Données inventées (magasin d'essai, produits de test). Jouée sur le téléphone (Pixel 7) ; le bureau seulement pour les tests étiquetés (playwright.config.ts).
 import { expect, test } from './support/test'
 
 import { BASE, SUMMARY_12, fakeApp, fakeBack, openArticles, scan } from './support/drive'

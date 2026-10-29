@@ -1,7 +1,7 @@
 // Réglages du drive (DRV-403), sans back ni compte : l'API est simulée (`e2e/support/driveBack.ts`). Hors de l'application Repas : le
-// pont natif est absent, le magasin se saisit à la main. Jouée sur bureau et sur Pixel 7.
+// pont natif est absent, le magasin se saisit à la main. Jouée sur le téléphone (Pixel 7) ; le bureau seulement pour les tests étiquetés (playwright.config.ts).
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page } from './support/test'
+import { expect, test, type Page, BUREAU } from './support/test'
 
 import { fakeDriveBack } from './support/driveBack'
 import { fakeAppForSetup } from './support/setupApp'
@@ -263,27 +263,29 @@ test('le drive coupé : « pas encore activé », sans formulaire', async ({ pag
 })
 
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`les réglages du drive sont accessibles, sans défilement horizontal, thème ${colorScheme}`, async ({
-    page,
-  }) => {
-    await fakeDriveBack(page)
-    await page.emulateMedia({ colorScheme })
+  test(
+    `les réglages du drive sont accessibles, sans défilement horizontal, thème ${colorScheme}`,
+    { tag: BUREAU },
+    async ({ page }) => {
+      await fakeDriveBack(page)
+      await page.emulateMedia({ colorScheme })
 
-    await page.goto('/drive/reglages')
-    await expect(page.getByText('Magasin …456')).toBeVisible()
-    await expect(page.getByText('Articles avec des produits', { exact: true })).toBeVisible()
-    expect((await scan(page)).violations).toEqual([])
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    )
-    expect(overflow).toBeLessThanOrEqual(0)
+      await page.goto('/drive/reglages')
+      await expect(page.getByText('Magasin …456')).toBeVisible()
+      await expect(page.getByText('Articles avec des produits', { exact: true })).toBeVisible()
+      expect((await scan(page)).violations).toEqual([])
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      )
+      expect(overflow).toBeLessThanOrEqual(0)
 
-    // L'erreur de saisie est lue par les lecteurs d'écran et lisible
-    await page.getByLabel('Adresse de ton magasin').fill('pas une adresse')
-    await page.getByRole('button', { name: 'Enregistrer mon magasin' }).click()
-    await expect(
-      page.getByText('Cette adresse n’est pas celle d’un magasin Leclerc Drive'),
-    ).toBeVisible()
-    expect((await scan(page)).violations).toEqual([])
-  })
+      // L'erreur de saisie est lue par les lecteurs d'écran et lisible
+      await page.getByLabel('Adresse de ton magasin').fill('pas une adresse')
+      await page.getByRole('button', { name: 'Enregistrer mon magasin' }).click()
+      await expect(
+        page.getByText('Cette adresse n’est pas celle d’un magasin Leclerc Drive'),
+      ).toBeVisible()
+      expect((await scan(page)).violations).toEqual([])
+    },
+  )
 }

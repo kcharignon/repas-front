@@ -1,8 +1,8 @@
 // Doublons possibles et fusion de deux ingrédients (ING-007), sans back ni compte : l'API est simulée par `page.route` (support/ingredientsBack.ts),
 // avec les cas réels de la production (« Melon » en double, « Épice guacamole », « Pâte » et « Pâte-2 »), des noms inventés.
-// Jouée sur bureau et sur Pixel 7 (412 px) ; les parcours sont aussi rejoués à 360 px. `E2E_SHOTS=<dossier>` garde des captures à lire.
+// Jouée sur le téléphone (Pixel 7, 412 px) ; les parcours sont aussi rejoués à 360 px. `E2E_SHOTS=<dossier>` garde des captures à lire.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page } from './support/test'
+import { expect, test, type Page, viewportTag } from './support/test'
 
 import { fakeIngredientsBack, productionPairs, type Pair } from './support/ingredientsBack'
 
@@ -537,78 +537,82 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
 for (const colorScheme of ['light', 'dark'] as const) {
   for (const width of [360, 1280]) {
-    test(`accessibilité (WCAG A/AA), thème ${colorScheme}, ${width} px`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 800 })
-      await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' })
-      await fakeIngredientsBack(page, {
-        previews: {
-          'epice-guacamole>epice-pour-guacamole': {
-            blockedBy: 'UNIT_MISSING',
-            canMerge: false,
-            missingUnits: [{ slug: 'tranche', name: 'tranche' }],
+    test(
+      `accessibilité (WCAG A/AA), thème ${colorScheme}, ${width} px`,
+      { tag: viewportTag({ width }) },
+      async ({ page }) => {
+        await page.setViewportSize({ width, height: 800 })
+        await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' })
+        await fakeIngredientsBack(page, {
+          previews: {
+            'epice-guacamole>epice-pour-guacamole': {
+              blockedBy: 'UNIT_MISSING',
+              canMerge: false,
+              missingUnits: [{ slug: 'tranche', name: 'tranche' }],
+            },
+            'pate-2>pate': { recoveredConversionCount: 2 },
           },
-          'pate-2>pate': { recoveredConversionCount: 2 },
-        },
-      })
+        })
 
-      // La page Rayons et son lien
-      await page.goto('/rayons')
-      await expect(page.getByRole('link', { name: '3 doublons possibles' })).toBeVisible()
-      expect((await scan(page)).violations).toEqual([])
-      await shot(page, `rayons-${colorScheme}-${width}`)
+        // La page Rayons et son lien
+        await page.goto('/rayons')
+        await expect(page.getByRole('link', { name: '3 doublons possibles' })).toBeVisible()
+        expect((await scan(page)).violations).toEqual([])
+        await shot(page, `rayons-${colorScheme}-${width}`)
 
-      // La liste des doublons : la première carte ouverte, les autres repliées
-      await page.goto('/ingredients/doublons')
-      await expect(cards(page)).toHaveCount(3)
-      expect((await scan(page)).violations).toEqual([])
-      await shot(page, `doublons-${colorScheme}-${width}`)
+        // La liste des doublons : la première carte ouverte, les autres repliées
+        await page.goto('/ingredients/doublons')
+        await expect(cards(page)).toHaveCount(3)
+        expect((await scan(page)).violations).toEqual([])
+        await shot(page, `doublons-${colorScheme}-${width}`)
 
-      // La confirmation, dans le cas normal puis quand une unité manque
-      await cards(page)
-        .first()
-        .getByRole('button', { name: /^Fusionner/ })
-        .click()
-      await expect(
-        page.getByRole('dialog').getByText('Tes quantités ne changent pas.'),
-      ).toBeVisible()
-      expect((await scan(page)).violations).toEqual([])
-      await shot(page, `confirmation-${colorScheme}-${width}`)
-      await page.keyboard.press('Escape')
-      await cards(page)
-        .nth(1)
-        .getByRole('button', { name: /^Voir et fusionner/ })
-        .click()
-      await cards(page)
-        .nth(1)
-        .getByRole('button', { name: /^Fusionner/ })
-        .click()
-      await expect(
-        page.getByRole('dialog').getByText(/ne connaît pas toutes les unités/),
-      ).toBeVisible()
-      expect((await scan(page)).violations).toEqual([])
-      await shot(page, `unite-${colorScheme}-${width}`)
+        // La confirmation, dans le cas normal puis quand une unité manque
+        await cards(page)
+          .first()
+          .getByRole('button', { name: /^Fusionner/ })
+          .click()
+        await expect(
+          page.getByRole('dialog').getByText('Tes quantités ne changent pas.'),
+        ).toBeVisible()
+        expect((await scan(page)).violations).toEqual([])
+        await shot(page, `confirmation-${colorScheme}-${width}`)
+        await page.keyboard.press('Escape')
+        await cards(page)
+          .nth(1)
+          .getByRole('button', { name: /^Voir et fusionner/ })
+          .click()
+        await cards(page)
+          .nth(1)
+          .getByRole('button', { name: /^Fusionner/ })
+          .click()
+        await expect(
+          page.getByRole('dialog').getByText(/ne connaît pas toutes les unités/),
+        ).toBeVisible()
+        expect((await scan(page)).violations).toEqual([])
+        await shot(page, `unite-${colorScheme}-${width}`)
 
-      // La confirmation avec les trois lignes d'effets : le total, le remplacé, les conversions
-      await page.goto('/ingredients/doublons')
-      await cards(page)
-        .nth(2)
-        .getByRole('button', { name: /^Voir et fusionner/ })
-        .click()
-      await cards(page)
-        .nth(2)
-        .getByRole('button', { name: /^Fusionner/ })
-        .click()
-      await expect(page.getByRole('dialog').getByText(/sont ajoutées à/)).toBeVisible()
-      expect((await scan(page)).violations).toEqual([])
-      await shot(page, `conversions-${colorScheme}-${width}`)
+        // La confirmation avec les trois lignes d'effets : le total, le remplacé, les conversions
+        await page.goto('/ingredients/doublons')
+        await cards(page)
+          .nth(2)
+          .getByRole('button', { name: /^Voir et fusionner/ })
+          .click()
+        await cards(page)
+          .nth(2)
+          .getByRole('button', { name: /^Fusionner/ })
+          .click()
+        await expect(page.getByRole('dialog').getByText(/sont ajoutées à/)).toBeVisible()
+        expect((await scan(page)).violations).toEqual([])
+        await shot(page, `conversions-${colorScheme}-${width}`)
 
-      // La feuille de choix de la fiche
-      await page.goto('/ingredients/tomates/modifier')
-      await page.getByRole('button', { name: 'Fusionner avec un autre ingrédient' }).click()
-      await page.getByRole('searchbox').fill('tomate')
-      await expect(page.getByText('Très proche')).toBeVisible()
-      expect((await scan(page)).violations).toEqual([])
-      await shot(page, `fiche-${colorScheme}-${width}`)
-    })
+        // La feuille de choix de la fiche
+        await page.goto('/ingredients/tomates/modifier')
+        await page.getByRole('button', { name: 'Fusionner avec un autre ingrédient' }).click()
+        await page.getByRole('searchbox').fill('tomate')
+        await expect(page.getByText('Très proche')).toBeVisible()
+        expect((await scan(page)).violations).toEqual([])
+        await shot(page, `fiche-${colorScheme}-${width}`)
+      },
+    )
   }
 }

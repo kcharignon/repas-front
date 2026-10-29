@@ -1,6 +1,6 @@
 // L'équation d'une conversion, sans back ni compte : l'API est simulée par `page.route`. Deux écrans la portent : « Nouvelle conversion »
 // de l'administration et la fiche d'un nouvel ingrédient dont les deux unités diffèrent. On écrit « 8 tasses = 1 kilo », la phrase se lit
-// en direct, et le coefficient que le back garde part inchangé. Jouée sur bureau et sur Pixel 7, en clair et en sombre.
+// en direct, et le coefficient que le back garde part inchangé. Jouée sur le téléphone (Pixel 7) ; le bureau seulement pour les tests étiquetés (playwright.config.ts), en clair et en sombre.
 // `E2E_SHOTS=<dossier>` garde des captures à lire.
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from './support/test'

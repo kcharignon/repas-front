@@ -1,5 +1,5 @@
 // Retour du drive (DRV-405), sans back ni compte : l'API est simulée par `page.route`, le pont natif par un faux qui répond au lancement
-// du drive par un résultat tiré du plan. Parcours complet : envoi, retour, enregistrement des choix, récapitulatif. Bureau et Pixel 7.
+// du drive par un résultat tiré du plan. Parcours complet : envoi, retour, enregistrement des choix, récapitulatif. Joué sur le téléphone (Pixel 7).
 import { expect, test } from './support/test'
 
 import { fakeApp, fakeBack, openArticles, openDetails, scan } from './support/drive'

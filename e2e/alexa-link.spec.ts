@@ -4,7 +4,7 @@
 //  - une décision par écran à 360 × 640 : le bouton principal se voit sans défiler, accessibilité (WCAG AA), captures claires et sombres.
 // Aucune vraie adresse : uniquement des valeurs inventées ; la redirection vers « Amazon » est interceptée, rien ne sort du test.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from './support/test'
+import { expect, test, viewportTag } from './support/test'
 import type { Page } from '@playwright/test'
 
 import { hasSession, signIn } from './support/session'
@@ -314,7 +314,7 @@ const viewports = [
 ]
 
 for (const { label, size } of viewports) {
-  test.describe(`liaison d’Alexa, ${label}`, () => {
+  test.describe(`liaison d’Alexa, ${label}`, { tag: viewportTag(size) }, () => {
     test.use({ viewport: size })
 
     for (const colorScheme of ['light', 'dark'] as const) {

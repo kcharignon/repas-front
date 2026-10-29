@@ -1,7 +1,7 @@
 // Liste envoyée au drive (DRV-401), sans back ni compte : l'API est simulée par `page.route`, avec un état qui suit les envois.
-// Jouée sur bureau et sur Pixel 7 : envoyer, lire en lecture seule, rouvrir.
+// Jouée sur le téléphone (Pixel 7) ; le bureau seulement pour les tests étiquetés (playwright.config.ts) : envoyer, lire en lecture seule, rouvrir.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page, type Route } from './support/test'
+import { expect, test, type Page, type Route, BUREAU } from './support/test'
 
 import { fakeApp, plan, trackTaps } from './support/drive'
 import { fakeAppForSetup } from './support/setupApp'
@@ -212,50 +212,54 @@ test('fonction coupée : « Reprendre l’envoi » dit que l’envoi n’est pas
 })
 
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`« Reprendre l’envoi » interrupteur coupé et sa confirmation sont accessibles, thème ${colorScheme}`, async ({
-    page,
-  }) => {
-    await fakeBack(page, 'SENT', false)
-    await page.emulateMedia({ colorScheme })
-    await page.goto('/drive/envoi/l1')
-    await expect(page.getByRole('button', { name: 'Rouvrir la liste' })).toBeVisible()
-    const scan = () =>
-      new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-        .exclude('.vue-devtools__anchor-btn')
-        .analyze()
+  test(
+    `« Reprendre l’envoi » interrupteur coupé et sa confirmation sont accessibles, thème ${colorScheme}`,
+    { tag: BUREAU },
+    async ({ page }) => {
+      await fakeBack(page, 'SENT', false)
+      await page.emulateMedia({ colorScheme })
+      await page.goto('/drive/envoi/l1')
+      await expect(page.getByRole('button', { name: 'Rouvrir la liste' })).toBeVisible()
+      const scan = () =>
+        new AxeBuilder({ page })
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+          .exclude('.vue-devtools__anchor-btn')
+          .analyze()
 
-    expect((await scan()).violations).toEqual([])
+      expect((await scan()).violations).toEqual([])
 
-    await page.getByRole('button', { name: 'Rouvrir la liste' }).click()
-    await expect(page.getByRole('dialog')).toBeVisible()
-    expect((await scan()).violations).toEqual([])
-  })
+      await page.getByRole('button', { name: 'Rouvrir la liste' }).click()
+      await expect(page.getByRole('dialog')).toBeVisible()
+      expect((await scan()).violations).toEqual([])
+    },
+  )
 }
 
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`la liste envoyée et sa confirmation sont accessibles, thème ${colorScheme}`, async ({
-    page,
-  }) => {
-    await fakeBack(page, 'SENT')
-    await page.emulateMedia({ colorScheme })
-    await page.goto('/listes/l1')
-    await expect(page.getByText('Cette liste est envoyée au drive')).toBeVisible()
-    const scan = () =>
-      new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-        .exclude('.vue-devtools__anchor-btn')
-        .analyze()
+  test(
+    `la liste envoyée et sa confirmation sont accessibles, thème ${colorScheme}`,
+    { tag: BUREAU },
+    async ({ page }) => {
+      await fakeBack(page, 'SENT')
+      await page.emulateMedia({ colorScheme })
+      await page.goto('/listes/l1')
+      await expect(page.getByText('Cette liste est envoyée au drive')).toBeVisible()
+      const scan = () =>
+        new AxeBuilder({ page })
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+          .exclude('.vue-devtools__anchor-btn')
+          .analyze()
 
-    expect((await scan()).violations).toEqual([])
+      expect((await scan()).violations).toEqual([])
 
-    await page.getByRole('button', { name: 'Plus d’actions' }).click()
-    await expect(page.getByRole('menu')).toBeVisible()
-    expect((await scan()).violations).toEqual([])
-    await page.getByRole('menuitem', { name: 'Rouvrir la liste' }).click()
-    await expect(page.getByRole('dialog')).toBeVisible()
-    expect((await scan()).violations).toEqual([])
-  })
+      await page.getByRole('button', { name: 'Plus d’actions' }).click()
+      await expect(page.getByRole('menu')).toBeVisible()
+      expect((await scan()).violations).toEqual([])
+      await page.getByRole('menuitem', { name: 'Rouvrir la liste' }).click()
+      await expect(page.getByRole('dialog')).toBeVisible()
+      expect((await scan()).violations).toEqual([])
+    },
+  )
 }
 
 test('sans magasin : « Choisir mon magasin » le lit, l’enregistre, et l’envoi reprend à sa confirmation (DRV-622, DRV-623)', async ({

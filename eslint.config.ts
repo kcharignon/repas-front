@@ -31,6 +31,14 @@ export default defineConfigWithVueTs(
     files: ['e2e/**/*.{test,spec}.{js,ts,jsx,tsx}', 'drive-agent/e2e/**/*.{test,spec}.{js,ts,jsx,tsx}'],
   },
 
+  // Les étiquettes `@bureau` et `@bureau-seul` viennent des constantes de e2e/support/test.ts (jamais d'un littéral recopié, une faute de frappe
+  // enverrait le test sur le mauvais projet) : la règle ne sait lire que des littéraux.
+  {
+    name: 'e2e/tags',
+    files: ['e2e/**/*.spec.ts'],
+    rules: { 'playwright/valid-test-tags': 'off' },
+  },
+
   {
     ...pluginVitest.configs.recommended,
     files: [

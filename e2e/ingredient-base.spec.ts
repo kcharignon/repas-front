@@ -1,9 +1,9 @@
 // L'ingrédient de base (ING-015), sans back ni compte : l'API est simulée par `page.route` (support/ingredientsBack.ts, option `base`).
 // Le propriétaire du catalogue règle le marqueur sur la fiche d'un de ses ingrédients et voit la pastille « de base » dans le rayon ;
-// tout autre compte ne voit ni l'un ni l'autre. Jouée sur bureau et sur Pixel 7 (412 px), puis à 360 px, en clair et en sombre.
+// tout autre compte ne voit ni l'un ni l'autre. Jouée sur le téléphone (Pixel 7, 412 px), puis à 360 px, en clair et en sombre.
 // `E2E_SHOTS=<dossier>` garde des captures à lire.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page } from './support/test'
+import { expect, test, type Page, viewportTag } from './support/test'
 
 import { fakeIngredientsBack } from './support/ingredientsBack'
 
@@ -119,37 +119,39 @@ test.describe('l’ingrédient de base', () => {
 
   for (const colorScheme of ['light', 'dark'] as const) {
     for (const width of [360, 412, 1280]) {
-      test(`accessible, sans défilement horizontal, ${width} px, thème ${colorScheme}`, async ({
-        page,
-      }) => {
-        await page.emulateMedia({ colorScheme })
-        await page.setViewportSize({ width, height: 800 })
-        await fakeIngredientsBack(page, { base: { owner: true, isBase: true } })
-        await page.goto('/rayons/fruit-et-legume')
+      test(
+        `accessible, sans défilement horizontal, ${width} px, thème ${colorScheme}`,
+        { tag: viewportTag({ width }) },
+        async ({ page }) => {
+          await page.emulateMedia({ colorScheme })
+          await page.setViewportSize({ width, height: 800 })
+          await fakeIngredientsBack(page, { base: { owner: true, isBase: true } })
+          await page.goto('/rayons/fruit-et-legume')
 
-        await expect(row(page, 'Tomates').getByText('de base', { exact: true })).toBeVisible()
-        await noHorizontalScroll(page)
-        expect((await scan(page)).violations).toEqual([])
-        await shot(page, `rayon-${width}-${colorScheme}`)
+          await expect(row(page, 'Tomates').getByText('de base', { exact: true })).toBeVisible()
+          await noHorizontalScroll(page)
+          expect((await scan(page)).violations).toEqual([])
+          await shot(page, `rayon-${width}-${colorScheme}`)
 
-        await row(page, 'Tomates')
-          .getByRole('link', { name: /^Modifier/ })
-          .click()
-        await expect(baseSwitch(page)).toHaveAttribute('aria-checked', 'true')
-        await noHorizontalScroll(page)
-        expect((await scan(page)).violations).toEqual([])
+          await row(page, 'Tomates')
+            .getByRole('link', { name: /^Modifier/ })
+            .click()
+          await expect(baseSwitch(page)).toHaveAttribute('aria-checked', 'true')
+          await noHorizontalScroll(page)
+          expect((await scan(page)).violations).toEqual([])
 
-        // Une cible tactile d'au moins 44 px, un seul bouton principal
-        const box = await baseSwitch(page).boundingBox()
-        expect(box?.height).toBeGreaterThanOrEqual(44)
-        expect(box?.width).toBeGreaterThanOrEqual(44)
-        await expect(page.getByRole('button', { name: 'Enregistrer' })).toHaveCount(1)
-        await shot(page, `fiche-${width}-${colorScheme}`)
+          // Une cible tactile d'au moins 44 px, un seul bouton principal
+          const box = await baseSwitch(page).boundingBox()
+          expect(box?.height).toBeGreaterThanOrEqual(44)
+          expect(box?.width).toBeGreaterThanOrEqual(44)
+          await expect(page.getByRole('button', { name: 'Enregistrer' })).toHaveCount(1)
+          await shot(page, `fiche-${width}-${colorScheme}`)
 
-        // Éteint
-        await baseSwitch(page).click()
-        await shot(page, `fiche-eteint-${width}-${colorScheme}`)
-      })
+          // Éteint
+          await baseSwitch(page).click()
+          await shot(page, `fiche-eteint-${width}-${colorScheme}`)
+        },
+      )
     }
   }
 })
