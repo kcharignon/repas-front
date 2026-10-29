@@ -89,11 +89,14 @@ export async function fakeDriveBack(
   const back: DriveBack = {
     received: [],
     bodies: [],
-    choices: options.choices ?? [
-      choice('farine', 'Farine', [farineA, farineB], [farineC]),
-      choice('oeufs', 'Œufs', [product('4', 'Œufs plein air x6', { value: 6, unit: 'piece' })]),
-      choice('sel', 'Sel', [], [], true),
-    ],
+    // Une copie : le faux back écrit dans ses choix (la contenance corrigée), et les constantes du module servent à tous les tests du processus
+    choices: structuredClone(
+      options.choices ?? [
+        choice('farine', 'Farine', [farineA, farineB], [farineC]),
+        choice('oeufs', 'Œufs', [product('4', 'Œufs plein air x6', { value: 6, unit: 'piece' })]),
+        choice('sel', 'Sel', [], [], true),
+      ],
+    ),
     store:
       options.store === undefined
         ? { id: '123456', baseUrl: 'https://exemple.leclercdrive.fr/magasin-123456-123456' }
