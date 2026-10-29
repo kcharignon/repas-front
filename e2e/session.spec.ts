@@ -1,32 +1,8 @@
-import AxeBuilder from '@axe-core/playwright'
+// La session de bout en bout. L'accessibilité des neuf pages publiques d'authentification (clair et sombre) est jugée écran par écran dans
+// `registration.spec.ts`, `password-reset.spec.ts` et `alexa-link.spec.ts` (`e2e/support/screen.ts`) : `/connexion`, `/inscription`,
+// `/verification-email`, `/confirmation-email` (avec et sans secret), `/mot-de-passe-oublie`, `/mot-de-passe-oublie/confirmation`
+// (la page est la même avec ou sans `bienvenue=1`, seuls les textes changent) et `/connexion?compte=pret`.
 import { expect, test } from './support/test'
-
-for (const path of [
-  '/connexion',
-  '/inscription',
-  '/verification-email?email=a%40example.com',
-  '/confirmation-email',
-  '/mot-de-passe-oublie',
-  '/mot-de-passe-oublie/confirmation?token=le-secret',
-  '/mot-de-passe-oublie/confirmation?token=le-secret&bienvenue=1',
-  '/mot-de-passe-oublie/confirmation',
-  '/connexion?compte=pret',
-]) {
-  for (const colorScheme of ['light', 'dark'] as const) {
-    test(`${path} est accessible (WCAG AA), thème ${colorScheme}`, async ({ page }) => {
-      await page.emulateMedia({ colorScheme })
-      await page.goto(path)
-      await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-
-      const { violations } = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-        .exclude('.vue-devtools__anchor-btn')
-        .analyze()
-
-      expect(violations).toEqual([])
-    })
-  }
-}
 
 test('une page protégée renvoie à la connexion en gardant la destination', async ({ page }) => {
   await page.goto('/moi')

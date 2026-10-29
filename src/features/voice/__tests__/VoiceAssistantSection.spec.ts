@@ -63,7 +63,8 @@ describe('section « Assistant vocal » de « Moi »', () => {
     wrapper.unmount()
 
     mount(VoiceAssistantSection, { global: { plugins: context.plugins } })
-    document.dispatchEvent(new Event('visibilitychange'))
+    // Le gestionnaire de focus de la bibliothèque écoute `window` : l'événement doit remonter jusqu'à lui
+    document.dispatchEvent(new Event('visibilitychange', { bubbles: true }))
     await flushPromises()
 
     expect(calls(fetchMock).filter((call) => call === links)).toHaveLength(1)

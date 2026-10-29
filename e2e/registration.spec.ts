@@ -1,15 +1,16 @@
 // Inscription par la seule adresse (back #314) : le formulaire, « Vérifie ta boîte mail », le lien de bienvenue qui fait choisir le
 // premier mot de passe, puis la connexion.
 //  - la première partie simule l'API (`page.route`) comme le fait le vrai back : `204` pour TOUTE adresse (nouvelle, déjà connue, en
-//    attente, désactivée), jamais autre chose ; elle joue le parcours, les refus, les anciens liens, une décision par écran à 360 × 640,
-//    l'accessibilité et les captures ;
+//    attente, désactivée), jamais autre chose ; elle joue le parcours et une décision par écran à 360 × 640 (puis au bureau),
+//    l’accessibilité dans les deux thèmes (`e2e/support/screen.ts`) ; les refus et les anciens liens sont des tests de composant
+//    (`AuthViews.spec.ts`, `PasswordResetViews.spec.ts`, `EmailVerificationViews.spec.ts`) ;
 //  - la seconde joue le parcours complet contre le VRAI back et sa boîte de développement Mailpit (`make e2e`).
 // Aucune vraie adresse : uniquement `@example.com`, et les comptes et messages du test sont supprimés à la fin.
-import AxeBuilder from '@axe-core/playwright'
 import { expect, test, viewportTag } from './support/test'
 import type { APIRequestContext, Page } from '@playwright/test'
 
 import { apiToken, hasSession } from './support/session'
+import { checkScreen, type Screen } from './support/screen'
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Un faux back
@@ -124,70 +125,12 @@ test.describe('inscription par l’adresse, parcours simulé', () => {
     })
     expect(received.map((call) => call.path)).not.toContain('/api/login_check')
   })
-
-  test('une adresse refusée par le back est expliquée sous le formulaire', async ({ page }) => {
-    await fakeBack(page, { register: { status: 422, message: 'email: invalide' } })
-    await page.goto('/inscription')
-    await email(page).fill('alexiane@example.com')
-    await page.getByRole('button', { name: 'Créer mon compte' }).click()
-
-    await expect(page.getByRole('alert')).toHaveText(
-      'Cette adresse e-mail n’est pas valide. Vérifie-la, puis réessaie.',
-    )
-    await expect(page).toHaveURL(/\/inscription$/)
-  })
-
-  test('trop de demandes : le délai est annoncé et rien n’est perdu', async ({ page }) => {
-    await fakeBack(page, { register: { status: 429, retryAfter: '1800' } })
-    await page.goto('/inscription')
-    await email(page).fill('alexiane@example.com')
-    await page.getByRole('button', { name: 'Créer mon compte' }).click()
-
-    await expect(page.getByRole('alert')).toHaveText(
-      'Trop de demandes en peu de temps. Aucun message n’est parti. Réessaie dans 30 minutes.',
-    )
-    await expect(email(page)).toHaveValue('alexiane@example.com')
-    await expect(page.getByRole('button', { name: 'Créer mon compte' })).toBeEnabled()
-  })
-
-  test('un lien de bienvenue périmé mène à « Demander un nouveau lien »', async ({ page }) => {
-    await fakeBack(page, { confirm: { status: 422, message: 'INVALID_PASSWORD_RESET_TOKEN' } })
-    await page.goto('/mot-de-passe-oublie/confirmation?token=vieux&bienvenue=1')
-    await firstPassword(page).fill('un premier mot de passe')
-    await confirmation(page).fill('un premier mot de passe')
-    await page.getByRole('button', { name: 'Enregistrer mon mot de passe' }).click()
-
-    await expect(
-      page.getByRole('heading', { level: 1, name: 'Ce lien ne marche plus' }),
-    ).toBeVisible()
-    await expect(page.getByRole('alert')).toHaveText(
-      'Il a déjà servi, ou il a expiré. Demande-en un nouveau pour choisir ton mot de passe.',
-    )
-    await page.getByRole('link', { name: 'Demander un nouveau lien' }).click()
-    await expect(page).toHaveURL(/\/mot-de-passe-oublie$/)
-  })
-
-  test('un ancien lien de confirmation active le compte, puis propose de choisir le mot de passe', async ({
-    page,
-  }) => {
-    const received = await fakeBack(page)
-    await page.goto('/confirmation-email?token=ancien')
-
-    await expect(page.getByRole('status')).toHaveText(
-      'Ton adresse est confirmée. Il te reste à choisir ton mot de passe.',
-    )
-    expect(received).toEqual([
-      { path: '/api/v1/users/email-verification/confirm', body: { token: 'ancien' } },
-    ])
-    await page.getByRole('link', { name: 'Choisir mon mot de passe' }).click()
-    await expect(page).toHaveURL(/\/mot-de-passe-oublie$/)
-  })
 })
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Une décision par écran, à 360 × 640, clair et sombre
 
-const screens: { name: string; prepare: (page: Page) => Promise<void>; primary: string }[] = [
+const screens: Screen[] = [
   {
     name: 'inscription',
     prepare: async (page) => {
@@ -231,6 +174,13 @@ const screens: { name: string; prepare: (page: Page) => Promise<void>; primary: 
     primary: 'Demander un nouveau lien',
   },
   {
+    name: 'connexion',
+    prepare: async (page) => {
+      await page.goto('/connexion')
+    },
+    primary: 'Se connecter',
+  },
+  {
     name: 'connexion-compte-pret',
     prepare: async (page) => {
       await page.goto('/connexion?compte=pret')
@@ -245,7 +195,13 @@ const screens: { name: string; prepare: (page: Page) => Promise<void>; primary: 
     },
     primary: 'Choisir mon mot de passe',
   },
-  // En dernier : sa route remplace celle du faux back pour les écrans suivants
+  {
+    name: 'ancien-lien-de-confirmation-perime',
+    prepare: async (page) => {
+      await page.goto('/confirmation-email')
+    },
+    primary: 'Recevoir un nouveau lien',
+  },
   {
     name: 'inscription-trop-de-demandes',
     prepare: async (page) => {
@@ -266,57 +222,37 @@ const screens: { name: string; prepare: (page: Page) => Promise<void>; primary: 
   },
 ]
 
-const viewports = [
-  { label: '360 × 640', size: { width: 360, height: 640 } },
-  { label: '390 × 844', size: { width: 390, height: 844 } },
-  { label: 'bureau 1280 × 800', size: { width: 1280, height: 800 } },
-]
+const phone = { width: 360, height: 640 }
 
-for (const { label, size } of viewports) {
-  test.describe(`inscription par l’adresse, ${label}`, { tag: viewportTag(size) }, () => {
-    test.use({ viewport: size })
+// Un test par écran (ils se répartissent entre les processus) : l'écran est préparé une fois, puis jugé dans les deux thèmes
+test.describe('inscription par l’adresse, 360 × 640', () => {
+  test.use({ viewport: phone })
 
-    for (const colorScheme of ['light', 'dark'] as const) {
-      test(`chaque écran tient en une décision, sans défiler, et reste accessible (WCAG AA), thème ${colorScheme}`, async ({
-        page,
-      }, testInfo) => {
-        await page.emulateMedia({ colorScheme })
-        await fakeBack(page)
+  for (const screen of screens) {
+    test(`${screen.name} : une décision, sans défiler, accessible (WCAG AA) en clair et en sombre`, async ({
+      page,
+    }) => {
+      await fakeBack(page)
+      await checkScreen(page, screen, phone)
+    })
+  }
+})
 
-        for (const screen of screens) {
-          await screen.prepare(page)
-          await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+// `AuthLayout` est partagé par l'inscription, le mot de passe oublié et la liaison d'Alexa : sa mise en page large est vérifiée ici, une fois.
+const desktop = { width: 1280, height: 800 }
 
-          // Le bouton principal se voit sans défiler, et rien ne déborde sur le côté
-          const primary = page
-            .getByRole('button', { name: screen.primary })
-            .or(page.getByRole('link', { name: screen.primary }))
-            .first()
-          const box = await primary.boundingBox()
-          expect(box, `${screen.name} : le bouton principal est affiché`).not.toBeNull()
-          expect(
-            box!.y + box!.height,
-            `${screen.name} : le bouton principal se voit sans défiler`,
-          ).toBeLessThanOrEqual(size.height)
-          expect(box!.height, `${screen.name} : cible d’au moins 44 px`).toBeGreaterThanOrEqual(44)
-          const overflow = await page.evaluate(
-            () => document.documentElement.scrollWidth - window.innerWidth,
-          )
-          expect(overflow, `${screen.name} : pas de défilement horizontal`).toBeLessThanOrEqual(0)
+test.describe('inscription par l’adresse, bureau 1280 × 800', { tag: viewportTag(desktop) }, () => {
+  test.use({ viewport: desktop })
 
-          const { violations } = await new AxeBuilder({ page })
-            .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-            .exclude('.vue-devtools__anchor-btn')
-            .analyze()
-          expect(violations, screen.name).toEqual([])
-          await page.screenshot({
-            path: testInfo.outputPath(`${size.width}-${colorScheme}-${screen.name}.png`),
-          })
-        }
-      })
-    }
-  })
-}
+  for (const screen of screens.filter(({ name }) => ['inscription', 'bienvenue'].includes(name))) {
+    test(`${screen.name} : une décision, sans défiler, accessible (WCAG AA) en clair et en sombre`, async ({
+      page,
+    }) => {
+      await fakeBack(page)
+      await checkScreen(page, screen, desktop)
+    })
+  }
+})
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Parcours complet contre le vrai back et Mailpit

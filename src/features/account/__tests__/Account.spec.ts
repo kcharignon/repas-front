@@ -48,8 +48,12 @@ describe('réglages du compte', () => {
     const { wrapper } = await open()
 
     const credits = wrapper.get('[data-testid="account-credits"]')
-    expect(credits.text()).toContain('Crédits')
+    expect(credits.get('h2').text()).toBe('Crédits')
     expect(credits.text()).toContain('créées par leurs auteurs')
+    expect(credits.findAll('a').map((link) => link.text())).toEqual([
+      'Flaticon',
+      'Licence et auteurs',
+    ])
     expect(credits.findAll('a').map((link) => link.attributes('href'))).toEqual([
       'https://www.flaticon.com',
       '/images/ingredient/license/license.html',
