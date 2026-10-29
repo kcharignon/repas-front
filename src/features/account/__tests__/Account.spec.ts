@@ -205,6 +205,20 @@ describe('décor saisonnier', () => {
     }
   })
 
+  it('le 1er janvier l’interrupteur est celui de Noël, le 6 janvier celui de la galette : Noël ne s’attarde pas', async () => {
+    vi.setSystemTime(new Date(2027, 0, 1, 12))
+    const noel = await open()
+    expect(noel.wrapper.text()).toContain('Décor de Noël')
+    expect(switchOf(noel.wrapper).attributes('aria-checked')).toBe('true')
+
+    vi.setSystemTime(new Date(2027, 0, 6, 12))
+    const galette = await open()
+
+    expect(galette.wrapper.text()).not.toContain('Décor de Noël')
+    expect(galette.wrapper.text()).toContain('Décor de la galette')
+    expect(document.documentElement.dataset.season).toBe('galette')
+  })
+
   it('en saison : l’interrupteur est là, juste sous le choix du thème, et activé par défaut', async () => {
     vi.setSystemTime(new Date(2026, 9, 27, 12))
 

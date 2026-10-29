@@ -911,34 +911,41 @@ describe('thème saisonnier : au démarrage', () => {
   }
 
   // Tous les jours de 2024 à 2040 (années bissextiles comprises), au premier et au dernier instant du jour : les deux implémentations ne
-  // divergent jamais, saison par saison.
-  for (const stored of [null, 'off', 'paques', 'halloween,noel'] as const) {
-    it(`chaque jour de 2024 à 2040, préférence ${stored ?? 'absente'} : le script d’amorçage et applySeason sont d’accord`, () => {
-      const divergences: string[] = []
-      for (const day of everyDay()) {
-        for (const [hour, minute, second] of [
-          [0, 0, 0],
-          [23, 59, 59],
-        ] as const) {
-          const date = new Date(
-            day.getFullYear(),
-            day.getMonth(),
-            day.getDate(),
-            hour,
-            minute,
-            second,
-          )
-          vi.setSystemTime(date)
-          const app = run(() => applySeason(), stored)
-          const init = run(runInitScript, stored)
-          if (JSON.stringify(app) !== JSON.stringify(init)) divergences.push(date.toString())
-          if (JSON.stringify(init) !== JSON.stringify(expectedState(date, stored)))
-            divergences.push(`attendu ${date.toString()}`)
-        }
-      }
+  // divergent jamais, saison par saison. Environ 12 000 instants par test : 1 à 4 s sur une machine libre, davantage quand la suite
+  // tourne en parallèle avec la couverture, d'où un délai large (celui de 5 s par défaut faisait échouer ces tests sous charge).
+  const LONG_LOOP_TIMEOUT = 60_000
 
-      expect(divergences).toEqual([])
-    })
+  for (const stored of [null, 'off', 'paques', 'halloween,noel'] as const) {
+    it(
+      `chaque jour de 2024 à 2040, préférence ${stored ?? 'absente'} : le script d’amorçage et applySeason sont d’accord`,
+      () => {
+        const divergences: string[] = []
+        for (const day of everyDay()) {
+          for (const [hour, minute, second] of [
+            [0, 0, 0],
+            [23, 59, 59],
+          ] as const) {
+            const date = new Date(
+              day.getFullYear(),
+              day.getMonth(),
+              day.getDate(),
+              hour,
+              minute,
+              second,
+            )
+            vi.setSystemTime(date)
+            const app = run(() => applySeason(), stored)
+            const init = run(runInitScript, stored)
+            if (JSON.stringify(app) !== JSON.stringify(init)) divergences.push(date.toString())
+            if (JSON.stringify(init) !== JSON.stringify(expectedState(date, stored)))
+              divergences.push(`attendu ${date.toString()}`)
+          }
+        }
+
+        expect(divergences).toEqual([])
+      },
+      LONG_LOOP_TIMEOUT,
+    )
   }
 
   it('une préférence « halloween » ne coupe pas Noël ni Pâques, y compris au démarrage', () => {

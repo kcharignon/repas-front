@@ -53,8 +53,11 @@ export async function switchTheme(page: Page, colorScheme: ColorScheme) {
       .poll(() => background(page), { message: 'le fond du thème sombre est posé' })
       .not.toBe(before)
   }
+  // Une animation annulée (un élément retiré de la page pendant l'attente) rejette `finished` par une AbortError : elle est finie pour nous.
   await page.evaluate(() =>
-    Promise.all(document.getAnimations().map((animation) => animation.finished)),
+    Promise.all(
+      document.getAnimations().map((animation) => animation.finished.catch(() => undefined)),
+    ),
   )
 }
 
