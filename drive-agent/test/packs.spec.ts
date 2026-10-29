@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Le nombre de produits d'un produit choisi (DRV-306) : les mêmes règles que `PackCalculator` du dépôt back (`architecture.md` § 6).
 import { describe, expect, it } from 'vitest'
 

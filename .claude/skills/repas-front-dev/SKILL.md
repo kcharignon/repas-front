@@ -19,7 +19,7 @@ Vue 3 (`<script setup>`), TypeScript strict, Vite, Pinia, TanStack Query, client
 |---|---|
 | `make check` | lint (oxlint + ESLint), Prettier, `api-check`, `vue-tsc`, Vitest (agent compris) : **avant chaque commit** |
 | `make quality` | `check` + `audit` + `api-verify` + `agent-verify` (ce que rejoue la CI hors navigateurs) |
-| `make test-coverage` | seuil 80 % lignes/fonctions/branches/instructions dans `vitest.config.ts` : il ne baisse **jamais** |
+| `make test-coverage` | seuil dans `vitest.config.ts` (96 % lignes, 94 % fonctions, 89 % branches, 95 % instructions, mesure du 2026-10-29 : 97,8 / 96,2 / 91,4 / 96,6) : il ne baisse **jamais**, on le remonte quand la mesure le permet |
 | `make api-update ref=<sha>` (= `npm run api:update -- <sha>`) | fige `api/openapi.json` sur un commit du back, régénère `src/api/schema.d.ts` ; relire le diff des deux fichiers |
 | `make samples-update ref=<sha>` / `samples-verify` | recopie / vérifie les exemples de contrat du back dans `drive-agent/fixtures/contract/` (à faire avec `api-update` quand le back change un DTO du drive) |
 | `make e2e` | Playwright (Chromium bureau + Pixel 7) contre le vrai back de dev (`make fixtures` crée `admin@repas.fr`) ; `make e2e-visual` : captures, vidéos, rapport sur http://localhost:9323 |
@@ -72,6 +72,7 @@ Hors Docker : `npm run check`, `npm run test:e2e`. Les sorties de `make check` s
 1. Contrat à jour : `make api-update ref=<sha du back fusionné>`, relire le diff (un champ ajouté est compatible, un champ retiré est une rupture).
 2. `src/features/<feature>/queries.ts` (clés, `useQuery`/`useMutation`, invalidations), vue + composants, route dans `src/router` (protégée par défaut ; `meta.public` seulement pour une page publique), textes dans `fr.ts`, composants `Ui*`.
 3. Tests Vitest à côté (`__tests__/`) avec `stubApi` et `appContext()` de `src/__tests__/helpers.ts` : un appel d'API non prévu fait échouer le test. Cas : chargement, vide, succès, chaque code d'erreur du back, hors ligne.
+   Un test qui ne touche ni au DOM ni à un composant `.vue` (logique pure, agent du drive) porte `// @vitest-environment node` en première ligne (jsdom coûte environ 0,5 s par fichier). Il ne doit importer aucun `.vue`, même par le routeur : en `node` Vitest compile les composants pour le rendu serveur et fausse la couverture.
 4. e2e : faux back par `page.route` (modèle `e2e/shopping-list-sent.spec.ts`, indice de session posé par `addInitScript`), axe (`@axe-core/playwright`) sans violation A/AA. **Un test n'est joué qu'une fois, sur le téléphone** (projet `mobile`, Pixel 7) ; `{ tag: BUREAU }` (de `e2e/support/test.ts`) l'envoie AUSSI sur le bureau (projet `chromium`) quand la mise en page du bureau change ce qu'il vérifie, `{ tag: BUREAU_SEUL }` ou `{ tag: viewportTag(size) }` SEULEMENT sur le bureau (le test fixe lui-même une largeur de bureau) : voir l'en-tête de `playwright.config.ts`. Les tests sont isolés (API simulée, aucun état partagé) et joués en parallèle : jamais de variable de module modifiée par un test, jamais de `waitForTimeout`. `make e2e` pour les scénarios contre le vrai back (un test à la fois : un seul compte ; vider le limiteur de débit du back en cas de 429).
 5. Test visuel : `make e2e-visual`, **lire les captures** (mobile et bureau, clair et sombre) avant de conclure ; une page visible non vue n'est pas finie.
 
@@ -86,7 +87,7 @@ Utiliser `<UiTextInput capitalize-first …/>` (ADR 0018) : la première lettre 
 
 ## 5. Definition of Done
 
-- [ ] `make check` vert (lint, format, `api-check`, types, tests) ; `make quality` avant la PR ; couverture ≥ 80 % non abaissée
+- [ ] `make check` vert (lint, format, `api-check`, types, tests) ; `make quality` avant la PR ; seuil de couverture non abaissé
 - [ ] Textes dans `fr.ts`, couleurs par jetons, aucune image externe, aucun `v-html`, aucune logique métier dans un composant
 - [ ] Test unitaire + e2e Pixel 7 + axe ; captures Chromium lues (mobile et bureau)
 - [ ] PR au modèle `.github/pull_request_template.md` (Quoi / Vérifié / À relire), sans pied d'attribution ; ticket : section « Réalisation » à fournir dans le rapport pour le back

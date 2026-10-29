@@ -10,6 +10,13 @@ import { shot } from './support/drive'
 
 import { buildAgent } from '../drive-agent/scripts/build.mjs'
 
+// La page de démonstration de l’agent (`drive-agent/demo/main.ts`) expose `demo` sur la fenêtre.
+declare global {
+  interface Window {
+    demo: { show(name: string): void }
+  }
+}
+
 test.use({ viewport: { width: 360, height: 640 } })
 
 const PAGE =

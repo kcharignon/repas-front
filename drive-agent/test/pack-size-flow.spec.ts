@@ -1,3 +1,4 @@
+// @vitest-environment node
 // La contenance d'un produit dans l'unité de la liste (DRV-652) : l'aide à la saisie (nombre du libellé, pluriel), et la phase A, quand un produit connu
 // dont le plan ne sait pas calculer le nombre de produits est mis au panier. La phase B et l'écran sont dans phase-b.spec.ts et ui.spec.ts.
 import { describe, expect, it } from 'vitest'

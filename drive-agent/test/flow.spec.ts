@@ -1,3 +1,4 @@
+// @vitest-environment node
 // L'orchestrateur du passage (DRV-305) : toutes les transitions, avec l'adaptateur, l'interface, l'horloge, le stockage et le verrou
 // d'écran simulés. Aucun réseau, aucun DOM propre : tout est injecté.
 import { describe, expect, it, vi } from 'vitest'

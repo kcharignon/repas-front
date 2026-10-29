@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Une page de recherche reconnue par sa STRUCTURE (ticket C) : le squelette que le site embarque dans toutes ses pages de magasin
 // (point de livraison, total et lignes du panier, conteneur de produits), et l'absence de tout produit. Aucune page « aucun résultat »
 // réelle n'a jamais été relevée : les formes ci-dessous sont plausibles, dérivées du squelette mesuré (DRV-002, DRV-011), pas mesurées.

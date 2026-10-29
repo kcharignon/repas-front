@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.node.json",
+  // Les tests de bout en bout (Playwright) : types de Node, le code de l'application n'y est importé que pour ses types et ses constantes.
+  "include": ["env.d.ts", "e2e/**/*.ts"],
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "allowJs": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@drive-protocol": ["./drive-agent/protocol/index.ts"]
+    },
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo"
+  }
+}

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // DRV-635 : « introuvable à la recherche » n'est pas « indisponible », et le panier tranche la disponibilité. Trois états distincts pour un produit
 // habituel que la phase A n'a pas mis au panier : `OUT_OF_STOCK` (le site le dit en rupture ET le panier le refuse), `NOT_FOUND` (aucune des
 // recherches ne l'a retrouvé), `CART_REFUSED` (le site le disait disponible, le panier n'en a rien pris). Le protocole ne change pas : la ligne reste

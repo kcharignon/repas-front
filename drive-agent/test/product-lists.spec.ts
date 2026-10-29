@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Les listes de produits de la réponse de recherche (DRV-647, 0.38.0) : relevé réel du 2026-10-20, la réponse « tomate » a d'autres listes que
 // `objContenu` (`objContenuMDD`, `objContenuGroupeVariantes`, `lstTrade`) et aucun produit frais n'était lu. L'agent lit TOUS les produits de la réponse
 // (la liste principale d'abord), y compris un produit qui en contient d'autres ou un objet très grand, et le diagnostic dit ce que chaque liste contient.

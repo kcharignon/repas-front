@@ -5,7 +5,7 @@
 // envoyé et la réouverture d'une conversion enregistrée dans l'un ou l'autre sens sont des tests de composant (`ConversionEquation.spec.ts`,
 // `equationMath.spec.ts`, `Admin.spec.ts`, `Ingredients.spec.ts`, `IngredientConversions.spec.ts`).
 // `E2E_SHOTS=<dossier>` garde une capture de chaque thème.
-import { expect, test, type Page } from './support/test'
+import { expect, test, type Locator, type Page } from './support/test'
 import { axeBothThemes } from './support/screen'
 
 const units = [
@@ -66,7 +66,7 @@ async function fakeBack(page: Page) {
   )
 }
 
-const phrase = (page: Page) => page.locator('[aria-live="polite"]')
+const phrase = (scope: Page | Locator) => scope.locator('[aria-live="polite"]')
 
 test('l’équation d’une conversion est accessible dans les deux thèmes : la feuille d’administration, son erreur et la fiche d’un ingrédient', async ({
   page,

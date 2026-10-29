@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { validatePlan } from '@drive-protocol'
 import type { PlanLine } from '@drive-protocol'

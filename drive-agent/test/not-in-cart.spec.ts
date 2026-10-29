@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Un produit choisi que le panier ne prend pas (DRV-644) : la réponse du panier lue, l'état gardé pour la reprise, l'écran de fin, le diagnostic.
 import { describe, expect, it } from 'vitest'
 

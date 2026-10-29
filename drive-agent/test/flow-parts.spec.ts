@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Les pièces de l'orchestrateur (DRV-305) : phase A d'une ligne, prix remonté, issue globale, résultat.
 import { describe, expect, it } from 'vitest'
 

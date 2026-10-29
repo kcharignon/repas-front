@@ -1,3 +1,4 @@
+// @vitest-environment node
 // La fiche d'un produit (DRV-652) : la même pour la liste de choix et l'écran « Vérifie la quantité ». Ce qui manque n'est jamais écrit.
 import { describe, expect, it } from 'vitest'
 

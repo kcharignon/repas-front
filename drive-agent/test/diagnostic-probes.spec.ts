@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Les sondes du diagnostic (ticket B de l'audit du 2026-10-18) : ce que le rapport dit du site réel, et la garantie qu'il ne contient AUCUNE valeur du
 // site (libellé, cookie, numéro de magasin, ville, adresse, point de livraison, valeur d'en-tête). Le site est un faux `fetch` aux pages INVENTÉES.
 import { describe, expect, it, vi } from 'vitest'

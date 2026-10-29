@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Le libellé des groupes de la rangée (DRV-647) d'après la mesure réelle du 2026-10-20 : jamais un texte de lien (« Voir le rayon »), le libellé au niveau
 // (rayon ou famille) où son identifiant correspond, le repli, et ce que le diagnostic en montre. Données INVENTÉES, de la forme mesurée.
 import { describe, expect, it } from 'vitest'
