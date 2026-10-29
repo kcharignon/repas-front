@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
 import { appContext, calls, json, me, stubApi } from '@/__tests__/helpers'
+import { INFO_TIMEOUT_MS } from '@/features/drive/bridge'
 import { fakeNative } from '@/features/drive/bridge/__tests__/fakeNative'
 import ShoppingListDetailView from '@/features/shopping-lists/ShoppingListDetailView.vue'
 import ShoppingListView from '@/features/shopping-lists/ShoppingListView.vue'
@@ -133,6 +134,7 @@ function installApp(version: string | 'silent' | 'held' | 'browser' = '1.0.0') {
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   delete (globalThis as { repasNative?: unknown }).repasNative
   document.body.innerHTML = ''
@@ -521,9 +523,11 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
 
   const tooOldSentence = 'Mets à jour l’application pour envoyer ta liste.'
 
+  // Une application `silent` ne répond jamais à `app.info` : le pont abandonne après son délai (INFO_TIMEOUT_MS), joué avec de fausses minuteries
   it.each([['0.1.9'], ['0.0.9'], ['silent'], ['pas-une-version']])(
     'application %s : ni verrou ni confirmation, la phrase de mise à jour et son bouton (DRV-641)',
     async (app) => {
+      if (app === 'silent') vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
       const { fetchMock, context } = await openActive(
         { 'POST /api/v1/shopping-lists/l1/send': noContent },
         detail('ACTIVE'),
@@ -534,9 +538,13 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
       await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
 
       button('Envoyer au drive')?.click()
-      await vi.waitFor(() => expect(body().textContent).toContain(tooOldSentence), {
-        timeout: 6000,
-      })
+      if (app === 'silent') {
+        // Tant que le délai court, le bouton attend la réponse : grisé, ni confirmation ni phrase
+        await vi.advanceTimersByTimeAsync(INFO_TIMEOUT_MS - 500)
+        expect(body().textContent).not.toContain(tooOldSentence)
+        await vi.advanceTimersByTimeAsync(500)
+      }
+      await vi.waitFor(() => expect(body().textContent).toContain(tooOldSentence))
 
       expect(body().textContent).not.toContain('La liste ne sera plus modifiable')
       const update = body().querySelector('[role="dialog"] a[href="/drive/aide"]')
@@ -546,7 +554,6 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
       // La liste reste modifiable : le bouton est de nouveau disponible
       await vi.waitFor(() => expect(button('Envoyer au drive')?.disabled).toBe(false))
     },
-    10000,
   )
 
   it('pendant la lecture de la version, le bouton est grisé et rien n’est enregistré', async () => {
