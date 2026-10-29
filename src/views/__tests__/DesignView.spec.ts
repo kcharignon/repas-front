@@ -42,6 +42,22 @@ describe('DesignView (catalogue)', () => {
     expect(document.documentElement.dataset.theme).toBe('dark')
   })
 
+  it('cocher une case du catalogue la barre et le dit aux lecteurs d’écran', async () => {
+    const wrapper = catalogue()
+    const checkbox = () =>
+      wrapper
+        .findAll('[role="checkbox"]')
+        .find((box) => box.element.closest('label')?.textContent?.includes('À prendre'))!
+    expect(checkbox().attributes('aria-checked')).toBe('false')
+
+    await checkbox().trigger('click')
+
+    expect(checkbox().attributes('aria-checked')).toBe('true')
+    expect(
+      checkbox().element.closest('label')?.querySelector('span.line-through')?.textContent,
+    ).toBe('À prendre')
+  })
+
   it("montre l'erreur du champ quantité avec le champ", () => {
     const wrapper = catalogue()
 

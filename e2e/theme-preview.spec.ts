@@ -1,6 +1,8 @@
 // L'aperçu des thèmes de l'administrateur (ADR 0013) : en mémoire seulement, il ne survit pas à un rechargement. Ni back ni compte :
-// l'API est simulée par `page.route` (comme theme-season.spec.ts).
-import { expect, IN_NOEL, IN_SEASON, test, type Page } from './support/test'
+// l'API est simulée par `page.route` (comme theme-season.spec.ts). Seul le rechargement réel du navigateur reste ici ; la priorité de l'aperçu
+// sur le calendrier et sur l'interrupteur du décor, ce qu'il n'écrit jamais, et l'accès réservé à l'administrateur sont en jsdom :
+// `seasonPreview.spec.ts` et `Account.spec.ts` (« aperçu des thèmes »).
+import { expect, test, type Page } from './support/test'
 
 async function fakeBack(page: Page, isAdmin: boolean) {
   await page.addInitScript(() => localStorage.setItem('repas.session', '1'))
@@ -63,47 +65,5 @@ test.describe('aperçu des thèmes', () => {
       'aria-pressed',
       'true',
     )
-  })
-
-  test('en pleine saison de Noël, « Sans décor » force le thème de base, puis Halloween passe devant', async ({
-    page,
-  }) => {
-    await page.clock.setSystemTime(IN_NOEL)
-    await fakeBack(page, true)
-    await page.goto('/moi')
-    await expect(page.locator('html')).toHaveAttribute('data-season', 'noel')
-
-    await group(page).getByRole('button', { name: 'Sans décor' }).click()
-    await expect(page.locator('html')).not.toHaveAttribute('data-season', /.*/)
-
-    await group(page).getByRole('button', { name: 'Halloween' }).click()
-    await expect(page.locator('html')).toHaveAttribute('data-season', 'halloween')
-
-    await group(page).getByRole('button', { name: 'Thème du moment' }).click()
-    await expect(page.locator('html')).toHaveAttribute('data-season', 'noel')
-  })
-
-  test('l’aperçu ne remplace pas l’interrupteur du décor et ne le touche pas', async ({ page }) => {
-    await page.clock.setSystemTime(IN_SEASON)
-    await fakeBack(page, true)
-    await page.goto('/moi')
-    await page.getByRole('switch', { name: 'Décor d’Halloween' }).click()
-    await expect(page.locator('html')).not.toHaveAttribute('data-season', /.*/)
-    const before = await stored(page)
-
-    await group(page).getByRole('button', { name: 'Noël' }).click()
-    await expect(page.locator('html')).toHaveAttribute('data-season', 'noel')
-    expect(await stored(page)).toBe(before)
-
-    await page.reload()
-    await expect(page.locator('html')).not.toHaveAttribute('data-season', /.*/)
-  })
-
-  test('un utilisateur qui n’est pas administrateur ne voit pas la section', async ({ page }) => {
-    await fakeBack(page, false)
-    await page.goto('/moi')
-
-    await expect(page.getByRole('heading', { level: 1, name: 'Moi' })).toBeVisible()
-    await expect(page.getByText('Aperçu des thèmes')).toHaveCount(0)
   })
 })

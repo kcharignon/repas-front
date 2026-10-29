@@ -1,21 +1,13 @@
 // La page publique d'installation de l'application Android, `/installer` (DRV-639), sans back ni compte : un gros bouton qui télécharge
-// l'APK de la dernière version, puis quatre étapes. Jouée sur le téléphone (Pixel 7) ; le bureau seulement pour les tests étiquetés (playwright.config.ts) ; captures à 412 et 360 px, thèmes clair et sombre.
-import AxeBuilder from '@axe-core/playwright'
+// l'APK de la dernière version, puis quatre étapes. Un seul test, à 360 × 640 (le plus étroit), accessible dans les deux thèmes de la même
+// visite. Le contenu (bouton, href, quatre étapes, un seul lien) et la redirection de la page d'aide vers `/installer` hors de l'application
+// sont en jsdom : `DriveHelpView.spec.ts`.
 import { expect, test } from './support/test'
+import { axeBothThemes } from './support/screen'
 import type { Page } from '@playwright/test'
-
-import { fakeBack } from './support/drive'
 
 const APK =
   'https://github.com/kcharignon/repas-front/releases/download/android-latest/repas-drive.apk'
-
-const accessibility = async (page: Page) => {
-  const { violations } = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    .exclude('.vue-devtools__anchor-btn')
-    .analyze()
-  expect(violations).toEqual([])
-}
 
 /** Aucun appel au back : la page est publique et ne dépend d'aucune donnée. */
 async function noBack(page: Page) {
@@ -31,69 +23,43 @@ async function noBack(page: Page) {
   return calls
 }
 
-for (const colorScheme of ['light', 'dark'] as const) {
-  for (const width of [412, 360]) {
-    test(`/installer à ${width} px : le bouton se voit sans défiler, thème ${colorScheme}`, async ({
-      page,
-    }, testInfo) => {
-      const calls = await noBack(page)
-      await page.setViewportSize({ width, height: 640 })
-      await page.emulateMedia({ colorScheme })
+test.describe('/installer, à 360 × 640', () => {
+  test.use({ viewport: { width: 360, height: 640 } })
 
-      await page.goto('/installer')
+  test('le bouton se voit sans défiler, un seul lien sans nouvel onglet, quatre étapes, accessible dans les deux thèmes', async ({
+    page,
+  }) => {
+    const calls = await noBack(page)
+    await page.emulateMedia({ colorScheme: 'light' })
 
-      await expect(
-        page.getByRole('heading', { level: 1, name: 'Installer l’application Repas' }),
-      ).toBeVisible()
-      const download = page.getByRole('link', { name: 'Télécharger l’application' })
-      await expect(download).toBeVisible()
-      await expect(download).toHaveAttribute('href', APK)
-      const box = await download.boundingBox()
-      expect(box, 'le bouton se voit').not.toBeNull()
-      expect(box!.y + box!.height, 'sans défiler').toBeLessThanOrEqual(640)
-      expect(box!.height).toBeGreaterThanOrEqual(44)
-      expect(box!.width).toBeGreaterThan(width / 2)
-      // Trois courtes étapes, dans l'ordre
-      const steps = page.getByRole('listitem')
-      await expect(steps).toHaveText([
-        'Ouvre le fichier quand Android le propose.',
-        'Autorise l’installation (une seule fois).',
-        'Touche « Installer ».',
-        'Si Play Protect s’affiche, touche « Installer sans analyser », puis confirme avec ton empreinte ou ton code.',
-      ])
-      expect(
-        await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
-      ).toBeLessThanOrEqual(0)
-      // La page n'a besoin de rien du back ni d'aucune connexion
-      expect(calls).toEqual([])
-      await accessibility(page)
-      await page.screenshot({ path: testInfo.outputPath(`${colorScheme}-installer-${width}.png`) })
-    })
-  }
-}
+    await page.goto('/installer')
 
-test('le bouton télécharge le fichier de la release roulante : un seul lien, sans nouvel onglet', async ({
-  page,
-}) => {
-  await noBack(page)
-  await page.goto('/installer')
-
-  const links = page.locator('main a')
-  await expect(links).toHaveCount(1)
-  await expect(links.first()).toHaveAttribute('href', APK)
-  await expect(links.first()).not.toHaveAttribute('target', /.+/)
-})
-
-test('dans un navigateur, une personne connectée qui ouvre la page d’aide arrive sur /installer', async ({
-  page,
-}) => {
-  await fakeBack(page)
-
-  await page.goto('/drive/aide')
-
-  await expect(page).toHaveURL(/\/installer$/)
-  await expect(page.getByRole('link', { name: 'Télécharger l’application' })).toHaveAttribute(
-    'href',
-    APK,
-  )
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Installer l’application Repas' }),
+    ).toBeVisible()
+    const download = page.getByRole('link', { name: 'Télécharger l’application' })
+    await expect(download).toBeVisible()
+    await expect(download).toHaveAttribute('href', APK)
+    const box = await download.boundingBox()
+    expect(box, 'le bouton se voit').not.toBeNull()
+    expect(box!.y + box!.height, 'sans défiler').toBeLessThanOrEqual(640)
+    expect(box!.height).toBeGreaterThanOrEqual(44)
+    expect(box!.width).toBeGreaterThan(360 / 2)
+    // Un seul lien dans la partie principale, et il ne s'ouvre pas dans un nouvel onglet
+    await expect(page.locator('main a')).toHaveCount(1)
+    await expect(download).not.toHaveAttribute('target', /.+/)
+    // Trois courtes étapes, dans l'ordre
+    await expect(page.getByRole('listitem')).toHaveText([
+      'Ouvre le fichier quand Android le propose.',
+      'Autorise l’installation (une seule fois).',
+      'Touche « Installer ».',
+      'Si Play Protect s’affiche, touche « Installer sans analyser », puis confirme avec ton empreinte ou ton code.',
+    ])
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+    ).toBeLessThanOrEqual(0)
+    await axeBothThemes(page, 'installer')
+    // La page n'a besoin de rien du back ni d'aucune connexion
+    expect(calls).toEqual([])
+  })
 })

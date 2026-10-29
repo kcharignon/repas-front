@@ -1,8 +1,10 @@
 // La mise à jour de l'application par elle-même (DRV-639), sans back ni compte : l'API est simulée par `page.route`, l'application par un faux
 // pont `repasNative` qui joue la machine à états de la vraie (recherche, téléchargement avec progression, vérification, installateur
-// d'Android). Ni GitHub, ni installation : la page ne fait que demander et afficher. Captures à 412 et 360 px, thèmes clair et sombre.
-import AxeBuilder from '@axe-core/playwright'
+// d'Android). Ni GitHub, ni installation : la page ne fait que demander et afficher. Deux parcours à 360 × 640 (le bandeau de « Moi », la page
+// d'aide), chacun accessible dans les deux thèmes de la même visite. Ce que le navigateur ne prouve pas est en jsdom : les états et les phrases du
+// bandeau (`AppUpdateBanner.spec.ts`, `appUpdateStore.spec.ts`) et de la page d'aide (`DriveHelpView.spec.ts`).
 import { expect, test } from './support/test'
+import { axeBothThemes } from './support/screen'
 import type { Page, Route } from '@playwright/test'
 
 const BANNER = 'Une nouvelle version de l’application est prête.'
@@ -134,123 +136,53 @@ const sent = (page: Page) =>
     (window as unknown as { __sent: { type: string }[] }).__sent.map((m) => m.type),
   )
 
-const accessibility = async (page: Page) => {
-  const { violations } = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    .exclude('.vue-devtools__anchor-btn')
-    .analyze()
-  expect(violations).toEqual([])
+/** Le bouton se voit sans défiler et se touche du pouce. */
+async function expectReachable(button: ReturnType<Page['getByRole']>, height: number) {
+  const box = await button.boundingBox()
+  expect(box, 'le bouton se voit sans défiler').not.toBeNull()
+  expect(box!.y + box!.height).toBeLessThanOrEqual(height)
+  expect(box!.height).toBeGreaterThanOrEqual(44)
 }
 
-test.describe('le bandeau de « Moi » : un seul bouton fait tout', () => {
-  test('Mettre à jour : recherche, téléchargement avec progression, puis l’écran d’installation d’Android', async ({
+const phone = { width: 360, height: 640 }
+
+test.describe('mise à jour de l’application, à 360 × 640', () => {
+  test.use({ viewport: phone })
+
+  test('le bandeau de « Moi » : un seul bouton fait tout, de la recherche à l’écran d’installation d’Android', async ({
     page,
   }) => {
+    await page.emulateMedia({ colorScheme: 'light' })
     await fakeBack(page)
-    await fakeUpdatingApp(page, { remote: 'newer', download: 'ok' })
+    await fakeUpdatingApp(page, { remote: 'newer', download: 'hold' })
 
     await page.goto('/moi')
     const banner = page.getByTestId('app-update-banner')
     await expect(banner).toContainText(BANNER)
     await expect(banner.getByRole('link'), 'ni lien vers GitHub ni vers l’aide').toHaveCount(0)
+    const action = banner.getByRole('button', { name: 'Mettre à jour' })
+    await expectReachable(action, phone.height)
+    await axeBothThemes(page, 'moi-bandeau-propose')
 
-    await banner.getByRole('button', { name: 'Mettre à jour' }).click()
+    await action.click()
     await expect(banner.getByRole('progressbar')).toBeVisible()
-    await expect(banner).toContainText('Touche « Installer » dans l’écran d’Android.')
+    await expect(banner).toContainText('Téléchargement de la mise à jour… 40 %')
+    await axeBothThemes(page, 'moi-bandeau-progression')
 
+    await page.evaluate(() => (window as unknown as { __finish: () => void }).__finish())
+    await expect(banner).toContainText('Touche « Installer » dans l’écran d’Android.')
     // Tout est resté dans l'application : la page n'a pas bougé, et n'a envoyé que des demandes sans adresse
     await expect(page).toHaveURL(/\/moi$/)
     expect(await sent(page)).toEqual(['app.info', 'update.status', 'update.check', 'update.start'])
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+    ).toBeLessThanOrEqual(0)
   })
 
-  test('l’application est déjà à jour : aucun bandeau, même si le serveur croit l’ancienne version', async ({
+  test('la page d’aide, dans l’application : la version installée et un seul bouton, qui fait tout', async ({
     page,
   }) => {
-    await fakeBack(page)
-    await fakeUpdatingApp(page, { remote: 'same' })
-
-    await page.goto('/moi')
-    await expect(page.getByRole('heading', { level: 1, name: 'Moi' })).toBeVisible()
-    await expect.poll(() => sent(page)).toContain('update.check')
-    await expect(page.getByText(BANNER)).toHaveCount(0)
-  })
-
-  test('une empreinte fausse : une phrase, rien d’installé, « Réessayer »', async ({ page }) => {
-    await fakeBack(page)
-    await fakeUpdatingApp(page, { remote: 'newer', download: 'mismatch' })
-
-    await page.goto('/moi')
-    await page
-      .getByTestId('app-update-banner')
-      .getByRole('button', { name: 'Mettre à jour' })
-      .click()
-
-    const banner = page.getByTestId('app-update-banner')
-    await expect(banner.getByRole('alert')).toHaveText(
-      'Le fichier téléchargé n’est pas le bon : rien n’a été installé.',
-    )
-    await expect(banner.getByRole('button', { name: 'Réessayer' })).toBeVisible()
-  })
-
-  test('une ancienne application garde le bouton vers l’aide', async ({ page }) => {
-    await fakeBack(page)
-    await fakeUpdatingApp(page, { selfUpdate: false })
-
-    await page.goto('/moi')
-    const banner = page.getByTestId('app-update-banner')
-    await expect(banner).toContainText(BANNER)
-    await expect(banner.getByRole('link', { name: 'Mettre à jour' })).toHaveAttribute(
-      'href',
-      '/drive/aide#mise-a-jour',
-    )
-    expect(await sent(page)).toEqual(['app.info'])
-  })
-
-  for (const colorScheme of ['light', 'dark'] as const) {
-    for (const width of [412, 360]) {
-      test(`captures et accessibilité à ${width} px, thème ${colorScheme}`, async ({
-        page,
-      }, testInfo) => {
-        await page.setViewportSize({ width, height: 640 })
-        await page.emulateMedia({ colorScheme })
-        await fakeBack(page)
-        await fakeUpdatingApp(page, { remote: 'newer', download: 'hold' })
-
-        await page.goto('/moi')
-        const banner = page.getByTestId('app-update-banner')
-        await expect(banner).toContainText(BANNER)
-        const action = banner.getByRole('button', { name: 'Mettre à jour' })
-        const box = await action.boundingBox()
-        expect(box, 'le bouton se voit sans défiler').not.toBeNull()
-        expect(box!.y + box!.height).toBeLessThanOrEqual(640)
-        expect(box!.height).toBeGreaterThanOrEqual(44)
-        await accessibility(page)
-        await page.screenshot({
-          path: testInfo.outputPath(`${colorScheme}-${width}-1-propose.png`),
-        })
-
-        await action.click()
-        await expect(banner).toContainText('Téléchargement de la mise à jour… 40 %')
-        await accessibility(page)
-        await page.screenshot({
-          path: testInfo.outputPath(`${colorScheme}-${width}-2-progression.png`),
-        })
-
-        await page.evaluate(() => (window as unknown as { __finish: () => void }).__finish())
-        await expect(banner).toContainText('Touche « Installer »')
-        await page.screenshot({
-          path: testInfo.outputPath(`${colorScheme}-${width}-3-installer.png`),
-        })
-        expect(
-          await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
-        ).toBeLessThanOrEqual(0)
-      })
-    }
-  }
-})
-
-test.describe('la page d’aide, dans l’application', () => {
-  test('la version installée et un seul bouton, qui fait tout', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light' })
     await fakeBack(page)
     await fakeUpdatingApp(page, { remote: 'newer', download: 'ok' })
 
@@ -261,35 +193,12 @@ test.describe('la page d’aide, dans l’application', () => {
     await expect(page.getByText('Version installée : 0.1.26')).toBeVisible()
     const button = page.getByRole('button', { name: 'Mettre à jour' })
     await expect(button).toBeVisible()
-    expect((await button.boundingBox())?.height).toBeGreaterThanOrEqual(44)
+    await expectReachable(button, phone.height)
     await expect(page.locator('main a')).toHaveCount(0)
-    await accessibility(page)
+    await axeBothThemes(page, 'aide-mise-a-jour')
 
     await button.click()
     await expect(page.getByText('Touche « Installer » dans l’écran d’Android.')).toBeVisible()
     await expect(page).toHaveURL(/\/drive\/aide#mise-a-jour$/)
-  })
-
-  test('à jour : une phrase, plus de bouton', async ({ page }) => {
-    await fakeBack(page)
-    await fakeUpdatingApp(page, { remote: 'same' })
-
-    await page.goto('/drive/aide#mise-a-jour')
-    await expect(page.getByText('Tu as la dernière version.')).toBeVisible()
-    await expect(page.getByRole('button')).toHaveCount(0)
-  })
-
-  test('une ancienne application : le téléchargement à la main, vers la page de la dernière version', async ({
-    page,
-  }) => {
-    await fakeBack(page)
-    await fakeUpdatingApp(page, { selfUpdate: false })
-
-    await page.goto('/drive/aide#mise-a-jour')
-    await expect(page.getByRole('link', { name: 'Télécharger l’application' })).toHaveAttribute(
-      'href',
-      'https://github.com/kcharignon/repas-front/releases/download/android-latest/repas-drive.apk',
-    )
-    await expect(page.getByRole('listitem')).toHaveCount(4)
   })
 })

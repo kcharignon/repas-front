@@ -207,6 +207,8 @@ describe('la page publique /installer', () => {
     const main = wrapper.find('main')
 
     expect(main.findAll('a')).toHaveLength(1)
+    // Le téléchargement se lance sur place : pas de nouvel onglet
+    expect(main.get('a').attributes('target')).toBeUndefined()
     expect(main.findAll('input, form, button')).toHaveLength(0)
   })
 })

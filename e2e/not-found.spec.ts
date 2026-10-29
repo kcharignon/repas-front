@@ -1,38 +1,21 @@
-import AxeBuilder from '@axe-core/playwright'
-import { expect, test, BUREAU } from './support/test'
+// La page introuvable et les anciennes adresses de l'interface Twig, sans back ni compte. Un seul test, sur le téléphone : la page n'a qu'une colonne,
+// son contraste ne dépend pas du viewport. Le titre, le lien de retour et la route publique sont en jsdom : `NotFoundView.spec.ts`, `legacy.spec.ts`.
+import { expect, test } from './support/test'
+import { axeBothThemes } from './support/screen'
 
-test("une adresse inconnue montre une page claire, qui ramène à l'application", async ({
+test("une adresse inconnue montre une page claire, accessible, qui ramène à l'application", async ({
   page,
 }) => {
+  await page.emulateMedia({ colorScheme: 'light' })
   await page.goto('/cette-page-nexiste-pas')
 
   await expect(page.getByRole('heading', { level: 1, name: 'Page introuvable' })).toBeVisible()
+  await axeBothThemes(page, 'page-introuvable')
   await page.getByRole('link', { name: 'Retour à la liste' }).click()
   // Sans session on arrive à la connexion, qui garde la page voulue
   await expect(page).toHaveURL(/\/connexion/)
-})
 
-test("une ancienne adresse de l'interface Twig mène à la page équivalente", async ({ page }) => {
+  // Une ancienne adresse de l'interface Twig mène à la page équivalente (la redirection, puis la garde de session)
   await page.goto('/recipes')
-
   await expect(page).toHaveURL(/\/connexion\?redirect=\/recettes$/)
 })
-
-for (const colorScheme of ['light', 'dark'] as const) {
-  test(
-    `la page introuvable est accessible (WCAG AA), thème ${colorScheme}`,
-    { tag: BUREAU },
-    async ({ page }) => {
-      await page.emulateMedia({ colorScheme })
-      await page.goto('/cette-page-nexiste-pas')
-      await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-
-      const { violations } = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-        .exclude('.vue-devtools__anchor-btn')
-        .analyze()
-
-      expect(violations).toEqual([])
-    },
-  )
-}
