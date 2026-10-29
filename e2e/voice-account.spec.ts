@@ -3,7 +3,7 @@
 //  - sans liaison, avec une liaison, « Délier Alexa » (confirmation, retour à « aucune liaison » sans recharger) ;
 //  - captures à 360 × 640 et au bureau, clair et sombre, accessibilité (WCAG AA) ; une lecture contre le VRAI back (`make e2e`).
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from './support/test'
+import { expect, test, viewportTag } from './support/test'
 import type { Page } from '@playwright/test'
 
 import { hasSession, signIn } from './support/session'
@@ -161,7 +161,7 @@ for (const { label, size } of [
   { label: '360 × 640', size: { width: 360, height: 640 } },
   { label: 'bureau 1280 × 800', size: { width: 1280, height: 800 } },
 ]) {
-  test.describe(`« Moi », assistant vocal, ${label}`, () => {
+  test.describe(`« Moi », assistant vocal, ${label}`, { tag: viewportTag(size) }, () => {
     test.use({ viewport: size })
 
     for (const colorScheme of ['light', 'dark'] as const) {

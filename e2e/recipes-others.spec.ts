@@ -1,9 +1,9 @@
 // « Recettes des autres », sans back ni compte : l'API est simulée par `page.route`. Sans recherche, la liste est rangée par catégorie
 // (une section chacune) ; avec une recherche (le champ attend une pause dans la frappe), une liste simple par pertinence où chaque ligne dit
-// sa catégorie ; le bouton d'effacement revient aux sections. Jouée en clair et en sombre, au téléphone et au bureau, axe sans violation.
+// sa catégorie ; le bouton d'effacement revient aux sections. Jouée en clair et en sombre, au téléphone (le bureau : largeur 1280 et axe étiqueté), axe sans violation.
 // `E2E_SHOTS=<dossier>` garde des captures (360, 390 et 1280 px).
 import AxeBuilder from '@axe-core/playwright'
-import { expect, IN_SEASON, test, type Page } from './support/test'
+import { expect, IN_SEASON, test, type Page, viewportTag, BUREAU } from './support/test'
 
 const shots = process.env.E2E_SHOTS
 
@@ -89,21 +89,25 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme })
     })
 
-    test('la liste est rangée par catégorie, sans violation axe', async ({ page }) => {
-      await fakeBack(page)
-      await page.goto('/recettes/autres')
+    test(
+      'la liste est rangée par catégorie, sans violation axe',
+      { tag: BUREAU },
+      async ({ page }) => {
+        await fakeBack(page)
+        await page.goto('/recettes/autres')
 
-      await expect(page.getByRole('heading', { level: 2 })).toHaveText([
-        'Entrée',
-        'Plat',
-        'Dessert',
-      ])
-      await expect(
-        page.getByRole('region', { name: 'Plat' }).getByRole('link', { name: 'Tarte flambée' }),
-      ).toBeVisible()
-      await shot(page, `autres-par-categorie-${colorScheme}`)
-      expect((await scan(page)).violations).toEqual([])
-    })
+        await expect(page.getByRole('heading', { level: 2 })).toHaveText([
+          'Entrée',
+          'Plat',
+          'Dessert',
+        ])
+        await expect(
+          page.getByRole('region', { name: 'Plat' }).getByRole('link', { name: 'Tarte flambée' }),
+        ).toBeVisible()
+        await shot(page, `autres-par-categorie-${colorScheme}`)
+        expect((await scan(page)).violations).toEqual([])
+      },
+    )
 
     test('une recherche : liste simple, catégorie sur chaque ligne ; effacer revient aux sections', async ({
       page,
@@ -161,7 +165,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
 test.describe('trois largeurs, sans défilement horizontal (captures avec E2E_SHOTS)', () => {
   for (const width of [360, 390, 1280]) {
-    test(`${width} px`, async ({ page }) => {
+    test(`${width} px`, { tag: viewportTag({ width }) }, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 })
       await fakeBack(page)
       for (const colorScheme of ['light', 'dark'] as const) {

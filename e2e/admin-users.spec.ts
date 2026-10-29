@@ -1,8 +1,8 @@
 // Administration des utilisateurs, sans back ni compte : l'API est simulée par `page.route`, avec un état qui suit les
-// changements de statut et les suppressions. Jouée sur bureau (tableau) et sur Pixel 7 (cartes). Données inventées.
+// changements de statut et les suppressions. Jouée sur le téléphone (cartes) et sur le bureau (tableau), étiquette BUREAU. Données inventées.
 // SHOTS_DIR=<dossier> : garde une capture de chaque état (clair et sombre) pour la relire.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page, type Route } from './support/test'
+import { expect, test, type Page, type Route, BUREAU } from './support/test'
 
 type Status = 'PENDING' | 'ACTIVE' | 'DISABLED'
 interface FakeUser {
@@ -135,7 +135,7 @@ const shot = async (page: Page, name: string) => {
 const rowOf = (page: Page, email: string) =>
   page.getByRole('listitem').filter({ hasText: email, has: page.locator('p', { hasText: email }) })
 
-test.describe('administration des utilisateurs', () => {
+test.describe('administration des utilisateurs', { tag: BUREAU }, () => {
   test('les comptes en attente passent en premier, avec une action visible et une dernière connexion lisible', async ({
     page,
   }) => {

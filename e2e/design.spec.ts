@@ -1,22 +1,24 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from './support/test'
+import { expect, test, BUREAU } from './support/test'
 
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`le catalogue est accessible (WCAG AA), thème ${colorScheme} du système`, async ({
-    page,
-  }) => {
-    await page.emulateMedia({ colorScheme })
-    await page.goto('/design')
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  test(
+    `le catalogue est accessible (WCAG AA), thème ${colorScheme} du système`,
+    { tag: BUREAU },
+    async ({ page }) => {
+      await page.emulateMedia({ colorScheme })
+      await page.goto('/design')
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
 
-    const { violations } = await new AxeBuilder({ page })
-      // Le bouton des Vue DevTools n'existe qu'en développement : ce n'est pas notre interface.
-      .exclude('.vue-devtools__anchor-btn')
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-      .analyze()
+      const { violations } = await new AxeBuilder({ page })
+        // Le bouton des Vue DevTools n'existe qu'en développement : ce n'est pas notre interface.
+        .exclude('.vue-devtools__anchor-btn')
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+        .analyze()
 
-    expect(violations).toEqual([])
-  })
+      expect(violations).toEqual([])
+    },
+  )
 }
 
 test('le choix du thème prime sur le système et reste après rechargement', async ({ page }) => {

@@ -11,6 +11,7 @@ import {
   IN_VALENTIN,
   test,
   type Page,
+  viewportTag,
 } from './support/test'
 
 const PHONE = { width: 360, height: 640 }
@@ -78,7 +79,7 @@ const scene = (page: Page) => page.getByTestId('season-scene')
 for (const viewport of [PHONE, DESKTOP]) {
   const label = `${viewport.width} × ${viewport.height}`
 
-  test.describe(`coin et scène de saison, ${label}`, () => {
+  test.describe(`coin et scène de saison, ${label}`, { tag: viewportTag(viewport) }, () => {
     test.use({ viewport })
 
     test('Halloween : le coin et la scène sont là sur la connexion, sans recouvrir d’action', async ({

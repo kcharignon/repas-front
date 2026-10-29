@@ -1,6 +1,6 @@
 // Limiteur de débit du drive (DRV-615), sans back ni compte : le faux back refuse d'abord par `429 DRIVE_RATE_LIMITED` (avec un
 // `Retry-After` optimiste de 1 seconde) puis répond. L'écran le dit comme un refus passager, n'insiste jamais tout seul et ne perd rien.
-// Données inventées. Joué sur bureau et sur Pixel 7.
+// Données inventées. Jouée sur le téléphone (Pixel 7) ; le bureau seulement pour les tests étiquetés (playwright.config.ts).
 import { expect, test } from './support/test'
 
 import { fakeApp, fakeBack, scan } from './support/drive'

@@ -1,10 +1,17 @@
 // `test` de Playwright, avec une horloge figée HORS des saisons (ADR 0010, 0011, 0014, 0015, 0016) : la suite ne dépend jamais du jour où on la lance
 // (la galette : du 6 janvier au 2 février ; la Saint-Valentin : du 7 au 14 février ; Pâques : trois semaines avant le dimanche de Pâques au lundi de Pâques ; l'été : du 21 juin au 31 août ; l'automne : du 1er septembre au 14 octobre ; Halloween : du 15 octobre au 1er novembre ; Noël : du 15 novembre
 // au 5 janvier). Les specs importent `test` et `expect` d'ici.
+// Un test est joué sur le téléphone (projet `mobile`) ; deux étiquettes, à passer en détail (`test(titre, { tag: BUREAU }, …)`), l'envoient aussi ou
+// seulement sur le bureau (projet `chromium`) : voir `playwright.config.ts`.
 // Un test de saison pose sa date avant d'ouvrir la page : `await page.clock.setSystemTime(IN_SEASON)`.
 import { test as base } from '@playwright/test'
 
 export * from '@playwright/test'
+
+/** Joué sur le téléphone ET sur le bureau : la mise en page du bureau change ce que le test vérifie (tableau ou cartes, accessibilité d'un écran large). */
+export const BUREAU = '@bureau'
+/** Joué sur le bureau SEULEMENT : le test fixe lui-même une largeur de bureau, le téléphone n'y changerait rien. */
+export const BUREAU_SEUL = '@bureau-seul'
 
 /** Le 15 juin 2026, midi, heure du navigateur. */
 export const OFF_SEASON = new Date(2026, 5, 15, 12, 0, 0)
@@ -30,3 +37,7 @@ export const test = base.extend({
     await use(page)
   },
 })
+
+/** L'étiquette d'un test qui fixe lui-même sa largeur : une largeur de bureau l'envoie sur le bureau seulement, une largeur de téléphone ne met rien. */
+export const viewportTag = ({ width }: { width: number }): string[] =>
+  width >= 768 ? [BUREAU_SEUL] : []

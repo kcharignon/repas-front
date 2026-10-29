@@ -1,6 +1,6 @@
 // La première lettre d'un nom de recette ou d'ingrédient passe en majuscule dès qu'elle est tapée, et le nom envoyé au back l'a toujours,
 // sans back ni compte : l'API est simulée par `page.route`. Le reste du nom reste tel qu'il est tapé ; un champ de recherche n'est pas touché.
-// Jouée au téléphone (390 px) et au bureau, en clair et en sombre, axe sans violation. `E2E_SHOTS=<dossier>` garde des captures.
+// Jouée au téléphone (390 px), en clair et en sombre, axe sans violation. `E2E_SHOTS=<dossier>` garde des captures.
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from './support/test'
 

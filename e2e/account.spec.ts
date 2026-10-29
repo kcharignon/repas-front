@@ -43,12 +43,8 @@ test.describe('mon compte', () => {
     )
   })
 
-  test('un mot de passe actuel incorrect est refusé sans déconnecter', async ({
-    page,
-  }, testInfo) => {
-    // Le back plafonne les refus de mot de passe : un seul projet joue ce refus
-    // eslint-disable-next-line playwright/no-skipped-test
-    test.skip(testInfo.project.name !== 'chromium', 'jouer le refus une fois suffit')
+  test('un mot de passe actuel incorrect est refusé sans déconnecter', async ({ page }) => {
+    // Le back plafonne les refus de mot de passe : ce refus n’est joué qu’une fois (sur le téléphone)
     await signIn(page, '/moi')
     await page.getByLabel('Mot de passe actuel').fill('pas-le-bon')
     await page.getByLabel('Nouveau mot de passe', { exact: true }).fill('un-autre-mdp-123')

@@ -1,7 +1,7 @@
 // « Mes produits » (DRV-410), sans back ni compte : l'API est simulée (`e2e/support/driveBack.ts`).
-// Jouée sur bureau et sur Pixel 7 : parcours du compte à l'enregistrement d'un nouvel ordre, accessibilité en clair et en sombre.
+// Jouée sur le téléphone (Pixel 7) ; le bureau seulement pour les tests étiquetés (playwright.config.ts) : parcours du compte à l'enregistrement d'un nouvel ordre, accessibilité en clair et en sombre.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page } from './support/test'
+import { expect, test, type Page, BUREAU } from './support/test'
 
 import { cheddar, cheddarChoice, farineA, farineB, fakeDriveBack } from './support/driveBack'
 
@@ -92,34 +92,36 @@ test('le drive coupé : pas d’entrée dans le compte, message sur l’écran',
 })
 
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`les écrans « Mes produits » sont accessibles, sans défilement horizontal, thème ${colorScheme}`, async ({
-    page,
-  }) => {
-    await fakeDriveBack(page)
-    await page.emulateMedia({ colorScheme })
+  test(
+    `les écrans « Mes produits » sont accessibles, sans défilement horizontal, thème ${colorScheme}`,
+    { tag: BUREAU },
+    async ({ page }) => {
+      await fakeDriveBack(page)
+      await page.emulateMedia({ colorScheme })
 
-    await page.goto('/moi')
-    await expect(page.getByRole('link', { name: /Mes produits du drive/ })).toBeVisible()
-    expect((await scan(page)).violations).toEqual([])
+      await page.goto('/moi')
+      await expect(page.getByRole('link', { name: /Mes produits du drive/ })).toBeVisible()
+      expect((await scan(page)).violations).toEqual([])
 
-    await page.goto('/drive/produits')
-    await expect(page.getByRole('link', { name: /Farine/ })).toBeVisible()
-    expect((await scan(page)).violations).toEqual([])
+      await page.goto('/drive/produits')
+      await expect(page.getByRole('link', { name: /Farine/ })).toBeVisible()
+      expect((await scan(page)).violations).toEqual([])
 
-    await page.getByRole('link', { name: /Farine/ }).click()
-    await expect(
-      page.getByRole('heading', { level: 2, name: 'Produits à ne plus proposer' }),
-    ).toBeVisible()
-    expect((await scan(page)).violations).toEqual([])
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    )
-    expect(overflow).toBeLessThanOrEqual(0)
+      await page.getByRole('link', { name: /Farine/ }).click()
+      await expect(
+        page.getByRole('heading', { level: 2, name: 'Produits à ne plus proposer' }),
+      ).toBeVisible()
+      expect((await scan(page)).violations).toEqual([])
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      )
+      expect(overflow).toBeLessThanOrEqual(0)
 
-    await page.getByRole('button', { name: 'Oublier cet article' }).click()
-    await expect(page.getByRole('dialog')).toBeVisible()
-    expect((await scan(page)).violations).toEqual([])
-  })
+      await page.getByRole('button', { name: 'Oublier cet article' }).click()
+      await expect(page.getByRole('dialog')).toBeVisible()
+      expect((await scan(page)).violations).toEqual([])
+    },
+  )
 }
 
 test('la contenance d’un produit dans l’unité de la liste s’affiche, et se corrige sur place (DRV-652)', async ({

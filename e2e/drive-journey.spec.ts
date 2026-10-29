@@ -144,12 +144,7 @@ async function fakeBackFromSamples(page: Page) {
 }
 
 test.describe('parcours complet, pont et API simulés', () => {
-  // eslint-disable-next-line playwright/no-skipped-test
-  test.skip(
-    ({ isMobile }) => !isMobile,
-    'Parcours joué sur Pixel 7 (le drive se pilote du téléphone)',
-  )
-
+  // Joué sur le téléphone seulement : le drive se pilote du téléphone (c'est le projet de tout test sans étiquette)
   test('réglages, liste envoyée, envoi, retour de l’application, choix enregistrés, récapitulatif', async ({
     page,
   }) => {

@@ -2,7 +2,7 @@
 // action secondaire, et « ⋮ » (« Plus d'actions ») pour le reste. Sans back : l'API est simulée par `page.route`. Captures (360 et
 // 320 px, clair et sombre, menu fermé et ouvert) dans test-results/, à lire avant de fusionner.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page, type Route } from './support/test'
+import { expect, test, type Page, type Route, BUREAU_SEUL } from './support/test'
 
 import { fakeApp } from './support/drive'
 
@@ -191,8 +191,6 @@ for (const width of [360, 320]) {
       test(`${scenario.name}, ${width} px, thème ${colorScheme} : une rangée, rien ne passe à la ligne, le menu tient dans l’écran`, async ({
         page,
       }, testInfo) => {
-        // eslint-disable-next-line playwright/no-skipped-test
-        test.skip(testInfo.project.name !== 'mobile', 'largeurs de téléphone')
         await page.setViewportSize({ width, height: 700 })
         await page.emulateMedia({ colorScheme })
         const expected = width < 360 && 'narrow' in scenario ? scenario.narrow : scenario
@@ -250,32 +248,32 @@ for (const width of [360, 320]) {
 }
 
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`bureau, thème ${colorScheme} : les actions se suivent à gauche, « ⋮ » juste après`, async ({
-    page,
-  }, testInfo) => {
-    // eslint-disable-next-line playwright/no-skipped-test
-    test.skip(testInfo.project.name !== 'chromium', 'écran de bureau')
-    await page.emulateMedia({ colorScheme })
-    await fakeBack(page, 'ACTIVE')
-    await fakeApp(page)
-    await page.goto('/listes/l1')
-    await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toBeVisible()
+  test(
+    `bureau, thème ${colorScheme} : les actions se suivent à gauche, « ⋮ » juste après`,
+    { tag: BUREAU_SEUL },
+    async ({ page }, testInfo) => {
+      await page.emulateMedia({ colorScheme })
+      await fakeBack(page, 'ACTIVE')
+      await fakeApp(page)
+      await page.goto('/listes/l1')
+      await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toBeVisible()
 
-    const row = await rowOf(page)
-    expect(row.map((action) => action.name)).toEqual([
-      'Envoyer au drive',
-      'Terminer',
-      'Plus d’actions',
-    ])
-    for (const action of row) expect(Math.abs(action.top - row[0]!.top)).toBeLessThan(1)
-    await more(page).click()
-    await expect(page.getByRole('menu')).toBeVisible()
-    expect((await scan(page)).violations).toEqual([])
-    await page.screenshot({
-      path: testInfo.outputPath(`bureau-${colorScheme}-menu.png`),
-      clip: { x: 0, y: 0, width: 1280, height: 420 },
-    })
-  })
+      const row = await rowOf(page)
+      expect(row.map((action) => action.name)).toEqual([
+        'Envoyer au drive',
+        'Terminer',
+        'Plus d’actions',
+      ])
+      for (const action of row) expect(Math.abs(action.top - row[0]!.top)).toBeLessThan(1)
+      await more(page).click()
+      await expect(page.getByRole('menu')).toBeVisible()
+      expect((await scan(page)).violations).toEqual([])
+      await page.screenshot({
+        path: testInfo.outputPath(`bureau-${colorScheme}-menu.png`),
+        clip: { x: 0, y: 0, width: 1280, height: 420 },
+      })
+    },
+  )
 }
 
 test('à 320 px, « Terminer » rangé dans « ⋮ » termine la liste', async ({ page }) => {

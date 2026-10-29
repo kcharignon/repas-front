@@ -1,5 +1,5 @@
 // Aide et installation de l'application (DRV-316, DRV-639), sans back ni compte : l'API est simulée par `page.route`, et le pont natif
-// `repasNative` de l'application par un faux installé avant la page. Joué sur bureau et sur Pixel 7. La mise à jour faite par l'application
+// `repasNative` de l'application par un faux installé avant la page. Jouée sur le téléphone (Pixel 7) ; le bureau seulement pour les tests étiquetés (playwright.config.ts). La mise à jour faite par l'application
 // elle-même est dans `app-update.spec.ts`, la page publique `/installer` dans `install.spec.ts`.
 import { expect, test } from './support/test'
 
