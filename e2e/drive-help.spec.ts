@@ -1,6 +1,6 @@
 // Aide et mise à jour de l'application (DRV-316, DRV-639), sans back ni compte : l'API est simulée par `page.route`, et le pont natif
 // `repasNative` de l'application par un faux installé avant la page. Jouée sur le téléphone (Pixel 7) seulement. Le texte et les liens sont
-// dans `DriveHelpView.spec.ts` (jsdom) ; la page publique `/installer` (et la redirection de `/drive/aide` dans un navigateur) dans
+// dans `DriveHelpView.spec.ts` (jsdom, redirection de `/drive/aide` dans un navigateur comprise) ; la page publique `/installer` dans
 // `install.spec.ts`, la mise à jour faite par l'application elle-même dans `app-update.spec.ts` : ici, ce qu'aucune d'elles ne scanne, l'entrée
 // « Application » de « Moi » et l'aide d'une application qui ne se met pas encore à jour seule, dans les deux thèmes.
 import { expect, test } from './support/test'

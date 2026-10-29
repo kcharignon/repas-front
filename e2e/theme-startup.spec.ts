@@ -24,11 +24,12 @@ async function fakeBack(page: Page) {
   )
 }
 
+// Deux cas suffisent : la préférence explicite bat le système, et « système » suit le système. Les polarités opposées prennent le même chemin ; la
+// valeur de `data-theme` pour chaque préférence (`light`, `dark`, `system`, inconnue, absente) est prouvée en jsdom contre le vrai
+// `public/theme-init.js` (`theme.spec.ts`, « au démarrage »).
 const cases = [
   { stored: 'light', system: 'dark', attribute: 'light', dark: false },
-  { stored: 'dark', system: 'light', attribute: 'dark', dark: true },
   { stored: 'system', system: 'dark', attribute: null, dark: true },
-  { stored: 'system', system: 'light', attribute: null, dark: false },
 ] as const
 
 for (const { stored, system, attribute, dark } of cases) {
