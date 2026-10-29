@@ -343,6 +343,9 @@ export default {
     othersMore: 'Voir plus',
     copy: 'Copier',
     copyNamed: 'Copier {name} dans mes recettes',
+    copied: 'Copiée',
+    copiedNamed: 'Copiée : {name} est dans tes recettes',
+    copiedToast: '« {name} » est dans tes recettes.',
   },
   editor: {
     newTitle: 'Nouvelle recette',

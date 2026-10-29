@@ -85,6 +85,10 @@ Ne se fait pas dans le front seul : schémas `drive-agent/protocol/*.schema.json
 ### 4.4 Un champ « nom » de recette ou d'ingrédient
 Utiliser `<UiTextInput capitalize-first …/>` (ADR 0018) : la première lettre passe en majuscule à la saisie, et le nom envoyé passe par `capitalizeFirst` (`src/design/capitalizeFirst.ts`) dans la mutation, jamais dans le composant seul. Pas sur un champ de recherche, ni sur une unité, un rayon, une liste ou un magasin.
 
+### 4.5 « Copier » une recette d'un autre
+
+Passer par `useCopyRecipeAction` (`src/features/recipes/`) : la copie ne navigue pas, un message confirme, le bouton de la recette passe à « Copiée » (`copiedRecipes`, en mémoire, vidé par `forgetAccountData`). Sur la fiche, le jeu d'actions dépend de la propriété déduite de SES recettes (`mine | other | unknown`) : jamais d'action tant qu'elle est inconnue, « Copier » seul pour un autre, `PlanButton`/Modifier/Supprimer pour soi (ADR 0017, amendement du 2026-10-30).
+
 ## 5. Definition of Done
 
 - [ ] `make check` vert (lint, format, `api-check`, types, tests) ; `make quality` avant la PR ; seuil de couverture non abaissé

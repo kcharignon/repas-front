@@ -106,7 +106,10 @@ export function useCopyRecipe() {
 
       return response.headers.get('Location')?.split('/').pop() ?? null
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: recipeKeys.all }),
+    // Sans attendre la relecture : le message et le bouton « Copiée » ne patientent pas derrière elle
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: recipeKeys.all })
+    },
   })
 }
 

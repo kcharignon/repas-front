@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink } from 'vue-router'
 
 import LoadError from '@/design/LoadError.vue'
 import SeasonEmpty from '@/design/season/SeasonEmpty.vue'
@@ -9,11 +9,18 @@ import UiButton from '@/design/UiButton.vue'
 import UiSearchField from '@/design/UiSearchField.vue'
 import { useDebounced } from '@/features/ingredients/useDebounced'
 import OtherRecipeItem from './OtherRecipeItem.vue'
-import { capitalized, groupByType } from './otherRecipeGroups'
-import { MIN_OTHERS_SEARCH_LENGTH, useCopyRecipe, useOtherPeopleRecipes } from './queries'
+import { useCopiedRecipesStore } from './copiedRecipes'
+import {
+  capitalized,
+  groupByType,
+  keepCopied,
+  type CopiedPin,
+  type OtherRecipe,
+} from './otherRecipeGroups'
+import { MIN_OTHERS_SEARCH_LENGTH, useOtherPeopleRecipes } from './queries'
+import { useCopyRecipeAction } from './useCopyRecipeAction'
 
 const { t } = useI18n()
-const router = useRouter()
 
 // La requête attend une pause dans la frappe (comme la recherche d'ingrédients) ; effacer le champ revient tout de suite à la liste.
 const search = ref('')
@@ -22,8 +29,15 @@ const term = computed(() => (search.value.trim() === '' ? '' : paused.value.trim
 const isSearching = computed(() => term.value.length >= MIN_OTHERS_SEARCH_LENGTH)
 
 const others = useOtherPeopleRecipes(() => term.value)
-const copy = useCopyRecipe()
-const items = computed(() => others.data.value?.pages.flatMap((page) => page.member) ?? [])
+const copying = useCopyRecipeAction()
+// Une nouvelle visite de l'écran repart de zéro : rien n'est « Copiée » d'une visite à l'autre
+useCopiedRecipesStore().clear()
+// Copier ne quitte pas la liste. La recette copiée n'est plus « à copier » : le back ne la rend plus à la relecture, on la garde
+// donc à sa place (avec « Copiée ») pour la visite ; une autre recherche repart d'une liste neuve.
+const pins = ref<CopiedPin[]>([])
+watch(term, () => (pins.value = []))
+const fetched = computed(() => others.data.value?.pages.flatMap((page) => page.member) ?? [])
+const items = computed(() => keepCopied(fetched.value, pins.value))
 // Sans recherche, le back range les recettes par catégorie : une section par catégorie. Avec une recherche, l'ordre est la pertinence.
 const groups = computed(() => (isSearching.value ? [] : groupByType(items.value)))
 const total = computed(() => others.data.value?.pages[0]?.totalItems ?? 0)
@@ -44,12 +58,10 @@ const nothingToSearch = computed(
     items.value.length === 0,
 )
 
-function copyRecipe(id: string) {
-  copy.mutate(id, {
-    onSuccess: (copyId) => {
-      if (copyId !== null) void router.push({ name: 'recipe', params: { id: copyId } })
-    },
-  })
+function copyRecipe(recipe: OtherRecipe) {
+  const index = items.value.findIndex((candidate) => candidate.id === recipe.id)
+  // Une fois copiée la recette est gardée à sa place ; un refus du back (dit par le retour commun des écritures) ne garde rien
+  copying.copy(recipe, () => (pins.value = [...pins.value, { recipe, index }]))
 }
 </script>
 
@@ -99,7 +111,8 @@ function copyRecipe(id: string) {
           :key="recipe.id"
           :recipe="recipe"
           show-type
-          :busy="copy.isPending.value"
+          :busy="copying.pending.value"
+          :copied="copying.isCopied(recipe.id)"
           @copy="copyRecipe"
         />
       </ul>
@@ -121,7 +134,8 @@ function copyRecipe(id: string) {
               :key="recipe.id"
               :recipe="recipe"
               :show-type="false"
-              :busy="copy.isPending.value"
+              :busy="copying.pending.value"
+              :copied="copying.isCopied(recipe.id)"
               @copy="copyRecipe"
             />
           </ul>

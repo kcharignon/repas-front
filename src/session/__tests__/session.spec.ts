@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { ApiError } from '@/api'
 import { bodyOf, calls, json, me, stubApi } from '@/__tests__/helpers'
 import { useDriveReturnStore } from '@/features/drive/returnStore'
+import { useCopiedRecipesStore } from '@/features/recipes/copiedRecipes'
 import { useSessionStore } from '@/session/session'
 
 describe('session', () => {
@@ -516,12 +517,14 @@ describe('session', () => {
       const driveReturn = useDriveReturnStore()
       driveReturn.receive({ kind: 'invalid', detail: 'champ' })
       expect(driveReturn.event).not.toBeNull()
+      useCopiedRecipesStore().add('r1')
 
       await session.logout()
 
       expect(localStorage.getItem('repas.drive.run')).toBeNull()
       expect(driveReturn.event).toBeNull()
       expect(driveReturn.status).toBe('idle')
+      expect(useCopiedRecipesStore().ids).toEqual([])
     })
 
     it('efface le brouillon du drive même si le back est injoignable', async () => {

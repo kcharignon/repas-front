@@ -172,7 +172,8 @@ describe('RecipeDetailView : ingrédients à régler', () => {
 
     expect(wrapper.text()).not.toContain('Je ne sais pas')
     expect(wrapper.text()).not.toContain('à régler')
-    expect(wrapper.find('[aria-pressed]').attributes('disabled')).toBeUndefined()
+    // Pas d'ajout à la liste pour la recette d'un autre : on la copie d'abord
+    expect(wrapper.find('[aria-pressed]').exists()).toBe(false)
     expect(calls(fetchMock)).not.toContain('GET /api/v1/units')
   })
 

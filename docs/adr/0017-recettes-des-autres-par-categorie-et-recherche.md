@@ -15,6 +15,13 @@ L'écran `/recettes/autres` (`OtherRecipesView.vue`) listait les recettes des au
 5. **« Voir plus » inchangé** : `offset` sur la liste en cours (avec `q` le cas échéant), `totalItems` est le vrai nombre ; la clé de recherche est lue dans la clé de la requête, pas dans la saisie du moment.
 6. Le champ n'est pas montré quand le back n'a aucune recette à proposer (« Rien de nouveau à copier pour le moment. »).
 
+## Amendement du 2026-10-30 : « Copier » ne quitte pas l'écran
+
+Constat de l'utilisateur : après « Copier », l'écran ouvrait la copie, dont le bouton « Ajouter » (à la liste de courses) se lisait comme « ajouter à mon livre de recettes ».
+
+7. **Copier reste sur la liste.** Plus de navigation vers la copie : un message (« « {nom} » est dans tes recettes. », par les notifications) et le bouton de cette recette qui passe à « Copiée » (grisé, coche) pour la visite, pour éviter une seconde copie par erreur. L'état est en mémoire de la page (`copiedRecipes`), vidé à l'ouverture de la liste et avec la session. Le back ne rend plus une recette copiée à la relecture : la liste la garde à sa place pour la visite (`keepCopied`), jusqu'à une autre recherche. Un refus du back garde « Copier » et le message d'erreur habituel.
+8. **La fiche d'une recette d'un autre n'a que « Copier »** (même logique, on reste sur la fiche) : ni ajout à la liste, ni Modifier, ni Supprimer ; le lien de retour mène à « Recettes des autres ». La propriété est déduite de la liste de SES recettes du même type (le contrat de la fiche n'a pas d'indicateur) : `mine | other | unknown`, et tant qu'elle est inconnue aucune action n'est affichée (la place est réservée). La fiche d'une recette à soi est inchangée.
+
 ## Conséquences
 
 - Aucune logique de tri ni de pertinence dans le front ; un changement d'ordre des catégories ou du classement reste côté back.
