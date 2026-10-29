@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 
 import { appContext, calls, json, me, rateLimited, stubApi } from '@/__tests__/helpers'
 import { useSessionStore } from '@/session/session'
-import { DRAFT_KEY } from '../bridge'
+import { DRAFT_KEY, INFO_TIMEOUT_MS } from '../bridge'
 import { fakeNative } from '../bridge/__tests__/fakeNative'
 import type { SentMessage } from '../bridge/__tests__/fakeNative'
 import { PACK_SIZE_APP_VERSION } from '../appVersion'
@@ -91,6 +91,7 @@ const started = (native: ReturnType<typeof fakeNative>) =>
 beforeEach(() => localStorage.clear())
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   delete (globalThis as { repasNative?: unknown }).repasNative
   document.body.innerHTML = ''
@@ -584,15 +585,22 @@ describe('écran d’envoi au drive, version de l’application (DRV-640)', () =
     },
   )
 
-  it('une application qui ne dit pas sa version est traitée comme trop ancienne', async () => {
+  it('une application qui ne dit pas sa version est traitée comme trop ancienne, une fois le délai de réponse écoulé', async () => {
+    // Le délai de réponse du pont passe par de fausses minuteries : rien n'attend pour de vrai
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     installVersion(null)
     const { wrapper } = await open({}, 'l1', '')
     await loaded(wrapper)
 
-    await vi.waitFor(() => expect(wrapper.text()).toContain(sentence), { timeout: 6000 })
+    // Tant que le délai court, l'application n'est pas jugée : ni phrase, ni lien « Mettre à jour »
+    await vi.advanceTimersByTimeAsync(INFO_TIMEOUT_MS - 500)
+    expect(wrapper.text()).not.toContain(sentence)
+    await vi.advanceTimersByTimeAsync(500)
+    await vi.waitFor(() => expect(wrapper.text()).toContain(sentence))
     expect(button('Ouvrir le drive')).toBeUndefined()
+    expect(wrapper.find('section[role="status"] a').attributes('href')).toBe('/drive/aide')
     expect(wrapper.findAll('main > section ul > li > a')).toHaveLength(11)
-  }, 10000)
+  })
 
   it('une réponse mal formée est traitée comme une version inconnue', async () => {
     const native = fakeNative((message, reply) => {
