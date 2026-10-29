@@ -32,6 +32,9 @@ export interface DriveBridgeOptions {
   infoTimeoutMs?: number
 }
 
+/** Combien de temps `app.info` attend la réponse de l'application avant de dire `TIMEOUT` (une application trop ancienne ne répond pas). */
+export const INFO_TIMEOUT_MS = 3000
+
 /** Au plus autant d'événements gardés pour un écran qui n'est pas encore là (le résultat peut arriver pendant un changement de page). */
 const BUFFER = 20
 
@@ -192,7 +195,7 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
       infoInFlight ??= new Promise<AppInfo>((resolve, reject) => {
         const timer = setTimeout(
           () => settleInfo((pending) => pending.reject(new DriveBridgeError('TIMEOUT'))),
-          options.infoTimeoutMs ?? 3000,
+          options.infoTimeoutMs ?? INFO_TIMEOUT_MS,
         )
         pendingInfo = { resolve, reject, timer }
         try {

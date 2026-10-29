@@ -1,5 +1,7 @@
 // Liste envoyée au drive (DRV-401), sans back ni compte : l'API est simulée par `page.route`, avec un état qui suit les envois.
-// Jouée sur le téléphone (Pixel 7) ; le bureau seulement pour les tests étiquetés (playwright.config.ts) : envoyer, lire en lecture seule, rouvrir.
+// Jouée sur le téléphone (Pixel 7) ; le bureau seulement pour l'axe du thème clair (playwright.config.ts) : envoyer, lire en lecture seule, rouvrir.
+// Le détail (fonction coupée, navigateur, application trop ancienne ou muette, refus du back, lecture seule) est dans `ShoppingListSent.spec.ts`
+// et `DriveSendView.spec.ts` (jsdom) : ici, le parcours qui compte les gestes, le contraste des deux thèmes et le raccord avec les réglages.
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page, type Route, BUREAU } from './support/test'
 
@@ -51,7 +53,10 @@ const reply = (route: Route, body?: unknown, status = body === undefined ? 204 :
       : { status, contentType: 'application/json', body: JSON.stringify(body) },
   )
 
-/** Un faux back : une liste dont le statut change avec `send` et `reopen`. Rend les appels reçus. `withStore` faux : pas de magasin enregistré. */
+/**
+ * Un faux back : une liste dont le statut change avec `send` et `reopen`. Rend les appels reçus, et `switchOff()` qui coupe la fonction (le retour
+ * arrière : toutes les routes du drive répondent 404 DRIVE_DISABLED). `withStore` faux : pas de magasin enregistré.
+ */
 async function fakeBack(page: Page, initial: Status = 'ACTIVE', enabled = true, withStore = true) {
   let status = initial
   let hasStore = withStore
@@ -114,7 +119,7 @@ async function fakeBack(page: Page, initial: Status = 'ACTIVE', enabled = true, 
     },
   )
 
-  return received
+  return Object.assign(received, { switchOff: () => (enabled = false) })
 }
 
 test('envoyer une liste au drive, la lire sans pouvoir la modifier, puis la rouvrir', async ({
@@ -165,82 +170,14 @@ test('envoyer une liste au drive, la lire sans pouvoir la modifier, puis la rouv
   expect(received).toContain('POST /api/v1/shopping-lists/l1/reopen')
 })
 
-test('fonction coupée (retour arrière) : une liste envoyée se rouvre, sans proposer l’envoi', async ({
-  page,
-}) => {
-  const received = await fakeBack(page, 'SENT', false)
-  await page.goto('/listes/l1')
-  await expect(page.getByText('Cette liste est envoyée au drive')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toHaveCount(0)
-
-  await page.getByRole('button', { name: 'Plus d’actions' }).click()
-  await page.getByRole('menuitem', { name: 'Rouvrir la liste' }).click()
-  await page.getByRole('dialog').getByRole('button', { name: 'Rouvrir la liste' }).click()
-
-  await expect(page.getByText('En cours')).toBeVisible()
-  expect(received).toContain('POST /api/v1/shopping-lists/l1/reopen')
-  // La liste est de nouveau modifiable ; tant que la fonction est coupée, l'envoi reste masqué
-  for (const box of await page.getByRole('checkbox').all()) await expect(box).toBeEnabled()
-  await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toHaveCount(0)
-})
-
-test('fonction coupée : « Reprendre l’envoi » dit que l’envoi n’est pas disponible, sans l’ouvrir, et laisse rouvrir la liste', async ({
-  page,
-}) => {
-  const received = await fakeBack(page, 'SENT', false)
-  await page.goto('/listes/l1')
-  await page.getByRole('link', { name: 'Reprendre l’envoi' }).click()
-  await expect(page).toHaveURL(/\/drive\/envoi\/l1$/)
-
-  // L'écran répond « pas disponible » ; ni « Ouvrir le drive » ni « Envoyer au drive », mais « Rouvrir la liste »
-  await expect(page.getByRole('alert')).toContainText(
-    'L’envoi au drive n’est pas disponible pour le moment. Ta liste n’a pas changé. Réessaie plus tard.',
-  )
-  await expect(page.getByRole('button', { name: 'Rouvrir la liste' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Ouvrir le drive', exact: true })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toHaveCount(0)
-  expect(received).not.toContain('POST /api/v1/shopping-lists/l1/reopen')
-
-  // Même confirmation que sur l'écran de la liste, puis retour à la liste, de nouveau modifiable
-  await page.getByRole('button', { name: 'Rouvrir la liste' }).click()
-  await expect(page.getByRole('dialog')).toContainText('La liste redevient modifiable.')
-  await page.getByRole('dialog').getByRole('button', { name: 'Rouvrir la liste' }).click()
-  await expect(page).toHaveURL(/\/listes\/l1$/)
-  await expect(page.getByText('En cours')).toBeVisible()
-  expect(received).toContain('POST /api/v1/shopping-lists/l1/reopen')
-  await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toHaveCount(0)
-})
-
+// Le contraste ne dépend que du thème, la mise en page que de la largeur : le bureau ne rejoue que le thème clair. Une visite, deux états : la
+// liste envoyée (menu, confirmation), puis le retour arrière (fonction coupée : « Reprendre l'envoi » dit « pas disponible » et laisse rouvrir).
 for (const colorScheme of ['light', 'dark'] as const) {
   test(
-    `« Reprendre l’envoi » interrupteur coupé et sa confirmation sont accessibles, thème ${colorScheme}`,
-    { tag: BUREAU },
+    `la liste envoyée, son menu, sa confirmation et le retour arrière sont accessibles, thème ${colorScheme}`,
+    { tag: colorScheme === 'light' ? BUREAU : [] },
     async ({ page }) => {
-      await fakeBack(page, 'SENT', false)
-      await page.emulateMedia({ colorScheme })
-      await page.goto('/drive/envoi/l1')
-      await expect(page.getByRole('button', { name: 'Rouvrir la liste' })).toBeVisible()
-      const scan = () =>
-        new AxeBuilder({ page })
-          .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-          .exclude('.vue-devtools__anchor-btn')
-          .analyze()
-
-      expect((await scan()).violations).toEqual([])
-
-      await page.getByRole('button', { name: 'Rouvrir la liste' }).click()
-      await expect(page.getByRole('dialog')).toBeVisible()
-      expect((await scan()).violations).toEqual([])
-    },
-  )
-}
-
-for (const colorScheme of ['light', 'dark'] as const) {
-  test(
-    `la liste envoyée et sa confirmation sont accessibles, thème ${colorScheme}`,
-    { tag: BUREAU },
-    async ({ page }) => {
-      await fakeBack(page, 'SENT')
+      const back = await fakeBack(page, 'SENT')
       await page.emulateMedia({ colorScheme })
       await page.goto('/listes/l1')
       await expect(page.getByText('Cette liste est envoyée au drive')).toBeVisible()
@@ -256,6 +193,16 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(page.getByRole('menu')).toBeVisible()
       expect((await scan()).violations).toEqual([])
       await page.getByRole('menuitem', { name: 'Rouvrir la liste' }).click()
+      await expect(page.getByRole('dialog')).toBeVisible()
+      expect((await scan()).violations).toEqual([])
+
+      // Le retour arrière : la fonction est coupée, l'écran d'envoi répond « pas disponible » et laisse rouvrir la liste
+      back.switchOff()
+      await page.goto('/drive/envoi/l1')
+      await expect(page.getByRole('alert')).toContainText('n’est pas disponible pour le moment')
+      await expect(page.getByRole('button', { name: 'Rouvrir la liste' })).toBeVisible()
+      expect((await scan()).violations).toEqual([])
+      await page.getByRole('button', { name: 'Rouvrir la liste' }).click()
       await expect(page.getByRole('dialog')).toBeVisible()
       expect((await scan()).violations).toEqual([])
     },
@@ -288,46 +235,3 @@ test('sans magasin : « Choisir mon magasin » le lit, l’enregistre, et l’en
   await expect(page).toHaveURL(/\/drive\/envoi\/l1$/)
   expect(received).toContain('POST /api/v1/shopping-lists/l1/send')
 })
-
-test('dans un navigateur, « Envoyer au drive » n’est pas proposé : rien à verrouiller pour rien (DRV-641)', async ({
-  page,
-}) => {
-  const received = await fakeBack(page)
-  await page.goto('/liste')
-  await expect(page.getByRole('heading', { level: 1, name: 'Courses du week-end' })).toBeVisible()
-  await expect.poll(() => received).toContain('GET /api/v1/drive/settings')
-
-  await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Terminer' })).toBeVisible()
-  expect(received).not.toContain('POST /api/v1/shopping-lists/l1/send')
-})
-
-for (const [label, version] of [
-  ['trop ancienne', '0.1.9'],
-  ['qui ne dit pas sa version', null],
-] as const) {
-  test(`application ${label} : la phrase de mise à jour, aucun verrou (DRV-641)`, async ({
-    page,
-  }) => {
-    const received = await fakeBack(page)
-    await fakeApp(page, 'completed', version)
-    await page.goto('/liste')
-
-    await page.getByRole('button', { name: 'Envoyer au drive' }).click()
-    const update = page.getByRole('dialog')
-    await expect(update).toContainText('Mets à jour l’application pour envoyer ta liste.', {
-      timeout: 6000,
-    })
-    await expect(update).not.toContainText('La liste ne sera plus modifiable')
-    await expect(update.getByRole('link', { name: 'Mettre à jour' })).toHaveAttribute(
-      'href',
-      '/drive/aide',
-    )
-    expect(received).not.toContain('POST /api/v1/shopping-lists/l1/send')
-
-    // La liste reste modifiable
-    await page.keyboard.press('Escape')
-    await expect(page.getByRole('button', { name: 'Terminer' })).toBeVisible()
-    await expect(page.getByText('Cette liste est envoyée au drive')).toHaveCount(0)
-  })
-}

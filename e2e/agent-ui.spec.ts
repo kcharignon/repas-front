@@ -1,8 +1,12 @@
-// L'interface superposée de l'agent du drive (DRV-304) dans Chromium : accessibilité (axe), 360×640 sans défilement horizontal, cibles
-// d'au moins 44 px, isolation de la page hôte, échappement du HTML, clavier. Autonome : la page de démonstration (`drive-agent/demo/`) est
-// construite ici et posée dans une page vide, sans serveur ni back. Aucune requête réseau.
+// L'interface superposée de l'agent du drive (DRV-304) dans Chromium : accessibilité (axe, contraste des deux thèmes), 360×640 sans défilement
+// horizontal, cibles d'au moins 44 px, isolation de la page hôte, échappement du HTML, clavier. Autonome : la page de démonstration
+// (`drive-agent/demo/`) est construite ici et posée dans une page vide, sans serveur ni back. Aucune requête réseau.
+// Ce que jsdom et l'agent réel prouvent déjà n'est pas rejoué ici : lots et photos de la recherche en défilant (`drive-agent/test/picker-scroll.spec.ts`,
+// `drive-agent/e2e/choix.spec.ts`). `E2E_SHOTS=<dossier>` garde une capture de chaque écran.
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from './support/test'
+
+import { shot } from './support/drive'
 
 import { buildAgent } from '../drive-agent/scripts/build.mjs'
 
@@ -118,53 +122,81 @@ async function show(page: Page, name: string): Promise<void> {
   await photosSettled(page)
 }
 
-for (const colorScheme of ['light', 'dark'] as const) {
-  test(`chaque écran est accessible (WCAG AA), thème ${colorScheme} du système`, async ({
-    page,
-  }, testInfo) => {
-    // Une trentaine d'écrans, chacun contrôlé par axe : de la marge quand la machine est chargée
-    test.setTimeout(90 * 1000)
-    await page.emulateMedia({ colorScheme })
-    await openPage(page)
-
-    for (const name of SCREENS) {
-      await show(page, name)
-      const { violations } = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-        .analyze()
-      expect(violations, name).toEqual([])
-      await page.screenshot({ path: testInfo.outputPath(`${colorScheme}-${name}.png`) })
+/** Ce que mesure un écran : rien ne déborde de 360 px, et chaque cible se touche (44 px). Le Shadow DOM de l'agent n'existe que dans un vrai navigateur. */
+const layoutOf = (page: Page) =>
+  page.evaluate(() => {
+    const root = (document.documentElement.lastElementChild as HTMLElement).shadowRoot as ShadowRoot
+    const screen = root.querySelector('.screen') as HTMLElement
+    // Un élément caché (le rapport du diagnostic, tant que les contrôles tournent) n'a pas de cible à toucher.
+    const small = [...root.querySelectorAll('button, input, summary')]
+      .filter((element) => !element.closest('[hidden]'))
+      .filter((element) => {
+        const box = element.getBoundingClientRect()
+        return box.width < 43.5 || box.height < 43.5
+      })
+    return {
+      overflow: screen.scrollWidth - screen.clientWidth,
+      page: document.documentElement.scrollWidth - window.innerWidth,
+      small: small.map((element) => element.textContent),
     }
   })
+
+/** La recherche de 60 produits arrive par lots, en défilant (DRV-643) : on va jusqu'au bout pour que les 60 fiches soient contrôlées. */
+async function scrollToEnd(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const root = (document.documentElement.lastElementChild as HTMLElement)
+            .shadowRoot as ShadowRoot
+          const scroll = root.querySelector('.scroll') as HTMLElement
+          scroll.scrollTop = scroll.scrollHeight
+          return root.querySelectorAll('li.candidate').length
+        }),
+      { timeout: 20_000, intervals: [100, 200] },
+    )
+    .toBe(60)
+  await photosSettled(page)
 }
 
-test('chaque écran tient dans 360×640 sans défilement horizontal, avec des cibles d’au moins 44 px', async ({
-  page,
-}) => {
-  await openPage(page)
+// Une trentaine d'écrans, chacun contrôlé par axe dans les deux thèmes : quatre tranches par thème (des tests de quelques secondes, répartis
+// entre les processus, plutôt qu'un seul de plus d'une minute). Le thème clair mesure aussi la mise en page, qui ne dépend pas du thème.
+const SLICES = 4
+const sliceSize = Math.ceil(SCREENS.length / SLICES)
 
-  for (const name of SCREENS) {
-    await show(page, name)
-    const metrics = await page.evaluate(() => {
-      const root = (document.documentElement.lastElementChild as HTMLElement)
-        .shadowRoot as ShadowRoot
-      const screen = root.querySelector('.screen') as HTMLElement
-      // Un élément caché (le rapport du diagnostic, tant que les contrôles tournent) n'a pas de cible à toucher.
-      const small = [...root.querySelectorAll('button, input, summary')]
-        .filter((element) => !element.closest('[hidden]'))
-        .filter((element) => {
-          const box = element.getBoundingClientRect()
-          return box.width < 43.5 || box.height < 43.5
-        })
-      return {
-        overflow: screen.scrollWidth - screen.clientWidth,
-        page: document.documentElement.scrollWidth - window.innerWidth,
-        small: small.map((element) => element.textContent),
+const EXPECTED_LAYOUT = { overflow: 0, page: 0, small: [] }
+
+/** Un écran de la démonstration : ce qu'axe y trouve ; en thème clair, aussi sa mise en page (360×640, cibles de 44 px : elle ne dépend pas du thème). */
+async function inspect(page: Page, name: string, colorScheme: 'light' | 'dark') {
+  await show(page, name)
+  if (name === 'chooser-long') await scrollToEnd(page)
+  const { violations } = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze()
+  const layout = colorScheme === 'light' ? await layoutOf(page) : EXPECTED_LAYOUT
+  await shot(page, `agent-${colorScheme}-${name}`)
+
+  return { violations, layout }
+}
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  for (let slice = 0; slice < SLICES; slice += 1) {
+    const names = SCREENS.slice(slice * sliceSize, (slice + 1) * sliceSize)
+
+    test(`chaque écran est accessible (WCAG AA), thème ${colorScheme} du système, écrans ${names[0]} à ${names.at(-1)} (${colorScheme === 'light' ? 'et 360×640, cibles de 44 px' : 'contraste'})`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme })
+      await openPage(page)
+
+      for (const name of names) {
+        const found = await inspect(page, name, colorScheme)
+        expect(found.violations, name).toEqual([])
+        expect(found.layout, name).toEqual(EXPECTED_LAYOUT)
       }
     })
-    expect(metrics, name).toEqual({ overflow: 0, page: 0, small: [] })
   }
-})
+}
 
 test('le style de la page hôte n’altère pas l’interface', async ({ page }) => {
   await openPage(page, HOSTILE_CSS)
@@ -257,7 +289,7 @@ async function cardsOf(page: Page) {
 for (const colorScheme of ['light', 'dark'] as const) {
   test(`l’écran de choix montre la photo à gauche du libellé, les boutons « Choisir » et « Pas mon habituel » côte à côte en dessous (${colorScheme}, 360×640)`, async ({
     page,
-  }, testInfo) => {
+  }) => {
     await page.emulateMedia({ colorScheme })
     await openPage(page)
 
@@ -294,7 +326,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       expect(card?.image, card?.name).toBeNull()
       expect(card?.text?.width).toBeGreaterThan(280)
     }
-    await page.screenshot({ path: testInfo.outputPath(`photos-choix-${colorScheme}.png`) })
+    await shot(page, `agent-photos-choix-${colorScheme}`)
   })
 }
 
@@ -314,95 +346,3 @@ test('seule l’adresse d’images de l’enseigne est demandée, jamais l’adr
     new Set(['1001', '1002', '9999']),
   )
 })
-
-// —— Tous les résultats de la recherche, en défilant (DRV-643) ————————————————————————————————————————————————————————————————————
-
-const rowCount = (page: Page) =>
-  page.evaluate(() => {
-    const root = (document.documentElement.lastElementChild as HTMLElement).shadowRoot as ShadowRoot
-    return root.querySelectorAll('li.candidate').length
-  })
-
-const photoIds = (page: Page) =>
-  new Set(requestedByPage(page).map((address) => Number(new URL(address).searchParams.get('id'))))
-
-for (const colorScheme of ['light', 'dark'] as const) {
-  test(`une recherche de 60 produits : un premier lot, la suite en défilant jusqu’au bout, les photos au fil du défilement (${colorScheme}, 360×640)`, async ({
-    page,
-  }, testInfo) => {
-    await page.emulateMedia({ colorScheme })
-    await openPage(page)
-
-    await show(page, 'chooser-long')
-
-    // Un premier lot seulement, sans rien à toucher pour voir la suite ; sa sentinelle n'a pas de texte.
-    expect(await rowCount(page)).toBe(8)
-    await expect(page.getByText('Biscuit sablé de test n° 60')).toHaveCount(0)
-    await page.screenshot({ path: testInfo.outputPath(`defilement-debut-${colorScheme}.png`) })
-    // Les photos : seulement celles des fiches affichées (et de leur voisinage), jamais les 60.
-    await expect.poll(() => photoIds(page).size).toBeGreaterThan(0)
-    expect(photoIds(page).has(2060)).toBe(false)
-    expect(photoIds(page).size).toBeLessThanOrEqual(8)
-
-    // La personne fait défiler : chaque descente ajoute un lot, jusqu'à la soixantième fiche.
-    await expect
-      .poll(
-        () =>
-          page.evaluate(() => {
-            const root = (document.documentElement.lastElementChild as HTMLElement)
-              .shadowRoot as ShadowRoot
-            const scroll = root.querySelector('.scroll') as HTMLElement
-            scroll.scrollTop = scroll.scrollHeight
-            return root.querySelectorAll('li.candidate').length
-          }),
-        { timeout: 20_000, intervals: [100, 200] },
-      )
-      .toBe(60)
-
-    // Au bout : la dernière fiche, puis « Annuler l'envoi » sous elle, atteignable ; rien ne déborde ; chaque cible se touche.
-    await page.evaluate(() => {
-      const root = (document.documentElement.lastElementChild as HTMLElement)
-        .shadowRoot as ShadowRoot
-      const scroll = root.querySelector('.scroll') as HTMLElement
-      scroll.scrollTop = scroll.scrollHeight
-    })
-    await expect(page.getByText('Biscuit sablé de test n° 60')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Annuler l’envoi' })).toBeVisible()
-    const metrics = await page.evaluate(() => {
-      const root = (document.documentElement.lastElementChild as HTMLElement)
-        .shadowRoot as ShadowRoot
-      const screen = root.querySelector('.screen') as HTMLElement
-      const small = [...root.querySelectorAll('button, input, summary')]
-        .filter((element) => !element.closest('[hidden]'))
-        .filter((element) => {
-          const box = element.getBoundingClientRect()
-          return box.width < 43.5 || box.height < 43.5
-        })
-      const buttons = [...root.querySelectorAll('li.candidate button')] as HTMLButtonElement[]
-      return {
-        overflow: screen.scrollWidth - screen.clientWidth,
-        page: document.documentElement.scrollWidth - window.innerWidth,
-        small: small.length,
-        // Le produit « Plus en stock » (n° 21) reste à choisir.
-        outEnabled: buttons[20]?.disabled === false,
-        sentinelHidden: (root.querySelector('.more') as HTMLElement).hidden,
-      }
-    })
-    expect(metrics).toEqual({
-      overflow: 0,
-      page: 0,
-      small: 0,
-      outEnabled: true,
-      sentinelHidden: true,
-    })
-    await expect.poll(() => photoIds(page).has(2060)).toBe(true)
-    for (const address of requestedByPage(page)) {
-      expect(new URL(address).hostname, address).toBe(PHOTO_HOST)
-    }
-    const { violations } = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-      .analyze()
-    expect(violations).toEqual([])
-    await page.screenshot({ path: testInfo.outputPath(`defilement-fin-${colorScheme}.png`) })
-  })
-}
