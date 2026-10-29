@@ -85,7 +85,16 @@ L'image de production ne contient ni nom de domaine ni secret ; ne jamais en ajo
 - **Types de l'API générés, jamais écrits à la main** : un changement de contrat doit casser la compilation, pas la production.
 - Jeton d'accès **en mémoire uniquement** (jamais `localStorage`) ; refresh par cookie `HttpOnly` (ADR 0015 du back).
 - Accessibilité : WCAG AA, cibles tactiles ≥ 44 px, clavier, thème clair et sombre, `prefers-reduced-motion`.
-- Un test avant de fusionner ; une page ou un composant visible passe aussi un test visuel dans Chromium (captures lues, mobile et bureau).
+- Un test avant de fusionner (au bon étage : « Tests : où mettre quoi ») ; une page ou un composant visible passe aussi un test visuel dans Chromium (captures lues, mobile et bureau).
+
+## Tests : où mettre quoi
+
+Règle complète : ADR 0019 (`docs/adr/0019-pyramide-de-tests.md`).
+- **Composant** (Vitest + `@vue/test-utils` + jsdom, `stubApi`, routeur et stores réels) : textes, états, refus du back, enchaînements. C'est le choix par défaut.
+- **Unitaire pur** : `// @vitest-environment node` en tête, sans aucun `.vue` importé (même par le routeur).
+- **e2e** seulement pour ce que jsdom ne voit pas : mise en page, contraste (axe, les deux thèmes dans la même visite), clavier et focus réels, service worker, `theme-init.js`, pont natif, un parcours nominal. Un test par écran (`e2e/support/screen.ts`), joué sur le téléphone ; `@bureau` / `@bureau-seul` pour le bureau. Captures derrière `E2E_SHOTS`, jamais de `waitForTimeout`.
+- Retirer ou descendre un test : lire les deux, contrôle par mutation, tableau de remplacement dans la PR.
+- Seuils de couverture en cliquet, `e2e/` type-vérifié. Si le job Playwright dépasse ~4 min, chercher ce qui peut descendre avant de découper en `--shard`.
 
 ## Git et PR
 

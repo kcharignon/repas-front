@@ -22,7 +22,7 @@ Vue 3 (`<script setup>`), TypeScript strict, Vite, Pinia, TanStack Query, client
 | `make test-coverage` | seuil dans `vitest.config.ts` (96 % lignes, 94 % fonctions, 89 % branches, 95 % instructions, mesure du 2026-10-29 : 97,8 / 96,2 / 91,4 / 96,6) : il ne baisse **jamais**, on le remonte quand la mesure le permet |
 | `make api-update ref=<sha>` (= `npm run api:update -- <sha>`) | fige `api/openapi.json` sur un commit du back, régénère `src/api/schema.d.ts` ; relire le diff des deux fichiers |
 | `make samples-update ref=<sha>` / `samples-verify` | recopie / vérifie les exemples de contrat du back dans `drive-agent/fixtures/contract/` (à faire avec `api-update` quand le back change un DTO du drive) |
-| `make e2e` | Playwright (Chromium bureau + Pixel 7) contre le vrai back de dev (`make fixtures` crée `admin@repas.fr`) ; `make e2e-visual` : captures, vidéos, rapport sur http://localhost:9323 |
+| `make e2e` | Playwright (Pixel 7 ; Chromium bureau pour les tests étiquetés) contre le vrai back de dev (`make fixtures` crée `admin@repas.fr`) ; `make e2e-visual` : captures, vidéos, rapport sur http://localhost:9323 |
 | `make start` / `stop` | le front sur http://localhost:5173, branché sur le back de dev (réseau `repas_default` : le back doit tourner) |
 
 Hors Docker : `npm run check`, `npm run test:e2e`. Les sorties de `make check` sont à lire en entier : un échec Prettier, de type ou de couverture bloque la CI. Prettier couvre `src`, `e2e` et `drive-agent` (pas `.claude/` ni `docs/`) ; `src/api/schema.d.ts` n'est jamais formaté à la main.
@@ -111,3 +111,12 @@ Utiliser `<UiTextInput capitalize-first …/>` (ADR 0018) : la première lettre 
 ## 7. Interdits
 
 Contacter Leclerc ou un autre site d'enseigne ; mettre un identifiant, cookie, jeton, numéro de magasin, ville ou e-mail réels dans le code, un test, une capture ou une PR ; `eval`/`v-html`/`innerHTML` sur une donnée venue de l'agent ou du back ; relâcher la CSP ; baisser le seuil de couverture ; `--no-verify`, force-push, push sur `main` ; fusionner une PR dont un contrôle n'est pas vert ; `make prod` ou déployer sans demande (jusqu'au 2026-10-20 l'approbation de la mise en production était humaine, ADR 0007 du front ; depuis, et jusqu'à la 1.0.0, seul l'assistant principal crée les releases, jamais un sous-agent : voir `CLAUDE.md`).
+
+## Tests : où mettre quoi
+
+Règle complète : ADR 0019 (`docs/adr/0019-pyramide-de-tests.md`).
+- **Composant** (Vitest + `@vue/test-utils` + jsdom, `stubApi`, routeur et stores réels) : textes, états, refus du back, enchaînements. C'est le choix par défaut.
+- **Unitaire pur** : `// @vitest-environment node` en tête, sans aucun `.vue` importé (même par le routeur).
+- **e2e** seulement pour ce que jsdom ne voit pas : mise en page, contraste (axe, les deux thèmes dans la même visite), clavier et focus réels, service worker, `theme-init.js`, pont natif, un parcours nominal. Un test par écran (`e2e/support/screen.ts`), joué sur le téléphone ; `@bureau` / `@bureau-seul` pour le bureau. Captures derrière `E2E_SHOTS`, jamais de `waitForTimeout`.
+- Retirer ou descendre un test : lire les deux, contrôle par mutation, tableau de remplacement dans la PR.
+- Seuils de couverture en cliquet, `e2e/` type-vérifié. Si le job Playwright dépasse ~4 min, chercher ce qui peut descendre avant de découper en `--shard`.
