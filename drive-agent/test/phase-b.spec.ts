@@ -3542,3 +3542,196 @@ describe('l’identifiant d’offre du produit choisi (DRV-722)', () => {
     })
   })
 })
+
+// —— Trier les produits proposés (DRV-743) ———————————————————————————————————————————————————————————————————————————————————
+
+describe('trier les produits proposés', () => {
+  // Dans l'ordre du site : ni l'ordre du prix, ni celui du prix au kilo.
+  const BUTTER_SHELF: Record<string, ShelfItem> = {
+    '3000001': { label: 'Beurre doux', price: 230, perMeasure: { cents: 920, unit: 'kg' } },
+    '3000002': { label: 'Beurre demi-sel', price: 350, perMeasure: { cents: 700, unit: 'kg' } },
+    '3000003': { label: 'Beurre extra fin', price: 180, perMeasure: { cents: 1200, unit: 'kg' } },
+    '3000004': { label: 'Beurre sans prix' },
+    '3000005': { label: 'Crème légère', price: 150 },
+    '3000006': { label: 'Crème épaisse', price: 300 },
+    '3000007': { label: 'Crème entière', price: 220 },
+  }
+  const BUTTER_FOUND = {
+    beurre: ['3000001', '3000002', '3000003', '3000004'],
+    creme: ['3000005', '3000006', '3000007'],
+  }
+  const sortButton = (zone: HTMLElement, text: string): HTMLButtonElement => {
+    const found = [...zone.querySelectorAll<HTMLButtonElement>('.sorting button')].find((button) =>
+      button.textContent?.startsWith(text),
+    )
+    if (!found) throw new Error(`Pas de bouton de tri « ${text} »`)
+    return found
+  }
+
+  it('choisir le premier produit trié met bien CE produit au panier, et le résultat est celui du produit, pas de sa place', async () => {
+    const test = run(
+      fresh('beurre'),
+      [
+        (view) => {
+          sortButton(view.zone, 'Prix').click()
+          expect(rows(view.zone).map(nameOf)).toEqual([
+            'Beurre extra fin',
+            'Beurre doux',
+            'Beurre demi-sel',
+            'Beurre sans prix',
+          ])
+          rows(view.zone)[0]?.querySelector<HTMLButtonElement>('button.primary')?.click()
+        },
+      ],
+      { shelf: BUTTER_SHELF, found: BUTTER_FOUND },
+    )
+
+    await test.start()
+
+    expect(test.adapter.calls).toEqual(['find beurre', 'cart 3000003 1'])
+    expect(lineOf(test.sent[0], 'beurre')).toMatchObject({
+      outcome: 'CHOSEN',
+      placement: 'PRIMARY',
+      product: { id: '3000003' },
+    })
+  })
+
+  it('le tri ne coûte aucune requête de plus et ne change rien à ce que l’agent propose', async () => {
+    const test = run(
+      fresh('beurre'),
+      [
+        (view) => {
+          const before = rows(view.zone).map(nameOf).sort()
+          sortButton(view.zone, 'Prix au kilo').click()
+          sortButton(view.zone, 'A → Z').click()
+          sortButton(view.zone, 'A → Z').click()
+          sortButton(view.zone, 'Pertinence').click()
+          expect(rows(view.zone).map(nameOf).sort()).toEqual(before)
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf: BUTTER_SHELF, found: BUTTER_FOUND },
+    )
+
+    await test.start()
+
+    expect(test.adapter.calls).toEqual(['find beurre'])
+  })
+
+  it('le tri choisi pour un article est gardé pour l’article suivant, sans que la personne le retouche', async () => {
+    const test = run(
+      fresh('beurre'),
+      [
+        (view) => {
+          sortButton(view.zone, 'Prix').click()
+          sortButton(view.zone, 'Prix').click()
+          expect(sortButton(view.zone, 'Prix ↓').getAttribute('aria-pressed')).toBe('true')
+          choose(view.zone, 'Beurre doux')
+        },
+        (view) => {
+          // article suivant : déjà du plus cher au moins cher
+          expect(rows(view.zone).map(nameOf)).toEqual([
+            'Crème épaisse',
+            'Crème entière',
+            'Crème légère',
+          ])
+          expect(sortButton(view.zone, 'Prix ↓').getAttribute('aria-pressed')).toBe('true')
+          choose(view.zone, 'Crème épaisse')
+        },
+      ],
+      { shelf: BUTTER_SHELF, found: BUTTER_FOUND, others: [fresh('creme')] },
+    )
+
+    await test.start()
+
+    expect(test.adapter.calls).toEqual([
+      'find beurre',
+      'cart 3000001 1',
+      'find creme',
+      'cart 3000006 1',
+    ])
+  })
+
+  it('revenir de l’écran de quantité remet la liste dans le même ordre', async () => {
+    const test = run(
+      fresh('beurre'),
+      [
+        (view) => {
+          sortButton(view.zone, 'A → Z').click()
+          // « Beurre sans prix » n'a pas de contenu : l'écran de quantité s'ouvre, la personne le referme (« Pas cette fois »)
+          choose(view.zone, 'Beurre sans prix')
+        },
+        (view) => {
+          expect(rows(view.zone).map(nameOf)).toEqual([
+            'Beurre demi-sel',
+            'Beurre doux',
+            'Beurre extra fin',
+            'Beurre sans prix',
+          ])
+          expect(sortButton(view.zone, 'A → Z ↑').getAttribute('aria-pressed')).toBe('true')
+          return { kind: 'skip' }
+        },
+      ],
+      {
+        shelf: BUTTER_SHELF,
+        found: BUTTER_FOUND,
+        quantity: () => null,
+      },
+    )
+
+    await test.start()
+  })
+
+  it('le tri porte aussi sur les résultats de « Chercher autre chose »', async () => {
+    const test = run(
+      fresh('beurre'),
+      [
+        async (view) => {
+          sortButton(view.zone, 'Prix').click()
+          search(view, 'creme')
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          expect(rows(view.zone).map(nameOf)).toEqual([
+            'Crème légère',
+            'Crème entière',
+            'Crème épaisse',
+          ])
+          expect(sortButton(view.zone, 'Prix ↑').getAttribute('aria-pressed')).toBe('true')
+          choose(view.zone, 'Crème légère')
+        },
+      ],
+      { shelf: BUTTER_SHELF, found: BUTTER_FOUND },
+    )
+
+    await test.start()
+
+    expect(test.adapter.calls).toEqual(['find beurre', 'find creme', 'cart 3000005 1'])
+  })
+
+  it('un nouvel envoi repart de l’ordre du site : le tri est oublié à la fin de l’envoi', async () => {
+    const first = run(
+      fresh('beurre'),
+      [
+        (view) => {
+          sortButton(view.zone, 'Prix').click()
+          choose(view.zone, 'Beurre doux')
+        },
+      ],
+      { shelf: BUTTER_SHELF, found: BUTTER_FOUND },
+    )
+    await first.start()
+    document.body.innerHTML = ''
+
+    const second = run(
+      fresh('beurre'),
+      [
+        (view) => {
+          expect(rows(view.zone).map(nameOf)[0]).toBe('Beurre doux')
+          expect(sortButton(view.zone, 'Pertinence').getAttribute('aria-pressed')).toBe('true')
+          return { kind: 'skip' }
+        },
+      ],
+      { shelf: BUTTER_SHELF, found: BUTTER_FOUND },
+    )
+    await second.start()
+  })
+})

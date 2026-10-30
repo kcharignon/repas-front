@@ -36,6 +36,8 @@ import {
   type AisleRow,
   type Picker,
   type PickerItem,
+  type SortMemory,
+  DEFAULT_SORT,
 } from '../ui'
 import { cardOf } from './card'
 import { putInCart } from './keep-cart'
@@ -262,6 +264,9 @@ function itemOf(
     promo: promo === null || !(promo > 0) ? null : S.picker.promo(formatPrice(promo)),
     photo,
     explain: explain(line, candidate),
+    // De quoi trier la liste (DRV-743) : les valeurs que la fiche montre déjà, rien de plus lu.
+    price: candidate.price,
+    perMeasure: candidate.pricePerMeasure,
     state: refused.has(candidate.id) ? 'refused' : saysOutOfStock(candidate) ? 'out' : 'ok',
     aisle: catalogId(key === 'family' ? candidate.family : candidate.aisle),
   }
@@ -394,6 +399,7 @@ async function settleLine(
   left: readonly PendingLine[],
   context: PhaseBContext,
   site: SiteAisleState = { state: 'OFF', listeners: new Set() },
+  sort: SortMemory = { current: DEFAULT_SORT },
 ): Promise<'done' | 'cancelled' | 'rest'> {
   const { adapter, ui, record } = context
   const slug = line.ingredientSlug
@@ -488,8 +494,13 @@ async function settleLine(
               items: items(),
               notice,
               aisles: search.aisles,
+              sort: sort.current,
             },
             {
+              // Le tri est gardé pour les articles suivants de cet envoi (DRV-743) ; il ne change que l'ordre d'affichage.
+              sort: (state) => {
+                sort.current = state
+              },
               choose: (id, placement) =>
                 conclude({ type: 'choose', id, placement } satisfies Picked),
               never: (id, on) => void (on ? never.add(id) : never.delete(id)),
@@ -696,6 +707,8 @@ async function settleLine(
 export const guidedChoice: PhaseB = async (context) => {
   // La rangée des rayons du site, pour tout le passage : la première requête filtrée la valide ou l'écarte (DRV-647, 0.36.0).
   const site: SiteAisleState = { state: 'UNKNOWN', listeners: new Set() }
+  // Le tri de la liste des produits, pour tout l'envoi (DRV-743) : oublié quand la phase B se termine.
+  const sort: SortMemory = { current: DEFAULT_SORT }
   const { pending } = context
   for (const [index, item] of pending.entries()) {
     if (context.stopRequested()) return 'cancelled'
@@ -706,6 +719,7 @@ export const guidedChoice: PhaseB = async (context) => {
       pending.slice(index),
       context,
       site,
+      sort,
     )
     if (settled === 'cancelled') return 'cancelled'
     if (settled === 'rest') {

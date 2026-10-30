@@ -8,6 +8,15 @@
 import type { PhotoRetailer, RetailerNames } from '../retailers/names'
 import { append, clear, h } from './dom'
 import { photoFrame } from './photo'
+import {
+  DEFAULT_SORT,
+  referenceUnit,
+  SORT_KEYS,
+  sortItems,
+  touch,
+  type SortKey,
+  type SortState,
+} from './sort'
 import { S } from './strings'
 import type { UnavailableReason } from './types'
 
@@ -32,6 +41,10 @@ export interface PickerItem {
   state: 'ok' | 'out' | 'refused'
   /** Le rayon du site du produit (DRV-647), pour le filtre ; `null` ou absent : le produit n'apparaît que sous « Tous ». */
   aisle?: number | null
+  /** Le prix, en centimes (DRV-743), pour le tri « Prix » ; `null` ou absent : le produit passe en dernier. */
+  price?: number | null
+  /** Le prix à l'unité de mesure, en centimes (DRV-743), pour le tri « Prix au kilo » ; `null` ou absent : le produit passe en dernier. */
+  perMeasure?: { cents: number; unit: 'kg' | 'l' | 'piece' } | null
 }
 
 /** L'identifiant d'un groupe de la rangée : un nombre (rayon ou famille des produits) ou la clé de filtre d'un rayon du site (`sIdValeurUrl`). */
@@ -87,6 +100,8 @@ export interface PickerProps {
   notice: string | null
   /** La rangée de filtres par rayon (DRV-647) ; absente ou de moins de deux rayons, rien ne s'affiche. */
   aisles?: AisleRow
+  /** Le tri choisi plus tôt dans cet envoi (DRV-743) ; absent : l'ordre du site. */
+  sort?: SortState
 }
 
 export interface PickerHooks {
@@ -98,6 +113,8 @@ export interface PickerHooks {
   aisle?: (id: number | null) => void
   /** Les produits d'un rayon du site ou d'un de ses enfants (DRV-647, 0.36.0) : une requête filtrée, ou le cache. */
   loadAisle?: (id: AisleId) => Promise<AisleLoad>
+  /** Le tri a changé (DRV-743) : l'appelant le garde pour les articles suivants. Aucune requête : la liste se range d'elle-même. */
+  sort?: (state: SortState) => void
 }
 
 export interface Picker {
@@ -286,6 +303,24 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
   let tickets = 0
   let shown = 0
   let waiting = false
+  // Trier (DRV-743) : l'ordre d'AFFICHAGE de la liste (aucune requête, aucun produit de plus ou de moins). Quatre boutons dont le bouton actif est enfoncé
+  // (`aria-pressed`) et porte la flèche du sens ; ils ne sont jamais refaits, pour que le focus reste sur le bouton touché.
+  let sorting: SortState = props.sort ?? DEFAULT_SORT
+  const sortHelp = h('p', { class: 'hint', attrs: { 'aria-live': 'polite' } })
+  const sortButtons = SORT_KEYS.map((key) =>
+    h('button', {
+      class: 'chip',
+      attrs: { type: 'button', 'aria-pressed': 'false', 'data-sort': key },
+      on: { click: () => touchSort(key) },
+    }),
+  )
+  const sortBlock = h(
+    'div',
+    { class: 'sorting', hidden: true, attrs: { role: 'group', 'aria-label': S.picker.sort.title } },
+    h('p', { class: 'title', text: S.picker.sort.title, attrs: { 'aria-hidden': 'true' } }),
+    h('div', { class: 'chips' }, ...sortButtons),
+    sortHelp,
+  )
   const watcher =
     typeof IntersectionObserver === 'function'
       ? new IntersectionObserver(
@@ -321,17 +356,61 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
   const root = watcher === null ? zone.getRootNode() : null
   root?.addEventListener('scroll', scrolled, true)
 
-  /** Refait la liste depuis le début : les produits du rayon du site chargé, ou ceux du groupe local choisi, ou tous. */
+  /** Refait la liste depuis le début : les produits du rayon du site chargé, ou ceux du groupe local choisi, ou tous, dans l'ordre du tri choisi. */
   function fill(): void {
     clear(list)
-    visible =
+    const base =
       remoteItems !== null
         ? remoteItems
         : current.remote === true || current.selected === null
           ? all
           : all.filter((item) => item.aisle === current.selected)
+    visible = sortItems(base, sorting)
+    refreshSort(referenceUnit(base))
     shown = 0
     showMore()
+  }
+  /** Le texte, l'état et l'aide des boutons de tri, d'après le tri choisi (le « prix au kilo » dit le litre ou la pièce quand la liste se mesure ainsi). */
+  function refreshSort(unit: 'kg' | 'l' | 'piece'): void {
+    const text = S.picker.sort
+    const labelOf = (key: SortKey): string =>
+      key === 'relevance'
+        ? text.relevance
+        : key === 'price'
+          ? text.price
+          : key === 'unitPrice'
+            ? text.unitPrice(unit)
+            : text.name
+    for (const button of sortButtons) {
+      const key = button.dataset.sort as SortKey
+      const label = labelOf(key)
+      // L'ordre du site n'a pas de sens à inverser : pas de flèche.
+      const arrowed = sorting.key === key && key !== 'relevance'
+      button.textContent = arrowed ? text.active(label, sorting.direction) : label
+      button.setAttribute('aria-pressed', sorting.key === key ? 'true' : 'false')
+      if (arrowed) {
+        button.setAttribute(
+          'aria-label',
+          text.activeNamed(button.textContent ?? label, sorting.direction, key === 'name'),
+        )
+      } else button.removeAttribute('aria-label')
+    }
+    sortHelp.textContent =
+      sorting.key === 'relevance'
+        ? text.help.relevance
+        : sorting.key === 'price'
+          ? text.help.price(sorting.direction)
+          : sorting.key === 'unitPrice'
+            ? text.help.unitPrice(sorting.direction, unit)
+            : text.help.name(sorting.direction)
+  }
+  /** Le toucher d'un bouton de tri : un autre tri, ou l'autre sens du tri actif ; la liste se range d'elle-même et l'appelant garde le choix. */
+  function touchSort(key: SortKey): void {
+    const next = touch(sorting, key)
+    if (next.key === sorting.key && next.direction === sorting.direction) return
+    sorting = next
+    fill()
+    hooks.sort?.(sorting)
   }
   const same = (a: AisleId | null, b: AisleId | null) =>
     a !== null && b !== null && String(a) === String(b)
@@ -467,6 +546,8 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
   let lastStatus = ''
   const results: Picker['results'] = (query, items, notice, asked = null, aisles = NO_ROW) => {
     all = items
+    // Un seul produit, ou aucun : rien à trier. Le tri choisi reste appliqué aux résultats d'une nouvelle recherche (DRV-743).
+    sortBlock.hidden = items.length < 2
     tickets++
     remoteItems = null
     child = null
@@ -500,6 +581,7 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
     }
     for (const button of shelf.querySelectorAll('button')) button.disabled = on
     for (const button of subShelf.querySelectorAll('button')) button.disabled = on
+    for (const button of sortButtons) button.disabled = on
     status.textContent = on ? message : lastStatus
   }
 
@@ -511,6 +593,7 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
       { class: 'picker' },
       props.need === null ? null : h('p', { text: S.picker.need(props.need) }),
       props.replaces === null ? null : h('p', { text: S.picker.replaces(props.replaces) }),
+      sortBlock,
       gone,
       form,
       status,
