@@ -465,7 +465,7 @@
                         "description": "Un \u00e9l\u00e9ment de m\u00eame slug existe d\u00e9j\u00e0 (le slug d\u00e9rive du nom)"
                     },
                     "422": {
-                        "description": "Corps de la requ\u00eate invalide"
+                        "description": "Corps de la requ\u00eate invalide, ou ic\u00f4ne inconnue"
                     }
                 }
             }
@@ -554,7 +554,7 @@
                         "description": "Rayon ou unit\u00e9 inconnu"
                     },
                     "409": {
-                        "description": "L'utilisateur a d\u00e9j\u00e0 un ingr\u00e9dient de ce nom (m\u00eame nom une fois normalis\u00e9 : casse, accents, ponctuation)"
+                        "description": "`INGREDIENT_NAME_ALREADY_USED` : l'utilisateur a d\u00e9j\u00e0 un ingr\u00e9dient de ce nom (m\u00eame nom une fois normalis\u00e9 : casse, accents, ponctuation) DANS CE RAYON. Le m\u00eame nom dans un autre rayon est permis (\u00ab Petits pois \u00bb surgel\u00e9s et \u00ab Petits pois \u00bb frais) : le nouvel ingr\u00e9dient re\u00e7oit alors son propre identifiant"
                     },
                     "422": {
                         "description": "Corps invalide, ou coefficient manquant alors que les unit\u00e9s diff\u00e8rent sans conversion connue"
@@ -1131,6 +1131,7 @@
                     "Departments"
                 ],
                 "summary": "Remplace le rayon (administrateur) ; son slug ne change pas",
+                "description": "Le champ facultatif `icon` r\u00e8gle l'ic\u00f4ne du rayon (`null` l'efface) ; absent du corps, l'ic\u00f4ne n'est pas touch\u00e9e : un ancien client ne l'efface jamais.",
                 "operationId": "put_api_update_department",
                 "parameters": [
                     {
@@ -1163,7 +1164,7 @@
                         "description": "Inconnu"
                     },
                     "422": {
-                        "description": "Corps de la requ\u00eate invalide"
+                        "description": "Corps de la requ\u00eate invalide, ou ic\u00f4ne inconnue"
                     }
                 }
             }
@@ -1237,6 +1238,9 @@
                     },
                     "404": {
                         "description": "Ingr\u00e9dient, rayon ou unit\u00e9 inconnu"
+                    },
+                    "409": {
+                        "description": "`INGREDIENT_NAME_ALREADY_USED` : le nom (une fois normalis\u00e9) ou le rayon change et l'utilisateur a d\u00e9j\u00e0 un autre ingr\u00e9dient de ce nom dans ce rayon ; rien n'est \u00e9crit. Modifier un ingr\u00e9dient sans changer ni son nom ni son rayon n'est jamais refus\u00e9 pour ce motif"
                     },
                     "422": {
                         "description": "Corps invalide, ou coefficient manquant alors que les unit\u00e9s diff\u00e8rent sans conversion connue (le coefficient est facultatif quand le graphe de conversion de l'ingr\u00e9dient les relie d\u00e9j\u00e0), ou unit\u00e9 des recettes qui ne se convertirait pas en unit\u00e9 d'achat"
@@ -3824,6 +3828,17 @@
                         "maxLength": 255,
                         "pattern": ".*(^(https://[^\\s]+|images/[A-Za-z0-9_\\-./]+)$).*",
                         "example": "images/frozen.svg"
+                    },
+                    "icon": {
+                        "description": "Nom de l'ic\u00f4ne du rayon, `null` pour l'effacer ; absent du corps, l'ic\u00f4ne d'un rayon existant n'est pas touch\u00e9e (`PUT`) ou le rayon n'en a pas (`POST`). Une valeur qui n'est pas dans l'\u00e9num\u00e9ration : `422`",
+                        "type": "string",
+                        "default": null,
+                        "enum": [
+                            "snowflake",
+                            "can"
+                        ],
+                        "example": "snowflake",
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -5102,6 +5117,18 @@
                         "type": "number",
                         "format": "float",
                         "example": 250
+                    },
+                    "departmentSlug": {
+                        "description": "Identifiant du rayon de l'ingr\u00e9dient (slug), null pour une conversion commune \u00e0 tous",
+                        "type": "string",
+                        "example": "epicerie",
+                        "nullable": true
+                    },
+                    "departmentName": {
+                        "description": "Nom du rayon de l'ingr\u00e9dient, null pour une conversion commune \u00e0 tous",
+                        "type": "string",
+                        "example": "\u00c9picerie",
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -5126,6 +5153,12 @@
                         "description": "Chemin ou URL de l'image du rayon",
                         "type": "string",
                         "example": "images/department/fruits.png"
+                    },
+                    "icon": {
+                        "description": "Nom de l'ic\u00f4ne du rayon (le front la dessine), `null` quand le rayon n'en a pas : elle distingue deux ingr\u00e9dients de m\u00eame nom dans deux rayons. Cl\u00e9 toujours \u00e9crite ; les valeurs permises sont celles du corps de `PUT /departments/{slug}` ; une ic\u00f4ne que le front ne conna\u00eet pas s'ignore",
+                        "type": "string",
+                        "example": "snowflake",
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -5133,7 +5166,9 @@
             "IngredientOptionDTO": {
                 "required": [
                     "slug",
-                    "name"
+                    "name",
+                    "departmentSlug",
+                    "departmentName"
                 ],
                 "properties": {
                     "slug": {
@@ -5144,6 +5179,16 @@
                     "name": {
                         "type": "string",
                         "example": "\u0153uf"
+                    },
+                    "departmentSlug": {
+                        "description": "Identifiant du rayon de l'ingr\u00e9dient (slug) : deux ingr\u00e9dients de m\u00eame nom dans deux rayons se distinguent par lui",
+                        "type": "string",
+                        "example": "surgele"
+                    },
+                    "departmentName": {
+                        "description": "Nom du rayon de l'ingr\u00e9dient",
+                        "type": "string",
+                        "example": "Surgel\u00e9"
                     }
                 },
                 "type": "object"
@@ -5676,7 +5721,9 @@
                     "unitName",
                     "purchaseUnitSlug",
                     "purchaseUnitName",
-                    "convertible"
+                    "convertible",
+                    "departmentSlug",
+                    "departmentName"
                 ],
                 "properties": {
                     "ingredientSlug": {
@@ -5728,6 +5775,16 @@
                         "description": "L'unit\u00e9 de la ligne se convertit en l'unit\u00e9 d'achat de l'ingr\u00e9dient (ses conversions propres et les universelles, comme \u00e0 la planification) ; faux : la recette ne peut pas \u00eatre planifi\u00e9e tant que la conversion manque",
                         "type": "boolean",
                         "example": true
+                    },
+                    "departmentSlug": {
+                        "description": "Identifiant du rayon de l'ingr\u00e9dient (slug) : deux ingr\u00e9dients de m\u00eame nom dans deux rayons (ADR 0028, amendement du 2026-10-30) se distinguent par lui ; le front en tire l'ic\u00f4ne par la liste des rayons",
+                        "type": "string",
+                        "example": "surgele"
+                    },
+                    "departmentName": {
+                        "description": "Nom du rayon de l'ingr\u00e9dient",
+                        "type": "string",
+                        "example": "Surgel\u00e9"
                     }
                 },
                 "type": "object"
@@ -5819,7 +5876,9 @@
                     "unitSymbol",
                     "checked",
                     "ingredientSlug",
-                    "unitSlug"
+                    "unitSlug",
+                    "departmentSlug",
+                    "departmentName"
                 ],
                 "properties": {
                     "id": {
@@ -5855,6 +5914,16 @@
                         "description": "Identifiant stable de l'unit\u00e9 d'achat (slug)",
                         "type": "string",
                         "example": "gramme"
+                    },
+                    "departmentSlug": {
+                        "description": "Identifiant du rayon de l'ingr\u00e9dient (slug), le m\u00eame que celui du rayon qui porte la ligne : la ligne seule (`GET \u2026/rows/{id}`) le dit aussi. Le front en tire l'ic\u00f4ne par la liste des rayons",
+                        "type": "string",
+                        "example": "surgele"
+                    },
+                    "departmentName": {
+                        "description": "Nom du rayon de l'ingr\u00e9dient",
+                        "type": "string",
+                        "example": "Surgel\u00e9"
                     }
                 },
                 "type": "object"

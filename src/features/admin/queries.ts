@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { ApiError, unwrap } from '@/api'
-import type { UnitPayload, UserStatus } from '@/api'
+import type { DepartmentIcon, DepartmentPayload, UnitPayload, UserStatus } from '@/api'
 import { ingredientKeys } from '@/features/ingredients/queries'
 import { recipeKeys } from '@/features/recipes/queries'
 import { useSessionStore } from '@/session/session'
@@ -55,17 +55,17 @@ export function useSaveDepartment() {
       form,
     }: {
       slug: string | null
-      form: { name: string; image: string }
+      // `icon` absent : le back ne touche pas à l'icône (`null` l'efface) ; le contrat généré la rend obligatoire
+      form: { name: string; image: string; icon?: DepartmentIcon | null }
     }) => {
+      const body = form as DepartmentPayload
       if (slug === null) {
-        const { response, error } = await api.POST('/api/v1/departments', { body: form })
+        const { response, error } = await api.POST('/api/v1/departments', { body })
         if (!response.ok) throw ApiError.fromResponse(response, error)
 
         return slugOf(response)
       }
-      await unwrap(
-        api.PUT('/api/v1/departments/{slug}', { params: { path: { slug } }, body: form }),
-      )
+      await unwrap(api.PUT('/api/v1/departments/{slug}', { params: { path: { slug } }, body }))
 
       return slug
     },

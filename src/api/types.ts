@@ -31,6 +31,9 @@ export type IngredientToFix = Schemas['IngredientToFixDTO']
 export type IngredientsToFix = Schemas['IngredientsToFixDTO']
 
 export type Department = Schemas['DepartmentDTO']
+export type DepartmentPayload = Schemas['DepartmentPayload']
+/** Les icônes de rayon que ce front dessine (ING-016 : `snowflake`, `can`) ; le back peut en ajouter, elles s'affichent sans repère tant qu'on ne les connaît pas. */
+export type DepartmentIcon = 'snowflake' | 'can'
 export type Unit = Schemas['UnitDTO']
 export type UnitPayload = Schemas['UnitPayload']
 export type Dimension = Schemas['Dimension']

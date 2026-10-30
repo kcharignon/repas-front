@@ -4,8 +4,10 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
 import { hasFailed } from '@/api/query'
+import DepartmentMarker from '@/design/DepartmentMarker.vue'
 import UiLinkButton from '@/design/UiLinkButton.vue'
 import { useActiveSummary } from '@/features/shopping-lists/queries'
+import { useDepartmentIcons } from './departmentMarkers'
 import IngredientStepper from './IngredientStepper.vue'
 import { useChangeIngredientQuantity, useDepartmentIngredients, useDepartments } from './queries'
 
@@ -22,6 +24,9 @@ const department = computed(() =>
   departments.data.value?.member?.find((candidate) => candidate.slug === slug.value),
 )
 const items = computed(() => ingredients.data.value?.member ?? [])
+// L'icône du rayon devant ses ingrédients (ING-017) : celle du rayon ouvert, lue dans la liste des rayons déjà chargée
+const { iconOf } = useDepartmentIcons()
+const markerIcon = computed(() => iconOf(slug.value))
 const hasActiveList = computed(() => summary.data.value?.shoppingListId != null)
 const quantityOf = (ingredientSlug: string) =>
   summary.data.value?.quantityByIngredientSlug[ingredientSlug] ?? 0
@@ -63,6 +68,7 @@ const quantityOf = (ingredientSlug: string) =>
         :key="ingredient.slug"
         class="flex min-h-16 flex-wrap items-center gap-3 py-2"
       >
+        <DepartmentMarker :icon="markerIcon" />
         <span class="min-w-0 flex-1">
           <span class="font-medium">{{ ingredient.name }}</span>
           <!-- Seul le propriétaire du catalogue reçoit `isBase` vrai (ING-015) ; absent d'un ancien back : pas de pastille -->

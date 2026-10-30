@@ -81,6 +81,14 @@ export default {
     unitMeasure: '{dimension}, × {factor}',
     image: 'Image',
     imageHint: 'Adresse de l’image, par exemple images/department/fruits.png.',
+    // L'icône d'un rayon (ING-016) : elle se pose devant les ingrédients du rayon pour les distinguer de ceux d'un autre rayon
+    icon: 'Icône',
+    iconHint: 'Elle s’affiche devant les ingrédients de ce rayon.',
+    iconNone: 'Aucune',
+    icons: {
+      snowflake: 'Flocon',
+      can: 'Boîte',
+    },
     order: "Ordre d'affichage",
     orderHint: 'Les types sont affichés du plus petit au plus grand.',
     orderN: 'Ordre {n}',
@@ -189,6 +197,9 @@ export default {
     deleteTitle: "Supprimer l'ingrédient ?",
     deleteHelp: '« {name} » sera supprimé avec ses conversions.',
     inUse: 'Impossible : cet ingrédient est utilisé dans une recette ou une liste de courses.',
+    // Le même nom dans deux rayons (ING-016, ING-017) : permis ; dans le même rayon, refusé (409 INGREDIENT_NAME_ALREADY_USED)
+    nameUsed: 'Tu as déjà « {name} » dans {department}. Choisis-le plutôt que d’en créer un autre.',
+    nameElsewhere: 'Tu as déjà « {name} » dans {department}. Celui-ci sera dans {chosen}.',
     // Ingrédient de base (ING-015) : l'interrupteur de la fiche et la pastille du rayon, pour le seul propriétaire du catalogue
     baseSwitch: 'Ingrédient de base',
     baseHint: 'Copié dans les nouveaux comptes.',
@@ -670,6 +681,9 @@ export default {
     unitBaseFactorInvalid: 'Le facteur de base doit être un nombre supérieur à zéro.',
     // `INGREDIENT_BASE_FORBIDDEN` (403, ING-015) : un écran périmé insiste, rien n'est enregistré
     ingredientBaseForbidden: 'Ce réglage n’est pas pour ton compte. Rien n’a changé.',
+    // `INGREDIENT_NAME_ALREADY_USED` (409, ING-016) quand l'écran ne sait pas dire le nom ni le rayon
+    ingredientNameUsed:
+      'Ce nom existe déjà dans ce rayon. Choisis-le plutôt que d’en créer un autre.',
     // Les conversions propres à un ingrédient (CONVERSION_ALREADY_EXISTS, CONVERSION_REQUIRED_BY_INGREDIENT)
     conversionExists: 'Cette conversion existe déjà : modifie-la.',
     conversionRequired:

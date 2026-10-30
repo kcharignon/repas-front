@@ -3,6 +3,7 @@ import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Trash2 } from 'lucide-vue-next'
 
+import DepartmentMarker from '@/design/DepartmentMarker.vue'
 import UiCombobox from '@/design/UiCombobox.vue'
 import type { ComboboxOption } from '@/design/UiCombobox.vue'
 import UiSelect from '@/design/UiSelect.vue'
@@ -18,7 +19,7 @@ export interface EditableRow {
 
 const row = defineModel<EditableRow>({ required: true })
 
-defineProps<{
+const props = defineProps<{
   options: ComboboxOption[]
   index: number
   errors: { ingredient?: string; quantity?: string; unit?: string }
@@ -41,6 +42,8 @@ const field = <K extends keyof EditableRow>(key: K) =>
 const ingredientSlug = field('ingredientSlug')
 const quantity = field('quantity')
 const unitSlug = field('unitSlug')
+// L'ingrédient choisi : son repère de rayon (et son rayon si son nom existe ailleurs) se lisent sous le champ, jamais dedans
+const chosen = computed(() => props.options.find((option) => option.value === ingredientSlug.value))
 const unitList = computed(() => units.data.value?.member ?? [])
 
 // Un ingrédient choisi : si l'unité n'est pas l'une des siennes, on prend la première.
@@ -64,6 +67,14 @@ watch(unitList, (list) => {
         :empty="t('editor.noIngredient')"
         :invalid="Boolean(errors.ingredient)"
       />
+      <p
+        v-if="chosen && (chosen.icon != null || chosen.hint)"
+        class="flex items-center gap-2 text-sm text-muted"
+        data-testid="chosen-department"
+      >
+        <DepartmentMarker :icon="chosen.icon" />
+        <span v-if="chosen.hint">{{ chosen.hint }}</span>
+      </p>
       <p v-if="errors.ingredient" class="text-sm font-semibold text-danger">
         {{ errors.ingredient }}
       </p>

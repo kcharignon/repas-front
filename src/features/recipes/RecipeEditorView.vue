@@ -6,6 +6,11 @@ import { Plus } from 'lucide-vue-next'
 
 import { hasFailed } from '@/api/query'
 import UiButton from '@/design/UiButton.vue'
+import {
+  isAmbiguousName,
+  namesInSeveralDepartments,
+  useDepartmentIcons,
+} from '@/features/ingredients/departmentMarkers'
 import UiField from '@/design/UiField.vue'
 import UiSelect from '@/design/UiSelect.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
@@ -70,12 +75,22 @@ watch(
   { immediate: true },
 )
 
-const options = computed(() =>
-  (ingredients.data.value?.member ?? []).map((option) => ({
+// Le repère du rayon devant chaque ingrédient (icône jointe par `departmentSlug` à la liste des rayons) ; son nom sous le nom
+// seulement quand ce nom existe dans deux rayons (ING-017). Un ancien back (ni rayon ni icône) : des options sans repère.
+const { iconOf } = useDepartmentIcons()
+const options = computed(() => {
+  const members = ingredients.data.value?.member ?? []
+  const ambiguous = namesInSeveralDepartments(members, (option) => option)
+
+  return members.map((option) => ({
     value: option.slug,
     label: option.name,
-  })),
-)
+    icon: iconOf(option.departmentSlug),
+    ...(isAmbiguousName(ambiguous, option.name) && option.departmentName
+      ? { hint: option.departmentName }
+      : {}),
+  }))
+})
 
 const errors = computed(() => {
   if (!submitted.value)
