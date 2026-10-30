@@ -14,7 +14,9 @@ const FOLDER = 'drive-agent/fixtures/contract'
 const BACK_FOLDER = 'docs/drive/samples'
 const FILES = [
   'plan.sample.json',
+  'plan-with-offer.sample.json',
   'choices.sample.json',
+  'choices-with-offer.sample.json',
   'estimate.sample.json',
   'settings.sample.json',
   'retailers.sample.json',

@@ -3,22 +3,25 @@ import type { DrivePlan, DrivePlanLine, DrivePlanProduct } from '@/api'
 /** Données inventées : un magasin d'essai, jamais une enseigne réelle. */
 export const storeBaseUrl = 'https://courses-test.leclercdrive.fr/magasin-123456-123456'
 
+// Le contrat marque `offerId` requis (`default: null` du générateur, DRV-721) alors que la clé est absente d'un produit sans offre : le produit de test n'en a
+// pas, d'où l'assertion de type.
 const product = (
   rank: number,
   id: string,
   label: string,
-  extra: Partial<DrivePlanProduct> = {},
-): DrivePlanProduct => ({
-  rank,
-  retailerProductId: id,
-  ean: null,
-  label,
-  content: { value: 1000, unit: 'g' },
-  packs: 1,
-  packsStatus: 'COMPUTED',
-  packSize: null,
-  ...extra,
-})
+  extra: Partial<Omit<DrivePlanProduct, 'offerId'>> = {},
+): DrivePlanProduct =>
+  ({
+    rank,
+    retailerProductId: id,
+    ean: null,
+    label,
+    content: { value: 1000, unit: 'g' },
+    packs: 1,
+    packsStatus: 'COMPUTED',
+    packSize: null,
+    ...extra,
+  }) as DrivePlanProduct
 
 const known = (
   slug: string,

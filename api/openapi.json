@@ -2928,7 +2928,7 @@
                         "description": "Pr\u00e9f\u00e9rence remplac\u00e9e (cr\u00e9\u00e9e si elle n'existait pas, supprim\u00e9e si le corps est vide)"
                     },
                     "404": {
-                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`), ou un ingr\u00e9dient qui n'est pas \u00e0 l'utilisateur (message `DRIVE_INGREDIENT_NOT_FOUND`) : un choix ne se pose que sur un ingr\u00e9dient de l'utilisateur (ou sur l'ancien slug de l'un d'eux), et rien n'est enregistr\u00e9"
+                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`), ou enseigne \u00e9teinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`), ou un ingr\u00e9dient qui n'est pas \u00e0 l'utilisateur (message `DRIVE_INGREDIENT_NOT_FOUND`) : un choix ne se pose que sur un ingr\u00e9dient de l'utilisateur (ou sur l'ancien slug de l'un d'eux), et rien n'est enregistr\u00e9"
                     },
                     "409": {
                         "description": "Pas de magasin enregistr\u00e9 (message `DRIVE_NOT_CONFIGURED`), ou `storeId` n'est pas le magasin courant (message `DRIVE_STORE_MISMATCH`)"
@@ -2979,7 +2979,7 @@
                         "required": true,
                         "schema": {
                             "type": "string",
-                            "maxLength": 20
+                            "maxLength": 40
                         },
                         "example": "123456"
                     }
@@ -2989,7 +2989,7 @@
                         "description": "Pr\u00e9f\u00e9rence oubli\u00e9e"
                     },
                     "404": {
-                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`), ou pas de pr\u00e9f\u00e9rence pour cet ingr\u00e9dient (message `DRIVE_CHOICE_NOT_FOUND`)"
+                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`), ou enseigne \u00e9teinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`), ou pas de pr\u00e9f\u00e9rence pour cet ingr\u00e9dient (message `DRIVE_CHOICE_NOT_FOUND`)"
                     },
                     "409": {
                         "description": "Pas de magasin enregistr\u00e9 (message `DRIVE_NOT_CONFIGURED`), ou `storeId` n'est pas le magasin courant (message `DRIVE_STORE_MISMATCH`)"
@@ -3050,7 +3050,7 @@
                         "description": "La liste appartient \u00e0 un autre utilisateur"
                     },
                     "404": {
-                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`) ou liste inconnue"
+                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`), ou enseigne \u00e9teinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`) ou liste inconnue"
                     },
                     "409": {
                         "description": "Pas de magasin enregistr\u00e9 (message `DRIVE_NOT_CONFIGURED`)"
@@ -3111,7 +3111,7 @@
                         "description": "La liste appartient \u00e0 un autre utilisateur"
                     },
                     "404": {
-                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`) ou liste inconnue"
+                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`), ou enseigne \u00e9teinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`) ou liste inconnue"
                     },
                     "409": {
                         "description": "Pas de magasin enregistr\u00e9 (message `DRIVE_NOT_CONFIGURED`), ou la liste n'est pas envoy\u00e9e au drive (message `SHOPPING_LIST_NOT_SENT`)"
@@ -3166,10 +3166,10 @@
                         "description": "Magasin enregistr\u00e9"
                     },
                     "404": {
-                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`)"
+                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`), ou enseigne \u00e9teinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`)"
                     },
                     "422": {
-                        "description": "Corps invalide, ou magasin refus\u00e9 (message `DRIVE_STORE_INVALID`) : adresse qui n'est pas celle d'un magasin de l'enseigne, identifiant diff\u00e9rent de celui de l'adresse"
+                        "description": "Corps invalide, ou magasin refus\u00e9 (message `DRIVE_STORE_INVALID`) : adresse qui n'est pas celle d'un magasin de l'enseigne, identifiant qui n'a pas la forme de l'enseigne ou, quand il se d\u00e9duit de l'adresse, diff\u00e9rent de celui de l'adresse"
                     },
                     "429": {
                         "$ref": "#/components/responses/DriveWriteRateLimited"
@@ -3223,7 +3223,7 @@
                         }
                     },
                     "404": {
-                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`)"
+                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`), ou enseigne \u00e9teinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`)"
                     },
                     "422": {
                         "description": "Param\u00e8tre `retailer` absent ou inconnu"
@@ -3251,7 +3251,7 @@
                         "description": "Pr\u00e9f\u00e9rences enregistr\u00e9es (tout ou rien)"
                     },
                     "404": {
-                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`), ou un ingr\u00e9dient qui n'est pas \u00e0 l'utilisateur (message `DRIVE_INGREDIENT_NOT_FOUND`) : un choix ne se pose que sur un ingr\u00e9dient de l'utilisateur (ou sur l'ancien slug de l'un d'eux), et rien n'est enregistr\u00e9"
+                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`), ou enseigne \u00e9teinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`), ou un ingr\u00e9dient qui n'est pas \u00e0 l'utilisateur (message `DRIVE_INGREDIENT_NOT_FOUND`) : un choix ne se pose que sur un ingr\u00e9dient de l'utilisateur (ou sur l'ancien slug de l'un d'eux), et rien n'est enregistr\u00e9"
                     },
                     "409": {
                         "description": "Pas de magasin enregistr\u00e9 (message `DRIVE_NOT_CONFIGURED`), ou `storeId` n'est pas le magasin courant (message `DRIVE_STORE_MISMATCH`)"
@@ -4243,7 +4243,7 @@
                     },
                     "storeId": {
                         "type": "string",
-                        "maxLength": 20
+                        "maxLength": 40
                     }
                 },
                 "type": "object"
@@ -4302,7 +4302,7 @@
                     "storeId": {
                         "description": "Magasin des produits : doit \u00eatre le magasin courant des r\u00e9glages de l'utilisateur",
                         "type": "string",
-                        "maxLength": 20,
+                        "maxLength": 40,
                         "example": "123456"
                     },
                     "haveAtHome": {
@@ -4336,9 +4336,9 @@
                 ],
                 "properties": {
                     "id": {
-                        "description": "Identifiant du magasin chez l'enseigne : celui de l'adresse de base",
+                        "description": "Identifiant du magasin chez l'enseigne, de la forme `storeIdPattern` du contrat des enseignes (40 caract\u00e8res au plus) : celui de l'adresse de base quand `storeIdSource` vaut `URL`, celui que l'agent a lu sur le site quand elle vaut `EXPLICIT`",
                         "type": "string",
-                        "maxLength": 20,
+                        "maxLength": 40,
                         "example": "123456"
                     },
                     "baseUrl": {
@@ -4564,6 +4564,14 @@
                                 "$ref": "#/components/schemas/PackSizePayload"
                             }
                         ]
+                    },
+                    "offerId": {
+                        "description": "Identifiant de l'offre du produit dans le magasin (DRV-721), pour les enseignes dont un produit a deux identifiants : de la forme `offerIdPattern` du contrat des enseignes, 40 caract\u00e8res au plus. Facultatif : absent ou `null`, la fiche n'est pas modifi\u00e9e ; une valeur re\u00e7ue remplace celle de la fiche (l'offre peut changer). Pour une enseigne sans offre (`offerIdPattern` \u00e0 `null`), toute valeur est refus\u00e9e : `422` `DRIVE_CHOICE_INVALID`",
+                        "type": "string",
+                        "default": null,
+                        "maxLength": 40,
+                        "example": "0b5f8a2e-3c1d-4e7f-9a6b-123456789abc",
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -4632,7 +4640,7 @@
                     "storeId": {
                         "description": "Magasin des produits : doit \u00eatre le magasin courant des r\u00e9glages de l'utilisateur",
                         "type": "string",
-                        "maxLength": 20,
+                        "maxLength": 40,
                         "example": "123456"
                     },
                     "choices": {
@@ -6208,7 +6216,7 @@
                 ],
                 "properties": {
                     "id": {
-                        "description": "Identifiant du magasin chez l'enseigne (chiffres, z\u00e9ros initiaux conserv\u00e9s)",
+                        "description": "Identifiant du magasin chez l'enseigne, en texte (40 caract\u00e8res au plus, de la forme `storeIdPattern` du contrat des enseignes ; z\u00e9ros initiaux conserv\u00e9s)",
                         "type": "string",
                         "example": "123456"
                     },
@@ -6556,6 +6564,12 @@
                                 "$ref": "#/components/schemas/PackSizeDTO"
                             }
                         ]
+                    },
+                    "offerId": {
+                        "description": "Identifiant de l'offre du produit dans le magasin (DRV-721), chez les enseignes dont un produit a deux identifiants. **La cl\u00e9 est absente** (jamais `null`) quand le produit n'a pas d'offre (toute enseigne sans offre, ou offre pas encore rapport\u00e9e par un agent)",
+                        "type": "string",
+                        "default": null,
+                        "example": "0b5f8a2e-3c1d-4e7f-9a6b-123456789abc"
                     }
                 },
                 "type": "object"
@@ -6767,7 +6781,7 @@
                         ]
                     },
                     "retailers": {
-                        "description": "Une entr\u00e9e par enseigne connue (ordre fixe), avec le magasin de l'utilisateur chez chacune ; s'ajoute aux champs `retailer` et `store`, qui restent ceux de l'enseigne par d\u00e9faut",
+                        "description": "Une entr\u00e9e par enseigne **allum\u00e9e** (`DRIVE_RETAILERS`, DRV-702 ; ordre fixe), avec le magasin de l'utilisateur chez chacune ; s'ajoute aux champs `retailer` et `store`, qui restent ceux de l'enseigne par d\u00e9faut",
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/DriveRetailerDTO"
@@ -6821,6 +6835,12 @@
                                 "$ref": "#/components/schemas/PackSizeDTO"
                             }
                         ]
+                    },
+                    "offerId": {
+                        "description": "Identifiant de l'offre du produit dans le magasin (DRV-721), chez les enseignes dont un produit a deux identifiants. **La cl\u00e9 est absente** (jamais `null`) quand le produit n'a pas d'offre (toute enseigne sans offre, ou offre pas encore rapport\u00e9e par un agent)",
+                        "type": "string",
+                        "default": null,
+                        "example": "0b5f8a2e-3c1d-4e7f-9a6b-123456789abc"
                     }
                 },
                 "type": "object"

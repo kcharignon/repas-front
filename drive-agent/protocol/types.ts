@@ -55,6 +55,8 @@ export const LIMITS = {
   packSizeDecimals: 3,
   /** Le slug d'une unité de Repas (`needed.unitSlug`, `packSize.unitSlug`), en caractères : `^[a-z0-9-]{1,255}$`. */
   unitSlug: 255,
+  /** L'identifiant d'offre d'un produit (DRV-722), en caractères : la borne du back (`drive_product.retailer_offer_id`). Sa forme est celle de l'enseigne. */
+  offerId: 40,
 } as const
 
 /** Le seul chemin de retour permis, sur l'origine de Repas écrite en dur dans l'agent. */
@@ -129,6 +131,11 @@ export interface PlanProduct extends ProductRef {
    * le plan : le site ne l'envoie qu'à une application dont l'agent est de la version 0.42.0 ou plus (`PACK_SIZE_APP_VERSION`).
    */
   packSize?: PackSize | null
+  /**
+   * Facultatif (DRV-722) : l'identifiant de l'offre de ce produit dans le magasin, pour les enseignes dont un produit a deux identifiants (`StoreRules.offerId`).
+   * Absent pour une enseigne sans offre (Leclerc) : la clé y est INTERDITE, comme toute clé inconnue. Sa forme est celle de l'enseigne du message.
+   */
+  offerId?: string
 }
 
 /** Combien d'unités de la liste (`unitSlug`, « tranche ») tiennent dans un produit : « 20 tranches » est `{value: 20, unitSlug: 'tranche'}`. */
@@ -224,6 +231,11 @@ export interface ChosenProduct extends RejectedProduct {
    */
   rayonId?: number
   familyId?: number
+  /**
+   * Facultatif (DRV-722) : l'identifiant de l'offre du produit choisi dans le magasin, pour une enseigne qui en a une. Absent chez Leclerc et chez les agents
+   * d'avant ; Repas le mémorise sur la fiche du produit (`PUT /drive/choices`, `product.offerId`). Jamais sur un produit refusé.
+   */
+  offerId?: string
 }
 
 interface LineBase {

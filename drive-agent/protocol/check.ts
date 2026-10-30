@@ -23,6 +23,11 @@ export interface StoreRules {
   id: RegExp
   /** L'adresse de base d'un magasin (`setup-result`) est celle de cet hôte et de ce magasin : la règle de l'enseigne. */
   base(url: string, host: string, id: string): boolean
+  /**
+   * La forme de l'identifiant d'offre d'un produit (DRV-722, `offerIdPattern` du contrat des enseignes), ou `null` quand l'enseigne n'a pas d'offre : la clé
+   * `offerId` est alors interdite dans ses messages.
+   */
+  offerId: RegExp | null
 }
 
 /**
@@ -37,6 +42,7 @@ export const STORES: Record<RetailerId, StoreRules> = {
       const found = /^https:[/][/]([^/]+)[/]magasin-([0-9]{1,12})-[0-9]{1,12}$/.exec(url)
       return found?.[1] === host && found?.[2] === id
     },
+    offerId: null,
   },
 }
 
@@ -44,6 +50,15 @@ export const STORES: Record<RetailerId, StoreRules> = {
 export const ANY_STORE_ID = new RegExp(
   RETAILER_IDS.map((id) => `(?:${STORES[id].id.source})`).join('|'),
 )
+
+/**
+ * La forme d'un identifiant d'offre d'une enseigne quelconque (un `result` ne dit pas l'enseigne), ou `null` quand aucune enseigne n'a d'offre : la clé est alors
+ * interdite. Calculée à l'appel, pas au chargement : le registre est la seule source.
+ */
+export function anyOfferId(): RegExp | null {
+  const rules = RETAILER_IDS.map((id) => STORES[id].offerId).filter((rule) => rule !== null)
+  return rules.length === 0 ? null : new RegExp(rules.map((rule) => `(?:${rule.source})`).join('|'))
+}
 
 /** L'enseigne dont ce texte est un hôte de magasin, ou `undefined`. */
 export function retailerOfHost(host: string): RetailerId | undefined {
@@ -163,6 +178,17 @@ export const packSize: Check = (scope, key) => {
   if (!isPackValue(own.v.value)) fail(at(own.p, 'value'))
   text(own, 'unitSlug', UNIT_SLUG, LIMITS.unitSlug)
 }
+
+/**
+ * Un identifiant d'offre (DRV-722) : 1 à `LIMITS.offerId` caractères et la forme `rule` de l'enseigne ; `null` (enseigne sans offre) l'interdit, la clé est
+ * alors inconnue comme n'importe quelle autre.
+ */
+export const offerId =
+  (rule: RegExp | null): Check =>
+  (scope, key) => {
+    if (rule === null) fail(at(scope.p, key), 'enseigne sans offre')
+    text(scope, key, rule, LIMITS.offerId)
+  }
 
 export const productRef: Check = (scope, key) => {
   const own = object(scope, key, ['id', 'label'])

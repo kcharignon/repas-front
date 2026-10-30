@@ -2,7 +2,7 @@
 // Partagé par l'agent (`drive-agent/src`, import relatif) et par le front (`@drive-protocol`). Aucune dépendance d'exécution.
 export { decodeMessage, encodeMessage } from './codec'
 import { STORES } from './check'
-export { retailerOfHost, STORES } from './check'
+export { anyOfferId, retailerOfHost, STORES } from './check'
 /** L'hôte d'un magasin Leclerc. Gardé pour le site (`storeAddress.ts`, DRV-708) ; le reste lit `STORES[retailer].host`. */
 export const STORE_HOST = STORES.leclerc.host
 export { cleanSearchQuery, cleanText } from './clean-text'
