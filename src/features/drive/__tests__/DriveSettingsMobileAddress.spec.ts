@@ -134,4 +134,22 @@ describe('adresse du site mobile collée dans la saisie à la main', () => {
     expect(native.sent.filter((message) => message.type === 'drive.setup')).toHaveLength(0)
     expect(puts(fetchMock)).toHaveLength(1)
   })
+
+  it('une adresse ordinateur avec ville et .aspx est acceptée et l’adresse de base est enregistrée (DRV-742)', async () => {
+    const { wrapper, native, fetchMock } = await open(true)
+
+    await paste(
+      wrapper,
+      'https://exemple.leclercdrive.fr/magasin-123456-123456-ville-test.aspx?a=1',
+    )
+    await flushPromises()
+
+    expect(native.sent.filter((message) => message.type === 'drive.setup')).toHaveLength(0)
+    const sent = puts(fetchMock)
+    expect(sent).toHaveLength(1)
+    const body = await (sent[0] as Request).clone().text()
+    expect(body).toContain('https://exemple.leclercdrive.fr/magasin-123456-123456')
+    expect(body).not.toContain('ville-test')
+    expect(body).not.toContain('.aspx')
+  })
 })
