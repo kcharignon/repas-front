@@ -259,6 +259,22 @@ export const S = {
         }, ${status === null ? 'code HTTP non mesurable' : `HTTP ${status}`}`,
       delivery: (where: string, read: string, same: string) =>
         `Point de livraison (${where}) : lu ${read}, égal au numéro de l’adresse ${same}`,
+      /** Comment le site a dit le magasin quand il ne se lit pas dans l'adresse (DRV-717) : réponse, contextes, magasin, forme de l'identifiant. */
+      storeRead: (read: {
+        status: string
+        contexts: string
+        others: number
+        store: string
+        idForm: string
+        pickUp: string
+        label: string
+      }) =>
+        `Magasin dit par le site : réponse ${read.status} ; contextes de courses : ${read.contexts} (${read.others} autre${read.others > 1 ? 's' : ''}) ; ${read.store} ; forme de l’identifiant : ${read.idForm} ; retrait au drive : ${read.pickUp} ; libellé lisible : ${read.label}`,
+      storeReadRead: 'magasin lu',
+      storeReadNone: 'contexte de courses vide (aucun magasin choisi)',
+      storeReadAbsent: 'pas de contexte de courses (aucun magasin choisi)',
+      none: 'aucun',
+      other: 'autre',
       searchSkipped: (term: string) =>
         `Recherche « ${term} » : non faite (page non prise en charge, blocage ou recherche courante en échec)`,
       searchNoReply: (term: string, why: string | null) =>
@@ -905,6 +921,17 @@ export function causeTexts(
     PAGE_MOBILE: {
       title: 'Ce n’est pas la version ordinateur du site',
       text: `${retailer.name} affiche son site mobile. Repas ne travaille que sur la version ordinateur. Ce qui est déjà au panier y reste. Ouvre « Ouvrir le drive ${retailer.name} » dans le menu de l’application, puis reprends l’envoi.`,
+    },
+    // Aucun magasin choisi (DRV-717) : chez une enseigne dont le magasin ne se lit pas dans l'adresse, la page dit « Choisir vos courses » ou le site n'a pas de drive
+    // pour la session. Trois phrases : ce qui s'est passé, ce qui est sauf, le geste à faire.
+    STORE_NOT_CHOSEN: {
+      title: 'Choisis ton magasin',
+      text: `Aucun magasin n’est choisi sur ${retailer.name}. ${S.end.safe} Choisis ton magasin dans la page, puis reprends l’envoi depuis Repas.`,
+    },
+    // Une adresse que le site ne connaît plus (un vrai 404).
+    PAGE_NOT_FOUND: {
+      title: 'Cette page n’existe pas',
+      text: `Cette page ${retailer.nameDe} n’existe pas. ${S.end.safe} Ouvre la page de ton magasin, puis reprends l’envoi depuis Repas.`,
     },
   }
 }

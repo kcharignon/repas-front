@@ -3,7 +3,7 @@ import { append, clear, h, type Child } from './dom'
 import { own } from '../own'
 import { ofUnits, packsFromSize, parsePackValue } from '../../protocol'
 import { photoFrame } from './photo'
-import type { RetailerNames } from '../retailers/names'
+import type { PhotoRetailer, RetailerNames } from '../retailers/names'
 import { causeTexts, errorParts, errorTexts, pluralOf, S, unitFor } from './strings'
 import type {
   ChallengeProps,
@@ -48,7 +48,7 @@ type Answer<K extends ScreenName> = (value: ScreenAnswer<K>) => void
 type Renderer<K extends ScreenName> = (
   props: ScreenProps<K>,
   answer: Answer<K>,
-  retailer: RetailerNames,
+  retailer: PhotoRetailer,
 ) => Rendered
 
 const LOG_SIZE = 5
@@ -206,13 +206,13 @@ function selectOnFirstTouch(input: HTMLInputElement): void {
  * juste à côté), le nom complet, la seconde ligne du libellé et « 400 g · 2,58 € · 6,45 € / kg » à droite. Rien n'est écrit pour ce qui manque, et une photo qui
  * ne charge pas se retire sans laisser de trou ni d'icône d'image cassée (`photoFrame`).
  */
-function productBlock(card: ProductCard | undefined): HTMLElement | null {
+function productBlock(card: ProductCard | undefined, retailer: PhotoRetailer): HTMLElement | null {
   if (card === undefined) return null
 
   return h(
     'div',
     { class: 'media product' },
-    photoFrame(card.photo, '', 'small'),
+    photoFrame(card.photo, '', retailer.photos, 'small'),
     h(
       'div',
       { class: 'text' },
@@ -223,7 +223,7 @@ function productBlock(card: ProductCard | undefined): HTMLElement | null {
   )
 }
 
-const quantity: Renderer<'quantity'> = (props: QuantityProps, answer) => {
+const quantity: Renderer<'quantity'> = (props: QuantityProps, answer, retailer) => {
   const input = h('input', {
     value: String(props.packs ?? 1),
     attrs: { id: 'quantite', type: 'number', min: '1', max: '99', step: '1', inputmode: 'numeric' },
@@ -261,7 +261,7 @@ const quantity: Renderer<'quantity'> = (props: QuantityProps, answer) => {
   return {
     el: screen(
       title(S.quantity.title),
-      productBlock(props.product),
+      productBlock(props.product, retailer),
       h('p', { text: S.quantity.text(props.productLabel, props.ingredient) }),
       props.need ? h('p', { text: S.picker.need(props.need) }) : null,
       form,
@@ -276,7 +276,7 @@ const quantity: Renderer<'quantity'> = (props: QuantityProps, answer) => {
  * porte pas un nombre valide (de 0,001 à 9 999, trois décimales au plus) : Repas refuserait sinon tout le lot de choix. Le champ est prérempli quand le
  * libellé du produit annonce le nombre (« 20 Tranches »), sinon vide.
  */
-const packSize: Renderer<'packSize'> = (props: PackSizeProps, answer) => {
+const packSize: Renderer<'packSize'> = (props: PackSizeProps, answer, retailer) => {
   const input = h('input', {
     value: props.prefill === null ? '' : String(props.prefill).replace('.', ','),
     attrs: {
@@ -350,7 +350,10 @@ const packSize: Renderer<'packSize'> = (props: PackSizeProps, answer) => {
       button(S.packSize.skip, () => answer(null)),
     ),
   )
-  return { el: screen(title(S.packSize.title), productBlock(props.product), form), focus: input }
+  return {
+    el: screen(title(S.packSize.title), productBlock(props.product, retailer), form),
+    focus: input,
+  }
 }
 
 /**

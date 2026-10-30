@@ -100,10 +100,10 @@ describe('un seul fichier, sans dépendance ni code distant', () => {
       const withoutHeader = code.replace(/"X-Requested-With":`XMLHttpRequest`/g, '')
       expect(withoutHeader).not.toMatch(/XMLHttpRequest|WebSocket|EventSource|sendBeacon/)
       // Aucune adresse absolue, sauf l'adresse de base du magasin bâtie sur l'hôte de la page (`https://${hôte}`, DRV-303) et la base
-      // fictive qui sert à analyser un chemin.
+      // fictive qui sert à analyser un chemin (une par adaptateur qui lit l'adresse d'une réponse).
       const withoutPageHost = code
         .replace(/https:\/\/\$\{[^}]*\}/g, '')
-        .replace('https://x.invalid', '')
+        .replaceAll('https://x.invalid', '')
       expect(withoutPageHost).not.toMatch(/https?:\/\//)
     }
   })

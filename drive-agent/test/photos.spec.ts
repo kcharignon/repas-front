@@ -169,12 +169,12 @@ describe('les photos suivent les lots (DRV-643)', () => {
 
 describe('photoFrame', () => {
   it('rend null pour une adresse refusée (aucun nœud, aucune erreur)', () => {
-    expect(photoFrame('javascript:alert(1)', 'x')).toBeNull()
-    expect(photoFrame(undefined, 'x')).toBeNull()
+    expect(photoFrame('javascript:alert(1)', 'x', LECLERC.photos)).toBeNull()
+    expect(photoFrame(undefined, 'x', LECLERC.photos)).toBeNull()
   })
 
   it('pose l’écouteur d’erreur avant l’adresse et ne met aucun gestionnaire en attribut', () => {
-    const frame = photoFrame(GOOD, 'Poivre')
+    const frame = photoFrame(GOOD, 'Poivre', LECLERC.photos)
     const image = frame?.querySelector('img')
 
     expect(frame?.className).toBe('photo')
