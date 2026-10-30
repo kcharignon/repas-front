@@ -3,7 +3,7 @@
 #
 # 1. Premier lancement seulement : télécharge dans le volume /sdk le SDK (platform-tools, émulateur) et l'image système Google APIs, puis crée
 #    l'AVD. Les lancements suivants réutilisent tout, sans rien télécharger.
-# 2. Démarre le DNS local (tout *.leclercdrive.fr, et le faux Repas repas.test, pointent vers la machine hôte de l'émulateur, 10.0.2.2 ; aucun autre nom ne se résout), le
+# 2. Démarre le DNS local (tout *.leclercdrive.fr, le faux Repas repas.test et l'enseigne FICTIVE d'essai *.exemple-b.test (DRV-707) pointent vers la machine hôte de l'émulateur, 10.0.2.2 ; aucun autre nom ne se résout), le
 #    faux site Leclerc complet (Node, drive-agent/fake-leclerc, HTTP sur 127.0.0.1:8099 dans ce conteneur) et les faux sites HTTPS (testsite.py,
 #    port 443 : le faux Repas, la page de test du drive, et le faux Leclerc en relais) : l'émulateur ne peut donc JAMAIS joindre le vrai site Leclerc.
 # 3. Lance l'émulateur sans fenêtre, accéléré par KVM.
@@ -55,10 +55,11 @@ set_config hw.lcd.density "${EMULATOR_LCD_DENSITY:-420}"
 # --- 2. Faux site et DNS local -----------------------------------------------------------------------------------------------------------
 mkdir -p "$SITE"
 if [ ! -f "$SITE/cert.pem" ] || ! openssl x509 -in "$SITE/cert.pem" -noout -checkend 604800 > /dev/null \
-  || ! openssl x509 -in "$SITE/cert.pem" -noout -ext subjectAltName | grep -q "repas.test"; then
+  || ! openssl x509 -in "$SITE/cert.pem" -noout -ext subjectAltName | grep -q "repas.test" \
+  || ! openssl x509 -in "$SITE/cert.pem" -noout -ext subjectAltName | grep -q "exemple-b.test"; then
   log "Création du certificat jetable des faux sites (reste dans le volume, jamais dans le dépôt)."
   openssl req -x509 -newkey rsa:2048 -nodes -days 397 -keyout "$SITE/key.pem" -out "$SITE/cert.pem" \
-    -subj "/CN=faux-sites.test" -addext "subjectAltName=DNS:leclercdrive.fr,DNS:*.leclercdrive.fr,DNS:repas.test" 2> /dev/null
+    -subj "/CN=faux-sites.test" -addext "subjectAltName=DNS:leclercdrive.fr,DNS:*.leclercdrive.fr,DNS:repas.test,DNS:exemple-b.test,DNS:*.exemple-b.test" 2> /dev/null
 fi
 # L'empreinte de sa clé publique : la WebView de l'émulateur n'ignore les erreurs de certificat que pour cette clé-là (voir smoke.sh).
 openssl x509 -in "$SITE/cert.pem" -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64 > "$SITE/spki.b64"
@@ -66,7 +67,7 @@ openssl x509 -in "$SITE/cert.pem" -pubkey -noout | openssl pkey -pubin -outform 
 : > "$SITE/dns.log"
 : > "$SITE/access.log"
 dnsmasq --keep-in-foreground --user=root --no-resolv --no-hosts --bind-interfaces --listen-address=127.0.0.1 \
-  --address=/leclercdrive.fr/10.0.2.2 --address=/repas.test/10.0.2.2 --log-queries --log-facility="$SITE/dns.log" &
+  --address=/leclercdrive.fr/10.0.2.2 --address=/repas.test/10.0.2.2 --address=/exemple-b.test/10.0.2.2 --log-queries --log-facility="$SITE/dns.log" &
 # Le faux Leclerc complet (catalogue, recherche, panier, défauts simulés) : accès local seulement, il n'écoute que sur 127.0.0.1 (le relais HTTPS de
 # testsite.py lui parle ; le pilotage /__fake/* n'est offert qu'aux noms de la boucle locale, donc à `docker compose exec`, jamais à l'émulateur).
 # Il accepte aussi le nom de l'accueil de l'enseigne (www), que testsite.py ne lui relaie qu'en mode « fake » (scénarios complets).

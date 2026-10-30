@@ -15,7 +15,19 @@ import androidx.webkit.WebViewFeature
 internal object DesktopMode {
     private const val TAG = "RepasDrive"
 
-    fun apply(context: Context, settings: WebSettings) {
+    /**
+     * Règle la WebView d'une enseigne selon la façon dont elle sert son site ([SiteMode], DRV-707). Le mode ordinateur (identité, fenêtre large) n'est
+     * imposé qu'à une enseigne qui sert un site mobile aux routes autres ([SiteMode.DESKTOP]) ; les autres gardent l'identité et la mise en page de la
+     * WebView. Le zoom au pincement est offert dans tous les cas.
+     */
+    fun apply(context: Context, settings: WebSettings, mode: SiteMode) {
+        settings.setSupportZoom(true)
+        settings.builtInZoomControls = true
+        settings.displayZoomControls = false
+        if (mode == SiteMode.DESKTOP) applyDesktop(context, settings)
+    }
+
+    private fun applyDesktop(context: Context, settings: WebSettings) {
         val supported = WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)
         val identity = UserAgents.identity(WebSettings.getDefaultUserAgent(context), supported)
         settings.userAgentString = identity.userAgent
@@ -28,9 +40,6 @@ internal object DesktopMode {
         // défilement horizontal, sur une mise en page inconnue. Le zoom de la page est donc toujours un geste de l'utilisateur, jamais un réglage.
         settings.useWideViewPort = true
         settings.loadWithOverviewMode = true
-        settings.setSupportZoom(true)
-        settings.builtInZoomControls = true
-        settings.displayZoomControls = false
         var note = identity.note
         if (identity.clientHints && !applyClientHints(settings, UserAgents.chromeMajorOf(identity.userAgent))) {
             note = "Indications client refusées par la WebView : agent utilisateur seul."

@@ -66,6 +66,22 @@ describe('ce que l’application répond à la page', () => {
     ).toEqual({ type: 'app.info', info: { version: '1.2.3', versionCode: 42, drive: true } })
   })
 
+  it('app.info avec le champ facultatif retailers (DRV-707) : le site qui ne le connaît pas le tolère et lit la réponse d’avant', () => {
+    const old = '{"v":1,"type":"app.info","version":"1.2.3","versionCode":42,"drive":true}'
+    const withRetailers =
+      '{"v":1,"type":"app.info","version":"1.2.3","versionCode":42,"drive":true,"retailers":["leclerc"]}'
+
+    expect(parseInbound(withRetailers)).toEqual(parseInbound(old))
+    expect(
+      parseInbound(
+        '{"v":1,"type":"app.info","version":"1.2.3","versionCode":42,"drive":true,"selfUpdate":true,"retailers":["leclerc","autre"]}',
+      ),
+    ).toEqual({
+      type: 'app.info',
+      info: { version: '1.2.3', versionCode: 42, drive: true, selfUpdate: true },
+    })
+  })
+
   it('drive.result d’une lecture du magasin : le front le reçoit et rend le magasin', async () => {
     const setupResult = {
       v: 1,

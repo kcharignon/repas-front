@@ -36,6 +36,7 @@ Le cœur : `android/core/src/main/kotlin/eu/kantin/repas/drive/` (le paquet n'a 
 |---|---|
 | `RetailerSite.kt` | **une enseigne de drive vue par l'application** (DRV-706) : `RetailerSite` (identifiant, noms, accueil, mode du site, hôtes où l'on navigue et hôtes où le pont `repasHost` et l'agent existent, formes des pages de magasin, de connexion et du site mobile, règle de livraison d'un plan), `HostPattern` (un nom exact ou tous les sous-domaines d'un domaine, jamais un joker plus large), `SiteHost`, `StorePages`, `SiteMode` |
 | `RetailerSites.kt` | **le registre des enseignes** : la seule liste (aujourd'hui une entrée), injectable dans les tests ; **le seul fichier du cœur qui nomme une enseigne** ; refuse deux enseignes qui se partagent un nom de site ; `announcedRetailers()` pour `app.info` |
+| `DriveProfileName.kt` | le nom du profil de WebView de chaque enseigne (DRV-707) : `drive` pour l'enseigne d'avant (les installations existantes restent connectées), `drive-<identifiant>` pour les autres |
 | `RetailerValue.kt` | une valeur texte **par enseigne** sur le stockage clé-valeur du téléphone (`KeyValueStore`) : clé `<nom>.<identifiant>`, ancienne clé unique relue comme celle de l'enseigne d'avant |
 | `NavigationPolicy.kt` | la règle de navigation du drive (seules les pages `https` de l'enseigne de l'écran restent dans l'application : `decide(site, url)`), la lecture des adresses ; les formes sans enseigne sont celles de l'enseigne d'avant |
 | `ShellNavigation.kt` | l'origine de Repas (`RepasOrigin`) et la règle de navigation de la coquille |
@@ -65,11 +66,11 @@ L'application : `android/app/src/main/kotlin/eu/kantin/repas/drive/` (commun aux
 | Fichier | Ce qu'il porte |
 |---|---|
 | `MainActivity.kt` | la coquille Repas : WebView, pont `repasNative`, liens entrants, menu |
-| `DriveActivity.kt` | le drive, second écran : WebView en mode ordinateur, agent injecté |
-| `AgentHost.kt` | la colle `androidx.webkit` : injection de l'agent, canal `repasHost` |
-| `DesktopMode.kt` | le mode ordinateur appliqué à la WebView |
-| `DriveProfile.kt` | le profil « drive » de la WebView (cookies et stockage séparés de Repas) |
-| `RepasApp.kt` | l'application ; les stockages Android (`PrefsPassStore`, `PrefsStorePathStore`, `PrefsFinalizeOutcomeStore`) |
+| `DriveActivity.kt` | le drive d'UNE enseigne, second écran (DRV-707) : WebView (en mode ordinateur si le site de l'enseigne le demande), agent injecté, profil, mémoires et textes de cette enseigne |
+| `AgentHost.kt` | la colle `androidx.webkit` : injection de l'agent, canal `repasHost`, avec les origines de l'enseigne de l'écran seulement |
+| `DesktopMode.kt` | le mode ordinateur appliqué à la WebView d'une enseigne dont le site le demande (`SiteMode.DESKTOP`) |
+| `DriveProfile.kt` | le profil de WebView de chaque enseigne (cookies et stockage séparés de Repas et des autres enseignes) |
+| `RepasApp.kt` | l'application, son registre des enseignes servies (`sites`) ; les stockages Android (`PrefsPassStore`, `PrefsKeyValueStore`) |
 | `AndroidServices.kt` | les services de plateforme d'Android derrière les interfaces du cœur (`AndroidLinkOpener`) |
 | `InstalledVersion.kt` | la version installée, lue dans le gestionnaire de paquets |
 | `Dialogs.kt`, `Views.kt`, `TextPanel.kt` | fenêtres, vues, écran de texte |
@@ -89,9 +90,9 @@ Quand le cœur a besoin de quelque chose que seule la plateforme sait faire, il 
 | `IdentityProvider` | un jeton d'identité, par la feuille de choix du compte de la plateforme (`signIn(clientId, nonce, callback)`) | Credential Manager (AUTH-011, à écrire) | hors portée |
 | `LinkOpener` | ouvrir une page web dans le navigateur du système | `AndroidLinkOpener` (`AndroidServices.kt`) | hors portée |
 | `PassStore` | garder une valeur texte : le passage non terminé et les résultats à livrer | `PrefsPassStore` (préférence privée, hors sauvegarde) | hors portée |
-| `StorePathStore` | garder le chemin du magasin | `PrefsStorePathStore` | hors portée |
-| `FinalizeOutcomeStore` | garder la forme du dernier « Finaliser » | `PrefsFinalizeOutcomeStore` | hors portée |
-| `KeyValueStore` | garder des valeurs texte par clé (DRV-706) : le cœur choisit les clés `path.<enseigne>`, `finalize.<enseigne>`, l'application les range | (à brancher : une préférence privée, DRV-707) | hors portée |
+| `StorePathStore` | garder le chemin du magasin d'UNE enseigne | `RetailerValue` sur `PrefsKeyValueStore` | hors portée |
+| `FinalizeOutcomeStore` | garder la forme du dernier « Finaliser » d'UNE enseigne | `RetailerValue` sur `PrefsKeyValueStore` | hors portée |
+| `KeyValueStore` | garder des valeurs texte par clé (DRV-706) : le cœur choisit les clés `path.<enseigne>`, `finalize.<enseigne>`, l'application les range | `PrefsKeyValueStore` (préférence privée `drive-store`, DRV-707) | hors portée |
 | `HttpHop` | UNE demande `GET` en `https`, sans suivre de redirection (DRV-639) | `HttpsHop` (`HttpsURLConnection`) | hors portée |
 | `UpdateStorage` | le dossier privé où l'APK téléchargé attend, seul (DRV-639) | `PrivateUpdateStorage` (`files/update/`) | hors portée |
 | `UpdatePlatform` | l'autorisation d'installer et le contrôle du fichier posé (paquet, code, certificat) | `AndroidUpdatePlatform` | hors portée |
@@ -106,9 +107,17 @@ Une enseigne est **une donnée, pas une branche de code** : `RetailerSite` (`Ret
 - **Navigation et pont ne sont pas la même liste.** Chaque `SiteHost` dit si le pont `repasHost` et l'agent y existent (`bridge`). Une enseigne peut naviguer sur plusieurs hôtes (la page de connexion, à part) sans que le pont existe sur la page du mot de passe. Les règles d'origine de la WebView (`BridgeMessages.originRules`) se déduisent des seuls hôtes qui portent le pont, de l'ensemble des enseignes **que l'écran ouvre** ; jamais `*`, jamais un joker plus large qu'un nom exact ou `*.domaine`.
 - **Une adresse n'est celle que d'une seule enseigne.** `RetailerSites` refuse deux enseignes qui se partagent un nom de site. `NavigationPolicy.decide(site, url)` ne garde dans la WebView que les pages de **l'enseigne de l'écran** ; une page d'une autre enseigne part au navigateur du téléphone.
 - **Un plan n'est livré qu'à une page de son enseigne** (`RetailerSite.acceptsPlanOn`, `OpeningWatch.canDeliver(request, url)`) : où le pont existe, et une page de magasin (ou l'accueil pour un plan) quand l'enseigne a des pages de magasin. Un plan est refusé (`INVALID_PLAN`) si son enseigne n'est pas au registre ou si l'hôte de son magasin n'est pas un hôte de **cette** enseigne.
-- **Les formes sans enseigne** (`NavigationPolicy.decide(url)`, `START_URL`, `BridgeMessages.isAllowedOrigin(origin)`, `DrivePlan.parse(plan)`…) sont celles de l'enseigne d'avant le multi-enseignes (`RetailerSites.legacy`) : un écran qui n'a pas choisi d'enseigne ne navigue que chez elle. L'écran du drive passe l'enseigne partout (DRV-707).
+- **Les formes sans enseigne** (`NavigationPolicy.decide(url)`, `START_URL`, `BridgeMessages.isAllowedOrigin(origin)`, `DrivePlan.parse(plan)`…) sont celles de l'enseigne d'avant le multi-enseignes (`RetailerSites.legacy`) : un écran qui n'a pas choisi d'enseigne ne navigue que chez elle. L'écran du drive passe son enseigne partout (DRV-707, voir plus bas).
 - **Mémoires par enseigne** : `StorePathMemories` et `FinalizeOutcomeMemories` rangent une valeur par enseigne (`path.<identifiant>`, `finalize.<identifiant>`) sur un `KeyValueStore` ; la valeur unique de l'ancienne version (`path`, `finalize`) est relue comme celle de l'enseigne d'avant, puis déplacée sous sa clé à la première écriture.
-- **Annonce** : `RetailerSites.announcedRetailers()` (liste d'identifiants) est ce que `app.info` annoncera (DRV-707).
+- **Annonce** : `RetailerSites.announcedRetailers()` (liste d'identifiants) est ce que `app.info` annonce (champ facultatif `retailers`, DRV-707) : une capacité de l'application, jamais un numéro de version.
+
+### L'écran du drive d'une enseigne (DRV-707)
+
+- **Il s'ouvre sur une enseigne** : l'enseigne du passage en cours, sinon l'extra d'intention `retailer` (`RetailerSites.forScreen` : absent ou inconnu = l'enseigne d'avant). La coquille le donne à chaque ouverture (`drive.start`, `drive.setup`, reprise d'un passage, « Finaliser », menu) ; `drive.setup` porte un `retailer` facultatif, absent = l'enseigne d'avant.
+- **Tout est de l'enseigne de l'écran** : navigation (`NavigationPolicy.decide(site, url)` : une adresse d'une autre enseigne part au navigateur du téléphone), accueil, mode du site (`SiteMode` : le mode ordinateur n'est imposé qu'à `DESKTOP`), origines du pont et injection de l'agent (`AgentHost`, avec `BridgeMessages.originRules(listOf(site))`, posées avant le premier chargement), repli d'injection (`site.isBridgePage`), livraison du plan (jamais à l'agent d'un écran d'une autre enseigne), mémoires (`storePaths`, `finalizeOutcomes`), textes.
+- **Un profil de WebView par enseigne** (`DriveProfileName`) : `drive` reste celui de l'enseigne d'avant (personne n'est déconnecté par la mise à jour), `drive-<identifiant>` pour les autres. « Se déconnecter {nom} » n'efface que le profil et les mémoires de cette enseigne.
+- **Textes** : `strings.xml` ne nomme aucune enseigne ; `%1$s` est le nom, `%2$s` la forme avec « de » (`getString(id, site.name, site.nameDe)`). Le menu de la coquille offre « Ouvrir le drive {nom} » et « Se déconnecter {nom} » pour chaque enseigne de `RetailerSites.DEFAULT` (une seule aujourd'hui : le menu est celui d'avant).
+- **Enseigne d'essai (variante de débogage seulement)** : `app/src/debug/…/TestRetailers.kt` ajoute une enseigne FICTIVE (`*.exemple-b.test`) au registre de `RepasApp.sites` pour que `make android-e2e` prouve l'isolement ; `app/src/release/…/TestRetailers.kt` est vide. Elle n'est jamais annoncée (`app.info`) ni proposée dans un menu.
 
 ## Deux variantes de distribution (DRV-639)
 

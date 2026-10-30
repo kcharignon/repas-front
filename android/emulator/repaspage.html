@@ -97,6 +97,7 @@
       item.versionCode = m.versionCode
       item.drive = m.drive
       item.selfUpdate = m.selfUpdate
+      item.retailers = m.retailers
       show('info', 'app.info : version ' + m.version + ', numéro ' + m.versionCode + ', drive ' + m.drive, true)
     } else if (m.type === 'drive.result') {
       item.runId = m.result && m.result.runId
@@ -150,7 +151,10 @@
           if (command.runId) plan.runId = command.runId
           send({ v: 1, type: 'drive.start', plan: plan })
         } else if (command.do === 'drive.setup') {
-          send({ v: 1, type: 'drive.setup', runId: command.runId })
+          // `retailer` : l'enseigne de la lecture du magasin (DRV-707) ; absent, le message d'avant (l'enseigne d'avant le multi-enseignes)
+          var setup = { v: 1, type: 'drive.setup', runId: command.runId }
+          if (command.retailer !== undefined) setup.retailer = command.retailer
+          send(setup)
         } else if (command.do === 'drive.cancel') {
           send({ v: 1, type: 'drive.cancel', runId: command.runId || PLAN.runId })
         } else if (command.do === 'app.info') {
