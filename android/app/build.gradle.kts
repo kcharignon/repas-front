@@ -28,6 +28,14 @@ fun originHost(origin: String): String {
     return match.groupValues[1]
 }
 val debugOrigin = env("ANDROID_REPAS_ORIGIN") ?: productionOrigin
+// Les enseignes ÉTEINTES qu'une construction de DÉBOGAGE allume (DRV-728) : `ANDROID_EXTRA_RETAILERS=auchan`, des identifiants séparés par des virgules (vide par
+// défaut : aucune). C'est le drapeau de construction qui fait entrer une enseigne inscrite dans le registre que l'application sert, annonce à Repas
+// (`app.info`) et propose dans son menu (`RetailerSites.serving`). La construction de PUBLICATION a toujours un drapeau vide, quoi que dise
+// l'environnement : `verifyReleaseInputs` refuse la variable, et `build.sh` vérifie le drapeau dans `BuildConfig`. Aucune enseigne n'est nommée ici.
+val extraRetailers = env("ANDROID_EXTRA_RETAILERS") ?: ""
+if (!Regex("^([a-z][a-z0-9]{0,19}(,[a-z][a-z0-9]{0,19})*)?$").matches(extraRetailers)) {
+    throw GradleException("ANDROID_EXTRA_RETAILERS doit être une liste d'identifiants d'enseigne (minuscules et chiffres) séparés par des virgules : « $extraRetailers ».")
+}
 val buildCommit = try {
     AppVersion.shortCommit(env("ANDROID_COMMIT"))
 } catch (e: IllegalArgumentException) {
@@ -136,12 +144,15 @@ android {
         getByName("debug") {
             signingConfig = signingConfigs.getByName("debug")
             buildConfigField("String", "REPAS_ORIGIN", "\"$debugOrigin\"")
+            buildConfigField("String", "EXTRA_RETAILERS", "\"$extraRetailers\"")
             manifestPlaceholders["repasHost"] = originHost(debugOrigin)
         }
         getByName("release") {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             buildConfigField("String", "REPAS_ORIGIN", "\"$productionOrigin\"")
+            // Aucune enseigne éteinte dans la publication : jamais lu de l'environnement (allumer une enseigne pour tous = changer cette ligne, relue, DRV-726).
+            buildConfigField("String", "EXTRA_RETAILERS", "\"\"")
             manifestPlaceholders["repasHost"] = originHost(productionOrigin)
         }
     }
@@ -177,6 +188,11 @@ val verifyReleaseInputs by tasks.registering {
     group = "verification"
     description = "Refuse de construire une publication sans clé de signature, étiquette de version ou compteur."
     doLast {
+        if (extraRetailers.isNotEmpty()) {
+            throw GradleException(
+                "Une publication n'embarque aucune enseigne éteinte : ANDROID_EXTRA_RETAILERS ne sert qu'aux constructions de débogage. Retire la variable de l'environnement.",
+            )
+        }
         val missing = listOfNotNull(
             "ANDROID_KEYSTORE_FILE".takeIf { releaseKeystorePath == null },
             "ANDROID_KEYSTORE_PASSWORD".takeIf { releaseStorePassword == null },

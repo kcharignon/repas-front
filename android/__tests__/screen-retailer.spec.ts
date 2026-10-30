@@ -165,8 +165,8 @@ describe('l’annonce de la coquille et ses mémoires', () => {
   const main = kotlin('MainActivity.kt')
   const app = kotlin('RepasApp.kt')
 
-  it('annonce les enseignes du registre de la version, jamais une enseigne d’essai', () => {
-    expect(main).toContain('retailers = RetailerSites.DEFAULT.announcedRetailers()')
+  it('annonce les enseignes de la construction (registre de la version et drapeau), jamais une enseigne d’essai', () => {
+    expect(main).toContain('retailers = repasApp.announced.announcedRetailers()')
   })
 
   it('ne lit le pont natif qu’avec les enseignes que cette construction sert', () => {

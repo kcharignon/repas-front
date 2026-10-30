@@ -62,6 +62,19 @@ check_distributions() {
   "${GRADLE[@]}" :app:processDirectDebugManifest :app:processPlayDebugManifest :app:compileDirectDebugKotlin :app:compilePlayDebugKotlin
   env ANDROID_KEYSTORE_FILE="$dummy" ANDROID_KEYSTORE_PASSWORD=factice ANDROID_KEY_ALIAS=factice ANDROID_KEY_PASSWORD=factice ANDROID_VERSION_TAG=android-v0.0.1 \
     "${GRADLE[@]}" :app:processDirectReleaseManifest :app:processPlayReleaseManifest :app:compileDirectReleaseKotlin :app:compilePlayReleaseKotlin
+  # Aucune enseigne éteinte n'entre dans une publication (DRV-728) : le drapeau est vide dans les deux variantes, et la construction de publication REFUSE la
+  # variable qui allumerait une enseigne (elle ne sert qu'au débogage).
+  local flavor
+  for flavor in direct play; do
+    grep -qF 'EXTRA_RETAILERS = "";' "app/build/generated/source/buildConfig/${flavor}/release/eu/kantin/repas/drive/BuildConfig.java" \
+      || fail "le drapeau des enseignes éteintes n'est pas vide dans la publication ${flavor} : une enseigne éteinte y serait servie et annoncée."
+  done
+  local refusal
+  if refusal=$(env ANDROID_KEYSTORE_FILE="$dummy" ANDROID_KEYSTORE_PASSWORD=factice ANDROID_KEY_ALIAS=factice ANDROID_KEY_PASSWORD=factice ANDROID_VERSION_TAG=android-v0.0.1 \
+    ANDROID_EXTRA_RETAILERS=auchan "${GRADLE[@]}" :app:preDirectReleaseBuild 2>&1); then
+    fail "une publication a accepté d'embarquer une enseigne éteinte (ANDROID_EXTRA_RETAILERS)."
+  fi
+  grep -q "n'embarque aucune enseigne éteinte" <<<"$refusal" || fail "le refus d'une enseigne éteinte dans la publication n'a pas le message attendu : $(tail -n 15 <<<"$refusal")"
   rm -f "$dummy"
   local direct_release play_release direct_debug play_debug direct_classes play_classes installer_classes
   manifest_of() { find "app/build/intermediates/merged_manifests/$1" -name AndroidManifest.xml | head -n 1; }
@@ -91,6 +104,7 @@ check_distributions() {
   find "$direct_classes" -name '*.class' | grep -qE "$installer_classes" || fail "la variante direct ne contient pas le code de mise à jour."
   ! find "$play_classes" -name '*.class' | grep -qE "$installer_classes" || fail "la variante play contient du code de mise à jour dans l'application."
   echo "   variantes : direct (permission d'installer, fournisseur de fichiers, code de mise à jour), play et débogage (aucun des trois)."
+  echo "   publications (direct, play) : aucune enseigne éteinte (drapeau vide), la variable qui en allume une est refusée."
 }
 
 build_debug() {
@@ -139,7 +153,7 @@ normalize_fingerprint() { printf '%s' "$1" | tr -d ': \t\r\n' | tr 'A-F' 'a-f'; 
 #   - signé d'une seule clé, de signature valide, dont le certificat a l'une des empreintes attendues (ANDROID_EXPECTED_CERT_SHA256) et n'est
 #     jamais celui de la clé de débogage publique ;
 #   - paquet, nom et code de version conformes à l'étiquette (le code est recalculé ici, indépendamment du Kotlin), minSdk 26, targetSdk 36 ;
-#   - deux permissions seulement (Internet, et REQUEST_INSTALL_PACKAGES pour la mise à jour dans l'application, DRV-639), non débogable, `BuildConfig.DEBUG` faux, origine de Repas de production, aucun plan d'essai ;
+#   - deux permissions seulement (Internet, et REQUEST_INSTALL_PACKAGES pour la mise à jour dans l'application, DRV-639), non débogable, `BuildConfig.DEBUG` faux, origine de Repas de production, aucun plan d'essai, aucune enseigne éteinte allumée (DRV-728) ;
 #   - l'agent embarqué est celui de android/agent.js.sha384.
 verify_release() {
   local apk=${1:-$DIST/repas-drive.apk}
@@ -206,7 +220,8 @@ verify_release() {
   [ -f "$config" ] || fail "la configuration de construction ($config) manque : contrôler l'APK juste après make android-release."
   grep -q 'boolean DEBUG = false;' "$config" || fail "BuildConfig.DEBUG n'est pas faux : le menu de débogage serait dans l'APK."
   grep -qF 'REPAS_ORIGIN = "https://kantin.eu/";' "$config" || fail "l'origine de Repas de l'APK n'est pas celle de la production."
-  echo "   agent intact ($agent_actual), ni plan d'essai ni menu de débogage, origine de production."
+  grep -qF 'EXTRA_RETAILERS = "";' "$config" || fail "le drapeau des enseignes éteintes n'est pas vide : une enseigne éteinte serait servie, annoncée et proposée dans le menu de l'APK."
+  echo "   agent intact ($agent_actual), ni plan d'essai ni menu de débogage, origine de production, aucune enseigne éteinte."
 
   # Les faits publics de cette publication, pour les notes de la release.
   local sha256 fingerprint
@@ -264,7 +279,7 @@ $(tail -n 25 <<<"$output")"
   keytool -genkeypair -keystore "$work/test.p12" -storetype PKCS12 -alias test -keyalg RSA -keysize 2048 -validity 2 \
     -storepass "$password" -keypass "$password" -dname "CN=Cle de test jetable" > /dev/null 2>&1
   # Le code de version vient de l'étiquette : ANDROID_VERSION_CODE est retiré de l'environnement.
-  env -u ANDROID_VERSION_CODE \
+  env -u ANDROID_VERSION_CODE -u ANDROID_EXTRA_RETAILERS \
     ANDROID_DIST=dist/selftest \
     ANDROID_KEYSTORE_BASE64=$(base64 -w0 "$work/test.p12") \
     ANDROID_KEYSTORE_PASSWORD=$password \
