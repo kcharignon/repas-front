@@ -46,6 +46,9 @@
 #  17. chemin du magasin inconnu (données de l'application effacées) : « Finaliser sur Leclerc » ouvre l'accueil du drive, avec le même bandeau ;
 #  18. le site ignore le clic d'un programme (seul un vrai toucher ouvre le magasin) : le clic de l'agent ne fait rien, il dit de toucher « Commencer mes
 #      courses » (une seule tentative, pas de boucle, rien d'écrit), l'utilisateur le touche et l'envoi continue.
+#  19. une seconde enseigne FICTIVE (APK de débogage seulement, `*.exemple-b.test`, DRV-707) : `drive.setup` ouvre l'écran de CETTE enseigne (pont et agent injectés
+#      chez elle), une adresse de l'autre enseigne part au navigateur du téléphone, un plan dont l'enseigne et le magasin ne vont pas ensemble est refusé
+#      (INVALID_PLAN) ; les profils de WebView séparés ne s'y prouvent pas (la WebView de l'émulateur n'a pas encore les profils : ScreenRetailerTest).
 # Les captures d'écran et le rapport texte sont dans android/dist/e2e/.
 # Code de sortie : 0 si tous les contrôles passent, 1 sinon, 3 si KVM manque.
 set -u
@@ -150,6 +153,11 @@ install_apk
 start_app
 if wait_until 40 has_report '"page": "repas"'; then ok "la coquille a chargé le faux Repas"; else ko "le faux Repas ne s'est pas chargé en 40 s"; fi
 if wait_until 15 has_report '"drive": true'; then ok "app.info annonce que le drive est utilisable"; else ko "app.info n'annonce pas le drive"; fi
+if wait_until 15 has_report '"retailers": \["leclerc"\]'; then
+  ok "app.info annonce les enseignes servies (retailers) : Leclerc seule, jamais l'enseigne d'essai de l'APK de débogage"
+else
+  ko "app.info n'annonce pas retailers [leclerc]"
+fi
 
 # --- 1. Lecture du magasin ------------------------------------------------------------------------------------------------------------------
 say
@@ -718,7 +726,7 @@ BASKET_PAGES_CITY="$HOME_PATH_CITY/detail-panier.aspx"
 BASKET_PAGES_BARE="/magasin-$FAKE_STORE_ID-$FAKE_STORE_ID/detail-panier.aspx"
 BASKET_BANNER='Ton panier est dans l'
 # La forme du dernier « Finaliser » est gardée dans une préférence privée de l'application (la variante de débogage se lit par run-as) ; l'écriture est asynchrone.
-finalize_outcome_is() { adb shell run-as "$APP" cat shared_prefs/drive-store.xml 2> /dev/null | grep -q "name=\"finalize\">$1<"; }
+finalize_outcome_is() { adb shell run-as "$APP" cat shared_prefs/drive-store.xml 2> /dev/null | grep -q "name=\"finalize.leclerc\">$1<"; }
 # Le journal du faux Leclerc repart de zéro (pour prouver qu'aucune autre page n'est demandée), le panier du deuxième envoi est remis.
 fake_reset
 emu curl -s -X POST -d '{"1000001":3,"1000006":1}' "$FAKE_CONTROL/cart" > /dev/null
@@ -841,9 +849,79 @@ else
 fi
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
-# --- 19. Bilan ------------------------------------------------------------------------------------------------------------------------------
+# --- 19. Une seconde enseigne FICTIVE : l'isolement entre enseignes (DRV-707) --------------------------------------------------------------------------
+# L'APK de débogage connaît, en plus de Leclerc, une enseigne FICTIVE (`TestRetailers`, `*.exemple-b.test`, servie par le faux site de l'émulateur :
+# jamais une vraie enseigne). Elle sert à prouver ce que le multi-enseignes promet : l'écran d'une enseigne n'ouvre que son site, l'agent et le pont n'y
+# sont que pour elle, une adresse d'une autre enseigne part au navigateur du téléphone, un plan dont l'enseigne et le magasin ne vont pas ensemble est refusé.
+# Les profils de WebView séparés (un par enseigne) ne se prouvent pas ici : la WebView de l'émulateur (113) n'a pas encore les profils (`MULTI_PROFILE`) ;
+# leur nom est jugé par `ScreenRetailerTest` (Kotlin) et la recette sur téléphone (WebView récente).
 say
-say "19. Bilan"
+say "19. Une seconde enseigne FICTIVE (APK de débogage, *.exemple-b.test) : écran limité à son enseigne, plan refusé sur la mauvaise enseigne (DRV-707)"
+local_name "$SITE_B_HOST" "le faux drive de l'enseigne d'essai B"
+chrome_focused() { adb shell dumpsys window 2> /dev/null | grep -m1 mCurrentFocus | grep -q com.android.chrome; }
+drive_screen_absent() { ! focused_is_drive; }
+no_request_to_fake() { fake_state | grep -qF '"requests":[]'; }
+start_plan_as() { # start_plan_as <runId> <fichier de plan> <enseigne> <hôte du magasin> : un plan dont l'enseigne et l'hôte du magasin sont ceux-là
+  local plan
+  plan=$(sed "s/__RUN_ID__/$1/; s/\"retailer\": \"leclerc\"/\"retailer\": \"$3\"/; s/\"host\": \"$FAKE_STORE_HOST\"/\"host\": \"$4\"/" "$PLANS/$2" | tr -d '\n')
+  printf '{"do":"drive.start","plan":%s}' "$plan" | emu curl -sk -X POST -H 'Content-Type: application/json' --data-binary @- "https://127.0.0.1/__command" > /dev/null
+}
+# Un état net : l'application est relancée, sans passage gardé (les scénarios d'avant peuvent en avoir laissé un)
+adb shell am force-stop "$APP"
+adb shell run-as "$APP" rm -f shared_prefs/drive-pass.xml > /dev/null 2>&1
+fake_reset
+start_app
+wait_until 40 has_report '"page": "repas"' || ko "le faux Repas ne s'est pas chargé"
+# a. Trois plans qui ne vont pas ensemble : l'enseigne d'essai avec le magasin d'une autre, Leclerc avec le magasin de l'enseigne d'essai, une enseigne inconnue
+start_plan_as 5e7b0000-0000-4000-8000-0000000000a1 plan-connu.json "$RETAILER_B" "$FAKE_STORE_HOST"
+start_plan_as 5e7b0000-0000-4000-8000-0000000000a2 plan-connu.json leclerc "$STORE_B_HOST"
+start_plan_as 5e7b0000-0000-4000-8000-0000000000a3 plan-connu.json inconnue "$FAKE_STORE_HOST"
+if wait_until 30 has_report_count '"type": "drive.error", "code": "INVALID_PLAN"' 3; then
+  ok "un plan dont le magasin n'est pas chez son enseigne (dans les deux sens), ou d'une enseigne inconnue, reçoit drive.error INVALID_PLAN"
+else
+  ko "les trois plans qui ne vont pas ensemble n'ont pas tous reçu INVALID_PLAN"
+fi
+check "aucun écran du drive ne s'est ouvert pour un plan refusé" drive_screen_absent
+check "le faux Leclerc n'a reçu aucune requête" no_request_to_fake
+# b. L'écran s'ouvre sur l'enseigne d'essai (lecture du magasin, avec l'enseigne dans le message)
+RUN_B=5e7b0000-0000-4000-8000-0000000000b1
+reset_reports
+post_command "{\"do\":\"drive.setup\",\"runId\":\"$RUN_B\",\"retailer\":\"$RETAILER_B\"}"
+if wait_until 40 has_report "\"hostname\": \"$SITE_B_HOST\", \"path\": \"/\", \"topFrame\": true, \"hostHidden\": true, \"hostLocked\": true, \"desktopAgent\": true"; then
+  ok "drive.setup d'une enseigne ouvre le drive de CETTE enseigne ($SITE_B_HOST), en mode ordinateur, avec le pont et l'agent injectés (le pont retiré de la page)"
+else
+  ko "l'écran du drive ne s'est pas ouvert sur l'enseigne d'essai"
+fi
+check "l'écran du drive est devant" focused_is_drive
+check "le message d'en-tête est celui de la lecture du magasin" wait_until 20 ui_has 'Choisis ton magasin, puis touche'
+check "le faux Leclerc n'a reçu aucune requête : l'écran de B ne parle qu'à B" no_request_to_fake
+screenshot e30-seconde-enseigne
+# c. Une adresse de Leclerc touchée dans l'écran de l'autre enseigne : confiée au navigateur du téléphone, jamais chargée dans l'écran
+if tap 'text="Choisir le magasin du faux Leclerc"'; then ok "le lien vers le faux Leclerc, dans la page de l'enseigne d'essai, est touché"; else ko "le lien vers le faux Leclerc est introuvable"; fi
+if wait_until 30 chrome_focused; then
+  ok "l'adresse de l'autre enseigne est confiée au navigateur du téléphone"
+else
+  ko "l'adresse de l'autre enseigne n'est pas partie au navigateur du téléphone"
+fi
+screenshot e31-adresse-autre-enseigne
+check "et le faux Leclerc n'a reçu aucune requête de l'écran" no_request_to_fake
+adb shell input keyevent KEYCODE_BACK
+adb shell am force-stop com.android.chrome
+if wait_until 20 focused_is_drive; then ok "le retour ramène à l'écran de l'enseigne d'essai, resté sur sa page"; else ko "l'écran de l'enseigne d'essai n'est pas revenu"; fi
+# d. Abandon : Repas reçoit « aborted », sans magasin
+adb shell input keyevent KEYCODE_BACK
+if wait_until 15 ui_has "Abandonner la lecture du magasin"; then ok "le retour du téléphone demande s'il faut abandonner la lecture du magasin"; else ko "pas de demande d'abandon de la lecture"; fi
+if tap 'text="Abandonner"' && wait_until 20 has_report "\"runId\": \"$RUN_B\", \"resultType\": \"result\", \"outcome\": \"aborted\", \"errorCode\": \"CANCELLED\", \"lines\": 0, \"hasStore\": false"; then
+  ok "l'abandon donne un résultat aborted à Repas, sans magasin"
+else
+  ko "l'abandon de la lecture sur l'enseigne d'essai n'a pas donné le résultat attendu"
+fi
+back_to_repas || ko "l'écran Repas n'est pas revenu"
+check "l'écran n'est plus maintenu allumé" screen_not_held
+
+# --- 20. Bilan ------------------------------------------------------------------------------------------------------------------------------
+say
+say "20. Bilan"
 fake_reset
 final_checks
 conclude "les scénarios complets"

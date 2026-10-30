@@ -61,7 +61,7 @@ check_distributions() {
   dummy=$(mktemp)
   "${GRADLE[@]}" :app:processDirectDebugManifest :app:processPlayDebugManifest :app:compileDirectDebugKotlin :app:compilePlayDebugKotlin
   env ANDROID_KEYSTORE_FILE="$dummy" ANDROID_KEYSTORE_PASSWORD=factice ANDROID_KEY_ALIAS=factice ANDROID_KEY_PASSWORD=factice ANDROID_VERSION_TAG=android-v0.0.1 \
-    "${GRADLE[@]}" :app:processDirectReleaseManifest :app:processPlayReleaseManifest
+    "${GRADLE[@]}" :app:processDirectReleaseManifest :app:processPlayReleaseManifest :app:compileDirectReleaseKotlin :app:compilePlayReleaseKotlin
   rm -f "$dummy"
   local direct_release play_release direct_debug play_debug direct_classes play_classes installer_classes
   manifest_of() { find "app/build/intermediates/merged_manifests/$1" -name AndroidManifest.xml | head -n 1; }
@@ -201,6 +201,7 @@ verify_release() {
   agent_expected=$(tr -d ' \t\r\n' < agent.js.sha384)
   [ "$agent_actual" = "$agent_expected" ] || fail "l'agent embarqué n'a pas l'empreinte de android/agent.js.sha384 (embarqué : $agent_actual)."
   ! unzip -p "$apk" 'classes*.dex' | grep -aq 'repas\.test' || fail "l'APK contient l'origine du faux Repas des essais (repas.test)."
+  ! unzip -p "$apk" 'classes*.dex' | grep -aq 'exemple-b\.test' || fail "l'APK contient l'enseigne d'essai de la variante de débogage (exemple-b.test)."
   local config=app/build/generated/source/buildConfig/direct/release/eu/kantin/repas/drive/BuildConfig.java
   [ -f "$config" ] || fail "la configuration de construction ($config) manque : contrôler l'APK juste après make android-release."
   grep -q 'boolean DEBUG = false;' "$config" || fail "BuildConfig.DEBUG n'est pas faux : le menu de débogage serait dans l'APK."

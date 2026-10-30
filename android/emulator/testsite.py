@@ -17,6 +17,8 @@ Selon le nom demandé (en-tête Host) :
                                               dans les deux modes, GET /connexion.aspx : la page de connexion hors d'un magasin, qui dit comme le vrai
                                                 site « Avant de vous authentifier, veuillez sélectionner un Drive. » (scénario 1b de e2e.sh)
   autre *.leclercdrive.fr (le faux drive)     comme www en mode « test » : GET / et GET /magasin-… : la page de test testpage.html ; le reste, 404
+  *.exemple-b.test (une enseigne FICTIVE      comme www en mode « test » : GET / et GET /point-… : la page de test testpage.html ; le reste, 404 ; sert à prouver
+  d'essai, DRV-707)                           l'isolement entre enseignes (profils, pont, plan refusé), jamais un vrai drive
 Pour tous les noms :
   POST /__report      la page y dépose ce qu'elle a relevé (JSON, 8 Ko au plus) ; les tests de l'émulateur le relisent
   GET  /__reports     la liste des relevés, en JSON
@@ -48,6 +50,8 @@ FAKE_LECLERC_HOSTS = {"courses-test.leclercdrive.fr", "photos-test.leclercdrive.
 # L'accueil de l'enseigne (NavigationPolicy.START_URL de l'application) : relayé au faux Leclerc seulement en mode « fake » (voir l'en-tête).
 HOME_HOST = "www.leclercdrive.fr"
 WWW_MODES = ("test", "fake")
+# L'enseigne FICTIVE d'essai de la variante de débogage de l'application (DRV-707, `TestRetailers`) : `.test` est un domaine réservé, le DNS de l'émulateur l'envoie ici.
+TEST_RETAILER_DOMAIN = "exemple-b.test"
 state = {"www": "test"}
 # La page de connexion de l'enseigne, hors d'un magasin (dans les deux modes) : le vrai site exige un magasin choisi AVANT la connexion et le dit
 # (« Avant de vous authentifier, veuillez sélectionner un Drive. »). Sert au scénario 1b de e2e.sh : « Se connecter » touché trop tôt.
@@ -111,6 +115,10 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             connection.close()
 
+    def _is_test_retailer(self):
+        host = self._host()
+        return host == TEST_RETAILER_DOMAIN or host.endswith("." + TEST_RETAILER_DOMAIN)
+
     def _is_fake_leclerc(self, path):
         host = self._host()
         relayed = host in FAKE_LECLERC_HOSTS or (host == HOME_HOST and state["www"] == "fake")
@@ -137,7 +145,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, json.dumps(command).encode(), "application/json")
         elif self._host() == REPAS_HOST and not path.startswith("/__"):
             self._page(REPAS_PAGE)
-        elif path == "/" or path.startswith("/magasin-"):
+        elif path == "/" or path.startswith("/magasin-") or (self._is_test_retailer() and path.startswith("/point-")):
             self._page(DRIVE_PAGE)
         else:
             self._send(404, b"introuvable")

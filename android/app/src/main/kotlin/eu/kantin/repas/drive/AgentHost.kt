@@ -25,7 +25,7 @@ internal class AgentLoad(val status: AgentStatus, val script: AgentScript?) {
 }
 
 /**
- * Le lien entre l'application et l'agent dans la WebView (DRV-313) : l'injection de l'agent dans les pages https de `*.leclercdrive.fr` et
+ * Le lien entre l'application et l'agent dans la WebView (DRV-313) : l'injection de l'agent dans les pages https où le pont existe pour **l'enseigne de l'écran** (DRV-707) et
  * le canal de messages. Les règles (origines, bornes, forme des messages) sont dans [BridgeMessages] et [AgentAsset], en Kotlin pur ; ici,
  * seulement la colle avec `androidx.webkit`.
  *
@@ -41,6 +41,8 @@ internal class AgentHost private constructor(
     private val script: AgentScript?,
     /** La variante de débogage : son script d'injection annonce `debug: true`, ce qui permet le test automatique (DRV-318). */
     private val debug: Boolean,
+    /** L'enseigne de l'écran : les origines du pont, l'injection et le contrôle de chaque message sont les siens, jamais ceux d'une autre. */
+    private val site: RetailerSite,
     /** Une page du drive a annoncé son agent (`hello`) : le canal de réponse vers elle est prêt. */
     private val onHello: () -> Unit,
     private val onAgentMessage: (Inbound.FromAgent) -> Unit,
@@ -55,9 +57,10 @@ internal class AgentHost private constructor(
     /** À appeler avant le premier chargement de la WebView. */
     fun attach(webView: WebView) {
         if (status != AgentStatus.READY || script == null) return
-        WebViewCompat.addWebMessageListener(webView, BridgeMessages.OBJECT_NAME, BridgeMessages.ORIGIN_RULES) { _, message, origin, isMainFrame, proxy ->
+        val origins = BridgeMessages.originRules(listOf(site))
+        WebViewCompat.addWebMessageListener(webView, BridgeMessages.OBJECT_NAME, origins) { _, message, origin, isMainFrame, proxy ->
             val text = if (message.type == WebMessageCompat.TYPE_STRING) message.data else null
-            when (val inbound = BridgeMessages.screen(text, origin.toString(), isMainFrame)) {
+            when (val inbound = BridgeMessages.screen(site, text, origin.toString(), isMainFrame)) {
                 is Inbound.Hello -> {
                     reply = proxy
                     pageAnnouncedDebug = inbound.debug
@@ -70,12 +73,12 @@ internal class AgentHost private constructor(
                 is Inbound.Rejected -> Log.w(TAG, "Message de la page ignoré : ${inbound.reason}")
             }
         }
-        if (documentStart) WebViewCompat.addDocumentStartJavaScript(webView, script.source, BridgeMessages.ORIGIN_RULES)
+        if (documentStart) WebViewCompat.addDocumentStartJavaScript(webView, script.source, origins)
     }
 
-    /** Le repli sans `addDocumentStartJavaScript` : évaluer l'agent quand une page du drive a fini de charger. */
+    /** Le repli sans `addDocumentStartJavaScript` : évaluer l'agent quand une page où le pont existe pour l'enseigne de l'écran a fini de charger ([RetailerSite.isBridgePage]), et seulement elle. */
     fun onPageFinished(webView: WebView, url: String?) {
-        if (script == null || status != AgentStatus.READY || documentStart || !NavigationPolicy.isAllowed(url)) return
+        if (script == null || status != AgentStatus.READY || documentStart || !site.isBridgePage(url)) return
         webView.evaluateJavascript(script.source, null)
     }
 
@@ -122,8 +125,8 @@ internal class AgentHost private constructor(
             return AgentLoad(status, script)
         }
 
-        fun create(load: AgentLoad, debug: Boolean, onHello: () -> Unit, onAgentMessage: (Inbound.FromAgent) -> Unit): AgentHost =
-            AgentHost(load.status, load.script, debug, onHello, onAgentMessage)
+        fun create(load: AgentLoad, debug: Boolean, site: RetailerSite, onHello: () -> Unit, onAgentMessage: (Inbound.FromAgent) -> Unit): AgentHost =
+            AgentHost(load.status, load.script, debug, site, onHello, onAgentMessage)
 
         fun readAsset(context: Context, name: String): ByteArray? = try {
             context.assets.open(name).use { it.readBytes() }

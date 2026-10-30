@@ -16,6 +16,11 @@ REPAS_HOST=repas.test
 FAKE_STORE_HOST=courses-test.leclercdrive.fr
 FAKE_STORE_ID=000001
 FAKE_CONTROL=http://127.0.0.1:8099/__fake
+# L'enseigne FICTIVE d'essai de l'APK de débogage (DRV-707, `TestRetailers`) : son identifiant, l'accueil et le profil de WebView que l'application lui donne. `.test` est un domaine réservé.
+RETAILER_B=exempleb
+SITE_B_HOST=www.exemple-b.test
+STORE_B_HOST=courses-test.exemple-b.test
+PROFILE_B=drive-exempleb
 # L'APK de débogage construit pour viser https://repas.test/ (voir le Makefile) : l'APK de débogage ordinaire vise le vrai Repas.
 APK=/apk/repas-drive-smoke.apk
 

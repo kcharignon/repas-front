@@ -77,6 +77,16 @@ class SetupRequest private constructor(override val runId: String, override val 
          */
         fun of(runId: Any?, site: RetailerSite = RetailerSites.DEFAULT.legacy): SetupRequest? =
             (runId as? String)?.takeIf { DrivePlan.isRunId(it) }?.let { SetupRequest(it, site) }
+
+        /**
+         * La demande d'un message `drive.setup` (ou d'un `setup` gardé) : le `runId` est un UUID, `retailer` (facultatif) une enseigne du registre
+         * [sites]. Un message qui ne dit pas l'enseigne est celui de l'enseigne d'avant le multi-enseignes ([RetailerSites.legacy]) ; une enseigne
+         * qui n'est pas au registre (ou qui n'est pas un texte) le fait refuser.
+         */
+        fun parse(json: JSONObject, sites: RetailerSites = RetailerSites.DEFAULT): SetupRequest? {
+            val site = if (json.has("retailer")) sites.byId(json.opt("retailer") as? String) else sites.legacy
+            return site?.let { of(json.opt("runId"), it) }
+        }
     }
 }
 
@@ -86,17 +96,12 @@ object PassRequests {
         val json = if (text == null) null else JSONObject(text)
         when (json?.opt("type")) {
             "plan" -> DrivePlan.parse(json, sites)
-            "setup" -> setupOf(json, sites)
+            // Un `setup` gardé : l'enseigne est celle du message ; un message d'avant le multi-enseignes qui ne la dit pas est celui de l'enseigne d'avant.
+            "setup" -> SetupRequest.parse(json, sites)
             else -> null
         }
     } catch (_: JSONException) {
         null
-    }
-
-    /** Un `setup` gardé : l'enseigne est celle du message ; un message d'avant le multi-enseignes qui ne la dit pas est celui de l'enseigne d'avant. */
-    private fun setupOf(json: JSONObject, sites: RetailerSites): SetupRequest? {
-        val site = if (json.has("retailer")) sites.byId(json.opt("retailer") as? String) else sites.legacy
-        return site?.let { SetupRequest.of(json.opt("runId"), it) }
     }
 }
 
