@@ -21,16 +21,10 @@ const { available: updateAvailable, inApp } = useAppUpdateAvailable()
 
 // La recherche d'une nouvelle version se fait dès l'ouverture de l'application (pas seulement dans « Moi ») et quand elle revient au premier
 // plan, au plus toutes les cinq minutes (le plafond de l'application, tenu aussi ici). Rien dans un navigateur.
-const CHECK_EVERY_MS = 5 * 60_000
-let lastCheck = Number.NEGATIVE_INFINITY
-
 async function searchNewVersion() {
   if (!inApp || session.user === null) return
-  const now = Date.now()
-  if (now - lastCheck < CHECK_EVERY_MS) return
-  lastCheck = now
   await versions.read()
-  if (versions.selfUpdate) void updates.check()
+  if (versions.selfUpdate) void updates.checkIfDue()
 }
 
 function onVisible() {

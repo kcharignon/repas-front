@@ -25,7 +25,7 @@ onMounted(async () => {
   if (!inApp) return
   await versions.read()
   // Une recherche au passage dans « Moi » (l'application la refait au plus toutes les cinq minutes)
-  if (versions.selfUpdate) void updates.check()
+  if (versions.selfUpdate) void updates.checkIfDue()
 })
 
 const { available: visible } = useAppUpdateAvailable()

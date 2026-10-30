@@ -11,6 +11,9 @@ const OFFERED = ['miseAJourDisponible', 'telechargement', 'pretAInstaller'] as c
 /** Attente d'une réponse de l'application à `update.check`, en millisecondes : au-delà, l'état devient une erreur de vérification. */
 const CHECK_TIMEOUT_MS = 30_000
 
+/** Au plus une recherche « au passage » toutes les cinq minutes (le plafond de l'application). */
+const CHECK_EVERY_MS = 5 * 60_000
+
 /**
  * La mise à jour de l'application par elle-même (DRV-639), partagée par le bandeau de « Moi » et la page d'aide : l'état que l'application
  * dit (`update.state`) et les deux gestes de l'utilisateur, « chercher » et « Mettre à jour ». Tout se passe dans l'application (qui cherche,
@@ -25,6 +28,7 @@ export const useAppUpdateStore = defineStore('appUpdate', () => {
   const state = ref<AppUpdateState>({ status: 'inconnu' })
   /** L'utilisateur a touché « Mettre à jour » : l'invitation reste à l'écran jusqu'à ce que l'application soit installée ou à jour. */
   const engaged = ref(false)
+  let lastCheckAt = Number.NEGATIVE_INFINITY
   let attaching: Promise<boolean> | null = null
   const waiters = new Set<() => void>()
 
@@ -94,6 +98,17 @@ export const useAppUpdateStore = defineStore('appUpdate', () => {
   }
 
   /**
+   * Une recherche « au passage » (ouverture de l'application, retour au premier plan, écran « Moi ») : au plus une toutes les cinq minutes,
+   * le plafond de l'application, partagé par tous ces points d'entrée. Sans effet si l'application ne sait pas se mettre à jour.
+   */
+  async function checkIfDue(): Promise<void> {
+    const now = Date.now()
+    if (now - lastCheckAt < CHECK_EVERY_MS) return
+    lastCheckAt = now
+    await check()
+  }
+
+  /**
    * « Mettre à jour » : cherche si besoin puis lance le téléchargement, la vérification et l'installateur d'Android. Un seul geste de
    * l'utilisateur. Rend faux hors de l'application ou dans une application qui ne sait pas se mettre à jour : l'appelant propose alors
    * l'ancien chemin.
@@ -115,5 +130,5 @@ export const useAppUpdateStore = defineStore('appUpdate', () => {
     return true
   }
 
-  return { state, engaged, supported, offered, attach, check, start }
+  return { state, engaged, supported, offered, attach, check, checkIfDue, start }
 })
