@@ -131,8 +131,12 @@ export interface CartResult {
 
 /** Tout ce qui est propre à une enseigne, derrière une interface : une autre enseigne ou un changement du site ne touche que ce dossier. */
 export interface RetailerAdapter {
-  /** Le magasin de la page courante. @throws {RetailerError} `UNSUPPORTED_PAGE` hors d'une page de magasin. */
-  readStore(): StoreInfo
+  /**
+   * Le magasin de la page courante. Leclerc le lit dans l'adresse de la page (synchrone, aucune requête) ; une enseigne dont le magasin ne s'y lit pas le
+   * demande à son site (DRV-717 : une requête, donc une promesse) : l'appelant attend toujours le résultat.
+   * @throws {RetailerError} `UNSUPPORTED_PAGE` hors d'une page de magasin (ou sans magasin choisi).
+   */
+  readStore(): StoreInfo | Promise<StoreInfo>
   /** Les produits que le site propose pour cette recherche, dans l'ordre de la page. */
   searchProducts(query: string): Promise<Candidate[]>
   /** Fixe la quantité du produit au panier (absolue : `0` le retire) et vérifie la réponse du site. */

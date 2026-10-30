@@ -5,7 +5,7 @@
 // DRV-643 : la liste montre TOUS les produits de la recherche, mais par lots. Un premier lot s'affiche ; la suite est ajoutée (jamais la liste refaite)
 // quand une sentinelle placée sous la dernière fiche approche de la zone visible. Seules les fiches affichées ont une photo : une fiche pas encore
 // ajoutée ne demande rien à l'enseigne.
-import type { RetailerNames } from '../retailers/names'
+import type { PhotoRetailer, RetailerNames } from '../retailers/names'
 import { append, clear, h } from './dom'
 import { photoFrame } from './photo'
 import { S } from './strings'
@@ -63,8 +63,8 @@ export type AisleLoad =
 const NO_ROW: AisleRow = { chips: [], selected: null }
 
 export interface PickerProps {
-  /** L'enseigne de la page, pour les phrases qui la nomment. */
-  retailer: RetailerNames
+  /** L'enseigne de la page, pour les phrases qui la nomment et la liste blanche de ses photos. */
+  retailer: PhotoRetailer
   /** « 800 g » : la quantité demandée par la liste. */
   need: string | null
   /** Le libellé du produit que l'utilisateur veut remplacer. */
@@ -133,6 +133,7 @@ function row(
   index: number,
   choose: PickerHooks['choose'],
   waiting: boolean,
+  retailer: PhotoRetailer,
 ): HTMLElement {
   const nameId = `produit-${index}`
   // Un produit « Plus en stock » reste à choisir : le panier tranche (DRV-635). Seul un produit écarté par l'utilisateur est grisé.
@@ -175,7 +176,7 @@ function row(
     h(
       'div',
       { class: 'media' },
-      photoFrame(item.photo, item.name),
+      photoFrame(item.photo, item.name, retailer.photos),
       h(
         'div',
         { class: 'text' },
@@ -306,7 +307,7 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
     if (end > shown) {
       const batch = visible
         .slice(shown, end)
-        .map((item, offset) => row(item, shown + offset, hooks.choose, waiting))
+        .map((item, offset) => row(item, shown + offset, hooks.choose, waiting, props.retailer))
       shown = end
       append(list, ...batch)
     }

@@ -194,7 +194,7 @@ export class Flow {
     if (deps.retailer !== undefined && message.retailer !== deps.retailer) {
       return this.showError('STORE_MISMATCH', message)
     }
-    const problem = this.storeProblem(message) ?? this.sessionProblem()
+    const problem = (await this.storeProblem(message)) ?? this.sessionProblem()
     // Une page de l'enseigne qui n'est pas celle d'un magasin (l'accueil, où le plan s'ouvre) : l'agent y entre dans le magasin (DRV-625).
     if (problem?.code === 'UNSUPPORTED_PAGE' && problem.cause === 'PAGE_PATH') {
       return this.enterStore(message)
@@ -319,9 +319,9 @@ export class Flow {
   }
 
   /** Le magasin de la page doit être celui du message. */
-  private storeProblem(plan: PlanMessage): Fault | null {
+  private async storeProblem(plan: PlanMessage): Promise<Fault | null> {
     try {
-      const store = this.deps.adapter.readStore()
+      const store = await this.deps.adapter.readStore()
       return store.id === plan.store.id && store.host === plan.store.host
         ? null
         : { code: 'STORE_MISMATCH', cause: null }

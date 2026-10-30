@@ -1,5 +1,6 @@
 import { type Content, type ContentSource, measureReference, parseContent } from './content'
 import { photoUrl } from '../photo-url'
+import { PHOTO_RULE } from './photo-rule'
 import type { AisleTexts, RawProduct } from './embedded'
 import type { LocationLike } from './store'
 
@@ -97,7 +98,7 @@ export function toCandidate(raw: RawProduct, page: LocationLike | null = null): 
     aisle: raw.aisle,
     family: raw.family,
     ...(raw.aisleTexts && { aisleTexts: raw.aisleTexts }),
-    imageUrl: photoUrl(raw.thumbnail, page),
+    imageUrl: photoUrl(raw.thumbnail, PHOTO_RULE, page),
     content: parsed?.content ?? null,
     contentSource: parsed?.source ?? null,
   }

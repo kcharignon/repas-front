@@ -106,17 +106,20 @@ export interface FakeApp {
 /** Injecte l'agent comme l'application Android : `injection.js` avec l'agent à la place du marqueur, par-dessus un faux canal natif. */
 export async function openWithBridge(
   page: Page,
-  fake: FakeLeclerc,
+  fake: Partial<Pick<FakeLeclerc, 'leclerc'>>,
   agentCode: string,
-  {
-    path = `${PAGE_PATH}/`,
-    origin = fake.leclerc,
-  }: {
+  options: {
     path?: string
-    /** L'origine de la page ouverte (par défaut celle du faux magasin) : par exemple l'accueil de l'enseigne (DRV-625). */
+    /**
+     * L'origine de la page ouverte (par défaut celle du faux magasin de Leclerc) : par exemple l'accueil de l'enseigne (DRV-625), ou, pour un autre faux site
+     * que celui de Leclerc (DRV-717 : `fake.site` du faux site d'Auchan), son origine, qui est alors obligatoire.
+     */
     origin?: string
   } = {},
 ): Promise<FakeApp> {
+  const path = options.path ?? `${PAGE_PATH}/`
+  const origin = options.origin ?? fake.leclerc
+  if (origin === undefined) throw new Error('Une page ouverte sans origine : donne `origin`.')
   const messages: Record<string, unknown>[] = []
   let hello: string | null = null
   const deliver = async (text: string) => {
