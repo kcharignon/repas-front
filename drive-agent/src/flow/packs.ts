@@ -2,7 +2,7 @@
 // `PackCalculator` du dépôt back (`architecture.md` § 6) : le contenu du produit vient de la page de l'enseigne, la quantité demandée
 // du plan. Dans le doute, `null` : l'agent demande alors la quantité à l'utilisateur.
 import { LIMITS, type NeededQuantity, type PacksStatus } from '../../protocol'
-import type { Content } from '../leclerc'
+import type { Content } from '../retailers'
 
 export interface Packs {
   /** Un entier de 1 à 99, ou `null` quand le calcul est impossible. */

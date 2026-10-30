@@ -1,4 +1,7 @@
-import { LeclercError } from './errors'
+import { RetailerError } from '../retailers/errors'
+
+/** Le message d'une erreur réseau par délai d'attente dépassé (ticket K) : Leclerc répond, mais trop lentement. */
+const TIMEOUT_MESSAGE = 'Leclerc met trop de temps à répondre.'
 
 /** Attente minimale entre deux requêtes (architecture.md § 8). */
 export const PAUSE_MS = 800
@@ -170,7 +173,7 @@ export class Pacer {
    */
   act<T>(task: () => T): Promise<T> {
     const turn = this.queue.then(async () => {
-      if (this.stopped) throw new LeclercError('BLOCKED')
+      if (this.stopped) throw new RetailerError('BLOCKED')
       await this.pause(true)
       try {
         return task()
@@ -197,7 +200,7 @@ export class Pacer {
     assertSameHost(url)
     let networkRetried = false
     for (;;) {
-      if (this.stopped) throw new LeclercError('BLOCKED')
+      if (this.stopped) throw new RetailerError('BLOCKED')
       await this.pause()
       let reply: Reply
       this.counters.requests += 1
@@ -231,7 +234,12 @@ export class Pacer {
           this.slowDown(REFUSAL_STEP_MS)
         }
         if (networkRetried) {
-          throw new LeclercError('NETWORK', null, timedOut ? 'REQUEST_TIMEOUT' : null)
+          throw new RetailerError(
+            'NETWORK',
+            null,
+            timedOut ? 'REQUEST_TIMEOUT' : null,
+            timedOut ? TIMEOUT_MESSAGE : undefined,
+          )
         }
         networkRetried = true
         await this.deps.sleep(NETWORK_RETRY_MS)
@@ -253,7 +261,7 @@ export class Pacer {
         else this.recover()
       }
       // Une page de défi : l'utilisateur doit la passer lui-même, la retenter n'y changerait rien et ne ferait qu'insister.
-      if (challenge) throw new LeclercError('BLOCKED', reply.status, 'CHALLENGE')
+      if (challenge) throw new RetailerError('BLOCKED', reply.status, 'CHALLENGE')
       if (!refused) {
         this.blocks = 0
         return reply
@@ -261,7 +269,7 @@ export class Pacer {
       this.blocks += 1
       if (this.blocks >= MAX_BLOCKS) {
         this.stopped = true
-        throw new LeclercError('BLOCKED', reply.status)
+        throw new RetailerError('BLOCKED', reply.status)
       }
     }
   }

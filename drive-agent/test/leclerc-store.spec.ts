@@ -2,7 +2,7 @@
 // Le magasin lu dans l'adresse de la page (DRV-303). Numéros et noms INVENTÉS.
 import { describe, expect, it } from 'vitest'
 
-import { LeclercError } from '../src/leclerc'
+import { RetailerError } from '../src/retailers'
 import { isMobileHost, readDeliveryPoint, readStorePaths } from '../src/leclerc/store'
 
 const HOST = 'fd0-courses.leclercdrive.fr'
@@ -54,7 +54,7 @@ describe('readStorePaths', () => {
     ['un magasin au second identifiant non numérique', HOST, '/magasin-000123-abc/x'],
     ['un chemin qui ne commence pas par le magasin', HOST, '/x/magasin-000123-000123'],
   ])('refuse %s : UNSUPPORTED_PAGE', (_name, hostname, pathname) => {
-    expect(() => readStorePaths({ hostname, pathname })).toThrow(LeclercError)
+    expect(() => readStorePaths({ hostname, pathname })).toThrow(RetailerError)
     expect(() => readStorePaths({ hostname, pathname })).toThrow(
       expect.objectContaining({ code: 'UNSUPPORTED_PAGE' }),
     )

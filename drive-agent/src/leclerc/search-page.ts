@@ -8,7 +8,7 @@
 // vide, liste nulle, conteneur absent, état encodé en entités), pas des mesures. Ce qui n'a pas ce squelette, ou qui annonce des produits
 // que l'agent ne sait pas lire, reste `CONTRACT_CHANGED`, avec la cause (`causes.ts`).
 import { extractProducts, pageReadings, type RawProduct } from './embedded'
-import { LeclercError } from './errors'
+import { RetailerError } from '../retailers/errors'
 import { visibleText } from './page-text'
 import { looksLikeLoginPage } from './session'
 
@@ -49,7 +49,7 @@ const NO_RESULT_TEXT = /aucun\s+(?:resultat|produit|article)|pas\s+de\s+resultat
 /**
  * Les produits d'une page de recherche : une liste vide si la page est une recherche sans résultat.
  *
- * @throws {LeclercError} `CONTRACT_CHANGED` (avec sa cause) si la structure n'est pas reconnue ou si les produits sont illisibles ;
+ * @throws {RetailerError} `CONTRACT_CHANGED` (avec sa cause) si la structure n'est pas reconnue ou si les produits sont illisibles ;
  *   `NOT_LOGGED_IN` (`LOGIN_FORM`) si c'est une page de connexion.
  */
 export function readSearchPage(reply: SearchReply): RawProduct[] {
@@ -60,13 +60,13 @@ export function readSearchPage(reply: SearchReply): RawProduct[] {
   const has = (pattern: RegExp) => readings.some((reading) => pattern.test(reading))
   const skeleton = SKELETON.filter(has).length + (has(EMPTY_LIST) ? 1 : 0)
   if (looksLikeLoginPage(reply.text, skeleton > 0)) {
-    throw new LeclercError('NOT_LOGGED_IN', reply.status, 'LOGIN_FORM')
+    throw new RetailerError('NOT_LOGGED_IN', reply.status, 'LOGIN_FORM')
   }
   if (PRODUCT_FIELDS.some(has) || has(NON_EMPTY_LIST)) {
-    throw new LeclercError('CONTRACT_CHANGED', reply.status, 'SEARCH_PRODUCTS_UNREADABLE')
+    throw new RetailerError('CONTRACT_CHANGED', reply.status, 'SEARCH_PRODUCTS_UNREADABLE')
   }
   if (skeleton >= 2 || (skeleton === 1 && NO_RESULT_TEXT.test(visibleText(reply.text)))) return []
-  throw new LeclercError(
+  throw new RetailerError(
     'CONTRACT_CHANGED',
     reply.status,
     reply.redirected ? 'SEARCH_REDIRECTED' : 'SEARCH_NO_STATE',

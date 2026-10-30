@@ -10,7 +10,7 @@ import {
   type SetupMessage,
 } from '../../protocol'
 import { own } from '../own'
-import type { LeclercCause } from '../leclerc'
+import type { RetailerCause } from '../retailers'
 import type { EndProps } from '../ui'
 import { ERROR_TEXTS } from '../ui'
 import type { RunState } from './run-state'
@@ -88,7 +88,7 @@ export interface Ending {
   outcome: Outcome
   code?: ErrorCode
   /** Quelle vérification a échoué (ticket A) : un code fixe, ajouté au message du résultat. */
-  cause?: LeclercCause
+  cause?: RetailerCause
 }
 
 /** Les issues finales, dans l'ordre du plan ; une ligne qui attend encore un choix devient `UNAVAILABLE`. */
@@ -114,7 +114,7 @@ export function endingOf(
   lines: readonly ResultLine[],
   stoppedByUser: boolean,
   code: ErrorCode | null,
-  cause: LeclercCause | null = null,
+  cause: RetailerCause | null = null,
 ): Ending {
   const why = cause === null ? {} : { cause }
   if (code === 'BLOCKED') return { outcome: 'partial', code, ...why }

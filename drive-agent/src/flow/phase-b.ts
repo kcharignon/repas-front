@@ -15,12 +15,12 @@ import {
 } from '../../protocol'
 import {
   catalogId,
-  LeclercError,
+  RetailerError,
   rankByAisle,
   saysOutOfStock,
   type Candidate,
   type RetailerAdapter,
-} from '../leclerc'
+} from '../retailers'
 import { cleanText } from '../text'
 import {
   formatContent,
@@ -331,7 +331,7 @@ async function load(
     search.aisles = site.state === 'OK' ? (search.siteRow ?? row) : row
     search.notice = null
   } catch (error) {
-    if (!(error instanceof LeclercError) || error.code !== 'NETWORK') throw error
+    if (!(error instanceof RetailerError) || error.code !== 'NETWORK') throw error
     search.notice = error.cause === 'REQUEST_TIMEOUT' ? S.picker.slow : S.picker.network
   }
 }
@@ -479,13 +479,13 @@ async function settleLine(
                   search.siteCache.set(key, kept)
                   return { items: itemsOf(kept) }
                 } catch (error) {
-                  if (error instanceof LeclercError && error.code === 'NETWORK') {
+                  if (error instanceof RetailerError && error.code === 'NETWORK') {
                     return {
                       notice: error.cause === 'REQUEST_TIMEOUT' ? S.picker.slow : S.picker.network,
                     }
                   }
                   // Une réponse que le site refuse : repli sans message sur les familles, pour le reste du passage.
-                  if (error instanceof LeclercError && error.code === 'CONTRACT_CHANGED')
+                  if (error instanceof RetailerError && error.code === 'CONTRACT_CHANGED')
                     return fallback()
                   if (live) conclude({ type: 'failure', error } satisfies Picked)
                   return { notice: '' }
@@ -580,7 +580,7 @@ async function settleLine(
       try {
         settled = await putInCart(adapter, candidate, packs)
       } catch (error) {
-        if (!(error instanceof LeclercError) || error.code !== 'NETWORK') throw error
+        if (!(error instanceof RetailerError) || error.code !== 'NETWORK') throw error
         record(
           { ingredientSlug: slug, outcome: 'FAILED', error: 'NETWORK', ...rejected() },
           error.cause === 'REQUEST_TIMEOUT' ? { slow: true } : undefined,

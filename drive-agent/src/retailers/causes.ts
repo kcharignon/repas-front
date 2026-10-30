@@ -22,10 +22,10 @@ export const CAUSE_LABELS = {
   LOGIN_FORM: 'page de connexion servie à la place de la réponse',
   SESSION_VISITOR: 'page d’un visiteur non connecté',
   // Les requêtes elles-mêmes (ticket K).
-  REQUEST_TIMEOUT: 'Leclerc n’a pas répondu dans le délai d’attente (20 s)',
+  REQUEST_TIMEOUT: 'le site n’a pas répondu dans le délai d’attente (20 s)',
   CHALLENGE: 'page de vérification de l’anti-robot (défi) servie à la place de la réponse',
   // La page courante.
-  PAGE_HOST: 'la page n’est pas sur un site leclercdrive.fr',
+  PAGE_HOST: 'la page n’est pas sur un site de l’enseigne',
   PAGE_PATH: 'l’adresse de la page n’est pas celle d’un magasin',
   PAGE_MOBILE: 'le site mobile (m-courses), pas la version ordinateur du site',
   // Les contrôles du diagnostic.
@@ -41,7 +41,7 @@ export type FixedCause = keyof typeof CAUSE_LABELS
 /** Une réponse HTTP que l'agent n'attendait pas : `HTTP_404` (le code est un nombre, jamais un texte de la réponse). */
 export type HttpCause = `HTTP_${number}`
 
-export type LeclercCause = FixedCause | HttpCause
+export type RetailerCause = FixedCause | HttpCause
 
 /** La cause d'un code HTTP inattendu. */
 export function httpCause(status: number): HttpCause {
@@ -49,11 +49,11 @@ export function httpCause(status: number): HttpCause {
 }
 
 /** Le texte français d'une cause, pour le diagnostic. */
-export function causeLabel(cause: LeclercCause): string {
+export function causeLabel(cause: RetailerCause): string {
   return own(CAUSE_LABELS, cause) ?? `réponse HTTP ${cause.slice('HTTP_'.length)} inattendue`
 }
 
 /** « cause SEARCH_NO_STATE : page de recherche sans l’état embarqué du magasin » : la ligne du diagnostic. */
-export function causeText(cause: LeclercCause): string {
+export function causeText(cause: RetailerCause): string {
   return `cause ${cause} : ${causeLabel(cause)}`
 }

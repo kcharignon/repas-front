@@ -1,0 +1,12 @@
+{
+    "retailers": [
+        {
+            "id": "leclerc",
+            "name": "Leclerc",
+            "nameDe": "de Leclerc",
+            "storeAddressPattern": "^https://[a-z0-9-]+\\.leclercdrive\\.fr/magasin-([0-9]+)-([0-9]+)$",
+            "storeAddressExample": "https://exemple.leclercdrive.fr/magasin-123456-123456",
+            "productIdPattern": "^[0-9]{1,12}$"
+        }
+    ]
+}

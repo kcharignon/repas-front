@@ -2,7 +2,7 @@
 // n'est envoyé au site : le magasin se lit dans l'adresse de la page ; seul le magasin part vers Repas, après un seul geste, « Utiliser
 // ce magasin » (DRV-623). Repas l'enregistre alors tout seul : l'agent ne demande pas deux fois la même chose.
 import { LIMITS, PROTOCOL_VERSION, type SetupMessage } from '../../protocol'
-import { LeclercError, type LeclercCause, type RetailerAdapter } from '../leclerc'
+import { RetailerError, type RetailerCause, type RetailerAdapter } from '../retailers'
 import { cleanText } from '../text'
 import type { Ui } from '../ui'
 import { buildResult } from './result'
@@ -13,6 +13,8 @@ export interface SetupDeps {
   ui: Ui
   send: FlowDeps['send']
   agentVersion: string
+  /** L'enseigne de la page (voir `FlowDeps.retailer`) : un `setup` d'une autre enseigne est refusé (`STORE_MISMATCH`). */
+  retailer?: string
 }
 
 /** Un libellé de magasin pour le protocole : de 1 à 255 caractères, ou rien. */
@@ -28,12 +30,12 @@ function labelOf(label: string | null): string | null {
  * `store`, la page doit être celle de ce magasin, sinon `STORE_MISMATCH`.
  */
 export function setupHandler(deps: SetupDeps): (message: SetupMessage) => Promise<void> {
-  const { adapter, ui, send, agentVersion } = deps
+  const { adapter, ui, send, agentVersion, retailer } = deps
   return async (message) => {
     /** Un écran d'erreur ; « Retourner dans Repas » renvoie un résultat en erreur. */
     const stop = async (
       code: 'UNSUPPORTED_PAGE' | 'STORE_MISMATCH',
-      cause: LeclercCause | null = null,
+      cause: RetailerCause | null = null,
     ) => {
       const answer = await ui.show('error', { code, canReturn: true, ...(cause && { cause }) })
       if (answer === 'return') {
@@ -48,11 +50,12 @@ export function setupHandler(deps: SetupDeps): (message: SetupMessage) => Promis
       }
       ui.close()
     }
+    if (retailer !== undefined && message.retailer !== retailer) return stop('STORE_MISMATCH')
     let store
     try {
       store = adapter.readStore()
     } catch (error) {
-      if (!(error instanceof LeclercError) || error.code !== 'UNSUPPORTED_PAGE') throw error
+      if (!(error instanceof RetailerError) || error.code !== 'UNSUPPORTED_PAGE') throw error
       return stop(error.code, error.cause)
     }
     if (message.store && (message.store.id !== store.id || message.store.host !== store.host)) {

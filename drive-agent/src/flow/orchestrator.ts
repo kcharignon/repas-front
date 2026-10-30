@@ -13,7 +13,12 @@ import {
   type ResultLine,
   type ResultStats,
 } from '../../protocol'
-import { LeclercError, type EntryReading, type LeclercCause, type RequestStats } from '../leclerc'
+import {
+  RetailerError,
+  type EntryReading,
+  type RetailerCause,
+  type RequestStats,
+} from '../retailers'
 import { own } from '../own'
 import { formatNeeded, S, summarySentence } from '../ui'
 import { cardOf } from './card'
@@ -48,7 +53,7 @@ interface Run {
   /** Le code qui a interrompu le passage (`BLOCKED`, `NOT_LOGGED_IN`…). */
   halted: ErrorCode | null
   /** Quelle vérification a échoué, quand l'adaptateur le dit (ticket A) : elle part dans le message du résultat. */
-  cause: LeclercCause | null
+  cause: RetailerCause | null
   /** Une requête a dépassé son délai d'attente (ticket K) : l'écran de fin le dit. */
   slow: boolean
   /** Les compteurs de requêtes des pages d'avant, quand le passage est repris après un rechargement (ticket L). */
@@ -68,7 +73,7 @@ const ENTRY_POLL_MS = 500
 /** Ce qui interrompt un passage : le code d'erreur du protocole, et la vérification précise qui a échoué quand on la connaît. */
 interface Fault {
   code: ErrorCode
-  cause: LeclercCause | null
+  cause: RetailerCause | null
 }
 
 /**
@@ -76,7 +81,7 @@ interface Fault {
  * `EXCEPTION` (jamais son message).
  */
 function faultOf(error: unknown): Fault {
-  return error instanceof LeclercError
+  return error instanceof RetailerError
     ? { code: error.code, cause: error.cause }
     : { code: 'CONTRACT_CHANGED', cause: 'EXCEPTION' }
 }
@@ -181,6 +186,10 @@ export class Flow {
     // Pas de retour possible vers Repas : on refuse avant de toucher au panier (ou de lire le magasin).
     if (!deps.canReturn) return this.showError('UNSUPPORTED_PAGE', null)
     if (message.type === 'setup') return void (await deps.onSetup?.(message))
+    // Le plan d'une autre enseigne que celle de la page (DRV-704) : refusé sans une requête ni une lecture du magasin.
+    if (deps.retailer !== undefined && message.retailer !== deps.retailer) {
+      return this.showError('STORE_MISMATCH', message)
+    }
     const problem = this.storeProblem(message) ?? this.sessionProblem()
     // Une page de l'enseigne qui n'est pas celle d'un magasin (l'accueil, où le plan s'ouvre) : l'agent y entre dans le magasin (DRV-625).
     if (problem?.code === 'UNSUPPORTED_PAGE' && problem.cause === 'PAGE_PATH') {
@@ -492,7 +501,7 @@ export class Flow {
   private async showError(
     code: ErrorCode,
     plan: PlanMessage | null,
-    cause: LeclercCause | null = null,
+    cause: RetailerCause | null = null,
   ): Promise<void> {
     const { ui, send, agentVersion } = this.deps
     this.enter('ERROR')

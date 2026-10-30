@@ -1,7 +1,7 @@
 // Le panier du magasin : `POST panier.aspx?op=1`, un champ de formulaire `d` contenant du JSON (recherche.md § 2 et DRV-007 du dépôt
 // back, forme relevée sur le site le 2026-10-17). La quantité est **absolue** dans les deux sens : rejouer une requête ne double rien.
 import { parseJson as parseJsonStrict, stringifyJson } from '../primitives'
-import { LeclercError } from './errors'
+import { RetailerError } from '../retailers/errors'
 
 /** Les en-têtes du site pour le panier : le navigateur ajoute les siens (`Origin`, `Referer`, cookies…). `zcwb` est obligatoire. */
 export const CART_HEADERS: Readonly<Record<string, string>> = {
@@ -197,24 +197,25 @@ function productFacts(events: readonly unknown[], productId: string): CartProduc
 /**
  * Lit la réponse d'une écriture au panier : la quantité obtenue du produit et le nombre d'articles.
  *
- * @throws {LeclercError} `CONTRACT_CHANGED`, avec la cause de l'échec (`CART_NOT_JSON`, `CART_NO_EVENTS`, `CART_NO_CART_EVENT`, `CART_NO_PRODUCT_LIST`,
+ * @throws {RetailerError} `CONTRACT_CHANGED`, avec la cause de l'échec (`CART_NOT_JSON`, `CART_NO_EVENTS`, `CART_NO_CART_EVENT`, `CART_NO_PRODUCT_LIST`,
  *   `CART_QUANTITY_UNREADABLE`) : la réponse n'est pas du JSON, n'a pas d'évènement panier, pas de `lstProduitsLight` ou une quantité illisible.
  */
 export function readCartResponse(text: string, productId: string): CartReading {
   const parsed = parseJson(text.trim())
-  if (parsed === undefined) throw new LeclercError('CONTRACT_CHANGED', null, 'CART_NOT_JSON')
+  if (parsed === undefined) throw new RetailerError('CONTRACT_CHANGED', null, 'CART_NOT_JSON')
   const events = eventsOf(parsed)
-  if (events === null) throw new LeclercError('CONTRACT_CHANGED', null, 'CART_NO_EVENTS')
+  if (events === null) throw new RetailerError('CONTRACT_CHANGED', null, 'CART_NO_EVENTS')
   const event = findCartEvent(events)
-  if (!event) throw new LeclercError('CONTRACT_CHANGED', null, 'CART_NO_CART_EVENT')
+  if (!event) throw new RetailerError('CONTRACT_CHANGED', null, 'CART_NO_CART_EVENT')
   const list = findKey(event, 'lstProduitsLight')
-  if (!Array.isArray(list)) throw new LeclercError('CONTRACT_CHANGED', null, 'CART_NO_PRODUCT_LIST')
+  if (!Array.isArray(list))
+    throw new RetailerError('CONTRACT_CHANGED', null, 'CART_NO_PRODUCT_LIST')
   const entry = list
     .map(asRecord)
     .find((item) => item !== null && String(item.iIdProduit) === productId)
   const obtained = entry ? asNumber(entry.iQtePanier) : 0
   if (obtained === null) {
-    throw new LeclercError('CONTRACT_CHANGED', null, 'CART_QUANTITY_UNREADABLE')
+    throw new RetailerError('CONTRACT_CHANGED', null, 'CART_QUANTITY_UNREADABLE')
   }
   return {
     obtained,

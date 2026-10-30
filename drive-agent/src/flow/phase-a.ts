@@ -9,7 +9,7 @@ import {
   type ProductPrice,
   type ResultLine,
 } from '../../protocol'
-import { type Candidate, type Content, type RetailerAdapter, saysOutOfStock } from '../leclerc'
+import { type Candidate, type Content, type RetailerAdapter, saysOutOfStock } from '../retailers'
 import type { UnavailableReason } from '../ui'
 import { type CartNote, putInCart } from './keep-cart'
 import { packsFor } from './packs'
@@ -107,7 +107,7 @@ export interface KnownLineDeps {
  * diffère de celui du plan, c'est lui qui part au panier, et `change` le signale. Sans `needed`, sans contenu lisible ou sans calcul
  * sûr, rien ne change : le nombre du plan, ou la question à l'utilisateur quand il est à vérifier.
  *
- * @throws {LeclercError} l'erreur de l'adaptateur, à traiter par l'appelant (`BLOCKED`, `NOT_LOGGED_IN`, `NETWORK`…).
+ * @throws {RetailerError} l'erreur de l'adaptateur, à traiter par l'appelant (`BLOCKED`, `NOT_LOGGED_IN`, `NETWORK`…).
  */
 export async function settleKnownLine(line: PlanLine, deps: KnownLineDeps): Promise<Verdict> {
   const products = line.products ?? []

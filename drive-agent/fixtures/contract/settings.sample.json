@@ -5,5 +5,17 @@
         "id": "123456",
         "label": "Ville-Test",
         "baseUrl": "https://exemple.leclercdrive.fr/magasin-123456-123456"
-    }
+    },
+    "retailers": [
+        {
+            "retailer": "leclerc",
+            "name": "Leclerc",
+            "configured": true,
+            "store": {
+                "id": "123456",
+                "label": "Ville-Test",
+                "baseUrl": "https://exemple.leclercdrive.fr/magasin-123456-123456"
+            }
+        }
+    ]
 }

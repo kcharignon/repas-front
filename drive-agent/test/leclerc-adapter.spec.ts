@@ -1,7 +1,8 @@
 // L'adaptateur Leclerc de bout en bout (DRV-303), sur les fixtures inventées : faux `fetch`, fausse horloge, aucun appel réseau.
 import { describe, expect, it, vi } from 'vitest'
 
-import { browserDeps, LeclercAdapter, LeclercError } from '../src/leclerc'
+import { browserDeps, LeclercAdapter } from '../src/leclerc'
+import { RetailerError } from '../src/retailers'
 import { cartPayload } from '../src/leclerc/cart'
 import { fakeSite, fixture, PAGE, type Scripted } from './leclerc-helpers'
 
@@ -272,9 +273,9 @@ describe('setCartQuantity', () => {
 
     const error = await adapter.setCartQuantity('1000001', 1).catch((caught: unknown) => caught)
 
-    expect(error).toBeInstanceOf(LeclercError)
+    expect(error).toBeInstanceOf(RetailerError)
     expect(error).toMatchObject({ code: 'CONTRACT_CHANGED', status: 404 })
-    expect((error as LeclercError).message).not.toContain('404')
+    expect((error as RetailerError).message).not.toContain('404')
   })
 
   it('garde le code HTTP d’un blocage', async () => {
@@ -460,7 +461,7 @@ describe('cartQuantity (ticket M)', () => {
     await adapter.setCartQuantity('1000001', 3)
 
     reply = { status: 404, body: 'introuvable' }
-    await expect(adapter.setCartQuantity('1000001', 3)).rejects.toThrow(LeclercError)
+    await expect(adapter.setCartQuantity('1000001', 3)).rejects.toThrow(RetailerError)
 
     expect(adapter.cartQuantity('1000003')).toBe(2)
   })
@@ -512,7 +513,7 @@ describe('la file et la cadence de l’adaptateur', () => {
 
     const failure = await adapter.setCartQuantity('1000001', 1).catch((error: unknown) => error)
 
-    expect(failure).toBeInstanceOf(LeclercError)
+    expect(failure).toBeInstanceOf(RetailerError)
     expect(String((failure as Error).message)).not.toMatch(/SECRET|datadome|privé/i)
   })
 })
@@ -569,7 +570,7 @@ describe('la cause de chaque erreur de l’adaptateur (ticket A)', () => {
 
     const error = await adapter.searchProducts('farine').catch((caught: unknown) => caught)
 
-    expect(error).toBeInstanceOf(LeclercError)
+    expect(error).toBeInstanceOf(RetailerError)
     expect(error).toMatchObject({ code, cause })
   })
 
@@ -604,7 +605,7 @@ describe('la cause de chaque erreur de l’adaptateur (ticket A)', () => {
 
       const error = await adapter.setCartQuantity('1000001', 1).catch((caught: unknown) => caught)
 
-      expect(error).toBeInstanceOf(LeclercError)
+      expect(error).toBeInstanceOf(RetailerError)
       expect(error).toMatchObject({ code, cause, status })
     },
   )
@@ -629,7 +630,7 @@ describe('la cause de chaque erreur de l’adaptateur (ticket A)', () => {
 
     const error = (await adapter
       .searchProducts('farine')
-      .catch((caught: unknown) => caught)) as LeclercError
+      .catch((caught: unknown) => caught)) as RetailerError
 
     expect(error.cause).toBe('SEARCH_NO_STATE')
     expect(error.message).toBe('Le site ne répond plus comme prévu.')

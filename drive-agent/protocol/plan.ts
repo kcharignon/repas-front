@@ -5,7 +5,6 @@ import {
   eachIfPresent,
   exactly,
   fail,
-  HOST,
   ID,
   int,
   object,
@@ -15,6 +14,7 @@ import {
   packSize,
   productRef,
   root,
+  STORES,
   text,
   values,
   at,
@@ -27,6 +27,7 @@ import {
   LINE_STATUSES,
   PACKS_STATUSES,
   PROTOCOL_VERSION,
+  RETAILER_IDS,
   RETURN_PATH,
   type PlanMessage,
   type SetupMessage,
@@ -132,12 +133,12 @@ export function validatePlan(input: unknown): PlanMessage | SetupMessage {
   const message = object(root(input), '', type === 'plan' ? [...keys, 'lines'] : keys)
   exactly(message, 'v', PROTOCOL_VERSION)
   text(message, 'runId', UUID)
-  exactly(message, 'retailer', 'leclerc')
+  const retailer = oneOf(message, 'retailer', RETAILER_IDS)
   // Le magasin est obligatoire pour un plan ; un `setup` peut ne pas en avoir (Repas ne le connaît pas encore, DRV-320).
   if (type === 'plan' || message.v.store !== undefined) {
     const store = object(message, 'store', ['id', 'host'])
-    text(store, 'id', ID)
-    text(store, 'host', HOST)
+    text(store, 'id', STORES[retailer].id)
+    text(store, 'host', STORES[retailer].host)
   }
   exactly(message, 'returnPath', RETURN_PATH)
   if (type === 'plan') distinct(each(message, 'lines', LIMITS.lines, planLine), 'ingredientSlug')

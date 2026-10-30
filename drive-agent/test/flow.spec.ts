@@ -4,7 +4,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { NeededQuantity } from '../protocol'
-import { LeclercAdapter, LeclercError } from '../src/leclerc'
+import { LeclercAdapter } from '../src/leclerc'
+import { RetailerError } from '../src/retailers'
 import type { PendingLine, PhaseB } from '../src/flow'
 import { RUN_PREFIX } from '../src/flow'
 import { fakeSite, fixture } from './leclerc-helpers'
@@ -731,7 +732,7 @@ describe('les erreurs', () => {
       { '1000001': {}, '1000003': {} },
       {
         before: (call) => {
-          if (call === 'search 1000003') throw new LeclercError('NOT_LOGGED_IN')
+          if (call === 'search 1000003') throw new RetailerError('NOT_LOGGED_IN')
         },
       },
     )
@@ -759,7 +760,7 @@ describe('les erreurs', () => {
       { '1000001': {}, '1000003': {} },
       {
         before: (call) => {
-          if (call === 'search 1000001') throw new LeclercError('NETWORK')
+          if (call === 'search 1000001') throw new RetailerError('NETWORK')
         },
       },
     )
@@ -780,7 +781,7 @@ describe('les erreurs', () => {
   })
 
   it.each([
-    ['CONTRACT_CHANGED', new LeclercError('CONTRACT_CHANGED')],
+    ['CONTRACT_CHANGED', new RetailerError('CONTRACT_CHANGED')],
     ['CONTRACT_CHANGED', new TypeError('le site renvoie un secret : cookie=abc')],
   ])(
     '%s : la ligne échoue et le passage s’arrête, sans jamais citer le message de l’erreur',
@@ -835,7 +836,7 @@ describe('les erreurs', () => {
     const { flow, sent } = makeFlow({
       ui: fakeUi().ui,
       adapter,
-      phaseB: () => Promise.reject(new LeclercError('BLOCKED')),
+      phaseB: () => Promise.reject(new RetailerError('BLOCKED')),
     })
 
     await flow.start(plan([fresh('poivre')]))
@@ -967,7 +968,7 @@ describe('le démarrage', () => {
       adapter: {
         ...fakeAdapter().adapter,
         readStore: () => {
-          throw new LeclercError('UNSUPPORTED_PAGE')
+          throw new RetailerError('UNSUPPORTED_PAGE')
         },
       },
     })
@@ -986,7 +987,7 @@ describe('le démarrage', () => {
       adapter: {
         ...adapter,
         readStore: () => {
-          throw new LeclercError('UNSUPPORTED_PAGE', null, 'PAGE_MOBILE')
+          throw new RetailerError('UNSUPPORTED_PAGE', null, 'PAGE_MOBILE')
         },
       },
     })
@@ -1341,7 +1342,7 @@ describe('l’écran allumé', () => {
       { '1000001': {} },
       {
         before: () => {
-          throw new LeclercError('NOT_LOGGED_IN')
+          throw new RetailerError('NOT_LOGGED_IN')
         },
       },
     )

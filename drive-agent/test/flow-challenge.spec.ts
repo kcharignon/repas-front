@@ -5,7 +5,7 @@
 // blocage. L'interface, l'adaptateur et le stockage sont simulés : aucun réseau.
 import { describe, expect, it, vi } from 'vitest'
 
-import { LeclercError } from '../src/leclerc'
+import { RetailerError } from '../src/retailers'
 import { RUN_PREFIX } from '../src/flow'
 import {
   RUN_ID,
@@ -25,7 +25,7 @@ const lines = () => [
   known('sucre', [product('1000003', 1)]),
   known('sel', [product('1000009', 2)]),
 ]
-const challenge = () => new LeclercError('BLOCKED', 200, 'CHALLENGE')
+const challenge = () => new RetailerError('BLOCKED', 200, 'CHALLENGE')
 
 /** Un faux site dont la requête `call` tombe sur le défi les `times` premières fois. */
 function challengedOn(call: string, times = 1) {
@@ -125,7 +125,7 @@ describe('un défi de l’anti-robot pendant le passage (phase A)', () => {
   it('un blocage ordinaire (403, 429 : sans défi) ne suspend rien : le passage s’arrête comme avant', async () => {
     const site = fakeAdapter(SHELF, {
       before: (name) => {
-        if (name === 'search 1000003') throw new LeclercError('BLOCKED', 429)
+        if (name === 'search 1000003') throw new RetailerError('BLOCKED', 429)
       },
     })
     const screens = fakeUi()
@@ -188,7 +188,7 @@ describe('un défi de l’anti-robot pendant le passage (phase A)', () => {
 })
 
 describe('une requête trop lente (délai d’attente dépassé)', () => {
-  const slow = () => new LeclercError('NETWORK', null, 'REQUEST_TIMEOUT')
+  const slow = () => new RetailerError('NETWORK', null, 'REQUEST_TIMEOUT')
 
   it('ne fait échouer que la ligne (NETWORK) : les suivantes sont tentées, la fin dit que Leclerc met trop de temps à répondre', async () => {
     // Given : la recherche du sucre dépasse le délai (déjà retentée une fois par la cadence)
@@ -222,7 +222,7 @@ describe('une requête trop lente (délai d’attente dépassé)', () => {
   it('une erreur réseau ordinaire n’est pas présentée comme une lenteur', async () => {
     const site = fakeAdapter(SHELF, {
       before: (name) => {
-        if (name === 'search 1000003') throw new LeclercError('NETWORK')
+        if (name === 'search 1000003') throw new RetailerError('NETWORK')
       },
     })
     const screens = fakeUi()

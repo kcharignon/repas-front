@@ -20,16 +20,16 @@ import type {
   ProbeAttempt,
   RetailerAdapter,
   KeyShape,
-  LeclercCause,
-  LeclercErrorCode,
+  RetailerCause,
+  RetailerErrorCode,
   LinkFacts,
   NamedObjectKeys,
   ReplyFacts,
   SearchFacts,
   ShownText,
   VocabularyKey,
-} from '../leclerc'
-import { MAX_MENU_AISLES } from '../leclerc'
+} from '../retailers'
+import { MAX_MENU_AISLES } from '../retailers'
 import type { LastReason, LastRefusal } from '../flow'
 import { own } from '../own'
 import { S } from '../ui'
@@ -42,7 +42,7 @@ export interface ProbedSearch {
   term: string
   /** `null` : aucune réponse (réseau coupé, page non prise en charge) ou recherche non faite. */
   facts: SearchFacts | null
-  fault: { code: LeclercErrorCode; cause: LeclercCause | null; status: number | null } | null
+  fault: { code: RetailerErrorCode; cause: RetailerCause | null; status: number | null } | null
   /** Vrai : la recherche n'a pas été faite (blocage, page non prise en charge). */
   skipped: boolean
 }
@@ -216,8 +216,8 @@ const F = S.diagnostic.facet
 
 /** « BLOCKED, HTTP 403 » ou « CONTRACT_CHANGED (HTTP_400) » : le code d'erreur, sa cause et le code HTTP s'il y en a un. */
 export function faultText(fault: {
-  code: LeclercErrorCode
-  cause: LeclercCause | null
+  code: RetailerErrorCode
+  cause: RetailerCause | null
   status?: number | null
 }): string {
   const named = fault.cause === null ? fault.code : `${fault.code} (${fault.cause})`
