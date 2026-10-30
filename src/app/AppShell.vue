@@ -90,6 +90,9 @@ const link =
         :key="item.name"
         :to="{ name: item.name }"
         :class="cn(link, 'flex-1')"
+        :aria-label="
+          item.name === 'account' && updateAvailable ? t('nav.accountUpdate') : undefined
+        "
         active-class="text-primary"
       >
         <span class="relative">
@@ -101,7 +104,7 @@ const link =
             class="absolute -top-[3px] -right-[5px] size-3 rounded-full border-2 border-surface bg-accent"
           />
         </span>
-        {{ item.name === 'account' && updateAvailable ? t('nav.accountUpdate') : t(item.label) }}
+        {{ t(item.label) }}
       </RouterLink>
     </nav>
   </div>
