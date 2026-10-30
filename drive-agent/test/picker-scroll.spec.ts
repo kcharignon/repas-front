@@ -1,5 +1,6 @@
 // L'affichage de la liste de produits par lots, en défilant (DRV-643). jsdom n'a pas d'`IntersectionObserver` : le chemin avec observateur se joue avec un
 // double qui enregistre ce qu'il observe, et le chemin sans observateur (repli) avec l'événement de défilement et une sentinelle dont la position est donnée.
+import { LECLERC } from './retailer-fixtures'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderPicker, type Picker, type PickerHooks, type PickerItem } from '../src/ui'
@@ -34,6 +35,7 @@ function mount(items: PickerItem[]): { zone: HTMLElement; picker: Picker } {
   const picker = renderPicker(
     zone,
     {
+      retailer: LECLERC,
       need: null,
       replaces: null,
       gone: [],

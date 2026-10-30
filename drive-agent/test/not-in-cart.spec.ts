@@ -1,5 +1,6 @@
 // @vitest-environment node
 // Un produit choisi que le panier ne prend pas (DRV-644) : la réponse du panier lue, l'état gardé pour la reprise, l'écran de fin, le diagnostic.
+import { LECLERC } from './retailer-fixtures'
 import { describe, expect, it } from 'vitest'
 
 import type { ResultLine } from '../protocol'
@@ -131,8 +132,8 @@ describe('l’écran de fin', () => {
   })
 
   it('une phrase par produit, avec la raison, au tutoiement et sans mot d’avertissement', () => {
-    const say = (name: string, reason: keyof typeof S.end.unreached.why) =>
-      S.end.unreached.item(name, S.end.unreached.why[reason])
+    const say = (name: string, reason: keyof ReturnType<typeof S.end.unreached.why>) =>
+      S.end.unreached.item(name, S.end.unreached.why(LECLERC)[reason])
     expect(say('Sirop Teisseire Fraise 60cl', 'OUT_OF_STOCK')).toBe(
       '« Sirop Teisseire Fraise 60cl » est enregistré, mais pas dans ton panier : Leclerc le dit en rupture dans ton magasin.',
     )

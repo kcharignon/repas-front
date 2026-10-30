@@ -5,6 +5,7 @@
 // DRV-643 : la liste montre TOUS les produits de la recherche, mais par lots. Un premier lot s'affiche ; la suite est ajoutée (jamais la liste refaite)
 // quand une sentinelle placée sous la dernière fiche approche de la zone visible. Seules les fiches affichées ont une photo : une fiche pas encore
 // ajoutée ne demande rien à l'enseigne.
+import type { RetailerNames } from '../retailers/names'
 import { append, clear, h } from './dom'
 import { photoFrame } from './photo'
 import { S } from './strings'
@@ -62,6 +63,8 @@ export type AisleLoad =
 const NO_ROW: AisleRow = { chips: [], selected: null }
 
 export interface PickerProps {
+  /** L'enseigne de la page, pour les phrases qui la nomment. */
+  retailer: RetailerNames
   /** « 800 g » : la quantité demandée par la liste. */
   need: string | null
   /** Le libellé du produit que l'utilisateur veut remplacer. */
@@ -191,7 +194,7 @@ function row(
  * Les phrases de la section des produits écartés (DRV-635) : les produits en rupture se disent ensemble (« Ces produits ne sont plus disponibles »),
  * chaque produit introuvable ou refusé par le panier a sa phrase, qui le nomme. Seule la rupture dit « plus disponible ».
  */
-function goneSentences(gone: PickerProps['gone']): HTMLElement[] {
+function goneSentences(gone: PickerProps['gone'], retailer: RetailerNames): HTMLElement[] {
   const out = gone.filter((product) => (product.reason ?? 'OUT_OF_STOCK') === 'OUT_OF_STOCK')
   return [
     ...(out.length > 0
@@ -201,7 +204,7 @@ function goneSentences(gone: PickerProps['gone']): HTMLElement[] {
       product.reason === 'NOT_FOUND'
         ? [h('p', { text: S.picker.notFound(product.label) })]
         : product.reason === 'CART_REFUSED'
-          ? [h('p', { text: S.picker.cartRefused(product.label) })]
+          ? [h('p', { text: S.picker.cartRefused(retailer, product.label) })]
           : [],
     ),
   ]
@@ -254,7 +257,7 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
       : h(
           'section',
           { class: 'gone' },
-          ...goneSentences(props.gone),
+          ...goneSentences(props.gone, props.retailer),
           ...props.gone.map((product, index) => {
             const box = h('input', {
               attrs: { type: 'checkbox', id: `jamais-${index}` },

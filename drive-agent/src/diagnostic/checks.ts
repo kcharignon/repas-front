@@ -5,7 +5,7 @@ import {
   type ArrivalFacts,
   type FacetExploration,
   describeSession,
-  isMobileHost,
+  type RetailerInfo,
   RetailerError,
   type RetailerCause,
   type RetailerErrorCode,
@@ -67,23 +67,27 @@ export interface ChecksDeps {
   wakeLock: WakeLockLike | null
   /** Vrai : l'origine de Repas est écrite dans l'agent ; faux : le marqueur n'est pas remplacé ; `null` : le pont n'en a pas besoin. */
   originReplaced: boolean | null
+  /** L'enseigne de la page : son identifiant, son nom, son domaine et la lecture de ses hôtes. */
+  retailer: RetailerInfo
 }
 
 /** Ce que le rapport montre de la page : jamais le numéro de magasin entier ni un hôte qui ne soit pas de la forme connue. */
 export interface PageFacts {
+  /** L'enseigne de la page : le rapport la nomme par son identifiant et son nom, et dit son domaine pour un hôte inconnu. */
+  retailer: Pick<RetailerInfo, 'id' | 'name' | 'siteDomain'>
   host: string
   store: string
   /** Ce que la page montre de la connexion de l'utilisateur (ticket G) : un état et les noms des signes lus. */
   session?: string
 }
 
-const HOST = /^(fd\d{1,3})-courses\.leclercdrive\.fr$/
-
-/** `fd9` pour `fd9-courses.leclercdrive.fr`, un texte fixe pour le site mobile (ticket J) et pour tout autre hôte. */
-export function hostFamily(host: string): string {
-  const family = HOST.exec(host.toLowerCase())?.[1]
-  if (family !== undefined) return family
-  return isMobileHost(host) ? S.diagnostic.detail.hostMobile : S.diagnostic.detail.hostOther
+/** La famille d'hôte d'un magasin (`fd9`), un texte fixe pour le site mobile (ticket J) et pour tout autre hôte : la lecture des hôtes est celle de l'enseigne. */
+export function hostFamily(host: string, retailer: RetailerInfo): string {
+  const family = retailer.hostFamily(host)
+  if (family !== null) return family
+  return retailer.isMobileHost(host)
+    ? S.diagnostic.detail.hostMobile
+    : S.diagnostic.detail.hostOther(retailer.siteDomain)
 }
 
 /** Ce que l'adaptateur a compté entre deux relevés (ticket L) : le diagnostic ne dit que ses propres requêtes ; la pause la plus longue est celle du relevé final. */
@@ -385,7 +389,12 @@ export async function runChecks(
     const store = deps.adapter.readStore()
     const session = sessionOf(deps.adapter)
     page = {
-      host: hostFamily(store.host),
+      retailer: {
+        id: deps.retailer.id,
+        name: deps.retailer.name,
+        siteDomain: deps.retailer.siteDomain,
+      },
+      host: hostFamily(store.host, deps.retailer),
       store: storeTail(store.id),
       ...(session !== undefined && { session }),
     }

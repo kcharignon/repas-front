@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+import { useRetailerI18n } from './useRetailerI18n'
 import { RouterLink } from 'vue-router'
 
 // Les conditions d'utilisation du drive (DRV-628, ex-note de vie privée DRV-504) : la seule page qui parle des risques, de la vie privée et des
 // engagements. On l'ouvre si on le veut (lien discret dans « Moi » et dans l'aide) ; rien dans le parcours ne l'impose. Le texte vient de
 // `driveTerms` ; les clés ci-dessous ne font que l'ordonner.
-const { t } = useI18n()
+const { t, retailer } = useRetailerI18n()
 
 const sections = [
   { key: 'how', items: ['start', 'session', 'local', 'resume', 'order'] },
@@ -27,6 +27,12 @@ const sections = [
   { key: 'erase', items: ['product', 'store', 'all', 'rights'] },
   { key: 'before', items: ['account', 'suspension', 'stop', 'manual'] },
 ] as const
+
+/** Le texte d'un élément ; ce qui est propre à l'enseigne vient de sa section (`driveTerms.retailers.<id>`), le reste est commun. */
+const textKey = (section: string, item: string): string =>
+  item === 'suspension'
+    ? `driveTerms.retailers.${retailer.value.id}.suspension`
+    : `driveTerms.${section}.${item}`
 </script>
 
 <template>
@@ -52,7 +58,7 @@ const sections = [
       </h2>
       <ul class="flex max-w-prose list-disc flex-col gap-2 pl-6">
         <li v-for="item in section.items" :key="item">
-          {{ t(`driveTerms.${section.key}.${item}`) }}
+          {{ t(textKey(section.key, item)) }}
         </li>
       </ul>
     </section>

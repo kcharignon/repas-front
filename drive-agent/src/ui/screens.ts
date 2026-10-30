@@ -3,7 +3,8 @@ import { append, clear, h, type Child } from './dom'
 import { own } from '../own'
 import { ofUnits, packsFromSize, parsePackValue } from '../../protocol'
 import { photoFrame } from './photo'
-import { CAUSE_TEXTS, ERROR_TEXTS, errorParts, pluralOf, S, unitFor } from './strings'
+import type { RetailerNames } from '../retailers/names'
+import { causeTexts, errorParts, errorTexts, pluralOf, S, unitFor } from './strings'
 import type {
   ChallengeProps,
   ChooserProps,
@@ -44,7 +45,11 @@ export interface Rendered {
 }
 
 type Answer<K extends ScreenName> = (value: ScreenAnswer<K>) => void
-type Renderer<K extends ScreenName> = (props: ScreenProps<K>, answer: Answer<K>) => Rendered
+type Renderer<K extends ScreenName> = (
+  props: ScreenProps<K>,
+  answer: Answer<K>,
+  retailer: RetailerNames,
+) => Rendered
 
 const LOG_SIZE = 5
 
@@ -89,7 +94,7 @@ const welcome: Renderer<'welcome'> = (_props, answer) => {
   }
 }
 
-const summary: Renderer<'summary'> = (props: SummaryProps, answer) => {
+const summary: Renderer<'summary'> = (props: SummaryProps, answer, retailer) => {
   const items = props.lines.map((line) =>
     h('li', {
       text: `${line.name} : ${S.summary.status[line.status]}${line.detail ? ` (${line.detail})` : ''}`,
@@ -97,7 +102,7 @@ const summary: Renderer<'summary'> = (props: SummaryProps, answer) => {
   )
   const start = button(S.summary.start, () => answer('start'), 'primary')
   // Une phrase, la même que sur l'écran de l'envoi de Repas : jamais une liste de compteurs, jamais un zéro (DRV-626).
-  const sentence = S.summary.sentence(props)
+  const sentence = S.summary.sentence(props, retailer)
   return {
     el: screen(
       title(S.summary.title),
@@ -520,11 +525,11 @@ const diagnostic: Renderer<'diagnostic'> = (props: DiagnosticProps, answer) => {
   }
 }
 
-const challenge: Renderer<'challenge'> = (_props: ChallengeProps, answer) => {
+const challenge: Renderer<'challenge'> = (_props: ChallengeProps, answer, retailer) => {
   const resume = button(S.challenge.resume, () => answer('resume'), 'primary')
   return {
     el: screen(
-      title(S.challenge.title),
+      title(S.challenge.title(retailer)),
       h('p', { text: S.challenge.text }),
       actions(
         resume,
@@ -543,13 +548,13 @@ const entry: Renderer<'entry'> = (props: EntryProps) => {
   return { el, sheet: true }
 }
 
-const error: Renderer<'error'> = (props: ErrorProps, answer) => {
+const error: Renderer<'error'> = (props: ErrorProps, answer, retailer) => {
   const close = button(S.error.close, () => answer('close'), props.canReturn ? 'plain' : 'primary')
   const back = button(S.error.back, () => answer('return'), 'primary')
   // Une cause qui a son propre texte (le site mobile, ticket J) remplace celui du code d'erreur.
   const texts =
-    (props.cause === undefined ? undefined : own(CAUSE_TEXTS, props.cause)) ??
-    ERROR_TEXTS[props.code]
+    (props.cause === undefined ? undefined : own(causeTexts(retailer), props.cause)) ??
+    errorTexts(retailer)[props.code]
   return {
     el: screen(
       title(texts.title),
@@ -564,15 +569,15 @@ const error: Renderer<'error'> = (props: ErrorProps, answer) => {
  * qu'il reste à ajouter quand l'envoi s'est arrêté avant la fin) et l'action. Un arrêt voulu (`aborted`) n'est pas une panne : son code,
  * s'il y en a un, ne change rien au texte.
  */
-function endText(props: EndProps): string {
+function endText(props: EndProps, retailer: RetailerNames): string {
   // Des produits choisis n'ont pas été pris par le panier (DRV-644) : « Tes produits sont dans ton panier » serait faux, la phrase de chaque produit suit.
   if (props.outcome === 'completed')
-    return (props.unreached?.length ?? 0) > 0 ? S.end.completedSome : S.end.completed
+    return (props.unreached?.length ?? 0) > 0 ? S.end.completedSome : S.end.completed(retailer)
   const code = props.outcome === 'aborted' ? undefined : props.error
   const left = props.failed + props.unavailable
   const safe = props.outcome === 'partial' && left > 0 ? S.end.safeLeft(left) : S.end.safe
   if (code !== undefined) {
-    const parts = errorParts(code)
+    const parts = errorParts(code, retailer)
     return `${parts.happened} ${safe} ${parts.action}`
   }
   const lead =
@@ -598,23 +603,23 @@ function endTitle(props: EndProps): string {
 }
 
 /** Les compteurs qui existent, dans l'ordre de l'écran : jamais un zéro, jamais « Échecs » (le texte dit ce qui reste à ajouter). */
-function endCounts(props: EndProps): string[] {
+function endCounts(props: EndProps, retailer: RetailerNames): string[] {
   return [
     props.added > 0 ? S.end.added(props.added) : null,
-    props.chosen > 0 ? S.end.chosen(props.chosen) : null,
+    props.chosen > 0 ? S.end.chosen(retailer, props.chosen) : null,
     props.haveAtHome > 0 ? S.end.haveAtHome(props.haveAtHome) : null,
     props.skipped > 0 ? S.end.skipped(props.skipped) : null,
     props.unavailable > 0 ? S.end.unavailable(props.unavailable) : null,
   ].filter((line) => line !== null)
 }
 
-const end: Renderer<'end'> = (props: EndProps, answer) => {
+const end: Renderer<'end'> = (props: EndProps, answer, retailer) => {
   const back = button(S.end.back, () => answer('return'), 'primary')
-  const counts = endCounts(props)
+  const counts = endCounts(props, retailer)
   return {
     el: screen(
       title(endTitle(props)),
-      h('p', { text: endText(props) }),
+      h('p', { text: endText(props, retailer) }),
       counts.length > 0
         ? h('ul', { class: 'counts' }, ...counts.map((text) => h('li', { text })))
         : null,
@@ -633,7 +638,7 @@ const end: Renderer<'end'> = (props: EndProps, answer) => {
             ),
           )
         : null,
-      props.slow ? h('p', { class: 'notice', text: S.end.slow }) : null,
+      props.slow ? h('p', { class: 'notice', text: S.end.slow(retailer) }) : null,
       props.kept && props.kept.length > 0
         ? h(
             'div',
@@ -654,7 +659,9 @@ const end: Renderer<'end'> = (props: EndProps, answer) => {
             'div',
             { class: 'notice' },
             ...props.unreached.map((line) =>
-              h('p', { text: S.end.unreached.item(line.label, S.end.unreached.why[line.reason]) }),
+              h('p', {
+                text: S.end.unreached.item(line.label, S.end.unreached.why(retailer)[line.reason]),
+              }),
             ),
           )
         : null,
@@ -683,7 +690,7 @@ const end: Renderer<'end'> = (props: EndProps, answer) => {
             'div',
             { class: 'notice' },
             h('p', {}, h('strong', { text: S.end.unreadable.title })),
-            h('p', { text: S.end.unreadable.text }),
+            h('p', { text: S.end.unreadable.text(retailer) }),
             h(
               'ul',
               {},

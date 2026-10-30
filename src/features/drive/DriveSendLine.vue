@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { useRetailerI18n } from './useRetailerI18n'
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 
 import type { DrivePlanLine } from '@/api'
 import UiChip from '@/design/UiChip.vue'
@@ -17,7 +17,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ change: [change: LineChange | undefined] }>()
 
-const { t } = useI18n()
+const { t } = useRetailerI18n()
 
 const status = computed(() =>
   effectiveStatus(props.line, { [props.line.ingredientSlug]: props.change }),

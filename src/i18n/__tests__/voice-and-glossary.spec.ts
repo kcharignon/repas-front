@@ -598,6 +598,14 @@ describe('aucun avertissement hors des conditions d’utilisation du drive (DRV-
     expect(sources.android.flatMap((entry) => warnings(entry.where, entry.text))).toEqual([])
   })
 
+  it('l’interface de l’agent n’écrit le nom d’aucune enseigne : il vient du registre (DRV-705)', () => {
+    const named = sources.agent
+      .filter((entry) => entry.where.startsWith('drive-agent/src/ui/strings.ts'))
+      .filter((entry) => /leclerc|auchan|carrefour|intermarch|enseigne|retailer/i.test(entry.text))
+      .map((entry) => `${entry.where} : « ${entry.text} »`)
+    expect(named).toEqual([])
+  })
+
   it('nomme des exemptions qui existent encore (aucune exemption périmée)', () => {
     const where = sources.agent.map((entry) => entry.where)
     for (const prefix of WARNING_EXEMPT_AGENT_PATHS) {
@@ -706,5 +714,28 @@ describe("l'ingrédient de base (ING-015)", () => {
       /commun|catalogue|administrateur|propriétaire/iu.test(entry.text),
     )
     expect(interdits.map((entry) => entry.where)).toEqual([])
+  })
+})
+
+describe('le nom d’une enseigne est un paramètre (DRV-708)', () => {
+  const texts = webEntries()
+
+  it('n’écrit « Leclerc » ni « Auchan » dans un texte du web, hors de la section de chaque enseigne des conditions d’utilisation', () => {
+    const named = texts
+      .filter(({ where }) => !where.includes('driveTerms.retailers.'))
+      .filter(({ text }) => /leclerc|auchan/i.test(text))
+      .map(({ where }) => where)
+
+    expect(named).toEqual([])
+  })
+
+  it('ne dit jamais « enseigne » ni « retailer » à l’écran : on dit « drive » et on nomme l’enseigne', () => {
+    const said = texts
+      .filter(({ text }) =>
+        /(?<![\p{L}])(?:enseignes?|retailers?)(?![\p{L}])/iu.test(text.replace(/{[^}]*}/g, '')),
+      )
+      .map(({ where }) => where)
+
+    expect(said).toEqual([])
   })
 })

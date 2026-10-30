@@ -10,9 +10,9 @@ import {
   type SetupMessage,
 } from '../../protocol'
 import { own } from '../own'
-import type { RetailerCause } from '../retailers'
+import type { RetailerCause, RetailerNames } from '../retailers'
 import type { EndProps } from '../ui'
-import { ERROR_TEXTS } from '../ui'
+import { errorTexts } from '../ui'
 import type { RunState } from './run-state'
 
 /** Une ligne dont le nombre de produits a été recalculé en direct, avec le nom de l'ingrédient pour l'écran de fin. */
@@ -130,8 +130,8 @@ export function endingOf(
  * Le message du résultat : le titre de l'erreur et, entre parenthèses, la cause précise (ticket A), par exemple
  * « Le site a changé (SEARCH_NO_STATE) ». Un code fixe : jamais un morceau de page ni le message d'une exception.
  */
-export function errorMessage(ending: Ending): string {
-  const title = ending.code ? ERROR_TEXTS[ending.code].title : ''
+export function errorMessage(ending: Ending, retailer: RetailerNames): string {
+  const title = ending.code ? errorTexts(retailer)[ending.code].title : ''
   return ending.cause ? `${title} (${ending.cause})` : title
 }
 
@@ -144,6 +144,7 @@ export function buildResult(
   lines: ResultLine[],
   ending: Ending,
   agentVersion: string,
+  retailer: RetailerNames,
   stats?: ResultStats,
 ): ResultMessage {
   return {
@@ -153,7 +154,7 @@ export function buildResult(
     agentVersion,
     outcome: ending.outcome,
     ...(plan.store && { store: { id: plan.store.id } }),
-    ...(ending.code && { error: { code: ending.code, message: errorMessage(ending) } }),
+    ...(ending.code && { error: { code: ending.code, message: errorMessage(ending, retailer) } }),
     ...(stats && stats.requests > 0 && { stats }),
     lines,
   }

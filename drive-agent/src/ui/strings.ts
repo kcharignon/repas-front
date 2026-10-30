@@ -3,6 +3,7 @@
 import type { ErrorCode, LineStatus, Outcome } from '../../protocol'
 import { pluralOf, unitFor } from '../../protocol'
 import { own } from '../own'
+import type { RetailerNames } from '../retailers/names'
 import type { UnavailableReason, UnreachedReason } from './types'
 
 export { pluralOf, unitFor }
@@ -85,7 +86,7 @@ export interface SummaryCounts {
  * `src/features/drive/__tests__/summarySentence.spec.ts` le prouve sur toutes les combinaisons. On n'écrit que ce qui existe (jamais « 0 »), et
  * « j'en ai toujours » et « pas cette fois » se disent ensemble : ni l'un ni l'autre n'ira au panier. Vide quand il n'y a aucun article.
  */
-export function summarySentence(counts: SummaryCounts): string {
+export function summarySentence(counts: SummaryCounts, retailer: RetailerNames): string {
   const other = counts.haveAtHome + counts.skipped
   const total = counts.known + counts.new + other
   if (total === 0) return ''
@@ -100,8 +101,12 @@ export function summarySentence(counts: SummaryCounts): string {
     ),
     ...part(
       counts.new,
-      total === 1 ? 'il est à choisir sur Leclerc' : 'tous sont à choisir sur Leclerc',
-      counts.new === 1 ? 'est à choisir sur Leclerc' : 'sont à choisir sur Leclerc',
+      total === 1
+        ? `il est à choisir sur ${retailer.name}`
+        : `tous sont à choisir sur ${retailer.name}`,
+      counts.new === 1
+        ? `est à choisir sur ${retailer.name}`
+        : `sont à choisir sur ${retailer.name}`,
     ),
     ...part(
       other,
@@ -152,7 +157,7 @@ export const S = {
     detail: {
       version: (version: string) => `version ${version}`,
       page: (host: string, store: string) => `hôte ${host}, magasin ${store}`,
-      hostOther: 'autre hôte leclercdrive.fr',
+      hostOther: (domain: string) => `autre hôte ${domain}`,
       hostMobile: 'site mobile (pas la version ordinateur)',
       originOk: 'origine écrite dans l’agent',
       originMissing: 'origine non remplacée dans l’agent',
@@ -188,6 +193,7 @@ export const S = {
       title: 'Repas Drive : diagnostic',
       agent: (version: string) => `Agent : ${version}`,
       date: (date: string) => `Date : ${date}`,
+      site: (id: string, name: string) => `Site : ${id} (${name})`,
       host: (host: string) => `Hôte : ${host}`,
       store: (store: string) => `Magasin : ${store}`,
       noWrite: 'Aucune écriture au panier.',
@@ -236,12 +242,13 @@ export const S = {
       /** La page du panier (`detail-panier.aspx` sous le chemin du magasin) : connue quand la page montre le chemin du magasin avec la ville. */
       basketPage: (known: string) =>
         `Page du panier (detail-panier.aspx sous le chemin du magasin) : ${known}`,
-      where: {
-        RELATIVE: 'adresse sans site',
-        SAME_HOST: 'même hôte que la page',
-        LECLERC_HOST: 'autre hôte leclercdrive.fr',
-        OTHER_SITE: 'autre site',
-      } as Record<string, string>,
+      where: (domain: string) =>
+        ({
+          RELATIVE: 'adresse sans site',
+          SAME_HOST: 'même hôte que la page',
+          RETAILER_HOST: `autre hôte ${domain}`,
+          OTHER_SITE: 'autre site',
+        }) as Record<string, string>,
       cookies: (count: number, antiBot: string) =>
         `Cookies lisibles par la page : ${count} ; cookie de protection anti-robot : ${antiBot} (les cookies HttpOnly ne sont pas lisibles)`,
       arrival: (redirects: number | null, status: number | null) =>
@@ -746,7 +753,8 @@ export const S = {
     none: (query: string) => `Aucun produit trouvé pour « ${query} ». Essaie un autre mot.`,
     network: 'Le site ne répond pas. Réessaie dans un instant.',
     /** La requête a dépassé son délai d'attente (ticket K) : Leclerc répond, mais trop lentement. */
-    slow: 'Leclerc met trop de temps à répondre. Réessaie dans un instant.',
+    slow: (retailer: RetailerNames) =>
+      `${retailer.name} met trop de temps à répondre. Réessaie dans un instant.`,
     choose: 'Choisir',
     /** Le second geste de la fiche (0.41.0) : le produit est pris cette fois, il n'est pas l'habituel ; Repas redemandera. « Habituel » est le mot du glossaire (pas « préféré »). */
     notUsual: 'Pas mon habituel',
@@ -764,8 +772,8 @@ export const S = {
         ? `À mettre au panier : ${count(packs, 'produit', 'produits')}.`
         : `${per} par produit : ${count(packs, 'produit', 'produits')}.`,
     /** Le panier n'a rien pris de ce produit (DRV-635) : on le nomme, la liste reste affichée. */
-    cartRefused: (product: string) =>
-      `Leclerc n’a pas pu mettre « ${product} » au panier. Choisis-en un autre.`,
+    cartRefused: (retailer: RetailerNames, product: string) =>
+      `${retailer.name} n’a pas pu mettre « ${product} » au panier. Choisis-en un autre.`,
     /** Aucune recherche n'a retrouvé ce produit habituel (DRV-635) : il n'est pas dit indisponible, la recherche est préremplie. */
     notFound: (product: string) =>
       `Je ne retrouve pas « ${product} » : cherche-le ou choisis-en un autre.`,
@@ -784,7 +792,8 @@ export const S = {
     } satisfies Record<Outcome, string>,
     /** Un envoi arrêté avant que rien ne soit mis au panier ni choisi : « en partie » serait faux (DRV-626). Le même mot que le récapitulatif de Repas. */
     notFilled: 'Le panier n’est pas rempli',
-    completed: 'Tes produits sont dans ton panier Leclerc. Retourne dans Repas pour le finaliser.',
+    completed: (retailer: RetailerNames) =>
+      `Tes produits sont dans ton panier ${retailer.name}. Retourne dans Repas pour le finaliser.`,
     /** Des produits choisis n'ont pas été pris par le panier (DRV-644) : seule l'action, chaque produit a sa phrase. */
     completedSome: 'Retourne dans Repas pour le finaliser.',
     /** Ce qui est sauf : rien de ce qui est déjà au panier n'est retiré. */
@@ -796,7 +805,7 @@ export const S = {
     notFinished: 'L’envoi n’a pas pu aller au bout.',
     resume: 'Retourne dans Repas pour reprendre l’envoi.',
     added: (n: number) => `Ajoutés au panier : ${n}`,
-    chosen: (n: number) => `Choisis sur Leclerc : ${n}`,
+    chosen: (retailer: RetailerNames, n: number) => `Choisis sur ${retailer.name} : ${n}`,
     haveAtHome: (n: number) => `J’en ai toujours : ${n}`,
     skipped: (n: number) => `Pas cette fois : ${n}`,
     unavailable: (n: number) => `Indisponibles : ${n}`,
@@ -808,7 +817,7 @@ export const S = {
         `${name} : ${live} au lieu de ${planned}`,
     },
     /** Une requête a dépassé son délai d'attente (ticket K) : ce qui s'est passé. Ce qui est sauf et l'action sont dans le texte de l'écran, juste au-dessus. */
-    slow: 'Leclerc a mis trop de temps à répondre.',
+    slow: (retailer: RetailerNames) => `${retailer.name} a mis trop de temps à répondre.`,
     /** Le panier avait déjà plus que le plan : ces articles restent tels quels (ticket M ; le fond est dans les conditions d'utilisation du drive). */
     kept: {
       title: 'Quantités déjà au panier',
@@ -818,7 +827,8 @@ export const S = {
     /** La recherche ne donnait pas la quantité déjà au panier : Repas n'a pas pu s'en assurer (ticket M). */
     unreadable: {
       title: 'Quantité au panier illisible',
-      text: 'Leclerc n’a pas donné la quantité déjà au panier. Vérifie ces articles dans ton panier.',
+      text: (retailer: RetailerNames) =>
+        `${retailer.name} n’a pas donné la quantité déjà au panier. Vérifie ces articles dans ton panier.`,
       item: (name: string, atLeast: number | null) =>
         atLeast === null ? name : `${name} — au moins ${atLeast} gardés`,
     },
@@ -838,12 +848,12 @@ export const S = {
       item: (product: string, why: string) =>
         `« ${product} » est enregistré, mais pas dans ton panier${why}`,
       /** La suite de la phrase : la raison, avec les mots de Leclerc quand c'est lui qui les dit. */
-      why: {
-        OUT_OF_STOCK: ' : Leclerc le dit en rupture dans ton magasin.',
-        COMING_SOON:
-          '. Leclerc indique « Bientôt disponible » : tu ne peux pas le commander pour l’instant.',
-        CART_REFUSED: ' : Leclerc n’a pas voulu le mettre au panier, sans en donner la raison.',
-      } satisfies Record<UnreachedReason, string>,
+      why: (retailer: RetailerNames) =>
+        ({
+          OUT_OF_STOCK: ` : ${retailer.name} le dit en rupture dans ton magasin.`,
+          COMING_SOON: `. ${retailer.name} indique « Bientôt disponible » : tu ne peux pas le commander pour l’instant.`,
+          CART_REFUSED: ` : ${retailer.name} n’a pas voulu le mettre au panier, sans en donner la raison.`,
+        }) satisfies Record<UnreachedReason, string>,
     },
     back: 'Retourner dans Repas',
   },
@@ -859,14 +869,16 @@ export const S = {
     notFound: (name: string) => `${name} : produit introuvable, à choisir ensuite`,
     cartRefused: (name: string) => `${name} : pas pris par le panier, à choisir ensuite`,
     /** Le site disait ce produit en rupture et le panier l'a pourtant pris (DRV-635). */
-    acceptedAnyway: (name: string) => `${name} : ajouté, Leclerc l’a accepté`,
+    acceptedAnyway: (retailer: RetailerNames, name: string) =>
+      `${name} : ajouté, ${retailer.name} l’a accepté`,
     /** Le produit choisi n'est pas au panier, mais le choix est enregistré (DRV-644). */
     savedNotInCart: (name: string) => `${name} : enregistré, pas dans le panier`,
-    slow: (name: string) => `${name} : Leclerc met trop de temps à répondre`,
+    slow: (retailer: RetailerNames, name: string) =>
+      `${name} : ${retailer.name} met trop de temps à répondre`,
   },
   /** La demande de vérification de l'anti-robot (ticket K) : un bandeau en bas de l'écran, pour que la page reste visible. */
   challenge: {
-    title: 'Leclerc demande une vérification',
+    title: (retailer: RetailerNames) => `${retailer.name} demande une vérification`,
     text: 'Fais-la dans la page, puis touche Reprendre.',
     resume: 'Reprendre',
     stop: 'Arrêter',
@@ -886,69 +898,84 @@ export const S = {
  * Le titre et le conseil d'une cause qui en a de plus précis que ceux de son code d'erreur (ticket J : le site mobile). Une table lue par `own` :
  * la cause vient d'un code fixe, mais ne l'indexe jamais en direct.
  */
-export const CAUSE_TEXTS: Readonly<Record<string, { title: string; text: string }>> = {
-  PAGE_MOBILE: {
-    title: 'Ce n’est pas la version ordinateur du site',
-    text: 'Leclerc affiche son site mobile. Repas ne travaille que sur la version ordinateur. Ce qui est déjà au panier y reste. Ouvre « Ouvrir le drive Leclerc » dans le menu de l’application, puis reprends l’envoi.',
-  },
+export function causeTexts(
+  retailer: RetailerNames,
+): Readonly<Record<string, { title: string; text: string }>> {
+  return {
+    PAGE_MOBILE: {
+      title: 'Ce n’est pas la version ordinateur du site',
+      text: `${retailer.name} affiche son site mobile. Repas ne travaille que sur la version ordinateur. Ce qui est déjà au panier y reste. Ouvre « Ouvrir le drive ${retailer.name} » dans le menu de l’application, puis reprends l’envoi.`,
+    },
+  }
 }
 
 /**
  * Chaque erreur du protocole, en trois phrases (principes-produit.md § 4) : ce qui s'est passé (`happened`), ce qui est sauf (la même phrase
  * partout : rien de ce qui est déjà au panier n'est retiré) et une action (`action`). Le titre part aussi dans le message du résultat.
  */
-const ERROR_PARTS: Record<ErrorCode, { title: string; happened: string; action: string }> = {
-  NOT_LOGGED_IN: {
-    title: 'Tu n’es pas connecté',
-    happened: 'Tu n’es pas connecté à Leclerc.',
-    action: 'Connecte-toi à Leclerc, puis reprends l’envoi depuis Repas.',
-  },
-  STORE_MISMATCH: {
-    title: 'Ce n’est pas le bon magasin',
-    happened: 'Repas a préparé ta liste pour un autre magasin.',
-    action: 'Ouvre ton magasin sur Leclerc, puis reprends l’envoi depuis Repas.',
-  },
-  BLOCKED: {
-    title: 'Leclerc a ralenti les demandes',
-    happened: 'Leclerc a ralenti les demandes.',
-    action: 'Attends quelques minutes, recharge la page, puis reprends l’envoi depuis Repas.',
-  },
-  CONTRACT_CHANGED: {
-    title: 'Le site a changé',
-    happened: 'Leclerc a changé son site, l’envoi automatique est arrêté.',
-    action: 'Cherche tes produits à la main sur Leclerc.',
-  },
-  NETWORK: {
-    title: 'Le site ne répond pas',
-    happened: 'Le site de Leclerc ne répond pas.',
-    action: 'Vérifie ta connexion, puis reprends l’envoi depuis Repas.',
-  },
-  CANCELLED: {
-    title: 'Envoi annulé',
-    happened: 'Tu as annulé l’envoi.',
-    action: 'Reprends l’envoi depuis Repas quand tu veux.',
-  },
-  INVALID_MESSAGE: {
-    title: 'Liste illisible',
-    happened: 'L’application ne comprend pas la liste envoyée par Repas.',
-    action: 'Mets à jour l’application, puis reprends l’envoi depuis Repas.',
-  },
-  UNSUPPORTED_PAGE: {
-    title: 'Page non prise en charge',
-    happened: 'Repas ne peut pas travailler sur cette page de Leclerc.',
-    action: 'Ouvre la page de ton magasin, puis reprends l’envoi depuis Repas.',
-  },
+function errorPartsTable(
+  retailer: RetailerNames,
+): Record<ErrorCode, { title: string; happened: string; action: string }> {
+  return {
+    NOT_LOGGED_IN: {
+      title: 'Tu n’es pas connecté',
+      happened: `Tu n’es pas connecté à ${retailer.name}.`,
+      action: `Connecte-toi à ${retailer.name}, puis reprends l’envoi depuis Repas.`,
+    },
+    STORE_MISMATCH: {
+      title: 'Ce n’est pas le bon magasin',
+      happened: 'Repas a préparé ta liste pour un autre magasin.',
+      action: `Ouvre ton magasin sur ${retailer.name}, puis reprends l’envoi depuis Repas.`,
+    },
+    BLOCKED: {
+      title: `${retailer.name} a ralenti les demandes`,
+      happened: `${retailer.name} a ralenti les demandes.`,
+      action: 'Attends quelques minutes, recharge la page, puis reprends l’envoi depuis Repas.',
+    },
+    CONTRACT_CHANGED: {
+      title: 'Le site a changé',
+      happened: `${retailer.name} a changé son site, l’envoi automatique est arrêté.`,
+      action: `Cherche tes produits à la main sur ${retailer.name}.`,
+    },
+    NETWORK: {
+      title: 'Le site ne répond pas',
+      happened: `Le site ${retailer.nameDe} ne répond pas.`,
+      action: 'Vérifie ta connexion, puis reprends l’envoi depuis Repas.',
+    },
+    CANCELLED: {
+      title: 'Envoi annulé',
+      happened: 'Tu as annulé l’envoi.',
+      action: 'Reprends l’envoi depuis Repas quand tu veux.',
+    },
+    INVALID_MESSAGE: {
+      title: 'Liste illisible',
+      happened: 'L’application ne comprend pas la liste envoyée par Repas.',
+      action: 'Mets à jour l’application, puis reprends l’envoi depuis Repas.',
+    },
+    UNSUPPORTED_PAGE: {
+      title: 'Page non prise en charge',
+      happened: `Repas ne peut pas travailler sur cette page ${retailer.nameDe}.`,
+      action: 'Ouvre la page de ton magasin, puis reprends l’envoi depuis Repas.',
+    },
+  }
 }
 
 /** Le titre et le texte de chaque erreur du protocole : ce qui s'est passé, ce qui est sauf, une action. */
-export const ERROR_TEXTS: Record<ErrorCode, { title: string; text: string }> = Object.fromEntries(
-  Object.entries(ERROR_PARTS).map(([code, { title, happened, action }]) => [
-    code,
-    { title, text: `${happened} ${S.end.safe} ${action}` },
-  ]),
-) as Record<ErrorCode, { title: string; text: string }>
+export function errorTexts(
+  retailer: RetailerNames,
+): Record<ErrorCode, { title: string; text: string }> {
+  return Object.fromEntries(
+    Object.entries(errorPartsTable(retailer)).map(([code, { title, happened, action }]) => [
+      code,
+      { title, text: `${happened} ${S.end.safe} ${action}` },
+    ]),
+  ) as Record<ErrorCode, { title: string; text: string }>
+}
 
 /** Ce qui s'est passé et l'action d'une erreur, pour l'écran de fin qui y ajoute ce qui reste à faire. */
-export function errorParts(code: ErrorCode): { happened: string; action: string } {
-  return ERROR_PARTS[code]
+export function errorParts(
+  code: ErrorCode,
+  retailer: RetailerNames,
+): { happened: string; action: string } {
+  return errorPartsTable(retailer)[code]
 }

@@ -1,6 +1,7 @@
 // Page de démonstration de l'interface (DRV-304), hors production : chaque écran avec des données inventées. Servie par le serveur de
 // développement (`make start`, /drive-agent/demo/index.html?screen=summary) et éprouvée par `e2e/agent-ui.spec.ts` (accessibilité, 360×640).
 import { ERROR_CODES } from '../protocol'
+import { RETAILERS } from '../src/retailers'
 import {
   createUi,
   renderPicker,
@@ -16,7 +17,9 @@ const photo = (id: number) => `https://photos-test.leclercdrive.fr/image.ashx?id
 const HOSTILE = '<img src=x onerror="window.pwned=1"> <script>window.pwned=1</script>'
 
 // Ouvert pour que les outils de test lisent l'interface ; l'agent, lui, la ferme.
-const ui = createUi({ mode: 'open' })
+const RETAILER = RETAILERS[0]
+if (RETAILER === undefined) throw new Error('le registre de l’agent est vide')
+const ui = createUi({ mode: 'open', retailer: RETAILER })
 
 const CANDIDATES: PickerItem[] = [
   {
@@ -85,6 +88,7 @@ const MANY: PickerItem[] = Array.from({ length: 60 }, (_unused, index) => ({
 }))
 
 const PICKER: PickerProps = {
+  retailer: RETAILER,
   need: '100 g',
   replaces: null,
   gone: [],

@@ -11,7 +11,7 @@ import { buildPlanMessage } from '../buildPlanMessage'
 import DriveReturnView from '../DriveReturnView.vue'
 import { useDriveReturnStore } from '../returnStore'
 import { plan, storeBaseUrl } from './fixtures'
-import { finalizeLink, DRIVE_HOME_URL } from '../leclerc'
+import { DEFAULT_RETAILER, finalizeLink } from '../retailers'
 import { result, RUN } from './results'
 
 // Données SYNTHÉTIQUES : magasin d'essai, produits et listes inventés.
@@ -245,7 +245,7 @@ describe('retour du drive : un passage réussi', () => {
   it('bâtit le lien du magasin à partir de l’hôte et des numéros du magasin enregistré, jamais d’une page de Leclerc (DRV-629)', () => {
     expect(finalizeLink(null)).toBeNull()
     expect(finalizeLink(null, true)).toBeNull()
-    expect(finalizeLink(storeBaseUrl)).toBe(DRIVE_HOME_URL)
+    expect(finalizeLink(storeBaseUrl)).toBe(DEFAULT_RETAILER.homeUrl)
     expect(finalizeLink(storeBaseUrl, true)).toBe(basketLink)
     // Une ville, des paramètres ou un identifiant dans l'adresse enregistrée ne passent pas dans le lien : la ville vient de l'application
     expect(finalizeLink(`${storeBaseUrl}-Ville-Test/recherche.aspx?x=1#y`, true)).toBe(basketLink)
@@ -260,7 +260,7 @@ describe('retour du drive : un passage réussi', () => {
     'https://courses-test.leclercdrive.fr/autre/magasin-123456-123456',
     'pas une adresse',
   ])('%s : repli sur l’accueil du drive', (base) => {
-    expect(finalizeLink(base, true)).toBe(DRIVE_HOME_URL)
+    expect(finalizeLink(base, true)).toBe(DEFAULT_RETAILER.homeUrl)
   })
 
   it('le lien ne mène jamais à la page du panier de Leclerc (DRV-631)', () => {

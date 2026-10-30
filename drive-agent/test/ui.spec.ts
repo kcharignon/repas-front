@@ -1,8 +1,9 @@
 // L'interface superposée (DRV-304) : chaque écran (rendu, réponses, échappement), le focus et l'isolation. jsdom, sans réseau.
+import { LECLERC } from './retailer-fixtures'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { h } from '../src/ui/dom'
-import { createUi, ERROR_TEXTS, renderPicker, type UiHandle } from '../src/ui'
+import { createUi, errorTexts, renderPicker, type UiHandle } from '../src/ui'
 import { STYLES } from '../src/ui/styles'
 import type { ChooserProps, DiagnosticRow, DiagnosticView, EndProps, SummaryProps } from '../src/ui'
 import { ERROR_CODES } from '../protocol'
@@ -13,7 +14,7 @@ let ui: UiHandle | null = null
 
 /** L'interface en mode ouvert : seul moyen pour un test de lire le Shadow DOM, qu'en production la page ne peut pas lire. */
 function open(): UiHandle {
-  ui = createUi({ mode: 'open' })
+  ui = createUi({ mode: 'open', retailer: LECLERC })
   return ui
 }
 
@@ -72,7 +73,7 @@ describe('le conteneur', () => {
   })
 
   it('est fermé par défaut : la page ne lit pas l’interface', () => {
-    const closed = createUi()
+    const closed = createUi({ retailer: LECLERC })
     void closed.show('welcome', {})
 
     expect(closed.host?.shadowRoot).toBeNull()
@@ -386,7 +387,7 @@ describe('progression', () => {
     void handle.show('welcome', {})
 
     expect(() => handle.update({ done: 3 })).not.toThrow()
-    expect(() => createUi().update({ done: 3 })).not.toThrow()
+    expect(() => createUi({ retailer: LECLERC }).update({ done: 3 })).not.toThrow()
   })
 })
 
@@ -859,6 +860,7 @@ describe('choix de produit (hôte)', () => {
     void renderPicker(
       zone,
       {
+        retailer: LECLERC,
         need: null,
         replaces: null,
         gone: [],
@@ -1345,6 +1347,7 @@ describe('les deux gestes d’une fiche de produit (0.41.0)', () => {
     state,
   })
   const props = {
+    retailer: LECLERC,
     need: null,
     replaces: null,
     gone: [],
@@ -1467,6 +1470,7 @@ describe('liste de produits dans l’écran de choix', () => {
     },
   ]
   const props = {
+    retailer: LECLERC,
     need: '800 g',
     replaces: null,
     gone: [],
@@ -1550,30 +1554,30 @@ describe('erreurs', () => {
     const handle = open()
     void handle.show('error', { code, canReturn: false })
 
-    expect(shadow().querySelector('h1')?.textContent).toBe(ERROR_TEXTS[code].title)
-    expect(shadow().textContent).toContain(ERROR_TEXTS[code].text)
+    expect(shadow().querySelector('h1')?.textContent).toBe(errorTexts(LECLERC)[code].title)
+    expect(shadow().textContent).toContain(errorTexts(LECLERC)[code].text)
   })
 
   it('dit quoi faire quand Leclerc ralentit les requêtes ou quand le site a changé', () => {
-    expect(ERROR_TEXTS.BLOCKED.text).toContain('Attends')
-    expect(ERROR_TEXTS.BLOCKED.text).toContain('recharge la page')
+    expect(errorTexts(LECLERC).BLOCKED.text).toContain('Attends')
+    expect(errorTexts(LECLERC).BLOCKED.text).toContain('recharge la page')
     // Quand l'utilisateur ne peut rien faire, le texte le dit franchement et propose le repli : chercher à la main
-    expect(ERROR_TEXTS.CONTRACT_CHANGED.text).toBe(
+    expect(errorTexts(LECLERC).CONTRACT_CHANGED.text).toBe(
       'Leclerc a changé son site, l’envoi automatique est arrêté. Ce qui est déjà au panier y reste. Cherche tes produits à la main sur Leclerc.',
     )
-    expect(ERROR_TEXTS.NOT_LOGGED_IN.text).toContain('Connecte-toi')
+    expect(errorTexts(LECLERC).NOT_LOGGED_IN.text).toContain('Connecte-toi')
   })
 
   it.each(ERROR_CODES)(
     '« %s » tient en trois phrases de 20 mots au plus : ce qui s’est passé, ce qui est sauf, une action',
     (code) => {
-      const sentences = ERROR_TEXTS[code].text.split(/(?<=[.!?])\s+/)
+      const sentences = errorTexts(LECLERC)[code].text.split(/(?<=[.!?])\s+/)
 
       expect(sentences).toHaveLength(3)
       expect(sentences[1]).toBe('Ce qui est déjà au panier y reste.')
       for (const sentence of sentences) expect(sentence.split(/\s+/).length).toBeLessThanOrEqual(20)
       // Aucun code à l'écran
-      expect(ERROR_TEXTS[code].text).not.toMatch(/[A-Z]{2,}_[A-Z_]+/)
+      expect(errorTexts(LECLERC)[code].text).not.toMatch(/[A-Z]{2,}_[A-Z_]+/)
     },
   )
 
@@ -1585,15 +1589,17 @@ describe('erreurs', () => {
       'Ce n’est pas la version ordinateur du site',
     )
     expect(shadow().textContent).toContain('version ordinateur')
-    expect(shadow().textContent).not.toContain(ERROR_TEXTS.UNSUPPORTED_PAGE.title)
+    expect(shadow().textContent).not.toContain(errorTexts(LECLERC).UNSUPPORTED_PAGE.title)
   })
 
   it('une cause sans texte à elle garde le titre et le conseil du code d’erreur', () => {
     const handle = open()
     void handle.show('error', { code: 'UNSUPPORTED_PAGE', canReturn: true, cause: 'PAGE_PATH' })
 
-    expect(shadow().querySelector('h1')?.textContent).toBe(ERROR_TEXTS.UNSUPPORTED_PAGE.title)
-    expect(shadow().textContent).toContain(ERROR_TEXTS.UNSUPPORTED_PAGE.text)
+    expect(shadow().querySelector('h1')?.textContent).toBe(
+      errorTexts(LECLERC).UNSUPPORTED_PAGE.title,
+    )
+    expect(shadow().textContent).toContain(errorTexts(LECLERC).UNSUPPORTED_PAGE.text)
   })
 
   it('une cause hostile (« constructor », « __proto__ ») ne change rien au texte', () => {
@@ -1601,7 +1607,7 @@ describe('erreurs', () => {
       const handle = open()
       void handle.show('error', { code: 'NETWORK', canReturn: false, cause })
 
-      expect(shadow().querySelector('h1')?.textContent).toBe(ERROR_TEXTS.NETWORK.title)
+      expect(shadow().querySelector('h1')?.textContent).toBe(errorTexts(LECLERC).NETWORK.title)
       handle.close()
     }
   })

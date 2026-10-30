@@ -1,10 +1,14 @@
 import { computed } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import type { QueryClient } from '@tanstack/vue-query'
 
 import { unwrap } from '@/api'
-import type { ChoiceIntent, DriveStorePayload } from '@/api'
+import type { ChoiceIntent, DriveSettings, DriveStorePayload } from '@/api'
 import { shoppingListKeys } from '@/features/shopping-lists/queries'
 import { useSessionStore } from '@/session/session'
+
+import { retailerOf } from './retailers'
+import type { Retailer } from './retailers'
 
 export const driveKeys = {
   all: ['drive'] as const,
@@ -28,6 +32,20 @@ export function useDriveSettings(enabled: () => boolean = () => true) {
     enabled: computed(enabled),
   })
 }
+
+/**
+ * L'enseigne du drive de l'utilisateur, d'après ses réglages (`retailer`) ; l'enseigne par défaut du registre tant qu'ils ne sont pas lus. C'est
+ * d'elle que viennent le nom des textes et l'enseigne de chaque appel de l'API : jamais un littéral.
+ */
+export function useRetailer() {
+  const settings = useDriveSettings()
+
+  return computed(() => retailerOf(settings.data.value?.retailer))
+}
+
+/** L'enseigne des réglages déjà lus, au moment de l'appel (sans les lire de nouveau) : pour les appels de l'API faits hors d'un rendu. */
+export const cachedRetailer = (queryClient: QueryClient): Retailer =>
+  retailerOf(queryClient.getQueryData<DriveSettings>(driveKeys.settings)?.retailer)
 
 /**
  * Le plan d'une liste envoyée : ce que le back sait de chaque ligne (produits classés, refusés, nombre de produits). Il dépend des
@@ -57,12 +75,15 @@ export function useDrivePlan(listId: () => string, enabled: () => boolean = () =
  */
 export function useSaveChoices() {
   const { api } = useSessionStore()
+  const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: async ({ storeId, batches }: { storeId: string; batches: ChoiceIntent[][] }) => {
       for (const choices of batches)
         await unwrap(
-          api.PUT('/api/v1/drive/choices', { body: { retailer: 'leclerc', storeId, choices } }),
+          api.PUT('/api/v1/drive/choices', {
+            body: { retailer: cachedRetailer(queryClient).id, storeId, choices },
+          }),
         )
     },
     meta: { silent: true },
@@ -79,7 +100,11 @@ export function useSaveDriveSettings() {
 
   return useMutation({
     mutationFn: (store: DriveStorePayload) =>
-      unwrap(api.PUT('/api/v1/drive/settings', { body: { retailer: 'leclerc', store } })),
+      unwrap(
+        api.PUT('/api/v1/drive/settings', {
+          body: { retailer: cachedRetailer(queryClient).id, store },
+        }),
+      ),
     meta: { silent: true },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: driveKeys.all }),
   })

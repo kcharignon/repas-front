@@ -6,6 +6,8 @@ import { useUnits } from '@/features/ingredients/queries'
 import type { ChoiceIntent, DriveChoicePayload } from '@/api'
 import { useSessionStore } from '@/session/session'
 
+import { cachedRetailer } from './queries'
+
 export const choiceKeys = {
   all: ['drive', 'choices'] as const,
 }
@@ -13,11 +15,16 @@ export const choiceKeys = {
 /** Les préférences de produits de l'utilisateur pour l'enseigne, triées par ingrédient (`GET /drive/choices`). */
 export function useDriveChoices(enabled: () => boolean) {
   const { api } = useSessionStore()
+  const queryClient = useQueryClient()
 
   return useQuery({
     queryKey: choiceKeys.all,
     queryFn: () =>
-      unwrap(api.GET('/api/v1/drive/choices', { params: { query: { retailer: 'leclerc' } } })),
+      unwrap(
+        api.GET('/api/v1/drive/choices', {
+          params: { query: { retailer: cachedRetailer(queryClient).id } },
+        }),
+      ),
     enabled: computed(enabled),
   })
 }
@@ -54,7 +61,7 @@ export function useForgetChoice(slug: () => string) {
         api.DELETE('/api/v1/drive/choices/{ingredientSlug}', {
           params: {
             path: { ingredientSlug: slug() },
-            query: { retailer: 'leclerc', storeId },
+            query: { retailer: cachedRetailer(queryClient).id, storeId },
           },
         }),
       ),
@@ -75,7 +82,7 @@ export function useCorrectPackSize() {
     mutationFn: ({ storeId, intent }: { storeId: string; intent: ChoiceIntent }) =>
       unwrap(
         api.PUT('/api/v1/drive/choices', {
-          body: { retailer: 'leclerc', storeId, choices: [intent] },
+          body: { retailer: cachedRetailer(queryClient).id, storeId, choices: [intent] },
         }),
       ),
     meta: { silent: true },

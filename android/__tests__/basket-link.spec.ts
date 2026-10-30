@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-import { finalizeLink } from '../../src/features/drive/leclerc'
+import { finalizeLink } from '../../src/features/drive/retailers'
 
 // Le Kotlin de l'application est en deux modules (AUTH-015) : le cœur sans Android et l'application ; un fichier se cherche dans les deux.
 const androidDir = join(dirname(fileURLToPath(import.meta.url)), '..')

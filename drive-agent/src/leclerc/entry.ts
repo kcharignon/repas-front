@@ -27,7 +27,7 @@ const ATTRIBUTE_LABEL = /\b(?:aria-label|title)\s*=\s*(?:"([^"]{0,100})"|'([^']{
 const START_LABEL = 'commencer mes courses'
 
 /** Où mène l'adresse d'un lien, sans la dire : le même site que la page, une adresse sans site, un autre drive Leclerc ou un autre site. */
-export type LinkWhere = 'RELATIVE' | 'SAME_HOST' | 'LECLERC_HOST' | 'OTHER_SITE'
+export type LinkWhere = 'RELATIVE' | 'SAME_HOST' | 'RETAILER_HOST' | 'OTHER_SITE'
 
 /** Ce que la page laisse voir d'un lien : présent ou non, la forme de son adresse et où elle mène. Jamais l'adresse. */
 export interface LinkFacts {
@@ -144,7 +144,7 @@ function where(href: string, url: URL | null, page: PageRef): LinkWhere | null {
   if (url === null) return null
   if (!/^[a-z][a-z0-9+.-]*:|^\/\//i.test(href)) return 'RELATIVE'
   if (url.hostname.toLowerCase() === page.hostname.toLowerCase()) return 'SAME_HOST'
-  return STORE_HOST.test(url.hostname.toLowerCase()) ? 'LECLERC_HOST' : 'OTHER_SITE'
+  return STORE_HOST.test(url.hostname.toLowerCase()) ? 'RETAILER_HOST' : 'OTHER_SITE'
 }
 
 function factsOf(anchor: Anchor | undefined, page: PageRef): LinkFacts {
