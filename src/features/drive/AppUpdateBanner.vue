@@ -4,12 +4,11 @@ import { useI18n } from 'vue-i18n'
 
 import UiButton from '@/design/UiButton.vue'
 import UiLinkButton from '@/design/UiLinkButton.vue'
-import { useSessionStore } from '@/session/session'
-import { offersAppUpdate } from './appVersion'
 import { useAppUpdateStore } from './appUpdateStore'
 import { useAppVersionStore } from './appVersionStore'
 import AppUpdateControl from './AppUpdateControl.vue'
 import { driveBridge } from './bridge'
+import { useAppUpdateAvailable } from './useAppUpdateAvailable'
 
 // L'invitation à mettre à jour l'application (DRV-637), en haut de « Moi » : une phrase et un bouton, rien de plus (ni fenêtre, ni blocage, ni
 // avertissement). Seulement dans l'application : dans un navigateur, il n'y a rien à mettre à jour.
@@ -18,7 +17,6 @@ import { driveBridge } from './bridge'
 //    Elle dit elle-même s'il y a une version plus récente : si elle dit « à jour », rien (même si le serveur croit l'ancienne version).
 //  - Une application qui ne le sait pas (ancienne, construction de débogage, Google Play) garde l'ancien comportement : un bouton vers l'aide.
 const { t } = useI18n()
-const session = useSessionStore()
 const versions = useAppVersionStore()
 const updates = useAppUpdateStore()
 const inApp = driveBridge.isAvailable()
@@ -27,23 +25,10 @@ onMounted(async () => {
   if (!inApp) return
   await versions.read()
   // Une recherche au passage dans « Moi » (l'application la refait au plus toutes les cinq minutes)
-  if (versions.selfUpdate) void updates.check()
+  if (versions.selfUpdate) void updates.checkIfDue()
 })
 
-/** Le serveur dit qu'une version plus récente est publiée (`GET /me`, comparée à la version que l'application donne). */
-const serverOffers = computed(() => offersAppUpdate(versions.running, session.user?.appUpdate))
-
-// Tant que le pont n'a pas répondu, rien : le bandeau n'apparaît pas pour disparaître aussitôt
-const visible = computed(() => {
-  if (!inApp || (versions.status !== 'known' && versions.status !== 'unknown')) return false
-  if (!updates.supported) return serverOffers.value
-  // L'utilisateur a touché « Mettre à jour » : l'invitation reste jusqu'au bout (téléchargement, erreur à réessayer)
-  if (updates.engaged) return updates.state.status !== 'aJour'
-  if (updates.state.status === 'aJour') return false
-  if (updates.offered) return true
-  // Pas encore de réponse de l'application : on attend ; une erreur de recherche (hors connexion) retombe sur ce que dit le serveur
-  return updates.state.status === 'erreur' && serverOffers.value
-})
+const { available: visible } = useAppUpdateAvailable()
 
 /**
  * Ce que l'application a dit ou ce que l'utilisateur a lancé : l'état s'affiche (téléchargement, installation, erreur à réessayer). Sinon, le serveur
