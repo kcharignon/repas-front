@@ -163,6 +163,14 @@ export interface EntryProps {
   stage: 'opening' | 'manual'
 }
 
+/**
+ * Le bandeau de la première configuration (DRV-740), quand le magasin se choisit sur le site : `waiting` pendant que la personne choisit son magasin (la page
+ * reste utilisable), `late` quand l'attente s'est allongée sans choix. Un bandeau : la page reste visible et touchable.
+ */
+export interface StoreWaitingProps {
+  stage: 'waiting' | 'late'
+}
+
 export interface ErrorProps {
   code: ErrorCode
   /**
@@ -236,6 +244,11 @@ export interface ScreenMap {
   challenge: { props: ChallengeProps; answer: 'resume' | 'stop' }
   /** Un bandeau sans bouton (DRV-625) : sa promesse ne se résout jamais, la page de l'enseigne change ou l'utilisateur touche son bouton. */
   entry: { props: EntryProps; answer: never }
+  /**
+   * Un bandeau non bloquant (DRV-740) : « Choisis ton magasin sur {enseigne}. » `return` : « Retourner dans Repas » ; `retry` : « Réessayer » (seulement au stade
+   * `late`).
+   */
+  storeWaiting: { props: StoreWaitingProps; answer: 'return' | 'retry' }
   error: { props: ErrorProps; answer: 'return' | 'close' }
   end: { props: EndProps; answer: 'return' }
 }

@@ -153,6 +153,18 @@ export class AuchanAdapter implements RetailerAdapter {
     }
   }
 
+  /**
+   * Le magasin se choisit SUR LA PAGE d'Auchan (DRV-740) : la barre du magasin dit « Retrait : … » une fois choisi (A-4b). Une lecture du DOM seule, aucune requête.
+   * Une page sans barre lisible (ou qui dit « Choisir vos courses ») n'a pas de magasin choisi.
+   */
+  storeChosenOnPage(): boolean {
+    try {
+      return storeBar(this.deps.document) === 'WITHDRAWAL'
+    } catch {
+      return false
+    }
+  }
+
   /** Le code HTTP du document de la page, `null` si le navigateur ne le dit pas. */
   private navigationStatus(): number | null {
     try {

@@ -908,6 +908,17 @@ export const S = {
     opening: 'Ouverture de ton magasin…',
     manual: 'Touche « Commencer mes courses ».',
   },
+  /**
+   * La première configuration quand le magasin se choisit sur le site (DRV-740) : un bandeau, la page reste utilisable. Une phrase, puis le geste ; au bout d'un
+   * long moment, « Réessayer » ou revenir dans Repas.
+   */
+  storeWaiting: {
+    waiting: (retailer: RetailerNames) =>
+      `Choisis ton magasin sur ${retailer.name}. Repas le reprend ensuite.`,
+    late: 'Je ne vois pas de magasin choisi.',
+    back: 'Retourner dans Repas',
+    retry: 'Réessayer',
+  },
   error: {
     close: 'Fermer',
     back: 'Retourner dans Repas',

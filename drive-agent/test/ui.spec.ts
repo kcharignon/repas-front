@@ -201,6 +201,35 @@ describe('la demande de vérification de l’anti-robot (ticket K)', () => {
   })
 })
 
+describe('le bandeau du choix du magasin (DRV-740)', () => {
+  const overlay = () => shadow().querySelector('.overlay') as HTMLElement
+
+  it('attente : une phrase et « Retourner dans Repas », un bandeau qui laisse la page visible et touchable', async () => {
+    const handle = open()
+    const answer = handle.show('storeWaiting', { stage: 'waiting' })
+
+    expect(shadow().querySelector('h1')?.textContent).toBe(
+      'Choisis ton magasin sur Leclerc. Repas le reprend ensuite.',
+    )
+    expect(labels()).toEqual(['Retourner dans Repas'])
+    expect(overlay().classList.contains('sheet')).toBe(true)
+    expect(overlay().getAttribute('aria-modal')).toBe('false')
+    expect(handle.host?.style.getPropertyValue('pointer-events')).toBe('none')
+    press('Retourner dans Repas')
+    await expect(answer).resolves.toBe('return')
+  })
+
+  it('trop long : « Réessayer » et « Retourner dans Repas »', async () => {
+    const handle = open()
+    const answer = handle.show('storeWaiting', { stage: 'late' })
+
+    expect(shadow().querySelector('h1')?.textContent).toBe('Je ne vois pas de magasin choisi.')
+    expect(labels()).toEqual(['Réessayer', 'Retourner dans Repas'])
+    press('Réessayer')
+    await expect(answer).resolves.toBe('retry')
+  })
+})
+
 describe('écran d’accueil', () => {
   it.each([
     ['Diagnostic', 'diagnostic'],

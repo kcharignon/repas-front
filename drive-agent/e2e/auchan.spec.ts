@@ -296,7 +296,48 @@ test.describe('la configuration du magasin (setup)', () => {
     expect(fakeAuchan.paced().map((request) => request.path)).toEqual(['/journey'])
   })
 
-  test('sans magasin choisi : « Choisis ton magasin », rien n’est enregistré', async ({
+  test('première configuration, sans magasin choisi (DRV-740) : pas d’écran bloquant, la page reste utilisable, aucune requête ; le magasin choisi, « Utiliser ce magasin ? »', async ({
+    page,
+    fakeAuchan,
+    agentCode,
+  }) => {
+    // Given : la barre dit « Choisir vos courses » et le setup arrive dès l'ouverture
+    fakeAuchan.setBehavior({ store: 'none' })
+    const app = await open(page, fakeAuchan, agentCode)
+    app.answerHello(SETUP)
+
+    // Then : un bandeau, pas d'écran d'erreur ; la page du site reste visible et touchable derrière
+    await expect(
+      page.getByText('Choisis ton magasin sur Auchan. Repas le reprend ensuite.'),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Choisis ton magasin', exact: true }),
+    ).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'Courses' }).first()).toBeVisible()
+    await page.getByRole('link', { name: 'Courses' }).first().click({ trial: true })
+    await page.waitForTimeout(2_500)
+    expect(fakeAuchan.paced()).toEqual([])
+
+    // When : la personne choisit son magasin sur le site (la barre change, le parcours aussi)
+    fakeAuchan.setBehavior({ store: 'chosen' })
+    await page.evaluate(() => {
+      const bar = document.querySelector('.store-bar')
+      if (bar)
+        bar.outerHTML = '<div class="store-bar"><span>Retrait : Drive Ville-Test</span></div>'
+    })
+
+    // Then : un seul GET /journey, puis l'écran habituel
+    await expect(page.getByRole('heading', { name: 'Utiliser ce magasin ?' })).toBeVisible()
+    await page.getByRole('button', { name: 'Utiliser ce magasin' }).click()
+    expect(await app.received('setup-result')).toMatchObject({
+      runId: RUN_ID,
+      store: { id: STORE.id, host: 'www.auchan.fr' },
+    })
+    expect(fakeAuchan.paced().map((request) => request.path)).toEqual(['/journey'])
+    expect(fakeAuchan.writes()).toEqual([])
+  })
+
+  test('sans magasin choisi, « Retourner dans Repas » rend la main : rien n’est enregistré, aucune requête', async ({
     page,
     fakeAuchan,
     agentCode,
@@ -305,11 +346,11 @@ test.describe('la configuration du magasin (setup)', () => {
     const app = await open(page, fakeAuchan, agentCode)
     app.answerHello(SETUP)
 
-    await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible()
     await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
 
     expect(await app.received('result')).toMatchObject({ outcome: 'error' })
     expect(app.messages.some((message) => message.type === 'setup-result')).toBe(false)
+    expect(fakeAuchan.paced()).toEqual([])
   })
 })
 

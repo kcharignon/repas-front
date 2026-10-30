@@ -125,6 +125,19 @@ describe('readStore : le magasin vient du parcours du site, pas de l’adresse',
     expect(site.calls).toEqual([])
   })
 
+  it('storeChosenOnPage (DRV-740) : vrai seulement quand la barre dit « Retrait : … », sans une requête', () => {
+    const site = auchanSite(() => journey())
+    const adapter = new AuchanAdapter(site.deps)
+
+    showPage(auchanFixture('accueil-sans-magasin.html'))
+    expect(adapter.storeChosenOnPage()).toBe(false)
+    document.documentElement.innerHTML = '<body><main><h1>Courses</h1></main></body>'
+    expect(adapter.storeChosenOnPage()).toBe(false)
+    showPage(auchanFixture('accueil-magasin.html'))
+    expect(adapter.storeChosenOnPage()).toBe(true)
+    expect(site.calls).toEqual([])
+  })
+
   it('une page sans barre du magasin se fie au parcours', async () => {
     document.documentElement.innerHTML = '<body><main><h1>Courses</h1></main></body>'
 
@@ -591,6 +604,7 @@ describe('ce qui n’est pas écrit : ce que le diagnostic de Leclerc seul conna
         'searchProducts',
         'setCartQuantity',
         'stats',
+        'storeChosenOnPage',
       ].sort(),
     )
   })

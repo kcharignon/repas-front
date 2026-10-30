@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest'
 
 import { validateResult, type ResultMessage, type SetupResultMessage } from '../protocol'
 import { Flow, setupHandler, type FlowDeps } from '../src/flow'
+import { STORE_WATCH_MAX_MS, STORE_WATCH_POLL_MS } from '../src/flow/setup'
+import { RetailerError } from '../src/retailers'
 import { LeclercAdapter, type RetailerAdapter } from '../src/leclerc'
 import { fakeAdapter, fakeUi, plan, RUN_ID, STORE } from './flow-helpers'
 import { fakeSite } from './leclerc-helpers'
@@ -368,5 +370,286 @@ describe('sans retour possible vers Repas', () => {
     expect(screens.propsOf('error')).toEqual([{ code: 'UNSUPPORTED_PAGE', canReturn: false }])
     expect(reads).toEqual([])
     expect(sent).toEqual([])
+  })
+})
+
+describe('le magasin se choisit sur la page (DRV-740)', () => {
+  const MAX = STORE_WATCH_MAX_MS
+  const notChosen = () => new RetailerError('UNSUPPORTED_PAGE', null, 'STORE_NOT_CHOSEN')
+  const STORE_READ = {
+    id: '0b5f8a2e-3c1d-4e7f-9a6b-123456789abc',
+    host: 'www.auchan.fr',
+    baseUrl: 'https://www.auchan.fr/',
+    label: 'Drive Ville-Test',
+  }
+  const AUCHAN_SETUP = { ...SETUP, retailer: 'leclerc' as const }
+
+  /**
+   * Un adaptateur dont le magasin se choisit sur la page : `chosen` est ce que la barre dit, `readStore` ne trouve un magasin que si la barre le dit ; une horloge
+   * simulée avance de la pause demandée (aucune attente réelle) et chaque tour peut agir (`onTick`).
+   */
+  function chooser(onTick: (tick: number, world: { chosen: boolean }) => void = () => undefined) {
+    const world = { chosen: false, reads: 0, polls: 0, ticks: 0, clock: 1_000 }
+    const base = fakeAdapter({}, { store: () => STORE_READ }).adapter
+    const adapter: RetailerAdapter = {
+      ...base,
+      readStore: () => {
+        world.reads += 1
+        if (!world.chosen) throw notChosen()
+        return STORE_READ
+      },
+      storeChosenOnPage: () => {
+        world.polls += 1
+        return world.chosen
+      },
+    }
+    const sleep = (ms: number) => {
+      world.ticks += 1
+      world.clock += ms
+      onTick(world.ticks, world)
+      return Promise.resolve()
+    }
+    return { adapter, world, sleep, now: () => world.clock }
+  }
+
+  function configure(
+    scripts: Parameters<typeof fakeUi>[0],
+    built: ReturnType<typeof chooser>,
+    retailer?: string,
+  ) {
+    const sent: Sent[] = []
+    const screens = fakeUi(scripts)
+    const send = (message: Sent) => void sent.push(message)
+    const deps = {
+      adapter: built.adapter,
+      ui: screens.ui,
+      send,
+      agentVersion: '0.4.0',
+      sleep: built.sleep,
+      now: built.now,
+      ...(retailer !== undefined && { retailer }),
+    }
+    const flow = new Flow({
+      adapter: built.adapter,
+      ui: screens.ui,
+      send,
+      storage: null,
+      wakeLock: null,
+      now: built.now,
+      agentVersion: '0.4.0',
+      canReturn: true,
+      onSetup: setupHandler(deps),
+    })
+    return { flow, sent, screens }
+  }
+
+  it('aucun magasin choisi : pas d’écran d’erreur, un bandeau ; dès que la page dit qu’il l’est, UNE lecture puis « Utiliser ce magasin ? »', async () => {
+    // Given : la barre dit « choisir » ; la personne choisit au 5e coup d’œil
+    const built = chooser((tick, world) => {
+      if (tick === 5) world.chosen = true
+    })
+    const { flow, sent, screens } = configure({ store: () => 'save' }, built)
+
+    // When
+    await flow.start(SETUP)
+
+    // Then : jamais d’écran d’erreur, le bandeau d’abord puis le magasin
+    expect(screens.screens()).toEqual(['storeWaiting', 'store'])
+    expect(screens.propsOf('storeWaiting')).toEqual([{ stage: 'waiting' }])
+    expect(screens.propsOf('store')).toEqual([{ id: STORE_READ.id, label: 'Drive Ville-Test' }])
+    expect(sent).toEqual([
+      expect.objectContaining({
+        type: 'setup-result',
+        store: expect.objectContaining({ id: STORE_READ.id }),
+      }),
+    ])
+    // Aucune lecture du magasin (donc aucune requête) pendant l’attente : la première, puis une seule quand la page l’a dit
+    expect(built.world.reads).toBe(2)
+    expect(built.world.ticks).toBe(5)
+    expect(screens.closed.count).toBe(1)
+  })
+
+  it('l’attente ne fait que lire la page toutes les 2 secondes', async () => {
+    const built = chooser((tick, world) => {
+      if (tick === 3) world.chosen = true
+    })
+    const pauses: number[] = []
+    const sleep = (ms: number) => {
+      pauses.push(ms)
+      return built.sleep(ms)
+    }
+    const { flow } = configure({ store: () => 'save' }, { ...built, sleep })
+
+    await flow.start(SETUP)
+
+    expect(pauses).toEqual([STORE_WATCH_POLL_MS, STORE_WATCH_POLL_MS, STORE_WATCH_POLL_MS])
+    expect(STORE_WATCH_POLL_MS).toBe(2_000)
+  })
+
+  it('« Retourner dans Repas » pendant l’attente : un résultat en erreur « magasin non choisi », la lecture s’arrête, rien n’est enregistré', async () => {
+    const built = chooser((tick) => {
+      if (tick === 3) screens.pressBack()
+    })
+    const { flow, sent, screens } = configure({}, built)
+
+    await flow.start(SETUP)
+
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toMatchObject({
+      type: 'result',
+      outcome: 'error',
+      error: { code: 'UNSUPPORTED_PAGE' },
+    })
+    expect(JSON.stringify(sent[0])).toContain('STORE_NOT_CHOSEN')
+    expect(sent.some((message) => message.type === 'setup-result')).toBe(false)
+    expect(screens.screens()).toEqual(['storeWaiting'])
+    expect(screens.closed.count).toBe(1)
+    expect(built.world.reads).toBe(1)
+    // L’attente s’est arrêtée avec la réponse (elle n’a pas couru jusqu’aux 15 minutes)
+    expect(built.world.clock - 1_000).toBeLessThan(MAX)
+  })
+
+  it('15 minutes sans choix : le bandeau propose « Réessayer » ; « Retourner dans Repas » rend le résultat en erreur', async () => {
+    const built = chooser()
+    const { flow, sent, screens } = configure({ storeWaiting: () => 'return' }, built)
+
+    await flow.start(SETUP)
+
+    expect(screens.propsOf('storeWaiting')).toEqual([{ stage: 'waiting' }, { stage: 'late' }])
+    expect(built.world.clock - 1_000).toBeGreaterThanOrEqual(MAX)
+    expect(built.world.clock - 1_000).toBeLessThan(MAX + STORE_WATCH_POLL_MS)
+    expect(built.world.reads).toBe(1)
+    expect(sent).toHaveLength(1)
+    expect(JSON.stringify(sent[0])).toContain('STORE_NOT_CHOSEN')
+    expect(screens.screens()).not.toContain('error')
+  })
+
+  it('« Réessayer » : on regarde de nouveau la page ; si le magasin est alors choisi, il est proposé', async () => {
+    // Given : 15 minutes passent, la personne touche « Réessayer » et la page dit alors qu’il est choisi
+    let late = 0
+    const built = chooser()
+    const { flow, sent, screens } = configure(
+      {
+        storeWaiting: () => {
+          late += 1
+          built.world.chosen = true
+          return 'retry'
+        },
+        store: () => 'save',
+      },
+      built,
+    )
+
+    await flow.start(SETUP)
+
+    expect(late).toBe(1)
+    expect(screens.screens()).toEqual(['storeWaiting', 'storeWaiting', 'store'])
+    expect(built.world.reads).toBe(2)
+    expect(sent[0]).toMatchObject({ type: 'setup-result' })
+  })
+
+  it('« Réessayer » sans choix : une nouvelle attente, sans requête de plus', async () => {
+    let answers = 0
+    const built = chooser()
+    const { flow, screens } = configure(
+      {
+        storeWaiting: () => {
+          answers += 1
+          return answers === 1 ? 'retry' : 'return'
+        },
+      },
+      built,
+    )
+
+    await flow.start(SETUP)
+
+    expect(screens.propsOf('storeWaiting').map((props) => props.stage)).toEqual([
+      'waiting',
+      'late',
+      'waiting',
+      'late',
+    ])
+    expect(built.world.reads).toBe(2)
+  })
+
+  it('la page dit déjà qu’un magasin est choisi mais le site n’en voit pas : une vraie panne, l’écran d’erreur', async () => {
+    const built = chooser()
+    built.adapter.readStore = () => {
+      throw notChosen()
+    }
+    built.world.chosen = true
+    const { flow, sent, screens } = configure({ error: () => 'return' }, built)
+
+    await flow.start(SETUP)
+
+    expect(screens.screens()).toEqual(['error'])
+    expect(screens.propsOf('error')).toEqual([
+      { code: 'UNSUPPORTED_PAGE', canReturn: true, cause: 'STORE_NOT_CHOSEN' },
+    ])
+    expect(sent).toHaveLength(1)
+  })
+
+  it('un vrai échec (réseau, blocage, site changé) reste un écran d’erreur, sans attente', async () => {
+    const built = chooser()
+    built.adapter.readStore = () => {
+      throw new RetailerError('NETWORK', 503, 'HTTP_503')
+    }
+    const { flow, screens } = configure({ error: () => 'close' }, built)
+
+    await flow.start(SETUP)
+
+    expect(screens.screens()).toEqual(['error'])
+    expect(screens.propsOf('error')).toEqual([
+      { code: 'NETWORK', canReturn: true, cause: 'HTTP_503' },
+    ])
+    expect(built.world.ticks).toBe(0)
+  })
+
+  it('une enseigne dont le magasin se lit dans l’adresse (Leclerc) n’attend pas : l’écran d’erreur tout de suite, comme avant', async () => {
+    // Given : un adaptateur qui n’a pas `storeChosenOnPage` et qui dit « aucun magasin choisi »
+    let ticks = 0
+    const adapter = fakeAdapter(
+      {},
+      {
+        store: () => {
+          throw notChosen()
+        },
+      },
+    ).adapter
+    expect(adapter.storeChosenOnPage).toBeUndefined()
+    const sent: Sent[] = []
+    const screens = fakeUi({ error: () => 'return' })
+    const send = (message: Sent) => void sent.push(message)
+    const flow = new Flow({
+      adapter,
+      ui: screens.ui,
+      send,
+      storage: null,
+      wakeLock: null,
+      now: () => 1,
+      agentVersion: '0.4.0',
+      canReturn: true,
+      onSetup: setupHandler({
+        adapter,
+        ui: screens.ui,
+        send,
+        agentVersion: '0.4.0',
+        sleep: () => {
+          ticks += 1
+          return Promise.resolve()
+        },
+      }),
+    })
+
+    // When
+    await flow.start(AUCHAN_SETUP)
+
+    // Then
+    expect(screens.screens()).toEqual(['error'])
+    expect(screens.propsOf('error')).toEqual([
+      { code: 'UNSUPPORTED_PAGE', canReturn: true, cause: 'STORE_NOT_CHOSEN' },
+    ])
+    expect(sent).toHaveLength(1)
+    expect(ticks).toBe(0)
   })
 })
