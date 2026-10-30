@@ -210,7 +210,7 @@ function webEntries(): Entry[] {
 
 /**
  * Les parties de `strings.ts` qui sont des outils du mainteneur : le diagnostic et le test automatique (exemptés du glossaire). Les messages
- * de `leclerc/errors.ts` partent dans le résultat envoyé à Repas (jamais affichés tels quels) : exemptés du glossaire aussi, pas du tutoiement.
+ * de `retailers/errors.ts` partent dans le résultat envoyé à Repas (jamais affichés tels quels) : exemptés du glossaire aussi, pas du tutoiement.
  */
 const AGENT_EXEMPT_PATHS = [
   ['MESSAGES'],
@@ -309,7 +309,7 @@ const sources = {
   web: webEntries(),
   agent: [
     ...agentEntries('drive-agent/src/ui/strings.ts'),
-    ...agentEntries('drive-agent/src/leclerc/errors.ts'),
+    ...agentEntries('drive-agent/src/retailers/errors.ts'),
   ],
   android: xmlEntries(),
 }

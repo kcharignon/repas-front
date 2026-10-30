@@ -5,7 +5,7 @@
 // Une structure vraiment inconnue reste `CONTRACT_CHANGED`, avec la cause précise (ticket A).
 import { describe, expect, it } from 'vitest'
 
-import { LeclercError } from '../src/leclerc'
+import { RetailerError } from '../src/retailers'
 import { readSearchPage } from '../src/leclerc/search-page'
 import { fixture } from './leclerc-helpers'
 
@@ -98,8 +98,8 @@ describe('une structure inconnue reste CONTRACT_CHANGED, avec sa cause', () => {
     try {
       readSearchPage(reply(page, extra))
     } catch (error) {
-      expect(error).toBeInstanceOf(LeclercError)
-      return error as LeclercError
+      expect(error).toBeInstanceOf(RetailerError)
+      return error as RetailerError
     }
     throw new Error('Aucune erreur levée.')
   }

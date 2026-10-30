@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest'
 
 import {
   JITTER_MS,
-  LeclercError,
   MAX_BLOCKS,
   MAX_PAUSE_MS,
   NETWORK_RETRY_MS,
@@ -16,6 +15,7 @@ import {
   SLOW_REPLY_MS,
   SLOWDOWN_STEP_MS,
 } from '../src/leclerc'
+import { RetailerError } from '../src/retailers'
 import { fixture, fakeSite } from './leclerc-helpers'
 
 function pacerOf(site: ReturnType<typeof fakeSite>): Pacer {
@@ -236,7 +236,7 @@ describe('Pacer : les blocages', () => {
       .request('/a', {})
       .catch((error: unknown) => error)
 
-    expect(failure).toBeInstanceOf(LeclercError)
+    expect(failure).toBeInstanceOf(RetailerError)
     expect(JSON.stringify([(failure as Error).message, (failure as Error).stack])).not.toMatch(
       /SECRET|datadome|Cookie/i,
     )
@@ -330,7 +330,7 @@ describe('Pacer : le délai d’attente de chaque requête (ticket K)', () => {
 
     const failure = await pacer.request('/a', {}).catch((error: unknown) => error)
 
-    expect(failure).toBeInstanceOf(LeclercError)
+    expect(failure).toBeInstanceOf(RetailerError)
     expect(failure).toMatchObject({
       code: 'NETWORK',
       cause: 'REQUEST_TIMEOUT',
@@ -791,7 +791,7 @@ describe('Pacer : une action de la page, à la cadence des requêtes (DRV-625)',
   it('est refusée une fois le site bloqué', async () => {
     const site = fakeSite(() => ({ status: 403, body: 'non' }))
     const pacer = pacerOf(site)
-    await expect(pacer.request('/a', { method: 'GET' })).rejects.toBeInstanceOf(LeclercError)
+    await expect(pacer.request('/a', { method: 'GET' })).rejects.toBeInstanceOf(RetailerError)
 
     await expect(pacer.act(() => 1)).rejects.toMatchObject({ code: 'BLOCKED' })
   })

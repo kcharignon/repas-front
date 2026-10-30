@@ -6,7 +6,6 @@ import {
   eachIfPresent,
   exactly,
   fail,
-  HOST,
   ID,
   int,
   object,
@@ -14,7 +13,10 @@ import {
   optional,
   orNull,
   packSize,
+  ANY_STORE_ID,
+  retailerOfHost,
   root,
+  STORES,
   text,
   type Check,
   type Scope,
@@ -127,10 +129,15 @@ const resultLine: Check = (list, index) => {
 
 function setupStore(message: Scope): void {
   const store = object(message, 'store', ['id', 'host', 'baseUrl', 'label'])
-  text(store, 'id', ID)
-  text(store, 'host', HOST)
-  const base = /^https:\/\/([^/]+)\/magasin-([0-9]{1,12})-[0-9]{1,12}$/.exec(text(store, 'baseUrl'))
-  if (base?.[1] !== store.v.host || base?.[2] !== store.v.id) fail(at(store.p, 'baseUrl'))
+  text(store, 'id', ANY_STORE_ID)
+  const retailer = retailerOfHost(text(store, 'host'))
+  if (retailer === undefined) fail(at(store.p, 'host'))
+  text(store, 'id', STORES[retailer].id)
+  if (
+    !STORES[retailer].base(text(store, 'baseUrl'), store.v.host as string, store.v.id as string)
+  ) {
+    fail(at(store.p, 'baseUrl'))
+  }
   if (store.v.label !== null) text(store, 'label')
 }
 
@@ -154,7 +161,9 @@ export function validateResult(input: unknown): ResultMessage | SetupResultMessa
     return input as SetupResultMessage
   }
   const outcome = oneOf(message, 'outcome', OUTCOMES)
-  optional(message, 'store', (parent, name) => text(object(parent, name, ['id']), 'id', ID))
+  optional(message, 'store', (parent, name) =>
+    text(object(parent, name, ['id']), 'id', ANY_STORE_ID),
+  )
   if (outcome === 'error' && message.v.error === undefined) fail('error')
   optional(message, 'error', (parent, name) => {
     const error = object(parent, name, ['code', 'message'])

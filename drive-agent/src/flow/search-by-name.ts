@@ -2,7 +2,7 @@
 // de `searchForms` se cherchent UNE par UNE, à la suite (jamais en parallèle), à la cadence normale du `Pacer` (800 ms au moins entre deux
 // requêtes), en s'arrêtant à la première qui répond. Au plus 1 + `MAX_FALLBACKS` requêtes, jamais deux fois la même. Une erreur du site (`BLOCKED`,
 // `NOT_LOGGED_IN`, `NETWORK`, `CONTRACT_CHANGED`) remonte telle quelle et arrête le repli : rien ne la masque.
-import type { Candidate, RetailerAdapter } from '../leclerc'
+import type { Candidate, RetailerAdapter } from '../retailers'
 import { productSearchForms, searchForms } from './search-forms'
 
 /** Ce que la recherche d'un nom a donné : la recherche qui a répondu (le nom, ou une de ses formes) et ses produits. */
@@ -15,7 +15,7 @@ export interface NameSearch {
 /**
  * Les produits que le site propose pour `name`, ou, à défaut, pour la première de ses formes qui en propose. Si rien ne répond, `query` reste
  * `name` et la liste est vide : « Aucun produit trouvé pour « name » ».
- * @throws {LeclercError} l'erreur de l'adaptateur, à traiter par l'appelant.
+ * @throws {RetailerError} l'erreur de l'adaptateur, à traiter par l'appelant.
  */
 export async function searchByName(
   adapter: Pick<RetailerAdapter, 'searchProducts'>,
@@ -47,7 +47,7 @@ const sameStep = (text: string): string => spaced(text).toLowerCase()
  * ses formes dérivées, puis, SI elle ne rend aucun produit, chaque étape de `then` dans l'ordre (le libellé du produit mémorisé, puis le nom de
  * l'ingrédient), et s'arrête à la première qui rend au moins un produit. Une requête n'est jamais envoyée deux fois, même si deux étapes partagent une
  * forme dérivée. Si rien ne répond, `query` reste `first` et la liste est vide.
- * @throws {LeclercError} l'erreur de l'adaptateur, à traiter par l'appelant.
+ * @throws {RetailerError} l'erreur de l'adaptateur, à traiter par l'appelant.
  */
 export async function searchInOrder(
   adapter: Pick<RetailerAdapter, 'searchProducts'>,
@@ -88,7 +88,7 @@ export interface KnownSearch {
  * Le produit connu `id` (stock, prix du jour) : cherché par son libellé TEL QUEL (apostrophe comprise), puis par ses formes (`productSearchForms` :
  * sans accents, sans signes, sans mots de liaison, mots-clés), l'une après l'autre, jusqu'à ce qu'une le retrouve. Au plus 5 requêtes, en série, à la
  * cadence du `Pacer`. `product` est `null` quand aucune ne le retrouve : INTROUVABLE, ce qui ne prouve jamais qu'il est indisponible (DRV-635).
- * @throws {LeclercError} l'erreur de l'adaptateur, à traiter par l'appelant.
+ * @throws {RetailerError} l'erreur de l'adaptateur, à traiter par l'appelant.
  */
 export async function lookUpKnownProduct(
   adapter: Pick<RetailerAdapter, 'readProductFromSearch'>,

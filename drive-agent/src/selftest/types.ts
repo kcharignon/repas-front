@@ -1,16 +1,16 @@
 // Ce que le test automatique (DRV-318) relève, étape par étape. Rien ici ne porte de donnée personnelle : des nombres, des codes
 // d'erreur du protocole, des libellés de produits du catalogue nettoyés (`safeLabel`) et des mots de recherche fixes.
-import type { LeclercCause, LeclercErrorCode } from '../leclerc'
+import type { RetailerCause, RetailerErrorCode } from '../retailers'
 import type { CheckResult, PageFacts, ProbeFacts } from '../diagnostic'
 
 export type Status = 'OK' | 'KO' | 'NOT_TESTED'
 
 /** Ce qui a fait échouer une requête : le code d'erreur de l'adaptateur et le code HTTP quand il y en a un. */
 export interface Failure {
-  code: LeclercErrorCode | 'OTHER'
+  code: RetailerErrorCode | 'OTHER'
   http: number | null
   /** Quelle vérification a échoué (ticket A), quand l'adaptateur le dit. */
-  cause?: LeclercCause
+  cause?: RetailerCause
 }
 
 /** Une recherche du lot. */

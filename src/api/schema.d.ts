@@ -1522,6 +1522,14 @@ export interface components {
             retailer: components["schemas"]["Retailer"];
             storeId: string;
         };
+        GetDriveEstimateRequestQuery: {
+            /** @default null */
+            retailer: components["schemas"]["Retailer"] | null;
+        };
+        GetDrivePlanRequestQuery: {
+            /** @default null */
+            retailer: components["schemas"]["Retailer"] | null;
+        };
         ListChoicesRequestQuery: {
             retailer: components["schemas"]["Retailer"];
         };
@@ -1549,8 +1557,8 @@ export interface components {
              */
             id: string;
             /**
-             * @description Adresse de base du magasin : `https://<sous-domaine>.leclercdrive.fr/magasin-<id>-<id>`
-             * @example https://exemple.leclercdrive.fr/magasin-123456-123456
+             * @description Adresse de base du magasin, selon la règle d'adresse de l'enseigne (`storeAddressPattern` du contrat des enseignes) ; une adresse hors de cette règle est refusée
+             * @example https://exemple.invalid/magasin-123456
              */
             baseUrl: string;
             /**
@@ -2655,7 +2663,7 @@ export interface components {
             label?: string | null;
             /**
              * @description Adresse de base du magasin sur le site de l'enseigne
-             * @example https://exemple.leclercdrive.fr/magasin-123456-123456
+             * @example https://exemple.invalid/magasin-123456
              */
             baseUrl: string;
         };
@@ -2946,6 +2954,26 @@ export interface components {
             /** @description Une ligne par ingrédient de la liste, dans l'ordre de la liste (slug d'ingrédient croissant) */
             lines: components["schemas"]["DrivePlanLineDTO"][];
         };
+        DriveRetailerDTO: {
+            /**
+             * @description Identifiant de l'enseigne
+             * @example leclerc
+             * @enum {string}
+             */
+            retailer: "leclerc";
+            /**
+             * @description Nom de l'enseigne, tel que les proches le disent
+             * @example Leclerc
+             */
+            name: string;
+            /**
+             * @description Vrai si l'utilisateur a enregistré un magasin chez cette enseigne
+             * @example true
+             */
+            configured: boolean;
+            /** @description Magasin de l'utilisateur chez cette enseigne, `null` tant qu'il n'en a pas enregistré */
+            store?: components["schemas"]["DriveStoreDTO"] | null;
+        };
         DriveSettingsDTO: {
             /**
              * @description Vrai si la fonction « envoyer au drive » est allumée (interrupteur `DRIVE_ENABLED`) ; faux, toutes les autres routes du drive répondent `404 DRIVE_DISABLED`
@@ -2960,6 +2988,8 @@ export interface components {
             retailer: "leclerc";
             /** @description Magasin de l'utilisateur, `null` tant qu'il n'a pas été enregistré */
             store?: components["schemas"]["DriveStoreDTO"] | null;
+            /** @description Une entrée par enseigne connue (ordre fixe), avec le magasin de l'utilisateur chez chacune ; s'ajoute aux champs `retailer` et `store`, qui restent ceux de l'enseigne par défaut */
+            retailers: components["schemas"]["DriveRetailerDTO"][];
         };
         ChoiceProductDTO: {
             /**
@@ -6089,7 +6119,13 @@ export interface operations {
     };
     get_api_get_drive_estimate: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Enseigne du drive ; absente, l'enseigne par défaut
+                 * @example leclerc
+                 */
+                retailer?: "leclerc";
+            };
             header?: never;
             path: {
                 /**
@@ -6132,12 +6168,25 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Paramètre `retailer` inconnu */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             429: components["responses"]["DriveReadRateLimited"];
         };
     };
     get_api_get_drive_plan: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Enseigne du drive ; absente, l'enseigne par défaut
+                 * @example leclerc
+                 */
+                retailer?: "leclerc";
+            };
             header?: never;
             path: {
                 /**
@@ -6175,6 +6224,13 @@ export interface operations {
             };
             /** @description Pas de magasin enregistré (message `DRIVE_NOT_CONFIGURED`), ou la liste n'est pas envoyée au drive (message `SHOPPING_LIST_NOT_SENT`) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paramètre `retailer` inconnu */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

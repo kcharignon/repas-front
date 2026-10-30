@@ -1,7 +1,7 @@
 // La fiche d'un produit telle que la personne la voit : photo, nom, seconde ligne du libellé, contenu net, prix et prix à l'unité de mesure. La même pour la liste
 // de l'écran de choix et pour l'écran « Vérifie la quantité » (DRV-652 : « il faut que tu affiches plus d'info sur le produit choisi : image, poids, etc. »).
 // Rien n'est lu de plus : tout vient du produit que l'agent a déjà lu sur la page de recherche.
-import type { Candidate } from '../leclerc'
+import type { Candidate } from '../retailers'
 import { cleanText } from '../text'
 import { formatContent, formatMeasure, formatPrice, S, type ProductCard } from '../ui'
 

@@ -4,10 +4,10 @@
 // des NOMS (de clés connues, de clés de connexion, d'en-têtes) et des NOMBRES (produits, clés). Jamais un libellé, un cookie, un numéro de
 // magasin, une ville, une adresse, un point de livraison ni la valeur d'un en-tête. `probe.spec.ts` et `diagnostic.spec.ts` le prouvent avec
 // une page hostile.
-import type { LeclercCause } from './causes'
+import type { RetailerCause } from '../retailers/causes'
 import type { EntryFacts } from './entry'
 import { decodeEntities, pageReadings } from './embedded'
-import type { LeclercErrorCode } from './errors'
+import type { RetailerErrorCode } from '../retailers/errors'
 import type { Reply } from './pacer'
 import { visibleText } from './page-text'
 import type { SearchVariant } from './search-request'
@@ -275,7 +275,7 @@ export interface SearchFacts {
   products: number | null
   /** `PRODUCTS` (au moins un produit), `EMPTY` (page reconnue sans produit), `FAILED` (erreur de l'adaptateur : voir [fault]). */
   outcome: 'PRODUCTS' | 'EMPTY' | 'FAILED'
-  fault?: { code: LeclercErrorCode; cause: LeclercCause | null }
+  fault?: { code: RetailerErrorCode; cause: RetailerCause | null }
   /** Toutes les requêtes de cette recherche, dans l'ordre : la courante, puis le repli ou la sonde des variantes. */
   attempts: AttemptFacts[]
 }

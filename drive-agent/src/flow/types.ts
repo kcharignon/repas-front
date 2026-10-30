@@ -7,7 +7,7 @@ import type {
   SetupMessage,
   SetupResultMessage,
 } from '../../protocol'
-import type { RetailerAdapter } from '../leclerc'
+import type { RetailerAdapter } from '../retailers'
 import type { Ui } from '../ui'
 import type { CartNote } from './keep-cart'
 import type { UnreachedReason } from '../ui'
@@ -80,7 +80,7 @@ export interface PhaseBContext {
 
 /**
  * La phase B : l'utilisateur choisit un produit pour chaque ligne en attente. Rend `cancelled` s'il annule le passage. Une erreur de
- * l'adaptateur (`LeclercError`) peut la traverser : l'orchestrateur la traite comme en phase A.
+ * l'adaptateur (`RetailerError`) peut la traverser : l'orchestrateur la traite comme en phase A.
  */
 export type PhaseB = (context: PhaseBContext) => Promise<'done' | 'cancelled'>
 
@@ -95,6 +95,11 @@ export interface FlowDeps {
   wakeLock: WakeLockLike | null
   now: () => number
   agentVersion: string
+  /**
+   * L'enseigne de la page, quand le registre l'a reconnue d'après son hôte (DRV-704) : un message d'une autre enseigne est refusé
+   * (`STORE_MISMATCH`) avant toute lecture ou requête. Absente : l'adaptateur juge la page lui-même (`UNSUPPORTED_PAGE`).
+   */
+  retailer?: string
   /** Faux : le résultat ne saurait pas revenir à Repas (origine non écrite dans l'agent) : refus avant toute action. */
   canReturn: boolean
   phaseB?: PhaseB

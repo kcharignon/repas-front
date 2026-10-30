@@ -4,7 +4,8 @@
 // sont simulés : aucun réseau.
 import { describe, expect, it, vi } from 'vitest'
 
-import { LeclercAdapter, LeclercError, MAX_PAUSE_MS, type RequestStats } from '../src/leclerc'
+import { LeclercAdapter, MAX_PAUSE_MS, type RequestStats } from '../src/leclerc'
+import { RetailerError } from '../src/retailers'
 import { RUN_PREFIX } from '../src/flow'
 import {
   RUN_ID,
@@ -89,7 +90,7 @@ describe('les compteurs du résultat', () => {
   it('accompagnent aussi un passage arrêté par un blocage : « partial », avec ce qui est parti avant', async () => {
     const site = fakeAdapter(SHELF, {
       before: (call) => {
-        if (call === 'search 1000003') throw new LeclercError('BLOCKED', 429)
+        if (call === 'search 1000003') throw new RetailerError('BLOCKED', 429)
       },
     })
     const { flow, sent } = makeFlow({ ui: fakeUi().ui, adapter: site.adapter })

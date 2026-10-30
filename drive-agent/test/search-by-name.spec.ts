@@ -14,7 +14,8 @@ import {
   searchForms,
   searchInOrder,
 } from '../src/flow'
-import { LeclercAdapter, LeclercError, PAUSE_MS, type Candidate } from '../src/leclerc'
+import { LeclercAdapter, PAUSE_MS, type Candidate } from '../src/leclerc'
+import { RetailerError } from '../src/retailers'
 import { candidate } from './flow-helpers'
 import { fakeSite, fixture, type Call, type Scripted } from './leclerc-helpers'
 
@@ -169,7 +170,7 @@ describe('searchByName : les erreurs', () => {
           return queries.length === 1
             ? Promise.resolve([])
             : Promise.reject(
-                new LeclercError(code, null, code === 'CONTRACT_CHANGED' ? 'HTTP_404' : null),
+                new RetailerError(code, null, code === 'CONTRACT_CHANGED' ? 'HTTP_404' : null),
               )
         },
       }
@@ -180,8 +181,8 @@ describe('searchByName : les erreurs', () => {
       )
 
       // Then
-      expect(failure).toBeInstanceOf(LeclercError)
-      expect((failure as LeclercError).code).toBe(code)
+      expect(failure).toBeInstanceOf(RetailerError)
+      expect((failure as RetailerError).code).toBe(code)
       expect(queries).toHaveLength(2)
     },
   )
@@ -191,13 +192,13 @@ describe('searchByName : les erreurs', () => {
     const adapter = {
       searchProducts(query: string): Promise<Candidate[]> {
         queries.push(query)
-        return Promise.reject(new LeclercError('BLOCKED', 403))
+        return Promise.reject(new RetailerError('BLOCKED', 403))
       },
     }
 
     const failure = await searchByName(adapter, 'œuf').catch((error: unknown) => error)
 
-    expect(failure).toBeInstanceOf(LeclercError)
+    expect(failure).toBeInstanceOf(RetailerError)
     expect(queries).toEqual(['œuf'])
   })
 })
@@ -374,11 +375,11 @@ describe('searchInOrder : la recherche du plan, puis le libellé, puis le nom (D
     const adapter = {
       async searchProducts(query: string): Promise<Candidate[]> {
         queries.push(query)
-        throw new LeclercError('BLOCKED', 403)
+        throw new RetailerError('BLOCKED', 403)
       },
     }
 
-    await expect(searchInOrder(adapter, 'a b', steps)).rejects.toBeInstanceOf(LeclercError)
+    await expect(searchInOrder(adapter, 'a b', steps)).rejects.toBeInstanceOf(RetailerError)
     expect(queries).toEqual(['a b'])
   })
 })

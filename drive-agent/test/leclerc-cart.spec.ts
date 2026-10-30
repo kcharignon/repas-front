@@ -10,7 +10,7 @@ import {
   readCartResponse,
   readPageTotal,
 } from '../src/leclerc/cart'
-import { LeclercError } from '../src/leclerc'
+import { RetailerError } from '../src/retailers'
 import { fixture } from './leclerc-helpers'
 
 /** L'ajout relevé sur le site (DRV-007), avec des valeurs inventées. */
@@ -135,7 +135,7 @@ describe('readCartResponse', () => {
       '[{"eTypeEvenement":1,"sIdUnique":"Panier1","lstProduitsLight":[{"iIdProduit":5,"iQtePanier":"beaucoup"}]}]',
     ],
   ])('refuse %s : CONTRACT_CHANGED', (_name, text) => {
-    expect(() => readCartResponse(text, '5')).toThrow(LeclercError)
+    expect(() => readCartResponse(text, '5')).toThrow(RetailerError)
     expect(() => readCartResponse(text, '5')).toThrow(
       expect.objectContaining({ code: 'CONTRACT_CHANGED' }),
     )

@@ -3020,6 +3020,19 @@
                             "type": "string"
                         },
                         "example": "0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10"
+                    },
+                    {
+                        "name": "retailer",
+                        "in": "query",
+                        "description": "Enseigne du drive ; absente, l'enseigne par d\u00e9faut",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "leclerc"
+                            ]
+                        },
+                        "example": "leclerc"
                     }
                 ],
                 "responses": {
@@ -3041,6 +3054,9 @@
                     },
                     "409": {
                         "description": "Pas de magasin enregistr\u00e9 (message `DRIVE_NOT_CONFIGURED`)"
+                    },
+                    "422": {
+                        "description": "Param\u00e8tre `retailer` inconnu"
                     },
                     "429": {
                         "$ref": "#/components/responses/DriveReadRateLimited"
@@ -3065,6 +3081,19 @@
                             "type": "string"
                         },
                         "example": "0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10"
+                    },
+                    {
+                        "name": "retailer",
+                        "in": "query",
+                        "description": "Enseigne du drive ; absente, l'enseigne par d\u00e9faut",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "leclerc"
+                            ]
+                        },
+                        "example": "leclerc"
                     }
                 ],
                 "responses": {
@@ -3086,6 +3115,9 @@
                     },
                     "409": {
                         "description": "Pas de magasin enregistr\u00e9 (message `DRIVE_NOT_CONFIGURED`), ou la liste n'est pas envoy\u00e9e au drive (message `SHOPPING_LIST_NOT_SENT`)"
+                    },
+                    "422": {
+                        "description": "Param\u00e8tre `retailer` inconnu"
                     },
                     "429": {
                         "$ref": "#/components/responses/DriveReadRateLimited"
@@ -4216,6 +4248,34 @@
                 },
                 "type": "object"
             },
+            "GetDriveEstimateRequestQuery": {
+                "properties": {
+                    "retailer": {
+                        "default": null,
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/Retailer"
+                            }
+                        ]
+                    }
+                },
+                "type": "object"
+            },
+            "GetDrivePlanRequestQuery": {
+                "properties": {
+                    "retailer": {
+                        "default": null,
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/Retailer"
+                            }
+                        ]
+                    }
+                },
+                "type": "object"
+            },
             "ListChoicesRequestQuery": {
                 "required": [
                     "retailer"
@@ -4282,10 +4342,10 @@
                         "example": "123456"
                     },
                     "baseUrl": {
-                        "description": "Adresse de base du magasin : `https://<sous-domaine>.leclercdrive.fr/magasin-<id>-<id>`",
+                        "description": "Adresse de base du magasin, selon la r\u00e8gle d'adresse de l'enseigne (`storeAddressPattern` du contrat des enseignes) ; une adresse hors de cette r\u00e8gle est refus\u00e9e",
                         "type": "string",
                         "maxLength": 255,
-                        "example": "https://exemple.leclercdrive.fr/magasin-123456-123456"
+                        "example": "https://exemple.invalid/magasin-123456"
                     },
                     "label": {
                         "description": "Nom du magasin tel que lu par l'agent (255 caract\u00e8res au plus)",
@@ -6161,7 +6221,7 @@
                     "baseUrl": {
                         "description": "Adresse de base du magasin sur le site de l'enseigne",
                         "type": "string",
-                        "example": "https://exemple.leclercdrive.fr/magasin-123456-123456"
+                        "example": "https://exemple.invalid/magasin-123456"
                     }
                 },
                 "type": "object"
@@ -6640,10 +6700,48 @@
                 },
                 "type": "object"
             },
+            "DriveRetailerDTO": {
+                "required": [
+                    "retailer",
+                    "name",
+                    "configured"
+                ],
+                "properties": {
+                    "retailer": {
+                        "description": "Identifiant de l'enseigne",
+                        "type": "string",
+                        "enum": [
+                            "leclerc"
+                        ],
+                        "example": "leclerc"
+                    },
+                    "name": {
+                        "description": "Nom de l'enseigne, tel que les proches le disent",
+                        "type": "string",
+                        "example": "Leclerc"
+                    },
+                    "configured": {
+                        "description": "Vrai si l'utilisateur a enregistr\u00e9 un magasin chez cette enseigne",
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "store": {
+                        "description": "Magasin de l'utilisateur chez cette enseigne, `null` tant qu'il n'en a pas enregistr\u00e9",
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/DriveStoreDTO"
+                            }
+                        ]
+                    }
+                },
+                "type": "object"
+            },
             "DriveSettingsDTO": {
                 "required": [
                     "enabled",
-                    "retailer"
+                    "retailer",
+                    "retailers"
                 ],
                 "properties": {
                     "enabled": {
@@ -6667,6 +6765,13 @@
                                 "$ref": "#/components/schemas/DriveStoreDTO"
                             }
                         ]
+                    },
+                    "retailers": {
+                        "description": "Une entr\u00e9e par enseigne connue (ordre fixe), avec le magasin de l'utilisateur chez chacune ; s'ajoute aux champs `retailer` et `store`, qui restent ceux de l'enseigne par d\u00e9faut",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DriveRetailerDTO"
+                        }
                     }
                 },
                 "type": "object"

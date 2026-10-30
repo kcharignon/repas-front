@@ -12,14 +12,14 @@
       "type": "string",
       "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
     },
-    "retailer": { "const": "leclerc" },
+    "retailer": { "enum": ["leclerc"] },
     "store": {
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "host"],
       "properties": {
         "id": { "type": "string", "pattern": "^[0-9]{1,12}$" },
-        "host": { "type": "string", "pattern": "^[a-z0-9-]+\\.leclercdrive\\.fr$" }
+        "host": { "type": "string", "minLength": 1, "maxLength": 255 }
       }
     },
     "returnPath": { "const": "/drive/retour" },
@@ -30,6 +30,22 @@
       "items": { "$ref": "#/definitions/line" }
     }
   },
+  "allOf": [
+    {
+      "description": "Le motif d’hôte d’une enseigne ne vaut que pour les messages de cette enseigne (une entrée de plus par enseigne).",
+      "if": { "properties": { "retailer": { "const": "leclerc" } }, "required": ["retailer"] },
+      "then": {
+        "properties": {
+          "store": {
+            "type": "object",
+            "properties": {
+              "host": { "type": "string", "pattern": "^[a-z0-9-]+\\.leclercdrive\\.fr$" }
+            }
+          }
+        }
+      }
+    }
+  ],
   "if": { "properties": { "type": { "const": "plan" } } },
   "then": { "required": ["lines", "store"] },
   "else": { "not": { "required": ["lines"] } },

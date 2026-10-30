@@ -28,3 +28,7 @@ panier), jamais une page réelle. Le point de livraison est `123456`, les produi
 | `panier-changement.json`           | Réponse d'un changement de quantité (identifiants et quantités en texte)                                                                                                                                                                           |
 | `panier-retrait.json`              | Réponse d'un retrait : le produit n'est plus dans `lstProduitsLight`                                                                                                                                                                               |
 | `panier-invalide.json`             | Une réponse sans évènement panier                                                                                                                                                                                                                  |
+
+## `contract/` (DRV-501, DRV-704)
+
+Copies à l'octet près des exemples de contrat du back (`make samples-update`, voir `contract/SOURCE.md`) : `plan`, `choices`, `estimate`, `settings` et `retailers.sample.json` (les enseignes : identifiant, noms, forme de l'adresse d'un magasin et d'un produit). Ne pas les modifier à la main.

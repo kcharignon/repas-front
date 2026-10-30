@@ -1,5 +1,5 @@
 import { STORE_HOST } from '../../protocol'
-import { LeclercError } from './errors'
+import { RetailerError } from '../retailers/errors'
 
 /** Le magasin de la page, tel que le protocole le renvoie (`setup-result`). */
 export interface StoreInfo {
@@ -48,7 +48,7 @@ export function isMobileHost(host: string): boolean {
 /**
  * Lit l'identifiant et l'hôte du magasin dans l'adresse de la page.
  *
- * @throws {LeclercError} `UNSUPPORTED_PAGE` si la page n'est pas sur `*.leclercdrive.fr` (cause `PAGE_HOST`), est le site mobile (cause `PAGE_MOBILE`,
+ * @throws {RetailerError} `UNSUPPORTED_PAGE` si la page n'est pas sur `*.leclercdrive.fr` (cause `PAGE_HOST`), est le site mobile (cause `PAGE_MOBILE`,
  *   ticket J : avant toute lecture de l'adresse, le site mobile n'a pas les routes du site ordinateur) ou n'a pas d'adresse de magasin (cause `PAGE_PATH`).
  */
 export function readStorePaths(location: LocationLike, label: string | null = null): StorePaths {
@@ -56,10 +56,10 @@ export function readStorePaths(location: LocationLike, label: string | null = nu
   const found = STORE_PATH.exec(location.pathname)
   const id = found?.[1]
   const second = found?.[2]
-  if (!STORE_HOST.test(host)) throw new LeclercError('UNSUPPORTED_PAGE', null, 'PAGE_HOST')
-  if (isMobileHost(host)) throw new LeclercError('UNSUPPORTED_PAGE', null, 'PAGE_MOBILE')
+  if (!STORE_HOST.test(host)) throw new RetailerError('UNSUPPORTED_PAGE', null, 'PAGE_HOST')
+  if (isMobileHost(host)) throw new RetailerError('UNSUPPORTED_PAGE', null, 'PAGE_MOBILE')
   if (!found || id === undefined || second === undefined) {
-    throw new LeclercError('UNSUPPORTED_PAGE', null, 'PAGE_PATH')
+    throw new RetailerError('UNSUPPORTED_PAGE', null, 'PAGE_PATH')
   }
   const cartPath = `/magasin-${id}-${second}`
   return {

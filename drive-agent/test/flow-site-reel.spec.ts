@@ -4,7 +4,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { guidedChoice, RUN_PREFIX } from '../src/flow'
-import { LeclercAdapter, LeclercError, type SessionReading } from '../src/leclerc'
+import { LeclercAdapter, type SessionReading } from '../src/leclerc'
+import { RetailerError } from '../src/retailers'
 import {
   expectConform,
   fakeAdapter,
@@ -41,7 +42,7 @@ describe('la cause de l’erreur dans le résultat (ticket A)', () => {
   }
 
   it('CONTRACT_CHANGED dit quelle vérification a échoué, dans le message du résultat', async () => {
-    const { sent } = await failWith(new LeclercError('CONTRACT_CHANGED', 200, 'SEARCH_NO_STATE'))
+    const { sent } = await failWith(new RetailerError('CONTRACT_CHANGED', 200, 'SEARCH_NO_STATE'))
 
     expect(expectConform(sent[0])).toMatchObject({
       outcome: 'error',
@@ -61,7 +62,7 @@ describe('la cause de l’erreur dans le résultat (ticket A)', () => {
   })
 
   it('une erreur sans cause garde le titre seul', async () => {
-    const { sent } = await failWith(new LeclercError('BLOCKED', 429))
+    const { sent } = await failWith(new RetailerError('BLOCKED', 429))
 
     expect(expectConform(sent[0]).error).toEqual({
       code: 'BLOCKED',
@@ -74,7 +75,7 @@ describe('la cause de l’erreur dans le résultat (ticket A)', () => {
       {},
       {
         store: () => {
-          throw new LeclercError('UNSUPPORTED_PAGE', null, 'PAGE_HOST')
+          throw new RetailerError('UNSUPPORTED_PAGE', null, 'PAGE_HOST')
         },
       },
     )
@@ -95,7 +96,7 @@ describe('la cause de l’erreur dans le résultat (ticket A)', () => {
       {
         before: (call) => {
           if (call.startsWith('find'))
-            throw new LeclercError('CONTRACT_CHANGED', 200, 'SEARCH_NO_STATE')
+            throw new RetailerError('CONTRACT_CHANGED', 200, 'SEARCH_NO_STATE')
         },
       },
     )
@@ -110,7 +111,9 @@ describe('la cause de l’erreur dans le résultat (ticket A)', () => {
   })
 
   it('l’écran de fin porte l’issue et le code, sans la cause (l’interface n’affiche que le conseil)', async () => {
-    const { screens } = await failWith(new LeclercError('CONTRACT_CHANGED', 200, 'SEARCH_NO_STATE'))
+    const { screens } = await failWith(
+      new RetailerError('CONTRACT_CHANGED', 200, 'SEARCH_NO_STATE'),
+    )
 
     expect(screens.propsOf('end')).toHaveLength(1)
     expect(screens.propsOf('end')[0]).toMatchObject({ outcome: 'error', error: 'CONTRACT_CHANGED' })
@@ -357,7 +360,7 @@ describe('le visiteur non connecté est arrêté avant toute écriture (ticket G
       {
         before: (call) => {
           if (call === 'search 1000003')
-            throw new LeclercError('NOT_LOGGED_IN', 200, 'SESSION_VISITOR')
+            throw new RetailerError('NOT_LOGGED_IN', 200, 'SESSION_VISITOR')
         },
       },
     )

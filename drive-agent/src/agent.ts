@@ -11,7 +11,7 @@
 import { validateCommand, type SelftestResultMessage } from '../protocol'
 import { showDiagnostic, type DiagnosticDeps } from './diagnostic'
 import { Flow, guidedChoice, setupHandler, type FlowDeps, type StorageLike } from './flow'
-import { browserDeps, LeclercAdapter } from './leclerc'
+import { RETAILERS, retailerForHost, type RetailerEntry } from './retailers'
 import { stringifyJson, takeWindowPrimitives } from './primitives'
 import { bridgeTransport, type Bridge } from './transport/bridge'
 import { fragmentTransport } from './transport/fragment'
@@ -55,6 +55,8 @@ export interface AgentOptions {
   /** Copie le rapport du diagnostic (par défaut le presse-papiers de la page). */
   copy?: (text: string) => Promise<boolean>
   flow?: Partial<FlowDeps>
+  /** Les enseignes que l'agent sait servir (par défaut le registre ; les tests en donnent un autre). */
+  retailers?: readonly RetailerEntry[]
 }
 
 export function run(win: Window & typeof globalThis = window, options: AgentOptions = {}): void {
@@ -71,11 +73,18 @@ export function run(win: Window & typeof globalThis = window, options: AgentOpti
       )
   // `fetch` et `attachShadow` de la page, pris maintenant : `run` s'exécute au chargement de l'agent, avant les scripts de la page.
   const primitives = takeWindowPrimitives(win)
-  const adapter = new LeclercAdapter(browserDeps(win, primitives))
+  // L'adaptateur est celui de l'enseigne dont la page est un hôte (DRV-704). Une page dont l'hôte n'est celui d'aucune enseigne reçoit l'adaptateur de la
+  // première : il la refuse lui-même (`UNSUPPORTED_PAGE`), sans requête. Un plan d'une autre enseigne que celle de la page est refusé par le passage.
+  const retailers = options.retailers ?? RETAILERS
+  const retailer = retailerForHost(win.location.hostname, retailers)
+  const entry = retailer ?? retailers[0]
+  if (entry === undefined) return // aucune enseigne dans le registre : l'agent reste silencieux
+  const adapter = entry.createAdapter({ win, primitives })
   const ui = createUi({ win, attachShadow: primitives.attachShadow })
   const send = (message: Parameters<Transport['send']>[0]) => transport.send(message)
   const deps: FlowDeps = {
     adapter,
+    ...(retailer && { retailer: retailer.id }),
     ui,
     send,
     storage: sessionStorageOf(win),

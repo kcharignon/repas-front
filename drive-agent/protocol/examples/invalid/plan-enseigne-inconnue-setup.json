@@ -1,0 +1,15 @@
+{
+  "path": "retailer",
+  "why": "Une enseigne que le registre ne connaît pas est refusée, aussi pour un setup.",
+  "message": {
+    "v": 1,
+    "type": "setup",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "retailer": "inconnue",
+    "store": {
+      "id": "000000",
+      "host": "courses-test.leclercdrive.fr"
+    },
+    "returnPath": "/drive/retour"
+  }
+}

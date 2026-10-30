@@ -4,7 +4,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { validateSelftestResult, type SelftestResultMessage } from '../protocol'
-import { LeclercError } from '../src/leclerc'
+import { RetailerError } from '../src/retailers'
 import {
   compareCart,
   isOk,
@@ -262,7 +262,7 @@ describe('un blocage du site', () => {
   it('arrête un site qui n’est pas connecté, ou une page qui n’est pas celle d’un magasin', async () => {
     const parts = shop(standardShelves(ALL_WORDS), {
       before: () => {
-        throw new LeclercError('NOT_LOGGED_IN', 401)
+        throw new RetailerError('NOT_LOGGED_IN', 401)
       },
     })
 
@@ -278,7 +278,7 @@ describe('une erreur, un arrêt demandé', () => {
   it('nettoie ce qui a été ajouté quand une écriture échoue en route (erreur réseau)', async () => {
     const parts = shop(standardShelves(ALL_WORDS), {
       before: (call) => {
-        if (call === 'cart 2000010 1') throw new LeclercError('NETWORK')
+        if (call === 'cart 2000010 1') throw new RetailerError('NETWORK')
       },
     })
 
@@ -297,7 +297,7 @@ describe('une erreur, un arrêt demandé', () => {
       before: (call) => {
         if (call === 'cart 2000010 0' && !failed) {
           failed = true
-          throw new LeclercError('NETWORK')
+          throw new RetailerError('NETWORK')
         }
       },
     })
@@ -593,7 +593,7 @@ describe('la cause précise des échecs et la connexion dans le rapport (tickets
   it('un visiteur détecté par la recherche arrête le test avant toute écriture, et le rapport en donne la cause', async () => {
     const parts = shop(standardShelves(ALL_WORDS), {
       before: () => {
-        throw new LeclercError('NOT_LOGGED_IN', 200, 'SESSION_VISITOR')
+        throw new RetailerError('NOT_LOGGED_IN', 200, 'SESSION_VISITOR')
       },
     })
 
@@ -609,7 +609,7 @@ describe('la cause précise des échecs et la connexion dans le rapport (tickets
     const parts = shop(standardShelves(ALL_WORDS), {
       before: (call) => {
         if (call === 'search riz')
-          throw new LeclercError('CONTRACT_CHANGED', 200, 'SEARCH_NO_STATE')
+          throw new RetailerError('CONTRACT_CHANGED', 200, 'SEARCH_NO_STATE')
       },
     })
 
@@ -627,7 +627,7 @@ describe('la cause précise des échecs et la connexion dans le rapport (tickets
     const parts = shop(standardShelves(ALL_WORDS), {
       before: (call) => {
         if (call === 'cart 2000000 3')
-          throw new LeclercError('CONTRACT_CHANGED', 200, 'CART_NO_CART_EVENT')
+          throw new RetailerError('CONTRACT_CHANGED', 200, 'CART_NO_CART_EVENT')
       },
     })
 
