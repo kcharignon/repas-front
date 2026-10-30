@@ -154,12 +154,13 @@ export function usePlanRecipe() {
 }
 
 /** Les ingrédients que l'utilisateur peut mettre dans une recette (les communs et les siens), triés par nom. */
-export function useIngredientOptions() {
+export function useIngredientOptions(enabled: () => boolean = () => true) {
   const { api } = useSessionStore()
 
   return useQuery({
     queryKey: ['ingredients', 'options'] as const,
     queryFn: () => unwrap(api.GET('/api/v1/ingredients')),
+    enabled: computed(enabled),
     staleTime: 5 * 60_000,
   })
 }

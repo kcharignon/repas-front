@@ -6,11 +6,17 @@ import { Minus, Plus, Trash2 } from 'lucide-vue-next'
 
 import type { ShoppingList } from '@/api'
 import UiButton from '@/design/UiButton.vue'
+import DepartmentMarker from '@/design/DepartmentMarker.vue'
 import UiCheckbox from '@/design/UiCheckbox.vue'
 import UiProgressBar from '@/design/UiProgressBar.vue'
 import DriveEstimate from '@/features/drive/DriveEstimate.vue'
 import UiImage from '@/design/UiImage.vue'
 import SeasonEmpty from '@/design/season/SeasonEmpty.vue'
+import {
+  isAmbiguousName,
+  namesInSeveralDepartments,
+  useDepartmentIcons,
+} from '@/features/ingredients/departmentMarkers'
 import { formatQuantity } from './format'
 import { useChangeServing, useToggleRow, useUnplanRecipe } from './queries'
 
@@ -26,6 +32,15 @@ const unplan = useUnplanRecipe()
 const tab = ref<'ingredients' | 'recipes'>('ingredients')
 
 const rows = computed(() => props.list.departments.flatMap((department) => department.rows))
+// Le repère du rayon devant chaque ingrédient, et son rayon sous le nom quand ce nom existe dans deux rayons de la liste (ING-017)
+const { iconOf, anyIcon } = useDepartmentIcons()
+const ambiguous = computed(() =>
+  namesInSeveralDepartments(rows.value, (row) => ({
+    name: row.ingredientName,
+    departmentSlug: row.departmentSlug,
+  })),
+)
+const markers = computed(() => anyIcon(rows.value.map((row) => row.departmentSlug)))
 const done = computed(() => rows.value.filter((row) => row.checked).length)
 const meals = computed(() => props.list.recipeTypes.flatMap((type) => type.meals))
 
@@ -105,7 +120,17 @@ const stepClass =
                 "
               >
                 <span class="flex items-baseline justify-between gap-3">
-                  <span>{{ row.ingredientName }}</span>
+                  <span class="flex min-w-0 items-center gap-3">
+                    <DepartmentMarker :icon="iconOf(row.departmentSlug)" :reserve="markers" />
+                    <span class="flex min-w-0 flex-col">
+                      <span>{{ row.ingredientName }}</span>
+                      <span
+                        v-if="isAmbiguousName(ambiguous, row.ingredientName) && row.departmentName"
+                        class="text-sm font-normal text-muted"
+                        >{{ row.departmentName }}</span
+                      >
+                    </span>
+                  </span>
                   <span class="text-sm font-semibold text-muted no-underline">{{
                     formatQuantity(row.quantity, row.unitSymbol)
                   }}</span>

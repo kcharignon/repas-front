@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { hasFailed } from '@/api/query'
+import type { DepartmentIcon } from '@/api'
+import DepartmentMarker from '@/design/DepartmentMarker.vue'
 import UiButton from '@/design/UiButton.vue'
 import UiField from '@/design/UiField.vue'
+import UiSelect from '@/design/UiSelect.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
 import { useDepartments } from '@/features/ingredients/queries'
 import UiImage from '@/design/UiImage.vue'
@@ -20,7 +23,13 @@ const departments = useDepartments()
 const save = useSaveDepartment()
 const items = computed(() => departments.data.value?.member ?? [])
 
-const dialog = useResourceDialog(() => ({ name: '', image: '' }))
+// L'icône du rayon (ING-016) : '' = aucune. Les valeurs que ce front sait dessiner ; une autre (valeur future du back) se garde telle quelle
+const ICONS: DepartmentIcon[] = ['snowflake', 'can']
+const iconOf = (department: { icon?: string | null }) => department.icon ?? ''
+
+const dialog = useResourceDialog(() => ({ name: '', image: '', icon: '' }))
+// L'icône que le rayon avait à l'ouverture de la fenêtre : on n'envoie `icon` que si elle a changé (absente, elle reste intacte côté back)
+const originalIcon = ref('')
 const errors = computed(() => ({
   name:
     dialog.submitted.value && dialog.form.name.trim() === '' ? t('admin.errors.name') : undefined,
@@ -28,15 +37,34 @@ const errors = computed(() => ({
     dialog.submitted.value && dialog.form.image.trim() === '' ? t('admin.errors.image') : undefined,
 }))
 
+function create() {
+  originalIcon.value = ''
+  dialog.create()
+}
+
+function edit(department: { slug: string; name: string; image: string; icon?: string | null }) {
+  originalIcon.value = iconOf(department)
+  dialog.edit(department.slug, {
+    name: department.name,
+    image: department.image,
+    icon: iconOf(department),
+  })
+}
+
 function submit() {
   dialog.submitted.value = true
   dialog.error.value = null
   if (errors.value.name || errors.value.image) return
 
+  const iconChanged = dialog.form.icon !== originalIcon.value
   save.mutate(
     {
       slug: dialog.editing.value,
-      form: { name: dialog.form.name.trim(), image: dialog.form.image.trim() },
+      form: {
+        name: dialog.form.name.trim(),
+        image: dialog.form.image.trim(),
+        ...(iconChanged ? { icon: (dialog.form.icon || null) as DepartmentIcon | null } : {}),
+      },
     },
     {
       onSuccess: () => (dialog.open.value = false),
@@ -52,7 +80,7 @@ function submit() {
     :loading="departments.isPending.value"
     :failed="hasFailed(departments)"
     :create-label="t('admin.newDepartment')"
-    @create="dialog.create"
+    @create="create"
   >
     <p v-if="items.length === 0" class="text-muted">{{ t('admin.none') }}</p>
     <ul
@@ -66,10 +94,11 @@ function submit() {
       >
         <UiImage :src="department.image" class="size-8 shrink-0" />
         <span class="flex-1 font-medium">{{ department.name }}</span>
+        <DepartmentMarker :icon="department.icon" />
         <UiButton
           variant="ghost"
           :aria-label="t('admin.editNamed', { name: department.name })"
-          @click="dialog.edit(department.slug, { name: department.name, image: department.image })"
+          @click="edit(department)"
         >
           {{ t('admin.edit') }}
         </UiButton>
@@ -106,6 +135,14 @@ function submit() {
         :aria-describedby="describedby"
         :invalid="invalid"
       />
+    </UiField>
+    <UiField :label="t('admin.icon')" :hint="t('admin.iconHint')" v-slot="{ id, describedby }">
+      <UiSelect :id="id" v-model="dialog.form.icon" :aria-describedby="describedby">
+        <option value="">{{ t('admin.iconNone') }}</option>
+        <option v-for="icon in ICONS" :key="icon" :value="icon">
+          {{ t(`admin.icons.${icon}`) }}
+        </option>
+      </UiSelect>
     </UiField>
   </AdminFormDialog>
 </template>

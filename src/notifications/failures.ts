@@ -27,6 +27,8 @@ const driveCodes = new Map([
   ['UNIT_BASE_FACTOR_INVALID', 'errors.unitBaseFactorInvalid'],
   // Ingrédient de base (ING-015) : seul le propriétaire du catalogue le règle
   ['INGREDIENT_BASE_FORBIDDEN', 'errors.ingredientBaseForbidden'],
+  // Le même nom dans le même rayon (ING-016) : un 409 qui n'est pas « une autre modification en cours »
+  ['INGREDIENT_NAME_ALREADY_USED', 'errors.ingredientNameUsed'],
 ])
 
 /** Les conversions propres à un ingrédient : chaque refus du back a sa phrase, quel que soit le statut (un 409 n'est pas un « autre modification en cours »). */

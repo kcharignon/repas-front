@@ -49,6 +49,11 @@ describe('messageForFailure', () => {
 
   it.each([
     [409, 'CONVERSION_ALREADY_EXISTS', 'Cette conversion existe déjà : modifie-la.'],
+    [
+      409,
+      'INGREDIENT_NAME_ALREADY_USED',
+      'Ce nom existe déjà dans ce rayon. Choisis-le plutôt que d’en créer un autre.',
+    ],
     [422, 'CONVERSION_SAME_UNIT', 'Choisis deux unités différentes.'],
     [
       422,
