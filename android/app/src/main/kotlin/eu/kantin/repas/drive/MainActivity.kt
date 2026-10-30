@@ -270,14 +270,15 @@ class MainActivity : Activity() {
             }
             NativeRequest.AppInfo -> {
                 val version = installedVersion()
-                // `retailers` : les enseignes que cette version sait servir, une capacité (DRV-707) ; jamais une enseigne d'essai de la variante de débogage.
+                // `retailers` : les enseignes que cette construction annonce, une capacité (DRV-707) ; jamais une enseigne d'essai de la variante de débogage,
+                // et d'une enseigne éteinte (DRV-728) seulement si le drapeau de la construction l'allume (jamais en publication).
                 post(
                     NativeBridge.appInfo(
                         version.name,
                         version.code,
                         repasApp.agentLoad.status == AgentStatus.READY,
                         selfUpdate.supported,
-                        retailers = RetailerSites.DEFAULT.announcedRetailers(),
+                        retailers = repasApp.announced.announcedRetailers(),
                     ),
                 )
             }
@@ -405,12 +406,13 @@ class MainActivity : Activity() {
     // Le menu
 
     /**
-     * Le menu de la coquille (DRV-707) : « Ouvrir le drive {nom} » et « Se déconnecter {nom} » pour CHAQUE enseigne que cette version annonce
-     * ([RetailerSites.DEFAULT]) ; avec une seule, le menu est celui d'avant. « Version et mode d'emploi » parle de l'enseigne d'avant.
+     * Le menu de la coquille (DRV-707) : « Ouvrir le drive {nom} » et « Se déconnecter {nom} » pour CHAQUE enseigne que cette construction annonce
+     * ([RepasApp.announced] : celles de la version publiée, plus celles que le drapeau de construction allume, DRV-728) ; avec une seule, le menu est
+     * celui d'avant, et la publication n'en a jamais plus. « Version et mode d'emploi » parle de l'enseigne d'avant.
      */
     private fun openMenu() {
-        val announced = RetailerSites.DEFAULT.all
-        val about = RetailerSites.DEFAULT.legacy
+        val announced = repasApp.announced.all
+        val about = repasApp.announced.legacy
         showMenu(
             buildList {
                 add(getString(R.string.menu_drive_settings) to { load("$repasOrigin$DRIVE_SETTINGS_PATH") })

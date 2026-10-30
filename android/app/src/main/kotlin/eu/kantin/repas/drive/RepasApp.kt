@@ -11,12 +11,19 @@ class RepasApp : Application() {
     internal val agentLoad: AgentLoad by lazy { AgentHost.load(this, BuildConfig.DEBUG) }
 
     /**
-     * Les enseignes que cette construction SERT (DRV-707) : celles du registre de la version, et, dans la seule variante de débogage, une enseigne
-     * fictive pour les essais de l'émulateur ([TestRetailers]). L'enseigne d'avant reste la même. Le menu et `app.info` ne parlent que de
-     * [RetailerSites.DEFAULT], jamais d'une enseigne d'essai.
+     * Les enseignes que cette construction ANNONCE à Repas (`app.info`) et PROPOSE dans son menu (DRV-707, DRV-728) : celles de la version publiée
+     * ([RetailerSites.DEFAULT]), plus celles que son drapeau de construction allume (`BuildConfig.EXTRA_RETAILERS`, [RetailerSites.serving]). La
+     * construction de publication a toujours un drapeau vide : Leclerc seul, sans menu ni annonce d'une enseigne éteinte. Jamais une enseigne d'essai.
+     */
+    internal val announced: RetailerSites by lazy { RetailerSites.serving(BuildConfig.EXTRA_RETAILERS) }
+
+    /**
+     * Les enseignes que cette construction SERT (DRV-707) : les enseignes annoncées ([announced]) et, dans la seule variante de débogage, une enseigne
+     * fictive pour les essais de l'émulateur ([TestRetailers]). L'enseigne d'avant reste la même. Les règles d'origine du pont, les écrans et les
+     * mémoires ne connaissent que ces enseignes.
      */
     internal val sites: RetailerSites by lazy {
-        if (TestRetailers.extra.isEmpty()) RetailerSites.DEFAULT else RetailerSites(RetailerSites.DEFAULT.all + TestRetailers.extra, legacy = RetailerSites.DEFAULT.legacy)
+        if (TestRetailers.extra.isEmpty()) announced else RetailerSites(announced.all + TestRetailers.extra, legacy = announced.legacy)
     }
 
     /** Le stockage clé-valeur des mémoires du drive (préférence `drive-store`, exclue des sauvegardes) : les clés sont choisies par le cœur, par enseigne. */

@@ -4,6 +4,7 @@ import java.io.File
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertThrows
@@ -20,6 +21,46 @@ class RetailerSitesTest {
         assertEquals(listOf(leclerc.id), RetailerSites.DEFAULT.announcedRetailers())
         assertEquals(setOf("https://*.leclercdrive.fr"), RetailerSites.DEFAULT.bridgeOrigins())
         assertEquals(RetailerSites.DEFAULT.bridgeOrigins(), BridgeMessages.ORIGIN_RULES)
+    }
+
+    @Test
+    fun `sans drapeau de construction, la version sert le registre par defaut lui-meme, sans enseigne eteinte`() {
+        listOf(null, "", " ", ",", " , ").forEach { assertSame("« $it »", RetailerSites.DEFAULT, RetailerSites.serving(it)) }
+        assertEquals(listOf("leclerc"), RetailerSites.serving("").announcedRetailers())
+        assertEquals(setOf("https://*.leclercdrive.fr"), RetailerSites.serving("").bridgeOrigins())
+        assertTrue("une enseigne éteinte n'est jamais dans le registre par défaut", RetailerSites.SWITCHED_OFF.none { off -> RetailerSites.DEFAULT.all.any { it.id == off.id } })
+    }
+
+    @Test
+    fun `le drapeau de construction allume une enseigne eteinte, sans changer l'enseigne d'avant ni l'ordre`() {
+        val sites = RetailerSites.serving("auchan")
+
+        assertEquals(listOf("leclerc", "auchan"), sites.announcedRetailers())
+        assertSame(leclerc, sites.legacy)
+        assertEquals(setOf("https://*.leclercdrive.fr", "https://www.auchan.fr"), sites.bridgeOrigins())
+        assertSame(sites.byId("auchan"), sites.forNavigation("https://www.auchan.fr/courses"))
+        assertSame(leclerc, sites.forNavigation("https://www.leclercdrive.fr/"))
+        // l'espace et la répétition ne changent rien
+        assertEquals(listOf("leclerc", "auchan"), RetailerSites.serving(" auchan , auchan ").announcedRetailers())
+        // le registre par défaut n'est pas modifié par l'allumage d'un autre
+        assertEquals(listOf("leclerc"), RetailerSites.DEFAULT.announcedRetailers())
+    }
+
+    @Test
+    fun `un drapeau qui ne designe pas une enseigne eteinte est refuse, rien n'est allume en silence`() {
+        listOf("autre", "Auchan", "AUCHAN", "leclerc", "auchan;leclerc", "auchan autre", "auchan,autre", "auchan.fr", "*", "www.auchan.fr").forEach {
+            assertThrows("« $it »", IllegalArgumentException::class.java) { RetailerSites.serving(it) }
+        }
+    }
+
+    @Test
+    fun `toutes les enseignes inscrites cohabitent sans nom de site en commun`() {
+        val all = RetailerSites.REGISTERED
+
+        assertEquals(RetailerSites.DEFAULT.all + RetailerSites.SWITCHED_OFF, all.all)
+        assertSame(leclerc, all.legacy)
+        // une page n'est celle que d'une seule enseigne
+        all.all.forEach { site -> all.all.filter { it !== site }.forEach { other -> assertFalse("${site.id} / ${other.id}", site.overlapsNavigation(other)) } }
     }
 
     @Test
@@ -119,9 +160,9 @@ class RetailerSitesTest {
     private val contract = JSONObject(File("src/test/resources/retailers.sample.json").readText()).getJSONArray("retailers")
 
     @Test
-    fun `chaque enseigne de l'application est dans le contrat, avec le meme nom`() {
+    fun `chaque enseigne inscrite est dans le contrat, avec le meme nom`() {
         val byId = (0 until contract.length()).associate { contract.getJSONObject(it).getString("id") to contract.getJSONObject(it) }
-        RetailerSites.DEFAULT.all.forEach { site ->
+        RetailerSites.REGISTERED.all.forEach { site ->
             val entry = byId[site.id] ?: throw AssertionError("${site.id} n'est pas dans le contrat des enseignes")
             assertEquals(entry.getString("name"), site.name)
             assertEquals(entry.getString("nameDe"), site.nameDe)
@@ -133,7 +174,8 @@ class RetailerSitesTest {
         // Les champs que le cœur ne connaît pas (identifiant de produit, source de l'identifiant du magasin…) sont tolérés : seuls ceux qu'il connaît se comparent.
         for (index in 0 until contract.length()) {
             val entry = contract.getJSONObject(index)
-            val site = RetailerSites.DEFAULT.byId(entry.getString("id")) ?: continue
+            val site = RetailerSites.REGISTERED.byId(entry.getString("id")) ?: continue
+            if (entry.optString("storeIdSource") == "EXPLICIT") continue
             val example = entry.optString("storeAddressExample").takeIf { it.isNotEmpty() } ?: continue
             val pattern = Regex(entry.getString("storeAddressPattern"))
             assertTrue("l'exemple suit le motif du contrat", pattern.matches(example))
@@ -142,6 +184,44 @@ class RetailerSitesTest {
             assertTrue("l'hôte de l'exemple est un hôte de magasin de ${site.id}", site.isStoreHost(host))
             val match = pattern.find(example)!!
             assertTrue("le numéro du magasin a la forme de ${site.id}", site.isStoreId(match.groupValues[1]))
+        }
+    }
+
+    @Test
+    fun `la source de l'identifiant du magasin du contrat dit si le magasin est dans l'adresse du cœur`() {
+        // URL : le magasin est dans l'adresse, le cœur a des pages de magasin. EXPLICIT : l'agent le lit dans la page, le cœur n'en reconnaît aucune.
+        for (index in 0 until contract.length()) {
+            val entry = contract.getJSONObject(index)
+            val site = RetailerSites.REGISTERED.byId(entry.getString("id")) ?: continue
+            when (val source = entry.getString("storeIdSource")) {
+                "URL" -> assertNotNull("${site.id} : magasin dans l'adresse", site.storePages)
+                "EXPLICIT" -> assertNull("${site.id} : magasin explicite", site.storePages)
+                else -> throw AssertionError("source inconnue : $source")
+            }
+        }
+    }
+
+    @Test
+    fun `l'adresse du magasin d'une enseigne a identifiant explicite est son accueil de pont, et son motif d'identifiant est celui du contrat`() {
+        for (index in 0 until contract.length()) {
+            val entry = contract.getJSONObject(index)
+            val site = RetailerSites.REGISTERED.byId(entry.getString("id")) ?: continue
+            if (entry.getString("storeIdSource") != "EXPLICIT") continue
+            // L'adresse du magasin est une constante de l'enseigne (le magasin n'est pas dans l'adresse) : un hôte où le pont existe.
+            val example = entry.getString("storeAddressExample")
+            assertTrue("l'exemple suit le motif du contrat", Regex(entry.getString("storeAddressPattern")).matches(example))
+            assertTrue("l'hôte de l'exemple porte le pont de ${site.id}", site.isBridgePage(example))
+            assertTrue("et c'est un hôte de magasin", site.isStoreHost(NavigationPolicy.httpsHostOf(example)))
+            // Le cœur accepte l'identifiant de magasin que le contrat accepte, et refuse ce qu'il refuse
+            val contractId = Regex(entry.getString("storeIdPattern"))
+            listOf(
+                "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+                "0A1B2C3D-4E5F-4A6B-8C7D-9E0F1A2B3C4D",
+                "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4",
+                "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d0",
+                "123456",
+                "",
+            ).forEach { assertEquals("« $it » pour ${site.id}", contractId.matches(it), site.isStoreId(it)) }
         }
     }
 }
