@@ -6,6 +6,7 @@ import { ChevronRight, Smartphone } from 'lucide-vue-next'
 
 import { useNotificationsStore } from '@/notifications/store'
 import { driveBridge } from './bridge'
+import { drivesOf, hasSeveralDrives } from './drives'
 import { useDriveSettings } from './queries'
 
 // Les entrées du drive dans « Moi » : absentes tant que la fonction n'est pas allumée (ou que la lecture échoue).
@@ -14,10 +15,16 @@ const notifications = useNotificationsStore()
 const settings = useDriveSettings()
 const enabled = computed(() => settings.data.value?.enabled === true)
 
-const entries = [
-  { to: 'drive-settings', title: 'driveSettings.entry', help: 'driveSettings.entryHelp' },
+// Plusieurs drives allumés (DRV-709) : l'entrée parle de « tes drives », pas d'un magasin ; avec un seul, son texte est celui d'avant
+const several = computed(() => hasSeveralDrives(drivesOf(settings.data.value)))
+const entries = computed(() => [
+  {
+    to: 'drive-settings',
+    title: 'driveSettings.entry',
+    help: several.value ? 'driveSettings.entryHelpSeveral' : 'driveSettings.entryHelp',
+  },
   { to: 'drive-products', title: 'driveProducts.entry', help: 'driveProducts.entryHelp' },
-] as const
+])
 
 // Le menu de l'application (version, mode d'emploi, « Se déconnecter de Leclerc ») : il n'existe que dans l'application, qui l'ouvre
 // quand on le lui demande (`app.menu`, DRV-320). Sans cette entrée, la déconnexion de Leclerc serait inatteignable.

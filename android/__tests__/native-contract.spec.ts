@@ -66,20 +66,41 @@ describe('ce que l’application répond à la page', () => {
     ).toEqual({ type: 'app.info', info: { version: '1.2.3', versionCode: 42, drive: true } })
   })
 
-  it('app.info avec le champ facultatif retailers (DRV-707) : le site qui ne le connaît pas le tolère et lit la réponse d’avant', () => {
-    const old = '{"v":1,"type":"app.info","version":"1.2.3","versionCode":42,"drive":true}'
-    const withRetailers =
-      '{"v":1,"type":"app.info","version":"1.2.3","versionCode":42,"drive":true,"retailers":["leclerc"]}'
-
-    expect(parseInbound(withRetailers)).toEqual(parseInbound(old))
+  it('app.info avec le champ facultatif retailers (DRV-707, lu par DRV-709) : le site lit les drives que l’application annonce', () => {
+    expect(
+      parseInbound(
+        '{"v":1,"type":"app.info","version":"1.2.3","versionCode":42,"drive":true,"retailers":["leclerc"]}',
+      ),
+    ).toEqual({
+      type: 'app.info',
+      info: { version: '1.2.3', versionCode: 42, drive: true, retailers: ['leclerc'] },
+    })
     expect(
       parseInbound(
         '{"v":1,"type":"app.info","version":"1.2.3","versionCode":42,"drive":true,"selfUpdate":true,"retailers":["leclerc","autre"]}',
       ),
     ).toEqual({
       type: 'app.info',
-      info: { version: '1.2.3', versionCode: 42, drive: true, selfUpdate: true },
+      info: {
+        version: '1.2.3',
+        versionCode: 42,
+        drive: true,
+        selfUpdate: true,
+        retailers: ['leclerc', 'autre'],
+      },
     })
+  })
+
+  it('app.info avec une liste retailers illisible : elle est ignorée, comme une application d’avant', () => {
+    const old = parseInbound(
+      '{"v":1,"type":"app.info","version":"1.2.3","versionCode":42,"drive":true}',
+    )
+    for (const retailers of ['[]', '"leclerc"', '[1]', '["Leclerc"]', '["leclerc",null]'])
+      expect(
+        parseInbound(
+          `{"v":1,"type":"app.info","version":"1.2.3","versionCode":42,"drive":true,"retailers":${retailers}}`,
+        ),
+      ).toEqual(old)
   })
 
   it('drive.result d’une lecture du magasin : le front le reçoit et rend le magasin', async () => {

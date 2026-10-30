@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRetailerI18n } from './useRetailerI18n'
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 
@@ -8,16 +8,28 @@ import { ApiError } from '@/api'
 import { hasFailed } from '@/api/query'
 import UiButton from '@/design/UiButton.vue'
 import UiConfirmDialog from '@/design/UiConfirmDialog.vue'
-import UiField from '@/design/UiField.vue'
 import UiLinkButton from '@/design/UiLinkButton.vue'
-import UiTextInput from '@/design/UiTextInput.vue'
 import { isStale, messageForFailure } from '@/notifications/failures'
 import { useNotificationsStore } from '@/notifications/store'
 import { useOnline } from '@/offline/useOnline'
+import type { DriveStore, DriveStorePayload } from '@/api'
 import { driveBridge } from './bridge'
 import { useDriveChoices } from './choicesQueries'
-import { driveKeys, useDriveSettings, useSaveDriveSettings } from './queries'
-import { parseStoreAddress, storeTail } from './storeAddress'
+import DefaultDriveChoice from './DefaultDriveChoice.vue'
+import DriveCard from './DriveCard.vue'
+import { drivesOf, hasSeveralDrives } from './drives'
+import type { Drive } from './drives'
+import {
+  driveKeys,
+  useDriveSettings,
+  useRemoveDrive,
+  useSaveDriveSettings,
+  useSetDefaultRetailer,
+} from './queries'
+import { appServes, retailerOf } from './retailers'
+import type { RetailerId } from './retailers'
+import StoreManualForm from './StoreManualForm.vue'
+import { parseStoreAddress, readExplicitStore, storeTail } from './storeAddress'
 import { canReadStoreFromApp, readStoreFromApp, StoreReadError } from './storeReader'
 import type { StoreReading } from './storeReader'
 
@@ -31,6 +43,9 @@ const online = useOnline()
 const settings = useDriveSettings()
 const enabled = computed(() => settings.data.value?.enabled === true)
 const store = computed(() => settings.data.value?.store ?? null)
+// « Mes drives » (DRV-709) : seulement avec plusieurs drives allumés. Avec un seul, l'écran est celui d'avant, sans un mot de plus.
+const drives = computed(() => drivesOf(settings.data.value))
+const several = computed(() => hasSeveralDrives(drives.value))
 
 // Envoyé ici faute de magasin (DRV-622) : l'écran ne pose qu'une question, et l'envoi nous attend. `retour=liste` : la liste en cours,
 // qui rouvre sa confirmation ; `retour=envoi` (avec `liste`) : l'écran de l'envoi d'une liste déjà envoyée.
@@ -44,30 +59,21 @@ const origin = computed(() => {
 })
 const choosing = computed(() => store.value === null && route.query.magasin === 'requis')
 
-// Le formulaire à la main : l'adresse du magasin et son nom. Ils suivent le magasin enregistré quand celui-ci change.
-const address = ref('')
-const label = ref('')
-watch(
-  store,
-  (next) => {
-    address.value = next?.baseUrl ?? ''
-    label.value = next?.label ?? ''
-  },
-  { immediate: true },
-)
-const addressError = ref<string | null>(null)
-const failure = ref<string | null>(null)
-// La lecture du magasin par l'application : l'état de l'écran
-const reading = ref(false)
+// La lecture du magasin par l'application : l'état de l'écran. `reading` : le drive dont on lit le magasin (il peut y en avoir plusieurs à l'écran).
+const reading = ref<RetailerId | null>(null)
 const savedTail = ref<string | null>(null)
+const savedFor = ref<RetailerId | null>(null)
 const readError = ref<string | null>(null)
+const readErrorFor = ref<RetailerId | null>(null)
 const save = useSaveDriveSettings()
 const locked = computed(() => !online.value || save.isPending.value)
 
-const typed = computed(() => parseStoreAddress(address.value, retailer.value))
-const otherStore = computed(
-  () => store.value !== null && typed.value !== null && typed.value.id !== store.value.id,
-)
+/** Le drive dont on parle : son identifiant et son magasin (celui des réglages quand il n'y en a qu'un). */
+interface Target {
+  id: RetailerId
+  store: DriveStore | null
+}
+const soleTarget = computed<Target>(() => ({ id: retailer.value.id, store: store.value }))
 
 /** Une fois le magasin enregistré, l'écran ne s'explique plus : il rend l'utilisateur à ce qu'il faisait. */
 async function leave() {
@@ -85,32 +91,29 @@ async function leave() {
   }
 }
 
-async function submit() {
-  failure.value = null
-  const parsed = parseStoreAddress(address.value, retailer.value)
-  if (parsed === null) {
-    addressError.value = t('driveSettings.errors.address')
-
-    return
-  }
-  addressError.value = null
-  const name = label.value.trim()
+/** Le magasin saisi à la main chez un drive (le formulaire en dit l'échec) : il est enregistré, puis l'écran rend la main. */
+async function saveManual(id: RetailerId, found: DriveStorePayload) {
   try {
-    await save.mutateAsync({
-      id: parsed.id,
-      baseUrl: parsed.baseUrl,
-      label: name === '' ? null : name,
-    })
+    await save.mutateAsync({ store: found, retailer: id })
   } catch (error) {
-    failure.value = messageForFailure(error)
     if (isStale(error)) void queryClient.invalidateQueries({ queryKey: driveKeys.all })
-
-    return
+    throw error
   }
   savedTail.value = null
+  savedFor.value = null
   notifications.push('success', t('driveSettings.saved'))
   await leave()
 }
+
+// L'application : sa version et l'état du drive, par le pont (absent hors de l'application)
+const inApp = driveBridge.isAvailable()
+const app = useQuery({
+  queryKey: driveKeys.appInfo,
+  queryFn: () => driveBridge.info(),
+  enabled: inApp,
+  retry: false,
+  staleTime: 60_000,
+})
 
 // La saisie à la main est repliée quand l'application sait lire le magasin ; sans elle, c'est le seul moyen : elle reste ouverte.
 const canRead = canReadStoreFromApp()
@@ -118,7 +121,7 @@ const manualOpen = ref(!canRead)
 
 // La lecture du magasin par l'application : un seul geste, « Utiliser ce magasin », puis Repas enregistre tout seul (DRV-623).
 /** Le magasin lu, quand ce n'est pas celui qui est enregistré : le seul cas où l'on demande de confirmer. */
-const other = ref<{ id: string; baseUrl: string } | null>(null)
+const other = ref<{ id: string; baseUrl: string; retailer: RetailerId } | null>(null)
 const confirming = computed({
   get: () => other.value !== null,
   set: (open) => {
@@ -127,59 +130,77 @@ const confirming = computed({
 })
 
 /** Écrit le magasin lu par le même `PUT /drive/settings` que la saisie à la main : le serveur le valide comme une adresse tapée. */
-async function register(found: { id: string; baseUrl: string; label: string | null }) {
+async function register(
+  found: { id: string; baseUrl: string; label: string | null },
+  id: RetailerId,
+) {
   try {
-    await save.mutateAsync(found)
+    await save.mutateAsync({ store: found, retailer: id })
   } catch (error) {
     readError.value =
       error instanceof ApiError && error.message === 'DRIVE_STORE_INVALID'
         ? t('driveSettings.readRefused')
         : messageForFailure(error)
+    readErrorFor.value = id
     manualOpen.value = true
     if (isStale(error)) void queryClient.invalidateQueries({ queryKey: driveKeys.all })
 
     return
   }
   savedTail.value = storeTail(found.id)
+  savedFor.value = id
   if (origin.value !== null)
     notifications.push('success', t('driveSettings.readDone', { tail: savedTail.value }))
   await leave()
 }
 
 /** Ce que l'on fait du magasin lu : l'enregistrer tout seul, ou demander d'abord s'il en change. */
-async function adopt(found: StoreReading) {
-  const parsed = parseStoreAddress(found.baseUrl, retailer.value)
+async function adopt(found: StoreReading, target: Target) {
+  // Le magasin d'un drive se lit dans son adresse, ou est un identifiant que l'application a lu sur la page : la règle est celle du drive
+  const drive = retailerOf(target.id)
+  const parsed =
+    drive.storeIdSource === 'EXPLICIT'
+      ? readExplicitStore(found.id, found.baseUrl, drive)
+      : parseStoreAddress(found.baseUrl, drive)
   if (parsed === null || parsed.id !== found.id) throw new StoreReadError('FAILED')
-  const current = store.value
-  if (current === null) return register({ ...parsed, label: found.label ?? null })
+  const current = target.store
+  if (current === null) return register({ ...parsed, label: found.label ?? null }, target.id)
   if (current.id !== parsed.id) {
-    other.value = parsed
+    other.value = { ...parsed, retailer: target.id }
 
     return
   }
   // Le même magasin relu : rien à écrire, ni écran de plus (le nom que Repas a retenu reste)
   if (current.baseUrl === parsed.baseUrl) {
     savedTail.value = storeTail(parsed.id)
+    savedFor.value = target.id
 
     return
   }
-  return register({ ...parsed, label: found.label ?? current.label ?? null })
+  return register({ ...parsed, label: found.label ?? current.label ?? null }, target.id)
 }
 
-async function readFromApp() {
-  if (reading.value || save.isPending.value) return
-  reading.value = true
+async function readFromApp(target: Target) {
+  if (reading.value !== null || save.isPending.value) return
+  reading.value = target.id
   savedTail.value = null
+  savedFor.value = null
   readError.value = null
+  readErrorFor.value = null
   other.value = null
   try {
-    await adopt(await readStoreFromApp())
+    // L'application qui annonce ses drives reçoit le nom du drive touché ; une ancienne ne lit que le drive d'avant et ne connaît pas la clé
+    await adopt(
+      await readStoreFromApp(undefined, app.data.value?.retailers === undefined ? null : target.id),
+      target,
+    )
   } catch (error) {
     const code = error instanceof StoreReadError ? error.code : 'FAILED'
     readError.value = t(`driveSettings.readErrors.${code}`)
+    readErrorFor.value = target.id
     manualOpen.value = true
   } finally {
-    reading.value = false
+    reading.value = null
   }
 }
 
@@ -187,8 +208,59 @@ async function readFromApp() {
 async function confirmChange() {
   const found = other.value
   if (found === null || save.isPending.value) return
-  await register({ ...found, label: null })
+  await register({ id: found.id, baseUrl: found.baseUrl, label: null }, found.retailer)
   other.value = null
+}
+
+/** Ce que la ligne d'un drive propose pour lire son magasin (DRV-709) : le bouton, la phrase de mise à jour, ou rien tant que l'application n'a pas répondu. */
+function readerFor(drive: Drive): 'button' | 'update' | 'browser' | 'wait' {
+  if (!canRead) return 'browser'
+  // Avant la réponse d'`app.info`, seul le drive d'avant est sûr : les autres attendent (une réponse prend quelques millisecondes)
+  if (app.isPending.value) return appServes(undefined, drive.id) ? 'button' : 'wait'
+
+  return appServes(app.data.value?.retailers, drive.id) ? 'button' : 'update'
+}
+
+/** Retirer un drive : la confirmation d'abord (difficile à défaire), puis `DELETE /drive/settings?retailer=`. */
+const removing = ref<Drive | null>(null)
+const removeDialog = computed({
+  get: () => removing.value !== null,
+  set: (open) => {
+    if (!open) removing.value = null
+  },
+})
+const removeDrive = useRemoveDrive()
+const drivesError = ref<string | null>(null)
+async function confirmRemove() {
+  const drive = removing.value
+  if (drive === null || removeDrive.isPending.value) return
+  drivesError.value = null
+  try {
+    await removeDrive.mutateAsync(drive.id)
+    notifications.push('success', t('driveSettings.drives.removed', { retailer: drive.name }))
+  } catch (error) {
+    // Un drive déjà retiré ailleurs : il n'y a plus rien à retirer, l'écran se relit
+    if (error instanceof ApiError && error.message === 'DRIVE_SETTINGS_NOT_FOUND')
+      void queryClient.invalidateQueries({ queryKey: driveKeys.all })
+    else drivesError.value = messageForFailure(error)
+  } finally {
+    removing.value = null
+  }
+}
+
+/** Le drive habituel : au moins deux drives configurés, sinon il n'y a rien à choisir. */
+const configured = computed(() => drives.value.filter((drive) => drive.configured))
+const setDefault = useSetDefaultRetailer()
+const defaultKey = ref(0)
+async function chooseDefault(id: RetailerId | null) {
+  drivesError.value = null
+  try {
+    await setDefault.mutateAsync(id)
+  } catch (error) {
+    drivesError.value = messageForFailure(error)
+    // Le bouton coché n'est plus ce que le back sait : on le remet
+    defaultKey.value += 1
+  }
 }
 
 const readLabel = computed(() =>
@@ -200,16 +272,6 @@ const readLabel = computed(() =>
         : 'driveSettings.read',
   ),
 )
-
-// L'application : sa version et l'état du drive, par le pont (absent hors de l'application)
-const inApp = driveBridge.isAvailable()
-const app = useQuery({
-  queryKey: driveKeys.appInfo,
-  queryFn: () => driveBridge.info(),
-  enabled: inApp,
-  retry: false,
-  staleTime: 60_000,
-})
 
 // Les produits mémorisés : un résumé de `GET /drive/choices`
 const choices = useDriveChoices(() => enabled.value && store.value !== null)
@@ -275,7 +337,8 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
     <p v-else-if="!enabled" class="text-muted">{{ t('driveSettings.disabled') }}</p>
 
     <template v-else>
-      <section class="flex flex-col gap-3" aria-labelledby="store-title">
+      <!-- Un seul drive : l'écran d'avant (DRV-709, règle 1). Plusieurs : « Mes drives », plus bas. -->
+      <section v-if="!several" class="flex flex-col gap-3" aria-labelledby="store-title">
         <h2
           id="store-title"
           class="font-display text-2xl font-bold"
@@ -302,8 +365,8 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
             <UiButton
               :variant="store === null ? 'primary' : 'secondary'"
               :size="choosing ? 'lg' : 'md'"
-              :disabled="locked || reading"
-              @click="readFromApp"
+              :disabled="locked || reading !== null"
+              @click="readFromApp(soleTarget)"
               >{{ readLabel }}</UiButton
             >
             <p class="text-sm text-muted">{{ t('driveSettings.readHelp') }}</p>
@@ -314,65 +377,58 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
           <p v-if="!online && canRead" :class="notice">{{ t('driveSettings.offline') }}</p>
         </div>
 
-        <details
-          class="rounded-2xl border border-line bg-surface px-4 py-1"
-          :open="manualOpen"
-          @toggle="manualOpen = ($event.target as HTMLDetailsElement).open"
-        >
-          <summary
-            class="inline-flex min-h-11 cursor-pointer items-center font-bold text-primary focus-visible:outline-2 focus-visible:outline-primary"
-          >
-            {{ t('driveSettings.manual') }}
-          </summary>
-          <form class="flex flex-col gap-3 pt-2 pb-3" novalidate @submit.prevent="submit">
-            <UiField
-              :label="t('driveSettings.address')"
-              :hint="t('driveSettings.addressHint')"
-              :error="addressError"
-              v-slot="{ id, describedby, invalid }"
-            >
-              <UiTextInput
-                :id="id"
-                v-model="address"
-                type="url"
-                inputmode="url"
-                autocomplete="off"
-                autocapitalize="none"
-                spellcheck="false"
-                :aria-describedby="describedby"
-                :invalid="invalid"
-              />
-            </UiField>
-            <UiField
-              :label="t('driveSettings.name')"
-              :hint="t('driveSettings.nameHint')"
-              v-slot="{ id, describedby }"
-            >
-              <UiTextInput
-                :id="id"
-                v-model="label"
-                maxlength="255"
-                autocomplete="off"
-                :aria-describedby="describedby"
-              />
-            </UiField>
+        <StoreManualForm
+          v-if="retailer.storeIdSource !== 'EXPLICIT'"
+          v-model:open="manualOpen"
+          :retailer="retailer"
+          :store="store"
+          :locked="locked"
+          :online="online"
+          :save="(found) => saveManual(retailer.id, found)"
+        />
+      </section>
 
-            <p v-if="otherStore" role="status" :class="notice">
-              {{ t('driveSettings.changeWarning') }}
-            </p>
-            <p v-if="!online" :class="notice">{{ t('driveSettings.offline') }}</p>
-            <p
-              v-if="failure"
-              role="alert"
-              class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
-            >
-              {{ failure }}
-            </p>
-            <div>
-              <UiButton type="submit" :disabled="locked">{{ t('driveSettings.save') }}</UiButton>
-            </div>
-          </form>
-        </details>
+      <!-- Plusieurs drives allumés (DRV-709) : la liste, un magasin par drive, et le drive habituel -->
+      <section v-else class="flex flex-col gap-3" aria-labelledby="drives-title">
+        <h2
+          id="drives-title"
+          class="font-display text-2xl font-bold"
+          :class="{ 'sr-only': choosing }"
+        >
+          {{ t('driveSettings.drives.title') }}
+        </h2>
+        <p v-if="choosing">{{ t('driveSettings.drives.chooseHelp') }}</p>
+        <ul class="flex flex-col gap-3">
+          <DriveCard
+            v-for="drive in drives"
+            :key="drive.id"
+            :drive="drive"
+            :retailer="retailerOf(drive.id)"
+            :reader="readerFor(drive)"
+            :reading="reading === drive.id"
+            :busy="locked || reading !== null || removeDrive.isPending.value"
+            :online="online"
+            :saved-tail="savedFor === drive.id ? savedTail : null"
+            :read-error="readErrorFor === drive.id ? readError : null"
+            :save="(found) => saveManual(drive.id, found)"
+            @read="readFromApp({ id: drive.id, store: drive.store })"
+            @remove="removing = drive"
+          />
+        </ul>
+        <DefaultDriveChoice
+          v-if="configured.length > 1"
+          :key="defaultKey"
+          :drives="configured"
+          :disabled="locked || setDefault.isPending.value"
+          @choose="chooseDefault"
+        />
+        <p
+          v-if="drivesError"
+          role="alert"
+          class="rounded-xl bg-danger-soft px-4 py-3 font-semibold text-on-danger-soft"
+        >
+          {{ drivesError }}
+        </p>
       </section>
 
       <template v-if="!choosing">
@@ -439,6 +495,16 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
           </div>
         </section>
       </template>
+
+      <UiConfirmDialog
+        v-model:open="removeDialog"
+        :title="t('driveSettings.drives.removeTitle', { retailer: removing?.name ?? '' })"
+        :description="t('driveSettings.drives.removeHelp', { retailer: removing?.name ?? '' })"
+        :confirm-label="t('driveSettings.drives.remove', { retailer: removing?.name ?? '' })"
+        :cancel-label="t('driveSettings.drives.keep', { retailer: removing?.name ?? '' })"
+        :pending="removeDrive.isPending.value"
+        @confirm="confirmRemove"
+      />
 
       <!-- Le seul cas à deux gestes : le magasin lu n'est pas celui qui est enregistré (DRV-623) -->
       <UiConfirmDialog
