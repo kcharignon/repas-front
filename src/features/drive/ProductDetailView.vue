@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { useRetailerI18n } from './useRetailerI18n'
 import { computed, nextTick, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useQueryClient } from '@tanstack/vue-query'
 import { ArrowDown, ArrowUp } from 'lucide-vue-next'
@@ -19,7 +19,7 @@ import ProductPackSize from './ProductPackSize.vue'
 import { useDriveSettings } from './queries'
 import { contentLabel } from './productFormat'
 
-const { t } = useI18n()
+const { t, retailer } = useRetailerI18n()
 const route = useRoute()
 const router = useRouter()
 const queryClient = useQueryClient()
@@ -138,7 +138,7 @@ async function save() {
   const toSave = draft.value
   failure.value = null
   try {
-    await replace.mutateAsync(choiceDraft.toPayload(toSave, store.value.id))
+    await replace.mutateAsync(choiceDraft.toPayload(toSave, retailer.value.id, store.value.id))
   } catch (error) {
     fail(error)
 

@@ -2,6 +2,8 @@ import { LIMITS } from '@drive-protocol'
 
 import type { DriveChoice, DriveChoicePayload, DriveChoiceProduct } from '@/api'
 
+import type { RetailerId } from './retailers'
+
 /**
  * La préférence d'un ingrédient en cours de modification : l'écran « Mes produits » travaille sur ce brouillon, puis l'envoie d'un
  * coup (`PUT /drive/choices/{slug}`). Le front ne décide que de l'ordre voulu ; le back valide (produits connus, bornes, doublons).
@@ -79,9 +81,13 @@ export function toggleHaveAtHome(draft: ChoiceDraft, haveAtHome: boolean): Choic
 const ids = (list: DriveChoiceProduct[]) => list.map((product) => product.productId)
 
 /** « J'en ai toujours » n'envoie aucun produit, mais le brouillon les garde : décocher rend la liste telle qu'elle était. */
-export function toPayload(draft: ChoiceDraft, storeId: string): DriveChoicePayload {
+export function toPayload(
+  draft: ChoiceDraft,
+  retailer: RetailerId,
+  storeId: string,
+): DriveChoicePayload {
   return {
-    retailer: 'leclerc',
+    retailer,
     storeId,
     haveAtHome: draft.haveAtHome,
     accepted: draft.haveAtHome ? [] : ids(draft.accepted),

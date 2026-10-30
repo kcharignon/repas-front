@@ -2,10 +2,14 @@
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
+import { DEFAULT_RETAILER, retailerParams } from '@/features/drive/retailers'
+
 // La politique de confidentialité publique de tout Repas, `/confidentialite` (STORE-010) : lisible sans connexion, car Google Play et Amazon (skill
 // Alexa) en demandent l'adresse. Le texte vient de `privacy` dans `fr.ts` ; les clés ci-dessous ne font que l'ordonner. Le texte des conditions
 // du drive (`driveTerms`) reste dans l'application : il parle des risques propres à l'envoi.
-const { t } = useI18n()
+// Page publique : aucune session, donc l'enseigne par défaut du registre.
+const { t: translate } = useI18n()
+const t = (key: string) => translate(key, retailerParams(DEFAULT_RETAILER))
 
 /** L'adresse de Amazon où se lit sa propre politique de confidentialité (la voix est traitée par Amazon). */
 const AMAZON_PRIVACY = 'https://www.amazon.fr/privacy'

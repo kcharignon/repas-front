@@ -4,11 +4,10 @@
 // compare sur toutes les combinaisons de comptes, pluriels et accords compris.
 import { describe, expect, it } from 'vitest'
 
-import { i18n } from '@/i18n'
 import { summarySentence } from '../../../../drive-agent/src/ui/strings'
 import { sendSummary } from '../sendSummary'
 
-const t = i18n.global.t as unknown as Parameters<typeof sendSummary>[0]
+import { t } from './retailerT'
 
 const range = [0, 1, 2, 3, 7, 40]
 const combinations = range.flatMap((known) =>

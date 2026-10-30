@@ -708,3 +708,26 @@ describe("l'ingrédient de base (ING-015)", () => {
     expect(interdits.map((entry) => entry.where)).toEqual([])
   })
 })
+
+describe('le nom d’une enseigne est un paramètre (DRV-708)', () => {
+  const texts = webEntries()
+
+  it('n’écrit « Leclerc » ni « Auchan » dans un texte du web, hors de la section de chaque enseigne des conditions d’utilisation', () => {
+    const named = texts
+      .filter(({ where }) => !where.includes('driveTerms.retailers.'))
+      .filter(({ text }) => /leclerc|auchan/i.test(text))
+      .map(({ where }) => where)
+
+    expect(named).toEqual([])
+  })
+
+  it('ne dit jamais « enseigne » ni « retailer » à l’écran : on dit « drive » et on nomme l’enseigne', () => {
+    const said = texts
+      .filter(({ text }) =>
+        /(?<![\p{L}])(?:enseignes?|retailers?)(?![\p{L}])/iu.test(text.replace(/{[^}]*}/g, '')),
+      )
+      .map(({ where }) => where)
+
+    expect(said).toEqual([])
+  })
+})

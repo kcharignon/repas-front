@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { useRetailerI18n } from './useRetailerI18n'
 import { computed, onMounted, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { LIMITS } from '@drive-protocol'
 
@@ -24,7 +24,7 @@ import DriveSendLine from './DriveSendLine.vue'
 import { useDrivePlan } from './queries'
 import { sendSummary } from './sendSummary'
 
-const { t } = useI18n()
+const { t } = useRetailerI18n()
 const route = useRoute()
 const router = useRouter()
 const online = useOnline()

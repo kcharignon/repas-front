@@ -119,7 +119,7 @@ describe('le mode d’emploi de l’application', () => {
     expect(strings).not.toContain('ne parle qu’à leclercdrive.fr')
     expect(strings).not.toContain('ne contacte que Leclerc')
     const terms = read(join(srcDir, 'i18n', 'fr.ts'))
-    expect(terms).toContain('les pages de Leclerc font appel à leurs propres services')
+    expect(terms).toContain('les pages {retailerDe} font appel à leurs propres services')
   })
 })
 
