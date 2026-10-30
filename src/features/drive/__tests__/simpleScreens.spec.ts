@@ -168,12 +168,12 @@ describe('l’écran de l’envoi : une décision', () => {
     expect(wrapper.find('dl').exists()).toBe(false)
     expect(main.textContent).not.toMatch(/\b0\b/)
     expect(wrapper.find('details > summary').text()).toBe('Voir les articles')
-    expect(primaries(main).map((item) => item.textContent.trim())).toEqual(['Ouvrir le drive'])
+    expect(primaries(main).map((item) => item.textContent.trim())).toEqual(['Remplir mon panier'])
     // Le bouton vient avant la liste : visible sans défiler (la mise en page est mesurée dans le test visuel)
     const order = [...main.querySelectorAll('button, summary')].map((item) =>
       item.textContent.trim(),
     )
-    expect(order.indexOf('Ouvrir le drive')).toBeLessThan(order.indexOf('Voir les articles'))
+    expect(order.indexOf('Remplir mon panier')).toBeLessThan(order.indexOf('Voir les articles'))
     expect(tooLong('envoi', visibleText(main))).toEqual([])
     expect(CODE.test(visibleText(main))).toBe(false)
   })

@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import UiLinkButton from '@/design/UiLinkButton.vue'
 
 // Ce qui s'est passé, ce qui est sauf, une action (principes-produit.md § 4) : le texte est déjà en trois phrases. Quand l'action est de mettre
-// l'application à jour, le bouton qui y mène est ici ; sinon l'action est de toucher de nouveau « Ouvrir le drive », juste au-dessus.
+// l'application à jour, le bouton qui y mène est ici ; sinon l'action est de toucher de nouveau « Remplir mon panier », juste au-dessus.
 defineProps<{ failure: { text: string; update: boolean } }>()
 
 const { t } = useI18n()

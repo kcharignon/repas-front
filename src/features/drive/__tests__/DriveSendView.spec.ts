@@ -100,7 +100,7 @@ afterEach(() => {
 })
 
 describe('écran d’envoi au drive, dans l’application', () => {
-  it('dit la liste en une phrase, garde « Ouvrir le drive » avant les articles, qui sont repliés au-delà de 6 lignes', async () => {
+  it('dit la liste en une phrase, garde « Remplir mon panier » avant les articles, qui sont repliés au-delà de 6 lignes', async () => {
     installApp()
     const { wrapper, fetchMock } = await open()
     await loaded(wrapper)
@@ -117,7 +117,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
     expect(wrapper.find('dl').exists()).toBe(false)
     expect(wrapper.find('details > summary').text()).toBe('Voir les articles')
     const html = wrapper.html()
-    expect(html.indexOf('Ouvrir le drive')).toBeLessThan(html.indexOf('Voir les articles'))
+    expect(html.indexOf('Remplir mon panier')).toBeLessThan(html.indexOf('Voir les articles'))
     expect(wrapper.findAll('main > section ul > li')).toHaveLength(12)
 
     const farine = wrapper.findAll('main > section ul > li')[0]!
@@ -171,7 +171,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
     expect(calls(fetchMock)).toContain('GET /api/v1/drive/estimates/l1')
     // Le bouton, puis l'estimation, puis les articles
     const html = wrapper.html()
-    expect(html.indexOf('Ouvrir le drive')).toBeLessThan(html.indexOf('Estimation du coût'))
+    expect(html.indexOf('Remplir mon panier')).toBeLessThan(html.indexOf('Estimation du coût'))
     expect(html.indexOf('Estimation du coût')).toBeLessThan(html.indexOf('Voir les articles'))
   })
 
@@ -217,14 +217,14 @@ describe('écran d’envoi au drive, dans l’application', () => {
     ])
   })
 
-  it('« Ouvrir le drive » garde le brouillon, envoie le plan de 12 lignes avec les surcharges, puis attend le retour', async () => {
+  it('« Remplir mon panier » garde le brouillon, envoie le plan de 12 lignes avec les surcharges, puis attend le retour', async () => {
     const native = installApp()
     const { wrapper } = await open()
     await loaded(wrapper)
     await press('Choisir un autre produit')
     await wrapper.find('button[aria-label="Pas cette fois : Lait"]').trigger('click')
 
-    await press('Ouvrir le drive')
+    await press('Remplir mon panier')
 
     const [start] = started(native)
     expect(start?.plan?.lines).toHaveLength(12)
@@ -282,7 +282,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
     expect(wrapper.text()).not.toContain('En attente du récapitulatif…')
 
     // Un nouveau passage a un nouveau runId
-    await press('Ouvrir le drive')
+    await press('Remplir mon panier')
     expect(started(native)[0]?.plan?.runId).not.toBe(RUN)
   })
 
@@ -336,7 +336,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
     await loaded(wrapper)
     localStorage.setItem(DRAFT_KEY, draftOf('l1', OTHER_RUN))
 
-    await press('Ouvrir le drive')
+    await press('Remplir mon panier')
 
     expect(started(native)).toHaveLength(0)
     expect(wrapper.text()).toContain('En attente du récapitulatif…')
@@ -352,7 +352,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
     expect(wrapper.text()).toContain('Reprise des articles en échec : 2 articles')
     expect(wrapper.find('a[href="/drive/envoi/l1"]').text()).toBe('Voir toute la liste')
 
-    await press('Ouvrir le drive')
+    await press('Remplir mon panier')
 
     expect(started(native)[0]?.plan?.lines.map((line) => line.ingredientSlug)).toEqual([
       'beurre',
@@ -368,7 +368,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
     window.dispatchEvent(new Event('offline'))
     await flushPromises()
 
-    expect(button('Ouvrir le drive')?.disabled).toBe(true)
+    expect(button('Remplir mon panier')?.disabled).toBe(true)
     expect(wrapper.text()).toContain('Hors connexion')
   })
 
@@ -379,7 +379,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
     await vi.waitFor(() =>
       expect(wrapper.text()).toContain('Le drive ne fonctionne pas sur ce téléphone'),
     )
-    expect(button('Ouvrir le drive')?.disabled).toBe(true)
+    expect(button('Remplir mon panier')?.disabled).toBe(true)
     expect(wrapper.find('a[href="/drive/aide"]').exists()).toBe(true)
   })
 
@@ -392,7 +392,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
     await loaded(wrapper)
 
     expect(wrapper.text()).toContain('Cette liste n’a aucun article à envoyer.')
-    expect(button('Ouvrir le drive')?.disabled).toBe(true)
+    expect(button('Remplir mon panier')?.disabled).toBe(true)
   })
 
   describe('erreurs du lancement', () => {
@@ -407,7 +407,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
       const { wrapper } = await open({ 'GET /api/v1/drive/plans/l1': () => json(many) })
       await loaded(wrapper)
 
-      await press('Ouvrir le drive')
+      await press('Remplir mon panier')
 
       expect(wrapper.find('[role="alert"]').text()).toContain('plus de 100 articles')
       expect(started(native)).toHaveLength(0)
@@ -431,7 +431,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
       const { wrapper } = await open({ 'GET /api/v1/drive/plans/l1': () => json(heavy) })
       await loaded(wrapper)
 
-      await press('Ouvrir le drive')
+      await press('Remplir mon panier')
 
       expect(wrapper.find('[role="alert"]').text()).toContain('trop gros pour l’application')
       expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
@@ -444,7 +444,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
       const { wrapper } = await open({ 'GET /api/v1/drive/plans/l1': () => json(broken) })
       await loaded(wrapper)
 
-      await press('Ouvrir le drive')
+      await press('Remplir mon panier')
 
       expect(wrapper.find('[role="alert"]').text()).toContain('Repas n’a pas pu préparer l’envoi')
       expect(started(native)).toHaveLength(0)
@@ -458,9 +458,9 @@ describe('écran d’envoi au drive, dans l’application', () => {
         throw new Error('pont fermé')
       })
 
-      await press('Ouvrir le drive')
+      await press('Remplir mon panier')
 
-      expect(wrapper.find('[role="alert"]').text()).toContain('n’a pas pu ouvrir le drive')
+      expect(wrapper.find('[role="alert"]').text()).toContain('n’a pas pu remplir ton panier')
       expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
     })
 
@@ -470,7 +470,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
       await loaded(wrapper)
       delete (globalThis as { repasNative?: unknown }).repasNative
 
-      await press('Ouvrir le drive')
+      await press('Remplir mon panier')
 
       const alert = wrapper.find('[role="alert"]')
       expect(alert.find('p').text()).toBe(
@@ -493,7 +493,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
       const { wrapper } = await open({ 'GET /api/v1/drive/plans/l1': () => json(many) })
       await loaded(wrapper)
 
-      await press('Ouvrir le drive')
+      await press('Remplir mon panier')
 
       const alert = wrapper.find('[role="alert"]')
       expect(alert.text()).toBe(
@@ -509,7 +509,7 @@ describe('écran d’envoi au drive, dans l’application', () => {
       const { wrapper } = await open({ 'GET /api/v1/drive/plans/l1': () => json(broken) })
       await loaded(wrapper)
 
-      await press('Ouvrir le drive')
+      await press('Remplir mon panier')
 
       expect(wrapper.find('[role="alert"]').text()).toContain('Repas n’a pas pu préparer l’envoi')
     })
@@ -523,7 +523,7 @@ describe('écran d’envoi au drive, hors de l’application', () => {
 
     expect(wrapper.text()).toContain('L’envoi automatique n’est pas disponible ici')
     expect(wrapper.find('a[href="/drive/aide"]').text()).toBe('Installer l’application')
-    expect(button('Ouvrir le drive')).toBeUndefined()
+    expect(button('Remplir mon panier')).toBeUndefined()
     expect(wrapper.findAll('main > section ul > li button')).toHaveLength(0)
 
     const links = wrapper.findAll('main > section ul > li > a')
@@ -571,7 +571,7 @@ describe('écran d’envoi au drive, version de l’application (DRV-640)', () =
       expect(update.text()).toBe('Mettre à jour')
       expect(update.attributes('href')).toBe('/drive/aide')
 
-      expect(button('Ouvrir le drive')).toBeUndefined()
+      expect(button('Remplir mon panier')).toBeUndefined()
       expect(wrapper.text()).not.toContain('sont déjà choisis')
       // Le repli à la main : un lien de recherche par article, liste ouverte
       const links = wrapper.findAll('main > section ul > li > a')
@@ -597,7 +597,7 @@ describe('écran d’envoi au drive, version de l’application (DRV-640)', () =
     expect(wrapper.text()).not.toContain(sentence)
     await vi.advanceTimersByTimeAsync(500)
     await vi.waitFor(() => expect(wrapper.text()).toContain(sentence))
-    expect(button('Ouvrir le drive')).toBeUndefined()
+    expect(button('Remplir mon panier')).toBeUndefined()
     expect(wrapper.find('section[role="status"] a').attributes('href')).toBe('/drive/aide')
     expect(wrapper.findAll('main > section ul > li > a')).toHaveLength(11)
   })
@@ -611,7 +611,7 @@ describe('écran d’envoi au drive, version de l’application (DRV-640)', () =
     await loaded(wrapper)
 
     await vi.waitFor(() => expect(wrapper.text()).toContain(sentence))
-    expect(button('Ouvrir le drive')).toBeUndefined()
+    expect(button('Remplir mon panier')).toBeUndefined()
   })
 
   it.each(['0.1.10', '0.2.0', '1.0.0'])(
@@ -624,8 +624,8 @@ describe('écran d’envoi au drive, version de l’application (DRV-640)', () =
       await vi.waitFor(() => expect(native.sent.map((m) => m.type)).toContain('app.info'))
       await flushPromises()
       expect(wrapper.text()).not.toContain(sentence)
-      expect(button('Ouvrir le drive')?.disabled).toBe(false)
-      await press('Ouvrir le drive')
+      expect(button('Remplir mon panier')?.disabled).toBe(false)
+      await press('Remplir mon panier')
       expect(started(native)).toHaveLength(1)
     },
   )
@@ -718,7 +718,7 @@ describe('lecture du plan', () => {
     const alert = (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
       wrapper.find('[role="alert"]').text().replace(/'/g, '’')
 
-    it('dit « pas disponible », sans « Ouvrir le drive » ni « Envoyer au drive », et propose de rouvrir la liste envoyée', async () => {
+    it('dit « pas disponible », sans « Remplir mon panier » ni « Envoyer au drive », et propose de rouvrir la liste envoyée', async () => {
       installApp()
       const { wrapper } = await open(disabled)
 
@@ -728,7 +728,7 @@ describe('lecture du plan', () => {
         'L’envoi au drive n’est pas disponible pour le moment. Ta liste n’a pas changé. Réessaie plus tard.',
       )
       expect(wrapper.text()).toContain('Tu peux la rouvrir pour la modifier.')
-      expect(button('Ouvrir le drive')).toBeUndefined()
+      expect(button('Remplir mon panier')).toBeUndefined()
       expect(button('Envoyer au drive')).toBeUndefined()
       expect(wrapper.find('p.text-xl').exists()).toBe(false)
     })
@@ -894,7 +894,7 @@ describe('écran d’envoi au drive, rayons conseillés (DRV-642)', () => {
     await loaded(wrapper)
     await vi.waitFor(() => expect(native.sent.map((m) => m.type)).toContain('app.info'))
     await flushPromises()
-    await press('Ouvrir le drive')
+    await press('Remplir mon panier')
 
     return started(native)[0]?.plan
   }
@@ -939,7 +939,7 @@ describe('écran d’envoi au drive, contenance d’un produit dans l’unité d
     await loaded(wrapper)
     await vi.waitFor(() => expect(native.sent.map((m) => m.type)).toContain('app.info'))
     await flushPromises()
-    await press('Ouvrir le drive')
+    await press('Remplir mon panier')
 
     return started(native)[0]?.plan
   }
@@ -985,7 +985,7 @@ describe('écran d’envoi au drive, ouverture automatique', () => {
     expect(context.router.currentRoute.value.fullPath).toBe('/drive/envoi/l1')
   })
 
-  it('montre « Ouverture du drive… » pendant qu’il prépare, jamais le plan ni le bouton', async () => {
+  it('montre « Je remplis ton panier… » pendant qu’il prépare, jamais le plan ni le bouton', async () => {
     installApp()
     let release: () => void = () => undefined
     const gate = new Promise<void>((resolve) => (release = resolve))
@@ -1000,9 +1000,9 @@ describe('écran d’envoi au drive, ouverture automatique', () => {
       OPEN,
     )
 
-    expect(wrapper.text()).toContain('Ouverture du drive…')
+    expect(wrapper.text()).toContain('Je remplis ton panier…')
     expect(wrapper.text()).not.toContain('Préparation de l’envoi…')
-    expect(button('Ouvrir le drive')).toBeUndefined()
+    expect(button('Remplir mon panier')).toBeUndefined()
     release()
     await vi.waitFor(() => expect(wrapper.text()).toContain('En attente du récapitulatif…'))
   })
@@ -1013,7 +1013,7 @@ describe('écran d’envoi au drive, ouverture automatique', () => {
     await loaded(wrapper)
 
     expect(started(native)).toHaveLength(0)
-    expect(button('Ouvrir le drive')).toBeDefined()
+    expect(button('Remplir mon panier')).toBeDefined()
   })
 
   it('ne l’ouvre qu’une fois : le plan relu ou l’écran qui se redessine ne relance rien', async () => {
@@ -1069,7 +1069,7 @@ describe('écran d’envoi au drive, ouverture automatique', () => {
       await vi.waitFor(() =>
         expect(wrapper.text()).toContain('L’envoi automatique n’est pas disponible ici'),
       )
-      expect(wrapper.text()).not.toContain('Ouverture du drive…')
+      expect(wrapper.text()).not.toContain('Je remplis ton panier…')
     })
 
     it('un autre envoi en cours', async () => {
@@ -1099,7 +1099,7 @@ describe('écran d’envoi au drive, ouverture automatique', () => {
       await loaded(wrapper)
 
       expect(started(native)).toHaveLength(0)
-      expect(button('Ouvrir le drive')).toBeDefined()
+      expect(button('Remplir mon panier')).toBeDefined()
     })
 
     it('une liste sans article', async () => {
@@ -1129,7 +1129,7 @@ describe('écran d’envoi au drive, ouverture automatique', () => {
       expect(wrapper.text()).toContain('Hors connexion')
     })
 
-    it('le lancement échoue (plan trop gros pour un envoi) : la raison s’affiche, avec « Ouvrir le drive » pour réessayer', async () => {
+    it('le lancement échoue (plan trop gros pour un envoi) : la raison s’affiche, avec « Remplir mon panier » pour réessayer', async () => {
       const native = installApp()
       const many = plan()
       many.lines = Array.from({ length: 101 }, (_, index) => ({
@@ -1142,8 +1142,8 @@ describe('écran d’envoi au drive, ouverture automatique', () => {
       await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
 
       expect(wrapper.find('[role="alert"]').text()).toContain('plus de 100 articles')
-      expect(wrapper.text()).not.toContain('Ouverture du drive…')
-      expect(button('Ouvrir le drive')).toBeDefined()
+      expect(wrapper.text()).not.toContain('Je remplis ton panier…')
+      expect(button('Remplir mon panier')).toBeDefined()
       expect(started(native)).toHaveLength(0)
     })
   })

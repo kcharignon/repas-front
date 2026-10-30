@@ -22,7 +22,7 @@ export interface SendChoice {
   retailer: RetailerId | undefined
   /** Les tuiles de la question « Où envoyer ta liste ? » ; vide : aucune question. */
   tiles: Drive[]
-  /** Plusieurs drives sont configurés : le bouton principal nomme le drive (« Ouvrir {drive} »), sinon c'est « Ouvrir le drive » comme avant. */
+  /** Plusieurs drives sont configurés : le bouton principal nomme le drive (« Remplir le panier {drive} »), sinon c'est « Remplir mon panier ». */
   named: boolean
 }
 
