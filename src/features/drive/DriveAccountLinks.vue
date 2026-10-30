@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { useRetailerI18n } from './useRetailerI18n'
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { ChevronRight, Smartphone } from 'lucide-vue-next'
 
@@ -9,7 +9,7 @@ import { driveBridge } from './bridge'
 import { useDriveSettings } from './queries'
 
 // Les entrées du drive dans « Moi » : absentes tant que la fonction n'est pas allumée (ou que la lecture échoue).
-const { t } = useI18n()
+const { t } = useRetailerI18n()
 const notifications = useNotificationsStore()
 const settings = useDriveSettings()
 const enabled = computed(() => settings.data.value?.enabled === true)

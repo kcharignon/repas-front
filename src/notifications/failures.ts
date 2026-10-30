@@ -1,9 +1,12 @@
 import { ApiError } from '@/api'
 import { i18n } from '@/i18n'
+import { DEFAULT_RETAILER, retailerParams } from '@/features/drive/retailers'
 
 import { useNotificationsStore } from './store'
 
-const t = (key: string, named?: Record<string, unknown>) => i18n.global.t(key, named ?? {})
+// Hors d'un écran, l'enseigne n'est pas connue : celle par défaut du registre (le seul texte concerné, `driveStoreInvalid`).
+const t = (key: string, named?: Record<string, unknown>) =>
+  i18n.global.t(key, { ...retailerParams(DEFAULT_RETAILER), ...named })
 
 /** Les codes de domaine du drive que le back renvoie comme message d'erreur : chacun a son texte, quel que soit le statut. */
 const driveCodes = new Map([
