@@ -30,6 +30,9 @@
   --on-cold-soft: #1a62a0;
   --can-soft: #f7e8d2;
   --on-can-soft: #8a4f12;
+  /* Recette secrète (REC-002) : la pastille « Secrète » et l'icône de l'interrupteur. Texte et cadenas sur le fond doux : AA. */
+  --secret-soft: #e6f2ec;
+  --on-secret-soft: #14513a;
   /* Bandeau de connexion et pastille du logo (texte blanc dessus) : le même vert en clair et en sombre. */
   --brand: #1e6b4c;
   color-scheme: light;
@@ -55,6 +58,8 @@
     --on-cold-soft: #8fd0ff;
     --can-soft: #3a2a14;
     --on-can-soft: #f0b878;
+    --secret-soft: #173a2b;
+    --on-secret-soft: #9fe0c0;
     color-scheme: dark;
   }
 }
@@ -78,6 +83,8 @@
   --on-cold-soft: #8fd0ff;
   --can-soft: #3a2a14;
   --on-can-soft: #f0b878;
+  --secret-soft: #173a2b;
+  --on-secret-soft: #9fe0c0;
   color-scheme: dark;
 }
 
@@ -431,6 +438,8 @@
   --color-on-cold-soft: var(--on-cold-soft);
   --color-can-soft: var(--can-soft);
   --color-on-can-soft: var(--on-can-soft);
+  --color-secret-soft: var(--secret-soft);
+  --color-on-secret-soft: var(--on-secret-soft);
   --color-brand: var(--brand);
   --font-sans: 'Figtree Variable', system-ui, sans-serif;
   --font-display: 'Bricolage Grotesque Variable', 'Figtree Variable', system-ui, sans-serif;

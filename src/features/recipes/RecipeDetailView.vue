@@ -23,6 +23,7 @@ import OwnConversionSheet from '@/features/ingredients/OwnConversionSheet.vue'
 import { useUnits } from '@/features/ingredients/queries'
 import { formatQuantity } from '@/features/shopping-lists/format'
 import PlanButton from './PlanButton.vue'
+import SecretBadge from './SecretBadge.vue'
 import { useDeleteRecipe, useRecipe, useRecipesByType } from './queries'
 import { useCopyRecipeAction } from './useCopyRecipeAction'
 
@@ -158,7 +159,10 @@ function confirmDelete() {
       <div class="flex items-center gap-4">
         <SeasonArt name="recipe-placeholder" class="size-20" />
         <header class="flex min-w-0 flex-col gap-1">
-          <p class="text-sm font-bold text-primary">{{ recipe.data.value.typeName }}</p>
+          <div class="flex flex-wrap items-center gap-2">
+            <p class="text-sm font-bold text-primary">{{ recipe.data.value.typeName }}</p>
+            <SecretBadge v-if="recipe.data.value.secret === true" />
+          </div>
           <h1 class="font-display text-3xl leading-tight font-bold md:text-4xl">
             {{ recipe.data.value.name }}
           </h1>
