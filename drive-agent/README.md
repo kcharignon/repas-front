@@ -12,13 +12,13 @@ Contexte et protocole : `docs/drive/` du dépôt back (`kcharignon/repas`), en p
 
 Tout se lance dans Docker (`make help` les liste toutes).
 
-| Commande            | Rôle                                                                                                                                            |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `make agent-build`  | construit `dist/agent.js` et `dist/manifest.json` (version, taille, empreinte SHA-384)                                                          |
-| `make agent-verify` | construit deux fois et échoue si les deux empreintes diffèrent (rejoué par la CI)                                                               |
-| `make agent-test`   | joue les tests de l'agent seul (chaîne de construction, règles de code, agent) ; `make check` les joue aussi                                    |
+| Commande            | Rôle                                                                                                                                                                                                              |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make agent-build`  | construit `dist/agent.js` et `dist/manifest.json` (version, taille, empreinte SHA-384)                                                                                                                            |
+| `make agent-verify` | construit deux fois et échoue si les deux empreintes diffèrent (rejoué par la CI)                                                                                                                                 |
+| `make agent-test`   | joue les tests de l'agent seul (chaîne de construction, règles de code, agent) ; `make check` les joue aussi                                                                                                      |
 | `make agent-e2e`    | joue l'agent réel dans Chromium (Pixel 7) contre le faux site Leclerc (`fake-leclerc/`, `e2e/`, DRV-309) et celui d'Auchan (`fake-auchan/`, `e2e/auchan.spec.ts`, DRV-717), sans back ni réseau ; la CI le rejoue |
-| `make agent-fake`   | lance le faux site Leclerc à la main sur 127.0.0.1:8099 (Node 24 de la machine)                                                                 |
+| `make agent-fake`   | lance le faux site Leclerc à la main sur 127.0.0.1:8099 (Node 24 de la machine)                                                                                                                                   |
 
 Le dossier `dist/` n'est jamais commité.
 
