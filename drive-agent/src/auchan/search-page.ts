@@ -264,22 +264,11 @@ export function hasProductTrace(doc: Document): boolean {
 }
 
 /**
- * Les phrases (sans accent ni majuscule) par lesquelles une page dit qu'elle n'a rien trouvé. NON MESURÉ : la page « aucun résultat » d'Auchan n'a jamais
- * été relevée ; ces formes sont plausibles. Une page qui dit autre chose est de forme inconnue (`SEARCH_UNKNOWN_PAGE`), jamais « aucun produit ».
+ * La phrase (sans accent ni majuscule) par laquelle la page « aucun résultat » d'Auchan le dit. MESURÉ le 2026-10-30 (DRV-734, B-7b) : « Oups, on n'a rien
+ * trouvé pour : » (puis le terme). Elle ne suffit pas seule : [isNoResultPage] exige aussi le titre de la page de recherche, son `h1` et (par l'appelant)
+ * l'absence de toute carte. Les formes inventées d'avant (« aucun résultat », « aucun produit »…) n'ont jamais été vues : elles ne reconnaissent plus rien.
  */
-export const NO_RESULT_PHRASES = [
-  'aucun resultat',
-  'aucun produit',
-  'aucun article',
-  '0 resultat',
-  '0 produit',
-  'pas de resultat',
-  'pas de produit',
-  "n'a donne aucun",
-  'ne correspond a aucun',
-  "nous n'avons trouve aucun",
-  "nous n'avons pas trouve",
-] as const
+export const NO_RESULT_PHRASES = ["on n'a rien trouve pour"] as const
 
 /** Les phrases d'une liste FERMÉE que la page dit (rangées dans `facts.phrases` du diagnostic) : jamais un morceau de son texte. */
 export const REPORTED_PHRASES = [
@@ -298,10 +287,43 @@ export function phrasesOf(doc: Document): string[] {
   return REPORTED_PHRASES.filter((phrase) => visible.includes(phrase))
 }
 
-/** La page dit qu'elle n'a rien trouvé (une des phrases de [NO_RESULT_PHRASES] dans son texte visible). */
-export function saysNoResult(doc: Document): boolean {
+/** Le texte du premier `h1` de la page, comparable (sans accent ni majuscule) ; vide s'il n'y en a pas. */
+function headingOf(doc: Document): string {
+  return fold(doc.querySelector('h1')?.textContent ?? '')
+}
+
+/** Le titre de la page, comparable. */
+function titleOf(doc: Document): string {
+  return fold(doc.title)
+}
+
+/**
+ * La page « aucun résultat » de la recherche d'Auchan (MESURÉE le 2026-10-30, DRV-734, B-7b) : statut 200 sans redirection, titre « Votre recherche <terme>
+ * sur Auchan.fr », `h1` « Votre recherche : <terme> », la phrase de [NO_RESULT_PHRASES] et AUCUNE carte de produit. Les quatre ensemble : une page qui n'en
+ * a qu'un ou deux n'est pas reconnue (`SEARCH_UNKNOWN_PAGE`). L'absence de carte est jugée par l'appelant ([hasProductTrace]).
+ */
+export function isNoResultPage(doc: Document): boolean {
   const visible = fold(doc.body?.textContent ?? '')
-  return NO_RESULT_PHRASES.some((phrase) => visible.includes(phrase))
+  return (
+    titleOf(doc).startsWith('votre recherche') &&
+    headingOf(doc).startsWith('votre recherche') &&
+    NO_RESULT_PHRASES.some((phrase) => visible.includes(phrase))
+  )
+}
+
+/**
+ * Une page de RAYON par son contenu (MESURÉ le 2026-10-30, DRV-734, B-8) : titre « <Catégorie> pas cher - Auchan.fr », `h1` le nom de la catégorie. Jugée
+ * avec l'adresse (`/<rayon>/…/ca-n<chiffres>`, dans `search.ts`) : ni l'une ni l'autre ne suffit. Ce n'est pas la page de recherche (« Votre recherche… »).
+ */
+export function isAislePage(doc: Document): boolean {
+  const title = titleOf(doc)
+  const heading = headingOf(doc)
+  return (
+    title.endsWith(' pas cher - auchan.fr') &&
+    !title.startsWith('votre recherche') &&
+    heading !== '' &&
+    !heading.startsWith('votre recherche')
+  )
 }
 
 /** Retire de la copie lue ce qui n'est pas du contenu : scripts, styles, gabarits et `noscript` (leur texte n'est pas visible et fausserait les phrases). */

@@ -106,7 +106,26 @@ test.describe('phase B : la liste des produits que la recherche a trouvés', () 
     expect(fakeAuchan.writes()).toEqual([])
   })
 
-  test('un terme que le site redirige vers une fiche de produit ou un rayon n’est pas une page de résultats : aucun produit', async ({
+  test('un terme que le site redirige vers une page de rayon (MESURÉ) : les produits du rayon sont proposés, comme une page de résultats', async ({
+    page,
+    fakeAuchan,
+    agentCode,
+  }) => {
+    // Given : un terme que le faux site redirige (302) vers une page de rayon à plusieurs produits
+    const app = await open(page, fakeAuchan, agentCode)
+    app.answerHello(plan([fresh('rayon', 'Rayon')]))
+
+    // Then : les quatre produits de la page de rayon sont listés, une seule recherche, rien d'écrit
+    const blé = page.getByRole('listitem').filter({ hasText: 'Farine de blé T55 de test' })
+    await expect(blé).toBeVisible()
+    await expect(blé).toContainText('0,91')
+    await expect(page.getByRole('listitem').filter({ hasText: 'Farine' })).toHaveCount(4)
+    expect(searches(fakeAuchan).map((request) => request.detail)).toEqual(['rayon'])
+    expect(fakeAuchan.writes()).toEqual([])
+    expect(fakeAuchan.violations()).toEqual([])
+  })
+
+  test('un terme que le site redirige vers une fiche de produit n’est pas une page de résultats : aucun produit', async ({
     page,
     fakeAuchan,
     agentCode,

@@ -116,7 +116,10 @@ describe('l’application ne nomme aucune enseigne et ne passe que par le drapea
 
     const files = allFiles(appSrc).filter((path) => /\.(kt|kts|xml|json|js)$/.test(path) && !path.includes(join('src', 'test')))
     for (const id of ids) {
-      const offenders = files.filter((path) => new RegExp(id, 'i').test(codeOf(read(path))))
+      // Seule exception (DRV-735) : le modèle de plan d'essai de CETTE enseigne, une donnée de la variante de débogage seulement (`src/debug/assets/`) qui dit son
+      // enseigne ; le même fichier dans un autre dossier (publication comprise) reste une faute.
+      const planModel = join(appSrc, 'debug', 'assets', `debug-plan.${id}.json`)
+      const offenders = files.filter((path) => path !== planModel && new RegExp(id, 'i').test(codeOf(read(path))))
       expect({ id, offenders: offenders.map((path) => path.slice(androidDir.length + 1)) }).toEqual({ id, offenders: [] })
     }
   })

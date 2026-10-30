@@ -318,6 +318,8 @@ export const S = {
           attempt.status === null ? 'aucune réponse' : `HTTP ${attempt.status}`
         }, contenu ${attempt.mime ?? 'inconnu'}, ${attempt.length === null ? 'longueur inconnue' : sizeText(attempt.length)}, chemin ${attempt.address}`,
       phrases: (list: string) => `Mots de page d’erreur reconnus : ${list}`,
+      landing: (term: string, landing: 'AISLE' | 'PRODUCT') =>
+        `Recherche « ${term} » : redirigée vers ${landing === 'AISLE' ? 'un rayon (lu comme des résultats)' : 'une fiche de produit (non lue)'}`,
       session: (term: string, state: string) => `Connexion dans la réponse « ${term} » : ${state}`,
       keys: (
         term: string,

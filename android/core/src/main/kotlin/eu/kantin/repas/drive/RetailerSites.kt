@@ -78,6 +78,7 @@ class RetailerSites(val all: List<RetailerSite>, val legacy: RetailerSite = all.
             ),
             loginPath = Regex("^/connexion(\\.aspx)?(/|$)", RegexOption.IGNORE_CASE),
             mobileSiteLabel = Regex("m(-[a-z0-9-]*)?"),
+            debugPlanFile = "debug-plan.json",
         )
 
         /**
