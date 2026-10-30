@@ -226,9 +226,12 @@ export function useSaveIngredient() {
       // Le nom part toujours avec sa majuscule, quel que soit le chemin qui a rempli le formulaire (le back la met aussi)
       const sent = { ...form, name: capitalizeFirst(form.name.trim()) }
       if (slug === null) {
-        const { response, error } = await api.POST('/api/v1/ingredients', {
-          body: sent as IngredientPayload,
-        })
+        // Hors ligne : une `ApiError` de statut 0 (« serveur injoignable »), pas une erreur brute du navigateur
+        const { response, error } = await api
+          .POST('/api/v1/ingredients', { body: sent as IngredientPayload })
+          .catch((cause: unknown) => {
+            throw ApiError.network(cause)
+          })
         if (!response.ok) throw ApiError.fromResponse(response, error)
 
         return response.headers.get('Location')?.split('/').pop() ?? ''

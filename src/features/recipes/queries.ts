@@ -1,7 +1,9 @@
 import { computed } from 'vue'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import type { QueryClient } from '@tanstack/vue-query'
 
 import { ApiError, ifMatch, unwrap } from '@/api'
+import type { IngredientOption } from '@/api'
 import { capitalizeFirst } from '@/design/capitalizeFirst'
 import { shoppingListKeys } from '@/features/shopping-lists/queries'
 import { useSessionStore } from '@/session/session'
@@ -154,11 +156,27 @@ export function usePlanRecipe() {
 }
 
 /** Les ingrédients que l'utilisateur peut mettre dans une recette (les communs et les siens), triés par nom. */
+const ingredientOptionsKey = ['ingredients', 'options'] as const
+
+/**
+ * Un ingrédient qu'on vient de créer depuis le formulaire d'une recette entre tout de suite dans le choix : la ligne qui le sélectionne
+ * affiche son nom sans attendre la relecture de la liste (qui suit, l'écriture invalide les ingrédients).
+ */
+export function addIngredientOption(queryClient: QueryClient, option: IngredientOption) {
+  queryClient.setQueryData<{ member: IngredientOption[]; totalItems: number }>(
+    ingredientOptionsKey,
+    (current) =>
+      current === undefined || current.member.some((known) => known.slug === option.slug)
+        ? current
+        : { ...current, member: [...current.member, option], totalItems: current.totalItems + 1 },
+  )
+}
+
 export function useIngredientOptions(enabled: () => boolean = () => true) {
   const { api } = useSessionStore()
 
   return useQuery({
-    queryKey: ['ingredients', 'options'] as const,
+    queryKey: ingredientOptionsKey,
     queryFn: () => unwrap(api.GET('/api/v1/ingredients')),
     enabled: computed(enabled),
     staleTime: 5 * 60_000,

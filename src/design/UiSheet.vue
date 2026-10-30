@@ -22,6 +22,11 @@ defineProps<{
   description?: string
 }>()
 
+const emit = defineEmits<{
+  /** Le focus va revenir à l'élément qui a ouvert la feuille : `preventDefault()` le garde pour l'appelant (il l'a retiré de l'écran, il choisit où va le focus). */
+  closeAutoFocus: [event: Event]
+}>()
+
 const { t } = useI18n()
 </script>
 
@@ -31,6 +36,7 @@ const { t } = useI18n()
       <DialogOverlay class="fixed inset-0 z-40 bg-black/50" />
       <DialogContent
         :aria-describedby="description ? undefined : ''"
+        @close-auto-focus="emit('closeAutoFocus', $event)"
         class="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[90dvh] w-full max-w-lg flex-col gap-4 overflow-y-auto rounded-t-3xl border-t border-line bg-surface p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-ink shadow-xl focus:outline-none md:inset-x-4 md:top-1/2 md:bottom-auto md:max-h-[85dvh] md:max-w-md md:-translate-y-1/2 md:rounded-3xl md:border md:p-6"
       >
         <span class="mx-auto -mt-2 h-1.5 w-11 rounded-full bg-line md:hidden" aria-hidden="true" />

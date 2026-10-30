@@ -372,6 +372,9 @@ export default {
     removeRow: "Retirer l'ingrédient {n}",
     ingredientPlaceholder: 'Choisir un ingrédient',
     noIngredient: 'Aucun ingrédient ne correspond.',
+    // Créer l'ingrédient qu'on cherchait sans quitter la recette (ING-017)
+    noIngredientNamed: 'Aucun ingrédient ne s’appelle « {name} ».',
+    createIngredient: 'Créer « {name} »',
     unit: 'Unité',
     errors: {
       name: 'Donne un nom à la recette.',
@@ -379,6 +382,21 @@ export default {
       noRow: 'Ajoute au moins un ingrédient.',
       ingredient: 'Choisis un ingrédient.',
       quantity: 'Entre une quantité supérieure à zéro.',
+      unit: 'Choisis une unité.',
+    },
+  },
+  // La feuille « Nouvel ingrédient » du formulaire de recette (ING-017)
+  newIngredient: {
+    title: 'Nouvel ingrédient',
+    name: 'Nom',
+    department: 'Rayon',
+    unit: 'Unité',
+    otherUnit: 'Autre',
+    otherUnitLabel: 'Autre unité',
+    submit: 'Créer et l’ajouter à la recette',
+    errors: {
+      name: 'Donne un nom.',
+      department: 'Choisis un rayon.',
       unit: 'Choisis une unité.',
     },
   },
