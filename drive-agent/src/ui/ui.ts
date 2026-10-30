@@ -144,6 +144,7 @@ export function createUi(options: UiOptions): UiHandle {
         shown.overlay.appendChild(rendered.el)
         shown.current = rendered
         setSheet(shown, rendered.sheet === true)
+        setDark(shown, rendered.dark === true)
         rendered.start?.()
         rendered.el.scrollTop = 0
         const first = rendered.focus ?? rendered.el.querySelector<HTMLElement>(FOCUSABLE)
@@ -180,6 +181,15 @@ function setSheet(
   view.overlay.setAttribute('aria-modal', sheet ? 'false' : 'true')
   view.backdrop.hidden = sheet
   view.host.style.setProperty('pointer-events', sheet ? 'none' : 'auto', 'important')
+}
+
+/**
+ * Une palette sombre propre à l'écran (`dark`, DRV-744 : l'écran de progression), posée sur le cadre ET sur le fond pour qu'aucune marge claire ne
+ * reste visible quand le cadre ne remplit pas toute la fenêtre. Tout autre écran retrouve la palette du thème du téléphone.
+ */
+function setDark(view: { overlay: HTMLElement; backdrop: HTMLElement }, dark: boolean): void {
+  view.overlay.classList.toggle('dark', dark)
+  view.backdrop.classList.toggle('dark', dark)
 }
 
 /** Garde le clavier dans l'écran : Tab après le dernier élément revient au premier, Maj+Tab avant le premier va au dernier. */

@@ -36,6 +36,29 @@ export interface ResumeProps {
   total: number
 }
 
+/**
+ * Ce qui est arrivé à un article, sans phrase toute faite (DRV-744) : l'écran de progression en tire l'icône, l'état en petit et le nom accessible
+ * (`entries.ts`). Les noms des sortes suivent les lignes du résultat ; aucune ne change ce que le résultat envoyé à Repas contient.
+ */
+export type EntryKind =
+  | 'added'
+  | 'addedBackup'
+  | 'acceptedAnyway'
+  | 'savedNotInCart'
+  | 'haveAtHome'
+  | 'skipped'
+  | 'toChoose'
+  | 'unavailable'
+  | 'notFound'
+  | 'cartRefused'
+  | 'slow'
+  | 'failed'
+
+/** Une ligne du journal : un article et son état, ou une simple note (le test automatique de la variante de débogage n'a pas d'article). */
+export type ProgressEntry =
+  | { readonly kind: EntryKind; readonly name: string }
+  | { readonly kind: 'note'; readonly text: string }
+
 export interface ProgressProps {
   /** Le titre de l'écran, `S.progress.title` s'il manque (le test automatique en met un autre, DRV-318). */
   title?: string
@@ -45,12 +68,12 @@ export interface ProgressProps {
   done: number
   /** L'ingrédient en cours. */
   current: string
-  /** Les dernières actions, la plus récente en dernier (l'écran en garde cinq). */
-  log: readonly string[]
+  /** Les actions déjà faites, la plus récente en dernier (l'écran en garde `LOG_SIZE`, la liste défile). */
+  log: readonly ProgressEntry[]
 }
 
 /** Ce que `ui.update` change sur l'écran de progression ; `entry` ajoute une ligne au journal. */
-export type ProgressPatch = Partial<Omit<ProgressProps, 'log'>> & { entry?: string }
+export type ProgressPatch = Partial<Omit<ProgressProps, 'log'>> & { entry?: ProgressEntry }
 
 /**
  * Le produit dont on vérifie la quantité, tel que la carte de l'écran de choix le montre : photo, nom complet, contenu net et prix. Tout vient de ce que

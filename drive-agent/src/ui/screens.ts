@@ -1,5 +1,7 @@
 // Les écrans : chacun reçoit ses données et un rappel `answer`, et rend ses nœuds. Aucune logique d'envoi ici.
 import { append, clear, h, type Child } from './dom'
+import { viewOf } from './entries'
+import { icon } from './icons'
 import { own } from '../own'
 import { ofUnits, packsFromSize, parsePackValue } from '../../protocol'
 import { photoFrame } from './photo'
@@ -13,6 +15,7 @@ import type {
   EndProps,
   EntryProps,
   ErrorProps,
+  ProgressEntry,
   ProgressPatch,
   PackSizeProps,
   ProductCard,
@@ -34,6 +37,8 @@ export interface Rendered {
   focus?: HTMLElement
   /** Écran de progression : applique une mise à jour. */
   update?: (patch: ProgressPatch) => void
+  /** Vrai : l'écran garde sa palette sombre, quel que soit le thème du téléphone (l'écran de progression, DRV-744). */
+  dark?: boolean
   /** Appelé une fois l'écran dans la page. */
   start?: () => void
   /** Appelé quand l'écran est remplacé ou fermé. */
@@ -52,7 +57,8 @@ type Renderer<K extends ScreenName> = (
   retailer: PhotoRetailer,
 ) => Rendered
 
-const LOG_SIZE = 5
+/** Combien d'articles traités la liste garde : tout un envoi (100 lignes au plus), elle défile. */
+const LOG_SIZE = 100
 
 /**
  * Le rang d'un bouton dans l'écran (DRV-624) : `primary` est LE geste de l'écran, `secondary` une autre réponse possible, `quiet` ce qu'on
@@ -76,6 +82,11 @@ const title = (value: string) => h('h1', { text: value, attrs: { id: 'titre', ta
 function screen(...children: Child[]): HTMLElement {
   const el = h('section', { class: 'screen', attrs: { 'aria-labelledby': 'titre' } })
   append(el, ...children)
+  return el
+}
+
+const withClass = (el: HTMLElement, name: string): HTMLElement => {
+  el.classList.add(name)
   return el
 }
 
@@ -134,11 +145,17 @@ const resume: Renderer<'resume'> = (props: ResumeProps, answer) => {
   }
 }
 
-const progress: Renderer<'progress'> = (props: ProgressProps, answer) => {
-  const bar = h('progress', { attrs: { 'aria-label': S.progress.bar } })
-  const count = h('p', { class: 'hint' })
-  const current = h('p')
-  const log = h('ul', { attrs: { 'aria-label': S.progress.log } })
+const progress: Renderer<'progress'> = (props: ProgressProps, answer, retailer) => {
+  const done = h('span', { class: 'done' })
+  const of = h('span', { class: 'of' })
+  const fill = h('div', { class: 'fill' })
+  const bar = h('div', {
+    class: 'meter',
+    attrs: { role: 'progressbar', 'aria-label': S.progress.bar, 'aria-valuemin': '0' },
+  })
+  bar.appendChild(fill)
+  const current = h('strong', { class: 'name' })
+  const log = h('ul', { class: 'done-list', attrs: { 'aria-label': S.progress.log } })
   const stop = button(S.progress.stop, () => {
     stop.disabled = true
     stop.textContent = S.progress.stopping
@@ -146,38 +163,94 @@ const progress: Renderer<'progress'> = (props: ProgressProps, answer) => {
   })
   const state = { total: props.total, done: props.done }
   const paint = () => {
-    bar.max = Math.max(state.total, 1)
-    bar.value = Math.min(state.done, bar.max)
-    count.textContent = S.progress.count(state.done, state.total)
+    const parts = S.progress.countParts(state.done, state.total)
+    done.textContent = parts.done
+    of.textContent = parts.of
+    const max = Math.max(state.total, 1)
+    const value = Math.min(state.done, max)
+    bar.setAttribute('aria-valuemax', String(max))
+    bar.setAttribute('aria-valuenow', String(value))
+    bar.setAttribute('aria-valuetext', S.progress.count(state.done, state.total))
+    fill.style.setProperty('width', `${(value / max) * 100}%`)
   }
-  const addEntry = (entry: string) => {
-    log.appendChild(h('li', { text: entry }))
+  const addEntry = (entry: ProgressEntry) => {
+    const view = viewOf(entry, retailer)
+    // Le nom accessible de la ligne est la phrase complète (« Farine : ajouté ») : l'icône et l'état en petit ne sont que visuels.
+    const row = h(
+      'li',
+      { class: `entry ${view.tone}`, attrs: { 'aria-label': view.sentence } },
+      h(
+        'span',
+        { class: `dot ${view.tone}` },
+        icon(view.icon, 16, view.icon === 'check' ? 3 : 2.2),
+      ),
+      h('span', { class: 'label', text: view.name }),
+      view.state === null ? null : h('span', { class: 'state', text: view.state }),
+    )
+    log.appendChild(row)
     while (log.children.length > LOG_SIZE) log.firstElementChild?.remove()
+    // Les plus récentes en bas, comme avant : la liste défile pour garder la dernière ligne en vue.
+    log.scrollTop = log.scrollHeight
   }
   props.log.slice(-LOG_SIZE).forEach(addEntry)
-  current.textContent = S.progress.current(props.current)
+  current.textContent = props.current
   paint()
   return {
-    el: screen(
-      title(props.title ?? S.progress.title),
-      props.lead ? h('p', { class: 'lead', text: props.lead }) : null,
-      bar,
-      count,
-      // Une seule zone annoncée par les lecteurs d'écran : l'ingrédient en cours et les dernières actions.
-      h(
-        'div',
-        { class: 'live', attrs: { 'aria-live': 'polite', 'aria-relevant': 'additions text' } },
-        current,
+    el: withClass(
+      screen(
+        // Le test automatique de la variante de débogage met son propre titre : il ne remplit pas un panier, donc pas de repère d'enseigne.
+        props.title === undefined
+          ? h(
+              'div',
+              { class: 'brand' },
+              h('span', { class: 'brand-icon' }, icon('cart', 20)),
+              h('span', { text: S.progress.brand(retailer) }),
+            )
+          : null,
+        title(props.title ?? S.progress.title),
+        props.lead ? h('p', { class: 'lead', text: props.lead }) : null,
+        h(
+          'div',
+          { class: 'card' },
+          h(
+            'div',
+            { class: 'count' },
+            h('span', { class: 'big' }, done, of),
+            h('span', { class: 'what', text: S.progress.processed }),
+          ),
+          bar,
+        ),
+        // Une seule zone annoncée par les lecteurs d'écran : l'article en cours.
+        h(
+          'div',
+          {
+            class: 'now live',
+            attrs: { 'aria-live': 'polite', 'aria-relevant': 'additions text' },
+          },
+          h('span', { class: 'spin', attrs: { 'aria-hidden': 'true' } }),
+          h(
+            'div',
+            { class: 'now-text' },
+            h('span', { class: 'hint', text: S.progress.nowTitle }),
+            current,
+          ),
+        ),
         log,
+        h(
+          'div',
+          { class: 'foot' },
+          h('p', { class: 'keep' }, icon('phone', 18), h('span', { text: S.progress.keepOpen })),
+          actions(stop),
+        ),
       ),
-      h('p', { class: 'hint', text: S.progress.keepOpen }),
-      actions(stop),
+      'progress',
     ),
+    dark: true,
     focus: stop,
     update(patch) {
       if (patch.total !== undefined) state.total = patch.total
       if (patch.done !== undefined) state.done = patch.done
-      if (patch.current !== undefined) current.textContent = S.progress.current(patch.current)
+      if (patch.current !== undefined) current.textContent = patch.current
       if (patch.entry !== undefined) addEntry(patch.entry)
       paint()
     },

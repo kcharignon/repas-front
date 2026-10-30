@@ -361,7 +361,7 @@ test('reprend après un rechargement de la page sans refaire les lignes déjà f
 }) => {
   // Given : un passage en cours, la première ligne est faite
   await openWithFragment(page, fake, agentCode, THREE_LINES)
-  await expect(page.getByText('Farine : ajouté')).toBeVisible()
+  await expect(page.getByRole('listitem', { name: 'Farine : ajouté' })).toBeVisible()
   expect(fake.cart()).toEqual({ 1000001: 3 })
 
   // When : la page se recharge (le plan est toujours dans l'adresse) ; l'utilisateur reprend un instant plus tard

@@ -1,11 +1,20 @@
 // L'interface superposée (DRV-304) : chaque écran (rendu, réponses, échappement), le focus et l'isolation. jsdom, sans réseau.
-import { LECLERC } from './retailer-fixtures'
+import { EXEMPLE, LECLERC } from './retailer-fixtures'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { h } from '../src/ui/dom'
 import { createUi, errorTexts, renderPicker, type UiHandle } from '../src/ui'
+import { ENTRY_KINDS, viewOf } from '../src/ui/entries'
 import { STYLES } from '../src/ui/styles'
-import type { ChooserProps, DiagnosticRow, DiagnosticView, EndProps, SummaryProps } from '../src/ui'
+import type {
+  ChooserProps,
+  DiagnosticRow,
+  DiagnosticView,
+  EndProps,
+  ProgressEntry,
+  ProgressProps,
+  SummaryProps,
+} from '../src/ui'
 import { ERROR_CODES } from '../protocol'
 
 const HOSTILE = '<img src=x onerror="window.pwned=1"><script>window.pwned=1</script>'
@@ -338,19 +347,129 @@ describe('reprise', () => {
 })
 
 describe('progression', () => {
-  const props = { total: 4, done: 1, current: 'Farine', log: ['Farine : ajouté'] }
+  const props: ProgressProps = {
+    total: 4,
+    done: 1,
+    current: 'Farine',
+    log: [{ kind: 'added', name: 'Farine' }],
+  }
+  const rows = () => [...shadow().querySelectorAll<HTMLElement>('.done-list li')]
+  const bar = () => shadow().querySelector<HTMLElement>('[role="progressbar"]')
 
-  it('montre la barre, la ligne en cours et le journal dans une zone annoncée poliment', () => {
+  it('montre le repère d’enseigne, le titre, la carte d’avancement, l’article en cours et le journal', () => {
     const handle = open()
     void handle.show('progress', props)
 
-    const bar = shadow().querySelector('progress')
-    expect(bar?.max).toBe(4)
-    expect(bar?.value).toBe(1)
-    expect(bar?.getAttribute('aria-label')).toBeTruthy()
-    expect(shadow().textContent).toContain('1 sur 4')
-    expect(shadow().textContent).toContain('En cours : Farine')
-    expect(shadow().querySelector('[aria-live="polite"] li')?.textContent).toBe('Farine : ajouté')
+    expect(shadow().querySelector('.brand')?.textContent).toBe('Panier Leclerc')
+    expect(shadow().querySelector('.brand svg')?.getAttribute('aria-hidden')).toBe('true')
+    expect(shadow().querySelector('h1')?.textContent).toBe('Ton panier se remplit')
+    expect(shadow().querySelector('.big')?.textContent).toBe('1 sur 4')
+    expect(shadow().querySelector('.what')?.textContent).toBe('articles traités')
+    const now = shadow().querySelector('.now')
+    expect(now?.getAttribute('aria-live')).toBe('polite')
+    expect(now?.textContent).toContain('En ce moment')
+    expect(now?.querySelector('strong')?.textContent).toBe('Farine')
+    expect(rows().map((row) => row.getAttribute('aria-label'))).toEqual(['Farine : ajouté'])
+    expect(shadow().querySelector('.keep')?.textContent).toBe('Garde l’application ouverte.')
+    expect(shadow().querySelector('.keep svg')?.getAttribute('aria-hidden')).toBe('true')
+    expect(buttons().map((button) => button.textContent)).toEqual(['Arrêter'])
+  })
+
+  it('le repère d’enseigne vient de la table de l’enseigne, sans condition sur son nom', () => {
+    ui = createUi({ mode: 'open', retailer: EXEMPLE })
+    void ui.show('progress', props)
+
+    expect(shadow().querySelector('.brand')?.textContent).toBe('Panier Exemple')
+  })
+
+  it('la barre est une vraie barre de progression, nommée, avec ses bornes et sa valeur dite', () => {
+    const handle = open()
+    void handle.show('progress', props)
+
+    expect(bar()?.getAttribute('aria-label')).toBe('Avancement')
+    expect(bar()?.getAttribute('aria-valuemin')).toBe('0')
+    expect(bar()?.getAttribute('aria-valuemax')).toBe('4')
+    expect(bar()?.getAttribute('aria-valuenow')).toBe('1')
+    expect(bar()?.getAttribute('aria-valuetext')).toBe('1 sur 4')
+    expect(bar()?.querySelector<HTMLElement>('.fill')?.style.width).toBe('25%')
+
+    void handle.show('progress', { ...props, total: 0, done: 3 })
+
+    expect(bar()?.getAttribute('aria-valuemax')).toBe('1')
+    expect(bar()?.getAttribute('aria-valuenow')).toBe('1')
+  })
+
+  it.each(ENTRY_KINDS)(
+    'la ligne « %s » a son icône, son nom, son état et sa phrase complète pour nom accessible',
+    (kind) => {
+      const handle = open()
+      const entry: ProgressEntry = { kind, name: 'Figolu' }
+      void handle.show('progress', { ...props, log: [entry] })
+      const view = viewOf(entry, LECLERC)
+
+      const row = rows()[0]
+      expect(row?.getAttribute('aria-label')).toBe(view.sentence)
+      expect(row?.querySelector('.label')?.textContent).toBe('Figolu')
+      expect(row?.querySelector('.state')?.textContent).toBe(view.state)
+      expect(row?.querySelector('.dot')?.classList.contains(view.tone)).toBe(true)
+      expect(row?.querySelector('.dot svg')?.getAttribute('aria-hidden')).toBe('true')
+      expect(row?.classList.contains('attention')).toBe(view.tone === 'attention')
+    },
+  )
+
+  it('range les états : coche pleine pour ajouté, maison pour « j’en ai toujours », trait pour « pas cette fois », attention pour le reste', () => {
+    const icons = Object.fromEntries(
+      ENTRY_KINDS.map((kind) => [kind, viewOf({ kind, name: 'X' }, LECLERC)] as const).map(
+        ([kind, view]) => [kind, `${view.icon}/${view.tone}`],
+      ),
+    )
+
+    expect(icons).toEqual({
+      added: 'check/ok',
+      addedBackup: 'check/ok',
+      acceptedAnyway: 'check/ok',
+      savedNotInCart: 'attention/attention',
+      haveAtHome: 'home/neutral',
+      skipped: 'dash/neutral',
+      toChoose: 'attention/attention',
+      unavailable: 'attention/attention',
+      notFound: 'attention/attention',
+      cartRefused: 'attention/attention',
+      slow: 'attention/attention',
+      failed: 'attention/attention',
+    })
+  })
+
+  it('les phrases complètes sont celles d’avant, mot pour mot', () => {
+    const sentences = ENTRY_KINDS.map((kind) => viewOf({ kind, name: 'Lait' }, LECLERC).sentence)
+
+    expect(sentences).toEqual([
+      'Lait : ajouté',
+      'Lait : ajouté, produit de remplacement',
+      'Lait : ajouté, Leclerc l’a accepté',
+      'Lait : enregistré, pas dans le panier',
+      'Lait : j’en ai toujours',
+      'Lait : pas cette fois',
+      'Lait : à choisir ensuite',
+      'Lait : plus disponible, à choisir ensuite',
+      'Lait : produit introuvable, à choisir ensuite',
+      'Lait : pas pris par le panier, à choisir ensuite',
+      'Lait : Leclerc met trop de temps à répondre',
+      'Lait : échec',
+    ])
+  })
+
+  it('une note (le test automatique) n’a pas d’état en petit', () => {
+    const handle = open()
+    void handle.show('progress', {
+      ...props,
+      title: 'Test automatique',
+      log: [{ kind: 'note', text: 'Étape 1' }],
+    })
+
+    expect(rows()[0]?.getAttribute('aria-label')).toBe('Étape 1')
+    expect(rows()[0]?.querySelector('.state')).toBeNull()
+    expect(shadow().querySelector('.brand')).toBeNull()
   })
 
   it('porte le titre du remplissage du panier, ou celui que l’appelant donne (le test automatique)', () => {
@@ -378,25 +497,70 @@ describe('progression', () => {
     expect(shadow().querySelector('p.lead')).toBeNull()
   })
 
-  it('se met à jour sans refaire l’écran et ne garde que les cinq dernières actions', () => {
+  it('se met à jour sans refaire l’écran, garde les plus récentes en bas et défile avec elles', () => {
     const handle = open()
     void handle.show('progress', props)
-    const live = shadow().querySelector('.live')
+    const list = shadow().querySelector<HTMLElement>('.done-list')
 
-    for (let i = 1; i <= 6; i += 1) handle.update({ done: 1 + i, entry: `Action ${i}` })
+    for (let i = 1; i <= 6; i += 1) {
+      handle.update({ done: 1 + i, entry: { kind: 'added', name: `Article ${i}` } })
+    }
     handle.update({ current: 'Lait', total: 10 })
 
-    expect(shadow().querySelector('.live')).toBe(live)
-    expect([...shadow().querySelectorAll('.live li')].map((li) => li.textContent)).toEqual([
-      'Action 2',
-      'Action 3',
-      'Action 4',
-      'Action 5',
-      'Action 6',
+    expect(shadow().querySelector('.done-list')).toBe(list)
+    expect(rows().map((row) => row.querySelector('.label')?.textContent)).toEqual([
+      'Farine',
+      'Article 1',
+      'Article 2',
+      'Article 3',
+      'Article 4',
+      'Article 5',
+      'Article 6',
     ])
-    expect(shadow().textContent).toContain('En cours : Lait')
-    expect(shadow().querySelector('progress')?.max).toBe(10)
-    expect(shadow().querySelector('progress')?.value).toBe(7)
+    expect(shadow().querySelector('.now strong')?.textContent).toBe('Lait')
+    expect(shadow().querySelector('.big')?.textContent).toBe('7 sur 10')
+    expect(bar()?.getAttribute('aria-valuemax')).toBe('10')
+    expect(bar()?.getAttribute('aria-valuenow')).toBe('7')
+  })
+
+  it('reste lisible quand le journal est long : un envoi entier, et pas un article de plus', () => {
+    const handle = open()
+    void handle.show('progress', { ...props, log: [] })
+
+    for (let i = 1; i <= 120; i += 1) {
+      handle.update({ entry: { kind: 'added', name: `Article ${i}` } })
+    }
+
+    expect(rows()).toHaveLength(100)
+    expect(rows()[0]?.querySelector('.label')?.textContent).toBe('Article 21')
+    expect(rows()[99]?.querySelector('.label')?.textContent).toBe('Article 120')
+  })
+
+  it('l’écran garde sa palette sombre, quel que soit le thème, et la perd avec l’écran suivant', () => {
+    const handle = open()
+    void handle.show('progress', props)
+    const overlay = () => shadow().querySelector('.overlay')
+    const backdrop = () => shadow().querySelector('.backdrop')
+
+    expect(overlay()?.classList.contains('dark')).toBe(true)
+    expect(backdrop()?.classList.contains('dark')).toBe(true)
+    expect(STYLES).toMatch(/\.dark\{[^}]*--bg:#0f1713[^}]*--accent:#4fb58a/)
+
+    void handle.show('welcome', {})
+
+    expect(overlay()?.classList.contains('dark')).toBe(false)
+    expect(backdrop()?.classList.contains('dark')).toBe(false)
+  })
+
+  it('l’indicateur tourne, sauf en mouvement réduit : un point fixe, sans animation', () => {
+    const handle = open()
+    void handle.show('progress', props)
+
+    expect(shadow().querySelector('.now .spin')?.getAttribute('aria-hidden')).toBe('true')
+    expect(STYLES).toMatch(/\.spin\{[^}]*animation:spin 1s linear infinite/)
+    const reduced = STYLES.slice(STYLES.indexOf('@media (prefers-reduced-motion:reduce)'))
+    expect(reduced).toMatch(/animation:none!important/)
+    expect(reduced).toMatch(/\.spin\{border:0;background:radial-gradient/)
   })
 
   it('« Arrêter » rend « stop » une fois et dit qu’il s’arrête après la ligne en cours', async () => {
@@ -408,7 +572,8 @@ describe('progression', () => {
     await expect(answer).resolves.toBe('stop')
     const stop = buttons()[0]
     expect(stop?.disabled).toBe(true)
-    expect(stop?.textContent).toContain('J’arrête')
+    expect(stop?.textContent).toBe('J’arrête après l’article en cours…')
+    expect(stop?.disabled).toBe(true)
   })
 
   it('une mise à jour sans écran de progression ne fait rien', () => {
@@ -1955,8 +2120,13 @@ describe('échappement', () => {
     })
     void handle.show('quantity', { ingredient: HOSTILE, productLabel: HOSTILE, packs: 1 })
     expect(shadow().textContent).toContain(HOSTILE)
-    void handle.show('progress', { total: 1, done: 0, current: HOSTILE, log: [HOSTILE] })
-    handle.update({ entry: HOSTILE, current: HOSTILE })
+    void handle.show('progress', {
+      total: 1,
+      done: 0,
+      current: HOSTILE,
+      log: [{ kind: 'added', name: HOSTILE }],
+    })
+    handle.update({ entry: { kind: 'note', text: HOSTILE }, current: HOSTILE })
     void handle.show('chooser', {
       ingredient: HOSTILE,
       position: 1,

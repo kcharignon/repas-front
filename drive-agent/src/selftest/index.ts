@@ -43,7 +43,8 @@ export async function showSelftest(deps: SelftestDeps): Promise<void> {
   try {
     const data = await runSelftest(deps, {
       stopped: () => stopRequested,
-      step: (done, current) => deps.ui.update({ done, current, entry: current }),
+      step: (done, current) =>
+        deps.ui.update({ done, current, entry: { kind: 'note', text: current } }),
     })
     deps.send({
       v: 1,
@@ -52,7 +53,7 @@ export async function showSelftest(deps: SelftestDeps): Promise<void> {
       agentVersion: deps.agentVersion,
       report: reportOf(data).slice(0, LIMITS.selftestReport),
     })
-    deps.ui.update({ done: PROGRESS_TOTAL, entry: S.selftest.reportReady })
+    deps.ui.update({ done: PROGRESS_TOTAL, entry: { kind: 'note', text: S.selftest.reportReady } })
   } finally {
     // Quoi qu'il arrive, l'écran de l'agent ne reste pas par-dessus la page.
     deps.ui.close()
