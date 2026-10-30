@@ -42,6 +42,19 @@ describe('LoginView', () => {
     })
   })
 
+  it('prépare la saisie automatique des gestionnaires de mots de passe', async () => {
+    const { wrapper } = await mountView(LoginView, '/connexion')
+
+    const email = wrapper.find('input[type=email]')
+    expect(email.attributes('autocomplete')).toBe('username')
+    expect(email.attributes('name')).toBe('username')
+    expect(email.attributes('autocapitalize')).toBe('none')
+    expect(email.attributes('spellcheck')).toBe('false')
+    const password = wrapper.find('input[type=password]')
+    expect(password.attributes('autocomplete')).toBe('current-password')
+    expect(password.attributes('name')).toBe('password')
+  })
+
   it('va à la liste de courses sans page demandée', async () => {
     stubApi(loggedIn)
     const { wrapper, router } = await mountView(LoginView, '/connexion')

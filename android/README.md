@@ -236,7 +236,7 @@ Sans ce fichier, Android ne vérifie pas le lien : un lien `https://kantin.eu/�
    ```json
    [
      {
-       "relation": ["delegate_permission/common.handle_all_urls"],
+       "relation": ["delegate_permission/common.handle_all_urls", "delegate_permission/common.get_login_creds"],
        "target": {
          "namespace": "android_app",
          "package_name": "eu.kantin.repas.drive",
@@ -247,6 +247,7 @@ Sans ce fichier, Android ne vérifie pas le lien : un lien `https://kantin.eu/�
    ```
 
    Côté front, le fichier va dans `public/.well-known/assetlinks.json` ; l'empreinte du certificat n'est pas un secret. **Essayé sur l'image de production** : Vite le recopie dans `dist/.well-known/`, le Caddy du front (`try_files {path} /index.html`) le sert en `200` et `application/json`, sans redirection, et la bordure du back (`deploy/Caddyfile`) envoie tout ce qui n'est pas `/api` ni `/images` vers le front : **aucun changement dans `deploy/`**. Fichier absent, Caddy répond `200` avec la page d'accueil : contrôler le type (`curl -sSI`), pas seulement le code. `__tests__/publication.spec.ts` vérifie la forme du fichier (un seul paquet `eu.kantin.repas.drive`, empreintes en `AA:BB:…`, jamais celle de la clé de débogage).
+   Si un **gestionnaire de mots de passe ne propose rien** sur la page de connexion : vérifier l'association du site (`assetlinks.json`, relation `delegate_permission/common.get_login_creds`, `PUBLICATION.md` étape 4), puis le réglage Android « service de saisie automatique » du gestionnaire.
 3. vérifier : `adb shell pm get-app-links eu.kantin.repas.drive` (état `verified` pour l'hôte), ou ouvrir un lien reçu par courriel.
 
 **Ne jamais** y mettre l'empreinte de la clé de débogage (publique) : n'importe qui pourrait alors se faire passer pour l'application. L'APK de débogage ne sera donc jamais « vérifié » : c'est voulu.

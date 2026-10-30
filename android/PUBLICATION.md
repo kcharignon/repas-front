@@ -103,7 +103,7 @@ Pour les deux mots de passe, `gh` te demande la valeur (elle ne s'affiche pas qu
 ```json
 [
   {
-    "relation": ["delegate_permission/common.handle_all_urls"],
+    "relation": ["delegate_permission/common.handle_all_urls", "delegate_permission/common.get_login_creds"],
     "target": {
       "namespace": "android_app",
       "package_name": "eu.kantin.repas.drive",
@@ -112,6 +112,8 @@ Pour les deux mots de passe, `gh` te demande la valeur (elle ne s'affiche pas qu
   }
 ]
 ```
+
+**Les deux relations** : `handle_all_urls` ouvre les liens `https://kantin.eu/…` dans l'application ; `get_login_creds` (ajoutée le 2026-10-30) permet aux gestionnaires de mots de passe (Proton Pass, Bitwarden…) de vérifier l'association application et site, et donc de proposer les identifiants de `kantin.eu` sur la page de connexion affichée dans la WebView. Aucune empreinte ni aucun nom de paquet ne change ; le fichier est servi par le site, aucune nouvelle version de l'application n'est nécessaire.
 
 **Ce que fait l'assistant** (toi, tu n'as rien à écrire) :
 
