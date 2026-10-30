@@ -279,6 +279,8 @@ export interface SearchFacts {
    * l'adresse : une forme fixe. Absent chez une enseigne qui ne redirige pas.
    */
   landing?: 'AISLE' | 'PRODUCT'
+  /** Les produits de la page écartés parce qu'ils ne sont pas du drive (aucune offre du vendeur `GROCERY`, DRV-739) : un nombre, absent s'il n'y en a pas. */
+  notDrive?: number
   /** Les produits lus ; `null` quand la réponse n'a pas pu être lue. */
   products: number | null
   /** `PRODUCTS` (au moins un produit), `EMPTY` (page reconnue sans produit), `FAILED` (erreur de l'adaptateur : voir [fault]). */

@@ -240,6 +240,46 @@ test.describe('phase A : la quantité déjà au panier se lit (DRV-732)', () => 
   })
 })
 
+test.describe('un produit en vente en ligne seulement n’arrête pas l’envoi (DRV-739)', () => {
+  /** Une ligne nouvelle de son propre ingrédient (un identifiant d'ingrédient par ligne). */
+  const line = (slug: string, query: string, name: string) => ({
+    ...fresh(query, name),
+    ingredientSlug: slug,
+  })
+
+  test('« enligne » (trois offres ONLINE, aucune du drive) : la ligne est sans produit, la farine connue est écrite, la ligne suivante est cherchée, l’envoi se termine sans erreur', async ({
+    page,
+    fakeAuchan,
+    agentCode,
+  }) => {
+    // Given : une farine connue (écrite), un produit que le site ne vend qu'en ligne, puis du sel
+    const app = await open(page, fakeAuchan, agentCode)
+    app.answerHello(plan([known, line('the', 'enligne', 'Enligne'), line('sel', 'sel', 'Sel')]))
+
+    // When : la ligne en ligne seulement est sans produit, comme une page « aucun résultat » (pas un arrêt)
+    await expect(page.getByText('Aucun produit trouvé pour « enligne ».')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'L’envoi s’est arrêté' })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Pas cette fois' }).click()
+    await expect(page.getByRole('listitem').filter({ hasText: 'Sel fin de test' })).toBeVisible()
+    await page.getByRole('button', { name: 'J’en ai toujours' }).click()
+
+    // Then : l'envoi s'est terminé, une seule écriture (la farine), jamais le produit en ligne
+    const result = await app.received('result')
+    expect(result).toMatchObject({
+      outcome: 'completed',
+      lines: [
+        { ingredientSlug: 'farine', outcome: 'ADDED' },
+        { ingredientSlug: 'the', outcome: 'SKIPPED' },
+        { ingredientSlug: 'sel', outcome: 'HAVE_AT_HOME' },
+      ],
+    })
+    expect(result).not.toHaveProperty('error')
+    expect(fakeAuchan.cart()).toEqual({ [FARINE]: 1 })
+    expect(fakeAuchan.writes()).toHaveLength(1)
+    expect(fakeAuchan.violations()).toEqual([])
+  })
+})
+
 test.describe('une page de résultats d’une forme inconnue : le site a changé, avec sa cause', () => {
   for (const [term, cause] of [
     ['inconnu', 'SEARCH_UNKNOWN_PAGE'],

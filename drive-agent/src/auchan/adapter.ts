@@ -262,6 +262,7 @@ export class AuchanAdapter implements RetailerAdapter {
       facts.products = reading.products.length
       facts.phrases = reading.phrases
       if (reading.landing !== undefined) facts.landing = reading.landing
+      if (reading.notDrive > 0) facts.notDrive = reading.notDrive
       for (const product of reading.products)
         this.rememberOffer(product.productId, offerOf(product))
       return reading.products.map((product) => toCandidate(product, this.deps.location))

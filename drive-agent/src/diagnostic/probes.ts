@@ -295,6 +295,7 @@ function searchLines(search: ProbedSearch): string[] {
   }
   if (facts.phrases.length > 0) lines.push(P.phrases(facts.phrases.join(', ')))
   if (facts.landing !== undefined) lines.push(P.landing(term, facts.landing))
+  if (facts.notDrive !== undefined) lines.push(P.notDrive(term, facts.notDrive))
   return lines
 }
 
