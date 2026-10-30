@@ -31,9 +31,13 @@ const props = defineProps<{
   placeholder?: string
   empty: string
   invalid?: boolean
+  /** Rien à lister : l'appelant montre lui-même l'issue (ajouter l'ingrédient), la liste ne s'ouvre pas. */
+  hideEmpty?: boolean
 }>()
 
 const model = defineModel<string>({ default: '' })
+/** Le texte du champ (ce qui est tapé, ou le nom de l'option choisie) : l'appelant peut proposer d'ajouter ce qu'aucune option ne porte. */
+const searchTerm = defineModel<string>('searchTerm', { default: '' })
 
 // Au moins une option a son repère : celles qui n'en ont pas gardent la place, les noms restent alignés
 const anyIcon = computed(() => props.options.some((option) => option.icon != null))
@@ -53,6 +57,7 @@ const labelOf = (value: string) =>
       "
     >
       <ComboboxInput
+        v-model="searchTerm"
         :aria-label="label"
         :placeholder="placeholder"
         :display-value="(value) => labelOf(String(value ?? ''))"
@@ -65,7 +70,7 @@ const labelOf = (value: string) =>
         <ChevronDown class="size-5" aria-hidden="true" />
       </ComboboxTrigger>
     </ComboboxAnchor>
-    <ComboboxPortal>
+    <ComboboxPortal v-if="!hideEmpty">
       <ComboboxContent
         position="popper"
         :side-offset="4"
@@ -97,5 +102,6 @@ const labelOf = (value: string) =>
         </ComboboxViewport>
       </ComboboxContent>
     </ComboboxPortal>
+    <slot name="below" />
   </ComboboxRoot>
 </template>

@@ -26,7 +26,7 @@ import {
   type EquationValue,
 } from './equationMath'
 import { usageText } from './mergeText'
-import { nameUsedMessage } from './nameUsed'
+import { nameUsedMessage, sameNameElsewhere } from './nameUsed'
 import {
   useDeleteIngredient,
   useDepartments,
@@ -211,24 +211,16 @@ const options = useIngredientOptions(() => !editing.value)
 const departmentName = (departmentSlug: string) =>
   departments.data.value?.member?.find((department) => department.slug === departmentSlug)?.name ??
   ''
-const sameNameElsewhere = computed(() => {
-  const wanted = form.name.trim().toLocaleLowerCase('fr')
-  if (editing.value || wanted === '' || form.departmentSlug === '') return null
-  const found = (options.data.value?.member ?? []).filter(
-    (option) =>
-      option.name.trim().toLocaleLowerCase('fr') === wanted &&
-      option.departmentSlug !== undefined &&
-      option.departmentSlug !== '',
-  )
+const nameElsewhere = computed(() => {
+  if (editing.value) return null
   // Déjà dans le rayon choisi : le refus du back parlera, pas cette information
-  if (found.some((option) => option.departmentSlug === form.departmentSlug)) return null
-  const other = found[0]
+  const other = sameNameElsewhere(options.data.value?.member ?? [], form.name, form.departmentSlug)
 
-  return other === undefined
+  return other === null
     ? null
     : t('ingredients.nameElsewhere', {
         name: other.name,
-        department: other.departmentName ?? departmentName(other.departmentSlug),
+        department: other.departmentName,
         chosen: departmentName(form.departmentSlug),
       })
 })
@@ -372,12 +364,12 @@ const back = computed(() =>
         </UiSelect>
       </UiField>
       <p
-        v-if="sameNameElsewhere"
+        v-if="nameElsewhere"
         role="status"
         data-testid="name-elsewhere"
         class="rounded-xl bg-soft px-4 py-3 text-[15px] text-ink"
       >
-        {{ sameNameElsewhere }}
+        {{ nameElsewhere }}
       </p>
       <div class="grid gap-4 sm:grid-cols-2">
         <UiField

@@ -238,6 +238,7 @@ function submit() {
             @update:model-value="(updated) => (form.rows[index] = updated)"
             :index="index"
             :options="options"
+            :can-create="ingredients.isSuccess.value"
             :errors="errors.rows[index] ?? {}"
             @remove="removeRow(row.key)"
           />
