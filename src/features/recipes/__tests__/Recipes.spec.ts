@@ -419,7 +419,9 @@ describe('RecipeDetailView', () => {
   })
 
   const buttonNames = (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
-    wrapper.findAll('main button, main a[href*="modifier"]').map((node) => node.text())
+    wrapper
+      .findAll('main button:not([data-favorite-button]), main a[href*="modifier"]')
+      .map((node) => node.text())
   const copyButton = (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
     wrapper.find('button[aria-label="Copier Gratin de courgettes dans mes recettes"]')
   const planButton = (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>

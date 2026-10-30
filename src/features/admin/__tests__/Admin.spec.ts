@@ -624,6 +624,122 @@ describe('types de recette', () => {
   })
 })
 
+describe('supprimer un type de recette', () => {
+  const twoTypes = {
+    member: [
+      { slug: 'entree', name: 'Entrée', image: 'images/entree.png', order: 1 },
+      { slug: 'plat', name: 'Plat', image: 'images/plat.png', order: 2 },
+    ],
+    totalItems: 2,
+  }
+  const notifications = () => useNotificationsStore().items.map((item) => item.text)
+  const openTypes = async (handlers: Parameters<typeof stubApi>[0] = {}) => {
+    const opened = await open(RecipeTypesAdminView, {
+      'GET /api/v1/recipe-types': () => json(twoTypes),
+      ...handlers,
+    })
+    await vi.waitFor(() => expect(opened.wrapper.findAll('li')).toHaveLength(2))
+
+    return opened
+  }
+  const dialogButton = (label: string) =>
+    [...document.body.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+      (candidate) => candidate.textContent.trim() === label,
+    )
+  const requestsTo = (fetchMock: ReturnType<typeof stubApi>, method: string) =>
+    fetchMock.mock.calls
+      .map(([call]) => call as Request)
+      .filter((request) => request.method === method)
+
+  it('demande dans quel type vont les recettes, sans proposer le type supprimé', async () => {
+    const { fetchMock } = await openTypes()
+
+    button('Supprimer Entrée')?.click()
+    await vi.waitFor(() => expect(document.body.querySelector('[role="dialog"]')).not.toBeNull())
+
+    const dialog = document.body.querySelector('[role="dialog"]')!
+    expect(dialog.textContent).toContain(
+      'Les recettes de « Entrée » passent dans le type que tu choisis',
+    )
+    expect(dialog.textContent).toContain('irréversible')
+    const options = [...dialog.querySelectorAll('option')].map((option) =>
+      option.textContent.trim(),
+    )
+    expect(options).toEqual(['Choisis un type', 'Plat'])
+    expect(requestsTo(fetchMock, 'DELETE')).toEqual([])
+  })
+
+  it("n'efface rien tant qu'un type de transfert n'est pas choisi", async () => {
+    const { fetchMock } = await openTypes()
+    button('Supprimer Entrée')?.click()
+    await vi.waitFor(() => expect(document.body.querySelector('[role="dialog"]')).not.toBeNull())
+
+    await submitDialog()
+
+    expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain('Choisis un type')
+    expect(requestsTo(fetchMock, 'DELETE')).toEqual([])
+  })
+
+  it('supprime avec le type choisi, le dit et relit les types', async () => {
+    const { fetchMock } = await openTypes({
+      'DELETE /api/v1/recipe-types/entree': () => new Response(null, { status: 204 }),
+    })
+    button('Supprimer Entrée')?.click()
+    await vi.waitFor(() => expect(document.body.querySelector('[role="dialog"]')).not.toBeNull())
+
+    type(field('Où vont ses recettes ?'), 'plat')
+    await submitDialog()
+
+    const [request] = requestsTo(fetchMock, 'DELETE')
+    expect(new URL(request!.url).pathname).toBe('/api/v1/recipe-types/entree')
+    expect(new URL(request!.url).searchParams.get('transferTo')).toBe('plat')
+    expect(notifications()).toContain('« Entrée » est supprimé. Ses recettes sont dans « Plat ».')
+    expect(calls(fetchMock).filter((call) => call === 'GET /api/v1/recipe-types')).toHaveLength(2)
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+  })
+
+  it('annuler ne supprime rien', async () => {
+    const { fetchMock } = await openTypes()
+    button('Supprimer Entrée')?.click()
+    await vi.waitFor(() => expect(document.body.querySelector('[role="dialog"]')).not.toBeNull())
+
+    dialogButton('Annuler')?.click()
+    await flushPromises()
+
+    expect(requestsTo(fetchMock, 'DELETE')).toEqual([])
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+  })
+
+  it('un refus du back reste dans la fenêtre, qui reste ouverte', async () => {
+    const { fetchMock } = await openTypes({
+      'DELETE /api/v1/recipe-types/entree': () =>
+        json({ error: { message: 'Recipe type not found' } }, { status: 404 }),
+    })
+    button('Supprimer Entrée')?.click()
+    await vi.waitFor(() => expect(document.body.querySelector('[role="dialog"]')).not.toBeNull())
+
+    type(field('Où vont ses recettes ?'), 'plat')
+    await submitDialog()
+
+    expect(document.body.querySelector('[role="dialog"] [role="alert"]')).not.toBeNull()
+    expect(notifications()).toEqual([])
+    expect(requestsTo(fetchMock, 'DELETE')).toHaveLength(1)
+  })
+
+  it("avec un seul type, dit qu'il en faut un autre et ne propose pas de supprimer", async () => {
+    await open(RecipeTypesAdminView)
+    await vi.waitFor(() => expect(button('Supprimer Plat')).toBeDefined())
+
+    button('Supprimer Plat')?.click()
+    await vi.waitFor(() => expect(document.body.querySelector('[role="dialog"]')).not.toBeNull())
+
+    expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(
+      'Il faut un autre type pour recevoir ses recettes.',
+    )
+    expect(dialogButton('Supprimer')?.disabled).toBe(true)
+  })
+})
+
 describe('conversions', () => {
   it('liste les conversions avec leur ingrédient ou « Tous les ingrédients »', async () => {
     const { wrapper } = await open(ConversionsAdminView)

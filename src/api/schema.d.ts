@@ -126,6 +126,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recipes/{id}/favorite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Met une recette de l'utilisateur en favoris, ou l'en retire
+         * @description Une recette favorite est dans la liste « Favoris » de son auteur (`GET /api/v1/recipes/favorites`) en plus de son type. Seul l'auteur change le choix : un administrateur qui peut modifier la recette d'un autre reçoit `403` `RECIPE_FAVORITE_FORBIDDEN` s'il envoie une autre valeur que l'actuelle. Le choix suit la version de la recette (`ETag`, `If-Match`).
+         */
+        put: operations["put_api_change_recipe_favorite"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/recipes/{id}/copy": {
         parameters: {
             query?: never;
@@ -471,7 +491,11 @@ export interface paths {
         /** Remplace le type de recette (administrateur) ; son slug ne change pas */
         put: operations["put_api_update_recipe_type"];
         post?: never;
-        delete?: never;
+        /**
+         * Supprime le type de recette (administrateur) après avoir passé toutes ses recettes dans un autre type
+         * @description Les recettes de tous les utilisateurs qui portent le type supprimé passent dans le type `transferTo` (leur version augmente), puis le type disparaît ; une seule transaction. Il reste donc toujours au moins un type.
+         */
+        delete: operations["delete_api_remove_recipe_type"];
         options?: never;
         head?: never;
         patch?: never;
@@ -526,6 +550,26 @@ export interface paths {
         };
         /** Unités compatibles d'un ingrédient, dans l'ordre où elles sont enregistrées */
         get: operations["get_api_list_compatible_units"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recipes/favorites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recettes que l'utilisateur authentifié a mises en favoris, triées par slug
+         * @description Toutes types confondus, secrètes comprises (chacune dit si elle l'est). La liste est vide tant qu'il n'a aucun favori : l'interface n'affiche alors pas le type « Favoris ».
+         */
+        get: operations["get_api_list_favorite_recipes"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1250,6 +1294,14 @@ export interface components {
         SearchIngredientsRequestQuery: {
             q: string;
         };
+        RecipeFavoritePayload: {
+            /**
+             * @description Vrai : la recette est mise en favoris ; faux : elle en est retirée. Un booléen JSON, rien d'autre (`422` sinon). Renvoyer la valeur actuelle est sans effet
+             * @default null
+             * @example true
+             */
+            favorite: boolean | null;
+        };
         ConversionPayload: {
             /**
              * @description Slug de l'unité de départ
@@ -1465,6 +1517,13 @@ export interface components {
              * @example tomate-0a1b2c3d
              */
             into: string;
+        };
+        RemoveRecipeTypeRequestQuery: {
+            /**
+             * @description Slug du type de recette qui reçoit toutes les recettes du type supprimé (différent de celui-ci)
+             * @example plat
+             */
+            transferTo: string;
         };
         UpdateServingMealPayload: {
             /**
@@ -2415,6 +2474,11 @@ export interface components {
              * @example false
              */
             secret: boolean;
+            /**
+             * @description Recette mise en favoris par son auteur (liste « Favoris », `PUT /recipes/{id}/favorite`). Toujours écrit ; toujours `false` pour la recette d'un autre : le choix est celui de l'auteur
+             * @example false
+             */
+            favorite: boolean;
             /** @description Ingrédients de la recette, dans l'ordre de la recette (celui de la saisie) */
             rows: components["schemas"]["RecipeRowDTO"][];
             /**
@@ -2609,6 +2673,20 @@ export interface components {
              */
             name: string;
         };
+        RecipeSummaryDTO: {
+            /**
+             * @description Identifiant de la recette
+             * @example 3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34
+             */
+            id: string;
+            /** @example pâtes carbonara */
+            name: string;
+            /**
+             * @description Recette secrète : seul son auteur la voit (elle n'est pas dans « Recettes des autres »). Toujours écrit
+             * @example false
+             */
+            secret: boolean;
+        };
         IngredientRowDTO: {
             /**
              * @description Identifiant de l'ingrédient (slug)
@@ -2689,20 +2767,6 @@ export interface components {
              * @example 12
              */
             totalItems: number;
-        };
-        RecipeSummaryDTO: {
-            /**
-             * @description Identifiant de la recette
-             * @example 3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34
-             */
-            id: string;
-            /** @example pâtes carbonara */
-            name: string;
-            /**
-             * @description Recette secrète : seul son auteur la voit (elle n'est pas dans « Recettes des autres »). Toujours écrit
-             * @example false
-             */
-            secret: boolean;
         };
         AppUpdateDTO: {
             /**
@@ -3580,6 +3644,61 @@ export interface operations {
             };
             /** @description La version de la liste n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
             412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    put_api_change_recipe_favorite: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Version (ETag) de la ressource lue par le client, entre guillemets. Absent : pas de contrôle (la dernière écriture gagne). Une autre version répond 412 (la ressource a été modifiée depuis la lecture) ; une modification simultanée détectée à l'enregistrement répond 409. ADR 0016. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipeFavoritePayload"];
+            };
+        };
+        responses: {
+            /** @description Choix enregistré */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La recette appartient à un autre utilisateur (la recette secrète d'un autre est inconnue pour tous, administrateur compris : `404`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recette inconnue */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La version de la recette n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide (`favorite` n'est pas un booléen JSON) */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4823,6 +4942,53 @@ export interface operations {
             };
         };
     };
+    delete_api_remove_recipe_type: {
+        parameters: {
+            query: {
+                /**
+                 * @description Slug du type de recette qui reçoit les recettes du type supprimé
+                 * @example plat
+                 */
+                transferTo: string;
+            };
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Supprimé, ses recettes sont dans le type de transfert */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Réservé aux administrateurs */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Type à supprimer ou type de transfert inconnu */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `transferTo` absent, ou identique au type supprimé */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_api_get_shopping_list: {
         parameters: {
             query?: never;
@@ -5061,6 +5227,30 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    get_api_list_favorite_recipes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recettes favorites (collection `member`) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        member?: components["schemas"]["RecipeSummaryDTO"][];
+                        /** @example 3 */
+                        totalItems?: number;
+                    };
+                };
             };
         };
     };

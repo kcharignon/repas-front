@@ -153,7 +153,7 @@ describe('RecipeDetailView : ingrédients à régler', () => {
   it('grise « Ajouter » et dit pourquoi tant qu’il reste une ligne à régler', async () => {
     const { wrapper } = await open([row(), farine])
 
-    const plan = wrapper.find('[aria-pressed]')
+    const plan = wrapper.find('[aria-pressed]:not([data-favorite-button])')
     expect(plan.attributes('disabled')).toBeDefined()
     const hint = wrapper.find(`#${plan.attributes('aria-describedby')}`)
     expect(hint.text()).toBe('Règle d’abord les ingrédients signalés.')
@@ -164,7 +164,9 @@ describe('RecipeDetailView : ingrédients à régler', () => {
 
     expect(wrapper.text()).not.toContain('à régler')
     expect(wrapper.text()).not.toContain('Régler')
-    expect(wrapper.find('[aria-pressed]').attributes('disabled')).toBeUndefined()
+    expect(
+      wrapper.find('[aria-pressed]:not([data-favorite-button])').attributes('disabled'),
+    ).toBeUndefined()
   })
 
   it('ne signale rien et ne bloque rien sur la recette d’un autre', async () => {
@@ -173,7 +175,7 @@ describe('RecipeDetailView : ingrédients à régler', () => {
     expect(wrapper.text()).not.toContain('Je ne sais pas')
     expect(wrapper.text()).not.toContain('à régler')
     // Pas d'ajout à la liste pour la recette d'un autre : on la copie d'abord
-    expect(wrapper.find('[aria-pressed]').exists()).toBe(false)
+    expect(wrapper.find('[aria-pressed]:not([data-favorite-button])').exists()).toBe(false)
     expect(calls(fetchMock)).not.toContain('GET /api/v1/units')
   })
 
@@ -258,7 +260,9 @@ describe('RecipeDetailView : ingrédients à régler', () => {
     })
     await vi.waitFor(() => expect(sheet()).toBeNull())
     expect(wrapper.text()).not.toContain('à régler')
-    expect(wrapper.find('[aria-pressed]').attributes('disabled')).toBeUndefined()
+    expect(
+      wrapper.find('[aria-pressed]:not([data-favorite-button])').attributes('disabled'),
+    ).toBeUndefined()
   })
 
   it('rend le focus à la ligne réglée', async () => {

@@ -3,7 +3,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import type { QueryClient } from '@tanstack/vue-query'
 
 import { ApiError, ifMatch, unwrap } from '@/api'
-import type { IngredientOption } from '@/api'
+import type { IngredientOption, Recipe } from '@/api'
 import { capitalizeFirst } from '@/design/capitalizeFirst'
 import { shoppingListKeys } from '@/features/shopping-lists/queries'
 import { useSessionStore } from '@/session/session'
@@ -12,6 +12,7 @@ export const recipeKeys = {
   all: ['recipes'] as const,
   types: ['recipes', 'types'] as const,
   byType: (slug: string) => ['recipes', 'type', slug] as const,
+  favorites: ['recipes', 'favorites'] as const,
   others: (search: string) => ['recipes', 'others', search] as const,
   detail: (id: string) => ['recipes', 'detail', id] as const,
 }
@@ -39,6 +40,16 @@ export function useRecipesByType(slug: () => string | null) {
         }),
       ),
     enabled: computed(() => slug() !== null),
+  })
+}
+
+/** Les recettes que l'utilisateur a mises en favoris, tous types confondus, triées par nom côté back (ADR 0034 du back) : le type « Favoris » de la liste. */
+export function useFavoriteRecipes() {
+  const { api } = useSessionStore()
+
+  return useQuery({
+    queryKey: recipeKeys.favorites,
+    queryFn: () => unwrap(api.GET('/api/v1/recipes/favorites')),
   })
 }
 
@@ -91,6 +102,35 @@ export function useRecipe(id: () => string) {
   return useQuery({
     queryKey: computed(() => recipeKeys.detail(id())),
     queryFn: () => unwrap(api.GET('/api/v1/recipes/{id}', { params: { path: { id: id() } } })),
+  })
+}
+
+/**
+ * Met une recette en favoris ou l'en retire (l'auteur seul, 403 sinon). L'étoile de la fiche bascule tout de suite et revient en arrière si
+ * le back refuse ; la relecture qui suit confirme (la version de la recette a changé, la liste « Favoris » aussi).
+ */
+export function useSetRecipeFavorite() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, favorite }: { id: string; favorite: boolean }) =>
+      unwrap(
+        api.PUT('/api/v1/recipes/{id}/favorite', { params: { path: { id } }, body: { favorite } }),
+      ),
+    onMutate: async ({ id, favorite }) => {
+      await queryClient.cancelQueries({ queryKey: recipeKeys.detail(id) })
+      const previous = queryClient.getQueryData<Recipe>(recipeKeys.detail(id))
+      if (previous !== undefined)
+        queryClient.setQueryData<Recipe>(recipeKeys.detail(id), { ...previous, favorite })
+
+      return { previous }
+    },
+    onError: (_error, { id }, context) => {
+      if (context?.previous !== undefined)
+        queryClient.setQueryData<Recipe>(recipeKeys.detail(id), context.previous)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: recipeKeys.all }),
   })
 }
 
