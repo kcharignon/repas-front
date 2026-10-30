@@ -110,7 +110,7 @@ afterEach(() => {
 })
 
 describe('un seul drive : l’écran d’avant', () => {
-  it('ni question, ni lien, « Ouvrir le drive », rien n’est retenu comme dernier drive', async () => {
+  it('ni question, ni lien, « Remplir mon panier », rien n’est retenu comme dernier drive', async () => {
     const native = installApp(['leclerc'])
     const { wrapper, fetchMock } = await open(
       { mode: 'AUTO', retailer: 'leclerc', configured: ['leclerc'] },
@@ -121,10 +121,10 @@ describe('un seul drive : l’écran d’avant', () => {
     expect(tiles()).toHaveLength(0)
     expect(wrapper.text()).not.toContain('Envoyer ailleurs')
     expect(wrapper.text()).not.toContain('Où envoyer ta liste')
-    expect(button('Ouvrir le drive')).toBeDefined()
+    expect(button('Remplir mon panier')).toBeDefined()
     expect(planRequests(fetchMock)).toEqual(['leclerc'])
 
-    await press('Ouvrir le drive')
+    await press('Remplir mon panier')
 
     expect(started(native)).toHaveLength(1)
     expect(started(native)[0]?.plan?.retailer).toBe('leclerc')
@@ -140,12 +140,12 @@ describe('un seul drive : l’écran d’avant', () => {
     await vi.waitFor(() => expect(wrapper.text()).toContain('Magasin …456'))
 
     expect(wrapper.text()).not.toContain('Mets à jour')
-    expect(button('Ouvrir le drive')).toBeDefined()
+    expect(button('Remplir mon panier')).toBeDefined()
   })
 })
 
 describe('plusieurs drives configurés, aucun drive habituel (R4)', () => {
-  it('propose les deux drives, le dernier utilisé coché, un seul bouton « Ouvrir {nom} »', async () => {
+  it('propose les deux drives, le dernier utilisé coché, un seul bouton « Remplir le panier {nom} »', async () => {
     installApp(['leclerc', 'auchan'])
     const { wrapper, fetchMock } = await open({
       mode: 'ASK',
@@ -157,15 +157,18 @@ describe('plusieurs drives configurés, aucun drive habituel (R4)', () => {
     expect(wrapper.text()).toContain('Où envoyer ta liste ?')
     expect(tileNames()).toEqual(['LeclercTon magasin : …456', 'AuchanTon magasin : …abc'])
     expect(checked()).toBe('auchan')
-    expect(button('Ouvrir Auchan')).toBeDefined()
-    expect(button('Ouvrir le drive')).toBeUndefined()
+    expect(button('Remplir le panier Auchan')).toBeDefined()
+    // Une petite icône de panier décorative devant le texte (DRV-744)
+    const icon = button('Remplir le panier Auchan')?.querySelector('svg')
+    expect(icon?.getAttribute('aria-hidden')).toBe('true')
+    expect(button('Remplir mon panier')).toBeUndefined()
     // Le plan est demandé pour le drive présélectionné
     expect(planRequests(fetchMock)).toEqual(['auchan'])
     // L'écran ne dit jamais « enseigne » ni « retailer »
     expect(wrapper.text()).not.toMatch(/enseigne|retailer/i)
   })
 
-  it('« Ouvrir Auchan » retient le dernier drive AVANT drive.start, puis lance le plan de ce drive', async () => {
+  it('« Remplir le panier Auchan » retient le dernier drive AVANT drive.start, puis lance le plan de ce drive', async () => {
     const native = installApp(['leclerc', 'auchan'])
     const { wrapper, fetchMock } = await open(
       { mode: 'ASK', retailer: 'auchan', lastUsed: 'auchan' },
@@ -183,7 +186,7 @@ describe('plusieurs drives configurés, aucun drive habituel (R4)', () => {
     )
     await vi.waitFor(() => expect(wrapper.text()).toContain('à choisir sur Auchan'))
 
-    await press('Ouvrir Auchan')
+    await press('Remplir le panier Auchan')
 
     const put = fetchMock.mock.calls.find(([input]) =>
       (input as Request).url.endsWith('/drive/last-retailer'),
@@ -222,7 +225,7 @@ describe('plusieurs drives configurés, aucun drive habituel (R4)', () => {
     expect(checked()).toBe('leclerc')
     expect(planRequests(fetchMock)).toEqual(['auchan', 'leclerc'])
     expect(wrapper.text()).toContain('sont à choisir sur Leclerc')
-    await press('Ouvrir Leclerc')
+    await press('Remplir le panier Leclerc')
     expect(started(native)[0]?.plan?.retailer).toBe('leclerc')
   })
 
@@ -237,7 +240,7 @@ describe('plusieurs drives configurés, aucun drive habituel (R4)', () => {
     )
     await vi.waitFor(() => expect(wrapper.text()).toContain('à choisir sur Leclerc'))
 
-    await press('Ouvrir Leclerc')
+    await press('Remplir le panier Leclerc')
 
     expect(started(native)).toHaveLength(1)
     expect(wrapper.text()).not.toContain('Rien n’a été mis au panier')
@@ -251,7 +254,7 @@ describe('plusieurs drives configurés, aucun drive habituel (R4)', () => {
 
     expect(started(native)).toHaveLength(0)
     expect(wrapper.text()).not.toContain('Ouverture du drive')
-    expect(button('Ouvrir Leclerc')).toBeDefined()
+    expect(button('Remplir le panier Leclerc')).toBeDefined()
   })
 
   it('une application qui ne connaît pas le drive coché le nomme dans la phrase de mise à jour, et l’autre reste proposé', async () => {
@@ -261,7 +264,7 @@ describe('plusieurs drives configurés, aucun drive habituel (R4)', () => {
 
     expect(wrapper.text()).toContain('Mets à jour l’application pour envoyer ta liste à Auchan.')
     expect(wrapper.text()).toContain('Mettre à jour')
-    expect(button('Ouvrir Auchan')).toBeUndefined()
+    expect(button('Remplir le panier Auchan')).toBeUndefined()
     // Le repli : un lien de recherche par article, sur le site de ce drive
     const search = wrapper.findAll('a').map((link) => link.attributes('href') ?? '')
     expect(search).toContain('https://www.auchan.fr/recherche?text=Farine')
@@ -269,10 +272,10 @@ describe('plusieurs drives configurés, aucun drive habituel (R4)', () => {
     const leclerc = tiles().find((tile) => (tile as HTMLInputElement).value === 'leclerc')!
     ;(leclerc as HTMLInputElement).click()
     await flushPromises()
-    await vi.waitFor(() => expect(button('Ouvrir Leclerc')).toBeDefined())
+    await vi.waitFor(() => expect(button('Remplir le panier Leclerc')).toBeDefined())
     expect(wrapper.text()).not.toContain('Mets à jour')
 
-    await press('Ouvrir Leclerc')
+    await press('Remplir le panier Leclerc')
     expect(started(native)).toHaveLength(1)
   })
 })
@@ -289,7 +292,7 @@ describe('un drive habituel et plusieurs drives configurés (DRV-737)', () => {
 
     expect(tileNames()).toHaveLength(2)
     expect(checked()).toBe('auchan')
-    expect(button('Ouvrir Auchan')).toBeDefined()
+    expect(button('Remplir le panier Auchan')).toBeDefined()
     expect(wrapper.text()).not.toContain('Envoyer ailleurs')
     expect(started(native)).toHaveLength(0)
   })
@@ -305,8 +308,8 @@ describe('un drive habituel et plusieurs drives configurés (DRV-737)', () => {
 
     const auchan = tiles().find((tile) => (tile as HTMLInputElement).value === 'auchan')
     ;(auchan as HTMLInputElement).click()
-    await vi.waitFor(() => expect(button('Ouvrir Auchan')).toBeDefined())
-    await press('Ouvrir Auchan')
+    await vi.waitFor(() => expect(button('Remplir le panier Auchan')).toBeDefined())
+    await press('Remplir le panier Auchan')
 
     expect(started(native)[0]?.plan?.retailer).toBe('auchan')
     expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/default-retailer')
@@ -358,7 +361,7 @@ describe('le plan reste celui d’un drive', () => {
     installApp(['leclerc', 'auchan'])
     const { wrapper } = await open({ mode: 'ASK', retailer: 'auchan' })
     await vi.waitFor(() => expect(wrapper.text()).toContain('à choisir sur Auchan'))
-    await press('Ouvrir Auchan')
+    await press('Remplir le panier Auchan')
 
     const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? '{}') as {
       lines: { ingredientSlug: string; products: string[] }[]

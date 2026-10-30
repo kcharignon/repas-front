@@ -17,7 +17,7 @@ test('dans l’application : choisir un autre produit, passer une ligne, ouvrir 
   // Une phrase de synthèse, le bouton visible sans défiler, aucune explication (DRV-628) ; la liste est repliée (12 articles)
   await expect(page.getByText(SUMMARY_12)).toBeVisible()
   await expect(page.getByText('va se remplir')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Ouvrir le drive' })).toBeInViewport()
+  await expect(page.getByRole('button', { name: 'Remplir mon panier' })).toBeInViewport()
   await expect(page.getByRole('listitem').filter({ hasText: 'Farine de blé T55' })).toHaveCount(0)
   await openArticles(page)
 
@@ -40,7 +40,7 @@ test('dans l’application : choisir un autre produit, passer une ligne, ouvrir 
   ).toBeVisible()
   expect((await scan(page)).violations).toEqual([])
 
-  await page.getByRole('button', { name: 'Ouvrir le drive' }).click()
+  await page.getByRole('button', { name: 'Remplir mon panier' }).click()
   await expect(page.getByText('En attente du récapitulatif…')).toBeVisible()
 
   const start = await page.evaluate(() => window.__sent.find((m) => m.type === 'drive.start'))
@@ -67,7 +67,7 @@ test('hors de l’application : message, installation et recherche par ligne, ac
   await page.goto('/drive/envoi/l1')
 
   await expect(page.getByText('L’envoi automatique n’est pas disponible ici')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Ouvrir le drive' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Remplir mon panier' })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Installer l’application' })).toHaveAttribute(
     'href',
     '/drive/aide',
@@ -83,7 +83,7 @@ test('hors de l’application : message, installation et recherche par ligne, ac
   }
 })
 
-test('à 360 px de large : « Ouvrir le drive » est visible sans défiler, au-dessus de la barre du bas, sans défilement de côté', async ({
+test('à 360 px de large : « Remplir mon panier » est visible sans défiler, au-dessus de la barre du bas, sans défilement de côté', async ({
   page,
 }) => {
   await fakeBack(page)
@@ -91,7 +91,7 @@ test('à 360 px de large : « Ouvrir le drive » est visible sans défiler, au-d
   await page.setViewportSize({ width: 360, height: 640 })
   await page.goto('/drive/envoi/l1')
 
-  const open = page.getByRole('button', { name: 'Ouvrir le drive' })
+  const open = page.getByRole('button', { name: 'Remplir mon panier' })
   await expect(open).toBeVisible()
   const box = await open.boundingBox()
   const bar = await page.locator('nav').last().boundingBox()
@@ -116,7 +116,7 @@ test('application 0.1.8 : mise à jour demandée, recherche à la main gardée, 
   await page.goto('/drive/envoi/l1')
 
   await expect(page.getByText(TOO_OLD)).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Ouvrir le drive' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Remplir mon panier' })).toHaveCount(0)
   const update = page.getByRole('link', { name: 'Mettre à jour' })
   await expect(update).toHaveAttribute('href', '/drive/aide')
   expect((await update.boundingBox())!.height).toBeGreaterThanOrEqual(44)

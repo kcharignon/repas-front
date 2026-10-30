@@ -238,10 +238,11 @@ const SCREENS: Record<string, () => unknown> = {
       done: 3,
       current: 'Farine de blé',
       log: [
-        'Sel : j’en ai toujours',
-        'Huile : pas cette fois',
-        'Beurre : ajouté',
-        'Lait : ajouté, produit de remplacement',
+        { kind: 'haveAtHome', name: 'Sel' },
+        { kind: 'skipped', name: 'Huile' },
+        { kind: 'added', name: 'Beurre' },
+        { kind: 'addedBackup', name: 'Lait' },
+        { kind: 'toChoose', name: 'Ice tea' },
       ],
     }),
   quantity: () =>

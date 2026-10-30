@@ -42,9 +42,39 @@ label{display:block;margin:12px 0 4px;font-weight:600}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .actions{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 0;padding:12px 0 0}
 .actions>button{flex:1 1 9em}
-progress{width:100%;height:16px;accent-color:var(--accent)}
-.live ul{list-style:none;padding:0}
-.live li{padding:4px 0;color:var(--muted)}
+.dark{--bg:#0f1713;--fg:#eaf1ec;--muted:#9db0a5;--card:#17221c;--line:#34443a;--accent:#4fb58a;--on:#0b1a13;--warn:#33270a;--warnfg:#f6d98f;--soft:#1b2a22;--stroke:#6b8575;--rule:#1f2d25}
+.screen.progress{display:flex;flex-direction:column;gap:14px;background:var(--bg);color:var(--fg);padding-bottom:var(--clear)}
+.progress h1{margin:0;font-size:1.9rem;line-height:1.12;letter-spacing:-.01em}
+.progress p{margin:0}
+.progress .lead{color:var(--muted);font-weight:500}
+.progress .brand{display:flex;align-items:center;gap:10px;color:var(--muted);font-weight:600;font-size:.95rem}
+.progress .brand-icon{display:flex;align-items:center;justify-content:center;flex:none;width:36px;height:36px;border-radius:12px;background:var(--soft);color:var(--accent)}
+.progress .card{display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--line);border-radius:20px;background:var(--card)}
+.progress .count{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.progress .big{font-size:2.1rem;font-weight:700;line-height:1}
+.progress .of{font-size:1.25rem;font-weight:600;color:var(--muted)}
+.progress .what{color:var(--muted);font-size:.95rem}
+.progress .meter{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.progress .fill{height:100%;border-radius:6px;background:var(--accent)}
+.progress .now{display:flex;align-items:center;gap:14px;padding:14px 16px;border:1.5px solid var(--accent);border-radius:18px;background:var(--soft)}
+.progress .now-text{display:flex;flex-direction:column;min-width:0}
+.progress .now-text .hint{font-size:.9rem}
+.progress .name{font-size:1.25rem;line-height:1.25}
+.spin{flex:none;width:28px;height:28px;box-sizing:border-box;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.progress .done-list{flex:1 1 auto;min-height:104px;margin:0;padding:0;list-style:none;overflow-y:auto;overscroll-behavior:contain}
+.progress .entry{display:flex;align-items:center;gap:12px;min-height:52px;border-bottom:1px solid var(--rule)}
+.progress .dot{display:flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;border-radius:50%;background:var(--soft);color:var(--muted)}
+.progress .dot.ok{background:var(--accent);color:var(--on)}
+.progress .dot.attention{background:var(--warn);color:#f4b73f}
+.progress .label{flex:1;min-width:0;font-weight:600;font-size:1.05rem}
+.progress .state{flex:0 1 45%;text-align:right;color:var(--muted);font-size:.95rem}
+.progress .entry.attention .state{color:var(--warnfg)}
+.progress .foot{display:flex;flex-direction:column;gap:12px}
+.progress .keep{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:.95rem}
+.progress .keep svg{flex:none}
+.progress .actions{margin:0;padding:0}
+.progress .actions>button{min-height:52px;border:1.5px solid var(--stroke);background:transparent;color:var(--fg);font-weight:600}
 .bar{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--card)}
 .bar p{margin:0}
 .bar .head{font-size:1.1rem}
@@ -101,5 +131,5 @@ textarea{width:100%;margin:8px 0;padding:8px 10px;font:.9rem/1.4 ui-monospace,mo
 .product{margin:8px 0 12px}
 .product p{margin:2px 0}
 .product .name{font-weight:600}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}.spin{border:0;background:radial-gradient(circle,var(--accent) 0 6px,transparent 6.5px)}}
 `

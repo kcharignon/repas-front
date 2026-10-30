@@ -4,6 +4,8 @@
 // recherches ne l'a retrouvé), `CART_REFUSED` (le site le disait disponible, le panier n'en a rien pris). Le protocole ne change pas : la ligne reste
 // `UNAVAILABLE`, la raison vit dans l'état de l'agent, son écran, son journal et son diagnostic.
 import { LECLERC } from './retailer-fixtures'
+import { viewOf } from '../src/ui/entries'
+import type { ProgressEntry } from '../src/ui'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -59,6 +61,10 @@ async function pass(options: {
 const NOT_FOUND = { shelf: { '1000034': {} }, sees: () => false }
 const CART_REFUSED = { shelf: { '1000034': { stock: 10, obtained: () => 0 } } }
 const OUT = { shelf: { '1000034': OUT_OF_STOCK } }
+
+/** Deux lignes de journal identiques (sorte et nom). */
+const same = (entry: ProgressEntry | undefined, expected: ProgressEntry): boolean =>
+  JSON.stringify(entry) === JSON.stringify(expected)
 
 describe('les trois états d’un produit habituel que la phase A n’a pas mis au panier', () => {
   it.each([
@@ -196,8 +202,8 @@ describe('le panier tranche : une étiquette de rupture n’est pas un verrou', 
       },
     ])
     expect(
-      test.screens.updates.some(
-        (update) => update.entry === 'Gateaux : ajouté, Leclerc l’a accepté',
+      test.screens.updates.some((update) =>
+        same(update.entry, { kind: 'acceptedAnyway', name: 'Gateaux' }),
       ),
     ).toBe(true)
     expect(test.screens.screens()).not.toContain('chooser')
@@ -213,14 +219,22 @@ describe('le panier tranche : une étiquette de rupture n’est pas un verrou', 
   it('un produit en stock se met au panier sans le journal « accepté » (rien n’était à démentir)', async () => {
     const test = await pass({ shelf: { '1000034': {} } })
 
-    expect(test.screens.updates.some((update) => update.entry === 'Gateaux : ajouté')).toBe(true)
-    expect(test.screens.updates.some((update) => update.entry?.includes('accepté'))).toBe(false)
+    expect(
+      test.screens.updates.some((update) => same(update.entry, { kind: 'added', name: 'Gateaux' })),
+    ).toBe(true)
+    expect(test.screens.updates.some((update) => update.entry?.kind === 'acceptedAnyway')).toBe(
+      false,
+    )
   })
 
   it('le journal dit la raison de chaque état, avec les mots du produit', async () => {
     const entries = async (scenario: Parameters<typeof pass>[0]) =>
-      (await pass(scenario)).screens.updates.map((update) => update.entry).filter(Boolean)
+      (await pass(scenario)).screens.updates
+        .map((update) => update.entry)
+        .filter((entry) => entry !== undefined)
+        .map((entry) => viewOf(entry, LECLERC).sentence)
 
+    // Les phrases complètes restent le nom accessible de chaque ligne : on les relit depuis les sortes d'état
     expect(await entries(NOT_FOUND)).toContain('Gateaux : produit introuvable, à choisir ensuite')
     expect(await entries(CART_REFUSED)).toContain(
       'Gateaux : pas pris par le panier, à choisir ensuite',

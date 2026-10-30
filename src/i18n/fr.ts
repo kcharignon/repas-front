@@ -778,11 +778,12 @@ export default {
     replaceFor: 'Choisir un autre produit : {name}',
     skip: 'Pas cette fois',
     skipFor: 'Pas cette fois : {name}',
-    open: 'Ouvrir le drive',
-    // Plusieurs drives configurés (DRV-710) : le bouton nomme le drive. Avec un seul, c'est « Ouvrir le drive », comme avant.
-    openNamed: 'Ouvrir {retailer}',
+    // Le bouton dit ce qu'il fait (DRV-744) : il remplit le panier, il n'« ouvre » rien. Avec un seul drive : « Remplir mon panier ».
+    open: 'Remplir mon panier',
+    // Plusieurs drives configurés (DRV-710) : le bouton nomme le drive.
+    openNamed: 'Remplir le panier {retailer}',
     reopenDrive: 'Rouvrir le drive',
-    opening: 'Ouverture du drive…',
+    opening: 'Je remplis ton panier…',
     offline:
       'Hors connexion : l’envoi au drive est impossible tant que le réseau n’est pas revenu.',
     emptyPlan: 'Cette liste n’a aucun article à envoyer.',
@@ -837,7 +838,7 @@ export default {
       tooLarge:
         'Cet envoi est trop gros pour l’application. Rien n’a été mis au panier. Mets « Pas cette fois » sur quelques articles, puis réessaie.',
       sendFailed:
-        'L’application n’a pas pu ouvrir le drive. Rien n’a été mis au panier. Réessaie dans un instant.',
+        'L’application n’a pas pu remplir ton panier. Rien n’a été mis au panier. Réessaie dans un instant.',
       appRefused:
         'Le drive n’a pas répondu comme prévu. Rien n’a été perdu. Mets l’application à jour, puis réessaie.',
       update: 'Mettre à jour l’application',

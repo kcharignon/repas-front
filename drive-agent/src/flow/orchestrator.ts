@@ -20,7 +20,8 @@ import {
   type RequestStats,
 } from '../retailers'
 import { own } from '../own'
-import { formatNeeded, S, summarySentence } from '../ui'
+import { formatNeeded, summarySentence } from '../ui'
+import type { EntryKind, ProgressEntry } from '../ui'
 import type { RetailerNames } from '../retailers'
 import { cardOf } from './card'
 import { askPacks } from './pack-size'
@@ -46,7 +47,7 @@ interface Run {
   state: RunState
   names: Map<string, string>
   /** Les dernières actions affichées. */
-  log: string[]
+  log: ProgressEntry[]
   /** L'ingrédient en cours. */
   current: string
   /** L'utilisateur a arrêté (ou annulé) : finir proprement. */
@@ -66,7 +67,8 @@ interface Run {
   release: () => Promise<void>
 }
 
-const LOG_SIZE = 5
+/** Combien d'articles traités l'écran de progression garde (un envoi entier : 100 lignes au plus). */
+const LOG_SIZE = 100
 /** Combien de temps l'accueil a pour montrer « Commencer mes courses » (il se dessine parfois après l'arrivée du plan), et à quel rythme on le relit. */
 const ENTRY_APPEAR_MS = 4_000
 const ENTRY_POLL_MS = 500
@@ -611,14 +613,15 @@ export class Flow {
     this.touch(run)
     // Le produit préféré donne le ton : rupture, introuvable ou refusé par le panier.
     const first = notes[0]?.reason
-    const entry =
+    const kind: EntryKind =
       first === undefined
-        ? S.log.toChoose(name)
+        ? 'toChoose'
         : first === 'NOT_FOUND'
-          ? S.log.notFound(name)
+          ? 'notFound'
           : first === 'CART_REFUSED'
-            ? S.log.cartRefused(name)
-            : S.log.unavailable(name)
+            ? 'cartRefused'
+            : 'unavailable'
+    const entry: ProgressEntry = { kind, name }
     run.log.push(entry)
     this.deps.ui.update({ entry })
   }
@@ -648,36 +651,34 @@ export class Flow {
     run: Run,
     line: ResultLine,
     { slow, accepted, unreached }: { slow: boolean; accepted: boolean; unreached: boolean },
-  ): { slug: string; entry: string } {
+  ): { slug: string; entry: ProgressEntry } {
     const slug = line.ingredientSlug
     const name = run.names.get(slug) ?? slug
     switch (line.outcome) {
       case 'ADDED':
         return {
           slug,
-          entry: accepted
-            ? S.log.acceptedAnyway(this.deps.ui.retailer, name)
-            : line.usedRank > 1
-              ? S.log.addedBackup(name)
-              : S.log.added(name),
+          entry: {
+            kind: accepted ? 'acceptedAnyway' : line.usedRank > 1 ? 'addedBackup' : 'added',
+            name,
+          },
         }
       case 'CHOSEN':
         return {
           slug,
-          entry: unreached
-            ? S.log.savedNotInCart(name)
-            : accepted
-              ? S.log.acceptedAnyway(this.deps.ui.retailer, name)
-              : S.log.added(name),
+          entry: {
+            kind: unreached ? 'savedNotInCart' : accepted ? 'acceptedAnyway' : 'added',
+            name,
+          },
         }
       case 'HAVE_AT_HOME':
-        return { slug, entry: S.log.haveAtHome(name) }
+        return { slug, entry: { kind: 'haveAtHome', name } }
       case 'SKIPPED':
-        return { slug, entry: S.log.skipped(name) }
+        return { slug, entry: { kind: 'skipped', name } }
       default:
         return {
           slug,
-          entry: slow ? S.log.slow(this.deps.ui.retailer, name) : S.log.failed(name),
+          entry: { kind: slow ? 'slow' : 'failed', name },
         }
     }
   }

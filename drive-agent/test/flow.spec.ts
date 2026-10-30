@@ -108,9 +108,9 @@ describe('un passage complet', () => {
     expect(screens.propsOf('progress')[0]).toMatchObject({ total: 2, done: 0, log: [] })
     expect(screens.updates).toEqual([
       { current: 'Farine' },
-      { done: 1, entry: 'Farine : ajouté' },
+      { done: 1, entry: { kind: 'added', name: 'Farine' } },
       { current: 'sel' },
-      { done: 2, entry: 'sel : j’en ai toujours' },
+      { done: 2, entry: { kind: 'haveAtHome', name: 'sel' } },
     ])
   })
 })
@@ -148,7 +148,7 @@ describe('les produits de secours', () => {
     expect(sent[0]?.outcome).toBe('completed')
     expect(screens.updates).toContainEqual({
       done: 1,
-      entry: 'Farine : ajouté, produit de remplacement',
+      entry: { kind: 'addedBackup', name: 'Farine' },
     })
   })
 
