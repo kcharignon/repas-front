@@ -63,7 +63,13 @@ const quantityOf = (slug: string) => summary.data.value?.quantityByIngredientSlu
           </RouterLink>
           <DepartmentMarker :icon="iconOf(ingredient.departmentSlug)" :reserve="markers" />
           <span class="min-w-0 flex-1">
-            <span class="block font-medium">{{ ingredient.name }}</span>
+            <RouterLink
+              v-if="ingredient.canEdit"
+              :to="{ name: 'ingredient-edit', params: { slug: ingredient.slug } }"
+              class="flex min-h-11 items-center font-medium [overflow-wrap:anywhere] hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
+              >{{ ingredient.name }}</RouterLink
+            >
+            <span v-else class="block font-medium">{{ ingredient.name }}</span>
             <span class="block text-sm text-muted">{{ ingredient.departmentName }}</span>
           </span>
           <IngredientStepper
