@@ -12,6 +12,7 @@ import SeasonArt from '@/design/season/SeasonArt.vue'
 import UiTile from '@/design/UiTile.vue'
 import UiImage from '@/design/UiImage.vue'
 import PlanButton from './PlanButton.vue'
+import SecretBadge from './SecretBadge.vue'
 import { useRecipeTypes, useRecipesByType } from './queries'
 
 const { t } = useI18n()
@@ -127,12 +128,15 @@ function choose(slug: string) {
         :key="recipe.id"
         class="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4"
       >
-        <RouterLink
-          :to="{ name: 'recipe', params: { id: recipe.id } }"
-          class="min-w-0 flex-1 text-lg font-bold [overflow-wrap:anywhere] hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
-        >
-          {{ recipe.name }}
-        </RouterLink>
+        <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+          <RouterLink
+            :to="{ name: 'recipe', params: { id: recipe.id } }"
+            class="text-lg font-bold [overflow-wrap:anywhere] hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            {{ recipe.name }}
+          </RouterLink>
+          <SecretBadge v-if="recipe.secret === true" />
+        </div>
         <PlanButton :recipe-id="recipe.id" :name="recipe.name" variant="icon" />
       </li>
     </ul>

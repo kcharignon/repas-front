@@ -137,7 +137,7 @@ export interface paths {
         put?: never;
         /**
          * Copie une recette dans celles de l'utilisateur connecté
-         * @description Chaque ingrédient de la recette est rapproché de ceux que l'utilisateur possède déjà (ce qu'il a adopté, puis le même nom dans le même rayon, avec une unité compatible) ; à défaut, il reçoit une copie de l'ingrédient avec ses conversions propres. Un ingrédient existant de l'utilisateur n'est jamais modifié.
+         * @description Chaque ingrédient de la recette est rapproché de ceux que l'utilisateur possède déjà (ce qu'il a adopté, puis le même nom dans le même rayon, avec une unité compatible) ; à défaut, il reçoit une copie de l'ingrédient avec ses conversions propres. Un ingrédient existant de l'utilisateur n'est jamais modifié. La copie d'une recette ordinaire est une recette ordinaire ; celle que l'auteur fait de sa propre recette secrète est secrète aussi.
          */
         post: operations["post_api_copy_recipe"];
         delete?: never;
@@ -236,7 +236,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Crée une recette de l'utilisateur connecté. Un ancien slug (ancien commun dont l'utilisateur a reçu une copie, ingrédient fusionné) est remplacé par celui de son ingrédient actuel ; l'ingrédient d'un autre utilisateur est inconnu */
+        /**
+         * Crée une recette de l'utilisateur connecté. Un ancien slug (ancien commun dont l'utilisateur a reçu une copie, ingrédient fusionné) est remplacé par celui de son ingrédient actuel ; l'ingrédient d'un autre utilisateur est inconnu
+         * @description Le champ facultatif `secret` rend la recette secrète : seul son auteur la voit (elle n'est pas dans « Recettes des autres »). Absent, la recette est visible de tous.
+         */
         post: operations["post_api_create_recipe"];
         delete?: never;
         options?: never;
@@ -441,9 +444,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Détail d'une recette et de ses ingrédients (lisible par tout utilisateur authentifié, comme sur le site) */
+        /** Détail d'une recette et de ses ingrédients (lisible par tout utilisateur authentifié, sauf une recette secrète d'un autre) */
         get: operations["get_api_get_recipe"];
-        /** Remplace une recette de l'utilisateur : nom, personnes, type et lignes (les lignes absentes du corps sont supprimées). Un ancien slug est remplacé par celui de l'ingrédient actuel de l'auteur, comme à la création */
+        /**
+         * Remplace une recette de l'utilisateur : nom, personnes, type et lignes (les lignes absentes du corps sont supprimées). Un ancien slug est remplacé par celui de l'ingrédient actuel de l'auteur, comme à la création
+         * @description Le champ facultatif `secret` rend la recette secrète (seul son auteur la voit) ou de nouveau visible : absent ou `null`, il reste inchangé. Seul l'auteur le change. Les copies déjà faites par d'autres restent à eux.
+         */
         put: operations["put_api_update_recipe"];
         post?: never;
         /** Supprime une recette de l'utilisateur, avec ses lignes */
@@ -570,8 +576,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Recettes des autres utilisateurs que l'utilisateur authentifié n'a pas encore copiées : triées par catégorie, ou cherchées par nom du plus pertinent au moins pertinent
-         * @description Sans `q`, les recettes sont triées par catégorie (l'ordre des types de recette), puis par nom, puis par identifiant. Avec `q`, seules les recettes dont le nom correspond sont rendues, du plus pertinent au moins pertinent (Jaro-Winkler, ADR 0019), à pertinence égale par nom puis par identifiant, toutes catégories confondues ; chaque recette porte sa catégorie (`typeSlug`, `typeName`). 200 recettes au plus par réponse (`totalItems` donne le vrai nombre). Sans autre paramètre, la première page de 200 : `limit` et `offset` facultatifs lisent la suite.
+         * Recettes (non secrètes) des autres utilisateurs que l'utilisateur authentifié n'a pas encore copiées : triées par catégorie, ou cherchées par nom du plus pertinent au moins pertinent
+         * @description Une recette secrète (`secret`, ADR 0033) n'y est jamais : ni dans `member`, ni dans `totalItems`, ni dans la recherche. Sans `q`, les recettes sont triées par catégorie (l'ordre des types de recette), puis par nom, puis par identifiant. Avec `q`, seules les recettes dont le nom correspond sont rendues, du plus pertinent au moins pertinent (Jaro-Winkler, ADR 0019), à pertinence égale par nom puis par identifiant, toutes catégories confondues ; chaque recette porte sa catégorie (`typeSlug`, `typeName`). 200 recettes au plus par réponse (`totalItems` donne le vrai nombre). Sans autre paramètre, la première page de 200 : `limit` et `offset` facultatifs lisent la suite.
          */
         get: operations["get_api_list_other_people_recipes"];
         put?: never;
@@ -1376,6 +1382,12 @@ export interface components {
             typeSlug: string;
             /** @description Lignes de la recette, de une à cent */
             rows: components["schemas"]["RecipeRowPayload"][];
+            /**
+             * @description Recette secrète : seul l'auteur la voit, elle n'est pas dans « Recettes des autres » et personne d'autre ne la lit ni ne la copie (un administrateur non plus). Facultatif : absent ou `null`, il reste inchangé (`PUT`) ou faux (`POST`) ; un ancien client ne le remet donc jamais à zéro. Un booléen JSON, rien d'autre (`422` sinon). Seul l'auteur le change : un administrateur qui modifie la recette ordinaire d'un autre et envoie `true` reçoit `403` `RECIPE_SECRET_FORBIDDEN` (la secrète d'un autre lui est inconnue : `404`). Les copies déjà faites par d'autres restent à eux
+             * @default null
+             * @example false
+             */
+            secret: boolean | null;
         };
         RecipeTypePayload: {
             /**
@@ -2398,6 +2410,11 @@ export interface components {
             typeSlug: string;
             /** @example plat */
             typeName: string;
+            /**
+             * @description Recette secrète : seul son auteur la voit (elle n'est pas dans « Recettes des autres » et personne d'autre ne la lit ni ne la copie). Toujours écrit ; toujours `false` pour la recette d'un autre, qu'on ne lit que si elle ne l'est pas
+             * @example false
+             */
+            secret: boolean;
             /** @description Ingrédients de la recette, dans l'ordre de la recette (celui de la saisie) */
             rows: components["schemas"]["RecipeRowDTO"][];
             /**
@@ -2681,6 +2698,11 @@ export interface components {
             id: string;
             /** @example pâtes carbonara */
             name: string;
+            /**
+             * @description Recette secrète : seul son auteur la voit (elle n'est pas dans « Recettes des autres »). Toujours écrit
+             * @example false
+             */
+            secret: boolean;
         };
         AppUpdateDTO: {
             /**
@@ -3585,7 +3607,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Recette inconnue */
+            /** @description Recette inconnue, ou secrète et d'un autre (que son auteur seul voit, un administrateur n'y échappe pas) : rien n'est copié */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3947,7 +3969,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Corps de la requête invalide */
+            /** @description Corps de la requête invalide (`secret` n'est pas un booléen JSON) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4612,7 +4634,7 @@ export interface operations {
                     "application/json": components["schemas"]["RecipeDTO"];
                 };
             };
-            /** @description Recette inconnue */
+            /** @description Recette inconnue, ou secrète et d'un autre : seul son auteur la lit, un administrateur n'y échappe pas (jamais `403`, on ne révèle pas qu'elle existe) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4646,7 +4668,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La recette appartient à un autre utilisateur */
+            /** @description La recette appartient à un autre utilisateur (la recette secrète d'un autre, que son auteur seul voit, est inconnue pour tous, administrateur compris : `404`). `RECIPE_SECRET_FORBIDDEN` : un administrateur qui modifie la recette ordinaire d'un autre envoie un `secret` différent de l'actuel, rien n'est écrit */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4667,7 +4689,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Corps de la requête invalide */
+            /** @description Corps de la requête invalide (`secret` n'est pas un booléen JSON) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4697,7 +4719,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La recette appartient à un autre utilisateur */
+            /** @description La recette appartient à un autre utilisateur (la recette secrète d'un autre est inconnue pour tous, administrateur compris : `404`) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5375,7 +5397,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Ressource inconnue */
+            /** @description Ressource inconnue (ou recette secrète d'un autre, que seul son auteur voit) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5685,7 +5707,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Ressource inconnue */
+            /** @description Ressource inconnue (ou repas hérité d'une recette secrète d'un autre, que seul son auteur voit) */
             404: {
                 headers: {
                     [name: string]: unknown;

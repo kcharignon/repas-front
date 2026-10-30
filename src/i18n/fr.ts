@@ -319,6 +319,7 @@ export default {
   recipes: {
     title: 'Recettes',
     others: 'Recettes des autres',
+    secretBadge: 'Secrète',
     search: 'Rechercher une recette',
     types: 'Types de recette',
     none: "Tu n'as pas encore de recette de ce type.",
@@ -365,6 +366,8 @@ export default {
     name: 'Nom de la recette',
     serving: 'Nombre de personnes',
     type: 'Type de recette',
+    secret: 'Recette secrète',
+    secretHint: 'Toi seul la vois. Les autres ne la trouvent pas dans « Recettes des autres ».',
     addRow: 'Ajouter un ingrédient',
     ingredientN: 'Ingrédient {n}',
     quantityN: "Quantité de l'ingrédient {n}",

@@ -16,6 +16,7 @@ import UiSelect from '@/design/UiSelect.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
 import { messageForFailure } from '@/notifications/failures'
 import RecipeRowEditor from './RecipeRowEditor.vue'
+import SecretRecipeSwitch from './SecretRecipeSwitch.vue'
 import type { EditableRow } from './RecipeRowEditor.vue'
 import { useIngredientOptions, useRecipe, useRecipeTypes, useSaveRecipe } from './queries'
 
@@ -40,7 +41,16 @@ const blankRow = (): EditableRow => ({
   quantity: '',
 })
 
-const form = reactive({ name: '', serving: 4 as string | number, typeSlug: '', rows: [blankRow()] })
+const form = reactive({
+  name: '',
+  serving: 4 as string | number,
+  typeSlug: '',
+  secret: false,
+  rows: [blankRow()],
+})
+// Un back qui ne connaît pas encore `secret` ne le rend pas : à la modification on n'affiche pas l'interrupteur (il ne dirait pas
+// vrai) et on n'envoie pas la clé. À la création il est toujours là : un ancien back ignore la clé inconnue.
+const secretKnown = ref(true)
 const version = ref<number | null>(null)
 const submitted = ref(false)
 const failure = ref<string | null>(null)
@@ -55,6 +65,8 @@ watch(
     form.name = recipe.name
     form.serving = recipe.serving
     form.typeSlug = recipe.typeSlug
+    secretKnown.value = 'secret' in recipe
+    form.secret = recipe.secret === true
     form.rows = recipe.rows.map((row) => ({
       key: nextKey++,
       ingredientSlug: row.ingredientSlug,
@@ -139,6 +151,14 @@ function submit() {
         name: form.name.trim(),
         serving: Number(form.serving),
         typeSlug: form.typeSlug,
+        // Création : la clé ne part que pour une recette secrète (absente = publique) ; modification : la valeur choisie, si le back la connaît
+        ...(editing.value
+          ? secretKnown.value
+            ? { secret: form.secret }
+            : {}
+          : form.secret
+            ? { secret: true }
+            : {}),
         rows: form.rows.map((row) => ({
           ingredientSlug: row.ingredientSlug,
           unitSlug: row.unitSlug,
@@ -224,6 +244,8 @@ function submit() {
           </UiSelect>
         </UiField>
       </section>
+
+      <SecretRecipeSwitch v-if="!editing || secretKnown" v-model="form.secret" />
 
       <section class="flex flex-col gap-3">
         <h2 class="font-display text-2xl font-bold">{{ t('recipes.ingredients') }}</h2>

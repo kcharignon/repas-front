@@ -200,6 +200,8 @@ export interface RecipeForm {
   name: string
   serving: number
   typeSlug: string
+  /** Recette secrète (REC-002) : absent = on n'envoie rien (création : publique ; modification : inchangée). */
+  secret?: boolean
   rows: { ingredientSlug: string; unitSlug: string; quantity: number }[]
 }
 
@@ -223,7 +225,10 @@ export function useSaveRecipe() {
       form: RecipeForm
     }): Promise<string> => {
       // Le nom part toujours avec sa majuscule, quel que soit le chemin qui a rempli le formulaire (le back la met aussi)
-      const sent = { ...form, name: capitalizeFirst(form.name.trim()) }
+      // `secret` absent : le back ne l'attend pas (création : publique) ou le laisse inchangé ; le contrat généré le rend obligatoire
+      const sent = { ...form, name: capitalizeFirst(form.name.trim()) } as typeof form & {
+        secret: boolean | null
+      }
       if (id === null) {
         const { response, error } = await api.POST('/api/v1/recipes', { body: sent })
         if (!response.ok) throw ApiError.fromResponse(response, error)

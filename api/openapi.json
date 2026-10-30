@@ -290,7 +290,7 @@
                     "Recipes"
                 ],
                 "summary": "Copie une recette dans celles de l'utilisateur connect\u00e9",
-                "description": "Chaque ingr\u00e9dient de la recette est rapproch\u00e9 de ceux que l'utilisateur poss\u00e8de d\u00e9j\u00e0 (ce qu'il a adopt\u00e9, puis le m\u00eame nom dans le m\u00eame rayon, avec une unit\u00e9 compatible) ; \u00e0 d\u00e9faut, il re\u00e7oit une copie de l'ingr\u00e9dient avec ses conversions propres. Un ingr\u00e9dient existant de l'utilisateur n'est jamais modifi\u00e9.",
+                "description": "Chaque ingr\u00e9dient de la recette est rapproch\u00e9 de ceux que l'utilisateur poss\u00e8de d\u00e9j\u00e0 (ce qu'il a adopt\u00e9, puis le m\u00eame nom dans le m\u00eame rayon, avec une unit\u00e9 compatible) ; \u00e0 d\u00e9faut, il re\u00e7oit une copie de l'ingr\u00e9dient avec ses conversions propres. Un ingr\u00e9dient existant de l'utilisateur n'est jamais modifi\u00e9. La copie d'une recette ordinaire est une recette ordinaire ; celle que l'auteur fait de sa propre recette secr\u00e8te est secr\u00e8te aussi.",
                 "operationId": "post_api_copy_recipe",
                 "parameters": [
                     {
@@ -315,7 +315,7 @@
                         }
                     },
                     "404": {
-                        "description": "Recette inconnue"
+                        "description": "Recette inconnue, ou secr\u00e8te et d'un autre (que son auteur seul voit, un administrateur n'y \u00e9chappe pas) : rien n'est copi\u00e9"
                     },
                     "422": {
                         "description": "L'utilisateur a d\u00e9j\u00e0 2 000 recettes, copies comprises (`RECIPE_LIMIT_REACHED`)"
@@ -656,6 +656,7 @@
                     "Recipes"
                 ],
                 "summary": "Cr\u00e9e une recette de l'utilisateur connect\u00e9. Un ancien slug (ancien commun dont l'utilisateur a re\u00e7u une copie, ingr\u00e9dient fusionn\u00e9) est remplac\u00e9 par celui de son ingr\u00e9dient actuel ; l'ingr\u00e9dient d'un autre utilisateur est inconnu",
+                "description": "Le champ facultatif `secret` rend la recette secr\u00e8te : seul son auteur la voit (elle n'est pas dans \u00ab Recettes des autres \u00bb). Absent, la recette est visible de tous.",
                 "operationId": "post_api_create_recipe",
                 "requestBody": {
                     "required": true,
@@ -683,7 +684,7 @@
                         "description": "Type de recette, ingr\u00e9dient ou unit\u00e9 inconnu (un ingr\u00e9dient personnalis\u00e9 d'un autre utilisateur l'est aussi)"
                     },
                     "422": {
-                        "description": "Corps de la requ\u00eate invalide"
+                        "description": "Corps de la requ\u00eate invalide (`secret` n'est pas un bool\u00e9en JSON)"
                     }
                 }
             }
@@ -1332,7 +1333,7 @@
                 "tags": [
                     "Recipes"
                 ],
-                "summary": "D\u00e9tail d'une recette et de ses ingr\u00e9dients (lisible par tout utilisateur authentifi\u00e9, comme sur le site)",
+                "summary": "D\u00e9tail d'une recette et de ses ingr\u00e9dients (lisible par tout utilisateur authentifi\u00e9, sauf une recette secr\u00e8te d'un autre)",
                 "operationId": "get_api_get_recipe",
                 "parameters": [
                     {
@@ -1366,7 +1367,7 @@
                         }
                     },
                     "404": {
-                        "description": "Recette inconnue"
+                        "description": "Recette inconnue, ou secr\u00e8te et d'un autre : seul son auteur la lit, un administrateur n'y \u00e9chappe pas (jamais `403`, on ne r\u00e9v\u00e8le pas qu'elle existe)"
                     }
                 }
             },
@@ -1375,6 +1376,7 @@
                     "Recipes"
                 ],
                 "summary": "Remplace une recette de l'utilisateur : nom, personnes, type et lignes (les lignes absentes du corps sont supprim\u00e9es). Un ancien slug est remplac\u00e9 par celui de l'ingr\u00e9dient actuel de l'auteur, comme \u00e0 la cr\u00e9ation",
+                "description": "Le champ facultatif `secret` rend la recette secr\u00e8te (seul son auteur la voit) ou de nouveau visible : absent ou `null`, il reste inchang\u00e9. Seul l'auteur le change. Les copies d\u00e9j\u00e0 faites par d'autres restent \u00e0 eux.",
                 "operationId": "put_api_update_recipe",
                 "parameters": [
                     {
@@ -1404,13 +1406,13 @@
                         "description": "Recette modifi\u00e9e"
                     },
                     "403": {
-                        "description": "La recette appartient \u00e0 un autre utilisateur"
+                        "description": "La recette appartient \u00e0 un autre utilisateur (la recette secr\u00e8te d'un autre, que son auteur seul voit, est inconnue pour tous, administrateur compris : `404`). `RECIPE_SECRET_FORBIDDEN` : un administrateur qui modifie la recette ordinaire d'un autre envoie un `secret` diff\u00e9rent de l'actuel, rien n'est \u00e9crit"
                     },
                     "404": {
                         "description": "Recette, type, ingr\u00e9dient ou unit\u00e9 inconnu (un ingr\u00e9dient personnalis\u00e9 d'un autre utilisateur l'est aussi)"
                     },
                     "422": {
-                        "description": "Corps de la requ\u00eate invalide"
+                        "description": "Corps de la requ\u00eate invalide (`secret` n'est pas un bool\u00e9en JSON)"
                     },
                     "412": {
                         "description": "La version de la recette n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
@@ -1441,7 +1443,7 @@
                         "description": "Recette supprim\u00e9e"
                     },
                     "403": {
-                        "description": "La recette appartient \u00e0 un autre utilisateur"
+                        "description": "La recette appartient \u00e0 un autre utilisateur (la recette secr\u00e8te d'un autre est inconnue pour tous, administrateur compris : `404`)"
                     },
                     "404": {
                         "description": "Recette inconnue"
@@ -1890,8 +1892,8 @@
                 "tags": [
                     "Recipes"
                 ],
-                "summary": "Recettes des autres utilisateurs que l'utilisateur authentifi\u00e9 n'a pas encore copi\u00e9es : tri\u00e9es par cat\u00e9gorie, ou cherch\u00e9es par nom du plus pertinent au moins pertinent",
-                "description": "Sans `q`, les recettes sont tri\u00e9es par cat\u00e9gorie (l'ordre des types de recette), puis par nom, puis par identifiant. Avec `q`, seules les recettes dont le nom correspond sont rendues, du plus pertinent au moins pertinent (Jaro-Winkler, ADR 0019), \u00e0 pertinence \u00e9gale par nom puis par identifiant, toutes cat\u00e9gories confondues ; chaque recette porte sa cat\u00e9gorie (`typeSlug`, `typeName`). 200 recettes au plus par r\u00e9ponse (`totalItems` donne le vrai nombre). Sans autre param\u00e8tre, la premi\u00e8re page de 200 : `limit` et `offset` facultatifs lisent la suite.",
+                "summary": "Recettes (non secr\u00e8tes) des autres utilisateurs que l'utilisateur authentifi\u00e9 n'a pas encore copi\u00e9es : tri\u00e9es par cat\u00e9gorie, ou cherch\u00e9es par nom du plus pertinent au moins pertinent",
+                "description": "Une recette secr\u00e8te (`secret`, ADR 0033) n'y est jamais : ni dans `member`, ni dans `totalItems`, ni dans la recherche. Sans `q`, les recettes sont tri\u00e9es par cat\u00e9gorie (l'ordre des types de recette), puis par nom, puis par identifiant. Avec `q`, seules les recettes dont le nom correspond sont rendues, du plus pertinent au moins pertinent (Jaro-Winkler, ADR 0019), \u00e0 pertinence \u00e9gale par nom puis par identifiant, toutes cat\u00e9gories confondues ; chaque recette porte sa cat\u00e9gorie (`typeSlug`, `typeName`). 200 recettes au plus par r\u00e9ponse (`totalItems` donne le vrai nombre). Sans autre param\u00e8tre, la premi\u00e8re page de 200 : `limit` et `offset` facultatifs lisent la suite.",
                 "operationId": "get_api_list_other_people_recipes",
                 "parameters": [
                     {
@@ -2168,7 +2170,7 @@
                         "description": "Recette retir\u00e9e"
                     },
                     "404": {
-                        "description": "Ressource inconnue"
+                        "description": "Ressource inconnue (ou recette secr\u00e8te d'un autre, que seul son auteur voit)"
                     },
                     "412": {
                         "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
@@ -2424,7 +2426,7 @@
                         "description": "La ressource appartient \u00e0 un autre utilisateur"
                     },
                     "404": {
-                        "description": "Ressource inconnue"
+                        "description": "Ressource inconnue (ou repas h\u00e9rit\u00e9 d'une recette secr\u00e8te d'un autre, que seul son auteur voit)"
                     },
                     "409": {
                         "description": "La liste est envoy\u00e9e au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`)"
@@ -3983,6 +3985,13 @@
                         },
                         "maxItems": 100,
                         "minItems": 1
+                    },
+                    "secret": {
+                        "description": "Recette secr\u00e8te : seul l'auteur la voit, elle n'est pas dans \u00ab Recettes des autres \u00bb et personne d'autre ne la lit ni ne la copie (un administrateur non plus). Facultatif : absent ou `null`, il reste inchang\u00e9 (`PUT`) ou faux (`POST`) ; un ancien client ne le remet donc jamais \u00e0 z\u00e9ro. Un bool\u00e9en JSON, rien d'autre (`422` sinon). Seul l'auteur le change : un administrateur qui modifie la recette ordinaire d'un autre et envoie `true` re\u00e7oit `403` `RECIPE_SECRET_FORBIDDEN` (la secr\u00e8te d'un autre lui est inconnue : `404`). Les copies d\u00e9j\u00e0 faites par d'autres restent \u00e0 eux",
+                        "type": "boolean",
+                        "default": null,
+                        "example": false,
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -5796,6 +5805,7 @@
                     "serving",
                     "typeSlug",
                     "typeName",
+                    "secret",
                     "rows",
                     "version"
                 ],
@@ -5822,6 +5832,11 @@
                     "typeName": {
                         "type": "string",
                         "example": "plat"
+                    },
+                    "secret": {
+                        "description": "Recette secr\u00e8te : seul son auteur la voit (elle n'est pas dans \u00ab Recettes des autres \u00bb et personne d'autre ne la lit ni ne la copie). Toujours \u00e9crit ; toujours `false` pour la recette d'un autre, qu'on ne lit que si elle ne l'est pas",
+                        "type": "boolean",
+                        "example": false
                     },
                     "rows": {
                         "description": "Ingr\u00e9dients de la recette, dans l'ordre de la recette (celui de la saisie)",
@@ -6294,7 +6309,8 @@
             "RecipeSummaryDTO": {
                 "required": [
                     "id",
-                    "name"
+                    "name",
+                    "secret"
                 ],
                 "properties": {
                     "id": {
@@ -6305,6 +6321,11 @@
                     "name": {
                         "type": "string",
                         "example": "p\u00e2tes carbonara"
+                    },
+                    "secret": {
+                        "description": "Recette secr\u00e8te : seul son auteur la voit (elle n'est pas dans \u00ab Recettes des autres \u00bb). Toujours \u00e9crit",
+                        "type": "boolean",
+                        "example": false
                     }
                 },
                 "type": "object"
