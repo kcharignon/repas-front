@@ -3,6 +3,8 @@
 // https, d'un hôte de `leclercdrive.fr`, sans identifiant ni port, d'au plus 2 000 caractères ; sinon `null` (la fiche reste en texte, sans erreur).
 import { describe, expect, it } from 'vitest'
 
+import { PHOTO_RULE as AUCHAN_RULE } from '../src/auchan'
+import { PHOTO_RULE } from '../src/leclerc'
 import { MAX_PHOTO_URL, photoUrl } from '../src/photo-url'
 
 const PAGE = {
@@ -23,12 +25,14 @@ describe('une adresse de photo acceptée', () => {
     ['https://a.b.c.leclercdrive.fr/a.jpg', 'https://a.b.c.leclercdrive.fr/a.jpg'],
     ['https://fd9-photos.leclercdrive.fr:443/a.jpg', 'https://fd9-photos.leclercdrive.fr/a.jpg'],
   ])('%s', (raw, expected) => {
-    expect(photoUrl(raw)).toBe(expected)
+    expect(photoUrl(raw, PHOTO_RULE)).toBe(expected)
   })
 
   it('une adresse relative se résout par rapport à la page', () => {
-    expect(photoUrl('/images/b.jpg', PAGE)).toBe('https://fd9-courses.leclercdrive.fr/images/b.jpg')
-    expect(photoUrl('//fd9-photos.leclercdrive.fr/b.jpg', PAGE)).toBe(
+    expect(photoUrl('/images/b.jpg', PHOTO_RULE, PAGE)).toBe(
+      'https://fd9-courses.leclercdrive.fr/images/b.jpg',
+    )
+    expect(photoUrl('//fd9-photos.leclercdrive.fr/b.jpg', PHOTO_RULE, PAGE)).toBe(
       'https://fd9-photos.leclercdrive.fr/b.jpg',
     )
   })
@@ -115,14 +119,14 @@ const HOSTILE: [string, unknown][] = [
 
 describe('les adresses hostiles : jamais affichées, jamais une erreur', () => {
   it.each(HOSTILE)('%s', (_name, raw) => {
-    expect(photoUrl(raw)).toBeNull()
-    expect(photoUrl(raw, PAGE)).toBeNull()
+    expect(photoUrl(raw, PHOTO_RULE)).toBeNull()
+    expect(photoUrl(raw, PHOTO_RULE, PAGE)).toBeNull()
   })
 
   it('une adresse de 2 000 caractères passe, une de 2 001 non', () => {
     const base = 'https://fd9-photos.leclercdrive.fr/'
-    expect(photoUrl(base + 'a'.repeat(MAX_PHOTO_URL - base.length))).not.toBeNull()
-    expect(photoUrl(base + 'a'.repeat(MAX_PHOTO_URL - base.length + 1))).toBeNull()
+    expect(photoUrl(base + 'a'.repeat(MAX_PHOTO_URL - base.length), PHOTO_RULE)).not.toBeNull()
+    expect(photoUrl(base + 'a'.repeat(MAX_PHOTO_URL - base.length + 1), PHOTO_RULE)).toBeNull()
   })
 })
 
@@ -132,11 +136,57 @@ describe('une adresse relative d’une page qui ne convient pas', () => {
     ['une page avec un port', { ...PAGE, port: '8099' }],
     ['une page d’un autre hôte', { ...PAGE, hostname: 'www.example.com' }],
   ])('%s : pas de photo', (_name, page) => {
-    expect(photoUrl('/images/b.jpg', page)).toBeNull()
+    expect(photoUrl('/images/b.jpg', PHOTO_RULE, page)).toBeNull()
   })
 
   it('sans page, une adresse relative est refusée', () => {
-    expect(photoUrl('/images/b.jpg')).toBeNull()
-    expect(photoUrl('//fd9-photos.leclercdrive.fr/b.jpg')).toBeNull()
+    expect(photoUrl('/images/b.jpg', PHOTO_RULE)).toBeNull()
+    expect(photoUrl('//fd9-photos.leclercdrive.fr/b.jpg', PHOTO_RULE)).toBeNull()
+  })
+})
+
+// Les photos d'Auchan (DRV-717) : une règle à elle, en `https` sur `cdn.auchan.fr`, chemin `/media/…` seulement. Valeurs inventées.
+describe('la règle des photos d’Auchan', () => {
+  const GOOD_AUCHAN = 'https://cdn.auchan.fr/media/S00000000000G1GPRIMARY'
+
+  it.each([
+    [GOOD_AUCHAN, GOOD_AUCHAN],
+    ['https://CDN.Auchan.FR/media/a/b.jpg?w=200', 'https://cdn.auchan.fr/media/a/b.jpg?w=200'],
+    ['https://cdn.auchan.fr:443/media/a.jpg', 'https://cdn.auchan.fr/media/a.jpg'],
+  ])('accepte %s', (raw, expected) => {
+    expect(photoUrl(raw, AUCHAN_RULE)).toBe(expected)
+  })
+
+  it.each([
+    ['un autre chemin du même hôte', 'https://cdn.auchan.fr/autre/a.jpg'],
+    ['la racine du même hôte', 'https://cdn.auchan.fr/'],
+    ['/media/ sans rien derrière', 'https://cdn.auchan.fr/media/'],
+    ['un chemin qui remonte hors de /media/', 'https://cdn.auchan.fr/media/../secret/a.jpg'],
+    ['le même chemin encodé', 'https://cdn.auchan.fr/media/%2e%2e/secret/a.jpg'],
+    ['un autre sous-domaine', 'https://images.auchan.fr/media/a.jpg'],
+    ['le site lui-même', 'https://www.auchan.fr/media/a.jpg'],
+    ['l’hôte en préfixe d’un autre', 'https://cdn.auchan.fr.autre-site.invalid/media/a.jpg'],
+    ['http', 'http://cdn.auchan.fr/media/a.jpg'],
+    ['un port', 'https://cdn.auchan.fr:8443/media/a.jpg'],
+    ['un identifiant', 'https://user@cdn.auchan.fr/media/a.jpg'],
+    ['une adresse de Leclerc', 'https://fd9-photos.leclercdrive.fr/image.ashx?id=1'],
+    ['javascript:', 'javascript:alert(1)'],
+    ['data:', 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='],
+  ])('refuse %s', (_name, raw) => {
+    expect(photoUrl(raw, AUCHAN_RULE)).toBeNull()
+  })
+
+  it('Leclerc ne laisse pas passer une photo d’Auchan, et Auchan pas une photo de Leclerc', () => {
+    expect(photoUrl(GOOD_AUCHAN, PHOTO_RULE)).toBeNull()
+    expect(photoUrl(GOOD, AUCHAN_RULE)).toBeNull()
+  })
+
+  it('une adresse relative à la page est jugée comme les autres', () => {
+    const page = { hostname: 'www.auchan.fr', pathname: '/courses' }
+
+    expect(photoUrl('/media/a.jpg', AUCHAN_RULE, page)).toBeNull()
+    expect(photoUrl('//cdn.auchan.fr/media/a.jpg', AUCHAN_RULE, page)).toBe(
+      'https://cdn.auchan.fr/media/a.jpg',
+    )
   })
 })

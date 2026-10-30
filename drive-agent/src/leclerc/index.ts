@@ -92,6 +92,7 @@ export {
   type SessionState,
 } from './session'
 export { hostFamily, isMobileHost, type LocationLike, type StoreInfo } from './store'
+export { PHOTO_RULE } from './photo-rule'
 export {
   addressShape,
   headerNames,
@@ -99,6 +100,7 @@ export {
   stateKeys,
   type ArrivalFacts,
   type AttemptFacts,
+  type CookieFacts,
   type DeliveryFacts,
   type NavigationFacts,
   type SearchFacts,

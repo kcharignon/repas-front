@@ -102,6 +102,18 @@ const reply = (route: Route, body?: unknown, status = body === undefined ? 204 :
       : { status, contentType: 'application/json', body: JSON.stringify(body) },
   )
 
+/** L'exemple des réglages avec le seul premier drive : l'écran des réglages est alors celui d'un seul drive (DRV-709). */
+const aloneInSettings = (settings: unknown) => {
+  const full = settings as { retailers: { retailer: string }[] }
+  const first = full.retailers[0]!.retailer
+
+  return {
+    ...full,
+    retailers: full.retailers.slice(0, 1),
+    selection: { mode: 'AUTO', retailer: first, candidates: [first] },
+  }
+}
+
 /** Le faux back : les exemples du back en réponse, les appels reçus et les corps de `PUT /drive/choices` gardés. */
 async function fakeBackFromSamples(page: Page) {
   const received = { calls: [] as string[], choices: [] as unknown[] }
@@ -124,7 +136,8 @@ async function fakeBackFromSamples(page: Page) {
             defaultServing: 4,
           })
         case 'GET /api/v1/drive/settings':
-          return reply(route, sample('settings'))
+          // Un seul drive allumé (la production d'aujourd'hui) : l'exemple du back en sert deux, « Mes drives » est dans `drive-drives.spec.ts`
+          return reply(route, aloneInSettings(sample('settings')))
         case 'GET /api/v1/drive/choices':
           return reply(route, sample('choices'))
         case `GET /api/v1/drive/plans/${LIST}`:

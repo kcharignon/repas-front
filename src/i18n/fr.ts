@@ -743,6 +743,8 @@ export default {
     skip: 'Pas cette fois',
     skipFor: 'Pas cette fois : {name}',
     open: 'Ouvrir le drive',
+    // Plusieurs drives configurés (DRV-710) : le bouton nomme le drive. Avec un seul, c'est « Ouvrir le drive », comme avant.
+    openNamed: 'Ouvrir {retailer}',
     reopenDrive: 'Rouvrir le drive',
     opening: 'Ouverture du drive…',
     offline:
@@ -773,9 +775,18 @@ export default {
       search: 'Chercher sur {retailer}',
       searchFor: 'Chercher sur {retailer} : {name} (s’ouvre dans un nouvel onglet)',
     },
+    // Plusieurs drives configurés, sans drive habituel (DRV-710) : la question, une tuile par drive, la dernière utilisée est cochée
+    where: {
+      title: 'Où envoyer ta liste ?',
+      store: 'Ton magasin : …{tail}',
+    },
+    // Le drive habituel est ouvert sans question ; ce lien change de drive pour cet envoi seulement (DRV-710)
+    goElsewhere: 'Envoyer ailleurs',
     // Une application trop ancienne pour le drive (DRV-640) : une phrase et un bouton, les liens de recherche restent sous l'écran
     appTooOld: {
       text: 'Mets à jour l’application pour envoyer ta liste.',
+      // L'application est à jour pour le drive d'avant mais ne connaît pas celui-ci (DRV-710) ; les autres drives restent proposés
+      textNamed: 'Mets à jour l’application pour envoyer ta liste à {retailer}.',
       update: 'Mettre à jour',
     },
     // Une erreur dit trois choses : ce qui s'est passé, ce qui est sauf, une action (principes-produit.md § 4)
@@ -942,6 +953,8 @@ export default {
     back: 'Moi',
     entry: 'Réglages du drive',
     entryHelp: 'Ton magasin {retailer} Drive et l’application Repas.',
+    // Plusieurs drives allumés (DRV-709)
+    entryHelpSeveral: 'Tes drives, ton drive habituel et l’application Repas.',
     disabled: 'L’envoi au drive n’est pas encore activé : il n’y a rien à régler pour le moment.',
     // Envoyé ici faute de magasin (DRV-622, DRV-623) : un titre, une phrase, un bouton qui fait le travail
     chooseTitle: 'Choisis ton magasin',
@@ -1005,6 +1018,25 @@ export default {
     productsRejected: 'Articles avec des produits à ne plus proposer',
     productsHome: 'Articles « J’en ai toujours »',
     manage: 'Gérer mes produits',
+    // « Mes drives » (DRV-709) : plusieurs drives allumés. Le nom du drive est toujours un paramètre (`{retailer}`).
+    drives: {
+      title: 'Mes drives',
+      chooseHelp: 'Quel drive utilises-tu ?',
+      storeNamed: 'Ton magasin : …{tail}',
+      choose: 'Choisir mon magasin {retailer}',
+      changeNamed: 'Changer de magasin {retailer}',
+      remove: 'Retirer {retailer}',
+      removeTitle: 'Retirer {retailer} ?',
+      removeHelp:
+        'Ton magasin {retailer} n’est plus enregistré. Tes produits habituels sont gardés, au cas où tu reviens.',
+      keep: 'Garder {retailer}',
+      removed: '{retailer} est retiré.',
+      updateApp: 'Mets à jour l’application pour ajouter {retailer}.',
+      inApp: 'Pour choisir ce magasin, ouvre Repas dans l’application.',
+      default: 'Mon drive habituel',
+      defaultHelp: 'Repas l’utilise sans rien te demander.',
+      defaultNone: 'Aucun',
+    },
   },
   // Liaison d'Alexa (VOX-401) : la page que l'application Alexa ouvre (`/alexa/lier`), une phrase et deux boutons
   alexaLink: {

@@ -36,6 +36,7 @@ function entry(id: string, hosts: string[]) {
     name: id,
     nameDe: `de ${id}`,
     siteDomain: `${id}.invalid`,
+    photos: { host: /^images\.exemple\.invalid$/ },
     hostFamily: () => null,
     isMobileHost: () => false,
     siteMode: 'AS_IS',

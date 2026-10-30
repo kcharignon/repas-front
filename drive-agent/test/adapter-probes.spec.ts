@@ -120,7 +120,9 @@ describe('lastSearchFacts : ce que la dernière recherche a laissé voir', () =>
     })
     expect(facts?.length).toBe(fixture('recherche-farine.html').length)
     expect(facts?.headers).toEqual(['content-type', 'x-frame-options'])
-    expect(facts?.keys.present).toEqual(expect.arrayContaining(['iIdProduit', 'sNoPointLivraison']))
+    expect(facts?.keys?.present).toEqual(
+      expect.arrayContaining(['iIdProduit', 'sNoPointLivraison']),
+    )
   })
 
   it('une page sans résultat reconnue : EMPTY, zéro produit', async () => {

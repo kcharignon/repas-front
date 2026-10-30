@@ -11,6 +11,7 @@
             "retailer": "leclerc",
             "name": "Leclerc",
             "configured": true,
+            "isDefault": false,
             "store": {
                 "id": "123456",
                 "label": "Ville-Test",
@@ -21,11 +22,22 @@
             "retailer": "auchan",
             "name": "Auchan",
             "configured": true,
+            "isDefault": false,
             "store": {
                 "id": "0b5f8a2e-3c1d-4e7f-9a6b-123456789abc",
                 "label": "Ville-Test",
                 "baseUrl": "https://www.auchan.fr/"
             }
         }
-    ]
+    ],
+    "defaultRetailer": null,
+    "lastUsedRetailer": null,
+    "selection": {
+        "mode": "ASK",
+        "retailer": "leclerc",
+        "candidates": [
+            "leclerc",
+            "auchan"
+        ]
+    }
 }

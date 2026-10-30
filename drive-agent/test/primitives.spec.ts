@@ -139,3 +139,49 @@ describe('fetch et attachShadow de la fenêtre', () => {
     expect(primitives.attachShadow(host, { mode: 'open' })).toBe(host.shadowRoot)
   })
 })
+
+describe('DOMParser de la fenêtre (DRV-724)', () => {
+  it('lit un texte HTML en document inerte : aucun script ne s’exécute, rien n’est chargé', () => {
+    const primitives = takeWindowPrimitives(window)
+
+    const doc = primitives.parseHtml(
+      '<p id="a">un</p><script>window.__pwned = 1</script><img src="https://hote.invalid/x.png" onerror="window.__pwned = 2">',
+    )
+
+    expect(doc.querySelector('#a')?.textContent).toBe('un')
+    expect(doc.querySelectorAll('img')).toHaveLength(1)
+    expect(Reflect.get(window, '__pwned')).toBeUndefined()
+    expect(doc).not.toBe(document)
+  })
+
+  it('ne passe plus par le DOMParser que la page installe ensuite', () => {
+    // Given : DOMParser pris, puis remplacé par la page
+    const primitives = takeWindowPrimitives(window)
+    const original = window.DOMParser
+    const calls: string[] = []
+    class Replacement {
+      parseFromString(text: string): Document {
+        calls.push(text)
+        return document
+      }
+    }
+    Object.defineProperty(window, 'DOMParser', { configurable: true, value: Replacement })
+    restore.push(() =>
+      Object.defineProperty(window, 'DOMParser', { configurable: true, value: original }),
+    )
+
+    // When
+    const doc = primitives.parseHtml('<p id="b">deux</p>')
+
+    // Then : c'est celui pris au démarrage qui a lu le texte
+    expect(doc.querySelector('#b')?.textContent).toBe('deux')
+    expect(calls).toEqual([])
+  })
+
+  it('lève une erreur franche quand la fenêtre n’a pas de DOMParser', () => {
+    const fake = { fetch: () => Promise.resolve(new Response('ok')) } as unknown as Window &
+      typeof globalThis
+
+    expect(() => takeWindowPrimitives(fake).parseHtml('<p>x</p>')).toThrow(TypeError)
+  })
+})

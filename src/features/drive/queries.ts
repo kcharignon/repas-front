@@ -8,15 +8,18 @@ import { shoppingListKeys } from '@/features/shopping-lists/queries'
 import { useSessionStore } from '@/session/session'
 
 import { retailerOf } from './retailers'
-import type { Retailer } from './retailers'
+import type { Retailer, RetailerId } from './retailers'
 
 export const driveKeys = {
   all: ['drive'] as const,
   settings: ['drive', 'settings'] as const,
   appInfo: ['drive', 'app-info'] as const,
-  plan: (listId: string) => ['drive', 'plan', listId] as const,
+  // L'enseigne fait partie de la clé (DRV-710) : le plan et l'estimation d'une liste diffèrent d'une enseigne à l'autre ; `null` : celle que le back choisit
+  plan: (listId: string, retailer: RetailerId | null = null) =>
+    ['drive', 'plan', listId, retailer] as const,
   // Sous les clés des listes : toute écriture sur une liste (qui invalide `shoppingListKeys.all`) relit aussi son estimation
-  estimate: (listId: string) => [...shoppingListKeys.all, 'drive-estimate', listId] as const,
+  estimate: (listId: string, retailer: RetailerId | null = null) =>
+    [...shoppingListKeys.all, 'drive-estimate', listId, retailer] as const,
 }
 
 /**
@@ -49,19 +52,30 @@ export const cachedRetailer = (queryClient: QueryClient): Retailer =>
 
 /**
  * Le plan d'une liste envoyée : ce que le back sait de chaque ligne (produits classés, refusés, nombre de produits). Il dépend des
- * choix mémorisés, qui changent entre deux ouvertures : il est relu à chaque ouverture de l'écran, jamais gardé.
+ * choix mémorisés, qui changent entre deux ouvertures : il est relu à chaque ouverture de l'écran, jamais gardé. `retailer` (DRV-710) : l'enseigne
+ * du plan, écrite dans `?retailer=` ; absente (`undefined`), le back prend celle de la sélection, comme avant.
  */
-export function useDrivePlan(listId: () => string, enabled: () => boolean = () => true) {
+export function useDrivePlan(
+  listId: () => string,
+  enabled: () => boolean = () => true,
+  retailer: () => RetailerId | undefined = () => undefined,
+) {
   const { api } = useSessionStore()
 
   return useQuery({
-    queryKey: computed(() => driveKeys.plan(listId())),
-    queryFn: () =>
-      unwrap(
+    queryKey: computed(() => driveKeys.plan(listId(), retailer() ?? null)),
+    queryFn: () => {
+      const chosen = retailer()
+
+      return unwrap(
         api.GET('/api/v1/drive/plans/{shoppingListId}', {
-          params: { path: { shoppingListId: listId() } },
+          params: {
+            path: { shoppingListId: listId() },
+            ...(chosen === undefined ? {} : { query: { retailer: chosen } }),
+          },
         }),
-      ),
+      )
+    },
     enabled: computed(enabled),
     staleTime: 0,
     gcTime: 0,
@@ -78,11 +92,20 @@ export function useSaveChoices() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ storeId, batches }: { storeId: string; batches: ChoiceIntent[][] }) => {
+    // `retailer` (DRV-710) : l'enseigne de l'envoi dont on enregistre le résultat (celle du brouillon), jamais celle des réglages d'aujourd'hui
+    mutationFn: async ({
+      storeId,
+      batches,
+      retailer,
+    }: {
+      storeId: string
+      batches: ChoiceIntent[][]
+      retailer?: RetailerId
+    }) => {
       for (const choices of batches)
         await unwrap(
           api.PUT('/api/v1/drive/choices', {
-            body: { retailer: cachedRetailer(queryClient).id, storeId, choices },
+            body: { retailer: retailer ?? cachedRetailer(queryClient).id, storeId, choices },
           }),
         )
     },
@@ -91,18 +114,19 @@ export function useSaveChoices() {
 }
 
 /**
- * Enregistre le magasin de l'utilisateur (`PUT /drive/settings`) ; il remplace le précédent. L'échec s'affiche dans l'écran
- * (`silent`) ; en cas de succès, tout ce que le drive a lu pour l'ancien magasin (choix, plans) est relu.
+ * Enregistre le magasin de l'utilisateur (`PUT /drive/settings`) ; il remplace le précédent. `retailer` (DRV-709) : le drive de la ligne touchée
+ * dans « Mes drives » ; sans lui, celui des réglages (le seul quand il n'y en a qu'un). L'échec s'affiche dans l'écran (`silent`) ; en cas de succès,
+ * tout ce que le drive a lu pour l'ancien magasin (choix, plans) est relu.
  */
 export function useSaveDriveSettings() {
   const { api } = useSessionStore()
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (store: DriveStorePayload) =>
+    mutationFn: ({ store, retailer }: { store: DriveStorePayload; retailer?: RetailerId }) =>
       unwrap(
         api.PUT('/api/v1/drive/settings', {
-          body: { retailer: cachedRetailer(queryClient).id, store },
+          body: { retailer: retailer ?? cachedRetailer(queryClient).id, store },
         }),
       ),
     meta: { silent: true },
@@ -111,20 +135,79 @@ export function useSaveDriveSettings() {
 }
 
 /**
- * L'estimation du coût d'une liste d'après les prix mémorisés (DRV-612). Elle dépend des produits choisis et des prix vus, qui changent
- * entre deux ouvertures : elle est relue à chaque ouverture de l'écran, et après toute écriture sur les listes.
+ * Fixe le drive habituel (`PUT /drive/default-retailer`, DRV-709), ou l'efface (`null`, « Aucun ») : la clé `retailer` est toujours écrite. L'échec
+ * s'affiche dans l'écran (`silent`) ; en cas de succès les réglages sont relus (la sélection du back change avec lui).
  */
-export function useDriveEstimate(listId: () => string, enabled: () => boolean = () => true) {
+export function useSetDefaultRetailer() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (retailer: RetailerId | null) =>
+      unwrap(api.PUT('/api/v1/drive/default-retailer', { body: { retailer } })),
+    meta: { silent: true },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: driveKeys.settings }),
+  })
+}
+
+/**
+ * Retient le drive que la personne ouvre (`PUT /drive/last-retailer`, DRV-710) : c'est la présélection de l'envoi suivant quand plusieurs drives sont
+ * configurés et qu'aucun n'est « habituel ». Écrit à l'ouverture du drive, pas au retour : un envoi interrompu compte aussi. L'appelant ne s'en
+ * inquiète pas (une erreur ne perd qu'une présélection) et relit les réglages après le lancement.
+ */
+export function useRememberLastRetailer() {
+  const { api } = useSessionStore()
+
+  return useMutation({
+    mutationFn: (retailer: RetailerId) =>
+      unwrap(api.PUT('/api/v1/drive/last-retailer', { body: { retailer } })),
+    meta: { silent: true },
+  })
+}
+
+/**
+ * Retire un drive (`DELETE /drive/settings?retailer=`, DRV-709) : son magasin n'est plus enregistré ; les produits habituels et les choix restent,
+ * pour un retour. Le back efface lui-même le drive habituel et la dernière enseigne si c'était celui-là. L'échec s'affiche dans l'écran (`silent`) ;
+ * en cas de succès tout ce que le drive a lu est relu.
+ */
+export function useRemoveDrive() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (retailer: RetailerId) =>
+      unwrap(api.DELETE('/api/v1/drive/settings', { params: { query: { retailer } } })),
+    meta: { silent: true },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: driveKeys.all }),
+  })
+}
+
+/**
+ * L'estimation du coût d'une liste d'après les prix mémorisés (DRV-612). Elle dépend des produits choisis et des prix vus, qui changent
+ * entre deux ouvertures : elle est relue à chaque ouverture de l'écran, et après toute écriture sur les listes. `retailer` (DRV-710) : l'enseigne
+ * estimée, écrite dans `?retailer=` ; absente, le back prend celle de la sélection, comme avant.
+ */
+export function useDriveEstimate(
+  listId: () => string,
+  enabled: () => boolean = () => true,
+  retailer: () => RetailerId | undefined = () => undefined,
+) {
   const { api } = useSessionStore()
 
   return useQuery({
-    queryKey: computed(() => driveKeys.estimate(listId())),
-    queryFn: () =>
-      unwrap(
+    queryKey: computed(() => driveKeys.estimate(listId(), retailer() ?? null)),
+    queryFn: () => {
+      const chosen = retailer()
+
+      return unwrap(
         api.GET('/api/v1/drive/estimates/{shoppingListId}', {
-          params: { path: { shoppingListId: listId() } },
+          params: {
+            path: { shoppingListId: listId() },
+            ...(chosen === undefined ? {} : { query: { retailer: chosen } }),
+          },
         }),
-      ),
+      )
+    },
     enabled: computed(enabled),
     staleTime: 0,
     refetchOnMount: 'always',

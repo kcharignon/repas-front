@@ -29,6 +29,30 @@ panier), jamais une page réelle. Le point de livraison est `123456`, les produi
 | `panier-retrait.json`              | Réponse d'un retrait : le produit n'est plus dans `lstProduitsLight`                                                                                                                                                                               |
 | `panier-invalide.json`             | Une réponse sans évènement panier                                                                                                                                                                                                                  |
 
+## `auchan/` (DRV-717)
+
+Elles reproduisent la **structure** mesurée sur le site d'Auchan le 2026-10-30 (rapports DRV-712 à 714 du dépôt back : `GET /journey`, la barre du magasin, la page
+du panier vide, le vrai `404`), avec des valeurs **inventées** : un magasin de test (UUID `0b5f8a2e-…`, libellé `Drive Ville-Test`), des produits de test. Elles sont
+**produites par le faux site** (`../fake-auchan/`, dont `test/fake-auchan.spec.ts` vérifie qu'elles lui restent égales) : jamais une page ni une réponse réelles.
+
+| Fichier                                                          | Contenu                                                                                                                                          |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `parcours-magasin.json`                                          | Le parcours d'une session qui a un drive choisi : contextes `GROCERY` (vendeur UUID, libellé, canal `PICK_UP`), `ONLINE` à contexte nul, `STORE` |
+| `parcours-sans-magasin.json`                                     | Aucun contexte de courses (après une déconnexion)                                                                                                |
+| `parcours-contexte-vide.json`                                    | Le contexte de courses est là mais nul                                                                                                           |
+| `parcours-sans-liste.json`                                       | Une réponse sans `activeContexts` : le site a changé                                                                                             |
+| `parcours-sans-vendeur.json`                                     | Un contexte de courses sans vendeur lisible : le site a changé                                                                                   |
+| `parcours-identifiant-invalide.json`                             | Un vendeur dont l'identifiant n'est pas un UUID                                                                                                  |
+| `recherche-farine.html`, `recherche-lot.html`                    | Pages de résultats (DRV-724) : quatre produits dont un indisponible et un sans prix ; un lot de six                                              |
+| `recherche-aucun-resultat.html`                                  | « Aucun résultat » (forme plausible, non mesurée)                                                                                                |
+| `recherche-inconnue.html`, `-illisible.html`, `-sans-offre.html` | Trois formes que l'adaptateur refuse (`CONTRACT_CHANGED`)                                                                                        |
+| `fiche-produit.html`, `rayon.html`                               | Où mènent les termes redirigés (la fiche porte les balises du produit)                                                                           |
+| `accueil-magasin.html`                                           | L'accueil des courses, barre « Retrait : Drive Ville-Test »                                                                                      |
+| `accueil-sans-magasin.html`                                      | L'accueil des courses, barre « Choisir vos courses »                                                                                             |
+| `panier-vide-bouton.html`, `panier-vide-lien.html`               | Le panier vide et son « Commencer mes achats » (un bouton, un lien du site)                                                                      |
+| `introuvable.html`                                               | La page « Erreur 404 » d'un vrai `404`                                                                                                           |
+| `recherche-farine.html`                                          | Un squelette de page de résultats (pour DRV-724) : cartes de produits de test, `data-product-id`, `data-offer-id`, microdonnées                  |
+
 ## `contract/` (DRV-501, DRV-704)
 
 Copies à l'octet près des exemples de contrat du back (`make samples-update`, voir `contract/SOURCE.md`) : `plan`, `plan-with-offer`, `choices`, `choices-with-offer`, `estimate`, `settings` et `retailers.sample.json` (les enseignes : identifiant, noms, forme de l'adresse d'un magasin et d'un produit). Ne pas les modifier à la main.

@@ -6,6 +6,8 @@ L'application Android de Repas (tickets `DRV-311` à `DRV-319`, dépôt back `do
 
 > Ce dossier prolonge l'application de test jetable du spike (DRV-011, `drive-agent/android-lab/`) et le banc d'essai du favori (`drive-agent/lab/`), **retirés le 2026-10-19** (ils restent dans l'historique Git).
 
+> **Plusieurs enseignes (DRV-711).** Les sections de ce fichier qui parlent du "drive Leclerc" décrivent **la première enseigne** et le faux Leclerc des scénarios de bout en bout ; l'application sert plusieurs enseignes par un registre (`RetailerSites`, voir `ARCHITECTURE.md`, « Plusieurs enseignes »). Pour une autre enseigne : une entrée de registre et son propre scénario, jamais un nom d'enseigne écrit ailleurs ; la procédure d'ajout est dans `.claude/skills/repas-android-dev` (« Ajouter une enseigne »). Auchan est inscrite mais éteinte tant que le back ne l'allume pas.
+
 ## Commandes
 
 Tout se lance dans Docker (image : JDK 17, Gradle, SDK Android ; rien à installer sur la machine). La première construction télécharge les outils, les suivantes réutilisent le cache.

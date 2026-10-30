@@ -58,6 +58,11 @@ export interface Retailer {
   readStore: (url: URL) => StoreAddress | null
   /** L'adresse « Finaliser » d'un magasin pour l'application, d'après son adresse de base enregistrée ; `null` si elle n'est pas lisible. */
   finalizeStoreUrl: (storeBaseUrl: URL) => string | null
+  /**
+   * L'adresse de la recherche d'un produit sur le site de l'enseigne, d'après l'adresse de base du magasin enregistré : le repli « Chercher à la
+   * main » (DRV-710), quand l'envoi automatique n'est pas possible. Le texte cherché est encodé ici.
+   */
+  searchUrl: (storeBaseUrl: string, query: string) => string
 }
 
 /** `/magasin-N-N`, avec ou sans ville : les deux numéros du magasin, sans le reste de l'adresse. */
@@ -90,6 +95,8 @@ const leclerc: Retailer = {
 
     return url.protocol !== 'https:' || store === null ? null : `https://${url.host}/${store[1]}`
   },
+  searchUrl: (storeBaseUrl, query) =>
+    `${storeBaseUrl}/recherche.aspx?TexteRecherche=${encodeURIComponent(query)}`,
 }
 
 /** Un UUID en minuscules : la forme des identifiants d'Auchan (magasin, produit, offre) dans le contrat. */
@@ -114,6 +121,9 @@ const auchan: Retailer = {
   readStore: () => null,
   // Pas de page de magasin à ouvrir : « Finaliser » mène à l'accueil des courses
   finalizeStoreUrl: () => null,
+  // La recherche du site ne dépend pas du magasin (celui-ci est un identifiant, l'adresse de base est celle du site)
+  searchUrl: (_storeBaseUrl, query) =>
+    `https://www.auchan.fr/recherche?text=${encodeURIComponent(query)}`,
 }
 
 /** Le registre : le seul endroit du web qui nomme une enseigne (les textes la reçoivent en paramètre, `fr.ts` ne la nomme jamais hors de ce fichier). */
@@ -175,3 +185,16 @@ export const finalizeLink = (
     return retailer.homeUrl
   }
 }
+
+/**
+ * Les drives que sert une application qui n'annonce rien (`app.info` sans `retailers`, DRV-707) : celui d'avant les drives multiples. Le seul endroit
+ * qui le dit.
+ */
+const LEGACY_APP_RETAILERS: readonly string[] = ['leclerc']
+
+/**
+ * L'application sert-elle ce drive ? D'après ce qu'elle annonce (`app.info.retailers`) ; sans annonce (ancienne application, ou réponse pas encore
+ * lue : `undefined`), elle ne sert que le drive d'avant. Un drive que l'application ne connaît pas ne reçoit ni lecture de magasin ni plan.
+ */
+export const appServes = (announced: readonly string[] | undefined, id: string): boolean =>
+  (announced ?? LEGACY_APP_RETAILERS).includes(id)

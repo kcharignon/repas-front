@@ -3,9 +3,11 @@
 // sans une requête). Ajouter une enseigne : un dossier (son adaptateur), une entrée ci-dessous, et son motif d'hôte dans `protocol/check.ts`.
 import {
   AuchanAdapter,
+  browserDeps as auchanBrowserDeps,
   hostFamily as auchanHostFamily,
   isMobileHost as auchanIsMobileHost,
   PACING as AUCHAN_PACING,
+  PHOTO_RULE as AUCHAN_PHOTOS,
 } from '../auchan'
 import {
   browserDeps,
@@ -15,6 +17,7 @@ import {
   LeclercAdapter,
   MAX_PAUSE_MS,
   PAUSE_MS,
+  PHOTO_RULE as LECLERC_PHOTOS,
   type RetailerAdapter,
 } from '../leclerc'
 import { STORES } from '../../protocol'
@@ -25,12 +28,14 @@ export * from './contract'
 export * from './entry'
 export * from './names'
 export * from './errors'
+export * from './store-facts'
 
 const leclerc: RetailerEntry = {
   id: 'leclerc',
   name: 'Leclerc',
   nameDe: 'de Leclerc',
   siteDomain: 'leclercdrive.fr',
+  photos: LECLERC_PHOTOS,
   matchesHost: (host) => STORES.leclerc.host.test(host),
   hostFamily,
   isMobileHost,
@@ -41,19 +46,22 @@ const leclerc: RetailerEntry = {
     new LeclercAdapter(browserDeps(win, primitives)),
 }
 
-// Auchan (DRV-727) : déclarée, adaptateur vide (DRV-717 l'écrit). Elle ne répond que sur `www.auchan.fr`, jamais sur la page du mot de passe.
+// Auchan (DRV-727, DRV-717) : déclarée, adaptateur écrit pour le magasin, la connexion et l'entrée (la recherche et le panier : DRV-724, DRV-725). Elle ne répond
+// que sur `www.auchan.fr`, jamais sur la page du mot de passe.
 const auchan: RetailerEntry = {
   id: 'auchan',
   name: 'Auchan',
   nameDe: 'd’Auchan',
   siteDomain: 'auchan.fr',
+  photos: AUCHAN_PHOTOS,
   matchesHost: (host) => STORES.auchan.host.test(host),
   hostFamily: auchanHostFamily,
   isMobileHost: auchanIsMobileHost,
   siteMode: 'AS_IS',
   antiBot: 'DATADOME',
   pacing: AUCHAN_PACING,
-  createAdapter: (): RetailerAdapter => new AuchanAdapter(),
+  createAdapter: ({ win, primitives }: AdapterContext): RetailerAdapter =>
+    new AuchanAdapter(auchanBrowserDeps(win, primitives)),
 }
 
 /** Les enseignes que l'agent sait servir, dans l'ordre : la première est celle d'une page dont l'hôte n'est celui d'aucune (elle la refuse). */

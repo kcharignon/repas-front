@@ -1081,7 +1081,8 @@ export interface paths {
         /** Enregistre le magasin du drive de l'utilisateur connecté (remplace le précédent) */
         put: operations["put_api_save_drive_settings"];
         post?: never;
-        delete?: never;
+        /** Retire le drive d'une enseigne de l'utilisateur connecté : son magasin n'est plus enregistré, ses choix et les produits restent ; si cette enseigne était son drive habituel ou sa dernière enseigne, ils sont effacés */
+        delete: operations["delete_api_remove_drive_settings"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1098,6 +1099,40 @@ export interface paths {
         get: operations["get_api_list_choices"];
         /** Mémorise un lot d'intentions de l'agent (produits choisis, refusés, « j'en ai toujours ») dans les préférences de l'utilisateur connecté. Un ancien slug (ancien commun dont l'utilisateur a reçu une copie, ingrédient fusionné) est remplacé par celui de son ingrédient actuel : aucune préférence n'est créée sous un ancien slug. La fiche d'un produit déjà connu (commune au magasin) n'est complétée que là où elle est vide : libellé, contenu et code-barres ne sont jamais réécrits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte déjà. Un `ADD_PRODUCT` peut porter la recherche qui a fait trouver le produit (`searchQuery`, mémorisée avec la préférence de cette enseigne et de ce magasin ; clé absente : gardée, `null` : effacée) ; l'intention `NOTE_SEARCH` (DRV-653) mémorise cette recherche seule, sans produit, quand le produit n'est pas mémorisé (pris pour cette fois seulement) et la contenance du produit dans l'unité de la liste (`product.packSize`, DRV-652, privée à l'utilisateur et propre à ce produit ; clé absente : gardée pour le même produit, `null` : effacée) */
         put: operations["put_api_save_product_choices"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/drive/last-retailer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Retient l'enseigne que l'utilisateur connecté vient d'ouvrir : c'est la présélection quand Repas lui demande où envoyer sa liste (le front l'écrit à l'ouverture du drive, jamais une lecture) */
+        put: operations["put_api_remember_last_retailer"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/drive/default-retailer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Fixe (ou efface avec `null`) le drive habituel de l'utilisateur connecté : avec plusieurs drives configurés, Repas l'utilise sans rien demander */
+        put: operations["put_api_set_default_retailer"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1533,6 +1568,12 @@ export interface components {
         ListChoicesRequestQuery: {
             retailer: components["schemas"]["Retailer"];
         };
+        RememberLastRetailerPayload: {
+            retailer: components["schemas"]["Retailer"];
+        };
+        RemoveDriveSettingsRequestQuery: {
+            retailer: components["schemas"]["Retailer"];
+        };
         ReplaceIngredientPreferencePayload: {
             retailer: components["schemas"]["Retailer"];
             /**
@@ -1709,6 +1750,14 @@ export interface components {
             storeId: string;
             /** @description Intentions, 200 au plus, appliquées dans l'ordre reçu pour un même ingrédient */
             choices: components["schemas"]["ChoiceIntentPayload"][];
+        };
+        SetDefaultRetailerPayload: {
+            /**
+             * @description Le drive habituel : une enseigne allumée où l'utilisateur a enregistré un magasin ; `null` pour ne plus en avoir. La clé est obligatoire
+             * @example leclerc
+             * @enum {unknown|null}
+             */
+            retailer: "leclerc" | "auchan" | null;
         };
         IssueAuthorizationCodePayload: {
             /**
@@ -2983,8 +3032,29 @@ export interface components {
              * @example true
              */
             configured: boolean;
+            /**
+             * @description Vrai si c'est le drive habituel de l'utilisateur (`defaultRetailer`) : au plus une enseigne le porte, et seulement une enseigne configurée et allumée
+             * @example false
+             */
+            isDefault: boolean;
             /** @description Magasin de l'utilisateur chez cette enseigne, `null` tant qu'il n'en a pas enregistré */
             store?: components["schemas"]["DriveStoreDTO"] | null;
+        };
+        RetailerSelectionDTO: {
+            /**
+             * @description Ce que Repas fait de l'enseigne : `NONE` aucune enseigne n'est configurée (mener aux réglages), `AUTO` une enseigne s'impose (l'utiliser sans rien demander : une seule configurée, ou le drive habituel), `ASK` proposer le choix entre les candidates (`retailer` est la présélection)
+             * @example AUTO
+             * @enum {string}
+             */
+            mode: "NONE" | "AUTO" | "ASK";
+            /**
+             * @description L'enseigne à utiliser (`AUTO`) ou à présélectionner (`ASK` : la dernière utilisée si elle est candidate, sinon la première configurée) ; `null` quand `mode` vaut `NONE`
+             * @example leclerc
+             * @enum {string|null}
+             */
+            retailer?: "leclerc" | "auchan" | null;
+            /** @description Les enseignes candidates : allumées (`DRIVE_RETAILERS`) ET où la personne a enregistré un magasin, la plus anciennement enregistrée d'abord ; vide quand `mode` vaut `NONE` */
+            candidates: ("leclerc" | "auchan")[];
         };
         DriveSettingsDTO: {
             /**
@@ -2993,15 +3063,26 @@ export interface components {
              */
             enabled: boolean;
             /**
-             * @description Enseigne du drive
+             * @description Enseigne en vigueur : celle de `selection` quand une enseigne est configurée, sinon l'enseigne par défaut du registre si elle est allumée, sinon la première allumée. Avec une seule enseigne allumée, c'est elle
              * @example leclerc
              * @enum {string}
              */
             retailer: "leclerc" | "auchan";
-            /** @description Magasin de l'utilisateur, `null` tant qu'il n'a pas été enregistré */
+            /** @description Magasin de l'utilisateur chez l'enseigne `retailer`, `null` tant qu'il n'a pas été enregistré */
             store?: components["schemas"]["DriveStoreDTO"] | null;
-            /** @description Une entrée par enseigne **allumée** (`DRIVE_RETAILERS`, DRV-702 ; ordre fixe), avec le magasin de l'utilisateur chez chacune ; s'ajoute aux champs `retailer` et `store`, qui restent ceux de l'enseigne par défaut */
+            /** @description Une entrée par enseigne **allumée** (`DRIVE_RETAILERS`, DRV-702 ; ordre fixe), avec le magasin de l'utilisateur chez chacune et si c'est son drive habituel ; s'ajoute aux champs `retailer` et `store` */
             retailers: components["schemas"]["DriveRetailerDTO"][];
+            /**
+             * @description Le drive habituel de l'utilisateur (choisi dans « Moi », `PUT /drive/default-retailer`), `null` s'il n'en a pas, ou si son drive habituel est éteint (`DRIVE_RETAILERS`) ou n'a plus de magasin : la sélection l'ignore alors, la préférence reste enregistrée
+             * @enum {string|null}
+             */
+            defaultRetailer?: "leclerc" | "auchan" | null;
+            /**
+             * @description La dernière enseigne que l'utilisateur a ouverte (`PUT /drive/last-retailer`), `null` s'il n'en a pas, ou si elle est éteinte ou n'a plus de magasin
+             * @enum {string|null}
+             */
+            lastUsedRetailer?: "leclerc" | "auchan" | null;
+            selection: components["schemas"]["RetailerSelectionDTO"];
         };
         ChoiceProductDTO: {
             /**
@@ -6314,6 +6395,45 @@ export interface operations {
             429: components["responses"]["DriveWriteRateLimited"];
         };
     };
+    delete_api_remove_drive_settings: {
+        parameters: {
+            query: {
+                /**
+                 * @description Enseigne du drive à retirer
+                 * @example leclerc
+                 */
+                retailer: "leclerc" | "auchan";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Drive retiré */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`), ou enseigne éteinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`), ou pas de magasin enregistré chez cette enseigne (message `DRIVE_SETTINGS_NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paramètre `retailer` absent ou inconnu */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["DriveWriteRateLimited"];
+        };
+    };
     get_api_list_choices: {
         parameters: {
             query: {
@@ -6393,6 +6513,80 @@ export interface operations {
                 content?: never;
             };
             /** @description Corps invalide, ou intention refusée (message `DRIVE_CHOICE_INVALID`) : identifiant, libellé, contenu ou prix hors des bornes, plus de 200 intentions, plus de 5 produits acceptés ou 20 refusés pour un ingrédient, produit à la fois choisi et refusé pour un ingrédient, recherche mémorisée sur une autre action que `ADD_PRODUCT` ou `NOTE_SEARCH` (même `null`), `NOTE_SEARCH` sans recherche (clé absente ou `null`), avec un produit ou un placement, ou sur un ingrédient « j'en ai toujours », contenance (`product.packSize`, même `null`) sur une autre action que `ADD_PRODUCT` ; ou recherche mémorisée refusée (message `DRIVE_SEARCH_QUERY_INVALID`) : moins de 2 ou plus de 80 caractères une fois les espaces réduites, caractère de contrôle ou invisible ; ou contenance refusée (message `DRIVE_PACK_SIZE_INVALID`) : valeur hors de 0,001 à 9 999 ou avec plus de trois décimales, slug d'unité mal formé ou qui n'existe pas ; ou plafond atteint (message `DRIVE_LIMIT_REACHED`) : plus de 5 000 écritures de produits dans la journée UTC, ou plus de 1 000 préférences dans le magasin. Rien n'est enregistré */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["DriveWriteRateLimited"];
+        };
+    };
+    put_api_remember_last_retailer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RememberLastRetailerPayload"];
+            };
+        };
+        responses: {
+            /** @description Dernière enseigne enregistrée */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`), ou enseigne éteinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide (enseigne absente ou inconnue), ou l'utilisateur n'a pas de magasin chez cette enseigne (message `DRIVE_RETAILER_NOT_CONFIGURED`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["DriveWriteRateLimited"];
+        };
+    };
+    put_api_set_default_retailer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetDefaultRetailerPayload"];
+            };
+        };
+        responses: {
+            /** @description Drive habituel enregistré (ou effacé) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`), ou enseigne éteinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide (clé `retailer` absente, enseigne inconnue), ou l'utilisateur n'a pas de magasin chez cette enseigne (message `DRIVE_RETAILER_NOT_CONFIGURED`) */
             422: {
                 headers: {
                     [name: string]: unknown;

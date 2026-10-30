@@ -742,3 +742,31 @@ describe('le nom d’une enseigne est un paramètre (DRV-708)', () => {
     expect(said).toEqual([])
   })
 })
+
+describe('« Mes drives » et « Mon drive habituel » (DRV-709)', () => {
+  const drives = sources.web.filter((entry) => entry.where.includes(' driveSettings.drives.'))
+
+  it('lit tous les textes du bloc', () => {
+    expect(drives.length).toBe(Object.keys(fr.driveSettings.drives).length)
+  })
+
+  it('le mot du glossaire est « Mon drive habituel » (jamais « par défaut » ni « préféré »)', () => {
+    expect(fr.driveSettings.drives.default).toBe('Mon drive habituel')
+    expect(fr.driveSettings.drives.title).toBe('Mes drives')
+    const interdits = sources.web.filter(
+      (entry) =>
+        /drive/i.test(entry.text) && /(?<![\p{L}])(?:par défaut|préféré|favori)/iu.test(entry.text),
+    )
+    expect(interdits.map((entry) => entry.where)).toEqual([])
+  })
+
+  it('tient chaque phrase en 15 mots au plus, sans avertissement', () => {
+    expect(drives.flatMap((entry) => warnings(entry.where, entry.text))).toEqual([])
+    const trop = drives.flatMap((entry) =>
+      entry.text
+        .split(/(?<=[.!?…])\s+/)
+        .filter((sentence) => sentence.trim().split(/\s+/).length > 15),
+    )
+    expect(trop).toEqual([])
+  })
+})
