@@ -86,22 +86,18 @@ test.describe('rayons et ingrédients', () => {
 
     await page.getByLabel("Nom de l'ingrédient").fill(prefix)
     await page.getByRole('button', { name: 'Enregistrer' }).click()
-    await expect(page.getByRole('link', { name: `Modifier ${prefix}`, exact: true })).toBeVisible()
+    await expect(page.getByRole('link', { name: prefix, exact: true })).toBeVisible()
 
-    await page.getByRole('link', { name: `Modifier ${prefix}`, exact: true }).click()
+    await page.getByRole('link', { name: prefix, exact: true }).click()
     await page.getByLabel("Nom de l'ingrédient").fill(`${prefix} modifié`)
     await page.getByRole('button', { name: 'Enregistrer' }).click()
-    await expect(
-      page.getByRole('link', { name: `Modifier ${prefix} modifié`, exact: true }),
-    ).toBeVisible()
+    await expect(page.getByRole('link', { name: `${prefix} modifié`, exact: true })).toBeVisible()
 
-    await page.getByRole('link', { name: `Modifier ${prefix} modifié` }).click()
+    await page.getByRole('link', { name: `${prefix} modifié` }).click()
     await page.getByRole('button', { name: 'Supprimer' }).click()
     await page.getByRole('dialog').getByRole('button', { name: 'Supprimer' }).click()
     await expect(page.getByRole('heading', { level: 1, name: 'Divers' })).toBeVisible()
-    await expect(
-      page.getByRole('link', { name: `Modifier ${prefix} modifié`, exact: true }),
-    ).toHaveCount(0)
+    await expect(page.getByRole('link', { name: `${prefix} modifié`, exact: true })).toHaveCount(0)
   })
 
   for (const colorScheme of ['light', 'dark'] as const) {

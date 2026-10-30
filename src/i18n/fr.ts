@@ -181,7 +181,6 @@ export default {
   ingredients: {
     new: 'Nouvel ingrédient',
     none: 'Aucun ingrédient dans ce rayon.',
-    edit: 'Modifier',
     less: 'Un de moins : {name}',
     more: 'Un de plus : {name}',
     newTitle: 'Nouvel ingrédient',

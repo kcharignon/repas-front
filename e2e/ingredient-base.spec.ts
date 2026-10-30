@@ -31,7 +31,7 @@ test('le rayon et la fiche de l’ingrédient de base sont accessibles dans les 
 
   // La fiche : l'interrupteur est allumé, une vraie cible tactile, un seul bouton principal
   await row(page, 'Tomates')
-    .getByRole('link', { name: /^Modifier/ })
+    .getByRole('link', { name: /^Tomates/ })
     .click()
   await expect(baseSwitch(page)).toHaveAttribute('aria-checked', 'true')
   await noHorizontalScroll(page)

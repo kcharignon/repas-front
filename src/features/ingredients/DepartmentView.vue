@@ -70,7 +70,13 @@ const quantityOf = (ingredientSlug: string) =>
       >
         <DepartmentMarker :icon="markerIcon" />
         <span class="min-w-0 flex-1">
-          <span class="font-medium">{{ ingredient.name }}</span>
+          <RouterLink
+            v-if="ingredient.canEdit"
+            :to="{ name: 'ingredient-edit', params: { slug: ingredient.slug } }"
+            class="inline-flex min-h-11 items-center align-middle font-medium [overflow-wrap:anywhere] hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
+            >{{ ingredient.name }}</RouterLink
+          >
+          <span v-else class="font-medium">{{ ingredient.name }}</span>
           <!-- Seul le propriétaire du catalogue reçoit `isBase` vrai (ING-015) ; absent d'un ancien back : pas de pastille -->
           <template v-if="ingredient.isBase === true">
             <span class="sr-only">, </span>
@@ -80,13 +86,6 @@ const quantityOf = (ingredientSlug: string) =>
             >
           </template>
         </span>
-        <RouterLink
-          v-if="ingredient.canEdit"
-          :to="{ name: 'ingredient-edit', params: { slug: ingredient.slug } }"
-          class="text-sm font-bold text-primary underline"
-        >
-          {{ t('ingredients.edit') }}<span class="sr-only"> {{ ingredient.name }}</span>
-        </RouterLink>
         <IngredientStepper
           :name="ingredient.name"
           :quantity="quantityOf(ingredient.slug)"

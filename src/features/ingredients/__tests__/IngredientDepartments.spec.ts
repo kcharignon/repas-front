@@ -81,7 +81,7 @@ describe('DepartmentView : le repère du rayon', () => {
     const markers = wrapper.findAll('li [data-department-marker="snowflake"]')
     expect(markers).toHaveLength(2)
     expect(markers[0]?.attributes('aria-hidden')).toBe('true')
-    // Hors du bouton « Modifier » et du stepper
+    // Hors du nom cliquable et du stepper
     expect(wrapper.find('li a [data-department-marker]').exists()).toBe(false)
     expect(wrapper.find('li button [data-department-marker]').exists()).toBe(false)
   })

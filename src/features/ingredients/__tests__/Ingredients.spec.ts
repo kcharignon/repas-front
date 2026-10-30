@@ -168,6 +168,7 @@ describe('DepartmentsView : recherche', () => {
     expect(wrapper.findAll('li a').map((link) => link.attributes('href'))).toEqual([
       '/rayons/legumes',
       '/rayons/epicerie',
+      '/ingredients/sauce-tomate/modifier',
     ])
     expect(wrapper.find('a[aria-label="Aller au rayon Épicerie"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('Fruits et légumes')
