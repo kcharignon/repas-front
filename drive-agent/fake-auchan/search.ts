@@ -1,12 +1,16 @@
-// La recherche du faux site d'Auchan (DRV-724) : des pages de résultats SYNTHÉTIQUES, de la FORME mesurée le 2026-10-30 (DRV-714, B-1 : `GET /recherche?text=…`
+// La recherche du faux site d'Auchan (DRV-724, DRV-734) : des pages de résultats SYNTHÉTIQUES, de la FORME mesurée le 2026-10-30 (DRV-714, B-1 : `GET /recherche?text=…`
 // rend une page HTML complète, les produits dans le DOM, plusieurs balises `data-product-id` par produit, des microdonnées schema.org, la pastille « 1kg »,
-// le prix au kilo et la mention « Dans mon drive ») et des données entièrement INVENTÉES. Ce qui n'a pas été mesuré est une forme plausible, dite telle :
-// l'élément qui porte chaque attribut, la page « aucun résultat », les valeurs « indisponible », les produits d'un autre vendeur, la pagination.
+// le prix au kilo et la mention « Dans mon drive » ; DRV-734, B-7b et B-8 : titre « Votre recherche <terme> sur Auchan.fr » et `h1` « Votre recherche : <terme> »,
+// la page « aucun résultat » dit « Oups, on n'a rien trouvé pour : » sans aucune carte, et les termes courants REDIRIGENT vers une page de rayon
+// `/<rayon>/<sous-rayons…>/ca-n<chiffres>` — titre « <Catégorie> pas cher - Auchan.fr », `h1` la catégorie — qui porte les mêmes cartes) et des données
+// entièrement INVENTÉES. Ce qui n'a pas été mesuré est une forme plausible, dite telle : l'élément qui porte chaque attribut, les valeurs « indisponible »,
+// les produits d'un autre vendeur, la pagination, la fiche de produit atteinte par redirection.
 //
 // Des termes pilotent la réponse (sans toucher au `Behavior` du reste du faux site) :
-//   - un mot qui ne rend rien              : la page « aucun résultat » (squelette du site + phrase) ;
-//   - `fiche`                              : le site REDIRIGE vers une fiche de produit (B-8 : SUPPOSÉ), qui porte elle aussi les balises et microdonnées du produit ;
-//   - `rayon`                              : le site REDIRIGE vers un rayon ;
+//   - un mot qui ne rend rien              : la page « aucun résultat » (mesurée) ;
+//   - `fiche`                              : le site REDIRIGE vers une fiche de produit (NON MESURÉ), qui porte elle aussi les balises et microdonnées du produit : elle reste NON LUE ;
+//   - `rayon`                              : le site REDIRIGE vers une page de rayon (MESURÉ) qui porte plusieurs produits : lue comme des résultats ;
+//   - `rayonvide`                          : le site REDIRIGE vers une page de rayon sans aucune carte (forme inventée) : page de forme inconnue ;
 //   - `inconnu`                            : une page du site, sans produit ni phrase connue (une forme que l'adaptateur ne reconnaît pas) ;
 //   - `illisible`                          : des balises de produit, mais plus aucune microdonnée (le site a renommé ses champs) ;
 //   - `sansoffre`                          : des cartes dont les balises n'ont plus d'identifiant d'offre.
@@ -142,17 +146,39 @@ function withoutOffer(item: Listed): string {
   return card(item).replace(/ data-offer-id="[^"]*"/g, '')
 }
 
-function resultsPage(options: PageOptions, body: string): string {
-  return `${HTML_HEAD('Recherche (faux site de test)')}
+/** Une page de recherche : titre et `h1` « Votre recherche… » (mesurés, DRV-734) pour le terme cherché. */
+function resultsPage(options: PageOptions, term: string, body: string): string {
+  const shown = escapeHtml(term)
+  return `${HTML_HEAD(`Votre recherche ${shown} sur Auchan.fr`)}
 <body>${sessionScript(options.session)}
 <header>${barHtml(options.bar)}${nav()}</header>
-<main><h1>Résultats</h1>${body}</main>
+<main><h1>Votre recherche : ${shown}</h1>${body}</main>
 </body></html>`
 }
 
-/** La page où le site dit qu'il n'a rien trouvé (PLAUSIBLE, non mesurée : le squelette du site et une phrase). */
-function noResultPage(options: PageOptions): string {
-  return resultsPage(options, '<p>Aucun résultat pour votre recherche.</p>')
+/** Une page de rayon (MESURÉE, DRV-734, B-8) : titre « <Catégorie> pas cher - Auchan.fr », `h1` la catégorie, les mêmes cartes que la recherche. */
+function aislePage(options: PageOptions, category: string, body: string): string {
+  return `${HTML_HEAD(`${category} pas cher - Auchan.fr`)}
+<body>${sessionScript(options.session)}
+<header>${barHtml(options.bar)}${nav()}</header>
+<main><h1>${category}</h1>${body}</main>
+</body></html>`
+}
+
+/** Un texte sûr dans du HTML : le terme cherché vient de l'adresse, le faux site ne le recopie jamais tel quel. */
+const escapeHtml = (text: string): string =>
+  text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+/**
+ * La page où le site dit qu'il n'a rien trouvé (MESURÉE le 2026-10-30, DRV-734, B-7b : `200`, non redirigée, titre « Votre recherche <terme> sur Auchan.fr »,
+ * `h1` « Votre recherche : <terme> », la phrase « Oups, on n'a rien trouvé pour : », aucune carte). Le détail des éléments est plausible.
+ */
+function noResultPage(options: PageOptions, term: string): string {
+  return resultsPage(
+    options,
+    term,
+    `<p>Oups, on n’a rien trouvé pour :</p><p>${escapeHtml(term)}</p><p>…ou à trouver votre bonheur dans nos rayons</p>`,
+  )
 }
 
 export interface SearchReply {
@@ -162,9 +188,13 @@ export interface SearchReply {
   location?: string
 }
 
-/** Où mènent les termes `fiche` et `rayon` (B-8 : SUPPOSÉ) : une fiche de produit (`/<libellé>/pr-C<7 chiffres>`, B-2) et un rayon (`/<libellé>/ca-…`). */
+/**
+ * Où mènent les termes `fiche`, `rayon` et `rayonvide` : une fiche de produit (`/<libellé>/pr-C<7 chiffres>`, B-2 ; la redirection vers elle n'est pas mesurée),
+ * une page de rayon (`/<rayon>/<sous-rayons…>/ca-n<chiffres>`, B-8 MESURÉ) et une page de rayon sans carte (INVENTÉE).
+ */
 export const PRODUCT_PAGE_PATH = '/lait-uht-demi-ecreme-de-test/pr-C0000001'
-export const AISLE_PAGE_PATH = '/fruits-et-legumes-de-test/ca-0000001'
+export const AISLE_PAGE_PATH = '/epicerie-de-test/farines-de-test/ca-n0000001'
+export const EMPTY_AISLE_PAGE_PATH = '/epicerie-de-test/vide-de-test/ca-n0000002'
 
 /** La réponse de `GET /recherche?text=<terme>`. */
 export function searchReply(text: string, options: PageOptions): SearchReply {
@@ -173,16 +203,19 @@ export function searchReply(text: string, options: PageOptions): SearchReply {
       return { status: 302, body: '', location: PRODUCT_PAGE_PATH }
     case 'rayon':
       return { status: 302, body: '', location: AISLE_PAGE_PATH }
+    case 'rayonvide':
+      return { status: 302, body: '', location: EMPTY_AISLE_PAGE_PATH }
     case 'inconnu':
       return {
         status: 200,
-        body: resultsPage(options, '<p>Une page que l’agent ne connaît pas.</p>'),
+        body: resultsPage(options, text, '<p>Une page que l’agent ne connaît pas.</p>'),
       }
     case 'illisible':
       return {
         status: 200,
         body: resultsPage(
           options,
+          text,
           find('farine')
             .map((item) => card(item, true))
             .join('\n'),
@@ -191,7 +224,7 @@ export function searchReply(text: string, options: PageOptions): SearchReply {
     case 'sansoffre':
       return {
         status: 200,
-        body: resultsPage(options, find('farine').map(withoutOffer).join('\n')),
+        body: resultsPage(options, text, find('farine').map(withoutOffer).join('\n')),
       }
     default: {
       const found = find(text)
@@ -199,22 +232,36 @@ export function searchReply(text: string, options: PageOptions): SearchReply {
         status: 200,
         body:
           found.length === 0
-            ? noResultPage(options)
-            : resultsPage(options, found.map((item) => card(item)).join('\n')),
+            ? noResultPage(options, text)
+            : resultsPage(options, text, found.map((item) => card(item)).join('\n')),
       }
     }
   }
 }
 
 /**
- * Les pages où `fiche` et `rayon` mènent. La fiche porte les balises et les microdonnées du produit, comme une vraie fiche le ferait (SUPPOSÉ) : l'agent
- * ne doit PAS la lire comme une page de résultats.
+ * Les pages où `fiche`, `rayon` et `rayonvide` mènent. La page de rayon porte plusieurs produits avec les mêmes cartes que la recherche (MESURÉ) : l'agent la
+ * lit comme des résultats. La fiche porte les balises et les microdonnées du produit, comme une vraie fiche le ferait (SUPPOSÉ) : l'agent ne doit PAS la lire
+ * comme une page de résultats.
  */
 export function landingPage(path: string, options: PageOptions): string | null {
   if (path === PRODUCT_PAGE_PATH) {
     const [item] = find('lait uht')
-    return resultsPage(options, item ? card(item) : '')
+    return `${HTML_HEAD('Lait UHT demi-écrémé de test - Auchan.fr')}
+<body>${sessionScript(options.session)}
+<header>${barHtml(options.bar)}${nav()}</header>
+<main><h1>Lait UHT demi-écrémé de test</h1>${item ? card(item) : ''}</main>
+</body></html>`
   }
-  if (path === AISLE_PAGE_PATH) return resultsPage(options, '<h2>Fruits et légumes de test</h2>')
+  if (path === AISLE_PAGE_PATH)
+    return aislePage(
+      options,
+      'Farines de test',
+      find('farine')
+        .map((item) => card(item))
+        .join('\n'),
+    )
+  if (path === EMPTY_AISLE_PAGE_PATH)
+    return aislePage(options, 'Rayon vide de test', '<p>Bientôt de nouveaux produits.</p>')
   return null
 }

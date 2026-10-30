@@ -16,7 +16,13 @@ import {
   notFoundPage,
   VISITOR_CART_ID,
 } from '../fake-auchan/pages'
-import { AISLE_PAGE_PATH, landingPage, PRODUCT_PAGE_PATH, searchReply } from '../fake-auchan/search'
+import {
+  AISLE_PAGE_PATH,
+  EMPTY_AISLE_PAGE_PATH,
+  landingPage,
+  PRODUCT_PAGE_PATH,
+  searchReply,
+} from '../fake-auchan/search'
 import {
   type Behavior,
   DEFAULT_BEHAVIOR,
@@ -122,6 +128,7 @@ describe('les fixtures sont ce que le faux site sert', () => {
     ['recherche-lot.html', searchReply('lot', { ...base, bar: 'withdrawal' }).body],
     ['fiche-produit.html', landingPage(PRODUCT_PAGE_PATH, { ...base, bar: 'withdrawal' }) ?? ''],
     ['rayon.html', landingPage(AISLE_PAGE_PATH, { ...base, bar: 'withdrawal' }) ?? ''],
+    ['rayon-vide.html', landingPage(EMPTY_AISLE_PAGE_PATH, { ...base, bar: 'withdrawal' }) ?? ''],
   ])('%s', (name, page) => {
     expect(auchanFixture(name).trimEnd()).toBe(page.trimEnd())
   })

@@ -274,6 +274,11 @@ export interface SearchFacts {
   session?: string
   /** Le point de livraison de la réponse (Leclerc) ; absent chez une enseigne qui n'en a pas (DRV-724). */
   delivery?: DeliveryFacts
+  /**
+   * Où le site a mené le terme quand il a redirigé (DRV-734) : une page de rayon (lue comme des résultats) ou une fiche de produit (non lue). Jamais
+   * l'adresse : une forme fixe. Absent chez une enseigne qui ne redirige pas.
+   */
+  landing?: 'AISLE' | 'PRODUCT'
   /** Les produits lus ; `null` quand la réponse n'a pas pu être lue. */
   products: number | null
   /** `PRODUCTS` (au moins un produit), `EMPTY` (page reconnue sans produit), `FAILED` (erreur de l'adaptateur : voir [fault]). */

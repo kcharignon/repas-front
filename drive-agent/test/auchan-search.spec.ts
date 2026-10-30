@@ -1,7 +1,7 @@
 // @vitest-environment-options {"url": "https://www.auchan.fr/courses"}
 // La recherche et la lecture des produits d'Auchan (DRV-724) : `GET /recherche?text=<terme>`, une page HTML lue par sélecteurs. Les pages sont INVENTÉES (les
 // fixtures de `fixtures/auchan/` que produit le faux site, et des cartes construites ici) : jamais une page réelle. Ce qui n'a pas été mesuré sur le vrai site
-// (les valeurs « indisponible », la page « aucun résultat », les offres d'un autre vendeur, la pagination) est éprouvé comme tel : tout ce qui n'est pas
+// (les valeurs « indisponible », les offres d'un autre vendeur, la pagination, la redirection vers une fiche de produit) est éprouvé comme tel : tout ce qui n'est pas
 // clairement disponible est indisponible, une forme inconnue est `CONTRACT_CHANGED` avec sa cause, jamais un produit inventé.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -102,6 +102,16 @@ const page = (...cards: string[]): AuchanReply =>
   html(
     `<!doctype html><html><head><title>Recherche</title></head><body><div>Retrait : Drive Ville-Test</div><main>${cards.join('\n')}</main></body></html>`,
   )
+
+/** Une page de rayon (titre « … pas cher - Auchan.fr », h1 la catégorie) avec les cartes données. */
+const aislePage = (...cards: string[]): string =>
+  `<!doctype html><html><head><title>Farines pas cher - Auchan.fr</title></head><body><div>Retrait : Drive Ville-Test</div><main><h1>Farines</h1>${cards.join('\n')}</main></body></html>`
+
+/** Une page de recherche refaite en page de rayon : le titre et le h1 d'une catégorie, les mêmes cartes. */
+const aisleOf = (markup: string): string =>
+  markup
+    .replace(/<title>.*<\/title>/, '<title>Farines pas cher - Auchan.fr</title>')
+    .replace(/<h1>.*<\/h1>/, '<h1>Farines</h1>')
 
 async function oneProduct(options: CardOptions = {}) {
   const { adapter } = shop(page(card(options)))
@@ -422,10 +432,25 @@ describe('les formes inconnues : CONTRACT_CHANGED avec une cause, jamais un prod
     expect(error).toMatchObject({ code: 'CONTRACT_CHANGED', cause: 'SEARCH_UNKNOWN_PAGE' })
   })
 
-  it('la phrase « aucun résultat » sans le squelette du site (pas de barre du magasin) : SEARCH_UNKNOWN_PAGE', async () => {
-    const { adapter } = shop(
-      html('<html><body><p>Aucun résultat pour votre recherche.</p></body></html>'),
-    )
+  it.each([
+    [
+      'la phrase seule (ni titre ni h1 de recherche)',
+      '<html><head><title>Autre</title></head><body><p>Oups, on n’a rien trouvé pour :</p></body></html>',
+    ],
+    [
+      'la phrase et le titre, sans h1 de recherche',
+      '<html><head><title>Votre recherche zzqxkw sur Auchan.fr</title></head><body><h1>Autre</h1><p>Oups, on n’a rien trouvé pour :</p></body></html>',
+    ],
+    [
+      'le titre et le h1, sans la phrase',
+      '<html><head><title>Votre recherche zzqxkw sur Auchan.fr</title></head><body><div>Retrait : Drive Ville-Test</div><h1>Votre recherche : zzqxkw</h1></body></html>',
+    ],
+    [
+      'une ancienne formule inventée (« Aucun résultat »), jamais vue sur le site',
+      '<html><head><title>Votre recherche zzqxkw sur Auchan.fr</title></head><body><div>Retrait : Drive Ville-Test</div><h1>Votre recherche : zzqxkw</h1><p>Aucun résultat pour votre recherche.</p></body></html>',
+    ],
+  ])('« aucun résultat » incomplet : %s : SEARCH_UNKNOWN_PAGE', async (_name, markup) => {
+    const { adapter } = shop(html(markup))
 
     const error = await failureOf(() => adapter.searchProducts('zzqxkw'))
 
@@ -435,7 +460,7 @@ describe('les formes inconnues : CONTRACT_CHANGED avec une cause, jamais un prod
   it('« aucun résultat » mais des traces de produit (un prix en microdonnées) : SEARCH_PRODUCTS_UNREADABLE', async () => {
     const { adapter } = shop(
       html(
-        '<html><body><div>Retrait : Drive Ville-Test</div><p>Aucun résultat</p><meta itemprop="price" content="1.00"></body></html>',
+        '<html><head><title>Votre recherche zzqxkw sur Auchan.fr</title></head><body><h1>Votre recherche : zzqxkw</h1><p>Oups, on n’a rien trouvé pour :</p><meta itemprop="price" content="1.00"></body></html>',
       ),
     )
 
@@ -465,35 +490,193 @@ describe('les formes inconnues : CONTRACT_CHANGED avec une cause, jamais un prod
   })
 })
 
-describe('« aucun résultat » : le squelette du site ET une phrase, jamais l’une sans l’autre', () => {
-  it('la page du faux site (barre du magasin + phrase) : aucun produit, sans erreur', async () => {
+describe('« aucun résultat » : le titre, le h1, la phrase ET l’absence de carte (MESURÉ, DRV-734), jamais l’un sans les autres', () => {
+  it('la page du faux site, de la forme mesurée : aucun produit, sans erreur, sans redirection', async () => {
     const { adapter } = shop(fixture('recherche-aucun-resultat.html'))
 
     expect(await adapter.searchProducts('zzqxkw')).toEqual([])
-    expect(adapter.lastSearchFacts()).toMatchObject({ outcome: 'EMPTY', products: 0 })
+    expect(adapter.lastSearchFacts()).toMatchObject({
+      outcome: 'EMPTY',
+      products: 0,
+      redirected: false,
+    })
+    expect(adapter.lastSearchFacts()).not.toHaveProperty('landing')
+  })
+
+  it('sans barre du magasin non plus (la barre n’est pas un des signes mesurés de cette page)', async () => {
+    const { adapter } = shop(
+      html(
+        '<html><head><title>Votre recherche zzqxkw sur Auchan.fr</title></head><body><h1>Votre recherche : zzqxkw</h1><p>Oups, on n’a rien trouvé pour :</p></body></html>',
+      ),
+    )
+
+    expect(await adapter.searchProducts('zzqxkw')).toEqual([])
   })
 })
 
-describe('un terme qui redirige n’est pas une page de résultats (SUPPOSÉ : clé searchRedirects)', () => {
-  it.each([
-    ['une fiche de produit', '/lait-uht-demi-ecreme-de-test/pr-C0000001', 'fiche-produit.html'],
-    ['un rayon', '/fruits-et-legumes-de-test/ca-0000001', 'rayon.html'],
-  ])(
-    'vers %s : aucun produit (le contenu de cette page n’est pas lu comme des résultats)',
-    async (_name, path, name) => {
-      const { adapter } = shop(
-        fixture(name, { url: `https://www.auchan.fr${path}`, redirected: true }),
-      )
+const AISLE_URL = 'https://www.auchan.fr/epicerie-de-test/farines-de-test/ca-n0000001'
+const PRODUCT_URL = 'https://www.auchan.fr/lait-uht-demi-ecreme-de-test/pr-C0000001'
 
-      expect(await adapter.searchProducts('fiche')).toEqual([])
-      expect(adapter.lastSearchFacts()).toMatchObject({
-        outcome: 'EMPTY',
-        products: 0,
+describe('un terme que le site redirige vers une page de rayon : lue comme une page de résultats (MESURÉ, DRV-734)', () => {
+  it('les mêmes cartes, les mêmes champs : les produits de la page de rayon sont rendus, et le fait est consigné sans l’adresse', async () => {
+    const { adapter } = shop(fixture('rayon.html', { url: AISLE_URL, redirected: true }))
+
+    const candidates = await adapter.searchProducts('farine')
+
+    expect(candidates.map((candidate) => candidate.id)).toEqual([
+      FARINE,
+      expect.any(String),
+      SEIGLE,
+      MAIS,
+    ])
+    expect(candidates[0]).toMatchObject({ offerId: FARINE_OFFER, price: 91 })
+    const facts = adapter.lastSearchFacts()
+    expect(facts).toMatchObject({
+      outcome: 'PRODUCTS',
+      products: 4,
+      redirected: true,
+      landing: 'AISLE',
+      address: '/…/…',
+      requested: '/recherche',
+    })
+    expect(JSON.stringify(facts)).not.toContain('ca-n')
+    expect(JSON.stringify(facts)).not.toContain('farines')
+  })
+
+  it('chaque produit de la page de rayon retient son offre pour le panier (rememberOffer)', async () => {
+    const { adapter } = shop(fixture('rayon.html', { url: AISLE_URL, redirected: true }))
+    const remembered: string[] = []
+    adapter.rememberOffer = (productId) => {
+      remembered.push(productId)
+      return true
+    }
+
+    await adapter.searchProducts('farine')
+
+    expect(remembered).toHaveLength(4)
+    expect(remembered[0]).toBe(FARINE)
+  })
+
+  it('une page de résultats ordinaire ne porte pas de « landing »', async () => {
+    const { adapter } = shop(fixture('recherche-farine.html'))
+    await adapter.searchProducts('farine')
+
+    expect(adapter.lastSearchFacts()).not.toHaveProperty('landing')
+  })
+
+  it('les mêmes garde-fous : un produit à deux offres différentes est écarté, une devise autre qu’EUR n’a pas de prix', async () => {
+    const twoOffers = card({ id: SEIGLE, name: 'Produit à deux offres' }).replace(
+      '</article>',
+      `<button type="button" data-product-id="${SEIGLE}" data-offer-id="aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee">Autre offre</button></article>`,
+    )
+    const { adapter } = shop(
+      html(
+        aislePage(
+          card(),
+          twoOffers,
+          card({ id: MAIS, offer: LOT, currency: 'USD', name: 'Hors euro' }),
+        ),
+        {
+          url: AISLE_URL,
+          redirected: true,
+        },
+      ),
+    )
+
+    const candidates = await adapter.searchProducts('sucre')
+
+    expect(candidates.map((candidate) => candidate.id)).toEqual([FARINE, MAIS])
+    expect(candidates[1]?.price).toBeNull()
+    expect(adapter.lastSearchFacts()).toMatchObject({ landing: 'AISLE', products: 2 })
+  })
+
+  it.each([
+    [
+      'une adresse de rayon, mais le contenu d’une autre page (titre sans « pas cher - Auchan.fr »)',
+      auchanFixture('rayon.html').replace('Farines de test pas cher - Auchan.fr', 'Courses'),
+      AISLE_URL,
+    ],
+    [
+      'une adresse de rayon, mais le titre d’une recherche',
+      auchanFixture('rayon.html').replace(
+        'Farines de test pas cher - Auchan.fr',
+        'Votre recherche farine sur Auchan.fr',
+      ),
+      AISLE_URL,
+    ],
+    [
+      'le contenu d’un rayon à une adresse qui n’en est pas un',
+      auchanFixture('rayon.html'),
+      'https://www.auchan.fr/courses',
+    ],
+    [
+      'le contenu d’un rayon à une adresse sans le segment de rayon',
+      auchanFixture('rayon.html'),
+      'https://www.auchan.fr/ca-n0000001',
+    ],
+    [
+      'une adresse de rayon d’une autre forme (ca- sans n)',
+      auchanFixture('rayon.html'),
+      'https://www.auchan.fr/epicerie-de-test/ca-0000001',
+    ],
+  ])('%s : SEARCH_REDIRECTED, aucun produit lu', async (_name, markup, url) => {
+    const { adapter } = shop(html(markup, { url, redirected: true }))
+
+    const error = await failureOf(() => adapter.searchProducts('farine'))
+
+    expect(error).toMatchObject({ code: 'CONTRACT_CHANGED', cause: 'SEARCH_REDIRECTED' })
+  })
+
+  it('une page de rayon sans aucune carte : SEARCH_UNKNOWN_PAGE (jamais prise pour « aucun produit »)', async () => {
+    const { adapter } = shop(
+      fixture('rayon-vide.html', {
+        url: 'https://www.auchan.fr/epicerie-de-test/vide-de-test/ca-n0000002',
         redirected: true,
-        address: '/…/…',
-      })
-    },
-  )
+      }),
+    )
+
+    const error = await failureOf(() => adapter.searchProducts('rayonvide'))
+
+    expect(error).toMatchObject({ code: 'CONTRACT_CHANGED', cause: 'SEARCH_UNKNOWN_PAGE' })
+  })
+
+  it('des balises de produit illisibles sur une page de rayon : SEARCH_PRODUCTS_UNREADABLE', async () => {
+    const { adapter } = shop(
+      html(aisleOf(auchanFixture('recherche-illisible.html')), {
+        url: AISLE_URL,
+        redirected: true,
+      }),
+    )
+
+    const error = await failureOf(() => adapter.searchProducts('farine'))
+
+    expect(error.cause).toBe('SEARCH_PRODUCTS_UNREADABLE')
+  })
+
+  it('une page « aucun résultat » atteinte par une redirection de rayon n’est pas reconnue comme telle', async () => {
+    const { adapter } = shop(
+      fixture('recherche-aucun-resultat.html', { url: AISLE_URL, redirected: true }),
+    )
+
+    const error = await failureOf(() => adapter.searchProducts('zzqxkw'))
+
+    expect(error.code).toBe('CONTRACT_CHANGED')
+  })
+})
+
+describe('un terme que le site redirige vers une fiche de produit : aucun produit (NON MESURÉ : le contenu de la fiche n’est pas lu comme des résultats)', () => {
+  it('aucun produit, sans erreur, et le fait est consigné', async () => {
+    const { adapter } = shop(fixture('fiche-produit.html', { url: PRODUCT_URL, redirected: true }))
+
+    expect(await adapter.searchProducts('fiche')).toEqual([])
+    expect(adapter.lastSearchFacts()).toMatchObject({
+      outcome: 'EMPTY',
+      products: 0,
+      redirected: true,
+      landing: 'PRODUCT',
+      address: '/…/…',
+    })
+  })
 
   it('vers une autre page du site : SEARCH_REDIRECTED', async () => {
     const { adapter } = shop(
@@ -692,7 +875,7 @@ describe('les faits du diagnostic : des formes et des nombres, jamais une valeur
     const { adapter } = shop(fixture('recherche-aucun-resultat.html'))
     await adapter.searchProducts('zzqxkw')
 
-    expect(adapter.lastSearchFacts()?.phrases).toEqual(['aucun resultat'])
+    expect(adapter.lastSearchFacts()?.phrases).toEqual(["on n'a rien trouve pour"])
   })
 
   it('exploreSearchVariants : une seule forme de requête, donc rien à sonder et aucune requête', async () => {

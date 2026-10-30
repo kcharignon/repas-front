@@ -245,7 +245,7 @@ export class AuchanAdapter implements RetailerAdapter {
   /**
    * Les produits que la page de résultats de `GET /recherche?text=<terme>` propose, dans l'ordre de la page (une seule page : la pagination n'est pas
    * mesurée). Chaque produit a son identifiant d'offre (`Candidate.offerId`). La requête passe par le `Pacer` (une à la fois, à la cadence d'Auchan).
-   * Une redirection du terme vers une fiche de produit ou un rayon n'est pas une page de résultats : aucun produit. L'EAN n'est pas sur cette page.
+   * Une redirection du terme vers une page de rayon (mesuré, DRV-734) est lue comme une page de résultats ; vers une fiche de produit (non mesuré), aucun produit. L'EAN n'est pas sur cette page.
    * @throws {RetailerError} `NOT_LOGGED_IN`, `BLOCKED`, `NETWORK`, ou `CONTRACT_CHANGED` avec la cause d'une page de forme inconnue.
    */
   async searchProducts(query: string): Promise<Candidate[]> {
@@ -261,6 +261,7 @@ export class AuchanAdapter implements RetailerAdapter {
       facts.outcome = reading.products.length > 0 ? 'PRODUCTS' : 'EMPTY'
       facts.products = reading.products.length
       facts.phrases = reading.phrases
+      if (reading.landing !== undefined) facts.landing = reading.landing
       for (const product of reading.products)
         this.rememberOffer(product.productId, offerOf(product))
       return reading.products.map((product) => toCandidate(product, this.deps.location))
