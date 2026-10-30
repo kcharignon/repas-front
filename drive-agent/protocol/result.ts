@@ -6,7 +6,7 @@ import {
   eachIfPresent,
   exactly,
   fail,
-  ID,
+  ANY_PRODUCT_ID,
   int,
   object,
   oneOf,
@@ -60,7 +60,7 @@ function product(scope: Scope, key: string | number, withPrice: boolean): void {
     'content',
     ...(withPrice ? ['price', 'rayonId', 'familyId', 'offerId'] : []),
   ])
-  text(own, 'id', ID)
+  text(own, 'id', ANY_PRODUCT_ID)
   text(own, 'label')
   optional(
     own,
@@ -88,7 +88,7 @@ const searchQuery: Check = (scope, key) => {
 /** Ce que chaque issue de ligne exige, en plus de `ingredientSlug` et `outcome`. */
 const REQUIRED: Record<string, Record<string, Check>> = {
   ADDED: {
-    productId: (scope, key) => text(scope, key, ID),
+    productId: (scope, key) => text(scope, key, ANY_PRODUCT_ID),
     quantity,
     usedRank: (scope, key) => int(scope, key, 1, LIMITS.products),
   },
@@ -121,7 +121,7 @@ const resultLine: Check = (list, index) => {
   optional(line, 'packSize', packSize)
   const max = outcome === 'ADDED' ? LIMITS.unavailableAdded : LIMITS.products
   optional(line, 'unavailableIds', (parent, name) => {
-    distinct(each(parent, name, max, (ids, rank) => text(ids, rank as never, ID)))
+    distinct(each(parent, name, max, (ids, rank) => text(ids, rank as never, ANY_PRODUCT_ID)))
   })
   distinct(
     eachIfPresent(line, 'rejected', LIMITS.rejected, (rejected, rank) =>

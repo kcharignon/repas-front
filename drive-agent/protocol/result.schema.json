@@ -58,13 +58,34 @@
           "required": ["id", "host", "baseUrl", "label"],
           "properties": {
             "id": { "$ref": "#/definitions/storeId" },
-            "host": { "type": "string", "pattern": "^[a-z0-9-]+\\.leclercdrive\\.fr$" },
-            "baseUrl": {
-              "type": "string",
-              "pattern": "^https://[a-z0-9-]+\\.leclercdrive\\.fr/magasin-[0-9]{1,12}-[0-9]{1,12}$"
-            },
+            "host": { "type": "string", "minLength": 1, "maxLength": 255 },
+            "baseUrl": { "type": "string", "minLength": 1 },
             "label": { "oneOf": [{ "$ref": "#/definitions/label" }, { "type": "null" }] }
-          }
+          },
+          "oneOf": [
+            {
+              "description": "Un magasin de Leclerc : l'identifiant est numérique et se lit dans l'adresse.",
+              "properties": {
+                "id": { "type": "string", "pattern": "^[0-9]{1,12}$" },
+                "host": { "type": "string", "pattern": "^[a-z0-9-]+\\.leclercdrive\\.fr$" },
+                "baseUrl": {
+                  "type": "string",
+                  "pattern": "^https://[a-z0-9-]+\\.leclercdrive\\.fr/magasin-[0-9]{1,12}-[0-9]{1,12}$"
+                }
+              }
+            },
+            {
+              "description": "Un magasin d'Auchan : l'identifiant est un UUID lu par l'agent, l'adresse de base est une constante de l'enseigne.",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                },
+                "host": { "type": "string", "const": "www.auchan.fr" },
+                "baseUrl": { "type": "string", "const": "https://www.auchan.fr/" }
+              }
+            }
+          ]
         }
       }
     }
@@ -79,7 +100,11 @@
   },
   "definitions": {
     "label": { "type": "string", "minLength": 1, "maxLength": 255 },
-    "storeId": { "type": "string", "pattern": "^[0-9]{1,12}$" },
+    "storeId": {
+      "description": "Un résultat ne dit pas l'enseigne : l'identifiant a la forme de l'un de ceux des enseignes (STORES.id).",
+      "type": "string",
+      "pattern": "^[0-9]{1,12}$|^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
     "counter": { "type": "integer", "minimum": 0, "maximum": 100000 },
     "catalogId": {
       "description": "Facultatif (DRV-642) : le rayon ou la famille du produit choisi chez l'enseigne.",
@@ -87,7 +112,11 @@
       "minimum": 1,
       "maximum": 2147483647
     },
-    "productId": { "type": "string", "pattern": "^[0-9]{1,12}$" },
+    "productId": {
+      "description": "Un résultat ne dit pas l'enseigne : l'identifiant a la forme de l'un de ceux des enseignes (STORES.productId).",
+      "type": "string",
+      "pattern": "^[0-9]{1,12}$|^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
     "errorCode": {
       "enum": [
         "NOT_LOGGED_IN",
@@ -176,10 +205,9 @@
         "rayonId": { "$ref": "#/definitions/catalogId" },
         "familyId": { "$ref": "#/definitions/catalogId" },
         "offerId": {
-          "description": "Facultatif (DRV-722) : l'identifiant de l'offre du produit choisi dans le magasin. Un résultat ne dit pas l'enseigne : sa forme est celle de l'une des enseignes qui ont une offre (StoreRules.offerId), et la clé est interdite tant qu'aucune n'en a ; seuls les validateurs voient cette règle.",
+          "description": "Facultatif (DRV-722) : l'identifiant de l'offre du produit choisi dans le magasin. Un résultat ne dit pas l'enseigne : sa forme est celle de l'une des enseignes qui ont une offre (StoreRules.offerId : l'UUID d'Auchan) ; la clé est interdite tant qu'aucune enseigne n'en a, ce que seuls les validateurs voient.",
           "type": "string",
-          "minLength": 1,
-          "maxLength": 40
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
         }
       }
     },

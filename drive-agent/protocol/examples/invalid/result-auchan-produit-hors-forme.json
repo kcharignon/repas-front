@@ -1,0 +1,27 @@
+{
+  "path": "lines[0].product.id",
+  "why": "Un produit a la forme de l’un de ceux des enseignes (un nombre de 1 à 12 chiffres ou un UUID en minuscules).",
+  "message": {
+    "v": 1,
+    "type": "result",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "agentVersion": "1.0.0",
+    "outcome": "completed",
+    "store": {
+      "id": "0b5f8a2e-3c1d-4e7f-9a6b-123456789abc"
+    },
+    "lines": [
+      {
+        "ingredientSlug": "farine",
+        "outcome": "CHOSEN",
+        "quantity": 1,
+        "placement": "PRIMARY",
+        "product": {
+          "id": "ABC-123",
+          "label": "Farine de test",
+          "offerId": "3c4d5e6f-7a8b-4c9d-8e1f-2a3b4c5d6e7f"
+        }
+      }
+    ]
+  }
+}

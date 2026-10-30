@@ -6,15 +6,21 @@ import type { components } from '@/api/schema'
 export type RetailerId = components['schemas']['Retailer']
 
 export interface StoreAddress {
-  /** L'identifiant du magasin chez l'enseigne : le premier groupe de chiffres de l'adresse, zéros initiaux conservés. */
+  /** L'identifiant du magasin chez l'enseigne : pour Leclerc, le premier groupe de chiffres de l'adresse, zéros initiaux conservés ; pour Auchan, un identifiant lu par l'application. */
   id: string
   /** L'adresse de base du magasin, celle que le back enregistre. */
   baseUrl: string
 }
 
 /**
- * Une enseigne de drive pour le web. Les six premiers champs sont ceux du contrat commun des couches (`docs/drive/samples/retailers.sample.json`
- * du back, vérifiés par `retailers.spec.ts`) ; les trois suivants sont propres au web.
+ * D'où vient l'identifiant du magasin (`storeIdSource` du contrat) : `URL` : il se lit dans l'adresse du magasin (Leclerc) ; `EXPLICIT` : l'adresse est une
+ * constante de l'enseigne, le magasin est un identifiant que l'application lit dans la page de l'enseigne (Auchan).
+ */
+export type StoreIdSource = 'URL' | 'EXPLICIT'
+
+/**
+ * Une enseigne de drive pour le web. Les champs jusqu'à `offerIdPattern` sont ceux du contrat commun des couches (`docs/drive/samples/retailers.sample.json`
+ * du back, vérifiés par `retailers.spec.ts`) ; les suivants sont propres au web.
  */
 export interface Retailer {
   id: RetailerId
@@ -28,6 +34,10 @@ export interface Retailer {
   storeAddressExample: string
   /** L'identifiant d'un produit chez l'enseigne (motif du contrat). */
   productIdPattern: string
+  /** D'où vient l'identifiant du magasin (contrat DRV-720). */
+  storeIdSource: StoreIdSource
+  /** La forme de l'identifiant du magasin (motif du contrat). */
+  storeIdPattern: string
   /**
    * L'identifiant d'offre d'un produit chez l'enseigne (motif du contrat, DRV-722), ou `null` quand l'enseigne n'a pas d'offre : le site n'envoie alors jamais
    * `offerId` à l'agent ni à Repas.
@@ -41,7 +51,10 @@ export interface Retailer {
    * quand l'application ne connaît pas encore le chemin du magasin.
    */
   homeUrl: string
-  /** Lit une adresse de magasin déjà analysée (https, sans port ni identifiants) : le magasin et son adresse de base, ou `null`. */
+  /**
+   * Lit une adresse de magasin déjà analysée (https, sans port ni identifiants) : le magasin et son adresse de base, ou `null`. Une enseigne dont le
+   * magasin est explicite (`storeIdSource` `EXPLICIT`) rend toujours `null` : son magasin ne se lit pas dans une adresse.
+   */
   readStore: (url: URL) => StoreAddress | null
   /** L'adresse « Finaliser » d'un magasin pour l'application, d'après son adresse de base enregistrée ; `null` si elle n'est pas lisible. */
   finalizeStoreUrl: (storeBaseUrl: URL) => string | null
@@ -57,6 +70,8 @@ const leclerc: Retailer = {
   storeAddressPattern: '^https://[a-z0-9-]+\\.leclercdrive\\.fr/magasin-([0-9]+)-([0-9]+)$',
   storeAddressExample: 'https://exemple.leclercdrive.fr/magasin-123456-123456',
   productIdPattern: '^[0-9]{1,12}$',
+  storeIdSource: 'URL',
+  storeIdPattern: '^[0-9]{1,20}$',
   offerIdPattern: null,
   appName: 'Drive Leclerc',
   homeUrl: 'https://www.leclercdrive.fr/',
@@ -77,8 +92,32 @@ const leclerc: Retailer = {
   },
 }
 
+/** Un UUID en minuscules : la forme des identifiants d'Auchan (magasin, produit, offre) dans le contrat. */
+const UUID = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+/**
+ * Auchan (DRV-727), déclarée mais éteinte : le web ne la propose que si le back la sert dans `retailers` (`DRIVE_RETAILERS`) et que l'application
+ * l'annonce. Son magasin ne se lit pas dans une adresse : l'adresse de base est celle du site, le magasin est un UUID lu par l'application.
+ */
+const auchan: Retailer = {
+  id: 'auchan',
+  name: 'Auchan',
+  nameDe: 'd’Auchan',
+  storeAddressPattern: '^https://www\\.auchan\\.fr/$',
+  storeAddressExample: 'https://www.auchan.fr/',
+  productIdPattern: UUID,
+  storeIdSource: 'EXPLICIT',
+  storeIdPattern: UUID,
+  offerIdPattern: UUID,
+  appName: 'Auchan',
+  homeUrl: 'https://www.auchan.fr/courses',
+  readStore: () => null,
+  // Pas de page de magasin à ouvrir : « Finaliser » mène à l'accueil des courses
+  finalizeStoreUrl: () => null,
+}
+
 /** Le registre : le seul endroit du web qui nomme une enseigne (les textes la reçoivent en paramètre, `fr.ts` ne la nomme jamais hors de ce fichier). */
-export const RETAILERS: readonly Retailer[] = [leclerc]
+export const RETAILERS: readonly Retailer[] = [leclerc, auchan]
 
 /** L'enseigne quand rien ne dit laquelle (réglages pas encore lus, pages publiques) : la première du registre. */
 export const DEFAULT_RETAILER: Retailer = leclerc

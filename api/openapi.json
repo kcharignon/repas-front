@@ -2967,7 +2967,8 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "leclerc"
+                                "leclerc",
+                                "auchan"
                             ]
                         },
                         "example": "leclerc"
@@ -3029,7 +3030,8 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "leclerc"
+                                "leclerc",
+                                "auchan"
                             ]
                         },
                         "example": "leclerc"
@@ -3090,7 +3092,8 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "leclerc"
+                                "leclerc",
+                                "auchan"
                             ]
                         },
                         "example": "leclerc"
@@ -3193,7 +3196,8 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "leclerc"
+                                "leclerc",
+                                "auchan"
                             ]
                         },
                         "example": "leclerc"
@@ -4229,7 +4233,8 @@
             "Retailer": {
                 "type": "string",
                 "enum": [
-                    "leclerc"
+                    "leclerc",
+                    "auchan"
                 ]
             },
             "ForgetChoiceRequestQuery": {
@@ -6320,7 +6325,8 @@
                         "description": "Enseigne du drive",
                         "type": "string",
                         "enum": [
-                            "leclerc"
+                            "leclerc",
+                            "auchan"
                         ],
                         "example": "leclerc"
                     },
@@ -6689,7 +6695,8 @@
                         "description": "Enseigne du drive",
                         "type": "string",
                         "enum": [
-                            "leclerc"
+                            "leclerc",
+                            "auchan"
                         ],
                         "example": "leclerc"
                     },
@@ -6725,7 +6732,8 @@
                         "description": "Identifiant de l'enseigne",
                         "type": "string",
                         "enum": [
-                            "leclerc"
+                            "leclerc",
+                            "auchan"
                         ],
                         "example": "leclerc"
                     },
@@ -6767,7 +6775,8 @@
                         "description": "Enseigne du drive",
                         "type": "string",
                         "enum": [
-                            "leclerc"
+                            "leclerc",
+                            "auchan"
                         ],
                         "example": "leclerc"
                     },

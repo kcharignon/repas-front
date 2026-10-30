@@ -455,6 +455,7 @@ export class Flow {
           ui: this.deps.ui,
           record: (line, notes) => this.record(run, line, notes),
           stopRequested: () => run.stopped,
+          ...(this.deps.retailer !== undefined && { retailer: this.deps.retailer }),
           showProgress: () => this.showProgress(run),
         })
         if (outcome === 'cancelled') run.stopped = true

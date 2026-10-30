@@ -1,0 +1,16 @@
+{
+  "path": "store.id",
+  "why": "Le magasin d’Auchan est un UUID.",
+  "message": {
+    "v": 1,
+    "type": "setup-result",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "agentVersion": "1.0.0",
+    "store": {
+      "id": "123456",
+      "host": "www.auchan.fr",
+      "baseUrl": "https://www.auchan.fr/",
+      "label": null
+    }
+  }
+}
