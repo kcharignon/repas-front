@@ -294,6 +294,7 @@ function searchLines(search: ProbedSearch): string[] {
     for (const attempt of facts.attempts) lines.push(P.attempt(attempt))
   }
   if (facts.phrases.length > 0) lines.push(P.phrases(facts.phrases.join(', ')))
+  if (facts.landing !== undefined) lines.push(P.landing(term, facts.landing))
   return lines
 }
 

@@ -167,6 +167,23 @@ describe('en fonctionnement normal', () => {
     expect(text).toContain('Connexion dans la réponse « zzqxkw »')
   })
 
+  it('une recherche redirigée dit où elle a mené (DRV-734) : une forme fixe, jamais l’adresse', async () => {
+    const { adapter } = site(normal)
+    const { probes } = await runChecks(deps(adapter), () => undefined)
+    const facts = probes?.common?.facts
+    if (!facts) throw new Error('les faits de la recherche courante étaient attendus')
+
+    const ordinary = probeLines(probes).join('\n')
+    facts.landing = 'AISLE'
+    const aisle = probeLines(probes).join('\n')
+    facts.landing = 'PRODUCT'
+    const product = probeLines(probes).join('\n')
+
+    expect(ordinary).not.toContain('redirigée vers')
+    expect(aisle).toContain('Recherche « sel » : redirigée vers un rayon (lu comme des résultats)')
+    expect(product).toContain('redirigée vers une fiche de produit (non lue)')
+  })
+
   it('le rapport du diagnostic porte les sondes, et la ligne « Connexion : » de la page est gardée', async () => {
     const { adapter } = site(normal)
     const { results, page, probes } = await runChecks(deps(adapter), () => undefined)

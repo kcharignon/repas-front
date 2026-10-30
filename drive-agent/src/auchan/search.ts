@@ -1,25 +1,33 @@
 // La recherche d'Auchan (DRV-724) : la requête, et ce que la réponse veut dire. Une recherche est `GET /recherche?text=<terme>` (une seule clé de requête,
 // B-1 mesuré) ; la réponse est une page HTML complète lue par `search-page.ts`. Ce fichier tranche, dans cet ordre :
 //   1. la réponse est vide, ou n'est pas du HTML : `CONTRACT_CHANGED` (cause explicite) ;
-//   2. l'adresse FINALE n'est pas la page de recherche : le site a redirigé (clé `searchRedirects` de son stockage local, SUPPOSÉ : B-8). Vers une fiche de
-//      produit ou un rayon, ce n'est PAS une page de résultats : aucun produit, jamais le contenu de cette page lu comme des résultats ; vers toute autre
-//      page, `CONTRACT_CHANGED` (`SEARCH_REDIRECTED`) ;
+//   2. l'adresse FINALE n'est pas la page de recherche : le site a redirigé (MESURÉ le 2026-10-30, DRV-734, B-8 : pour les termes courants — « sucre »,
+//      « riz », « oeufs »… — vers une PAGE DE RAYON, `/<rayon>/<sous-rayons…>/ca-n<chiffres>`). Une page de rayon, reconnue par son adresse ET son contenu
+//      (titre « … pas cher - Auchan.fr », `h1` : [isAislePage]), porte les MÊMES cartes que la page de résultats : elle est lue comme elle (première page
+//      seulement, mêmes garde-fous), et le fait est consigné dans les faits de la recherche (`landing: 'AISLE'`). Une adresse de rayon sans ce contenu, ou
+//      toute autre page, est `CONTRACT_CHANGED` (`SEARCH_REDIRECTED`). Vers une fiche de produit (`/pr-C…`, NON MESURÉ) : aucun produit, jamais le contenu
+//      de cette fiche lu comme des résultats ;
 //   3. des produits lus : ce sont les résultats ;
 //   4. des traces de produit mais aucun produit lisible : `CONTRACT_CHANGED` (`SEARCH_PRODUCTS_UNREADABLE`), jamais « aucun produit » ;
-//   5. aucune trace de produit : « aucun résultat » SEULEMENT si la page a le squelette du site (la barre du magasin) ET le dit par une phrase de
-//      `NO_RESULT_PHRASES` (NON MESURÉ) ; sinon `CONTRACT_CHANGED` (`SEARCH_UNKNOWN_PAGE`). Une structure inconnue n'est jamais prise pour une liste vide.
+//   5. aucune trace de produit : « aucun résultat » SEULEMENT pour la page MESURÉE du site ([isNoResultPage] : titre et `h1` « Votre recherche… » ET la
+//      phrase « Oups, on n'a rien trouvé pour : »), page non redirigée ; sinon `CONTRACT_CHANGED` (`SEARCH_UNKNOWN_PAGE`), y compris pour un rayon sans
+//      aucune carte. Une structure inconnue n'est jamais prise pour une liste vide.
 // Aucune pagination, aucun tri, aucun filtre n'est lu (B-7 : INCONNU) : seule la première page de résultats l'est.
 import { RetailerError } from '../retailers/errors'
 import type { SearchFacts } from '../retailers/contract'
-import { addressShape, isNotFoundPage, storeBar } from './page'
+import { addressShape, isNotFoundPage } from './page'
 import {
   hasProductTrace,
+  isAislePage,
+  isNoResultPage,
   phrasesOf,
   readProducts,
-  saysNoResult,
   stripInert,
   type PageProduct,
 } from './search-page'
+
+/** Où mène la redirection d'un terme : une page de rayon ou une fiche de produit. */
+export type Landing = 'AISLE' | 'PRODUCT'
 
 /** Un produit lu de la page et le fait que la page y a mené par une redirection du terme. */
 export interface SearchReading {
@@ -29,8 +37,10 @@ export interface SearchReading {
   markers: number
   /** Les produits écartés parce qu'illisibles. */
   unreadable: number
-  /** Pourquoi la page est vide : le site a dit « aucun résultat », ou le terme a mené à une fiche de produit ou à un rayon. */
-  why?: 'NO_RESULT' | 'REDIRECT_PRODUCT' | 'REDIRECT_AISLE'
+  /** Pourquoi la page est vide : le site a dit « aucun résultat », ou le terme a mené à une fiche de produit. */
+  why?: 'NO_RESULT' | 'REDIRECT_PRODUCT'
+  /** Où le terme a mené quand le site a redirigé (jamais l'adresse) : une page de rayon (lue comme des résultats) ou une fiche de produit (non lue). */
+  landing?: Landing
   /** Les phrases de la liste fermée que la page dit (pour le diagnostic). */
   phrases: string[]
 }
@@ -62,9 +72,12 @@ function finalPath(reply: { url: string; redirected: boolean }): string {
   return reply.redirected ? pathOf(reply.url) : SEARCH_PATH
 }
 
-/** Une fiche de produit (`/<libellé>/pr-C<chiffres>`, B-2 mesuré) ou un rayon (`/<libellé>/ca-…`, B-1 : les identifiants de rayon `ca-…`). */
+/**
+ * Une fiche de produit (`/<libellé>/pr-C<chiffres>`, B-2 mesuré) ou une page de rayon (`/<rayon>/<sous-rayons…>/ca-n<chiffres>`, MESURÉ le 2026-10-30,
+ * DRV-734, B-8 : au moins un segment avant l'identifiant). Un `ca-` d'une autre forme n'est pas un rayon connu.
+ */
 const PRODUCT_PAGE = /\/pr-C\d+$/
-const AISLE_PAGE = /\/ca-[^/]+$/
+const AISLE_PAGE = /^\/[^/]+(?:\/[^/]+)*\/ca-n\d+$/
 
 /** Le type MIME d'une réponse : une page HTML, ou rien (un faux `fetch` ne le dit pas). */
 function isHtml(contentType: string | null): boolean {
@@ -86,13 +99,18 @@ export function interpretSearch(
   if (!isHtml(reply.contentType))
     throw new RetailerError('CONTRACT_CHANGED', null, 'SEARCH_NOT_HTML')
   const path = finalPath(reply)
+  let landing: Landing | undefined
   if (path !== SEARCH_PATH) {
-    if (PRODUCT_PAGE.test(path)) return empty('REDIRECT_PRODUCT')
-    if (AISLE_PAGE.test(path)) return empty('REDIRECT_AISLE')
-    throw new RetailerError('CONTRACT_CHANGED', null, 'SEARCH_REDIRECTED')
+    if (PRODUCT_PAGE.test(path)) return { ...empty('REDIRECT_PRODUCT'), landing: 'PRODUCT' }
+    if (!AISLE_PAGE.test(path))
+      throw new RetailerError('CONTRACT_CHANGED', null, 'SEARCH_REDIRECTED')
+    landing = 'AISLE'
   }
   const doc = parseHtml(reply.text)
   stripInert(doc)
+  // L'adresse dit « rayon » : le contenu doit le dire aussi (titre et `h1` d'une page de catégorie), sinon ce n'est pas une page que l'on sait lire.
+  if (landing === 'AISLE' && !isAislePage(doc))
+    throw new RetailerError('CONTRACT_CHANGED', null, 'SEARCH_REDIRECTED')
   const read = readProducts(doc)
   const phrases = phrasesOf(doc)
   if (read.products.length > 0) {
@@ -102,14 +120,16 @@ export function interpretSearch(
       markers: read.markers,
       unreadable: read.unreadable,
       phrases,
+      ...(landing !== undefined && { landing }),
     }
   }
   if (hasProductTrace(doc)) {
     throw new RetailerError('CONTRACT_CHANGED', null, 'SEARCH_PRODUCTS_UNREADABLE')
   }
-  if (isNotFoundPage(doc, null)) throw new RetailerError('CONTRACT_CHANGED', null, 'PAGE_NOT_FOUND')
-  if (storeBar(doc) !== null && saysNoResult(doc)) {
-    return { ...empty('NO_RESULT'), phrases }
+  if (landing === undefined) {
+    if (isNotFoundPage(doc, null))
+      throw new RetailerError('CONTRACT_CHANGED', null, 'PAGE_NOT_FOUND')
+    if (isNoResultPage(doc)) return { ...empty('NO_RESULT'), phrases }
   }
   throw new RetailerError('CONTRACT_CHANGED', null, 'SEARCH_UNKNOWN_PAGE')
 }
