@@ -7,11 +7,11 @@ import { useSessionStore } from '@/session/session'
 import { fakeNative } from '../bridge/__tests__/fakeNative'
 import DriveAccountLinks from '../DriveAccountLinks.vue'
 
-async function open(enabled: boolean) {
+async function open(enabled: boolean, settings: object = {}) {
   stubApi({
     'POST /api/auth/refresh': () => json({ token: 'jeton' }),
     'GET /api/v1/me': () => json(me),
-    'GET /api/v1/drive/settings': () => json({ enabled, retailer: 'leclerc' }),
+    'GET /api/v1/drive/settings': () => json({ enabled, retailer: 'leclerc', ...settings }),
   })
   localStorage.setItem('repas.session', '1')
   const { plugins, router } = appContext()
@@ -47,6 +47,23 @@ describe('entrées du drive dans le compte', () => {
     ])
     expect(wrapper.text()).toContain('Réglages du drive')
     expect(wrapper.text()).toContain('Mes produits du drive')
+  })
+
+  it('avec un seul drive allumé le texte est celui d’avant ; avec plusieurs il parle de « tes drives » (DRV-709)', async () => {
+    const one = {
+      retailers: [{ retailer: 'leclerc', name: 'Leclerc', configured: true, isDefault: false }],
+    }
+    const two = {
+      retailers: [
+        ...one.retailers,
+        { retailer: 'auchan', name: 'Auchan', configured: false, isDefault: false },
+      ],
+    }
+
+    expect((await open(true, one)).text()).toContain('Ton magasin Leclerc Drive')
+    const several = (await open(true, two)).text()
+    expect(several).toContain('Tes drives, ton drive habituel et l’application Repas.')
+    expect(several).not.toContain('Ton magasin Leclerc Drive')
   })
 
   it('finit par un lien discret vers les conditions d’utilisation du drive (DRV-628)', async () => {

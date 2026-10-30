@@ -942,6 +942,8 @@ export default {
     back: 'Moi',
     entry: 'Réglages du drive',
     entryHelp: 'Ton magasin {retailer} Drive et l’application Repas.',
+    // Plusieurs drives allumés (DRV-709)
+    entryHelpSeveral: 'Tes drives, ton drive habituel et l’application Repas.',
     disabled: 'L’envoi au drive n’est pas encore activé : il n’y a rien à régler pour le moment.',
     // Envoyé ici faute de magasin (DRV-622, DRV-623) : un titre, une phrase, un bouton qui fait le travail
     chooseTitle: 'Choisis ton magasin',
@@ -1005,6 +1007,25 @@ export default {
     productsRejected: 'Articles avec des produits à ne plus proposer',
     productsHome: 'Articles « J’en ai toujours »',
     manage: 'Gérer mes produits',
+    // « Mes drives » (DRV-709) : plusieurs drives allumés. Le nom du drive est toujours un paramètre (`{retailer}`).
+    drives: {
+      title: 'Mes drives',
+      chooseHelp: 'Pour envoyer ta liste, choisis ton magasin.',
+      storeNamed: 'Ton magasin : …{tail}',
+      choose: 'Choisir mon magasin {retailer}',
+      changeNamed: 'Changer de magasin {retailer}',
+      remove: 'Retirer {retailer}',
+      removeTitle: 'Retirer {retailer} ?',
+      removeHelp:
+        'Ton magasin {retailer} n’est plus enregistré. Tes produits habituels sont gardés, au cas où tu reviens.',
+      keep: 'Garder {retailer}',
+      removed: '{retailer} est retiré.',
+      updateApp: 'Mets à jour l’application pour ajouter {retailer}.',
+      inApp: 'Pour choisir ce magasin, ouvre Repas dans l’application.',
+      default: 'Mon drive habituel',
+      defaultHelp: 'Repas l’utilise sans rien te demander.',
+      defaultNone: 'Aucun',
+    },
   },
   // Liaison d'Alexa (VOX-401) : la page que l'application Alexa ouvre (`/alexa/lier`), une phrase et deux boutons
   alexaLink: {
