@@ -62,8 +62,9 @@ announces_published_retailers() {
 # Le même contrôle sur l'APK de publication lui-même : l'entrée d'Auchan (ses deux hôtes de navigation, dont le seul qui reçoit le pont) est dans le code compilé.
 apk_announces_published_retailers() {
   local apk=$1
-  unzip -p "$apk" 'classes*.dex' | grep -aqF 'www.auchan.fr' || fail "l'APK de publication ne contient pas l'entrée d'Auchan (www.auchan.fr) : il ne servirait pas Auchan."
-  unzip -p "$apk" 'classes*.dex' | grep -aqF 'compte.auchan.fr' || fail "l'APK de publication ne contient pas la page de connexion d'Auchan (compte.auchan.fr) en navigation."
+  # Pas de `grep -q` ici : sous `pipefail`, il se ferme au premier résultat, `unzip` reçoit SIGPIPE et la chaîne échoue alors que le nom est bien là.
+  unzip -p "$apk" 'classes*.dex' | grep -aF 'www.auchan.fr' > /dev/null || fail "l'APK de publication ne contient pas l'entrée d'Auchan (www.auchan.fr) : il ne servirait pas Auchan."
+  unzip -p "$apk" 'classes*.dex' | grep -aF 'compte.auchan.fr' > /dev/null || fail "l'APK de publication ne contient pas la page de connexion d'Auchan (compte.auchan.fr) en navigation."
 }
 
 # Les deux variantes de distribution (DRV-639) : la permission d'installer des applications et le code de la mise à jour dans l'application ne

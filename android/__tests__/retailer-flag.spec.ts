@@ -92,8 +92,8 @@ describe('le drapeau de construction des enseignes éteintes', () => {
     // …et sur l'APK signé lui-même : l'entrée d'Auchan est dans le code compilé, navigation sur ses deux hôtes
     const verify = buildScript.slice(buildScript.indexOf('verify_release() {'), buildScript.indexOf('release_selftest() {'))
     expect(verify).toContain('apk_announces_published_retailers "$apk"')
-    expect(buildScript).toContain("grep -aqF 'www.auchan.fr'")
-    expect(buildScript).toContain("grep -aqF 'compte.auchan.fr'")
+    expect(buildScript).toContain("grep -aF 'www.auchan.fr' > /dev/null")
+    expect(buildScript).toContain("grep -aF 'compte.auchan.fr' > /dev/null")
   })
 
   it('le registre que build.sh lit annonce bien Auchan (le même texte que le contrôle cherche)', () => {
