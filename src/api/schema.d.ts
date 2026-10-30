@@ -251,7 +251,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Liste des types de recette, dans l'ordre d'affichage */
+        /** Liste des types de recette, dans l'ordre d'affichage, avec le nombre de recettes de la personne dans chacun */
         get: operations["get_api_list_recipe_types"];
         put?: never;
         /** Crée un type de recette (administrateur) */
@@ -2018,7 +2018,7 @@ export interface components {
              */
             purchaseUnitSlug: string;
         };
-        RecipeTypeDTO: {
+        RecipeTypeCountDTO: {
             /**
              * @description Identifiant du type de recette (slug)
              * @example plat
@@ -2036,6 +2036,11 @@ export interface components {
              * @example 2
              */
             order: number;
+            /**
+             * @description Nombre de recettes de la personne dans ce type, pour masquer les catégories vides
+             * @example 7
+             */
+            recipeCount: number;
         };
         ShoppingListDTO: {
             /**
@@ -2355,6 +2360,25 @@ export interface components {
              * @example 3
              */
             version: number;
+        };
+        RecipeTypeDTO: {
+            /**
+             * @description Identifiant du type de recette (slug)
+             * @example plat
+             */
+            slug: string;
+            /** @example plat */
+            name: string;
+            /**
+             * @description Chemin ou URL de l'image du type
+             * @example images/recipe/type/meal.svg
+             */
+            image: string;
+            /**
+             * @description Position d'affichage (croissante)
+             * @example 2
+             */
+            order: number;
         };
         ShoppingListRowDTO: {
             /**
@@ -2934,10 +2958,9 @@ export interface components {
             packSize?: components["schemas"]["PackSizeDTO"] | null;
             /**
              * @description Identifiant de l'offre du produit dans le magasin (DRV-721), chez les enseignes dont un produit a deux identifiants. **La clé est absente** (jamais `null`) quand le produit n'a pas d'offre (toute enseigne sans offre, ou offre pas encore rapportée par un agent)
-             * @default null
              * @example 0b5f8a2e-3c1d-4e7f-9a6b-123456789abc
              */
-            offerId: string;
+            offerId?: string | null;
         };
         DrivePlanRejectedDTO: {
             /**
@@ -3042,13 +3065,13 @@ export interface components {
         };
         RetailerSelectionDTO: {
             /**
-             * @description Ce que Repas fait de l'enseigne : `NONE` aucune enseigne n'est configurée (mener aux réglages), `AUTO` une enseigne s'impose (l'utiliser sans rien demander : une seule configurée, ou le drive habituel), `ASK` proposer le choix entre les candidates (`retailer` est la présélection)
+             * @description Ce que Repas fait de l'enseigne : `NONE` aucune enseigne n'est configurée (mener aux réglages), `AUTO` une seule enseigne configurée (l'utiliser sans rien demander), `ASK` plusieurs configurées : proposer le choix entre les candidates, `retailer` est la présélection (le drive habituel, sinon la dernière utilisée, sinon la première configurée)
              * @example AUTO
              * @enum {string}
              */
             mode: "NONE" | "AUTO" | "ASK";
             /**
-             * @description L'enseigne à utiliser (`AUTO`) ou à présélectionner (`ASK` : la dernière utilisée si elle est candidate, sinon la première configurée) ; `null` quand `mode` vaut `NONE`
+             * @description L'enseigne à utiliser (`AUTO`) ou à présélectionner (`ASK` : le drive habituel s'il est candidat, sinon la dernière utilisée si elle est candidate, sinon la première configurée) ; `null` quand `mode` vaut `NONE`
              * @example leclerc
              * @enum {string|null}
              */
@@ -3070,10 +3093,10 @@ export interface components {
             retailer: "leclerc" | "auchan";
             /** @description Magasin de l'utilisateur chez l'enseigne `retailer`, `null` tant qu'il n'a pas été enregistré */
             store?: components["schemas"]["DriveStoreDTO"] | null;
-            /** @description Une entrée par enseigne **allumée** (`DRIVE_RETAILERS`, DRV-702 ; ordre fixe), avec le magasin de l'utilisateur chez chacune et si c'est son drive habituel ; s'ajoute aux champs `retailer` et `store` */
+            /** @description Une entrée par enseigne **allumée** (`DRIVE_RETAILERS`, DRV-702 ; ordre fixe), avec le magasin de l'utilisateur chez chacune et si c'est son drive habituel (présélectionné à l'envoi) ; s'ajoute aux champs `retailer` et `store` */
             retailers: components["schemas"]["DriveRetailerDTO"][];
             /**
-             * @description Le drive habituel de l'utilisateur (choisi dans « Moi », `PUT /drive/default-retailer`), `null` s'il n'en a pas, ou si son drive habituel est éteint (`DRIVE_RETAILERS`) ou n'a plus de magasin : la sélection l'ignore alors, la préférence reste enregistrée
+             * @description Le drive habituel de l'utilisateur (choisi dans « Moi », `PUT /drive/default-retailer`), `null` s'il n'en a pas, ou si son drive habituel est éteint (`DRIVE_RETAILERS`) ou n'a plus de magasin : la sélection l'ignore alors, la préférence reste enregistrée ; quand plusieurs drives sont configurés, c'est la présélection du choix à l'envoi (`selection.mode` vaut `ASK`)
              * @enum {string|null}
              */
             defaultRetailer?: "leclerc" | "auchan" | null;
@@ -3111,10 +3134,9 @@ export interface components {
             packSize?: components["schemas"]["PackSizeDTO"] | null;
             /**
              * @description Identifiant de l'offre du produit dans le magasin (DRV-721), chez les enseignes dont un produit a deux identifiants. **La clé est absente** (jamais `null`) quand le produit n'a pas d'offre (toute enseigne sans offre, ou offre pas encore rapportée par un agent)
-             * @default null
              * @example 0b5f8a2e-3c1d-4e7f-9a6b-123456789abc
              */
-            offerId: string;
+            offerId?: string | null;
         };
         AcceptedProductDTO: {
             /**
@@ -3895,7 +3917,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        member?: components["schemas"]["RecipeTypeDTO"][];
+                        member?: components["schemas"]["RecipeTypeCountDTO"][];
                         /** @example 4 */
                         totalItems?: number;
                     };
