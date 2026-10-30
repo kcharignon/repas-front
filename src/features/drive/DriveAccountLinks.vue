@@ -17,12 +17,15 @@ const enabled = computed(() => settings.data.value?.enabled === true)
 
 // Plusieurs drives allumés (DRV-709) : l'entrée parle de « tes drives », pas d'un magasin ; avec un seul, son texte est celui d'avant
 const several = computed(() => hasSeveralDrives(drivesOf(settings.data.value)))
+// Aucun drive configuré (DRV-737) : « Envoyer au drive » n'est pas proposé sur la liste, c'est ici qu'on en configure un ; l'entrée le dit
+const noDrive = computed(() => settings.data.value?.selection?.mode === 'NONE')
+const entryHelp = computed(() => {
+  if (noDrive.value) return 'driveSettings.entryHelpNone'
+
+  return several.value ? 'driveSettings.entryHelpSeveral' : 'driveSettings.entryHelp'
+})
 const entries = computed(() => [
-  {
-    to: 'drive-settings',
-    title: 'driveSettings.entry',
-    help: several.value ? 'driveSettings.entryHelpSeveral' : 'driveSettings.entryHelp',
-  },
+  { to: 'drive-settings', title: 'driveSettings.entry', help: entryHelp.value },
   { to: 'drive-products', title: 'driveProducts.entry', help: 'driveProducts.entryHelp' },
 ])
 

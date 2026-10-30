@@ -7,7 +7,7 @@ import type { DriveSettings } from '@/api'
 import { needsStore, sendChoice, unservedDrive } from '../sendChoice'
 import { severalSettings } from './severalDrives'
 
-const none = { picked: null, elsewhere: false }
+const none = { picked: null }
 
 describe('sendChoice : ce que l’écran montre du verdict du back', () => {
   it('des réglages pas encore lus : aucun drive, aucune question', () => {
@@ -15,7 +15,6 @@ describe('sendChoice : ce que l’écran montre du verdict du back', () => {
       retailer: undefined,
       tiles: [],
       named: false,
-      canGoElsewhere: false,
     })
   })
 
@@ -29,7 +28,6 @@ describe('sendChoice : ce que l’écran montre du verdict du back', () => {
       retailer: 'leclerc',
       tiles: [],
       named: false,
-      canGoElsewhere: false,
     })
   })
 
@@ -40,32 +38,28 @@ describe('sendChoice : ce que l’écran montre du verdict du back', () => {
       retailer: 'leclerc',
       tiles: [],
       named: false,
-      canGoElsewhere: false,
     })
     expect(needsStore(settings)).toBe(true)
   })
 
-  it('R2, un seul drive configuré : il s’impose, rien à demander, rien à nommer, pas de lien', () => {
+  it('R2, un seul drive configuré : il s’impose, rien à demander, rien à nommer', () => {
     const settings = severalSettings({ mode: 'AUTO', retailer: 'auchan', configured: ['auchan'] })
 
     expect(sendChoice({ settings, ...none })).toEqual({
       retailer: 'auchan',
       tiles: [],
       named: false,
-      canGoElsewhere: false,
     })
     expect(needsStore(settings)).toBe(false)
   })
 
-  it('R3, plusieurs drives et un drive habituel : il s’impose, le bouton le nomme, « Envoyer ailleurs » est proposé', () => {
-    const settings = severalSettings({ mode: 'AUTO', retailer: 'auchan', habitual: 'auchan' })
+  it('plusieurs drives et un drive habituel (ASK) : la question est posée, l’habituel est coché, aucun lien « Envoyer ailleurs »', () => {
+    const settings = severalSettings({ mode: 'ASK', retailer: 'auchan', habitual: 'auchan' })
+    const choice = sendChoice({ settings, ...none })
 
-    expect(sendChoice({ settings, ...none })).toEqual({
-      retailer: 'auchan',
-      tiles: [],
-      named: true,
-      canGoElsewhere: true,
-    })
+    expect(choice).toMatchObject({ retailer: 'auchan', named: true })
+    expect(choice.tiles.map((tile) => tile.id)).toEqual(['leclerc', 'auchan'])
+    expect(choice).not.toHaveProperty('canGoElsewhere')
   })
 
   it('R4, plusieurs drives sans drive habituel (ASK) : une tuile par drive, la présélection du back est cochée', () => {
@@ -73,13 +67,13 @@ describe('sendChoice : ce que l’écran montre du verdict du back', () => {
     const choice = sendChoice({ settings, ...none })
 
     expect(choice.tiles.map((tile) => tile.id)).toEqual(['leclerc', 'auchan'])
-    expect(choice).toMatchObject({ retailer: 'auchan', named: true, canGoElsewhere: false })
+    expect(choice).toMatchObject({ retailer: 'auchan', named: true })
   })
 
   it('R4 : la tuile touchée l’emporte sur la présélection ; un drive qui n’est pas candidat est ignoré', () => {
     const settings = severalSettings({ mode: 'ASK', retailer: 'auchan' })
 
-    expect(sendChoice({ settings, picked: 'leclerc', elsewhere: false }).retailer).toBe('leclerc')
+    expect(sendChoice({ settings, picked: 'leclerc' }).retailer).toBe('leclerc')
     const one = severalSettings({
       mode: 'ASK',
       retailer: 'leclerc',
@@ -89,26 +83,17 @@ describe('sendChoice : ce que l’écran montre du verdict du back', () => {
       ...one,
       selection: { ...one.selection, candidates: ['leclerc'] as 'leclerc'[] },
     }
-    expect(sendChoice({ settings: stale, picked: 'auchan', elsewhere: false }).tiles).toEqual([])
+    expect(sendChoice({ settings: stale, picked: 'auchan' }).tiles).toEqual([])
   })
 
   it('R5, un drive éteint n’est pas dans les candidats du back : il n’a pas de tuile', () => {
     // Le back ne liste que les drives allumés ET configurés : un drive éteint reste dans `retailers` mais pas dans `candidates`
     const settings = severalSettings({ mode: 'AUTO', retailer: 'leclerc', configured: ['leclerc'] })
 
-    expect(sendChoice({ settings, picked: 'auchan', elsewhere: true })).toMatchObject({
+    expect(sendChoice({ settings, picked: 'auchan' })).toMatchObject({
       retailer: 'leclerc',
       tiles: [],
     })
-  })
-
-  it('« Envoyer ailleurs » : la question est posée et l’autre drive est présélectionné, pour cet envoi seulement', () => {
-    const settings = severalSettings({ mode: 'AUTO', retailer: 'leclerc', habitual: 'leclerc' })
-    const choice = sendChoice({ settings, picked: null, elsewhere: true })
-
-    expect(choice).toMatchObject({ retailer: 'auchan', named: true, canGoElsewhere: false })
-    expect(choice.tiles.map((tile) => tile.id)).toEqual(['leclerc', 'auchan'])
-    expect(sendChoice({ settings, picked: 'leclerc', elsewhere: true }).retailer).toBe('leclerc')
   })
 })
 

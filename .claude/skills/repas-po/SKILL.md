@@ -44,7 +44,7 @@ Le ticket contient : le parcours heureux **avant / après** (touches), les écra
 
 ## 5. Plusieurs drives (DRV-711)
 
-- **Mot** : « **Mon drive habituel** » (choix d'un des drives configurés dans « Moi », masqué s'il n'y en a qu'un) ; l'envoi exceptionnel est « **Envoyer ailleurs** ». Jamais « par défaut », « préféré », « favori », « enseigne » ni « retailer » à l'écran : on dit « drive » et on **nomme** l'enseigne.
+- **Mot** : « **Mon drive habituel** » (choix d'un des drives configurés dans « Moi », masqué s'il n'y en a qu'un) ; il est la présélection de la question « Où envoyer ta liste ? », posée à chaque envoi dès que plusieurs drives sont configurés (DRV-737 ; « Envoyer ailleurs » n'existe plus). Jamais « par défaut », « préféré », « favori », « enseigne » ni « retailer » à l'écran : on dit « drive » et on **nomme** l'enseigne.
 - **Élision** : le nom de l'enseigne est un paramètre et sa forme avec « de » en est un autre (« de Leclerc », « d'Auchan »). Un texte ne colle jamais « de » à un nom écrit à la main. Le glossaire (`principes-produit.md` § 5) a les deux lignes.
 - **Touches** : avec un seul drive, le parcours est **exactement** celui d'avant (0 touche de plus) ; avec deux et sans drive habituel, une touche « Ouvrir {nom} » à l'écran d'envoi si la présélection convient ; le relevé est dans `audit-simplicite.md` § 8. Un ticket qui ajoute une question à l'envoi se justifie contre la règle 3 (ne pas demander ce qu'on sait déjà).
 - **Texte de vie privée** : la variante par enseigne de `note-vie-privee.md` § 5 bis n'est pas définitive tant que le propriétaire ne l'a pas validée ; ne jamais écrire une phrase sur les conditions d'une enseigne sans l'avoir lue à la source.

@@ -45,13 +45,33 @@ const reopen = useReopenShoppingList()
 // articles : dans un navigateur il ne pourrait rien faire, et il verrouillerait la liste pour rien (DRV-641).
 const inApp = driveBridge.isAvailable()
 const settings = useDriveSettings(() => props.list.isActive)
-const canSend = computed(
-  () =>
+// Aucun drive configuré (`selection.mode` vaut `NONE`) : pas de bouton « Envoyer au drive », « Terminer » devient l'action principale (DRV-737).
+// Un drive se configure depuis « Moi » (Réglages du drive).
+const canSend = computed(() => {
+  const data = settings.data.value
+
+  return (
     inApp &&
     props.list.isActive &&
     props.list.rowCount > 0 &&
-    settings.data.value?.enabled === true,
+    data?.enabled === true &&
+    !needsStore(data)
+  )
+})
+
+// Aucun drive configuré, dans l'application, fonction allumée : « ⋮ » propose d'en configurer un (la liste en cours seulement, voir `otherActions`)
+const canConfigureDrive = computed(
+  () =>
+    inApp &&
+    props.list.isActive &&
+    settings.data.value?.enabled === true &&
+    settings.data.value.selection?.mode === 'NONE',
 )
+
+/** « Configurer un drive » : l'écran des réglages pose la question du drive, puis nous rend la liste une fois le magasin enregistré (`retour=liste`). */
+function configureDrive() {
+  void router.push({ name: 'drive-settings', query: { magasin: 'requis', retour: 'liste' } })
+}
 
 const checking = ref(false)
 const updating = ref(false)
@@ -214,6 +234,9 @@ const otherActions = computed<UiAction[]>(() => {
   if (!props.list.isActive) return [renameAction, remove]
 
   return [
+    ...(canConfigureDrive.value
+      ? [{ key: 'configure-drive', label: t('shoppingList.configureDrive'), run: configureDrive }]
+      : []),
     renameAction,
     {
       key: 'pause',

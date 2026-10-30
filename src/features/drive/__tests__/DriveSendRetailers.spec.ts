@@ -277,38 +277,35 @@ describe('plusieurs drives configurés, aucun drive habituel (R4)', () => {
   })
 })
 
-describe('un drive habituel (R3)', () => {
-  it('l’envoi ouvre le drive habituel sans question et retient ce drive', async () => {
+describe('un drive habituel et plusieurs drives configurés (DRV-737)', () => {
+  it('la question est posée, le drive habituel est coché, aucun lien « Envoyer ailleurs », même avec ?ouvrir', async () => {
     const native = installApp(['leclerc', 'auchan'])
-    const { fetchMock } = await open(
-      { mode: 'AUTO', retailer: 'auchan', habitual: 'auchan' },
+    const { wrapper } = await open(
+      { mode: 'ASK', retailer: 'auchan', habitual: 'auchan' },
       { 'PUT /api/v1/drive/last-retailer': noContent },
       '?ouvrir=1',
     )
-
-    await vi.waitFor(() => expect(started(native)).toHaveLength(1))
-
-    expect(started(native)[0]?.plan?.retailer).toBe('auchan')
-    expect(tiles()).toHaveLength(0)
-    expect(calls(fetchMock)).toContain('PUT /api/v1/drive/last-retailer')
-  })
-
-  it('« Envoyer ailleurs » pose la question pour cet envoi seulement : l’autre drive est présélectionné, le drive habituel ne change pas', async () => {
-    const native = installApp(['leclerc', 'auchan'])
-    const { wrapper, fetchMock } = await open(
-      { mode: 'AUTO', retailer: 'leclerc', habitual: 'leclerc' },
-      { 'PUT /api/v1/drive/last-retailer': noContent },
-    )
-    await vi.waitFor(() => expect(wrapper.text()).toContain('à choisir sur Leclerc'))
-    expect(tiles()).toHaveLength(0)
-    expect(button('Ouvrir Leclerc')).toBeDefined()
-
-    await press('Envoyer ailleurs')
     await vi.waitFor(() => expect(wrapper.text()).toContain('à choisir sur Auchan'))
 
     expect(tileNames()).toHaveLength(2)
     expect(checked()).toBe('auchan')
+    expect(button('Ouvrir Auchan')).toBeDefined()
     expect(wrapper.text()).not.toContain('Envoyer ailleurs')
+    expect(started(native)).toHaveLength(0)
+  })
+
+  it('toucher une autre tuile change le drive de cet envoi seulement : le drive habituel ne change pas', async () => {
+    const native = installApp(['leclerc', 'auchan'])
+    const { wrapper, fetchMock } = await open(
+      { mode: 'ASK', retailer: 'leclerc', habitual: 'leclerc' },
+      { 'PUT /api/v1/drive/last-retailer': noContent },
+    )
+    await vi.waitFor(() => expect(wrapper.text()).toContain('à choisir sur Leclerc'))
+    expect(checked()).toBe('leclerc')
+
+    const auchan = tiles().find((tile) => (tile as HTMLInputElement).value === 'auchan')
+    ;(auchan as HTMLInputElement).click()
+    await vi.waitFor(() => expect(button('Ouvrir Auchan')).toBeDefined())
     await press('Ouvrir Auchan')
 
     expect(started(native)[0]?.plan?.retailer).toBe('auchan')

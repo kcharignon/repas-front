@@ -394,8 +394,8 @@ Les deux icônes portent le même nom. L’ancienne est en général celle qui p
 
 ### Se connecter à Leclerc la première fois
 
-1. La première fois, Repas te demande de choisir ton magasin dans les réglages du drive : suis les indications de cet écran.
-2. Ouvre une liste, touche « Envoyer au drive » puis « Ouvrir le drive ». Le site de Leclerc s’affiche dans l’application.
+1. La première fois, aucun drive n'est configuré et la liste n'a pas de bouton « Envoyer au drive » : touche « ⋮ » puis « Configurer un drive » (ou « Moi », « Réglages du drive »), et suis les indications de cet écran.
+2. Ouvre une liste, touche « Envoyer au drive » puis « Ouvrir le drive » (avec plusieurs drives configurés, choisis d'abord où envoyer ta liste). Le site de Leclerc s’affiche dans l’application.
 3. Une fois ton magasin ouvert, connecte-toi à ton compte E.Leclerc, comme sur le site. Si Leclerc t’envoie un code par e-mail, saisis-le.
 4. Si Leclerc te redemande un jour de te connecter, fais-le de la même façon.
 
@@ -430,7 +430,7 @@ Pour seulement te déconnecter de Leclerc, sans désinstaller : dans l’écran 
 
 ### Sans l’application : chercher à la main
 
-Dans un navigateur, la liste en cours n’a pas de bouton « Envoyer au drive » (DRV-641) : il verrouillerait la liste sans rien pouvoir envoyer. Une liste déjà envoyée depuis l’application s’y ouvre avec « Reprendre l’envoi » : Repas montre chaque article avec un lien « Chercher sur Leclerc » qui ouvre le site de Leclerc sur le produit, et tu ajoutes les produits au panier toi-même. Dans l’application, si le bouton n’apparaît pas, l’envoi au drive n’est pas activé pour le moment.
+Dans un navigateur, la liste en cours n’a pas de bouton « Envoyer au drive » (DRV-641) : il verrouillerait la liste sans rien pouvoir envoyer. Une liste déjà envoyée depuis l’application s’y ouvre avec « Reprendre l’envoi » : Repas montre chaque article avec un lien « Chercher sur Leclerc » qui ouvre le site de Leclerc sur le produit, et tu ajoutes les produits au panier toi-même. Dans l’application, si le bouton n’apparaît pas, l’envoi au drive n’est pas activé pour le moment, ou aucun drive n’est encore configuré : touche « ⋮ » puis « Configurer un drive ».
 
 ## Version
 

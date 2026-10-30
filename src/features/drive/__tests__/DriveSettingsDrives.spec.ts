@@ -232,6 +232,9 @@ describe('« Mon drive habituel »', () => {
 
     const group = wrapper.find('fieldset')
     expect(group.find('legend').text()).toBe('Mon drive habituel')
+    // Proposé d'avance à l'envoi (DRV-737), plus « utilisé sans rien demander »
+    expect(group.text()).toContain('Repas te le propose d’avance quand tu envoies ta liste.')
+    expect(group.text()).not.toContain('sans rien te demander')
     const radios = group.findAll('input[type="radio"]')
     expect(radios.map((radio) => (radio.element as HTMLInputElement).value)).toEqual([
       'leclerc',
