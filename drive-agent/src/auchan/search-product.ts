@@ -10,7 +10,10 @@ import type { AuchanOffer } from './offers'
 import { PHOTO_RULE } from './photo-rule'
 import type { PageProduct } from './search-page'
 
-/** Les deux valeurs MESURÉES d'une offre du drive (DRV-714, B-1) : `data-seller-type` `GROCERY` et `data-offer-type` `DEFAULT`. Toute autre n'est pas mesurée. */
+/**
+ * Les deux valeurs MESURÉES d'une offre du drive (DRV-714, B-1) : `data-seller-type` `GROCERY` et `data-offer-type` `DEFAULT`. Une offre d'un autre vendeur
+ * (`ONLINE`, B-9) n'arrive plus jusqu'ici : `readProducts` l'écarte (DRV-739). Un autre type d'offre n'est pas mesuré.
+ */
 const MEASURED_SELLER_TYPE = 'GROCERY'
 const MEASURED_OFFER_TYPE = 'DEFAULT'
 
