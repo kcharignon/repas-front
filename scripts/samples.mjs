@@ -12,7 +12,13 @@ import { readFileSync, writeFileSync } from 'node:fs'
 const REPOSITORY = 'kcharignon/repas'
 const FOLDER = 'drive-agent/fixtures/contract'
 const BACK_FOLDER = 'docs/drive/samples'
-const FILES = ['plan.sample.json', 'choices.sample.json', 'estimate.sample.json', 'settings.sample.json', 'retailers.sample.json']
+const FILES = [
+  'plan.sample.json',
+  'choices.sample.json',
+  'estimate.sample.json',
+  'settings.sample.json',
+  'retailers.sample.json',
+]
 const SOURCE = `${FOLDER}/SOURCE.md`
 
 const SHA = /^[0-9a-f]{40}$/
