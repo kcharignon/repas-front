@@ -1,0 +1,46 @@
+{
+  "v": 1,
+  "type": "plan",
+  "runId": "__RUN_ID__",
+  "retailer": "auchan",
+  "store": { "id": "__STORE_ID__", "host": "__STORE_HOST__" },
+  "returnPath": "/drive/retour",
+  "lines": [
+    {
+      "ingredientSlug": "farine",
+      "name": "Farine",
+      "status": "NEW",
+      "products": [],
+      "rejected": [],
+      "searchQuery": "farine",
+      "needed": { "quantity": 500, "unitSymbol": "g", "dimension": "WEIGHT", "baseFactor": 1 }
+    },
+    {
+      "ingredientSlug": "sucre",
+      "name": "Sucre",
+      "status": "NEW",
+      "products": [],
+      "rejected": [],
+      "searchQuery": "sucre",
+      "needed": { "quantity": 250, "unitSymbol": "g", "dimension": "WEIGHT", "baseFactor": 1 }
+    },
+    {
+      "ingredientSlug": "sel",
+      "name": "Sel",
+      "status": "NEW",
+      "products": [],
+      "rejected": [],
+      "searchQuery": "sel",
+      "needed": { "quantity": 1, "unitSymbol": "kg", "dimension": "WEIGHT", "baseFactor": 1000 }
+    },
+    {
+      "ingredientSlug": "huile",
+      "name": "Huile",
+      "status": "NEW",
+      "products": [],
+      "rejected": [],
+      "searchQuery": "huile",
+      "needed": { "quantity": 1, "unitSymbol": "l", "dimension": "VOLUME", "baseFactor": 1000 }
+    }
+  ]
+}

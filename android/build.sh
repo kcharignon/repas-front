@@ -210,7 +210,7 @@ verify_release() {
   listing=$(unzip -Z1 "$apk")
   grep -qx 'assets/agent.js' <<<"$listing" || fail "l'APK ne contient pas l'agent du drive (assets/agent.js)."
   grep -qx 'assets/injection.js' <<<"$listing" || fail "l'APK ne contient pas le script d'injection (assets/injection.js)."
-  ! grep -qx 'assets/debug-plan.json' <<<"$listing" || fail "l'APK contient le plan d'essai de débogage (assets/debug-plan.json)."
+  ! grep -qE '^assets/debug-plan(\.[a-z0-9]+)?\.json$' <<<"$listing" || fail "l'APK contient un plan d'essai de débogage (assets/debug-plan*.json)."
   agent_actual="sha384-$(unzip -p "$apk" assets/agent.js | openssl dgst -sha384 -binary | base64 -w0)"
   agent_expected=$(tr -d ' \t\r\n' < agent.js.sha384)
   [ "$agent_actual" = "$agent_expected" ] || fail "l'agent embarqué n'a pas l'empreinte de android/agent.js.sha384 (embarqué : $agent_actual)."

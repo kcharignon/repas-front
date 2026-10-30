@@ -16,11 +16,12 @@ class DebugRunTest {
 
     // Le même fichier que celui de l'APK de débogage (`src/debug/assets`, un actif de l'application) : ce test reste donc dans l'application, pas dans le cœur ;
     // il tourne dans le dossier `android/app`.
-    private val template = File("src/debug/assets/debug-plan.json").readText()
+    private val site = RetailerSites.DEFAULT.legacy
+    private val template = File("src/debug/assets/${site.debugPlanFile}").readText()
 
     @Test
     fun `le plan d'essai remplace le passage et le magasin, et rien d'autre`() {
-        val plan = DebugPlan.plan(template, runId, "123456", host)!!
+        val plan = DebugPlan.plan(template, runId, "123456", host, site)!!
         val json = JSONObject(plan)
 
         assertEquals(runId, json.getString("runId"))
@@ -32,7 +33,7 @@ class DebugRunTest {
 
     @Test
     fun `le plan d'essai est un plan de quatre ingredients courants, sans produit memorise, avec la quantite demandee`() {
-        val lines = JSONObject(DebugPlan.plan(template, runId, "123456", host)!!).getJSONArray("lines")
+        val lines = JSONObject(DebugPlan.plan(template, runId, "123456", host, site)!!).getJSONArray("lines")
 
         assertEquals(4, lines.length())
         for (index in 0 until lines.length()) {
@@ -46,35 +47,36 @@ class DebugRunTest {
 
     @Test
     fun `le plan tient dans la borne du protocole`() {
-        assertTrue(BridgeMessages.fitsBound(DebugPlan.plan(template, runId, "123456", host)!!))
+        assertTrue(BridgeMessages.fitsBound(DebugPlan.plan(template, runId, "123456", host, site)!!))
     }
 
     @Test
     fun `une valeur qui n'est pas de la forme du protocole fait refuser le plan`() {
-        assertNull(DebugPlan.plan(template, "pas-un-uuid", "123456", host))
-        assertNull(DebugPlan.plan(template, runId, "12 34", host))
-        assertNull(DebugPlan.plan(template, runId, "", host))
-        assertNull(DebugPlan.plan(template, runId, "1234567890123", host))
-        assertNull(DebugPlan.plan(template, runId, "123456", "exemple.invalid"))
-        assertNull(DebugPlan.plan(template, runId, "123456", "fd0-courses.leclercdrive.fr\"}"))
-        assertNull(DebugPlan.plan(template, runId, "123456", "FD0.leclercdrive.fr"))
+        assertNull(DebugPlan.plan(template, "pas-un-uuid", "123456", host, site))
+        assertNull(DebugPlan.plan(template, runId, "12 34", host, site))
+        assertNull(DebugPlan.plan(template, runId, "", host, site))
+        assertNull(DebugPlan.plan(template, runId, "1234567890123", host, site))
+        assertNull(DebugPlan.plan(template, runId, "123456", "exemple.invalid", site))
+        assertNull(DebugPlan.plan(template, runId, "123456", "fd0-courses.leclercdrive.fr\"}", site))
+        assertNull(DebugPlan.plan(template, runId, "123456", "FD0.leclercdrive.fr", site))
     }
 
     @Test
     fun `un modele illisible, trop gros ou a plus de 100 lignes fait refuser le plan`() {
-        assertNull(DebugPlan.plan("pas du json __RUN_ID__", runId, "1", host))
+        assertNull(DebugPlan.plan("pas du json __RUN_ID__", runId, "1", host, site))
         val line = """{"ingredientSlug":"a","name":"A","status":"SKIP"}"""
-        assertNull(DebugPlan.plan("""{"lines":[${List(101) { line }.joinToString(",")}]}""", runId, "1", host))
-        assertNotNull(DebugPlan.plan("""{"lines":[${List(100) { line }.joinToString(",")}]}""", runId, "1", host))
-        assertNull(DebugPlan.plan("""{"lines":[],"x":"${"a".repeat(BridgeMessages.MAX_BYTES)}"}""", runId, "1", host))
+        assertNull(DebugPlan.plan("""{"lines":[${List(101) { line }.joinToString(",")}]}""", runId, "1", host, site))
+        assertNotNull(DebugPlan.plan("""{"lines":[${List(100) { line }.joinToString(",")}]}""", runId, "1", host, site))
+        assertNull(DebugPlan.plan("""{"lines":[],"x":"${"a".repeat(BridgeMessages.MAX_BYTES)}"}""", runId, "1", host, site))
     }
 
     // —— le déroulement ————————————————————————————————————————————————————————————————————————————————————————————————
 
-    private class Harness(template: String?, var accept: Boolean = true) {
+    private class Harness(template: String?, var accept: Boolean = true, site: RetailerSite = RetailerSites.DEFAULT.legacy) {
         val sent = mutableListOf<String>()
         val shown = mutableListOf<String>()
         val run = DebugRun(
+            site = site,
             template = { template },
             send = { text -> if (accept) sent += text; accept },
             startPass = { text -> if (accept) sent += text; accept },
@@ -173,5 +175,84 @@ class DebugRunTest {
         h.run.onAgentMessage("log", """{"v":1,"type":"log"}""")
 
         assertTrue(h.shown.isEmpty())
+    }
+
+    // —— un plan d'essai par enseigne (DRV-735) ————————————————————————————————————————————————————————————————————————
+
+    /** Une enseigne FICTIVE dont le magasin est un UUID sur un hôte propre : la forme d'Auchan, sans la nommer. */
+    private val other = RetailerSite(
+        id = "exemplea",
+        name = "Exemple A",
+        nameDe = "d’Exemple A",
+        startUrl = "https://www.exemple-a.test/",
+        siteMode = SiteMode.AS_IS,
+        hosts = listOf(SiteHost(HostPattern.exact("www.exemple-a.test"), bridge = true)),
+        storeHost = Regex("www\\.exemple-a\\.test"),
+        storeIdPattern = Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"),
+    )
+    private val registered = RetailerSites.DEFAULT.all + RetailerSites.SWITCHED_OFF
+    private val otherStoreId = "0b5b1d0c-6f4e-4d0e-9a53-2f6a3c1d7e88"
+    private val otherTemplate = """{"v":1,"type":"plan","runId":"__RUN_ID__","retailer":"${other.id}","store":{"id":"__STORE_ID__","host":"__STORE_HOST__"},"lines":[]}"""
+
+    @Test
+    fun `le modele se choisit par la table de l'enseigne, un fichier de donnees par enseigne`() {
+        assertEquals("debug-plan.exemplea.json", other.debugPlanFile)
+        assertEquals("debug-plan.json", RetailerSites.DEFAULT.legacy.debugPlanFile)
+        registered.forEach { assertTrue(it.id, File("src/debug/assets/${it.debugPlanFile}").isFile) }
+        assertEquals(registered.size, registered.map { it.debugPlanFile }.toSet().size)
+    }
+
+    @Test
+    fun `chaque modele dit l'enseigne dont il porte le nom de fichier`() {
+        registered.forEach { site ->
+            val json = JSONObject(File("src/debug/assets/${site.debugPlanFile}").readText())
+            assertEquals(site.id, json.getString("retailer"))
+        }
+    }
+
+    @Test
+    fun `le plan d'une autre enseigne n'accepte que le magasin de la forme de cette enseigne`() {
+        val plan = JSONObject(DebugPlan.plan(otherTemplate, runId, otherStoreId, "www.exemple-a.test", other)!!)
+        assertEquals(other.id, plan.getString("retailer"))
+        assertEquals(otherStoreId, plan.getJSONObject("store").getString("id"))
+
+        assertNull(DebugPlan.plan(otherTemplate, runId, "123456", "www.exemple-a.test", other))
+        assertNull(DebugPlan.plan(otherTemplate, runId, otherStoreId.uppercase(), "www.exemple-a.test", other))
+        assertNull(DebugPlan.plan(otherTemplate, runId, otherStoreId, host, other))
+        assertNull(DebugPlan.plan(otherTemplate, runId, otherStoreId, "autre.exemple-a.test", other))
+        // Et le magasin d'une enseigne n'est jamais accepté pour une autre.
+        assertNull(DebugPlan.plan(template, runId, otherStoreId, "www.exemple-a.test", site))
+        assertNull(DebugPlan.plan(otherTemplate, runId, "123456", host, other))
+    }
+
+    @Test
+    fun `l'essai d'une autre enseigne annonce son enseigne et refuse un magasin de la forme d'une autre`() {
+        val h = Harness(otherTemplate, site = other)
+        h.run.start()
+        assertEquals(other.id, JSONObject(h.sent[0]).getString("retailer"))
+
+        h.run.onAgentMessage("setup-result", setupResult.replace("\"123456\"", "\"$otherStoreId\"").replace(host, "www.exemple-a.test"))
+        assertEquals("plan", JSONObject(h.sent[1]).getString("type"))
+        assertEquals(other.id, JSONObject(h.sent[1]).getString("retailer"))
+
+        val wrong = Harness(otherTemplate, site = other)
+        wrong.run.start()
+        wrong.run.onAgentMessage("setup-result", setupResult)
+        assertEquals(1, wrong.sent.size)
+        assertTrue(wrong.shown[0].startsWith("Plan d'essai impossible"))
+    }
+
+    @Test
+    fun `le modele de l'enseigne d'avant est inchange, octet pour octet, et son plan aussi`() {
+        val bytes = File("src/debug/assets/debug-plan.json").readBytes()
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+        assertEquals("e0e93df0af2aa6dd606b91164ed12ba540f2f95d360a628059abe4e733f393fb", digest)
+
+        // Le plan d'avant : le modèle rempli par les trois remplacements, relu et réécrit par org.json.
+        val before = JSONObject(
+            template.replace("__RUN_ID__", runId).replace("__STORE_ID__", "123456").replace("__STORE_HOST__", host),
+        ).toString()
+        assertEquals(before, DebugPlan.plan(template, runId, "123456", host, site))
+        assertEquals("leclerc", JSONObject(before).getString("retailer"))
     }
 }

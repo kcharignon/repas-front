@@ -52,7 +52,7 @@ Le cœur : `android/core/src/main/kotlin/eu/kantin/repas/drive/` (le paquet n'a 
 | `UserAgent.kt` | l'identité « ordinateur » : agent utilisateur et indications client |
 | `LoadProblem.kt` | le classement des incidents de chargement |
 | `VersionLabel.kt` | la ligne de version montrée à l'utilisateur |
-| `DebugPlan.kt`, `ResultReport.kt`, `SelftestReport.kt` | (débogage) le plan d'essai, le rapport du résultat, le rapport du test automatique |
+| `DebugPlan.kt`, `ResultReport.kt`, `SelftestReport.kt` | (débogage) le plan d'essai (un modèle de données par enseigne, `RetailerSite.debugPlanFile`, DRV-735), le rapport du résultat, le rapport du test automatique |
 | `IdentityProvider.kt` | le service de plateforme « obtenir un jeton d'identité » (AUTH-011) : `IdentityProvider`, `IdentityResult`, `IdentityError`, `Cancellation` |
 | `LinkOpener.kt` | le service de plateforme « ouvrir une page web dans le navigateur du système » |
 | `UpdateSource.kt` | la mise à jour de l'application (DRV-639) : les SEULES adresses qu'elle contacte (écrites en dur), les hôtes de redirection permis, les bornes de taille |

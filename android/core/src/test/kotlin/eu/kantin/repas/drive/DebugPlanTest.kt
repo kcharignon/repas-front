@@ -14,7 +14,7 @@ class DebugPlanTest {
     fun `le message setup suit le protocole et n'a pas de magasin, l'agent lit celui de la page`() {
         val golden = JSONObject(File("src/test/resources/setup-message.json").readText())
 
-        val built = JSONObject(DebugPlan.setupMessage(runId))
+        val built = JSONObject(DebugPlan.setupMessage(runId, RetailerSites.DEFAULT.legacy))
 
         assertTrue(sameJson(golden, built))
         assertFalse(built.has("store"))

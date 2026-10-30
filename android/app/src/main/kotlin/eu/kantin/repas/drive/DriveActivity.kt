@@ -132,7 +132,8 @@ class DriveActivity : Activity() {
 
         resultPanel = TextPanel(this)
         debugRun = DebugRun(
-            template = { AgentHost.readAsset(this, DebugPlan.TEMPLATE_FILE)?.toString(Charsets.UTF_8) },
+            site = site,
+            template = { AgentHost.readAsset(this, site.debugPlanFile)?.toString(Charsets.UTF_8) },
             send = { agent.send(it) },
             startPass = ::startDebugPass,
             show = { resultPanel.show(it) },

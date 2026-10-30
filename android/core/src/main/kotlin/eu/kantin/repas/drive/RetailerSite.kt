@@ -107,6 +107,11 @@ class RetailerSite(
     val loginPath: Regex? = null,
     /** Le premier libellé du nom du site mobile (`m-courses` pour `m-courses.exemple.test`) ; seulement en [SiteMode.DESKTOP]. */
     val mobileSiteLabel: Regex? = null,
+    /**
+     * Le modèle du plan d'essai de la variante de débogage (DRV-735) : le nom d'un fichier de données de `app/src/debug/assets/`, propre à l'enseigne (un plan
+     * dit son enseigne et la forme de son magasin). Par défaut `debug-plan.<id>.json` ; jamais dans l'APK de publication.
+     */
+    val debugPlanFile: String = "debug-plan.$id.json",
 ) {
     private val navigation: List<HostPattern> = hosts.map { it.pattern }
     private val bridge: List<HostPattern> = hosts.filter { it.bridge }.map { it.pattern }
@@ -119,6 +124,7 @@ class RetailerSite(
 
     init {
         require(ID.matches(id)) { "Identifiant d'enseigne invalide : $id" }
+        require(DEBUG_PLAN_FILE.matches(debugPlanFile)) { "Nom de plan d'essai invalide : $id" }
         require(name.isNotBlank() && nameDe.isNotBlank()) { "Nom d'enseigne vide : $id" }
         require(bridge.isNotEmpty()) { "L'enseigne $id n'a aucun hôte où le pont existe." }
         require(siteMode == SiteMode.DESKTOP || mobileSiteLabel == null) { "Seul le mode ordinateur refuse un site mobile : $id" }
@@ -222,5 +228,6 @@ class RetailerSite(
 
     private companion object {
         val ID = Regex("[a-z][a-z0-9]{0,19}")
+        val DEBUG_PLAN_FILE = Regex("debug-plan(\\.[a-z][a-z0-9]{0,19})?\\.json")
     }
 }
