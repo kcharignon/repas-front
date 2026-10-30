@@ -284,6 +284,57 @@
                 }
             }
         },
+        "/api/v1/recipes/{id}/favorite": {
+            "put": {
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Met une recette de l'utilisateur en favoris, ou l'en retire",
+                "description": "Une recette favorite est dans la liste \u00ab Favoris \u00bb de son auteur (`GET /api/v1/recipes/favorites`) en plus de son type. Seul l'auteur change le choix : un administrateur qui peut modifier la recette d'un autre re\u00e7oit `403` `RECIPE_FAVORITE_FORBIDDEN` s'il envoie une autre valeur que l'actuelle. Le choix suit la version de la recette (`ETag`, `If-Match`).",
+                "operationId": "put_api_change_recipe_favorite",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/IfMatch"
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "pattern": "[0-9a-fA-F-]{36}"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RecipeFavoritePayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Choix enregistr\u00e9"
+                    },
+                    "403": {
+                        "description": "La recette appartient \u00e0 un autre utilisateur (la recette secr\u00e8te d'un autre est inconnue pour tous, administrateur compris : `404`)"
+                    },
+                    "404": {
+                        "description": "Recette inconnue"
+                    },
+                    "412": {
+                        "description": "La version de la recette n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
+                    },
+                    "422": {
+                        "description": "Corps invalide (`favorite` n'est pas un bool\u00e9en JSON)"
+                    }
+                }
+            }
+        },
         "/api/v1/recipes/{id}/copy": {
             "post": {
                 "tags": [
@@ -1530,6 +1581,49 @@
                         "description": "Corps de la requ\u00eate invalide"
                     }
                 }
+            },
+            "delete": {
+                "tags": [
+                    "Recipe types"
+                ],
+                "summary": "Supprime le type de recette (administrateur) apr\u00e8s avoir pass\u00e9 toutes ses recettes dans un autre type",
+                "description": "Les recettes de tous les utilisateurs qui portent le type supprim\u00e9 passent dans le type `transferTo` (leur version augmente), puis le type dispara\u00eet ; une seule transaction. Il reste donc toujours au moins un type.",
+                "operationId": "delete_api_remove_recipe_type",
+                "parameters": [
+                    {
+                        "name": "transferTo",
+                        "in": "query",
+                        "description": "Slug du type de recette qui re\u00e7oit les recettes du type supprim\u00e9",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 255
+                        },
+                        "example": "plat"
+                    },
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Supprim\u00e9, ses recettes sont dans le type de transfert"
+                    },
+                    "403": {
+                        "description": "R\u00e9serv\u00e9 aux administrateurs"
+                    },
+                    "404": {
+                        "description": "Type \u00e0 supprimer ou type de transfert inconnu"
+                    },
+                    "422": {
+                        "description": "`transferTo` absent, ou identique au type supprim\u00e9"
+                    }
+                }
             }
         },
         "/api/v1/shopping-lists/{id}": {
@@ -1774,6 +1868,40 @@
                     },
                     "404": {
                         "description": "Ingr\u00e9dient inconnu"
+                    }
+                }
+            }
+        },
+        "/api/v1/recipes/favorites": {
+            "get": {
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Recettes que l'utilisateur authentifi\u00e9 a mises en favoris, tri\u00e9es par slug",
+                "description": "Toutes types confondus, secr\u00e8tes comprises (chacune dit si elle l'est). La liste est vide tant qu'il n'a aucun favori : l'interface n'affiche alors pas le type \u00ab Favoris \u00bb.",
+                "operationId": "get_api_list_favorite_recipes",
+                "responses": {
+                    "200": {
+                        "description": "Recettes favorites (collection `member`)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "member": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/RecipeSummaryDTO"
+                                            }
+                                        },
+                                        "totalItems": {
+                                            "type": "integer",
+                                            "example": 3
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -3777,6 +3905,18 @@
                 },
                 "type": "object"
             },
+            "RecipeFavoritePayload": {
+                "properties": {
+                    "favorite": {
+                        "description": "Vrai : la recette est mise en favoris ; faux : elle en est retir\u00e9e. Un bool\u00e9en JSON, rien d'autre (`422` sinon). Renvoyer la valeur actuelle est sans effet",
+                        "type": "boolean",
+                        "default": null,
+                        "example": true,
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
             "ConversionPayload": {
                 "required": [
                     "startUnitSlug",
@@ -4158,6 +4298,20 @@
                         "type": "string",
                         "maxLength": 255,
                         "example": "tomate-0a1b2c3d"
+                    }
+                },
+                "type": "object"
+            },
+            "RemoveRecipeTypeRequestQuery": {
+                "required": [
+                    "transferTo"
+                ],
+                "properties": {
+                    "transferTo": {
+                        "description": "Slug du type de recette qui re\u00e7oit toutes les recettes du type supprim\u00e9 (diff\u00e9rent de celui-ci)",
+                        "type": "string",
+                        "maxLength": 255,
+                        "example": "plat"
                     }
                 },
                 "type": "object"
@@ -5806,6 +5960,7 @@
                     "typeSlug",
                     "typeName",
                     "secret",
+                    "favorite",
                     "rows",
                     "version"
                 ],
@@ -5835,6 +5990,11 @@
                     },
                     "secret": {
                         "description": "Recette secr\u00e8te : seul son auteur la voit (elle n'est pas dans \u00ab Recettes des autres \u00bb et personne d'autre ne la lit ni ne la copie). Toujours \u00e9crit ; toujours `false` pour la recette d'un autre, qu'on ne lit que si elle ne l'est pas",
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "favorite": {
+                        "description": "Recette mise en favoris par son auteur (liste \u00ab Favoris \u00bb, `PUT /recipes/{id}/favorite`). Toujours \u00e9crit ; toujours `false` pour la recette d'un autre : le choix est celui de l'auteur",
                         "type": "boolean",
                         "example": false
                     },
@@ -6164,6 +6324,30 @@
                 },
                 "type": "object"
             },
+            "RecipeSummaryDTO": {
+                "required": [
+                    "id",
+                    "name",
+                    "secret"
+                ],
+                "properties": {
+                    "id": {
+                        "description": "Identifiant de la recette",
+                        "type": "string",
+                        "example": "3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "p\u00e2tes carbonara"
+                    },
+                    "secret": {
+                        "description": "Recette secr\u00e8te : seul son auteur la voit (elle n'est pas dans \u00ab Recettes des autres \u00bb). Toujours \u00e9crit",
+                        "type": "boolean",
+                        "example": false
+                    }
+                },
+                "type": "object"
+            },
             "IngredientRowDTO": {
                 "required": [
                     "slug",
@@ -6302,30 +6486,6 @@
                         "description": "Le nombre r\u00e9el de recettes des autres (ou de correspondances, avec une recherche), toutes pages confondues ; peut d\u00e9passer le nombre de `member`",
                         "type": "integer",
                         "example": 12
-                    }
-                },
-                "type": "object"
-            },
-            "RecipeSummaryDTO": {
-                "required": [
-                    "id",
-                    "name",
-                    "secret"
-                ],
-                "properties": {
-                    "id": {
-                        "description": "Identifiant de la recette",
-                        "type": "string",
-                        "example": "3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34"
-                    },
-                    "name": {
-                        "type": "string",
-                        "example": "p\u00e2tes carbonara"
-                    },
-                    "secret": {
-                        "description": "Recette secr\u00e8te : seul son auteur la voit (elle n'est pas dans \u00ab Recettes des autres \u00bb). Toujours \u00e9crit",
-                        "type": "boolean",
-                        "example": false
                     }
                 },
                 "type": "object"
