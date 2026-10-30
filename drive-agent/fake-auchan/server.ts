@@ -11,7 +11,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 
-import { findProduct, searchCatalog } from './catalog.ts'
+import { findProduct } from './catalog.ts'
 import {
   cartConfig,
   cartPage,
@@ -22,7 +22,6 @@ import {
   journeyBody,
   MEMBER_CART_ID,
   notFoundPage,
-  searchPage,
   STORE,
   VISITOR_CART_ID,
   type Bar,
@@ -31,6 +30,8 @@ import {
   type PageOptions,
   type SessionKind,
 } from './pages.ts'
+
+import { landingPage, searchReply } from './search.ts'
 
 export { STORE } from './pages.ts'
 
@@ -409,9 +410,12 @@ export async function startFakeAuchan(options: FakeOptions = {}): Promise<FakeAu
     const text = url.searchParams.get('text') ?? ''
     entry.detail = text
     await paced(entry, () => {
-      entry.status = 200
-      return send(res, 200, searchPage(pageOptions(), searchCatalog(text)), {
+      // La page (ou la redirection) vient de `search.ts` (DRV-724) : des pages de résultats synthétiques, pilotées par le mot cherché.
+      const found = searchReply(text, pageOptions())
+      entry.status = found.status
+      return send(res, found.status, found.body, {
         ...HTML,
+        ...(found.location !== undefined && { Location: found.location }),
         'Set-Cookie': sessionCookies(),
       })
     })
@@ -472,6 +476,12 @@ export async function startFakeAuchan(options: FakeOptions = {}): Promise<FakeAu
     if (path === '/checkout/cart' && get) {
       entry.status = 200
       return send(res, 200, cartPage(pageOptions()), { ...HTML, 'Set-Cookie': sessionCookies() })
+    }
+    // Les pages où mènent les termes redirigés de la recherche (une fiche de produit, un rayon).
+    const landing = get ? landingPage(path, pageOptions()) : null
+    if (landing !== null) {
+      entry.status = 200
+      return send(res, 200, landing, { ...HTML, 'Set-Cookie': sessionCookies() })
     }
     // Un VRAI 404 (B-6) : une adresse inventée n'est pas une page trompeuse en 200.
     entry.status = 404

@@ -1,15 +1,20 @@
 import { STORES } from '../../protocol'
 import { takeWindowPrimitives, type WindowPrimitives } from '../primitives'
 import { httpCause } from '../retailers/causes'
-import type {
-  ArrivalFacts,
-  CookieFacts,
-  EntryReading,
-  LocationLike,
-  NavigationFacts,
-  RetailerAdapter,
-  SessionReading,
-  StoreInfo,
+import {
+  headerNames,
+  mimeOf,
+  type ArrivalFacts,
+  type AttemptFacts,
+  type Candidate,
+  type CookieFacts,
+  type EntryReading,
+  type LocationLike,
+  type NavigationFacts,
+  type RetailerAdapter,
+  type SearchFacts,
+  type SessionReading,
+  type StoreInfo,
 } from '../retailers/contract'
 import { RetailerError } from '../retailers/errors'
 import {
@@ -25,6 +30,8 @@ import { readJourney } from './journey'
 import { addressShape, cookieFacts, isNotFoundPage, storeBar } from './page'
 import { PACING } from './pacing'
 import { readSession } from './session'
+import { describeReply, interpretSearch, SEARCH_INIT, searchPath } from './search'
+import { OfferMemory, offerOf, type SeenOffer, toCandidate } from './search-product'
 
 /**
  * L'adaptateur d'Auchan (DRV-717), première moitié : le magasin, la connexion, l'entrée, le diagnostic. Il parle au site depuis la page de la personne
@@ -47,6 +54,8 @@ export interface AuchanDeps extends PacerDeps {
   cookies?: () => string
   /** Ouvre une adresse dans la page (`location.assign`) : suivre un lien d'entrée. Absente, `followEntry` ne suit pas de lien. */
   navigate?: (url: string) => void
+  /** Lit un texte HTML en document inerte (le `DOMParser` pris au démarrage, DRV-724) : la page de résultats se lit par des sélecteurs. */
+  parseHtml: (html: string) => Document
 }
 
 /** Le temps laissé à une navigation pour quitter la page avant de la dire sans effet (le clic ou le lien d'entrée). */
@@ -81,6 +90,10 @@ export class AuchanAdapter implements RetailerAdapter {
   private entryUrl: string | null = null
   /** Le bouton que `readEntry` a trouvé en dernier : le seul que `followEntry` touche. */
   private entryButton: { click(): void } | null = null
+  /** Ce que la dernière recherche a laissé voir de la réponse du site (formes et nombres seulement), pour le diagnostic. */
+  private searchFacts: SearchFacts | null = null
+  /** Les offres que les recherches ont montrées (par identifiant de produit), pour l'ajout au panier (DRV-725). */
+  private readonly offers = new OfferMemory()
 
   constructor(deps: AuchanDeps) {
     this.deps = deps
@@ -206,7 +219,58 @@ export class AuchanAdapter implements RetailerAdapter {
     return this.pacer.stats()
   }
 
-  // —— Ce qui n'a pas encore de réponse : aucune recherche ni aucun panier n'a eu lieu ———————————————————————————————————————————
+  // —— La recherche et la lecture des produits (DRV-724) ———————————————————————————————————————————————————————————————————————
+
+  /**
+   * Les produits que la page de résultats de `GET /recherche?text=<terme>` propose, dans l'ordre de la page (une seule page : la pagination n'est pas
+   * mesurée). Chaque produit a son identifiant d'offre (`Candidate.offerId`). La requête passe par le `Pacer` (une à la fois, à la cadence d'Auchan).
+   * Une redirection du terme vers une fiche de produit ou un rayon n'est pas une page de résultats : aucun produit. L'EAN n'est pas sur cette page.
+   * @throws {RetailerError} `NOT_LOGGED_IN`, `BLOCKED`, `NETWORK`, ou `CONTRACT_CHANGED` avec la cause d'une page de forme inconnue.
+   */
+  async searchProducts(query: string): Promise<Candidate[]> {
+    const text = query.trim()
+    if (text === '') return []
+    this.searchFacts = null
+    const reply = await this.pacer.request(searchPath(text), SEARCH_INIT)
+    const facts = describeReply(reply, mimeOf(reply.contentType), headerNames(reply.headers))
+    this.searchFacts = facts
+    try {
+      this.assertUsable(reply)
+      const reading = interpretSearch(reply, this.deps.parseHtml)
+      facts.outcome = reading.products.length > 0 ? 'PRODUCTS' : 'EMPTY'
+      facts.products = reading.products.length
+      facts.phrases = reading.phrases
+      for (const product of reading.products) this.offers.remember(offerOf(product))
+      return reading.products.map((product) => toCandidate(product, this.deps.location))
+    } catch (error) {
+      facts.outcome = 'FAILED'
+      if (error instanceof RetailerError) facts.fault = { code: error.code, cause: error.cause }
+      else facts.fault = { code: 'CONTRACT_CHANGED', cause: 'EXCEPTION' }
+      throw error
+    }
+  }
+
+  /** L'offre que la dernière recherche a montrée pour ce produit (identifiant d'offre, type de vendeur, type d'offre, vendeur), `undefined` si aucune. Aucune requête. */
+  seenOffer(productId: string): SeenOffer | undefined {
+    return this.offers.get(productId)
+  }
+
+  /** Le produit voulu parmi les résultats d'une recherche (son identifiant de produit), ou `null` s'il n'y figure pas. */
+  async readProductFromSearch(query: string, productId: string): Promise<Candidate | null> {
+    const candidates = await this.searchProducts(query)
+    return candidates.find((candidate) => candidate.id === productId) ?? null
+  }
+
+  lastSearchFacts(): SearchFacts | null {
+    return this.searchFacts
+  }
+
+  /** Une seule forme de requête de recherche : rien à sonder, aucune requête. */
+  exploreSearchVariants(): Promise<AttemptFacts[]> {
+    return Promise.resolve([])
+  }
+
+  // —— Ce qui n'a pas encore de réponse : aucun panier n'a eu lieu ———————————————————————————————————————————————————————————————
 
   pageCartTotal(): null {
     return null
@@ -214,22 +278,10 @@ export class AuchanAdapter implements RetailerAdapter {
   cartQuantity(): null {
     return null
   }
-  lastSearchFacts(): null {
-    return null
-  }
 
-  // —— Écrit par DRV-724 (la recherche et les produits) et DRV-725 (le panier) ————————————————————————————————————————————————
+  // —— Écrit par DRV-725 (le panier) ——————————————————————————————————————————————————————————————————————————————————————————
 
-  searchProducts(): Promise<never> {
-    return notWrittenLater()
-  }
   setCartQuantity(): Promise<never> {
-    return notWrittenLater()
-  }
-  readProductFromSearch(): Promise<never> {
-    return notWrittenLater()
-  }
-  exploreSearchVariants(): Promise<never> {
     return notWrittenLater()
   }
   readAisleMenu(): never {
@@ -299,6 +351,7 @@ export function browserDeps(
     navigation: () => navigationOf(win),
     cookies: () => win.document.cookie,
     navigate: (url) => win.location.assign(url),
+    parseHtml: primitives.parseHtml,
     sleep: (ms) => new Promise((resolve) => win.setTimeout(resolve, ms)),
     timer: (ms, fire) => {
       const id = win.setTimeout(fire, ms)

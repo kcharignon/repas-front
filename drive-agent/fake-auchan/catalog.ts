@@ -69,10 +69,3 @@ export const PRODUCTS: readonly FakeProduct[] = [
 export function findProduct(productId: string): FakeProduct | undefined {
   return PRODUCTS.find((product) => product.productId === productId)
 }
-
-/** Les produits dont le libellé contient le texte cherché (sans casse). Pas de moteur d'Auchan : un squelette pour DRV-724. */
-export function searchCatalog(text: string): FakeProduct[] {
-  const wanted = text.trim().toLowerCase()
-  if (wanted === '') return []
-  return PRODUCTS.filter((product) => product.label.toLowerCase().includes(wanted))
-}

@@ -2,7 +2,7 @@
 // `hypotheses-site-reel-auchan.md` du dépôt back) et des données entièrement INVENTÉES : un UUID de test, `Drive Ville-Test`, des produits de test. Aucun
 // HTML, aucun nom de magasin, aucun identifiant ni aucune ville du vrai site n'est ici. Ce qui n'a pas été mesuré (la structure exacte de la barre du
 // magasin, la page « introuvable » au-delà de son titre et de son texte, où mène « Commencer mes achats ») est une FORME PLAUSIBLE, marquée comme telle.
-import { type FakeProduct, PRODUCTS } from './catalog.ts'
+import { PRODUCTS } from './catalog.ts'
 
 /** Le faux magasin : son identifiant (un UUID de test, celui de l'exemple `plan-auchan.json` du protocole), son libellé et son hôte. */
 export const STORE = {
@@ -32,11 +32,11 @@ export interface PageOptions {
   entry: EntryForm
 }
 
-const HTML_HEAD = (title: string): string =>
+export const HTML_HEAD = (title: string): string =>
   `<!doctype html>\n<html lang="fr"><head><meta charset="utf-8"><title>${title}</title></head>`
 
 /** Le script que la page exécute à son chargement : le signal de connexion (D-6). */
-function sessionScript(session: SessionKind): string {
+export function sessionScript(session: SessionKind): string {
   if (session === 'unknown') return ''
   return `<script>sessionStorage.setItem('tracking_authenticated', '${session === 'member' ? 'true' : 'false'}')</script>`
 }
@@ -45,14 +45,14 @@ function sessionScript(session: SessionKind): string {
  * La barre du magasin en haut de la page. `withdrawal` : « Retrait : <le drive> » (A-4) ; `choose` : « Choisir vos courses » (A-5). PLAUSIBLE, non
  * mesuré : l'élément (ici un bouton-lien et un bloc) ; le texte, lui, est celui du rapport.
  */
-function barHtml(bar: Bar): string {
+export function barHtml(bar: Bar): string {
   if (bar === 'none') return ''
   return bar === 'withdrawal'
     ? `<div class="store-bar"><span>Retrait : ${STORE.label}</span></div>`
     : '<a href="#" role="button" class="store-bar">Choisir vos courses</a>'
 }
 
-function nav(): string {
+export function nav(): string {
   return '<nav><a href="/courses">Courses</a> <a href="/recherche?text=farine">Recherche</a> <a href="/checkout/cart">Panier</a></nav>'
 }
 
@@ -94,39 +94,6 @@ export function notFoundPage(): string {
 export function challengePage(): string {
   return `${HTML_HEAD('Vérification (faux site de test)')}
 <body><iframe src="https://geo.captcha-delivery.com/captcha/?initialCid=test" title="Vérification"></iframe></body></html>`
-}
-
-// —— La recherche (un squelette pour DRV-724) ——————————————————————————————————————————————————————————————————————————————————
-
-const euros = (cents: number): string => `${(cents / 100).toFixed(2).replace('.', ',')} €`
-
-/**
- * Une carte de produit : les attributs `data-product-id`, `data-offer-id`, `data-seller-type`, `data-offer-type`, `data-seller-id` (vide) et les microdonnées
- * `name`, `image`, `brand`, `offers`, `price` (décimal), `priceCurrency`, `availability` (B-1, mesuré). La mention « Dans mon drive » et le contenu net
- * (« 1kg ») sont affichés (B-4). Le HTML autour est inventé.
- */
-function card(product: FakeProduct): string {
-  return `<article class="product" data-product-id="${product.productId}" data-offer-id="${product.offerId}" data-seller-type="GROCERY" data-offer-type="DEFAULT" data-seller-id="" itemscope itemtype="https://schema.org/Product">
-<meta itemprop="image" content="https://${PHOTO_HOST}/media/${product.photo}">
-<h3 itemprop="name">${product.label}</h3>
-<span itemprop="brand">${product.brand}</span>
-<span class="net">${product.net}</span>
-<div itemprop="offers" itemscope itemtype="https://schema.org/Offer">
-<meta itemprop="price" content="${(product.priceCents / 100).toFixed(2)}">
-<meta itemprop="priceCurrency" content="EUR">
-<link itemprop="availability" href="https://schema.org/InStock">
-<span>${euros(product.priceCents)}</span> <em>Dans mon drive</em>
-</div>
-</article>`
-}
-
-/** La page de résultats de `GET /recherche?text=…` : une page HTML complète, les produits dans le DOM (B-1). */
-export function searchPage(options: PageOptions, products: readonly FakeProduct[]): string {
-  return `${HTML_HEAD('Recherche (faux site de test)')}
-<body>${sessionScript(options.session)}
-<header>${barHtml(options.bar)}${nav()}</header>
-<main><h1>Résultats</h1>${products.map(card).join('\n')}</main>
-</body></html>`
 }
 
 // —— Le parcours (`GET /journey`, A-2) ———————————————————————————————————————————————————————————————————————————————————————

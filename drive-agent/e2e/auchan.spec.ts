@@ -2,7 +2,7 @@
 // dans une page du faux site d'Auchan (`drive-agent/fake-auchan/`, données inventées, `www.auchan.fr` résolu vers 127.0.0.1). Le magasin n'est PAS dans
 // l'adresse : l'agent le lit par `GET /journey`. Ce qui est prouvé : la lecture du magasin et de la connexion, la configuration du magasin (setup), les arrêts
 // sans magasin, visiteur, autre magasin et page introuvable SANS AUCUNE écriture, le refus d'un plan de Leclerc sans une requête, la cadence d'Auchan, et un
-// diagnostic qui ne laisse rien du site. La recherche et le panier ne sont pas écrits (DRV-724, DRV-725).
+// diagnostic qui ne laisse rien du site. La recherche est écrite (DRV-724, `auchan-recherche.spec.ts`) ; le panier ne l'est pas (DRV-725).
 import { openWithBridge, trackInteractions, type FakeApp } from './support/agent'
 import { expect, test } from './support/fixtures'
 import { RUN_ID } from './support/plans'
@@ -19,7 +19,7 @@ const plan = (extra: Record<string, unknown> = {}) => ({
   lines: [{ ingredientSlug: 'sel', name: 'Sel', status: 'HAVE_AT_HOME' }],
   ...extra,
 })
-/** Le même plan avec un produit à chercher : la recherche n'étant pas écrite, le passage s'arrête dessus. */
+/** Le même plan avec un produit à chercher : retrouvé par la recherche, puis le panier, non écrit, arrête le passage. */
 const planToSearch = () =>
   plan({
     lines: [
@@ -88,7 +88,7 @@ test.describe('un parcours qui va jusqu’au bout de ce qui est écrit', () => {
     expect(new URL(page.url()).pathname).toBe('/courses')
   })
 
-  test('la recherche n’est pas écrite : un produit à chercher arrête le passage proprement (CONTRACT_CHANGED, ADAPTER_NOT_WRITTEN), sans écrire au panier', async ({
+  test('le panier n’est pas écrit : un produit à mettre au panier arrête le passage proprement (CONTRACT_CHANGED, ADAPTER_NOT_WRITTEN), sans écrire au panier', async ({
     page,
     fakeAuchan,
     agentCode,
@@ -103,7 +103,7 @@ test.describe('un parcours qui va jusqu’au bout de ce qui est écrit', () => {
 
     expect(result).toMatchObject({ outcome: 'error', error: { code: 'CONTRACT_CHANGED' } })
     expect(JSON.stringify(result)).toContain('ADAPTER_NOT_WRITTEN')
-    expect(fakeAuchan.paced().map((request) => request.path)).toEqual(['/journey'])
+    expect(fakeAuchan.paced().map((request) => request.path)).toEqual(['/journey', '/recherche'])
     expect(fakeAuchan.writes()).toEqual([])
   })
 
@@ -311,7 +311,7 @@ test.describe('la configuration du magasin (setup)', () => {
 })
 
 test.describe('le diagnostic', () => {
-  test('lit le magasin, la connexion et l’arrivée sans rien écrire ni laisser de valeur du site ; la recherche, non écrite, y est dite KO', async ({
+  test('lit le magasin, la connexion et l’arrivée sans rien écrire ni laisser de valeur du site ; la recherche y est dite OK', async ({
     page,
     fakeAuchan,
     agentCode,
@@ -333,9 +333,8 @@ test.describe('le diagnostic', () => {
     )
     expect(text).toMatch(/forme de l’identifiant : UUID/)
     expect(text).toMatch(/cookie de protection anti-robot : oui/)
-    // La recherche n'est pas écrite : le rapport le dit par sa cause
-    expect(text).toMatch(/\[KO CONTRACT_CHANGED\] Recherche d’un mot courant/)
-    expect(text).toContain('ADAPTER_NOT_WRITTEN')
+    // La recherche est lue (DRV-724) : le rapport le dit, sans un libellé du site
+    expect(text).toMatch(/\[OK\] Recherche d’un mot courant/)
     // Aucune valeur du site : ni l'identifiant du magasin, ni son libellé, ni un cookie, ni une localité
     for (const secret of [
       STORE.id,

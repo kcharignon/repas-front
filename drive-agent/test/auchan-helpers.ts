@@ -68,6 +68,7 @@ export function auchanSite(
     location: AUCHAN_PAGE,
     document,
     authenticated: () => 'true',
+    parseHtml: (html) => new DOMParser().parseFromString(html, 'text/html'),
     sleep: (ms) => {
       sleeps.push(ms)
       clock.now += ms
