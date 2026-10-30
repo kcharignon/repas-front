@@ -129,7 +129,7 @@ test('reprend le plan que l’application renvoie à chaque chargement de la pag
       known('sucre', 'Sucre', [product(1000006, 1)]),
     ]),
   )
-  await expect(page.getByText('Farine : ajouté')).toBeVisible()
+  await expect(page.getByRole('listitem', { name: 'Farine : ajouté' })).toBeVisible()
 
   // When : la page se recharge ; l'application renvoie le même plan
   await page.reload()

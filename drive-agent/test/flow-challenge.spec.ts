@@ -214,9 +214,10 @@ describe('une requête trop lente (délai d’attente dépassé)', () => {
     ])
     expect(screens.screens()).not.toContain('challenge')
     expect(screens.propsOf('end')[0]).toMatchObject({ outcome: 'partial', failed: 1, slow: true })
-    expect(screens.updates.map((update) => update.entry)).toContain(
-      'Sucre : Leclerc met trop de temps à répondre',
-    )
+    expect(screens.updates.map((update) => update.entry)).toContainEqual({
+      kind: 'slow',
+      name: 'Sucre',
+    })
   })
 
   it('une erreur réseau ordinaire n’est pas présentée comme une lenteur', async () => {
@@ -231,7 +232,10 @@ describe('une requête trop lente (délai d’attente dépassé)', () => {
     await flow.start(plan(lines()))
 
     expect(screens.propsOf('end')[0]).not.toHaveProperty('slow')
-    expect(screens.updates.map((update) => update.entry)).toContain('Sucre : échec')
+    expect(screens.updates.map((update) => update.entry)).toContainEqual({
+      kind: 'failed',
+      name: 'Sucre',
+    })
   })
 
   it('un passage sans lenteur n’a pas la mention', async () => {

@@ -698,13 +698,35 @@ export const S = {
   },
   progress: {
     title: 'Ton panier se remplit',
+    /** Le repère d'enseigne en haut de l'écran, le nom vient de la table de l'enseigne (DRV-744). */
+    brand: (retailer: RetailerNames) => `Panier ${retailer.name}`,
     bar: 'Avancement',
     count: (done: number, total: number) => `${done} sur ${total}`,
+    /** « 3 » (en grand) et « sur 6 » : la même phrase que `count`, coupée pour que le nombre fait soit lisible d'un coup d'œil. */
+    countParts: (done: number, total: number) => ({ done: `${done}`, of: ` sur ${total}` }),
+    processed: 'articles traités',
+    /** Le titre de la carte de l'article en cours. */
+    nowTitle: 'En ce moment',
     current: (name: string) => `En cours : ${name}`,
     log: 'Dernières actions',
     keepOpen: 'Garde l’application ouverte.',
     stop: 'Arrêter',
     stopping: 'J’arrête après l’article en cours…',
+    /** L'état de chaque article, en petit à droite de son nom ; la phrase complète est le nom accessible de la ligne (`S.log`). */
+    state: {
+      added: 'ajouté',
+      addedBackup: 'ajouté, produit de remplacement',
+      acceptedAnyway: (retailer: RetailerNames) => `ajouté, ${retailer.name} l’a accepté`,
+      savedNotInCart: 'enregistré, pas dans le panier',
+      haveAtHome: 'j’en ai toujours',
+      skipped: 'pas cette fois',
+      toChoose: 'à choisir ensuite',
+      unavailable: 'plus disponible',
+      notFound: 'introuvable',
+      cartRefused: 'pas pris par le panier',
+      slow: (retailer: RetailerNames) => `${retailer.name} met trop de temps à répondre`,
+      failed: 'échec',
+    },
   },
   packSize: {
     title: 'Vérifie la quantité',
