@@ -16,6 +16,9 @@ import { useWrappedRow } from '@/design/useWrappedRow'
 import { isDriveAppVersionEnough } from '@/features/drive/appVersion'
 import { driveBridge } from '@/features/drive/bridge'
 import { useDriveSettings } from '@/features/drive/queries'
+import { retailerOf } from '@/features/drive/retailers'
+import type { RetailerId } from '@/features/drive/retailers'
+import { needsStore, unservedDrive } from '@/features/drive/sendChoice'
 import { useOnline } from '@/offline/useOnline'
 import {
   useChangeListStatus,
@@ -52,6 +55,8 @@ const canSend = computed(
 
 const checking = ref(false)
 const updating = ref(false)
+/** Le drive que l'application ne connaît pas (DRV-710), pour le nommer dans la phrase de mise à jour ; `null` : l'application est trop ancienne tout court. */
+const unservedFor = ref<RetailerId | null>(null)
 
 /**
  * L'application est-elle assez récente pour envoyer (même test que l'écran d'envoi) ? Tant que la réponse n'est pas là (3 s au plus),
@@ -60,9 +65,18 @@ const updating = ref(false)
  */
 async function appIsEnough(): Promise<boolean> {
   checking.value = true
+  unservedFor.value = null
   let enough = false
   try {
-    enough = isDriveAppVersionEnough((await driveBridge.info()).version)
+    const info = await driveBridge.info()
+    enough = isDriveAppVersionEnough(info.version)
+    // L'application ne sert AUCUN des drives configurés (DRV-710) : même phrase, avec le nom du drive ; s'il en reste un qu'elle sert, l'écran d'envoi arbitre
+    const data = settings.data.value
+    const unserved = enough && data !== undefined ? unservedDrive(data, info.retailers) : null
+    if (unserved !== null) {
+      enough = false
+      unservedFor.value = unserved
+    }
   } catch {
     // Une application qui ne dit pas sa version est trop ancienne
   } finally {
@@ -79,7 +93,8 @@ async function appIsEnough(): Promise<boolean> {
  */
 async function askToSend() {
   if (checking.value || !(await appIsEnough())) return
-  if (settings.data.value?.store) sending.value = true
+  const data = settings.data.value
+  if (data !== undefined && !needsStore(data)) sending.value = true
   else
     void router.push({
       name: 'drive-settings',
@@ -313,7 +328,11 @@ const statusLabel = (list: ShoppingList) =>
     <UiDialog
       v-model:open="updating"
       :title="t('shoppingList.send')"
-      :description="t('driveSend.appTooOld.text')"
+      :description="
+        unservedFor === null
+          ? t('driveSend.appTooOld.text')
+          : t('driveSend.appTooOld.textNamed', { retailer: retailerOf(unservedFor).name })
+      "
     >
       <div class="flex justify-end">
         <UiLinkButton :to="{ name: 'drive-help' }">

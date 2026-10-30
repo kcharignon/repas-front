@@ -13,12 +13,18 @@ import { useDriveReturnStore } from '../returnStore'
 import { plan, storeBaseUrl } from './fixtures'
 import { DEFAULT_RETAILER, finalizeLink } from '../retailers'
 import { result, RUN } from './results'
+import { SECOND_STORE, secondPlan, severalSettings } from './severalDrives'
 
 // Données SYNTHÉTIQUES : magasin d'essai, produits et listes inventés.
 type Handlers = Parameters<typeof stubApi>[0]
 
 // Le brouillon date d'une heure avant le jour figé des tests (`src/__tests__/setup.ts` ; il est écrit à l'import, avant le décalage de l'horloge)
-const draft = { runId: RUN, listId: 'l1', startedAt: new Date(2026, 5, 15, 11, 0).toISOString() }
+const draft = {
+  runId: RUN,
+  listId: 'l1',
+  retailer: 'leclerc' as const,
+  startedAt: new Date(2026, 5, 15, 11, 0).toISOString(),
+}
 // Le brouillon d'aujourd'hui garde les lignes du plan envoyé (ici le plan du back, sans rien remplacer ni passer)
 const sentLines = sentLinesOf(buildPlanMessage(plan(), {}, RUN))
 const sentDraft = { ...draft, lines: sentLines }
@@ -89,6 +95,78 @@ afterEach(() => {
   localStorage.clear()
   useDriveReturnStore().clear()
   window.dispatchEvent(new Event('online'))
+})
+
+// Le retour porte le drive du passage (DRV-710) : ses choix s'enregistrent pour lui, quel que soit le drive que les réglages désignent aujourd'hui
+describe('retour du drive : le passage d’un autre drive que celui des réglages', () => {
+  const SECOND_PRODUCT = '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d'
+  const secondDraft = {
+    ...draft,
+    retailer: 'auchan' as const,
+    lines: sentLinesOf(buildPlanMessage(secondPlan(), {}, RUN)),
+  }
+  const secondResult = result({
+    store: { id: SECOND_STORE.id },
+    lines: [
+      {
+        ingredientSlug: 'poivre',
+        outcome: 'CHOSEN',
+        quantity: 1,
+        placement: 'PRIMARY',
+        product: { id: SECOND_PRODUCT, label: 'Poivre de test' },
+      },
+    ],
+  })
+  const handlers: Handlers = {
+    'GET /api/v1/drive/plans/l1': (request: Request) =>
+      json(new URL(request.url).searchParams.get('retailer') === 'auchan' ? secondPlan() : plan()),
+    // Les réglages désignent le premier drive : le passage, lui, a eu lieu chez le second
+    'GET /api/v1/drive/settings': () =>
+      json(severalSettings({ mode: 'ASK', retailer: 'leclerc', lastUsed: 'leclerc' })),
+  }
+
+  it('enregistre les choix pour le drive du brouillon et le magasin du résultat', async () => {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(secondDraft))
+    const { wrapper, fetchMock } = await open(
+      { kind: 'result', result: secondResult, draft: secondDraft },
+      handlers,
+    )
+    await saved(wrapper)
+
+    const index = calls(fetchMock).indexOf('PUT /api/v1/drive/choices')
+    expect(await bodyOf(fetchMock, index)).toMatchObject({
+      retailer: 'auchan',
+      storeId: SECOND_STORE.id,
+      choices: [{ ingredientSlug: 'poivre', action: 'ADD_PRODUCT' }],
+    })
+    // Les noms viennent du plan de CE drive
+    const asked = fetchMock.mock.calls
+      .map(([input]) => new URL((input as Request).url))
+      .filter((url) => url.pathname === '/api/v1/drive/plans/l1')
+      .map((url) => url.searchParams.get('retailer'))
+    expect(asked).toEqual(['auchan'])
+    // Les textes nomment ce drive, pas celui des réglages
+    expect(wrapper.text()).toContain('Retrouve-le dans l’appli Auchan.')
+    expect(wrapper.text()).not.toContain('Leclerc')
+  })
+
+  it('« Chercher à la main » mène au site du drive du passage', async () => {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(secondDraft))
+    const stopped = result({
+      outcome: 'error',
+      store: { id: SECOND_STORE.id },
+      error: { code: 'CONTRACT_CHANGED', message: 'x' },
+      lines: [],
+    })
+    const { wrapper } = await open(
+      { kind: 'result', result: stopped, draft: secondDraft },
+      handlers,
+    )
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Chercher à la main sur Auchan'))
+
+    const link = wrapper.findAll('a').find((item) => item.text().includes('Chercher à la main'))
+    expect(link?.attributes('href')).toBe('https://www.auchan.fr/courses')
+  })
 })
 
 describe('retour du drive : un passage réussi', () => {
