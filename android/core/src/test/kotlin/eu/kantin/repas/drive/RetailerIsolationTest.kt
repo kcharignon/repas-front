@@ -31,59 +31,7 @@ class RetailerIsolationTest {
         "HTTPS://WWW.${domain.uppercase()}/Accueil",
     )
 
-    private fun hostile(domain: String): List<String> {
-        val prefix = domain.substringBefore('.')
-        val suffix = domain.substringAfter('.')
-        return listOf(
-            // un autre domaine qui contient le nôtre
-            "https://$domain.evil.test/",
-            "https://www.$domain.evil.test/",
-            "https://evil$domain/",
-            "https://www.$domain-evil.test/",
-            "https://$prefix$suffix/",
-            "https://${prefix}X$suffix/",
-            "https://www.${prefix}X$suffix/",
-            "https://evil.test/$domain",
-            "https://evil.test/?u=https://www.$domain/",
-            "https://evil.test#.$domain",
-            "https://evil.test?.$domain",
-            // les astuces d'écriture
-            "https://www.$domain@evil.test/",
-            "https://user:pass@www.$domain/",
-            "https://evil.test\\@www.$domain/",
-            "https://evil.test\\.$domain/",
-            "https://www.$domain\\.evil.test/",
-            "https://www.$domain./",
-            "https://.$domain/",
-            "https://..$domain/",
-            "https://-.$domain/",
-            "https://a-.$domain/",
-            "https://www.$domain:8443/",
-            "https://www.$domain:/",
-            "https://www.$domain:443x/",
-            "https://[::1]/",
-            "https://www.$domain /",
-            "https://www.$domain\n.evil.test/",
-            "https://www.$domain\t/",
-            "https://www.${domain.replaceFirst('e', 'е')}/",
-            "https://www.$domain%2f@evil.test/",
-            "https://www.$domain‮/",
-            "https:///www.$domain/",
-            "https://",
-            "https:/www.$domain/",
-            // un autre schéma
-            "http://www.$domain/",
-            "ftp://www.$domain/",
-            "file:///www.$domain/",
-            "javascript:alert('www.$domain')",
-            "data:text/html,https://www.$domain/",
-            "intent://www.$domain/#Intent;scheme=https;end",
-            "about:blank",
-            "//www.$domain/",
-            "www.$domain",
-            "",
-        )
-    }
+    private fun hostile(domain: String): List<String> = HostileAddresses.of(domain)
 
     @Test
     fun `une page d'une enseigne reste dans son ecran, jamais dans l'ecran d'une autre`() {

@@ -27,6 +27,10 @@ function codeOf(text: string): string {
 }
 
 const files = kotlinFiles(coreMain)
+const registry = join(coreMain, 'eu/kantin/repas/drive/RetailerSites.kt')
+
+/** Les identifiants des enseignes inscrites (allumées ou éteintes), lus dans l’entrée de chaque enseigne du registre. */
+const retailerIds = [...codeOf(read(registry)).matchAll(/\bid = "([a-z][a-z0-9]*)"/g)].map((match) => match[1] as string)
 
 describe('le registre des enseignes est le seul endroit du cœur qui nomme une enseigne', () => {
   it('regarde bien les sources du cœur, dont le registre', () => {
@@ -34,16 +38,30 @@ describe('le registre des enseignes est le seul endroit du cœur qui nomme une e
     expect(files.map((path) => basename(path))).toEqual(expect.arrayContaining(['RetailerSites.kt', 'RetailerSite.kt', 'RetailerValue.kt']))
   })
 
-  it('n’écrit « leclerc » dans le code d’aucun autre fichier du cœur', () => {
-    const offenders = files
-      .filter((path) => basename(path) !== 'RetailerSites.kt')
-      .filter((path) => /leclerc/i.test(codeOf(read(path))))
-
-    expect(offenders.map((path) => path.slice(androidDir.length + 1))).toEqual([])
+  it('inscrit Leclerc et Auchan, et aucune autre enseigne', () => {
+    expect(retailerIds).toEqual(['leclerc', 'auchan'])
   })
 
-  it('porte l’entrée d’aujourd’hui dans le registre', () => {
-    expect(codeOf(read(join(coreMain, 'eu/kantin/repas/drive/RetailerSites.kt')))).toMatch(/id = "leclerc"/)
+  it('n’écrit le nom d’aucune enseigne inscrite dans le code d’un autre fichier du cœur', () => {
+    for (const id of retailerIds) {
+      const offenders = files.filter((path) => basename(path) !== 'RetailerSites.kt').filter((path) => new RegExp(id, 'i').test(codeOf(read(path))))
+
+      expect({ id, offenders: offenders.map((path) => path.slice(androidDir.length + 1)) }).toEqual({ id, offenders: [] })
+    }
+  })
+
+  it('porte l’entrée de chaque enseigne dans le registre', () => {
+    const code = codeOf(read(registry))
+
+    expect(code).toMatch(/id = "leclerc"/)
+    expect(code).toMatch(/id = "auchan"/)
+  })
+
+  it('n’inscrit Auchan que dans la liste des enseignes éteintes, jamais dans le registre de la version publiée', () => {
+    const code = codeOf(read(registry))
+
+    expect(code).toContain('val DEFAULT = RetailerSites(listOf(LECLERC))')
+    expect(code).toContain('val SWITCHED_OFF: List<RetailerSite> = listOf(AUCHAN)')
   })
 
   it('n’écrit aucune règle d’origine à la main hors du modèle d’enseigne', () => {
@@ -62,8 +80,22 @@ describe('le contrat des enseignes lu par les tests Kotlin', () => {
     const contract = JSON.parse(read(join(coreResources, 'retailers.sample.json'))) as { retailers: Record<string, unknown>[] }
     const entry = contract.retailers.find((retailer) => retailer.id === 'leclerc')
 
-    expect(entry).toMatchObject({ id: 'leclerc', name: 'Leclerc', nameDe: 'de Leclerc' })
+    expect(entry).toMatchObject({ id: 'leclerc', name: 'Leclerc', nameDe: 'de Leclerc', storeIdSource: 'URL' })
     expect(typeof entry?.storeAddressPattern).toBe('string')
     expect(typeof entry?.storeAddressExample).toBe('string')
+  })
+
+  it('liste Auchan, au magasin explicite, avec les champs que le cœur compare (DRV-728)', () => {
+    const contract = JSON.parse(read(join(coreResources, 'retailers.sample.json'))) as { retailers: Record<string, unknown>[] }
+    const entry = contract.retailers.find((retailer) => retailer.id === 'auchan')
+
+    expect(entry).toMatchObject({ id: 'auchan', name: 'Auchan', nameDe: 'd’Auchan', storeIdSource: 'EXPLICIT', storeAddressExample: 'https://www.auchan.fr/' })
+    expect(typeof entry?.storeIdPattern).toBe('string')
+  })
+
+  it('ne liste que les enseignes inscrites dans le cœur', () => {
+    const contract = JSON.parse(read(join(coreResources, 'retailers.sample.json'))) as { retailers: { id: string }[] }
+
+    expect(contract.retailers.map((retailer) => retailer.id)).toEqual(retailerIds)
   })
 })

@@ -65,7 +65,7 @@ describe('les menus nomment l’enseigne (DRV-707)', () => {
     expect(start).toBeGreaterThan(-1)
     const menu = mainActivity.slice(start, mainActivity.indexOf('\n    }\n', start))
 
-    expect(menu).toContain('val announced = RetailerSites.DEFAULT.all')
+    expect(menu).toContain('val announced = repasApp.announced.all')
     expect(menu).toMatch(/announced\.forEach \{ site -> add\(getString\(R\.string\.menu_open_drive, site\.name, site\.nameDe\)/)
     expect(menu).toMatch(/getString\(R\.string\.menu_logout_drive, site\.name, site\.nameDe\)/)
     // l’ordre d’avant, avec une seule enseigne : réglages, ouvrir, version, se déconnecter
