@@ -51,6 +51,21 @@ run_tests() {
   check_distributions
 }
 
+# La publication annonce les enseignes que le cœur sert par défaut (DRV-738) : Auchan est dans RetailerSites.DEFAULT (la liste que `app.info` annonce, le drapeau
+# de la publication étant vide) et son entrée est dans le code compilé. Le back reste l'interrupteur (DRIVE_RETAILERS) : annoncer n'est pas proposer.
+announces_published_retailers() {
+  local registry=core/src/main/kotlin/eu/kantin/repas/drive/RetailerSites.kt
+  grep -qE '^[[:space:]]*val DEFAULT = RetailerSites\(listOf\([^)]*\bAUCHAN\b[^)]*\)\)' "$registry" \
+    || fail "la liste des enseignes servies par défaut (RetailerSites.DEFAULT) n'annonce plus Auchan : la publication ne servirait pas Auchan."
+}
+
+# Le même contrôle sur l'APK de publication lui-même : l'entrée d'Auchan (ses deux hôtes de navigation, dont le seul qui reçoit le pont) est dans le code compilé.
+apk_announces_published_retailers() {
+  local apk=$1
+  unzip -p "$apk" 'classes*.dex' | grep -aqF 'www.auchan.fr' || fail "l'APK de publication ne contient pas l'entrée d'Auchan (www.auchan.fr) : il ne servirait pas Auchan."
+  unzip -p "$apk" 'classes*.dex' | grep -aqF 'compte.auchan.fr' || fail "l'APK de publication ne contient pas la page de connexion d'Auchan (compte.auchan.fr) en navigation."
+}
+
 # Les deux variantes de distribution (DRV-639) : la permission d'installer des applications et le code de la mise à jour dans l'application ne
 # sont que dans `direct` (l'APK de la release GitHub). La variante `play` (Google Play, à venir : Google interdit à une application distribuée par
 # Play de s'installer ailleurs) n'en contient NI l'un NI l'autre, ni l'APK de débogage : on construit leurs manifestes et leurs classes, et on les lit.
@@ -63,7 +78,7 @@ check_distributions() {
   env ANDROID_KEYSTORE_FILE="$dummy" ANDROID_KEYSTORE_PASSWORD=factice ANDROID_KEY_ALIAS=factice ANDROID_KEY_PASSWORD=factice ANDROID_VERSION_TAG=android-v0.0.1 \
     "${GRADLE[@]}" :app:processDirectReleaseManifest :app:processPlayReleaseManifest :app:compileDirectReleaseKotlin :app:compilePlayReleaseKotlin
   # Aucune enseigne éteinte n'entre dans une publication (DRV-728) : le drapeau est vide dans les deux variantes, et la construction de publication REFUSE la
-  # variable qui allumerait une enseigne (elle ne sert qu'au débogage).
+  # variable qui allumerait une enseigne (elle ne sert qu'au débogage). L'identifiant ci-dessous est fictif : Auchan est servie depuis DRV-738.
   local flavor
   for flavor in direct play; do
     grep -qF 'EXTRA_RETAILERS = "";' "app/build/generated/source/buildConfig/${flavor}/release/eu/kantin/repas/drive/BuildConfig.java" \
@@ -71,11 +86,13 @@ check_distributions() {
   done
   local refusal
   if refusal=$(env ANDROID_KEYSTORE_FILE="$dummy" ANDROID_KEYSTORE_PASSWORD=factice ANDROID_KEY_ALIAS=factice ANDROID_KEY_PASSWORD=factice ANDROID_VERSION_TAG=android-v0.0.1 \
-    ANDROID_EXTRA_RETAILERS=auchan "${GRADLE[@]}" :app:preDirectReleaseBuild 2>&1); then
+    ANDROID_EXTRA_RETAILERS=exemple "${GRADLE[@]}" :app:preDirectReleaseBuild 2>&1); then
     fail "une publication a accepté d'embarquer une enseigne éteinte (ANDROID_EXTRA_RETAILERS)."
   fi
   grep -q "n'embarque aucune enseigne éteinte" <<<"$refusal" || fail "le refus d'une enseigne éteinte dans la publication n'a pas le message attendu : $(tail -n 15 <<<"$refusal")"
   rm -f "$dummy"
+  # Et la publication ANNONCE Auchan (DRV-738) : la liste servie par la version publiée est celle du cœur, sans le drapeau (vide, contrôlé juste au-dessus).
+  announces_published_retailers
   local direct_release play_release direct_debug play_debug direct_classes play_classes installer_classes
   manifest_of() { find "app/build/intermediates/merged_manifests/$1" -name AndroidManifest.xml | head -n 1; }
   direct_release=$(manifest_of directRelease)
@@ -104,7 +121,7 @@ check_distributions() {
   find "$direct_classes" -name '*.class' | grep -qE "$installer_classes" || fail "la variante direct ne contient pas le code de mise à jour."
   ! find "$play_classes" -name '*.class' | grep -qE "$installer_classes" || fail "la variante play contient du code de mise à jour dans l'application."
   echo "   variantes : direct (permission d'installer, fournisseur de fichiers, code de mise à jour), play et débogage (aucun des trois)."
-  echo "   publications (direct, play) : aucune enseigne éteinte (drapeau vide), la variable qui en allume une est refusée."
+  echo "   publications (direct, play) : aucune enseigne éteinte (drapeau vide), la variable qui en allume une est refusée ; Auchan annoncée par défaut."
 }
 
 build_debug() {
@@ -153,7 +170,7 @@ normalize_fingerprint() { printf '%s' "$1" | tr -d ': \t\r\n' | tr 'A-F' 'a-f'; 
 #   - signé d'une seule clé, de signature valide, dont le certificat a l'une des empreintes attendues (ANDROID_EXPECTED_CERT_SHA256) et n'est
 #     jamais celui de la clé de débogage publique ;
 #   - paquet, nom et code de version conformes à l'étiquette (le code est recalculé ici, indépendamment du Kotlin), minSdk 26, targetSdk 36 ;
-#   - deux permissions seulement (Internet, et REQUEST_INSTALL_PACKAGES pour la mise à jour dans l'application, DRV-639), non débogable, `BuildConfig.DEBUG` faux, origine de Repas de production, aucun plan d'essai, aucune enseigne éteinte allumée (DRV-728) ;
+#   - deux permissions seulement (Internet, et REQUEST_INSTALL_PACKAGES pour la mise à jour dans l'application, DRV-639), non débogable, `BuildConfig.DEBUG` faux, origine de Repas de production, aucun plan d'essai, aucune enseigne éteinte allumée (DRV-728), Auchan servie et annoncée (DRV-738) ;
 #   - l'agent embarqué est celui de android/agent.js.sha384.
 verify_release() {
   local apk=${1:-$DIST/repas-drive.apk}
@@ -221,7 +238,8 @@ verify_release() {
   grep -q 'boolean DEBUG = false;' "$config" || fail "BuildConfig.DEBUG n'est pas faux : le menu de débogage serait dans l'APK."
   grep -qF 'REPAS_ORIGIN = "https://kantin.eu/";' "$config" || fail "l'origine de Repas de l'APK n'est pas celle de la production."
   grep -qF 'EXTRA_RETAILERS = "";' "$config" || fail "le drapeau des enseignes éteintes n'est pas vide : une enseigne éteinte serait servie, annoncée et proposée dans le menu de l'APK."
-  echo "   agent intact ($agent_actual), ni plan d'essai ni menu de débogage, origine de production, aucune enseigne éteinte."
+  apk_announces_published_retailers "$apk"
+  echo "   agent intact ($agent_actual), ni plan d'essai ni menu de débogage, origine de production, aucune enseigne éteinte, Auchan servie et annoncée."
 
   # Les faits publics de cette publication, pour les notes de la release.
   local sha256 fingerprint

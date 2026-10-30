@@ -57,11 +57,11 @@ describe('le registre des enseignes est le seul endroit du cœur qui nomme une e
     expect(code).toMatch(/id = "auchan"/)
   })
 
-  it('n’inscrit Auchan que dans la liste des enseignes éteintes, jamais dans le registre de la version publiée', () => {
+  it('sert Auchan dans le registre de la version publiée (DRV-738), après Leclerc, et ne garde aucune enseigne éteinte', () => {
     const code = codeOf(read(registry))
 
-    expect(code).toContain('val DEFAULT = RetailerSites(listOf(LECLERC))')
-    expect(code).toContain('val SWITCHED_OFF: List<RetailerSite> = listOf(AUCHAN)')
+    expect(code).toContain('val DEFAULT = RetailerSites(listOf(LECLERC, AUCHAN))')
+    expect(code).toContain('val SWITCHED_OFF: List<RetailerSite> = emptyList()')
   })
 
   it('n’écrit aucune règle d’origine à la main hors du modèle d’enseigne', () => {

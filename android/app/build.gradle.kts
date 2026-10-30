@@ -28,10 +28,12 @@ fun originHost(origin: String): String {
     return match.groupValues[1]
 }
 val debugOrigin = env("ANDROID_REPAS_ORIGIN") ?: productionOrigin
-// Les enseignes ÉTEINTES qu'une construction de DÉBOGAGE allume (DRV-728) : `ANDROID_EXTRA_RETAILERS=auchan`, des identifiants séparés par des virgules (vide par
+// Les enseignes ÉTEINTES qu'une construction de DÉBOGAGE allume (DRV-728) : `ANDROID_EXTRA_RETAILERS=<id>`, des identifiants séparés par des virgules (vide par
 // défaut : aucune). C'est le drapeau de construction qui fait entrer une enseigne inscrite dans le registre que l'application sert, annonce à Repas
 // (`app.info`) et propose dans son menu (`RetailerSites.serving`). La construction de PUBLICATION a toujours un drapeau vide, quoi que dise
-// l'environnement : `verifyReleaseInputs` refuse la variable, et `build.sh` vérifie le drapeau dans `BuildConfig`. Aucune enseigne n'est nommée ici.
+// l'environnement : `verifyReleaseInputs` refuse la variable, et `build.sh` vérifie le drapeau dans `BuildConfig`. Aucune enseigne n'est nommée ici. Depuis DRV-738
+// Auchan n'est plus éteinte (elle est dans `RetailerSites.DEFAULT`, donc servie et annoncée par toute construction) : la liste des enseignes éteintes est vide,
+// le mécanisme attend la prochaine enseigne.
 val extraRetailers = env("ANDROID_EXTRA_RETAILERS") ?: ""
 if (!Regex("^([a-z][a-z0-9]{0,19}(,[a-z][a-z0-9]{0,19})*)?$").matches(extraRetailers)) {
     throw GradleException("ANDROID_EXTRA_RETAILERS doit être une liste d'identifiants d'enseigne (minuscules et chiffres) séparés par des virgules : « $extraRetailers ».")
@@ -151,7 +153,7 @@ android {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             buildConfigField("String", "REPAS_ORIGIN", "\"$productionOrigin\"")
-            // Aucune enseigne éteinte dans la publication : jamais lu de l'environnement (allumer une enseigne pour tous = changer cette ligne, relue, DRV-726).
+            // Aucune enseigne éteinte dans la publication : jamais lu de l'environnement. Les enseignes servies par la publication sont celles de `RetailerSites.DEFAULT` (DRV-738).
             buildConfigField("String", "EXTRA_RETAILERS", "\"\"")
             manifestPlaceholders["repasHost"] = originHost(productionOrigin)
         }

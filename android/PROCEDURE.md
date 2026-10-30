@@ -1,6 +1,6 @@
 # Essayer l’application Repas (version de débogage) sur ton téléphone
 
-> **Plusieurs enseignes (DRV-711).** Cette procédure essaie le drive **de Leclerc**, la première enseigne. Pour une autre enseigne (Auchan : recette réelle DRV-726), le test automatique n'existe que si son adaptateur le prévoit ; la recette d'une enseigne suit le gabarit de `docs/drive/recette.md` (partie 20, dépôt back). Remplace « Leclerc » par le nom de l'enseigne essayée ; ne mets jamais le nom d'une enseigne dans un rapport collé.
+> **Plusieurs enseignes (DRV-711).** Cette procédure essaie le drive **de Leclerc**, la première enseigne. Pour une autre enseigne (Auchan, servie par l'application publiée depuis DRV-738 : recette réelle DRV-726), le test automatique n'existe que si son adaptateur le prévoit ; la recette d'une enseigne suit le gabarit de `docs/drive/recette.md` (partie 20, dépôt back). Remplace « Leclerc » par le nom de l'enseigne essayée ; ne mets jamais le nom d'une enseigne dans un rapport collé.
 
 Quelques étapes, dans l’ordre. Durée : environ 10 minutes.
 

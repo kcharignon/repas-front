@@ -82,7 +82,7 @@ describe('les scripts de l’émulateur', () => {
     expect(checked.status).toBe(0)
   })
 
-  it('jouent Auchan (DRV-731) contre le faux site d’Auchan, sur ses deux seuls hôtes de test, avec un second APK de débogage', () => {
+  it('jouent Auchan (DRV-731, DRV-738) contre le faux site d’Auchan, sur ses deux seuls hôtes de test, avec l’APK ordinaire', () => {
     const entrypoint = read(join(emulatorDir, 'entrypoint.sh'))
     const lib = read(join(emulatorDir, 'lib.sh'))
     const script = read(join(emulatorDir, 'e2e.sh'))
@@ -93,12 +93,17 @@ describe('les scripts de l’émulateur', () => {
     expect(lib).toContain('AUCHAN_HOST=www.auchan.fr')
     expect(lib).toContain('AUCHAN_LOGIN_HOST=compte.auchan.fr')
     expect(script).toContain('auchan_scenario')
-    expect(makefile).toContain('ANDROID_EXTRA_RETAILERS=auchan')
-    expect(makefile).toContain('ANDROID_APK_NAME=repas-drive-auchan.apk')
-    // L'APK ordinaire des scénarios d'avant n'a jamais Auchan : son appel de construction ne porte pas le drapeau.
+    // Un seul APK de débogage, l'ordinaire : plus de second APK ni de drapeau de construction pour Auchan (elle est servie par la version publiée).
+    expect(makefile).not.toContain('ANDROID_EXTRA_RETAILERS=auchan')
+    expect(makefile).not.toContain('repas-drive-auchan.apk')
+    expect(script).not.toContain('repas-drive-auchan.apk')
     const ordinary = makefile.split('\n').filter((line) => line.includes('ANDROID_APK_NAME=repas-drive-smoke.apk'))
     expect(ordinary.length).toBeGreaterThan(0)
     expect(ordinary.filter((line) => line.includes('ANDROID_EXTRA_RETAILERS'))).toEqual([])
+    // L'APK ordinaire annonce Auchan et son menu la propose ; la preuve du pont sur l'hôte du mot de passe est gardée (jamais de pont sur compte).
+    expect(script).toContain('"retailers": \\["leclerc", "auchan"\\]')
+    expect(read(join(emulatorDir, 'smoke.sh'))).toContain("ui_has 'Ouvrir le drive Auchan'")
+    expect(script).toContain('\\"hostLocked\\": false')
   })
 
   it('ne parlent qu’à des noms de faux sites, jamais à un vrai hôte', () => {

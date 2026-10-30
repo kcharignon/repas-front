@@ -49,10 +49,10 @@
 #  19. une seconde enseigne FICTIVE (APK de débogage seulement, `*.exemple-b.test`, DRV-707) : `drive.setup` ouvre l'écran de CETTE enseigne (pont et agent injectés
 #      chez elle), une adresse de l'autre enseigne part au navigateur du téléphone, un plan dont l'enseigne et le magasin ne vont pas ensemble est refusé
 #      (INVALID_PLAN) ; les profils de WebView séparés ne s'y prouvent pas (la WebView de l'émulateur n'a pas encore les profils : ScreenRetailerTest).
-#  21. Auchan (DRV-731), enseigne ÉTEINTE que seule une construction de débogage allume (un SECOND APK, ANDROID_EXTRA_RETAILERS=auchan) : le menu propose « Ouvrir le
+#  21. Auchan (DRV-731, servie par l'APK ordinaire depuis DRV-738 : plus de second APK) : le menu propose « Ouvrir le
 #      drive Auchan », l'écran s'ouvre sur l'accueil du faux Auchan (drive-agent/fake-auchan) avec le pont et l'agent, MAIS sur l'hôte du mot de passe (la connexion) la
 #      navigation a lieu sans pont ni agent ; le « Diagnostic de l'agent » lit le magasin (hôte www, UUID) sans rien écrire, et s'arrête sur STORE_NOT_CHOSEN sans magasin
-#      choisi ; aucun nom d'Auchan n'est transmis à Internet. L'APK de publication n'a jamais Auchan : `build.sh` (drapeau vide) et `make android-test` le gardent.
+#      choisi ; aucun nom d'Auchan n'est transmis à Internet. `build.sh` garde que la publication annonce Auchan (et n'embarque aucune enseigne éteinte).
 # Les captures d'écran et le rapport texte sont dans android/dist/e2e/.
 # Code de sortie : 0 si tous les contrôles passent, 1 sinon, 3 si KVM manque.
 set -u
@@ -167,10 +167,10 @@ install_apk
 start_app
 if wait_until 40 has_report '"page": "repas"'; then ok "la coquille a chargé le faux Repas"; else ko "le faux Repas ne s'est pas chargé en 40 s"; fi
 if wait_until 15 has_report '"drive": true'; then ok "app.info annonce que le drive est utilisable"; else ko "app.info n'annonce pas le drive"; fi
-if wait_until 15 has_report '"retailers": \["leclerc"\]'; then
-  ok "app.info annonce les enseignes servies (retailers) : Leclerc seule, jamais l'enseigne d'essai de l'APK de débogage"
+if wait_until 15 has_report '"retailers": \["leclerc", "auchan"\]'; then
+  ok "app.info annonce les enseignes servies (retailers) : Leclerc puis Auchan, jamais l'enseigne d'essai de l'APK de débogage"
 else
-  ko "app.info n'annonce pas retailers [leclerc]"
+  ko "app.info n'annonce pas retailers [leclerc, auchan]"
 fi
 
 # --- 1. Lecture du magasin ------------------------------------------------------------------------------------------------------------------
@@ -903,11 +903,11 @@ auchan_polite() { auchan_state | grep -q '"violations":\[\]' && ! auchan_state |
 auchan_dns_local() { ! emu grep -q "forwarded.*auchan" /sdk/site/dns.log; }
 cert_covers_auchan() { local names; names=$(emu openssl x509 -in /sdk/site/cert.pem -noout -ext subjectAltName) && grep -q "$AUCHAN_HOST" <<< "$names" && grep -q "$AUCHAN_LOGIN_HOST" <<< "$names"; }
 
-# --- 21. Auchan, une enseigne éteinte que la construction de débogage allume (DRV-731) -------------------------------------------------------------------
-# L'APK de publication n'a jamais Auchan (drapeau ANDROID_EXTRA_RETAILERS vide, refusé par une publication : `build.sh`, `make android-test`). Ce scénario joue donc
-# un SECOND APK de débogage, construit avec ANDROID_EXTRA_RETAILERS=auchan (`make android-e2e` le construit), contre le faux site d'Auchan (drive-agent/fake-auchan,
-# DRV-717) servi en HTTPS sous www.auchan.fr, avec une page de « connexion » de test sous compte.auchan.fr (l'hôte du mot de passe). Seuls ces deux noms d'Auchan se
-# résolvent, vers le faux site local : JAMAIS vers le vrai. Les scénarios d'avant tournent sur l'APK ordinaire et ne sont pas touchés.
+# --- 21. Auchan, servie par l'APK ordinaire (DRV-731, DRV-738) -------------------------------------------------------------------------------------------
+# Auchan est dans le registre que la version publiée sert (DRV-738) : l'APK ordinaire, le même que celui de tous les scénarios, la sert, sans second APK ni drapeau de
+# construction. Le scénario la joue contre le faux site d'Auchan (drive-agent/fake-auchan, DRV-717) servi en HTTPS sous www.auchan.fr, avec une page de « connexion » de
+# test sous compte.auchan.fr (l'hôte du mot de passe). Seuls ces deux noms d'Auchan se résolvent, vers le faux site local : JAMAIS vers le vrai. La preuve du pont est
+# la même qu'avant : sur compte.auchan.fr, repasHost n'est JAMAIS défini. Que le back reste l'interrupteur (DRIVE_RETAILERS) est prouvé côté web (Vitest), pas ici.
 # Le profil de WebView `drive-auchan` ne se prouve pas ici (la WebView de l'émulateur n'a pas `MULTI_PROFILE`, comme au scénario 19) : son nom est jugé par `ScreenRetailerTest`.
 # Ferme l'écran du diagnostic : son bouton « Fermer » est au bas de l'écran, sous le rapport (on fait défiler jusqu'à lui).
 close_diagnostic() {
@@ -921,11 +921,6 @@ close_diagnostic() {
   check "le diagnostic est fermé" ui_lacks 'Contrôles terminés'
 }
 auchan_scenario() {
-  local auchan_apk=/apk/repas-drive-auchan.apk
-  if ! emu test -f "$auchan_apk"; then
-    ko "$auchan_apk manque (make android-e2e le construit avec ANDROID_EXTRA_RETAILERS=$AUCHAN_ID)"
-    return
-  fi
   local_name "$AUCHAN_HOST" "le faux site d'Auchan"
   local_name "$AUCHAN_LOGIN_HOST" "la page de connexion du faux Auchan"
   if adb shell ping -c 1 -W 3 "api.auchan.fr" 2>&1 | grep -q 'unknown host\|Name or service not known\|bad address'; then
@@ -941,15 +936,14 @@ auchan_scenario() {
   fi
   check "le certificat du faux site couvre $AUCHAN_HOST et $AUCHAN_LOGIN_HOST" cert_covers_auchan
 
-  say "   Installation de l'APK de débogage qui allume Auchan"
-  APK=$auchan_apk
+  say "   Réinstallation de l'APK ordinaire (données du drive à neuf)"
   install_apk
   adb shell run-as "$APP" rm -f shared_prefs/drive-pass.xml > /dev/null 2>&1
   auchan_reset
   start_app
   wait_until 40 has_report '"page": "repas"' || ko "le faux Repas ne s'est pas chargé"
   if wait_until 15 has_report '"retailers": \["leclerc", "auchan"\]'; then
-    ok "app.info annonce les enseignes servies par CETTE construction : Leclerc et Auchan"
+    ok "app.info annonce les enseignes servies par l'APK ordinaire : Leclerc et Auchan"
   else
     ko "app.info n'annonce pas retailers [leclerc, auchan]"
   fi
@@ -1021,7 +1015,7 @@ auchan_scenario() {
 }
 
 say
-say "21. Auchan (APK de débogage allumé par ANDROID_EXTRA_RETAILERS=auchan) contre le faux site d'Auchan : menu, écran, pont absent de l'hôte du mot de passe, lecture du magasin (DRV-731)"
+say "21. Auchan (servie par l'APK ordinaire, DRV-738) contre le faux site d'Auchan : menu, écran, pont absent de l'hôte du mot de passe, lecture du magasin (DRV-731)"
 auchan_scenario
 check "le DNS n'a transmis aucun nom d'Auchan à Internet" auchan_dns_local
 say "   noms d'Auchan demandés au DNS : $(emu grep -o "query\[[A-Z]*\] [^ ]*auchan[^ ]*" /sdk/site/dns.log 2> /dev/null | awk '{print $2}' | sort -u | tr '\n' ' ')"

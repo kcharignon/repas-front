@@ -12,8 +12,9 @@ class RepasApp : Application() {
 
     /**
      * Les enseignes que cette construction ANNONCE à Repas (`app.info`) et PROPOSE dans son menu (DRV-707, DRV-728) : celles de la version publiée
-     * ([RetailerSites.DEFAULT]), plus celles que son drapeau de construction allume (`BuildConfig.EXTRA_RETAILERS`, [RetailerSites.serving]). La
-     * construction de publication a toujours un drapeau vide : Leclerc seul, sans menu ni annonce d'une enseigne éteinte. Jamais une enseigne d'essai.
+     * ([RetailerSites.DEFAULT] : Leclerc et Auchan), plus celles que son drapeau de construction allume (`BuildConfig.EXTRA_RETAILERS`, [RetailerSites.serving]).
+     * La construction de publication a toujours un drapeau vide : sans menu ni annonce d'une enseigne éteinte. Annoncer une enseigne ne la fait pas proposer à
+     * l'utilisateur : Repas ne la propose que si le back l'allume (`DRIVE_RETAILERS`). Jamais une enseigne d'essai.
      */
     internal val announced: RetailerSites by lazy { RetailerSites.serving(BuildConfig.EXTRA_RETAILERS) }
 

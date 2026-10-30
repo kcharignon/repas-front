@@ -82,7 +82,7 @@ class RetailerSites(val all: List<RetailerSite>, val legacy: RetailerSite = all.
         )
 
         /**
-         * L'entrée d'Auchan (DRV-728, ADR 0027 du back, décision DRV-715) : **inscrite, éteinte**. Le mot de passe est sur un autre hôte que le site :
+         * L'entrée d'Auchan (DRV-728, ADR 0027 du back, décision DRV-715) : inscrite éteinte, servie par la version publiée depuis DRV-738. Le mot de passe est sur un autre hôte que le site :
          * - on **navigue** sur `www.auchan.fr` ET `compte.auchan.fr` (la connexion), jamais sur un autre nom, pas même un sous-domaine d'`auchan.fr` ;
          * - le **pont** `repasHost` et l'agent n'existent QUE sur `https://www.auchan.fr` (nom exact, aucun joker) : `compte.auchan.fr` est la page du mot
          *   de passe, aucun code de Repas n'y vit. Un plan d'Auchan n'est donc livré qu'à une page de `www.auchan.fr` ([RetailerSite.acceptsPlanOn]) ;
@@ -108,14 +108,19 @@ class RetailerSites(val all: List<RetailerSite>, val legacy: RetailerSite = all.
             storeIdPattern = Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"),
         )
 
-        /** Les enseignes que cette version de l'application sait servir : celles de la version PUBLIÉE (Leclerc seul). */
-        val DEFAULT = RetailerSites(listOf(LECLERC))
+        /**
+         * Les enseignes que cette version de l'application sait servir : celles de la version PUBLIÉE (Leclerc et Auchan depuis DRV-738). Que l'application
+         * annonce une enseigne ne la fait pas proposer : Repas ne la propose que si le back l'allume (`DRIVE_RETAILERS`), et une application plus ancienne qui
+         * ne l'annonce pas reste servie comme avant.
+         */
+        val DEFAULT = RetailerSites(listOf(LECLERC, AUCHAN))
 
         /**
-         * Les enseignes **inscrites mais éteintes** (DRV-728) : connues de la table, jamais servies ni annoncées par [DEFAULT]. Une construction les allume
-         * par leur identifiant ([serving]) ; la construction de publication n'en allume aucune.
+         * Les enseignes **inscrites mais éteintes** (DRV-728) : connues de la table, jamais servies ni annoncées par [DEFAULT]. Une construction de débogage
+         * les allume par leur identifiant ([serving]) ; la construction de publication n'en allume aucune. Vide depuis DRV-738 (Auchan est passée dans
+         * [DEFAULT]) : le mécanisme reste pour la prochaine enseigne, qui y naît éteinte.
          */
-        val SWITCHED_OFF: List<RetailerSite> = listOf(AUCHAN)
+        val SWITCHED_OFF: List<RetailerSite> = emptyList()
 
         /** Toutes les enseignes inscrites, allumées ou non : pour les tests des règles de chaque enseigne, jamais pour l'application. */
         internal val REGISTERED = RetailerSites(DEFAULT.all + SWITCHED_OFF, legacy = DEFAULT.legacy)
@@ -128,12 +133,15 @@ class RetailerSites(val all: List<RetailerSite>, val legacy: RetailerSite = all.
          * Un identifiant qui n'est pas celui d'une enseigne éteinte (une faute de frappe, une enseigne déjà servie) est refusé : on ne sert jamais en silence
          * autre chose que ce que le drapeau dit.
          */
-        fun serving(flag: String?): RetailerSites {
+        fun serving(flag: String?): RetailerSites = serving(flag, DEFAULT, SWITCHED_OFF)
+
+        /** [serving] pour un registre servi et des enseignes éteintes donnés : ce qui prouve le mécanisme avec une enseigne fictive. */
+        internal fun serving(flag: String?, served: RetailerSites, switchedOff: List<RetailerSite>): RetailerSites {
             val ids = (flag ?: "").split(',').map { it.trim() }.filter { it.isNotEmpty() }.distinct()
-            if (ids.isEmpty()) return DEFAULT
-            val unknown = ids.filter { id -> SWITCHED_OFF.none { it.id == id } }
+            if (ids.isEmpty()) return served
+            val unknown = ids.filter { id -> switchedOff.none { it.id == id } }
             require(unknown.isEmpty()) { "Enseigne à allumer inconnue ou déjà servie : ${unknown.joinToString()}" }
-            return RetailerSites(DEFAULT.all + ids.map { id -> SWITCHED_OFF.first { it.id == id } }, legacy = DEFAULT.legacy)
+            return RetailerSites(served.all + ids.map { id -> switchedOff.first { it.id == id } }, legacy = served.legacy)
         }
     }
 }

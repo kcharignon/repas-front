@@ -1,8 +1,9 @@
 // @vitest-environment node
-// Auchan est inscrite et ÉTEINTE (DRV-728) : ce que `make check` garde sans construire l'application. Les règles de chaque enseigne sont jouées par les
-// tests Kotlin (`AuchanSiteTest`, `RetailerSitesTest`) ; ici, le MÉCANISME qui laisse la version publiée sans menu, sans annonce et sans origine du pont
-// d'une enseigne éteinte : un drapeau de construction (`ANDROID_EXTRA_RETAILERS` → `BuildConfig.EXTRA_RETAILERS` → `RetailerSites.serving`), vide et
-// refusé dans toute publication, vérifié par `build.sh`, et aucun nom d'enseigne dans l'application.
+// Le mécanisme des enseignes ÉTEINTES (DRV-728), qui reste pour la prochaine enseigne alors qu'Auchan est servie depuis DRV-738 : ce que `make check` garde sans
+// construire l'application. Les règles de chaque enseigne sont jouées par les tests Kotlin (`AuchanSiteTest`, `RetailerSitesTest`) ; ici, le MÉCANISME qui laisse
+// la version publiée sans menu, sans annonce et sans origine du pont d'une enseigne éteinte : un drapeau de construction (`ANDROID_EXTRA_RETAILERS` →
+// `BuildConfig.EXTRA_RETAILERS` → `RetailerSites.serving`), vide et refusé dans toute publication, vérifié par `build.sh` (qui vérifie aussi que la publication
+// ANNONCE Auchan), et aucun nom d'enseigne dans l'application.
 import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -68,7 +69,9 @@ describe('le drapeau de construction des enseignes éteintes', () => {
 
   it('est contrôlé par build.sh : vide dans les deux variantes de publication, refusé par la publication, vide dans l’APK contrôlé', () => {
     expect(buildScript).toMatch(/for flavor in direct play[\s\S]*?EXTRA_RETAILERS = "";/)
-    expect(buildScript).toContain('ANDROID_EXTRA_RETAILERS=auchan')
+    // l'identifiant refusé est fictif : Auchan est servie, elle n'est plus une enseigne à allumer
+    expect(buildScript).toContain('ANDROID_EXTRA_RETAILERS=exemple')
+    expect(buildScript).not.toContain('ANDROID_EXTRA_RETAILERS=auchan')
     expect(buildScript).toContain(':app:preDirectReleaseBuild')
     expect(buildScript).toContain('n\'embarque aucune enseigne éteinte')
     // verify-release lit le BuildConfig de l'APK de publication
@@ -76,6 +79,28 @@ describe('le drapeau de construction des enseignes éteintes', () => {
     expect(verify).toContain('EXTRA_RETAILERS = "";')
     // et l'essai de la publication n'en hérite pas de l'environnement du développeur
     expect(buildScript).toContain('env -u ANDROID_VERSION_CODE -u ANDROID_EXTRA_RETAILERS')
+  })
+
+  it('est contrôlé par build.sh dans l’autre sens aussi : la publication ANNONCE Auchan (DRV-738)', () => {
+    // la liste des enseignes servies par défaut (ce que `app.info` annonce, le drapeau de la publication étant vide), lue dans le registre
+    expect(buildScript).toContain('announces_published_retailers() {')
+    expect(buildScript).toContain('RetailerSites.kt')
+    expect(buildScript).toContain('AUCHAN')
+    // contrôlée à la construction des deux variantes…
+    const distributions = buildScript.slice(buildScript.indexOf('check_distributions() {'), buildScript.indexOf('build_debug() {'))
+    expect(distributions).toContain('announces_published_retailers\n')
+    // …et sur l'APK signé lui-même : l'entrée d'Auchan est dans le code compilé, navigation sur ses deux hôtes
+    const verify = buildScript.slice(buildScript.indexOf('verify_release() {'), buildScript.indexOf('release_selftest() {'))
+    expect(verify).toContain('apk_announces_published_retailers "$apk"')
+    expect(buildScript).toContain("grep -aqF 'www.auchan.fr'")
+    expect(buildScript).toContain("grep -aqF 'compte.auchan.fr'")
+  })
+
+  it('le registre que build.sh lit annonce bien Auchan (le même texte que le contrôle cherche)', () => {
+    const registry = read(join(androidDir, 'core', 'src', 'main', 'kotlin', 'eu', 'kantin', 'repas', 'drive', 'RetailerSites.kt'))
+    const pattern = /^[ \t]*val DEFAULT = RetailerSites\(listOf\([^)]*\bAUCHAN\b[^)]*\)\)/m
+
+    expect(registry).toMatch(pattern)
   })
 
   it('traverse Docker (compose) comme les autres variables de construction de débogage', () => {
