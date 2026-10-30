@@ -372,6 +372,8 @@ describe('progression', () => {
     expect(rows().map((row) => row.getAttribute('aria-label'))).toEqual(['Farine : ajouté'])
     expect(shadow().querySelector('.keep')?.textContent).toBe('Garde l’application ouverte.')
     expect(shadow().querySelector('.keep svg')?.getAttribute('aria-hidden')).toBe('true')
+    // La liste défile : elle se parcourt au clavier
+    expect(shadow().querySelector('.done-list')?.getAttribute('tabindex')).toBe('0')
     expect(buttons().map((button) => button.textContent)).toEqual(['Arrêter'])
   })
 
