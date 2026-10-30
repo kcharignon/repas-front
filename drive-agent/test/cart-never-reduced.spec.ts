@@ -132,6 +132,78 @@ describe('putInCart : la quantité du plan ne réduit jamais le panier', () => {
     expect(done.note).toBeNull()
   })
 
+  describe('un adaptateur qui sait lire le panier (readCartQuantity, DRV-732)', () => {
+    /** Le fake habituel, avec une lecture du panier en plus : `read` donne la quantité lue, `reads` compte ses appels. */
+    function readingAdapter(read: number | null | Error) {
+      const base = fakeAdapter({ '1000001': { inCart: null } })
+      const reads: string[] = []
+      const adapter = {
+        ...base.adapter,
+        readCartQuantity: (id: string) => {
+          reads.push(id)
+          return read instanceof Error ? Promise.reject(read) : Promise.resolve(read)
+        },
+      }
+      return { adapter, reads, writes: base.writes }
+    }
+
+    it('la quantité lue dans le panier est CONNUE : le plan est écrit, sans la mention « illisible »', async () => {
+      const { adapter, reads, writes } = readingAdapter(0)
+
+      const done = await putInCart(adapter, candidate('1000001', { inCart: null }), 2)
+
+      expect(reads).toEqual(['1000001'])
+      expect(writes).toEqual([{ id: '1000001', quantity: 2 }])
+      expect(done).toEqual({ obtained: 2, note: null })
+    })
+
+    it('le panier a plus que le plan : rien n’est écrit, la mention est « conservé » et jamais « illisible »', async () => {
+      const { adapter, writes } = readingAdapter(5)
+
+      const done = await putInCart(adapter, candidate('1000001', { inCart: null }), 2)
+
+      expect(writes).toEqual([])
+      expect(done).toEqual({ obtained: 5, note: { kind: 'KEPT', wanted: 2, inCart: 5 } })
+    })
+
+    it('le panier a exactement la quantité voulue : rien n’est écrit, aucune mention', async () => {
+      const { adapter, writes } = readingAdapter(2)
+
+      const done = await putInCart(adapter, candidate('1000001', { inCart: null }), 2)
+
+      expect(writes).toEqual([])
+      expect(done).toEqual({ obtained: 2, note: null })
+    })
+
+    it('la quantité de la ligne reste illisible dans le panier : la mention « illisible » comme avant, jamais une quantité inventée', async () => {
+      const { adapter, writes } = readingAdapter(null)
+
+      const done = await putInCart(adapter, candidate('1000001', { inCart: null }), 2)
+
+      expect(writes).toEqual([{ id: '1000001', quantity: 2 }])
+      expect(done).toEqual({ obtained: 2, note: { kind: 'UNREADABLE', wanted: 2, inCart: null } })
+    })
+
+    it('la quantité donnée par la recherche prime : le panier n’est pas lu', async () => {
+      const { adapter, reads, writes } = readingAdapter(9)
+
+      const done = await putInCart(adapter, candidate('1000001', { inCart: 1 }), 2)
+
+      expect(reads).toEqual([])
+      expect(writes).toEqual([{ id: '1000001', quantity: 2 }])
+      expect(done.note).toBeNull()
+    })
+
+    it('une lecture qui échoue fait échouer la ligne comme une écriture (rien n’est écrit)', async () => {
+      const { adapter, writes } = readingAdapter(new Error('panier injoignable'))
+
+      await expect(putInCart(adapter, candidate('1000001', { inCart: null }), 2)).rejects.toThrow(
+        'panier injoignable',
+      )
+      expect(writes).toEqual([])
+    })
+  })
+
   it('rend ce que le panier a gardé quand il garde moins que la demande', async () => {
     const { adapter } = fakeAdapter({ '1000001': { inCart: 0, obtained: () => 1 } })
 

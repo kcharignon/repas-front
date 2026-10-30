@@ -96,14 +96,15 @@ test.describe('un parcours qui va jusqu’au bout de ce qui est écrit', () => {
     const app = await open(page, fakeAuchan, agentCode)
     app.answerHello(planToSearch())
 
-    // L'écran de fin (le panier est rempli) : la personne retourne dans Repas
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    // Le panier est rempli et la quantité déjà au panier a été LUE (DRV-732) : rien à faire relire, le résultat part sans écran de fin
+    // (avant, « Quantité au panier illisible » en imposait un).
     const result = await app.received('result')
 
     expect(result).toMatchObject({
       outcome: 'completed',
       lines: [{ outcome: 'ADDED', quantity: 1 }],
     })
+    await expect(page.getByText('Quantité au panier illisible')).toHaveCount(0)
     expect(fakeAuchan.paced().map((request) => request.path)).toContain('/recherche')
     expect(fakeAuchan.cart()).toEqual({ '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d': 1 })
     expect(fakeAuchan.violations()).toEqual([])

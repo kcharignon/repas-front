@@ -205,14 +205,18 @@ describe('un passage complet contre le faux site (phases A et B)', () => {
 
     await flow.start(auchanPlan([known('farine', [withOffer(FARINE, 3)])]))
 
-    expect(screens.screens()).toEqual(['progress', 'challenge', 'progress', 'end'])
+    // Plus d'écran de fin : la quantité déjà au panier est LUE (DRV-732), il n'y a donc rien à faire relire (avant, « Quantité au panier illisible »).
+    expect(screens.screens()).toEqual(['progress', 'challenge', 'progress'])
     expect(expectConform(sent[0])).toMatchObject({ outcome: 'completed' })
-    // L'écriture qui a déclenché le défi n'est pas rejouée seule : la reprise relit le panier (une lecture de plus) puis écrit une fois.
+    // L'écriture qui a déclenché le défi n'est pas rejouée seule : la reprise relit le panier (la lecture du passage, refaite, puis celle d'avant l'écriture)
+    // puis écrit une fois.
     expect(fake.writes()).toHaveLength(2)
     expect(fake.paced().map((request) => `${request.method} ${request.path}`)).toEqual([
       'GET /journey',
       'GET /cart',
+      'GET /cart',
       'POST /cart/update',
+      'GET /cart',
       'GET /cart',
       'POST /cart/update',
     ])

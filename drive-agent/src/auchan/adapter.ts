@@ -295,6 +295,13 @@ export class AuchanAdapter implements RetailerAdapter {
   cartQuantity(productId: string): number | null {
     return this.cart.quantityOf(productId)
   }
+  /**
+   * La quantité déjà au panier, LUE (DRV-732) : la page de résultats d'Auchan ne la dit pas, le panier oui. Un seul `GET /cart` par passage (par le `Pacer`),
+   * partagé entre les produits et rafraîchi par chaque écriture.
+   */
+  readCartQuantity(productId: string): Promise<number | null> {
+    return this.cart.readQuantity(productId)
+  }
 
   // —— Écrit par DRV-725 (le panier) ——————————————————————————————————————————————————————————————————————————————————————————
 

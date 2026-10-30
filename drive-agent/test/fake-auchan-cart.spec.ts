@@ -9,6 +9,7 @@ import { PRODUCTS } from '../fake-auchan/catalog'
 import { CONSENT_ID, MEMBER_CART_ID, VISITOR_CART_ID } from '../fake-auchan/pages'
 import { startFakeAuchan, type FakeAuchan } from '../fake-auchan/server'
 import { AuchanAdapter } from '../src/auchan'
+import { putInCart } from '../src/flow'
 import { RetailerError } from '../src/retailers'
 import { auchanSite } from './auchan-helpers'
 import { bridgeTo } from './auchan-fake-bridge'
@@ -135,6 +136,66 @@ describe('l’agent contre le panier du faux site', () => {
     expect(fake.writes()).toEqual([])
     expect(fake.cart()).toEqual({ [FARINE.productId]: 6 })
     expect(result).toMatchObject({ requested: 2, sent: 6, obtained: 6, ok: true })
+  })
+
+  it('produits trouvés par la recherche (inCart: null) : la quantité déjà au panier se LIT, un seul GET /cart partagé, rafraîchi par chaque écriture (DRV-732)', async () => {
+    // Given : du lait déjà au panier en plus grande quantité que voulu, de la farine à poser, du sel à poser
+    fake.seedCart(LAIT.productId, 4)
+    const adapter = adapterFor()
+    const found = async (term: string, productId: string) => {
+      const seen = (await adapter.searchProducts(term)).find((one) => one.id === productId)
+      if (!seen) throw new Error('produit attendu dans les résultats')
+      return seen
+    }
+    const SEL = PRODUCTS[3]!
+
+    // When : trois produits, dans l'ordre d'un passage
+    const farine = await found('farine de blé', FARINE.productId)
+    const lait = await found('lait', LAIT.productId)
+    const sel = await found('sel fin', SEL.productId)
+    expect([farine.inCart, lait.inCart, sel.inCart]).toEqual([null, null, null])
+    const settled = [
+      await putInCart(adapter, farine, 2),
+      await putInCart(adapter, lait, 1),
+      await putInCart(adapter, sel, 3),
+    ]
+
+    // Then : jamais « illisible » ; le lait est conservé (4 > 1) sans écriture ; le panier est la somme de ce qu'il avait et de ce qui a été posé
+    expect(settled.map((one) => one.note)).toEqual([
+      null,
+      { kind: 'KEPT', wanted: 1, inCart: 4 },
+      null,
+    ])
+    expect(settled.map((one) => one.obtained)).toEqual([2, 4, 3])
+    expect(fake.cart()).toEqual({
+      [LAIT.productId]: 4,
+      [FARINE.productId]: 2,
+      [SEL.productId]: 3,
+    })
+    // Les requêtes du panier : la lecture du passage + celle d'avant chaque écriture (DRV-725), jamais une par produit ; le lait n'en coûte aucune
+    expect(
+      fake
+        .paced()
+        .filter((request) => request.kind === 'cart')
+        .map((request) => `${request.method} ${request.path}`),
+    ).toEqual(['GET /cart', 'GET /cart', 'POST /cart/update', 'GET /cart', 'POST /cart/update'])
+    expect(fake.violations().filter((violation) => violation.kind === 'parallel')).toEqual([])
+  })
+
+  it('un panier illisible (ligne sans quantité) : la mention « illisible » reste, la quantité n’est jamais inventée', async () => {
+    fake.seedCart(FARINE.productId, 3)
+    fake.setCartBehavior({ read: 'line-without-quantity' })
+    const adapter = adapterFor()
+    const seen = (await adapter.searchProducts('farine de blé')).find(
+      (one) => one.id === FARINE.productId,
+    )
+    if (!seen) throw new Error('produit attendu dans les résultats')
+
+    const error = await failureOf(() => putInCart(adapter, seen, 1))
+
+    // L'écriture refuse aussi de deviner une ligne sans quantité : rien n'est écrit
+    expect(error).toMatchObject({ code: 'CONTRACT_CHANGED', cause: 'CART_LINE_UNREADABLE' })
+    expect(fake.writes()).toEqual([])
   })
 
   it('aucune écriture de l’agent ne porte desiredQuantity 0, sur toute une série', async () => {

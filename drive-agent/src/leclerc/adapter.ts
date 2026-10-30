@@ -154,6 +154,14 @@ export interface RetailerAdapter {
    */
   cartQuantity(productId: string): number | null
   /**
+   * FACULTATIVE (DRV-732) : la quantité de ce produit au panier quand la recherche ne la donne pas. Elle LIT le panier si le passage ne l'a pas encore fait (une
+   * requête, à la cadence, jamais en parallèle) puis répond depuis cette lecture, partagée entre les produits et rafraîchie par chaque écriture ; `null` quand le
+   * panier est lu mais ne dit pas la quantité de cette ligne (jamais une quantité inventée). Absente (Leclerc : sa recherche dit la quantité), `putInCart` retombe
+   * sur `cartQuantity`, sans requête.
+   * @throws {RetailerError} l'erreur de la lecture du panier, à traiter comme celle d'une écriture.
+   */
+  readCartQuantity?(productId: string): Promise<number | null>
+  /**
    * Les compteurs de la cadence depuis la création de l'adaptateur (ticket L) : requêtes, erreurs, blocages, délais dépassés, réponses lentes, plus
    * longue pause. Des nombres seulement. Cumulatifs : un passage en prend la différence entre son début et sa fin.
    */

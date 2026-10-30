@@ -59,12 +59,27 @@ function safePath(url: string): string {
 export class AuchanCart {
   private readonly deps: CartDeps
   private readonly offers = new OfferBook()
-  /** Les quantités du dernier panier lu, par produit ; `null` avant toute lecture. */
-  private quantities: ReadonlyMap<string, number> | null = null
+  /**
+   * Les quantités du dernier panier lu (une lecture ou la réponse d'une écriture), par produit ; `null` pour une ligne dont la quantité est illisible ; `null`
+   * (la table) avant toute lecture, et de nouveau après une erreur : la lecture suivante est alors refaite (DRV-732).
+   */
+  private quantities: ReadonlyMap<string, number | null> | null = null
   private total: number | null = null
 
   constructor(deps: CartDeps) {
     this.deps = deps
+  }
+
+  /**
+   * La quantité du produit au panier, LUE (DRV-732) : un seul `GET /cart` par passage, partagé entre les produits (la table est rafraîchie par la réponse de
+   * chaque écriture, `remember`). `0` quand le panier est lu et ne cite pas le produit, `null` quand il le cite sans quantité lisible : jamais une quantité
+   * inventée.
+   *
+   * @throws {RetailerError} l'échec de la lecture (`NOT_LOGGED_IN`, `BLOCKED`, `NETWORK`, `CONTRACT_CHANGED`…), comme celui d'une écriture.
+   */
+  async readQuantity(productId: string): Promise<number | null> {
+    if (this.quantities === null) await this.read()
+    return this.quantityOf(productId)
   }
 
   /** Retient l'offre d'un produit lu par la recherche (DRV-724) : `setCartQuantity` n'a que l'identifiant du produit. */
@@ -74,7 +89,9 @@ export class AuchanCart {
 
   /** La quantité du produit dans la dernière lecture du panier, `null` sans lecture (aucune requête). */
   quantityOf(productId: string): number | null {
-    return this.quantities === null ? null : (this.quantities.get(productId) ?? 0)
+    if (this.quantities === null) return null
+    // Une ligne citée sans quantité lisible est « rien », pas zéro ; un produit que le panier ne cite pas en a zéro.
+    return this.quantities.has(productId) ? (this.quantities.get(productId) ?? null) : 0
   }
 
   /** Le total du panier en centimes d'après la dernière lecture, `null` sans lecture (aucune requête). */
@@ -89,6 +106,16 @@ export class AuchanCart {
    * @throws {RetailerError} le site n'a pas répondu comme prévu : `CONTRACT_CHANGED` (cause), `NOT_LOGGED_IN`, `NETWORK`, `BLOCKED`.
    */
   async setQuantity(productId: string, quantity: number): Promise<CartResult> {
+    try {
+      return await this.write(productId, quantity)
+    } catch (error) {
+      // Une écriture ratée laisse le panier dans un état qu'on ne connaît plus : la prochaine lecture de quantité redemande le panier au site.
+      if (error instanceof RetailerError) this.quantities = null
+      throw error
+    }
+  }
+
+  private async write(productId: string, quantity: number): Promise<CartResult> {
     if (!STORES.auchan.productId.test(productId) || !Number.isInteger(quantity) || quantity < 1) {
       throw new RangeError('Produit ou quantité invalide.')
     }
@@ -215,9 +242,8 @@ export class AuchanCart {
   }
 
   private remember(reading: CartReading): void {
-    const quantities = new Map<string, number>()
-    for (const [id, line] of reading.lines)
-      if (line.actual !== null) quantities.set(id, line.actual)
+    const quantities = new Map<string, number | null>()
+    for (const [id, line] of reading.lines) quantities.set(id, line.actual)
     this.quantities = quantities
     this.total = reading.totalCents
   }
