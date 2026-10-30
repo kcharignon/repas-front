@@ -6,6 +6,7 @@ import { photoUrl } from '../photo-url'
 import { measureReference, parseContent } from '../retailers/content'
 import type { Candidate, LocationLike, PricePerMeasure } from '../retailers/contract'
 import { fold } from './page'
+import type { AuchanOffer } from './offers'
 import { PHOTO_RULE } from './photo-rule'
 import type { PageProduct } from './search-page'
 
@@ -14,45 +15,16 @@ const MEASURED_SELLER_TYPE = 'GROCERY'
 const MEASURED_OFFER_TYPE = 'DEFAULT'
 
 /**
- * Ce que la page a dit de l'offre d'un produit, gardé par l'adaptateur pour l'ajout au panier (DRV-725) : le `Candidate` ne porte que son identifiant d'offre,
- * et le corps de `POST /cart/update` demande aussi le type de vendeur, le type d'offre et le vendeur (C-1). Des valeurs de la page, non fiables : des mots de code.
+ * L'offre d'un produit telle que la page la donne, retenue par l'adaptateur pour l'ajout au panier (`rememberOffer`, DRV-725) : l'interface commune ne passe que
+ * `productId` à `setCartQuantity`. Un champ que la page ne donne pas (absent, vide, contradictoire) n'est pas retenu : le panier prend alors sa valeur par défaut
+ * (`GROCERY`, `DEFAULT`, vendeur vide), jamais une valeur lue ailleurs.
  */
-export interface SeenOffer {
-  productId: string
-  offerId: string
-  sellerType: string | null
-  offerType: string | null
-  sellerId: string | null
-}
-
-export const offerOf = (product: PageProduct): SeenOffer => ({
-  productId: product.productId,
+export const offerOf = (product: PageProduct): AuchanOffer => ({
   offerId: product.offerId,
-  sellerType: product.sellerType,
-  offerType: product.offerType,
-  sellerId: product.sellerId,
+  ...(product.sellerType !== null && { sellerType: product.sellerType }),
+  ...(product.offerType !== null && { offerType: product.offerType }),
+  ...(product.sellerId !== null && { sellerId: product.sellerId }),
 })
-
-/** Les offres vues par les recherches, par identifiant de produit : au plus `capacity`, les plus récentes (un passage en voit quelques centaines au plus). */
-export class OfferMemory {
-  private readonly offers = new Map<string, SeenOffer>()
-  private readonly capacity: number
-
-  constructor(capacity = 2_000) {
-    this.capacity = capacity
-  }
-
-  remember(offer: SeenOffer): void {
-    this.offers.delete(offer.productId)
-    this.offers.set(offer.productId, offer)
-    const oldest = this.offers.keys().next()
-    if (this.offers.size > this.capacity && !oldest.done) this.offers.delete(oldest.value)
-  }
-
-  get(productId: string): SeenOffer | undefined {
-    return this.offers.get(productId)
-  }
-}
 
 const cents = (euros: number): number => Math.round(euros * 100)
 

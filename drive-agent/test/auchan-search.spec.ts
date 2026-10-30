@@ -6,7 +6,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { AuchanAdapter, PACING } from '../src/auchan'
-import { OfferMemory } from '../src/auchan/search-product'
 import { RetailerError } from '../src/retailers'
 import { auchanFixture, auchanSite, showPage, type AuchanReply } from './auchan-helpers'
 
@@ -611,39 +610,35 @@ describe('la page vient du site : une donnée non fiable', () => {
   }, 30_000)
 })
 
-describe('l’offre vue, gardée pour le panier (DRV-725)', () => {
-  it('seenOffer rend l’offre de la dernière recherche pour un produit : offre, type de vendeur, type d’offre, vendeur', async () => {
+describe('l’offre de chaque produit lu est retenue pour le panier (DRV-725 : rememberOffer)', () => {
+  it('chaque produit lu est retenu avec son offre et ce que la page donne (types de vendeur et d’offre, vendeur vide non retenu)', async () => {
     const { adapter } = shop(fixture('recherche-farine.html'))
+    const remembered: [string, unknown][] = []
+    adapter.rememberOffer = (productId, offer) => {
+      remembered.push([productId, offer])
+      return true
+    }
+
     await adapter.searchProducts('farine')
 
-    expect(adapter.seenOffer(FARINE)).toEqual({
-      productId: FARINE,
-      offerId: FARINE_OFFER,
-      sellerType: 'GROCERY',
-      offerType: 'DEFAULT',
-      sellerId: null,
-    })
-    expect(adapter.seenOffer('00000000-0000-4000-8000-000000000000')).toBeUndefined()
+    expect(remembered).toHaveLength(4)
+    expect(remembered[0]).toEqual([
+      FARINE,
+      { offerId: FARINE_OFFER, sellerType: 'GROCERY', offerType: 'DEFAULT' },
+    ])
   })
 
-  it('la mémoire est bornée : les plus anciennes offres partent', () => {
-    const memory = new OfferMemory(2)
-    const offer = (productId: string) => ({
-      productId,
-      offerId: FARINE_OFFER,
-      sellerType: null,
-      offerType: null,
-      sellerId: null,
-    })
+  it('un champ que la page ne donne pas n’est pas retenu (le panier prend alors sa valeur par défaut, jamais une valeur devinée ici)', async () => {
+    const { adapter } = shop(page(card({ sellerType: 'x y' })))
+    const remembered: unknown[] = []
+    adapter.rememberOffer = (_productId, offer) => {
+      remembered.push(offer)
+      return true
+    }
 
-    memory.remember(offer('a'))
-    memory.remember(offer('b'))
-    memory.remember(offer('a'))
-    memory.remember(offer('c'))
+    await adapter.searchProducts('farine')
 
-    expect(memory.get('b')).toBeUndefined()
-    expect(memory.get('a')?.productId).toBe('a')
-    expect(memory.get('c')?.productId).toBe('c')
+    expect(remembered).toEqual([{ offerId: FARINE_OFFER, offerType: 'DEFAULT' }])
   })
 })
 

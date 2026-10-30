@@ -196,8 +196,18 @@ function offerIdOf(candidate: Candidate, retailer: string | undefined): string |
     : null
 }
 
-/** Le produit tel qu'il part vers Repas : le contenu n'y figure que s'il est plausible (strictement positif). */
-function chosenProduct(candidate: Candidate, retailer: string | undefined): ChosenLine['product'] {
+/** Un code-barres plausible : 8 à 14 chiffres (la forme que Repas accepte). */
+const EAN = /^[0-9]{8,14}$/
+
+/**
+ * Le produit tel qu'il part vers Repas : le contenu n'y figure que s'il est plausible (strictement positif). `ean` : le code-barres que la réponse du panier a
+ * donné après l'ajout (DRV-725 : chez une enseigne dont la page de résultats n'en a pas), seulement s'il a la forme d'un code-barres.
+ */
+function chosenProduct(
+  candidate: Candidate,
+  retailer: string | undefined,
+  ean?: string,
+): ChosenLine['product'] {
   const price = priceOf(candidate)
   const { content } = candidate
   // Le rayon et la famille du produit (DRV-642) : des faits du catalogue que Repas apprend ; absents si le site ne les donne pas.
@@ -212,6 +222,7 @@ function chosenProduct(candidate: Candidate, retailer: string | undefined): Chos
     ...(rayonId !== null && { rayonId }),
     ...(familyId !== null && { familyId }),
     ...(offerId !== null && { offerId }),
+    ...(ean !== undefined && EAN.test(ean) && { ean }),
   }
 }
 
@@ -656,7 +667,7 @@ async function settleLine(
         {
           ingredientSlug: slug,
           outcome: 'CHOSEN',
-          product: chosenProduct(candidate, context.retailer),
+          product: chosenProduct(candidate, context.retailer, settled.ean),
           quantity: Math.min(settled.obtained, LIMITS.packsMax),
           placement,
           ...(memo !== null && { searchQuery: memo }),

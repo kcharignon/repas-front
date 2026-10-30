@@ -2,7 +2,6 @@
 // `hypotheses-site-reel-auchan.md` du dépôt back) et des données entièrement INVENTÉES : un UUID de test, `Drive Ville-Test`, des produits de test. Aucun
 // HTML, aucun nom de magasin, aucun identifiant ni aucune ville du vrai site n'est ici. Ce qui n'a pas été mesuré (la structure exacte de la barre du
 // magasin, la page « introuvable » au-delà de son titre et de son texte, où mène « Commencer mes achats ») est une FORME PLAUSIBLE, marquée comme telle.
-import { PRODUCTS } from './catalog.ts'
 
 /** Le faux magasin : son identifiant (un UUID de test, celui de l'exemple `plan-auchan.json` du protocole), son libellé et son hôte. */
 export const STORE = {
@@ -146,84 +145,5 @@ export function journeyBody(
     activeContexts,
     contextHistory: [],
     metadata: {},
-  }
-}
-
-// —— Le panier (`/cart/config`, `/cart`, `/cart/update`, C-1 à C-4) ———————————————————————————————————————————————————————————
-
-/** Une ligne du faux panier. */
-export interface CartLine {
-  /** L'identifiant de la ligne de panier (`id`), posé au premier ajout. */
-  id: string
-  quantity: number
-}
-
-export type FakeCart = ReadonlyMap<string, CartLine>
-
-/** La configuration que le site lit avant d'utiliser son panier (B-2 du rapport DRV-714) : les adresses, la reprise, le délai et les codes d'erreur. */
-export function cartConfig(): Record<string, unknown> {
-  return {
-    updateCartEndpoint: '/cart/update',
-    getCartEndpoint: '/cart',
-    cartRetry: 2,
-    timeout: 15_000,
-    // Les CLÉS ont été relevées, pas les messages (C-7) : ils restent vides.
-    errors: Object.fromEntries(
-      [
-        '401',
-        '99001',
-        '99002',
-        '99003',
-        '99004',
-        '99005',
-        '99006',
-        '99007',
-        'default',
-        'mba-notification',
-        'use-by-date-notification',
-      ].map((code) => [code, '']),
-    ),
-  }
-}
-
-/** Le panier tel que le site le rend : les lignes, `cart.version`, le total EN CENTIMES (`cart.prices.totalPrice.amount`). */
-export function cartResponse(
-  cartId: string,
-  version: number,
-  cart: FakeCart,
-): Record<string, unknown> {
-  const items = [...cart.entries()].flatMap(([productId, line]) => {
-    const product = PRODUCTS.find((candidate) => candidate.productId === productId)
-    if (product === undefined) return []
-    return [
-      {
-        cartItem: { id: line.id, desiredQuantity: line.quantity, actualQuantity: line.quantity },
-        product: { id: product.productId, name: product.label, eans: [product.ean] },
-        offer: {
-          id: product.offerId,
-          price: { amount: product.priceCents, currency: 'EUR' },
-          availability: 'AVAILABLE',
-          state: 'IMMEDIATE',
-        },
-        offering: { actualQuantity: line.quantity, maxQuantity: product.maxQuantity },
-        deltaQuantity: 0,
-      },
-    ]
-  })
-  const total = [...cart.entries()].reduce((sum, [productId, line]) => {
-    const product = PRODUCTS.find((candidate) => candidate.productId === productId)
-    return sum + (product?.priceCents ?? 0) * line.quantity
-  }, 0)
-  return {
-    revisedItems: [],
-    cart: {
-      id: cartId,
-      version,
-      items,
-      prices: { totalPrice: { amount: total, currency: 'EUR' } },
-      changes: [],
-      contentWarnings: [],
-    },
-    itemsSortedByMostRecent: [],
   }
 }

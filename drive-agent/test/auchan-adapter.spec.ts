@@ -534,7 +534,7 @@ describe('readEntry et followEntry : « Commencer mes achats », sans geste inve
   })
 })
 
-describe('ce qui n’est pas encore écrit : le panier (DRV-725) et ce que le diagnostic de Leclerc seul connaît', () => {
+describe('ce qui n’est pas écrit : ce que le diagnostic de Leclerc seul connaît', () => {
   const NOT_WRITTEN = [
     'aisleChoices',
     'aisleSamples',
@@ -543,7 +543,6 @@ describe('ce qui n’est pas encore écrit : le panier (DRV-725) et ce que le di
     'exploreFacets',
     'readAisleMenu',
     'searchFiltered',
-    'setCartQuantity',
     'siteAisles',
     'validateSiteFilter',
   ]
@@ -587,18 +586,19 @@ describe('ce qui n’est pas encore écrit : le panier (DRV-725) et ce que le di
         'readProductFromSearch',
         'readSession',
         'readStore',
+        'rememberOffer',
         'searchProducts',
-        'seenOffer',
+        'setCartQuantity',
         'stats',
       ].sort(),
     )
   })
 
-  it('les accesseurs sans requête rendent « rien » : ni total de page, ni quantité, ni recherche', () => {
+  it('les accesseurs sans requête rendent « rien » : ni total de panier, ni quantité, ni recherche', () => {
     const adapter = new AuchanAdapter(auchanSite(() => ({})).deps)
 
     expect(adapter.pageCartTotal()).toBeNull()
-    expect(adapter.cartQuantity()).toBeNull()
+    expect(adapter.cartQuantity('1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d')).toBeNull()
     expect(adapter.lastSearchFacts()).toBeNull()
     expect(adapter.stats()).toEqual({
       requests: 0,

@@ -1,7 +1,7 @@
 // La recherche d'Auchan de bout en bout (DRV-724) : l'agent construit, injecté comme l'application le fait, dans une page du faux site d'Auchan
 // (`drive-agent/fake-auchan/`, pages de résultats SYNTHÉTIQUES, `www.auchan.fr` résolu vers 127.0.0.1). La phase A (un produit connu, retrouvé par sa
 // recherche) et le début de la phase B (un nouveau produit : la liste que l'agent montre) rendent les mêmes TYPES de résultats que contre le faux Leclerc, avec
-// un identifiant d'offre pour chaque produit. Le panier n'est pas écrit (DRV-725) : aucun de ces tests ne choisit un produit, aucun n'écrit.
+// un identifiant d'offre pour chaque produit. Les tests de la phase B ne choisissent aucun produit : aucun n'écrit ; celui de la phase A écrit au panier (DRV-725) l'offre lue par la recherche.
 import { openWithBridge, trackInteractions, type FakeApp } from './support/agent'
 import { expect, test } from './support/fixtures'
 import { RUN_ID } from './support/plans'
@@ -28,7 +28,7 @@ const fresh = (query: string, name = 'Farine') => ({
   rejected: [],
   searchQuery: query,
 })
-/** Un produit connu (phase A) : il se retrouve par sa recherche, puis le panier le mettrait au panier (non écrit : DRV-725). */
+/** Un produit connu (phase A) : il se retrouve par sa recherche, puis se met au panier. */
 const known = {
   ingredientSlug: 'farine',
   name: 'Farine',
@@ -122,7 +122,7 @@ test.describe('phase B : la liste des produits que la recherche a trouvés', () 
 })
 
 test.describe('phase A : un produit connu est retrouvé par sa recherche', () => {
-  test('le produit est retrouvé (une recherche), puis le panier, non écrit, arrête le passage proprement', async ({
+  test('le produit est retrouvé (une recherche) et son offre, lue par la recherche, part au panier : une seule écriture, la bonne offre', async ({
     page,
     fakeAuchan,
     agentCode,
@@ -130,18 +130,23 @@ test.describe('phase A : un produit connu est retrouvé par sa recherche', () =>
     const app = await open(page, fakeAuchan, agentCode)
     app.answerHello(plan([known]))
 
-    await expect(page.getByRole('heading', { name: 'L’envoi s’est arrêté' })).toBeVisible()
+    // L'écran de fin (le panier est rempli) : la personne retourne dans Repas
     await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
     const result = await app.received('result')
 
-    // Le produit a été retrouvé (ce n'est pas « introuvable ») ; seul le panier manque encore
-    expect(result).toMatchObject({ outcome: 'error', error: { code: 'CONTRACT_CHANGED' } })
-    expect(JSON.stringify(result)).toContain('ADAPTER_NOT_WRITTEN')
-    expect(JSON.stringify(result)).not.toContain('SEARCH_')
+    expect(result).toMatchObject({ outcome: 'completed', lines: [{ outcome: 'ADDED' }] })
     expect(searches(fakeAuchan).map((request) => request.detail)).toEqual([
       'Farine de blé T55 de test',
     ])
-    expect(fakeAuchan.writes()).toEqual([])
+    expect(fakeAuchan.cart()).toEqual({ [FARINE]: 1 })
+    const writes = fakeAuchan.writes().map((write) => JSON.parse(write.detail ?? '{}'))
+    expect(writes).toHaveLength(1)
+    expect(writes[0].items[0]).toMatchObject({
+      productId: FARINE,
+      offerId: FARINE_OFFER,
+      sellerType: 'GROCERY',
+      desiredQuantity: 1,
+    })
     expect(fakeAuchan.violations()).toEqual([])
   })
 })
@@ -186,7 +191,6 @@ test.describe('le diagnostic lit la recherche', () => {
     await expect(report).toHaveValue(/Aucune écriture au panier\./)
     const text = await report.inputValue()
     expect(text).toMatch(/\[OK\] Recherche d’un mot courant/)
-    expect(text).not.toContain('ADAPTER_NOT_WRITTEN')
     for (const secret of ['Marque Test', 'Farine', FARINE, FARINE_OFFER, 'cdn.auchan.fr']) {
       expect(text, secret).not.toContain(secret)
     }

@@ -2,7 +2,7 @@
 // dans une page du faux site d'Auchan (`drive-agent/fake-auchan/`, données inventées, `www.auchan.fr` résolu vers 127.0.0.1). Le magasin n'est PAS dans
 // l'adresse : l'agent le lit par `GET /journey`. Ce qui est prouvé : la lecture du magasin et de la connexion, la configuration du magasin (setup), les arrêts
 // sans magasin, visiteur, autre magasin et page introuvable SANS AUCUNE écriture, le refus d'un plan de Leclerc sans une requête, la cadence d'Auchan, et un
-// diagnostic qui ne laisse rien du site. La recherche est écrite (DRV-724, `auchan-recherche.spec.ts`) ; le panier ne l'est pas (DRV-725).
+// diagnostic qui ne laisse rien du site. La recherche (DRV-724, `auchan-recherche.spec.ts`) et le panier (DRV-725) sont écrits.
 import { openWithBridge, trackInteractions, type FakeApp } from './support/agent'
 import { expect, test } from './support/fixtures'
 import { RUN_ID } from './support/plans'
@@ -19,7 +19,7 @@ const plan = (extra: Record<string, unknown> = {}) => ({
   lines: [{ ingredientSlug: 'sel', name: 'Sel', status: 'HAVE_AT_HOME' }],
   ...extra,
 })
-/** Le même plan avec un produit à chercher : retrouvé par la recherche, puis le panier, non écrit, arrête le passage. */
+/** Le même plan avec un produit connu : retrouvé par la recherche, puis mis au panier. */
 const planToSearch = () =>
   plan({
     lines: [
@@ -88,7 +88,7 @@ test.describe('un parcours qui va jusqu’au bout de ce qui est écrit', () => {
     expect(new URL(page.url()).pathname).toBe('/courses')
   })
 
-  test('le panier n’est pas écrit : un produit à mettre au panier arrête le passage proprement (CONTRACT_CHANGED, ADAPTER_NOT_WRITTEN), sans écrire au panier', async ({
+  test('un produit connu : retrouvé par la recherche (DRV-724), puis mis au panier (DRV-725), le passage se termine', async ({
     page,
     fakeAuchan,
     agentCode,
@@ -96,15 +96,17 @@ test.describe('un parcours qui va jusqu’au bout de ce qui est écrit', () => {
     const app = await open(page, fakeAuchan, agentCode)
     app.answerHello(planToSearch())
 
-    // Le passage s'arrête sur la première ligne : l'écran de fin dit que l'envoi s'est arrêté, rien n'est au panier
-    await expect(page.getByRole('heading', { name: 'L’envoi s’est arrêté' })).toBeVisible()
+    // L'écran de fin (le panier est rempli) : la personne retourne dans Repas
     await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
     const result = await app.received('result')
 
-    expect(result).toMatchObject({ outcome: 'error', error: { code: 'CONTRACT_CHANGED' } })
-    expect(JSON.stringify(result)).toContain('ADAPTER_NOT_WRITTEN')
-    expect(fakeAuchan.paced().map((request) => request.path)).toEqual(['/journey', '/recherche'])
-    expect(fakeAuchan.writes()).toEqual([])
+    expect(result).toMatchObject({
+      outcome: 'completed',
+      lines: [{ outcome: 'ADDED', quantity: 1 }],
+    })
+    expect(fakeAuchan.paced().map((request) => request.path)).toContain('/recherche')
+    expect(fakeAuchan.cart()).toEqual({ '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d': 1 })
+    expect(fakeAuchan.violations()).toEqual([])
   })
 
   test('la politesse : deux lectures du parcours sont séparées d’au moins la pause d’Auchan, jamais en parallèle', async ({
