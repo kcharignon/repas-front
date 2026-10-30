@@ -286,7 +286,7 @@ describe('public/.well-known/assetlinks.json (quand il existe)', () => {
     expect(Array.isArray(statements)).toBe(true)
     expect(statements).toHaveLength(1)
     const [statement] = statements
-    expect(statement!.relation).toEqual(['delegate_permission/common.handle_all_urls'])
+    expect(statement!.relation).toEqual(['delegate_permission/common.handle_all_urls', 'delegate_permission/common.get_login_creds'])
     expect(statement!.target.namespace).toBe('android_app')
     expect(statement!.target.package_name).toBe('eu.kantin.repas.drive')
     expect(statement!.target.sha256_cert_fingerprints.length).toBeGreaterThan(0)

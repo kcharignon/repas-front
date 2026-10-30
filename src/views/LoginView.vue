@@ -69,13 +69,23 @@ async function submit() {
     </p>
     <form class="flex flex-col gap-4" @submit.prevent="submit">
       <UiField :label="t('login.email')" v-slot="{ id }">
-        <UiTextInput :id="id" v-model="email" type="email" autocomplete="email" required />
+        <UiTextInput
+          :id="id"
+          v-model="email"
+          type="email"
+          name="username"
+          autocomplete="username"
+          autocapitalize="none"
+          spellcheck="false"
+          required
+        />
       </UiField>
       <UiField :label="t('login.password')" v-slot="{ id }">
         <UiTextInput
           :id="id"
           v-model="password"
           type="password"
+          name="password"
           autocomplete="current-password"
           required
         />
