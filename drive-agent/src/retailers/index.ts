@@ -1,20 +1,30 @@
 // Le registre des enseignes de l'agent (DRV-704) : la SEULE liste, et, avec le dossier de chaque enseigne, le seul endroit qui la nomme. L'agent
 // choisit l'adaptateur d'après l'hôte de la page (`retailerForHost`) et refuse un plan d'une autre enseigne que celle de la page (`STORE_MISMATCH`,
 // sans une requête). Ajouter une enseigne : un dossier (son adaptateur), une entrée ci-dessous, et son motif d'hôte dans `protocol/check.ts`.
-import { browserDeps, LeclercAdapter, type RetailerAdapter } from '../leclerc'
+import {
+  browserDeps,
+  hostFamily,
+  isMobileHost,
+  LeclercAdapter,
+  type RetailerAdapter,
+} from '../leclerc'
 import { STORES } from '../../protocol'
 import type { AdapterContext, RetailerEntry } from './entry'
 
 export * from './causes'
 export * from './contract'
 export * from './entry'
+export * from './names'
 export * from './errors'
 
 const leclerc: RetailerEntry = {
   id: 'leclerc',
   name: 'Leclerc',
   nameDe: 'de Leclerc',
+  siteDomain: 'leclercdrive.fr',
   matchesHost: (host) => STORES.leclerc.host.test(host),
+  hostFamily,
+  isMobileHost,
   createAdapter: ({ win, primitives }: AdapterContext): RetailerAdapter =>
     new LeclercAdapter(browserDeps(win, primitives)),
 }

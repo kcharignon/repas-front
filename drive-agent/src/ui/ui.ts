@@ -1,4 +1,5 @@
 // L'interface superposée : un Shadow DOM fermé dans un conteneur plein écran, au-dessus de la page de l'enseigne.
+import type { RetailerInfo } from '../retailers/names'
 import { append, clear, h } from './dom'
 import { displayLayout, measureDisplay, type DisplayLayout } from './scale'
 import { RENDERERS, type Rendered } from './screens'
@@ -16,6 +17,8 @@ export interface UiOptions {
   mode?: 'closed' | 'open'
   /** Comment poser le Shadow DOM sur le conteneur : l'`attachShadow` pris au démarrage de l'agent (`primitives.ts`) ; à défaut, celui du conteneur. */
   attachShadow?: (host: Element, init: ShadowRootInit) => ShadowRoot
+  /** L'enseigne de la page : les écrans la nomment par son nom (jamais écrit en dur, DRV-705). */
+  retailer: RetailerInfo
 }
 
 /** L'interface, et son conteneur dans la page (`null` tant qu'aucun écran n'est affiché). */
@@ -74,7 +77,7 @@ function installStyles(win: Window & typeof globalThis, root: ShadowRoot): void 
   }
 }
 
-export function createUi(options: UiOptions = {}): UiHandle {
+export function createUi(options: UiOptions): UiHandle {
   const win = options.win ?? window
   const mode = options.mode ?? 'closed'
   const attach = options.attachShadow ?? ((target, init) => target.attachShadow(init))
@@ -116,6 +119,7 @@ export function createUi(options: UiOptions = {}): UiHandle {
   }
 
   return {
+    retailer: options.retailer,
     get host() {
       return view?.host ?? null
     },
@@ -127,10 +131,15 @@ export function createUi(options: UiOptions = {}): UiHandle {
         const render = RENDERERS[screen] as (
           props: ScreenProps<K>,
           answer: (value: ScreenAnswer<K>) => void,
+          retailer: RetailerInfo,
         ) => Rendered
-        const rendered = render(props, (value) => {
-          if (mine === serial) resolve(value)
-        })
+        const rendered = render(
+          props,
+          (value) => {
+            if (mine === serial) resolve(value)
+          },
+          options.retailer,
+        )
         clear(shown.overlay)
         shown.overlay.appendChild(rendered.el)
         shown.current = rendered

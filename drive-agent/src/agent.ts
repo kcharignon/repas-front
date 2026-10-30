@@ -80,7 +80,7 @@ export function run(win: Window & typeof globalThis = window, options: AgentOpti
   const entry = retailer ?? retailers[0]
   if (entry === undefined) return // aucune enseigne dans le registre : l'agent reste silencieux
   const adapter = entry.createAdapter({ win, primitives })
-  const ui = createUi({ win, attachShadow: primitives.attachShadow })
+  const ui = createUi({ win, attachShadow: primitives.attachShadow, retailer: entry })
   const send = (message: Parameters<Transport['send']>[0]) => transport.send(message)
   const deps: FlowDeps = {
     adapter,
@@ -101,6 +101,7 @@ export function run(win: Window & typeof globalThis = window, options: AgentOpti
   const diagnosticDeps = (): DiagnosticDeps => ({
     ...deps,
     originReplaced: bridge ? null : ORIGIN_SHAPE.test(origin),
+    retailer: entry,
     copy: options.copy ?? ((text) => copyText(win, text)),
   })
   // Le test automatique n'existe que si l'application a annoncé le mode débogage (`isDebug` du pont, posé par son script d'injection de la

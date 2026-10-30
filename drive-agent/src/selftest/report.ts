@@ -133,6 +133,10 @@ export function reportOf(data: SelftestData): string {
                 ? T.back
                 : T.differs,
         ]
+  const probes = probeLines(data.probes, {
+    aisleSource: false,
+    siteDomain: data.page?.retailer.siteDomain,
+  })
   return [
     T.title,
     S.diagnostic.text.agent(data.agentVersion),
@@ -143,9 +147,7 @@ export function reportOf(data: SelftestData): string {
     ...halt,
     '',
     // Sans le relevé DRV-647 (menu des rayons, structure de la réponse) : il est au diagnostic, et ce rapport est borné à 20 000 caractères.
-    ...(probeLines(data.probes, { aisleSource: false }).length > 0
-      ? [...probeLines(data.probes, { aisleSource: false }), '']
-      : []),
+    ...(probes.length > 0 ? [...probes, ''] : []),
     ...block(
       0,
       S.selftest.step.check,

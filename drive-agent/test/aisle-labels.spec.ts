@@ -1,6 +1,7 @@
 // @vitest-environment node
 // Le libellé des groupes de la rangée (DRV-647) d'après la mesure réelle du 2026-10-20 : jamais un texte de lien (« Voir le rayon »), le libellé au niveau
 // (rayon ou famille) où son identifiant correspond, le repli, et ce que le diagnostic en montre. Données INVENTÉES, de la forme mesurée.
+import { LECLERC } from './retailer-fixtures'
 import { describe, expect, it } from 'vitest'
 
 import { probeLines, runChecks, type ChecksDeps } from '../src/diagnostic'
@@ -309,6 +310,7 @@ describe('le diagnostic dit le niveau, le libellé de chaque groupe et sa source
       storage: fakeStorage(),
       wakeLock: fakeWakeLock().wakeLock,
       originReplaced: null,
+      retailer: LECLERC,
     }
     const { probes } = await runChecks(deps, () => undefined)
     return { text: probeLines(probes).join('\n'), calls: fake.calls.length }

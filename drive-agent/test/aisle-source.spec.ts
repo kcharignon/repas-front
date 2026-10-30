@@ -1,5 +1,6 @@
 // D'où viennent les libellés de rayons (DRV-647, étape 0) : la structure de la réponse de recherche (noms de clés seulement), le menu « Rayons » de
 // la page (identifiant lu dans l'adresse du lien et libellé de catalogue), et leur correspondance avec les rayons des produits. Pages INVENTÉES.
+import { LECLERC } from './retailer-fixtures'
 import { describe, expect, it } from 'vitest'
 
 import { probeLines, reportOf, runChecks, type ChecksDeps } from '../src/diagnostic'
@@ -267,6 +268,7 @@ function diagnose(storePage = STORE_PAGE, reply: (call: Call) => Scripted = norm
     storage: fakeStorage(),
     wakeLock: fakeWakeLock().wakeLock,
     originReplaced: null,
+    retailer: LECLERC,
   }
   return { fake, adapter, run: () => runChecks(deps, () => undefined) }
 }

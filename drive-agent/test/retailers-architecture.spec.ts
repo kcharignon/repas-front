@@ -34,10 +34,11 @@ const OUTSIDE = all.filter(
 )
 
 /**
- * Les textes affichés, la liste blanche des photos, le nom d'hôte du diagnostic et le filtre du rapport nomment encore l'enseigne : ils attendent le
- * nom en paramètre (DRV-705) et la deuxième enseigne (DRV-717). Cette liste ne grandit pas : un fichier qui en sort la retire, un autre ne s'y ajoute pas.
+ * Les textes affichés, le diagnostic et le filtre du rapport prennent le nom de l'enseigne en paramètre (DRV-705) : ils ne la nomment plus. Reste la
+ * liste blanche des hôtes de photos : une règle de sécurité que l'écran revérifie sans connaître l'enseigne, à rendre propre à chaque enseigne avec la
+ * deuxième (DRV-717). Cette liste ne grandit pas : un fichier qui en sort la retire, un autre ne s'y ajoute pas.
  */
-const STILL_NAMING = ['diagnostic/checks.ts', 'photo-url.ts', 'selftest/run.ts', 'ui/strings.ts']
+const STILL_NAMING = ['photo-url.ts']
 
 describe('l’agent ne nomme pas son enseigne hors de son dossier', () => {
   it('flow, diagnostic, selftest, ui, transport et agent n’importent pas le dossier d’une enseigne', () => {

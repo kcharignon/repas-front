@@ -1,6 +1,7 @@
 // @vitest-environment node
 // Les sondes du diagnostic (ticket B de l'audit du 2026-10-18) : ce que le rapport dit du site réel, et la garantie qu'il ne contient AUCUNE valeur du
 // site (libellé, cookie, numéro de magasin, ville, adresse, point de livraison, valeur d'en-tête). Le site est un faux `fetch` aux pages INVENTÉES.
+import { LECLERC } from './retailer-fixtures'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -35,6 +36,7 @@ const deps = (adapter: LeclercAdapter): ChecksDeps => ({
   storage: fakeStorage(),
   wakeLock: fakeWakeLock().wakeLock,
   originReplaced: null,
+  retailer: LECLERC,
 })
 
 describe('en fonctionnement normal', () => {
@@ -323,7 +325,7 @@ describe('« Commencer mes courses » et la page du panier (DRV-625, DRV-629)', 
     })
 
     const { probes } = await runChecks(deps(adapter), () => undefined)
-    const text = probeLines(probes).join('\n')
+    const text = probeLines(probes, { siteDomain: LECLERC.siteDomain }).join('\n')
 
     expect(text).toContain(
       'Lien « Commencer mes courses » dans la page : oui, adresse /magasin-N-N-V/, autre hôte leclercdrive.fr',

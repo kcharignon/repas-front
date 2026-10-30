@@ -232,12 +232,12 @@ function cityOf(address: string): string {
 }
 
 /** La ligne « Commencer mes courses » : absent, bouton cliquable (le vrai site, DRV-629), ou lien avec la forme de son adresse et où il mène. */
-function startLine(link: LinkFacts, clickable: boolean): string {
+function startLine(link: LinkFacts, clickable: boolean, siteDomain: string): string {
   if (!link.present || link.shape === null) return P.start(link.present, clickable)
   return P.link(P.startLink, {
     present: true,
     shape: link.shape,
-    where: link.where === null ? null : (own(P.where, link.where) ?? null),
+    where: link.where === null ? null : (own(P.where(siteDomain), link.where) ?? null),
   })
 }
 
@@ -748,7 +748,10 @@ function aisleSourceLines(probes: ProbeFacts): string[] {
  */
 export function probeLines(
   probes: ProbeFacts | null | undefined,
-  { aisleSource = true }: { aisleSource?: boolean } = {},
+  {
+    aisleSource = true,
+    siteDomain = '',
+  }: { aisleSource?: boolean; siteDomain?: string | undefined } = {},
 ): string[] {
   if (!probes) return []
   const lines: string[] = []
@@ -770,7 +773,7 @@ export function probeLines(
       lines.push(P.cookies(arrival.cookies.count, yesNo(arrival.cookies.antiBot)))
     lines.push(P.arrival(arrival.redirects, arrival.status))
     if (arrival.entry) {
-      lines.push(startLine(arrival.entry.start, arrival.entry.clickable))
+      lines.push(startLine(arrival.entry.start, arrival.entry.clickable, siteDomain))
     }
     lines.push(P.basketPage(cityOf(arrival.address)))
     lines.push(

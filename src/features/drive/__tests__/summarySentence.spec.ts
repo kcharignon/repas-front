@@ -9,6 +9,9 @@ import { sendSummary } from '../sendSummary'
 
 import { t } from './retailerT'
 
+/** Les noms de l'enseigne du registre de l'agent (Leclerc) : l'agent les prend en paramètre. */
+const LECLERC = { name: 'Leclerc', nameDe: 'de Leclerc' }
+
 const range = [0, 1, 2, 3, 7, 40]
 const combinations = range.flatMap((known) =>
   range.flatMap((added) =>
@@ -23,10 +26,10 @@ describe('la phrase de synthèse : l’agent et Repas disent la même chose', ()
     expect(combinations.length).toBeGreaterThan(800)
 
     const different = combinations
-      .filter((counts) => summarySentence(counts) !== sendSummary(t, counts))
+      .filter((counts) => summarySentence(counts, LECLERC) !== sendSummary(t, counts))
       .map(
         (counts) =>
-          `${JSON.stringify(counts)} : agent « ${summarySentence(counts)} », Repas « ${sendSummary(t, counts)} »`,
+          `${JSON.stringify(counts)} : agent « ${summarySentence(counts, LECLERC)} », Repas « ${sendSummary(t, counts)} »`,
       )
 
     expect(different).toEqual([])
@@ -49,13 +52,13 @@ describe('la phrase de synthèse : l’agent et Repas disent la même chose', ()
     [{ known: 0, new: 0, haveAtHome: 2, skipped: 1 }, '3 articles : aucun ne sera mis au panier.'],
     [{ known: 0, new: 0, haveAtHome: 0, skipped: 0 }, ''],
   ])('%j donne « %s »', (counts, expected) => {
-    expect(summarySentence(counts)).toBe(expected)
+    expect(summarySentence(counts, LECLERC)).toBe(expected)
     expect(sendSummary(t, counts)).toBe(expected)
   })
 
   it('n’écrit jamais un zéro (un compteur à zéro ne se dit pas)', () => {
     for (const counts of combinations) {
-      expect(summarySentence(counts)).not.toMatch(/(^|\D)0(\D|$)/)
+      expect(summarySentence(counts, LECLERC)).not.toMatch(/(^|\D)0(\D|$)/)
     }
   })
 })

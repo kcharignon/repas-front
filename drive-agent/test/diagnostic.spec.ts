@@ -1,5 +1,6 @@
 // Le mode diagnostic (DRV-308) : l'auto-test en lecture seule et son rapport copiable. Les pages sont les fixtures inventées, le site un
 // faux `fetch`, l'horloge fausse ; aucun réseau.
+import { LECLERC } from './retailer-fixtures'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -41,6 +42,7 @@ const deps = (adapter: RetailerAdapter, extra: Partial<ChecksDeps> = {}): Checks
   storage: fakeStorage(),
   wakeLock: fakeWakeLock().wakeLock,
   originReplaced: true,
+  retailer: LECLERC,
   ...extra,
 })
 
@@ -320,10 +322,14 @@ describe('ce que le rapport laisse voir', () => {
     expect(storeTail('000123')).toBe('…123')
     expect(storeTail('123')).toBe('…')
     expect(storeTail('7')).toBe('…')
-    expect(hostFamily('fd9-courses.leclercdrive.fr')).toBe('fd9')
-    expect(hostFamily('FD12-courses.leclercdrive.fr')).toBe('fd12')
-    expect(hostFamily('ville-test-courses.leclercdrive.fr')).toBe('autre hôte leclercdrive.fr')
-    expect(hostFamily('m-courses.leclercdrive.fr')).toBe('site mobile (pas la version ordinateur)')
+    expect(hostFamily('fd9-courses.leclercdrive.fr', LECLERC)).toBe('fd9')
+    expect(hostFamily('FD12-courses.leclercdrive.fr', LECLERC)).toBe('fd12')
+    expect(hostFamily('ville-test-courses.leclercdrive.fr', LECLERC)).toBe(
+      'autre hôte leclercdrive.fr',
+    )
+    expect(hostFamily('m-courses.leclercdrive.fr', LECLERC)).toBe(
+      'site mobile (pas la version ordinateur)',
+    )
   })
 
   it('ne contient aucune des valeurs interdites : numéro entier, ville, cookie, libellé de produit, adresse', async () => {
@@ -371,6 +377,7 @@ describe('ce que le rapport laisse voir', () => {
       'Repas Drive : diagnostic',
       'Agent : 0.5.0',
       'Date : 2026-10-18 14:03 UTC',
+      'Site : leclerc (Leclerc)',
       'Hôte : fd0',
       'Magasin : …123',
       'Connexion : indéterminé (aucun signe)',

@@ -1,5 +1,6 @@
 // Outils des tests de l'orchestrateur (DRV-305) : une interface, un adaptateur et un stockage simulés, des plans inventés.
 // Données synthétiques seulement : magasin `000123`, produits `1000001` et suivants.
+import { LECLERC } from './retailer-fixtures'
 import {
   validateResult,
   type PlanLine,
@@ -119,6 +120,7 @@ export function fakeUi(scripts: Scripts = {}) {
   const stops: (() => void)[] = []
   const closed = { count: 0 }
   const ui: Ui = {
+    retailer: LECLERC,
     show(screen, props) {
       shown.push({ screen, props })
       // Un bandeau sans bouton (DRV-625) : sa promesse ne se résout jamais.

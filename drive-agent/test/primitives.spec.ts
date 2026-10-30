@@ -1,5 +1,6 @@
 // Les primitives du navigateur que l'agent prend au démarrage (`src/primitives.ts`) : une fois prises, une page qui remplace `JSON`, l'encodeur
 // de texte, `fetch` ou `attachShadow` ne voit rien passer de ce que l'agent traite avec elles.
+import { LECLERC } from './retailer-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createUi } from '../src/ui'
@@ -117,7 +118,7 @@ describe('fetch et attachShadow de la fenêtre', () => {
 
     // When : l'agent fait une requête (par ses dépendances) et monte son interface (fermée)
     await browserDeps(window, primitives).fetch('/recherche?q=sel')
-    const ui = createUi({ win: window, attachShadow: primitives.attachShadow })
+    const ui = createUi({ win: window, attachShadow: primitives.attachShadow, retailer: LECLERC })
     void ui.show('progress', { total: 1, done: 0, current: 'Farine', log: [] })
 
     // Then : la requête est partie par le fetch pris, le conteneur est monté, la page n'a rien vu

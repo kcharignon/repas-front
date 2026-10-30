@@ -67,20 +67,25 @@ const failureOf = (error: unknown): Failure =>
 
 const isBlocking = (failure: Failure) => BLOCKING.has(failure.code)
 
-/** Ce qu'un libellé de produit n'a pas à porter dans le rapport : un nom de site, d'enseigne, de cookie ou de jeton. */
-const FORBIDDEN_WORDS =
-  /leclerc\w*|https?\w*|www\w*|cookie\w*|token\w*|jeton\w*|bearer|authorization/gi
+/** Ce qu'un libellé de produit n'a pas à porter dans le rapport : un nom de site, d'enseigne (celui de l'enseigne de la page), de cookie ou de jeton. */
+function forbiddenWords(retailerName: string): RegExp {
+  const name = retailerName.replace(/[^\p{L}\p{N}]/gu, '')
+  return new RegExp(
+    `${name === '' ? '' : `${name}\\w*|`}https?\\w*|www\\w*|cookie\\w*|token\\w*|jeton\\w*|bearer|authorization`,
+    'giu',
+  )
+}
 
 /**
  * Le libellé d'un produit du catalogue, réduit à des lettres, des chiffres et un peu de ponctuation, court, sans longue suite de chiffres
  * ni nom de site : le rapport ne doit rien contenir qui ressemble à une adresse, un compte ou un cookie, même si un libellé l'imitait.
  */
-export function safeLabel(label: string): string {
+export function safeLabel(label: string, retailerName: string): string {
   const cleaned = label
     .normalize('NFC')
     .replace(/[^\p{L}\p{N} .,'’%&()+-]/gu, ' ')
     .replace(/(?<!\d)\.|\.(?!\d)/g, ' ')
-    .replace(FORBIDDEN_WORDS, '…')
+    .replace(forbiddenWords(retailerName), '…')
     .replace(/\d{6,}/g, '…')
     .replace(/\s+/g, ' ')
     .trim()
@@ -273,7 +278,7 @@ export async function runSelftest(deps: RunDeps, hooks: Hooks): Promise<Selftest
         done += 1
         continue
       }
-      item.label = safeLabel(pick.label)
+      item.label = safeLabel(pick.label, deps.retailer.name)
       const first = touched.length === 0
       touched.push({ id: pick.id, label: item.label, item })
       // Le premier produit passe par trois quantités (1, puis 3, puis 2) ; les autres sont seulement ajoutés.

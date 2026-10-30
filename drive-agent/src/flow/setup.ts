@@ -45,6 +45,7 @@ export function setupHandler(deps: SetupDeps): (message: SetupMessage) => Promis
             [],
             { outcome: 'error', code, ...(cause && { cause }) },
             agentVersion,
+            ui.retailer,
           ),
         )
       }
@@ -72,7 +73,7 @@ export function setupHandler(deps: SetupDeps): (message: SetupMessage) => Promis
         store: { id: store.id, host: store.host, baseUrl: store.baseUrl, label },
       })
     } else {
-      send(buildResult(message, [], { outcome: 'aborted' }, agentVersion))
+      send(buildResult(message, [], { outcome: 'aborted' }, agentVersion, ui.retailer))
     }
     ui.close()
   }

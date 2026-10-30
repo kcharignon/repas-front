@@ -201,7 +201,7 @@ describe('entryFacts : les deux sondes du diagnostic, des formes seulement', () 
       HOME,
     )
 
-    expect(facts.start).toEqual({ present: true, shape: '/magasin-N-N-V/', where: 'LECLERC_HOST' })
+    expect(facts.start).toEqual({ present: true, shape: '/magasin-N-N-V/', where: 'RETAILER_HOST' })
     expect(facts.clickable).toBe(false)
   })
 
@@ -257,7 +257,7 @@ describe('entryFacts : les deux sondes du diagnostic, des formes seulement', () 
       expect(text).not.toContain(secret)
     }
     expect(JSON.parse(text)).toEqual({
-      start: { present: true, shape: '/magasin-N-N-V/…/…', where: 'LECLERC_HOST' },
+      start: { present: true, shape: '/magasin-N-N-V/…/…', where: 'RETAILER_HOST' },
       clickable: false,
     })
   })
@@ -306,7 +306,7 @@ describe('LeclercAdapter : suivre le lien', () => {
     const { adapter, site } = page(GOOD)
 
     expect(adapter.readArrival().entry).toEqual({
-      start: { present: true, shape: '/magasin-N-N-V/', where: 'LECLERC_HOST' },
+      start: { present: true, shape: '/magasin-N-N-V/', where: 'RETAILER_HOST' },
       clickable: false,
     })
     expect(site.calls).toEqual([])

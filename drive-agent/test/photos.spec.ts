@@ -1,5 +1,6 @@
 // Les photos des produits dans l'écran de choix (DRV-633). jsdom, sans réseau : on lit les balises créées,
 // leurs attributs et ce qui se passe quand l'image ne charge pas.
+import { LECLERC } from './retailer-fixtures'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { renderPicker, type PickerItem } from '../src/ui'
@@ -30,6 +31,7 @@ function picker(items: PickerItem[]): HTMLElement {
   renderPicker(
     zone,
     {
+      retailer: LECLERC,
       need: null,
       replaces: null,
       gone: [],
@@ -142,6 +144,7 @@ describe('les photos suivent les lots (DRV-643)', () => {
     const shown = renderPicker(
       zone,
       {
+        retailer: LECLERC,
         need: null,
         replaces: null,
         gone: [],
