@@ -711,6 +711,21 @@ describe('driveBridge', () => {
       expect(Object.keys(sent[0] ?? {}).sort()).toEqual(['runId', 'type', 'v'])
     })
 
+    it('nomme le drive dont on lit le magasin (DRV-709), et refuse la lecture d’un autre drive tant qu’une est en cours', async () => {
+      const { bridge, sent, reply } = reading(() => undefined)
+
+      const first = bridge.startSetup('exemple')
+      const refused = await rejection(bridge.startSetup('autre'))
+
+      expect(refused).toMatchObject({ code: 'REFUSED', detail: 'BUSY' })
+      expect(sent).toHaveLength(1)
+      expect(sent[0]).toMatchObject({ v: 1, type: 'drive.setup', retailer: 'exemple' })
+      // Le même drive rouvre la lecture en cours, sans la doubler
+      expect(bridge.startSetup('exemple')).toBe(first)
+      reply(setupResult(sent[0]?.runId ?? ''))
+      await expect(first).resolves.toEqual(STORE)
+    })
+
     it('le résultat n’est pas montré aux écrans du retour, et ne touche pas au brouillon d’un envoi', async () => {
       const { bridge, listen, events } = reading((runId, reply) => reply(setupResult(runId)))
       listen()

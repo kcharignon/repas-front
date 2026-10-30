@@ -11,6 +11,8 @@ export interface SentMessage {
   type: string
   plan?: PlanMessage
   runId?: string
+  /** Le drive dont on lit le magasin (`drive.setup`, DRV-709). */
+  retailer?: string
 }
 
 /**

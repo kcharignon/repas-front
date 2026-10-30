@@ -59,6 +59,8 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
   /** La lecture du magasin en cours (DRV-320) : un seul à la fois, en mémoire de la page. */
   let pendingSetup: {
     runId: string
+    /** Le drive dont on lit le magasin (`null` : celui d'avant les drives multiples, sans `retailer` dans le message). */
+    retailer: string | null
     promise: Promise<SetupStore>
     resolve: (store: SetupStore) => void
     reject: (error: DriveBridgeError) => void
@@ -254,10 +256,14 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
      * Fait lire le magasin à l'application (DRV-320, `drive.setup`) : elle ouvre le drive, l'utilisateur s'y connecte et choisit son
      * magasin, l'agent le lit et l'application revient ici. Rend le magasin lu ; rejette avec une `DriveBridgeError` : `UNAVAILABLE`
      * (hors de l'application), `REFUSED` (`detail` : `BUSY`, `UNAVAILABLE`, `INVALID_SETUP`), `CANCELLED` (abandon) ou `SETUP_FAILED`
-     * (`detail` : le code de l'agent). Une lecture déjà en cours est rouverte et attendue, pas doublée.
+     * (`detail` : le code de l'agent). Une lecture déjà en cours est rouverte et attendue, pas doublée ; celle d'un autre drive est refusée (`BUSY`).
+     * `retailer` (DRV-709) : le drive dont on lit le magasin, écrit dans le message ; à ne donner qu'à une application qui l'annonce dans
+     * `app.info.retailers` (une ancienne ne lit que le drive d'avant et ne connaît pas la clé). Sans lui, le message est celui d'avant.
      */
-    startSetup(): Promise<SetupStore> {
+    startSetup(retailer: string | null = null): Promise<SetupStore> {
       const native = requireNative()
+      if (pendingSetup !== null && pendingSetup.retailer !== retailer)
+        return Promise.reject(new DriveBridgeError('REFUSED', 'BUSY'))
       const created = pendingSetup === null
       const runId = pendingSetup?.runId ?? crypto.randomUUID()
       if (pendingSetup === null) {
@@ -267,11 +273,16 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
           resolve = ok
           reject = ko
         })
-        pendingSetup = { runId, promise, resolve, reject }
+        pendingSetup = { runId, retailer, promise, resolve, reject }
       }
       const pending = pendingSetup
       try {
-        send(native, { v: PROTOCOL_VERSION, type: 'drive.setup', runId })
+        send(native, {
+          v: PROTOCOL_VERSION,
+          type: 'drive.setup',
+          runId,
+          ...(retailer === null ? {} : { retailer }),
+        })
       } catch (error) {
         if (created) pendingSetup = null
         throw error

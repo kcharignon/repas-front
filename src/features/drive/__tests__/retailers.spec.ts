@@ -8,7 +8,14 @@ import { i18n } from '@/i18n'
 
 import fr from '@/i18n/fr'
 
-import { DEFAULT_RETAILER, RETAILERS, finalizeLink, retailerOf, retailerParams } from '../retailers'
+import {
+  DEFAULT_RETAILER,
+  RETAILERS,
+  appServes,
+  finalizeLink,
+  retailerOf,
+  retailerParams,
+} from '../retailers'
 import type { Retailer } from '../retailers'
 import { parseStoreAddress, readExplicitStore } from '../storeAddress'
 import { translateFor } from './retailerT'
@@ -176,6 +183,13 @@ describe('le registre des enseignes du web', () => {
     expect(
       finalizeLink('https://x-test.leclercdrive.fr/magasin-123456-123456-Ville-Test', true),
     ).toBe('https://x-test.leclercdrive.fr/magasin-123456-123456')
+  })
+
+  it('une application qui n’annonce rien ne sert que le drive d’avant (DRV-707, DRV-709)', () => {
+    expect(appServes(undefined, DEFAULT_RETAILER.id)).toBe(true)
+    expect(appServes(undefined, 'auchan')).toBe(false)
+    expect(appServes(['leclerc', 'auchan'], 'auchan')).toBe(true)
+    expect(appServes(['auchan'], 'leclerc')).toBe(false)
   })
 
   it('dit le nom, son élision et le nom de l’application par paramètre', () => {

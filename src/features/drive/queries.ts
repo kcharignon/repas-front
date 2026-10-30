@@ -8,7 +8,7 @@ import { shoppingListKeys } from '@/features/shopping-lists/queries'
 import { useSessionStore } from '@/session/session'
 
 import { retailerOf } from './retailers'
-import type { Retailer } from './retailers'
+import type { Retailer, RetailerId } from './retailers'
 
 export const driveKeys = {
   all: ['drive'] as const,
@@ -91,20 +91,54 @@ export function useSaveChoices() {
 }
 
 /**
- * Enregistre le magasin de l'utilisateur (`PUT /drive/settings`) ; il remplace le précédent. L'échec s'affiche dans l'écran
- * (`silent`) ; en cas de succès, tout ce que le drive a lu pour l'ancien magasin (choix, plans) est relu.
+ * Enregistre le magasin de l'utilisateur (`PUT /drive/settings`) ; il remplace le précédent. `retailer` (DRV-709) : le drive de la ligne touchée
+ * dans « Mes drives » ; sans lui, celui des réglages (le seul quand il n'y en a qu'un). L'échec s'affiche dans l'écran (`silent`) ; en cas de succès,
+ * tout ce que le drive a lu pour l'ancien magasin (choix, plans) est relu.
  */
 export function useSaveDriveSettings() {
   const { api } = useSessionStore()
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (store: DriveStorePayload) =>
+    mutationFn: ({ store, retailer }: { store: DriveStorePayload; retailer?: RetailerId }) =>
       unwrap(
         api.PUT('/api/v1/drive/settings', {
-          body: { retailer: cachedRetailer(queryClient).id, store },
+          body: { retailer: retailer ?? cachedRetailer(queryClient).id, store },
         }),
       ),
+    meta: { silent: true },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: driveKeys.all }),
+  })
+}
+
+/**
+ * Fixe le drive habituel (`PUT /drive/default-retailer`, DRV-709), ou l'efface (`null`, « Aucun ») : la clé `retailer` est toujours écrite. L'échec
+ * s'affiche dans l'écran (`silent`) ; en cas de succès les réglages sont relus (la sélection du back change avec lui).
+ */
+export function useSetDefaultRetailer() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (retailer: RetailerId | null) =>
+      unwrap(api.PUT('/api/v1/drive/default-retailer', { body: { retailer } })),
+    meta: { silent: true },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: driveKeys.settings }),
+  })
+}
+
+/**
+ * Retire un drive (`DELETE /drive/settings?retailer=`, DRV-709) : son magasin n'est plus enregistré ; les produits habituels et les choix restent,
+ * pour un retour. Le back efface lui-même le drive habituel et la dernière enseigne si c'était celui-là. L'échec s'affiche dans l'écran (`silent`) ;
+ * en cas de succès tout ce que le drive a lu est relu.
+ */
+export function useRemoveDrive() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (retailer: RetailerId) =>
+      unwrap(api.DELETE('/api/v1/drive/settings', { params: { query: { retailer } } })),
     meta: { silent: true },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: driveKeys.all }),
   })

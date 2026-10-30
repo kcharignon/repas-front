@@ -175,3 +175,16 @@ export const finalizeLink = (
     return retailer.homeUrl
   }
 }
+
+/**
+ * Les drives que sert une application qui n'annonce rien (`app.info` sans `retailers`, DRV-707) : celui d'avant les drives multiples. Le seul endroit
+ * qui le dit.
+ */
+const LEGACY_APP_RETAILERS: readonly string[] = ['leclerc']
+
+/**
+ * L'application sert-elle ce drive ? D'après ce qu'elle annonce (`app.info.retailers`) ; sans annonce (ancienne application, ou réponse pas encore
+ * lue : `undefined`), elle ne sert que le drive d'avant. Un drive que l'application ne connaît pas ne reçoit ni lecture de magasin ni plan.
+ */
+export const appServes = (announced: readonly string[] | undefined, id: string): boolean =>
+  (announced ?? LEGACY_APP_RETAILERS).includes(id)
