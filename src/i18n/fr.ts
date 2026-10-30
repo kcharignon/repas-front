@@ -10,6 +10,7 @@ export default {
     recipes: 'Recettes',
     departments: 'Rayons',
     account: 'Moi',
+    accountUpdate: 'Moi, une nouvelle version est prête',
   },
   common: {
     loading: 'Chargement…',

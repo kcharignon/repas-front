@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { BookOpen, LayoutGrid, ShoppingBasket, User } from 'lucide-vue-next'
@@ -7,8 +8,40 @@ import OfflineBanner from '@/app/OfflineBanner.vue'
 import logo from '@/assets/logo.png'
 import { cn } from '@/design/cn'
 import SeasonArt from '@/design/season/SeasonArt.vue'
+import { useAppUpdateStore } from '@/features/drive/appUpdateStore'
+import { useAppVersionStore } from '@/features/drive/appVersionStore'
+import { useAppUpdateAvailable } from '@/features/drive/useAppUpdateAvailable'
+import { useSessionStore } from '@/session/session'
 
 const { t } = useI18n()
+const session = useSessionStore()
+const versions = useAppVersionStore()
+const updates = useAppUpdateStore()
+const { available: updateAvailable, inApp } = useAppUpdateAvailable()
+
+// La recherche d'une nouvelle version se fait dès l'ouverture de l'application (pas seulement dans « Moi ») et quand elle revient au premier
+// plan, au plus toutes les cinq minutes (le plafond de l'application, tenu aussi ici). Rien dans un navigateur.
+const CHECK_EVERY_MS = 5 * 60_000
+let lastCheck = Number.NEGATIVE_INFINITY
+
+async function searchNewVersion() {
+  if (!inApp || session.user === null) return
+  const now = Date.now()
+  if (now - lastCheck < CHECK_EVERY_MS) return
+  lastCheck = now
+  await versions.read()
+  if (versions.selfUpdate) void updates.check()
+}
+
+function onVisible() {
+  if (document.visibilityState === 'visible') void searchNewVersion()
+}
+
+onMounted(() => {
+  void searchNewVersion()
+  document.addEventListener('visibilitychange', onVisible)
+})
+onBeforeUnmount(() => document.removeEventListener('visibilitychange', onVisible))
 
 // Les entrées de navigation s'ajoutent avec les écrans : liste de courses, recettes, rayons.
 const nav = [
@@ -65,7 +98,16 @@ const link =
         :class="cn(link, 'flex-1')"
         active-class="text-primary"
       >
-        <component :is="item.icon" class="size-6" aria-hidden="true" />{{ t(item.label) }}
+        <span class="relative">
+          <component :is="item.icon" class="size-6" aria-hidden="true" />
+          <span
+            v-if="item.name === 'account' && updateAvailable"
+            data-testid="account-update-dot"
+            aria-hidden="true"
+            class="absolute -top-[3px] -right-[5px] size-3 rounded-full border-2 border-surface bg-accent"
+          />
+        </span>
+        {{ item.name === 'account' && updateAvailable ? t('nav.accountUpdate') : t(item.label) }}
       </RouterLink>
     </nav>
   </div>
