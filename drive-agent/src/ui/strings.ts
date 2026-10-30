@@ -762,6 +762,45 @@ export const S = {
     /** Un rayon du site dont la recherche filtrée ne rend pas ses produits (DRV-647, 0.38.0) : la liste revient entière, rangée des familles. */
     aisleUnexpected: 'Ce rayon ne répond pas comme prévu.',
     subAisles: (label: string) => `Rayons de « ${label} »`,
+    /**
+     * Trier la liste (DRV-743), un ordre d'affichage : quatre boutons, le sens par une flèche sur le bouton actif, une phrase qui dit l'ordre. « Pertinence » est l'ordre
+     * du site. Le « prix au kilo » devient « au litre » ou « à la pièce » quand la liste est mesurée ainsi (on ne compare pas des kilos et des litres).
+     */
+    sort: {
+      title: 'Trier',
+      relevance: 'Pertinence',
+      price: 'Prix',
+      unitPrice: (unit: 'kg' | 'l' | 'piece') =>
+        unit === 'l' ? 'Prix au litre' : unit === 'piece' ? 'Prix à la pièce' : 'Prix au kilo',
+      name: 'A → Z',
+      /** Le bouton actif : son texte porte la flèche du sens, ↑ croissant et ↓ décroissant. */
+      active: (label: string, direction: 'asc' | 'desc') =>
+        `${label} ${direction === 'asc' ? '↑' : '↓'}`,
+      /** Le nom accessible du bouton actif : le texte visible, puis le sens dit en mots. */
+      activeNamed: (label: string, direction: 'asc' | 'desc', alphabetic: boolean) => {
+        const way = alphabetic
+          ? direction === 'asc'
+            ? 'de A à Z'
+            : 'de Z à A'
+          : direction === 'asc'
+            ? 'croissant'
+            : 'décroissant'
+        return `${label}, ${way}`
+      },
+      help: {
+        relevance: 'Dans l’ordre du site.',
+        price: (direction: 'asc' | 'desc') =>
+          `${direction === 'asc' ? 'Du moins cher au plus cher.' : 'Du plus cher au moins cher.'} Touche encore pour inverser.`,
+        unitPrice: (direction: 'asc' | 'desc', unit: 'kg' | 'l' | 'piece') => {
+          const per = unit === 'l' ? 'au litre' : unit === 'piece' ? 'à la pièce' : 'au kilo'
+          const order =
+            direction === 'asc' ? 'Du moins cher au plus cher' : 'Du plus cher au moins cher'
+          return `${order} ${per}. Touche encore pour inverser.`
+        },
+        name: (direction: 'asc' | 'desc') =>
+          `${direction === 'asc' ? 'De A à Z.' : 'De Z à A.'} Touche encore pour inverser.`,
+      },
+    },
     searchLabel: 'Chercher autre chose',
     searchButton: 'Chercher',
     searching: 'Recherche en cours…',
