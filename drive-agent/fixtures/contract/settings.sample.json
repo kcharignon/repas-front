@@ -16,6 +16,16 @@
                 "label": "Ville-Test",
                 "baseUrl": "https://exemple.leclercdrive.fr/magasin-123456-123456"
             }
+        },
+        {
+            "retailer": "auchan",
+            "name": "Auchan",
+            "configured": true,
+            "store": {
+                "id": "0b5f8a2e-3c1d-4e7f-9a6b-123456789abc",
+                "label": "Ville-Test",
+                "baseUrl": "https://www.auchan.fr/"
+            }
         }
     ]
 }
