@@ -9,6 +9,7 @@ import {
   DriveBridgeError,
   type DriveBridgeErrorCode,
   type DriveEvent,
+  type DriveResult,
 } from '..'
 import { fakeNative } from './fakeNative'
 
@@ -210,6 +211,7 @@ describe('driveBridge', () => {
       expect(draft).toEqual({
         runId: RUN,
         listId: 'l1',
+        retailer: 'leclerc',
         startedAt: NOW.toISOString(),
         lines: SENT_LINES,
       })
@@ -308,6 +310,114 @@ describe('driveBridge', () => {
     })
   })
 
+  // Le drive du passage (DRV-710) : un autre drive a d'autres formes d'identifiants, et son résultat ne se rattache pas au passage d'un autre
+  describe('le drive du passage', () => {
+    const SECOND_STORE = '0b5f8a2e-3c1d-4e7f-9a6b-123456789abc'
+    const SECOND_PRODUCT = '5d3c2b1a-9f8e-4d7c-8b6a-0123456789ab'
+    const SECOND_OFFER = 'c3b2a1d0-5e4f-4a6b-9c8d-7e6f5a4b3c2d'
+
+    const secondPlan = (runId = RUN): PlanMessage => ({
+      v: 1,
+      type: 'plan',
+      runId,
+      retailer: 'auchan',
+      store: { id: SECOND_STORE, host: 'www.auchan.fr' },
+      returnPath: '/drive/retour',
+      lines: [
+        {
+          ingredientSlug: 'farine',
+          name: 'Farine',
+          status: 'KNOWN',
+          products: [
+            { id: SECOND_PRODUCT, offerId: SECOND_OFFER, label: 'Farine de test 1 kg', packs: 1 },
+          ],
+          rejected: [],
+          searchQuery: 'farine',
+        },
+      ],
+    })
+    const secondResult = (store: string, runId = RUN) => ({
+      ...result(runId),
+      store: { id: store },
+      lines: [
+        {
+          ingredientSlug: 'farine',
+          outcome: 'ADDED',
+          productId: SECOND_PRODUCT,
+          quantity: 1,
+          usedRank: 1,
+        },
+      ],
+    })
+
+    it('le brouillon garde le drive du plan envoyé, et se relit avec les identifiants de ce drive', () => {
+      const first = setup()
+      const draft = first.bridge.startRun(secondPlan(), 'l1')
+
+      expect(draft.retailer).toBe('auchan')
+      const reloaded = createDriveBridge({ window: first.window, now: () => NOW })
+      expect(reloaded.loadDraft()).toEqual(draft)
+      expect(JSON.parse(localStorage.getItem(DRAFT_KEY) ?? '')).toMatchObject({
+        retailer: 'auchan',
+        lines: [{ products: [SECOND_PRODUCT] }],
+      })
+    })
+
+    it('refuse un brouillon dont les produits n’ont pas la forme de son drive, ou dont le drive est inconnu', () => {
+      const { bridge } = setup()
+      const base = { runId: RUN, listId: 'l1', startedAt: NOW.toISOString() }
+      // Des identifiants numériques dans un brouillon du drive aux identifiants à tirets
+      localStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({ ...base, retailer: 'auchan', lines: [line({ products: ['111'] })] }),
+      )
+      expect(bridge.loadDraft()).toBeNull()
+
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...base, retailer: 'inconnu' }))
+      expect(bridge.loadDraft()).toBeNull()
+    })
+
+    it('rattache le résultat dont le magasin a la forme de celui du drive du brouillon', () => {
+      const { bridge, events, listen, reply } = setup()
+      listen()
+      bridge.startRun(secondPlan(), 'l1')
+
+      reply({ v: 1, type: 'drive.result', result: secondResult(SECOND_STORE) })
+
+      expect(events.map((event) => event.kind)).toEqual(['result'])
+    })
+
+    it('ignore, comme un autre passage, le résultat d’un autre drive que celui du brouillon', () => {
+      const { bridge, events, listen, reply } = setup()
+      listen()
+      bridge.startRun(secondPlan(), 'l1')
+
+      // Même `runId`, mais le magasin est un numéro : il vient de l'autre drive
+      reply({ v: 1, type: 'drive.result', result: result() })
+
+      expect(events.map((event) => event.kind)).toEqual(['stale'])
+      expect(bridge.matchesDraft(result() as DriveResult)).toBe(false)
+    })
+
+    it('le résultat sans magasin ne dit rien de plus : seul son passage compte', () => {
+      const { bridge, events, listen, reply } = setup()
+      listen()
+      bridge.startRun(plan(), 'l1')
+      const { store: _store, ...withoutStore } = result()
+
+      reply({ v: 1, type: 'drive.result', result: withoutStore })
+
+      expect(events.map((event) => event.kind)).toEqual(['result'])
+    })
+
+    it('un même passage ne change pas de drive : l’écran abandonne d’abord le passage de l’autre drive', () => {
+      const { bridge } = setup()
+      bridge.startRun(plan(), 'l1')
+
+      expect(codeOf(() => bridge.startRun(secondPlan(), 'l1'))).toBe('RUN_IN_PROGRESS')
+    })
+  })
+
   it('cancel envoie drive.cancel', () => {
     const { bridge, sent } = setup()
 
@@ -328,10 +438,16 @@ describe('driveBridge', () => {
         {
           kind: 'result',
           result: result(),
-          draft: { runId: RUN, listId: 'l1', startedAt: NOW.toISOString(), lines: SENT_LINES },
+          draft: {
+            runId: RUN,
+            listId: 'l1',
+            retailer: 'leclerc',
+            startedAt: NOW.toISOString(),
+            lines: SENT_LINES,
+          },
         },
       ])
-      expect(bridge.matchesDraft(result())).toBe(true)
+      expect(bridge.matchesDraft(result() as DriveResult)).toBe(true)
       // Le brouillon reste jusqu’à ce que l’écran l’efface
       expect(bridge.loadDraft()).not.toBeNull()
     })
@@ -345,7 +461,7 @@ describe('driveBridge', () => {
       reply(driveResult(OTHER_RUN))
 
       expect(events.map((event) => event.kind)).toEqual(['stale', 'stale'])
-      expect(bridge.matchesDraft(result(OTHER_RUN))).toBe(false)
+      expect(bridge.matchesDraft(result(OTHER_RUN) as DriveResult)).toBe(false)
     })
 
     it('reconnaît aussi la lecture du magasin', () => {
@@ -468,7 +584,13 @@ describe('driveBridge', () => {
 
       const reloaded = createDriveBridge({ window: first.window, now: () => NOW })
 
-      const expected = { runId: RUN, listId: 'l1', startedAt: NOW.toISOString(), lines: SENT_LINES }
+      const expected = {
+        runId: RUN,
+        listId: 'l1',
+        retailer: 'leclerc',
+        startedAt: NOW.toISOString(),
+        lines: SENT_LINES,
+      }
       expect(reloaded.loadDraft()).toEqual(expected)
       expect(JSON.parse(localStorage.getItem(DRAFT_KEY) ?? '')).toEqual(expected)
     })
@@ -494,7 +616,7 @@ describe('driveBridge', () => {
 
       expect(bridge.loadDraft()).toBeNull()
       expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
-      expect(bridge.matchesDraft(result())).toBe(false)
+      expect(bridge.matchesDraft(result() as DriveResult)).toBe(false)
     })
 
     it('s’efface à la demande', () => {
@@ -575,7 +697,8 @@ describe('driveBridge', () => {
       const old = { runId: RUN, listId: 'l1', startedAt: NOW.toISOString() }
       localStorage.setItem(DRAFT_KEY, JSON.stringify(old))
 
-      expect(bridge.loadDraft()).toEqual(old)
+      // Écrit avant les drives multiples (DRV-710) : le seul drive d'alors
+      expect(bridge.loadDraft()).toEqual({ ...old, retailer: 'leclerc' })
     })
 
     it.each([

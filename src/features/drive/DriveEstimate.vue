@@ -11,12 +11,14 @@ import UiButton from '@/design/UiButton.vue'
 import { isRateLimited, messageForFailure } from '@/notifications/failures'
 import { useOnline } from '@/offline/useOnline'
 import { formatEuros, groupLines, toBuy } from './estimate'
+import type { RetailerId } from './retailers'
 import { useDriveEstimate, useDriveSettings } from './queries'
 
 // Le bloc « Estimation du coût » d'une liste (DRV-612) : le total estimé et le nombre d'articles estimés, rien d'autre (DRV-628 : les réserves
 // sur l'estimation sont dans les conditions d'utilisation du drive). Rien n'est calculé ici : le back donne le total, la couverture et le
 // statut de chaque ligne ; l'écran les range et les écrit.
-const props = defineProps<{ listId: string }>()
+// `retailer` (DRV-710) : le drive estimé quand l'écran d'envoi en a choisi un ; sans lui, celui que le back prend (la sélection), comme sur la liste.
+const props = defineProps<{ listId: string; retailer?: RetailerId }>()
 
 const { t, d } = useI18n()
 const online = useOnline()
@@ -29,6 +31,7 @@ const usable = computed(
 const estimate = useDriveEstimate(
   () => props.listId,
   () => usable.value,
+  () => props.retailer,
 )
 
 const failure = computed(() => (hasFailed(estimate) ? estimate.error.value : null))
