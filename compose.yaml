@@ -165,6 +165,8 @@ services:
       - ./android/dist:/apk:ro
       # Le faux site Leclerc complet (DRV-309), rejoué dans l'émulateur par `make android-e2e` (DRV-319, partie 2) : Node l'exécute dans le conteneur.
       - ./drive-agent/fake-leclerc:/opt/fake-leclerc:ro
+      # Le faux site d'Auchan (DRV-717), rejoué dans l'émulateur par le scénario 21 de `make android-e2e` (DRV-731) : Node l'exécute dans le conteneur.
+      - ./drive-agent/fake-auchan:/opt/fake-auchan:ro
     stop_grace_period: 30s
 
   # Image de production (statique + relais vers le back) : http://localhost:8081, pour essayer le build comme en production.
