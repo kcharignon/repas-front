@@ -4,29 +4,26 @@
 //   - Il n'écoute que sur 127.0.0.1 et refuse toute connexion qui ne vient pas de la boucle locale ou qui vise un autre nom d'hôte que ceux de sa liste
 //     (`localhost`, `127.0.0.1`, `www.auchan.fr`) : il ne sort jamais du poste.
 //   - `GET /journey` n'est servi qu'à une requête XHR (`X-Requested-With: XMLHttpRequest`) : tout écart reçoit un `400` consigné dans `rejected`.
-//   - `POST /cart/update` (un squelette pour DRV-725) vérifie la forme mesurée : JSON, `X-Requested-With`, aucun jeton d'en-tête, `cartId` accordé au
-//     cookie `lark-cart` (visiteur) ou à la lecture du panier (client connecté), quantité absolue.
+//   - Le panier (`GET /cart`, `POST /cart/update`, DRV-725) est dans `cart.ts` : forme mesurée (JSON, `X-Requested-With`, aucun jeton d'en-tête, `cartId`,
+//     quantité absolue) et pannes pilotables.
 //   - Il surveille la cadence (jamais deux requêtes de l'agent en parallèle, `MIN_GAP_MS` au moins entre deux) et la consigne dans `violations()`.
 //   - Une adresse inconnue est un VRAI `404` (B-6, mesuré), avec la page « Erreur 404 ».
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 
-import { findProduct, searchCatalog } from './catalog.ts'
+import { createFakeCart, type CartBehavior } from './cart.ts'
+import { searchCatalog } from './catalog.ts'
 import {
-  cartConfig,
   cartPage,
-  cartResponse,
   challengePage,
   CONSENT_ID,
   coursesPage,
   journeyBody,
-  MEMBER_CART_ID,
   notFoundPage,
   searchPage,
   STORE,
   VISITOR_CART_ID,
   type Bar,
-  type CartLine,
   type EntryForm,
   type PageOptions,
   type SessionKind,
@@ -127,6 +124,11 @@ export interface FakeAuchan {
   reset(): void
   /** Le panier : identifiant de produit vers quantité. */
   cart(): Record<string, number>
+  /** Ce que le panier fait (DRV-725, `cart.ts`) : écriture ignorée, quantité fausse, défi, panne… */
+  cartBehavior(): CartBehavior
+  setCartBehavior(patch: Partial<CartBehavior>): void
+  /** Pose une ligne dans le panier avant le passage (un panier qui n'est pas vide au départ). */
+  seedCart(productId: string, quantity: number): void
   requests(): FakeRequest[]
   /** Les requêtes de l'agent (le parcours, la recherche, le panier), dans l'ordre. */
   paced(): FakeRequest[]
@@ -198,20 +200,23 @@ const JSON_HEADERS = {
 export async function startFakeAuchan(options: FakeOptions = {}): Promise<FakeAuchan> {
   const hosts = new Set([SITE_HOST, ...(options.hosts ?? [])])
   let behavior: Behavior = { ...DEFAULT_BEHAVIOR, ...options.behavior }
-  const cart = new Map<string, CartLine>()
-  let cartVersion = 1
-  let lineCounter = 0
   const log: FakeRequest[] = []
   const violations: Violation[] = []
   let inFlight = 0
   let lastPacedEnd: number | null = null
   let pacedCount = 0
 
+  // Le panier (DRV-725) : son état et ses pannes sont dans `cart.ts` ; le serveur lui prête sa cadence et ses réponses.
+  const cartSim = createFakeCart({
+    paced: (entry, serve) => paced(entry, serve),
+    send: (res, status, body, headers) => send(res, status, body, headers),
+    readBody: (req) => readBody(req),
+    session: () => behavior.session,
+  })
+
   function reset(): void {
     behavior = { ...DEFAULT_BEHAVIOR }
-    cart.clear()
-    cartVersion = 1
-    lineCounter = 0
+    cartSim.reset()
     log.length = 0
     violations.length = 0
     lastPacedEnd = null
@@ -318,93 +323,6 @@ export async function startFakeAuchan(options: FakeOptions = {}): Promise<FakeAu
     })
   }
 
-  /** L'identifiant du panier de la session : le cookie `lark-cart` pour un visiteur, celui du compte pour un client connecté. */
-  const sessionCartId = (): string =>
-    behavior.session === 'member' ? MEMBER_CART_ID : VISITOR_CART_ID
-
-  async function cartRead(
-    entry: FakeRequest,
-    req: IncomingMessage,
-    res: ServerResponse,
-    url: URL,
-  ): Promise<void> {
-    await paced(entry, async () => {
-      if (req.headers['x-requested-with'] !== 'XMLHttpRequest') {
-        return reject(entry, res, 'X-Requested-With manquant')
-      }
-      if (url.searchParams.get('consentId') !== CONSENT_ID)
-        return reject(entry, res, 'consentId inconnu')
-      const cartId = url.searchParams.get('cartId')
-      // Visiteur : le panier se lit avec `cartId` ; client connecté : sans (C-3).
-      if (behavior.session === 'member' && cartId !== null)
-        return reject(entry, res, 'cartId pour un client connecté')
-      if (behavior.session !== 'member' && cartId !== VISITOR_CART_ID) {
-        return reject(entry, res, 'cartId du visiteur inconnu')
-      }
-      entry.status = 200
-      return send(
-        res,
-        200,
-        JSON.stringify(cartResponse(sessionCartId(), cartVersion, cart)),
-        JSON_HEADERS,
-      )
-    })
-  }
-
-  async function cartWrite(
-    entry: FakeRequest,
-    req: IncomingMessage,
-    res: ServerResponse,
-  ): Promise<void> {
-    await paced(entry, async () => {
-      const text = await readBody(req)
-      entry.detail = text
-      if (req.headers['x-requested-with'] !== 'XMLHttpRequest') {
-        return reject(entry, res, 'X-Requested-With manquant')
-      }
-      if (!/^application\/json/i.test(req.headers['content-type'] ?? '')) {
-        return reject(entry, res, 'Content-Type attendu : JSON')
-      }
-      let body: Record<string, unknown>
-      try {
-        body = JSON.parse(text) as Record<string, unknown>
-      } catch {
-        return reject(entry, res, 'corps illisible')
-      }
-      if (body.cartId !== sessionCartId()) return reject(entry, res, 'cartId inconnu')
-      if (body.consentId !== CONSENT_ID) return reject(entry, res, 'consentId inconnu')
-      const items = body.items
-      if (!Array.isArray(items) || items.length !== 1)
-        return reject(entry, res, 'items attendus : un seul produit')
-      const item = items[0] as Record<string, unknown>
-      const product = typeof item.productId === 'string' ? findProduct(item.productId) : undefined
-      if (product === undefined || item.offerId !== product.offerId)
-        return reject(entry, res, 'produit ou offre inconnus')
-      const quantity = item.desiredQuantity
-      if (typeof quantity !== 'number' || !Number.isInteger(quantity) || quantity < 0) {
-        return reject(entry, res, 'desiredQuantity invalide')
-      }
-      // Quantité ABSOLUE (C-2) : le total voulu ; 0 retire la ligne ; au plus `maxQuantity` (C-5).
-      const wanted = Math.min(quantity, product.maxQuantity)
-      if (wanted === 0) cart.delete(product.productId)
-      else {
-        const line = cart.get(product.productId) ?? {
-          id: `l0000000-0000-4000-8000-${String(++lineCounter).padStart(12, '0')}`,
-          quantity: 0,
-        }
-        cart.set(product.productId, { id: line.id, quantity: wanted })
-      }
-      cartVersion += 1
-      entry.status = 200
-      return send(
-        res,
-        200,
-        JSON.stringify(cartResponse(sessionCartId(), cartVersion, cart)),
-        JSON_HEADERS,
-      )
-    })
-  }
-
   async function search(entry: FakeRequest, url: URL, res: ServerResponse): Promise<void> {
     const text = url.searchParams.get('text') ?? ''
     entry.detail = text
@@ -436,21 +354,7 @@ export async function startFakeAuchan(options: FakeOptions = {}): Promise<FakeAu
       entry.kind = 'journey'
       return journey(entry, req, res)
     }
-    if (path === '/cart/config' && get) {
-      entry.kind = 'cart'
-      return paced(entry, () => {
-        entry.status = 200
-        return send(res, 200, JSON.stringify(cartConfig()), JSON_HEADERS)
-      })
-    }
-    if (path === '/cart' && get) {
-      entry.kind = 'cart'
-      return cartRead(entry, req, res, url)
-    }
-    if (path === '/cart/update' && req.method === 'POST') {
-      entry.kind = 'cart'
-      return cartWrite(entry, req, res)
-    }
+    if (cartSim.handles(req.method ?? 'GET', path)) return cartSim.handle(entry, req, res, url)
     if (path === '/recherche' && get) {
       entry.kind = 'search'
       return search(entry, url, res)
@@ -492,8 +396,9 @@ export async function startFakeAuchan(options: FakeOptions = {}): Promise<FakeAu
         res,
         200,
         JSON.stringify({
-          cart: Object.fromEntries([...cart].map(([id, line]) => [id, line.quantity])),
+          cart: cartSim.contents(),
           behavior,
+          cartBehavior: cartSim.behavior(),
           requests: log.filter((r) => r.kind !== 'control'),
           violations,
         }),
@@ -503,6 +408,10 @@ export async function startFakeAuchan(options: FakeOptions = {}): Promise<FakeAu
     if (req.method === 'POST' && path === '/__fake/behavior') {
       behavior = { ...behavior, ...(JSON.parse(await readBody(req)) as Partial<Behavior>) }
       return send(res, 200, JSON.stringify(behavior), json)
+    }
+    if (req.method === 'POST' && path === '/__fake/cart-behavior') {
+      cartSim.setBehavior(JSON.parse(await readBody(req)) as Partial<CartBehavior>)
+      return send(res, 200, JSON.stringify(cartSim.behavior()), json)
     }
     if (req.method === 'POST' && path === '/__fake/reset') {
       reset()
@@ -558,7 +467,10 @@ export async function startFakeAuchan(options: FakeOptions = {}): Promise<FakeAu
       behavior = { ...behavior, ...patch }
     },
     reset,
-    cart: () => Object.fromEntries([...cart].map(([id, line]) => [id, line.quantity])),
+    cart: () => cartSim.contents(),
+    cartBehavior: () => cartSim.behavior(),
+    setCartBehavior: (patch) => cartSim.setBehavior(patch),
+    seedCart: (productId, quantity) => cartSim.seed(productId, quantity),
     requests: () =>
       log.filter((request) => request.kind !== 'control').map((request) => ({ ...request })),
     paced: () =>

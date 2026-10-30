@@ -33,6 +33,11 @@ export interface PacerTuning {
   readonly jitterMs: number
   readonly maxPauseMs: number
   readonly timeoutMessage: string
+  /**
+   * Ce qui est une page de défi pour cette enseigne (DRV-725), à partir du texte et du code HTTP de la réponse. Absent : `isChallenge` (`captcha-delivery.com`),
+   * comme chez Leclerc.
+   */
+  readonly challenge?: (text: string, status: number) => boolean
 }
 
 /**
@@ -254,7 +259,7 @@ export class Pacer {
         disarm?.()
       }
       this.lastEnd = this.deps.now()
-      const challenge = isChallenge(reply.text)
+      const challenge = (this.tuning.challenge ?? isChallenge)(reply.text, reply.status)
       const refused = challenge || reply.status === 403 || reply.status === 429
       const slow = this.lastEnd - startedAt > SLOW_REPLY_MS
       if (slow) this.counters.slow += 1
