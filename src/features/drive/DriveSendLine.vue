@@ -7,6 +7,7 @@ import UiChip from '@/design/UiChip.vue'
 import { formatQuantity } from '@/features/shopping-lists/format'
 import { effectiveStatus } from './buildPlanMessage'
 import type { LineChange } from './buildPlanMessage'
+import type { RetailerId } from './retailers'
 
 const props = defineProps<{
   line: DrivePlanLine
@@ -14,10 +15,12 @@ const props = defineProps<{
   /** Mode assisté (hors de l'application) : pas de choix par ligne, un lien de recherche sur le site de l'enseigne. */
   assisted: boolean
   searchUrl: string
+  /** Le drive de l'envoi (DRV-710) quand ce n'est pas celui des réglages : les textes le nomment. */
+  retailer?: RetailerId
 }>()
 const emit = defineEmits<{ change: [change: LineChange | undefined] }>()
 
-const { t } = useRetailerI18n()
+const { t } = useRetailerI18n(() => props.retailer)
 
 const status = computed(() =>
   effectiveStatus(props.line, { [props.line.ingredientSlug]: props.change }),

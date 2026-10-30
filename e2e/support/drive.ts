@@ -212,7 +212,7 @@ declare global {
     __sent: {
       type: string
       retailer?: string
-      plan?: { lines: { ingredientSlug: string; status: string }[] }
+      plan?: { retailer?: string; lines: { ingredientSlug: string; status: string }[] }
     }[]
   }
 }
@@ -222,15 +222,17 @@ declare global {
  * mis au panier, un produit de secours, des prix) ou `partial` (le beurre échoue, `BLOCKED`). Avec un résultat tout fait (sans son
  * `runId`, celui du plan reçu y est mis), il le renvoie tel quel : le parcours choisit alors lui-même ce que l'agent a fait. `version` est
  * celle que l'application annonce à `app.info` (`null` : elle ne répond pas), pour essayer une application trop ancienne (DRV-640).
- * `silent` : le drive est ouvert et l'utilisateur n'est pas encore revenu, l'application ne rend aucun résultat.
+ * `silent` : le drive est ouvert et l'utilisateur n'est pas encore revenu, l'application ne rend aucun résultat. `retailers` : les drives que l'application
+ * annonce servir dans `app.info` (DRV-707) ; absent : rien, une application d'avant les drives multiples.
  */
 export async function fakeApp(
   page: Page,
   mode: 'completed' | 'partial' | 'silent' | Record<string, unknown> = 'completed',
   version: string | null = '1.0.0',
+  retailers?: string[],
 ) {
   await page.addInitScript(
-    ([mode, version]) => {
+    ([mode, version, retailers]) => {
       const listeners = new Set<(event: { data: unknown }) => void>()
       window.__sent = []
       ;(window as unknown as { repasNative: unknown }).repasNative = {
@@ -246,6 +248,7 @@ export async function fakeApp(
               version,
               versionCode: 1,
               drive: true,
+              ...(retailers === undefined ? {} : { retailers }),
             })
             setTimeout(() => emit(data), 0)
           }
@@ -309,7 +312,7 @@ export async function fakeApp(
           void listeners.delete(listener),
       }
     },
-    [mode, version] as const,
+    [mode, version, retailers] as const,
   )
 }
 

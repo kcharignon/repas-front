@@ -1,7 +1,7 @@
 import { LIMITS, PROTOCOL_VERSION, ProtocolError, validatePlan } from '@drive-protocol'
 import type { PlanMessage, SetupResultMessage } from '@drive-protocol'
 
-import { browserDraftStorage, createDraftStore, sentLinesOf } from './draft'
+import { browserDraftStorage, createDraftStore, isFromDraft, sentLinesOf } from './draft'
 import type { DraftStorage, DriveResult, RunDraft } from './draft'
 import { DriveBridgeError } from './errors'
 import { byteLength, findNativeBridge, parseInbound } from './native'
@@ -145,7 +145,8 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
       case 'drive.result': {
         if (receiveSetup(inbound.result)) return
         const draft = drafts.load()
-        if (draft !== null && draft.runId === inbound.result.runId)
+        // Le même passage ET le même drive (DRV-710) : un résultat venu pour un autre drive que celui du brouillon est périmé comme un autre `runId`
+        if (draft !== null && isFromDraft(inbound.result, draft))
           return publish({ kind: 'result', result: inbound.result, draft })
         // Un magasin lu que personne n'attend (page rechargée) n'est pas un passage périmé : rien à montrer
         if (inbound.result.type === 'setup-result') return
@@ -230,12 +231,17 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
         )
       }
       const current = drafts.load()
-      if (current !== null && current.runId !== message.runId)
+      // Un autre passage, ou le même identifiant pour un autre drive (jamais voulu : l'écran abandonne d'abord le passage d'un autre drive)
+      if (
+        current !== null &&
+        (current.runId !== message.runId || current.retailer !== message.retailer)
+      )
         throw new DriveBridgeError('RUN_IN_PROGRESS')
 
       const draft: RunDraft = {
         runId: message.runId,
         listId,
+        retailer: message.retailer,
         startedAt: current?.runId === message.runId ? current.startedAt : now().toISOString(),
         // Les lignes envoyées : l'écran du retour n'enregistre que ce qui s'y rattache (DRV-614)
         lines: sentLinesOf(message),
@@ -353,11 +359,11 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
       return () => listeners.delete(listener)
     },
 
-    /** Le passage en cours (`runId`, `listId`, `startedAt`), s'il a moins de 24 h. Survit à un rechargement de la page. */
+    /** Le passage en cours (`runId`, `listId`, `retailer`, `startedAt`), s'il a moins de 24 h. Survit à un rechargement de la page. */
     loadDraft: (): RunDraft | null => drafts.load(),
     clearDraft: (): void => drafts.clear(),
-    /** Ce résultat est-il celui du passage en cours ? Sinon il est périmé. */
-    matchesDraft: (result: { runId: string }): boolean => drafts.matches(result),
+    /** Ce résultat est-il celui du passage en cours, pour son drive ? Sinon il est périmé. */
+    matchesDraft: (result: DriveResult): boolean => drafts.matches(result),
   }
 }
 

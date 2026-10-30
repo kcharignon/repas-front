@@ -8,7 +8,12 @@ import { useDriveReturnStore } from '../returnStore'
 import { result, RUN } from './results'
 
 // Données SYNTHÉTIQUES.
-const draft = { runId: RUN, listId: 'l1', startedAt: '2026-10-18T10:00:00.000Z' }
+const draft = {
+  runId: RUN,
+  listId: 'l1',
+  retailer: 'leclerc' as const,
+  startedAt: '2026-10-18T10:00:00.000Z',
+}
 const sent = [{ ingredientSlug: 'farine', status: 'KNOWN' as const, products: ['222333'] }]
 const lines: ResultLine[] = [
   { ingredientSlug: 'farine', outcome: 'ADDED', productId: '222333', quantity: 1, usedRank: 1 },
