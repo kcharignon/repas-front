@@ -21,6 +21,14 @@ RETAILER_B=exempleb
 SITE_B_HOST=www.exemple-b.test
 STORE_B_HOST=courses-test.exemple-b.test
 PROFILE_B=drive-exempleb
+# Auchan (DRV-731), enseigne ÉTEINTE que seule une construction de débogage allume (ANDROID_EXTRA_RETAILERS=auchan) : ses deux hôtes de test (le site, et la page du
+# mot de passe, où l'application ne met ni pont ni agent) et le profil de WebView que l'application lui donne. Ce sont des données de l'émulateur, jamais du code de l'application.
+AUCHAN_ID=auchan
+AUCHAN_HOST=www.auchan.fr
+AUCHAN_LOGIN_HOST=compte.auchan.fr
+PROFILE_AUCHAN=drive-auchan
+# Le faux site d'Auchan (drive-agent/fake-auchan, DRV-717) : l'adresse de son pilotage dans le conteneur (noms de la boucle locale seulement).
+AUCHAN_CONTROL=http://127.0.0.1:8098/__fake
 # L'APK de débogage construit pour viser https://repas.test/ (voir le Makefile) : l'APK de débogage ordinaire vise le vrai Repas.
 APK=/apk/repas-drive-smoke.apk
 
@@ -109,6 +117,12 @@ has_report_count() { [ "$(reports | grep -o "$1" | wc -l)" -ge "$2" ]; } # au mo
 not_reported() { ! has_report "$1"; } # aucun relevé de ce motif
 post_command() { emu curl -sk -X POST -H 'Content-Type: application/json' -d "$1" "https://127.0.0.1/__command" > /dev/null; } # un ordre pour le faux Repas
 reset_reports() { emu curl -sk -X POST "https://127.0.0.1/__reset" > /dev/null; }
+# Le faux Auchan, vu de l'intérieur du conteneur : son état, sa remise à neuf, son comportement.
+auchan_state() { emu curl -s "$AUCHAN_CONTROL/state"; }
+auchan_behavior() { emu curl -s -X POST -H 'Content-Type: application/json' -d "$1" "$AUCHAN_CONTROL/behavior" > /dev/null; }
+auchan_reset() { emu curl -s -X POST "$AUCHAN_CONTROL/reset" > /dev/null; reset_reports; }
+auchan_requested() { auchan_state | grep -qF "\"path\":\"$1\""; } # le faux Auchan a reçu une requête sur ce chemin
+auchan_kind_seen() { auchan_state | grep -qF "\"kind\":\"$1\""; } # ... d'un de ces genres (journey, search, cart, page)
 # Ce que sert l'accueil de l'enseigne (www.leclercdrive.fr, la page de départ d'un plan et de la lecture du magasin) : « test » (la page locale de
 # test, test de fumée) ou « fake » (l'accueil du faux Leclerc complet, scénarios complets). Usage : www_mode test|fake
 www_mode() { emu curl -sk -X POST -H 'Content-Type: application/json' -d "{\"mode\":\"$1\"}" "https://127.0.0.1/__www" > /dev/null; }

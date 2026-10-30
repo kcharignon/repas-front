@@ -82,6 +82,25 @@ describe('les scripts de l’émulateur', () => {
     expect(checked.status).toBe(0)
   })
 
+  it('jouent Auchan (DRV-731) contre le faux site d’Auchan, sur ses deux seuls hôtes de test, avec un second APK de débogage', () => {
+    const entrypoint = read(join(emulatorDir, 'entrypoint.sh'))
+    const lib = read(join(emulatorDir, 'lib.sh'))
+    const script = read(join(emulatorDir, 'e2e.sh'))
+    const makefile = read(join(androidDir, '..', 'Makefile'))
+    expect(entrypoint).toContain('--address=/www.auchan.fr/10.0.2.2 --address=/compte.auchan.fr/10.0.2.2')
+    expect(entrypoint).not.toMatch(/--address=\/auchan\.fr\//)
+    expect(entrypoint).toContain('DNS:www.auchan.fr,DNS:compte.auchan.fr')
+    expect(lib).toContain('AUCHAN_HOST=www.auchan.fr')
+    expect(lib).toContain('AUCHAN_LOGIN_HOST=compte.auchan.fr')
+    expect(script).toContain('auchan_scenario')
+    expect(makefile).toContain('ANDROID_EXTRA_RETAILERS=auchan')
+    expect(makefile).toContain('ANDROID_APK_NAME=repas-drive-auchan.apk')
+    // L'APK ordinaire des scénarios d'avant n'a jamais Auchan : son appel de construction ne porte pas le drapeau.
+    const ordinary = makefile.split('\n').filter((line) => line.includes('ANDROID_APK_NAME=repas-drive-smoke.apk'))
+    expect(ordinary.length).toBeGreaterThan(0)
+    expect(ordinary.filter((line) => line.includes('ANDROID_EXTRA_RETAILERS'))).toEqual([])
+  })
+
   it('ne parlent qu’à des noms de faux sites, jamais à un vrai hôte', () => {
     const hosts = new Set(
       ['lib.sh', 'smoke.sh', 'e2e.sh']

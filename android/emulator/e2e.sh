@@ -49,6 +49,10 @@
 #  19. une seconde enseigne FICTIVE (APK de débogage seulement, `*.exemple-b.test`, DRV-707) : `drive.setup` ouvre l'écran de CETTE enseigne (pont et agent injectés
 #      chez elle), une adresse de l'autre enseigne part au navigateur du téléphone, un plan dont l'enseigne et le magasin ne vont pas ensemble est refusé
 #      (INVALID_PLAN) ; les profils de WebView séparés ne s'y prouvent pas (la WebView de l'émulateur n'a pas encore les profils : ScreenRetailerTest).
+#  21. Auchan (DRV-731), enseigne ÉTEINTE que seule une construction de débogage allume (un SECOND APK, ANDROID_EXTRA_RETAILERS=auchan) : le menu propose « Ouvrir le
+#      drive Auchan », l'écran s'ouvre sur l'accueil du faux Auchan (drive-agent/fake-auchan) avec le pont et l'agent, MAIS sur l'hôte du mot de passe (la connexion) la
+#      navigation a lieu sans pont ni agent ; le « Diagnostic de l'agent » lit le magasin (hôte www, UUID) sans rien écrire, et s'arrête sur STORE_NOT_CHOSEN sans magasin
+#      choisi ; aucun nom d'Auchan n'est transmis à Internet. L'APK de publication n'a jamais Auchan : `build.sh` (drapeau vide) et `make android-test` le gardent.
 # Les captures d'écran et le rapport texte sont dans android/dist/e2e/.
 # Code de sortie : 0 si tous les contrôles passent, 1 sinon, 3 si KVM manque.
 set -u
@@ -891,6 +895,136 @@ else
 fi
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 check "l'écran n'est plus maintenu allumé" screen_not_held
+
+# Ce que le scénario 21 juge du faux Auchan : aucune écriture au panier, cadence respectée, rien d'envoyé, certificat.
+auchan_no_cart_write() { ! auchan_kind_seen cart; }
+auchan_nothing_sent() { ! auchan_kind_seen search && ! auchan_kind_seen cart; }
+auchan_polite() { auchan_state | grep -q '"violations":\[\]' && ! auchan_state | grep -q '"rejected"'; }
+auchan_dns_local() { ! emu grep -q "forwarded.*auchan" /sdk/site/dns.log; }
+cert_covers_auchan() { local names; names=$(emu openssl x509 -in /sdk/site/cert.pem -noout -ext subjectAltName) && grep -q "$AUCHAN_HOST" <<< "$names" && grep -q "$AUCHAN_LOGIN_HOST" <<< "$names"; }
+
+# --- 21. Auchan, une enseigne éteinte que la construction de débogage allume (DRV-731) -------------------------------------------------------------------
+# L'APK de publication n'a jamais Auchan (drapeau ANDROID_EXTRA_RETAILERS vide, refusé par une publication : `build.sh`, `make android-test`). Ce scénario joue donc
+# un SECOND APK de débogage, construit avec ANDROID_EXTRA_RETAILERS=auchan (`make android-e2e` le construit), contre le faux site d'Auchan (drive-agent/fake-auchan,
+# DRV-717) servi en HTTPS sous www.auchan.fr, avec une page de « connexion » de test sous compte.auchan.fr (l'hôte du mot de passe). Seuls ces deux noms d'Auchan se
+# résolvent, vers le faux site local : JAMAIS vers le vrai. Les scénarios d'avant tournent sur l'APK ordinaire et ne sont pas touchés.
+# Le profil de WebView `drive-auchan` ne se prouve pas ici (la WebView de l'émulateur n'a pas `MULTI_PROFILE`, comme au scénario 19) : son nom est jugé par `ScreenRetailerTest`.
+# Ferme l'écran du diagnostic : son bouton « Fermer » est au bas de l'écran, sous le rapport (on fait défiler jusqu'à lui).
+close_diagnostic() {
+  local attempt
+  for attempt in 1 2 3 4 5 6; do
+    adb shell input swipe 540 1900 540 400 200 > /dev/null 2>&1
+    sleep 1
+    tap 'text="Fermer"' || continue
+    wait_until 6 ui_lacks 'Contrôles terminés' && break
+  done
+  check "le diagnostic est fermé" ui_lacks 'Contrôles terminés'
+}
+auchan_scenario() {
+  local auchan_apk=/apk/repas-drive-auchan.apk
+  if ! emu test -f "$auchan_apk"; then
+    ko "$auchan_apk manque (make android-e2e le construit avec ANDROID_EXTRA_RETAILERS=$AUCHAN_ID)"
+    return
+  fi
+  local_name "$AUCHAN_HOST" "le faux site d'Auchan"
+  local_name "$AUCHAN_LOGIN_HOST" "la page de connexion du faux Auchan"
+  if adb shell ping -c 1 -W 3 "api.auchan.fr" 2>&1 | grep -q 'unknown host\|Name or service not known\|bad address'; then
+    ok "un autre nom d'Auchan (api.auchan.fr) ne se résout pas : seuls les deux hôtes de test sont ouverts"
+  else
+    ko "un autre nom d'Auchan se résout : le DNS de l'émulateur n'est pas fermé"
+  fi
+  if emu curl -s -o /dev/null "$AUCHAN_CONTROL/state"; then
+    ok "le faux site d'Auchan (Node, drive-agent/fake-auchan) répond dans le conteneur"
+  else
+    ko "le faux site d'Auchan ne répond pas (make android-emulator-down puis up reconstruit l'émulateur : il lui faut le dossier monté). ARRÊT."
+    return
+  fi
+  check "le certificat du faux site couvre $AUCHAN_HOST et $AUCHAN_LOGIN_HOST" cert_covers_auchan
+
+  say "   Installation de l'APK de débogage qui allume Auchan"
+  APK=$auchan_apk
+  install_apk
+  adb shell run-as "$APP" rm -f shared_prefs/drive-pass.xml > /dev/null 2>&1
+  auchan_reset
+  start_app
+  wait_until 40 has_report '"page": "repas"' || ko "le faux Repas ne s'est pas chargé"
+  if wait_until 15 has_report '"retailers": \["leclerc", "auchan"\]'; then
+    ok "app.info annonce les enseignes servies par CETTE construction : Leclerc et Auchan"
+  else
+    ko "app.info n'annonce pas retailers [leclerc, auchan]"
+  fi
+
+  # a. Le menu de l'application propose Auchan
+  post_command '{"do":"app.menu"}'
+  if wait_until 10 ui_has 'Réglages du drive'; then ok "app.menu ouvre le menu de l'application"; else ko "le menu ne s'est pas ouvert par app.menu"; fi
+  check "le menu propose « Ouvrir le drive Auchan »" ui_has 'Ouvrir le drive Auchan'
+  check "le menu propose de se déconnecter d'Auchan" ui_has 'Se déconnecter d.Auchan'
+  check "le menu propose toujours « Ouvrir le drive Leclerc »" ui_has 'Ouvrir le drive Leclerc'
+  screenshot e40-menu-auchan
+
+  # b. L'écran s'ouvre sur l'accueil du faux Auchan, pont et agent injectés (hôte www)
+  auchan_reset
+  if tap 'text="Ouvrir le drive Auchan"' && wait_until 40 has_report "\"hostname\": \"$AUCHAN_HOST\", \"path\": \"/courses\", \"topFrame\": true, \"hostHidden\": true, \"hostLocked\": true"; then
+    ok "« Ouvrir le drive Auchan » ouvre l'écran du drive sur l'accueil du faux Auchan ($AUCHAN_HOST/courses), avec le pont et l'agent injectés (le pont retiré de la page, sa propriété verrouillée)"
+  else
+    ko "l'écran du drive d'Auchan ne s'est pas ouvert sur l'accueil du faux Auchan avec le pont"
+  fi
+  check "l'écran du drive est devant" focused_is_drive
+  check "la page du faux Auchan est affichée" wait_until 20 ui_has 'Courses en ligne'
+  screenshot e41-accueil-auchan
+
+  # c. Sur l'hôte du mot de passe, aucun pont ni agent
+  if tap 'text="Se connecter (test)"'; then ok "le lien de connexion du faux Auchan est touché"; else ko "le lien de connexion du faux Auchan est introuvable"; fi
+  if wait_until 30 has_report "\"hostname\": \"$AUCHAN_LOGIN_HOST\", \"path\": \"/connexion\", \"topFrame\": true, \"hostHidden\": true, \"hostLocked\": false"; then
+    ok "sur $AUCHAN_LOGIN_HOST, la navigation a lieu mais repasHost n'a JAMAIS été défini (propriété absente : ni pont, ni agent)"
+  else
+    ko "la page de connexion du faux Auchan n'a pas été relevée comme sans pont"
+  fi
+  check "la page de connexion est affichée dans l'écran du drive" ui_has 'Connexion'
+  check "aucune interface de l'agent n'y est montée" not_reported '"kind": "agent-ui"'
+  screenshot e42-connexion-auchan
+  adb shell input keyevent KEYCODE_BACK
+  check "le retour ramène à l'accueil du faux Auchan" wait_until 20 ui_has 'Courses en ligne'
+
+  # d. Le diagnostic de l'agent, avec un magasin choisi : il lit le magasin
+  auchan_reset
+  if tap 'content-desc="Menu"' && wait_until 10 ui_has 'Diagnostic de l.agent'; then ok "le menu du drive est ouvert"; else ko "le menu du drive est introuvable"; fi
+  check "c'est le menu de l'écran d'Auchan (« Se déconnecter d'Auchan »)" ui_has 'Se déconnecter d.Auchan'
+  if tap 'text="Diagnostic de l.agent"' && wait_until 120 ui_has 'Contrôles terminés'; then
+    ok "le diagnostic de l'agent est joué sur la page du faux Auchan"
+  else
+    ko "le diagnostic de l'agent n'a pas fini"
+  fi
+  screenshot e43-diagnostic-auchan
+  check "le diagnostic lit le magasin : hôte www, numéro caché sauf ses trois derniers chiffres" ui_has 'hôte www, magasin'
+  check "le faux Auchan a reçu GET /journey (le magasin n'est pas dans l'adresse)" auchan_requested '/journey'
+  check "la forme du magasin est un UUID et son libellé est présent (rapport du diagnostic)" ui_has 'UUID'
+  check "le rapport dit « Aucune écriture au panier. »" ui_has 'Aucune écriture au panier'
+  check "aucune écriture au panier du faux Auchan" auchan_no_cart_write
+  check "cadence du faux Auchan respectée (jamais deux requêtes à la fois, jamais trop vite)" auchan_polite
+  close_diagnostic
+
+  # e. Sans magasin choisi : le diagnostic s'arrête sur STORE_NOT_CHOSEN, sans rien écrire
+  auchan_reset
+  auchan_behavior '{"store":"none"}'
+  if tap 'text="Courses"' && wait_until 20 ui_has 'Courses en ligne'; then ok "la page est rechargée sans magasin choisi (le parcours n'a plus de drive)"; else ko "la page n'a pas pu être rechargée"; fi
+  if tap 'content-desc="Menu"' && tap 'text="Diagnostic de l.agent"' && wait_until 120 ui_has 'Contrôles terminés'; then
+    ok "le diagnostic est joué sans magasin choisi"
+  else
+    ko "le diagnostic sans magasin n'a pas fini"
+  fi
+  screenshot e44-diagnostic-sans-magasin
+  check "il s'arrête sur STORE_NOT_CHOSEN (« Aucun magasin n'est choisi »)" ui_has 'STORE_NOT_CHOSEN\|Aucun magasin'
+  check "aucune recherche ni écriture partie vers le faux Auchan" auchan_nothing_sent
+  close_diagnostic
+  auchan_reset
+}
+
+say
+say "21. Auchan (APK de débogage allumé par ANDROID_EXTRA_RETAILERS=auchan) contre le faux site d'Auchan : menu, écran, pont absent de l'hôte du mot de passe, lecture du magasin (DRV-731)"
+auchan_scenario
+check "le DNS n'a transmis aucun nom d'Auchan à Internet" auchan_dns_local
+say "   noms d'Auchan demandés au DNS : $(emu grep -o "query\[[A-Z]*\] [^ ]*auchan[^ ]*" /sdk/site/dns.log 2> /dev/null | awk '{print $2}' | sort -u | tr '\n' ' ')"
 
 # --- 20. Bilan ------------------------------------------------------------------------------------------------------------------------------
 say
