@@ -16,15 +16,16 @@ object DebugPlan {
 
     private const val MAX_LINES = 100
     private val RUN_ID = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
-    private val STORE_ID = Regex("[0-9]{1,12}")
-    private val STORE_HOST = Regex("[a-z0-9-]+\\.leclercdrive\\.fr")
 
-    /** Le message `setup` qui demande à l'agent de lire le magasin de la page : sans `store`, l'agent lit celui de la page (DRV-320). */
-    fun setupMessage(runId: String): String = JSONObject()
+    /**
+     * Le message `setup` qui demande à l'agent de lire le magasin de la page : sans `store`, l'agent lit celui de la page (DRV-320). L'essai est celui de
+     * l'enseigne [site] (celle d'avant le multi-enseignes quand l'appelant n'en dit pas).
+     */
+    fun setupMessage(runId: String, site: RetailerSite = RetailerSites.DEFAULT.legacy): String = JSONObject()
         .put("v", 1)
         .put("type", "setup")
         .put("runId", runId)
-        .put("retailer", "leclerc")
+        .put("retailer", site.id)
         .put("returnPath", "/drive/retour")
         .toString()
 
@@ -32,8 +33,8 @@ object DebugPlan {
      * Le plan d'essai pour ce magasin, ou `null` si une valeur n'est pas de la forme du protocole (identifiant, hôte, passage), si le
      * modèle est illisible, ou si le résultat dépasse les bornes du protocole (64 Ko, 100 lignes).
      */
-    fun plan(template: String, runId: String, storeId: String, storeHost: String): String? {
-        if (!RUN_ID.matches(runId) || !STORE_ID.matches(storeId) || !STORE_HOST.matches(storeHost)) return null
+    fun plan(template: String, runId: String, storeId: String, storeHost: String, site: RetailerSite = RetailerSites.DEFAULT.legacy): String? {
+        if (!RUN_ID.matches(runId) || !site.isStoreId(storeId) || !site.isStoreHost(storeHost)) return null
         val text = template
             .replace("__RUN_ID__", runId)
             .replace("__STORE_ID__", storeId)

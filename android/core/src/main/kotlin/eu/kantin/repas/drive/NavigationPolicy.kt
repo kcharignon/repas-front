@@ -2,7 +2,7 @@ package eu.kantin.repas.drive
 
 /** Ce que l'application fait d'une adresse que la WebView veut ouvrir. */
 enum class Decision {
-    /** Rester dans la WebView : `https` et un hôte de `leclercdrive.fr`. */
+    /** Rester dans la WebView : `https` et un hôte de l'enseigne de l'écran. */
     ALLOW,
 
     /** Confier l'adresse au navigateur du téléphone : une page web (`http` ou `https`) d'un autre site. */
@@ -13,33 +13,33 @@ enum class Decision {
 }
 
 /**
- * La règle de navigation : seules les pages `https` de `leclercdrive.fr` et de ses sous-domaines restent dans l'application.
+ * La règle de navigation : seules les pages `https` **de l'enseigne de l'écran** ([RetailerSite]) restent dans l'application. Une page d'une autre enseigne
+ * n'y reste pas : elle part au navigateur du téléphone, comme n'importe quel autre site.
  *
- * Écrite en Kotlin pur (sans `android.net.Uri`) pour se tester sans téléphone. Elle lit l'adresse à la main et refuse
- * tout ce qui est ambigu (barre oblique inverse, `@`, port inattendu, point final, caractère hors ASCII) : un refus
- * envoie l'adresse au navigateur du téléphone, ce qui est sans danger ; une acceptation à tort ne l'est pas.
+ * Écrite en Kotlin pur (sans `android.net.Uri`) pour se tester sans téléphone. Elle lit l'adresse à la main et refuse tout ce qui est ambigu (barre
+ * oblique inverse, `@`, port inattendu, point final, caractère hors ASCII) : un refus envoie l'adresse au navigateur du téléphone, ce qui est sans
+ * danger ; une acceptation à tort ne l'est pas.
+ *
+ * Les formes d'adresse propres à une enseigne (page de magasin, accueil, connexion, site mobile) sont des méthodes de [RetailerSite]. Les fonctions de cet
+ * objet qui ne reçoivent pas d'enseigne ([decide], [isAllowed], [START_URL]…) sont celles de l'enseigne d'avant le multi-enseignes
+ * ([RetailerSites.legacy]) : un écran qui n'a pas choisi d'enseigne ne navigue que chez elle, jamais chez toutes.
  */
 object NavigationPolicy {
-    const val START_URL = "https://www.leclercdrive.fr/"
-
-    private const val HOME_HOST = "www.leclercdrive.fr"
-
-    private const val ALLOWED_DOMAIN = "leclercdrive.fr"
     private const val HTTPS = "https://"
     private const val HTTP = "http://"
 
-    /** Le début du chemin d'une page de magasin : `/magasin-123456-123456`, puis `/`, `-Ville`, ou la fin du chemin. */
-    private val STORE_PATH = Regex("^/magasin-[0-9]{1,12}-[0-9]{1,12}(-[^/]*)?(/|$)", RegexOption.IGNORE_CASE)
+    private val legacy: RetailerSite get() = RetailerSites.DEFAULT.legacy
 
-    /** Le chemin de la page de connexion hors d'un magasin : `/connexion` ou `/connexion.aspx`, éventuellement suivi d'un `/`. */
-    private val LOGIN_PATH = Regex("^/connexion(\\.aspx)?(/|$)", RegexOption.IGNORE_CASE)
+    /** L'accueil de l'enseigne d'avant le multi-enseignes ([RetailerSite.startUrl]). */
+    val START_URL: String get() = legacy.startUrl
 
-    /** Le premier nom du site mobile de Leclerc (`m-courses.leclercdrive.fr`) : `m`, ou un nom qui commence par `m-`. */
-    private val MOBILE_LABEL = Regex("m(-[a-z0-9-]*)?")
+    /** Ce que l'application fait de cette adresse dans l'écran de l'enseigne d'avant le multi-enseignes. */
+    fun decide(url: String?): Decision = decide(legacy, url)
 
-    fun decide(url: String?): Decision {
+    /** Ce que l'application fait de cette adresse dans l'écran de [site] : elle ne reste dans la WebView que sur les pages de **cette** enseigne. */
+    fun decide(site: RetailerSite, url: String?): Decision {
         if (url == null) return Decision.BLOCK
-        if (isAllowed(url)) return Decision.ALLOW
+        if (site.isNavigable(url)) return Decision.ALLOW
         val isWebPage = startsWithAscii(url, HTTPS) || startsWithAscii(url, HTTP)
         return if (isWebPage) Decision.OPEN_EXTERNALLY else Decision.BLOCK
     }
@@ -54,64 +54,30 @@ object NavigationPolicy {
             (if (char in 'A'..'Z') char + ('a' - 'A') else char) == prefix[index]
         }
 
-    fun isAllowed(url: String?): Boolean {
-        val host = httpsHostOf(url) ?: return false
-        return host == ALLOWED_DOMAIN || host.endsWith(".$ALLOWED_DOMAIN")
-    }
+    /** Une page où l'on navigue chez l'enseigne d'avant le multi-enseignes ([RetailerSite.isNavigable]). */
+    fun isAllowed(url: String?): Boolean = legacy.isNavigable(url)
+
+    /** Le site mobile de l'enseigne d'avant le multi-enseignes ([RetailerSite.isMobileSite]). */
+    fun isMobileSite(url: String?): Boolean = legacy.isMobileSite(url)
+
+    /** Une page de magasin de l'enseigne d'avant le multi-enseignes ([RetailerSite.isStorePage]). */
+    fun isStorePage(url: String?): Boolean = legacy.isStorePage(url)
+
+    /** L'accueil de l'enseigne d'avant le multi-enseignes ([RetailerSite.isHomePage]). */
+    fun isHomePage(url: String?): Boolean = legacy.isHomePage(url)
+
+    /** La page de connexion hors d'un magasin de l'enseigne d'avant le multi-enseignes ([RetailerSite.isLoginPage]). */
+    fun isLoginPage(url: String?): Boolean = legacy.isLoginPage(url)
 
     /**
-     * L'adresse est-elle celle du site mobile de Leclerc (`m-courses.leclercdrive.fr`, ticket J) ? Il n'a pas les routes du site ordinateur (la
-     * recherche y répond 200 sans produit) : l'agent n'y agit pas, et l'application ne lui envoie ni plan ni lecture du magasin ([isStorePage]).
-     * La WebView est en mode ordinateur pour ne pas le recevoir ; s'il apparaît quand même, [StoreBanner.MOBILE] le dit à l'utilisateur.
+     * Le chemin d'une adresse `https` déjà lue ([httpsHostOf] n'est pas `null`) : ce qui suit le nom du site, sans requête ni fragment. Vide quand
+     * l'adresse n'a pas de chemin (`https://exemple.test`, `https://exemple.test?x=1`).
      */
-    fun isMobileSite(url: String?): Boolean {
-        if (!isAllowed(url)) return false
-        val host = httpsHostOf(url) ?: return false
-        return MOBILE_LABEL.matches(host.substringBefore('.'))
-    }
-
-    /**
-     * L'adresse est-elle celle d'une page de magasin (DRV-320) ? Une page `https` du drive dont le chemin commence par
-     * `/magasin-<identifiant>-<identifiant>` (chiffres), éventuellement suivi d'un nom de ville : la même règle que l'agent
-     * (`readStorePaths`), qui lit le magasin dans cette adresse. L'accueil du drive et la page de connexion n'en sont pas, ni le site mobile
-     * ([isMobileSite]), même avec une adresse de cette forme.
-     */
-    fun isStorePage(url: String?): Boolean {
-        if (!isAllowed(url) || isMobileSite(url)) return false
-        val afterScheme = url!!.substring(HTTPS.length)
+    internal fun pathOf(url: String): String {
+        val afterScheme = url.substring(HTTPS.length)
         val pathStart = afterScheme.indexOfAny(charArrayOf('/', '?', '#'))
-        if (pathStart < 0 || afterScheme[pathStart] != '/') return false
-        val path = afterScheme.substring(pathStart).substringBefore('?').substringBefore('#')
-        return STORE_PATH.containsMatchIn(path)
-    }
-
-    /**
-     * L'adresse est-elle l'accueil de l'enseigne ([START_URL], DRV-625) : `https://www.leclercdrive.fr/`, sans chemin (la requête et le fragment ne
-     * comptent pas) ? C'est là qu'un plan s'ouvre : session ouverte, la page affiche l'accueil du magasin de l'utilisateur et son bouton « Commencer
-     * mes courses », que l'agent suit lui-même. Ce n'est pas une page de magasin ([isStorePage]).
-     */
-    fun isHomePage(url: String?): Boolean {
-        if (httpsHostOf(url) != HOME_HOST) return false
-        val afterScheme = url!!.substring(HTTPS.length)
-        val pathStart = afterScheme.indexOfAny(charArrayOf('/', '?', '#'))
-        if (pathStart < 0) return true
-        return afterScheme.substring(pathStart).substringBefore('?').substringBefore('#').let { it == "" || it == "/" }
-    }
-
-    /**
-     * L'adresse est-elle celle de la page de connexion de Leclerc **hors d'un magasin** : une page `https` du drive (ni une page de magasin
-     * ([isStorePage]), ni le site mobile ([isMobileSite])) dont le chemin est `/connexion` ou `/connexion.aspx` ? Leclerc exige un magasin choisi
-     * AVANT la connexion (« Avant de vous authentifier, veuillez sélectionner un Drive. ») : on n'arrive là sans magasin qu'en touchant
-     * « Se connecter » trop tôt, et [StoreBanner.STORE_FIRST] ramène alors l'utilisateur au choix du magasin. Une lecture de l'adresse seulement :
-     * l'application ne lit jamais le contenu des pages, et le message rouge de Leclerc n'a pas d'adresse à lui.
-     */
-    fun isLoginPage(url: String?): Boolean {
-        if (!isAllowed(url) || isMobileSite(url) || isStorePage(url)) return false
-        val afterScheme = url!!.substring(HTTPS.length)
-        val pathStart = afterScheme.indexOfAny(charArrayOf('/', '?', '#'))
-        if (pathStart < 0 || afterScheme[pathStart] != '/') return false
-        val path = afterScheme.substring(pathStart).substringBefore('?').substringBefore('#')
-        return LOGIN_PATH.containsMatchIn(path)
+        if (pathStart < 0) return ""
+        return afterScheme.substring(pathStart).substringBefore('?').substringBefore('#')
     }
 
     /**
@@ -152,7 +118,7 @@ object NavigationPolicy {
     }
 
     /** Un nom de site en lettres ASCII, chiffres, tirets et points, sans libellé vide ni tiret au bord, sans point final. */
-    private fun isPlainHostName(host: String): Boolean {
+    internal fun isPlainHostName(host: String): Boolean {
         if (host.isEmpty() || host.length > 253) return false
         return host.split('.').all { label ->
             label.isNotEmpty() &&
