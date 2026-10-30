@@ -841,7 +841,7 @@ export default {
     // Le titre dit le résultat ; le reste, au plus trois phrases : ce qui s'est passé, ce qui est sauf, ce qu'il reste à faire
     safe: 'Ce qui est déjà au panier y reste.',
     // Le panier est fait : la suite (créneau, paiement) se passe dans l'appli officielle, Repas n'explique rien de plus (DRV-645)
-    basketReady: 'Ton panier est prêt. Retrouve-le dans l’appli {appName}.',
+    basketReady: 'Ton panier est rempli. Tu peux finaliser ta commande dans l’appli {appName}.',
     outcome: {
       completed: {
         title: 'Le panier est rempli',
@@ -916,7 +916,7 @@ export default {
     counts: {
       label: 'Récapitulatif de l’envoi',
       added: 'Ajoutés au panier',
-      chosen: 'Choisis sur {retailer}',
+      chosen: 'Choisis par toi',
       haveAtHome: 'J’en ai toujours',
       skipped: 'Pas cette fois',
       unavailable: 'Indisponibles',

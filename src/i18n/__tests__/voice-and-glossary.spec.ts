@@ -407,7 +407,7 @@ describe('le détecteur lui-même (il ne doit pas devenir aveugle)', () => {
     'Farine — vérifie dans le panier',
     'Entre un nombre entier de 1 à 99.',
     'Réessaie dans un instant.',
-    'Choisis sur Leclerc',
+    'Choisis par toi',
     'Choisis : 3',
     'Copie impossible',
     'Chez Leclerc, c’est assez long',

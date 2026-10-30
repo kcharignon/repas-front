@@ -135,7 +135,7 @@ describe('le registre des enseignes du web', () => {
       const t = translateFor(auchan)
 
       expect(t('driveReturn.basketReady')).toBe(
-        'Ton panier est prêt. Retrouve-le dans l’appli Auchan.',
+        'Ton panier est rempli. Tu peux finaliser ta commande dans l’appli Auchan.',
       )
       expect(t('driveReturn.errorCode.UNSUPPORTED_PAGE.happened')).toBe(
         'Repas ne peut pas travailler sur cette page d’Auchan.',
@@ -196,7 +196,7 @@ describe('le registre des enseignes du web', () => {
     const t = translateFor(fictive)
 
     expect(t('driveReturn.basketReady')).toBe(
-      'Ton panier est prêt. Retrouve-le dans l’appli Drive Exemple.',
+      'Ton panier est rempli. Tu peux finaliser ta commande dans l’appli Drive Exemple.',
     )
     expect(t('driveReturn.errorCode.UNSUPPORTED_PAGE.happened')).toBe(
       'Repas ne peut pas travailler sur cette page d’Exemple.',
