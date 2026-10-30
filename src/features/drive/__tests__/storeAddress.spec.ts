@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 
-import { parseStoreAddress, storeTail } from '../storeAddress'
+import { retailerOf } from '../retailers'
+import { parseMobileStoreAddress, parseStoreAddress, storeTail } from '../storeAddress'
 
 const base = 'https://exemple.leclercdrive.fr/magasin-123456-123456'
 
@@ -49,5 +50,77 @@ describe('adresse d’un magasin', () => {
   it('montre les derniers chiffres de l’identifiant', () => {
     expect(storeTail('123456')).toBe('456')
     expect(storeTail('12')).toBe('12')
+  })
+})
+
+describe('adresse du site mobile d’un magasin (DRV-741)', () => {
+  const opened = 'https://m-courses.leclercdrive.fr/magasin-123456-123456-ville-test'
+
+  it('reconnaît l’adresse mobile, avec ou sans .aspx, avec ou sans ville, et la ramène à l’adresse à ouvrir', () => {
+    for (const [pasted, expected] of [
+      [`${opened}`, opened],
+      [`${opened}.aspx`, opened],
+      [`  ${opened}.aspx?a=1#haut  `, opened],
+      [`${opened}/accueil.aspx`, opened],
+      [
+        'https://m-courses.leclercdrive.fr/magasin-123456-123456',
+        'https://m-courses.leclercdrive.fr/magasin-123456-123456',
+      ],
+      [
+        'https://m-courses.leclercdrive.fr/magasin-123456-123456.aspx',
+        'https://m-courses.leclercdrive.fr/magasin-123456-123456',
+      ],
+      ['HTTPS://M-Courses.LeclercDrive.fr/magasin-123456-123456-ville-test.aspx', opened],
+      [
+        'https://m.leclercdrive.fr/magasin-123456-123456-ville-test',
+        'https://m.leclercdrive.fr/magasin-123456-123456-ville-test',
+      ],
+    ] as const)
+      expect([pasted, parseMobileStoreAddress(pasted)]).toEqual([pasted, expected])
+  })
+
+  it('ne l’enregistre jamais comme un magasin : parseStoreAddress la refuse avec une ville ou un .aspx', () => {
+    expect(parseStoreAddress(`${opened}.aspx`)).toBeNull()
+    expect(parseStoreAddress(opened)).toBeNull()
+  })
+
+  it('refuse ce qui n’est pas l’adresse mobile d’un magasin Leclerc', () => {
+    for (const wrong of [
+      '',
+      'pas une adresse',
+      'http://m-courses.leclercdrive.fr/magasin-123456-123456-ville-test',
+      'https://m-courses.example.com/magasin-123456-123456-ville-test',
+      'https://m-courses.leclercdrive.fr.example.com/magasin-123456-123456',
+      'https://a.m-courses.leclercdrive.fr/magasin-123456-123456',
+      'https://m-courses.leclercdrive.fr:8443/magasin-123456-123456-ville-test',
+      'https://nom:mot@m-courses.leclercdrive.fr/magasin-123456-123456-ville-test',
+      'https://m-courses.leclercdrive.fr/',
+      'https://m-courses.leclercdrive.fr/connexion.aspx',
+      'https://m-courses.leclercdrive.fr/magasin-123456',
+      'https://m-courses.leclercdrive.fr/magasin-abc-123456',
+      'https://m-courses.leclercdrive.fr/magasin-1234567890123-1',
+      'https://m-courses.leclercdrive.fr/autre/magasin-123456-123456',
+      'https://m-courses.leclercdrive.fr/magasin-123456-123456x.y',
+      // une adresse du site ordinateur n'est pas une adresse mobile
+      'https://fd9-courses.leclercdrive.fr/magasin-123456-123456-ville-test.aspx',
+      'https://exemple.leclercdrive.fr/magasin-123456-123456',
+      'https://courses.leclercdrive.fr/magasin-123456-123456',
+      'https://mx.leclercdrive.fr/magasin-123456-123456',
+    ])
+      expect([wrong, parseMobileStoreAddress(wrong)]).toEqual([wrong, null])
+  })
+
+  it('Auchan n’a pas de site mobile à refuser', () => {
+    const auchan = retailerOf('auchan')
+
+    expect(parseMobileStoreAddress(`${opened}.aspx`, auchan)).toBeNull()
+  })
+
+  it('une adresse du site ordinateur avec une ville est refusée comme avant (aucune attente modifiée)', () => {
+    expect(
+      parseStoreAddress(
+        'https://fd9-courses.leclercdrive.fr/magasin-123456-123456-ville-test.aspx',
+      ),
+    ).toBeNull()
   })
 })

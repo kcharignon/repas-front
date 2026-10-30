@@ -14,6 +14,28 @@ export function parseStoreAddress(
 ): StoreAddress | null {
   // Un magasin explicite n'est pas dans l'adresse : aucune adresse collée ne dit quel est le magasin (`readExplicitStore`).
   if (retailer.storeIdSource === 'EXPLICIT') return null
+  const url = plainHttpsUrl(input)
+
+  return url === null ? null : retailer.readStore(url)
+}
+
+/**
+ * Reconnaît l'adresse du site MOBILE d'un magasin (DRV-741), celle que donne un téléphone : `https://m-courses…/magasin-N-N-ville[.aspx]`. Elle ne dit pas
+ * le magasin (l'enseigne la redirige, en mode ordinateur, vers l'hôte du magasin, qu'on ne peut pas deviner) : elle rend l'adresse à ouvrir dans
+ * l'application, qui lit le magasin sur la page finale. Jamais enregistrée telle quelle. `null` si ce n'est pas une adresse mobile de magasin.
+ */
+export function parseMobileStoreAddress(
+  input: string,
+  retailer: Retailer = DEFAULT_RETAILER,
+): string | null {
+  if (retailer.storeIdSource === 'EXPLICIT') return null
+  const url = plainHttpsUrl(input)
+
+  return url === null ? null : retailer.readMobileStoreAddress(url)
+}
+
+/** Une adresse `https` sans port ni identifiants, ou `null`. */
+function plainHttpsUrl(input: string): URL | null {
   let url: URL
   try {
     url = new URL(input.trim())
@@ -23,7 +45,7 @@ export function parseStoreAddress(
   if (url.protocol !== 'https:' || url.port !== '' || url.username !== '' || url.password !== '')
     return null
 
-  return retailer.readStore(url)
+  return url
 }
 
 /**

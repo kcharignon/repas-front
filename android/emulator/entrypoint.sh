@@ -73,7 +73,7 @@ dnsmasq --keep-in-foreground --user=root --no-resolv --no-hosts --bind-interface
 # Le faux Leclerc complet (catalogue, recherche, panier, défauts simulés) : accès local seulement, il n'écoute que sur 127.0.0.1 (le relais HTTPS de
 # testsite.py lui parle ; le pilotage /__fake/* n'est offert qu'aux noms de la boucle locale, donc à `docker compose exec`, jamais à l'émulateur).
 # Il accepte aussi le nom de l'accueil de l'enseigne (www), que testsite.py ne lui relaie qu'en mode « fake » (scénarios complets).
-FAKE_LECLERC_PORT=8099 FAKE_LECLERC_HOSTS=www.leclercdrive.fr node /opt/fake-leclerc/main.ts > "$SITE/fake-leclerc.log" 2>&1 &
+FAKE_LECLERC_PORT=8099 FAKE_LECLERC_HOSTS=www.leclercdrive.fr,m-courses.leclercdrive.fr node /opt/fake-leclerc/main.ts > "$SITE/fake-leclerc.log" 2>&1 &
 # Le faux site d'Auchan (DRV-717, jamais le vrai ; DRV-731) : HTTP sur 127.0.0.1:8098, pilotage réservé aux noms de la boucle locale. testsite.py lui relaie
 # www.auchan.fr seulement ; compte.auchan.fr (la connexion) est une page de test à part. Ce sont les DEUX seuls noms d'Auchan que le DNS résout (vers 10.0.2.2).
 FAKE_AUCHAN_PORT=8098 node /opt/fake-auchan/main.ts > "$SITE/fake-auchan.log" 2>&1 &

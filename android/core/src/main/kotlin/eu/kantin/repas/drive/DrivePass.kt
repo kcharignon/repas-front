@@ -123,7 +123,8 @@ class DrivePass(
     private fun persist() {
         val json = JSONObject()
         active?.takeIf { it.source == PassSource.REPAS }?.let {
-            json.put("pass", JSONObject().put("plan", it.request.text).put("startedAt", it.startedAt))
+            // L'adresse d'un magasin à ouvrir (DRV-741) est gardée à côté du message : le message du protocole ne la porte pas
+            json.put("pass", JSONObject().put("plan", it.request.text).put("startedAt", it.startedAt).apply { (it.request as? SetupRequest)?.address?.let { address -> put("address", address) } })
         }
         if (outbox.isNotEmpty()) json.put("outbox", JSONArray(outbox))
         store.save(if (json.length() == 0) null else json.toString())
@@ -136,7 +137,10 @@ class DrivePass(
             null
         } ?: return
         saved.optJSONObject("pass")?.let { pass ->
-            val request = PassRequests.parseText(pass.optString("plan"), sites)
+            val request = PassRequests.parseText(pass.optString("plan"), sites)?.let { restored ->
+                // Une adresse gardée qui ne passe plus la vérification est oubliée : la lecture reprend à l'accueil
+                if (restored is SetupRequest && pass.has("address")) SetupRequest.of(restored.runId, restored.site, pass.optString("address")) ?: restored else restored
+            }
             if (request != null && pass.has("startedAt")) active = ActivePass(request, PassSource.REPAS, pass.optLong("startedAt"))
         }
         saved.optJSONArray("outbox")?.let { messages ->
@@ -173,7 +177,10 @@ enum class StoreBanner {
     /** Pas de passage, ou la page est celle d'un magasin : rien à dire. */
     NONE,
 
-    /** Lecture du magasin (`drive.setup`) : choisir son magasin, puis toucher « Utiliser ce magasin ». Rien sur la connexion : Leclerc veut le magasin d'abord. */
+    /**
+     * Lecture du magasin (`drive.setup`) : choisir son magasin, puis toucher « Utiliser ce magasin ». Rien sur la connexion : Leclerc veut le magasin
+     * d'abord. Aussi pendant que l'adresse de magasin donnée par l'utilisateur charge (DRV-741), même si c'est celle du site mobile : l'enseigne la redirige.
+     */
     SETUP,
 
     /** Envoi d'un plan, accueil du magasin ou autre page qui n'en est pas une : toucher « Commencer mes courses » pour ouvrir son magasin. Pas de bouton. */
@@ -206,11 +213,12 @@ enum class StoreBanner {
 
     companion object {
         /** Le message à montrer pour la page d'adresse [url], que [trouble] (la surveillance de la page, [OpeningWatch]) juge ainsi. */
-        fun of(request: PassRequest?, url: String?, trouble: PageTrouble = PageTrouble.NONE, basketHint: Boolean = false): StoreBanner = when {
+        fun of(request: PassRequest?, url: String?, trouble: PageTrouble = PageTrouble.NONE, basketHint: Boolean = false, loading: Boolean = false): StoreBanner = when {
             request == null -> if (basketHint && trouble == PageTrouble.NONE) BASKET else NONE
             trouble == PageTrouble.VERIFICATION -> VERIFICATION
             request.isSetup -> when {
-                trouble == PageTrouble.NONE && request.site.isMobileSite(url) -> MOBILE
+                // L'adresse mobile que l'utilisateur a donnée charge, puis l'enseigne la redirige : pas d'alarme tant que la page n'a pas fini
+                trouble == PageTrouble.NONE && request.site.isMobileSite(url) -> if (loading && request.opensAddress) SETUP else MOBILE
                 request.site.isStorePage(url) && trouble == PageTrouble.NONE -> NONE
                 // Une enseigne sans page de magasin (le magasin se choisit dans la page du site) : aucun message de magasin.
                 !request.site.hasStorePages -> NONE

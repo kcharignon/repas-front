@@ -29,7 +29,14 @@ const props = defineProps<{
   readError: string | null
   save: (store: DriveStorePayload) => Promise<void>
 }>()
-const emit = defineEmits<{ read: []; remove: [] }>()
+const emit = defineEmits<{ read: []; remove: []; readAddress: [address: string] }>()
+
+/** L'adresse du site mobile collée dans la saisie à la main (DRV-741) : l'écran la fait lire par l'application. */
+const readAddress = (address: string): Promise<void> => {
+  emit('readAddress', address)
+
+  return Promise.resolve()
+}
 
 const { t: translate } = useI18n()
 const t = (key: string, named: Record<string, unknown> = {}) =>
@@ -116,6 +123,7 @@ watch(
       :locked="busy || !online"
       :online="online"
       :save="save"
+      :read-address="reader === 'button' ? readAddress : null"
     />
   </li>
 </template>

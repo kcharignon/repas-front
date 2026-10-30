@@ -184,6 +184,25 @@ class RetailerSite(
     }
 
     /**
+     * L'adresse d'un magasin que Repas demande d'ouvrir à la place de l'accueil (`drive.setup` avec `address`, DRV-741), ou `null` si elle n'est pas
+     * acceptable. C'est l'adresse que l'utilisateur a collée depuis le site mobile de l'enseigne : l'application l'ouvre en mode ordinateur, l'enseigne la
+     * redirige vers la bonne adresse de magasin et l'agent lit le magasin sur la page finale. Elle est revérifiée ici comme côté web, **à la lettre** :
+     * un texte en ASCII visible, `https` sans port, ni identifiants, ni requête, ni fragment, sur un hôte de l'enseigne où le pont existe (le site mobile
+     * en est un) ; le chemin est exactement le segment d'un magasin ([StorePages.homeSegment], avec sa ville, ou [StorePages.frontLink], sans). Une enseigne
+     * dont le magasin n'est pas dans l'adresse n'en accepte aucune. Le résultat est [raw] lui-même, jamais une version réécrite.
+     */
+    fun openableStoreAddress(raw: Any?): String? {
+        val pages = storePages ?: return null
+        val address = raw as? String ?: return null
+        if (address.length > MAX_ADDRESS || address.any { it.code !in 0x21..0x7e || it == '\\' || it == '@' || it == '?' || it == '#' }) return null
+        val host = NavigationPolicy.httpsHostOf(address) ?: return null
+        // Le nom du site tel quel, sans port, en minuscules : pas d'autre forme de la même adresse
+        if (!address.startsWith("https://$host/") || !isBridgePage(address)) return null
+        val path = NavigationPolicy.pathOf(address)
+        return address.takeIf { pages.homeSegment.matches(path) || pages.frontLink.matches(path) }
+    }
+
+    /**
      * L'adresse est-elle celle d'une page de magasin : une page de l'enseigne dont le chemin commence par la forme d'un magasin ([StorePages.pagePath]) ?
      * L'accueil et la page de connexion n'en sont pas, ni le site mobile ([isMobileSite]), même avec une adresse de cette forme. Toujours faux pour une
      * enseigne dont le magasin n'est pas dans l'adresse.
@@ -227,6 +246,8 @@ class RetailerSite(
     override fun toString(): String = "RetailerSite($id)"
 
     private companion object {
+        /** La borne d'une adresse de magasin à ouvrir ([openableStoreAddress]). */
+        const val MAX_ADDRESS = 300
         val ID = Regex("[a-z][a-z0-9]{0,19}")
         val DEBUG_PLAN_FILE = Regex("debug-plan(\\.[a-z][a-z0-9]{0,19})?\\.json")
     }

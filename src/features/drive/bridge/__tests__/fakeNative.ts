@@ -13,6 +13,8 @@ export interface SentMessage {
   runId?: string
   /** Le drive dont on lit le magasin (`drive.setup`, DRV-709). */
   retailer?: string
+  /** L'adresse du magasin que l'application ouvre à la place de l'accueil (`drive.setup`, DRV-741). */
+  address?: string
 }
 
 /**

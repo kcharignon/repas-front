@@ -313,7 +313,7 @@ describe('driveBridge', () => {
   // Le drive du passage (DRV-710) : un autre drive a d'autres formes d'identifiants, et son résultat ne se rattache pas au passage d'un autre
   describe('le drive du passage', () => {
     const SECOND_STORE = '0b5f8a2e-3c1d-4e7f-9a6b-123456789abc'
-    const SECOND_PRODUCT = '5d3c2b1a-9f8e-4d7c-8b6a-0123456789ab'
+    const SECOND_PRODUCT = '5d3c2b1a-9f8e-4d7c-8b6a-1234566789ab'
     const SECOND_OFFER = 'c3b2a1d0-5e4f-4a6b-9c8d-7e6f5a4b3c2d'
 
     const secondPlan = (runId = RUN): PlanMessage => ({
@@ -847,6 +847,38 @@ describe('driveBridge', () => {
       expect(bridge.startSetup('exemple')).toBe(first)
       reply(setupResult(sent[0]?.runId ?? ''))
       await expect(first).resolves.toEqual(STORE)
+    })
+
+    it('écrit l’adresse du magasin à ouvrir dans le message (DRV-741), et rouvre la même lecture avec la même adresse', async () => {
+      const { bridge, sent, reply } = reading(() => undefined)
+      const address = 'https://m-courses.exemple-test.fr/magasin-123456-123456-ville-test'
+
+      const first = bridge.startSetup('exemple', address)
+
+      expect(sent[0]).toMatchObject({ v: 1, type: 'drive.setup', retailer: 'exemple', address })
+      expect(bridge.startSetup('exemple', address)).toBe(first)
+      // Une autre adresse (ou aucune) pendant la lecture : refusée, jamais substituée
+      expect(await rejection(bridge.startSetup('exemple', null))).toMatchObject({ detail: 'BUSY' })
+      expect(sent).toHaveLength(2)
+      reply(setupResult(sent[0]?.runId ?? ''))
+      await expect(first).resolves.toEqual(STORE)
+    })
+
+    it.each([
+      'http://m-courses.exemple-test.fr/magasin-1-1',
+      'https://m-courses.exemple-test.fr/magasin 1-1',
+      'https://nom@m-courses.exemple-test.fr/magasin-1-1',
+      'javascript:alert(1)',
+      '',
+      `https://${'a'.repeat(400)}`,
+    ])('refuse d’envoyer l’adresse %s à l’application', async (address) => {
+      const { bridge, sent } = reading(() => undefined)
+
+      expect(await rejection(bridge.startSetup('exemple', address))).toMatchObject({
+        code: 'REFUSED',
+        detail: 'INVALID_SETUP',
+      })
+      expect(sent).toHaveLength(0)
     })
 
     it('le résultat n’est pas montré aux écrans du retour, et ne touche pas au brouillon d’un envoi', async () => {

@@ -40,6 +40,12 @@ export const STORE = { id: '000001', host: 'courses-test.leclercdrive.fr' } as c
  * n'est servi que sur demande (`hosts`, `FAKE_LECLERC_HOSTS`), comme tout nom autre que celui du faux magasin.
  */
 export const HOME_HOST = 'www.leclercdrive.fr'
+/**
+ * Le site MOBILE de l'enseigne (DRV-741, constat du 2026-10-30 sur le téléphone de test, en mode ordinateur) : l'adresse d'un magasin sur ce nom est
+ * REDIRIGÉE vers la même adresse sur l'hôte du magasin, avec `.aspx` en plus (le bon hôte `fd<N>` est celui de Leclerc, on ne le devine pas). Rien d'autre
+ * n'y est servi. Comme tout nom autre que celui du faux magasin, il n'est servi que sur demande (`hosts`, `FAKE_LECLERC_HOSTS`).
+ */
+export const MOBILE_HOST = 'm-courses.leclercdrive.fr'
 /** Début des adresses des pages du magasin (avec le suffixe de ville, que portent les pages) et de celle du panier (sans). */
 export const PAGE_PATH = `/magasin-${STORE.id}-${STORE.id}-Ville-Test`
 export const CART_PATH = `/magasin-${STORE.id}-${STORE.id}`
@@ -570,6 +576,18 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
     // son hôte. Ce n'est pas une page de magasin pour l'agent (qui n'y agit pas) ; c'est là que l'application ouvre un plan
     // (`DrivePlan.startUrl` = `NavigationPolicy.START_URL`), et l'utilisateur y touche lui-même le bouton. Le faux ne cache plus ce défaut : s'il
     // retombait sur la racine de l'hôte du magasin, le scénario d'émulateur échouerait.
+    if (hostnameOf(req.headers.host) === MOBILE_HOST) {
+      entry.kind = 'page'
+      const mobile = STORE_PATTERN.exec(path)
+      // Une adresse de magasin (avec ou sans `.aspx`, avec sa ville) mène à la page du magasin sur son hôte, sur le même port et le même schéma
+      if (req.method === 'GET' && mobile?.[3] !== undefined && mobile[4] === undefined) {
+        entry.status = 302
+        const target = `//${STORE.host}${portSuffixOf(req.headers.host)}${path}${path.endsWith('.aspx') ? '' : '.aspx'}`
+        return send(res, 302, '', { Location: target })
+      }
+      entry.status = 404
+      return send(res, 404, errorPage(), HTML)
+    }
     const home = hostnameOf(req.headers.host) === HOME_HOST
     if (path === '/' && req.method === 'GET') {
       entry.kind = 'page'
