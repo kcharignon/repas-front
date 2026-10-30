@@ -22,9 +22,16 @@ const types = useRecipeTypes()
 const search = ref('')
 
 // Le type affiché est dans l'adresse (`?type=plat`) : on peut partager ou recharger la page ; à défaut, le premier.
+// Un type sans recette de la personne n'est pas montré. Un back plus ancien ne rend pas `recipeCount` : le type reste affiché.
+const shownTypes = computed(() =>
+  (types.data.value?.member ?? []).filter(
+    (type) => (type as { recipeCount?: number }).recipeCount !== 0,
+  ),
+)
+
 const current = computed<string | null>(() => {
   const asked = typeof route.query.type === 'string' ? route.query.type : null
-  const known = types.data.value?.member ?? []
+  const known = shownTypes.value
 
   return known.find((type) => type.slug === asked)?.slug ?? known[0]?.slug ?? null
 })
@@ -79,13 +86,13 @@ function choose(slug: string) {
 
     <!-- Une grille et non un défilement : tous les types sont visibles, un type de plus passe à la ligne tout seul. -->
     <div
-      v-if="types.data.value"
+      v-if="shownTypes.length > 0"
       role="group"
       :aria-label="t('recipes.types')"
       class="grid grid-cols-[repeat(auto-fit,minmax(3.5rem,1fr))] gap-1.5 md:grid-cols-[repeat(auto-fit,minmax(5.5rem,6.5rem))]"
     >
       <UiTile
-        v-for="type in types.data.value.member"
+        v-for="type in shownTypes"
         :key="type.slug"
         :pressed="type.slug === current"
         @update:pressed="choose(type.slug)"
@@ -99,7 +106,7 @@ function choose(slug: string) {
 
     <LoadError v-if="hasFailed(types) || hasFailed(recipes)" />
     <p
-      v-else-if="types.isPending.value || recipes.isPending.value"
+      v-else-if="types.isPending.value || (current !== null && recipes.isPending.value)"
       class="text-muted"
       role="status"
     >

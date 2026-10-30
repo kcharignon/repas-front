@@ -252,6 +252,19 @@ describe('RecipeEditorView', () => {
   })
 
   describe('création', () => {
+    it('propose tous les types, même ceux sans recette', async () => {
+      const { wrapper } = await open('/recettes/nouvelle', {
+        'GET /api/v1/recipe-types': () =>
+          json({
+            member: types.member.map((type) => ({ ...type, recipeCount: 0 })),
+            totalItems: 2,
+          }),
+      })
+      await vi.waitFor(() => expect(wrapper.text()).toContain('Entrée'))
+
+      expect(wrapper.text()).toContain('Plat')
+    })
+
     it('refuse un formulaire incomplet en disant quoi corriger, sans appeler le back', async () => {
       const { wrapper, fetchMock } = await open('/recettes/nouvelle')
       await vi.waitFor(() => expect(wrapper.find('select').exists()).toBe(true))

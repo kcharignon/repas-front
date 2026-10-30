@@ -101,6 +101,51 @@ describe('RecipesView', () => {
     ).toEqual(['Entrée'])
   })
 
+  describe('catégories vides', () => {
+    const counted = (counts: Array<number | undefined>) => ({
+      member: types.member.map((type, index) => ({
+        ...type,
+        ...(counts[index] === undefined ? {} : { recipeCount: counts[index] }),
+      })),
+      totalItems: 3,
+    })
+    const tileNames = (wrapper: Awaited<ReturnType<typeof open>>['wrapper']) =>
+      wrapper.findAll('[role="group"] button').map((tile) => tile.text())
+
+    it('masque le type sans recette et choisit le premier type non vide', async () => {
+      const { wrapper } = await open({
+        'GET /api/v1/recipe-types': () => json(counted([0, 2, 0])),
+      })
+      await vi.waitFor(() => expect(wrapper.text()).toContain('Gratin de courgettes'))
+
+      expect(tileNames(wrapper)).toEqual(['Plat'])
+      expect(wrapper.find('[aria-pressed="true"]').text()).toBe('Plat')
+    })
+
+    it('affiche les types non vides', async () => {
+      const { wrapper } = await open({
+        'GET /api/v1/recipe-types': () => json(counted([1, 2, 3])),
+      })
+      await vi.waitFor(() => expect(tileNames(wrapper)).toEqual(['Entrée', 'Plat', 'Dessert']))
+    })
+
+    it("garde l'état vide quand tous les types sont à zéro", async () => {
+      const { wrapper } = await open({
+        'GET /api/v1/recipe-types': () => json(counted([0, 0, 0])),
+      })
+      await vi.waitFor(() => expect(wrapper.text()).toContain('Tu n'))
+
+      expect(tileNames(wrapper)).toEqual([])
+    })
+
+    it("n'efface jamais un type quand le back ne rend pas recipeCount", async () => {
+      const { wrapper } = await open({
+        'GET /api/v1/recipe-types': () => json(counted([undefined, 0, undefined])),
+      })
+      await vi.waitFor(() => expect(tileNames(wrapper)).toEqual(['Entrée', 'Dessert']))
+    })
+  })
+
   it("montre l'image de chaque type et l'écrit avec une majuscule", async () => {
     const { wrapper } = await open({
       'GET /api/v1/recipe-types': () =>

@@ -91,7 +91,7 @@ const leclerc: Retailer = {
   storeIdSource: 'URL',
   storeIdPattern: '^[0-9]{1,20}$',
   offerIdPattern: null,
-  appName: 'Drive Leclerc',
+  appName: 'Leclerc Drive',
   homeUrl: 'https://www.leclercdrive.fr/',
   readStore: (url) => {
     if (!STORE_HOST.test(url.hostname)) return null

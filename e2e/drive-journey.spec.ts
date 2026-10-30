@@ -265,7 +265,7 @@ test.describe('parcours complet, pont et API simulés', () => {
     // 7. Le récapitulatif : les compteurs, puis chaque ligne
     const counts = page.getByLabel('Récapitulatif de l’envoi')
     await expect(counts).toContainText('Ajoutés au panier2')
-    await expect(counts).toContainText('Choisis sur Leclerc1')
+    await expect(counts).toContainText('Choisis par toi1')
     await expect(counts).toContainText('J’en ai toujours1')
     await expect(counts).toContainText('Indisponibles1')
     // Les prix lus sont mémorisés (REFRESH_PRICE ci-dessus) mais ne s'affichent plus comme compteur
