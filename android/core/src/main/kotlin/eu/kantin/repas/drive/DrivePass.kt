@@ -164,6 +164,10 @@ class DrivePass(
  * L'ordre que Leclerc impose : un magasin d'abord, la connexion ensuite (« Avant de vous authentifier, veuillez sélectionner un Drive. »). Aucun
  * de ces messages ne parle donc de connexion avant le magasin ; la connexion n'est demandée que par l'agent, quand elle manque. Si la page de
  * connexion s'affiche avant tout magasin ([RetailerSite.isLoginPage]), [STORE_FIRST] ramène au choix du magasin.
+ *
+ * **Seules les enseignes qui ont des pages de magasin** ([RetailerSite.hasStorePages]) ont les messages de magasin ([SETUP], [OPEN], [STORE_FIRST]) : chez
+ * les autres, le magasin se choisit dans la page du site et l'agent le lit lui-même, l'écran n'a rien à dire sur les pages ordinaires (DRV-733). Les
+ * messages d'une page qui cloche ([PLAN], [VERIFICATION], [MOBILE]) et l'arrivée de « Finaliser » ([BASKET]) valent pour toutes.
  */
 enum class StoreBanner {
     /** Pas de passage, ou la page est celle d'un magasin : rien à dire. */
@@ -208,6 +212,8 @@ enum class StoreBanner {
             request.isSetup -> when {
                 trouble == PageTrouble.NONE && request.site.isMobileSite(url) -> MOBILE
                 request.site.isStorePage(url) && trouble == PageTrouble.NONE -> NONE
+                // Une enseigne sans page de magasin (le magasin se choisit dans la page du site) : aucun message de magasin.
+                !request.site.hasStorePages -> NONE
                 trouble == PageTrouble.NONE && request.site.isLoginPage(url) -> STORE_FIRST
                 else -> SETUP
             }
@@ -216,6 +222,8 @@ enum class StoreBanner {
             request.site.isStorePage(url) -> NONE
             // L'accueil de l'enseigne : l'agent y suit « Commencer mes courses » ou dit lui-même de le toucher (DRV-625), le bandeau se tait.
             request.site.isHomePage(url) -> NONE
+            // Une enseigne sans page de magasin : ni « Commencer mes courses » ni « choisis d'abord ton magasin », propres aux enseignes à pages de magasin.
+            !request.site.hasStorePages -> NONE
             // La connexion avant tout magasin : Leclerc la refuse, le message ramène au choix du magasin.
             request.site.isLoginPage(url) -> STORE_FIRST
             else -> OPEN
