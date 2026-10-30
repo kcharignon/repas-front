@@ -6,6 +6,8 @@ Procédure **pour l'utilisateur**, une étape à la fois (l'assistant te guide e
 
 ## Ce qu'il faut savoir avant de commencer
 
+- **Plusieurs enseignes (DRV-711).** Une seule application sert toutes les enseignes : publier une version ne change pas celles qui sont allumées (c'est `DRIVE_RETAILERS` côté back, acte de l'humain). Une version qui ajoute une enseigne se publie **éteinte**, après le site (règle « le site avant l'application »). « Se déconnecter de {enseigne} » n'efface que le profil de CETTE enseigne ; le mot « Leclerc » de cette procédure est l'exemple de la première.
+
 - La version « de production » de l'application est un **fichier `.apk` signé avec ta clé**, publié dans une *release* GitHub. Elle est installée à la main, sans Google Play. Les mises à jour se font en installant le nouveau fichier **par-dessus**.
 - **Ta clé de signature est la chose la plus importante** : si tu la perds, plus aucune version ne peut s'installer par-dessus l'ancienne (il faudrait désinstaller puis réinstaller, et refaire la connexion à Leclerc). Fais **deux copies** (étape 1).
 - **Jamais de clé, de mot de passe ni de secret dans le chat avec l'assistant, dans un commit ou dans une PR** (le dépôt est public). L'assistant ne les voit jamais : tu les tapes toi-même dans ton terminal.
