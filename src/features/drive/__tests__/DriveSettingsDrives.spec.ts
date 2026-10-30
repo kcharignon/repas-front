@@ -180,6 +180,20 @@ describe('« Mes drives » : la liste', () => {
     expect(wrapper.findAll('li')).toHaveLength(0)
   })
 
+  it('envoyé ici faute de magasin avec plusieurs drives : la question « Quel drive utilises-tu ? », un bouton « Choisir mon magasin » par drive (DRV-710)', async () => {
+    const { wrapper } = await open(
+      fakeBack({}),
+      appOf(['leclerc', 'auchan']),
+      '/drive/reglages?magasin=requis&retour=liste',
+    )
+
+    expect(wrapper.find('h1').text()).toBe('Choisis ton magasin')
+    expect(wrapper.text()).toContain('Quel drive utilises-tu ?')
+    expect(button(wrapper, 'Choisir mon magasin Leclerc')).toBeDefined()
+    expect(button(wrapper, 'Choisir mon magasin Auchan')).toBeDefined()
+    expect(wrapper.text()).not.toMatch(/enseigne|retailer/i)
+  })
+
   it('deux drives dont un configuré : le magasin de l’un, « Choisir mon magasin » pour l’autre, pas de drive habituel', async () => {
     const { wrapper } = await open(
       fakeBack({ leclerc: LECLERC_STORE }),

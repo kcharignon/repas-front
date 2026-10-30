@@ -8,6 +8,7 @@ import ShoppingListDetailView from '@/features/shopping-lists/ShoppingListDetail
 import ShoppingListView from '@/features/shopping-lists/ShoppingListView.vue'
 import { useNotificationsStore } from '@/notifications/store'
 import { useSessionStore } from '@/session/session'
+import { severalSettings } from '@/features/drive/__tests__/severalDrives'
 
 type Status = 'ACTIVE' | 'SENT' | 'COMPLETED'
 
@@ -119,11 +120,20 @@ async function signedIn() {
  * répond pas ; `'held'` : elle répond quand le test appelle `release` ; `'browser'` : aucun pont (un navigateur ordinaire).
  */
 let release: (() => void) | null = null
+/** Les drives que l'application annonce (`app.info.retailers`, DRV-707) ; `undefined` : rien, une application d'avant les drives multiples. */
+let announced: string[] | undefined
 function installApp(version: string | 'silent' | 'held' | 'browser' = '1.0.0') {
   const native = fakeNative((message, reply) => {
     if (message.type !== 'app.info' || version === 'silent') return
     const info = (number: string) =>
-      reply({ v: 1, type: 'app.info', version: number, versionCode: 1, drive: true })
+      reply({
+        v: 1,
+        type: 'app.info',
+        version: number,
+        versionCode: 1,
+        drive: true,
+        ...(announced === undefined ? {} : { retailers: announced }),
+      })
     // `held` : l'application répond quand le test le décide (une application à jour)
     if (version === 'held') release = () => info('1.0.0')
     else info(version)
@@ -134,6 +144,7 @@ function installApp(version: string | 'silent' | 'held' | 'browser' = '1.0.0') {
 }
 
 afterEach(() => {
+  announced = undefined
   vi.useRealTimers()
   vi.unstubAllGlobals()
   delete (globalThis as { repasNative?: unknown }).repasNative
@@ -607,6 +618,77 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     release?.()
     await vi.waitFor(() => expect(body().textContent).toContain('La liste ne sera plus modifiable'))
     expect(button('Envoyer au drive')?.disabled).toBe(false)
+  })
+
+  // Plusieurs drives (DRV-710) : la règle de choix est celle du back (`selection`) ; ici ce que « Envoyer au drive » en fait
+  describe('plusieurs drives', () => {
+    const several = (options: Parameters<typeof severalSettings>[0]) => ({
+      'GET /api/v1/drive/settings': () => json(severalSettings(options)),
+      'POST /api/v1/shopping-lists/l1/send': noContent,
+    })
+
+    it('aucun drive configuré : « Choisir mon magasin » avant tout, ni confirmation ni verrou', async () => {
+      announced = ['leclerc', 'auchan']
+      const { context, fetchMock } = await openActive(
+        several({ mode: 'NONE', retailer: null, configured: [] }),
+      )
+      await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+
+      button('Envoyer au drive')?.click()
+
+      await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-settings'))
+      expect(context.router.currentRoute.value.query).toMatchObject({
+        magasin: 'requis',
+        retour: 'liste',
+      })
+      expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/send')
+    })
+
+    it('deux drives configurés : la confirmation habituelle, le choix du drive se fait sur l’écran d’envoi', async () => {
+      announced = ['leclerc', 'auchan']
+      const { context } = await openActive(several({ mode: 'ASK', retailer: 'auchan' }))
+      await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+
+      button('Envoyer au drive')?.click()
+
+      await vi.waitFor(() =>
+        expect(body().textContent).toContain('La liste ne sera plus modifiable'),
+      )
+      expect(context.router.currentRoute.value.name).not.toBe('drive-settings')
+    })
+
+    it('l’application ne connaît pas le seul drive configuré : la phrase de mise à jour le nomme, ni verrou ni confirmation', async () => {
+      announced = ['leclerc']
+      const { fetchMock } = await openActive(
+        several({ mode: 'AUTO', retailer: 'auchan', configured: ['auchan'] }),
+      )
+      await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+
+      button('Envoyer au drive')?.click()
+
+      await vi.waitFor(() =>
+        expect(body().textContent).toContain(
+          'Mets à jour l’application pour envoyer ta liste à Auchan.',
+        ),
+      )
+      expect(
+        body().querySelector('[role="dialog"] a[href="/drive/aide"]')?.textContent.trim(),
+      ).toBe('Mettre à jour')
+      expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/send')
+    })
+
+    it('l’application sert l’un des deux drives : l’envoi continue, l’écran d’envoi arbitre', async () => {
+      announced = ['leclerc']
+      await openActive(several({ mode: 'ASK', retailer: 'auchan' }))
+      await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+
+      button('Envoyer au drive')?.click()
+
+      await vi.waitFor(() =>
+        expect(body().textContent).toContain('La liste ne sera plus modifiable'),
+      )
+      expect(body().textContent).not.toContain('Mets à jour')
+    })
   })
 
   it('application trop ancienne et aucun magasin : la phrase d’abord, les réglages jamais', async () => {

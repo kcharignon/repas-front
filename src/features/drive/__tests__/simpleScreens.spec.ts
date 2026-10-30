@@ -194,7 +194,12 @@ describe('l’écran de l’envoi : une décision', () => {
 })
 
 describe('le récapitulatif : aucun compteur à zéro, aucun code visible, un seul bouton principal', () => {
-  const draft = { runId: RUN, listId: 'l1', startedAt: new Date().toISOString() }
+  const draft = {
+    runId: RUN,
+    listId: 'l1',
+    retailer: 'leclerc' as const,
+    startedAt: new Date().toISOString(),
+  }
   const farine: ResultLine = {
     ingredientSlug: 'farine',
     outcome: 'ADDED',
