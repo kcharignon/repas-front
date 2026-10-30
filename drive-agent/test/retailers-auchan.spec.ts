@@ -1,7 +1,7 @@
 // @vitest-environment-options {"url": "https://www.auchan.fr/courses"}
 // Auchan dans le registre de l'agent (DRV-727, DRV-717) : la page est celle du site d'Auchan. Un plan de Leclerc y est refusé (`STORE_MISMATCH`) sans une
-// requête ; un plan d'Auchan lit d'abord le magasin (une requête `GET /journey`, jamais l'adresse), puis la recherche, qui n'est pas écrite (DRV-724),
-// arrête le passage sans écrire au panier. Tout est inventé : aucun contact avec un site d'enseigne.
+// requête ; un plan d'Auchan lit d'abord le magasin (une requête `GET /journey`, jamais l'adresse), puis cherche le produit (DRV-724), et le panier (DRV-725),
+// faute de cookie lisible dans cette page de test, arrête le passage sans rien écrire. Tout est inventé : aucun contact avec un site d'enseigne.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { validateResult } from '../protocol'
@@ -43,6 +43,7 @@ beforeEach(() => {
   sessionStorage.setItem('tracking_authenticated', 'true')
 })
 afterEach(() => {
+  vi.useRealTimers()
   Reflect.deleteProperty(window, 'repasHost')
   document.documentElement.innerHTML = ''
   sessionStorage.clear()
@@ -86,8 +87,20 @@ describe('la page est celle d’Auchan', () => {
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
-  it('un plan d’Auchan : le magasin est lu par UNE requête GET /journey, puis la recherche (non écrite) arrête le passage, sans écrire', async () => {
-    const fetchSpy = journeyFetch()
+  it('un plan d’Auchan : le magasin est lu par UNE requête GET /journey, puis le produit est cherché ; le panier s’arrête faute de cookie de consentement lisible, sans écrire', async () => {
+    // La cadence d'Auchan (2 s au moins entre deux requêtes) tourne sur l'horloge fausse du test
+    vi.useFakeTimers()
+    const fetchSpy = vi.fn<typeof fetch>((url) =>
+      Promise.resolve(
+        String(url).startsWith('/recherche')
+          ? new Response(auchanFixture('recherche-farine.html'), {
+              headers: { 'content-type': 'text/html; charset=utf-8' },
+            })
+          : new Response(auchanFixture('parcours-magasin.json'), {
+              headers: { 'content-type': 'application/json' },
+            }),
+      ),
+    )
     Object.assign(window, { fetch: fetchSpy })
     const app = bridge()
     const screens = fakeUi({ error: () => 'return' })
@@ -95,11 +108,14 @@ describe('la page est celle d’Auchan', () => {
 
     app.send(auchanPlan())
 
-    await vi.waitFor(() => expect(app.postMessage).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(app.postMessage).toHaveBeenCalledOnce(), { timeout: 20_000 })
     const result = resultOf(app.postMessage)
     expect(result).toMatchObject({ outcome: 'error', error: { code: 'CONTRACT_CHANGED' } })
-    expect(JSON.stringify(result)).toContain('ADAPTER_NOT_WRITTEN')
-    expect(fetchSpy.mock.calls.map(([url]) => url)).toEqual(['/journey'])
+    expect(JSON.stringify(result)).toContain('CART_CONSENT_UNREADABLE')
+    expect(fetchSpy.mock.calls.map(([url]) => url)).toEqual([
+      '/journey',
+      '/recherche?text=Farine%20de%20bl%C3%A9%20T55%20de%20test%201%20kg',
+    ])
     expect(fetchSpy.mock.calls.every(([, init]) => init?.method !== 'POST')).toBe(true)
   })
 

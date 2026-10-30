@@ -534,18 +534,15 @@ describe('readEntry et followEntry : « Commencer mes achats », sans geste inve
   })
 })
 
-describe('ce qui n’est pas encore écrit : la recherche (DRV-724)', () => {
+describe('ce qui n’est pas écrit : ce que le diagnostic de Leclerc seul connaît', () => {
   const NOT_WRITTEN = [
     'aisleChoices',
     'aisleSamples',
     'describeLastReply',
     'describeProductLists',
     'exploreFacets',
-    'exploreSearchVariants',
     'readAisleMenu',
-    'readProductFromSearch',
     'searchFiltered',
-    'searchProducts',
     'siteAisles',
     'validateSiteFilter',
   ]
@@ -580,14 +577,17 @@ describe('ce qui n’est pas encore écrit : la recherche (DRV-724)', () => {
         'assertUsable',
         'navigationStatus',
         'cartQuantity',
+        'exploreSearchVariants',
         'followEntry',
         'lastSearchFacts',
         'pageCartTotal',
         'readArrival',
         'readEntry',
+        'readProductFromSearch',
         'readSession',
         'readStore',
         'rememberOffer',
+        'searchProducts',
         'setCartQuantity',
         'stats',
       ].sort(),

@@ -1,6 +1,6 @@
 // Les primitives du navigateur dont l'agent se sert pour les messages de l'application, ses requêtes vers le site et son interface :
-// `JSON.parse`, `JSON.stringify`, l'encodeur de texte, `fetch` et `attachShadow`. Elles sont prises une fois, au chargement du fichier
-// (JSON, encodeur) ou au démarrage de `run` (`fetch`, `attachShadow`, qui tiennent à la fenêtre) : l'application injecte l'agent avant le
+// `JSON.parse`, `JSON.stringify`, l'encodeur de texte, `fetch`, `attachShadow` et `DOMParser` (DRV-724). Elles sont prises une fois, au chargement du fichier
+// (JSON, encodeur) ou au démarrage de `run` (`fetch`, `attachShadow`, `DOMParser`, qui tiennent à la fenêtre) : l'application injecte l'agent avant le
 // premier script de la page, à ce moment elles sont celles du navigateur. L'agent ne les relit plus par leur nom ensuite, donc un script de
 // la page qui en remplace une plus tard n'est jamais appelé avec ce que l'agent traite (le plan, le résultat, les requêtes, l'interface).
 // `drive-agent/src` n'appelle JSON qu'ici (règle ESLint, `test/rules.spec.ts`).
@@ -34,17 +34,29 @@ export interface WindowPrimitives {
   fetch: (input: string, init?: RequestInit) => Promise<Response>
   /** `Element.prototype.attachShadow` appliqué à `host`. */
   attachShadow: (host: Element, init: ShadowRootInit) => ShadowRoot
+  /**
+   * Lit un texte HTML en document INERT (`DOMParser` de la fenêtre, pris au démarrage) : aucun script ne s'y exécute, aucune image ni feuille de style ne s'y
+   * charge. Sert à lire une page de résultats (DRV-724) par des sélecteurs, jamais par des expressions régulières sur 600 Ko de HTML.
+   */
+  parseHtml: (html: string) => Document
 }
 
-/** Prend `fetch` et `attachShadow` de la fenêtre donnée, tels qu'ils sont à cet instant. */
+/** Prend `fetch`, `attachShadow` et `DOMParser` de la fenêtre donnée, tels qu'ils sont à cet instant. */
 export function takeWindowPrimitives(win: Win): WindowPrimitives {
   const takenFetch = win.fetch
   const takenAttach = win.Element?.prototype?.attachShadow
+  const TakenParser = win.DOMParser
+  const takenParse = TakenParser?.prototype?.parseFromString
   return {
     fetch: (input, init) => apply(takenFetch, win, [input, init]) as Promise<Response>,
     attachShadow: (host, init) =>
       (takenAttach === undefined
         ? host.attachShadow(init)
         : apply(takenAttach, host, [init])) as ShadowRoot,
+    parseHtml: (html) => {
+      if (TakenParser === undefined || takenParse === undefined)
+        throw new TypeError('DOMParser indisponible')
+      return apply(takenParse, Reflect.construct(TakenParser, []), [html, 'text/html']) as Document
+    },
   }
 }

@@ -266,12 +266,14 @@ export interface SearchFacts {
   mime: string | null
   length: number
   headers: string[]
-  keys: StateKeys
+  /** Les clés de l'état embarqué (Leclerc) ; absentes chez une enseigne dont la page n'en a pas (DRV-724). */
+  keys?: StateKeys
   /** Les mots de [PAGE_PHRASES] que la réponse dit à voir (cherchés seulement quand la recherche n'a pas rendu de produit). */
   phrases: string[]
-  /** Ce que la réponse montre de la connexion ([describeSession] : un état et des noms de signes). */
-  session: string
-  delivery: DeliveryFacts
+  /** Ce que la réponse montre de la connexion ([describeSession] : un état et des noms de signes). Absent chez une enseigne dont la page n'a pas ces signes (DRV-724). */
+  session?: string
+  /** Le point de livraison de la réponse (Leclerc) ; absent chez une enseigne qui n'en a pas (DRV-724). */
+  delivery?: DeliveryFacts
   /** Les produits lus ; `null` quand la réponse n'a pas pu être lue. */
   products: number | null
   /** `PRODUCTS` (au moins un produit), `EMPTY` (page reconnue sans produit), `FAILED` (erreur de l'adaptateur : voir [fault]). */

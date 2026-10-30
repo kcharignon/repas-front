@@ -14,9 +14,9 @@ import {
   journeyBody,
   MEMBER_CART_ID,
   notFoundPage,
-  searchPage,
   VISITOR_CART_ID,
 } from '../fake-auchan/pages'
+import { AISLE_PAGE_PATH, landingPage, PRODUCT_PAGE_PATH, searchReply } from '../fake-auchan/search'
 import {
   type Behavior,
   DEFAULT_BEHAVIOR,
@@ -115,6 +115,13 @@ describe('les fixtures sont ce que le faux site sert', () => {
     ['panier-vide-bouton.html', cartPage({ ...base, bar: 'withdrawal', entry: 'button' })],
     ['panier-vide-lien.html', cartPage({ ...base, bar: 'withdrawal', entry: 'link' })],
     ['introuvable.html', notFoundPage()],
+    ['recherche-aucun-resultat.html', searchReply('zzqxkw', { ...base, bar: 'withdrawal' }).body],
+    ['recherche-inconnue.html', searchReply('inconnu', { ...base, bar: 'withdrawal' }).body],
+    ['recherche-illisible.html', searchReply('illisible', { ...base, bar: 'withdrawal' }).body],
+    ['recherche-sans-offre.html', searchReply('sansoffre', { ...base, bar: 'withdrawal' }).body],
+    ['recherche-lot.html', searchReply('lot', { ...base, bar: 'withdrawal' }).body],
+    ['fiche-produit.html', landingPage(PRODUCT_PAGE_PATH, { ...base, bar: 'withdrawal' }) ?? ''],
+    ['rayon.html', landingPage(AISLE_PAGE_PATH, { ...base, bar: 'withdrawal' }) ?? ''],
   ])('%s', (name, page) => {
     expect(auchanFixture(name).trimEnd()).toBe(page.trimEnd())
   })
@@ -325,10 +332,7 @@ describe('le panier du faux site (un squelette pour DRV-725), de la forme mesur√
     expect(reply.text).toContain(`data-offer-id="${product.offerId}"`)
     expect(reply.text).toContain('itemprop="price"')
     expect(reply.text).toBe(
-      searchPage({ bar: 'withdrawal', session: 'member', entry: 'button' }, [
-        PRODUCTS[0]!,
-        PRODUCTS[2]!,
-      ]),
+      searchReply('Farine', { session: 'member', entry: 'button', bar: 'withdrawal' }).body,
     )
     expect(auchanFixture('recherche-farine.html').trimEnd()).toBe(reply.text.trimEnd())
   })

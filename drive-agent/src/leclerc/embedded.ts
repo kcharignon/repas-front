@@ -2,19 +2,10 @@
 // garanti : on cherche des champs nommés dans le texte de la page, pas une structure précise. Pas de grosse expression régulière
 // unique : on repère chaque `iIdProduit`, on délimite l'objet `{…}` qui l'entoure et on y lit les champs voulus, les inconnus étant ignorés.
 import { own } from '../own'
+import type { StructuredContent } from '../retailers/content'
 import { cleanText } from '../text'
 
-/** Le contenu net structuré que le site joint à un produit (relevé DRV-007) ; chaque champ est `null` s'il manque. */
-export interface StructuredContent {
-  /** `sUniteMesure` (« KG »). */
-  unitMeasure: string | null
-  /** `nrContenanceUnitaire`. */
-  unitContent: number | null
-  /** `nrContenanceTotale`. */
-  totalContent: number | null
-  /** `sUniteMesureTotale` (« kg »). */
-  totalUnit: string | null
-}
+export type { StructuredContent }
 
 /**
  * L'`objFiltreBloc` joint à un produit (mesure du 2026-10-20, agent 0.33.0 : six clés `iIdBloc`, `neTypeBloc`, `sLibelle`, `fMultiSelection`, `niNbAffichage`,

@@ -839,22 +839,27 @@ export function probeLines(
     lines.push(...searchLines(nonsense))
     const facts = nonsense.facts
     if (facts) {
-      lines.push(
-        P.delivery(
-          P.inReply(nonsense.term),
-          yesNo(facts.delivery.read),
-          yesNo(facts.delivery.sameAsAddress),
-        ),
-      )
-      lines.push(P.session(nonsense.term, facts.session))
-      lines.push(
-        P.keys(nonsense.term, {
-          total: facts.keys.total,
-          present: facts.keys.present,
-          absent: facts.keys.absent,
-          session: facts.keys.session,
-        }),
-      )
+      // Les signes de Leclerc (point de livraison, connexion, clés de l'état embarqué) : une enseigne dont la page n'en a pas ne les rapporte pas (DRV-724).
+      if (facts.delivery) {
+        lines.push(
+          P.delivery(
+            P.inReply(nonsense.term),
+            yesNo(facts.delivery.read),
+            yesNo(facts.delivery.sameAsAddress),
+          ),
+        )
+      }
+      if (facts.session !== undefined) lines.push(P.session(nonsense.term, facts.session))
+      if (facts.keys) {
+        lines.push(
+          P.keys(nonsense.term, {
+            total: facts.keys.total,
+            present: facts.keys.present,
+            absent: facts.keys.absent,
+            session: facts.keys.session,
+          }),
+        )
+      }
       lines.push(P.headers(nonsense.term, facts.headers))
     }
   }
