@@ -34,7 +34,10 @@ enum class PageTrouble {
  * plan parti vers l'agent) et le consulte. Les délais eux-mêmes sont armés par l'activité (`Handler`), qui appelle [loadTimedOut] et
  * [agentTimedOut] à leur échéance. Aucune adresse n'est gardée : l'adresse courante est donnée à chaque question.
  */
-class OpeningWatch {
+class OpeningWatch(
+    /** L'enseigne dont l'écran est surveillé : ses pages seules reçoivent un message (celle d'avant le multi-enseignes quand l'appelant n'en dit pas). */
+    private val site: RetailerSite = RetailerSites.DEFAULT.legacy,
+) {
     /** Une page principale est en cours de chargement : elle a commencé (par son début ou par son erreur) et n'a pas fini. */
     private var open = false
     private var status = 0
@@ -111,7 +114,7 @@ class OpeningWatch {
         status == 403 || status == 429 -> PageTrouble.VERIFICATION
         status >= HTTP_ERROR_FROM -> PageTrouble.HTTP_ERROR
         slow -> PageTrouble.SLOW
-        agentMissing && (NavigationPolicy.isStorePage(url) || NavigationPolicy.isHomePage(url)) -> PageTrouble.NO_AGENT
+        agentMissing && site.acceptsPlanOn(url, entersStore = true) -> PageTrouble.NO_AGENT
         else -> PageTrouble.NONE
     }
 
@@ -119,10 +122,17 @@ class OpeningWatch {
      * Le message du passage peut-il partir vers l'agent de la page d'adresse [url] ? Seulement sur une page de magasin que le site n'a pas
      * refusée : sur une page d'erreur, l'agent n'aurait rien à faire (et son message d'erreur ne dirait pas pourquoi). Un plan part aussi de
      * l'accueil de l'enseigne ([entersStore], DRV-625) : l'agent y suit lui-même « Commencer mes courses » ; la lecture du magasin, elle, attend
-     * toujours une page de magasin (l'utilisateur choisit son magasin).
+     * toujours une page de magasin (l'utilisateur choisit son magasin). Seule une page de [site] (l'enseigne de la surveillance, ou celle que
+     * l'appelant donne) où le pont existe reçoit le message ([RetailerSite.acceptsPlanOn]).
      */
-    fun canDeliver(url: String?, entersStore: Boolean = false): Boolean =
-        !failed && status < HTTP_ERROR_FROM && (NavigationPolicy.isStorePage(url) || (entersStore && NavigationPolicy.isHomePage(url)))
+    fun canDeliver(url: String?, entersStore: Boolean = false, site: RetailerSite = this.site): Boolean =
+        !failed && status < HTTP_ERROR_FROM && site.acceptsPlanOn(url, entersStore)
+
+    /**
+     * Le message de ce passage peut-il partir vers la page d'adresse [url] ? L'enseigne et la nature du passage (un plan entre dans le magasin depuis
+     * l'accueil, la lecture du magasin attend une page de magasin) sont celles de la demande : un plan d'une enseigne ne part jamais vers la page d'une autre.
+     */
+    fun canDeliver(request: PassRequest, url: String?): Boolean = canDeliver(url, entersStore = !request.isSetup, site = request.site)
 
     companion object {
         /** À partir de ce code HTTP, une réponse de la page principale est une erreur. */

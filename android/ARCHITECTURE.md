@@ -34,15 +34,18 @@ Le cœur : `android/core/src/main/kotlin/eu/kantin/repas/drive/` (le paquet n'a 
 
 | Fichier | Ce qu'il porte |
 |---|---|
-| `NavigationPolicy.kt` | la règle de navigation du drive (seules les pages `https` de `leclercdrive.fr` restent dans l'application), les formes d'adresses, le site mobile, l'accueil |
+| `RetailerSite.kt` | **une enseigne de drive vue par l'application** (DRV-706) : `RetailerSite` (identifiant, noms, accueil, mode du site, hôtes où l'on navigue et hôtes où le pont `repasHost` et l'agent existent, formes des pages de magasin, de connexion et du site mobile, règle de livraison d'un plan), `HostPattern` (un nom exact ou tous les sous-domaines d'un domaine, jamais un joker plus large), `SiteHost`, `StorePages`, `SiteMode` |
+| `RetailerSites.kt` | **le registre des enseignes** : la seule liste (aujourd'hui une entrée), injectable dans les tests ; **le seul fichier du cœur qui nomme une enseigne** ; refuse deux enseignes qui se partagent un nom de site ; `announcedRetailers()` pour `app.info` |
+| `RetailerValue.kt` | une valeur texte **par enseigne** sur le stockage clé-valeur du téléphone (`KeyValueStore`) : clé `<nom>.<identifiant>`, ancienne clé unique relue comme celle de l'enseigne d'avant |
+| `NavigationPolicy.kt` | la règle de navigation du drive (seules les pages `https` de l'enseigne de l'écran restent dans l'application : `decide(site, url)`), la lecture des adresses ; les formes sans enseigne sont celles de l'enseigne d'avant |
 | `ShellNavigation.kt` | l'origine de Repas (`RepasOrigin`) et la règle de navigation de la coquille |
-| `DriveEntry.kt` | où ouvrir le drive depuis « Finaliser sur Leclerc » (l'accueil du magasin, ou l'accueil du drive) |
-| `FinalizeOutcome.kt` | la forme du dernier « Finaliser » (un mot, jamais une adresse) et son port de stockage (`FinalizeOutcomeStore`) |
-| `StorePathMemory.kt` | le chemin du magasin avec sa ville, et son port de stockage (`StorePathStore`) |
+| `DriveEntry.kt` | où ouvrir le drive depuis « Finaliser » (l'accueil du magasin, ou l'accueil du drive de l'enseigne du lien) |
+| `FinalizeOutcome.kt` | la forme du dernier « Finaliser » (un mot, jamais une adresse), son port de stockage (`FinalizeOutcomeStore`) et sa mémoire par enseigne (`FinalizeOutcomeMemories`) |
+| `StorePathMemory.kt` | le chemin du magasin avec sa ville, son port de stockage (`StorePathStore`) et sa mémoire par enseigne (`StorePathMemories`) |
 | `OpeningWatch.kt` | la surveillance de la page où l'envoi attend la page du magasin (`PageTrouble`) |
 | `NativeBridge.kt` | les règles du pont `repasNative` : origine, 64 Ko, forme du JSON, réponses |
-| `BridgeMessages.kt` | les règles du canal `repasHost` entre l'application et l'agent |
-| `DrivePlan.kt` | le plan reçu de Repas (forme, hôte, bornes), la lecture du magasin et le résultat `aborted` |
+| `BridgeMessages.kt` | les règles du canal `repasHost` entre l'application et l'agent : origines du pont d'une enseigne, règles d'origine de la WebView (`originRules`) |
+| `DrivePlan.kt` | le plan reçu de Repas (forme, enseigne du registre, hôte de cette enseigne, bornes), la lecture du magasin et le résultat `aborted` |
 | `DrivePass.kt` | le passage (un seul à la fois, reprise sous 24 h, résultats à livrer, son port `PassStore`), le bandeau (`StoreBanner`), l'envoi du plan (`PlanDelivery`) |
 | `AgentAsset.kt` | l'agent embarqué : empreinte SHA-384, version, script injecté, états |
 | `UserAgent.kt` | l'identité « ordinateur » : agent utilisateur et indications client |
@@ -88,12 +91,24 @@ Quand le cœur a besoin de quelque chose que seule la plateforme sait faire, il 
 | `PassStore` | garder une valeur texte : le passage non terminé et les résultats à livrer | `PrefsPassStore` (préférence privée, hors sauvegarde) | hors portée |
 | `StorePathStore` | garder le chemin du magasin | `PrefsStorePathStore` | hors portée |
 | `FinalizeOutcomeStore` | garder la forme du dernier « Finaliser » | `PrefsFinalizeOutcomeStore` | hors portée |
+| `KeyValueStore` | garder des valeurs texte par clé (DRV-706) : le cœur choisit les clés `path.<enseigne>`, `finalize.<enseigne>`, l'application les range | (à brancher : une préférence privée, DRV-707) | hors portée |
 | `HttpHop` | UNE demande `GET` en `https`, sans suivre de redirection (DRV-639) | `HttpsHop` (`HttpsURLConnection`) | hors portée |
 | `UpdateStorage` | le dossier privé où l'APK téléchargé attend, seul (DRV-639) | `PrivateUpdateStorage` (`files/update/`) | hors portée |
 | `UpdatePlatform` | l'autorisation d'installer et le contrôle du fichier posé (paquet, code, certificat) | `AndroidUpdatePlatform` | hors portée |
 
 - **Pas de `SecureStore`** : rien ne garde de secret aujourd'hui (la connexion Google ne garde pas le jeton). Le jour où quelque chose en aura besoin, on l'ajoute au cœur avec son implémentation.
 - **Pas encore d'interface** pour l'écran allumé (`FLAG_KEEP_SCREEN_ON`), la WebView elle-même (injection, pont, profil, mode ordinateur) ni les fenêtres : il n'y a qu'une plateforme, on n'invente pas l'interface avant le second besoin. Les *règles* de ces morceaux sont déjà dans le cœur, c'est ce qui compte.
+
+## Plusieurs enseignes (DRV-706)
+
+Une enseigne est **une donnée, pas une branche de code** : `RetailerSite` (`RetailerSite.kt`) et sa seule liste `RetailerSites` (`RetailerSites.kt`, aujourd'hui une entrée). Ajouter une enseigne, c'est ajouter une entrée ; `RetailerSitesArchitectureTest` (et `retailer-sites.spec.ts`) échouent si une enseigne est nommée dans le code d'un autre fichier du cœur.
+
+- **Navigation et pont ne sont pas la même liste.** Chaque `SiteHost` dit si le pont `repasHost` et l'agent y existent (`bridge`). Une enseigne peut naviguer sur plusieurs hôtes (la page de connexion, à part) sans que le pont existe sur la page du mot de passe. Les règles d'origine de la WebView (`BridgeMessages.originRules`) se déduisent des seuls hôtes qui portent le pont, de l'ensemble des enseignes **que l'écran ouvre** ; jamais `*`, jamais un joker plus large qu'un nom exact ou `*.domaine`.
+- **Une adresse n'est celle que d'une seule enseigne.** `RetailerSites` refuse deux enseignes qui se partagent un nom de site. `NavigationPolicy.decide(site, url)` ne garde dans la WebView que les pages de **l'enseigne de l'écran** ; une page d'une autre enseigne part au navigateur du téléphone.
+- **Un plan n'est livré qu'à une page de son enseigne** (`RetailerSite.acceptsPlanOn`, `OpeningWatch.canDeliver(request, url)`) : où le pont existe, et une page de magasin (ou l'accueil pour un plan) quand l'enseigne a des pages de magasin. Un plan est refusé (`INVALID_PLAN`) si son enseigne n'est pas au registre ou si l'hôte de son magasin n'est pas un hôte de **cette** enseigne.
+- **Les formes sans enseigne** (`NavigationPolicy.decide(url)`, `START_URL`, `BridgeMessages.isAllowedOrigin(origin)`, `DrivePlan.parse(plan)`…) sont celles de l'enseigne d'avant le multi-enseignes (`RetailerSites.legacy`) : un écran qui n'a pas choisi d'enseigne ne navigue que chez elle. L'écran du drive passe l'enseigne partout (DRV-707).
+- **Mémoires par enseigne** : `StorePathMemories` et `FinalizeOutcomeMemories` rangent une valeur par enseigne (`path.<identifiant>`, `finalize.<identifiant>`) sur un `KeyValueStore` ; la valeur unique de l'ancienne version (`path`, `finalize`) est relue comme celle de l'enseigne d'avant, puis déplacée sous sa clé à la première écriture.
+- **Annonce** : `RetailerSites.announcedRetailers()` (liste d'identifiants) est ce que `app.info` annoncera (DRV-707).
 
 ## Deux variantes de distribution (DRV-639)
 

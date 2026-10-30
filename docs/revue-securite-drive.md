@@ -160,3 +160,13 @@ Les workflows référencent les actions par étiquette (`actions/checkout@v7`, `
 
 - La branche DRV-320 (lecture du magasin depuis l'application, protocole `setup`) n'est pas relue ici ; elle touche `agent.ts`, le protocole et `android/` : après sa fusion, relire `MainActivity` et `DriveActivity` (nouvelle entrée de menu, `drive.setup`) avec les mêmes règles (une seule origine, un seul passage, rien de personnel dans le résultat de lecture du magasin).
 - L'historique de l'agent (`AGENT_VERSION`) est maintenant 0.6.2 ; chaque changement de l'agent change `android/agent.js.sha384`.
+
+## Addendum DRV-706 (2026-10-30) : la liste des origines par enseigne
+
+Les règles de navigation et d'origine du pont ne sont plus écrites pour un seul domaine : `RetailerSite` (le cœur de l'application) les porte pour chaque enseigne, et `RetailerSites` est la seule liste. À relire par la revue :
+
+- **Aucun joker plus large que nécessaire.** Un nom de site est un nom exact (`www.exemple.test`) ou tous les sous-domaines d'un domaine (`*.exemple.test`, jamais le domaine nu, jamais `*.fr`) ; `HostPattern` refuse tout autre forme à la construction. Les règles données à la WebView se déduisent de ces noms (`BridgeMessages.originRules`), seulement pour les hôtes qui portent le pont.
+- **Navigation et pont sont deux listes.** Une enseigne peut naviguer sur plusieurs hôtes (page de connexion à part) sans que le pont `repasHost` ni l'agent existent sur la page du mot de passe (test avec une enseigne fictive : `RetailerIsolationTest`).
+- **Une origine d'une enseigne ne reçoit jamais le plan d'une autre.** Un plan est refusé si son enseigne n'est pas au registre ou si l'hôte de son magasin n'est pas un hôte de cette enseigne où le pont existe ; il n'est livré qu'à une page de son enseigne (`RetailerSite.acceptsPlanOn`). Une adresse n'est celle que d'une seule enseigne : un registre où deux enseignes se partagent un nom de site est refusé.
+- **Tables hostiles** (`@`, barre oblique inverse, port, point final, non-ASCII, domaine qui en contient un autre, schémas voisins) rejouées pour chaque enseigne fictive, en plus de celles de `NavigationPolicyTest` pour l'enseigne d'aujourd'hui, dont les attentes n'ont pas bougé.
+- **Légère contrainte de plus pour l'enseigne d'aujourd'hui** : un plan ne part plus vers une page du domaine nu `leclercdrive.fr` (où l'on navigue mais où le pont n'existe pas) ; sans effet visible, le pont n'y existait pas.

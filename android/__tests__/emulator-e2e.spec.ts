@@ -99,13 +99,16 @@ describe('la page de départ d’un plan dans l’émulateur (recette réelle du
   const script = read(join(emulatorDir, 'e2e.sh'))
 
   it('est celle de l’application : l’accueil de l’enseigne (NavigationPolicy.START_URL), servi par le faux Leclerc complet sous le même nom', () => {
+    // L'accueil de l'enseigne est une donnée de son entrée au registre (DRV-706) ; `NavigationPolicy.START_URL` et les pages de départ la lisent.
+    const registry = read(join(androidDir, 'core/src/main/kotlin/eu/kantin/repas/drive/RetailerSites.kt'))
     const policy = read(join(androidDir, 'core/src/main/kotlin/eu/kantin/repas/drive/NavigationPolicy.kt'))
     const plan = read(join(androidDir, 'core/src/main/kotlin/eu/kantin/repas/drive/DrivePlan.kt'))
 
-    expect(/const val START_URL = "([^"]+)"/.exec(policy)?.[1]).toBe(`https://${HOME_HOST}/`)
+    expect(/startUrl = "([^"]+)"/.exec(registry)?.[1]).toBe(`https://${HOME_HOST}/`)
+    expect(policy).toContain('val START_URL: String get() = legacy.startUrl')
     // La lecture du magasin (SetupRequest) et le plan (DrivePlan) : les deux pages de départ sont celle-là, jamais l'hôte du magasin du plan.
     const starts = [...plan.matchAll(/override val startUrl: String get\(\) = (.+)/g)].map((match) => match[1])
-    expect(starts).toEqual(['NavigationPolicy.START_URL', 'NavigationPolicy.START_URL'])
+    expect(starts).toEqual(['site.startUrl', 'site.startUrl'])
     expect(read(join(emulatorDir, 'lib.sh'))).toContain(`SITE_HOST=${HOME_HOST}`)
     expect(read(join(emulatorDir, 'testsite.py'))).toContain(`HOME_HOST = "${HOME_HOST}"`)
     expect(read(join(emulatorDir, 'entrypoint.sh'))).toContain(`FAKE_LECLERC_HOSTS=${HOME_HOST}`)
