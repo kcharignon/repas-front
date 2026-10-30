@@ -56,6 +56,13 @@ export interface Retailer {
    * magasin est explicite (`storeIdSource` `EXPLICIT`) rend toujours `null` : son magasin ne se lit pas dans une adresse.
    */
   readStore: (url: URL) => StoreAddress | null
+  /**
+   * L'adresse du site MOBILE de l'enseigne, déjà analysée (https, sans port ni identifiants), ramenée à ce que l'application ouvre en mode ordinateur
+   * (DRV-741) : l'enseigne la redirige alors vers la bonne adresse de magasin. `null` si ce n'est pas une adresse de magasin du site mobile, et toujours
+   * `null` pour une enseigne sans site mobile à refuser. Elle ne dit jamais le magasin : seule la page finale, lue par l'agent, le fait (l'hôte du
+   * magasin ne se devine pas).
+   */
+  readMobileStoreAddress: (url: URL) => string | null
   /** L'adresse « Finaliser » d'un magasin pour l'application, d'après son adresse de base enregistrée ; `null` si elle n'est pas lisible. */
   finalizeStoreUrl: (storeBaseUrl: URL) => string | null
   /**
@@ -67,6 +74,12 @@ export interface Retailer {
 
 /** `/magasin-N-N`, avec ou sans ville : les deux numéros du magasin, sans le reste de l'adresse. */
 const LECLERC_STORE_IDS = /^\/(magasin-\d{1,12}-\d{1,12})(?:-[^/?#]*)?(?:\/|$)/
+
+/** Le site mobile de Leclerc : un premier nom `m` ou `m-…` (`m-courses.leclercdrive.fr`), comme l'agent et l'application le reconnaissent. */
+const LECLERC_MOBILE_HOST = /^m(?:-[a-z0-9-]*)?\./
+/** `/magasin-N-N[-ville][.aspx]`, suivi au besoin d'un chemin : le segment du magasin, sans le `.aspx`. */
+const LECLERC_MOBILE_STORE =
+  /^\/(magasin-\d{1,12}-\d{1,12}(?:-[A-Za-z0-9%_-]{1,100})?)(?:\.aspx)?(?:\/.*)?$/
 
 const leclerc: Retailer = {
   id: 'leclerc',
@@ -89,6 +102,12 @@ const leclerc: Retailer = {
       id: path[1] as string,
       baseUrl: `https://${url.hostname}/magasin-${path[1]}-${path[2]}`,
     }
+  },
+  readMobileStoreAddress: (url) => {
+    if (!STORE_HOST.test(url.hostname) || !LECLERC_MOBILE_HOST.test(url.hostname)) return null
+    const path = LECLERC_MOBILE_STORE.exec(url.pathname)
+
+    return path === null ? null : `https://${url.hostname}/${path[1]}`
   },
   finalizeStoreUrl: (url) => {
     const store = LECLERC_STORE_IDS.exec(url.pathname)
@@ -119,6 +138,8 @@ const auchan: Retailer = {
   appName: 'Auchan',
   homeUrl: 'https://www.auchan.fr/courses',
   readStore: () => null,
+  // Un site adaptatif : pas de site mobile à refuser
+  readMobileStoreAddress: () => null,
   // Pas de page de magasin à ouvrir : « Finaliser » mène à l'accueil des courses
   finalizeStoreUrl: () => null,
   // La recherche du site ne dépend pas du magasin (celui-ci est un identifiant, l'adresse de base est celle du site)

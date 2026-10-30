@@ -53,14 +53,17 @@ function codeOf(error: DriveBridgeError): StoreReadErrorCode {
 /**
  * Demande à l'application d'ouvrir le drive pour lire le magasin choisi, et le rend (le retour peut prendre plusieurs minutes : il faut
  * se connecter et choisir son magasin). `retailer` (DRV-709) : le drive touché, nommé dans le message ; `null`, le message d'avant les drives
- * multiples (une application qui n'annonce aucun drive). Lève une `StoreReadError`.
+ * multiples (une application qui n'annonce aucun drive). `address` (DRV-741) : l'adresse du site mobile d'un magasin que l'utilisateur a collée, ramenée par
+ * `parseMobileStoreAddress` ; l'application l'ouvre en mode ordinateur au lieu de l'accueil, et le magasin lu est celui de la page finale.
+ * Lève une `StoreReadError`.
  */
 export async function readStoreFromApp(
   bridge: DriveBridge = driveBridge,
   retailer: string | null = null,
+  address: string | null = null,
 ): Promise<StoreReading> {
   try {
-    const store = await bridge.startSetup(retailer)
+    const store = await bridge.startSetup(retailer, address)
 
     return { id: store.id, baseUrl: store.baseUrl, label: store.label }
   } catch (error) {

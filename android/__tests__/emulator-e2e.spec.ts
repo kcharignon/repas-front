@@ -112,7 +112,7 @@ describe('les scripts de l’émulateur', () => {
         .flatMap((file) => read(join(emulatorDir, file)).match(/https?:\/\/[a-z0-9.$_{}-]+/gi) ?? [])
         .map((address) => address.replace(/^https?:\/\//i, '')),
     )
-    expect([...hosts].sort()).toEqual(['$FAKE_STORE_HOST', '$REPAS_HOST', '127.0.0.1', 'repas.test'])
+    expect([...hosts].sort()).toEqual(['$FAKE_STORE_HOST', '$MOBILE_HOST', '$REPAS_HOST', '127.0.0.1', 'repas.test'])
   })
 })
 
@@ -132,7 +132,8 @@ describe('la page de départ d’un plan dans l’émulateur (recette réelle du
     expect(policy).toContain('val START_URL: String get() = legacy.startUrl')
     // La lecture du magasin (SetupRequest) et le plan (DrivePlan) : les deux pages de départ sont celle-là, jamais l'hôte du magasin du plan.
     const starts = [...plan.matchAll(/override val startUrl: String get\(\) = (.+)/g)].map((match) => match[1])
-    expect(starts).toEqual(['site.startUrl', 'site.startUrl'])
+    // (DRV-741 : la lecture du magasin s'ouvre sur l'adresse d'un magasin que l'utilisateur a donnée, à défaut sur cet accueil)
+    expect(starts).toEqual(['address ?: site.startUrl', 'site.startUrl'])
     expect(read(join(emulatorDir, 'lib.sh'))).toContain(`SITE_HOST=${HOME_HOST}`)
     expect(read(join(emulatorDir, 'testsite.py'))).toContain(`HOME_HOST = "${HOME_HOST}"`)
     expect(read(join(emulatorDir, 'entrypoint.sh'))).toContain(`FAKE_LECLERC_HOSTS=${HOME_HOST}`)

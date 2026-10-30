@@ -1001,6 +1001,8 @@ export default {
     errors: {
       address:
         'Cette adresse n’est pas celle d’un magasin {retailer} Drive : elle ressemble à {storeExample}.',
+      mobile:
+        'Cette adresse est celle du site mobile. Ouvre-la dans l’application Repas, ou colle l’adresse du site sur ordinateur.',
     },
     offline:
       'Hors connexion : l’enregistrement est impossible tant que le réseau n’est pas revenu.',

@@ -51,7 +51,8 @@ REPAS_HOST = "repas.test"
 # Le faux magasin Leclerc complet (Node), en HTTP sur la boucle locale du conteneur : seuls ces noms lui sont relayés, tels quels (en-tête Host compris,
 # qu'il vérifie lui-même : il refuse tout autre nom).
 FAKE_LECLERC = ("127.0.0.1", int(os.environ.get("FAKE_LECLERC_PORT", "8099")))
-FAKE_LECLERC_HOSTS = {"courses-test.leclercdrive.fr", "photos-test.leclercdrive.fr"}
+# Le site mobile de l'enseigne (DRV-741) en fait partie : le faux Leclerc y redirige une adresse de magasin vers l'hôte du magasin, comme le vrai site en mode ordinateur.
+FAKE_LECLERC_HOSTS = {"courses-test.leclercdrive.fr", "photos-test.leclercdrive.fr", "m-courses.leclercdrive.fr"}
 # L'accueil de l'enseigne (NavigationPolicy.START_URL de l'application) : relayé au faux Leclerc seulement en mode « fake » (voir l'en-tête).
 HOME_HOST = "www.leclercdrive.fr"
 WWW_MODES = ("test", "fake")

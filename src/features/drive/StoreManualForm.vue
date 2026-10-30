@@ -9,7 +9,7 @@ import UiTextInput from '@/design/UiTextInput.vue'
 import { messageForFailure } from '@/notifications/failures'
 import { retailerParams } from './retailers'
 import type { Retailer } from './retailers'
-import { parseStoreAddress } from './storeAddress'
+import { parseMobileStoreAddress, parseStoreAddress } from './storeAddress'
 
 // La saisie du magasin à la main (l'adresse et son nom), repliée quand l'application sait le lire. Un formulaire par drive : l'adresse
 // se lit avec la règle de ce drive (`retailer`), et le texte d'aide donne l'exemple de ce drive.
@@ -21,6 +21,12 @@ const props = defineProps<{
   online: boolean
   /** Enregistre le magasin ; rejette si l'écriture échoue (l'échec s'affiche ici). */
   save: (store: DriveStorePayload) => Promise<void>
+  /**
+   * Dans l'application (DRV-741) : lit le magasin à l'adresse du site mobile que la personne a collée, au lieu de l'enregistrer (l'application l'ouvre
+   * en mode ordinateur, l'enseigne la redirige vers le bon hôte, et la lecture du magasin est enregistrée par l'écran). Absent hors de l'application :
+   * une adresse mobile y est expliquée, jamais enregistrée.
+   */
+  readAddress?: ((address: string) => Promise<void>) | null
 }>()
 const open = defineModel<boolean>('open', { default: false })
 
@@ -49,7 +55,16 @@ async function submit() {
   failure.value = null
   const parsed = parseStoreAddress(address.value, props.retailer)
   if (parsed === null) {
-    addressError.value = t('driveSettings.errors.address')
+    // L'adresse du site mobile n'est jamais enregistrée (son hôte n'est pas celui du magasin) : l'application la fait lire, un navigateur l'explique
+    const mobile = parseMobileStoreAddress(address.value, props.retailer)
+    if (mobile !== null && props.readAddress) {
+      addressError.value = null
+      await props.readAddress(mobile)
+
+      return
+    }
+    addressError.value =
+      mobile === null ? t('driveSettings.errors.address') : t('driveSettings.errors.mobile')
 
     return
   }

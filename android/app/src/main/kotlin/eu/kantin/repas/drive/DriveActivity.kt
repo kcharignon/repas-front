@@ -524,7 +524,7 @@ class DriveActivity : Activity() {
      * qu'il tarde ou que l'agent manque), il dit quoi faire ; pour un plan il porte « Ouvrir l'accueil du drive ». Jamais un écran muet.
      */
     private fun updateStoreBanner(url: String?) {
-        val banner = StoreBanner.of(pass.current()?.request, url, watch.trouble(url), basketHint)
+        val banner = StoreBanner.of(pass.current()?.request, url, watch.trouble(url), basketHint, watch.isLoading())
         val text = when (banner) {
             StoreBanner.NONE -> null
             StoreBanner.SETUP -> R.string.setup_banner
@@ -566,14 +566,15 @@ class DriveActivity : Activity() {
      * « Ouvrir l'accueil du drive » : recharge la page de départ du passage (l'accueil de l'enseigne, [RetailerSite.startUrl], où
      * l'utilisateur est déjà connecté). Elle affiche l'accueil du magasin : il touche lui-même « Commencer mes courses » (l'application ne
      * clique jamais à sa place), et dès qu'il est sur une page de magasin le message du passage part tout seul vers l'agent ([sendPlan]) ; si
-     * ce n'est pas le magasin du plan, l'agent le dit (`STORE_MISMATCH`).
+     * ce n'est pas le magasin du plan, l'agent le dit (`STORE_MISMATCH`). Toujours l'accueil de l'enseigne, jamais l'adresse de magasin qu'une lecture
+     * du magasin a pu ouvrir (DRV-741) : si elle n'a pas mené au site ordinateur, la recharger ne ferait que recommencer.
      */
     private fun openHome() {
         val request = pass.current()?.request ?: return
         problems.hide()
         navigationBegins()
-        updateStoreBanner(request.startUrl)
-        webView.loadUrl(request.startUrl)
+        updateStoreBanner(request.site.startUrl)
+        webView.loadUrl(request.site.startUrl)
     }
 
     /** Le résultat de l'agent. Vrai si c'est celui du passage en cours : il est clos, et l'écran se referme ou montre l'essai. */

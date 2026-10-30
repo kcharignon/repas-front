@@ -35,6 +35,9 @@ export interface DriveBridgeOptions {
 /** Combien de temps `app.info` attend la réponse de l'application avant de dire `TIMEOUT` (une application trop ancienne ne répond pas). */
 export const INFO_TIMEOUT_MS = 3000
 
+/** L'adresse que `drive.setup` ouvre (DRV-741) : `https`, sans espace, de 300 caractères au plus. La forme précise (le site, le magasin) est jugée par l'enseigne, côté web comme dans l'application. */
+const SETUP_ADDRESS = /^https:\/\/[^\s\\@]{1,290}$/
+
 /** Au plus autant d'événements gardés pour un écran qui n'est pas encore là (le résultat peut arriver pendant un changement de page). */
 const BUFFER = 20
 
@@ -61,6 +64,8 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
     runId: string
     /** Le drive dont on lit le magasin (`null` : celui d'avant les drives multiples, sans `retailer` dans le message). */
     retailer: string | null
+    /** L'adresse du magasin que l'application ouvre à la place de l'accueil (DRV-741), `null` : l'accueil. */
+    address: string | null
     promise: Promise<SetupStore>
     resolve: (store: SetupStore) => void
     reject: (error: DriveBridgeError) => void
@@ -265,10 +270,18 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
      * (`detail` : le code de l'agent). Une lecture déjà en cours est rouverte et attendue, pas doublée ; celle d'un autre drive est refusée (`BUSY`).
      * `retailer` (DRV-709) : le drive dont on lit le magasin, écrit dans le message ; à ne donner qu'à une application qui l'annonce dans
      * `app.info.retailers` (une ancienne ne lit que le drive d'avant et ne connaît pas la clé). Sans lui, le message est celui d'avant.
+     * `address` (DRV-741) : l'adresse du site mobile d'un magasin que l'utilisateur a collée (déjà ramenée par `parseMobileStoreAddress`) ; l'application
+     * l'ouvre en mode ordinateur à la place de l'accueil. Une application qui ne connaît pas la clé l'ignore et ouvre l'accueil, comme avant. Une forme
+     * qui n'est pas celle d'une adresse `https` est refusée ici (`REFUSED` `INVALID_SETUP`), l'application la revérifie.
      */
-    startSetup(retailer: string | null = null): Promise<SetupStore> {
+    startSetup(retailer: string | null = null, address: string | null = null): Promise<SetupStore> {
       const native = requireNative()
-      if (pendingSetup !== null && pendingSetup.retailer !== retailer)
+      if (address !== null && !SETUP_ADDRESS.test(address))
+        return Promise.reject(new DriveBridgeError('REFUSED', 'INVALID_SETUP'))
+      if (
+        pendingSetup !== null &&
+        (pendingSetup.retailer !== retailer || pendingSetup.address !== address)
+      )
         return Promise.reject(new DriveBridgeError('REFUSED', 'BUSY'))
       const created = pendingSetup === null
       const runId = pendingSetup?.runId ?? crypto.randomUUID()
@@ -279,7 +292,7 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
           resolve = ok
           reject = ko
         })
-        pendingSetup = { runId, retailer, promise, resolve, reject }
+        pendingSetup = { runId, retailer, address, promise, resolve, reject }
       }
       const pending = pendingSetup
       try {
@@ -288,6 +301,7 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
           type: 'drive.setup',
           runId,
           ...(retailer === null ? {} : { retailer }),
+          ...(address === null ? {} : { address }),
         })
       } catch (error) {
         if (created) pendingSetup = null

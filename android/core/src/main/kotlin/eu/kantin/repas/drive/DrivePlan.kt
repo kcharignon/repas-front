@@ -31,6 +31,12 @@ interface PassRequest {
     val isSetup: Boolean
 
     /**
+     * Vrai quand [startUrl] est l'adresse d'un magasin que l'utilisateur a collée (DRV-741, lecture du magasin seulement) et non l'accueil de l'enseigne :
+     * la page peut être celle du site mobile, que l'enseigne redirige en mode ordinateur ; ce n'est pas un défaut tant qu'elle charge.
+     */
+    val opensAddress: Boolean get() = false
+
+    /**
      * Le résultat `aborted` du protocole v1 pour ce passage (abandon par l'utilisateur ou `drive.cancel`) : aucune ligne (l'application ne sait
      * pas ce que l'agent a déjà mis au panier), le code `CANCELLED`. [agentVersion] : la version de l'agent embarqué.
      */
@@ -53,8 +59,15 @@ private fun abortedResultJson(runId: String, storeId: String?, agentVersion: Str
     .put("lines", JSONArray())
     .toString()
 
-/** Une demande de lecture du magasin (`drive.setup {runId}`, DRV-320) : le message `setup` du protocole v1, sans magasin. */
-class SetupRequest private constructor(override val runId: String, override val site: RetailerSite) : PassRequest {
+/**
+ * Une demande de lecture du magasin (`drive.setup {runId}`, DRV-320) : le message `setup` du protocole v1, sans magasin.
+ *
+ * [address] (DRV-741) : l'adresse d'un magasin que Repas a reçue de l'utilisateur (collée depuis le site mobile de l'enseigne), déjà jugée par
+ * [RetailerSite.openableStoreAddress]. L'application l'ouvre à la place de l'accueil, en mode ordinateur : l'enseigne la redirige vers la bonne
+ * adresse de magasin, et l'agent lit le magasin sur la page finale (flux habituel, « Utiliser ce magasin »). Elle ne va **jamais** à l'agent : le
+ * message du protocole [text] est le même, et seul le magasin lu sur la page finale revient à Repas.
+ */
+class SetupRequest private constructor(override val runId: String, override val site: RetailerSite, val address: String?) : PassRequest {
     override val text: String = JSONObject()
         .put("v", PROTOCOL)
         .put("type", "setup")
@@ -63,9 +76,10 @@ class SetupRequest private constructor(override val runId: String, override val 
         .put("returnPath", "/drive/retour")
         .toString()
 
-    /** L'accueil du drive de l'enseigne : l'utilisateur s'y connecte et y choisit son magasin. */
-    override val startUrl: String get() = site.startUrl
+    /** L'accueil du drive de l'enseigne (l'utilisateur s'y connecte et y choisit son magasin), ou l'adresse de magasin qu'il a donnée. */
+    override val startUrl: String get() = address ?: site.startUrl
     override val isSetup: Boolean get() = true
+    override val opensAddress: Boolean get() = address != null
 
     override fun abortedResult(agentVersion: String): String =
         abortedResultJson(runId, null, agentVersion, "Lecture du magasin abandonnée.")
@@ -73,19 +87,25 @@ class SetupRequest private constructor(override val runId: String, override val 
     companion object {
         /**
          * La demande pour cet identifiant de passage et cette enseigne (celle d'avant le multi-enseignes quand l'appelant n'en dit pas), ou `null`
-         * si ce n'est pas un UUID.
+         * si ce n'est pas un UUID, ou si [address] (facultative) n'est pas une adresse de magasin acceptable pour cette enseigne.
          */
-        fun of(runId: Any?, site: RetailerSite = RetailerSites.DEFAULT.legacy): SetupRequest? =
-            (runId as? String)?.takeIf { DrivePlan.isRunId(it) }?.let { SetupRequest(it, site) }
+        fun of(runId: Any?, site: RetailerSite = RetailerSites.DEFAULT.legacy, address: String? = null): SetupRequest? {
+            val id = (runId as? String)?.takeIf { DrivePlan.isRunId(it) } ?: return null
+            if (address != null && site.openableStoreAddress(address) == null) return null
+            return SetupRequest(id, site, address)
+        }
 
         /**
          * La demande d'un message `drive.setup` (ou d'un `setup` gardé) : le `runId` est un UUID, `retailer` (facultatif) une enseigne du registre
          * [sites]. Un message qui ne dit pas l'enseigne est celui de l'enseigne d'avant le multi-enseignes ([RetailerSites.legacy]) ; une enseigne
-         * qui n'est pas au registre (ou qui n'est pas un texte) le fait refuser.
+         * qui n'est pas au registre (ou qui n'est pas un texte) le fait refuser. `address` (facultative, absente ou `null` : l'accueil) est jugée par
+         * [RetailerSite.openableStoreAddress] ; une adresse qui ne l'est pas fait refuser tout le message.
          */
         fun parse(json: JSONObject, sites: RetailerSites = RetailerSites.DEFAULT): SetupRequest? {
             val site = if (json.has("retailer")) sites.byId(json.opt("retailer") as? String) else sites.legacy
-            return site?.let { of(json.opt("runId"), it) }
+            val address = json.opt("address")
+            if (address != null && address != JSONObject.NULL && address !is String) return null
+            return site?.let { of(json.opt("runId"), it, address as? String) }
         }
     }
 }

@@ -154,6 +154,8 @@
           // `retailer` : l'enseigne de la lecture du magasin (DRV-707) ; absent, le message d'avant (l'enseigne d'avant le multi-enseignes)
           var setup = { v: 1, type: 'drive.setup', runId: command.runId }
           if (command.retailer !== undefined) setup.retailer = command.retailer
+          // `address` : l'adresse du site mobile d'un magasin collée par l'utilisateur (DRV-741), que l'application ouvre à la place de l'accueil
+          if (command.address !== undefined) setup.address = command.address
           send(setup)
         } else if (command.do === 'drive.cancel') {
           send({ v: 1, type: 'drive.cancel', runId: command.runId || PLAN.runId })

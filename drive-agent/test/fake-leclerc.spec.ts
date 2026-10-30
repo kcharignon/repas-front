@@ -15,6 +15,7 @@ import {
   CART_PATH,
   HOME_HOST,
   isLoopback,
+  MOBILE_HOST,
   OTHER_STORE_PATH,
   PAGE_PATH,
   STORE,
@@ -1054,5 +1055,39 @@ describe('les photos des produits (DRV-633)', () => {
 
   it('l’hôte « autre site » n’est pas servi : le faux site refuse son nom', async () => {
     expect((await call('/image.ashx?id=1003', { host: FOREIGN_PHOTO_HOST })).status).toBe(403)
+  })
+})
+
+describe('le site mobile de l’enseigne (DRV-741)', () => {
+  // Servi sous son nom seulement sur demande (`hosts`), comme tout autre nom
+  beforeEach(async () => {
+    await fake.close()
+    fake = await startFakeLeclerc({ hosts: [MOBILE_HOST] })
+  })
+
+  it('redirige une adresse de magasin vers la même adresse sur l’hôte du magasin, avec .aspx (le bon hôte est celui de l’enseigne)', async () => {
+    for (const path of [PAGE_PATH, `${PAGE_PATH}.aspx`]) {
+      const reply = await call(path, { host: MOBILE_HOST })
+
+      expect(reply.status).toBe(302)
+      expect(reply.headers.location).toBe(`//${STORE.host}:${fake.port}${PAGE_PATH}.aspx`)
+    }
+    // La page finale est une page du magasin, avec sa ville
+    const page = await call(`${PAGE_PATH}.aspx`)
+    expect(page.status).toBe(200)
+    expect(page.text).toContain('Accueil du magasin')
+  })
+
+  it('ne sert rien d’autre : ni la racine, ni les pages du magasin, ni une adresse sans ville', async () => {
+    for (const path of ['/', `${PAGE_PATH}/recherche.aspx`, `${PAGE_PATH}/`, CART_PATH])
+      expect([path, (await call(path, { host: MOBILE_HOST })).status]).toEqual([path, 404])
+  })
+
+  it('journalise ses requêtes avec leur nom d’hôte', async () => {
+    await call(PAGE_PATH, { host: MOBILE_HOST })
+
+    expect(fake.requests().map((r) => [r.host, r.path, r.status])).toEqual([
+      [MOBILE_HOST, PAGE_PATH, 302],
+    ])
   })
 })

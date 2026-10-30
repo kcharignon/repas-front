@@ -180,7 +180,11 @@ async function adopt(found: StoreReading, target: Target) {
   return register({ ...parsed, label: found.label ?? current.label ?? null }, target.id)
 }
 
-async function readFromApp(target: Target) {
+/**
+ * `address` (DRV-741) : l'adresse du site mobile d'un magasin collée dans la saisie à la main. L'application l'ouvre en mode ordinateur à la place de
+ * l'accueil (l'enseigne la redirige vers le bon hôte) ; la personne n'a qu'à toucher « Utiliser ce magasin », et c'est le magasin lu qui est enregistré.
+ */
+async function readFromApp(target: Target, address: string | null = null) {
   if (reading.value !== null || save.isPending.value) return
   reading.value = target.id
   savedTail.value = null
@@ -191,7 +195,11 @@ async function readFromApp(target: Target) {
   try {
     // L'application qui annonce ses drives reçoit le nom du drive touché ; une ancienne ne lit que le drive d'avant et ne connaît pas la clé
     await adopt(
-      await readStoreFromApp(undefined, app.data.value?.retailers === undefined ? null : target.id),
+      await readStoreFromApp(
+        undefined,
+        app.data.value?.retailers === undefined ? null : target.id,
+        address,
+      ),
       target,
     )
   } catch (error) {
@@ -385,6 +393,7 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
           :locked="locked"
           :online="online"
           :save="(found) => saveManual(retailer.id, found)"
+          :read-address="canRead ? (found) => readFromApp(soleTarget, found) : null"
         />
       </section>
 
@@ -412,6 +421,7 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
             :read-error="readErrorFor === drive.id ? readError : null"
             :save="(found) => saveManual(drive.id, found)"
             @read="readFromApp({ id: drive.id, store: drive.store })"
+            @read-address="(address) => readFromApp({ id: drive.id, store: drive.store }, address)"
             @remove="removing = drive"
           />
         </ul>

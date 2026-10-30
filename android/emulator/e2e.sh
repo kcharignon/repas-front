@@ -10,6 +10,8 @@
 # Les scénarios, dans l'ordre (chacun repart d'un faux Leclerc remis à neuf) :
 #   1. lecture du magasin (`drive.setup`) : accueil du drive, choix du magasin du faux Leclerc, l'agent le lit, Repas reçoit son numéro et son hôte ;
 #      (Depuis DRV-629 le faux accueil a, comme le vrai site, un BOUTON « Commencer mes courses » sans adresse : l'agent le CLIQUE ; les scénarios 8 et 12
+#  1c. lecture du magasin à l'adresse du SITE MOBILE (DRV-741) : l'application ouvre l'adresse collée (`drive.setup` avec `address`) à la place de l'accueil, le
+#      faux site mobile la redirige vers l'hôte du magasin (+ .aspx), l'agent lit le magasin sur la page finale, Repas reçoit le bon hôte, jamais celui du site mobile ;
 #   3. « Annuler l'envoi » au premier choix de produit : rien n'est écrit au panier, Repas reçoit un résultat « aborted » ;
 #  1b. « Se connecter » touché avant le magasin (Leclerc exige le magasin AVANT la connexion) : la page de connexion s'affiche, le bandeau ramène au
 #      choix du magasin (« Choisis d'abord ton magasin… »), le retour de la page remet le message de la lecture du magasin, puis abandon ;
@@ -109,6 +111,7 @@ start_setup() { post_command "{\"do\":\"drive.setup\",\"runId\":\"$1\"}"; }
 result_has() { reports | grep -qF "\"runId\": \"$1\", \"resultType\": \"result\", \"outcome\": \"$2\"$3"; }
 result_detail() { reports | grep -qF "\"detail\": \"$1\""; }
 agent_screen() { ui_has "$1"; }
+mobile_host_never_reported() { ! reports | grep -qF "\"storeHost\": \"$MOBILE_HOST\""; } # aucun relevé de Repas ne porte l'hôte du site mobile (DRV-741)
 # Le bouton du bandeau d'en-tête (ticket E) : exactement ce texte, pas la phrase du bandeau qui le cite.
 home_button() { ui_has 'text="Ouvrir l’accueil du drive"'; }
 home_button_absent() { ! home_button; }
@@ -247,6 +250,36 @@ if tap 'text="Abandonner"' && wait_until 20 has_report "\"runId\": \"$RUN_EARLY\
 else
   ko "l'abandon de la lecture n'a pas donné le résultat attendu"
 fi
+back_to_repas || ko "l'écran Repas n'est pas revenu"
+
+# --- 1c. Lecture du magasin à l'adresse du site mobile (DRV-741) ------------------------------------------------------------------------------
+# Un proche colle, dans la saisie à la main, l'adresse de son magasin copiée depuis le site MOBILE de Leclerc. Repas l'envoie à l'application
+# (`drive.setup` avec `address`) : elle l'ouvre en mode ordinateur à la place de l'accueil, Leclerc la redirige vers l'hôte du magasin (que l'on ne peut
+# pas deviner) et l'agent lit le magasin sur la page finale : « Utiliser ce magasin » est le seul geste. L'hôte enregistré est celui du magasin.
+say
+say "1c. Lecture du magasin à l'adresse du site mobile (DRV-741) : redirigée par le site, lue sur la page finale"
+RUN_MOBILE=5e7b0000-0000-4000-8000-00000000001c
+fake_reset
+post_command "{\"do\":\"drive.setup\",\"runId\":\"$RUN_MOBILE\",\"retailer\":\"leclerc\",\"address\":\"https://$MOBILE_HOST/magasin-$FAKE_STORE_ID-$FAKE_STORE_ID-Ville-Test\"}"
+if wait_until 40 ui_has 'Utiliser ce magasin ?'; then
+  ok "l'application a ouvert l'adresse donnée, le site l'a redirigée vers le magasin et l'agent demande confirmation, sans toucher « Commencer mes courses »"
+else
+  ko "l'agent n'a pas demandé confirmation après l'ouverture de l'adresse du site mobile"
+fi
+check "le faux site mobile a été interrogé sur l'adresse donnée" requested_on "$MOBILE_HOST" "/magasin-$FAKE_STORE_ID-$FAKE_STORE_ID-Ville-Test"
+check "puis la page du magasin sur SON hôte, avec la ville et .aspx (le bon hôte est celui que le site donne)" requested_on "$FAKE_STORE_HOST" "/magasin-$FAKE_STORE_ID-$FAKE_STORE_ID-Ville-Test.aspx"
+check "l'accueil de l'enseigne n'a pas été ouvert : l'adresse donnée l'a remplacé" not_requested_on "$SITE_HOST" '/'
+check "aucun bandeau « site mobile » : la redirection a eu lieu, la page finale est celle du site ordinateur" ui_lacks 'site mobile'
+check "aucune recherche ni écriture du panier pendant la lecture du magasin" nothing_sent
+sleep 1
+screenshot e03c-lecture-adresse-mobile
+if tap 'text="Utiliser ce magasin"'; then ok "« Utiliser ce magasin » touché"; else ko "le bouton « Utiliser ce magasin » est introuvable"; fi
+if wait_until 20 has_report "\"runId\": \"$RUN_MOBILE\", \"resultType\": \"setup-result\", \"lines\": -1, \"hasStore\": true, \"storeId\": \"$FAKE_STORE_ID\", \"storeHost\": \"$FAKE_STORE_HOST\", \"storeBase\": \"https://$FAKE_STORE_HOST/magasin-$FAKE_STORE_ID-$FAKE_STORE_ID\""; then
+  ok "Repas reçoit le magasin lu avec le bon hôte (celui du magasin, jamais celui du site mobile), du même runId"
+else
+  ko "Repas n'a pas reçu le magasin lu sur la page finale"
+fi
+check "le site mobile n'est jamais l'hôte rendu à Repas" mobile_host_never_reported
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
 # --- 2. Passage complet : phase A, phase B, retour ---------------------------------------------------------------------------------------

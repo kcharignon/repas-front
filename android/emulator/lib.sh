@@ -15,6 +15,8 @@ REPAS_HOST=repas.test
 # Le faux magasin Leclerc complet (drive-agent/fake-leclerc, DRV-309) : son nom d'hôte, son numéro et l'adresse de son pilotage dans le conteneur.
 FAKE_STORE_HOST=courses-test.leclercdrive.fr
 FAKE_STORE_ID=000001
+# Le site MOBILE de l'enseigne (DRV-741), servi par le faux Leclerc complet : une adresse de magasin y est redirigée vers l'hôte du magasin (+ .aspx).
+MOBILE_HOST=m-courses.leclercdrive.fr
 FAKE_CONTROL=http://127.0.0.1:8099/__fake
 # L'enseigne FICTIVE d'essai de l'APK de débogage (DRV-707, `TestRetailers`) : son identifiant, l'accueil et le profil de WebView que l'application lui donne. `.test` est un domaine réservé.
 RETAILER_B=exempleb
@@ -212,6 +214,7 @@ check_network() {
   local_name "$REPAS_HOST" "le faux Repas"
   if [ "${1:-}" = "fake-leclerc" ]; then
     local_name "$FAKE_STORE_HOST" "le faux magasin Leclerc"
+    local_name "$MOBILE_HOST" "le faux site mobile Leclerc"
     if emu curl -s -o /dev/null "$FAKE_CONTROL/state"; then
       ok "le faux site Leclerc complet (Node, drive-agent/fake-leclerc) répond dans le conteneur"
     else

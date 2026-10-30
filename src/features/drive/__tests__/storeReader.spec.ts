@@ -88,6 +88,26 @@ describe('lecture du magasin par l’application', () => {
     expect(error).toMatchObject({ code })
   })
 
+  it('transmet l’adresse du site mobile à ouvrir (DRV-741), et rend le magasin lu sur la page finale', async () => {
+    const { bridge, native } = app((runId, reply) => reply(found(runId)))
+    const address = 'https://m-courses.exemple-test.fr/magasin-123456-123456-ville-test'
+
+    await expect(readStoreFromApp(bridge, 'leclerc', address)).resolves.toEqual({
+      id: '123456',
+      baseUrl: STORE.baseUrl,
+      label: null,
+    })
+    expect(native.sent[0]).toMatchObject({ type: 'drive.setup', retailer: 'leclerc', address })
+  })
+
+  it('sans adresse, le message est celui d’avant', async () => {
+    const { bridge, native } = app((runId, reply) => reply(found(runId)))
+
+    await readStoreFromApp(bridge)
+
+    expect(Object.keys(native.sent[0] ?? {}).sort()).toEqual(['runId', 'type', 'v'])
+  })
+
   it('un pont qui refuse l’envoi donne UNAVAILABLE', async () => {
     const native = fakeNative()
     native.bridge.postMessage = () => {
