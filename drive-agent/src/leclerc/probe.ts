@@ -5,6 +5,7 @@
 // magasin, une ville, une adresse, un point de livraison ni la valeur d'un en-tête. `probe.spec.ts` et `diagnostic.spec.ts` le prouvent avec
 // une page hostile.
 import type { RetailerCause } from '../retailers/causes'
+import type { StoreReadFacts } from '../retailers/store-facts'
 import type { EntryFacts } from './entry'
 import { decodeEntities, pageReadings } from './embedded'
 import type { RetailerErrorCode } from '../retailers/errors'
@@ -265,12 +266,14 @@ export interface SearchFacts {
   mime: string | null
   length: number
   headers: string[]
-  keys: StateKeys
+  /** Les clés de l'état embarqué (Leclerc) ; absentes chez une enseigne dont la page n'en a pas (DRV-724). */
+  keys?: StateKeys
   /** Les mots de [PAGE_PHRASES] que la réponse dit à voir (cherchés seulement quand la recherche n'a pas rendu de produit). */
   phrases: string[]
-  /** Ce que la réponse montre de la connexion ([describeSession] : un état et des noms de signes). */
-  session: string
-  delivery: DeliveryFacts
+  /** Ce que la réponse montre de la connexion ([describeSession] : un état et des noms de signes). Absent chez une enseigne dont la page n'a pas ces signes (DRV-724). */
+  session?: string
+  /** Le point de livraison de la réponse (Leclerc) ; absent chez une enseigne qui n'en a pas (DRV-724). */
+  delivery?: DeliveryFacts
   /** Les produits lus ; `null` quand la réponse n'a pas pu être lue. */
   products: number | null
   /** `PRODUCTS` (au moins un produit), `EMPTY` (page reconnue sans produit), `FAILED` (erreur de l'adaptateur : voir [fault]). */
@@ -329,13 +332,16 @@ export interface ArrivalFacts {
   redirects: number | null
   /** Le code HTTP du document ; `null` s'il ne le dit pas. */
   status: number | null
-  delivery: DeliveryFacts
+  /** Le point de livraison de la page (Leclerc) ; absent chez une enseigne qui n'en a pas (DRV-717). */
+  delivery?: DeliveryFacts
   /** Les cookies lisibles par la page (hors HttpOnly) : un nombre et un oui/non ; `null` si la page ne les dit pas. */
   cookies: CookieFacts | null
   /** Le chemin avec la ville que la page donne (formulaire de recherche, à défaut lien), en motif ; `null` si elle n'en donne pas. */
   searchBase: { shape: string; source: 'FORM' | 'LINK' } | null
   /** « Commencer mes courses » dans la page : présent ou non, la forme de son adresse, bouton cliquable ou non (DRV-625, DRV-629). */
   entry?: EntryFacts
+  /** Comment le site a dit le magasin quand il ne se lit pas dans l'adresse (DRV-717) : des formes seulement. Absent chez Leclerc. */
+  storeRead?: StoreReadFacts
 }
 
 /** Ce que le navigateur sait de la navigation qui a amené sur la page (`PerformanceNavigationTiming`) : des nombres, jamais une adresse. */

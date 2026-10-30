@@ -128,6 +128,13 @@ class RetailerSite(
         homePath = NavigationPolicy.pathOf(startUrl).ifEmpty { "/" }
     }
 
+    /**
+     * Le magasin est-il une **page** de l'enseigne (une adresse par magasin) ? Alors l'application reconnaît ces pages et son écran peut guider vers elles
+     * (les messages « touche Commencer mes courses », « choisis ton magasin » de [StoreBanner]). Sinon, le magasin se choisit dans la page du site et
+     * l'agent le lit lui-même : l'écran n'a aucun message de magasin à montrer.
+     */
+    val hasStorePages: Boolean get() = storePages != null
+
     /** Vrai si l'application peut naviguer sur ce nom de site (déjà lu et en minuscules). */
     internal fun navigatesTo(host: String): Boolean = navigation.any { it.matches(host) }
 

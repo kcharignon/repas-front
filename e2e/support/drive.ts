@@ -209,7 +209,11 @@ export async function fakeBack(page: Page) {
 
 declare global {
   interface Window {
-    __sent: { type: string; plan?: { lines: { ingredientSlug: string; status: string }[] } }[]
+    __sent: {
+      type: string
+      retailer?: string
+      plan?: { retailer?: string; lines: { ingredientSlug: string; status: string }[] }
+    }[]
   }
 }
 
@@ -218,15 +222,17 @@ declare global {
  * mis au panier, un produit de secours, des prix) ou `partial` (le beurre échoue, `BLOCKED`). Avec un résultat tout fait (sans son
  * `runId`, celui du plan reçu y est mis), il le renvoie tel quel : le parcours choisit alors lui-même ce que l'agent a fait. `version` est
  * celle que l'application annonce à `app.info` (`null` : elle ne répond pas), pour essayer une application trop ancienne (DRV-640).
- * `silent` : le drive est ouvert et l'utilisateur n'est pas encore revenu, l'application ne rend aucun résultat.
+ * `silent` : le drive est ouvert et l'utilisateur n'est pas encore revenu, l'application ne rend aucun résultat. `retailers` : les drives que l'application
+ * annonce servir dans `app.info` (DRV-707) ; absent : rien, une application d'avant les drives multiples.
  */
 export async function fakeApp(
   page: Page,
   mode: 'completed' | 'partial' | 'silent' | Record<string, unknown> = 'completed',
   version: string | null = '1.0.0',
+  retailers?: string[],
 ) {
   await page.addInitScript(
-    ([mode, version]) => {
+    ([mode, version, retailers]) => {
       const listeners = new Set<(event: { data: unknown }) => void>()
       window.__sent = []
       ;(window as unknown as { repasNative: unknown }).repasNative = {
@@ -242,6 +248,7 @@ export async function fakeApp(
               version,
               versionCode: 1,
               drive: true,
+              ...(retailers === undefined ? {} : { retailers }),
             })
             setTimeout(() => emit(data), 0)
           }
@@ -305,7 +312,7 @@ export async function fakeApp(
           void listeners.delete(listener),
       }
     },
-    [mode, version] as const,
+    [mode, version, retailers] as const,
   )
 }
 
@@ -351,4 +358,55 @@ export async function shot(page: Page, name: string): Promise<void> {
   const dir = process.env.E2E_SHOTS
   if (dir === undefined) return
   await page.screenshot({ path: `${dir}/${name}.png` })
+}
+
+/**
+ * Le faux pont de l'application pour les réglages du drive (DRV-709) : il annonce les drives qu'elle sert dans `app.info` (`retailers`) et, à
+ * `drive.setup`, rend le magasin du drive demandé (`stores`, par identifiant de drive) ; les messages reçus sont dans `window.__sent`. Valeurs inventées.
+ */
+export async function fakeSetupApp(
+  page: Page,
+  retailers: string[] | undefined,
+  stores: Record<string, { id: string; host: string; baseUrl: string }> = {},
+) {
+  await page.addInitScript(
+    ([retailers, stores]) => {
+      const listeners = new Set<(event: { data: unknown }) => void>()
+      window.__sent = []
+      ;(window as unknown as { repasNative: unknown }).repasNative = {
+        postMessage(text: string) {
+          const message = JSON.parse(text)
+          window.__sent.push(message)
+          const emit = (data: string) => listeners.forEach((listener) => listener({ data }))
+          if (message.type === 'app.info') {
+            const data = JSON.stringify({
+              v: 1,
+              type: 'app.info',
+              version: '1.4.0',
+              versionCode: 14,
+              drive: true,
+              ...(retailers === undefined ? {} : { retailers }),
+            })
+            setTimeout(() => emit(data), 0)
+          }
+          if (message.type === 'drive.setup') {
+            const store = stores[message.retailer ?? 'leclerc']
+            const result = {
+              v: 1,
+              type: 'setup-result',
+              runId: message.runId,
+              agentVersion: '1.0.0',
+              store: { ...store, label: null },
+            }
+            setTimeout(() => emit(JSON.stringify({ v: 1, type: 'drive.result', result })), 50)
+          }
+        },
+        addEventListener: (_type: string, listener: (event: { data: unknown }) => void) =>
+          void listeners.add(listener),
+        removeEventListener: (_type: string, listener: (event: { data: unknown }) => void) =>
+          void listeners.delete(listener),
+      }
+    },
+    [retailers, stores] as const,
+  )
 }

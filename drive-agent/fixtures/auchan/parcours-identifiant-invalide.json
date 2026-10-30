@@ -1,0 +1,63 @@
+{
+  "id": "a0000000-0000-4000-8000-0000000000f6",
+  "address": {
+    "postalCode": "00000",
+    "city": "Ville-Test"
+  },
+  "location": {
+    "longitude": 0,
+    "latitude": 0
+  },
+  "accuracy": "CITY",
+  "activeContexts": [
+    {
+      "type": "GROCERY",
+      "context": {
+        "channels": [
+          "PICK_UP"
+        ],
+        "seller": {
+          "id": "pas-un-uuid",
+          "name": "Drive Ville-Test",
+          "type": "DRIVE",
+          "storeReference": {
+            "id": "123"
+          },
+          "functionalReferences": {
+            "storeId": "123",
+            "warehouseId": "456"
+          }
+        },
+        "pointOfService": {
+          "id": "e0000000-0000-4000-8000-0000000000d4",
+          "name": "Drive Ville-Test",
+          "type": "DRIVE",
+          "url": "/magasins/drive-ville-test",
+          "enabled": true,
+          "open": true
+        }
+      }
+    },
+    {
+      "type": "ONLINE",
+      "context": null
+    },
+    {
+      "type": "STORE",
+      "context": {
+        "channels": [
+          "SELF",
+          "PICK_UP"
+        ],
+        "seller": {
+          "id": "f0000000-0000-4000-8000-0000000000e5",
+          "storeReference": {
+            "id": "12"
+          }
+        }
+      }
+    }
+  ],
+  "contextHistory": [],
+  "metadata": {}
+}

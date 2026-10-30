@@ -24,6 +24,7 @@
     "agent:verify": "node drive-agent/scripts/build.mjs --twice",
     "agent:test": "vitest run drive-agent/test",
     "agent:fake": "node drive-agent/fake-leclerc/main.ts",
+    "agent:fake-auchan": "node drive-agent/fake-auchan/main.ts",
     "agent:e2e": "playwright test -c drive-agent/e2e/playwright.config.ts",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
     "check": "run-s lint format:check api:check type-check test",

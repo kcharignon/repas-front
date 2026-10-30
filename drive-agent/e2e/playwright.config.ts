@@ -2,7 +2,7 @@ import process from 'node:process'
 import { defineConfig, devices } from '@playwright/test'
 
 // Tests de bout en bout de l'agent du drive (DRV-309) : l'agent réel, dans Chromium mobile, contre le faux site Leclerc
-// (`drive-agent/fake-leclerc/`). Pas de front ni de back : chaque test démarre son propre faux site sur un port libre.
+// (`drive-agent/fake-leclerc/`) et le faux site Auchan (`drive-agent/fake-auchan/`, DRV-717). Pas de front ni de back : chaque test démarre son propre faux site sur un port libre.
 // `make agent-e2e` (Docker) ou `npm run agent:e2e`.
 //
 // Le navigateur ne sort jamais du poste : le faux magasin `courses-test.leclercdrive.fr` (et, pour le test du site mobile, le faux
@@ -13,6 +13,8 @@ const HOST_RULES = [
   'MAP m-courses.leclercdrive.fr 127.0.0.1',
   // L'accueil de l'enseigne, où un plan s'ouvre (DRV-625)
   'MAP www.leclercdrive.fr 127.0.0.1',
+  // Le faux site d'Auchan (DRV-717) : son hôte est celui du site, jamais `compte.auchan.fr` (aucun code de Repas n'y est injecté)
+  'MAP www.auchan.fr 127.0.0.1',
   'MAP * ~NOTFOUND',
   'EXCLUDE localhost',
   'EXCLUDE 127.0.0.1',

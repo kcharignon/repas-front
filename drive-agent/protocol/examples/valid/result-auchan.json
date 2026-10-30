@@ -1,0 +1,26 @@
+{
+  "v": 1,
+  "type": "result",
+  "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+  "agentVersion": "1.0.0",
+  "outcome": "completed",
+  "store": {
+    "id": "0b5f8a2e-3c1d-4e7f-9a6b-123456789abc"
+  },
+  "lines": [
+    {
+      "ingredientSlug": "farine",
+      "outcome": "CHOSEN",
+      "quantity": 1,
+      "placement": "PRIMARY",
+      "product": {
+        "id": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+        "label": "Farine de blé T55 de test 1 kg",
+        "price": {
+          "cents": 189
+        },
+        "offerId": "3c4d5e6f-7a8b-4c9d-8e1f-2a3b4c5d6e7f"
+      }
+    }
+  ]
+}

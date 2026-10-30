@@ -125,14 +125,23 @@ export interface CartResult {
   totalCents: number | null
   /** La disponibilité du produit que la réponse du panier donne (DRV-644), `null` quand elle n'en dit rien. */
   product?: CartProductFacts | null
+  /**
+   * Le code-barres du produit quand la réponse du panier le donne (DRV-725 : une enseigne dont le panier le donne ; Leclerc ne le donne pas). 8 à 14 chiffres ; absent sinon.
+   * Rendu au résultat du choix (`ChosenProduct.ean`) pour que Repas le mémorise.
+   */
+  ean?: string
   /** Le code HTTP de la réponse du site. */
   status: number
 }
 
 /** Tout ce qui est propre à une enseigne, derrière une interface : une autre enseigne ou un changement du site ne touche que ce dossier. */
 export interface RetailerAdapter {
-  /** Le magasin de la page courante. @throws {RetailerError} `UNSUPPORTED_PAGE` hors d'une page de magasin. */
-  readStore(): StoreInfo
+  /**
+   * Le magasin de la page courante. Leclerc le lit dans l'adresse de la page (synchrone, aucune requête) ; une enseigne dont le magasin ne s'y lit pas le
+   * demande à son site (DRV-717 : une requête, donc une promesse) : l'appelant attend toujours le résultat.
+   * @throws {RetailerError} `UNSUPPORTED_PAGE` hors d'une page de magasin (ou sans magasin choisi).
+   */
+  readStore(): StoreInfo | Promise<StoreInfo>
   /** Les produits que le site propose pour cette recherche, dans l'ordre de la page. */
   searchProducts(query: string): Promise<Candidate[]>
   /** Fixe la quantité du produit au panier (absolue : `0` le retire) et vérifie la réponse du site. */
@@ -144,6 +153,14 @@ export interface RetailerAdapter {
    * quantité déjà au panier), `null` si cette réponse ne le cite pas ou s'il n'y en a pas eu. Aucune requête.
    */
   cartQuantity(productId: string): number | null
+  /**
+   * FACULTATIVE (DRV-732) : la quantité de ce produit au panier quand la recherche ne la donne pas. Elle LIT le panier si le passage ne l'a pas encore fait (une
+   * requête, à la cadence, jamais en parallèle) puis répond depuis cette lecture, partagée entre les produits et rafraîchie par chaque écriture ; `null` quand le
+   * panier est lu mais ne dit pas la quantité de cette ligne (jamais une quantité inventée). Absente (Leclerc : sa recherche dit la quantité), `putInCart` retombe
+   * sur `cartQuantity`, sans requête.
+   * @throws {RetailerError} l'erreur de la lecture du panier, à traiter comme celle d'une écriture.
+   */
+  readCartQuantity?(productId: string): Promise<number | null>
   /**
    * Les compteurs de la cadence depuis la création de l'adaptateur (ticket L) : requêtes, erreurs, blocages, délais dépassés, réponses lentes, plus
    * longue pause. Des nombres seulement. Cumulatifs : un passage en prend la différence entre son début et sa fin.

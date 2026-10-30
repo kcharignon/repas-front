@@ -2,6 +2,7 @@
 import { useRetailerI18n } from './useRetailerI18n'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useQueryClient } from '@tanstack/vue-query'
 import { LIMITS } from '@drive-protocol'
 
 import { ApiError } from '@/api'
@@ -21,17 +22,62 @@ import DriveEstimate from './DriveEstimate.vue'
 import DriveFold from './DriveFold.vue'
 import DriveSendFailure from './DriveSendFailure.vue'
 import DriveSendLine from './DriveSendLine.vue'
-import { useDrivePlan } from './queries'
+import DriveSendTiles from './DriveSendTiles.vue'
+import { driveKeys, useDrivePlan, useDriveSettings, useRememberLastRetailer } from './queries'
+import { appServes, retailerOf } from './retailers'
+import type { RetailerId } from './retailers'
+import { sendChoice } from './sendChoice'
 import { sendSummary } from './sendSummary'
 
-const { t } = useRetailerI18n()
 const route = useRoute()
 const router = useRouter()
 const online = useOnline()
+const queryClient = useQueryClient()
 
 const listId = computed(() => String(route.params.listId))
-const plan = useDrivePlan(() => listId.value)
+
+// --- Le drive de cet envoi (DRV-710) ---
+// La règle de choix (R1 à R5) est calculée par le back et lue dans `selection` des réglages : l'écran n'en recopie rien (`sendChoice`).
+// Les réglages sont lus (ou ont échoué : le plan se demande alors sans drive, le back prend le sien) AVANT le plan, qui se demande pour un drive.
+const settings = useDriveSettings()
+// « Lus » une fois pour toutes : une relecture en échec repasse en attente (`isPending`), et le plan ne doit pas se redemander pour autant
+const settingsRead = ref(!settings.isPending.value)
+watch(
+  () => settings.isPending.value,
+  (pending) => {
+    if (!pending) settingsRead.value = true
+  },
+)
+/** Le drive touché sur l'écran (une tuile) ; `null` : celui que la règle désigne. */
+const picked = ref<RetailerId | null>(null)
+/** « Envoyer ailleurs » : la question est posée pour CET envoi seulement (le drive habituel ne change pas). */
+const goingElsewhere = ref(false)
+const draft = ref<RunDraft | null>(driveBridge.loadDraft())
+/** Un passage de cette liste attend son résultat (le brouillon survit à un rechargement de la page). */
+const waiting = computed(() => draft.value !== null && draft.value.listId === listId.value)
+/** Un passage d'une autre liste est en cours : un seul à la fois. */
+const elsewhere = computed(() => draft.value !== null && draft.value.listId !== listId.value)
+
+const choice = computed(() =>
+  sendChoice({
+    settings: settings.data.value,
+    picked: picked.value,
+    elsewhere: goingElsewhere.value,
+  }),
+)
+/** Le drive de cet envoi : celui du passage en attente (il se rouvre là où il a été ouvert), sinon celui que la règle ou la tuile touchée désignent. */
+const retailerId = computed<RetailerId | undefined>(() =>
+  waiting.value ? draft.value?.retailer : choice.value.retailer,
+)
+
+const { t } = useRetailerI18n(() => retailerId.value)
+const plan = useDrivePlan(
+  () => listId.value,
+  () => settingsRead.value,
+  () => retailerId.value,
+)
 const reopen = useReopenShoppingList()
+const rememberLast = useRememberLastRetailer()
 
 // Dans l'application Repas, le pont natif existe ; dans un navigateur ordinaire, seul le mode assisté est possible.
 const inApp = driveBridge.isAvailable()
@@ -39,12 +85,22 @@ const driveUsable = ref(true)
 // La version de l'application (DRV-640) : tant qu'elle n'a pas répondu on attend ; trop ancienne ou inconnue, l'envoi n'est pas proposé
 const appCheck = ref<'checking' | 'enough' | 'tooOld'>(inApp ? 'checking' : 'enough')
 const tooOld = computed(() => appCheck.value === 'tooOld')
+/** Les drives que l'application annonce servir (`app.info.retailers`, DRV-707) ; absent : le drive d'avant (`appServes`). */
+const appRetailers = ref<readonly string[] | undefined>(undefined)
+/** L'application a répondu et ne connaît pas le drive de cet envoi : la phrase de mise à jour nomme ce drive, les autres restent proposés. */
+const unserved = computed(
+  () =>
+    inApp &&
+    appCheck.value !== 'checking' &&
+    retailerId.value !== undefined &&
+    !appServes(appRetailers.value, retailerId.value),
+)
 // L'agent de l'application connaît-il les rayons conseillés (DRV-642) ? Sinon le plan part sans eux : un agent plus ancien refuse un plan qui porte une clé qu'il ne connaît pas.
 const agentKnowsRayons = ref(false)
 /** L'agent de l'application connaît-il la contenance d'un produit dans l'unité de la liste (DRV-652) ? Sinon le plan ne la porte pas. */
 const agentKnowsPackSize = ref(false)
 /** Mode assisté : un lien de recherche par article, sans choix de produit (hors de l'application, ou dans une application trop ancienne). */
-const assisted = computed(() => !inApp || tooOld.value)
+const assisted = computed(() => !inApp || tooOld.value || unserved.value)
 
 /**
  * « Une intention = un clic » : arrivé ici par « Envoyer au drive » (et sa fenêtre de confirmation) ou par « Reprendre l'envoi », l'utilisateur a
@@ -57,14 +113,12 @@ const opening = ref(route.query.ouvrir !== undefined)
 if (opening.value) void router.replace({ query: { ...route.query, ouvrir: undefined } })
 
 const changes = ref<Record<string, LineChange | undefined>>({})
-const draft = ref<RunDraft | null>(driveBridge.loadDraft())
 const failure = ref<{ text: string; update: boolean } | null>(null)
 const reopening = ref(false)
-
-/** Un passage de cette liste attend son résultat (le brouillon survit à un rechargement de la page). */
-const waiting = computed(() => draft.value !== null && draft.value.listId === listId.value)
-/** Un passage d'une autre liste est en cours : un seul à la fois. */
-const elsewhere = computed(() => draft.value !== null && draft.value.listId !== listId.value)
+/** La question « Où envoyer ta liste ? » est posée : plusieurs drives configurés et aucun drive habituel, ou « Envoyer ailleurs ». Pas en attente d'un résultat, ni hors de l'application. */
+const asking = computed(
+  () => inApp && !tooOld.value && !waiting.value && choice.value.tiles.length > 0,
+)
 
 // Une adresse avec « lignes » ne reprend que les articles nommés. Le récapitulatif ne la propose plus (DRV-622 : « Reprendre l'envoi » reprend toute la liste) ; elle reste lue pour les anciens liens
 const only = computed(() => {
@@ -103,16 +157,24 @@ const storeName = computed(() => {
     ? t('driveSend.storeEnding', { ending: store.id.slice(-3) })
     : t('driveSend.store', { label: store.label })
 })
+// Le repli « Chercher à la main » : la recherche du site du drive de CE plan (l'adresse est celle de son enseigne)
 const searchUrl = (query: string): string =>
-  `${plan.data.value?.store.baseUrl ?? ''}/recherche.aspx?TexteRecherche=${encodeURIComponent(query)}`
+  retailerOf(plan.data.value?.retailer ?? retailerId.value).searchUrl(
+    plan.data.value?.store.baseUrl ?? '',
+    query,
+  )
 
 watch(listId, () => (changes.value = {}))
 
-// Sans magasin enregistré, le plan est refusé (409) : on mène à « Choisis ton magasin », qui nous rend la liste
+// Sans magasin enregistré (pour ce drive), le plan est refusé (409) : on mène à « Choisis ton magasin », qui nous rend la liste
 watch(
   () => plan.error.value,
   (error) => {
-    if (error instanceof ApiError && error.message === 'DRIVE_NOT_CONFIGURED')
+    if (
+      error instanceof ApiError &&
+      (error.message === 'DRIVE_NOT_CONFIGURED' ||
+        error.message === 'DRIVE_RETAILER_NOT_CONFIGURED')
+    )
       void router.replace({
         name: 'drive-settings',
         query: { magasin: 'requis', retour: 'envoi', liste: listId.value },
@@ -127,6 +189,7 @@ onMounted(() => {
   driveBridge.info().then(
     (info) => {
       driveUsable.value = info.drive
+      appRetailers.value = info.retailers
       appCheck.value = isDriveAppVersionEnough(info.version) ? 'enough' : 'tooOld'
       agentKnowsRayons.value = isRayonHintsAppVersion(info.version)
       agentKnowsPackSize.value = isPackSizeAppVersion(info.version)
@@ -200,28 +263,55 @@ watch(
       visible.value,
       appCheck.value,
       driveUsable.value,
+      asking.value,
+      unserved.value,
     ] as const,
-  ([wanted, app, isOnline, other, failed, data, check, usable]) => {
+  ([wanted, app, isOnline, other, failed, data, check, usable, question, unknown]) => {
     if (!wanted) return
-    // Un obstacle déjà connu : l'écran reste, avec sa raison
-    if (!app || !isOnline || other || failed) {
+    // Un obstacle déjà connu : l'écran reste, avec sa raison. La question « Où envoyer ta liste ? » en est une (R4) : la personne choisit.
+    if (!app || !isOnline || other || failed || question) {
       opening.value = false
       return
     }
     // Pas encore de plan ni de réponse de l'application : on attend
     if (data === undefined || check === 'checking') return
     opening.value = false
-    if (check === 'tooOld' || !usable || data.lines.length === 0) return
-    openDrive()
+    if (check === 'tooOld' || unknown || !usable || data.lines.length === 0) return
+    void openDrive()
   },
   { immediate: true },
 )
 
-/** Lance le drive ; en attente d'un résultat, rouvre le même passage (même `runId`). */
-function openDrive() {
+/** Combien de temps l'ouverture attend l'écriture de « dernier drive » : une erreur ou une lenteur ne perd qu'une présélection, jamais l'envoi. */
+const REMEMBER_WAIT_MS = 1500
+
+/** Attend la fin d'une écriture, qu'elle réussisse ou non, mais pas au-delà de `ms`. */
+const settleWithin = (work: Promise<unknown>, ms: number) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms)
+    const done = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    work.then(done, done)
+  })
+
+/** Un passage est en train de se lancer (l'écriture de « dernier drive » est en cours) : un second toucher ne le double pas. */
+const starting = ref(false)
+
+/**
+ * Lance le drive ; en attente d'un résultat, rouvre le même passage (même `runId`). Quand plusieurs drives sont configurés, le drive ouvert est retenu
+ * (`PUT /drive/last-retailer`) AVANT `drive.start` : un envoi interrompu compte aussi. Avec un seul drive il n'y a rien à retenir, rien ne part.
+ */
+async function openDrive() {
   const data = visible.value
-  if (data === undefined) return
+  if (data === undefined || starting.value) return
   failure.value = null
+  const remember = draft.value === null && choice.value.named
+  if (remember) {
+    starting.value = true
+    await settleWithin(rememberLast.mutateAsync(data.retailer), REMEMBER_WAIT_MS)
+  }
   try {
     const runId = draft.value?.runId ?? crypto.randomUUID()
     draft.value = driveBridge.startRun(
@@ -231,11 +321,21 @@ function openDrive() {
       }),
       listId.value,
     )
+    // Les réglages portent `lastUsedRetailer` et la présélection : ils sont relus pour le prochain envoi
+    if (remember) void queryClient.invalidateQueries({ queryKey: driveKeys.settings })
   } catch (error) {
     if (error instanceof DriveBridgeError && error.code === 'RUN_IN_PROGRESS')
       draft.value = driveBridge.loadDraft()
     else failure.value = failureOf(error)
+  } finally {
+    starting.value = false
   }
+}
+
+/** « Envoyer ailleurs » : la question est posée, un autre drive que celui du back est présélectionné ; le drive habituel ne change pas. */
+function goElsewhere() {
+  picked.value = null
+  goingElsewhere.value = true
 }
 
 /** Abandonne le passage en cours : l'application est prévenue (si elle est là), le brouillon part. */
@@ -279,6 +379,14 @@ function confirmReopenList() {
       {{ t('driveSend.title') }}
     </h1>
 
+    <!-- Plusieurs drives configurés et aucun n'est habituel (R4), ou « Envoyer ailleurs » : où envoyer ? La dernière utilisée est cochée. -->
+    <DriveSendTiles
+      v-if="asking"
+      :drives="choice.tiles"
+      :selected="retailerId"
+      @choose="picked = $event"
+    />
+
     <!-- L'intention est donnée (« Envoyer au drive », « Reprendre l'envoi ») : le drive s'ouvre sans autre geste -->
     <p v-if="opening" role="status" class="text-xl font-semibold">{{ t('driveSend.opening') }}</p>
 
@@ -301,7 +409,7 @@ function confirmReopenList() {
     </section>
 
     <template v-else-if="plan.data.value">
-      <p class="text-muted">{{ storeName }}</p>
+      <p v-if="!asking" class="text-muted">{{ storeName }}</p>
       <p v-if="only !== null && !waiting" class="flex flex-wrap items-center gap-x-3 font-semibold">
         {{ t('driveSend.retryOnly', { count: lines.length }, lines.length) }}
         <RouterLink
@@ -358,6 +466,17 @@ function confirmReopenList() {
             {{ t('driveSend.appTooOld.update') }}
           </UiLinkButton>
         </section>
+        <!-- L'application est à jour pour le drive d'avant mais ne connaît pas celui-ci : la phrase le nomme, les autres drives restent proposés -->
+        <section
+          v-else-if="unserved"
+          role="status"
+          class="flex flex-col items-start gap-3 rounded-2xl bg-soft px-5 py-4"
+        >
+          <p class="max-w-prose text-xl font-semibold">{{ t('driveSend.appTooOld.textNamed') }}</p>
+          <UiLinkButton :to="{ name: 'drive-help' }">
+            {{ t('driveSend.appTooOld.update') }}
+          </UiLinkButton>
+        </section>
         <section
           v-else-if="!driveUsable"
           role="alert"
@@ -374,17 +493,24 @@ function confirmReopenList() {
 
         <section v-if="inApp && !tooOld" class="flex flex-col items-start gap-3">
           <UiButton
+            v-if="!unserved"
             size="lg"
-            :disabled="!online || !driveUsable || appCheck === 'checking' || lines.length === 0"
+            :disabled="
+              !online || !driveUsable || appCheck === 'checking' || lines.length === 0 || starting
+            "
             @click="openDrive"
           >
-            {{ t('driveSend.open') }}
+            {{ choice.named ? t('driveSend.openNamed') : t('driveSend.open') }}
           </UiButton>
           <p v-if="!online" class="font-semibold">{{ t('driveSend.offline') }}</p>
           <DriveSendFailure v-if="failure" :failure="failure" />
+          <!-- Le drive habituel est ouvert sans question ; ce lien est la seule porte vers l'autre, pour cet envoi seulement -->
+          <UiButton v-if="choice.canGoElsewhere" variant="ghost" @click="goElsewhere">
+            {{ t('driveSend.goElsewhere') }}
+          </UiButton>
         </section>
 
-        <DriveEstimate :list-id="listId" />
+        <DriveEstimate :list-id="listId" :retailer="retailerId" />
 
         <section class="flex flex-col gap-3">
           <p v-if="lines.length === 0" class="text-muted">{{ t('driveSend.emptyPlan') }}</p>
@@ -397,6 +523,7 @@ function confirmReopenList() {
                 :change="changes[line.ingredientSlug]"
                 :assisted="assisted"
                 :search-url="searchUrl(line.searchQuery)"
+                :retailer="retailerId"
                 @change="changes[line.ingredientSlug] = $event"
               />
             </ul>
@@ -411,6 +538,7 @@ function confirmReopenList() {
                 :change="changes[line.ingredientSlug]"
                 :assisted="assisted"
                 :search-url="searchUrl(line.searchQuery)"
+                :retailer="retailerId"
                 @change="changes[line.ingredientSlug] = $event"
               />
             </ul>

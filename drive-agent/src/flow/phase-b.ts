@@ -13,6 +13,7 @@ import {
   type PlanLine,
   type PlanProduct,
   type RejectedProduct,
+  STORES,
 } from '../../protocol'
 import {
   catalogId,
@@ -23,6 +24,7 @@ import {
   type RetailerAdapter,
   type RetailerNames,
 } from '../retailers'
+import { own } from '../own'
 import { cleanText } from '../text'
 import {
   formatContent,
@@ -179,11 +181,12 @@ const refusedOf = (product: PlanProduct): RejectedProduct => ({
 })
 
 /**
- * L'identifiant d'offre du produit (DRV-722), ou `null`. Il ne part que s'il a la forme d'une enseigne qui a des offres (`StoreRules.offerId`) : un
- * identifiant que Repas refuserait ferait perdre tout le lot de choix. Chez Leclerc (aucune offre) la clé n'existe jamais.
+ * L'identifiant d'offre du produit (DRV-722), ou `null`. Il ne part que s'il a la forme de l'offre de l'enseigne de la page (`StoreRules.offerId`) : un
+ * identifiant que Repas refuserait ferait perdre tout le lot de choix. Chez une enseigne sans offre (Leclerc) la clé n'existe jamais, même si un candidat en
+ * portait une. Sans enseigne connue (`retailer` absent), la forme de l'une de celles qui en ont (un résultat ne dit pas l'enseigne).
  */
-function offerIdOf(candidate: Candidate): string | null {
-  const rule = anyOfferId()
+function offerIdOf(candidate: Candidate, retailer: string | undefined): string | null {
+  const rule = retailer === undefined ? anyOfferId() : (own(STORES, retailer)?.offerId ?? null)
   const offerId = candidate.offerId
   return rule !== null &&
     offerId !== undefined &&
@@ -193,14 +196,24 @@ function offerIdOf(candidate: Candidate): string | null {
     : null
 }
 
-/** Le produit tel qu'il part vers Repas : le contenu n'y figure que s'il est plausible (strictement positif). */
-function chosenProduct(candidate: Candidate): ChosenLine['product'] {
+/** Un code-barres plausible : 8 à 14 chiffres (la forme que Repas accepte). */
+const EAN = /^[0-9]{8,14}$/
+
+/**
+ * Le produit tel qu'il part vers Repas : le contenu n'y figure que s'il est plausible (strictement positif). `ean` : le code-barres que la réponse du panier a
+ * donné après l'ajout (DRV-725 : chez une enseigne dont la page de résultats n'en a pas), seulement s'il a la forme d'un code-barres.
+ */
+function chosenProduct(
+  candidate: Candidate,
+  retailer: string | undefined,
+  ean?: string,
+): ChosenLine['product'] {
   const price = priceOf(candidate)
   const { content } = candidate
   // Le rayon et la famille du produit (DRV-642) : des faits du catalogue que Repas apprend ; absents si le site ne les donne pas.
   const rayonId = catalogId(candidate.aisle)
   const familyId = catalogId(candidate.family)
-  const offerId = offerIdOf(candidate)
+  const offerId = offerIdOf(candidate, retailer)
   return {
     id: candidate.id,
     label: labelOf(candidate),
@@ -209,6 +222,7 @@ function chosenProduct(candidate: Candidate): ChosenLine['product'] {
     ...(rayonId !== null && { rayonId }),
     ...(familyId !== null && { familyId }),
     ...(offerId !== null && { offerId }),
+    ...(ean !== undefined && EAN.test(ean) && { ean }),
   }
 }
 
@@ -623,7 +637,7 @@ async function settleLine(
           {
             ingredientSlug: slug,
             outcome: 'CHOSEN',
-            product: chosenProduct(candidate),
+            product: chosenProduct(candidate, context.retailer),
             quantity: Math.min(packs, LIMITS.packsMax),
             placement,
             ...(memo !== null && { searchQuery: memo }),
@@ -653,7 +667,7 @@ async function settleLine(
         {
           ingredientSlug: slug,
           outcome: 'CHOSEN',
-          product: chosenProduct(candidate),
+          product: chosenProduct(candidate, context.retailer, settled.ean),
           quantity: Math.min(settled.obtained, LIMITS.packsMax),
           placement,
           ...(memo !== null && { searchQuery: memo }),

@@ -210,3 +210,102 @@ export async function fakeDriveBack(
 
   return back
 }
+
+type DriveId = 'leclerc' | 'auchan'
+interface DriveStore {
+  id: string
+  label: string | null
+  baseUrl: string
+}
+
+/** Le magasin d'essai du premier drive et celui du second (valeurs inventées). */
+export const FIRST_STORE: DriveStore = {
+  id: '123456',
+  label: 'Ville-Test',
+  baseUrl: 'https://exemple.leclercdrive.fr/magasin-123456-123456',
+}
+export const SECOND_STORE: DriveStore = {
+  id: '0b5f8a2e-3c1d-4e7f-9a6b-123456789abc',
+  label: null,
+  baseUrl: 'https://www.auchan.fr/',
+}
+
+/** L'état d'un faux back à deux drives allumés (DRV-709) : les magasins, le drive habituel et les écritures reçues. */
+export interface SeveralDrives {
+  stores: Record<DriveId, DriveStore | null>
+  habitual: DriveId | null
+  /** Les écritures reçues, `'PUT /api/v1/drive/default-retailer {"retailer":"auchan"}'`. */
+  writes: string[]
+}
+
+/**
+ * À appeler APRÈS `fakeDriveBack` : le faux back sert alors deux drives allumés (`GET /drive/settings` avec `retailers`, `selection`…) et suit
+ * `PUT /drive/default-retailer`, `PUT` et `DELETE /drive/settings`. Une route enregistrée plus tard passe avant les autres.
+ */
+export async function fakeSeveralDrives(
+  page: Page,
+  initial: Partial<Pick<SeveralDrives, 'stores' | 'habitual'>> = {},
+): Promise<SeveralDrives> {
+  const state: SeveralDrives = {
+    stores: { leclerc: FIRST_STORE, auchan: null, ...initial.stores },
+    habitual: initial.habitual ?? null,
+    writes: [],
+  }
+  const names = { leclerc: 'Leclerc', auchan: 'Auchan' } as const
+  await page.route(
+    (url) =>
+      url.pathname === '/api/v1/drive/settings' ||
+      url.pathname === '/api/v1/drive/default-retailer',
+    async (route) => {
+      const request = route.request()
+      const path = new URL(request.url()).pathname
+      const key = `${request.method()} ${path}`
+      if (key === 'GET /api/v1/drive/settings') {
+        const first: DriveId = state.stores.leclerc ? 'leclerc' : 'auchan'
+        const retailers = (['leclerc', 'auchan'] as const).map((id) => ({
+          retailer: id,
+          name: names[id],
+          configured: state.stores[id] !== null,
+          isDefault: state.habitual === id && state.stores[id] !== null,
+          store: state.stores[id],
+        }))
+
+        return reply(route, {
+          enabled: true,
+          retailer: first,
+          store: state.stores[first],
+          retailers,
+          defaultRetailer: state.habitual,
+          lastUsedRetailer: null,
+          selection: { mode: 'ASK', retailer: first, candidates: [first] },
+        })
+      }
+      if (key === 'PUT /api/v1/drive/default-retailer') {
+        const body = request.postDataJSON() as { retailer: DriveId | null }
+        state.writes.push(`${key} ${JSON.stringify(body)}`)
+        state.habitual = body.retailer
+
+        return reply(route)
+      }
+      if (key === 'PUT /api/v1/drive/settings') {
+        const body = request.postDataJSON() as { retailer: DriveId; store: DriveStore }
+        state.writes.push(`${key} ${JSON.stringify(body)}`)
+        state.stores[body.retailer] = body.store
+
+        return reply(route)
+      }
+      if (key === 'DELETE /api/v1/drive/settings') {
+        const id = new URL(request.url()).searchParams.get('retailer') as DriveId
+        state.writes.push(`${key}?retailer=${id}`)
+        state.stores[id] = null
+        if (state.habitual === id) state.habitual = null
+
+        return reply(route)
+      }
+
+      return route.fallback()
+    },
+  )
+
+  return state
+}

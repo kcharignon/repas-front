@@ -2967,7 +2967,8 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "leclerc"
+                                "leclerc",
+                                "auchan"
                             ]
                         },
                         "example": "leclerc"
@@ -3029,7 +3030,8 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "leclerc"
+                                "leclerc",
+                                "auchan"
                             ]
                         },
                         "example": "leclerc"
@@ -3090,7 +3092,8 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "leclerc"
+                                "leclerc",
+                                "auchan"
                             ]
                         },
                         "example": "leclerc"
@@ -3175,6 +3178,43 @@
                         "$ref": "#/components/responses/DriveWriteRateLimited"
                     }
                 }
+            },
+            "delete": {
+                "tags": [
+                    "Drive"
+                ],
+                "summary": "Retire le drive d'une enseigne de l'utilisateur connect\u00e9 : son magasin n'est plus enregistr\u00e9, ses choix et les produits restent ; si cette enseigne \u00e9tait son drive habituel ou sa derni\u00e8re enseigne, ils sont effac\u00e9s",
+                "operationId": "delete_api_remove_drive_settings",
+                "parameters": [
+                    {
+                        "name": "retailer",
+                        "in": "query",
+                        "description": "Enseigne du drive \u00e0 retirer",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "leclerc",
+                                "auchan"
+                            ]
+                        },
+                        "example": "leclerc"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Drive retir\u00e9"
+                    },
+                    "404": {
+                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`), ou enseigne \u00e9teinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`), ou pas de magasin enregistr\u00e9 chez cette enseigne (message `DRIVE_SETTINGS_NOT_FOUND`)"
+                    },
+                    "422": {
+                        "description": "Param\u00e8tre `retailer` absent ou inconnu"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/DriveWriteRateLimited"
+                    }
+                }
             }
         },
         "/api/v1/drive/choices": {
@@ -3193,7 +3233,8 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "leclerc"
+                                "leclerc",
+                                "auchan"
                             ]
                         },
                         "example": "leclerc"
@@ -3258,6 +3299,72 @@
                     },
                     "422": {
                         "description": "Corps invalide, ou intention refus\u00e9e (message `DRIVE_CHOICE_INVALID`) : identifiant, libell\u00e9, contenu ou prix hors des bornes, plus de 200 intentions, plus de 5 produits accept\u00e9s ou 20 refus\u00e9s pour un ingr\u00e9dient, produit \u00e0 la fois choisi et refus\u00e9 pour un ingr\u00e9dient, recherche m\u00e9moris\u00e9e sur une autre action que `ADD_PRODUCT` ou `NOTE_SEARCH` (m\u00eame `null`), `NOTE_SEARCH` sans recherche (cl\u00e9 absente ou `null`), avec un produit ou un placement, ou sur un ingr\u00e9dient \u00ab j'en ai toujours \u00bb, contenance (`product.packSize`, m\u00eame `null`) sur une autre action que `ADD_PRODUCT` ; ou recherche m\u00e9moris\u00e9e refus\u00e9e (message `DRIVE_SEARCH_QUERY_INVALID`) : moins de 2 ou plus de 80 caract\u00e8res une fois les espaces r\u00e9duites, caract\u00e8re de contr\u00f4le ou invisible ; ou contenance refus\u00e9e (message `DRIVE_PACK_SIZE_INVALID`) : valeur hors de 0,001 \u00e0 9 999 ou avec plus de trois d\u00e9cimales, slug d'unit\u00e9 mal form\u00e9 ou qui n'existe pas ; ou plafond atteint (message `DRIVE_LIMIT_REACHED`) : plus de 5 000 \u00e9critures de produits dans la journ\u00e9e UTC, ou plus de 1 000 pr\u00e9f\u00e9rences dans le magasin. Rien n'est enregistr\u00e9"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/DriveWriteRateLimited"
+                    }
+                }
+            }
+        },
+        "/api/v1/drive/last-retailer": {
+            "put": {
+                "tags": [
+                    "Drive"
+                ],
+                "summary": "Retient l'enseigne que l'utilisateur connect\u00e9 vient d'ouvrir : c'est la pr\u00e9s\u00e9lection quand Repas lui demande o\u00f9 envoyer sa liste (le front l'\u00e9crit \u00e0 l'ouverture du drive, jamais une lecture)",
+                "operationId": "put_api_remember_last_retailer",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RememberLastRetailerPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Derni\u00e8re enseigne enregistr\u00e9e"
+                    },
+                    "404": {
+                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`), ou enseigne \u00e9teinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`)"
+                    },
+                    "422": {
+                        "description": "Corps invalide (enseigne absente ou inconnue), ou l'utilisateur n'a pas de magasin chez cette enseigne (message `DRIVE_RETAILER_NOT_CONFIGURED`)"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/DriveWriteRateLimited"
+                    }
+                }
+            }
+        },
+        "/api/v1/drive/default-retailer": {
+            "put": {
+                "tags": [
+                    "Drive"
+                ],
+                "summary": "Fixe (ou efface avec `null`) le drive habituel de l'utilisateur connect\u00e9 : avec plusieurs drives configur\u00e9s, Repas l'utilise sans rien demander",
+                "operationId": "put_api_set_default_retailer",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SetDefaultRetailerPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Drive habituel enregistr\u00e9 (ou effac\u00e9)"
+                    },
+                    "404": {
+                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`), ou enseigne \u00e9teinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`)"
+                    },
+                    "422": {
+                        "description": "Corps invalide (cl\u00e9 `retailer` absente, enseigne inconnue), ou l'utilisateur n'a pas de magasin chez cette enseigne (message `DRIVE_RETAILER_NOT_CONFIGURED`)"
                     },
                     "429": {
                         "$ref": "#/components/responses/DriveWriteRateLimited"
@@ -4229,7 +4336,8 @@
             "Retailer": {
                 "type": "string",
                 "enum": [
-                    "leclerc"
+                    "leclerc",
+                    "auchan"
                 ]
             },
             "ForgetChoiceRequestQuery": {
@@ -4277,6 +4385,28 @@
                 "type": "object"
             },
             "ListChoicesRequestQuery": {
+                "required": [
+                    "retailer"
+                ],
+                "properties": {
+                    "retailer": {
+                        "$ref": "#/components/schemas/Retailer"
+                    }
+                },
+                "type": "object"
+            },
+            "RememberLastRetailerPayload": {
+                "required": [
+                    "retailer"
+                ],
+                "properties": {
+                    "retailer": {
+                        "$ref": "#/components/schemas/Retailer"
+                    }
+                },
+                "type": "object"
+            },
+            "RemoveDriveSettingsRequestQuery": {
                 "required": [
                     "retailer"
                 ],
@@ -4650,6 +4780,28 @@
                             "$ref": "#/components/schemas/ChoiceIntentPayload"
                         },
                         "maxItems": 200
+                    }
+                },
+                "type": "object"
+            },
+            "SetDefaultRetailerPayload": {
+                "required": [
+                    "retailer"
+                ],
+                "properties": {
+                    "retailer": {
+                        "description": "Le drive habituel : une enseigne allum\u00e9e o\u00f9 l'utilisateur a enregistr\u00e9 un magasin ; `null` pour ne plus en avoir. La cl\u00e9 est obligatoire",
+                        "enum": [
+                            "leclerc",
+                            "auchan"
+                        ],
+                        "example": "leclerc",
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/Retailer"
+                            }
+                        ]
                     }
                 },
                 "type": "object"
@@ -6320,7 +6472,8 @@
                         "description": "Enseigne du drive",
                         "type": "string",
                         "enum": [
-                            "leclerc"
+                            "leclerc",
+                            "auchan"
                         ],
                         "example": "leclerc"
                     },
@@ -6689,7 +6842,8 @@
                         "description": "Enseigne du drive",
                         "type": "string",
                         "enum": [
-                            "leclerc"
+                            "leclerc",
+                            "auchan"
                         ],
                         "example": "leclerc"
                     },
@@ -6718,14 +6872,16 @@
                 "required": [
                     "retailer",
                     "name",
-                    "configured"
+                    "configured",
+                    "isDefault"
                 ],
                 "properties": {
                     "retailer": {
                         "description": "Identifiant de l'enseigne",
                         "type": "string",
                         "enum": [
-                            "leclerc"
+                            "leclerc",
+                            "auchan"
                         ],
                         "example": "leclerc"
                     },
@@ -6739,6 +6895,11 @@
                         "type": "boolean",
                         "example": true
                     },
+                    "isDefault": {
+                        "description": "Vrai si c'est le drive habituel de l'utilisateur (`defaultRetailer`) : au plus une enseigne le porte, et seulement une enseigne configur\u00e9e et allum\u00e9e",
+                        "type": "boolean",
+                        "example": false
+                    },
                     "store": {
                         "description": "Magasin de l'utilisateur chez cette enseigne, `null` tant qu'il n'en a pas enregistr\u00e9",
                         "nullable": true,
@@ -6751,11 +6912,53 @@
                 },
                 "type": "object"
             },
+            "RetailerSelectionDTO": {
+                "required": [
+                    "mode",
+                    "candidates"
+                ],
+                "properties": {
+                    "mode": {
+                        "description": "Ce que Repas fait de l'enseigne : `NONE` aucune enseigne n'est configur\u00e9e (mener aux r\u00e9glages), `AUTO` une enseigne s'impose (l'utiliser sans rien demander : une seule configur\u00e9e, ou le drive habituel), `ASK` proposer le choix entre les candidates (`retailer` est la pr\u00e9s\u00e9lection)",
+                        "type": "string",
+                        "enum": [
+                            "NONE",
+                            "AUTO",
+                            "ASK"
+                        ],
+                        "example": "AUTO"
+                    },
+                    "retailer": {
+                        "description": "L'enseigne \u00e0 utiliser (`AUTO`) ou \u00e0 pr\u00e9s\u00e9lectionner (`ASK` : la derni\u00e8re utilis\u00e9e si elle est candidate, sinon la premi\u00e8re configur\u00e9e) ; `null` quand `mode` vaut `NONE`",
+                        "type": "string",
+                        "enum": [
+                            "leclerc",
+                            "auchan"
+                        ],
+                        "example": "leclerc",
+                        "nullable": true
+                    },
+                    "candidates": {
+                        "description": "Les enseignes candidates : allum\u00e9es (`DRIVE_RETAILERS`) ET o\u00f9 la personne a enregistr\u00e9 un magasin, la plus anciennement enregistr\u00e9e d'abord ; vide quand `mode` vaut `NONE`",
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "leclerc",
+                                "auchan"
+                            ],
+                            "example": "leclerc"
+                        }
+                    }
+                },
+                "type": "object"
+            },
             "DriveSettingsDTO": {
                 "required": [
                     "enabled",
                     "retailer",
-                    "retailers"
+                    "retailers",
+                    "selection"
                 ],
                 "properties": {
                     "enabled": {
@@ -6764,15 +6967,16 @@
                         "example": true
                     },
                     "retailer": {
-                        "description": "Enseigne du drive",
+                        "description": "Enseigne en vigueur : celle de `selection` quand une enseigne est configur\u00e9e, sinon l'enseigne par d\u00e9faut du registre si elle est allum\u00e9e, sinon la premi\u00e8re allum\u00e9e. Avec une seule enseigne allum\u00e9e, c'est elle",
                         "type": "string",
                         "enum": [
-                            "leclerc"
+                            "leclerc",
+                            "auchan"
                         ],
                         "example": "leclerc"
                     },
                     "store": {
-                        "description": "Magasin de l'utilisateur, `null` tant qu'il n'a pas \u00e9t\u00e9 enregistr\u00e9",
+                        "description": "Magasin de l'utilisateur chez l'enseigne `retailer`, `null` tant qu'il n'a pas \u00e9t\u00e9 enregistr\u00e9",
                         "nullable": true,
                         "oneOf": [
                             {
@@ -6781,11 +6985,32 @@
                         ]
                     },
                     "retailers": {
-                        "description": "Une entr\u00e9e par enseigne **allum\u00e9e** (`DRIVE_RETAILERS`, DRV-702 ; ordre fixe), avec le magasin de l'utilisateur chez chacune ; s'ajoute aux champs `retailer` et `store`, qui restent ceux de l'enseigne par d\u00e9faut",
+                        "description": "Une entr\u00e9e par enseigne **allum\u00e9e** (`DRIVE_RETAILERS`, DRV-702 ; ordre fixe), avec le magasin de l'utilisateur chez chacune et si c'est son drive habituel ; s'ajoute aux champs `retailer` et `store`",
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/DriveRetailerDTO"
                         }
+                    },
+                    "defaultRetailer": {
+                        "description": "Le drive habituel de l'utilisateur (choisi dans \u00ab Moi \u00bb, `PUT /drive/default-retailer`), `null` s'il n'en a pas, ou si son drive habituel est \u00e9teint (`DRIVE_RETAILERS`) ou n'a plus de magasin : la s\u00e9lection l'ignore alors, la pr\u00e9f\u00e9rence reste enregistr\u00e9e",
+                        "type": "string",
+                        "enum": [
+                            "leclerc",
+                            "auchan"
+                        ],
+                        "nullable": true
+                    },
+                    "lastUsedRetailer": {
+                        "description": "La derni\u00e8re enseigne que l'utilisateur a ouverte (`PUT /drive/last-retailer`), `null` s'il n'en a pas, ou si elle est \u00e9teinte ou n'a plus de magasin",
+                        "type": "string",
+                        "enum": [
+                            "leclerc",
+                            "auchan"
+                        ],
+                        "nullable": true
+                    },
+                    "selection": {
+                        "$ref": "#/components/schemas/RetailerSelectionDTO"
                     }
                 },
                 "type": "object"

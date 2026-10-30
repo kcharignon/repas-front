@@ -1,5 +1,20 @@
-import { LIMITS, LINE_STATUSES, UNIT_SLUG } from '@drive-protocol'
-import type { LineStatus, PlanMessage, ResultMessage, SetupResultMessage } from '@drive-protocol'
+import {
+  LIMITS,
+  LINE_STATUSES,
+  RETAILER_IDS,
+  retailerOfHost,
+  STORES,
+  UNIT_SLUG,
+} from '@drive-protocol'
+import type {
+  LineStatus,
+  PlanMessage,
+  ResultMessage,
+  RetailerId,
+  SetupResultMessage,
+} from '@drive-protocol'
+
+import { DEFAULT_RETAILER } from '../retailers'
 
 /** La clé du brouillon de passage dans `localStorage`. */
 export const DRAFT_KEY = 'repas.drive.run'
@@ -12,9 +27,11 @@ const CLOCK_SKEW_MS = 5 * 60 * 1000
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-/** Un slug d'ingrédient et un identifiant de produit chez l'enseigne, comme le protocole les écrit. */
+/** Un slug d'ingrédient, comme le protocole l'écrit ; l'identifiant d'un produit a la forme de SON enseigne (`STORES[retailer].productId`). */
 const SLUG = /^[a-z0-9-]{1,100}$/
-const PRODUCT_ID = /^[0-9]{1,12}$/
+
+/** Le drive d'un brouillon écrit avant les drives multiples (DRV-710) : le seul qui existait. */
+const LEGACY_RETAILER: RetailerId = DEFAULT_RETAILER.id
 
 /**
  * Ce que le plan envoyé annonçait d'une ligne (DRV-614) : de quoi recouper le résultat de l'agent avec ce qu'on lui a demandé, même
@@ -41,6 +58,11 @@ export interface SentLine {
 export interface RunDraft {
   runId: string
   listId: string
+  /**
+   * Le drive du passage (DRV-710) : celui du plan envoyé. Le résultat n'est rattaché qu'à ce drive-là, et ses choix sont enregistrés pour lui. Un brouillon
+   * écrit avant les drives multiples n'a pas la clé : c'est le seul drive d'alors (`DEFAULT_RETAILER`).
+   */
+  retailer: RetailerId
   /** Date ISO de l'envoi du plan. */
   startedAt: string
   /** Les lignes du plan envoyé ; absent d'un brouillon écrit par une version plus ancienne (l'écran du retour relit alors le plan). */
@@ -109,7 +131,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
 /** Les lignes d'un brouillon : `null` si une seule n'a pas exactement la forme attendue. */
-function parseLines(value: unknown): SentLine[] | null {
+function parseLines(value: unknown, retailer: RetailerId): SentLine[] | null {
   if (!Array.isArray(value) || value.length > LIMITS.lines) return null
   const lines: SentLine[] = []
   const slugs = new Set<string>()
@@ -131,7 +153,9 @@ function parseLines(value: unknown): SentLine[] | null {
     if (
       !Array.isArray(products) ||
       products.length > LIMITS.products ||
-      !(products as unknown[]).every((id) => typeof id === 'string' && PRODUCT_ID.test(id))
+      !(products as unknown[]).every(
+        (id) => typeof id === 'string' && STORES[retailer].productId.test(id),
+      )
     )
       return null
     slugs.add(ingredientSlug)
@@ -155,16 +179,38 @@ function parse(raw: string): RunDraft | null {
     return null
   }
   if (!isRecord(value)) return null
-  const keys = Object.keys(value).sort().join()
-  if (keys !== 'listId,runId,startedAt' && keys !== 'lines,listId,runId,startedAt') return null
+  // `lines` et `retailer` sont facultatifs : un brouillon d'une version plus ancienne n'a pas `lines` (DRV-614), ni `retailer` (DRV-710)
+  const keys = Object.keys(value)
+  const required = ['listId', 'runId', 'startedAt']
+  if (
+    !required.every((key) => keys.includes(key)) ||
+    keys.some((key) => ![...required, 'lines', 'retailer'].includes(key))
+  )
+    return null
   const { runId, listId, startedAt } = value
   if (typeof runId !== 'string' || !UUID.test(runId)) return null
   if (typeof listId !== 'string' || listId === '' || listId.length > 100) return null
   if (typeof startedAt !== 'string' || Number.isNaN(Date.parse(startedAt))) return null
-  if (!('lines' in value)) return { runId, listId, startedAt }
-  const lines = parseLines(value.lines)
+  const retailer = 'retailer' in value ? value.retailer : LEGACY_RETAILER
+  if (!(RETAILER_IDS as readonly unknown[]).includes(retailer)) return null
+  const drive = retailer as RetailerId
+  if (!('lines' in value)) return { runId, listId, retailer: drive, startedAt }
+  const lines = parseLines(value.lines, drive)
 
-  return lines === null ? null : { runId, listId, startedAt, lines }
+  return lines === null ? null : { runId, listId, retailer: drive, startedAt, lines }
+}
+
+/**
+ * Ce résultat est-il celui du passage du brouillon ? Il faut le même `runId` ET le même drive (DRV-710). Un `result` ne dit pas son enseigne, mais le
+ * magasin qu'il porte a la forme de celui de SON enseigne (un numéro, un identifiant à tirets… : `STORES[…].id`) : un résultat
+ * dont le magasin n'a pas la forme du drive du brouillon est celui d'un autre envoi, il est ignoré comme un autre `runId` (rien n'est enregistré). Un
+ * résultat sans magasin (arrêt avant de le connaître) ne dit rien de plus : seul le `runId` compte.
+ */
+export function isFromDraft(result: DriveResult, draft: RunDraft): boolean {
+  if (result.runId !== draft.runId) return false
+  if (result.type === 'setup-result') return retailerOfHost(result.store.host) === draft.retailer
+
+  return result.store === undefined || STORES[draft.retailer].id.test(result.store.id)
 }
 
 export interface DraftStore {
@@ -172,8 +218,11 @@ export interface DraftStore {
   load(): RunDraft | null
   save(draft: RunDraft): void
   clear(): void
-  /** Le résultat est-il celui du passage en cours ? Sinon il est périmé : un autre appareil, un autre passage, un brouillon expiré. */
-  matches(result: { runId: string }): boolean
+  /**
+   * Le résultat est-il celui du passage en cours ? Sinon il est périmé : un autre appareil, un autre passage, un brouillon expiré, ou un résultat
+   * d'un autre drive que celui du brouillon (`isFromDraft`).
+   */
+  matches(result: DriveResult): boolean
 }
 
 export function createDraftStore(storage: DraftStorage, now: () => Date): DraftStore {
@@ -195,6 +244,10 @@ export function createDraftStore(storage: DraftStorage, now: () => Date): DraftS
     load,
     save: (draft) => storage.set(JSON.stringify(draft)),
     clear: () => storage.remove(),
-    matches: (result) => load()?.runId === result.runId,
+    matches: (result) => {
+      const draft = load()
+
+      return draft !== null && isFromDraft(result, draft)
+    },
   }
 }

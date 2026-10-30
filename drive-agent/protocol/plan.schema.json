@@ -12,13 +12,13 @@
       "type": "string",
       "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
     },
-    "retailer": { "enum": ["leclerc"] },
+    "retailer": { "enum": ["leclerc", "auchan"] },
     "store": {
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "host"],
       "properties": {
-        "id": { "type": "string", "pattern": "^[0-9]{1,12}$" },
+        "id": { "type": "string", "minLength": 1, "maxLength": 40 },
         "host": { "type": "string", "minLength": 1, "maxLength": 255 }
       }
     },
@@ -32,25 +32,105 @@
   },
   "allOf": [
     {
-      "description": "Le motif d’hôte d’une enseigne ne vaut que pour les messages de cette enseigne (une entrée de plus par enseigne).",
+      "description": "Ce qui est propre à une enseigne (hôte, identifiant du magasin, forme des identifiants de produit et d'offre) ne vaut que pour les messages de cette enseigne (une entrée de plus par enseigne, STORES de check.ts).",
       "if": { "properties": { "retailer": { "const": "leclerc" } }, "required": ["retailer"] },
       "then": {
         "properties": {
           "store": {
             "type": "object",
             "properties": {
+              "id": { "type": "string", "pattern": "^[0-9]{1,12}$" },
               "host": { "type": "string", "pattern": "^[a-z0-9-]+\\.leclercdrive\\.fr$" }
             }
           },
           "lines": {
-            "description": "Leclerc n'a pas d'offre (StoreRules.offerId est null) : la clé offerId d'un produit est interdite.",
+            "description": "Leclerc n'a pas d'offre (StoreRules.offerId est null) : la clé offerId d'un produit est interdite. Ses identifiants de produit sont numériques.",
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
                 "products": {
                   "type": "array",
-                  "items": { "type": "object", "not": { "required": ["offerId"] } }
+                  "items": {
+                    "type": "object",
+                    "properties": { "id": { "type": "string", "pattern": "^[0-9]{1,12}$" } },
+                    "not": { "required": ["offerId"] }
+                  }
+                },
+                "rejected": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": { "id": { "type": "string", "pattern": "^[0-9]{1,12}$" } }
+                  }
+                },
+                "replaces": {
+                  "type": "object",
+                  "properties": { "id": { "type": "string", "pattern": "^[0-9]{1,12}$" } }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "retailer": { "const": "auchan" } }, "required": ["retailer"] },
+      "then": {
+        "properties": {
+          "store": {
+            "description": "Le magasin d'Auchan ne se lit pas dans l'adresse : son identifiant est un UUID lu par l'agent, son hôte est celui du site (jamais compte.auchan.fr).",
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "host": { "type": "string", "pattern": "^www\\.auchan\\.fr$" }
+            }
+          },
+          "lines": {
+            "description": "Un produit d'Auchan a un identifiant de produit et un identifiant d'offre, tous deux des UUID en minuscules.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "products": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "offerId": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      }
+                    }
+                  }
+                },
+                "rejected": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      }
+                    }
+                  }
+                },
+                "replaces": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                    }
+                  }
                 }
               }
             }
@@ -64,7 +144,12 @@
   "else": { "not": { "required": ["lines"] } },
   "definitions": {
     "label": { "type": "string", "minLength": 1, "maxLength": 255 },
-    "productId": { "type": "string", "pattern": "^[0-9]{1,12}$" },
+    "productId": {
+      "description": "La forme de l'identifiant d'un produit est celle de l'enseigne du message (allOf plus haut, productIdPattern du contrat des enseignes).",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
     "productRef": {
       "type": "object",
       "additionalProperties": false,

@@ -36,6 +36,11 @@ export interface AppInfo {
    * application, variante de Google Play, construction de débogage) : faux, la page garde l'ancien comportement.
    */
   selfUpdate?: boolean
+  /**
+   * Les drives que l'application sait servir (DRV-707), par identifiant. Absent (application d'avant les drives multiples, ou liste mal formée) :
+   * la clé n'est pas là, et l'application ne sert que le drive d'avant (`appServes`).
+   */
+  retailers?: string[]
 }
 
 /** Un message de l'application, reconnu et validé. */
@@ -51,6 +56,16 @@ export type Inbound =
 
 const CODE = /^[A-Z][A-Z0-9_]{0,63}$/
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Les identifiants de drive annoncés par `app.info` : de 1 à 20 identifiants de 1 à 32 caractères (minuscules, chiffres, tiret), ou `null` si la liste n'est pas lisible. */
+function retailerIdsOf(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 20) return null
+  const ids = value.filter(
+    (item): item is string => typeof item === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(item),
+  )
+
+  return ids.length === value.length ? ids : null
+}
 
 /** Le nombre d'octets d'un texte en UTF-8 (la borne du pont se compte en octets). */
 export const byteLength = (text: string): number => new TextEncoder().encode(text).length
@@ -85,6 +100,8 @@ export function parseInbound(data: unknown): Inbound | null {
       if (typeof drive !== 'boolean') return { type: 'invalid', detail: 'drive' }
       // Facultatif : une application qui ne connaît pas la mise à jour n'écrit pas la clé
       const selfUpdate = message.selfUpdate === true
+      // Facultatif aussi : une liste d'identifiants. Mal formée, elle est ignorée (l'application passe pour une ancienne : on n'en suppose pas plus)
+      const retailers = retailerIdsOf(message.retailers)
 
       return {
         type: 'app.info',
@@ -93,6 +110,7 @@ export function parseInbound(data: unknown): Inbound | null {
           versionCode: versionCode as number,
           drive,
           ...(selfUpdate ? { selfUpdate } : {}),
+          ...(retailers === null ? {} : { retailers }),
         },
       }
     }

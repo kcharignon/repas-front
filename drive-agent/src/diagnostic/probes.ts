@@ -29,7 +29,7 @@ import type {
   ShownText,
   VocabularyKey,
 } from '../retailers'
-import { MAX_MENU_AISLES } from '../retailers'
+import { MAX_MENU_AISLES, type StoreReadFacts } from '../retailers'
 import type { LastReason, LastRefusal } from '../flow'
 import { own } from '../own'
 import { S } from '../ui'
@@ -238,6 +238,22 @@ function startLine(link: LinkFacts, clickable: boolean, siteDomain: string): str
     present: true,
     shape: link.shape,
     where: link.where === null ? null : (own(P.where(siteDomain), link.where) ?? null),
+  })
+}
+
+/** Comment le site a dit le magasin (DRV-717) : des formes et des mots fixes, jamais l'identifiant ni le libellé. */
+function storeReadLine(read: StoreReadFacts): string {
+  const store = { READ: P.storeReadRead, NONE: P.storeReadNone, ABSENT: P.storeReadAbsent }[
+    read.store
+  ]
+  return P.storeRead({
+    status: read.status === null ? P.noReply : String(read.status),
+    contexts: read.contexts.length === 0 ? P.none : read.contexts.join(', '),
+    others: read.otherContexts,
+    store,
+    idForm: read.idForm === null ? P.notApplicable : read.idForm === 'UUID' ? 'UUID' : P.other,
+    pickUp: yesNo(read.pickUp),
+    label: yesNo(read.store === 'READ' ? read.label : null),
   })
 }
 
@@ -766,19 +782,25 @@ export function probeLines(
     shelvesSkipped,
   } = probes
   if (arrival) {
+    // Le suffixe de ville, le chemin de recherche, la page du panier et le point de livraison sont des faits de l'adresse de Leclerc : une enseigne dont le
+    // magasin ne s'y lit pas (DRV-717) ne les a pas, et le rapport ne les invente pas.
+    const inAddress = arrival.delivery !== undefined
     lines.push(P.address(arrival.address))
-    lines.push(P.city(cityOf(arrival.address)))
-    lines.push(P.searchBase(arrival.searchBase ?? null))
+    if (inAddress) lines.push(P.city(cityOf(arrival.address)))
+    if (inAddress) lines.push(P.searchBase(arrival.searchBase ?? null))
     if (arrival.cookies)
       lines.push(P.cookies(arrival.cookies.count, yesNo(arrival.cookies.antiBot)))
     lines.push(P.arrival(arrival.redirects, arrival.status))
+    if (arrival.storeRead) lines.push(storeReadLine(arrival.storeRead))
     if (arrival.entry) {
       lines.push(startLine(arrival.entry.start, arrival.entry.clickable, siteDomain))
     }
-    lines.push(P.basketPage(cityOf(arrival.address)))
-    lines.push(
-      P.delivery(P.inPage, yesNo(arrival.delivery.read), yesNo(arrival.delivery.sameAsAddress)),
-    )
+    if (inAddress) lines.push(P.basketPage(cityOf(arrival.address)))
+    if (arrival.delivery) {
+      lines.push(
+        P.delivery(P.inPage, yesNo(arrival.delivery.read), yesNo(arrival.delivery.sameAsAddress)),
+      )
+    }
   }
   if (common) lines.push(...searchLines(common))
   // Les rayons juste après la recherche du mot courant, pas après les clés et les en-têtes.
@@ -817,22 +839,27 @@ export function probeLines(
     lines.push(...searchLines(nonsense))
     const facts = nonsense.facts
     if (facts) {
-      lines.push(
-        P.delivery(
-          P.inReply(nonsense.term),
-          yesNo(facts.delivery.read),
-          yesNo(facts.delivery.sameAsAddress),
-        ),
-      )
-      lines.push(P.session(nonsense.term, facts.session))
-      lines.push(
-        P.keys(nonsense.term, {
-          total: facts.keys.total,
-          present: facts.keys.present,
-          absent: facts.keys.absent,
-          session: facts.keys.session,
-        }),
-      )
+      // Les signes de Leclerc (point de livraison, connexion, clés de l'état embarqué) : une enseigne dont la page n'en a pas ne les rapporte pas (DRV-724).
+      if (facts.delivery) {
+        lines.push(
+          P.delivery(
+            P.inReply(nonsense.term),
+            yesNo(facts.delivery.read),
+            yesNo(facts.delivery.sameAsAddress),
+          ),
+        )
+      }
+      if (facts.session !== undefined) lines.push(P.session(nonsense.term, facts.session))
+      if (facts.keys) {
+        lines.push(
+          P.keys(nonsense.term, {
+            total: facts.keys.total,
+            present: facts.keys.present,
+            absent: facts.keys.absent,
+            session: facts.keys.session,
+          }),
+        )
+      }
       lines.push(P.headers(nonsense.term, facts.headers))
     }
   }

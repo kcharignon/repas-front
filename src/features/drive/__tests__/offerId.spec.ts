@@ -1,16 +1,8 @@
 // @vitest-environment node
 // `offerId`, l'identifiant d'offre FACULTATIF d'un produit (DRV-722) côté web : recopié champ par champ dans le message du protocole et rendu à Repas par
-// `PUT /drive/choices`. Aucune enseigne du registre n'a d'offre (Leclerc : `offerIdPattern` à `null`) ; l'enseigne à offres des tests est FICTIVE et
-// aucune règle d'Auchan n'est écrite ici.
+// `PUT /drive/choices`. Leclerc n'a pas d'offre (`offerIdPattern` à `null`) ; Auchan en a (DRV-727) : ses tests visent son entrée réelle du registre.
 import { describe, expect, it } from 'vitest'
-import {
-  decodeMessage,
-  encodeMessage,
-  RETAILER_IDS,
-  STORES,
-  validatePlan,
-  validateResult,
-} from '@drive-protocol'
+import { decodeMessage, encodeMessage, validatePlan, validateResult } from '@drive-protocol'
 import type { PlanMessage, ResultLine } from '@drive-protocol'
 
 import type { DrivePlan } from '@/api'
@@ -21,12 +13,13 @@ import { plan } from './fixtures'
 import { result } from './results'
 
 const RUN_ID = '8f14e45f-ceea-467a-9575-8e6b8c0a1b2c'
-const UUID = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
 const OFFER_A = '0b5f8a2e-3c1d-4e7f-9a6b-123456789abc'
 const OFFER_B = 'c3b2a1d0-5e4f-4a6b-9c8d-7e6f5a4b3c2d'
 
-/** L'enseigne fictive à offres du web : le motif du contrat des enseignes (`offerIdPattern`). */
-const exemple: Retailer = { ...DEFAULT_RETAILER, offerIdPattern: UUID }
+/** L'enseigne à offres du web : Auchan, dont le motif du contrat des enseignes (`offerIdPattern`) est un UUID. */
+const exemple: Retailer = retailerOf('auchan')
+/** Un identifiant de produit d'Auchan (un UUID inventé) à la place d'un identifiant numérique de Leclerc : le rang est celui de l'identifiant numérique. */
+const uuidOf = (id: string) => `00000000-0000-4000-8000-${id.padStart(12, '0')}`
 
 /** Le plan du back avec des offres (DRV-721) : la farine préférée et son secours en ont, les autres non. */
 function planWithOffers(): DrivePlan {
@@ -46,6 +39,12 @@ describe('offerIdOf', () => {
     expect(DEFAULT_RETAILER.offerIdPattern).toBeNull()
     expect(offerIdOf(OFFER_A, DEFAULT_RETAILER)).toBeNull()
     expect(offerIdOf(OFFER_A, retailerOf('leclerc'))).toBeNull()
+  })
+
+  it('Auchan : son motif est celui du contrat, un UUID', () => {
+    expect(exemple.offerIdPattern).toBe(
+      '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    )
   })
 
   it('la valeur seulement si elle a la forme de l’enseigne et 40 caractères au plus', () => {
@@ -115,27 +114,27 @@ describe('buildPlanMessage et l’identifiant d’offre', () => {
   })
 
   it('le message d’une enseigne à offres est valide pour le protocole de cette enseigne', () => {
-    const ids = RETAILER_IDS as unknown as string[]
-    const stores = STORES as unknown as Record<string, (typeof STORES)['leclerc']>
-    ids.push('exemple')
-    stores.exemple = {
-      host: /^[a-z0-9-]+\.exemple\.invalid$/,
-      id: /^[0-9]{1,12}$/,
-      base: () => true,
-      offerId: new RegExp(UUID),
-    }
-    try {
-      const message = {
-        ...buildPlanMessage(planWithOffers(), {}, RUN_ID, { retailer: exemple }),
-        retailer: 'exemple',
-        store: { id: '123456', host: 'courses-test.exemple.invalid' },
-      } as unknown as PlanMessage
+    const built = buildPlanMessage(planWithOffers(), {}, RUN_ID, { retailer: exemple })
+    // Le plan de test est celui d'un magasin de Leclerc : ses produits ont des numéros. Chez Auchan ils sont des UUID, et le magasin n'est pas dans l'adresse.
+    const message = {
+      ...built,
+      retailer: 'auchan',
+      store: { id: '0b5f8a2e-3c1d-4e7f-9a6b-123456789abc', host: 'www.auchan.fr' },
+      lines: built.lines.map((line) => ({
+        ...line,
+        ...(line.products && {
+          products: line.products.map((product) => ({ ...product, id: uuidOf(product.id) })),
+        }),
+        ...(line.rejected && {
+          rejected: line.rejected.map((product) => ({ ...product, id: uuidOf(product.id) })),
+        }),
+        ...(line.replaces && { replaces: { ...line.replaces, id: uuidOf(line.replaces.id) } }),
+      })),
+    } as unknown as PlanMessage
 
-      expect(() => validatePlan(decodeMessage(encodeMessage(message)))).not.toThrow()
-    } finally {
-      ids.splice(ids.indexOf('exemple'), 1)
-      delete stores.exemple
-    }
+    expect(() => validatePlan(decodeMessage(encodeMessage(message)))).not.toThrow()
+    // Le même message avec une offre de Leclerc (aucune) : la clé est refusée comme toute clé inconnue
+    expect(() => validatePlan({ ...message, retailer: 'leclerc' })).toThrow(/store.id/)
   })
 })
 
@@ -202,7 +201,8 @@ describe('buildChoiceBatches et l’identifiant d’offre', () => {
     )
   })
 
-  it('le résultat du protocole n’accepte pas d’offre tant qu’aucune enseigne n’en a', () => {
-    expect(() => validateResult(result({ lines: lines(OFFER_A) }))).toThrow(/offerId/)
+  it('le résultat du protocole n’accepte qu’une offre de la forme d’une enseigne à offres (Auchan)', () => {
+    expect(() => validateResult(result({ lines: lines(OFFER_A) }))).not.toThrow()
+    expect(() => validateResult(result({ lines: lines('1000001') }))).toThrow(/offerId/)
   })
 })

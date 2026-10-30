@@ -5,7 +5,6 @@ import {
   eachIfPresent,
   exactly,
   fail,
-  ID,
   int,
   object,
   offerId,
@@ -20,6 +19,7 @@ import {
   values,
   at,
   type Check,
+  type StoreRules,
 } from './check'
 import { UNIT_SLUG } from './pack-size'
 import {
@@ -37,9 +37,9 @@ import {
 export const SLUG = /^[a-z0-9-]{1,100}$/
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-/** Un produit connu d'une ligne ; `rule` : la forme de l'offre de l'enseigne du plan (`null` : pas d'offre, la clé est interdite). */
+/** Un produit connu d'une ligne ; `stores` : les règles de l'enseigne du plan (forme des produits, forme de l'offre ou `null` : pas d'offre, la clé est interdite). */
 const planProduct =
-  (rule: RegExp | null): Check =>
+  (stores: StoreRules): Check =>
   (list, index) => {
     const product = object(list, index, [
       'id',
@@ -50,7 +50,7 @@ const planProduct =
       'packSize',
       'offerId',
     ])
-    text(product, 'id', ID)
+    text(product, 'id', stores.productId)
     text(product, 'label')
     optional(product, 'content', content)
     optional(
@@ -64,7 +64,7 @@ const planProduct =
       orNull((scope, key) => oneOf(scope, key, PACKS_STATUSES)),
     )
     optional(product, 'packSize', orNull(packSize))
-    optional(product, 'offerId', offerId(rule))
+    optional(product, 'offerId', offerId(stores.offerId))
   }
 
 /** Un nombre strictement positif, fini, d'au plus `LIMITS.quantity`. */
@@ -97,7 +97,7 @@ const needed: Check = (scope, key) => {
 }
 
 const planLine =
-  (rule: RegExp | null): Check =>
+  (stores: StoreRules): Check =>
   (list, index) => {
     const line = object(list, index, [
       'ingredientSlug',
@@ -113,18 +113,18 @@ const planLine =
     text(line, 'ingredientSlug', SLUG)
     text(line, 'name')
     const status = oneOf(line, 'status', LINE_STATUSES)
-    const products = eachIfPresent(line, 'products', LIMITS.products, planProduct(rule))
+    const products = eachIfPresent(line, 'products', LIMITS.products, planProduct(stores))
     distinct(products, 'id')
     const accepted = values(products, 'id')
     if (status === 'KNOWN' && accepted.length === 0) fail(products.p)
     if (status === 'NEW' && accepted.length > 0) fail(products.p)
-    const rejected = eachIfPresent(line, 'rejected', LIMITS.rejected, productRef)
+    const rejected = eachIfPresent(line, 'rejected', LIMITS.rejected, productRef(stores.productId))
     distinct(rejected, 'id')
     values(rejected, 'id').forEach((id, rank) => {
       if (accepted.includes(id)) fail(at(at(rejected.p, rank), 'id'), 'accepté et refusé')
     })
     optional(line, 'searchQuery', text)
-    optional(line, 'replaces', productRef)
+    optional(line, 'replaces', productRef(stores.productId))
     optional(line, 'needed', needed)
     optional(line, 'rayonHints', (parent, name) => {
       each(parent, name, LIMITS.rayonHints, (ids, rank) => int(ids, rank, 1, LIMITS.catalogId))
@@ -150,7 +150,7 @@ export function validatePlan(input: unknown): PlanMessage | SetupMessage {
   }
   exactly(message, 'returnPath', RETURN_PATH)
   if (type === 'plan') {
-    const lines = each(message, 'lines', LIMITS.lines, planLine(STORES[retailer].offerId))
+    const lines = each(message, 'lines', LIMITS.lines, planLine(STORES[retailer]))
     distinct(lines, 'ingredientSlug')
   }
   return input as PlanMessage | SetupMessage

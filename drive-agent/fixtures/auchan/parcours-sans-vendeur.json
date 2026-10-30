@@ -1,0 +1,12 @@
+{
+  "activeContexts": [
+    {
+      "type": "GROCERY",
+      "context": {
+        "channels": [
+          "PICK_UP"
+        ]
+      }
+    }
+  ]
+}

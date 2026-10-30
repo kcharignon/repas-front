@@ -312,8 +312,13 @@ const backed = {
 }
 const plain = (text: string) => text.replace(/\s+/g, ' ').trim()
 
-async function show(view: object, path: string, props: Record<string, unknown> = {}) {
-  const fetchMock = stubApi(backed)
+async function show(
+  view: object,
+  path: string,
+  props: Record<string, unknown> = {},
+  handlers: Parameters<typeof stubApi>[0] = {},
+) {
+  const fetchMock = stubApi({ ...backed, ...handlers })
   localStorage.setItem('repas.session', '1')
   const context = appContext()
   await useSessionStore().restore()
@@ -337,13 +342,37 @@ afterEach(() => {
 })
 
 describe('les écrans lisent les exemples du back sans erreur', () => {
-  it('réglages : le magasin, son nom et le résumé des produits mémorisés', async () => {
+  it('réglages : « Mes drives » (deux drives dans l’exemple), le magasin de chacun, le drive habituel et le résumé des produits', async () => {
     const { wrapper, fetchMock } = await show(DriveSettingsView, '/drive/reglages')
+
+    expect(wrapper.text()).toContain('Mes drives')
+    expect(wrapper.text()).toContain('Ville-Test')
+    expect(wrapper.text()).toContain('Ton magasin : …456')
+    expect(wrapper.text()).toContain('Ton magasin : …abc')
+    expect(wrapper.text()).toContain('Mon drive habituel')
+    expect(wrapper.findAll('dd').map((value) => value.text())).toEqual(['3', '1', '1'])
+    expect(calls(fetchMock)).toContain('GET /api/v1/drive/choices')
+  })
+
+  it('réglages avec un seul drive allumé : l’écran d’avant, sans « Mes drives »', async () => {
+    const one = {
+      ...settings,
+      retailers: settings.retailers.slice(0, 1),
+      selection: { mode: 'AUTO', retailer: 'leclerc', candidates: ['leclerc'] },
+    }
+    const { wrapper } = await show(
+      DriveSettingsView,
+      '/drive/reglages',
+      {},
+      {
+        'GET /api/v1/drive/settings': () => json(one),
+      },
+    )
 
     expect(wrapper.text()).toContain('Ville-Test')
     expect(wrapper.text()).toContain('Magasin …456')
-    expect(wrapper.findAll('dd').map((value) => value.text())).toEqual(['3', '1', '1'])
-    expect(calls(fetchMock)).toContain('GET /api/v1/drive/choices')
+    expect(wrapper.text()).not.toContain('Mes drives')
+    expect(wrapper.text()).not.toContain('Mon drive habituel')
   })
 
   it('Mes produits : le produit préféré de chaque ingrédient, ou « J’en ai toujours »', async () => {

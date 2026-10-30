@@ -52,11 +52,15 @@ function codeOf(error: DriveBridgeError): StoreReadErrorCode {
 
 /**
  * Demande à l'application d'ouvrir le drive pour lire le magasin choisi, et le rend (le retour peut prendre plusieurs minutes : il faut
- * se connecter et choisir son magasin). Lève une `StoreReadError`.
+ * se connecter et choisir son magasin). `retailer` (DRV-709) : le drive touché, nommé dans le message ; `null`, le message d'avant les drives
+ * multiples (une application qui n'annonce aucun drive). Lève une `StoreReadError`.
  */
-export async function readStoreFromApp(bridge: DriveBridge = driveBridge): Promise<StoreReading> {
+export async function readStoreFromApp(
+  bridge: DriveBridge = driveBridge,
+  retailer: string | null = null,
+): Promise<StoreReading> {
   try {
-    const store = await bridge.startSetup()
+    const store = await bridge.startSetup(retailer)
 
     return { id: store.id, baseUrl: store.baseUrl, label: store.label }
   } catch (error) {

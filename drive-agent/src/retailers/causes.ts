@@ -3,6 +3,7 @@
 // Une cause est un code interne fixe : elle ne contient jamais un morceau de page, d'adresse, de cookie ni de libellé. Elle part dans le
 // message du résultat (`error.message`) et dans le diagnostic ; l'interface de l'agent n'affiche que le conseil du code d'erreur.
 
+import { AUCHAN_CAUSES } from '../auchan/causes'
 import { own } from '../own'
 
 /** Les causes fixes. Une réponse HTTP inattendue a sa propre forme : `HTTP_404`, `HTTP_401`… (voir `httpCause`). */
@@ -32,6 +33,10 @@ export const CAUSE_LABELS = {
   SEARCH_COMMON_EMPTY: 'aucun produit pour le mot courant d’essai',
   SEARCH_FIELDS_INCOMPLETE: 'produits lus sans tous les champs attendus',
   CONTENT_UNREADABLE: 'contenu net illisible pour la plupart des produits',
+  // Un adaptateur déclaré mais pas encore écrit (DRV-727).
+  ADAPTER_NOT_WRITTEN: 'adaptateur de l’enseigne pas encore écrit (recherche, panier)',
+  // Les causes propres à une enseigne (DRV-717 : Auchan, dans son dossier) : un seul tableau pour le diagnostic.
+  ...AUCHAN_CAUSES,
   // Un incident imprévu de l'agent (jamais son message).
   EXCEPTION: 'incident imprévu de l’agent',
 } as const

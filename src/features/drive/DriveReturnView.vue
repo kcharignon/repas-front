@@ -16,6 +16,7 @@ import { isRateLimited, messageForFailure } from '@/notifications/failures'
 import { useOnline } from '@/offline/useOnline'
 import { driveBridge } from './bridge'
 import { buildChoiceBatches, countChoices, knownProductsOf } from './choices'
+import { drivesOf } from './drives'
 import { finalizeLink, retailerOf } from './retailers'
 import { useDrivePlan, useDriveSettings, useSaveChoices } from './queries'
 import { expectedFromPlan } from './restrictToPlan'
@@ -23,7 +24,10 @@ import { useDriveReturnStore } from './returnStore'
 import DriveFold from './DriveFold.vue'
 import { countOutcomes, formatPrice, remaining, visibleCounts } from './summary'
 
-const { t, retailer } = useRetailerI18n()
+// Le drive du passage dont on lit le résultat (DRV-710) : celui du brouillon, pas celui des réglages d'aujourd'hui. Les textes, les choix enregistrés
+// et le lien « Finaliser » sont les siens.
+const runRetailer = computed(() => run.value?.retailer)
+const { t, retailer } = useRetailerI18n(() => runRetailer.value)
 const router = useRouter()
 const online = useOnline()
 const store = useDriveReturnStore()
@@ -36,7 +40,7 @@ const run = computed(() => {
   const current = store.event
   if (current?.kind !== 'result' || current.result.type !== 'result') return null
 
-  return { result: current.result, listId: current.draft.listId }
+  return { result: current.result, listId: current.draft.listId, retailer: current.draft.retailer }
 })
 const listId = computed(() => run.value?.listId ?? null)
 const result = computed(() => run.value?.result ?? null)
@@ -45,6 +49,7 @@ const result = computed(() => run.value?.result ?? null)
 const plan = useDrivePlan(
   () => listId.value ?? '',
   () => listId.value !== null,
+  () => runRetailer.value,
 )
 const list = useShoppingList(
   () => listId.value ?? '',
@@ -68,9 +73,15 @@ const labels = computed(
 
 const counts = computed(() => (result.value ? countOutcomes(result.value) : null))
 const shownCounts = computed(() => (counts.value ? visibleCounts(counts.value) : []))
-const finalizeUrl = computed(() =>
-  finalizeLink(settings.data.value?.store?.baseUrl, inApp, retailer.value),
-)
+// Le magasin du drive du passage ; sans liste de drives (un back plus ancien), le seul magasin des réglages
+const runStore = computed(() => {
+  const drives = drivesOf(settings.data.value)
+
+  return drives.length === 0
+    ? (settings.data.value?.store ?? null)
+    : (drives.find((drive) => drive.id === runRetailer.value)?.store ?? null)
+})
+const finalizeUrl = computed(() => finalizeLink(runStore.value?.baseUrl, inApp, retailer.value))
 const saved = computed(() => store.status === 'saved')
 /**
  * Ce que Repas retient VRAIMENT de cet envoi : un produit choisi, un produit à ne plus proposer, un « j'en ai toujours ». Sans cela (tout était
@@ -207,11 +218,12 @@ async function persist() {
     )
       ? knownProductsOf(await planData())
       : undefined
-    // L'enseigne du plan envoyé dit si les produits choisis portent une offre (DRV-722) ; le plan est lu par le recoupement ci-dessus
-    const retailer = retailerOf(plan.data.value?.retailer)
+    // Le drive du passage (celui du brouillon, DRV-710) dit où les choix s'enregistrent et si les produits choisis portent une offre (DRV-722)
+    const drive = current.retailer
     await save.mutateAsync({
       storeId,
-      batches: buildChoiceBatches(current.result, known, retailer),
+      retailer: drive,
+      batches: buildChoiceBatches(current.result, known, retailerOf(drive)),
     })
     driveBridge.clearDraft()
     store.saved()

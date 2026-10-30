@@ -130,7 +130,7 @@ fixtures: ## Create the demo accounts and data in the back dev database: admin@r
 	@echo "✅ Connecte-toi sur http://localhost:$(FRONT_PORT) avec admin@repas.fr (administrateur) ou user@repas.fr, mot de passe : M0t 2 p@sse"
 
 ## —— Drive Leclerc 🛒 ————————————————————————————————————————————————————
-.PHONY: agent-build agent-verify agent-test agent-e2e e2e-agent agent-fake
+.PHONY: agent-build agent-verify agent-test agent-e2e e2e-agent agent-fake agent-fake-auchan
 
 agent-build: ## Build the drive agent (drive-agent/): dist/agent.js and dist/manifest.json (version, size, SHA-384)
 	@$(RUN) npm run --silent agent:build
@@ -148,6 +148,9 @@ e2e-agent: agent-e2e ## Same as agent-e2e
 
 agent-fake: ## Start the fake Leclerc site by hand on 127.0.0.1:8099 with the Node of your machine (FAKE_LECLERC_PORT, FAKE_LECLERC_HOSTS); Ctrl-C to stop
 	@npm run --silent agent:fake
+
+agent-fake-auchan: ## Start the fake Auchan site by hand on 127.0.0.1:8098 with the Node of your machine (FAKE_AUCHAN_PORT, FAKE_AUCHAN_HOSTS); Ctrl-C to stop (DRV-717)
+	@npm run --silent agent:fake-auchan
 
 ## —— Android 📱 (Repas Drive) ———————————————————————————————————————————————
 .PHONY: android android-test android-release android-release-verify android-release-selftest android-agent-hash android-verification-metadata

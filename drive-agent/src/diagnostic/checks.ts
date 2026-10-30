@@ -337,12 +337,16 @@ function sessionWorks(storage: StorageLike | null): boolean {
   }
 }
 
-/** Le produit a-t-il tous les champs que l'agent attend ? */
+/**
+ * Le produit a-t-il tous les champs que l'agent attend ? Un identifiant (un nombre quand le produit n'a pas d'identifiant d'offre, un UUID s'il en a un), un libellé, un prix, et un stock : sauf pour un produit qui porte un identifiant d'offre, dont la page ne donne pas de quantité en stock (DRV-724).
+ */
 const complete = (candidate: Awaited<ReturnType<RetailerAdapter['searchProducts']>>[number]) =>
-  /^[0-9]{1,12}$/.test(candidate.id) &&
+  (candidate.offerId === undefined
+    ? /^[0-9]{1,12}$/.test(candidate.id)
+    : /^[A-Za-z0-9-]{1,40}$/.test(candidate.id)) &&
   candidate.label.trim() !== '' &&
   candidate.price !== null &&
-  candidate.stock !== null
+  (candidate.stock !== null || candidate.offerId !== undefined)
 
 const D = S.diagnostic.detail
 
@@ -386,7 +390,7 @@ export async function runChecks(
 
   let page: PageFacts | null = null
   try {
-    const store = deps.adapter.readStore()
+    const store = await deps.adapter.readStore()
     const session = sessionOf(deps.adapter)
     page = {
       retailer: {

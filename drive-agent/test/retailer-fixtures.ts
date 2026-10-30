@@ -14,6 +14,7 @@ export const EXEMPLE: RetailerInfo = {
   name: 'Exemple',
   nameDe: 'd’Exemple',
   siteDomain: 'exemple.invalid',
+  photos: { host: /^images\.exemple\.invalid$/ },
   matchesHost: (host) => host.endsWith('.exemple.invalid'),
   hostFamily: (host) => /^(zz\d{1,3})-courses\.exemple\.invalid$/.exec(host)?.[1] ?? null,
   isMobileHost: (host) => host.startsWith('m-'),

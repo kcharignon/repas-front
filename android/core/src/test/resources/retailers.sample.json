@@ -10,6 +10,17 @@
             "storeIdSource": "URL",
             "storeIdPattern": "^[0-9]{1,20}$",
             "offerIdPattern": null
+        },
+        {
+            "id": "auchan",
+            "name": "Auchan",
+            "nameDe": "d’Auchan",
+            "storeAddressPattern": "^https://www\\.auchan\\.fr/$",
+            "storeAddressExample": "https://www.auchan.fr/",
+            "productIdPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "storeIdSource": "EXPLICIT",
+            "storeIdPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "offerIdPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
         }
     ]
 }

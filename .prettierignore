@@ -1,5 +1,6 @@
 src/api/schema.d.ts
 # Fixtures de l'agent du drive : pages et réponses inventées, figées à l'octet près
 drive-agent/fixtures/leclerc
+drive-agent/fixtures/auchan
 # Exemples de contrat du back (DRV-501) : copies à l'octet près des réponses de l'API
 drive-agent/fixtures/contract/*.json

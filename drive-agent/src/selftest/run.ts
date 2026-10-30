@@ -151,12 +151,12 @@ export async function runSelftest(deps: RunDeps, hooks: Hooks): Promise<Selftest
   const probes = checks.probes
   done += 1
 
-  // 2. La lecture du magasin de la page (aucune requête).
+  // 2. La lecture du magasin de la page (l'adresse de la page chez Leclerc, une requête chez une enseigne qui l'y demande).
   hooks.step(done, S.selftest.step.store)
   t = now()
   let store: SelftestData['store']
   try {
-    const read = adapter.readStore()
+    const read = await adapter.readStore()
     store = { status: 'OK', ms: now() - t, labelKnown: read.label !== null }
   } catch (error) {
     const failure = failureOf(error)
