@@ -693,7 +693,7 @@
                 "tags": [
                     "Recipe types"
                 ],
-                "summary": "Liste des types de recette, dans l'ordre d'affichage",
+                "summary": "Liste des types de recette, dans l'ordre d'affichage, avec le nombre de recettes de la personne dans chacun",
                 "operationId": "get_api_list_recipe_types",
                 "responses": {
                     "200": {
@@ -705,7 +705,7 @@
                                         "member": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/components/schemas/RecipeTypeDTO"
+                                                "$ref": "#/components/schemas/RecipeTypeCountDTO"
                                             }
                                         },
                                         "totalItems": {
@@ -5237,12 +5237,13 @@
                 },
                 "type": "object"
             },
-            "RecipeTypeDTO": {
+            "RecipeTypeCountDTO": {
                 "required": [
                     "slug",
                     "name",
                     "image",
-                    "order"
+                    "order",
+                    "recipeCount"
                 ],
                 "properties": {
                     "slug": {
@@ -5263,6 +5264,11 @@
                         "description": "Position d'affichage (croissante)",
                         "type": "integer",
                         "example": 2
+                    },
+                    "recipeCount": {
+                        "description": "Nombre de recettes de la personne dans ce type, pour masquer les cat\u00e9gories vides",
+                        "type": "integer",
+                        "example": 7
                     }
                 },
                 "type": "object"
@@ -5771,6 +5777,36 @@
                         "description": "Version de la recette, aussi renvoy\u00e9e dans l'en-t\u00eate `ETag` : \u00e0 renvoyer dans `If-Match` pour modifier ou supprimer sans \u00e9craser le travail d'un autre",
                         "type": "integer",
                         "example": 3
+                    }
+                },
+                "type": "object"
+            },
+            "RecipeTypeDTO": {
+                "required": [
+                    "slug",
+                    "name",
+                    "image",
+                    "order"
+                ],
+                "properties": {
+                    "slug": {
+                        "description": "Identifiant du type de recette (slug)",
+                        "type": "string",
+                        "example": "plat"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "plat"
+                    },
+                    "image": {
+                        "description": "Chemin ou URL de l'image du type",
+                        "type": "string",
+                        "example": "images/recipe/type/meal.svg"
+                    },
+                    "order": {
+                        "description": "Position d'affichage (croissante)",
+                        "type": "integer",
+                        "example": 2
                     }
                 },
                 "type": "object"
@@ -6721,8 +6757,8 @@
                     "offerId": {
                         "description": "Identifiant de l'offre du produit dans le magasin (DRV-721), chez les enseignes dont un produit a deux identifiants. **La cl\u00e9 est absente** (jamais `null`) quand le produit n'a pas d'offre (toute enseigne sans offre, ou offre pas encore rapport\u00e9e par un agent)",
                         "type": "string",
-                        "default": null,
-                        "example": "0b5f8a2e-3c1d-4e7f-9a6b-123456789abc"
+                        "example": "0b5f8a2e-3c1d-4e7f-9a6b-123456789abc",
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -6919,7 +6955,7 @@
                 ],
                 "properties": {
                     "mode": {
-                        "description": "Ce que Repas fait de l'enseigne : `NONE` aucune enseigne n'est configur\u00e9e (mener aux r\u00e9glages), `AUTO` une enseigne s'impose (l'utiliser sans rien demander : une seule configur\u00e9e, ou le drive habituel), `ASK` proposer le choix entre les candidates (`retailer` est la pr\u00e9s\u00e9lection)",
+                        "description": "Ce que Repas fait de l'enseigne : `NONE` aucune enseigne n'est configur\u00e9e (mener aux r\u00e9glages), `AUTO` une seule enseigne configur\u00e9e (l'utiliser sans rien demander), `ASK` plusieurs configur\u00e9es : proposer le choix entre les candidates, `retailer` est la pr\u00e9s\u00e9lection (le drive habituel, sinon la derni\u00e8re utilis\u00e9e, sinon la premi\u00e8re configur\u00e9e)",
                         "type": "string",
                         "enum": [
                             "NONE",
@@ -6929,7 +6965,7 @@
                         "example": "AUTO"
                     },
                     "retailer": {
-                        "description": "L'enseigne \u00e0 utiliser (`AUTO`) ou \u00e0 pr\u00e9s\u00e9lectionner (`ASK` : la derni\u00e8re utilis\u00e9e si elle est candidate, sinon la premi\u00e8re configur\u00e9e) ; `null` quand `mode` vaut `NONE`",
+                        "description": "L'enseigne \u00e0 utiliser (`AUTO`) ou \u00e0 pr\u00e9s\u00e9lectionner (`ASK` : le drive habituel s'il est candidat, sinon la derni\u00e8re utilis\u00e9e si elle est candidate, sinon la premi\u00e8re configur\u00e9e) ; `null` quand `mode` vaut `NONE`",
                         "type": "string",
                         "enum": [
                             "leclerc",
@@ -6985,14 +7021,14 @@
                         ]
                     },
                     "retailers": {
-                        "description": "Une entr\u00e9e par enseigne **allum\u00e9e** (`DRIVE_RETAILERS`, DRV-702 ; ordre fixe), avec le magasin de l'utilisateur chez chacune et si c'est son drive habituel ; s'ajoute aux champs `retailer` et `store`",
+                        "description": "Une entr\u00e9e par enseigne **allum\u00e9e** (`DRIVE_RETAILERS`, DRV-702 ; ordre fixe), avec le magasin de l'utilisateur chez chacune et si c'est son drive habituel (pr\u00e9s\u00e9lectionn\u00e9 \u00e0 l'envoi) ; s'ajoute aux champs `retailer` et `store`",
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/DriveRetailerDTO"
                         }
                     },
                     "defaultRetailer": {
-                        "description": "Le drive habituel de l'utilisateur (choisi dans \u00ab Moi \u00bb, `PUT /drive/default-retailer`), `null` s'il n'en a pas, ou si son drive habituel est \u00e9teint (`DRIVE_RETAILERS`) ou n'a plus de magasin : la s\u00e9lection l'ignore alors, la pr\u00e9f\u00e9rence reste enregistr\u00e9e",
+                        "description": "Le drive habituel de l'utilisateur (choisi dans \u00ab Moi \u00bb, `PUT /drive/default-retailer`), `null` s'il n'en a pas, ou si son drive habituel est \u00e9teint (`DRIVE_RETAILERS`) ou n'a plus de magasin : la s\u00e9lection l'ignore alors, la pr\u00e9f\u00e9rence reste enregistr\u00e9e ; quand plusieurs drives sont configur\u00e9s, c'est la pr\u00e9s\u00e9lection du choix \u00e0 l'envoi (`selection.mode` vaut `ASK`)",
                         "type": "string",
                         "enum": [
                             "leclerc",
@@ -7064,8 +7100,8 @@
                     "offerId": {
                         "description": "Identifiant de l'offre du produit dans le magasin (DRV-721), chez les enseignes dont un produit a deux identifiants. **La cl\u00e9 est absente** (jamais `null`) quand le produit n'a pas d'offre (toute enseigne sans offre, ou offre pas encore rapport\u00e9e par un agent)",
                         "type": "string",
-                        "default": null,
-                        "example": "0b5f8a2e-3c1d-4e7f-9a6b-123456789abc"
+                        "example": "0b5f8a2e-3c1d-4e7f-9a6b-123456789abc",
+                        "nullable": true
                     }
                 },
                 "type": "object"
