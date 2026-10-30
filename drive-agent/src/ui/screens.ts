@@ -155,7 +155,11 @@ const progress: Renderer<'progress'> = (props: ProgressProps, answer, retailer) 
   })
   bar.appendChild(fill)
   const current = h('strong', { class: 'name' })
-  const log = h('ul', { class: 'done-list', attrs: { 'aria-label': S.progress.log } })
+  // Une zone qui défile se parcourt au clavier : elle est focalisable (règle `scrollable-region-focusable` d'axe).
+  const log = h('ul', {
+    class: 'done-list',
+    attrs: { 'aria-label': S.progress.log, tabindex: '0' },
+  })
   const stop = button(S.progress.stop, () => {
     stop.disabled = true
     stop.textContent = S.progress.stopping
