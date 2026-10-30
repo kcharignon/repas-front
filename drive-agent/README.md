@@ -230,6 +230,10 @@ Seul le Shadow DOM de l'interface est ouvert pour Playwright (`attachShadow` for
 
 `fake-auchan/` rejoue les formes mesurées (`/journey`, `/courses` et sa barre du magasin, `/checkout/cart`, un squelette de `/cart`, `/cart/update` et `/recherche`, un vrai `404`, les cookies `lark-cart`, `lark-consentId`, `datadome`, `sessionStorage.tracking_authenticated`) avec des données inventées, et juge la cadence (2 000 ms au moins entre deux requêtes). Les e2e (`e2e/auchan.spec.ts`) résolvent `www.auchan.fr` vers 127.0.0.1 ; ils prouvent la lecture du magasin, les arrêts sans écriture (sans magasin, visiteur, autre magasin, page introuvable, site changé), le `setup`, la cadence et un diagnostic sans valeur du site. `make agent-fake-auchan` le lance à la main (127.0.0.1:8098). Fixtures : `fixtures/auchan/`, égales à ce qu'il sert (`test/fake-auchan.spec.ts`).
 
+## Ajouter une enseigne (DRV-711)
+
+L'agent connaît chaque enseigne par **une entrée du registre** (`src/retailers/index.ts`, `RETAILERS`) et **un dossier** (`src/<id>/`) ; `flow/`, `ui/`, `diagnostic/` et `selftest/` n'en nomment aucune. Pour une nouvelle enseigne : le dossier de son adaptateur (modèle `src/auchan/` quand le magasin est lu par l'application, `src/leclerc/` quand il se déduit de l'adresse), son entrée, son motif d'hôte dans `protocol/check.ts` et l'énumération de `retailer` des schémas, un faux site `fake-<id>/` aux données inventées, ses fixtures et ses tests. Ce que l'on sait de son site est dans `docs/drive/hypotheses-site-reel-<id>.md` du dépôt back (mesuré, supposé, inconnu) ; une méthode non écrite lève `ADAPTER_NOT_WRITTEN`, jamais une supposition. Skill : `repas-agent-dev`, « Ajouter une enseigne ».
+
 ## Règles de code
 
 L'agent tourne dans la page d'une enseigne, avec les droits de l'utilisateur. Dans `src/`, ESLint (`eslint.config.ts`, bloc `drive-agent/src`) interdit :
