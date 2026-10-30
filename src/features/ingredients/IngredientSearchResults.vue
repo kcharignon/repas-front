@@ -4,10 +4,12 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import { hasFailed } from '@/api/query'
+import DepartmentMarker from '@/design/DepartmentMarker.vue'
 import LoadError from '@/design/LoadError.vue'
 import SeasonEmpty from '@/design/season/SeasonEmpty.vue'
 import UiImage from '@/design/UiImage.vue'
 import { useActiveSummary } from '@/features/shopping-lists/queries'
+import { useDepartmentIcons } from './departmentMarkers'
 import IngredientStepper from './IngredientStepper.vue'
 import { useChangeIngredientQuantity, useSearchIngredients } from './queries'
 
@@ -21,6 +23,9 @@ const summary = useActiveSummary()
 const change = useChangeIngredientQuantity()
 
 const items = computed(() => results.data.value?.member ?? [])
+// Le repère du rayon devant le nom (ING-017) ; le rayon, lui, se lit déjà sous chaque nom
+const { iconOf, anyIcon } = useDepartmentIcons()
+const markers = computed(() => anyIcon(items.value.map((ingredient) => ingredient.departmentSlug)))
 const hasActiveList = computed(() => summary.data.value?.shoppingListId != null)
 const quantityOf = (slug: string) => summary.data.value?.quantityByIngredientSlug[slug] ?? 0
 </script>
@@ -56,6 +61,7 @@ const quantityOf = (slug: string) => summary.data.value?.quantityByIngredientSlu
           >
             <UiImage :src="ingredient.departmentImage" class="size-8" />
           </RouterLink>
+          <DepartmentMarker :icon="iconOf(ingredient.departmentSlug)" :reserve="markers" />
           <span class="min-w-0 flex-1">
             <span class="block font-medium">{{ ingredient.name }}</span>
             <span class="block text-sm text-muted">{{ ingredient.departmentName }}</span>

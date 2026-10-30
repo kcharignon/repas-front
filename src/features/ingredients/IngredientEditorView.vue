@@ -11,6 +11,7 @@ import UiSelect from '@/design/UiSelect.vue'
 import UiSwitch from '@/design/UiSwitch.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
 import { messageForFailure, notifyDeleteFailure } from '@/notifications/failures'
+import { useIngredientOptions } from '@/features/recipes/queries'
 import { useSessionStore } from '@/session/session'
 import ConversionEquation from './ConversionEquation.vue'
 import IngredientConversionsSection from './IngredientConversionsSection.vue'
@@ -25,6 +26,7 @@ import {
   type EquationValue,
 } from './equationMath'
 import { usageText } from './mergeText'
+import { nameUsedMessage, sameNameElsewhere } from './nameUsed'
 import {
   useDeleteIngredient,
   useDepartments,
@@ -204,6 +206,25 @@ const apiCoefficient = computed<number | null>(() => {
   return coefficientOf(eqLeft.value, eqRight.value)
 })
 
+// Le même nom existe déjà dans un AUTRE rayon (ING-017) : permis, on le dit sans bloquer. Dans le même rayon, c'est le back qui refuse.
+const options = useIngredientOptions(() => !editing.value)
+const departmentName = (departmentSlug: string) =>
+  departments.data.value?.member?.find((department) => department.slug === departmentSlug)?.name ??
+  ''
+const nameElsewhere = computed(() => {
+  if (editing.value) return null
+  // Déjà dans le rayon choisi : le refus du back parlera, pas cette information
+  const other = sameNameElsewhere(options.data.value?.member ?? [], form.name, form.departmentSlug)
+
+  return other === null
+    ? null
+    : t('ingredients.nameElsewhere', {
+        name: other.name,
+        department: other.departmentName,
+        chosen: departmentName(form.departmentSlug),
+      })
+})
+
 const errors = computed(() => ({
   name: submitted.value && form.name.trim() === '' ? t('ingredients.errors.name') : undefined,
 }))
@@ -228,7 +249,9 @@ function submit() {
     {
       onSuccess: () => router.push({ name: 'department', params: { slug: form.departmentSlug } }),
       onError: (error) => {
-        failure.value = messageForFailure(error)
+        failure.value =
+          nameUsedMessage(error, form.name.trim(), departmentName(form.departmentSlug)) ??
+          messageForFailure(error)
       },
     },
   )
@@ -340,6 +363,14 @@ const back = computed(() =>
           </option>
         </UiSelect>
       </UiField>
+      <p
+        v-if="nameElsewhere"
+        role="status"
+        data-testid="name-elsewhere"
+        class="rounded-xl bg-soft px-4 py-3 text-[15px] text-ink"
+      >
+        {{ nameElsewhere }}
+      </p>
       <div class="grid gap-4 sm:grid-cols-2">
         <UiField
           :label="t('ingredients.cookingUnit')"

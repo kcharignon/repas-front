@@ -8,10 +8,16 @@ import { hasFailed } from '@/api/query'
 import { ApiError } from '@/api'
 import type { RecipeRow } from '@/api'
 import { notifyDeleteFailure } from '@/notifications/failures'
+import DepartmentMarker from '@/design/DepartmentMarker.vue'
 import UiButton from '@/design/UiButton.vue'
 import UiConfirmDialog from '@/design/UiConfirmDialog.vue'
 import UiLinkButton from '@/design/UiLinkButton.vue'
 import SeasonArt from '@/design/season/SeasonArt.vue'
+import {
+  isAmbiguousName,
+  namesInSeveralDepartments,
+  useDepartmentIcons,
+} from '@/features/ingredients/departmentMarkers'
 import type { EquationValue } from '@/features/ingredients/equationMath'
 import OwnConversionSheet from '@/features/ingredients/OwnConversionSheet.vue'
 import { useUnits } from '@/features/ingredients/queries'
@@ -51,6 +57,18 @@ const toFix = computed<RecipeRow[]>(() =>
   isMine.value ? (recipe.data.value?.rows ?? []).filter((row) => row.convertible === false) : [],
 )
 const blocked = computed(() => toFix.value.length > 0)
+
+// Le repère du rayon devant chaque ingrédient, et son rayon sous le nom quand ce nom existe dans deux rayons de la recette (ING-017)
+const { iconOf, anyIcon } = useDepartmentIcons()
+const ambiguous = computed(() =>
+  namesInSeveralDepartments(recipe.data.value?.rows ?? [], (row) => ({
+    name: row.ingredientName,
+    departmentSlug: row.departmentSlug,
+  })),
+)
+const markers = computed(() =>
+  anyIcon((recipe.data.value?.rows ?? []).map((row) => row.departmentSlug)),
+)
 
 const units = useUnits(() => blocked.value)
 const unitList = computed(() => units.data.value?.member ?? [])
@@ -230,7 +248,15 @@ function confirmDelete() {
           >
             <div class="flex min-h-10 items-center gap-3">
               <!-- L'image de l'ingrédient (row.ingredientImage) n'est pas affichée : trop d'ingrédients n'en ont pas encore. -->
-              <span class="flex-1 font-medium">{{ row.ingredientName }}</span>
+              <DepartmentMarker :icon="iconOf(row.departmentSlug)" :reserve="markers" />
+              <span class="flex min-w-0 flex-1 flex-col">
+                <span class="font-medium">{{ row.ingredientName }}</span>
+                <span
+                  v-if="isAmbiguousName(ambiguous, row.ingredientName) && row.departmentName"
+                  class="text-sm text-muted"
+                  >{{ row.departmentName }}</span
+                >
+              </span>
               <span class="text-sm font-semibold text-muted">{{
                 formatQuantity(row.quantity, row.unitSymbol)
               }}</span>

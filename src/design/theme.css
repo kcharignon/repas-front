@@ -25,6 +25,11 @@
   /* Avertissement : ce qui n'est pas une erreur mais demande un geste (une conversion qui manque). Texte sur fond doux ET sur la surface : AA (9,1 et 10,2). */
   --warning-soft: #fdf1d3;
   --on-warning-soft: #5c3a00;
+  /* Repères de rayon (ING-017) : le flocon (surgelés) et la boîte (conserves). Pastille et trait de l'icône : AA sur la pastille. */
+  --cold-soft: #e3f0fa;
+  --on-cold-soft: #1a62a0;
+  --can-soft: #f7e8d2;
+  --on-can-soft: #8a4f12;
   /* Bandeau de connexion et pastille du logo (texte blanc dessus) : le même vert en clair et en sombre. */
   --brand: #1e6b4c;
   color-scheme: light;
@@ -46,6 +51,10 @@
     --on-danger-soft: #f6b8ab;
     --warning-soft: #33270a;
     --on-warning-soft: #f6d98f;
+    --cold-soft: #16324a;
+    --on-cold-soft: #8fd0ff;
+    --can-soft: #3a2a14;
+    --on-can-soft: #f0b878;
     color-scheme: dark;
   }
 }
@@ -65,6 +74,10 @@
   --on-danger-soft: #f6b8ab;
   --warning-soft: #33270a;
   --on-warning-soft: #f6d98f;
+  --cold-soft: #16324a;
+  --on-cold-soft: #8fd0ff;
+  --can-soft: #3a2a14;
+  --on-can-soft: #f0b878;
   color-scheme: dark;
 }
 
@@ -414,6 +427,10 @@
   --color-on-danger-soft: var(--on-danger-soft);
   --color-warning-soft: var(--warning-soft);
   --color-on-warning-soft: var(--on-warning-soft);
+  --color-cold-soft: var(--cold-soft);
+  --color-on-cold-soft: var(--on-cold-soft);
+  --color-can-soft: var(--can-soft);
+  --color-on-can-soft: var(--on-can-soft);
   --color-brand: var(--brand);
   --font-sans: 'Figtree Variable', system-ui, sans-serif;
   --font-display: 'Bricolage Grotesque Variable', 'Figtree Variable', system-ui, sans-serif;

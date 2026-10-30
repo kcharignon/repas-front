@@ -81,6 +81,10 @@ const LECLERC_MOBILE_HOST = /^m(?:-[a-z0-9-]*)?\./
 const LECLERC_MOBILE_STORE =
   /^\/(magasin-\d{1,12}-\d{1,12}(?:-[A-Za-z0-9%_-]{1,100})?)(?:\.aspx)?(?:\/.*)?$/
 
+/** `/magasin-N-N[-ville][.aspx]` (DRV-742), suivi au besoin d'un chemin : seuls les deux numéros (groupes 1 et 2) sont gardés, ni la ville (3) ni `.aspx` (4). */
+const LECLERC_DESKTOP_STORE =
+  /^\/magasin-(\d{1,12})-(\d{1,12})(-[A-Za-z0-9%_-]{1,100})?(\.aspx)?(?:\/.*)?$/
+
 const leclerc: Retailer = {
   id: 'leclerc',
   name: 'Leclerc',
@@ -95,8 +99,11 @@ const leclerc: Retailer = {
   homeUrl: 'https://www.leclercdrive.fr/',
   readStore: (url) => {
     if (!STORE_HOST.test(url.hostname)) return null
-    const path = /^\/magasin-(\d{1,12})-(\d{1,12})(?:\/.*)?$/.exec(url.pathname)
+    const path = LECLERC_DESKTOP_STORE.exec(url.pathname)
     if (path === null) return null
+    // Une adresse mobile avec ville ou .aspx va par `readMobileStoreAddress` (DRV-741) : son hôte n'est jamais enregistré
+    if ((path[3] !== undefined || path[4] !== undefined) && LECLERC_MOBILE_HOST.test(url.hostname))
+      return null
 
     return {
       id: path[1] as string,

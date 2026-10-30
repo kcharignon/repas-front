@@ -383,7 +383,10 @@ export interface paths {
         };
         /** Détail d'un rayon */
         get: operations["get_api_get_department"];
-        /** Remplace le rayon (administrateur) ; son slug ne change pas */
+        /**
+         * Remplace le rayon (administrateur) ; son slug ne change pas
+         * @description Le champ facultatif `icon` règle l'icône du rayon (`null` l'efface) ; absent du corps, l'icône n'est pas touchée : un ancien client ne l'efface jamais.
+         */
         put: operations["put_api_update_department"];
         post?: never;
         delete?: never;
@@ -1276,6 +1279,13 @@ export interface components {
              * @example images/frozen.svg
              */
             image: string;
+            /**
+             * @description Nom de l'icône du rayon, `null` pour l'effacer ; absent du corps, l'icône d'un rayon existant n'est pas touchée (`PUT`) ou le rayon n'en a pas (`POST`). Une valeur qui n'est pas dans l'énumération : `422`
+             * @default null
+             * @example snowflake
+             * @enum {string|null}
+             */
+            icon: "snowflake" | "can" | null;
         };
         IngredientPayload: {
             /**
@@ -1941,6 +1951,16 @@ export interface components {
              * @example 250
              */
             coefficient: number;
+            /**
+             * @description Identifiant du rayon de l'ingrédient (slug), null pour une conversion commune à tous
+             * @example epicerie
+             */
+            departmentSlug?: string | null;
+            /**
+             * @description Nom du rayon de l'ingrédient, null pour une conversion commune à tous
+             * @example Épicerie
+             */
+            departmentName?: string | null;
         };
         DepartmentDTO: {
             /**
@@ -1955,6 +1975,11 @@ export interface components {
              * @example images/department/fruits.png
              */
             image: string;
+            /**
+             * @description Nom de l'icône du rayon (le front la dessine), `null` quand le rayon n'en a pas : elle distingue deux ingrédients de même nom dans deux rayons. Clé toujours écrite ; les valeurs permises sont celles du corps de `PUT /departments/{slug}` ; une icône que le front ne connaît pas s'ignore
+             * @example snowflake
+             */
+            icon?: string | null;
         };
         IngredientOptionDTO: {
             /**
@@ -1964,6 +1989,16 @@ export interface components {
             slug: string;
             /** @example œuf */
             name: string;
+            /**
+             * @description Identifiant du rayon de l'ingrédient (slug) : deux ingrédients de même nom dans deux rayons se distinguent par lui
+             * @example surgele
+             */
+            departmentSlug: string;
+            /**
+             * @description Nom du rayon de l'ingrédient
+             * @example Surgelé
+             */
+            departmentName: string;
         };
         IngredientConversionDTO: {
             /**
@@ -2332,6 +2367,16 @@ export interface components {
              * @example true
              */
             convertible: boolean;
+            /**
+             * @description Identifiant du rayon de l'ingrédient (slug) : deux ingrédients de même nom dans deux rayons (ADR 0028, amendement du 2026-10-30) se distinguent par lui ; le front en tire l'icône par la liste des rayons
+             * @example surgele
+             */
+            departmentSlug: string;
+            /**
+             * @description Nom du rayon de l'ingrédient
+             * @example Surgelé
+             */
+            departmentName: string;
         };
         RecipeDTO: {
             /**
@@ -2411,6 +2456,16 @@ export interface components {
              * @example gramme
              */
             unitSlug: string;
+            /**
+             * @description Identifiant du rayon de l'ingrédient (slug), le même que celui du rayon qui porte la ligne : la ligne seule (`GET …/rows/{id}`) le dit aussi. Le front en tire l'icône par la liste des rayons
+             * @example surgele
+             */
+            departmentSlug: string;
+            /**
+             * @description Nom du rayon de l'ingrédient
+             * @example Surgelé
+             */
+            departmentName: string;
         };
         ShoppingListDepartmentDTO: {
             /**
@@ -3682,7 +3737,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Corps de la requête invalide */
+            /** @description Corps de la requête invalide, ou icône inconnue */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3764,7 +3819,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description L'utilisateur a déjà un ingrédient de ce nom (même nom une fois normalisé : casse, accents, ponctuation) */
+            /** @description `INGREDIENT_NAME_ALREADY_USED` : l'utilisateur a déjà un ingrédient de ce nom (même nom une fois normalisé : casse, accents, ponctuation) DANS CE RAYON. Le même nom dans un autre rayon est permis (« Petits pois » surgelés et « Petits pois » frais) : le nouvel ingrédient reçoit alors son propre identifiant */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4362,7 +4417,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Corps de la requête invalide */
+            /** @description Corps de la requête invalide, ou icône inconnue */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4431,6 +4486,13 @@ export interface operations {
             };
             /** @description Ingrédient, rayon ou unité inconnu */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `INGREDIENT_NAME_ALREADY_USED` : le nom (une fois normalisé) ou le rayon change et l'utilisateur a déjà un autre ingrédient de ce nom dans ce rayon ; rien n'est écrit. Modifier un ingrédient sans changer ni son nom ni son rayon n'est jamais refusé pour ce motif */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

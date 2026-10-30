@@ -461,6 +461,134 @@ describe('rayons', () => {
   })
 })
 
+describe('rayons : l’icône (ING-017)', () => {
+  const withIcons = {
+    member: [
+      { slug: 'surgele', name: 'Surgelés', image: 'images/surgele.png', icon: 'snowflake' },
+      { slug: 'conserve', name: 'Conserves', image: 'images/conserve.png', icon: 'can' },
+      { slug: 'legumes', name: 'Fruits et légumes', image: 'images/legumes.png', icon: null },
+    ],
+    totalItems: 3,
+  }
+  const show = async (handlers: Parameters<typeof stubApi>[0] = {}) => {
+    const opened = await open(DepartmentsAdminView, {
+      'GET /api/v1/departments': () => json(withIcons),
+      'PUT /api/v1/departments/surgele': () => new Response(null, { status: 204 }),
+      'PUT /api/v1/departments/legumes': () => new Response(null, { status: 204 }),
+      'POST /api/v1/departments': () =>
+        new Response(null, { status: 201, headers: { Location: '/api/v1/departments/frais' } }),
+      ...handlers,
+    })
+    await vi.waitFor(() => expect(opened.wrapper.findAll('li')).toHaveLength(3))
+
+    return opened
+  }
+
+  it('montre le repère de chaque rayon qui en a un, et rien pour les autres', async () => {
+    const { wrapper } = await show()
+
+    const [surgele, conserve, legumes] = wrapper.findAll('li')
+    expect(surgele?.find('[data-department-marker="snowflake"]').exists()).toBe(true)
+    expect(conserve?.find('[data-department-marker="can"]').exists()).toBe(true)
+    expect(legumes?.find('[data-department-marker]').exists()).toBe(false)
+  })
+
+  it('propose Aucune, Flocon et Boîte, et ouvre sur l’icône du rayon', async () => {
+    await show()
+
+    button('Modifier Surgelés')?.click()
+    await vi.waitFor(() => expect(field('Nom').value).toBe('Surgelés'))
+
+    const select = field('Icône') as HTMLSelectElement
+    expect([...select.options].map((option) => [option.value, option.textContent.trim()])).toEqual([
+      ['', 'Aucune'],
+      ['snowflake', 'Flocon'],
+      ['can', 'Boîte'],
+    ])
+    expect(select.value).toBe('snowflake')
+  })
+
+  it('envoie la nouvelle icône avec le reste', async () => {
+    const { fetchMock } = await show()
+
+    button('Modifier Fruits et légumes')?.click()
+    await vi.waitFor(() => expect(field('Nom').value).toBe('Fruits et légumes'))
+    expect((field('Icône') as HTMLSelectElement).value).toBe('')
+    type(field('Icône'), 'can')
+    await submitDialog()
+
+    expect(await body(fetchMock, 'PUT', '/departments/legumes')).toEqual({
+      name: 'Fruits et légumes',
+      image: 'images/legumes.png',
+      icon: 'can',
+    })
+  })
+
+  it('efface l’icône avec null', async () => {
+    const { fetchMock } = await show()
+
+    button('Modifier Surgelés')?.click()
+    await vi.waitFor(() => expect(field('Nom').value).toBe('Surgelés'))
+    type(field('Icône'), '')
+    await submitDialog()
+
+    expect(await body(fetchMock, 'PUT', '/departments/surgele')).toEqual({
+      name: 'Surgelés',
+      image: 'images/surgele.png',
+      icon: null,
+    })
+  })
+
+  it('n’envoie rien de plus quand l’icône n’a pas changé (un autre champ seul)', async () => {
+    const { fetchMock } = await show()
+
+    button('Modifier Surgelés')?.click()
+    await vi.waitFor(() => expect(field('Nom').value).toBe('Surgelés'))
+    type(field('Nom'), 'Surgelés et glaces')
+    await submitDialog()
+
+    expect(await body(fetchMock, 'PUT', '/departments/surgele')).toEqual({
+      name: 'Surgelés et glaces',
+      image: 'images/surgele.png',
+    })
+  })
+
+  it('crée un rayon avec une icône, ou sans (rien d’envoyé)', async () => {
+    const { fetchMock } = await show()
+
+    button('Nouveau rayon')?.click()
+    await vi.waitFor(() => expect(field('Nom')).not.toBeNull())
+    expect((field('Icône') as HTMLSelectElement).value).toBe('')
+    type(field('Nom'), 'Frais')
+    type(field('Image'), 'images/frais.png')
+    type(field('Icône'), 'snowflake')
+    await submitDialog()
+
+    expect(await body(fetchMock, 'POST', '/departments')).toEqual({
+      name: 'Frais',
+      image: 'images/frais.png',
+      icon: 'snowflake',
+    })
+  })
+
+  it('un back plus ancien (rayons sans icône) : « Aucune » et rien d’envoyé tant qu’on n’y touche pas', async () => {
+    const { fetchMock } = await open(DepartmentsAdminView, {
+      'PUT /api/v1/departments/legumes': () => new Response(null, { status: 204 }),
+    })
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Légumes'))
+
+    button('Modifier Légumes')?.click()
+    await vi.waitFor(() => expect(field('Nom').value).toBe('Légumes'))
+    expect((field('Icône') as HTMLSelectElement).value).toBe('')
+    await submitDialog()
+
+    expect(await body(fetchMock, 'PUT', '/departments/legumes')).toEqual({
+      name: 'Légumes',
+      image: 'images/legumes.png',
+    })
+  })
+})
+
 describe('types de recette', () => {
   it("crée un type avec son ordre d'affichage et modifie un type", async () => {
     const { wrapper, fetchMock } = await open(RecipeTypesAdminView, {

@@ -115,12 +115,47 @@ describe('adresse du site mobile d’un magasin (DRV-741)', () => {
 
     expect(parseMobileStoreAddress(`${opened}.aspx`, auchan)).toBeNull()
   })
+})
 
-  it('une adresse du site ordinateur avec une ville est refusée comme avant (aucune attente modifiée)', () => {
+describe('adresse ordinateur avec ville ou .aspx (DRV-742)', () => {
+  it('ramène l’adresse à l’adresse de base, sans ville ni .aspx', () => {
+    for (const pasted of [
+      'https://fd1-courses.leclercdrive.fr/magasin-123456-123456-ville-test',
+      'https://fd1-courses.leclercdrive.fr/magasin-123456-123456.aspx',
+      'https://fd1-courses.leclercdrive.fr/magasin-123456-123456-ville-test.aspx',
+      'https://fd1-courses.leclercdrive.fr/magasin-123456-123456-ville-test.aspx#haut',
+      'https://fd1-courses.leclercdrive.fr/magasin-123456-123456-ville-test/accueil?a=1',
+      'https://fd1-courses.leclercdrive.fr/magasin-123456-123456-ville%20test/',
+    ])
+      expect([pasted, parseStoreAddress(pasted)]).toEqual([
+        pasted,
+        {
+          id: '123456',
+          baseUrl: 'https://fd1-courses.leclercdrive.fr/magasin-123456-123456',
+        },
+      ])
+  })
+
+  it('garde l’adresse nue telle quelle et refuse les mauvaises', () => {
+    expect(parseStoreAddress('https://fd1-courses.leclercdrive.fr/magasin-123456-123456')).toEqual({
+      id: '123456',
+      baseUrl: 'https://fd1-courses.leclercdrive.fr/magasin-123456-123456',
+    })
+    for (const wrong of [
+      'http://fd1-courses.leclercdrive.fr/magasin-123456-123456-ville-test.aspx',
+      'https://fd1-courses.example.com/magasin-123456-123456-ville-test.aspx',
+      'https://fd1-courses.leclercdrive.fr:8443/magasin-123456-123456-ville-test',
+      'https://nom:mot@fd1-courses.leclercdrive.fr/magasin-123456-123456-ville-test',
+      'https://fd1-courses.leclercdrive.fr/magasin-123456-ville-test',
+      'https://fd1-courses.leclercdrive.fr/magasin-123456-123456-ville.test',
+      'https://fd1-courses.leclercdrive.fr/magasin-123456-123456.html',
+    ])
+      expect([wrong, parseStoreAddress(wrong)]).toEqual([wrong, null])
+  })
+
+  it('n’enregistre jamais un hôte mobile à adresse décorée', () => {
     expect(
-      parseStoreAddress(
-        'https://fd9-courses.leclercdrive.fr/magasin-123456-123456-ville-test.aspx',
-      ),
+      parseStoreAddress('https://m-courses.leclercdrive.fr/magasin-123456-123456-ville-test.aspx'),
     ).toBeNull()
   })
 })

@@ -10,13 +10,19 @@ import {
   ComboboxTrigger,
   ComboboxViewport,
 } from 'reka-ui'
+import { computed } from 'vue'
 import { Check, ChevronDown } from 'lucide-vue-next'
 
 import { cn } from './cn'
+import DepartmentMarker from './DepartmentMarker.vue'
 
 export interface ComboboxOption {
   value: string
   label: string
+  /** Le repère du rayon (ING-017), devant le nom ; rien si absent ou inconnu. */
+  icon?: string | null
+  /** Une ligne grise sous le nom (le rayon d'un ingrédient dont le nom existe dans un autre rayon) ; elle fait partie de ce que lit un lecteur d'écran. */
+  hint?: string
 }
 
 const props = defineProps<{
@@ -25,9 +31,16 @@ const props = defineProps<{
   placeholder?: string
   empty: string
   invalid?: boolean
+  /** Rien à lister : l'appelant montre lui-même l'issue (ajouter l'ingrédient), la liste ne s'ouvre pas. */
+  hideEmpty?: boolean
 }>()
 
 const model = defineModel<string>({ default: '' })
+/** Le texte du champ (ce qui est tapé, ou le nom de l'option choisie) : l'appelant peut proposer d'ajouter ce qu'aucune option ne porte. */
+const searchTerm = defineModel<string>('searchTerm', { default: '' })
+
+// Au moins une option a son repère : celles qui n'en ont pas gardent la place, les noms restent alignés
+const anyIcon = computed(() => props.options.some((option) => option.icon != null))
 
 const labelOf = (value: string) =>
   props.options.find((option) => option.value === value)?.label ?? ''
@@ -44,6 +57,7 @@ const labelOf = (value: string) =>
       "
     >
       <ComboboxInput
+        v-model="searchTerm"
         :aria-label="label"
         :placeholder="placeholder"
         :display-value="(value) => labelOf(String(value ?? ''))"
@@ -56,7 +70,7 @@ const labelOf = (value: string) =>
         <ChevronDown class="size-5" aria-hidden="true" />
       </ComboboxTrigger>
     </ComboboxAnchor>
-    <ComboboxPortal>
+    <ComboboxPortal v-if="!hideEmpty">
       <ComboboxContent
         position="popper"
         :side-offset="4"
@@ -68,13 +82,26 @@ const labelOf = (value: string) =>
             v-for="option in options"
             :key="option.value"
             :value="option.value"
-            class="flex min-h-11 cursor-pointer items-center justify-between gap-2 rounded-lg px-3 text-base text-ink data-[highlighted]:bg-soft"
+            :text-value="option.label"
+            :class="
+              cn(
+                'flex cursor-pointer items-center justify-between gap-2 rounded-lg px-3 text-base text-ink data-[highlighted]:bg-soft',
+                option.hint ? 'min-h-14' : 'min-h-11',
+              )
+            "
           >
-            <span>{{ option.label }}</span>
+            <span class="flex min-w-0 items-center gap-3">
+              <DepartmentMarker :icon="option.icon" size="md" :reserve="anyIcon" />
+              <span class="flex min-w-0 flex-col">
+                <span>{{ option.label }}</span>
+                <span v-if="option.hint" class="text-sm text-muted">{{ option.hint }}</span>
+              </span>
+            </span>
             <Check v-if="option.value === model" class="size-4 text-primary" aria-hidden="true" />
           </ComboboxItem>
         </ComboboxViewport>
       </ComboboxContent>
     </ComboboxPortal>
+    <slot name="below" />
   </ComboboxRoot>
 </template>
