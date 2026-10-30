@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { useRetailerI18n } from './useRetailerI18n'
 import { computed, onMounted, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
 import type { ResultLine } from '@drive-protocol'
 
@@ -16,14 +16,14 @@ import { isRateLimited, messageForFailure } from '@/notifications/failures'
 import { useOnline } from '@/offline/useOnline'
 import { driveBridge } from './bridge'
 import { buildChoiceBatches, countChoices, knownProductsOf } from './choices'
-import { finalizeLink, DRIVE_HOME_URL, RETAILER_APP_NAME } from './leclerc'
+import { finalizeLink } from './retailers'
 import { useDrivePlan, useDriveSettings, useSaveChoices } from './queries'
 import { expectedFromPlan } from './restrictToPlan'
 import { useDriveReturnStore } from './returnStore'
 import DriveFold from './DriveFold.vue'
 import { countOutcomes, formatPrice, remaining, visibleCounts } from './summary'
 
-const { t } = useI18n()
+const { t, retailer } = useRetailerI18n()
 const router = useRouter()
 const online = useOnline()
 const store = useDriveReturnStore()
@@ -68,7 +68,9 @@ const labels = computed(
 
 const counts = computed(() => (result.value ? countOutcomes(result.value) : null))
 const shownCounts = computed(() => (counts.value ? visibleCounts(counts.value) : []))
-const finalizeUrl = computed(() => finalizeLink(settings.data.value?.store?.baseUrl, inApp))
+const finalizeUrl = computed(() =>
+  finalizeLink(settings.data.value?.store?.baseUrl, inApp, retailer.value),
+)
 const saved = computed(() => store.status === 'saved')
 /**
  * Ce que Repas retient VRAIMENT de cet envoi : un produit choisi, un produit à ne plus proposer, un « j'en ai toujours ». Sans cela (tout était
@@ -100,8 +102,7 @@ const sentences = computed(() => {
   const current = result.value
   const known = counts.value
   if (current === null || known === null) return []
-  if (current.outcome === 'completed')
-    return [t('driveReturn.basketReady', { retailer: RETAILER_APP_NAME })]
+  if (current.outcome === 'completed') return [t('driveReturn.basketReady')]
 
   const code = stopCode.value
   const left = remaining(known)
@@ -415,7 +416,7 @@ function confirmReopen() {
       </div>
 
       <p v-if="showBasketReady" class="max-w-prose text-lg font-semibold">
-        {{ t('driveReturn.basketReady', { retailer: RETAILER_APP_NAME }) }}
+        {{ t('driveReturn.basketReady') }}
       </p>
 
       <p v-if="store.status === 'saving' && hasChoices" role="status" class="text-muted">
@@ -443,7 +444,7 @@ function confirmReopen() {
       <section class="flex flex-col items-start gap-3">
         <a
           v-if="primary === 'manual' && finalizeUrl"
-          :href="DRIVE_HOME_URL"
+          :href="retailer.homeUrl"
           :target="inApp ? undefined : '_blank'"
           :rel="inApp ? undefined : 'noopener noreferrer'"
           :class="primaryClass"

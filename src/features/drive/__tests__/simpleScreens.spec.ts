@@ -5,7 +5,6 @@ import { flushPromises, mount } from '@vue/test-utils'
 import type { ResultLine } from '@drive-protocol'
 
 import { appContext, calls, json, me, stubApi } from '@/__tests__/helpers'
-import { i18n } from '@/i18n'
 import fr from '@/i18n/fr'
 import { WARNING_WORDS } from '@/i18n/__tests__/warningWords'
 import { useSessionStore } from '@/session/session'
@@ -16,6 +15,7 @@ import DriveReturnView from '../DriveReturnView.vue'
 import DriveSendView from '../DriveSendView.vue'
 import { useDriveReturnStore } from '../returnStore'
 import { sendSummary } from '../sendSummary'
+import { t } from './retailerT'
 import { plan, storeBaseUrl } from './fixtures'
 import { result, RUN } from './results'
 
@@ -93,7 +93,7 @@ describe('les textes de l’envoi et du récapitulatif : phrases courtes (20 mot
 })
 
 describe('la phrase de synthèse de l’envoi', () => {
-  const t = i18n.global.t as unknown as Parameters<typeof sendSummary>[0]
+  // t : le registre donne le nom de l'enseigne (retailerT.ts)
 
   it('dit les comptes en une phrase, sans jamais écrire un zéro', () => {
     expect(sendSummary(t, { known: 2, new: 4, haveAtHome: 0, skipped: 0 })).toBe(

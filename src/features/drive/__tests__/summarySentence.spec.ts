@@ -4,14 +4,13 @@
 // compare sur toutes les combinaisons de comptes, pluriels et accords compris.
 import { describe, expect, it } from 'vitest'
 
-import { i18n } from '@/i18n'
 import { summarySentence } from '../../../../drive-agent/src/ui/strings'
 import { sendSummary } from '../sendSummary'
 
+import { t } from './retailerT'
+
 /** Les noms de l'enseigne du registre de l'agent (Leclerc) : l'agent les prend en paramètre. */
 const LECLERC = { name: 'Leclerc', nameDe: 'de Leclerc' }
-
-const t = i18n.global.t as unknown as Parameters<typeof sendSummary>[0]
 
 const range = [0, 1, 2, 3, 7, 40]
 const combinations = range.flatMap((known) =>

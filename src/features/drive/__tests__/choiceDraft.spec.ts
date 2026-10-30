@@ -75,7 +75,7 @@ describe('brouillon d’une préférence de produits', () => {
     const start = draft.draftOf(choice(['a', 'b'], ['c']))
     const home = draft.toggleHaveAtHome(start, true)
 
-    expect(draft.toPayload(home, '123456')).toEqual({
+    expect(draft.toPayload(home, 'leclerc', '123456')).toEqual({
       retailer: 'leclerc',
       storeId: '123456',
       haveAtHome: true,
@@ -83,7 +83,7 @@ describe('brouillon d’une préférence de produits', () => {
       rejected: [],
     })
     expect(ids(draft.toggleHaveAtHome(home, false).accepted)).toEqual(['p-a', 'p-b'])
-    expect(draft.toPayload(start, '123456')).toEqual({
+    expect(draft.toPayload(start, 'leclerc', '123456')).toEqual({
       retailer: 'leclerc',
       storeId: '123456',
       haveAtHome: false,

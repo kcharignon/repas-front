@@ -683,7 +683,7 @@ export default {
     passwordRateLimited:
       'Trop de mots de passe actuels incorrects. Rien n’a été changé. Patiente {wait}, puis réessaie.',
     driveStoreInvalid:
-      'Cette adresse n’est pas celle d’un magasin Leclerc Drive : vérifie-la, elle ressemble à https://exemple.leclercdrive.fr/magasin-123456-123456.',
+      'Cette adresse n’est pas celle d’un magasin {retailer} Drive : vérifie-la, elle ressemble à {storeExample}.',
   },
   // Les plafonds et les bornes de l'API (422) : chaque message dit la limite vraie et quoi faire. Groupe à part du glossaire du drive : « ingrédient » est le bon mot ici.
   limits: {
@@ -719,16 +719,16 @@ export default {
       total: '{count} article | {count} articles',
       known: '{count} est déjà choisi | {count} sont déjà choisis',
       allKnown: 'il est déjà choisi | tous sont déjà choisis',
-      new: '{count} est à choisir sur Leclerc | {count} sont à choisir sur Leclerc',
-      allNew: 'il est à choisir sur Leclerc | tous sont à choisir sur Leclerc',
+      new: '{count} est à choisir sur {retailer} | {count} sont à choisir sur {retailer}',
+      allNew: 'il est à choisir sur {retailer} | tous sont à choisir sur {retailer}',
       other: '{count} ne sera pas mis au panier | {count} ne seront pas mis au panier',
       allOther: 'il ne sera pas mis au panier | aucun ne sera mis au panier',
     },
     articles: 'Tes articles',
     showArticles: 'Voir les articles',
     need: 'À acheter : {quantity}',
-    statusNew: 'Nouveau : tu choisiras le produit sur Leclerc.',
-    statusReplace: 'Tu choisiras un autre produit sur Leclerc, à la place de : {label}.',
+    statusNew: 'Nouveau : tu choisiras le produit sur {retailer}.',
+    statusReplace: 'Tu choisiras un autre produit sur {retailer}, à la place de : {label}.',
     statusHaveAtHome: 'J’en ai toujours : rien à mettre au panier.',
     statusSkip: 'Pas cette fois : rien ne sera mis au panier.',
     // Lu par les lecteurs d'écran avant la liste : un seul produit, c'est le produit habituel ; plusieurs, ce sont les produits retenus
@@ -768,10 +768,10 @@ export default {
     },
     notInApp: {
       title: 'L’envoi automatique n’est pas disponible ici',
-      help: 'L’envoi automatique fonctionne dans l’application Repas pour Android. Tu peux l’installer, ou chercher chaque produit sur Leclerc avec les liens ci-dessous.',
+      help: 'L’envoi automatique fonctionne dans l’application Repas pour Android. Tu peux l’installer, ou chercher chaque produit sur {retailer} avec les liens ci-dessous.',
       install: 'Installer l’application',
-      search: 'Chercher sur Leclerc',
-      searchFor: 'Chercher sur Leclerc : {name} (s’ouvre dans un nouvel onglet)',
+      search: 'Chercher sur {retailer}',
+      searchFor: 'Chercher sur {retailer} : {name} (s’ouvre dans un nouvel onglet)',
     },
     // Une application trop ancienne pour le drive (DRV-640) : une phrase et un bouton, les liens de recherche restent sous l'écran
     appTooOld: {
@@ -830,7 +830,7 @@ export default {
     // Le titre dit le résultat ; le reste, au plus trois phrases : ce qui s'est passé, ce qui est sauf, ce qu'il reste à faire
     safe: 'Ce qui est déjà au panier y reste.',
     // Le panier est fait : la suite (créneau, paiement) se passe dans l'appli officielle, Repas n'explique rien de plus (DRV-645)
-    basketReady: 'Ton panier est prêt. Retrouve-le dans l’appli {retailer}.',
+    basketReady: 'Ton panier est prêt. Retrouve-le dans l’appli {appName}.',
     outcome: {
       completed: {
         title: 'Le panier est rempli',
@@ -857,20 +857,20 @@ export default {
     },
     errorCode: {
       NOT_LOGGED_IN: {
-        happened: 'Tu n’es pas connecté à Leclerc.',
-        action: 'Connecte-toi à Leclerc, puis reprends l’envoi.',
+        happened: 'Tu n’es pas connecté à {retailer}.',
+        action: 'Connecte-toi à {retailer}, puis reprends l’envoi.',
       },
       STORE_MISMATCH: {
-        happened: 'Le magasin ouvert sur Leclerc n’est pas le tien.',
-        action: 'Ouvre ton magasin sur Leclerc, puis reprends l’envoi.',
+        happened: 'Le magasin ouvert sur {retailer} n’est pas le tien.',
+        action: 'Ouvre ton magasin sur {retailer}, puis reprends l’envoi.',
       },
       BLOCKED: {
-        happened: 'Leclerc a ralenti les demandes.',
+        happened: '{retailer} a ralenti les demandes.',
         action: 'Attends quelques minutes, puis reprends l’envoi.',
       },
       CONTRACT_CHANGED: {
-        happened: 'Leclerc a changé son site, l’envoi automatique est arrêté.',
-        action: 'Cherche tes produits à la main sur Leclerc.',
+        happened: '{retailer} a changé son site, l’envoi automatique est arrêté.',
+        action: 'Cherche tes produits à la main sur {retailer}.',
       },
       NETWORK: {
         happened: 'La connexion a été coupée pendant l’envoi.',
@@ -885,7 +885,7 @@ export default {
         action: 'Mets l’application à jour, puis reprends l’envoi.',
       },
       UNSUPPORTED_PAGE: {
-        happened: 'Repas ne peut pas travailler sur cette page de Leclerc.',
+        happened: 'Repas ne peut pas travailler sur cette page {retailerDe}.',
         action: 'Ouvre la page de ton magasin, puis reprends l’envoi.',
       },
     },
@@ -905,7 +905,7 @@ export default {
     counts: {
       label: 'Récapitulatif de l’envoi',
       added: 'Ajoutés au panier',
-      chosen: 'Choisis sur Leclerc',
+      chosen: 'Choisis sur {retailer}',
       haveAtHome: 'J’en ai toujours',
       skipped: 'Pas cette fois',
       unavailable: 'Indisponibles',
@@ -914,9 +914,9 @@ export default {
     unknownProduct: 'Produit n° {id}',
     line: {
       fallback: 'Produit de remplacement utilisé : le produit habituel n’était pas disponible.',
-      chosenPrimary: 'Choisi sur Leclerc, produit habituel : Repas s’en souvient.',
-      chosenFallback: 'Choisi sur Leclerc, produit de remplacement : Repas s’en souvient.',
-      chosenOnce: 'Choisi sur Leclerc pour cette fois seulement : Repas ne s’en souvient pas.',
+      chosenPrimary: 'Choisi sur {retailer}, produit habituel : Repas s’en souvient.',
+      chosenFallback: 'Choisi sur {retailer}, produit de remplacement : Repas s’en souvient.',
+      chosenOnce: 'Choisi sur {retailer} pour cette fois seulement : Repas ne s’en souvient pas.',
       haveAtHome: 'J’en ai toujours : Repas s’en souvient.',
       skipped: 'Pas cette fois.',
       unavailable: 'Aucun produit disponible : rien n’a été mis au panier.',
@@ -925,7 +925,7 @@ export default {
     },
     actions: {
       newTab: 'S’ouvre dans un nouvel onglet.',
-      manual: 'Chercher à la main sur Leclerc',
+      manual: 'Chercher à la main sur {retailer}',
       resume: 'Reprendre l’envoi',
       update: 'Mettre à jour l’application',
       complete: 'Terminer la liste',
@@ -941,11 +941,11 @@ export default {
     title: 'Réglages du drive',
     back: 'Moi',
     entry: 'Réglages du drive',
-    entryHelp: 'Ton magasin Leclerc Drive et l’application Repas.',
+    entryHelp: 'Ton magasin {retailer} Drive et l’application Repas.',
     disabled: 'L’envoi au drive n’est pas encore activé : il n’y a rien à régler pour le moment.',
     // Envoyé ici faute de magasin (DRV-622, DRV-623) : un titre, une phrase, un bouton qui fait le travail
     chooseTitle: 'Choisis ton magasin',
-    chooseHelp: 'Pour envoyer ta liste, Repas doit connaître ton magasin Leclerc.',
+    chooseHelp: 'Pour envoyer ta liste, Repas doit connaître ton magasin {retailer}.',
     choose: 'Choisir mon magasin',
     store: 'Ton magasin',
     storeNamed: 'Magasin …{tail}',
@@ -976,8 +976,7 @@ export default {
         'La lecture a échoué. Rien n’est enregistré. Réessaie, ou saisis l’adresse à la main.',
     },
     address: 'Adresse de ton magasin',
-    addressHint:
-      'Celle du site du drive une fois ton magasin choisi, par exemple https://exemple.leclercdrive.fr/magasin-123456-123456.',
+    addressHint: 'Celle du site du drive une fois ton magasin choisi, par exemple {storeExample}.',
     name: 'Nom de ton magasin (facultatif)',
     nameHint: 'Pour le reconnaître : le nom de ta ville, par exemple.',
     changeWarning:
@@ -986,7 +985,7 @@ export default {
     saved: 'Magasin enregistré.',
     errors: {
       address:
-        'Cette adresse n’est pas celle d’un magasin Leclerc Drive : elle ressemble à https://exemple.leclercdrive.fr/magasin-123456-123456.',
+        'Cette adresse n’est pas celle d’un magasin {retailer} Drive : elle ressemble à {storeExample}.',
     },
     offline:
       'Hors connexion : l’enregistrement est impossible tant que le réseau n’est pas revenu.',
@@ -1038,7 +1037,7 @@ export default {
   // Les entrées de l’application dans « Moi » (DRV-320)
   driveAccount: {
     appMenu: 'Menu de l’application',
-    appMenuHelp: 'Version, mode d’emploi et déconnexion de Leclerc.',
+    appMenuHelp: 'Version, mode d’emploi et déconnexion {retailerDe}.',
     appMenuFailed: 'Le menu de l’application n’a pas pu s’ouvrir. Réessaie.',
   },
   season: {
@@ -1197,12 +1196,12 @@ export default {
     },
     drive: {
       title: 'Si tu utilises l’envoi au drive',
-      store: 'Ton magasin Leclerc : son numéro, son adresse et le nom que tu lui donnes.',
+      store: 'Ton magasin {retailer} : son numéro, son adresse et le nom que tu lui donnes.',
       products: 'Les produits que tu choisis, avec leur prix vu et la date.',
       search: 'Les mots que tu as tapés pour trouver un produit.',
       lists: 'Pour chaque liste : si elle est envoyée, et la date d’envoi.',
-      never: 'Repas ne voit ni ton identifiant Leclerc, ni ton mot de passe, ni ton panier.',
-      own: 'L’envoi se fait dans l’application, avec ta propre connexion à Leclerc.',
+      never: 'Repas ne voit ni ton identifiant {retailer}, ni ton mot de passe, ni ton panier.',
+      own: 'L’envoi se fait dans l’application, avec ta propre connexion à {retailer}.',
       terms: 'Le détail est dans les conditions d’utilisation du drive, depuis « Moi ».',
     },
     voice: {
@@ -1243,7 +1242,7 @@ export default {
         'Quand ton compte est supprimé, tout part avec lui : recettes, listes, produits, liaisons Alexa.',
       copies: 'Une recette que quelqu’un a copiée reste chez lui, sans lien avec toi.',
       shared:
-        'Les descriptions de produits Leclerc, communes à tous, restent sans aucun lien avec toi.',
+        'Les descriptions de produits {retailer}, communes à tous, restent sans aucun lien avec toi.',
       backups:
         'Une sauvegarde est faite chaque nuit, et les 14 dernières sont gardées. Une donnée effacée peut y rester environ deux semaines.',
     },
@@ -1272,34 +1271,34 @@ export default {
     back: 'Moi',
     privacyLink: 'Confidentialité de tout Repas',
     intro:
-      'Envoyer ta liste au drive, c’est Repas qui prépare la liste et l’application qui la met dans ton panier Leclerc, avec ta connexion à toi. Voici comment cela se passe, ce que Repas garde, ce qu’il ne voit pas, les risques, et comment tout effacer.',
+      'Envoyer ta liste au drive, c’est Repas qui prépare la liste et l’application qui la met dans ton panier {retailer}, avec ta connexion à toi. Voici comment cela se passe, ce que Repas garde, ce qu’il ne voit pas, les risques, et comment tout effacer.',
     how: {
       title: 'Comment ça se passe',
       start:
         'Quand tu touches « Envoyer au drive », Repas prépare ta liste et la donne à l’application, sur ton téléphone. Rien n’est mis au panier tant que tu n’as pas touché « Commencer ».',
       session:
-        'L’application ouvre Leclerc dans sa propre fenêtre. C’est toi qui te connectes à Leclerc, comme sur le site. Ensuite elle cherche les produits et les met dans ton panier depuis ta session Leclerc, comme si tu le faisais toi-même : un produit à la fois, avec des pauses, pour ne pas gêner Leclerc.',
+        'L’application ouvre {retailer} dans sa propre fenêtre. C’est toi qui te connectes à {retailer}, comme sur le site. Ensuite elle cherche les produits et les met dans ton panier depuis ta session {retailer}, comme si tu le faisais toi-même : un produit à la fois, avec des pauses, pour ne pas gêner {retailer}.',
       local:
-        'Tout cela se passe entre ton téléphone et Leclerc. Rien de cela ne passe par les serveurs de Repas. Comme dans un navigateur, les pages de Leclerc font appel à leurs propres services (protection contre les robots, mesure d’audience) : Repas n’y a pas accès et ne les choisit pas. À la fin, l’application ne rend à Repas que ce qu’il doit retenir : les produits que tu as choisis, et ton magasin quand tu le lui fais lire. Rien d’autre de ton compte Leclerc ne quitte la page.',
+        'Tout cela se passe entre ton téléphone et {retailer}. Rien de cela ne passe par les serveurs de Repas. Comme dans un navigateur, les pages {retailerDe} font appel à leurs propres services (protection contre les robots, mesure d’audience) : Repas n’y a pas accès et ne les choisit pas. À la fin, l’application ne rend à Repas que ce qu’il doit retenir : les produits que tu as choisis, et ton magasin quand tu le lui fais lire. Rien d’autre de ton compte {retailer} ne quitte la page.',
       resume:
         'Si l’envoi s’arrête, tu le reprends là où il en était : l’avancement est gardé et les articles déjà faits ne sont pas refaits.',
       order:
-        'Tu finalises ta commande toi-même sur Leclerc. Repas ne valide jamais de commande, ne choisit pas de créneau, ne paie rien et ne vide jamais ton panier. Il ne réduit jamais une quantité déjà au panier : un article déjà présent en plus grande quantité reste tel quel.',
+        'Tu finalises ta commande toi-même sur {retailer}. Repas ne valide jamais de commande, ne choisit pas de créneau, ne paie rien et ne vide jamais ton panier. Il ne réduit jamais une quantité déjà au panier : un article déjà présent en plus grande quantité reste tel quel.',
     },
     saves: {
       title: 'Ce que Repas enregistre',
       store:
-        'Ton magasin Leclerc : son numéro, son adresse sur le site de Leclerc, et le nom que tu lui as donné si tu en as mis un.',
+        'Ton magasin {retailer} : son numéro, son adresse sur le site {retailerDe}, et le nom que tu lui as donné si tu en as mis un.',
       choices:
         'Les produits dont Repas se souvient, article par article : ton produit habituel, tes produits de remplacement (5 au plus), les produits à ne plus proposer (20 au plus) et les articles « J’en ai toujours ». Ces produits sont propres à ton magasin.',
       products:
-        'Pour chaque produit : son numéro chez Leclerc, son nom, son contenu (par exemple 1 kg), et son prix avec la date où il a été vu.',
+        'Pour chaque produit : son numéro chez {retailer}, son nom, son contenu (par exemple 1 kg), et son prix avec la date où il a été vu.',
       searches:
-        'La recherche qui t’a fait trouver un produit : le texte que tu as tapé pour le trouver sur le site (par exemple « céréales coussins »), pour chercher un remplaçant avec ce texte quand le produit n’est plus disponible. Elle est gardée avec l’article, pour ton magasin Leclerc seulement. Elle n’est jamais envoyée ailleurs et personne d’autre ne la voit. Elle est gardée aussi quand tu prends un produit « Pas mon habituel » : le produit n’est pas retenu, mais le texte qui l’a fait trouver l’est.',
+        'La recherche qui t’a fait trouver un produit : le texte que tu as tapé pour le trouver sur le site (par exemple « céréales coussins »), pour chercher un remplaçant avec ce texte quand le produit n’est plus disponible. Elle est gardée avec l’article, pour ton magasin {retailer} seulement. Elle n’est jamais envoyée ailleurs et personne d’autre ne la voit. Elle est gardée aussi quand tu prends un produit « Pas mon habituel » : le produit n’est pas retenu, mais le texte qui l’a fait trouver l’est.',
       packSizes:
-        'Combien il y en a dans un produit, quand ta liste compte autrement qu’en poids ou en volume : si ta liste dit « 15 tranches », Repas ne sait pas combien de tranches tient dans un produit. Il te le demande une fois, et retient ta réponse (par exemple « 20 tranches ») pour calculer le nombre de produits la fois suivante, sans te le redemander. Elle est gardée avec ce produit-là, dans ton article, pour ton magasin Leclerc seulement. Elle n’est jamais envoyée ailleurs et personne d’autre ne la voit.',
+        'Combien il y en a dans un produit, quand ta liste compte autrement qu’en poids ou en volume : si ta liste dit « 15 tranches », Repas ne sait pas combien de tranches tient dans un produit. Il te le demande une fois, et retient ta réponse (par exemple « 20 tranches ») pour calculer le nombre de produits la fois suivante, sans te le redemander. Elle est gardée avec ce produit-là, dans ton article, pour ton magasin {retailer} seulement. Elle n’est jamais envoyée ailleurs et personne d’autre ne la voit.',
       estimate:
-        'Les prix servent à estimer le coût d’une liste. L’estimation est indicative : elle est faite d’après les derniers prix vus, avec leur date, et le vrai prix est toujours celui de Leclerc. Elle ne compte que les articles dont le prix est connu, elle est peu fiable quand moins de la moitié en ont un, et Repas ne devine jamais un prix.',
+        'Les prix servent à estimer le coût d’une liste. L’estimation est indicative : elle est faite d’après les derniers prix vus, avec leur date, et le vrai prix est toujours celui {retailerDe}. Elle ne compte que les articles dont le prix est connu, elle est peu fiable quand moins de la moitié en ont un, et Repas ne devine jamais un prix.',
       lists:
         'Pour chaque liste : le fait qu’elle a été « envoyée au drive » et la date de l’envoi.',
       appVersion:
@@ -1308,10 +1307,10 @@ export default {
     never: {
       title: 'Ce que Repas ne voit et n’enregistre jamais',
       credentials:
-        'Ton identifiant et ton mot de passe Leclerc, et le code que Leclerc t’envoie par e-mail.',
-      cookies: 'Tes cookies et tes jetons de connexion à Leclerc.',
+        'Ton identifiant et ton mot de passe {retailer}, et le code que {retailer} t’envoie par e-mail.',
+      cookies: 'Tes cookies et tes jetons de connexion à {retailer}.',
       address: 'Ton adresse, ton créneau de retrait, ton moyen de paiement.',
-      basket: 'Le contenu réel de ton panier Leclerc, tes commandes, tes achats passés.',
+      basket: 'Le contenu réel de ton panier {retailer}, tes commandes, tes achats passés.',
       photos: 'Les photos des produits.',
     },
     where: {
@@ -1323,7 +1322,7 @@ export default {
       backups:
         'Le serveur fait une copie de sauvegarde chaque nuit et garde les 14 dernières : une donnée effacée peut rester dans ces copies environ deux semaines au plus, puis elles sont remplacées.',
       phone:
-        'Sur ton téléphone, l’application garde ta connexion à Leclerc, comme le ferait un navigateur. Elle ne la partage ni avec Repas ni avec personne d’autre que Leclerc et ses propres services. Tu peux l’effacer à tout moment : menu de l’application, « Se déconnecter de Leclerc ».',
+        'Sur ton téléphone, l’application garde ta connexion à {retailer}, comme le ferait un navigateur. Elle ne la partage ni avec Repas ni avec personne d’autre que {retailer} et ses propres services. Tu peux l’effacer à tout moment : menu de l’application, « Se déconnecter {retailerDe} ».',
       sheets:
         'Les descriptions de produits (nom, contenu, prix vu, magasin) sont communes à tous les utilisateurs de Repas et ne disent pas qui les a vues. Chacun ne retrouve que les produits dont Repas se souvient pour lui. La première personne qui décrit un produit fixe sa description (nom, contenu, code-barres) : les suivantes ne la réécrivent pas, elles ne font que la compléter si elle est incomplète ; le prix vu, lui, est rafraîchi par celles qui choisissent ce produit. Ces descriptions restent quand un compte est supprimé, mais sans aucun lien avec la personne.',
     },
@@ -1340,12 +1339,17 @@ export default {
     before: {
       title: 'Avant d’utiliser l’envoi : ce que tu dois savoir',
       account:
-        'L’envoi agit dans ton propre compte Leclerc, avec ta propre connexion, comme si tu faisais les recherches et les ajouts toi-même. Repas ne voit jamais tes identifiants.',
-      suspension:
-        'Les conditions d’utilisation de Leclerc permettent à l’enseigne de suspendre un compte E.Leclerc (et la cagnotte de Tickets E.Leclerc qui va avec) si elle juge l’usage abusif. Repas limite ce risque : une requête à la fois, avec des pauses, seulement quand tu le demandes, et seulement pour ta liste. Mais le risque existe et il est pour ton compte.',
-      stop: 'Si Leclerc ralentit les requêtes, l’application s’arrête d’elle-même. Attends plusieurs heures avant de reprendre l’envoi, sans le relancer en boucle. Si ton compte Leclerc pose un problème, contacte le service client de Leclerc : Repas n’a aucun accès à ton compte et ne contacte jamais Leclerc.',
+        'L’envoi agit dans ton propre compte {retailer}, avec ta propre connexion, comme si tu faisais les recherches et les ajouts toi-même. Repas ne voit jamais tes identifiants.',
+      stop: 'Si {retailer} ralentit les requêtes, l’application s’arrête d’elle-même. Attends plusieurs heures avant de reprendre l’envoi, sans le relancer en boucle. Si ton compte {retailer} pose un problème, contacte le service client {retailerDe} : Repas n’a aucun accès à ton compte et ne contacte jamais {retailer}.',
       manual:
-        'Tu peux t’en passer à tout moment : la liste de Repas reste utilisable pour faire tes courses à la main sur Leclerc.',
+        'Tu peux t’en passer à tout moment : la liste de Repas reste utilisable pour faire tes courses à la main sur {retailer}.',
+    },
+    // Ce qui est propre à chaque enseigne (ADR 0027, DRV-708) : une section par identifiant du registre, jamais le nom d'une enseigne ailleurs.
+    retailers: {
+      leclerc: {
+        suspension:
+          'Les conditions d’utilisation de Leclerc permettent de suspendre un compte E.Leclerc (et la cagnotte de Tickets E.Leclerc qui va avec) si l’usage est jugé abusif. Repas limite ce risque : une requête à la fois, avec des pauses, seulement quand tu le demandes, et seulement pour ta liste. Mais le risque existe et il est pour ton compte.',
+      },
     },
   },
   // L'estimation du coût d'une liste (DRV-612)

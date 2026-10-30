@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { useRetailerI18n } from './useRetailerI18n'
 import { computed, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 
@@ -21,7 +21,7 @@ import { parseStoreAddress, storeTail } from './storeAddress'
 import { canReadStoreFromApp, readStoreFromApp, StoreReadError } from './storeReader'
 import type { StoreReading } from './storeReader'
 
-const { t } = useI18n()
+const { t, retailer } = useRetailerI18n()
 const route = useRoute()
 const router = useRouter()
 const queryClient = useQueryClient()
@@ -64,7 +64,7 @@ const readError = ref<string | null>(null)
 const save = useSaveDriveSettings()
 const locked = computed(() => !online.value || save.isPending.value)
 
-const typed = computed(() => parseStoreAddress(address.value))
+const typed = computed(() => parseStoreAddress(address.value, retailer.value))
 const otherStore = computed(
   () => store.value !== null && typed.value !== null && typed.value.id !== store.value.id,
 )
@@ -87,7 +87,7 @@ async function leave() {
 
 async function submit() {
   failure.value = null
-  const parsed = parseStoreAddress(address.value)
+  const parsed = parseStoreAddress(address.value, retailer.value)
   if (parsed === null) {
     addressError.value = t('driveSettings.errors.address')
 
@@ -148,7 +148,7 @@ async function register(found: { id: string; baseUrl: string; label: string | nu
 
 /** Ce que l'on fait du magasin lu : l'enregistrer tout seul, ou demander d'abord s'il en change. */
 async function adopt(found: StoreReading) {
-  const parsed = parseStoreAddress(found.baseUrl)
+  const parsed = parseStoreAddress(found.baseUrl, retailer.value)
   if (parsed === null || parsed.id !== found.id) throw new StoreReadError('FAILED')
   const current = store.value
   if (current === null) return register({ ...parsed, label: found.label ?? null })
