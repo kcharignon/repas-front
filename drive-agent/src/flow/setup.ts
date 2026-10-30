@@ -2,7 +2,12 @@
 // n'est envoyé au site : le magasin se lit dans l'adresse de la page ; seul le magasin part vers Repas, après un seul geste, « Utiliser
 // ce magasin » (DRV-623). Repas l'enregistre alors tout seul : l'agent ne demande pas deux fois la même chose.
 import { LIMITS, PROTOCOL_VERSION, type SetupMessage } from '../../protocol'
-import { RetailerError, type RetailerCause, type RetailerAdapter } from '../retailers'
+import {
+  RetailerError,
+  type RetailerAdapter,
+  type RetailerCause,
+  type RetailerErrorCode,
+} from '../retailers'
 import { cleanText } from '../text'
 import type { Ui } from '../ui'
 import { buildResult } from './result'
@@ -34,7 +39,7 @@ export function setupHandler(deps: SetupDeps): (message: SetupMessage) => Promis
   return async (message) => {
     /** Un écran d'erreur ; « Retourner dans Repas » renvoie un résultat en erreur. */
     const stop = async (
-      code: 'UNSUPPORTED_PAGE' | 'STORE_MISMATCH',
+      code: RetailerErrorCode | 'STORE_MISMATCH',
       cause: RetailerCause | null = null,
     ) => {
       const answer = await ui.show('error', { code, canReturn: true, ...(cause && { cause }) })
@@ -54,9 +59,10 @@ export function setupHandler(deps: SetupDeps): (message: SetupMessage) => Promis
     if (retailer !== undefined && message.retailer !== retailer) return stop('STORE_MISMATCH')
     let store
     try {
-      store = adapter.readStore()
+      store = await adapter.readStore()
     } catch (error) {
-      if (!(error instanceof RetailerError) || error.code !== 'UNSUPPORTED_PAGE') throw error
+      // Chez une enseigne dont le magasin se demande au site (DRV-717), la lecture peut aussi échouer par le réseau, un blocage ou un site changé.
+      if (!(error instanceof RetailerError)) throw error
       return stop(error.code, error.cause)
     }
     if (message.store && (message.store.id !== store.id || message.store.host !== store.host)) {

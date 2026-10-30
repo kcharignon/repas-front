@@ -386,7 +386,7 @@ export async function runChecks(
 
   let page: PageFacts | null = null
   try {
-    const store = deps.adapter.readStore()
+    const store = await deps.adapter.readStore()
     const session = sessionOf(deps.adapter)
     page = {
       retailer: {

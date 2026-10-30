@@ -1,8 +1,9 @@
 // La photo d'un produit (DRV-633), dans la fiche de l'écran de choix et dans la question « Toujours prendre ce produit ? ». L'adresse vient de la page
-// de l'enseigne (texte non fiable) : elle est revérifiée ici (`photoUrl`, https, hôte de la liste blanche, sans identifiant ni port) avant d'être
+// de l'enseigne (texte non fiable) : elle est revérifiée ici (`photoUrl`, https, hôte de la liste blanche de l'enseigne, sans identifiant ni port) avant d'être
 // donnée à une balise `img` créée par le DOM (jamais de HTML injecté). Une adresse refusée ou une image qui ne charge pas ne laisse AUCUNE trace :
 // pas d'icône d'image cassée, pas de message, la fiche reste en texte.
 import { photoUrl } from '../photo-url'
+import type { PhotoRule } from '../retailers/names'
 import { h } from './dom'
 
 /**
@@ -12,9 +13,10 @@ import { h } from './dom'
 export function photoFrame(
   address: string | null | undefined,
   alt: string,
+  rule: PhotoRule,
   size: 'normal' | 'small' = 'normal',
 ): HTMLElement | null {
-  const src = photoUrl(address)
+  const src = photoUrl(address, rule)
   if (src === null) return null
   const frame = h('span', { class: size === 'small' ? 'photo small' : 'photo' })
   const side = size === 'small' ? '64' : '80'

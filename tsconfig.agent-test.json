@@ -7,6 +7,7 @@
     "drive-agent/test/**/*.ts",
     "drive-agent/demo/**/*.ts",
     "drive-agent/fake-leclerc/**/*.ts",
+    "drive-agent/fake-auchan/**/*.ts",
     "drive-agent/e2e/**/*.ts",
     "drive-agent/scripts/**/*.mjs"
   ],
