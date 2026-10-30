@@ -23,17 +23,20 @@ function driveMenuLines(): string[] {
     .filter((line) => line.includes('R.string.menu_'))
 }
 
+/** La ligne parle de cette entrée (et non d'une autre qui commencerait par le même nom). */
+const mentions = (line: string, name: string) => new RegExp(`R\\.string\\.${name}\\b`).test(line)
+
 const DEBUG_ENTRIES = ['menu_selftest', 'menu_debug_plan']
 
 describe('les entrées de débogage du menu du drive', () => {
   it.each(DEBUG_ENTRIES)('« %s » n’est ajoutée que sous BuildConfig.DEBUG', (name) => {
-    const lines = driveMenuLines().filter((line) => line.includes(`R.string.${name} `))
+    const lines = driveMenuLines().filter((line) => mentions(line, name))
     expect(lines).toHaveLength(1)
     expect(lines[0]).toMatch(/^\s*if \(BuildConfig\.DEBUG\) add\(/)
   })
 
   it('aucune autre entrée du menu du drive ne dépend de BuildConfig.DEBUG', () => {
-    const others = driveMenuLines().filter((line) => !DEBUG_ENTRIES.some((name) => line.includes(`R.string.${name} `)))
+    const others = driveMenuLines().filter((line) => !DEBUG_ENTRIES.some((name) => mentions(line, name)))
     expect(others.filter((line) => line.includes('BuildConfig.DEBUG'))).toEqual([])
   })
 
@@ -53,5 +56,25 @@ describe('l’ordre du menu du drive', () => {
     expect(names.indexOf('menu_logout_drive')).toBeGreaterThan(-1)
     expect(names.indexOf('menu_logout_drive')).toBeLessThan(names.indexOf('menu_diagnostic'))
     expect(names.indexOf('menu_diagnostic')).toBeLessThan(names.indexOf('menu_browser'))
+  })
+})
+
+describe('les menus nomment l’enseigne (DRV-707)', () => {
+  it('le menu de la coquille offre « Ouvrir le drive » et « Se déconnecter » pour chaque enseigne annoncée, jamais pour une enseigne d’essai', () => {
+    const start = mainActivity.indexOf('private fun openMenu()')
+    expect(start).toBeGreaterThan(-1)
+    const menu = mainActivity.slice(start, mainActivity.indexOf('\n    }\n', start))
+
+    expect(menu).toContain('val announced = RetailerSites.DEFAULT.all')
+    expect(menu).toMatch(/announced\.forEach \{ site -> add\(getString\(R\.string\.menu_open_drive, site\.name, site\.nameDe\)/)
+    expect(menu).toMatch(/getString\(R\.string\.menu_logout_drive, site\.name, site\.nameDe\)/)
+    // l’ordre d’avant, avec une seule enseigne : réglages, ouvrir, version, se déconnecter
+    const names = [...menu.matchAll(/R\.string\.(menu_\w+)/g)].map((match) => match[1])
+    expect(names).toEqual(['menu_drive_settings', 'menu_open_drive', 'menu_about', 'menu_logout_drive'])
+  })
+
+  it('le menu du drive compose chaque texte avec l’enseigne de l’écran', () => {
+    expect(driveActivity).toContain('private fun text(resource: Int): String = getString(resource, site.name, site.nameDe)')
+    expect(driveActivity).toMatch(/add\(text\(R\.string\.menu_logout_drive\) to \{ confirmClearDriveData\(site, ::clearDriveData\) \}\)/)
   })
 })

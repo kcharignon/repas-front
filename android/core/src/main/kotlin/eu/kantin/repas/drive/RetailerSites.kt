@@ -26,6 +26,12 @@ class RetailerSites(val all: List<RetailerSite>, val legacy: RetailerSite = all.
     /** L'enseigne de ce `retailer` du protocole, ou `null`. Comparaison exacte : « Leclerc » n'est pas `leclerc`. */
     fun byId(id: String?): RetailerSite? = all.firstOrNull { it.id == id }
 
+    /**
+     * L'enseigne sur laquelle un écran du drive s'ouvre (DRV-707) : celle de ce `retailer` d'intention ; un identifiant absent, vide ou inconnu est
+     * celle d'avant le multi-enseignes ([legacy]), jamais une erreur (le comportement d'aujourd'hui).
+     */
+    fun forScreen(id: String?): RetailerSite = byId(id) ?: legacy
+
     /** L'enseigne dont l'adresse est une page où l'on navigue, ou `null` : une adresse n'est celle que d'une seule enseigne. */
     fun forNavigation(url: String?): RetailerSite? {
         val host = NavigationPolicy.httpsHostOf(url) ?: return null

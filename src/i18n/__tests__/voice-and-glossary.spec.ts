@@ -503,7 +503,10 @@ describe('le menu de l’application', () => {
   const label = (name: string) => xml.find((entry) => entry.where.endsWith(` ${name}`))?.text
 
   it('dit « Se déconnecter de Leclerc » : la fenêtre de confirmation détaille ce qui est effacé', () => {
-    expect(label('menu_logout_drive')).toBe('Se déconnecter de Leclerc')
+    // Le texte prend le nom de l’enseigne en paramètre (DRV-707) : rendu pour Leclerc, il est celui d’avant
+    expect(label('menu_logout_drive')?.replace('%2$s', 'de Leclerc')).toBe(
+      'Se déconnecter de Leclerc',
+    )
     expect(label('clear_message')).toContain('seront effacés')
     expect(label('clear_message_shared')).toContain('seront effacés')
   })

@@ -35,10 +35,10 @@ import androidx.webkit.WebViewFeature
  * (`BuildConfig.REPAS_ORIGIN`). Le drive est un second écran ([DriveActivity]).
  *
  * - **Navigation** : seule l'origine de Repas reste dans la WebView ([ShellNavigation]) ; tout autre lien s'ouvre dans le navigateur du
- *   téléphone, sauf un lien du drive (`*.leclercdrive.fr`, « Finaliser sur Leclerc »), ouvert dans l'écran du drive de l'application ([DriveEntry]). Les liens `https://kantin.eu/…` reçus d'une autre application (courriel de confirmation)
+ *   téléphone, sauf un lien du drive d'une enseigne (« Finaliser »), ouvert dans l'écran du drive de cette enseigne ([DriveEntry]). Les liens `https://kantin.eu/…` reçus d'une autre application (courriel de confirmation)
  *   arrivent ici.
  * - **Données** : cookies (dont celui de rafraîchissement du jeton, `HttpOnly`), stockage du site et service worker restent dans le profil
- *   par défaut de la WebView. Le drive a le sien ([DriveProfile]) : la WebView de Repas ne reçoit ni l'agent Leclerc ni les cookies de Leclerc.
+ *   par défaut de la WebView. Chaque enseigne du drive a le sien ([DriveProfile]) : la WebView de Repas ne reçoit ni l'agent d'une enseigne ni ses cookies.
  * - **Pont natif** : `window.repasNative`, réservé à l'origine de Repas ([NativeBridge]). Aucun `addJavascriptInterface`.
  * - **Passage du plan (DRV-314)** : `drive.start` ouvre [DriveActivity] sur le magasin du plan ; le résultat revient ici, d'où `drive.result`
  *   est posté à la page (mis en file, et gardé par [DrivePass], si la page s'est rechargée entre-temps). Un passage interrompu (application
@@ -196,9 +196,9 @@ class MainActivity : Activity() {
             // Seule la page principale est limitée à Repas : les cadres restent libres de charger.
             if (!request.isForMainFrame) return false
             val url = request.url.toString()
-            // Un lien du drive (« Finaliser sur Leclerc ») s'ouvre dans l'application, connecté, pas dans le navigateur du téléphone (DRV-625).
-            DriveEntry.resolve(url, repasApp.storePath)?.let {
-                openDrive(it.page, it.outcome)
+            // Un lien du drive (« Finaliser ») s'ouvre dans l'application, connecté, pas dans le navigateur du téléphone (DRV-625), dans l'écran de son enseigne.
+            DriveEntry.resolve(url, repasApp.storePaths)?.let {
+                openDrive(repasApp.sites.forNavigation(it.page) ?: repasApp.sites.legacy, it.page, it.outcome)
                 return true
             }
             return when (navigation.decide(url)) {
@@ -254,7 +254,7 @@ class MainActivity : Activity() {
     // Le pont natif
 
     private fun onNativeMessage(text: String?, origin: String, isMainFrame: Boolean, proxy: JavaScriptReplyProxy) {
-        val request = NativeBridge.screen(text, origin, isMainFrame, repasOrigin)
+        val request = NativeBridge.screen(text, origin, isMainFrame, repasOrigin, repasApp.sites)
         if (request is NativeRequest.Ignored) {
             Log.w(TAG, "Message de la page ignoré : ${request.reason}")
             return
@@ -270,7 +270,16 @@ class MainActivity : Activity() {
             }
             NativeRequest.AppInfo -> {
                 val version = installedVersion()
-                post(NativeBridge.appInfo(version.name, version.code, repasApp.agentLoad.status == AgentStatus.READY, selfUpdate.supported))
+                // `retailers` : les enseignes que cette version sait servir, une capacité (DRV-707) ; jamais une enseigne d'essai de la variante de débogage.
+                post(
+                    NativeBridge.appInfo(
+                        version.name,
+                        version.code,
+                        repasApp.agentLoad.status == AgentStatus.READY,
+                        selfUpdate.supported,
+                        retailers = RetailerSites.DEFAULT.announcedRetailers(),
+                    ),
+                )
             }
             NativeRequest.AppMenu -> openMenu()
             NativeRequest.UpdateStatus -> updateOrRefuse(selfUpdate::status)
@@ -298,7 +307,7 @@ class MainActivity : Activity() {
         if (repasApp.agentLoad.status != AgentStatus.READY) return post(NativeBridge.driveError(NativeBridge.UNAVAILABLE, request.runId))
         when (val outcome = repasApp.pass.start(request, PassSource.REPAS)) {
             is StartOutcome.Busy -> post(NativeBridge.driveError(NativeBridge.BUSY, outcome.runId))
-            StartOutcome.Started, StartOutcome.Resumed -> openDrive()
+            StartOutcome.Started, StartOutcome.Resumed -> openDrive(request.site)
         }
     }
 
@@ -308,10 +317,14 @@ class MainActivity : Activity() {
         resumeDialog?.dismiss()
     }
 
-    /** Ouvre l'écran du drive ; sans passage en cours il s'ouvre sur [startUrl] (DRV-625 : la page de « Finaliser sur Leclerc », DRV-631 : sa forme), sinon sur l'accueil du drive. */
-    private fun openDrive(startUrl: String? = null, finalize: FinalizeOutcome? = null) =
+    /**
+     * Ouvre l'écran du drive de [site] (DRV-707) ; sans passage en cours il s'ouvre sur [startUrl] (DRV-625 : la page de « Finaliser », DRV-631 : sa forme), sinon
+     * sur l'accueil du drive de l'enseigne. Avec un passage en cours, l'écran suit l'enseigne du passage.
+     */
+    private fun openDrive(site: RetailerSite, startUrl: String? = null, finalize: FinalizeOutcome? = null) =
         startActivity(
             Intent(this, DriveActivity::class.java).apply {
+                putExtra(DriveActivity.EXTRA_RETAILER, site.id)
                 startUrl?.let { putExtra(DriveActivity.EXTRA_START_URL, it) }
                 finalize?.let { putExtra(DriveActivity.EXTRA_FINALIZE, it.name) }
             },
@@ -347,7 +360,7 @@ class MainActivity : Activity() {
             .setTitle(if (setup) R.string.resume_setup_title else R.string.resume_title)
             .setMessage(if (setup) R.string.resume_setup_message else R.string.resume_message)
             .setCancelable(false)
-            .setPositiveButton(R.string.resume_confirm) { _, _ -> openDrive() }
+            .setPositiveButton(R.string.resume_confirm) { _, _ -> openDrive(interrupted.request.site) }
             .setNegativeButton(R.string.resume_abandon) { _, _ ->
                 repasApp.pass.abort()
                 flushOutbox()
@@ -391,20 +404,30 @@ class MainActivity : Activity() {
     // ---------------------------------------------------------------------------------------------------------------
     // Le menu
 
-    private fun openMenu() = showMenu(
-        listOf(
-            R.string.menu_drive_settings to { load("$repasOrigin$DRIVE_SETTINGS_PATH") },
-            R.string.menu_open_drive to { openDrive() },
-            R.string.menu_about to { showAbout(repasApp.agentLoad.describe(this), repasApp.finalizeOutcome.last()) },
-            R.string.menu_logout_drive to { confirmClearDriveData(::clearDriveData) },
-        ),
-    )
+    /**
+     * Le menu de la coquille (DRV-707) : « Ouvrir le drive {nom} » et « Se déconnecter {nom} » pour CHAQUE enseigne que cette version annonce
+     * ([RetailerSites.DEFAULT]) ; avec une seule, le menu est celui d'avant. « Version et mode d'emploi » parle de l'enseigne d'avant.
+     */
+    private fun openMenu() {
+        val announced = RetailerSites.DEFAULT.all
+        val about = RetailerSites.DEFAULT.legacy
+        showMenu(
+            buildList {
+                add(getString(R.string.menu_drive_settings) to { load("$repasOrigin$DRIVE_SETTINGS_PATH") })
+                announced.forEach { site -> add(getString(R.string.menu_open_drive, site.name, site.nameDe) to { openDrive(site) }) }
+                add(getString(R.string.menu_about) to { showAbout(repasApp.agentLoad.describe(this@MainActivity), about, repasApp.finalizeOutcomes.last(about)) })
+                announced.forEach { site ->
+                    add(getString(R.string.menu_logout_drive, site.name, site.nameDe) to { confirmClearDriveData(site) { clearDriveData(site) } })
+                }
+            },
+        )
+    }
 
-    /** Se déconnecter de Leclerc : le profil du drive est vidé. Sans profils, Repas aussi l'est, et la page se recharge. */
-    private fun clearDriveData() {
+    /** Se déconnecter d'une enseigne : le profil de SON drive est vidé, jamais celui d'une autre. Sans profils, Repas aussi l'est, et la page se recharge. */
+    private fun clearDriveData(site: RetailerSite) {
         val shared = !DriveProfile.isolated
-        DriveProfile.clear(if (shared) webView else null)
-        repasApp.storePath.forget()
+        DriveProfile.clear(if (shared) webView else null, site, repasApp.sites)
+        repasApp.storePaths.forget(site)
         if (shared) load("$repasOrigin/")
         toast(R.string.drive_data_cleared)
     }

@@ -1,5 +1,6 @@
 package eu.kantin.repas.drive
 
+import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
@@ -26,7 +27,7 @@ sealed interface NativeRequest {
     /** `drive.start` : lancer le passage de ce plan (DRV-314). Le plan est valide dans sa forme et son hôte. */
     class DriveStart(val plan: DrivePlan) : NativeRequest
 
-    /** `drive.setup` : lire le magasin choisi sur le drive (DRV-320). Le `runId` est un UUID. */
+    /** `drive.setup` : lire le magasin choisi sur le drive (DRV-320). Le `runId` est un UUID ; l'enseigne est celle du message (`retailer`, facultatif), à défaut celle d'avant le multi-enseignes. */
     class DriveSetup(val setup: SetupRequest) : NativeRequest
 
     /** `drive.cancel` : abandonner le passage en cours ; [runId], s'il est donné, doit être celui du passage. */
@@ -67,7 +68,7 @@ object NativeBridge {
     private const val PROTOCOL_VERSION = 1
 
     /** Contrôle un message reçu de la page : origine, cadre principal, texte, borne, JSON de version 1, type connu. */
-    fun screen(data: String?, origin: String?, isMainFrame: Boolean, repasOrigin: String): NativeRequest {
+    fun screen(data: String?, origin: String?, isMainFrame: Boolean, repasOrigin: String, sites: RetailerSites = RetailerSites.DEFAULT): NativeRequest {
         if (!RepasOrigin.matches(origin, repasOrigin)) return NativeRequest.Ignored(Rejection.ORIGIN)
         if (!isMainFrame) return NativeRequest.Ignored(Rejection.NOT_MAIN_FRAME)
         if (data == null) return refused(error(INVALID_MESSAGE), Rejection.NOT_TEXT)
@@ -85,9 +86,9 @@ object NativeBridge {
             "update.check" -> NativeRequest.UpdateCheck
             "update.start" -> NativeRequest.UpdateStart
             "update.cancel" -> NativeRequest.UpdateCancel
-            "drive.start" -> DrivePlan.parse(json.optJSONObject("plan"))?.let { NativeRequest.DriveStart(it) }
+            "drive.start" -> DrivePlan.parse(json.optJSONObject("plan"), sites)?.let { NativeRequest.DriveStart(it) }
                 ?: refused(driveError(INVALID_PLAN), Rejection.NOT_PROTOCOL)
-            "drive.setup" -> SetupRequest.of(json.opt("runId"))?.let { NativeRequest.DriveSetup(it) }
+            "drive.setup" -> SetupRequest.parse(json, sites)?.let { NativeRequest.DriveSetup(it) }
                 ?: refused(driveError(INVALID_SETUP), Rejection.NOT_PROTOCOL)
             "drive.cancel" -> {
                 val runId = json.opt("runId")
@@ -109,13 +110,16 @@ object NativeBridge {
     /**
      * Réponse à `app.info`. `drive` : le drive est utilisable (agent intact, WebView assez récente). `selfUpdate` : l'application sait se mettre
      * à jour elle-même (DRV-639, variante hors Google Play seulement) ; la clé n'est écrite que si c'est vrai, pour qu'une application sans cette
-     * fonction réponde exactement comme avant.
+     * fonction réponde exactement comme avant. `retailers` (DRV-707) : les enseignes que l'application sait servir (leurs identifiants, dans l'ordre de
+     * [RetailerSites.announcedRetailers]) : une CAPACITÉ, jamais un numéro de version. Facultatif pour le lecteur : une page qui ne connaît pas la clé
+     * la lit comme la liste de la seule enseigne d'avant ([RetailerSites.legacy]). La clé n'est écrite que si l'appelant la donne.
      */
-    fun appInfo(version: String, versionCode: Long, drive: Boolean, selfUpdate: Boolean = false): String = message("app.info") {
+    fun appInfo(version: String, versionCode: Long, drive: Boolean, selfUpdate: Boolean = false, retailers: List<String>? = null): String = message("app.info") {
         put("version", version)
         put("versionCode", versionCode)
         put("drive", drive)
         if (selfUpdate) put("selfUpdate", true)
+        if (retailers != null) put("retailers", JSONArray(retailers))
     }
 
     /**
