@@ -3,6 +3,7 @@
 // habituel que la phase A n'a pas mis au panier : `OUT_OF_STOCK` (le site le dit en rupture ET le panier le refuse), `NOT_FOUND` (aucune des
 // recherches ne l'a retrouvé), `CART_REFUSED` (le site le disait disponible, le panier n'en a rien pris). Le protocole ne change pas : la ligne reste
 // `UNAVAILABLE`, la raison vit dans l'état de l'agent, son écran, son journal et son diagnostic.
+import { LECLERC } from './retailer-fixtures'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -417,7 +418,14 @@ describe('la mesure de la disponibilité (diagnostic)', () => {
 
     // When
     const { probes } = await runChecks(
-      { adapter, agentVersion: '0.5.0', storage, wakeLock: null, originReplaced: true },
+      {
+        adapter,
+        agentVersion: '0.5.0',
+        storage,
+        wakeLock: null,
+        originReplaced: true,
+        retailer: LECLERC,
+      },
       () => undefined,
     )
     const text = probeLines(probes).join('\n')

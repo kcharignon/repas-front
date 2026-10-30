@@ -3,6 +3,7 @@
 // `objContenu` (`objContenuMDD`, `objContenuGroupeVariantes`, `lstTrade`) et aucun produit frais n'était lu. L'agent lit TOUS les produits de la réponse
 // (la liste principale d'abord), y compris un produit qui en contient d'autres ou un objet très grand, et le diagnostic dit ce que chaque liste contient.
 // Données INVENTÉES.
+import { LECLERC } from './retailer-fixtures'
 import { describe, expect, it } from 'vitest'
 
 import { probeLines, runChecks, type ChecksDeps } from '../src/diagnostic'
@@ -128,6 +129,7 @@ describe('le diagnostic dit les listes de produits de « tomate » et « courget
       storage: fakeStorage(),
       wakeLock: fakeWakeLock().wakeLock,
       originReplaced: null,
+      retailer: LECLERC,
     }
 
     const { probes } = await runChecks(deps, () => undefined)

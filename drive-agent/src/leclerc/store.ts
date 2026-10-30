@@ -40,6 +40,11 @@ const STORE_PATH = /^\/magasin-([0-9]{1,12})-([0-9]{1,12})(-[^/?#]*)?(?=\/|$)/i
  */
 const MOBILE_HOST = /^m(?:-[a-z0-9-]*)?\./i
 
+/** `fd9` pour `fd9-courses.leclercdrive.fr` (la famille d'hôte, jamais le numéro de magasin), `null` pour tout autre hôte. */
+export function hostFamily(host: string): string | null {
+  return /^(fd\d{1,3})-courses\.leclercdrive\.fr$/.exec(host.toLowerCase())?.[1] ?? null
+}
+
 /** Vrai pour un hôte du site mobile de l'enseigne (`m-courses.leclercdrive.fr`) : l'agent n'y agit pas. */
 export function isMobileHost(host: string): boolean {
   return STORE_HOST.test(host.toLowerCase()) && MOBILE_HOST.test(host)

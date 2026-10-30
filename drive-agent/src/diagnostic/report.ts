@@ -48,6 +48,7 @@ export function dateOf(now: number): string {
 /** L'hôte, le magasin et, s'il est connu, ce que la page montre de la connexion (signes de visiteur ou de client : des noms seulement). */
 export function pageLines(page: PageFacts): string[] {
   return [
+    T.text.site(page.retailer.id, page.retailer.name),
     T.text.host(page.host),
     T.text.store(page.store),
     ...(page.session === undefined ? [] : [`Connexion : ${page.session}`]),
@@ -62,7 +63,7 @@ export function reportOf(
   probes?: ProbeFacts | null,
   stats?: RequestStats | null,
 ): string {
-  const sondes = probeLines(probes)
+  const sondes = probeLines(probes, { siteDomain: page?.retailer.siteDomain })
   const lines = [
     T.text.title,
     T.text.agent(agentVersion),

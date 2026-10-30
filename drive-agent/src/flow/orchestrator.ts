@@ -21,6 +21,7 @@ import {
 } from '../retailers'
 import { own } from '../own'
 import { formatNeeded, S, summarySentence } from '../ui'
+import type { RetailerNames } from '../retailers'
 import { cardOf } from './card'
 import { askPacks } from './pack-size'
 import { settleKnownLine, type UnavailableNote } from './phase-a'
@@ -104,15 +105,18 @@ const failed = (line: PlanLine, error: ErrorCode): ResultLine => ({
 })
 
 /** La phrase qui ouvre l'écran de progression, la même que sur l'écran d'envoi de Repas : « 6 articles : 2 sont déjà choisis, 4 sont à choisir sur Leclerc. » */
-function leadOf(plan: PlanMessage): string {
+function leadOf(plan: PlanMessage, retailer: RetailerNames): string {
   const count = (status: PlanLine['status']) =>
     plan.lines.filter((line) => line.status === status).length
-  return summarySentence({
-    known: count('KNOWN'),
-    new: count('NEW'),
-    haveAtHome: count('HAVE_AT_HOME'),
-    skipped: count('SKIP'),
-  })
+  return summarySentence(
+    {
+      known: count('KNOWN'),
+      new: count('NEW'),
+      haveAtHome: count('HAVE_AT_HOME'),
+      skipped: count('SKIP'),
+    },
+    retailer,
+  )
 }
 
 export class Flow {
@@ -478,7 +482,14 @@ export class Flow {
     this.enter(
       ending.outcome === 'aborted' ? 'ABORTED' : ending.outcome === 'error' ? 'ERROR' : 'DONE',
     )
-    const result = buildResult(run.plan, lines, ending, agentVersion, this.passStats(run))
+    const result = buildResult(
+      run.plan,
+      lines,
+      ending,
+      agentVersion,
+      this.deps.ui.retailer,
+      this.passStats(run),
+    )
     const props = endProps(
       lines,
       ending,
@@ -511,7 +522,15 @@ export class Flow {
       ...(cause && { cause }),
     })
     if (answer === 'return' && plan) {
-      send(buildResult(plan, [], { outcome: 'error', code, ...(cause && { cause }) }, agentVersion))
+      send(
+        buildResult(
+          plan,
+          [],
+          { outcome: 'error', code, ...(cause && { cause }) },
+          agentVersion,
+          this.deps.ui.retailer,
+        ),
+      )
     }
     ui.close()
   }
@@ -636,7 +655,7 @@ export class Flow {
         return {
           slug,
           entry: accepted
-            ? S.log.acceptedAnyway(name)
+            ? S.log.acceptedAnyway(this.deps.ui.retailer, name)
             : line.usedRank > 1
               ? S.log.addedBackup(name)
               : S.log.added(name),
@@ -647,7 +666,7 @@ export class Flow {
           entry: unreached
             ? S.log.savedNotInCart(name)
             : accepted
-              ? S.log.acceptedAnyway(name)
+              ? S.log.acceptedAnyway(this.deps.ui.retailer, name)
               : S.log.added(name),
         }
       case 'HAVE_AT_HOME':
@@ -655,7 +674,10 @@ export class Flow {
       case 'SKIPPED':
         return { slug, entry: S.log.skipped(name) }
       default:
-        return { slug, entry: slow ? S.log.slow(name) : S.log.failed(name) }
+        return {
+          slug,
+          entry: slow ? S.log.slow(this.deps.ui.retailer, name) : S.log.failed(name),
+        }
     }
   }
 
@@ -663,7 +685,7 @@ export class Flow {
   private showProgress(run: Run): void {
     void this.deps.ui
       .show('progress', {
-        lead: leadOf(run.plan),
+        lead: leadOf(run.plan, this.deps.ui.retailer),
         total: run.plan.lines.length,
         done: Object.keys(run.state.done).length,
         current: run.current,

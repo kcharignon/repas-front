@@ -1,5 +1,6 @@
 // @vitest-environment node
 // Les pièces de l'orchestrateur (DRV-305) : phase A d'une ligne, prix remonté, issue globale, résultat.
+import { LECLERC } from './retailer-fixtures'
 import { describe, expect, it } from 'vitest'
 
 import { ERROR_CODES, LIMITS, type ResultLine } from '../protocol'
@@ -311,7 +312,7 @@ describe('cartsOf (ticket M)', () => {
 
 describe('le résultat', () => {
   it.each(ERROR_CODES)('porte un message d’erreur fixe et court pour « %s »', (code) => {
-    const result = buildResult(plan([]), [], { outcome: 'error', code }, '1.2.3')
+    const result = buildResult(plan([]), [], { outcome: 'error', code }, '1.2.3', LECLERC)
 
     expect(result.error?.code).toBe(code)
     expect(result.error?.message.length).toBeGreaterThan(0)

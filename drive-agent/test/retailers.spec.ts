@@ -32,6 +32,9 @@ function entry(id: string, hosts: string[]) {
     id,
     name: id,
     nameDe: `de ${id}`,
+    siteDomain: `${id}.invalid`,
+    hostFamily: () => null,
+    isMobileHost: () => false,
     matchesHost: (host) => hosts.includes(host),
     createAdapter: () => {
       reads.created += 1

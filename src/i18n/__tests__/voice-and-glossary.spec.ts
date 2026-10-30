@@ -598,6 +598,14 @@ describe('aucun avertissement hors des conditions d’utilisation du drive (DRV-
     expect(sources.android.flatMap((entry) => warnings(entry.where, entry.text))).toEqual([])
   })
 
+  it('l’interface de l’agent n’écrit le nom d’aucune enseigne : il vient du registre (DRV-705)', () => {
+    const named = sources.agent
+      .filter((entry) => entry.where.startsWith('drive-agent/src/ui/strings.ts'))
+      .filter((entry) => /leclerc|auchan|carrefour|intermarch|enseigne|retailer/i.test(entry.text))
+      .map((entry) => `${entry.where} : « ${entry.text} »`)
+    expect(named).toEqual([])
+  })
+
   it('nomme des exemptions qui existent encore (aucune exemption périmée)', () => {
     const where = sources.agent.map((entry) => entry.where)
     for (const prefix of WARNING_EXEMPT_AGENT_PATHS) {

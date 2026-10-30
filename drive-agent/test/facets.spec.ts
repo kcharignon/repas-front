@@ -2,6 +2,7 @@
 // La facette « Rayons » et la forme du filtre du site (DRV-647, agent 0.35.0, diagnostic seulement) : lecture de l'arbre des valeurs, valeur « fruits /
 // légumes », forme du paramètre `Filtres`, adresse d'une recherche filtrée déduite SANS deviner, une seule requête de sondage, pagination et univers, rien
 // de personnel. Données INVENTÉES, de la forme relevée sur le vrai site le 2026-10-20.
+import { LECLERC } from './retailer-fixtures'
 import { describe, expect, it } from 'vitest'
 
 import { probeLines, runChecks, type ChecksDeps } from '../src/diagnostic'
@@ -211,6 +212,7 @@ describe('le diagnostic essaie jusqu’à trois formes de « Filtres » et retie
       storage: fakeStorage(),
       wakeLock: fakeWakeLock().wakeLock,
       originReplaced: null,
+      retailer: LECLERC,
     }
     const { probes } = await runChecks(deps, () => undefined)
     return {

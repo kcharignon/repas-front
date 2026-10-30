@@ -563,12 +563,12 @@ describe('aucune donnée personnelle dans le rapport', () => {
   })
 
   it('nettoie un libellé : lettres, chiffres et ponctuation simple, 40 caractères au plus', () => {
-    expect(safeLabel('Farine <b>de blé</b> jean@exemple.invalid')).toBe(
+    expect(safeLabel('Farine <b>de blé</b> jean@exemple.invalid', 'Leclerc')).toBe(
       'Farine b de blé b jean exemple invalid',
     )
-    expect(safeLabel('Lait 1234567 UHT')).toBe('Lait … UHT')
-    expect(safeLabel('x'.repeat(100))).toHaveLength(40)
-    expect(safeLabel('@@@')).toBe('?')
+    expect(safeLabel('Lait 1234567 UHT', 'Leclerc')).toBe('Lait … UHT')
+    expect(safeLabel('x'.repeat(100), 'Leclerc')).toHaveLength(40)
+    expect(safeLabel('@@@', 'Leclerc')).toBe('?')
   })
 })
 

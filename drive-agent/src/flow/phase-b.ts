@@ -20,6 +20,7 @@ import {
   saysOutOfStock,
   type Candidate,
   type RetailerAdapter,
+  type RetailerNames,
 } from '../retailers'
 import { cleanText } from '../text'
 import {
@@ -303,6 +304,7 @@ export function aisleRowOf(
 async function load(
   search: Search,
   adapter: RetailerAdapter,
+  retailer: RetailerNames,
   query: string,
   hints: readonly number[] | undefined,
   then: readonly SearchStep[] | null = null,
@@ -332,7 +334,7 @@ async function load(
     search.notice = null
   } catch (error) {
     if (!(error instanceof RetailerError) || error.code !== 'NETWORK') throw error
-    search.notice = error.cause === 'REQUEST_TIMEOUT' ? S.picker.slow : S.picker.network
+    search.notice = error.cause === 'REQUEST_TIMEOUT' ? S.picker.slow(retailer) : S.picker.network
   }
 }
 
@@ -418,6 +420,7 @@ async function settleLine(
     await load(
       search,
       adapter,
+      ui.retailer,
       line.searchQuery ?? line.name,
       line.rayonHints,
       fallbackSteps(line, unavailable, reasons),
@@ -439,6 +442,7 @@ async function settleLine(
           const picker = renderPicker(
             zone,
             {
+              retailer: ui.retailer,
               need: formatNeeded(line.needed),
               replaces: line.replaces?.label ?? null,
               gone: unavailable.map((product) => {
@@ -481,7 +485,10 @@ async function settleLine(
                 } catch (error) {
                   if (error instanceof RetailerError && error.code === 'NETWORK') {
                     return {
-                      notice: error.cause === 'REQUEST_TIMEOUT' ? S.picker.slow : S.picker.network,
+                      notice:
+                        error.cause === 'REQUEST_TIMEOUT'
+                          ? S.picker.slow(ui.retailer)
+                          : S.picker.network,
                     }
                   }
                   // Une réponse que le site refuse : repli sans message sur les familles, pour le reste du passage.
@@ -493,7 +500,7 @@ async function settleLine(
               },
               search: (query) => {
                 picker.busy(S.picker.searching)
-                load(search, adapter, query, line.rayonHints, null, site).then(
+                load(search, adapter, ui.retailer, query, line.rayonHints, null, site).then(
                   () => {
                     if (!live) return
                     picker.results(
@@ -538,7 +545,10 @@ async function settleLine(
       // Défense en profondeur : la liste ne propose pas les produits écartés, un message ne doit pas pouvoir les imposer. Un produit « Plus en stock »
       // se choisit : le panier tranche (DRV-635).
       if (!candidate || refused.has(id)) {
-        search.notice = S.picker.cartRefused(candidate ? cleanText(candidate.label) : '')
+        search.notice = S.picker.cartRefused(
+          ui.retailer,
+          candidate ? cleanText(candidate.label) : '',
+        )
         continue
       }
 

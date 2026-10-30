@@ -91,7 +91,7 @@ export {
   type SessionSign,
   type SessionState,
 } from './session'
-export { isMobileHost, type LocationLike, type StoreInfo } from './store'
+export { hostFamily, isMobileHost, type LocationLike, type StoreInfo } from './store'
 export {
   addressShape,
   headerNames,

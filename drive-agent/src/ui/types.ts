@@ -1,5 +1,6 @@
 // Les écrans de l'interface et ce que chacun reçoit (`props`) et rend (`answer`, la réponse de l'utilisateur).
 import type { ErrorCode, LineStatus, Outcome } from '../../protocol'
+import type { RetailerInfo } from '../retailers/names'
 
 /**
  * Pourquoi un produit habituel n'a pas été mis au panier (DRV-635). `OUT_OF_STOCK` : le site le dit en rupture (stock nul ou « Bientôt disponible ») ET le
@@ -245,6 +246,8 @@ export type ScreenAnswer<K extends ScreenName> = ScreenMap[K]['answer']
 
 /** L'interface vue de l'orchestrateur : de quoi afficher un écran et attendre l'utilisateur, sans aucun DOM réel dans les tests. */
 export interface Ui {
+  /** L'enseigne de la page : son nom (et son nom avec « de ») vont dans les textes qui la nomment. */
+  readonly retailer: RetailerInfo
   /**
    * Affiche l'écran, à la place du précédent, et rend la réponse de l'utilisateur. La promesse d'un écran remplacé par un autre ne se
    * résout jamais (une réponse tardive est ignorée) ; celle de `progress` reste donc en attente tant que « Arrêter » n'est pas touché.

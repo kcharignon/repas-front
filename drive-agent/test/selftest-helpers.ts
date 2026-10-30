@@ -1,5 +1,6 @@
 // Outils des tests du test automatique (DRV-318) : un magasin simulé (rayons, panier, pannes programmées) derrière `RetailerAdapter`.
 // Données synthétiques seulement : magasin `123456`, produits `2000001` et suivants.
+import { LECLERC } from './retailer-fixtures'
 import {
   type Candidate,
   type CartResult,
@@ -184,6 +185,7 @@ export function runDeps(adapter: RetailerAdapter) {
     storage: fakeStorage(),
     wakeLock: fakeWakeLock().wakeLock,
     originReplaced: null,
+    retailer: LECLERC,
     // Chaque lecture de l'heure avance de 100 ms : les durées du rapport sont connues.
     now: () => (clock += 100),
   }

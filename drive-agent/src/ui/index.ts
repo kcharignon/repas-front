@@ -13,8 +13,8 @@ export {
   type PickerProps,
 } from './picker'
 export {
-  CAUSE_TEXTS,
-  ERROR_TEXTS,
+  causeTexts,
+  errorTexts,
   errorParts,
   S,
   count,
