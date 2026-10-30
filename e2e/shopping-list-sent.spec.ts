@@ -98,6 +98,10 @@ async function fakeBack(page: Page, initial: Status = 'ACTIVE', enabled = true, 
                   baseUrl: 'https://courses-test.leclercdrive.fr/magasin-123456-123456',
                 }
               : null,
+            // Le verdict du back (DRV-737) : aucun drive configuré tant que le magasin n'est pas enregistré
+            selection: hasStore
+              ? { mode: 'AUTO', retailer: 'leclerc', candidates: ['leclerc'] }
+              : { mode: 'NONE', retailer: null, candidates: [] },
           })
         case 'PUT /api/v1/drive/settings':
           hasStore = true
@@ -216,8 +220,12 @@ test('sans magasin : « Choisir mon magasin » le lit, l’enregistre, et l’en
   await fakeAppForSetup(page, 'found')
   await page.goto('/liste')
 
+  // Aucun drive configuré (DRV-737) : pas de « Envoyer au drive » ; « ⋮ » propose « Configurer un drive »
+  await expect(page.getByRole('button', { name: 'Terminer' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Envoyer au drive' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Plus d’actions' }).click()
   // Un geste : l'écran dit ce qu'il attend et porte le bouton qui fait le travail
-  await page.getByRole('button', { name: 'Envoyer au drive' }).click()
+  await page.getByRole('menuitem', { name: 'Configurer un drive' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Choisis ton magasin' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Retour à la liste' })).toBeVisible()
   expect(received).not.toContain('POST /api/v1/shopping-lists/l1/send')

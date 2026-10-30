@@ -68,25 +68,23 @@ test('toucher l’autre tuile (clavier) redemande son plan et nomme le bouton', 
   await shot(page, 'drv710-autre-tuile-360')
 })
 
-test('un drive habituel : « Envoyer ailleurs » pose la question pour cet envoi seulement', async ({
+test('un drive habituel et deux drives : la question est posée, l’habituel est coché, aucun lien « Envoyer ailleurs »', async ({
   page,
 }) => {
-  const back = await fakeSendBack(page, { mode: 'AUTO', retailer: 'leclerc', habitual: 'leclerc' })
+  const back = await fakeSendBack(page, { mode: 'ASK', retailer: 'leclerc', habitual: 'leclerc' })
   await fakeApp(page, 'silent', '1.0.0', ['leclerc', 'auchan'])
   await page.goto('/drive/envoi/l1')
 
+  const group = page.getByRole('group', { name: 'Où envoyer ta liste ?' })
+  await expect(group.getByRole('radio', { name: /Leclerc/ })).toBeChecked()
   await expect(page.getByRole('button', { name: 'Ouvrir Leclerc' })).toBeInViewport({ ratio: 1 })
-  const elsewhere = page.getByRole('button', { name: 'Envoyer ailleurs' })
-  await expect(elsewhere).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Envoyer ailleurs' })).toHaveCount(0)
   expect(await overflow(page)).toBeLessThanOrEqual(0)
-  await shot(page, 'drv710-drive-habituel-360')
+  await shot(page, 'drv737-drive-habituel-coche-360')
   await axeBothThemes(page, 'drive-envoi-habituel')
 
-  await elsewhere.click()
-  const group = page.getByRole('group', { name: 'Où envoyer ta liste ?' })
-  await expect(group.getByRole('radio', { name: /Auchan/ })).toBeChecked()
+  await page.locator('label', { hasText: 'Auchan' }).click()
   await expect(page.getByRole('button', { name: 'Ouvrir Auchan' })).toBeVisible()
-  await shot(page, 'drv710-envoyer-ailleurs-360')
   expect(back.received.some((call) => call.includes('default-retailer'))).toBe(false)
 })
 

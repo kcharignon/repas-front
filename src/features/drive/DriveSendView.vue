@@ -50,8 +50,6 @@ watch(
 )
 /** Le drive touché sur l'écran (une tuile) ; `null` : celui que la règle désigne. */
 const picked = ref<RetailerId | null>(null)
-/** « Envoyer ailleurs » : la question est posée pour CET envoi seulement (le drive habituel ne change pas). */
-const goingElsewhere = ref(false)
 const draft = ref<RunDraft | null>(driveBridge.loadDraft())
 /** Un passage de cette liste attend son résultat (le brouillon survit à un rechargement de la page). */
 const waiting = computed(() => draft.value !== null && draft.value.listId === listId.value)
@@ -62,7 +60,6 @@ const choice = computed(() =>
   sendChoice({
     settings: settings.data.value,
     picked: picked.value,
-    elsewhere: goingElsewhere.value,
   }),
 )
 /** Le drive de cet envoi : celui du passage en attente (il se rouvre là où il a été ouvert), sinon celui que la règle ou la tuile touchée désignent. */
@@ -115,7 +112,7 @@ if (opening.value) void router.replace({ query: { ...route.query, ouvrir: undefi
 const changes = ref<Record<string, LineChange | undefined>>({})
 const failure = ref<{ text: string; update: boolean } | null>(null)
 const reopening = ref(false)
-/** La question « Où envoyer ta liste ? » est posée : plusieurs drives configurés et aucun drive habituel, ou « Envoyer ailleurs ». Pas en attente d'un résultat, ni hors de l'application. */
+/** La question « Où envoyer ta liste ? » est posée : plusieurs drives configurés (le drive habituel n'est que la présélection). Pas en attente d'un résultat, ni hors de l'application. */
 const asking = computed(
   () => inApp && !tooOld.value && !waiting.value && choice.value.tiles.length > 0,
 )
@@ -332,12 +329,6 @@ async function openDrive() {
   }
 }
 
-/** « Envoyer ailleurs » : la question est posée, un autre drive que celui du back est présélectionné ; le drive habituel ne change pas. */
-function goElsewhere() {
-  picked.value = null
-  goingElsewhere.value = true
-}
-
 /** Abandonne le passage en cours : l'application est prévenue (si elle est là), le brouillon part. */
 function abandon() {
   try {
@@ -379,7 +370,7 @@ function confirmReopenList() {
       {{ t('driveSend.title') }}
     </h1>
 
-    <!-- Plusieurs drives configurés et aucun n'est habituel (R4), ou « Envoyer ailleurs » : où envoyer ? La dernière utilisée est cochée. -->
+    <!-- Plusieurs drives configurés : où envoyer ? Le drive habituel, sinon le dernier utilisé, est coché. -->
     <DriveSendTiles
       v-if="asking"
       :drives="choice.tiles"
@@ -504,10 +495,6 @@ function confirmReopenList() {
           </UiButton>
           <p v-if="!online" class="font-semibold">{{ t('driveSend.offline') }}</p>
           <DriveSendFailure v-if="failure" :failure="failure" />
-          <!-- Le drive habituel est ouvert sans question ; ce lien est la seule porte vers l'autre, pour cet envoi seulement -->
-          <UiButton v-if="choice.canGoElsewhere" variant="ghost" @click="goElsewhere">
-            {{ t('driveSend.goElsewhere') }}
-          </UiButton>
         </section>
 
         <DriveEstimate :list-id="listId" :retailer="retailerId" />

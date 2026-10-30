@@ -6,8 +6,8 @@ import { useI18n } from 'vue-i18n'
 import type { Drive } from './drives'
 import type { RetailerId } from './retailers'
 
-// « Mon drive habituel » (DRV-709) : un choix parmi les drives où la personne a un magasin, « Aucun » compris. Repas l'utilise alors sans rien
-// demander à l'envoi. Il n'existe qu'avec au moins deux drives configurés (avec un seul, il n'y a rien à choisir).
+// « Mon drive habituel » (DRV-709) : un choix parmi les drives où la personne a un magasin, « Aucun » compris. Repas le propose alors d'avance
+// (coché) à l'envoi, qui pose toujours la question. Il n'existe qu'avec au moins deux drives configurés (avec un seul, il n'y a rien à choisir).
 const props = defineProps<{ drives: readonly Drive[]; disabled: boolean }>()
 const emit = defineEmits<{ choose: [id: RetailerId | null] }>()
 

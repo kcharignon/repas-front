@@ -7,15 +7,14 @@ import type { RetailerId } from './retailers'
 
 /**
  * Le choix du drive à l'envoi (DRV-710). La règle R1 à R5 (`multi-enseignes.md` § 5) est calculée par le back et lue dans `selection` des réglages :
- * ce fichier ne la recopie pas, il en tire seulement ce que l'écran montre (les tuiles, le drive de l'envoi, le lien « Envoyer ailleurs »). Un back qui
+ * ce fichier ne la recopie pas, il en tire seulement ce que l'écran montre (les tuiles, le drive de l'envoi). Un seul drive configuré : aucune question ; plusieurs :
+ * la question est toujours posée (`ASK`), le drive habituel n'est que la présélection (DRV-737). Un back qui
  * ne sert pas `selection` (ou des réglages pas encore lus) donne l'écran d'avant : un seul drive, celui de `retailer`.
  */
 export interface SendChoiceInput {
   settings: DriveSettings | undefined
-  /** Le drive touché sur l'écran (une tuile, ou celui que « Envoyer ailleurs » présélectionne) ; `null` : aucun. */
+  /** Le drive touché sur l'écran (une tuile) ; `null` : aucun. */
   picked: RetailerId | null
-  /** « Envoyer ailleurs » a été touché : la question est posée pour cet envoi seulement. */
-  elsewhere: boolean
 }
 
 export interface SendChoice {
@@ -25,8 +24,6 @@ export interface SendChoice {
   tiles: Drive[]
   /** Plusieurs drives sont configurés : le bouton principal nomme le drive (« Ouvrir {drive} »), sinon c'est « Ouvrir le drive » comme avant. */
   named: boolean
-  /** Le lien « Envoyer ailleurs » : plusieurs drives configurés, le back en a choisi un sans rien demander. */
-  canGoElsewhere: boolean
 }
 
 /** La sélection du back ; absente d'un back plus ancien et des réglages pas encore lus (le type du contrat la dit toujours là). */
@@ -40,28 +37,19 @@ function candidatesOf(settings: DriveSettings | undefined): Drive[] {
   return drivesOf(settings).filter((drive) => candidates.includes(drive.id))
 }
 
-export function sendChoice({ settings, picked, elsewhere }: SendChoiceInput): SendChoice {
+export function sendChoice({ settings, picked }: SendChoiceInput): SendChoice {
   const selection = selectionOf(settings)
   const candidates = candidatesOf(settings)
   const several = candidates.length > 1
   // `retailer` de la sélection : le drive à utiliser (`AUTO`) ou la présélection (`ASK`) ; à défaut, celui des réglages
   const base: RetailerId | undefined = selection?.retailer ?? settings?.retailer
-  const asking = several && (selection?.mode === 'ASK' || elsewhere)
+  const asking = several && selection?.mode === 'ASK'
 
-  if (!asking)
-    return {
-      retailer: base,
-      tiles: [],
-      named: several,
-      canGoElsewhere: several && selection?.mode === 'AUTO',
-    }
+  if (!asking) return { retailer: base, tiles: [], named: several }
 
-  // « Envoyer ailleurs » présélectionne un autre drive que celui que le back avait choisi : on le demande pour aller ailleurs
-  const preselected =
-    selection?.mode === 'ASK' ? base : (candidates.find((drive) => drive.id !== base)?.id ?? base)
   const touched = candidates.find((drive) => drive.id === picked)?.id
 
-  return { retailer: touched ?? preselected, tiles: candidates, named: true, canGoElsewhere: false }
+  return { retailer: touched ?? base, tiles: candidates, named: true }
 }
 
 /**

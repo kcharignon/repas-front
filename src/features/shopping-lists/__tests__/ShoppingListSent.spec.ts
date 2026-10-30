@@ -622,26 +622,113 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
 
   // Plusieurs drives (DRV-710) : la règle de choix est celle du back (`selection`) ; ici ce que « Envoyer au drive » en fait
   describe('plusieurs drives', () => {
-    const several = (options: Parameters<typeof severalSettings>[0]) => ({
+    type Options = Parameters<typeof severalSettings>[0]
+    const several = (options: Options) => ({
       'GET /api/v1/drive/settings': () => json(severalSettings(options)),
       'POST /api/v1/shopping-lists/l1/send': noContent,
     })
 
-    it('aucun drive configuré : « Choisir mon magasin » avant tout, ni confirmation ni verrou', async () => {
+    it('aucun drive configuré (NONE) : pas de « Envoyer au drive », « Terminer » est l’action principale (DRV-737)', async () => {
       announced = ['leclerc', 'auchan']
-      const { context, fetchMock } = await openActive(
+      const { fetchMock } = await openActive(
         several({ mode: 'NONE', retailer: null, configured: [] }),
+      )
+      await vi.waitFor(() => expect(calls(fetchMock)).toContain('GET /api/v1/drive/settings'))
+      await flushPromises()
+
+      expect(button('Envoyer au drive')).toBeUndefined()
+      expect(rowActions()).toEqual(['Terminer', 'Plus d’actions'])
+      expect(button('Terminer')?.classList).toContain('bg-primary')
+    })
+
+    it('aucun drive configuré : « ⋮ » propose « Configurer un drive », qui mène au choix du drive et rend la liste ensuite (DRV-737)', async () => {
+      announced = ['leclerc', 'auchan']
+      const { context } = await openActive(
+        several({ mode: 'NONE', retailer: null, configured: [] }),
+      )
+      await choose('Configurer un drive')
+
+      await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-settings'))
+      expect(context.router.currentRoute.value.query).toEqual({
+        magasin: 'requis',
+        retour: 'liste',
+      })
+    })
+
+    it.each([
+      [
+        'un seul drive configuré',
+        { mode: 'AUTO', retailer: 'leclerc', configured: ['leclerc'] } as Options,
+      ],
+      ['plusieurs drives configurés', { mode: 'ASK', retailer: 'auchan' } as Options],
+    ])('%s : pas de « Configurer un drive »', async (_case, options) => {
+      announced = ['leclerc', 'auchan']
+      await openActive(several(options))
+      await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+
+      await openMenu('Renommer')
+      expect(menuItems()).toEqual(['Renommer', 'Mettre en pause', 'Supprimer'])
+    })
+
+    it.each([['SENT' as const], ['COMPLETED' as const]])(
+      'une liste %s : pas de « Configurer un drive »',
+      async (status) => {
+        const { fetchMock } = await openActive(
+          several({ mode: 'NONE', retailer: null, configured: [] }),
+          detail(status),
+        )
+        await vi.waitFor(() => expect(calls(fetchMock)).toContain('GET /api/v1/drive/settings'))
+        await flushPromises()
+
+        body().querySelector<HTMLButtonElement>('button[aria-label="Plus d’actions"]')?.click()
+        await vi.waitFor(() => expect(menuItems().length).toBeGreaterThan(0))
+        expect(menuItems()).not.toContain('Configurer un drive')
+      },
+    )
+
+    it('dans un navigateur : pas de « Configurer un drive »', async () => {
+      const { fetchMock } = await openActive(
+        several({ mode: 'NONE', retailer: null, configured: [] }),
+        detail('ACTIVE'),
+        true,
+        '/liste',
+        'browser',
+      )
+      await vi.waitFor(() => expect(calls(fetchMock)).toContain('GET /api/v1/drive/settings'))
+      await flushPromises()
+
+      await openMenu('Renommer')
+      expect(menuItems()).toEqual(['Renommer', 'Mettre en pause', 'Supprimer'])
+    })
+
+    it('fonction coupée : pas de « Configurer un drive »', async () => {
+      const { fetchMock } = await openActive({
+        'GET /api/v1/drive/settings': () =>
+          json({
+            ...severalSettings({ mode: 'NONE', retailer: null, configured: [] }),
+            enabled: false,
+          }),
+      })
+      await vi.waitFor(() => expect(calls(fetchMock)).toContain('GET /api/v1/drive/settings'))
+      await flushPromises()
+
+      await openMenu('Renommer')
+      expect(menuItems()).toEqual(['Renommer', 'Mettre en pause', 'Supprimer'])
+    })
+
+    it('un seul drive configuré (AUTO) : « Envoyer au drive » est proposé, la confirmation habituelle, aucune question', async () => {
+      announced = ['leclerc', 'auchan']
+      const { context } = await openActive(
+        several({ mode: 'AUTO', retailer: 'leclerc', configured: ['leclerc'] }),
       )
       await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
 
       button('Envoyer au drive')?.click()
 
-      await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-settings'))
-      expect(context.router.currentRoute.value.query).toMatchObject({
-        magasin: 'requis',
-        retour: 'liste',
-      })
-      expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/send')
+      await vi.waitFor(() =>
+        expect(body().textContent).toContain('La liste ne sera plus modifiable'),
+      )
+      expect(context.router.currentRoute.value.name).not.toBe('drive-settings')
     })
 
     it('deux drives configurés : la confirmation habituelle, le choix du drive se fait sur l’écran d’envoi', async () => {
@@ -691,14 +778,8 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     })
   })
 
-  it('application trop ancienne et aucun magasin : la phrase d’abord, les réglages jamais', async () => {
-    const { context } = await openActive(
-      { 'GET /api/v1/drive/settings': () => json({ enabled: true, retailer: 'leclerc' }) },
-      detail('ACTIVE'),
-      true,
-      '/liste',
-      '0.1.0',
-    )
+  it('application trop ancienne : la phrase d’abord, les réglages jamais', async () => {
+    const { context } = await openActive({}, detail('ACTIVE'), true, '/liste', '0.1.0')
     await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
 
     button('Envoyer au drive')?.click()
@@ -743,18 +824,15 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     },
   )
 
-  it('mène aux réglages du drive, sans confirmation, quand aucun magasin n’est enregistré', async () => {
-    const { fetchMock, context } = await openActive({
+  it('aucun magasin enregistré (un back sans `selection`) : pas de « Envoyer au drive » non plus (DRV-737)', async () => {
+    const { fetchMock } = await openActive({
       'GET /api/v1/drive/settings': () => json({ enabled: true, retailer: 'leclerc' }),
     })
-    await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+    await vi.waitFor(() => expect(calls(fetchMock)).toContain('GET /api/v1/drive/settings'))
+    await flushPromises()
 
-    button('Envoyer au drive')?.click()
-    await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-settings'))
-
-    // Le magasin est demandé en un geste, et l'écran du magasin sait quelle liste l'attend (DRV-622)
-    expect(context.router.currentRoute.value.query).toEqual({ magasin: 'requis', retour: 'liste' })
-    expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-lists/l1/send')
+    expect(button('Envoyer au drive')).toBeUndefined()
+    expect(rowActions()).toEqual(['Terminer', 'Plus d’actions'])
   })
 
   it('revenu de l’écran du magasin, rouvre la confirmation de l’envoi sans retoucher « Envoyer au drive »', async () => {

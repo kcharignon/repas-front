@@ -383,6 +383,8 @@ export default {
     sentHelp: 'Cette liste est envoyée au drive : elle n’est plus modifiable.',
     resumeSend: 'Reprendre l’envoi',
     send: 'Envoyer au drive',
+    // Aucun drive configuré (DRV-737) : « Envoyer au drive » n'est pas proposé, cette entrée de « ⋮ » mène à son choix
+    configureDrive: 'Configurer un drive',
     sendTitle: 'Envoyer la liste au drive ?',
     sendHelp: 'La liste ne sera plus modifiable. Tu pourras la rouvrir.',
     reopen: 'Rouvrir la liste',
@@ -775,13 +777,11 @@ export default {
       search: 'Chercher sur {retailer}',
       searchFor: 'Chercher sur {retailer} : {name} (s’ouvre dans un nouvel onglet)',
     },
-    // Plusieurs drives configurés, sans drive habituel (DRV-710) : la question, une tuile par drive, la dernière utilisée est cochée
+    // Plusieurs drives configurés (DRV-710, DRV-737) : la question est toujours posée, une tuile par drive, le drive habituel (sinon le dernier utilisé) est coché
     where: {
       title: 'Où envoyer ta liste ?',
       store: 'Ton magasin : …{tail}',
     },
-    // Le drive habituel est ouvert sans question ; ce lien change de drive pour cet envoi seulement (DRV-710)
-    goElsewhere: 'Envoyer ailleurs',
     // Une application trop ancienne pour le drive (DRV-640) : une phrase et un bouton, les liens de recherche restent sous l'écran
     appTooOld: {
       text: 'Mets à jour l’application pour envoyer ta liste.',
@@ -955,6 +955,8 @@ export default {
     entryHelp: 'Ton magasin {retailer} Drive et l’application Repas.',
     // Plusieurs drives allumés (DRV-709)
     entryHelpSeveral: 'Tes drives, ton drive habituel et l’application Repas.',
+    // Aucun drive configuré (DRV-737) : la liste ne propose pas d'envoi, c'est ici qu'on choisit son magasin
+    entryHelpNone: 'Choisis ton magasin pour envoyer ta liste au drive.',
     disabled: 'L’envoi au drive n’est pas encore activé : il n’y a rien à régler pour le moment.',
     // Envoyé ici faute de magasin (DRV-622, DRV-623) : un titre, une phrase, un bouton qui fait le travail
     chooseTitle: 'Choisis ton magasin',
@@ -1034,7 +1036,7 @@ export default {
       updateApp: 'Mets à jour l’application pour ajouter {retailer}.',
       inApp: 'Pour choisir ce magasin, ouvre Repas dans l’application.',
       default: 'Mon drive habituel',
-      defaultHelp: 'Repas l’utilise sans rien te demander.',
+      defaultHelp: 'Repas te le propose d’avance quand tu envoies ta liste.',
       defaultNone: 'Aucun',
     },
   },

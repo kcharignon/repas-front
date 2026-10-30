@@ -66,6 +66,16 @@ describe('entrées du drive dans le compte', () => {
     expect(several).not.toContain('Ton magasin Leclerc Drive')
   })
 
+  it('aucun drive configuré : l’entrée des réglages dit où choisir son magasin (DRV-737)', async () => {
+    const none = { selection: { mode: 'NONE', retailer: null, candidates: [] } }
+    const text = (await open(true, none)).text()
+
+    expect(text).toContain('Choisis ton magasin pour envoyer ta liste au drive.')
+    expect(text).not.toContain('Ton magasin Leclerc Drive')
+    const configured = { selection: { mode: 'AUTO', retailer: 'leclerc', candidates: ['leclerc'] } }
+    expect((await open(true, configured)).text()).toContain('Ton magasin Leclerc Drive')
+  })
+
   it('finit par un lien discret vers les conditions d’utilisation du drive (DRV-628)', async () => {
     const wrapper = await open(true)
 
