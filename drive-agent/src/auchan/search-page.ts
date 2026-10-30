@@ -6,6 +6,8 @@
 // (`DEFAULT`), `data-seller-id` (vide en épicerie) et des microdonnées schema.org `name`, `image`, `brand`, `offers`, `price` (décimal, en euros),
 // `priceCurrency` (`EUR`), `availability` (`InStock` vu) ; la carte affiche « 1kg », « 0,91 € / kg » et la mention « Dans mon drive » pour un produit
 // disponible au drive choisi ; 200 à 250 balises `data-product-id` par page, PLUSIEURS PAR PRODUIT (donc jamais un nombre de produits).
+// MESURÉ le 2026-10-30 (DRV-739, B-9) : un produit peut porter PLUSIEURS offres, d'autres vendeurs que le drive (`data-seller-type="ONLINE"`, livraison) : seules
+// les offres `GROCERY` sont celles du drive. Un produit sans offre `GROCERY` n'est pas un produit du drive (écarté, compté à part).
 // NON MESURÉ (chaque point est marqué où il sert) : sur QUEL élément chaque attribut et chaque microdonnée se trouvent, la forme de l'élément qui
 // porte le contenu net et le prix au kilo, les valeurs « indisponible », les produits d'un autre vendeur, les promotions, la pagination et l'ordre.
 import { LIMITS } from '../../protocol'
@@ -55,7 +57,15 @@ export interface PageReading {
   found: number
   /** Ceux qu'on n'a pas su lire (pas d'offre sûre, pas de nom) : écartés, jamais devinés. */
   unreadable: number
+  /**
+   * Ceux qui ne sont PAS du drive (DRV-739, B-9) : toutes leurs offres sont d'un vendeur autre que `GROCERY` (`ONLINE` mesuré). Ni lus ni « illisibles » : ce
+   * ne sont pas des résultats de la recherche du drive, et ils ne disent rien d'une rupture du contrat du site.
+   */
+  notDrive: number
 }
+
+/** Le vendeur du drive (MESURÉ, B-1) : toute offre d'un autre vendeur (`ONLINE`, B-9) n'est pas une offre du drive. */
+export const DRIVE_SELLER_TYPE = 'GROCERY'
 
 // —— Les valeurs ————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
@@ -182,21 +192,59 @@ function availabilityOf(card: Element): string[] {
     .filter((value) => value !== '')
 }
 
-/** Lit un produit : `null` s'il est illisible (sans offre sûre, sans carte, sans nom). */
-function readProduct(productId: string, elements: readonly Element[]): PageProduct | null {
-  const offers = new Set<string>()
+/** Ce que la lecture d'un produit rend : le produit, `NOT_DRIVE` (aucune offre du drive : écarté, DRV-739) ou `UNREADABLE` (jamais deviné). */
+type ProductReading = PageProduct | 'NOT_DRIVE' | 'UNREADABLE'
+
+/**
+ * Les offres d'un produit, chacune avec les éléments qui la portent. Le vendeur d'une offre est celui que tous ses éléments disent (`data-seller-type`) ;
+ * `null` quand aucun n'en dit un, que deux se contredisent ou qu'il n'a pas la forme d'un mot de code. Une balise sans `data-offer-id` (le bouton d'ajout
+ * d'une carte, B-1) n'est d'aucune offre.
+ */
+function offersOf(
+  elements: readonly Element[],
+): Map<string, { sellerType: string | null; elements: Element[] }> {
+  const offers = new Map<string, { sellerType: string | null; elements: Element[] }>()
   for (const element of elements) {
     const offer = (element.getAttribute('data-offer-id') ?? '').trim()
-    if (offer !== '') offers.add(offer)
+    if (offer === '') continue
+    const known = offers.get(offer)
+    if (known) known.elements.push(element)
+    else offers.set(offer, { sellerType: null, elements: [element] })
   }
-  const [offerId] = offers
-  // Un produit = UN identifiant d'offre sûr : sans lui, ou avec deux, on ne saurait pas laquelle mettre au panier.
-  if (offers.size !== 1 || offerId === undefined || !UUID.test(offerId)) return null
+  for (const offer of offers.values())
+    offer.sellerType = code(agreed(offer.elements, 'data-seller-type'))
+  return offers
+}
+
+/**
+ * Lit un produit. DRV-739 (B-9, MESURÉ le 2026-10-30) : une offre n'est une offre du DRIVE que si son vendeur est `GROCERY` ; un produit peut porter des offres
+ * d'autres vendeurs (`ONLINE`, livraison), qui sont écartées AVANT de compter. Il reste :
+ *  - une seule offre du drive : le produit est lu avec elle ;
+ *  - aucune, parce que toutes sont d'un vendeur connu autre que `GROCERY` : `NOT_DRIVE` ;
+ *  - plusieurs : `UNREADABLE`, on ne saurait pas laquelle mettre au panier ; ou aucune offre du tout, pas de carte, pas de nom : `UNREADABLE`.
+ * Une offre dont le vendeur n'est pas lisible (absent, contradictoire, mal formé) n'est PAS écartée : elle reste comptée comme avant (jamais écarter ce
+ * qu'on ne comprend pas).
+ */
+function readProduct(productId: string, elements: readonly Element[]): ProductReading {
+  const all = offersOf(elements)
+  const offers = [...all].filter(
+    ([, offer]) => offer.sellerType === null || offer.sellerType === DRIVE_SELLER_TYPE,
+  )
+  if (all.size > 0 && offers.length === 0) return 'NOT_DRIVE'
+  const [only] = offers
+  // Un produit = UNE offre du drive sûre : sans elle, ou avec deux, on ne saurait pas laquelle mettre au panier.
+  if (offers.length !== 1 || only === undefined || !UUID.test(only[0])) return 'UNREADABLE'
+  const offerId = only[0]
+  // Les éléments de CETTE offre (et ceux d'aucune offre) : les attributs des autres offres du produit ne se mélangent pas aux siens.
+  const own = elements.filter((element) => {
+    const offer = (element.getAttribute('data-offer-id') ?? '').trim()
+    return offer === '' || offer === offerId
+  })
   const card = cardOf(elements, productId)
-  if (card === null) return null
+  if (card === null) return 'UNREADABLE'
   const nameElement = nameOf(card)
   const name = nameElement ? cut(contentOrText(nameElement), LIMITS.label) : ''
-  if (name === '') return null
+  if (name === '') return 'UNREADABLE'
   const brandElement = prop(card, 'brand')[0]
   const brandName = brandElement ? prop(brandElement, 'name')[0] : undefined
   const brand = brandElement ? cut(contentOrText(brandName ?? brandElement), LIMITS.label) : ''
@@ -211,9 +259,9 @@ function readProduct(productId: string, elements: readonly Element[]): PageProdu
   return {
     productId,
     offerId,
-    sellerType: code(agreed(elements, 'data-seller-type')),
-    offerType: code(agreed(elements, 'data-offer-type')),
-    sellerId: code(agreed(elements, 'data-seller-id')),
+    sellerType: code(agreed(own, 'data-seller-type')),
+    offerType: code(agreed(own, 'data-offer-type')),
+    sellerId: code(agreed(own, 'data-seller-id')),
     name,
     brand: brand === '' ? null : brand,
     image: image ? addressOf(image, ['content', 'src', 'href']) : null,
@@ -240,15 +288,18 @@ export function readProducts(doc: Document): PageReading {
     else groups.set(id, [marker])
   }
   const products: PageProduct[] = []
+  let notDrive = 0
   for (const [id, elements] of groups) {
     const product = readProduct(id, elements)
-    if (product !== null) products.push(product)
+    if (product === 'NOT_DRIVE') notDrive += 1
+    else if (product !== 'UNREADABLE') products.push(product)
   }
   return {
     products,
     markers: markers.length,
     found: groups.size,
-    unreadable: groups.size - products.length,
+    unreadable: groups.size - products.length - notDrive,
+    notDrive,
   }
 }
 

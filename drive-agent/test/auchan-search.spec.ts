@@ -269,7 +269,6 @@ describe('la disponibilité : tout ce qui n’est pas CLAIREMENT disponible est 
       { availability: ['https://schema.org/InStock', 'https://schema.org/SoldOut'] },
     ],
     ['InStock sans « Dans mon drive »', { inDrive: false }],
-    ['un autre type de vendeur (non mesuré)', { sellerType: 'MARKETPLACE' }],
     ['un autre type d’offre (non mesuré)', { offerType: 'PROMOTION' }],
   ])('%s : stock 0, jamais disponible', async (_name, options) => {
     expect(await oneProduct(options)).toMatchObject({ stock: 0 })
@@ -883,5 +882,171 @@ describe('les faits du diagnostic : des formes et des nombres, jamais une valeur
 
     expect(await adapter.exploreSearchVariants()).toEqual([])
     expect(site.calls).toEqual([])
+  })
+})
+
+// —— DRV-739 : une offre n'est une offre du DRIVE que si son vendeur est GROCERY (B-9) ————————————————————————————————————————————
+
+describe('un produit en vente en ligne seulement n’est pas un produit du drive : écarté, sans arrêter l’envoi (DRV-739)', () => {
+  const ONLINE = '3f4a5b6c-7d8e-4f90-8a1b-2c3d4e5f6a7b'
+  const OFFERS = [
+    '4a5b6c7d-8e9f-4a01-8b2c-3d4e5f6a7b8c',
+    '6c7d8e9f-a0b1-4c23-8d4e-5f6a7b8c9d0e',
+    '8e9fa0b1-c2d3-4e45-8f6a-7b8c9d0e1f20',
+  ]
+  const DRIVE_OFFER = 'a0b1c2d3-e4f5-4a67-8b8c-9d0e1f2a3b4c'
+  const OTHER = '2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e'
+  const OTHER_OFFER = '4d5e6f7a-8b9c-4d0e-9f2a-3b4c5d6e7f80'
+
+  /** Les balises d'une offre, à la forme mesurée : plusieurs éléments par offre, un vendeur et un type d'offre. */
+  const tag = (id: string, offer: string, seller: string, element = 'div'): string =>
+    `<${element} data-product-id="${id}" data-offer-id="${offer}" data-seller-type="${seller}" data-offer-type="DEFAULT"></${element}>`
+
+  /** Un produit à la forme mesurée du 2026-10-30 : un nom, un prix, des offres (identifiant et vendeur), des boutons SANS offre. */
+  function product(id: string, offers: [string, string][], name = 'Thé glacé de test'): string {
+    return `<article itemscope itemtype="https://schema.org/Product"><h3 itemprop="name">${name}</h3>
+<div itemprop="offers" itemscope itemtype="https://schema.org/Offer"><meta itemprop="price" content="1.89"><meta itemprop="priceCurrency" content="EUR"><link itemprop="availability" href="https://schema.org/InStock"></div>
+${offers.map(([offer, seller]) => tag(id, offer, seller) + tag(id, offer, seller, 'footer')).join('\n')}
+<button type="button" data-product-id="${id}">Ajouter</button></article>`
+  }
+  const onlineOnly = (): string =>
+    product(
+      ONLINE,
+      OFFERS.map((offer) => [offer, 'ONLINE']),
+    )
+  const farine = (): string => card()
+
+  it('une page dont le seul produit n’a que des offres ONLINE (trois offres) : aucun produit, sans erreur, et le fait est rapporté', async () => {
+    const { adapter } = shop(page(onlineOnly()))
+
+    const candidates = await adapter.searchProducts('ice tea green')
+
+    expect(candidates).toEqual([])
+    expect(adapter.lastSearchFacts()).toMatchObject({ outcome: 'EMPTY', products: 0, notDrive: 1 })
+    expect(adapter.lastSearchFacts()).not.toHaveProperty('fault')
+  })
+
+  it('une page de produits du drive et d’un produit en ligne seulement : les produits du drive, rien d’autre', async () => {
+    const { adapter } = shop(page(onlineOnly(), farine()))
+
+    const candidates = await adapter.searchProducts('farine')
+
+    expect(candidates.map((candidate) => candidate.id)).toEqual([FARINE])
+    expect(adapter.lastSearchFacts()).toMatchObject({
+      outcome: 'PRODUCTS',
+      products: 1,
+      notDrive: 1,
+    })
+  })
+
+  it('un produit en ligne ET au drive : les offres ONLINE sont ignorées avant de compter, le produit est lu avec l’offre du drive', async () => {
+    const mixed = product(OTHER, [
+      [OFFERS[0] ?? '', 'ONLINE'],
+      [OTHER_OFFER, 'GROCERY'],
+      [OFFERS[1] ?? '', 'ONLINE'],
+    ])
+    const { adapter } = shop(page(mixed))
+    const remembered: [string, unknown][] = []
+    adapter.rememberOffer = (productId, offer) => {
+      remembered.push([productId, offer])
+      return true
+    }
+
+    const [candidate] = await adapter.searchProducts('the')
+
+    expect(candidate).toMatchObject({ id: OTHER, offerId: OTHER_OFFER })
+    expect(remembered).toEqual([
+      [OTHER, { offerId: OTHER_OFFER, sellerType: 'GROCERY', offerType: 'DEFAULT' }],
+    ])
+  })
+
+  it('un produit qui a PLUSIEURS offres du drive différentes reste ambigu : illisible, jamais deviné', async () => {
+    const { adapter } = shop(
+      page(
+        product(OTHER, [
+          [OTHER_OFFER, 'GROCERY'],
+          [DRIVE_OFFER, 'GROCERY'],
+          [OFFERS[0] ?? '', 'ONLINE'],
+        ]),
+        farine(),
+      ),
+    )
+
+    const candidates = await adapter.searchProducts('x')
+
+    expect(candidates.map((candidate) => candidate.id)).toEqual([FARINE])
+    expect(adapter.lastSearchFacts()).toMatchObject({ outcome: 'PRODUCTS', products: 1 })
+    expect(adapter.lastSearchFacts()).not.toHaveProperty('notDrive')
+  })
+
+  it('une page dont le seul produit a plusieurs offres du drive : CONTRACT_CHANGED (SEARCH_PRODUCTS_UNREADABLE), on ne sait pas laquelle ajouter', async () => {
+    const ambiguous = product(OTHER, [
+      [OTHER_OFFER, 'GROCERY'],
+      [DRIVE_OFFER, 'GROCERY'],
+    ])
+    const { adapter } = shop(page(ambiguous))
+
+    const error = await failureOf(() => adapter.searchProducts('x'))
+
+    expect(error).toMatchObject({ code: 'CONTRACT_CHANGED', cause: 'SEARCH_PRODUCTS_UNREADABLE' })
+  })
+
+  it('un produit du drive illisible à côté d’un produit en ligne seulement : CONTRACT_CHANGED, une vraie rupture du contrat', async () => {
+    const { adapter } = shop(page(onlineOnly(), card({ name: '' })))
+
+    const error = await failureOf(() => adapter.searchProducts('x'))
+
+    expect(error).toMatchObject({ code: 'CONTRACT_CHANGED', cause: 'SEARCH_PRODUCTS_UNREADABLE' })
+  })
+
+  it('un produit sans aucune offre (balises sans identifiant d’offre) reste illisible, pas « hors drive »', async () => {
+    const { adapter } = shop(fixture('recherche-sans-offre.html'))
+
+    const error = await failureOf(() => adapter.searchProducts('sansoffre'))
+
+    expect(error).toMatchObject({ code: 'CONTRACT_CHANGED', cause: 'SEARCH_PRODUCTS_UNREADABLE' })
+  })
+
+  it('un vendeur dont le code est illisible (mal formé) n’est pas écarté : l’offre est comptée comme avant', async () => {
+    const { adapter } = shop(page(card({ sellerType: 'x y' })))
+
+    const [candidate] = await adapter.searchProducts('farine')
+
+    expect(candidate).toMatchObject({ id: FARINE, stock: 0 })
+  })
+
+  it('un autre vendeur connu (MARKETPLACE) est écarté comme ONLINE : seul GROCERY est le drive', async () => {
+    const { adapter } = shop(page(card({ sellerType: 'MARKETPLACE' })))
+
+    expect(await adapter.searchProducts('farine')).toEqual([])
+    expect(adapter.lastSearchFacts()).toMatchObject({ outcome: 'EMPTY', notDrive: 1 })
+  })
+
+  it('readProductFromSearch applique la même règle : un produit en ligne seulement est « introuvable » (null), pas une rupture', async () => {
+    const { adapter } = shop(page(onlineOnly()))
+
+    expect(await adapter.readProductFromSearch('ice tea', ONLINE)).toBeNull()
+  })
+
+  it('les pages du faux site (fixtures) : « en ligne » est sans produit, « mixte » ne rend que le produit du drive avec son offre', async () => {
+    const online = shop(fixture('recherche-en-ligne.html'))
+    const mixed = shop(fixture('recherche-mixte.html'))
+
+    expect(await online.adapter.searchProducts('enligne')).toEqual([])
+    const candidates = await mixed.adapter.searchProducts('mixte')
+
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0]).toMatchObject({ id: FARINE, offerId: FARINE_OFFER })
+    expect(mixed.adapter.lastSearchFacts()).toMatchObject({ products: 1, notDrive: 1 })
+  })
+
+  it('les faits rapportent un nombre, jamais un identifiant ni un libellé du produit écarté', async () => {
+    const { adapter } = shop(page(onlineOnly()))
+    await adapter.searchProducts('ice tea green')
+
+    const facts = JSON.stringify(adapter.lastSearchFacts())
+
+    for (const secret of [ONLINE, ...OFFERS, 'Thé glacé', 'ice tea'])
+      expect(facts).not.toContain(secret)
   })
 })

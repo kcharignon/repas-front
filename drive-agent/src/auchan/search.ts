@@ -7,9 +7,12 @@
 //      seulement, mêmes garde-fous), et le fait est consigné dans les faits de la recherche (`landing: 'AISLE'`). Une adresse de rayon sans ce contenu, ou
 //      toute autre page, est `CONTRACT_CHANGED` (`SEARCH_REDIRECTED`). Vers une fiche de produit (`/pr-C…`, NON MESURÉ) : aucun produit, jamais le contenu
 //      de cette fiche lu comme des résultats ;
-//   3. des produits lus : ce sont les résultats ;
-//   4. des traces de produit mais aucun produit lisible : `CONTRACT_CHANGED` (`SEARCH_PRODUCTS_UNREADABLE`), jamais « aucun produit » ;
-//   5. aucune trace de produit : « aucun résultat » SEULEMENT pour la page MESURÉE du site ([isNoResultPage] : titre et `h1` « Votre recherche… » ET la
+//   3. des produits lus : ce sont les résultats (ceux qui ne sont pas du drive sont écartés, voir 4) ;
+//   4. des produits, mais AUCUN du drive (DRV-739, B-9 : toutes leurs offres sont d'un vendeur autre que `GROCERY`, `ONLINE` mesuré le 2026-10-30) et aucun
+//      d'illisible : une page sans résultat utilisable, comme « aucun résultat » (`why: 'NOT_DRIVE'`) ; l'envoi continue avec les autres lignes ;
+//   5. des traces de produit mais aucun produit lisible (des produits du drive illisibles, ou aucun produit reconnu) : `CONTRACT_CHANGED`
+//      (`SEARCH_PRODUCTS_UNREADABLE`), jamais « aucun produit » ;
+//   6. aucune trace de produit : « aucun résultat » SEULEMENT pour la page MESURÉE du site ([isNoResultPage] : titre et `h1` « Votre recherche… » ET la
 //      phrase « Oups, on n'a rien trouvé pour : »), page non redirigée ; sinon `CONTRACT_CHANGED` (`SEARCH_UNKNOWN_PAGE`), y compris pour un rayon sans
 //      aucune carte. Une structure inconnue n'est jamais prise pour une liste vide.
 // Aucune pagination, aucun tri, aucun filtre n'est lu (B-7 : INCONNU) : seule la première page de résultats l'est.
@@ -37,8 +40,10 @@ export interface SearchReading {
   markers: number
   /** Les produits écartés parce qu'illisibles. */
   unreadable: number
-  /** Pourquoi la page est vide : le site a dit « aucun résultat », ou le terme a mené à une fiche de produit. */
-  why?: 'NO_RESULT' | 'REDIRECT_PRODUCT'
+  /** Les produits écartés parce qu'ils ne sont pas du drive (aucune offre `GROCERY`, DRV-739). */
+  notDrive: number
+  /** Pourquoi la page est vide : le site a dit « aucun résultat », le terme a mené à une fiche de produit, ou la page n'a que des produits hors drive. */
+  why?: 'NO_RESULT' | 'REDIRECT_PRODUCT' | 'NOT_DRIVE'
   /** Où le terme a mené quand le site a redirigé (jamais l'adresse) : une page de rayon (lue comme des résultats) ou une fiche de produit (non lue). */
   landing?: Landing
   /** Les phrases de la liste fermée que la page dit (pour le diagnostic). */
@@ -119,6 +124,17 @@ export function interpretSearch(
       products: read.products,
       markers: read.markers,
       unreadable: read.unreadable,
+      notDrive: read.notDrive,
+      phrases,
+      ...(landing !== undefined && { landing }),
+    }
+  }
+  // Des produits, tous hors drive, aucun d'illisible : la page ne dit rien du drive (le site n'a pas changé), la ligne est sans produit.
+  if (read.notDrive > 0 && read.unreadable === 0) {
+    return {
+      ...empty('NOT_DRIVE'),
+      notDrive: read.notDrive,
+      markers: read.markers,
       phrases,
       ...(landing !== undefined && { landing }),
     }
@@ -135,7 +151,7 @@ export function interpretSearch(
 }
 
 function empty(why: NonNullable<SearchReading['why']>): SearchReading {
-  return { kind: 'EMPTY', products: [], markers: 0, unreadable: 0, why, phrases: [] }
+  return { kind: 'EMPTY', products: [], markers: 0, unreadable: 0, notDrive: 0, why, phrases: [] }
 }
 
 // —— Les faits du diagnostic ————————————————————————————————————————————————————————————————————————————————————————————

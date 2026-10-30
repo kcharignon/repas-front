@@ -13,7 +13,11 @@
 //   - `rayonvide`                          : le site REDIRIGE vers une page de rayon sans aucune carte (forme inventée) : page de forme inconnue ;
 //   - `inconnu`                            : une page du site, sans produit ni phrase connue (une forme que l'adaptateur ne reconnaît pas) ;
 //   - `illisible`                          : des balises de produit, mais plus aucune microdonnée (le site a renommé ses champs) ;
-//   - `sansoffre`                          : des cartes dont les balises n'ont plus d'identifiant d'offre.
+//   - `sansoffre`                          : des cartes dont les balises n'ont plus d'identifiant d'offre ;
+//   - `enligne`                            : un produit que la page ne propose qu'en vente EN LIGNE (DRV-739, B-9, MESURÉ le 2026-10-30) : trois offres `data-seller-type="ONLINE"`,
+//                                          aucune du drive (`GROCERY`) ; la page n'a aucun autre produit : la ligne est sans produit, sans erreur ;
+//   - `mixte`                              : le même produit en vente en ligne ET au drive (une offre `ONLINE`, une `GROCERY`) à côté d'un produit en ligne seulement : seul le
+//                                          produit du drive est lu, avec l'offre du drive (forme INVENTÉE d'après B-9).
 // Les autres mots cherchent dans les libellés (sans casse ni accent).
 import { type FakeProduct, PRODUCTS } from './catalog.ts'
 import { barHtml, HTML_HEAD, nav, type PageOptions, PHOTO_HOST, sessionScript } from './pages.ts'
@@ -141,6 +145,55 @@ ${showPrice ? `<span class="price">${euros(product.priceCents)}</span>` : ''}${m
 </article>`
 }
 
+/** Le produit « en ligne seulement » du faux site (DRV-739) : jamais au panier, absent du catalogue. Identifiants INVENTÉS. */
+const ONLINE_PRODUCT = {
+  productId: '3f4a5b6c-7d8e-4f90-8a1b-2c3d4e5f6a7b',
+  label: 'Thé glacé vert de test',
+  brand: 'Marque Test',
+  net: '1,5L',
+  priceCents: 189,
+  photo: 'S00000000008G1GPRIMARY',
+}
+const ONLINE_OFFERS = [
+  {
+    offerId: '4a5b6c7d-8e9f-4a01-8b2c-3d4e5f6a7b8c',
+    sellerId: '5b6c7d8e-9fa0-4b12-8c3d-4e5f6a7b8c9d',
+  },
+  {
+    offerId: '6c7d8e9f-a0b1-4c23-8d4e-5f6a7b8c9d0e',
+    sellerId: '7d8e9fa0-b1c2-4d34-8e5f-6a7b8c9d0e1f',
+  },
+  {
+    offerId: '8e9fa0b1-c2d3-4e45-8f6a-7b8c9d0e1f20',
+    sellerId: '9fa0b1c2-d3e4-4f56-8a7b-8c9d0e1f2031',
+  },
+] as const
+
+/**
+ * Une carte « en ligne seulement » (B-9, MESURÉ : les balises du produit portent trois identifiants d'offre, tous `data-seller-type="ONLINE"` ; certaines
+ * balises, les boutons, n'ont aucune offre). PLAUSIBLE, non mesuré : quels éléments portent quoi.
+ */
+function onlineOnlyCard(offers: readonly (typeof ONLINE_OFFERS)[number][] = ONLINE_OFFERS): string {
+  const { productId, label, brand, net, priceCents, photo } = ONLINE_PRODUCT
+  const ids = (offer: (typeof ONLINE_OFFERS)[number], type = 'ONLINE'): string =>
+    `data-product-id="${productId}" data-offer-id="${offer.offerId}" data-seller-type="${type}" data-offer-type="DEFAULT"`
+  const first = offers[0]
+  return `<article class="product" ${first ? ids(first) : `data-product-id="${productId}"`} itemscope itemtype="https://schema.org/Product">
+<meta itemprop="image" content="https://${PHOTO_HOST}/media/${photo}">
+<h3 itemprop="name">${label}</h3>
+<span itemprop="brand">${brand}</span>
+<span class="net">${net}</span>
+<div itemprop="offers" itemscope itemtype="https://schema.org/Offer">
+<meta itemprop="price" content="${(priceCents / 100).toFixed(2)}">
+<meta itemprop="priceCurrency" content="EUR">
+<link itemprop="availability" href="https://schema.org/InStock">
+<span class="price">${euros(priceCents)}</span>
+</div>
+${offers.map((offer) => `<footer class="offer" ${ids(offer)} data-seller-id="${offer.sellerId}"></footer>`).join('\n')}
+<button type="button" data-product-id="${productId}">Ajouter</button> <button type="button" data-product-id="${productId}">Favori</button>
+</article>`
+}
+
 /** Une carte dont les balises n'ont plus d'identifiant d'offre (le site a changé ses attributs). */
 function withoutOffer(item: Listed): string {
   return card(item).replace(/ data-offer-id="[^"]*"/g, '')
@@ -226,6 +279,19 @@ export function searchReply(text: string, options: PageOptions): SearchReply {
         status: 200,
         body: resultsPage(options, text, find('farine').map(withoutOffer).join('\n')),
       }
+    case 'enligne':
+      return { status: 200, body: resultsPage(options, text, onlineOnlyCard()) }
+    case 'mixte': {
+      // Le produit de la farine en vente aussi en ligne (une offre `ONLINE` de plus sur ses balises), à côté d'un produit en ligne seulement.
+      const [farine] = find('farine de blé')
+      const mixed = farine
+        ? card(farine).replace(
+            '</article>',
+            `<footer class="offer" data-product-id="${farine.product.productId}" data-offer-id="${ONLINE_OFFERS[0].offerId}" data-seller-type="ONLINE" data-offer-type="DEFAULT"></footer>\n</article>`,
+          )
+        : ''
+      return { status: 200, body: resultsPage(options, text, `${mixed}\n${onlineOnlyCard()}`) }
+    }
     default: {
       const found = find(text)
       return {

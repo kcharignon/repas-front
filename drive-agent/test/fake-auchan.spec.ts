@@ -126,6 +126,8 @@ describe('les fixtures sont ce que le faux site sert', () => {
     ['recherche-illisible.html', searchReply('illisible', { ...base, bar: 'withdrawal' }).body],
     ['recherche-sans-offre.html', searchReply('sansoffre', { ...base, bar: 'withdrawal' }).body],
     ['recherche-lot.html', searchReply('lot', { ...base, bar: 'withdrawal' }).body],
+    ['recherche-en-ligne.html', searchReply('enligne', { ...base, bar: 'withdrawal' }).body],
+    ['recherche-mixte.html', searchReply('mixte', { ...base, bar: 'withdrawal' }).body],
     ['fiche-produit.html', landingPage(PRODUCT_PAGE_PATH, { ...base, bar: 'withdrawal' }) ?? ''],
     ['rayon.html', landingPage(AISLE_PAGE_PATH, { ...base, bar: 'withdrawal' }) ?? ''],
     ['rayon-vide.html', landingPage(EMPTY_AISLE_PAGE_PATH, { ...base, bar: 'withdrawal' }) ?? ''],

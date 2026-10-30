@@ -320,6 +320,8 @@ export const S = {
       phrases: (list: string) => `Mots de page d’erreur reconnus : ${list}`,
       landing: (term: string, landing: 'AISLE' | 'PRODUCT') =>
         `Recherche « ${term} » : redirigée vers ${landing === 'AISLE' ? 'un rayon (lu comme des résultats)' : 'une fiche de produit (non lue)'}`,
+      notDrive: (term: string, count: number) =>
+        `Recherche « ${term} » : ${count} produit(s) hors drive écarté(s) (aucune offre du drive)`,
       session: (term: string, state: string) => `Connexion dans la réponse « ${term} » : ${state}`,
       keys: (
         term: string,
