@@ -14,9 +14,9 @@ class BridgeMessagesTest {
         (BridgeMessages.screen(data, origin, isMainFrame) as? Inbound.Rejected)?.reason
 
     @Test
-    fun `l'objet s'appelle repasHost et n'existe que pour les sous-domaines de leclercdrive`() {
+    fun `l'objet s'appelle repasHost et n'existe que pour les sous-domaines de leclercdrive et www d'Auchan`() {
         assertEquals("repasHost", BridgeMessages.OBJECT_NAME)
-        assertEquals(setOf("https://*.leclercdrive.fr"), BridgeMessages.ORIGIN_RULES)
+        assertEquals(setOf("https://*.leclercdrive.fr", "https://www.auchan.fr"), BridgeMessages.ORIGIN_RULES)
         assertFalse(BridgeMessages.ORIGIN_RULES.any { it == "*" || it.startsWith("http://") })
     }
 

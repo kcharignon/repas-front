@@ -21,7 +21,7 @@ RETAILER_B=exempleb
 SITE_B_HOST=www.exemple-b.test
 STORE_B_HOST=courses-test.exemple-b.test
 PROFILE_B=drive-exempleb
-# Auchan (DRV-731), enseigne ÉTEINTE que seule une construction de débogage allume (ANDROID_EXTRA_RETAILERS=auchan) : ses deux hôtes de test (le site, et la page du
+# Auchan (DRV-731, servie par l'APK ordinaire depuis DRV-738) : ses deux hôtes de test (le site, et la page du
 # mot de passe, où l'application ne met ni pont ni agent) et le profil de WebView que l'application lui donne. Ce sont des données de l'émulateur, jamais du code de l'application.
 AUCHAN_ID=auchan
 AUCHAN_HOST=www.auchan.fr

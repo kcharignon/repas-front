@@ -126,7 +126,7 @@ services:
       # L'origine de Repas visée par l'APK de débogage (jamais par la publication) et le nom de cet APK : voir android/README.md.
       - ANDROID_REPAS_ORIGIN
       - ANDROID_APK_NAME
-      # Les enseignes éteintes qu'un APK de DÉBOGAGE allume (DRV-728, ex. « auchan ») : vide par défaut, et refusé par une publication.
+      # Les enseignes éteintes qu'un APK de DÉBOGAGE allume (DRV-728 ; aucune aujourd'hui, Auchan est servie par la publication depuis DRV-738) : vide par défaut, et refusé par une publication.
       - ANDROID_EXTRA_RETAILERS
       - ANDROID_KEYSTORE_BASE64
       - ANDROID_KEYSTORE_PASSWORD

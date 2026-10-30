@@ -213,9 +213,8 @@ android-smoke: ## Smoke test: build the debug APK aimed at the local fake Repas,
 	@$(MAKE) --no-print-directory android-emulator-up
 	@DOCKER_COMPOSE="$(DOCKER_COMPOSE)" ./android/emulator/smoke.sh
 
-android-e2e: ## End-to-end scenarios in the emulator against the full fake Leclerc over HTTPS (read the store, a complete pass, abandon, resume, blocked, site changed, then Auchan switched on by a second debug APK); report and screenshots in android/dist/e2e/
+android-e2e: ## End-to-end scenarios in the emulator against the full fake Leclerc over HTTPS (read the store, a complete pass, abandon, resume, blocked, site changed, then Auchan, served by the same APK); report and screenshots in android/dist/e2e/
 	@ANDROID_REPAS_ORIGIN=https://repas.test/ ANDROID_APK_NAME=repas-drive-smoke.apk $(MAKE) --no-print-directory android
-	@ANDROID_REPAS_ORIGIN=https://repas.test/ ANDROID_APK_NAME=repas-drive-auchan.apk ANDROID_EXTRA_RETAILERS=auchan $(MAKE) --no-print-directory android
 	@$(MAKE) --no-print-directory android-emulator-up
 	@DOCKER_COMPOSE="$(DOCKER_COMPOSE)" ./android/emulator/e2e.sh
 

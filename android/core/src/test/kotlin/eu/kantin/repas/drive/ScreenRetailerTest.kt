@@ -147,8 +147,9 @@ class ScreenRetailerTest {
     @Test
     fun `app info annonce les enseignes servies quand l'application les donne, et rien sinon`() {
         val announced = JSONObject(NativeBridge.appInfo("1.2.3", 42, drive = true, retailers = RetailerSites.DEFAULT.announcedRetailers()))
-        assertEquals(1, announced.getJSONArray("retailers").length())
+        assertEquals(2, announced.getJSONArray("retailers").length())
         assertEquals(RetailerSites.DEFAULT.legacy.id, announced.getJSONArray("retailers").getString(0))
+        assertEquals("auchan", announced.getJSONArray("retailers").getString(1))
         assertEquals(setOf("v", "type", "version", "versionCode", "drive", "retailers"), announced.keys().asSequence().toSet())
 
         val two = JSONObject(NativeBridge.appInfo("1.2.3", 42, drive = true, selfUpdate = true, retailers = listOf("un", "deux")))

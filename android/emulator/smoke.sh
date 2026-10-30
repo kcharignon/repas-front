@@ -78,7 +78,8 @@ if wait_until 10 ui_has 'Réglages du drive'; then ok "app.menu ouvre le menu de
 check "le menu propose « Ouvrir le drive Leclerc »" ui_has 'Ouvrir le drive Leclerc'
 check "le menu propose « Version et mode d.emploi »" ui_has "Version et mode d.emploi"
 check "le menu propose de se déconnecter de Leclerc" ui_has 'Se déconnecter de Leclerc'
-check "le menu ne propose aucune enseigne éteinte (Auchan est inscrite mais éteinte, DRV-728)" ui_lacks 'Auchan'
+check "le menu propose « Ouvrir le drive Auchan » (servie par l'APK ordinaire, DRV-738)" ui_has 'Ouvrir le drive Auchan'
+check "le menu propose de se déconnecter d'Auchan" ui_has 'Se déconnecter d.Auchan'
 sleep 1
 screenshot 02-menu-repas
 adb shell input keyevent KEYCODE_BACK

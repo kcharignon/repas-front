@@ -16,41 +16,50 @@ class RetailerSitesTest {
     private val leclerc = RetailerSites.DEFAULT.legacy
 
     @Test
-    fun `le registre de cette version ne sert que la seule enseigne d'aujourd'hui`() {
-        assertEquals(listOf(leclerc), RetailerSites.DEFAULT.all)
-        assertEquals(listOf(leclerc.id), RetailerSites.DEFAULT.announcedRetailers())
-        assertEquals(setOf("https://*.leclercdrive.fr"), RetailerSites.DEFAULT.bridgeOrigins())
+    fun `le registre de cette version sert Leclerc, l'enseigne d'avant, puis Auchan`() {
+        assertEquals(listOf("leclerc", "auchan"), RetailerSites.DEFAULT.all.map { it.id })
+        assertSame(leclerc, RetailerSites.DEFAULT.all.first())
+        assertEquals(listOf(leclerc.id, "auchan"), RetailerSites.DEFAULT.announcedRetailers())
+        assertEquals(setOf("https://*.leclercdrive.fr", "https://www.auchan.fr"), RetailerSites.DEFAULT.bridgeOrigins())
         assertEquals(RetailerSites.DEFAULT.bridgeOrigins(), BridgeMessages.ORIGIN_RULES)
     }
 
     @Test
     fun `sans drapeau de construction, la version sert le registre par defaut lui-meme, sans enseigne eteinte`() {
         listOf(null, "", " ", ",", " , ").forEach { assertSame("« $it »", RetailerSites.DEFAULT, RetailerSites.serving(it)) }
-        assertEquals(listOf("leclerc"), RetailerSites.serving("").announcedRetailers())
-        assertEquals(setOf("https://*.leclercdrive.fr"), RetailerSites.serving("").bridgeOrigins())
+        assertEquals(listOf("leclerc", "auchan"), RetailerSites.serving("").announcedRetailers())
+        assertEquals(setOf("https://*.leclercdrive.fr", "https://www.auchan.fr"), RetailerSites.serving("").bridgeOrigins())
+        assertTrue("depuis DRV-738 aucune enseigne n'est éteinte : le mécanisme attend la prochaine", RetailerSites.SWITCHED_OFF.isEmpty())
         assertTrue("une enseigne éteinte n'est jamais dans le registre par défaut", RetailerSites.SWITCHED_OFF.none { off -> RetailerSites.DEFAULT.all.any { it.id == off.id } })
     }
 
     @Test
-    fun `le drapeau de construction allume une enseigne eteinte, sans changer l'enseigne d'avant ni l'ordre`() {
-        val sites = RetailerSites.serving("auchan")
+    fun `le drapeau de construction allume une enseigne eteinte (fictive), sans changer l'enseigne d'avant ni l'ordre`() {
+        val served = RetailerSites.DEFAULT
+        val sites = RetailerSites.serving("exemplec", served, listOf(FictionalSites.C))
 
-        assertEquals(listOf("leclerc", "auchan"), sites.announcedRetailers())
+        assertEquals(listOf("leclerc", "auchan", "exemplec"), sites.announcedRetailers())
         assertSame(leclerc, sites.legacy)
-        assertEquals(setOf("https://*.leclercdrive.fr", "https://www.auchan.fr"), sites.bridgeOrigins())
-        assertSame(sites.byId("auchan"), sites.forNavigation("https://www.auchan.fr/courses"))
+        assertEquals(served.bridgeOrigins() + "https://www.exemple-c.test", sites.bridgeOrigins())
+        assertSame(FictionalSites.C, sites.forNavigation("https://www.exemple-c.test/courses"))
         assertSame(leclerc, sites.forNavigation("https://www.leclercdrive.fr/"))
         // l'espace et la répétition ne changent rien
-        assertEquals(listOf("leclerc", "auchan"), RetailerSites.serving(" auchan , auchan ").announcedRetailers())
+        assertEquals(listOf("leclerc", "auchan", "exemplec"), RetailerSites.serving(" exemplec , exemplec ", served, listOf(FictionalSites.C)).announcedRetailers())
+        // sans drapeau : le registre servi lui-même
+        assertSame(served, RetailerSites.serving("", served, listOf(FictionalSites.C)))
         // le registre par défaut n'est pas modifié par l'allumage d'un autre
-        assertEquals(listOf("leclerc"), RetailerSites.DEFAULT.announcedRetailers())
+        assertEquals(listOf("leclerc", "auchan"), RetailerSites.DEFAULT.announcedRetailers())
     }
 
     @Test
     fun `un drapeau qui ne designe pas une enseigne eteinte est refuse, rien n'est allume en silence`() {
-        listOf("autre", "Auchan", "AUCHAN", "leclerc", "auchan;leclerc", "auchan autre", "auchan,autre", "auchan.fr", "*", "www.auchan.fr").forEach {
-            assertThrows("« $it »", IllegalArgumentException::class.java) { RetailerSites.serving(it) }
+        val off = listOf(FictionalSites.C)
+        // « auchan » et « leclerc » sont servies : ce ne sont plus des enseignes à allumer
+        listOf("autre", "Exemplec", "EXEMPLEC", "leclerc", "auchan", "exemplec;leclerc", "exemplec autre", "exemplec,autre", "exemple-c.test", "*", "www.exemple-c.test").forEach {
+            assertThrows("« $it »", IllegalArgumentException::class.java) { RetailerSites.serving(it, RetailerSites.DEFAULT, off) }
         }
+        // et le drapeau réel, sans enseigne éteinte, n'allume rien : tout identifiant est refusé
+        listOf("auchan", "leclerc", "exemplec").forEach { assertThrows("« $it »", IllegalArgumentException::class.java) { RetailerSites.serving(it) } }
     }
 
     @Test
@@ -121,7 +130,7 @@ class RetailerSitesTest {
         assertSame(leclerc, sites.legacy)
         assertSame(leclerc, sites.forNavigation("https://www.leclercdrive.fr/"))
         assertSame(FictionalSites.A, sites.forNavigation("https://www.exemple-a.test/"))
-        assertEquals(setOf("https://*.leclercdrive.fr", "https://*.exemple-a.test"), sites.bridgeOrigins())
+        assertEquals(setOf("https://*.leclercdrive.fr", "https://www.auchan.fr", "https://*.exemple-a.test"), sites.bridgeOrigins())
     }
 
     @Test

@@ -36,7 +36,8 @@ class StoreBannerWithoutStorePagesTest {
     fun `l'enseigne fictive de test n'a pas de page de magasin et l'autre en a`() {
         assertFalse(noPages.hasStorePages)
         assertTrue(withPages.hasStorePages)
-        assertTrue(RetailerSites.DEFAULT.all.all { it.hasStorePages })
+        assertTrue("Leclerc, l'enseigne d'avant, a des pages de magasin", RetailerSites.DEFAULT.legacy.hasStorePages)
+        assertFalse("Auchan n'en a pas : l'agent lit le magasin", RetailerSites.DEFAULT.byId("auchan")!!.hasStorePages)
     }
 
     @Test

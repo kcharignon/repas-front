@@ -11,7 +11,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Auchan dans la table des enseignes (DRV-728), **inscrite et éteinte** : la sécurité de la navigation, du pont et de l'injection, sur la vraie entrée du
+ * Auchan dans la table des enseignes (DRV-728, servie par la version publiée depuis DRV-738) : la sécurité de la navigation, du pont et de l'injection, sur la vraie entrée du
  * registre et non sur une enseigne fictive. Les règles sont celles de la décision DRV-715 : on navigue sur `www.auchan.fr` ET `compte.auchan.fr`, mais le
  * pont et l'agent n'existent que sur `www.auchan.fr`, jamais sur la page du mot de passe. Les tables d'adresses hostiles sont celles de Leclerc
  * (`NavigationPolicyTest`, [HostileAddresses]) appliquées à Auchan, plus l'isolement entre les deux enseignes réelles. Aucune adresse n'est ouverte,
@@ -21,6 +21,9 @@ class AuchanSiteTest {
     private val both = RetailerSites.REGISTERED
     private val auchan = both.byId("auchan")!!
     private val leclerc = both.byId("leclerc")!!
+
+    /** Le registre d'une application plus ancienne, qui n'annonce pas Auchan (R5) : Leclerc seul. */
+    private val leclercOnly = RetailerSites(listOf(leclerc))
 
     private val storeUuid = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
     private val runId = "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c"
@@ -47,17 +50,29 @@ class AuchanSiteTest {
     }
 
     @Test
-    fun `Auchan est dans la table mais pas dans le registre de la version publiee`() {
-        assertTrue(RetailerSites.SWITCHED_OFF.any { it === auchan })
-        assertNull(RetailerSites.DEFAULT.byId("auchan"))
-        assertNull(RetailerSites.DEFAULT.forNavigation(home))
-        assertNull(RetailerSites.DEFAULT.forNavigation(loginPage))
-        assertEquals(listOf("leclerc"), RetailerSites.DEFAULT.announcedRetailers())
-        assertEquals(setOf("https://*.leclercdrive.fr"), RetailerSites.DEFAULT.bridgeOrigins())
-        assertEquals(setOf("https://*.leclercdrive.fr"), BridgeMessages.ORIGIN_RULES)
+    fun `Auchan est dans le registre de la version publiee, apres Leclerc, et plus dans les enseignes eteintes`() {
+        assertSame(auchan, RetailerSites.DEFAULT.byId("auchan"))
+        assertTrue(RetailerSites.SWITCHED_OFF.none { it === auchan })
+        assertSame(auchan, RetailerSites.DEFAULT.forNavigation(home))
+        assertSame("la page du mot de passe se navigue dans l'écran d'Auchan", auchan, RetailerSites.DEFAULT.forNavigation(loginPage))
+        assertEquals(listOf("leclerc", "auchan"), RetailerSites.DEFAULT.announcedRetailers())
+        assertSame("Leclerc reste l'enseigne d'avant", leclerc, RetailerSites.DEFAULT.legacy)
+        // le pont : le sous-domaine de Leclerc ET www.auchan.fr (nom exact), jamais compte.auchan.fr ni un joker d'auchan.fr
+        assertEquals(setOf("https://*.leclercdrive.fr", "https://www.auchan.fr"), RetailerSites.DEFAULT.bridgeOrigins())
+        assertEquals(RetailerSites.DEFAULT.bridgeOrigins(), BridgeMessages.ORIGIN_RULES)
+        assertTrue(BridgeMessages.ORIGIN_RULES.none { it.contains("compte") || it.contains("*.auchan") || it == "*" })
+        assertSame(auchan, RetailerSites.DEFAULT.forScreen("auchan"))
+    }
+
+    @Test
+    fun `une application plus ancienne, qui n'annonce pas Auchan, la traite comme n'importe quel autre site`() {
+        assertNull(leclercOnly.byId("auchan"))
+        assertNull(leclercOnly.forNavigation(home))
+        assertNull(leclercOnly.forNavigation(loginPage))
+        assertEquals(listOf("leclerc"), leclercOnly.announcedRetailers())
+        assertEquals(setOf("https://*.leclercdrive.fr"), leclercOnly.bridgeOrigins())
         // l'écran d'Auchan ne s'ouvre pas dans une version qui ne le sert pas : c'est l'écran de l'enseigne d'avant
-        assertSame(leclerc, RetailerSites.DEFAULT.forScreen("auchan"))
-        assertSame(auchan, both.forScreen("auchan"))
+        assertSame(leclerc, leclercOnly.forScreen("auchan"))
     }
 
     // —— la navigation ————————————————————————————————————————————————————————————————————————————————————————
@@ -327,13 +342,12 @@ class AuchanSiteTest {
     fun `un plan d'Auchan n'est lu par aucun registre qui ne la sert pas`() {
         val text = auchanPlan().toString()
 
-        assertNull(DrivePlan.parse(auchanPlan()))
-        assertNull(DrivePlan.parseText(text))
-        assertNull(DrivePlan.parse(auchanPlan(), RetailerSites.DEFAULT))
-        assertNull(DrivePlan.parse(auchanPlan(), RetailerSites.serving("")))
-        assertNotNull(DrivePlan.parse(auchanPlan(), RetailerSites.serving("auchan")))
+        assertNotNull("la version publiée la sert", DrivePlan.parse(auchanPlan()))
+        assertNotNull(DrivePlan.parseText(text))
+        assertNotNull(DrivePlan.parse(auchanPlan(), RetailerSites.serving("")))
+        assertNull("une application plus ancienne ne la lit pas", DrivePlan.parse(auchanPlan(), leclercOnly))
 
-        val refused = NativeBridge.screen("""{"v":1,"type":"drive.start","plan":$text}""", "https://repas.exemple.test", true, "https://repas.exemple.test")
+        val refused = NativeBridge.screen("""{"v":1,"type":"drive.start","plan":$text}""", "https://repas.exemple.test", true, "https://repas.exemple.test", leclercOnly)
         assertEquals("INVALID_PLAN", JSONObject((refused as NativeRequest.Refused).reply).getString("code"))
         val served = NativeBridge.screen("""{"v":1,"type":"drive.start","plan":$text}""", "https://repas.exemple.test", true, "https://repas.exemple.test", both)
         assertSame(auchan, (served as NativeRequest.DriveStart).plan.site)
@@ -344,8 +358,9 @@ class AuchanSiteTest {
         val data = """{"v":1,"type":"drive.setup","runId":"$runId","retailer":"auchan"}"""
         val repas = "https://repas.exemple.test"
 
-        val refused = NativeBridge.screen(data, repas, true, repas) as NativeRequest.Refused
+        val refused = NativeBridge.screen(data, repas, true, repas, leclercOnly) as NativeRequest.Refused
         assertEquals("INVALID_SETUP", JSONObject(refused.reply).getString("code"))
+        assertSame("la version publiée la sert", auchan, (NativeBridge.screen(data, repas, true, repas) as NativeRequest.DriveSetup).setup.site)
         val served = NativeBridge.screen(data, repas, true, repas, both) as NativeRequest.DriveSetup
         assertSame(auchan, served.setup.site)
         assertEquals(home, served.setup.startUrl)
@@ -472,7 +487,8 @@ class AuchanSiteTest {
         assertEquals("drive", DriveProfileName.of(leclerc, both))
         assertEquals("drive-auchan", DriveProfileName.of(auchan, both))
         assertEquals("drive", DriveProfileName.of(leclerc, RetailerSites.DEFAULT))
-        assertEquals("drive", DriveProfileName.of(leclerc, RetailerSites.serving("auchan")))
+        assertEquals("drive-auchan", DriveProfileName.of(auchan, RetailerSites.DEFAULT))
+        assertEquals("drive", DriveProfileName.of(leclerc, leclercOnly))
         assertTrue(Regex("[a-z][a-z0-9-]*").matches(DriveProfileName.of(auchan, both)))
     }
 
