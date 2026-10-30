@@ -3,6 +3,7 @@ import { takeWindowPrimitives, type WindowPrimitives } from '../primitives'
 import { httpCause } from '../retailers/causes'
 import type {
   ArrivalFacts,
+  CartResult,
   CookieFacts,
   EntryReading,
   LocationLike,
@@ -20,15 +21,18 @@ import {
   type RequestStats,
 } from '../retailers/pacer'
 import type { StoreReadFacts } from '../retailers/store-facts'
+import { AuchanCart } from './cart-writer'
+import { isAuchanChallenge } from './challenge'
 import { readEntry } from './entry'
 import { readJourney } from './journey'
 import { addressShape, cookieFacts, isNotFoundPage, storeBar } from './page'
+import type { AuchanOffer } from './offers'
 import { PACING } from './pacing'
 import { readSession } from './session'
 
 /**
- * L'adaptateur d'Auchan (DRV-717), première moitié : le magasin, la connexion, l'entrée, le diagnostic. Il parle au site depuis la page de la personne
- * (chemins relatifs, mêmes cookies), à la cadence d'Auchan (`pacing.ts`, NON MESURÉE). La recherche et le panier (DRV-724, DRV-725) ne sont pas écrits :
+ * L'adaptateur d'Auchan : le magasin, la connexion, l'entrée, le diagnostic (DRV-717) et le panier (DRV-725 : `auchan/cart-writer.ts`). Il parle au site depuis
+ * la page de la personne (chemins relatifs, mêmes cookies), à la cadence d'Auchan (`pacing.ts`, NON MESURÉE). La recherche (DRV-724) n'est pas écrite :
  * ces méthodes lèvent `CONTRACT_CHANGED` de cause `ADAPTER_NOT_WRITTEN`, sans une requête, comme avant.
  */
 
@@ -81,10 +85,29 @@ export class AuchanAdapter implements RetailerAdapter {
   private entryUrl: string | null = null
   /** Le bouton que `readEntry` a trouvé en dernier : le seul que `followEntry` touche. */
   private entryButton: { click(): void } | null = null
+  /** Le panier (DRV-725) : lire d'abord, écrire une quantité absolue, relire. Il parle par le même `Pacer` : jamais deux requêtes à la fois. */
+  private readonly cart: AuchanCart
 
   constructor(deps: AuchanDeps) {
     this.deps = deps
-    this.pacer = new Pacer(deps.fetch, deps, { ...PACING, timeoutMessage: TIMEOUT_MESSAGE })
+    this.pacer = new Pacer(deps.fetch, deps, {
+      ...PACING,
+      timeoutMessage: TIMEOUT_MESSAGE,
+      challenge: isAuchanChallenge,
+    })
+    this.cart = new AuchanCart({
+      request: (url, init) => this.pacer.request(url, init),
+      ...(deps.cookies !== undefined && { cookies: deps.cookies }),
+      member: () => {
+        const { state } = this.readSession()
+        return state === 'UNKNOWN' ? null : state === 'MEMBER'
+      },
+    })
+  }
+
+  /** Retient l'offre d'un produit lu par la recherche (DRV-724 l'appelle pour chaque produit lu) : l'écriture du panier n'a que `productId`. */
+  rememberOffer(productId: string, offer: AuchanOffer): boolean {
+    return this.cart.rememberOffer(productId, offer)
   }
 
   /**
@@ -208,11 +231,11 @@ export class AuchanAdapter implements RetailerAdapter {
 
   // —— Ce qui n'a pas encore de réponse : aucune recherche ni aucun panier n'a eu lieu ———————————————————————————————————————————
 
-  pageCartTotal(): null {
-    return null
+  pageCartTotal(): number | null {
+    return this.cart.totalCents()
   }
-  cartQuantity(): null {
-    return null
+  cartQuantity(productId: string): number | null {
+    return this.cart.quantityOf(productId)
   }
   lastSearchFacts(): null {
     return null
@@ -223,8 +246,8 @@ export class AuchanAdapter implements RetailerAdapter {
   searchProducts(): Promise<never> {
     return notWrittenLater()
   }
-  setCartQuantity(): Promise<never> {
-    return notWrittenLater()
+  setCartQuantity(productId: string, quantity: number): Promise<CartResult> {
+    return this.cart.setQuantity(productId, quantity)
   }
   readProductFromSearch(): Promise<never> {
     return notWrittenLater()

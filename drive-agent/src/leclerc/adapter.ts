@@ -125,6 +125,11 @@ export interface CartResult {
   totalCents: number | null
   /** La disponibilité du produit que la réponse du panier donne (DRV-644), `null` quand elle n'en dit rien. */
   product?: CartProductFacts | null
+  /**
+   * Le code-barres du produit quand la réponse du panier le donne (DRV-725 : une enseigne dont le panier le donne ; Leclerc ne le donne pas). 8 à 14 chiffres ; absent sinon.
+   * Rendu au résultat du choix (`ChosenProduct.ean`) pour que Repas le mémorise.
+   */
+  ean?: string
   /** Le code HTTP de la réponse du site. */
   status: number
 }

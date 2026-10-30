@@ -26,6 +26,8 @@ export interface Settled {
   note: CartNote | null
   /** Ce que la réponse du panier dit de la disponibilité du produit (DRV-644), `null` quand rien n'a été écrit ou qu'elle n'en dit rien. */
   facts?: CartProductFacts | null
+  /** Le code-barres que la réponse du panier a donné pour le produit écrit (DRV-725), absent quand elle n'en donne pas ou que rien n'a été écrit. */
+  ean?: string
 }
 
 /**
@@ -55,6 +57,7 @@ export async function putInCart(
     obtained: cart.obtained,
     note: readable ? null : noteOf(false, wanted, floor),
     ...(cart.product && { facts: cart.product }),
+    ...(cart.ean !== undefined && { ean: cart.ean }),
   }
 }
 
