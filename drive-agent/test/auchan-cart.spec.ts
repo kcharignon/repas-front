@@ -541,6 +541,108 @@ describe('les cookies : deux noms exacts, jamais gardés ni rapportés', () => {
   })
 })
 
+describe('la quantité déjà au panier, LUE (readCartQuantity, DRV-732)', () => {
+  it('lit le panier une seule fois (GET /cart par le Pacer) et répond pour chaque produit depuis cette lecture', async () => {
+    const site = cartSite([{ desired: 4 }])
+    const adapter = adapterOf(site)
+
+    const first = await adapter.readCartQuantity(PRODUCT)
+    const second = await adapter.readCartQuantity(OTHER_PRODUCT)
+    const again = await adapter.readCartQuantity(PRODUCT)
+
+    expect([first, second, again]).toEqual([4, 0, 4])
+    expect(site.calls.map((call) => `${call.init.method} ${call.url}`)).toEqual([
+      `GET /cart?consentId=${CONSENT}`,
+    ])
+    expect(site.peak()).toBe(1)
+  })
+
+  it('une écriture rafraîchit la lecture avec la réponse du site : aucun GET de plus pour le produit suivant', async () => {
+    const site = cartSite([{ productId: OTHER_PRODUCT, offerId: OTHER_OFFER, desired: 2 }])
+    const adapter = adapterOf(site)
+
+    expect(await adapter.readCartQuantity(PRODUCT)).toBe(0)
+    await adapter.setCartQuantity(PRODUCT, 3)
+    const afterWrite = [
+      await adapter.readCartQuantity(PRODUCT),
+      await adapter.readCartQuantity(OTHER_PRODUCT),
+    ]
+
+    expect(afterWrite).toEqual([3, 2])
+    // La lecture du passage, la lecture qui précède l'écriture (DRV-725), l'écriture : rien d'autre.
+    expect(site.calls.map((call) => call.init.method)).toEqual(['GET', 'GET', 'POST'])
+  })
+
+  it('le panier reste lu AVANT chaque écriture (DRV-725) : la quantité envoyée est max(demandée, déjà présente), jamais plus bas', async () => {
+    // Given : 6 au panier pendant que l'on en veut 2, puis une autre personne en pose 9 entre la lecture du passage et l'écriture
+    const site = cartSite([{ desired: 6 }])
+    const adapter = adapterOf(site)
+    expect(await adapter.readCartQuantity(PRODUCT)).toBe(6)
+    site.rows.set(PRODUCT, { productId: PRODUCT, offerId: OFFER, desired: 9 })
+
+    // When
+    const result = await adapter.setCartQuantity(PRODUCT, 7)
+
+    // Then : la lecture d'avant l'écriture a vu 9, rien n'est écrit
+    expect(writes(site.calls)).toHaveLength(0)
+    expect(result).toMatchObject({ obtained: 9, sent: 9 })
+  })
+
+  it('une lecture qui échoue lève l’erreur de l’adaptateur et ne retient rien : la suivante redemande le panier', async () => {
+    let failing = true
+    const site = auchanSite(
+      () => (failing ? { status: 500, body: '' } : { body: cartJson([line({ desired: 4 })]) }),
+      { cookies: () => `lark-consentId=${CONSENT}` },
+    )
+    const adapter = new AuchanAdapter(site.deps)
+
+    const error = await failureOf(() => adapter.readCartQuantity(PRODUCT))
+    failing = false
+    const quantity = await adapter.readCartQuantity(PRODUCT)
+
+    expect(error).toMatchObject({ code: 'NETWORK' })
+    expect(adapter.cartQuantity(PRODUCT)).toBe(4)
+    expect(quantity).toBe(4)
+  })
+
+  it('une écriture qui échoue oublie la lecture : la lecture de quantité suivante redemande le panier', async () => {
+    const site = cartSite([], { mode: 'wrong' })
+    const adapter = adapterOf(site)
+    await adapter.readCartQuantity(PRODUCT)
+
+    const error = await failureOf(() => adapter.setCartQuantity(PRODUCT, 2))
+    await adapter.readCartQuantity(PRODUCT)
+
+    expect(error).toMatchObject({ cause: 'CART_QUANTITY_MISMATCH' })
+    expect(adapter.cartQuantity(PRODUCT)).not.toBeNull()
+    // Lecture du passage, lecture d'avant l'écriture, écriture, puis la lecture refaite.
+    expect(site.calls.map((call) => call.init.method)).toEqual(['GET', 'GET', 'POST', 'GET'])
+  })
+
+  it('un panier connecté est lu sans cartId, un visiteur avec (comme avant l’écriture)', async () => {
+    const member = cartSite([])
+    await adapterOf(member, 'true').readCartQuantity(PRODUCT)
+    const visitor = cartSite([])
+    await adapterOf(visitor, 'false').readCartQuantity(PRODUCT)
+
+    expect(member.calls[0]?.url).toBe(`/cart?consentId=${CONSENT}`)
+    expect(visitor.calls[0]?.url).toBe(`/cart?consentId=${CONSENT}&cartId=${VISITOR_CART}`)
+  })
+
+  it('l’horloge fausse : la lecture passe par le Pacer, à sa cadence', async () => {
+    const site = cartSite([])
+    const adapter = adapterOf(site)
+
+    await adapter.readCartQuantity(PRODUCT)
+    await adapter.setCartQuantity(PRODUCT, 1)
+
+    const gaps = site.calls.slice(1).map((call, index) => call.at - (site.calls[index]?.at ?? 0))
+    // Chaque requête de l'horloge fausse dure 50 ms ; la pause de départ d'Auchan sépare deux requêtes.
+    expect(gaps.every((gap) => gap - 50 >= PACING.pauseMs)).toBe(true)
+    expect(gaps).toHaveLength(2)
+  })
+})
+
 describe('lecture : cartQuantity et pageCartTotal', () => {
   it('rien avant la première lecture (aucune requête pour répondre)', () => {
     const site = cartSite([])
@@ -560,6 +662,17 @@ describe('lecture : cartQuantity et pageCartTotal', () => {
     expect(adapter.cartQuantity(PRODUCT)).toBe(4)
     expect(adapter.cartQuantity(OTHER_PRODUCT)).toBe(0)
     expect(adapter.pageCartTotal()).toBe(273)
+  })
+
+  it('une ligne citée sans quantité lisible est « rien », pas zéro (jamais une quantité inventée)', async () => {
+    const site = cartSite([{ desired: 4, actual: null }])
+    const adapter = adapterOf(site)
+
+    const quantity = await adapter.readCartQuantity(PRODUCT)
+
+    expect(quantity).toBeNull()
+    expect(adapter.cartQuantity(PRODUCT)).toBeNull()
+    expect(adapter.cartQuantity(OTHER_PRODUCT)).toBe(0)
   })
 
   it('un total illisible est « rien » (jamais un total deviné)', async () => {

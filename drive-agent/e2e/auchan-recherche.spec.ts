@@ -130,11 +130,11 @@ test.describe('phase A : un produit connu est retrouvé par sa recherche', () =>
     const app = await open(page, fakeAuchan, agentCode)
     app.answerHello(plan([known]))
 
-    // L'écran de fin (le panier est rempli) : la personne retourne dans Repas
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    // Le panier est rempli et la quantité déjà au panier a été LUE (DRV-732) : le résultat part, sans écran de fin
     const result = await app.received('result')
 
     expect(result).toMatchObject({ outcome: 'completed', lines: [{ outcome: 'ADDED' }] })
+    await expect(page.getByText('Quantité au panier illisible')).toHaveCount(0)
     expect(searches(fakeAuchan).map((request) => request.detail)).toEqual([
       'Farine de blé T55 de test',
     ])
@@ -148,6 +148,76 @@ test.describe('phase A : un produit connu est retrouvé par sa recherche', () =>
       desiredQuantity: 1,
     })
     expect(fakeAuchan.violations()).toEqual([])
+  })
+})
+
+test.describe('phase A : la quantité déjà au panier se lit (DRV-732)', () => {
+  const LAIT = '2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e'
+  const LAIT_OFFER = '4d5e6f7a-8b9c-4d0e-9f2a-3b4c5d6e7f80'
+  const knownLait = {
+    ingredientSlug: 'lait',
+    name: 'Lait',
+    status: 'KNOWN',
+    products: [
+      {
+        id: LAIT,
+        label: 'Lait UHT demi-écrémé de test',
+        packs: 1,
+        packsStatus: 'COMPUTED',
+        offerId: LAIT_OFFER,
+      },
+    ],
+    rejected: [],
+    searchQuery: 'lait',
+  }
+  const cartRequests = (fakeAuchan: FakeAuchan) =>
+    fakeAuchan
+      .paced()
+      .filter((request) => request.kind === 'cart')
+      .map((request) => `${request.method} ${request.path}`)
+
+  test('deux produits connus, l’un déjà au panier en plus grande quantité : « Déjà 4 au panier : conservé », jamais « Quantité au panier illisible », et un seul GET /cart de départ', async ({
+    page,
+    fakeAuchan,
+    agentCode,
+  }) => {
+    // Given : 4 laits déjà au panier, 1 voulu ; une farine à poser
+    fakeAuchan.seedCart(LAIT, 4)
+    const app = await open(page, fakeAuchan, agentCode)
+    app.answerHello(plan([known, knownLait]))
+
+    // Then : l'écran de fin dit ce qui est conservé, et rien d'illisible
+    await expect(page.getByText('Quantités déjà au panier')).toBeVisible()
+    await expect(page.getByText('Déjà 4 au panier : conservé')).toBeVisible()
+    await expect(page.getByText('Quantité au panier illisible')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    const result = await app.received('result')
+    expect(result).toMatchObject({
+      outcome: 'completed',
+      lines: [{ outcome: 'ADDED' }, { outcome: 'ADDED', quantity: 4 }],
+    })
+    // Le panier n'est jamais réduit, le lait n'a coûté aucune écriture
+    expect(fakeAuchan.cart()).toEqual({ [FARINE]: 1, [LAIT]: 4 })
+    expect(fakeAuchan.writes()).toHaveLength(1)
+    // Les requêtes du panier : la lecture du passage, celle d'avant l'écriture de la farine, l'écriture ; le lait se lit depuis la réponse de l'écriture
+    expect(cartRequests(fakeAuchan)).toEqual(['GET /cart', 'GET /cart', 'POST /cart/update'])
+    expect(fakeAuchan.violations()).toEqual([])
+  })
+
+  test('un seul produit connu, panier vide : deux GET /cart (un par passage, un avant l’écriture) et une écriture, aucune mention', async ({
+    page,
+    fakeAuchan,
+    agentCode,
+  }) => {
+    const app = await open(page, fakeAuchan, agentCode)
+    app.answerHello(plan([known]))
+
+    const result = await app.received('result')
+
+    expect(result).toMatchObject({ outcome: 'completed' })
+    await expect(page.getByText('Quantité au panier illisible')).toHaveCount(0)
+    expect(cartRequests(fakeAuchan)).toEqual(['GET /cart', 'GET /cart', 'POST /cart/update'])
+    expect(fakeAuchan.cart()).toEqual({ [FARINE]: 1 })
   })
 })
 

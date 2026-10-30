@@ -3,7 +3,8 @@
 // en plus grande quantité que celle du plan reste tel quel, et la fin du passage le dit.
 //
 // La quantité déjà au panier est celle que la recherche vient de lire (`iQuantitePanier`, la plus récente). Quand la recherche ne la donne
-// pas (champ absent ou illisible), la dernière réponse du panier sert de plancher (`RetailerAdapter.cartQuantity`) et la fin le signale :
+// pas et que l'adaptateur sait lire le panier (`readCartQuantity`, DRV-732), c'est cette lecture. Sinon (champ absent ou illisible), la dernière
+// réponse du panier sert de plancher (`RetailerAdapter.cartQuantity`) et la fin le signale :
 // l'agent n'écrit alors pas plus bas que ce qu'il a su, mais ne peut pas jurer de ce que le panier contient.
 import { LIMITS } from '../../protocol'
 import type { Candidate, CartProductFacts, RetailerAdapter } from '../retailers'
@@ -38,12 +39,22 @@ export interface Settled {
  * @throws {RetailerError} l'erreur de l'adaptateur (`setCartQuantity`), à traiter par l'appelant.
  */
 export async function putInCart(
-  adapter: Pick<RetailerAdapter, 'cartQuantity' | 'setCartQuantity'>,
+  adapter: Pick<RetailerAdapter, 'cartQuantity' | 'setCartQuantity' | 'readCartQuantity'>,
   seen: Candidate,
   wanted: number,
 ): Promise<Settled> {
-  const readable = seen.inCart !== null
-  const floor = readable ? seen.inCart : adapter.cartQuantity(seen.id)
+  let readable = seen.inCart !== null
+  let floor = seen.inCart
+  if (!readable) {
+    if (adapter.readCartQuantity !== undefined) {
+      // L'adaptateur sait lire le panier lui-même (sa page de résultats ne dit pas la quantité, DRV-732) : la quantité lue est alors CONNUE ; `null`
+      // (la ligne est là mais sans quantité lisible) reste « illisible ».
+      floor = await adapter.readCartQuantity(seen.id)
+      readable = floor !== null
+    } else {
+      floor = adapter.cartQuantity(seen.id)
+    }
+  }
   const reachable = Math.min(
     wanted,
     LIMITS.packsMax,
