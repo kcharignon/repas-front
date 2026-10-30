@@ -4,6 +4,7 @@
 //         -> [quantité à vérifier] -> panier -> issue `CHOSEN` (placement `PRIMARY` ou `ONCE`, selon le bouton de la fiche)
 // Jamais un produit refusé (grisé, non sélectionnable), jamais plus que le stock (l'adaptateur plafonne), requêtes en série.
 import {
+  anyOfferId,
   LIMITS,
   packsFromSize,
   type ChosenLine,
@@ -177,6 +178,21 @@ const refusedOf = (product: PlanProduct): RejectedProduct => ({
   ...(product.content && { content: product.content }),
 })
 
+/**
+ * L'identifiant d'offre du produit (DRV-722), ou `null`. Il ne part que s'il a la forme d'une enseigne qui a des offres (`StoreRules.offerId`) : un
+ * identifiant que Repas refuserait ferait perdre tout le lot de choix. Chez Leclerc (aucune offre) la clé n'existe jamais.
+ */
+function offerIdOf(candidate: Candidate): string | null {
+  const rule = anyOfferId()
+  const offerId = candidate.offerId
+  return rule !== null &&
+    offerId !== undefined &&
+    offerId.length <= LIMITS.offerId &&
+    rule.test(offerId)
+    ? offerId
+    : null
+}
+
 /** Le produit tel qu'il part vers Repas : le contenu n'y figure que s'il est plausible (strictement positif). */
 function chosenProduct(candidate: Candidate): ChosenLine['product'] {
   const price = priceOf(candidate)
@@ -184,6 +200,7 @@ function chosenProduct(candidate: Candidate): ChosenLine['product'] {
   // Le rayon et la famille du produit (DRV-642) : des faits du catalogue que Repas apprend ; absents si le site ne les donne pas.
   const rayonId = catalogId(candidate.aisle)
   const familyId = catalogId(candidate.family)
+  const offerId = offerIdOf(candidate)
   return {
     id: candidate.id,
     label: labelOf(candidate),
@@ -191,6 +208,7 @@ function chosenProduct(candidate: Candidate): ChosenLine['product'] {
     ...(price && { price }),
     ...(rayonId !== null && { rayonId }),
     ...(familyId !== null && { familyId }),
+    ...(offerId !== null && { offerId }),
   }
 }
 

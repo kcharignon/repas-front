@@ -14,6 +14,8 @@ import {
   orNull,
   packSize,
   ANY_STORE_ID,
+  anyOfferId,
+  offerId,
   retailerOfHost,
   root,
   STORES,
@@ -56,7 +58,7 @@ function product(scope: Scope, key: string | number, withPrice: boolean): void {
     'label',
     'ean',
     'content',
-    ...(withPrice ? ['price', 'rayonId', 'familyId'] : []),
+    ...(withPrice ? ['price', 'rayonId', 'familyId', 'offerId'] : []),
   ])
   text(own, 'id', ID)
   text(own, 'label')
@@ -70,6 +72,8 @@ function product(scope: Scope, key: string | number, withPrice: boolean): void {
   if (withPrice) {
     optional(own, 'rayonId', (parent, name) => int(parent, name, 1, LIMITS.catalogId))
     optional(own, 'familyId', (parent, name) => int(parent, name, 1, LIMITS.catalogId))
+    // DRV-722 : le résultat ne dit pas l'enseigne ; l'offre doit avoir la forme de l'une de celles qui en ont (aucune : la clé est interdite)
+    optional(own, 'offerId', offerId(anyOfferId()))
   }
 }
 

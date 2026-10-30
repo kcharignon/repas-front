@@ -41,6 +41,19 @@
             "properties": {
               "host": { "type": "string", "pattern": "^[a-z0-9-]+\\.leclercdrive\\.fr$" }
             }
+          },
+          "lines": {
+            "description": "Leclerc n'a pas d'offre (StoreRules.offerId est null) : la clé offerId d'un produit est interdite.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "products": {
+                  "type": "array",
+                  "items": { "type": "object", "not": { "required": ["offerId"] } }
+                }
+              }
+            }
           }
         }
       }
@@ -80,6 +93,12 @@
         },
         "packs": { "type": ["integer", "null"], "minimum": 1, "maximum": 99 },
         "packsStatus": { "enum": ["COMPUTED", "TO_CHECK", null] },
+        "offerId": {
+          "description": "Facultatif (DRV-722) : l'identifiant de l'offre du produit dans le magasin, pour une enseigne dont un produit a deux identifiants. Sa forme est celle de l'enseigne du message (offerIdPattern du contrat des enseignes, une entrée par enseigne à offre dans allOf) ; une enseigne sans offre (Leclerc) l'interdit.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
         "packSize": {
           "description": "Facultatif (DRV-652) : la contenance que la personne a donnée pour CE produit dans l'unité de la ligne (needed.unitSlug), null si elle n'a rien répondu. Quand elle est là, packs est déjà calculé avec elle.",
           "oneOf": [{ "$ref": "#/definitions/packSize" }, { "type": "null" }]

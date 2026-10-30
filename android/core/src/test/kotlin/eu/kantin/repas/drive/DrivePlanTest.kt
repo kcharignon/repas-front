@@ -79,6 +79,21 @@ class DrivePlanTest {
         assertEquals(NavigationPolicy.START_URL, SetupRequest.of(RUN_ID)!!.startUrl)
     }
 
+    /** DRV-722 : `offerId` est un champ facultatif du produit d'un plan ; l'application ne lit pas les lignes, elle le garde tel quel pour l'agent. */
+    @Test
+    fun `l'identifiant d'offre d'un produit du plan n'est ni refuse ni perdu`() {
+        val offer = "0b5f8a2e-3c1d-4e7f-9a6b-123456789abc"
+        val product = JSONObject().put("id", "1000001").put("label", "Farine de test").put("offerId", offer)
+        val line = JSONObject().put("ingredientSlug", "farine").put("name", "Farine").put("status", "KNOWN").put("products", org.json.JSONArray().put(product))
+        val message = JSONObject(valid.toString()).put("lines", org.json.JSONArray().put(line))
+
+        val plan = DrivePlan.parse(message)!!
+
+        assertTrue(sameJson(message, JSONObject(plan.text)))
+        assertTrue(plan.text.contains(offer))
+        assertTrue(sameJson(message, JSONObject(PassRequests.parseText(plan.text)!!.text)))
+    }
+
     @Test
     fun `un plan de 100 lignes est accepte`() {
         assertNotNull(DrivePlan.parse(JSONObject(resource("plan-100-lignes.json"))))

@@ -174,7 +174,13 @@
         "content": { "$ref": "#/definitions/content" },
         "price": { "$ref": "#/definitions/price" },
         "rayonId": { "$ref": "#/definitions/catalogId" },
-        "familyId": { "$ref": "#/definitions/catalogId" }
+        "familyId": { "$ref": "#/definitions/catalogId" },
+        "offerId": {
+          "description": "Facultatif (DRV-722) : l'identifiant de l'offre du produit choisi dans le magasin. Un résultat ne dit pas l'enseigne : sa forme est celle de l'une des enseignes qui ont une offre (StoreRules.offerId), et la clé est interdite tant qu'aucune n'en a ; seuls les validateurs voient cette règle.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        }
       }
     },
     "line": {

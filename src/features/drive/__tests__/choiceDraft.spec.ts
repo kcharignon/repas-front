@@ -4,11 +4,13 @@ import { describe, expect, it } from 'vitest'
 import type { DriveChoice, DriveChoiceProduct } from '@/api'
 import * as draft from '../choiceDraft'
 
-const product = (id: string): DriveChoiceProduct => ({
-  productId: `p-${id}`,
-  retailerProductId: '123456',
-  label: `Produit ${id}`,
-})
+// Le contrat marque `offerId` requis (`default: null` du générateur, DRV-721) alors que la clé est absente d'un produit sans offre
+const product = (id: string): DriveChoiceProduct =>
+  ({
+    productId: `p-${id}`,
+    retailerProductId: '123456',
+    label: `Produit ${id}`,
+  }) as DriveChoiceProduct
 
 const choice = (accepted: string[], rejected: string[], haveAtHome = false): DriveChoice => ({
   ingredientSlug: 'farine',

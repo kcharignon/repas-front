@@ -16,7 +16,7 @@ import { isRateLimited, messageForFailure } from '@/notifications/failures'
 import { useOnline } from '@/offline/useOnline'
 import { driveBridge } from './bridge'
 import { buildChoiceBatches, countChoices, knownProductsOf } from './choices'
-import { finalizeLink } from './retailers'
+import { finalizeLink, retailerOf } from './retailers'
 import { useDrivePlan, useDriveSettings, useSaveChoices } from './queries'
 import { expectedFromPlan } from './restrictToPlan'
 import { useDriveReturnStore } from './returnStore'
@@ -207,7 +207,12 @@ async function persist() {
     )
       ? knownProductsOf(await planData())
       : undefined
-    await save.mutateAsync({ storeId, batches: buildChoiceBatches(current.result, known) })
+    // L'enseigne du plan envoyé dit si les produits choisis portent une offre (DRV-722) ; le plan est lu par le recoupement ci-dessus
+    const retailer = retailerOf(plan.data.value?.retailer)
+    await save.mutateAsync({
+      storeId,
+      batches: buildChoiceBatches(current.result, known, retailer),
+    })
     driveBridge.clearDraft()
     store.saved()
   } catch (error) {
