@@ -1,10 +1,12 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
-import { appContext } from '@/__tests__/helpers'
+import { appContext, json, me, stubApi } from '@/__tests__/helpers'
+import { useSessionStore } from '@/session/session'
 import DriveTermsView from '../DriveTermsView.vue'
 
 afterEach(() => {
+  vi.unstubAllGlobals()
   document.body.innerHTML = ''
 })
 
@@ -119,5 +121,71 @@ describe('conditions d’utilisation du drive', () => {
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
     expect(wrapper.find('a').attributes('href')).toBe('/moi')
     expect(wrapper.find('a').text()).toBe('Moi')
+  })
+})
+
+// Auchan (DRV-727) : la phrase de l'enseigne dans « Avant d'utiliser l'envoi » ne dit que ce que Repas fait. Le texte est une proposition à valider.
+describe('conditions d’utilisation du drive pour Auchan', () => {
+  async function openFor(retailer: string) {
+    stubApi({
+      'POST /api/auth/refresh': () => json({ token: 'jeton' }),
+      'GET /api/v1/me': () => json(me),
+      'GET /api/v1/drive/settings': () =>
+        json({
+          enabled: true,
+          retailer,
+          store:
+            retailer === 'auchan'
+              ? {
+                  id: '0b5f8a2e-3c1d-4e7f-9a6b-123456789abc',
+                  label: null,
+                  baseUrl: 'https://www.auchan.fr/',
+                }
+              : null,
+        }),
+    })
+    localStorage.setItem('repas.session', '1')
+    const context = appContext()
+    await useSessionStore().restore()
+    await context.router.push('/drive/conditions')
+    const wrapper = mount(DriveTermsView, {
+      attachTo: document.body,
+      global: { plugins: context.plugins },
+    })
+    await vi.waitFor(() =>
+      expect(wrapper.text()).toContain(retailer === 'auchan' ? 'Auchan' : 'Leclerc'),
+    )
+    await flushPromises()
+
+    return wrapper
+  }
+
+  it('dit ce que Repas fait sur Auchan : le panier dans la page, ni validation ni paiement', async () => {
+    const text = (await openFor('auchan')).text()
+
+    expect(text).toContain('Repas remplit ton panier dans la page Auchan de ton téléphone.')
+    expect(text).toContain('Il ne valide jamais ta commande et ne paie jamais')
+    expect(text).toContain('une demande à la fois, avec des pauses')
+  })
+
+  it('ne reprend rien du texte de Leclerc : ni son nom, ni sa suspension, ni sa cagnotte', async () => {
+    const text = (await openFor('auchan')).text()
+
+    expect(text).not.toMatch(/leclerc/i)
+    expect(text).not.toContain('suspendre un compte')
+    expect(text).not.toContain('cagnotte')
+    expect(text).toContain('Si Auchan ralentit les requêtes')
+    expect(text).toContain('le service client d’Auchan')
+  })
+
+  it('garde les six mêmes rubriques, et le texte de Leclerc reste celui d’avant pour Leclerc', async () => {
+    const auchan = await openFor('auchan')
+    expect(auchan.findAll('h2')).toHaveLength(6)
+    document.body.innerHTML = ''
+    const leclerc = await openFor('leclerc')
+
+    expect(leclerc.findAll('h2')).toHaveLength(6)
+    expect(leclerc.text()).toContain('suspendre un compte E.Leclerc')
+    expect(leclerc.text()).not.toMatch(/auchan/i)
   })
 })

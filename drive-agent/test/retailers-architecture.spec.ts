@@ -64,3 +64,22 @@ describe('l’agent ne nomme pas son enseigne hors de son dossier', () => {
     expect(stillNaming).toEqual(STILL_NAMING)
   })
 })
+
+// Auchan (DRV-727) : son nom n'est écrit que dans son dossier et dans l'entrée du registre, même dans un commentaire.
+describe('l’agent ne nomme Auchan que dans son dossier et dans le registre', () => {
+  it('le mot « auchan » n’apparaît que dans auchan/ et retailers/index.ts', () => {
+    const naming = all.filter(({ text }) => /auchan/i.test(text)).map(({ file }) => file)
+
+    expect(naming.sort()).toEqual(['auchan/adapter.ts', 'auchan/index.ts', 'retailers/index.ts'])
+  })
+
+  it('l’adaptateur d’Auchan n’importe ni le dossier d’une autre enseigne ni le passage', () => {
+    const imports = all
+      .filter(({ file }) => file.startsWith('auchan/'))
+      .flatMap(({ text }) =>
+        [...code(text).matchAll(/from\s+['"]([^'"]+)['"]/g)].map((match) => match[1]),
+      )
+
+    expect(imports.sort()).toEqual(['../retailers/contract', '../retailers/errors', './adapter'])
+  })
+})

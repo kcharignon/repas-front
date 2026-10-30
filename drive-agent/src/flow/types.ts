@@ -74,6 +74,8 @@ export interface PhaseBContext {
   record(line: ResultLine, notes?: LineNotes): void
   /** Vrai dès que l'utilisateur a touché « Arrêter » : finir la ligne en cours, puis rendre la main. */
   stopRequested(): boolean
+  /** L'identifiant de l'enseigne de la page (`FlowDeps.retailer`), absent quand le registre ne la reconnaît pas : il juge la forme de l'offre d'un produit. */
+  retailer?: string
   /** Remet l'écran de progression, après un écran de la phase B. */
   showProgress(): void
 }
