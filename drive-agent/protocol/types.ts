@@ -8,7 +8,7 @@ export const PROTOCOL_VERSION = 1
  * Les enseignes que le protocole connaît (champ `retailer`, DRV-704). Une enseigne de plus s'ajoute ici et dans `STORES` (`check.ts`), jamais dans
  * un validateur ; le reste du protocole ne nomme aucune enseigne.
  */
-export const RETAILER_IDS = ['leclerc'] as const
+export const RETAILER_IDS = ['leclerc', 'auchan'] as const
 export type RetailerId = (typeof RETAILER_IDS)[number]
 
 /** Les bornes du protocole, vérifiées des deux côtés. */

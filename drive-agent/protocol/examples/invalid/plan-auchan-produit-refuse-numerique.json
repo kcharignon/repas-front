@@ -1,0 +1,41 @@
+{
+  "path": "lines[0].rejected[0].id",
+  "why": "Un produit refusé d’Auchan est un UUID aussi.",
+  "message": {
+    "v": 1,
+    "type": "plan",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "retailer": "auchan",
+    "store": {
+      "id": "0b5f8a2e-3c1d-4e7f-9a6b-123456789abc",
+      "host": "www.auchan.fr"
+    },
+    "returnPath": "/drive/retour",
+    "lines": [
+      {
+        "ingredientSlug": "farine",
+        "name": "Farine",
+        "status": "KNOWN",
+        "products": [
+          {
+            "id": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+            "label": "Farine de blé T55 de test 1 kg",
+            "content": {
+              "value": 1000,
+              "unit": "g"
+            },
+            "packs": 1,
+            "packsStatus": "COMPUTED",
+            "offerId": "3c4d5e6f-7a8b-4c9d-8e1f-2a3b4c5d6e7f"
+          }
+        ],
+        "rejected": [
+          {
+            "id": "999000",
+            "label": "Non"
+          }
+        ]
+      }
+    ]
+  }
+}

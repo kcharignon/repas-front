@@ -1345,10 +1345,16 @@ export default {
         'Tu peux t’en passer à tout moment : la liste de Repas reste utilisable pour faire tes courses à la main sur {retailer}.',
     },
     // Ce qui est propre à chaque enseigne (ADR 0027, DRV-708) : une section par identifiant du registre, jamais le nom d'une enseigne ailleurs.
+    // `specific` : la phrase de l'enseigne dans « Avant d'utiliser l'envoi », entre « ton compte » et « si l'enseigne ralentit ».
     retailers: {
       leclerc: {
-        suspension:
+        specific:
           'Les conditions d’utilisation de Leclerc permettent de suspendre un compte E.Leclerc (et la cagnotte de Tickets E.Leclerc qui va avec) si l’usage est jugé abusif. Repas limite ce risque : une requête à la fois, avec des pauses, seulement quand tu le demandes, et seulement pour ta liste. Mais le risque existe et il est pour ton compte.',
+      },
+      auchan: {
+        // DRV-727, TEXTE À VALIDER par le propriétaire : il ne dit que ce que Repas fait, rien des conditions d’Auchan (le sujet est clos, et leur contenu n’a pas été relevé).
+        specific:
+          'Repas remplit ton panier dans la page Auchan de ton téléphone. Il ne valide jamais ta commande et ne paie jamais : c’est toi qui finis, sur Auchan. Il va doucement : une demande à la fois, avec des pauses, seulement quand tu le demandes, et seulement pour ta liste.',
       },
     },
   },

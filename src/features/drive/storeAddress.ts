@@ -12,6 +12,8 @@ export function parseStoreAddress(
   input: string,
   retailer: Retailer = DEFAULT_RETAILER,
 ): StoreAddress | null {
+  // Un magasin explicite n'est pas dans l'adresse : aucune adresse collée ne dit quel est le magasin (`readExplicitStore`).
+  if (retailer.storeIdSource === 'EXPLICIT') return null
   let url: URL
   try {
     url = new URL(input.trim())
@@ -22,6 +24,22 @@ export function parseStoreAddress(
     return null
 
   return retailer.readStore(url)
+}
+
+/**
+ * Le magasin d'une enseigne dont l'identifiant est explicite (`storeIdSource` `EXPLICIT`), tel que l'application l'a lu : l'identifiant a la forme du contrat et
+ * l'adresse de base est exactement celle de l'enseigne (une constante). `null` sinon, et toujours `null` pour une enseigne dont le magasin se lit dans l'adresse.
+ */
+export function readExplicitStore(
+  id: string,
+  baseUrl: string,
+  retailer: Retailer,
+): StoreAddress | null {
+  if (retailer.storeIdSource !== 'EXPLICIT') return null
+  if (!new RegExp(retailer.storeIdPattern).test(id)) return null
+  if (!new RegExp(retailer.storeAddressPattern).test(baseUrl)) return null
+
+  return { id, baseUrl }
 }
 
 /** Les derniers chiffres de l'identifiant (« …123 ») : l'agent ne lit pas le nom du magasin, c'est ce qu'on montre à la place. */

@@ -25,13 +25,13 @@ const sections = [
   { key: 'never', items: ['credentials', 'cookies', 'address', 'basket', 'photos'] },
   { key: 'where', items: ['server', 'duration', 'backups', 'phone', 'sheets'] },
   { key: 'erase', items: ['product', 'store', 'all', 'rights'] },
-  { key: 'before', items: ['account', 'suspension', 'stop', 'manual'] },
+  { key: 'before', items: ['account', 'specific', 'stop', 'manual'] },
 ] as const
 
 /** Le texte d'un élément ; ce qui est propre à l'enseigne vient de sa section (`driveTerms.retailers.<id>`), le reste est commun. */
 const textKey = (section: string, item: string): string =>
-  item === 'suspension'
-    ? `driveTerms.retailers.${retailer.value.id}.suspension`
+  item === 'specific'
+    ? `driveTerms.retailers.${retailer.value.id}.specific`
     : `driveTerms.${section}.${item}`
 </script>
 

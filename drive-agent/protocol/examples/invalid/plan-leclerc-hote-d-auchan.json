@@ -1,0 +1,22 @@
+{
+  "path": "store.host",
+  "why": "L’hôte d’Auchan n’est pas celui de l’enseigne du message : le motif d’hôte de leclerc ne vaut que pour retailer leclerc.",
+  "message": {
+    "v": 1,
+    "type": "plan",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "retailer": "leclerc",
+    "store": {
+      "id": "000000",
+      "host": "www.auchan.fr"
+    },
+    "returnPath": "/drive/retour",
+    "lines": [
+      {
+        "ingredientSlug": "sel",
+        "name": "Sel",
+        "status": "HAVE_AT_HOME"
+      }
+    ]
+  }
+}

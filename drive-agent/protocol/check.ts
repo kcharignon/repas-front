@@ -15,12 +15,16 @@ export type Key = string | number
 export type Check = (scope: Scope, key: Key) => void
 
 export const ID = /^[0-9]{1,12}$/
+/** Un UUID en minuscules : la forme des identifiants d'Auchan (magasin, produit, offre), celle de `storeIdPattern`, `productIdPattern` et `offerIdPattern` du contrat. */
+export const LOWER_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /** Ce que le protocole demande d'un magasin d'une enseigne (voir `STORES`). */
 export interface StoreRules {
   /** Les hôtes où les magasins de l'enseigne vivent. */
   host: RegExp
   /** La forme de l'identifiant du magasin : propre à l'enseigne (numérique, UUID…), jamais supposée déduite d'une adresse. */
   id: RegExp
+  /** La forme de l'identifiant d'un produit chez l'enseigne (`productIdPattern` du contrat des enseignes). */
+  productId: RegExp
   /** L'adresse de base d'un magasin (`setup-result`) est celle de cet hôte et de ce magasin : la règle de l'enseigne. */
   base(url: string, host: string, id: string): boolean
   /**
@@ -38,17 +42,32 @@ export const STORES: Record<RetailerId, StoreRules> = {
   leclerc: {
     host: /^[a-z0-9-]+\.leclercdrive\.fr$/,
     id: ID,
+    productId: ID,
     base: (url, host, id) => {
       const found = /^https:[/][/]([^/]+)[/]magasin-([0-9]{1,12})-[0-9]{1,12}$/.exec(url)
       return found?.[1] === host && found?.[2] === id
     },
     offerId: null,
   },
+  auchan: {
+    // Le magasin d'Auchan ne se lit pas dans l'adresse (DRV-715 § 2 point 2) : son hôte est celui du site (jamais `compte.auchan.fr`, la page du mot de passe),
+    // son identifiant est lu par l'agent (un UUID), l'adresse de base est une constante de l'enseigne. Un produit a deux identifiants : produit et offre.
+    host: /^www\.auchan\.fr$/,
+    id: LOWER_UUID,
+    productId: LOWER_UUID,
+    base: (url, host) => host === 'www.auchan.fr' && /^https:[/][/]www[.]auchan[.]fr[/]$/.test(url),
+    offerId: LOWER_UUID,
+  },
 }
 
 /** Une forme d'identifiant de magasin d'une enseigne quelconque (un `result` ne dit pas l'enseigne). */
 export const ANY_STORE_ID = new RegExp(
   RETAILER_IDS.map((id) => `(?:${STORES[id].id.source})`).join('|'),
+)
+
+/** La forme d'un identifiant de produit d'une enseigne quelconque (un `result` ne dit pas l'enseigne : l'identifiant a la forme de l'une d'elles). */
+export const ANY_PRODUCT_ID = new RegExp(
+  RETAILER_IDS.map((id) => `(?:${STORES[id].productId.source})`).join('|'),
 )
 
 /**
@@ -190,8 +209,11 @@ export const offerId =
     text(scope, key, rule, LIMITS.offerId)
   }
 
-export const productRef: Check = (scope, key) => {
-  const own = object(scope, key, ['id', 'label'])
-  text(own, 'id', ID)
-  text(own, 'label')
-}
+/** Un produit refusé ou remplacé d'un plan : `rule`, la forme des identifiants de produit de l'enseigne du plan. */
+export const productRef =
+  (rule: RegExp): Check =>
+  (scope, key) => {
+    const own = object(scope, key, ['id', 'label'])
+    text(own, 'id', rule)
+    text(own, 'label')
+  }

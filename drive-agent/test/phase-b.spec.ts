@@ -21,7 +21,7 @@ import {
   type ShelfItem,
 } from './flow-helpers'
 import { backAcceptsLabel } from './back-label-rules'
-import { OFFER_A, OFFER_B, useOfferRetailers } from './offer-retailer'
+import { OFFER_A, OFFER_B } from './offer-retailer'
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -166,6 +166,8 @@ function run(
     incoherent?: string[]
     /** La recherche d'un produit connu par son libellé : vrai si le moteur le retrouve (par défaut : toujours, s'il est au rayon). */
     sees?: (query: string, id: string) => boolean
+    /** L'enseigne de la page (`FlowDeps.retailer`) ; absente : le registre ne la reconnaît pas. */
+    retailer?: string
   } = {},
 ) {
   const adapter = fakeAdapter(options.shelf ?? SHELF, {
@@ -190,6 +192,7 @@ function run(
     ui: screens.ui,
     adapter: adapter.adapter,
     phaseB: guidedChoice,
+    ...(options.retailer !== undefined && { retailer: options.retailer }),
   })
   const start = () => flow.start(plan([line, ...(options.others ?? [])]))
   return { start, adapter, screens, user, sent, flow }
@@ -3482,9 +3485,12 @@ describe('l’identifiant d’offre du produit choisi (DRV-722)', () => {
   })
 
   it('chez Leclerc (aucune offre), rien ne part, même si un candidat en portait une : le résultat reste octet pour octet comme avant', async () => {
-    const plain = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')])
+    const plain = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')], {
+      retailer: 'leclerc',
+    })
     const odd = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')], {
       shelf: withOffer(OFFER_A),
+      retailer: 'leclerc',
     })
 
     await plain.start()
@@ -3494,9 +3500,8 @@ describe('l’identifiant d’offre du produit choisi (DRV-722)', () => {
     expect(JSON.stringify(plain.sent)).not.toContain('offerId')
   })
 
-  describe('pour une enseigne qui a des offres (fictive)', () => {
-    useOfferRetailers()
-
+  // Sans enseigne reconnue (`retailer` absent), l'offre est jugée par la forme de celles des enseignes qui en ont : l'UUID d'Auchan (DRV-727).
+  describe('pour une enseigne qui a des offres (la forme d’Auchan)', () => {
     it('renvoie l’offre du produit choisi, et d’aucun autre', async () => {
       const test = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')], {
         shelf: {

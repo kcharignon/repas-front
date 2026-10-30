@@ -32,6 +32,8 @@ export const CAUSE_LABELS = {
   SEARCH_COMMON_EMPTY: 'aucun produit pour le mot courant d’essai',
   SEARCH_FIELDS_INCOMPLETE: 'produits lus sans tous les champs attendus',
   CONTENT_UNREADABLE: 'contenu net illisible pour la plupart des produits',
+  // Un adaptateur déclaré mais pas encore écrit (DRV-727).
+  ADAPTER_NOT_WRITTEN: 'adaptateur de l’enseigne pas encore écrit',
   // Un incident imprévu de l'agent (jamais son message).
   EXCEPTION: 'incident imprévu de l’agent',
 } as const

@@ -1517,7 +1517,7 @@ export interface components {
             token: string;
         };
         /** @enum {string} */
-        Retailer: "leclerc";
+        Retailer: "leclerc" | "auchan";
         ForgetChoiceRequestQuery: {
             retailer: components["schemas"]["Retailer"];
             storeId: string;
@@ -2727,7 +2727,7 @@ export interface components {
              * @example leclerc
              * @enum {string}
              */
-            retailer: "leclerc";
+            retailer: "leclerc" | "auchan";
             store: components["schemas"]["DriveStoreDTO"];
             /**
              * @description Total estimé en centimes : somme des sous-totaux des lignes `ESTIMATED` seulement ; les autres lignes ne sont pas devinées
@@ -2955,7 +2955,7 @@ export interface components {
              * @example leclerc
              * @enum {string}
              */
-            retailer: "leclerc";
+            retailer: "leclerc" | "auchan";
             store: components["schemas"]["DriveStoreDTO"];
             /**
              * @description Date de calcul du plan (ISO 8601)
@@ -2972,7 +2972,7 @@ export interface components {
              * @example leclerc
              * @enum {string}
              */
-            retailer: "leclerc";
+            retailer: "leclerc" | "auchan";
             /**
              * @description Nom de l'enseigne, tel que les proches le disent
              * @example Leclerc
@@ -2997,7 +2997,7 @@ export interface components {
              * @example leclerc
              * @enum {string}
              */
-            retailer: "leclerc";
+            retailer: "leclerc" | "auchan";
             /** @description Magasin de l'utilisateur, `null` tant qu'il n'a pas été enregistré */
             store?: components["schemas"]["DriveStoreDTO"] | null;
             /** @description Une entrée par enseigne **allumée** (`DRIVE_RETAILERS`, DRV-702 ; ordre fixe), avec le magasin de l'utilisateur chez chacune ; s'ajoute aux champs `retailer` et `store`, qui restent ceux de l'enseigne par défaut */
@@ -6085,7 +6085,7 @@ export interface operations {
                  * @description Enseigne du drive
                  * @example leclerc
                  */
-                retailer: "leclerc";
+                retailer: "leclerc" | "auchan";
                 /**
                  * @description Magasin de la préférence : doit être le magasin courant des réglages
                  * @example 123456
@@ -6142,7 +6142,7 @@ export interface operations {
                  * @description Enseigne du drive ; absente, l'enseigne par défaut
                  * @example leclerc
                  */
-                retailer?: "leclerc";
+                retailer?: "leclerc" | "auchan";
             };
             header?: never;
             path: {
@@ -6203,7 +6203,7 @@ export interface operations {
                  * @description Enseigne du drive ; absente, l'enseigne par défaut
                  * @example leclerc
                  */
-                retailer?: "leclerc";
+                retailer?: "leclerc" | "auchan";
             };
             header?: never;
             path: {
@@ -6321,7 +6321,7 @@ export interface operations {
                  * @description Enseigne du drive
                  * @example leclerc
                  */
-                retailer: "leclerc";
+                retailer: "leclerc" | "auchan";
             };
             header?: never;
             path?: never;
