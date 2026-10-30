@@ -47,7 +47,9 @@ describe('pastille de l’onglet « Moi »', () => {
 
     const dot = accountTab(wrapper).get('[data-testid="account-update-dot"]')
     expect(dot.attributes('aria-hidden')).toBe('true')
-    expect(accountTab(wrapper).text()).toBe('Moi, une nouvelle version est prête')
+    // Le texte VISIBLE reste « Moi » (la barre du bas ne change pas de mise en page) ; la phrase longue n'est que le nom accessible
+    expect(accountTab(wrapper).text()).toBe('Moi')
+    expect(accountTab(wrapper).attributes('aria-label')).toBe('Moi, une nouvelle version est prête')
   })
 
   it('l’application dit « plus récent » : pastille', async () => {
