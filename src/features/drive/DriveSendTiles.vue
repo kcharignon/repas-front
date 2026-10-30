@@ -7,7 +7,7 @@ import type { RetailerId } from './retailers'
 import { storeTail } from './storeAddress'
 
 // « Où envoyer ta liste ? » (DRV-710) : une tuile par drive configuré, celle qui est présélectionnée est cochée ; la décision de l'écran est le bouton
-// « Ouvrir {drive} » plus bas. Le nom du drive vient de la liste des réglages, jamais d'un texte écrit ici.
+// « Remplir le panier {drive} » plus bas. Le nom du drive vient de la liste des réglages, jamais d'un texte écrit ici.
 defineProps<{ drives: readonly Drive[]; selected: RetailerId | undefined }>()
 const emit = defineEmits<{ choose: [id: RetailerId] }>()
 

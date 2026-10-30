@@ -147,8 +147,8 @@ test('envoyer une liste au drive, la lire sans pouvoir la modifier, puis la rouv
     .poll(() => page.evaluate(() => window.__sent.filter((m) => m.type === 'drive.start').length))
     .toBe(1)
   await expect(page.getByText('En attente du récapitulatif…')).toBeVisible()
-  // Pas de « Ouvrir le drive » à toucher : deux gestes en tout, et aucun de plus après la confirmation
-  await expect(page.getByRole('button', { name: 'Ouvrir le drive', exact: true })).toHaveCount(0)
+  // Pas de « Remplir mon panier » à toucher : deux gestes en tout, et aucun de plus après la confirmation
+  await expect(page.getByRole('button', { name: 'Remplir mon panier', exact: true })).toHaveCount(0)
   expect(await taps.total()).toBe(2)
 
   // La liste envoyée : lecture seule

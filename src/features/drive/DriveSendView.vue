@@ -141,7 +141,7 @@ const summary = computed(() => {
     skipped: count('SKIP'),
   })
 })
-/** Au-delà de ce nombre d'articles la liste est repliée : la seule décision de l'écran est « Ouvrir le drive ». */
+/** Au-delà de ce nombre d'articles la liste est repliée : la seule décision de l'écran est « Remplir mon panier ». */
 const FOLD_ABOVE = 6
 // Hors de l'application la liste EST l'écran (un lien de recherche par article) : elle reste ouverte
 const folded = computed(() => !assisted.value && lines.value.length > FOLD_ABOVE)
@@ -491,6 +491,21 @@ function confirmReopenList() {
             "
             @click="openDrive"
           >
+            <svg
+              class="size-5 shrink-0"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M3 4h2l2.4 10.2a1 1 0 0 0 1 .8h8.7a1 1 0 0 0 1-.8L20 8H6.2" />
+              <circle cx="9.5" cy="19" r="1.4" />
+              <circle cx="17" cy="19" r="1.4" />
+            </svg>
             {{ choice.named ? t('driveSend.openNamed') : t('driveSend.open') }}
           </UiButton>
           <p v-if="!online" class="font-semibold">{{ t('driveSend.offline') }}</p>

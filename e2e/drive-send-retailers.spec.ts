@@ -13,7 +13,7 @@ const overflow = (page: import('@playwright/test').Page) =>
 
 test.use({ viewport: { width: 360, height: 640 } })
 
-test('deux drives configurés, aucun habituel : la question, la dernière utilisée cochée, « Ouvrir Auchan » en une touche', async ({
+test('deux drives configurés, aucun habituel : la question, la dernière utilisée cochée, « Remplir le panier Auchan » en une touche', async ({
   page,
 }) => {
   const back = await fakeSendBack(page, { mode: 'ASK', retailer: 'auchan', lastUsed: 'auchan' })
@@ -25,7 +25,7 @@ test('deux drives configurés, aucun habituel : la question, la dernière utilis
   await expect(group).toBeVisible()
   await expect(group.getByRole('radio', { name: /Auchan/ })).toBeChecked()
   await expect(group.getByText('Ton magasin : …abc')).toBeVisible()
-  const open = page.getByRole('button', { name: 'Ouvrir Auchan' })
+  const open = page.getByRole('button', { name: 'Remplir le panier Auchan' })
   await expect(open).toBeInViewport({ ratio: 1 })
   expect(await overflow(page)).toBeLessThanOrEqual(0)
   await shot(page, 'drv710-deux-drives-question-360')
@@ -59,7 +59,7 @@ test('toucher l’autre tuile (clavier) redemande son plan et nomme le bouton', 
   await page.keyboard.press('ArrowUp')
 
   await expect(group.getByRole('radio', { name: /Leclerc/ })).toBeChecked()
-  await expect(page.getByRole('button', { name: 'Ouvrir Leclerc' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Remplir le panier Leclerc' })).toBeVisible()
   await expect(page.getByText('sont à choisir sur Leclerc')).toBeVisible()
   expect(back.received.filter((call) => call.includes('/plans/l1'))).toEqual([
     'GET /api/v1/drive/plans/l1?retailer=auchan',
@@ -77,14 +77,16 @@ test('un drive habituel et deux drives : la question est posée, l’habituel es
 
   const group = page.getByRole('group', { name: 'Où envoyer ta liste ?' })
   await expect(group.getByRole('radio', { name: /Leclerc/ })).toBeChecked()
-  await expect(page.getByRole('button', { name: 'Ouvrir Leclerc' })).toBeInViewport({ ratio: 1 })
+  await expect(page.getByRole('button', { name: 'Remplir le panier Leclerc' })).toBeInViewport({
+    ratio: 1,
+  })
   await expect(page.getByRole('button', { name: 'Envoyer ailleurs' })).toHaveCount(0)
   expect(await overflow(page)).toBeLessThanOrEqual(0)
   await shot(page, 'drv737-drive-habituel-coche-360')
   await axeBothThemes(page, 'drive-envoi-habituel')
 
   await page.locator('label', { hasText: 'Auchan' }).click()
-  await expect(page.getByRole('button', { name: 'Ouvrir Auchan' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Remplir le panier Auchan' })).toBeVisible()
   expect(back.received.some((call) => call.includes('default-retailer'))).toBe(false)
 })
 
@@ -99,16 +101,16 @@ test('l’application ne connaît pas le drive coché : la phrase le nomme, l’
     page.getByText('Mets à jour l’application pour envoyer ta liste à Auchan.'),
   ).toBeVisible()
   await expect(page.getByRole('link', { name: 'Mettre à jour' })).toBeInViewport({ ratio: 1 })
-  await expect(page.getByRole('button', { name: 'Ouvrir Auchan' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Remplir le panier Auchan' })).toHaveCount(0)
   expect(await overflow(page)).toBeLessThanOrEqual(0)
   await shot(page, 'drv710-application-trop-ancienne-pour-un-drive-360')
   await axeBothThemes(page, 'drive-envoi-application-ancienne')
 
   await page.locator('label', { hasText: 'Leclerc' }).click()
-  await expect(page.getByRole('button', { name: 'Ouvrir Leclerc' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Remplir le panier Leclerc' })).toBeVisible()
 })
 
-test('un seul drive : l’écran d’avant, « Ouvrir le drive », ni question ni lien', async ({
+test('un seul drive : l’écran d’avant, « Remplir mon panier », ni question ni lien', async ({
   page,
 }) => {
   const back = await fakeSendBack(page, {
@@ -119,10 +121,12 @@ test('un seul drive : l’écran d’avant, « Ouvrir le drive », ni question n
   await fakeApp(page, 'silent', '1.0.0')
   await page.goto('/drive/envoi/l1')
 
-  await expect(page.getByRole('button', { name: 'Ouvrir le drive' })).toBeInViewport({ ratio: 1 })
+  await expect(page.getByRole('button', { name: 'Remplir mon panier' })).toBeInViewport({
+    ratio: 1,
+  })
   await expect(page.getByRole('group', { name: 'Où envoyer ta liste ?' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Envoyer ailleurs' })).toHaveCount(0)
-  await page.getByRole('button', { name: 'Ouvrir le drive' }).click()
+  await page.getByRole('button', { name: 'Remplir mon panier' }).click()
   await expect(page.getByText('En attente du récapitulatif…')).toBeVisible()
   expect(back.lastRetailers).toEqual([])
   await shot(page, 'drv710-un-seul-drive-360')

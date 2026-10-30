@@ -209,7 +209,9 @@ test.describe('parcours complet, pont et API simulés', () => {
       .poll(() => page.evaluate(() => window.__sent.some((m) => m.type === 'drive.start')))
       .toBe(true)
     expect(await taps.total()).toBe(before + 1)
-    await expect(page.getByRole('button', { name: 'Ouvrir le drive', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Remplir mon panier', exact: true })).toHaveCount(
+      0,
+    )
     const start = await page.evaluate(() => window.__sent.find((m) => m.type === 'drive.start'))
     const sent = start?.plan as unknown as PlanMessage
     expect(() => validatePlan(sent)).not.toThrow()

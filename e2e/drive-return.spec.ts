@@ -14,7 +14,7 @@ test('un passage arrêté par Leclerc : accessible en clair et en sombre, repli�
   await fakeBack(page)
   await fakeApp(page, 'partial')
   await page.goto('/drive/envoi/l1')
-  await page.getByRole('button', { name: 'Ouvrir le drive' }).click()
+  await page.getByRole('button', { name: 'Remplir mon panier' }).click()
 
   await expect(
     page.getByRole('heading', { level: 1, name: 'Le panier est rempli en partie' }),
@@ -36,7 +36,7 @@ test('un passage arrêté par Leclerc : accessible en clair et en sombre, repli�
     expect((await scan(page)).violations, `déplié, ${colorScheme}`).toEqual([])
   }
 
-  // « Reprendre l'envoi » est l'intention : le drive se rouvre tout seul, sur toute la liste (pas de second « Ouvrir le drive »)
+  // « Reprendre l'envoi » est l'intention : le drive se rouvre tout seul, sur toute la liste (pas de second « Remplir mon panier »)
   await page.getByRole('link', { name: 'Reprendre l’envoi' }).first().click()
   await expect
     .poll(() => page.evaluate(() => window.__sent.filter((m) => m.type === 'drive.start').length))
