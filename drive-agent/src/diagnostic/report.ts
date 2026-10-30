@@ -3,7 +3,7 @@
 // contrôles, qui ne portent que des nombres et des phrases fixes.
 import type { DiagnosticRow } from '../ui'
 import { S } from '../ui'
-import { causeText, type RequestStats } from '../leclerc'
+import { causeText, type RequestStats } from '../retailers'
 import { CHECK_IDS, type CheckId, type CheckResult, type PageFacts } from './checks'
 import { probeLines, type ProbeFacts } from './probes'
 

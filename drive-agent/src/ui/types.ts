@@ -165,7 +165,7 @@ export interface EntryProps {
 export interface ErrorProps {
   code: ErrorCode
   /**
-   * Quelle vérification a échoué (`LeclercError.cause`, ticket A) : une cause qui a son propre texte (le site mobile, ticket J) remplace le titre et
+   * Quelle vérification a échoué (`RetailerError.cause`, ticket A) : une cause qui a son propre texte (le site mobile, ticket J) remplace le titre et
    * le conseil du code d'erreur ; les autres sont ignorées.
    */
   cause?: string

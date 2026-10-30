@@ -3,7 +3,8 @@
 // une seule fois par envoi ; au moindre doute il laisse l'utilisateur toucher le bouton. Un envoi terminé repart sans écran de fin.
 import { describe, expect, it } from 'vitest'
 
-import { LeclercError, type EntryReading } from '../src/leclerc'
+import { type EntryReading } from '../src/leclerc'
+import { RetailerError } from '../src/retailers'
 import {
   expectConform,
   fakeAdapter,
@@ -17,7 +18,7 @@ import {
 } from './flow-helpers'
 
 const notAStore = () => {
-  throw new LeclercError('UNSUPPORTED_PAGE', null, 'PAGE_PATH')
+  throw new RetailerError('UNSUPPORTED_PAGE', null, 'PAGE_PATH')
 }
 const LINK = {
   kind: 'LINK',
@@ -201,7 +202,7 @@ describe('entrer dans le magasin', () => {
   it('un suivi qui échoue laisse le geste manuel', async () => {
     const { flow, screens } = home(LINK, {
       onFollow: () => {
-        throw new LeclercError('BLOCKED')
+        throw new RetailerError('BLOCKED')
       },
     })
 
@@ -215,7 +216,7 @@ describe('entrer dans le magasin', () => {
       {},
       {
         store: () => {
-          throw new LeclercError('UNSUPPORTED_PAGE', null, 'PAGE_HOST')
+          throw new RetailerError('UNSUPPORTED_PAGE', null, 'PAGE_HOST')
         },
       },
     )

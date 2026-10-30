@@ -3,7 +3,7 @@
 // seul fichier qui doit rester petit. La racine du message est la clé vide d'un conteneur, d'où un chemin vide.
 import { ProtocolError } from './error'
 import { isPackValue, UNIT_SLUG } from './pack-size'
-import { CONTENT_UNITS, LIMITS } from './types'
+import { CONTENT_UNITS, LIMITS, RETAILER_IDS, type RetailerId } from './types'
 
 export type Box = Record<string | number, unknown>
 /** Un conteneur (objet ou liste) et son chemin (`lines[2].products`). */
@@ -15,7 +15,40 @@ export type Key = string | number
 export type Check = (scope: Scope, key: Key) => void
 
 export const ID = /^[0-9]{1,12}$/
-export const HOST = /^[a-z0-9-]+\.leclercdrive\.fr$/
+/** Ce que le protocole demande d'un magasin d'une enseigne (voir `STORES`). */
+export interface StoreRules {
+  /** Les hôtes où les magasins de l'enseigne vivent. */
+  host: RegExp
+  /** La forme de l'identifiant du magasin : propre à l'enseigne (numérique, UUID…), jamais supposée déduite d'une adresse. */
+  id: RegExp
+  /** L'adresse de base d'un magasin (`setup-result`) est celle de cet hôte et de ce magasin : la règle de l'enseigne. */
+  base(url: string, host: string, id: string): boolean
+}
+
+/**
+ * Ce qui est propre à chaque enseigne : ses hôtes, l'identifiant de son magasin et l'adresse de base. Chaque règle ne vaut que pour les messages de
+ * cette enseigne ; le validateur n'en suppose aucune (ni que l'identifiant vienne de l'adresse, ni qu'il soit numérique).
+ */
+export const STORES: Record<RetailerId, StoreRules> = {
+  leclerc: {
+    host: /^[a-z0-9-]+\.leclercdrive\.fr$/,
+    id: ID,
+    base: (url, host, id) => {
+      const found = /^https:[/][/]([^/]+)[/]magasin-([0-9]{1,12})-[0-9]{1,12}$/.exec(url)
+      return found?.[1] === host && found?.[2] === id
+    },
+  },
+}
+
+/** Une forme d'identifiant de magasin d'une enseigne quelconque (un `result` ne dit pas l'enseigne). */
+export const ANY_STORE_ID = new RegExp(
+  RETAILER_IDS.map((id) => `(?:${STORES[id].id.source})`).join('|'),
+)
+
+/** L'enseigne dont ce texte est un hôte de magasin, ou `undefined`. */
+export function retailerOfHost(host: string): RetailerId | undefined {
+  return RETAILER_IDS.find((id) => STORES[id].host.test(host))
+}
 
 export function fail(path: string, reason = 'invalide'): never {
   throw new ProtocolError(path, reason)

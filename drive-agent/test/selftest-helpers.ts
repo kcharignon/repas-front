@@ -1,12 +1,12 @@
 // Outils des tests du test automatique (DRV-318) : un magasin simulé (rayons, panier, pannes programmées) derrière `RetailerAdapter`.
 // Données synthétiques seulement : magasin `123456`, produits `2000001` et suivants.
 import {
-  LeclercError,
   type Candidate,
   type CartResult,
   type RetailerAdapter,
   type SessionReading,
 } from '../src/leclerc'
+import { RetailerError } from '../src/retailers'
 import { PASSAGE_WORDS } from '../src/selftest'
 import { fakeStorage, fakeWakeLock, NO_MENU } from './flow-helpers'
 
@@ -174,7 +174,7 @@ export function shop(shelves: Shelves, options: ShopOptions = {}) {
 }
 
 /** Un blocage du site : le code HTTP donné (un 429 par exemple). */
-export const blocked = (status = 429) => new LeclercError('BLOCKED', status)
+export const blocked = (status = 429) => new RetailerError('BLOCKED', status)
 
 export function runDeps(adapter: RetailerAdapter) {
   let clock = NOW

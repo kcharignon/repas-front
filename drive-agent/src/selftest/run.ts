@@ -4,7 +4,7 @@
 // Garde-fous : au plus 3 produits ajoutés, jamais une quantité au-dessus de 3, jamais un produit déjà au panier (le retrait y mettrait sa
 // quantité à 0), arrêt immédiat sur blocage du site, et le nettoyage (quantité 0 de tout ce qui a été touché) est toujours tenté.
 import { runChecks, type ChecksDeps, type PageFacts } from '../diagnostic'
-import { LeclercError, type Candidate, type CartResult } from '../leclerc'
+import { RetailerError, type Candidate, type CartResult } from '../retailers'
 import { S } from '../ui'
 import type {
   CartState,
@@ -61,7 +61,7 @@ export interface RunDeps extends ChecksDeps {
 const BLOCKING = new Set<Failure['code']>(['BLOCKED', 'NOT_LOGGED_IN', 'UNSUPPORTED_PAGE'])
 
 const failureOf = (error: unknown): Failure =>
-  error instanceof LeclercError
+  error instanceof RetailerError
     ? { code: error.code, http: error.status, ...(error.cause && { cause: error.cause }) }
     : { code: 'OTHER', http: null }
 

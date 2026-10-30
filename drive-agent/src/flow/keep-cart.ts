@@ -6,7 +6,7 @@
 // pas (champ absent ou illisible), la dernière réponse du panier sert de plancher (`RetailerAdapter.cartQuantity`) et la fin le signale :
 // l'agent n'écrit alors pas plus bas que ce qu'il a su, mais ne peut pas jurer de ce que le panier contient.
 import { LIMITS } from '../../protocol'
-import type { Candidate, CartProductFacts, RetailerAdapter } from '../leclerc'
+import type { Candidate, CartProductFacts, RetailerAdapter } from '../retailers'
 
 /** Ce que l'écran de fin doit dire d'une ligne à propos de la quantité déjà au panier. */
 export type CartNote =
@@ -33,7 +33,7 @@ export interface Settled {
  * le panier a déjà (la plus récente lue : la recherche, à défaut la dernière réponse du panier). Une quantité qu'on ne peut pas atteindre
  * (plafond de 99, stock du produit) ne compte pas : l'écrire ne ferait que baisser le panier.
  *
- * @throws {LeclercError} l'erreur de l'adaptateur (`setCartQuantity`), à traiter par l'appelant.
+ * @throws {RetailerError} l'erreur de l'adaptateur (`setCartQuantity`), à traiter par l'appelant.
  */
 export async function putInCart(
   adapter: Pick<RetailerAdapter, 'cartQuantity' | 'setCartQuantity'>,

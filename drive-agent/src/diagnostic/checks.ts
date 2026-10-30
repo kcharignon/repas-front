@@ -6,12 +6,12 @@ import {
   type FacetExploration,
   describeSession,
   isMobileHost,
-  LeclercError,
-  type LeclercCause,
-  type LeclercErrorCode,
+  RetailerError,
+  type RetailerCause,
+  type RetailerErrorCode,
   type RequestStats,
   type RetailerAdapter,
-} from '../leclerc'
+} from '../retailers'
 import { own } from '../own'
 import { S } from '../ui'
 import { readLastReasons, readLastRefusals, type StorageLike, type WakeLockLike } from '../flow'
@@ -51,9 +51,9 @@ export interface CheckResult {
   id: CheckId
   status: 'OK' | 'KO' | 'NOT_TESTED'
   /** Le code d'erreur d'un contrôle en échec, quand le site ou la page en est la cause. */
-  code?: LeclercErrorCode
+  code?: RetailerErrorCode
   /** Quelle vérification a échoué (ticket A) : un code fixe, montré avec son libellé. */
-  cause?: LeclercCause
+  cause?: RetailerCause
   detail?: string
 }
 
@@ -111,8 +111,8 @@ const ok = (id: CheckId, detail?: string): CheckResult => ({
 const ko = (
   id: CheckId,
   detail?: string,
-  code?: LeclercErrorCode,
-  cause?: LeclercCause | null,
+  code?: RetailerErrorCode,
+  cause?: RetailerCause | null,
 ): CheckResult => ({
   id,
   status: 'KO',
@@ -123,26 +123,26 @@ const ko = (
 const skipped = (id: CheckId, detail: string): CheckResult => ({ id, status: 'NOT_TESTED', detail })
 
 /** Une erreur de l'adaptateur a son code et sa cause ; tout autre incident est un site qui ne répond plus comme prévu (cause EXCEPTION). */
-const faultOf = (error: unknown): { code: LeclercErrorCode; cause: LeclercCause | null } =>
-  error instanceof LeclercError
+const faultOf = (error: unknown): { code: RetailerErrorCode; cause: RetailerCause | null } =>
+  error instanceof RetailerError
     ? { code: error.code, cause: error.cause }
     : { code: 'CONTRACT_CHANGED', cause: 'EXCEPTION' }
 
 /** L'erreur d'une recherche avec son code HTTP (un blocage n'a pas de faits de réponse : le code HTTP de l'erreur dit au moins cela). */
 const probedFault = (error: unknown): NonNullable<ProbedSearch['fault']> => ({
   ...faultOf(error),
-  status: error instanceof LeclercError ? error.status : null,
+  status: error instanceof RetailerError ? error.status : null,
 })
 
 /** Les erreurs après lesquelles chercher encore ne dirait rien de plus : un blocage, une session perdue, une page hors magasin, un site muet, un refus HTTP. */
-const STOPS_PROBING = new Set<LeclercErrorCode>([
+const STOPS_PROBING = new Set<RetailerErrorCode>([
   'BLOCKED',
   'NOT_LOGGED_IN',
   'UNSUPPORTED_PAGE',
   'NETWORK',
 ])
 /** Les codes après lesquels aucune recherche de plus n'a de sens, quelle que soit la cause. */
-const HARD_STOPS = new Set<LeclercErrorCode>(['BLOCKED', 'NOT_LOGGED_IN', 'UNSUPPORTED_PAGE'])
+const HARD_STOPS = new Set<RetailerErrorCode>(['BLOCKED', 'NOT_LOGGED_IN', 'UNSUPPORTED_PAGE'])
 const stopsProbing = (fault: ProbedSearch['fault']): boolean =>
   fault !== null && (STOPS_PROBING.has(fault.code) || (fault.cause?.startsWith('HTTP_') ?? false))
 

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { PlanLine, ProductRef, ResultLine } from '../protocol'
 import { guidedChoice, labelOf, MAX_CANDIDATES, productSearchForms, searchForms } from '../src/flow'
-import { LeclercError } from '../src/leclerc'
+import { RetailerError } from '../src/retailers'
 import type { ChooserAnswer, ChooserProps, PackSizeProps, QuantityProps } from '../src/ui'
 import {
   candidate,
@@ -1340,7 +1340,7 @@ describe('chercher autre chose', () => {
       ],
       {
         before: (call) => {
-          if (call === 'find sel') throw new LeclercError('BLOCKED')
+          if (call === 'find sel') throw new RetailerError('BLOCKED')
         },
       },
     )
@@ -1394,7 +1394,7 @@ describe('les erreurs du site', () => {
       ],
       {
         before: () => {
-          throw new LeclercError('NETWORK')
+          throw new RetailerError('NETWORK')
         },
       },
     )
@@ -1426,7 +1426,7 @@ describe('les erreurs du site', () => {
         before: (call) => {
           if (call === 'find sel' && fail) {
             fail = false
-            throw new LeclercError('NETWORK')
+            throw new RetailerError('NETWORK')
           }
         },
       },
@@ -1441,7 +1441,7 @@ describe('les erreurs du site', () => {
     const test = run(pepper(), [(view) => choose(view.zone, 'Poivre noir')], {
       others: [home('sel')],
       before: (call) => {
-        if (call.startsWith('cart')) throw new LeclercError('NETWORK')
+        if (call.startsWith('cart')) throw new RetailerError('NETWORK')
       },
     })
 
@@ -1468,7 +1468,7 @@ describe('les erreurs du site', () => {
       ],
       {
         before: () => {
-          throw new LeclercError('NETWORK', null, 'REQUEST_TIMEOUT')
+          throw new RetailerError('NETWORK', null, 'REQUEST_TIMEOUT')
         },
       },
     )
@@ -1499,7 +1499,7 @@ describe('les erreurs du site', () => {
         before: (call) => {
           if (call === 'find sel' && !challenged) {
             challenged = true
-            throw new LeclercError('BLOCKED', 200, 'CHALLENGE')
+            throw new RetailerError('BLOCKED', 200, 'CHALLENGE')
           }
         },
       },
@@ -1528,7 +1528,7 @@ describe('les erreurs du site', () => {
       others: [fresh('sel')],
       challenge: () => 'stop',
       before: (call) => {
-        if (call.startsWith('find')) throw new LeclercError('BLOCKED', 200, 'CHALLENGE')
+        if (call.startsWith('find')) throw new RetailerError('BLOCKED', 200, 'CHALLENGE')
       },
     })
 
@@ -1550,7 +1550,7 @@ describe('les erreurs du site', () => {
     const test = run(pepper(), [], {
       others: [fresh('sel'), fresh('huile')],
       before: (call) => {
-        if (call.startsWith('find')) throw new LeclercError('BLOCKED')
+        if (call.startsWith('find')) throw new RetailerError('BLOCKED')
       },
     })
 
@@ -1573,7 +1573,7 @@ describe('les erreurs du site', () => {
   it('« pas connecté » arrête aussitôt : « error »', async () => {
     const test = run(pepper(), [], {
       before: () => {
-        throw new LeclercError('NOT_LOGGED_IN')
+        throw new RetailerError('NOT_LOGGED_IN')
       },
     })
 
@@ -1842,7 +1842,7 @@ describe('quand la recherche du nom ne répond rien', () => {
     const test = run(egg(), [() => ({ kind: 'skip' })], {
       found: {},
       before: (call) => {
-        if (call === 'find oeuf') throw new LeclercError('BLOCKED', 403)
+        if (call === 'find oeuf') throw new RetailerError('BLOCKED', 403)
       },
     })
 
@@ -2869,7 +2869,7 @@ describe('la rangée des rayons du site, tirée de sa facette « Rayons » (DRV-
         siteValid: true,
         siteAisles: SITE,
         ...familyOptions,
-        filtered: { '4-2': new LeclercError('CONTRACT_CHANGED', 404, 'HTTP_404') },
+        filtered: { '4-2': new RetailerError('CONTRACT_CHANGED', 404, 'HTTP_404') },
       },
     )
 
@@ -2899,7 +2899,7 @@ describe('la rangée des rayons du site, tirée de sa facette « Rayons » (DRV-
         found: { tomate: ids },
         siteValid: true,
         siteAisles: SITE,
-        filtered: { '4-2': new LeclercError('NETWORK', null, 'REQUEST_TIMEOUT') },
+        filtered: { '4-2': new RetailerError('NETWORK', null, 'REQUEST_TIMEOUT') },
       },
     )
 
@@ -2982,7 +2982,7 @@ describe('la recherche qui a fait trouver le produit est rendue à Repas (DRV-65
       {
         found: answer('poivre vert'),
         before: (call) => {
-          if (call === 'find poivre rose') throw new LeclercError('NETWORK')
+          if (call === 'find poivre rose') throw new RetailerError('NETWORK')
         },
       },
     )

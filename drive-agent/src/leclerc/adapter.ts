@@ -54,7 +54,7 @@ import {
 import { cleanText } from '../text'
 import { stringifyJson, takeWindowPrimitives, type WindowPrimitives } from '../primitives'
 import { extractProducts } from './embedded'
-import { httpCause } from './causes'
+import { httpCause } from '../retailers/causes'
 import {
   entryFacts,
   findStartButton,
@@ -63,7 +63,7 @@ import {
   type EntryReading,
   type StartButton,
 } from './entry'
-import { LeclercError } from './errors'
+import { RetailerError } from '../retailers/errors'
 import { type FetchFn, Pacer, type PacerDeps, type Reply, type RequestStats } from './pacer'
 import {
   addressShape,
@@ -131,7 +131,7 @@ export interface CartResult {
 
 /** Tout ce qui est propre à une enseigne, derrière une interface : une autre enseigne ou un changement du site ne touche que ce dossier. */
 export interface RetailerAdapter {
-  /** Le magasin de la page courante. @throws {LeclercError} `UNSUPPORTED_PAGE` hors d'une page de magasin. */
+  /** Le magasin de la page courante. @throws {RetailerError} `UNSUPPORTED_PAGE` hors d'une page de magasin. */
   readStore(): StoreInfo
   /** Les produits que le site propose pour cette recherche, dans l'ordre de la page. */
   searchProducts(query: string): Promise<Candidate[]>
@@ -210,7 +210,7 @@ export interface RetailerAdapter {
   siteAisles(): SiteAisle[]
   /**
    * UNE recherche de [query] filtrée sur le rayon du site [key] (une clé de `siteAisles`), à la cadence normale ; ne change pas ce que l'adaptateur retient
-   * de la dernière recherche. @throws {LeclercError} comme `searchProducts`.
+   * de la dernière recherche. @throws {RetailerError} comme `searchProducts`.
    */
   searchFiltered(
     query: string,
@@ -346,7 +346,7 @@ export class LeclercAdapter implements RetailerAdapter {
     } catch (error) {
       facts.outcome = 'FAILED'
       facts.phrases = pagePhrases(reply.text)
-      if (error instanceof LeclercError) facts.fault = { code: error.code, cause: error.cause }
+      if (error instanceof RetailerError) facts.fault = { code: error.code, cause: error.cause }
       else facts.fault = { code: 'CONTRACT_CHANGED', cause: 'EXCEPTION' }
       throw error
     }
@@ -391,7 +391,7 @@ export class LeclercAdapter implements RetailerAdapter {
       last = { reply, variant, url }
       if (reply.status !== 400) break
     }
-    if (last === null) throw new LeclercError('CONTRACT_CHANGED', null, 'EXCEPTION')
+    if (last === null) throw new RetailerError('CONTRACT_CHANGED', null, 'EXCEPTION')
     return { ...last, attempts }
   }
 
@@ -774,7 +774,7 @@ export class LeclercAdapter implements RetailerAdapter {
         if (attempt.coherence.valid) return { attempts, retained: form, address }
       } catch (error) {
         attempt.fault =
-          error instanceof LeclercError
+          error instanceof RetailerError
             ? `${error.code}${error.cause === null ? '' : ` (${error.cause})`}`
             : 'EXCEPTION'
         // Une erreur du site (blocage, réseau) arrête l'essai des formes.
@@ -810,7 +810,7 @@ export class LeclercAdapter implements RetailerAdapter {
     query: string,
     key: string,
   ): Promise<{ url: string; reply: Reply }> {
-    if (!FILTER_KEY.test(key)) throw new LeclercError('CONTRACT_CHANGED', null, 'EXCEPTION')
+    if (!FILTER_KEY.test(key)) throw new RetailerError('CONTRACT_CHANGED', null, 'EXCEPTION')
     const context = this.searchContext(this.paths())
     const base = buildSearch('e1', context, query).url
     const { init } = buildSearch(this.searchVariant ?? 'a', context, query)
@@ -826,7 +826,7 @@ export class LeclercAdapter implements RetailerAdapter {
     const value = this.siteValues.get(aisle)
     const key =
       value === undefined || this.filterForm === null ? null : keyFor(value, this.filterForm)
-    if (key === null) throw new LeclercError('CONTRACT_CHANGED', null, 'EXCEPTION')
+    if (key === null) throw new RetailerError('CONTRACT_CHANGED', null, 'EXCEPTION')
     const { reply } = await this.filteredRequest(query.trim(), key)
     this.assertUsable(reply)
     const candidates = this.readSearch(reply).map((raw) => toCandidate(raw, this.deps.location))
@@ -1002,7 +1002,7 @@ export class LeclercAdapter implements RetailerAdapter {
     try {
       products = readSearchPage(reply)
     } catch (error) {
-      if (error instanceof LeclercError && error.code === 'CONTRACT_CHANGED')
+      if (error instanceof RetailerError && error.code === 'CONTRACT_CHANGED')
         this.assertMember(reply)
       throw error
     }
@@ -1010,10 +1010,10 @@ export class LeclercAdapter implements RetailerAdapter {
     return products
   }
 
-  /** @throws {LeclercError} `NOT_LOGGED_IN` si la réponse est la page d'un visiteur : rien ne s'écrit dans un panier anonyme. */
+  /** @throws {RetailerError} `NOT_LOGGED_IN` si la réponse est la page d'un visiteur : rien ne s'écrit dans un panier anonyme. */
   private assertMember(reply: Reply): void {
     if (readSession(reply.text).state === 'VISITOR') {
-      throw new LeclercError('NOT_LOGGED_IN', reply.status, 'SESSION_VISITOR')
+      throw new RetailerError('NOT_LOGGED_IN', reply.status, 'SESSION_VISITOR')
     }
   }
 
@@ -1022,9 +1022,9 @@ export class LeclercAdapter implements RetailerAdapter {
     try {
       return readCartResponse(reply.text, productId)
     } catch (error) {
-      if (!(error instanceof LeclercError)) throw error
+      if (!(error instanceof RetailerError)) throw error
       if (error.cause === 'CART_NOT_JSON' && looksLikeLoginPage(reply.text, false)) {
-        throw new LeclercError('NOT_LOGGED_IN', reply.status, 'LOGIN_FORM')
+        throw new RetailerError('NOT_LOGGED_IN', reply.status, 'LOGIN_FORM')
       }
       throw error.withStatus(reply.status)
     }
@@ -1060,15 +1060,15 @@ export class LeclercAdapter implements RetailerAdapter {
    * ou une route disparue) ; seuls 403, 429 et la page de défi, traités par le `Pacer`, sont `BLOCKED`.
    */
   private assertUsable(reply: Reply): void {
-    if (reply.status === 401) throw new LeclercError('NOT_LOGGED_IN', reply.status, 'HTTP_401')
+    if (reply.status === 401) throw new RetailerError('NOT_LOGGED_IN', reply.status, 'HTTP_401')
     if (reply.redirected && LOGIN_PATH.test(safePath(reply.url))) {
-      throw new LeclercError('NOT_LOGGED_IN', reply.status, 'LOGIN_REDIRECT')
+      throw new RetailerError('NOT_LOGGED_IN', reply.status, 'LOGIN_REDIRECT')
     }
     if (reply.status >= 500) {
-      throw new LeclercError('NETWORK', reply.status, httpCause(reply.status))
+      throw new RetailerError('NETWORK', reply.status, httpCause(reply.status))
     }
     if (reply.status < 200 || reply.status >= 300) {
-      throw new LeclercError('CONTRACT_CHANGED', reply.status, httpCause(reply.status))
+      throw new RetailerError('CONTRACT_CHANGED', reply.status, httpCause(reply.status))
     }
   }
 }
