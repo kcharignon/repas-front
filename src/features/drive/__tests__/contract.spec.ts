@@ -14,6 +14,7 @@ import type { DriveEstimate, DrivePlan, DriveSettings } from '@/api'
 import { appContext, calls, json, me, stubApi } from '@/__tests__/helpers'
 import { useSessionStore } from '@/session/session'
 import { buildPlanMessage } from '../buildPlanMessage'
+import { DEFAULT_RETAILER, type Retailer } from '../retailers'
 import DriveEstimateBlock from '../DriveEstimate.vue'
 import DriveSendView from '../DriveSendView.vue'
 import DriveSettingsView from '../DriveSettingsView.vue'
@@ -25,6 +26,8 @@ const sample = (name: string): unknown =>
   read(`../../../../drive-agent/fixtures/contract/${name}.sample.json`)
 
 const plan = sample('plan') as DrivePlan
+const planWithOffer = sample('plan-with-offer') as DrivePlan
+const choicesWithOffer = sample('choices-with-offer') as { member: unknown[]; totalItems: number }
 const choices = sample('choices') as { member: unknown[]; totalItems: number }
 const estimate = sample('estimate') as DriveEstimate
 const settings = sample('settings') as DriveSettings
@@ -78,6 +81,12 @@ describe('les exemples du back suivent le contrat OpenAPI figé', () => {
     expect(Object.keys(choices)).toEqual(['member', 'totalItems'])
     expect(choices.totalItems).toBe(choices.member.length)
     choices.member.forEach((choice) => expect(mismatches('ChoiceDTO', choice)).toEqual([]))
+  })
+
+  it('les exemples avec identifiant d’offre (DRV-721) suivent aussi le contrat : plan et choix', () => {
+    expect(mismatches('DrivePlanDTO', planWithOffer)).toEqual([])
+    expect(choicesWithOffer.totalItems).toBe(choicesWithOffer.member.length)
+    choicesWithOffer.member.forEach((choice) => expect(mismatches('ChoiceDTO', choice)).toEqual([]))
   })
 
   it('un champ renommé, retiré ou ajouté par le back fait échouer le test, avec son chemin', () => {
@@ -213,6 +222,44 @@ describe('le plan du back, traduit par buildPlanMessage, est valide pour l’age
       replaces: { id: '555101' },
     })
     expect(lineOf(message.lines, 'lait').status).toBe('SKIP')
+  })
+})
+
+describe('le plan du back avec des identifiants d’offre (DRV-721, DRV-722)', () => {
+  /** Une enseigne FICTIVE qui a des offres en forme d'UUID : aucune règle d'Auchan n'est écrite ici. */
+  const exemple: Retailer = {
+    ...DEFAULT_RETAILER,
+    offerIdPattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+  }
+  const offersOf = (message: ReturnType<typeof buildPlanMessage>, slug: string) =>
+    lineOf(message.lines, slug).products?.map((product) => product.offerId)
+
+  it('le plan avec offres est le plan d’avant avec une clé de plus par produit : les autres champs sont les mêmes', () => {
+    const slim = (value: DrivePlan) =>
+      JSON.stringify(value, (key, item: unknown) => (key === 'offerId' ? undefined : item))
+
+    expect(slim(planWithOffer)).toBe(slim(plan))
+  })
+
+  it('une enseigne sans offre (Leclerc) : le message est celui du plan sans offres, valide pour le protocole et son schéma', () => {
+    const message = buildPlanMessage(planWithOffer, {}, RUN_ID)
+
+    expect(JSON.stringify(message)).not.toContain('offerId')
+    expect(JSON.stringify(message)).toBe(JSON.stringify(buildPlanMessage(plan, {}, RUN_ID)))
+    expect(() => validatePlan(message)).not.toThrow()
+    expect(protocol(message)).toBe(true)
+  })
+
+  it('une enseigne à offres : chaque offre du plan part avec son produit, et seulement elle', () => {
+    const message = buildPlanMessage(planWithOffer, {}, RUN_ID, { retailer: exemple })
+
+    expect(offersOf(message, 'farine')).toEqual([
+      '0b5f8a2e-3c1d-4e7f-9a6b-123456789abc',
+      'c3b2a1d0-5e4f-4a6b-9c8d-7e6f5a4b3c2d',
+    ])
+    expect(offersOf(message, 'lait')).toEqual([undefined])
+    expect(offersOf(message, 'sel')).toEqual([undefined, undefined])
+    expect(lineOf(message.lines, 'lait').products?.[0]).not.toHaveProperty('offerId')
   })
 })
 

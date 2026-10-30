@@ -31,4 +31,4 @@ panier), jamais une page réelle. Le point de livraison est `123456`, les produi
 
 ## `contract/` (DRV-501, DRV-704)
 
-Copies à l'octet près des exemples de contrat du back (`make samples-update`, voir `contract/SOURCE.md`) : `plan`, `choices`, `estimate`, `settings` et `retailers.sample.json` (les enseignes : identifiant, noms, forme de l'adresse d'un magasin et d'un produit). Ne pas les modifier à la main.
+Copies à l'octet près des exemples de contrat du back (`make samples-update`, voir `contract/SOURCE.md`) : `plan`, `plan-with-offer`, `choices`, `choices-with-offer`, `estimate`, `settings` et `retailers.sample.json` (les enseignes : identifiant, noms, forme de l'adresse d'un magasin et d'un produit). Ne pas les modifier à la main.

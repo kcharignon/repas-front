@@ -1,0 +1,29 @@
+{
+  "path": "lines[0].products[0].offerId",
+  "why": "Leclerc n'a pas d'offre (StoreRules.offerId est null) : la clé offerId est interdite dans ses messages, comme toute clé inconnue.",
+  "message": {
+    "v": 1,
+    "type": "plan",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "retailer": "leclerc",
+    "store": {
+      "id": "000000",
+      "host": "courses-test.leclercdrive.fr"
+    },
+    "returnPath": "/drive/retour",
+    "lines": [
+      {
+        "ingredientSlug": "farine",
+        "name": "Farine",
+        "status": "KNOWN",
+        "products": [
+          {
+            "id": "555101",
+            "label": "Farine de blé T55 de test 1 kg",
+            "offerId": "0b5f8a2e-3c1d-4e7f-9a6b-123456789abc"
+          }
+        ]
+      }
+    ]
+  }
+}

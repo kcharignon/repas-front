@@ -28,6 +28,11 @@ export interface Retailer {
   storeAddressExample: string
   /** L'identifiant d'un produit chez l'enseigne (motif du contrat). */
   productIdPattern: string
+  /**
+   * L'identifiant d'offre d'un produit chez l'enseigne (motif du contrat, DRV-722), ou `null` quand l'enseigne n'a pas d'offre : le site n'envoie alors jamais
+   * `offerId` à l'agent ni à Repas.
+   */
+  offerIdPattern: string | null
   /** Le nom de l'application officielle de l'enseigne, dit quand le panier est prêt (DRV-645). */
   appName: string
   /**
@@ -52,6 +57,7 @@ const leclerc: Retailer = {
   storeAddressPattern: '^https://[a-z0-9-]+\\.leclercdrive\\.fr/magasin-([0-9]+)-([0-9]+)$',
   storeAddressExample: 'https://exemple.leclercdrive.fr/magasin-123456-123456',
   productIdPattern: '^[0-9]{1,12}$',
+  offerIdPattern: null,
   appName: 'Drive Leclerc',
   homeUrl: 'https://www.leclercdrive.fr/',
   readStore: (url) => {
@@ -80,6 +86,24 @@ export const DEFAULT_RETAILER: Retailer = leclerc
 /** L'enseigne d'un identifiant ; une valeur inconnue ou absente rend l'enseigne par défaut, jamais une erreur. */
 export const retailerOf = (id: string | null | undefined): Retailer =>
   RETAILERS.find((retailer) => retailer.id === id) ?? DEFAULT_RETAILER
+
+/** Une offre d'un produit (DRV-722) est une chaîne de 1 à 40 caractères : la borne du protocole et du back. */
+const OFFER_ID_MAX = 40
+
+/**
+ * L'identifiant d'offre à envoyer, ou `null` : il n'est gardé que si l'enseigne a des offres (`offerIdPattern`) et qu'il en a la forme. Le plan du back ne le
+ * porte que pour ces enseignes ; la revérification évite qu'une valeur que l'agent ou Repas refuserait en bloc fasse échouer tout le message.
+ */
+export function offerIdOf(value: unknown, retailer: Retailer): string | null {
+  if (retailer.offerIdPattern === null) return null
+
+  return typeof value === 'string' &&
+    value !== '' &&
+    [...value].length <= OFFER_ID_MAX &&
+    new RegExp(retailer.offerIdPattern).test(value)
+    ? value
+    : null
+}
 
 /** Les paramètres de texte d'une enseigne : `{retailer}` (« Leclerc »), `{retailerDe}` (« de Leclerc »), `{appName}` et l'exemple d'adresse. */
 export const retailerParams = (retailer: Retailer) => ({

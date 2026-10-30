@@ -172,6 +172,8 @@ export interface ShelfItem {
   /** Le rayon et la famille du produit chez l'enseigne (DRV-642) ; par défaut : non lus. */
   aisle?: number | null
   family?: number | null
+  /** L'identifiant d'offre du produit (DRV-722) ; par défaut : aucun, comme chez Leclerc. */
+  offerId?: string
 }
 
 export function candidate(id: string, item: ShelfItem = {}): Candidate {
@@ -191,6 +193,7 @@ export function candidate(id: string, item: ShelfItem = {}): Candidate {
     family: item.family ?? null,
     content: item.content ?? null,
     contentSource: item.content ? 'label' : null,
+    ...(item.offerId !== undefined && { offerId: item.offerId }),
   }
 }
 

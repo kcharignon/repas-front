@@ -21,6 +21,7 @@ import {
   type ShelfItem,
 } from './flow-helpers'
 import { backAcceptsLabel } from './back-label-rules'
+import { OFFER_A, OFFER_B, useOfferRetailers } from './offer-retailer'
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -3471,5 +3472,68 @@ describe('la contenance du produit dans l’unité de la liste (DRV-652)', () =>
     expect(asked).toEqual([])
     expect(lineOf(test.sent[0], 'cheddar')).toMatchObject({ quantity: 1 })
     expect(JSON.stringify(test.sent[0])).not.toContain('packSize')
+  })
+})
+
+describe('l’identifiant d’offre du produit choisi (DRV-722)', () => {
+  const withOffer = (offerId: string): Record<string, ShelfItem> => ({
+    ...SHELF,
+    '2000001': { ...SHELF['2000001'], offerId },
+  })
+
+  it('chez Leclerc (aucune offre), rien ne part, même si un candidat en portait une : le résultat reste octet pour octet comme avant', async () => {
+    const plain = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')])
+    const odd = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')], {
+      shelf: withOffer(OFFER_A),
+    })
+
+    await plain.start()
+    await odd.start()
+
+    expect(JSON.stringify(odd.sent)).toBe(JSON.stringify(plain.sent))
+    expect(JSON.stringify(plain.sent)).not.toContain('offerId')
+  })
+
+  describe('pour une enseigne qui a des offres (fictive)', () => {
+    useOfferRetailers()
+
+    it('renvoie l’offre du produit choisi, et d’aucun autre', async () => {
+      const test = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')], {
+        shelf: {
+          ...withOffer(OFFER_A),
+          '2000002': { ...SHELF['2000002'], offerId: OFFER_B },
+        },
+      })
+
+      await test.start()
+
+      expect(lineOf(test.sent[0], 'poivre')).toMatchObject({
+        outcome: 'CHOSEN',
+        product: { id: '2000001', offerId: OFFER_A },
+      })
+      expect(JSON.stringify(test.sent[0])).not.toContain(OFFER_B)
+      expect(expectConform(test.sent[0])).toBeTruthy()
+    })
+
+    it('ne renvoie pas une offre mal formée ou trop longue : Repas refuserait tout le lot', async () => {
+      for (const odd of ['pas une offre', `${OFFER_A}0`, '']) {
+        const test = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')], {
+          shelf: withOffer(odd),
+        })
+
+        await test.start()
+
+        expect(JSON.stringify(test.sent[0])).not.toContain('offerId')
+        expect(expectConform(test.sent[0])).toBeTruthy()
+      }
+    })
+
+    it('un produit sans offre repart sans la clé', async () => {
+      const test = run(pepper(), [(view) => choose(view.zone, 'Poivre noir moulu')])
+
+      await test.start()
+
+      expect(JSON.stringify(test.sent[0])).not.toContain('offerId')
+    })
   })
 })

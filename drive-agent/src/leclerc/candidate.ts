@@ -41,6 +41,11 @@ export interface Candidate {
   /** Les textes du rayon lus avec le produit (DRV-647) : la matière du libellé du rayon (`aisle-labels.ts`). Jamais envoyés à Repas. */
   aisleTexts?: AisleTexts
   content: Content | null
+  /**
+   * L'identifiant de l'offre du produit dans le magasin (DRV-722), pour une enseigne dont un produit a deux identifiants. Absent chez Leclerc (`toCandidate` ne
+   * le pose jamais) ; une autre enseigne le lit sur sa page. Il part vers Repas avec le produit choisi, seulement s'il a la forme de son enseigne.
+   */
+  offerId?: string
   /** D'où vient `content` ; `prices` est le moins précis (prix arrondis au centime). */
   contentSource: ContentSource | null
 }

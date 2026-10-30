@@ -21,6 +21,7 @@ const CONTRACT_FIELDS = [
   'storeAddressPattern',
   'storeAddressExample',
   'productIdPattern',
+  'offerIdPattern',
 ] as const
 
 const contract = JSON.parse(

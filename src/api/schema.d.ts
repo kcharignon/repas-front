@@ -1552,7 +1552,7 @@ export interface components {
         };
         DriveStorePayload: {
             /**
-             * @description Identifiant du magasin chez l'enseigne : celui de l'adresse de base
+             * @description Identifiant du magasin chez l'enseigne, de la forme `storeIdPattern` du contrat des enseignes (40 caractères au plus) : celui de l'adresse de base quand `storeIdSource` vaut `URL`, celui que l'agent a lu sur le site quand elle vaut `EXPLICIT`
              * @example 123456
              */
             id: string;
@@ -1667,6 +1667,12 @@ export interface components {
              * @default null
              */
             packSize: components["schemas"]["PackSizePayload"] | null;
+            /**
+             * @description Identifiant de l'offre du produit dans le magasin (DRV-721), pour les enseignes dont un produit a deux identifiants : de la forme `offerIdPattern` du contrat des enseignes, 40 caractères au plus. Facultatif : absent ou `null`, la fiche n'est pas modifiée ; une valeur reçue remplace celle de la fiche (l'offre peut changer). Pour une enseigne sans offre (`offerIdPattern` à `null`), toute valeur est refusée : `422` `DRIVE_CHOICE_INVALID`
+             * @default null
+             * @example 0b5f8a2e-3c1d-4e7f-9a6b-123456789abc
+             */
+            offerId: string | null;
         };
         ChoiceIntentPayload: {
             /**
@@ -2652,7 +2658,7 @@ export interface components {
         };
         DriveStoreDTO: {
             /**
-             * @description Identifiant du magasin chez l'enseigne (chiffres, zéros initiaux conservés)
+             * @description Identifiant du magasin chez l'enseigne, en texte (40 caractères au plus, de la forme `storeIdPattern` du contrat des enseignes ; zéros initiaux conservés)
              * @example 123456
              */
             id: string;
@@ -2877,6 +2883,12 @@ export interface components {
             packsStatus: "COMPUTED" | "TO_CHECK";
             /** @description La contenance que la personne a donnée pour CE produit, dans l'unité de la liste (DRV-652), ou `null` si elle n'en a pas donné. Quand son `unitSlug` est celui de la ligne (`needed.unitSlug`), `packs` est calculé avec elle et vaut `COMPUTED`, sans question ; une contenance dans une autre unité est ignorée par le calcul (mais reste renvoyée) */
             packSize?: components["schemas"]["PackSizeDTO"] | null;
+            /**
+             * @description Identifiant de l'offre du produit dans le magasin (DRV-721), chez les enseignes dont un produit a deux identifiants. **La clé est absente** (jamais `null`) quand le produit n'a pas d'offre (toute enseigne sans offre, ou offre pas encore rapportée par un agent)
+             * @default null
+             * @example 0b5f8a2e-3c1d-4e7f-9a6b-123456789abc
+             */
+            offerId: string;
         };
         DrivePlanRejectedDTO: {
             /**
@@ -2988,7 +3000,7 @@ export interface components {
             retailer: "leclerc";
             /** @description Magasin de l'utilisateur, `null` tant qu'il n'a pas été enregistré */
             store?: components["schemas"]["DriveStoreDTO"] | null;
-            /** @description Une entrée par enseigne connue (ordre fixe), avec le magasin de l'utilisateur chez chacune ; s'ajoute aux champs `retailer` et `store`, qui restent ceux de l'enseigne par défaut */
+            /** @description Une entrée par enseigne **allumée** (`DRIVE_RETAILERS`, DRV-702 ; ordre fixe), avec le magasin de l'utilisateur chez chacune ; s'ajoute aux champs `retailer` et `store`, qui restent ceux de l'enseigne par défaut */
             retailers: components["schemas"]["DriveRetailerDTO"][];
         };
         ChoiceProductDTO: {
@@ -3016,6 +3028,12 @@ export interface components {
             content?: components["schemas"]["ProductContentDTO"] | null;
             /** @description Combien d'unités de la liste tiennent dans ce produit, tel que la personne l'a répondu (DRV-652) : « 20 tranches » pour un cheddar que la liste compte en tranches. Propre à l'utilisateur et à ce produit dans cette préférence ; `null` si elle n'a rien répondu (et toujours pour un produit refusé). Elle ne sert au calcul que pour la même unité : si la liste change d'unité, elle est ignorée */
             packSize?: components["schemas"]["PackSizeDTO"] | null;
+            /**
+             * @description Identifiant de l'offre du produit dans le magasin (DRV-721), chez les enseignes dont un produit a deux identifiants. **La clé est absente** (jamais `null`) quand le produit n'a pas d'offre (toute enseigne sans offre, ou offre pas encore rapportée par un agent)
+             * @default null
+             * @example 0b5f8a2e-3c1d-4e7f-9a6b-123456789abc
+             */
+            offerId: string;
         };
         AcceptedProductDTO: {
             /**
@@ -6036,7 +6054,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Fonction drive coupée (message `DRIVE_DISABLED`), ou un ingrédient qui n'est pas à l'utilisateur (message `DRIVE_INGREDIENT_NOT_FOUND`) : un choix ne se pose que sur un ingrédient de l'utilisateur (ou sur l'ancien slug de l'un d'eux), et rien n'est enregistré */
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`), ou enseigne éteinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`), ou un ingrédient qui n'est pas à l'utilisateur (message `DRIVE_INGREDIENT_NOT_FOUND`) : un choix ne se pose que sur un ingrédient de l'utilisateur (ou sur l'ancien slug de l'un d'eux), et rien n'est enregistré */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6093,7 +6111,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Fonction drive coupée (message `DRIVE_DISABLED`), ou pas de préférence pour cet ingrédient (message `DRIVE_CHOICE_NOT_FOUND`) */
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`), ou enseigne éteinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`), ou pas de préférence pour cet ingrédient (message `DRIVE_CHOICE_NOT_FOUND`) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6154,7 +6172,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Fonction drive coupée (message `DRIVE_DISABLED`) ou liste inconnue */
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`), ou enseigne éteinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`) ou liste inconnue */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6215,7 +6233,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Fonction drive coupée (message `DRIVE_DISABLED`) ou liste inconnue */
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`), ou enseigne éteinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`) ou liste inconnue */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6279,14 +6297,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Fonction drive coupée (message `DRIVE_DISABLED`) */
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`), ou enseigne éteinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`) */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Corps invalide, ou magasin refusé (message `DRIVE_STORE_INVALID`) : adresse qui n'est pas celle d'un magasin de l'enseigne, identifiant différent de celui de l'adresse */
+            /** @description Corps invalide, ou magasin refusé (message `DRIVE_STORE_INVALID`) : adresse qui n'est pas celle d'un magasin de l'enseigne, identifiant qui n'a pas la forme de l'enseigne ou, quand il se déduit de l'adresse, différent de celui de l'adresse */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6324,7 +6342,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Fonction drive coupée (message `DRIVE_DISABLED`) */
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`), ou enseigne éteinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6360,7 +6378,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Fonction drive coupée (message `DRIVE_DISABLED`), ou un ingrédient qui n'est pas à l'utilisateur (message `DRIVE_INGREDIENT_NOT_FOUND`) : un choix ne se pose que sur un ingrédient de l'utilisateur (ou sur l'ancien slug de l'un d'eux), et rien n'est enregistré */
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`), ou enseigne éteinte (message `DRIVE_RETAILER_DISABLED`, `DRIVE_RETAILERS`), ou un ingrédient qui n'est pas à l'utilisateur (message `DRIVE_INGREDIENT_NOT_FOUND`) : un choix ne se pose que sur un ingrédient de l'utilisateur (ou sur l'ancien slug de l'un d'eux), et rien n'est enregistré */
             404: {
                 headers: {
                     [name: string]: unknown;

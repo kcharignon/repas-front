@@ -1,0 +1,131 @@
+{
+    "member": [
+        {
+            "ingredientSlug": "farine",
+            "ingredientName": "Farine",
+            "haveAtHome": false,
+            "accepted": [
+                {
+                    "rank": 1,
+                    "product": {
+                        "productId": "9684fc84-f500-5edc-8b33-f6b38b890810",
+                        "retailerProductId": "555101",
+                        "ean": "2000000000008",
+                        "label": "Farine de blé T55 1 kg",
+                        "content": {
+                            "value": 1,
+                            "unit": "kg"
+                        },
+                        "packSize": null,
+                        "offerId": "0b5f8a2e-3c1d-4e7f-9a6b-123456789abc"
+                    }
+                },
+                {
+                    "rank": 2,
+                    "product": {
+                        "productId": "b9af7875-8284-578e-85e8-325822109260",
+                        "retailerProductId": "555102",
+                        "ean": null,
+                        "label": "Farine de blé T45 500 g",
+                        "content": {
+                            "value": 500,
+                            "unit": "g"
+                        },
+                        "packSize": null,
+                        "offerId": "c3b2a1d0-5e4f-4a6b-9c8d-7e6f5a4b3c2d"
+                    }
+                }
+            ],
+            "rejected": [],
+            "updatedAt": "2026-10-18T09:20:00+00:00",
+            "searchQuery": "farine de blé t55"
+        },
+        {
+            "ingredientSlug": "lait",
+            "ingredientName": "Lait",
+            "haveAtHome": false,
+            "accepted": [
+                {
+                    "rank": 1,
+                    "product": {
+                        "productId": "7dddc9eb-3f96-5c8c-97f4-297bc4463bcd",
+                        "retailerProductId": "555201",
+                        "ean": null,
+                        "label": "Lait demi-écrémé UHT 50 cl",
+                        "content": {
+                            "value": 50,
+                            "unit": "cl"
+                        },
+                        "packSize": null
+                    }
+                }
+            ],
+            "rejected": [
+                {
+                    "productId": "f2c2d89d-3f2f-5f86-ac89-f64024749722",
+                    "retailerProductId": "555299",
+                    "ean": null,
+                    "label": "Lait entier UHT 1 l",
+                    "content": {
+                        "value": 1,
+                        "unit": "l"
+                    },
+                    "packSize": null
+                }
+            ],
+            "updatedAt": "2026-10-18T09:20:00+00:00",
+            "searchQuery": null
+        },
+        {
+            "ingredientSlug": "sel",
+            "ingredientName": "Sel",
+            "haveAtHome": false,
+            "accepted": [
+                {
+                    "rank": 1,
+                    "product": {
+                        "productId": "d080c309-b5e9-56b9-b73b-f5153fdc223b",
+                        "retailerProductId": "555401",
+                        "ean": null,
+                        "label": "Sel fin 1 kg",
+                        "content": {
+                            "value": 1,
+                            "unit": "kg"
+                        },
+                        "packSize": null
+                    }
+                },
+                {
+                    "rank": 2,
+                    "product": {
+                        "productId": "5e335da5-631e-5452-b9e6-f6fa9ff4c988",
+                        "retailerProductId": "555402",
+                        "ean": null,
+                        "label": "Sel fin 250 g",
+                        "content": {
+                            "value": 250,
+                            "unit": "g"
+                        },
+                        "packSize": {
+                            "value": 14,
+                            "unitSlug": "cuillere-a-soupe"
+                        }
+                    }
+                }
+            ],
+            "rejected": [],
+            "updatedAt": "2026-10-18T09:20:00+00:00",
+            "searchQuery": null
+        },
+        {
+            "ingredientSlug": "sucre",
+            "ingredientName": "Sucre",
+            "haveAtHome": true,
+            "accepted": [],
+            "rejected": [],
+            "updatedAt": "2026-10-18T09:20:00+00:00",
+            "searchQuery": null
+        }
+    ],
+    "totalItems": 4
+}

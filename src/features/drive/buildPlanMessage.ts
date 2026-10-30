@@ -10,6 +10,7 @@ import {
 
 import type { DrivePlan, DrivePlanLine } from '@/api'
 import { catalogIdOf } from './choices'
+import { offerIdOf, retailerOf, type Retailer } from './retailers'
 
 /**
  * Les rayons conseillés d'une ligne tels qu'ils partent à l'agent : les valeurs valides seulement (jamais un message que l'agent refuserait en
@@ -52,6 +53,11 @@ export function effectiveStatus(line: DrivePlanLine, changes: LineChanges): Plan
 export interface PlanOptions {
   rayonHints?: boolean
   packSize?: boolean
+  /**
+   * L'enseigne du plan, d'où vient la forme d'un identifiant d'offre (DRV-722) ; celle du registre pour `plan.retailer` à défaut. Une enseigne sans offre
+   * n'envoie jamais `offerId` : un agent qui ne connaît pas la clé rejetterait le plan entier.
+   */
+  retailer?: Retailer
 }
 
 type Needed = NonNullable<PlanLine['needed']>
@@ -81,7 +87,19 @@ function neededOf(needed: DrivePlanLine['needed'], options: PlanOptions): Needed
   return named ? { ...base, unitSlug: slug, unitName: name } : base
 }
 
-function translate(line: DrivePlanLine, changes: LineChanges, options: PlanOptions): PlanLine {
+/** `{offerId}` quand le produit a une offre valide pour cette enseigne, rien sinon (la clé est absente, jamais `null`). */
+function offerField(value: unknown, retailer: Retailer): { offerId?: string } {
+  const offerId = offerIdOf(value, retailer)
+
+  return offerId === null ? {} : { offerId }
+}
+
+function translate(
+  line: DrivePlanLine,
+  changes: LineChanges,
+  options: PlanOptions,
+  retailer: Retailer,
+): PlanLine {
   const status = effectiveStatus(line, changes)
   const head = { ingredientSlug: line.ingredientSlug, name: line.ingredientName }
   if (status === 'HAVE_AT_HOME' || status === 'SKIP') return { ...head, status }
@@ -127,6 +145,8 @@ function translate(line: DrivePlanLine, changes: LineChanges, options: PlanOptio
         ...(product.content ? { content: product.content } : {}),
         packs: product.packs ?? null,
         packsStatus: product.packsStatus,
+        // L'offre du produit (DRV-722), champ par champ et seulement pour une enseigne qui en a : jamais la clé du back en bloc
+        ...offerField(product.offerId, retailer),
         // La contenance déjà donnée pour ce produit (DRV-652) : l'agent ne repose pas la question et n'écrase pas le calcul du plan par le contenu lu
         ...(options.packSize === true && { packSize: toPackSize(product.packSize) }),
       })),
@@ -145,6 +165,8 @@ export function buildPlanMessage(
   runId: string,
   options: PlanOptions = {},
 ): PlanMessage {
+  const retailer = options.retailer ?? retailerOf(plan.retailer)
+
   return {
     v: PROTOCOL_VERSION,
     type: 'plan',
@@ -152,6 +174,6 @@ export function buildPlanMessage(
     retailer: plan.retailer,
     store: { id: plan.store.id, host: new URL(plan.store.baseUrl).host },
     returnPath: RETURN_PATH,
-    lines: plan.lines.map((line) => translate(line, changes, options)),
+    lines: plan.lines.map((line) => translate(line, changes, options, retailer)),
   }
 }

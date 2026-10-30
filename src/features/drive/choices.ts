@@ -13,6 +13,7 @@ import {
 } from '@drive-protocol'
 
 import type { ChoiceIntent, DriveChoiceProduct, DrivePlan } from '@/api'
+import { DEFAULT_RETAILER, offerIdOf, type Retailer } from './retailers'
 
 /** Intentions par appel `PUT /api/v1/drive/choices` (borne du back). */
 export const MAX_INTENTS = 200
@@ -33,8 +34,14 @@ export function catalogIdOf(value: unknown): number | null {
 /** Le produit d'une intention, avec son rayon et sa famille (DRV-642), présents seulement quand l'agent les a donnés. */
 type WireProduct = NonNullable<ChoiceIntent['product']>
 /** Le contrat marque `rayonId` et `familyId` requis (défaut `null`) ; le back accepte aussi leur absence, qu'on garde quand l'agent n'en dit rien. */
-type Product = Omit<WireProduct, 'rayonId' | 'familyId' | 'packSize'> &
+type Product = Omit<WireProduct, 'rayonId' | 'familyId' | 'packSize' | 'offerId'> &
   Partial<Pick<WireProduct, 'rayonId' | 'familyId'>> & {
+    /**
+     * L'identifiant d'offre du produit (DRV-722). Le contrat le marque requis (défaut `null`), un artefact du générateur : une clé absente GARDE l'offre de la
+     * fiche, une offre la REMPLACE. Pour une enseigne sans offre toute valeur est refusée (`422`, et le lot entier est perdu) : le site ne l'écrit que pour une
+     * enseigne qui en a et jamais `null`.
+     */
+    offerId?: string
     /**
      * La contenance du produit dans l'unité de la liste (DRV-652). Le contrat la marque requise (défaut `null`), un autre artefact du générateur : une clé absente
      * GARDE la contenance mémorisée pour ce produit, `null` l'EFFACE, un objet la remplace. Le site ne l'écrit donc que pour une contenance donnée pendant le
@@ -69,9 +76,15 @@ function priceOf(price: ProductPrice | undefined): Price | null {
  * fait que d'invisibles redevient l'identifiant du produit : le back exige un libellé. Le rayon et la famille d'un produit choisi (DRV-642) ne
  * partent que s'ils sont valides, et seulement quand l'agent les a donnés : un agent ancien n'en dit rien, la clé est alors absente.
  */
-function productOf(product: RejectedProduct | ChosenProduct, packSize?: PackSizeValue): Product {
+function productOf(
+  product: RejectedProduct | ChosenProduct,
+  retailer: Retailer,
+  packSize?: PackSizeValue,
+): Product {
   const rayonId = 'rayonId' in product ? catalogIdOf(product.rayonId) : null
   const familyId = 'familyId' in product ? catalogIdOf(product.familyId) : null
+  // L'offre d'un produit choisi (DRV-722) : seulement pour une enseigne qui en a et si elle en a la forme, sinon tout le lot serait refusé
+  const offerId = 'offerId' in product ? offerIdOf(product.offerId, retailer) : null
 
   return {
     retailerProductId: product.id,
@@ -81,6 +94,7 @@ function productOf(product: RejectedProduct | ChosenProduct, packSize?: PackSize
     price: 'price' in product ? priceOf(product.price) : null,
     ...(rayonId !== null && { rayonId }),
     ...(familyId !== null && { familyId }),
+    ...(offerId !== null && { offerId }),
     ...(packSize !== undefined && { packSize }),
   }
 }
@@ -179,6 +193,7 @@ function intentsOf(
   line: ResultLine,
   known: ReadonlyMap<string, KnownProduct>,
   settled: ReadonlySet<string>,
+  retailer: Retailer,
 ): ChoiceIntent[] {
   const slug = line.ingredientSlug
   const intents: Intent[] = []
@@ -190,7 +205,7 @@ function intentsOf(
         ingredientSlug: slug,
         action: 'REJECT_PRODUCT',
         placement: null,
-        product: productOf(product),
+        product: productOf(product, retailer),
       })
   }
 
@@ -202,7 +217,7 @@ function intentsOf(
           ingredientSlug: slug,
           action: 'ADD_PRODUCT',
           placement: line.placement,
-          product: productOf(line.product, packSizeOf(line)),
+          product: productOf(line.product, retailer, packSizeOf(line)),
           ...(searchQuery !== null && { searchQuery }),
         })
       } else {
@@ -302,6 +317,7 @@ export const countChoices = (batches: ChoiceIntent[][]): number =>
 export function buildChoiceBatches(
   result: ResultMessage,
   known: ReadonlyMap<string, KnownProduct> = new Map(),
+  retailer: Retailer = DEFAULT_RETAILER,
 ): ChoiceIntent[][] {
   // Les articles dont un produit est retenu ou qui sont « j'en ai toujours » : leur recherche part avec l'`ADD_PRODUCT`, et `NOTE_SEARCH` serait refusé
   const settled = new Set(
@@ -316,7 +332,7 @@ export function buildChoiceBatches(
   const batches: ChoiceIntent[][] = []
   let current: ChoiceIntent[] = []
   for (const line of result.lines) {
-    const group = intentsOf(line, known, settled)
+    const group = intentsOf(line, known, settled, retailer)
     if (current.length + group.length > MAX_INTENTS) {
       batches.push(current)
       current = []
