@@ -102,6 +102,26 @@ export function useSaveRecipeType() {
   })
 }
 
+/**
+ * Supprime un type de recette : toutes ses recettes, de tous les utilisateurs, passent dans le type `transferTo` (le back refuse un type
+ * inconnu ou identique). On relit les types et les listes de recettes que le déplacement change.
+ */
+export function useRemoveRecipeType() {
+  const { api } = useSessionStore()
+  const refresh = useRefresh([recipeKeys.all])
+
+  return useMutation({
+    meta: { silent: true },
+    mutationFn: ({ slug, transferTo }: { slug: string; transferTo: string }) =>
+      unwrap(
+        api.DELETE('/api/v1/recipe-types/{slug}', {
+          params: { path: { slug }, query: { transferTo } },
+        }),
+      ),
+    onSettled: refresh,
+  })
+}
+
 export function useConversions() {
   const { api } = useSessionStore()
 

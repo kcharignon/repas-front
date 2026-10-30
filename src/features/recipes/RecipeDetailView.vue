@@ -22,6 +22,7 @@ import type { EquationValue } from '@/features/ingredients/equationMath'
 import OwnConversionSheet from '@/features/ingredients/OwnConversionSheet.vue'
 import { useUnits } from '@/features/ingredients/queries'
 import { formatQuantity } from '@/features/shopping-lists/format'
+import FavoriteButton from './FavoriteButton.vue'
 import PlanButton from './PlanButton.vue'
 import SecretBadge from './SecretBadge.vue'
 import { useDeleteRecipe, useRecipe, useRecipesByType } from './queries'
@@ -176,6 +177,14 @@ function confirmDelete() {
             }}
           </p>
         </header>
+        <!-- Le choix de l'auteur : l'étoile n'est proposée que sur ses propres recettes -->
+        <FavoriteButton
+          v-if="isMine"
+          class="ml-auto self-center"
+          :recipe-id="recipe.data.value.id"
+          :name="recipe.data.value.name"
+          :favorite="recipe.data.value.favorite === true"
+        />
       </div>
 
       <!-- La place des actions est réservée même quand on ne sait pas encore à qui est la recette -->

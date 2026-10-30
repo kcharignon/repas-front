@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Trash2 } from 'lucide-vue-next'
 
 import { hasFailed } from '@/api/query'
 import UiButton from '@/design/UiButton.vue'
@@ -9,15 +10,19 @@ import UiTextInput from '@/design/UiTextInput.vue'
 import { useRecipeTypes } from '@/features/recipes/queries'
 import UiImage from '@/design/UiImage.vue'
 import { messageForFailure } from '@/notifications/failures'
+import { useNotificationsStore } from '@/notifications/store'
 import AdminFormDialog from './AdminFormDialog.vue'
 import AdminPage from './AdminPage.vue'
-import { useSaveRecipeType } from './queries'
+import RecipeTypeDeleteDialog from './RecipeTypeDeleteDialog.vue'
+import { useRemoveRecipeType, useSaveRecipeType } from './queries'
 import { useResourceDialog } from './useResourceDialog'
 
 const { t } = useI18n()
 
 const types = useRecipeTypes()
 const save = useSaveRecipeType()
+const remove = useRemoveRecipeType()
+const notifications = useNotificationsStore()
 const items = computed(() => types.data.value?.member ?? [])
 
 const dialog = useResourceDialog(() => ({ name: '', image: '', order: '' as string | number }))
@@ -28,6 +33,35 @@ const errors = computed(() => ({
     dialog.submitted.value && dialog.form.image.trim() === '' ? t('admin.errors.image') : undefined,
   order: dialog.submitted.value && dialog.form.order === '' ? t('admin.errors.order') : undefined,
 }))
+
+// Supprimer un type : on choisit d'abord le type qui reçoit ses recettes (celles de tous les utilisateurs)
+const deleting = ref<{ slug: string; name: string } | null>(null)
+const deleteError = ref<string | null>(null)
+
+function askDelete(type: { slug: string; name: string }) {
+  deleteError.value = null
+  deleting.value = { slug: type.slug, name: type.name }
+}
+
+function confirmDelete(transferTo: string) {
+  const type = deleting.value
+  if (type === null) return
+  deleteError.value = null
+  remove.mutate(
+    { slug: type.slug, transferTo },
+    {
+      onSuccess: () => {
+        deleting.value = null
+        const target = items.value.find((candidate) => candidate.slug === transferTo)
+        notifications.push(
+          'success',
+          t('admin.typeDeleted', { name: type.name, target: target?.name ?? transferTo }),
+        )
+      },
+      onError: (error) => (deleteError.value = messageForFailure(error)),
+    },
+  )
+}
 
 function submit() {
   dialog.submitted.value = true
@@ -67,7 +101,9 @@ function submit() {
       <li v-for="type in items" :key="type.slug" class="flex min-h-14 items-center gap-3">
         <UiImage :src="type.image" class="size-8 shrink-0" />
         <span class="flex-1 font-medium">{{ type.name }}</span>
-        <span class="text-sm text-muted">{{ t('admin.orderN', { n: type.order }) }}</span>
+        <span class="text-sm whitespace-nowrap text-muted">{{
+          t('admin.orderN', { n: type.order })
+        }}</span>
         <UiButton
           variant="ghost"
           :aria-label="t('admin.editNamed', { name: type.name })"
@@ -75,9 +111,27 @@ function submit() {
         >
           {{ t('admin.edit') }}
         </UiButton>
+        <UiButton
+          variant="ghost"
+          size="icon"
+          :aria-label="t('admin.deleteTypeNamed', { name: type.name })"
+          :title="t('admin.deleteTypeNamed', { name: type.name })"
+          @click="askDelete(type)"
+        >
+          <Trash2 class="size-5" aria-hidden="true" />
+        </UiButton>
       </li>
     </ul>
   </AdminPage>
+
+  <RecipeTypeDeleteDialog
+    :type="deleting"
+    :choices="items"
+    :pending="remove.isPending.value"
+    :error="deleteError"
+    @confirm="confirmDelete"
+    @close="deleting = null"
+  />
 
   <AdminFormDialog
     v-model:open="dialog.open.value"

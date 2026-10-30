@@ -13,22 +13,34 @@ import UiTile from '@/design/UiTile.vue'
 import UiImage from '@/design/UiImage.vue'
 import PlanButton from './PlanButton.vue'
 import SecretBadge from './SecretBadge.vue'
-import { useRecipeTypes, useRecipesByType } from './queries'
+import { useFavoriteRecipes, useRecipeTypes, useRecipesByType } from './queries'
+
+// Le type « Favoris » n'existe pas côté back (ADR 0034) : une pastille de plus, en première position, tant que l'utilisateur a au moins une
+// recette en favoris. Sa clé d'adresse (`?type=`) ne peut pas être celle d'un vrai type (un slug n'a jamais de tiret bas).
+const FAVORITES = '__favoris__'
+const FAVORITES_IMAGE = 'images/recipe/type/star.png'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
 const types = useRecipeTypes()
+const favorites = useFavoriteRecipes()
 const search = ref('')
 
-// Le type affiché est dans l'adresse (`?type=plat`) : on peut partager ou recharger la page ; à défaut, le premier.
+// Les favoris ne bloquent jamais la page : un back plus ancien (sans la route) ou une panne se lisent comme « aucun favori »
+const favoriteRecipes = computed(() => favorites.data.value?.member ?? [])
+
+// Le type affiché est dans l'adresse (`?type=plat`) : on peut partager ou recharger la page ; à défaut, le premier (« Favoris » s'il y en a).
 // Un type sans recette de la personne n'est pas montré. Un back plus ancien ne rend pas `recipeCount` : le type reste affiché.
-const shownTypes = computed(() =>
-  (types.data.value?.member ?? []).filter(
+const shownTypes = computed(() => [
+  ...(favoriteRecipes.value.length > 0
+    ? [{ slug: FAVORITES, name: t('recipes.favorites'), image: FAVORITES_IMAGE }]
+    : []),
+  ...(types.data.value?.member ?? []).filter(
     (type) => (type as { recipeCount?: number }).recipeCount !== 0,
   ),
-)
+])
 
 const current = computed<string | null>(() => {
   const asked = typeof route.query.type === 'string' ? route.query.type : null
@@ -37,13 +49,19 @@ const current = computed<string | null>(() => {
   return known.find((type) => type.slug === asked)?.slug ?? known[0]?.slug ?? null
 })
 
-const recipes = useRecipesByType(() => current.value)
+const onFavorites = computed(() => current.value === FAVORITES)
+const recipes = useRecipesByType(() => (onFavorites.value ? null : current.value))
+// Une recette en favoris est dans la liste « Favoris » ET dans son type : les deux listes se lisent chacune de leur côté
+const listed = computed(() =>
+  onFavorites.value ? favoriteRecipes.value : (recipes.data.value?.member ?? []),
+)
+const listPending = computed(() =>
+  onFavorites.value ? favorites.isPending.value : current.value !== null && recipes.isPending.value,
+)
 const shown = computed(() => {
   const needle = search.value.trim().toLowerCase()
 
-  return (recipes.data.value?.member ?? []).filter((recipe) =>
-    recipe.name.toLowerCase().includes(needle),
-  )
+  return listed.value.filter((recipe) => recipe.name.toLowerCase().includes(needle))
 })
 
 // Les noms de types sont saisis librement (« plat », « Boisson ») : on les affiche tous avec une majuscule.
@@ -105,9 +123,9 @@ function choose(slug: string) {
       </UiTile>
     </div>
 
-    <LoadError v-if="hasFailed(types) || hasFailed(recipes)" />
+    <LoadError v-if="hasFailed(types) || (!onFavorites && hasFailed(recipes))" />
     <p
-      v-else-if="types.isPending.value || (current !== null && recipes.isPending.value)"
+      v-else-if="types.isPending.value || favorites.isPending.value || listPending"
       class="text-muted"
       role="status"
     >
