@@ -23,6 +23,7 @@ import type {
   ScreenName,
   ScreenProps,
   StoreProps,
+  StoreWaitingProps,
   SummaryProps,
 } from './types'
 
@@ -551,6 +552,19 @@ const entry: Renderer<'entry'> = (props: EntryProps) => {
   return { el, sheet: true }
 }
 
+/** Le bandeau d'attente du choix du magasin (DRV-740) : la phrase, puis le geste ; la page de l'enseigne reste visible et touchable. */
+const storeWaiting: Renderer<'storeWaiting'> = (props: StoreWaitingProps, answer, retailer) => {
+  const back = button(S.storeWaiting.back, () => answer('return'))
+  const retry = button(S.storeWaiting.retry, () => answer('retry'), 'primary')
+  const late = props.stage === 'late'
+  const el = screen(
+    title(late ? S.storeWaiting.late : S.storeWaiting.waiting(retailer)),
+    actions(...(late ? [retry, back] : [back])),
+  )
+  el.setAttribute('role', 'status')
+  return { el, sheet: true }
+}
+
 const error: Renderer<'error'> = (props: ErrorProps, answer, retailer) => {
   const close = button(S.error.close, () => answer('close'), props.canReturn ? 'plain' : 'primary')
   const back = button(S.error.back, () => answer('return'), 'primary')
@@ -721,6 +735,7 @@ export const RENDERERS: { [K in ScreenName]: Renderer<K> } = {
   diagnostic,
   challenge,
   entry,
+  storeWaiting,
   error,
   end,
 }

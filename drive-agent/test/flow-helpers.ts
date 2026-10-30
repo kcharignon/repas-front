@@ -118,6 +118,7 @@ export function fakeUi(scripts: Scripts = {}) {
   const shown: { screen: ScreenName; props: unknown }[] = []
   const updates: ProgressPatch[] = []
   const stops: (() => void)[] = []
+  const backs: (() => void)[] = []
   const closed = { count: 0 }
   const ui: Ui = {
     retailer: LECLERC,
@@ -125,6 +126,10 @@ export function fakeUi(scripts: Scripts = {}) {
       shown.push({ screen, props })
       // Un bandeau sans bouton (DRV-625) : sa promesse ne se résout jamais.
       if (screen === 'entry') return new Promise(() => undefined)
+      // Le bandeau d'attente du magasin (DRV-740) : tant qu'il attend, il ne répond que si le test touche « Retourner dans Repas » ; plus tard, le script répond.
+      if (screen === 'storeWaiting' && (props as { stage: string }).stage === 'waiting') {
+        return new Promise((resolve) => backs.push(() => resolve('return' as never)))
+      }
       if (screen === 'progress') {
         return new Promise((resolve) => stops.push(() => resolve('stop' as never)))
       }
@@ -143,6 +148,8 @@ export function fakeUi(scripts: Scripts = {}) {
     closed,
     /** « Arrêter » touché sur l'écran de progression affiché en dernier. */
     pressStop: () => stops.at(-1)?.(),
+    /** « Retourner dans Repas » touché sur le bandeau d'attente du magasin (DRV-740). */
+    pressBack: () => backs.at(-1)?.(),
     screens: () => shown.map((item) => item.screen),
     propsOf: <K extends ScreenName>(screen: K) =>
       shown.filter((item) => item.screen === screen).map((item) => item.props as ScreenProps<K>),

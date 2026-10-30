@@ -142,6 +142,12 @@ export interface RetailerAdapter {
    * @throws {RetailerError} `UNSUPPORTED_PAGE` hors d'une page de magasin (ou sans magasin choisi).
    */
   readStore(): StoreInfo | Promise<StoreInfo>
+  /**
+   * FACULTATIVE (DRV-740) : présente seulement chez une enseigne dont le magasin se CHOISIT SUR LA PAGE du site (il n'est pas dans l'adresse, à la
+   * différence de Leclerc). Dit si la page montre qu'un magasin est choisi. Une lecture de la page seule : aucune requête, jamais d'erreur. Le mode
+   * configuration s'en sert quand `readStore` dit « aucun magasin choisi » : au lieu d'un écran d'erreur, il laisse la page utilisable et attend ce choix.
+   */
+  storeChosenOnPage?(): boolean
   /** Les produits que le site propose pour cette recherche, dans l'ordre de la page. */
   searchProducts(query: string): Promise<Candidate[]>
   /** Fixe la quantité du produit au panier (absolue : `0` le retire) et vérifie la réponse du site. */

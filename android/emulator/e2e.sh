@@ -52,7 +52,8 @@
 #  21. Auchan (DRV-731, servie par l'APK ordinaire depuis DRV-738 : plus de second APK) : le menu propose « Ouvrir le
 #      drive Auchan », l'écran s'ouvre sur l'accueil du faux Auchan (drive-agent/fake-auchan) avec le pont et l'agent, MAIS sur l'hôte du mot de passe (la connexion) la
 #      navigation a lieu sans pont ni agent ; le « Diagnostic de l'agent » lit le magasin (hôte www, UUID) sans rien écrire, et s'arrête sur STORE_NOT_CHOSEN sans magasin
-#      choisi ; aucun nom d'Auchan n'est transmis à Internet. `build.sh` garde que la publication annonce Auchan (et n'embarque aucune enseigne éteinte).
+#      choisi ; la première configuration depuis Repas (`drive.setup` sans magasin choisi, DRV-740) affiche un bandeau sans masquer la page, ne fait aucune requête, puis propose le magasin
+#      une fois choisi ; aucun nom d'Auchan n'est transmis à Internet. `build.sh` garde que la publication annonce Auchan (et n'embarque aucune enseigne éteinte).
 # Les captures d'écran et le rapport texte sont dans android/dist/e2e/.
 # Code de sortie : 0 si tous les contrôles passent, 1 sinon, 3 si KVM manque.
 set -u
@@ -899,6 +900,7 @@ check "l'écran n'est plus maintenu allumé" screen_not_held
 # Ce que le scénario 21 juge du faux Auchan : aucune écriture au panier, cadence respectée, rien d'envoyé, certificat.
 auchan_no_cart_write() { ! auchan_kind_seen cart; }
 auchan_nothing_sent() { ! auchan_kind_seen search && ! auchan_kind_seen cart; }
+auchan_nothing_requested() { ! auchan_kind_seen journey && ! auchan_kind_seen search && ! auchan_kind_seen cart; }
 auchan_polite() { auchan_state | grep -q '"violations":\[\]' && ! auchan_state | grep -q '"rejected"'; }
 auchan_dns_local() { ! emu grep -q "forwarded.*auchan" /sdk/site/dns.log; }
 cert_covers_auchan() { local names; names=$(emu openssl x509 -in /sdk/site/cert.pem -noout -ext subjectAltName) && grep -q "$AUCHAN_HOST" <<< "$names" && grep -q "$AUCHAN_LOGIN_HOST" <<< "$names"; }
@@ -1011,6 +1013,44 @@ auchan_scenario() {
   check "il s'arrête sur STORE_NOT_CHOSEN (« Aucun magasin n'est choisi »)" ui_has 'STORE_NOT_CHOSEN\|Aucun magasin'
   check "aucune recherche ni écriture partie vers le faux Auchan" auchan_nothing_sent
   close_diagnostic
+  auchan_reset
+
+  # f. La première configuration depuis Repas (DRV-740) : l'adresse d'Auchan ne change jamais, `drive.setup` arrive dès l'ouverture, AVANT le choix du magasin.
+  # Aucun écran d'erreur ne masque la page : un bandeau, la page reste touchable, aucune requête ; le magasin choisi, « Utiliser ce magasin ? » puis le magasin part vers Repas.
+  RUN_AUCHAN_SETUP=5e7b0000-0000-4000-8000-0000000000c1
+  auchan_behavior '{"store":"none"}'
+  start_app
+  wait_until 40 has_report '"page": "repas"' || ko "le faux Repas ne s'est pas chargé"
+  post_command "{\"do\":\"drive.setup\",\"runId\":\"$RUN_AUCHAN_SETUP\",\"retailer\":\"auchan\"}"
+  if wait_until 40 ui_has 'Choisis ton magasin sur Auchan'; then
+    ok "drive.setup d'Auchan sans magasin choisi : un bandeau « Choisis ton magasin sur Auchan. Repas le reprend ensuite. »"
+  else
+    ko "le bandeau d'attente du choix du magasin n'est pas apparu"
+  fi
+  screenshot e45-premiere-configuration-bandeau
+  check "aucun écran d'erreur « Aucun magasin n'est choisi » ne masque la page" ui_lacks 'Aucun magasin'
+  check "la page du faux Auchan est toujours là, sous le bandeau" ui_has 'Courses en ligne'
+  check "le bandeau propose de retourner dans Repas" ui_has 'Retourner dans Repas'
+  sleep 5
+  check "aucune requête partie vers le faux Auchan pendant l'attente du choix" auchan_nothing_requested
+  # La personne choisit son magasin : le site garde son choix, la page se recharge (la barre dit « Retrait : … »). Le lien « Courses » de la page est touchable sous le bandeau.
+  auchan_behavior '{"store":"chosen"}'
+  if tap 'text="Courses"'; then ok "la page reste touchable sous le bandeau (« Courses » touché)"; else ko "la page n'est pas touchable sous le bandeau"; fi
+  if wait_until 60 ui_has 'Utiliser ce magasin ?'; then
+    ok "le magasin choisi, l'agent demande confirmation avec l'écran habituel"
+  else
+    ko "l'agent n'a pas proposé le magasin une fois choisi"
+  fi
+  screenshot e46-premiere-configuration-confirmation
+  check "le faux Auchan a reçu GET /journey (une fois le magasin choisi)" auchan_requested '/journey'
+  check "aucune recherche ni écriture partie vers le faux Auchan" auchan_nothing_sent
+  if tap 'text="Utiliser ce magasin"'; then ok "« Utiliser ce magasin » touché"; else ko "le bouton « Utiliser ce magasin » est introuvable"; fi
+  if wait_until 20 has_report "\"runId\": \"$RUN_AUCHAN_SETUP\", \"resultType\": \"setup-result\", \"lines\": -1, \"hasStore\": true"; then
+    ok "Repas reçoit le magasin lu, du même runId"
+  else
+    ko "Repas n'a pas reçu le magasin lu"
+  fi
+  back_to_repas || ko "l'écran Repas n'est pas revenu"
   auchan_reset
 }
 

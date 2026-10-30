@@ -229,7 +229,7 @@ describe('la configuration du magasin d’Auchan (setup)', () => {
     })
   })
 
-  it('sans magasin choisi : l’écran d’erreur « Choisis ton magasin », et rien n’est enregistré', async () => {
+  it('la page dit qu’un magasin est choisi mais le site n’en voit pas : l’écran d’erreur « Choisis ton magasin », et rien n’est enregistré', async () => {
     Object.assign(window, { fetch: journeyFetch(auchanFixture('parcours-sans-magasin.json')) })
     const app = bridge()
     const screens = fakeUi({ error: () => 'return' })
@@ -243,6 +243,40 @@ describe('la configuration du magasin d’Auchan (setup)', () => {
     ])
     expect(screens.screens()).not.toContain('store')
     expect(resultOf(app.postMessage)).toMatchObject({ outcome: 'error' })
+  })
+
+  it('première configuration, aucun magasin choisi (DRV-740) : pas d’écran d’erreur, un bandeau ; la page reste utilisable et aucune requête ne part tant que la barre dit « Choisir vos courses » ; le magasin choisi, UNE lecture puis « Utiliser ce magasin ? »', async () => {
+    // Given : la barre dit « Choisir vos courses »
+    vi.useFakeTimers()
+    showPage(auchanFixture('accueil-sans-magasin.html'))
+    const fetchSpy = journeyFetch()
+    Object.assign(window, { fetch: fetchSpy })
+    const app = bridge()
+    const screens = fakeUi({ store: () => 'save' })
+    run(window, { flow: { ui: screens.ui } })
+
+    // When : le setup arrive tout de suite à l'ouverture (l'adresse d'Auchan ne change jamais)
+    app.send(auchanSetup())
+    await vi.advanceTimersByTimeAsync(0)
+
+    // Then : un bandeau, pas d'erreur ; 30 secondes de choix sans une requête
+    expect(screens.screens()).toEqual(['storeWaiting'])
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(screens.screens()).toEqual(['storeWaiting'])
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(app.postMessage).not.toHaveBeenCalled()
+
+    // When : la personne choisit son magasin, la barre change
+    showPage(auchanFixture('accueil-magasin.html'))
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    // Then : une seule lecture du parcours, puis l'écran habituel
+    expect(screens.screens()).toEqual(['storeWaiting', 'store'])
+    expect(fetchSpy.mock.calls.map(([url]) => url)).toEqual(['/journey'])
+    expect(screens.propsOf('store')).toEqual([
+      { id: '0b5f8a2e-3c1d-4e7f-9a6b-123456789abc', label: 'Drive Ville-Test' },
+    ])
+    expect(resultOf(app.postMessage)).toMatchObject({ type: 'setup-result' })
   })
 
   it('une panne du site pendant la lecture du magasin est dite (NETWORK), pas avalée', async () => {
