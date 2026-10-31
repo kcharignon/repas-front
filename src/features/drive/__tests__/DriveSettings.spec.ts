@@ -598,52 +598,28 @@ describe('réglages du drive : la lecture du magasin par l’application (un seu
   })
 })
 
-describe('réglages du drive : l’application et les produits', () => {
-  it('hors de l’application, propose de l’installer et mène à l’aide', async () => {
+describe('réglages du drive : les produits', () => {
+  it('ne montre aucune section sur l’application ni lien vers l’aide, hors de l’application', async () => {
     const { wrapper } = await open()
 
-    expect(wrapper.text()).toContain('Tu utilises Repas dans un navigateur')
-    expect(wrapper.find('a[href="/drive/aide"]').text()).toBe('Aide d’installation')
-  })
-
-  it('dans l’application, montre sa version et que le drive est prêt', async () => {
-    const native = fakeNative((message, reply) => {
-      if (message.type === 'app.info')
-        reply({ v: 1, type: 'app.info', version: '0.5.0', versionCode: 5, drive: true })
-    })
-    Object.assign(globalThis, { repasNative: native.bridge })
-    const { wrapper } = await open()
-    await vi.waitFor(() => expect(wrapper.text()).toContain('Version 0.5.0'))
-
-    // Rien à faire : « prêt » n'est pas dit (DRV-628)
-    expect(wrapper.text()).not.toContain('prêt')
+    expect(wrapper.text()).not.toContain('Application Repas')
     expect(wrapper.text()).not.toContain('navigateur')
-    // Déjà installée : l'aide ne propose pas de l'installer, elle mène à la mise à jour
-    const help = wrapper.find('a[href="/drive/aide#mise-a-jour"]')
-    expect(help.text()).toBe('Mettre à jour l’application')
-    expect(wrapper.text()).not.toContain('Aide d’installation')
+    expect(wrapper.find('a[href="/drive/aide"]').exists()).toBe(false)
   })
 
-  it('dans une application dont le drive ne peut pas fonctionner, demande de la mettre à jour', async () => {
+  it('ne montre ni version ni mise à jour dans l’application, même si le drive y est coupé', async () => {
     const native = fakeNative((message, reply) => {
       if (message.type === 'app.info')
         reply({ v: 1, type: 'app.info', version: '0.1.0', versionCode: 1, drive: false })
     })
     Object.assign(globalThis, { repasNative: native.bridge })
     const { wrapper } = await open()
+    await flushPromises()
 
-    await vi.waitFor(() => expect(wrapper.text()).toContain('Version 0.1.0'))
-    expect(wrapper.text()).toContain('mets-la à jour')
-  })
-
-  it('dit quand l’application ne répond pas comme prévu', async () => {
-    const native = fakeNative((message, reply) => {
-      if (message.type === 'app.info') reply({ v: 1, type: 'error', code: 'UNSUPPORTED' })
-    })
-    Object.assign(globalThis, { repasNative: native.bridge })
-    const { wrapper } = await open()
-
-    await vi.waitFor(() => expect(wrapper.text()).toContain('L’application ne répond pas'))
+    expect(wrapper.text()).not.toContain('Application Repas')
+    expect(wrapper.text()).not.toContain('Version 0.1.0')
+    expect(wrapper.text()).not.toContain('mets-la à jour')
+    expect(wrapper.find('a[href="/drive/aide#mise-a-jour"]').exists()).toBe(false)
   })
 
   it('résume les produits mémorisés et mène à leur gestion', async () => {

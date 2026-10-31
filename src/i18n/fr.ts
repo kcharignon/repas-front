@@ -1054,17 +1054,6 @@ export default {
     },
     offline:
       'Hors connexion : l’enregistrement est impossible tant que le réseau n’est pas revenu.',
-    app: 'Application Repas',
-    appVersion: 'Version {version}',
-    appChecking: 'Vérification de l’application…',
-    appNoAnswer: 'L’application ne répond pas : ferme-la, puis rouvre-la.',
-    appDriveOff:
-      'Le drive ne peut pas fonctionner dans cette version de l’application : mets-la à jour.',
-    appMissing:
-      'Tu utilises Repas dans un navigateur. Pour envoyer une liste au drive, installe l’application Repas sur ton téléphone.',
-    help: 'Aide d’installation',
-    // Dans l'application elle-même : elle est installée, l'aide sert à la mettre à jour
-    helpInApp: 'Mettre à jour l’application',
     products: 'Produits dont Repas se souvient',
     productsWith: 'Articles avec des produits',
     productsRejected: 'Articles avec des produits à ne plus proposer',
