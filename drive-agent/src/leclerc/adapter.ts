@@ -97,7 +97,8 @@ import {
   type SearchContext,
   type SearchVariant,
 } from './search-request'
-import { looksLikeLoginPage, readSession, type SessionReading } from './session'
+import { looksLikeLoginPage, LOGIN_LABELS, readSession, type SessionReading } from './session'
+import { findControl, type GuideStep, type GuideTarget } from '../retailers/guide'
 import {
   findSearchBase,
   type LocationLike,
@@ -148,6 +149,12 @@ export interface RetailerAdapter {
    * configuration s'en sert quand `readStore` dit « aucun magasin choisi » : au lieu d'un écran d'erreur, il laisse la page utilisable et attend ce choix.
    */
   storeChosenOnPage?(): boolean
+  /**
+   * FACULTATIVE (DRV-751) : le contrôle de la page que la personne doit toucher pour une étape guidée (`store` : choisir son magasin, `login` : se connecter), avec
+   * son libellé tel que la page l'écrit ; `null` quand la page ne le montre pas (ou que l'enseigne n'a pas cette étape sur la page). Une lecture de la page seule : aucune
+   * requête, et l'agent ne touche jamais ce contrôle, il l'entoure seulement.
+   */
+  guideTarget?(step: GuideStep): GuideTarget | null
   /**
    * FACULTATIVE (DRV-748) : présente (et vraie) chez une enseigne dont l'accueil, après la connexion que la personne tape elle-même, montre de nouveau « Commencer
    * mes courses » alors que l'agent l'a déjà touché AVANT la connexion (le site avait répondu par sa page de connexion). Le passage peut alors faire une seconde
@@ -305,6 +312,8 @@ export interface LeclercDeps extends PacerDeps {
   startButton?: () => StartButton | null
   /** Les liens de la page et le bloc du menu « Rayons », lus dans le DOM (DRV-647). Absente, la page n'a aucun lien. */
   pageLinks?: () => PageLinks
+  /** Le lien ou bouton « Se connecter » de la page (DRV-751), à entourer. Absent, l'agent n'en désigne aucun. */
+  loginControl?: () => GuideTarget | null
 }
 
 /** Le temps laissé à une navigation pour quitter la page avant de la dire sans effet (le clic ou le lien d'entrée, 0.39.0 : l'utilisateur ne doit pas attendre davantage). */
@@ -1073,6 +1082,11 @@ export class LeclercAdapter implements RetailerAdapter {
     return this.pacer.stats()
   }
 
+  /** Chez Leclerc le magasin se lit dans l'adresse (aucune étape « magasin » sur la page) : seule la connexion se désigne, par son lien « Se connecter ». */
+  guideTarget(step: GuideStep): GuideTarget | null {
+    return step === 'login' ? (this.deps.loginControl?.() ?? null) : null
+  }
+
   readSession(): SessionReading {
     return readSession(this.deps.pageText())
   }
@@ -1123,6 +1137,7 @@ export function browserDeps(
     navigate: (url) => win.location.assign(url),
     startButton: () => findStartButton(win.document),
     pageLinks: () => readPageLinks(win.document),
+    loginControl: () => findControl(win.document, LOGIN_LABELS),
     pageText: () => new win.XMLSerializer().serializeToString(win.document),
     navigation: () => navigationOf(win),
     cookies: () => cookiesOf(win),

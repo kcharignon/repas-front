@@ -12,6 +12,7 @@ import {
 } from '../retailers'
 import { cleanText } from '../text'
 import type { Ui } from '../ui'
+import { guideProps } from './guide'
 import { buildResult } from './result'
 import type { FlowDeps } from './types'
 
@@ -31,7 +32,7 @@ export interface SetupDeps {
 /** Le rythme auquel l'agent regarde si la barre du magasin a changé pendant que la personne choisit (DRV-740) : une lecture de la page, aucune requête. */
 export const STORE_WATCH_POLL_MS = 2_000
 
-/** La durée au bout de laquelle l'attente du choix du magasin propose « Réessayer » et « Retourner dans Repas » (DRV-740) : 15 minutes. */
+/** La durée au bout de laquelle l'attente du choix du magasin propose « Attendre encore » ou d'arrêter (DRV-740, DRV-751) : 15 minutes. */
 export const STORE_WATCH_MAX_MS = 15 * 60_000
 
 /** Un libellé de magasin pour le protocole : de 1 à 255 caractères, ou rien. */
@@ -64,7 +65,7 @@ export function setupHandler(deps: SetupDeps): (message: SetupMessage) => Promis
         ),
       )
     }
-    /** Un écran d'erreur ; « Retourner dans Repas » renvoie un résultat en erreur. */
+    /** Un écran d'erreur ; « Revenir à ma liste dans Repas » renvoie un résultat en erreur. */
     const stop = async (
       code: RetailerErrorCode | 'STORE_MISMATCH',
       cause: RetailerCause | null = null,
@@ -74,16 +75,21 @@ export function setupHandler(deps: SetupDeps): (message: SetupMessage) => Promis
       ui.close()
     }
     /**
-     * Le bandeau « Choisis ton magasin » (DRV-740) : la page reste utilisable ; l'agent regarde la barre du magasin (une lecture de la page, aucune requête, toutes
-     * les 2 s) jusqu'à ce qu'elle dise qu'un magasin est choisi (`chosen`), ou que la personne rentre (`return`). Au bout de 15 minutes, le bandeau propose
-     * « Réessayer » (`retry`) ou rentrer.
+     * La carte « Choisis ton magasin » (DRV-740, DRV-751) : la page reste utilisable et le contrôle à toucher est entouré ; l'agent regarde la barre du magasin
+     * (une lecture de la page, aucune requête, toutes les 2 s) jusqu'à ce qu'elle dise qu'un magasin est choisi (`chosen`), ou que la personne arrête (`return` :
+     * « Arrêter pour l'instant », rien n'est enregistré). Au bout de 15 minutes, la carte propose « Attendre encore » (`retry`) ou d'arrêter.
      */
     const waitForChoice = async (
       chosenOnPage: () => boolean,
     ): Promise<'chosen' | 'return' | 'retry'> => {
       const started = now()
       let watching = true
-      const asked = ui.show('storeWaiting', { stage: 'waiting' })
+      const card = (stage: 'waiting' | 'late') =>
+        ui.show(
+          'guide',
+          guideProps('store', stage, { index: 1, total: 0 }, adapter, { setup: true }),
+        )
+      const asked = card('waiting').then((answer) => (answer === 'wait' ? 'retry' : 'return'))
       const seen = (async (): Promise<'chosen' | 'late' | 'stopped'> => {
         while (watching) {
           if (chosenOnPage()) return 'chosen'
@@ -95,7 +101,7 @@ export function setupHandler(deps: SetupDeps): (message: SetupMessage) => Promis
       const first = await Promise.race([asked, seen])
       watching = false
       if (first !== 'late') return first === 'stopped' ? 'return' : first
-      return ui.show('storeWaiting', { stage: 'late' })
+      return card('late').then((answer) => (answer === 'wait' ? 'retry' : 'return'))
     }
     if (retailer !== undefined && message.retailer !== retailer) return stop('STORE_MISMATCH')
     let store

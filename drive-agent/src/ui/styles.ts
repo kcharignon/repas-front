@@ -6,14 +6,33 @@
 // du bouton de menu (⋮, 48 dp et 24 dp de marge) que l'application pose sur le coin bas droit de la page.
 
 export const STYLES = `
-:host{all:initial;color-scheme:light dark;--target:48px;--clear:88px;--bg:#f7f8f6;--fg:#1d2a24;--muted:#4a5850;--card:#fff;--line:#7b8780;--accent:#1e6b4c;--on:#fff;--warn:#fff3d6;--warnfg:#5b3b00;--danger:#a12a2a;--photo:#fff}
-@media (prefers-color-scheme:dark){:host{--bg:#121a16;--fg:#e8f0eb;--muted:#b4c2b9;--card:#1b2621;--line:#8c9a92;--accent:#7fd6a8;--on:#0b1510;--warn:#3a2f12;--warnfg:#ffe3a3;--danger:#ff9b9b;--photo:#fff}}
+:host{all:initial;color-scheme:light dark;--target:48px;--clear:88px;--bg:#f7f8f6;--fg:#1d2a24;--muted:#4a5850;--card:#fff;--line:#7b8780;--accent:#1e6b4c;--on:#fff;--warn:#fff3d6;--warnfg:#5b3b00;--danger:#a12a2a;--photo:#fff;--g-card:#fff;--g-fg:#16221c;--g-muted:#55645c;--g-line:#c9d3cc;--g-primary:#1e6b4c;--g-soft:#e6f2ec;--g-meter:#e6ece7;--g-shadow:rgba(22,34,28,.18)}
+@media (prefers-color-scheme:dark){:host{--bg:#121a16;--fg:#e8f0eb;--muted:#b4c2b9;--card:#1b2621;--line:#8c9a92;--accent:#7fd6a8;--on:#0b1510;--warn:#3a2f12;--warnfg:#ffe3a3;--danger:#ff9b9b;--photo:#fff;--g-card:#17221c;--g-fg:#eaf1ec;--g-muted:#9db0a5;--g-line:#34443a;--g-primary:#4fb58a;--g-soft:#1b2a22;--g-meter:#1f2d25;--g-shadow:rgba(0,0,0,.5)}}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 .backdrop{position:absolute;inset:0;background:var(--bg)}
 .overlay{position:absolute;left:0;top:0;width:100%;height:100%;transform-origin:0 0;touch-action:pan-y;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
 .overlay.sheet{background:transparent;pointer-events:none;overflow:visible}
 .overlay.sheet>.screen{flex:none;max-height:70%;margin-top:auto;border-top:3px solid var(--accent);background:var(--bg);pointer-events:auto}
+.overlay.sheet>.screen.guide{flex:none;max-height:calc(100% - 24px);margin:auto 8px var(--clear);padding:16px 18px 14px;display:flex;flex-direction:column;gap:10px;border:1.5px solid var(--g-line);border-radius:22px;background:var(--g-card);color:var(--g-fg);box-shadow:0 8px 24px var(--g-shadow)}
+.guide h1{margin:0;font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:24px;line-height:1.15;font-weight:700}
+.guide .g-text{margin:0;font-size:17px;line-height:1.4}
+.guide .g-head{display:flex;align-items:center;gap:10px}
+.guide .g-segments{display:inline-flex;gap:4px}
+.guide .g-seg{width:28px;height:6px;border-radius:999px;background:var(--g-line)}
+.guide .g-seg.on{background:var(--g-primary)}
+.guide .g-step{font-size:14px;font-weight:700;color:var(--g-muted)}
+.guide .g-tick{display:inline-flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;border-radius:999px;background:var(--g-soft);color:var(--g-primary)}
+.guide .g-status{margin:0;display:flex;align-items:center;gap:8px;font-size:15px;color:var(--g-muted)}
+.guide .g-dot{flex:none;width:10px;height:10px;border-radius:999px;background:var(--g-primary)}
+.guide .g-meter{height:8px;border-radius:999px;background:var(--g-meter);overflow:hidden}
+.guide .g-fill{width:100%;height:8px;border-radius:999px;background:var(--g-primary);transform-origin:0 50%;animation:g-fill 1.5s linear both}
+@keyframes g-fill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.guide>button{width:100%;min-height:56px;border-radius:14px}
+.guide>button.primary{border-color:var(--g-primary);background:var(--g-primary)}
+.guide .g-stop{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 12px;border:1.5px solid var(--g-line);background:var(--g-card);color:var(--g-fg)}
+.guide .g-stop-title{font-size:16px;font-weight:700}
+.guide .g-stop-note{font-size:14px;color:var(--g-muted)}
 .screen{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:16px 16px var(--clear);overflow-wrap:anywhere}
 .screen.fill{display:flex;flex-direction:column;padding:0;overflow:hidden}
 h1{margin:0 0 12px;font-size:1.35rem;line-height:1.25}

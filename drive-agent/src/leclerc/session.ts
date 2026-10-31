@@ -56,7 +56,7 @@ const ORDERS = /^mes commandes$/
  * newsletter ») n'en est pas un : un client connecté en voit aussi. Un libellé double (« Connexion / Inscription ») est coupé en parties,
  * qui doivent toutes être connues.
  */
-const LOGIN_LABELS = new Set([
+export const LOGIN_LABELS = new Set([
   'se connecter',
   'me connecter',
   'connexion',

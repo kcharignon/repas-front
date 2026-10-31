@@ -107,7 +107,7 @@ test('mode configuration avec un autre magasin que celui de la page : STORE_MISM
   app.answerHello({ ...SETUP, store: { ...SETUP.store, id: '000999' } })
 
   await expect(page.getByRole('heading', { name: 'Ce n’est pas le bon magasin' })).toBeVisible()
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+  await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
 
   expect(await app.received('result')).toMatchObject({
     outcome: 'error',

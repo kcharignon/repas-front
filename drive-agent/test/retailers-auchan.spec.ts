@@ -119,27 +119,76 @@ describe('la page est celle d’Auchan', () => {
     expect(fetchSpy.mock.calls.every(([, init]) => init?.method !== 'POST')).toBe(true)
   })
 
-  it('aucun magasin choisi (la barre « Choisir vos courses ») : UNSUPPORTED_PAGE, cause « magasin non choisi », sans une requête ni une écriture', async () => {
+  it('aucun magasin choisi (la barre « Choisir vos courses ») : une étape guidée, pas une erreur (DRV-751) ; ni requête ni écriture, la page reste utilisable ; « Arrêter pour l’instant » rend un envoi arrêté', async () => {
     showPage(auchanFixture('accueil-sans-magasin.html'))
     const fetchSpy = journeyFetch()
+    Object.assign(window, { fetch: fetchSpy })
+    const app = bridge()
+    const screens = fakeUi()
+    run(window, { flow: { ui: screens.ui } })
+
+    app.send(auchanPlan())
+
+    await vi.waitFor(() => expect(screens.screens()).toEqual(['guide']))
+    expect(screens.propsOf('guide')).toEqual([
+      expect.objectContaining({ step: 'store', stage: 'waiting', index: 1, total: 1 }),
+    ])
+    // La carte cite la barre de la page, que la personne n'a plus qu'à toucher ; l'agent la désigne sans y toucher
+    expect(screens.propsOf('guide')[0]?.label).toBe('Choisir vos courses')
+    expect(screens.propsOf('guide')[0]?.target?.()?.textContent).toBe('Choisir vos courses')
+    expect(screens.screens()).not.toContain('error')
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(app.postMessage).not.toHaveBeenCalled()
+
+    screens.pressGuideStop()
+
+    await vi.waitFor(() => expect(app.postMessage).toHaveBeenCalledOnce())
+    expect(resultOf(app.postMessage)).toMatchObject({ outcome: 'aborted' })
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('aucun magasin choisi, puis choisi dans la page : l’agent continue TOUT SEUL, une seule lecture du parcours, aucun écran d’erreur, aucun double envoi', async () => {
+    vi.useFakeTimers()
+    showPage(auchanFixture('accueil-sans-magasin.html'))
+    const fetchSpy = vi.fn<typeof fetch>((url) =>
+      Promise.resolve(
+        String(url).startsWith('/recherche')
+          ? new Response(auchanFixture('recherche-farine.html'), {
+              headers: { 'content-type': 'text/html; charset=utf-8' },
+            })
+          : new Response(auchanFixture('parcours-magasin.json'), {
+              headers: { 'content-type': 'application/json' },
+            }),
+      ),
+    )
     Object.assign(window, { fetch: fetchSpy })
     const app = bridge()
     const screens = fakeUi({ error: () => 'return' })
     run(window, { flow: { ui: screens.ui } })
 
     app.send(auchanPlan())
-
-    await vi.waitFor(() => expect(app.postMessage).toHaveBeenCalledOnce())
-    expect(screens.propsOf('error')).toEqual([
-      { code: 'UNSUPPORTED_PAGE', canReturn: true, cause: 'STORE_NOT_CHOSEN' },
-    ])
-    const result = resultOf(app.postMessage)
-    expect(result).toMatchObject({ outcome: 'error', error: { code: 'UNSUPPORTED_PAGE' } })
-    expect(JSON.stringify(result)).toContain('STORE_NOT_CHOSEN')
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(screens.screens()).toEqual(['guide'])
     expect(fetchSpy).not.toHaveBeenCalled()
+
+    // La personne choisit son magasin : la barre change, sans recharger la page
+    showPage(auchanFixture('accueil-magasin.html'))
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    // Plus rien à guider : « Ton magasin est choisi », puis le passage lui-même (la recherche du premier produit), sans que la personne ait quitté la page
+    expect(screens.propsOf('guide').map((props) => props.stage)).toEqual(['waiting', 'done'])
+    expect(screens.screens()).not.toContain('error')
+    expect(fetchSpy.mock.calls.map(([url]) => url).slice(0, 2)).toEqual([
+      '/journey',
+      '/recherche?text=Farine%20de%20bl%C3%A9%20T55%20de%20test%201%20kg',
+    ])
+    expect(fetchSpy.mock.calls.filter(([url]) => url === '/journey')).toHaveLength(1)
+    expect(fetchSpy.mock.calls.every(([, init]) => init?.method !== 'POST')).toBe(true)
   })
 
-  it('aucun contexte de courses dans le parcours : même arrêt, sans écriture', async () => {
+  it('aucun contexte de courses dans le parcours alors que la barre dit « Retrait » : un vrai désaccord, l’écran d’erreur après trois lectures, pas une attente sans fin', async () => {
+    vi.useFakeTimers()
     const fetchSpy = journeyFetch(auchanFixture('parcours-sans-magasin.json'))
     Object.assign(window, { fetch: fetchSpy })
     const app = bridge()
@@ -147,10 +196,13 @@ describe('la page est celle d’Auchan', () => {
     run(window, { flow: { ui: screens.ui } })
 
     app.send(auchanPlan())
+    await vi.advanceTimersByTimeAsync(0)
 
-    await vi.waitFor(() => expect(app.postMessage).toHaveBeenCalledOnce())
+    // La page dit déjà que le magasin est choisi : pas une étape à guider, l'erreur tout de suite
+    expect(screens.screens()).toEqual(['error'])
     expect(screens.propsOf('error')[0]).toMatchObject({ cause: 'STORE_NOT_CHOSEN' })
     expect(fetchSpy.mock.calls.map(([url]) => url)).toEqual(['/journey'])
+    expect(resultOf(app.postMessage)).toMatchObject({ outcome: 'error' })
   })
 
   it('un autre magasin que celui du plan : STORE_MISMATCH', async () => {
@@ -169,22 +221,27 @@ describe('la page est celle d’Auchan', () => {
     expect(screens.propsOf('error')).toEqual([{ code: 'STORE_MISMATCH', canReturn: true }])
   })
 
-  it('un visiteur (tracking_authenticated « false ») : NOT_LOGGED_IN, après la seule lecture du magasin, sans écrire', async () => {
+  it('un visiteur (tracking_authenticated « false ») : une étape guidée « connecte-toi » après la seule lecture du magasin, sans écrire (DRV-751) ; « Arrêter pour l’instant » rend un envoi arrêté', async () => {
     sessionStorage.setItem('tracking_authenticated', 'false')
     const fetchSpy = journeyFetch()
     Object.assign(window, { fetch: fetchSpy })
     const app = bridge()
-    const screens = fakeUi({ error: () => 'return' })
+    const screens = fakeUi()
     run(window, { flow: { ui: screens.ui } })
 
     app.send(auchanPlan())
 
+    await vi.waitFor(() => expect(screens.screens()).toEqual(['guide']))
+    expect(screens.propsOf('guide')).toEqual([
+      expect.objectContaining({ step: 'login', stage: 'waiting', index: 1, total: 1 }),
+    ])
+    expect(fetchSpy.mock.calls.map(([url]) => url)).toEqual(['/journey'])
+    expect(app.postMessage).not.toHaveBeenCalled()
+
+    screens.pressGuideStop()
+
     await vi.waitFor(() => expect(app.postMessage).toHaveBeenCalledOnce())
-    expect(resultOf(app.postMessage)).toMatchObject({
-      outcome: 'error',
-      error: { code: 'NOT_LOGGED_IN' },
-    })
-    expect(JSON.stringify(resultOf(app.postMessage))).toContain('SESSION_VISITOR')
+    expect(resultOf(app.postMessage)).toMatchObject({ outcome: 'aborted' })
     expect(fetchSpy.mock.calls.map(([url]) => url)).toEqual(['/journey'])
   })
 
@@ -260,9 +317,9 @@ describe('la configuration du magasin d’Auchan (setup)', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     // Then : un bandeau, pas d'erreur ; 30 secondes de choix sans une requête
-    expect(screens.screens()).toEqual(['storeWaiting'])
+    expect(screens.screens()).toEqual(['guide'])
     await vi.advanceTimersByTimeAsync(30_000)
-    expect(screens.screens()).toEqual(['storeWaiting'])
+    expect(screens.screens()).toEqual(['guide'])
     expect(fetchSpy).not.toHaveBeenCalled()
     expect(app.postMessage).not.toHaveBeenCalled()
 
@@ -271,7 +328,7 @@ describe('la configuration du magasin d’Auchan (setup)', () => {
     await vi.advanceTimersByTimeAsync(2_000)
 
     // Then : une seule lecture du parcours, puis l'écran habituel
-    expect(screens.screens()).toEqual(['storeWaiting', 'store'])
+    expect(screens.screens()).toEqual(['guide', 'store'])
     expect(fetchSpy.mock.calls.map(([url]) => url)).toEqual(['/journey'])
     expect(screens.propsOf('store')).toEqual([
       { id: '0b5f8a2e-3c1d-4e7f-9a6b-123456789abc', label: 'Drive Ville-Test' },

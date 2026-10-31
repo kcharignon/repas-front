@@ -126,7 +126,7 @@ test('ne réduit jamais une quantité déjà au panier : 5 déjà pour un plan d
   expect(fake.paced().map((call) => call.kind)).toEqual(['search'])
   await expect(page.getByText('Déjà 5 au panier : conservé')).toBeVisible()
   expectPoliteAgent(fake)
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+  await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
   expect(await returnedResult(page, fake)).toMatchObject({
     outcome: 'completed',
     lines: [{ ingredientSlug: 'farine', outcome: 'ADDED', productId: '1000001', quantity: 5 }],
@@ -261,7 +261,7 @@ test('met au panier le nombre calculé sur le contenu lu sur le site, pas celui 
   await expect(page.getByText('Quantités changées')).toBeVisible()
   await expect(page.getByText('Farine : 3 au lieu de 30')).toBeVisible()
   await expect(page.getByText('Sucre :')).toHaveCount(0)
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+  await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
 
   // And : le résultat porte la quantité réellement mise au panier
   expect(await returnedResult(page, fake)).toMatchObject({
@@ -316,7 +316,7 @@ test('« Arrêter » pendant le passage : l’agent finit l’article en cours, 
   await expect(page.getByRole('heading', { name: 'Tu as arrêté l’envoi' })).toBeVisible({
     timeout: 30_000,
   })
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+  await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
 
   // Then : le second article n'a pas été touché
   expect(await returnedResult(page, fake)).toMatchObject({ outcome: 'aborted' })
@@ -336,7 +336,7 @@ for (const [name, message] of [
 
     // Then
     await expect(page.getByRole('heading', { name: 'Liste illisible' })).toBeVisible()
-    await page.getByRole('button', { name: 'Fermer' }).click()
+    await page.getByRole('button', { name: 'Fermer ce message' }).click()
     await expect(page.getByRole('dialog')).toHaveCount(0)
     expect(fake.paced()).toEqual([])
   })
@@ -355,7 +355,7 @@ test('refuse un plan fait pour un autre magasin que celui de la page, et le dit 
     path: '/magasin-000002-000002-Ville-Test/',
   })
   await expect(page.getByRole('heading', { name: 'Ce n’est pas le bon magasin' })).toBeVisible()
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+  await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
 
   // Then
   expect(await returnedResult(page, fake)).toMatchObject({

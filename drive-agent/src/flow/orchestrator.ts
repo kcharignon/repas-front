@@ -16,6 +16,7 @@ import {
 import {
   RetailerError,
   type EntryReading,
+  type GuideStep,
   type RetailerCause,
   type RequestStats,
 } from '../retailers'
@@ -24,6 +25,15 @@ import { formatNeeded, summarySentence } from '../ui'
 import type { EntryKind, ProgressEntry } from '../ui'
 import type { RetailerNames } from '../retailers'
 import { cardOf } from './card'
+import {
+  GUIDE_DONE_MS,
+  GUIDE_STUCK_CHECKS,
+  guideProps,
+  guideStepOf,
+  realSleep,
+  stepLooksDone,
+  watchStep,
+} from './guide'
 import { askPacks } from './pack-size'
 import { settleKnownLine, type UnavailableNote } from './phase-a'
 import {
@@ -196,7 +206,24 @@ export class Flow {
     if (deps.retailer !== undefined && message.retailer !== deps.retailer) {
       return this.showError('STORE_MISMATCH', message)
     }
-    const problem = (await this.storeProblem(message)) ?? this.sessionProblem()
+    let problem = (await this.storeProblem(message)) ?? this.sessionProblem()
+    // Un premier envoi : le magasin pas encore choisi et la personne pas encore connectée sont des ÉTAPES, pas des pannes (DRV-751). L'agent guide, attend, et continue
+    // tout seul ; une page d'avant (la page se recharge quand on choisit son magasin ou qu'on se connecte) a pu noter où en est ce parcours.
+    let guided: GuideStep | null = this.runs.guide(message.runId)?.step ?? null
+    const firstStep = guideStepOf(problem, deps.adapter)
+    // La page dit déjà qu'un magasin est choisi alors que le site n'en voit pas : ce n'est pas une étape à guider, c'est un vrai désaccord (comme à la lecture du magasin)
+    if (firstStep !== null && !(firstStep === 'store' && stepLooksDone('store', deps.adapter))) {
+      const outcome = await this.guide(message, problem as Fault)
+      if (outcome === 'stopped') return
+      problem = outcome.problem
+      guided = outcome.last ?? guided
+    }
+    if (
+      problem === null &&
+      guided !== null &&
+      (await this.announceReady(message, guided)) === 'stopped'
+    )
+      return
     // Une page de l'enseigne qui n'est pas celle d'un magasin (l'accueil, où le plan s'ouvre) : l'agent y entre dans le magasin (DRV-625).
     if (problem?.code === 'UNSUPPORTED_PAGE' && problem.cause === 'PAGE_PATH') {
       return this.enterStore(message)
@@ -238,6 +265,89 @@ export class Flow {
       }
     }
     await this.finish(run)
+  }
+
+  /**
+   * Le parcours guidé (DRV-751) : une carte à la fois (« Étape 1 sur 2 : choisis ton magasin », puis « Étape 2 sur 2 : connecte-toi », seulement celles qui
+   * manquent), le contrôle à toucher entouré dans la page, et rien d'autre à faire pour la personne : dès que la page dit que l'étape est faite, l'agent relit le
+   * magasin et la session, passe à l'étape suivante ou rend la main. Aucune requête pendant l'attente. Rend le problème qui reste (`null` : tout est prêt, ou une vraie
+   * erreur à montrer) et la dernière étape montrée, ou `stopped` : la personne a arrêté, l'envoi est rendu à Repas comme arrêté, la liste est gardée.
+   */
+  private async guide(
+    plan: PlanMessage,
+    initial: Fault,
+  ): Promise<'stopped' | { problem: Fault | null; last: GuideStep | null }> {
+    const { adapter, ui, now } = this.deps
+    const sleep = this.deps.sleep ?? realSleep
+    const watch = { started: now(), lastCheck: now(), late: false }
+    let problem: Fault | null = initial
+    let last: GuideStep | null = null
+    let shown = ''
+    let stuck = 0
+    // Le nombre d'étapes ne baisse pas quand la première est faite : « 2 sur 2 » reste « 2 sur 2 » (même sans stockage pour le noter)
+    let total: 1 | 2 = 1
+    let asked: Promise<'stop' | 'wait'> = Promise.resolve('wait')
+    for (;;) {
+      const step = guideStepOf(problem, adapter)
+      if (step === null) break
+      last = step
+      const steps = this.guideSteps(plan.runId, step, total)
+      total = steps.total
+      this.runs.noteGuide(plan.runId, steps.total, step)
+      const stage = watch.late ? 'late' : 'waiting'
+      // Une carte déjà là n'est pas redessinée (le repère ne saute pas, la page ne défile pas sous le doigt de la personne)
+      if (shown !== `${step}:${stage}`) {
+        shown = `${step}:${stage}`
+        asked = ui.show('guide', guideProps(step, stage, steps, adapter))
+      }
+      let watching = true
+      const seen = watchStep(step, adapter, { now, sleep }, watch, () => watching)
+      const outcome = await Promise.race([asked, seen])
+      watching = false
+      if (outcome === 'stop') return this.stopGuided(plan)
+      if (outcome === 'wait') {
+        watch.started = now()
+        watch.late = false
+      } else if (outcome === 'late') {
+        watch.late = true
+      } else if (outcome === 'check') {
+        watch.lastCheck = now()
+        problem = (await this.storeProblem(plan)) ?? this.sessionProblem()
+        // La page dit « fait » mais le site ne le voit toujours pas, trois fois de suite : une vraie panne, l'écran d'erreur (pas une lecture du site toutes les 5 s à vie)
+        stuck = guideStepOf(problem, adapter) === step ? stuck + 1 : 0
+        if (stuck >= GUIDE_STUCK_CHECKS) break
+      }
+    }
+    return { problem, last }
+  }
+
+  /** « Étape 1 sur 2 » : combien d'étapes manquent (celles que la page montre, ou celles qu'une page d'avant a notées) et le rang de celle-ci. */
+  private guideSteps(runId: string, step: GuideStep, seen: 1 | 2): { index: 1 | 2; total: 1 | 2 } {
+    const noted = this.runs.guide(runId)
+    const both = step === 'store' && this.sessionProblem() !== null
+    const total = both || noted?.total === 2 || seen === 2 ? 2 : 1
+    return { index: step === 'store' ? 1 : total, total }
+  }
+
+  /** Tout est prêt : la carte le dit (« Ton magasin est choisi. Je remplis ton panier. »), puis le passage continue tout seul. */
+  private async announceReady(plan: PlanMessage, step: GuideStep): Promise<'ready' | 'stopped'> {
+    const { adapter, ui } = this.deps
+    const sleep = this.deps.sleep ?? realSleep
+    const asked = ui.show('guide', guideProps(step, 'done', { index: 1, total: 1 }, adapter))
+    const answer = await Promise.race([asked, sleep(GUIDE_DONE_MS).then(() => 'go' as const)])
+    if (answer === 'stop') return this.stopGuided(plan)
+    this.runs.clearGuide()
+    return 'ready'
+  }
+
+  /** « Arrêter pour l'instant » : l'envoi s'arrête sans rien avoir écrit, la liste est gardée ; Repas le sait (`aborted`). */
+  private stopGuided(plan: PlanMessage): 'stopped' {
+    const { ui, send, agentVersion } = this.deps
+    this.runs.clearGuide()
+    this.enter('ABORTED')
+    send(buildResult(plan, [], { outcome: 'aborted' }, agentVersion, ui.retailer))
+    ui.close()
+    return 'stopped'
   }
 
   /**
@@ -542,6 +652,7 @@ export class Flow {
     // Les raisons de cet envoi restent pour le diagnostic (DRV-635) : des mots fixes et des nombres, sans libellé.
     this.runs.keepReasons(run.state.reasons)
     this.runs.keepRefusals(run.state.unreached)
+    this.runs.clearGuide()
     // Un envoi terminé sans rien à lire repart tout de suite vers Repas (DRV-625) ; l'écran de fin reste pour le reste (partiel, arrêté, erreur).
     if (hasSomethingToRead(props)) await ui.show('end', props)
     this.runs.remove(run.plan.runId)
@@ -555,6 +666,7 @@ export class Flow {
     cause: RetailerCause | null = null,
   ): Promise<void> {
     const { ui, send, agentVersion } = this.deps
+    this.runs.clearGuide()
     this.enter('ERROR')
     const answer = await ui.show('error', {
       code,

@@ -936,7 +936,7 @@ export const S = {
           CART_REFUSED: ` : ${retailer.name} n’a pas voulu le mettre au panier, sans en donner la raison.`,
         }) satisfies Record<UnreachedReason, string>,
     },
-    back: 'Retourner dans Repas',
+    back: 'Revenir à ma liste dans Repas',
   },
   /** Les lignes du journal de progression (une par article traité). */
   log: {
@@ -962,7 +962,7 @@ export const S = {
     title: (retailer: RetailerNames) => `${retailer.name} demande une vérification`,
     text: 'Fais-la dans la page, puis touche Reprendre.',
     resume: 'Reprendre',
-    stop: 'Arrêter',
+    stop: 'Arrêter pour l’instant',
   },
   /** L'entrée dans le magasin (DRV-625) : ce qui se passe, ou le seul geste à faire. Un bandeau, la page reste visible. */
   entry: {
@@ -970,19 +970,59 @@ export const S = {
     manual: 'Touche « Commencer mes courses ».',
   },
   /**
-   * La première configuration quand le magasin se choisit sur le site (DRV-740) : un bandeau, la page reste utilisable. Une phrase, puis le geste ; au bout d'un
-   * long moment, « Réessayer » ou revenir dans Repas.
+   * Le guide des étapes de première utilisation (DRV-751, repas-po) : choisir son magasin, puis se connecter. Une carte en bas ; le magasin d'abord (la connexion
+   * n'est jamais citée dans le texte du magasin). Un titre, UNE phrase qui dit quoi faire et où, ce que l'agent fait pendant ce temps, et UNE seule action
+   * qui dit ce qui se passe quand on la touche. Le libellé cité est celui de la page (`label`) ; sans lui, une phrase sans libellé.
    */
-  storeWaiting: {
-    waiting: (retailer: RetailerNames) =>
-      `Choisis ton magasin sur ${retailer.name}. Repas le reprend ensuite.`,
-    late: 'Je ne vois pas de magasin choisi.',
-    back: 'Retourner dans Repas',
-    retry: 'Réessayer',
+  guide: {
+    /** Le repère d'étape : « Étape 1 sur 2 » ; une seule étape qui reste : « Il reste une étape ». */
+    step: (index: number, total: number) =>
+      total <= 1 ? 'Il reste une étape' : `Étape ${index} sur ${total}`,
+    /** Le repère d'une étape faite. */
+    done: 'C’est bon',
+    store: {
+      title: 'Choisis ton magasin',
+      text: (label: string | null) =>
+        label === null
+          ? 'Touche la barre du magasin en haut de la page, puis ton magasin.'
+          : `Touche « ${label} » en haut de la page, puis ton magasin.`,
+    },
+    login: {
+      title: 'Connecte-toi',
+      text: (label: string | null) =>
+        label === null
+          ? 'Touche le bouton de connexion de la page, puis entre tes identifiants. Tu tapes toi-même ton mot de passe.'
+          : `Touche « ${label} », puis entre tes identifiants. Tu tapes toi-même ton mot de passe.`,
+    },
+    /** Ce que l'agent fait pendant que la personne agit. */
+    status: 'Je continue dès que c’est fait.',
+    /** Le repère posé sous le contrôle à toucher, dans la page. */
+    pointer: 'Touche ici',
+    /** L'étape est faite : l'agent reprend la main. */
+    ready: {
+      store: 'Ton magasin est choisi',
+      login: 'Tu es connecté',
+      text: 'Je remplis ton panier. Tu n’as rien à faire.',
+    },
+    /** L'attente s'est allongée : on propose d'attendre encore (le seul autre bouton de la carte). */
+    late: {
+      title: 'Je suis toujours là',
+      text: 'Je n’ai rien vu changer sur la page. Je peux attendre encore.',
+      wait: 'Attendre encore',
+    },
+    /** L'unique action secondaire : elle dit qu'on arrête, et que rien n'est perdu. */
+    stop: {
+      title: 'Arrêter pour l’instant',
+      note: 'Ta liste est gardée, tu pourras reprendre.',
+      /** La lecture du magasin (réglages) : aucune liste en jeu. */
+      noteSetup: 'Rien n’est enregistré, tu pourras recommencer.',
+    },
   },
   error: {
-    close: 'Fermer',
-    back: 'Retourner dans Repas',
+    /** Le message se ferme et la page reste là : rien d'autre ne change. */
+    close: 'Fermer ce message',
+    /** L'envoi s'arrête, la liste est gardée : Repas explique la suite. */
+    back: 'Revenir à ma liste dans Repas',
   },
 } as const
 
