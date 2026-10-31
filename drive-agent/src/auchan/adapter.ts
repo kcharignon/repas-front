@@ -25,7 +25,9 @@ import {
   type Reply,
   type RequestStats,
 } from '../retailers/pacer'
+import type { CartProbeFacts, CartReplyFacts } from '../retailers/cart-facts'
 import type { StoreReadFacts } from '../retailers/store-facts'
+import { CART_FAILURE_KEY, parseCartFailure, stringifyCartFailure } from './cart-failure'
 import { AuchanCart } from './cart-writer'
 import { isAuchanChallenge } from './challenge'
 import { readEntry } from './entry'
@@ -58,6 +60,11 @@ export interface AuchanDeps extends PacerDeps {
   cookies?: () => string
   /** Ouvre une adresse dans la page (`location.assign`) : suivre un lien d'entrée. Absente, `followEntry` ne suit pas de lien. */
   navigate?: (url: string) => void
+  /**
+   * Le `sessionStorage` de l'onglet (DRV-752) : la FORME de la dernière réponse du panier en échec s'y garde (un nombre, des noms, des mots d'une liste
+   * fermée) pour que le diagnostic la montre après un rechargement. Absent : elle ne vit qu'en mémoire.
+   */
+  storage?: { getItem(key: string): string | null; setItem(key: string, value: string): void }
   /** Lit un texte HTML en document inerte (le `DOMParser` pris au démarrage, DRV-724) : la page de résultats se lit par des sélecteurs. */
   parseHtml: (html: string) => Document
 }
@@ -113,6 +120,11 @@ export class AuchanAdapter implements RetailerAdapter {
         const { state } = this.readSession()
         return state === 'UNKNOWN' ? null : state === 'MEMBER'
       },
+      ...(deps.storage !== undefined && {
+        keepFailure: (facts: CartReplyFacts) =>
+          deps.storage?.setItem(CART_FAILURE_KEY, stringifyCartFailure(facts)),
+        recallFailure: () => parseCartFailure(deps.storage?.getItem(CART_FAILURE_KEY) ?? null),
+      }),
     })
   }
 
@@ -317,6 +329,19 @@ export class AuchanAdapter implements RetailerAdapter {
     return this.cart.readQuantity(productId)
   }
 
+  /**
+   * La sonde de lecture du panier du diagnostic (DRV-752) : UNE requête `GET /cart` à la cadence, jamais une écriture, qui ne retient rien du panier. Elle rend
+   * la forme de la réponse du site et ne lève jamais d'erreur.
+   */
+  probeCart(): Promise<CartProbeFacts> {
+    return this.cart.probe()
+  }
+
+  /** La forme de la dernière réponse du panier qui a échoué (DRV-752), de cette page ou de l'onglet ; `null` s'il n'y en a pas. */
+  lastCartFailure(): CartReplyFacts | null {
+    return this.cart.lastFailure()
+  }
+
   // —— Écrit par DRV-725 (le panier) ——————————————————————————————————————————————————————————————————————————————————————————
 
   setCartQuantity(productId: string, quantity: number): Promise<CartResult> {
@@ -388,6 +413,16 @@ export function browserDeps(
     },
     navigation: () => navigationOf(win),
     cookies: () => win.document.cookie,
+    storage: {
+      getItem: (key) => {
+        try {
+          return win.sessionStorage.getItem(key)
+        } catch {
+          return null
+        }
+      },
+      setItem: (key, value) => win.sessionStorage.setItem(key, value),
+    },
     navigate: (url) => win.location.assign(url),
     parseHtml: primitives.parseHtml,
     sleep: (ms) => new Promise((resolve) => win.setTimeout(resolve, ms)),

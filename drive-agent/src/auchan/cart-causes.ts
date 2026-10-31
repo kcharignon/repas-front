@@ -3,6 +3,9 @@
 // (les codes d'erreur `401` et `99001` à `99007` de `GET /cart/config` sont INCONNUS : hypothèse C-7).
 export const AUCHAN_CART_CAUSES = {
   CART_CONSENT_UNREADABLE: 'identifiant de consentement du panier absent ou illisible dans la page',
+  CART_EMPTY: 'réponse du panier vide',
+  CART_JSON_EMPTY: 'réponse du panier en JSON vide (ni panier, ni erreur)',
+  CART_ERROR_PAGE: 'page d’erreur du site à la place de la réponse du panier',
   CART_NO_CART: 'réponse du panier sans panier lisible',
   CART_ID_UNREADABLE: 'identifiant du panier absent ou illisible dans la réponse',
   CART_ITEMS_UNREADABLE: 'réponse du panier sans liste de lignes',

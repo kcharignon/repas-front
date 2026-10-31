@@ -14,6 +14,8 @@ import type {
   ArrivalFacts,
   AttemptFacts,
   Candidate,
+  CartProbeFacts,
+  CartReplyFacts,
   CountKey,
   FacetExploration,
   FacetMatch,
@@ -73,6 +75,10 @@ export interface ProbeFacts {
   lastPass?: readonly LastReason[]
   /** Ce que le panier a répondu aux produits choisis qu'il n'a pas pris, au dernier envoi (DRV-644). */
   lastRefusals?: readonly LastRefusal[]
+  /** La sonde de lecture du panier (DRV-752) : la forme de sa réponse. Absente chez une enseigne dont le panier ne se lit pas à part, ou sonde non faite. */
+  cart?: CartProbeFacts | null
+  /** La forme de la dernière réponse du panier qui a échoué dans cet onglet (DRV-752), même avant un rechargement de la page. */
+  cartFailure?: CartReplyFacts | null
 }
 
 /** Ce que l'échantillon de résultats dit de la disponibilité (DRV-635) : des nombres, jamais un libellé. */
@@ -222,6 +228,32 @@ export function faultText(fault: {
 }): string {
   const named = fault.cause === null ? fault.code : `${fault.code} (${fault.cause})`
   return fault.status == null ? named : `${named}, HTTP ${fault.status}`
+}
+
+/** « HTTP 200, type text/html, 4,1 k caractères, adresse /cart, non redirigée, corps page HTML, mots reconnus : page de connexion » : la forme d'une réponse du panier. */
+export function cartReplyText(facts: CartReplyFacts): string {
+  return P.cartReply(facts)
+}
+
+/** Les lignes du rapport sur le panier (DRV-752) : la sonde de lecture, les noms d'en-têtes de sa réponse, le dernier échec de l'onglet. */
+function cartLines(
+  cart: CartProbeFacts | null | undefined,
+  failure: CartReplyFacts | null | undefined,
+): string[] {
+  const lines: string[] = []
+  if (cart) {
+    const reply = cart.reply === null ? null : cartReplyText(cart.reply)
+    lines.push(
+      P.cartProbe(
+        cart.outcome === 'READ'
+          ? P.cartProbeRead(cart.lines ?? 0, reply)
+          : P.cartProbeFailed(cart.fault === null ? '?' : faultText(cart.fault), reply),
+      ),
+    )
+    if (cart.reply !== null) lines.push(P.cartHeaders(cart.reply.headers))
+  }
+  if (failure) lines.push(P.cartFailure(cartReplyText(failure)))
+  return lines
 }
 
 /** Le suffixe de ville de l'adresse de la page, lu dans son motif (`/magasin-N-N-V/…` : oui, `/magasin-N-N/…` : non). */
@@ -865,5 +897,6 @@ export function probeLines(
       lines.push(P.headers(nonsense.term, facts.headers))
     }
   }
+  lines.push(...cartLines(probes.cart, probes.cartFailure))
   return lines.length === 0 ? [] : [P.title, ...lines.map((line) => ` - ${line}`)]
 }

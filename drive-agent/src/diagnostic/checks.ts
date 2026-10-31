@@ -1,8 +1,10 @@
-// Les contrôles du diagnostic (DRV-308) : tous en lecture seule, un seul appel au site (une recherche, à la cadence de l'adaptateur).
+// Les contrôles du diagnostic (DRV-308) : tous en lecture seule (la recherche d'essai, à la cadence de l'adaptateur, et, chez une enseigne dont le panier se
+// lit à part, UNE lecture du panier : DRV-752).
 // Chaque contrôle rend `OK`, `KO` (avec le code d'erreur quand il y en a un) ou `NOT_TESTED`. Un détail ne contient que des nombres et
 // des phrases fixes : jamais un cookie, un identifiant, une adresse ni un morceau de page.
 import {
   type ArrivalFacts,
+  type CartProbeFacts,
   type FacetExploration,
   describeSession,
   type RetailerInfo,
@@ -18,6 +20,7 @@ import { readLastReasons, readLastRefusals, type StorageLike, type WakeLockLike 
 import {
   attemptsText,
   availabilityFacts,
+  cartReplyText,
   type AisleLabelFacts,
   type ProductListsReport,
   type AvailabilityFacts,
@@ -42,6 +45,7 @@ export const CHECK_IDS = [
   'search',
   'content',
   'shelves',
+  'cart',
   'startButton',
   'frame',
 ] as const
@@ -351,6 +355,29 @@ const complete = (candidate: Awaited<ReturnType<RetailerAdapter['searchProducts'
 const D = S.diagnostic.detail
 
 /**
+ * La lecture du panier (DRV-752) : UNE requête `GET`, jamais une écriture, pour dire la FORME de ce que le site répond (code, type, taille, noms d'en-têtes,
+ * mots d'une liste fermée). `NON TESTÉ` chez une enseigne dont le panier ne se lit pas à part, et quand la page ou la recherche d'essai n'a pas répondu (un
+ * blocage, une session perdue ou une page hors magasin : lire le panier n'apprendrait rien de plus, et insisterait auprès de l'anti-robot).
+ */
+async function probeCart(
+  adapter: RetailerAdapter,
+  page: PageFacts | null,
+  faults: readonly ProbedSearch['fault'][],
+): Promise<{ facts: CartProbeFacts | null; result: CheckResult }> {
+  if (adapter.probeCart === undefined) return { facts: null, result: skipped('cart', D.cartNone) }
+  if (page === null || faults.some((fault) => fault !== null && HARD_STOPS.has(fault.code))) {
+    return { facts: null, result: skipped('cart', D.cartSkipped) }
+  }
+  const facts = await adapter.probeCart()
+  if (facts.outcome === 'READ') return { facts, result: ok('cart', D.cartOk(facts.lines ?? 0)) }
+  const detail = facts.reply === null ? undefined : cartReplyText(facts.reply)
+  return {
+    facts,
+    result: ko('cart', detail, facts.fault?.code, facts.fault?.cause),
+  }
+}
+
+/**
  * « Bouton de démarrage trouvé » (0.39.0) : l'agent appuie lui-même sur « Commencer mes courses » ; ce contrôle dit s'il le trouve dans la page.
  * Lecture seule, sans clic. `OK` : le bouton se touche (ou c'est un lien) ; `KO` : la page parle de « Commencer mes courses » mais l'agent n'en
  * trouve pas l'élément à toucher ; `NON TESTÉ` : la page n'a pas cette fenêtre (une page de magasin ordinaire).
@@ -502,6 +529,9 @@ export async function runChecks(
           : null
   const measured = shelvesSkip === null ? await probeShelves(deps.adapter) : undefined
   const shelves = measured?.shelves
+  // La forme du dernier échec du panier de cet onglet (celui d'un envoi), lue AVANT la sonde : la sonde ne l'écrase pas, mais ne le montre pas non plus.
+  const cartFailure = deps.adapter.lastCartFailure?.() ?? null
+  const cart = await probeCart(deps.adapter, page, [commonFault, nonsenseFault])
   // La disponibilité de l'échantillon et les raisons du dernier envoi (DRV-635) : des nombres et des mots fixes, jamais un libellé.
   probes = {
     ...probes,
@@ -516,6 +546,8 @@ export async function runChecks(
     productLists: measured?.productLists ?? [],
     lastPass: readLastReasons(deps.storage),
     lastRefusals: readLastRefusals(deps.storage),
+    cart: cart.facts,
+    cartFailure,
   }
 
   if (shelves === undefined) await push(skipped('shelves', shelvesSkip ?? D.pageSkipped))
@@ -524,6 +556,7 @@ export async function runChecks(
     const seen = shelves.some((shelf) => shelf.aisles.length > 0)
     await push(seen ? ok('shelves', detail) : skipped('shelves', detail))
   }
+  await push(cart.result)
   await push(startButtonCheck(arrival))
   await push(skipped('frame', D.frameSkipped))
   return { results, page, probes, stats: statsSince(before, deps.adapter.stats()) }

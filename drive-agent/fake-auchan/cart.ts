@@ -11,7 +11,16 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import { findProduct, PRODUCTS } from './catalog.ts'
-import { challengePage, CONSENT_ID, MEMBER_CART_ID, VISITOR_CART_ID } from './pages.ts'
+import {
+  challengePage,
+  consentPage,
+  CONSENT_ID,
+  errorPage,
+  loginPage,
+  MEMBER_CART_ID,
+  sitePage,
+  VISITOR_CART_ID,
+} from './pages.ts'
 import type { SessionKind } from './pages.ts'
 import type { FakeRequest } from './server.ts'
 
@@ -24,6 +33,14 @@ export type WriteForm =
   | 'ignore-without-id'
   /** `200`, une autre quantité que celle demandée est appliquée (la demande + 1). */
   | 'wrong-quantity'
+  | ReplyForm
+
+/**
+ * Les réponses qui ne sont pas un panier, communes à la lecture et à l'écriture. Les formes de page de `login-page` à `site-page` et `empty-body`, `json-empty`
+ * sont celles de DRV-752 : elles servent à prouver comment l'agent classe une réponse que le site n'a pas encore montrée (INVENTÉES, aucune n'est mesurée).
+ */
+export type ReplyForm =
+  /** `200`, une page HTML sans mot connu : `CART_NOT_JSON`. */
   | 'not-json'
   /** `200`, du JSON sans panier (une forme d'erreur inconnue). */
   | 'no-cart'
@@ -35,18 +52,23 @@ export type WriteForm =
   | 'forbidden'
   | 'server-error'
   | 'login-redirect'
+  /** `200`, la page de connexion (formulaire, champ de mot de passe, reCAPTCHA invisible) à la place du JSON. */
+  | 'login-page'
+  /** `200`, une page de cookies (consentement) sans champ de mot de passe. */
+  | 'consent-page'
+  /** `200`, une page d'erreur du site. */
+  | 'error-page'
+  /** `200`, une page ordinaire du site (lien « Se connecter », bannière de cookies) sans champ de mot de passe. */
+  | 'site-page'
+  /** `200`, aucun corps. */
+  | 'empty-body'
+  /** `200`, `{}` en JSON. */
+  | 'json-empty'
 
 /** Ce que la lecture (`GET /cart`) fait. */
 export type ReadForm =
   | 'ok'
-  | 'not-json'
-  | 'no-cart'
-  | 'challenge'
-  | 'recaptcha'
-  | 'unauthorized'
-  | 'forbidden'
-  | 'server-error'
-  | 'login-redirect'
+  | ReplyForm
   /** Un panier dont la ligne n'a pas d'`id` lisible. */
   | 'line-without-id'
   /** Un panier dont la ligne n'a pas de quantité lisible. */
@@ -212,6 +234,30 @@ export function createFakeCart(host: CartHost): FakeCart {
       case 'challenge':
         entry.status = 200
         await host.send(res, 200, challengePage(), HTML)
+        return true
+      case 'login-page':
+        entry.status = 200
+        await host.send(res, 200, loginPage(), HTML)
+        return true
+      case 'consent-page':
+        entry.status = 200
+        await host.send(res, 200, consentPage(), HTML)
+        return true
+      case 'error-page':
+        entry.status = 200
+        await host.send(res, 200, errorPage(), HTML)
+        return true
+      case 'site-page':
+        entry.status = 200
+        await host.send(res, 200, sitePage(), HTML)
+        return true
+      case 'empty-body':
+        entry.status = 200
+        await host.send(res, 200, '', JSON_HEADERS)
+        return true
+      case 'json-empty':
+        entry.status = 200
+        await host.send(res, 200, '{}', JSON_HEADERS)
         return true
       case 'recaptcha':
         entry.status = 403

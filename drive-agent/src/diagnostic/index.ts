@@ -1,5 +1,6 @@
 // Le mode diagnostic (DRV-308) : depuis l'écran d'accueil, un auto-test lisible de l'agent et du site, en lecture seule, et un rapport
-// texte à copier pour le support. Rien n'est écrit dans le panier ; une seule recherche part, à la cadence de l'adaptateur.
+// texte à copier pour le support. Rien n'est écrit dans le panier ; la recherche d'essai part, à la cadence de l'adaptateur, puis, chez une enseigne dont le
+// panier se lit à part (DRV-752), UNE requête de lecture du panier.
 import type { Ui } from '../ui'
 import { runChecks, type CheckResult, type ChecksDeps } from './checks'
 import { reportOf, rowsOf, summaryOf } from './report'

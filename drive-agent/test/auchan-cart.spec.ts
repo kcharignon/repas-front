@@ -629,6 +629,24 @@ describe('la quantité déjà au panier, LUE (readCartQuantity, DRV-732)', () =>
     expect(visitor.calls[0]?.url).toBe(`/cart?consentId=${CONSENT}&cartId=${VISITOR_CART}`)
   })
 
+  it('DRV-752 : la sonde du diagnostic envoie EXACTEMENT la requête de lecture du passage (la mesurée du 2026-10-30), et jamais une écriture', async () => {
+    const passage = cartSite([])
+    await adapterOf(passage, 'true').readCartQuantity(PRODUCT)
+    const probe = cartSite([])
+    const facts = await adapterOf(probe, 'true').probeCart()
+
+    expect(facts).toMatchObject({ outcome: 'READ', lines: 0 })
+    expect(probe.calls).toHaveLength(1)
+    expect(probe.calls[0]?.url).toBe(`/cart?consentId=${CONSENT}`)
+    expect(probe.calls[0]?.init).toEqual(passage.calls[0]?.init)
+    expect(probe.calls[0]?.init.method).toBe('GET')
+    expect(probe.calls[0]?.init.headers).toEqual({
+      'X-Requested-With': 'XMLHttpRequest',
+      Accept: 'application/json',
+    })
+    expect(probe.calls[0]?.init.body).toBeUndefined()
+  })
+
   it('l’horloge fausse : la lecture passe par le Pacer, à sa cadence', async () => {
     const site = cartSite([])
     const adapter = adapterOf(site)
@@ -756,13 +774,14 @@ describe('les réponses du site : un statut ou un corps inattendu n’est jamais
 
   it.each([
     ['du HTML', '<html><body>Bienvenue</body></html>', 'CART_NOT_JSON'],
-    ['un texte vide', '', 'CART_NOT_JSON'],
+    ['un texte vide', '', 'CART_EMPTY'],
     [
       'du JSON sans panier (une forme d’erreur inconnue)',
       '{"errors":[{"code":"99001"}]}',
       'CART_NO_CART',
     ],
-    ['un tableau', '[]', 'CART_NO_CART'],
+    ['un tableau vide', '[]', 'CART_JSON_EMPTY'],
+    ['un tableau', '[1]', 'CART_NO_CART'],
     ['un panier sans identifiant', '{"cart":{"items":[]}}', 'CART_ID_UNREADABLE'],
     ['un identifiant hostile', '{"cart":{"id":"a b&c","items":[]}}', 'CART_ID_UNREADABLE'],
     ['un panier sans liste de lignes', `{"cart":{"id":"${MEMBER_CART}"}}`, 'CART_ITEMS_UNREADABLE'],

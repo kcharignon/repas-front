@@ -77,6 +77,7 @@ describe('en fonctionnement normal', () => {
       ['search', 'OK'],
       ['content', 'OK'],
       ['shelves', 'OK'],
+      ['cart', 'NOT_TESTED'],
       ['startButton', 'NOT_TESTED'],
       ['frame', 'NOT_TESTED'],
     ])
@@ -390,6 +391,7 @@ describe('ce que le rapport laisse voir', () => {
       '[KO BLOCKED] Recherche d’un mot courant',
       '[NON TESTÉ] Contenu net des produits : recherche impossible, contenu non analysé',
       '[NON TESTÉ] Rayons vus : la recherche « sel » a échoué : BLOCKED, HTTP 403',
+      '[NON TESTÉ] Lecture du panier : sans objet : ce site ne lit pas son panier à part',
       '[NON TESTÉ] Bouton de démarrage trouvé : pas de fenêtre « Commencer mes courses » sur cette page',
       '[NON TESTÉ] Cadre de même origine : non utilisé : l’agent affiche lui-même la liste de produits',
       '',
@@ -471,9 +473,10 @@ describe('l’écran du diagnostic', () => {
       'ok',
       'skip',
       'skip',
+      'skip',
     ])
     expect(updates.length).toBe(CHECK_IDS.length + 1)
-    expect(finished[0]?.summary).toBe('Contrôles terminés : 8 réussis, 0 en échec, 2 non testés.')
+    expect(finished[0]?.summary).toBe('Contrôles terminés : 8 réussis, 0 en échec, 3 non testés.')
     expect(finished[0]?.report).toContain('Agent : 0.5.0')
     expect(ui.propsOf('diagnostic')[0]?.copy).toBe(copy)
   })

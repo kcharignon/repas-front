@@ -379,6 +379,11 @@ test.describe('le diagnostic', () => {
     expect(text).toMatch(/cookie de protection anti-robot : oui/)
     // La recherche est lue (DRV-724) : le rapport le dit, sans un libellé du site
     expect(text).toMatch(/\[OK\] Recherche d’un mot courant/)
+    // Le panier est lu par UNE requête de lecture (DRV-752) : sa forme est dite, jamais une valeur du site
+    expect(text).toMatch(
+      /\[OK\] Lecture du panier : panier lu par une seule requête de lecture, rien écrit : 0 ligne/,
+    )
+    expect(text).toContain('corps JSON, mots reconnus : aucun')
     // Aucune valeur du site : ni l'identifiant du magasin, ni son libellé, ni un cookie, ni une localité
     for (const secret of [
       STORE.id,
@@ -391,5 +396,26 @@ test.describe('le diagnostic', () => {
     }
     expect(fakeAuchan.writes()).toEqual([])
     expect(fakeAuchan.cart()).toEqual({})
+  })
+
+  test('un panier qui répond la page de connexion en 200 : « Lecture du panier » est KO NOT_LOGGED_IN, avec la forme de la réponse, rien n’est écrit (DRV-752)', async ({
+    page,
+    fakeAuchan,
+    agentCode,
+  }) => {
+    fakeAuchan.setCartBehavior({ read: 'login-page' })
+    const app = await open(page, fakeAuchan, agentCode)
+    await app.received('hello')
+
+    await app.send(DIAGNOSTIC)
+
+    const report = page.getByLabel('Rapport à copier')
+    await expect(report).toHaveValue(/Aucune écriture au panier\./)
+    const text = await report.inputValue()
+    expect(text).toMatch(/\[KO NOT_LOGGED_IN\] Lecture du panier : HTTP 200, type text\/html, /)
+    expect(text).toContain('mots reconnus : page de connexion')
+    expect(text).toContain('cause LOGIN_FORM')
+    expect(text).not.toMatch(/consentId|https?:\/\/127/)
+    expect(fakeAuchan.writes()).toEqual([])
   })
 })
