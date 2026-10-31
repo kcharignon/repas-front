@@ -146,6 +146,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingredients/{slug}/list-destination": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Règle la liste de courses où va un produit (« produit à part »)
+         * @description Seul le propriétaire du produit le règle, un administrateur compris (`403` pour le produit d'un autre). `default` efface le choix : le produit va dans la liste du type de son rayon, sinon dans la liste principale ; `main` l'envoie dans la liste principale même si son rayon est dans un type ; un identifiant de type l'envoie dans la liste de ce type. Le choix se fait à l'ajout et se fige : aucune ligne déjà dans une liste ne bouge. Le type d'un autre utilisateur est inconnu (`404`) et rien n'est écrit.
+         */
+        put: operations["put_api_choose_ingredient_list"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/recipes/{id}/copy": {
         parameters: {
             query?: never;
@@ -191,7 +211,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Liste des rayons, triés par slug */
+        /**
+         * Liste des rayons, triés par slug
+         * @description Les rayons sont des données globales ; seul `listTypeId` est propre à l'utilisateur connecté : le type de liste de courses auquel il a rattaché le rayon (ADR 0036), `null` pour un rayon sans type.
+         */
         get: operations["get_api_list_departments"];
         put?: never;
         /** Crée un rayon (administrateur) */
@@ -297,6 +320,30 @@ export interface paths {
         put?: never;
         /** Crée une nouvelle liste active ; l'éventuelle liste active passe en pause et les listes terminées sont supprimées */
         post: operations["post_api_create_shopping_list"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shopping-list-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Types de liste de courses de l'utilisateur authentifié, triés par date de création
+         * @description Un type est un nom que l'utilisateur crée (« Boucherie », « Marché ») ; les produits de ses rayons vont dans la liste en cours de ce type (ADR 0036). Propres à chaque compte, administrateur compris : jamais ceux d'un autre. La liste est vide tant que l'utilisateur n'en a créé aucun : rien ne change alors pour lui.
+         */
+        get: operations["get_api_list_shopping_list_types"];
+        put?: never;
+        /**
+         * Crée un type de liste de courses pour l'utilisateur authentifié (10 au plus par compte)
+         * @description Le type naît sans rayon : on les rattache ensuite par `PUT /api/v1/shopping-list-types/{id}`. Le propriétaire est l'utilisateur du jeton, jamais le corps. `Location` est l'adresse du type créé.
+         */
+        post: operations["post_api_create_shopping_list_type"];
         delete?: never;
         options?: never;
         head?: never;
@@ -518,6 +565,34 @@ export interface paths {
         head?: never;
         /** Renomme une liste de courses ; `name` absent ou null rétablit le nom par défaut (la date) */
         patch: operations["patch_api_update_shopping_list"];
+        trace?: never;
+    };
+    "/api/v1/shopping-list-types/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Un type de liste de courses de l'utilisateur, avec ses rayons et ses produits à part
+         * @description Les rayons rattachés au type (avec leur nom) et les produits à part : ceux de l'utilisateur dont le type est choisi à la main, avec leur rayon. Le type d'un autre utilisateur, administrateur compris, est inconnu (`404`, la même réponse qu'un identifiant inconnu).
+         */
+        get: operations["get_api_get_shopping_list_type"];
+        /**
+         * Remplace le nom d'un type de liste de courses de l'utilisateur et le jeu complet de ses rayons
+         * @description Seul le propriétaire du type l'écrit, un administrateur compris (`403` pour le type d'un autre). Un rayon rattaché alors qu'un autre type de l'utilisateur l'avait est déplacé ; changer les rayons d'un type ne déplace aucune ligne des listes déjà remplies (le choix se fait à l'ajout et se fige). Rien n'est écrit en cas de refus.
+         */
+        put: operations["put_api_update_shopping_list_type"];
+        post?: never;
+        /**
+         * Supprime un type de liste de courses de l'utilisateur sans rien perdre
+         * @description Une seule transaction : les rayons rattachés au type sont détachés, les produits qui le désignaient redeviennent « comme leur rayon », ses listes n'ont plus de type et celle qui était en cours passe en pause (version +1), sous son nom, visible dans « Mes listes ». Aucune ligne n'est déplacée ni fusionnée. Seul le propriétaire du type le supprime, un administrateur compris.
+         */
+        delete: operations["delete_api_remove_shopping_list_type"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/units/{slug}": {
@@ -1302,6 +1377,13 @@ export interface components {
              */
             favorite: boolean | null;
         };
+        ChooseIngredientListPayload: {
+            /**
+             * @description Où va le produit : `default` (dans la liste de son rayon, le choix est effacé), `main` (dans la liste principale, même si son rayon est dans un type) ou l'identifiant d'un type de liste du compte
+             * @example main
+             */
+            destination: string;
+        };
         ConversionPayload: {
             /**
              * @description Slug de l'unité de départ
@@ -1458,6 +1540,13 @@ export interface components {
              */
             order: number;
         };
+        CreateShoppingListTypePayload: {
+            /**
+             * @description Nom du type, de 1 à 40 caractères, unique par compte une fois normalisé ; sa première lettre est mise en majuscule
+             * @example Boucherie
+             */
+            name: string;
+        };
         /** @enum {string} */
         Dimension: "WEIGHT" | "VOLUME" | "COUNT" | "PACKAGE";
         UnitPayload: {
@@ -1539,6 +1628,15 @@ export interface components {
              * @example Courses du week-end
              */
             name: string | null;
+        };
+        UpdateShoppingListTypePayload: {
+            /**
+             * @description Nom du type, de 1 à 40 caractères, unique par compte une fois normalisé ; sa première lettre est mise en majuscule. Renommer un type ne renomme pas ses listes
+             * @example Boucherie
+             */
+            name: string;
+            /** @description Le jeu COMPLET des rayons du type (leurs slugs) : ceux qui n'y sont plus sont détachés, un tableau vide les détache tous. Un rayon qu'un autre type du compte avait est déplacé dans celui-ci (un rayon est dans un seul type à la fois) */
+            departmentSlugs: string[];
         };
         ChangeUserStatusPayload: {
             /**
@@ -2033,7 +2131,7 @@ export interface components {
              */
             departmentName?: string | null;
         };
-        DepartmentDTO: {
+        DepartmentListItemDTO: {
             /**
              * @description Identifiant du rayon (slug)
              * @example fruits-et-legumes
@@ -2051,6 +2149,8 @@ export interface components {
              * @example snowflake
              */
             icon?: string | null;
+            /** @description Identifiant du type de liste de courses auquel l'utilisateur connecté a rattaché ce rayon (ADR 0036), `null` quand le rayon n'a pas de type (ses produits vont dans la liste principale) ; propre à son compte. Clé toujours écrite */
+            listTypeId?: string | null;
         };
         IngredientOptionDTO: {
             /**
@@ -2196,6 +2296,22 @@ export interface components {
              */
             createdAt: string;
         };
+        ShoppingListTypeSummaryDTO: {
+            /**
+             * @description Identifiant du type de liste
+             * @example 3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34
+             */
+            id: string;
+            /** @example Boucherie */
+            name: string;
+            /** @description Identifiants (slugs) des rayons rattachés à ce type, triés par identifiant : les produits de ces rayons vont dans la liste de ce type */
+            departmentSlugs: string[];
+            /**
+             * @description Nombre de produits à part de ce type : ceux de l'utilisateur dont le type est choisi à la main (jamais ceux d'un autre), toujours renseigné
+             * @example 2
+             */
+            ingredientCount: number;
+        };
         UnitDTO: {
             /**
              * @description Identifiant de l'unité (slug)
@@ -2245,6 +2361,37 @@ export interface components {
              *     ]
              */
             plannedRecipeIds: string[];
+        };
+        DepartmentDTO: {
+            /**
+             * @description Identifiant du rayon (slug)
+             * @example fruits-et-legumes
+             */
+            slug: string;
+            /** @example Fruits et légumes */
+            name: string;
+            /**
+             * @description Chemin ou URL de l'image du rayon
+             * @example images/department/fruits.png
+             */
+            image: string;
+            /**
+             * @description Nom de l'icône du rayon (le front la dessine), `null` quand le rayon n'en a pas : elle distingue deux ingrédients de même nom dans deux rayons. Clé toujours écrite ; les valeurs permises sont celles du corps de `PUT /departments/{slug}` ; une icône que le front ne connaît pas s'ignore
+             * @example snowflake
+             */
+            icon?: string | null;
+        };
+        ListDestinationDTO: {
+            /**
+             * @description `DEFAULT` : le produit va dans la liste de son rayon (ou la principale si son rayon n'a pas de type) ; `MAIN` : toujours la liste principale ; `TYPE` : toujours la liste du type `typeId`. Un choix qui désigne un type qui n'existe plus se lit `DEFAULT`
+             * @example DEFAULT
+             * @enum {string}
+             */
+            mode: "DEFAULT" | "MAIN" | "TYPE";
+            /** @description Identifiant du type de liste choisi ; `null` hors du mode `TYPE`. Clé toujours écrite */
+            typeId?: string | null;
+            /** @description Nom du type de liste choisi ; `null` hors du mode `TYPE`. Clé toujours écrite */
+            typeName?: string | null;
         };
         IngredientDTO: {
             /**
@@ -2311,6 +2458,7 @@ export interface components {
             isBase: boolean;
             /** @description Le lecteur peut poser le marqueur « de base » sur cet ingrédient : il est le propriétaire du catalogue et l'ingrédient est à lui. Toujours écrit, jamais `null` : le front s'appuie sur ce champ, pas sur le rôle administrateur */
             canSetBase: boolean;
+            listDestination: components["schemas"]["ListDestinationDTO"];
         };
         MergeIngredientDTO: {
             /**
@@ -2660,6 +2808,44 @@ export interface components {
              * @example 3
              */
             version: number;
+        };
+        ShoppingListTypeDepartmentDTO: {
+            /**
+             * @description Identifiant du rayon (slug)
+             * @example viandes
+             */
+            slug: string;
+            /** @example Viandes */
+            name: string;
+        };
+        ShoppingListTypeIngredientDTO: {
+            /**
+             * @description Identifiant de l'ingrédient (slug)
+             * @example saucisse-de-toulouse
+             */
+            slug: string;
+            /** @example Saucisse de Toulouse */
+            name: string;
+            /**
+             * @description Identifiant du rayon de l'ingrédient (slug) : deux produits de même nom peuvent être dans deux rayons
+             * @example charcuterie
+             */
+            departmentSlug: string;
+            /** @example Charcuterie */
+            departmentName: string;
+        };
+        ShoppingListTypeDTO: {
+            /**
+             * @description Identifiant du type de liste
+             * @example 3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34
+             */
+            id: string;
+            /** @example Boucherie */
+            name: string;
+            /** @description Rayons rattachés à ce type, triés par identifiant : les produits de ces rayons vont dans la liste de ce type */
+            departments: components["schemas"]["ShoppingListTypeDepartmentDTO"][];
+            /** @description Produits à part de ce type : ceux de l'utilisateur dont le type est choisi à la main, triés par nom (puis par identifiant) */
+            ingredients: components["schemas"]["ShoppingListTypeIngredientDTO"][];
         };
         CompatibleUnitDTO: {
             /**
@@ -3706,6 +3892,51 @@ export interface operations {
             };
         };
     };
+    put_api_choose_ingredient_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChooseIngredientListPayload"];
+            };
+        };
+        responses: {
+            /** @description Choix enregistré (ou déjà celui-là) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Le produit appartient à un autre utilisateur (un administrateur n'a pas de passe-droit) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Produit inconnu, ou type de liste inconnu ou d'un autre utilisateur */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide : `destination` absente, vide ou de plus de 36 caractères */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     post_api_copy_recipe: {
         parameters: {
             query?: never;
@@ -3834,7 +4065,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        member?: components["schemas"]["DepartmentDTO"][];
+                        member?: components["schemas"]["DepartmentListItemDTO"][];
                         /** @example 21 */
                         totalItems?: number;
                     };
@@ -4204,6 +4435,68 @@ export interface operations {
                 headers: {
                     /** @description URL de la liste créée */
                     Location?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_api_list_shopping_list_types: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Types de liste (collection `member`) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        member?: components["schemas"]["ShoppingListTypeSummaryDTO"][];
+                        /** @example 2 */
+                        totalItems?: number;
+                    };
+                };
+            };
+        };
+    };
+    post_api_create_shopping_list_type: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateShoppingListTypePayload"];
+            };
+        };
+        responses: {
+            /** @description Type créé */
+            201: {
+                headers: {
+                    /** @description URL du type créé */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Un type de ce nom existe déjà pour ce compte, une fois le nom normalisé (`LIST_TYPE_NAME_ALREADY_USED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide : nom vide, de plus de 40 caractères ou sans lettre ni chiffre (`LIST_TYPE_NAME_INVALID`), ou le compte a déjà 10 types (`LIST_TYPE_LIMIT_REACHED`) */
+            422: {
+                headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -5116,6 +5409,121 @@ export interface operations {
             };
             /** @description Corps de la requête invalide */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_api_get_shopping_list_type: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Le type de liste */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingListTypeDTO"];
+                };
+            };
+            /** @description Type inconnu, ou à un autre utilisateur */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    put_api_update_shopping_list_type: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateShoppingListTypePayload"];
+            };
+        };
+        responses: {
+            /** @description Type enregistré */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Le type appartient à un autre utilisateur (un administrateur n'a pas de passe-droit) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Type inconnu, ou un des rayons est inconnu */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Un autre type de ce compte porte déjà ce nom, une fois normalisé (`LIST_TYPE_NAME_ALREADY_USED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide : nom vide, de plus de 40 caractères ou sans lettre ni chiffre (`LIST_TYPE_NAME_INVALID`), ou `departmentSlugs` qui n'est pas une liste de textes */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_api_remove_shopping_list_type: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Type supprimé, ses listes sont sans type */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Le type appartient à un autre utilisateur (un administrateur n'a pas de passe-droit) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Type inconnu */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
