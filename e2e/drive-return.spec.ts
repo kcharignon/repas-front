@@ -45,3 +45,27 @@ test('un passage arrêté par Leclerc : accessible en clair et en sombre, repli�
   const [, again] = await page.evaluate(() => window.__sent.filter((m) => m.type === 'drive.start'))
   expect(again?.plan?.lines.map((line) => line.ingredientSlug).sort()).toEqual(['beurre', 'sel'])
 })
+
+// DRV-750 : l'envoi est allé au bout, mais le panier n'a pas pris un produit choisi : le titre dit « en partie », jamais « Le panier est rempli ».
+test('un produit choisi que le panier n’a pas pris : « rempli en partie », lisible en clair et en sombre', async ({
+  page,
+}) => {
+  await fakeBack(page)
+  await fakeApp(page, 'notInCart')
+  await page.goto('/drive/envoi/l1')
+  await page.getByRole('button', { name: 'Remplir mon panier' }).click()
+
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Le panier est rempli en partie' }),
+  ).toBeVisible()
+  await expect(
+    page.getByText(
+      'Un produit que tu avais choisi n’est pas dans ton panier. Tout le reste est dans ton panier. Finalise ta commande dans l’appli Leclerc Drive, sans lui.',
+    ),
+  ).toBeVisible()
+  await expect(page.getByText('Ton panier est rempli.')).toBeHidden()
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await switchTheme(page, colorScheme)
+    expect((await scan(page)).violations, colorScheme).toEqual([])
+  }
+})
