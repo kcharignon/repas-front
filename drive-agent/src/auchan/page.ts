@@ -30,20 +30,30 @@ const BAR_ELEMENTS = 'a, button, [role="button"], p, span, div, li, h1, h2, h3'
  * La barre du magasin en haut de la page (DRV-712, A-4 et A-5, mesurées) : « Choisir vos courses » tant qu'aucun magasin n'est choisi, « Retrait : <le
  * drive> » ensuite. `CHOOSE` : un élément dont TOUT le texte est « Choisir vos courses » ; `WITHDRAWAL` : un élément qui commence par « Retrait : » ;
  * `null` : aucune des deux (page sans barre, forme changée). Aucun libellé de magasin n'est lu.
+ *
+ * **La preuve d'un magasin choisi passe AVANT le texte « Choisir… »** (DRV-751, relevé du téléphone de test le 2026-10-31, APRÈS le choix) : la page portait À LA FOIS
+ * « Choisir mon mode de livraison » (la barre du haut, encore dans l'arbre) et « Drive Auchan Drive <ville> Dès Dimanche 01 novembre 08:30 » (le magasin choisi, avec son
+ * créneau). Un texte « Choisir… » resté dans la page ne dit donc pas qu'aucun magasin n'est choisi : avec une preuve de retrait (« Retrait : … », ou un libellé « Drive
+ * Auchan <nom> … » plus long que le seul nom du site), la page dit `WITHDRAWAL`. Avant, `CHOOSE` au premier texte « Choisir… » faisait lever `STORE_NOT_CHOSEN` sans demander
+ * le site, alors que le magasin venait d'être choisi : c'est le message « Aucun magasin n'est choisi » qui revenait.
  */
 export function storeBar(root: ParentNode): 'CHOOSE' | 'WITHDRAWAL' | null {
   let withdrawal = false
+  let choose = false
   for (const element of root.querySelectorAll(BAR_ELEMENTS)) {
     const raw = element.textContent ?? ''
     // Un conteneur de la page entière n'est pas une barre : on ne normalise pas son texte.
     if (raw.length > 4 * MAX_BAR_TEXT) continue
     const text = fold(raw)
     if (text === '' || text.length > MAX_BAR_TEXT) continue
-    if (CHOOSE_BARS.includes(text)) return 'CHOOSE'
-    if (/^retrait ?:/.test(text)) withdrawal = true
+    if (CHOOSE_BARS.includes(text)) choose = true
+    else if (WITHDRAWAL_BAR.test(text)) withdrawal = true
   }
-  return withdrawal ? 'WITHDRAWAL' : null
+  return withdrawal ? 'WITHDRAWAL' : choose ? 'CHOOSE' : null
 }
+
+/** « Retrait : <le drive> » (mesuré, DRV-712) ou « Drive Auchan <nom du drive> … » (relevé du 2026-10-31) ; le seul nom du site, sans suite, n'en est pas une. */
+const WITHDRAWAL_BAR = /^(?:retrait ?:|drive auchan\b.{12,})/
 
 /**
  * Le contrôle à toucher pour choisir son magasin (DRV-751) : la barre qui dit « Choisir vos courses » ou « Choisir mon mode de livraison » (le texte entier de

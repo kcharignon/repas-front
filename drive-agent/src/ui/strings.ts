@@ -993,6 +993,8 @@ export const S = {
         label === null
           ? 'Touche le bouton de connexion de la page, puis entre tes identifiants. Tu tapes toi-même ton mot de passe.'
           : `Touche « ${label} », puis entre tes identifiants. Tu tapes toi-même ton mot de passe.`,
+      /** La personne est déjà sur la page de connexion de l'enseigne. */
+      form: 'Entre tes identifiants dans la page. Tu tapes toi-même ton mot de passe.',
     },
     /** Ce que l'agent fait pendant que la personne agit. */
     status: 'Je continue dès que c’est fait.',

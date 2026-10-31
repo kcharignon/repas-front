@@ -524,7 +524,7 @@ class DriveActivity : Activity() {
      * qu'il tarde ou que l'agent manque), il dit quoi faire ; pour un plan il porte « Ouvrir l'accueil du drive ». Jamais un écran muet.
      */
     private fun updateStoreBanner(url: String?) {
-        val banner = StoreBanner.of(pass.current()?.request, url, watch.trouble(url), basketHint, watch.isLoading())
+        val banner = StoreBanner.of(pass.current()?.request, url, watch.trouble(url), basketHint, watch.isLoading(), storeKnown = repasApp.storePaths.of(site).hasPath())
         val text = when (banner) {
             StoreBanner.NONE -> null
             StoreBanner.SETUP -> R.string.setup_banner

@@ -11,10 +11,17 @@ import {
   GUIDE_POLL_MS,
   GUIDE_STUCK_CHECKS,
 } from '../src/flow/guide'
-import { RetailerError, type GuideTarget, type RetailerAdapter } from '../src/retailers'
+import {
+  RetailerError,
+  type EntryReading,
+  type GuideTarget,
+  type RetailerAdapter,
+} from '../src/retailers'
 import { S } from '../src/ui/strings'
 import { chooseBarTarget } from '../src/auchan/page'
 import { AuchanAdapter } from '../src/auchan'
+import { LeclercAdapter } from '../src/leclerc'
+import { fakeSite } from './leclerc-helpers'
 import { findControl } from '../src/retailers/guide'
 import { LOGIN_LABELS } from '../src/leclerc/session'
 import {
@@ -41,7 +48,10 @@ const FARINE = plan([known('farine', [product('1000001', 3)]), home('sel')])
 const notChosen = () => new RetailerError('UNSUPPORTED_PAGE', null, 'STORE_NOT_CHOSEN')
 
 /** Une page qui évolue : ce que la personne a fait (magasin choisi, connectée), et l'adaptateur simulé qui le lit. */
-function world(initial: { chosen: boolean; member: boolean }) {
+function world(
+  initial: { chosen: boolean; member: boolean; unknown?: boolean },
+  options: { entry?: EntryReading } = {},
+) {
   const state = { ...initial, storeReads: 0, sessionReads: 0 }
   const target = (label: string | null): GuideTarget => ({
     element: document.createElement('a'),
@@ -50,8 +60,11 @@ function world(initial: { chosen: boolean; member: boolean }) {
   const built = fakeAdapter(
     { '1000001': {} },
     {
+      ...(options.entry !== undefined && { entry: options.entry }),
       session: () => {
         state.sessionReads += 1
+        // Une page qui ne dit rien de la connexion (état inconnu) : ni connecté ni visiteur
+        if (state.unknown) return { state: 'UNKNOWN' as const, signs: [] }
         return state.member ? MEMBER : VISITOR
       },
       store: () => {
@@ -289,6 +302,130 @@ describe('le magasin d’abord, puis la connexion : deux étapes, l’agent cont
   })
 })
 
+describe('la connexion n’est « faite » que si la page la CONFIRME (ticket G : jamais un panier anonyme)', () => {
+  it('une page qui ne dit plus rien de la connexion (état inconnu) laisse la carte en attente : pas de « Tu es connecté », rien n’est écrit', async () => {
+    const w = world({ chosen: true, member: false })
+    const time = clock((tick) => {
+      if (tick === 3) w.state.unknown = true
+    })
+    const screens = fakeUi()
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, ...time })
+
+    await flow.start(FARINE)
+
+    // Jamais « done » : seulement l'attente, puis l'attente longue où la personne arrête
+    expect(screens.propsOf('guide').map((props) => props.stage)).toEqual(['waiting', 'late'])
+    expect(w.writes).toEqual([])
+    expect(w.calls).toEqual([])
+    expect(expectConform(sent[0]).outcome).toBe('aborted')
+  })
+
+  it('la même page, qui confirme enfin la connexion : « Tu es connecté », puis le passage', async () => {
+    const w = world({ chosen: true, member: false })
+    const time = clock((tick) => {
+      if (tick === 3) w.state.unknown = true
+      if (tick === 6) {
+        w.state.unknown = false
+        w.state.member = true
+      }
+    })
+    const screens = fakeUi()
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, ...time })
+
+    await flow.start(FARINE)
+
+    expect(screens.propsOf('guide').map((props) => props.stage)).toEqual(['waiting', 'done'])
+    expect(w.writes).toEqual([{ id: '1000001', quantity: 3 }])
+    expect(sent).toHaveLength(1)
+  })
+
+  it('une note « connexion » d’une page d’avant n’est pas crue quand cette page-ci ne confirme rien : pas de « Tu es connecté »', async () => {
+    const storage = fakeStorage({ [GUIDE_KEY]: `${RUN_ID}|2|login` })
+    const w = world({ chosen: true, member: false, unknown: true })
+    const screens = fakeUi()
+    const { flow } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage })
+
+    await flow.start(FARINE)
+
+    expect(screens.screens()).not.toContain('guide')
+  })
+})
+
+describe('la page de connexion de l’enseigne n’est jamais « entrer dans le magasin » (DRV-751)', () => {
+  const pagePath = () => new RetailerError('UNSUPPORTED_PAGE', null, 'PAGE_PATH')
+  const BUTTON: EntryReading = { kind: 'BUTTON' }
+
+  it('hors du chemin d’un magasin (/connexion.aspx) : l’étape « connecte-toi », sans toucher « Commencer mes courses », sans bandeau « Ouverture de ton magasin »', async () => {
+    const w = world({ chosen: false, member: false }, { entry: BUTTON })
+    w.adapter.readStore = () => {
+      throw pagePath()
+    }
+    Object.assign(w.adapter, { onLoginPage: () => true })
+    const screens = fakeUi()
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter })
+
+    await flow.start(FARINE)
+
+    expect(w.follows.count).toBe(0)
+    expect(screens.screens()).not.toContain('entry')
+    expect(screens.propsOf('guide')[0]).toMatchObject({
+      step: 'login',
+      stage: 'waiting',
+      form: true,
+    })
+    expect(screens.propsOf('guide')[0]?.target).toBeUndefined()
+    expect(flow.history).toEqual(['START', 'VALIDATED', 'ABORTED'])
+    expect(expectConform(sent[0]).outcome).toBe('aborted')
+  })
+
+  it('sous le chemin d’un magasin (la page de connexion se lit comme une page de magasin) : la même étape, rien ne commence', async () => {
+    const w = world({ chosen: true, member: false, unknown: true })
+    Object.assign(w.adapter, { onLoginPage: () => true })
+    const screens = fakeUi()
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter })
+
+    await flow.start(FARINE)
+
+    expect(screens.propsOf('guide')[0]).toMatchObject({ step: 'login', form: true })
+    expect(w.writes).toEqual([])
+    expect(w.calls).toEqual([])
+    expect(expectConform(sent[0]).outcome).toBe('aborted')
+  })
+
+  it('connecté sur cette page (la page s’en va) : rien n’est touché, rien n’est envoyé, la carte se retire', async () => {
+    const w = world({ chosen: false, member: true }, { entry: BUTTON })
+    w.adapter.readStore = () => {
+      throw pagePath()
+    }
+    Object.assign(w.adapter, { onLoginPage: () => true })
+    const screens = fakeUi()
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter })
+
+    await flow.start(FARINE)
+
+    expect(w.follows.count).toBe(0)
+    expect(screens.screens()).toEqual([])
+    expect(sent).toEqual([])
+    expect(screens.closed.count).toBe(1)
+  })
+
+  it('une page qui n’est PAS la page de connexion garde l’entrée dans le magasin (DRV-625, DRV-748 intacts)', async () => {
+    const w = world({ chosen: false, member: true }, { entry: BUTTON })
+    w.adapter.readStore = () => {
+      throw pagePath()
+    }
+    Object.assign(w.adapter, { onLoginPage: () => false })
+    const storage = fakeStorage()
+    const screens = fakeUi()
+    const { flow } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage })
+
+    await flow.start(FARINE)
+
+    expect(w.follows.count).toBe(1)
+    expect(screens.propsOf('entry')[0]).toEqual({ stage: 'opening' })
+  })
+})
+
 describe('la page se recharge pendant l’attente (choisir son magasin, se connecter)', () => {
   it('la page suivante sait qu’elle est l’étape « 2 sur 2 » (note de la page d’avant) et la montre comme telle', async () => {
     const storage = fakeStorage({ [GUIDE_KEY]: `${RUN_ID}|2|store` })
@@ -407,6 +544,22 @@ describe('chaque enseigne dit où est le contrôle à toucher', () => {
     const icon = findControl(document, LOGIN_LABELS, ['connex'])
     expect(icon?.element.id).toBe('icon')
     expect(icon?.label).toBeNull()
+  })
+
+  it('Leclerc : la page de connexion se reconnaît à son adresse seulement, à la racine de l’hôte ou sous un magasin', () => {
+    const on = (pathname: string) =>
+      new LeclercAdapter(
+        fakeSite(() => ({ body: '' }), {
+          location: { hostname: 'courses-test.leclercdrive.fr', pathname },
+        }).deps,
+      ).onLoginPage()
+
+    expect(on('/connexion.aspx')).toBe(true)
+    expect(on('/connexion')).toBe(true)
+    expect(on('/magasin-000001-000001-Ville-Test/connexion.aspx')).toBe(true)
+    expect(on('/magasin-000001-000001-Ville-Test/')).toBe(false)
+    expect(on('/magasin-000001-000001-Ville-Test/connexion-et-securite.aspx')).toBe(false)
+    expect(on('/')).toBe(false)
   })
 
   it('aucun contrôle ne ressemble à une connexion : rien à désigner, la carte ne cite aucun libellé', () => {

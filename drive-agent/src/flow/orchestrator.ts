@@ -30,6 +30,7 @@ import {
   GUIDE_STUCK_CHECKS,
   guideProps,
   guideStepOf,
+  onLoginPage,
   realSleep,
   stepLooksDone,
   watchStep,
@@ -206,10 +207,12 @@ export class Flow {
     if (deps.retailer !== undefined && message.retailer !== deps.retailer) {
       return this.showError('STORE_MISMATCH', message)
     }
-    let problem = (await this.storeProblem(message)) ?? this.sessionProblem()
+    let problem = this.withLoginPage(await this.storeProblem(message)) ?? this.sessionProblem()
     // Un premier envoi : le magasin pas encore choisi et la personne pas encore connectée sont des ÉTAPES, pas des pannes (DRV-751). L'agent guide, attend, et continue
     // tout seul ; une page d'avant (la page se recharge quand on choisit son magasin ou qu'on se connecte) a pu noter où en est ce parcours.
     let guided: GuideStep | null = this.runs.guide(message.runId)?.step ?? null
+    // « Tu es connecté » ne se dit que si la page le CONFIRME : une page qui ne dit rien de la connexion ne le laisse pas croire
+    if (guided === 'login' && !this.isMember()) guided = null
     const firstStep = guideStepOf(problem, deps.adapter)
     // La page dit déjà qu'un magasin est choisi alors que le site n'en voit pas : ce n'est pas une étape à guider, c'est un vrai désaccord (comme à la lecture du magasin)
     if (firstStep !== null && !(firstStep === 'store' && stepLooksDone('store', deps.adapter))) {
@@ -217,6 +220,12 @@ export class Flow {
       if (outcome === 'stopped') return
       problem = outcome.problem
       guided = outcome.last ?? guided
+    }
+    // La page de connexion de l'enseigne : la personne s'y connecte (connectée, la page s'en va). L'agent n'y « entre » JAMAIS dans le magasin, n'y dit pas « Tu es connecté »
+    // et n'y commence rien ; la page suivante, qui reçoit de nouveau le plan, continue.
+    if (this.onLoginPageWithoutStore(problem) && onLoginPage(deps.adapter)) {
+      deps.ui.close()
+      return
     }
     if (
       problem === null &&
@@ -312,7 +321,7 @@ export class Flow {
         watch.late = true
       } else if (outcome === 'check') {
         watch.lastCheck = now()
-        problem = (await this.storeProblem(plan)) ?? this.sessionProblem()
+        problem = this.withLoginPage(await this.storeProblem(plan)) ?? this.sessionProblem()
         // La page dit « fait » mais le site ne le voit toujours pas, trois fois de suite : une vraie panne, l'écran d'erreur (pas une lecture du site toutes les 5 s à vie)
         stuck = guideStepOf(problem, adapter) === step ? stuck + 1 : 0
         if (stuck >= GUIDE_STUCK_CHECKS) break
@@ -465,6 +474,29 @@ export class Flow {
     } catch {
       return false
     }
+  }
+
+  /**
+   * Ce qui empêche de commencer, page de connexion comprise (DRV-751) : sur la page de connexion de l'enseigne, la page n'est pas « une page qui n'est pas celle d'un
+   * magasin » à laquelle l'agent répond en entrant dans le magasin, c'est l'étape « connecte-toi » (la personne a touché « Se connecter »). Connectée, la page est
+   * celle qui s'en va : le problème reste `PAGE_PATH` et `execute` n'y touche à rien.
+   */
+  private withLoginPage(problem: Fault | null): Fault | null {
+    if (
+      this.onLoginPageWithoutStore(problem) &&
+      onLoginPage(this.deps.adapter) &&
+      !this.isMember()
+    ) {
+      return { code: 'NOT_LOGGED_IN', cause: 'SESSION_VISITOR' }
+    }
+    return problem
+  }
+
+  /** Le problème est « pas une page de magasin » (ou aucun : la page de connexion sous le chemin d'un magasin se lit comme une page de magasin). */
+  private onLoginPageWithoutStore(problem: Fault | null): boolean {
+    return (
+      problem === null || (problem.code === 'UNSUPPORTED_PAGE' && problem.cause === 'PAGE_PATH')
+    )
   }
 
   /** Le magasin de la page doit être celui du message. */

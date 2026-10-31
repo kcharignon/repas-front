@@ -201,6 +201,8 @@ export interface GuideProps {
   total: number
   /** Le libellé du contrôle à toucher, tel que la page l'écrit ; `null` : le message ne cite aucun libellé. */
   label: string | null
+  /** La personne est déjà sur la page de connexion de l'enseigne : la phrase dit de remplir le formulaire, et rien n'est entouré. */
+  form?: boolean
   /** La lecture du magasin depuis les réglages : la carte dit que rien n'est enregistré si l'on arrête, au lieu de « ta liste est gardée ». */
   setup?: boolean
   /** Le contrôle à entourer dans la page, relu à chaque mesure (la page peut se redessiner) ; `null` : rien à entourer. */

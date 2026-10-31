@@ -213,7 +213,15 @@ enum class StoreBanner {
 
     companion object {
         /** Le message à montrer pour la page d'adresse [url], que [trouble] (la surveillance de la page, [OpeningWatch]) juge ainsi. */
-        fun of(request: PassRequest?, url: String?, trouble: PageTrouble = PageTrouble.NONE, basketHint: Boolean = false, loading: Boolean = false): StoreBanner = when {
+        fun of(
+            request: PassRequest?,
+            url: String?,
+            trouble: PageTrouble = PageTrouble.NONE,
+            basketHint: Boolean = false,
+            loading: Boolean = false,
+            /** Un magasin de l'enseigne a déjà été ouvert dans cette application ([StorePathMemory.hasPath]) : « Choisis d'abord ton magasin » serait faux sur la page de connexion d'un envoi (DRV-751). */
+            storeKnown: Boolean = false,
+        ): StoreBanner = when {
             request == null -> if (basketHint && trouble == PageTrouble.NONE) BASKET else NONE
             trouble == PageTrouble.VERIFICATION -> VERIFICATION
             request.isSetup -> when {
@@ -232,8 +240,9 @@ enum class StoreBanner {
             request.site.isHomePage(url) -> NONE
             // Une enseigne sans page de magasin : ni « Commencer mes courses » ni « choisis d'abord ton magasin », propres aux enseignes à pages de magasin.
             !request.site.hasStorePages -> NONE
-            // La connexion avant tout magasin : Leclerc la refuse, le message ramène au choix du magasin.
-            request.site.isLoginPage(url) -> STORE_FIRST
+            // La connexion avant tout magasin : Leclerc la refuse, le message ramène au choix du magasin. Un magasin déjà ouvert (la personne a touché « Se connecter » depuis
+            // sa page de magasin, DRV-751) : rien à dire, elle remplit le formulaire.
+            request.site.isLoginPage(url) -> if (storeKnown) NONE else STORE_FIRST
             else -> OPEN
         }
     }

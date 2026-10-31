@@ -173,6 +173,11 @@ export interface Behavior {
    * public et le panier accepte les écritures d'un visiteur : c'est le danger que l'agent doit détecter (ticket G).
    */
   visitorAfter?: number | null
+  /**
+   * La page de connexion SOUS le chemin du magasin (`<magasin>/connexion.aspx`, où mène le lien « Se connecter » des pages d'un visiteur) est un formulaire qu'une
+   * PERSONNE valide (DRV-751) : il pose le cookie de connexion et la ramène à l'accueil du magasin, dont les pages montrent alors un client connecté.
+   */
+  loginForm?: boolean
 }
 
 export type RequestKind = 'search' | 'cart' | 'page' | 'repas' | 'control' | 'image' | 'other'
@@ -333,6 +338,8 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
   let inFlight = 0
   let lastPacedEnd: number | null = null
   let pacedCount = 0
+  /** La personne s'est connectée sur le faux site (le cookie de connexion de la requête en cours, `loginForm`). */
+  let cookieMember = false
 
   function reset(): void {
     behavior = { latencyMs: 0, fault: null }
@@ -430,6 +437,7 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
 
   /** La page d'un visiteur une fois `visitorAfter` requêtes terminées ; `finished` : combien l'ont été avant la page servie. */
   function sessionAfter(finished: number): Session {
+    if (behavior.loginForm === true && cookieMember) return 'member'
     const after = behavior.visitorAfter
     return after !== undefined && after !== null && finished >= after ? 'visitor' : 'member'
   }
@@ -551,6 +559,7 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
     loopbackHost: boolean,
   ): Promise<void> {
     const path = url.pathname
+    cookieMember = new RegExp(`(?:^|;\\s*)${MEMBER_COOKIE}=1(?:;|$)`).test(req.headers.cookie ?? '')
     if (path.startsWith('/__fake/')) {
       entry.kind = 'control'
       if (loopbackHost) return control(entry, req, res, path)
@@ -672,7 +681,12 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
     }
     if (rest === '/connexion.aspx') {
       entry.status = 200
-      return send(res, 200, loginPage(), HTML)
+      return send(
+        res,
+        200,
+        behavior.loginForm === true ? loginFormPage(`${PAGE_PATH}/`) : loginPage(),
+        HTML,
+      )
     }
     if (rest === '' || rest === '/' || rest === '/accueil.aspx') {
       // Sans suffixe de ville, l'accueil du magasin est une page 404 (comme sur le vrai site) : seules les adresses avec la ville sont des pages.

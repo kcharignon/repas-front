@@ -41,12 +41,15 @@ export function guideStepOf(fault: GuideFault | null, adapter: RetailerAdapter):
   return null
 }
 
-/** La page dit-elle déjà que l'étape est faite ? Une lecture de la page seule, jamais une erreur. */
+/**
+ * La page dit-elle déjà que l'étape est faite ? Une lecture de la page seule, jamais une erreur. La connexion n'est « faite » que si la page la CONFIRME
+ * (`MEMBER`) : un état inconnu reste une attente, jamais un panier anonyme (ticket G).
+ */
 export function stepLooksDone(step: GuideStep, adapter: RetailerAdapter): boolean {
   try {
     return step === 'store'
       ? adapter.storeChosenOnPage?.() === true
-      : adapter.readSession().state !== 'VISITOR'
+      : adapter.readSession().state === 'MEMBER'
   } catch {
     return false
   }
@@ -69,15 +72,26 @@ export function guideProps(
   adapter: RetailerAdapter,
   extra: { setup?: boolean } = {},
 ): GuideProps {
-  const target = guideTargetOf(step, adapter)
+  // La personne est DÉJÀ sur la page de connexion : rien à désigner, elle remplit le formulaire
+  const form = step === 'login' && onLoginPage(adapter)
+  const target = form ? null : guideTargetOf(step, adapter)
   return {
     step,
     stage,
     index: steps.index,
     total: steps.total,
     label: target?.label ?? null,
-    target: () => guideTargetOf(step, adapter)?.element ?? null,
+    ...(form ? { form: true } : { target: () => guideTargetOf(step, adapter)?.element ?? null }),
     ...extra,
+  }
+}
+
+/** La page courante est-elle la page de connexion de l'enseigne ? Une lecture de l'adresse, jamais une erreur. */
+export function onLoginPage(adapter: RetailerAdapter): boolean {
+  try {
+    return adapter.onLoginPage?.() === true
+  } catch {
+    return false
   }
 }
 

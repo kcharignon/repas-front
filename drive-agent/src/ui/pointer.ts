@@ -14,6 +14,13 @@ const GAP = 3
 /** Sous le cadre : la flèche (10) et le repère (30) en dp, et l'air qu'on garde entre le repère et la carte du guide. */
 const TAG_HEIGHT = 40
 const CLEARANCE = 8
+/**
+ * Le contrôle est résolu (lu dans la page par l'enseigne : un parcours du document) à l'affichage, gardé tant qu'il est dans la page, et relu au plus UNE fois par
+ * seconde quand il manque ou a disparu, ou au redimensionnement : jamais à chaque image d'un défilement.
+ */
+const RESOLVE_MS = 1_000
+/** Le cadre est remesuré toutes les 500 ms même sans défilement (images et polices qui finissent de charger). */
+const REMEASURE_MS = 500
 
 /** Les couleurs de la maquette : le safran (jeton `accent`) et son texte (`on-accent`), les mêmes en clair et en sombre. */
 const POINTER_STYLES = `
@@ -92,7 +99,11 @@ export function createPointer(options: PointerOptions): Pointer {
   let card: () => DOMRect | null = () => null
   let scrolled = false
   let frame = 0
-  let late = 0
+  let timer = 0
+  /** Le contrôle résolu, et quand ; `refresh` : le prochain tour doit le relire (la fenêtre a changé de taille). */
+  let cached: HTMLElement | null = null
+  let resolvedAt = 0
+  let refresh = false
 
   const scale = (): number => displayLayout(measureDisplay(win)).scale
 
@@ -115,9 +126,24 @@ export function createPointer(options: PointerOptions): Pointer {
     }
   }
 
+  /** Le contrôle à entourer : celui qu'on a déjà s'il est encore dans la page, sinon une relecture, au plus une par seconde. */
+  function resolve(): HTMLElement | null {
+    const at = Date.now()
+    if (cached?.isConnected !== true || refresh) {
+      if (refresh || at - resolvedAt >= RESOLVE_MS) {
+        cached = get()
+        resolvedAt = at
+        refresh = false
+      } else if (cached?.isConnected !== true) {
+        cached = null
+      }
+    }
+    return cached
+  }
+
   function layout(): void {
     if (view === null) return
-    const target = get()
+    const target = resolve()
     const rect = target?.isConnected === true ? target.getBoundingClientRect() : null
     const s = scale()
     const visible =
@@ -165,6 +191,11 @@ export function createPointer(options: PointerOptions): Pointer {
     )
   }
 
+  const onResize = (): void => {
+    refresh = true
+    schedule()
+  }
+
   const schedule = (): void => {
     if (frame !== 0) return
     frame = win.requestAnimationFrame(() => {
@@ -187,8 +218,8 @@ export function createPointer(options: PointerOptions): Pointer {
     win.document.documentElement.appendChild(host)
     view = { host, ring, tag, arrow: tagArrow }
     win.addEventListener('scroll', schedule, { capture: true, passive: true })
-    win.addEventListener('resize', schedule)
-    win.visualViewport?.addEventListener('resize', schedule)
+    win.addEventListener('resize', onResize)
+    win.visualViewport?.addEventListener('resize', onResize)
     win.visualViewport?.addEventListener('scroll', schedule)
     return view
   }
@@ -198,20 +229,24 @@ export function createPointer(options: PointerOptions): Pointer {
       get = next
       card = nextCard
       scrolled = false
+      cached = null
+      resolvedAt = 0
+      refresh = true
       mount()
       layout()
-      // La page finit de se dessiner après l'arrivée du guide (images, polices) : une seconde mesure.
-      win.clearTimeout(late)
-      late = win.setTimeout(layout, 400)
+      // La page finit de se dessiner après l'arrivée du guide (images, polices) : le cadre est remesuré de temps en temps, sans relire le contrôle à chaque fois.
+      win.clearInterval(timer)
+      timer = win.setInterval(layout, REMEASURE_MS)
     },
     clear() {
-      win.clearTimeout(late)
+      win.clearInterval(timer)
+      cached = null
       if (frame !== 0) win.cancelAnimationFrame(frame)
       frame = 0
       if (view === null) return
       win.removeEventListener('scroll', schedule, { capture: true })
-      win.removeEventListener('resize', schedule)
-      win.visualViewport?.removeEventListener('resize', schedule)
+      win.removeEventListener('resize', onResize)
+      win.visualViewport?.removeEventListener('resize', onResize)
       win.visualViewport?.removeEventListener('scroll', schedule)
       view.host.remove()
       view = null

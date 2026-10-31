@@ -399,6 +399,82 @@ describe('le guide d’une étape (DRV-751)', () => {
       expect(element.getAttribute('style')).toBeNull()
     })
 
+    it('l’attente longue garde le repère : l’étape reste à faire', () => {
+      const element = control({ left: 20, top: 100, width: 200, height: 40 })
+      const handle = open()
+      void handle.show('guide', props({ stage: 'late', target: () => element }))
+
+      expect(hosts()).toHaveLength(2)
+      const pointer = hosts().find((host) => host !== handle.host) as HTMLElement
+      const ring = (pointer.shadowRoot as ShadowRoot).querySelector('.ring') as HTMLElement
+      expect(ring.hidden).toBe(false)
+    })
+
+    it('la page « fait » ou la page de connexion déjà ouverte : rien à entourer', () => {
+      const element = control({ left: 20, top: 100, width: 200, height: 40 })
+      const handle = open()
+      void handle.show('guide', props({ step: 'login', form: true }))
+
+      expect(shadow().querySelector('.g-text')?.textContent).toBe(
+        'Entre tes identifiants dans la page. Tu tapes toi-même ton mot de passe.',
+      )
+      expect(hosts()).toHaveLength(1)
+      void handle.show('guide', props({ stage: 'done', target: () => element }))
+      expect(hosts()).toHaveLength(1)
+    })
+
+    it('le contrôle est résolu à l’affichage et gardé : un défilement ne relit pas la page à chaque image', async () => {
+      const element = control({ left: 20, top: 100, width: 200, height: 40 })
+      let reads = 0
+      const handle = open()
+      void handle.show(
+        'guide',
+        props({
+          target: () => {
+            reads += 1
+            return element
+          },
+        }),
+      )
+      expect(reads).toBe(1)
+
+      for (let i = 0; i < 20; i += 1) window.dispatchEvent(new Event('scroll'))
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      expect(reads).toBe(1)
+    })
+
+    it('le contrôle disparu de la page est relu, au plus une fois par seconde ; un redimensionnement le relit tout de suite', async () => {
+      let element: HTMLElement | null = control({ left: 20, top: 100, width: 200, height: 40 })
+      let reads = 0
+      const handle = open()
+      void handle.show(
+        'guide',
+        props({
+          target: () => {
+            reads += 1
+            return element
+          },
+        }),
+      )
+      const first = element as HTMLElement
+      first.remove()
+
+      // La page l'a retiré : les défilements qui suivent n'y changent rien avant la seconde
+      for (let i = 0; i < 10; i += 1) window.dispatchEvent(new Event('scroll'))
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(reads).toBe(1)
+
+      // La page en dessine un autre ; la fenêtre change de taille : relu aussitôt
+      element = control({ left: 30, top: 120, width: 100, height: 30 })
+      window.dispatchEvent(new Event('resize'))
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(reads).toBe(2)
+      const pointer = hosts().find((host) => host !== handle.host) as HTMLElement
+      const ring = (pointer.shadowRoot as ShadowRoot).querySelector('.ring') as HTMLElement
+      expect(ring.style.left).toBe('24px')
+    })
+
     it('ne dessine rien quand la page ne montre pas le contrôle', () => {
       const handle = open()
       void handle.show('guide', props({ target: () => null }))

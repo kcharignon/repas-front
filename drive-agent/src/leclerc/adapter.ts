@@ -156,6 +156,11 @@ export interface RetailerAdapter {
    */
   guideTarget?(step: GuideStep): GuideTarget | null
   /**
+   * FACULTATIVE (DRV-751) : la page courante est-elle celle de CONNEXION de l'enseigne (par son adresse seulement) ? Sur cette page l'agent ne « entre » jamais dans
+   * le magasin et ne dit pas de toucher « Se connecter » : la personne remplit le formulaire, que l'agent n'approche pas (le mot de passe se tape à la main).
+   */
+  onLoginPage?(): boolean
+  /**
    * FACULTATIVE (DRV-748) : présente (et vraie) chez une enseigne dont l'accueil, après la connexion que la personne tape elle-même, montre de nouveau « Commencer
    * mes courses » alors que l'agent l'a déjà touché AVANT la connexion (le site avait répondu par sa page de connexion). Le passage peut alors faire une seconde
    * entrée, la dernière, session connectée (voir `Flow.enterStore`). Absente : une seule entrée par envoi et par onglet, comme avant.
@@ -322,6 +327,8 @@ export const ENTRY_WAIT_MS = 3_000
 const PRODUCT_ID = /^[0-9]{1,12}$/
 /** La ville du chemin du magasin (`/magasin-N-N-<Ville>`) : un libellé de rayon qui la porte est écarté. */
 const STORE_CITY = /^\/magasin-\d{1,12}-\d{1,12}-([^/?#]+)/i
+/** L'adresse d'une page de connexion du site (le chemin seulement). */
+const LOGIN_PAGE = /(?:^|\/)connexion(?:\.aspx)?(?:\/|$)/i
 /** Une redirection vers une page de connexion. */
 const LOGIN_PATH = /connexion|identif|login|authent/i
 
@@ -1080,6 +1087,11 @@ export class LeclercAdapter implements RetailerAdapter {
 
   stats(): RequestStats {
     return this.pacer.stats()
+  }
+
+  /** La page de connexion de Leclerc : `/connexion` ou `/connexion.aspx`, à la racine de l'hôte ou sous le chemin d'un magasin (le même repère que `RetailerSite.loginPath` de l'application). */
+  onLoginPage(): boolean {
+    return LOGIN_PAGE.test(this.deps.location.pathname)
   }
 
   /** Chez Leclerc le magasin se lit dans l'adresse (aucune étape « magasin » sur la page) : seule la connexion se désigne, par son lien « Se connecter ». */

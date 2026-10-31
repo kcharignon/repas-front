@@ -672,7 +672,9 @@ const guide: Renderer<'guide'> = (props: GuideProps, answer) => {
     ? S.guide.ready.text
     : late
       ? S.guide.late.text
-      : S.guide[props.step].text(props.label)
+      : props.form === true
+        ? S.guide.login.form
+        : S.guide[props.step].text(props.label)
   const wait = late ? button(S.guide.late.wait, () => answer('wait'), 'primary') : null
   const stop = h(
     'button',
@@ -711,9 +713,8 @@ const guide: Renderer<'guide'> = (props: GuideProps, answer) => {
   return {
     el,
     sheet: true,
-    ...(done || late || props.target === undefined
-      ? {}
-      : { pointAt: () => props.target?.() ?? null }),
+    // Le repère reste tant que l'étape est à faire, attente longue comprise
+    ...(done || props.target === undefined ? {} : { pointAt: () => props.target?.() ?? null }),
     // Le focus va au titre (lu par un lecteur d'écran, sans anneau) et non au bouton : la carte n'a rien à confirmer, la personne agit dans la page
     focus: late && wait !== null ? wait : titleEl,
   }
