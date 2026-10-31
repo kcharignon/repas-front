@@ -252,6 +252,45 @@ describe('un passage complet contre le faux site (phases A et B)', () => {
     expect(fake.cart()).toEqual({ [FARINE.productId]: 1 })
   })
 
+  it('DRV-752 : la page de connexion servie à la place du panier (200) : NOT_LOGGED_IN (LOGIN_FORM), jamais « Auchan a changé son site », rien n’est écrit', async () => {
+    fake.setCartBehavior({ read: 'login-page' })
+    const screens = fakeUi({ error: () => 'return' })
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: setup(), retailer: 'auchan' })
+
+    await flow.start(auchanPlan([known('farine', [withOffer(FARINE, 3)])]))
+
+    const result = expectConform(sent[0])
+    expect(result).toMatchObject({ outcome: 'error', error: { code: 'NOT_LOGGED_IN' } })
+    expect(JSON.stringify(result)).toContain('LOGIN_FORM')
+    expect(JSON.stringify([result, screens.propsOf('error')])).not.toContain('a changé son site')
+    expect(fake.writes()).toEqual([])
+  })
+
+  it('DRV-752 : le défi de l’anti-robot servi à la place du JSON du panier (reCAPTCHA) est un défi, jamais « le site a changé »', async () => {
+    fake.setCartBehavior({ read: 'recaptcha' })
+    const screens = fakeUi({ challenge: () => 'stop', error: () => 'return' })
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: setup(), retailer: 'auchan' })
+
+    await flow.start(auchanPlan([known('farine', [withOffer(FARINE, 3)])]))
+
+    const result = expectConform(sent[0])
+    expect(result).toMatchObject({ error: { code: 'BLOCKED' } })
+    expect(JSON.stringify(result)).not.toContain('CONTRACT_CHANGED')
+    expect(fake.writes()).toEqual([])
+  })
+
+  it('DRV-752 : une réponse que rien ne reconnaît garde CONTRACT_CHANGED (CART_NOT_JSON) : le site a bien changé, seulement quand rien d’autre ne l’explique', async () => {
+    fake.setCartBehavior({ read: 'site-page' })
+    const screens = fakeUi({ error: () => 'return' })
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: setup(), retailer: 'auchan' })
+
+    await flow.start(auchanPlan([known('farine', [withOffer(FARINE, 3)])]))
+
+    const result = expectConform(sent[0])
+    expect(JSON.stringify(result)).toContain('CART_NOT_JSON')
+    expect(fake.writes()).toEqual([])
+  })
+
   it('visiteur : une étape guidée « connecte-toi » (DRV-751), puis l’envoi s’arrête sans écrire quand la personne arrête ; aucune écriture, une seule lecture du site', async () => {
     const screens = fakeUi()
     const { flow, sent } = makeFlow({

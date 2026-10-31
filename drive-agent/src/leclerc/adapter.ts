@@ -54,6 +54,7 @@ import {
 import { cleanText } from '../text'
 import { stringifyJson, takeWindowPrimitives, type WindowPrimitives } from '../primitives'
 import { extractProducts } from './embedded'
+import type { CartProbeFacts, CartReplyFacts } from '../retailers/cart-facts'
 import { httpCause } from '../retailers/causes'
 import {
   entryFacts,
@@ -185,6 +186,18 @@ export interface RetailerAdapter {
    * @throws {RetailerError} l'erreur de la lecture du panier, à traiter comme celle d'une écriture.
    */
   readCartQuantity?(productId: string): Promise<number | null>
+  /**
+   * FACULTATIVE (DRV-752) : la sonde de lecture du panier du diagnostic, présente chez une enseigne dont le panier se lit à part (`GET /cart`).
+   * UNE requête de lecture, à la cadence, jamais une écriture ; elle ne retient rien du panier et ne lève jamais d'erreur : elle rend la FORME de la réponse du
+   * site (code, type, taille, noms d'en-têtes, mots d'une liste fermée) et le nombre de lignes quand le panier s'est lu. Absente (Leclerc : la réponse du
+   * panier se lit à l'écriture), le diagnostic dit « sans objet ».
+   */
+  probeCart?(): Promise<CartProbeFacts>
+  /**
+   * FACULTATIVE (DRV-752) : la forme de la dernière réponse du panier qui a échoué, dans cette page ou, rechargement compris, dans cet onglet ; `null` s'il n'y
+   * en a pas. Aucune requête.
+   */
+  lastCartFailure?(): CartReplyFacts | null
   /**
    * Les compteurs de la cadence depuis la création de l'adaptateur (ticket L) : requêtes, erreurs, blocages, délais dépassés, réponses lentes, plus
    * longue pause. Des nombres seulement. Cumulatifs : un passage en prend la différence entre son début et sa fin.

@@ -1,3 +1,4 @@
+import type { CartReplyFacts } from './cart-facts'
 import type { RetailerCause } from './causes'
 
 /** Les erreurs d'un adaptateur d'enseigne ; ce sont des codes d'erreur du protocole (`ErrorCode`). */
@@ -28,6 +29,11 @@ export class RetailerError extends Error {
    * suffit (blocage, erreur réseau). Jamais un morceau de page : la cause part dans le résultat et dans le diagnostic.
    */
   readonly cause: RetailerCause | null
+  /**
+   * La FORME de la réponse du panier qui a causé l'erreur (DRV-752) : code, type, taille, noms d'en-têtes, mots d'une liste fermée, jamais une valeur du site.
+   * `null` quand l'erreur ne vient pas d'une réponse du panier.
+   */
+  readonly reply: CartReplyFacts | null
 
   /**
    * `message` : le texte fixe que l'adaptateur donne à une erreur (par exemple le délai d'attente dit avec le nom de l'enseigne) ; sans lui, le
@@ -38,6 +44,7 @@ export class RetailerError extends Error {
     status: number | null = null,
     cause: RetailerCause | null = null,
     message?: string,
+    reply: CartReplyFacts | null = null,
   ) {
     super(
       message ??
@@ -47,10 +54,16 @@ export class RetailerError extends Error {
     this.code = code
     this.status = status
     this.cause = cause
+    this.reply = reply
   }
 
   /** La même erreur avec le code HTTP de la réponse, pour le rapport (une erreur levée plus bas ne le connaît pas). */
   withStatus(status: number): RetailerError {
-    return new RetailerError(this.code, status, this.cause, this.message)
+    return new RetailerError(this.code, status, this.cause, this.message, this.reply)
+  }
+
+  /** La même erreur avec la forme de la réponse qui l'a causée (DRV-752), sans rien changer d'autre. */
+  withReply(reply: CartReplyFacts): RetailerError {
+    return new RetailerError(this.code, this.status, this.cause, this.message, reply)
   }
 }

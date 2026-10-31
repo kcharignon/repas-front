@@ -151,6 +151,7 @@ export const S = {
       search: 'Recherche d’un mot courant',
       content: 'Contenu net des produits',
       shelves: 'Rayons vus',
+      cart: 'Lecture du panier',
       startButton: 'Bouton de démarrage trouvé',
       frame: 'Cadre de même origine',
     },
@@ -181,6 +182,12 @@ export const S = {
       contentOk: (known: number, read: number) => `${known} produits sur ${read}`,
       contentKo: (known: number, read: number) => `seulement ${known} produits sur ${read}`,
       frameSkipped: 'non utilisé : l’agent affiche lui-même la liste de produits',
+      /** DRV-752 : une seule lecture du panier (`GET`), jamais une écriture. */
+      cartOk: (lines: number) =>
+        `panier lu par une seule requête de lecture, rien écrit : ${lines} ligne${lines > 1 ? 's' : ''}`,
+      cartNone: 'sans objet : ce site ne lit pas son panier à part',
+      cartSkipped:
+        'non lu : la page ou la recherche d’essai n’a pas répondu, ou le site demande une vérification',
       startButtonOk:
         'le bouton « Commencer mes courses » est dans la page, l’agent peut le toucher',
       startButtonLink: 'un lien « Commencer mes courses » est dans la page, l’agent peut le suivre',
@@ -337,6 +344,45 @@ export const S = {
         }) : ${listText(keys.present)} ; connues absentes : ${listText(keys.absent)} ; liées à la connexion : ${listText(keys.session)}`,
       headers: (term: string, names: readonly string[]) =>
         `En-têtes de la réponse « ${term} » (noms seulement) : ${listText(names)}`,
+      /**
+       * DRV-752 : la FORME d'une réponse du panier, jamais une valeur du site ni du compte : le code, le type de média, la taille, l'adresse en motif, ce qu'est le
+       * corps et les mots d'une liste fermée que la réponse dit.
+       */
+      cartReply: (facts: {
+        status: number
+        mime: string | null
+        length: number
+        redirected: boolean
+        address: string
+        body: 'EMPTY' | 'JSON' | 'JSON_EMPTY' | 'HTML' | 'TEXT'
+        words: readonly ('LOGIN' | 'CHALLENGE' | 'CONSENT' | 'ERROR')[]
+      }) => {
+        const body = {
+          EMPTY: 'vide',
+          JSON: 'JSON',
+          JSON_EMPTY: 'JSON vide',
+          HTML: 'page HTML',
+          TEXT: 'texte',
+        }
+        const word = {
+          LOGIN: 'page de connexion',
+          CHALLENGE: 'défi de l’anti-robot',
+          CONSENT: 'page de consentement',
+          ERROR: 'page d’erreur',
+        }
+        return `HTTP ${facts.status}, type ${facts.mime ?? 'inconnu'}, ${sizeText(facts.length)}, adresse ${facts.address}, ${
+          facts.redirected ? 'redirigée' : 'non redirigée'
+        }, corps ${body[facts.body]}, mots reconnus : ${listText(facts.words.map((name) => word[name]))}`
+      },
+      cartProbe: (result: string) => `Panier (une lecture, jamais d’écriture) : ${result}`,
+      cartProbeRead: (lines: number, reply: string | null) =>
+        `lu, ${lines} ligne${lines > 1 ? 's' : ''}${reply === null ? '' : ` ; réponse : ${reply}`}`,
+      cartProbeFailed: (fault: string, reply: string | null) =>
+        `échec ${fault} ; ${reply === null ? 'forme de la réponse non relevée (aucune réponse, ou refus avant lecture)' : `réponse : ${reply}`}`,
+      cartHeaders: (names: readonly string[]) =>
+        `En-têtes de la réponse du panier (noms seulement) : ${listText(names)}`,
+      cartFailure: (reply: string) =>
+        `Dernier échec de la réponse du panier dans cet onglet : ${reply}`,
       /** DRV-635 : le stock et l'étiquette de disponibilité d'un échantillon de résultats (12 au plus), des nombres seulement, jamais un libellé. */
       availability: (a: {
         sampled: number

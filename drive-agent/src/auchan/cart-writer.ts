@@ -17,6 +17,7 @@
 // `consignes-agents.md`, `test/auchan-cart.spec.ts`).
 import { stringifyJson } from '../primitives'
 import { httpCause } from '../retailers/causes'
+import type { CartProbeFacts, CartReplyFacts } from '../retailers/cart-facts'
 import type { CartResult } from '../retailers/contract'
 import { RetailerError } from '../retailers/errors'
 import type { Reply } from '../retailers/pacer'
@@ -29,7 +30,7 @@ import {
   type CartLine,
   type CartReading,
 } from './cart'
-import { isRecaptchaPage } from './challenge'
+import { describeCartReply, verdictOf } from './cart-reply'
 import { DEFAULT_OFFER_TYPE, DEFAULT_SELLER_TYPE, OfferBook, type AuchanOffer } from './offers'
 import { STORES } from '../../protocol'
 
@@ -46,6 +47,13 @@ export interface CartDeps {
   cookies?: () => string
   /** La connexion de la personne (`readSession` de l'adaptateur) : `true` connecté, `false` visiteur, `null` inconnue. */
   member(): boolean | null
+  /**
+   * Garde la FORME de la dernière réponse du panier qui a échoué (DRV-752, des nombres et des mots d'une liste fermée, jamais une valeur du site) pour que le
+   * diagnostic la montre même si la page a été rechargée depuis. Absente : la forme ne vit qu'en mémoire.
+   */
+  keepFailure?: (facts: CartReplyFacts) => void
+  /** Relit ce que `keepFailure` a gardé, `null` s'il n'y a rien (ou rien de lisible). */
+  recallFailure?: () => CartReplyFacts | null
 }
 
 function safePath(url: string): string {
@@ -65,9 +73,50 @@ export class AuchanCart {
    */
   private quantities: ReadonlyMap<string, number | null> | null = null
   private total: number | null = null
+  /** La forme de la dernière réponse du panier qui a échoué dans cette page (DRV-752) : la mémoire d'abord, ce que `keepFailure` a gardé ensuite. */
+  private failure: CartReplyFacts | null = null
+  /** La forme de la dernière réponse reçue du panier, bonne ou mauvaise (la sonde la rend quand l'erreur n'en porte pas). */
+  private lastReply: CartReplyFacts | null = null
+  /** Vrai pendant la sonde du diagnostic : ses échecs ne remplacent pas ceux d'un envoi. */
+  private probing = false
 
   constructor(deps: CartDeps) {
     this.deps = deps
+  }
+
+  /**
+   * La SONDE de lecture du diagnostic (DRV-752) : une seule requête `GET /cart`, à la cadence, jamais `/cart/update`. Elle rend la forme de la réponse et, si le
+   * panier s'est lu, son nombre de lignes ; elle ne lève jamais d'erreur et ne retient RIEN du panier (ni quantités, ni total) : un diagnostic ne change pas
+   * ce que le passage sait.
+   */
+  async probe(): Promise<CartProbeFacts> {
+    this.lastReply = null
+    // Un échec de la sonde n'écrase pas la forme du dernier échec d'un envoi : c'est elle que le diagnostic montre à côté.
+    this.probing = true
+    try {
+      const { reading } = await this.fetchCart()
+      return { outcome: 'READ', reply: this.lastReply, lines: reading.lines.size, fault: null }
+    } catch (error) {
+      const fault =
+        error instanceof RetailerError
+          ? { code: error.code, cause: error.cause, status: error.status }
+          : { code: 'CONTRACT_CHANGED' as const, cause: 'EXCEPTION' as const, status: null }
+      const reply =
+        error instanceof RetailerError ? (error.reply ?? this.lastReply) : this.lastReply
+      return { outcome: 'FAILED', reply, lines: null, fault }
+    } finally {
+      this.probing = false
+    }
+  }
+
+  /** La forme de la dernière réponse du panier qui a échoué (DRV-752), de cette page ou de l'onglet ; `null` s'il n'y en a pas. */
+  lastFailure(): CartReplyFacts | null {
+    if (this.failure !== null) return this.failure
+    try {
+      return this.deps.recallFailure?.() ?? null
+    } catch {
+      return null
+    }
   }
 
   /**
@@ -202,6 +251,13 @@ export class AuchanCart {
    * seul et rend `cart.id`. Un cookie `lark-cart` resté dans la page d'une personne connectée n'est pas utilisé.
    */
   private async read(): Promise<{ reading: CartReading; status: number }> {
+    const fetched = await this.fetchCart()
+    this.remember(fetched.reading)
+    return fetched
+  }
+
+  /** La requête de lecture et rien d'autre : le panier lu, sans rien retenir (la sonde du diagnostic s'en sert seule). */
+  private async fetchCart(): Promise<{ reading: CartReading; status: number }> {
     const consent = this.consentId(null)
     let url = `/cart?consentId=${encodeURIComponent(consent)}`
     if (this.deps.member() !== true) {
@@ -216,12 +272,34 @@ export class AuchanCart {
     }
     const reply = await this.deps.request(url, { method: 'GET', headers: { ...READ_HEADERS } })
     const reading = this.reading(reply)
-    this.remember(reading)
     return { reading, status: reply.status }
   }
 
-  /** Écarte ce qui n'est pas une réponse du site à notre requête, puis lit le panier. Un statut ou un corps inattendu n'est jamais un succès. */
+  /**
+   * Relève la FORME de la réponse (DRV-752), puis la lit : toute erreur qui en sort la porte (`RetailerError.reply`), et la forme d'un échec est gardée pour le
+   * diagnostic.
+   */
   private reading(reply: Reply): CartReading {
+    const facts = describeCartReply(reply)
+    this.lastReply = facts
+    try {
+      return this.readReply(reply, facts)
+    } catch (error) {
+      if (!(error instanceof RetailerError)) throw error
+      if (!this.probing) {
+        this.failure = facts
+        try {
+          this.deps.keepFailure?.(facts)
+        } catch {
+          // Rien ne se garde : la forme reste en mémoire.
+        }
+      }
+      throw error.withReply(facts)
+    }
+  }
+
+  /** Écarte ce qui n'est pas une réponse du site à notre requête, puis lit le panier. Un statut ou un corps inattendu n'est jamais un succès. */
+  private readReply(reply: Reply, facts: CartReplyFacts): CartReading {
     // 401 : le sens de ce code est INCONNU (C-7) ; on le traite comme le parcours (DRV-717) : la personne n'est pas (ou plus) connectée.
     if (reply.status === 401) throw new RetailerError('NOT_LOGGED_IN', reply.status, 'HTTP_401')
     if (reply.redirected && LOGIN_PATH.test(safePath(reply.url))) {
@@ -232,8 +310,10 @@ export class AuchanCart {
     if (reply.status < 200 || reply.status >= 300) {
       throw new RetailerError('CONTRACT_CHANGED', reply.status, httpCause(reply.status))
     }
-    // Une page de reCAPTCHA à la place du JSON de l'API du panier (SUPPOSÉ, non mesuré) : un défi, que la personne passe dans la page.
-    if (isRecaptchaPage(reply.text)) throw new RetailerError('BLOCKED', reply.status, 'CHALLENGE')
+    // Une réponse qui n'est pas du JSON se classe d'après sa forme (`cart-reply.ts`) : un défi de l'anti-robot (la personne le passe dans la page), une page de
+    // connexion (la personne n'est pas connectée), un corps vide, un JSON vide, une page d'erreur ; sinon `readCart` dit `CART_NOT_JSON`.
+    const verdict = verdictOf(facts)
+    if (verdict !== null) throw verdict
     try {
       return readCart(reply.text)
     } catch (error) {

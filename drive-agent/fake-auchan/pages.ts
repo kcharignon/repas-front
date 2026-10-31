@@ -147,3 +147,35 @@ export function journeyBody(
     metadata: {},
   }
 }
+
+/**
+ * Une page de connexion INVENTÉE servie à la place du JSON du panier (DRV-752) : un formulaire vers l'adresse d'un serveur d'identité, un champ de mot de
+ * passe et le script du reCAPTCHA invisible (D-4 : présent sur la page de connexion, mesuré). Ni la page réelle ni une forme mesurée sur la réponse du panier.
+ */
+export function loginPage(): string {
+  return `${HTML_HEAD('Connexion (faux site de test)')}
+<body><main><h1>Se connecter</h1>
+<form action="/auth/realms/test/protocol/openid-connect/auth" method="post"><input type="email" name="username"><input type="password" name="password"><button>Se connecter</button></form>
+<script src="https://www.google.com/recaptcha/enterprise.js"></script></main></body></html>`
+}
+
+/** Une page de consentement aux cookies INVENTÉE (DRV-752) : sans champ de mot de passe ni défi, elle ne change pas le verdict de l'agent. */
+export function consentPage(): string {
+  return `${HTML_HEAD('Cookies (faux site de test)')}
+<body><main><h1>Vos choix</h1><p>Nous demandons votre consentement.</p><button>Tout accepter</button><button>Continuer sans accepter</button></main></body></html>`
+}
+
+/** Une page d'erreur INVENTÉE servie en `200` (DRV-752). */
+export function errorPage(): string {
+  return `${HTML_HEAD('Erreur (faux site de test)')}
+<body><main><h1>Service temporairement indisponible</h1><p>Réessayez dans un instant.</p></main></body></html>`
+}
+
+/**
+ * Une page ordinaire du site INVENTÉE (DRV-752) : un lien « Se connecter » et une bannière de cookies, sans champ de mot de passe. Ni connexion, ni défi, ni
+ * erreur : l'agent ne la reconnaît pas (`CART_NOT_JSON`), il n'accuse ni la connexion ni l'anti-robot.
+ */
+export function sitePage(): string {
+  return `${HTML_HEAD('Courses en ligne (faux site de test)')}
+<body><header><a href="/auth/login">Se connecter</a></header><main><h1>Courses en ligne</h1></main><div>Gérer mes cookies : tout accepter ou refuser.</div></body></html>`
+}

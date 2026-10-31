@@ -23,6 +23,7 @@ import {
 import { STORES } from '../../protocol'
 import type { AdapterContext, RetailerEntry } from './entry'
 
+export * from './cart-facts'
 export * from './causes'
 export * from './contract'
 export * from './entry'

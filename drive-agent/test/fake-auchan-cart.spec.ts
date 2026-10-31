@@ -241,6 +241,11 @@ describe('l’agent contre le panier du faux site', () => {
     ['un 503', { write: 'server-error' }, 'NETWORK', 'HTTP_503'],
     ['une page de DataDome', { write: 'challenge' }, 'BLOCKED', 'CHALLENGE'],
     ['une page reCAPTCHA (403)', { write: 'recaptcha' }, 'BLOCKED', 'CHALLENGE'],
+    ['la page de connexion en 200', { write: 'login-page' }, 'NOT_LOGGED_IN', 'LOGIN_FORM'],
+    ['une page de cookies', { write: 'consent-page' }, 'CONTRACT_CHANGED', 'CART_NOT_JSON'],
+    ['une page d’erreur en 200', { write: 'error-page' }, 'CONTRACT_CHANGED', 'CART_ERROR_PAGE'],
+    ['un corps vide', { write: 'empty-body' }, 'CONTRACT_CHANGED', 'CART_EMPTY'],
+    ['un JSON vide', { write: 'json-empty' }, 'CONTRACT_CHANGED', 'CART_JSON_EMPTY'],
   ] as const)(
     '%s : l’agent échoue (%s %s), il ne réussit jamais à tort',
     async (_name, behavior, code, cause) => {
@@ -265,6 +270,14 @@ describe('l’agent contre le panier du faux site', () => {
     ['du JSON sans panier à la lecture', { read: 'no-cart' }, 'CONTRACT_CHANGED', 'CART_NO_CART'],
     ['un défi à la lecture', { read: 'challenge' }, 'BLOCKED', 'CHALLENGE'],
     ['un reCAPTCHA à la lecture', { read: 'recaptcha' }, 'BLOCKED', 'CHALLENGE'],
+    // DRV-752 : la recette du 2026-10-31 a lu `CART_NOT_JSON` sans savoir pourquoi ; chaque forme a maintenant sa cause, et une connexion ou un blocage ne
+    // se disent plus « le site a changé ».
+    ['la page de connexion en 200', { read: 'login-page' }, 'NOT_LOGGED_IN', 'LOGIN_FORM'],
+    ['une page de cookies', { read: 'consent-page' }, 'CONTRACT_CHANGED', 'CART_NOT_JSON'],
+    ['une page ordinaire du site', { read: 'site-page' }, 'CONTRACT_CHANGED', 'CART_NOT_JSON'],
+    ['une page d’erreur en 200', { read: 'error-page' }, 'CONTRACT_CHANGED', 'CART_ERROR_PAGE'],
+    ['un corps vide', { read: 'empty-body' }, 'CONTRACT_CHANGED', 'CART_EMPTY'],
+    ['un JSON vide', { read: 'json-empty' }, 'CONTRACT_CHANGED', 'CART_JSON_EMPTY'],
     [
       'une ligne sans id à la lecture',
       { read: 'line-without-id' },
@@ -333,6 +346,237 @@ describe('l’agent contre le panier du faux site', () => {
 
     expect(fake.violations().filter((violation) => violation.kind === 'parallel')).toEqual([])
     expect(fake.cart()).toEqual({ [FARINE.productId]: 3, [LAIT.productId]: 2 })
+  })
+})
+
+describe('la forme de la réponse du panier dans l’erreur (DRV-752)', () => {
+  it('une connexion servie en 200 : la forme dit le code, le type, la taille, les noms d’en-têtes et le mot « page de connexion »', async () => {
+    fake.setCartBehavior({ read: 'login-page' })
+
+    const error = await failureOf(() => adapterFor().setCartQuantity(FARINE.productId, 2))
+
+    expect(error.reply).toMatchObject({
+      status: 200,
+      mime: 'text/html',
+      redirected: false,
+      address: '/cart',
+      body: 'HTML',
+      words: ['LOGIN'],
+    })
+    expect(error.reply?.length).toBeGreaterThan(100)
+    expect(error.reply?.headers).toContain('content-type')
+    expect(error.reply?.headers).toContain('x-datadome')
+  })
+
+  it('une page qui ne dit rien de connu : CART_NOT_JSON, la forme garde le type et la taille et aucun mot', async () => {
+    fake.setCartBehavior({ read: 'not-json' })
+
+    const error = await failureOf(() => adapterFor().setCartQuantity(FARINE.productId, 2))
+
+    expect(error).toMatchObject({ code: 'CONTRACT_CHANGED', cause: 'CART_NOT_JSON' })
+    expect(error.reply).toMatchObject({ body: 'HTML', words: [] })
+  })
+
+  it('une écriture refusée par le site garde aussi la forme de sa réponse', async () => {
+    fake.setCartBehavior({ write: 'login-page' })
+
+    const error = await failureOf(() => adapterFor().setCartQuantity(FARINE.productId, 2))
+
+    expect(error).toMatchObject({ code: 'NOT_LOGGED_IN', cause: 'LOGIN_FORM' })
+    expect(error.reply).toMatchObject({ status: 200, body: 'HTML', words: ['LOGIN'] })
+    expect(fake.writes()).toHaveLength(1)
+  })
+
+  it('aucune valeur du site ni du compte dans la forme : ni identifiant de consentement, ni de panier, ni adresse', async () => {
+    fake.setCartBehavior({ read: 'login-page' })
+
+    const error = await failureOf(() => adapterFor().setCartQuantity(FARINE.productId, 2))
+
+    const text = JSON.stringify(error.reply)
+    expect(text).not.toContain(CONSENT_ID)
+    expect(text).not.toContain(MEMBER_CART_ID)
+    expect(text).not.toMatch(/https?:|consentId|127\.0\.0\.1|Se connecter/)
+  })
+})
+
+describe('la sonde de lecture du panier du diagnostic (DRV-752)', () => {
+  it('lit le panier par UNE requête GET, n’écrit jamais, et dit la forme et le nombre de lignes', async () => {
+    fake.seedCart(FARINE.productId, 1)
+    fake.seedCart(LAIT.productId, 2)
+
+    const facts = await adapterFor().probeCart()
+
+    expect(facts).toMatchObject({
+      outcome: 'READ',
+      lines: 2,
+      fault: null,
+      reply: { status: 200, mime: 'application/json', body: 'JSON', words: [], address: '/cart' },
+    })
+    expect(
+      fake.paced().map((request) => `${request.method} ${request.path.split('?')[0]}`),
+    ).toEqual(['GET /cart'])
+    expect(fake.writes()).toEqual([])
+    expect(fake.cart()).toEqual({ [FARINE.productId]: 1, [LAIT.productId]: 2 })
+  })
+
+  it('un panier vide se lit : zéro ligne', async () => {
+    const facts = await adapterFor().probeCart()
+
+    expect(facts).toMatchObject({ outcome: 'READ', lines: 0 })
+  })
+
+  it('ne retient rien du panier : ni quantités, ni total (un diagnostic ne change pas ce que le passage sait)', async () => {
+    fake.seedCart(FARINE.productId, 3)
+    const adapter = adapterFor()
+
+    await adapter.probeCart()
+
+    expect(adapter.cartQuantity(FARINE.productId)).toBeNull()
+    expect(adapter.pageCartTotal()).toBeNull()
+  })
+
+  it.each([
+    ['la page de connexion', { read: 'login-page' }, 'NOT_LOGGED_IN', 'LOGIN_FORM', ['LOGIN']],
+    ['un défi de l’anti-robot', { read: 'challenge' }, 'BLOCKED', 'CHALLENGE', null],
+    [
+      'une page de cookies',
+      { read: 'consent-page' },
+      'CONTRACT_CHANGED',
+      'CART_NOT_JSON',
+      ['CONSENT'],
+    ],
+    ['une page d’erreur', { read: 'error-page' }, 'CONTRACT_CHANGED', 'CART_ERROR_PAGE', ['ERROR']],
+    ['un corps vide', { read: 'empty-body' }, 'CONTRACT_CHANGED', 'CART_EMPTY', []],
+    ['un JSON vide', { read: 'json-empty' }, 'CONTRACT_CHANGED', 'CART_JSON_EMPTY', []],
+    ['du JSON sans panier', { read: 'no-cart' }, 'CONTRACT_CHANGED', 'CART_NO_CART', []],
+    ['un 401', { read: 'unauthorized' }, 'NOT_LOGGED_IN', 'HTTP_401', []],
+  ] as const)(
+    '%s : la sonde rend l’échec (%s %s) avec la forme, sans lever d’erreur et sans écrire',
+    async (_name, behavior, code, cause, words) => {
+      fake.setCartBehavior(behavior)
+
+      const facts = await adapterFor().probeCart()
+
+      expect(facts).toMatchObject({ outcome: 'FAILED', lines: null, fault: { code, cause } })
+      // Un défi de DataDome est jugé par le `Pacer` avant toute lecture : pas de forme relevée.
+      expect(facts.reply === null ? null : facts.reply.words).toEqual(words)
+      expect(fake.writes()).toEqual([])
+      expect(fake.paced()).toHaveLength(1)
+    },
+  )
+
+  it('sans identifiant de consentement lisible : aucune requête, CART_CONSENT_UNREADABLE, aucune forme', async () => {
+    fake.setBehavior({ session: 'member' })
+    const site = auchanSite(() => ({}), { cookies: () => '', authenticated: () => 'true' })
+    site.deps.fetch = bridgeTo(fake)
+
+    const facts = await new AuchanAdapter(site.deps).probeCart()
+
+    expect(facts).toMatchObject({
+      outcome: 'FAILED',
+      reply: null,
+      fault: { code: 'CONTRACT_CHANGED', cause: 'CART_CONSENT_UNREADABLE' },
+    })
+    expect(fake.paced()).toEqual([])
+  })
+})
+
+describe('la forme du dernier échec du panier, gardée dans l’onglet (DRV-752)', () => {
+  const store = () => {
+    const values = new Map<string, string>()
+    return {
+      values,
+      storage: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => void values.set(key, value),
+      },
+    }
+  }
+
+  function adapterWith(storage: ReturnType<typeof store>['storage'] | undefined) {
+    fake.setBehavior({ session: 'member' })
+    const site = auchanSite(() => ({}), {
+      cookies: () => `lark-consentId=${CONSENT_ID}`,
+      authenticated: () => 'true',
+      ...(storage !== undefined && { storage }),
+    })
+    site.deps.fetch = bridgeTo(fake)
+    return new AuchanAdapter(site.deps)
+  }
+
+  it('un envoi qui échoue laisse sa forme, qu’une autre page (un autre adaptateur) relit', async () => {
+    const { storage, values } = store()
+    fake.setCartBehavior({ read: 'login-page' })
+    const error = await failureOf(() => adapterWith(storage).setCartQuantity(FARINE.productId, 2))
+    expect(error).toMatchObject({ code: 'NOT_LOGGED_IN', cause: 'LOGIN_FORM' })
+
+    const later = adapterWith(storage)
+
+    expect(later.lastCartFailure()).toMatchObject({ status: 200, body: 'HTML', words: ['LOGIN'] })
+    expect([...values.values()].join('')).not.toMatch(/https?:|SECRET|consent/i)
+  })
+
+  it('sans stockage, la forme ne vit qu’en mémoire', async () => {
+    fake.setCartBehavior({ read: 'error-page' })
+    const adapter = adapterWith(undefined)
+    expect(adapter.lastCartFailure()).toBeNull()
+
+    await failureOf(() => adapter.setCartQuantity(FARINE.productId, 2))
+
+    expect(adapter.lastCartFailure()).toMatchObject({ words: ['ERROR'] })
+    expect(adapterWith(undefined).lastCartFailure()).toBeNull()
+  })
+
+  it('un stockage qui refuse l’écriture ne change pas l’erreur de l’envoi', async () => {
+    const storage = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error('quota')
+      },
+    }
+    fake.setCartBehavior({ read: 'login-page' })
+
+    const error = await failureOf(() => adapterWith(storage).setCartQuantity(FARINE.productId, 2))
+
+    expect(error).toMatchObject({ code: 'NOT_LOGGED_IN', cause: 'LOGIN_FORM' })
+  })
+
+  it('l’échec de la sonde ne remplace pas celui d’un envoi', async () => {
+    const { storage } = store()
+    fake.setCartBehavior({ read: 'login-page' })
+    const adapter = adapterWith(storage)
+    await failureOf(() => adapter.setCartQuantity(FARINE.productId, 2))
+
+    fake.setCartBehavior({ read: 'error-page' })
+    const probed = await adapter.probeCart()
+
+    expect(probed.reply?.words).toEqual(['ERROR'])
+    expect(adapter.lastCartFailure()?.words).toEqual(['LOGIN'])
+    expect(adapterWith(storage).lastCartFailure()?.words).toEqual(['LOGIN'])
+  })
+
+  it.each([
+    ['du texte qui n’est pas du JSON', 'pas du json'],
+    ['un tableau', '[]'],
+    ['une forme sans corps', '{"status":200}'],
+    [
+      'un mot qui n’est pas de la liste fermée',
+      '{"status":200,"mime":"text/html","length":1,"redirected":false,"address":"/cart","headers":[],"body":"HTML","words":["jean.dupont"]}',
+    ],
+    [
+      'un nom d’en-tête hostile',
+      '{"status":200,"mime":"text/html","length":1,"redirected":false,"address":"/cart","headers":["a b"],"body":"HTML","words":[]}',
+    ],
+    [
+      'une adresse entière',
+      '{"status":200,"mime":"text/html","length":1,"redirected":false,"address":"https://x.invalid/cart","headers":[],"body":"HTML","words":[]}',
+    ],
+    ['un texte énorme', `{"status":200,"x":"${'a'.repeat(5000)}"}`],
+  ])('un stockage altéré (%s) n’est jamais relu', (_name, raw) => {
+    const { storage, values } = store()
+    values.set('repas:last-cart-reply', raw)
+
+    expect(adapterWith(storage).lastCartFailure()).toBeNull()
   })
 })
 
