@@ -179,6 +179,8 @@ const WEB_GROUPS = [
   'checkEmail',
   'confirmEmail',
   'welcome',
+  // Les types de liste de courses (ADR 0036, LST-006)
+  'listTypes',
 ] as const
 
 /**

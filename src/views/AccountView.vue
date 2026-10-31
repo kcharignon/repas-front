@@ -13,6 +13,7 @@ import SettingsForms from '@/features/account/SettingsForms.vue'
 import AppHelpLink from '@/features/drive/AppHelpLink.vue'
 import AppUpdateBanner from '@/features/drive/AppUpdateBanner.vue'
 import DriveAccountLinks from '@/features/drive/DriveAccountLinks.vue'
+import ListTypesEntry from '@/features/list-types/ListTypesEntry.vue'
 import VoiceAssistantSection from '@/features/voice/VoiceAssistantSection.vue'
 import { useSessionStore } from '@/session/session'
 
@@ -86,6 +87,8 @@ async function logout() {
     </section>
 
     <AppHelpLink />
+
+    <ListTypesEntry />
 
     <DriveAccountLinks />
 

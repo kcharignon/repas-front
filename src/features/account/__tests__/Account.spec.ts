@@ -384,3 +384,18 @@ describe('aperçu des thèmes', () => {
     expect(JSON.stringify({ ...localStorage })).toBe(written)
   })
 })
+
+describe('entrée « Types de liste » (LST-006)', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('est dans « Moi » pour tout compte, avec son sous-titre, et mène à l’écran des types', async () => {
+    const { wrapper, fetchMock } = await open()
+    await flushPromises()
+
+    const entry = wrapper.findAll('a').find((link) => link.text().includes('Types de liste'))
+    expect(entry?.text()).toBe('Types de listeSépare tes courses par magasin.')
+    expect(entry?.attributes('href')).toBe('/moi/types-de-liste')
+    // L'entrée ne lit rien : un compte sans type ne coûte aucune requête de plus
+    expect(calls(fetchMock).filter((call) => call.includes('shopping-list-types'))).toEqual([])
+  })
+})

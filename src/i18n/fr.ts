@@ -717,6 +717,9 @@ export default {
     // `INGREDIENT_NAME_ALREADY_USED` (409, ING-016) quand l'écran ne sait pas dire le nom ni le rayon
     ingredientNameUsed:
       'Ce nom existe déjà dans ce rayon. Choisis-le plutôt que d’en créer un autre.',
+    // Les types de liste (LIST_TYPE_NAME_ALREADY_USED en 409, LIST_TYPE_NAME_INVALID en 422) : trois phrases au plus, jamais le code
+    listTypeNameUsed: 'Tu as déjà un type qui s’appelle comme ça. Choisis un autre nom.',
+    listTypeNameInvalid: 'Ce nom n’est pas valable. Écris de 1 à 40 caractères, avec une lettre.',
     // Les conversions propres à un ingrédient (CONVERSION_ALREADY_EXISTS, CONVERSION_REQUIRED_BY_INGREDIENT)
     conversionExists: 'Cette conversion existe déjà : modifie-la.',
     conversionRequired:
@@ -745,6 +748,7 @@ export default {
     listMealLimitReached:
       'Cette liste a déjà 500 repas : c’est le maximum. Retire-en un, puis réessaie.',
     recipeRowsLimitReached: 'Une recette a 100 ingrédients au plus. Retire-en un, puis réessaie.',
+    listTypeLimitReached: 'Tu as déjà 10 types. Supprime-en un pour en ajouter.',
     conversionLimitReached:
       'Cet ingrédient a déjà 50 conversions : c’est le maximum. Supprime-en une, puis réessaie.',
     quantityInvalid:
@@ -1105,6 +1109,42 @@ export default {
     unlinkDescription:
       'Alexa ne pourra plus ajouter de produits à ta liste. Tu pourras la lier de nouveau.',
     unlinkConfirm: 'Délier',
+  },
+  // Les types de liste de courses (ADR 0036, LST-006) : « Moi », l'écran des types et la fiche d'un type. Mots du glossaire : type de liste,
+  // liste principale, produit à part. Jamais « catégorie », « destination », « routage » ni « tag ».
+  listTypes: {
+    entry: 'Types de liste',
+    entryHelp: 'Sépare tes courses par magasin.',
+    title: 'Types de liste',
+    intro: 'Sépare tes courses par magasin. Chaque type a sa propre liste.',
+    none: 'Tu n’as pas encore de type. Crée-en un, par exemple Boucherie.',
+    noDepartments: 'Aucun rayon pour l’instant',
+    standalone: '{count} produit à part | {count} produits à part',
+    main: 'Liste principale',
+    mainHelp: 'Tout le reste',
+    add: 'Ajouter un type',
+    addTitle: 'Nouveau type de liste',
+    addHelp: 'Donne-lui le nom d’un magasin, par exemple Boucherie ou Marché.',
+    name: 'Nom du type',
+    nameRequired: 'Écris un nom.',
+    nameTooLong: 'Le nom a 40 caractères au plus.',
+    created: 'Le type « {name} » est créé.',
+    departmentsTitle: 'Rayons dans cette liste',
+    departmentsHelp: 'Les produits de ces rayons vont dans cette liste.',
+    takenBy: 'Dans {type}',
+    productsTitle: 'Produits à part',
+    productsHelp: 'Pour ajouter un produit, ouvre-le et choisis sa liste.',
+    productsNone: 'Aucun produit à part pour l’instant.',
+    productRemove: 'Retirer {name} de ce type',
+    productRemoved: '{name} n’est plus à part.',
+    save: 'Enregistrer',
+    saved: 'Type enregistré.',
+    delete: 'Supprimer ce type',
+    deleteTitle: 'Supprimer « {name} » ?',
+    deleteBody: 'Sa liste en cours passe dans Mes listes. Rien n’est perdu.',
+    deleteConfirm: 'Supprimer',
+    deleted: 'Le type « {name} » est supprimé.',
+    notFound: 'Ce type n’existe plus.',
   },
   // Les entrées de l’application dans « Moi » (DRV-320)
   driveAccount: {

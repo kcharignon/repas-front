@@ -30,6 +30,11 @@ export type IngredientConversionPayload = Schemas['IngredientConversionPayload']
 export type IngredientToFix = Schemas['IngredientToFixDTO']
 export type IngredientsToFix = Schemas['IngredientsToFixDTO']
 
+// Types de liste de courses (ADR 0036, LST-006) : le nom que l'utilisateur crée (« Boucherie »), ses rayons et ses produits à part
+export type ListType = Schemas['ShoppingListTypeSummaryDTO']
+export type ListTypeDetail = Schemas['ShoppingListTypeDTO']
+export type ListTypeStandaloneProduct = Schemas['ShoppingListTypeIngredientDTO']
+
 export type Department = Schemas['DepartmentDTO']
 export type DepartmentPayload = Schemas['DepartmentPayload']
 /** Les icônes de rayon que ce front dessine (ING-016 : `snowflake`, `can`) ; le back peut en ajouter, elles s'affichent sans repère tant qu'on ne les connaît pas. */

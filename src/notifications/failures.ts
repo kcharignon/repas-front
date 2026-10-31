@@ -31,6 +31,12 @@ const driveCodes = new Map([
   ['INGREDIENT_NAME_ALREADY_USED', 'errors.ingredientNameUsed'],
 ])
 
+/** Les types de liste de courses (ADR 0036) : un 409 de nom pris n'est pas « une autre modification en cours », un 422 de nom dit ce qui ne va pas. */
+const listTypeCodes = new Map([
+  ['LIST_TYPE_NAME_ALREADY_USED', 'errors.listTypeNameUsed'],
+  ['LIST_TYPE_NAME_INVALID', 'errors.listTypeNameInvalid'],
+])
+
 /** Les conversions propres à un ingrédient : chaque refus du back a sa phrase, quel que soit le statut (un 409 n'est pas un « autre modification en cours »). */
 const conversionCodes = new Map([
   ['CONVERSION_ALREADY_EXISTS', 'errors.conversionExists'],
@@ -41,6 +47,7 @@ const conversionCodes = new Map([
 /** Les plafonds et les bornes des recettes, ingrédients, listes et conversions (422) : chacun dit sa limite, au lieu du code brut. */
 const limitCodes = new Map([
   ['RECIPE_LIMIT_REACHED', 'limits.recipeLimitReached'],
+  ['LIST_TYPE_LIMIT_REACHED', 'limits.listTypeLimitReached'],
   ['INGREDIENT_LIMIT_REACHED', 'limits.ingredientLimitReached'],
   ['SHOPPING_LIST_LIMIT_REACHED', 'limits.listLimitReached'],
   ['SHOPPING_LIST_MEAL_LIMIT_REACHED', 'limits.listMealLimitReached'],
@@ -100,6 +107,7 @@ export function messageForFailure(error: unknown): string {
   const code =
     driveCodes.get(error.message) ??
     conversionCodes.get(error.message) ??
+    listTypeCodes.get(error.message) ??
     limitCodes.get(error.message)
   if (code !== undefined) return t(code)
 
