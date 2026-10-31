@@ -116,7 +116,7 @@ const aloneInSettings = (settings: unknown) => {
 
 /** Le faux back : les exemples du back en réponse, les appels reçus et les corps de `PUT /drive/choices` gardés. */
 async function fakeBackFromSamples(page: Page) {
-  const received = { calls: [] as string[], choices: [] as unknown[] }
+  const received = { calls: [] as string[], choices: [] as unknown[], baskets: [] as unknown[] }
   await page.addInitScript(() => localStorage.setItem('repas.session', '1'))
   await page.route(
     (url) => url.pathname.startsWith('/api/'),
@@ -148,6 +148,10 @@ async function fakeBackFromSamples(page: Page) {
           return reply(route, sentList)
         case 'PUT /api/v1/drive/choices':
           received.choices.push(request.postDataJSON())
+          return reply(route)
+        // DRV-747 : les articles mis au panier sont cochés dans la liste
+        case `POST /api/v1/drive/plans/${LIST}/basket-lines`:
+          received.baskets.push(request.postDataJSON())
           return reply(route)
         default:
           return reply(route, { error: { message: 'inconnu' } }, 404)
@@ -263,6 +267,13 @@ test.describe('parcours complet, pont et API simulés', () => {
       ['sel', 'REFRESH_PRICE', null, '555401', 45],
       ['sucre', 'HAVE_AT_HOME', null, null, null],
     ])
+
+    // 6 bis. Les articles réellement au panier sont cochés dans la liste, en un seul appel : l'article ajouté, le produit choisi, l'autre article ajouté ;
+    // le produit introuvable (lait) et « j'en ai toujours » (sucre) restent non cochés
+    await expect(
+      page.getByText('Les articles ajoutés au panier sont cochés dans ta liste.'),
+    ).toBeVisible()
+    expect(back.baskets).toEqual([{ ingredientSlugs: ['farine', 'oeuf', 'sel'] }])
 
     // 7. Le récapitulatif : les compteurs, puis chaque ligne
     const counts = page.getByLabel('Récapitulatif de l’envoi')

@@ -41,11 +41,15 @@ test('deux drives configurés, aucun habituel : la question, la dernière utilis
   expect(start?.plan?.retailer).toBe('auchan')
   expect(back.lastRetailers).toEqual([{ retailer: 'auchan' }])
   // Le plan se demande toujours pour le drive du passage : à l'envoi, puis au retour (les noms des articles)
-  const asked = back.received.filter((call) => call.includes('/plans/l1'))
+  const asked = back.received.filter(
+    (call) => call.startsWith('GET ') && call.includes('/plans/l1'),
+  )
   expect(asked.length).toBeGreaterThan(0)
   expect(new Set(asked)).toEqual(new Set(['GET /api/v1/drive/plans/l1?retailer=auchan']))
   // Les choix du passage sont enregistrés pour le drive du passage et son magasin
   expect(back.choices).toMatchObject([{ retailer: 'auchan', storeId: SECOND_STORE.id }])
+  // Les articles mis au panier sont cochés dans la liste, quel que soit le drive : la route n'a pas d'enseigne (DRV-747)
+  expect(back.baskets).toHaveLength(1)
   await shot(page, 'drv710-retour-second-drive-360')
 })
 

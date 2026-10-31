@@ -94,6 +94,8 @@ export interface SendBack {
   /** Les corps de `PUT /drive/last-retailer` et de `PUT /drive/choices`, dans l'ordre. */
   lastRetailers: unknown[]
   choices: unknown[]
+  /** Les corps de `POST /drive/plans/l1/basket-lines` (les articles mis au panier, cochés dans la liste, DRV-747). */
+  baskets: unknown[]
 }
 
 const reply = (route: Route, body?: unknown, status = body === undefined ? 204 : 200) =>
@@ -105,7 +107,7 @@ const reply = (route: Route, body?: unknown, status = body === undefined ? 204 :
 
 /** Un faux back où la personne est connectée, le drive allumé et deux drives servis (selon `options`). */
 export async function fakeSendBack(page: Page, options: SendBackOptions): Promise<SendBack> {
-  const back: SendBack = { received: [], lastRetailers: [], choices: [] }
+  const back: SendBack = { received: [], lastRetailers: [], choices: [], baskets: [] }
   const configured = options.configured ?? (['leclerc', 'auchan'] as Id[])
   const stores = { leclerc: FIRST_STORE, auchan: SECOND_STORE }
   const current: Id = options.retailer ?? configured[0] ?? 'leclerc'
@@ -161,6 +163,9 @@ export async function fakeSendBack(page: Page, options: SendBackOptions): Promis
           return reply(route)
         case 'PUT /api/v1/drive/choices':
           back.choices.push(request.postDataJSON())
+          return reply(route)
+        case 'POST /api/v1/drive/plans/l1/basket-lines':
+          back.baskets.push(request.postDataJSON())
           return reply(route)
         default:
           return reply(route, { error: { message: 'inconnu' } }, 404)

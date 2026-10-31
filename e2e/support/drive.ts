@@ -160,9 +160,14 @@ const reply = (route: Route, body?: unknown, status = body === undefined ? 204 :
       : { status, contentType: 'application/json', body: JSON.stringify(body) },
   )
 
-/** Rend les corps reçus par `PUT /drive/choices` et les appels reçus. */
+/**
+ * Rend les corps reçus par `PUT /drive/choices` et par `POST /drive/plans/l1/basket-lines` (les articles que le passage a mis au panier, cochés dans la
+ * liste, DRV-747) et les appels reçus.
+ */
 export async function fakeBack(page: Page) {
-  const received = { choices: [] as unknown[], calls: [] as string[] }
+  const received = { choices: [] as unknown[], baskets: [] as unknown[], calls: [] as string[] }
+  // Les lignes que le passage a cochées : comme le vrai back, le plan ne les contient plus (DRV-745), « Reprendre l'envoi » ne reprend que les manquantes
+  const ticked = new Set<string>()
   await page.addInitScript(() => localStorage.setItem('repas.session', '1'))
   await page.route(
     (url) => url.pathname.startsWith('/api/'),
@@ -182,7 +187,10 @@ export async function fakeBack(page: Page) {
             defaultServing: 4,
           })
         case 'GET /api/v1/drive/plans/l1':
-          return reply(route, plan)
+          return reply(route, {
+            ...plan,
+            lines: plan.lines.filter((line) => !ticked.has(line.ingredientSlug)),
+          })
         case 'GET /api/v1/drive/estimates/l1':
           return reply(route, estimate)
         case 'GET /api/v1/drive/settings':
@@ -196,6 +204,12 @@ export async function fakeBack(page: Page) {
         case 'PUT /api/v1/drive/choices':
           received.choices.push(request.postDataJSON())
           return reply(route)
+        case 'POST /api/v1/drive/plans/l1/basket-lines': {
+          const body = request.postDataJSON() as { ingredientSlugs: string[] }
+          received.baskets.push(body)
+          for (const slug of body.ingredientSlugs) ticked.add(slug)
+          return reply(route)
+        }
         case 'POST /api/v1/shopping-lists/l1/complete':
           return reply(route)
         default:

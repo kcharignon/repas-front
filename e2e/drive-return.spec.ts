@@ -36,11 +36,12 @@ test('un passage arrêté par Leclerc : accessible en clair et en sombre, repli�
     expect((await scan(page)).violations, `déplié, ${colorScheme}`).toEqual([])
   }
 
-  // « Reprendre l'envoi » est l'intention : le drive se rouvre tout seul, sur toute la liste (pas de second « Remplir mon panier »)
+  // « Reprendre l'envoi » est l'intention : le drive se rouvre tout seul (pas de second « Remplir mon panier »), sur les seuls articles qui manquent :
+  // les 9 mis au panier (6 ajoutés, 3 choisis) ont été cochés dans la liste, donc le plan n'a plus que le beurre en échec et « j'en ai toujours » (DRV-747)
   await page.getByRole('link', { name: 'Reprendre l’envoi' }).first().click()
   await expect
     .poll(() => page.evaluate(() => window.__sent.filter((m) => m.type === 'drive.start').length))
     .toBe(2)
   const [, again] = await page.evaluate(() => window.__sent.filter((m) => m.type === 'drive.start'))
-  expect(again?.plan?.lines).toHaveLength(12)
+  expect(again?.plan?.lines.map((line) => line.ingredientSlug).sort()).toEqual(['beurre', 'sel'])
 })
