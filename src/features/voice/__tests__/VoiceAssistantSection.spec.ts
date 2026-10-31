@@ -78,13 +78,12 @@ describe('section « Assistant vocal » de « Moi »', () => {
     expect(wrapper.find('section').exists()).toBe(false)
   })
 
-  it('sans liaison : dit où lier Alexa, avec le nom du skill, et la ligne d’aide', async () => {
+  it('sans liaison : dit où lier Alexa, avec le nom du skill', async () => {
     const { wrapper } = await open({ [links]: () => json({ member: [], totalItems: 0 }) })
 
     expect(wrapper.find('h2').text()).toBe('Assistant vocal')
     expect(wrapper.findAll('p').map((p) => p.text())).toEqual([
       'Pour lier Alexa, ouvre l’application Alexa, Skills, Jarvis.',
-      'Alexa ne voit pas ta liste de courses d’Amazon : dis bien le nom du skill.',
     ])
     expect(wrapper.find('button').exists()).toBe(false)
   })
@@ -94,7 +93,6 @@ describe('section « Assistant vocal » de « Moi »', () => {
 
     expect(wrapper.findAll('p').map((p) => p.text())).toEqual([
       'Alexa est liée. Dis : « Alexa, demande à Jarvis d’ajouter du pain ».',
-      'Alexa ne voit pas ta liste de courses d’Amazon : dis bien le nom du skill.',
     ])
     expect(wrapper.find('button').text()).toBe('Délier Alexa')
   })
