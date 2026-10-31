@@ -112,13 +112,15 @@ const DEFAULT_SCRIPTS: Scripts = {
   packSize: (props) => props.prefill ?? 1,
   error: () => 'close',
   end: () => 'return',
+  // L'attente allongée du guide (DRV-751) : sans consigne du test, la personne arrête
+  guide: () => 'stop',
 }
 
 export function fakeUi(scripts: Scripts = {}) {
   const shown: { screen: ScreenName; props: unknown }[] = []
   const updates: ProgressPatch[] = []
   const stops: (() => void)[] = []
-  const backs: (() => void)[] = []
+  const guides: ((answer: 'stop' | 'wait') => void)[] = []
   const closed = { count: 0 }
   const ui: Ui = {
     retailer: LECLERC,
@@ -126,9 +128,13 @@ export function fakeUi(scripts: Scripts = {}) {
       shown.push({ screen, props })
       // Un bandeau sans bouton (DRV-625) : sa promesse ne se résout jamais.
       if (screen === 'entry') return new Promise(() => undefined)
-      // Le bandeau d'attente du magasin (DRV-740) : tant qu'il attend, il ne répond que si le test touche « Retourner dans Repas » ; plus tard, le script répond.
-      if (screen === 'storeWaiting' && (props as { stage: string }).stage === 'waiting') {
-        return new Promise((resolve) => backs.push(() => resolve('return' as never)))
+      // La carte du guide (DRV-751) : tant qu'elle attend, elle ne répond que si le test touche « Arrêter pour l'instant » ; « C'est bon » ne répond jamais (c'est la
+      // pause de l'agent qui la finit) ; l'attente allongée est celle du script.
+      if (screen === 'guide') {
+        const stage = (props as { stage: string }).stage
+        if (stage === 'waiting')
+          return new Promise((resolve) => guides.push((answer) => resolve(answer as never)))
+        if (stage === 'done') return new Promise(() => undefined)
       }
       if (screen === 'progress') {
         return new Promise((resolve) => stops.push(() => resolve('stop' as never)))
@@ -148,8 +154,8 @@ export function fakeUi(scripts: Scripts = {}) {
     closed,
     /** « Arrêter » touché sur l'écran de progression affiché en dernier. */
     pressStop: () => stops.at(-1)?.(),
-    /** « Retourner dans Repas » touché sur le bandeau d'attente du magasin (DRV-740). */
-    pressBack: () => backs.at(-1)?.(),
+    /** « Arrêter pour l'instant » touché sur la carte d'attente du guide (DRV-751). */
+    pressGuideStop: () => guides.at(-1)?.('stop'),
     screens: () => shown.map((item) => item.screen),
     propsOf: <K extends ScreenName>(screen: K) =>
       shown.filter((item) => item.screen === screen).map((item) => item.props as ScreenProps<K>),

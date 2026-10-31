@@ -252,28 +252,26 @@ describe('une page « aucun résultat » n’arrête pas le passage (ticket C)',
 describe('le visiteur non connecté est arrêté avant toute écriture (ticket G)', () => {
   const FARINE = plan([known('farine', [product('1000001', 3)]), home('sel')])
 
-  it('refuse de commencer : ni récapitulatif, ni recherche, ni panier, et le dit clairement', async () => {
+  it('un visiteur : une étape guidée « connecte-toi » (DRV-751), ni récapitulatif, ni recherche, ni panier ; quinze minutes plus tard la carte propose d’attendre encore, et « Arrêter pour l’instant » rend un envoi arrêté', async () => {
     // Given : la page ouverte est celle d'un visiteur
     const { adapter, calls, writes } = fakeAdapter({ '1000001': {} }, { session: VISITOR })
-    const screens = fakeUi({ error: () => 'return' })
+    const screens = fakeUi()
     const { flow, sent } = makeFlow({ ui: screens.ui, adapter })
 
-    // When
+    // When : personne ne se connecte pendant quinze minutes, puis la personne arrête
     await flow.start(FARINE)
 
-    // Then : « Connecte-toi à Leclerc, puis relance l'envoi », rien n'a été demandé au site
+    // Then : une carte « Connecte-toi », jamais un écran d'erreur, rien n'a été demandé au site
     expect(calls).toEqual([])
     expect(writes).toEqual([])
-    expect(screens.screens()).toEqual(['error'])
-    expect(screens.propsOf('error')).toEqual([
-      { code: 'NOT_LOGGED_IN', canReturn: true, cause: 'SESSION_VISITOR' },
+    expect(screens.screens()).toEqual(['guide', 'guide'])
+    expect(screens.propsOf('guide')).toEqual([
+      expect.objectContaining({ step: 'login', stage: 'waiting', index: 1, total: 1 }),
+      expect.objectContaining({ step: 'login', stage: 'late' }),
     ])
-    expect(flow.history).toEqual(['START', 'VALIDATED', 'ERROR'])
-    expect(expectConform(sent[0])).toMatchObject({
-      outcome: 'error',
-      error: { code: 'NOT_LOGGED_IN', message: 'Tu n’es pas connecté (SESSION_VISITOR)' },
-      lines: [],
-    })
+    expect(flow.history).toEqual(['START', 'VALIDATED', 'ABORTED'])
+    expect(sent).toHaveLength(1)
+    expect(expectConform(sent[0])).toMatchObject({ outcome: 'aborted', lines: [] })
   })
 
   it('un client connecté, ou un état inconnu, passe comme avant', async () => {
@@ -309,7 +307,7 @@ describe('le visiteur non connecté est arrêté avant toute écriture (ticket G
     expect(expectConform(sent[0]).error?.code).toBe('STORE_MISMATCH')
   })
 
-  it('garde l’état de reprise : après la connexion, le passage se reprend là où il s’était arrêté', async () => {
+  it('garde l’état de reprise : arrêter pendant l’attente de la connexion ne touche pas ce qui est déjà fait', async () => {
     // Given : un passage commencé dont `sel` est fait, puis la session perdue
     const storage = fakeStorage({
       [`${RUN_PREFIX}${RUN_ID}`]: JSON.stringify({
@@ -322,14 +320,14 @@ describe('le visiteur non connecté est arrêté avant toute écriture (ticket G
       }),
     })
     const { adapter } = fakeAdapter({ '1000001': {} }, { session: VISITOR })
-    const screens = fakeUi({ error: () => 'close' })
+    const screens = fakeUi()
     const { flow } = makeFlow({ ui: screens.ui, adapter, storage })
 
     // When
     await flow.start(FARINE)
 
     // Then
-    expect(screens.screens()).toEqual(['error'])
+    expect(screens.screens()).toEqual(['guide', 'guide'])
     expect(storage.getItem(`${RUN_PREFIX}${RUN_ID}`)).toContain('"sel"')
   })
 
@@ -391,14 +389,15 @@ describe('le visiteur non connecté est arrêté avant toute écriture (ticket G
           : { body: visitorPage },
       { pageText: () => visitorPage },
     )
-    const screens = fakeUi({ error: () => 'return' })
+    const screens = fakeUi()
     const { flow, sent } = makeFlow({ ui: screens.ui, adapter: new LeclercAdapter(site.deps) })
 
     // When
     await flow.start(FARINE)
 
-    // Then : aucune requête, ni recherche ni écriture
+    // Then : aucune requête, ni recherche ni écriture ; une carte « Connecte-toi »
     expect(site.calls).toEqual([])
-    expect(expectConform(sent[0]).error?.code).toBe('NOT_LOGGED_IN')
+    expect(screens.propsOf('guide')[0]).toMatchObject({ step: 'login' })
+    expect(expectConform(sent[0]).outcome).toBe('aborted')
   })
 })

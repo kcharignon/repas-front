@@ -1,6 +1,7 @@
 // Les écrans de l'interface et ce que chacun reçoit (`props`) et rend (`answer`, la réponse de l'utilisateur).
 import type { ErrorCode, LineStatus, Outcome } from '../../protocol'
 import type { RetailerInfo } from '../retailers/names'
+import type { GuideStep } from '../retailers/guide'
 
 /**
  * Pourquoi un produit habituel n'a pas été mis au panier (DRV-635). `OUT_OF_STOCK` : le site le dit en rupture (stock nul ou « Bientôt disponible ») ET le
@@ -187,11 +188,25 @@ export interface EntryProps {
 }
 
 /**
- * Le bandeau de la première configuration (DRV-740), quand le magasin se choisit sur le site : `waiting` pendant que la personne choisit son magasin (la page
- * reste utilisable), `late` quand l'attente s'est allongée sans choix. Un bandeau : la page reste visible et touchable.
+ * Le guide d'une étape de première utilisation (DRV-751, qui reprend le bandeau d'attente du magasin de DRV-740) : choisir son magasin, puis se connecter, sur la
+ * page de l'enseigne. Une carte posée en bas : la page reste visible et touchable, le contrôle à toucher est entouré dans la page.
+ * - `waiting` : l'étape est à faire, l'agent attend et continue tout seul ; `late` : l'attente s'est allongée, la carte propose d'attendre encore ;
+ * - `done` : l'étape est faite, l'agent reprend la main (« Je remplis ton panier »).
  */
-export interface StoreWaitingProps {
-  stage: 'waiting' | 'late'
+export interface GuideProps {
+  step: GuideStep
+  stage: 'waiting' | 'late' | 'done'
+  /** Le rang de l'étape (à partir de 1) et leur nombre ; `0` : aucun repère d'étape (la lecture du magasin n'a qu'une étape, et pas de « 2 sur 2 »). */
+  index: number
+  total: number
+  /** Le libellé du contrôle à toucher, tel que la page l'écrit ; `null` : le message ne cite aucun libellé. */
+  label: string | null
+  /** La personne est déjà sur la page de connexion de l'enseigne : la phrase dit de remplir le formulaire, et rien n'est entouré. */
+  form?: boolean
+  /** La lecture du magasin depuis les réglages : la carte dit que rien n'est enregistré si l'on arrête, au lieu de « ta liste est gardée ». */
+  setup?: boolean
+  /** Le contrôle à entourer dans la page, relu à chaque mesure (la page peut se redessiner) ; `null` : rien à entourer. */
+  target?: () => HTMLElement | null
 }
 
 export interface ErrorProps {
@@ -201,7 +216,7 @@ export interface ErrorProps {
    * le conseil du code d'erreur ; les autres sont ignorées.
    */
   cause?: string
-  /** Vrai : un résultat peut repartir vers Repas (bouton « Retourner dans Repas »), sinon l'écran se ferme seulement. */
+  /** Vrai : un résultat peut repartir vers Repas (bouton « Revenir à ma liste dans Repas »), sinon l'écran se ferme seulement. */
   canReturn: boolean
 }
 
@@ -268,10 +283,10 @@ export interface ScreenMap {
   /** Un bandeau sans bouton (DRV-625) : sa promesse ne se résout jamais, la page de l'enseigne change ou l'utilisateur touche son bouton. */
   entry: { props: EntryProps; answer: never }
   /**
-   * Un bandeau non bloquant (DRV-740) : « Choisis ton magasin sur {enseigne}. » `return` : « Retourner dans Repas » ; `retry` : « Réessayer » (seulement au stade
-   * `late`).
+   * Le guide d'une étape (DRV-751) : une carte en bas, la page reste visible et touchable. `stop` : « Arrêter pour l'instant » (l'envoi, ou la lecture du magasin,
+   * s'arrête, rien n'est perdu) ; `wait` : « Attendre encore » (seulement au stade `late`).
    */
-  storeWaiting: { props: StoreWaitingProps; answer: 'return' | 'retry' }
+  guide: { props: GuideProps; answer: 'stop' | 'wait' }
   error: { props: ErrorProps; answer: 'return' | 'close' }
   end: { props: EndProps; answer: 'return' }
 }

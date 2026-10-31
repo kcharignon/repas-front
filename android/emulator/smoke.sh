@@ -138,7 +138,7 @@ if wait_until 20 has_report '"kind": "agent-ui", "mounted": true'; then ok "l'ag
 if wait_until 15 ui_has 'Prêt à remplir ton panier'; then ok "l'agent affiche son récapitulatif, sans que l'utilisateur ait à naviguer"; else ko "l'agent n'a pas affiché son récapitulatif"; fi
 sleep 2
 screenshot 03-passage-agent
-if tap 'text="Annuler"' && tap 'text="Retourner dans Repas"'; then ok "« Annuler » puis « Retourner dans Repas » touchés dans l'interface de l'agent"; else ko "les boutons de l'agent sont introuvables"; fi
+if tap 'text="Annuler"' && tap 'text="Revenir à ma liste dans Repas"'; then ok "« Annuler » puis « Revenir à ma liste dans Repas » touchés dans l'interface de l'agent"; else ko "les boutons de l'agent sont introuvables"; fi
 if wait_until 20 result_report "$RUN_A" aborted; then
   ok "Repas reçoit drive.result : le résultat de l'agent, du même runId (issue « aborted » : l'utilisateur a annulé au récapitulatif)"
 else

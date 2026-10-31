@@ -80,6 +80,22 @@ class StoreBannerTest {
         assertEquals(StoreBanner.NONE, StoreBanner.of(plan, inStore))
     }
 
+    /**
+     * DRV-751 : la personne touche « Se connecter » depuis sa page de magasin, le site l'emmène sur la page de connexion. Un magasin est déjà ouvert : « Choisis d'abord
+     * ton magasin » serait faux, un envoi n'y dit rien. La lecture du magasin et les pages refusées gardent leur message ; sans magasin connu, rien ne change.
+     */
+    @Test
+    fun `la page de connexion d'un envoi ne dit pas de choisir son magasin quand un magasin est deja ouvert`() {
+        listOf(login, "https://www.leclercdrive.fr/connexion").forEach {
+            assertEquals(it, StoreBanner.NONE, StoreBanner.of(plan, it, storeKnown = true))
+            assertEquals(it, StoreBanner.STORE_FIRST, StoreBanner.of(plan, it, storeKnown = false))
+            assertEquals(it, StoreBanner.STORE_FIRST, StoreBanner.of(plan, it))
+            assertEquals(it, StoreBanner.STORE_FIRST, StoreBanner.of(setup, it, storeKnown = true))
+            assertEquals(it, StoreBanner.PLAN, StoreBanner.of(plan, it, PageTrouble.HTTP_ERROR, storeKnown = true))
+            assertEquals(it, StoreBanner.VERIFICATION, StoreBanner.of(plan, it, PageTrouble.VERIFICATION, storeKnown = true))
+        }
+    }
+
     /** DRV-625 : sur l'accueil de l'enseigne, l'agent suit lui-même « Commencer mes courses » (ou dit de le toucher) : le bandeau de l'application se tait. */
     @Test
     fun `sur l'accueil de l'enseigne, un plan n'a pas de bandeau, l'agent y parle`() {

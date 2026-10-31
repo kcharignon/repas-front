@@ -173,7 +173,7 @@ test.describe('un produit habituel devenu indisponible : la recherche du plan, p
       .getByRole('button', { name: 'Choisir' })
       .click()
     // Le panier refuse ce produit (vraie rupture) : le choix est enregistré quand même, et la fin le dit (DRV-644)
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
     await returnsToRepas(page, fake)
     expect(Object.keys(await chosenLine(page, fake))).not.toContain('searchQuery')
     expectPoliteAgent(fake)
@@ -214,7 +214,7 @@ test.describe('un produit habituel devenu indisponible : la recherche du plan, p
       .getByRole('button', { name: 'Choisir' })
       .click()
     // Le panier refuse ce produit (vraie rupture) : le choix est enregistré quand même, et la fin le dit (DRV-644)
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
     await returnsToRepas(page, fake)
     expect(await chosenLine(page, fake)).toMatchObject({
       outcome: 'CHOSEN',

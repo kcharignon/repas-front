@@ -25,8 +25,8 @@ import type {
   ScreenAnswer,
   ScreenName,
   ScreenProps,
+  GuideProps,
   StoreProps,
-  StoreWaitingProps,
   SummaryProps,
 } from './types'
 
@@ -48,6 +48,11 @@ export interface Rendered {
    * ce qu'il faut faire DANS la page, comme la vérification de l'anti-robot (ticket K).
    */
   sheet?: boolean
+  /**
+   * Le contrôle de la PAGE à entourer pendant que cet écran est affiché (DRV-751) : relu à chaque mesure, `null` quand la page ne le montre pas. C'est `ui.ts` qui
+   * dessine le cadre et son repère « Touche ici », dans un second conteneur : l'écran ne touche pas à la page.
+   */
+  pointAt?: () => HTMLElement | null
 }
 
 type Answer<K extends ScreenName> = (value: ScreenAnswer<K>) => void
@@ -629,17 +634,90 @@ const entry: Renderer<'entry'> = (props: EntryProps) => {
   return { el, sheet: true }
 }
 
-/** Le bandeau d'attente du choix du magasin (DRV-740) : la phrase, puis le geste ; la page de l'enseigne reste visible et touchable. */
-const storeWaiting: Renderer<'storeWaiting'> = (props: StoreWaitingProps, answer, retailer) => {
-  const back = button(S.storeWaiting.back, () => answer('return'))
-  const retry = button(S.storeWaiting.retry, () => answer('retry'), 'primary')
+/**
+ * Le guide d'une étape (DRV-751), d'après la maquette du propriétaire : une CARTE en bas, la page reste visible et touchable au-dessus, et le contrôle à toucher est
+ * entouré dans la page (`pointAt`). Un repère d'étape, un titre, UNE phrase, ce que l'agent fait pendant que la personne agit, puis UNE seule action, sur deux lignes :
+ * ce qu'elle fait, et ce qui est sauf. Étape faite : une coche, la phrase « Je remplis ton panier », une barre fine. Aucune alerte, aucun mot d'erreur.
+ */
+const guide: Renderer<'guide'> = (props: GuideProps, answer) => {
+  const done = props.stage === 'done'
   const late = props.stage === 'late'
-  const el = screen(
-    title(late ? S.storeWaiting.late : S.storeWaiting.waiting(retailer)),
-    actions(...(late ? [retry, back] : [back])),
+  const marker = done
+    ? h(
+        'div',
+        { class: 'g-head' },
+        h('span', { class: 'g-tick' }, icon('check', 18, 3)),
+        h('span', { class: 'g-step', text: S.guide.done }),
+      )
+    : props.total > 0
+      ? h(
+          'div',
+          { class: 'g-head' },
+          h(
+            'span',
+            { class: 'g-segments', attrs: { 'aria-hidden': 'true' } },
+            ...(props.total <= 1 ? [1] : Array.from({ length: props.total }, (_, i) => i + 1)).map(
+              (rank) => h('span', { class: rank <= props.index ? 'g-seg on' : 'g-seg' }),
+            ),
+          ),
+          h('span', { class: 'g-step', text: S.guide.step(props.index, props.total) }),
+        )
+      : null
+  const heading = done
+    ? S.guide.ready[props.step]
+    : late
+      ? S.guide.late.title
+      : S.guide[props.step].title
+  const sentence = done
+    ? S.guide.ready.text
+    : late
+      ? S.guide.late.text
+      : props.form === true
+        ? S.guide.login.form
+        : S.guide[props.step].text(props.label)
+  const wait = late ? button(S.guide.late.wait, () => answer('wait'), 'primary') : null
+  const stop = h(
+    'button',
+    { class: 'g-stop', attrs: { type: 'button' }, on: { click: () => answer('stop') } },
+    h('span', { class: 'g-stop-title', text: S.guide.stop.title }),
+    h('span', {
+      class: 'g-stop-note',
+      text: props.setup === true ? S.guide.stop.noteSetup : S.guide.stop.note,
+    }),
   )
+  const titleEl = h('h1', { text: heading, attrs: { id: 'titre', tabindex: '-1' } })
+  const el = screen(
+    marker,
+    titleEl,
+    h('p', { class: 'g-text', text: sentence }),
+    done || late
+      ? null
+      : h(
+          'p',
+          { class: 'g-status' },
+          h('span', { class: 'g-dot', attrs: { 'aria-hidden': 'true' } }),
+          S.guide.status,
+        ),
+    done
+      ? h(
+          'div',
+          { class: 'g-meter', attrs: { 'aria-hidden': 'true' } },
+          h('div', { class: 'g-fill' }),
+        )
+      : null,
+    wait,
+    stop,
+  )
+  el.classList.add('guide')
   el.setAttribute('role', 'status')
-  return { el, sheet: true }
+  return {
+    el,
+    sheet: true,
+    // Le repère reste tant que l'étape est à faire, attente longue comprise
+    ...(done || props.target === undefined ? {} : { pointAt: () => props.target?.() ?? null }),
+    // Le focus va au titre (lu par un lecteur d'écran, sans anneau) et non au bouton : la carte n'a rien à confirmer, la personne agit dans la page
+    focus: late && wait !== null ? wait : titleEl,
+  }
 }
 
 const error: Renderer<'error'> = (props: ErrorProps, answer, retailer) => {
@@ -812,7 +890,7 @@ export const RENDERERS: { [K in ScreenName]: Renderer<K> } = {
   diagnostic,
   challenge,
   entry,
-  storeWaiting,
+  guide,
   error,
   end,
 }

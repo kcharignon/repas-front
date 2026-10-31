@@ -454,8 +454,10 @@ describe('le magasin se choisit sur la page (DRV-740)', () => {
     await flow.start(SETUP)
 
     // Then : jamais d’écran d’erreur, le bandeau d’abord puis le magasin
-    expect(screens.screens()).toEqual(['storeWaiting', 'store'])
-    expect(screens.propsOf('storeWaiting')).toEqual([{ stage: 'waiting' }])
+    expect(screens.screens()).toEqual(['guide', 'store'])
+    expect(screens.propsOf('guide')).toEqual([
+      expect.objectContaining({ step: 'store', stage: 'waiting', index: 1, total: 0, setup: true }),
+    ])
     expect(screens.propsOf('store')).toEqual([{ id: STORE_READ.id, label: 'Drive Ville-Test' }])
     expect(sent).toEqual([
       expect.objectContaining({
@@ -486,9 +488,9 @@ describe('le magasin se choisit sur la page (DRV-740)', () => {
     expect(STORE_WATCH_POLL_MS).toBe(2_000)
   })
 
-  it('« Retourner dans Repas » pendant l’attente : un résultat en erreur « magasin non choisi », la lecture s’arrête, rien n’est enregistré', async () => {
+  it('« Arrêter pour l’instant » pendant l’attente : un résultat en erreur « magasin non choisi », la lecture s’arrête, rien n’est enregistré', async () => {
     const built = chooser((tick) => {
-      if (tick === 3) screens.pressBack()
+      if (tick === 3) screens.pressGuideStop()
     })
     const { flow, sent, screens } = configure({}, built)
 
@@ -502,20 +504,20 @@ describe('le magasin se choisit sur la page (DRV-740)', () => {
     })
     expect(JSON.stringify(sent[0])).toContain('STORE_NOT_CHOSEN')
     expect(sent.some((message) => message.type === 'setup-result')).toBe(false)
-    expect(screens.screens()).toEqual(['storeWaiting'])
+    expect(screens.screens()).toEqual(['guide'])
     expect(screens.closed.count).toBe(1)
     expect(built.world.reads).toBe(1)
     // L’attente s’est arrêtée avec la réponse (elle n’a pas couru jusqu’aux 15 minutes)
     expect(built.world.clock - 1_000).toBeLessThan(MAX)
   })
 
-  it('15 minutes sans choix : le bandeau propose « Réessayer » ; « Retourner dans Repas » rend le résultat en erreur', async () => {
+  it('15 minutes sans choix : la carte propose « Attendre encore » ; « Arrêter pour l’instant » rend le résultat en erreur', async () => {
     const built = chooser()
-    const { flow, sent, screens } = configure({ storeWaiting: () => 'return' }, built)
+    const { flow, sent, screens } = configure({ guide: () => 'stop' }, built)
 
     await flow.start(SETUP)
 
-    expect(screens.propsOf('storeWaiting')).toEqual([{ stage: 'waiting' }, { stage: 'late' }])
+    expect(screens.propsOf('guide').map((props) => props.stage)).toEqual(['waiting', 'late'])
     expect(built.world.clock - 1_000).toBeGreaterThanOrEqual(MAX)
     expect(built.world.clock - 1_000).toBeLessThan(MAX + STORE_WATCH_POLL_MS)
     expect(built.world.reads).toBe(1)
@@ -524,16 +526,16 @@ describe('le magasin se choisit sur la page (DRV-740)', () => {
     expect(screens.screens()).not.toContain('error')
   })
 
-  it('« Réessayer » : on regarde de nouveau la page ; si le magasin est alors choisi, il est proposé', async () => {
-    // Given : 15 minutes passent, la personne touche « Réessayer » et la page dit alors qu’il est choisi
+  it('« Attendre encore » : on regarde de nouveau la page ; si le magasin est alors choisi, il est proposé', async () => {
+    // Given : 15 minutes passent, la personne touche « Attendre encore » et la page dit alors qu’il est choisi
     let late = 0
     const built = chooser()
     const { flow, sent, screens } = configure(
       {
-        storeWaiting: () => {
+        guide: () => {
           late += 1
           built.world.chosen = true
-          return 'retry'
+          return 'wait'
         },
         store: () => 'save',
       },
@@ -543,19 +545,19 @@ describe('le magasin se choisit sur la page (DRV-740)', () => {
     await flow.start(SETUP)
 
     expect(late).toBe(1)
-    expect(screens.screens()).toEqual(['storeWaiting', 'storeWaiting', 'store'])
+    expect(screens.screens()).toEqual(['guide', 'guide', 'store'])
     expect(built.world.reads).toBe(2)
     expect(sent[0]).toMatchObject({ type: 'setup-result' })
   })
 
-  it('« Réessayer » sans choix : une nouvelle attente, sans requête de plus', async () => {
+  it('« Attendre encore » sans choix : une nouvelle attente, sans requête de plus', async () => {
     let answers = 0
     const built = chooser()
     const { flow, screens } = configure(
       {
-        storeWaiting: () => {
+        guide: () => {
           answers += 1
-          return answers === 1 ? 'retry' : 'return'
+          return answers === 1 ? 'wait' : 'stop'
         },
       },
       built,
@@ -563,7 +565,7 @@ describe('le magasin se choisit sur la page (DRV-740)', () => {
 
     await flow.start(SETUP)
 
-    expect(screens.propsOf('storeWaiting').map((props) => props.stage)).toEqual([
+    expect(screens.propsOf('guide').map((props) => props.stage)).toEqual([
       'waiting',
       'late',
       'waiting',

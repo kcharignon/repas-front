@@ -3,6 +3,7 @@
 // adresse, un cookie (nom ou valeur) ni un identifiant. NON MESURÉ : l'élément exact de la barre (on cherche un élément dont le texte est celui de la
 // barre, quelle que soit sa balise) et le titre de la page « introuvable » au-delà d'une page vue le 2026-10-30.
 import type { CookieFacts } from '../retailers/contract'
+import type { GuideTarget } from '../retailers/guide'
 
 /** Un texte comparable : sans accent, minuscules, apostrophes droites, espaces réduites. */
 export function fold(text: string): string {
@@ -18,27 +19,82 @@ export function fold(text: string): string {
 /** Au-delà, un texte est une phrase de la page, pas une barre. */
 const MAX_BAR_TEXT = 120
 
-const CHOOSE_BAR = 'choisir vos courses'
+/**
+ * Les textes de la barre quand aucun magasin n'est choisi : « Choisir vos courses » (mesuré, DRV-712) et « Choisir mon mode de livraison » (vu par le propriétaire sur
+ * le téléphone de test le 2026-10-31, DRV-751 : le texte du site a changé ou varie ; NON MESURÉ au-delà de ce constat). Le texte entier de l'élément, rien de moins.
+ */
+const CHOOSE_BARS: readonly string[] = ['choisir vos courses', 'choisir mon mode de livraison']
 const BAR_ELEMENTS = 'a, button, [role="button"], p, span, div, li, h1, h2, h3'
 
 /**
  * La barre du magasin en haut de la page (DRV-712, A-4 et A-5, mesurées) : « Choisir vos courses » tant qu'aucun magasin n'est choisi, « Retrait : <le
  * drive> » ensuite. `CHOOSE` : un élément dont TOUT le texte est « Choisir vos courses » ; `WITHDRAWAL` : un élément qui commence par « Retrait : » ;
  * `null` : aucune des deux (page sans barre, forme changée). Aucun libellé de magasin n'est lu.
+ *
+ * **La preuve d'un magasin choisi passe AVANT le texte « Choisir… »** (DRV-751, relevé du téléphone de test le 2026-10-31, APRÈS le choix) : la page portait À LA FOIS
+ * « Choisir mon mode de livraison » (la barre du haut, encore dans l'arbre) et « Drive Auchan Drive <ville> Dès Dimanche 01 novembre 08:30 » (le magasin choisi, avec son
+ * créneau). Un texte « Choisir… » resté dans la page ne dit donc pas qu'aucun magasin n'est choisi : avec une preuve de retrait (« Retrait : … », ou un libellé « Drive
+ * Auchan <nom> … » plus long que le seul nom du site), la page dit `WITHDRAWAL`. Avant, `CHOOSE` au premier texte « Choisir… » faisait lever `STORE_NOT_CHOSEN` sans demander
+ * le site, alors que le magasin venait d'être choisi : c'est le message « Aucun magasin n'est choisi » qui revenait.
  */
 export function storeBar(root: ParentNode): 'CHOOSE' | 'WITHDRAWAL' | null {
   let withdrawal = false
+  let choose = false
   for (const element of root.querySelectorAll(BAR_ELEMENTS)) {
     const raw = element.textContent ?? ''
     // Un conteneur de la page entière n'est pas une barre : on ne normalise pas son texte.
     if (raw.length > 4 * MAX_BAR_TEXT) continue
     const text = fold(raw)
     if (text === '' || text.length > MAX_BAR_TEXT) continue
-    if (text === CHOOSE_BAR) return 'CHOOSE'
-    if (/^retrait ?:/.test(text)) withdrawal = true
+    if (CHOOSE_BARS.includes(text)) choose = true
+    else if (WITHDRAWAL_BAR.test(text)) withdrawal = true
   }
-  return withdrawal ? 'WITHDRAWAL' : null
+  return withdrawal ? 'WITHDRAWAL' : choose ? 'CHOOSE' : null
 }
+
+/** « Retrait : <le drive> » (mesuré, DRV-712) ou « Drive Auchan <nom du drive> … » (relevé du 2026-10-31) ; le seul nom du site, sans suite, n'en est pas une. */
+const WITHDRAWAL_BAR = /^(?:retrait ?:|drive auchan\b.{12,})/
+
+/**
+ * Le contrôle à toucher pour choisir son magasin (DRV-751) : la barre qui dit « Choisir vos courses » ou « Choisir mon mode de livraison » (le texte entier de
+ * l'élément), remontée jusqu'au lien ou bouton qui la porte s'il y en a un tout près. `null` si la page n'a pas cette barre. Son libellé est celui de la page, cité
+ * tel quel à la personne ; l'agent ne la touche jamais.
+ */
+export function chooseBarTarget(root: ParentNode): GuideTarget | null {
+  const elements = [...root.querySelectorAll<HTMLElement>(BAR_ELEMENTS)]
+  const matches = elements.filter((element) => {
+    const raw = element.textContent ?? ''
+    return raw.length <= 4 * MAX_BAR_TEXT && CHOOSE_BARS.includes(fold(raw))
+  })
+  // Le plus petit élément qui porte le texte entier (pas un conteneur du même texte), celui que la page montre de préférence
+  const innermost = matches.filter(
+    (candidate) => !matches.some((other) => other !== candidate && candidate.contains(other)),
+  )
+  const element =
+    innermost.find((candidate) => candidate.getClientRects().length > 0) ?? innermost[0]
+  if (element === undefined) return null
+  const control = element.closest<HTMLElement>('a, button, [role="button"]')
+  const target = control !== null && control.contains(element) ? control : element
+  const label = (element.textContent ?? '').replace(/\s+/g, ' ').trim()
+  return { element: target, label: label !== '' && label.length <= 40 ? label : null }
+}
+
+/**
+ * Les libellés d'un contrôle de connexion (DRV-751, NON MESURÉ : DRV-726 a vu le formulaire de connexion, pas le contrôle de la page des courses qui y mène). Un
+ * contrôle dont le libellé est l'un d'eux, ou dont l'`aria-label` ou le `title` parle de connexion ou de compte, est entouré ; sans lui, le message ne cite aucun
+ * libellé et dit « le bouton de connexion de la page ».
+ */
+export const LOGIN_LABELS: ReadonlySet<string> = new Set([
+  'se connecter',
+  'me connecter',
+  'connexion',
+  'identifiez-vous',
+  "s'identifier",
+  'mon compte',
+  'se connecter / creer un compte',
+  'connexion / inscription',
+])
+export const LOGIN_HINTS: readonly string[] = ['connect', 'connex', 'compte', 'identif']
 
 /**
  * La page est celle d'une adresse « introuvable » : un VRAI 404 (B-6, mesuré : titre « 404 Not Found Page », « Erreur 404 »). Le code HTTP du document

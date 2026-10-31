@@ -502,7 +502,7 @@ export const MEMBER_COOKIE = 'fake_member'
  * La page de connexion de l'accueil de l'enseigne (DRV-748) : un bouton, que la PERSONNE touche (l'agent ne se connecte jamais), qui pose le cookie puis la
  * ramène à l'accueil. Aucun champ de mot de passe : rien à saisir, rien à voler.
  */
-export function loginFormPage(): string {
+export function loginFormPage(back = '/'): string {
   return `<!doctype html>
 <html lang="fr">
 <head>${HEAD}<title>Connexion (faux site de test)</title></head>
@@ -513,7 +513,7 @@ export function loginFormPage(): string {
 <script>
 document.getElementById('login').addEventListener('click', function () {
   document.cookie = '${MEMBER_COOKIE}=1; path=/';
-  location.assign('/');
+  location.assign('${back}');
 });
 </script>
 </body>
