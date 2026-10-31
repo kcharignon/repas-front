@@ -245,7 +245,7 @@ describe('messageForFailure', () => {
     [
       422,
       'SHOPPING_LIST_EMPTY',
-      'La liste est vide : il n’y a rien à envoyer au drive. Ta liste n’a pas changé. Ajoute des articles, puis envoie-la.',
+      'Il n’y a rien à envoyer au drive : la liste est vide, ou tout est coché. Ta liste n’a pas changé. Ajoute un article ou décoche-en un, puis réessaie.',
     ],
   ])('traduit le code du drive %i %s en français simple', (status, code, expected) => {
     expect(messageForFailure(new ApiError(status, code))).toBe(expected)

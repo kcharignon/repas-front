@@ -434,6 +434,8 @@ export default {
     sentBadge: 'Envoyée',
     sentOn: 'Envoyée au drive le {date}',
     sentHelp: 'Cette liste est envoyée au drive : elle n’est plus modifiable.',
+    // DRV-747 : plus aucun article non coché, l'envoi n'a plus rien à prendre
+    allChecked: 'Tout est coché : il n’y a plus rien à envoyer au drive.',
     resumeSend: 'Reprendre l’envoi',
     send: 'Envoyer au drive',
     // Aucun drive configuré (DRV-737) : « Envoyer au drive » n'est pas proposé, cette entrée de « ⋮ » mène à son choix
@@ -717,7 +719,7 @@ export default {
     listNotSendable:
       'Seule une liste en cours peut être envoyée au drive. Rien n’a été changé. Ouvre une liste en cours.',
     listEmpty:
-      'La liste est vide : il n’y a rien à envoyer au drive. Ta liste n’a pas changé. Ajoute des articles, puis envoie-la.',
+      'Il n’y a rien à envoyer au drive : la liste est vide, ou tout est coché. Ta liste n’a pas changé. Ajoute un article ou décoche-en un, puis réessaie.',
     driveNotConfigured: 'Choisis d’abord ton magasin dans les réglages du drive.',
     driveChoiceInvalid:
       'Ce choix n’est pas valable : 5 produits à garder et 20 à ne plus proposer au plus, sans doublon. Rien n’a été enregistré. Corrige-le, puis réessaie.',
@@ -776,6 +778,8 @@ export default {
   },
   driveSend: {
     title: 'Ta liste est prête pour le drive',
+    // Plan sans ligne : tout est coché (DRV-747), « prête pour le drive » serait faux
+    titleNothing: 'Rien à envoyer au drive',
     back: 'Retour à la liste',
     store: 'Magasin : {label}',
     storeEnding: 'Magasin …{ending}',
@@ -821,7 +825,8 @@ export default {
     opening: 'Je remplis ton panier…',
     offline:
       'Hors connexion : l’envoi au drive est impossible tant que le réseau n’est pas revenu.',
-    emptyPlan: 'Cette liste n’a aucun article à envoyer.',
+    // Un envoi ne prend que les articles non cochés (DRV-747) : un plan sans ligne, c'est une liste dont tout est coché (tout est déjà au panier)
+    emptyPlan: 'Tous tes articles sont cochés.',
     retryOnly:
       'Reprise des articles en échec : {count} article | Reprise des articles en échec : {count} articles',
     showAll: 'Voir toute la liste',
@@ -912,6 +917,8 @@ export default {
     safe: 'Ce qui est déjà au panier y reste.',
     // Le panier est fait : la suite (créneau, paiement) se passe dans l'appli officielle, Repas n'explique rien de plus (DRV-645)
     basketReady: 'Ton panier est rempli. Tu peux finaliser ta commande dans l’appli {appName}.',
+    // DRV-747 : dite seulement quand les coches sont écrites dans la liste (jamais sur un échec, qui se tait)
+    basketTicked: 'Les articles ajoutés au panier sont cochés dans ta liste.',
     outcome: {
       completed: {
         title: 'Le panier est rempli',

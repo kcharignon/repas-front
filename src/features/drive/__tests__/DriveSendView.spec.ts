@@ -7,6 +7,7 @@ import { DRAFT_KEY, INFO_TIMEOUT_MS } from '../bridge'
 import { fakeNative } from '../bridge/__tests__/fakeNative'
 import type { SentMessage } from '../bridge/__tests__/fakeNative'
 import { PACK_SIZE_APP_VERSION } from '../appVersion'
+import { driveKeys } from '../queries'
 import DriveSendView from '../DriveSendView.vue'
 import { estimate } from './estimateFixtures'
 import { plan, storeBaseUrl } from './fixtures'
@@ -46,7 +47,13 @@ const session = {
   'GET /api/v1/me': () => json(me),
 }
 
-async function open(handlers: Handlers = {}, listId = 'l1', query = '') {
+/** `prime` : de quoi garnir le cache des données serveur avant d'ouvrir l'écran (ce que l'écran précédent a laissé). */
+async function open(
+  handlers: Handlers = {},
+  listId = 'l1',
+  query = '',
+  prime?: (client: ReturnType<typeof appContext>['queryClient']) => void,
+) {
   const fetchMock = stubApi({
     ...session,
     'GET /api/v1/drive/plans/l1': () => json(plan()),
@@ -54,6 +61,7 @@ async function open(handlers: Handlers = {}, listId = 'l1', query = '') {
   })
   localStorage.setItem('repas.session', '1')
   const context = appContext()
+  prime?.(context.queryClient)
   await useSessionStore().restore()
   await context.router.push(`/drive/envoi/${listId}${query}`)
   const wrapper = mount(DriveSendView, {
@@ -383,16 +391,42 @@ describe('écran d’envoi au drive, dans l’application', () => {
     expect(wrapper.find('a[href="/drive/aide"]').exists()).toBe(true)
   })
 
-  it('une liste sans ligne n’a rien à envoyer', async () => {
+  // DRV-747 : les lignes cochées ne partent pas ; une fois tout mis au panier (donc coché) le plan n'a plus aucune ligne
+  it('un plan sans ligne : tout est coché, une phrase le dit, ni bouton ni estimation à vide', async () => {
     installApp()
-    const { wrapper } = await open({
+    const { wrapper, fetchMock } = await open({
       'GET /api/v1/drive/plans/l1': () =>
         json(plan({ lines: [], counts: { known: 0, new: 0, haveAtHome: 0 } })),
     })
     await loaded(wrapper)
 
-    expect(wrapper.text()).toContain('Cette liste n’a aucun article à envoyer.')
-    expect(button('Remplir mon panier')?.disabled).toBe(true)
+    expect(wrapper.find('h1').text()).toBe('Rien à envoyer au drive')
+    expect(wrapper.text()).toContain('Tous tes articles sont cochés.')
+    // « Ta liste est prête pour le drive » serait faux ; aucune action vide ni écran d'erreur
+    expect(wrapper.text()).not.toContain('prête pour le drive')
+    expect(button('Remplir mon panier')).toBeUndefined()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Estimation du coût')
+    expect(calls(fetchMock)).not.toContain('GET /api/v1/drive/estimates/l1')
+    expect(wrapper.find('a[href="/listes/l1"]').exists()).toBe(true)
+  })
+
+  it('« Reprendre l’envoi » après un passage : le plan ne porte que les articles manquants, la phrase et le bouton en suivent le compte', async () => {
+    installApp()
+    // Le back a déjà retiré du plan les lignes cochées (mises au panier au passage précédent) : il ne reste que deux articles
+    const left = plan().lines.filter(
+      (line) => line.ingredientSlug === 'poivre' || line.ingredientSlug === 'curry',
+    )
+    const { wrapper } = await open({
+      'GET /api/v1/drive/plans/l1': () =>
+        json(plan({ lines: left, counts: { known: 0, new: 2, haveAtHome: 0 } })),
+    })
+    await loaded(wrapper)
+
+    expect(wrapper.find('h1').text()).toBe('Ta liste est prête pour le drive')
+    expect(summary(wrapper)).toBe('2 articles : tous sont à choisir sur Leclerc.')
+    expect(button('Remplir mon panier')?.disabled).toBe(false)
+    expect(wrapper.text()).not.toContain('Tous tes articles sont cochés.')
   })
 
   describe('erreurs du lancement', () => {
@@ -985,6 +1019,40 @@ describe('écran d’envoi au drive, ouverture automatique', () => {
     expect(context.router.currentRoute.value.fullPath).toBe('/drive/envoi/l1')
   })
 
+  // DRV-747 : le récapitulatif a lu un plan sous la même clé ; depuis, le passage a coché les articles mis au panier et le back les a retirés du plan
+  it('n’ouvre jamais le drive avec le plan plus ancien du récapitulatif : il attend la relecture, qui ne porte que les articles manquants', async () => {
+    const native = installApp()
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    const left = plan().lines.filter(
+      (line) => line.ingredientSlug === 'poivre' || line.ingredientSlug === 'curry',
+    )
+    const { wrapper } = await open(
+      {
+        'GET /api/v1/drive/plans/l1': async () => {
+          await gate
+          return json(plan({ lines: left, counts: { known: 0, new: 2, haveAtHome: 0 } }))
+        },
+      },
+      'l1',
+      OPEN,
+      (client) => client.setQueryData(driveKeys.plan('l1'), plan()),
+    )
+    await flushPromises()
+
+    // Le plan en mémoire est celui d'avant la coche (12 lignes) : rien ne part, rien de lui ne s'affiche
+    expect(started(native)).toHaveLength(0)
+    expect(wrapper.text()).not.toContain('Magasin')
+    expect(wrapper.text()).not.toContain('Tes articles')
+
+    release()
+    await vi.waitFor(() => expect(started(native)).toHaveLength(1))
+    expect(started(native)[0]?.plan?.lines.map((line) => line.ingredientSlug)).toEqual([
+      'poivre',
+      'curry',
+    ])
+  })
+
   it('montre « Je remplis ton panier… » pendant qu’il prépare, jamais le plan ni le bouton', async () => {
     installApp()
     let release: () => void = () => undefined
@@ -1113,9 +1181,7 @@ describe('écran d’envoi au drive, ouverture automatique', () => {
         OPEN,
       )
 
-      await vi.waitFor(() =>
-        expect(wrapper.text()).toContain('Cette liste n’a aucun article à envoyer.'),
-      )
+      await vi.waitFor(() => expect(wrapper.text()).toContain('Tous tes articles sont cochés.'))
       expect(started(native)).toHaveLength(0)
     })
 

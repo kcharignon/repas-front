@@ -6,7 +6,6 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { LIMITS } from '@drive-protocol'
 
 import { ApiError } from '@/api'
-import { hasFailed } from '@/api/query'
 import UiButton from '@/design/UiButton.vue'
 import UiConfirmDialog from '@/design/UiConfirmDialog.vue'
 import UiLinkButton from '@/design/UiLinkButton.vue'
@@ -73,6 +72,16 @@ const plan = useDrivePlan(
   () => settingsRead.value,
   () => retailerId.value,
 )
+/**
+ * Le plan LU pour cet écran (DRV-747) : le plan change entre deux ouvertures (le passage coche les articles mis au panier, le back les retire du plan), or
+ * l'écran du récapitulatif en a lu un sous la même clé. Une relecture est lancée à chaque ouverture, mais tant qu'elle n'a rien rendu la requête garde ce
+ * plan plus ancien : on ne l'utilise pas, il ferait repartir au drive des articles déjà au panier. `dataUpdatedAt` ne bouge que sur une donnée lue.
+ */
+const mountedAt = Date.now()
+const planData = computed(() =>
+  plan.dataUpdatedAt.value >= mountedAt ? plan.data.value : undefined,
+)
+const planFailed = computed(() => plan.isError.value && planData.value === undefined)
 const reopen = useReopenShoppingList()
 const rememberLast = useRememberLastRetailer()
 
@@ -123,12 +132,16 @@ const only = computed(() => {
   return typeof names === 'string' && names !== '' ? new Set(names.split(',')) : null
 })
 const visible = computed(() => {
-  const data = plan.data.value
+  const data = planData.value
   if (data === undefined || only.value === null) return data
 
   return { ...data, lines: data.lines.filter((line) => only.value?.has(line.ingredientSlug)) }
 })
 const lines = computed(() => visible.value?.lines ?? [])
+/** Le plan est lu et n'a aucune ligne : tout est coché, rien ne part (hors attente d'un résultat, où l'écran dit autre chose). */
+const nothingToSend = computed(
+  () => visible.value !== undefined && lines.value.length === 0 && !waiting.value,
+)
 // Une phrase de synthèse construite avec les comptes ; elle suit les choix de l'utilisateur (« Choisir un autre produit », « Pas cette fois »)
 const summary = computed(() => {
   const statuses = lines.value.map((line) => effectiveStatus(line, changes.value))
@@ -147,7 +160,7 @@ const FOLD_ABOVE = 6
 const folded = computed(() => !assisted.value && lines.value.length > FOLD_ABOVE)
 
 const storeName = computed(() => {
-  const store = plan.data.value?.store
+  const store = planData.value?.store
   if (store === undefined) return ''
 
   return store.label === null || store.label === undefined
@@ -156,8 +169,8 @@ const storeName = computed(() => {
 })
 // Le repli « Chercher à la main » : la recherche du site du drive de CE plan (l'adresse est celle de son enseigne)
 const searchUrl = (query: string): string =>
-  retailerOf(plan.data.value?.retailer ?? retailerId.value).searchUrl(
-    plan.data.value?.store.baseUrl ?? '',
+  retailerOf(planData.value?.retailer ?? retailerId.value).searchUrl(
+    planData.value?.store.baseUrl ?? '',
     query,
   )
 
@@ -196,13 +209,13 @@ onMounted(() => {
   )
 })
 
-const planError = computed(() => (hasFailed(plan) ? messageForFailure(plan.error.value) : null))
+const planError = computed(() => (planFailed.value ? messageForFailure(plan.error.value) : null))
 
 // Fonction coupée (retour arrière) : le plan répond « pas disponible », mais une liste restée envoyée doit pouvoir se rouvrir (la
 // réouverture, elle, reste permise interrupteur coupé). Le plan n'a pas pu donner la version : on lit la liste, et seulement alors.
 const driveOff = computed(
   () =>
-    hasFailed(plan) &&
+    planFailed.value &&
     plan.error.value instanceof ApiError &&
     plan.error.value.message === 'DRIVE_DISABLED',
 )
@@ -256,7 +269,7 @@ watch(
       inApp,
       online.value,
       elsewhere.value,
-      hasFailed(plan),
+      planFailed.value,
       visible.value,
       appCheck.value,
       driveUsable.value,
@@ -342,7 +355,7 @@ function abandon() {
 }
 
 function confirmReopenList() {
-  const version = plan.data.value?.listVersion ?? sentList.data.value?.version
+  const version = planData.value?.listVersion ?? sentList.data.value?.version
   if (version === undefined) return
   reopen.mutate(
     { id: listId.value, version },
@@ -367,7 +380,7 @@ function confirmReopenList() {
     </RouterLink>
 
     <h1 class="font-display text-3xl leading-tight font-bold md:text-4xl">
-      {{ t('driveSend.title') }}
+      {{ nothingToSend ? t('driveSend.titleNothing') : t('driveSend.title') }}
     </h1>
 
     <!-- Plusieurs drives configurés : où envoyer ? Le drive habituel, sinon le dernier utilisé, est coché. -->
@@ -399,7 +412,7 @@ function confirmReopenList() {
       </div>
     </section>
 
-    <template v-else-if="plan.data.value">
+    <template v-else-if="planData">
       <p v-if="!asking" class="text-muted">{{ storeName }}</p>
       <p v-if="only !== null && !waiting" class="flex flex-wrap items-center gap-x-3 font-semibold">
         {{ t('driveSend.retryOnly', { count: lines.length }, lines.length) }}
@@ -483,12 +496,11 @@ function confirmReopenList() {
         <p v-else-if="summary !== ''" class="max-w-prose text-xl font-semibold">{{ summary }}</p>
 
         <section v-if="inApp && !tooOld" class="flex flex-col items-start gap-3">
+          <!-- Un plan sans ligne : tout est déjà coché (les lignes cochées ne partent pas, DRV-747), il n'y a rien à remplir et la phrase plus bas le dit -->
           <UiButton
-            v-if="!unserved"
+            v-if="!unserved && lines.length > 0"
             size="lg"
-            :disabled="
-              !online || !driveUsable || appCheck === 'checking' || lines.length === 0 || starting
-            "
+            :disabled="!online || !driveUsable || appCheck === 'checking' || starting"
             @click="openDrive"
           >
             <svg
@@ -512,10 +524,12 @@ function confirmReopenList() {
           <DriveSendFailure v-if="failure" :failure="failure" />
         </section>
 
-        <DriveEstimate :list-id="listId" :retailer="retailerId" />
+        <DriveEstimate v-if="lines.length > 0" :list-id="listId" :retailer="retailerId" />
 
         <section class="flex flex-col gap-3">
-          <p v-if="lines.length === 0" class="text-muted">{{ t('driveSend.emptyPlan') }}</p>
+          <p v-if="lines.length === 0" class="max-w-prose text-xl font-semibold">
+            {{ t('driveSend.emptyPlan') }}
+          </p>
           <DriveFold v-else-if="folded" :label="t('driveSend.showArticles')">
             <ul class="flex flex-col gap-3">
               <DriveSendLine
