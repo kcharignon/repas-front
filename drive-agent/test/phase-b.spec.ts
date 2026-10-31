@@ -691,6 +691,8 @@ describe('les produits refusés et indisponibles', () => {
       product: expect.objectContaining({ id: '2000003', label: 'Poivre en grains de test' }),
       quantity: 4,
       placement: 'PRIMARY',
+      // DRV-742 : le résultat dit que rien n'est au panier (Repas ne coche pas la ligne)
+      notInCart: true,
     })
     expect(test.screens.propsOf('end')[0]?.unreached).toEqual([
       { label: 'Poivre en grains de test', reason: 'OUT_OF_STOCK' },
@@ -724,7 +726,11 @@ describe('les produits refusés et indisponibles', () => {
 
     await test.start()
 
-    expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', product: { id: '2000001' } })
+    expect(lineOf(test.sent[0])).toMatchObject({
+      outcome: 'CHOSEN',
+      product: { id: '2000001' },
+      notInCart: true,
+    })
     expect(test.screens.propsOf('end')[0]?.unreached).toEqual([
       { label: 'Poivre noir moulu de test', reason: 'CART_REFUSED' },
     ])
@@ -755,6 +761,8 @@ describe('les produits refusés et indisponibles', () => {
 
     expect(test.screens.propsOf('end')).toEqual([])
     expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', quantity: 2 })
+    // DRV-742 : au panier = pas de clé (compatible avec les agents d'avant), jamais `notInCart: false`
+    expect(lineOf(test.sent[0])).not.toHaveProperty('notInCart')
   })
 
   it('un produit inconnu de la liste (message forgé) ne met rien au panier', async () => {

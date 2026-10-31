@@ -284,6 +284,13 @@ export interface ChosenLine extends LineBase {
    * nombre de produits, et chez les agents d'avant.
    */
   packSize?: PackSize
+  /**
+   * Facultatif (DRV-742) : vrai quand le panier de l'enseigne n'a rien pris de ce produit (`obtained < 1`, DRV-644) : le choix de la personne est quand même
+   * enregistré (même ligne `CHOSEN`, `quantity` = le nombre demandé), mais le produit n'est pas au panier. Absente = au panier, donc chez les agents d'avant
+   * (compatibles : sans clé, un `CHOSEN` se lit « au panier »). Jamais `false`. Repas s'en sert pour ne cocher que les lignes réellement mises au panier.
+   * Un récepteur qui ne connaît pas la clé rejette le résultat : le site d'abord, l'application Android qui embarque l'agent 0.54.0 ensuite.
+   */
+  notInCart?: true
   unavailableIds?: string[]
 }
 

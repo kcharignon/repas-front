@@ -460,3 +460,65 @@ describe('la recherche mémorisée du produit choisi (DRV-650) : un ajout facult
     )
   })
 })
+
+describe('« notInCart » d’un produit choisi que le panier n’a pas pris (DRV-742) : un ajout facultatif du protocole v1', () => {
+  const result = (line: object) => ({
+    v: 1,
+    type: 'result',
+    runId: '8f14e45f-ceea-467a-9575-8e6b8c0a1b2c',
+    agentVersion: '1.0.0',
+    outcome: 'completed',
+    lines: [line],
+  })
+  const chosen = (extra: object) => ({
+    ingredientSlug: 'cereale',
+    outcome: 'CHOSEN',
+    quantity: 1,
+    placement: 'PRIMARY',
+    product: { id: '555101', label: 'Céréales coussins de test' },
+    ...extra,
+  })
+
+  it('un résultat sans la clé (un agent d’avant) reste valide et repart octet pour octet', () => {
+    const before = encodeMessage(result(chosen({})))
+
+    expect(encodeMessage(validateResult(decodeMessage(before)))).toBe(before)
+    expect(JSON.stringify(decodeMessage(before))).not.toContain('notInCart')
+  })
+
+  it('accepte « true » sur un choix, seul ou avec une recherche', () => {
+    expect(validateResult(result(chosen({ notInCart: true })))).toBeTruthy()
+    expect(validateResult(result(chosen({ notInCart: true, searchQuery: 'ab' })))).toBeTruthy()
+  })
+
+  it.each([
+    ['false (l’absence dit « au panier »)', false],
+    ['le texte « true »', 'true'],
+    ['le nombre 1', 1],
+    ['null', null],
+    ['une liste', [true]],
+    ['un objet', { a: true }],
+  ])('refuse %s', (_name, notInCart) => {
+    expect(pathOf(() => validateResult(result(chosen({ notInCart }))))).toBe('lines[0].notInCart')
+  })
+
+  it.each([
+    [
+      'ADDED',
+      {
+        ingredientSlug: 'cereale',
+        outcome: 'ADDED',
+        productId: '555101',
+        quantity: 1,
+        usedRank: 1,
+      },
+    ],
+    ['SKIPPED', { ingredientSlug: 'cereale', outcome: 'SKIPPED' }],
+    ['HAVE_AT_HOME', { ingredientSlug: 'cereale', outcome: 'HAVE_AT_HOME' }],
+    ['UNAVAILABLE', { ingredientSlug: 'cereale', outcome: 'UNAVAILABLE' }],
+  ])('refuse la clé sur une ligne %s (seul un choix peut ne pas être au panier)', (_name, line) => {
+    expect(pathOf(() => validateResult(result({ ...line, notInCart: true })))).toBe(
+      'lines[0].notInCart',
+    )
+  })
+})

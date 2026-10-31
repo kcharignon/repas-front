@@ -193,7 +193,7 @@ test.describe('« Bientôt disponible » : le panier tranche', () => {
     await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
     await returnsToRepas(page, fake)
 
-    // And : le résultat est une ligne CHOSEN ordinaire, avec le produit à mémoriser et aucune clé de plus
+    // And : le résultat est une ligne CHOSEN ordinaire, avec le produit à mémoriser et `notInCart: true` (DRV-742 : rien n'est au panier)
     const result = await returnedResult(page, fake)
     expect(result).toMatchObject({
       lines: [
@@ -203,13 +203,22 @@ test.describe('« Bientôt disponible » : le panier tranche', () => {
           placement: 'PRIMARY',
           quantity: 2,
           product: { id: String(CEREALS) },
+          notInCart: true,
         },
         { ingredientSlug: 'sel', outcome: 'SKIPPED' },
       ],
     })
     const chosen = (result as unknown as { lines: Record<string, unknown>[] }).lines[0] ?? {}
     expect(Object.keys(chosen).sort()).toEqual(
-      ['ingredientSlug', 'outcome', 'placement', 'product', 'quantity', 'unavailableIds'].sort(),
+      [
+        'ingredientSlug',
+        'notInCart',
+        'outcome',
+        'placement',
+        'product',
+        'quantity',
+        'unavailableIds',
+      ].sort(),
     )
     expectPoliteAgent(fake)
   })

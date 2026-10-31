@@ -1,0 +1,24 @@
+{
+  "path": "lines[0].notInCart",
+  "why": "notInCart est le booléen true, pas le nombre 1.",
+  "message": {
+    "v": 1,
+    "type": "result",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "agentVersion": "1.0.0",
+    "outcome": "completed",
+    "store": {
+      "id": "000000"
+    },
+    "lines": [
+      {
+        "ingredientSlug": "cereale",
+        "outcome": "CHOSEN",
+        "quantity": 1,
+        "placement": "PRIMARY",
+        "product": { "id": "555101", "label": "Céréales coussins chocolat de test 500 g" },
+        "notInCart": 1
+      }
+    ]
+  }
+}
