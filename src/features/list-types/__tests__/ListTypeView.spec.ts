@@ -62,7 +62,7 @@ describe('fiche d’un type de liste', () => {
     ])
     expect(wrapper.text()).toContain('Merguez')
     expect(wrapper.text()).toContain('Charcuterie')
-    expect(wrapper.text()).toContain('Pour ajouter un produit, ouvre sa fiche et choisis sa liste.')
+    expect(wrapper.text()).toContain('Pour ajouter un produit, ouvre-le et choisis sa liste.')
   })
 
   it('dit « Dans Marché » pour un rayon déjà pris par un autre type, et rien pour les autres', async () => {

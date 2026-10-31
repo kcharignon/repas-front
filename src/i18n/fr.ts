@@ -1133,7 +1133,7 @@ export default {
     departmentsHelp: 'Les produits de ces rayons vont dans cette liste.',
     takenBy: 'Dans {type}',
     productsTitle: 'Produits à part',
-    productsHelp: 'Pour ajouter un produit, ouvre sa fiche et choisis sa liste.',
+    productsHelp: 'Pour ajouter un produit, ouvre-le et choisis sa liste.',
     productsNone: 'Aucun produit à part pour l’instant.',
     productRemove: 'Retirer {name} de ce type',
     productRemoved: '{name} n’est plus à part.',
