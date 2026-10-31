@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
@@ -41,6 +41,28 @@ describe('AppToasts', () => {
     await wrapper.findAll('[role="status"]')[0]!.get('button[aria-label="Fermer"]').trigger('click')
 
     expect(wrapper.findAll('[role="status"]').map((toast) => toast.text())).toEqual(['Deux'])
+  })
+
+  it('propose un geste (« Voir ») qui s’exécute puis ferme le message', async () => {
+    const { wrapper, store } = toasts()
+    const run = vi.fn<() => void>()
+    store.push('success', 'Ajouté à Boucherie.', 0, { label: 'Voir', run })
+    await wrapper.vm.$nextTick()
+
+    const action = wrapper.get('[role="status"]').findAll('button')[0]!
+    expect(action.text()).toBe('Voir')
+    await action.trigger('click')
+
+    expect(run).toHaveBeenCalledOnce()
+    expect(wrapper.find('[role="status"]').exists()).toBe(false)
+  })
+
+  it('ne montre pas de geste à un message qui n’en propose pas', async () => {
+    const { wrapper, store } = toasts()
+    store.push('success', 'Enregistré', 0)
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.get('[role="status"]').findAll('button')).toHaveLength(1)
   })
 
   it('ne montre rien quand il n’y a aucun message', () => {

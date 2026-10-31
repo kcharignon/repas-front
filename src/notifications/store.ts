@@ -3,10 +3,17 @@ import { defineStore } from 'pinia'
 
 export type NotificationKind = 'success' | 'error'
 
+/** Un geste proposé avec le message (« Voir ») : un bouton qui fait `run`, puis ferme le message. */
+export interface NotificationAction {
+  label: string
+  run: () => void
+}
+
 export interface Notification {
   id: number
   kind: NotificationKind
   text: string
+  action?: NotificationAction
 }
 
 const LIFETIME_MS = 6000
@@ -20,9 +27,14 @@ export const useNotificationsStore = defineStore('notifications', () => {
     items.value = items.value.filter((item) => item.id !== id)
   }
 
-  function push(kind: NotificationKind, text: string, lifetime = LIFETIME_MS) {
+  function push(
+    kind: NotificationKind,
+    text: string,
+    lifetime = LIFETIME_MS,
+    action?: NotificationAction,
+  ) {
     const id = next++
-    items.value = [...items.value, { id, kind, text }]
+    items.value = [...items.value, { id, kind, text, ...(action === undefined ? {} : { action }) }]
     if (lifetime > 0) setTimeout(() => dismiss(id), lifetime)
 
     return id

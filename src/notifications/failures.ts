@@ -146,6 +146,16 @@ export function notifyFailure(error: unknown) {
 }
 
 /**
+ * Un repas peut être réparti sur plusieurs listes (ADR 0036) : si l'une est partie au drive (`409 SHOPPING_LIST_SENT`), tout est refusé et
+ * le texte dit laquelle des listes de CE repas pose problème, pas « cette liste ». Les autres échecs gardent leur texte habituel.
+ */
+export function notifyMealFailure(error: unknown) {
+  if (error instanceof ApiError && error.message === 'SHOPPING_LIST_SENT')
+    useNotificationsStore().push('error', t('errors.mealListSent'))
+  else notifyFailure(error)
+}
+
+/**
  * Un refus de suppression est un 409 (la chose est encore utilisée) : on dit pourquoi, avec le texte de l'écran, au lieu
  * du « autre modification en cours » des conflits d'écriture.
  */

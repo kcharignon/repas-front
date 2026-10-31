@@ -58,7 +58,7 @@ const label = {
         <RouterLink
           :to="
             list.isActive
-              ? { name: 'shopping-list' }
+              ? { name: 'shopping-list', query: list.typeId ? { liste: list.id } : {} }
               : { name: 'shopping-list-detail', params: { id: list.id } }
           "
           class="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-3 hover:border-primary focus-visible:outline-2 focus-visible:outline-primary"

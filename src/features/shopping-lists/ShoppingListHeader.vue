@@ -28,9 +28,16 @@ import {
   useSendShoppingList,
 } from './queries'
 
-const props = defineProps<{ list: ShoppingList }>()
+const props = defineProps<{
+  list: ShoppingList
+  /** Plusieurs listes en cours se voient par pastilles : le bouton dit laquelle il termine (« Terminer cette liste »). */
+  several?: boolean
+}>()
 
 const { t, d } = useI18n()
+const completeLabel = computed(() =>
+  t(props.several ? 'shoppingList.completeThis' : 'shoppingList.complete'),
+)
 const route = useRoute()
 const router = useRouter()
 const online = useOnline()
@@ -204,7 +211,7 @@ const moreActions = computed<UiAction[]>(() => [
     ? [
         {
           key: 'complete',
-          label: t('shoppingList.complete'),
+          label: completeLabel.value,
           disabled: status.isPending.value,
           run: complete,
         },
@@ -306,7 +313,7 @@ const statusLabel = (list: ShoppingList) =>
           :disabled="status.isPending.value"
           @click="complete"
         >
-          {{ t('shoppingList.complete') }}
+          {{ completeLabel }}
         </UiButton>
         <UiButton
           v-else
@@ -323,7 +330,7 @@ const statusLabel = (list: ShoppingList) =>
           :disabled="status.isPending.value"
           @click="complete"
         >
-          {{ t('shoppingList.complete') }}
+          {{ completeLabel }}
         </UiButton>
       </div>
       <UiActionMenu :label="t('shoppingList.moreActions')" :actions="moreActions" />

@@ -212,6 +212,15 @@ export default {
     baseSwitch: 'Ingrédient de base',
     baseHint: 'Copié dans les nouveaux comptes.',
     baseBadge: 'de base',
+    // « Liste de courses » d'un produit (LST-007, ADR 0036) : visible seulement avec au moins un type de liste
+    list: {
+      label: 'Liste de courses',
+      follow: 'Comme son rayon',
+      theMain: 'la liste principale',
+      helpFollow: 'Ce produit ira dans {list}, comme son rayon.',
+      helpMain: 'Ce produit ira dans la liste principale, quel que soit son rayon.',
+      helpType: 'Ce produit ira dans {list}, quel que soit son rayon.',
+    },
     // Les conversions propres à un ingrédient (fiche de l'ingrédient) : « 1 tasse = 125 g », ajoutées, modifiées, retirées par son propriétaire
     conversions: {
       title: 'Conversions de {name}',
@@ -466,6 +475,13 @@ export default {
     fewer: 'Une personne de moins pour {name}',
     more: 'Une personne de plus pour {name}',
     unplan: 'Retirer {name} de la liste',
+    // Plusieurs listes en cours, une par type (ADR 0036, LST-007)
+    openLists: 'Tes listes en cours',
+    mainPill: 'Principale',
+    toTick: 'à cocher',
+    completeThis: 'Terminer cette liste',
+    plannedIn: 'Ajouté à {lists}.',
+    see: 'Voir',
   },
   account: {
     title: 'Moi',
@@ -694,6 +710,8 @@ export default {
       'L’envoi au drive n’est pas disponible pour le moment. Ta liste n’a pas changé. Réessaie plus tard.',
     listSent:
       'Cette liste vient d’être envoyée au drive : elle n’est plus modifiable. Rien n’a été changé. Rouvre-la pour la modifier.',
+    // Un repas réparti sur plusieurs listes (ADR 0036) : l'une d'elles est partie, rien n'est écrit
+    mealListSent: 'Une des listes de ce repas est partie au drive. Rouvre-la, puis réessaie.',
     listNotSent:
       'Cette liste n’est plus envoyée au drive. Rien n’a été changé. Ouvre la liste pour voir où elle en est.',
     listNotSendable:

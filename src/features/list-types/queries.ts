@@ -16,12 +16,13 @@ export const listTypeKeys = {
 export const LIST_TYPE_LIMIT = 10
 
 /** Les types de liste de l'utilisateur, par date de création. Un compte sans type reçoit une liste vide. */
-export function useListTypes() {
+export function useListTypes(enabled: () => boolean = () => true) {
   const { api } = useSessionStore()
 
   return useQuery({
     queryKey: listTypeKeys.collection,
     queryFn: () => unwrap(api.GET('/api/v1/shopping-list-types')),
+    enabled: computed(enabled),
   })
 }
 
@@ -91,6 +92,27 @@ export function useRemoveListType(id: () => string) {
     mutationFn: () =>
       unwrap(api.DELETE('/api/v1/shopping-list-types/{id}', { params: { path: { id: id() } } })),
     onSettled: () => refresh(true),
+  })
+}
+
+/**
+ * Choisit la liste de courses d'un produit : `default` (comme son rayon), `main` (la liste principale) ou l'identifiant d'un type.
+ * Le choix vaut pour les ajouts suivants ; rien n'est déplacé dans les listes déjà remplies.
+ */
+export function useSetProductDestination() {
+  const { api } = useSessionStore()
+  const refresh = useRefresh()
+
+  return useMutation({
+    meta: { silent: true },
+    mutationFn: ({ slug, destination }: { slug: string; destination: string }) =>
+      unwrap(
+        api.PUT('/api/v1/ingredients/{slug}/list-destination', {
+          params: { path: { slug } },
+          body: { destination },
+        }),
+      ),
+    onSettled: () => refresh(),
   })
 }
 
