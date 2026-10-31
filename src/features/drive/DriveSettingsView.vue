@@ -442,39 +442,6 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
       </section>
 
       <template v-if="!choosing">
-        <section class="flex flex-col gap-3" aria-labelledby="app-title">
-          <h2 id="app-title" class="font-display text-2xl font-bold">
-            {{ t('driveSettings.app') }}
-          </h2>
-          <div :class="card">
-            <template v-if="inApp">
-              <p v-if="app.isPending.value" class="text-muted" role="status">
-                {{ t('driveSettings.appChecking') }}
-              </p>
-              <p v-else-if="app.isError.value" role="alert" class="font-semibold text-danger">
-                {{ t('driveSettings.appNoAnswer') }}
-              </p>
-              <template v-else-if="app.data.value">
-                <p class="font-bold">
-                  {{ t('driveSettings.appVersion', { version: app.data.value.version }) }}
-                </p>
-                <!-- Seulement quand il y a quelque chose à faire : « prêt » n'est pas dit (DRV-628) -->
-                <p v-if="!app.data.value.drive" class="font-semibold text-danger">
-                  {{ t('driveSettings.appDriveOff') }}
-                </p>
-              </template>
-            </template>
-            <p v-else class="text-muted">{{ t('driveSettings.appMissing') }}</p>
-            <div>
-              <UiLinkButton
-                variant="secondary"
-                :to="inApp ? { name: 'drive-help', hash: '#mise-a-jour' } : { name: 'drive-help' }"
-                >{{ t(inApp ? 'driveSettings.helpInApp' : 'driveSettings.help') }}</UiLinkButton
-              >
-            </div>
-          </div>
-        </section>
-
         <section class="flex flex-col gap-3" aria-labelledby="products-title">
           <h2 id="products-title" class="font-display text-2xl font-bold">
             {{ t('driveSettings.products') }}
