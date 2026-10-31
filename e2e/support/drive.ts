@@ -241,7 +241,7 @@ declare global {
  */
 export async function fakeApp(
   page: Page,
-  mode: 'completed' | 'partial' | 'silent' | Record<string, unknown> = 'completed',
+  mode: 'completed' | 'partial' | 'notInCart' | 'silent' | Record<string, unknown> = 'completed',
   version: string | null = '1.0.0',
   retailers?: string[],
 ) {
@@ -290,6 +290,8 @@ export async function fakeApp(
                     quantity: 1,
                     placement: 'PRIMARY',
                     product: { id: '5551' + slug.length, label: line.name + ' choisi sur le site' },
+                    // DRV-750 : le panier n'a pas pris le poivre (l'agent écrit `notInCart`), le reste est au panier
+                    ...(mode === 'notInCart' && slug === 'poivre' ? { notInCart: true } : {}),
                   }
                 if (mode === 'partial' && slug === 'beurre')
                   return { ingredientSlug: slug, outcome: 'FAILED', error: 'BLOCKED' }
@@ -310,7 +312,7 @@ export async function fakeApp(
               type: 'result',
               runId: message.plan.runId,
               agentVersion: '1.0.0',
-              outcome: mode,
+              outcome: mode === 'notInCart' ? 'completed' : mode,
               store: { id: message.plan.store.id },
               lines,
               ...(mode === 'partial'

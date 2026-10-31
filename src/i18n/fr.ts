@@ -923,6 +923,13 @@ export default {
       completed: {
         title: 'Le panier est rempli',
       },
+      // DRV-750 : l'envoi est allé au bout mais un produit choisi n'est pas dans le panier ; le titre est celui de `partial` (comme l'écran de fin de l'agent)
+      completedSome: {
+        lead: 'Un produit que tu avais choisi n’est pas dans ton panier. | {count} produits que tu avais choisis ne sont pas dans ton panier.',
+        safe: 'Tout le reste est dans ton panier.',
+        action:
+          'Finalise ta commande dans l’appli {appName}, sans lui. | Finalise ta commande dans l’appli {appName}, sans eux.',
+      },
       // Un envoi arrêté avant que rien ne soit mis au panier ni choisi : « en partie » serait faux (même titre que l'écran de fin de l'agent)
       notFilled: {
         title: 'Le panier n’est pas rempli',

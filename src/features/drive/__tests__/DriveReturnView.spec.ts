@@ -1354,6 +1354,74 @@ describe('retour du drive : les articles mis au panier sont cochés dans la list
     expect(await basketBodies(fetchMock)).toEqual([['farine']])
   })
 
+  // DRV-750 : l'envoi est allé au bout, mais un produit choisi n'est pas au panier : « rempli » serait faux pour lui
+  describe('terminé avec un produit choisi que le panier n’a pas pris', () => {
+    it('dit « rempli en partie » en trois phrases courtes, et ne coche que ce qui est au panier', async () => {
+      const { wrapper, fetchMock } = await open(
+        sentOf([added('farine', '123456'), notInCart('poivre'), chosen('curry')]),
+      )
+      await saved(wrapper)
+      await ticked(fetchMock)
+
+      expect(wrapper.find('h1').text()).toBe('Le panier est rempli en partie')
+      expect(wrapper.find('main [role="status"] p').text()).toBe(
+        'Un produit que tu avais choisi n’est pas dans ton panier. Tout le reste est dans ton panier. Finalise ta commande dans l’appli Leclerc Drive, sans lui.',
+      )
+      expect(wrapper.text()).not.toContain('Ton panier est rempli.')
+      expect(await basketBodies(fetchMock)).toEqual([['farine', 'curry']])
+    })
+
+    it('au pluriel, compte les produits et dit « sans eux »', async () => {
+      const { wrapper } = await open(
+        sentOf([added('farine', '123456'), notInCart('poivre'), notInCart('curry')]),
+      )
+      await saved(wrapper)
+
+      expect(wrapper.find('h1').text()).toBe('Le panier est rempli en partie')
+      expect(wrapper.find('main [role="status"] p').text()).toBe(
+        '2 produits que tu avais choisis ne sont pas dans ton panier. Tout le reste est dans ton panier. Finalise ta commande dans l’appli Leclerc Drive, sans eux.',
+      )
+    })
+
+    it('un seul produit choisi, refusé, sans rien d’autre au panier : le titre reste « en partie »', async () => {
+      const { wrapper } = await open(sentOf([notInCart('poivre')]))
+      await saved(wrapper)
+
+      expect(wrapper.find('h1').text()).toBe('Le panier est rempli en partie')
+    })
+
+    it('sans produit refusé : « Le panier est rempli », comme avant', async () => {
+      const { wrapper } = await open(sentOf([added('farine', '123456'), chosen('poivre')]))
+      await saved(wrapper)
+
+      expect(wrapper.find('h1').text()).toBe('Le panier est rempli')
+      expect(wrapper.find('main [role="status"] p').text()).toBe(
+        'Ton panier est rempli. Tu peux finaliser ta commande dans l’appli Leclerc Drive.',
+      )
+    })
+
+    it('un agent d’avant la clé (aucun notInCart) : « Le panier est rempli », comme avant', async () => {
+      const { wrapper } = await open(sentOf([chosen('poivre'), chosen('curry')]))
+      await saved(wrapper)
+
+      expect(wrapper.find('h1').text()).toBe('Le panier est rempli')
+    })
+
+    it('« J’en ai toujours », « Pas cette fois » et un produit introuvable ne changent pas le titre', async () => {
+      const { wrapper } = await open(
+        sentOf([
+          added('farine', '123456'),
+          { ingredientSlug: 'sel', outcome: 'HAVE_AT_HOME' },
+          { ingredientSlug: 'riz', outcome: 'SKIPPED' },
+          { ingredientSlug: 'beurre', outcome: 'UNAVAILABLE' },
+        ]),
+      )
+      await saved(wrapper)
+
+      expect(wrapper.find('h1').text()).toBe('Le panier est rempli')
+    })
+  })
+
   it.each<[string, ResultLine[]]>([
     ['« J’en ai toujours »', [{ ingredientSlug: 'sel', outcome: 'HAVE_AT_HOME' }]],
     ['« Pas cette fois »', [{ ingredientSlug: 'sel', outcome: 'SKIPPED' }]],
