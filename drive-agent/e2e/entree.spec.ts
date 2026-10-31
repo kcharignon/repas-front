@@ -7,6 +7,7 @@ import { openWithBridge, trackInteractions } from './support/agent'
 import { expect, test } from './support/fixtures'
 import { fresh, known, planOf, product } from './support/plans'
 import { HOME_HOST, startFakeLeclerc, type FakeLeclerc } from '../fake-leclerc/server'
+import { MEMBER_COOKIE } from '../fake-leclerc/pages'
 
 const PLAN = planOf([known('farine', 'Farine', [product(1000001, 2)])])
 const OPENING = 'Ouverture de ton magasin…'
@@ -202,6 +203,56 @@ test('un bouton qui ne fait rien : même repli, une seule page demandée (pas de
     const pages = fake.requests().filter((request) => request.kind === 'page')
     expect(pages.map((request) => request.status)).toEqual([200])
     expect(fake.paced()).toEqual([])
+  })
+})
+
+// La connexion entre deux (DRV-748) : le visiteur qui touche « Commencer mes courses » arrive sur la page de connexion, que la PERSONNE remplit (l'agent ne
+// se connecte jamais) ; l'accueil qui revient, connecté, montre de nouveau le bouton : l'agent le suit une seconde fois, sans que la personne y touche.
+test.describe('la connexion entre l’accueil et le magasin', () => {
+  test('le premier toucher mène à la connexion ; une fois connecté, l’agent entre seul : le seul geste de la personne est la connexion', async ({
+    page,
+    agentCode,
+  }) => {
+    await withHome(async (fake, home) => {
+      // Given : un visiteur sur l'accueil (installation neuve), le bouton mène à la connexion
+      fake.setBehavior({ homeForm: 'login-first' })
+      const gestures = await trackInteractions(page)
+      const app = await openWithBridge(page, fake, agentCode, { path: '/', origin: home })
+      app.answerHello(PLAN)
+
+      // When : l'agent touche le bouton, la page de connexion s'ouvre ; la personne se connecte (son seul geste)
+      const login = page.locator('#login')
+      await expect(login).toBeVisible({ timeout: 15_000 })
+      expect(fake.cart()).toEqual({})
+      await login.click()
+
+      // Then : l'accueil revient connecté, l'agent entre seul dans le magasin et remplit le panier, sans « Commencer mes courses » touché
+      expect(await app.received('result')).toMatchObject({ outcome: 'completed' })
+      expect(fake.cart()).toEqual({ 1000001: 2 })
+      expect(new URL(page.url()).pathname).toBe('/magasin-000001-000001-Ville-Test/')
+      await expect(page.getByRole('heading', { name: MANUAL })).toHaveCount(0)
+      expect(gestures.count()).toBe(1)
+    })
+  })
+
+  test('session déjà ouverte : un seul toucher de l’agent, aucun geste de la personne', async ({
+    page,
+    agentCode,
+  }) => {
+    await withHome(async (fake, home) => {
+      fake.setBehavior({ homeForm: 'login-first' })
+      await page
+        .context()
+        .addCookies([{ name: MEMBER_COOKIE, value: '1', domain: HOME_HOST, path: '/' }])
+      const gestures = await trackInteractions(page)
+      const app = await openWithBridge(page, fake, agentCode, { path: '/', origin: home })
+      app.answerHello(PLAN)
+
+      expect(await app.received('result')).toMatchObject({ outcome: 'completed' })
+      expect(fake.cart()).toEqual({ 1000001: 2 })
+      expect(fake.requests().filter((request) => request.path === '/connexion.aspx')).toEqual([])
+      expect(gestures.count()).toBe(0)
+    })
   })
 })
 

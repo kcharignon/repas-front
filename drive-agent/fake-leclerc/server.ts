@@ -15,6 +15,9 @@ import {
   challengePage,
   changedSearchPage,
   accueilPage,
+  LOGIN_PATH,
+  loginFormPage,
+  MEMBER_COOKIE,
   basketPage,
   errorPage,
   homePage,
@@ -611,9 +614,25 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       return send(
         res,
         200,
-        accueilPage(`${origin}${start}`, `${origin}${OTHER_STORE_PATH}/`, behavior.homeForm),
+        accueilPage(
+          `${origin}${start}`,
+          `${origin}${OTHER_STORE_PATH}/`,
+          behavior.homeForm,
+          new RegExp(`(?:^|;\\s*)${MEMBER_COOKIE}=1(?:;|$)`).test(req.headers.cookie ?? ''),
+        ),
         HTML,
       )
+    }
+    if (
+      home &&
+      path === LOGIN_PATH &&
+      req.method === 'GET' &&
+      behavior.homeForm === 'login-first'
+    ) {
+      // La connexion de l'accueil de l'enseigne, seulement pour la forme `login-first` (DRV-748) : un bouton que la personne touche.
+      entry.kind = 'page'
+      entry.status = 200
+      return send(res, 200, loginFormPage(), HTML)
     }
     if (home) {
       // L'enseigne n'a que son accueil ici : les pages d'un magasin sont sur l'hôte du magasin.

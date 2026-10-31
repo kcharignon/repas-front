@@ -3,8 +3,9 @@
 // une seule fois par envoi ; au moindre doute il laisse l'utilisateur toucher le bouton. Un envoi terminé repart sans écran de fin.
 import { describe, expect, it } from 'vitest'
 
-import { type EntryReading } from '../src/leclerc'
+import { type EntryReading, type SessionReading } from '../src/leclerc'
 import { RetailerError } from '../src/retailers'
+import { ENTRY_KEY, ENTRY_LOGIN_KEY } from '../src/flow/run-state'
 import {
   expectConform,
   fakeAdapter,
@@ -28,11 +29,22 @@ const lines = () => [known('farine', [product('1000001', 2)])]
 
 function home(
   entry: EntryReading | (() => EntryReading),
-  options: { storage?: boolean; onFollow?: () => void | Promise<void> } = {},
+  options: {
+    storage?: boolean
+    onFollow?: () => void | Promise<void>
+    session?: () => SessionReading
+    entersAfterLogin?: boolean
+  } = {},
 ) {
   const adapter = fakeAdapter(
     {},
-    { store: notAStore, entry, ...(options.onFollow && { onFollow: options.onFollow }) },
+    {
+      store: notAStore,
+      entry,
+      ...(options.onFollow && { onFollow: options.onFollow }),
+      ...(options.session && { session: options.session }),
+      ...(options.entersAfterLogin !== undefined && { entersAfterLogin: options.entersAfterLogin }),
+    },
   )
   const screens = fakeUi()
   const storage = fakeStorage()
@@ -334,6 +346,251 @@ describe('revenir sans geste', () => {
     expect(sent[0]?.outcome).toBe('completed')
     expect(screens.propsOf('end')[0]).toMatchObject({
       kept: [{ name: 'Farine', wanted: 2, inCart: 5 }],
+    })
+  })
+})
+
+// DRV-748 : le premier toucher a lieu sur l'accueil d'un visiteur (le site répond par sa page de connexion, que la personne remplit elle-même) ; une fois
+// connectée, l'accueil montre de nouveau le bouton : l'agent le suit une seconde fois, la dernière, sans que la personne ait à le toucher.
+describe('entrer une seconde fois après la connexion (DRV-748)', () => {
+  const VISITOR: SessionReading = { state: 'VISITOR', signs: ['LOGIN_LINK', 'REGISTER_LINK'] }
+  const MEMBER: SessionReading = { state: 'MEMBER', signs: ['LOGOUT_LINK'] }
+  const UNKNOWN: SessionReading = { state: 'UNKNOWN', signs: [] }
+
+  /** Un accueil dont la session change entre deux passages du plan (la personne se connecte entre les deux). */
+  function login(
+    entry: EntryReading | (() => EntryReading),
+    options: { entersAfterLogin?: boolean; onFollow?: () => void | Promise<void> } = {},
+  ) {
+    let session: SessionReading = VISITOR
+    const made = home(entry, { session: () => session, ...options })
+    return { ...made, signIn: (to: SessionReading = MEMBER) => void (session = to) }
+  }
+
+  it('le premier toucher avant la connexion, le second après : une fois connecté, le bouton revient et l’agent le suit sans geste', async () => {
+    const { flow, screens, adapter, sent, storage, signIn } = login({ kind: 'BUTTON' })
+
+    // Le visiteur : premier toucher (le site répond par sa page de connexion), puis le bandeau dit de toucher le bouton
+    await flow.start(plan(lines()))
+    expect(adapter.follows.count).toBe(1)
+    expect(storage.getItem(ENTRY_LOGIN_KEY)).toBe(`${RUN_ID}:before`)
+
+    // La personne se connecte : l'accueil revient avec le bouton, l'agent le suit une seconde fois
+    signIn()
+    await flow.start(plan(lines()))
+
+    expect(adapter.follows.count).toBe(2)
+    expect(screens.propsOf('entry')).toEqual([
+      { stage: 'opening' },
+      { stage: 'manual' },
+      { stage: 'opening' },
+      { stage: 'manual' },
+    ])
+    expect(storage.getItem(ENTRY_KEY)).toBe(RUN_ID)
+    expect(storage.getItem(ENTRY_LOGIN_KEY)).toBe(`${RUN_ID}:after`)
+    // Aucune requête, aucune écriture avant l'entrée
+    expect(sent).toEqual([])
+    expect(adapter.calls).toEqual([])
+    expect(adapter.writes).toEqual([])
+  })
+
+  it('jamais trois touchers : le troisième passage du même envoi ne touche rien, le geste manuel reste', async () => {
+    const { flow, screens, adapter, signIn } = login({ kind: 'BUTTON' })
+    await flow.start(plan(lines()))
+    signIn()
+    await flow.start(plan(lines()))
+
+    await flow.start(plan(lines()))
+    await flow.start(plan(lines()))
+
+    expect(adapter.follows.count).toBe(2)
+    expect(screens.propsOf('entry').slice(-2)).toEqual([{ stage: 'manual' }, { stage: 'manual' }])
+  })
+
+  it('un lien vérifié vers le magasin du plan est suivi de la même façon', async () => {
+    const { flow, adapter, signIn } = login(LINK)
+    await flow.start(plan(lines()))
+    signIn()
+
+    await flow.start(plan(lines()))
+
+    expect(adapter.follows.count).toBe(2)
+  })
+
+  it.each([
+    ['un état inconnu', UNKNOWN],
+    ['un visiteur', VISITOR],
+  ])(
+    '%s : la seconde entrée n’a pas lieu, le bandeau dit de toucher le bouton',
+    async (_name, session) => {
+      const { flow, screens, adapter, signIn } = login({ kind: 'BUTTON' })
+      await flow.start(plan(lines()))
+      signIn(session)
+
+      await flow.start(plan(lines()))
+
+      expect(adapter.follows.count).toBe(1)
+      expect(screens.propsOf('entry')).toEqual([
+        { stage: 'opening' },
+        { stage: 'manual' },
+        { stage: 'manual' },
+      ])
+    },
+  )
+
+  it('un premier toucher fait session ouverte n’en permet aucun autre : un clic sans effet ne se refait pas', async () => {
+    const { flow, adapter, storage, signIn } = login({ kind: 'BUTTON' })
+    signIn()
+
+    await flow.start(plan(lines()))
+    await flow.start(plan(lines()))
+
+    expect(adapter.follows.count).toBe(1)
+    expect(storage.getItem(ENTRY_LOGIN_KEY)).toBeNull()
+  })
+
+  it.each([
+    ['sans bouton', { kind: 'NONE' }],
+    ['avec un lien qui ne mène pas au magasin du plan', { kind: 'REFUSED' }],
+    ['sur la page d’un défi de l’anti-robot', { kind: 'CHALLENGE' }],
+  ] as const)('%s : rien n’est touché la seconde fois', async (_name, second) => {
+    // Given : le premier toucher a eu lieu, puis la page ne montre plus rien de suivable
+    let current: EntryReading = { kind: 'BUTTON' }
+    const { flow, screens, adapter, sent, signIn } = login(() => current)
+    await flow.start(plan(lines()))
+    signIn()
+    current = second
+
+    // When
+    await flow.start(plan(lines()))
+
+    // Then
+    expect(adapter.follows.count).toBe(1)
+    expect(screens.screens()).not.toContain('error')
+    expect(sent).toEqual([])
+    expect(adapter.calls).toEqual([])
+    expect(adapter.writes).toEqual([])
+  })
+
+  it('une enseigne qui ne le permet pas (pas de seconde entrée) garde une seule entrée par envoi', async () => {
+    const { flow, adapter, signIn } = login({ kind: 'BUTTON' }, { entersAfterLogin: false })
+    await flow.start(plan(lines()))
+    signIn()
+
+    await flow.start(plan(lines()))
+
+    expect(adapter.follows.count).toBe(1)
+  })
+
+  it('un suivi qui échoue la seconde fois laisse le geste manuel, sans en tenter un troisième', async () => {
+    let follows = 0
+    const { flow, screens, adapter, signIn } = login(
+      { kind: 'BUTTON' },
+      {
+        onFollow: () => {
+          if (++follows === 2) throw new RetailerError('BLOCKED')
+        },
+      },
+    )
+    await flow.start(plan(lines()))
+    signIn()
+
+    await flow.start(plan(lines()))
+    await flow.start(plan(lines()))
+
+    expect(adapter.follows.count).toBe(2)
+    expect(screens.propsOf('entry').at(-1)).toEqual({ stage: 'manual' })
+  })
+
+  it('un autre envoi repart de zéro : son premier toucher, puis sa seconde entrée après la connexion', async () => {
+    const { flow, adapter, signIn } = login({ kind: 'BUTTON' })
+    const OTHER = '11111111-2222-4333-8444-555555555555'
+    await flow.start(plan(lines(), RUN_ID))
+    signIn()
+    await flow.start(plan(lines(), RUN_ID))
+
+    await flow.start(plan(lines(), OTHER))
+
+    // Le premier envoi a eu ses deux touchers ; l'autre, connecté d'emblée, a le sien
+    expect(adapter.follows.count).toBe(3)
+  })
+
+  describe('sur la page du magasin du plan, la fenêtre d’accueil de la personne connectée', () => {
+    const onStore = (
+      notes: Record<string, string>,
+      options: { session?: SessionReading; entry?: EntryReading } = {},
+    ) => {
+      const adapter = fakeAdapter(
+        { '1000001': {} },
+        {
+          entry: options.entry ?? { kind: 'BUTTON' },
+          session: options.session ?? MEMBER,
+        },
+      )
+      const screens = fakeUi()
+      const storage = fakeStorage(notes)
+      const { flow, sent } = makeFlow({ ui: screens.ui, adapter: adapter.adapter, storage })
+      return { flow, sent, screens, adapter, storage }
+    }
+    const BEFORE = { [ENTRY_KEY]: RUN_ID, [ENTRY_LOGIN_KEY]: `${RUN_ID}:before` }
+
+    it('le premier toucher a eu lieu avant la connexion : le bouton est touché une seconde fois', async () => {
+      const { flow, adapter, screens, storage } = onStore(BEFORE)
+
+      await flow.start(plan(lines()))
+      await flow.start(plan(lines()))
+
+      expect(adapter.follows.count).toBe(1)
+      expect(screens.propsOf('entry')).toEqual([{ stage: 'opening' }])
+      expect(storage.getItem(ENTRY_LOGIN_KEY)).toBe(`${RUN_ID}:after`)
+    })
+
+    it('le premier toucher a eu lieu session ouverte : rien de plus, le passage démarre', async () => {
+      const { flow, adapter, sent } = onStore({ [ENTRY_KEY]: RUN_ID })
+
+      await flow.start(plan(lines()))
+
+      expect(adapter.follows.count).toBe(0)
+      expect(expectConform(sent[0]).outcome).toBe('completed')
+    })
+
+    it('la seconde entrée est déjà dépensée : rien de plus', async () => {
+      const { flow, adapter } = onStore({
+        [ENTRY_KEY]: RUN_ID,
+        [ENTRY_LOGIN_KEY]: `${RUN_ID}:after`,
+      })
+
+      await flow.start(plan(lines()))
+
+      expect(adapter.follows.count).toBe(0)
+    })
+
+    it('un autre magasin que celui du plan : rien n’est touché, `STORE_MISMATCH` comme avant', async () => {
+      const screens = fakeUi({ error: () => 'close' })
+      const adapter = fakeAdapter(
+        {},
+        {
+          entry: { kind: 'BUTTON' },
+          session: MEMBER,
+          store: () => ({
+            id: '000002',
+            host: 'fd0-courses.leclercdrive.fr',
+            baseUrl: 'https://fd0-courses.leclercdrive.fr/magasin-000002-000002',
+            label: null,
+          }),
+        },
+      )
+      const { flow, sent } = makeFlow({
+        ui: screens.ui,
+        adapter: adapter.adapter,
+        storage: fakeStorage(BEFORE),
+      })
+
+      await flow.start(plan(lines()))
+
+      expect(adapter.follows.count).toBe(0)
+      expect(screens.screens()).toEqual(['error'])
+      expect(sent).toEqual([])
     })
   })
 })

@@ -214,8 +214,8 @@ export function fakeAdapter(
     /** Appelé avant chaque requête : `search <id>`, `find <mot>`, `cart <id> <quantité>`. */
     before?: (call: string) => void | Promise<void>
     store?: () => ReturnType<RetailerAdapter['readStore']>
-    /** Ce que la page dit de la connexion de l'utilisateur (par défaut : rien, état inconnu). */
-    session?: SessionReading
+    /** Ce que la page dit de la connexion de l'utilisateur (par défaut : rien, état inconnu) ; une fonction pour une page qui change (la connexion se fait entre deux pages). */
+    session?: SessionReading | (() => SessionReading)
     /** Ce que la recherche d'un mot rend : des identifiants du rayon, dans l'ordre. Un mot absent ne trouve rien. */
     found?: Record<string, string[]>
     /** La recherche d'un produit connu par son libellé : vrai si le moteur le retrouve sous cette requête (par défaut : toujours, s'il est au rayon). */
@@ -226,6 +226,8 @@ export function fakeAdapter(
     stats?: () => RequestStats
     /** Ce que l'accueil de l'enseigne laisse suivre (DRV-625, par défaut : pas de lien « Commencer mes courses »). */
     entry?: EntryReading | (() => EntryReading)
+    /** L'enseigne refait l'entrée après la connexion (DRV-748, par défaut oui, comme Leclerc). */
+    entersAfterLogin?: boolean
     /** Appelé quand l'agent suit le lien ; peut ne jamais rendre la main (la page a quitté le script). */
     onFollow?: () => void | Promise<void>
     /** Le libellé de chaque rayon (DRV-647) ; un rayon absent n'a pas de libellé lisible. */
@@ -251,6 +253,7 @@ export function fakeAdapter(
   let inFlight = 0
   let peak = 0
   const adapter: RetailerAdapter = {
+    entersAfterLogin: options.entersAfterLogin ?? true,
     readStore:
       options.store ??
       (() => ({
@@ -282,7 +285,10 @@ export function fakeAdapter(
         peakPauseMs: 0,
       })),
     cartQuantity: (id) => cartReply.get(id) ?? null,
-    readSession: () => options.session ?? { state: 'UNKNOWN', signs: [] },
+    readSession: () => {
+      const session = options.session ?? { state: 'UNKNOWN' as const, signs: [] }
+      return typeof session === 'function' ? session() : session
+    },
     readArrival: () => ({
       address: '/',
       redirects: null,
