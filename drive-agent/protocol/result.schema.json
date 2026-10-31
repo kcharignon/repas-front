@@ -137,7 +137,7 @@
       "maxLength": 80
     },
     "notInCart": {
-      "description": "Facultatif (DRV-742), sur une ligne CHOSEN : vrai quand le panier de l'enseigne n'a rien pris de ce produit (le choix de la personne est quand même enregistré). Absente = au panier (agents d'avant compris). Jamais false.",
+      "description": "Facultatif (DRV-746), sur une ligne CHOSEN : vrai quand le panier de l'enseigne n'a rien pris de ce produit (le choix de la personne est quand même enregistré). Absente = au panier (agents d'avant compris). Jamais false.",
       "const": true
     },
     "packSize": {

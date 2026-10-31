@@ -193,7 +193,7 @@ test.describe('« Bientôt disponible » : le panier tranche', () => {
     await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
     await returnsToRepas(page, fake)
 
-    // And : le résultat est une ligne CHOSEN ordinaire, avec le produit à mémoriser et `notInCart: true` (DRV-742 : rien n'est au panier)
+    // And : le résultat est une ligne CHOSEN ordinaire, avec le produit à mémoriser et `notInCart: true` (DRV-746 : rien n'est au panier)
     const result = await returnedResult(page, fake)
     expect(result).toMatchObject({
       lines: [

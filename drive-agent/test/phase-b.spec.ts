@@ -691,7 +691,7 @@ describe('les produits refusés et indisponibles', () => {
       product: expect.objectContaining({ id: '2000003', label: 'Poivre en grains de test' }),
       quantity: 4,
       placement: 'PRIMARY',
-      // DRV-742 : le résultat dit que rien n'est au panier (Repas ne coche pas la ligne)
+      // DRV-746 : le résultat dit que rien n'est au panier (Repas ne coche pas la ligne)
       notInCart: true,
     })
     expect(test.screens.propsOf('end')[0]?.unreached).toEqual([
@@ -761,7 +761,7 @@ describe('les produits refusés et indisponibles', () => {
 
     expect(test.screens.propsOf('end')).toEqual([])
     expect(lineOf(test.sent[0])).toMatchObject({ outcome: 'CHOSEN', quantity: 2 })
-    // DRV-742 : au panier = pas de clé (compatible avec les agents d'avant), jamais `notInCart: false`
+    // DRV-746 : au panier = pas de clé (compatible avec les agents d'avant), jamais `notInCart: false`
     expect(lineOf(test.sent[0])).not.toHaveProperty('notInCart')
   })
 
