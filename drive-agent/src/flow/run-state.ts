@@ -6,6 +6,7 @@ import { parseJson, stringifyJson } from '../primitives'
 import type { CartNote } from './keep-cart'
 import type { UnreachedReason } from '../ui'
 import type { ContentChange, UnavailableNote } from './phase-a'
+import type { GuideStep } from '../retailers'
 import type { StorageLike } from './types'
 
 export const RUN_PREFIX = 'repas:run:'
@@ -16,6 +17,12 @@ export const ENTRY_KEY = 'repas:entry'
  * `<runId>:after` une fois la seconde dépensée. Absente quand le premier toucher a eu lieu session ouverte : il n'y a pas de seconde. Un identifiant et un mot fixe.
  */
 export const ENTRY_LOGIN_KEY = 'repas:entry-login'
+/**
+ * Où en est le parcours guidé de cet envoi (DRV-751) : `<runId>|<nombre d'étapes>|<dernière étape montrée>` (`store` ou `login`). Les pages de l'enseigne se
+ * rechargent pendant qu'on choisit son magasin ou qu'on se connecte : la page suivante sait ainsi qu'elle est l'étape « 2 sur 2 » et dit « c'est bon » quand elle
+ * a tout ce qu'il faut. Un identifiant, un nombre et un mot fixe.
+ */
+export const GUIDE_KEY = 'repas:guide'
 /** Les raisons du dernier envoi (DRV-635), gardées pour le diagnostic : des mots fixes et des nombres, jamais un libellé ni un identifiant. */
 export const LAST_REASONS_KEY = 'repas:last-reasons'
 /** Ce que le panier a répondu au dernier produit choisi qu'il n'a pas pris (DRV-644), gardé pour le diagnostic : deux nombres et un mot fixe. */
@@ -326,6 +333,37 @@ export class RunStore {
       return !storage || storage.getItem(ENTRY_KEY) === runId
     } catch {
       return true
+    }
+  }
+
+  /** Le parcours guidé de cet envoi, tel qu'une page d'avant l'a noté ; `null` sans note, pour un autre envoi ou au moindre doute. */
+  guide(runId: string): { total: number; step: GuideStep } | null {
+    try {
+      const [id, total, step] = (this.storage?.getItem(GUIDE_KEY) ?? '').split('|')
+      const count = Number(total)
+      return id === runId && (count === 1 || count === 2) && (step === 'store' || step === 'login')
+        ? { total: count, step }
+        : null
+    } catch {
+      return null
+    }
+  }
+
+  /** Note le parcours guidé de cet envoi : combien d'étapes, et la dernière montrée. */
+  noteGuide(runId: string, total: 1 | 2, step: GuideStep): void {
+    try {
+      this.storage?.setItem(GUIDE_KEY, `${runId}|${total}|${step}`)
+    } catch {
+      // Sans la note, la page suivante dit « il reste une étape » : le parcours marche quand même.
+    }
+  }
+
+  /** Efface la note : le parcours guidé est fini (ou l'envoi s'arrête). */
+  clearGuide(): void {
+    try {
+      this.storage?.removeItem(GUIDE_KEY)
+    } catch {
+      // Sans importance.
     }
   }
 

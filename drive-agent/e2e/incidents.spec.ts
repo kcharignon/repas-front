@@ -31,7 +31,7 @@ for (const kind of ['forbidden', 'too-many-requests'] satisfies FaultKind[]) {
     expect(fake.paced().map((call) => call.fault)).toEqual([undefined, kind, kind])
     expect(fake.cart()).toEqual({})
     expectPoliteAgent(fake)
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
     expect(await returnedResult(page, fake)).toMatchObject({
       runId: RUN_ID,
       outcome: 'partial',
@@ -122,7 +122,7 @@ test.describe('une page de défi de l’anti-robot', () => {
 
     expect(fake.cart()).toEqual({ 1000001: 3 })
     expect(fake.paced()).toHaveLength(3)
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
     expect(await returnedResult(page, fake)).toMatchObject({
       outcome: 'partial',
       error: { code: 'BLOCKED', message: 'Leclerc a ralenti les demandes (CHALLENGE)' },
@@ -198,7 +198,7 @@ test('interrompt une requête que le site retient (20 s, une reprise), dit que L
   expectPoliteAgent(fake)
   await expect(page.getByText('Leclerc a mis trop de temps à répondre.')).toBeVisible()
   await expect(page.getByText('il reste 1 article à ajouter')).toBeVisible()
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+  await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
   expect(await returnedResult(page, fake)).toMatchObject({
     outcome: 'partial',
     lines: [
@@ -229,7 +229,7 @@ test('sur le site mobile (m-courses), dit « Ce n’est pas la version ordinateu
     await expect(page.getByRole('button', { name: 'Commencer' })).toHaveCount(0)
     expect(mobile.paced()).toEqual([])
     expect(mobile.cart()).toEqual({})
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
     expect(await returnedResult(page, mobile)).toMatchObject({
       runId: RUN_ID,
       outcome: 'error',
@@ -281,7 +281,7 @@ for (const [name, fault, cause] of [
     await expect(page.getByText('Leclerc a changé son site')).toBeVisible()
     expect(fake.paced().filter((call) => call.fault)).toHaveLength(1)
     expect(fake.cart()).toEqual({})
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
     expect(await returnedResult(page, fake)).toMatchObject({
       outcome: 'error',
       error: { code: 'CONTRACT_CHANGED', message: `Le site a changé (${cause})` },
@@ -299,14 +299,14 @@ test('s’arrête aussitôt quand le compte n’est plus connecté', async ({ pa
   // Then : une seule requête est partie, le conseil est de se reconnecter
   await expect(page.getByText('Connecte-toi à Leclerc')).toBeVisible()
   expect(fake.paced()).toHaveLength(1)
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+  await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
   expect(await returnedResult(page, fake)).toMatchObject({
     outcome: 'error',
     error: { code: 'NOT_LOGGED_IN' },
   })
 })
 
-test('refuse de commencer devant la page d’un visiteur non connecté : rien n’est cherché ni écrit, et le conseil est de se connecter', async ({
+test('devant la page d’un visiteur non connecté : l’étape guidée « Connecte-toi » (DRV-751), rien n’est cherché ni écrit ; « Arrêter pour l’instant » rend un envoi arrêté', async ({
   page,
   fake,
   agentCode,
@@ -317,18 +317,15 @@ test('refuse de commencer devant la page d’un visiteur non connecté : rien n�
   // When
   await openWithFragment(page, fake, agentCode, THREE_LINES)
 
-  // Then : « Connecte-toi à Leclerc, puis reprends l'envoi », pas de récapitulatif, aucune requête, panier intact
-  await expect(page.getByRole('heading', { name: 'Tu n’es pas connecté' })).toBeVisible()
-  await expect(page.getByText('Connecte-toi à Leclerc, puis reprends l’envoi')).toBeVisible()
+  // Then : une carte « Connecte-toi » en bas de la page, pas d'écran d'incident, pas de récapitulatif, aucune requête, panier intact
+  await expect(page.getByRole('heading', { name: 'Connecte-toi' })).toBeVisible()
+  await expect(page.getByText('Il reste une étape')).toBeVisible()
+  await expect(page.getByText('Tu n’es pas connecté')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Commencer' })).toHaveCount(0)
   expect(fake.paced()).toEqual([])
   expect(fake.cart()).toEqual({})
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
-  expect(await returnedResult(page, fake)).toMatchObject({
-    outcome: 'error',
-    error: { code: 'NOT_LOGGED_IN', message: 'Tu n’es pas connecté (SESSION_VISITOR)' },
-    lines: [],
-  })
+  await page.getByRole('button', { name: 'Arrêter pour l’instant' }).click()
+  expect(await returnedResult(page, fake)).toMatchObject({ outcome: 'aborted', lines: [] })
 })
 
 test('un client connecté qui devient visiteur en cours de passage : la recherche suivante arrête tout, sans écrire dans un panier anonyme', async ({
@@ -346,7 +343,7 @@ test('un client connecté qui devient visiteur en cours de passage : la recherch
   // Then : la farine est au panier, la ligne suivante a été cherchée puis refusée, rien d'autre n'est parti
   expect(fake.paced().map((call) => call.kind)).toEqual(['search', 'cart', 'search'])
   expect(fake.cart()).toEqual({ 1000001: 3 })
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+  await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
   expect(await returnedResult(page, fake)).toMatchObject({
     outcome: 'error',
     error: { code: 'NOT_LOGGED_IN', message: 'Tu n’es pas connecté (SESSION_VISITOR)' },

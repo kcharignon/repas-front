@@ -138,7 +138,7 @@ test.describe('un parcours qui va jusqu’au bout de ce qui est écrit', () => {
 })
 
 test.describe('les arrêts, tous sans écriture', () => {
-  test('aucun magasin choisi (la barre dit « Choisir vos courses ») : « Choisis ton magasin », et pas même une requête', async ({
+  test('aucun magasin choisi (la barre dit « Choisir vos courses ») : une étape guidée, pas une erreur (DRV-751) ; la barre est désignée, la page reste touchable, pas même une requête', async ({
     page,
     fakeAuchan,
     agentCode,
@@ -148,18 +148,59 @@ test.describe('les arrêts, tous sans écriture', () => {
     app.answerHello(plan())
 
     await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible()
-    await expect(page.getByText('Aucun magasin n’est choisi sur Auchan.')).toBeVisible()
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    await expect(
+      page.getByText('Touche « Choisir vos courses » en haut de la page, puis ton magasin.'),
+    ).toBeVisible()
+    await expect(page.getByText('Je continue dès que c’est fait.')).toBeVisible()
+    await expect(page.getByText('Touche ici')).toBeVisible()
+    // Aucun écran d'incident, aucun gros bouton « Fermer » : une seule action, qui rassure
+    await expect(page.getByText('Aucun magasin n’est choisi sur Auchan.')).toHaveCount(0)
+    await expect(page.getByRole('dialog').getByRole('button')).toHaveCount(1)
+    await expect(
+      page.getByRole('button', {
+        name: 'Arrêter pour l’instant Ta liste est gardée, tu pourras reprendre.',
+      }),
+    ).toBeVisible()
+    // La barre à toucher n'est pas cachée : elle reçoit le toucher
+    await page.getByRole('button', { name: 'Choisir vos courses' }).click({ trial: true })
+    await page.getByRole('button', { name: 'Arrêter pour l’instant' }).click()
 
-    expect(await app.received('result')).toMatchObject({
-      outcome: 'error',
-      error: { code: 'UNSUPPORTED_PAGE' },
-    })
+    expect(await app.received('result')).toMatchObject({ outcome: 'aborted' })
     expect(fakeAuchan.paced()).toEqual([])
     expect(fakeAuchan.writes()).toEqual([])
   })
 
-  test('le parcours ne donne aucun contexte de courses alors que la page n’en dit rien : même arrêt, après une seule lecture', async ({
+  test('le magasin se choisit dans la page : l’agent le voit, dit « Ton magasin est choisi » et remplit le panier TOUT SEUL, sans retour dans Repas', async ({
+    page,
+    fakeAuchan,
+    agentCode,
+  }) => {
+    // Given : aucun magasin choisi, la carte guide
+    fakeAuchan.setBehavior({ store: 'none' })
+    const app = await open(page, fakeAuchan, agentCode)
+    app.answerHello(plan())
+    await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible()
+    expect(fakeAuchan.paced()).toEqual([])
+
+    // When : la personne choisit son magasin (la barre et le parcours changent, la page n'est pas rechargée)
+    fakeAuchan.setBehavior({ store: 'chosen' })
+    await page.evaluate(() => {
+      const bar = document.querySelector('.store-bar')
+      if (bar)
+        bar.outerHTML = '<div class="store-bar"><span>Retrait : Drive Ville-Test</span></div>'
+    })
+
+    // Then : « C'est bon », puis le passage, jusqu'au résultat, sans que la personne touche quoi que ce soit
+    await expect(page.getByRole('heading', { name: 'Ton magasin est choisi' })).toBeVisible()
+    await expect(page.getByText('Je remplis ton panier. Tu n’as rien à faire.')).toBeVisible()
+    expect(await app.received('result')).toMatchObject({ outcome: 'completed' })
+    expect(app.messages.filter((message) => message.type === 'result')).toHaveLength(1)
+    // Une seule lecture du parcours, faite quand la page a dit que le magasin était choisi
+    expect(fakeAuchan.paced().filter((request) => request.path === '/journey')).toHaveLength(1)
+    expect(fakeAuchan.violations()).toEqual([])
+  })
+
+  test('le parcours ne donne aucun contexte de courses et la page n’a pas de barre : la même carte, sans libellé cité, après une seule lecture', async ({
     page,
     fakeAuchan,
     agentCode,
@@ -169,14 +210,17 @@ test.describe('les arrêts, tous sans écriture', () => {
     app.answerHello(plan())
 
     await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible()
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    await expect(
+      page.getByText('Touche la barre du magasin en haut de la page, puis ton magasin.'),
+    ).toBeVisible()
+    await page.getByRole('button', { name: 'Arrêter pour l’instant' }).click()
 
-    expect(await app.received('result')).toMatchObject({ outcome: 'error' })
+    expect(await app.received('result')).toMatchObject({ outcome: 'aborted' })
     expect(fakeAuchan.paced().map((request) => request.path)).toEqual(['/journey'])
     expect(fakeAuchan.writes()).toEqual([])
   })
 
-  test('un visiteur (tracking_authenticated « false ») : « Tu n’es pas connecté », après la lecture du magasin', async ({
+  test('un visiteur (tracking_authenticated « false ») : l’étape « Connecte-toi », après la lecture du magasin, sans écran d’incident', async ({
     page,
     fakeAuchan,
     agentCode,
@@ -185,13 +229,12 @@ test.describe('les arrêts, tous sans écriture', () => {
     const app = await open(page, fakeAuchan, agentCode)
     app.answerHello(plan())
 
-    await expect(page.getByRole('heading', { name: 'Tu n’es pas connecté' })).toBeVisible()
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    await expect(page.getByRole('heading', { name: 'Connecte-toi' })).toBeVisible()
+    await expect(page.getByText('Tu tapes toi-même ton mot de passe.')).toBeVisible()
+    await expect(page.getByText('Tu n’es pas connecté')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Arrêter pour l’instant' }).click()
 
-    expect(await app.received('result')).toMatchObject({
-      outcome: 'error',
-      error: { code: 'NOT_LOGGED_IN' },
-    })
+    expect(await app.received('result')).toMatchObject({ outcome: 'aborted' })
     expect(fakeAuchan.paced().map((request) => request.path)).toEqual(['/journey'])
     expect(fakeAuchan.writes()).toEqual([])
   })
@@ -206,7 +249,7 @@ test.describe('les arrêts, tous sans écriture', () => {
     app.answerHello(plan())
 
     await expect(page.getByRole('heading', { name: 'Ce n’est pas le bon magasin' })).toBeVisible()
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
 
     expect(await app.received('result')).toMatchObject({
       outcome: 'error',
@@ -224,7 +267,7 @@ test.describe('les arrêts, tous sans écriture', () => {
     app.answerHello(plan())
 
     await expect(page.getByRole('heading', { name: 'Cette page n’existe pas' })).toBeVisible()
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
 
     expect(await app.received('result')).toMatchObject({
       outcome: 'error',
@@ -244,7 +287,7 @@ test.describe('les arrêts, tous sans écriture', () => {
     )
 
     await expect(page.getByRole('heading', { name: 'Ce n’est pas le bon magasin' })).toBeVisible()
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
 
     expect(await app.received('result')).toMatchObject({
       outcome: 'error',
@@ -263,7 +306,7 @@ test.describe('les arrêts, tous sans écriture', () => {
     app.answerHello(plan())
 
     await expect(page.getByRole('heading', { name: 'Le site a changé' })).toBeVisible()
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
 
     const result = await app.received('result')
     expect(JSON.stringify(result)).toContain('JOURNEY_NOT_JSON')
@@ -306,13 +349,13 @@ test.describe('la configuration du magasin (setup)', () => {
     const app = await open(page, fakeAuchan, agentCode)
     app.answerHello(SETUP)
 
-    // Then : un bandeau, pas d'écran d'erreur ; la page du site reste visible et touchable derrière
+    // Then : la carte du guide, pas d'écran d'erreur ; la page du site reste visible et touchable derrière
     await expect(
-      page.getByText('Choisis ton magasin sur Auchan. Repas le reprend ensuite.'),
+      page.getByText('Touche « Choisir vos courses » en haut de la page, puis ton magasin.'),
     ).toBeVisible()
     await expect(
       page.getByRole('heading', { name: 'Choisis ton magasin', exact: true }),
-    ).toHaveCount(0)
+    ).toBeVisible()
     await expect(page.getByRole('link', { name: 'Courses' }).first()).toBeVisible()
     await page.getByRole('link', { name: 'Courses' }).first().click({ trial: true })
     await page.waitForTimeout(2_500)
@@ -337,7 +380,7 @@ test.describe('la configuration du magasin (setup)', () => {
     expect(fakeAuchan.writes()).toEqual([])
   })
 
-  test('sans magasin choisi, « Retourner dans Repas » rend la main : rien n’est enregistré, aucune requête', async ({
+  test('sans magasin choisi, « Arrêter pour l’instant » rend la main : rien n’est enregistré, aucune requête', async ({
     page,
     fakeAuchan,
     agentCode,
@@ -346,7 +389,7 @@ test.describe('la configuration du magasin (setup)', () => {
     const app = await open(page, fakeAuchan, agentCode)
     app.answerHello(SETUP)
 
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    await page.getByRole('button', { name: 'Arrêter pour l’instant' }).click()
 
     expect(await app.received('result')).toMatchObject({ outcome: 'error' })
     expect(app.messages.some((message) => message.type === 'setup-result')).toBe(false)

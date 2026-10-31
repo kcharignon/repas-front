@@ -11,6 +11,7 @@ import type {
   DiagnosticRow,
   DiagnosticView,
   EndProps,
+  GuideProps,
   ProgressEntry,
   ProgressProps,
   SummaryProps,
@@ -159,13 +160,13 @@ describe('la demande de vérification de l’anti-robot (ticket K)', () => {
 
     expect(shadow().querySelector('h1')?.textContent).toBe('Leclerc demande une vérification')
     expect(shadow().textContent).toContain('Fais-la dans la page, puis touche Reprendre.')
-    expect(labels()).toEqual(['Reprendre', 'Arrêter'])
+    expect(labels()).toEqual(['Reprendre', 'Arrêter pour l’instant'])
     expect(shadow().activeElement?.textContent).toBe('Reprendre')
   })
 
   it.each([
     ['Reprendre', 'resume'],
-    ['Arrêter', 'stop'],
+    ['Arrêter pour l’instant', 'stop'],
   ])('« %s » rend « %s »', async (label, expected) => {
     const handle = open()
     const answer = handle.show('challenge', {})
@@ -210,32 +211,320 @@ describe('la demande de vérification de l’anti-robot (ticket K)', () => {
   })
 })
 
-describe('le bandeau du choix du magasin (DRV-740)', () => {
+describe('le guide d’une étape (DRV-751)', () => {
   const overlay = () => shadow().querySelector('.overlay') as HTMLElement
+  const STOP = 'Arrêter pour l’instantTa liste est gardée, tu pourras reprendre.'
+  const props = (extra: Partial<GuideProps> = {}): GuideProps => ({
+    step: 'store',
+    stage: 'waiting',
+    index: 1,
+    total: 2,
+    label: 'Choisir mon mode de livraison',
+    ...extra,
+  })
+  /** Les conteneurs que l'agent a posés dans la page : celui de l'interface, et celui du repère (le second, sans prise sur les touchers). */
+  const hosts = () => [...document.documentElement.children].filter((el) => el.shadowRoot !== null)
 
-  it('attente : une phrase et « Retourner dans Repas », un bandeau qui laisse la page visible et touchable', async () => {
+  it('étape 1 sur 2 : un repère, un titre, une phrase qui dit quoi faire et où, ce que l’agent fait, et UNE seule action', () => {
     const handle = open()
-    const answer = handle.show('storeWaiting', { stage: 'waiting' })
+    void handle.show('guide', props())
 
-    expect(shadow().querySelector('h1')?.textContent).toBe(
-      'Choisis ton magasin sur Leclerc. Repas le reprend ensuite.',
+    expect(shadow().querySelector('.g-step')?.textContent).toBe('Étape 1 sur 2')
+    expect(shadow().querySelectorAll('.g-seg.on')).toHaveLength(1)
+    expect(shadow().querySelectorAll('.g-seg')).toHaveLength(2)
+    expect(shadow().querySelector('h1')?.textContent).toBe('Choisis ton magasin')
+    expect(shadow().querySelector('.g-text')?.textContent).toBe(
+      'Touche « Choisir mon mode de livraison » en haut de la page, puis ton magasin.',
     )
-    expect(labels()).toEqual(['Retourner dans Repas'])
-    expect(overlay().classList.contains('sheet')).toBe(true)
-    expect(overlay().getAttribute('aria-modal')).toBe('false')
-    expect(handle.host?.style.getPropertyValue('pointer-events')).toBe('none')
-    press('Retourner dans Repas')
-    await expect(answer).resolves.toBe('return')
+    expect(shadow().querySelector('.g-status')?.textContent).toBe('Je continue dès que c’est fait.')
+    expect(labels()).toEqual([STOP])
   })
 
-  it('trop long : « Réessayer » et « Retourner dans Repas »', async () => {
+  it('étape 2 sur 2 : se connecter, le mot de passe se tape à la main', () => {
     const handle = open()
-    const answer = handle.show('storeWaiting', { stage: 'late' })
+    void handle.show('guide', props({ step: 'login', index: 2, label: 'Se connecter' }))
 
-    expect(shadow().querySelector('h1')?.textContent).toBe('Je ne vois pas de magasin choisi.')
-    expect(labels()).toEqual(['Réessayer', 'Retourner dans Repas'])
-    press('Réessayer')
-    await expect(answer).resolves.toBe('retry')
+    expect(shadow().querySelector('.g-step')?.textContent).toBe('Étape 2 sur 2')
+    expect(shadow().querySelectorAll('.g-seg.on')).toHaveLength(2)
+    expect(shadow().querySelector('h1')?.textContent).toBe('Connecte-toi')
+    expect(shadow().querySelector('.g-text')?.textContent).toBe(
+      'Touche « Se connecter », puis entre tes identifiants. Tu tapes toi-même ton mot de passe.',
+    )
+  })
+
+  it('une seule étape qui reste : « Il reste une étape », sans « 1 sur 1 »', () => {
+    const handle = open()
+    void handle.show('guide', props({ step: 'login', index: 1, total: 1, label: null }))
+
+    expect(shadow().querySelector('.g-step')?.textContent).toBe('Il reste une étape')
+    expect(shadow().querySelector('.g-text')?.textContent).toBe(
+      'Touche le bouton de connexion de la page, puis entre tes identifiants. Tu tapes toi-même ton mot de passe.',
+    )
+  })
+
+  it('sans libellé lu dans la page, la phrase n’en cite aucun', () => {
+    const handle = open()
+    void handle.show('guide', props({ label: null }))
+
+    expect(shadow().querySelector('.g-text')?.textContent).toBe(
+      'Touche la barre du magasin en haut de la page, puis ton magasin.',
+    )
+  })
+
+  it('le texte du magasin ne parle jamais de connexion : le magasin d’abord', () => {
+    const handle = open()
+    void handle.show('guide', props({ label: null }))
+
+    expect(shadow().textContent).not.toMatch(/connect|identifi|mot de passe/i)
+  })
+
+  it('une carte en bas : la page reste visible et touchable, sans fond, aucune boîte modale', () => {
+    const handle = open()
+    void handle.show('guide', props())
+
+    expect(overlay().classList.contains('sheet')).toBe(true)
+    expect(overlay().getAttribute('aria-modal')).toBe('false')
+    expect((shadow().querySelector('.backdrop') as HTMLElement).hidden).toBe(true)
+    expect(handle.host?.style.getPropertyValue('pointer-events')).toBe('none')
+    expect(shadow().querySelector('.screen')?.classList.contains('guide')).toBe(true)
+  })
+
+  it('« Arrêter pour l’instant » rend « stop » : il dit que la liste est gardée', async () => {
+    const handle = open()
+    const answer = handle.show('guide', props())
+
+    press(STOP)
+
+    await expect(answer).resolves.toBe('stop')
+  })
+
+  it('la lecture du magasin (réglages) dit que rien n’est enregistré, pas que la liste est gardée', () => {
+    const handle = open()
+    void handle.show('guide', props({ total: 0, setup: true }))
+
+    expect(shadow().querySelector('.g-head')).toBeNull()
+    expect(labels()).toEqual([
+      'Arrêter pour l’instantRien n’est enregistré, tu pourras recommencer.',
+    ])
+  })
+
+  it('l’attente s’allonge : « Attendre encore » et « Arrêter pour l’instant », rien d’autre', async () => {
+    const handle = open()
+    const answer = handle.show('guide', props({ stage: 'late' }))
+
+    expect(shadow().querySelector('h1')?.textContent).toBe('Je suis toujours là')
+    expect(labels()).toEqual(['Attendre encore', STOP])
+    expect(shadow().querySelector('.g-status')).toBeNull()
+    press('Attendre encore')
+    await expect(answer).resolves.toBe('wait')
+  })
+
+  it('l’étape est faite : « C’est bon », « Ton magasin est choisi », « Je remplis ton panier » et une barre fine', () => {
+    const handle = open()
+    void handle.show('guide', props({ stage: 'done' }))
+
+    expect(shadow().querySelector('.g-step')?.textContent).toBe('C’est bon')
+    expect(shadow().querySelector('h1')?.textContent).toBe('Ton magasin est choisi')
+    expect(shadow().querySelector('.g-text')?.textContent).toBe(
+      'Je remplis ton panier. Tu n’as rien à faire.',
+    )
+    expect(shadow().querySelector('.g-meter')).not.toBeNull()
+    expect(shadow().querySelector('.g-status')).toBeNull()
+  })
+
+  it('connecté : « Tu es connecté »', () => {
+    const handle = open()
+    void handle.show('guide', props({ step: 'login', stage: 'done' }))
+
+    expect(shadow().querySelector('h1')?.textContent).toBe('Tu es connecté')
+  })
+
+  it('aucun mot d’alerte : ni « erreur », ni « introuvable », ni « incident », ni « Fermer »', () => {
+    const handle = open()
+    for (const stage of ['waiting', 'late', 'done'] as const) {
+      for (const step of ['store', 'login'] as const) {
+        void handle.show('guide', props({ stage, step }))
+        expect(shadow().textContent).not.toMatch(
+          /erreur|introuvable|incident|fermer|annuler|pas connecté/i,
+        )
+      }
+    }
+  })
+
+  it('les boutons mesurent 56 px au moins, sur deux lignes pour l’action secondaire', () => {
+    expect(STYLES).toMatch(/\.guide>button\{[^}]*min-height:56px/)
+    const handle = open()
+    void handle.show('guide', props())
+
+    expect(shadow().querySelectorAll('.g-stop > span')).toHaveLength(2)
+  })
+
+  it('la carte reste au-dessus du bouton de menu de l’application (marge basse de 88 px)', () => {
+    expect(STYLES).toMatch(/\.screen\.guide\{[^}]*margin:auto 8px var\(--clear\)/)
+    expect(STYLES).toMatch(/--clear:88px/)
+  })
+
+  describe('le repère dans la page', () => {
+    /** Un contrôle de la page, avec la position que le navigateur lui donnerait (jsdom ne mesure rien). */
+    function control(rect: { left: number; top: number; width: number; height: number }) {
+      const element = document.createElement('a')
+      document.body.appendChild(element)
+      element.getBoundingClientRect = () =>
+        ({
+          ...rect,
+          right: rect.left + rect.width,
+          bottom: rect.top + rect.height,
+          x: rect.left,
+          y: rect.top,
+        }) as DOMRect
+      return element
+    }
+
+    it('entoure le contrôle d’un trait de 3 px à 3 px de lui, avec « Touche ici » dessous ; la page n’est pas modifiée', () => {
+      const element = control({ left: 20, top: 100, width: 200, height: 40 })
+      const before = element.outerHTML
+      const handle = open()
+      void handle.show('guide', props({ target: () => element }))
+
+      const pointer = hosts().find((host) => host !== handle.host) as HTMLElement
+      const ring = pointer.shadowRoot?.querySelector('.ring') as HTMLElement
+      expect(ring.hidden).toBe(false)
+      expect(ring.style.left).toBe('14px')
+      expect(ring.style.top).toBe('94px')
+      expect(ring.style.width).toBe('212px')
+      expect(ring.style.height).toBe('52px')
+      expect(pointer.shadowRoot?.querySelector('.label')?.textContent).toBe('Touche ici')
+      expect(pointer.style.getPropertyValue('pointer-events')).toBe('none')
+      expect(element.outerHTML).toBe(before)
+      expect(element.getAttribute('style')).toBeNull()
+    })
+
+    it('l’attente longue garde le repère : l’étape reste à faire', () => {
+      const element = control({ left: 20, top: 100, width: 200, height: 40 })
+      const handle = open()
+      void handle.show('guide', props({ stage: 'late', target: () => element }))
+
+      expect(hosts()).toHaveLength(2)
+      const pointer = hosts().find((host) => host !== handle.host) as HTMLElement
+      const ring = (pointer.shadowRoot as ShadowRoot).querySelector('.ring') as HTMLElement
+      expect(ring.hidden).toBe(false)
+    })
+
+    it('la page « fait » ou la page de connexion déjà ouverte : rien à entourer', () => {
+      const element = control({ left: 20, top: 100, width: 200, height: 40 })
+      const handle = open()
+      void handle.show('guide', props({ step: 'login', form: true }))
+
+      expect(shadow().querySelector('.g-text')?.textContent).toBe(
+        'Entre tes identifiants dans la page. Tu tapes toi-même ton mot de passe.',
+      )
+      expect(hosts()).toHaveLength(1)
+      void handle.show('guide', props({ stage: 'done', target: () => element }))
+      expect(hosts()).toHaveLength(1)
+    })
+
+    it('le contrôle est résolu à l’affichage et gardé : un défilement ne relit pas la page à chaque image', async () => {
+      const element = control({ left: 20, top: 100, width: 200, height: 40 })
+      let reads = 0
+      const handle = open()
+      void handle.show(
+        'guide',
+        props({
+          target: () => {
+            reads += 1
+            return element
+          },
+        }),
+      )
+      expect(reads).toBe(1)
+
+      for (let i = 0; i < 20; i += 1) window.dispatchEvent(new Event('scroll'))
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      expect(reads).toBe(1)
+    })
+
+    it('le contrôle disparu de la page est relu, au plus une fois par seconde ; un redimensionnement le relit tout de suite', async () => {
+      let element: HTMLElement | null = control({ left: 20, top: 100, width: 200, height: 40 })
+      let reads = 0
+      const handle = open()
+      void handle.show(
+        'guide',
+        props({
+          target: () => {
+            reads += 1
+            return element
+          },
+        }),
+      )
+      const first = element as HTMLElement
+      first.remove()
+
+      // La page l'a retiré : les défilements qui suivent n'y changent rien avant la seconde
+      for (let i = 0; i < 10; i += 1) window.dispatchEvent(new Event('scroll'))
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(reads).toBe(1)
+
+      // La page en dessine un autre ; la fenêtre change de taille : relu aussitôt
+      element = control({ left: 30, top: 120, width: 100, height: 30 })
+      window.dispatchEvent(new Event('resize'))
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(reads).toBe(2)
+      const pointer = hosts().find((host) => host !== handle.host) as HTMLElement
+      const ring = (pointer.shadowRoot as ShadowRoot).querySelector('.ring') as HTMLElement
+      expect(ring.style.left).toBe('24px')
+    })
+
+    it('ne dessine rien quand la page ne montre pas le contrôle', () => {
+      const handle = open()
+      void handle.show('guide', props({ target: () => null }))
+
+      const pointer = hosts().find((host) => host !== handle.host) as HTMLElement
+      const root = pointer.shadowRoot as ShadowRoot
+      expect((root.querySelector('.ring') as HTMLElement).hidden).toBe(true)
+      expect((root.querySelector('.tag') as HTMLElement).hidden).toBe(true)
+    })
+
+    it('disparaît avec la carte : étape suivante sans contrôle, ou fermeture', () => {
+      const element = control({ left: 20, top: 100, width: 200, height: 40 })
+      const handle = open()
+      void handle.show('guide', props({ target: () => element }))
+      expect(hosts()).toHaveLength(2)
+
+      void handle.show('guide', props({ stage: 'done', target: () => element }))
+      expect(hosts()).toHaveLength(1)
+
+      void handle.show('guide', props({ target: () => element }))
+      handle.close()
+      expect(hosts()).toHaveLength(0)
+    })
+
+    it('suit le contrôle quand la page défile', async () => {
+      let top = 100
+      const element = control({ left: 20, top: 100, width: 200, height: 40 })
+      element.getBoundingClientRect = () =>
+        ({
+          left: 20,
+          top,
+          width: 200,
+          height: 40,
+          right: 220,
+          bottom: top + 40,
+          x: 20,
+          y: top,
+        }) as DOMRect
+      const handle = open()
+      void handle.show('guide', props({ target: () => element }))
+      const pointer = hosts().find((host) => host !== handle.host) as HTMLElement
+      const ring = pointer.shadowRoot?.querySelector('.ring') as HTMLElement
+      expect(ring.style.top).toBe('94px')
+
+      top = 60
+      window.dispatchEvent(new Event('scroll'))
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      expect(ring.style.top).toBe('54px')
+    })
   })
 })
 
@@ -1820,20 +2109,20 @@ describe('erreurs', () => {
   it('sans retour possible, ne propose que « Fermer »', async () => {
     const handle = open()
     const answer = handle.show('error', { code: 'INVALID_MESSAGE', canReturn: false })
-    expect(labels()).toEqual(['Fermer'])
+    expect(labels()).toEqual(['Fermer ce message'])
 
-    press('Fermer')
+    press('Fermer ce message')
 
     await expect(answer).resolves.toBe('close')
   })
 
-  it('avec un retour possible, propose « Retourner dans Repas » en premier', async () => {
+  it('avec un retour possible, propose « Revenir à ma liste dans Repas » en premier', async () => {
     const handle = open()
     const answer = handle.show('error', { code: 'STORE_MISMATCH', canReturn: true })
-    expect(labels()).toEqual(['Retourner dans Repas', 'Fermer'])
-    expect(shadow().activeElement?.textContent).toBe('Retourner dans Repas')
+    expect(labels()).toEqual(['Revenir à ma liste dans Repas', 'Fermer ce message'])
+    expect(shadow().activeElement?.textContent).toBe('Revenir à ma liste dans Repas')
 
-    press('Retourner dans Repas')
+    press('Revenir à ma liste dans Repas')
 
     await expect(answer).resolves.toBe('return')
   })
@@ -1857,7 +2146,7 @@ describe('fin', () => {
       'Tes produits sont dans ton panier Leclerc. Retourne dans Repas pour le finaliser.',
     )
 
-    press('Retourner dans Repas')
+    press('Revenir à ma liste dans Repas')
 
     await expect(answer).resolves.toBe('return')
   })
@@ -1888,7 +2177,7 @@ describe('fin', () => {
     ])
     expect(shadow().querySelector('img, script, iframe, object')).toBeNull()
     expect((window as unknown as { pwned?: number }).pwned).toBeUndefined()
-    press('Retourner dans Repas')
+    press('Revenir à ma liste dans Repas')
     await expect(answer).resolves.toBe('return')
   })
 
@@ -1919,7 +2208,7 @@ describe('fin', () => {
       `${HOSTILE} — Déjà 3 au panier : conservé`,
     ])
     expect(shadow().querySelector('img, script, iframe, object')).toBeNull()
-    press('Retourner dans Repas')
+    press('Revenir à ma liste dans Repas')
     await expect(answer).resolves.toBe('return')
   })
 
@@ -2076,7 +2365,7 @@ describe('fin', () => {
       const text = shadow().textContent ?? ''
       expect(text).not.toMatch(/(^|[^\d])0(?!\d)/)
       expect(text).not.toMatch(/Échecs|Prix lus|[A-Z]{2,}_[A-Z_]+|Code\s*:/)
-      expect(labels()).toEqual(['Retourner dans Repas'])
+      expect(labels()).toEqual(['Revenir à ma liste dans Repas'])
       expect(shadow().querySelectorAll('button.primary')).toHaveLength(1)
     },
   )
@@ -2104,7 +2393,7 @@ describe('un écran remplacé', () => {
 
     const second = handle.show('end', END)
     staleStart?.click()
-    press('Retourner dans Repas')
+    press('Revenir à ma liste dans Repas')
 
     await expect(second).resolves.toBe('return')
     expect(first).not.toHaveBeenCalled()

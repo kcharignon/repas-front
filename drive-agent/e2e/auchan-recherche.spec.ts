@@ -209,7 +209,7 @@ test.describe('phase A : la quantité déjà au panier se lit (DRV-732)', () => 
     await expect(page.getByText('Quantités déjà au panier')).toBeVisible()
     await expect(page.getByText('Déjà 4 au panier : conservé')).toBeVisible()
     await expect(page.getByText('Quantité au panier illisible')).toHaveCount(0)
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
     const result = await app.received('result')
     expect(result).toMatchObject({
       outcome: 'completed',
@@ -295,7 +295,7 @@ test.describe('une page de résultats d’une forme inconnue : le site a changé
       app.answerHello(plan([fresh(term, term)]))
 
       await expect(page.getByRole('heading', { name: 'L’envoi s’est arrêté' })).toBeVisible()
-      await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+      await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
 
       const result = await app.received('result')
       expect(result).toMatchObject({ outcome: 'error', error: { code: 'CONTRACT_CHANGED' } })

@@ -32,7 +32,16 @@ import { AuchanCart } from './cart-writer'
 import { isAuchanChallenge } from './challenge'
 import { readEntry } from './entry'
 import { readJourney } from './journey'
-import { addressShape, cookieFacts, isNotFoundPage, storeBar } from './page'
+import {
+  addressShape,
+  chooseBarTarget,
+  cookieFacts,
+  isNotFoundPage,
+  LOGIN_HINTS,
+  LOGIN_LABELS,
+  storeBar,
+} from './page'
+import { findControl, type GuideStep, type GuideTarget } from '../retailers/guide'
 import type { AuchanOffer } from './offers'
 import { PACING } from './pacing'
 import { readSession } from './session'
@@ -174,6 +183,21 @@ export class AuchanAdapter implements RetailerAdapter {
       return storeBar(this.deps.document) === 'WITHDRAWAL'
     } catch {
       return false
+    }
+  }
+
+  /**
+   * Le contrôle que la personne doit toucher pour une étape guidée (DRV-751) : la barre du magasin (`store`), ou le contrôle de connexion de la page (`login`,
+   * libellés non mesurés : `null` si rien ne ressemble à une connexion). Une lecture de la page seule, jamais un toucher.
+   */
+  guideTarget(step: GuideStep): GuideTarget | null {
+    try {
+      const { document } = this.deps
+      return step === 'store'
+        ? chooseBarTarget(document)
+        : findControl(document, LOGIN_LABELS, LOGIN_HINTS)
+    } catch {
+      return null
     }
   }
 

@@ -20,7 +20,7 @@
 #      pages 404, le faux site les refuse aussi) ; le test ÉCHOUE si le départ retombe sur la racine de l'hôte du magasin (non-régression) ; DRV-625 :
 #      l'AGENT clique lui-même « Commencer mes courses » (aucun toucher), le plan repart vers la page du magasin : le passage démarre seul (agent 0.39.0 : plus de récapitulatif ni de « Commencer »), phase A (deux produits
 #      connus, quantités du plan), phase B (un nouveau produit choisi dans la liste de l'agent, nombre calculé), « j'en ai toujours » et « ignoré » ;
-#      Repas reçoit le résultat TOUT SEUL (aucun « Retourner dans Repas » pour un envoi terminé) ; panier du faux Leclerc, cadence, requêtes ;
+#      Repas reçoit le résultat TOUT SEUL (aucun « Revenir à ma liste dans Repas » pour un envoi terminé) ; panier du faux Leclerc, cadence, requêtes ;
 #   3. « Annuler » au récapitulatif : rien ne part vers le site, Repas reçoit un résultat « aborted » ;
 #   4. abandon par l'utilisateur en plein passage (retour du téléphone, « Abandonner ») : Repas reçoit « aborted / CANCELLED » ;
 #   5. application tuée en plein passage, puis reprise : le passage repart, se termine, le panier est exact et Repas reçoit le résultat ;
@@ -342,16 +342,16 @@ screenshot e05-choix
 touch_target "$CHOOSE" "Choisir (liste de produits)"
 touch_target 'text="Pas cette fois"' "Pas cette fois"
 if tap "$CHOOSE"; then ok "premier produit proposé choisi (poivre moulu)"; else ko "aucun bouton « Choisir » à l'écran"; fi
-# DRV-625 : un envoi terminé n'a rien à faire lire, le résultat repart tout seul (aucun « Retourner dans Repas ») et l'application ferme le drive.
+# DRV-625 : un envoi terminé n'a rien à faire lire, le résultat repart tout seul (aucun « Revenir à ma liste dans Repas ») et l'application ferme le drive.
 if wait_until 60 result_has "$RUN_FULL" completed ''; then
-  ok "l'envoi terminé repart tout seul : Repas reçoit drive.result, « completed », du même runId, sans toucher « Retourner dans Repas »"
+  ok "l'envoi terminé repart tout seul : Repas reçoit drive.result, « completed », du même runId, sans toucher « Revenir à ma liste dans Repas »"
 else
   ko "Repas n'a pas reçu le résultat du passage"
 fi
 check "le panier du faux Leclerc : farine x3, sucre x1 et le poivre choisi x2" cart_is "$CART_FULL"
 polite_agent
 back_to_repas || ko "l'écran Repas n'est pas revenu"
-check "aucun écran de fin de l'agent à lire ni à toucher : le drive s'est refermé" ui_lacks 'Retourner dans Repas'
+check "aucun écran de fin de l'agent à lire ni à toucher : le drive s'est refermé" ui_lacks 'Revenir à ma liste dans Repas'
 sleep 1
 screenshot e06-retour-automatique
 check "le résultat détaille chaque ligne (ajoutée, ajoutée, à la maison, ignorée, choisie)" \
@@ -369,7 +369,7 @@ wait_until 60 ui_has 'Il te faut' || ko "la liste de choix ne s'est pas affiché
 if tap 'text="Annuler l’envoi"'; then ok "« Annuler l'envoi » touché dans l'interface de l'agent"; else ko "le bouton « Annuler l'envoi » est introuvable"; fi
 if wait_until 20 ui_has 'Tu as arrêté'; then ok "l'agent annonce « Tu as arrêté l'envoi »"; else ko "l'agent n'a pas annoncé l'arrêt"; fi
 screenshot e08-annule
-if tap 'text="Retourner dans Repas"' && wait_until 20 result_has "$RUN_CANCEL" aborted ''; then
+if tap 'text="Revenir à ma liste dans Repas"' && wait_until 20 result_has "$RUN_CANCEL" aborted ''; then
   ok "Repas reçoit un résultat « aborted »"
 else
   ko "Repas n'a pas reçu de résultat « aborted »"
@@ -460,7 +460,7 @@ else
   ko "l'agent a envoyé $(paced_count) requêtes (3 attendues)"
 fi
 check "rien n'a été mis au panier" cart_is '{}'
-if tap 'text="Retourner dans Repas"' && wait_until 20 result_has "$RUN_BLOCK" partial ', "errorCode": "BLOCKED"'; then
+if tap 'text="Revenir à ma liste dans Repas"' && wait_until 20 result_has "$RUN_BLOCK" partial ', "errorCode": "BLOCKED"'; then
   ok "Repas reçoit « partial / BLOCKED »"
 else
   ko "Repas n'a pas reçu « partial / BLOCKED »"
@@ -481,7 +481,7 @@ check "l'agent dit que Leclerc a changé son site" ui_has 'Leclerc a changé son
 check "le conseil est de chercher à la main sur Leclerc" ui_has 'à la main sur Leclerc'
 sleep 1
 screenshot e13-site-change
-if tap 'text="Retourner dans Repas"' && wait_until 20 result_has "$RUN_CHANGED" error ', "errorCode": "CONTRACT_CHANGED"'; then
+if tap 'text="Revenir à ma liste dans Repas"' && wait_until 20 result_has "$RUN_CHANGED" error ', "errorCode": "CONTRACT_CHANGED"'; then
   ok "Repas reçoit « error / CONTRACT_CHANGED »"
 else
   ko "Repas n'a pas reçu « error / CONTRACT_CHANGED »"
@@ -511,7 +511,7 @@ fi
 check "rien n'a été cherché ni mis au panier" nothing_sent
 sleep 1
 screenshot e14-autre-magasin
-if tap 'text="Retourner dans Repas"' && wait_until 20 result_has "$RUN_OTHER" error ', "errorCode": "STORE_MISMATCH"'; then
+if tap 'text="Revenir à ma liste dans Repas"' && wait_until 20 result_has "$RUN_OTHER" error ', "errorCode": "STORE_MISMATCH"'; then
   ok "Repas reçoit « error / STORE_MISMATCH »"
 else
   ko "Repas n'a pas reçu « error / STORE_MISMATCH »"
@@ -728,7 +728,7 @@ fake_reset
 start_plan "$RUN_ALL" plan-connu.json
 # (Le passage de plan-connu est trop court pour qu'on attende son écran : le résultat tout seul le prouve.)
 if wait_until 90 result_has "$RUN_ALL" completed ''; then
-  ok "le passage démarre et se termine sans aucun toucher : Repas reçoit « completed » tout seul, sans « Retourner dans Repas »"
+  ok "le passage démarre et se termine sans aucun toucher : Repas reçoit « completed » tout seul, sans « Revenir à ma liste dans Repas »"
 else
   ko "Repas n'a pas reçu le résultat du passage"
 fi
@@ -1049,26 +1049,29 @@ auchan_scenario() {
   auchan_reset
 
   # f. La première configuration depuis Repas (DRV-740) : l'adresse d'Auchan ne change jamais, `drive.setup` arrive dès l'ouverture, AVANT le choix du magasin.
-  # Aucun écran d'erreur ne masque la page : un bandeau, la page reste touchable, aucune requête ; le magasin choisi, « Utiliser ce magasin ? » puis le magasin part vers Repas.
+  # Aucun écran d'erreur ne masque la page : la carte du guide (DRV-751 : « Choisis ton magasin », la barre de la page entourée, une seule action « Arrêter pour l'instant »),
+  # la page reste touchable, aucune requête ; le magasin choisi, « Utiliser ce magasin ? » puis le magasin part vers Repas.
   RUN_AUCHAN_SETUP=5e7b0000-0000-4000-8000-0000000000c1
   auchan_behavior '{"store":"none"}'
   start_app
   wait_until 40 has_report '"page": "repas"' || ko "le faux Repas ne s'est pas chargé"
   post_command "{\"do\":\"drive.setup\",\"runId\":\"$RUN_AUCHAN_SETUP\",\"retailer\":\"auchan\"}"
-  if wait_until 40 ui_has 'Choisis ton magasin sur Auchan'; then
-    ok "drive.setup d'Auchan sans magasin choisi : un bandeau « Choisis ton magasin sur Auchan. Repas le reprend ensuite. »"
+  if wait_until 40 ui_has 'Choisis ton magasin'; then
+    ok "drive.setup d'Auchan sans magasin choisi : la carte « Choisis ton magasin » (« Touche « Choisir vos courses » en haut de la page, puis ton magasin. »)"
   else
-    ko "le bandeau d'attente du choix du magasin n'est pas apparu"
+    ko "la carte d'attente du choix du magasin n'est pas apparue"
   fi
   screenshot e45-premiere-configuration-bandeau
   check "aucun écran d'erreur « Aucun magasin n'est choisi » ne masque la page" ui_lacks 'Aucun magasin'
-  check "la page du faux Auchan est toujours là, sous le bandeau" ui_has 'Courses en ligne'
-  check "le bandeau propose de retourner dans Repas" ui_has 'Retourner dans Repas'
+  check "la page du faux Auchan est toujours là, sous la carte" ui_has 'Courses en ligne'
+  check "la carte ne propose qu'une action, qui rassure : « Arrêter pour l'instant », « Ta liste est gardée »…" ui_has 'Arrêter pour l.instant'
+  check "aucun bouton « Fermer » ni « Retourner dans Repas »" ui_lacks 'text="Fermer"\|Retourner dans Repas'
+  check "la carte dit qu'elle continue toute seule : « Je continue dès que c'est fait. »" ui_has 'Je continue d'
   sleep 5
   check "aucune requête partie vers le faux Auchan pendant l'attente du choix" auchan_nothing_requested
-  # La personne choisit son magasin : le site garde son choix, la page se recharge (la barre dit « Retrait : … »). Le lien « Courses » de la page est touchable sous le bandeau.
+  # La personne choisit son magasin : le site garde son choix, la page se recharge (la barre dit « Retrait : … »). Le lien « Courses » de la page est touchable sous la carte.
   auchan_behavior '{"store":"chosen"}'
-  if tap 'text="Courses"'; then ok "la page reste touchable sous le bandeau (« Courses » touché)"; else ko "la page n'est pas touchable sous le bandeau"; fi
+  if tap 'text="Courses"'; then ok "la page reste touchable sous la carte (« Courses » touché)"; else ko "la page n'est pas touchable sous la carte"; fi
   if wait_until 60 ui_has 'Utiliser ce magasin ?'; then
     ok "le magasin choisi, l'agent demande confirmation avec l'écran habituel"
   else

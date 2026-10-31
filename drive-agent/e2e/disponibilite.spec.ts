@@ -190,7 +190,7 @@ test.describe('« Bientôt disponible » : le panier tranche', () => {
       ),
     ).toBeVisible()
     expect(fake.cart()).toEqual({})
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
     await returnsToRepas(page, fake)
 
     // And : le résultat est une ligne CHOSEN ordinaire, avec le produit à mémoriser et `notInCart: true` (DRV-746 : rien n'est au panier)
@@ -247,7 +247,7 @@ test.describe('« Bientôt disponible » : le panier tranche', () => {
         "« Gâteaux C'est Nous Pépites » est enregistré, mais pas dans ton panier : Leclerc n’a pas voulu le mettre au panier, sans en donner la raison.",
       ),
     ).toBeVisible()
-    await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+    await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
     await returnsToRepas(page, fake)
     expect(fake.cart()).toEqual({})
     expect(await returnedResult(page, fake)).toMatchObject({

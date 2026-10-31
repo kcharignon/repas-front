@@ -1,7 +1,9 @@
 // L'interface superposée : un Shadow DOM fermé dans un conteneur plein écran, au-dessus de la page de l'enseigne.
 import type { RetailerInfo } from '../retailers/names'
 import { append, clear, h } from './dom'
+import { createPointer, type Pointer } from './pointer'
 import { displayLayout, measureDisplay, type DisplayLayout } from './scale'
+import { installStyles } from './sheet'
 import { RENDERERS, type Rendered } from './screens'
 import { S } from './strings'
 import { STYLES } from './styles'
@@ -66,17 +68,6 @@ function place(overlay: HTMLElement, layout: DisplayLayout): void {
   else style.setProperty('transform', `scale(${layout.scale})`)
 }
 
-/** Feuille de style sans balise `<style>` (une politique de sécurité de la page pourrait l'interdire) ; à défaut, la balise. */
-function installStyles(win: Window & typeof globalThis, root: ShadowRoot): void {
-  try {
-    const sheet = new win.CSSStyleSheet()
-    sheet.replaceSync(STYLES)
-    root.adoptedStyleSheets = [sheet]
-  } catch {
-    root.appendChild(h('style', { text: STYLES }))
-  }
-}
-
 export function createUi(options: UiOptions): UiHandle {
   const win = options.win ?? window
   const mode = options.mode ?? 'closed'
@@ -94,13 +85,15 @@ export function createUi(options: UiOptions): UiHandle {
   }
   /** Numéro du dernier écran affiché : la réponse d'un écran remplacé est ignorée. */
   let serial = 0
+  /** Le cadre et le repère que le guide pose dans la page (DRV-751), dans un second conteneur ; créé au premier besoin. */
+  let pointer: Pointer | null = null
 
   function mount() {
     if (view) return view
     const host = h('div')
     pin(host)
     const root = attach(host, { mode })
-    installStyles(win, root)
+    installStyles(win, root, STYLES)
     const overlay = h('div', {
       class: 'overlay',
       attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': S.dialog },
@@ -126,6 +119,7 @@ export function createUi(options: UiOptions): UiHandle {
     show<K extends ScreenName>(screen: K, props: ScreenProps<K>): Promise<ScreenAnswer<K>> {
       const shown = mount()
       shown.current?.dispose?.()
+      pointer?.clear()
       const mine = ++serial
       return new Promise((resolve) => {
         const render = RENDERERS[screen] as (
@@ -145,6 +139,10 @@ export function createUi(options: UiOptions): UiHandle {
         shown.current = rendered
         setSheet(shown, rendered.sheet === true)
         setDark(shown, rendered.dark === true)
+        if (rendered.pointAt !== undefined) {
+          pointer ??= createPointer({ win, attachShadow: attach, mode })
+          pointer.point(rendered.pointAt, () => rendered.el.getBoundingClientRect())
+        }
         rendered.start?.()
         rendered.el.scrollTop = 0
         const first = rendered.focus ?? rendered.el.querySelector<HTMLElement>(FOCUSABLE)
@@ -156,6 +154,7 @@ export function createUi(options: UiOptions): UiHandle {
     },
     close() {
       serial += 1
+      pointer?.clear()
       view?.current?.dispose?.()
       view?.host.remove()
       if (view) {

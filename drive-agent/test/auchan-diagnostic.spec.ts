@@ -66,7 +66,7 @@ async function diagnose(adapter: AuchanAdapter, storage = fakeStorage()) {
   const { results, page, probes } = await runChecks(
     {
       adapter,
-      agentVersion: '0.56.0',
+      agentVersion: '0.57.0',
       storage,
       wakeLock: fakeWakeLock().wakeLock,
       originReplaced: null,
@@ -78,7 +78,7 @@ async function diagnose(adapter: AuchanAdapter, storage = fakeStorage()) {
     CheckResult['id'],
     CheckResult
   >
-  return { results, page, probes, by, report: reportOf('0.56.0', NOW, page, results, probes) }
+  return { results, page, probes, by, report: reportOf('0.57.0', NOW, page, results, probes) }
 }
 
 const cartRequests = () =>

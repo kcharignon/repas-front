@@ -79,6 +79,11 @@ const STORE_ONLY: readonly Entry[] = [
   { where: 'fr.ts driveSettings.readHelp', text: fr.driveSettings.readHelp },
   ...strings('agent S.store', S.store),
   ...strings('agent S.entry', S.entry),
+  // Le guide de la première utilisation (DRV-751) : l'étape du magasin ne parle jamais de connexion (le magasin d'abord), ses textes à trous rendus avec et sans libellé
+  { where: 'agent S.guide.store.title', text: S.guide.store.title },
+  { where: 'agent S.guide.store.text', text: S.guide.store.text('Choisir mon mode de livraison') },
+  { where: 'agent S.guide.store.text (sans libellé)', text: S.guide.store.text(null) },
+  { where: 'agent S.guide.ready.store', text: S.guide.ready.store },
 ]
 
 /** Tous les textes qui touchent au magasin et peuvent parler de connexion, à condition de ne le faire qu'après le magasin. */
@@ -161,10 +166,12 @@ describe('le magasin d’abord, la connexion ensuite (Leclerc refuse la connexio
   })
 
   it('l’agent ne demande la connexion que lorsqu’elle manque', () => {
-    // Le seul texte de l'agent qui demande de se connecter est l'erreur « Tu n'es pas connecté » (l'envoi s'arrête, rien n'est perdu).
+    // Les seuls textes de l'agent qui demandent de se connecter : l'erreur « Tu n'es pas connecté » (la session qui tombe en plein envoi) et l'étape « Connecte-toi »
+    // du guide (DRV-751), qui ne vient qu'APRÈS l'étape du magasin.
     const asksLogin = strings('agent S', S)
       .filter((entry) => mentionsConnection(entry.text))
       .filter((entry) => !/\.(diagnostic|selftest)\./.test(entry.where))
+      .filter((entry) => !/^agent S\.guide\.(login|ready)\./.test(entry.where))
     expect(asksLogin.map((entry) => entry.where)).toEqual([])
   })
 })

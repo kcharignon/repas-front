@@ -138,6 +138,35 @@ describe('readStore : le magasin vient du parcours du site, pas de l’adresse',
     expect(site.calls).toEqual([])
   })
 
+  it.each([
+    ['« Retrait : … »', '<div><span>Retrait : Drive Ville-Test</span></div>'],
+    [
+      '« Drive Auchan Drive <ville> Dès Dimanche … » (relevé du téléphone de test, 2026-10-31)',
+      '<div><span>Drive Auchan Drive Ville-Test Dès Dimanche 01 novembre 08:30</span></div>',
+    ],
+  ])(
+    'DRV-751 : le texte « Choisir mon mode de livraison » resté dans la page APRÈS le choix du magasin (%s) ne dit pas « aucun magasin » : la page dit « choisi » et le parcours tranche',
+    async (_name, proof) => {
+      document.documentElement.innerHTML = `<body><header><a role="button" href="#">Choisir mon mode de livraison</a></header>${proof}</body>`
+      const site = auchanSite(() => journey())
+      const adapter = new AuchanAdapter(site.deps)
+
+      expect(adapter.storeChosenOnPage()).toBe(true)
+      const store = await adapter.readStore()
+
+      expect(store.id).toBe(STORE_ID)
+      expect(site.calls).toHaveLength(1)
+    },
+  )
+
+  it('DRV-751 : le seul nom du site (« Drive Auchan »), sans magasin à la suite, n’est pas la preuve d’un magasin choisi', () => {
+    document.documentElement.innerHTML =
+      '<body><a href="/">Drive Auchan</a><a role="button" href="#">Choisir mon mode de livraison</a></body>'
+    const adapter = new AuchanAdapter(auchanSite(() => journey()).deps)
+
+    expect(adapter.storeChosenOnPage()).toBe(false)
+  })
+
   it('une page sans barre du magasin se fie au parcours', async () => {
     document.documentElement.innerHTML = '<body><main><h1>Courses</h1></main></body>'
 
@@ -607,6 +636,7 @@ describe('ce qui n’est pas écrit : ce que le diagnostic de Leclerc seul conna
         'setCartQuantity',
         'stats',
         'storeChosenOnPage',
+        'guideTarget',
       ].sort(),
     )
   })

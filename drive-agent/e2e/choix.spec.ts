@@ -255,7 +255,7 @@ test('annule le passage depuis le choix : la ligne reste à choisir et Repas le 
   // When
   await page.getByRole('button', { name: 'Annuler l’envoi' }).click()
   await expect(page.getByRole('heading', { name: 'Tu as arrêté l’envoi' })).toBeVisible()
-  await page.getByRole('button', { name: 'Retourner dans Repas' }).click()
+  await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
 
   // Then
   expect(await returnedResult(page, fake)).toMatchObject({

@@ -291,17 +291,20 @@ describe('un passage complet contre le faux site (phases A et B)', () => {
     expect(fake.writes()).toEqual([])
   })
 
-  it('visiteur : l’envoi s’arrête (NOT_LOGGED_IN, SESSION_VISITOR) avant toute écriture, comme chez Leclerc (première recette : conservateur)', async () => {
+  it('visiteur : une étape guidée « connecte-toi » (DRV-751), puis l’envoi s’arrête sans écrire quand la personne arrête ; aucune écriture, une seule lecture du site', async () => {
+    const screens = fakeUi()
     const { flow, sent } = makeFlow({
-      ui: fakeUi({ error: () => 'return' }).ui,
+      ui: screens.ui,
       adapter: setup('visitor'),
       retailer: 'auchan',
     })
 
     await flow.start(auchanPlan([known('farine', [withOffer(FARINE, 3)])]))
 
+    expect(screens.screens()).toEqual(['guide', 'guide'])
+    expect(screens.propsOf('guide')[0]).toMatchObject({ step: 'login', stage: 'waiting' })
     const result = expectConform(sent[0])
-    expect(result).toMatchObject({ outcome: 'error', error: { code: 'NOT_LOGGED_IN' } })
+    expect(result).toMatchObject({ outcome: 'aborted' })
     expect(fake.writes()).toEqual([])
     expect(fake.paced().map((request) => request.path)).toEqual(['/journey'])
   })
