@@ -30,7 +30,7 @@ import {
 
 const props = defineProps<{
   list: ShoppingList
-  /** Plusieurs listes en cours se voient par pastilles : le bouton dit laquelle il termine (« Terminer cette liste »). */
+  /** Plusieurs listes sont en cours : le bouton dit laquelle il termine (« Terminer cette liste »). */
   several?: boolean
 }>()
 

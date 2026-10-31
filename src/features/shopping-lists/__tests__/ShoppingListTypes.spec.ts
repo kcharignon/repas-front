@@ -7,7 +7,7 @@ import ShoppingListsView from '@/features/shopping-lists/ShoppingListsView.vue'
 import ShoppingListView from '@/features/shopping-lists/ShoppingListView.vue'
 import { useSessionStore } from '@/session/session'
 
-// Plusieurs listes en cours, une par type de liste (ADR 0036, LST-007) : les pastilles, la liste montrée et ses actions.
+// Plusieurs listes en cours, une par type de liste (ADR 0036, LST-007, LST-010) : une seule liste est montrée (aucune pastille), ses actions.
 const row = (id: string, name: string, checked = false) => ({
   id,
   ingredientName: name,
@@ -101,9 +101,13 @@ async function mountList(path = '/liste') {
   return { wrapper, context }
 }
 
-const pills = (wrapper: VueWrapper) => wrapper.findAll('[role="group"] button')
-const pillTexts = (wrapper: VueWrapper) =>
-  pills(wrapper).map((pill) => pill.text().replace(/\s+/g, ' '))
+// Plus de pastilles (LST-010) : ni groupe de boutons, ni nom de liste en bouton, ni « à cocher »
+const noPills = (wrapper: VueWrapper) => {
+  expect(wrapper.findAll('[role="group"] button')).toHaveLength(0)
+  expect(wrapper.findAll('button[aria-pressed]')).toHaveLength(0)
+  expect(wrapper.text()).not.toContain('à cocher')
+  expect(wrapper.text()).not.toContain('Tes listes en cours')
+}
 
 describe('ShoppingListView : plusieurs listes en cours', () => {
   afterEach(() => {
@@ -116,7 +120,7 @@ describe('ShoppingListView : plusieurs listes en cours', () => {
 
     const { wrapper } = await mountList()
 
-    expect(pills(wrapper)).toHaveLength(0)
+    noPills(wrapper)
     expect(wrapper.find('h1').text()).toBe('Liste du 31 octobre 2026')
     expect(wrapper.text()).toContain('Terminer')
     expect(wrapper.text()).not.toContain('Terminer cette liste')
@@ -127,46 +131,34 @@ describe('ShoppingListView : plusieurs listes en cours', () => {
 
     const { wrapper } = await mountList()
 
-    expect(pills(wrapper)).toHaveLength(0)
+    noPills(wrapper)
     expect(wrapper.find('h1').text()).toBe('Liste du 31 octobre 2026')
   })
 
-  it('montre une pastille par liste en cours avec les articles à cocher, la principale d’abord', async () => {
+  it('avec des types ouverts, une seule liste est montrée (la principale), sans aucune pastille', async () => {
     backWith(withTypes)
 
     const { wrapper } = await mountList()
 
-    expect(pillTexts(wrapper)).toEqual([
-      'Principale 4 à cocher',
-      'Boucherie 3 à cocher',
-      'Marché 7 à cocher',
-    ])
-    // La principale est montrée d'abord, sa pastille est enfoncée
-    expect(pills(wrapper).map((pill) => pill.attributes('aria-pressed'))).toEqual([
-      'true',
-      'false',
-      'false',
-    ])
+    noPills(wrapper)
     expect(wrapper.find('h1').text()).toBe('Liste du 31 octobre 2026')
+    expect(wrapper.text()).toContain('Pâtes')
+    expect(wrapper.text()).not.toContain('Merguez')
+    expect(wrapper.text()).not.toContain('Marché')
     expect(wrapper.text()).toContain('Terminer cette liste')
+    // Le chemin pour changer de liste est « Mes listes »
+    expect(wrapper.find('a[href="/listes"]').exists()).toBe(true)
   })
 
-  it('une pastille montre la liste du type, ses lignes et son nom', async () => {
+  it('?liste= choisit la liste montrée : celle du type, ses lignes et son nom, toujours sans pastille', async () => {
     backWith(withTypes)
-    const { wrapper, context } = await mountList()
 
-    await pills(wrapper)[1]!.trigger('click')
+    const { wrapper } = await mountList('/liste?liste=list-b')
+
     await vi.waitFor(() => expect(wrapper.find('h1').text()).toBe('Boucherie'))
-
     expect(wrapper.text()).toContain('Merguez')
     expect(wrapper.text()).not.toContain('Pâtes')
-    expect(pills(wrapper)[1]!.attributes('aria-pressed')).toBe('true')
-    // Le choix est dans l'adresse : on peut y revenir, et « Voir » y mène
-    expect(context.router.currentRoute.value.query.liste).toBe('list-b')
-
-    await pills(wrapper)[0]!.trigger('click')
-    await vi.waitFor(() => expect(wrapper.find('h1').text()).toBe('Liste du 31 octobre 2026'))
-    expect(context.router.currentRoute.value.query.liste).toBeUndefined()
+    noPills(wrapper)
   })
 
   it('s’ouvre sur la liste demandée par l’adresse (« Voir »)', async () => {
@@ -175,7 +167,8 @@ describe('ShoppingListView : plusieurs listes en cours', () => {
     const { wrapper } = await mountList('/liste?liste=list-m')
 
     await vi.waitFor(() => expect(wrapper.find('h1').text()).toBe('Marché'))
-    expect(pills(wrapper)[2]!.attributes('aria-pressed')).toBe('true')
+    expect(wrapper.text()).toContain('Poireaux')
+    noPills(wrapper)
   })
 
   it('retombe sur la principale quand la liste demandée n’est plus en cours', async () => {
@@ -184,7 +177,8 @@ describe('ShoppingListView : plusieurs listes en cours', () => {
     const { wrapper } = await mountList('/liste?liste=list-fantome')
 
     expect(wrapper.find('h1').text()).toBe('Liste du 31 octobre 2026')
-    expect(pills(wrapper)[0]!.attributes('aria-pressed')).toBe('true')
+    expect(wrapper.text()).toContain('Pâtes')
+    noPills(wrapper)
   })
 
   it('« Terminer cette liste » ne termine que la liste montrée', async () => {
@@ -298,7 +292,7 @@ describe('ShoppingListView : plusieurs listes en cours', () => {
 describe('ShoppingListsView : une liste de type en cours', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('ouvre la liste du type sur l’écran Liste, à sa pastille', async () => {
+  it('ouvre la liste du type sur l’écran Liste', async () => {
     stubApi({
       'POST /api/auth/refresh': () => json({ token: 'jeton' }),
       'GET /api/v1/me': () => json(me),

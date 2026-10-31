@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 import { hasFailed } from '@/api/query'
 import LoadError from '@/design/LoadError.vue'
@@ -10,35 +10,34 @@ import UiButton from '@/design/UiButton.vue'
 import { useOnline } from '@/offline/useOnline'
 import ShoppingListContent from './ShoppingListContent.vue'
 import ShoppingListHeader from './ShoppingListHeader.vue'
-import ShoppingListPills from './ShoppingListPills.vue'
 import {
   isTyped,
   useActiveShoppingList,
   useEnsureActiveShoppingList,
   useOpenShoppingLists,
 } from './queries'
-import type { OpenShoppingList } from '@/api'
 
 const { t, d } = useI18n()
 const online = useOnline()
 const route = useRoute()
-const router = useRouter()
 
-// Les pastilles n'existent que s'il y a au moins une liste d'un type : sans type, l'écran est celui de la liste principale, inchangé.
-// Une lecture qui échoue ne change rien non plus (pas de pastilles).
+// L'écran montre UNE seule liste ; on en change par « Mes listes ». Sans type de liste, c'est la liste principale, inchangée.
+// Une lecture qui échoue ne change rien non plus.
 const open = useOpenShoppingLists()
 const openLists = computed(() => open.data.value?.member ?? [])
-const showPills = computed(() => openLists.value.some(isTyped))
-// La pastille choisie est dans l'adresse (`?liste=`) : « Voir » du message de planification y mène, et un rechargement la garde.
+const hasTypedList = computed(() => openLists.value.some(isTyped))
+// La liste choisie est dans l'adresse (`?liste=`) : « Voir » du message de planification et « Mes listes » y mènent, et un rechargement la garde.
 // Une liste qui n'est plus en cours (terminée) n'est plus trouvée : on retombe sur la principale.
 const requested = computed(() => (typeof route.query.liste === 'string' ? route.query.liste : null))
 const selected = computed(
   () =>
-    (showPills.value ? openLists.value.find((list) => list.id === requested.value)?.id : null) ??
+    (hasTypedList.value ? openLists.value.find((list) => list.id === requested.value)?.id : null) ??
     null,
 )
 // Sans liste principale en cours (seulement des types), la première liste en cours est montrée au lieu de « Aucune liste »
-const fallback = computed(() => (showPills.value ? (openLists.value[0]?.id ?? null) : null))
+const fallback = computed(() => (hasTypedList.value ? (openLists.value[0]?.id ?? null) : null))
+// Plusieurs listes en cours : le bouton dit laquelle il termine (« Terminer cette liste »)
+const several = computed(() => openLists.value.length > 1)
 // Une adresse qui demande une liste précise attend de savoir lesquelles sont en cours, pour ne pas montrer la principale un instant
 const waitingForOpen = computed(() => requested.value !== null && open.isPending.value)
 
@@ -48,12 +47,6 @@ const { summary, id, detail, forget } = useActiveShoppingList(
 )
 const ensure = useEnsureActiveShoppingList()
 
-function choose(list: OpenShoppingList) {
-  void router.replace({
-    query: { ...route.query, liste: isTyped(list) ? list.id : undefined },
-  })
-}
-
 function createList() {
   ensure.mutate(undefined, { onSuccess: forget })
 }
@@ -61,8 +54,6 @@ function createList() {
 
 <template>
   <main class="mx-auto flex max-w-4xl flex-col gap-5 px-4 py-6">
-    <ShoppingListPills v-if="showPills" :lists="openLists" :current="id" @select="choose" />
-
     <p v-if="summary.isPending.value || waitingForOpen" class="text-muted" role="status">
       {{ t('common.loading') }}
     </p>
@@ -92,7 +83,7 @@ function createList() {
       <p v-if="!online" class="-mb-2 text-sm text-muted">
         {{ t('offline.savedAt', { date: d(new Date(detail.dataUpdatedAt.value), 'short') }) }}
       </p>
-      <ShoppingListHeader :list="detail.data.value" :several="showPills" />
+      <ShoppingListHeader :list="detail.data.value" :several="several" />
       <ShoppingListContent
         :list="detail.data.value"
         :starting-new="ensure.isPending.value"
