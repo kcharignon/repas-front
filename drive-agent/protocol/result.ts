@@ -111,7 +111,7 @@ const resultLine: Check = (list, index) => {
     ...Object.keys(required),
     ...(withUnavailable ? ['unavailableIds'] : []),
     ...(outcome === 'ADDED' ? ['price'] : []),
-    ...(outcome === 'CHOSEN' ? ['searchQuery'] : []),
+    ...(outcome === 'CHOSEN' ? ['searchQuery', 'notInCart'] : []),
     ...(outcome === 'ADDED' || outcome === 'CHOSEN' ? ['packSize'] : []),
   ])
   text(line, 'ingredientSlug', SLUG)
@@ -119,6 +119,10 @@ const resultLine: Check = (list, index) => {
   optional(line, 'price', price)
   optional(line, 'searchQuery', searchQuery)
   optional(line, 'packSize', packSize)
+  // DRV-742 : la clé n'a qu'une valeur, `true` (absente = au panier) ; `false` ou tout autre type est refusé
+  optional(line, 'notInCart', (parent, name) => {
+    if (parent.v[name] !== true) fail(at(parent.p, name))
+  })
   const max = outcome === 'ADDED' ? LIMITS.unavailableAdded : LIMITS.products
   optional(line, 'unavailableIds', (parent, name) => {
     distinct(each(parent, name, max, (ids, rank) => text(ids, rank as never, ANY_PRODUCT_ID)))

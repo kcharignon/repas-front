@@ -136,6 +136,10 @@
       "minLength": 2,
       "maxLength": 80
     },
+    "notInCart": {
+      "description": "Facultatif (DRV-742), sur une ligne CHOSEN : vrai quand le panier de l'enseigne n'a rien pris de ce produit (le choix de la personne est quand même enregistré). Absente = au panier (agents d'avant compris). Jamais false.",
+      "const": true
+    },
     "packSize": {
       "description": "Facultatif (DRV-652), sur une ligne ADDED ou CHOSEN : la contenance du produit dans l'unité de la ligne du plan (needed.unitSlug), donnée par la personne à l'écran « Vérifie la quantité ». Valeur de 0,001 à 9999, trois décimales au plus (le schéma ne sait pas le dire, les validateurs le vérifient). Pour un CHOSEN, seulement en PRIMARY.",
       "type": "object",
@@ -258,6 +262,7 @@
             "quantity": { "$ref": "#/definitions/quantity" },
             "placement": { "enum": ["PRIMARY", "FALLBACK", "ONCE"] },
             "searchQuery": { "$ref": "#/definitions/searchQuery" },
+            "notInCart": { "$ref": "#/definitions/notInCart" },
             "packSize": { "$ref": "#/definitions/packSize" },
             "unavailableIds": { "$ref": "#/definitions/unavailableIds" }
           }

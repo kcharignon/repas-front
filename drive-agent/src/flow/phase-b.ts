@@ -642,7 +642,8 @@ async function settleLine(
       }
       if (settled.obtained < 1) {
         // Le panier n'a rien pris (DRV-644) : c'est quand même le produit que la personne veut, en priorité. Le choix est enregistré (la même ligne `CHOSEN`
-        // qu'un choix pris au panier, aucune clé de plus), le passage continue, et la fin dit en une phrase que le produit n'est pas au panier, et pourquoi.
+        // qu'un choix pris au panier, plus `notInCart` : DRV-742, le résultat dit que rien n'est au panier, Repas ne coche donc pas la ligne), le passage
+        // continue, et la fin dit en une phrase que le produit n'est pas au panier, et pourquoi.
         const facts = settled.facts ?? null
         record(
           {
@@ -651,6 +652,7 @@ async function settleLine(
             product: chosenProduct(candidate, context.retailer),
             quantity: Math.min(packs, LIMITS.packsMax),
             placement,
+            notInCart: true,
             ...(memo !== null && { searchQuery: memo }),
             ...(packSize && { packSize }),
             ...(unavailable.length > 0 && {
