@@ -2717,7 +2717,7 @@
                         "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
                     },
                     "422": {
-                        "description": "La liste est vide (message `SHOPPING_LIST_EMPTY`)"
+                        "description": "Il ne reste aucune ligne \u00e0 acheter : liste vide, ou toutes les lignes d\u00e9j\u00e0 coch\u00e9es (message `SHOPPING_LIST_EMPTY`). Les lignes d\u00e9j\u00e0 coch\u00e9es ne partent pas au drive"
                     }
                 }
             }
@@ -3446,7 +3446,7 @@
                 "tags": [
                     "Drive"
                 ],
-                "summary": "Estimation du co\u00fbt d'une liste d'apr\u00e8s les derniers prix vus du produit pr\u00e9f\u00e9r\u00e9 de chaque ligne (total, couverture, dates des prix, une ligne par ingr\u00e9dient avec son statut) ; une estimation dat\u00e9e, jamais un prix garanti",
+                "summary": "Estimation du co\u00fbt d'une liste, hors lignes d\u00e9j\u00e0 coch\u00e9es (DRV-745), d'apr\u00e8s les derniers prix vus du produit pr\u00e9f\u00e9r\u00e9 de chaque ligne (total, couverture, dates des prix, une ligne par ingr\u00e9dient avec son statut) ; une estimation dat\u00e9e, jamais un prix garanti",
                 "operationId": "get_api_get_drive_estimate",
                 "parameters": [
                     {
@@ -3508,7 +3508,7 @@
                 "tags": [
                     "Drive"
                 ],
-                "summary": "Plan d'envoi d'une liste envoy\u00e9e au drive : pour chaque ligne, le statut (`KNOWN`, `NEW`, `HAVE_AT_HOME`), la quantit\u00e9 demand\u00e9e, les produits class\u00e9s avec leur nombre de produits et les produits refus\u00e9s",
+                "summary": "Plan d'envoi d'une liste envoy\u00e9e au drive (les lignes d\u00e9j\u00e0 coch\u00e9es n'en font pas partie, DRV-745) : pour chaque ligne, le statut (`KNOWN`, `NEW`, `HAVE_AT_HOME`), la quantit\u00e9 demand\u00e9e, les produits class\u00e9s avec leur nombre de produits et les produits refus\u00e9s",
                 "operationId": "get_api_get_drive_plan",
                 "parameters": [
                     {
@@ -3736,6 +3736,57 @@
                     },
                     "422": {
                         "description": "Corps invalide, ou intention refus\u00e9e (message `DRIVE_CHOICE_INVALID`) : identifiant, libell\u00e9, contenu ou prix hors des bornes, plus de 200 intentions, plus de 5 produits accept\u00e9s ou 20 refus\u00e9s pour un ingr\u00e9dient, produit \u00e0 la fois choisi et refus\u00e9 pour un ingr\u00e9dient, recherche m\u00e9moris\u00e9e sur une autre action que `ADD_PRODUCT` ou `NOTE_SEARCH` (m\u00eame `null`), `NOTE_SEARCH` sans recherche (cl\u00e9 absente ou `null`), avec un produit ou un placement, ou sur un ingr\u00e9dient \u00ab j'en ai toujours \u00bb, contenance (`product.packSize`, m\u00eame `null`) sur une autre action que `ADD_PRODUCT` ; ou recherche m\u00e9moris\u00e9e refus\u00e9e (message `DRIVE_SEARCH_QUERY_INVALID`) : moins de 2 ou plus de 80 caract\u00e8res une fois les espaces r\u00e9duites, caract\u00e8re de contr\u00f4le ou invisible ; ou contenance refus\u00e9e (message `DRIVE_PACK_SIZE_INVALID`) : valeur hors de 0,001 \u00e0 9 999 ou avec plus de trois d\u00e9cimales, slug d'unit\u00e9 mal form\u00e9 ou qui n'existe pas ; ou plafond atteint (message `DRIVE_LIMIT_REACHED`) : plus de 5 000 \u00e9critures de produits dans la journ\u00e9e UTC, ou plus de 1 000 pr\u00e9f\u00e9rences dans le magasin. Rien n'est enregistr\u00e9"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/DriveWriteRateLimited"
+                    }
+                }
+            }
+        },
+        "/api/v1/drive/plans/{shoppingListId}/basket-lines": {
+            "post": {
+                "tags": [
+                    "Drive"
+                ],
+                "summary": "Coche, dans la liste envoy\u00e9e au drive, les lignes dont l'agent a mis l'article au panier de l'enseigne (DRV-745). C'est la seule \u00e9criture qui coche une ligne d'une liste envoy\u00e9e : r\u00e9serv\u00e9e au propri\u00e9taire, jamais un d\u00e9cochage, idempotente (une ligne d\u00e9j\u00e0 coch\u00e9e le reste, un slug absent de la liste est ignor\u00e9). La version de la liste ne change pas et la derni\u00e8re ligne coch\u00e9e ne termine pas la liste : \u00ab Terminer la liste \u00bb reste un geste explicite",
+                "operationId": "post_api_mark_lines_in_basket",
+                "parameters": [
+                    {
+                        "name": "shoppingListId",
+                        "in": "path",
+                        "description": "Identifiant de la liste de courses (statut `SENT`)",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "example": "0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/MarkLinesInBasketPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Lignes coch\u00e9es (ou d\u00e9j\u00e0 coch\u00e9es, ou absentes de la liste)"
+                    },
+                    "403": {
+                        "description": "La liste appartient \u00e0 un autre utilisateur, administrateur compris (message `SHOPPING_LIST_FORBIDDEN`)"
+                    },
+                    "404": {
+                        "description": "Fonction drive coup\u00e9e (message `DRIVE_DISABLED`), ou liste inconnue"
+                    },
+                    "409": {
+                        "description": "La liste n'est pas envoy\u00e9e au drive : rouverte ou termin\u00e9e entre-temps (message `SHOPPING_LIST_NOT_SENT`)"
+                    },
+                    "422": {
+                        "description": "Corps invalide : `ingredientSlugs` absent, vide, de plus de 1 000 \u00e9l\u00e9ments, avec un doublon ou un slug mal form\u00e9"
                     },
                     "429": {
                         "$ref": "#/components/responses/DriveWriteRateLimited"
@@ -4938,6 +4989,26 @@
                 "properties": {
                     "retailer": {
                         "$ref": "#/components/schemas/Retailer"
+                    }
+                },
+                "type": "object"
+            },
+            "MarkLinesInBasketPayload": {
+                "required": [
+                    "ingredientSlugs"
+                ],
+                "properties": {
+                    "ingredientSlugs": {
+                        "description": "Slugs des ingr\u00e9dients dont l'article est au panier : 1 \u00e0 1 000, distincts. Un slug qui n'est pas dans la liste est ignor\u00e9 ; un ancien slug (ancien commun, ingr\u00e9dient fusionn\u00e9) d\u00e9signe l'ingr\u00e9dient actuel",
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9-]{1,255}$",
+                            "example": "farine"
+                        },
+                        "maxItems": 1000,
+                        "minItems": 1,
+                        "uniqueItems": true
                     }
                 },
                 "type": "object"

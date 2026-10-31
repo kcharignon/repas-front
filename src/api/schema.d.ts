@@ -1202,7 +1202,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Estimation du coût d'une liste d'après les derniers prix vus du produit préféré de chaque ligne (total, couverture, dates des prix, une ligne par ingrédient avec son statut) ; une estimation datée, jamais un prix garanti */
+        /** Estimation du coût d'une liste, hors lignes déjà cochées (DRV-745), d'après les derniers prix vus du produit préféré de chaque ligne (total, couverture, dates des prix, une ligne par ingrédient avec son statut) ; une estimation datée, jamais un prix garanti */
         get: operations["get_api_get_drive_estimate"];
         put?: never;
         post?: never;
@@ -1219,7 +1219,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Plan d'envoi d'une liste envoyée au drive : pour chaque ligne, le statut (`KNOWN`, `NEW`, `HAVE_AT_HOME`), la quantité demandée, les produits classés avec leur nombre de produits et les produits refusés */
+        /** Plan d'envoi d'une liste envoyée au drive (les lignes déjà cochées n'en font pas partie, DRV-745) : pour chaque ligne, le statut (`KNOWN`, `NEW`, `HAVE_AT_HOME`), la quantité demandée, les produits classés avec leur nombre de produits et les produits refusés */
         get: operations["get_api_get_drive_plan"];
         put?: never;
         post?: never;
@@ -1260,6 +1260,23 @@ export interface paths {
         /** Mémorise un lot d'intentions de l'agent (produits choisis, refusés, « j'en ai toujours ») dans les préférences de l'utilisateur connecté. Un ancien slug (ancien commun dont l'utilisateur a reçu une copie, ingrédient fusionné) est remplacé par celui de son ingrédient actuel : aucune préférence n'est créée sous un ancien slug. La fiche d'un produit déjà connu (commune au magasin) n'est complétée que là où elle est vide : libellé, contenu et code-barres ne sont jamais réécrits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte déjà. Un `ADD_PRODUCT` peut porter la recherche qui a fait trouver le produit (`searchQuery`, mémorisée avec la préférence de cette enseigne et de ce magasin ; clé absente : gardée, `null` : effacée) ; l'intention `NOTE_SEARCH` (DRV-653) mémorise cette recherche seule, sans produit, quand le produit n'est pas mémorisé (pris pour cette fois seulement) et la contenance du produit dans l'unité de la liste (`product.packSize`, DRV-652, privée à l'utilisateur et propre à ce produit ; clé absente : gardée pour le même produit, `null` : effacée) */
         put: operations["put_api_save_product_choices"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/drive/plans/{shoppingListId}/basket-lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Coche, dans la liste envoyée au drive, les lignes dont l'agent a mis l'article au panier de l'enseigne (DRV-745). C'est la seule écriture qui coche une ligne d'une liste envoyée : réservée au propriétaire, jamais un décochage, idempotente (une ligne déjà cochée le reste, un slug absent de la liste est ignoré). La version de la liste ne change pas et la dernière ligne cochée ne termine pas la liste : « Terminer la liste » reste un geste explicite */
+        post: operations["post_api_mark_lines_in_basket"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1786,6 +1803,10 @@ export interface components {
         };
         ListChoicesRequestQuery: {
             retailer: components["schemas"]["Retailer"];
+        };
+        MarkLinesInBasketPayload: {
+            /** @description Slugs des ingrédients dont l'article est au panier : 1 à 1 000, distincts. Un slug qui n'est pas dans la liste est ignoré ; un ancien slug (ancien commun, ingrédient fusionné) désigne l'ingrédient actuel */
+            ingredientSlugs: string[];
         };
         RememberLastRetailerPayload: {
             retailer: components["schemas"]["Retailer"];
@@ -6303,7 +6324,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La liste est vide (message `SHOPPING_LIST_EMPTY`) */
+            /** @description Il ne reste aucune ligne à acheter : liste vide, ou toutes les lignes déjà cochées (message `SHOPPING_LIST_EMPTY`). Les lignes déjà cochées ne partent pas au drive */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7372,6 +7393,63 @@ export interface operations {
                 content?: never;
             };
             /** @description Corps invalide, ou intention refusée (message `DRIVE_CHOICE_INVALID`) : identifiant, libellé, contenu ou prix hors des bornes, plus de 200 intentions, plus de 5 produits acceptés ou 20 refusés pour un ingrédient, produit à la fois choisi et refusé pour un ingrédient, recherche mémorisée sur une autre action que `ADD_PRODUCT` ou `NOTE_SEARCH` (même `null`), `NOTE_SEARCH` sans recherche (clé absente ou `null`), avec un produit ou un placement, ou sur un ingrédient « j'en ai toujours », contenance (`product.packSize`, même `null`) sur une autre action que `ADD_PRODUCT` ; ou recherche mémorisée refusée (message `DRIVE_SEARCH_QUERY_INVALID`) : moins de 2 ou plus de 80 caractères une fois les espaces réduites, caractère de contrôle ou invisible ; ou contenance refusée (message `DRIVE_PACK_SIZE_INVALID`) : valeur hors de 0,001 à 9 999 ou avec plus de trois décimales, slug d'unité mal formé ou qui n'existe pas ; ou plafond atteint (message `DRIVE_LIMIT_REACHED`) : plus de 5 000 écritures de produits dans la journée UTC, ou plus de 1 000 préférences dans le magasin. Rien n'est enregistré */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["DriveWriteRateLimited"];
+        };
+    };
+    post_api_mark_lines_in_basket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Identifiant de la liste de courses (statut `SENT`)
+                 * @example 0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10
+                 */
+                shoppingListId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkLinesInBasketPayload"];
+            };
+        };
+        responses: {
+            /** @description Lignes cochées (ou déjà cochées, ou absentes de la liste) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La liste appartient à un autre utilisateur, administrateur compris (message `SHOPPING_LIST_FORBIDDEN`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fonction drive coupée (message `DRIVE_DISABLED`), ou liste inconnue */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La liste n'est pas envoyée au drive : rouverte ou terminée entre-temps (message `SHOPPING_LIST_NOT_SENT`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide : `ingredientSlugs` absent, vide, de plus de 1 000 éléments, avec un doublon ou un slug mal formé */
             422: {
                 headers: {
                     [name: string]: unknown;
