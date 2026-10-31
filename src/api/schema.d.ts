@@ -58,6 +58,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/shopping-lists/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listes en cours de l'utilisateur authentifié : la liste principale d'abord, puis une par type de liste
+         * @description Une liste en cours (`ACTIVE`) au plus par type et une pour la liste principale (ADR 0036). Les types sont rangés par date de création, puis identifiant. Un compte sans type de liste reçoit au plus sa liste principale. Une liste en pause, envoyée au drive ou terminée n'y figure pas (`GET /api/v1/shopping-lists`).
+         */
+        get: operations["get_api_list_open_shopping_lists"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ingredients/search": {
         parameters: {
             query?: never;
@@ -118,7 +138,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ajoute 1 à la quantité d'un ingrédient dans la liste active de l'utilisateur. Un ancien slug (ancien commun dont l'utilisateur a reçu une copie, ingrédient fusionné) désigne son ingrédient actuel, qui est celui de la liste ; l'ingrédient d'un autre utilisateur est inconnu */
+        /** Ajoute 1 à la quantité d'un ingrédient dans la liste de sa destination (le choix fait sur le produit, sinon le type de son rayon, sinon la liste principale ; ADR 0036), ouverte à la demande pour un type sans liste en cours. Un ancien slug (ancien commun dont l'utilisateur a reçu une copie, ingrédient fusionné) désigne son ingrédient actuel, qui est celui de la liste ; l'ingrédient d'un autre utilisateur est inconnu */
         post: operations["post_api_increase_ingredient"];
         delete?: never;
         options?: never;
@@ -318,7 +338,10 @@ export interface paths {
         /** Listes de courses de l'utilisateur authentifié, de la plus récente à la plus ancienne */
         get: operations["get_api_list_shopping_lists"];
         put?: never;
-        /** Crée une nouvelle liste active ; l'éventuelle liste active passe en pause et les listes terminées sont supprimées */
+        /**
+         * Crée une nouvelle liste active ; la liste en cours du même type passe en pause et les listes terminées sont supprimées
+         * @description Sans corps (ou sans `typeId`), la liste principale : l'éventuelle liste principale en cours passe en pause, comme avant. Avec `typeId`, une liste de ce type, nommée comme lui : seule la liste en cours de ce type passe en pause, la liste principale et les autres types ne bougent pas (ADR 0036).
+         */
         post: operations["post_api_create_shopping_list"];
         delete?: never;
         options?: never;
@@ -783,10 +806,16 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Planifie une recette dans la liste active de l'utilisateur et ajoute ses ingrédients (404 si aucune liste n'est active) */
+        /**
+         * Planifie une recette dans les listes en cours de l'utilisateur et ajoute ses ingrédients (404 si la liste principale doit recevoir un produit et n'est pas en cours)
+         * @description Chaque produit de la recette va dans la liste de SA destination (ADR 0036 : le choix fait sur le produit, sinon le type de son rayon, sinon la liste principale). Une liste de type sans liste en cours est ouverte à la demande, nommée comme le type. Chaque liste qui reçoit au moins un produit reçoit un repas ; une recette déjà dans l'une des listes visées n'est planifiée dans aucune (409, rien n'est écrit). Sans type de liste, la liste principale seule reçoit la recette, comme avant.
+         */
         put: operations["put_api_plan_recipe"];
         post?: never;
-        /** Retire une recette de la liste active de l'utilisateur et déduit ses ingrédients */
+        /**
+         * Retire une recette des listes de l'utilisateur et déduit ses ingrédients
+         * @description Quand la recette a été planifiée dans plusieurs listes (ADR 0036), le retrait agit sur TOUT le groupe de repas, en une transaction, et chaque liste ne perd que les lignes que son repas y avait posées. Si une liste du groupe est envoyée au drive, tout est refusé (409 `SHOPPING_LIST_SENT`) et rien n'est écrit.
+         */
         delete: operations["delete_api_unplan_recipe"];
         options?: never;
         head?: never;
@@ -802,7 +831,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Retire 1 à la quantité d'un ingrédient dans la liste active de l'utilisateur (la ligne disparaît à zéro). Un ancien slug (ancien commun dont l'utilisateur a reçu une copie, ingrédient fusionné) désigne son ingrédient actuel, qui est celui de la liste */
+        /** Retire 1 à la quantité d'un ingrédient, d'abord dans la liste de sa destination, sinon dans n'importe quelle liste en cours qui en a une ligne (ADR 0036) ; la ligne disparaît à zéro. Un ancien slug (ancien commun dont l'utilisateur a reçu une copie, ingrédient fusionné) désigne son ingrédient actuel, qui est celui de la liste */
         post: operations["post_api_decrease_ingredient"];
         delete?: never;
         options?: never;
@@ -903,7 +932,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Change le nombre de personnes d'un repas ; les quantités de la liste sont recalculées */
+        /**
+         * Change le nombre de personnes d'un repas ; les quantités de la liste sont recalculées
+         * @description Quand la recette a été planifiée dans plusieurs listes (ADR 0036), le changement agit sur TOUT le groupe de repas, en une transaction, et chaque liste ajuste exactement les lignes que son repas y avait posées. Si une liste du groupe est envoyée au drive, tout est refusé (409 `SHOPPING_LIST_SENT`) et rien n'est écrit.
+         */
         put: operations["put_api_update_meal_serving"];
         post?: never;
         delete?: never;
@@ -1540,6 +1572,14 @@ export interface components {
              */
             order: number;
         };
+        CreateShoppingListPayload: {
+            /**
+             * @description Identifiant du type de la liste (`GET /api/v1/shopping-list-types`) ; absent ou null : la liste principale. La liste porte le nom du type. Un type qui n'est pas à l'utilisateur est `404`
+             * @default null
+             * @example 3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34
+             */
+            typeId: string | null;
+        };
         CreateShoppingListTypePayload: {
             /**
              * @description Nom du type, de 1 à 40 caractères, unique par compte une fois normalisé ; sa première lettre est mise en majuscule
@@ -2054,6 +2094,38 @@ export interface components {
              */
             totalItems: number;
         };
+        OpenShoppingListDTO: {
+            /**
+             * @description Identifiant de la liste en cours
+             * @example 0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10
+             */
+            id: string;
+            /**
+             * @description Nom de la liste (celui du type pour une liste de type), ou à défaut la date de création en français
+             * @example Boucherie
+             */
+            name: string;
+            /**
+             * @description Identifiant du type de la liste (ADR 0036), null pour la liste principale
+             * @example null
+             */
+            typeId?: string | null;
+            /**
+             * @description Nombre de lignes de la liste
+             * @example 12
+             */
+            rowCount: number;
+            /**
+             * @description Nombre de lignes pas encore cochées
+             * @example 5
+             */
+            uncheckedCount: number;
+            /**
+             * @description Version de la liste (ETag, ADR 0016)
+             * @example 3
+             */
+            version: number;
+        };
         IngredientSearchResultDTO: {
             /**
              * @description Identifiant de l'ingrédient (slug)
@@ -2266,7 +2338,7 @@ export interface components {
              */
             status: "ACTIVE" | "PAUSED" | "SENT" | "COMPLETED";
             /**
-             * @description La liste est en cours (au plus une par utilisateur)
+             * @description La liste est en cours (au plus une par type de liste et une pour la liste principale)
              * @example true
              */
             isActive: boolean;
@@ -2295,6 +2367,12 @@ export interface components {
              * @example 2026-10-12T10:00:00+02:00
              */
             createdAt: string;
+            /**
+             * @description Identifiant du type de la liste (ADR 0036), null pour la liste principale
+             * @default null
+             * @example null
+             */
+            typeId: string | null;
         };
         ShoppingListTypeSummaryDTO: {
             /**
@@ -2953,6 +3031,23 @@ export interface components {
              * @example 12
              */
             totalItems: number;
+        };
+        PlannedMealListResponse: {
+            /**
+             * @description Identifiant de la liste
+             * @example 0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10
+             */
+            id: string;
+            /**
+             * @description Nom de la liste (celui du type pour une liste de type), ou à défaut sa date de création en français
+             * @example Boucherie
+             */
+            name: string;
+            /**
+             * @description Identifiant du type de la liste (ADR 0036), null pour la liste principale
+             * @example null
+             */
+            typeId?: string | null;
         };
         AppUpdateDTO: {
             /**
@@ -3699,6 +3794,30 @@ export interface operations {
             };
         };
     };
+    get_api_list_open_shopping_lists: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Listes en cours */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        member?: components["schemas"]["OpenShoppingListDTO"][];
+                        /** @example 2 */
+                        totalItems?: number;
+                    };
+                };
+            };
+        };
+    };
     get_api_search_ingredients: {
         parameters: {
             query: {
@@ -3821,14 +3940,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Aucune liste active, ou ingrédient inconnu ou personnalisé d'un autre utilisateur */
+            /** @description Aucune liste principale en cours (quand le produit y va), ou ingrédient inconnu ou personnalisé d'un autre utilisateur */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description La version de la liste n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
+            /** @description La version de la liste principale n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture (ignoré pour la liste d'un type) */
             412: {
                 headers: {
                     [name: string]: unknown;
@@ -4428,13 +4547,31 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateShoppingListPayload"];
+            };
+        };
         responses: {
             /** @description Liste créée */
             201: {
                 headers: {
                     /** @description URL de la liste créée */
                     Location?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Le type n'est pas à l'utilisateur ou n'existe pas (`LIST_TYPE_NOT_FOUND`) : rien n'est écrit */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide (`typeId` n'est pas un texte), ou le plafond de listes est atteint */
+            422: {
+                headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -5951,12 +6088,16 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Recette planifiée */
-            204: {
+            /** @description Recette planifiée : les listes qui ont reçu quelque chose, la liste principale d'abord */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        lists?: components["schemas"]["PlannedMealListResponse"][];
+                    };
+                };
             };
             /** @description Aucune liste active, recette inconnue ou recette d'un autre utilisateur */
             404: {
@@ -5965,7 +6106,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La version de la liste n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
+            /** @description La recette est déjà dans une des listes visées : elle n'est planifiée dans aucune, rien n'est écrit */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La version de la liste principale n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture (ignoré pour les listes d'un type) */
             412: {
                 headers: {
                     [name: string]: unknown;
@@ -5995,14 +6143,21 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Ressource inconnue (ou recette secrète d'un autre, que seul son auteur voit) */
+            /** @description Aucune liste en cours, ressource inconnue (ou recette secrète d'un autre, que seul son auteur voit) */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description La version de la liste n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
+            /** @description Une liste du groupe est envoyée au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`), rien n'est écrit */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La version de la liste principale n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture (ignoré pour les listes d'un type) */
             412: {
                 headers: {
                     [name: string]: unknown;
@@ -6039,7 +6194,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La version de la liste n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
+            /** @description La version de la liste principale n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture (ignoré pour la liste d'un type) */
             412: {
                 headers: {
                     [name: string]: unknown;
@@ -6312,14 +6467,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La liste est envoyée au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`) */
+            /** @description Une liste du groupe de repas est envoyée au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`), rien n'est écrit */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description La version de la liste n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
+            /** @description La version de la liste principale n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture (ignoré pour les listes d'un type) */
             412: {
                 headers: {
                     [name: string]: unknown;

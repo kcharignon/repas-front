@@ -142,6 +142,40 @@
                 }
             }
         },
+        "/api/v1/shopping-lists/open": {
+            "get": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "Listes en cours de l'utilisateur authentifi\u00e9 : la liste principale d'abord, puis une par type de liste",
+                "description": "Une liste en cours (`ACTIVE`) au plus par type et une pour la liste principale (ADR 0036). Les types sont rang\u00e9s par date de cr\u00e9ation, puis identifiant. Un compte sans type de liste re\u00e7oit au plus sa liste principale. Une liste en pause, envoy\u00e9e au drive ou termin\u00e9e n'y figure pas (`GET /api/v1/shopping-lists`).",
+                "operationId": "get_api_list_open_shopping_lists",
+                "responses": {
+                    "200": {
+                        "description": "Listes en cours",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "member": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/OpenShoppingListDTO"
+                                            }
+                                        },
+                                        "totalItems": {
+                                            "type": "integer",
+                                            "example": 2
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/ingredients/search": {
             "get": {
                 "tags": [
@@ -256,7 +290,7 @@
                 "tags": [
                     "Shopping lists"
                 ],
-                "summary": "Ajoute 1 \u00e0 la quantit\u00e9 d'un ingr\u00e9dient dans la liste active de l'utilisateur. Un ancien slug (ancien commun dont l'utilisateur a re\u00e7u une copie, ingr\u00e9dient fusionn\u00e9) d\u00e9signe son ingr\u00e9dient actuel, qui est celui de la liste ; l'ingr\u00e9dient d'un autre utilisateur est inconnu",
+                "summary": "Ajoute 1 \u00e0 la quantit\u00e9 d'un ingr\u00e9dient dans la liste de sa destination (le choix fait sur le produit, sinon le type de son rayon, sinon la liste principale ; ADR 0036), ouverte \u00e0 la demande pour un type sans liste en cours. Un ancien slug (ancien commun dont l'utilisateur a re\u00e7u une copie, ingr\u00e9dient fusionn\u00e9) d\u00e9signe son ingr\u00e9dient actuel, qui est celui de la liste ; l'ingr\u00e9dient d'un autre utilisateur est inconnu",
                 "operationId": "post_api_increase_ingredient",
                 "parameters": [
                     {
@@ -276,10 +310,10 @@
                         "description": "Quantit\u00e9 augment\u00e9e"
                     },
                     "404": {
-                        "description": "Aucune liste active, ou ingr\u00e9dient inconnu ou personnalis\u00e9 d'un autre utilisateur"
+                        "description": "Aucune liste principale en cours (quand le produit y va), ou ingr\u00e9dient inconnu ou personnalis\u00e9 d'un autre utilisateur"
                     },
                     "412": {
-                        "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
+                        "description": "La version de la liste principale n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture (ignor\u00e9 pour la liste d'un type)"
                     }
                 }
             }
@@ -893,8 +927,19 @@
                 "tags": [
                     "Shopping lists"
                 ],
-                "summary": "Cr\u00e9e une nouvelle liste active ; l'\u00e9ventuelle liste active passe en pause et les listes termin\u00e9es sont supprim\u00e9es",
+                "summary": "Cr\u00e9e une nouvelle liste active ; la liste en cours du m\u00eame type passe en pause et les listes termin\u00e9es sont supprim\u00e9es",
+                "description": "Sans corps (ou sans `typeId`), la liste principale : l'\u00e9ventuelle liste principale en cours passe en pause, comme avant. Avec `typeId`, une liste de ce type, nomm\u00e9e comme lui : seule la liste en cours de ce type passe en pause, la liste principale et les autres types ne bougent pas (ADR 0036).",
                 "operationId": "post_api_create_shopping_list",
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateShoppingListPayload"
+                            }
+                        }
+                    }
+                },
                 "responses": {
                     "201": {
                         "description": "Liste cr\u00e9\u00e9e",
@@ -906,6 +951,12 @@
                                 }
                             }
                         }
+                    },
+                    "404": {
+                        "description": "Le type n'est pas \u00e0 l'utilisateur ou n'existe pas (`LIST_TYPE_NOT_FOUND`) : rien n'est \u00e9crit"
+                    },
+                    "422": {
+                        "description": "Corps invalide (`typeId` n'est pas un texte), ou le plafond de listes est atteint"
                     }
                 }
             }
@@ -2475,7 +2526,8 @@
                 "tags": [
                     "Shopping lists"
                 ],
-                "summary": "Planifie une recette dans la liste active de l'utilisateur et ajoute ses ingr\u00e9dients (404 si aucune liste n'est active)",
+                "summary": "Planifie une recette dans les listes en cours de l'utilisateur et ajoute ses ingr\u00e9dients (404 si la liste principale doit recevoir un produit et n'est pas en cours)",
+                "description": "Chaque produit de la recette va dans la liste de SA destination (ADR 0036 : le choix fait sur le produit, sinon le type de son rayon, sinon la liste principale). Une liste de type sans liste en cours est ouverte \u00e0 la demande, nomm\u00e9e comme le type. Chaque liste qui re\u00e7oit au moins un produit re\u00e7oit un repas ; une recette d\u00e9j\u00e0 dans l'une des listes vis\u00e9es n'est planifi\u00e9e dans aucune (409, rien n'est \u00e9crit). Sans type de liste, la liste principale seule re\u00e7oit la recette, comme avant.",
                 "operationId": "put_api_plan_recipe",
                 "parameters": [
                     {
@@ -2491,14 +2543,32 @@
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "Recette planifi\u00e9e"
+                    "200": {
+                        "description": "Recette planifi\u00e9e : les listes qui ont re\u00e7u quelque chose, la liste principale d'abord",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "lists": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/PlannedMealListResponse"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
                     },
                     "404": {
                         "description": "Aucune liste active, recette inconnue ou recette d'un autre utilisateur"
                     },
+                    "409": {
+                        "description": "La recette est d\u00e9j\u00e0 dans une des listes vis\u00e9es : elle n'est planifi\u00e9e dans aucune, rien n'est \u00e9crit"
+                    },
                     "412": {
-                        "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
+                        "description": "La version de la liste principale n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture (ignor\u00e9 pour les listes d'un type)"
                     }
                 }
             },
@@ -2506,7 +2576,8 @@
                 "tags": [
                     "Shopping lists"
                 ],
-                "summary": "Retire une recette de la liste active de l'utilisateur et d\u00e9duit ses ingr\u00e9dients",
+                "summary": "Retire une recette des listes de l'utilisateur et d\u00e9duit ses ingr\u00e9dients",
+                "description": "Quand la recette a \u00e9t\u00e9 planifi\u00e9e dans plusieurs listes (ADR 0036), le retrait agit sur TOUT le groupe de repas, en une transaction, et chaque liste ne perd que les lignes que son repas y avait pos\u00e9es. Si une liste du groupe est envoy\u00e9e au drive, tout est refus\u00e9 (409 `SHOPPING_LIST_SENT`) et rien n'est \u00e9crit.",
                 "operationId": "delete_api_unplan_recipe",
                 "parameters": [
                     {
@@ -2526,10 +2597,13 @@
                         "description": "Recette retir\u00e9e"
                     },
                     "404": {
-                        "description": "Ressource inconnue (ou recette secr\u00e8te d'un autre, que seul son auteur voit)"
+                        "description": "Aucune liste en cours, ressource inconnue (ou recette secr\u00e8te d'un autre, que seul son auteur voit)"
+                    },
+                    "409": {
+                        "description": "Une liste du groupe est envoy\u00e9e au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`), rien n'est \u00e9crit"
                     },
                     "412": {
-                        "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
+                        "description": "La version de la liste principale n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture (ignor\u00e9 pour les listes d'un type)"
                     }
                 }
             }
@@ -2539,7 +2613,7 @@
                 "tags": [
                     "Shopping lists"
                 ],
-                "summary": "Retire 1 \u00e0 la quantit\u00e9 d'un ingr\u00e9dient dans la liste active de l'utilisateur (la ligne dispara\u00eet \u00e0 z\u00e9ro). Un ancien slug (ancien commun dont l'utilisateur a re\u00e7u une copie, ingr\u00e9dient fusionn\u00e9) d\u00e9signe son ingr\u00e9dient actuel, qui est celui de la liste",
+                "summary": "Retire 1 \u00e0 la quantit\u00e9 d'un ingr\u00e9dient, d'abord dans la liste de sa destination, sinon dans n'importe quelle liste en cours qui en a une ligne (ADR 0036) ; la ligne dispara\u00eet \u00e0 z\u00e9ro. Un ancien slug (ancien commun dont l'utilisateur a re\u00e7u une copie, ingr\u00e9dient fusionn\u00e9) d\u00e9signe son ingr\u00e9dient actuel, qui est celui de la liste",
                 "operationId": "post_api_decrease_ingredient",
                 "parameters": [
                     {
@@ -2562,7 +2636,7 @@
                         "description": "Ressource inconnue"
                     },
                     "412": {
-                        "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
+                        "description": "La version de la liste principale n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture (ignor\u00e9 pour la liste d'un type)"
                     }
                 }
             }
@@ -2750,6 +2824,7 @@
                     "Shopping lists"
                 ],
                 "summary": "Change le nombre de personnes d'un repas ; les quantit\u00e9s de la liste sont recalcul\u00e9es",
+                "description": "Quand la recette a \u00e9t\u00e9 planifi\u00e9e dans plusieurs listes (ADR 0036), le changement agit sur TOUT le groupe de repas, en une transaction, et chaque liste ajuste exactement les lignes que son repas y avait pos\u00e9es. Si une liste du groupe est envoy\u00e9e au drive, tout est refus\u00e9 (409 `SHOPPING_LIST_SENT`) et rien n'est \u00e9crit.",
                 "operationId": "put_api_update_meal_serving",
                 "parameters": [
                     {
@@ -2785,13 +2860,13 @@
                         "description": "Ressource inconnue (ou repas h\u00e9rit\u00e9 d'une recette secr\u00e8te d'un autre, que seul son auteur voit)"
                     },
                     "409": {
-                        "description": "La liste est envoy\u00e9e au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`)"
+                        "description": "Une liste du groupe de repas est envoy\u00e9e au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`), rien n'est \u00e9crit"
                     },
                     "422": {
                         "description": "Corps de la requ\u00eate invalide"
                     },
                     "412": {
-                        "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
+                        "description": "La version de la liste principale n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture (ignor\u00e9 pour les listes d'un type)"
                     }
                 }
             }
@@ -4408,6 +4483,20 @@
                 },
                 "type": "object"
             },
+            "CreateShoppingListPayload": {
+                "properties": {
+                    "typeId": {
+                        "description": "Identifiant du type de la liste (`GET /api/v1/shopping-list-types`) ; absent ou null : la liste principale. La liste porte le nom du type. Un type qui n'est pas \u00e0 l'utilisateur est `404`",
+                        "type": "string",
+                        "default": null,
+                        "maxLength": 36,
+                        "minLength": 1,
+                        "example": "3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
             "CreateShoppingListTypePayload": {
                 "required": [
                     "name"
@@ -5459,6 +5548,49 @@
                 },
                 "type": "object"
             },
+            "OpenShoppingListDTO": {
+                "required": [
+                    "id",
+                    "name",
+                    "rowCount",
+                    "uncheckedCount",
+                    "version"
+                ],
+                "properties": {
+                    "id": {
+                        "description": "Identifiant de la liste en cours",
+                        "type": "string",
+                        "example": "0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10"
+                    },
+                    "name": {
+                        "description": "Nom de la liste (celui du type pour une liste de type), ou \u00e0 d\u00e9faut la date de cr\u00e9ation en fran\u00e7ais",
+                        "type": "string",
+                        "example": "Boucherie"
+                    },
+                    "typeId": {
+                        "description": "Identifiant du type de la liste (ADR 0036), null pour la liste principale",
+                        "type": "string",
+                        "example": null,
+                        "nullable": true
+                    },
+                    "rowCount": {
+                        "description": "Nombre de lignes de la liste",
+                        "type": "integer",
+                        "example": 12
+                    },
+                    "uncheckedCount": {
+                        "description": "Nombre de lignes pas encore coch\u00e9es",
+                        "type": "integer",
+                        "example": 5
+                    },
+                    "version": {
+                        "description": "Version de la liste (ETag, ADR 0016)",
+                        "type": "integer",
+                        "example": 3
+                    }
+                },
+                "type": "object"
+            },
             "IngredientSearchResultDTO": {
                 "required": [
                     "slug",
@@ -5800,7 +5932,7 @@
                         "example": "ACTIVE"
                     },
                     "isActive": {
-                        "description": "La liste est en cours (au plus une par utilisateur)",
+                        "description": "La liste est en cours (au plus une par type de liste et une pour la liste principale)",
                         "type": "boolean",
                         "example": true
                     },
@@ -5829,6 +5961,13 @@
                         "description": "Date de cr\u00e9ation (ATOM)",
                         "type": "string",
                         "example": "2026-10-12T10:00:00+02:00"
+                    },
+                    "typeId": {
+                        "description": "Identifiant du type de la liste (ADR 0036), null pour la liste principale",
+                        "type": "string",
+                        "default": null,
+                        "example": null,
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -6947,6 +7086,31 @@
                         "description": "Le nombre r\u00e9el de recettes des autres (ou de correspondances, avec une recherche), toutes pages confondues ; peut d\u00e9passer le nombre de `member`",
                         "type": "integer",
                         "example": 12
+                    }
+                },
+                "type": "object"
+            },
+            "PlannedMealListResponse": {
+                "required": [
+                    "id",
+                    "name"
+                ],
+                "properties": {
+                    "id": {
+                        "description": "Identifiant de la liste",
+                        "type": "string",
+                        "example": "0b0a8c4e-6b0e-4e0a-9d52-2c3f7a1d9e10"
+                    },
+                    "name": {
+                        "description": "Nom de la liste (celui du type pour une liste de type), ou \u00e0 d\u00e9faut sa date de cr\u00e9ation en fran\u00e7ais",
+                        "type": "string",
+                        "example": "Boucherie"
+                    },
+                    "typeId": {
+                        "description": "Identifiant du type de la liste (ADR 0036), null pour la liste principale",
+                        "type": "string",
+                        "example": null,
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -8105,10 +8269,10 @@
             "name": "Ingredients"
         },
         {
-            "name": "Health"
+            "name": "Shopping lists"
         },
         {
-            "name": "Shopping lists"
+            "name": "Health"
         },
         {
             "name": "Recipes"
