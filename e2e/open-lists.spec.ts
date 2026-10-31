@@ -1,7 +1,8 @@
-// Plusieurs listes en cours, une par type de liste (LST-007), sans back ni compte : l'API est simulée par `page.route`, avec un état qui suit les
-// planifications, les terminaisons et les choix de liste d'un produit. Un seul test, à 360 px : les pastilles de l'écran Liste, « Terminer cette
-// liste », le message après avoir planifié une recette (et son « Voir »), puis la liste de courses d'un produit, avec à chaque écran la mise en
-// page (pas de défilement horizontal, cibles de 44 px) et l'accessibilité (WCAG AA, contraste compris) dans les DEUX thèmes de la même visite.
+// Plusieurs listes en cours, une par type de liste (LST-007, LST-010), sans back ni compte : l'API est simulée par `page.route`, avec un état qui suit
+// les planifications, les terminaisons et les choix de liste d'un produit. À 360 px : l'écran Liste (une seule liste, aucune pastille, on change de
+// liste par « Mes listes »), « Terminer cette liste », le message après avoir planifié une recette (et son « Voir »), puis la liste de courses d'un
+// produit, avec à chaque écran la mise en page (pas de défilement horizontal, cibles de 44 px) et l'accessibilité (WCAG AA, contraste compris)
+// dans les DEUX thèmes de la même visite.
 // Les textes, les refus du back et chaque état sont des tests de composant. `E2E_SHOTS=<dossier>` garde une capture de chaque thème.
 import { expect, test, type Page } from './support/test'
 import { axeBothThemes } from './support/screen'
@@ -120,6 +121,21 @@ async function fakeBack(page: Page) {
           })),
           totalItems: lists.length,
         })
+      if (key === 'GET /api/v1/shopping-lists')
+        return reply({
+          member: lists.map((list) => ({
+            id: list.id,
+            displayName: list.displayName,
+            status: 'ACTIVE',
+            isActive: true,
+            isPaused: false,
+            isCompleted: false,
+            isSent: false,
+            createdAt: '2026-10-31T10:00:00+02:00',
+            typeId: list.typeId,
+          })),
+          totalItems: lists.length,
+        })
       if (key === 'GET /api/v1/shopping-lists/active/summary')
         return reply({
           shoppingListId: lists.find((list) => list.typeId === null)?.id ?? null,
@@ -127,6 +143,15 @@ async function fakeBack(page: Page) {
           plannedRecipeIds: [],
         })
       const one = /^GET \/api\/v1\/shopping-lists\/([^/]+)$/.exec(key)
+      if (one?.[1] === 'l-sent')
+        return reply({
+          ...detail(lists[1]!),
+          id: 'l-sent',
+          status: 'SENT',
+          isActive: false,
+          isSent: true,
+          sentAt: '2026-10-30T10:00:00+02:00',
+        })
       if (one !== null) {
         const list = lists.find((candidate) => candidate.id === one[1])
 
@@ -224,7 +249,7 @@ async function fakeBack(page: Page) {
   return { sent, bodyOf: (key: string) => sent.find((entry) => entry.key === key)?.body }
 }
 
-test('on voit ses listes en cours par pastilles, on planifie une recette, on choisit la liste d’un produit, accessible dans les deux thèmes', async ({
+test('l’écran Liste montre une seule liste sans pastille, on change de liste par « Mes listes », accessible dans les deux thèmes', async ({
   page,
 }) => {
   const back = await fakeBack(page)
@@ -232,41 +257,66 @@ test('on voit ses listes en cours par pastilles, on planifie une recette, on cho
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
     ).toBeLessThanOrEqual(0)
+  const noPills = async () => {
+    await expect(page.getByRole('group', { name: 'Tes listes en cours' })).toHaveCount(0)
+    await expect(page.locator('button[aria-pressed]')).toHaveCount(0)
+    await expect(page.getByText('à cocher')).toHaveCount(0)
+  }
 
-  // 1. Liste : une pastille par liste en cours avec ses articles à cocher
+  // 1. Liste : la principale seule, aucune pastille pour les autres listes en cours
   await page.goto('/liste')
-  const pills = page.getByRole('group', { name: 'Tes listes en cours' })
-  await expect(pills.getByRole('button')).toHaveCount(3)
-  await expect(pills.getByRole('button', { name: /^Principale/ })).toContainText('1')
-  await expect(pills.getByRole('button', { name: /^Boucherie/ })).toContainText('3')
-  await expect(pills.getByRole('button', { name: /^Marché/ })).toContainText('1')
-  await expect(pills.getByRole('button', { name: /^Principale/ })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
-  for (const pill of await pills.getByRole('button').all())
-    expect((await pill.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  await expect(
+    page.getByRole('heading', { name: 'Liste du 31 octobre 2026', level: 1 }),
+  ).toBeVisible()
+  await expect(page.getByText('Pâtes')).toBeVisible()
+  await expect(page.getByText('Merguez')).toHaveCount(0)
+  await noPills()
+  // « Mes listes » : une pastille en tête, une seule fois, d'au moins 44 px
+  await expect(page.getByRole('link', { name: 'Mes listes' })).toHaveCount(1)
+  expect(
+    (await page.getByRole('link', { name: 'Mes listes' }).boundingBox())!.height,
+  ).toBeGreaterThanOrEqual(44)
   await noOverflow()
-  await axeBothThemes(page, 'liste-pastilles')
+  await axeBothThemes(page, 'liste-sans-pastilles')
 
-  // 2. Une pastille montre l'autre liste, et le bouton dit laquelle il termine
-  await pills.getByRole('button', { name: /^Boucherie/ }).click()
+  // 2. « Mes listes » : on y choisit la liste de la boucherie, qui arrive seule sur l'écran Liste
+  await page.getByRole('link', { name: 'Mes listes' }).click()
+  await expect(page).toHaveURL(/\/listes$/)
+  await page.getByRole('link', { name: /Boucherie/ }).click()
+  await expect(page).toHaveURL(/\/liste\?liste=l-b$/)
   await expect(page.getByRole('heading', { name: 'Boucherie', level: 1 })).toBeVisible()
   await expect(page.getByText('Merguez')).toBeVisible()
   await expect(page.getByText('Pâtes')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Terminer cette liste' }).first()).toBeVisible()
+  await noPills()
   await noOverflow()
   await axeBothThemes(page, 'liste-boucherie')
 
   // 3. Terminer cette liste : les autres ne bougent pas, on retombe sur la principale
   await page.getByRole('button', { name: 'Terminer cette liste' }).first().click()
-  await expect(pills.getByRole('button')).toHaveCount(2)
   await expect(
     page.getByRole('heading', { name: 'Liste du 31 octobre 2026', level: 1 }),
   ).toBeVisible()
+  await noPills()
   expect(
     back.sent.filter((entry) => entry.key.endsWith('/complete')).map((entry) => entry.key),
   ).toEqual(['POST /api/v1/shopping-lists/l-b/complete'])
+})
+
+test('la page d’une liste envoyée a la même pastille « Mes listes » en tête', async ({ page }) => {
+  await fakeBack(page)
+
+  await page.goto('/listes/l-sent')
+  const link = page.getByRole('link', { name: 'Mes listes' })
+  await expect(link).toHaveCount(1)
+  expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+  ).toBeLessThanOrEqual(0)
+  await axeBothThemes(page, 'liste-envoyee')
+
+  await link.click()
+  await expect(page).toHaveURL(/\/listes$/)
 })
 
 test('un message dit où la recette est allée, « Voir » ouvre la liste', async ({ page }) => {

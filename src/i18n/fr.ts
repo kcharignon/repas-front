@@ -477,10 +477,7 @@ export default {
     fewer: 'Une personne de moins pour {name}',
     more: 'Une personne de plus pour {name}',
     unplan: 'Retirer {name} de la liste',
-    // Plusieurs listes en cours, une par type (ADR 0036, LST-007)
-    openLists: 'Tes listes en cours',
-    mainPill: 'Principale',
-    toTick: 'à cocher',
+    // Plusieurs listes en cours, une par type (ADR 0036, LST-007) : on change de liste par « Mes listes » (LST-010)
     completeThis: 'Terminer cette liste',
     plannedIn: 'Ajouté à {lists}.',
     see: 'Voir',

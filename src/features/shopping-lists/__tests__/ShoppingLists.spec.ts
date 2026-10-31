@@ -218,6 +218,21 @@ describe('ShoppingListDetailView', () => {
       (item) => item.textContent.trim() === label,
     )
 
+  it('« Mes listes » est en tête, en pastille (le même composant que l’écran Liste), et mène à la liste des listes', async () => {
+    const { wrapper, context } = await open('COMPLETED')
+
+    const link = wrapper.find('a[href="/listes"]')
+    expect(link.text()).toBe('Mes listes')
+    expect(link.classes()).toContain('min-h-11')
+    expect(link.classes()).toContain('rounded-full')
+    expect(link.find('svg').attributes('aria-hidden')).toBe('true')
+    // Tout en haut, avant le titre de la liste
+    expect(wrapper.find('main').element.firstElementChild).toBe(link.element)
+
+    await link.trigger('click')
+    await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('shopping-lists'))
+  })
+
   /** Les actions visibles de la rangée : libellé, ou nom accessible pour « ⋮ ». */
   const rowActions = () =>
     [
