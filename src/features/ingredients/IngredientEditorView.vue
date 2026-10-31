@@ -11,9 +11,12 @@ import UiSelect from '@/design/UiSelect.vue'
 import UiSwitch from '@/design/UiSwitch.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
 import { messageForFailure, notifyDeleteFailure } from '@/notifications/failures'
+import { useListTypes, useSetProductDestination } from '@/features/list-types/queries'
 import { useIngredientOptions } from '@/features/recipes/queries'
 import { useSessionStore } from '@/session/session'
 import ConversionEquation from './ConversionEquation.vue'
+import IngredientListField from './IngredientListField.vue'
+import { choiceOf } from './listChoice'
 import IngredientConversionsSection from './IngredientConversionsSection.vue'
 import MergeConfirmSheet from './MergeConfirmSheet.vue'
 import MergePickerSheet from './MergePickerSheet.vue'
@@ -51,12 +54,30 @@ const existing = useIngredient(() => slug.value ?? '')
 const save = useSaveIngredient()
 const remove = useDeleteIngredient()
 
+// La liste de courses du produit n'est proposée qu'à un compte qui a au moins un type de liste (sinon rien ne change) ; sur un produit
+// qui existe déjà (la destination s'écrit sur un produit enregistré)
+const listTypes = useListTypes(() => editing.value)
+const types = computed(() => listTypes.data.value?.member ?? [])
+const typeIds = computed(() => types.value.map((type) => type.id))
+const showList = computed(
+  () => editing.value && existing.data.value !== undefined && types.value.length > 0,
+)
+const setDestination = useSetProductDestination()
+
 const form = reactive({
   name: '',
   departmentSlug: typeof route.query.rayon === 'string' ? route.query.rayon : '',
   cookingUnit: '',
   purchaseUnit: '',
   isBase: false,
+})
+// Le choix de la liste de courses du produit (`default`, `main` ou l'identifiant d'un type, ADR 0036) : tant que la personne n'y a pas
+// touché, c'est celui du produit lu (les types et le produit n'arrivent pas forcément ensemble)
+const pickedList = ref<string | null>(null)
+const readList = computed(() => choiceOf(existing.data.value?.listDestination, typeIds.value))
+const list = computed({
+  get: () => pickedList.value ?? readList.value,
+  set: (value: string) => (pickedList.value = value),
 })
 const submitted = ref(false)
 const failure = ref<string | null>(null)
@@ -66,6 +87,7 @@ let loaded = false
 // « Modifier » un autre ingrédient depuis la fusion garde cette vue montée : le formulaire se recharge pour le nouveau
 watch(slug, () => {
   loaded = false
+  pickedList.value = null
   submitted.value = false
   failure.value = null
 })
@@ -225,6 +247,15 @@ const nameElsewhere = computed(() => {
       })
 })
 
+// Le type du rayon choisi dans le formulaire, pour dire où irait le produit « comme son rayon »
+const departmentTypeId = computed(
+  () =>
+    departments.data.value?.member?.find((department) => department.slug === form.departmentSlug)
+      ?.listTypeId ?? null,
+)
+// Le choix ne s'écrit que s'il a changé depuis la lecture du produit
+const listChanged = computed(() => showList.value && list.value !== readList.value)
+
 const errors = computed(() => ({
   name: submitted.value && form.name.trim() === '' ? t('ingredients.errors.name') : undefined,
 }))
@@ -247,7 +278,19 @@ function submit() {
       },
     },
     {
-      onSuccess: () => router.push({ name: 'department', params: { slug: form.departmentSlug } }),
+      // Le produit d'abord, puis sa liste de courses (deux écritures) : si la seconde échoue le produit est déjà enregistré, on le dit
+      onSuccess: async (savedSlug) => {
+        if (listChanged.value) {
+          try {
+            await setDestination.mutateAsync({ slug: savedSlug, destination: list.value })
+          } catch (error) {
+            failure.value = messageForFailure(error)
+
+            return
+          }
+        }
+        await router.push({ name: 'department', params: { slug: form.departmentSlug } })
+      },
       onError: (error) => {
         failure.value =
           nameUsedMessage(error, form.name.trim(), departmentName(form.departmentSlug)) ??
@@ -416,6 +459,13 @@ const back = computed(() =>
         <p class="text-sm text-muted">{{ t('ingredients.conversionHint') }}</p>
       </div>
 
+      <IngredientListField
+        v-if="showList"
+        v-model="list"
+        :types="types"
+        :department-type-id="departmentTypeId"
+      />
+
       <UiSwitch
         v-if="canSetBase"
         v-model="form.isBase"
@@ -438,7 +488,11 @@ const back = computed(() =>
         <span v-else />
         <div class="flex flex-wrap gap-2">
           <UiButton variant="ghost" @click="router.push(back)">{{ t('common.cancel') }}</UiButton>
-          <UiButton type="submit" :disabled="save.isPending.value">{{ t('common.save') }}</UiButton>
+          <UiButton
+            type="submit"
+            :disabled="save.isPending.value || setDestination.isPending.value"
+            >{{ t('common.save') }}</UiButton
+          >
         </div>
       </div>
     </form>

@@ -4,9 +4,16 @@ import { X } from 'lucide-vue-next'
 
 import { cn } from '@/design/cn'
 import { useNotificationsStore } from '@/notifications/store'
+import type { Notification } from '@/notifications/store'
 
 const { t } = useI18n()
 const notifications = useNotificationsStore()
+
+/** Le geste proposé avec le message (« Voir ») : il s'exécute, puis le message se ferme. */
+function act(item: Notification) {
+  item.action?.run()
+  notifications.dismiss(item.id)
+}
 </script>
 
 <template>
@@ -26,6 +33,14 @@ const notifications = useNotificationsStore()
       "
     >
       <span class="flex-1">{{ item.text }}</span>
+      <button
+        v-if="item.action"
+        type="button"
+        class="min-h-11 shrink-0 cursor-pointer rounded-lg px-3 font-bold underline hover:bg-black/10 focus-visible:outline-2 focus-visible:outline-primary"
+        @click="act(item)"
+      >
+        {{ item.action.label }}
+      </button>
       <button
         type="button"
         :aria-label="t('common.close')"

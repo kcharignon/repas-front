@@ -1,11 +1,16 @@
 import { computed } from 'vue'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import type { QueryClient } from '@tanstack/vue-query'
+import { useRouter } from 'vue-router'
 
 import { ApiError, ifMatch, unwrap } from '@/api'
 import type { IngredientOption, Recipe } from '@/api'
 import { capitalizeFirst } from '@/design/capitalizeFirst'
+import { plannedListNames, shouldTellWhere } from '@/features/shopping-lists/plannedMessage'
 import { shoppingListKeys } from '@/features/shopping-lists/queries'
+import { i18n } from '@/i18n'
+import { notifyMealFailure } from '@/notifications/failures'
+import { useNotificationsStore } from '@/notifications/store'
 import { useSessionStore } from '@/session/session'
 
 export const recipeKeys = {
@@ -169,12 +174,19 @@ export function useDeleteRecipe() {
 /**
  * Planifier une recette dans la liste active (ses ingrédients s'y ajoutent, avec le nombre de personnes de l'utilisateur) ou
  * l'en retirer. Sans liste active, on la crée d'abord (la lecture n'a plus d'effet de bord, ADR 0007 du back).
+ *
+ * Avec des types de liste (ADR 0036), chaque produit va dans la liste de sa destination : le back rend les listes qui ont reçu quelque
+ * chose. Si l'une est celle d'un type, un message le dit avec « Voir » (l'écran Liste, sur la première). Sans type, rien ne change.
  */
 export function usePlanRecipe() {
   const { api } = useSessionStore()
   const queryClient = useQueryClient()
+  const router = useRouter()
+  const notifications = useNotificationsStore()
 
   return useMutation({
+    // Un refus porte sur tout le repas (une liste partie au drive) : son texte est dit ici
+    meta: { silent: true },
     mutationFn: async ({
       recipeId,
       planned,
@@ -191,6 +203,23 @@ export function usePlanRecipe() {
 
       return unwrap(api.PUT('/api/v1/shopping-lists/active/recipes/{recipeId}', params))
     },
+    onSuccess: (result) => {
+      const lists = result?.lists
+      if (lists === undefined || !shouldTellWhere(lists)) return
+      const first = lists[0]
+      notifications.push(
+        'success',
+        i18n.global.t('shoppingList.plannedIn', { lists: plannedListNames(lists) }),
+        10_000,
+        first === undefined
+          ? undefined
+          : {
+              label: i18n.global.t('shoppingList.see'),
+              run: () => void router.push({ name: 'shopping-list', query: { liste: first.id } }),
+            },
+      )
+    },
+    onError: notifyMealFailure,
     onSettled: () => queryClient.invalidateQueries({ queryKey: shoppingListKeys.all }),
   })
 }

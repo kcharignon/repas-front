@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useQueryClient } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
@@ -6,7 +7,7 @@ import { hasFailed } from '@/api/query'
 import { ApiError } from '@/api'
 import ShoppingListContent from './ShoppingListContent.vue'
 import ShoppingListHeader from './ShoppingListHeader.vue'
-import { useCreateShoppingList, useShoppingList } from './queries'
+import { shoppingListKeys, useCreateShoppingList, useShoppingList } from './queries'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -14,9 +15,25 @@ const router = useRouter()
 
 const list = useShoppingList(() => String(route.params.id))
 const create = useCreateShoppingList()
+const queryClient = useQueryClient()
 
+// Une nouvelle liste prend la place d'une liste terminée : du même type que celle-ci (le détail ne le dit pas, « Mes listes » oui)
 function startNew() {
-  create.mutate(undefined, { onSuccess: () => router.push({ name: 'shopping-list' }) })
+  const id = String(route.params.id)
+  const typeId =
+    queryClient
+      .getQueryData<{ member?: { id: string; typeId?: string | null }[] }>(
+        shoppingListKeys.collection,
+      )
+      ?.member?.find((candidate) => candidate.id === id)?.typeId ?? null
+  create.mutate(typeId, {
+    onSuccess: (created) =>
+      router.push(
+        typeId === null || created === ''
+          ? { name: 'shopping-list' }
+          : { name: 'shopping-list', query: { liste: created } },
+      ),
+  })
 }
 </script>
 

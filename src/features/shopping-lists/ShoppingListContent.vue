@@ -18,7 +18,7 @@ import {
   useDepartmentIcons,
 } from '@/features/ingredients/departmentMarkers'
 import { formatQuantity } from './format'
-import { useChangeServing, useToggleRow, useUnplanRecipe } from './queries'
+import { useChangeServing, useMealVersion, useToggleRow, useUnplanRecipe } from './queries'
 
 const props = defineProps<{ list: ShoppingList; startingNew?: boolean }>()
 const emit = defineEmits<{ startNew: [] }>()
@@ -28,6 +28,8 @@ const { t } = useI18n()
 const toggle = useToggleRow(() => props.list.id)
 const changeServing = useChangeServing()
 const unplan = useUnplanRecipe()
+// La liste d'un type n'envoie pas sa version (le back ne contrôle que celle de la liste principale d'un repas réparti)
+const versionToSend = useMealVersion()
 
 const tab = ref<'ingredients' | 'recipes'>('ingredients')
 
@@ -165,7 +167,7 @@ const stepClass =
                   type="button"
                   :aria-label="t('shoppingList.unplan', { name: meal.recipeName })"
                   :class="stepClass"
-                  @click="unplan.mutate({ recipeId: meal.recipeId, version: list.version })"
+                  @click="unplan.mutate({ recipeId: meal.recipeId, version: versionToSend(list) })"
                 >
                   <Trash2 class="size-5" aria-hidden="true" />
                 </button>
@@ -190,7 +192,7 @@ const stepClass =
                       changeServing.mutate({
                         mealId: meal.id,
                         serving: meal.serving - 1,
-                        version: list.version,
+                        version: versionToSend(list),
                       })
                     "
                   >
@@ -207,7 +209,7 @@ const stepClass =
                       changeServing.mutate({
                         mealId: meal.id,
                         serving: meal.serving + 1,
-                        version: list.version,
+                        version: versionToSend(list),
                       })
                     "
                   >

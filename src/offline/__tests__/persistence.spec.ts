@@ -98,6 +98,34 @@ describe('liste en cours gardée hors-ligne', () => {
     ])
   })
 
+  it('garde toutes les listes en cours (la principale et une par type), pas les autres', async () => {
+    keepActiveListOffline(client)
+    await signIn()
+    seed(client)
+    client.setQueryData(shoppingListKeys.open, {
+      member: [{ id: 'list-1' }, { id: 'list-boucherie' }, { id: 'list-marche' }],
+    })
+    client.setQueryData(shoppingListKeys.detail('list-boucherie'), { id: 'list-boucherie' })
+    client.setQueryData(shoppingListKeys.detail('list-marche'), { id: 'list-marche' })
+    client.setQueryData(shoppingListKeys.detail('en-pause'), { id: 'en-pause' })
+    client.setQueryData(shoppingListKeys.collection, { member: [] })
+
+    await vi.advanceTimersByTimeAsync(1100)
+
+    const keys = saved().state.queries.map((query: { queryKey: string[] }) =>
+      query.queryKey.join('/'),
+    )
+    expect(keys.sort()).toEqual(
+      [
+        'shopping-lists/active/summary',
+        'shopping-lists/detail/list-1',
+        'shopping-lists/detail/list-boucherie',
+        'shopping-lists/detail/list-marche',
+        'shopping-lists/open',
+      ].sort(),
+    )
+  })
+
   it('regroupe les changements rapprochés en une seule écriture', async () => {
     const setItem = vi.spyOn(Storage.prototype, 'setItem')
     keepActiveListOffline(client)

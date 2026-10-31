@@ -7,8 +7,8 @@ import { hasSessionHint, useSessionStore } from '@/session/session'
 import { eraseOfflineCopy, OFFLINE_COPY_KEY } from './offlineCopy'
 
 /**
- * Lecture hors-ligne de la liste de courses en cours (plan du front, phase 5) : seule la liste active, résumé et détail, est
- * gardée dans le navigateur, **au nom de l'utilisateur** ; elle disparaît à la déconnexion et n'est jamais montrée à quelqu'un
+ * Lecture hors-ligne de la liste de courses en cours (plan du front, phase 5) : seules les listes en cours, résumé, liste des listes
+ * en cours et détail de chacune (la principale et une par type de liste, ADR 0036), sont gardées dans le navigateur, **au nom de l'utilisateur** ; elle disparaît à la déconnexion et n'est jamais montrée à quelqu'un
  * d'autre. L'édition hors-ligne reste hors périmètre : une écriture sans réseau échoue clairement.
  */
 const KEY = OFFLINE_COPY_KEY
@@ -39,19 +39,30 @@ function read(): Envelope | null {
   }
 }
 
-/** Les requêtes qu'on garde : le résumé de la liste active et le détail de cette liste. */
+/**
+ * Les requêtes qu'on garde : le résumé de la liste active, la liste des listes en cours, et le détail de chacune (la principale et celle de
+ * chaque type de liste). Rien d'autre : ni « Mes listes », ni les listes en pause ou envoyées.
+ */
 const keptBy = (client: QueryClient) => {
   const activeId = client.getQueryData<{ shoppingListId?: string | null }>(
     shoppingListKeys.activeSummary,
   )?.shoppingListId
+  const kept = new Set<string>(
+    (client.getQueryData<{ member?: { id: string }[] }>(shoppingListKeys.open)?.member ?? []).map(
+      (list) => shoppingListKeys.detail(list.id).join('/'),
+    ),
+  )
+  if (activeId != null) kept.add(shoppingListKeys.detail(activeId).join('/'))
 
   return (query: Query): boolean => {
     if (query.state.status !== 'success') return false
-    const key = query.queryKey
+    const key = query.queryKey.join('/')
 
-    if (key.join('/') === shoppingListKeys.activeSummary.join('/')) return true
-
-    return activeId != null && key.join('/') === shoppingListKeys.detail(activeId).join('/')
+    return (
+      key === shoppingListKeys.activeSummary.join('/') ||
+      key === shoppingListKeys.open.join('/') ||
+      kept.has(key)
+    )
   }
 }
 

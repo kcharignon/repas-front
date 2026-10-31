@@ -1,14 +1,17 @@
 import { computed, ref, watchEffect } from 'vue'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/vue-query'
 
-import { ifMatch, unwrap } from '@/api'
-import type { ShoppingList } from '@/api'
+import { ApiError, ifMatch, unwrap } from '@/api'
+import type { ActiveShoppingListSummary, OpenShoppingList, ShoppingList } from '@/api'
+import { notifyMealFailure } from '@/notifications/failures'
 import { useSessionStore } from '@/session/session'
 
 export const shoppingListKeys = {
   all: ['shopping-lists'] as const,
   collection: ['shopping-lists', 'collection'] as const,
   activeSummary: ['shopping-lists', 'active', 'summary'] as const,
+  /** Toutes les listes en cours : la principale et une par type de liste (ADR 0036). */
+  open: ['shopping-lists', 'open'] as const,
   detail: (id: string) => ['shopping-lists', 'detail', id] as const,
 }
 
@@ -17,7 +20,12 @@ export const shoppingListKeys = {
  * Cocher la dernière ligne termine la liste : le back n'en a alors plus d'active, mais l'écran garde la liste qu'il vient
  * d'afficher (terminée) au lieu de dire « aucune liste » ; `forget()` l'oublie (nouvelle liste).
  */
-export function useActiveShoppingList() {
+export function useActiveShoppingList(
+  /** Une liste en cours choisie à la main (une pastille d'un type) : elle passe avant la liste principale. */
+  selected: () => string | null = () => null,
+  /** Sans liste principale ni liste vue à l'instant : la liste à montrer quand même (la première liste en cours d'un type). */
+  fallback: () => string | null = () => null,
+) {
   const { api } = useSessionStore()
 
   const summary = useQuery({
@@ -29,7 +37,9 @@ export function useActiveShoppingList() {
     const current = summary.data.value?.shoppingListId
     if (current) lastId.value = current
   })
-  const id = computed(() => summary.data.value?.shoppingListId ?? lastId.value)
+  const id = computed(
+    () => selected() ?? summary.data.value?.shoppingListId ?? lastId.value ?? fallback(),
+  )
 
   const detail = useQuery({
     queryKey: computed(() => shoppingListKeys.detail(id.value ?? '')),
@@ -39,6 +49,46 @@ export function useActiveShoppingList() {
   })
 
   return { summary, id, detail, forget: () => (lastId.value = null) }
+}
+
+/**
+ * Toutes les listes en cours de l'utilisateur, la principale d'abord puis les types par date de création (une lecture). Un compte sans
+ * type n'en a qu'une, la principale : les pastilles de l'écran Liste n'existent que s'il y en a au moins une de plus.
+ */
+export function useOpenShoppingLists() {
+  const { api } = useSessionStore()
+
+  return useQuery({
+    queryKey: shoppingListKeys.open,
+    queryFn: () => unwrap(api.GET('/api/v1/shopping-lists/open')),
+  })
+}
+
+/** Une liste d'un type (« Boucherie »), par opposition à la liste principale (sans type). */
+export const isTyped = (list: { typeId?: string | null }): boolean => list.typeId != null
+
+/**
+ * La version à envoyer (`If-Match`) en écrivant un repas : celle de la liste affichée si c'est la principale ; `null` (aucun contrôle) pour
+ * la liste d'un type, car le back ne contrôle que la version de la liste principale d'un groupe de repas (ADR 0036 décision 12) et
+ * refuserait (412) celle d'un type. Le type de la liste se lit dans ce que l'écran a déjà : les listes en cours, puis « Mes listes ».
+ */
+export function useMealVersion() {
+  const queryClient = useQueryClient()
+
+  return (list: { id: string; version: number }): number | null => {
+    const open = queryClient
+      .getQueryData<{ member?: OpenShoppingList[] }>(shoppingListKeys.open)
+      ?.member?.find((candidate) => candidate.id === list.id)
+    const known =
+      open ??
+      queryClient
+        .getQueryData<{
+          member?: { id: string; typeId?: string | null }[]
+        }>(shoppingListKeys.collection)
+        ?.member?.find((candidate) => candidate.id === list.id)
+
+    return known !== undefined && isTyped(known) ? null : list.version
+  }
 }
 
 /** Crée la liste active si l'utilisateur n'en a pas (le front le demande, la lecture n'a plus d'effet de bord). */
@@ -102,6 +152,8 @@ export function useChangeServing() {
 
   return useMutation({
     // `version` : celle de la liste affichée (ETag) ; si elle a changé ailleurs, le back répond 412 et l'écran se relit.
+    // Un repas peut être réparti sur plusieurs listes : un refus (une liste partie au drive) a son texte
+    meta: { silent: true },
     mutationFn: ({
       mealId,
       serving,
@@ -109,7 +161,7 @@ export function useChangeServing() {
     }: {
       mealId: string
       serving: number
-      version: number
+      version: number | null
     }) =>
       unwrap(
         api.PUT('/api/v1/meals/{id}/serving', {
@@ -117,22 +169,25 @@ export function useChangeServing() {
           body: { serving },
         }),
       ),
+    onError: notifyMealFailure,
     onSettled: () => queryClient.invalidateQueries({ queryKey: shoppingListKeys.all }),
   })
 }
 
-/** Retire une recette de la liste active (ses ingrédients sont déduits par le back). */
+/** Retire une recette de la liste active (ses ingrédients sont déduits par le back), de toutes les listes qui l'ont reçue. */
 export function useUnplanRecipe() {
   const { api } = useSessionStore()
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ recipeId, version }: { recipeId: string; version: number }) =>
+    meta: { silent: true },
+    mutationFn: ({ recipeId, version }: { recipeId: string; version: number | null }) =>
       unwrap(
         api.DELETE('/api/v1/shopping-lists/active/recipes/{recipeId}', {
           params: { path: { recipeId }, header: ifMatch(version) },
         }),
       ),
+    onError: notifyMealFailure,
     onSettled: () => queryClient.invalidateQueries({ queryKey: shoppingListKeys.all }),
   })
 }
@@ -159,13 +214,25 @@ export function useShoppingList(id: () => string, enabled: () => boolean = () =>
   })
 }
 
-/** Nouvelle liste active : l'éventuelle liste active passe en pause, les listes terminées sont supprimées par le back. */
+/**
+ * Nouvelle liste active : l'éventuelle liste active du même type passe en pause, les listes terminées sont supprimées par le back.
+ * Sans `typeId`, la liste principale. Rend l'identifiant de la liste créée (en-tête `Location`, vide s'il manque).
+ */
 export function useCreateShoppingList() {
   const { api } = useSessionStore()
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: () => unwrap(api.POST('/api/v1/shopping-lists')),
+    mutationFn: async (typeId?: string | null): Promise<string> => {
+      const { response, error } = await api
+        .POST('/api/v1/shopping-lists', typeId == null ? {} : { body: { typeId } })
+        .catch((cause: unknown) => {
+          throw ApiError.network(cause)
+        })
+      if (!response.ok) throw ApiError.fromResponse(response, error)
+
+      return response.headers.get('Location')?.split('/').pop() ?? ''
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: shoppingListKeys.all }),
   })
 }
@@ -222,14 +289,52 @@ export function useDeleteShoppingList() {
   })
 }
 
-/** Le résumé de la liste active : son identifiant et les recettes qu'elle planifie (pour les boutons « Ajouter à la liste »). */
+/**
+ * Le résumé de la liste active : son identifiant et les recettes qu'elle planifie (pour les boutons « Ajouter à la liste »).
+ *
+ * Le back ne résume que la liste principale ; une recette ou un produit peut être allé dans la liste d'un type (ADR 0036). Quand le
+ * compte a des listes de types en cours, leurs recettes et leurs quantités sont donc ajoutées au résumé (leur détail est déjà lu par
+ * l'écran Liste, la même requête). Sans type, c'est exactement la réponse du back.
+ */
 export function useActiveSummary() {
   const { api } = useSessionStore()
 
-  return useQuery({
+  const summary = useQuery({
     queryKey: shoppingListKeys.activeSummary,
     queryFn: () => unwrap(api.GET('/api/v1/shopping-lists/active/summary')),
   })
+  const open = useOpenShoppingLists()
+  const typed = computed(() => (open.data.value?.member ?? []).filter(isTyped))
+  const details = useQueries({
+    queries: computed(() =>
+      typed.value.map((list) => ({
+        queryKey: shoppingListKeys.detail(list.id),
+        queryFn: () =>
+          unwrap(api.GET('/api/v1/shopping-lists/{id}', { params: { path: { id: list.id } } })),
+      })),
+    ),
+  })
+
+  const data = computed<ActiveShoppingListSummary | undefined>(() => {
+    const main = summary.data.value
+    const lists = details.value.flatMap((detail) =>
+      detail.data === undefined ? [] : [detail.data],
+    )
+    if (main === undefined || lists.length === 0) return main
+
+    const planned = new Set(main.plannedRecipeIds)
+    const quantities: Record<string, number> = { ...main.quantityByIngredientSlug }
+    for (const list of lists) {
+      for (const type of list.recipeTypes) for (const meal of type.meals) planned.add(meal.recipeId)
+      for (const department of list.departments)
+        for (const row of department.rows)
+          quantities[row.ingredientSlug] = (quantities[row.ingredientSlug] ?? 0) + row.quantity
+    }
+
+    return { ...main, plannedRecipeIds: [...planned], quantityByIngredientSlug: quantities }
+  })
+
+  return { ...summary, data }
 }
 
 /** Envoie une liste au drive : elle passe à `SENT` et n'est plus modifiable (sans effet si elle l'est déjà). */
