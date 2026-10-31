@@ -176,15 +176,17 @@ function confirmDelete() {
 }
 
 function confirmSend() {
+  // L'identifiant est pris AVANT l'envoi : une fois la liste partie, l'accueil ne montre plus que les listes en cours et `props.list` devient une autre liste
+  const listId = props.list.id
   send.mutate(
-    { id: props.list.id, version: props.list.version },
+    { id: listId, version: props.list.version },
     {
       onSuccess: async () => {
         sending.value = false
         // La confirmation a donné l'intention : l'écran d'envoi ouvre le drive tout seul (`ouvrir`)
         await router.push({
           name: 'drive-send',
-          params: { listId: props.list.id },
+          params: { listId },
           query: { ouvrir: '1' },
         })
       },

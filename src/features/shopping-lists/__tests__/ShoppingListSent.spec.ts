@@ -6,6 +6,7 @@ import { INFO_TIMEOUT_MS } from '@/features/drive/bridge'
 import { fakeNative } from '@/features/drive/bridge/__tests__/fakeNative'
 import ShoppingListDetailView from '@/features/shopping-lists/ShoppingListDetailView.vue'
 import ShoppingListView from '@/features/shopping-lists/ShoppingListView.vue'
+import { shoppingListKeys } from '@/features/shopping-lists/queries'
 import { useNotificationsStore } from '@/notifications/store'
 import { useSessionStore } from '@/session/session'
 import { severalSettings } from '@/features/drive/__tests__/severalDrives'
@@ -591,6 +592,52 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     expect(context.router.currentRoute.value.params.listId).toBe('l1')
     // La confirmation a donné l'intention : l'écran d'envoi ouvre le drive sans autre clic (`ouvrir`, consommé par l'écran)
     expect(context.router.currentRoute.value.query.ouvrir).toBe('1')
+  })
+
+  it('ouvre l’écran d’envoi sur la liste envoyée, même si l’accueil montre une autre liste dès la relecture', async () => {
+    // Une liste d'un type (l1) est montrée ; une fois envoyée, il ne reste en cours que la principale (l2)
+    const openList = (id: string, typeId: string | null) => ({
+      id,
+      name: id,
+      typeId,
+      rowCount: 1,
+      uncheckedCount: 1,
+      version: 1,
+    })
+    let sent = false
+    const { context } = await openActive(
+      {
+        'POST /api/v1/shopping-lists/l1/send': () => {
+          sent = true
+
+          return noContent()
+        },
+        'GET /api/v1/shopping-lists/active/summary': () =>
+          json({ shoppingListId: 'l2', quantityByIngredientSlug: {}, plannedRecipeIds: [] }),
+        'GET /api/v1/shopping-lists/open': () =>
+          json({
+            member: sent ? [openList('l2', null)] : [openList('l2', null), openList('l1', 't1')],
+            totalItems: sent ? 1 : 2,
+          }),
+        'GET /api/v1/shopping-lists/l2': () => json({ ...detail('ACTIVE', 0), id: 'l2' }),
+      },
+      detail('ACTIVE'),
+      true,
+      '/liste?liste=l1',
+    )
+    await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+    // La principale a déjà été vue : sa fiche est en mémoire, l'en-tête reste monté quand l'accueil bascule dessus
+    context.queryClient.setQueryData(shoppingListKeys.detail('l2'), {
+      ...detail('ACTIVE', 0),
+      id: 'l2',
+    })
+
+    button('Envoyer au drive')?.click()
+    await vi.waitFor(() => expect(dialogButton('Envoyer au drive')).toBeDefined())
+    dialogButton('Envoyer au drive').click()
+    await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-send'))
+
+    expect(context.router.currentRoute.value.params.listId).toBe('l1')
   })
 
   const tooOldSentence = 'Mets à jour l’application pour envoyer ta liste.'
