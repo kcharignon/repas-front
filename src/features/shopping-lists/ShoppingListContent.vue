@@ -44,6 +44,8 @@ const ambiguous = computed(() =>
 )
 const markers = computed(() => anyIcon(rows.value.map((row) => row.departmentSlug)))
 const done = computed(() => rows.value.filter((row) => row.checked).length)
+/** Tout est coché : une liste envoyée n'a plus rien à reprendre. (Une liste en cours se termine d'elle-même quand sa dernière case est cochée.) */
+const allChecked = computed(() => rows.value.length > 0 && done.value === rows.value.length)
 const meals = computed(() => props.list.recipeTypes.flatMap((type) => type.meals))
 
 const tabClass =
@@ -56,6 +58,7 @@ const stepClass =
   <div class="flex flex-col gap-5">
     <section v-if="list.isSent" role="status" class="rounded-2xl bg-soft px-5 py-4">
       <p class="font-semibold">{{ t('shoppingList.sentHelp') }}</p>
+      <p v-if="allChecked" class="mt-1 font-semibold">{{ t('shoppingList.allChecked') }}</p>
     </section>
 
     <section
@@ -70,8 +73,11 @@ const stepClass =
       </UiButton>
     </section>
 
-    <!-- Sur une liste envoyée au drive, cocher en magasin n'a pas de sens : « 0 sur 6 articles dans le panier » contredirait « Le panier est rempli » -->
-    <div v-if="!list.isSent" class="flex flex-col gap-2">
+    <!--
+      Sur une liste envoyée, la barre montre d'un coup d'œil ce qui manque au drive (DRV-747) : le passage coche les articles qu'il a mis au panier, les autres
+      restent non cochés. Avant, elle était masquée : « 0 sur 6 articles dans le panier » contredisait « Le panier est rempli » (DRV-626), la case n'étant jamais cochée.
+    -->
+    <div class="flex flex-col gap-2">
       <div class="flex items-baseline justify-between text-sm text-muted">
         <span>
           <strong class="text-base text-ink">{{

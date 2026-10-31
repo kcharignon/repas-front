@@ -461,7 +461,7 @@ describe('la recherche mémorisée du produit choisi (DRV-650) : un ajout facult
   })
 })
 
-describe('« notInCart » d’un produit choisi que le panier n’a pas pris (DRV-742) : un ajout facultatif du protocole v1', () => {
+describe('« notInCart » d’un produit choisi que le panier n’a pas pris (DRV-746) : un ajout facultatif du protocole v1', () => {
   const result = (line: object) => ({
     v: 1,
     type: 'result',

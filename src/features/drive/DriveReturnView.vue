@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { useRetailerI18n } from './useRetailerI18n'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import type { ResultLine } from '@drive-protocol'
+import type { ResultLine, ResultMessage } from '@drive-protocol'
 
+import type { DrivePlan } from '@/api'
 import UiButton from '@/design/UiButton.vue'
 import UiConfirmDialog from '@/design/UiConfirmDialog.vue'
 import UiLinkButton from '@/design/UiLinkButton.vue'
@@ -14,11 +15,12 @@ import {
 } from '@/features/shopping-lists/queries'
 import { isRateLimited, messageForFailure } from '@/notifications/failures'
 import { useOnline } from '@/offline/useOnline'
+import { basketSlugsOf } from './basket'
 import { driveBridge } from './bridge'
 import { buildChoiceBatches, countChoices, knownProductsOf } from './choices'
 import { drivesOf } from './drives'
 import { finalizeLink, retailerOf } from './retailers'
-import { useDrivePlan, useDriveSettings, useSaveChoices } from './queries'
+import { useDrivePlan, useDriveSettings, useMarkBasketLines, useSaveChoices } from './queries'
 import { expectedFromPlan } from './restrictToPlan'
 import { useDriveReturnStore } from './returnStore'
 import DriveFold from './DriveFold.vue'
@@ -56,13 +58,26 @@ const list = useShoppingList(
   () => listId.value !== null,
 )
 const settings = useDriveSettings()
+// Le plan est gardé tel qu'il a été lu la PREMIÈRE fois pour ce passage (DRV-747) : une fois les articles mis au panier cochés dans la liste, le back ne les
+// met plus dans le plan. Une relecture (retour sur la page, focus) rendrait moins de lignes, et les noms et les libellés du récapitulatif retomberaient sur
+// des identifiants.
+const planAtStart = shallowRef<DrivePlan | undefined>()
+watch([listId, runRetailer], () => (planAtStart.value = undefined))
+watch(
+  plan.data,
+  (data) => {
+    if (data !== undefined && planAtStart.value === undefined) planAtStart.value = data
+  },
+  { immediate: true },
+)
+const readPlan = computed(() => planAtStart.value ?? plan.data.value)
 const names = computed(
-  () => new Map(plan.data.value?.lines.map((line) => [line.ingredientSlug, line.ingredientName])),
+  () => new Map(readPlan.value?.lines.map((line) => [line.ingredientSlug, line.ingredientName])),
 )
 const labels = computed(
   () =>
     new Map(
-      plan.data.value?.lines.flatMap((line) =>
+      readPlan.value?.lines.flatMap((line) =>
         [...line.products, ...line.rejected].map((product) => [
           product.retailerProductId,
           product.label,
@@ -192,13 +207,37 @@ const saveFailure = computed(() =>
  */
 async function planData() {
   const data =
-    plan.data.value ?? (await plan.refetch({ cancelRefetch: false, throwOnError: true })).data
+    readPlan.value ?? (await plan.refetch({ cancelRefetch: false, throwOnError: true })).data
   if (data === undefined) throw new Error('plan')
 
   return data
 }
 
 const expectedLines = async () => expectedFromPlan(await planData())
+
+// --- Cocher dans la liste ce qui est au panier (DRV-747) ---
+const markBasket = useMarkBasketLines()
+/** Le passage dont l'appel est parti (une seule fois : « Réessayer l'enregistrement » ne le renvoie pas) et celui dont les coches sont écrites. */
+const basketSent = ref<string | null>(null)
+const basketTicked = ref<string | null>(null)
+
+/**
+ * Une fois, jamais bloquant : sans lui l'enregistrement des choix n'est pas gêné (un `404`, un `409` ou le réseau coûtent seulement des coches), et
+ * rien n'est dit s'il échoue. Le résultat est déjà recoupé avec le plan : un faux résultat ne coche que des lignes que le plan explique. Aucun appel
+ * sans article au panier (un arrêt avant le moindre ajout) : le back refuse une liste vide.
+ */
+async function tickBasket(result: ResultMessage, id: string) {
+  if (basketSent.value === result.runId) return
+  basketSent.value = result.runId
+  const slugs = basketSlugsOf(result)
+  if (slugs.length === 0) return
+  try {
+    await markBasket.mutateAsync({ listId: id, slugs })
+    basketTicked.value = result.runId
+  } catch {
+    // Les articles restent non cochés : la liste dit toujours ce qu'il reste à voir
+  }
+}
 
 async function persist() {
   const first = run.value
@@ -212,6 +251,7 @@ async function persist() {
     if (!store.checked) store.check(await expectedLines())
     const current = run.value
     if (current === null) return
+    void tickBasket(current.result, current.listId)
     // Le libellé et le contenu d'un produit connu dont la personne a donné la contenance (DRV-652) viennent du plan : il n'est lu que pour cela
     const known = current.result.lines.some(
       (line) => line.outcome === 'ADDED' && line.packSize !== undefined,
@@ -434,6 +474,14 @@ function confirmReopen() {
 
       <p v-if="showBasketReady" class="max-w-prose text-lg font-semibold">
         {{ t('driveReturn.basketReady') }}
+      </p>
+
+      <p
+        v-if="basketTicked !== null && basketTicked === result.runId"
+        role="status"
+        class="max-w-prose text-muted"
+      >
+        {{ t('driveReturn.basketTicked') }}
       </p>
 
       <p v-if="store.status === 'saving' && hasChoices" role="status" class="text-muted">

@@ -52,6 +52,13 @@ const reopen = useReopenShoppingList()
 // articles : dans un navigateur il ne pourrait rien faire, et il verrouillerait la liste pour rien (DRV-641).
 const inApp = driveBridge.isAvailable()
 const settings = useDriveSettings(() => props.list.isActive)
+// Un envoi ne prend que les articles NON cochés (DRV-747) : sans article à cocher il n'y a rien à envoyer, ni à reprendre
+const uncheckedCount = computed(() =>
+  props.list.departments.reduce(
+    (total, department) => total + department.rows.filter((row) => !row.checked).length,
+    0,
+  ),
+)
 // Aucun drive configuré (`selection.mode` vaut `NONE`) : pas de bouton « Envoyer au drive », « Terminer » devient l'action principale (DRV-737).
 // Un drive se configure depuis « Moi » (Réglages du drive).
 const canSend = computed(() => {
@@ -60,7 +67,7 @@ const canSend = computed(() => {
   return (
     inApp &&
     props.list.isActive &&
-    props.list.rowCount > 0 &&
+    uncheckedCount.value > 0 &&
     data?.enabled === true &&
     !needsStore(data)
   )
@@ -201,7 +208,8 @@ const complete = () => status.mutate({ id: props.list.id, action: 'complete' })
 
 // « Terminer » à côté de l'action principale quand celle-ci est l'envoi (le faire ou le reprendre) ; s'il n'y tient pas (320 px,
 // grands caractères), il passe en tête de « ⋮ »
-const completeBeside = computed(() => props.list.isSent || canSend.value)
+const canResume = computed(() => props.list.isSent && uncheckedCount.value > 0)
+const completeBeside = computed(() => canResume.value || canSend.value)
 const row = useTemplateRef<HTMLElement>('row')
 const sideWrapped = useWrappedRow(row)
 
@@ -291,7 +299,7 @@ const statusLabel = (list: ShoppingList) =>
         class="-m-1 flex h-13 min-w-0 flex-1 flex-wrap gap-x-2 gap-y-4 overflow-hidden p-1 md:flex-none"
       >
         <UiLinkButton
-          v-if="list.isSent"
+          v-if="canResume"
           :to="{ name: 'drive-send', params: { listId: list.id }, query: { ouvrir: '1' } }"
           :class="mainAction"
         >
@@ -306,9 +314,9 @@ const statusLabel = (list: ShoppingList) =>
         >
           {{ t('shoppingList.send') }}
         </UiButton>
-        <!-- Sans envoi possible (navigateur, drive coupé, liste vide) : « Terminer » devient l'action principale -->
+        <!-- Sans envoi possible (navigateur, drive coupé, liste vide, tout est coché) : « Terminer » devient l'action principale -->
         <UiButton
-          v-else-if="list.isActive"
+          v-else-if="list.isActive || list.isSent"
           :class="mainAction"
           :disabled="status.isPending.value"
           @click="complete"

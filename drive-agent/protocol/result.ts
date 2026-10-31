@@ -119,7 +119,7 @@ const resultLine: Check = (list, index) => {
   optional(line, 'price', price)
   optional(line, 'searchQuery', searchQuery)
   optional(line, 'packSize', packSize)
-  // DRV-742 : la clé n'a qu'une valeur, `true` (absente = au panier) ; `false` ou tout autre type est refusé
+  // DRV-746 : la clé n'a qu'une valeur, `true` (absente = au panier) ; `false` ou tout autre type est refusé
   optional(line, 'notInCart', (parent, name) => {
     if (parent.v[name] !== true) fail(at(parent.p, name))
   })

@@ -12,7 +12,8 @@ import { severalSettings } from '@/features/drive/__tests__/severalDrives'
 
 type Status = 'ACTIVE' | 'SENT' | 'COMPLETED'
 
-const detail = (status: Status = 'ACTIVE', rowCount = 2) => ({
+/** `everythingChecked` : toutes les cases sont cochées (le passage a tout mis au panier, ou la personne avait déjà tout coché). */
+const detail = (status: Status = 'ACTIVE', rowCount = 2, everythingChecked = false) => ({
   id: 'l1',
   name: 'Courses du week-end',
   displayName: 'Courses du week-end',
@@ -36,7 +37,13 @@ const detail = (status: Status = 'ACTIVE', rowCount = 2) => ({
             name: 'Divers',
             image: 'images/divers.png',
             rows: [
-              { id: 'r1', ingredientName: 'Sel', quantity: 5, unitSymbol: 'g', checked: false },
+              {
+                id: 'r1',
+                ingredientName: 'Sel',
+                quantity: 5,
+                unitSymbol: 'g',
+                checked: everythingChecked,
+              },
               { id: 'r2', ingredientName: 'Farine', quantity: 1, unitSymbol: 'kg', checked: true },
             ],
           },
@@ -180,12 +187,35 @@ describe('liste envoyée au drive (page de la liste)', () => {
     )
   })
 
-  it('n’affiche pas la progression des cases cochées : « 0 sur 6 articles dans le panier » contredirait « Le panier est rempli » (DRV-626)', async () => {
+  // DRV-747 : le passage coche ce qu'il a mis au panier, la barre redevient vraie et montre d'un coup d'œil ce qui manque au drive (DRV-626 la masquait :
+  // « 0 sur 6 » contredisait « Le panier est rempli » quand rien n'était jamais coché)
+  it('affiche la progression : un article coché est au panier, l’autre manque', async () => {
     const { wrapper } = await openSent()
 
-    expect(wrapper.text()).not.toMatch(/articles dans le panier/)
-    expect(wrapper.find('[role="progressbar"]').exists()).toBe(false)
-    expect(wrapper.text()).not.toMatch(/\d+ %/)
+    expect(wrapper.text()).toContain('1 sur 2 articles dans le panier')
+    expect(wrapper.text()).toContain('50 %')
+    expect(wrapper.find('[role="progressbar"]').attributes('aria-valuenow')).toBe('1')
+  })
+
+  it('tout est au panier : la barre est pleine, une phrase dit qu’il n’y a plus rien à envoyer, « Terminer » prend la place de « Reprendre l’envoi »', async () => {
+    const { wrapper } = await openSent({
+      'GET /api/v1/shopping-lists/l1': () => json(detail('SENT', 2, true)),
+    })
+
+    expect(wrapper.text()).toContain('2 sur 2 articles dans le panier')
+    expect(wrapper.text()).toContain('Tout est coché : il n’y a plus rien à envoyer au drive.')
+    // Reprendre l'envoi n'aurait rien à prendre : « Terminer » est l'action principale, seule sur la rangée avec « ⋮ »
+    expect(rowActions()).toEqual(['Terminer', 'Plus d’actions'])
+    expect(wrapper.find('header a').exists()).toBe(false)
+    await openMenu('Rouvrir la liste')
+    expect(menuItems()).toEqual(['Rouvrir la liste', 'Supprimer'])
+  })
+
+  it('il reste un article non coché : pas de phrase « plus rien à envoyer », la reprise de l’envoi reste là', async () => {
+    const { wrapper } = await openSent()
+
+    expect(wrapper.text()).not.toContain('plus rien à envoyer')
+    expect(rowActions()[0]).toBe('Reprendre l’envoi')
   })
 
   it('l’affiche toujours sur une liste en cours (la liste se coche en magasin)', async () => {
@@ -213,7 +243,7 @@ describe('liste envoyée au drive (page de la liste)', () => {
     const boxes = wrapper.findAll('[role="checkbox"]')
     expect(boxes).toHaveLength(2)
     expect(boxes.every((box) => box.attributes('disabled') !== undefined)).toBe(true)
-    // L'état coché est conservé : un envoi ne modifie jamais `checked`
+    // Les cases sont celles de la liste (le passage a coché ce qu'il a mis au panier) : on ne les touche pas à la main sur une liste envoyée
     expect(boxes.map((box) => box.attributes('aria-checked'))).toEqual(['false', 'true'])
 
     await wrapper.findAll('[role="tab"]')[1]?.trigger('mousedown', { button: 0 })
@@ -517,6 +547,20 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     await flushPromises()
 
     expect(button('Envoyer au drive')).toBeUndefined()
+  })
+
+  it('ne le propose pas quand tout est coché : un envoi ne prend que les articles non cochés (DRV-747)', async () => {
+    await openActive({}, detail('ACTIVE', 2, true))
+    await flushPromises()
+
+    expect(button('Envoyer au drive')).toBeUndefined()
+    // « Terminer » devient l'action principale
+    expect(button('Terminer')).toBeDefined()
+  })
+
+  it('le propose dès qu’un article n’est pas coché, même si les autres le sont', async () => {
+    await openActive({}, detail('ACTIVE'))
+    await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
   })
 
   it('ne le propose pas quand les réglages ne se lisent pas', async () => {
@@ -894,7 +938,7 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     [
       422,
       'SHOPPING_LIST_EMPTY',
-      'La liste est vide : il n’y a rien à envoyer au drive. Ta liste n’a pas changé. Ajoute des articles, puis envoie-la.',
+      'Il n’y a rien à envoyer au drive : la liste est vide, ou tout est coché. Ta liste n’a pas changé. Ajoute un article ou décoche-en un, puis réessaie.',
     ],
     [
       409,

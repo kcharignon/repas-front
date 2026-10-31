@@ -231,3 +231,37 @@ describe('la contenance d’un produit (DRV-652) ne vaut que dans l’unité de 
     expect(restrict([line], sized).result.lines).toEqual([line])
   })
 })
+
+// DRV-747 : le site coche dans la liste ce que le résultat dit au panier ; la restriction au plan ne doit donc ni perdre ni inventer `notInCart`
+describe('restrictToPlan et la clé notInCart d’un produit choisi (DRV-746, DRV-747)', () => {
+  const notInCart = (slug: string) => chosen(slug, { notInCart: true } as Partial<ResultLine>)
+  const flag = (line: ResultLine | undefined) =>
+    line !== undefined && 'notInCart' in line ? line.notInCart : undefined
+
+  it('la garde sur la ligne qu’elle retient, même quand elle lui retire sa contenance', () => {
+    const restricted = restrict([
+      chosen('poivre'),
+      notInCart('poivre'),
+      {
+        ...notInCart('poivre'),
+        packSize: { value: 20, unitSlug: 'tranche' },
+      } as ResultLine,
+    ])
+
+    expect(restricted.ignored).toBe(0)
+    expect(restricted.result.lines.map(flag)).toEqual([undefined, true, true])
+  })
+
+  it('n’en ajoute jamais à une ligne qui ne l’avait pas', () => {
+    const line = chosen('poivre')
+
+    expect(restrict([line]).result.lines).toEqual([line])
+  })
+
+  it('une ligne falsifiée pour un slug hors du plan est ignorée : elle ne peut rien cocher', () => {
+    const restricted = restrict([notInCart('pirate'), added('pirate', '123456'), chosen('pirate')])
+
+    expect(restricted.slugs).toEqual([])
+    expect(restricted.ignored).toBe(3)
+  })
+})
