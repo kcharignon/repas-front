@@ -244,20 +244,23 @@ export class Flow {
    * Entrer dans le magasin sans geste (DRV-625, DRV-629) : sur l'accueil de l'enseigne, l'agent touche lui-même « Commencer mes courses » (il
    * CLIQUE le bouton du vrai site, ou suit son lien s'il en a un qui mène au magasin du plan : une action de la page, à la cadence des autres,
    * pendant que le bandeau dit « Ouverture de ton magasin… ») ; la page suivante est celle du magasin, l'application y renvoie le plan et l'agent
-   * y vérifie le magasin. Une seule tentative par envoi et par onglet : au moindre doute (bouton ou lien absent, adresse qui n'est pas celle du
-   * magasin du plan, défi de l'anti-robot, clic sans effet : la page est restée là) le bandeau dit de toucher le bouton, sans boucle, sans
-   * requête et sans écriture.
+   * y vérifie le magasin. Une seule tentative par envoi et par onglet, sauf après la connexion (DRV-748) : au moindre doute (bouton ou lien absent,
+   * adresse qui n'est pas celle du magasin du plan, défi de l'anti-robot, clic sans effet : la page est restée là) le bandeau dit de toucher le
+   * bouton, sans boucle, sans requête et sans écriture.
+   *
+   * La connexion (DRV-748) : si le premier toucher a eu lieu AVANT la connexion (le site a répondu par sa page de connexion, que la personne remplit
+   * elle-même), l'accueil qui revient une fois connectée montre de nouveau le bouton. L'agent le suit alors une seconde fois, la dernière, à
+   * trois conditions : la session est connectée (`readSession`), la lecture dit `BUTTON` ou `LINK` vérifié (donc ni défi ni refus), et l'enseigne
+   * le permet (`entersAfterLogin`). Deux touchers au plus par envoi et par onglet ; un premier toucher fait session ouverte n'en permet aucun
+   * (un clic sans effet ne se refait pas).
    */
   private async enterStore(plan: PlanMessage): Promise<void> {
     const { adapter, ui } = this.deps
     this.enter('ENTERING')
-    // Déjà tenté pour cet envoi (ou aucun moyen de le noter) : pas de seconde tentative, le geste manuel tout de suite.
-    if (!this.runs.hasEntered(plan.runId)) {
+    // Déjà tenté pour cet envoi (ou aucun moyen de le noter) : pas de seconde tentative, le geste manuel tout de suite, sauf la seconde entrée d'après la connexion.
+    if (!this.runs.hasEntered(plan.runId) || this.mayEnterAfterLogin(plan)) {
       const { reading, announced } = await this.awaitEntry(plan)
-      if (
-        (reading.kind === 'LINK' || reading.kind === 'BUTTON') &&
-        this.runs.markEntered(plan.runId)
-      ) {
+      if (this.allowEntry(plan, reading, ['LINK', 'BUTTON'])) {
         if (!announced) void ui.show('entry', { stage: 'opening' })
         try {
           await adapter.followEntry()
@@ -300,7 +303,8 @@ export class Flow {
 
   /**
    * Sur la page du magasin du plan, la fenêtre d'accueil du site (« <magasin> vous propose… » et son « Commencer mes courses ») peut être là :
-   * l'agent appuie sur ce bouton, comme le ferait un doigt, une seule fois par envoi et par onglet. Rien d'autre n'est touché. Si la page
+   * l'agent appuie sur ce bouton, comme le ferait un doigt, une seule fois par envoi et par onglet (deux si le premier toucher a eu lieu avant la connexion :
+   * `enterStore`, DRV-748). Rien d'autre n'est touché. Si la page
    * change, elle reçoit de nouveau le plan ; sinon le passage continue. Un bouton absent, un lien ou le moindre doute : on passe.
    */
   private async dismissWelcome(plan: PlanMessage): Promise<void> {
@@ -311,12 +315,45 @@ export class Flow {
     } catch {
       return
     }
-    if (reading.kind !== 'BUTTON' || !this.runs.markEntered(plan.runId)) return
+    if (!this.allowEntry(plan, reading, ['BUTTON'])) return
     void ui.show('entry', { stage: 'opening' })
     try {
       await adapter.followEntry()
     } catch {
       // Le clic n'a rien fait : le passage continue sur la page telle qu'elle est.
+    }
+  }
+
+  /**
+   * L'agent peut-il encore refaire l'entrée après la connexion (DRV-748) ? L'enseigne le permet, et le premier toucher de cet envoi a eu lieu avant
+   * la connexion sans que la seconde ait eu lieu. Une lecture du stockage, rien n'est noté ici.
+   */
+  private mayEnterAfterLogin(plan: PlanMessage): boolean {
+    return this.deps.adapter.entersAfterLogin === true && this.runs.enteredBeforeLogin(plan.runId)
+  }
+
+  /**
+   * La lecture de l'entrée autorise-t-elle un toucher, et lequel (DRV-748) ? `kinds` : les lectures qu'on suit. Le premier toucher de l'envoi est noté
+   * `avant la connexion` quand la session n'est pas connectée ; la seconde entrée n'est permise que session connectée (`MEMBER`, jamais un état inconnu),
+   * une seule fois. Le toucher est noté AVANT d'être fait : sans stockage, jamais de clic.
+   */
+  private allowEntry(
+    plan: PlanMessage,
+    reading: EntryReading,
+    kinds: readonly EntryReading['kind'][],
+  ): boolean {
+    if (!kinds.includes(reading.kind)) return false
+    const member = this.isMember()
+    if (this.runs.markEntered(plan.runId, !member)) return true
+    return member && this.mayEnterAfterLogin(plan) && this.runs.markEnteredAfterLogin(plan.runId)
+  }
+
+  /** La page montre-t-elle un client connecté ? Seul `MEMBER` le dit : un état inconnu, ou une lecture qui échoue, n'est pas « connecté ». */
+  private isMember(): boolean {
+    try {
+      return this.deps.adapter.readSession().state === 'MEMBER'
+    } catch {
+      return false
     }
   }
 

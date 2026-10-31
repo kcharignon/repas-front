@@ -11,6 +11,11 @@ import type { StorageLike } from './types'
 export const RUN_PREFIX = 'repas:run:'
 /** La clé de l'envoi dont l'agent a déjà suivi « Commencer mes courses » dans cet onglet (DRV-625) : un identifiant, rien d'autre. */
 export const ENTRY_KEY = 'repas:entry'
+/**
+ * Où en est la seconde entrée de cet envoi (DRV-748) : `<runId>:before` quand le premier toucher a eu lieu AVANT la connexion (la seconde, après, reste permise),
+ * `<runId>:after` une fois la seconde dépensée. Absente quand le premier toucher a eu lieu session ouverte : il n'y a pas de seconde. Un identifiant et un mot fixe.
+ */
+export const ENTRY_LOGIN_KEY = 'repas:entry-login'
 /** Les raisons du dernier envoi (DRV-635), gardées pour le diagnostic : des mots fixes et des nombres, jamais un libellé ni un identifiant. */
 export const LAST_REASONS_KEY = 'repas:last-reasons'
 /** Ce que le panier a répondu au dernier produit choisi qu'il n'a pas pris (DRV-644), gardé pour le diagnostic : deux nombres et un mot fixe. */
@@ -260,13 +265,51 @@ export class RunStore {
   /**
    * Note que l'agent a suivi « Commencer mes courses » pour cet envoi, et dit si c'est la première fois dans cet onglet (DRV-625). Garde contre
    * toute boucle : une page qui nous ramène ici, un rechargement, une application qui renvoie le plan une seconde fois. Sans stockage, on ne
-   * suit rien (jamais de boucle possible).
+   * suit rien (jamais de boucle possible). `beforeLogin` : la session n'est pas (encore) ouverte au moment du toucher, qui peut mener à la page de
+   * connexion ; une seconde entrée reste alors permise, une seule, après la connexion (`markEnteredAfterLogin`, DRV-748).
    */
-  markEntered(runId: string): boolean {
+  markEntered(runId: string, beforeLogin = false): boolean {
     try {
       const storage = this.storage
       if (!storage || storage.getItem(ENTRY_KEY) === runId) return false
       storage.setItem(ENTRY_KEY, runId)
+    } catch {
+      return false
+    }
+    try {
+      if (beforeLogin) this.storage?.setItem(ENTRY_LOGIN_KEY, `${runId}:before`)
+      else this.storage?.removeItem(ENTRY_LOGIN_KEY)
+    } catch {
+      // Sans la note, la seconde entrée n'est jamais permise : la prudence d'avant.
+    }
+    return true
+  }
+
+  /**
+   * Le premier toucher de cet envoi a-t-il eu lieu avant la connexion, la seconde entrée restant à faire (DRV-748) ? Une lecture, qui ne note rien :
+   * `markEnteredAfterLogin` est le seul geste qui autorise ce clic. Faux sans stockage ou au moindre doute.
+   */
+  enteredBeforeLogin(runId: string): boolean {
+    try {
+      const storage = this.storage
+      return (
+        !!storage &&
+        storage.getItem(ENTRY_KEY) === runId &&
+        storage.getItem(ENTRY_LOGIN_KEY) === `${runId}:before`
+      )
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Note la seconde entrée de cet envoi, la dernière (DRV-748), et dit si elle est permise : le premier toucher a eu lieu avant la connexion et la seconde
+   * n'a pas encore été dépensée. Deux touchers au plus par envoi et par onglet ; sans stockage ou en cas d'erreur, aucun.
+   */
+  markEnteredAfterLogin(runId: string): boolean {
+    try {
+      if (!this.enteredBeforeLogin(runId)) return false
+      this.storage?.setItem(ENTRY_LOGIN_KEY, `${runId}:after`)
       return true
     } catch {
       return false

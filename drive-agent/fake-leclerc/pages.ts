@@ -187,13 +187,19 @@ export function accueilPage(
   storeUrl: string,
   otherStoreUrl?: string,
   form: HomeForm = 'link',
+  member = false,
 ): string {
-  const button = form === 'button' || form === 'button-human' || form === 'button-inert'
-  // Le clic ouvre le magasin ; `button-human` ignore un clic de programme, `button-inert` n'ouvre rien.
+  const button =
+    form === 'button' ||
+    form === 'button-human' ||
+    form === 'button-inert' ||
+    form === 'login-first'
+  // Le clic ouvre le magasin ; `button-human` ignore un clic de programme, `button-inert` n'ouvre rien, `login-first` mène un visiteur à la connexion.
+  const target = form === 'login-first' && !member ? LOGIN_PATH : storeUrl
   const onClick =
     form === 'button-inert'
       ? ''
-      : `${form === 'button-human' ? 'if (!event.isTrusted) return;' : ''} location.assign('${storeUrl}');`
+      : `${form === 'button-human' ? 'if (!event.isTrusted) return;' : ''} location.assign('${target}');`
   const start = button
     ? `<p><a id="start-shopping" class="btn" role="button">Commencer mes courses</a></p>
 <script>
@@ -223,6 +229,10 @@ setTimeout(function () {
           : form === 'no-link'
             ? '<p><a href="/connexion.aspx">Se connecter</a></p>'
             : `<p><a id="start-shopping" href="${storeUrl}">Commencer mes courses</a></p>`
+  const session =
+    form === 'login-first'
+      ? `${NAV[member ? 'member' : 'visitor']}\n${member ? '<p>Vous êtes connecté(e) au drive</p>\n' : ''}`
+      : ''
   const challenge =
     form === 'challenge'
       ? '<iframe title="Vérification" src="https://geo.captcha-delivery.com/captcha/"></iframe>\n'
@@ -231,7 +241,7 @@ setTimeout(function () {
 <html lang="fr">
 <head>${HEAD}<title>Accueil du magasin (faux site de test)</title></head>
 <body>
-<h1>Faux Leclerc Ville-Test</h1>
+${session}<h1>Faux Leclerc Ville-Test</h1>
 <p>Je peux retirer ma commande</p>
 ${start}
 ${challenge}${otherStoreUrl === undefined ? '' : `<p><a id="other-store" href="${otherStoreUrl}">Changer de magasin</a></p>\n`}<footer>Faux site Leclerc : données inventées.</footer>
@@ -482,6 +492,35 @@ var donnees = { "items": [ { "id": "A1", "nom": "Farine de test", "prix": 1.29 }
 `
 }
 
+/** Le chemin de la page de connexion de l'accueil de l'enseigne (forme `login-first`). */
+export const LOGIN_PATH = '/connexion.aspx'
+
+/** Le cookie qui dit que la personne s'est connectée (forme `login-first`) : posé par la page de connexion de l'accueil, jamais par un script de l'agent. */
+export const MEMBER_COOKIE = 'fake_member'
+
+/**
+ * La page de connexion de l'accueil de l'enseigne (DRV-748) : un bouton, que la PERSONNE touche (l'agent ne se connecte jamais), qui pose le cookie puis la
+ * ramène à l'accueil. Aucun champ de mot de passe : rien à saisir, rien à voler.
+ */
+export function loginFormPage(): string {
+  return `<!doctype html>
+<html lang="fr">
+<head>${HEAD}<title>Connexion (faux site de test)</title></head>
+<body>
+<h1>Connexion</h1>
+<p>Identifiez-vous pour continuer (page simulée).</p>
+<p><button id="login" type="button">Me connecter (simulé)</button></p>
+<script>
+document.getElementById('login').addEventListener('click', function () {
+  document.cookie = '${MEMBER_COOKIE}=1; path=/';
+  location.assign('/');
+});
+</script>
+</body>
+</html>
+`
+}
+
 /** La page de connexion, où le faux site redirige quand on n'est pas connecté. */
 export function loginPage(): string {
   return `<!doctype html>
@@ -517,7 +556,9 @@ export function challengePage(): string {
  * que « Se connecter » (`no-link`), ou le lien accompagné d'un défi de l'anti-robot (`challenge`) : dans les deux derniers cas l'agent ne suit
  * rien. Le vrai site (constat du 2026-10-19) a un BOUTON sans adresse : `button` (un élément sans `href` dont un script ouvre le magasin au clic,
  * quel qu'il soit), `button-human` (idem, mais le script ignore tout clic qui n'est pas un vrai toucher : `event.isTrusted`, comme le site
- * qui distingue un clic programmé), `button-inert` (le bouton est là et ne fait rien).
+ * qui distingue un clic programmé), `button-inert` (le bouton est là et ne fait rien). `login-first` (DRV-748, forme PLAUSIBLE, jamais mesurée) : le même bouton, mais
+ * le visiteur qui le touche arrive sur la page de connexion (`/connexion.aspx`) ; une fois connecté (cookie `fake_member`), l'accueil dit « Vous êtes connecté(e)
+ * au drive », montre « Se déconnecter » et le bouton, qui ouvre cette fois le magasin.
  */
 export type HomeForm =
   | 'link'
@@ -529,6 +570,7 @@ export type HomeForm =
   | 'div'
   | 'late'
   | 'store-link'
+  | 'login-first'
 
 /** Le faux Repas : la page de retour, qui affiche le fragment `#result=` reçu (décodé) pour que les tests le lisent. */
 export function repasReturnPage(): string {

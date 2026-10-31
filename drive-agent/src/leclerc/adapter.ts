@@ -148,6 +148,12 @@ export interface RetailerAdapter {
    * configuration s'en sert quand `readStore` dit « aucun magasin choisi » : au lieu d'un écran d'erreur, il laisse la page utilisable et attend ce choix.
    */
   storeChosenOnPage?(): boolean
+  /**
+   * FACULTATIVE (DRV-748) : présente (et vraie) chez une enseigne dont l'accueil, après la connexion que la personne tape elle-même, montre de nouveau « Commencer
+   * mes courses » alors que l'agent l'a déjà touché AVANT la connexion (le site avait répondu par sa page de connexion). Le passage peut alors faire une seconde
+   * entrée, la dernière, session connectée (voir `Flow.enterStore`). Absente : une seule entrée par envoi et par onglet, comme avant.
+   */
+  readonly entersAfterLogin?: boolean
   /** Les produits que le site propose pour cette recherche, dans l'ordre de la page. */
   searchProducts(query: string): Promise<Candidate[]>
   /** Fixe la quantité du produit au panier (absolue : `0` le retire) et vérifie la réponse du site. */
@@ -312,6 +318,8 @@ const LOGIN_PATH = /connexion|identif|login|authent/i
 
 /** L'adaptateur de l'enseigne E.Leclerc Drive : le site PC `fdN-courses.leclercdrive.fr`, seul contrat supporté. */
 export class LeclercAdapter implements RetailerAdapter {
+  /** Leclerc : l'accueil peut montrer le bouton avant la connexion (le toucher mène alors à la connexion) et de nouveau après : l'entrée se refait une fois (DRV-748). */
+  readonly entersAfterLogin = true
   private readonly deps: LeclercDeps
   private readonly pacer: Pacer
   private lastQuery = ''

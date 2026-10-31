@@ -128,7 +128,7 @@ Règle de produit : une intention donnée une fois (« Envoyer au drive » + sa 
 
 ## DRV-625 : entrer dans le magasin sans geste
 
-`leclerc/entry.ts` lit « Commencer mes courses » dans le texte de la page ; `Flow.enterStore` ne le suit (`adapter.followEntry()`, `Pacer.act`) que s'il mène à une page du **magasin du plan**, une seule fois par envoi et par onglet (`RunStore.markEntered`), sinon le bandeau `entry` dit de toucher le bouton. Un envoi terminé sans rien à lire ne montre pas l'écran de fin (`hasSomethingToRead`). Les deux sondes du diagnostic (`entryFacts`) ne disent que des formes. Le protocole ne change pas.
+`leclerc/entry.ts` lit « Commencer mes courses » dans le texte de la page ; `Flow.enterStore` ne le suit (`adapter.followEntry()`, `Pacer.act`) que s'il mène à une page du **magasin du plan**, une seule fois par envoi et par onglet (`RunStore.markEntered`), sinon le bandeau `entry` dit de toucher le bouton. **DRV-748 (agent 0.55.0)** : si ce premier toucher a eu lieu avant la connexion (`markEntered(runId, beforeLogin)`, clé `repas:entry-login`), une seconde entrée, la dernière (`markEnteredAfterLogin`), est permise quand l'accueil revient connecté (`readSession` = `MEMBER`, `BUTTON` ou `LINK` vérifié, `RetailerAdapter.entersAfterLogin`, Leclerc seulement) : deux touchers au plus par envoi et par onglet, un toucher fait session ouverte n'en permet aucun. Un envoi terminé sans rien à lire ne montre pas l'écran de fin (`hasSomethingToRead`). Les deux sondes du diagnostic (`entryFacts`) ne disent que des formes. Le protocole ne change pas.
 
 ## Ajouter une enseigne (DRV-711)
 
