@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { useQueryClient } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import { hasFailed } from '@/api/query'
 import { ApiError } from '@/api'
+import BackToListsLink from './BackToListsLink.vue'
 import ShoppingListContent from './ShoppingListContent.vue'
 import ShoppingListHeader from './ShoppingListHeader.vue'
 import { shoppingListKeys, useCreateShoppingList, useShoppingList } from './queries'
@@ -39,12 +40,7 @@ function startNew() {
 
 <template>
   <main class="mx-auto flex max-w-4xl flex-col gap-5 px-4 py-6">
-    <RouterLink
-      :to="{ name: 'shopping-lists' }"
-      class="self-start font-bold text-primary underline"
-    >
-      {{ t('shoppingList.allLists') }}
-    </RouterLink>
+    <BackToListsLink />
 
     <template v-if="list.data.value">
       <ShoppingListHeader :list="list.data.value" />

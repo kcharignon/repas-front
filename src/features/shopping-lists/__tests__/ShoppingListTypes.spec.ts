@@ -146,8 +146,38 @@ describe('ShoppingListView : plusieurs listes en cours', () => {
     expect(wrapper.text()).not.toContain('Merguez')
     expect(wrapper.text()).not.toContain('Marché')
     expect(wrapper.text()).toContain('Terminer cette liste')
-    // Le chemin pour changer de liste est « Mes listes »
-    expect(wrapper.find('a[href="/listes"]').exists()).toBe(true)
+    // Le chemin pour changer de liste est « Mes listes », en tête
+    expect(wrapper.findAll('a[href="/listes"]')).toHaveLength(1)
+  })
+
+  it('avec un type ouvert, « Mes listes » est en tête en pastille, une seule fois, et mène à Mes listes', async () => {
+    backWith(withTypes)
+
+    const { wrapper, context } = await mountList('/liste?liste=list-b')
+    await vi.waitFor(() => expect(wrapper.find('h1').text()).toBe('Boucherie'))
+
+    const links = wrapper.findAll('a[href="/listes"]')
+    expect(links).toHaveLength(1)
+    const [link] = links
+    expect(link!.text()).toBe('Mes listes')
+    expect(wrapper.find('main').element.firstElementChild).toBe(link!.element)
+    // Une pastille de 44 px au moins (jsdom ne mesure pas : la classe porte la hauteur), flèche décorative
+    expect(link!.classes()).toContain('min-h-11')
+    expect(link!.find('svg').attributes('aria-hidden')).toBe('true')
+
+    await link!.trigger('click')
+    await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('shopping-lists'))
+  })
+
+  it('sans type, « Mes listes » reste sous la liste et rien n’est ajouté en tête', async () => {
+    backWith(onlyMain)
+
+    const { wrapper } = await mountList()
+
+    const links = wrapper.findAll('a[href="/listes"]')
+    expect(links).toHaveLength(1)
+    expect(wrapper.find('main').element.firstElementChild).not.toBe(links[0]!.element)
+    expect(links[0]!.classes()).toContain('underline')
   })
 
   it('?liste= choisit la liste montrée : celle du type, ses lignes et son nom, toujours sans pastille', async () => {

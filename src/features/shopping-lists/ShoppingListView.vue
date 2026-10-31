@@ -8,6 +8,7 @@ import LoadError from '@/design/LoadError.vue'
 import SeasonArt from '@/design/season/SeasonArt.vue'
 import UiButton from '@/design/UiButton.vue'
 import { useOnline } from '@/offline/useOnline'
+import BackToListsLink from './BackToListsLink.vue'
 import ShoppingListContent from './ShoppingListContent.vue'
 import ShoppingListHeader from './ShoppingListHeader.vue'
 import {
@@ -54,6 +55,9 @@ function createList() {
 
 <template>
   <main class="mx-auto flex max-w-4xl flex-col gap-5 px-4 py-6">
+    <!-- Plusieurs listes en cours (au moins un type) : le chemin pour en changer est en haut ; sinon il reste sous la liste -->
+    <BackToListsLink v-if="hasTypedList" />
+
     <p v-if="summary.isPending.value || waitingForOpen" class="text-muted" role="status">
       {{ t('common.loading') }}
     </p>
@@ -90,6 +94,7 @@ function createList() {
         @start-new="createList"
       />
       <RouterLink
+        v-if="!hasTypedList"
         :to="{ name: 'shopping-lists' }"
         class="self-start font-bold text-primary underline"
       >

@@ -143,6 +143,15 @@ async function fakeBack(page: Page) {
           plannedRecipeIds: [],
         })
       const one = /^GET \/api\/v1\/shopping-lists\/([^/]+)$/.exec(key)
+      if (one?.[1] === 'l-sent')
+        return reply({
+          ...detail(lists[1]!),
+          id: 'l-sent',
+          status: 'SENT',
+          isActive: false,
+          isSent: true,
+          sentAt: '2026-10-30T10:00:00+02:00',
+        })
       if (one !== null) {
         const list = lists.find((candidate) => candidate.id === one[1])
 
@@ -262,6 +271,11 @@ test('l’écran Liste montre une seule liste sans pastille, on change de liste 
   await expect(page.getByText('Pâtes')).toBeVisible()
   await expect(page.getByText('Merguez')).toHaveCount(0)
   await noPills()
+  // « Mes listes » : une pastille en tête, une seule fois, d'au moins 44 px
+  await expect(page.getByRole('link', { name: 'Mes listes' })).toHaveCount(1)
+  expect(
+    (await page.getByRole('link', { name: 'Mes listes' }).boundingBox())!.height,
+  ).toBeGreaterThanOrEqual(44)
   await noOverflow()
   await axeBothThemes(page, 'liste-sans-pastilles')
 
@@ -287,6 +301,22 @@ test('l’écran Liste montre une seule liste sans pastille, on change de liste 
   expect(
     back.sent.filter((entry) => entry.key.endsWith('/complete')).map((entry) => entry.key),
   ).toEqual(['POST /api/v1/shopping-lists/l-b/complete'])
+})
+
+test('la page d’une liste envoyée a la même pastille « Mes listes » en tête', async ({ page }) => {
+  await fakeBack(page)
+
+  await page.goto('/listes/l-sent')
+  const link = page.getByRole('link', { name: 'Mes listes' })
+  await expect(link).toHaveCount(1)
+  expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+  ).toBeLessThanOrEqual(0)
+  await axeBothThemes(page, 'liste-envoyee')
+
+  await link.click()
+  await expect(page).toHaveURL(/\/listes$/)
 })
 
 test('un message dit où la recette est allée, « Voir » ouvre la liste', async ({ page }) => {
