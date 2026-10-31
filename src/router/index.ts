@@ -232,6 +232,17 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/features/admin/UsersAdminView.vue'),
         meta: { admin: true },
       },
+      {
+        // Les types de liste de courses (LST-006) : l'écran des types, puis la fiche d'un type
+        path: 'moi/types-de-liste',
+        name: 'list-types',
+        component: () => import('@/features/list-types/ListTypesView.vue'),
+      },
+      {
+        path: 'moi/types-de-liste/:id',
+        name: 'list-type',
+        component: () => import('@/features/list-types/ListTypeView.vue'),
+      },
       { path: 'moi', name: 'account', component: () => import('@/views/AccountView.vue') },
     ],
   },
