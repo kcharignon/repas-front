@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import type { ResultLine } from '@drive-protocol'
 
 import { appContext, bodyOf, calls, json, me, rateLimited, stubApi } from '@/__tests__/helpers'
+import { useNotificationsStore } from '@/notifications/store'
 import { useSessionStore } from '@/session/session'
 import { DRAFT_KEY } from '../bridge'
 import type { DriveEvent } from '../bridge'
@@ -41,6 +42,8 @@ const okHandlers: Handlers = {
   'GET /api/v1/shopping-lists/l1': () => json(listDetail),
   'GET /api/v1/drive/settings': () => json({ enabled: true, retailer: 'leclerc', store }),
   'PUT /api/v1/drive/choices': noContent,
+  // DRV-747 : les articles mis au panier sont cochés dans la liste après le passage
+  'POST /api/v1/drive/plans/l1/basket-lines': noContent,
 }
 
 async function open(event: DriveEvent | null, handlers: Handlers = {}) {
@@ -277,6 +280,8 @@ describe('retour du drive : un passage réussi', () => {
     await saved(wrapper)
 
     expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
+    // Rien n'est au panier : rien à cocher non plus (le back refuse un tableau vide)
+    expect(calls(fetchMock)).not.toContain('POST /api/v1/drive/plans/l1/basket-lines')
     expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
     expect(wrapper.text()).toContain('Aucun produit disponible : rien n’a été mis au panier.')
     expect(wrapper.text()).toContain('Pas cette fois.')
@@ -985,7 +990,9 @@ describe('retour du drive : le résultat est recoupé avec le plan envoyé (DRV-
       expect(wrapper.find('details').text()).toContain(
         '2 articles ne figuraient pas dans ta liste : Repas les a laissés de côté.',
       )
-      expect(calls(fetchMock).filter((call) => call.includes('/plans/'))).toHaveLength(1)
+      expect(calls(fetchMock).filter((call) => call === 'GET /api/v1/drive/plans/l1')).toHaveLength(
+        1,
+      )
     })
 
     it('sans plan retrouvé, n’enregistre rien, garde le résultat et le brouillon, puis réessaie', async () => {
@@ -1264,5 +1271,251 @@ describe('retour du drive : terminer ou rouvrir la liste', () => {
     expect(button('Terminer la liste')?.disabled).toBe(true)
     expect(button('Rouvrir la liste')?.disabled).toBe(true)
     expect(wrapper.text()).toContain('Hors connexion')
+  })
+})
+
+// DRV-747 : après le passage, les articles RÉELLEMENT mis au panier sont cochés dans la liste (une écriture à part, jamais bloquante)
+describe('retour du drive : les articles mis au panier sont cochés dans la liste (DRV-747)', () => {
+  const BASKET = 'POST /api/v1/drive/plans/l1/basket-lines'
+  const LISTS = 'GET /api/v1/shopping-lists/l1'
+  const saidTicked = 'Les articles ajoutés au panier sont cochés dans ta liste.'
+  const chosen = (slug: string, extra: Partial<ResultLine> = {}): ResultLine =>
+    ({
+      ingredientSlug: slug,
+      outcome: 'CHOSEN',
+      quantity: 1,
+      placement: 'PRIMARY',
+      product: { id: '555999', label: 'Produit de test' },
+      ...extra,
+    }) as ResultLine
+  const added = (slug: string, productId: string): ResultLine => ({
+    ingredientSlug: slug,
+    outcome: 'ADDED',
+    productId,
+    quantity: 1,
+    usedRank: 1,
+  })
+  const notInCart = (slug: string) => chosen(slug, { notInCart: true } as Partial<ResultLine>)
+  const sentOf = (
+    lines: ResultLine[],
+    outcome: 'completed' | 'partial' | 'aborted' = 'completed',
+  ) => ({ kind: 'result', result: result({ lines, outcome }), draft: sentDraft }) as DriveEvent
+
+  /** Les corps reçus par la route de coche, dans l'ordre. */
+  async function basketBodies(fetchMock: ReturnType<typeof stubApi>) {
+    const bodies: string[][] = []
+    for (const [index, call] of calls(fetchMock).entries())
+      if (call === BASKET)
+        bodies.push(
+          ((await bodyOf(fetchMock, index)) as { ingredientSlugs: string[] }).ingredientSlugs,
+        )
+
+    return bodies
+  }
+  const ticked = (fetchMock: ReturnType<typeof stubApi>) =>
+    vi.waitFor(() => expect(calls(fetchMock)).toContain(BASKET))
+
+  it('coche les articles ajoutés et les produits choisis, une seule fois, avec les identifiants du plan', async () => {
+    const { wrapper, fetchMock } = await open(
+      sentOf([
+        added('farine', '123456'),
+        added('beurre', '300001'),
+        chosen('poivre'),
+        { ingredientSlug: 'sel', outcome: 'HAVE_AT_HOME' },
+      ]),
+    )
+    await saved(wrapper)
+    await ticked(fetchMock)
+
+    expect(await basketBodies(fetchMock)).toEqual([['farine', 'beurre', 'poivre']])
+    const request = fetchMock.mock.calls
+      .map(([input]) => input as Request)
+      .find((candidate) => candidate.url.endsWith('/basket-lines'))
+    expect(request?.method).toBe('POST')
+    // La liste n'est pas modifiée par l'écriture de passage : aucune version à envoyer
+    expect(request?.headers.get('If-Match')).toBeNull()
+  })
+
+  it('un produit choisi sans la clé notInCart est au panier (un agent d’avant la clé)', async () => {
+    const { wrapper, fetchMock } = await open(sentOf([chosen('poivre')]))
+    await saved(wrapper)
+    await ticked(fetchMock)
+
+    expect(await basketBodies(fetchMock)).toEqual([['poivre']])
+  })
+
+  it('ne coche pas un produit choisi que le panier n’a pas pris (notInCart), ni un article déjà ajouté plus loin dans le résultat', async () => {
+    const { wrapper, fetchMock } = await open(
+      sentOf([notInCart('poivre'), added('farine', '123456'), notInCart('curry')], 'partial'),
+    )
+    await saved(wrapper)
+    await ticked(fetchMock)
+
+    expect(await basketBodies(fetchMock)).toEqual([['farine']])
+  })
+
+  it.each<[string, ResultLine[]]>([
+    ['« J’en ai toujours »', [{ ingredientSlug: 'sel', outcome: 'HAVE_AT_HOME' }]],
+    ['« Pas cette fois »', [{ ingredientSlug: 'sel', outcome: 'SKIPPED' }]],
+    ['un produit introuvable', [{ ingredientSlug: 'riz', outcome: 'UNAVAILABLE' }]],
+    ['un échec', [{ ingredientSlug: 'beurre', outcome: 'FAILED', error: 'NETWORK' }]],
+    ['un produit choisi que le panier n’a pas pris', [notInCart('poivre')]],
+  ])('%s : aucun article n’est coché, donc aucun appel', async (_label, lines) => {
+    const { wrapper, fetchMock } = await open(sentOf(lines, 'partial'))
+    await saved(wrapper)
+    await flushPromises()
+
+    expect(calls(fetchMock)).not.toContain(BASKET)
+    expect(wrapper.text()).not.toContain(saidTicked)
+  })
+
+  it('un arrêt voulu sans aucune ligne n’appelle rien : le back refuse un tableau vide', async () => {
+    const { wrapper, fetchMock } = await open(sentOf([], 'aborted'))
+    await saved(wrapper)
+    await flushPromises()
+
+    expect(calls(fetchMock)).not.toContain(BASKET)
+  })
+
+  it('un résultat falsifié ne coche que ce que le plan explique', async () => {
+    const { wrapper, fetchMock } = await open(
+      sentOf([
+        added('pirate', '123456'),
+        chosen('pirate'),
+        // Un produit qui n'est pas l'un de ceux du plan pour cette ligne connue
+        added('beurre', '777000'),
+        // Une ligne connue, envoyée telle quelle : rien à choisir sur le site
+        chosen('lait'),
+        added('farine', '123456'),
+      ]),
+    )
+    await saved(wrapper)
+    await ticked(fetchMock)
+
+    expect(await basketBodies(fetchMock)).toEqual([['farine']])
+  })
+
+  it('avec un brouillon sans les lignes du plan, la restriction se fait sur le plan relu, avant la coche', async () => {
+    const { wrapper, fetchMock } = await open(
+      outcomeOf([added('farine', '123456'), chosen('pirate'), added('beurre', '777000')]),
+    )
+    await saved(wrapper)
+    await ticked(fetchMock)
+
+    expect(await basketBodies(fetchMock)).toEqual([['farine']])
+  })
+
+  it('dit que les articles au panier sont cochés, seulement une fois que c’est écrit', async () => {
+    const { wrapper, fetchMock } = await open(sentOf([added('farine', '123456')]))
+    await saved(wrapper)
+    await ticked(fetchMock)
+
+    await vi.waitFor(() => expect(wrapper.text()).toContain(saidTicked))
+    expect(wrapper.text()).toContain('Ton panier est rempli.')
+  })
+
+  describe('l’écriture ne bloque jamais le récapitulatif', () => {
+    const lines = [
+      added('farine', '123456'),
+      { ingredientSlug: 'beurre', outcome: 'FAILED', error: 'NETWORK' },
+    ]
+
+    it.each<[string, () => Response]>([
+      ['liste rouverte entre-temps (409)', failure(409, 'SHOPPING_LIST_NOT_SENT')],
+      ['back plus ancien (404)', failure(404, 'inconnu')],
+      ['fonction coupée (404)', failure(404, 'DRIVE_DISABLED')],
+      ['trop de demandes (429)', rateLimited(60)],
+      [
+        'réseau coupé',
+        () => {
+          throw new TypeError('Failed to fetch')
+        },
+      ],
+    ])(
+      '%s : les choix sont enregistrés, « Reprendre l’envoi » s’ouvre, rien n’est dit',
+      async (_label, answer) => {
+        const { wrapper, fetchMock } = await open(sentOf(lines as ResultLine[], 'partial'), {
+          [BASKET]: answer,
+        })
+        await saved(wrapper)
+        await ticked(fetchMock)
+        await flushPromises()
+
+        expect(useDriveReturnStore().status).toBe('saved')
+        expect(wrapper.findAll('a').some((link) => link.text() === 'Reprendre l’envoi')).toBe(true)
+        // Ni message ni toast : les articles restent seulement non cochés
+        expect(wrapper.text()).not.toContain(saidTicked)
+        expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+        expect(useNotificationsStore().items).toEqual([])
+        expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+      },
+    )
+  })
+
+  it('« Réessayer l’enregistrement » ne renvoie pas la coche', async () => {
+    let healthy = false
+    const { wrapper, fetchMock } = await open(sentOf([chosen('poivre')]), {
+      'PUT /api/v1/drive/choices': () => (healthy ? noContent() : failure(500, 'Erreur')()),
+    })
+    await vi.waitFor(() => expect(wrapper.text()).toContain('n’ont pas pu être enregistrés'))
+    await ticked(fetchMock)
+
+    healthy = true
+    await press('Réessayer l’enregistrement')
+    await saved(wrapper)
+    await flushPromises()
+
+    expect(await basketBodies(fetchMock)).toEqual([['poivre']])
+  })
+
+  it('relit les listes après la coche, jamais le plan du récapitulatif', async () => {
+    const { wrapper, fetchMock } = await open(sentOf([added('farine', '123456')]))
+    await saved(wrapper)
+    await ticked(fetchMock)
+    await vi.waitFor(() =>
+      expect(calls(fetchMock).filter((call) => call === LISTS).length).toBeGreaterThan(1),
+    )
+
+    expect(calls(fetchMock).filter((call) => call === 'GET /api/v1/drive/plans/l1')).toHaveLength(1)
+  })
+
+  it('garde les noms du récapitulatif quand le plan, relu après la coche, n’a plus les lignes cochées', async () => {
+    let afterTick = false
+    const { wrapper, context, fetchMock } = await open(
+      sentOf([added('farine', '123456'), chosen('poivre')]),
+      {
+        'GET /api/v1/drive/plans/l1': () =>
+          json(
+            afterTick
+              ? plan({
+                  lines: plan().lines.filter(
+                    (line) => line.ingredientSlug !== 'farine' && line.ingredientSlug !== 'poivre',
+                  ),
+                })
+              : plan(),
+          ),
+        [BASKET]: () => {
+          afterTick = true
+
+          return noContent()
+        },
+      },
+    )
+    await saved(wrapper)
+    await ticked(fetchMock)
+    await vi.waitFor(() => expect(wrapper.text()).toContain(saidTicked))
+    // Le retour sur la page (focus) relit le plan : le back ne dit plus rien des lignes cochées
+    await context.queryClient.invalidateQueries({ queryKey: ['drive', 'plan'] })
+    await flushPromises()
+
+    expect(calls(fetchMock).filter((call) => call === 'GET /api/v1/drive/plans/l1')).toHaveLength(2)
+    // Les noms ET le libellé du produit viennent encore du plan lu au montage : sans lui, ce seraient des identifiants (« farine », « Produit n° 123456 »)
+    const texts = wrapper.findAll('main ul > li p').map((item) => item.text())
+    expect(texts.filter((text) => text === 'Farine' || text === 'Poivre')).toEqual([
+      'Farine',
+      'Poivre',
+    ])
+    expect(texts.join(' ')).toContain('Farine de blé T55 Marque Repère 1 kg')
+    expect(wrapper.find('main ul').text()).not.toContain('Produit n°')
   })
 })
