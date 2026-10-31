@@ -15,7 +15,7 @@ import {
 } from '@/features/shopping-lists/queries'
 import { isRateLimited, messageForFailure } from '@/notifications/failures'
 import { useOnline } from '@/offline/useOnline'
-import { basketSlugsOf } from './basket'
+import { basketSlugsOf, notInCartCount } from './basket'
 import { driveBridge } from './bridge'
 import { buildChoiceBatches, countChoices, knownProductsOf } from './choices'
 import { drivesOf } from './drives'
@@ -87,6 +87,8 @@ const labels = computed(
 )
 
 const counts = computed(() => (result.value ? countOutcomes(result.value) : null))
+/** Des produits choisis que le panier n'a pas pris (DRV-750) : un envoi terminé n'est alors « rempli » qu'en partie (le titre de l'écran de fin de l'agent). */
+const notInCart = computed(() => (result.value ? notInCartCount(result.value) : 0))
 const shownCounts = computed(() => (counts.value ? visibleCounts(counts.value) : []))
 // Le magasin du drive du passage ; sans liste de drives (un back plus ancien), le seul magasin des réglages
 const runStore = computed(() => {
@@ -117,6 +119,8 @@ const headline = computed(() => {
   // Arrêté avant que rien ne soit mis au panier ni choisi : « rempli en partie » serait faux
   const none = counts.value !== null && counts.value.added + counts.value.chosen === 0
   if (result.value.outcome === 'partial' && none) return t('driveReturn.outcome.notFilled.title')
+  if (result.value.outcome === 'completed' && notInCart.value > 0)
+    return t('driveReturn.outcome.partial.title')
 
   return t(`driveReturn.outcome.${result.value.outcome}.title`)
 })
@@ -128,7 +132,18 @@ const sentences = computed(() => {
   const current = result.value
   const known = counts.value
   if (current === null || known === null) return []
-  if (current.outcome === 'completed') return [t('driveReturn.basketReady')]
+  if (current.outcome === 'completed') {
+    const count = notInCart.value
+    // Un produit choisi n'est pas au panier (DRV-750) : ce qui s'est passé, ce qui est sauf, ce qu'il reste à faire
+    if (count > 0)
+      return [
+        t('driveReturn.outcome.completedSome.lead', { count }, count),
+        t('driveReturn.outcome.completedSome.safe'),
+        t('driveReturn.outcome.completedSome.action', { count }, count),
+      ]
+
+    return [t('driveReturn.basketReady')]
+  }
 
   const code = stopCode.value
   const left = remaining(known)
