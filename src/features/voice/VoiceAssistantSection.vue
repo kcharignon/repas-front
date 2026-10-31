@@ -30,7 +30,6 @@ function unlinkAlexa() {
       </div>
     </template>
     <p v-else>{{ t('voice.notLinked', { skill: ALEXA_SKILL_NAME }) }}</p>
-    <p class="text-sm text-muted">{{ t('voice.help') }}</p>
 
     <UiConfirmDialog
       v-model:open="confirming"

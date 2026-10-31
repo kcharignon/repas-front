@@ -1100,7 +1100,6 @@ export default {
     title: 'Assistant vocal',
     linked: 'Alexa est liée. Dis : « Alexa, demande à {skill} d’ajouter du pain ».',
     notLinked: 'Pour lier Alexa, ouvre l’application Alexa, Skills, {skill}.',
-    help: 'Alexa ne voit pas ta liste de courses d’Amazon : dis bien le nom du skill.',
     unlink: 'Délier Alexa',
     unlinkTitle: 'Délier Alexa ?',
     unlinkDescription:
