@@ -3,7 +3,7 @@
 // `e2e/carte-guide.spec.ts`).
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { choose, fitGuide, typingIn } from '../src/ui/fit'
+import { choose, fitGuide, leastCovered, typingIn } from '../src/ui/fit'
 
 const box = (top: number, bottom: number, left = 0, right = 300) => ({ top, bottom, left, right })
 const rect = (top: number, bottom: number, left = 0, right = 300): DOMRect =>
@@ -299,5 +299,12 @@ describe('la carte posée dans la page', () => {
     window.dispatchEvent(new Event('scroll'))
     expect(measures - afterStart - oneBurst).toBeGreaterThan(0)
     fit.stop()
+  })
+
+  it('DRV-759 : sans place libre, la barre se pose là où elle couvre le MOINS de ce qu’on ne couvre pas, jamais nulle part', () => {
+    // Haut (8-58), bas (700-750) et milieu (350-400) portent tous quelque chose ; le milieu en couvre le moins
+    const hard = [box(0, 70, 0, 300), box(690, 760, 0, 300), box(360, 380, 0, 100)]
+    expect(choose(placed, hard, hard, true)).toBeNull()
+    expect(leastCovered(placed, hard)).toEqual({ min: true, top: false, mid: true })
   })
 })

@@ -117,6 +117,30 @@ export function choose(
   return first(rects) ?? (bar ? first(hard) : null)
 }
 
+/**
+ * La barre là où elle couvre le MOINS de ce qu'on ne couvre pas (la surface des boîtes de `hard` sous elle), jamais nulle part : devant un mur de cookies la carte ne s'efface pas
+ * (DRV-759), elle se pose sur le texte du mur plutôt que de disparaître. À égalité, la première place (en bas, en haut, au milieu).
+ */
+export function leastCovered(measure: (spot: Spot) => Box, hard: readonly Box[]): Spot {
+  const covered = (box: Box): number =>
+    hard.reduce((sum, rect) => {
+      const width = Math.min(box.right, rect.right) - Math.max(box.left, rect.left)
+      const height = Math.min(box.bottom, rect.bottom) - Math.max(box.top, rect.top)
+      return sum + (width > 0 && height > 0 ? width * height : 0)
+    }, 0)
+  let best: Spot | undefined
+  let least = Infinity
+  for (const spot of SPOTS) {
+    if (!spot.min) continue
+    const area = covered(measure(spot))
+    if (area < least) {
+      least = area
+      best = spot
+    }
+  }
+  return best ?? { min: true, top: false }
+}
+
 /** Pose la carte et la garde à sa place : relue toutes les 500 ms et à chaque changement de la fenêtre ou du champ actif. */
 export function fitGuide(
   win: Window & typeof globalThis,
@@ -182,7 +206,8 @@ export function fitGuide(
       // Rouverte par la personne, sans place libre : la carte pleine, en bas, c'est elle qui l'a demandée
       const spot =
         options.collapsible && (pref === 'min' || (pref === 'auto' && need))
-          ? choose(measure, rects, hard, true)
+          ? (choose(measure, rects, hard, true) ??
+            (sub === 'wall' ? leastCovered(measure, hard) : null))
           : (full ?? { min: false, top: false })
       apply(spot)
       placed = true

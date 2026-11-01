@@ -99,8 +99,18 @@ function covers(box: HTMLElement, win: Window): boolean {
   return area > 0 && (width * height) / area >= COVER
 }
 
+/** Un contrôle, pas un conteneur : il ne couvre pas une grande part de la fenêtre et ne contient aucun autre contrôle de la zone (le plus profond, le bouton, pas la zone qui l'entoure). */
+function isControlSized(element: HTMLElement, win: Window): boolean {
+  const area = win.innerWidth * win.innerHeight
+  const { width, height } = element.getBoundingClientRect()
+  if (area > 0 && (width * height) / area > WALL_CONTROL_MAX) return false
+  return element.querySelector(WALL_CLICKABLE) === null
+}
+
 /** Au plus ce nombre de contrôles gardés libres dans la zone d'un mur. */
 const WALL_KEPT = 40
+/** Un élément de la zone d'un mur qui couvre plus que cette part de la fenêtre n'est pas un contrôle à toucher (la zone défilante focalisable d'un dialogue plein écran) : le garder libre ne laisserait aucune place à la carte (DRV-759). */
+const WALL_CONTROL_MAX = 0.2
 const WALL_CLICKABLE = `${CLICKABLE}, [role="link"], [tabindex="0"]`
 
 /**
@@ -128,7 +138,7 @@ export function wallLook(doc: Document): GuideLook | null {
   for (const box of boxes) {
     for (const one of box.querySelectorAll<HTMLElement>(WALL_CLICKABLE)) {
       if (keep.size >= WALL_KEPT) break
-      if (isShown(one)) keep.add(one)
+      if (isShown(one) && isControlSized(one, win)) keep.add(one)
     }
   }
   return { sub: 'wall', target: null, keep: [...keep], maybe: [] }
