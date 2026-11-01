@@ -23,13 +23,16 @@ class StoreArrival(private val clock: () -> Long = System::currentTimeMillis) {
 
     /** Une page principale commence : si ce n'est pas la page d'arrivée, on ne surveille plus rien. */
     fun pageStarted(url: String?) {
-        if (url?.trimEnd('/') != armedUrl?.trimEnd('/')) disarm()
+        if (url != null && same(url, armedUrl)) return
+        if (url != null) disarm()
     }
 
     /** La page a fini de charger : sans refus du site, ce n'est plus « l'adresse d'arrivée à vérifier » ; le titre n'est plus lu que quelques secondes. */
     fun pageFinished(url: String?) {
-        if (url == homeTarget) homeTarget = null
-        if (url == armedUrl && finishedAt == null) finishedAt = clock()
+        // Quelle que soit l'adresse finale (une redirection, un `/` de plus ou de moins) : le chargement armé est fini
+        if (armedUrl == null) return
+        homeTarget = null
+        if (finishedAt == null) finishedAt = clock()
     }
 
     /** Le titre de cette page dit-il « introuvable » (la page d'arrivée seulement, pendant son chargement et le court délai qui suit) ? */
@@ -42,6 +45,8 @@ class StoreArrival(private val clock: () -> Long = System::currentTimeMillis) {
         }
         return DriveEntry.isStoreHome(url, site) && DriveEntry.isNotFoundTitle(title)
     }
+
+    private fun same(url: String, other: String?): Boolean = other != null && url.trimEnd('/') == other.trimEnd('/')
 
     fun disarm() {
         armedUrl = null

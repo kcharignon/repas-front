@@ -66,4 +66,52 @@ class StoreArrivalTest {
         assertFalse(arrival.titleSaysMissing(home, "404", site))
         assertTrue(DriveEntry.fallsBack(arrival.homeTarget, home, 404))
     }
+
+    @Test
+    fun `un slash final de plus ou de moins n'empeche ni la fin du chargement ni le delai de grace`() {
+        arrival.arm(home, watchTitle = true)
+        arrival.pageStarted("$home/")
+        assertTrue(arrival.titleSaysMissing(home, "404", site))
+
+        arrival.pageFinished("$home/")
+
+        assertNull(arrival.homeTarget)
+        now += StoreArrival.TITLE_GRACE_MS + 1
+        assertFalse(arrival.titleSaysMissing(home, "404", site))
+    }
+
+    @Test
+    fun `une redirection vers une autre adresse du meme magasin finit quand meme la surveillance apres le delai`() {
+        val redirected = "$home/accueil.aspx"
+        arrival.arm(home, watchTitle = true)
+
+        arrival.pageFinished(redirected)
+
+        assertNull(arrival.homeTarget)
+        now += StoreArrival.TITLE_GRACE_MS + 1
+        assertFalse(arrival.titleSaysMissing(redirected, "404", site))
+    }
+
+    @Test
+    fun `un debut de page sans adresse ne change rien`() {
+        arrival.arm(home, watchTitle = true)
+
+        arrival.pageStarted(null)
+
+        assertEquals(home, arrival.homeTarget)
+        assertTrue(arrival.titleSaysMissing(home, "404", site))
+    }
+
+    @Test
+    fun `un rechargement apres le delai ne relance pas la surveillance du titre`() {
+        arrival.arm(home, watchTitle = true)
+        arrival.pageFinished(home)
+        now += StoreArrival.TITLE_GRACE_MS + 1
+
+        arrival.pageStarted(home)
+        arrival.pageFinished(home)
+
+        assertFalse(arrival.titleSaysMissing(home, "404", site))
+        assertNull(arrival.homeTarget)
+    }
 }
