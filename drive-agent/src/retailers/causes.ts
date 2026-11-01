@@ -12,6 +12,9 @@ export const CAUSE_LABELS = {
   SEARCH_NO_STATE: 'page de recherche sans l’état embarqué du magasin',
   SEARCH_PRODUCTS_UNREADABLE: 'produits présents dans la page de recherche, mais illisibles',
   SEARCH_REDIRECTED: 'page de recherche remplacée par une autre page du site',
+  // La recherche de la version mobile (DRV-754) : une réponse qui n'est pas du JSON, ou sans liste de produits.
+  SEARCH_NOT_JSON: 'réponse de recherche qui n’est pas du JSON',
+  SEARCH_NO_LIST: 'réponse de recherche sans liste de produits (lstProduits.lstElements)',
   // La réponse du panier.
   CART_NOT_JSON: 'réponse du panier qui n’est pas du JSON',
   CART_NO_EVENTS: 'réponse du panier sans liste d’évènements',
@@ -28,7 +31,9 @@ export const CAUSE_LABELS = {
   // La page courante.
   PAGE_HOST: 'la page n’est pas sur un site de l’enseigne',
   PAGE_PATH: 'l’adresse de la page n’est pas celle d’un magasin',
-  PAGE_MOBILE: 'le site mobile (m-courses), pas la version ordinateur du site',
+  // Le site mobile (DRV-754) : l'hôte du serveur du magasin ne se lit dans aucun lien de la page, ou la page attend un choix sur l'ancien panier.
+  PAGE_SERVER_HOST: 'l’hôte du serveur du magasin n’est lisible dans aucun lien de la page',
+  BASKET_MERGE_ASKED: 'le site attend un choix de la personne sur son ancien panier',
   // Les contrôles du diagnostic.
   SEARCH_COMMON_EMPTY: 'aucun produit pour le mot courant d’essai',
   SEARCH_FIELDS_INCOMPLETE: 'produits lus sans tous les champs attendus',

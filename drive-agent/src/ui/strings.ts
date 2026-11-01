@@ -249,6 +249,11 @@ export const S = {
       /** La page du panier (`detail-panier.aspx` sous le chemin du magasin) : connue quand la page montre le chemin du magasin avec la ville. */
       basketPage: (known: string) =>
         `Page du panier (detail-panier.aspx sous le chemin du magasin) : ${known}`,
+      /** La version mobile (DRV-754) : d'où vient l'hôte du serveur du magasin, les liens du magasin, la question de l'ancien panier, la connexion. Des formes seulement. */
+      mobile: (serverHost: string, links: number, question: string, session: string) =>
+        `Version mobile : hôte du serveur ${serverHost}, ${links} lien(s) du magasin dans la page, question de l’ancien panier : ${question}, connexion ${session}`,
+      /** La forme de la réponse de recherche de la version mobile : le genre du corps et des NOMS de clés, jamais une valeur. */
+      searchForm: (term: string, form: string) => `Forme de la réponse de « ${term} » : ${form}`,
       where: (domain: string) =>
         ({
           RELATIVE: 'adresse sans site',
@@ -1029,7 +1034,7 @@ export const S = {
     store: {
       title: 'Choisis ton magasin',
       /** Le magasin se choisit sur l'accueil de l'enseigne, par son code postal (DRV-753) : le champ est entouré dans la page quand l'agent le reconnaît. */
-      postalCode: 'Écris ton code postal, puis choisis ton magasin.',
+      postalCode: 'Écris ton code postal, touche ta ville, puis choisis ton magasin.',
       text: (label: string | null) =>
         label === null
           ? 'Touche la barre du magasin en haut de la page, puis ton magasin.'
@@ -1044,6 +1049,15 @@ export const S = {
       /** La personne est déjà sur la page de connexion de l'enseigne. */
       form: 'Entre tes identifiants dans la page. Tu tapes toi-même ton mot de passe.',
     },
+    /**
+     * La page pose une question à la personne (DRV-754 : « compléter ton ancien panier ? » d'après la connexion). Elle a deux boutons, dans la page ; l'agent n'en touche
+     * aucun, il attend et continue quand la question a disparu. Aucun libellé cité : la page les écrit.
+     */
+    basket: {
+      title: 'Choisis dans la page',
+      text: (_label: string | null) =>
+        'La page te demande si tu veux compléter ton ancien panier. Choisis toi-même.',
+    },
     /** Ce que l'agent fait pendant que la personne agit. */
     status: 'Je continue dès que c’est fait.',
     /** Le repère posé sous le contrôle à toucher, dans la page. */
@@ -1052,6 +1066,7 @@ export const S = {
     ready: {
       store: 'Ton magasin est choisi',
       login: 'Tu es connecté',
+      basket: 'C’est noté',
       text: 'Je remplis ton panier. Tu n’as rien à faire.',
     },
     /** L'attente s'est allongée : on propose d'attendre encore (le seul autre bouton de la carte). */
@@ -1084,9 +1099,15 @@ export function causeTexts(
   retailer: RetailerNames,
 ): Readonly<Record<string, { title: string; text: string }>> {
   return {
-    PAGE_MOBILE: {
-      title: 'Ce n’est pas la version ordinateur du site',
-      text: `${retailer.name} affiche son site mobile. Repas ne travaille que sur la version ordinateur. Ce qui est déjà au panier y reste. Ouvre « Ouvrir le drive ${retailer.name} » dans le menu de l’application, puis reprends l’envoi.`,
+    // La question de l'ancien panier (DRV-754) est posée dans la page : l'agent ne choisit jamais à la place de la personne, et n'écrit rien tant qu'elle attend.
+    BASKET_MERGE_ASKED: {
+      title: `${retailer.name} attend ton choix sur ton ancien panier`,
+      text: `Réponds à la question dans la page. ${S.end.safe} Puis reprends l’envoi depuis Repas.`,
+    },
+    // L'hôte du serveur du magasin ne se lit dans aucun lien de la page (DRV-754) : la page n'a peut-être pas fini de s'afficher.
+    PAGE_SERVER_HOST: {
+      title: 'La page n’est pas prête',
+      text: `Repas ne trouve pas encore ton magasin dans la page. ${S.end.safe} Attends que la page s’affiche en entier, puis reprends l’envoi depuis Repas.`,
     },
     // Aucun magasin choisi (DRV-717) : chez une enseigne dont le magasin ne se lit pas dans l'adresse, la page dit « Choisir vos courses » ou le site n'a pas de drive
     // pour la session. Trois phrases : ce qui s'est passé, ce qui est sauf, le geste à faire.

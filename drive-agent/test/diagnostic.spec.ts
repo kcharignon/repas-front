@@ -580,7 +580,7 @@ describe('la cause précise d’un échec dans le diagnostic (ticket A)', () => 
     expect(reportOf('0.5.0', NOW, page, results)).not.toContain('secret interne')
   })
 
-  it('le site mobile : KO UNSUPPORTED_PAGE de cause PAGE_MOBILE, sans aucune requête (ticket J)', async () => {
+  it('m-courses sans lien vers le serveur du magasin : KO UNSUPPORTED_PAGE de cause PAGE_SERVER_HOST, sans aucune requête (DRV-754)', async () => {
     const { adapter, fake } = site(GOOD, {
       hostname: 'm-courses.leclercdrive.fr',
       pathname: '/magasin-000123-000123-Ville-Test/recherche.aspx',
@@ -588,7 +588,11 @@ describe('la cause précise d’un échec dans le diagnostic (ticket A)', () => 
 
     const { by, page } = await run(deps(adapter))
 
-    expect(by.page).toMatchObject({ status: 'KO', code: 'UNSUPPORTED_PAGE', cause: 'PAGE_MOBILE' })
+    expect(by.page).toMatchObject({
+      status: 'KO',
+      code: 'UNSUPPORTED_PAGE',
+      cause: 'PAGE_SERVER_HOST',
+    })
     expect(by.search).toMatchObject({ status: 'NOT_TESTED' })
     expect(page).toBeNull()
     expect(fake.calls).toEqual([])

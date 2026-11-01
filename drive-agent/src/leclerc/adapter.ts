@@ -2,10 +2,24 @@ import {
   CART_HEADERS,
   cartBody,
   MAX_QUANTITY,
+  readCartListing,
   readCartResponse,
   readPageTotal,
   type CartProductFacts,
 } from './cart'
+import {
+  asksOldBasketChoice,
+  cartReadRequest,
+  cartWriteRequest,
+  describeSearchForm,
+  originOf,
+  readMobileSearch,
+  readServerHost,
+  searchRequest,
+  usesMobileProtocol,
+  type ServerHostReading,
+} from './mobile'
+import { describeCartReply } from './mobile-reply'
 import { aisleMenuFacts, type AisleMenuFacts, type PageLinks, readPageLinks } from './aisle-menu'
 import {
   aisleChoices,
@@ -75,6 +89,7 @@ import {
   cookieFacts,
   deliveryFacts,
   describeSearchReply,
+  type MobileFacts,
   type NavigationFacts,
   pagePhrases,
   type SearchFacts,
@@ -95,16 +110,26 @@ import {
   buildSearch,
   FALLBACK_ORDER,
   SEARCH_VARIANTS,
+  type DesktopVariant,
   type SearchContext,
-  type SearchVariant,
 } from './search-request'
-import { looksLikeLoginPage, LOGIN_LABELS, readSession, type SessionReading } from './session'
+import {
+  describeSession,
+  looksLikeLoginPage,
+  LOGIN_CONTROL_LABELS,
+  readSession,
+  type SessionReading,
+} from './session'
 import { findControl, type GuideStep, type GuideTarget } from '../retailers/guide'
 import { findPostalCodeField } from './store-field'
 import {
+  findDeliveryPoint,
   findSearchBase,
+  hostFamily,
   type LocationLike,
+  type PageStore,
   readDeliveryPoint,
+  readPageStore,
   readStorePaths,
   type SearchBase,
   type StoreInfo,
@@ -162,6 +187,22 @@ export interface RetailerAdapter {
    * le magasin et ne dit pas de toucher « Se connecter » : la personne remplit le formulaire, que l'agent n'approche pas (le mot de passe se tape à la main).
    */
   onLoginPage?(): boolean
+  /**
+   * FACULTATIVE (DRV-754) : vrai chez une enseigne dont la page ne dit pas elle-même qu'on est connecté avant que la personne l'ait fait (la version mobile de Leclerc : ni
+   * jeton, ni page de visiteur nette). Le passage n'écrit alors rien dans un panier tant que la page ne CONFIRME pas la connexion (`readSession().state === 'MEMBER'`) : un
+   * état inconnu est une étape « connecte-toi », jamais un panier anonyme (ticket G). Absent : seul un visiteur reconnu arrête le passage.
+   */
+  readonly requiresConfirmedLogin?: boolean
+  /**
+   * FACULTATIVE (DRV-754) : la page demande-t-elle un choix à la personne avant tout (la question « compléter ton ancien panier ? » d'après la connexion) ? Une lecture de
+   * la page seule. L'agent ne choisit JAMAIS à sa place : le passage attend, une carte le dit, et reprend dès que la question a disparu.
+   */
+  basketChoiceAsked?(): boolean
+  /**
+   * FACULTATIVE (DRV-754) : les cartes du guide se posent hors des boutons d'un mur de cookies (la version mobile montre une fenêtre modale à chaque premier usage). Absent :
+   * seule la carte du choix du magasin le fait.
+   */
+  readonly keepClearOfConsent?: boolean
   /**
    * FACULTATIVE (DRV-748) : présente (et vraie) chez une enseigne dont l'accueil, après la connexion que la personne tape elle-même, montre de nouveau « Commencer
    * mes courses » alors que l'agent l'a déjà touché AVANT la connexion (le site avait répondu par sa page de connexion). Le passage peut alors faire une seconde
@@ -340,11 +381,20 @@ export interface LeclercDeps extends PacerDeps {
 /** Le temps laissé à une navigation pour quitter la page avant de la dire sans effet (le clic ou le lien d'entrée, 0.39.0 : l'utilisateur ne doit pas attendre davantage). */
 export const ENTRY_WAIT_MS = 3_000
 
+/** Le temps qu'on laisse au pied de page de `m-courses` pour se dessiner (hypothèse H7), et le rythme de relecture : des lectures du DOM, aucune requête. */
+export const SERVER_HOST_WAIT_MS = 10_000
+const SERVER_HOST_POLL_MS = 500
+
 const PRODUCT_ID = /^[0-9]{1,12}$/
 /** La ville du chemin du magasin (`/magasin-N-N-<Ville>`) : un libellé de rayon qui la porte est écarté. */
 const STORE_CITY = /^\/magasin-\d{1,12}-\d{1,12}-([^/?#]+)/i
-/** L'adresse d'une page de connexion du site (le chemin seulement). */
-const LOGIN_PAGE = /(?:^|\/)connexion(?:\.aspx)?(?:\/|$)/i
+/**
+ * L'adresse d'une page de connexion du site (le chemin seulement) : `/connexion(.aspx)` du site ordinateur, et celles de la version mobile (mesurées le 2026-11-01) :
+ * `…/drive/magasin-N-N-Ville/authentification.aspx` (la connexion, la même page pendant la fenêtre du code reçu par e-mail) et `creation-compte-ccc.aspx` (où mène d'abord
+ * « Connexion / Inscription » de `m-courses`).
+ */
+const LOGIN_PAGE =
+  /(?:^|\/)(?:connexion(?:\.aspx)?|authentification\.aspx|creation-compte[a-z0-9-]*\.aspx)(?:\/|$)/i
 /** Une redirection vers une page de connexion. */
 const LOGIN_PATH = /connexion|identif|login|authent/i
 
@@ -358,7 +408,7 @@ export class LeclercAdapter implements RetailerAdapter {
   private pageTotal: number | null = null
   private deliveryPoint: string | null = null
   /** La forme de requête de recherche qui a passé la dernière fois : celle d'abord essayée ensuite (aucune avant la première). */
-  private searchVariant: SearchVariant | null = null
+  private searchVariant: DesktopVariant | null = null
   /** Le chemin avec la ville que la page donne, une fois trouvé (la page ne change pas de magasin pendant la vie de l'agent). */
   private searchBase: SearchBase | null = null
   private facts: SearchFacts | null = null
@@ -381,14 +431,279 @@ export class LeclercAdapter implements RetailerAdapter {
   private readonly stocks = new Map<string, number>()
   /** Les quantités de la dernière réponse du panier lisible (ticket M), `null` avant la première. */
   private cartLines: ReadonlyMap<string, number> | null = null
+  /** La page est celle de la version mobile (DRV-754) : l'agent parle comme l'application mobile (`mobile.ts`). */
+  private readonly mobile: boolean
+  /** L'hôte du serveur du magasin (`fd<N>-courses`), une fois lu ; d'où il vient et combien de liens du magasin la page portait. */
+  private serverHost: string | null = null
+  private serverSource: MobileFacts['serverHost'] | null = null
+  private serverLinks = 0
+  /** La forme de la dernière réponse du panier qui a échoué (DRV-752), en mémoire pour la vie de la page. */
+  private failure: CartReplyFacts | null = null
+  readonly requiresConfirmedLogin?: boolean
+  readonly keepClearOfConsent?: boolean
+  probeCart?: () => Promise<CartProbeFacts>
+  lastCartFailure?: () => CartReplyFacts | null
+  basketChoiceAsked?: () => boolean
 
   constructor(deps: LeclercDeps) {
     this.deps = deps
     this.pacer = new Pacer(deps.fetch, deps)
+    this.mobile = usesMobileProtocol(deps.location)
+    if (this.mobile) {
+      this.requiresConfirmedLogin = true
+      this.keepClearOfConsent = true
+      this.probeCart = () => this.probeMobileCart()
+      this.lastCartFailure = () => this.failure
+      this.basketChoiceAsked = () => this.oldBasketAsked()
+    }
   }
 
-  readStore(): StoreInfo {
-    return this.paths().store
+  readStore(): StoreInfo | Promise<StoreInfo> {
+    return this.mobile ? this.readMobileStore() : this.paths().store
+  }
+
+  // —— La version mobile (DRV-754, `mobile.ts`) ————————————————————————————————————————————————————————————————————————————————
+
+  /** La page pose-t-elle la question de l'ancien panier ? Une lecture de la page, jamais une erreur. */
+  private oldBasketAsked(): boolean {
+    try {
+      return asksOldBasketChoice(this.deps.pageText())
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Le magasin de la version mobile : les numéros de l'adresse de la page, l'hôte du SERVEUR lu dans ses liens. Une question d'ancien panier posée est une étape de la
+   * personne, pas une erreur de page : `BASKET_MERGE_ASKED` (le guide l'attend).
+   */
+  private async readMobileStore(): Promise<StoreInfo> {
+    if (this.oldBasketAsked())
+      throw new RetailerError('UNSUPPORTED_PAGE', null, 'BASKET_MERGE_ASKED')
+    const page = readPageStore(this.deps.location)
+    const host = await this.mobileHost(page)
+    return {
+      id: page.id,
+      host,
+      baseUrl: `https://${host}${page.cartPath}`,
+      label: this.deps.readLabel?.() ?? null,
+    }
+  }
+
+  /**
+   * L'hôte du serveur du magasin : celui de la page quand elle est sur lui, sinon celui de ses liens (le pied de page de `m-courses`), attendu jusqu'à
+   * `SERVER_HOST_WAIT_MS` (la page Angular se dessine après son chargement). Jamais deviné : sans lien (`PAGE_SERVER_HOST`) ou avec deux hôtes différents, l'erreur.
+   */
+  private async mobileHost(page: PageStore): Promise<string> {
+    if (this.serverHost !== null) return this.serverHost
+    const own = this.deps.location.hostname.toLowerCase()
+    if (hostFamily(own) !== null) {
+      this.serverSource = 'PAGE'
+      return (this.serverHost = own)
+    }
+    const read = (): ServerHostReading =>
+      readServerHost(this.deps.pageText(), this.deps.location, {
+        first: page.id,
+        second: page.second,
+      })
+    let reading = read()
+    for (
+      let waited = 0;
+      reading.kind === 'MISSING' && waited < SERVER_HOST_WAIT_MS;
+      waited += SERVER_HOST_POLL_MS
+    ) {
+      await this.deps.sleep(SERVER_HOST_POLL_MS)
+      reading = read()
+    }
+    this.serverLinks = reading.links
+    if (reading.kind === 'FOUND') {
+      this.serverSource = 'FOOTER'
+      return (this.serverHost = reading.host)
+    }
+    this.serverSource = reading.kind
+    throw new RetailerError('UNSUPPORTED_PAGE', null, 'PAGE_SERVER_HOST')
+  }
+
+  /** Où partent les appels de la version mobile : le chemin du magasin sans ville, et l'origine du serveur quand ce n'est pas la page (`undefined` : l'hôte de la page). */
+  private async mobileTarget(): Promise<{
+    base: string
+    origin: string | undefined
+    cartPath: string
+    id: string
+  }> {
+    const page = readPageStore(this.deps.location)
+    const host = await this.mobileHost(page)
+    const same = host === this.deps.location.hostname.toLowerCase()
+    const origin = same ? undefined : originOf(host, this.deps.location)
+    return { base: origin ?? '', origin, cartPath: page.cartPath, id: page.id }
+  }
+
+  /** La recherche de la version mobile (M1) : un POST au serveur du magasin, une réponse JSON, des produits lus comme ceux de la page ordinateur. */
+  private async searchMobile(text: string): Promise<Candidate[]> {
+    const target = await this.mobileTarget()
+    const { url, init } = searchRequest(target.base, target.cartPath, text)
+    const reply = await this.pacer.request(url, init, target.origin)
+    this.lastReplyText = reply.text
+    const facts = describeSearchReply('m', reply, url, target.id)
+    facts.attempts = [attemptOf('m', reply, url)]
+    facts.form = describeSearchForm(reply.text)
+    // La connexion est celle de la PAGE (l'en-tête de `m-courses`), pas de la réponse JSON
+    facts.session = describeSession(readSession(this.deps.pageText()))
+    this.facts = facts
+    let products
+    try {
+      this.assertUsable(reply)
+      products = readMobileSearch(reply.text, reply.status)
+    } catch (error) {
+      facts.outcome = 'FAILED'
+      facts.phrases = pagePhrases(reply.text)
+      if (error instanceof RetailerError) facts.fault = { code: error.code, cause: error.cause }
+      else facts.fault = { code: 'CONTRACT_CHANGED', cause: 'EXCEPTION' }
+      throw error
+    }
+    facts.products = products.length
+    facts.outcome = products.length > 0 ? 'PRODUCTS' : 'EMPTY'
+    if (products.length === 0) facts.phrases = pagePhrases(reply.text)
+    this.lastQuery = text
+    this.pageTotal = null
+    this.deliveryPoint ??= findDeliveryPoint(reply.text)
+    const candidates = products.map((raw) => toCandidate(raw, this.deps.location))
+    for (const candidate of candidates) {
+      if (candidate.stock !== null) this.stocks.set(candidate.id, candidate.stock)
+    }
+    return candidates
+  }
+
+  /**
+   * L'écriture du panier de la version mobile (M4, H1 à H5) : jamais tant que la page attend le choix de l'ancien panier ; la réponse est lue comme celle du site ordinateur,
+   * et toute erreur porte la FORME de la réponse. Une écriture sans effet ou une réponse illisible pendant que la question est posée est `BASKET_MERGE_ASKED` (H4) : « Leclerc
+   * attend ton choix », jamais « le site a changé ».
+   */
+  private async writeMobile(
+    productId: string,
+    quantity: number,
+    sent: number,
+  ): Promise<CartResult> {
+    if (this.oldBasketAsked())
+      throw new RetailerError('UNSUPPORTED_PAGE', null, 'BASKET_MERGE_ASKED')
+    const target = await this.mobileTarget()
+    const { url, init } = cartWriteRequest(target.base, target.cartPath, {
+      productId,
+      quantity: sent,
+      deliveryPoint: this.deliveryPoint ?? target.id,
+      searchText: this.lastQuery,
+    })
+    const reply = await this.pacer.request(url, init, target.origin)
+    const shape = describeCartReply(reply)
+    let read
+    try {
+      this.assertUsable(reply)
+      read = this.readCart(reply, productId)
+    } catch (error) {
+      this.failure = shape
+      if (error instanceof RetailerError) {
+        if (this.oldBasketAsked()) {
+          throw new RetailerError(
+            'UNSUPPORTED_PAGE',
+            reply.status,
+            'BASKET_MERGE_ASKED',
+            undefined,
+            shape,
+          )
+        }
+        throw error.withReply(shape)
+      }
+      throw error
+    }
+    this.cartLines = read.quantities
+    if (read.obtained !== sent && this.oldBasketAsked()) {
+      this.failure = shape
+      throw new RetailerError(
+        'UNSUPPORTED_PAGE',
+        reply.status,
+        'BASKET_MERGE_ASKED',
+        undefined,
+        shape,
+      )
+    }
+    return {
+      productId,
+      requested: quantity,
+      sent,
+      obtained: read.obtained,
+      ok: read.obtained === sent,
+      items: read.items,
+      totalCents: read.totalCents,
+      ...(read.product && { product: read.product }),
+      status: reply.status,
+    }
+  }
+
+  /** La sonde de lecture du panier du diagnostic (M5) : UN POST de lecture, jamais une écriture ; elle ne retient rien du panier et ne lève jamais d'erreur. */
+  private async probeMobileCart(): Promise<CartProbeFacts> {
+    try {
+      const target = await this.mobileTarget()
+      const { url, init } = cartReadRequest(
+        target.base,
+        target.cartPath,
+        this.deliveryPoint ?? target.id,
+      )
+      const reply = await this.pacer.request(url, init, target.origin)
+      const shape = describeCartReply(reply)
+      try {
+        this.assertUsable(reply)
+        const listing = readCartListing(reply.text)
+        return { outcome: 'READ', reply: shape, lines: listing.quantities.size, fault: null }
+      } catch (error) {
+        return {
+          outcome: 'FAILED',
+          reply: shape,
+          lines: null,
+          fault:
+            error instanceof RetailerError
+              ? { code: error.code, cause: error.cause, status: error.status ?? reply.status }
+              : { code: 'CONTRACT_CHANGED', cause: 'EXCEPTION', status: reply.status },
+        }
+      }
+    } catch (error) {
+      return {
+        outcome: 'FAILED',
+        reply: null,
+        lines: null,
+        fault:
+          error instanceof RetailerError
+            ? { code: error.code, cause: error.cause, status: error.status }
+            : { code: 'CONTRACT_CHANGED', cause: 'EXCEPTION', status: null },
+      }
+    }
+  }
+
+  /** Ce que la page de la version mobile laisse voir pour le diagnostic : d'où vient l'hôte du serveur, les liens du magasin, la question de l'ancien panier, la connexion. */
+  private mobileFacts(): MobileFacts {
+    let serverHost = this.serverSource
+    let links = this.serverLinks
+    if (serverHost === null) {
+      try {
+        const page = readPageStore(this.deps.location)
+        if (hostFamily(this.deps.location.hostname.toLowerCase()) !== null) serverHost = 'PAGE'
+        else {
+          const reading = readServerHost(this.deps.pageText(), this.deps.location, {
+            first: page.id,
+            second: page.second,
+          })
+          serverHost = reading.kind === 'FOUND' ? 'FOOTER' : reading.kind
+          links = reading.links
+        }
+      } catch {
+        serverHost = 'MISSING'
+      }
+    }
+    return {
+      serverHost,
+      links,
+      oldBasketQuestion: this.oldBasketAsked(),
+      session: describeSession(readSession(this.deps.pageText())),
+    }
   }
 
   async searchProducts(query: string): Promise<Candidate[]> {
@@ -396,6 +711,7 @@ export class LeclercAdapter implements RetailerAdapter {
     if (text === '') return []
     this.facts = null
     this.lastReplyText = null
+    if (this.mobile) return this.searchMobile(text)
     const paths = this.paths()
     const { reply, variant, url, attempts } = await this.requestSearch(text, paths)
     this.lastReplyText = reply.text
@@ -434,14 +750,14 @@ export class LeclercAdapter implements RetailerAdapter {
   private async requestSearch(
     text: string,
     paths: StorePaths,
-  ): Promise<{ reply: Reply; variant: SearchVariant; url: string; attempts: AttemptFacts[] }> {
+  ): Promise<{ reply: Reply; variant: DesktopVariant; url: string; attempts: AttemptFacts[] }> {
     const context = this.searchContext(paths)
     const kept = this.searchVariant
     const order =
       kept === null ? [...FALLBACK_ORDER] : [kept, ...FALLBACK_ORDER.filter((v) => v !== kept)]
     const attempts: AttemptFacts[] = []
     const seen = new Set<string>()
-    let last: { reply: Reply; variant: SearchVariant; url: string } | null = null
+    let last: { reply: Reply; variant: DesktopVariant; url: string } | null = null
     for (const variant of order) {
       if (!applicable(variant, context)) continue
       const { url, init } = buildSearch(variant, context, text)
@@ -508,6 +824,7 @@ export class LeclercAdapter implements RetailerAdapter {
       cookies,
       searchBase,
       entry: this.entryFacts(),
+      ...(this.mobile && { mobile: this.mobileFacts() }),
     }
   }
 
@@ -612,7 +929,8 @@ export class LeclercAdapter implements RetailerAdapter {
     candidates: readonly Candidate[],
   ): Promise<FacetExploration | null> {
     const text = this.lastReplyText
-    if (text === null) return null
+    // Le filtre par rayon (`Filtres`) n'a jamais été mesuré sur la version mobile : aucune sonde, aucune requête (DRV-754)
+    if (text === null || this.mobile) return null
     const city = this.city()
     const safe = (label: string | null): string | null => {
       const shown = shownAisleText(label, city)
@@ -848,6 +1166,7 @@ export class LeclercAdapter implements RetailerAdapter {
   }
 
   async validateSiteFilter(query: string): Promise<boolean> {
+    if (this.mobile) return false
     if (this.filterCheck !== null) return this.filterCheck
     const text = this.lastReplyText
     const target =
@@ -940,7 +1259,7 @@ export class LeclercAdapter implements RetailerAdapter {
 
   siteAisles(): SiteAisle[] {
     const text = this.lastReplyText
-    if (text === null) return []
+    if (text === null || this.mobile) return []
     const rayons = aisleBloc(readFacets(text))
     const city = this.city()
     const shown = (values: readonly FacetValue[]): SiteAisle[] =>
@@ -989,16 +1308,20 @@ export class LeclercAdapter implements RetailerAdapter {
     const facts = this.facts
     const text = query.trim()
     if (facts === null || text === '') return []
+    // La version mobile n'a qu'une forme de recherche, mesurée : aucune variante à sonder
+    if (this.mobile) return [...facts.attempts]
     try {
       const paths = this.paths()
       const context = this.searchContext(paths)
       const seen = new Set(
-        facts.attempts.map((attempt) => {
+        facts.attempts.flatMap((attempt) => {
+          if (attempt.variant === 'm') return []
           const { url, init } = buildSearch(attempt.variant, context, text)
-          return `${url}\n${stringifyJson(init)}`
+          return [`${url}\n${stringifyJson(init)}`]
         }),
       )
       for (const variant of SEARCH_VARIANTS) {
+        if (variant === 'm') continue
         if (facts.attempts.some((attempt) => attempt.variant === variant)) continue
         if (!applicable(variant, context)) continue
         const { url, init } = buildSearch(variant, context, text)
@@ -1021,13 +1344,14 @@ export class LeclercAdapter implements RetailerAdapter {
     if (!PRODUCT_ID.test(productId) || !Number.isInteger(quantity) || quantity < 0) {
       throw new RangeError('Produit ou quantité invalide.')
     }
-    const { store, cartPath } = this.paths()
     const stock = this.stocks.get(productId)
     const sent = Math.min(
       quantity,
       MAX_QUANTITY,
       stock !== undefined && stock > 0 ? stock : MAX_QUANTITY,
     )
+    if (this.mobile) return this.writeMobile(productId, quantity, sent)
+    const { store, cartPath } = this.paths()
     this.deliveryPoint ??= readDeliveryPoint(this.deps.pageText(), store)
     const body = cartBody({
       productId,
@@ -1187,7 +1511,7 @@ export function browserDeps(
     navigate: (url) => win.location.assign(url),
     startButton: () => findStartButton(win.document),
     pageLinks: () => readPageLinks(win.document),
-    loginControl: () => findControl(win.document, LOGIN_LABELS),
+    loginControl: () => findControl(win.document, LOGIN_CONTROL_LABELS),
     storeField: () => findPostalCodeField(win.document),
     pageText: () => new win.XMLSerializer().serializeToString(win.document),
     navigation: () => navigationOf(win),

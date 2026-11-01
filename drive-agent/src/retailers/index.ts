@@ -17,6 +17,7 @@ import {
   LeclercAdapter,
   MAX_PAUSE_MS,
   PAUSE_MS,
+  LOGIN_NOTES as LECLERC_LOGIN_NOTES,
   PHOTO_RULE as LECLERC_PHOTOS,
   type RetailerAdapter,
 } from '../leclerc'
@@ -38,10 +39,12 @@ const leclerc: RetailerEntry = {
   nameDe: 'de Leclerc',
   siteDomain: 'leclercdrive.fr',
   photos: LECLERC_PHOTOS,
+  loginNotes: LECLERC_LOGIN_NOTES,
   matchesHost: (host) => STORES.leclerc.host.test(host),
   hostFamily,
   isMobileHost,
-  siteMode: 'DESKTOP',
+  // DRV-754 : Leclerc passe par sa version mobile (m-courses), plus de mode ordinateur
+  siteMode: 'MOBILE',
   antiBot: 'DATADOME',
   pacing: { pauseMs: PAUSE_MS, jitterMs: JITTER_MS, maxPauseMs: MAX_PAUSE_MS, measured: true },
   createAdapter: ({ win, primitives }: AdapterContext): RetailerAdapter =>

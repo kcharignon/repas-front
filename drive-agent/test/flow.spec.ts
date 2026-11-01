@@ -978,8 +978,8 @@ describe('le démarrage', () => {
     expect(screens.propsOf('error')).toEqual([{ code: 'UNSUPPORTED_PAGE', canReturn: true }])
   })
 
-  it('le site mobile de Leclerc : UNSUPPORTED_PAGE de cause PAGE_MOBILE, aucune requête, et la cause part au résultat (ticket J)', async () => {
-    // Given : l'adaptateur dit que la page est le site mobile
+  it('l’hôte du serveur du magasin introuvable : UNSUPPORTED_PAGE de cause PAGE_SERVER_HOST, aucune requête, et la cause part au résultat (DRV-754)', async () => {
+    // Given : l'adaptateur ne trouve l'hôte du serveur du magasin dans aucun lien de la page
     const { adapter, calls } = fakeAdapter({ '1000001': {} })
     const screens = fakeUi({ error: () => 'return' })
     const { flow, sent } = makeFlow({
@@ -987,7 +987,7 @@ describe('le démarrage', () => {
       adapter: {
         ...adapter,
         readStore: () => {
-          throw new RetailerError('UNSUPPORTED_PAGE', null, 'PAGE_MOBILE')
+          throw new RetailerError('UNSUPPORTED_PAGE', null, 'PAGE_SERVER_HOST')
         },
       },
     })
@@ -997,13 +997,13 @@ describe('le démarrage', () => {
 
     // Then : l'écran d'erreur reçoit la cause, rien n'est demandé au site, le résultat dit laquelle
     expect(screens.propsOf('error')).toEqual([
-      { code: 'UNSUPPORTED_PAGE', canReturn: true, cause: 'PAGE_MOBILE' },
+      { code: 'UNSUPPORTED_PAGE', canReturn: true, cause: 'PAGE_SERVER_HOST' },
     ])
     expect(screens.screens()).toEqual(['error'])
     expect(calls).toEqual([])
     expect(expectConform(sent[0])).toMatchObject({
       outcome: 'error',
-      error: { code: 'UNSUPPORTED_PAGE', message: 'Page non prise en charge (PAGE_MOBILE)' },
+      error: { code: 'UNSUPPORTED_PAGE', message: 'Page non prise en charge (PAGE_SERVER_HOST)' },
     })
   })
 

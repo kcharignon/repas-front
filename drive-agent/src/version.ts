@@ -3,4 +3,4 @@
  * le résultat de chaque passage (`agentVersion`, DRV-302). Monter ce numéro à chaque changement de l'agent : l'application qui
  * l'embarque (DRV-313) se publie avec lui.
  */
-export const AGENT_VERSION = '0.58.0'
+export const AGENT_VERSION = '0.59.0'

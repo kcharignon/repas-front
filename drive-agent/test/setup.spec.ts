@@ -320,9 +320,9 @@ describe('une page qui n’est pas celle d’un magasin', () => {
   })
 })
 
-describe('le site mobile de Leclerc (ticket J)', () => {
-  it('« Ce n’est pas la version ordinateur du site » : cause PAGE_MOBILE, aucun magasin lu ni enregistré, le retour dit la cause', async () => {
-    // Given : une page de magasin, mais sur le site mobile
+describe('la version mobile de Leclerc (DRV-754)', () => {
+  it('une page de m-courses sans lien vers le serveur du magasin : cause PAGE_SERVER_HOST, aucun magasin lu ni enregistré, le retour dit la cause', async () => {
+    // Given : une page de magasin de la version mobile, dont le pied de page n'est pas (encore) dessiné
     const { adapter, site } = page(
       '/magasin-123456-123456-Ville-Test/recherche.aspx',
       'm-courses.leclercdrive.fr',
@@ -335,7 +335,7 @@ describe('le site mobile de Leclerc (ticket J)', () => {
     // Then : l'écran d'erreur, pas de « Enregistrer ce magasin », aucune requête, et pas de magasin rendu à Repas
     expect(screens.screens()).toEqual(['error'])
     expect(screens.propsOf('error')).toEqual([
-      { code: 'UNSUPPORTED_PAGE', canReturn: true, cause: 'PAGE_MOBILE' },
+      { code: 'UNSUPPORTED_PAGE', canReturn: true, cause: 'PAGE_SERVER_HOST' },
     ])
     expect(site.calls).toEqual([])
     expect(sent).toHaveLength(1)
@@ -343,7 +343,7 @@ describe('le site mobile de Leclerc (ticket J)', () => {
     expect(sent[0]).toMatchObject({
       type: 'result',
       outcome: 'error',
-      error: { code: 'UNSUPPORTED_PAGE', message: 'Page non prise en charge (PAGE_MOBILE)' },
+      error: { code: 'UNSUPPORTED_PAGE', message: 'Page non prise en charge (PAGE_SERVER_HOST)' },
     })
     validateResult(JSON.parse(JSON.stringify(sent[0])))
   })

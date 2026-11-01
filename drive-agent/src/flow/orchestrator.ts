@@ -307,9 +307,15 @@ export class Flow {
       const step = guideStepOf(problem, adapter)
       if (step === null) break
       last = step
-      const steps = this.guideSteps(plan.runId, step, total, extra.byPostalCode === true)
-      total = steps.total
-      this.runs.noteGuide(plan.runId, steps.total, step)
+      // La question de l'ancien panier n'est ni « le magasin » ni « la connexion » : pas de repère d'étape, rien à noter pour une page d'après
+      const steps =
+        step === 'basket'
+          ? { index: 0, total: 0 }
+          : this.guideSteps(plan.runId, step, total, extra.byPostalCode === true)
+      if (step !== 'basket') {
+        total = steps.total as 1 | 2
+        this.runs.noteGuide(plan.runId, steps.total as 1 | 2, step)
+      }
       const stage = watch.late ? 'late' : 'waiting'
       // Une carte déjà là n'est pas redessinée (le repère ne saute pas, la page ne défile pas sous le doigt de la personne)
       if (shown !== `${step}:${stage}`) {
@@ -555,7 +561,10 @@ export class Flow {
    */
   private sessionProblem(): Fault | null {
     try {
-      return this.deps.adapter.readSession().state === 'VISITOR'
+      const { state } = this.deps.adapter.readSession()
+      // Une enseigne dont la page ne dit pas « visiteur » (DRV-754) : sans la preuve d'une connexion, rien ne s'écrit dans un panier (ticket G, `requiresConfirmedLogin`)
+      const unproven = this.deps.adapter.requiresConfirmedLogin === true && state !== 'MEMBER'
+      return state === 'VISITOR' || unproven
         ? { code: 'NOT_LOGGED_IN', cause: 'SESSION_VISITOR' }
         : null
     } catch {

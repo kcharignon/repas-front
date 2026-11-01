@@ -2112,15 +2112,31 @@ describe('erreurs', () => {
     },
   )
 
-  it('le site mobile (cause PAGE_MOBILE) dit « Ce n’est pas la version ordinateur du site » et quoi faire (ticket J)', () => {
+  it('la question de l’ancien panier (cause BASKET_MERGE_ASKED) dit que l’enseigne attend le choix de la personne (DRV-754)', () => {
     const handle = open()
-    void handle.show('error', { code: 'UNSUPPORTED_PAGE', canReturn: true, cause: 'PAGE_MOBILE' })
+    void handle.show('error', {
+      code: 'UNSUPPORTED_PAGE',
+      canReturn: true,
+      cause: 'BASKET_MERGE_ASKED',
+    })
 
     expect(shadow().querySelector('h1')?.textContent).toBe(
-      'Ce n’est pas la version ordinateur du site',
+      'Leclerc attend ton choix sur ton ancien panier',
     )
-    expect(shadow().textContent).toContain('version ordinateur')
+    expect(shadow().textContent).toContain('Réponds à la question dans la page.')
     expect(shadow().textContent).not.toContain(errorTexts(LECLERC).UNSUPPORTED_PAGE.title)
+  })
+
+  it('l’hôte du serveur introuvable (cause PAGE_SERVER_HOST) dit d’attendre que la page s’affiche (DRV-754)', () => {
+    const handle = open()
+    void handle.show('error', {
+      code: 'UNSUPPORTED_PAGE',
+      canReturn: true,
+      cause: 'PAGE_SERVER_HOST',
+    })
+
+    expect(shadow().querySelector('h1')?.textContent).toBe('La page n’est pas prête')
+    expect(shadow().textContent).toContain('Attends que la page s’affiche en entier')
   })
 
   it('une cause sans texte à elle garde le titre et le conseil du code d’erreur', () => {

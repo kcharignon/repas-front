@@ -36,6 +36,26 @@ import {
   type WelcomeForm,
   type Session,
 } from './pages.ts'
+import {
+  accountPage,
+  ACCOUNT_PATH,
+  authenticationPage,
+  creationPage,
+  listingJson,
+  mobileAccueilPage,
+  MOBILE_ANSWERED_COOKIE,
+  MOBILE_CART_PATH,
+  MOBILE_CONSENT_COOKIE,
+  MOBILE_MEMBER_COOKIE,
+  MOBILE_PAGE_PATH,
+  MOBILE_STORE_COOKIE,
+  mobileBasketPage,
+  mobileStorePage,
+  searchJson,
+  SERVER_PAGE_PATH,
+  type FooterForm,
+  type MobileOrigins,
+} from './mobile.ts'
 import { PHOTO_HOST, photoReply } from './photos.ts'
 
 /** Le faux magasin : son identifiant et son nom d'hôte (le plan de Repas et la page doivent s'accorder dessus). */
@@ -52,6 +72,16 @@ export const HOME_HOST = 'www.leclercdrive.fr'
  * n'y est servi. Comme tout nom autre que celui du faux magasin, il n'est servi que sur demande (`hosts`, `FAKE_LECLERC_HOSTS`).
  */
 export const MOBILE_HOST = 'm-courses.leclercdrive.fr'
+/**
+ * Les hôtes de la VERSION MOBILE (DRV-754, `mobile.ts`) : `HOME_HOST` (l'accueil adapté au téléphone), `MOBILE_HOST` (`m-courses`, qui sert alors lui-même la page du
+ * magasin), le SERVEUR du magasin (`fd<N>-courses`, parlé en AJAX depuis `m-courses`) et le compte (`fd<N>-espace-client`). Servis sur demande (`hosts`).
+ */
+export const SERVER_HOST = 'fd8-courses.leclercdrive.fr'
+export const ACCOUNT_HOST = 'fd8-espace-client.leclercdrive.fr'
+export const MOBILE_HOSTS: string[] = [HOME_HOST, MOBILE_HOST, SERVER_HOST, ACCOUNT_HOST]
+/** Le magasin du plan de la version mobile : son identifiant, et l'hôte du SERVEUR (celui que l'agent lit dans les liens de `m-courses`). */
+export const MOBILE_PLAN_STORE = { id: '000001', host: SERVER_HOST } as const
+
 /** Début des adresses des pages du magasin (avec le suffixe de ville, que portent les pages) et de celle du panier (sans). */
 export const PAGE_PATH = `/magasin-${STORE.id}-${STORE.id}-Ville-Test`
 export const CART_PATH = `/magasin-${STORE.id}-${STORE.id}`
@@ -183,6 +213,29 @@ export interface Behavior {
   loginForm?: boolean
   /** Le mur de cookies plein écran de l'accueil national de la forme `homeForm: 'first-use'` (DRV-753), tant que la personne n'a pas répondu. */
   cookieWall?: boolean | 'tall' | 'banner'
+  /**
+   * La VERSION MOBILE (DRV-754) : `www` et `m-courses` servent les pages mesurées le 2026-11-01 (`mobile.ts`) à la place de celles du site ordinateur. `null` ou absent : le
+   * faux site d'avant (`m-courses` redirige alors vers l'hôte du magasin). Les hôtes du serveur et du compte (`SERVER_HOST`, `ACCOUNT_HOST`) répondent toujours.
+   */
+  mobile?: MobileBehavior | null
+}
+
+/** Ce que la version mobile du faux site montre ou fait, au choix d'un test. */
+export interface MobileBehavior {
+  /** La personne est déjà connectée (le cookie de connexion est posé d'avance) ; sinon elle l'est une fois la connexion faite sur `ACCOUNT_HOST`. */
+  member?: boolean
+  /** Le magasin est déjà choisi sur l'accueil (le bouton « Commencer mes courses » est là) ; sinon il se choisit par le code postal. */
+  chosen?: boolean
+  /** Après la connexion, `m-courses` demande « compléter ton ancien panier ? » tant que la personne n'a pas répondu. */
+  question?: boolean
+  /** La connexion ajoute la fenêtre « code reçu par e-mail » avant d'ouvrir le compte. */
+  loginCode?: boolean
+  /** Le pied de page de `m-courses` : les liens vers le serveur (`normal`), aucun (`none`) ou deux hôtes différents (`two-hosts`). */
+  footer?: FooterForm
+  /** La réponse de recherche du serveur : `no-list` (un objet sans `lstProduits.lstElements`) ou `text` (du texte, pas du JSON). */
+  searchShape?: 'no-list' | 'text' | null
+  /** L'écriture du panier ignorée : le serveur répond 200 avec le panier tel qu'il est, sans rien ajouter (la question de l'ancien panier est posée). */
+  ignoreWrites?: boolean
 }
 
 export type RequestKind = 'search' | 'cart' | 'page' | 'repas' | 'control' | 'image' | 'other'
@@ -220,6 +273,8 @@ export interface FakeLeclerc {
   readonly leclerc: string
   /** `http://localhost:<port>` : l'origine du faux Repas, où l'agent renvoie son résultat. */
   readonly repas: string
+  /** Les origines de la version mobile (`http://<hôte>:<port>`) : l'accueil, `m-courses`, le serveur du magasin et le compte. */
+  readonly mobileOrigins: MobileOrigins
   behavior(): Behavior
   setBehavior(patch: Partial<Behavior>): void
   /** Remet le faux site à neuf : panier vide, journal et violations effacés, cadence repartie de zéro, comportement par défaut. */
@@ -508,6 +563,8 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
     entry: FakeRequest,
     req: IncomingMessage,
     res: ServerResponse,
+    /** Vrai : le site ordinateur (en-têtes `zcwb` et `X-Requested-With` exigés) ; faux : la version mobile (DRV-754, hypothèse H2 : le marqueur est `ng-ajax=1`). */
+    desktop = true,
   ): Promise<void> {
     await paced(
       entry,
@@ -521,9 +578,14 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
           await send(res, 404, errorPage(), HTML)
         }
         // La requête du site : formulaire, en-têtes `X-Requested-With` et `zcwb`, adresse SANS suffixe de ville (recherche.md § 2).
-        if (req.headers.zcwb !== 'ajax-manager') return reject('en-tête zcwb manquant')
-        if (req.headers['x-requested-with'] !== 'XMLHttpRequest')
+        if (desktop && req.headers.zcwb !== 'ajax-manager') return reject('en-tête zcwb manquant')
+        if (desktop && req.headers['x-requested-with'] !== 'XMLHttpRequest')
           return reject('X-Requested-With manquant')
+        if (
+          !desktop &&
+          new URL(req.url ?? '/', 'http://fake.invalid').searchParams.get('ng-ajax') !== '1'
+        )
+          return reject('ng-ajax manquant')
         if (!/^application\/x-www-form-urlencoded/i.test(req.headers['content-type'] ?? '')) {
           return reject('Content-Type attendu : formulaire')
         }
@@ -545,7 +607,9 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
         // La disponibilité trompeuse (DRV-635) : la fiche dit stock nul, le panier prend le produit.
         else if (product && behavior.availability === 'misleading')
           after = Math.min(body.iQuantite, 99)
-        if (after === 0) cart.delete(Number(body.iIdProduit))
+        // La version mobile qui ignore l'écriture (la question de l'ancien panier est posée) : le panier reste tel qu'il est
+        if (!desktop && behavior.mobile?.ignoreWrites === true) after = before
+        else if (after === 0) cart.delete(Number(body.iIdProduit))
         else cart.set(Number(body.iIdProduit), after)
         entry.status = 200
         if (!product) return send(res, 200, JSON.stringify([]), JSON_HEADERS)
@@ -554,6 +618,165 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       },
       res,
     )
+  }
+
+  /**
+   * La recherche de la version mobile (M1) : un POST sans corps, un JSON. Même cadence, mêmes défauts simulés et mêmes moteurs de recherche que la page du site ordinateur.
+   * `searchShape` fait rendre une réponse qui n'est pas celle qu'on lit (défaut de forme).
+   */
+  async function searchAjax(entry: FakeRequest, url: URL, res: ServerResponse): Promise<void> {
+    const query = url.searchParams.get('TexteRecherche') ?? ''
+    entry.detail = query
+    await paced(
+      entry,
+      'search',
+      () => {
+        entry.status = 200
+        const shape = behavior.mobile?.searchShape
+        if (shape === 'text')
+          return send(res, 200, 'ce n’est pas du JSON', { 'Content-Type': 'text/plain' })
+        if (shape === 'no-list') {
+          return send(res, 200, JSON.stringify({ iNbTotalProduits: 2, liste: [] }), JSON_HEADERS)
+        }
+        const all = searchCatalog(
+          query,
+          behavior.strictSearch === true,
+          behavior.strictApostrophe === true,
+        ).filter((product) => behavior.mddList === true || product.mdd !== true)
+        return send(
+          res,
+          200,
+          searchJson(query, all, cart, behavior.availability !== undefined),
+          JSON_HEADERS,
+        )
+      },
+      res,
+    )
+  }
+
+  /**
+   * Les hôtes de la VERSION MOBILE (DRV-754). Le serveur du magasin parle à `m-courses` depuis un AUTRE hôte : il répond comme le vrai (CORS : l'origine de `m-courses`,
+   * les cookies permis, rien d'autre que `Content-Type` en en-tête de requête : une requête qui en porte un autre est refusée avant d'arriver).
+   */
+  async function routeMobile(
+    entry: FakeRequest,
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL,
+  ): Promise<void> {
+    const host = hostnameOf(req.headers.host)
+    const port = portSuffixOf(req.headers.host)
+    const origins: MobileOrigins = {
+      www: `http://${HOME_HOST}${port}`,
+      courses: `http://${MOBILE_HOST}${port}`,
+      server: `http://${SERVER_HOST}${port}`,
+      account: `http://${ACCOUNT_HOST}${port}`,
+      repas: `http://localhost${port}`,
+    }
+    const mobile = behavior.mobile ?? {}
+    const cookie = req.headers.cookie ?? ''
+    const has = (name: string) => new RegExp(`(?:^|;\\s*)${name}=1(?:;|$)`).test(cookie)
+    const member = mobile.member === true || has(MOBILE_MEMBER_COOKIE)
+    const path = url.pathname
+    entry.kind = 'page'
+    if (host === HOME_HOST) {
+      if (path === '/' && req.method === 'GET') {
+        entry.status = 200
+        return send(
+          res,
+          200,
+          mobileAccueilPage(origins, {
+            chosen: mobile.chosen === true || has(MOBILE_STORE_COOKIE),
+            consent: has(MOBILE_CONSENT_COOKIE),
+            wall: behavior.cookieWall ?? false,
+          }),
+          HTML,
+        )
+      }
+      entry.status = 404
+      return send(res, 404, errorPage(), HTML)
+    }
+    if (host === MOBILE_HOST) {
+      if (req.method === 'GET' && new RegExp(`^${MOBILE_PAGE_PATH}/?$`, 'i').test(path)) {
+        entry.status = 200
+        return send(
+          res,
+          200,
+          mobileStorePage(origins, cart, {
+            member,
+            question: mobile.question === true && !has(MOBILE_ANSWERED_COOKIE),
+            footer: mobile.footer ?? 'normal',
+          }),
+          HTML,
+        )
+      }
+      entry.status = 404
+      return send(res, 404, errorPage(), HTML)
+    }
+    if (host === ACCOUNT_HOST) {
+      const page = new RegExp(`^${ACCOUNT_PATH}/([a-z-]+\\.aspx)$`, 'i').exec(path)?.[1]
+      const html =
+        page === 'creation-compte-ccc.aspx'
+          ? creationPage(origins)
+          : page === 'authentification.aspx'
+            ? authenticationPage(origins, mobile.loginCode === true)
+            : page === 'home-espace-client-ccc.aspx'
+              ? accountPage(origins)
+              : null
+      entry.status = html === null ? 404 : 200
+      return send(res, entry.status, html ?? errorPage(), HTML)
+    }
+    // Le serveur du magasin (`fd<N>-courses`) : l'AJAX de `m-courses` et la page HTML du panier
+    const allowed = req.headers.origin === origins.courses
+    if (allowed) {
+      res.setHeader('Access-Control-Allow-Origin', origins.courses)
+      res.setHeader('Access-Control-Allow-Credentials', 'true')
+      res.setHeader('Vary', 'Origin')
+    }
+    if (req.method === 'OPTIONS') {
+      entry.status = allowed ? 204 : 403
+      return send(res, entry.status, '', {
+        'Access-Control-Allow-Methods': 'GET, POST',
+        'Access-Control-Allow-Headers': 'content-type',
+      })
+    }
+    if (
+      req.method === 'GET' &&
+      new RegExp(`^${SERVER_PAGE_PATH}/mobile-detail-panier.aspx$`, 'i').test(path)
+    ) {
+      entry.status = 200
+      return send(res, 200, mobileBasketPage(cart), HTML)
+    }
+    if (req.method === 'POST' && url.searchParams.get('ng-ajax') === '1') {
+      if (path === `${MOBILE_CART_PATH}/recherche-ajax.aspx`) {
+        entry.kind = 'search'
+        return searchAjax(entry, url, res)
+      }
+      if (path === `${MOBILE_CART_PATH}/panier.aspx`) {
+        const op = url.searchParams.get('op')
+        if (op === '1') {
+          entry.kind = 'cart'
+          return cartWrite(entry, req, res, false)
+        }
+        if (op === '12') {
+          // La lecture du panier : cadencée comme les autres requêtes de l'agent, mais ce n'est pas une écriture
+          entry.kind = 'other'
+          entry.detail = 'op=12'
+          return paced(
+            entry,
+            'cart',
+            async () => {
+              await readBody(req)
+              entry.status = 200
+              await send(res, 200, listingJson(cart), JSON_HEADERS)
+            },
+            res,
+          )
+        }
+      }
+    }
+    entry.status = 404
+    return send(res, 404, errorPage(), HTML)
   }
 
   async function route(
@@ -593,6 +816,15 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
     // son hôte. Ce n'est pas une page de magasin pour l'agent (qui n'y agit pas) ; c'est là que l'application ouvre un plan
     // (`DrivePlan.startUrl` = `NavigationPolicy.START_URL`), et l'utilisateur y touche lui-même le bouton. Le faux ne cache plus ce défaut : s'il
     // retombait sur la racine de l'hôte du magasin, le scénario d'émulateur échouerait.
+    const requested = hostnameOf(req.headers.host)
+    // La version mobile : le serveur et le compte répondent toujours ; `www` et `m-courses` seulement quand `behavior.mobile` est posé (sinon, le faux site d'avant)
+    if (
+      requested === SERVER_HOST ||
+      requested === ACCOUNT_HOST ||
+      (behavior.mobile != null && (requested === HOME_HOST || requested === MOBILE_HOST))
+    ) {
+      return routeMobile(entry, req, res, url)
+    }
     if (hostnameOf(req.headers.host) === MOBILE_HOST) {
       entry.kind = 'page'
       const mobile = STORE_PATTERN.exec(path)
@@ -821,6 +1053,13 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
     port,
     leclerc: `http://${STORE.host}:${port}`,
     repas: `http://localhost:${port}`,
+    mobileOrigins: {
+      www: `http://${HOME_HOST}:${port}`,
+      courses: `http://${MOBILE_HOST}:${port}`,
+      server: `http://${SERVER_HOST}:${port}`,
+      account: `http://${ACCOUNT_HOST}:${port}`,
+      repas: `http://localhost:${port}`,
+    },
     behavior: () => ({ ...behavior }),
     setBehavior(patch) {
       behavior = { ...behavior, ...patch }

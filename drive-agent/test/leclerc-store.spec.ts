@@ -3,7 +3,13 @@
 import { describe, expect, it } from 'vitest'
 
 import { RetailerError } from '../src/retailers'
-import { isMobileHost, readDeliveryPoint, readStorePaths } from '../src/leclerc/store'
+import { usesMobileProtocol } from '../src/leclerc/mobile'
+import {
+  isMobileHost,
+  readDeliveryPoint,
+  readPageStore,
+  readStorePaths,
+} from '../src/leclerc/store'
 
 const HOST = 'fd0-courses.leclercdrive.fr'
 
@@ -67,7 +73,7 @@ describe('readStorePaths', () => {
   })
 })
 
-describe('le site mobile n’est pas la version ordinateur (ticket J)', () => {
+describe('la version mobile de Leclerc (DRV-754)', () => {
   it.each([
     ['m-courses.leclercdrive.fr'],
     ['M-COURSES.LECLERCDRIVE.FR'],
@@ -90,20 +96,46 @@ describe('le site mobile n’est pas la version ordinateur (ticket J)', () => {
     expect(isMobileHost(host)).toBe(false)
   })
 
-  it.each([
-    ['une page de magasin', '/magasin-000123-000123-Ville-Test/recherche.aspx'],
-    ['la racine', '/'],
-    ['une page sans magasin', '/accueil'],
-  ])(
-    'refuse %s du site mobile : UNSUPPORTED_PAGE, cause PAGE_MOBILE (avant toute lecture du magasin)',
-    (_name, pathname) => {
-      const hostname = 'm-courses.leclercdrive.fr'
+  it('lit les numéros du magasin dans une adresse de m-courses (sans .aspx, ville en minuscules)', () => {
+    expect(
+      readPageStore({
+        hostname: 'm-courses.leclercdrive.fr',
+        pathname: '/magasin-206911-206911-saint-priest',
+      }),
+    ).toEqual({
+      id: '206911',
+      second: '206911',
+      pagePath: '/magasin-206911-206911-saint-priest',
+      cartPath: '/magasin-206911-206911',
+    })
+  })
 
-      expect(() => readStorePaths({ hostname, pathname })).toThrow(
-        expect.objectContaining({ code: 'UNSUPPORTED_PAGE', cause: 'PAGE_MOBILE' }),
-      )
-    },
-  )
+  it('une page de m-courses sans adresse de magasin : PAGE_PATH ; hors leclercdrive.fr : PAGE_HOST', () => {
+    expect(() => readPageStore({ hostname: 'm-courses.leclercdrive.fr', pathname: '/' })).toThrow(
+      expect.objectContaining({ code: 'UNSUPPORTED_PAGE', cause: 'PAGE_PATH' }),
+    )
+    expect(() =>
+      readPageStore({ hostname: 'm-courses.exemple.invalid', pathname: '/magasin-1-2' }),
+    ).toThrow(expect.objectContaining({ cause: 'PAGE_HOST' }))
+  })
+
+  it.each([
+    ['m-courses.leclercdrive.fr', '/magasin-206911-206911-saint-priest', true],
+    [
+      'fd8-courses.leclercdrive.fr',
+      '/magasin-206911-206911-saint-priest/mobile-detail-panier.aspx',
+      true,
+    ],
+    ['fd8-courses.leclercdrive.fr', '/magasin-206911-206911-Saint-Priest/recherche.aspx', false],
+    ['www.leclercdrive.fr', '/', false],
+    [
+      'fd8-espace-client.leclercdrive.fr',
+      '/drive/magasin-206911-206911-Saint-Priest/authentification.aspx',
+      false,
+    ],
+  ])('%s%s parle comme la version mobile : %s', (hostname, pathname, mobile) => {
+    expect(usesMobileProtocol({ hostname, pathname })).toBe(mobile)
+  })
 
   it('un hôte hors leclercdrive.fr garde sa cause PAGE_HOST, même s’il commence par « m- »', () => {
     expect(() =>

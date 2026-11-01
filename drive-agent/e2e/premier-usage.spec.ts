@@ -44,7 +44,9 @@ test('premier usage complet : la carte guide chaque étape, le mur de cookies re
       timeout: 15_000,
     })
     await expect(page.getByText('Étape 1 sur 2')).toBeVisible()
-    await expect(page.getByText('Écris ton code postal, puis choisis ton magasin.')).toBeVisible()
+    await expect(
+      page.getByText('Écris ton code postal, touche ta ville, puis choisis ton magasin.'),
+    ).toBeVisible()
     await expect(page.getByRole('heading', { name: MANUAL })).toHaveCount(0)
 
     // La carte se met EN HAUT : en bas elle couvrirait les boutons du mur (ils sont dans sa zone). Aucun des trois n'est sous elle, et le premier se touche vraiment

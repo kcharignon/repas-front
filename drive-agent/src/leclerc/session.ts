@@ -12,6 +12,7 @@
 // Les libellés ci-dessous sont des hypothèses plausibles, pas des mesures : les signes lus figurent dans le diagnostic (noms seulement),
 // pour que la recette réelle les confirme ou les corrige.
 import { pageReadings } from './embedded'
+import { showsLastLogin } from './mobile'
 import { fold, INVISIBLE } from './page-text'
 
 export type SessionState = 'MEMBER' | 'VISITOR' | 'UNKNOWN'
@@ -23,7 +24,13 @@ export const VISITOR_SIGNS = [
   'PASSWORD_FIELD',
   'STATE_FLAG_OFF',
 ] as const
-export const MEMBER_SIGNS = ['LOGOUT_LINK', 'ORDERS_LINK', 'STATE_FLAG_ON'] as const
+/** `LAST_LOGIN_BAR` : la barre basse « Dernière connexion le … » de la version mobile (DRV-754, mesurée connecté) ; un signe parmi d'autres, jamais une preuve seule : la règle ci-dessous exige qu'aucun signe de visiteur fort ne la contredise. */
+export const MEMBER_SIGNS = [
+  'LOGOUT_LINK',
+  'ORDERS_LINK',
+  'STATE_FLAG_ON',
+  'LAST_LOGIN_BAR',
+] as const
 
 export type SessionSign = (typeof VISITOR_SIGNS)[number] | (typeof MEMBER_SIGNS)[number]
 
@@ -74,6 +81,16 @@ const REGISTER_LABELS = new Set([
   'inscrivez-vous',
   'nouveau client',
 ])
+/**
+ * Le contrôle à entourer pour « se connecter » : les libellés de connexion, et le menu de la version mobile, qui les réunit (« Connexion / Inscription », mesuré le
+ * 2026-11-01 : il ouvre d'abord la création de compte, la connexion est un lien de cette page). Réservé au repère de la carte : un libellé double n'est jamais un
+ * signe de visiteur à lui seul (`signsOfLabel` le coupe en parties).
+ */
+export const LOGIN_CONTROL_LABELS: ReadonlySet<string> = new Set([
+  ...LOGIN_LABELS,
+  'connexion / inscription',
+  'connexion/inscription',
+])
 const SEPARATOR = /\s*(?:\/|\||·|,|;|\bou\b|\bet\b)\s*/
 
 /** Les signes que porte le libellé (comparable, voir `fold`) d'un lien ou d'un bouton. */
@@ -108,6 +125,7 @@ export function readSession(page: string): SessionReading {
     }
   }
   if (PASSWORD_FIELD.test(visible)) found.add('PASSWORD_FIELD')
+  if (showsLastLogin(page)) found.add('LAST_LOGIN_BAR')
   for (const reading of pageReadings(page)) {
     for (const flag of reading.matchAll(STATE_FLAG)) {
       found.add(flag[1]?.toLowerCase() === 'true' ? 'STATE_FLAG_ON' : 'STATE_FLAG_OFF')

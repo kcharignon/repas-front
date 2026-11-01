@@ -105,7 +105,12 @@ export interface FakeApp {
 
 /** Une page de magasin d'un drive : `/magasin-N-N-Ville…` (`RetailerSite.isStorePage`, avec la ville pour que l'application retienne le magasin). */
 const STORE_PAGE = /^\/magasin-\d+-\d+(-[^/]*)?(\/|$)/i
-const LOGIN_PAGE = /^\/connexion(\.aspx)?(\/|$)/i
+/**
+ * La page de connexion hors d'un magasin (`RetailerSite.isLoginPage`) : `/connexion(.aspx)` du site ordinateur, et, pour la version mobile (DRV-754), la connexion et la
+ * création de compte de `fd<N>-espace-client` sous `/drive/magasin-N-N-Ville/`. Le compte (`home-espace-client-ccc.aspx`) n'en est pas une.
+ */
+const LOGIN_PAGE =
+  /^(?:\/connexion(?:\.aspx)?(?:\/|$)|\/drive\/magasin-\d+-\d+(?:-[^/]*)?\/(?:authentification|creation-compte-ccc)\.aspx$)/i
 
 /**
  * Où l'application Android livre le plan à l'agent (`RetailerSite.acceptsPlanOn`, DRV-753) : une page de magasin, l'accueil de l'enseigne (la racine de `HOME_HOST`) et la page

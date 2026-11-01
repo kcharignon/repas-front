@@ -93,6 +93,7 @@ export {
 } from './session'
 export { hostFamily, isMobileHost, type LocationLike, type StoreInfo } from './store'
 export { PHOTO_RULE } from './photo-rule'
+export { LOGIN_NOTES } from './texts'
 export {
   addressShape,
   headerNames,

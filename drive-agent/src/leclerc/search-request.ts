@@ -19,9 +19,15 @@
  * recette réelle), puis la requête courante, puis chaque variante une fois tant que le site répond HTTP 400.
  */
 export const FALLBACK_ORDER = ['g', 'a', 'b', 'e1', 'e2', 'f', 'h'] as const
-/** Toutes les variantes : celles du repli, et `c` que le diagnostic sonde en plus. */
-export const SEARCH_VARIANTS = [...FALLBACK_ORDER, 'c'] as const
+/**
+ * Toutes les variantes : celles du repli, `c` que le diagnostic sonde en plus, et `m` (DRV-754) : la recherche de la VERSION MOBILE (`POST recherche-ajax.aspx`, `mobile.ts`),
+ * la seule que l'agent emploie sur `m-courses`, sans repli ni variante. Les autres sont celles du site ordinateur (`GET recherche.aspx`).
+ */
+export const DESKTOP_VARIANTS = [...FALLBACK_ORDER, 'c'] as const
+export const SEARCH_VARIANTS = [...DESKTOP_VARIANTS, 'm'] as const
 export type SearchVariant = (typeof SEARCH_VARIANTS)[number]
+/** Les variantes de la recherche du site ordinateur : celles que `buildSearch` sait écrire. */
+export type DesktopVariant = (typeof DESKTOP_VARIANTS)[number]
 
 /** Ce que la page courante donne pour bâtir l'adresse. */
 export interface SearchContext {
@@ -37,7 +43,9 @@ export interface SearchContext {
 
 /** La variante a-t-elle un sens pour cette page ? `g` n'en a que si la page porte un lien avec la ville, différent de son adresse. */
 export function applicable(variant: SearchVariant, context: SearchContext): boolean {
-  return variant !== 'g' || (context.linkPath !== null && context.linkPath !== context.pagePath)
+  return variant === 'm'
+    ? false
+    : variant !== 'g' || (context.linkPath !== null && context.linkPath !== context.pagePath)
 }
 
 const ACCEPT_HTML = 'text/html,application/xhtml+xml'
@@ -49,7 +57,7 @@ function folderOf(pathname: string): string {
 
 /** La requête de recherche de [query] pour cette variante : l'adresse (relative à l'hôte) et les options de `fetch` (le `Pacer` y ajoute `credentials`). */
 export function buildSearch(
-  variant: SearchVariant,
+  variant: DesktopVariant,
   context: SearchContext,
   query: string,
 ): { url: string; init: RequestInit } {

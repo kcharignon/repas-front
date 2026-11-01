@@ -19,6 +19,11 @@ export interface PhotoRule {
 /** Les noms de l'enseigne et la règle de ses photos : ce que l'écran de choix et la question « Toujours prendre ce produit ? » lui demandent. */
 export interface PhotoRetailer extends RetailerNames {
   readonly photos: PhotoRule
+  /**
+   * Ce que la carte « Connecte-toi » dit de plus de cette enseigne (DRV-754, voix de `repas-po`) : une phrase par ligne, quinze mots au plus chacune. Le texte vit dans le
+   * dossier de l'enseigne, jamais dans l'interface. Absent : rien de plus.
+   */
+  readonly loginNotes?: readonly string[]
 }
 
 /** Ce que l'interface et le diagnostic savent de l'enseigne de la page : son identifiant, ses noms, son domaine et la lecture de ses hôtes. */

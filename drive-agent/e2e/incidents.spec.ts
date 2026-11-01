@@ -5,7 +5,7 @@ import { openWithFragment, returnedResult, returnsToRepas } from './support/agen
 import { expectPoliteAgent, waitForQuiet } from './support/cadence'
 import { expect, test } from './support/fixtures'
 import { known, planOf, product, RUN_ID } from './support/plans'
-import { startFakeLeclerc, type Fault, type FaultKind } from '../fake-leclerc/server'
+import { type Fault, type FaultKind } from '../fake-leclerc/server'
 
 const THREE_LINES = planOf([
   known('farine', 'Farine', [product(1000001, 3)]),
@@ -206,39 +206,6 @@ test('interrompt une requête que le site retient (20 s, une reprise), dit que L
       { ingredientSlug: 'sucre', outcome: 'ADDED' },
     ],
   })
-})
-
-// Le site mobile de Leclerc (ticket J) : l'hôte `m-courses` n'a pas les routes du site ordinateur. L'agent le dit tout de suite (au lieu d'échouer
-// plus loin sur « le site a changé » ou « ce n'est pas le bon magasin ») et ne touche à rien.
-test('sur le site mobile (m-courses), dit « Ce n’est pas la version ordinateur du site » avant toute requête, et la cause revient à Repas', async ({
-  page,
-  agentCode,
-}) => {
-  // Given : le faux magasin servi sous l'hôte du site mobile
-  const mobile = await startFakeLeclerc({ hosts: ['m-courses.leclercdrive.fr'] })
-  try {
-    // When
-    await openWithFragment(page, mobile, agentCode, THREE_LINES, {
-      origin: `http://m-courses.leclercdrive.fr:${mobile.port}`,
-    })
-
-    // Then : le message dit ce qui ne va pas et quoi faire, sans récapitulatif, sans requête ni écriture
-    await expect(
-      page.getByRole('heading', { name: 'Ce n’est pas la version ordinateur du site' }),
-    ).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Commencer' })).toHaveCount(0)
-    expect(mobile.paced()).toEqual([])
-    expect(mobile.cart()).toEqual({})
-    await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
-    expect(await returnedResult(page, mobile)).toMatchObject({
-      runId: RUN_ID,
-      outcome: 'error',
-      error: { code: 'UNSUPPORTED_PAGE', message: 'Page non prise en charge (PAGE_MOBILE)' },
-      lines: [],
-    })
-  } finally {
-    await mobile.close()
-  }
 })
 
 for (const [name, fault, cause] of [

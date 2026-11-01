@@ -170,13 +170,28 @@ function quantitiesOf(list: readonly unknown[]): Map<string, number> {
 
 const startsWithPanier = (value: unknown) => typeof value === 'string' && value.startsWith('Panier')
 
-/** L'évènement d'état du panier : `eTypeEvenement` 1 dont l'identifiant (`sIdUnique`) commence par « Panier ». */
+/**
+ * L'évènement d'état du panier : `eTypeEvenement` 1 (la réponse d'une écriture du site ordinateur) ou 6 (la lecture du panier de la version mobile, `op=12`, MESURÉE
+ * le 2026-11-01), dont l'identifiant (`sIdUnique`) commence par « Panier » ou dont l'objet est un panier (`objElement.sType` « Panier »).
+ */
 function findCartEvent(events: readonly unknown[]): Record<string, unknown> | null {
-  const typed = events.map(asRecord).filter((record) => record?.eTypeEvenement === 1)
-  const named = typed.find(
-    (record) => startsWithPanier(record?.sIdUnique) || startsWithPanier(record?.sNomEvenement),
+  const typed = events
+    .map(asRecord)
+    .filter((record) => record?.eTypeEvenement === 1 || record?.eTypeEvenement === 6)
+  const isCart = (record: Record<string, unknown> | null) => {
+    const element = asRecord(record?.objElement)
+    return (
+      startsWithPanier(record?.sIdUnique) ||
+      startsWithPanier(record?.sNomEvenement) ||
+      element?.sType === 'Panier' ||
+      startsWithPanier(element?.sId)
+    )
+  }
+  return (
+    typed.find(isCart) ??
+    typed.find((record) => findKey(record, 'lstProduitsLight') !== undefined) ??
+    null
   )
-  return named ?? typed.find((record) => findKey(record, 'lstProduitsLight') !== undefined) ?? null
 }
 
 /** Les évènements du produit : ajout (101), changement (104), retrait (102). */
@@ -192,6 +207,37 @@ function productFacts(events: readonly unknown[], productId: string): CartProduc
   const stock = asNumber(found.iQteDisponible)
   const availability = asNumber(found.eDisponibilite)
   return stock === null && availability === null ? null : { stock, availability }
+}
+
+/** Ce que la lecture du panier de la version mobile (`panier.aspx?op=12`, DRV-754) donne : le panier courant, sans produit particulier. */
+export interface CartListing {
+  items: number | null
+  totalCents: number | null
+  /** La quantité de chaque produit du panier (`lstProduitsLight`), par identifiant. */
+  quantities: ReadonlyMap<string, number>
+}
+
+/**
+ * Lit la réponse de la lecture du panier : un tableau d'évènements dont un (`eTypeEvenement` 6) porte le panier (`objElement.sType` « Panier », `lstProduitsLight`,
+ * `iQuantitePanier`, `sTotalAPayer`). Même vérification que l'écriture, sans produit.
+ *
+ * @throws {RetailerError} `CONTRACT_CHANGED` avec la cause : `CART_NOT_JSON`, `CART_NO_EVENTS`, `CART_NO_CART_EVENT`, `CART_NO_PRODUCT_LIST`.
+ */
+export function readCartListing(text: string): CartListing {
+  const parsed = parseJson(text.trim())
+  if (parsed === undefined) throw new RetailerError('CONTRACT_CHANGED', null, 'CART_NOT_JSON')
+  const events = eventsOf(parsed)
+  if (events === null) throw new RetailerError('CONTRACT_CHANGED', null, 'CART_NO_EVENTS')
+  const event = findCartEvent(events)
+  if (!event) throw new RetailerError('CONTRACT_CHANGED', null, 'CART_NO_CART_EVENT')
+  const list = findKey(event, 'lstProduitsLight')
+  if (!Array.isArray(list))
+    throw new RetailerError('CONTRACT_CHANGED', null, 'CART_NO_PRODUCT_LIST')
+  return {
+    items: asNumber(findKey(event, 'iQuantitePanier')),
+    totalCents: parseTotal(findKey(event, 'sTotalAPayer')),
+    quantities: quantitiesOf(list),
+  }
 }
 
 /**

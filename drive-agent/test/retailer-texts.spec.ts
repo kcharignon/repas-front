@@ -30,8 +30,10 @@ function rendered(retailer: typeof LECLERC): Record<string, string> {
     'progression, accepté': S.progress.state.acceptedAnyway(retailer),
     'progression, lenteur': S.progress.state.slow(retailer),
     vérification: S.challenge.title(retailer),
-    'site mobile, titre': causeTexts(retailer).PAGE_MOBILE?.title ?? '',
-    'site mobile, texte': causeTexts(retailer).PAGE_MOBILE?.text ?? '',
+    'ancien panier, titre': causeTexts(retailer).BASKET_MERGE_ASKED?.title ?? '',
+    'ancien panier, texte': causeTexts(retailer).BASKET_MERGE_ASKED?.text ?? '',
+    'page pas prête, titre': causeTexts(retailer).PAGE_SERVER_HOST?.title ?? '',
+    'page pas prête, texte': causeTexts(retailer).PAGE_SERVER_HOST?.text ?? '',
     ...Object.fromEntries(
       ERROR_CODES.flatMap((code) => [
         [`erreur ${code}, titre`, errors[code].title],
@@ -70,9 +72,12 @@ describe('Leclerc : les textes sont ceux d’avant, mot pour mot', () => {
       'progression, accepté': 'ajouté, Leclerc l’a accepté',
       'progression, lenteur': 'Leclerc met trop de temps à répondre',
       vérification: 'Leclerc demande une vérification',
-      'site mobile, titre': 'Ce n’est pas la version ordinateur du site',
-      'site mobile, texte':
-        'Leclerc affiche son site mobile. Repas ne travaille que sur la version ordinateur. Ce qui est déjà au panier y reste. Ouvre « Ouvrir le drive Leclerc » dans le menu de l’application, puis reprends l’envoi.',
+      'ancien panier, titre': 'Leclerc attend ton choix sur ton ancien panier',
+      'ancien panier, texte':
+        'Réponds à la question dans la page. Ce qui est déjà au panier y reste. Puis reprends l’envoi depuis Repas.',
+      'page pas prête, titre': 'La page n’est pas prête',
+      'page pas prête, texte':
+        'Repas ne trouve pas encore ton magasin dans la page. Ce qui est déjà au panier y reste. Attends que la page s’affiche en entier, puis reprends l’envoi depuis Repas.',
     })
   })
 
