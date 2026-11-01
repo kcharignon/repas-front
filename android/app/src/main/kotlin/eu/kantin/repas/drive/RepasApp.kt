@@ -39,6 +39,20 @@ class RepasApp : Application() {
     /** La forme du dernier « Finaliser » de chaque enseigne (DRV-631), montrée dans « Version et mode d'emploi ». */
     internal val finalizeOutcomes: FinalizeOutcomeMemories by lazy { FinalizeOutcomeMemories(sites, driveStore) }
 
+    /**
+     * La migration unique vers la version mobile de l'enseigne d'avant (DRV-757) : ses cookies et son stockage de site sont effacés une fois, dans SON profil de WebView
+     * seulement (ni Repas, ni une autre enseigne). Sans profils de WebView l'effacement toucherait Repas : rien n'est fait, elle sera retentée.
+     */
+    internal val siteModeMigration: SiteModeMigration by lazy {
+        SiteModeMigration(sites, driveStore) { site ->
+            if (!DriveProfile.isolated) return@SiteModeMigration false
+            DriveProfile.clear(null, site, sites)
+            storePaths.forget(site)
+            finalizeOutcomes.forget(site)
+            true
+        }
+    }
+
     internal val pass: DrivePass by lazy {
         DrivePass(
             store = PrefsPassStore(this),

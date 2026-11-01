@@ -151,6 +151,12 @@ class DriveActivity : Activity() {
             }
         }
         webView = createWebView()
+        // DRV-757 : une seule fois, avant tout chargement, l'ancien site ordinateur d'une version d'avant ne reste pas dans la WebView
+        if (repasApp.siteModeMigration.runFor(site)) {
+            webView.clearCache(true)
+            webView.clearHistory()
+            Toast.makeText(this, getString(R.string.site_mode_migrated, site.nameDe), Toast.LENGTH_LONG).show()
+        }
         beginFinalize()
         problems = ProblemPanel(this, ::problemMessage) { retry() }
         // Le message d'en-tête (se connecter, choisir ou ouvrir son magasin) et, pour un plan, son issue : ouvrir l'accueil du drive.

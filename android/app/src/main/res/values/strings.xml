@@ -20,6 +20,8 @@
     <string name="clear_message_shared">Tu seras déconnecté %2$s : les cookies, les données du site et l’historique seront effacés de cette application. Sur ce téléphone, Repas et le drive ne sont pas séparés : tu seras déconnecté de Repas aussi.</string>
     <string name="clear_confirm">Effacer</string>
     <string name="drive_data_cleared">Données du drive effacées.</string>
+    <!-- DRV-757 : une seule fois, après la mise à jour qui passe l’enseigne à sa version mobile. %1$s : le nom avec « de ». -->
+    <string name="site_mode_migrated">Pour passer à la nouvelle version %1$s, je t’ai déconnecté. Tu te reconnectes une seule fois.</string>
 
     <string name="retry">Réessayer</string>
     <string name="close">Fermer</string>
