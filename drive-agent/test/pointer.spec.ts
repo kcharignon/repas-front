@@ -56,27 +56,42 @@ describe('le repère suit la lecture de la page', () => {
     pointer.clear()
   })
 
-  it('une lecture qui alterne entre deux contrôles chaque seconde ne fait pas sauter le repère : il ne change que si le même autre contrôle est lu deux fois de suite', () => {
-    const a = control(200)
-    const b = control(400)
-    let turn = 0
+  /** Le repère suit une suite de lectures, une par seconde ; rend le haut de son cadre après chacune. */
+  function followed(reads: ('a' | 'b')[]): string[] {
+    const els = { a: control(200), b: control(400) }
+    let next = 0
     const pointer = createPointer({
       win: window as Window & typeof globalThis,
       attachShadow: (host, init) => host.attachShadow(init),
       mode: 'open',
     })
-
     pointer.point(
-      () => ({ element: turn++ === 0 || turn % 2 === 1 ? a : b }),
+      () => ({ element: els[reads[Math.min(next++, reads.length - 1)] ?? 'a'] }),
       () => null,
     )
-    vi.advanceTimersByTime(6_000)
-
-    const ring = [...document.documentElement.children]
-      .map((host) => host.shadowRoot?.querySelector<HTMLElement>('.ring'))
-      .find((one) => one !== undefined && one !== null)
-    expect(ring?.style.getPropertyValue('top')).toBe(`${200 - 6}px`)
+    const tops: string[] = []
+    for (let second = 1; second < reads.length; second += 1) {
+      vi.advanceTimersByTime(1_000)
+      const ring = [...document.documentElement.children]
+        .map((host) => host.shadowRoot?.querySelector<HTMLElement>('.ring'))
+        .find((one) => one !== undefined && one !== null)
+      tops.push(ring?.style.getPropertyValue('top') ?? '')
+    }
     pointer.clear()
+    return tops
+  }
+
+  it('une lecture qui alterne A, B, A, B… chaque seconde ne fait JAMAIS sauter le repère (non-régression : il sautait une fois sur deux)', () => {
+    expect(new Set(followed(['a', 'b', 'a', 'b', 'a', 'b', 'a', 'b']))).toEqual(
+      new Set([`${200 - 6}px`]),
+    )
+  })
+
+  it('le même autre contrôle lu deux fois de suite fait bien changer le repère', () => {
+    const tops = followed(['a', 'b', 'b', 'b', 'b'])
+
+    expect(tops[0]).toBe(`${200 - 6}px`)
+    expect(tops.at(-1)).toBe(`${400 - 6}px`)
   })
 
   it('plus de contrôle à entourer (un mur de cookies apparaît) : le repère se retire tout de suite, sans attendre une seconde lecture', () => {

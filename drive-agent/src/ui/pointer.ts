@@ -186,15 +186,13 @@ export function createPointer(options: PointerOptions): Pointer {
     const at = Date.now()
     if (refresh || at - resolvedAt >= RESOLVE_MS) {
       let spot = get()
-      // Un autre contrôle n'est suivi que lu deux fois de suite : une lecture qui alterne chaque seconde ne fait pas sauter le repère (DRV-759)
-      if (
-        cached?.isConnected === true &&
-        spot !== null &&
-        spot.element !== cached &&
-        spot.element !== pending
-      ) {
-        pending = spot.element
-        spot = { element: cached, word }
+      // Un autre contrôle n'est suivi que lu deux fois de suite, à la suite l'un de l'autre : une lecture qui alterne chaque seconde ne fait pas sauter le repère (DRV-759)
+      if (cached?.isConnected === true && spot !== null && spot.element !== cached) {
+        const same = spot.element === pending
+        pending = same ? null : spot.element
+        if (!same) spot = { element: cached, word }
+      } else {
+        pending = null
       }
       // Un autre contrôle : le repère revient (la page ne défile qu'une fois pour lui)
       if (spot?.element !== cached) {
