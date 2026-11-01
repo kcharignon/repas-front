@@ -168,6 +168,7 @@ describe('entrer dans le magasin', () => {
       step: 'store',
       stage: 'waiting',
       byPostalCode: true,
+      clearOfConsent: true,
     })
     expect(screens.propsOf('entry')).not.toContainEqual({ stage: 'manual' })
     expect(adapter.follows.count).toBe(0)

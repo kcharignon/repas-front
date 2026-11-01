@@ -182,7 +182,7 @@ export interface Behavior {
    */
   loginForm?: boolean
   /** Le mur de cookies plein écran de l'accueil national de la forme `homeForm: 'first-use'` (DRV-753), tant que la personne n'a pas répondu. */
-  cookieWall?: boolean
+  cookieWall?: boolean | 'tall' | 'banner'
 }
 
 export type RequestKind = 'search' | 'cart' | 'page' | 'repas' | 'control' | 'image' | 'other'
@@ -630,7 +630,7 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
             member: cookieMember,
             chosen: hasCookie(STORE_CHOSEN_COOKIE),
             consent: hasCookie(CONSENT_COOKIE),
-            wall: behavior.cookieWall === true,
+            wall: behavior.cookieWall ?? false,
           }),
           HTML,
         )

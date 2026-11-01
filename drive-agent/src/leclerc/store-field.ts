@@ -9,7 +9,7 @@ const TEXT_FIELD =
   'input:not([type]), input[type="text"], input[type="search"], input[type="tel"], input[type="number"]'
 
 /** Le bouton qui lance la recherche du magasin : le champ à entourer est celui qui l'accompagne. */
-const SEARCH_LABELS = new Set(['lancer la recherche', 'rechercher'])
+const SEARCH_LABELS = new Set(['lancer la recherche'])
 const CLICKABLE = 'button, [role="button"], input[type="submit"], input[type="button"], a'
 
 /** Un champ que la page montre ; en jsdom, sans mesure, tout champ compte (comme `findControl`). */

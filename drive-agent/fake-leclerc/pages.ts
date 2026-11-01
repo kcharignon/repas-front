@@ -592,14 +592,14 @@ export function firstUsePage(
     chosen,
     consent,
     wall,
-  }: { member: boolean; chosen: boolean; consent: boolean; wall: boolean },
+  }: { member: boolean; chosen: boolean; consent: boolean; wall: boolean | 'tall' | 'banner' },
 ): string {
   const cookie = (name: string) => `document.cookie = '${name}=1; path=/';`
   const wallHtml =
     wall && !consent
-      ? `<div id="cookie-wall" role="dialog" aria-label="Cookies" style="position:fixed;inset:0;z-index:2147483000;background:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:16px">
+      ? `<div id="cookie-wall" role="dialog" aria-label="Cookies" style="${wall === 'banner' ? 'position:fixed;left:0;right:0;bottom:700px;' : 'position:fixed;inset:0;'}z-index:2147483000;background:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:16px">
 <div><h2>Respect de votre vie privée</h2><p>Nous utilisons des cookies pour améliorer votre expérience.</p></div>
-<div style="display:flex;flex-direction:column;gap:12px;padding-bottom:24px">
+<div style="display:flex;flex-direction:column;gap:12px;padding-bottom:${wall === 'tall' ? 600 : 24}px">
 <button type="button" class="wall-btn">Continuer sans accepter</button>
 <button type="button" class="wall-btn">Paramétrer les cookies</button>
 <button type="button" class="wall-btn">Tout accepter</button>

@@ -210,6 +210,11 @@ export interface GuideProps {
    * postal, pas de toucher une barre. Seulement pour l'étape `store`.
    */
   byPostalCode?: boolean
+  /**
+   * La carte se pose hors des boutons d'un mur de cookies que la page montre (`ui/keep-clear.ts`), sans jamais cacher le contrôle entouré ni son repère. Seulement là où
+   * l'étape le demande (DRV-753 : le choix du magasin sur l'accueil national) ; les autres cartes du guide restent où elles sont.
+   */
+  clearOfConsent?: boolean
   /** Le contrôle à entourer dans la page, relu à chaque mesure (la page peut se redessiner) ; `null` : rien à entourer. */
   target?: () => HTMLElement | null
 }

@@ -777,6 +777,10 @@ describe('le champ du code postal de l’accueil (DRV-753) : désigné seulement
     ).toBe('q')
   })
 
+  it('« Rechercher » seul n’est pas le bouton relevé : seul « Lancer la recherche » désigne le champ', () => {
+    expect(page('<div><input id="q"><button>Rechercher</button></div>')).toBeNull()
+  })
+
   it('deux champs sans indice dans le bloc du bouton, ou aucun bouton : rien n’est désigné (on ne devine pas)', () => {
     expect(
       page('<form><input id="x"><input id="y"><button>Lancer la recherche</button></form>'),

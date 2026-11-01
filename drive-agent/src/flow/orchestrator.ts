@@ -286,7 +286,7 @@ export class Flow {
   private async guide(
     plan: PlanMessage,
     initial: Fault,
-    extra: { byPostalCode?: boolean } = {},
+    extra: { byPostalCode?: boolean; clearOfConsent?: boolean } = {},
   ): Promise<'stopped' | { problem: Fault | null; last: GuideStep | null }> {
     const { adapter, ui, now } = this.deps
     const sleep = this.deps.sleep ?? realSleep
@@ -398,7 +398,7 @@ export class Flow {
       const outcome = await this.guide(
         plan,
         { code: 'UNSUPPORTED_PAGE', cause: 'STORE_NOT_CHOSEN' },
-        { byPostalCode: true },
+        { byPostalCode: true, clearOfConsent: true },
       )
       if (outcome === 'stopped') return
       ;({ reading, announced } = await this.awaitEntry(plan))

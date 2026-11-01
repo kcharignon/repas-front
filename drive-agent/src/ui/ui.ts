@@ -148,7 +148,8 @@ export function createUi(options: UiOptions): UiHandle {
           pointer ??= createPointer({ win, attachShadow: attach, mode })
           pointer.point(rendered.pointAt, () => rendered.el.getBoundingClientRect())
         }
-        if (rendered.keepClear === true) stopClear = keepClear(win, rendered.el)
+        if (rendered.keepClear === true)
+          stopClear = keepClear(win, rendered.el, () => rendered.pointAt?.() ?? null)
         rendered.start?.()
         rendered.el.scrollTop = 0
         const first = rendered.focus ?? rendered.el.querySelector<HTMLElement>(FOCUSABLE)

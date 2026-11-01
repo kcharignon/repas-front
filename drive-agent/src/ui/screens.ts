@@ -717,7 +717,7 @@ const guide: Renderer<'guide'> = (props: GuideProps, answer) => {
   return {
     el,
     sheet: true,
-    keepClear: true,
+    ...(props.clearOfConsent === true && { keepClear: true }),
     // Le repère reste tant que l'étape est à faire, attente longue comprise
     ...(done || props.target === undefined ? {} : { pointAt: () => props.target?.() ?? null }),
     // Le focus va au titre (lu par un lecteur d'écran, sans anneau) et non au bouton : la carte n'a rien à confirmer, la personne agit dans la page

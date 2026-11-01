@@ -25,8 +25,13 @@ test('premier usage complet : la carte guide chaque étape, le mur de cookies re
   agentCode,
 }) => {
   await withHome(async (fake, home) => {
-    // Given : personne n'est connecté, aucun magasin choisi, un mur de cookies plein écran (boutons en bas)
-    fake.setBehavior({ homeForm: 'first-use', cookieWall: true, visitorAfter: 0, loginForm: true })
+    // Given : personne n'est connecté, aucun magasin choisi, un mur de cookies plein écran dont les boutons sont DANS la zone où la carte se pose d'ordinaire (en bas)
+    fake.setBehavior({
+      homeForm: 'first-use',
+      cookieWall: 'tall',
+      visitorAfter: 0,
+      loginForm: true,
+    })
     const app = await openWithBridge(page, fake, agentCode, {
       path: '/',
       origin: home,
@@ -42,19 +47,18 @@ test('premier usage complet : la carte guide chaque étape, le mur de cookies re
     await expect(page.getByText('Écris ton code postal, puis choisis ton magasin.')).toBeVisible()
     await expect(page.getByRole('heading', { name: MANUAL })).toHaveCount(0)
 
-    // La carte est AU-DESSUS du mur et ne cache aucun de ses boutons : le bouton du mur se touche vraiment (Playwright vérifie qu'aucun élément ne le couvre)
+    // La carte se met EN HAUT : en bas elle couvrirait les boutons du mur (ils sont dans sa zone). Aucun des trois n'est sous elle, et le premier se touche vraiment
+    // (Playwright vérifie qu'aucun élément, la carte comprise, ne le couvre)
     const card = page.locator('.screen.guide')
     const wallButton = page.getByRole('button', { name: 'Continuer sans accepter' })
+    await expect
+      .poll(async () => ((await card.boundingBox())?.y ?? 9999) < 100, { message: 'carte en haut' })
+      .toBe(true)
     const cardBox = await card.boundingBox()
-    const buttonBox = await wallButton.boundingBox()
-    expect(cardBox).not.toBeNull()
-    expect(buttonBox).not.toBeNull()
-    const apart =
-      (cardBox?.y ?? 0) + (cardBox?.height ?? 0) <= (buttonBox?.y ?? 0) ||
-      (buttonBox?.y ?? 0) + (buttonBox?.height ?? 0) <= (cardBox?.y ?? 0)
-    expect(apart).toBe(true)
-    for (const name of ['Paramétrer les cookies', 'Tout accepter']) {
-      await expect(page.getByRole('button', { name })).toBeVisible()
+    for (const name of ['Continuer sans accepter', 'Paramétrer les cookies', 'Tout accepter']) {
+      const box = await page.getByRole('button', { name }).boundingBox()
+      expect(box).not.toBeNull()
+      expect((box?.y ?? 0) >= (cardBox?.y ?? 0) + (cardBox?.height ?? 0)).toBe(true)
     }
     await wallButton.click({ timeout: 5_000 })
     await expect(page.locator('#cookie-wall')).toHaveCount(0)
@@ -81,6 +85,35 @@ test('premier usage complet : la carte guide chaque étape, le mur de cookies re
     // Then (4) le retour connecté : « Tu es connecté », puis le passage jusqu'au bout, sans retour dans Repas
     expect(await app.received('result')).toMatchObject({ outcome: 'completed' })
     expect(fake.cart()).toEqual({ 1000001: 2 })
+  })
+})
+
+test('un mur qui ne couvre pas le champ : la carte ne passe pas en haut si elle y cacherait le champ entouré et son repère (elle reste en bas)', async ({
+  page,
+  agentCode,
+}) => {
+  await withHome(async (fake, home) => {
+    // Given : une bannière de cookies dont les boutons sont dans la zone de la carte, et le champ du code postal visible en haut de la page
+    fake.setBehavior({ homeForm: 'first-use', cookieWall: 'banner' })
+    const app = await openWithBridge(page, fake, agentCode, {
+      path: '/',
+      origin: home,
+      asApplication: true,
+    })
+    app.answerHello(PLAN)
+
+    await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible({
+      timeout: 15_000,
+    })
+    await expect(page.getByText('Touche ici')).toBeVisible()
+    // Laisse le garde passer plusieurs fois : la carte ne bouge pas
+    await page.waitForTimeout(2_500)
+    const cardBox = await page.locator('.screen.guide').boundingBox()
+    const fieldBox = await page.locator('#postal').boundingBox()
+    expect(cardBox).not.toBeNull()
+    expect(fieldBox).not.toBeNull()
+    // La carte est sous le champ : elle ne le cache pas
+    expect((cardBox?.y ?? 0) >= (fieldBox?.y ?? 0) + (fieldBox?.height ?? 0)).toBe(true)
   })
 })
 
