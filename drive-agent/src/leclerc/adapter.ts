@@ -1599,6 +1599,20 @@ function safePath(url: string): string {
   }
 }
 
+/** Une lecture mémorisée `ms` millisecondes : la carte relit la page toutes les 500 ms, une lecture de la page n'a pas à suivre. */
+function memoized(ms: number, read: () => boolean): () => boolean {
+  let at = 0
+  let value = false
+  return () => {
+    const now = Date.now()
+    if (now - at >= ms) {
+      at = now
+      value = read()
+    }
+    return value
+  }
+}
+
 /** Les dépendances du navigateur : la page courante (lue en lecture seule), son `fetch` et l'horloge réelle. */
 export function browserDeps(
   win: Window & typeof globalThis,
@@ -1620,7 +1634,7 @@ export function browserDeps(
         : step === 'login'
           ? readLoginLook(win.document, win.location, isMobileHost(win.location.hostname))
           : null),
-    loginText: () => showsLoginText(win.document),
+    loginText: memoized(1_500, () => showsLoginText(win.document)),
     referrer: () => win.document.referrer,
     pageText: () => new win.XMLSerializer().serializeToString(win.document),
     navigation: () => navigationOf(win),

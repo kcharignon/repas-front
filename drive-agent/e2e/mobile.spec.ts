@@ -385,6 +385,15 @@ const HIDDEN_LOGIN_TEXT = [
   ['hors écran', `<p style="position:absolute;left:-9999px">${LOGIN_TEXT}</p>`],
   ['visibility:hidden', `<p style="visibility:hidden">${LOGIN_TEXT}</p>`],
   ['script', `<script type="application/json">{"titre":"${LOGIN_TEXT}"}</script>`],
+  [
+    'sr-only',
+    `<p style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">${LOGIN_TEXT}</p>`,
+  ],
+  ['parent à hauteur 0', `<div style="height:0;overflow:hidden"><p>${LOGIN_TEXT}</p></div>`],
+  [
+    'text-indent',
+    `<p style="width:30px;height:20px;overflow:hidden;white-space:nowrap;text-indent:-9999px">${LOGIN_TEXT}</p>`,
+  ],
 ] as const
 
 for (const [how, markup] of HIDDEN_LOGIN_TEXT) {

@@ -1,8 +1,9 @@
 // La page de connexion se reconnaît à ce qu'elle MONTRE (DRV-759) : le texte « Connectez-vous avec votre compte… » ET un champ de saisie montré. Mesuré sur le téléphone : ce texte
 // existe aussi, CACHÉ, sur l'accueil de Leclerc et sur la présentation du magasin ; le lire dans tout le document faisait dire « Étape 2 sur 2 · Connecte-toi » à l'accueil, et l'agent
 // n'entrait plus dans le magasin. Jamais le texte d'un script, d'un élément caché (hidden, display:none, hors écran, visibility:hidden), ni sans champ montré.
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { browserDeps } from '../src/leclerc/adapter'
 import { showsLoginText } from '../src/leclerc/guide-look'
 
 const TEXT = 'Connectez-vous avec votre compte unique E.Leclerc.'
@@ -10,16 +11,16 @@ const TEXT = 'Connectez-vous avec votre compte unique E.Leclerc.'
 /** Un élément dont la boîte est donnée (jsdom ne mesure rien) ; `visible: false` : aucune boîte, comme un élément caché. */
 function shown<T extends HTMLElement>(
   el: T,
-  box: { left: number; width: number } | null = { left: 20, width: 300 },
+  box: { left: number; width: number; height?: number } | null = { left: 20, width: 300 },
 ): T {
   el.getBoundingClientRect = () =>
     ({
       top: 100,
-      bottom: box === null ? 100 : 140,
+      bottom: 100 + (box === null ? 0 : (box.height ?? 40)),
       left: box?.left ?? 0,
       right: (box?.left ?? 0) + (box?.width ?? 0),
       width: box?.width ?? 0,
-      height: box === null ? 0 : 40,
+      height: box === null ? 0 : (box.height ?? 40),
       x: 0,
       y: 100,
       toJSON: () => ({}),
@@ -30,7 +31,7 @@ function shown<T extends HTMLElement>(
 function add<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   html: string,
-  box: { left: number; width: number } | null = { left: 20, width: 300 },
+  box: { left: number; width: number; height?: number } | null = { left: 20, width: 300 },
   parent: HTMLElement = document.body,
 ): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag)
@@ -100,5 +101,53 @@ describe('showsLoginText', () => {
     typeHidden.setAttribute('type', 'hidden')
 
     expect(showsLoginText(document)).toBe(false)
+  })
+
+  it('DRV-759 : deux façons de cacher le texte avec une boîte non nulle ne font pas une page de connexion (sr-only 1 × 1, parent à hauteur 0 qui rogne ; le texte rejeté hors écran par `text-indent` est prouvé par l’e2e)', () => {
+    // (a) « sr-only » : 1 pixel sur 1
+    add('p', TEXT, { left: 20, width: 1, height: 1 })
+    field()
+    expect(showsLoginText(document)).toBe(false)
+    document.body.innerHTML = ''
+
+    // (b) un parent de hauteur 0 qui rogne (overflow: hidden) : l'enfant a, lui, une boîte
+    const clip = add('div', '', { left: 20, width: 300, height: 0 })
+    clip.setAttribute('style', 'height:0;overflow:hidden')
+    add('p', TEXT, { left: 20, width: 300 }, clip)
+    field()
+    expect(showsLoginText(document)).toBe(false)
+  })
+
+  it('le texte rangé ailleurs que dans le bloc du champ montré n’est pas celui de ce champ ; dans le même bloc, si', () => {
+    const elsewhere = add('section', '')
+    add('p', TEXT, undefined, elsewhere)
+    const form = add('form', '')
+    add('input', '', undefined, form)
+    expect(showsLoginText(document)).toBe(false)
+
+    add('p', TEXT, undefined, form)
+    expect(showsLoginText(document)).toBe(true)
+  })
+
+  it('un texte marqué aria-hidden mais montré est un vrai positif (la page le dit à l’écran)', () => {
+    const text = add('p', TEXT)
+    text.setAttribute('aria-hidden', 'true')
+    field()
+
+    expect(showsLoginText(document)).toBe(true)
+  })
+
+  it('DRV-759 : la lecture est mémorisée une seconde et demie (la carte relit la page toutes les 500 ms) : trois appels, une seule lecture des champs', () => {
+    const spy = vi.spyOn(document, 'querySelectorAll')
+    const deps = browserDeps(window as Window & typeof globalThis)
+
+    deps.loginText?.()
+    deps.loginText?.()
+    deps.loginText?.()
+
+    expect(
+      spy.mock.calls.filter(([selector]) => String(selector).startsWith('input')),
+    ).toHaveLength(1)
+    spy.mockRestore()
   })
 })

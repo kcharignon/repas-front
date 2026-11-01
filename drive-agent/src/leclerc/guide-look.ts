@@ -145,23 +145,48 @@ export function readStoreLook(root: Document): GuideLook {
 /** Ce que dit la page de connexion réelle (mesuré le 2026-11-01). Le même texte existe, CACHÉ, sur l'accueil et sur la présentation du magasin. */
 const LOGIN_TEXT = /connectez-vous avec votre compte/i
 
+/** Le bloc d'un champ : le texte de connexion doit y être (un texte rangé ailleurs dans la page n'est pas celui de ce champ). */
+const FIELD_BLOCK = 'form, section, main, [role="dialog"], dialog'
+/** Un élément a une vraie taille : au moins 8 pixels dans les deux sens (une classe « sr-only », 1 × 1 pixel, ne se voit pas). */
+const sized = (element: Element): boolean => {
+  const { width, height } = element.getBoundingClientRect()
+  return width >= 8 && height >= 8
+}
+
 /**
- * La page est-elle celle de la connexion d'après ce qu'elle MONTRE : le texte « Connectez-vous avec votre compte… » dans un élément montré (un script, un style, un élément caché
- * n'est jamais montré : `isShown`), ET un champ de saisie montré. Une lecture ciblée (les champs, puis les nœuds de texte), sans sérialiser le document ni lire une valeur.
+ * Le texte à l'écran ? Son élément est montré et de vraie taille, et aucun ancêtre jusqu'au bloc n'est minuscule en rognant (`height: 0` et `overflow: hidden`), et la boîte du texte
+ * lui-même n'est pas rejetée hors de la fenêtre (`text-indent: -9999px`).
+ */
+function textOnScreen(node: Node, block: Element): boolean {
+  const parent = node.parentElement
+  if (parent === null || !shown(parent) || !sized(parent)) return false
+  const win = node.ownerDocument?.defaultView
+  for (let up = parent.parentElement; up !== null && up !== block; up = up.parentElement) {
+    // Un ancêtre minuscule qui rogne (`overflow` autre que visible) cache ce qu'il contient ; un `display: contents` n'a aucune boîte et ne rogne rien
+    if (!sized(up) && win?.getComputedStyle(up).overflow !== 'visible') return false
+  }
+  const range = node.ownerDocument?.createRange()
+  range?.selectNodeContents(node)
+  const box = range?.getBoundingClientRect?.()
+  const width = node.ownerDocument?.defaultView?.innerWidth ?? 0
+  return box === undefined || (width > 0 && box.right > 0 && box.left < width) || box.width === 0
+}
+
+/**
+ * La page est-elle celle de la connexion d'après ce qu'elle MONTRE : le texte « Connectez-vous avec votre compte… » à l'écran (`textOnScreen`), dans le MÊME bloc qu'un champ de
+ * saisie montré (au plus trois champs). Un script, un style, un élément caché, minuscule ou rejeté hors écran n'en est pas un. Une lecture ciblée (les champs, puis les nœuds de
+ * texte de leur bloc), sans sérialiser le document ni lire une valeur.
  */
 export function showsLoginText(root: Document): boolean {
-  const fields = root.querySelectorAll<HTMLInputElement>('input:not([type="hidden"])')
-  if (root.body === null || ![...fields].some(shown)) return false
-  const walker = root.createTreeWalker(root.body, NodeFilter.SHOW_TEXT)
-  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-    const text = node.nodeValue ?? ''
-    if (
-      text.length < 200 &&
-      LOGIN_TEXT.test(text) &&
-      node.parentElement &&
-      shown(node.parentElement)
-    )
-      return true
+  const fields = [...root.querySelectorAll<HTMLInputElement>('input:not([type="hidden"])')]
+  for (const field of fields.filter(shown).slice(0, 3)) {
+    const block = field.closest(FIELD_BLOCK) ?? field.parentElement?.parentElement ?? root.body
+    if (block === null) continue
+    const walker = root.createTreeWalker(block, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const text = node.nodeValue ?? ''
+      if (text.length < 200 && LOGIN_TEXT.test(text) && textOnScreen(node, block)) return true
+    }
   }
   return false
 }
