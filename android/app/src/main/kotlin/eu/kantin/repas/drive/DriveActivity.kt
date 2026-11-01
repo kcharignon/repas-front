@@ -110,10 +110,7 @@ class DriveActivity : Activity() {
      * ou le sert avec un titre « introuvable », l'écran se replie sur l'accueil du drive ([DriveEntry.fallsBack], [DriveEntry.isNotFoundTitle]).
      * `null` sinon.
      */
-    private var homeTarget: String? = null
-
-    /** Le titre de la page est surveillé (page d'arrivée de « Finaliser », avant la première navigation) : seul le titre est lu, jamais le contenu. */
-    private var watchTitle = false
+    private val arrival = StoreArrival()
 
     /** Le bandeau « Ton panier est dans l'icône en haut à droite. » : de l'arrivée de « Finaliser » à la première navigation. */
     private var basketHint = false
@@ -234,8 +231,7 @@ class DriveActivity : Activity() {
         repasApp.finalizeOutcomes.record(outcome, site)
         basketHint = true
         if (DriveEntry.isStoreHome(firstUrl(), site)) {
-            homeTarget = firstUrl()
-            watchTitle = true
+            arrival.arm(firstUrl(), watchTitle = true)
         }
     }
 
@@ -244,11 +240,8 @@ class DriveActivity : Activity() {
         // Un plan dont le magasin vient d'être ouvert ici (DRV-759, « Utiliser ce magasin ») s'ouvre sur sa page, pas sur l'accueil où il faudrait choisir son magasin une seconde fois ; la page refusée par le site ramène à l'accueil
         if (request is DrivePlan) {
             val opening = request.openingPage(repasApp.storePaths.of(site))
-            if (opening != request.startUrl) {
-                homeTarget = opening
-                // Une page « introuvable » servie avec le statut 200 ramène aussi à l'accueil, comme pour « Finaliser »
-                watchTitle = true
-            }
+            // Une page refusée, ou « introuvable » servie en 200 (son titre, le temps de son chargement), ramène à l'accueil, comme pour « Finaliser »
+            if (opening != request.startUrl) arrival.arm(opening, watchTitle = true)
             return opening
         }
         return request?.startUrl ?: DriveEntry.startPage(intent?.getStringExtra(EXTRA_START_URL), site)
@@ -374,6 +367,7 @@ class DriveActivity : Activity() {
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             loadFailed = false
             pagesStarted++
+            arrival.pageStarted(url)
             delivery.pageStarted()
             watch.pageStarted()
             timers.removeCallbacks(onAgentTimeout)
@@ -391,7 +385,7 @@ class DriveActivity : Activity() {
             // Une page de magasin de l'enseigne avec sa ville, que le site n'a pas refusée : « Finaliser » l'ouvrira (DRV-629, DRV-631).
             if (!loadFailed && !watch.refused()) {
                 repasApp.storePaths.of(site).remember(url)
-                if (url == homeTarget) homeTarget = null
+                arrival.pageFinished(url)
             }
             timers.removeCallbacks(onLoadTimeout)
             agent.onPageFinished(view, url)
@@ -411,7 +405,7 @@ class DriveActivity : Activity() {
         override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
             if (!request.isForMainFrame) return
             // L'accueil du magasin refusé par le site : l'accueil du drive, où le panier est dans la même icône (DRV-631).
-            if (DriveEntry.fallsBack(homeTarget, request.url.toString(), errorResponse.statusCode)) {
+            if (DriveEntry.fallsBack(arrival.homeTarget, request.url.toString(), errorResponse.statusCode)) {
                 fallBackToDriveHome(FinalizeOutcome.ofHttp(errorResponse.statusCode))
                 return
             }
@@ -443,7 +437,7 @@ class DriveActivity : Activity() {
         // Une page « introuvable » du site servie avec un statut 200 (DRV-631) : seul le TITRE est lu, jamais le contenu de la page, et seulement
         // sur la page d'arrivée de « Finaliser » (avant la première navigation).
         override fun onReceivedTitle(view: WebView, title: String?) {
-            if (watchTitle && DriveEntry.isStoreHome(view.url, site) && DriveEntry.isNotFoundTitle(title)) fallBackToDriveHome(FinalizeOutcome.TITRE_INTROUVABLE)
+            if (arrival.titleSaysMissing(view.url, title, site)) fallBackToDriveHome(FinalizeOutcome.TITRE_INTROUVABLE)
         }
 
         override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean {
@@ -583,8 +577,7 @@ class DriveActivity : Activity() {
     /** La première navigation après l'arrivée de « Finaliser » : le bandeau disparaît et l'on ne surveille plus rien (DRV-631). */
     private fun endBasketHint() {
         basketHint = false
-        watchTitle = false
-        homeTarget = null
+        arrival.disarm()
         updateStoreBanner(webView.url)
     }
 
@@ -595,8 +588,7 @@ class DriveActivity : Activity() {
     private fun fallBackToDriveHome(outcome: FinalizeOutcome) {
         // Une forme de « Finaliser » ne s'enregistre que pour « Finaliser » : un passage de plan qui se replie n'en est pas un
         if (pass.current() == null) repasApp.finalizeOutcomes.record(outcome, site)
-        homeTarget = null
-        watchTitle = false
+        arrival.disarm()
         clearHistoryWhenLoaded = true
         problems.hide()
         navigationBegins()
