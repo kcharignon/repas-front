@@ -10,6 +10,7 @@ import { causeTexts, errorParts, errorTexts, pluralOf, S, unitFor } from './stri
 import type {
   ChallengeProps,
   ChooserProps,
+  ChosenStoreProps,
   DiagnosticProps,
   DiagnosticRow,
   EndProps,
@@ -728,6 +729,34 @@ const guide: Renderer<'guide'> = (props: GuideProps, answer, retailer) => {
   }
 }
 
+/**
+ * Le magasin ouvert n'est pas celui que Repas avait retenu (DRV-755) : la carte du guide, sans repère d'étape. Un titre qui dit quel magasin est ouvert, UNE phrase, le
+ * geste principal « Utiliser ce magasin » (Repas le retient et reprend l'envoi), « Choisir un autre magasin », puis « Arrêter pour l'instant » qui rassure.
+ */
+const chosenStore: Renderer<'chosenStore'> = (props: ChosenStoreProps, answer) => {
+  const use = button(S.chosenStore.use, () => answer('use'), 'primary')
+  const stop = h(
+    'button',
+    { class: 'g-stop', attrs: { type: 'button' }, on: { click: () => answer('stop') } },
+    h('span', { class: 'g-stop-title', text: S.guide.stop.title }),
+    h('span', { class: 'g-stop-note', text: S.guide.stop.note }),
+  )
+  const titleEl = h('h1', {
+    text: S.chosenStore.title(props.label, props.tail),
+    attrs: { id: 'titre', tabindex: '-1' },
+  })
+  const el = screen(
+    titleEl,
+    h('p', { class: 'g-text', text: S.chosenStore.text }),
+    use,
+    button(S.chosenStore.other, () => answer('other')),
+    stop,
+  )
+  el.classList.add('guide')
+  el.setAttribute('role', 'status')
+  return { el, sheet: true, ...(props.clearOfConsent === true && { keepClear: true }), focus: use }
+}
+
 const error: Renderer<'error'> = (props: ErrorProps, answer, retailer) => {
   const close = button(S.error.close, () => answer('close'), props.canReturn ? 'plain' : 'primary')
   const back = button(S.error.back, () => answer('return'), 'primary')
@@ -899,6 +928,7 @@ export const RENDERERS: { [K in ScreenName]: Renderer<K> } = {
   challenge,
   entry,
   guide,
+  chosenStore,
   error,
   end,
 }

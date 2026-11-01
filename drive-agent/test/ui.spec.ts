@@ -211,6 +211,62 @@ describe('la demande de vérification de l’anti-robot (ticket K)', () => {
   })
 })
 
+describe('le magasin ouvert n’est pas celui de Repas (DRV-755)', () => {
+  const STOP = 'Arrêter pour l’instantTa liste est gardée, tu pourras reprendre.'
+
+  it('dit la ville ouverte, une phrase, et propose trois réponses : utiliser, en choisir un autre, arrêter', async () => {
+    const handle = open()
+    const answer = handle.show('chosenStore', { label: 'Ville-Test', tail: '456' })
+
+    expect(shadow().querySelector('h1')?.textContent).toBe('Tu as ouvert Ville-Test')
+    expect(shadow().querySelector('.g-text')?.textContent).toBe(
+      'Repas avait retenu un autre magasin. Tu veux envoyer ta liste ici ?',
+    )
+    expect(labels()).toEqual(['Utiliser ce magasin', 'Choisir un autre magasin', STOP])
+    // La carte du guide : en bas, la page reste visible et touchable
+    expect(shadow().querySelector('.overlay')?.classList.contains('sheet')).toBe(true)
+    expect(shadow().querySelector('.screen')?.classList.contains('guide')).toBe(true)
+    press('Utiliser ce magasin')
+    await expect(answer).resolves.toBe('use')
+  })
+
+  it('sans nom de ville : le numéro, par ses derniers chiffres seulement', () => {
+    const handle = open()
+    void handle.show('chosenStore', { label: null, tail: '456' })
+
+    expect(shadow().querySelector('h1')?.textContent).toBe('Tu as ouvert le magasin …456')
+  })
+
+  it('« Choisir un autre magasin » et « Arrêter pour l’instant » rendent leur réponse', async () => {
+    const handle = open()
+    const other = handle.show('chosenStore', { label: null, tail: '456' })
+    press('Choisir un autre magasin')
+    await expect(other).resolves.toBe('other')
+
+    const stop = handle.show('chosenStore', { label: null, tail: '456' })
+    press(STOP)
+    await expect(stop).resolves.toBe('stop')
+  })
+
+  it('jamais « Fermer », jamais un mot d’alerte : ce n’est pas une panne', () => {
+    const handle = open()
+    void handle.show('chosenStore', { label: 'Ville-Test', tail: '456' })
+
+    expect(shadow().textContent).not.toMatch(
+      /erreur|introuvable|incident|fermer|annuler|pas le bon/i,
+    )
+  })
+
+  it('un nom de ville hostile est du texte, jamais du code', () => {
+    const handle = open()
+    void handle.show('chosenStore', { label: HOSTILE, tail: '456' })
+
+    expect(shadow().querySelector('img')).toBeNull()
+    expect(shadow().querySelector('script')).toBeNull()
+    expect(shadow().querySelector('h1')?.textContent).toContain('<img')
+  })
+})
+
 describe('le guide d’une étape (DRV-751)', () => {
   const overlay = () => shadow().querySelector('.overlay') as HTMLElement
   const STOP = 'Arrêter pour l’instantTa liste est gardée, tu pourras reprendre.'

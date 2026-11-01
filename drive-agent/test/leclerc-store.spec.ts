@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest'
 import { RetailerError } from '../src/retailers'
 import { usesMobileProtocol } from '../src/leclerc/mobile'
 import {
+  cameFromNationalHome,
+  cityOfPath,
   isMobileHost,
   readDeliveryPoint,
   readPageStore,
@@ -164,5 +166,40 @@ describe('readDeliveryPoint', () => {
 
   it('prend à défaut l’identifiant de l’adresse', () => {
     expect(readDeliveryPoint('<html>rien</html>', store)).toBe('000123')
+  })
+})
+
+describe('cityOfPath (DRV-755) : le nom de la ville d’une adresse de magasin, pour l’écran', () => {
+  it.each([
+    ['/magasin-000123-000123-ville-test', 'Ville-Test'],
+    ['/magasin-000123-000123-saint-priest', 'Saint-Priest'],
+    ['/magasin-000123-000123-saint-maur-des-fosses.aspx', 'Saint-Maur-des-Fosses'],
+    ['/magasin-000123-000123-Ville-Test/recherche.aspx', 'Ville-Test'],
+    ['/magasin-000123-000123-l-isle-d-abeau', 'L-Isle-d-Abeau'],
+    ['/magasin-000123-000123-bo%C3%A9', 'Boé'],
+  ])('%s : %s', (path, city) => {
+    expect(cityOfPath(path)).toBe(city)
+  })
+
+  it.each([
+    ['sans ville', '/magasin-000123-000123'],
+    ['sans ville, avec .aspx', '/magasin-000123-000123.aspx'],
+    ['pas une page de magasin', '/connexion'],
+    ['un échappement illisible', '/magasin-000123-000123-%E0%A4%A'],
+    ['un caractère de contrôle', '/magasin-000123-000123-ville%00test'],
+    ['une balise', '/magasin-000123-000123-%3Cscript%3E'],
+    ['trop long', `/magasin-000123-000123-${'a'.repeat(100)}`],
+  ])('%s : rien (jamais un morceau d’adresse à l’écran)', (_name, path) => {
+    expect(cityOfPath(path)).toBeNull()
+  })
+})
+
+describe('cameFromNationalHome (DRV-755)', () => {
+  it('seul l’accueil national de l’enseigne, en https, est l’endroit où l’on choisit son magasin', () => {
+    expect(cameFromNationalHome('https://www.leclercdrive.fr/')).toBe(true)
+    expect(cameFromNationalHome('https://m-courses.leclercdrive.fr/')).toBe(false)
+    expect(cameFromNationalHome('https://fd0-courses.leclercdrive.fr/')).toBe(false)
+    expect(cameFromNationalHome('https://www.leclercdrive.fr.exemple.invalid/')).toBe(false)
+    expect(cameFromNationalHome('')).toBe(false)
   })
 })

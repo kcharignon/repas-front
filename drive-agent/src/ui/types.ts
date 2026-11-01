@@ -219,6 +219,19 @@ export interface GuideProps {
   target?: () => HTMLElement | null
 }
 
+/**
+ * Le magasin ouvert n'est pas celui du plan (DRV-755) : la carte dit lequel et propose « Utiliser ce magasin » (`use`), « Choisir un autre magasin » (`other`) ou
+ * « Arrêter pour l'instant » (`stop`). Une carte posée en bas, comme le guide : la page reste visible et touchable.
+ */
+export interface ChosenStoreProps {
+  /** Le nom de la ville du magasin ouvert, quand la page le donne ; `null` : la carte dit son numéro. */
+  label: string | null
+  /** Les derniers chiffres du numéro du magasin (jamais le numéro entier). */
+  tail: string
+  /** La carte se pose hors des boutons d'un mur de cookies que la page montre (comme le guide). */
+  clearOfConsent?: boolean
+}
+
 export interface ErrorProps {
   code: ErrorCode
   /**
@@ -297,6 +310,8 @@ export interface ScreenMap {
    * s'arrête, rien n'est perdu) ; `wait` : « Attendre encore » (seulement au stade `late`).
    */
   guide: { props: GuideProps; answer: 'stop' | 'wait' }
+  /** Le magasin ouvert n'est pas celui du plan (DRV-755) : l'utiliser, en choisir un autre, ou arrêter (rien n'est perdu). */
+  chosenStore: { props: ChosenStoreProps; answer: 'use' | 'other' | 'stop' }
   error: { props: ErrorProps; answer: 'return' | 'close' }
   end: { props: EndProps; answer: 'return' }
 }

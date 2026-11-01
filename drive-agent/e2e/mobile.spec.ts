@@ -14,7 +14,7 @@ import {
   type FakeLeclerc,
   type MobileBehavior,
 } from '../fake-leclerc/server'
-import { MOBILE_PAGE_PATH } from '../fake-leclerc/mobile'
+import { MOBILE_OTHER_PAGE_PATH, MOBILE_PAGE_PATH } from '../fake-leclerc/mobile'
 import type { PlanLine } from '../protocol'
 
 const PLAN = (...lines: PlanLine[]) => planOf(lines, { store: { ...MOBILE_PLAN_STORE } })
@@ -412,4 +412,149 @@ test('Leclerc exige la preuve de la connexion sur TOUTE page, y compris celle du
   expect(fake.cart()).toEqual({})
   await page.getByRole('button', { name: 'Arrêter pour l’instant' }).click()
   expect(await returnedResult(page, fake)).toMatchObject({ outcome: 'aborted', lines: [] })
+})
+
+// Accepter le magasin que la personne a choisi (DRV-755) : le plan est fait pour le magasin 000001, la personne choisit le magasin 000002 sur l'accueil. L'agent ne s'arrête
+// plus : une carte dit « Tu as ouvert Autre-Ville » et propose de l'utiliser. Rien n'est écrit dans le panier, rien n'est demandé au serveur du magasin.
+const OTHER_TITLE = 'Tu as ouvert Autre-Ville'
+
+/** Le plan est livré sur l'accueil, la personne choisit un magasin, l'agent entre : la page du SECOND magasin reçoit le plan (le référent est l'accueil national). */
+async function chooseOtherStore(
+  page: Parameters<typeof openWithBridge>[0],
+  fake: FakeLeclerc,
+  agentCode: string,
+) {
+  const app = await openWithBridge(page, fake, agentCode, {
+    path: '/',
+    origin: fake.mobileOrigins.www,
+    asApplication: true,
+  })
+  app.answerHello(PLAN(FARINE))
+  await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible({
+    timeout: 15_000,
+  })
+  await page.getByRole('button', { name: 'Tout accepter' }).click()
+  await page.locator('#postal').fill('69720')
+  await page.locator('#suggestion').click()
+  await page.locator('#pick').click()
+  await expect(page).toHaveURL(new RegExp(`${MOBILE_OTHER_PAGE_PATH}$`))
+  return app
+}
+
+test.describe('un autre magasin que celui du plan, choisi sur l’accueil', () => {
+  test('la carte dit la ville ouverte ; « Utiliser ce magasin » rend le magasin à Repas, sans une requête ni une écriture', async ({
+    page,
+    agentCode,
+  }) => {
+    await withMobile(
+      { otherStore: true },
+      async (fake) => {
+        const app = await chooseOtherStore(page, fake, agentCode)
+
+        // La carte, pas un écran d'erreur : jamais « Ce n'est pas le bon magasin »
+        await expect(page.getByRole('heading', { name: OTHER_TITLE })).toBeVisible()
+        await expect(
+          page.getByText('Repas avait retenu un autre magasin. Tu veux envoyer ta liste ici ?'),
+        ).toBeVisible()
+        await expect(
+          page.getByRole('heading', { name: 'Ce n’est pas le bon magasin' }),
+        ).toHaveCount(0)
+        await expect(page.getByRole('button', { name: 'Choisir un autre magasin' })).toBeVisible()
+        await expect(page.getByRole('button', { name: /Arrêter pour l’instant/ })).toBeVisible()
+        // Tant que la personne ne touche rien, rien n'est rendu à Repas
+        await page.waitForTimeout(1_500)
+        expect(app.messages.some((message) => message.type === 'result')).toBe(false)
+
+        await page.getByRole('button', { name: 'Utiliser ce magasin' }).click()
+
+        // Le résultat est « arrêté » (rien n'a été écrit) et porte le magasin lu sur la page : numéro, serveur, adresse de base, ville
+        expect(await app.received('result')).toMatchObject({
+          type: 'result',
+          outcome: 'aborted',
+          store: { id: '000001' },
+          lines: [],
+          chosenStore: {
+            id: '000002',
+            host: 'fd8-courses.leclercdrive.fr',
+            baseUrl: 'https://fd8-courses.leclercdrive.fr/magasin-000002-000002',
+            label: 'Autre-Ville',
+          },
+        })
+        expect(fake.cart()).toEqual({})
+        expect(fake.paced()).toEqual([])
+      },
+      { cookieWall: 'tall' },
+    )
+  })
+
+  test('« Arrêter pour l’instant » : l’envoi s’arrête sans magasin rendu, la liste est gardée', async ({
+    page,
+    agentCode,
+  }) => {
+    await withMobile(
+      { otherStore: true },
+      async (fake) => {
+        const app = await chooseOtherStore(page, fake, agentCode)
+        await expect(page.getByRole('heading', { name: OTHER_TITLE })).toBeVisible()
+
+        await page.getByRole('button', { name: /Arrêter pour l’instant/ }).click()
+
+        const result = await app.received('result')
+        expect(result).toMatchObject({ outcome: 'aborted', lines: [] })
+        expect(result).not.toHaveProperty('chosenStore')
+        expect(fake.cart()).toEqual({})
+        expect(fake.paced()).toEqual([])
+      },
+      { cookieWall: 'tall' },
+    )
+  })
+
+  test('« Choisir un autre magasin » : la carte du choix attend, rien n’est rendu ni écrit ; « Arrêter pour l’instant » ferme sans magasin', async ({
+    page,
+    agentCode,
+  }) => {
+    await withMobile(
+      { otherStore: true },
+      async (fake) => {
+        const app = await chooseOtherStore(page, fake, agentCode)
+        await expect(page.getByRole('heading', { name: OTHER_TITLE })).toBeVisible()
+
+        await page.getByRole('button', { name: 'Choisir un autre magasin' }).click()
+
+        await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible()
+        await expect(
+          page.getByText('Touche la barre du magasin en haut de la page, puis ton magasin.'),
+        ).toBeVisible()
+        await page.waitForTimeout(2_500)
+        expect(app.messages.some((message) => message.type === 'result')).toBe(false)
+
+        await page.getByRole('button', { name: /Arrêter pour l’instant/ }).click()
+        const result = await app.received('result')
+        expect(result).toMatchObject({ outcome: 'aborted' })
+        expect(result).not.toHaveProperty('chosenStore')
+        expect(fake.cart()).toEqual({})
+      },
+      { cookieWall: 'tall' },
+    )
+  })
+
+  test('un autre magasin ouvert HORS du choix guidé (la page ouverte directement) : « Ce n’est pas le bon magasin », comme avant', async ({
+    page,
+    agentCode,
+  }) => {
+    await withMobile({ ...SESSION, otherStore: true }, async (fake) => {
+      await openWithFragment(page, fake, agentCode, PLAN(FARINE), {
+        path: MOBILE_OTHER_PAGE_PATH,
+        origin: fake.mobileOrigins.courses,
+      })
+
+      await expect(page.getByRole('heading', { name: 'Ce n’est pas le bon magasin' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Utiliser ce magasin' })).toHaveCount(0)
+      await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
+      const result = await returnedResult(page, fake)
+      expect(result).toMatchObject({ outcome: 'error', error: { code: 'STORE_MISMATCH' } })
+      expect(result).not.toHaveProperty('chosenStore')
+      expect(fake.paced()).toEqual([])
+    })
+  })
 })
