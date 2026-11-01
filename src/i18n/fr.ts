@@ -905,6 +905,13 @@ export default {
       detail: 'Détail : {detail}',
       update: 'Mettre à jour l’application',
     },
+    // DRV-755 : la personne a ouvert un autre magasin que celui de Repas, à l'étape guidée ; Repas le retient et reprend l'envoi tout seul
+    storeSwitch: {
+      title: 'Je retiens ton magasin',
+      help: 'Je reprends ton envoi dans un instant. Ta liste est gardée.',
+      failed: 'Je n’ai pas pu retenir ce magasin. Ta liste est gardée. Tu peux réessayer.',
+      retry: 'Réessayer',
+    },
     setup: {
       title: 'Lecture du magasin',
       help: 'Cette réponse est celle d’une lecture du magasin : elle se traite dans les réglages du drive.',

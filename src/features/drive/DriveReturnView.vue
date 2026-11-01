@@ -18,9 +18,16 @@ import { useOnline } from '@/offline/useOnline'
 import { basketSlugsOf, notInCartCount } from './basket'
 import { driveBridge } from './bridge'
 import { buildChoiceBatches, countChoices, knownProductsOf } from './choices'
+import { chosenStoreOf } from './chosenStore'
 import { drivesOf } from './drives'
 import { finalizeLink, retailerOf } from './retailers'
-import { useDrivePlan, useDriveSettings, useMarkBasketLines, useSaveChoices } from './queries'
+import {
+  useDrivePlan,
+  useDriveSettings,
+  useMarkBasketLines,
+  useSaveChoices,
+  useSaveDriveSettings,
+} from './queries'
 import { expectedFromPlan } from './restrictToPlan'
 import { useDriveReturnStore } from './returnStore'
 import DriveFold from './DriveFold.vue'
@@ -86,6 +93,13 @@ const labels = computed(
     ),
 )
 
+// Le magasin que la personne a choisi à la place de celui de Repas (DRV-755) : un envoi arrêté avant le moindre article, qui porte le magasin lu par l'agent. Jugé par
+// `chosenStoreOf` (le drive du passage, la règle de l'enseigne) : un magasin qu'on ne peut pas croire n'est qu'un envoi arrêté, comme avant.
+const chosen = computed(() =>
+  run.value === null ? null : chosenStoreOf(run.value.result, run.value.retailer),
+)
+const switching = ref<'saving' | 'failed' | null>(null)
+
 const counts = computed(() => (result.value ? countOutcomes(result.value) : null))
 /** Des produits choisis que le panier n'a pas pris (DRV-750) : un envoi terminé n'est alors « rempli » qu'en partie (le titre de l'écran de fin de l'agent). */
 const notInCart = computed(() => (result.value ? notInCartCount(result.value) : 0))
@@ -116,6 +130,7 @@ const headline = computed(() => {
   if (current.kind === 'refused') return t('driveReturn.refused.title')
   if (current.kind === 'invalid') return t('driveReturn.invalid.title')
   if (result.value === null) return t('driveReturn.setup.title')
+  if (chosen.value !== null) return t('driveReturn.storeSwitch.title')
   // Arrêté avant que rien ne soit mis au panier ni choisi : « rempli en partie » serait faux
   const none = counts.value !== null && counts.value.added + counts.value.chosen === 0
   if (result.value.outcome === 'partial' && none) return t('driveReturn.outcome.notFilled.title')
@@ -288,7 +303,35 @@ async function persist() {
   }
 }
 
+const saveSettings = useSaveDriveSettings()
+
+/**
+ * Retient le magasin que la personne a choisi, puis reprend l'envoi (DRV-755) : le magasin est enregistré par le même `PUT /drive/settings` que la lecture du magasin des
+ * réglages, le passage fini est oublié (son brouillon : l'envoi suivant a un autre identifiant), et l'écran d'envoi rouvre le drive tout seul avec un plan REFAIT pour ce
+ * magasin (les produits habituels d'un autre magasin ne sont pas ceux de celui-ci : rien n'est deviné, rien n'est écrit avant que ce plan soit prêt). La personne n'a rien
+ * de plus à toucher ; sur un échec elle garde sa liste et peut réessayer.
+ */
+async function adoptChosenStore() {
+  const found = chosen.value
+  const id = listId.value
+  if (found === null || id === null || switching.value === 'saving') return
+  switching.value = 'saving'
+  try {
+    await saveSettings.mutateAsync({ store: found.store, retailer: found.retailer })
+    driveBridge.clearDraft()
+    await router.replace({
+      name: 'drive-send',
+      params: { listId: id },
+      query: { ouvrir: '1', drive: found.retailer },
+    })
+    store.clear()
+  } catch {
+    switching.value = 'failed'
+  }
+}
+
 onMounted(() => {
+  if (chosen.value !== null) return void adoptChosenStore()
   const current = store.event
   if (current?.kind === 'refused') {
     const draft = driveBridge.loadDraft()
@@ -473,6 +516,27 @@ function confirmReopen() {
       <UiLinkButton variant="secondary" :to="{ name: 'drive-settings' }">
         {{ t('driveReturn.setup.settings') }}
       </UiLinkButton>
+    </section>
+
+    <!-- Le magasin choisi à la place de celui de Repas (DRV-755) : Repas le retient et reprend l'envoi tout seul -->
+    <section
+      v-else-if="chosen !== null"
+      :role="switching === 'failed' ? 'alert' : 'status'"
+      :class="[
+        'flex flex-col items-start gap-3 rounded-2xl px-5 py-4',
+        switching === 'failed' ? 'bg-danger-soft text-on-danger-soft' : 'bg-soft',
+      ]"
+    >
+      <p class="max-w-prose text-lg">
+        {{
+          switching === 'failed'
+            ? t('driveReturn.storeSwitch.failed')
+            : t('driveReturn.storeSwitch.help')
+        }}
+      </p>
+      <UiButton v-if="switching === 'failed'" :disabled="!online" @click="adoptChosenStore">
+        {{ t('driveReturn.storeSwitch.retry') }}
+      </UiButton>
     </section>
 
     <!-- Le résultat d'un envoi : une phrase, une action principale, ce qui existe, puis les détails repliés -->

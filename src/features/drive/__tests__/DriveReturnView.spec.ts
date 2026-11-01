@@ -1587,3 +1587,105 @@ describe('retour du drive : les articles mis au panier sont cochés dans la list
     expect(wrapper.find('main ul').text()).not.toContain('Produit n°')
   })
 })
+
+// DRV-755 : la personne a ouvert un autre magasin que celui de Repas, à l'étape guidée ; l'agent rend un envoi arrêté qui porte ce magasin. Repas le retient, oublie le
+// passage, et reprend l'envoi : l'écran d'envoi rouvre le drive tout seul, avec un plan refait pour ce magasin.
+describe('retour du drive : le magasin que la personne a choisi (DRV-755)', () => {
+  const OTHER = {
+    id: '000456',
+    host: 'fd8-courses.leclercdrive.fr',
+    baseUrl: 'https://fd8-courses.leclercdrive.fr/magasin-000456-000456',
+    label: 'Ville-Test',
+  }
+  const chosenEvent = (chosenStore: typeof OTHER = OTHER) =>
+    ({
+      kind: 'result',
+      draft: sentDraft,
+      result: result({ outcome: 'aborted', lines: [], chosenStore }),
+    }) as DriveEvent
+  const handlers: Handlers = {
+    'PUT /api/v1/drive/settings': noContent,
+    'GET /api/v1/drive/plans/l1': () => json(plan()),
+  }
+  const onSendScreen = (context: Awaited<ReturnType<typeof open>>['context']) =>
+    vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-send'))
+
+  it('enregistre ce magasin par le même appel que la lecture des réglages, oublie le passage, et rouvre l’envoi tout seul pour ce drive', async () => {
+    const { context, fetchMock } = await open(chosenEvent(), handlers)
+    await onSendScreen(context)
+
+    const put = calls(fetchMock).indexOf('PUT /api/v1/drive/settings')
+    expect(put).toBeGreaterThan(-1)
+    expect(await bodyOf(fetchMock, put)).toEqual({
+      retailer: 'leclerc',
+      store: { id: '000456', baseUrl: OTHER.baseUrl, label: 'Ville-Test' },
+    })
+    // Le passage fini n'a rien à enregistrer : aucun choix, aucune coche, et son brouillon est effacé (l'envoi suivant a un autre identifiant)
+    expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
+    expect(calls(fetchMock).some((call) => call.includes('basket-lines'))).toBe(false)
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+    // L'écran d'envoi : « ouvrir » (un geste de moins) et le drive du passage
+    expect(context.router.currentRoute.value.params.listId).toBe('l1')
+    expect(context.router.currentRoute.value.query).toMatchObject({ ouvrir: '1', drive: 'leclerc' })
+    expect(useDriveReturnStore().event).toBeNull()
+  })
+
+  it('pendant l’enregistrement, l’écran dit ce qui se passe : « Je retiens ton magasin », sans bouton', async () => {
+    let release: () => void = () => undefined
+    const slow = new Promise<void>((resolve) => (release = resolve))
+    const { wrapper } = await open(chosenEvent(), {
+      ...handlers,
+      'PUT /api/v1/drive/settings': async () => {
+        await slow
+        return noContent()
+      },
+    })
+
+    expect(wrapper.find('h1').text()).toBe('Je retiens ton magasin')
+    expect(wrapper.find('main [role="status"] p').text()).toBe(
+      'Je reprends ton envoi dans un instant. Ta liste est gardée.',
+    )
+    expect(wrapper.find('main [role="status"] button').exists()).toBe(false)
+    release()
+  })
+
+  it('l’enregistrement échoue : la liste est gardée, le passage aussi, et la personne peut réessayer', async () => {
+    let attempts = 0
+    const { wrapper, context } = await open(chosenEvent(), {
+      ...handlers,
+      'PUT /api/v1/drive/settings': () =>
+        ++attempts === 1 ? failure(500, 'Erreur')() : noContent(),
+    })
+    await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
+
+    expect(wrapper.find('[role="alert"]').text()).toContain('Ta liste est gardée')
+    expect(context.router.currentRoute.value.name).toBe('drive-return')
+    expect(localStorage.getItem(DRAFT_KEY)).not.toBeNull()
+
+    await press('Réessayer')
+    await onSendScreen(context)
+    expect(attempts).toBe(2)
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+  })
+
+  it('un magasin qu’on ne peut pas croire (adresse d’un autre numéro) : un envoi arrêté comme avant, rien n’est écrit', async () => {
+    const forged = {
+      ...OTHER,
+      baseUrl: 'https://fd8-courses.leclercdrive.fr/magasin-999111-999111',
+    }
+    const { wrapper, context, fetchMock } = await open(chosenEvent(forged), handlers)
+    await saved(wrapper)
+
+    expect(wrapper.find('h1').text()).toBe('Tu as arrêté l’envoi')
+    expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/settings')
+    expect(context.router.currentRoute.value.name).toBe('drive-return')
+  })
+
+  it('un envoi arrêté sans magasin choisi : rien ne change (« Tu as arrêté l’envoi »)', async () => {
+    const { wrapper, fetchMock } = await open(outcomeOf([], 'aborted'), handlers)
+    await saved(wrapper)
+
+    expect(wrapper.find('h1').text()).toBe('Tu as arrêté l’envoi')
+    expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/settings')
+  })
+})
