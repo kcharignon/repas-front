@@ -64,6 +64,8 @@ class StorePathMemory(private val store: StorePathStore, val site: RetailerSite 
             val path = afterScheme.substring(afterScheme.indexOf('/')).substringBefore('?').substringBefore('#')
             val segment = "/" + path.removePrefix("/").substringBefore('/')
             val match = pages.homeSegment.matchEntire(segment) ?: return null
+            // L'accueil retenu doit lui-même être une page de magasin : sur un hôte du serveur, seule la version mobile compte (DRV-754), jamais une page de l'ancien site
+            if (!site.isStorePage("https://$host$segment")) return null
             return Entry(host, match.groupValues[1], match.groupValues[2], segment)
         }
     }

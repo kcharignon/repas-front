@@ -32,7 +32,7 @@
 import { parseJson, stringifyJson } from '../primitives'
 import { RetailerError } from '../retailers/errors'
 import { decodeEntities, extractProducts, type RawProduct } from './embedded'
-import { INVISIBLE, visibleText } from './page-text'
+import { fold, INVISIBLE, visibleText } from './page-text'
 import { SITE_STYLE } from './reply-shape'
 import { hostFamily, isMobileHost, type LocationLike } from './store'
 
@@ -104,13 +104,48 @@ const OLD_BASKET_NO = 'non je ne souhaite pas completer mon panier'
  * d'un ancien panier dans la commande, « Non » les écarte, et c'est à la personne de le dire.
  */
 export function asksOldBasketChoice(pageText: string): boolean {
-  const text = visibleText(pageText)
+  // Le texte visible ET les attributs que porte un bouton (`value`, `aria-label`, `title`), sans la ponctuation : « Oui, je souhaite compléter mon panier » est la même question
+  const attributes = [...pageText.replace(INVISIBLE, ' ').matchAll(BUTTON_ATTRIBUTE)].map(
+    (found) => found[1] ?? found[2] ?? '',
+  )
+  const text = [visibleText(pageText), ...attributes.map((one) => fold(decodeEntities(one)))]
+    .join(' ')
+    .replace(/[^a-z0-9' ]+/g, ' ')
+    .replace(/\s+/g, ' ')
   return text.includes(OLD_BASKET_YES) && text.includes(OLD_BASKET_NO)
 }
 
+const BUTTON_ATTRIBUTE = /\b(?:value|aria-label|title)\s*=\s*(?:"([^"]{1,200})"|'([^']{1,200})')/gi
+
 /** La barre basse « Dernière connexion le … » (M6) : un signe que la personne est connectée, jamais seul (voir `session.ts`). */
 export function showsLastLogin(pageText: string): boolean {
-  return visibleText(pageText).includes('derniere connexion le')
+  // La barre est SON élément : le texte d'un élément qui COMMENCE par « Dernière connexion le » (jamais une phrase d'un paragraphe qui la mentionne)
+  for (const node of pageText.replace(INVISIBLE, ' ').matchAll(/>([^<>]{1,120})</g)) {
+    if (fold(node[1] ?? '').startsWith('derniere connexion le')) return true
+  }
+  return false
+}
+
+/** L'hôte du serveur d'un magasin : `fd<N>-courses.leclercdrive.fr`, en minuscules, rien d'autre. */
+const SERVER_HOST = /^fd\d{1,3}-courses\.leclercdrive\.fr$/
+
+/**
+ * Le seul hôte, hors de la page, vers lequel l'agent envoie des requêtes avec la session (M1) : l'origine du serveur du magasin, de la forme `fd<N>-courses.leclercdrive.fr`,
+ * avec le schéma et le port de la PAGE (un faux site de test n'a ni https ni port 443). Jamais un nom voisin, un point final, un port ou un schéma de plus.
+ */
+export function isServerOrigin(
+  origin: string,
+  page: Pick<LocationLike, 'protocol' | 'port'>,
+): boolean {
+  const found = /^(https?):\/\/([^/:?#@\s\\]+)(?::(\d{1,5}))?$/.exec(origin)
+  if (!found) return false
+  const [, scheme, host, port] = found
+  return (
+    `${scheme}:` === (page.protocol ?? 'https:') &&
+    (port ?? '') === (page.port ?? '') &&
+    host !== undefined &&
+    SERVER_HOST.test(host)
+  )
 }
 
 /** Un hôte (`fd8-courses.leclercdrive.fr`) devenu une origine : le schéma et le port de la page, comme le navigateur les voit. */

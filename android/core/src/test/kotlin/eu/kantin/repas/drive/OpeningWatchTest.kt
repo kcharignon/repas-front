@@ -11,8 +11,8 @@ import org.junit.Test
  * une page de magasin pour l'agent : l'attendre est normal, ce n'est pas un problème. Adresses SYNTHÉTIQUES.
  */
 class OpeningWatchTest {
-    private val storePage = "https://courses-test.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx"
-    private val root = "https://courses-test.leclercdrive.fr/"
+    private val storePage = "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx"
+    private val root = "https://m-courses.leclercdrive.fr/"
     private val enseigne = "https://www.leclercdrive.fr/"
 
     /** Une page qui a démarré puis fini de charger, sans erreur du site. */
@@ -41,7 +41,7 @@ class OpeningWatchTest {
     @Test
     fun `une page qui n'est pas celle d'un magasin n'est pas un probleme, mais ne recoit pas le plan`() {
         // La racine de l'hôte du magasin (une page 404 du vrai site), l'accueil de l'enseigne, la connexion : l'utilisateur y choisit son magasin.
-        listOf(root, enseigne, "https://courses-test.leclercdrive.fr/connexion.aspx", "https://courses-test.leclercdrive.fr/autre", null).forEach {
+        listOf(root, enseigne, "https://m-courses.leclercdrive.fr/connexion.aspx", "https://m-courses.leclercdrive.fr/autre", null).forEach {
             val watch = loaded()
             assertEquals(it, PageTrouble.NONE, watch.trouble(it))
             assertFalse(it, watch.canDeliver(it))
@@ -131,6 +131,19 @@ class OpeningWatchTest {
             "https://m-courses.leclercdrive.fr.evil.com/magasin-000000-000000-ville-test",
             "https://m-courses.leclercdrive.fr:8443/magasin-000000-000000-ville-test",
             "http://m-courses.leclercdrive.fr/magasin-000000-000000-ville-test",
+            // DRV-754 : une page du serveur qui n'est pas de la version mobile (plan du site, pied de page) ne reçoit pas le plan ; ni un autre nom que les quatre
+            "https://fd8-courses.leclercdrive.fr/magasin-000000-000000-ville-test/plan-du-site",
+            "https://fd8-courses.leclercdrive.fr/magasin-000000-000000-ville-test",
+            "https://fd8-courses.leclercdrive.fr/magasin-000000-000000-ville-test/detail-panier.aspx",
+            "https://fd8-courses.leclercdrive.fr.attaquant.fr/magasin-000000-000000-ville-test/mobile-detail-panier.aspx",
+            "https://evil-fd8-courses.leclercdrive.fr/magasin-000000-000000-ville-test/mobile-detail-panier.aspx",
+            "https://fd8-courses.leclercdrive.fr:8443/magasin-000000-000000-ville-test/mobile-detail-panier.aspx",
+            "https://fd8-photos.leclercdrive.fr/magasin-000000-000000-ville-test/mobile-detail-panier.aspx",
+            "https://fdx-courses.leclercdrive.fr/magasin-000000-000000-ville-test/mobile-detail-panier.aspx",
+            "https://m-courses2.leclercdrive.fr/magasin-000000-000000-ville-test",
+            "https://m.leclercdrive.fr/magasin-000000-000000-ville-test",
+            "https://m-autre.leclercdrive.fr/magasin-000000-000000-ville-test",
+            "https://www.leclercdrive.fr/magasin-000000-000000-ville-test",
         ).forEach { assertFalse(it, watch.canDeliver(it)) }
         // La racine de m-courses n'est pas une page de magasin
         assertFalse(watch.canDeliver("https://m-courses.leclercdrive.fr/"))

@@ -25,7 +25,7 @@ class DrivePassTest {
     private var now = 1_000_000L
 
     private fun plan(id: String = runId): DrivePlan {
-        val json = JSONObject(File("src/test/resources/plan-complet.json").readText()).put("runId", id)
+        val json = ReferencePlans.json().put("runId", id)
         return DrivePlan.parse(json)!!
     }
 
@@ -268,7 +268,7 @@ class DrivePassTest {
     private fun setup(id: String = runId) = SetupRequest.of(id)!!
 
     private fun setupResult(id: String = runId) =
-        """{"v":1,"type":"setup-result","runId":"$id","agentVersion":"0.6.0","store":{"id":"000000","host":"courses-test.leclercdrive.fr","baseUrl":"https://courses-test.leclercdrive.fr/magasin-000000-000000","label":null}}"""
+        """{"v":1,"type":"setup-result","runId":"$id","agentVersion":"0.6.0","store":{"id":"000000","host":"fd9-courses.leclercdrive.fr","baseUrl":"https://fd9-courses.leclercdrive.fr/magasin-000000-000000","label":null}}"""
 
     @Test
     fun `une lecture du magasin est un passage comme un autre, un seul a la fois dans les deux sens`() {

@@ -74,14 +74,12 @@ describe('readStorePaths', () => {
 })
 
 describe('la version mobile de Leclerc (DRV-754)', () => {
-  it.each([
-    ['m-courses.leclercdrive.fr'],
-    ['M-COURSES.LECLERCDRIVE.FR'],
-    ['m-autre.leclercdrive.fr'],
-    ['m.leclercdrive.fr'],
-  ])('%s est un site mobile', (host) => {
-    expect(isMobileHost(host)).toBe(true)
-  })
+  it.each([['m-courses.leclercdrive.fr'], ['M-COURSES.LECLERCDRIVE.FR']])(
+    '%s est un site mobile',
+    (host) => {
+      expect(isMobileHost(host)).toBe(true)
+    },
+  )
 
   it.each([
     ['fd0-courses.leclercdrive.fr'],
@@ -89,6 +87,10 @@ describe('la version mobile de Leclerc (DRV-754)', () => {
     ['courses-test.leclercdrive.fr'],
     ['www.leclercdrive.fr'],
     ['mm-courses.leclercdrive.fr'],
+    ['m-courses2.leclercdrive.fr'],
+    ['m-autre.leclercdrive.fr'],
+    ['m.leclercdrive.fr'],
+    ['m-courses.leclercdrive.fr.attaquant.fr'],
     ['xm-courses.leclercdrive.fr'],
     ['mobile-courses.leclercdrive.fr.exemple.invalid'],
     ['m-courses.exemple.invalid'],

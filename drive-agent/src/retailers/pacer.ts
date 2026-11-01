@@ -90,6 +90,11 @@ export interface PacerDeps {
    * (certains tests) aucune requête n'expire et aucun signal d'interruption n'est posé.
    */
   timer?: (ms: number, fire: () => void) => () => void
+  /**
+   * DRV-754 : l'origine (`https://hôte`) vers laquelle l'adaptateur peut envoyer UNE requête hors de l'hôte de la page, jugée par l'ENSEIGNE (son motif d'hôte, le schéma et le
+   * port de la page). Absent : aucune requête ne part ailleurs que vers l'hôte de la page.
+   */
+  allowsOrigin?: (origin: string) => boolean
 }
 
 /**
@@ -104,8 +109,12 @@ export function isChallenge(text: string): boolean {
  * Une adresse de l'hôte courant : un chemin qui commence par un seul `/`, jamais `//hôte` ni `https://…`. Un navigateur lit « \ » comme
  * « / » et ignore les tabulations et retours à la ligne d'une adresse : `/\hôte` et `/<tabulation>/hôte` sont donc refusés aussi.
  */
-function assertSameHost(url: string, origin?: string): void {
-  if (origin !== undefined) return assertOrigin(url, origin)
+function assertSameHost(
+  url: string,
+  origin?: string,
+  allowsOrigin?: (origin: string) => boolean,
+): void {
+  if (origin !== undefined) return assertOrigin(url, origin, allowsOrigin)
   const seen = url.replace(/[\t\n\r]/g, '')
   if (!url.startsWith('/') || !/^\/(?![/\\])/.test(seen)) {
     throw new Error('Une requête ne part que vers l’hôte de la page.')
@@ -117,10 +126,17 @@ function assertSameHost(url: string, origin?: string): void {
  * son serveur sur un autre, comme son application le fait elle-même) : `origin` est `https://hôte` (le schéma et le port de la page, qui sont ceux de la page ; `http` et un port seulement pour un faux site de test), sans identifiant ni chemin, et l'adresse est cet
  * hôte suivi d'un chemin sans `//`, sans barre oblique inverse, sans espace. Jamais un autre hôte que celui que l'adaptateur a vérifié.
  */
-function assertOrigin(url: string, origin: string): void {
+function assertOrigin(
+  url: string,
+  origin: string,
+  allowsOrigin: ((origin: string) => boolean) | undefined,
+): void {
   const rest = url.startsWith(`${origin}/`) ? url.slice(origin.length) : ''
   if (
+    // Aucun autre hôte que celui que l'adaptateur de l'enseigne reconnaît lui-même (`PacerDeps.allowsOrigin`) : sans lui, aucune requête ne quitte l'hôte de la page
+    allowsOrigin === undefined ||
     !/^https?:\/\/[a-z0-9]([a-z0-9.-]{0,60}[a-z0-9])?(:\d{1,5})?$/.test(origin) ||
+    !allowsOrigin(origin) ||
     !/^\/(?![/\\])[^\s\\@]*$/.test(rest)
   ) {
     throw new Error('Une requête ne part que vers l’hôte de la page ou son serveur.')
@@ -225,7 +241,7 @@ export class Pacer {
   }
 
   private async send(url: string, init: RequestInit, origin?: string): Promise<Reply> {
-    assertSameHost(url, origin)
+    assertSameHost(url, origin, this.deps.allowsOrigin)
     let networkRetried = false
     for (;;) {
       if (this.stopped) throw new RetailerError('BLOCKED')

@@ -129,8 +129,10 @@ function lightLines(cart: Cart, asText: boolean): Record<string, unknown>[] {
 const HEAD = '<meta charset="utf-8">'
 
 /** Ce que la page montre de la connexion : un client connecté ou un visiteur (ticket G). Libellés inventés, plausibles, jamais mesurés. */
-export type Session = 'member' | 'visitor'
+export type Session = 'member' | 'visitor' | 'unknown'
 const NAV: Record<Session, string> = {
+  // Une page qui ne dit RIEN de la connexion (ni « Se déconnecter », ni « Se connecter ») : l'état de session est inconnu (DRV-754)
+  unknown: '<nav><a href="./">Accueil</a> <a href="panier.aspx">Panier</a></nav>',
   member:
     '<nav><a href="./">Accueil</a> <a href="panier.aspx">Panier</a> <a href="compte.aspx">Mon compte</a> <a href="deconnexion.aspx">Se déconnecter</a></nav>',
   visitor:

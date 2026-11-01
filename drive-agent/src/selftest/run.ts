@@ -221,6 +221,14 @@ export async function runSelftest(deps: RunDeps, hooks: Hooks): Promise<Selftest
     }
     const begun = now()
     try {
+      // Une enseigne qui exige la preuve de la connexion (DRV-754) : aucun article n'est mis au panier sans elle (retirer ses propres articles reste permis)
+      if (
+        quantity > 0 &&
+        adapter.requiresConfirmedLogin === true &&
+        adapter.readSession().state !== 'MEMBER'
+      ) {
+        throw new RetailerError('NOT_LOGGED_IN', null, 'SESSION_VISITOR')
+      }
       const result: CartResult = await adapter.setCartQuantity(id, quantity)
       return {
         wanted: quantity,

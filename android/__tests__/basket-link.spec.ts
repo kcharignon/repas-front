@@ -20,9 +20,9 @@ const source = (name: string) => readFileSync(kotlinFiles.find((file) => file.na
 
 describe('le lien « Finaliser sur Leclerc », des deux côtés', () => {
   it('le front ne fait que le lien du magasin, l’application ne l’ouvre que si c’est cette forme', () => {
-    const link = finalizeLink('https://courses-test.leclercdrive.fr/magasin-000000-000000-Ville-Test/x', true)
+    const link = finalizeLink('https://fd9-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/x', true)
 
-    expect(link).toBe('https://courses-test.leclercdrive.fr/magasin-000000-000000')
+    expect(link).toBe('https://fd9-courses.leclercdrive.fr/magasin-000000-000000')
     // La forme du lien est celle de l'entrée de l'enseigne au registre (DRV-706) ; DriveEntry la lit chez l'enseigne du lien, il ne l'écrit pas.
     expect(source('RetailerSites.kt')).toContain('frontLink = Regex("^/magasin-([0-9]{1,12})-([0-9]{1,12})$")')
     expect(source('DriveEntry.kt')).toContain('pages.frontLink')

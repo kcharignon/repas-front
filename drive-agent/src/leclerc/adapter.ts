@@ -13,6 +13,7 @@ import {
   cartReadRequest,
   cartWriteRequest,
   describeSearchForm,
+  isServerOrigin,
   originOf,
   readMobileSearch,
   readServerHost,
@@ -448,10 +449,15 @@ export class LeclercAdapter implements RetailerAdapter {
 
   constructor(deps: LeclercDeps) {
     this.deps = deps
-    this.pacer = new Pacer(deps.fetch, deps)
+    // Une requête hors de l'hôte de la page ne part que vers le serveur du magasin (`fd<N>-courses`), jugé ICI par l'enseigne
+    this.pacer = new Pacer(deps.fetch, {
+      ...deps,
+      allowsOrigin: (origin) => isServerOrigin(origin, deps.location),
+    })
     this.mobile = usesMobileProtocol(deps.location)
+    // La PREUVE de la connexion avant toute écriture, sur TOUT adaptateur de Leclerc (DRV-754) : un état de session inconnu n'écrit jamais dans un panier anonyme
+    this.requiresConfirmedLogin = true
     if (this.mobile) {
-      this.requiresConfirmedLogin = true
       this.keepClearOfConsent = true
       this.probeCart = () => this.probeMobileCart()
       this.lastCartFailure = () => this.failure
@@ -587,6 +593,10 @@ export class LeclercAdapter implements RetailerAdapter {
   ): Promise<CartResult> {
     if (this.oldBasketAsked())
       throw new RetailerError('UNSUPPORTED_PAGE', null, 'BASKET_MERGE_ASKED')
+    // La session est relue (le DOM seul) AVANT CHAQUE écriture : un client devenu visiteur en cours de passage n'écrit plus rien (ticket G)
+    if (this.readSession().state !== 'MEMBER') {
+      throw new RetailerError('NOT_LOGGED_IN', null, 'SESSION_VISITOR')
+    }
     const target = await this.mobileTarget()
     const { url, init } = cartWriteRequest(target.base, target.cartPath, {
       productId,
@@ -603,7 +613,9 @@ export class LeclercAdapter implements RetailerAdapter {
     } catch (error) {
       this.failure = shape
       if (error instanceof RetailerError) {
-        if (this.oldBasketAsked()) {
+        // Seule une écriture sans effet ou une réponse de forme inattendue se dit « attend ton choix » : jamais une session perdue ni un blocage
+        const unchanged = error.code === 'CONTRACT_CHANGED' || error.code === 'NETWORK'
+        if (unchanged && this.oldBasketAsked()) {
           throw new RetailerError(
             'UNSUPPORTED_PAGE',
             reply.status,

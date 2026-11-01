@@ -213,6 +213,8 @@ export interface Behavior {
    * PERSONNE valide (DRV-751) : il pose le cookie de connexion et la ramène à l'accueil du magasin, dont les pages montrent alors un client connecté.
    */
   loginForm?: boolean
+  /** Les pages du magasin ne disent rien de la connexion : ni « Se déconnecter » ni « Se connecter » (DRV-754 : l'agent n'écrit alors rien dans le panier). */
+  unknownSession?: boolean
   /** Le mur de cookies plein écran de l'accueil national de la forme `homeForm: 'first-use'` (DRV-753), tant que la personne n'a pas répondu. */
   cookieWall?: boolean | 'tall' | 'banner'
   /**
@@ -499,6 +501,7 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
 
   /** La page d'un visiteur une fois `visitorAfter` requêtes terminées ; `finished` : combien l'ont été avant la page servie. */
   function sessionAfter(finished: number): Session {
+    if (behavior.unknownSession === true) return 'unknown'
     if (behavior.loginForm === true && cookieMember) return 'member'
     const after = behavior.visitorAfter
     return after !== undefined && after !== null && finished >= after ? 'visitor' : 'member'

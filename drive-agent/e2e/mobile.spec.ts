@@ -337,3 +337,79 @@ test('« Arrêter pour l’instant » pendant le choix du magasin : rien n’est
     expect(fake.paced()).toEqual([])
   })
 })
+
+const TWO_LINES = [
+  known('farine', 'Farine', [product(1000001, 3)]),
+  known('sucre', 'Sucre', [product(1000006, 1)]),
+]
+
+test('un client devenu visiteur EN COURS de passage : la session est relue avant chaque écriture, aucune ligne suivante n’est écrite, jamais « Panier rempli »', async ({
+  page,
+  agentCode,
+}) => {
+  await withMobile(SESSION, async (fake) => {
+    // Given : connecté ; la première ligne s'écrit
+    await openWithFragment(page, fake, agentCode, PLAN(...TWO_LINES), {
+      path: MOBILE_PAGE_PATH,
+      origin: fake.mobileOrigins.courses,
+    })
+    await expect.poll(() => fake.cart()[1000001]).toBe(3)
+
+    // When : la page se met à jour (comme le ferait l'application Angular) : la barre disparaît, le menu « Connexion / Inscription » revient
+    await page.evaluate(() => {
+      document.getElementById('last-login')?.remove()
+      const item = document.createElement('li')
+      item.textContent = 'Connexion / Inscription'
+      document.getElementById('menu-list')?.append(item)
+    })
+
+    // Then : la ligne suivante n'est PAS écrite, le passage s'arrête sur « Tu n'es pas connecté », jamais sur « Panier rempli »
+    await expect(page.getByText('Connecte-toi à Leclerc')).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText(/Tes produits sont dans ton panier/)).toHaveCount(0)
+    expect(fake.cart()).toEqual({ 1000001: 3 })
+    expect(fake.paced().filter((call) => call.kind === 'cart')).toHaveLength(1)
+    await page.getByRole('button', { name: 'Revenir à ma liste dans Repas' }).click()
+    expect(await returnedResult(page, fake)).toMatchObject({
+      outcome: 'error',
+      error: { code: 'NOT_LOGGED_IN' },
+    })
+  })
+})
+
+test('une page qui ne dit rien de la connexion (la page du panier du serveur) : « Connecte-toi », aucune recherche, aucune écriture', async ({
+  page,
+  agentCode,
+}) => {
+  await withMobile(SESSION, async (fake) => {
+    await openWithFragment(page, fake, agentCode, PLAN(FARINE), {
+      path: '/magasin-000001-000001-Ville-Test/mobile-detail-panier.aspx',
+      origin: fake.mobileOrigins.server,
+    })
+
+    await expect(page.getByRole('heading', { name: 'Connecte-toi' })).toBeVisible({
+      timeout: 15_000,
+    })
+    await page.waitForTimeout(3_000)
+    expect(fake.paced()).toEqual([])
+    expect(fake.cart()).toEqual({})
+  })
+})
+
+test('Leclerc exige la preuve de la connexion sur TOUTE page, y compris celle du site ordinateur : un état inconnu n’écrit rien dans un panier anonyme', async ({
+  page,
+  fake,
+  agentCode,
+}) => {
+  // Given : une page de magasin du site ordinateur dont l'en-tête ne dit ni « Se connecter » ni « Se déconnecter »
+  fake.setBehavior({ unknownSession: true })
+
+  await openWithFragment(page, fake, agentCode, planOf([FARINE]))
+
+  // Then : l'étape « Connecte-toi », rien n'est cherché ni écrit
+  await expect(page.getByRole('heading', { name: 'Connecte-toi' })).toBeVisible()
+  await page.waitForTimeout(3_000)
+  expect(fake.paced()).toEqual([])
+  expect(fake.cart()).toEqual({})
+  await page.getByRole('button', { name: 'Arrêter pour l’instant' }).click()
+  expect(await returnedResult(page, fake)).toMatchObject({ outcome: 'aborted', lines: [] })
+})

@@ -36,9 +36,9 @@ const STORE_PATH = /^\/magasin-([0-9]{1,12})-([0-9]{1,12})(-[^/?#]*)?(?=\/|$)/i
 
 /**
  * Le site mobile de l'enseigne : sur un téléphone Leclerc sert `m-courses.leclercdrive.fr` (DRV-754 : c'est LUI que l'agent sert désormais, par ses propres appels,
- * voir `mobile.ts`). Son premier nom est `m` ou commence par `m-`.
+ * voir `mobile.ts`). Son nom est exactement `m-courses` (les autres `m-…` ne sont pas des sites de l'enseigne reconnus).
  */
-const MOBILE_HOST = /^m(?:-[a-z0-9-]*)?\./i
+const MOBILE_HOST = /^m-courses\./i
 
 /** `fd9` pour `fd9-courses.leclercdrive.fr` (la famille d'hôte, jamais le numéro de magasin), `null` pour tout autre hôte. */
 export function hostFamily(host: string): string | null {

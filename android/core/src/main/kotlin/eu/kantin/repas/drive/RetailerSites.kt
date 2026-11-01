@@ -55,13 +55,15 @@ class RetailerSites(val all: List<RetailerSite>, val legacy: RetailerSite = all.
     companion object {
         /**
          * L'entrée de Leclerc : les valeurs d'avant le multi-enseignes, puis la **version mobile** du site (DRV-754, décision du propriétaire du 2026-11-01 :
-         * le drive ne fonctionne que sur téléphone). On y navigue sur `leclercdrive.fr` et tous ses sous-domaines ; le pont et l'agent n'existent que sur
-         * les sous-domaines (la règle d’origine `*.leclercdrive.fr` en `https`, jamais le domaine nu). Les hôtes de la version mobile y sont déjà :
+         * le drive ne fonctionne que sur téléphone). On y navigue sur `leclercdrive.fr` et tous ses sous-domaines ; le pont, l'agent et le plan n'existent que sur
+         * les QUATRE noms de la version mobile (`SiteHost.bridgeOnlyOn` ; la règle d’origine de la WebView reste `*.leclercdrive.fr` en `https`, jamais le domaine nu, et le
+         * resserrement est fait par les contrôles du cœur à chaque message). Les hôtes de la version mobile :
          * `www` (accueil, choix du magasin), `m-courses` (pages du magasin, `/magasin-N-N-ville` sans `.aspx`), `fd<N>-espace-client` (connexion, création
          * de compte et compte, `/drive/magasin-N-N-Ville/…`) et `fd<N>-courses` (AJAX de la page, page du panier rendue par le serveur, `store.host` d'un plan).
          * Un magasin a une adresse `https://<sous-domaine>.leclercdrive.fr/magasin-N-N[-Ville]/…`, Leclerc exige un magasin choisi avant la connexion. La WebView
          * garde son identité de téléphone : plus de mode ordinateur imposé, plus de site mobile à refuser. Un lien « Finaliser » (`fd<N>-courses`) et la page
-         * retenue (`m-courses`) désignent le même magasin par ses deux numéros ([StorePages.sameStoreOnAnyHost]).
+         * retenue (`m-courses`) désignent le même magasin par ses deux numéros ([StorePages.sameStoreOnAnyHost]). Sur `fd<N>-courses`, seules les pages `mobile-….aspx` sont des pages de magasin
+         * ([StorePages.pagesOnHosts]) : un lien de pied de page ou `plan-du-site` ne reçoit pas le plan.
          */
         private val LECLERC = RetailerSite(
             id = "leclerc",
@@ -71,15 +73,33 @@ class RetailerSites(val all: List<RetailerSite>, val legacy: RetailerSite = all.
             siteMode = SiteMode.MOBILE,
             hosts = listOf(
                 SiteHost(HostPattern.exact("leclercdrive.fr"), bridge = false),
-                SiteHost(HostPattern.subdomainsOf("leclercdrive.fr"), bridge = true),
+                // Navigation sur tous les sous-domaines (images, ressources) ; le pont, l'agent et le plan seulement sur les quatre noms de la version mobile
+                // (la règle d'origine de la WebView reste `https://*.leclercdrive.fr`, le resserrement est fait par les contrôles du cœur)
+                SiteHost(
+                    HostPattern.subdomainsOf("leclercdrive.fr"),
+                    bridge = true,
+                    bridgeOnlyOn = Regex("(www|m-courses|fd[0-9]{1,3}-courses|fd[0-9]{1,3}-espace-client)\\.leclercdrive\\.fr"),
+                ),
             ),
-            storeHost = Regex("[a-z0-9-]+\\.leclercdrive\\.fr"),
+            // L'hôte d'un magasin dans un plan : le serveur `fd<N>-courses`
+            storeHost = Regex("fd[0-9]{1,3}-courses\\.leclercdrive\\.fr"),
             storeIdPattern = Regex("[0-9]{1,12}"),
             storePages = StorePages(
                 pagePath = Regex("^/magasin-[0-9]{1,12}-[0-9]{1,12}(-[^/]*)?(/|$)", RegexOption.IGNORE_CASE),
                 homeSegment = Regex("^/magasin-([0-9]{1,12})-([0-9]{1,12})-[^/?#\\s\\\\<>\"'\\u0000-\\u001f]+$"),
                 frontLink = Regex("^/magasin-([0-9]{1,12})-([0-9]{1,12})$"),
                 sameStoreOnAnyHost = true,
+                // `m-courses` : toute page du magasin ; `fd<N>-courses` : seulement les pages `mobile-….aspx` (le panier de la version mobile) ; aucune autre page (ni `www`) n'en est une
+                pagesOnHosts = listOf(
+                    PagesOnHost(
+                        host = Regex("m-courses\\.leclercdrive\\.fr"),
+                        path = Regex("^/magasin-[0-9]{1,12}-[0-9]{1,12}(-[^/]*)?(/.*)?$", RegexOption.IGNORE_CASE),
+                    ),
+                    PagesOnHost(
+                        host = Regex("fd[0-9]{1,3}-courses\\.leclercdrive\\.fr"),
+                        path = Regex("^/magasin-[0-9]{1,12}-[0-9]{1,12}(-[^/]*)?/mobile-[^/]+\\.aspx$", RegexOption.IGNORE_CASE),
+                    ),
+                ),
             ),
             // Connexion et création de compte, hors magasin : `/connexion(.aspx)` d'avant, et `/drive/magasin-N-N[-Ville]/authentification.aspx` ou `creation-compte-ccc.aspx`
             // de `fd<N>-espace-client` (DRV-754 : le menu « Connexion / Inscription » de la version mobile ouvre d'abord la création de compte). Jamais `home-espace-client-ccc.aspx`

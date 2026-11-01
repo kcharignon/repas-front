@@ -113,6 +113,7 @@ const LOGIN_PAGE =
   /^(?:\/connexion(?:\.aspx)?(?:\/|$)|\/drive\/magasin-\d+-\d+(?:-[^/]*)?\/(?:authentification|creation-compte-ccc)\.aspx$)/i
 
 /**
+ * ATTENTION : ce modèle est PLUS LARGE que l'application réelle (DRV-754) : celle-ci ne livre le plan qu'aux pages de `m-courses`, aux pages `mobile-….aspx` de `fd<N>-courses`, à `www` et à la connexion de `fd<N>-espace-client` ; il garde l'hôte du faux site ordinateur (`courses-test`) pour ses anciens scénarios, qui n'ont plus de route de production.
  * Où l'application Android livre le plan à l'agent (`RetailerSite.acceptsPlanOn`, DRV-753) : une page de magasin, l'accueil de l'enseigne (la racine de `HOME_HOST`) et la page
  * de connexion hors d'un magasin SEULEMENT quand un magasin a déjà été ouvert (`StorePathMemory.hasPath`) ; jamais une autre page.
  */

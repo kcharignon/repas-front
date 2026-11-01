@@ -224,7 +224,9 @@ class SetupAddressTest {
 
         assertEquals(StoreBanner.NONE, StoreBanner.of(setup, mobile, loading = true))
         assertEquals(StoreBanner.NONE, StoreBanner.of(setup, mobile, loading = false))
-        assertEquals(StoreBanner.NONE, StoreBanner.of(setup, sameStore, loading = false))
+        // Une page de l'ancien site sur le serveur `fd<N>-courses` n'est pas une page de magasin : l'agent n'y lit rien, le bandeau de la lecture reste
+        assertEquals(StoreBanner.SETUP, StoreBanner.of(setup, sameStore, loading = false))
+        assertFalse(OpeningWatch().canDeliver(setup, sameStore))
         assertTrue(OpeningWatch().canDeliver(setup, mobile))
     }
 
@@ -276,6 +278,7 @@ class SetupAddressTest {
         // Leclerc : la page m-courses donnée est elle-même une page de magasin (DRV-754)
         val leclerc = parse(mobile)!!
         assertTrue(watch.canDeliver(leclerc, mobile))
-        assertTrue(watch.canDeliver(leclerc, sameStore))
+        assertFalse("une page de l'ancien site du serveur n'est pas une page de magasin", watch.canDeliver(leclerc, sameStore))
+        assertTrue(watch.canDeliver(leclerc, "https://fd9-courses.leclercdrive.fr/magasin-123456-123456-ville-test/mobile-detail-panier.aspx"))
     }
 }

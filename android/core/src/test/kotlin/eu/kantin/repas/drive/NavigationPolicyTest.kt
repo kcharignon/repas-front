@@ -20,7 +20,7 @@ class NavigationPolicyTest {
             "https://leclercdrive.fr",
             "https://leclercdrive.fr/",
             "https://www.leclercdrive.fr/",
-            "https://courses-test.leclercdrive.fr/magasin-000000-Ville-Test/accueil.aspx",
+            "https://m-courses.leclercdrive.fr/magasin-000000-Ville-Test/accueil.aspx",
             "https://a.b.c.leclercdrive.fr/recherche.aspx?TexteRecherche=farine#haut",
             "https://magasin.leclercdrive.fr?x=1",
             "https://magasin.leclercdrive.fr#ancre",
@@ -114,13 +114,13 @@ class NavigationPolicyTest {
         listOf(
             "https://www.leclercdrive.fr/connexion.aspx",
             "https://www.leclercdrive.fr//",
-            "https://courses-test.leclercdrive.fr/",
+            "https://m-courses.leclercdrive.fr/",
             "https://m-courses.leclercdrive.fr/",
             "https://leclercdrive.fr/",
             "https://www.leclercdrive.fr.evil.com/",
             "https://user:pass@www.leclercdrive.fr/",
             "http://www.leclercdrive.fr/",
-            "https://courses-test.leclercdrive.fr/magasin-000000-000000-Ville-Test/",
+            "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/",
             "",
         ).forEach { assertFalse(it, NavigationPolicy.isHomePage(it)) }
         assertFalse(NavigationPolicy.isHomePage(null))
@@ -198,13 +198,27 @@ class NavigationPolicyTest {
     @Test
     fun `une page de magasin se reconnait a son chemin (DRV-320), l'accueil et la connexion non`() {
         val stores = listOf(
+            "https://m-courses.leclercdrive.fr/magasin-123456-123456/accueil.aspx",
+            "https://m-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/recherche.aspx?TexteRecherche=farine#haut",
+            "https://m-courses.leclercdrive.fr/magasin-123456-123456",
+            "https://m-courses.leclercdrive.fr/magasin-123456-123456?x=1",
+            "https://m-courses.leclercdrive.fr/MAGASIN-000001-000001-Ville-Test/",
+            // Sur le serveur, seules les pages `mobile-….aspx` (DRV-754)
+            "https://fd0-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/mobile-detail-panier.aspx",
+        )
+        val others = listOf(
+            // Une page du serveur qui n'est pas de la version mobile (plan du site, pied de page, ancien site) ne reçoit jamais le plan (DRV-754)
             "https://fd0-courses.leclercdrive.fr/magasin-123456-123456/accueil.aspx",
             "https://fd0-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/recherche.aspx?TexteRecherche=farine#haut",
             "https://fd0-courses.leclercdrive.fr/magasin-123456-123456",
-            "https://fd0-courses.leclercdrive.fr/magasin-123456-123456?x=1",
+            "https://fd8-courses.leclercdrive.fr/magasin-123456-123456-ville/plan-du-site",
+            "https://fd8-courses.leclercdrive.fr/magasin-123456-123456-ville/mobile-detail-panier.aspx/autre",
+            "https://fd8-courses.leclercdrive.fr/magasin-123456-123456-ville/x/mobile-detail-panier.aspx",
+            "https://fd8-courses.leclercdrive.fr/magasin-123456-123456-ville/detail-panier.aspx",
+            // Ni `www` ni un autre nom de la famille
             "https://www.leclercdrive.fr/MAGASIN-000001-000001-Ville-Test/",
-        )
-        val others = listOf(
+            "https://fd8-espace-client.leclercdrive.fr/magasin-123456-123456-ville/mobile-detail-panier.aspx",
+            "https://courses-test.leclercdrive.fr/magasin-123456-123456-ville",
             "https://www.leclercdrive.fr/",
             "https://www.leclercdrive.fr",
             "https://www.leclercdrive.fr/connexion.aspx",
@@ -240,7 +254,7 @@ class NavigationPolicyTest {
             "https://www.leclercdrive.fr/connexion/",
             "https://www.leclercdrive.fr/connexion.aspx",
             "https://www.leclercdrive.fr/Connexion.aspx?retour=%2F#haut",
-            "https://courses-test.leclercdrive.fr/connexion.aspx",
+            "https://m-courses.leclercdrive.fr/connexion.aspx",
             "https://m-courses.leclercdrive.fr/connexion.aspx",
             "https://fd8-espace-client.leclercdrive.fr/drive/magasin-123456-123456-Ville-Test/authentification.aspx?s=600&x=1",
             "https://fd8-espace-client.leclercdrive.fr/drive/magasin-123456-123456-ville-test/authentification.aspx",
@@ -255,7 +269,7 @@ class NavigationPolicyTest {
             "https://www.leclercdrive.fr/mon-compte/connexion.aspx",
             "https://www.leclercdrive.fr/deconnexion.aspx",
             // Sous le chemin d'un magasin, un magasin est ouvert : c'est une page de magasin, pas ce cas.
-            "https://courses-test.leclercdrive.fr/magasin-000000-000000-Ville-Test/connexion.aspx",
+            "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/connexion.aspx",
             "https://fd8-espace-client.leclercdrive.fr/drive/magasin-123456-123456-Ville-Test/home-espace-client-ccc.aspx",
             "https://fd8-espace-client.leclercdrive.fr/drive/magasin-123456-123456-Ville-Test/mon-compte.aspx",
             "https://fd8-espace-client.leclercdrive.fr/drive/magasin-123456-123456-Ville-Test/authentification.aspx.evil",
@@ -307,6 +321,39 @@ class NavigationPolicyTest {
             "https://fd8-courses.leclercdrive.fr@evil.test/",
         )
         others.forEach { assertTrue("ne reste pas dans l'application : $it", NavigationPolicy.decide(leclerc, it) != Decision.ALLOW) }
+        // DRV-754 : on NAVIGUE sur tout `*.leclercdrive.fr` (images, ressources), mais le pont, l'agent et le plan ne sont que sur la famille des quatre noms
+        val navigateOnly = listOf(
+            "https://m-courses2.leclercdrive.fr/",
+            "https://fdx-courses.leclercdrive.fr/",
+            "https://fd-courses.leclercdrive.fr/",
+            "https://fd1234-courses.leclercdrive.fr/",
+            "https://fd8-photos.leclercdrive.fr/image.ashx",
+            "https://fd8-courses2.leclercdrive.fr/",
+            "https://m.leclercdrive.fr/",
+            "https://m-autre.leclercdrive.fr/",
+            "https://evil-fd8-courses.leclercdrive.fr/",
+            "https://fd8-courses.sous.leclercdrive.fr/",
+            "https://courses-test.leclercdrive.fr/",
+            "https://leclercdrive.fr/",
+        )
+        navigateOnly.forEach {
+            assertEquals(it, Decision.ALLOW, NavigationPolicy.decide(leclerc, it))
+            assertFalse("pas de pont : $it", leclerc.isBridgePage(it))
+            assertFalse("pas d'origine du pont : $it", leclerc.isBridgeOrigin("https://" + NavigationPolicy.httpsHostOf(it)))
+            assertFalse("aucun plan : $it", leclerc.acceptsPlanOn(it, entersStore = true, storeKnown = true))
+            assertFalse("pas un hôte de plan : $it", leclerc.isStoreHost(NavigationPolicy.httpsHostOf(it)))
+        }
+        // Majuscules, point final, port : jamais un hôte de plan ; jamais le pont d'un autre nom
+        listOf("FD8-COURSES.LECLERCDRIVE.FR", "fd8-courses.leclercdrive.fr.", "fd8-courses.leclercdrive.fr:8443", "fd8-courses.leclercdrive.fr:443", "fd8-courses.leclercdrive.fr.attaquant.fr").forEach {
+            assertFalse(it, leclerc.isStoreHost(it))
+        }
+        assertTrue(leclerc.isStoreHost("fd8-courses.leclercdrive.fr"))
+        assertFalse("l'hôte d'un plan est celui du serveur", leclerc.isStoreHost("m-courses.leclercdrive.fr"))
+        assertFalse(leclerc.isStoreHost("www.leclercdrive.fr"))
+        assertFalse(leclerc.isStoreHost("fd8-espace-client.leclercdrive.fr"))
+        listOf("https://fd8-photos.leclercdrive.fr", "https://m-courses2.leclercdrive.fr", "https://m.leclercdrive.fr", "https://fdx-courses.leclercdrive.fr").forEach {
+            assertFalse(it, leclerc.isBridgeOrigin(it))
+        }
         // Un nom en majuscules est lu en minuscules (le même site) ; le pont ne s'ouvre que sur l'origine exacte
         assertTrue(leclerc.isBridgeOrigin("https://m-courses.leclercdrive.fr"))
         assertTrue(leclerc.isBridgeOrigin("https://fd8-espace-client.leclercdrive.fr"))
@@ -317,7 +364,10 @@ class NavigationPolicyTest {
         assertEquals(SiteMode.MOBILE, leclerc.siteMode)
     }
 
-    /** DRV-754 : une page de `m-courses` ou de `fd<N>-courses` dont le chemin est un magasin (sans `.aspx`, ville en minuscules ou en majuscules, panier mobile) est une page de magasin. */
+    /**
+     * DRV-754 : une page de `m-courses` dont le chemin est un magasin (sans `.aspx`, ville en minuscules ou en majuscules) est une page de magasin ; sur le serveur
+     * `fd<N>-courses`, seules les pages `mobile-….aspx` le sont (le panier de la version mobile), jamais un lien de pied de page ni `plan-du-site`.
+     */
     @Test
     fun `les pages de magasin de la version mobile sont des pages de magasin, la connexion et le compte n'en sont pas`() {
         val stores = listOf(
@@ -326,7 +376,7 @@ class NavigationPolicyTest {
             "https://m-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test",
             "https://fd8-courses.leclercdrive.fr/magasin-123456-123456-ville-test/mobile-detail-panier.aspx?sProvenance=SM",
             "https://fd8-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/mobile-detail-panier.aspx",
-            "https://fd9-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/recherche.aspx",
+            "https://fd8-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/Mobile-Detail-Panier.aspx",
         )
         val notStores = listOf(
             "https://www.leclercdrive.fr/",
@@ -336,6 +386,9 @@ class NavigationPolicyTest {
             "https://fd8-espace-client.leclercdrive.fr/drive/magasin-123456-123456-Ville-Test/home-espace-client-ccc.aspx",
             "https://m-courses.leclercdrive.fr/",
             "https://m-courses.leclercdrive.fr/autre-page",
+            "https://fd8-courses.leclercdrive.fr/magasin-123456-123456-ville-test",
+            "https://fd8-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/plan-du-site",
+            "https://fd8-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/recherche.aspx",
         )
         stores.forEach { assertTrue("devrait être une page de magasin : $it", NavigationPolicy.isStorePage(it)) }
         notStores.forEach { assertFalse("ne devrait pas être une page de magasin : $it", NavigationPolicy.isStorePage(it)) }
@@ -385,9 +438,9 @@ class NavigationPolicyTest {
     fun `de l'accueil de l'enseigne a la page du magasin, chaque etape reste dans l'application`() {
         val steps = listOf(
             NavigationPolicy.START_URL,
-            "https://fd9-courses.leclercdrive.fr/",
-            "https://fd9-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/",
-            "https://fd9-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/accueil.aspx",
+            "https://m-courses.leclercdrive.fr/",
+            "https://m-courses.leclercdrive.fr/magasin-123456-123456-ville-test",
+            "https://fd9-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/mobile-detail-panier.aspx",
         )
 
         steps.forEach {

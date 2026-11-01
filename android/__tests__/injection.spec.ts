@@ -127,7 +127,7 @@ afterEach(async () => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
   window.sessionStorage.clear()
-  document.documentElement.innerHTML = '<head></head><body></body>'
+  document.documentElement.innerHTML = '<head></head><body><a href="/deconnexion">Se déconnecter</a></body>'
 })
 
 describe('le pont vu par l’agent', () => {
@@ -439,7 +439,7 @@ describe('le fichier agent.js réel, tel que l’application l’injecte', () =>
     const { buildAgent } = await import('../../drive-agent/scripts/build.mjs')
     const built = await buildAgent()
     const channel = withNative()
-    document.body.innerHTML = '<p>Page du drive (simulée)</p>'
+    document.body.innerHTML = '<p>Page du drive (simulée)</p><a href="/deconnexion">Se déconnecter</a>'
     const before = document.documentElement.outerHTML
 
     // When : il démarre sans rien recevoir

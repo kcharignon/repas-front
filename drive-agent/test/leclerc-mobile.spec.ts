@@ -9,6 +9,7 @@ import {
   cartReadRequest,
   cartWriteRequest,
   describeSearchForm,
+  isServerOrigin,
   originOf,
   readMobileSearch,
   readServerHost,
@@ -360,8 +361,103 @@ describe('la page : question de l’ancien panier et connexion (M6)', () => {
     expect(contradicted.state).not.toBe('MEMBER')
   })
 
+  it.each([
+    [
+      'les attributs value',
+      '<input type="button" value="Oui je souhaite compléter mon panier"><input type="button" value="Non je ne souhaite pas compléter mon panier">',
+    ],
+    [
+      'les aria-label',
+      '<div role="button" aria-label="Oui je souhaite compléter mon panier"></div><div role="button" aria-label="Non je ne souhaite pas compléter mon panier"></div>',
+    ],
+    [
+      'la ponctuation et les majuscules',
+      '<button>OUI, je souhaite compléter mon panier.</button><button>Non, je ne souhaite pas compléter mon panier !</button>',
+    ],
+    [
+      'des entités HTML',
+      '<button>Oui je souhaite compl&#233;ter mon panier</button><button>Non je ne souhaite pas compl&#233;ter mon panier</button>',
+    ],
+  ])('la question se lit aussi dans %s', (_name, markup) => {
+    expect(asksOldBasketChoice(BODY(markup))).toBe(true)
+  })
+
+  it('la barre « Dernière connexion le » est celle d’un ÉLÉMENT qui commence par elle, pas d’une phrase qui la cite', () => {
+    expect(showsLastLogin(BODY('<div>Dernière connexion le 01/11/2026 à 12:00</div>'))).toBe(true)
+    expect(showsLastLogin(BODY('<span>Dernière connexion le <b>01/11</b></span>'))).toBe(true)
+    expect(
+      showsLastLogin(
+        BODY('<p>Pour voir votre dernière connexion le plus simple est de vous identifier.</p>'),
+      ),
+    ).toBe(false)
+    expect(
+      readSession(BODY('<p>Voir la dernière connexion le plus tôt possible</p>')).state,
+    ).not.toBe('MEMBER')
+  })
+
+  it.each([
+    ['un li', '<li>Connexion / Inscription</li>'],
+    ['un div', '<div class="menu">Connexion / Inscription</div>'],
+    [
+      'un span dans un élément cliquable par script',
+      '<div onclick="go()"><span>Connexion / Inscription</span></div>',
+    ],
+  ])(
+    '« Connexion / Inscription » dans %s : un visiteur, jamais un connecté, même avec la barre',
+    (_name, menu) => {
+      expect(readSession(BODY(menu)).state).toBe('VISITOR')
+      expect(readSession(BODY(menu, MEMBER_BAR)).state).not.toBe('MEMBER')
+    },
+  )
+
   it('« Connexion / Inscription » sans barre : un visiteur', () => {
     expect(readSession(BODY('<a href="/c">Connexion / Inscription</a>')).state).toBe('VISITOR')
+  })
+})
+
+describe('isServerOrigin : le seul hôte, hors de la page, qui reçoit la session', () => {
+  const https = { protocol: 'https:', port: '' }
+  it('accepte fd<N>-courses.leclercdrive.fr, avec le schéma et le port de la page', () => {
+    expect(isServerOrigin('https://fd8-courses.leclercdrive.fr', https)).toBe(true)
+    expect(isServerOrigin('https://fd14-courses.leclercdrive.fr', https)).toBe(true)
+    expect(
+      isServerOrigin('http://fd8-courses.leclercdrive.fr:8099', {
+        protocol: 'http:',
+        port: '8099',
+      }),
+    ).toBe(true)
+  })
+
+  it.each([
+    ['m-courses', 'https://m-courses.leclercdrive.fr'],
+    ['une famille inconnue', 'https://fdx-courses.leclercdrive.fr'],
+    ['les photos', 'https://fd8-photos.leclercdrive.fr'],
+    ['le compte', 'https://fd8-espace-client.leclercdrive.fr'],
+    ['un hôte voisin', 'https://fd8-courses.leclercdrive.fr.attaquant.fr'],
+    ['un préfixe', 'https://evil-fd8-courses.leclercdrive.fr'],
+    ['des majuscules', 'https://FD8-courses.leclercdrive.fr'],
+    ['un point final', 'https://fd8-courses.leclercdrive.fr.'],
+    ['http sur une page https', 'http://fd8-courses.leclercdrive.fr'],
+    ['un port que la page n’a pas', 'https://fd8-courses.leclercdrive.fr:444'],
+    ['un identifiant', 'https://moi@fd8-courses.leclercdrive.fr'],
+    ['un chemin', 'https://fd8-courses.leclercdrive.fr/x'],
+    ['un espace', 'https://fd8-courses.leclercdrive.fr '],
+    ['une barre oblique inverse', 'https://fd8-courses.leclercdrive.fr\\x'],
+    ['un nom vide', ''],
+  ])('refuse %s', (_name, origin) => {
+    expect(isServerOrigin(origin, https)).toBe(false)
+  })
+
+  it('refuse le port d’une page qui n’en a pas, et celui d’une autre page', () => {
+    expect(
+      isServerOrigin('http://fd8-courses.leclercdrive.fr:8099', { protocol: 'http:', port: '' }),
+    ).toBe(false)
+    expect(
+      isServerOrigin('http://fd8-courses.leclercdrive.fr:8099', {
+        protocol: 'http:',
+        port: '9000',
+      }),
+    ).toBe(false)
   })
 })
 
@@ -471,7 +567,8 @@ describe('l’adaptateur sur m-courses', () => {
     const site = fakeSite(() => ({}))
     const adapter = new LeclercAdapter(site.deps)
 
-    expect(adapter.requiresConfirmedLogin).toBeUndefined()
+    // La preuve de la connexion est exigée de TOUT adaptateur de Leclerc, pas seulement de la version mobile (DRV-754)
+    expect(adapter.requiresConfirmedLogin).toBe(true)
     expect(adapter.basketChoiceAsked).toBeUndefined()
     expect(adapter.probeCart).toBeUndefined()
     expect(adapter.lastCartFailure).toBeUndefined()
@@ -679,7 +776,7 @@ describe('l’écriture du panier sur m-courses (M4, M11 à M15)', () => {
                 FOOTER,
                 '<button>Oui je souhaite compléter mon panier</button><button>Non je ne souhaite pas compléter mon panier</button>',
               )
-            : BODY(FOOTER),
+            : BODY(FOOTER, MEMBER_BAR),
       },
     )
     const adapter = new LeclercAdapter(site.deps)
@@ -691,6 +788,60 @@ describe('l’écriture du panier sur m-courses (M4, M11 à M15)', () => {
 
     expect(failure).toMatchObject({ code: 'UNSUPPORTED_PAGE', cause: 'BASKET_MERGE_ASKED' })
     expect(failure.reply).toMatchObject({ status: 500, body: 'TEXT' })
+  })
+
+  it('un client devenu visiteur EN COURS de passage : la session est relue avant CHAQUE écriture, NOT_LOGGED_IN, plus aucune écriture', async () => {
+    // Given : connecté pour la première écriture ; la page montre un visiteur ensuite (le menu « Connexion / Inscription » revient, la barre disparaît)
+    let lost = false
+    const site = fakeSite(
+      (call) => {
+        if (call.url.includes('recherche-ajax')) return { body: searchBody([element(1000001)]) }
+        lost = true
+        return { body: writeBody(1) }
+      },
+      {
+        location: M_PAGE,
+        pageText: () =>
+          lost ? BODY(FOOTER, '<li>Connexion / Inscription</li>') : BODY(FOOTER, MEMBER_BAR),
+      },
+    )
+    const adapter = new LeclercAdapter(site.deps)
+    await adapter.searchProducts('poireau')
+    await expect(adapter.setCartQuantity('1000001', 1)).resolves.toMatchObject({ ok: true })
+
+    // When / Then : l'écriture suivante n'est pas envoyée
+    await expect(adapter.setCartQuantity('1000001', 2)).rejects.toThrow(
+      expect.objectContaining({ code: 'NOT_LOGGED_IN', cause: 'SESSION_VISITOR' }),
+    )
+    expect(site.calls.filter((call) => call.url.includes('panier.aspx'))).toHaveLength(1)
+  })
+
+  it('une page de connexion servie pendant la question de l’ancien panier reste NOT_LOGGED_IN : jamais renommée « attend ton choix »', async () => {
+    let asked = false
+    const site = fakeSite(
+      (call) => {
+        if (call.url.includes('recherche-ajax')) return { body: searchBody([element(1000001)]) }
+        asked = true
+        return { body: '<html><input type="password"></html>' }
+      },
+      {
+        location: M_PAGE,
+        pageText: () =>
+          asked
+            ? BODY(
+                FOOTER,
+                MEMBER_BAR,
+                '<button>Oui je souhaite compléter mon panier</button><button>Non je ne souhaite pas compléter mon panier</button>',
+              )
+            : BODY(FOOTER, MEMBER_BAR),
+      },
+    )
+    const adapter = new LeclercAdapter(site.deps)
+    await adapter.searchProducts('poireau')
+
+    await expect(adapter.setCartQuantity('1000001', 1)).rejects.toThrow(
+      expect.objectContaining({ code: 'NOT_LOGGED_IN', cause: 'LOGIN_FORM' }),
+    )
   })
 
   it('refuse une quantité ou un produit invalide avant toute requête', async () => {

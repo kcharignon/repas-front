@@ -111,8 +111,8 @@ describe('ce que l’application répond à la page', () => {
       agentVersion: '1.0.0',
       store: {
         id: '000000',
-        host: 'courses-test.leclercdrive.fr',
-        baseUrl: 'https://courses-test.leclercdrive.fr/magasin-000000-000000',
+        host: 'fd9-courses.leclercdrive.fr',
+        baseUrl: 'https://fd9-courses.leclercdrive.fr/magasin-000000-000000',
         label: null,
       },
     }

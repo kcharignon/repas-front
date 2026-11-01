@@ -124,6 +124,10 @@ export function readSession(page: string): SessionReading {
       for (const sign of signsOfLabel(fold(label))) found.add(sign)
     }
   }
+  // Le menu de la version mobile peut n'être ni un lien ni un bouton : le libellé d'un élément QUELCONQUE (son texte seul, court) compte aussi comme signe de visiteur
+  for (const node of visible.matchAll(/>([^<>]{1,60})</g)) {
+    for (const sign of signsOfLabel(fold(node[1] ?? ''))) found.add(sign)
+  }
   if (PASSWORD_FIELD.test(visible)) found.add('PASSWORD_FIELD')
   if (showsLastLogin(page)) found.add('LAST_LOGIN_BAR')
   for (const reading of pageReadings(page)) {

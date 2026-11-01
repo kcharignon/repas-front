@@ -19,10 +19,10 @@ class DriveEntryTest {
         }
     }
 
-    private val link = "https://courses-test.leclercdrive.fr/magasin-000000-000000"
-    private val home = "https://courses-test.leclercdrive.fr/magasin-000000-000000-Ville-Test"
-    private val storePage = "https://courses-test.leclercdrive.fr/magasin-000000-000000-Ville-Test/recherche.aspx"
-    private val oldBasketPage = "https://courses-test.leclercdrive.fr/magasin-000000-000000-Ville-Test/detail-panier.aspx"
+    private val link = "https://fd9-courses.leclercdrive.fr/magasin-000000-000000"
+    private val home = "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test"
+    private val storePage = "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/recherche.aspx"
+    private val oldBasketPage = "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/detail-panier.aspx"
 
     private fun memory(seen: String? = null) = StorePathMemory(MemoryStore()).also { if (seen != null) it.remember(seen) }
 
@@ -47,7 +47,7 @@ class DriveEntryTest {
     @Test
     fun `un chemin d'un autre magasin n'est pas utilise, l'adresse est refusee`() {
         val refused = DriveEntry.Entry(NavigationPolicy.START_URL, FinalizeOutcome.ADRESSE_REFUSEE)
-        assertEquals(refused, DriveEntry.resolve(link, memory("https://courses-test.leclercdrive.fr/magasin-000000-000002-Ville-Test/")))
+        assertEquals(refused, DriveEntry.resolve(link, memory("https://m-courses.leclercdrive.fr/magasin-000000-000002-Ville-Test/")))
         assertEquals(refused, DriveEntry.resolve(link, memory("https://m-courses.leclercdrive.fr/magasin-000002-000000-ville-test")))
     }
 
@@ -78,7 +78,7 @@ class DriveEntryTest {
             oldBasketPage,
             "$link/detail-panier.aspx",
             "$link/detail-panier.aspx?a=1",
-            "https://courses-test.leclercdrive.fr/x/magasin-000000-000000/detail-panier.aspx",
+            "https://m-courses.leclercdrive.fr/x/magasin-000000-000000/detail-panier.aspx",
         ).forEach {
             val entry = DriveEntry.resolve(it, seen)!!
             assertEquals(it, NavigationPolicy.START_URL, entry.page)
@@ -93,17 +93,17 @@ class DriveEntryTest {
     fun `seul le lien exact du magasin est complete, toute autre page du drive est remplacee par l'accueil`() {
         val seen = memory(storePage)
         listOf(
-            "https://courses-test.leclercdrive.fr/",
+            "https://m-courses.leclercdrive.fr/",
             "https://www.leclercdrive.fr/connexion.aspx",
             storePage,
             home,
             "$link?a=1",
             "$link#x",
             "$link/",
-            "https://courses-test.leclercdrive.fr/magasin-000000-000000/autre.aspx",
+            "https://m-courses.leclercdrive.fr/magasin-000000-000000/autre.aspx",
             "https://m-courses.leclercdrive.fr/magasin-000000-000000/autre",
             "https://m-courses.leclercdrive.fr/magasin-000000-000000-ville-test",
-            "https://courses-test.leclercdrive.fr/autre-page",
+            "https://m-courses.leclercdrive.fr/autre-page",
         ).forEach { assertEquals(it, NavigationPolicy.START_URL, DriveEntry.resolve(it, seen)!!.page) }
     }
 
@@ -127,14 +127,14 @@ class DriveEntryTest {
         assertEquals(home, DriveEntry.startPage(home))
         assertEquals("$home/", DriveEntry.startPage("$home/"))
         assertEquals(NavigationPolicy.START_URL, DriveEntry.startPage(NavigationPolicy.START_URL))
-        listOf(null, "", link, storePage, oldBasketPage, "https://www.exemple.org/", "http://courses-test.leclercdrive.fr/magasin-000000-000000-V")
+        listOf(null, "", link, storePage, oldBasketPage, "https://www.exemple.org/", "http://m-courses.leclercdrive.fr/magasin-000000-000000-V")
             .forEach { assertEquals(it, NavigationPolicy.START_URL, DriveEntry.startPage(it)) }
     }
 
     @Test
     fun `la page d'arrivee est l'accueil du drive ou l'accueil d'un magasin, rien d'autre`() {
         listOf(home, "$home/", "$home?a=1", NavigationPolicy.START_URL).forEach { assertTrue(it, DriveEntry.isArrivalPage(it)) }
-        listOf(null, "", storePage, link, "$home/rayon.aspx", "https://courses-test.leclercdrive.fr/").forEach {
+        listOf(null, "", storePage, link, "$home/rayon.aspx", "https://m-courses.leclercdrive.fr/").forEach {
             assertFalse(it, DriveEntry.isArrivalPage(it))
         }
     }
@@ -165,7 +165,7 @@ class DriveEntryTest {
             "E.Leclerc Drive - Ville-Test",
             "Mon panier",
             "Produits 4040 en promotion",
-            "https://courses-test.leclercdrive.fr/magasin-000000-000000-Ville-Test",
+            "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test",
         ).forEach { assertFalse(it, DriveEntry.isNotFoundTitle(it)) }
     }
 }

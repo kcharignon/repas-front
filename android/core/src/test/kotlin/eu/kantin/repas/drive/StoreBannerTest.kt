@@ -12,13 +12,13 @@ import org.junit.Test
  */
 class StoreBannerTest {
     private val runId = "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c"
-    private val plan = DrivePlan.parse(JSONObject(java.io.File("src/test/resources/plan-complet.json").readText()))!!
+    private val plan = DrivePlan.parse(ReferencePlans.json())!!
     private val setup = SetupRequest.of(runId)!!
 
-    private val storePage = "https://courses-test.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx"
-    private val storeRoot = "https://courses-test.leclercdrive.fr/"
+    private val storePage = "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx"
+    private val storeRoot = "https://m-courses.leclercdrive.fr/"
     private val enseigne = "https://www.leclercdrive.fr/"
-    private val login = "https://courses-test.leclercdrive.fr/connexion.aspx"
+    private val login = "https://m-courses.leclercdrive.fr/connexion.aspx"
 
     @Test
     fun `sans passage en cours, aucun message`() {
@@ -39,7 +39,7 @@ class StoreBannerTest {
     @Test
     fun `un plan sur une page de magasin n'a rien a dire`() {
         assertEquals(StoreBanner.NONE, StoreBanner.of(plan, storePage))
-        assertEquals(StoreBanner.NONE, StoreBanner.of(plan, "https://courses-test.leclercdrive.fr/magasin-000000-000000/panier.aspx"))
+        assertEquals(StoreBanner.NONE, StoreBanner.of(plan, "https://m-courses.leclercdrive.fr/magasin-000000-000000/panier.aspx"))
     }
 
     /**
@@ -49,7 +49,7 @@ class StoreBannerTest {
      */
     @Test
     fun `sur l'accueil du magasin ou toute page qui n'en est pas une, un plan dit d'ouvrir son magasin, sans alarme ni bouton`() {
-        listOf(storeRoot, null, "https://courses-test.leclercdrive.fr/autre-page").forEach {
+        listOf(storeRoot, null, "https://m-courses.leclercdrive.fr/autre-page").forEach {
             assertEquals(it, StoreBanner.OPEN, StoreBanner.of(plan, it, storeKnown = true))
             assertEquals(it, StoreBanner.OPEN, StoreBanner.of(plan, it, PageTrouble.NONE, storeKnown = true))
         }
@@ -63,7 +63,7 @@ class StoreBannerTest {
      */
     @Test
     fun `sans magasin deja ouvert, aucun message ne designe un bouton Commencer mes courses qui n'existe pas encore`() {
-        listOf(storeRoot, null, "https://courses-test.leclercdrive.fr/autre-page").forEach {
+        listOf(storeRoot, null, "https://m-courses.leclercdrive.fr/autre-page").forEach {
             assertEquals(it, StoreBanner.NONE, StoreBanner.of(plan, it))
             assertEquals(it, StoreBanner.NONE, StoreBanner.of(plan, it, PageTrouble.NONE, storeKnown = false))
             assertEquals(it, StoreBanner.PLAN, StoreBanner.of(plan, it, PageTrouble.HTTP_ERROR))
@@ -90,7 +90,7 @@ class StoreBannerTest {
         }
         assertFalse(StoreBanner.STORE_FIRST.hasAction)
         // Sous le chemin d'un magasin, un magasin est ouvert : rien à dire pour la lecture, l'agent a la main pour un envoi.
-        val inStore = "https://courses-test.leclercdrive.fr/magasin-000000-000000-Ville-Test/connexion.aspx"
+        val inStore = "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/connexion.aspx"
         assertEquals(StoreBanner.NONE, StoreBanner.of(setup, inStore))
         assertEquals(StoreBanner.NONE, StoreBanner.of(plan, inStore))
     }
@@ -236,8 +236,8 @@ class StoreBannerTest {
     fun `une page 404 pendant un envoi montre le repli, dont le bouton recharge l'accueil de l'enseigne`() {
         val pages404 = listOf(
             storeRoot,
-            "https://courses-test.leclercdrive.fr/magasin-000000-000000/",
-            "https://courses-test.leclercdrive.fr/magasin-000000-000000",
+            "https://m-courses.leclercdrive.fr/magasin-000000-000000/",
+            "https://m-courses.leclercdrive.fr/magasin-000000-000000",
             enseigne,
         )
         pages404.forEach { url ->

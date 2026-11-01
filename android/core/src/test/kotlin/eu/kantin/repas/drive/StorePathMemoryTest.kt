@@ -19,7 +19,7 @@ class StorePathMemoryTest {
         }
     }
 
-    private val host = "courses-test.leclercdrive.fr"
+    private val host = "m-courses.leclercdrive.fr"
 
     @Test
     fun `retient le chemin avec la ville d'une page de magasin, sans le reste de l'adresse`() {

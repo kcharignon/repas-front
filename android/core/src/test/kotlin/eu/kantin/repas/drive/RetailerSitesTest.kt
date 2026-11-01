@@ -91,7 +91,11 @@ class RetailerSitesTest {
     /** DRV-754 : le `store.host` d'un plan de la version mobile est l'hôte du serveur `fd<N>-courses` ; jamais un autre domaine, un nom en majuscules, un port ni le domaine nu. */
     @Test
     fun `le store host d'un plan de Leclerc est un hote fd-courses en minuscules, jamais un autre domaine`() {
-        listOf("fd8-courses.leclercdrive.fr", "fd14-courses.leclercdrive.fr", "m-courses.leclercdrive.fr", "www.leclercdrive.fr").forEach { assertTrue(it, leclerc.isStoreHost(it)) }
+        listOf("fd8-courses.leclercdrive.fr", "fd14-courses.leclercdrive.fr", "fd123-courses.leclercdrive.fr").forEach { assertTrue(it, leclerc.isStoreHost(it)) }
+        listOf(
+            "m-courses.leclercdrive.fr", "www.leclercdrive.fr", "fd8-espace-client.leclercdrive.fr", "fd8-photos.leclercdrive.fr", "fdx-courses.leclercdrive.fr", "fd1234-courses.leclercdrive.fr",
+            "m-courses2.leclercdrive.fr", "m.leclercdrive.fr", "m-autre.leclercdrive.fr", "evil-fd8-courses.leclercdrive.fr", "courses-test.leclercdrive.fr",
+        ).forEach { assertFalse(it, leclerc.isStoreHost(it)) }
         listOf(
             null, "", "leclercdrive.fr", "FD8-COURSES.LECLERCDRIVE.FR", "fd8-courses.leclercdrive.fr:8443", "fd8-courses.leclercdrive.fr:443", "fd8-courses.leclercdrive.fr.evil.com",
             "fd8-courses.exemple.org", "evil.com/fd8-courses.leclercdrive.fr", "fd8-courses.leclercdrive.fr/", " fd8-courses.leclercdrive.fr", "www.auchan.fr",
@@ -182,6 +186,9 @@ class RetailerSitesTest {
 
     private val contract = JSONObject(File("src/test/resources/retailers.sample.json").readText()).getJSONArray("retailers")
 
+    /** Un hôte de magasin de chaque enseigne à adresse de magasin, tel que le cœur le reconnaît (un sous-ensemble de ce que le contrat accepte). */
+    private val coreStoreHost = mapOf("leclerc" to "fd9-courses.leclercdrive.fr")
+
     @Test
     fun `chaque enseigne inscrite est dans le contrat, avec le meme nom`() {
         val byId = (0 until contract.length()).associate { contract.getJSONObject(it).getString("id") to contract.getJSONObject(it) }
@@ -199,10 +206,14 @@ class RetailerSitesTest {
             val entry = contract.getJSONObject(index)
             val site = RetailerSites.REGISTERED.byId(entry.getString("id")) ?: continue
             if (entry.optString("storeIdSource") == "EXPLICIT") continue
-            val example = entry.optString("storeAddressExample").takeIf { it.isNotEmpty() } ?: continue
+            val contractExample = entry.optString("storeAddressExample").takeIf { it.isNotEmpty() } ?: continue
             val pattern = Regex(entry.getString("storeAddressPattern"))
-            assertTrue("l'exemple suit le motif du contrat", pattern.matches(example))
-            assertTrue("l'exemple est une page de magasin de ${site.id}", site.isStorePage(example))
+            assertTrue("l'exemple suit le motif du contrat", pattern.matches(contractExample))
+            // Le cœur resserre l'hôte d'un magasin à sa famille (DRV-754) alors que le contrat du back accepte tout `[a-z0-9-]+` : l'exemple du contrat est jugé avec un hôte du cœur,
+            // qui doit suivre le même motif (le cœur ne reconnaît qu'une partie de ce que le contrat accepte, jamais autre chose)
+            val example = "https://" + coreStoreHost.getValue(site.id) + "/" + contractExample.substringAfter("://").substringAfter('/')
+            assertTrue("l'adresse d'exemple du cœur suit le motif du contrat", pattern.matches(example))
+            assertTrue("l'exemple est un hôte de magasin de ${site.id}", site.isStoreHost(NavigationPolicy.httpsHostOf(example)))
             val host = NavigationPolicy.httpsHostOf(example)
             assertTrue("l'hôte de l'exemple est un hôte de magasin de ${site.id}", site.isStoreHost(host))
             val match = pattern.find(example)!!

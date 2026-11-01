@@ -381,7 +381,7 @@ describe('ce que le rapport laisse voir', () => {
       'Site : leclerc (Leclerc)',
       'Hôte : fd0',
       'Magasin : …123',
-      'Connexion : indéterminé (aucun signe)',
+      'Connexion : connecté (signes : LOGOUT_LINK)',
       '',
       '[OK] Version de l’agent : version 0.5.0',
       '[OK] Page prise en charge : hôte fd0, magasin …123',
