@@ -62,6 +62,26 @@ class OpeningWatchTest {
         assertFalse(refused.canDeliver(enseigne, entersStore = true))
     }
 
+    /**
+     * DRV-753 : la page de connexion (hors d'un magasin) reçoit le plan d'un envoi quand un magasin a déjà été ouvert : l'agent y dit « Entre tes identifiants dans la page » (étape 2
+     * du parcours guidé). Sans magasin connu, la connexion serait refusée par Leclerc et le message de l'application ramène au choix du magasin : rien n'est livré. Jamais la
+     * lecture du magasin, jamais une page refusée, jamais le site mobile.
+     */
+    @Test
+    fun `un plan part de la page de connexion seulement quand un magasin a deja ete ouvert`() {
+        val watch = loaded()
+        val login = "https://www.leclercdrive.fr/connexion"
+        assertTrue(watch.canDeliver(login, entersStore = true, storeKnown = true))
+        assertTrue(watch.canDeliver("https://www.leclercdrive.fr/connexion.aspx", entersStore = true, storeKnown = true))
+        assertFalse(watch.canDeliver(login, entersStore = true, storeKnown = false))
+        assertFalse("la lecture du magasin n'y va jamais", watch.canDeliver(login, entersStore = false, storeKnown = true))
+        assertFalse(watch.canDeliver("https://www.leclercdrive.fr/connexion-autre", entersStore = true, storeKnown = true))
+        assertFalse(watch.canDeliver("https://m-courses.leclercdrive.fr/connexion.aspx", entersStore = true, storeKnown = true))
+        assertFalse(watch.canDeliver("https://www.exemple.org/connexion", entersStore = true, storeKnown = true))
+        val refused = OpeningWatch().apply { pageStarted(); httpError(403); pageFinished() }
+        assertFalse(refused.canDeliver(login, entersStore = true, storeKnown = true))
+    }
+
     @Test
     fun `un agent absent de l'accueil de l'enseigne est dit, comme sur une page de magasin`() {
         val watch = loaded().apply { agentTimedOut() }

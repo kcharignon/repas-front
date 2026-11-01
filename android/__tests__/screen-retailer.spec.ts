@@ -130,7 +130,7 @@ describe('l’écran du drive est celui d’une enseigne', () => {
 
   it('ne livre le message du passage qu’aux pages de l’enseigne du passage', () => {
     expect(drive).toContain('if (request.site !== site) return delivery.failed()')
-    expect(drive).toContain('watch.canDeliver(request, webView.url)')
+    expect(drive).toContain('watch.canDeliver(request, webView.url, storeKnown = repasApp.storePaths.of(site).hasPath())')
     expect(drive).toContain('if (plan.site !== site) return false')
   })
 

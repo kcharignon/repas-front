@@ -237,10 +237,18 @@ class RetailerSite(
      * l'agent existent : jamais une page d'une autre enseigne, ni un hôte où l'on navigue sans pont (la page du mot de passe), ni le site mobile.
      * Une enseigne qui a des pages de magasin n'envoie son message que de l'une d'elles, ou de l'accueil quand [entersStore] (l'agent y entre dans le
      * magasin) ; une enseigne sans page de magasin l'envoie de toute page où le pont existe (l'agent lit le magasin lui-même).
+     *
+     * La page de CONNEXION hors d'un magasin ([isLoginPage]) reçoit aussi le plan d'un envoi quand un magasin a déjà été ouvert ([storeKnown], DRV-753) : c'est l'étape 2 du
+     * parcours guidé (« Entre tes identifiants dans la page »), que l'agent ne peut dire que s'il y est. Sans magasin connu, Leclerc refuserait la connexion
+     * (« veuillez sélectionner un Drive ») : le message de l'application ([StoreBanner.STORE_FIRST]) ramène au choix du magasin, la carte de l'agent ne s'y ajoute pas.
      */
-    fun acceptsPlanOn(url: String?, entersStore: Boolean = false): Boolean {
+    fun acceptsPlanOn(url: String?, entersStore: Boolean = false, storeKnown: Boolean = false): Boolean {
         if (!isBridgePage(url) || isMobileSite(url)) return false
-        return if (storePages == null) true else isStorePage(url) || (entersStore && isHomePage(url))
+        return if (storePages == null) {
+            true
+        } else {
+            isStorePage(url) || (entersStore && (isHomePage(url) || (storeKnown && isLoginPage(url))))
+        }
     }
 
     override fun toString(): String = "RetailerSite($id)"
