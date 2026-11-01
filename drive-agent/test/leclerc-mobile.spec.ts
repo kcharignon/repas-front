@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { LeclercAdapter } from '../src/leclerc'
-import { readCartListing } from '../src/leclerc/cart'
+import { readCartListing, readMobileCartWrite } from '../src/leclerc/cart'
 import {
   asksOldBasketChoice,
   cartReadRequest,
@@ -62,16 +62,45 @@ const searchBody = (elements: unknown[], total = elements.length) =>
     lstProduits: { lstElements: elements },
   })
 
-/** La réponse d'une écriture du panier (la forme du site ordinateur, H3). */
-const writeBody = (quantity: number) =>
+/**
+ * La réponse d'une écriture du panier de la version mobile (M13, M14), la forme MESURÉE le 2026-11-01 : produit (101 première fois, 103 changement, 102 retrait ; un refus :
+ * 102 puis 106, quantité 0), rayon (503), panier (1), paniers complets (4).
+ */
+const writeBody = (quantity: number, types: number[] = [quantity === 0 ? 102 : 101]) =>
   JSON.stringify([
-    { eTypeEvenement: 101, sIdUnique: 'Produit1000001', iQteDisponible: 12 },
+    ...types.map((type) => ({
+      eTypeEvenement: type,
+      sIdUnique: 'Produit1000001',
+      objElement: {
+        sType: 'Produit',
+        iIdProduit: 1000001,
+        sLibelleLigne1: 'Poireaux',
+        iQuantitePanier: quantity,
+        sTotalAPayer: '3,99 €',
+        iQteDisponible: 12,
+      },
+    })),
+    {
+      eTypeEvenement: 503,
+      sIdUnique: 'Rayon4',
+      objElement: { sType: 'Rayon', iQuantitePanier: quantity },
+    },
     {
       eTypeEvenement: 1,
       sIdUnique: 'Panier123',
+      objElement: {
+        sType: 'Panier',
+        fEstVide: false,
+        iQuantitePanier: quantity,
+        sTotalAPayer: '9,47 €',
+        lstProduitsLight: [{ iIdProduit: 1000001, iQtePanier: quantity }],
+      },
+    },
+    {
+      eTypeEvenement: 4,
+      sIdUnique: 'pPaniers',
+      sType: 'PaniersComplets',
       iQuantitePanier: quantity,
-      sTotalAPayer: '9,47 €',
-      lstProduitsLight: [{ iIdProduit: 1000001, iQtePanier: quantity }],
     },
   ])
 
@@ -166,7 +195,7 @@ describe('les requêtes de la version mobile (M1, M4, M5)', () => {
     })
   })
 
-  it('l’écriture : un champ de formulaire d, le contenu des formulaires pour seul en-tête (H1, H2)', () => {
+  it('l’écriture : un champ de formulaire d EXACTEMENT celui de l’application mobile, le contenu des formulaires pour seul en-tête (M11)', () => {
     const { url, init } = cartWriteRequest(`https://${SERVER}`, '/magasin-000123-000123', {
       productId: '1000001',
       quantity: 2,
@@ -179,7 +208,10 @@ describe('les requêtes de la version mobile (M1, M4, M5)', () => {
     expect(init.headers).toEqual({
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
     })
-    expect(String(init.body)).toMatch(/^d=%7B%22eTypeAction%22%3A1/)
+    // Relevé le 2026-11-01 : l'ordre des clés, l'identifiant en NOMBRE, eOrigine 9, eTypePage 3, niIdElement et lIdDemande nuls
+    expect(decodeURIComponent(String(init.body))).toBe(
+      'd={"eTypeAction":1,"iIdProduit":1000001,"iQuantite":2,"sNoPointLivraison":"000123","objContexteProvenanceArticle":{"eOrigine":9,"eTypePage":3,"niIdElement":null,"eVue":0,"sTexteRecherche":"poireau","lIdDemande":null}}',
+    )
   })
 
   it('la lecture : op=12, d={"sNoPointLivraison":"…"}', () => {
@@ -525,7 +557,7 @@ describe('la recherche sur m-courses (M1, M2)', () => {
   })
 })
 
-describe('l’écriture du panier sur m-courses (M4, H1 à H5)', () => {
+describe('l’écriture du panier sur m-courses (M4, M11 à M15)', () => {
   const answer = (scripted: Scripted) => (call: Call) =>
     call.url.includes('recherche-ajax') ? { body: searchBody([element(1000001)]) } : scripted
 
@@ -549,11 +581,36 @@ describe('l’écriture du panier sur m-courses (M4, H1 à H5)', () => {
     >
     expect(d).toMatchObject({
       eTypeAction: 1,
-      iIdProduit: '1000001',
+      iIdProduit: 1000001,
       iQuantite: 2,
       sNoPointLivraison: '000123',
-      objContexteProvenanceArticle: { sTexteRecherche: 'poireau' },
+      objContexteProvenanceArticle: { eOrigine: 9, eTypePage: 3, sTexteRecherche: 'poireau' },
     })
+  })
+
+  it('M12 : la quantité est ABSOLUE, un second envoi demande le total voulu (103 : changement)', async () => {
+    const { site, adapter } = shop(answer({ body: writeBody(3, [103]) }))
+    await adapter.searchProducts('poireau')
+
+    const result = await adapter.setCartQuantity('1000001', 3)
+
+    expect(result).toMatchObject({ ok: true, obtained: 3 })
+    const d = JSON.parse(decodeURIComponent(String(site.calls[1]?.init.body).slice(2))) as {
+      iQuantite: number
+    }
+    expect(d.iQuantite).toBe(3)
+  })
+
+  it('M14 : un produit que Leclerc ne prend pas (102 puis 106, quantité 0) : pas ok, aucune erreur, jamais « le site a changé »', async () => {
+    const { adapter } = shop(answer({ body: writeBody(0, [102, 106]) }))
+    await adapter.searchProducts('poireau')
+
+    await expect(adapter.setCartQuantity('1000001', 1)).resolves.toMatchObject({
+      ok: false,
+      obtained: 0,
+      sent: 1,
+    })
+    expect(adapter.lastCartFailure?.()).toBeNull()
   })
 
   it('une quantité qui n’est pas celle demandée sans question dans la page : pas ok (le refus se juge comme avant), aucune erreur', async () => {
@@ -642,6 +699,61 @@ describe('l’écriture du panier sur m-courses (M4, H1 à H5)', () => {
     await expect(adapter.setCartQuantity('abc', 1)).rejects.toThrow(RangeError)
     await expect(adapter.setCartQuantity('1', -1)).rejects.toThrow(RangeError)
     expect(site.calls).toEqual([])
+  })
+})
+
+describe('readMobileCartWrite : la forme MESURÉE d’une écriture (M13, M14)', () => {
+  it.each([
+    ['la première fois (101)', [101]],
+    ['un changement de quantité (103)', [103]],
+  ])('%s : la quantité du produit au panier, le total d’articles et le total', (_name, types) => {
+    const reading = readMobileCartWrite(writeBody(2, types), '1000001', 2)
+
+    expect(reading).toMatchObject({
+      obtained: 2,
+      items: 2,
+      totalCents: 947,
+      refused: false,
+      product: { stock: 12, availability: null },
+    })
+    expect([...reading.quantities]).toEqual([['1000001', 2]])
+  })
+
+  it('un retrait (102, quantité 0) n’est pas un refus', () => {
+    expect(readMobileCartWrite(writeBody(0, [102]), '1000001', 0)).toMatchObject({
+      obtained: 0,
+      refused: false,
+    })
+  })
+
+  it('un refus : 102 puis 106, quantité 0 alors qu’une quantité est demandée', () => {
+    expect(readMobileCartWrite(writeBody(0, [102, 106]), '1000001', 1)).toMatchObject({
+      obtained: 0,
+      refused: true,
+    })
+  })
+
+  it.each([
+    ['du texte', 'oups', 'CART_NOT_JSON'],
+    ['un objet seul', '{"a":1}', 'CART_NO_PRODUCT_EVENT'],
+    [
+      'un autre produit',
+      writeBody(1).replaceAll('Produit1000001', 'Produit9').replaceAll('1000001', '9'),
+      'CART_NO_PRODUCT_EVENT',
+    ],
+    [
+      'une quantité illisible',
+      writeBody(1).replace(
+        '"iQuantitePanier":1,"sTotalAPayer":"3,99 €"',
+        '"iQuantitePanier":"x","sTotalAPayer":"3,99 €"',
+      ),
+      'CART_QUANTITY_UNREADABLE',
+    ],
+    ['pas d’évènement panier', JSON.stringify([JSON.parse(writeBody(1))[0]]), 'CART_NO_CART_EVENT'],
+  ])('%s : CONTRACT_CHANGED, cause %s', (_name, body, cause) => {
+    expect(() => readMobileCartWrite(body, '1000001', 1)).toThrow(
+      expect.objectContaining({ code: 'CONTRACT_CHANGED', cause }),
+    )
   })
 })
 

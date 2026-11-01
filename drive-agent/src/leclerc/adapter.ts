@@ -4,6 +4,7 @@ import {
   MAX_QUANTITY,
   readCartListing,
   readCartResponse,
+  readMobileCartWrite,
   readPageTotal,
   type CartProductFacts,
 } from './cart'
@@ -575,7 +576,7 @@ export class LeclercAdapter implements RetailerAdapter {
   }
 
   /**
-   * L'écriture du panier de la version mobile (M4, H1 à H5) : jamais tant que la page attend le choix de l'ancien panier ; la réponse est lue comme celle du site ordinateur,
+   * L'écriture du panier de la version mobile (M4, M11 à M15) : jamais tant que la page attend le choix de l'ancien panier ; la réponse est lue sur la forme MESURÉE (`readMobileCartWrite`),
    * et toute erreur porte la FORME de la réponse. Une écriture sans effet ou une réponse illisible pendant que la question est posée est `BASKET_MERGE_ASKED` (H4) : « Leclerc
    * attend ton choix », jamais « le site a changé ».
    */
@@ -598,7 +599,7 @@ export class LeclercAdapter implements RetailerAdapter {
     let read
     try {
       this.assertUsable(reply)
-      read = this.readCart(reply, productId)
+      read = this.readMobileWrite(reply, productId, sent)
     } catch (error) {
       this.failure = shape
       if (error instanceof RetailerError) {
@@ -636,6 +637,23 @@ export class LeclercAdapter implements RetailerAdapter {
       totalCents: read.totalCents,
       ...(read.product && { product: read.product }),
       status: reply.status,
+    }
+  }
+
+  /** La réponse d'une écriture de la version mobile lue (M13, M14) ; une page de connexion servie à la place est `NOT_LOGGED_IN`, une réponse illisible garde son code HTTP. */
+  private readMobileWrite(
+    reply: Reply,
+    productId: string,
+    requested: number,
+  ): ReturnType<typeof readMobileCartWrite> {
+    try {
+      return readMobileCartWrite(reply.text, productId, requested)
+    } catch (error) {
+      if (!(error instanceof RetailerError)) throw error
+      if (error.cause === 'CART_NOT_JSON' && looksLikeLoginPage(reply.text, false)) {
+        throw new RetailerError('NOT_LOGGED_IN', reply.status, 'LOGIN_FORM')
+      }
+      throw error.withStatus(reply.status)
     }
   }
 

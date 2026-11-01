@@ -20,6 +20,7 @@ export const CAUSE_LABELS = {
   CART_NO_EVENTS: 'réponse du panier sans liste d’évènements',
   CART_NO_CART_EVENT: 'réponse du panier sans évènement panier',
   CART_NO_PRODUCT_LIST: 'évènement panier sans liste de produits',
+  CART_NO_PRODUCT_EVENT: 'réponse du panier sans évènement du produit écrit',
   CART_QUANTITY_UNREADABLE: 'quantité du produit illisible dans la réponse du panier',
   // La connexion.
   LOGIN_REDIRECT: 'redirection vers une page de connexion',

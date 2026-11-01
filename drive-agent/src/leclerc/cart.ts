@@ -271,3 +271,66 @@ export function readCartResponse(text: string, productId: string): CartReading {
     product: productFacts(events, productId),
   }
 }
+
+/** Ce que la réponse d'une écriture de la VERSION MOBILE (`panier.aspx?op=1&ng-ajax=1`, DRV-754, mesurée le 2026-11-01) dit du panier. */
+export interface MobileCartReading extends CartReading {
+  /**
+   * Le site a REFUSÉ le produit : une quantité était demandée (`requested` > 0) et l'évènement du produit dit `iQuantitePanier` 0 avec un évènement `106` (mesuré pour un
+   * identifiant inconnu : `102` puis `106`, le panier inchangé). « Leclerc n'a pas pris ce produit » : jamais un succès, jamais « le site a changé ».
+   */
+  refused: boolean
+}
+
+/**
+ * Lit la réponse d'une écriture de la version mobile : un tableau de 4 évènements (MESURÉ le 2026-11-01), dans l'ordre : le PRODUIT (`eTypeEvenement` 101 première fois,
+ * 103 changement de quantité, 102 retrait, 106 refus ; `objElement.sType` « Produit », `iQuantitePanier` = la quantité de CE produit au panier, `iQteDisponible`), le RAYON
+ * (503), le PANIER (`eTypeEvenement` 1, `objElement.sType` « Panier » : `iQuantitePanier` total d'articles, `sTotalAPayer`, `lstProduitsLight[]`) et `PaniersComplets` (4).
+ * Le succès est l'évènement du produit qui porte la quantité demandée ; le panier donne le total.
+ *
+ * @throws {RetailerError} `CONTRACT_CHANGED` avec la cause : `CART_NOT_JSON`, `CART_NO_EVENTS`, `CART_NO_PRODUCT_EVENT` (aucun évènement du produit écrit),
+ *   `CART_QUANTITY_UNREADABLE` (sa quantité n'est pas un nombre), `CART_NO_CART_EVENT`, `CART_NO_PRODUCT_LIST`.
+ */
+export function readMobileCartWrite(
+  text: string,
+  productId: string,
+  requested: number,
+): MobileCartReading {
+  const parsed = parseJson(text.trim())
+  if (parsed === undefined) throw new RetailerError('CONTRACT_CHANGED', null, 'CART_NOT_JSON')
+  const events = eventsOf(parsed)
+  if (events === null) throw new RetailerError('CONTRACT_CHANGED', null, 'CART_NO_EVENTS')
+  const records = events.map(asRecord)
+  const forProduct = records.filter((record) => {
+    const element = asRecord(record?.objElement)
+    return (
+      record?.sIdUnique === `Produit${productId}` ||
+      (element?.sType === 'Produit' && String(element.iIdProduit) === productId)
+    )
+  })
+  const last = forProduct.at(-1)
+  if (!last) throw new RetailerError('CONTRACT_CHANGED', null, 'CART_NO_PRODUCT_EVENT')
+  const element = asRecord(last.objElement)
+  const obtained = asNumber(element?.iQuantitePanier)
+  if (obtained === null)
+    throw new RetailerError('CONTRACT_CHANGED', null, 'CART_QUANTITY_UNREADABLE')
+  const cart = records.find(
+    (record) =>
+      record?.eTypeEvenement === 1 &&
+      (asRecord(record.objElement)?.sType === 'Panier' || startsWithPanier(record.sIdUnique)),
+  )
+  if (!cart) throw new RetailerError('CONTRACT_CHANGED', null, 'CART_NO_CART_EVENT')
+  const list = findKey(cart, 'lstProduitsLight')
+  if (!Array.isArray(list))
+    throw new RetailerError('CONTRACT_CHANGED', null, 'CART_NO_PRODUCT_LIST')
+  const stock = asNumber(element?.iQteDisponible)
+  const availability = asNumber(element?.eDisponibilite)
+  return {
+    obtained,
+    items: asNumber(findKey(cart, 'iQuantitePanier')),
+    totalCents: parseTotal(findKey(cart, 'sTotalAPayer')),
+    quantities: quantitiesOf(list),
+    product: stock === null && availability === null ? null : { stock, availability },
+    refused:
+      requested > 0 && obtained === 0 && forProduct.some((one) => one?.eTypeEvenement === 106),
+  }
+}

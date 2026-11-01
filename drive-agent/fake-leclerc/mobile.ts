@@ -148,6 +148,102 @@ export function listingJson(cart: ReadonlyMap<number, number>): string {
   ])
 }
 
+/** La réponse d'une écriture de la version mobile (M13, M14), la FORME relevée le 2026-11-01 : produit, rayon, panier, paniers complets ; un refus : 102 puis 106. */
+export function writeJson(
+  cart: ReadonlyMap<number, number>,
+  productId: number,
+  kind: 'add' | 'change' | 'remove' | 'refused',
+): string {
+  const product = findProduct(productId)
+  const { items, total } = totals(cart)
+  const quantity = cart.get(productId) ?? 0
+  const element = (
+    extra: Record<string, unknown>,
+    type: number,
+    id: string,
+  ): Record<string, unknown> => ({ eTypeEvenement: type, sIdUnique: id, ...extra })
+  const productEvent = (type: number): Record<string, unknown> =>
+    element(
+      {
+        objElement: {
+          sType: 'Produit',
+          iIdProduit: productId,
+          sLibelleLigne1: product?.label1 ?? '',
+          sPrixUnitaire: product === undefined ? '' : euros(cents(product.price)),
+          nrPVUnitaireTTC: product?.price ?? 0,
+          iQuantitePanier: quantity,
+          sTotalAPayer:
+            product === undefined ? '0,00 €' : euros(cents(paidPrice(product)) * quantity),
+          iQteDisponible: product?.stock ?? 0,
+        },
+      },
+      type,
+      `Produit${productId}`,
+    )
+  const first =
+    kind === 'refused'
+      ? [productEvent(102), productEvent(106)]
+      : [productEvent({ add: 101, change: 103, remove: 102 }[kind])]
+  return JSON.stringify([
+    ...first,
+    {
+      eTypeEvenement: 503,
+      sIdUnique: `Rayon${product?.aisle ?? 0}`,
+      objElement: { sType: 'Rayon', iQuantitePanier: quantity },
+    },
+    {
+      eTypeEvenement: 1,
+      sIdUnique: `Panier${DELIVERY_POINT}`,
+      objElement: {
+        sType: 'Panier',
+        fEstVide: items === 0,
+        iQuantitePanier: items,
+        sTotalAPayer: total,
+        lstProduitsLight: lines(cart),
+      },
+    },
+    {
+      eTypeEvenement: 4,
+      sIdUnique: 'pPaniers',
+      sType: 'PaniersComplets',
+      iQuantitePanier: items,
+      sTotalAPayer: total,
+    },
+  ])
+}
+
+/**
+ * Ce que la requête d'une écriture de la version mobile doit être (M11, M12) : le champ `d` EXACTEMENT de la forme relevée (l'identifiant est un NOMBRE, le contexte
+ * `eOrigine` 9, `eTypePage` 3, `niIdElement` et `lIdDemande` nuls, `sTexteRecherche` un texte), la quantité absolue. `null` si tout est conforme.
+ */
+export function mobileCartProblem(d: unknown): string | null {
+  if (typeof d !== 'object' || d === null) return 'champ d illisible'
+  const body = d as Record<string, unknown>
+  const keys = Object.keys(body).join(',')
+  if (keys !== 'eTypeAction,iIdProduit,iQuantite,sNoPointLivraison,objContexteProvenanceArticle')
+    return 'clés de d inattendues'
+  if (body.eTypeAction !== 1) return 'eTypeAction inattendu'
+  if (typeof body.iIdProduit !== 'number' || !Number.isInteger(body.iIdProduit))
+    return 'iIdProduit doit être un nombre'
+  if (body.sNoPointLivraison !== DELIVERY_POINT) return 'point de livraison inconnu'
+  const quantity = body.iQuantite
+  if (typeof quantity !== 'number' || !Number.isInteger(quantity) || quantity < 0 || quantity > 99)
+    return 'iQuantite invalide'
+  const context = body.objContexteProvenanceArticle as Record<string, unknown> | null
+  const valid =
+    typeof context === 'object' &&
+    context !== null &&
+    Object.keys(context).join(',') ===
+      'eOrigine,eTypePage,niIdElement,eVue,sTexteRecherche,lIdDemande' &&
+    context.eOrigine === 9 &&
+    context.eTypePage === 3 &&
+    context.niIdElement === null &&
+    context.eVue === 0 &&
+    typeof context.sTexteRecherche === 'string' &&
+    context.lIdDemande === null
+  return valid ? null : 'objContexteProvenanceArticle inattendu'
+}
+
 /** La page du panier de la version mobile : du HTML rendu par le SERVEUR (`mobile-detail-panier.aspx`), sur l'hôte `fd<N>-courses`. */
 export function mobileBasketPage(cart: ReadonlyMap<number, number>): string {
   const { items, total } = totals(cart)

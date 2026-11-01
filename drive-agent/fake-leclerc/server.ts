@@ -42,6 +42,7 @@ import {
   authenticationPage,
   creationPage,
   listingJson,
+  mobileCartProblem,
   mobileAccueilPage,
   MOBILE_ANSWERED_COOKIE,
   MOBILE_CART_PATH,
@@ -53,6 +54,7 @@ import {
   mobileStorePage,
   searchJson,
   SERVER_PAGE_PATH,
+  writeJson,
   type FooterForm,
   type MobileOrigins,
 } from './mobile.ts'
@@ -563,7 +565,7 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
     entry: FakeRequest,
     req: IncomingMessage,
     res: ServerResponse,
-    /** Vrai : le site ordinateur (en-têtes `zcwb` et `X-Requested-With` exigés) ; faux : la version mobile (DRV-754, hypothèse H2 : le marqueur est `ng-ajax=1`). */
+    /** Vrai : le site ordinateur (en-têtes `zcwb` et `X-Requested-With` exigés) ; faux : la version mobile (DRV-754, M11 : aucun en-tête propre au site, le marqueur est `ng-ajax=1`). */
     desktop = true,
   ): Promise<void> {
     await paced(
@@ -595,9 +597,10 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
         } catch {
           return reject('champ d absent ou illisible')
         }
-        const problem = cartRequestProblem(d)
+        const problem = desktop ? cartRequestProblem(d) : mobileCartProblem(d)
         if (problem) return reject(problem)
-        const body = d as { eTypeAction: number; iIdProduit: string; iQuantite: number }
+        const body = d as { eTypeAction: number; iIdProduit: string | number; iQuantite: number }
+        if (!desktop) return mobileWrite(entry, res, Number(body.iIdProduit), body.iQuantite)
         const product = findProduct(Number(body.iIdProduit))
         const before = cart.get(Number(body.iIdProduit)) ?? 0
         let after = before
@@ -607,9 +610,7 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
         // La disponibilité trompeuse (DRV-635) : la fiche dit stock nul, le panier prend le produit.
         else if (product && behavior.availability === 'misleading')
           after = Math.min(body.iQuantite, 99)
-        // La version mobile qui ignore l'écriture (la question de l'ancien panier est posée) : le panier reste tel qu'il est
-        if (!desktop && behavior.mobile?.ignoreWrites === true) after = before
-        else if (after === 0) cart.delete(Number(body.iIdProduit))
+        if (after === 0) cart.delete(Number(body.iIdProduit))
         else cart.set(Number(body.iIdProduit), after)
         entry.status = 200
         if (!product) return send(res, 200, JSON.stringify([]), JSON_HEADERS)
@@ -618,6 +619,40 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       },
       res,
     )
+  }
+
+  /**
+   * L'écriture de la version mobile (M11 à M14) : la quantité est ABSOLUE (0 retire), la réponse a 4 évènements (produit 101, 103 ou 102, rayon, panier, paniers complets).
+   * Un produit que le site ne prend pas (inconnu, stock nul, refusé) rend 102 PUIS 106 avec la quantité 0 et laisse le panier inchangé. `ignoreWrites` : le panier reste tel
+   * qu'il est (la question de l'ancien panier est posée).
+   */
+  async function mobileWrite(
+    entry: FakeRequest,
+    res: ServerResponse,
+    id: number,
+    requested: number,
+  ): Promise<void> {
+    const product = findProduct(id)
+    const before = cart.get(id) ?? 0
+    let after = before
+    if (requested === 0) after = 0
+    else if (product && behavior.refuseCart?.includes(product.id)) after = before
+    else if (product && product.stock > 0) after = Math.min(requested, product.stock)
+    // La disponibilité trompeuse (DRV-635) : la fiche dit stock nul, le panier prend le produit.
+    else if (product && behavior.availability === 'misleading') after = Math.min(requested, 99)
+    if (behavior.mobile?.ignoreWrites === true) after = before
+    else if (after === 0) cart.delete(id)
+    else cart.set(id, after)
+    entry.status = 200
+    const kind =
+      requested > 0 && after === 0
+        ? 'refused'
+        : after === 0
+          ? 'remove'
+          : before === 0
+            ? 'add'
+            : 'change'
+    await send(res, 200, writeJson(cart, id, kind), JSON_HEADERS)
   }
 
   /**

@@ -7,25 +7,30 @@
 //       (`credentials: 'include'`) : 200 JSON ; `lstProduits.lstElements[].objElement` porte le produit (mêmes champs que la page ordinateur, libellés avec des ENTITÉS HTML) ;
 //   M2  l'ancienne recherche `GET recherche.aspx` échoue depuis `m-courses` (interdit entre hôtes) ;
 //   M3  l'hôte `fd<N>` se lit dans les liens du pied de page de `m-courses` (`https://fd8-courses…/magasin-N-N-Ville/plan-du-site`) : jamais deviné ;
-//   M4  écriture du panier : `POST <serveur>/magasin-N-N/panier.aspx?op=1&ng-ajax=1`, un champ de formulaire `d` (du JSON) : la même opération que le site ordinateur ;
+//   M4  écriture du panier : `POST <serveur>/magasin-N-N/panier.aspx?op=1&ng-ajax=1`, un champ de formulaire `d` (du JSON) ;
 //   M5  lecture du panier : `POST …/panier.aspx?op=12&ng-ajax=1`, `d={"sNoPointLivraison":"<id>"}` : 200, un tableau d'évènements (`eTypeEvenement` 6) dont l'`objElement` est
 //       le panier (`sType` « Panier », `iQuantitePanier`, `sTotalAPayer`, `lstProduitsLight[]`) ;
 //   M6  juste après la connexion, `m-courses` demande « Souhaitez-vous compléter le panier en cours avec les articles du panier du … ? » (« Oui je souhaite compléter mon
 //       panier » / « Non je ne souhaite pas compléter mon panier ») : l'agent ne choisit JAMAIS ; une barre basse « Dernière connexion le … » apparaît connecté.
+//   M11 (relevé le 2026-11-01, produit 17313, magasin 206911, identique au clic sur « + ») la requête d'un ajout n'a AUCUN en-tête propre au site (pas de `zcwb`) :
+//       Accept, Content-Type, Origin, Referer, … du navigateur ; corps `d=<JSON>` EXACTEMENT : `{"eTypeAction":1,"iIdProduit":17313,"iQuantite":1,"sNoPointLivraison":"206911",
+//       "objContexteProvenanceArticle":{"eOrigine":9,"eTypePage":3,"niIdElement":null,"eVue":0,"sTexteRecherche":"Poireau","lIdDemande":null}}` (l'identifiant est un NOMBRE ; ce
+//       contexte est celui d'un ajout depuis les résultats d'une recherche) ;
+//   M12 la quantité est ABSOLUE (le total voulu au panier : un second clic envoie `iQuantite` 2, retirer envoie 0) ;
+//   M13 la réponse d'un ajout : 4 évènements dans l'ordre : PRODUIT (`eTypeEvenement` 101 première fois, 103 changement, 102 retrait ; `objElement.iQuantitePanier` = la quantité
+//       de CE produit au panier), RAYON (503), PANIER (1 : total d'articles, `sTotalAPayer`, `lstProduitsLight[]`), `PaniersComplets` (4) : `readMobileCartWrite` ;
+//   M14 un produit refusé ou inconnu (`iIdProduit` 999999999) : 200 JSON, évènements produit 102 PUIS 106, `iQuantitePanier` 0, panier inchangé : « Leclerc n'a pas pris ce
+//       produit » (`MobileCartReading.refused`) ;
+//   M15 le `sNoPointLivraison` d'un ajout est le numéro du magasin, celui de `objElement.sNoPointLivraison` de la recherche.
 // HYPOTHÈSES (non mesurées, à confirmer à la recette ; elles sont listées dans `drive-agent/README.md`) :
-//   H1  la valeur complète de `d` d'un AJOUT est celle du site ordinateur (`cartPayload`) ;
-//   H2  l'écriture mobile n'a besoin d'aucun en-tête de plus que `Content-Type` (le marqueur est `ng-ajax=1`, pas `zcwb`) ;
-//   H3  la réponse d'un ajout a la forme de celle du site ordinateur (un évènement panier avec `lstProduitsLight`) ;
 //   H4  tant que la question de l'ancien panier n'a pas de réponse, un ajout peut être refusé ou ignoré : l'agent le DÉTECTE (la question est dans la page) et dit « Leclerc
 //       attend ton choix » ;
-//   H5  un produit refusé (indisponible) se lit comme sur le site ordinateur : la quantité au panier ne bouge pas ;
 //   H6  la connexion se reconnaît à la barre basse « Dernière connexion le … » et à l'absence de « Connexion / Inscription » dans la page ;
 //   H7  le pied de page de `m-courses` est dessiné quand la page a fini de charger (l'agent l'attend 10 s).
 // Règles : l'agent n'écrit JAMAIS un identifiant ni un code, ne touche ni le hCaptcha, ni la case « plus de code sur cet appareil », ni les fenêtres d'aide, de consentement
 // marketing, d'ajout à l'écran d'accueil ou de cookies, ni les deux boutons de la question de l'ancien panier.
 import { parseJson, stringifyJson } from '../primitives'
 import { RetailerError } from '../retailers/errors'
-import { cartBody, type CartRequest } from './cart'
 import { decodeEntities, extractProducts, type RawProduct } from './embedded'
 import { INVISIBLE, visibleText } from './page-text'
 import { SITE_STYLE } from './reply-shape'
@@ -130,15 +135,49 @@ export function searchRequest(base: string, cartPath: string, query: string): Mo
   }
 }
 
-/** M4 (et H1, H2) : l'écriture du panier, le champ `d` du site ordinateur, rien d'autre qu'un type de contenu de formulaire. */
+/** Ce qu'une écriture du panier demande : le produit, la quantité visée AU TOTAL (0 retire), le point de livraison, le dernier mot cherché. */
+export interface MobileCartRequest {
+  productId: string
+  quantity: number
+  deliveryPoint: string
+  searchText: string
+}
+
+/**
+ * Le champ `d` d'une écriture (M11, M12), EXACTEMENT celui que l'application mobile envoie depuis les résultats d'une recherche : l'ordre des clés, l'identifiant en NOMBRE,
+ * le contexte `eOrigine` 9, `eTypePage` 3, `niIdElement` et `lIdDemande` nuls. La quantité est le total voulu ; 0 retire (le `eTypeAction` d'un retrait n'a pas été relevé : la même
+ * action que l'ajout, la quantité dit tout).
+ */
+export function cartPayload(request: MobileCartRequest): string {
+  return stringifyJson({
+    eTypeAction: 1,
+    iIdProduit: Number(request.productId),
+    iQuantite: request.quantity,
+    sNoPointLivraison: request.deliveryPoint,
+    objContexteProvenanceArticle: {
+      eOrigine: 9,
+      eTypePage: 3,
+      niIdElement: null,
+      eVue: 0,
+      sTexteRecherche: request.searchText,
+      lIdDemande: null,
+    },
+  })
+}
+
+/** M4, M11 : l'écriture du panier, un champ de formulaire `d`, aucun en-tête propre au site (pas de `zcwb`) : le type de contenu du formulaire seul. */
 export function cartWriteRequest(
   base: string,
   cartPath: string,
-  request: CartRequest,
+  request: MobileCartRequest,
 ): MobileRequest {
   return {
     url: `${base}${cartPath}/panier.aspx?op=1&ng-ajax=1`,
-    init: { method: 'POST', headers: { ...FORM }, body: cartBody(request) },
+    init: {
+      method: 'POST',
+      headers: { ...FORM },
+      body: `d=${encodeURIComponent(cartPayload(request))}`,
+    },
   }
 }
 
