@@ -417,7 +417,31 @@ describe('la commande de diagnostic de l’application', () => {
     // Then
     await vi.waitFor(() => expect(screens.closed.count).toBe(1))
     expect(screens.screens()).toEqual(['diagnostic'])
-    expect(bridge.postMessage).not.toHaveBeenCalled()
+    // Rien pour Repas : seul message, l'état lisible pour l'application (DRV-759, ci-dessous)
+    expect(bridge.postMessage.mock.calls.map(([text]) => JSON.parse(text).type)).toEqual(['log'])
+  })
+
+  it('DRV-759 : dit à l’application la ligne « Session » et la « Fenêtre au premier plan », des formes seulement, pour sa boîte de diagnostic', async () => {
+    // Given
+    const { bridge, receive } = withBridge()
+    const { screens, closeDiagnostic } = diagnosticUi()
+    run(window, { flow: { ui: screens.ui, adapter: fakeAdapter().adapter } })
+
+    // When
+    receive(COMMAND)
+    await vi.waitFor(() => expect(bridge.postMessage).toHaveBeenCalled())
+    closeDiagnostic()
+
+    // Then
+    const message = JSON.parse(bridge.postMessage.mock.calls[0]?.[0] ?? '{}') as {
+      v: number
+      type: string
+      lines: string[]
+    }
+    expect(message).toMatchObject({ v: 1, type: 'log' })
+    expect(message.lines).toHaveLength(2)
+    expect(message.lines[0]).toMatch(/^Session : /)
+    expect(message.lines[1]).toMatch(/^Fenêtre au premier plan : /)
   })
 
   it.each([
@@ -469,7 +493,8 @@ describe('la commande de diagnostic de l’application', () => {
     receive(PLAN)
 
     // Then
-    await vi.waitFor(() => expect(bridge.postMessage).toHaveBeenCalledOnce())
+    // (le premier message du pont est l'état du diagnostic, DRV-759 ; le second, celui du plan)
+    await vi.waitFor(() => expect(bridge.postMessage).toHaveBeenCalledTimes(2))
     expect(screens.screens()).toEqual(['diagnostic', 'progress'])
   })
 })

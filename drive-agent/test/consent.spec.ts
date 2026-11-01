@@ -128,6 +128,32 @@ describe('un mur de cookies est là seulement devant une réponse franche', () =
     expect(look?.keep).not.toContain(page)
   })
 
+  it('DRV-759 : la zone défilante focalisable du mur (plein écran, ou qui contient les réponses) n’est jamais « un contrôle à ne pas couvrir » : elle ne laisserait aucune place à la carte', () => {
+    const box = at(document.createElement('div'), 0, { width: 1024, height: 768 })
+    box.setAttribute('style', 'position:fixed;inset:0')
+    box.setAttribute('role', 'dialog')
+    document.body.appendChild(box)
+    const scroll = at(document.createElement('div'), 0, { width: 1024, height: 768 })
+    scroll.setAttribute('tabindex', '0')
+    box.appendChild(scroll)
+    const accept = button('Tout accepter', 640, scroll)
+    const link = document.createElement('a')
+    link.setAttribute('role', 'button')
+    link.textContent = 'Poursuivre sans consentir →'
+    scroll.appendChild(link)
+    at(link, 16, { width: 150, height: 22 })
+    const lone = document.createElement('div')
+    lone.setAttribute('tabindex', '0')
+    scroll.appendChild(lone)
+    at(lone, 300, { width: 1000, height: 600 })
+
+    const look = wallLook(document)
+
+    expect(look?.keep).toEqual(expect.arrayContaining([accept, link]))
+    expect(look?.keep).not.toContain(scroll)
+    expect(look?.keep).not.toContain(lone)
+  })
+
   it('un mur qui n’est pas dans une boîte fixe n’a que ses réponses reconnues de gardées (sa zone n’est pas lisible : limite documentée)', () => {
     const known = button('Tout accepter', 640)
     const other = button('Poursuivre sans consentir', 20)

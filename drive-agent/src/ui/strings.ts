@@ -573,18 +573,7 @@ export const S = {
       templateMiss: (why: string) => `Adresse d’une recherche filtrée : non déduite (${why})`,
       probeSkipped: (term: string, why: string) =>
         `Recherche « ${term} » filtrée : non faite (${why})`,
-      probeHead: (term: string, label: string, id: number, form: string, value: string) =>
-        `Recherche « ${term} » filtrée sur ${label} (iIdValeur=${id}), Filtres=<${form}> (forme ${value}) : `,
       probeFault: (fault: string) => `erreur ${fault}`,
-      probeReply: (
-        status: number,
-        total: number | null,
-        products: number | null,
-        level: string,
-        first: string,
-        verdict: string,
-      ) =>
-        `HTTP ${status}, iNbTotalProduits=${total ?? '?'}, ${products ?? '?'} produits lus, groupes au niveau ${level} ; premier produit : ${first} ; verdict : ${verdict}`,
       address: (shape: string) => `Forme finale de l’adresse filtrée : ${shape}`,
       /** DRV-647 (0.37.0) : chaque forme de `Filtres` essayée, sa cohérence avec la valeur demandée, la forme retenue. */
       formRank: { URL_ID: 'i', BLOC_ID: 'ii', ID_BLOC: 'iii' } as Record<string, string>,
@@ -658,8 +647,6 @@ export const S = {
         HTTP: 'réponse HTTP autre que 200',
         ERROR: 'erreur',
       } as Record<string, string>,
-      probeGroup: (id: number, count: number, label: string) =>
-        `Groupe de la recherche filtrée ${id} (${count} produit${count > 1 ? 's' : ''}) : ${label}`,
       pagination: (where: string, list: string) =>
         `Clés de pagination (${where}, nombres et oui/non seulement) : ${list}`,
       universes: (where: string, list: string) => `eUnivers (${where}) : ${list}`,
@@ -894,7 +881,6 @@ export const S = {
     searchLabel: 'Chercher autre chose',
     searchButton: 'Chercher',
     searching: 'Recherche en cours…',
-    adding: 'Ajout au panier…',
     results: (query: string) => `Résultats pour « ${query} »`,
     /** Le nom n'a rien donné : l'agent a essayé une autre forme (« oeuf » pour « œuf ») et dit laquelle a répondu. */
     resultsInstead: (query: string, asked: string) =>

@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Le poids de l'adaptateur Leclerc dans l'agent (DRV-303) : un garde-fou, bien en deçà du budget de 288 000 octets du fichier.
+// Le poids de l'adaptateur Leclerc dans l'agent (DRV-303) : un garde-fou, bien en deçà du budget de 300 000 octets du fichier.
 import { describe, expect, it } from 'vitest'
 
 import { buildAgent } from '../scripts/build.mjs'

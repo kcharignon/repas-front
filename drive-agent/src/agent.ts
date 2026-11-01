@@ -12,7 +12,8 @@ import { validateCommand, type SelftestResultMessage } from '../protocol'
 import { showDiagnostic, type DiagnosticDeps } from './diagnostic'
 import { foregroundFacts } from './diagnostic/foreground'
 import { Flow, guidedChoice, setupHandler, type FlowDeps, type StorageLike } from './flow'
-import { RETAILERS, retailerForHost, type RetailerEntry } from './retailers'
+import { describeSession, RETAILERS, retailerForHost, type RetailerEntry } from './retailers'
+import { S } from './ui/strings'
 import { stringifyJson, takeWindowPrimitives } from './primitives'
 import { bridgeTransport, type Bridge } from './transport/bridge'
 import { fragmentTransport } from './transport/fragment'
@@ -117,12 +118,35 @@ export function run(win: Window & typeof globalThis = window, options: AgentOpti
       : null
   transport.listen(
     (message) => {
-      if (isCommand(message)) return void command(flow, message, diagnosticDeps, selftestDeps)
+      if (isCommand(message)) {
+        return void command(
+          flow,
+          message,
+          diagnosticDeps,
+          selftestDeps,
+          bridge && stateSender(bridge),
+        )
+      }
       void flow.start(message)
     },
     () => void flow.invalid(),
   )
   if (win.location.hash === DIAGNOSTIC_HASH) void welcome(diagnosticDeps())
+}
+
+/** Ce que l'agent dit à l'application quand elle ouvre le diagnostic : `log`, deux lignes de formes (jamais une valeur ni une adresse), pour sa boîte de dialogue. */
+function stateSender(bridge: Bridge): (deps: DiagnosticDeps) => void {
+  return (deps) => {
+    const facts = deps.foreground?.()
+    let session = 'illisible'
+    try {
+      session = describeSession(deps.adapter.readSession())
+    } catch {
+      // la page ne se laisse pas lire
+    }
+    const lines = [`Session : ${session}`, ...(facts ? [S.diagnostic.probe.foreground(facts)] : [])]
+    bridge.postMessage(stringifyJson({ v: 1, type: 'log', lines }))
+  }
 }
 
 /** Un message dont le type est `command` : il ne passe pas par la validation d'un plan. */
@@ -144,6 +168,7 @@ async function command(
   raw: unknown,
   depsOf: () => DiagnosticDeps,
   selftestDepsOf: (() => SelftestDeps) | null,
+  sendState: ((deps: DiagnosticDeps) => void) | null = null,
 ): Promise<void> {
   let name: ReturnType<typeof validateCommand>['command']
   try {
@@ -157,6 +182,8 @@ async function command(
   }
   await flow.exclusive(async () => {
     const deps = depsOf()
+    // La boîte de diagnostic de l'application, lisible hors de la page (DRV-759) : la session lue et la fenêtre au premier plan, des formes seulement
+    sendState?.(deps)
     await showDiagnostic(deps)
     deps.ui.close()
   })

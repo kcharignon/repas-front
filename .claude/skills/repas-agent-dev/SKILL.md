@@ -55,7 +55,7 @@ L'agent s'exécute **dans la page de l'enseigne, avec les droits de l'utilisateu
 ## 3. Construction, taille, empreinte
 
 - `make agent-build` produit `dist/agent.js` (IIFE minifié ES2022, précédé de `/*! Repas Drive agent X.Y.Z */`) et `dist/manifest.json` `{version, bytes, sha384}` (`sha384-<base64>`, format `integrity`). `make agent-verify` construit deux fois et échoue si les empreintes diffèrent (aucune date ni chemin absolu dans le fichier ; versions épinglées par `package-lock.json`). `make agent-test` ne joue que les tests de l'agent.
-- **Budget** : 288 000 octets (`AGENT_MAX_BYTES` pour un essai ; relevé par DRV-754 puis DRV-757, jamais « respecté » : voir `drive-agent/README.md`, « Budget de taille ») : une bibliothèque entrée par mégarde le dépasse. `agent.js` pèse aujourd'hui environ 284 Ko.
+- **Budget** : 300 000 octets (`AGENT_MAX_BYTES` pour un essai ; relevé par DRV-754, DRV-757 puis DRV-759, jamais « respecté » : voir `drive-agent/README.md`, « Budget de taille ») : une bibliothèque entrée par mégarde le dépasse. `agent.js` pèse aujourd'hui environ 288 Ko.
 - **Cliquet de l'empreinte** : toute modification de `drive-agent/src`, du protocole, des scripts de construction ou de `package-lock.json` change l'empreinte. Après un changement voulu : `make agent-build` puis `make android-agent-hash`, relire, **commiter `android/agent.js.sha384`** et le dire dans la PR (`make check` et la construction de l'APK échouent sinon). Monter `AGENT_VERSION` (`src/version.ts`, semver) à chaque changement de l'agent.
 - Vérifier à la main : `openssl dgst -sha384 -binary drive-agent/dist/agent.js | openssl base64 -A` (préfixer `sha384-`).
 

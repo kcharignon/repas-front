@@ -3,7 +3,7 @@
 // `e2e/carte-guide.spec.ts`).
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { choose, fitGuide, typingIn } from '../src/ui/fit'
+import { choose, fitGuide, leastCovered, typingIn } from '../src/ui/fit'
 
 const box = (top: number, bottom: number, left = 0, right = 300) => ({ top, bottom, left, right })
 const rect = (top: number, bottom: number, left = 0, right = 300): DOMRect =>
@@ -299,5 +299,90 @@ describe('la carte posée dans la page', () => {
     window.dispatchEvent(new Event('scroll'))
     expect(measures - afterStart - oneBurst).toBeGreaterThan(0)
     fit.stop()
+  })
+
+  it('DRV-759 : sans place libre, la barre se pose là où elle couvre le MOINS de ce qu’on ne couvre pas, jamais nulle part', () => {
+    // Haut (8-58), bas (700-750) et milieu (350-400) portent tous quelque chose ; le milieu en couvre le moins
+    const hard = [box(0, 70, 0, 300), box(690, 760, 0, 300), box(360, 380, 0, 100)]
+    expect(choose(placed, hard, hard, true)).toBeNull()
+    expect(leastCovered(placed, hard)).toEqual({ min: true, top: false, mid: true })
+  })
+
+  describe('DRV-759 : un mur de cookies dense, sans place libre', () => {
+    const answer = (label: string, top: number, bottom: number) => {
+      const el = document.createElement('button')
+      el.textContent = label
+      document.body.appendChild(el)
+      el.getBoundingClientRect = () => rect(top, bottom)
+      return el
+    }
+    /** La carte du mur : la barre en bas (700-750), en haut (8-58) ou au milieu (350-400). */
+    const wallCard = () => {
+      const el = document.createElement('section')
+      document.body.appendChild(el)
+      el.getBoundingClientRect = () => {
+        const box = el.classList.contains('mid')
+          ? [350, 400]
+          : el.classList.contains('top')
+            ? [8, 58]
+            : [700, 750]
+        return rect(box[0] ?? 0, box[1] ?? 0)
+      }
+      return el
+    }
+    const wallOptions = (keep: HTMLElement[]) => ({
+      needs: () => ({ keep, maybe: [], sub: 'wall' as const, target: null, compact: true }),
+      consent: true,
+      collapsible: true,
+      pointed: () => null,
+      changed: () => undefined,
+    })
+
+    it('le haut, le milieu et le bas portent une réponse : la carte n’est jamais effacée et couvre la MOINS importante, jamais « Continuer sans accepter »', () => {
+      const refuse = answer('Continuer sans accepter', 10, 60)
+      const settings = answer('Paramétrer les cookies', 340, 410)
+      const accept = answer('Tout accepter', 690, 760)
+      const el = wallCard()
+
+      const fit = fitGuide(window, el, wallOptions([refuse, settings, accept]))
+
+      expect(el.hidden).toBe(false)
+      expect(el.classList.contains('away')).toBe(false)
+      expect(el.classList.contains('mid')).toBe(true) // sur « Paramétrer les cookies »
+      fit.stop()
+    })
+
+    it.each([
+      ['Poursuivre sans consentir', 'refus'],
+      ['Refuser et continuer', 'refus'],
+      ['Non merci', 'refus'],
+    ])(
+      '« %s » (un refus que la lecture ne connaît pas par son libellé exact) est pesé comme un refus : la carte se pose sur un contrôle sans importance, pas dessus',
+      (label) => {
+        // Le refus est EN BAS, là où la carte se poserait d'abord à égalité ; deux autres contrôles du mur, sans rapport avec un refus, tiennent le haut et le milieu
+        const other = answer('Voir nos partenaires', 8, 58)
+        const middle = answer('Lire la suite', 350, 400)
+        const refusal = answer(label, 700, 750)
+        const el = wallCard()
+
+        const fit = fitGuide(window, el, wallOptions([other, middle, refusal]))
+
+        expect(el.hidden).toBe(false)
+        expect(el.classList.contains('top')).toBe(true) // ni sur le refus (bas), ni la première place par défaut
+        fit.stop()
+      },
+    )
+
+    it('une zone sans réponse existe (le texte du mur, au milieu) : la barre s’y pose et ne couvre aucune réponse', () => {
+      const refuse = answer('Continuer sans accepter', 10, 60)
+      const accept = answer('Tout accepter', 690, 760)
+      const el = wallCard()
+
+      const fit = fitGuide(window, el, wallOptions([refuse, accept]))
+
+      expect(el.classList.contains('mid')).toBe(true)
+      expect(el.hidden).toBe(false)
+      fit.stop()
+    })
   })
 })

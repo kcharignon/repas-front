@@ -127,7 +127,8 @@ afterEach(async () => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
   window.sessionStorage.clear()
-  document.documentElement.innerHTML = '<head></head><body><a href="/deconnexion">Se déconnecter</a></body>'
+  document.documentElement.innerHTML =
+    '<head></head><body><a href="/deconnexion">Se déconnecter</a></body>'
 })
 
 describe('le pont vu par l’agent', () => {
@@ -265,10 +266,21 @@ describe('le pont une fois l’agent démarré', () => {
     const channel = withNative()
     const received: unknown[] = []
     injectRun(() => {
-      ;(page.repasHost as unknown as PageBridge).addEventListener('message', (event) => received.push(event.data))
+      ;(page.repasHost as unknown as PageBridge).addEventListener('message', (event) =>
+        received.push(event.data),
+      )
     })
     const seen: unknown[] = []
-    const names = ['forEach', 'slice', 'push', 'splice', 'indexOf', 'concat', 'map', 'filter'] as const
+    const names = [
+      'forEach',
+      'slice',
+      'push',
+      'splice',
+      'indexOf',
+      'concat',
+      'map',
+      'filter',
+    ] as const
     const originals = names.map((name) => Object.getOwnPropertyDescriptor(Array.prototype, name))
     const listen = Array.prototype.indexOf
     try {
@@ -429,7 +441,11 @@ describe('de bout en bout avec l’agent réel dans jsdom', () => {
     expect(diagnostic.screens()).toEqual(['diagnostic'])
     // Le diagnostic va au bout de ses contrôles dans ce test, il n'en laisse rien au suivant.
     await untilQuiet(() => fetchSpy.mock.calls.length)
-    expect(channel.postMessage).toHaveBeenCalledExactlyOnceWith(HELLO)
+    // L'annonce, puis l'état du diagnostic pour la boîte de l'application (DRV-759) : rien d'autre
+    expect(channel.postMessage.mock.calls.map(([text]) => JSON.parse(String(text)).type)).toEqual([
+      'hello',
+      'log',
+    ])
   })
 })
 
@@ -439,7 +455,8 @@ describe('le fichier agent.js réel, tel que l’application l’injecte', () =>
     const { buildAgent } = await import('../../drive-agent/scripts/build.mjs')
     const built = await buildAgent()
     const channel = withNative()
-    document.body.innerHTML = '<p>Page du drive (simulée)</p><a href="/deconnexion">Se déconnecter</a>'
+    document.body.innerHTML =
+      '<p>Page du drive (simulée)</p><a href="/deconnexion">Se déconnecter</a>'
     const before = document.documentElement.outerHTML
 
     // When : il démarre sans rien recevoir
@@ -452,16 +469,20 @@ describe('le fichier agent.js réel, tel que l’application l’injecte', () =>
     // When : l'application demande le diagnostic
     channel.fromApp('{"v":1,"type":"command","command":"diagnostic"}')
 
-    // Then : l'interface de l'agent s'est posée dans la page, et rien n'est parti vers l'application
+    // Then : l'interface de l'agent s'est posée dans la page, et seul l'état du diagnostic (`log`, DRV-759) est parti vers l'application, après l'annonce
     await advance(() => document.documentElement.outerHTML !== before)
     expect(document.documentElement.outerHTML).not.toBe(before)
-    expect(channel.postMessage).toHaveBeenCalledTimes(1)
+    expect(channel.postMessage).toHaveBeenCalledTimes(2)
+    expect(JSON.parse(String(channel.postMessage.mock.calls[1]?.[0]))).toMatchObject({
+      v: 1,
+      type: 'log',
+    })
     // Le diagnostic va au bout de ses contrôles dans ce test (il ne laisse rien au suivant) : les seules requêtes tentées visent l'hôte
     // de la page (chemins relatifs).
     await untilQuiet(() => fetchSpy.mock.calls.length)
     expect(fetchSpy).toHaveBeenCalled()
     expect(fetchSpy.mock.calls.every(([url]) => String(url).startsWith('/'))).toBe(true)
-    expect(channel.postMessage).toHaveBeenCalledTimes(1)
+    expect(channel.postMessage).toHaveBeenCalledTimes(2)
   }, 30_000)
 })
 

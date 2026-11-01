@@ -139,6 +139,8 @@ export function createPointer(options: PointerOptions): Pointer {
   let cached: HTMLElement | null = null
   let resolvedAt = 0
   let refresh = false
+  /** Le contrôle autre que celui du repère que la dernière lecture a désigné : il faut le lire une seconde fois pour le suivre. */
+  let pending: HTMLElement | null = null
 
   const scale = (): number => displayLayout(measureDisplay(win)).scale
 
@@ -176,24 +178,33 @@ export function createPointer(options: PointerOptions): Pointer {
     }
   }
 
-  /** Le contrôle à entourer : celui qu'on a déjà s'il est encore dans la page, sinon une relecture, au plus une par seconde. */
+  /**
+   * Le contrôle à entourer : relu au plus une fois par seconde, ou tout de suite à la demande. Un contrôle gardé parce qu'il est encore dans la page ne suffit pas (DRV-759, mesuré :
+   * la liste des magasins se réécrit et le repère restait sur un contrôle que la lecture ne désignait plus, bien plus bas que la première carte).
+   */
   function resolve(): HTMLElement | null {
     const at = Date.now()
-    if (cached?.isConnected !== true || refresh) {
-      if (refresh || at - resolvedAt >= RESOLVE_MS) {
-        const spot = get()
-        // Un autre contrôle : le repère revient (la page ne défile qu'une fois pour lui)
-        if (spot?.element !== cached) {
-          scrolled = false
-          touchedAt = 0
-        }
-        cached = spot?.element ?? null
-        word = spot?.word
-        resolvedAt = at
-        refresh = false
-      } else if (cached?.isConnected !== true) {
-        cached = null
+    if (refresh || at - resolvedAt >= RESOLVE_MS) {
+      let spot = get()
+      // Un autre contrôle n'est suivi que lu deux fois de suite, à la suite l'un de l'autre : une lecture qui alterne chaque seconde ne fait pas sauter le repère (DRV-759)
+      if (cached?.isConnected === true && spot !== null && spot.element !== cached) {
+        const same = spot.element === pending
+        pending = same ? null : spot.element
+        if (!same) spot = { element: cached, word }
+      } else {
+        pending = null
       }
+      // Un autre contrôle : le repère revient (la page ne défile qu'une fois pour lui)
+      if (spot?.element !== cached) {
+        scrolled = false
+        touchedAt = 0
+      }
+      cached = spot?.element ?? null
+      word = spot?.word
+      resolvedAt = at
+      refresh = false
+    } else if (cached?.isConnected !== true) {
+      cached = null
     }
     return cached
   }
