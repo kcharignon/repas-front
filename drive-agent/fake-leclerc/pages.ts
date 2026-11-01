@@ -571,6 +571,79 @@ export type HomeForm =
   | 'late'
   | 'store-link'
   | 'login-first'
+  | 'first-use'
+
+/** Le cookie qui dit qu'un magasin est choisi sur l'accueil national (forme `first-use`) : posé par la page, quand la personne choisit son magasin. */
+export const STORE_CHOSEN_COOKIE = 'fake_store'
+/** Le cookie qui dit que la personne a répondu au mur de cookies (forme `first-use` avec `cookieWall`). */
+export const CONSENT_COOKIE = 'fake_consent'
+
+/**
+ * L'accueil NATIONAL de l'enseigne au PREMIER usage (DRV-753, forme PLAUSIBLE : le vrai accueil n'a jamais été relevé dans le DOM, seuls ses textes l'ont été, par
+ * le propriétaire le 2026-11-01) : un mur de cookies plein écran (« Continuer sans accepter », « Paramétrer les cookies », « Tout accepter », boutons en bas), « Se connecter »,
+ * « Mes courses en ligne… », « 1. Je saisis mon code postal », un champ, « Lancer la recherche » et « Me géolocaliser ». Aucun « Commencer mes courses » tant qu'aucun
+ * magasin n'est choisi : « Lancer la recherche » montre un magasin, « Choisir ce magasin » pose le cookie et recharge la page, qui montre alors le bouton (qui ouvre le
+ * magasin, `storeUrl`). Une fois connecté (cookie `fake_member`), la page le dit.
+ */
+export function firstUsePage(
+  storeUrl: string,
+  {
+    member,
+    chosen,
+    consent,
+    wall,
+  }: { member: boolean; chosen: boolean; consent: boolean; wall: boolean | 'tall' | 'banner' },
+): string {
+  const cookie = (name: string) => `document.cookie = '${name}=1; path=/';`
+  const wallHtml =
+    wall && !consent
+      ? `<div id="cookie-wall" role="dialog" aria-label="Cookies" style="${wall === 'banner' ? 'position:fixed;left:0;right:0;bottom:700px;' : 'position:fixed;inset:0;'}z-index:2147483000;background:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:16px">
+<div><h2>Respect de votre vie privée</h2><p>Nous utilisons des cookies pour améliorer votre expérience.</p></div>
+<div style="display:flex;flex-direction:column;gap:12px;padding-bottom:${wall === 'tall' ? 600 : 24}px">
+<button type="button" class="wall-btn">Continuer sans accepter</button>
+<button type="button" class="wall-btn">Paramétrer les cookies</button>
+<button type="button" class="wall-btn">Tout accepter</button>
+</div></div>
+<script>
+for (const b of document.querySelectorAll('.wall-btn')) b.addEventListener('click', function () { ${cookie(CONSENT_COOKIE)} document.getElementById('cookie-wall').remove(); });
+</script>`
+      : ''
+  const nav = member
+    ? '<nav><a href="/">Accueil</a> <a href="deconnexion.aspx">Se déconnecter</a></nav><p>Vous êtes connecté(e) au drive</p>'
+    : '<nav><a href="/connexion.aspx">Se connecter</a> <a href="inscription.aspx">Créer un compte</a></nav>'
+  const body = chosen
+    ? `<h1>Faux Leclerc Ville-Test</h1>
+<p>Je peux retirer ma commande</p>
+<p><a id="start-shopping" class="btn" role="button">Commencer mes courses</a></p>
+<script>
+document.getElementById('start-shopping').addEventListener('click', function () { location.assign('${storeUrl}'); });
+</script>`
+    : `<h1>Mes courses en ligne en drive, en retrait piéton ou livrées à domicile</h1>
+<h2>1. Je saisis mon code postal</h2>
+<form id="search" onsubmit="return false">
+<input id="postal" type="search" placeholder="Code postal ou ville" aria-label="Code postal ou ville">
+<button id="launch" type="submit">Lancer la recherche</button>
+<button type="button">Me géolocaliser</button>
+</form>
+<div id="results"></div>
+<script>
+document.getElementById('launch').addEventListener('click', function () {
+  document.getElementById('results').innerHTML = '<p>Faux Leclerc Ville-Test</p><button id="pick" type="button">Choisir ce magasin</button>';
+  document.getElementById('pick').addEventListener('click', function () { ${cookie(STORE_CHOSEN_COOKIE)} location.reload(); });
+});
+</script>`
+  return `<!doctype html>
+<html lang="fr">
+<head>${HEAD}<title>Accueil Leclerc Drive (faux site de test)</title></head>
+<body>
+${nav}
+${body}
+${wallHtml}
+<footer>Faux site Leclerc : données inventées.</footer>
+</body>
+</html>
+`
+}
 
 /** Le faux Repas : la page de retour, qui affiche le fragment `#result=` reçu (décodé) pour que les tests le lisent. */
 export function repasReturnPage(): string {

@@ -53,6 +53,8 @@ export interface Rendered {
    * dessine le cadre et son repère « Touche ici », dans un second conteneur : l'écran ne touche pas à la page.
    */
   pointAt?: () => HTMLElement | null
+  /** Vrai : la carte se pose hors des boutons d'un mur de cookies que la page montre (DRV-753, `keep-clear.ts`) : en bas, ou en haut quand le bas les couvrirait. */
+  keepClear?: boolean
 }
 
 type Answer<K extends ScreenName> = (value: ScreenAnswer<K>) => void
@@ -674,7 +676,9 @@ const guide: Renderer<'guide'> = (props: GuideProps, answer) => {
       ? S.guide.late.text
       : props.form === true
         ? S.guide.login.form
-        : S.guide[props.step].text(props.label)
+        : props.step === 'store' && props.byPostalCode === true
+          ? S.guide.store.postalCode
+          : S.guide[props.step].text(props.label)
   const wait = late ? button(S.guide.late.wait, () => answer('wait'), 'primary') : null
   const stop = h(
     'button',
@@ -713,6 +717,7 @@ const guide: Renderer<'guide'> = (props: GuideProps, answer) => {
   return {
     el,
     sheet: true,
+    ...(props.clearOfConsent === true && { keepClear: true }),
     // Le repère reste tant que l'étape est à faire, attente longue comprise
     ...(done || props.target === undefined ? {} : { pointAt: () => props.target?.() ?? null }),
     // Le focus va au titre (lu par un lecteur d'écran, sans anneau) et non au bouton : la carte n'a rien à confirmer, la personne agit dans la page

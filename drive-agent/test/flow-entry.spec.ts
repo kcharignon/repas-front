@@ -40,13 +40,16 @@ function home(
     {},
     {
       store: notAStore,
+      // Comme Leclerc (DRV-753) : la page dit si un magasin est choisi ; ici jamais (le bouton n'apparaît pas), le guide du premier usage attend
+      storeChosen: () => false,
       entry,
       ...(options.onFollow && { onFollow: options.onFollow }),
       ...(options.session && { session: options.session }),
       ...(options.entersAfterLogin !== undefined && { entersAfterLogin: options.entersAfterLogin }),
     },
   )
-  const screens = fakeUi()
+  // La carte de vérification (page d'un défi) : la personne arrête
+  const screens = fakeUi({ challenge: () => 'stop' })
   const storage = fakeStorage()
   const { flow, sent } = makeFlow({
     ui: screens.ui,
@@ -141,27 +144,53 @@ describe('entrer dans le magasin', () => {
     expect(adapter.writes).toEqual([])
   })
 
-  it.each([
-    ['sans lien', { kind: 'NONE' }],
-    ['avec un lien qui ne mène pas au magasin du plan', { kind: 'REFUSED' }],
-    ['sur la page d’un défi de l’anti-robot', { kind: 'CHALLENGE' }],
-  ] as const)(
-    '%s : le bandeau dit de toucher le bouton, rien n’est suivi',
-    async (_name, entry) => {
-      const { flow, screens, adapter, sent } = home(entry)
+  it('avec un lien qui ne mène pas au magasin du plan : le bouton est dans la page, le bandeau dit de le toucher, rien n’est suivi', async () => {
+    const { flow, screens, adapter, sent } = home({ kind: 'REFUSED' })
 
-      await flow.start(plan(lines()))
+    await flow.start(plan(lines()))
 
-      // Sans rien à suivre : on a attendu que la fenêtre s'affiche (bandeau « Ouverture… ») avant de rendre la main à l'utilisateur
-      expect(screens.propsOf('entry')).toEqual(
-        entry.kind === 'NONE' ? [{ stage: 'opening' }, { stage: 'manual' }] : [{ stage: 'manual' }],
-      )
-      expect(adapter.follows.count).toBe(0)
-      expect(screens.screens()).not.toContain('error')
-      expect(sent).toEqual([])
-      expect(adapter.calls).toEqual([])
-    },
-  )
+    expect(screens.propsOf('entry')).toEqual([{ stage: 'manual' }])
+    expect(adapter.follows.count).toBe(0)
+    expect(screens.screens()).not.toContain('error')
+    expect(sent).toEqual([])
+    expect(adapter.calls).toEqual([])
+  })
+
+  // DRV-753 : « Touche « Commencer mes courses » » ne se dit que si la page montre ce bouton. Sans lui (l'accueil national, aucun magasin choisi), c'est une étape du
+  // guide, pas ce message.
+  it('sans bouton ni lien (aucun magasin choisi) : jamais « Touche « Commencer mes courses » », la carte du guide prend le relais et la personne peut arrêter', async () => {
+    const { flow, screens, adapter, sent } = home({ kind: 'NONE' })
+
+    await flow.start(plan(lines()))
+
+    expect(screens.propsOf('entry')).toEqual([{ stage: 'opening' }])
+    expect(screens.propsOf('guide')[0]).toMatchObject({
+      step: 'store',
+      stage: 'waiting',
+      byPostalCode: true,
+      clearOfConsent: true,
+    })
+    expect(screens.propsOf('entry')).not.toContainEqual({ stage: 'manual' })
+    expect(adapter.follows.count).toBe(0)
+    expect(screens.screens()).not.toContain('error')
+    expect(adapter.calls).toEqual([])
+    expect(sent).toHaveLength(1)
+    expect(expectConform(sent[0]).outcome).toBe('aborted')
+  })
+
+  it('sur la page d’un défi de l’anti-robot : le bouton n’est pas dans la page, la carte de vérification (jamais « Touche … ») ; « Arrêter pour l’instant » rend l’envoi arrêté', async () => {
+    const { flow, screens, adapter, sent } = home({ kind: 'CHALLENGE' })
+
+    await flow.start(plan(lines()))
+
+    expect(screens.propsOf('entry')).toEqual([])
+    expect(screens.screens()).toContain('challenge')
+    expect(adapter.follows.count).toBe(0)
+    expect(screens.screens()).not.toContain('error')
+    expect(adapter.calls).toEqual([])
+    expect(sent).toHaveLength(1)
+    expect(expectConform(sent[0]).outcome).toBe('aborted')
+  })
 
   it('la fenêtre se dessine après l’arrivée du plan : l’agent relit la page, puis clique le bouton une fois qu’il est là', async () => {
     // Given : rien aux deux premières lectures, le bouton à la troisième
@@ -181,15 +210,16 @@ describe('entrer dans le magasin', () => {
     expect(adapter.follows.count).toBe(1)
   })
 
-  it('une page qui ne montre jamais rien : l’attente est bornée, puis le geste manuel', async () => {
+  it('une page qui ne montre jamais rien : l’attente est bornée, puis la carte du guide', async () => {
     let reads = 0
     const { flow, screens, adapter } = home(() => (reads++, { kind: 'NONE' }))
 
     await flow.start(plan(lines()))
 
-    // 4 s d'attente à 500 ms : neuf lectures au plus, pas une de plus
+    // 4 s d'attente à 500 ms : neuf lectures au plus, pas une de plus ; puis la carte du guide (le bouton n'existe pas dans la page : jamais « Touche … »)
     expect(reads).toBe(9)
-    expect(screens.propsOf('entry')).toEqual([{ stage: 'opening' }, { stage: 'manual' }])
+    expect(screens.propsOf('entry')).toEqual([{ stage: 'opening' }])
+    expect(screens.screens()).toContain('guide')
     expect(adapter.follows.count).toBe(0)
   })
 
@@ -450,9 +480,9 @@ describe('entrer une seconde fois après la connexion (DRV-748)', () => {
   })
 
   it.each([
-    ['sans bouton', { kind: 'NONE' }],
+    ['sans bouton (la carte du guide)', { kind: 'NONE' }],
     ['avec un lien qui ne mène pas au magasin du plan', { kind: 'REFUSED' }],
-    ['sur la page d’un défi de l’anti-robot', { kind: 'CHALLENGE' }],
+    ['sur la page d’un défi de l’anti-robot (la carte de vérification)', { kind: 'CHALLENGE' }],
   ] as const)('%s : rien n’est touché la seconde fois', async (_name, second) => {
     // Given : le premier toucher a eu lieu, puis la page ne montre plus rien de suivable
     let current: EntryReading = { kind: 'BUTTON' }
@@ -467,7 +497,10 @@ describe('entrer une seconde fois après la connexion (DRV-748)', () => {
     // Then
     expect(adapter.follows.count).toBe(1)
     expect(screens.screens()).not.toContain('error')
-    expect(sent).toEqual([])
+    // Sans bouton ou sur un défi : la personne arrête la carte (le texte de la page n'est jamais « Touche … »), rien n'est écrit ; avec un lien refusé, l'envoi attend
+    expect(sent.map((result) => result.outcome)).toEqual(
+      second.kind === 'REFUSED' ? [] : ['aborted'],
+    )
     expect(adapter.calls).toEqual([])
     expect(adapter.writes).toEqual([])
   })

@@ -277,9 +277,9 @@ class RetailerIsolationTest {
     fun `le bandeau d'un plan suit son enseigne, pas celle de la page`() {
         val planA = DrivePlan.parse(FictionalSites.plan(a, "123456", "boutique.exemple-a.test"), all)!!
         assertEquals(StoreBanner.NONE, StoreBanner.of(planA, pageOfA))
-        assertEquals("la page de magasin de B n'est pas celle d'un magasin de A", StoreBanner.OPEN, StoreBanner.of(planA, pageOfB))
+        assertEquals("la page de magasin de B n'est pas celle d'un magasin de A", StoreBanner.OPEN, StoreBanner.of(planA, pageOfB, storeKnown = true))
         assertEquals(StoreBanner.NONE, StoreBanner.of(planA, homeOfA))
-        assertEquals(StoreBanner.OPEN, StoreBanner.of(planA, homeOfB))
+        assertEquals(StoreBanner.OPEN, StoreBanner.of(planA, homeOfB, storeKnown = true))
     }
 
     // —— la lecture du magasin gardée ————————————————————————————————————————————————————————————————————————————

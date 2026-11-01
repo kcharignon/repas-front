@@ -26,6 +26,7 @@ import type { EntryKind, ProgressEntry } from '../ui'
 import type { RetailerNames } from '../retailers'
 import { cardOf } from './card'
 import {
+  GUIDE_CHECK_MS,
   GUIDE_DONE_MS,
   GUIDE_STUCK_CHECKS,
   guideProps,
@@ -285,10 +286,16 @@ export class Flow {
   private async guide(
     plan: PlanMessage,
     initial: Fault,
+    extra: { byPostalCode?: boolean; clearOfConsent?: boolean } = {},
   ): Promise<'stopped' | { problem: Fault | null; last: GuideStep | null }> {
     const { adapter, ui, now } = this.deps
     const sleep = this.deps.sleep ?? realSleep
-    const watch = { started: now(), lastCheck: now(), late: false }
+    // Sur l'accueil sans magasin (DRV-753) la page se relit sans requête : pas d'attente avant de constater que « Commencer mes courses » est là
+    const watch = {
+      started: now(),
+      lastCheck: extra.byPostalCode === true ? now() - GUIDE_CHECK_MS : now(),
+      late: false,
+    }
     let problem: Fault | null = initial
     let last: GuideStep | null = null
     let shown = ''
@@ -300,14 +307,14 @@ export class Flow {
       const step = guideStepOf(problem, adapter)
       if (step === null) break
       last = step
-      const steps = this.guideSteps(plan.runId, step, total)
+      const steps = this.guideSteps(plan.runId, step, total, extra.byPostalCode === true)
       total = steps.total
       this.runs.noteGuide(plan.runId, steps.total, step)
       const stage = watch.late ? 'late' : 'waiting'
       // Une carte déjà là n'est pas redessinée (le repère ne saute pas, la page ne défile pas sous le doigt de la personne)
       if (shown !== `${step}:${stage}`) {
         shown = `${step}:${stage}`
-        asked = ui.show('guide', guideProps(step, stage, steps, adapter))
+        asked = ui.show('guide', guideProps(step, stage, steps, adapter, extra))
       }
       let watching = true
       const seen = watchStep(step, adapter, { now, sleep }, watch, () => watching)
@@ -331,9 +338,16 @@ export class Flow {
   }
 
   /** « Étape 1 sur 2 » : combien d'étapes manquent (celles que la page montre, ou celles qu'une page d'avant a notées) et le rang de celle-ci. */
-  private guideSteps(runId: string, step: GuideStep, seen: 1 | 2): { index: 1 | 2; total: 1 | 2 } {
+  private guideSteps(
+    runId: string,
+    step: GuideStep,
+    seen: 1 | 2,
+    atHome = false,
+  ): { index: 1 | 2; total: 1 | 2 } {
     const noted = this.runs.guide(runId)
-    const both = step === 'store' && this.sessionProblem() !== null
+    // Sur l'accueil d'une enseigne sans magasin choisi (DRV-753), la connexion suit presque toujours : tant que la page ne CONFIRME pas qu'on est connecté, deux étapes
+    const both =
+      step === 'store' && (this.sessionProblem() !== null || (atHome && !this.isMember()))
     const total = both || noted?.total === 2 || seen === 2 ? 2 : 1
     return { index: step === 'store' ? 1 : total, total }
   }
@@ -376,19 +390,41 @@ export class Flow {
   private async enterStore(plan: PlanMessage): Promise<void> {
     const { adapter, ui } = this.deps
     this.enter('ENTERING')
+    // La page est LUE d'abord, même si l'entrée a déjà été tentée : « Touche « Commencer mes courses » » ne se dit que si la page montre ce bouton (DRV-753)
+    let { reading, announced } = await this.awaitEntry(plan)
+    if (reading.kind === 'NONE') {
+      // Pas de « Commencer mes courses » : l'accueil de l'enseigne attend qu'on choisisse son magasin (le bouton n'apparaît qu'après). Premier usage, ou magasin effacé :
+      // une ÉTAPE, pas une panne. La carte du guide dit quoi faire, l'agent attend et entre tout seul dès que le bouton est là.
+      const outcome = await this.guide(
+        plan,
+        { code: 'UNSUPPORTED_PAGE', cause: 'STORE_NOT_CHOSEN' },
+        { byPostalCode: true, clearOfConsent: true },
+      )
+      if (outcome === 'stopped') return
+      ;({ reading, announced } = await this.awaitEntry(plan))
+      if (reading.kind === 'NONE') return ui.close()
+    }
+    if (reading.kind === 'CHALLENGE') {
+      // Le site demande une vérification : le bouton n'est pas dans la page, on n'en parle pas. La personne la passe, puis touche « Reprendre ».
+      if ((await ui.show('challenge', {})) === 'stop') {
+        this.stopGuided(plan)
+        return
+      }
+      return this.enterStore(plan)
+    }
     // Déjà tenté pour cet envoi (ou aucun moyen de le noter) : pas de seconde tentative, le geste manuel tout de suite, sauf la seconde entrée d'après la connexion.
-    if (!this.runs.hasEntered(plan.runId) || this.mayEnterAfterLogin(plan)) {
-      const { reading, announced } = await this.awaitEntry(plan)
-      if (this.allowEntry(plan, reading, ['LINK', 'BUTTON'])) {
-        if (!announced) void ui.show('entry', { stage: 'opening' })
-        try {
-          await adapter.followEntry()
-        } catch {
-          // Le site est bloqué, la navigation a échoué ou le clic n'a rien fait : le geste manuel reste possible.
-        }
+    if (
+      (!this.runs.hasEntered(plan.runId) || this.mayEnterAfterLogin(plan)) &&
+      this.allowEntry(plan, reading, ['LINK', 'BUTTON'])
+    ) {
+      if (!announced) void ui.show('entry', { stage: 'opening' })
+      try {
+        await adapter.followEntry()
+      } catch {
+        // Le site est bloqué, la navigation a échoué ou le clic n'a rien fait : le geste manuel reste possible.
       }
     }
-    // Ici seulement si le bouton ou le lien manque, a été refusé, a déjà été touché une fois, ou n'a rien changé : l'utilisateur touche le bouton du site.
+    // Ici seulement si le bouton ou le lien est dans la page et a été refusé, a déjà été touché une fois, ou n'a rien changé : l'utilisateur touche le bouton du site.
     void ui.show('entry', { stage: 'manual' })
   }
 

@@ -491,7 +491,7 @@ class DriveActivity : Activity() {
         // Le plan d'une autre enseigne que celle de l'écran n'est jamais livré à son agent (DRV-707).
         if (request.site !== site) return delivery.failed()
         // Pas de message vers une page que le site a refusée ou détournée (ticket E) : le bandeau dit quoi faire à l'utilisateur.
-        if (!watch.canDeliver(request, webView.url)) return delivery.failed()
+        if (!watch.canDeliver(request, webView.url, storeKnown = repasApp.storePaths.of(site).hasPath())) return delivery.failed()
         if (agent.send(request.text)) {
             watch.planSent()
             updateStoreBanner(webView.url)

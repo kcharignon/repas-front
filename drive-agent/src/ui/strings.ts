@@ -1028,6 +1028,8 @@ export const S = {
     done: 'C’est bon',
     store: {
       title: 'Choisis ton magasin',
+      /** Le magasin se choisit sur l'accueil de l'enseigne, par son code postal (DRV-753) : le champ est entouré dans la page quand l'agent le reconnaît. */
+      postalCode: 'Écris ton code postal, puis choisis ton magasin.',
       text: (label: string | null) =>
         label === null
           ? 'Touche la barre du magasin en haut de la page, puis ton magasin.'

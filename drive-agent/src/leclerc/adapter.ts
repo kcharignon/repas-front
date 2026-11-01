@@ -100,6 +100,7 @@ import {
 } from './search-request'
 import { looksLikeLoginPage, LOGIN_LABELS, readSession, type SessionReading } from './session'
 import { findControl, type GuideStep, type GuideTarget } from '../retailers/guide'
+import { findPostalCodeField } from './store-field'
 import {
   findSearchBase,
   type LocationLike,
@@ -145,8 +146,8 @@ export interface RetailerAdapter {
    */
   readStore(): StoreInfo | Promise<StoreInfo>
   /**
-   * FACULTATIVE (DRV-740) : présente seulement chez une enseigne dont le magasin se CHOISIT SUR LA PAGE du site (il n'est pas dans l'adresse, à la
-   * différence de Leclerc). Dit si la page montre qu'un magasin est choisi. Une lecture de la page seule : aucune requête, jamais d'erreur. Le mode
+   * FACULTATIVE (DRV-740, DRV-753) : présente chez une enseigne dont le magasin se CHOISIT SUR LA PAGE du site (il n'est pas dans l'adresse), ou qui le fait choisir sur son
+   * accueil avant tout magasin (la page montre « Commencer mes courses » une fois choisi : DRV-753). Dit si la page montre qu'un magasin est choisi. Une lecture de la page seule : aucune requête, jamais d'erreur. Le mode
    * configuration s'en sert quand `readStore` dit « aucun magasin choisi » : au lieu d'un écran d'erreur, il laisse la page utilisable et attend ce choix.
    */
   storeChosenOnPage?(): boolean
@@ -332,6 +333,8 @@ export interface LeclercDeps extends PacerDeps {
   pageLinks?: () => PageLinks
   /** Le lien ou bouton « Se connecter » de la page (DRV-751), à entourer. Absent, l'agent n'en désigne aucun. */
   loginControl?: () => GuideTarget | null
+  /** Le champ du code postal de l'accueil, où l'on choisit son magasin (DRV-753), à entourer. Absent, l'agent n'en désigne aucun. */
+  storeField?: () => GuideTarget | null
 }
 
 /** Le temps laissé à une navigation pour quitter la page avant de la dire sans effet (le clic ou le lien d'entrée, 0.39.0 : l'utilisateur ne doit pas attendre davantage). */
@@ -1107,9 +1110,31 @@ export class LeclercAdapter implements RetailerAdapter {
     return LOGIN_PAGE.test(this.deps.location.pathname)
   }
 
-  /** Chez Leclerc le magasin se lit dans l'adresse (aucune étape « magasin » sur la page) : seule la connexion se désigne, par son lien « Se connecter ». */
+  /**
+   * Chez Leclerc le magasin se lit dans l'adresse, mais il se CHOISIT sur l'accueil (DRV-753) : « Commencer mes courses » n'y apparaît qu'une fois un magasin choisi.
+   * La page dit donc qu'un magasin est choisi quand elle montre ce bouton (ou un lien vers le magasin, ou un défi : la lecture de l'entrée n'est pas « rien »). Une lecture
+   * de la page seule, aucune requête, jamais d'erreur. Le magasin du plan n'est pas jugé ici (`readStore` le fait, par l'adresse).
+   */
+  storeChosenOnPage(): boolean {
+    try {
+      return (
+        readEntry(this.deps.pageText(), this.deps.location, '').kind !== 'NONE' ||
+        this.findButton() !== null
+      )
+    } catch {
+      return false
+    }
+  }
+
+  /** Le contrôle à désigner : le champ du code postal de l'accueil (`store`, jamais touché ni rempli), ou le lien « Se connecter » (`login`). */
   guideTarget(step: GuideStep): GuideTarget | null {
-    return step === 'login' ? (this.deps.loginControl?.() ?? null) : null
+    try {
+      return step === 'login'
+        ? (this.deps.loginControl?.() ?? null)
+        : (this.deps.storeField?.() ?? null)
+    } catch {
+      return null
+    }
   }
 
   readSession(): SessionReading {
@@ -1163,6 +1188,7 @@ export function browserDeps(
     startButton: () => findStartButton(win.document),
     pageLinks: () => readPageLinks(win.document),
     loginControl: () => findControl(win.document, LOGIN_LABELS),
+    storeField: () => findPostalCodeField(win.document),
     pageText: () => new win.XMLSerializer().serializeToString(win.document),
     navigation: () => navigationOf(win),
     cookies: () => cookiesOf(win),

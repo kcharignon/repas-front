@@ -183,7 +183,10 @@ enum class StoreBanner {
      */
     SETUP,
 
-    /** Envoi d'un plan, accueil du magasin ou autre page qui n'en est pas une : toucher « Commencer mes courses » pour ouvrir son magasin. Pas de bouton. */
+    /**
+     * Envoi d'un plan, accueil du magasin ou autre page qui n'en est pas une : toucher « Commencer mes courses » pour ouvrir son magasin. Pas de bouton. Seulement quand un
+     * magasin a déjà été ouvert dans l'application ([StorePathMemory.hasPath]) : au premier usage ce bouton n'existe pas encore sur le site (DRV-753), le message se tait.
+     */
     OPEN,
 
     /**
@@ -243,7 +246,9 @@ enum class StoreBanner {
             // La connexion avant tout magasin : Leclerc la refuse, le message ramène au choix du magasin. Un magasin déjà ouvert (la personne a touché « Se connecter » depuis
             // sa page de magasin, DRV-751) : rien à dire, elle remplit le formulaire.
             request.site.isLoginPage(url) -> if (storeKnown) NONE else STORE_FIRST
-            else -> OPEN
+            // Toucher « Commencer mes courses » : seulement pour qui a déjà ouvert un magasin (DRV-753). Un premier usage n'a pas ce bouton (il n'apparaît qu'une fois le magasin
+            // choisi) : l'agent guide le choix du magasin sur l'accueil, et ce message désignerait un bouton qui n'existe pas.
+            else -> if (storeKnown) OPEN else NONE
         }
     }
 }

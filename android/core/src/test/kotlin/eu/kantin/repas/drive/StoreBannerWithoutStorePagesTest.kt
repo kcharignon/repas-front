@@ -80,7 +80,7 @@ class StoreBannerWithoutStorePagesTest {
 
         assertEquals(StoreBanner.NONE, StoreBanner.of(planA, storePage))
         assertEquals(StoreBanner.NONE, StoreBanner.of(planA, home))
-        assertEquals(StoreBanner.OPEN, StoreBanner.of(planA, storeRoot))
+        assertEquals(StoreBanner.OPEN, StoreBanner.of(planA, storeRoot, storeKnown = true))
         assertEquals(StoreBanner.STORE_FIRST, StoreBanner.of(planA, login))
         assertEquals(StoreBanner.SETUP, StoreBanner.of(setupA, home))
         assertEquals(StoreBanner.SETUP, StoreBanner.of(setupA, storeRoot))

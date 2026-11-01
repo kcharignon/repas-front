@@ -205,6 +205,16 @@ export interface GuideProps {
   form?: boolean
   /** La lecture du magasin depuis les réglages : la carte dit que rien n'est enregistré si l'on arrête, au lieu de « ta liste est gardée ». */
   setup?: boolean
+  /**
+   * Le magasin se choisit sur l'ACCUEIL de l'enseigne, par son code postal (DRV-753 : le premier usage de Leclerc, avant tout magasin) : la phrase dit d'écrire le code
+   * postal, pas de toucher une barre. Seulement pour l'étape `store`.
+   */
+  byPostalCode?: boolean
+  /**
+   * La carte se pose hors des boutons d'un mur de cookies que la page montre (`ui/keep-clear.ts`), sans jamais cacher le contrôle entouré ni son repère. Seulement là où
+   * l'étape le demande (DRV-753 : le choix du magasin sur l'accueil national) ; les autres cartes du guide restent où elles sont.
+   */
+  clearOfConsent?: boolean
   /** Le contrôle à entourer dans la page, relu à chaque mesure (la page peut se redessiner) ; `null` : rien à entourer. */
   target?: () => HTMLElement | null
 }

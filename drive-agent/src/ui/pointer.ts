@@ -107,19 +107,34 @@ export function createPointer(options: PointerOptions): Pointer {
 
   const scale = (): number => displayLayout(measureDisplay(win)).scale
 
-  /** Fait défiler la page, une seule fois, pour que le contrôle et son repère restent visibles AU-DESSUS de la carte du guide. */
+  /**
+   * Où est la carte du guide : en bas (le cas ordinaire) ou en haut (`keep-clear.ts`, pour ne pas couvrir un mur de cookies). Le contrôle et son repère doivent rester dans
+   * l'espace qu'elle laisse : `low` (sous la carte quand elle est en haut) et `limit` (au-dessus d'elle quand elle est en bas).
+   */
+  function room(s: number): { low: number; limit: number } {
+    const box = card()
+    if (box !== null && box.top + box.height / 2 < win.innerHeight / 2) {
+      return { low: box.bottom + CLEARANCE * s, limit: win.innerHeight }
+    }
+    return { low: 0, limit: (box?.top ?? win.innerHeight) - CLEARANCE * s }
+  }
+
+  /** Fait défiler la page, une seule fois, pour que le contrôle et son repère restent visibles HORS de la carte du guide (au-dessus d'elle, ou en dessous si elle est en haut). */
   function bringIntoView(target: HTMLElement, s: number): void {
     try {
-      const limit = (card()?.top ?? win.innerHeight) - CLEARANCE * s
+      const { low, limit } = room(s)
       const fits = () => {
         const rect = target.getBoundingClientRect()
-        return rect.top >= 0 && rect.bottom + (GAP * 2 + TAG_HEIGHT) * s <= limit
+        return rect.top >= low && rect.bottom + (GAP * 2 + TAG_HEIGHT) * s <= limit
       }
       if (fits()) return
       target.scrollIntoView({ block: 'center', inline: 'nearest' })
       if (!fits()) {
         const rect = target.getBoundingClientRect()
-        win.scrollBy(0, rect.bottom + (GAP * 2 + TAG_HEIGHT) * s - limit)
+        win.scrollBy(
+          0,
+          rect.top < low ? rect.top - low : rect.bottom + (GAP * 2 + TAG_HEIGHT) * s - limit,
+        )
       }
     } catch {
       // La page refuse de défiler : le cadre se pose là où est le contrôle.
@@ -174,11 +189,11 @@ export function createPointer(options: PointerOptions): Pointer {
     tag.style.setProperty('transform', s === 1 ? 'none' : `scale(${s})`)
     const width = tag.offsetWidth * s
     const height = TAG_HEIGHT * s
-    const cardTop = card()?.top ?? win.innerHeight
+    const { low, limit } = room(s)
     const below = rect.bottom + out + CLEARANCE * s
-    const fitsBelow = below + height <= Math.min(cardTop - 4 * s, win.innerHeight)
+    const fitsBelow = below + height <= Math.min(limit + CLEARANCE * s - 4 * s, win.innerHeight)
     const above = rect.top - out - CLEARANCE * s - height
-    const placeAbove = !fitsBelow && above >= 0
+    const placeAbove = !fitsBelow && above >= low
     tag.classList.toggle('above', placeAbove)
     const left = Math.max(8 * s, Math.min(rect.left, win.innerWidth - width - 8 * s))
     tag.style.setProperty('left', `${left}px`)

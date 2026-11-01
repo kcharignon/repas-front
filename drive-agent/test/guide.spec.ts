@@ -1,7 +1,7 @@
 // Le parcours guidé de la première utilisation (DRV-751) : le magasin pas encore choisi et la personne pas encore connectée sont des ÉTAPES, pas des pannes. L'agent
 // pose une carte, attend sans requête, et CONTINUE TOUT SEUL dès que la page dit que l'étape est faite ; la page qui se recharge reprend au même endroit, rien
 // ne revient en erreur, rien n'est envoyé deux fois. Les deux enseignes passent par la même interface (`guideTarget`, `storeChosenOnPage`, `readSession`).
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { GUIDE_KEY, RUN_PREFIX } from '../src/flow/run-state'
 import {
@@ -23,6 +23,8 @@ import { AuchanAdapter } from '../src/auchan'
 import { LeclercAdapter } from '../src/leclerc'
 import { fakeSite } from './leclerc-helpers'
 import { findControl } from '../src/retailers/guide'
+import { findStartButton } from '../src/leclerc/entry'
+import { findPostalCodeField } from '../src/leclerc/store-field'
 import { LOGIN_LABELS } from '../src/leclerc/session'
 import {
   expectConform,
@@ -591,6 +593,206 @@ describe('chaque enseigne dit où est le contrôle à toucher', () => {
   })
 })
 
+// DRV-753 (recette du 2026-11-01) : le premier usage de Leclerc commence sur l'accueil NATIONAL, sans magasin choisi, où « Commencer mes courses » n'existe pas encore.
+describe('le premier usage de Leclerc : l’accueil sans magasin (DRV-753)', () => {
+  const pagePath = () => new RetailerError('UNSUPPORTED_PAGE', null, 'PAGE_PATH')
+  const field = (): GuideTarget => ({ element: document.createElement('input'), label: null })
+
+  /** L'accueil national : pas de magasin dans l'adresse ; « Commencer mes courses » n'est là qu'une fois le magasin choisi. */
+  function national(options: { member?: boolean; leaves?: boolean } = {}) {
+    const state = { chosen: false, member: options.member ?? false }
+    const built = fakeAdapter(
+      { '1000001': {} },
+      {
+        store: () => {
+          throw pagePath()
+        },
+        entry: () => (state.chosen ? { kind: 'BUTTON' } : { kind: 'NONE' }),
+        storeChosen: () => state.chosen,
+        guideTarget: (step) => (step === 'store' ? field() : null),
+        // Le clic fait quitter la page : la promesse ne se résout jamais
+        ...(options.leaves && { onFollow: () => new Promise(() => undefined) }),
+        session: () => (state.member ? MEMBER : VISITOR),
+      },
+    )
+    return { ...built, state }
+  }
+
+  it('aucun bouton : la carte « Étape 1 sur 2 » dit d’écrire le code postal ; dès que « Commencer mes courses » apparaît, l’agent l’entre tout seul, sans « Touche … »', async () => {
+    // Given : la personne choisit son magasin après l'attente de l'entrée (9 pauses) et trois coups d'œil du guide
+    const w = national({ leaves: true })
+    const storage = fakeStorage()
+    const time = clock((tick) => {
+      if (tick === 12) w.state.chosen = true
+    })
+    const screens = fakeUi()
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage, ...time })
+
+    // When : la page quitte le script au clic
+    void flow.start(FARINE)
+    await vi.waitFor(() => expect(w.follows.count).toBe(1))
+
+    // Then : la carte du magasin (par code postal, repère sur le champ), puis le bandeau d'ouverture ; jamais « Touche … »
+    expect(screens.propsOf('guide')).toEqual([
+      expect.objectContaining({
+        step: 'store',
+        stage: 'waiting',
+        index: 1,
+        total: 2,
+        byPostalCode: true,
+      }),
+    ])
+    expect(screens.propsOf('guide')[0]?.target?.()).toBeInstanceOf(HTMLInputElement)
+    expect(screens.propsOf('entry')).toEqual([{ stage: 'opening' }, { stage: 'opening' }])
+    expect(w.follows.count).toBe(1)
+    expect(screens.screens()).not.toContain('error')
+    expect(sent).toEqual([])
+    expect(w.calls).toEqual([])
+    // La page suivante (le magasin) saura qu'elle est la suite de l'étape 1
+    expect(storage.getItem(GUIDE_KEY)).toBe(`${RUN_ID}|2|store`)
+  })
+
+  it('une personne déjà connectée : « Il reste une étape » (une seule)', async () => {
+    const w = national({ member: true, leaves: true })
+    const time = clock((tick) => {
+      if (tick === 11) w.state.chosen = true
+    })
+    const screens = fakeUi()
+    const { flow } = makeFlow({
+      ui: screens.ui,
+      adapter: w.adapter,
+      storage: fakeStorage(),
+      ...time,
+    })
+
+    void flow.start(FARINE)
+    await vi.waitFor(() => expect(w.follows.count).toBe(1))
+
+    expect(screens.propsOf('guide')[0]).toMatchObject({ step: 'store', index: 1, total: 1 })
+  })
+
+  it('« Arrêter pour l’instant » : l’envoi s’arrête, la liste est gardée, rien n’est suivi ni écrit', async () => {
+    const w = national()
+    const screens = fakeUi()
+    const time = clock((tick) => {
+      if (tick === 11) screens.pressGuideStop()
+    })
+    const { flow, sent } = makeFlow({
+      ui: screens.ui,
+      adapter: w.adapter,
+      storage: fakeStorage(),
+      ...time,
+    })
+
+    await flow.start(FARINE)
+
+    expect(w.follows.count).toBe(0)
+    expect(w.writes).toEqual([])
+    expect(expectConform(sent[0])).toMatchObject({ outcome: 'aborted' })
+    expect(screens.screens()).not.toContain('error')
+  })
+
+  it('le bouton est là dès l’arrivée : aucune carte, l’agent entre tout de suite (rien ne change pour un magasin déjà choisi)', async () => {
+    const w = national({ leaves: true })
+    w.state.chosen = true
+    const screens = fakeUi()
+    const { flow } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage: fakeStorage() })
+
+    void flow.start(FARINE)
+    await vi.waitFor(() => expect(w.follows.count).toBe(1))
+
+    expect(screens.screens()).not.toContain('guide')
+    expect(w.follows.count).toBe(1)
+  })
+
+  it('la page du magasin qui suit (note « magasin » d’une page d’avant) : « Ton magasin est choisi », puis le passage', async () => {
+    // Given : la page d'avant a noté l'étape 1 ; cette page est celle du magasin, la personne est connectée
+    const storage = fakeStorage({ [GUIDE_KEY]: `${RUN_ID}|2|store` })
+    const w = world({ chosen: true, member: true })
+    const screens = fakeUi()
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage })
+
+    await flow.start(FARINE)
+
+    expect(screens.propsOf('guide')).toEqual([
+      expect.objectContaining({ step: 'store', stage: 'done' }),
+    ])
+    expect(expectConform(sent[0]).outcome).toBe('completed')
+    expect(storage.getItem(GUIDE_KEY)).toBeNull()
+  })
+
+  it('l’adaptateur de Leclerc : « magasin choisi » quand la page montre « Commencer mes courses », le champ du code postal désigné sans rien toucher', () => {
+    const make = (html: string) => {
+      document.body.innerHTML = html
+      return new LeclercAdapter(
+        fakeSite(() => ({ body: '' }), {
+          location: { hostname: 'www.leclercdrive.fr', pathname: '/' },
+          pageText: () => document.documentElement.outerHTML,
+          startButton: () => findStartButton(document),
+          storeField: () => findPostalCodeField(document),
+        }).deps,
+      )
+    }
+    const nationalHtml =
+      '<header><a href="/connexion">Se connecter</a></header><main><h1>Mes courses en ligne</h1><p>1. Je saisis mon code postal</p><form><input id="cp" type="text" placeholder="Code postal ou ville"><button type="submit">Lancer la recherche</button><button type="button">Me géolocaliser</button></form></main>'
+    const before = nationalHtml
+    const adapter = make(nationalHtml)
+
+    expect(adapter.storeChosenOnPage()).toBe(false)
+    expect(adapter.guideTarget('store')?.element.id).toBe('cp')
+    expect(document.body.innerHTML).toBe(document.body.innerHTML)
+    expect(before).toBe(nationalHtml)
+    expect((document.getElementById('cp') as HTMLInputElement).value).toBe('')
+
+    make(
+      nationalHtml.replace('</main>', '<a id="go" role="button">Commencer mes courses</a></main>'),
+    )
+    expect(adapter.storeChosenOnPage()).toBe(true)
+  })
+})
+
+describe('le champ du code postal de l’accueil (DRV-753) : désigné seulement si on en est sûr', () => {
+  const page = (html: string) => {
+    document.body.innerHTML = html
+    return findPostalCodeField(document)
+  }
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('un champ qui dit « code postal » (texte d’aide, nom lu à voix haute, étiquette ou autocomplete)', () => {
+    expect(page('<input id="a" placeholder="Votre code postal">')?.element.id).toBe('a')
+    expect(page('<input id="b" aria-label="Code postal">')?.element.id).toBe('b')
+    expect(page('<label for="c">Code postal</label><input id="c" type="search">')?.element.id).toBe(
+      'c',
+    )
+    expect(page('<input id="d" autocomplete="postal-code">')?.element.id).toBe('d')
+  })
+
+  it('sans indice, le seul champ du bloc qui porte « Lancer la recherche »', () => {
+    expect(
+      page(
+        '<div><input id="q"><button>Lancer la recherche</button></div><input id="news" type="email">',
+      )?.element.id,
+    ).toBe('q')
+  })
+
+  it('« Rechercher » seul n’est pas le bouton relevé : seul « Lancer la recherche » désigne le champ', () => {
+    expect(page('<div><input id="q"><button>Rechercher</button></div>')).toBeNull()
+  })
+
+  it('deux champs sans indice dans le bloc du bouton, ou aucun bouton : rien n’est désigné (on ne devine pas)', () => {
+    expect(
+      page('<form><input id="x"><input id="y"><button>Lancer la recherche</button></form>'),
+    ).toBeNull()
+    expect(page('<input id="z">')).toBeNull()
+    expect(page('<input type="password" placeholder="Code postal">')).toBeNull()
+    expect(
+      page('<input type="hidden" name="postal"><input disabled placeholder="Code postal">'),
+    ).toBeNull()
+  })
+})
+
 describe('les textes du guide : courts, simples, au tutoiement (repas-po)', () => {
   const sentences = (text: string) =>
     text
@@ -606,6 +808,7 @@ describe('les textes du guide : courts, simples, au tutoiement (repas-po)', () =
     S.guide.store.title,
     S.guide.store.text('Choisir mon mode de livraison'),
     S.guide.store.text(null),
+    S.guide.store.postalCode,
     S.guide.login.title,
     S.guide.login.text('Se connecter'),
     S.guide.login.text(null),

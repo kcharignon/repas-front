@@ -225,6 +225,43 @@ describe('le guide d’une étape (DRV-751)', () => {
   /** Les conteneurs que l'agent a posés dans la page : celui de l'interface, et celui du repère (le second, sans prise sur les touchers). */
   const hosts = () => [...document.documentElement.children].filter((el) => el.shadowRoot !== null)
 
+  it('la carte ne quitte le bas pour un mur de cookies QUE si l’étape le demande (clearOfConsent) : Auchan et la connexion restent où elles sont', () => {
+    const rect = (top: number, bottom: number) =>
+      ({
+        top,
+        bottom,
+        left: 0,
+        right: 300,
+        width: 300,
+        height: bottom - top,
+        x: 0,
+        y: top,
+        toJSON: () => ({}),
+      }) as DOMRect
+    document.body.innerHTML = '<button id="wall">Tout accepter</button>'
+    const spy = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      if (this.id === 'wall') return rect(640, 690)
+      if (this.classList.contains('guide')) {
+        return this.classList.contains('top') ? rect(8, 268) : rect(500, 760)
+      }
+      return rect(0, 0)
+    })
+    try {
+      const wanted = open()
+      void wanted.show('guide', props({ clearOfConsent: true }))
+      expect(shadow().querySelector('.screen.guide')?.classList.contains('top')).toBe(true)
+      wanted.close()
+
+      const other = open()
+      void other.show('guide', props())
+      expect(shadow().querySelector('.screen.guide')?.classList.contains('top')).toBe(false)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
   it('étape 1 sur 2 : un repère, un titre, une phrase qui dit quoi faire et où, ce que l’agent fait, et UNE seule action', () => {
     const handle = open()
     void handle.show('guide', props())

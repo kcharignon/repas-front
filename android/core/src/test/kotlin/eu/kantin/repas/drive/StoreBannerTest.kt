@@ -50,10 +50,25 @@ class StoreBannerTest {
     @Test
     fun `sur l'accueil du magasin ou toute page qui n'en est pas une, un plan dit d'ouvrir son magasin, sans alarme ni bouton`() {
         listOf(storeRoot, null, "https://courses-test.leclercdrive.fr/autre-page").forEach {
-            assertEquals(it, StoreBanner.OPEN, StoreBanner.of(plan, it))
-            assertEquals(it, StoreBanner.OPEN, StoreBanner.of(plan, it, PageTrouble.NONE))
+            assertEquals(it, StoreBanner.OPEN, StoreBanner.of(plan, it, storeKnown = true))
+            assertEquals(it, StoreBanner.OPEN, StoreBanner.of(plan, it, PageTrouble.NONE, storeKnown = true))
         }
         assertFalse(StoreBanner.OPEN.hasAction)
+    }
+
+    /**
+     * DRV-753 (recette du 2026-11-01) : au premier usage, aucun magasin n'a jamais été ouvert dans l'application, et « Commencer mes courses » n'est pas sur le site (il
+     * n'apparaît qu'une fois le magasin choisi). Le message qui le désignait mentait : il se tait, c'est la carte du guide de l'agent qui dit quoi faire. Une page refusée ou
+     * une vérification gardent leur message.
+     */
+    @Test
+    fun `sans magasin deja ouvert, aucun message ne designe un bouton Commencer mes courses qui n'existe pas encore`() {
+        listOf(storeRoot, null, "https://courses-test.leclercdrive.fr/autre-page").forEach {
+            assertEquals(it, StoreBanner.NONE, StoreBanner.of(plan, it))
+            assertEquals(it, StoreBanner.NONE, StoreBanner.of(plan, it, PageTrouble.NONE, storeKnown = false))
+            assertEquals(it, StoreBanner.PLAN, StoreBanner.of(plan, it, PageTrouble.HTTP_ERROR))
+            assertEquals(it, StoreBanner.VERIFICATION, StoreBanner.of(plan, it, PageTrouble.VERIFICATION))
+        }
     }
 
     /**

@@ -232,6 +232,10 @@ export function fakeAdapter(
     stats?: () => RequestStats
     /** Ce que l'accueil de l'enseigne laisse suivre (DRV-625, par défaut : pas de lien « Commencer mes courses »). */
     entry?: EntryReading | (() => EntryReading)
+    /** La page dit-elle qu'un magasin est choisi (DRV-753 : « Commencer mes courses » est là) ? Par défaut l'adaptateur n'a pas cette lecture (comme Leclerc avant DRV-753). */
+    storeChosen?: () => boolean
+    /** Le contrôle que la page offre pour une étape guidée (DRV-753, par défaut aucun). */
+    guideTarget?: RetailerAdapter['guideTarget']
     /** L'enseigne refait l'entrée après la connexion (DRV-748, par défaut oui, comme Leclerc). */
     entersAfterLogin?: boolean
     /** Appelé quand l'agent suit le lien ; peut ne jamais rendre la main (la page a quitté le script). */
@@ -260,6 +264,8 @@ export function fakeAdapter(
   let peak = 0
   const adapter: RetailerAdapter = {
     entersAfterLogin: options.entersAfterLogin ?? true,
+    ...(options.storeChosen && { storeChosenOnPage: options.storeChosen }),
+    ...(options.guideTarget && { guideTarget: options.guideTarget }),
     readStore:
       options.store ??
       (() => ({

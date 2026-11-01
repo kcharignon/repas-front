@@ -128,14 +128,15 @@ class OpeningWatch(
      * toujours une page de magasin (l'utilisateur choisit son magasin). Seule une page de [site] (l'enseigne de la surveillance, ou celle que
      * l'appelant donne) où le pont existe reçoit le message ([RetailerSite.acceptsPlanOn]).
      */
-    fun canDeliver(url: String?, entersStore: Boolean = false, site: RetailerSite = this.site): Boolean =
-        !failed && status < HTTP_ERROR_FROM && site.acceptsPlanOn(url, entersStore)
+    fun canDeliver(url: String?, entersStore: Boolean = false, site: RetailerSite = this.site, storeKnown: Boolean = false): Boolean =
+        !failed && status < HTTP_ERROR_FROM && site.acceptsPlanOn(url, entersStore, storeKnown)
 
     /**
      * Le message de ce passage peut-il partir vers la page d'adresse [url] ? L'enseigne et la nature du passage (un plan entre dans le magasin depuis
      * l'accueil, la lecture du magasin attend une page de magasin) sont celles de la demande : un plan d'une enseigne ne part jamais vers la page d'une autre.
      */
-    fun canDeliver(request: PassRequest, url: String?): Boolean = canDeliver(url, entersStore = !request.isSetup, site = request.site)
+    fun canDeliver(request: PassRequest, url: String?, storeKnown: Boolean = false): Boolean =
+        canDeliver(url, entersStore = !request.isSetup, site = request.site, storeKnown = storeKnown)
 
     companion object {
         /** À partir de ce code HTTP, une réponse de la page principale est une erreur. */
