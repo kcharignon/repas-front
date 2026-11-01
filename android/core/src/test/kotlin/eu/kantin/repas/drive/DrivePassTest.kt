@@ -97,6 +97,25 @@ class DrivePassTest {
     }
 
     @Test
+    fun `le magasin choisi que l'agent rend avec un envoi arrete arrive a Repas tel quel, l'application n'y change rien (DRV-755)`() {
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+        val chosen = """{"id":"000456","host":"fd8-courses.leclercdrive.fr","baseUrl":"https://fd8-courses.leclercdrive.fr/magasin-000456-000456","label":"Ville-Test"}"""
+
+        val ended = pass.finish(
+            """{"v":1,"type":"result","runId":"$runId","agentVersion":"0.60.0","outcome":"aborted","store":{"id":"000000"},"chosenStore":$chosen,"lines":[]}""",
+        )
+
+        assertNotNull(ended)
+        assertNull(pass.current())
+        val result = JSONObject(pass.pendingMessages().single()).getJSONObject("result")
+        assertEquals("aborted", result.getString("outcome"))
+        // Le magasin est celui que l'agent a lu, sans une lettre de plus ni de moins : l'application ne le lit pas, ne le choisit pas, ne l'enregistre pas
+        assertEquals(JSONObject(chosen).toString(), result.getJSONObject("chosenStore").toString())
+        assertEquals("000000", result.getJSONObject("store").getString("id"))
+    }
+
+    @Test
     fun `un resultat d'un autre passage, sans passage ou illisible est ignore`() {
         val pass = pass()
         assertNull(pass.finish(result()))

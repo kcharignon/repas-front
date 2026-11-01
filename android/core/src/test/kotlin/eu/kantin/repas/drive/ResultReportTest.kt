@@ -31,6 +31,23 @@ class ResultReportTest {
     }
 
     @Test
+    fun `le magasin choisi a la place de celui du plan n'est montre que par ses trois derniers chiffres (DRV-755)`() {
+        val chosen = """
+            {"v":1,"type":"result","runId":"8f14e45f-ceea-467a-9575-8e6b8c0a1b2c","agentVersion":"1.0.0","outcome":"aborted",
+             "store":{"id":"123456"},
+             "chosenStore":{"id":"000456","host":"fd8-courses.leclercdrive.fr","baseUrl":"https://fd8-courses.leclercdrive.fr/magasin-000456-000456","label":"Ville-Test"},
+             "lines":[]}
+        """.trimIndent()
+
+        val report = ResultReport.render(chosen)
+
+        assertTrue(report.contains("Magasin choisi : …456"))
+        assertFalse(report.contains("000456"))
+        assertFalse(report.contains("leclercdrive"))
+        assertFalse(report.contains("Ville-Test"))
+    }
+
+    @Test
     fun `un resultat montre l'issue, la version, l'erreur et chaque ligne`() {
         val report = ResultReport.render(result)
 

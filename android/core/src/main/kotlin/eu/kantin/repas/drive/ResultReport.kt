@@ -29,6 +29,8 @@ object ResultReport {
         appendLine("Issue : " + message.optString("outcome", "?"))
         appendLine("Version de l'agent : " + message.optString("agentVersion", "?"))
         appendLine("Magasin : " + storeTail(message.optJSONObject("store")?.optString("id").orEmpty()))
+        // Le magasin que la personne a choisi à la place de celui du plan (DRV-755) : ses trois derniers chiffres, comme le magasin du plan
+        message.optJSONObject("chosenStore")?.let { appendLine("Magasin choisi : " + storeTail(it.optString("id"))) }
         message.optJSONObject("error")?.let { appendLine("Erreur : " + it.optString("code", "?") + " (" + it.optString("message") + ")") }
         // Les compteurs du passage (ticket L) : des nombres seulement, quand l'agent en donne.
         message.optJSONObject("stats")?.let {
