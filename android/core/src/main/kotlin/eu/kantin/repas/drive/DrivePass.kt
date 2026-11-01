@@ -246,8 +246,8 @@ enum class StoreBanner {
             }
             trouble != PageTrouble.NONE -> PLAN
             request.site.isMobileSite(url) -> MOBILE
-            // Une page du site où le pont n'existe pas (la page du mot de passe) : l'agent n'y est pas, l'écran parle à sa place
-            request.site.isNavigable(url) && !request.site.isBridgePage(url) -> LOGIN
+            // La page du mot de passe de l'enseigne (nom désigné par l'enseigne, jamais une page sans pont quelconque) : l'agent n'y est pas, l'écran parle à sa place
+            request.site.isPasswordPage(url) -> LOGIN
             request.site.isStorePage(url) -> NONE
             // L'accueil de l'enseigne : l'agent y suit « Commencer mes courses » ou dit lui-même de le toucher (DRV-625), le bandeau se tait.
             request.site.isHomePage(url) -> NONE

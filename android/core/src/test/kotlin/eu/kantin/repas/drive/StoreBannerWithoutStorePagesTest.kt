@@ -62,6 +62,21 @@ class StoreBannerWithoutStorePagesTest {
     }
 
     @Test
+    fun `DRV-757 le message de connexion n'est que pour la page du mot de passe de l'enseigne, jamais pour une page sans pont qui n'en est pas une`() {
+        // Le domaine nu d'une enseigne à pages de magasin : on y navigue, sans pont, mais ce n'est pas une page de mot de passe
+        val bare = "https://exemple-a.test/"
+        assertTrue(withPages.isNavigable(bare))
+        assertFalse(withPages.isBridgePage(bare))
+        assertFalse(withPages.isPasswordPage(bare))
+        assertTrue(noPages.isPasswordPage(passwordPage))
+        assertFalse(noPages.isPasswordPage("https://www.exemple-c.test/courses"))
+
+        assertFalse(StoreBanner.LOGIN == StoreBanner.of(planA, bare))
+        assertFalse(StoreBanner.LOGIN == StoreBanner.of(plan, "https://www.exemple-c.test/courses"))
+        assertEquals(StoreBanner.LOGIN, StoreBanner.of(plan, passwordPage))
+    }
+
+    @Test
     fun `Auchan, la page du mot de passe a le message de connexion et la page du site non`() {
         val auchan = RetailerSites.DEFAULT.byId("auchan")!!
         val request = DrivePlan.parse(

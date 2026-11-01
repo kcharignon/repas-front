@@ -74,9 +74,15 @@ data class SiteHost(
      * contrôles du cœur (chaque message relit son origine, un plan ne part que vers une page de la famille). Absent : tout le motif (comportement d'avant).
      */
     val bridgeOnlyOn: Regex? = null,
+    /**
+     * Ce nom est la page du MOT DE PASSE de l'enseigne (DRV-757) : on y navigue, jamais de pont ni d'agent, et l'écran y pose son propre message de connexion
+     * ([StoreBanner.LOGIN]). Seulement un nom que l'enseigne désigne ainsi : jamais n'importe quelle page sans pont (un domaine nu, un sous-domaine d'images).
+     */
+    val passwordPage: Boolean = false,
 ) {
     init {
         require(bridgeOnlyOn == null || bridge) { "Une famille de noms ne resserre que le pont." }
+        require(!passwordPage || !bridge) { "Une page de mot de passe n'a ni pont ni agent." }
     }
 }
 
@@ -148,6 +154,7 @@ class RetailerSite(
 ) {
     private val navigation: List<HostPattern> = hosts.map { it.pattern }
     private val bridge: List<SiteHost> = hosts.filter { it.bridge }
+    private val passwordHosts: List<HostPattern> = hosts.filter { it.passwordPage }.map { it.pattern }
 
     /** Les règles d'origine de la WebView pour le pont et l'injection de l'agent : celles des hôtes qui portent le pont, jamais celles des autres. */
     val bridgeOrigins: Set<String> = bridge.mapTo(LinkedHashSet()) { it.pattern.origin }
@@ -185,6 +192,10 @@ class RetailerSite(
 
     /** Une page `https` de cette enseigne : l'application la garde dans la WebView. Rien d'autre (autre enseigne, autre site) n'y reste. */
     fun isNavigable(url: String?): Boolean = NavigationPolicy.httpsHostOf(url)?.let(::navigatesTo) ?: false
+
+    /** Une page `https` du MOT DE PASSE de l'enseigne (`compte.auchan.fr`) : un nom que l'enseigne désigne ainsi ([SiteHost.passwordPage]), jamais une autre page sans pont. */
+    fun isPasswordPage(url: String?): Boolean =
+        NavigationPolicy.httpsHostOf(url)?.let { host -> passwordHosts.any { it.matches(host) } } ?: false
 
     /** Une page `https` où le pont `repasHost` et l'agent existent (un sous-ensemble des pages où l'on navigue). */
     fun isBridgePage(url: String?): Boolean = NavigationPolicy.httpsHostOf(url)?.let(::bridgesOn) ?: false
