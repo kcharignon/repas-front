@@ -24,14 +24,21 @@ const SIZES = [
  * Le mur de la mesure : un lien de réponse EN HAUT (« Continuer sans accepter → », la flèche dans son libellé) et deux boutons en bas assez haut pour que la carte pleine, en bas,
  * les couvre : elle n'a alors de place qu'en haut, où se trouve le lien. Posé par la page, comme un vrai mur (jamais par l'agent).
  */
-const WALL = `(() => {
+const wallWith = (topLabel: string): string => `(() => {
   const wall = document.createElement('div')
   wall.id = 'cookie-wall'
-  wall.setAttribute('style', 'position:fixed;inset:0;z-index:2147483000;background:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:16px 16px 190px')
-  wall.innerHTML = '<div><a href="#" role="button" class="wall-btn" id="refuse">Continuer sans accepter →</a><h2>Respect de votre vie privée</h2></div><div style="display:flex;flex-direction:column;gap:12px"><button type="button" class="wall-btn">Paramétrer les cookies</button><button type="button" class="wall-btn">Tout accepter</button></div>'
+  wall.setAttribute('style', 'position:fixed;inset:0;z-index:2147483000;background:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:16px')
+  wall.innerHTML = '<div><a href="#" role="button" class="wall-btn" id="refuse">${topLabel}</a><h2>Respect de votre vie privée</h2></div><div style="display:flex;flex-direction:column;gap:12px"><button type="button" class="wall-btn">Paramétrer les cookies</button><button type="button" class="wall-btn">Tout accepter</button></div>'
   wall.querySelector('#refuse').addEventListener('click', (event) => { event.preventDefault(); wall.remove() })
   document.body.appendChild(wall)
 })()`
+/** Le mur de la mesure, et trois murs dont le lien du haut a un libellé que l'agent ne connaît pas : une liste de libellés devinée ne suffit pas, la zone du mur entière est protégée. */
+const WALLS = [
+  ['libellé connu', 'Continuer sans accepter →'],
+  ['libellé inconnu 1', 'Poursuivre sans consentir →'],
+  ['libellé inconnu 2', 'Poursuivre sans accepter'],
+  ['libellé inconnu 3', 'Refuser et continuer'],
+] as const
 /** Les réponses du mur : le lien du haut (flèche comprise) et les boutons du bas. */
 const ANSWERS = ['.wall-btn']
 
@@ -55,23 +62,66 @@ async function provesClear(page: Page, size: { width: number; height: number }) 
 }
 
 for (const size of SIZES) {
-  test.describe(`mur de cookies, ${size.width} × ${size.height}`, () => {
-    test.use({ viewport: size })
+  for (const [name, topLabel] of WALLS) {
+    const WALL = wallWith(topLabel)
+    test.describe(`mur de cookies (${name}), ${size.width} × ${size.height}`, () => {
+      test.use({ viewport: size })
 
-    test('Leclerc : la carte, pleine ou barre, ne couvre aucune réponse du mur, le lien du haut compris, clavier fermé puis ouvert', async ({
-      page,
-      agentCode,
-    }) => {
-      test.setTimeout(90_000)
-      const fake = await startFakeLeclerc({ hosts: MOBILE_HOSTS })
-      try {
-        fake.setBehavior({ mobile: {} })
-        const app = await openWithBridge(page, fake, agentCode, {
-          path: '/',
-          origin: fake.mobileOrigins.www,
-          asApplication: true,
+      test('Leclerc : la carte, pleine ou barre, ne couvre aucune réponse du mur, le lien du haut compris, clavier fermé puis ouvert', async ({
+        page,
+        agentCode,
+      }) => {
+        test.setTimeout(90_000)
+        const fake = await startFakeLeclerc({ hosts: MOBILE_HOSTS })
+        try {
+          fake.setBehavior({ mobile: {} })
+          const app = await openWithBridge(page, fake, agentCode, {
+            path: '/',
+            origin: fake.mobileOrigins.www,
+            asApplication: true,
+          })
+          app.answerHello(PLAN(FARINE))
+          await expect(page.locator('.g-text')).toBeAttached({ timeout: 15_000 })
+          await page.evaluate(WALL)
+          await expect(page.locator('.g-text')).toHaveText(
+            'D’abord, réponds aux cookies, dans la page.',
+          )
+
+          await provesClear(page, size)
+
+          // Un toucher sur la barre ne redonne PAS la grande carte par-dessus les réponses du mur (elle reste une barre tant que le mur est là)
+          await page.locator('.g-bar').click()
+          await expectClear(page, ANSWERS, 5)
+          await expect(page.locator('.screen.guide.min')).toHaveCount(1)
+
+          // La personne répond avec le lien du HAUT : le mur part, l'envoi n'est pas arrêté
+          await page.locator('#refuse').click()
+          await expect(page.locator('#cookie-wall')).toHaveCount(0)
+          expect(app.messages.filter((message) => message.type === 'result')).toEqual([])
+        } finally {
+          await fake.close()
+        }
+      })
+
+      test('Auchan : même preuve avec un mur dont le lien de réponse est en haut', async ({
+        page,
+        fakeAuchan,
+        agentCode,
+      }) => {
+        fakeAuchan.setBehavior({ store: 'none' })
+        const app = await openWithBridge(page, {}, agentCode, {
+          origin: fakeAuchan.site,
+          path: '/courses',
         })
-        app.answerHello(PLAN(FARINE))
+        app.answerHello({
+          v: 1,
+          type: 'plan',
+          runId: RUN_ID,
+          retailer: 'auchan',
+          store: { id: STORE.id, host: STORE.host },
+          returnPath: '/drive/retour',
+          lines: [{ ingredientSlug: 'sel', name: 'Sel', status: 'HAVE_AT_HOME' }],
+        })
         await expect(page.locator('.g-text')).toBeAttached({ timeout: 15_000 })
         await page.evaluate(WALL)
         await expect(page.locator('.g-text')).toHaveText(
@@ -79,42 +129,9 @@ for (const size of SIZES) {
         )
 
         await provesClear(page, size)
-
-        // La personne répond avec le lien du HAUT : le mur part, l'envoi n'est pas arrêté
-        await page.getByRole('button', { name: /Continuer sans accepter/ }).click()
-        await expect(page.locator('#cookie-wall')).toHaveCount(0)
-        expect(app.messages.filter((message) => message.type === 'result')).toEqual([])
-      } finally {
-        await fake.close()
-      }
-    })
-
-    test('Auchan : même preuve avec un mur dont le lien de réponse est en haut', async ({
-      page,
-      fakeAuchan,
-      agentCode,
-    }) => {
-      fakeAuchan.setBehavior({ store: 'none' })
-      const app = await openWithBridge(page, {}, agentCode, {
-        origin: fakeAuchan.site,
-        path: '/courses',
+        await page.locator('.g-bar').click()
+        await expectClear(page, ANSWERS, 5)
       })
-      app.answerHello({
-        v: 1,
-        type: 'plan',
-        runId: RUN_ID,
-        retailer: 'auchan',
-        store: { id: STORE.id, host: STORE.host },
-        returnPath: '/drive/retour',
-        lines: [{ ingredientSlug: 'sel', name: 'Sel', status: 'HAVE_AT_HOME' }],
-      })
-      await expect(page.locator('.g-text')).toBeAttached({ timeout: 15_000 })
-      await page.evaluate(WALL)
-      await expect(page.locator('.g-text')).toHaveText(
-        'D’abord, réponds aux cookies, dans la page.',
-      )
-
-      await provesClear(page, size)
     })
-  })
+  }
 }

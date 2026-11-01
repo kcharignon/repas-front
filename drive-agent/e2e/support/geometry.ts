@@ -79,6 +79,14 @@ export async function expectClear(
   limit = 3,
 ): Promise<'full' | 'bar' | 'away'> {
   await page.waitForTimeout(900)
+  // Le contrôle « un doigt tomberait sur le contrôle » compte tout hôte à shadow root FERMÉ comme la page ; il ne vaut que si les hôtes de l'agent sont ouverts (`OPEN_SHADOW`) : sans cela il deviendrait vrai sans bruit
+  const open = await page.evaluate(() =>
+    [...document.documentElement.children].some((host) => host.shadowRoot !== null),
+  )
+  expect(
+    open,
+    'aucun hôte de l’agent n’a de shadow root ouvert : la preuve du toucher ne vaudrait rien',
+  ).toBe(true)
   const card = await cardBox(page)
   const must = await controls(page, selectors, limit)
   expect(must.length, 'rien à protéger à l’écran : le test ne prouverait rien').toBeGreaterThan(0)

@@ -354,7 +354,7 @@ test('« Inscription » touché par erreur : la création de compte dit à la pe
   })
 })
 
-test('DRV-757 : une page du compte de l’enseigne dont le chemin est inconnu est quand même la connexion : « Étape 2 sur 2 · Connecte-toi », jamais « Choisis ton magasin » (mesuré sur le téléphone)', async ({
+test('DRV-757, défense : une page du compte de l’enseigne au chemin inconnu (que l’application ne livrerait pas aujourd’hui : seul `authentification.aspx` l’est) se lit quand même comme la connexion, jamais comme le choix du magasin', async ({
   page,
   agentCode,
 }) => {
