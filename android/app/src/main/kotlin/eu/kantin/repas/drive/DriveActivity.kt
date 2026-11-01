@@ -244,7 +244,11 @@ class DriveActivity : Activity() {
         // Un plan dont le magasin vient d'être ouvert ici (DRV-759, « Utiliser ce magasin ») s'ouvre sur sa page, pas sur l'accueil où il faudrait choisir son magasin une seconde fois ; la page refusée par le site ramène à l'accueil
         if (request is DrivePlan) {
             val opening = request.openingPage(repasApp.storePaths.of(site))
-            if (opening != request.startUrl) homeTarget = opening
+            if (opening != request.startUrl) {
+                homeTarget = opening
+                // Une page « introuvable » servie avec le statut 200 ramène aussi à l'accueil, comme pour « Finaliser »
+                watchTitle = true
+            }
             return opening
         }
         return request?.startUrl ?: DriveEntry.startPage(intent?.getStringExtra(EXTRA_START_URL), site)
@@ -589,7 +593,8 @@ class DriveActivity : Activity() {
      * du drive s'ouvre à la place, une seule fois (jamais de boucle). Le bandeau reste : le panier y est dans la même icône.
      */
     private fun fallBackToDriveHome(outcome: FinalizeOutcome) {
-        repasApp.finalizeOutcomes.record(outcome, site)
+        // Une forme de « Finaliser » ne s'enregistre que pour « Finaliser » : un passage de plan qui se replie n'en est pas un
+        if (pass.current() == null) repasApp.finalizeOutcomes.record(outcome, site)
         homeTarget = null
         watchTitle = false
         clearHistoryWhenLoaded = true
