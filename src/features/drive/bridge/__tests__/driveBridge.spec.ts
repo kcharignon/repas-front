@@ -486,6 +486,53 @@ describe('driveBridge', () => {
       expect(events[0]).toMatchObject({ kind: 'result', result: setupResult })
     })
 
+    it('le magasin choisi à la place de celui du plan (DRV-755) arrive avec le résultat arrêté du passage, tel que l’agent l’a lu', () => {
+      const { bridge, events, listen, reply } = setup()
+      listen()
+      bridge.startRun(plan(), 'l1')
+      const chosenStore = {
+        id: '000456',
+        host: 'fd8-courses.leclercdrive.fr',
+        baseUrl: 'https://fd8-courses.leclercdrive.fr/magasin-000456-000456',
+        label: 'Ville-Test',
+      }
+
+      reply({
+        v: 1,
+        type: 'drive.result',
+        result: { ...result(), outcome: 'aborted', lines: [], chosenStore },
+      })
+
+      expect(events).toHaveLength(1)
+      expect(events[0]).toMatchObject({
+        kind: 'result',
+        result: { outcome: 'aborted', chosenStore },
+      })
+    })
+
+    it('un magasin choisi sur un autre résultat qu’un envoi arrêté, ou avec des articles, est un résultat invalide', () => {
+      const { events, listen, reply } = setup()
+      listen()
+      const chosenStore = {
+        id: '000456',
+        host: 'fd8-courses.leclercdrive.fr',
+        baseUrl: 'https://fd8-courses.leclercdrive.fr/magasin-000456-000456',
+        label: null,
+      }
+
+      reply({ v: 1, type: 'drive.result', result: { ...result(), chosenStore } })
+      reply({
+        v: 1,
+        type: 'drive.result',
+        result: { ...result(), outcome: 'aborted', chosenStore },
+      })
+
+      expect(events).toEqual([
+        { kind: 'invalid', detail: 'outcome' },
+        { kind: 'invalid', detail: 'lines' },
+      ])
+    })
+
     it('signale un résultat invalide sans le recopier', () => {
       const { events, listen, reply } = setup()
       listen()

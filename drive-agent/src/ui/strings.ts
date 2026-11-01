@@ -1083,6 +1083,18 @@ export const S = {
       noteSetup: 'Rien n’est enregistré, tu pourras recommencer.',
     },
   },
+  /**
+   * Le magasin que la personne a ouvert n'est pas celui que Repas avait retenu (DRV-755, repas-po) : une carte, comme le guide. Elle dit quel magasin est ouvert (son nom
+   * de ville quand la page le donne, sinon son numéro), propose de l'utiliser (UN geste : Repas le retient et reprend l'envoi) ou d'en choisir un autre, et garde
+   * la sortie « Arrêter pour l'instant ». Jamais « Fermer », jamais un mot d'erreur : ce n'est pas une panne.
+   */
+  chosenStore: {
+    title: (label: string | null, tail: string) =>
+      label === null ? `Tu as ouvert le magasin …${tail}` : `Tu as ouvert ${label}`,
+    text: 'Repas avait retenu un autre magasin. Tu veux envoyer ta liste ici ?',
+    use: 'Utiliser ce magasin',
+    other: 'Choisir un autre magasin',
+  },
   error: {
     /** Le message se ferme et la page reste là : rien d'autre ne change. */
     close: 'Fermer ce message',

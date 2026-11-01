@@ -91,6 +91,77 @@ export function readStorePaths(location: LocationLike, label: string | null = nu
   }
 }
 
+/** Les petits mots d'un nom de ville qui restent en minuscules quand ils ne le commencent pas (« Saint-Maur-des-Fosses »). */
+const SMALL_WORDS = new Set([
+  'de',
+  'du',
+  'des',
+  'la',
+  'le',
+  'les',
+  'sur',
+  'sous',
+  'en',
+  'aux',
+  'au',
+  'et',
+  'l',
+  'd',
+])
+
+/**
+ * Le nom de la ville du magasin, lu dans l'adresse de la page (`/magasin-N-N-saint-priest`, avec ou sans `.aspx`) : « Saint-Priest ». Du texte pour l'écran seulement : des
+ * lettres, des chiffres, des espaces, l'apostrophe et le trait d'union, 80 caractères au plus. `null` quand l'adresse n'a pas de ville ou qu'elle n'est pas lisible
+ * (jamais un morceau d'adresse brut à l'écran : la personne voit alors le numéro du magasin).
+ */
+export function cityOfPath(pathname: string): string | null {
+  const slug = /^\/magasin-\d{1,12}-\d{1,12}-([A-Za-z0-9%_-]{1,100})(?:\.aspx)?(?:\/|$)/i.exec(
+    pathname,
+  )?.[1]
+  if (slug === undefined) return null
+  let decoded: string
+  try {
+    decoded = decodeURIComponent(slug)
+  } catch {
+    return null
+  }
+  const words = decoded
+    .replace(/_/g, '-')
+    .split('-')
+    .filter((word) => word !== '')
+  if (words.length === 0 || words.some((word) => !/^[\p{L}\p{N}']{1,40}$/u.test(word))) return null
+  const city = words
+    .map((word, rank) => {
+      const lower = word.toLowerCase()
+      return rank > 0 && SMALL_WORDS.has(lower)
+        ? lower
+        : lower.charAt(0).toUpperCase() + lower.slice(1)
+    })
+    .join('-')
+  return city.length <= 80 ? city : null
+}
+
+/**
+ * La page d'où l'on vient est-elle l'ACCUEIL NATIONAL de l'enseigne (`https://www.leclercdrive.fr/…`), où l'on choisit son magasin (DRV-755) ? Une lecture de `document.referrer` :
+ * `sessionStorage` ne passe pas de `www` à `m-courses` (deux origines), le référent si. Une adresse illisible, ou d'un autre site, n'en est pas.
+ */
+export function cameFromNationalHome(
+  referrer: string,
+  page: Pick<LocationLike, 'protocol' | 'port'> = {},
+): boolean {
+  try {
+    const url = new URL(referrer)
+    return (
+      url.protocol === (page.protocol ?? 'https:') &&
+      url.port === (page.port ?? '') &&
+      STORE_HOST.test(url.hostname) &&
+      /^www\./i.test(url.hostname)
+    )
+  } catch {
+    return false
+  }
+}
+
 /** Le point de livraison (`sNoPointLivraison`) lu dans le texte de la page, `null` s'il n'y est pas. */
 export function findDeliveryPoint(pageText: string): string | null {
   const found = /["']?sNoPointLivraison["']?\s*[:=]\s*["']?(\w{3,20})["']?/.exec(

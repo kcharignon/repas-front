@@ -20,6 +20,15 @@ export const MOBILE_STORE = {
   cityMobile: 'ville-test',
   cityServer: 'Ville-Test',
 } as const
+/**
+ * Un SECOND magasin (DRV-755) : celui que la personne choisit quand le plan est fait pour `MOBILE_STORE` (`otherStore`). Il n'a que sa page `m-courses` : on n'y fait aucun passage.
+ */
+export const MOBILE_OTHER_STORE = {
+  id: '000002',
+  cityMobile: 'autre-ville',
+  cityServer: 'Autre-Ville',
+} as const
+export const MOBILE_OTHER_PAGE_PATH = `/magasin-${MOBILE_OTHER_STORE.id}-${MOBILE_OTHER_STORE.id}-${MOBILE_OTHER_STORE.cityMobile}`
 export const MOBILE_PAGE_PATH = `/magasin-${MOBILE_STORE.id}-${MOBILE_STORE.id}-${MOBILE_STORE.cityMobile}`
 export const MOBILE_CART_PATH = `/magasin-${MOBILE_STORE.id}-${MOBILE_STORE.id}`
 export const SERVER_PAGE_PATH = `/magasin-${MOBILE_STORE.id}-${MOBILE_STORE.id}-${MOBILE_STORE.cityServer}`
@@ -30,6 +39,8 @@ export const MOBILE_MEMBER_COOKIE = 'fake_m_member'
 export const MOBILE_STORE_COOKIE = 'fake_m_store'
 export const MOBILE_ANSWERED_COOKIE = 'fake_m_answered'
 export const MOBILE_CONSENT_COOKIE = 'fake_m_consent'
+/** Le magasin choisi sur l'accueil est le SECOND magasin (DRV-755) : posé avec `MOBILE_STORE_COOKIE`. */
+export const MOBILE_OTHER_COOKIE = 'fake_m_other'
 const setCookie = (name: string) => `document.cookie = '${name}=1; domain=leclercdrive.fr; path=/';`
 
 const euros = (cents: number): string => `${(cents / 100).toFixed(2).replace('.', ',')} €`
@@ -296,14 +307,21 @@ for (const b of document.querySelectorAll('.wall-btn')) b.addEventListener('clic
  */
 export function mobileAccueilPage(
   origins: MobileOrigins,
-  state: { chosen: boolean; consent: boolean; wall?: boolean | 'tall' | 'banner' },
+  state: {
+    chosen: boolean
+    consent: boolean
+    wall?: boolean | 'tall' | 'banner'
+    /** Le magasin qu'on choisit (ou a choisi) est le second (DRV-755). */
+    other?: boolean
+  },
 ): string {
+  const target = state.other === true ? MOBILE_OTHER_PAGE_PATH : MOBILE_PAGE_PATH
   const body = state.chosen
     ? `<h1>Faux Leclerc Ville-Test</h1>
 <p>Retrait de vos courses en drive</p>
 <p><button id="start-shopping" type="button" class="btn">Commencer mes courses</button></p>
 <script>
-document.getElementById('start-shopping').addEventListener('click', function () { location.assign('${origins.courses}${MOBILE_PAGE_PATH}'); });
+document.getElementById('start-shopping').addEventListener('click', function () { location.assign('${origins.courses}${target}'); });
 </script>`
     : `<h1>Mes courses en ligne en drive</h1>
 <form id="search" onsubmit="return false">
@@ -320,7 +338,7 @@ field.addEventListener('input', function () {
   const suggestion = document.getElementById('suggestion');
   if (suggestion) suggestion.addEventListener('click', function () {
     document.getElementById('results').innerHTML = '<h2>Choisissez votre service autour du ' + field.value + '</h2><div class="card"><p>Faux Leclerc Ville-Test</p><button id="pick" type="button" aria-label="Choisir ce magasin">→</button></div>';
-    document.getElementById('pick').addEventListener('click', function () { ${setCookie(MOBILE_STORE_COOKIE)} location.reload(); });
+    document.getElementById('pick').addEventListener('click', function () { ${setCookie(MOBILE_STORE_COOKIE)} ${state.other === true ? setCookie(MOBILE_OTHER_COOKIE) : ''} location.reload(); });
   });
 });
 </script>`
@@ -345,13 +363,18 @@ ${wallHtml(state.wall, state.consent)}
 export function mobileStorePage(
   origins: MobileOrigins,
   cart: ReadonlyMap<number, number>,
-  state: { member: boolean; question: boolean; footer: FooterForm },
+  state: { member: boolean; question: boolean; footer: FooterForm; other?: boolean },
 ): string {
   const { items, total } = totals(cart)
+  // Le second magasin (DRV-755) a ses propres liens : ses numéros, sa ville, le même serveur
+  const serverPath =
+    state.other === true
+      ? `/magasin-${MOBILE_OTHER_STORE.id}-${MOBILE_OTHER_STORE.id}-${MOBILE_OTHER_STORE.cityServer}`
+      : SERVER_PAGE_PATH
   const links: Record<FooterForm, string> = {
-    normal: `<a href="${origins.server}${SERVER_PAGE_PATH}/plan-du-site">Plan du site</a> <a href="${origins.server}${SERVER_PAGE_PATH}/mentions-legales">Mentions légales</a>`,
+    normal: `<a href="${origins.server}${serverPath}/plan-du-site">Plan du site</a> <a href="${origins.server}${serverPath}/mentions-legales">Mentions légales</a>`,
     none: '<a href="/aide">Aide</a>',
-    'two-hosts': `<a href="${origins.server}${SERVER_PAGE_PATH}/plan-du-site">Plan du site</a> <a href="${origins.server.replace('fd8-', 'fd9-')}${SERVER_PAGE_PATH}/mentions-legales">Mentions légales</a>`,
+    'two-hosts': `<a href="${origins.server}${serverPath}/plan-du-site">Plan du site</a> <a href="${origins.server.replace('fd8-', 'fd9-')}${serverPath}/mentions-legales">Mentions légales</a>`,
   }
   if (state.member && state.question) {
     return `<!doctype html>
@@ -374,7 +397,7 @@ for (const id of ['merge-yes', 'merge-no']) document.getElementById(id).addEvent
   const basketLink =
     state.footer === 'none'
       ? '/panier'
-      : `${origins.server}${SERVER_PAGE_PATH}/mobile-detail-panier.aspx?sProvenance=SM`
+      : `${origins.server}${serverPath}/mobile-detail-panier.aspx?sProvenance=SM`
   const menu = state.member
     ? '<li><a href="#">Mon compte</a></li>'
     : `<li><a id="login-link" href="${origins.account}${ACCOUNT_PATH}/creation-compte-ccc.aspx?s=16000&amp;v=&amp;u=&amp;r=%2Fdrive">Connexion / Inscription</a></li>`

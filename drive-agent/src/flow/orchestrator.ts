@@ -5,11 +5,14 @@
 // plan est validé et que la page est celle du bon magasin. Rien n'est envoyé au site avant cela. Un seul passage à la fois.
 import {
   LIMITS,
+  PROTOCOL_VERSION,
   ProtocolError,
   validatePlan,
+  validateResult,
   type ErrorCode,
   type PlanLine,
   type PlanMessage,
+  type ReadStore,
   type ResultLine,
   type ResultStats,
 } from '../../protocol'
@@ -17,10 +20,12 @@ import {
   RetailerError,
   type EntryReading,
   type GuideStep,
+  type RetailerAdapter,
   type RetailerCause,
   type RequestStats,
 } from '../retailers'
 import { own } from '../own'
+import { cleanText } from '../text'
 import { formatNeeded, summarySentence } from '../ui'
 import type { EntryKind, ProgressEntry } from '../ui'
 import type { RetailerNames } from '../retailers'
@@ -28,6 +33,8 @@ import { cardOf } from './card'
 import {
   GUIDE_CHECK_MS,
   GUIDE_DONE_MS,
+  GUIDE_MAX_MS,
+  GUIDE_POLL_MS,
   GUIDE_STUCK_CHECKS,
   guideProps,
   guideStepOf,
@@ -52,6 +59,9 @@ import {
 import { emptyState, RunStore, type RunState } from './run-state'
 import type { FlowDeps, LineNotes, PendingLine, Step } from './types'
 import { keepAwake } from './wake-lock'
+
+/** Le magasin que l'adaptateur lit sur la page (`RetailerAdapter.readStore`). */
+type StoreInfo = Awaited<ReturnType<RetailerAdapter['readStore']>>
 
 /** Un passage en cours. */
 interface Run {
@@ -139,6 +149,8 @@ export class Flow {
   private readonly deps: FlowDeps
   private readonly runs: RunStore
   private busy = false
+  /** Le magasin que la page montre quand ce n'est pas celui du plan (DRV-755), lu par `storeProblem`. */
+  private otherStore: StoreInfo | null = null
 
   constructor(deps: FlowDeps) {
     this.deps = deps
@@ -208,7 +220,18 @@ export class Flow {
     if (deps.retailer !== undefined && message.retailer !== deps.retailer) {
       return this.showError('STORE_MISMATCH', message)
     }
+    return this.proceed(message)
+  }
+
+  /** Le plan est valide, pour l'enseigne de la page, et Repas peut le recevoir : le magasin, la connexion, puis le passage. */
+  private async proceed(message: PlanMessage): Promise<void> {
+    const { deps } = this
     let problem = this.withLoginPage(await this.storeProblem(message)) ?? this.sessionProblem()
+    // Un autre magasin que celui du plan, ouvert à l'étape guidée du choix du magasin (DRV-755) : la personne peut le garder, ce n'est pas une panne
+    if (problem?.code === 'STORE_MISMATCH') {
+      const chosen = this.chosenStoreOf(message)
+      if (chosen !== null) return this.offerChosenStore(message, chosen)
+    }
     // Un premier envoi : le magasin pas encore choisi et la personne pas encore connectée sont des ÉTAPES, pas des pannes (DRV-751). L'agent guide, attend, et continue
     // tout seul ; une page d'avant (la page se recharge quand on choisit son magasin ou qu'on se connecte) a pu noter où en est ce parcours.
     let guided: GuideStep | null = this.runs.guide(message.runId)?.step ?? null
@@ -543,13 +566,160 @@ export class Flow {
 
   /** Le magasin de la page doit être celui du message. */
   private async storeProblem(plan: PlanMessage): Promise<Fault | null> {
+    this.otherStore = null
     try {
       const store = await this.deps.adapter.readStore()
-      return store.id === plan.store.id && store.host === plan.store.host
-        ? null
-        : { code: 'STORE_MISMATCH', cause: null }
+      if (store.id === plan.store.id && store.host === plan.store.host) return null
+      this.otherStore = store
+      return { code: 'STORE_MISMATCH', cause: null }
     } catch (error) {
       return faultOf(error)
+    }
+  }
+
+  /**
+   * Le magasin que la page montre, quand il n'est pas celui du plan et que la personne PEUT le garder (DRV-755), sinon `null` (le passage s'arrête, `STORE_MISMATCH`, comme
+   * avant). Quatre conditions, toutes vraies : l'enseigne le permet (`acceptsChosenStore`), rien n'a encore été écrit dans ce passage (un autre magasin EN PLEIN passage est une
+   * vraie contradiction), la personne est à l'étape guidée du choix du magasin (la note d'un guide de cette page, ou une page atteinte depuis l'endroit où l'on choisit son
+   * magasin : la note ne passe pas d'un site à l'autre), et la page donne un magasin que le protocole accepte de lire.
+   */
+  private chosenStoreOf(plan: PlanMessage): ReadStore | null {
+    const { adapter } = this.deps
+    const store = this.otherStore
+    if (store === null || adapter.acceptsChosenStore !== true) return null
+    // « Rien n'a été écrit » doit se PROUVER : un stockage illisible, un article déjà traité ou une seule requête déjà partie disent qu'on ne sait pas (ou que si), et
+    // l'envoi s'arrête comme avant (`STORE_MISMATCH`)
+    if (!this.runs.isReadable()) return null
+    const saved = this.runs.load(plan.runId)
+    if (
+      saved &&
+      (Object.keys(saved.done).length + Object.keys(saved.waiting).length > 0 ||
+        saved.stats.requests > 0)
+    )
+      return null
+    const guided =
+      this.runs.guide(plan.runId)?.step === 'store' || adapter.cameFromStoreChoice?.() === true
+    if (!guided) return null
+    return this.readStoreOf(store)
+  }
+
+  /** Le magasin tel que le protocole le dit : son nom de ville (ou `null`) en libellé. `null` si le protocole ne l'accepte pas (l'hôte ou le numéro ne sont pas ceux d'un magasin). */
+  private readStoreOf(store: StoreInfo): ReadStore | null {
+    let city: string | null = null
+    try {
+      city = this.deps.adapter.storeCity?.() ?? null
+    } catch {
+      city = null
+    }
+    const label = city === null ? null : cleanText(city).slice(0, LIMITS.label) || null
+    const candidate: ReadStore = {
+      id: store.id,
+      host: store.host,
+      baseUrl: store.baseUrl,
+      label,
+    }
+    try {
+      validateResult({
+        v: PROTOCOL_VERSION,
+        type: 'setup-result',
+        runId: '00000000-0000-4000-8000-000000000000',
+        agentVersion: '0.0.0',
+        store: candidate,
+      })
+    } catch {
+      return null
+    }
+    return candidate
+  }
+
+  /**
+   * « Tu as ouvert <ville> » (DRV-755) : une carte, la page reste visible. « Utiliser ce magasin » rend à Repas un résultat `aborted` qui porte le magasin lu (`chosenStore`) :
+   * l'envoi s'arrête sans rien avoir écrit, Repas retient le magasin et refait le plan pour lui. L'agent ne change JAMAIS le magasin seul : seul ce toucher envoie quelque
+   * chose, et le magasin envoyé est celui que la page montre AU MOMENT du toucher (relu : une page qui a changé depuis n'est pas celle qu'on a montrée). « Choisir un
+   * autre magasin » rend la main à la personne, la carte du choix du magasin attend qu'un autre magasin soit ouvert ; « Arrêter pour l'instant » rend l'envoi arrêté, la
+   * liste est gardée.
+   */
+  private async offerChosenStore(plan: PlanMessage, chosen: ReadStore): Promise<void> {
+    const { adapter, ui, send, agentVersion } = this.deps
+    let shown = chosen
+    for (;;) {
+      const answer = await ui.show('chosenStore', {
+        label: shown.label,
+        tail: shown.id.slice(-3),
+        ...(adapter.keepClearOfConsent === true && { clearOfConsent: true }),
+      })
+      if (answer === 'stop') return void this.stopGuided(plan)
+      if (answer === 'other') {
+        const next = await this.awaitOtherStore(plan, shown)
+        return next === 'stopped' ? undefined : this.proceed(plan)
+      }
+      // « Utiliser ce magasin » : le magasin est relu, la carte a pu devenir périmée (la page change sans se recharger). Ce qui part est ce que la page montre MAINTENANT.
+      const now = await this.readPageStore()
+      // Une lecture qui échoue un instant n'est pas une raison de s'arrêter après un toucher : la carte revient, la personne retouche
+      if (now === null) continue
+      if (now.id === plan.store.id && now.host === plan.store.host) return this.proceed(plan)
+      if (now.id !== shown.id || now.host !== shown.host) {
+        shown = now
+        continue
+      }
+      this.runs.clearGuide()
+      this.enter('ABORTED')
+      send({
+        ...buildResult(plan, [], { outcome: 'aborted' }, agentVersion, ui.retailer),
+        chosenStore: now,
+      })
+      ui.close()
+      return
+    }
+  }
+
+  /** Le magasin que la page montre à l'instant, déjà lu comme le protocole le dit, ou `null` (page sans magasin, question en cours, lecture refusée). */
+  private async readPageStore(): Promise<ReadStore | null> {
+    try {
+      return this.readStoreOf(await this.deps.adapter.readStore())
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * « Choisir un autre magasin » : la carte du choix du magasin attend (la page reste utilisable), l'agent relit le magasin de la page (une lecture de la page, aucune requête)
+   * et rend la main dès qu'il a changé : `changed`, le passage reprend avec ce nouveau magasin (si c'est celui du plan, il continue ; sinon la carte le propose). `stopped` :
+   * la personne a arrêté, l'envoi est rendu à Repas comme arrêté. Au bout de 15 minutes la carte propose d'attendre encore.
+   */
+  private async awaitOtherStore(
+    plan: PlanMessage,
+    shown: ReadStore,
+  ): Promise<'changed' | 'stopped'> {
+    const { adapter, ui, now } = this.deps
+    const sleep = this.deps.sleep ?? realSleep
+    let started = now()
+    let stage: 'waiting' | 'late' = 'waiting'
+    for (;;) {
+      let watching = true
+      const asked = ui.show('guide', guideProps('store', stage, { index: 1, total: 0 }, adapter))
+      const seen = (async (): Promise<'changed' | 'late' | 'stopped'> => {
+        while (watching) {
+          if (stage === 'waiting' && now() - started >= GUIDE_MAX_MS) return 'late'
+          const page = await this.readPageStore()
+          if (page !== null && (page.id !== shown.id || page.host !== shown.host)) return 'changed'
+          await sleep(GUIDE_POLL_MS)
+        }
+        return 'stopped'
+      })()
+      const outcome = await Promise.race([asked, seen])
+      watching = false
+      if (outcome === 'stop') {
+        this.stopGuided(plan)
+        return 'stopped'
+      }
+      if (outcome === 'changed') return 'changed'
+      if (outcome === 'wait') {
+        started = now()
+        stage = 'waiting'
+      } else if (outcome === 'late') {
+        stage = 'late'
+      }
     }
   }
 

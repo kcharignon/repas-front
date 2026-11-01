@@ -125,6 +125,8 @@ import {
 import { findControl, type GuideStep, type GuideTarget } from '../retailers/guide'
 import { findPostalCodeField } from './store-field'
 import {
+  cameFromNationalHome,
+  cityOfPath,
   findDeliveryPoint,
   findSearchBase,
   hostFamily,
@@ -205,6 +207,19 @@ export interface RetailerAdapter {
    * seule la carte du choix du magasin le fait.
    */
   readonly keepClearOfConsent?: boolean
+  /**
+   * FACULTATIVE (DRV-755) : vrai chez une enseigne dont la personne peut CHOISIR un magasin autre que celui de Repas pendant le choix guidé du magasin, et le faire
+   * retenir (la version mobile de Leclerc). Le passage lui propose alors « Utiliser ce magasin » au lieu de s'arrêter (`STORE_MISMATCH`), tant qu'il n'a rien écrit ; absent :
+   * un autre magasin arrête toujours le passage, comme avant.
+   */
+  readonly acceptsChosenStore?: boolean
+  /**
+   * FACULTATIVE (DRV-755, avec `acceptsChosenStore`) : la page courante a-t-elle été atteinte depuis l'endroit où l'on choisit son magasin (l'accueil national) ? Une
+   * lecture de la page seule, jamais une erreur. Le choix guidé traverse deux sites (deux origines : la note du guide ne passe pas) : c'est ce qui reconnaît l'arrivée.
+   */
+  cameFromStoreChoice?(): boolean
+  /** FACULTATIVE (DRV-755, avec `acceptsChosenStore`) : le nom de la ville du magasin de la page, quand son adresse le dit ; sinon `null`. Du texte d'écran, jamais une adresse. */
+  storeCity?(): string | null
   /**
    * FACULTATIVE (DRV-748) : présente (et vraie) chez une enseigne dont l'accueil, après la connexion que la personne tape elle-même, montre de nouveau « Commencer
    * mes courses » alors que l'agent l'a déjà touché AVANT la connexion (le site avait répondu par sa page de connexion). Le passage peut alors faire une seconde
@@ -378,6 +393,8 @@ export interface LeclercDeps extends PacerDeps {
   loginControl?: () => GuideTarget | null
   /** Le champ du code postal de l'accueil, où l'on choisit son magasin (DRV-753), à entourer. Absent, l'agent n'en désigne aucun. */
   storeField?: () => GuideTarget | null
+  /** La page d'où l'on vient (`document.referrer`, DRV-755). Absente, la page ne dit pas d'où l'on vient. */
+  referrer?: () => string
 }
 
 /** Le temps laissé à une navigation pour quitter la page avant de la dire sans effet (le clic ou le lien d'entrée, 0.39.0 : l'utilisateur ne doit pas attendre davantage). */
@@ -437,12 +454,17 @@ export class LeclercAdapter implements RetailerAdapter {
   private readonly mobile: boolean
   /** L'hôte du serveur du magasin (`fd<N>-courses`), une fois lu ; d'où il vient et combien de liens du magasin la page portait. */
   private serverHost: string | null = null
+  /** Le magasin (`<id>-<second>`) dont l'hôte est gardé. */
+  private serverHostFor: string | null = null
   private serverSource: MobileFacts['serverHost'] | null = null
   private serverLinks = 0
   /** La forme de la dernière réponse du panier qui a échoué (DRV-752), en mémoire pour la vie de la page. */
   private failure: CartReplyFacts | null = null
   readonly requiresConfirmedLogin?: boolean
   readonly keepClearOfConsent?: boolean
+  readonly acceptsChosenStore?: boolean
+  cameFromStoreChoice?: () => boolean
+  storeCity?: () => string | null
   probeCart?: () => Promise<CartProbeFacts>
   lastCartFailure?: () => CartReplyFacts | null
   basketChoiceAsked?: () => boolean
@@ -459,6 +481,11 @@ export class LeclercAdapter implements RetailerAdapter {
     this.requiresConfirmedLogin = true
     if (this.mobile) {
       this.keepClearOfConsent = true
+      // DRV-755 : la personne choisit son magasin sur l'accueil national puis arrive sur `m-courses` : un magasin autre que celui de Repas se propose, il n'arrête pas l'envoi
+      this.acceptsChosenStore = true
+      this.cameFromStoreChoice = () =>
+        cameFromNationalHome(this.deps.referrer?.() ?? '', this.deps.location)
+      this.storeCity = () => cityOfPath(this.deps.location.pathname)
       this.probeCart = () => this.probeMobileCart()
       this.lastCartFailure = () => this.failure
       this.basketChoiceAsked = () => this.oldBasketAsked()
@@ -502,6 +529,12 @@ export class LeclercAdapter implements RetailerAdapter {
    * `SERVER_HOST_WAIT_MS` (la page Angular se dessine après son chargement). Jamais deviné : sans lien (`PAGE_SERVER_HOST`) ou avec deux hôtes différents, l'erreur.
    */
   private async mobileHost(page: PageStore): Promise<string> {
+    // Un autre magasin dans la même page (DRV-755 : la personne en change sans que la page se recharge) : l'hôte du serveur d'avant n'est plus celui-ci
+    const key = `${page.id}-${page.second}`
+    if (this.serverHostFor !== key) {
+      this.serverHost = null
+      this.serverHostFor = key
+    }
     if (this.serverHost !== null) return this.serverHost
     const own = this.deps.location.hostname.toLowerCase()
     if (hostFamily(own) !== null) {
@@ -1543,6 +1576,7 @@ export function browserDeps(
     pageLinks: () => readPageLinks(win.document),
     loginControl: () => findControl(win.document, LOGIN_CONTROL_LABELS),
     storeField: () => findPostalCodeField(win.document),
+    referrer: () => win.document.referrer,
     pageText: () => new win.XMLSerializer().serializeToString(win.document),
     navigation: () => navigationOf(win),
     cookies: () => cookiesOf(win),

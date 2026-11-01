@@ -37,6 +37,10 @@ function candidatesOf(settings: DriveSettings | undefined): Drive[] {
   return drivesOf(settings).filter((drive) => candidates.includes(drive.id))
 }
 
+/** Les identifiants des drives candidats de la sélection du back (vide : aucune sélection lue). */
+export const candidateIds = (settings: DriveSettings | undefined): RetailerId[] =>
+  candidatesOf(settings).map((drive) => drive.id)
+
 export function sendChoice({ settings, picked }: SendChoiceInput): SendChoice {
   const selection = selectionOf(settings)
   const candidates = candidatesOf(settings)

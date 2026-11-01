@@ -339,7 +339,22 @@ export interface ResultMessage {
   error?: ResultError
   /** Facultatif (ticket L) : absent d'un résultat où aucune requête n'est partie, et des agents d'avant. */
   stats?: ResultStats
+  /**
+   * Facultatif (DRV-755, agent 0.60.0) : le magasin que la personne a choisi à la place de celui du plan, lu par l'agent sur la page, après qu'elle a touché « Utiliser
+   * ce magasin ». Même forme que le magasin d'un `setup-result`. Seulement avec l'issue `aborted`, sans ligne ni erreur : l'envoi s'est arrêté avant le moindre
+   * article, et Repas retient ce magasin puis reprend l'envoi avec un plan refait pour lui. Absente = comme avant (chez les agents d'avant, jamais). Un récepteur
+   * qui ne connaît pas la clé rejette le résultat : le site d'abord, l'application Android qui embarque l'agent 0.60.0 ensuite.
+   */
+  chosenStore?: ReadStore
   lines: ResultLine[]
+}
+
+/** Un magasin lu par l'agent sur la page de l'enseigne. */
+export interface ReadStore {
+  id: string
+  host: string
+  baseUrl: string
+  label: string | null
 }
 
 /** Agent vers Repas : le magasin courant. */
@@ -348,7 +363,7 @@ export interface SetupResultMessage {
   type: 'setup-result'
   runId: string
   agentVersion: string
-  store: { id: string; host: string; baseUrl: string; label: string | null }
+  store: ReadStore
 }
 
 export const COMMANDS = ['diagnostic', 'selftest'] as const

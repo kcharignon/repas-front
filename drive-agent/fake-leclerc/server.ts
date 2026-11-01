@@ -44,6 +44,8 @@ import {
   listingJson,
   mobileCartProblem,
   mobileAccueilPage,
+  MOBILE_OTHER_COOKIE,
+  MOBILE_OTHER_PAGE_PATH,
   MOBILE_ANSWERED_COOKIE,
   MOBILE_CART_PATH,
   MOBILE_CONSENT_COOKIE,
@@ -230,6 +232,8 @@ export interface MobileBehavior {
   member?: boolean
   /** Le magasin est déjà choisi sur l'accueil (le bouton « Commencer mes courses » est là) ; sinon il se choisit par le code postal. */
   chosen?: boolean
+  /** Le magasin qu'on choisit sur l'accueil (ou que « Commencer mes courses » ouvre) est le SECOND magasin (`MOBILE_OTHER_STORE`, DRV-755), pas celui du plan. */
+  otherStore?: boolean
   /** Après la connexion, `m-courses` demande « compléter ton ancien panier ? » tant que la personne n'a pas répondu. */
   question?: boolean
   /** La connexion ajoute la fenêtre « code reçu par e-mail » avant d'ouvrir le compte. */
@@ -727,6 +731,7 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
             chosen: mobile.chosen === true || has(MOBILE_STORE_COOKIE),
             consent: has(MOBILE_CONSENT_COOKIE),
             wall: behavior.cookieWall ?? false,
+            other: mobile.otherStore === true || has(MOBILE_OTHER_COOKIE),
           }),
           HTML,
         )
@@ -735,6 +740,21 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       return send(res, 404, errorPage(), HTML)
     }
     if (host === MOBILE_HOST) {
+      // Le second magasin (DRV-755) : sa page seule, aucun passage
+      if (req.method === 'GET' && new RegExp(`^${MOBILE_OTHER_PAGE_PATH}/?$`, 'i').test(path)) {
+        entry.status = 200
+        return send(
+          res,
+          200,
+          mobileStorePage(origins, cart, {
+            member,
+            question: false,
+            footer: mobile.footer ?? 'normal',
+            other: true,
+          }),
+          HTML,
+        )
+      }
       if (req.method === 'GET' && new RegExp(`^${MOBILE_PAGE_PATH}/?$`, 'i').test(path)) {
         entry.status = 200
         return send(

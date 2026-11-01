@@ -68,7 +68,7 @@ async function open(settings: Settings, handlers: Handlers = {}, query = '') {
   })
   await vi.waitFor(() => expect(wrapper.find('h1').exists()).toBe(true))
 
-  return { wrapper, fetchMock }
+  return { wrapper, fetchMock, context }
 }
 
 const button = (label: string) =>
@@ -255,6 +255,31 @@ describe('plusieurs drives configurés, aucun drive habituel (R4)', () => {
     expect(started(native)).toHaveLength(0)
     expect(wrapper.text()).not.toContain('Ouverture du drive')
     expect(button('Remplir le panier Leclerc')).toBeDefined()
+  })
+
+  it('le drive que l’adresse porte (la personne vient de retenir son magasin, DRV-755) est déjà choisi : le drive s’ouvre tout seul, sans reposer la question', async () => {
+    const native = installApp(['leclerc', 'auchan'])
+    // Les réglages désignent Leclerc, la personne envoyait sa liste à Auchan : c'est ce drive qui s'ouvre
+    const { fetchMock, context } = await open(
+      { mode: 'ASK', retailer: 'leclerc', habitual: 'leclerc' },
+      { 'PUT /api/v1/drive/last-retailer': noContent },
+      '?ouvrir=1&drive=auchan',
+    )
+    await vi.waitFor(() => expect(started(native)).toHaveLength(1))
+    // Les deux demandes sont CONSOMMÉES (un seul remplacement les retire ensemble) : l'adresse finale n'en porte plus aucune
+    await vi.waitFor(() => expect(context.router.currentRoute.value.query).toEqual({}))
+
+    expect(started(native)[0]?.plan?.retailer).toBe('auchan')
+    expect(planRequests(fetchMock)).toContain('auchan')
+  })
+
+  it('un identifiant de drive inconnu dans l’adresse est ignoré : l’écran garde la question', async () => {
+    const native = installApp(['leclerc', 'auchan'])
+    await open({ mode: 'ASK', retailer: 'leclerc' }, {}, '?ouvrir=1&drive=inconnu')
+    await vi.waitFor(() => expect(tiles()).toHaveLength(2))
+    await flushPromises()
+
+    expect(started(native)).toHaveLength(0)
   })
 
   it('une application qui ne connaît pas le drive coché le nomme dans la phrase de mise à jour, et l’autre reste proposé', async () => {

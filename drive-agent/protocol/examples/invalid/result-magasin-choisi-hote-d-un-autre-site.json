@@ -1,0 +1,21 @@
+{
+  "path": "chosenStore.host",
+  "why": "L’hôte est celui d’un magasin d’une enseigne connue.",
+  "message": {
+    "v": 1,
+    "type": "result",
+    "runId": "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c",
+    "agentVersion": "1.0.0",
+    "outcome": "aborted",
+    "store": {
+      "id": "000000"
+    },
+    "chosenStore": {
+      "id": "000001",
+      "host": "courses-test.exemple.invalid",
+      "baseUrl": "https://courses-test.leclercdrive.fr/magasin-000001-000001",
+      "label": "Ville-Test"
+    },
+    "lines": []
+  }
+}

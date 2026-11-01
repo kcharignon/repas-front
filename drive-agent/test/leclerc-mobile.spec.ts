@@ -150,7 +150,7 @@ describe('l’hôte du serveur : lu dans les liens du pied de page, jamais devin
 
   it.each([
     ['aucun lien', BODY('<a href="/rayons">Rayons</a>')],
-    ['un lien d’un autre magasin', BODY(FOOTER.replace('000123-000123', '000999-000999'))],
+    ['un lien d’un autre magasin', BODY(FOOTER.replace('000123-000123', '999111-999111'))],
     [
       'un hôte qui n’est pas fd<N>-courses',
       BODY(FOOTER.replace(SERVER, 'exemple.leclercdrive.fr')),
@@ -971,5 +971,60 @@ describe('le diagnostic de la page de la version mobile : des formes, jamais une
     const site = fakeSite(() => ({}))
 
     expect(new LeclercAdapter(site.deps).readArrival().mobile).toBeUndefined()
+  })
+})
+
+describe('accepter le magasin choisi (DRV-755) : ce que la version mobile sait dire', () => {
+  it('seule la version mobile le propose : un adaptateur du site ordinateur ne le fait pas', () => {
+    expect(shop(() => ({})).adapter.acceptsChosenStore).toBe(true)
+    const desktop = fakeSite(() => ({}), {
+      location: { hostname: SERVER, pathname: '/magasin-000123-000123-Ville-Test/recherche.aspx' },
+    })
+    expect(new LeclercAdapter(desktop.deps).acceptsChosenStore).toBeUndefined()
+  })
+
+  it('le nom de la ville vient de l’adresse de la page, jamais du texte de la page', () => {
+    const { adapter } = shop(() => ({}), {
+      text: BODY(FOOTER, '<h1>Un titre qu’on ne lit pas</h1>'),
+    })
+
+    expect(adapter.storeCity?.()).toBe('Ville-Test')
+  })
+
+  it('arrivée de l’accueil national : lue dans le référent de la page', () => {
+    const from = (referrer: string) =>
+      new LeclercAdapter(
+        fakeSite(() => ({}), {
+          location: M_PAGE,
+          pageText: () => BODY(FOOTER),
+          referrer: () => referrer,
+        }).deps,
+      ).cameFromStoreChoice?.()
+
+    expect(from('https://www.leclercdrive.fr/')).toBe(true)
+    expect(from('https://www.leclercdrive.fr/accueil')).toBe(true)
+    // Une page du magasin (même origine, en plein envoi), un autre site, une adresse illisible, aucun référent : pas l'endroit où l'on choisit
+    expect(from('https://m-courses.leclercdrive.fr/magasin-000123-000123-ville-test')).toBe(false)
+    expect(from('https://www.exemple.invalid/')).toBe(false)
+    expect(from('http://www.leclercdrive.fr/')).toBe(false)
+    expect(from('pas une adresse')).toBe(false)
+    expect(from('')).toBe(false)
+  })
+
+  it('la page change de magasin sans se recharger : l’hôte du serveur est relu pour le nouveau, pas gardé de l’ancien', async () => {
+    const location = { ...M_PAGE }
+    const other = `<footer><a href="https://fd3-courses.leclercdrive.fr/magasin-999111-999111-Autre/plan-du-site">Plan</a></footer>`
+    let text = BODY(FOOTER)
+    const site = fakeSite(() => ({}), { location, pageText: () => text })
+    const adapter = new LeclercAdapter(site.deps)
+
+    await expect(adapter.readStore()).resolves.toMatchObject({ id: '000123', host: SERVER })
+    location.pathname = '/magasin-999111-999111-autre'
+    text = BODY(other)
+
+    await expect(adapter.readStore()).resolves.toMatchObject({
+      id: '999111',
+      host: 'fd3-courses.leclercdrive.fr',
+    })
   })
 })

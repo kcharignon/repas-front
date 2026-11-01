@@ -23,9 +23,9 @@ import DriveSendFailure from './DriveSendFailure.vue'
 import DriveSendLine from './DriveSendLine.vue'
 import DriveSendTiles from './DriveSendTiles.vue'
 import { driveKeys, useDrivePlan, useDriveSettings, useRememberLastRetailer } from './queries'
-import { appServes, retailerOf } from './retailers'
+import { appServes, retailerOf, RETAILERS } from './retailers'
 import type { RetailerId } from './retailers'
-import { sendChoice } from './sendChoice'
+import { candidateIds, sendChoice } from './sendChoice'
 import { sendSummary } from './sendSummary'
 
 const route = useRoute()
@@ -47,8 +47,19 @@ watch(
     if (!pending) settingsRead.value = true
   },
 )
+/**
+ * Le drive que l'adresse porte (`drive`, DRV-755) : la personne vient de retenir son magasin dans CE drive pendant son envoi. Elle l'a déjà choisi : il est coché, et la
+ * question « Où envoyer ta liste ? » ne se repose pas. Consommé tout de suite (retiré de l'adresse) ; un identifiant qui n'est pas un drive connu est ignoré.
+ */
+const carried = ref<RetailerId | null>(
+  RETAILERS.find((drive) => drive.id === route.query.drive)?.id ?? null,
+)
+/** Le drive porté n'épargne la question que s'il est l'un des drives CANDIDATS du back (`selection`) : un lien extérieur ne choisit pas pour la personne un drive qu'elle n'a pas. */
+const carriedTrusted = computed(
+  () => carried.value !== null && candidateIds(settings.data.value).includes(carried.value),
+)
 /** Le drive touché sur l'écran (une tuile) ; `null` : celui que la règle désigne. */
-const picked = ref<RetailerId | null>(null)
+const picked = ref<RetailerId | null>(carried.value)
 const draft = ref<RunDraft | null>(driveBridge.loadDraft())
 /** Un passage de cette liste attend son résultat (le brouillon survit à un rechargement de la page). */
 const waiting = computed(() => draft.value !== null && draft.value.listId === listId.value)
@@ -116,7 +127,9 @@ const assisted = computed(() => !inApp || tooOld.value || unserved.value)
  * envoi en cours, liste sans article) garde l'écran.
  */
 const opening = ref(route.query.ouvrir !== undefined)
-if (opening.value) void router.replace({ query: { ...route.query, ouvrir: undefined } })
+// UN SEUL remplacement retire les deux demandes (`ouvrir` et `drive`) : deux remplacements à la suite partent du même `route.query` périmé, et le second remettrait celle que le premier retire
+if (opening.value || route.query.drive !== undefined)
+  void router.replace({ query: { ...route.query, ouvrir: undefined, drive: undefined } })
 
 const changes = ref<Record<string, LineChange | undefined>>({})
 const failure = ref<{ text: string; update: boolean } | null>(null)
@@ -278,8 +291,9 @@ watch(
     ] as const,
   ([wanted, app, isOnline, other, failed, data, check, usable, question, unknown]) => {
     if (!wanted) return
-    // Un obstacle déjà connu : l'écran reste, avec sa raison. La question « Où envoyer ta liste ? » en est une (R4) : la personne choisit.
-    if (!app || !isOnline || other || failed || question) {
+    // Un obstacle déjà connu : l'écran reste, avec sa raison. La question « Où envoyer ta liste ? » en est une (R4) : la personne choisit, sauf si elle vient de le faire
+    // (le drive porté par l'adresse, DRV-755).
+    if (!app || !isOnline || other || failed || (question && !carriedTrusted.value)) {
       opening.value = false
       return
     }
