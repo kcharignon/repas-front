@@ -4,7 +4,7 @@
 import { driveBridge, DriveBridgeError } from './bridge'
 import type { DriveBridge } from './bridge'
 
-/** Le magasin lu par l'agent : son identifiant et son adresse (jamais son nom, que l'agent ne lit pas). */
+/** Le magasin lu par l'agent : son identifiant et son adresse, et son nom (`label`) quand le drive le donne (l'agent le lit dans la page du parcours) ; sans nom, seul le numéro s'affiche. */
 export interface StoreReading {
   id: string
   baseUrl: string
