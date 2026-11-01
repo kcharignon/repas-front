@@ -46,7 +46,7 @@ internal object FictionalSites {
         siteMode = SiteMode.AS_IS,
         hosts = listOf(
             SiteHost(HostPattern.exact("www.exemple-c.test"), bridge = true),
-            SiteHost(HostPattern.exact("compte.exemple-c.test"), bridge = false),
+            SiteHost(HostPattern.exact("compte.exemple-c.test"), bridge = false, passwordPage = true),
         ),
         storeHost = Regex("www\\.exemple-c\\.test"),
         storeIdPattern = Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"),

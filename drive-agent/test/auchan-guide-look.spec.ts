@@ -73,7 +73,7 @@ describe('Auchan : la sous-étape lue dans la page', () => {
 
     const look = readAuchanLook(document, 'store')
 
-    expect(look).toMatchObject({ sub: 'wall', target: null, keep: [] })
+    expect(look).toMatchObject({ sub: 'wall', target: null })
   })
 
   it('le panneau de choix ouvert : « field », le champ entouré et gardé libre', () => {

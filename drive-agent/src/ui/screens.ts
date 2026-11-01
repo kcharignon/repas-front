@@ -771,7 +771,11 @@ const guide: Renderer<'guide'> = (props: GuideProps, answer, retailer) => {
             maybe: look?.maybe ?? [],
             sub: look?.sub ?? null,
             target,
-            compact: look?.sub === 'city' || look?.sub === 'shop' || look?.crowded === true,
+            compact:
+              look?.sub === 'city' ||
+              look?.sub === 'shop' ||
+              look?.sub === 'wall' ||
+              look?.crowded === true,
           }
           return last
         }

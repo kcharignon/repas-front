@@ -20,8 +20,16 @@ const rect = (top: number, bottom: number, left = 0, right = 300): DOMRect =>
   }) as DOMRect
 
 /** La boîte de la carte selon sa place : pleine en bas 500-760, pleine en haut 8-268, barre en bas 700-750, barre en haut 8-58. */
-const placed = (spot: { min: boolean; top: boolean }) =>
-  spot.min ? (spot.top ? box(8, 58) : box(700, 750)) : spot.top ? box(8, 268) : box(500, 760)
+const placed = (spot: { min: boolean; top: boolean; mid?: boolean }) =>
+  spot.min
+    ? spot.mid
+      ? box(350, 400)
+      : spot.top
+        ? box(8, 58)
+        : box(700, 750)
+    : spot.top
+      ? box(8, 268)
+      : box(500, 760)
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -52,11 +60,19 @@ describe('où poser la carte', () => {
     expect(choose(placed, [box(710, 740)], [box(710, 740)], true)).toEqual({ min: true, top: true })
   })
 
+  it('DRV-757 : le haut et le bas portent des réponses du mur : la barre se pose au MILIEU ; si le milieu aussi, aucune place', () => {
+    const blocked = [box(10, 40), box(700, 750)]
+    expect(choose(placed, blocked, blocked, true)).toEqual({ min: true, top: false, mid: true })
+    const all = [...blocked, box(360, 380)]
+    expect(choose(placed, all, all, true)).toBeNull()
+  })
+
   it('la barre cache le moins possible : un contrôle qu’on évite sans y tenir peut passer dessous, jamais un contrôle à toucher', () => {
     const soft = box(710, 740)
     const hard = box(20, 40)
-    expect(choose(placed, [hard, soft], [hard], true)).toEqual({ min: true, top: false })
-    expect(choose(placed, [hard, soft], [hard, box(720, 730)], true)).toBeNull()
+    const middle = box(360, 380)
+    expect(choose(placed, [hard, soft, middle], [hard], true)).toEqual({ min: true, top: false })
+    expect(choose(placed, [hard, soft, middle], [hard, box(720, 730), middle], true)).toBeNull()
   })
 })
 

@@ -552,6 +552,7 @@ class DriveActivity : Activity() {
             StoreBanner.VERIFICATION -> R.string.plan_banner_verification
             StoreBanner.MOBILE -> R.string.plan_banner_mobile
             StoreBanner.BASKET -> R.string.basket_banner
+            StoreBanner.LOGIN -> R.string.login_page_banner
         }
         if (text != null) storeBanner.text = getString(text, site.name, site.nameDe)
         bannerAction.visibility = if (banner.hasAction) View.VISIBLE else View.GONE

@@ -28,6 +28,7 @@ export const STYLES = `
 .guide:not(.min)>.g-bar,.guide.min>:not(.g-bar){display:none}
 .overlay.sheet>.screen.guide.min{flex-direction:row;gap:0;margin:auto 80px 12px 8px;padding:0;border-radius:16px}
 .overlay.sheet>.screen.guide.min.top{margin:8px 8px auto}
+.overlay.sheet>.screen.guide.min.mid{margin:auto 80px auto 8px}
 .guide .g-segments{display:inline-flex;gap:4px}
 .guide .g-seg{width:28px;height:6px;border-radius:999px;background:var(--g-line)}
 .guide .g-seg.on{background:var(--g-primary)}

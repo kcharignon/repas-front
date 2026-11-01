@@ -150,8 +150,9 @@ for (const viewport of VIEWPORTS) {
         // (6) La page de connexion : e-mail, mot de passe, code : le champ où l'on écrit et le bouton de la page ne sont jamais couverts
         await expect(page).toHaveURL(/authentification\.aspx/)
         await expect(page.locator('.g-text')).toHaveText(
-          'Écris ton e-mail, puis ton mot de passe. Tu les tapes toi-même.',
+          'Écris ton adresse e-mail, puis touche « Continuer ».',
         )
+        await expect(page.locator('.g-step').filter({ hasText: 'Étape 2 sur 2' })).toBeAttached()
         const FORM = [
           '#email',
           '#secret',
@@ -169,6 +170,9 @@ for (const viewport of VIEWPORTS) {
         await shot(page, '9-connexion-email-clavier')
         await keyboard(page, false, viewport.height)
         await page.locator('#continue').click()
+        await expect(page.locator('.g-text')).toHaveText(
+          'Écris ton mot de passe, coche « Je suis un humain », puis valide.',
+        )
         await keyboard(page, true, viewport.height, '#secret')
         await expectClear(page, FORM, 8)
         await shot(page, '10-connexion-mot-de-passe-clavier')

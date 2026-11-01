@@ -132,7 +132,7 @@ class RetailerSites(val all: List<RetailerSite>, val legacy: RetailerSite = all.
             siteMode = SiteMode.AS_IS,
             hosts = listOf(
                 SiteHost(HostPattern.exact("www.auchan.fr"), bridge = true),
-                SiteHost(HostPattern.exact("compte.auchan.fr"), bridge = false),
+                SiteHost(HostPattern.exact("compte.auchan.fr"), bridge = false, passwordPage = true),
             ),
             storeHost = Regex("www\\.auchan\\.fr"),
             storeIdPattern = Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"),

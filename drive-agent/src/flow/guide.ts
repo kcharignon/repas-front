@@ -36,6 +36,14 @@ export interface GuideFault {
  */
 export function guideStepOf(fault: GuideFault | null, adapter: RetailerAdapter): GuideStep | null {
   if (fault === null) return null
+  // La page de connexion de l'enseigne (par son adresse) : l'étape est « connecte-toi », jamais « choisis ton magasin » (DRV-757, mesuré : la page de connexion redisait l'étape du magasin)
+  if (
+    fault.code === 'UNSUPPORTED_PAGE' &&
+    fault.cause === 'STORE_NOT_CHOSEN' &&
+    onLoginPage(adapter)
+  ) {
+    return 'login'
+  }
   if (
     fault.code === 'UNSUPPORTED_PAGE' &&
     fault.cause === 'STORE_NOT_CHOSEN' &&

@@ -373,6 +373,8 @@ export class Flow {
     seen: 1 | 2,
     atHome = false,
   ): { index: 1 | 2; total: 1 | 2 } {
+    // La page de connexion : le magasin est forcément choisi (la connexion en dépend), il ne reste que se connecter : « Étape 2 sur 2 », sans note d'une page d'avant (la note ne passe pas d'une origine à l'autre)
+    if (step === 'login' && onLoginPage(this.deps.adapter)) return { index: 2, total: 2 }
     const noted = this.runs.guide(runId)
     // Sur l'accueil d'une enseigne sans magasin choisi (DRV-753), la connexion suit presque toujours : tant que la page ne CONFIRME pas qu'on est connecté, deux étapes
     const both =

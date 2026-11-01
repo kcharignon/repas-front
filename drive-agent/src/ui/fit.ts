@@ -10,6 +10,8 @@ import { consentRects, pointedRects } from './keep-clear'
 export const MIN = 'min'
 export const AWAY = 'away'
 export const TOP = 'top'
+/** La barre au MILIEU de l'écran, quand le haut et le bas portent tous deux ce qu'on ne couvre pas (un mur de cookies dense). */
+export const MID = 'mid'
 
 /** Ce que la personne a demandé : rien (la carte décide), réduire, ou rouvrir. */
 export type Pref = 'auto' | 'min' | 'full'
@@ -51,14 +53,16 @@ type Box = Pick<DOMRect, 'top' | 'bottom' | 'left' | 'right'>
 interface Spot {
   min: boolean
   top: boolean
+  mid?: boolean
 }
 
-/** Pleine d'abord, en bas puis en haut ; puis la barre, en bas puis en haut. */
+/** Pleine d'abord, en bas puis en haut ; puis la barre, en bas, en haut, puis au milieu. */
 const SPOTS: readonly Spot[] = [
   { min: false, top: false },
   { min: false, top: true },
   { min: true, top: false },
   { min: true, top: true },
+  { min: true, top: false, mid: true },
 ]
 /** La place qu'on laisse entre la carte et un contrôle, en pixels de la page. */
 const AIR = 8
@@ -131,6 +135,7 @@ export function fitGuide(
     card.hidden = spot === null
     card.classList.toggle(MIN, spot?.min === true)
     card.classList.toggle(TOP, spot?.top === true)
+    card.classList.toggle(MID, spot?.mid === true)
     card.classList.toggle(AWAY, spot === null)
   }
 
@@ -140,6 +145,7 @@ export function fitGuide(
       hidden: card.hidden,
       min: card.classList.contains(MIN),
       top: card.classList.contains(TOP),
+      mid: card.classList.contains(MID),
       away: card.classList.contains(AWAY),
     }
     let placed = false
@@ -158,6 +164,8 @@ export function fitGuide(
       // Sans lecture du guide de l'enseigne, le contrôle entouré se protège comme avant (avec la place de son repère)
       if (needs === null && options.consent) hard.push(...pointedRects(options.pointed()))
       const sub = needs?.sub ?? null
+      // Devant un mur de cookies la carte reste une barre : un toucher sur la barre ne redonne PAS la grande carte par-dessus les réponses du mur
+      if (sub === 'wall' && pref === 'full') pref = 'auto'
       if (sub !== lastSub) {
         lastSub = sub
         if (pref === 'full') pref = 'auto'
@@ -193,6 +201,7 @@ export function fitGuide(
         card.hidden = was.hidden
         card.classList.toggle(MIN, was.min)
         card.classList.toggle(TOP, was.top)
+        card.classList.toggle(MID, was.mid)
         card.classList.toggle(AWAY, was.away)
       }
     }

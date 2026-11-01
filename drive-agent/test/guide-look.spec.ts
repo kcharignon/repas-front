@@ -160,14 +160,14 @@ describe('la connexion', () => {
     expect(look.target?.element).toBe(link)
   })
 
-  it('la page de connexion (adresse) : « form », les champs et le bouton de la page restent libres ; aucun contrôle entouré', () => {
+  it('la page de connexion (adresse) : l’adresse e-mail est à écrire (« email »), les champs et le bouton de la page restent libres ; aucun contrôle entouré', () => {
     const email = add('input', '', 100, { type: 'email' })
     const next = add('button', 'Continuer', 160)
     add('button', 'Aide', 400)
 
     const look = readLoginLook(document, ACCOUNT('authentification.aspx'), false)
 
-    expect(look.sub).toBe('form')
+    expect(look.sub).toBe('email')
     expect(look.target).toBeNull()
     expect(look.keep).toEqual([email, next])
   })
@@ -226,7 +226,7 @@ describe('DRV-757 : ce qu’on ne protège pas à tort et ce qu’on protège en
 
     const look = readLoginLook(document, where('authentification.aspx'), false)
 
-    expect(look.sub).toBe('form')
+    expect(look.sub).toBe('human')
     expect(look.keep).toContain(box)
     expect(look.keep).toContain(frame)
     expect(look.crowded).toBe(true)
@@ -280,6 +280,110 @@ describe('DRV-757 : ce qu’on ne protège pas à tort et ce qu’on protège en
     at(aside, 150, 40, 700, 200)
 
     expect(readStoreLook(document).sub).toBe('field')
+  })
+})
+
+describe('DRV-757 (suite) : la page de connexion, sous-étape par sous-étape', () => {
+  const login = {
+    hostname: 'fd8-espace-client.leclercdrive.fr',
+    pathname: '/drive/magasin-000001-000001-Ville-Test/authentification.aspx',
+  }
+
+  it('l’adresse e-mail est à écrire : « email », le champ et « Continuer » restent libres', () => {
+    const email = add('input', '', 100, { type: 'email', autocomplete: 'username' })
+    const next = add('button', 'Continuer', 160)
+
+    const look = readLoginLook(document, login, false)
+
+    expect(look.sub).toBe('email')
+    expect(look.keep).toEqual(expect.arrayContaining([email, next]))
+  })
+
+  it('le mot de passe est à écrire : « password », avec la case « Je suis un humain » gardée libre', () => {
+    const secret = add('input', '', 100, { type: 'password' })
+    const box = document.createElement('input')
+    box.type = 'checkbox'
+    const label = document.createElement('label')
+    label.append(box, ' Je suis un humain')
+    document.body.appendChild(label)
+    at(box, 220, 24, 10, 24)
+    const connect = add('button', 'Me connecter', 300)
+
+    const look = readLoginLook(document, login, false)
+
+    expect(look.sub).toBe('password')
+    expect(look.keep).toEqual(expect.arrayContaining([secret, box, connect]))
+  })
+
+  it('le cadre de vérification est ouvert et couvre la page : « human » (la personne le fait elle-même)', () => {
+    add('input', '', 100, { type: 'password' })
+    const frame = document.createElement('iframe')
+    frame.setAttribute('title', 'hCaptcha challenge')
+    document.body.appendChild(frame)
+    at(frame, 150, 500, 10, 700)
+
+    const look = readLoginLook(document, login, false)
+
+    expect(look.sub).toBe('human')
+    expect(look.crowded).toBe(true)
+  })
+
+  it('le code reçu par e-mail passe avant tout (les champs de la page sont encore là)', () => {
+    add('input', '', 100, { type: 'password' })
+    add('h2', 'Saisissez le code reçu par e-mail', 200)
+
+    expect(readLoginLook(document, login, false).sub).toBe('code')
+  })
+
+  it('une page de connexion sans champ lisible : « form » (la phrase d’ensemble)', () => {
+    expect(readLoginLook(document, login, false).sub).toBe('form')
+  })
+
+  it('une page du compte de l’enseigne qui n’est pas la page de connexion connue se lit aussi comme une connexion', () => {
+    const email = add('input', '', 100, { type: 'email' })
+
+    const look = readLoginLook(
+      document,
+      {
+        hostname: 'fd8-espace-client.leclercdrive.fr',
+        pathname: '/drive/magasin-000001-000001-Ville-Test/identification-unique.aspx',
+      },
+      false,
+    )
+
+    expect(look.sub).toBe('email')
+    expect(look.keep).toContain(email)
+  })
+})
+
+describe('DRV-757 (suite) : « Retour » et « Me géolocaliser » de la page des magasins restent libres', () => {
+  it('la barre réduite posée en haut ne recouvre pas « Retour » ni « Me géolocaliser » : ils sont gardés libres à chaque sous-étape du choix du magasin', () => {
+    postalField()
+    const back = add('a', 'Retour', 10, { role: 'button' })
+    const locate = add('button', 'Me géolocaliser', 60)
+    add('h2', 'Choisissez votre service autour du 69720', 200)
+    const arrow = add('button', '', 300, { 'aria-label': 'Choisir ce magasin' })
+
+    const look = readStoreLook(document)
+
+    expect(look.sub).toBe('shop')
+    expect(look.keep).toEqual(expect.arrayContaining([arrow, back, locate]))
+    // Au premier toucher aussi (le champ)
+    document.querySelector('h2')?.remove()
+    arrow.remove()
+    expect(readStoreLook(document).keep).toEqual(expect.arrayContaining([back, locate]))
+  })
+
+  it('un lien « Retour » caché ou d’un autre texte n’est pas gardé', () => {
+    postalField()
+    const hidden = add('a', 'Retour', 10, { role: 'button' })
+    hidden.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0)
+    const other = add('a', 'Retour aux courses de la semaine dernière', 60)
+
+    const keep = readStoreLook(document).keep
+
+    expect(keep).not.toContain(hidden)
+    expect(keep).not.toContain(other)
   })
 })
 

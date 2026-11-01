@@ -86,4 +86,55 @@ describe('un mur de cookies est là seulement devant une réponse franche', () =
 
     expect(wallLook(document)).toBeNull()
   })
+
+  it.each([
+    'Continuer sans accepter →',
+    'Continuer sans accepter  ›',
+    '→ Continuer sans accepter',
+    'Continuer sans accepter.',
+    'Tout accepter »',
+  ])(
+    'DRV-757 : « %s » (le lien du HAUT du mur, flèche ou ponctuation dans son libellé) est une réponse du mur : la carte s’en tient à l’écart',
+    (label) => {
+      const link = document.createElement('a')
+      link.setAttribute('role', 'button')
+      link.textContent = label
+      document.body.appendChild(link)
+      at(link, 20)
+
+      expect(consentButtons(document, 1024, 768)).toEqual([link])
+      expect(wallLook(document)?.sub).toBe('wall')
+    },
+  )
+
+  it('DRV-757 : la zone du mur est gardée libre quel que soit le libellé : tout lien ou bouton cliquable et montré de la boîte fixe qui porte une réponse reconnue, jamais ceux de la page', () => {
+    const box = at(document.createElement('div'), 0, { width: 1024, height: 700 })
+    box.setAttribute('style', 'position:fixed;inset:0')
+    document.body.appendChild(box)
+    const known = button('Tout accepter', 640, box)
+    const unknown = document.createElement('a')
+    unknown.setAttribute('role', 'button')
+    unknown.textContent = 'Poursuivre sans consentir →'
+    box.appendChild(unknown)
+    at(unknown, 16)
+    const hidden = button('Autre', 100, box)
+    hidden.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0)
+    const page = button('Mon compte', 300)
+
+    const look = wallLook(document)
+
+    expect(look?.keep).toEqual(expect.arrayContaining([known, unknown]))
+    expect(look?.keep).not.toContain(hidden)
+    expect(look?.keep).not.toContain(page)
+  })
+
+  it('un mur qui n’est pas dans une boîte fixe n’a que ses réponses reconnues de gardées (sa zone n’est pas lisible : limite documentée)', () => {
+    const known = button('Tout accepter', 640)
+    const other = button('Poursuivre sans consentir', 20)
+
+    const look = wallLook(document)
+
+    expect(look?.keep).toEqual([known])
+    expect(look?.keep).not.toContain(other)
+  })
 })

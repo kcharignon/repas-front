@@ -66,6 +66,8 @@
     <string name="abandon_continue">Continuer</string>
     <string name="setup_banner">Choisis ton magasin, puis touche « Utiliser ce magasin ». Le bouton retour du téléphone annule.</string>
     <string name="store_first_banner">Choisis d’abord ton magasin : touche la flèche retour de la page, puis choisis-le.</string>
+    <!-- DRV-757 : la page du mot de passe de l’enseigne n’a pas de carte de l’agent, par choix : l’écran dit quoi faire. -->
+    <string name="login_page_banner">Connecte-toi dans la page. Tu tapes toi-même ton e-mail et ton mot de passe.</string>
     <string name="basket_banner">Ton panier est dans l’icône en haut à droite.</string>
     <string name="about_finalize">Dernier « Finaliser sur %1$s » : %2$s</string>
     <string name="plan_banner_open">Touche « Commencer mes courses ».</string>

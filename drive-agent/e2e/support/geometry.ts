@@ -1,6 +1,6 @@
 // La preuve par la géométrie de la carte du guide (DRV-757), commune aux essais de Leclerc et d'Auchan : où est la carte (pleine, barre, effacée) et ce qu'elle ne doit jamais couvrir.
 // Deux preuves à chaque fois : les boîtes ne se recouvrent pas, ET le point central de chaque contrôle est bien celui du contrôle (`elementFromPoint` : ce qu'un doigt toucherait, pas
-// seulement une boîte). Elle ne rend JAMAIS sans avoir vérifié quelque chose, même quand la carte s'est effacée faute de place (alors seul le second contrôle est non vide).
+// seulement une boîte ; un contrôle que la PAGE recouvre elle-même, un mur par exemple, n'est pas l'affaire de la carte : seul un conteneur de l'agent, qui a un shadow root ouvert en test, compte). Elle ne rend JAMAIS sans avoir vérifié quelque chose, même quand la carte s'est effacée faute de place (alors seul le second contrôle est non vide).
 import { expect, type Page } from '@playwright/test'
 
 export interface Box {
@@ -39,7 +39,9 @@ async function controls(
           found.push({
             name: `${selector}[${index}]`,
             box: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-            touched: hit !== null && (element.contains(hit) || hit.contains(element)),
+            touched:
+              hit !== null &&
+              (element.contains(hit) || hit.contains(element) || hit.shadowRoot === null),
           })
         }
       }
@@ -55,7 +57,9 @@ async function controls(
           found.push({
             name: 'champ en cours de saisie',
             box: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-            touched: hit !== null && (active.contains(hit) || hit.contains(active)),
+            touched:
+              hit !== null &&
+              (active.contains(hit) || hit.contains(active) || hit.shadowRoot === null),
           })
         }
       }
@@ -75,6 +79,14 @@ export async function expectClear(
   limit = 3,
 ): Promise<'full' | 'bar' | 'away'> {
   await page.waitForTimeout(900)
+  // Le contrôle « un doigt tomberait sur le contrôle » compte tout hôte à shadow root FERMÉ comme la page ; il ne vaut que si les hôtes de l'agent sont ouverts (`OPEN_SHADOW`) : sans cela il deviendrait vrai sans bruit
+  const open = await page.evaluate(() =>
+    [...document.documentElement.children].some((host) => host.shadowRoot !== null),
+  )
+  expect(
+    open,
+    'aucun hôte de l’agent n’a de shadow root ouvert : la preuve du toucher ne vaudrait rien',
+  ).toBe(true)
   const card = await cardBox(page)
   const must = await controls(page, selectors, limit)
   expect(must.length, 'rien à protéger à l’écran : le test ne prouverait rien').toBeGreaterThan(0)

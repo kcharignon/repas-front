@@ -776,7 +776,7 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       const html =
         page === 'creation-compte-ccc.aspx'
           ? creationPage(origins)
-          : page === 'authentification.aspx'
+          : page === 'authentification.aspx' || page === 'identification-unique.aspx'
             ? authenticationPage(origins, mobile.loginCode === true)
             : page === 'home-espace-client-ccc.aspx'
               ? accountPage(origins)

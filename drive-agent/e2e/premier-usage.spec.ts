@@ -40,27 +40,33 @@ test('premier usage complet : la carte guide chaque étape, le mur de cookies re
     app.answerHello(PLAN)
 
     // Then (1) l'accueil national : la carte « Étape 1 sur 2 », écrire le code postal ; jamais « Touche « Commencer mes courses » »
-    await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible({
+    // La carte est là (réduite devant le mur de cookies : sa barre est la seule chose visible)
+    await expect(page.locator('.screen.guide')).toBeVisible({
       timeout: 15_000,
     })
-    await expect(page.locator('.g-step').filter({ hasText: 'Étape 1 sur 2' })).toBeVisible()
+    await expect(page.locator('.g-step').filter({ hasText: 'Étape 1 sur 2' })).toBeAttached()
     // Le mur de cookies est là : la carte dit d'y répondre d'abord (la personne choisit), le repère se retire (le champ est derrière le mur)
-    await expect(page.getByText('D’abord, réponds aux cookies, dans la page.')).toBeVisible()
+    await expect(
+      page.locator('.g-bar-text').filter({ hasText: 'Réponds aux cookies' }),
+    ).toBeVisible()
     await expect(page.getByText('Touche ici')).toBeHidden()
     await expect(page.getByRole('heading', { name: MANUAL })).toHaveCount(0)
 
-    // La carte se met EN HAUT : en bas elle couvrirait les boutons du mur (ils sont dans sa zone). Aucun des trois n'est sous elle, et le premier se touche vraiment
-    // (Playwright vérifie qu'aucun élément, la carte comprise, ne le couvre)
+    // Devant le mur la carte est une BARRE (jamais un grand bouton « Arrêter » sur le mur) : aucune des trois réponses n'est sous elle, et la première se touche vraiment
+    // (Playwright vérifie qu'aucun élément, la carte comprise, ne la couvre)
     const card = page.locator('.screen.guide')
     const wallButton = page.getByRole('button', { name: 'Continuer sans accepter' })
-    await expect
-      .poll(async () => ((await card.boundingBox())?.y ?? 9999) < 100, { message: 'carte en haut' })
-      .toBe(true)
+    await expect(card).toHaveClass(/min/)
     const cardBox = await card.boundingBox()
     for (const name of ['Continuer sans accepter', 'Paramétrer les cookies', 'Tout accepter']) {
       const box = await page.getByRole('button', { name }).boundingBox()
       expect(box).not.toBeNull()
-      expect((box?.y ?? 0) >= (cardBox?.y ?? 0) + (cardBox?.height ?? 0)).toBe(true)
+      const covered =
+        (cardBox?.x ?? 0) < (box?.x ?? 0) + (box?.width ?? 0) &&
+        (cardBox?.x ?? 0) + (cardBox?.width ?? 0) > (box?.x ?? 0) &&
+        (cardBox?.y ?? 0) < (box?.y ?? 0) + (box?.height ?? 0) &&
+        (cardBox?.y ?? 0) + (cardBox?.height ?? 0) > (box?.y ?? 0)
+      expect(covered, name).toBe(false)
     }
     await wallButton.click({ timeout: 5_000 })
     await expect(page.locator('#cookie-wall')).toHaveCount(0)
@@ -106,7 +112,9 @@ test('une bannière de cookies dont les boutons sont dans la zone de la carte : 
     })
     app.answerHello(PLAN)
 
-    await expect(page.getByText('D’abord, réponds aux cookies, dans la page.')).toBeVisible({
+    await expect(
+      page.locator('.g-bar-text').filter({ hasText: 'Réponds aux cookies' }),
+    ).toBeVisible({
       timeout: 15_000,
     })
     await expect(page.getByText('Touche ici')).toBeHidden()
@@ -145,7 +153,8 @@ test('sans mur de cookies : la carte du magasin se pose en bas, comme d’habitu
     })
     app.answerHello(PLAN)
 
-    await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible({
+    // La carte est là (réduite devant le mur de cookies : sa barre est la seule chose visible)
+    await expect(page.locator('.screen.guide')).toBeVisible({
       timeout: 15_000,
     })
     const box = await page.locator('.screen.guide').boundingBox()
