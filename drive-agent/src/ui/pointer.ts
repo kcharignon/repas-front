@@ -176,24 +176,25 @@ export function createPointer(options: PointerOptions): Pointer {
     }
   }
 
-  /** Le contrôle à entourer : celui qu'on a déjà s'il est encore dans la page, sinon une relecture, au plus une par seconde. */
+  /**
+   * Le contrôle à entourer : relu au plus une fois par seconde, ou tout de suite à la demande. Un contrôle gardé parce qu'il est encore dans la page ne suffit pas (DRV-759, mesuré :
+   * la liste des magasins se réécrit et le repère restait sur un contrôle que la lecture ne désignait plus, bien plus bas que la première carte).
+   */
   function resolve(): HTMLElement | null {
     const at = Date.now()
-    if (cached?.isConnected !== true || refresh) {
-      if (refresh || at - resolvedAt >= RESOLVE_MS) {
-        const spot = get()
-        // Un autre contrôle : le repère revient (la page ne défile qu'une fois pour lui)
-        if (spot?.element !== cached) {
-          scrolled = false
-          touchedAt = 0
-        }
-        cached = spot?.element ?? null
-        word = spot?.word
-        resolvedAt = at
-        refresh = false
-      } else if (cached?.isConnected !== true) {
-        cached = null
+    if (refresh || at - resolvedAt >= RESOLVE_MS) {
+      const spot = get()
+      // Un autre contrôle : le repère revient (la page ne défile qu'une fois pour lui)
+      if (spot?.element !== cached) {
+        scrolled = false
+        touchedAt = 0
       }
+      cached = spot?.element ?? null
+      word = spot?.word
+      resolvedAt = at
+      refresh = false
+    } else if (cached?.isConnected !== true) {
+      cached = null
     }
     return cached
   }
