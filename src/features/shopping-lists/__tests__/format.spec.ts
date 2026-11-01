@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 
+import agreement from '../../../../drive-agent/fixtures/unit-agreement.json'
+
 import { formatQuantity, imageUrl } from '@/features/shopping-lists/format'
 
 describe('formatQuantity', () => {
@@ -19,6 +21,16 @@ describe('formatQuantity', () => {
     // Intl insère une espace insécable fine : on compare sans tenir compte du type d'espace
     expect(formatQuantity(value, unit).replace(/\s/g, ' ')).toBe(expected)
   })
+})
+
+describe('formatQuantity, la même règle que l’agent du drive', () => {
+  // `drive-agent/test/needed-text.spec.ts` lit le même fichier : la quantité d'un article se dit pareil sur le site et dans la carte de l'agent
+  it.each(agreement.cases)(
+    '$quantity « $unitSymbol » se dit « $expected »',
+    ({ quantity, unitSymbol, expected }) => {
+      expect(formatQuantity(quantity, unitSymbol).replace(/\s/g, ' ')).toBe(expected)
+    },
+  )
 })
 
 describe('imageUrl', () => {

@@ -291,7 +291,7 @@ test('premier usage complet : accueil, code postal, ville, magasin, connexion en
       await page.locator('#continue').click()
       // L'adresse est écrite : le mot de passe et la case « Je suis un humain »
       await expect(
-        page.getByText('Écris ton mot de passe, coche « Je suis un humain », puis valide.'),
+        page.getByText('Écris ton mot de passe, puis coche « Je suis un humain ».'),
       ).toBeVisible()
       await expect(page.locator('#hcaptcha')).not.toBeChecked()
       await page.locator('#hcaptcha').check()

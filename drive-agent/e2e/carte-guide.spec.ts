@@ -171,7 +171,7 @@ for (const viewport of VIEWPORTS) {
         await keyboard(page, false, viewport.height)
         await page.locator('#continue').click()
         await expect(page.locator('.g-text')).toHaveText(
-          'Écris ton mot de passe, coche « Je suis un humain », puis valide.',
+          'Écris ton mot de passe, puis coche « Je suis un humain ».',
         )
         await keyboard(page, true, viewport.height, '#secret')
         await expectClear(page, FORM, 8)

@@ -66,10 +66,13 @@ export function listText(names: readonly string[]): string {
   return names.length > LIST_MAX ? `${shown} (et ${names.length - LIST_MAX} de plus)` : shown
 }
 
+/** Un symbole d'un ou deux caractères (g, kg, l, cl, ml) est une abréviation : jamais de « s ». La MÊME règle que le site (`src/features/shopping-lists/format.ts`, `ABBREVIATION`) ; `fixtures/unit-agreement.json` les tient ensemble. */
+const ABBREVIATION = /^\p{L}{1,2}$/u
+
 /**
  * Ce que la liste demande pour un article : « 800 g » (la quantité et son unité), `null` quand le plan ne le dit pas. Une unité qui est un MOT (« unité », « tranche », « cuillère à
- * soupe ») s'accorde : « 2 unités » dès deux (DRV-757, mesuré : « Il te faut : 2 unité. ») ; un symbole (g, kg, ml, cl, l) ne s'accorde jamais. Le symbole est un mot quand il est le nom
- * de l'unité (`unitName`, DRV-652), ou, sans nom, qu'il a trois lettres au moins.
+ * soupe ») s'accorde : « 2 unités » dès deux (DRV-757, mesuré : « Il te faut : 2 unité. ») ; une abréviation (un ou deux caractères) ne s'accorde jamais, comme sur le site. Le
+ * symbole est un mot quand il n'est pas une abréviation et, si le plan donne le nom de l'unité (`unitName`, DRV-652), qu'il en est le nom. Sans unité, la quantité seule.
  */
 export function formatNeeded(
   needed:
@@ -77,11 +80,11 @@ export function formatNeeded(
 ): string | null {
   if (!needed) return null
   const symbol = needed.unitSymbol.trim()
-  const word =
-    needed.unitName === undefined
-      ? /^\p{L}{3,}(?: \p{L}+)*$/u.test(symbol)
-      : symbol.toLowerCase() === needed.unitName.trim().toLowerCase()
-  return `${formatNumber(needed.quantity)} ${word ? unitFor(symbol, needed.quantity) : needed.unitSymbol}`
+  const named =
+    needed.unitName === undefined || symbol.toLowerCase() === needed.unitName.trim().toLowerCase()
+  const word = symbol !== '' && !ABBREVIATION.test(symbol) && named
+  const unit = word ? unitFor(symbol, needed.quantity) : symbol
+  return `${formatNumber(needed.quantity)}${unit === '' ? '' : ` ${unit}`}`
 }
 
 /** Les articles de la liste rangés par ce qui leur arrive : ce qu'il faut pour écrire la phrase de synthèse. */

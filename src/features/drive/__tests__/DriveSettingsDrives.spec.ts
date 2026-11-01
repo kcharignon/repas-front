@@ -396,7 +396,7 @@ describe('ajouter un drive : la lecture du magasin par l’application', () => {
         ...base,
         result: {
           ...base.result,
-          store: { ...base.result.store, label: 'Auchan Drive Lyon Saint-Priest' },
+          store: { ...base.result.store, label: 'Auchan Drive Test' },
         },
       }
     }
@@ -413,9 +413,9 @@ describe('ajouter un drive : la lecture du magasin par l’application', () => {
         (input as Request).method === 'PUT' && (input as Request).url.endsWith('/drive/settings'),
     )
     expect(await bodyOf(fetchMock, index)).toMatchObject({
-      store: { label: 'Auchan Drive Lyon Saint-Priest' },
+      store: { label: 'Auchan Drive Test' },
     })
-    expect(card(wrapper, 'Auchan')?.text()).toContain('Auchan Drive Lyon Saint-Priest')
+    expect(card(wrapper, 'Auchan')?.text()).toContain('Auchan Drive Test')
     expect(card(wrapper, 'Auchan')?.text()).toContain('Magasin …abc enregistré.')
   })
 

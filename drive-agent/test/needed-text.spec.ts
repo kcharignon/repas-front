@@ -2,6 +2,7 @@
 // ml, cl, l) ne s'accorde jamais.
 import { describe, expect, it } from 'vitest'
 
+import agreement from '../fixtures/unit-agreement.json'
 import { formatNeeded } from '../src/ui/strings'
 import { S } from '../src/ui/strings'
 
@@ -21,6 +22,18 @@ describe('la quantité demandée par la liste', () => {
     [2, 'l', undefined, '2 l'],
   ])('%s « %s » (nom : %s) se dit « %s »', (quantity, unitSymbol, unitName, expected) => {
     expect(formatNeeded({ quantity, unitSymbol, ...(unitName && { unitName }) })).toBe(expected)
+  })
+
+  // La règle du site (src/features/shopping-lists/format.ts) : le même fichier est lu par son test (`format.spec.ts`)
+  it.each(agreement.cases)(
+    'sans nom d’unité, comme le site : $quantity « $unitSymbol » se dit « $expected »',
+    ({ quantity, unitSymbol, expected }) => {
+      expect(formatNeeded({ quantity, unitSymbol })).toBe(expected)
+    },
+  )
+
+  it('une abréviation d’un ou deux caractères ne prend jamais de « s », même si l’unité porte ce nom', () => {
+    expect(formatNeeded({ quantity: 2, unitSymbol: 'ml', unitName: 'ml' })).toBe('2 ml')
   })
 
   it('la phrase de l’écran de choix : « Il te faut : 2 unités. »', () => {
