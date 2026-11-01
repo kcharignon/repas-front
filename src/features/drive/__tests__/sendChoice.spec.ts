@@ -4,10 +4,36 @@
 import { describe, expect, it } from 'vitest'
 
 import type { DriveSettings } from '@/api'
-import { needsStore, sendChoice, unservedDrive } from '../sendChoice'
+import { candidateIds, needsStore, sendChoice, unservedDrive } from '../sendChoice'
 import { severalSettings } from './severalDrives'
 
 const none = { picked: null }
+
+describe('candidateIds (DRV-755) : les seuls drives dont un lien peut épargner la question', () => {
+  it('les drives candidats de la sélection du back, et rien d’autre', () => {
+    expect(
+      candidateIds(
+        severalSettings({ mode: 'ASK', retailer: 'leclerc', configured: ['leclerc', 'auchan'] }),
+      ),
+    ).toEqual(['leclerc', 'auchan'])
+    // Un drive allumé mais sans magasin n'est pas candidat
+    expect(
+      candidateIds(severalSettings({ mode: 'AUTO', retailer: 'leclerc', configured: ['leclerc'] })),
+    ).toEqual(['leclerc'])
+    expect(candidateIds(severalSettings({ mode: 'NONE', retailer: null, configured: [] }))).toEqual(
+      [],
+    )
+  })
+
+  it('des réglages pas encore lus, ou sans sélection : aucun candidat', () => {
+    expect(candidateIds(undefined)).toEqual([])
+    const settings = {
+      ...severalSettings({ mode: 'ASK', retailer: 'leclerc' }),
+    } as Partial<DriveSettings>
+    delete settings.selection
+    expect(candidateIds(settings as DriveSettings)).toEqual([])
+  })
+})
 
 describe('sendChoice : ce que l’écran montre du verdict du back', () => {
   it('des réglages pas encore lus : aucun drive, aucune question', () => {

@@ -911,6 +911,7 @@ export default {
       help: 'Je reprends ton envoi dans un instant. Ta liste est gardée.',
       failed: 'Je n’ai pas pu retenir ce magasin. Ta liste est gardée. Tu peux réessayer.',
       retry: 'Réessayer',
+      leave: 'Revenir à ma liste',
     },
     setup: {
       title: 'Lecture du magasin',

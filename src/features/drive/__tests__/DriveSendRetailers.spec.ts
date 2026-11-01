@@ -68,7 +68,7 @@ async function open(settings: Settings, handlers: Handlers = {}, query = '') {
   })
   await vi.waitFor(() => expect(wrapper.find('h1').exists()).toBe(true))
 
-  return { wrapper, fetchMock }
+  return { wrapper, fetchMock, context }
 }
 
 const button = (label: string) =>
@@ -260,12 +260,14 @@ describe('plusieurs drives configurés, aucun drive habituel (R4)', () => {
   it('le drive que l’adresse porte (la personne vient de retenir son magasin, DRV-755) est déjà choisi : le drive s’ouvre tout seul, sans reposer la question', async () => {
     const native = installApp(['leclerc', 'auchan'])
     // Les réglages désignent Leclerc, la personne envoyait sa liste à Auchan : c'est ce drive qui s'ouvre
-    const { fetchMock } = await open(
+    const { fetchMock, context } = await open(
       { mode: 'ASK', retailer: 'leclerc', habitual: 'leclerc' },
       { 'PUT /api/v1/drive/last-retailer': noContent },
       '?ouvrir=1&drive=auchan',
     )
     await vi.waitFor(() => expect(started(native)).toHaveLength(1))
+    // Les deux demandes sont CONSOMMÉES (un seul remplacement les retire ensemble) : l'adresse finale n'en porte plus aucune
+    await vi.waitFor(() => expect(context.router.currentRoute.value.query).toEqual({}))
 
     expect(started(native)[0]?.plan?.retailer).toBe('auchan')
     expect(planRequests(fetchMock)).toContain('auchan')

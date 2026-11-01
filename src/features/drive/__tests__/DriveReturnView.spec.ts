@@ -1661,11 +1661,39 @@ describe('retour du drive : le magasin que la personne a choisi (DRV-755)', () =
     expect(wrapper.find('[role="alert"]').text()).toContain('Ta liste est gardée')
     expect(context.router.currentRoute.value.name).toBe('drive-return')
     expect(localStorage.getItem(DRAFT_KEY)).not.toBeNull()
+    // Deux gestes, jamais « Fermer » : réessayer, ou revenir à la liste
+    expect([...wrapper.findAll('[role="alert"] button')].map((item) => item.text())).toEqual([
+      'Réessayer',
+      'Revenir à ma liste',
+    ])
 
     await press('Réessayer')
     await onSendScreen(context)
     expect(attempts).toBe(2)
     expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+  })
+
+  it('le back refuse durablement : « Revenir à ma liste » oublie le passage et garde la liste (hors ligne aussi)', async () => {
+    const { wrapper, context, fetchMock } = await open(chosenEvent(), {
+      ...handlers,
+      'PUT /api/v1/drive/settings': failure(422, 'DRIVE_STORE_INVALID'),
+    })
+    await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true))
+    window.dispatchEvent(new Event('offline'))
+    await flushPromises()
+
+    await press('Revenir à ma liste')
+    await vi.waitFor(() =>
+      expect(context.router.currentRoute.value.name).toBe('shopping-list-detail'),
+    )
+
+    expect(context.router.currentRoute.value.params.id).toBe('l1')
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+    expect(useDriveReturnStore().event).toBeNull()
+    // Rien d'autre n'est écrit : ni choix, ni coche, ni liste terminée
+    expect(calls(fetchMock).filter((call) => call.startsWith('PUT'))).toEqual([
+      'PUT /api/v1/drive/settings',
+    ])
   })
 
   it('un magasin qu’on ne peut pas croire (adresse d’un autre numéro) : un envoi arrêté comme avant, rien n’est écrit', async () => {

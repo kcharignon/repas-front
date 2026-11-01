@@ -330,6 +330,18 @@ async function adoptChosenStore() {
   }
 }
 
+/** Renoncer à reprendre : le passage est oublié (son brouillon ne bloque pas l'envoi suivant), la liste est gardée telle quelle. */
+async function leaveStoreSwitch() {
+  const id = listId.value
+  driveBridge.clearDraft()
+  if (id === null) {
+    store.clear()
+    await router.push({ name: 'shopping-lists' })
+    return
+  }
+  await leave(id)
+}
+
 onMounted(() => {
   if (chosen.value !== null) return void adoptChosenStore()
   const current = store.event
@@ -534,9 +546,15 @@ function confirmReopen() {
             : t('driveReturn.storeSwitch.help')
         }}
       </p>
-      <UiButton v-if="switching === 'failed'" :disabled="!online" @click="adoptChosenStore">
-        {{ t('driveReturn.storeSwitch.retry') }}
-      </UiButton>
+      <div v-if="switching === 'failed'" class="flex flex-wrap items-center gap-3">
+        <UiButton :disabled="!online" @click="adoptChosenStore">
+          {{ t('driveReturn.storeSwitch.retry') }}
+        </UiButton>
+        <!-- Une sortie quand le back refuse durablement : le passage est oublié, la liste est gardée -->
+        <UiButton variant="secondary" @click="leaveStoreSwitch">
+          {{ t('driveReturn.storeSwitch.leave') }}
+        </UiButton>
+      </div>
     </section>
 
     <!-- Le résultat d'un envoi : une phrase, une action principale, ce qui existe, puis les détails repliés -->
