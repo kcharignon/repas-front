@@ -30,10 +30,27 @@ class SiteModeMigrationTest {
     }
 
     private class Result {
-        val calls = mutableListOf<Boolean>()
-        fun record(hadData: Boolean) {
-            calls += hadData
+        val calls = mutableListOf<MigrationOutcome>()
+        fun record(outcome: MigrationOutcome) {
+            calls += outcome
         }
+    }
+
+    /** Une horloge à la main : le délai de secours sonne quand le test le dit. */
+    private class Clock : Delay {
+        private var pending: (() -> Unit)? = null
+        var cancelled = false
+
+        override fun after(millis: Long, action: () -> Unit): () -> Unit {
+            assertEquals(SiteModeMigration.GIVE_UP_MS, millis)
+            pending = action
+            return {
+                cancelled = true
+                pending = null
+            }
+        }
+
+        fun ring() = pending?.invoke()
     }
 
     @Test
@@ -41,7 +58,7 @@ class SiteModeMigrationTest {
         val store = MemoryKeyValues()
         val eraser = Eraser()
         val result = Result()
-        val migration = SiteModeMigration(sites, store, eraser)
+        val migration = SiteModeMigration(sites, store, eraser, Clock())
 
         assertTrue(migration.runFor(leclerc, result::record))
 
@@ -53,7 +70,7 @@ class SiteModeMigrationTest {
         eraser.finish?.invoke()
 
         assertEquals("1", store.values["${SiteModeMigration.KEY}.${leclerc.id}"])
-        assertEquals(listOf(true), result.calls)
+        assertEquals(listOf(MigrationOutcome.ERASED), result.calls)
         assertFalse(migration.due(leclerc))
     }
 
@@ -63,11 +80,11 @@ class SiteModeMigrationTest {
         val eraser = Eraser(data = false)
         val result = Result()
 
-        SiteModeMigration(sites, store, eraser).runFor(leclerc, result::record)
+        SiteModeMigration(sites, store, eraser, Clock()).runFor(leclerc, result::record)
         eraser.finish?.invoke()
 
         assertEquals("le stockage du site est effacé quand même", listOf(leclerc.id), eraser.erased)
-        assertEquals("pas de message : personne n'a été déconnecté", listOf(false), result.calls)
+        assertEquals("pas de message : personne n'a été déconnecté", listOf(MigrationOutcome.NOTHING_TO_ERASE), result.calls)
         assertEquals("1", store.values["${SiteModeMigration.KEY}.${leclerc.id}"])
     }
 
@@ -75,10 +92,10 @@ class SiteModeMigrationTest {
     fun `elle ne se rejoue jamais, meme apres un redemarrage`() {
         val store = MemoryKeyValues()
         val eraser = Eraser()
-        SiteModeMigration(sites, store, eraser).runFor(leclerc) {}
+        SiteModeMigration(sites, store, eraser, Clock()).runFor(leclerc) {}
         eraser.finish?.invoke()
 
-        val again = SiteModeMigration(sites, store, eraser)
+        val again = SiteModeMigration(sites, store, eraser, Clock())
 
         assertFalse(again.runFor(leclerc) {})
         assertFalse(again.runFor(leclerc) {})
@@ -89,10 +106,10 @@ class SiteModeMigrationTest {
     fun `un effacement interrompu avant sa fin se refait au lancement suivant`() {
         val store = MemoryKeyValues()
         val eraser = Eraser()
-        SiteModeMigration(sites, store, eraser).runFor(leclerc) {}
+        SiteModeMigration(sites, store, eraser, Clock()).runFor(leclerc) {}
         // le processus s'arrête : le rappel n'est jamais venu
 
-        val next = SiteModeMigration(sites, store, eraser)
+        val next = SiteModeMigration(sites, store, eraser, Clock())
 
         assertTrue(next.due(leclerc))
         assertTrue(next.runFor(leclerc) {})
@@ -104,7 +121,7 @@ class SiteModeMigrationTest {
         val store = MemoryKeyValues()
         val eraser = Eraser()
         val result = Result()
-        val migration = SiteModeMigration(sites, store, eraser)
+        val migration = SiteModeMigration(sites, store, eraser, Clock())
 
         assertTrue(migration.runFor(leclerc, result::record))
         assertFalse(migration.runFor(leclerc, result::record))
@@ -115,10 +132,49 @@ class SiteModeMigrationTest {
     }
 
     @Test
+    fun `un rappel qui ne vient jamais, au bout de 3 s la page se charge quand meme, pas de drapeau, pas de message, et la migration sera retentee`() {
+        val store = MemoryKeyValues()
+        val eraser = Eraser()
+        val clock = Clock()
+        val result = Result()
+        val migration = SiteModeMigration(sites, store, eraser, clock)
+
+        assertTrue(migration.runFor(leclerc, result::record))
+        assertTrue("rien avant le délai", result.calls.isEmpty())
+        clock.ring()
+
+        assertEquals(listOf(MigrationOutcome.GAVE_UP), result.calls)
+        assertTrue("le drapeau n'est PAS posé", store.values.isEmpty())
+        assertTrue(migration.due(leclerc))
+
+        // Le rappel tardif de la WebView ne pose rien et ne dit rien
+        eraser.finish?.invoke()
+        assertEquals(1, result.calls.size)
+        assertTrue(store.values.isEmpty())
+
+        // Au lancement suivant, elle est retentée
+        val next = SiteModeMigration(sites, store, eraser, Clock())
+        assertTrue(next.runFor(leclerc) {})
+        assertEquals(2, eraser.erased.size)
+    }
+
+    @Test
+    fun `un effacement fini a temps annule le delai de secours`() {
+        val clock = Clock()
+        val eraser = Eraser()
+        val migration = SiteModeMigration(sites, MemoryKeyValues(), eraser, clock)
+        migration.runFor(leclerc) {}
+
+        eraser.finish?.invoke()
+
+        assertTrue(clock.cancelled)
+    }
+
+    @Test
     fun `une autre enseigne n'est jamais effacee et n'a pas de drapeau`() {
         val store = MemoryKeyValues()
         val eraser = Eraser()
-        val migration = SiteModeMigration(sites, store, eraser)
+        val migration = SiteModeMigration(sites, store, eraser, Clock())
 
         assertFalse(migration.due(other))
         assertFalse(migration.runFor(other) {})
@@ -131,7 +187,7 @@ class SiteModeMigrationTest {
     fun `sans effacement possible sans toucher aux autres donnees, rien n'est note et elle sera retentee`() {
         val store = MemoryKeyValues()
         val eraser = Eraser(possible = false)
-        val migration = SiteModeMigration(sites, store, eraser)
+        val migration = SiteModeMigration(sites, store, eraser, Clock())
 
         assertFalse(migration.runFor(leclerc) {})
 
@@ -146,6 +202,6 @@ class SiteModeMigrationTest {
         val fictive = FictionalSites.A
         val registry = RetailerSites(listOf(fictive), legacy = fictive)
 
-        assertFalse(SiteModeMigration(registry, MemoryKeyValues(), Eraser()).due(fictive))
+        assertFalse(SiteModeMigration(registry, MemoryKeyValues(), Eraser(), Clock()).due(fictive))
     }
 }

@@ -135,7 +135,13 @@ export function fitGuide(
   }
 
   const check = (read = true): void => {
-    const was = card.hidden
+    // L'état de la dernière mesure réussie : une lecture qui lève le remet en entier (cachée, réduite, en haut, effacée), pas seulement `hidden`
+    const was = {
+      hidden: card.hidden,
+      min: card.classList.contains(MIN),
+      top: card.classList.contains(TOP),
+      away: card.classList.contains(AWAY),
+    }
     let placed = false
     try {
       if (read) latest = options.needs?.() ?? null
@@ -183,7 +189,12 @@ export function fitGuide(
       // La page ne se laisse pas lire : la carte reste où elle est.
     } finally {
       // Une lecture qui a levé après avoir ôté la carte la remet : la carte, avec « Arrêter pour l'instant », ne reste jamais cachée par une panne de lecture
-      if (!placed) card.hidden = was
+      if (!placed) {
+        card.hidden = was.hidden
+        card.classList.toggle(MIN, was.min)
+        card.classList.toggle(TOP, was.top)
+        card.classList.toggle(AWAY, was.away)
+      }
     }
   }
 

@@ -175,9 +175,9 @@ for (const viewport of VIEWPORTS) {
         await keyboard(page, false, viewport.height)
         await expectClear(page, FORM, 8)
         await page.locator('#hcaptcha').check()
-        // Le cadre de vérification s'ouvre (plus de 30 % de la fenêtre) : la carte se réduit, ne couvre ni la case ni le cadre
+        // Le cadre de vérification s'ouvre en bas de la page (petit : il ne réduit pas la carte à lui seul, mais il ne doit JAMAIS être couvert : la carte, pleine, couvrirait le bas de l'écran)
         await expect(page.locator('#hc-frame')).toBeVisible()
-        expect(await expectClear(page, FORM, 8), 'réduite devant le défi').not.toBe('full')
+        await expectClear(page, FORM, 8)
         await shot(page, '10b-connexion-defi')
         await page.locator('#next').click()
         await expect(page.locator('#step3')).toBeVisible()

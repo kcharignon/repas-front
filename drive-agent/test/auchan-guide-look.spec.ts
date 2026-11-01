@@ -2,6 +2,7 @@
 // Formes PLAUSIBLES (le constat du 2026-11-01 : un DIV aria-modal, « Code postal, ville… », « Dardilly 69570 »). jsdom ne mesure rien : chaque test place ses éléments.
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { AuchanAdapter } from '../src/auchan'
 import { readAuchanLook } from '../src/auchan/guide-look'
 import { GUIDE_TEXTS } from '../src/auchan/texts'
 
@@ -140,5 +141,67 @@ describe('Auchan : les mots de chaque sous-étape (voix de repas-po)', () => {
       // Une phrase qui cite un libellé en a une version sans libellé
       expect(text.includes('{label}') && bare === undefined).toBe(false)
     }
+  })
+})
+
+describe('Auchan : le cadre de vérification reCAPTCHA (DRV-757)', () => {
+  const adapter = () =>
+    new AuchanAdapter({
+      fetch: () => Promise.reject(new Error('aucune requête')),
+      location: { hostname: 'www.auchan.fr', pathname: '/courses' } as Location,
+      document,
+      authenticated: () => 'false',
+      parseHtml: () => document,
+      sleep: () => Promise.resolve(),
+      timer: () => () => undefined,
+      random: () => 0,
+      now: () => 0,
+    } as ConstructorParameters<typeof AuchanAdapter>[0])
+
+  function frame(title: string, top: number, height: number, width = 300): HTMLIFrameElement {
+    const el = document.createElement('iframe')
+    el.setAttribute('title', title)
+    document.body.appendChild(el)
+    el.getBoundingClientRect = () =>
+      ({
+        top,
+        bottom: top + height,
+        left: 10,
+        right: 10 + width,
+        width,
+        height,
+        x: 10,
+        y: top,
+        toJSON: () => ({}),
+      }) as DOMRect
+    return el
+  }
+
+  it('un petit cadre reCAPTCHA est gardé libre, avec le contrôle de connexion, sans réduire la carte', () => {
+    const login = add('a', 'Se connecter', 20)
+    const captcha = frame('reCAPTCHA', 300, 78)
+
+    const look = adapter().guideLook('login')
+
+    expect(look.keep).toEqual(expect.arrayContaining([login, captcha]))
+    expect(look.crowded).toBe(false)
+  })
+
+  it('un cadre qui couvre plus de 30 % de la fenêtre (le défi image) réduit la carte', () => {
+    const captcha = frame('recaptcha challenge', 100, 500, 700)
+
+    const look = adapter().guideLook('login')
+
+    expect(look.keep).toContain(captcha)
+    expect(look.crowded).toBe(true)
+  })
+
+  it('un cadre d’un autre service n’est jamais gardé ; sans cadre la lecture est celle de la page', () => {
+    frame('publicité', 300, 300, 700)
+
+    const look = adapter().guideLook('login')
+
+    expect(look.keep).toEqual([])
+    expect(look.crowded).toBeUndefined()
   })
 })

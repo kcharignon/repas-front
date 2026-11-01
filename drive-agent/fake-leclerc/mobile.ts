@@ -458,7 +458,7 @@ export function authenticationPage(origins: MobileOrigins, code: boolean): strin
 <label for="secret">Mot de passe unique</label><input id="secret" type="password" autocomplete="current-password">
 <label><input id="stay" type="checkbox"> Rester connecté</label>
 <label><input id="hcaptcha" type="checkbox"> Je suis un humain</label>
-<iframe id="hc-frame" title="hCaptcha challenge" src="about:blank" style="display:none;width:300px;height:420px;border:1px solid #888"></iframe>
+<iframe id="hc-frame" title="hCaptcha challenge" src="about:blank" style="display:none;position:fixed;left:16px;bottom:20px;width:300px;height:120px;border:1px solid #888;background:#fff"></iframe>
 <button id="next" type="button">Me connecter</button>
 </section>
 <section id="step3" role="dialog" aria-label="Saisissez le code reçu par e-mail" style="display:none">

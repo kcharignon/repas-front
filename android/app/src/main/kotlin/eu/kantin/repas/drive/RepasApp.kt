@@ -2,6 +2,8 @@ package eu.kantin.repas.drive
 
 import android.app.Application
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 
 /**
  * L'application : ce que la coquille Repas ([MainActivity]) et l'écran du drive ([DriveActivity]) partagent pendant que le processus vit.
@@ -58,6 +60,13 @@ class RepasApp : Application() {
                     DriveProfile.clear(null, site, sites, done)
                     return true
                 }
+            },
+            // Si la WebView ne rappelle jamais, la page se charge au bout de 3 s (la migration sera retentée)
+            Delay { millis, action ->
+                val handler = Handler(Looper.getMainLooper())
+                val task = Runnable(action)
+                handler.postDelayed(task, millis)
+                return@Delay { handler.removeCallbacks(task) }
             },
         )
     }

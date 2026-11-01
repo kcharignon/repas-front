@@ -229,4 +229,59 @@ describe('la carte posée dans la page', () => {
     expect(performance.now() - start).toBeLessThan(500)
     fit.stop()
   })
+
+  it('DRV-757 : une lecture qui lève après avoir posé la carte ailleurs remet l’état complet de la dernière mesure réussie (réduite, en haut, effacée), pas seulement « cachée »', () => {
+    const field = document.createElement('input')
+    field.type = 'text'
+    document.body.appendChild(field)
+    field.getBoundingClientRect = () => rect(100, 150)
+    field.focus()
+    const el = card()
+    const measure = el.getBoundingClientRect
+    const fit = fitGuide(window, el, options([]))
+    // La dernière mesure réussie : la carte est réduite (le clavier est ouvert)
+    expect(el.classList.contains('min')).toBe(true)
+    expect(el.hidden).toBe(false)
+
+    // La carte lève en pleine mesure, après que la mesure l'a déjà posée en pleine, en bas
+    let calls = 0
+    el.getBoundingClientRect = () => {
+      calls += 1
+      if (calls > 1) throw new Error('la page ne se laisse pas mesurer')
+      return measure.call(el)
+    }
+    window.dispatchEvent(new Event('resize'))
+
+    expect(calls).toBeGreaterThan(1)
+    expect(el.classList.contains('min')).toBe(true)
+    expect(el.classList.contains('top')).toBe(false)
+    expect(el.classList.contains('away')).toBe(false)
+    expect(el.hidden).toBe(false)
+    fit.stop()
+  })
+
+  it('DRV-757 : le plafond de 200 ms du défilement : cinquante défilements d’affilée ne remesurent la carte qu’une fois, un défilement 250 ms plus tard la remesure', async () => {
+    const el = card()
+    const key = control(100, 150)
+    const measure = el.getBoundingClientRect
+    let measures = 0
+    el.getBoundingClientRect = () => {
+      measures += 1
+      return measure.call(el)
+    }
+    const fit = fitGuide(window, el, options([key]))
+    const afterStart = measures
+
+    for (let i = 0; i < 50; i += 1) window.dispatchEvent(new Event('scroll'))
+    const oneBurst = measures - afterStart
+
+    // Une seule remesure (au plus six mesures de places), jamais cinquante
+    expect(oneBurst).toBeGreaterThan(0)
+    expect(oneBurst).toBeLessThanOrEqual(6)
+
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    window.dispatchEvent(new Event('scroll'))
+    expect(measures - afterStart - oneBurst).toBeGreaterThan(0)
+    fit.stop()
+  })
 })
