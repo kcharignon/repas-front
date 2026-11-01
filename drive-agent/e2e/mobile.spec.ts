@@ -377,6 +377,65 @@ test('DRV-757, défense : une page du compte de l’enseigne au chemin inconnu (
   })
 })
 
+const LOGIN_TEXT = 'Connectez-vous avec votre compte unique E.Leclerc.'
+/** Le texte de connexion présent dans l'accueil de quatre façons CACHÉES et dans un script (mesuré sur le téléphone : il y est, caché), jamais montré. */
+const HIDDEN_LOGIN_TEXT = [
+  ['hidden', `<p hidden>${LOGIN_TEXT}</p>`],
+  ['display:none', `<p style="display:none">${LOGIN_TEXT}</p>`],
+  ['hors écran', `<p style="position:absolute;left:-9999px">${LOGIN_TEXT}</p>`],
+  ['visibility:hidden', `<p style="visibility:hidden">${LOGIN_TEXT}</p>`],
+  ['script', `<script type="application/json">{"titre":"${LOGIN_TEXT}"}</script>`],
+] as const
+
+for (const [how, markup] of HIDDEN_LOGIN_TEXT) {
+  test(`DRV-759 : le texte de connexion caché (${how}) sur l’accueil n’en fait pas une page de connexion : « Étape 1 sur 2 », jamais « Connecte-toi »`, async ({
+    page,
+    agentCode,
+  }) => {
+    await withMobile({}, async (fake) => {
+      const app = await openWithBridge(page, fake, agentCode, {
+        path: '/',
+        origin: fake.mobileOrigins.www,
+        asApplication: true,
+      })
+      await page.evaluate((html) => document.body.insertAdjacentHTML('beforeend', html), markup)
+      app.answerHello(PLAN(FARINE))
+
+      await expect(page.locator('.g-step').filter({ hasText: 'Étape 1 sur 2' })).toBeAttached({
+        timeout: 15_000,
+      })
+      await expect(page.locator('.g-step').filter({ hasText: 'Étape 2 sur 2' })).toHaveCount(0)
+      await expect(page.getByRole('heading', { name: 'Connecte-toi' })).toHaveCount(0)
+    })
+  })
+}
+
+test('DRV-759 : une page qui MONTRE le texte de connexion et un champ, d’adresse inconnue, est « Étape 2 sur 2 · Connecte-toi »', async ({
+  page,
+  agentCode,
+}) => {
+  await withMobile({}, async (fake) => {
+    const app = await openWithBridge(page, fake, agentCode, {
+      path: '/',
+      origin: fake.mobileOrigins.www,
+      asApplication: true,
+    })
+    await page.evaluate(
+      (text) =>
+        document.body.insertAdjacentHTML(
+          'beforeend',
+          `<section style="position:relative"><h1>Connexion</h1><p>${text}</p><input type="email" aria-label="Adresse email"></section>`,
+        ),
+      LOGIN_TEXT,
+    )
+    app.answerHello(PLAN(FARINE))
+
+    await expect(page.locator('.g-step').filter({ hasText: 'Étape 2 sur 2' })).toBeAttached({
+      timeout: 15_000,
+    })
+  })
+})
+
 test('« Arrêter pour l’instant » pendant le choix du magasin : rien n’est demandé au serveur, rien n’est écrit', async ({
   page,
   agentCode,

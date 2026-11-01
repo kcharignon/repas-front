@@ -125,7 +125,7 @@ import {
 import { findControl, type GuideLook, type GuideStep, type GuideTarget } from '../retailers/guide'
 import { wallLook } from '../retailers/consent'
 import { isAccountLoginPage } from './account'
-import { readLoginLook, readStoreLook } from './guide-look'
+import { readLoginLook, readStoreLook, showsLoginText } from './guide-look'
 import { findPostalCodeField } from './store-field'
 import {
   cameFromNationalHome,
@@ -404,6 +404,8 @@ export interface LeclercDeps extends PacerDeps {
   storeField?: () => GuideTarget | null
   /** La page d'où l'on vient (`document.referrer`, DRV-755). Absente, la page ne dit pas d'où l'on vient. */
   referrer?: () => string
+  /** La page montre-t-elle sa connexion (texte et champ MONTRÉS, DRV-759) ? Absente, la page ne se reconnaît pas à ce qu'elle dit. */
+  loginText?: () => boolean
   /** La sous-étape que la page montre, le contrôle à entourer et ce qu'il faut laisser libre (DRV-757). Absente, `guideLook` retombe sur `storeField` et `loginControl`. */
   look?: (step: GuideStep) => GuideLook | null
 }
@@ -425,8 +427,6 @@ const STORE_CITY = /^\/magasin-\d{1,12}-\d{1,12}-([^/?#]+)/i
  */
 const LOGIN_PAGE =
   /(?:^|\/)(?:connexion(?:\.aspx)?|authentification\.aspx|creation-compte[a-z0-9-]*\.aspx)(?:\/|$)/i
-/** Ce que dit la page de connexion réelle (mesuré le 2026-11-01), sans lire aucun champ. */
-const LOGIN_TEXT = /Connectez-vous avec votre compte/i
 /** Une redirection vers une page de connexion. */
 const LOGIN_PATH = /connexion|identif|login|authent/i
 
@@ -1512,11 +1512,11 @@ export class LeclercAdapter implements RetailerAdapter {
    */
   onLoginPage(): boolean {
     const { hostname, pathname } = this.deps.location
-    // Ou ce que la page dit (DRV-759 : mesuré sur la vraie page de connexion, d'adresse inconnue : « Connectez-vous avec votre compte unique E.Leclerc. »)
+    // Ou ce que la page MONTRE (DRV-759 : la vraie page de connexion, d'adresse inconnue, dit « Connectez-vous avec votre compte… » ; le même texte, caché, est sur l'accueil)
     return (
       LOGIN_PAGE.test(pathname) ||
       isAccountLoginPage(hostname, pathname) ||
-      LOGIN_TEXT.test(this.deps.pageText())
+      this.deps.loginText?.() === true
     )
   }
 
@@ -1620,6 +1620,7 @@ export function browserDeps(
         : step === 'login'
           ? readLoginLook(win.document, win.location, isMobileHost(win.location.hostname))
           : null),
+    loginText: () => showsLoginText(win.document),
     referrer: () => win.document.referrer,
     pageText: () => new win.XMLSerializer().serializeToString(win.document),
     navigation: () => navigationOf(win),

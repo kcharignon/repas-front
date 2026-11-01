@@ -142,6 +142,30 @@ export function readStoreLook(root: Document): GuideLook {
   return { ...look, keep: [...look.keep, ...own] }
 }
 
+/** Ce que dit la page de connexion réelle (mesuré le 2026-11-01). Le même texte existe, CACHÉ, sur l'accueil et sur la présentation du magasin. */
+const LOGIN_TEXT = /connectez-vous avec votre compte/i
+
+/**
+ * La page est-elle celle de la connexion d'après ce qu'elle MONTRE : le texte « Connectez-vous avec votre compte… » dans un élément montré (un script, un style, un élément caché
+ * n'est jamais montré : `isShown`), ET un champ de saisie montré. Une lecture ciblée (les champs, puis les nœuds de texte), sans sérialiser le document ni lire une valeur.
+ */
+export function showsLoginText(root: Document): boolean {
+  const fields = root.querySelectorAll<HTMLInputElement>('input:not([type="hidden"])')
+  if (root.body === null || ![...fields].some(shown)) return false
+  const walker = root.createTreeWalker(root.body, NodeFilter.SHOW_TEXT)
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    const text = node.nodeValue ?? ''
+    if (
+      text.length < 200 &&
+      LOGIN_TEXT.test(text) &&
+      node.parentElement &&
+      shown(node.parentElement)
+    )
+      return true
+  }
+  return false
+}
+
 /** La page demande-t-elle le code reçu par e-mail ? Un titre ou une fenêtre que la page montre. */
 function codeAsked(root: Document): boolean {
   return [...root.querySelectorAll<HTMLElement>(`${HEADINGS}, [role="dialog"], dialog`)].some(

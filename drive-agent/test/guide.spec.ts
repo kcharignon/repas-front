@@ -591,7 +591,7 @@ describe('DRV-757 (suite) : la page de connexion de Leclerc est l’étape 2 sur
       new LeclercAdapter(
         fakeSite(() => ({ body: '' }), {
           location: { hostname: 'm-courses.leclercdrive.fr', pathname },
-          pageText: () => text,
+          loginText: () => text.includes('Connectez-vous'),
         }).deps,
       )
 
