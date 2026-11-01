@@ -612,6 +612,19 @@ describe('le guide d’une étape (DRV-751)', () => {
       expect(shadow().querySelector('.screen.guide.min')).not.toBeNull()
     })
 
+    it('DRV-759 : devant un mur la barre n’a ni « Afficher » ni flèche (le toucher y est ignoré) ; hors mur elle les garde', () => {
+      const handle = open()
+      let sub: 'wall' | null = 'wall'
+      void handle.show('guide', props({ look: () => ({ sub, target: null, keep: [], maybe: [] }) }))
+      const act = () => shadow().querySelector<HTMLElement>('.g-bar-act')
+
+      expect(act()?.hidden).toBe(true)
+
+      sub = null
+      handle.show('guide', props({ look: () => ({ sub, target: null, keep: [], maybe: [] }) }))
+      expect(act()?.hidden).toBe(false)
+    })
+
     it('le mur de cookies : la carte dit d’abord d’y répondre, la personne choisit', () => {
       const handle = open()
       void handle.show(

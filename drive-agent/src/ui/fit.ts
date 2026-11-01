@@ -118,27 +118,26 @@ export function choose(
 }
 
 /**
- * La barre là où elle couvre le MOINS de ce qu'on ne couvre pas (la surface des boîtes de `hard` sous elle), jamais nulle part : devant un mur de cookies la carte ne s'efface pas
- * (DRV-759), elle se pose sur le texte du mur plutôt que de disparaître. À égalité, la première place (en bas, en haut, au milieu).
+ * La barre là où elle coûte le MOINS à couvrir, jamais nulle part : devant un mur de cookies la carte ne s'efface pas (DRV-759). Couvrir une réponse du mur coûte cher (sa surface
+ * × 1000 × son poids, `answerWeight` : jamais « Continuer sans accepter » tant qu'une autre place existe), tout autre contrôle sa surface seule : sans réponse à couvrir, la barre
+ * se pose sur le texte du mur. À égalité, la première place (en bas, en haut, au milieu).
  */
-export function leastCovered(measure: (spot: Spot) => Box, hard: readonly Box[]): Spot {
-  const covered = (box: Box): number =>
+export function leastCovered(
+  measure: (spot: Spot) => Box,
+  hard: readonly (Box & { w?: number })[],
+): Spot {
+  const cost = (box: Box): number =>
     hard.reduce((sum, rect) => {
       const width = Math.min(box.right, rect.right) - Math.max(box.left, rect.left)
       const height = Math.min(box.bottom, rect.bottom) - Math.max(box.top, rect.top)
-      return sum + (width > 0 && height > 0 ? width * height : 0)
+      return (
+        sum +
+        (width > 0 && height > 0 ? width * height * (rect.w === undefined ? 1 : rect.w * 1000) : 0)
+      )
     }, 0)
-  let best: Spot | undefined
-  let least = Infinity
-  for (const spot of SPOTS) {
-    if (!spot.min) continue
-    const area = covered(measure(spot))
-    if (area < least) {
-      least = area
-      best = spot
-    }
-  }
-  return best ?? { min: true, top: false }
+  const spots = SPOTS.filter((spot) => spot.min)
+  const costs = spots.map((spot) => cost(measure(spot)))
+  return spots[costs.indexOf(Math.min(...costs))] ?? { min: true, top: false }
 }
 
 /** Pose la carte et la garde à sa place : relue toutes les 500 ms et à chaque changement de la fenêtre ou du champ actif. */

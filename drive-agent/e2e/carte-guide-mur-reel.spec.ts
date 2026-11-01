@@ -58,3 +58,53 @@ test('DRV-759 : devant le mur réel (dialogue fixe plein écran) la carte ne dis
     await fake.close()
   }
 })
+
+/**
+ * Un mur DENSE (360 × 740) : « Continuer sans accepter » en haut, « Paramétrer les cookies » au milieu, « Tout accepter » en bas ; aucune place libre pour la barre. Elle ne s'efface
+ * pas (`leastCovered`) : elle se pose sur la réponse la moins importante, jamais sur « Continuer sans accepter ».
+ */
+const DENSE_WALL = `(() => {
+  const wall = document.createElement('div')
+  wall.id = 'cookie-wall'
+  wall.setAttribute('role', 'dialog')
+  wall.setAttribute('style', 'position:fixed;inset:0;z-index:2147483000;background:#fff')
+  wall.innerHTML = '<a href="#" class="wall-btn" id="refuse" style="position:absolute;left:8px;right:8px;top:4px;height:66px">Continuer sans accepter</a>'
+    + '<button type="button" class="wall-btn" id="settings" style="position:absolute;left:8px;right:8px;top:320px;height:100px">Paramétrer les cookies</button>'
+    + '<button type="button" class="wall-btn" id="accept" style="position:absolute;left:8px;right:8px;top:650px;height:90px">Tout accepter</button>'
+  document.body.appendChild(wall)
+})()`
+
+test.describe('mur dense, 360 × 740', () => {
+  test.use({ viewport: { width: 360, height: 740 } })
+
+  test('DRV-759 : sans aucune place libre la carte ne s’efface pas et ne couvre pas « Continuer sans accepter »', async ({
+    page,
+    agentCode,
+  }) => {
+    test.setTimeout(90_000)
+    const fake = await startFakeLeclerc({ hosts: MOBILE_HOSTS })
+    try {
+      fake.setBehavior({ mobile: {} })
+      const app = await openWithBridge(page, fake, agentCode, {
+        path: '/',
+        origin: fake.mobileOrigins.www,
+        asApplication: true,
+      })
+      app.answerHello(PLAN(FARINE))
+      await expect(page.locator('.g-text')).toBeAttached({ timeout: 15_000 })
+      await page.evaluate(DENSE_WALL)
+      await expect(page.locator('.g-text')).toHaveText(
+        'D’abord, réponds aux cookies, dans la page.',
+      )
+      await page.waitForTimeout(1200)
+
+      await expect(page.locator('.screen.guide.away')).toHaveCount(0)
+      await expect(page.locator('.screen.guide')).toBeVisible()
+      await expectClear(page, ['#refuse'], 5)
+      // La barre n'a ni « Afficher » ni flèche : son toucher est ignoré devant un mur
+      await expect(page.locator('.g-bar-act')).toBeHidden()
+    } finally {
+      await fake.close()
+    }
+  })
+})

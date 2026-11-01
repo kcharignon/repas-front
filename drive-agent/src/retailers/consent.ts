@@ -84,6 +84,15 @@ const FRANK: ReadonlySet<string> = new Set([
 /** Une boîte fixe qui couvre au moins cette part de la fenêtre est un mur (ou une fenêtre qui s'en tient lieu). */
 const COVER = 0.4
 
+/**
+ * Ce que coûte de couvrir cette réponse (DRV-759) : réglages 1, accepter 3, refuser ou continuer sans accepter 9 ; quand la carte n'a de place nulle part, elle se pose sur la
+ * moins importante, jamais sur « Continuer sans accepter ».
+ */
+export function answerWeight(button: HTMLElement): number {
+  const label = labelsOf(button).join(' ')
+  return /refus|sans accepter/.test(label) ? 9 : /parametr|personnalis|gerer/.test(label) ? 1 : 3
+}
+
 /** La boîte FIXE qui porte ce bouton (le mur, ou sa bannière), `null` : le bouton est dans la page ordinaire. */
 function fixedBoxOf(button: HTMLElement, win: Window): HTMLElement | null {
   for (let box = button.parentElement; box !== null; box = box.parentElement) {
