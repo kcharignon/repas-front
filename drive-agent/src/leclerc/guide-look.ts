@@ -10,6 +10,7 @@ import {
   type GuideSub,
   type GuideTarget,
 } from '../retailers/guide'
+import { isAccountLoginPage } from './account'
 import { findPostalCodeField } from './store-field'
 import { LOGIN_CONTROL_LABELS, LOGIN_LABELS } from './session'
 
@@ -35,8 +36,6 @@ const FIELD =
   'input:not([type]), input[type="text"], input[type="email"], input[type="password"], input[type="tel"], input[type="number"], input[type="search"]'
 /** La fenêtre du code reçu par e-mail (mesurée) : « Saisissez le code reçu par e-mail ». */
 const CODE_TITLE = 'code recu par e-mail'
-/** Le compte de l'enseigne (`fd<N>-espace-client`) : la connexion, la création de compte, le compte. */
-const ACCOUNT_HOST = /^fd\d{1,3}-espace-client\./
 /** Une case de saisie du mot de passe, ou de l'adresse e-mail. */
 const SECRET = 'input[type="password"]'
 const EMAIL = 'input[type="email"], input[autocomplete="username"]'
@@ -208,7 +207,7 @@ export function readLoginLook(
   // La page de connexion : son adresse, ou toute page du compte de l'enseigne qui n'est pas le compte connecté (une page de connexion d'un chemin inconnu)
   if (
     /authentification\.aspx|\/connexion/.test(path) ||
-    (ACCOUNT_HOST.test(location.hostname.toLowerCase()) && !/home-espace-client/.test(path))
+    isAccountLoginPage(location.hostname, path)
   ) {
     const { keep, crowded } = formControls(root)
     return { ...none(null, keep), sub: loginSub(root, crowded), crowded }

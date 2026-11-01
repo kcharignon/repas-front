@@ -15,6 +15,7 @@ export const GUIDE_TEXTS: Readonly<Partial<Record<GuideSub, GuideSubText>>> = {
   },
   connexion: {
     text: 'Touche « {label} », en haut de la page, pour te connecter.',
+    // « en haut à droite » : mesuré sur le téléphone (2026-11-01), le bouton de connexion du bandeau est sans nom, tout à droite (x 840 à 1042 sur 1080, y 135 à 235) et ouvre « Se connecter »
     bare: 'Touche l’icône de connexion, en haut à droite de la page.',
     short: 'Touche la connexion',
   },
