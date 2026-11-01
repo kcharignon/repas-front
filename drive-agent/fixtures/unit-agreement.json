@@ -1,19 +1,135 @@
 {
-  "_": "La quantité d'un article et son unité d'achat, dite pareil par le site de Repas (src/features/shopping-lists/format.ts, formatQuantity) et par l'agent (drive-agent/src/ui/strings.ts, formatNeeded, SANS nom d'unité). Un symbole de un ou deux caractères est une abréviation (jamais de « s »), tout autre est un mot qui s'accorde dès deux. Les deux tests lisent ce même fichier : changer une règle d'un côté sans l'autre les fait échouer.",
+  "_": "La quantité d'un article et son unité d'achat, dite pareil par le site de Repas (src/features/shopping-lists/format.ts, formatQuantity) et par l'agent (drive-agent/src/ui/strings.ts, formatNeeded, SANS nom d'unité). Un symbole de un ou deux caractères est une abréviation (jamais de « s »), tout autre est un mot qui s'accorde dès deux. Les deux tests lisent ce même fichier : changer une règle d'un côté sans l'autre les fait échouer. Le nom de l'unité (`unitName`) ne change rien : seul le symbole décide. Limite connue, hors de la table : un nom de plusieurs mots SANS préposition (« petit pot ») met le premier mot au pluriel dans l'agent (`pluralOf`, protocole, partagé avec la question de la contenance) et le dernier sur le site.",
   "cases": [
-    { "quantity": 800, "unitSymbol": "g", "expected": "800 g" },
-    { "quantity": 2, "unitSymbol": "kg", "expected": "2 kg" },
-    { "quantity": 250, "unitSymbol": "ml", "expected": "250 ml" },
-    { "quantity": 2, "unitSymbol": "cl", "expected": "2 cl" },
-    { "quantity": 2, "unitSymbol": "l", "expected": "2 l" },
-    { "quantity": 2, "unitSymbol": "unité", "expected": "2 unités" },
-    { "quantity": 1, "unitSymbol": "unité", "expected": "1 unité" },
-    { "quantity": 1.5, "unitSymbol": "tranche", "expected": "1,5 tranche" },
-    { "quantity": 15, "unitSymbol": "tranche", "expected": "15 tranches" },
-    { "quantity": 3, "unitSymbol": "œuf", "expected": "3 œufs" },
-    { "quantity": 2, "unitSymbol": "cuillère à soupe", "expected": "2 cuillères à soupe" },
-    { "quantity": 2, "unitSymbol": "cac", "expected": "2 cacs" },
-    { "quantity": 1, "unitSymbol": "cac", "expected": "1 cac" },
-    { "quantity": 4, "unitSymbol": "", "expected": "4" }
+    {
+      "quantity": 800,
+      "unitSymbol": "g",
+      "expected": "800 g"
+    },
+    {
+      "quantity": 2,
+      "unitSymbol": "kg",
+      "expected": "2 kg"
+    },
+    {
+      "quantity": 250,
+      "unitSymbol": "ml",
+      "expected": "250 ml"
+    },
+    {
+      "quantity": 2,
+      "unitSymbol": "cl",
+      "expected": "2 cl"
+    },
+    {
+      "quantity": 2,
+      "unitSymbol": "l",
+      "expected": "2 l"
+    },
+    {
+      "quantity": 2,
+      "unitSymbol": "unité",
+      "expected": "2 unités"
+    },
+    {
+      "quantity": 1,
+      "unitSymbol": "unité",
+      "expected": "1 unité"
+    },
+    {
+      "quantity": 1.5,
+      "unitSymbol": "tranche",
+      "expected": "1,5 tranche"
+    },
+    {
+      "quantity": 15,
+      "unitSymbol": "tranche",
+      "expected": "15 tranches"
+    },
+    {
+      "quantity": 3,
+      "unitSymbol": "œuf",
+      "expected": "3 œufs"
+    },
+    {
+      "quantity": 2,
+      "unitSymbol": "cuillère à soupe",
+      "expected": "2 cuillères à soupe"
+    },
+    {
+      "quantity": 2,
+      "unitSymbol": "cac",
+      "expected": "2 cacs"
+    },
+    {
+      "quantity": 1,
+      "unitSymbol": "cac",
+      "expected": "1 cac"
+    },
+    {
+      "quantity": 4,
+      "unitSymbol": "",
+      "expected": "4"
+    },
+    {
+      "quantity": 0,
+      "unitSymbol": "unité",
+      "expected": "0 unité"
+    },
+    {
+      "quantity": 0.5,
+      "unitSymbol": "kg",
+      "expected": "0,5 kg"
+    },
+    {
+      "quantity": 0.5,
+      "unitSymbol": "litre",
+      "expected": "0,5 litre"
+    },
+    {
+      "quantity": 1000,
+      "unitSymbol": "g",
+      "expected": "1 000 g"
+    },
+    {
+      "quantity": 1000,
+      "unitSymbol": "unité",
+      "expected": "1 000 unités"
+    },
+    {
+      "quantity": 1234.5,
+      "unitSymbol": "kg",
+      "expected": "1 234,5 kg"
+    },
+    {
+      "quantity": 1.333,
+      "unitSymbol": "kg",
+      "expected": "1,33 kg"
+    },
+    {
+      "quantity": 2,
+      "unitSymbol": "litre",
+      "expected": "2 litres"
+    },
+    {
+      "quantity": 1,
+      "unitSymbol": "litre",
+      "expected": "1 litre"
+    },
+    {
+      "quantity": 2,
+      "unitSymbol": "kilo",
+      "expected": "2 kilos"
+    },
+    {
+      "quantity": 2,
+      "unitSymbol": "gramme",
+      "expected": "2 grammes"
+    },
+    {
+      "quantity": 2,
+      "unitSymbol": "pot",
+      "expected": "2 pots"
+    }
   ]
 }

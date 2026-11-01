@@ -28,12 +28,15 @@ describe('la quantité demandée par la liste', () => {
   it.each(agreement.cases)(
     'sans nom d’unité, comme le site : $quantity « $unitSymbol » se dit « $expected »',
     ({ quantity, unitSymbol, expected }) => {
-      expect(formatNeeded({ quantity, unitSymbol })).toBe(expected)
+      // Intl insère une espace insécable fine entre les milliers : on compare sans tenir compte du type d'espace, comme le test du site
+      expect(formatNeeded({ quantity, unitSymbol })?.replace(/\s/g, ' ')).toBe(expected)
     },
   )
 
-  it('une abréviation d’un ou deux caractères ne prend jamais de « s », même si l’unité porte ce nom', () => {
+  it('le nom de l’unité ne change rien : seul le symbole décide, comme sur le site (« Petit pot » et le symbole « pot » : « 2 pots »)', () => {
     expect(formatNeeded({ quantity: 2, unitSymbol: 'ml', unitName: 'ml' })).toBe('2 ml')
+    expect(formatNeeded({ quantity: 2, unitSymbol: 'pot', unitName: 'Petit pot' })).toBe('2 pots')
+    expect(formatNeeded({ quantity: 2, unitSymbol: 'g', unitName: 'gramme' })).toBe('2 g')
   })
 
   it('la phrase de l’écran de choix : « Il te faut : 2 unités. »', () => {
