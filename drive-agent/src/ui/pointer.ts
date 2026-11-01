@@ -139,6 +139,8 @@ export function createPointer(options: PointerOptions): Pointer {
   let cached: HTMLElement | null = null
   let resolvedAt = 0
   let refresh = false
+  /** Le contrôle autre que celui du repère que la dernière lecture a désigné : il faut le lire une seconde fois pour le suivre. */
+  let pending: HTMLElement | null = null
 
   const scale = (): number => displayLayout(measureDisplay(win)).scale
 
@@ -183,7 +185,17 @@ export function createPointer(options: PointerOptions): Pointer {
   function resolve(): HTMLElement | null {
     const at = Date.now()
     if (refresh || at - resolvedAt >= RESOLVE_MS) {
-      const spot = get()
+      let spot = get()
+      // Un autre contrôle n'est suivi que lu deux fois de suite : une lecture qui alterne chaque seconde ne fait pas sauter le repère (DRV-759)
+      if (
+        cached?.isConnected === true &&
+        spot !== null &&
+        spot.element !== cached &&
+        spot.element !== pending
+      ) {
+        pending = spot.element
+        spot = { element: cached, word }
+      }
       // Un autre contrôle : le repère revient (la page ne défile qu'une fois pour lui)
       if (spot?.element !== cached) {
         scrolled = false

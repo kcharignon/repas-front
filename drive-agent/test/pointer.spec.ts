@@ -47,12 +47,57 @@ describe('le repère suit la lecture de la page', () => {
       () => null,
     )
     designated = first
-    vi.advanceTimersByTime(1_600)
+    vi.advanceTimersByTime(2_600)
 
     const ring = [...document.documentElement.children]
       .map((host) => host.shadowRoot?.querySelector<HTMLElement>('.ring'))
       .find((one) => one !== undefined && one !== null)
     expect(ring?.style.getPropertyValue('top')).toBe(`${200 - 6}px`)
+    pointer.clear()
+  })
+
+  it('une lecture qui alterne entre deux contrôles chaque seconde ne fait pas sauter le repère : il ne change que si le même autre contrôle est lu deux fois de suite', () => {
+    const a = control(200)
+    const b = control(400)
+    let turn = 0
+    const pointer = createPointer({
+      win: window as Window & typeof globalThis,
+      attachShadow: (host, init) => host.attachShadow(init),
+      mode: 'open',
+    })
+
+    pointer.point(
+      () => ({ element: turn++ === 0 || turn % 2 === 1 ? a : b }),
+      () => null,
+    )
+    vi.advanceTimersByTime(6_000)
+
+    const ring = [...document.documentElement.children]
+      .map((host) => host.shadowRoot?.querySelector<HTMLElement>('.ring'))
+      .find((one) => one !== undefined && one !== null)
+    expect(ring?.style.getPropertyValue('top')).toBe(`${200 - 6}px`)
+    pointer.clear()
+  })
+
+  it('plus de contrôle à entourer (un mur de cookies apparaît) : le repère se retire tout de suite, sans attendre une seconde lecture', () => {
+    const only = control(200)
+    let designated: HTMLElement | null = only
+    const pointer = createPointer({
+      win: window as Window & typeof globalThis,
+      attachShadow: (host, init) => host.attachShadow(init),
+      mode: 'open',
+    })
+    pointer.point(
+      () => (designated === null ? null : { element: designated }),
+      () => null,
+    )
+    designated = null
+    vi.advanceTimersByTime(1_100)
+
+    const ring = [...document.documentElement.children]
+      .map((host) => host.shadowRoot?.querySelector<HTMLElement>('.ring'))
+      .find((one) => one !== undefined && one !== null)
+    expect(ring?.hidden).toBe(true)
     pointer.clear()
   })
 })
