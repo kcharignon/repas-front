@@ -587,8 +587,16 @@ export class Flow {
     const { adapter } = this.deps
     const store = this.otherStore
     if (store === null || adapter.acceptsChosenStore !== true) return null
+    // « Rien n'a été écrit » doit se PROUVER : un stockage illisible, un article déjà traité ou une seule requête déjà partie disent qu'on ne sait pas (ou que si), et
+    // l'envoi s'arrête comme avant (`STORE_MISMATCH`)
+    if (!this.runs.isReadable()) return null
     const saved = this.runs.load(plan.runId)
-    if (saved && Object.keys(saved.done).length + Object.keys(saved.waiting).length > 0) return null
+    if (
+      saved &&
+      (Object.keys(saved.done).length + Object.keys(saved.waiting).length > 0 ||
+        saved.stats.requests > 0)
+    )
+      return null
     const guided =
       this.runs.guide(plan.runId)?.step === 'store' || adapter.cameFromStoreChoice?.() === true
     if (!guided) return null
@@ -633,27 +641,36 @@ export class Flow {
    */
   private async offerChosenStore(plan: PlanMessage, chosen: ReadStore): Promise<void> {
     const { adapter, ui, send, agentVersion } = this.deps
-    const tail = chosen.id.slice(-3)
-    const answer = await ui.show('chosenStore', {
-      label: chosen.label,
-      tail,
-      ...(adapter.keepClearOfConsent === true && { clearOfConsent: true }),
-    })
-    if (answer === 'stop') return void this.stopGuided(plan)
-    if (answer === 'other') {
-      const next = await this.awaitOtherStore(plan, chosen)
-      return next === 'stopped' ? undefined : this.proceed(plan)
+    let shown = chosen
+    for (;;) {
+      const answer = await ui.show('chosenStore', {
+        label: shown.label,
+        tail: shown.id.slice(-3),
+        ...(adapter.keepClearOfConsent === true && { clearOfConsent: true }),
+      })
+      if (answer === 'stop') return void this.stopGuided(plan)
+      if (answer === 'other') {
+        const next = await this.awaitOtherStore(plan, shown)
+        return next === 'stopped' ? undefined : this.proceed(plan)
+      }
+      // « Utiliser ce magasin » : le magasin est relu, la carte a pu devenir périmée (la page change sans se recharger). Ce qui part est ce que la page montre MAINTENANT.
+      const now = await this.readPageStore()
+      // Une lecture qui échoue un instant n'est pas une raison de s'arrêter après un toucher : la carte revient, la personne retouche
+      if (now === null) continue
+      if (now.id === plan.store.id && now.host === plan.store.host) return this.proceed(plan)
+      if (now.id !== shown.id || now.host !== shown.host) {
+        shown = now
+        continue
+      }
+      this.runs.clearGuide()
+      this.enter('ABORTED')
+      send({
+        ...buildResult(plan, [], { outcome: 'aborted' }, agentVersion, ui.retailer),
+        chosenStore: now,
+      })
+      ui.close()
+      return
     }
-    // « Utiliser ce magasin » : le magasin est relu, la carte a pu devenir périmée (la page change sans se recharger)
-    const now = await this.readPageStore()
-    if (now === null || now.id !== chosen.id || now.host !== chosen.host) return this.proceed(plan)
-    this.runs.clearGuide()
-    this.enter('ABORTED')
-    send({
-      ...buildResult(plan, [], { outcome: 'aborted' }, agentVersion, ui.retailer),
-      chosenStore: chosen,
-    })
-    ui.close()
   }
 
   /** Le magasin que la page montre à l'instant, déjà lu comme le protocole le dit, ou `null` (page sans magasin, question en cours, lecture refusée). */

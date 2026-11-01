@@ -234,6 +234,20 @@ export class RunStore {
     this.storage = storage
   }
 
+  /**
+   * Le stockage de session se lit-il (DRV-755) ? Faux quand il n'existe pas ou qu'il refuse la lecture : on ne sait alors pas ce que ce passage a déjà fait, et
+   * « rien n'a été écrit » ne se prouve pas.
+   */
+  isReadable(): boolean {
+    try {
+      if (!this.storage) return false
+      this.storage.getItem(RUN_PREFIX + 'probe')
+      return true
+    } catch {
+      return false
+    }
+  }
+
   load(runId: string): RunState | null {
     try {
       const raw = this.storage?.getItem(RUN_PREFIX + runId)

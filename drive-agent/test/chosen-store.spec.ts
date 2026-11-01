@@ -83,7 +83,7 @@ describe('un autre magasin à l’étape guidée du choix du magasin : la person
     // Given : le plan est fait pour 000123, la page est celle de 000456, atteinte depuis l'accueil national
     const w = world()
     const screens = fakeUi({ chosenStore: () => 'use' })
-    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter })
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage: fakeStorage() })
 
     // When
     await flow.start(FARINE)
@@ -111,7 +111,7 @@ describe('un autre magasin à l’étape guidée du choix du magasin : la person
   it('une page sans nom de ville : la carte dit les derniers chiffres du numéro', async () => {
     const w = world({ city: null })
     const screens = fakeUi({ chosenStore: () => 'use' })
-    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter })
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage: fakeStorage() })
 
     await flow.start(FARINE)
 
@@ -136,7 +136,7 @@ describe('un autre magasin à l’étape guidée du choix du magasin : la person
   it('« Arrêter pour l’instant » : l’envoi s’arrête, la liste est gardée, aucun magasin n’est rendu', async () => {
     const w = world()
     const screens = fakeUi({ chosenStore: () => 'stop' })
-    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter })
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage: fakeStorage() })
 
     await flow.start(FARINE)
 
@@ -149,7 +149,7 @@ describe('un autre magasin à l’étape guidée du choix du magasin : la person
   it('tant que la personne ne touche rien, rien n’est envoyé : l’agent ne change jamais le magasin seul', async () => {
     const w = world()
     const screens = fakeUi({ chosenStore: () => new Promise(() => undefined) })
-    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter })
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage: fakeStorage() })
 
     void flow.start(FARINE)
     await new Promise((resolve) => setTimeout(resolve, 20))
@@ -170,7 +170,7 @@ describe('un autre magasin à l’étape guidée du choix du magasin : la person
         return next
       },
     })
-    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter })
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage: fakeStorage() })
 
     // When
     await flow.start(FARINE)
@@ -181,6 +181,54 @@ describe('un autre magasin à l’étape guidée du choix du magasin : la person
     expect(sent[0]?.outcome).toBe('aborted')
   })
 
+  it('ce qui part est la page d’AUJOURD’HUI (le libellé relu), pas la carte d’avant', async () => {
+    const w = world()
+    let city = 'Ville-Test'
+    w.adapter.storeCity = () => city
+    const screens = fakeUi({
+      chosenStore: () => {
+        // Le nom de la ville a changé entre l'affichage de la carte et le toucher (même numéro, même hôte)
+        city = 'Autre-Nom'
+        return 'use'
+      },
+    })
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage: fakeStorage() })
+
+    await flow.start(FARINE)
+
+    expect(expectConform(sent[0]).chosenStore?.label).toBe('Autre-Nom')
+  })
+
+  it('une relecture qui échoue un instant après le toucher : la carte revient, rien n’est envoyé ni arrêté ; la personne retouche', async () => {
+    const w = world()
+    const read = w.adapter.readStore
+    let failures = 2
+    const screens = fakeUi({ chosenStore: () => 'use' })
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage: fakeStorage() })
+    let cards = 0
+    const show = screens.ui.show.bind(screens.ui)
+    screens.ui.show = ((screen: Parameters<typeof show>[0], props: never) => {
+      if (screen === 'chosenStore') {
+        cards += 1
+        // La première lecture (la carte) a réussi ; celle qui suit le premier toucher échoue
+        if (cards === 1) {
+          w.adapter.readStore = () => {
+            if (failures-- > 0) throw new Error('page en cours de chargement')
+            return read()
+          }
+        }
+      }
+      return show(screen, props)
+    }) as typeof screens.ui.show
+
+    await flow.start(FARINE)
+
+    expect(screens.screens()).toEqual(['chosenStore', 'chosenStore', 'chosenStore'])
+    expect(screens.screens()).not.toContain('error')
+    expect(expectConform(sent[0]).chosenStore?.id).toBe('000456')
+    expect(sent).toHaveLength(1)
+  })
+
   it('« Choisir un autre magasin » : la carte du choix attend, et quand la page montre le magasin du plan, l’envoi continue tout seul', async () => {
     // Given : la personne refuse 000456, puis ouvre le magasin du plan au 3e coup d'œil
     const w = world()
@@ -188,7 +236,12 @@ describe('un autre magasin à l’étape guidée du choix du magasin : la person
       if (tick === 3) w.state.page = { ...STORE }
     })
     const screens = fakeUi({ chosenStore: () => 'other' })
-    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, ...time })
+    const { flow, sent } = makeFlow({
+      ui: screens.ui,
+      adapter: w.adapter,
+      storage: fakeStorage(),
+      ...time,
+    })
 
     // When
     await flow.start(FARINE)
@@ -207,7 +260,12 @@ describe('un autre magasin à l’étape guidée du choix du magasin : la person
       if (tick === 2) w.state.page = ANOTHER
     })
     const screens = fakeUi({ chosenStore: () => answers.shift() ?? 'stop' })
-    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, ...time })
+    const { flow, sent } = makeFlow({
+      ui: screens.ui,
+      adapter: w.adapter,
+      storage: fakeStorage(),
+      ...time,
+    })
 
     await flow.start(FARINE)
 
@@ -221,6 +279,7 @@ describe('un autre magasin à l’étape guidée du choix du magasin : la person
     const { flow, sent } = makeFlow({
       ui: screens.ui,
       adapter: w.adapter,
+      storage: fakeStorage(),
       // Chaque pause de l'attente touche « Arrêter pour l'instant » sur la carte affichée
       sleep: () => {
         screens.pressGuideStop()
@@ -239,7 +298,7 @@ describe('STORE_MISMATCH reste vrai hors de l’étape guidée du choix du magas
   it('ni guide noté ni arrivée de l’accueil national : l’envoi s’arrête comme avant', async () => {
     const w = world({ fromHome: false })
     const screens = fakeUi({ error: () => 'return' })
-    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter })
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage: fakeStorage() })
 
     await flow.start(FARINE)
 
@@ -247,6 +306,55 @@ describe('STORE_MISMATCH reste vrai hors de l’étape guidée du choix du magas
     expect(screens.propsOf('error')).toEqual([{ code: 'STORE_MISMATCH', canReturn: true }])
     expect(expectConform(sent[0]).error?.code).toBe('STORE_MISMATCH')
     expect(sent[0]).not.toHaveProperty('chosenStore')
+  })
+
+  it('un stockage de session illisible : on ne sait pas ce que ce passage a écrit, l’envoi s’arrête comme avant', async () => {
+    const w = world()
+    const screens = fakeUi({ error: () => 'return' })
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage: null })
+
+    await flow.start(FARINE)
+
+    expect(screens.screens()).toEqual(['error'])
+    expect(expectConform(sent[0]).error?.code).toBe('STORE_MISMATCH')
+  })
+
+  it('un stockage qui refuse la lecture : même chose', async () => {
+    const w = world()
+    const screens = fakeUi({ error: () => 'return' })
+    const broken = {
+      ...fakeStorage(),
+      getItem: () => {
+        throw new Error('interdit')
+      },
+    }
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage: broken })
+
+    await flow.start(FARINE)
+
+    expect(expectConform(sent[0]).error?.code).toBe('STORE_MISMATCH')
+  })
+
+  it('une requête déjà partie dans ce passage (même sans article traité) : l’envoi s’arrête comme avant', async () => {
+    const storage = fakeStorage({
+      [`${RUN_PREFIX}${RUN_ID}`]: JSON.stringify({
+        v: 1,
+        runId: RUN_ID,
+        updatedAt: 1,
+        phase: 'PHASE_A',
+        done: {},
+        waiting: {},
+        stats: { requests: 3, errors: 0, blocks: 0 },
+      }),
+    })
+    const w = world()
+    const screens = fakeUi({ error: () => 'return' })
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage })
+
+    await flow.start(FARINE)
+
+    expect(screens.screens()).toEqual(['error'])
+    expect(expectConform(sent[0]).error?.code).toBe('STORE_MISMATCH')
   })
 
   it('en plein passage (des articles déjà traités) : l’envoi s’arrête, même arrivé de l’accueil national', async () => {
@@ -286,7 +394,7 @@ describe('STORE_MISMATCH reste vrai hors de l’étape guidée du choix du magas
   it('une page dont l’hôte n’est pas celui d’un magasin de l’enseigne : jamais offerte, l’envoi s’arrête', async () => {
     const w = world({ page: { id: '000456', host: 'evil.example.invalid' } })
     const screens = fakeUi({ error: () => 'return' })
-    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter })
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage: fakeStorage() })
 
     await flow.start(FARINE)
 
@@ -298,7 +406,7 @@ describe('STORE_MISMATCH reste vrai hors de l’étape guidée du choix du magas
   it('une page qui a le magasin du plan : aucune carte, le passage a lieu', async () => {
     const w = world({ page: { ...STORE } })
     const screens = fakeUi()
-    const { flow } = makeFlow({ ui: screens.ui, adapter: w.adapter })
+    const { flow } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage: fakeStorage() })
 
     await flow.start(FARINE)
 
