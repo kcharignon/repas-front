@@ -4,7 +4,7 @@
 // doute la sous-étape est la plus générale.
 import { wallLook } from '../retailers/consent'
 import { foldLabel, isShown, type GuideLook, type GuideStep } from '../retailers/guide'
-import { chooseBarTarget } from './page'
+import { chooseBarTarget, visibleLoginControl } from './page'
 
 const PANEL = '[aria-modal="true"], [role="dialog"], dialog'
 const CLICKABLE = 'button, a, li, [role="button"], [role="link"], [role="option"]'
@@ -65,11 +65,21 @@ function below(
 export function readAuchanLook(root: Document, step: GuideStep): GuideLook | null {
   const wall = wallLook(root)
   if (wall !== null) return wall
+  if (step === 'login') {
+    // Le contrôle de connexion que la page montre, avec son libellé ; sans lui (le bouton du bandeau n'a aucun nom), la carte dit où il est
+    const login = visibleLoginControl(root)
+    return {
+      sub: 'connexion',
+      target: login,
+      keep: login === null ? [] : [login.element],
+      maybe: [],
+    }
+  }
   if (step !== 'store') return null
   const open = panelField(root)
   if (open === null) {
     const bar = chooseBarTarget(root)
-    return bar === null ? null : look('bar', bar.element, [bar.element])
+    return bar === null ? null : { sub: 'bar', target: bar, keep: [bar.element], maybe: [] }
   }
   const { panel, field } = open
   const [keep] = below(panel, field, (text) => KEEP.test(text))

@@ -35,15 +35,13 @@ import { readJourney } from './journey'
 import {
   addressShape,
   chooseBarTarget,
+  visibleLoginControl,
   cookieFacts,
   isNotFoundPage,
-  LOGIN_HINTS,
-  LOGIN_LABELS,
   storeBar,
 } from './page'
 import {
   challengeFrames,
-  findControl,
   type GuideLook,
   type GuideStep,
   type GuideTarget,
@@ -230,9 +228,7 @@ export class AuchanAdapter implements RetailerAdapter {
   guideTarget(step: GuideStep): GuideTarget | null {
     try {
       const { document } = this.deps
-      return step === 'store'
-        ? chooseBarTarget(document)
-        : findControl(document, LOGIN_LABELS, LOGIN_HINTS)
+      return step === 'store' ? chooseBarTarget(document) : visibleLoginControl(document)
     } catch {
       return null
     }

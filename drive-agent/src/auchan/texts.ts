@@ -13,6 +13,11 @@ export const GUIDE_TEXTS: Readonly<Partial<Record<GuideSub, GuideSubText>>> = {
     bare: 'Touche la barre, en haut de la page.',
     short: 'Touche la barre du haut',
   },
+  connexion: {
+    text: 'Touche « {label} », en haut de la page, pour te connecter.',
+    bare: 'Touche l’icône de connexion, en haut à droite de la page.',
+    short: 'Touche la connexion',
+  },
   field: { text: 'Écris ton code postal ou ta ville.', short: 'Écris ton code postal' },
   city: { text: 'Touche ta ville dans la liste.', short: 'Touche ta ville' },
   shop: { text: 'Touche ton magasin dans la liste.', short: 'Touche ton magasin' },

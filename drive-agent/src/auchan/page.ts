@@ -3,7 +3,7 @@
 // adresse, un cookie (nom ou valeur) ni un identifiant. NON MESURÉ : l'élément exact de la barre (on cherche un élément dont le texte est celui de la
 // barre, quelle que soit sa balise) et le titre de la page « introuvable » au-delà d'une page vue le 2026-10-30.
 import type { CookieFacts } from '../retailers/contract'
-import type { GuideTarget } from '../retailers/guide'
+import { findControl, isShown, type GuideTarget } from '../retailers/guide'
 
 /** Un texte comparable : sans accent, minuscules, apostrophes droites, espaces réduites. */
 export function fold(text: string): string {
@@ -66,20 +66,68 @@ export function chooseBarTarget(root: ParentNode): GuideTarget | null {
     const raw = element.textContent ?? ''
     return raw.length <= 4 * MAX_BAR_TEXT && CHOOSE_BARS.includes(fold(raw))
   })
-  // Le plus petit élément qui porte le texte entier (pas un conteneur du même texte), celui que la page MONTRE : jamais un élément caché (DRV-757, constat du 2026-11-01 : la carte citait
-  // « Choisir vos courses » alors que la page affichait « Choisir mon mode de livraison » ; le libellé cité est celui de l'élément entouré, vu à l'écran)
+  // Le plus petit élément qui porte le texte entier (pas un conteneur du même texte)
   const innermost = matches.filter(
     (candidate) => !matches.some((other) => other !== candidate && candidate.contains(other)),
   )
-  const element = innermost.find((candidate) => {
-    const { width, height } = candidate.getBoundingClientRect()
-    return width > 0 && height > 0
+  const asText: Candidate[] = innermost.map((element) => {
+    const control = element.closest<HTMLElement>('a, button, [role="button"]')
+    const label = (element.textContent ?? '').replace(/\s+/g, ' ').trim()
+    return {
+      element: control !== null && control.contains(element) ? control : element,
+      shown: element,
+      label: label !== '' && label.length <= 40 ? label : null,
+    }
   })
-  if (element === undefined) return null
-  const control = element.closest<HTMLElement>('a, button, [role="button"]')
-  const target = control !== null && control.contains(element) ? control : element
-  const label = (element.textContent ?? '').replace(/\s+/g, ' ').trim()
-  return { element: target, label: label !== '' && label.length <= 40 ? label : null }
+  // Un bouton sans texte dont le NOM ACCESSIBLE est celui de la barre (une icône) : le libellé est son nom
+  const asName: Candidate[] = [...root.querySelectorAll<HTMLElement>('a, button, [role="button"]')]
+    .filter((control) => {
+      const name = control.getAttribute('aria-label') ?? ''
+      return name.length <= 4 * MAX_BAR_TEXT && CHOOSE_BARS.includes(fold(name))
+    })
+    .filter((control) => !asText.some((one) => one.element === control))
+    .map((control) => ({
+      element: control,
+      shown: control,
+      label: (control.getAttribute('aria-label') ?? '').replace(/\s+/g, ' ').trim().slice(0, 40),
+    }))
+  // Celle que la page MONTRE, jamais un élément caché ou transparent (DRV-757, constat du 2026-11-01 : la carte citait « Choisir vos courses » alors que la page affichait « Choisir mon
+  // mode de livraison »), et d'abord celle qui REÇOIT le toucher (rien ne la recouvre) ; le libellé cité est celui de l'élément entouré
+  const shown = [...asText, ...asName].filter((one) => isShown(one.shown))
+  const pick =
+    shown.find((one) => receivesTouch(one.element) === true) ??
+    shown.find((one) => receivesTouch(one.element) === null) ??
+    shown[0]
+  return pick === undefined ? null : { element: pick.element, label: pick.label }
+}
+
+/** Un candidat : le contrôle à entourer, l'élément dont on a lu le mot (montré ou non) et le libellé à citer. */
+interface Candidate {
+  element: HTMLElement
+  shown: HTMLElement
+  label: string | null
+}
+
+/**
+ * Ce qu'un doigt toucherait au milieu de l'élément : lui (`true`), un autre élément de la page qui le recouvre (`false`), ou on ne sait pas (`null` : pas de lecture du toucher dans ce
+ * document, ou le milieu est hors de la fenêtre). Une lecture de la page seule.
+ */
+function receivesTouch(element: HTMLElement): boolean | null {
+  const doc = element.ownerDocument
+  const win = doc.defaultView
+  const { left, top, width, height } = element.getBoundingClientRect()
+  const x = left + width / 2
+  const y = top + height / 2
+  if (typeof doc.elementFromPoint !== 'function' || win === null) return null
+  if (x < 0 || y < 0 || x > win.innerWidth || y > win.innerHeight) return null
+  const hit = doc.elementFromPoint(x, y)
+  if (hit === null) return null
+  return element.contains(hit)
+}
+
+/** Le contrôle de connexion que la page MONTRE (jamais un « Me connecter » caché d'un menu replié) ; `null` : aucun, la carte dit où chercher au lieu d'un libellé inventé. */
+export function visibleLoginControl(root: ParentNode): GuideTarget | null {
+  return findControl(root, LOGIN_LABELS, LOGIN_HINTS, isShown)
 }
 
 /**

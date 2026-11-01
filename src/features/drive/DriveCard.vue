@@ -26,6 +26,8 @@ const props = defineProps<{
   online: boolean
   /** Les derniers chiffres du magasin qui vient d'être enregistré ici (et lu dans l'application). */
   savedTail: string | null
+  /** Le nom du magasin enregistré, quand l'application l'a lu (jamais inventé). */
+  savedLabel?: string | null
   readError: string | null
   save: (store: DriveStorePayload) => Promise<void>
 }>()
@@ -56,8 +58,11 @@ watch(
 <template>
   <li class="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4">
     <h3 class="font-display text-xl font-bold">{{ drive.name }}</h3>
-    <p v-if="savedTail" role="status" class="text-lg font-bold">
-      {{ t('driveSettings.readDone', { tail: savedTail }) }}
+    <p v-if="savedTail" role="status" class="flex flex-col text-lg font-bold">
+      <span v-if="savedLabel" class="break-words">{{ savedLabel }}</span>
+      <span :class="{ 'text-sm font-normal text-muted': savedLabel }">{{
+        t('driveSettings.readDone', { tail: savedTail })
+      }}</span>
     </p>
     <p v-else-if="drive.store === null" class="font-bold">{{ t('driveSettings.none') }}</p>
     <p v-else class="flex flex-col">
