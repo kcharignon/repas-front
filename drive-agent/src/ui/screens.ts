@@ -1,11 +1,14 @@
 // Les écrans : chacun reçoit ses données et un rappel `answer`, et rend ses nœuds. Aucune logique d'envoi ici.
 import { append, clear, h, type Child } from './dom'
 import { viewOf } from './entries'
+import type { Needs } from './fit'
 import { icon } from './icons'
 import { own } from '../own'
 import { ofUnits, packsFromSize, parsePackValue } from '../../protocol'
 import { photoFrame } from './photo'
+import type { GuideSub } from '../retailers/guide'
 import type { PhotoRetailer, RetailerNames } from '../retailers/names'
+import type { Spot } from './pointer'
 import { causeTexts, errorParts, errorTexts, pluralOf, S, unitFor } from './strings'
 import type {
   ChallengeProps,
@@ -53,9 +56,19 @@ export interface Rendered {
    * Le contrôle de la PAGE à entourer pendant que cet écran est affiché (DRV-751) : relu à chaque mesure, `null` quand la page ne le montre pas. C'est `ui.ts` qui
    * dessine le cadre et son repère « Touche ici », dans un second conteneur : l'écran ne touche pas à la page.
    */
-  pointAt?: () => HTMLElement | null
-  /** Vrai : la carte se pose hors des boutons d'un mur de cookies que la page montre (DRV-753, `keep-clear.ts`) : en bas, ou en haut quand le bas les couvrirait. */
-  keepClear?: boolean
+  pointAt?: () => Spot | null
+  /** Ce que le repère ne doit pas recouvrir (DRV-757) : les contrôles que la page vient d'afficher. */
+  avoid?: () => readonly DOMRect[]
+  /**
+   * La carte du guide se réduit à une barre fine, ou s'efface, quand la page a besoin de la place (DRV-757, `fit.ts`) : `needs` relit ce que la page montre, `consent` pose la
+   * carte hors d'un mur de cookies, `link.ask` est le geste de la personne (réduire, rouvrir), branché par l'interface.
+   */
+  fit?: {
+    needs: (() => Needs) | null
+    consent: boolean
+    collapsible: boolean
+    link: { ask: (pref: 'min' | 'full') => void }
+  }
 }
 
 type Answer<K extends ScreenName> = (value: ScreenAnswer<K>) => void
@@ -645,6 +658,8 @@ const entry: Renderer<'entry'> = (props: EntryProps) => {
 const guide: Renderer<'guide'> = (props: GuideProps, answer, retailer) => {
   const done = props.stage === 'done'
   const late = props.stage === 'late'
+  const link = { ask: (_pref: 'min' | 'full'): void => undefined }
+  const stepText = !done && props.total > 0 ? S.guide.step(props.index, props.total) : ''
   const marker = done
     ? h(
         'div',
@@ -652,34 +667,49 @@ const guide: Renderer<'guide'> = (props: GuideProps, answer, retailer) => {
         h('span', { class: 'g-tick' }, icon('check', 18, 3)),
         h('span', { class: 'g-step', text: S.guide.done }),
       )
-    : props.total > 0
-      ? h(
-          'div',
-          { class: 'g-head' },
-          h(
-            'span',
-            { class: 'g-segments', attrs: { 'aria-hidden': 'true' } },
-            ...(props.total <= 1 ? [1] : Array.from({ length: props.total }, (_, i) => i + 1)).map(
-              (rank) => h('span', { class: rank <= props.index ? 'g-seg on' : 'g-seg' }),
-            ),
-          ),
-          h('span', { class: 'g-step', text: S.guide.step(props.index, props.total) }),
-        )
-      : null
+    : h(
+        'div',
+        { class: 'g-head' },
+        props.total > 0
+          ? h(
+              'span',
+              { class: 'g-segments', attrs: { 'aria-hidden': 'true' } },
+              ...(props.total <= 1
+                ? [1]
+                : Array.from({ length: props.total }, (_, i) => i + 1)
+              ).map((rank) => h('span', { class: rank <= props.index ? 'g-seg on' : 'g-seg' })),
+            )
+          : null,
+        props.total > 0 ? h('span', { class: 'g-step', text: stepText }) : null,
+        // Réduire : la carte devient une barre fine, rien ne se ferme ni ne se perd
+        h(
+          'button',
+          {
+            class: 'g-fold',
+            attrs: { type: 'button', 'aria-expanded': 'true' },
+            on: { click: () => link.ask('min') },
+          },
+          S.guide.hide,
+          icon('chevron', 18, 3),
+        ),
+      )
   const heading = done
     ? S.guide.ready[props.step]
     : late
       ? S.guide.late.title
       : S.guide[props.step].title
-  const sentence = done
-    ? S.guide.ready.text
-    : late
-      ? S.guide.late.text
-      : props.form === true
-        ? S.guide.login.form
-        : props.step === 'store' && props.byPostalCode === true
-          ? S.guide.store.postalCode
-          : S.guide[props.step].text(props.label)
+  /** La phrase générale ; le libellé du contrôle est celui que la page montre à l'instant quand l'enseigne lit la page (`look`), jamais un libellé d'un instant d'avant. */
+  const generalFor = (label: string | null): string =>
+    done
+      ? S.guide.ready.text
+      : late
+        ? S.guide.late.text
+        : props.form === true
+          ? S.guide.login.form
+          : props.step === 'store' && props.byPostalCode === true
+            ? S.guide.store.postalCode
+            : S.guide[props.step].text(label)
+  const general = generalFor(props.label)
   const wait = late ? button(S.guide.late.wait, () => answer('wait'), 'primary') : null
   const stop = h(
     'button',
@@ -691,13 +721,68 @@ const guide: Renderer<'guide'> = (props: GuideProps, answer, retailer) => {
     }),
   )
   const titleEl = h('h1', { text: heading, attrs: { id: 'titre', tabindex: '-1' } })
+  const textEl = h('p', { class: 'g-text', text: general })
+  const notes = (done || late || props.step !== 'login' ? [] : (retailer.loginNotes ?? [])).map(
+    (note) => h('p', { class: 'g-note', text: note }),
+  )
+  const barText = h('span', { class: 'g-bar-text' })
+  // La barre fine : l'étape et ce qu'il y a à faire, et UN geste qui rouvre la carte
+  const bar = done
+    ? null
+    : h(
+        'button',
+        {
+          class: 'g-bar',
+          attrs: { type: 'button', 'aria-expanded': 'false' },
+          on: { click: () => link.ask('full') },
+        },
+        barText,
+        h('span', { class: 'g-bar-act' }, S.guide.show, icon('chevron', 18, 3)),
+      )
+  /** Les mots de la sous-étape que la page montre (DRV-757), propres à l'enseigne ; sans eux, la phrase générale. Relus sans redessiner la carte. */
+  let painted: string | undefined
+  const paint = (sub: GuideSub | null, label: string | null): void => {
+    const key = `${sub}|${label}`
+    if (key === painted) return
+    painted = key
+    const own = done || late || sub === null ? undefined : retailer.guideTexts?.[sub]
+    const said =
+      own === undefined
+        ? undefined
+        : own.text.includes('{label}')
+          ? label === null
+            ? own.bare
+            : own.text.replace('{label}', () => label)
+          : own.text
+    textEl.textContent = said ?? (props.look === undefined ? general : generalFor(label))
+    for (const note of notes) note.hidden = said !== undefined
+    barText.textContent = [stepText, own?.short ?? heading].filter(Boolean).join(' · ')
+  }
+  let last: Needs | null = null
+  const needs =
+    props.look === undefined
+      ? null
+      : (): Needs => {
+          const look = props.look?.()
+          paint(look?.sub ?? null, look?.target?.label ?? null)
+          const target = look?.target?.element ?? null
+          last = {
+            keep: [...(target === null ? [] : [target]), ...(look?.keep ?? [])],
+            maybe: look?.maybe ?? [],
+            sub: look?.sub ?? null,
+            target,
+            compact: look?.sub === 'city' || look?.sub === 'shop' || look?.crowded === true,
+          }
+          return last
+        }
+  if (needs === null) paint(null, props.label)
+  else needs()
   const el = screen(
+    bar,
     marker,
     titleEl,
-    h('p', { class: 'g-text', text: sentence }),
-    ...(done || late || props.step !== 'login' ? [] : (retailer.loginNotes ?? [])).map((note) =>
-      h('p', { class: 'g-note', text: note }),
-    ),
+    textEl,
+    ...notes,
     done || late
       ? null
       : h(
@@ -718,12 +803,29 @@ const guide: Renderer<'guide'> = (props: GuideProps, answer, retailer) => {
   )
   el.classList.add('guide')
   el.setAttribute('role', 'status')
+  const pointing = !done && (props.target !== undefined || props.look !== undefined)
   return {
     el,
     sheet: true,
-    ...(props.clearOfConsent === true && { keepClear: true }),
+    // Une carte faite (« Je remplis ton panier ») dure un instant : elle ne se réduit pas
+    ...(done
+      ? props.clearOfConsent === true && {
+          fit: { needs: null, consent: true, collapsible: false, link },
+        }
+      : { fit: { needs, consent: props.clearOfConsent === true, collapsible: true, link } }),
     // Le repère reste tant que l'étape est à faire, attente longue comprise
-    ...(done || props.target === undefined ? {} : { pointAt: () => props.target?.() ?? null }),
+    ...(pointing && {
+      pointAt: (): Spot | null => {
+        if (props.look !== undefined) {
+          const target = props.look().target
+          return target === null ? null : { element: target.element, word: target.word }
+        }
+        const element = props.target?.() ?? null
+        return element === null ? null : { element }
+      },
+      avoid: (): readonly DOMRect[] =>
+        [...(last?.keep ?? []), ...(last?.maybe ?? [])].map((one) => one.getBoundingClientRect()),
+    }),
     // Le focus va au titre (lu par un lecteur d'écran, sans anneau) et non au bouton : la carte n'a rien à confirmer, la personne agit dans la page
     focus: late && wait !== null ? wait : titleEl,
   }
@@ -754,7 +856,14 @@ const chosenStore: Renderer<'chosenStore'> = (props: ChosenStoreProps, answer) =
   )
   el.classList.add('guide')
   el.setAttribute('role', 'status')
-  return { el, sheet: true, ...(props.clearOfConsent === true && { keepClear: true }), focus: use }
+  return {
+    el,
+    sheet: true,
+    ...(props.clearOfConsent === true && {
+      fit: { needs: null, consent: true, collapsible: false, link: { ask: () => undefined } },
+    }),
+    focus: use,
+  }
 }
 
 const error: Renderer<'error'> = (props: ErrorProps, answer, retailer) => {

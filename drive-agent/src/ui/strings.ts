@@ -2,6 +2,7 @@
 // Le diagnostic et le test automatique sont des outils du mainteneur : exemptés du glossaire, pas du tutoiement. Gardé par src/i18n/__tests__/voice-and-glossary.spec.ts.
 import type { ErrorCode, LineStatus, Outcome } from '../../protocol'
 import { pluralOf, unitFor } from '../../protocol'
+import type { ForegroundFacts } from '../diagnostic/foreground'
 import { own } from '../own'
 import type { RetailerNames } from '../retailers/names'
 import type { UnavailableReason, UnreachedReason } from './types'
@@ -252,6 +253,9 @@ export const S = {
       /** La version mobile (DRV-754) : d'où vient l'hôte du serveur du magasin, les liens du magasin, la question de l'ancien panier, la connexion. Des formes seulement. */
       mobile: (serverHost: string, links: number, question: string, session: string) =>
         `Version mobile : hôte du serveur ${serverHost}, ${links} lien(s) du magasin dans la page, question de l’ancien panier : ${question}, connexion ${session}`,
+      /** La fenêtre au premier plan (DRV-757, A2) : des formes seulement, jamais un texte de la page. */
+      foreground: (facts: ForegroundFacts) =>
+        `Fenêtre au premier plan : boîtes modales ${facts.modal ?? 'inconnu'}, fenêtres flottantes ouvertes ${facts.popovers ?? 'inconnu'}, plein écran ${facts.fullscreen ? 'oui' : 'non'} ; au point (${facts.point.x}, ${facts.point.y}) : ${facts.stack.length === 0 ? 'rien' : facts.stack.map((one) => `${one.tag}${one.id === '' ? '' : `#${one.id}`}${one.className === '' ? '' : `.${one.className}`} z=${one.zIndex}${one.agent ? ' [agent]' : ''}`).join(' > ')}`,
       /** La forme de la réponse de recherche de la version mobile : le genre du corps et des NOMS de clés, jamais une valeur. */
       searchForm: (term: string, form: string) => `Forme de la réponse de « ${term} » : ${form}`,
       where: (domain: string) =>
@@ -1060,6 +1064,9 @@ export const S = {
     },
     /** Ce que l'agent fait pendant que la personne agit. */
     status: 'Je continue dès que c’est fait.',
+    /** La carte se réduit à une barre fine (DRV-757) : un bouton dit ce qui se passe, la barre dit comment la rouvrir. Jamais « Fermer » : la carte reste, et la liste est gardée. */
+    hide: 'Réduire',
+    show: 'Afficher',
     /** Le repère posé sous le contrôle à toucher, dans la page. */
     pointer: 'Touche ici',
     /** L'étape est faite : l'agent reprend la main. */

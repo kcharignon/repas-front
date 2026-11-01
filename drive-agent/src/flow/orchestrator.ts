@@ -547,11 +547,11 @@ export class Flow {
    * celle qui s'en va : le problème reste `PAGE_PATH` et `execute` n'y touche à rien.
    */
   private withLoginPage(problem: Fault | null): Fault | null {
-    if (
-      this.onLoginPageWithoutStore(problem) &&
-      onLoginPage(this.deps.adapter) &&
-      !this.isMember()
-    ) {
+    // L'ADRESSE de la page dit où l'on est, d'une origine à l'autre (la note de session ne passe pas de `www` à la connexion, DRV-757) : sur la page de connexion, quoi que la lecture du
+    // magasin ait dit de la page (pas une page de magasin, un autre magasin), l'étape est « connecte-toi », jamais « choisis ton magasin »
+    const aboutPage =
+      problem === null || problem.code === 'UNSUPPORTED_PAGE' || problem.code === 'STORE_MISMATCH'
+    if (aboutPage && onLoginPage(this.deps.adapter) && !this.isMember()) {
       return { code: 'NOT_LOGGED_IN', cause: 'SESSION_VISITOR' }
     }
     return problem

@@ -1,4 +1,6 @@
-// Ce que l'interface et le diagnostic savent de l'enseigne de la page (DRV-705). Un fichier sans import : les textes (`ui/`) en dépendent sans tirer l'adaptateur.
+// Ce que l'interface et le diagnostic savent de l'enseigne de la page (DRV-705). Un fichier sans autre import que des TYPES : les textes (`ui/`) en dépendent sans tirer l'adaptateur.
+import type { GuideSub, GuideSubText } from './guide'
+
 export interface RetailerNames {
   readonly name: string
   readonly nameDe: string
@@ -24,6 +26,8 @@ export interface PhotoRetailer extends RetailerNames {
    * dossier de l'enseigne, jamais dans l'interface. Absent : rien de plus.
    */
   readonly loginNotes?: readonly string[]
+  /** Les mots de chaque sous-étape du guide (DRV-757, voix de `repas-po`) ; absent, ou sans une sous-étape : la phrase générale de la carte. */
+  readonly guideTexts?: Readonly<Partial<Record<GuideSub, GuideSubText>>>
 }
 
 /** Ce que l'interface et le diagnostic savent de l'enseigne de la page : son identifiant, ses noms, son domaine et la lecture de ses hôtes. */

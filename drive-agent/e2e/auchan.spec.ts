@@ -149,13 +149,15 @@ test.describe('les arrêts, tous sans écriture', () => {
 
     await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible()
     await expect(
-      page.getByText('Touche « Choisir vos courses » en haut de la page, puis ton magasin.'),
+      page.getByText('Touche « Choisir vos courses », en haut de la page.'),
     ).toBeVisible()
     await expect(page.getByText('Je continue dès que c’est fait.')).toBeVisible()
     await expect(page.getByText('Touche ici')).toBeVisible()
     // Aucun écran d'incident, aucun gros bouton « Fermer » : une seule action, qui rassure
     await expect(page.getByText('Aucun magasin n’est choisi sur Auchan.')).toHaveCount(0)
-    await expect(page.getByRole('dialog').getByRole('button')).toHaveCount(1)
+    // « Réduire » (la carte devient une barre fine, DRV-757) et l'unique sortie qui rassure ; jamais « Fermer »
+    await expect(page.getByRole('dialog').getByRole('button')).toHaveCount(2)
+    await expect(page.getByRole('button', { name: /fermer/i })).toHaveCount(0)
     await expect(
       page.getByRole('button', {
         name: 'Arrêter pour l’instant Ta liste est gardée, tu pourras reprendre.',
@@ -351,7 +353,7 @@ test.describe('la configuration du magasin (setup)', () => {
 
     // Then : la carte du guide, pas d'écran d'erreur ; la page du site reste visible et touchable derrière
     await expect(
-      page.getByText('Touche « Choisir vos courses » en haut de la page, puis ton magasin.'),
+      page.getByText('Touche « Choisir vos courses », en haut de la page.'),
     ).toBeVisible()
     await expect(
       page.getByRole('heading', { name: 'Choisis ton magasin', exact: true }),

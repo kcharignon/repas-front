@@ -250,69 +250,98 @@ test('premier usage complet : accueil, code postal, ville, magasin, connexion en
       await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible({
         timeout: 15_000,
       })
-      await expect(page.getByText('Étape 1 sur 2')).toBeVisible()
-      await expect(
-        page.getByText('Écris ton code postal, touche ta ville, puis choisis ton magasin.'),
-      ).toBeVisible()
-      await expect(page.getByText('Touche ici')).toBeVisible()
+      await expect(page.locator('.g-step').filter({ hasText: 'Étape 1 sur 2' })).toBeVisible()
+      // Le mur de cookies : la carte dit d'y répondre d'abord, le repère est retiré ; la personne répond, la carte revient au champ
+      await expect(page.getByText('D’abord, réponds aux cookies, dans la page.')).toBeVisible()
+      await expect(page.getByText('Touche ici')).toBeHidden()
       await page.getByRole('button', { name: 'Tout accepter' }).click()
       await expect(page.locator('#cookie-wall')).toHaveCount(0)
+      await expect(page.getByText('Écris ton code postal dans la page.')).toBeVisible()
+      await expect(page.getByText('Touche ici')).toBeVisible()
 
-      // La personne écrit son code postal, touche la ville, puis la flèche du magasin
+      // La personne écrit son code postal : la carte se réduit (le clavier est ouvert) et dit la suite ; elle touche la ville, puis la flèche du magasin
       await page.locator('#postal').fill('69720')
+      await expect(page.locator('.g-bar-text')).toHaveText('Étape 1 sur 2 · Touche ta ville')
       await page.locator('#suggestion').click()
+      await expect(page.locator('.g-bar-text')).toHaveText('Étape 1 sur 2 · Touche ton magasin')
       await page.locator('#pick').click()
 
       // (2) Le magasin est choisi : l'agent touche « Commencer mes courses » ; la page de m-courses reçoit le plan ; la personne n'est pas connectée
       await expect(page).toHaveURL(new RegExp(`${MOBILE_PAGE_PATH}$`))
       await expect(page.getByRole('heading', { name: 'Connecte-toi' })).toBeVisible()
-      await expect(page.getByText('Il reste une étape')).toBeVisible()
-      await expect(
-        page.getByText('La page peut te proposer de créer un compte : cherche « Me connecter ».'),
-      ).toBeVisible()
-      await expect(
-        page.getByText('Leclerc peut t’envoyer un code par e-mail : tape-le dans la page.'),
-      ).toBeVisible()
-      // Le menu de m-courses : le contrôle « Connexion / Inscription » est désigné
+      await expect(page.locator('.g-step').filter({ hasText: 'Il reste une étape' })).toBeVisible()
+      // Le menu de m-courses est fermé : la carte dit de l'ouvrir ; ouvert, elle dit quoi toucher et le repère n'entoure que le mot « Connexion »
+      await expect(page.getByText('Ouvre le menu, en haut de la page.')).toBeVisible()
       await page.locator('#menu').click()
+      await expect(page.getByText('Touche « Connexion » dans le menu.')).toBeVisible()
       await page.locator('#login-link').click()
 
-      // (3) La création de compte (où mène d'abord ce menu) : la carte est là, la personne cherche « Me connecter »
-      await expect(page).toHaveURL(/creation-compte-ccc\.aspx/)
-      await expect(page.getByText('Entre tes identifiants dans la page.')).toBeVisible()
-      await page.locator('#to-login').click()
-
-      // (4) La connexion, en deux temps, sur UNE adresse : la carte reste là à chaque étape, y compris pendant la fenêtre du code reçu par e-mail
+      // (3) La connexion, en deux temps, sur UNE adresse : la carte dit l'étape de connexion (jamais celle du magasin), y compris pendant la fenêtre du code reçu par e-mail
       await expect(page).toHaveURL(/authentification\.aspx/)
-      await expect(page.getByText('Entre tes identifiants dans la page.')).toBeVisible()
+      await expect(
+        page.getByText('Écris ton e-mail, puis ton mot de passe. Tu les tapes toi-même.'),
+      ).toBeVisible()
+      await expect(page.getByText('Choisis ton magasin')).toHaveCount(0)
       await page.locator('#continue').click()
       await expect(page.locator('#hcaptcha')).not.toBeChecked()
       await page.locator('#hcaptcha').check()
       await page.locator('#next').click()
       await expect(page.locator('#step3')).toBeVisible()
       await page.waitForTimeout(3_000)
+      await expect(
+        page.getByText('Leclerc t’a envoyé un code par e-mail. Tape-le dans la page.'),
+      ).toBeVisible()
       await expect(page.getByRole('heading', { name: 'Connecte-toi' })).toBeVisible()
       await expect(page.getByRole('heading', { name: 'Je suis toujours là' })).toHaveCount(0)
       await expect(page.locator('#trust')).not.toBeChecked()
       await page.locator('#validate').click()
 
-      // (5) Le compte s'ouvre ; la personne revient aux courses
+      // (4) Le compte s'ouvre ; la personne revient aux courses
       await expect(page).toHaveURL(/home-espace-client-ccc\.aspx/)
       await page.locator('#back-to-shop').click()
 
-      // (6) Connectée, la page demande « compléter ton ancien panier ? » : l'agent attend, n'écrit rien
+      // (5) Connectée, la page demande « compléter ton ancien panier ? » : l'agent attend, n'écrit rien
       await expect(page.getByRole('heading', { name: 'Choisis dans la page' })).toBeVisible()
       expect(fake.paced()).toEqual([])
       expect(fake.cart()).toEqual({})
       await page.locator('#merge-yes').click()
 
-      // (7) Le passage va jusqu'au bout, sans retour dans Repas
+      // (6) Le passage va jusqu'au bout, sans retour dans Repas
       expect(await app.received('result')).toMatchObject({ outcome: 'completed' })
       expect(fake.cart()).toEqual({ 1000001: 2 })
       expectPoliteAgent(fake)
     },
     { cookieWall: 'tall' },
   )
+})
+
+test('« Inscription » touché par erreur : la création de compte dit à la personne de toucher « Me connecter »', async ({
+  page,
+  agentCode,
+}) => {
+  await withMobile({ chosen: true }, async (fake) => {
+    const app = await openWithBridge(page, fake, agentCode, {
+      path: MOBILE_PAGE_PATH,
+      origin: fake.mobileOrigins.courses,
+      asApplication: true,
+    })
+    app.answerHello(PLAN(FARINE))
+    await page.locator('#menu').click()
+    await expect(page.getByText('Touche « Connexion » dans le menu.')).toBeVisible()
+
+    await page.locator('#signup-link').click()
+
+    await expect(page).toHaveURL(/creation-compte-ccc\.aspx/)
+    await expect(
+      page.getByText('Tu es sur la création de compte. Touche « Me connecter ».'),
+    ).toBeVisible()
+    await expect(page.getByText('Touche ici')).toBeVisible()
+    await page.locator('#to-login').click()
+    await expect(page).toHaveURL(/authentification\.aspx/)
+    await expect(
+      page.getByText('Écris ton e-mail, puis ton mot de passe. Tu les tapes toi-même.'),
+    ).toBeVisible()
+  })
 })
 
 test('« Arrêter pour l’instant » pendant le choix du magasin : rien n’est demandé au serveur, rien n’est écrit', async ({

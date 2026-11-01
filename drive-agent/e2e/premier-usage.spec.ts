@@ -43,10 +43,10 @@ test('premier usage complet : la carte guide chaque étape, le mur de cookies re
     await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible({
       timeout: 15_000,
     })
-    await expect(page.getByText('Étape 1 sur 2')).toBeVisible()
-    await expect(
-      page.getByText('Écris ton code postal, touche ta ville, puis choisis ton magasin.'),
-    ).toBeVisible()
+    await expect(page.locator('.g-step').filter({ hasText: 'Étape 1 sur 2' })).toBeVisible()
+    // Le mur de cookies est là : la carte dit d'y répondre d'abord (la personne choisit), le repère se retire (le champ est derrière le mur)
+    await expect(page.getByText('D’abord, réponds aux cookies, dans la page.')).toBeVisible()
+    await expect(page.getByText('Touche ici')).toBeHidden()
     await expect(page.getByRole('heading', { name: MANUAL })).toHaveCount(0)
 
     // La carte se met EN HAUT : en bas elle couvrirait les boutons du mur (ils sont dans sa zone). Aucun des trois n'est sous elle, et le premier se touche vraiment
@@ -66,7 +66,8 @@ test('premier usage complet : la carte guide chaque étape, le mur de cookies re
     await expect(page.locator('#cookie-wall')).toHaveCount(0)
     await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible()
 
-    // Le champ du code postal est entouré (« Touche ici »), la personne l'écrit : la page n'est jamais modifiée par l'agent
+    // Le mur parti, la carte revient au champ du code postal, entouré (« Touche ici »), la personne l'écrit : la page n'est jamais modifiée par l'agent
+    await expect(page.getByText('Écris ton code postal dans la page.')).toBeVisible()
     await expect(page.getByText('Touche ici')).toBeVisible()
     await page.locator('#postal').fill('29000')
     await page.locator('#launch').click()
@@ -78,10 +79,12 @@ test('premier usage complet : la carte guide chaque étape, le mur de cookies re
     // Then (3) la personne n'est pas connectée : « Connecte-toi », jamais « Touche « Commencer mes courses » ». La page du magasin est sur un AUTRE hôte que l'accueil
     // (`fdN-courses…`) : la note de session du parcours ne la suit pas, la carte dit donc l'étape qui reste (« Il reste une étape »), ce qui est exact.
     await expect(page.getByRole('heading', { name: 'Connecte-toi' })).toBeVisible()
-    await expect(page.getByText('Il reste une étape')).toBeVisible()
+    await expect(page.locator('.g-step').filter({ hasText: 'Il reste une étape' })).toBeVisible()
     await expect(page.getByRole('heading', { name: MANUAL })).toHaveCount(0)
     await page.getByRole('link', { name: 'Se connecter' }).click()
-    await expect(page.getByText('Entre tes identifiants dans la page.')).toBeVisible()
+    await expect(
+      page.getByText('Écris ton e-mail, puis ton mot de passe. Tu les tapes toi-même.'),
+    ).toBeVisible()
     await page.locator('#login').click()
 
     // Then (4) le retour connecté : « Tu es connecté », puis le passage jusqu'au bout, sans retour dans Repas
@@ -90,12 +93,11 @@ test('premier usage complet : la carte guide chaque étape, le mur de cookies re
   })
 })
 
-test('un mur qui ne couvre pas le champ : la carte ne passe pas en haut si elle y cacherait le champ entouré et son repère (elle reste en bas)', async ({
+test('une bannière de cookies dont les boutons sont dans la zone de la carte : la carte dit d’y répondre d’abord et ne couvre aucun de ses boutons ; le repère est retiré, puis la carte revient au champ', async ({
   page,
   agentCode,
 }) => {
   await withHome(async (fake, home) => {
-    // Given : une bannière de cookies dont les boutons sont dans la zone de la carte, et le champ du code postal visible en haut de la page
     fake.setBehavior({ homeForm: 'first-use', cookieWall: 'banner' })
     const app = await openWithBridge(page, fake, agentCode, {
       path: '/',
@@ -104,18 +106,29 @@ test('un mur qui ne couvre pas le champ : la carte ne passe pas en haut si elle 
     })
     app.answerHello(PLAN)
 
-    await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible({
+    await expect(page.getByText('D’abord, réponds aux cookies, dans la page.')).toBeVisible({
       timeout: 15_000,
     })
-    await expect(page.getByText('Touche ici')).toBeVisible()
-    // Laisse le garde passer plusieurs fois : la carte ne bouge pas
+    await expect(page.getByText('Touche ici')).toBeHidden()
+    // Laisse le garde passer plusieurs fois : la carte ne bouge pas et ne couvre aucun bouton de la bannière
     await page.waitForTimeout(2_500)
     const cardBox = await page.locator('.screen.guide').boundingBox()
-    const fieldBox = await page.locator('#postal').boundingBox()
     expect(cardBox).not.toBeNull()
-    expect(fieldBox).not.toBeNull()
-    // La carte est sous le champ : elle ne le cache pas
-    expect((cardBox?.y ?? 0) >= (fieldBox?.y ?? 0) + (fieldBox?.height ?? 0)).toBe(true)
+    for (const name of ['Continuer sans accepter', 'Paramétrer les cookies', 'Tout accepter']) {
+      const box = await page.getByRole('button', { name }).boundingBox()
+      expect(box).not.toBeNull()
+      const covered =
+        (cardBox?.x ?? 0) < (box?.x ?? 0) + (box?.width ?? 0) &&
+        (cardBox?.x ?? 0) + (cardBox?.width ?? 0) > (box?.x ?? 0) &&
+        (cardBox?.y ?? 0) < (box?.y ?? 0) + (box?.height ?? 0) &&
+        (cardBox?.y ?? 0) + (cardBox?.height ?? 0) > (box?.y ?? 0)
+      expect(covered, name).toBe(false)
+    }
+
+    // La personne répond : la carte revient au champ, entouré
+    await page.getByRole('button', { name: 'Continuer sans accepter' }).click()
+    await expect(page.getByText('Écris ton code postal dans la page.')).toBeVisible()
+    await expect(page.getByText('Touche ici')).toBeVisible()
   })
 })
 
@@ -164,7 +177,9 @@ test('la connexion hors d’un magasin : l’agent y dit quoi faire seulement qu
     await page.goto(`${home}/connexion.aspx`)
 
     // Then : l'application livre le plan (magasin connu), la carte dit d'entrer ses identifiants
-    await expect(page.getByText('Entre tes identifiants dans la page.')).toBeVisible()
+    await expect(
+      page.getByText('Écris ton e-mail, puis ton mot de passe. Tu les tapes toi-même.'),
+    ).toBeVisible()
     await expect(page.getByRole('heading', { name: MANUAL })).toHaveCount(0)
   })
 })

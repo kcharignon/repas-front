@@ -1,7 +1,7 @@
 // Les écrans de l'interface et ce que chacun reçoit (`props`) et rend (`answer`, la réponse de l'utilisateur).
 import type { ErrorCode, LineStatus, Outcome } from '../../protocol'
 import type { RetailerInfo } from '../retailers/names'
-import type { GuideStep } from '../retailers/guide'
+import type { GuideLook, GuideStep } from '../retailers/guide'
 
 /**
  * Pourquoi un produit habituel n'a pas été mis au panier (DRV-635). `OUT_OF_STOCK` : le site le dit en rupture (stock nul ou « Bientôt disponible ») ET le
@@ -217,6 +217,11 @@ export interface GuideProps {
   clearOfConsent?: boolean
   /** Le contrôle à entourer dans la page, relu à chaque mesure (la page peut se redessiner) ; `null` : rien à entourer. */
   target?: () => HTMLElement | null
+  /**
+   * Ce que la page montre de l'étape MAINTENANT (DRV-757), relu sans cesse sans redessiner la carte : la sous-étape (la phrase de la carte la suit), le contrôle, ou le seul mot,
+   * à entourer, et les contrôles que la carte ne doit pas cacher. Absent : la phrase générale, le contrôle de `target`.
+   */
+  look?: () => GuideLook
 }
 
 /**

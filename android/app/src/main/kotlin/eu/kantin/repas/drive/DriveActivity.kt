@@ -193,6 +193,24 @@ class DriveActivity : Activity() {
         registerBackAction()
 
         navigationBegins()
+        // DRV-757 : une seule fois, AVANT tout chargement, l'ancien site ordinateur d'une version d'avant ne reste pas dans la WebView. L'effacement des cookies est asynchrone :
+        // la page se charge à sa fin. La personne n'apprend qu'elle a été déconnectée que s'il y avait quelque chose à effacer.
+        val started = repasApp.siteModeMigration.runFor(site) { outcome ->
+            if (isDestroyed) return@runFor
+            // Abandonnée faute de réponse de la WebView (3 s) : la page se charge quand même, aucun message, la migration sera retentée au lancement suivant
+            if (outcome != MigrationOutcome.GAVE_UP) {
+                webView.clearCache(true)
+                webView.clearHistory()
+            }
+            if (outcome == MigrationOutcome.ERASED) {
+                Toast.makeText(this, getString(R.string.site_mode_migrated, site.nameDe), Toast.LENGTH_LONG).show()
+            }
+            openFirstPage()
+        }
+        if (!started) openFirstPage()
+    }
+
+    private fun openFirstPage() {
         webView.loadUrl(firstUrl())
         updateStoreBanner(pass.current()?.request?.startUrl)
     }

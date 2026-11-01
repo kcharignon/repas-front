@@ -286,7 +286,7 @@ test('devant la page d’un visiteur non connecté : l’étape guidée « Conne
 
   // Then : une carte « Connecte-toi » en bas de la page, pas d'écran d'incident, pas de récapitulatif, aucune requête, panier intact
   await expect(page.getByRole('heading', { name: 'Connecte-toi' })).toBeVisible()
-  await expect(page.getByText('Il reste une étape')).toBeVisible()
+  await expect(page.locator('.g-step').filter({ hasText: 'Il reste une étape' })).toBeVisible()
   await expect(page.getByText('Tu n’es pas connecté')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Commencer' })).toHaveCount(0)
   expect(fake.paced()).toEqual([])

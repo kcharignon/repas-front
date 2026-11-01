@@ -337,7 +337,10 @@ field.addEventListener('input', function () {
     : '';
   const suggestion = document.getElementById('suggestion');
   if (suggestion) suggestion.addEventListener('click', function () {
-    document.getElementById('results').innerHTML = '<h2>Choisissez votre service autour du ' + field.value + '</h2><div class="card"><p>Faux Leclerc Ville-Test</p><button id="pick" type="button" aria-label="Choisir ce magasin">→</button></div>';
+    // Le panneau mesuré (DRV-754) : un titre, des puces (Tous, Drive, Retrait piéton, Livraison à domicile), puis UNE carte par magasin, chacune avec son bouton rond à flèche
+    const cards = ['Faux Leclerc Ville-Test', 'Faux Leclerc Autre-Ville', 'Faux Leclerc Troisième-Ville', 'Faux Leclerc Quatrième-Ville']
+      .map(function (name, rank) { return '<div class="card" style="box-sizing:border-box;height:120px;margin:8px 0;padding:10px;border:1px solid #ccc;border-radius:12px;display:flex;justify-content:space-between;align-items:center"><div><p>' + name + '</p><p>' + (rank + 1) + ',2 km · Drive</p></div><button' + (rank === 0 ? ' id="pick"' : '') + ' type="button" aria-label="Choisir ce magasin" style="width:48px;height:48px;border-radius:50%">→</button></div>'; }).join('');
+    document.getElementById('results').innerHTML = '<h2>Choisissez votre service autour du ' + field.value + '</h2><div><button type="button">Tous</button> <button type="button">Drive</button> <button type="button">Retrait piéton</button> <button type="button">Livraison à domicile</button></div>' + cards;
     document.getElementById('pick').addEventListener('click', function () { ${setCookie(MOBILE_STORE_COOKIE)} ${state.other === true ? setCookie(MOBILE_OTHER_COOKIE) : ''} location.reload(); });
   });
 });
@@ -400,7 +403,8 @@ for (const id of ['merge-yes', 'merge-no']) document.getElementById(id).addEvent
       : `${origins.server}${serverPath}/mobile-detail-panier.aspx?sProvenance=SM`
   const menu = state.member
     ? '<li><a href="#">Mon compte</a></li>'
-    : `<li><a id="login-link" href="${origins.account}${ACCOUNT_PATH}/creation-compte-ccc.aspx?s=16000&amp;v=&amp;u=&amp;r=%2Fdrive">Connexion / Inscription</a></li>`
+    : // Deux zones à toucher (constat du 2026-11-01) : « Connexion » mène à la connexion, « / Inscription » à la création de compte
+      `<li><a id="login-link" href="${origins.account}${ACCOUNT_PATH}/authentification.aspx?s=600">Connexion</a> / <a id="signup-link" href="${origins.account}${ACCOUNT_PATH}/creation-compte-ccc.aspx?s=16000&amp;v=&amp;u=&amp;r=%2Fdrive">Inscription</a></li>`
   return `<!doctype html>
 <html lang="fr">
 <head>${HEAD}<title>Faux Leclerc Ville-Test (faux site mobile de test)</title></head>
@@ -445,6 +449,7 @@ export function authenticationPage(origins: MobileOrigins, code: boolean): strin
 <head>${HEAD}<title>Connexion (faux site mobile de test)</title></head>
 <body>
 <h1>Connexion</h1>
+<div style="height:120px"></div>
 <section id="step1">
 <label for="email">Adresse email</label><input id="email" type="email" autocomplete="username">
 <button id="continue" type="button">Continuer</button>
@@ -453,12 +458,14 @@ export function authenticationPage(origins: MobileOrigins, code: boolean): strin
 <label for="secret">Mot de passe unique</label><input id="secret" type="password" autocomplete="current-password">
 <label><input id="stay" type="checkbox"> Rester connecté</label>
 <label><input id="hcaptcha" type="checkbox"> Je suis un humain</label>
+<iframe id="hc-frame" title="hCaptcha challenge" src="about:blank" style="display:none;position:fixed;left:16px;bottom:20px;width:300px;height:120px;border:1px solid #888;background:#fff"></iframe>
 <button id="next" type="button">Me connecter</button>
 </section>
 <section id="step3" role="dialog" aria-label="Saisissez le code reçu par e-mail" style="display:none">
 <h2>Saisissez le code reçu par e-mail</h2>
 <p>Afin de confirmer votre identité, veuillez saisir le code de sécurité à 6 chiffres envoyé à l'adresse indiquée.</p>
 <div>${'<input class="digit" inputmode="numeric" maxlength="1" size="1"> '.repeat(6)}</div>
+<div style="height:60px"></div>
 <label><input id="trust" type="checkbox"> En cochant cette case, vous n'aurez plus à saisir de code de sécurité sur cet appareil pendant un certain temps</label>
 <button id="validate" type="button">Valider</button>
 </section>
@@ -466,6 +473,7 @@ export function authenticationPage(origins: MobileOrigins, code: boolean): strin
 const show = (id) => { for (const s of ['step1', 'step2', 'step3']) document.getElementById(s).style.display = s === id ? 'block' : 'none'; };
 const done = () => { ${setCookie(MOBILE_MEMBER_COOKIE)} location.assign('${origins.account}${ACCOUNT_PATH}/home-espace-client-ccc.aspx'); };
 document.getElementById('continue').addEventListener('click', () => show('step2'));
+document.getElementById('hcaptcha').addEventListener('change', (e) => { document.getElementById('hc-frame').style.display = e.target.checked ? 'block' : 'none'; });
 document.getElementById('next').addEventListener('click', () => { if (document.getElementById('hcaptcha').checked) { ${code ? "show('step3')" : 'done()'}; } });
 document.getElementById('validate').addEventListener('click', done);
 </script>

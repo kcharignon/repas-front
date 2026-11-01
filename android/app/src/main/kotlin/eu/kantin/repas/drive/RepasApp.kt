@@ -2,6 +2,8 @@ package eu.kantin.repas.drive
 
 import android.app.Application
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 
 /**
  * L'application : ce que la coquille Repas ([MainActivity]) et l'écran du drive ([DriveActivity]) partagent pendant que le processus vit.
@@ -38,6 +40,36 @@ class RepasApp : Application() {
 
     /** La forme du dernier « Finaliser » de chaque enseigne (DRV-631), montrée dans « Version et mode d'emploi ». */
     internal val finalizeOutcomes: FinalizeOutcomeMemories by lazy { FinalizeOutcomeMemories(sites, driveStore) }
+
+    /**
+     * La migration unique vers la version mobile de l'enseigne d'avant (DRV-757) : ses cookies et son stockage de site sont effacés une fois, dans SON profil de WebView
+     * seulement (ni Repas, ni une autre enseigne). Sans profils de WebView l'effacement toucherait Repas : rien n'est fait, elle sera retentée.
+     */
+    internal val siteModeMigration: SiteModeMigration by lazy {
+        SiteModeMigration(
+            sites,
+            driveStore,
+            object : SiteDataEraser {
+                override fun hasData(site: RetailerSite): Boolean =
+                    DriveProfile.cookieManager(site, sites).hasCookies() || storePaths.of(site).hasPath()
+
+                override fun erase(site: RetailerSite, done: () -> Unit): Boolean {
+                    if (!DriveProfile.isolated) return false
+                    storePaths.forget(site)
+                    finalizeOutcomes.forget(site)
+                    DriveProfile.clear(null, site, sites, done)
+                    return true
+                }
+            },
+            // Si la WebView ne rappelle jamais, la page se charge au bout de 3 s (la migration sera retentée)
+            Delay { millis, action ->
+                val handler = Handler(Looper.getMainLooper())
+                val task = Runnable(action)
+                handler.postDelayed(task, millis)
+                return@Delay { handler.removeCallbacks(task) }
+            },
+        )
+    }
 
     internal val pass: DrivePass by lazy {
         DrivePass(

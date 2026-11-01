@@ -66,12 +66,15 @@ export function chooseBarTarget(root: ParentNode): GuideTarget | null {
     const raw = element.textContent ?? ''
     return raw.length <= 4 * MAX_BAR_TEXT && CHOOSE_BARS.includes(fold(raw))
   })
-  // Le plus petit élément qui porte le texte entier (pas un conteneur du même texte), celui que la page montre de préférence
+  // Le plus petit élément qui porte le texte entier (pas un conteneur du même texte), celui que la page MONTRE : jamais un élément caché (DRV-757, constat du 2026-11-01 : la carte citait
+  // « Choisir vos courses » alors que la page affichait « Choisir mon mode de livraison » ; le libellé cité est celui de l'élément entouré, vu à l'écran)
   const innermost = matches.filter(
     (candidate) => !matches.some((other) => other !== candidate && candidate.contains(other)),
   )
-  const element =
-    innermost.find((candidate) => candidate.getClientRects().length > 0) ?? innermost[0]
+  const element = innermost.find((candidate) => {
+    const { width, height } = candidate.getBoundingClientRect()
+    return width > 0 && height > 0
+  })
   if (element === undefined) return null
   const control = element.closest<HTMLElement>('a, button, [role="button"]')
   const target = control !== null && control.contains(element) ? control : element

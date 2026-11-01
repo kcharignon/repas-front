@@ -20,7 +20,7 @@ test('visiteur sur la page du magasin : « Connecte-toi », la page de connexion
 
   // Then : la carte dit quoi faire et où, entoure « Se connecter » ; rien n'a été demandé au site, aucune erreur
   await expect(page.getByRole('heading', { name: 'Connecte-toi' })).toBeVisible()
-  await expect(page.getByText('Il reste une étape')).toBeVisible()
+  await expect(page.locator('.g-step').filter({ hasText: 'Il reste une étape' })).toBeVisible()
   await expect(
     page.getByText('Touche « Se connecter », puis entre tes identifiants.'),
   ).toBeVisible()
@@ -32,7 +32,9 @@ test('visiteur sur la page du magasin : « Connecte-toi », la page de connexion
   await page.getByRole('link', { name: 'Se connecter' }).click()
 
   // Then : la carte dit d'entrer ses identifiants ; jamais « Ouverture de ton magasin… » ni « Touche « Commencer mes courses » » par-dessus le formulaire
-  await expect(page.getByText('Entre tes identifiants dans la page.')).toBeVisible()
+  await expect(
+    page.getByText('Écris ton e-mail, puis ton mot de passe. Tu les tapes toi-même.'),
+  ).toBeVisible()
   await expect(page.locator('#login')).toBeVisible()
   await page.waitForTimeout(5_000)
   await expect(page.getByText('Ouverture de ton magasin…')).toHaveCount(0)

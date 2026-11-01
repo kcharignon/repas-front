@@ -19,3 +19,9 @@ export const EXEMPLE: RetailerInfo = {
   hostFamily: (host) => /^(zz\d{1,3})-courses\.exemple\.invalid$/.exec(host)?.[1] ?? null,
   isMobileHost: (host) => host.startsWith('m-'),
 }
+
+const auchan = RETAILERS.find((entry) => entry.id === 'auchan')
+if (auchan === undefined) throw new Error('le registre de l’agent n’a plus l’enseigne « auchan »')
+
+/** L'enseigne Auchan du registre : ses mots de sous-étape (DRV-757) sont ceux de l'agent publié. */
+export const AUCHAN: RetailerInfo = auchan

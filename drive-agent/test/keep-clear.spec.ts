@@ -1,7 +1,7 @@
-// La carte du guide ne cache jamais les boutons d'un mur de cookies (DRV-753) : en bas, ou en haut quand le bas les couvrirait ; jamais d'écriture dans la page.
+// La lecture du mur de cookies et du contrôle entouré (DRV-753), dont la place de la carte (`fit.spec.ts`) se sert ; jamais d'écriture dans la page.
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { arrange, AT_TOP, consentRects, MAX_SCANNED, pointedRects } from '../src/ui/keep-clear'
+import { consentRects, MAX_SCANNED, pointedRects } from '../src/ui/keep-clear'
 
 /** Une boîte à l'écran : jsdom ne mesure rien, le test donne les positions. */
 function box(top: number, bottom: number, left = 0, right = 300): DOMRect {
@@ -100,68 +100,5 @@ describe('le contrôle entouré, que la carte ne doit pas cacher', () => {
     measured(field, box(-500, -450))
     expect(pointedRects(field)).toEqual([])
     delete (document as { elementFromPoint?: unknown }).elementFromPoint
-  })
-})
-
-describe('la place de la carte', () => {
-  const card = (rect: () => DOMRect) => {
-    const el = document.createElement('div')
-    el.getBoundingClientRect = rect
-    return el
-  }
-
-  it('aucun bouton de mur : en bas', () => {
-    const el = card(() => box(500, 760))
-    el.classList.add(AT_TOP)
-
-    arrange(el, [])
-
-    expect(el.classList.contains(AT_TOP)).toBe(false)
-  })
-
-  it('le bas couvrirait un bouton du mur : la carte passe en haut', () => {
-    // La boîte de la carte dépend de sa classe : en bas 500-760, en haut 8-268
-    const el = document.createElement('div')
-    el.getBoundingClientRect = () => (el.classList.contains(AT_TOP) ? box(8, 268) : box(500, 760))
-
-    arrange(el, [box(640, 690)])
-
-    expect(el.classList.contains(AT_TOP)).toBe(true)
-  })
-
-  it('le bas est libre : la carte reste en bas', () => {
-    const el = document.createElement('div')
-    el.getBoundingClientRect = () => (el.classList.contains(AT_TOP) ? box(8, 268) : box(500, 760))
-
-    arrange(el, [box(100, 150)])
-
-    expect(el.classList.contains(AT_TOP)).toBe(false)
-  })
-
-  it('le haut cacherait le contrôle entouré ou son repère : la carte reste en bas, même si le bas couvre un bouton du mur', () => {
-    const el = document.createElement('div')
-    el.getBoundingClientRect = () => (el.classList.contains(AT_TOP) ? box(8, 268) : box(500, 760))
-
-    arrange(el, [box(640, 690)], () => [box(138, 250)])
-
-    expect(el.classList.contains(AT_TOP)).toBe(false)
-  })
-
-  it('le contrôle entouré est loin du haut : la carte monte', () => {
-    const el = document.createElement('div')
-    el.getBoundingClientRect = () => (el.classList.contains(AT_TOP) ? box(8, 268) : box(500, 760))
-
-    arrange(el, [box(640, 690)], () => [box(400, 450)])
-
-    expect(el.classList.contains(AT_TOP)).toBe(true)
-  })
-
-  it('les deux places couvrent un bouton : elle reste en bas (jamais pire)', () => {
-    const el = document.createElement('div')
-    el.getBoundingClientRect = () => (el.classList.contains(AT_TOP) ? box(8, 268) : box(500, 760))
-
-    arrange(el, [box(100, 150), box(640, 690)])
-
-    expect(el.classList.contains(AT_TOP)).toBe(false)
   })
 })

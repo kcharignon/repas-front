@@ -4,7 +4,13 @@
 // La page de l'enseigne peut se recharger pendant l'attente (choisir son magasin, se connecter) : la page suivante refait la même lecture et arrive au même endroit,
 // sans que rien ne revienne en rouge ni en plus grand. La seule sortie est « Arrêter pour l'instant » : l'envoi s'arrête, la liste est gardée.
 import type { ErrorCode } from '../../protocol'
-import type { GuideStep, GuideTarget, RetailerAdapter, RetailerCause } from '../retailers'
+import type {
+  GuideLook,
+  GuideStep,
+  GuideTarget,
+  RetailerAdapter,
+  RetailerCause,
+} from '../retailers'
 import type { GuideProps } from '../ui'
 
 /** Le rythme auquel l'agent relit la page pendant que la personne agit : une lecture du DOM, aucune requête. */
@@ -85,19 +91,32 @@ export function guideProps(
   const form = step === 'login' && onLoginPage(adapter)
   // La question de l'ancien panier est dans la page : rien à entourer, la personne la voit (elle ne la ferme pas, ne la choisit pas à sa place)
   const target = form || step === 'basket' ? null : guideTargetOf(step, adapter)
+  // Une enseigne qui lit la sous-étape dans la page (DRV-757) : la carte la suit sans se redessiner, et la page ne dit pas deux fois la même chose
+  const look = adapter.guideLook
+  const live = look === undefined || step === 'basket' ? undefined : () => lookOf(step, adapter)
   return {
     step,
     stage,
     index: steps.index,
     total: steps.total,
     label: target?.label ?? null,
-    ...(form || step === 'basket'
-      ? form
-        ? { form: true }
-        : {}
-      : { target: () => guideTargetOf(step, adapter)?.element ?? null }),
+    ...(form ? { form: true } : {}),
+    ...(live === undefined
+      ? form || step === 'basket'
+        ? {}
+        : { target: () => guideTargetOf(step, adapter)?.element ?? null }
+      : { look: live }),
     ...(adapter.keepClearOfConsent === true && { clearOfConsent: true }),
     ...extra,
+  }
+}
+
+/** Ce que la page montre de l'étape à cet instant (DRV-757) ; une page qui ne se laisse pas lire ne montre rien. */
+function lookOf(step: GuideStep, adapter: RetailerAdapter): GuideLook {
+  try {
+    return adapter.guideLook?.(step) ?? { sub: null, target: null, keep: [], maybe: [] }
+  } catch {
+    return { sub: null, target: null, keep: [], maybe: [] }
   }
 }
 
