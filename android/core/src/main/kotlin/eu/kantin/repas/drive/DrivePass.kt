@@ -208,6 +208,13 @@ enum class StoreBanner {
      */
     MOBILE,
 
+    /**
+     * La page du MOT DE PASSE de l'enseigne (DRV-757) : on y navigue mais aucun code de Repas n'y vit, par choix (ADR 0027 : le pont et l'agent n'existent que sur les pages du site
+     * lui-même, jamais sur la page du mot de passe) : ni carte ni repère n'y sont possibles. L'ÉCRAN le dit à leur place, en bandeau natif au-dessus de la page, pour que la
+     * personne ne soit jamais seule : se connecter dans la page, en tapant elle-même son mot de passe. Pas de bouton.
+     */
+    LOGIN,
+
     /** Arrivée de « Finaliser sur Leclerc » (DRV-631), sans passage : « Ton panier est dans l'icône en haut à droite. » Pas de bouton ; disparaît à la première navigation. */
     BASKET,
     ;
@@ -239,6 +246,8 @@ enum class StoreBanner {
             }
             trouble != PageTrouble.NONE -> PLAN
             request.site.isMobileSite(url) -> MOBILE
+            // Une page du site où le pont n'existe pas (la page du mot de passe) : l'agent n'y est pas, l'écran parle à sa place
+            request.site.isNavigable(url) && !request.site.isBridgePage(url) -> LOGIN
             request.site.isStorePage(url) -> NONE
             // L'accueil de l'enseigne : l'agent y suit « Commencer mes courses » ou dit lui-même de le toucher (DRV-625), le bandeau se tait.
             request.site.isHomePage(url) -> NONE

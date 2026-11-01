@@ -29,8 +29,10 @@ class StoreBannerWithoutStorePagesTest {
         "https://www.exemple-c.test/rayons/fruits",
         "https://www.exemple-c.test/produit/123",
         "https://www.exemple-c.test/connexion",
-        "https://compte.exemple-c.test/auth/connexion",
     )
+
+    /** La page du mot de passe de l'enseigne : on y navigue, mais aucun code de Repas n'y vit (ni agent ni carte). */
+    private val passwordPage = "https://compte.exemple-c.test/auth/connexion"
 
     @Test
     fun `l'enseigne fictive de test n'a pas de page de magasin et l'autre en a`() {
@@ -44,6 +46,31 @@ class StoreBannerWithoutStorePagesTest {
     fun `un plan sur une enseigne sans page de magasin n'a aucun message de magasin sur ses pages`() {
         pages.forEach { assertEquals(it, StoreBanner.NONE, StoreBanner.of(plan, it)) }
         pages.forEach { assertEquals(it, StoreBanner.NONE, StoreBanner.of(plan, it, PageTrouble.NONE)) }
+    }
+
+    @Test
+    fun `DRV-757 la page du mot de passe sans agent par choix a un message de l'ecran et la personne n'est jamais seule devant elle`() {
+        assertFalse(noPages.isBridgePage(passwordPage))
+        assertTrue(noPages.isNavigable(passwordPage))
+
+        assertEquals(StoreBanner.LOGIN, StoreBanner.of(plan, passwordPage))
+        assertFalse("pas de bouton : la personne se connecte dans la page", StoreBanner.LOGIN.hasAction)
+        // Les autres pages du site, où l'agent vit, gardent l'agent : aucun message de l'écran
+        assertEquals(StoreBanner.NONE, StoreBanner.of(plan, "https://www.exemple-c.test/courses"))
+        // Une page qui cloche garde son message (le défaut passe avant)
+        assertEquals(StoreBanner.PLAN, StoreBanner.of(plan, passwordPage, PageTrouble.HTTP_ERROR))
+    }
+
+    @Test
+    fun `Auchan, la page du mot de passe a le message de connexion et la page du site non`() {
+        val auchan = RetailerSites.DEFAULT.byId("auchan")!!
+        val request = DrivePlan.parse(
+            FictionalSites.plan(auchan, FictionalSites.STORE_UUID, "www.auchan.fr"),
+            RetailerSites.DEFAULT,
+        )!!
+
+        assertEquals(StoreBanner.LOGIN, StoreBanner.of(request, "https://compte.auchan.fr/connexion"))
+        assertEquals(StoreBanner.NONE, StoreBanner.of(request, "https://www.auchan.fr/courses"))
     }
 
     @Test
