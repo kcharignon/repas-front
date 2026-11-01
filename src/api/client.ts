@@ -18,6 +18,12 @@ export interface AuthProvider {
 export interface ApiClientOptions {
   baseUrl?: string
   auth: AuthProvider
+  /**
+   * La version de l'application Android qui fait tourner le site, quand elle est connue et envoyable (`null` sinon : navigateur, construction
+   * de développement, pont qui n'a pas encore répondu). Lue de façon synchrone à CHAQUE requête vers l'API de Repas : le serveur retient ainsi
+   * la version dès la première requête d'une session (en-têtes `X-App-Version` et `X-App-Platform`), jamais vers un autre hôte.
+   */
+  appVersion?: () => string | null
   /** Pour les tests ; par défaut le `fetch` du navigateur. */
   fetch?: typeof globalThis.fetch
 }
@@ -33,16 +39,48 @@ const withBearer = (request: Request, token: string | null): Request => {
   return new Request(request, { headers })
 }
 
+/** Les en-têtes par lesquels le serveur apprend la version de l'application (DRV-637) ; leurs noms sont fixés avec le back. */
+export const APP_VERSION_HEADER = 'X-App-Version'
+export const APP_PLATFORM_HEADER = 'X-App-Platform'
+
+/** Origine de l'API de Repas : la requête n'y est jointe d'une version que si elle y va (le site ne parle qu'à son API, on le vérifie quand même). */
+const originOf = (url: string): string | null => {
+  try {
+    return new URL(url).origin
+  } catch {
+    return null
+  }
+}
+
+const withAppVersion = (
+  request: Request,
+  version: string | null,
+  apiOrigin: string | null,
+): Request => {
+  if (version === null || apiOrigin === null || originOf(request.url) !== apiOrigin) return request
+  const headers = new Headers(request.headers)
+  headers.set(APP_VERSION_HEADER, version)
+  headers.set(APP_PLATFORM_HEADER, 'android')
+
+  return new Request(request, { headers })
+}
+
 /**
  * `fetch` qui pose le jeton d'accès et, sur un 401, demande un jeton neuf puis rejoue la requête **une seule fois**.
  */
 export function createAuthFetch({
   auth,
+  appVersion,
+  baseUrl,
   fetch: baseFetch = (...args) => globalThis.fetch(...args),
 }: ApiClientOptions) {
+  const apiOrigin = originOf(baseUrl ?? globalThis.location?.origin ?? '')
+  const stamp = (request: Request): Request =>
+    withAppVersion(request, appVersion?.() ?? null, apiOrigin)
+
   return async (request: Request): Promise<Response> => {
-    const replay = request.clone()
-    const first = await baseFetch(withBearer(request, auth.token()))
+    const replay = stamp(request.clone())
+    const first = await baseFetch(withBearer(stamp(request), auth.token()))
     const { pathname } = new URL(request.url)
     if (first.status !== 401 || WITHOUT_REFRESH.some((prefix) => pathname.startsWith(prefix)))
       return first
@@ -59,7 +97,7 @@ export function createAuthFetch({
 export function createApiClient(options: ApiClientOptions) {
   return createClient<paths>({
     baseUrl: options.baseUrl ?? globalThis.location?.origin ?? '',
-    fetch: createAuthFetch(options),
+    fetch: createAuthFetch({ ...options, baseUrl: options.baseUrl ?? globalThis.location?.origin }),
   })
 }
 
