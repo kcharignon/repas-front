@@ -124,6 +124,7 @@ import {
 } from './session'
 import { findControl, type GuideLook, type GuideStep, type GuideTarget } from '../retailers/guide'
 import { wallLook } from '../retailers/consent'
+import { isAccountLoginPage } from './account'
 import { readLoginLook, readStoreLook } from './guide-look'
 import { findPostalCodeField } from './store-field'
 import {
@@ -424,10 +425,6 @@ const STORE_CITY = /^\/magasin-\d{1,12}-\d{1,12}-([^/?#]+)/i
  */
 const LOGIN_PAGE =
   /(?:^|\/)(?:connexion(?:\.aspx)?|authentification\.aspx|creation-compte[a-z0-9-]*\.aspx)(?:\/|$)/i
-/** Les pages du COMPTE de l'enseigne : `fd<N>-espace-client` (connexion, création de compte, compte). */
-const ACCOUNT_HOST = /^fd\d{1,3}-espace-client\.leclercdrive\.fr$/
-/** Le compte de la personne connectée (`home-espace-client-ccc.aspx`) n'est pas une page de connexion. */
-const ACCOUNT_HOME = /home-espace-client/i
 /** Une redirection vers une page de connexion. */
 const LOGIN_PATH = /connexion|identif|login|authent/i
 
@@ -1513,10 +1510,7 @@ export class LeclercAdapter implements RetailerAdapter {
    */
   onLoginPage(): boolean {
     const { hostname, pathname } = this.deps.location
-    return (
-      LOGIN_PAGE.test(pathname) ||
-      (ACCOUNT_HOST.test(hostname.toLowerCase()) && !ACCOUNT_HOME.test(pathname))
-    )
+    return LOGIN_PAGE.test(pathname) || isAccountLoginPage(hostname, pathname)
   }
 
   /**

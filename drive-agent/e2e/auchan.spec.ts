@@ -232,7 +232,10 @@ test.describe('les arrêts, tous sans écriture', () => {
     app.answerHello(plan())
 
     await expect(page.getByRole('heading', { name: 'Connecte-toi' })).toBeVisible()
-    await expect(page.getByText('Tu tapes toi-même ton mot de passe.')).toBeVisible()
+    // Aucun contrôle de connexion montré (le faux site n'en a pas) : la carte ne cite aucun libellé et dit où chercher (DRV-757)
+    await expect(
+      page.getByText('Touche l’icône de connexion, en haut à droite de la page.'),
+    ).toBeVisible()
     await expect(page.getByText('Tu n’es pas connecté')).toHaveCount(0)
     await page.getByRole('button', { name: 'Arrêter pour l’instant' }).click()
 

@@ -13,6 +13,12 @@ export const GUIDE_TEXTS: Readonly<Partial<Record<GuideSub, GuideSubText>>> = {
     bare: 'Touche la barre, en haut de la page.',
     short: 'Touche la barre du haut',
   },
+  connexion: {
+    text: 'Touche « {label} », en haut de la page, pour te connecter.',
+    // « en haut à droite » : mesuré sur le téléphone (2026-11-01), le bouton de connexion du bandeau est sans nom, tout à droite (x 840 à 1042 sur 1080, y 135 à 235) et ouvre « Se connecter »
+    bare: 'Touche l’icône de connexion, en haut à droite de la page.',
+    short: 'Touche la connexion',
+  },
   field: { text: 'Écris ton code postal ou ta ville.', short: 'Écris ton code postal' },
   city: { text: 'Touche ta ville dans la liste.', short: 'Touche ta ville' },
   shop: { text: 'Touche ton magasin dans la liste.', short: 'Touche ton magasin' },

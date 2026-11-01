@@ -36,11 +36,11 @@ export const GUIDE_TEXTS: Readonly<Partial<Record<GuideSub, GuideSubText>>> = {
     short: 'Écris ton e-mail',
   },
   password: {
-    text: 'Écris ton mot de passe, coche « Je suis un humain », puis valide.',
+    text: 'Écris ton mot de passe, puis coche « Je suis un humain ».',
     short: 'Écris ton mot de passe',
   },
   human: {
-    text: 'Fais la vérification dans le cadre, puis valide.',
+    text: 'Fais la vérification qui s’affiche.',
     short: 'Fais la vérification',
   },
   code: {

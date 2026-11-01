@@ -574,6 +574,16 @@ describe('DRV-757 (suite) : la page de connexion de Leclerc est l’étape 2 sur
       location('m-courses.leclercdrive.fr', '/magasin-000001-000001-ville-test').onLoginPage(),
     ).toBe(false)
     expect(location('www.leclercdrive.fr', '/').onLoginPage()).toBe(false)
+    // Un site qui ressemble au compte de l'enseigne n'en est pas un (une seule définition, ancrée, pour l'adaptateur et pour la lecture de la page)
+    expect(location('fd8-espace-client.exemple.test', '/drive/x/autre.aspx').onLoginPage()).toBe(
+      false,
+    )
+    expect(
+      location(
+        'fd8-espace-client.leclercdrive.fr.exemple.test',
+        '/drive/x/autre.aspx',
+      ).onLoginPage(),
+    ).toBe(false)
   })
 
   it('un problème « magasin pas choisi » sur la page de connexion est l’étape « connecte-toi », pas « choisis ton magasin »', () => {

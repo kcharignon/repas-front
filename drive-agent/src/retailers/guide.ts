@@ -142,6 +142,8 @@ export function findControl(
   root: ParentNode,
   labels: ReadonlySet<string>,
   contains: readonly string[] = [],
+  /** Un contrôle MONTRÉ seulement (DRV-757) : sans repli sur un contrôle caché. Absent : le contrôle que la page montre d'abord, à défaut le premier. */
+  visibleOnly?: (element: HTMLElement) => boolean,
 ): GuideTarget | null {
   const found: GuideTarget[] = []
   for (const element of root.querySelectorAll<HTMLElement>(CLICKABLE)) {
@@ -156,5 +158,6 @@ export function findControl(
       .find((text) => text !== '' && contains.some((word) => text.includes(word)))
     if (hint !== undefined) found.push({ element, label: null })
   }
+  if (visibleOnly !== undefined) return found.find((target) => visibleOnly(target.element)) ?? null
   return found.find((target) => shown(target.element)) ?? found[0] ?? null
 }

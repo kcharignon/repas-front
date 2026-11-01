@@ -66,11 +66,24 @@ export function listText(names: readonly string[]): string {
   return names.length > LIST_MAX ? `${shown} (et ${names.length - LIST_MAX} de plus)` : shown
 }
 
-/** Ce que la liste demande pour un article : « 800 g » (la quantité et son unité), `null` quand le plan ne le dit pas. */
+/** Un symbole d'un ou deux caractères (g, kg, l, cl, ml) est une abréviation : jamais de « s ». La MÊME règle que le site (`src/features/shopping-lists/format.ts`, `ABBREVIATION`) ; `fixtures/unit-agreement.json` les tient ensemble. */
+const ABBREVIATION = /^\p{L}{1,2}$/u
+
+/** La quantité à la française comme sur le site : virgule, deux décimales au plus, séparateur de milliers (« 1 234,5 »). */
+const needed = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 })
+
+/**
+ * Ce que la liste demande pour un article : « 800 g » (la quantité et son unité), `null` quand le plan ne le dit pas. **La même règle que le site** : un symbole d'un ou deux
+ * caractères est une abréviation, jamais accordée ; tout autre est un mot, qui s'accorde dès deux (« 2 unités », DRV-757, mesuré : « Il te faut : 2 unité. »). Sans unité, la quantité
+ * seule. Le NOM de l'unité (`unitName`) ne change rien : seul le symbole décide, comme sur le site (le site n'a que le symbole) ; mille et plus s'écrit avec le séparateur (« 1 000 »).
+ */
 export function formatNeeded(
-  needed: { quantity: number; unitSymbol: string } | null | undefined,
+  line: { quantity: number; unitSymbol: string; unitName?: string | undefined } | null | undefined,
 ): string | null {
-  return needed ? `${formatNumber(needed.quantity)} ${needed.unitSymbol}` : null
+  if (!line) return null
+  const symbol = line.unitSymbol.trim()
+  const unit = symbol === '' || ABBREVIATION.test(symbol) ? symbol : unitFor(symbol, line.quantity)
+  return `${needed.format(line.quantity)}${unit === '' ? '' : ` ${unit}`}`
 }
 
 /** Les articles de la liste rangés par ce qui leur arrive : ce qu'il faut pour écrire la phrase de synthèse. */

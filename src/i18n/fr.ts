@@ -466,7 +466,9 @@ export default {
     completedTitle: 'Courses terminées',
     completedHelp: 'Décoche un article pour reprendre la liste, ou commence une nouvelle liste.',
     startNew: 'Nouvelle liste',
-    progress: '{done} sur {total} articles dans le panier',
+    // Un seul article : « 1 sur 1 article » (le pluriel suit le TOTAL : `t(clé, { done, total }, total)`)
+    progress:
+      '{done} sur {total} article dans le panier | {done} sur {total} articles dans le panier',
     sections: 'Contenu de la liste',
     ingredientsTab: 'Articles · {count}',
     recipesTab: 'Recettes · {count}',
@@ -1248,7 +1250,8 @@ export default {
     dessert: 'Dessert',
     starter: 'Entrée',
     tiles: 'Types de recette',
-    progressLabel: '{done} sur {total} articles dans le panier',
+    progressLabel:
+      '{done} sur {total} article dans le panier | {done} sur {total} articles dans le panier',
   },
   // La page publique d'installation de l'application Android (DRV-639), `/installer` : un gros bouton et trois courtes étapes, sans connexion
   install: {
