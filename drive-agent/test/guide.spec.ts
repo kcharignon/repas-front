@@ -586,6 +586,25 @@ describe('DRV-757 (suite) : la page de connexion de Leclerc est l’étape 2 sur
     ).toBe(false)
   })
 
+  it('DRV-759 : la page de connexion se reconnaît aussi à ce qu’elle dit, quand son adresse n’est pas connue (mesuré : la page réelle redisait « Étape 1 sur 2 · Écris ton code postal »)', () => {
+    const page = (text: string, pathname = '/magasin-000001-000001-ville-test/inconnue.aspx') =>
+      new LeclercAdapter(
+        fakeSite(() => ({ body: '' }), {
+          location: { hostname: 'm-courses.leclercdrive.fr', pathname },
+          pageText: () => text,
+        }).deps,
+      )
+
+    expect(
+      page(
+        '<h1>Connexion</h1><p>Connectez-vous avec votre compte unique E.Leclerc.</p>',
+      ).onLoginPage(),
+    ).toBe(true)
+    expect(
+      page('<h1>Choisissez votre service</h1><p>Écris ton code postal</p>').onLoginPage(),
+    ).toBe(false)
+  })
+
   it('un problème « magasin pas choisi » sur la page de connexion est l’étape « connecte-toi », pas « choisis ton magasin »', () => {
     const w = world({ chosen: false, member: false })
     Object.assign(w.adapter, { onLoginPage: () => true })

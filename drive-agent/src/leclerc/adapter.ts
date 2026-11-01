@@ -425,6 +425,8 @@ const STORE_CITY = /^\/magasin-\d{1,12}-\d{1,12}-([^/?#]+)/i
  */
 const LOGIN_PAGE =
   /(?:^|\/)(?:connexion(?:\.aspx)?|authentification\.aspx|creation-compte[a-z0-9-]*\.aspx)(?:\/|$)/i
+/** Ce que dit la page de connexion réelle (mesuré le 2026-11-01), sans lire aucun champ. */
+const LOGIN_TEXT = /Connectez-vous avec votre compte/i
 /** Une redirection vers une page de connexion. */
 const LOGIN_PATH = /connexion|identif|login|authent/i
 
@@ -1510,7 +1512,12 @@ export class LeclercAdapter implements RetailerAdapter {
    */
   onLoginPage(): boolean {
     const { hostname, pathname } = this.deps.location
-    return LOGIN_PAGE.test(pathname) || isAccountLoginPage(hostname, pathname)
+    // Ou ce que la page dit (DRV-759 : mesuré sur la vraie page de connexion, d'adresse inconnue : « Connectez-vous avec votre compte unique E.Leclerc. »)
+    return (
+      LOGIN_PAGE.test(pathname) ||
+      isAccountLoginPage(hostname, pathname) ||
+      LOGIN_TEXT.test(this.deps.pageText())
+    )
   }
 
   /**
