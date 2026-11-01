@@ -352,6 +352,27 @@ describe('la carte posée dans la page', () => {
       fit.stop()
     })
 
+    it.each([
+      ['Poursuivre sans consentir', 'refus'],
+      ['Refuser et continuer', 'refus'],
+      ['Non merci', 'refus'],
+    ])(
+      '« %s » (un refus que la lecture ne connaît pas par son libellé exact) est pesé comme un refus : la carte se pose sur un contrôle sans importance, pas dessus',
+      (label) => {
+        // Le refus est EN BAS, là où la carte se poserait d'abord à égalité ; deux autres contrôles du mur, sans rapport avec un refus, tiennent le haut et le milieu
+        const other = answer('Voir nos partenaires', 8, 58)
+        const middle = answer('Lire la suite', 350, 400)
+        const refusal = answer(label, 700, 750)
+        const el = wallCard()
+
+        const fit = fitGuide(window, el, wallOptions([other, middle, refusal]))
+
+        expect(el.hidden).toBe(false)
+        expect(el.classList.contains('top')).toBe(true) // ni sur le refus (bas), ni la première place par défaut
+        fit.stop()
+      },
+    )
+
     it('une zone sans réponse existe (le texte du mur, au milieu) : la barre s’y pose et ne couvre aucune réponse', () => {
       const refuse = answer('Continuer sans accepter', 10, 60)
       const accept = answer('Tout accepter', 690, 760)
