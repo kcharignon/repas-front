@@ -95,6 +95,12 @@ class DriveActivity : Activity() {
     }
     private var abandonDialog: AlertDialog? = null
 
+    /** La boîte de diagnostic native (DRV-759) : ce que l'application sait, puis ce que l'agent a dit ; les annonces de l'agent et les pages chargées sont comptées pour elle. */
+    private var diagnosticBody: TextView? = null
+    private var diagnosticAgentLines: List<String> = emptyList()
+    private var agentHellos = 0
+    private var pagesStarted = 0
+
     /** La fenêtre vide qui reçoit un `window.open` avant que son adresse soit confiée à la WebView principale. */
     private var popup: WebView? = null
     private var loadFailed = false
@@ -143,7 +149,9 @@ class DriveActivity : Activity() {
             send = { agent.openSelftest() },
             show = { resultPanel.show(it, R.string.selftest_title, autoCopy = true) },
         )
-        agent = AgentHost.create(repasApp.agentLoad, BuildConfig.DEBUG, site, onHello = { if (delivery.hello()) sendPlan() }) { message ->
+        agent = AgentHost.create(repasApp.agentLoad, BuildConfig.DEBUG, site, onHello = { agentHellos++; if (delivery.hello()) sendPlan() }) { message ->
+            // Les deux lignes que l'agent dit à la boîte de diagnostic (DRV-759) : du texte seul, jamais une décision
+            if (message.type == "log") return@create onAgentDiagnosticLines(message.text)
             if ((message.type == "result" || message.type == "setup-result") && onAgentResult(message.text)) return@create
             // La variante de débogage montre le résultat de l'essai et le rapport du test automatique.
             if (BuildConfig.DEBUG && !selftestRun.onAgentMessage(message.type, message.text)) {
@@ -211,8 +219,9 @@ class DriveActivity : Activity() {
     }
 
     private fun openFirstPage() {
-        webView.loadUrl(firstUrl())
-        updateStoreBanner(pass.current()?.request?.startUrl)
+        val first = firstUrl()
+        webView.loadUrl(first)
+        updateStoreBanner(first)
     }
 
     /**
@@ -230,9 +239,16 @@ class DriveActivity : Activity() {
         }
     }
 
-    private fun firstUrl(): String =
-        pass.current()?.request?.startUrl
-            ?: DriveEntry.startPage(intent?.getStringExtra(EXTRA_START_URL), site)
+    private fun firstUrl(): String {
+        val request = pass.current()?.request
+        // Un plan dont le magasin vient d'être ouvert ici (DRV-759, « Utiliser ce magasin ») s'ouvre sur sa page, pas sur l'accueil où il faudrait choisir son magasin une seconde fois ; la page refusée par le site ramène à l'accueil
+        if (request is DrivePlan) {
+            val opening = request.openingPage(repasApp.storePaths.of(site))
+            if (opening != request.startUrl) homeTarget = opening
+            return opening
+        }
+        return request?.startUrl ?: DriveEntry.startPage(intent?.getStringExtra(EXTRA_START_URL), site)
+    }
 
     override fun onResume() {
         super.onResume()
@@ -353,6 +369,7 @@ class DriveActivity : Activity() {
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             loadFailed = false
+            pagesStarted++
             delivery.pageStarted()
             watch.pageStarted()
             timers.removeCallbacks(onAgentTimeout)
@@ -704,7 +721,45 @@ class DriveActivity : Activity() {
 
     /** Le diagnostic de l'agent : une commande sur le pont, jamais un fragment d'adresse (un fragment trop long fait échouer le site). */
     private fun openAgentDiagnostic() {
-        if (!agent.openDiagnostic()) toast(agent.unavailableMessage())
+        // La boîte native s'ouvre toujours (DRV-759) : une page sans agent est justement ce qu'elle doit dire ; l'écran de l'agent, s'il y en a un, s'ouvre derrière
+        diagnosticAgentLines = emptyList()
+        val body = label("", sizeSp = 14f).apply { setTextIsSelectable(true) }
+        diagnosticBody = body
+        val box = LinearLayout(this).apply {
+            setPadding(dp(20), dp(12), dp(20), dp(4))
+            addView(body, LinearLayout.LayoutParams(MATCH, WRAP))
+        }
+        refreshDiagnostic()
+        AlertDialog.Builder(this)
+            .setTitle(R.string.menu_diagnostic)
+            .setView(android.widget.ScrollView(this).apply { addView(box) })
+            .setPositiveButton(R.string.ok, null)
+            .setOnDismissListener { diagnosticBody = null }
+            .show()
+        agent.openDiagnostic()
+    }
+
+    private fun onAgentDiagnosticLines(text: String) {
+        diagnosticAgentLines = AgentDiagnostic.agentLines(text)
+        refreshDiagnostic()
+    }
+
+    private fun refreshDiagnostic() {
+        val body = diagnosticBody ?: return
+        val request = pass.current()?.request
+        val url = webView.url
+        body.text = AgentDiagnostic.report(
+            page = AgentDiagnostic.pageCategory(site, url),
+            agentHellos = agentHellos,
+            pagesStarted = pagesStarted,
+            pass = when {
+                request == null -> "aucun"
+                request.isSetup -> "lecture du magasin"
+                else -> "plan"
+            },
+            banner = StoreBanner.of(request, url, watch.trouble(url), basketHint, watch.isLoading(), storeKnown = repasApp.storePaths.of(site).hasPath()).name,
+            agentLines = diagnosticAgentLines,
+        ).joinToString("\n\n")
     }
 
     /**

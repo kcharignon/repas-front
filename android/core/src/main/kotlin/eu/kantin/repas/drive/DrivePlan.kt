@@ -155,6 +155,14 @@ class DrivePlan private constructor(
     override val startUrl: String get() = site.startUrl
     override val isSetup: Boolean get() = false
 
+    /**
+     * Où le passage s'ouvre (DRV-759) : la page du magasin du plan quand l'utilisateur vient de l'ouvrir dans l'application ([memory] retient sa dernière page de magasin, avec la
+     * ville), sinon l'accueil de l'enseigne ([startUrl]). Mesuré après « Utiliser ce magasin » : le parcours repartait de l'accueil, champ du code postal vide, et la personne
+     * devait choisir son magasin une seconde fois. Seule la mémoire de l'application parle (une page de magasin vue dans la WebView, de forme vérifiée), jamais une adresse
+     * construite avec le plan ; un site qui refuse cette page ramène à l'accueil ([DriveEntry.fallsBack]).
+     */
+    fun openingPage(memory: StorePathMemory?): String = memory?.takeIf { it.site === site }?.storeHomeUrl(storeHost, storeId, storeId) ?: startUrl
+
     override fun abortedResult(agentVersion: String): String = abortedResultJson(runId, storeId, agentVersion, "Envoi abandonné.")
 
     companion object {
