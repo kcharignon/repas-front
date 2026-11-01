@@ -70,7 +70,7 @@ export function guideProps(
   stage: 'waiting' | 'late' | 'done',
   steps: { index: number; total: number },
   adapter: RetailerAdapter,
-  extra: { setup?: boolean } = {},
+  extra: { setup?: boolean; byPostalCode?: boolean } = {},
 ): GuideProps {
   // La personne est DÉJÀ sur la page de connexion : rien à désigner, elle remplit le formulaire
   const form = step === 'login' && onLoginPage(adapter)

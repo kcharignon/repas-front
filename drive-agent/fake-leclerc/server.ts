@@ -18,6 +18,9 @@ import {
   LOGIN_PATH,
   loginFormPage,
   MEMBER_COOKIE,
+  CONSENT_COOKIE,
+  STORE_CHOSEN_COOKIE,
+  firstUsePage,
   basketPage,
   errorPage,
   homePage,
@@ -178,6 +181,8 @@ export interface Behavior {
    * PERSONNE valide (DRV-751) : il pose le cookie de connexion et la ramène à l'accueil du magasin, dont les pages montrent alors un client connecté.
    */
   loginForm?: boolean
+  /** Le mur de cookies plein écran de l'accueil national de la forme `homeForm: 'first-use'` (DRV-753), tant que la personne n'a pas répondu. */
+  cookieWall?: boolean
 }
 
 export type RequestKind = 'search' | 'cart' | 'page' | 'repas' | 'control' | 'image' | 'other'
@@ -614,6 +619,22 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
         return send(res, behavior.homeStatus, errorPage(), HTML)
       }
       entry.status = 200
+      const hasCookie = (name: string) =>
+        new RegExp(`(?:^|;\\s*)${name}=1(?:;|$)`).test(req.headers.cookie ?? '')
+      if (behavior.homeForm === 'first-use') {
+        const origin = `//${STORE.host}${portSuffixOf(req.headers.host)}`
+        return send(
+          res,
+          200,
+          firstUsePage(`${origin}${PAGE_PATH}/`, {
+            member: cookieMember,
+            chosen: hasCookie(STORE_CHOSEN_COOKIE),
+            consent: hasCookie(CONSENT_COOKIE),
+            wall: behavior.cookieWall === true,
+          }),
+          HTML,
+        )
+      }
       // Liens sans schéma, vers le nom du faux magasin sur le même port : ils suivent le schéma de la page (HTTP en test, HTTPS dans l'émulateur).
       const origin = `//${STORE.host}${portSuffixOf(req.headers.host)}`
       const start =
@@ -636,7 +657,7 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
       home &&
       path === LOGIN_PATH &&
       req.method === 'GET' &&
-      behavior.homeForm === 'login-first'
+      (behavior.homeForm === 'login-first' || behavior.homeForm === 'first-use')
     ) {
       // La connexion de l'accueil de l'enseigne, seulement pour la forme `login-first` (DRV-748) : un bouton que la personne touche.
       entry.kind = 'page'

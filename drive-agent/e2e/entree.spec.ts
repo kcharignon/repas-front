@@ -81,7 +81,7 @@ test('PREUVE : de l’arrivée du plan à l’écran de choix d’un produit nou
   })
 })
 
-test('l’accueil sans le lien (page d’un visiteur) : l’agent attend la fenêtre, puis le bandeau dit de toucher le bouton, rien n’est suivi ni écrit', async ({
+test('l’accueil sans le bouton (aucun magasin choisi) : l’agent attend la fenêtre, puis la carte du guide dit de choisir son magasin (jamais « Touche … »), rien n’est suivi ni écrit', async ({
   page,
   agentCode,
 }) => {
@@ -91,14 +91,17 @@ test('l’accueil sans le lien (page d’un visiteur) : l’agent attend la fen�
     app.answerHello(PLAN)
 
     await expect(page.getByRole('heading', { name: OPENING })).toBeVisible()
-    await expect(page.getByRole('heading', { name: MANUAL })).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible({
+      timeout: 15_000,
+    })
+    await expect(page.getByRole('heading', { name: MANUAL })).toHaveCount(0)
     expect(new URL(page.url()).pathname).toBe('/')
     expect(fake.paced()).toEqual([])
     expect(fake.cart()).toEqual({})
   })
 })
 
-test('un défi de l’anti-robot dans la page : rien n’est touché ; une fois le bouton touché à la main, l’envoi continue tout seul', async ({
+test('un défi de l’anti-robot dans la page : rien n’est touché, la carte de vérification (jamais « Touche … ») ; une fois le bouton touché à la main, l’envoi continue tout seul', async ({
   page,
   agentCode,
 }) => {
@@ -107,7 +110,10 @@ test('un défi de l’anti-robot dans la page : rien n’est touché ; une fois 
     const app = await openWithBridge(page, fake, agentCode, { path: '/', origin: home })
     app.answerHello(PLAN)
 
-    await expect(page.getByRole('heading', { name: MANUAL })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Leclerc demande une vérification' }),
+    ).toBeVisible()
+    await expect(page.getByRole('heading', { name: MANUAL })).toHaveCount(0)
     expect(new URL(page.url()).pathname).toBe('/')
 
     // Quand l'utilisateur touche lui-même le bouton, l'agent reprend sur la page du magasin, sans autre geste
@@ -160,7 +166,11 @@ test('« choisir mon magasin » vers un autre magasin que celui du plan : jamais
     const app = await openWithBridge(page, fake, agentCode, { path: '/', origin: home })
     app.answerHello(PLAN)
 
-    await expect(page.getByRole('heading', { name: MANUAL })).toBeVisible({ timeout: 15_000 })
+    // Pas de « Commencer mes courses » dans la page (le magasin choisi n'est pas celui du plan) : la carte du guide, jamais « Touche … »
+    await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible({
+      timeout: 15_000,
+    })
+    await expect(page.getByRole('heading', { name: MANUAL })).toHaveCount(0)
     expect(new URL(page.url()).pathname).toBe('/')
     expect(fake.cart()).toEqual({})
   })

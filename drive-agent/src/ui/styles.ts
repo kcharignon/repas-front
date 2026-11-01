@@ -15,6 +15,7 @@ export const STYLES = `
 .overlay.sheet{background:transparent;pointer-events:none;overflow:visible}
 .overlay.sheet>.screen{flex:none;max-height:70%;margin-top:auto;border-top:3px solid var(--accent);background:var(--bg);pointer-events:auto}
 .overlay.sheet>.screen.guide{flex:none;max-height:calc(100% - 24px);margin:auto 8px var(--clear);padding:16px 18px 14px;display:flex;flex-direction:column;gap:10px;border:1.5px solid var(--g-line);border-radius:22px;background:var(--g-card);color:var(--g-fg);box-shadow:0 8px 24px var(--g-shadow)}
+.overlay.sheet>.screen.guide.top{margin:8px 8px auto}
 .guide h1{margin:0;font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:24px;line-height:1.15;font-weight:700}
 .guide .g-text{margin:0;font-size:17px;line-height:1.4}
 .guide .g-head{display:flex;align-items:center;gap:10px}

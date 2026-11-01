@@ -16,7 +16,7 @@ import {
   type ResultMessage,
   type SetupResultMessage,
 } from '../../protocol'
-import { PAGE_PATH, type FakeLeclerc } from '../../fake-leclerc/server'
+import { HOME_HOST, PAGE_PATH, type FakeLeclerc } from '../../fake-leclerc/server'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const INJECTION = readFileSync(
@@ -103,6 +103,21 @@ export interface FakeApp {
   received(type: string): Promise<Record<string, unknown>>
 }
 
+/** Une page de magasin d'un drive : `/magasin-N-N-Ville…` (`RetailerSite.isStorePage`, avec la ville pour que l'application retienne le magasin). */
+const STORE_PAGE = /^\/magasin-\d+-\d+(-[^/]*)?(\/|$)/i
+const LOGIN_PAGE = /^\/connexion(\.aspx)?(\/|$)/i
+
+/**
+ * Où l'application Android livre le plan à l'agent (`RetailerSite.acceptsPlanOn`, DRV-753) : une page de magasin, l'accueil de l'enseigne (la racine de `HOME_HOST`) et la page
+ * de connexion hors d'un magasin SEULEMENT quand un magasin a déjà été ouvert (`StorePathMemory.hasPath`) ; jamais une autre page.
+ */
+export function applicationDelivers(url: string, storeKnown: boolean): boolean {
+  const { hostname, pathname } = new URL(url)
+  if (STORE_PAGE.test(pathname)) return true
+  if (hostname === HOME_HOST && pathname === '/') return true
+  return storeKnown && LOGIN_PAGE.test(pathname)
+}
+
 /** Injecte l'agent comme l'application Android : `injection.js` avec l'agent à la place du marqueur, par-dessus un faux canal natif. */
 export async function openWithBridge(
   page: Page,
@@ -115,6 +130,11 @@ export async function openWithBridge(
      * que celui de Leclerc (DRV-717 : `fake.site` du faux site d'Auchan), son origine, qui est alors obligatoire.
      */
     origin?: string
+    /**
+     * Livrer le plan comme l'application (`applicationDelivers`) : sur une page qu'elle ne sert pas, l'agent ne reçoit rien et ne peut rien afficher. Par défaut (faux), le
+     * plan est livré à chaque page, comme avant.
+     */
+    asApplication?: boolean
   } = {},
 ): Promise<FakeApp> {
   const path = options.path ?? `${PAGE_PATH}/`
@@ -122,7 +142,16 @@ export async function openWithBridge(
   if (origin === undefined) throw new Error('Une page ouverte sans origine : donne `origin`.')
   const messages: Record<string, unknown>[] = []
   let hello: string | null = null
+  // L'application retient un magasin dès qu'elle a chargé une page de magasin (`StorePathMemory.remember`)
+  let storeKnown = false
+  if (options.asApplication === true) {
+    page.on('framenavigated', (frame) => {
+      if (frame === page.mainFrame() && STORE_PAGE.test(new URL(frame.url()).pathname))
+        storeKnown = true
+    })
+  }
   const deliver = async (text: string) => {
+    if (options.asApplication === true && !applicationDelivers(page.url(), storeKnown)) return
     // Comme l'application, qui parle à la page une fois chargée ; la page peut se recharger : au prochain « hello », on réessaie.
     await page.waitForFunction(() => document.readyState !== 'loading').catch(() => undefined)
     await page

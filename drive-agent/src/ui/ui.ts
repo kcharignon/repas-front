@@ -1,6 +1,7 @@
 // L'interface superposée : un Shadow DOM fermé dans un conteneur plein écran, au-dessus de la page de l'enseigne.
 import type { RetailerInfo } from '../retailers/names'
 import { append, clear, h } from './dom'
+import { keepClear } from './keep-clear'
 import { createPointer, type Pointer } from './pointer'
 import { displayLayout, measureDisplay, type DisplayLayout } from './scale'
 import { installStyles } from './sheet'
@@ -87,6 +88,8 @@ export function createUi(options: UiOptions): UiHandle {
   let serial = 0
   /** Le cadre et le repère que le guide pose dans la page (DRV-751), dans un second conteneur ; créé au premier besoin. */
   let pointer: Pointer | null = null
+  /** Arrête la veille des boutons d'un mur de cookies (DRV-753) ; `null` quand l'écran n'en a pas. */
+  let stopClear: (() => void) | null = null
 
   function mount() {
     if (view) return view
@@ -120,6 +123,8 @@ export function createUi(options: UiOptions): UiHandle {
       const shown = mount()
       shown.current?.dispose?.()
       pointer?.clear()
+      stopClear?.()
+      stopClear = null
       const mine = ++serial
       return new Promise((resolve) => {
         const render = RENDERERS[screen] as (
@@ -143,6 +148,7 @@ export function createUi(options: UiOptions): UiHandle {
           pointer ??= createPointer({ win, attachShadow: attach, mode })
           pointer.point(rendered.pointAt, () => rendered.el.getBoundingClientRect())
         }
+        if (rendered.keepClear === true) stopClear = keepClear(win, rendered.el)
         rendered.start?.()
         rendered.el.scrollTop = 0
         const first = rendered.focus ?? rendered.el.querySelector<HTMLElement>(FOCUSABLE)
@@ -155,6 +161,8 @@ export function createUi(options: UiOptions): UiHandle {
     close() {
       serial += 1
       pointer?.clear()
+      stopClear?.()
+      stopClear = null
       view?.current?.dispose?.()
       view?.host.remove()
       if (view) {
