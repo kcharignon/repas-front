@@ -291,6 +291,18 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
 
   // La sentinelle : un élément sans hauteur sous la liste ; quand elle approche de la zone visible, le lot suivant s'ajoute.
   const more = h('div', { class: 'more', hidden: true, attrs: { 'aria-hidden': 'true' } })
+  // Les résultats peu pertinents (DRV-757) : au bout de la liste, « Chercher autre chose » ramène au champ de recherche, sans remonter à la main
+  const elsewhere = h('button', {
+    text: S.picker.searchLabel,
+    class: 'secondary',
+    attrs: { type: 'button' },
+    on: {
+      click: () => {
+        form.scrollIntoView({ block: 'center' })
+        input.focus()
+      },
+    },
+  })
   let all: readonly PickerItem[] = []
   /** Les produits que la liste montre : tous, ou ceux du rayon choisi. */
   let visible: readonly PickerItem[] = []
@@ -602,6 +614,7 @@ export function renderPicker(zone: HTMLElement, props: PickerProps, hooks: Picke
       note,
       list,
       more,
+      elsewhere,
     ),
   )
   return {

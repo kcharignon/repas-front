@@ -40,11 +40,42 @@ export interface PointerOptions {
   mode: 'closed' | 'open'
 }
 
+/** Ce que le repère entoure : un contrôle de la page, ou le seul MOT de ce contrôle qu'il faut toucher (un menu à deux zones, DRV-757). */
+export interface Spot {
+  element: HTMLElement
+  word?: string | undefined
+}
+
 export interface Pointer {
-  /** Entoure le contrôle que `get` rend (relu à chaque mesure) ; `card` rend la boîte de la carte du guide, que le repère ne doit pas toucher. */
-  point(get: () => HTMLElement | null, card: () => DOMRect | null): void
+  /**
+   * Entoure le contrôle que `get` rend (relu à chaque mesure) ; `card` rend la boîte de la carte du guide, que le repère ne doit pas toucher ; `avoid` rend ce que le repère
+   * ne doit pas recouvrir non plus (la ville proposée sous le champ, les magasins) : sans place libre au-dessous ni au-dessus, le cadre reste et le repère s'efface.
+   */
+  point(get: () => Spot | null, card: () => DOMRect | null, avoid?: () => readonly DOMRect[]): void
+  /** Le contrôle à entourer a peut-être changé : il est relu à la prochaine mesure. */
+  refresh(): void
   /** Retire le cadre, le repère et les écouteurs. */
   clear(): void
+}
+
+/** Le repère se retire dès que le contrôle est touché (ou que la personne y écrit) ; ce temps suffit à une navigation. */
+const TOUCHED_MS = 2_000
+
+/** La boîte du seul mot `word` dans `element` (un menu « Connexion / Inscription » a deux zones) ; à défaut, celle de tout l'élément. */
+function boxOf(element: HTMLElement, word: string | undefined): DOMRect {
+  if (word !== undefined) {
+    const walker = element.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const at = (node.textContent ?? '').toLowerCase().indexOf(word.toLowerCase())
+      if (at < 0) continue
+      const range = element.ownerDocument.createRange()
+      range.setStart(node, at)
+      range.setEnd(node, at + word.length)
+      const box = range.getBoundingClientRect()
+      if (box.width > 0 && box.height > 0) return box
+    }
+  }
+  return element.getBoundingClientRect()
 }
 
 const SVG = ['http:', '', 'www.w3.org', '2000', 'svg'].join('/')
@@ -95,8 +126,12 @@ export function createPointer(options: PointerOptions): Pointer {
     tag: HTMLElement
     arrow: Element
   } | null = null
-  let get: () => HTMLElement | null = () => null
+  let get: () => Spot | null = () => null
   let card: () => DOMRect | null = () => null
+  let avoid: () => readonly DOMRect[] = () => []
+  /** Le mot à entourer, et le dernier moment où le contrôle a été touché. */
+  let word: string | undefined
+  let touchedAt = 0
   let scrolled = false
   let frame = 0
   let timer = 0
@@ -146,7 +181,14 @@ export function createPointer(options: PointerOptions): Pointer {
     const at = Date.now()
     if (cached?.isConnected !== true || refresh) {
       if (refresh || at - resolvedAt >= RESOLVE_MS) {
-        cached = get()
+        const spot = get()
+        // Un autre contrôle : le repère revient (la page ne défile qu'une fois pour lui)
+        if (spot?.element !== cached) {
+          scrolled = false
+          touchedAt = 0
+        }
+        cached = spot?.element ?? null
+        word = spot?.word
         resolvedAt = at
         refresh = false
       } else if (cached?.isConnected !== true) {
@@ -158,10 +200,18 @@ export function createPointer(options: PointerOptions): Pointer {
 
   function layout(): void {
     if (view === null) return
+    // Un conteneur que la page a retiré ou réécrit (un panneau qui s'ouvre) est remis, épinglé (DRV-757)
+    if (!view.host.isConnected) win.document.documentElement.appendChild(view.host)
+    pin(view.host)
     const target = resolve()
-    const rect = target?.isConnected === true ? target.getBoundingClientRect() : null
+    const rect = target?.isConnected === true ? boxOf(target, word) : null
     const s = scale()
+    // Touché, ou le champ où la personne écrit : le repère n'a plus rien à dire (il recouvrirait la ville proposée dessous)
+    const touched =
+      target !== null &&
+      (Date.now() - touchedAt < TOUCHED_MS || target.contains(win.document.activeElement))
     const visible =
+      !touched &&
       rect !== null &&
       rect.width > 0 &&
       rect.height > 0 &&
@@ -178,7 +228,7 @@ export function createPointer(options: PointerOptions): Pointer {
       return layout()
     }
     const out = (STROKE + GAP) * s
-    const radius = px(win.getComputedStyle(target).borderTopLeftRadius)
+    const radius = word === undefined ? px(win.getComputedStyle(target).borderTopLeftRadius) : 6
     const { ring, tag } = view
     ring.style.setProperty('left', `${rect.left - out}px`)
     ring.style.setProperty('top', `${rect.top - out}px`)
@@ -191,11 +241,29 @@ export function createPointer(options: PointerOptions): Pointer {
     const height = TAG_HEIGHT * s
     const { low, limit } = room(s)
     const below = rect.bottom + out + CLEARANCE * s
-    const fitsBelow = below + height <= Math.min(limit + CLEARANCE * s - 4 * s, win.innerHeight)
     const above = rect.top - out - CLEARANCE * s - height
-    const placeAbove = !fitsBelow && above >= low
-    tag.classList.toggle('above', placeAbove)
     const left = Math.max(8 * s, Math.min(rect.left, win.innerWidth - width - 8 * s))
+    // Le repère ne couvre pas ce que la page vient d'afficher : au-dessous du contrôle, sinon au-dessus ; sans place libre, le cadre seul
+    const others = [...avoid()].filter((box) => box.width > 0 && box.height > 0)
+    const free = (at: number): boolean =>
+      !others.some(
+        (box) =>
+          box.left < left + width &&
+          box.right > left &&
+          box.top < at + height &&
+          box.bottom > at &&
+          !(
+            box.top <= rect.top + 1 &&
+            box.bottom >= rect.bottom - 1 &&
+            box.left <= rect.left + 1 &&
+            box.right >= rect.right - 1
+          ),
+      )
+    const fitsBelow = below + height <= Math.min(limit + CLEARANCE * s - 4 * s, win.innerHeight)
+    const roomAbove = above >= low
+    const placeAbove = (!fitsBelow || !free(below)) && roomAbove
+    tag.hidden = !(placeAbove ? free(above) : fitsBelow && free(below)) && others.length > 0
+    tag.classList.toggle('above', placeAbove)
     tag.style.setProperty('left', `${left}px`)
     tag.style.setProperty('top', `${placeAbove ? above : below}px`)
     // La flèche vise le milieu du contrôle, sans sortir du repère
@@ -211,8 +279,18 @@ export function createPointer(options: PointerOptions): Pointer {
     schedule()
   }
 
+  /** Un toucher sur le contrôle (ou dedans) : le repère s'efface. */
+  const onTouch = (event: Event): void => {
+    if (cached !== null && event.composedPath().includes(cached)) {
+      touchedAt = Date.now()
+      schedule()
+    }
+  }
+
   const schedule = (): void => {
     if (frame !== 0) return
+    // Une fenêtre sans images d'animation (un document de test) : mesure tout de suite
+    if (typeof win.requestAnimationFrame !== 'function') return layout()
     frame = win.requestAnimationFrame(() => {
       frame = 0
       layout()
@@ -234,15 +312,20 @@ export function createPointer(options: PointerOptions): Pointer {
     view = { host, ring, tag, arrow: tagArrow }
     win.addEventListener('scroll', schedule, { capture: true, passive: true })
     win.addEventListener('resize', onResize)
+    win.addEventListener('pointerdown', onTouch, { capture: true, passive: true })
+    win.addEventListener('focusin', schedule, true)
+    win.addEventListener('focusout', schedule, true)
     win.visualViewport?.addEventListener('resize', onResize)
     win.visualViewport?.addEventListener('scroll', schedule)
     return view
   }
 
   return {
-    point(next, nextCard) {
+    point(next, nextCard, nextAvoid = () => []) {
       get = next
       card = nextCard
+      avoid = nextAvoid
+      touchedAt = 0
       scrolled = false
       cached = null
       resolvedAt = 0
@@ -253,6 +336,10 @@ export function createPointer(options: PointerOptions): Pointer {
       win.clearInterval(timer)
       timer = win.setInterval(layout, REMEASURE_MS)
     },
+    refresh() {
+      refresh = true
+      schedule()
+    },
     clear() {
       win.clearInterval(timer)
       cached = null
@@ -261,6 +348,9 @@ export function createPointer(options: PointerOptions): Pointer {
       if (view === null) return
       win.removeEventListener('scroll', schedule, { capture: true })
       win.removeEventListener('resize', onResize)
+      win.removeEventListener('pointerdown', onTouch, { capture: true })
+      win.removeEventListener('focusin', schedule, true)
+      win.removeEventListener('focusout', schedule, true)
       win.visualViewport?.removeEventListener('resize', onResize)
       win.visualViewport?.removeEventListener('scroll', schedule)
       view.host.remove()

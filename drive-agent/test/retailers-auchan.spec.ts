@@ -121,6 +121,25 @@ describe('la page est celle d’Auchan', () => {
 
   it('aucun magasin choisi (la barre « Choisir vos courses ») : une étape guidée, pas une erreur (DRV-751) ; ni requête ni écriture, la page reste utilisable ; « Arrêter pour l’instant » rend un envoi arrêté', async () => {
     showPage(auchanFixture('accueil-sans-magasin.html'))
+    // jsdom ne mesure rien : la page montre tout ce qu'elle contient (DRV-757 : seul un élément MONTRÉ est désigné)
+    const box = (shown: boolean) =>
+      ({
+        top: 10,
+        bottom: shown ? 50 : 10,
+        left: 0,
+        right: shown ? 200 : 0,
+        width: shown ? 200 : 0,
+        height: shown ? 40 : 0,
+        x: 0,
+        y: 10,
+        toJSON: () => ({}),
+      }) as DOMRect
+    // (le panneau de choix du faux site est fermé : ses éléments n'ont pas de boîte)
+    const shownBoxes = vi
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: Element) {
+        return box(this.closest('#panel') === null)
+      })
     const fetchSpy = journeyFetch()
     Object.assign(window, { fetch: fetchSpy })
     const app = bridge()
@@ -135,7 +154,10 @@ describe('la page est celle d’Auchan', () => {
     ])
     // La carte cite la barre de la page, que la personne n'a plus qu'à toucher ; l'agent la désigne sans y toucher
     expect(screens.propsOf('guide')[0]?.label).toBe('Choisir vos courses')
-    expect(screens.propsOf('guide')[0]?.target?.()?.textContent).toBe('Choisir vos courses')
+    expect(screens.propsOf('guide')[0]?.look?.().target?.element.textContent).toBe(
+      'Choisir vos courses',
+    )
+    expect(screens.propsOf('guide')[0]?.look?.().sub).toBe('bar')
     expect(screens.screens()).not.toContain('error')
     expect(fetchSpy).not.toHaveBeenCalled()
     expect(app.postMessage).not.toHaveBeenCalled()
@@ -145,6 +167,7 @@ describe('la page est celle d’Auchan', () => {
     await vi.waitFor(() => expect(app.postMessage).toHaveBeenCalledOnce())
     expect(resultOf(app.postMessage)).toMatchObject({ outcome: 'aborted' })
     expect(fetchSpy).not.toHaveBeenCalled()
+    shownBoxes.mockRestore()
   })
 
   it('aucun magasin choisi, puis choisi dans la page : l’agent continue TOUT SEUL, une seule lecture du parcours, aucun écran d’erreur, aucun double envoi', async () => {

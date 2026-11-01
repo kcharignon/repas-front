@@ -15,6 +15,7 @@ import {
   type RetailerAdapter,
 } from '../retailers'
 import { own } from '../own'
+import type { ForegroundFacts } from './foreground'
 import { S } from '../ui'
 import { readLastReasons, readLastRefusals, type StorageLike, type WakeLockLike } from '../flow'
 import {
@@ -73,6 +74,8 @@ export interface ChecksDeps {
   originReplaced: boolean | null
   /** L'enseigne de la page : son identifiant, son nom, son domaine et la lecture de ses hôtes. */
   retailer: RetailerInfo
+  /** La fenêtre au premier plan (DRV-757, A2) : des sondes de forme de la page ; absente, la ligne n'est pas écrite. */
+  foreground?: () => ForegroundFacts | null
 }
 
 /** Ce que le rapport montre de la page : jamais le numéro de magasin entier ni un hôte qui ne soit pas de la forme connue. */
@@ -83,6 +86,15 @@ export interface PageFacts {
   store: string
   /** Ce que la page montre de la connexion de l'utilisateur (ticket G) : un état et les noms des signes lus. */
   session?: string
+}
+
+/** La fenêtre au premier plan, ou rien quand la page ne se laisse pas lire. */
+function readForeground(deps: ChecksDeps): ForegroundFacts | null {
+  try {
+    return deps.foreground?.() ?? null
+  } catch {
+    return null
+  }
 }
 
 /** La famille d'hôte d'un magasin (`fd9`), un texte fixe pour le site mobile (ticket J) et pour tout autre hôte : la lecture des hôtes est celle de l'enseigne. */
@@ -548,6 +560,7 @@ export async function runChecks(
     lastRefusals: readLastRefusals(deps.storage),
     cart: cart.facts,
     cartFailure,
+    foreground: readForeground(deps),
   }
 
   if (shelves === undefined) await push(skipped('shelves', shelvesSkip ?? D.pageSkipped))

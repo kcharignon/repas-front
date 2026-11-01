@@ -44,6 +44,7 @@ Le cœur : `android/core/src/main/kotlin/eu/kantin/repas/drive/` (le paquet n'a 
 | `FinalizeOutcome.kt` | la forme du dernier « Finaliser » (un mot, jamais une adresse), son port de stockage (`FinalizeOutcomeStore`) et sa mémoire par enseigne (`FinalizeOutcomeMemories`) |
 | `StorePathMemory.kt` | le chemin du magasin avec sa ville, son port de stockage (`StorePathStore`) et sa mémoire par enseigne (`StorePathMemories`) |
 | `OpeningWatch.kt` | la surveillance de la page où l'envoi attend la page du magasin (`PageTrouble`) |
+| `SiteModeMigration.kt` | la migration unique d'une enseigne vers sa version mobile (DRV-757) : un drapeau, les données du site de l'enseigne d'avant effacées une seule fois (l'effacement lui-même est dans l'application) |
 | `NativeBridge.kt` | les règles du pont `repasNative` : origine, 64 Ko, forme du JSON, réponses |
 | `BridgeMessages.kt` | les règles du canal `repasHost` entre l'application et l'agent : origines du pont d'une enseigne, règles d'origine de la WebView (`originRules`) |
 | `DrivePlan.kt` | le plan reçu de Repas (forme, enseigne du registre, hôte de cette enseigne, bornes), la lecture du magasin et le résultat `aborted` |

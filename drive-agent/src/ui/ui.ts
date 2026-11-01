@@ -1,7 +1,7 @@
 // L'interface superposée : un Shadow DOM fermé dans un conteneur plein écran, au-dessus de la page de l'enseigne.
 import type { RetailerInfo } from '../retailers/names'
 import { append, clear, h } from './dom'
-import { keepClear } from './keep-clear'
+import { fitGuide, type Fit } from './fit'
 import { createPointer, type Pointer } from './pointer'
 import { displayLayout, measureDisplay, type DisplayLayout } from './scale'
 import { installStyles } from './sheet'
@@ -88,8 +88,9 @@ export function createUi(options: UiOptions): UiHandle {
   let serial = 0
   /** Le cadre et le repère que le guide pose dans la page (DRV-751), dans un second conteneur ; créé au premier besoin. */
   let pointer: Pointer | null = null
-  /** Arrête la veille des boutons d'un mur de cookies (DRV-753) ; `null` quand l'écran n'en a pas. */
-  let stopClear: (() => void) | null = null
+  /** La place de la carte du guide (DRV-757) : réduite, en haut ou en bas, ou effacée quand la page a besoin de la place. */
+  let fit: Fit | null = null
+  let present = 0
 
   function mount() {
     if (view) return view
@@ -111,6 +112,13 @@ export function createUi(options: UiOptions): UiHandle {
     win.addEventListener('resize', replace)
     win.visualViewport?.addEventListener('resize', replace)
     win.visualViewport?.addEventListener('scroll', replace)
+    // La page peut retirer ou réécrire un conteneur étranger quand elle se redessine (un panneau qui s'ouvre) : il est remis à sa place, épinglé, sans que la carte revienne de zéro (DRV-757)
+    present = win.setInterval(() => {
+      if (view === null) return
+      if (!view.host.isConnected) win.document.documentElement.appendChild(view.host)
+      pin(view.host)
+      setSheet(view, view.overlay.classList.contains('sheet'))
+    }, 500)
     return view
   }
 
@@ -123,8 +131,8 @@ export function createUi(options: UiOptions): UiHandle {
       const shown = mount()
       shown.current?.dispose?.()
       pointer?.clear()
-      stopClear?.()
-      stopClear = null
+      fit?.stop()
+      fit = null
       const mine = ++serial
       return new Promise((resolve) => {
         const render = RENDERERS[screen] as (
@@ -146,10 +154,24 @@ export function createUi(options: UiOptions): UiHandle {
         setDark(shown, rendered.dark === true)
         if (rendered.pointAt !== undefined) {
           pointer ??= createPointer({ win, attachShadow: attach, mode })
-          pointer.point(rendered.pointAt, () => rendered.el.getBoundingClientRect())
+          pointer.point(
+            rendered.pointAt,
+            () => (rendered.el.hidden ? null : rendered.el.getBoundingClientRect()),
+            rendered.avoid,
+          )
         }
-        if (rendered.keepClear === true)
-          stopClear = keepClear(win, rendered.el, () => rendered.pointAt?.() ?? null)
+        if (rendered.fit !== undefined) {
+          const placing = rendered.fit
+          fit = fitGuide(win, rendered.el, {
+            needs: placing.needs,
+            consent: placing.consent,
+            collapsible: placing.collapsible,
+            pointed: () => rendered.pointAt?.()?.element ?? null,
+            changed: () => pointer?.refresh(),
+          })
+          const placed = fit
+          placing.link.ask = (pref) => placed.ask(pref)
+        }
         rendered.start?.()
         rendered.el.scrollTop = 0
         const first = rendered.focus ?? rendered.el.querySelector<HTMLElement>(FOCUSABLE)
@@ -162,8 +184,9 @@ export function createUi(options: UiOptions): UiHandle {
     close() {
       serial += 1
       pointer?.clear()
-      stopClear?.()
-      stopClear = null
+      fit?.stop()
+      fit = null
+      win.clearInterval(present)
       view?.current?.dispose?.()
       view?.host.remove()
       if (view) {

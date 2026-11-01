@@ -8,7 +8,7 @@ const SVG = ['http:', '', 'www.w3.org', '2000', 'svg'].join('/')
 
 type Shape = readonly [tag: 'path' | 'circle' | 'rect', attrs: Readonly<Record<string, string>>]
 
-export type DecorName = IconName | 'cart' | 'phone'
+export type DecorName = IconName | 'cart' | 'phone' | 'chevron'
 
 const SHAPES: Record<DecorName, readonly Shape[]> = {
   cart: [
@@ -19,6 +19,7 @@ const SHAPES: Record<DecorName, readonly Shape[]> = {
   check: [['path', { d: 'M5 12.5l4.5 4.5L19 7.5' }]],
   home: [['path', { d: 'M4 11l8-7 8 7M6 10v9h12v-9' }]],
   dash: [['path', { d: 'M6 12h12' }]],
+  chevron: [['path', { d: 'M6 15l6-6 6 6' }]],
   attention: [['path', { d: 'M12 7v6M12 17h.01' }]],
   phone: [
     ['rect', { x: '7', y: '2.5', width: '10', height: '19', rx: '2.5' }],

@@ -14,6 +14,88 @@ export interface GuideTarget {
   element: HTMLElement
   /** Le libellé lisible du contrôle (40 caractères au plus), `null` s'il n'en a pas (une icône sans texte) : le message ne cite alors aucun libellé. */
   label: string | null
+  /** Le seul MOT du contrôle à entourer (DRV-757 : « Connexion » d'un menu « Connexion / Inscription », qui a deux zones à toucher) ; absent : tout le contrôle. */
+  word?: string
+}
+
+/**
+ * La sous-étape RÉELLE où en est la personne, lue dans la page (DRV-757) : la carte dit chaque fois quoi faire MAINTENANT. `field` : le champ du code postal est à remplir ;
+ * `city` : une ville est proposée ; `shop` : des magasins sont proposés ; `menu` : le menu est fermé ; `connexion` : le menu montre « Connexion » ; `signup` : la page est la
+ * création de compte ; `form` : la page est la connexion ; `code` : la page attend le code reçu par e-mail ; `bar` : la barre du magasin est à toucher ; `confirm` : la page demande
+ * de garder le magasin ; `wall` : le mur de cookies est là, la personne y répond d'abord.
+ */
+export type GuideSub =
+  | 'field'
+  | 'city'
+  | 'shop'
+  | 'bar'
+  | 'confirm'
+  | 'wall'
+  | 'menu'
+  | 'connexion'
+  | 'signup'
+  | 'form'
+  | 'code'
+
+/**
+ * Ce que la page montre d'une étape guidée (DRV-757), une lecture de la page seule : la sous-étape (`null` : la page ne le dit pas, la carte garde sa phrase générale), le contrôle
+ * à entourer, et ce que la carte ne doit JAMAIS cacher (`keep`, les contrôles à toucher) ou cache le moins possible (`maybe`, les suivants d'une liste).
+ */
+export interface GuideLook {
+  sub: GuideSub | null
+  target: GuideTarget | null
+  keep: readonly HTMLElement[]
+  maybe: readonly HTMLElement[]
+  /** Un défi (cadre de vérification) couvre une grande part de la fenêtre : la carte se réduit tant qu'il est là. */
+  crowded?: boolean
+}
+
+/** Les mots de la carte pour une sous-étape : la phrase, et la ligne courte de la barre réduite. Propres à l'enseigne (jamais dans l'interface). */
+export interface GuideSubText {
+  readonly text: string
+  readonly short: string
+  /** La phrase sans le libellé du contrôle, quand `text` en cite un (`{label}`) et que la page n'en donne aucun. */
+  readonly bare?: string
+}
+
+/**
+ * Un contrôle que la page montre vraiment (DRV-757) : une boîte non nulle, pas hors de l'écran sur le côté (un menu replié), et, quand le navigateur sait le dire,
+ * ni `visibility: hidden`, ni `opacity: 0`, ni `display: none` d'un ancêtre. Une lecture de la page seule.
+ */
+export function isShown(element: Element): boolean {
+  const rect = element.getBoundingClientRect()
+  if (!(rect.width > 0 && rect.height > 0)) return false
+  const win = element.ownerDocument.defaultView
+  if (win !== null && (rect.right <= 0 || rect.left >= win.innerWidth)) return false
+  const check = (element as { checkVisibility?: (options: object) => boolean }).checkVisibility
+  return typeof check === 'function'
+    ? check.call(element, { visibilityProperty: true, opacityProperty: true })
+    : true
+}
+
+/** Une part de la fenêtre au-delà de laquelle un cadre de vérification « couvre » la page (la carte se réduit). */
+const FRAME_COVER = 0.3
+
+/**
+ * Les cadres de vérification anti-robot que la page montre (`iframe` dont l'adresse ou le titre contient l'un de `words`, par exemple `hcaptcha` ou `recaptcha`) : à ne pas couvrir ;
+ * `crowded` : l'un d'eux couvre plus de 30 % de la fenêtre. Une lecture de la page seule : l'agent ne les touche jamais.
+ */
+export function challengeFrames(
+  root: Document,
+  words: readonly string[],
+): { frames: HTMLElement[]; crowded: boolean } {
+  const win = root.defaultView
+  const frames = [...root.querySelectorAll<HTMLElement>('iframe')].filter((frame) => {
+    const text =
+      `${frame.getAttribute('src') ?? ''} ${frame.getAttribute('title') ?? ''}`.toLowerCase()
+    return words.some((word) => text.includes(word)) && isShown(frame)
+  })
+  const area = (win?.innerWidth ?? 0) * (win?.innerHeight ?? 0)
+  const crowded = frames.some((frame) => {
+    const { width, height } = frame.getBoundingClientRect()
+    return area > 0 && (width * height) / area > FRAME_COVER
+  })
+  return { frames, crowded }
 }
 
 /** Un texte comparable : sans accent, minuscules, apostrophes droites, espaces réduites. */
