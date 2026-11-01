@@ -602,6 +602,16 @@ describe('le guide d’une étape (DRV-751)', () => {
       )
     })
 
+    it('DRV-757 : devant un mur de cookies la carte est une barre (jamais un grand bouton « Arrêter » sur le mur) : le lien du haut ne se découvre pas sous elle', () => {
+      const handle = open()
+      void handle.show(
+        'guide',
+        props({ look: () => ({ sub: 'wall', target: null, keep: [], maybe: [] }) }),
+      )
+
+      expect(shadow().querySelector('.screen.guide.min')).not.toBeNull()
+    })
+
     it('le mur de cookies : la carte dit d’abord d’y répondre, la personne choisit', () => {
       const handle = open()
       void handle.show(

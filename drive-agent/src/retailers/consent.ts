@@ -42,8 +42,14 @@ function labelsOf(element: Element): string[] {
   }
   return labels
     .filter((label): label is string => label !== null && label.length <= MAX_LABEL * 4)
-    .map(foldLabel)
+    .map(answerOf)
 }
+
+/**
+ * Un libellé de réponse sans la ponctuation et les flèches qui l'entourent : « Continuer sans accepter → » (le lien du HAUT d'un mur de Leclerc, mesuré le 2026-11-01) est la réponse
+ * « continuer sans accepter ». Sans cela le lien n'était pas reconnu et la carte pleine se posait dessus.
+ */
+const answerOf = (label: string): string => foldLabel(label).replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '')
 
 /** Les boutons du mur de cookies que la page montre. Une lecture de la page seule, bornée (`MAX_SCANNED`, depuis la fin de la page). */
 export function consentButtons(doc: Document, width: number, height: number): HTMLElement[] {

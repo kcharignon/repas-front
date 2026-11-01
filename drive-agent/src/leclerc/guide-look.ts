@@ -7,6 +7,7 @@ import {
   foldLabel,
   isShown,
   type GuideLook,
+  type GuideSub,
   type GuideTarget,
 } from '../retailers/guide'
 import { findPostalCodeField } from './store-field'
@@ -34,6 +35,11 @@ const FIELD =
   'input:not([type]), input[type="text"], input[type="email"], input[type="password"], input[type="tel"], input[type="number"], input[type="search"]'
 /** La fenêtre du code reçu par e-mail (mesurée) : « Saisissez le code reçu par e-mail ». */
 const CODE_TITLE = 'code recu par e-mail'
+/** Le compte de l'enseigne (`fd<N>-espace-client`) : la connexion, la création de compte, le compte. */
+const ACCOUNT_HOST = /^fd\d{1,3}-espace-client\./
+/** Une case de saisie du mot de passe, ou de l'adresse e-mail. */
+const SECRET = 'input[type="password"]'
+const EMAIL = 'input[type="email"], input[autocomplete="username"]'
 const MENU_LABELS: ReadonlySet<string> = new Set(['menu', 'ouvrir le menu', 'menu principal'])
 
 const none = (target: GuideTarget | null = null, keep: readonly HTMLElement[] = []): GuideLook => ({
@@ -99,7 +105,7 @@ function citySuggestions(root: Document, field: HTMLElement): HTMLElement[] {
  * L'accueil où l'on choisit son magasin : les magasins proposés (le dernier état), sinon la ville proposée sous le champ, sinon le champ du code postal. Le champ reste
  * à garder libre tant que la personne y écrit ou touche sa ville. Aucune valeur de champ n'est lue.
  */
-export function readStoreLook(root: Document): GuideLook {
+function storeLook(root: Document): GuideLook {
   const shops = shopControls(root)
   const [first, ...next] = shops
   if (first !== undefined)
@@ -118,6 +124,23 @@ export function readStoreLook(root: Document): GuideLook {
     }
   // Sans champ de code postal (une page du magasin, où l'on en change) la page ne dit pas où en est la personne
   return { sub: field === null ? null : 'field', target: field, keep: kept, maybe: [] }
+}
+
+/** Les contrôles de la page du choix du magasin qu'on ne couvre pas : « Retour » et « Me géolocaliser » (mesuré : la barre réduite, en haut, les recouvrait en partie). */
+const PAGE_CONTROLS: ReadonlySet<string> = new Set(['retour', 'me geolocaliser'])
+
+/** Voir `storeLook` ; la page du choix du magasin garde aussi libres son « Retour » et son « Me géolocaliser » (le libellé ENTIER, jamais « Retour aux courses de… »). */
+export function readStoreLook(root: Document): GuideLook {
+  const look = storeLook(root)
+  if (look.sub === null) return look
+  const own = [...root.querySelectorAll<HTMLElement>(CONTROL)].filter(
+    (one) =>
+      shown(one) &&
+      [textOf(one), foldLabel(one.getAttribute('aria-label') ?? '')].some((label) =>
+        PAGE_CONTROLS.has(label),
+      ),
+  )
+  return { ...look, keep: [...look.keep, ...own] }
 }
 
 /** La page demande-t-elle le code reçu par e-mail ? Un titre ou une fenêtre que la page montre. */
@@ -156,6 +179,18 @@ function formControls(root: Document): { keep: HTMLElement[]; crowded: boolean }
 }
 
 /**
+ * Où en est la connexion, lu dans la page (deux temps : l'adresse e-mail, puis le mot de passe avec la case « Je suis un humain ») : le code reçu par e-mail d'abord, puis le cadre de
+ * vérification ouvert (la personne le fait), le mot de passe, l'adresse e-mail ; la page ne dit rien de connu : la phrase d'ensemble. Aucune valeur de champ n'est lue.
+ */
+function loginSub(root: Document, crowded: boolean): GuideSub {
+  if (codeAsked(root)) return 'code'
+  if (crowded) return 'human'
+  if ([...root.querySelectorAll<HTMLElement>(SECRET)].some(shown)) return 'password'
+  if ([...root.querySelectorAll<HTMLElement>(EMAIL)].some(shown)) return 'email'
+  return 'form'
+}
+
+/**
  * La connexion. Par l'ADRESSE de la page d'abord (elle ne ment pas, d'une origine à l'autre) : la création de compte (où mène « Inscription », la connexion y est un lien « Me
  * connecter »), la page de connexion (et sa fenêtre du code reçu par e-mail). Sur les pages du magasin de la version mobile : le mot « Connexion » du menu, qui
  * réunit deux zones à toucher (« Connexion » et « / Inscription ») : on n'entoure que le mot ; menu fermé, le bouton du menu.
@@ -170,9 +205,13 @@ export function readLoginLook(
     const link = findControl(root, LOGIN_LABELS)
     return { ...none(link, link === null ? [] : [link.element]), sub: 'signup' }
   }
-  if (/authentification\.aspx|\/connexion/.test(path)) {
+  // La page de connexion : son adresse, ou toute page du compte de l'enseigne qui n'est pas le compte connecté (une page de connexion d'un chemin inconnu)
+  if (
+    /authentification\.aspx|\/connexion/.test(path) ||
+    (ACCOUNT_HOST.test(location.hostname.toLowerCase()) && !/home-espace-client/.test(path))
+  ) {
     const { keep, crowded } = formControls(root)
-    return { ...none(null, keep), sub: codeAsked(root) ? 'code' : 'form', crowded }
+    return { ...none(null, keep), sub: loginSub(root, crowded), crowded }
   }
   if (!mobilePage) return none(findControl(root, LOGIN_CONTROL_LABELS))
   const login = findControl(root, LOGIN_CONTROL_LABELS)

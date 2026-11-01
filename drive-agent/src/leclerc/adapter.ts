@@ -424,6 +424,10 @@ const STORE_CITY = /^\/magasin-\d{1,12}-\d{1,12}-([^/?#]+)/i
  */
 const LOGIN_PAGE =
   /(?:^|\/)(?:connexion(?:\.aspx)?|authentification\.aspx|creation-compte[a-z0-9-]*\.aspx)(?:\/|$)/i
+/** Les pages du COMPTE de l'enseigne : `fd<N>-espace-client` (connexion, création de compte, compte). */
+const ACCOUNT_HOST = /^fd\d{1,3}-espace-client\.leclercdrive\.fr$/
+/** Le compte de la personne connectée (`home-espace-client-ccc.aspx`) n'est pas une page de connexion. */
+const ACCOUNT_HOME = /home-espace-client/i
 /** Une redirection vers une page de connexion. */
 const LOGIN_PATH = /connexion|identif|login|authent/i
 
@@ -1502,9 +1506,17 @@ export class LeclercAdapter implements RetailerAdapter {
     return this.pacer.stats()
   }
 
-  /** La page de connexion de Leclerc : `/connexion` ou `/connexion.aspx`, à la racine de l'hôte ou sous le chemin d'un magasin (le même repère que `RetailerSite.loginPath` de l'application). */
+  /**
+   * La page de connexion de Leclerc : `/connexion` ou `/connexion.aspx`, à la racine de l'hôte ou sous le chemin d'un magasin (le même repère que `RetailerSite.loginPath` de
+   * l'application), ou une page du COMPTE de l'enseigne (`fd<N>-espace-client`, DRV-757 : la page de connexion y a mesuré une carte « Choisis ton magasin » ; ce que la personne
+   * y fait, c'est se connecter, quel que soit le chemin exact). Connectée, la page du compte n'est plus celle de la connexion : l'appelant le sait par la session.
+   */
   onLoginPage(): boolean {
-    return LOGIN_PAGE.test(this.deps.location.pathname)
+    const { hostname, pathname } = this.deps.location
+    return (
+      LOGIN_PAGE.test(pathname) ||
+      (ACCOUNT_HOST.test(hostname.toLowerCase()) && !ACCOUNT_HOME.test(pathname))
+    )
   }
 
   /**
@@ -1536,13 +1548,15 @@ export class LeclercAdapter implements RetailerAdapter {
 
   /** La sous-étape lue dans la page (DRV-757) ; sans lecture de la page, le contrôle de `guideTarget` seul. Jamais une erreur. */
   guideLook(step: GuideStep): GuideLook {
+    // Sur la page de connexion on ne lit que la connexion, quelle que soit l'étape demandée
+    const asked = this.onLoginPage() ? 'login' : step
     try {
-      const look = this.deps.look?.(step)
+      const look = this.deps.look?.(asked)
       if (look !== undefined && look !== null) return look
     } catch {
       // La page ne se laisse pas lire : le contrôle seul, ou rien.
     }
-    return { sub: null, target: this.guideTarget(step), keep: [], maybe: [] }
+    return { sub: null, target: this.guideTarget(asked), keep: [], maybe: [] }
   }
 
   readSession(): SessionReading {

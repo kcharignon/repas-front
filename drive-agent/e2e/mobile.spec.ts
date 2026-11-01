@@ -14,7 +14,7 @@ import {
   type FakeLeclerc,
   type MobileBehavior,
 } from '../fake-leclerc/server'
-import { MOBILE_OTHER_PAGE_PATH, MOBILE_PAGE_PATH } from '../fake-leclerc/mobile'
+import { ACCOUNT_PATH, MOBILE_OTHER_PAGE_PATH, MOBILE_PAGE_PATH } from '../fake-leclerc/mobile'
 import type { PlanLine } from '../protocol'
 
 const PLAN = (...lines: PlanLine[]) => planOf(lines, { store: { ...MOBILE_PLAN_STORE } })
@@ -247,12 +247,15 @@ test('premier usage complet : accueil, code postal, ville, magasin, connexion en
       app.answerHello(PLAN(FARINE))
 
       // (1) L'accueil : le champ « Où souhaitez-vous récupérer vos courses ? » est désigné, la carte dit quoi faire ; le mur de cookies reste touchable
-      await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible({
+      // La carte est là (réduite devant le mur de cookies : sa barre est la seule chose visible)
+      await expect(page.locator('.screen.guide')).toBeVisible({
         timeout: 15_000,
       })
-      await expect(page.locator('.g-step').filter({ hasText: 'Étape 1 sur 2' })).toBeVisible()
+      await expect(page.locator('.g-step').filter({ hasText: 'Étape 1 sur 2' })).toBeAttached()
       // Le mur de cookies : la carte dit d'y répondre d'abord, le repère est retiré ; la personne répond, la carte revient au champ
-      await expect(page.getByText('D’abord, réponds aux cookies, dans la page.')).toBeVisible()
+      await expect(
+        page.locator('.g-bar-text').filter({ hasText: 'Réponds aux cookies' }),
+      ).toBeVisible()
       await expect(page.getByText('Touche ici')).toBeHidden()
       await page.getByRole('button', { name: 'Tout accepter' }).click()
       await expect(page.locator('#cookie-wall')).toHaveCount(0)
@@ -279,10 +282,17 @@ test('premier usage complet : accueil, code postal, ville, magasin, connexion en
       // (3) La connexion, en deux temps, sur UNE adresse : la carte dit l'étape de connexion (jamais celle du magasin), y compris pendant la fenêtre du code reçu par e-mail
       await expect(page).toHaveURL(/authentification\.aspx/)
       await expect(
-        page.getByText('Écris ton e-mail, puis ton mot de passe. Tu les tapes toi-même.'),
+        page.getByText('Écris ton adresse e-mail, puis touche « Continuer ».'),
       ).toBeVisible()
       await expect(page.getByText('Choisis ton magasin')).toHaveCount(0)
+      // La page de connexion est l'étape 2 sur 2 : jamais l'étape du magasin (mesuré sur le téléphone : elle redisait « Étape 1 sur 2 · Écris ton code postal »)
+      await expect(page.locator('.g-step').filter({ hasText: 'Étape 2 sur 2' })).toBeAttached()
+      await expect(page.getByRole('heading', { name: 'Connecte-toi' })).toBeAttached()
       await page.locator('#continue').click()
+      // L'adresse est écrite : le mot de passe et la case « Je suis un humain »
+      await expect(
+        page.getByText('Écris ton mot de passe, coche « Je suis un humain », puis valide.'),
+      ).toBeVisible()
       await expect(page.locator('#hcaptcha')).not.toBeChecked()
       await page.locator('#hcaptcha').check()
       await page.locator('#next').click()
@@ -339,8 +349,31 @@ test('« Inscription » touché par erreur : la création de compte dit à la pe
     await page.locator('#to-login').click()
     await expect(page).toHaveURL(/authentification\.aspx/)
     await expect(
-      page.getByText('Écris ton e-mail, puis ton mot de passe. Tu les tapes toi-même.'),
+      page.getByText('Écris ton adresse e-mail, puis touche « Continuer ».'),
     ).toBeVisible()
+  })
+})
+
+test('DRV-757 : une page du compte de l’enseigne dont le chemin est inconnu est quand même la connexion : « Étape 2 sur 2 · Connecte-toi », jamais « Choisis ton magasin » (mesuré sur le téléphone)', async ({
+  page,
+  agentCode,
+}) => {
+  await withMobile({}, async (fake) => {
+    const app = await openWithBridge(page, fake, agentCode, {
+      path: `${ACCOUNT_PATH}/identification-unique.aspx`,
+      origin: fake.mobileOrigins.account,
+    })
+    app.answerHello(PLAN(FARINE))
+
+    await expect(page.locator('.g-step').filter({ hasText: 'Étape 2 sur 2' })).toBeAttached({
+      timeout: 15_000,
+    })
+    await expect(page.getByRole('heading', { name: 'Connecte-toi' })).toBeAttached()
+    await expect(page.locator('.g-text')).toHaveText(
+      'Écris ton adresse e-mail, puis touche « Continuer ».',
+    )
+    await expect(page.getByText('Choisis ton magasin')).toHaveCount(0)
+    await expect(page.getByText('Écris ton code postal')).toHaveCount(0)
   })
 })
 
@@ -356,7 +389,8 @@ test('« Arrêter pour l’instant » pendant le choix du magasin : rien n’est
     })
     app.answerHello(PLAN(FARINE))
 
-    await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible({
+    // La carte est là (réduite devant le mur de cookies : sa barre est la seule chose visible)
+    await expect(page.locator('.screen.guide')).toBeVisible({
       timeout: 15_000,
     })
     await page.getByRole('button', { name: /Arrêter pour l’instant/ }).click()
@@ -459,7 +493,7 @@ async function chooseOtherStore(
     asApplication: true,
   })
   app.answerHello(PLAN(FARINE))
-  await expect(page.getByRole('heading', { name: 'Choisis ton magasin' })).toBeVisible({
+  await expect(page.locator('.screen.guide')).toBeVisible({
     timeout: 15_000,
   })
   await page.getByRole('button', { name: 'Tout accepter' }).click()

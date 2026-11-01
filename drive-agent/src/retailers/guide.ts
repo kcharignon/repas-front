@@ -22,7 +22,7 @@ export interface GuideTarget {
  * La sous-étape RÉELLE où en est la personne, lue dans la page (DRV-757) : la carte dit chaque fois quoi faire MAINTENANT. `field` : le champ du code postal est à remplir ;
  * `city` : une ville est proposée ; `shop` : des magasins sont proposés ; `menu` : le menu est fermé ; `connexion` : le menu montre « Connexion » ; `signup` : la page est la
  * création de compte ; `form` : la page est la connexion ; `code` : la page attend le code reçu par e-mail ; `bar` : la barre du magasin est à toucher ; `confirm` : la page demande
- * de garder le magasin ; `wall` : le mur de cookies est là, la personne y répond d'abord.
+ * de garder le magasin ; `email`, `password`, `human` : la connexion attend l'adresse e-mail, le mot de passe (et la case « Je suis un humain »), la vérification ; `wall` : le mur de cookies est là, la personne y répond d'abord.
  */
 export type GuideSub =
   | 'field'
@@ -35,6 +35,9 @@ export type GuideSub =
   | 'connexion'
   | 'signup'
   | 'form'
+  | 'email'
+  | 'password'
+  | 'human'
   | 'code'
 
 /**

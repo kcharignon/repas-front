@@ -86,4 +86,24 @@ describe('un mur de cookies est là seulement devant une réponse franche', () =
 
     expect(wallLook(document)).toBeNull()
   })
+
+  it.each([
+    'Continuer sans accepter →',
+    'Continuer sans accepter  ›',
+    '→ Continuer sans accepter',
+    'Continuer sans accepter.',
+    'Tout accepter »',
+  ])(
+    'DRV-757 : « %s » (le lien du HAUT du mur, flèche ou ponctuation dans son libellé) est une réponse du mur : la carte s’en tient à l’écart',
+    (label) => {
+      const link = document.createElement('a')
+      link.setAttribute('role', 'button')
+      link.textContent = label
+      document.body.appendChild(link)
+      at(link, 20)
+
+      expect(consentButtons(document, 1024, 768)).toEqual([link])
+      expect(wallLook(document)?.sub).toBe('wall')
+    },
+  )
 })

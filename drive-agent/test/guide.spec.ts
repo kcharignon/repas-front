@@ -10,6 +10,7 @@ import {
   GUIDE_MAX_MS,
   GUIDE_POLL_MS,
   GUIDE_STUCK_CHECKS,
+  guideStepOf,
 } from '../src/flow/guide'
 import {
   RetailerError,
@@ -540,6 +541,88 @@ describe('la page de connexion de l’enseigne n’est jamais « entrer dans le 
 
     expect(w.follows.count).toBe(1)
     expect(screens.propsOf('entry')[0]).toEqual({ stage: 'opening' })
+  })
+})
+
+describe('DRV-757 (suite) : la page de connexion de Leclerc est l’étape 2 sur 2, jamais le magasin', () => {
+  const location = (hostname: string, pathname: string) =>
+    new LeclercAdapter(fakeSite(() => ({ body: '' }), { location: { hostname, pathname } }).deps)
+
+  it('l’adaptateur reconnaît la page de connexion par son adresse ET par son hôte (le compte de l’enseigne, `fd<N>-espace-client`), quelle que soit la page du compte', () => {
+    const account = 'fd8-espace-client.leclercdrive.fr'
+    expect(
+      location(
+        account,
+        '/drive/magasin-000001-000001-Ville-Test/authentification.aspx',
+      ).onLoginPage(),
+    ).toBe(true)
+    expect(
+      location(
+        account,
+        '/drive/magasin-000001-000001-Ville-Test/identification-unique.aspx',
+      ).onLoginPage(),
+    ).toBe(true)
+    expect(location(account, '/').onLoginPage()).toBe(true)
+    // Le compte de la personne connectée n'est pas la page de connexion
+    expect(
+      location(
+        account,
+        '/drive/magasin-000001-000001-Ville-Test/home-espace-client-ccc.aspx',
+      ).onLoginPage(),
+    ).toBe(false)
+    expect(
+      location('m-courses.leclercdrive.fr', '/magasin-000001-000001-ville-test').onLoginPage(),
+    ).toBe(false)
+    expect(location('www.leclercdrive.fr', '/').onLoginPage()).toBe(false)
+  })
+
+  it('un problème « magasin pas choisi » sur la page de connexion est l’étape « connecte-toi », pas « choisis ton magasin »', () => {
+    const w = world({ chosen: false, member: false })
+    Object.assign(w.adapter, { onLoginPage: () => true })
+
+    expect(guideStepOf({ code: 'UNSUPPORTED_PAGE', cause: 'STORE_NOT_CHOSEN' }, w.adapter)).toBe(
+      'login',
+    )
+    Object.assign(w.adapter, { onLoginPage: () => false })
+    expect(guideStepOf({ code: 'UNSUPPORTED_PAGE', cause: 'STORE_NOT_CHOSEN' }, w.adapter)).toBe(
+      'store',
+    )
+  })
+
+  it('la carte de la page de connexion est « Étape 2 sur 2 » (le magasin est forcément choisi : la connexion en dépend), même sans note d’une page d’avant', async () => {
+    const w = world({ chosen: true, member: false, unknown: true })
+    Object.assign(w.adapter, { onLoginPage: () => true })
+    const screens = fakeUi()
+    const { flow } = makeFlow({ ui: screens.ui, adapter: w.adapter })
+
+    await flow.start(FARINE)
+
+    expect(screens.propsOf('guide')[0]).toMatchObject({
+      step: 'login',
+      index: 2,
+      total: 2,
+      form: true,
+    })
+  })
+
+  it('l’adaptateur lit la connexion sur la page de connexion même quand on lui demande l’étape du magasin', () => {
+    const asked: string[] = []
+    const adapter = new LeclercAdapter(
+      fakeSite(() => ({ body: '' }), {
+        location: {
+          hostname: 'fd8-espace-client.leclercdrive.fr',
+          pathname: '/drive/magasin-000001-000001-Ville-Test/authentification.aspx',
+        },
+        look: (step) => {
+          asked.push(step)
+          return null
+        },
+      }).deps,
+    )
+
+    adapter.guideLook('store')
+
+    expect(asked).toEqual(['login'])
   })
 })
 
