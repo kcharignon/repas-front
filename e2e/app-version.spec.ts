@@ -1,7 +1,7 @@
 // La version de l'application connue du serveur (DRV-637), sans back ni compte : l'API est simulée par `page.route`, l'application par un
-// faux pont `repasNative` posé avant le chargement. Un seul parcours reste ici : `App.vue` envoie la version une fois par session et « Moi »
+// faux pont `repasNative` posé avant le chargement. Un seul parcours reste ici : `App.vue` lit la version au démarrage (elle part dans l'en-tête de chaque requête, l'envoi explicite est retenté) et « Moi »
 // invite à mettre à jour (le branchement de `useAppVersionReport` dans l'application, que seul un navigateur monte en entier), avec la mise en page
-// à 360 × 640 et l'accessibilité du bandeau dans les deux thèmes. Le reste est en jsdom : l'envoi (une fois, jamais en développement ni dans un
+// à 360 × 640 et l'accessibilité du bandeau dans les deux thèmes. Le reste est en jsdom : l'envoi (en-tête de chaque requête, essais, jamais en développement ni dans un
 // navigateur, silence sur un refus) dans `useAppVersionReport.spec.ts`, le bandeau dans `AppUpdateBanner.spec.ts`, la comparaison des versions dans
 // `appVersion.spec.ts`, la colonne « Application » de l'administration dans `Admin.spec.ts` (mise en page et axe : `admin-users.spec.ts`).
 import { expect, test, type Page, type Route } from './support/test'

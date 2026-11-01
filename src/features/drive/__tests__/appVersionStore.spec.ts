@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
+import type { ApiClient } from '@/api'
 import { useAppVersionStore } from '../appVersionStore'
 import { INFO_TIMEOUT_MS } from '../bridge/driveBridge'
 import { fakeNative } from '../bridge/__tests__/fakeNative'
@@ -68,5 +69,61 @@ describe('read', () => {
 
     install(1)
     expect(await store.read()).toBe('1.3.1')
+  })
+})
+
+describe('report', () => {
+  /** Un faux client dont le `PUT` attend qu'on le libère. */
+  function slowApi() {
+    const puts: Array<(status: number) => void> = []
+    const api = {
+      PUT: vi.fn<() => Promise<unknown>>(
+        () =>
+          new Promise((resolve) =>
+            puts.push((status) => resolve({ response: { ok: status < 300, status } })),
+          ),
+      ),
+    } as unknown as ApiClient
+
+    return { api, puts }
+  }
+
+  it('une déconnexion pendant un envoi en vol : sa réponse tardive ne dit pas « fait » pour la session suivante', async () => {
+    install(1)
+    const store = useAppVersionStore()
+    const { api, puts } = slowApi()
+
+    const first = store.report('u1', api)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(api.PUT).toHaveBeenCalledTimes(1)
+
+    store.forget()
+    puts[0]!(204)
+    await first
+
+    // La session suivante (même compte, même version) doit renvoyer la version
+    const second = store.report('u1', api)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(api.PUT).toHaveBeenCalledTimes(2)
+    puts[1]!(204)
+    await second
+  })
+
+  it('un envoi qui lève ne bloque pas le suivant', async () => {
+    install(1)
+    const store = useAppVersionStore()
+    const { api, puts } = slowApi()
+    const unprintable = {
+      toString() {
+        throw new Error('panne')
+      },
+    } as unknown as string
+
+    await store.report(unprintable, api)
+    const next = store.report('u1', api)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(api.PUT).toHaveBeenCalledTimes(1)
+    puts[0]!(204)
+    await next
   })
 })

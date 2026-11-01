@@ -3,6 +3,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 
 import { appContext, bodyOf, calls, json, me, stubApi, type Handler } from '@/__tests__/helpers'
+import { useAppVersionStore } from '../appVersionStore'
 import { useNotificationsStore } from '@/notifications/store'
 import { useSessionStore } from '@/session/session'
 import { fakeNative } from '../bridge/__tests__/fakeNative'
@@ -197,6 +198,23 @@ describe('l’en-tête de version sur chaque requête (DRV-637)', () => {
 })
 
 describe('l’envoi est retenté tant qu’il n’a pas réussi', () => {
+  it('la version devient connue APRÈS la connexion (autre écran qui la lit) : elle est envoyée', async () => {
+    const app = installApp(null)
+    const { fetchMock } = await start()
+    expect(puts(fetchMock)).toEqual([])
+
+    // Le pont n'avait pas dit sa version ; un écran la relit (bandeau de « Moi ») et l'application répond cette fois
+    app.setVersion('1.3.1')
+    await useAppVersionStore().read()
+    await flushPromises()
+
+    expect(puts(fetchMock)).toHaveLength(1)
+    expect(await bodyOf(fetchMock, calls(fetchMock).indexOf(PUT))).toEqual({
+      platform: 'android',
+      version: '1.3.1',
+    })
+  })
+
   it.each([
     ['une panne du serveur (500)', () => json({ error: { message: 'Erreur' } }, { status: 500 })],
     [

@@ -114,7 +114,8 @@ export const useAppVersionStore = defineStore('appVersion', () => {
    * de n'importe quelle requête (`createAuthFetch`) : cet envoi est le filet.
    */
   function report(userId: string, api: ApiClient): Promise<void> {
-    queue = queue.then(() => send(userId, api))
+    // Un envoi qui lèverait ne doit pas laisser la file rejetée : les suivants seraient sautés en silence
+    queue = queue.then(() => send(userId, api)).catch(() => {})
 
     return queue
   }
