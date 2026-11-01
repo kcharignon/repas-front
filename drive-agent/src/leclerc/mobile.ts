@@ -12,8 +12,8 @@
 //       le panier (`sType` « Panier », `iQuantitePanier`, `sTotalAPayer`, `lstProduitsLight[]`) ;
 //   M6  juste après la connexion, `m-courses` demande « Souhaitez-vous compléter le panier en cours avec les articles du panier du … ? » (« Oui je souhaite compléter mon
 //       panier » / « Non je ne souhaite pas compléter mon panier ») : l'agent ne choisit JAMAIS ; une barre basse « Dernière connexion le … » apparaît connecté.
-//   M11 (relevé le 2026-11-01, produit 17313, magasin 206911, identique au clic sur « + ») la requête d'un ajout n'a AUCUN en-tête propre au site (pas de `zcwb`) :
-//       Accept, Content-Type, Origin, Referer, … du navigateur ; corps `d=<JSON>` EXACTEMENT : `{"eTypeAction":1,"iIdProduit":17313,"iQuantite":1,"sNoPointLivraison":"206911",
+//   M11 (relevé le 2026-11-01, produit 17313, magasin 654321, identique au clic sur « + ») la requête d'un ajout n'a AUCUN en-tête propre au site (pas de `zcwb`) :
+//       Accept, Content-Type, Origin, Referer, … du navigateur ; corps `d=<JSON>` EXACTEMENT : `{"eTypeAction":1,"iIdProduit":17313,"iQuantite":1,"sNoPointLivraison":"654321",
 //       "objContexteProvenanceArticle":{"eOrigine":9,"eTypePage":3,"niIdElement":null,"eVue":0,"sTexteRecherche":"Poireau","lIdDemande":null}}` (l'identifiant est un NOMBRE ; ce
 //       contexte est celui d'un ajout depuis les résultats d'une recherche) ;
 //   M12 la quantité est ABSOLUE (le total voulu au panier : un second clic envoie `iQuantite` 2, retirer envoie 0) ;

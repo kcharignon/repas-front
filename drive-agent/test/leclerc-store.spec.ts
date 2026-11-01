@@ -100,13 +100,13 @@ describe('la version mobile de Leclerc (DRV-754)', () => {
     expect(
       readPageStore({
         hostname: 'm-courses.leclercdrive.fr',
-        pathname: '/magasin-206911-206911-saint-priest',
+        pathname: '/magasin-654321-654321-ville-test',
       }),
     ).toEqual({
-      id: '206911',
-      second: '206911',
-      pagePath: '/magasin-206911-206911-saint-priest',
-      cartPath: '/magasin-206911-206911',
+      id: '654321',
+      second: '654321',
+      pagePath: '/magasin-654321-654321-ville-test',
+      cartPath: '/magasin-654321-654321',
     })
   })
 
@@ -120,17 +120,17 @@ describe('la version mobile de Leclerc (DRV-754)', () => {
   })
 
   it.each([
-    ['m-courses.leclercdrive.fr', '/magasin-206911-206911-saint-priest', true],
+    ['m-courses.leclercdrive.fr', '/magasin-654321-654321-ville-test', true],
     [
       'fd8-courses.leclercdrive.fr',
-      '/magasin-206911-206911-saint-priest/mobile-detail-panier.aspx',
+      '/magasin-654321-654321-ville-test/mobile-detail-panier.aspx',
       true,
     ],
-    ['fd8-courses.leclercdrive.fr', '/magasin-206911-206911-Saint-Priest/recherche.aspx', false],
+    ['fd8-courses.leclercdrive.fr', '/magasin-654321-654321-Ville-Test/recherche.aspx', false],
     ['www.leclercdrive.fr', '/', false],
     [
       'fd8-espace-client.leclercdrive.fr',
-      '/drive/magasin-206911-206911-Saint-Priest/authentification.aspx',
+      '/drive/magasin-654321-654321-Ville-Test/authentification.aspx',
       false,
     ],
   ])('%s%s parle comme la version mobile : %s', (hostname, pathname, mobile) => {
