@@ -16,7 +16,7 @@ import org.junit.Test
 class DrivePlanTest {
     private fun resource(name: String) = File("src/test/resources/$name").readText()
 
-    private val valid = JSONObject(resource("plan-complet.json"))
+    private val valid = ReferencePlans.json()
     private val RUN_ID = "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c"
 
     /** Le plan valide dont on remplace un champ (`null` : on l'enlève). */
@@ -33,7 +33,7 @@ class DrivePlanTest {
 
         assertEquals("8f14e45f-ceea-467a-9575-8e6b8c0a1b2c", plan.runId)
         assertEquals("000000", plan.storeId)
-        assertEquals("courses-test.leclercdrive.fr", plan.storeHost)
+        assertEquals(ReferencePlans.STORE_HOST, plan.storeHost)
         assertEquals(NavigationPolicy.START_URL, plan.startUrl)
         assertTrue(NavigationPolicy.isAllowed(plan.startUrl))
         assertTrue(sameJson(valid, JSONObject(plan.text)))
@@ -49,7 +49,7 @@ class DrivePlanTest {
      */
     @Test
     fun `un plan s'ouvre sur l'accueil de l'enseigne, jamais sur la racine de l'hote du magasin ni sur une page 404`() {
-        val stores = listOf("000000" to "courses-test.leclercdrive.fr", "1" to "fd9-courses.leclercdrive.fr", "123456789012" to "fd14-courses.leclercdrive.fr")
+        val stores = listOf("000000" to "fd8-courses.leclercdrive.fr", "1" to "fd9-courses.leclercdrive.fr", "123456789012" to "fd14-courses.leclercdrive.fr")
         stores.forEach { (id, host) ->
             val plan = DrivePlan.parse(with("host", host, store = true).apply { getJSONObject("store").put("id", id) })!!
 
@@ -96,12 +96,12 @@ class DrivePlanTest {
 
     @Test
     fun `un plan de 100 lignes est accepte`() {
-        assertNotNull(DrivePlan.parse(JSONObject(resource("plan-100-lignes.json"))))
+        assertNotNull(DrivePlan.parse(ReferencePlans.json("plan-100-lignes.json")))
     }
 
     @Test
     fun `un plan de 101 lignes est refuse`() {
-        val plan = JSONObject(resource("plan-100-lignes.json"))
+        val plan = ReferencePlans.json("plan-100-lignes.json")
         plan.getJSONArray("lines").put(plan.getJSONArray("lines").getJSONObject(0))
         assertNull(DrivePlan.parse(plan))
     }
@@ -147,14 +147,32 @@ class DrivePlanTest {
             "exemple.invalid",
             "leclercdrive.fr",
             "www.leclercdrive.fr.exemple.invalid",
-            "courses-test.leclercdrive.fr.exemple.invalid",
-            "exemple.invalid/courses-test.leclercdrive.fr",
-            "courses-test.leclercdrive.fr@exemple.invalid",
-            "courses-test.leclercdrive.fr:8443",
-            "courses-test.leclercdrive.fr/chemin",
-            "Courses-Test.leclercdrive.fr",
-            "sous.courses-test.leclercdrive.fr\"}",
+            "fd8-courses.leclercdrive.fr.exemple.invalid",
+            "fd8-courses.leclercdrive.fr.attaquant.fr",
+            "evil-fd8-courses.leclercdrive.fr",
+            "exemple.invalid/fd8-courses.leclercdrive.fr",
+            "fd8-courses.leclercdrive.fr@exemple.invalid",
+            "fd8-courses.leclercdrive.fr:8443",
+            "fd8-courses.leclercdrive.fr:443",
+            "fd8-courses.leclercdrive.fr.",
+            "fd8-courses.leclercdrive.fr/chemin",
+            "FD8-courses.leclercdrive.fr",
+            "fd8-courses.LECLERCDRIVE.fr",
+            "sous.fd8-courses.leclercdrive.fr\"}",
             "autre.leclercdrive.com",
+            // DRV-754 : l'hôte d'un plan est un hôte du serveur, pas un autre sous-domaine du drive
+            "courses-test.leclercdrive.fr",
+            "www.leclercdrive.fr",
+            "m-courses.leclercdrive.fr",
+            "fd8-espace-client.leclercdrive.fr",
+            "fd8-photos.leclercdrive.fr",
+            "fdx-courses.leclercdrive.fr",
+            "fd-courses.leclercdrive.fr",
+            "fd1234-courses.leclercdrive.fr",
+            "fd8-courses2.leclercdrive.fr",
+            "m-courses2.leclercdrive.fr",
+            "m.leclercdrive.fr",
+            "m-autre.leclercdrive.fr",
         ).forEach { assertNull(it, DrivePlan.parse(with("host", it, store = true))) }
         assertNull(DrivePlan.parse(with("id", 123456, store = true)))
         assertNotNull(DrivePlan.parse(with("host", "fd0-courses.leclercdrive.fr", store = true)))

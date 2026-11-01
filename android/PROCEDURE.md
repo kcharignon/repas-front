@@ -37,6 +37,6 @@ Un seul geste lance tout le test. L’application cherche 12 produits courants s
 - **Le rapport dit « Arrêt : UNSUPPORTED_PAGE »** : tu n’étais pas sur une page de magasin ; recommence à l’étape 3.
 - **Le rapport dit « Arrêt : NOT_LOGGED_IN »** : reconnecte-toi (étape 2), puis recommence.
 - **Le rapport dit « Arrêt : BLOCKED »** : Leclerc a ralenti les requêtes. Attends quelques minutes, recharge la page, recommence, et dis-le dans ta réponse.
-- **Le site s’affiche en version mobile** (le nom du site commence par `m-`) : touche **⋮**, **Se déconnecter de Leclerc**, puis rouvre le drive.
+- **Le site s’affiche en version mobile** (le nom du site commence par `m-`) : c’est normal, depuis DRV-754 Leclerc passe par sa version mobile ; rien à faire.
 - **Le menu dit que ta WebView est trop ancienne** : mets à jour « Android System WebView » dans le Play Store.
 - **L’installation est refusée** : désinstalle d’abord l’ancienne version de **Repas Drive** (l’ancien nom de l’application), puis recommence.

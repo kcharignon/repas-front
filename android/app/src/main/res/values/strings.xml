@@ -69,6 +69,7 @@
     <string name="plan_banner_open">Touche « Commencer mes courses ».</string>
     <string name="plan_banner">Cette page n’est pas celle de ton magasin : %1$s ne l’a pas ouverte ou ne répond pas. Touche « Ouvrir l’accueil du drive » pour recommencer. Le bouton retour du téléphone annule.</string>
     <string name="plan_banner_action">Ouvrir l’accueil du drive</string>
+    <!-- DRV-754 : jamais montré pour une enseigne servie (leur version mobile est leur site) ; ne sert qu’aux enseignes fictives des tests (SiteMode.DESKTOP). -->
     <string name="plan_banner_mobile">%1$s affiche son site mobile : ce n’est pas la version ordinateur du site, et Repas ne peut pas y agir. Touche « Ouvrir l’accueil du drive » pour recommencer. Le bouton retour du téléphone annule.</string>
     <string name="plan_banner_verification">%1$s demande une vérification. Fais-la sur la page. Sinon, touche « Ouvrir l’accueil du drive ». Le bouton retour du téléphone annule.</string>
     <string name="menu_abandon_setup">Abandonner la lecture du magasin</string>

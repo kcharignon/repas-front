@@ -494,7 +494,7 @@ export async function runChecks(
           : whole * 2 >= read
             ? ok(
                 'search',
-                `${D.searchOk(TEST_TERM, read, whole)}${variant === 'a' ? '' : D.searchVariant(variant)}`,
+                `${D.searchOk(TEST_TERM, read, whole)}${variant === 'a' || variant === 'm' ? '' : D.searchVariant(variant)}`,
               )
             : ko(
                 'search',

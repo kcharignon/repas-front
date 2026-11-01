@@ -15,10 +15,12 @@ import java.util.Locale
  * - le lien du front est `https://<hôte>/magasin-N-N` (le magasin enregistré dans Repas, sans ville, [StorePages.frontLink]) : il ne dit que QUEL magasin. La
  *   page qui s'ouvre est l'accueil du magasin AVEC la ville (`/magasin-N-N-Ville`), que la dernière page de magasin vue dans le drive a donnée
  *   ([StorePathMemory]) : elle charge toujours. Le panier est dans l'icône en haut à droite de cette page (bandeau court de l'écran du drive).
- *   Si ce chemin est inconnu, d'un autre hôte ou d'autres numéros : l'accueil de l'enseigne. Jamais une adresse tirée du plan ni d'une page ;
+ *   Si ce chemin est inconnu, d'un autre hôte (sauf pour Leclerc, où le lien porte l'hôte du serveur `fd<N>-courses` et la page retenue celui de la version
+ *   mobile `m-courses` : les numéros seuls font le magasin, [StorePages.sameStoreOnAnyHost], DRV-754) ou d'autres numéros : l'accueil de l'enseigne.
+ *   Jamais une adresse tirée du plan ni d'une page ;
  * - l'application ne navigue **jamais** vers la page du panier du site : ouverte sans passer par le site, elle la répond « introuvable » (constat
  *   du 2026-10-19 sur un téléphone, application 0.1.8) ;
- * - toute autre page du drive (accueil, page de magasin, site mobile, forme douteuse) est remplacée par l'accueil de l'enseigne. Une adresse qui n'est
+ * - toute autre page du drive (accueil, page de magasin, site mobile à refuser, forme douteuse) est remplacée par l'accueil de l'enseigne. Une adresse qui n'est
  *   d'aucune enseigne n'est pas concernée (la coquille la confie au navigateur, comme avant).
  *
  * Si le site refuse l'accueil du magasin (4xx, 5xx) ou le sert avec un titre « introuvable », l'écran du drive se replie sur l'accueil du drive

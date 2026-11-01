@@ -325,6 +325,7 @@ function searchLines(search: ProbedSearch): string[] {
     lines.push(P.attempts(term, attemptsText(facts.attempts)))
     for (const attempt of facts.attempts) lines.push(P.attempt(attempt))
   }
+  if (facts.form !== undefined) lines.push(P.searchForm(term, facts.form))
   if (facts.phrases.length > 0) lines.push(P.phrases(facts.phrases.join(', ')))
   if (facts.landing !== undefined) lines.push(P.landing(term, facts.landing))
   if (facts.notDrive !== undefined) lines.push(P.notDrive(term, facts.notDrive))
@@ -830,6 +831,10 @@ export function probeLines(
       lines.push(startLine(arrival.entry.start, arrival.entry.clickable, siteDomain))
     }
     if (inAddress) lines.push(P.basketPage(cityOf(arrival.address)))
+    if (arrival.mobile) {
+      const { serverHost, links, oldBasketQuestion, session } = arrival.mobile
+      lines.push(P.mobile(serverHost, links, yesNo(oldBasketQuestion), session))
+    }
     if (arrival.delivery) {
       lines.push(
         P.delivery(P.inPage, yesNo(arrival.delivery.read), yesNo(arrival.delivery.sameAsAddress)),

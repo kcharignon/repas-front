@@ -9,7 +9,7 @@ import {
   applicable,
   buildSearch,
   FALLBACK_ORDER,
-  SEARCH_VARIANTS,
+  DESKTOP_VARIANTS,
   type SearchContext,
 } from '../src/leclerc/search-request'
 
@@ -45,7 +45,7 @@ describe('la requête courante : celle du banc d’essai qui a marché', () => {
   })
 
   it('est une adresse de l’hôte de la page : un chemin qui commence par un seul « / »', () => {
-    for (const id of SEARCH_VARIANTS) {
+    for (const id of DESKTOP_VARIANTS) {
       const { url } = buildSearch(id, { ...CITY, linkPath: '/magasin-000123-000123-Autre' }, 'sel')
       expect(url).toMatch(/^\/(?![/\\])/)
       expect(url).not.toMatch(/^[a-z]+:/i)
@@ -110,7 +110,7 @@ describe('les variantes, une par différence possible avec la requête qui march
   it('g n’a de sens que si la page porte un lien avec la ville différent de son adresse', () => {
     expect(applicable('g', CITY)).toBe(false)
     expect(applicable('g', { ...CITY, linkPath: CITY.pagePath })).toBe(false)
-    for (const id of SEARCH_VARIANTS.filter((v) => v !== 'g'))
+    for (const id of DESKTOP_VARIANTS.filter((v) => v !== 'g'))
       expect(applicable(id, CITY)).toBe(true)
   })
 
@@ -137,7 +137,7 @@ describe('les variantes, une par différence possible avec la requête qui march
   })
 
   it('aucune variante n’écrit : toujours GET, jamais de corps', () => {
-    for (const id of SEARCH_VARIANTS) {
+    for (const id of DESKTOP_VARIANTS) {
       const { init } = buildSearch(id, CITY, 'sel')
       expect(init.method).toBe('GET')
       expect(init.body).toBeUndefined()
@@ -147,6 +147,6 @@ describe('les variantes, une par différence possible avec la requête qui march
   it('la requête essaie d’abord le chemin avec la ville tiré de la page (g, s’il y en a un), puis la requête courante, puis chaque variante une fois (c, identique à b sur le réseau, n’est que sondée)', () => {
     expect(FALLBACK_ORDER).toEqual(['g', 'a', 'b', 'e1', 'e2', 'f', 'h'])
     expect(new Set(FALLBACK_ORDER).size).toBe(FALLBACK_ORDER.length)
-    expect([...FALLBACK_ORDER, 'c'].sort()).toEqual([...SEARCH_VARIANTS].sort())
+    expect([...FALLBACK_ORDER, 'c'].sort()).toEqual([...DESKTOP_VARIANTS].sort())
   })
 })

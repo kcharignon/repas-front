@@ -19,7 +19,7 @@ class StorePathMemoryTest {
         }
     }
 
-    private val host = "courses-test.leclercdrive.fr"
+    private val host = "m-courses.leclercdrive.fr"
 
     @Test
     fun `retient le chemin avec la ville d'une page de magasin, sans le reste de l'adresse`() {
@@ -49,7 +49,7 @@ class StorePathMemoryTest {
     }
 
     @Test
-    fun `ne retient ni une page sans ville, ni l'accueil, ni le site mobile, ni une autre forme`() {
+    fun `ne retient ni une page sans ville, ni l'accueil, ni la connexion, ni une autre forme`() {
         val store = MemoryStore()
         val memory = StorePathMemory(store)
 
@@ -63,7 +63,7 @@ class StorePathMemoryTest {
             "https://$host/magasin-000000-000000-Ville Test/",
             "https://$host/magasin-000000-000000-Vi\\lle/",
             "https://$host/magasin-000000-000000-Vi\"lle/",
-            "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/",
+            "https://fd8-espace-client.leclercdrive.fr/drive/magasin-000000-000000-Ville-Test/authentification.aspx",
             "http://$host/magasin-000000-000000-Ville-Test/",
             "https://www.exemple.org/magasin-000000-000000-Ville-Test/",
             "https://user:secret@$host/magasin-000000-000000-Ville-Test/",
@@ -76,7 +76,7 @@ class StorePathMemoryTest {
     }
 
     @Test
-    fun `ne donne l'accueil du magasin qu'au meme hote et aux memes numeros`() {
+    fun `ne donne l'accueil du magasin qu'aux memes numeros`() {
         val memory = StorePathMemory(MemoryStore())
         memory.remember("https://$host/magasin-000000-000456-Ville-Test/")
 
@@ -84,9 +84,49 @@ class StorePathMemoryTest {
             "https://$host/magasin-000000-000456-Ville-Test",
             memory.storeHomeUrl(host, "000000", "000456"),
         )
-        assertNull(memory.storeHomeUrl("autre-courses.leclercdrive.fr", "000000", "000456"))
         assertNull(memory.storeHomeUrl(host, "000000", "000000"))
         assertNull(memory.storeHomeUrl(host, "000456", "000456"))
+    }
+
+    /** DRV-754 : la page retenue est celle de la version mobile (`m-courses`) ; le lien du front porte `fd<N>-courses`. Pour Leclerc seuls les numéros comptent. */
+    @Test
+    fun `pour Leclerc, la page retenue de la version mobile sert un lien d'un autre hote de l'enseigne au meme magasin`() {
+        val memory = StorePathMemory(MemoryStore())
+        memory.remember("https://m-courses.leclercdrive.fr/magasin-000000-000456-ville-test")
+        val page = "https://m-courses.leclercdrive.fr/magasin-000000-000456-ville-test"
+
+        assertEquals(page, memory.storeHomeUrl("m-courses.leclercdrive.fr", "000000", "000456"))
+        assertEquals(page, memory.storeHomeUrl("fd8-courses.leclercdrive.fr", "000000", "000456"))
+        // Autres numéros : repli sur l'accueil (rien)
+        assertNull(memory.storeHomeUrl("fd8-courses.leclercdrive.fr", "000000", "000457"))
+        assertNull(memory.storeHomeUrl("fd8-courses.leclercdrive.fr", "000001", "000456"))
+        // Un nom qui n'a pas la forme d'un hôte de magasin de l'enseigne : jamais (domaine nu, autre domaine, majuscules, port)
+        listOf("leclercdrive.fr", "fd8-courses.exemple.org", "fd8-courses.leclercdrive.fr.evil.com", "FD8-COURSES.LECLERCDRIVE.FR", "fd8-courses.leclercdrive.fr:8443", "").forEach {
+            assertNull(it, memory.storeHomeUrl(it, "000000", "000456"))
+        }
+    }
+
+    /** Une enseigne qui ne le dit pas ([StorePages.sameStoreOnAnyHost] faux) garde l'exigence du même hôte. */
+    @Test
+    fun `une enseigne qui ne dit pas que ses hotes se valent exige le meme hote`() {
+        val site = FictionalSites.A
+        assertFalse(site.storePages!!.sameStoreOnAnyHost)
+        val memory = StorePathMemory(MemoryStore(), site)
+        memory.remember("https://boutique.exemple-a.test/depot-000000-000456-Ville-Test/")
+
+        assertEquals("https://boutique.exemple-a.test/depot-000000-000456-Ville-Test", memory.storeHomeUrl("boutique.exemple-a.test", "000000", "000456"))
+        assertNull(memory.storeHomeUrl("autre.exemple-a.test", "000000", "000456"))
+    }
+
+    /** Une mémoire est celle d'UNE enseigne : le même magasin d'une autre enseigne ne la lit jamais. */
+    @Test
+    fun `la memoire d'une enseigne ne retient ni ne sert la page d'une autre`() {
+        val memory = StorePathMemory(MemoryStore())
+        memory.remember("https://boutique.exemple-a.test/depot-000000-000456-Ville-Test/")
+        memory.remember("https://www.auchan.fr/magasin-000000-000456-Ville-Test")
+
+        assertFalse(memory.hasPath())
+        assertNull(memory.storeHomeUrl("boutique.exemple-a.test", "000000", "000456"))
     }
 
     @Test

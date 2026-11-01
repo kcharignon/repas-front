@@ -270,6 +270,11 @@ export interface SearchFacts {
   keys?: StateKeys
   /** Les mots de [PAGE_PHRASES] que la réponse dit à voir (cherchés seulement quand la recherche n'a pas rendu de produit). */
   phrases: string[]
+  /**
+   * La FORME de la réponse de la version mobile (DRV-754, `describeSearchForm`) : le genre du corps et des NOMS de clés, jamais une valeur. Présente seulement pour la
+   * recherche de la version mobile ; c'est ce qui permet de dire pourquoi une réponse n'est pas lue, sans jamais dire « le site a changé » sans mesure.
+   */
+  form?: string
   /** Ce que la réponse montre de la connexion ([describeSession] : un état et des noms de signes). Absent chez une enseigne dont la page n'a pas ces signes (DRV-724). */
   session?: string
   /** Le point de livraison de la réponse (Leclerc) ; absent chez une enseigne qui n'en a pas (DRV-724). */
@@ -349,6 +354,19 @@ export interface ArrivalFacts {
   entry?: EntryFacts
   /** Comment le site a dit le magasin quand il ne se lit pas dans l'adresse (DRV-717) : des formes seulement. Absent chez Leclerc. */
   storeRead?: StoreReadFacts
+  /** Ce que la page de la VERSION MOBILE laisse voir (DRV-754) : des formes, des nombres et des oui/non, jamais une adresse ni un libellé. Absent hors de la version mobile. */
+  mobile?: MobileFacts
+}
+
+/**
+ * La version mobile vue par le diagnostic (DRV-754) : d'où vient l'hôte du serveur (`PAGE` : la page est sur lui ; `FOOTER` : lu dans les liens ; `MISSING` : aucun lien ne le
+ * dit ; `AMBIGUOUS` : deux hôtes), combien de liens du magasin la page porte, si la question de l'ancien panier est posée, et les signes de connexion lus (des noms).
+ */
+export interface MobileFacts {
+  serverHost: 'PAGE' | 'FOOTER' | 'MISSING' | 'AMBIGUOUS'
+  links: number
+  oldBasketQuestion: boolean
+  session: string
 }
 
 /** Ce que le navigateur sait de la navigation qui a amené sur la page (`PerformanceNavigationTiming`) : des nombres, jamais une adresse. */

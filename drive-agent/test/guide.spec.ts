@@ -20,7 +20,7 @@ import {
 import { S } from '../src/ui/strings'
 import { chooseBarTarget } from '../src/auchan/page'
 import { AuchanAdapter } from '../src/auchan'
-import { LeclercAdapter } from '../src/leclerc'
+import { LeclercAdapter, LOGIN_NOTES } from '../src/leclerc'
 import { fakeSite } from './leclerc-helpers'
 import { findControl } from '../src/retailers/guide'
 import { findStartButton } from '../src/leclerc/entry'
@@ -51,10 +51,10 @@ const notChosen = () => new RetailerError('UNSUPPORTED_PAGE', null, 'STORE_NOT_C
 
 /** Une page qui évolue : ce que la personne a fait (magasin choisi, connectée), et l'adaptateur simulé qui le lit. */
 function world(
-  initial: { chosen: boolean; member: boolean; unknown?: boolean },
-  options: { entry?: EntryReading } = {},
+  initial: { chosen: boolean; member: boolean; unknown?: boolean; asked?: boolean },
+  options: { entry?: EntryReading; confirmedLogin?: boolean } = {},
 ) {
-  const state = { ...initial, storeReads: 0, sessionReads: 0 }
+  const state = { asked: false, ...initial, storeReads: 0, sessionReads: 0 }
   const target = (label: string | null): GuideTarget => ({
     element: document.createElement('a'),
     label,
@@ -71,6 +71,8 @@ function world(
       },
       store: () => {
         state.storeReads += 1
+        // La question de l'ancien panier (DRV-754) est posée dans la page : l'agent attend la réponse de la personne
+        if (state.asked) throw new RetailerError('UNSUPPORTED_PAGE', null, 'BASKET_MERGE_ASKED')
         if (!state.chosen) throw notChosen()
         return { ...STORE, baseUrl: `https://${STORE.host}/`, label: null }
       },
@@ -78,6 +80,10 @@ function world(
   )
   const adapter: RetailerAdapter = Object.assign(built.adapter, {
     storeChosenOnPage: () => state.chosen,
+    ...(options.confirmedLogin === true && {
+      requiresConfirmedLogin: true,
+      basketChoiceAsked: () => state.asked,
+    }),
     guideTarget: (step: 'store' | 'login') =>
       step === 'store' ? target('Choisir mon mode de livraison') : target(null),
   })
@@ -350,6 +356,90 @@ describe('la connexion n’est « faite » que si la page la CONFIRME (ticket G 
     await flow.start(FARINE)
 
     expect(screens.screens()).not.toContain('guide')
+  })
+})
+
+describe('la question de l’ancien panier (DRV-754) : l’agent ne choisit jamais à la place de la personne', () => {
+  it('la page pose la question : une carte « Choisis dans la page », sans repère d’étape ni contrôle entouré, aucune écriture ; la réponse donnée, « C’est noté » puis le passage', async () => {
+    // Given : connectée, la page demande « compléter ton ancien panier ? » ; la personne répond au 4e coup d'œil
+    const w = world({ chosen: true, member: true, asked: true }, { confirmedLogin: true })
+    const time = clock((tick) => {
+      if (tick === 4) w.state.asked = false
+    })
+    const screens = fakeUi()
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, ...time })
+
+    // When
+    await flow.start(FARINE)
+
+    // Then : une carte d'attente sans repère d'étape (0 sur 0), qui ne désigne rien, puis « C'est noté », puis le passage
+    const props = screens.propsOf('guide')
+    expect(props.map((one) => one.stage)).toEqual(['waiting', 'done'])
+    expect(props[0]).toMatchObject({ step: 'basket', index: 0, total: 0, label: null })
+    expect(props[0]).not.toHaveProperty('target')
+    expect(props[0]).not.toHaveProperty('form')
+    expect(screens.screens()).not.toContain('error')
+    expect(w.writes).toEqual([{ id: '1000001', quantity: 3 }])
+    expect(sent).toHaveLength(1)
+    expect(expectConform(sent[0]).outcome).toBe('completed')
+  })
+
+  it('« Arrêter pour l’instant » pendant la question : rien n’est écrit, l’envoi est rendu comme arrêté', async () => {
+    const w = world({ chosen: true, member: true, asked: true }, { confirmedLogin: true })
+    const screens = fakeUi({ guide: () => 'stop' })
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, ...clock() })
+
+    await flow.start(FARINE)
+
+    expect(w.writes).toEqual([])
+    expect(w.calls).toEqual([])
+    expect(expectConform(sent[0]).outcome).toBe('aborted')
+  })
+
+  it('une enseigne qui ne sait pas dire la question ne guide pas : c’est une vraie erreur de page', async () => {
+    const w = world({ chosen: true, member: true, asked: true })
+    const screens = fakeUi({ error: () => 'return' })
+    const { flow } = makeFlow({ ui: screens.ui, adapter: w.adapter, ...clock() })
+
+    await flow.start(FARINE)
+
+    expect(screens.propsOf('error')).toEqual([
+      { code: 'UNSUPPORTED_PAGE', canReturn: true, cause: 'BASKET_MERGE_ASKED' },
+    ])
+    expect(w.writes).toEqual([])
+  })
+})
+
+describe('une enseigne qui exige la preuve de la connexion (DRV-754) : l’état inconnu n’est jamais un panier anonyme', () => {
+  it('page qui ne dit rien de la connexion : « Connecte-toi », rien n’est écrit ; dès que la page la confirme, le passage continue', async () => {
+    // Given : la page ne dit ni « visiteur » ni « connecté » ; elle confirme la connexion au 4e coup d'œil
+    const w = world({ chosen: true, member: false, unknown: true }, { confirmedLogin: true })
+    const time = clock((tick) => {
+      if (tick === 4) {
+        w.state.unknown = false
+        w.state.member = true
+      }
+    })
+    const screens = fakeUi()
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, ...time })
+
+    // When
+    await flow.start(FARINE)
+
+    // Then
+    expect(screens.propsOf('guide').map((props) => props.stage)).toEqual(['waiting', 'done'])
+    expect(screens.propsOf('guide')[0]).toMatchObject({ step: 'login' })
+    expect(w.writes).toEqual([{ id: '1000001', quantity: 3 }])
+    expect(expectConform(sent[0]).outcome).toBe('completed')
+  })
+
+  it('sans cette exigence (le comportement d’avant), un état inconnu laisse passer comme avant', async () => {
+    const w = world({ chosen: true, member: false, unknown: true })
+    const { flow } = makeFlow({ ui: fakeUi().ui, adapter: w.adapter, ...clock() })
+
+    await flow.start(FARINE)
+
+    expect(w.writes).toEqual([{ id: '1000001', quantity: 3 }])
   })
 })
 
@@ -809,6 +899,10 @@ describe('les textes du guide : courts, simples, au tutoiement (repas-po)', () =
     S.guide.store.text('Choisir mon mode de livraison'),
     S.guide.store.text(null),
     S.guide.store.postalCode,
+    S.guide.basket.title,
+    S.guide.basket.text(null),
+    S.guide.ready.basket,
+    ...LOGIN_NOTES,
     S.guide.login.title,
     S.guide.login.text('Se connecter'),
     S.guide.login.text(null),

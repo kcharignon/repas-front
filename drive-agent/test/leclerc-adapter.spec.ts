@@ -30,10 +30,10 @@ describe('readStore', () => {
     })
   })
 
-  it('porte le libellé que la page donne', () => {
+  it('porte le libellé que la page donne', async () => {
     const site = fakeSite(() => ({}), { readLabel: () => 'Drive de test' })
 
-    expect(new LeclercAdapter(site.deps).readStore().label).toBe('Drive de test')
+    expect((await new LeclercAdapter(site.deps).readStore()).label).toBe('Drive de test')
   })
 
   it.each([

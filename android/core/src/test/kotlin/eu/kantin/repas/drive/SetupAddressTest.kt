@@ -9,15 +9,24 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * La lecture du magasin à une adresse donnée (DRV-741) : l'utilisateur a collé l'adresse du site mobile d'un magasin ; Repas la transmet à l'application
- * (`drive.setup` avec `address`), qui l'ouvre en mode ordinateur à la place de l'accueil. L'adresse est revérifiée ici comme côté web, et ne va jamais à
- * l'agent. Adresses et passages SYNTHÉTIQUES.
+ * La lecture du magasin à une adresse donnée (DRV-741) : l'utilisateur a collé l'adresse d'un magasin du site de l'enseigne ; Repas la transmet à l'application
+ * (`drive.setup` avec `address`), qui l'ouvre à la place de l'accueil. Pour Leclerc (DRV-754), l'adresse `m-courses…/magasin-N-N-ville` de la version mobile est
+ * une page directe de magasin : plus de mode ordinateur ni de redirection attendue. L'adresse est revérifiée ici comme côté web, et ne va jamais à
+ * l'agent. Le bandeau « site mobile » d'une enseigne qui le refuse se prouve avec une enseigne fictive. Adresses et passages SYNTHÉTIQUES.
  */
 class SetupAddressTest {
     private val runId = "8f14e45f-ceea-467a-9575-8e6b8c0a1b2c"
     private val site = RetailerSites.DEFAULT.legacy
     private val mobile = "https://m-courses.leclercdrive.fr/magasin-123456-123456-ville-test"
     private val sameStore = "https://fd9-courses.leclercdrive.fr/magasin-123456-123456-ville-test.aspx"
+
+    // Une enseigne fictive qui refuse son site mobile (mode ordinateur) : le mécanisme générique, que Leclerc n'utilise plus
+    private val refusing = FictionalSites.A
+    private val refusingMobile = "https://m-courses.exemple-a.test/depot-123456-123456-ville-test"
+    private val refusingDesktop = "https://fd9-courses.exemple-a.test/depot-123456-123456-ville-test.aspx"
+    private val refusingSites = FictionalSites.ALL
+
+    private fun parseRefusing(address: String?): SetupRequest? = SetupRequest.of(runId, refusing, address)
 
     private fun parse(address: String?): SetupRequest? {
         val json = JSONObject().put("v", 1).put("type", "drive.setup").put("runId", runId)
@@ -28,7 +37,7 @@ class SetupAddressTest {
     // —— la règle de l'enseigne ——————————————————————————————————————————————————————————————————————————————————————————
 
     @Test
-    fun `l'adresse d'un magasin du site mobile, avec ou sans ville, avec ou sans aspx, est acceptable telle quelle`() {
+    fun `l'adresse d'un magasin de la version mobile de Leclerc, avec ou sans ville, avec ou sans aspx, est acceptable telle quelle (page directe, DRV-754)`() {
         listOf(
             mobile,
             "$mobile.aspx",
@@ -210,27 +219,39 @@ class SetupAddressTest {
     // —— le bandeau —————————————————————————————————————————————————————————————————————————————————————————————————————
 
     @Test
-    fun `pendant que l'adresse donnee charge, le site mobile n'alarme pas, une fois fini il le dit`() {
+    fun `pour Leclerc, la page m-courses donnee est une page de magasin, aucun bandeau, l'agent recoit la demande (DRV-754)`() {
         val setup = parse(mobile)!!
 
-        assertEquals(StoreBanner.SETUP, StoreBanner.of(setup, mobile, loading = true))
-        // Fini et toujours sur le site mobile : l'enseigne n'a pas redirigé, le bandeau le dit et propose l'accueil
-        assertEquals(StoreBanner.MOBILE, StoreBanner.of(setup, mobile, loading = false))
-        // La page finale du site ordinateur est une page de magasin : l'agent reçoit la demande
-        assertEquals(StoreBanner.NONE, StoreBanner.of(setup, sameStore, loading = false))
+        assertEquals(StoreBanner.NONE, StoreBanner.of(setup, mobile, loading = true))
+        assertEquals(StoreBanner.NONE, StoreBanner.of(setup, mobile, loading = false))
+        // Une page de l'ancien site sur le serveur `fd<N>-courses` n'est pas une page de magasin : l'agent n'y lit rien, le bandeau de la lecture reste
+        assertEquals(StoreBanner.SETUP, StoreBanner.of(setup, sameStore, loading = false))
+        assertFalse(OpeningWatch().canDeliver(setup, sameStore))
+        assertTrue(OpeningWatch().canDeliver(setup, mobile))
     }
 
     @Test
-    fun `sans adresse donnee, le site mobile alarme aussitot, comme avant`() {
-        assertEquals(StoreBanner.MOBILE, StoreBanner.of(parse(null)!!, mobile, loading = true))
-        assertEquals(StoreBanner.MOBILE, StoreBanner.of(parse(null)!!, mobile))
+    fun `pendant que l'adresse donnee charge, le site mobile d'une enseigne qui le refuse n'alarme pas, une fois fini il le dit`() {
+        val setup = parseRefusing(refusingMobile)!!
+
+        assertEquals(StoreBanner.SETUP, StoreBanner.of(setup, refusingMobile, loading = true))
+        // Fini et toujours sur le site mobile : l'enseigne n'a pas redirigé, le bandeau le dit et propose l'accueil
+        assertEquals(StoreBanner.MOBILE, StoreBanner.of(setup, refusingMobile, loading = false))
+        // La page finale du site ordinateur est une page de magasin : l'agent reçoit la demande
+        assertEquals(StoreBanner.NONE, StoreBanner.of(setup, refusingDesktop, loading = false))
+    }
+
+    @Test
+    fun `sans adresse donnee, le site mobile d'une enseigne qui le refuse alarme aussitot, comme avant`() {
+        assertEquals(StoreBanner.MOBILE, StoreBanner.of(parseRefusing(null)!!, refusingMobile, loading = true))
+        assertEquals(StoreBanner.MOBILE, StoreBanner.of(parseRefusing(null)!!, refusingMobile))
     }
 
     @Test
     fun `l'adresse donnee ne change rien pour un plan`() {
-        val plan = DrivePlan.parse(JSONObject(java.io.File("src/test/resources/plan-complet.json").readText()))!!
+        val plan = DrivePlan.parse(FictionalSites.plan(refusing, "123456", "fd9-courses.exemple-a.test"), refusingSites)!!
 
-        assertEquals(StoreBanner.MOBILE, StoreBanner.of(plan, mobile, loading = true))
+        assertEquals(StoreBanner.MOBILE, StoreBanner.of(plan, refusingMobile, loading = true))
     }
 
     @Test
@@ -247,12 +268,17 @@ class SetupAddressTest {
     // —— la livraison ———————————————————————————————————————————————————————————————————————————————————————————————————
 
     @Test
-    fun `le message n'est livre qu'a la page finale du site ordinateur, jamais au site mobile`() {
+    fun `le message n'est livre qu'a la page de magasin, jamais au site mobile d'une enseigne qui le refuse`() {
         val watch = OpeningWatch()
-        val setup = parse(mobile)!!
+        val setup = parseRefusing(refusingMobile)!!
 
-        assertFalse(watch.canDeliver(setup, mobile))
+        assertFalse(watch.canDeliver(setup, refusingMobile))
         assertFalse(watch.canDeliver(setup, setup.startUrl))
-        assertTrue(watch.canDeliver(setup, sameStore))
+        assertTrue(watch.canDeliver(setup, refusingDesktop))
+        // Leclerc : la page m-courses donnée est elle-même une page de magasin (DRV-754)
+        val leclerc = parse(mobile)!!
+        assertTrue(watch.canDeliver(leclerc, mobile))
+        assertFalse("une page de l'ancien site du serveur n'est pas une page de magasin", watch.canDeliver(leclerc, sameStore))
+        assertTrue(watch.canDeliver(leclerc, "https://fd9-courses.leclercdrive.fr/magasin-123456-123456-ville-test/mobile-detail-panier.aspx"))
     }
 }

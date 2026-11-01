@@ -11,6 +11,9 @@ import { defineConfig, devices } from '@playwright/test'
 const HOST_RULES = [
   'MAP courses-test.leclercdrive.fr 127.0.0.1',
   'MAP m-courses.leclercdrive.fr 127.0.0.1',
+  // La version mobile (DRV-754) : le serveur du magasin et le compte, que `m-courses` et l'accueil appellent ou ouvrent
+  'MAP fd8-courses.leclercdrive.fr 127.0.0.1',
+  'MAP fd8-espace-client.leclercdrive.fr 127.0.0.1',
   // L'accueil de l'enseigne, où un plan s'ouvre (DRV-625)
   'MAP www.leclercdrive.fr 127.0.0.1',
   // Le faux site d'Auchan (DRV-717) : son hôte est celui du site, jamais `compte.auchan.fr` (aucun code de Repas n'y est injecté)

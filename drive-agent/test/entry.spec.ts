@@ -37,6 +37,17 @@ describe('readEntry : le lien « Commencer mes courses »', () => {
     })
   })
 
+  it('suit « Commencer mes courses » vers m-courses, la version mobile (DRV-754), seulement pour le magasin du plan', () => {
+    const mobile = (id: string) =>
+      START(`https://m-courses.leclercdrive.fr/magasin-${id}-${id}-saint-priest`)
+
+    expect(readEntry(mobile('000123'), HOME, STORE_ID)).toEqual({
+      kind: 'LINK',
+      url: 'https://m-courses.leclercdrive.fr/magasin-000123-000123-saint-priest',
+    })
+    expect(readEntry(mobile('000999'), HOME, STORE_ID)).toEqual({ kind: 'REFUSED' })
+  })
+
   it('trouve le lien même enveloppé, avec un point ou une flèche, ou dans un aria-label', () => {
     const href = 'https://fd0-courses.leclercdrive.fr/magasin-000123-000123-Ville-Test/'
     for (const html of [
@@ -67,7 +78,6 @@ describe('readEntry : le lien « Commencer mes courses »', () => {
       'un hôte qui ressemble à Leclerc',
       'https://fd0-courses.leclercdrive.fr.exemple.invalid/magasin-000123-000123-Ville-Test/',
     ],
-    ['le site mobile', 'https://m-courses.leclercdrive.fr/magasin-000123-000123-Ville-Test/'],
     ['une page qui n’est pas celle d’un magasin', 'https://fd0-courses.leclercdrive.fr/'],
     [
       'une adresse non sécurisée',
@@ -174,7 +184,6 @@ describe('readEntry : « choisir mon magasin » (aller droit à l’accueil du m
     ['une page du magasin qui n’est pas son accueil', link(`${STORE}panier.aspx`)],
     ['une adresse avec paramètres', link(`${STORE}?x=1`)],
     ['un autre site', link('https://exemple.invalid/magasin-000123-000123-Ville-Test/')],
-    ['le site mobile', link('https://m-courses.leclercdrive.fr/magasin-000123-000123-Ville-Test/')],
     [
       'une adresse avec identifiant',
       link('https://u:p@fd0-courses.leclercdrive.fr/magasin-000123-000123-Ville-Test/'),

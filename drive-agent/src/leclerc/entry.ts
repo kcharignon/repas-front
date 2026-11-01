@@ -10,7 +10,7 @@ import { decodeEntities } from './embedded'
 import { fold, INVISIBLE } from './page-text'
 import { isChallenge } from './pacer'
 import { addressShape } from './probe'
-import { isMobileHost, type LocationLike } from './store'
+import type { LocationLike } from './store'
 
 /** Au-delà, un lien est une phrase, pas un libellé de bouton. */
 const MAX_LABEL = 40
@@ -247,7 +247,7 @@ const STORE_HOME_PATH = /^\/magasin-([0-9]{1,12})-[0-9]{1,12}-[^/?#]+\/?$/i
 
 /**
  * Un lien de la page qui mène à l'ACCUEIL du magasin du plan (« Mon magasin », un magasin choisi dans la liste) : le même magasin que le plan
- * (premier numéro identique), sur un hôte `*.leclercdrive.fr` qui n'est pas le site mobile, avec le même schéma et le même port que la page,
+ * (premier numéro identique), sur un hôte `*.leclercdrive.fr` (dont `m-courses`, la version mobile : DRV-754), avec le même schéma et le même port que la page,
  * sans identifiant. Rend l'adresse complète, `null` sans lien sûr. Jamais un autre magasin, jamais une page autre que l'accueil du magasin.
  */
 function findStoreHomeLink(pageText: string, page: PageRef, storeId: string): string | null {
@@ -265,8 +265,7 @@ function findStoreHomeLink(pageText: string, page: PageRef, storeId: string): st
       url.password === '' &&
       url.search === '' &&
       url.hash === '' &&
-      STORE_HOST.test(host) &&
-      !isMobileHost(host)
+      STORE_HOST.test(host)
     )
       return url.href
   }
@@ -278,7 +277,7 @@ const STORE_PATH = /^\/magasin-([0-9]{1,12})-([0-9]{1,12})(?:-[^/?#]*)?(?=\/|$)/
 
 /**
  * « Commencer mes courses » dans la page : un bouton sans adresse (`BUTTON`, à cliquer), ou un lien, vérifié : il n'est suivi que s'il mène à une page de MAGASIN du plan (même premier numéro que
- * le magasin du plan), sur un hôte `*.leclercdrive.fr` qui n'est pas le site mobile, avec le même schéma et le même port que la page, sans
+ * le magasin du plan), sur un hôte `*.leclercdrive.fr` (dont `m-courses`, la version mobile : DRV-754), avec le même schéma et le même port que la page, sans
  * identifiant dans l'adresse. Toute autre adresse est refusée : une adresse lue dans la page n'est pas une adresse de navigation de confiance.
  * `storeId` : le premier numéro de l'adresse du magasin du plan (`plan.store.id`).
  */
@@ -301,7 +300,6 @@ export function readEntry(pageText: string, page: PageRef, storeId: string): Ent
     url.username === '' &&
     url.password === '' &&
     STORE_HOST.test(host) &&
-    !isMobileHost(host) &&
     found?.[1] === storeId
   return sound ? { kind: 'LINK', url: url.href } : { kind: 'REFUSED' }
 }

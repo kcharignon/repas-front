@@ -30,19 +30,19 @@ class NativeBridgeTest {
         assertEquals(NativeRequest.AppMenu, screen("""{"v":1,"type":"app.menu"}"""))
     }
 
-    private val plan = File("src/test/resources/plan-complet.json").readText()
+    private val plan = ReferencePlans.text()
 
     @Test
     fun `drive start porte un plan valide`() {
         val start = screen("""{"v":1,"type":"drive.start","plan":$plan}""") as NativeRequest.DriveStart
 
         assertEquals("8f14e45f-ceea-467a-9575-8e6b8c0a1b2c", start.plan.runId)
-        assertEquals("courses-test.leclercdrive.fr", start.plan.storeHost)
+        assertEquals(ReferencePlans.STORE_HOST, start.plan.storeHost)
     }
 
     @Test
     fun `un plan invalide, absent ou d'un hote non autorise recoit INVALID_PLAN`() {
-        val badHost = plan.replace("courses-test.leclercdrive.fr", "exemple.invalid")
+        val badHost = plan.replace(ReferencePlans.STORE_HOST, "exemple.invalid")
         val asSetup = plan.replaceFirst("plan\"", "setup\"")
         listOf(
             """{"v":1,"type":"drive.start"}""",

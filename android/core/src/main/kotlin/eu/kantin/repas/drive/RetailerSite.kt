@@ -2,10 +2,13 @@ package eu.kantin.repas.drive
 
 /** Comment une enseigne sert son site à un téléphone (`siteMode` du registre, ADR 0027 du back). */
 enum class SiteMode {
-    /** Un téléphone reçoit un site mobile dont les routes sont autres : l'application impose le mode ordinateur et refuse le site mobile ([RetailerSite.isMobileSite]). */
+    /**
+     * Un téléphone reçoit un site mobile dont les routes sont autres : l'application impose le mode ordinateur et refuse le site mobile ([RetailerSite.isMobileSite]).
+     * Aucune enseigne servie ne l'utilise plus (Leclerc est passé à sa version mobile, DRV-754) ; le mécanisme reste pour les enseignes fictives des tests.
+     */
     DESKTOP,
 
-    /** Le site mobile est celui que l'on veut. */
+    /** Le site mobile est celui que l'on veut : la WebView garde son identité de téléphone (Leclerc depuis DRV-754). */
     MOBILE,
 
     /** Un seul site adaptatif : on le prend tel quel, il n'y a ni mode à imposer ni site mobile à refuser. */
@@ -61,7 +64,21 @@ class HostPattern private constructor(val name: String, val subdomains: Boolean)
  * [bridge]. C'est ce qui permet à une enseigne de naviguer sur plusieurs hôtes (une page de connexion à part, par exemple) sans que le pont ni l'agent
  * existent sur la page du mot de passe.
  */
-data class SiteHost(val pattern: HostPattern, val bridge: Boolean)
+data class SiteHost(
+    val pattern: HostPattern,
+    val bridge: Boolean,
+    /**
+     * Resserre le pont et le plan à une **famille de noms** à l'intérieur de [pattern] (DRV-754) : un nom (déjà lu et en minuscules) de [pattern] qui ne correspond pas
+     * en entier à cette expression n'a ni pont, ni agent, ni plan, mais reste un site où l'on **navigue** (images, ressources). La règle d'origine donnée à la
+     * WebView ([HostPattern.origin]) reste celle du motif (un joker de sous-domaine est tout ce qu'elle sait écrire) : le resserrement est fait par les
+     * contrôles du cœur (chaque message relit son origine, un plan ne part que vers une page de la famille). Absent : tout le motif (comportement d'avant).
+     */
+    val bridgeOnlyOn: Regex? = null,
+) {
+    init {
+        require(bridgeOnlyOn == null || bridge) { "Une famille de noms ne resserre que le pont." }
+    }
+}
 
 /**
  * Les règles d'adresse des pages de magasin d'une enseigne qui en a (une adresse par magasin). Les trois sont des expressions régulières sur le
@@ -74,7 +91,23 @@ class StorePages(
     val homeSegment: Regex,
     /** Le chemin du lien que le front fait vers un magasin (« Finaliser »), entier, deux groupes (les deux numéros) : sans ville. */
     val frontLink: Regex,
+    /**
+     * Deux numéros désignent le même magasin sur **tous** les hôtes de l'enseigne (DRV-754) : le lien « Finaliser » du front porte `store.host` (`fd<N>-courses`)
+     * alors que la page retenue est celle de l'hôte où l'on navigue (`m-courses`). [StorePathMemory.storeHomeUrl] ne compare alors que les numéros, jamais
+     * l'hôte ; faux par défaut (même hôte exigé, comme avant). C'est une donnée du registre, jamais une adresse tirée du plan ni d'une page.
+     */
+    val sameStoreOnAnyHost: Boolean = false,
+    /**
+     * Quand la liste n'est pas vide (DRV-754), une page dont le chemin suit [pagePath] n'est une page de magasin que si **une** de ces règles lui convient : son hôte (nom entier,
+     * minuscules) ET son chemin entier. Liste vide (par défaut) : toute page qui suit [pagePath] en est une, comme avant. Pour Leclerc : toute page de `m-courses` (l'application
+     * mobile), mais sur le serveur `fd<N>-courses` seulement les pages `mobile-….aspx` (le serveur sert aussi l'ancien site : plan du site, pied de page… où l'agent prendrait
+     * l'ancien protocole), et aucune page de `www` ni d'un autre nom. [StorePathMemory] ne retient pas non plus une page qui n'en est pas une.
+     */
+    val pagesOnHosts: List<PagesOnHost> = emptyList(),
 )
+
+/** Une règle de [StorePages.pagesOnHosts] : une page d'un hôte qui correspond à [host] (nom entier, minuscules) est une page de magasin si son chemin entier correspond à [path]. */
+class PagesOnHost(val host: Regex, val path: Regex)
 
 /**
  * Une enseigne de drive vue par l'application (DRV-706, ADR 0027 du back) : **une donnée, pas une branche de code**. Elle dit où l'on peut naviguer,
@@ -114,10 +147,10 @@ class RetailerSite(
     val debugPlanFile: String = "debug-plan.$id.json",
 ) {
     private val navigation: List<HostPattern> = hosts.map { it.pattern }
-    private val bridge: List<HostPattern> = hosts.filter { it.bridge }.map { it.pattern }
+    private val bridge: List<SiteHost> = hosts.filter { it.bridge }
 
     /** Les règles d'origine de la WebView pour le pont et l'injection de l'agent : celles des hôtes qui portent le pont, jamais celles des autres. */
-    val bridgeOrigins: Set<String> = bridge.mapTo(LinkedHashSet()) { it.origin }
+    val bridgeOrigins: Set<String> = bridge.mapTo(LinkedHashSet()) { it.pattern.origin }
 
     private val homeHost: String
     private val homePath: String
@@ -130,7 +163,7 @@ class RetailerSite(
         require(siteMode == SiteMode.DESKTOP || mobileSiteLabel == null) { "Seul le mode ordinateur refuse un site mobile : $id" }
         require(startUrl.none { it == '?' || it == '#' }) { "L'adresse de départ de $id ne porte ni requête ni fragment." }
         homeHost = NavigationPolicy.httpsHostOf(startUrl) ?: throw IllegalArgumentException("Adresse de départ invalide : $id")
-        require(bridge.any { it.matches(homeHost) }) { "L'adresse de départ de $id n'est pas sur un hôte où le pont existe." }
+        require(bridgesOn(homeHost)) { "L'adresse de départ de $id n'est pas sur un hôte où le pont existe." }
         homePath = NavigationPolicy.pathOf(startUrl).ifEmpty { "/" }
     }
 
@@ -145,7 +178,7 @@ class RetailerSite(
     internal fun navigatesTo(host: String): Boolean = navigation.any { it.matches(host) }
 
     /** Vrai si le pont et l'agent existent sur ce nom de site (déjà lu et en minuscules). */
-    internal fun bridgesOn(host: String): Boolean = bridge.any { it.matches(host) }
+    internal fun bridgesOn(host: String): Boolean = bridge.any { it.pattern.matches(host) && it.bridgeOnlyOn?.matches(host) != false }
 
     /** Les noms de site de l'enseigne : pour comparer deux enseignes entre elles ([RetailerSites]). */
     internal fun overlapsNavigation(other: RetailerSite): Boolean = navigation.any { a -> other.navigation.any { b -> a.overlaps(b) } }
@@ -173,8 +206,9 @@ class RetailerSite(
     fun isStoreId(value: String?): Boolean = value != null && storeIdPattern.matches(value)
 
     /**
-     * L'adresse est-elle celle du site mobile (`m-courses.exemple.test`) ? Il n'a pas les routes du site ordinateur : l'agent n'y agit pas, et
-     * l'application ne lui envoie ni plan ni lecture du magasin. Toujours faux pour une enseigne sans site mobile à refuser.
+     * L'adresse est-elle celle d'un site mobile à refuser (`m-courses.exemple.test`) ? Il n'a pas les routes du site ordinateur : l'agent n'y agit pas, et
+     * l'application ne lui envoie ni plan ni lecture du magasin. Toujours faux pour une enseigne sans site mobile à refuser : Leclerc et Auchan
+     * (DRV-754 : la version mobile de Leclerc EST son site) ; seules les enseignes fictives des tests en ont un.
      */
     fun isMobileSite(url: String?): Boolean {
         val label = mobileSiteLabel ?: return false
@@ -185,8 +219,9 @@ class RetailerSite(
 
     /**
      * L'adresse d'un magasin que Repas demande d'ouvrir à la place de l'accueil (`drive.setup` avec `address`, DRV-741), ou `null` si elle n'est pas
-     * acceptable. C'est l'adresse que l'utilisateur a collée depuis le site mobile de l'enseigne : l'application l'ouvre en mode ordinateur, l'enseigne la
-     * redirige vers la bonne adresse de magasin et l'agent lit le magasin sur la page finale. Elle est revérifiée ici comme côté web, **à la lettre** :
+     * acceptable. C'est l'adresse que l'utilisateur a collée depuis le site de l'enseigne : l'application l'ouvre, l'enseigne la redirige au besoin vers la
+     * bonne adresse de magasin et l'agent lit le magasin sur la page finale. Pour Leclerc (DRV-754), la page `m-courses…/magasin-N-N-ville` de la version mobile
+     * est une page directe de magasin, sans détour. Elle est revérifiée ici comme côté web, **à la lettre** :
      * un texte en ASCII visible, `https` sans port, ni identifiants, ni requête, ni fragment, sur un hôte de l'enseigne où le pont existe (le site mobile
      * en est un) ; le chemin est exactement le segment d'un magasin ([StorePages.homeSegment], avec sa ville, ou [StorePages.frontLink], sans). Une enseigne
      * dont le magasin n'est pas dans l'adresse n'en accepte aucune. Le résultat est [raw] lui-même, jamais une version réécrite.
@@ -210,7 +245,12 @@ class RetailerSite(
     fun isStorePage(url: String?): Boolean {
         val pages = storePages ?: return false
         if (!isNavigable(url) || isMobileSite(url)) return false
-        return pages.pagePath.containsMatchIn(NavigationPolicy.pathOf(url!!))
+        val path = NavigationPolicy.pathOf(url!!)
+        if (!pages.pagePath.containsMatchIn(path)) return false
+        // Seules les pages que la version mobile utilise sont des pages de magasin (DRV-754) : un lien de pied de page du serveur n'en est pas une
+        if (pages.pagesOnHosts.isEmpty()) return true
+        val host = NavigationPolicy.httpsHostOf(url) ?: return false
+        return pages.pagesOnHosts.any { it.host.matches(host) && it.path.matches(path) }
     }
 
     /**

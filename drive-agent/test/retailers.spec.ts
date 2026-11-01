@@ -97,8 +97,8 @@ describe('le registre', () => {
 
   it('décrit chaque enseigne : mode du site, anti-robot, cadence de départ', () => {
     const [leclerc, auchan] = RETAILERS
-    // Leclerc : le mode ordinateur, la cadence réglée sur le vrai site (celle de l’agent publié)
-    expect(leclerc).toMatchObject({ siteMode: 'DESKTOP', antiBot: 'DATADOME' })
+    // Leclerc : la version mobile du site (DRV-754, plus de mode ordinateur), la cadence réglée sur le vrai site (celle de l’agent publié)
+    expect(leclerc).toMatchObject({ siteMode: 'MOBILE', antiBot: 'DATADOME' })
     expect(leclerc?.pacing).toEqual({
       pauseMs: PAUSE_MS,
       jitterMs: JITTER_MS,

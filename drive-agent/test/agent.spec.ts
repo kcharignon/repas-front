@@ -31,7 +31,7 @@ afterEach(() => {
 describe('sans plan', () => {
   it('ne change rien à la page : ni élément, ni variable globale', () => {
     // Given : une page de magasin inventée
-    document.body.innerHTML = '<p>Page</p>'
+    document.body.innerHTML = '<p>Page</p><a href="/deconnexion">Se déconnecter</a>'
     const before = document.documentElement.outerHTML
     const names = Object.getOwnPropertyNames(window)
 

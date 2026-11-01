@@ -2,8 +2,12 @@
 // L'agent attend, désigne dans la page le contrôle à toucher, et continue tout seul. Ce fichier dit ce que chaque enseigne doit lui donner pour cela : où est le contrôle
 // de chaque étape (`RetailerAdapter.guideTarget`). Le contrôle n'est jamais touché par l'agent : il est seulement entouré (`ui/pointer.ts`) ; la personne le touche.
 
-/** Les étapes que l'agent sait guider : choisir son magasin, puis se connecter (le magasin d'abord, comme chez Leclerc qui refuse la connexion sans magasin). */
-export type GuideStep = 'store' | 'login'
+/**
+ * Les étapes que l'agent sait guider : choisir son magasin, puis se connecter (le magasin d'abord, comme chez Leclerc qui refuse la connexion sans magasin), et, pour une
+ * page qui pose une QUESTION à la personne avant de continuer, y répondre (`basket` : « compléter ton ancien panier ? » d'après la connexion, DRV-754). L'agent ne
+ * répond jamais à sa place.
+ */
+export type GuideStep = 'store' | 'login' | 'basket'
 
 /** Le contrôle de la page à toucher pour une étape : l'élément (jamais touché par l'agent) et son libellé tel que la page l'écrit, pour le citer à la personne. */
 export interface GuideTarget {

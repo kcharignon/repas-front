@@ -18,6 +18,7 @@ export const STYLES = `
 .overlay.sheet>.screen.guide.top{margin:8px 8px auto}
 .guide h1{margin:0;font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:24px;line-height:1.15;font-weight:700}
 .guide .g-text{margin:0;font-size:17px;line-height:1.4}
+.guide .g-note{margin:0;font-size:15px;line-height:1.4;color:var(--g-muted)}
 .guide .g-head{display:flex;align-items:center;gap:10px}
 .guide .g-segments{display:inline-flex;gap:4px}
 .guide .g-seg{width:28px;height:6px;border-radius:999px;background:var(--g-line)}

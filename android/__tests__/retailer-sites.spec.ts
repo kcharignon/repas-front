@@ -64,6 +64,16 @@ describe('le registre des enseignes est le seul endroit du cœur qui nomme une e
     expect(code).toContain('val SWITCHED_OFF: List<RetailerSite> = emptyList()')
   })
 
+  it('fait passer Leclerc par sa version mobile (DRV-754) : plus de mode ordinateur, plus de site mobile refusé, Auchan inchangé', () => {
+    const code = codeOf(read(registry))
+    const leclerc = code.slice(code.indexOf('private val LECLERC'), code.indexOf('private val AUCHAN'))
+
+    expect(leclerc).toContain('siteMode = SiteMode.MOBILE')
+    expect(leclerc).not.toContain('SiteMode.DESKTOP')
+    expect(leclerc).not.toContain('mobileSiteLabel')
+    expect(code).toContain('siteMode = SiteMode.AS_IS')
+  })
+
   it('n’écrit aucune règle d’origine à la main hors du modèle d’enseigne', () => {
     const offenders = files.filter((path) => basename(path) !== 'RetailerSite.kt').filter((path) => /"https:\/\/\*/.test(codeOf(read(path))))
 

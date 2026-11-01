@@ -35,41 +35,58 @@ export interface StorePaths {
 const STORE_PATH = /^\/magasin-([0-9]{1,12})-([0-9]{1,12})(-[^/?#]*)?(?=\/|$)/i
 
 /**
- * Le site mobile de l'enseigne (ticket J, hypothèse H11) : sans le mode ordinateur, Leclerc sert `m-courses.leclercdrive.fr`, dont les routes sont autres
- * (la recherche y répond 200 sans produit : DRV-011). Son premier nom est `m` ou commence par `m-`.
+ * Le site mobile de l'enseigne : sur un téléphone Leclerc sert `m-courses.leclercdrive.fr` (DRV-754 : c'est LUI que l'agent sert désormais, par ses propres appels,
+ * voir `mobile.ts`). Son nom est exactement `m-courses` (les autres `m-…` ne sont pas des sites de l'enseigne reconnus).
  */
-const MOBILE_HOST = /^m(?:-[a-z0-9-]*)?\./i
+const MOBILE_HOST = /^m-courses\./i
 
 /** `fd9` pour `fd9-courses.leclercdrive.fr` (la famille d'hôte, jamais le numéro de magasin), `null` pour tout autre hôte. */
 export function hostFamily(host: string): string | null {
   return /^(fd\d{1,3})-courses\.leclercdrive\.fr$/.exec(host.toLowerCase())?.[1] ?? null
 }
 
-/** Vrai pour un hôte du site mobile de l'enseigne (`m-courses.leclercdrive.fr`) : l'agent n'y agit pas. */
+/** Vrai pour un hôte du site mobile de l'enseigne (`m-courses.leclercdrive.fr`) : un hôte de PAGES, dont le serveur du magasin est un autre (`fd<N>-courses`). */
 export function isMobileHost(host: string): boolean {
   return STORE_HOST.test(host.toLowerCase()) && MOBILE_HOST.test(host)
 }
 
+/** Le magasin d'une adresse de page, sans l'hôte du serveur : les deux numéros et les deux chemins. */
+export interface PageStore {
+  id: string
+  second: string
+  pagePath: string
+  cartPath: string
+}
+
 /**
- * Lit l'identifiant et l'hôte du magasin dans l'adresse de la page.
+ * Lit les numéros du magasin dans l'adresse de la page, quel que soit l'hôte `*.leclercdrive.fr` (le serveur du magasin, ou `m-courses` : DRV-754).
  *
- * @throws {RetailerError} `UNSUPPORTED_PAGE` si la page n'est pas sur `*.leclercdrive.fr` (cause `PAGE_HOST`), est le site mobile (cause `PAGE_MOBILE`,
- *   ticket J : avant toute lecture de l'adresse, le site mobile n'a pas les routes du site ordinateur) ou n'a pas d'adresse de magasin (cause `PAGE_PATH`).
+ * @throws {RetailerError} `UNSUPPORTED_PAGE` si la page n'est pas sur `*.leclercdrive.fr` (cause `PAGE_HOST`) ou n'a pas d'adresse de magasin (cause `PAGE_PATH`).
  */
-export function readStorePaths(location: LocationLike, label: string | null = null): StorePaths {
+export function readPageStore(location: LocationLike): PageStore {
   const host = location.hostname.toLowerCase()
   const found = STORE_PATH.exec(location.pathname)
   const id = found?.[1]
   const second = found?.[2]
   if (!STORE_HOST.test(host)) throw new RetailerError('UNSUPPORTED_PAGE', null, 'PAGE_HOST')
-  if (isMobileHost(host)) throw new RetailerError('UNSUPPORTED_PAGE', null, 'PAGE_MOBILE')
   if (!found || id === undefined || second === undefined) {
     throw new RetailerError('UNSUPPORTED_PAGE', null, 'PAGE_PATH')
   }
-  const cartPath = `/magasin-${id}-${second}`
+  return { id, second, pagePath: found[0], cartPath: `/magasin-${id}-${second}` }
+}
+
+/**
+ * Lit l'identifiant et l'hôte du magasin dans l'adresse de la page (la page est sur le serveur du magasin : `fd<N>-courses`). Sur `m-courses` l'hôte du serveur
+ * n'est pas celui de la page : l'adaptateur le lit dans ses liens (`mobile.ts`).
+ *
+ * @throws {RetailerError} comme `readPageStore`.
+ */
+export function readStorePaths(location: LocationLike, label: string | null = null): StorePaths {
+  const host = location.hostname.toLowerCase()
+  const { id, pagePath, cartPath } = readPageStore(location)
   return {
     store: { id, host, baseUrl: `https://${host}${cartPath}`, label },
-    pagePath: found[0],
+    pagePath,
     cartPath,
   }
 }

@@ -42,8 +42,12 @@ function hintsOf(field: HTMLInputElement): string {
   )
 }
 
+/**
+ * Le champ de l'accueil de la version mobile (mesuré le 2026-11-01, DRV-754) s'appelle « Où souhaitez-vous récupérer vos courses ? » : un code postal tapé dedans fait
+ * apparaître une suggestion de ville, que la personne touche.
+ */
 const asksPostalCode = (field: HTMLInputElement): boolean =>
-  /postal|code postal|zip|\bcp\b/.test(hintsOf(field))
+  /postal|code postal|zip|\bcp\b|recuperer vos courses/.test(hintsOf(field))
 
 const labelsOfControl = (element: Element): string[] =>
   [

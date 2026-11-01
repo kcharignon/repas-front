@@ -11,8 +11,8 @@ import org.junit.Test
  * une page de magasin pour l'agent : l'attendre est normal, ce n'est pas un problème. Adresses SYNTHÉTIQUES.
  */
 class OpeningWatchTest {
-    private val storePage = "https://courses-test.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx"
-    private val root = "https://courses-test.leclercdrive.fr/"
+    private val storePage = "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx"
+    private val root = "https://m-courses.leclercdrive.fr/"
     private val enseigne = "https://www.leclercdrive.fr/"
 
     /** Une page qui a démarré puis fini de charger, sans erreur du site. */
@@ -41,7 +41,7 @@ class OpeningWatchTest {
     @Test
     fun `une page qui n'est pas celle d'un magasin n'est pas un probleme, mais ne recoit pas le plan`() {
         // La racine de l'hôte du magasin (une page 404 du vrai site), l'accueil de l'enseigne, la connexion : l'utilisateur y choisit son magasin.
-        listOf(root, enseigne, "https://courses-test.leclercdrive.fr/connexion.aspx", "https://courses-test.leclercdrive.fr/autre", null).forEach {
+        listOf(root, enseigne, "https://m-courses.leclercdrive.fr/connexion.aspx", "https://m-courses.leclercdrive.fr/autre", null).forEach {
             val watch = loaded()
             assertEquals(it, PageTrouble.NONE, watch.trouble(it))
             assertFalse(it, watch.canDeliver(it))
@@ -65,7 +65,8 @@ class OpeningWatchTest {
     /**
      * DRV-753 : la page de connexion (hors d'un magasin) reçoit le plan d'un envoi quand un magasin a déjà été ouvert : l'agent y dit « Entre tes identifiants dans la page » (étape 2
      * du parcours guidé). Sans magasin connu, la connexion serait refusée par Leclerc et le message de l'application ramène au choix du magasin : rien n'est livré. Jamais la
-     * lecture du magasin, jamais une page refusée, jamais le site mobile.
+     * lecture du magasin, jamais une page refusée. DRV-754 : aussi la connexion et la création de compte de la version mobile (`fd<N>-espace-client`), jamais
+     * le compte une fois connecté.
      */
     @Test
     fun `un plan part de la page de connexion seulement quand un magasin a deja ete ouvert`() {
@@ -76,7 +77,17 @@ class OpeningWatchTest {
         assertFalse(watch.canDeliver(login, entersStore = true, storeKnown = false))
         assertFalse("la lecture du magasin n'y va jamais", watch.canDeliver(login, entersStore = false, storeKnown = true))
         assertFalse(watch.canDeliver("https://www.leclercdrive.fr/connexion-autre", entersStore = true, storeKnown = true))
-        assertFalse(watch.canDeliver("https://m-courses.leclercdrive.fr/connexion.aspx", entersStore = true, storeKnown = true))
+        assertTrue(watch.canDeliver("https://m-courses.leclercdrive.fr/connexion.aspx", entersStore = true, storeKnown = true))
+        // La version mobile : la connexion et la création de compte de `fd<N>-espace-client` (le menu « Connexion / Inscription » ouvre d'abord la création)
+        val mobileLogin = "https://fd8-espace-client.leclercdrive.fr/drive/magasin-000000-000000-Ville-Test/authentification.aspx?s=600"
+        val mobileSignUp = "https://fd8-espace-client.leclercdrive.fr/drive/magasin-000000-000000-ville-test/creation-compte-ccc.aspx?s=16000&v=&u=&r=x"
+        listOf(mobileLogin, mobileSignUp).forEach {
+            assertTrue(it, watch.canDeliver(it, entersStore = true, storeKnown = true))
+            assertFalse("sans magasin connu : $it", watch.canDeliver(it, entersStore = true, storeKnown = false))
+            assertFalse("la lecture du magasin n'y va jamais : $it", watch.canDeliver(it, entersStore = false, storeKnown = true))
+        }
+        // Le compte, une fois connecté : pas de connexion, rien n'est livré
+        assertFalse(watch.canDeliver("https://fd8-espace-client.leclercdrive.fr/drive/magasin-000000-000000-Ville-Test/home-espace-client-ccc.aspx", entersStore = true, storeKnown = true))
         assertFalse(watch.canDeliver("https://www.exemple.org/connexion", entersStore = true, storeKnown = true))
         val refused = OpeningWatch().apply { pageStarted(); httpError(403); pageFinished() }
         assertFalse(refused.canDeliver(login, entersStore = true, storeKnown = true))
@@ -91,12 +102,52 @@ class OpeningWatchTest {
     }
 
     @Test
-    fun `le site mobile ne recoit jamais le plan, meme charge sans incident (ticket J)`() {
-        val mobilePage = "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx"
-        val watch = loaded()
+    fun `le site mobile d'une enseigne qui le refuse ne recoit jamais le plan, meme charge sans incident (ticket J)`() {
+        val site = FictionalSites.A
+        val mobilePage = "https://m-courses.exemple-a.test/depot-000000-000000-Ville-Test/accueil.aspx"
+        val watch = OpeningWatch(site).apply { pageStarted(); pageFinished() }
 
         assertEquals(PageTrouble.NONE, watch.trouble(mobilePage))
-        assertFalse(watch.canDeliver(mobilePage))
+        assertFalse(watch.canDeliver(mobilePage, site = site))
+        assertTrue(watch.canDeliver("https://fd9-courses.exemple-a.test/depot-000000-000000-Ville-Test/accueil.aspx", site = site))
+    }
+
+    /**
+     * DRV-754 : la version mobile de Leclerc EST son site. Les pages du magasin de `m-courses` (sans `.aspx`) et le panier mobile de `fd<N>-courses` reçoivent le
+     * plan ; l'accueil `www` aussi quand l'agent y entre. Un hôte d'un autre domaine, un nom en majuscules ou un port : jamais.
+     */
+    @Test
+    fun `la version mobile de Leclerc recoit le plan sur ses pages de magasin, jamais sur un autre hote`() {
+        val watch = loaded()
+        listOf(
+            "https://m-courses.leclercdrive.fr/magasin-000000-000000-ville-test",
+            "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/",
+            "https://fd8-courses.leclercdrive.fr/magasin-000000-000000-ville-test/mobile-detail-panier.aspx?sProvenance=SM",
+            "https://fd8-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/mobile-detail-panier.aspx",
+        ).forEach { assertTrue(it, watch.canDeliver(it)) }
+        assertTrue(watch.canDeliver("https://www.leclercdrive.fr/", entersStore = true))
+        listOf(
+            "https://m-courses.exemple.org/magasin-000000-000000-ville-test",
+            "https://m-courses.leclercdrive.fr.evil.com/magasin-000000-000000-ville-test",
+            "https://m-courses.leclercdrive.fr:8443/magasin-000000-000000-ville-test",
+            "http://m-courses.leclercdrive.fr/magasin-000000-000000-ville-test",
+            // DRV-754 : une page du serveur qui n'est pas de la version mobile (plan du site, pied de page) ne reçoit pas le plan ; ni un autre nom que les quatre
+            "https://fd8-courses.leclercdrive.fr/magasin-000000-000000-ville-test/plan-du-site",
+            "https://fd8-courses.leclercdrive.fr/magasin-000000-000000-ville-test",
+            "https://fd8-courses.leclercdrive.fr/magasin-000000-000000-ville-test/detail-panier.aspx",
+            "https://fd8-courses.leclercdrive.fr.attaquant.fr/magasin-000000-000000-ville-test/mobile-detail-panier.aspx",
+            "https://evil-fd8-courses.leclercdrive.fr/magasin-000000-000000-ville-test/mobile-detail-panier.aspx",
+            "https://fd8-courses.leclercdrive.fr:8443/magasin-000000-000000-ville-test/mobile-detail-panier.aspx",
+            "https://fd8-photos.leclercdrive.fr/magasin-000000-000000-ville-test/mobile-detail-panier.aspx",
+            "https://fdx-courses.leclercdrive.fr/magasin-000000-000000-ville-test/mobile-detail-panier.aspx",
+            "https://m-courses2.leclercdrive.fr/magasin-000000-000000-ville-test",
+            "https://m.leclercdrive.fr/magasin-000000-000000-ville-test",
+            "https://m-autre.leclercdrive.fr/magasin-000000-000000-ville-test",
+            "https://www.leclercdrive.fr/magasin-000000-000000-ville-test",
+        ).forEach { assertFalse(it, watch.canDeliver(it)) }
+        // La racine de m-courses n'est pas une page de magasin
+        assertFalse(watch.canDeliver("https://m-courses.leclercdrive.fr/"))
+        assertEquals(PageTrouble.NONE, watch.trouble("https://m-courses.leclercdrive.fr/magasin-000000-000000-ville-test"))
     }
 
     @Test

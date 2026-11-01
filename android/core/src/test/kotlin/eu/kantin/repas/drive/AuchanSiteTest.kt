@@ -325,17 +325,17 @@ class AuchanSiteTest {
         assertNotNull(DrivePlan.parse(auchanPlan(storeId = storeUuid), both))
         assertTrue(auchan.isStoreId("ffffffff-ffff-ffff-ffff-ffffffffffff"))
         assertNull("un numéro à la Leclerc n'est pas un magasin d'Auchan", DrivePlan.parse(auchanPlan(storeId = "123456"), both))
-        assertNull("un UUID n'est pas un magasin de Leclerc", DrivePlan.parse(plan(leclerc, storeUuid, "boutique.leclercdrive.fr"), both))
+        assertNull("un UUID n'est pas un magasin de Leclerc", DrivePlan.parse(plan(leclerc, storeUuid, "fd9-courses.leclercdrive.fr"), both))
     }
 
     @Test
     fun `un plan dont l'enseigne et l'hote ne vont pas ensemble est refuse`() {
-        assertNull("un plan d'Auchan chez Leclerc", DrivePlan.parse(plan(auchan, storeUuid, "boutique.leclercdrive.fr"), both))
-        assertNull("un plan d'Auchan chez Leclerc", DrivePlan.parse(plan(auchan, "123456", "boutique.leclercdrive.fr"), both))
+        assertNull("un plan d'Auchan chez Leclerc", DrivePlan.parse(plan(auchan, storeUuid, "fd9-courses.leclercdrive.fr"), both))
+        assertNull("un plan d'Auchan chez Leclerc", DrivePlan.parse(plan(auchan, "123456", "fd9-courses.leclercdrive.fr"), both))
         assertNull("un plan de Leclerc chez Auchan", DrivePlan.parse(plan(leclerc, "123456", "www.auchan.fr"), both))
         assertNull("un plan de Leclerc chez Auchan", DrivePlan.parse(plan(leclerc, storeUuid, "www.auchan.fr"), both))
         assertNull("un plan de Leclerc chez la page du mot de passe d'Auchan", DrivePlan.parse(plan(leclerc, "123456", "compte.auchan.fr"), both))
-        assertNotNull(DrivePlan.parse(plan(leclerc, "123456", "boutique.leclercdrive.fr"), both))
+        assertNotNull(DrivePlan.parse(plan(leclerc, "123456", "fd9-courses.leclercdrive.fr"), both))
     }
 
     @Test
@@ -390,7 +390,7 @@ class AuchanSiteTest {
             assertFalse(watch.canDeliver(request, "https://api.auchan.fr/"))
             assertFalse(watch.canDeliver(request, "https://www.auchan.fr.exemple.invalid/"))
             assertFalse(watch.canDeliver(request, "https://www.leclercdrive.fr/"))
-            assertFalse(watch.canDeliver(request, "https://boutique.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx"))
+            assertFalse(watch.canDeliver(request, "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx"))
             assertFalse(watch.canDeliver(request, null))
         }
         assertTrue(auchan.acceptsPlanOn(home))
@@ -411,8 +411,8 @@ class AuchanSiteTest {
     @Test
     fun `le plan d'une autre enseigne n'est jamais livre a une page d'Auchan, et le plan d'Auchan jamais a une autre`() {
         val planOfAuchan = DrivePlan.parse(auchanPlan(), both)!!
-        val planOfLeclerc = DrivePlan.parse(plan(leclerc, "123456", "boutique.leclercdrive.fr"), both)!!
-        val pageOfLeclerc = "https://boutique.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx"
+        val planOfLeclerc = DrivePlan.parse(plan(leclerc, "123456", "fd9-courses.leclercdrive.fr"), both)!!
+        val pageOfLeclerc = "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx"
         val homeOfLeclerc = "https://www.leclercdrive.fr/"
 
         listOf(OpeningWatch(auchan), OpeningWatch(leclerc)).forEach { watch ->
@@ -437,9 +437,12 @@ class AuchanSiteTest {
         val leclercPages = listOf(
             "https://www.leclercdrive.fr/",
             "https://leclercdrive.fr/",
-            "https://boutique.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx",
+            "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx",
             "https://www.leclercdrive.fr/connexion.aspx",
             "https://m-courses.leclercdrive.fr/",
+            "https://m-courses.leclercdrive.fr/magasin-000000-000000-ville-test",
+            "https://fd8-espace-client.leclercdrive.fr/drive/magasin-000000-000000-Ville-Test/authentification.aspx",
+            "https://fd8-courses.leclercdrive.fr/magasin-000000-000000-ville-test/mobile-detail-panier.aspx",
         )
         val auchanPages = listOf(home, "https://www.auchan.fr/", "https://www.auchan.fr/panier", loginPage, "https://compte.auchan.fr/")
 
@@ -466,6 +469,10 @@ class AuchanSiteTest {
             "https://www.auchan.fr/connexion.aspx",
             "https://www.auchan.fr/",
             "https://compte.auchan.fr/connexion.aspx",
+            // La version mobile de Leclerc (DRV-754) : ni ses pages de magasin, ni sa connexion ne sont celles d'Auchan
+            "https://m-courses.leclercdrive.fr/magasin-000000-000000-ville-test",
+            "https://www.auchan.fr/drive/magasin-000000-000000-Ville-Test/authentification.aspx",
+            "https://compte.auchan.fr/drive/magasin-000000-000000-Ville-Test/creation-compte-ccc.aspx",
         ).forEach {
             assertFalse(it, auchan.isStorePage(it))
             assertFalse(it, auchan.isLoginPage(it))
@@ -479,7 +486,7 @@ class AuchanSiteTest {
         // et les formes d'Auchan ne sont pas à Leclerc
         assertFalse(leclerc.isStorePage(home))
         assertFalse(leclerc.isHomePage(home))
-        assertNull(StorePathMemory.parse("https://boutique.leclercdrive.fr/magasin-000000-000000-Ville-Test/", auchan))
+        assertNull(StorePathMemory.parse("https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/", auchan))
     }
 
     @Test
@@ -494,10 +501,10 @@ class AuchanSiteTest {
 
     @Test
     fun `les memoires d'Auchan ne touchent pas celles de Leclerc`() {
-        val keyValues = MemoryKeyValues(mapOf("path" to "https://boutique.leclercdrive.fr/magasin-000000-000000-Ville-Test", "finalize" to "OUVERTE"))
+        val keyValues = MemoryKeyValues(mapOf("path" to "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test", "finalize" to "OUVERTE"))
         val paths = StorePathMemories(both, keyValues)
         val outcomes = FinalizeOutcomeMemories(both, keyValues)
-        val leclercPage = "https://boutique.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx"
+        val leclercPage = "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx"
 
         // Auchan ne retient aucun chemin de magasin (il n'y en a pas), pas même celui d'une page de Leclerc
         paths.remember(home)
@@ -509,8 +516,8 @@ class AuchanSiteTest {
         assertEquals(DriveEntry.Entry(home, null), DriveEntry.resolve(home, paths))
         assertEquals(DriveEntry.Entry(home, FinalizeOutcome.ADRESSE_REFUSEE), DriveEntry.resolve("https://www.auchan.fr/panier", paths))
         assertEquals(
-            DriveEntry.Entry("https://boutique.leclercdrive.fr/magasin-000000-000000-Ville-Test", FinalizeOutcome.OUVERTE),
-            DriveEntry.resolve("https://boutique.leclercdrive.fr/magasin-000000-000000", paths),
+            DriveEntry.Entry("https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test", FinalizeOutcome.OUVERTE),
+            DriveEntry.resolve("https://fd9-courses.leclercdrive.fr/magasin-000000-000000", paths),
         )
         assertNull("une adresse d'aucune enseigne", DriveEntry.resolve("https://www.auchan.fr.exemple.invalid/", paths))
         // la page du mot de passe est une page d'Auchan : « Finaliser » ouvre l'accueil, jamais cette page

@@ -39,7 +39,7 @@ import java.util.UUID
 private const val PAGE_ZOOM_STEP = 1.5f
 
 /**
- * L'écran du drive (DRV-312, DRV-313, DRV-707) : le drive d'UNE enseigne en plein écran, en mode ordinateur quand son site le demande. C'était l'hôte WebView de
+ * L'écran du drive (DRV-312, DRV-313, DRV-707) : le drive d'UNE enseigne en plein écran, dans l'identité de la WebView, ou en mode ordinateur seulement quand le site d'une enseigne (fictive) le demande ([SiteMode.DESKTOP] ; ni Leclerc ni Auchan : DRV-754). C'était l'hôte WebView de
  * « Repas Drive » ; c'est maintenant le second écran de l'application, que la coquille Repas ([MainActivity]) ouvre. **Il s'ouvre sur une enseigne**
  * ([site] : le passage en cours, sinon l'extra [EXTRA_RETAILER], sinon l'enseigne d'avant le multi-enseignes) et tout ce qu'il fait est de cette
  * enseigne seulement : navigation, accueil, mode du site, injection, origines du pont, profil de WebView, mémoires, textes.
@@ -567,7 +567,7 @@ class DriveActivity : Activity() {
      * l'utilisateur est déjà connecté). Elle affiche l'accueil du magasin : il touche lui-même « Commencer mes courses » (l'application ne
      * clique jamais à sa place), et dès qu'il est sur une page de magasin le message du passage part tout seul vers l'agent ([sendPlan]) ; si
      * ce n'est pas le magasin du plan, l'agent le dit (`STORE_MISMATCH`). Toujours l'accueil de l'enseigne, jamais l'adresse de magasin qu'une lecture
-     * du magasin a pu ouvrir (DRV-741) : si elle n'a pas mené au site ordinateur, la recharger ne ferait que recommencer.
+     * du magasin a pu ouvrir (DRV-741) : si elle n'a pas mené au magasin, la recharger ne ferait que recommencer.
      */
     private fun openHome() {
         val request = pass.current()?.request ?: return
@@ -653,8 +653,8 @@ class DriveActivity : Activity() {
     }
 
     /**
-     * Agrandir ou réduire la page du drive d'un cran, d'un geste : le site s'affiche en mode ordinateur (fenêtre de 980 px CSS affichée sur
-     * ~411 dp), son texte y est petit. Le pincement et le double toucher le font déjà ; ce menu est la voie sans geste, et sans risque pour
+     * Agrandir ou réduire la page du drive d'un cran, d'un geste : utile à qui lit mal un texte du site (le mode ordinateur, à la fenêtre de 980 px CSS,
+     * n'est plus celui de Leclerc depuis DRV-754 : sa version mobile est faite pour le téléphone). Le pincement et le double toucher le font déjà ; ce menu est la voie sans geste, et sans risque pour
      * l'agent : son interface lit le zoom de la page à chaque instant et s'y adapte (`drive-agent/src/ui/scale.ts`). La WebView borne le zoom.
      */
     private fun zoomPage(factor: Float) {

@@ -108,7 +108,9 @@ export function fakeSite(
       } as unknown as Response
     },
     location: PAGE,
-    pageText: () => '<script>var page = {"sNoPointLivraison":"555123"}</script>',
+    // Une page de client connecté (DRV-754 : Leclerc exige la PREUVE de la connexion avant d'écrire)
+    pageText: () =>
+      '<a href="/deconnexion">Se déconnecter</a><script>var page = {"sNoPointLivraison":"555123"}</script>',
     sleep: (ms) => {
       sleeps.push(ms)
       clock.now += ms

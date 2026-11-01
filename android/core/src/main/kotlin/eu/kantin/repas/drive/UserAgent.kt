@@ -15,10 +15,11 @@ data class Brand(val name: String, val majorVersion: String, val fullVersion: St
 }
 
 /**
- * L'identité que l'application donne à sa WebView : celle du mode « version pour ordinateur » de Chrome, en permanence.
+ * L'identité que l'application donne à la WebView d'une enseigne qui l'exige : celle du mode « version pour ordinateur » de Chrome ([SiteMode.DESKTOP]).
  *
- * Sur un téléphone, Leclerc sert son site mobile, dont les routes sont autres que celles du site pour ordinateur sur lequel le contrat
- * de l'agent a été mesuré (décision D25). Écrit en Kotlin pur (sans classe Android) pour se tester sans téléphone.
+ * **Plus aucune enseigne servie ne l'exige** : Leclerc passe par sa version mobile depuis DRV-754 (décision du propriétaire du 2026-11-01), comme Auchan,
+ * et garde l'identité de téléphone de la WebView. Le mode ordinateur (décision D25, d'avant) reste un mécanisme du registre pour une enseigne dont le
+ * site mobile aurait d'autres routes que l'agent connaît. Écrit en Kotlin pur (sans classe Android) pour se tester sans téléphone.
  */
 object UserAgents {
     const val WEBVIEW_BRAND = "Android WebView"

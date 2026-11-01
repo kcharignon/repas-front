@@ -16,7 +16,7 @@ class RetailerMemoriesTest {
     private val sites = FictionalSites.WITH_DEFAULT
     private val fictive = FictionalSites.A
 
-    private val host = "courses-test.leclercdrive.fr"
+    private val host = "m-courses.leclercdrive.fr"
     private val leclercPage = "https://$host/magasin-000000-000000-Ville-Test/recherche.aspx"
     private val leclercHome = "https://$host/magasin-000000-000000-Ville-Test"
     private val fictivePage = "https://boutique.exemple-a.test/depot-000000-000000-Ville-Test/accueil.aspx"

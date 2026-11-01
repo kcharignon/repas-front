@@ -38,6 +38,14 @@ export function guideStepOf(fault: GuideFault | null, adapter: RetailerAdapter):
     return 'store'
   }
   if (fault.code === 'NOT_LOGGED_IN' && fault.cause === 'SESSION_VISITOR') return 'login'
+  // Une question posée à la personne (« compléter ton ancien panier ? ») : l'agent attend sa réponse, il ne la donne jamais (DRV-754)
+  if (
+    fault.code === 'UNSUPPORTED_PAGE' &&
+    fault.cause === 'BASKET_MERGE_ASKED' &&
+    adapter.basketChoiceAsked !== undefined
+  ) {
+    return 'basket'
+  }
   return null
 }
 
@@ -47,6 +55,7 @@ export function guideStepOf(fault: GuideFault | null, adapter: RetailerAdapter):
  */
 export function stepLooksDone(step: GuideStep, adapter: RetailerAdapter): boolean {
   try {
+    if (step === 'basket') return adapter.basketChoiceAsked?.() === false
     return step === 'store'
       ? adapter.storeChosenOnPage?.() === true
       : adapter.readSession().state === 'MEMBER'
@@ -74,14 +83,20 @@ export function guideProps(
 ): GuideProps {
   // La personne est DÉJÀ sur la page de connexion : rien à désigner, elle remplit le formulaire
   const form = step === 'login' && onLoginPage(adapter)
-  const target = form ? null : guideTargetOf(step, adapter)
+  // La question de l'ancien panier est dans la page : rien à entourer, la personne la voit (elle ne la ferme pas, ne la choisit pas à sa place)
+  const target = form || step === 'basket' ? null : guideTargetOf(step, adapter)
   return {
     step,
     stage,
     index: steps.index,
     total: steps.total,
     label: target?.label ?? null,
-    ...(form ? { form: true } : { target: () => guideTargetOf(step, adapter)?.element ?? null }),
+    ...(form || step === 'basket'
+      ? form
+        ? { form: true }
+        : {}
+      : { target: () => guideTargetOf(step, adapter)?.element ?? null }),
+    ...(adapter.keepClearOfConsent === true && { clearOfConsent: true }),
     ...extra,
   }
 }

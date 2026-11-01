@@ -27,6 +27,32 @@ import { ALL_WORDS, blocked, runDeps, shop, standardShelves } from './selftest-h
 const play = (parts: ReturnType<typeof shop>) =>
   runSelftest(runDeps(parts.adapter), { stopped: () => false, step: () => undefined })
 
+describe('une enseigne qui exige la preuve de la connexion (DRV-754)', () => {
+  it('une page dont la connexion n’est pas confirmée : le test automatique n’écrit RIEN dans le panier', async () => {
+    // Given : l'adaptateur exige la preuve, la page ne dit rien de la connexion
+    const parts = shop(standardShelves(ALL_WORDS), { session: { state: 'UNKNOWN', signs: [] } })
+    Object.assign(parts.adapter, { requiresConfirmedLogin: true })
+
+    // When
+    await play(parts)
+
+    // Then : des recherches, aucun article mis au panier (le nettoyage ne retire que ce que le test aurait ajouté)
+    expect(parts.writes.filter((write) => write.quantity > 0)).toEqual([])
+    expect(parts.cart()).toEqual({})
+  })
+
+  it('une page qui confirme la connexion : l’essai se joue comme avant', async () => {
+    const parts = shop(standardShelves(ALL_WORDS), {
+      session: { state: 'MEMBER', signs: ['LOGOUT_LINK'] },
+    })
+    Object.assign(parts.adapter, { requiresConfirmedLogin: true })
+
+    await play(parts)
+
+    expect(parts.writes.length).toBeGreaterThan(0)
+  })
+})
+
 describe('le mot de la liste et ses bornes', () => {
   it('cherche douze mots courants, et essaie trois produits au plus', () => {
     expect(LOT_WORDS).toHaveLength(12)

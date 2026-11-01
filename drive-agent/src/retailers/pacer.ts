@@ -90,6 +90,11 @@ export interface PacerDeps {
    * (certains tests) aucune requête n'expire et aucun signal d'interruption n'est posé.
    */
   timer?: (ms: number, fire: () => void) => () => void
+  /**
+   * DRV-754 : l'origine (`https://hôte`) vers laquelle l'adaptateur peut envoyer UNE requête hors de l'hôte de la page, jugée par l'ENSEIGNE (son motif d'hôte, le schéma et le
+   * port de la page). Absent : aucune requête ne part ailleurs que vers l'hôte de la page.
+   */
+  allowsOrigin?: (origin: string) => boolean
 }
 
 /**
@@ -104,10 +109,37 @@ export function isChallenge(text: string): boolean {
  * Une adresse de l'hôte courant : un chemin qui commence par un seul `/`, jamais `//hôte` ni `https://…`. Un navigateur lit « \ » comme
  * « / » et ignore les tabulations et retours à la ligne d'une adresse : `/\hôte` et `/<tabulation>/hôte` sont donc refusés aussi.
  */
-function assertSameHost(url: string): void {
+function assertSameHost(
+  url: string,
+  origin?: string,
+  allowsOrigin?: (origin: string) => boolean,
+): void {
+  if (origin !== undefined) return assertOrigin(url, origin, allowsOrigin)
   const seen = url.replace(/[\t\n\r]/g, '')
   if (!url.startsWith('/') || !/^\/(?![/\\])/.test(seen)) {
     throw new Error('Une requête ne part que vers l’hôte de la page.')
+  }
+}
+
+/**
+ * Une requête vers UN autre hôte que celui de la page, nommé par l'adaptateur (DRV-754 : la version mobile d'une enseigne sert ses pages depuis un hôte et parle à
+ * son serveur sur un autre, comme son application le fait elle-même) : `origin` est `https://hôte` (le schéma et le port de la page, qui sont ceux de la page ; `http` et un port seulement pour un faux site de test), sans identifiant ni chemin, et l'adresse est cet
+ * hôte suivi d'un chemin sans `//`, sans barre oblique inverse, sans espace. Jamais un autre hôte que celui que l'adaptateur a vérifié.
+ */
+function assertOrigin(
+  url: string,
+  origin: string,
+  allowsOrigin: ((origin: string) => boolean) | undefined,
+): void {
+  const rest = url.startsWith(`${origin}/`) ? url.slice(origin.length) : ''
+  if (
+    // Aucun autre hôte que celui que l'adaptateur de l'enseigne reconnaît lui-même (`PacerDeps.allowsOrigin`) : sans lui, aucune requête ne quitte l'hôte de la page
+    allowsOrigin === undefined ||
+    !/^https?:\/\/[a-z0-9]([a-z0-9.-]{0,60}[a-z0-9])?(:\d{1,5})?$/.test(origin) ||
+    !allowsOrigin(origin) ||
+    !/^\/(?![/\\])[^\s\\@]*$/.test(rest)
+  ) {
+    throw new Error('Une requête ne part que vers l’hôte de la page ou son serveur.')
   }
 }
 
@@ -121,7 +153,8 @@ function assertSameHost(url: string): void {
  *    à l'utilisateur de faire la vérification, puis à l'appelant de recommencer (ticket K) ;
  *  - une erreur réseau est retentée une fois, après 2 s ; la seconde lève `NETWORK` ;
  *  - une requête qui ne répond pas en `REQUEST_TIMEOUT_MS` est interrompue et traitée de même (`NETWORK`, cause `REQUEST_TIMEOUT`).
- * Seul l'hôte de la page est joint (chemins relatifs), avec les cookies de la session que le navigateur envoie lui-même.
+ * Seul l'hôte de la page est joint (chemins relatifs), avec les cookies de la session que le navigateur envoie lui-même ; une requête peut viser UN autre
+ * hôte que l'adaptateur a nommé et vérifié (`request(url, init, origin)`, DRV-754).
  */
 export class Pacer {
   private readonly fetchFn: FetchFn
@@ -170,8 +203,8 @@ export class Pacer {
   }
 
   /** Envoie une requête à son tour. Rend toute réponse qui n'est pas un blocage (404, 500… compris : à l'appelant de juger). */
-  request(url: string, init: RequestInit): Promise<Reply> {
-    const turn = this.queue.then(() => this.send(url, init))
+  request(url: string, init: RequestInit, origin?: string): Promise<Reply> {
+    const turn = this.queue.then(() => this.send(url, init, origin))
     this.queue = turn.catch(() => undefined)
     return turn
   }
@@ -207,8 +240,8 @@ export class Pacer {
     if (wait > 0) await this.deps.sleep(wait)
   }
 
-  private async send(url: string, init: RequestInit): Promise<Reply> {
-    assertSameHost(url)
+  private async send(url: string, init: RequestInit, origin?: string): Promise<Reply> {
+    assertSameHost(url, origin, this.deps.allowsOrigin)
     let networkRetried = false
     for (;;) {
       if (this.stopped) throw new RetailerError('BLOCKED')
@@ -225,7 +258,8 @@ export class Pacer {
       })
       try {
         const response = await this.fetchFn(url, {
-          credentials: 'same-origin',
+          // Vers un autre hôte (`origin`), la session part aussi : c'est ce que fait l'application mobile de l'enseigne, depuis la même page
+          credentials: origin === undefined ? 'same-origin' : 'include',
           ...init,
           ...(controller && { signal: controller.signal }),
         })

@@ -341,7 +341,9 @@ export class RunStore {
     try {
       const [id, total, step] = (this.storage?.getItem(GUIDE_KEY) ?? '').split('|')
       const count = Number(total)
-      return id === runId && (count === 1 || count === 2) && (step === 'store' || step === 'login')
+      return id === runId &&
+        (count === 1 || count === 2) &&
+        (step === 'store' || step === 'login' || step === 'basket')
         ? { total: count, step }
         : null
     } catch {

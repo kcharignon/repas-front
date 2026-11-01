@@ -641,7 +641,7 @@ const entry: Renderer<'entry'> = (props: EntryProps) => {
  * entouré dans la page (`pointAt`). Un repère d'étape, un titre, UNE phrase, ce que l'agent fait pendant que la personne agit, puis UNE seule action, sur deux lignes :
  * ce qu'elle fait, et ce qui est sauf. Étape faite : une coche, la phrase « Je remplis ton panier », une barre fine. Aucune alerte, aucun mot d'erreur.
  */
-const guide: Renderer<'guide'> = (props: GuideProps, answer) => {
+const guide: Renderer<'guide'> = (props: GuideProps, answer, retailer) => {
   const done = props.stage === 'done'
   const late = props.stage === 'late'
   const marker = done
@@ -694,6 +694,9 @@ const guide: Renderer<'guide'> = (props: GuideProps, answer) => {
     marker,
     titleEl,
     h('p', { class: 'g-text', text: sentence }),
+    ...(done || late || props.step !== 'login' ? [] : (retailer.loginNotes ?? [])).map((note) =>
+      h('p', { class: 'g-note', text: note }),
+    ),
     done || late
       ? null
       : h(
