@@ -7,9 +7,10 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-import type { Locator, Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { openWithBridge } from './support/agent'
+import { expectClear, overlaps } from './support/geometry'
 import { expect, test } from './support/fixtures'
 import { known, planOf, product } from './support/plans'
 import {
@@ -41,65 +42,6 @@ async function withMobile(
     await use(fake)
   } finally {
     await fake.close()
-  }
-}
-
-interface Box {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
-const overlaps = (a: Box, b: Box): boolean =>
-  a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
-
-/** La carte du guide telle que la personne la voit : pleine ou barre ; `null` quand elle s'est effacée faute de place. */
-const cardBox = (page: Page): Promise<Box | null> => page.locator('.screen.guide').boundingBox()
-
-/** Les boîtes que la page montre, parmi celles que les sélecteurs désignent (les `limit` premières de chaque). */
-async function boxesOf(
-  page: Page,
-  selectors: readonly string[],
-  limit = 3,
-): Promise<[string, Box][]> {
-  const found: [string, Box][] = []
-  for (const selector of selectors) {
-    const all: Locator[] = await page.locator(selector).all()
-    for (const [index, one] of all.slice(0, limit).entries()) {
-      const box = await one.boundingBox()
-      if (box !== null && box.width > 0 && box.height > 0)
-        found.push([`${selector}[${index}]`, box])
-    }
-  }
-  return found
-}
-
-/** Le champ qui a le focus (le clavier est ouvert) : sa boîte, ou rien. */
-async function typingBox(page: Page): Promise<Box | null> {
-  const rect = await page.evaluate(() => {
-    const active = document.activeElement
-    if (!(active instanceof HTMLInputElement) || !active.getClientRects().length) return null
-    const { x, y, width, height } = active.getBoundingClientRect()
-    return { x, y, width, height }
-  })
-  return rect
-}
-
-/** Laisse la carte se replacer (relue toutes les 500 ms), puis vérifie qu'elle ne recouvre rien de ce qui doit rester libre. */
-async function expectClear(page: Page, selectors: readonly string[], limit = 3): Promise<void> {
-  await page.waitForTimeout(900)
-  const card = await cardBox(page)
-  if (card === null) return
-  const must = await boxesOf(page, selectors, limit)
-  const active = await typingBox(page)
-  if (active !== null) must.push(['champ en cours de saisie', active])
-  expect(must.length, 'rien à protéger : le test ne prouverait rien').toBeGreaterThan(0)
-  for (const [name, box] of must) {
-    expect(
-      overlaps(card, box),
-      `${name} est recouvert par la carte (${JSON.stringify(card)})`,
-    ).toBe(false)
   }
 }
 
@@ -159,12 +101,9 @@ for (const viewport of VIEWPORTS) {
         // (2) La personne écrit son code postal, clavier ouvert : la carte se réduit (ou s'efface), le champ et la ville proposée restent libres
         await keyboard(page, true, viewport.height, '#postal')
         await page.locator('#postal').pressSequentially('69720')
-        await expectClear(page, FIELDS)
-        const typing = await cardBox(page)
-        if (typing !== null)
-          expect(await page.locator('.screen.guide.min').count(), 'réduite pendant la saisie').toBe(
-            1,
-          )
+        expect(await expectClear(page, FIELDS), 'réduite (ou effacée) pendant la saisie').not.toBe(
+          'full',
+        )
         await shot(page, '2-magasin-ville-clavier')
         // Le repère « Touche ici » désigne la ville et ne la recouvre pas
         const tag = page.locator('.tag')
@@ -213,7 +152,16 @@ for (const viewport of VIEWPORTS) {
         await expect(page.locator('.g-text')).toHaveText(
           'Écris ton e-mail, puis ton mot de passe. Tu les tapes toi-même.',
         )
-        const FORM = ['#email', '#secret', '#continue', '#next', '.digit', '#validate']
+        const FORM = [
+          '#email',
+          '#secret',
+          '#continue',
+          '#next',
+          '.digit',
+          '#validate',
+          '#hcaptcha',
+          '#hc-frame',
+        ]
         await expectClear(page, FORM, 8)
         await shot(page, '8-connexion-formulaire')
         await keyboard(page, true, viewport.height, '#email')
@@ -225,7 +173,12 @@ for (const viewport of VIEWPORTS) {
         await expectClear(page, FORM, 8)
         await shot(page, '10-connexion-mot-de-passe-clavier')
         await keyboard(page, false, viewport.height)
+        await expectClear(page, FORM, 8)
         await page.locator('#hcaptcha').check()
+        // Le cadre de vérification s'ouvre (plus de 30 % de la fenêtre) : la carte se réduit, ne couvre ni la case ni le cadre
+        await expect(page.locator('#hc-frame')).toBeVisible()
+        expect(await expectClear(page, FORM, 8), 'réduite devant le défi').not.toBe('full')
+        await shot(page, '10b-connexion-defi')
         await page.locator('#next').click()
         await expect(page.locator('#step3')).toBeVisible()
         await expect(page.locator('.g-text')).toHaveText(

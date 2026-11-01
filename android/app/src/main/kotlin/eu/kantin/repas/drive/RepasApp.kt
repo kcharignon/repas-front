@@ -44,13 +44,22 @@ class RepasApp : Application() {
      * seulement (ni Repas, ni une autre enseigne). Sans profils de WebView l'effacement toucherait Repas : rien n'est fait, elle sera retentée.
      */
     internal val siteModeMigration: SiteModeMigration by lazy {
-        SiteModeMigration(sites, driveStore) { site ->
-            if (!DriveProfile.isolated) return@SiteModeMigration false
-            DriveProfile.clear(null, site, sites)
-            storePaths.forget(site)
-            finalizeOutcomes.forget(site)
-            true
-        }
+        SiteModeMigration(
+            sites,
+            driveStore,
+            object : SiteDataEraser {
+                override fun hasData(site: RetailerSite): Boolean =
+                    DriveProfile.cookieManager(site, sites).hasCookies() || storePaths.of(site).hasPath()
+
+                override fun erase(site: RetailerSite, done: () -> Unit): Boolean {
+                    if (!DriveProfile.isolated) return false
+                    storePaths.forget(site)
+                    finalizeOutcomes.forget(site)
+                    DriveProfile.clear(null, site, sites, done)
+                    return true
+                }
+            },
+        )
     }
 
     internal val pass: DrivePass by lazy {

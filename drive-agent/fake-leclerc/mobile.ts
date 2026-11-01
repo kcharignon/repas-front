@@ -458,6 +458,7 @@ export function authenticationPage(origins: MobileOrigins, code: boolean): strin
 <label for="secret">Mot de passe unique</label><input id="secret" type="password" autocomplete="current-password">
 <label><input id="stay" type="checkbox"> Rester connecté</label>
 <label><input id="hcaptcha" type="checkbox"> Je suis un humain</label>
+<iframe id="hc-frame" title="hCaptcha challenge" src="about:blank" style="display:none;width:300px;height:420px;border:1px solid #888"></iframe>
 <button id="next" type="button">Me connecter</button>
 </section>
 <section id="step3" role="dialog" aria-label="Saisissez le code reçu par e-mail" style="display:none">
@@ -472,6 +473,7 @@ export function authenticationPage(origins: MobileOrigins, code: boolean): strin
 const show = (id) => { for (const s of ['step1', 'step2', 'step3']) document.getElementById(s).style.display = s === id ? 'block' : 'none'; };
 const done = () => { ${setCookie(MOBILE_MEMBER_COOKIE)} location.assign('${origins.account}${ACCOUNT_PATH}/home-espace-client-ccc.aspx'); };
 document.getElementById('continue').addEventListener('click', () => show('step2'));
+document.getElementById('hcaptcha').addEventListener('change', (e) => { document.getElementById('hc-frame').style.display = e.target.checked ? 'block' : 'none'; });
 document.getElementById('next').addEventListener('click', () => { if (document.getElementById('hcaptcha').checked) { ${code ? "show('step3')" : 'done()'}; } });
 document.getElementById('validate').addEventListener('click', done);
 </script>

@@ -1,12 +1,24 @@
 // Ce que la page de Leclerc montre de l'étape guidée (DRV-757) : la sous-étape où en est la personne, le contrôle à entourer et ce que la carte ne doit pas cacher. Des lectures
 // de la page seule : aucun toucher, aucune saisie, aucune requête. Le vrai DOM de ces pages n'a jamais été relevé (seuls les textes et les formes de DRV-754 le sont) : on lit des
 // indices que la page écrit à l'intention de la personne, et au moindre doute la sous-étape reste la plus générale (le champ du code postal, le menu).
-import { findControl, foldLabel, type GuideLook, type GuideTarget } from '../retailers/guide'
+import {
+  challengeFrames,
+  findControl,
+  foldLabel,
+  isShown,
+  type GuideLook,
+  type GuideTarget,
+} from '../retailers/guide'
 import { findPostalCodeField } from './store-field'
 import { LOGIN_CONTROL_LABELS, LOGIN_LABELS } from './session'
 
 const CLICKABLE =
   'button, a, li, [role="button"], [role="link"], [role="option"], input[type="button"], input[type="submit"]'
+/** Un contrôle RÉEL (jamais une simple ligne de liste) : ce qu'on touche pour choisir un magasin. */
+const CONTROL =
+  'button, a, [role="button"], [role="link"], input[type="button"], input[type="submit"]'
+/** La ville proposée est à moins de cela sous le champ, en pixels. */
+const SUGGESTION_REACH = 320
 const HEADINGS = 'h1, h2, h3, h4, h5, h6, [role="heading"], legend, p, span, div'
 /** Le titre du panneau des magasins (mesuré le 2026-11-01, DRV-754) : « Choisissez votre service autour du 69720 ». */
 const SHOPS_TITLE = 'choisissez votre service'
@@ -31,10 +43,7 @@ const none = (target: GuideTarget | null = null, keep: readonly HTMLElement[] = 
   maybe: [],
 })
 
-const shown = (element: Element): boolean => {
-  const { width, height } = element.getBoundingClientRect()
-  return width > 0 && height > 0
-}
+const shown = isShown
 const textOf = (element: Element): string => foldLabel(element.textContent ?? '')
 const top = (element: Element): number => element.getBoundingClientRect().top
 
@@ -54,7 +63,7 @@ function shopControls(root: Document): HTMLElement[] {
   )
   if (title === undefined) return []
   const below = title.getBoundingClientRect().bottom - 2
-  const found = [...root.querySelectorAll<HTMLElement>(CLICKABLE)].filter(
+  const found = [...root.querySelectorAll<HTMLElement>(CONTROL)].filter(
     (one) => shown(one) && top(one) >= below && !CHIP.test(textOf(one)),
   )
   return innermost(found)
@@ -66,17 +75,20 @@ function shopControls(root: Document): HTMLElement[] {
 
 /** Les lignes de suggestion sous le champ : un contrôle qui porte un code postal (« Saint-Bonnet-de-Mure, Rhône (69720) »). */
 function citySuggestions(root: Document, field: HTMLElement): HTMLElement[] {
-  const below = field.getBoundingClientRect().bottom - 4
+  const box = field.getBoundingClientRect()
   const found = [...root.querySelectorAll<HTMLElement>(CLICKABLE)].filter((one) => {
     const text = textOf(one)
-    return (
-      one !== field &&
-      !one.contains(field) &&
-      text.length <= 120 &&
-      POSTAL_CODE.test(text) &&
-      shown(one) &&
-      top(one) >= below
-    )
+    if (one === field || one.contains(field) || text.length > 120 || !POSTAL_CODE.test(text))
+      return false
+    if (!shown(one)) return false
+    // Une ligne de la liste de suggestions : juste sous le champ, dans sa colonne, jamais dans l'en-tête, le menu ou le pied de page (un « 75001 » d'une adresse n'en est pas une) ;
+    // une simple ligne de liste (`li`) ne compte que dans une vraie liste
+    const at = one.getBoundingClientRect()
+    const column = at.left < box.right + 24 && at.right > box.left - 24
+    const near = at.top >= box.bottom - 4 && at.top <= box.bottom + SUGGESTION_REACH
+    const apart = one.closest('nav, header, footer') !== null
+    const real = one.tagName !== 'LI' || one.closest('[role="listbox"], ul, ol') !== null
+    return column && near && !apart && real
   })
   return innermost(found)
     .sort((a, b) => top(a) - top(b))
@@ -119,15 +131,28 @@ function codeAsked(root: Document): boolean {
   )
 }
 
-/** Ce que la carte ne couvre jamais sur la page de connexion : les champs que la page montre (e-mail, mot de passe, les six cases du code) et son bouton de validation. */
-function formControls(root: Document): HTMLElement[] {
+/** La case de vérification « Je suis un humain » (mesurée) : une case dont l'étiquette dit humain ou robot. Que la personne coche : l'agent n'y touche jamais. */
+function humanBox(box: HTMLInputElement): boolean {
+  const label = [box.getAttribute('aria-label'), box.closest('label')?.textContent].join(' ')
+  return /humain|robot/.test(foldLabel(label))
+}
+
+/**
+ * Ce que la carte ne couvre jamais sur la page de connexion : les champs que la page montre (e-mail, mot de passe, les six cases du code), son bouton de validation, la case « Je suis
+ * un humain » et le cadre de vérification (hCaptcha) qui s'ouvre ; `crowded` : ce cadre couvre plus de 30 % de la fenêtre, la carte se réduit.
+ */
+function formControls(root: Document): { keep: HTMLElement[]; crowded: boolean } {
   const fields = [...root.querySelectorAll<HTMLElement>(FIELD)].filter(shown)
   const buttons = [
     ...root.querySelectorAll<HTMLElement>('button, input[type="submit"], input[type="button"]'),
   ].filter(
     (one) => shown(one) && VALIDATE.test(textOf(one) || foldLabel(one.getAttribute('value') ?? '')),
   )
-  return [...fields, ...buttons]
+  const humans = [...root.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].filter(
+    (one) => shown(one) && humanBox(one),
+  )
+  const { frames, crowded } = challengeFrames(root, ['hcaptcha'])
+  return { keep: [...fields, ...buttons, ...humans, ...frames], crowded }
 }
 
 /**
@@ -145,8 +170,10 @@ export function readLoginLook(
     const link = findControl(root, LOGIN_LABELS)
     return { ...none(link, link === null ? [] : [link.element]), sub: 'signup' }
   }
-  if (/authentification\.aspx|\/connexion/.test(path))
-    return { ...none(null, formControls(root)), sub: codeAsked(root) ? 'code' : 'form' }
+  if (/authentification\.aspx|\/connexion/.test(path)) {
+    const { keep, crowded } = formControls(root)
+    return { ...none(null, keep), sub: codeAsked(root) ? 'code' : 'form', crowded }
+  }
   if (!mobilePage) return none(findControl(root, LOGIN_CONTROL_LABELS))
   const login = findControl(root, LOGIN_CONTROL_LABELS)
   if (login !== null && shown(login.element)) {

@@ -41,7 +41,7 @@ export const DIST = join(root, 'dist')
  * Le budget de taille de `agent.js` : un garde-fou contre une bibliothèque embarquée par mégarde, pas une limite d'un navigateur
  * (l'agent est un actif de l'application, plus une chaîne de favori). Modifiable pour un essai : `AGENT_MAX_BYTES=<octets>`.
  */
-export const DEFAULT_MAX_BYTES = 284_000
+export const DEFAULT_MAX_BYTES = 288_000
 
 /** L'empreinte SHA-384 d'un contenu, au format de l'attribut `integrity` : `sha384-<base64>`. */
 export function digestOf(/** @type {string | Uint8Array} */ content) {

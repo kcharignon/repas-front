@@ -175,4 +175,58 @@ describe('la carte posée dans la page', () => {
     expect(el.classList.contains('min')).toBe(false)
     fit.stop()
   })
+
+  it('DRV-757 : « Afficher » tient quand un champ a le focus, même sans lecture du guide (la sous-étape absente ne la remet pas à « auto » à chaque passe)', () => {
+    const field = document.createElement('input')
+    field.type = 'text'
+    document.body.appendChild(field)
+    field.getBoundingClientRect = () => rect(100, 150)
+    field.focus()
+    const el = card()
+    const fit = fitGuide(window, el, { ...options([]), needs: null })
+    expect(el.classList.contains('min')).toBe(true)
+
+    fit.ask('full')
+    window.dispatchEvent(new Event('resize'))
+    window.dispatchEvent(new Event('resize'))
+
+    expect(el.classList.contains('min')).toBe(false)
+    fit.stop()
+  })
+
+  it('DRV-757 : une lecture qui lève ne laisse pas la carte cachée (« Arrêter pour l’instant » reste atteignable)', () => {
+    const el = card()
+    const broken = control(100, 150)
+    broken.getBoundingClientRect = () => {
+      throw new Error('la page ne se laisse pas lire')
+    }
+    const fit = fitGuide(window, el, options([broken]))
+
+    expect(el.hidden).toBe(false)
+    window.dispatchEvent(new Event('resize'))
+    expect(el.hidden).toBe(false)
+    fit.stop()
+  })
+
+  it('DRV-757 : un défilement ne relit pas le guide (des requêtes sur le document) : une page de 3000 éléments, 200 défilements, aucune lecture de plus et une remesure au plus tous les 200 ms', async () => {
+    for (let i = 0; i < 3000; i += 1) document.body.appendChild(document.createElement('div'))
+    let reads = 0
+    const el = card()
+    const key = control(100, 150)
+    const fit = fitGuide(window, el, {
+      ...options([key]),
+      needs: () => {
+        reads += 1
+        return { keep: [key], maybe: [], sub: null, target: key, compact: false }
+      },
+    })
+    expect(reads).toBe(1)
+    const start = performance.now()
+
+    for (let i = 0; i < 200; i += 1) window.dispatchEvent(new Event('scroll'))
+
+    expect(reads, 'aucune lecture du guide pendant un défilement').toBe(1)
+    expect(performance.now() - start).toBeLessThan(500)
+    fit.stop()
+  })
 })

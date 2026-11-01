@@ -63,12 +63,40 @@ export function consentButtons(doc: Document, width: number, height: number): HT
   return found
 }
 
+/**
+ * Les réponses FRANCHES d'un mur : elles seules, ou une boîte fixe qui couvre une grande part de l'écran, disent qu'un mur est là. Un lien qui reste dans la page après la réponse
+ * (« Gérer mes cookies », « Personnaliser », « Paramétrer les cookies ») ou un « Accepter » isolé n'en est pas un : la carte ne dit pas de répondre aux cookies pour lui. La carte
+ * se tient hors de TOUS ces boutons (`consentButtons`), mur ou pas.
+ */
+const FRANK: ReadonlySet<string> = new Set([
+  'tout accepter',
+  'accepter tout',
+  'continuer sans accepter',
+  'tout refuser',
+  'refuser tout',
+])
+/** Une boîte fixe qui couvre au moins cette part de la fenêtre est un mur (ou une fenêtre qui s'en tient lieu). */
+const COVER = 0.4
+
+/** Ce bouton est-il dans une boîte fixe qui couvre une grande part de la fenêtre ? */
+function inCoveringBox(button: HTMLElement, win: Window): boolean {
+  const area = win.innerWidth * win.innerHeight
+  for (let box = button.parentElement; box !== null; box = box.parentElement) {
+    if (win.getComputedStyle(box).position !== 'fixed') continue
+    const { width, height } = box.getBoundingClientRect()
+    return area > 0 && (width * height) / area >= COVER
+  }
+  return false
+}
+
 /** La sous-étape « le mur de cookies est là » : la carte dit d'y répondre d'abord, rien n'est entouré (le contrôle de l'étape est derrière le mur). `null` : pas de mur. */
 export function wallLook(doc: Document): GuideLook | null {
   const win = doc.defaultView
-  return win !== null && consentButtons(doc, win.innerWidth, win.innerHeight).length > 0
-    ? { sub: 'wall', target: null, keep: [], maybe: [] }
-    : null
+  if (win === null) return null
+  const wall = consentButtons(doc, win.innerWidth, win.innerHeight).some(
+    (button) => labelsOf(button).some((label) => FRANK.has(label)) || inCoveringBox(button, win),
+  )
+  return wall ? { sub: 'wall', target: null, keep: [], maybe: [] } : null
 }
 
 /** La phrase de la carte tant que le mur est là : c'est la personne qui répond aux cookies, jamais l'agent. */

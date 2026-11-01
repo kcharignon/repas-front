@@ -752,7 +752,7 @@ const guide: Renderer<'guide'> = (props: GuideProps, answer, retailer) => {
         : own.text.includes('{label}')
           ? label === null
             ? own.bare
-            : own.text.replace('{label}', label)
+            : own.text.replace('{label}', () => label)
           : own.text
     textEl.textContent = said ?? (props.look === undefined ? general : generalFor(label))
     for (const note of notes) note.hidden = said !== undefined
@@ -771,7 +771,7 @@ const guide: Renderer<'guide'> = (props: GuideProps, answer, retailer) => {
             maybe: look?.maybe ?? [],
             sub: look?.sub ?? null,
             target,
-            compact: look?.sub === 'city' || look?.sub === 'shop',
+            compact: look?.sub === 'city' || look?.sub === 'shop' || look?.crowded === true,
           }
           return last
         }

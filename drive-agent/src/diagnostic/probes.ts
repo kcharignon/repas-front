@@ -34,6 +34,7 @@ import type {
 import { MAX_MENU_AISLES, type StoreReadFacts } from '../retailers'
 import type { LastReason, LastRefusal } from '../flow'
 import { own } from '../own'
+import type { ForegroundFacts } from './foreground'
 import { S } from '../ui'
 
 /** Le mot qu'aucun produit ne porte : la forme de la réponse d'une recherche sans résultat (hypothèse H2 de l'audit). */
@@ -79,6 +80,8 @@ export interface ProbeFacts {
   cart?: CartProbeFacts | null
   /** La forme de la dernière réponse du panier qui a échoué dans cet onglet (DRV-752), même avant un rechargement de la page. */
   cartFailure?: CartReplyFacts | null
+  /** La fenêtre au premier plan (DRV-757, A2) : des formes seulement, voir `foreground.ts`. */
+  foreground?: ForegroundFacts | null
 }
 
 /** Ce que l'échantillon de résultats dit de la disponibilité (DRV-635) : des nombres, jamais un libellé. */
@@ -841,6 +844,7 @@ export function probeLines(
       )
     }
   }
+  if (probes.foreground) lines.push(P.foreground(probes.foreground))
   if (common) lines.push(...searchLines(common))
   // Les rayons juste après la recherche du mot courant, pas après les clés et les en-têtes.
   if (shelvesSkipped !== undefined) lines.push(P.shelvesSkipped(shelvesSkipped))

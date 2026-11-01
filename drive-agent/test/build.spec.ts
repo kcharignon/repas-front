@@ -199,7 +199,7 @@ describe('le budget de taille', () => {
 
   it('le budget par défaut est large pour un agent et se vérifie à la construction', () => {
     expect(agent.manifest.bytes).toBeLessThanOrEqual(DEFAULT_MAX_BYTES)
-    expect(DEFAULT_MAX_BYTES).toBe(284_000)
+    expect(DEFAULT_MAX_BYTES).toBe(288_000)
   })
 })
 

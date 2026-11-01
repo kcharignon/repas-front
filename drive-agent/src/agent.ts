@@ -10,6 +10,7 @@
  */
 import { validateCommand, type SelftestResultMessage } from '../protocol'
 import { showDiagnostic, type DiagnosticDeps } from './diagnostic'
+import { foregroundFacts } from './diagnostic/foreground'
 import { Flow, guidedChoice, setupHandler, type FlowDeps, type StorageLike } from './flow'
 import { RETAILERS, retailerForHost, type RetailerEntry } from './retailers'
 import { stringifyJson, takeWindowPrimitives } from './primitives'
@@ -102,6 +103,7 @@ export function run(win: Window & typeof globalThis = window, options: AgentOpti
     ...deps,
     originReplaced: bridge ? null : ORIGIN_SHAPE.test(origin),
     retailer: entry,
+    foreground: () => foregroundFacts(win),
     copy: options.copy ?? ((text) => copyText(win, text)),
   })
   // Le test automatique n'existe que si l'application a annoncé le mode débogage (`isDebug` du pont, posé par son script d'injection de la

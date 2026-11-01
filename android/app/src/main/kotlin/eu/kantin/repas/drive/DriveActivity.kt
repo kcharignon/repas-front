@@ -151,12 +151,6 @@ class DriveActivity : Activity() {
             }
         }
         webView = createWebView()
-        // DRV-757 : une seule fois, avant tout chargement, l'ancien site ordinateur d'une version d'avant ne reste pas dans la WebView
-        if (repasApp.siteModeMigration.runFor(site)) {
-            webView.clearCache(true)
-            webView.clearHistory()
-            Toast.makeText(this, getString(R.string.site_mode_migrated, site.nameDe), Toast.LENGTH_LONG).show()
-        }
         beginFinalize()
         problems = ProblemPanel(this, ::problemMessage) { retry() }
         // Le message d'en-tête (se connecter, choisir ou ouvrir son magasin) et, pour un plan, son issue : ouvrir l'accueil du drive.
@@ -199,6 +193,19 @@ class DriveActivity : Activity() {
         registerBackAction()
 
         navigationBegins()
+        // DRV-757 : une seule fois, AVANT tout chargement, l'ancien site ordinateur d'une version d'avant ne reste pas dans la WebView. L'effacement des cookies est asynchrone :
+        // la page se charge à sa fin. La personne n'apprend qu'elle a été déconnectée que s'il y avait quelque chose à effacer.
+        val started = repasApp.siteModeMigration.runFor(site) { hadData ->
+            if (isDestroyed) return@runFor
+            webView.clearCache(true)
+            webView.clearHistory()
+            if (hadData) Toast.makeText(this, getString(R.string.site_mode_migrated, site.nameDe), Toast.LENGTH_LONG).show()
+            openFirstPage()
+        }
+        if (!started) openFirstPage()
+    }
+
+    private fun openFirstPage() {
         webView.loadUrl(firstUrl())
         updateStoreBanner(pass.current()?.request?.startUrl)
     }

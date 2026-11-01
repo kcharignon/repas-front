@@ -31,14 +31,19 @@ internal object DriveProfile {
     fun cookieManager(site: RetailerSite, sites: RetailerSites): CookieManager =
         if (isolated) profile(site, sites).cookieManager else CookieManager.getInstance()
 
-    /** Efface les cookies, le stockage du site, le cache et l'historique de [site] (et de Repas aussi, si les profils manquent). */
-    fun clear(webView: WebView?, site: RetailerSite, sites: RetailerSites) {
-        cookieManager(site, sites).apply {
-            removeAllCookies(null)
-            flush()
-        }
+    /**
+     * Efface les cookies, le stockage du site, le cache et l'historique de [site] (et de Repas aussi, si les profils manquent). [done] est appelé quand l'effacement des
+     * cookies est RÉELLEMENT fini (il est asynchrone), sur le fil principal.
+     */
+    fun clear(webView: WebView?, site: RetailerSite, sites: RetailerSites, done: () -> Unit = {}) {
         if (isolated) profile(site, sites).webStorage.deleteAllData() else WebStorage.getInstance().deleteAllData()
         webView?.clearCache(true)
         webView?.clearHistory()
+        cookieManager(site, sites).apply {
+            removeAllCookies {
+                flush()
+                done()
+            }
+        }
     }
 }

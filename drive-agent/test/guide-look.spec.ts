@@ -202,6 +202,87 @@ describe('la connexion', () => {
   })
 })
 
+describe('DRV-757 : ce qu’on ne protège pas à tort et ce qu’on protège enfin', () => {
+  const where = (pathname: string) => ({
+    hostname: 'fd8-espace-client.leclercdrive.fr',
+    pathname: `/drive/magasin-000001-000001-Ville-Test/${pathname}`,
+  })
+  const courses = {
+    hostname: 'm-courses.leclercdrive.fr',
+    pathname: '/magasin-000001-000001-ville-test',
+  }
+
+  it('la case « Je suis un humain » et le cadre hCaptcha sont gardés libres ; un cadre qui couvre plus de 30 % de la fenêtre réduit la carte', () => {
+    const box = document.createElement('input')
+    box.type = 'checkbox'
+    const label = document.createElement('label')
+    label.append(box, ' Je suis un humain')
+    document.body.appendChild(label)
+    at(box, 300, 24, 10, 24)
+    const frame = document.createElement('iframe')
+    frame.setAttribute('title', 'hCaptcha challenge')
+    document.body.appendChild(frame)
+    at(frame, 330, 420, 10, 700)
+
+    const look = readLoginLook(document, where('authentification.aspx'), false)
+
+    expect(look.sub).toBe('form')
+    expect(look.keep).toContain(box)
+    expect(look.keep).toContain(frame)
+    expect(look.crowded).toBe(true)
+  })
+
+  it('un petit cadre hCaptcha est gardé libre sans réduire la carte ; un cadre d’un autre service n’est pas gardé', () => {
+    const small = document.createElement('iframe')
+    small.setAttribute('src', 'https://newassets.hcaptcha.com/captcha/v1/frame.html')
+    document.body.appendChild(small)
+    at(small, 300, 70, 10, 300)
+    const other = document.createElement('iframe')
+    other.setAttribute('title', 'publicité')
+    document.body.appendChild(other)
+    at(other, 400, 400, 10, 300)
+
+    const look = readLoginLook(document, where('authentification.aspx'), false)
+
+    expect(look.keep).toContain(small)
+    expect(look.keep).not.toContain(other)
+    expect(look.crowded).toBe(false)
+  })
+
+  it('un contrôle hors de l’écran sur le côté (menu replié) ou que le navigateur dit caché (visibility, opacité) n’est pas montré : c’est le bouton du menu qu’on entoure', () => {
+    add('button', 'Menu', 10, { 'aria-label': 'Menu' })
+    const login = add('a', 'Connexion / Inscription', 60)
+    at(login, 60, 40, -400, 300)
+
+    expect(readLoginLook(document, courses, true).sub).toBe('menu')
+
+    at(login, 60, 40, 10, 300)
+    expect(readLoginLook(document, courses, true).sub).toBe('connexion')
+    ;(login as unknown as { checkVisibility: () => boolean }).checkVisibility = () => false
+    expect(readLoginLook(document, courses, true).sub).toBe('menu')
+  })
+
+  it('« Choisissez votre service… » sans aucun contrôle réel dessous (une simple ligne de liste) ne parle pas des magasins', () => {
+    postalField()
+    add('h2', 'Choisissez votre service autour du 69720', 200)
+    add('li', 'Faux Leclerc Ville-Test', 300)
+
+    expect(readStoreLook(document).sub).toBe('field')
+  })
+
+  it('un code postal ailleurs que dans la liste de suggestions (pied de page, ligne loin sous le champ, hors de sa colonne) n’est pas une ville proposée', () => {
+    postalField(100)
+    const footer = document.createElement('footer')
+    document.body.appendChild(footer)
+    add('a', 'Magasin 75001 Paris', 150, {}, footer)
+    add('button', 'Autre ville (69001)', 900)
+    const aside = add('button', 'Colonne voisine (69002)', 150)
+    at(aside, 150, 40, 700, 200)
+
+    expect(readStoreLook(document).sub).toBe('field')
+  })
+})
+
 describe('les mots de chaque sous-étape (voix de repas-po)', () => {
   it('quinze mots au plus par phrase, tutoiement, aucun jargon ni mot d’alerte', () => {
     for (const { text, short } of Object.values(GUIDE_TEXTS)) {

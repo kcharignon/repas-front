@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import type { Page } from '@playwright/test'
 
 import { openWithBridge } from './support/agent'
+import { expectClear } from './support/geometry'
 import { expect, test } from './support/fixtures'
 import { RUN_ID } from './support/plans'
 import { STORE } from '../fake-auchan/server'
@@ -24,33 +25,6 @@ const plan = () => ({
   returnPath: '/drive/retour',
   lines: [{ ingredientSlug: 'sel', name: 'Sel', status: 'HAVE_AT_HOME' }],
 })
-
-interface Box {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-const overlaps = (a: Box, b: Box): boolean =>
-  a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
-
-const card = (page: Page): Promise<Box | null> => page.locator('.screen.guide').boundingBox()
-
-async function expectClear(page: Page, selectors: readonly string[]): Promise<void> {
-  await page.waitForTimeout(900)
-  const box = await card(page)
-  if (box === null) return
-  let checked = 0
-  for (const selector of selectors) {
-    for (const one of (await page.locator(selector).all()).slice(0, 3)) {
-      const target = await one.boundingBox()
-      if (target === null) continue
-      checked += 1
-      expect(overlaps(box, target), `${selector} est recouvert par la carte`).toBe(false)
-    }
-  }
-  expect(checked, 'rien à protéger : le test ne prouverait rien').toBeGreaterThan(0)
-}
 
 /** `CARD_SHOTS=<dossier>` : une capture de chaque étape (jamais dans le dépôt). */
 const shot = async (page: Page, name: string, height: number): Promise<void> => {
@@ -126,8 +100,8 @@ for (const height of [761, 914]) {
       await keyboard(page, true, height)
       await page.locator('#where').pressSequentially('69570')
       await expect(page.locator('#city')).toBeVisible()
-      await expectClear(page, ['#where', '#city'])
-      expect(await card(page), 'la carte ne disparaît pas pendant la saisie').not.toBeNull()
+      // La carte ne disparaît pas pendant la saisie : elle est réduite à sa barre
+      expect(await expectClear(page, ['#where', '#city'])).toBe('bar')
       await expect(page.locator('.g-bar-text')).toHaveText('Il reste une étape · Touche ta ville')
       await expect(page.locator('.ring')).toBeVisible()
       await shot(page, '4-ville-clavier', height)
@@ -136,9 +110,9 @@ for (const height of [761, 914]) {
       await page.locator('#city').click()
       await keyboard(page, false, height)
       await expect(page.locator('.pick-drive').first()).toBeVisible()
-      await expectClear(page, ['.pick-drive'])
+      // Dix drives, une liste plus longue que l'écran : pleine, la carte couvrirait les boutons ; réduite, elle ne couvre aucun bouton que l'écran montre
+      expect(await expectClear(page, ['.pick-drive'], 10)).toBe('bar')
       await shot(page, '5-liste-drives', height)
-      expect(await card(page)).not.toBeNull()
       await expect(page.locator('.g-bar-text')).toHaveText(
         'Il reste une étape · Touche ton magasin',
       )

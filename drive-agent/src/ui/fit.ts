@@ -64,6 +64,8 @@ const SPOTS: readonly Spot[] = [
 const AIR = 8
 /** Le rythme de relecture : la page se dessine après l'arrivée de la carte. */
 const FIT_MS = 500
+/** Au plus une remesure par défilement toutes les 200 ms. */
+const SCROLL_MS = 200
 const EDITABLE = /^(?:|text|search|tel|email|url|number|password)$/
 
 const hits = (box: Box, rects: readonly Box[]): boolean =>
@@ -122,6 +124,8 @@ export function fitGuide(
   let lastSub: GuideSub | null = null
   let lastTarget: HTMLElement | null = null
   let started = false
+  /** Ce que la dernière lecture complète du guide a rendu : un défilement ne le relit pas (il n'a changé de place que les boîtes), seule la place de la carte est refaite. */
+  let latest: Needs | null = null
 
   const apply = (spot: Spot | null): void => {
     card.hidden = spot === null
@@ -130,9 +134,12 @@ export function fitGuide(
     card.classList.toggle(AWAY, spot === null)
   }
 
-  const check = (): void => {
+  const check = (read = true): void => {
+    const was = card.hidden
+    let placed = false
     try {
-      const needs = options.needs?.() ?? null
+      if (read) latest = options.needs?.() ?? null
+      const needs = latest
       const typing = typingIn(doc)
       const wall = options.consent ? consentRects(doc, win.innerWidth, win.innerHeight) : []
       const hard: Box[] = [...wall]
@@ -144,8 +151,9 @@ export function fitGuide(
       if (typing !== null) hard.push(...seen(typing, win, false))
       // Sans lecture du guide de l'enseigne, le contrôle entouré se protège comme avant (avec la place de son repère)
       if (needs === null && options.consent) hard.push(...pointedRects(options.pointed()))
-      if (needs?.sub !== lastSub) {
-        lastSub = needs?.sub ?? null
+      const sub = needs?.sub ?? null
+      if (sub !== lastSub) {
+        lastSub = sub
         if (pref === 'full') pref = 'auto'
       }
       const rects = [...hard, ...soft]
@@ -163,6 +171,7 @@ export function fitGuide(
           ? choose(measure, rects, hard, true)
           : (full ?? { min: false, top: false })
       apply(spot)
+      placed = true
       const target = needs?.target ?? null
       // Un autre contrôle à entourer : le repère le relit (la carte, elle, il la suit à chaque mesure)
       if (target !== lastTarget) {
@@ -172,15 +181,28 @@ export function fitGuide(
       started = true
     } catch {
       // La page ne se laisse pas lire : la carte reste où elle est.
+    } finally {
+      // Une lecture qui a levé après avoir ôté la carte la remet : la carte, avec « Arrêter pour l'instant », ne reste jamais cachée par une panne de lecture
+      if (!placed) card.hidden = was
     }
   }
 
+  /** Un défilement ne relit pas le guide (des requêtes sur le document) : il refait la place de la carte, au plus une fois par 200 ms. */
+  let scrolledAt = 0
+  const onScroll = (): void => {
+    const at = Date.now()
+    if (at - scrolledAt < SCROLL_MS) return
+    scrolledAt = at
+    check(false)
+  }
+  const onChange = (): void => check()
+
   check()
-  const timer = win.setInterval(check, FIT_MS)
+  const timer = win.setInterval(onChange, FIT_MS)
   const events = ['resize', 'focusin', 'focusout'] as const
-  for (const name of events) win.addEventListener(name, check, true)
-  win.visualViewport?.addEventListener('resize', check)
-  win.addEventListener('scroll', check, { capture: true, passive: true })
+  for (const name of events) win.addEventListener(name, onChange, true)
+  win.visualViewport?.addEventListener('resize', onChange)
+  win.addEventListener('scroll', onScroll, { capture: true, passive: true })
   return {
     ask(next) {
       pref = next
@@ -188,9 +210,9 @@ export function fitGuide(
     },
     stop() {
       win.clearInterval(timer)
-      for (const name of events) win.removeEventListener(name, check, true)
-      win.visualViewport?.removeEventListener('resize', check)
-      win.removeEventListener('scroll', check, { capture: true })
+      for (const name of events) win.removeEventListener(name, onChange, true)
+      win.visualViewport?.removeEventListener('resize', onChange)
+      win.removeEventListener('scroll', onScroll, { capture: true })
     },
   }
 }

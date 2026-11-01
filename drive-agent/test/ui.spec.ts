@@ -583,6 +583,25 @@ describe('le guide d’une étape (DRV-751)', () => {
       expect(text()).toBe('Touche la barre, en haut de la page.')
     })
 
+    it('un libellé de la page qui porte « $& » ou « $$ » est cité tel quel (jamais interprété comme un motif de remplacement)', () => {
+      ui = createUi({ mode: 'open', retailer: AUCHAN })
+      void ui.show(
+        'guide',
+        props({
+          look: () => ({
+            sub: 'bar',
+            target: { element: document.body, label: 'Prix $& et $$ ' },
+            keep: [],
+            maybe: [],
+          }),
+        }),
+      )
+
+      expect(shadow().querySelector('.g-text')?.textContent).toBe(
+        'Touche « Prix $& et $$  », en haut de la page.',
+      )
+    })
+
     it('le mur de cookies : la carte dit d’abord d’y répondre, la personne choisit', () => {
       const handle = open()
       void handle.show(

@@ -41,7 +41,13 @@ import {
   LOGIN_LABELS,
   storeBar,
 } from './page'
-import { findControl, type GuideLook, type GuideStep, type GuideTarget } from '../retailers/guide'
+import {
+  challengeFrames,
+  findControl,
+  type GuideLook,
+  type GuideStep,
+  type GuideTarget,
+} from '../retailers/guide'
 import { readAuchanLook } from './guide-look'
 import type { AuchanOffer } from './offers'
 import { PACING } from './pacing'
@@ -199,6 +205,18 @@ export class AuchanAdapter implements RetailerAdapter {
    * contrôle de `guideTarget` seul. Le libellé cité est celui de l'élément entouré, lu à l'instant. Une lecture de la page seule.
    */
   guideLook(step: GuideStep): GuideLook {
+    const look = this.pageLook(step)
+    // Le cadre de vérification (reCAPTCHA) qui s'ouvre n'est jamais couvert, et la carte se réduit tant qu'il couvre une grande part de la fenêtre
+    try {
+      const { frames, crowded } = challengeFrames(this.deps.document, ['recaptcha', 'hcaptcha'])
+      if (frames.length > 0) return { ...look, keep: [...look.keep, ...frames], crowded }
+    } catch {
+      // La page ne se laisse pas lire : sans cadre.
+    }
+    return look
+  }
+
+  private pageLook(step: GuideStep): GuideLook {
     try {
       const look = readAuchanLook(this.deps.document, step)
       if (look !== null) return look
