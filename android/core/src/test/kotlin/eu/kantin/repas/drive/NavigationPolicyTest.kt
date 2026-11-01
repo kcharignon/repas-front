@@ -230,16 +230,22 @@ class NavigationPolicyTest {
 
     /**
      * La page de connexion hors d'un magasin : Leclerc la refuse tant qu'aucun magasin n'est choisi (« veuillez sélectionner un Drive »). Seule
-     * l'adresse compte : `/connexion` ou `/connexion.aspx`, sur le drive, hors site mobile, et jamais sous le chemin d'un magasin.
+     * l'adresse compte : `/connexion` ou `/connexion.aspx`, ou (version mobile, DRV-754) `/drive/magasin-N-N[-Ville]/authentification.aspx` et `creation-compte-ccc.aspx`
+     * de `fd<N>-espace-client`, sur le drive, et jamais sous le chemin d'un magasin ni le compte une fois connecté (`home-espace-client-ccc.aspx`).
      */
     @Test
-    fun `la page de connexion hors d'un magasin se reconnait a son chemin, jamais une page de magasin ni le site mobile`() {
+    fun `la page de connexion hors d'un magasin se reconnait a son chemin, jamais une page de magasin ni le compte`() {
         val login = listOf(
             "https://www.leclercdrive.fr/connexion",
             "https://www.leclercdrive.fr/connexion/",
             "https://www.leclercdrive.fr/connexion.aspx",
             "https://www.leclercdrive.fr/Connexion.aspx?retour=%2F#haut",
             "https://courses-test.leclercdrive.fr/connexion.aspx",
+            "https://m-courses.leclercdrive.fr/connexion.aspx",
+            "https://fd8-espace-client.leclercdrive.fr/drive/magasin-123456-123456-Ville-Test/authentification.aspx?s=600&x=1",
+            "https://fd8-espace-client.leclercdrive.fr/drive/magasin-123456-123456-ville-test/authentification.aspx",
+            "https://fd12-espace-client.leclercdrive.fr/drive/magasin-123456-123456/Authentification.aspx#haut",
+            "https://fd8-espace-client.leclercdrive.fr/drive/magasin-123456-123456-ville-test/creation-compte-ccc.aspx?s=16000&v=&u=&r=abc",
         )
         val others = listOf(
             "https://www.leclercdrive.fr/",
@@ -250,7 +256,13 @@ class NavigationPolicyTest {
             "https://www.leclercdrive.fr/deconnexion.aspx",
             // Sous le chemin d'un magasin, un magasin est ouvert : c'est une page de magasin, pas ce cas.
             "https://courses-test.leclercdrive.fr/magasin-000000-000000-Ville-Test/connexion.aspx",
-            "https://m-courses.leclercdrive.fr/connexion.aspx",
+            "https://fd8-espace-client.leclercdrive.fr/drive/magasin-123456-123456-Ville-Test/home-espace-client-ccc.aspx",
+            "https://fd8-espace-client.leclercdrive.fr/drive/magasin-123456-123456-Ville-Test/mon-compte.aspx",
+            "https://fd8-espace-client.leclercdrive.fr/drive/magasin-123456-123456-Ville-Test/authentification.aspx.evil",
+            "https://fd8-espace-client.leclercdrive.fr/autre/drive/magasin-123456-123456-Ville-Test/authentification.aspx",
+            "https://fd8-espace-client.leclercdrive.fr/drive/magasin-123456-123456-Ville-Test/x/authentification.aspx",
+            "https://fd8-espace-client.leclercdrive.fr/drive/magasin-abc-123456-Ville-Test/authentification.aspx",
+            "https://exemple.org/drive/magasin-123456-123456-Ville-Test/authentification.aspx",
             "https://exemple.org/connexion.aspx",
             "http://www.leclercdrive.fr/connexion.aspx",
             "https://www.leclercdrive.fr.evil.com/connexion.aspx",
@@ -268,38 +280,100 @@ class NavigationPolicyTest {
     }
 
     /**
-     * Le site mobile de Leclerc (`m-courses`, ticket J) n'a pas les routes du site ordinateur : même avec une adresse de la forme d'un magasin, ce n'est
-     * pas une page où l'agent peut écrire. L'application ne lui envoie donc jamais un plan ni la lecture du magasin.
+     * DRV-754 : Leclerc passe par sa VERSION MOBILE (décision du propriétaire du 2026-11-01), comme Auchan. Ses quatre hôtes sont dans `*.leclercdrive.fr`
+     * en minuscules : `www` (accueil), `m-courses` (pages du magasin, sans `.aspx`), `fd<N>-espace-client` (connexion) et `fd<N>-courses` (AJAX, panier, plan).
+     * On y navigue, le pont et l'agent y existent ; `m-courses` n'est plus un « site mobile » refusé.
      */
     @Test
-    fun `le site mobile se reconnait a son nom et n'est jamais une page de magasin`() {
-        val mobile = listOf(
+    fun `les quatre hotes de la version mobile de Leclerc restent dans l'application, avec le pont, jamais un autre domaine`() {
+        val leclerc = RetailerSites.DEFAULT.byId("leclerc")!!
+        val hosts = listOf(
+            "https://www.leclercdrive.fr/",
+            "https://m-courses.leclercdrive.fr/magasin-123456-123456-ville-test",
+            "https://fd8-espace-client.leclercdrive.fr/drive/magasin-123456-123456-Ville-Test/authentification.aspx?s=600",
+            "https://fd8-courses.leclercdrive.fr/magasin-123456-123456-ville-test/mobile-detail-panier.aspx?sProvenance=SM",
+        )
+        hosts.forEach {
+            assertEquals(it, Decision.ALLOW, NavigationPolicy.decide(leclerc, it))
+            assertTrue("le pont existe : $it", leclerc.isBridgePage(it))
+            assertFalse("Leclerc n'a plus de site mobile à refuser : $it", leclerc.isMobileSite(it))
+        }
+        val others = listOf(
+            "https://m-courses.leclercdrive.fr.evil.com/magasin-123456-123456-ville-test",
+            "https://m-courses.exemple.org/magasin-123456-123456-ville-test",
+            "https://fd8-courses.leclercdrive.fr:8443/magasin-123456-123456-ville-test",
+            "http://m-courses.leclercdrive.fr/magasin-123456-123456-ville-test",
+            "https://m-courses.leclercdrive.fr\\@evil.test/",
+            "https://fd8-courses.leclercdrive.fr@evil.test/",
+        )
+        others.forEach { assertTrue("ne reste pas dans l'application : $it", NavigationPolicy.decide(leclerc, it) != Decision.ALLOW) }
+        // Un nom en majuscules est lu en minuscules (le même site) ; le pont ne s'ouvre que sur l'origine exacte
+        assertTrue(leclerc.isBridgeOrigin("https://m-courses.leclercdrive.fr"))
+        assertTrue(leclerc.isBridgeOrigin("https://fd8-espace-client.leclercdrive.fr"))
+        assertFalse(leclerc.isBridgeOrigin("https://leclercdrive.fr"))
+        assertFalse(leclerc.isBridgeOrigin("https://m-courses.leclercdrive.fr.evil.com"))
+        assertFalse(leclerc.isBridgeOrigin("https://m-courses.leclercdrive.fr:8443"))
+        assertEquals(setOf("https://*.leclercdrive.fr"), leclerc.bridgeOrigins)
+        assertEquals(SiteMode.MOBILE, leclerc.siteMode)
+    }
+
+    /** DRV-754 : une page de `m-courses` ou de `fd<N>-courses` dont le chemin est un magasin (sans `.aspx`, ville en minuscules ou en majuscules, panier mobile) est une page de magasin. */
+    @Test
+    fun `les pages de magasin de la version mobile sont des pages de magasin, la connexion et le compte n'en sont pas`() {
+        val stores = listOf(
+            "https://m-courses.leclercdrive.fr/magasin-123456-123456-ville-test",
+            "https://m-courses.leclercdrive.fr/magasin-123456-123456-ville-test/",
+            "https://m-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test",
+            "https://fd8-courses.leclercdrive.fr/magasin-123456-123456-ville-test/mobile-detail-panier.aspx?sProvenance=SM",
+            "https://fd8-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/mobile-detail-panier.aspx",
+            "https://fd9-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/recherche.aspx",
+        )
+        val notStores = listOf(
+            "https://www.leclercdrive.fr/",
+            "https://www.leclercdrive.fr/#_divMoc123",
+            "https://fd8-espace-client.leclercdrive.fr/drive/magasin-123456-123456-Ville-Test/authentification.aspx?s=600",
+            "https://fd8-espace-client.leclercdrive.fr/drive/magasin-123456-123456-ville-test/creation-compte-ccc.aspx?s=16000&v=&u=&r=x",
+            "https://fd8-espace-client.leclercdrive.fr/drive/magasin-123456-123456-Ville-Test/home-espace-client-ccc.aspx",
             "https://m-courses.leclercdrive.fr/",
-            "https://m-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/recherche.aspx",
-            "https://M-COURSES.LECLERCDRIVE.FR/magasin-123456-123456/accueil.aspx",
-            "https://m-autre.leclercdrive.fr/magasin-123456-123456/accueil.aspx",
-            "https://m.leclercdrive.fr/magasin-123456-123456/accueil.aspx",
+            "https://m-courses.leclercdrive.fr/autre-page",
+        )
+        stores.forEach { assertTrue("devrait être une page de magasin : $it", NavigationPolicy.isStorePage(it)) }
+        notStores.forEach { assertFalse("ne devrait pas être une page de magasin : $it", NavigationPolicy.isStorePage(it)) }
+    }
+
+    /**
+     * Le mécanisme générique d'un site mobile à refuser (`mobileSiteLabel`, mode ordinateur) reste pour les enseignes qui en ont besoin : prouvé avec une
+     * enseigne FICTIVE, plus avec Leclerc.
+     */
+    @Test
+    fun `le site mobile d'une enseigne qui le refuse se reconnait a son nom et n'est jamais une page de magasin`() {
+        val site = FictionalSites.A
+        val mobile = listOf(
+            "https://m-courses.exemple-a.test/",
+            "https://m-courses.exemple-a.test/depot-123456-123456-Ville-Test/recherche.aspx",
+            "https://M-COURSES.EXEMPLE-A.TEST/depot-123456-123456/accueil.aspx",
+            "https://m-autre.exemple-a.test/depot-123456-123456/accueil.aspx",
+            "https://m.exemple-a.test/depot-123456-123456/accueil.aspx",
         )
         val desktop = listOf(
-            "https://fd9-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/recherche.aspx",
-            "https://fd14-courses.leclercdrive.fr/",
-            "https://courses-test.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx",
-            "https://www.leclercdrive.fr/",
-            "https://mm-courses.leclercdrive.fr/magasin-123456-123456/accueil.aspx",
-            "https://xm-courses.leclercdrive.fr/magasin-123456-123456/accueil.aspx",
-            "https://m-courses.exemple.org/magasin-123456-123456/accueil.aspx",
-            "http://m-courses.leclercdrive.fr/",
+            "https://fd9-courses.exemple-a.test/depot-123456-123456-Ville-Test/recherche.aspx",
+            "https://fd14-courses.exemple-a.test/",
+            "https://www.exemple-a.test/",
+            "https://mm-courses.exemple-a.test/depot-123456-123456/accueil.aspx",
+            "https://xm-courses.exemple-a.test/depot-123456-123456/accueil.aspx",
+            "https://m-courses.exemple.org/depot-123456-123456/accueil.aspx",
+            "http://m-courses.exemple-a.test/",
             "",
             null,
         )
         mobile.forEach {
-            assertTrue("devrait être le site mobile : $it", NavigationPolicy.isMobileSite(it))
-            assertFalse("le site mobile n'est pas une page de magasin : $it", NavigationPolicy.isStorePage(it))
+            assertTrue("devrait être le site mobile : $it", site.isMobileSite(it))
+            assertFalse("le site mobile n'est pas une page de magasin : $it", site.isStorePage(it))
             // Il reste dans l'application (la page se charge, l'utilisateur y est guidé) : seul l'agent n'y agit pas.
-            assertEquals(it, Decision.ALLOW, NavigationPolicy.decide(it))
+            assertEquals(it, Decision.ALLOW, NavigationPolicy.decide(site, it))
         }
-        desktop.forEach { assertFalse("ne devrait pas être le site mobile : $it", NavigationPolicy.isMobileSite(it)) }
-        assertTrue(NavigationPolicy.isStorePage("https://fd9-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/recherche.aspx"))
+        desktop.forEach { assertFalse("ne devrait pas être le site mobile : $it", site.isMobileSite(it)) }
+        assertTrue(site.isStorePage("https://fd9-courses.exemple-a.test/depot-123456-123456-Ville-Test/recherche.aspx"))
     }
 
     /**

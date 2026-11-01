@@ -32,7 +32,7 @@ interface PassRequest {
 
     /**
      * Vrai quand [startUrl] est l'adresse d'un magasin que l'utilisateur a collée (DRV-741, lecture du magasin seulement) et non l'accueil de l'enseigne :
-     * la page peut être celle du site mobile, que l'enseigne redirige en mode ordinateur ; ce n'est pas un défaut tant qu'elle charge.
+     * la page peut être celle d'un site mobile à refuser que l'enseigne redirige (une enseigne fictive des tests : Leclerc n'en a plus, DRV-754) ; ce n'est pas un défaut tant qu'elle charge.
      */
     val opensAddress: Boolean get() = false
 
@@ -62,9 +62,9 @@ private fun abortedResultJson(runId: String, storeId: String?, agentVersion: Str
 /**
  * Une demande de lecture du magasin (`drive.setup {runId}`, DRV-320) : le message `setup` du protocole v1, sans magasin.
  *
- * [address] (DRV-741) : l'adresse d'un magasin que Repas a reçue de l'utilisateur (collée depuis le site mobile de l'enseigne), déjà jugée par
- * [RetailerSite.openableStoreAddress]. L'application l'ouvre à la place de l'accueil, en mode ordinateur : l'enseigne la redirige vers la bonne
- * adresse de magasin, et l'agent lit le magasin sur la page finale (flux habituel, « Utiliser ce magasin »). Elle ne va **jamais** à l'agent : le
+ * [address] (DRV-741) : l'adresse d'un magasin que Repas a reçue de l'utilisateur (collée depuis le site de l'enseigne), déjà jugée par
+ * [RetailerSite.openableStoreAddress]. L'application l'ouvre à la place de l'accueil : l'enseigne la redirige au besoin vers la bonne
+ * adresse de magasin (pour Leclerc, la page `m-courses…/magasin-N-N-ville` de sa version mobile est déjà celle du magasin, DRV-754), et l'agent lit le magasin sur la page finale (flux habituel, « Utiliser ce magasin »). Elle ne va **jamais** à l'agent : le
  * message du protocole [text] est le même, et seul le magasin lu sur la page finale revient à Repas.
  */
 class SetupRequest private constructor(override val runId: String, override val site: RetailerSite, val address: String?) : PassRequest {

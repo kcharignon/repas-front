@@ -139,22 +139,73 @@ class StoreBannerTest {
     }
 
     /**
-     * Le site mobile (ticket J) : l'agent n'y agit pas, l'application ne lui envoie rien. Le message dit que ce n'est pas la version ordinateur du
-     * site et propose de recommencer depuis l'accueil du drive, pour un envoi comme pour la lecture du magasin.
+     * Le site mobile d'une enseigne qui le refuse (ticket J, mécanisme générique, prouvé avec une enseigne FICTIVE : Leclerc n'en a plus, DRV-754) : l'agent n'y
+     * agit pas, l'application ne lui envoie rien. Le message propose de recommencer depuis l'accueil du drive, pour un envoi comme pour la lecture du magasin.
      */
     @Test
-    fun `le site mobile dit que ce n'est pas la version ordinateur, pour un envoi comme pour la lecture du magasin`() {
-        val mobilePage = "https://m-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx"
-        val mobileRoot = "https://m-courses.leclercdrive.fr/"
+    fun `le site mobile d'une enseigne qui le refuse propose de recommencer, pour un envoi comme pour la lecture du magasin`() {
+        val site = FictionalSites.A
+        val fakePlan = DrivePlan.parse(FictionalSites.plan(site, "123456", "fd9-courses.exemple-a.test"), FictionalSites.ALL)!!
+        val fakeSetup = SetupRequest.of(runId, site)!!
+        val mobilePage = "https://m-courses.exemple-a.test/depot-000000-000000-Ville-Test/accueil.aspx"
+        val mobileRoot = "https://m-courses.exemple-a.test/"
 
         listOf(mobilePage, mobileRoot).forEach {
-            assertEquals(it, StoreBanner.MOBILE, StoreBanner.of(plan, it))
-            assertEquals(it, StoreBanner.MOBILE, StoreBanner.of(setup, it))
-            assertEquals(it, StoreBanner.MOBILE, StoreBanner.of(plan, it, PageTrouble.NONE))
+            assertEquals(it, StoreBanner.MOBILE, StoreBanner.of(fakePlan, it))
+            assertEquals(it, StoreBanner.MOBILE, StoreBanner.of(fakeSetup, it))
+            assertEquals(it, StoreBanner.MOBILE, StoreBanner.of(fakePlan, it, PageTrouble.NONE))
         }
         // Sans passage en cours, rien à dire ; une vérification du site passe avant (la page doit rester visible pour qu'on la passe).
         assertEquals(StoreBanner.NONE, StoreBanner.of(null, mobilePage))
-        assertEquals(StoreBanner.VERIFICATION, StoreBanner.of(plan, mobilePage, PageTrouble.VERIFICATION))
+        assertEquals(StoreBanner.VERIFICATION, StoreBanner.of(fakePlan, mobilePage, PageTrouble.VERIFICATION))
+    }
+
+    /**
+     * DRV-754 : Leclerc passe par sa version mobile. Ses pages `m-courses` ne sont plus « un site mobile » : aucun message « site mobile » ni « version ordinateur »
+     * n'est jamais montré pour Leclerc, quelle que soit la page, avec ou sans magasin connu.
+     */
+    @Test
+    fun `Leclerc ne montre jamais le message du site mobile, sur aucune page de sa version mobile`() {
+        val pages = listOf(
+            "https://m-courses.leclercdrive.fr/magasin-000000-000000-ville-test",
+            "https://m-courses.leclercdrive.fr/",
+            "https://www.leclercdrive.fr/#_divMoc123",
+            "https://fd8-courses.leclercdrive.fr/magasin-000000-000000-ville-test/mobile-detail-panier.aspx?sProvenance=SM",
+            "https://fd8-espace-client.leclercdrive.fr/drive/magasin-000000-000000-Ville-Test/authentification.aspx?s=600",
+            "https://fd8-espace-client.leclercdrive.fr/drive/magasin-000000-000000-Ville-Test/home-espace-client-ccc.aspx",
+        )
+        pages.forEach { page ->
+            listOf(false, true).forEach { known ->
+                assertTrue(page, StoreBanner.of(plan, page, storeKnown = known) != StoreBanner.MOBILE)
+                assertTrue(page, StoreBanner.of(setup, page, storeKnown = known) != StoreBanner.MOBILE)
+            }
+        }
+        // Une page du magasin sur m-courses : l'agent y a la main, rien à dire
+        assertEquals(StoreBanner.NONE, StoreBanner.of(plan, pages[0]))
+        assertEquals(StoreBanner.NONE, StoreBanner.of(setup, pages[0]))
+    }
+
+    /**
+     * DRV-754 : la connexion et la création de compte de la version mobile (`fd<N>-espace-client`) suivent les règles de la connexion d'avant : avant tout magasin
+     * connu, le message ramène au choix du magasin ; un magasin connu, un envoi n'y dit rien (la carte « Connecte-toi » de l'agent y parle). Le compte une fois
+     * connecté (`home-espace-client-ccc.aspx`) n'est pas une page de connexion.
+     */
+    @Test
+    fun `la connexion et la creation de compte de la version mobile suivent les regles de la connexion`() {
+        val mobileLogin = "https://fd8-espace-client.leclercdrive.fr/drive/magasin-000000-000000-Ville-Test/authentification.aspx?s=600"
+        val signUp = "https://fd8-espace-client.leclercdrive.fr/drive/magasin-000000-000000-ville-test/creation-compte-ccc.aspx?s=16000&v=&u=&r=x"
+        listOf(mobileLogin, signUp).forEach {
+            assertEquals(it, StoreBanner.NONE, StoreBanner.of(plan, it, storeKnown = true))
+            assertEquals(it, StoreBanner.STORE_FIRST, StoreBanner.of(plan, it, storeKnown = false))
+            assertEquals(it, StoreBanner.STORE_FIRST, StoreBanner.of(setup, it, storeKnown = true))
+            assertEquals(it, StoreBanner.STORE_FIRST, StoreBanner.of(setup, it))
+            assertEquals(it, StoreBanner.PLAN, StoreBanner.of(plan, it, PageTrouble.HTTP_ERROR, storeKnown = true))
+            assertEquals(it, StoreBanner.VERIFICATION, StoreBanner.of(plan, it, PageTrouble.VERIFICATION, storeKnown = true))
+        }
+        val account = "https://fd8-espace-client.leclercdrive.fr/drive/magasin-000000-000000-Ville-Test/home-espace-client-ccc.aspx"
+        assertFalse(RetailerSites.DEFAULT.legacy.isLoginPage(account))
+        // Connecté, avec un magasin connu : le bandeau « Commencer mes courses » comme sur toute autre page qui n'est ni magasin ni connexion
+        assertEquals(StoreBanner.OPEN, StoreBanner.of(plan, account, storeKnown = true))
     }
 
     @Test

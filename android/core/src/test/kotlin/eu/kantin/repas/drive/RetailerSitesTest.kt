@@ -78,11 +78,25 @@ class RetailerSitesTest {
         assertEquals("de Leclerc", leclerc.nameDe)
         assertEquals("https://www.leclercdrive.fr/", leclerc.startUrl)
         assertEquals(NavigationPolicy.START_URL, leclerc.startUrl)
-        assertEquals(SiteMode.DESKTOP, leclerc.siteMode)
+        // DRV-754 : la version mobile du site, plus de mode ordinateur ni de site mobile refusé
+        assertEquals(SiteMode.MOBILE, leclerc.siteMode)
+        assertNull(leclerc.mobileSiteLabel)
+        assertFalse(leclerc.isMobileSite("https://m-courses.leclercdrive.fr/magasin-000000-000000-ville-test"))
         // On navigue sur le domaine et ses sous-domaines ; le pont n'existe que sur les sous-domaines
         assertTrue(leclerc.isNavigable("https://leclercdrive.fr"))
         assertFalse(leclerc.isBridgePage("https://leclercdrive.fr"))
         assertTrue(leclerc.isBridgePage("https://www.leclercdrive.fr"))
+    }
+
+    /** DRV-754 : le `store.host` d'un plan de la version mobile est l'hôte du serveur `fd<N>-courses` ; jamais un autre domaine, un nom en majuscules, un port ni le domaine nu. */
+    @Test
+    fun `le store host d'un plan de Leclerc est un hote fd-courses en minuscules, jamais un autre domaine`() {
+        listOf("fd8-courses.leclercdrive.fr", "fd14-courses.leclercdrive.fr", "m-courses.leclercdrive.fr", "www.leclercdrive.fr").forEach { assertTrue(it, leclerc.isStoreHost(it)) }
+        listOf(
+            null, "", "leclercdrive.fr", "FD8-COURSES.LECLERCDRIVE.FR", "fd8-courses.leclercdrive.fr:8443", "fd8-courses.leclercdrive.fr:443", "fd8-courses.leclercdrive.fr.evil.com",
+            "fd8-courses.exemple.org", "evil.com/fd8-courses.leclercdrive.fr", "fd8-courses.leclercdrive.fr/", " fd8-courses.leclercdrive.fr", "www.auchan.fr",
+        ).forEach { assertFalse(it.toString(), leclerc.isStoreHost(it)) }
+        assertFalse(RetailerSites.DEFAULT.byId("auchan")!!.isStoreHost("fd8-courses.leclercdrive.fr"))
     }
 
     @Test

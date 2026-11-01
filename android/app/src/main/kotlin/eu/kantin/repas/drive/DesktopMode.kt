@@ -8,8 +8,9 @@ import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
 
 /**
- * Le mode ordinateur permanent (DRV-312) : agent utilisateur de bureau, indications client cohérentes (plateforme Linux, mobile
- * faux), fenêtre large et zoom au pincement. La décision est dans [UserAgents.identity] (testée sans téléphone) ; ici, seulement
+ * Le mode ordinateur (DRV-312) : agent utilisateur de bureau, indications client cohérentes (plateforme Linux, mobile
+ * faux), fenêtre large et zoom au pincement. **Aucune enseigne servie ne l'impose plus** (Leclerc passe par sa version mobile depuis DRV-754, comme Auchan) :
+ * [apply] ne règle que le zoom, sauf pour une enseigne en [SiteMode.DESKTOP] (une enseigne fictive des tests). La décision est dans [UserAgents.identity] (testée sans téléphone) ; ici, seulement
  * l'application à la WebView. Une faiblesse est notée au journal de l'application, sans adresse ni contenu, et l'application continue.
  */
 internal object DesktopMode {
@@ -17,8 +18,8 @@ internal object DesktopMode {
 
     /**
      * Règle la WebView d'une enseigne selon la façon dont elle sert son site ([SiteMode], DRV-707). Le mode ordinateur (identité, fenêtre large) n'est
-     * imposé qu'à une enseigne qui sert un site mobile aux routes autres ([SiteMode.DESKTOP]) ; les autres gardent l'identité et la mise en page de la
-     * WebView. Le zoom au pincement est offert dans tous les cas.
+     * imposé qu'à une enseigne qui sert un site mobile aux routes autres ([SiteMode.DESKTOP]) : aucune enseigne servie (Leclerc, Auchan) ; elles gardent
+     * l'identité et la mise en page de la WebView. Le zoom au pincement est offert dans tous les cas (un geste de l'utilisateur, jamais un réglage).
      */
     fun apply(context: Context, settings: WebSettings, mode: SiteMode) {
         settings.setSupportZoom(true)

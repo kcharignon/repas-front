@@ -179,7 +179,7 @@ enum class StoreBanner {
 
     /**
      * Lecture du magasin (`drive.setup`) : choisir son magasin, puis toucher « Utiliser ce magasin ». Rien sur la connexion : Leclerc veut le magasin
-     * d'abord. Aussi pendant que l'adresse de magasin donnée par l'utilisateur charge (DRV-741), même si c'est celle du site mobile : l'enseigne la redirige.
+     * d'abord. Aussi pendant que l'adresse de magasin donnée par l'utilisateur charge (DRV-741), même si c'est celle d'un site mobile à refuser : l'enseigne la redirige.
      */
     SETUP,
 
@@ -202,8 +202,9 @@ enum class StoreBanner {
     VERIFICATION,
 
     /**
-     * La page est le site mobile de Leclerc (ticket J) : ce n'est pas la version ordinateur du site, l'agent n'y agit pas et rien ne lui est envoyé.
-     * Le bouton « Ouvrir l'accueil du drive » recommence depuis l'accueil de l'enseigne (la WebView est en mode ordinateur).
+     * La page est un site mobile que l'enseigne fait refuser ([SiteMode.DESKTOP], [RetailerSite.mobileSiteLabel]) : l'agent n'y agit pas et rien ne lui est envoyé.
+     * Le bouton « Ouvrir l'accueil du drive » recommence depuis l'accueil de l'enseigne. **Aucune enseigne servie n'en a plus** (Leclerc passe par sa version
+     * mobile depuis DRV-754, comme Auchan) : ce message n'est montré qu'aux enseignes fictives des tests, jamais à un proche.
      */
     MOBILE,
 

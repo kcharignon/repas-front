@@ -45,10 +45,30 @@ class DriveEntryTest {
     }
 
     @Test
-    fun `un chemin d'un autre hote ou d'un autre magasin n'est pas utilise, l'adresse est refusee`() {
+    fun `un chemin d'un autre magasin n'est pas utilise, l'adresse est refusee`() {
         val refused = DriveEntry.Entry(NavigationPolicy.START_URL, FinalizeOutcome.ADRESSE_REFUSEE)
-        assertEquals(refused, DriveEntry.resolve(link, memory("https://autre-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/")))
         assertEquals(refused, DriveEntry.resolve(link, memory("https://courses-test.leclercdrive.fr/magasin-000000-000002-Ville-Test/")))
+        assertEquals(refused, DriveEntry.resolve(link, memory("https://m-courses.leclercdrive.fr/magasin-000002-000000-ville-test")))
+    }
+
+    /**
+     * DRV-754 : le lien du front porte l'hôte du serveur du plan (`fd<N>-courses`), la page retenue est celle de la version mobile (`m-courses`). Pour Leclerc,
+     * les deux numéros font le magasin, sur tout hôte de l'enseigne ; ce qui s'ouvre est la page RETENUE, jamais une adresse construite avec l'hôte du lien.
+     */
+    @Test
+    fun `le lien d'un hote du serveur ouvre la page retenue de la version mobile du meme magasin`() {
+        val mobileHome = "https://m-courses.leclercdrive.fr/magasin-000000-000000-ville-test"
+        val serverLink = "https://fd8-courses.leclercdrive.fr/magasin-000000-000000"
+        assertEquals(DriveEntry.Entry(mobileHome, FinalizeOutcome.OUVERTE), DriveEntry.resolve(serverLink, memory("$mobileHome/")))
+        assertEquals(DriveEntry.Entry(mobileHome, FinalizeOutcome.OUVERTE), DriveEntry.resolve("https://m-courses.leclercdrive.fr/magasin-000000-000000", memory("$mobileHome/")))
+        // Autres numéros : repli sur l'accueil du drive, adresse refusée
+        val refused = DriveEntry.Entry(NavigationPolicy.START_URL, FinalizeOutcome.ADRESSE_REFUSEE)
+        assertEquals(refused, DriveEntry.resolve("https://fd8-courses.leclercdrive.fr/magasin-000000-000009", memory("$mobileHome/")))
+        assertEquals(refused, DriveEntry.resolve("https://fd8-courses.leclercdrive.fr/magasin-000009-000000", memory("$mobileHome/")))
+        // Rien retenu : chemin inconnu
+        assertEquals(DriveEntry.Entry(NavigationPolicy.START_URL, FinalizeOutcome.CHEMIN_INCONNU), DriveEntry.resolve(serverLink, memory()))
+        // Un nom de l'enseigne où le pont n'existe pas (le domaine nu) ne profite pas de la règle
+        assertEquals(refused, DriveEntry.resolve("https://leclercdrive.fr/magasin-000000-000000", memory("$mobileHome/")))
     }
 
     @Test
@@ -81,7 +101,8 @@ class DriveEntryTest {
             "$link#x",
             "$link/",
             "https://courses-test.leclercdrive.fr/magasin-000000-000000/autre.aspx",
-            "https://m-courses.leclercdrive.fr/magasin-000000-000000",
+            "https://m-courses.leclercdrive.fr/magasin-000000-000000/autre",
+            "https://m-courses.leclercdrive.fr/magasin-000000-000000-ville-test",
             "https://courses-test.leclercdrive.fr/autre-page",
         ).forEach { assertEquals(it, NavigationPolicy.START_URL, DriveEntry.resolve(it, seen)!!.page) }
     }

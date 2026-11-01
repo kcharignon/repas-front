@@ -2,10 +2,13 @@ package eu.kantin.repas.drive
 
 /** Comment une enseigne sert son site à un téléphone (`siteMode` du registre, ADR 0027 du back). */
 enum class SiteMode {
-    /** Un téléphone reçoit un site mobile dont les routes sont autres : l'application impose le mode ordinateur et refuse le site mobile ([RetailerSite.isMobileSite]). */
+    /**
+     * Un téléphone reçoit un site mobile dont les routes sont autres : l'application impose le mode ordinateur et refuse le site mobile ([RetailerSite.isMobileSite]).
+     * Aucune enseigne servie ne l'utilise plus (Leclerc est passé à sa version mobile, DRV-754) ; le mécanisme reste pour les enseignes fictives des tests.
+     */
     DESKTOP,
 
-    /** Le site mobile est celui que l'on veut. */
+    /** Le site mobile est celui que l'on veut : la WebView garde son identité de téléphone (Leclerc depuis DRV-754). */
     MOBILE,
 
     /** Un seul site adaptatif : on le prend tel quel, il n'y a ni mode à imposer ni site mobile à refuser. */
@@ -74,6 +77,12 @@ class StorePages(
     val homeSegment: Regex,
     /** Le chemin du lien que le front fait vers un magasin (« Finaliser »), entier, deux groupes (les deux numéros) : sans ville. */
     val frontLink: Regex,
+    /**
+     * Deux numéros désignent le même magasin sur **tous** les hôtes de l'enseigne (DRV-754) : le lien « Finaliser » du front porte `store.host` (`fd<N>-courses`)
+     * alors que la page retenue est celle de l'hôte où l'on navigue (`m-courses`). [StorePathMemory.storeHomeUrl] ne compare alors que les numéros, jamais
+     * l'hôte ; faux par défaut (même hôte exigé, comme avant). C'est une donnée du registre, jamais une adresse tirée du plan ni d'une page.
+     */
+    val sameStoreOnAnyHost: Boolean = false,
 )
 
 /**
@@ -173,8 +182,9 @@ class RetailerSite(
     fun isStoreId(value: String?): Boolean = value != null && storeIdPattern.matches(value)
 
     /**
-     * L'adresse est-elle celle du site mobile (`m-courses.exemple.test`) ? Il n'a pas les routes du site ordinateur : l'agent n'y agit pas, et
-     * l'application ne lui envoie ni plan ni lecture du magasin. Toujours faux pour une enseigne sans site mobile à refuser.
+     * L'adresse est-elle celle d'un site mobile à refuser (`m-courses.exemple.test`) ? Il n'a pas les routes du site ordinateur : l'agent n'y agit pas, et
+     * l'application ne lui envoie ni plan ni lecture du magasin. Toujours faux pour une enseigne sans site mobile à refuser : Leclerc et Auchan
+     * (DRV-754 : la version mobile de Leclerc EST son site) ; seules les enseignes fictives des tests en ont un.
      */
     fun isMobileSite(url: String?): Boolean {
         val label = mobileSiteLabel ?: return false
@@ -185,8 +195,9 @@ class RetailerSite(
 
     /**
      * L'adresse d'un magasin que Repas demande d'ouvrir à la place de l'accueil (`drive.setup` avec `address`, DRV-741), ou `null` si elle n'est pas
-     * acceptable. C'est l'adresse que l'utilisateur a collée depuis le site mobile de l'enseigne : l'application l'ouvre en mode ordinateur, l'enseigne la
-     * redirige vers la bonne adresse de magasin et l'agent lit le magasin sur la page finale. Elle est revérifiée ici comme côté web, **à la lettre** :
+     * acceptable. C'est l'adresse que l'utilisateur a collée depuis le site de l'enseigne : l'application l'ouvre, l'enseigne la redirige au besoin vers la
+     * bonne adresse de magasin et l'agent lit le magasin sur la page finale. Pour Leclerc (DRV-754), la page `m-courses…/magasin-N-N-ville` de la version mobile
+     * est une page directe de magasin, sans détour. Elle est revérifiée ici comme côté web, **à la lettre** :
      * un texte en ASCII visible, `https` sans port, ni identifiants, ni requête, ni fragment, sur un hôte de l'enseigne où le pont existe (le site mobile
      * en est un) ; le chemin est exactement le segment d'un magasin ([StorePages.homeSegment], avec sa ville, ou [StorePages.frontLink], sans). Une enseigne
      * dont le magasin n'est pas dans l'adresse n'en accepte aucune. Le résultat est [raw] lui-même, jamais une version réécrite.

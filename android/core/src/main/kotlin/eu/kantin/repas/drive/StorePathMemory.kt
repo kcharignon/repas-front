@@ -7,12 +7,13 @@ interface StorePathStore {
 }
 
 /**
- * Le chemin d'un magasin AVEC sa ville, tel que la dernière page de magasin vue dans le drive l'a donné (DRV-629) : `https://<hôte>/magasin-N-N-Ville`.
+ * Le chemin d'un magasin AVEC sa ville, tel que la dernière page de magasin vue dans le drive l'a donné (DRV-629) : `https://<hôte>/magasin-N-N-Ville`
+ * (pour Leclerc, la page de la version mobile `m-courses`, DRV-754).
  *
  * Pourquoi : l'accueil du magasin qui charge toujours est `<chemin du magasin avec la ville>` (constat du 2026-10-19), et la ville ne se lit que dans une
  * page du magasin. Le front ne connaît le magasin que par ses numéros (`/magasin-N-N`) ; « Finaliser » est donc un lien
- * `https://<hôte>/magasin-N-N` que la coquille complète ici ([DriveEntry.resolve]) avec la ville retenue, SI elle est du même hôte et des mêmes
- * numéros (DRV-631 : l'accueil du magasin, jamais la page du panier). Jamais une adresse tirée du message du plan ni d'un texte de page : seule une
+ * `https://<hôte>/magasin-N-N` que la coquille complète ici ([DriveEntry.resolve]) avec la ville retenue, SI elle est du même hôte (ou d'un autre hôte de
+ * l'enseigne quand elle le dit, [StorePages.sameStoreOnAnyHost]) et des mêmes numéros (DRV-631 : l'accueil du magasin, jamais la page du panier). Jamais une adresse tirée du message du plan ni d'un texte de page : seule une
  * adresse que la WebView a vraiment chargée, de forme vérifiée, est retenue.
  *
  * Elle est celle d'**une enseigne** ([site]) : elle ne retient que les pages de magasin de cette enseigne. [StorePathMemories] en tient une par enseigne.
@@ -32,10 +33,18 @@ class StorePathMemory(private val store: StorePathStore, val site: RetailerSite 
         if (entry.value != store.load()) store.save(entry.value)
     }
 
-    /** L'accueil du magasin [first]-[second] de l'hôte [host] (avec la ville), si le chemin retenu est celui de ce magasin ; sinon `null`. */
+    /**
+     * L'accueil du magasin [first]-[second] de l'hôte [host] (avec la ville), si le chemin retenu est celui de ce magasin ; sinon `null`.
+     *
+     * Même hôte exigé, sauf pour une enseigne dont deux hôtes servent le même magasin ([StorePages.sameStoreOnAnyHost], Leclerc depuis DRV-754) : le lien
+     * du front porte l'hôte du serveur du plan (`fd<N>-courses`), la page retenue est celle où l'on navigue (`m-courses`). Alors seuls les NUMÉROS comptent,
+     * et [host] doit avoir la forme d'un hôte de magasin de l'enseigne ([RetailerSite.isStoreHost] : minuscules, pont présent) ; ce qui s'ouvre reste la page retenue (vue dans la WebView, de forme vérifiée), jamais
+     * une adresse construite avec [host].
+     */
     fun storeHomeUrl(host: String, first: String, second: String): String? {
         val entry = parse(store.load(), site) ?: return null
-        if (entry.host != host || entry.first != first || entry.second != second) return null
+        if (entry.first != first || entry.second != second) return null
+        if (entry.host != host && !(site.storePages?.sameStoreOnAnyHost == true && site.isStoreHost(host))) return null
         return entry.value
     }
 

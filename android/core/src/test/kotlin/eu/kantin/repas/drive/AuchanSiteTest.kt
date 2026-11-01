@@ -440,6 +440,9 @@ class AuchanSiteTest {
             "https://boutique.leclercdrive.fr/magasin-000000-000000-Ville-Test/accueil.aspx",
             "https://www.leclercdrive.fr/connexion.aspx",
             "https://m-courses.leclercdrive.fr/",
+            "https://m-courses.leclercdrive.fr/magasin-000000-000000-ville-test",
+            "https://fd8-espace-client.leclercdrive.fr/drive/magasin-000000-000000-Ville-Test/authentification.aspx",
+            "https://fd8-courses.leclercdrive.fr/magasin-000000-000000-ville-test/mobile-detail-panier.aspx",
         )
         val auchanPages = listOf(home, "https://www.auchan.fr/", "https://www.auchan.fr/panier", loginPage, "https://compte.auchan.fr/")
 
@@ -466,6 +469,10 @@ class AuchanSiteTest {
             "https://www.auchan.fr/connexion.aspx",
             "https://www.auchan.fr/",
             "https://compte.auchan.fr/connexion.aspx",
+            // La version mobile de Leclerc (DRV-754) : ni ses pages de magasin, ni sa connexion ne sont celles d'Auchan
+            "https://m-courses.leclercdrive.fr/magasin-000000-000000-ville-test",
+            "https://www.auchan.fr/drive/magasin-000000-000000-Ville-Test/authentification.aspx",
+            "https://compte.auchan.fr/drive/magasin-000000-000000-Ville-Test/creation-compte-ccc.aspx",
         ).forEach {
             assertFalse(it, auchan.isStorePage(it))
             assertFalse(it, auchan.isLoginPage(it))
