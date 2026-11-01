@@ -445,6 +445,106 @@ test('DRV-759 : une page qui MONTRE le texte de connexion et un champ, d’adres
   })
 })
 
+/** Les façons de cacher le texte de connexion qui laissent une boîte non nulle ou le rejettent hors écran, dans la structure même de la page de connexion. */
+const HIDDEN_VARIANTS = [
+  `<p hidden>${LOGIN_TEXT}</p>`,
+  `<p style="display:none">${LOGIN_TEXT}</p>`,
+  `<p style="position:absolute;left:-9999px">${LOGIN_TEXT}</p>`,
+  `<p style="position:absolute;top:-9999px">${LOGIN_TEXT}</p>`,
+  `<p style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">${LOGIN_TEXT}</p>`,
+  `<div style="height:0;overflow:hidden"><p>${LOGIN_TEXT}</p></div>`,
+  `<p style="width:30px;height:20px;overflow:hidden;white-space:nowrap;text-indent:-9999px">${LOGIN_TEXT}</p>`,
+  `<p style="clip-path:inset(100%)">${LOGIN_TEXT}</p>`,
+  `<p style="transform:scale(0)">${LOGIN_TEXT}</p>`,
+  `<p style="font-size:0">${LOGIN_TEXT}</p>`,
+].join('')
+
+/**
+ * Des structures possibles de la VRAIE page de connexion (mesure : le texte à [107,508][971,574], le champ à [42,765][399,818], rien ne dit qu'ils partagent un `<form>`). `text` : ce
+ * qui tient lieu du texte (le texte montré, ou ses façons d'être caché). Le champ est toujours montré et de taille réelle.
+ */
+const nested = (levels: number, inner: string): string =>
+  '<div>'.repeat(levels) + inner + '</div>'.repeat(levels)
+const LOGIN_STRUCTURES: [string, (text: string) => string][] = [
+  [
+    'un form plein page avec recherche, champ caché et case',
+    (text) =>
+      `<form id="aspnetForm"><input type="search" aria-label="Rechercher"><input type="hidden" value="x"><label><input type="checkbox"> Newsletter</label><h1>Connexion</h1>${text}<input type="email" aria-label="Adresse email"></form>`,
+  ],
+  [
+    'titre et texte dans un header frère du form',
+    (text) =>
+      `<header><h1>Connexion</h1>${text}</header><form><input type="email" aria-label="Adresse email"></form>`,
+  ],
+  [
+    'des div imbriqués, sans form ni section (1 niveau)',
+    (text) =>
+      `<div>${text}<div><label><input type="email" aria-label="Adresse email"></label></div></div>`,
+  ],
+  [
+    'des div imbriqués, sans form ni section (5 niveaux)',
+    (text) =>
+      `<div>${text}${nested(5, '<label><input type="email" aria-label="Adresse email"></label>')}</div>`,
+  ],
+  [
+    'un main avec titre, texte, form et cadre de vérification',
+    (text) =>
+      `<main><h1>Connexion</h1>${text}<form><input type="email" aria-label="Adresse email"><iframe title="hCaptcha" style="width:200px;height:60px"></iframe></form></main>`,
+  ],
+  [
+    'deux sections voisines',
+    (text) =>
+      `<section>${text}</section><section><input type="email" aria-label="Adresse email"></section>`,
+  ],
+]
+
+for (const [name, structure] of LOGIN_STRUCTURES) {
+  test(`DRV-759 : la page de connexion — ${name} — est « Étape 2 sur 2 » quand son texte est montré`, async ({
+    page,
+    agentCode,
+  }) => {
+    await withMobile({}, async (fake) => {
+      const app = await openWithBridge(page, fake, agentCode, {
+        path: '/',
+        origin: fake.mobileOrigins.www,
+        asApplication: true,
+      })
+      await page.evaluate(
+        (html) => document.body.insertAdjacentHTML('beforeend', html),
+        structure(`<p>${LOGIN_TEXT}</p>`),
+      )
+      app.answerHello(PLAN(FARINE))
+
+      await expect(page.locator('.g-step').filter({ hasText: 'Étape 2 sur 2' })).toBeAttached({
+        timeout: 15_000,
+      })
+    })
+  })
+
+  test(`DRV-759 : la même structure — ${name} — avec le texte CACHÉ de dix façons n'est pas une page de connexion`, async ({
+    page,
+    agentCode,
+  }) => {
+    await withMobile({}, async (fake) => {
+      const app = await openWithBridge(page, fake, agentCode, {
+        path: '/',
+        origin: fake.mobileOrigins.www,
+        asApplication: true,
+      })
+      await page.evaluate(
+        (html) => document.body.insertAdjacentHTML('beforeend', html),
+        structure(HIDDEN_VARIANTS),
+      )
+      app.answerHello(PLAN(FARINE))
+
+      await expect(page.locator('.g-step').filter({ hasText: 'Étape 1 sur 2' })).toBeAttached({
+        timeout: 15_000,
+      })
+      await expect(page.locator('.g-step').filter({ hasText: 'Étape 2 sur 2' })).toHaveCount(0)
+    })
+  })
+}
+
 test('« Arrêter pour l’instant » pendant le choix du magasin : rien n’est demandé au serveur, rien n’est écrit', async ({
   page,
   agentCode,

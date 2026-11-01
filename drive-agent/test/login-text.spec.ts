@@ -11,12 +11,15 @@ const TEXT = 'Connectez-vous avec votre compte unique E.Leclerc.'
 /** Un élément dont la boîte est donnée (jsdom ne mesure rien) ; `visible: false` : aucune boîte, comme un élément caché. */
 function shown<T extends HTMLElement>(
   el: T,
-  box: { left: number; width: number; height?: number } | null = { left: 20, width: 300 },
+  box: { left: number; width: number; height?: number; top?: number } | null = {
+    left: 20,
+    width: 300,
+  },
 ): T {
   el.getBoundingClientRect = () =>
     ({
-      top: 100,
-      bottom: 100 + (box === null ? 0 : (box.height ?? 40)),
+      top: box?.top ?? 100,
+      bottom: (box?.top ?? 100) + (box === null ? 0 : (box.height ?? 40)),
       left: box?.left ?? 0,
       right: (box?.left ?? 0) + (box?.width ?? 0),
       width: box?.width ?? 0,
@@ -31,7 +34,10 @@ function shown<T extends HTMLElement>(
 function add<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   html: string,
-  box: { left: number; width: number; height?: number } | null = { left: 20, width: 300 },
+  box: { left: number; width: number; height?: number; top?: number } | null = {
+    left: 20,
+    width: 300,
+  },
   parent: HTMLElement = document.body,
 ): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag)
@@ -118,14 +124,38 @@ describe('showsLoginText', () => {
     expect(showsLoginText(document)).toBe(false)
   })
 
-  it('le texte rangé ailleurs que dans le bloc du champ montré n’est pas celui de ce champ ; dans le même bloc, si', () => {
-    const elsewhere = add('section', '')
-    add('p', TEXT, undefined, elsewhere)
+  it('le texte et le champ ne partagent ni form ni section : la page de connexion n’est pas manquée (le bloc n’est que main, un dialogue, ou la page)', () => {
+    const header = add('header', '')
+    add('p', TEXT, undefined, header)
     const form = add('form', '')
     add('input', '', undefined, form)
+
+    expect(showsLoginText(document)).toBe(true)
+  })
+
+  it('un texte hors du <main> qui porte le champ n’est pas celui de ce champ ; dans le même <main>, si', () => {
+    const outside = add('section', '')
+    add('p', TEXT, undefined, outside)
+    const main = add('main', '')
+    add('input', '', undefined, main)
     expect(showsLoginText(document)).toBe(false)
 
-    add('p', TEXT, undefined, form)
+    add('p', TEXT, undefined, main)
+    expect(showsLoginText(document)).toBe(true)
+  })
+
+  it('un texte placé très au-dessus du document (top: -9999px) n’est pas montré, même avec une boîte de taille réelle', () => {
+    add('p', TEXT, { left: 20, width: 300, top: -9999 })
+    field()
+
+    expect(showsLoginText(document)).toBe(false)
+  })
+
+  it('un ancêtre minuscule qui ne rogne pas (overflow visible ou non lu) ne cache rien : le texte reste montré', () => {
+    const wrapper = add('div', '', { left: 20, width: 300, height: 0 })
+    add('p', TEXT, { left: 20, width: 300 }, wrapper)
+    field()
+
     expect(showsLoginText(document)).toBe(true)
   })
 
