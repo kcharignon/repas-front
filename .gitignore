@@ -57,3 +57,9 @@ android/*.p12
 android/*.pfx
 android/**/*.keystore
 !android/debug.keystore
+
+# Réglages locaux et secrets : tout fichier .env.local*, .env.*.local*, à n'importe quelle profondeur, reste hors du dépôt (.env.example reste suivi)
+.env.local*
+.env.*.local*
+# Marqueur Windows laissé par un fichier copié
+*:Zone.Identifier
