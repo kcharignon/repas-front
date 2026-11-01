@@ -63,6 +63,8 @@ const choosing = computed(() => store.value === null && route.query.magasin === 
 const reading = ref<RetailerId | null>(null)
 const savedTail = ref<string | null>(null)
 const savedFor = ref<RetailerId | null>(null)
+/** Le nom du magasin qui vient d'être enregistré, quand l'application l'a lu (jamais inventé : `null` sinon). */
+const savedLabel = ref<string | null>(null)
 const readError = ref<string | null>(null)
 const readErrorFor = ref<RetailerId | null>(null)
 const save = useSaveDriveSettings()
@@ -101,6 +103,7 @@ async function saveManual(id: RetailerId, found: DriveStorePayload) {
   }
   savedTail.value = null
   savedFor.value = null
+  savedLabel.value = null
   notifications.push('success', t('driveSettings.saved'))
   await leave()
 }
@@ -149,6 +152,7 @@ async function register(
   }
   savedTail.value = storeTail(found.id)
   savedFor.value = id
+  savedLabel.value = found.label
   if (origin.value !== null)
     notifications.push('success', t('driveSettings.readDone', { tail: savedTail.value }))
   await leave()
@@ -174,6 +178,7 @@ async function adopt(found: StoreReading, target: Target) {
   if (current.baseUrl === parsed.baseUrl) {
     savedTail.value = storeTail(parsed.id)
     savedFor.value = target.id
+    savedLabel.value = current.label ?? null
 
     return
   }
@@ -189,6 +194,7 @@ async function readFromApp(target: Target, address: string | null = null) {
   reading.value = target.id
   savedTail.value = null
   savedFor.value = null
+  savedLabel.value = null
   readError.value = null
   readErrorFor.value = null
   other.value = null
@@ -355,8 +361,11 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
           {{ t('driveSettings.store') }}
         </h2>
         <div :class="card">
-          <p v-if="savedTail" role="status" class="text-lg font-bold">
-            {{ t('driveSettings.readDone', { tail: savedTail }) }}
+          <p v-if="savedTail" role="status" class="flex flex-col text-lg font-bold">
+            <span v-if="savedLabel" class="break-words">{{ savedLabel }}</span>
+            <span :class="{ 'text-sm font-normal text-muted': savedLabel }">{{
+              t('driveSettings.readDone', { tail: savedTail })
+            }}</span>
           </p>
           <p v-else-if="choosing">{{ t('driveSettings.chooseHelp') }}</p>
           <p v-else-if="store === null" class="font-bold">{{ t('driveSettings.none') }}</p>
@@ -418,6 +427,7 @@ const notice = 'rounded-xl bg-soft px-4 py-3 font-semibold'
             :busy="locked || reading !== null || removeDrive.isPending.value"
             :online="online"
             :saved-tail="savedFor === drive.id ? savedTail : null"
+            :saved-label="savedFor === drive.id ? savedLabel : null"
             :read-error="readErrorFor === drive.id ? readError : null"
             :save="(found) => saveManual(drive.id, found)"
             @read="readFromApp({ id: drive.id, store: drive.store })"

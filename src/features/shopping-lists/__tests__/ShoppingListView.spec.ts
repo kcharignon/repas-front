@@ -103,6 +103,18 @@ describe('ShoppingListView', () => {
     expect(wrapper.find('img').attributes('src')).toBe('/images/department/legumes.png')
   })
 
+  it('DRV-757 : la progression est au singulier pour un seul article (« 1 sur 1 article dans le panier »), au pluriel sinon, et pour aucun', async () => {
+    backWith({}, detail([row('r1', 'Poulet', 1.6, 'kg', true)]))
+
+    const wrapper = await mountList()
+
+    expect(wrapper.find('[role="progressbar"]').attributes('aria-label')).toBe(
+      '1 sur 1 article dans le panier',
+    )
+    expect(wrapper.text()).toContain('1 sur 1 article dans le panier')
+    expect(wrapper.text()).not.toContain('1 sur 1 articles')
+  })
+
   it('coche une ligne tout de suite, puis le back confirme', async () => {
     let release: () => void = () => undefined
     const fetchMock = backWith({

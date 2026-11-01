@@ -389,6 +389,36 @@ describe('ajouter un drive : la lecture du magasin par l’application', () => {
     expect(wrapper.text()).toContain('Mon drive habituel')
   })
 
+  it('DRV-757 : le nom du magasin lu par l’application est montré avec la confirmation, comme chez Leclerc (jamais seulement « …abc »), et enregistré ; sans nom lu, rien n’est inventé', async () => {
+    const named = (runId: string) => {
+      const base = found(runId)
+      return {
+        ...base,
+        result: {
+          ...base.result,
+          store: { ...base.result.store, label: 'Auchan Drive Lyon Saint-Priest' },
+        },
+      }
+    }
+    const back = fakeBack({ leclerc: LECLERC_STORE })
+    const native = appOf(['leclerc', 'auchan'], named)
+    const { wrapper, fetchMock } = await open(back, native)
+
+    await button(wrapper, 'Choisir mon magasin Auchan')?.trigger('click')
+    await vi.waitFor(() => expect(back.state.stores.auchan).not.toBeNull())
+    await flushPromises()
+
+    const index = fetchMock.mock.calls.findIndex(
+      ([input]) =>
+        (input as Request).method === 'PUT' && (input as Request).url.endsWith('/drive/settings'),
+    )
+    expect(await bodyOf(fetchMock, index)).toMatchObject({
+      store: { label: 'Auchan Drive Lyon Saint-Priest' },
+    })
+    expect(card(wrapper, 'Auchan')?.text()).toContain('Auchan Drive Lyon Saint-Priest')
+    expect(card(wrapper, 'Auchan')?.text()).toContain('Magasin …abc enregistré.')
+  })
+
   it('pendant la lecture, seul ce drive est « en cours » : les autres boutons ne bougent pas, aucun second message', async () => {
     const back = fakeBack({ leclerc: LECLERC_STORE })
     const native = appOf(['leclerc', 'auchan'])

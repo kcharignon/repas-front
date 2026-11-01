@@ -168,7 +168,7 @@ const tile = ref('dish')
       <UiProgressBar
         :value="4"
         :max="11"
-        :label="t('design.progressLabel', { done: 4, total: 11 })"
+        :label="t('design.progressLabel', { done: 4, total: 11 }, 11)"
       />
     </section>
   </main>

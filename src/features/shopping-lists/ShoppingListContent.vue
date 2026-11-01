@@ -81,7 +81,7 @@ const stepClass =
       <div class="flex items-baseline justify-between text-sm text-muted">
         <span>
           <strong class="text-base text-ink">{{
-            t('shoppingList.progress', { done, total: rows.length })
+            t('shoppingList.progress', { done, total: rows.length }, rows.length)
           }}</strong>
         </span>
         <span>{{ rows.length === 0 ? 0 : Math.round((done / rows.length) * 100) }} %</span>
@@ -89,7 +89,7 @@ const stepClass =
       <UiProgressBar
         :value="done"
         :max="rows.length"
-        :label="t('shoppingList.progress', { done, total: rows.length })"
+        :label="t('shoppingList.progress', { done, total: rows.length }, rows.length)"
       />
     </div>
 

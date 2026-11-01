@@ -120,12 +120,13 @@ describe('Auchan : la sous-étape lue dans la page', () => {
     expect(look?.target).toMatchObject({ element: keep, label: 'Utiliser ce magasin' })
   })
 
-  it('une barre cachée n’est pas désignée ; rien à lire pour la connexion : la page ne dit rien', () => {
+  it('une barre cachée n’est pas désignée ; la connexion sans contrôle montré ne cite aucun libellé', () => {
     const bar = add('a', 'Choisir vos courses', 10, document.body, { role: 'button' })
     bar.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0)
 
     expect(readAuchanLook(document, 'store')).toBeNull()
-    expect(readAuchanLook(document, 'login')).toBeNull()
+    // La connexion : aucun contrôle montré, la carte dit où chercher (pas de libellé inventé)
+    expect(readAuchanLook(document, 'login')).toMatchObject({ sub: 'connexion', target: null })
   })
 })
 
@@ -203,5 +204,79 @@ describe('Auchan : le cadre de vérification reCAPTCHA (DRV-757)', () => {
 
     expect(look.keep).toEqual([])
     expect(look.crowded).toBeUndefined()
+  })
+})
+
+describe('Auchan : le mot que la personne voit (DRV-757, suite)', () => {
+  const shownFor = (element: HTMLElement, hit: HTMLElement | null = element): void => {
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: () => hit,
+    })
+    void element
+  }
+  afterEach(() => {
+    Reflect.deleteProperty(document, 'elementFromPoint')
+  })
+
+  it('la barre : le libellé est celui de l’élément que la page MONTRE (opacité 0 écartée), même si un autre élément cache le même mot d’une autre phrase', () => {
+    const ghost = add('a', 'Choisir vos courses', 10, document.body, { role: 'button' })
+    ;(ghost as unknown as { checkVisibility: () => boolean }).checkVisibility = () => false
+    const bar = add('a', 'Choisir mon mode de livraison', 60, document.body, { role: 'button' })
+
+    const look = readAuchanLook(document, 'store')
+
+    expect(look?.target).toMatchObject({ element: bar, label: 'Choisir mon mode de livraison' })
+  })
+
+  it('la barre : un élément que la page recouvre (le doigt tomberait ailleurs) passe après celui qui reçoit le toucher', () => {
+    const covered = add('a', 'Choisir vos courses', 10, document.body, { role: 'button' })
+    const touched = add('a', 'Choisir mon mode de livraison', 60, document.body, { role: 'button' })
+    // Une fenêtre de la page recouvre le premier : le doigt tomberait sur elle
+    const overlay = add('div', '', 0)
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: (_x: number, y: number) => (y < 40 ? overlay : touched),
+    })
+
+    const look = readAuchanLook(document, 'store')
+
+    expect(look?.target?.element).toBe(touched)
+    expect(look?.target?.label).toBe('Choisir mon mode de livraison')
+    expect(covered.isConnected).toBe(true)
+  })
+
+  it('un bouton sans texte dont le NOM ACCESSIBLE est « Choisir mon mode de livraison » est la barre : le libellé est son nom', () => {
+    const bar = add('button', '', 60, document.body, {
+      'aria-label': 'Choisir mon mode de livraison',
+    })
+    shownFor(bar)
+
+    const look = readAuchanLook(document, 'store')
+
+    expect(look?.sub).toBe('bar')
+    expect(look?.target).toMatchObject({ element: bar, label: 'Choisir mon mode de livraison' })
+  })
+
+  it('la connexion : le contrôle de la page, montré, avec son libellé ; un « Me connecter » caché n’est jamais cité', () => {
+    const hidden = add('a', 'Me connecter', 10)
+    hidden.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0)
+    const icon = add('button', '', 60)
+    shownFor(icon)
+
+    const nameless = readAuchanLook(document, 'login')
+
+    // Le bouton du bandeau n'a aucun nom : la carte ne cite rien, elle dit où il est
+    expect(nameless).toMatchObject({ sub: 'connexion', target: null })
+
+    const link = add('a', 'Se connecter', 120)
+    const named = readAuchanLook(document, 'login')
+    expect(named?.target).toMatchObject({ element: link, label: 'Se connecter' })
+  })
+
+  it('les mots de la connexion d’Auchan : le libellé de la page, sinon « l’icône de connexion, en haut à droite »', () => {
+    const text = GUIDE_TEXTS.connexion
+    expect(text?.text).toContain('{label}')
+    expect(text?.bare).toBe('Touche l’icône de connexion, en haut à droite de la page.')
   })
 })

@@ -66,11 +66,22 @@ export function listText(names: readonly string[]): string {
   return names.length > LIST_MAX ? `${shown} (et ${names.length - LIST_MAX} de plus)` : shown
 }
 
-/** Ce que la liste demande pour un article : « 800 g » (la quantité et son unité), `null` quand le plan ne le dit pas. */
+/**
+ * Ce que la liste demande pour un article : « 800 g » (la quantité et son unité), `null` quand le plan ne le dit pas. Une unité qui est un MOT (« unité », « tranche », « cuillère à
+ * soupe ») s'accorde : « 2 unités » dès deux (DRV-757, mesuré : « Il te faut : 2 unité. ») ; un symbole (g, kg, ml, cl, l) ne s'accorde jamais. Le symbole est un mot quand il est le nom
+ * de l'unité (`unitName`, DRV-652), ou, sans nom, qu'il a trois lettres au moins.
+ */
 export function formatNeeded(
-  needed: { quantity: number; unitSymbol: string } | null | undefined,
+  needed:
+    { quantity: number; unitSymbol: string; unitName?: string | undefined } | null | undefined,
 ): string | null {
-  return needed ? `${formatNumber(needed.quantity)} ${needed.unitSymbol}` : null
+  if (!needed) return null
+  const symbol = needed.unitSymbol.trim()
+  const word =
+    needed.unitName === undefined
+      ? /^\p{L}{3,}(?: \p{L}+)*$/u.test(symbol)
+      : symbol.toLowerCase() === needed.unitName.trim().toLowerCase()
+  return `${formatNumber(needed.quantity)} ${word ? unitFor(symbol, needed.quantity) : needed.unitSymbol}`
 }
 
 /** Les articles de la liste rangés par ce qui leur arrive : ce qu'il faut pour écrire la phrase de synthèse. */
