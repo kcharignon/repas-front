@@ -501,6 +501,31 @@ describe('la page de connexion de l’enseigne n’est jamais « entrer dans le 
     expect(screens.closed.count).toBe(1)
   })
 
+  it.each([
+    ['le magasin pas choisi', new RetailerError('UNSUPPORTED_PAGE', null, 'STORE_NOT_CHOSEN')],
+    ['une page d’un autre hôte', new RetailerError('UNSUPPORTED_PAGE', null, 'PAGE_HOST')],
+    ['un autre magasin que celui du plan', null],
+  ])(
+    'DRV-757 : l’ADRESSE de la connexion l’emporte sur la lecture du magasin (%s) : jamais « Choisis ton magasin » sur la page de connexion',
+    async (_name, error) => {
+      const w = world({ chosen: true, member: false })
+      w.adapter.readStore = () => {
+        if (error !== null) throw error
+        return { ...STORE, id: '999999', baseUrl: 'https://exemple.test/magasin', label: null }
+      }
+      Object.assign(w.adapter, { onLoginPage: () => true })
+      const screens = fakeUi()
+      const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter })
+
+      await flow.start(FARINE)
+
+      expect(screens.propsOf('guide').map((props) => props.step)).not.toContain('store')
+      expect(screens.propsOf('guide')[0]).toMatchObject({ step: 'login', form: true })
+      expect(screens.screens()).not.toContain('chosenStore')
+      expect(expectConform(sent[0]).outcome).toBe('aborted')
+    },
+  )
+
   it('une page qui n’est PAS la page de connexion garde l’entrée dans le magasin (DRV-625, DRV-748 intacts)', async () => {
     const w = world({ chosen: false, member: true }, { entry: BUTTON })
     w.adapter.readStore = () => {
@@ -593,8 +618,24 @@ describe('la page se recharge pendant l’attente (choisir son magasin, se conne
 })
 
 describe('chaque enseigne dit où est le contrôle à toucher', () => {
+  /** jsdom ne mesure rien : tout élément a une boîte, sauf ceux marqués `hidden-box` (la page les cache). */
   const page = (html: string) => {
     document.body.innerHTML = html
+    for (const element of document.querySelectorAll('*')) {
+      const hidden = element.closest('.hidden-box') !== null
+      element.getBoundingClientRect = () =>
+        ({
+          top: 10,
+          bottom: hidden ? 10 : 50,
+          left: 0,
+          right: hidden ? 0 : 200,
+          width: hidden ? 0 : 200,
+          height: hidden ? 0 : 40,
+          x: 0,
+          y: 10,
+          toJSON: () => ({}),
+        }) as DOMRect
+    }
     return document
   }
   afterEach(() => {
@@ -610,6 +651,29 @@ describe('chaque enseigne dit où est le contrôle à toucher', () => {
       expect(target?.label).toBe(label)
       expect(target?.element.textContent).toBe(label)
     }
+  })
+
+  it('DRV-757 (constat du 2026-11-01) : le libellé cité est celui de la barre que la page MONTRE, jamais celui d’un élément caché (« Choisir vos courses » caché, « Choisir mon mode de livraison » visible)', () => {
+    page(
+      '<header><div class="hidden-box"><span>Choisir vos courses</span></div><div id="shown"><span>Choisir mon mode de livraison</span></div></header>',
+    )
+
+    const target = chooseBarTarget(document)
+
+    expect(target?.label).toBe('Choisir mon mode de livraison')
+    expect(target?.element.closest('#shown')).not.toBeNull()
+
+    // Les deux libellés, dans l'autre sens
+    page(
+      '<header><div class="hidden-box"><span>Choisir mon mode de livraison</span></div><div id="shown"><span>Choisir vos courses</span></div></header>',
+    )
+    expect(chooseBarTarget(document)?.label).toBe('Choisir vos courses')
+  })
+
+  it('DRV-757 : une barre que la page ne montre pas n’est jamais désignée (aucun libellé inventé : la carte dit « la barre en haut de la page »)', () => {
+    page('<header class="hidden-box"><span>Choisir vos courses</span></header>')
+
+    expect(chooseBarTarget(document)).toBeNull()
   })
 
   it('Auchan : la barre remontée jusqu’au bouton qui la porte', () => {

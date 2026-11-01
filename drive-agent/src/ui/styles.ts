@@ -20,6 +20,14 @@ export const STYLES = `
 .guide .g-text{margin:0;font-size:17px;line-height:1.4}
 .guide .g-note{margin:0;font-size:15px;line-height:1.4;color:var(--g-muted)}
 .guide .g-head{display:flex;align-items:center;gap:10px}
+.guide .g-fold{display:inline-flex;align-items:center;gap:4px;margin:-12px -10px -12px auto;padding:0 10px;border:0;background:transparent;color:var(--g-muted);font-size:14px;font-weight:700}
+.guide .g-fold svg{transform:rotate(180deg)}
+.guide>button.g-bar{display:flex;align-items:center;gap:10px;min-height:48px;padding:4px 8px 4px 14px;border:0;border-radius:16px;background:transparent;color:var(--g-fg);text-align:left}
+.guide .g-bar-text{flex:1;min-width:0;font-size:14px;font-weight:700;line-height:1.25}
+.guide .g-bar-act{display:inline-flex;align-items:center;flex:none;gap:2px;color:var(--g-primary);font-size:14px;font-weight:700}
+.guide:not(.min)>.g-bar,.guide.min>:not(.g-bar){display:none}
+.overlay.sheet>.screen.guide.min{flex-direction:row;gap:0;margin:auto 80px 12px 8px;padding:0;border-radius:16px}
+.overlay.sheet>.screen.guide.min.top{margin:8px 8px auto}
 .guide .g-segments{display:inline-flex;gap:4px}
 .guide .g-seg{width:28px;height:6px;border-radius:999px;background:var(--g-line)}
 .guide .g-seg.on{background:var(--g-primary)}

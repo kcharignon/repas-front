@@ -235,7 +235,9 @@ test.describe('la connexion entre l’accueil et le magasin', () => {
       await expect(login).toBeVisible({ timeout: 15_000 })
       expect(fake.cart()).toEqual({})
       // La page de connexion n'est pas « une page où entrer dans le magasin » (DRV-751) : la carte dit d'entrer ses identifiants, aucun bandeau d'entrée par-dessus
-      await expect(page.getByText('Entre tes identifiants dans la page.')).toBeVisible()
+      await expect(
+        page.getByText('Écris ton e-mail, puis ton mot de passe. Tu les tapes toi-même.'),
+      ).toBeVisible()
       await expect(page.getByRole('heading', { name: MANUAL })).toHaveCount(0)
       await login.click()
 

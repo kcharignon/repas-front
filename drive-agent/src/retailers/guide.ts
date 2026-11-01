@@ -14,6 +14,46 @@ export interface GuideTarget {
   element: HTMLElement
   /** Le libellé lisible du contrôle (40 caractères au plus), `null` s'il n'en a pas (une icône sans texte) : le message ne cite alors aucun libellé. */
   label: string | null
+  /** Le seul MOT du contrôle à entourer (DRV-757 : « Connexion » d'un menu « Connexion / Inscription », qui a deux zones à toucher) ; absent : tout le contrôle. */
+  word?: string
+}
+
+/**
+ * La sous-étape RÉELLE où en est la personne, lue dans la page (DRV-757) : la carte dit chaque fois quoi faire MAINTENANT. `field` : le champ du code postal est à remplir ;
+ * `city` : une ville est proposée ; `shop` : des magasins sont proposés ; `menu` : le menu est fermé ; `connexion` : le menu montre « Connexion » ; `signup` : la page est la
+ * création de compte ; `form` : la page est la connexion ; `code` : la page attend le code reçu par e-mail ; `bar` : la barre du magasin est à toucher ; `confirm` : la page demande
+ * de garder le magasin ; `wall` : le mur de cookies est là, la personne y répond d'abord.
+ */
+export type GuideSub =
+  | 'field'
+  | 'city'
+  | 'shop'
+  | 'bar'
+  | 'confirm'
+  | 'wall'
+  | 'menu'
+  | 'connexion'
+  | 'signup'
+  | 'form'
+  | 'code'
+
+/**
+ * Ce que la page montre d'une étape guidée (DRV-757), une lecture de la page seule : la sous-étape (`null` : la page ne le dit pas, la carte garde sa phrase générale), le contrôle
+ * à entourer, et ce que la carte ne doit JAMAIS cacher (`keep`, les contrôles à toucher) ou cache le moins possible (`maybe`, les suivants d'une liste).
+ */
+export interface GuideLook {
+  sub: GuideSub | null
+  target: GuideTarget | null
+  keep: readonly HTMLElement[]
+  maybe: readonly HTMLElement[]
+}
+
+/** Les mots de la carte pour une sous-étape : la phrase, et la ligne courte de la barre réduite. Propres à l'enseigne (jamais dans l'interface). */
+export interface GuideSubText {
+  readonly text: string
+  readonly short: string
+  /** La phrase sans le libellé du contrôle, quand `text` en cite un (`{label}`) et que la page n'en donne aucun. */
+  readonly bare?: string
 }
 
 /** Un texte comparable : sans accent, minuscules, apostrophes droites, espaces réduites. */

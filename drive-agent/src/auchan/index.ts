@@ -4,6 +4,7 @@ export { AuchanAdapter, browserDeps, ENTRY_WAIT_MS, type AuchanDeps } from './ad
 export { AUCHAN_CAUSES, type AuchanCause } from './causes'
 export { PACING } from './pacing'
 export { PHOTO_RULE } from './photo-rule'
+export { GUIDE_TEXTS } from './texts'
 
 /**
  * Le site d'Auchan : l'hôte où l'agent vit (jamais `compte.auchan.fr`, la page du mot de passe : aucun code de Repas n'y est injecté, DRV-715 § 2 point 6).

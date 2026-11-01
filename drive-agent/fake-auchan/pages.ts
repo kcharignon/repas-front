@@ -48,7 +48,41 @@ export function barHtml(bar: Bar): string {
   if (bar === 'none') return ''
   return bar === 'withdrawal'
     ? `<div class="store-bar"><span>Retrait : ${STORE.label}</span></div>`
-    : '<a href="#" role="button" class="store-bar">Choisir vos courses</a>'
+    : `<a href="#" role="button" class="store-bar">Choisir vos courses</a>${chooserPanel()}`
+}
+
+/**
+ * Le panneau « Choisir un drive ou la livraison » que la barre ouvre (constat du 2026-11-01, DRV-757) : un `DIV` `aria-modal` en position fixe et de z-index 111 (pas une `<dialog>`), un
+ * champ « Code postal, ville… », la ligne de suggestion « Dardilly 69570 » (une ville inventée du faux site) qui apparaît dès cinq chiffres, puis une liste de drives à choisir. Choisir un
+ * drive ferme le panneau et remplace la barre par « Retrait : … » ; le serveur, lui, ne le sait que par `setBehavior({ store: 'chosen' })` (le test). FORME PLAUSIBLE, non mesurée au-delà de
+ * ce constat.
+ */
+function chooserPanel(): string {
+  return `<div id="panel" aria-modal="true" style="display:none;position:fixed;inset:0;z-index:111;background:#fff;padding:16px;overflow:auto">
+<h2>Choisir un drive ou la livraison</h2>
+<label>Rechercher par : <input id="where" type="text" placeholder="Code postal, ville…" autocomplete="off"></label>
+<p id="hint">Renseignez un code postal ou une ville pour commencer vos courses !</p>
+<div id="suggest"></div><div id="drives"></div>
+</div>
+<script>
+const panel = document.getElementById('panel');
+document.querySelector('.store-bar').addEventListener('click', function (e) { e.preventDefault(); panel.style.display = 'block'; });
+const where = document.getElementById('where');
+where.addEventListener('input', function () {
+  document.getElementById('suggest').innerHTML = where.value.length >= 5 ? '<button id="city" type="button">Dardilly 69570</button>' : '';
+  const city = document.getElementById('city');
+  if (city) city.addEventListener('click', function () {
+    document.getElementById('suggest').innerHTML = '';
+    document.getElementById('drives').innerHTML = [1, 2, 3, 4].map(function (n) {
+      return '<div style="box-sizing:border-box;height:110px;margin:8px 0;padding:10px;border:1px solid #ccc;border-radius:12px"><p>Drive Ville-Test ' + n + '</p><button class="pick-drive" type="button">Choisir ce drive</button></div>';
+    }).join('');
+    for (const pick of document.querySelectorAll('.pick-drive')) pick.addEventListener('click', function () {
+      panel.style.display = 'none';
+      document.querySelector('.store-bar').outerHTML = '<div class="store-bar"><span>Retrait : Drive Ville-Test</span></div>';
+    });
+  });
+});
+</script>`
 }
 
 export function nav(): string {

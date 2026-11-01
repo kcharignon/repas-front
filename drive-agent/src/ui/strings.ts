@@ -1060,6 +1060,9 @@ export const S = {
     },
     /** Ce que l'agent fait pendant que la personne agit. */
     status: 'Je continue dès que c’est fait.',
+    /** La carte se réduit à une barre fine (DRV-757) : un bouton dit ce qui se passe, la barre dit comment la rouvrir. Jamais « Fermer » : la carte reste, et la liste est gardée. */
+    hide: 'Réduire',
+    show: 'Afficher',
     /** Le repère posé sous le contrôle à toucher, dans la page. */
     pointer: 'Touche ici',
     /** L'étape est faite : l'agent reprend la main. */

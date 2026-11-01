@@ -41,7 +41,8 @@ import {
   LOGIN_LABELS,
   storeBar,
 } from './page'
-import { findControl, type GuideStep, type GuideTarget } from '../retailers/guide'
+import { findControl, type GuideLook, type GuideStep, type GuideTarget } from '../retailers/guide'
+import { readAuchanLook } from './guide-look'
 import type { AuchanOffer } from './offers'
 import { PACING } from './pacing'
 import { readSession } from './session'
@@ -190,6 +191,24 @@ export class AuchanAdapter implements RetailerAdapter {
    * Le contrôle que la personne doit toucher pour une étape guidée (DRV-751) : la barre du magasin (`store`), ou le contrôle de connexion de la page (`login`,
    * libellés non mesurés : `null` si rien ne ressemble à une connexion). Une lecture de la page seule, jamais un toucher.
    */
+  /** La carte se pose hors des boutons du mur de cookies d'Auchan, qui apparaît avant tout (DRV-757, parcours du 2026-11-01). */
+  readonly keepClearOfConsent = true
+
+  /**
+   * La sous-étape que la page montre (DRV-757) : le mur de cookies, la barre, le panneau de choix (champ, ville proposée, magasins, « Utiliser ce magasin ») ; sans elle, le
+   * contrôle de `guideTarget` seul. Le libellé cité est celui de l'élément entouré, lu à l'instant. Une lecture de la page seule.
+   */
+  guideLook(step: GuideStep): GuideLook {
+    try {
+      const look = readAuchanLook(this.deps.document, step)
+      if (look !== null) return look
+    } catch {
+      // La page ne se laisse pas lire : le contrôle seul, ou rien.
+    }
+    const target = this.guideTarget(step)
+    return { sub: null, target, keep: target === null ? [] : [target.element], maybe: [] }
+  }
+
   guideTarget(step: GuideStep): GuideTarget | null {
     try {
       const { document } = this.deps

@@ -122,7 +122,9 @@ import {
   readSession,
   type SessionReading,
 } from './session'
-import { findControl, type GuideStep, type GuideTarget } from '../retailers/guide'
+import { findControl, type GuideLook, type GuideStep, type GuideTarget } from '../retailers/guide'
+import { wallLook } from '../retailers/consent'
+import { readLoginLook, readStoreLook } from './guide-look'
 import { findPostalCodeField } from './store-field'
 import {
   cameFromNationalHome,
@@ -130,6 +132,7 @@ import {
   findDeliveryPoint,
   findSearchBase,
   hostFamily,
+  isMobileHost,
   type LocationLike,
   type PageStore,
   readDeliveryPoint,
@@ -186,6 +189,11 @@ export interface RetailerAdapter {
    * requête, et l'agent ne touche jamais ce contrôle, il l'entoure seulement.
    */
   guideTarget?(step: GuideStep): GuideTarget | null
+  /**
+   * FACULTATIVE (DRV-757) : ce que la page montre de l'étape guidée MAINTENANT : la sous-étape réelle (la carte dit chaque fois quoi faire), le contrôle à entourer (ou le seul
+   * mot à entourer), et les contrôles que la carte ne doit pas cacher. Une lecture de la page seule. Absente : `guideTarget` seul, sans sous-étape.
+   */
+  guideLook?(step: GuideStep): GuideLook
   /**
    * FACULTATIVE (DRV-751) : la page courante est-elle celle de CONNEXION de l'enseigne (par son adresse seulement) ? Sur cette page l'agent ne « entre » jamais dans
    * le magasin et ne dit pas de toucher « Se connecter » : la personne remplit le formulaire, que l'agent n'approche pas (le mot de passe se tape à la main).
@@ -395,6 +403,8 @@ export interface LeclercDeps extends PacerDeps {
   storeField?: () => GuideTarget | null
   /** La page d'où l'on vient (`document.referrer`, DRV-755). Absente, la page ne dit pas d'où l'on vient. */
   referrer?: () => string
+  /** La sous-étape que la page montre, le contrôle à entourer et ce qu'il faut laisser libre (DRV-757). Absente, `guideLook` retombe sur `storeField` et `loginControl`. */
+  look?: (step: GuideStep) => GuideLook | null
 }
 
 /** Le temps laissé à une navigation pour quitter la page avant de la dire sans effet (le clic ou le lien d'entrée, 0.39.0 : l'utilisateur ne doit pas attendre davantage). */
@@ -1524,6 +1534,17 @@ export class LeclercAdapter implements RetailerAdapter {
     }
   }
 
+  /** La sous-étape lue dans la page (DRV-757) ; sans lecture de la page, le contrôle de `guideTarget` seul. Jamais une erreur. */
+  guideLook(step: GuideStep): GuideLook {
+    try {
+      const look = this.deps.look?.(step)
+      if (look !== undefined && look !== null) return look
+    } catch {
+      // La page ne se laisse pas lire : le contrôle seul, ou rien.
+    }
+    return { sub: null, target: this.guideTarget(step), keep: [], maybe: [] }
+  }
+
   readSession(): SessionReading {
     return readSession(this.deps.pageText())
   }
@@ -1576,6 +1597,14 @@ export function browserDeps(
     pageLinks: () => readPageLinks(win.document),
     loginControl: () => findControl(win.document, LOGIN_CONTROL_LABELS),
     storeField: () => findPostalCodeField(win.document),
+    look: (step) =>
+      // Le mur de cookies d'abord : la personne y répond avant tout (DRV-757)
+      wallLook(win.document) ??
+      (step === 'store'
+        ? readStoreLook(win.document)
+        : step === 'login'
+          ? readLoginLook(win.document, win.location, isMobileHost(win.location.hostname))
+          : null),
     referrer: () => win.document.referrer,
     pageText: () => new win.XMLSerializer().serializeToString(win.document),
     navigation: () => navigationOf(win),

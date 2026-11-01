@@ -637,6 +637,7 @@ describe('ce qui n’est pas écrit : ce que le diagnostic de Leclerc seul conna
         'stats',
         'storeChosenOnPage',
         'guideTarget',
+        'guideLook',
       ].sort(),
     )
   })

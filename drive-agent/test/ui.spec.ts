@@ -1,5 +1,5 @@
 // L'interface superposée (DRV-304) : chaque écran (rendu, réponses, échappement), le focus et l'isolation. jsdom, sans réseau.
-import { EXEMPLE, LECLERC } from './retailer-fixtures'
+import { AUCHAN, EXEMPLE, LECLERC } from './retailer-fixtures'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { h } from '../src/ui/dom'
@@ -330,7 +330,8 @@ describe('le guide d’une étape (DRV-751)', () => {
       'Touche « Choisir mon mode de livraison » en haut de la page, puis ton magasin.',
     )
     expect(shadow().querySelector('.g-status')?.textContent).toBe('Je continue dès que c’est fait.')
-    expect(labels()).toEqual([STOP])
+    // Une carte repliable (DRV-757) : « Réduire » (la carte devient une barre fine, rien ne se ferme), la barre qui dit « Afficher », et UNE seule sortie
+    expect(labels()).toEqual(['Étape 1 sur 2 · Choisis ton magasinAfficher', 'Réduire', STOP])
   })
 
   it('étape 2 sur 2 : se connecter, le mot de passe se tape à la main', () => {
@@ -395,8 +396,10 @@ describe('le guide d’une étape (DRV-751)', () => {
     const handle = open()
     void handle.show('guide', props({ total: 0, setup: true }))
 
-    expect(shadow().querySelector('.g-head')).toBeNull()
+    expect(shadow().querySelector('.g-step')).toBeNull()
     expect(labels()).toEqual([
+      'Choisis ton magasinAfficher',
+      'Réduire',
       'Arrêter pour l’instantRien n’est enregistré, tu pourras recommencer.',
     ])
   })
@@ -406,7 +409,12 @@ describe('le guide d’une étape (DRV-751)', () => {
     const answer = handle.show('guide', props({ stage: 'late' }))
 
     expect(shadow().querySelector('h1')?.textContent).toBe('Je suis toujours là')
-    expect(labels()).toEqual(['Attendre encore', STOP])
+    expect(labels()).toEqual([
+      'Étape 1 sur 2 · Je suis toujours làAfficher',
+      'Réduire',
+      'Attendre encore',
+      STOP,
+    ])
     expect(shadow().querySelector('.g-status')).toBeNull()
     press('Attendre encore')
     await expect(answer).resolves.toBe('wait')
@@ -455,6 +463,154 @@ describe('le guide d’une étape (DRV-751)', () => {
   it('la carte reste au-dessus du bouton de menu de l’application (marge basse de 88 px)', () => {
     expect(STYLES).toMatch(/\.screen\.guide\{[^}]*margin:auto 8px var\(--clear\)/)
     expect(STYLES).toMatch(/--clear:88px/)
+  })
+
+  describe('la carte repliable et la sous-étape (DRV-757)', () => {
+    const FIELD = { sub: 'field' as const, target: null, keep: [], maybe: [] }
+    const withTexts = {
+      ...LECLERC,
+      guideTexts: {
+        field: { text: 'Écris ton code postal dans la page.', short: 'Écris ton code postal' },
+        city: { text: 'Touche ta ville dans la liste.', short: 'Touche ta ville' },
+      },
+    }
+    const openWithTexts = (): UiHandle => {
+      ui = createUi({ mode: 'open', retailer: withTexts })
+      return ui
+    }
+    const card = () => shadow().querySelector('.screen.guide') as HTMLElement
+
+    it('« Réduire » donne la barre fine « Étape 1 sur 2 · … · Afficher » ; « Afficher » rouvre la carte ; jamais « Fermer »', () => {
+      const handle = open()
+      void handle.show('guide', props({ clearOfConsent: true }))
+      const fold = buttons().find((b) => b.textContent === 'Réduire') as HTMLButtonElement
+      const bar = shadow().querySelector('.g-bar') as HTMLButtonElement
+      expect(fold.getAttribute('aria-expanded')).toBe('true')
+      expect(bar.getAttribute('aria-expanded')).toBe('false')
+      expect(card().classList.contains('min')).toBe(false)
+
+      fold.click()
+      expect(card().classList.contains('min')).toBe(true)
+      expect(bar.textContent).toBe('Étape 1 sur 2 · Choisis ton magasinAfficher')
+
+      bar.click()
+      expect(card().classList.contains('min')).toBe(false)
+      expect(shadow().textContent).not.toMatch(/fermer/i)
+    })
+
+    it('« Arrêter pour l’instant — Ta liste est gardée » reste atteignable, la carte réduite comme pleine', async () => {
+      const handle = open()
+      const answer = handle.show('guide', props())
+      ;(buttons().find((b) => b.textContent === 'Réduire') as HTMLButtonElement).click()
+      expect(card().classList.contains('min')).toBe(true)
+
+      press(STOP)
+
+      await expect(answer).resolves.toBe('stop')
+    })
+
+    it('la phrase suit la sous-étape lue dans la page, sans redessiner la carte ; la barre dit la même chose en court', () => {
+      let look: typeof FIELD | { sub: 'city'; target: null; keep: never[]; maybe: never[] } = FIELD
+      const handle = openWithTexts()
+      void handle.show('guide', props({ look: () => look }))
+      const text = () => shadow().querySelector('.g-text')?.textContent
+      const bar = () => shadow().querySelector('.g-bar-text')?.textContent
+      expect(text()).toBe('Écris ton code postal dans la page.')
+      expect(bar()).toBe('Étape 1 sur 2 · Écris ton code postal')
+      const same = shadow().querySelector('h1')
+
+      look = { sub: 'city', target: null, keep: [], maybe: [] }
+      window.dispatchEvent(new Event('resize'))
+
+      expect(text()).toBe('Touche ta ville dans la liste.')
+      expect(bar()).toBe('Étape 1 sur 2 · Touche ta ville')
+      expect(shadow().querySelector('h1')).toBe(same)
+    })
+
+    it('une enseigne sans mots pour la sous-étape garde la phrase générale, avec le libellé que la page montre À L’INSTANT (DRV-757, constat Auchan du 2026-11-01)', () => {
+      ui = createUi({ mode: 'open', retailer: EXEMPLE })
+      let label: string | null = 'Choisir mon mode de livraison'
+      const handle = ui
+      void handle.show(
+        'guide',
+        props({
+          label: 'Choisir vos courses',
+          look: () => ({
+            sub: 'field',
+            target: { element: document.body, label },
+            keep: [],
+            maybe: [],
+          }),
+        }),
+      )
+      const text = () => shadow().querySelector('.g-text')?.textContent
+
+      // Jamais le libellé d'un instant d'avant : celui de l'élément entouré, lu maintenant
+      expect(text()).toBe(
+        'Touche « Choisir mon mode de livraison » en haut de la page, puis ton magasin.',
+      )
+      label = 'Choisir vos courses'
+      window.dispatchEvent(new Event('resize'))
+      expect(text()).toBe('Touche « Choisir vos courses » en haut de la page, puis ton magasin.')
+      // Sans libellé lu : aucun mot inventé
+      label = null
+      window.dispatchEvent(new Event('resize'))
+      expect(text()).toBe('Touche la barre du magasin en haut de la page, puis ton magasin.')
+    })
+
+    it('le libellé de la barre d’Auchan est celui de la page ; sans libellé, « la barre » (aucun mot inventé)', () => {
+      ui = createUi({ mode: 'open', retailer: AUCHAN })
+      let label: string | null = 'Choisir mon mode de livraison'
+      void ui.show(
+        'guide',
+        props({
+          look: () => ({
+            sub: 'bar',
+            target: { element: document.body, label },
+            keep: [],
+            maybe: [],
+          }),
+        }),
+      )
+      const text = () => shadow().querySelector('.g-text')?.textContent
+
+      expect(text()).toBe('Touche « Choisir mon mode de livraison », en haut de la page.')
+      label = 'Choisir vos courses'
+      window.dispatchEvent(new Event('resize'))
+      expect(text()).toBe('Touche « Choisir vos courses », en haut de la page.')
+      label = null
+      window.dispatchEvent(new Event('resize'))
+      expect(text()).toBe('Touche la barre, en haut de la page.')
+    })
+
+    it('le mur de cookies : la carte dit d’abord d’y répondre, la personne choisit', () => {
+      const handle = open()
+      void handle.show(
+        'guide',
+        props({ look: () => ({ sub: 'wall', target: null, keep: [], maybe: [] }) }),
+      )
+
+      expect(shadow().querySelector('.g-text')?.textContent).toBe(
+        'D’abord, réponds aux cookies, dans la page.',
+      )
+    })
+
+    it('la carte du magasin ouvert ou « C’est bon » ne se réduit pas : pas de barre', () => {
+      const handle = open()
+      void handle.show('guide', props({ stage: 'done' }))
+
+      expect(shadow().querySelector('.g-bar')).toBeNull()
+      expect(shadow().querySelector('.g-fold')).toBeNull()
+    })
+
+    it('les cibles tactiles de la barre et de « Réduire » mesurent 48 px au moins', () => {
+      expect(STYLES).toMatch(/\.guide>button\.g-bar\{[^}]*min-height:48px/)
+      expect(STYLES).toMatch(/\.g-fold\{[^}]*margin:-12px -10px -12px auto/)
+    })
+
+    it('la barre laisse libre le bouton de menu de l’application (marge à droite de 80 px)', () => {
+      expect(STYLES).toMatch(/\.screen\.guide\.min\{[^}]*margin:auto 80px 12px 8px/)
+    })
   })
 
   describe('le repère dans la page', () => {
@@ -1483,6 +1639,23 @@ describe('choix de produit (hôte)', () => {
     expect(mount).toHaveBeenCalledOnce()
   })
 
+  it('DRV-757 : « Chercher autre chose » est aussi au bout de la liste, pour des résultats peu pertinents : il ramène au champ de recherche', () => {
+    const handle = open()
+    void handle.show('chooser', { ...base, mount: mountList })
+    const elsewhere = [...shadow().querySelectorAll('button')].find(
+      (b) => b.textContent === 'Chercher autre chose',
+    ) as HTMLButtonElement
+    const search = shadow().querySelector('#chercher') as HTMLInputElement
+    const scrolled = vi.fn<() => void>()
+    ;(search.closest('form') as HTMLElement).scrollIntoView = scrolled
+
+    expect(elsewhere.closest('.picker')?.lastElementChild).toBe(elsewhere)
+    elsewhere.click()
+
+    expect(scrolled).toHaveBeenCalledOnce()
+    expect(shadow().activeElement).toBe(search)
+  })
+
   it('range les gestes : « Choisir » est le principal, les autres réponses sont secondaires, « Annuler l’envoi » est discret, tout en bas', () => {
     const handle = open()
     void handle.show('chooser', { ...base, mount: mountList })
@@ -1501,6 +1674,7 @@ describe('choix de produit (hôte)', () => {
       'Choisir',
       'Pas mon habituel',
       'Ne plus proposer',
+      'Chercher autre chose',
       'Annuler l’envoi',
     ])
     const classOf = (label: string) =>
@@ -1654,6 +1828,7 @@ describe('choix de produit (hôte)', () => {
         'Choisir',
         'Pas mon habituel',
         'Ne plus proposer',
+        'Chercher autre chose',
         'Annuler l’envoi',
       ])
     })
