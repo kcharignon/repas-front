@@ -39,10 +39,26 @@
             "blocks": { "$ref": "#/definitions/counter" }
           }
         },
+        "chosenStore": { "$ref": "#/definitions/readStore" },
         "lines": { "type": "array", "maxItems": 100, "items": { "$ref": "#/definitions/line" } }
       },
-      "if": { "properties": { "outcome": { "const": "error" } } },
-      "then": { "required": ["error"] }
+      "allOf": [
+        {
+          "if": { "properties": { "outcome": { "const": "error" } } },
+          "then": { "required": ["error"] }
+        },
+        {
+          "description": "DRV-755 : le magasin choisi à la place de celui du plan n'accompagne qu'un envoi arrêté avant le moindre article, sans erreur.",
+          "if": { "required": ["chosenStore"] },
+          "then": {
+            "properties": {
+              "outcome": { "const": "aborted" },
+              "lines": { "type": "array", "maxItems": 0 }
+            },
+            "not": { "required": ["error"] }
+          }
+        }
+      ]
     },
     {
       "additionalProperties": false,
@@ -52,41 +68,7 @@
         "runId": true,
         "agentVersion": true,
         "type": { "const": "setup-result" },
-        "store": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["id", "host", "baseUrl", "label"],
-          "properties": {
-            "id": { "$ref": "#/definitions/storeId" },
-            "host": { "type": "string", "minLength": 1, "maxLength": 255 },
-            "baseUrl": { "type": "string", "minLength": 1 },
-            "label": { "oneOf": [{ "$ref": "#/definitions/label" }, { "type": "null" }] }
-          },
-          "oneOf": [
-            {
-              "description": "Un magasin de Leclerc : l'identifiant est numérique et se lit dans l'adresse.",
-              "properties": {
-                "id": { "type": "string", "pattern": "^[0-9]{1,12}$" },
-                "host": { "type": "string", "pattern": "^[a-z0-9-]+\\.leclercdrive\\.fr$" },
-                "baseUrl": {
-                  "type": "string",
-                  "pattern": "^https://[a-z0-9-]+\\.leclercdrive\\.fr/magasin-[0-9]{1,12}-[0-9]{1,12}$"
-                }
-              }
-            },
-            {
-              "description": "Un magasin d'Auchan : l'identifiant est un UUID lu par l'agent, l'adresse de base est une constante de l'enseigne.",
-              "properties": {
-                "id": {
-                  "type": "string",
-                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-                },
-                "host": { "type": "string", "const": "www.auchan.fr" },
-                "baseUrl": { "type": "string", "const": "https://www.auchan.fr/" }
-              }
-            }
-          ]
-        }
+        "store": { "$ref": "#/definitions/readStore" }
       }
     }
   ],
@@ -99,6 +81,41 @@
     "agentVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }
   },
   "definitions": {
+    "readStore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "host", "baseUrl", "label"],
+      "properties": {
+        "id": { "$ref": "#/definitions/storeId" },
+        "host": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "baseUrl": { "type": "string", "minLength": 1 },
+        "label": { "oneOf": [{ "$ref": "#/definitions/label" }, { "type": "null" }] }
+      },
+      "oneOf": [
+        {
+          "description": "Un magasin de Leclerc : l'identifiant est numérique et se lit dans l'adresse.",
+          "properties": {
+            "id": { "type": "string", "pattern": "^[0-9]{1,12}$" },
+            "host": { "type": "string", "pattern": "^[a-z0-9-]+\\.leclercdrive\\.fr$" },
+            "baseUrl": {
+              "type": "string",
+              "pattern": "^https://[a-z0-9-]+\\.leclercdrive\\.fr/magasin-[0-9]{1,12}-[0-9]{1,12}$"
+            }
+          }
+        },
+        {
+          "description": "Un magasin d'Auchan : l'identifiant est un UUID lu par l'agent, l'adresse de base est une constante de l'enseigne.",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "host": { "type": "string", "const": "www.auchan.fr" },
+            "baseUrl": { "type": "string", "const": "https://www.auchan.fr/" }
+          }
+        }
+      ]
+    },
     "label": { "type": "string", "minLength": 1, "maxLength": 255 },
     "storeId": {
       "description": "Un résultat ne dit pas l'enseigne : l'identifiant a la forme de l'un de ceux des enseignes (STORES.id).",

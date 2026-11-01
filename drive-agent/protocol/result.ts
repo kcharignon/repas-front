@@ -135,8 +135,9 @@ const resultLine: Check = (list, index) => {
   )
 }
 
-function setupStore(message: Scope): void {
-  const store = object(message, 'store', ['id', 'host', 'baseUrl', 'label'])
+/** Un magasin lu par l'agent sur la page (`setup-result.store`, DRV-755 : `result.chosenStore`) : son identifiant, son hôte, son adresse de base et son libellé (ou `null`). */
+function readStore(message: Scope, key: 'store' | 'chosenStore'): void {
+  const store = object(message, key, ['id', 'host', 'baseUrl', 'label'])
   text(store, 'id', ANY_STORE_ID)
   const retailer = retailerOfHost(text(store, 'host'))
   if (retailer === undefined) fail(at(store.p, 'host'))
@@ -159,13 +160,13 @@ export function validateResult(input: unknown): ResultMessage | SetupResultMessa
   const message = object(
     root(input),
     '',
-    type === 'result' ? [...keys, 'outcome', 'error', 'stats', 'lines'] : keys,
+    type === 'result' ? [...keys, 'outcome', 'error', 'stats', 'chosenStore', 'lines'] : keys,
   )
   exactly(message, 'v', PROTOCOL_VERSION)
   text(message, 'runId', UUID)
   text(message, 'agentVersion', SEMVER)
   if (type === 'setup-result') {
-    setupStore(message)
+    readStore(message, 'store')
     return input as SetupResultMessage
   }
   const outcome = oneOf(message, 'outcome', OUTCOMES)
@@ -183,5 +184,13 @@ export function validateResult(input: unknown): ResultMessage | SetupResultMessa
     for (const key of ['requests', 'errors', 'blocks']) int(stats, key, 0, LIMITS.requests)
   })
   each(message, 'lines', LIMITS.lines, resultLine)
+  // DRV-755 : le magasin que la personne a choisi à la place de celui du plan. Il n'accompagne qu'un envoi ARRÊTÉ avant le moindre article, sans erreur : rien n'a été
+  // touché, la personne a seulement dit « utiliser ce magasin ». Tout autre résultat qui le porte est refusé.
+  if (message.v.chosenStore !== undefined) {
+    readStore(message, 'chosenStore')
+    if (outcome !== 'aborted') fail('outcome')
+    if (message.v.error !== undefined) fail('error')
+    if ((message.v.lines as unknown[]).length > 0) fail('lines')
+  }
   return input as ResultMessage
 }
