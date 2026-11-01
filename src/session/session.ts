@@ -3,6 +3,8 @@ import { defineStore } from 'pinia'
 
 import { ApiError, createApiClient, unwrap } from '@/api'
 import type { CurrentUser, RegisterPayload } from '@/api'
+import { isReportableAppVersion } from '@/features/drive/appVersion'
+import { useAppVersionStore } from '@/features/drive/appVersionStore'
 import { forgetAccountData } from './accountData'
 
 /** ADR 0015 §5 (back) : deux onglets qui rafraîchissent ensemble envoient le même cookie, le second perd la course. */
@@ -160,6 +162,12 @@ export const useSessionStore = defineStore('session', () => {
 
   const api = createApiClient({
     auth: { token: () => token.value, refresh, unreachable: () => unreachable },
+    // La version de l'application (DRV-637) part avec chaque requête dès que le pont l'a donnée : jamais dans un navigateur
+    appVersion: () => {
+      const version = useAppVersionStore().running
+
+      return isReportableAppVersion(version) ? version : null
+    },
   })
 
   /** Met fin à la session de ce navigateur : jeton, utilisateur, indice, copie de l'utilisateur et ce que le drive gardait pour lui. */

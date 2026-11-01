@@ -179,3 +179,101 @@ describe('version (ETag / If-Match)', () => {
     expect(ifMatch(undefined)).toEqual({})
   })
 })
+
+describe('createAuthFetch : la version de l’application (DRV-637)', () => {
+  const headersOf = (fetchMock: ReturnType<typeof vi.fn<typeof fetch>>, index = 0) => {
+    const { headers } = fetchMock.mock.calls[index]![0] as Request
+
+    return [headers.get('X-App-Version'), headers.get('X-App-Platform')]
+  }
+
+  it('joint la version et la plateforme à une requête quelconque quand la version est connue', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => json({}))
+    const request = createAuthFetch({
+      auth: auth('jeton'),
+      appVersion: () => '1.3.1',
+      baseUrl: 'http://localhost',
+      fetch: fetchMock,
+    })
+
+    await request(new Request('http://localhost/api/v1/recipes'))
+    await request(new Request('http://localhost/api/v1/recipes', { method: 'POST', body: '{}' }))
+
+    expect(headersOf(fetchMock, 0)).toEqual(['1.3.1', 'android'])
+    expect(headersOf(fetchMock, 1)).toEqual(['1.3.1', 'android'])
+    expect(authorizations(fetchMock)).toEqual(['Bearer jeton', 'Bearer jeton'])
+  })
+
+  it('ne joint rien quand la version n’est pas connue (navigateur, développement, pont en retard)', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => json({}))
+    const request = createAuthFetch({
+      auth: auth('jeton'),
+      appVersion: () => null,
+      baseUrl: 'http://localhost',
+      fetch: fetchMock,
+    })
+
+    await request(new Request('http://localhost/api/v1/me'))
+
+    expect(headersOf(fetchMock)).toEqual([null, null])
+  })
+
+  it('lit la version à chaque requête : une version qui arrive ou qui change est jointe aussitôt', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => json({}))
+    let version: string | null = null
+    const request = createAuthFetch({
+      auth: auth('jeton'),
+      appVersion: () => version,
+      baseUrl: 'http://localhost',
+      fetch: fetchMock,
+    })
+
+    await request(new Request('http://localhost/api/v1/me'))
+    version = '1.3.0'
+    await request(new Request('http://localhost/api/v1/me'))
+    version = '1.3.1'
+    await request(new Request('http://localhost/api/v1/me'))
+
+    expect([0, 1, 2].map((index) => headersOf(fetchMock, index)[0])).toEqual([
+      null,
+      '1.3.0',
+      '1.3.1',
+    ])
+  })
+
+  it('ne joint rien à une requête vers un autre hôte que l’API de Repas', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => json({}))
+    const request = createAuthFetch({
+      auth: auth('jeton'),
+      appVersion: () => '1.3.1',
+      baseUrl: 'https://repas.example',
+      fetch: fetchMock,
+    })
+
+    await request(new Request('https://autre.example/api/v1/me'))
+    await request(new Request('https://repas.example.evil.test/api/v1/me'))
+    await request(new Request('https://repas.example/api/v1/me'))
+
+    expect(headersOf(fetchMock, 0)).toEqual([null, null])
+    expect(headersOf(fetchMock, 1)).toEqual([null, null])
+    expect(headersOf(fetchMock, 2)).toEqual(['1.3.1', 'android'])
+  })
+
+  it('la requête rejouée après un 401 porte aussi la version', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(json({}, { status: 401 }))
+      .mockResolvedValueOnce(json({}))
+    const request = createAuthFetch({
+      auth: auth('périmé', 'neuf'),
+      appVersion: () => '1.3.1',
+      baseUrl: 'http://localhost',
+      fetch: fetchMock,
+    })
+
+    await request(new Request('http://localhost/api/v1/me'))
+
+    expect(headersOf(fetchMock, 0)).toEqual(['1.3.1', 'android'])
+    expect(headersOf(fetchMock, 1)).toEqual(['1.3.1', 'android'])
+  })
+})
