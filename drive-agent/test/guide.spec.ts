@@ -605,6 +605,17 @@ describe('DRV-757 (suite) : la page de connexion de Leclerc est l’étape 2 sur
     })
   })
 
+  it('PISTE du relecteur, non mesurée : sur la page de connexion, un signe de client sans signe de visiteur fort (la lecture de session rend MEMBER) ne ramène pas « choisis ton magasin » : l’étape est « connecte-toi », 2 sur 2', async () => {
+    const w = world({ chosen: false, member: true })
+    Object.assign(w.adapter, { onLoginPage: () => true })
+    const screens = fakeUi()
+    const { flow } = makeFlow({ ui: screens.ui, adapter: w.adapter })
+
+    await flow.start(FARINE)
+
+    expect(screens.propsOf('guide')[0]).toMatchObject({ step: 'login', index: 2, total: 2 })
+  })
+
   it('l’adaptateur lit la connexion sur la page de connexion même quand on lui demande l’étape du magasin', () => {
     const asked: string[] = []
     const adapter = new LeclercAdapter(

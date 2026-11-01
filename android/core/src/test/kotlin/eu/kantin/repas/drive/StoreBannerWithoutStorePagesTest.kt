@@ -2,6 +2,7 @@ package eu.kantin.repas.drive
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -74,6 +75,13 @@ class StoreBannerWithoutStorePagesTest {
         assertFalse(StoreBanner.LOGIN == StoreBanner.of(planA, bare))
         assertFalse(StoreBanner.LOGIN == StoreBanner.of(plan, "https://www.exemple-c.test/courses"))
         assertEquals(StoreBanner.LOGIN, StoreBanner.of(plan, passwordPage))
+    }
+
+    @Test
+    fun `une page de mot de passe n'a ni pont ni agent, la déclarer avec un pont est refusé`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            SiteHost(HostPattern.exact("x.test"), bridge = true, passwordPage = true)
+        }
     }
 
     @Test
