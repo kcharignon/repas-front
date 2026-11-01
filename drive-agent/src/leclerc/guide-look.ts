@@ -142,6 +142,63 @@ export function readStoreLook(root: Document): GuideLook {
   return { ...look, keep: [...look.keep, ...own] }
 }
 
+/** Ce que dit la page de connexion réelle (mesuré le 2026-11-01). Le même texte existe, CACHÉ, sur l'accueil et sur la présentation du magasin. */
+const LOGIN_TEXT = /connectez-vous avec votre compte/i
+
+/** Le bloc d'un champ : le texte de connexion doit y être. Seulement `main`, un dialogue, ou la page : un titre, un texte et un champ n'ont aucune raison de partager un `form` ou une `section` (mesuré : le texte et le champ sont à 250 pixels l'un de l'autre). */
+const FIELD_BLOCK = 'main, [role="dialog"], dialog'
+/** Un découpage qui ne laisse rien voir (`clip-path: inset(100%)`, `inset(50%)`, un polygone réduit à un point). */
+const CLIPPED_AWAY = /^inset\((?:100|50)%\)$|^polygon\(0(?:px)? 0(?:px)?, 0/
+/** Un élément a une vraie taille : au moins 8 pixels dans les deux sens (une classe « sr-only », 1 × 1 pixel, ne se voit pas). */
+const sized = (element: Element): boolean => {
+  const { width, height } = element.getBoundingClientRect()
+  return width >= 8 && height >= 8
+}
+
+/**
+ * Le texte à l'écran ? Son élément est montré, de vraie taille, au-dessous du haut du document (pas `top: -9999px`) et sans `clip-path` qui cache tout ; aucun ancêtre jusqu'au bloc
+ * n'est minuscule en rognant (`height: 0` et `overflow` autre que visible, ou non lu) ; la boîte du texte lui-même n'est pas rejetée hors de la fenêtre (`text-indent: -9999px`).
+ * LIMITE : un texte de la couleur du fond, ou masqué par un autre élément, ne se détecte pas.
+ */
+function textOnScreen(node: Node, block: Element): boolean {
+  const parent = node.parentElement
+  const win = node.ownerDocument?.defaultView
+  if (parent === null || !shown(parent) || !sized(parent)) return false
+  if (parent.getBoundingClientRect().bottom + (win?.scrollY ?? 0) <= 0) return false
+  for (let up: Element | null = parent; up !== null && up !== block; up = up.parentElement) {
+    const style = win?.getComputedStyle(up)
+    if (CLIPPED_AWAY.test(style?.clipPath ?? '')) return false
+    // Un ancêtre minuscule qui rogne cache ce qu'il contient ; un `display: contents` n'a aucune boîte et ne rogne rien ; un `overflow` non lu n'est pas un rognage
+    if (up !== parent && !sized(up) && style?.overflow !== 'visible' && style?.overflow !== '')
+      return false
+  }
+  const range = node.ownerDocument?.createRange()
+  range?.selectNodeContents(node)
+  const box = range?.getBoundingClientRect?.()
+  const width = win?.innerWidth ?? 0
+  return box === undefined || (width > 0 && box.right > 0 && box.left < width) || box.width === 0
+}
+
+/**
+ * La page est-elle celle de la connexion d'après ce qu'elle MONTRE : le texte « Connectez-vous avec votre compte… » à l'écran (`textOnScreen`), dans le même bloc (`main`, dialogue ou
+ * page) qu'un champ de saisie montré. Un script, un style, un élément caché, minuscule ou rejeté hors écran n'en est pas un. Une lecture ciblée (les champs, puis les nœuds de texte de
+ * leur bloc, une fois par bloc), sans sérialiser le document ni lire une valeur.
+ */
+export function showsLoginText(root: Document): boolean {
+  const blocks = new Set<Element>()
+  for (const field of root.querySelectorAll<HTMLInputElement>('input:not([type="hidden"])')) {
+    if (shown(field)) blocks.add(field.closest(FIELD_BLOCK) ?? root.body)
+  }
+  for (const block of blocks) {
+    const walker = root.createTreeWalker(block, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const text = node.nodeValue ?? ''
+      if (text.length < 200 && LOGIN_TEXT.test(text) && textOnScreen(node, block)) return true
+    }
+  }
+  return false
+}
+
 /** La page demande-t-elle le code reçu par e-mail ? Un titre ou une fenêtre que la page montre. */
 function codeAsked(root: Document): boolean {
   return [...root.querySelectorAll<HTMLElement>(`${HEADINGS}, [role="dialog"], dialog`)].some(

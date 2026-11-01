@@ -84,6 +84,19 @@ const FRANK: ReadonlySet<string> = new Set([
 /** Une boîte fixe qui couvre au moins cette part de la fenêtre est un mur (ou une fenêtre qui s'en tient lieu). */
 const COVER = 0.4
 
+/**
+ * Ce que coûte de couvrir cette réponse (DRV-759) : réglages 1, accepter et tout autre contrôle du mur 3, refuser (« refus », « sans accepter », « sans consentir », « non merci ») 9 ; quand la carte n'a de place nulle part, elle se pose sur la
+ * moins importante, jamais sur « Continuer sans accepter ».
+ */
+export function answerWeight(button: HTMLElement): number {
+  const label = labelsOf(button).join(' ')
+  return /refus|sans (accepter|consentir)|non merci/.test(label)
+    ? 9
+    : /parametr|personnalis|gerer/.test(label)
+      ? 1
+      : 3
+}
+
 /** La boîte FIXE qui porte ce bouton (le mur, ou sa bannière), `null` : le bouton est dans la page ordinaire. */
 function fixedBoxOf(button: HTMLElement, win: Window): HTMLElement | null {
   for (let box = button.parentElement; box !== null; box = box.parentElement) {
@@ -99,8 +112,18 @@ function covers(box: HTMLElement, win: Window): boolean {
   return area > 0 && (width * height) / area >= COVER
 }
 
+/** Un contrôle, pas un conteneur : il ne couvre pas une grande part de la fenêtre et ne contient aucun autre contrôle de la zone (le plus profond, le bouton, pas la zone qui l'entoure). */
+function isControlSized(element: HTMLElement, win: Window): boolean {
+  const area = win.innerWidth * win.innerHeight
+  const { width, height } = element.getBoundingClientRect()
+  if (area > 0 && (width * height) / area > WALL_CONTROL_MAX) return false
+  return element.querySelector(WALL_CLICKABLE) === null
+}
+
 /** Au plus ce nombre de contrôles gardés libres dans la zone d'un mur. */
 const WALL_KEPT = 40
+/** Un élément de la zone d'un mur qui couvre plus que cette part de la fenêtre n'est pas un contrôle à toucher (la zone défilante focalisable d'un dialogue plein écran) : le garder libre ne laisserait aucune place à la carte (DRV-759). */
+const WALL_CONTROL_MAX = 0.2
 const WALL_CLICKABLE = `${CLICKABLE}, [role="link"], [tabindex="0"]`
 
 /**
@@ -128,7 +151,7 @@ export function wallLook(doc: Document): GuideLook | null {
   for (const box of boxes) {
     for (const one of box.querySelectorAll<HTMLElement>(WALL_CLICKABLE)) {
       if (keep.size >= WALL_KEPT) break
-      if (isShown(one)) keep.add(one)
+      if (isShown(one) && isControlSized(one, win)) keep.add(one)
     }
   }
   return { sub: 'wall', target: null, keep: [...keep], maybe: [] }

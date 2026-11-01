@@ -125,7 +125,7 @@ import {
 import { findControl, type GuideLook, type GuideStep, type GuideTarget } from '../retailers/guide'
 import { wallLook } from '../retailers/consent'
 import { isAccountLoginPage } from './account'
-import { readLoginLook, readStoreLook } from './guide-look'
+import { readLoginLook, readStoreLook, showsLoginText } from './guide-look'
 import { findPostalCodeField } from './store-field'
 import {
   cameFromNationalHome,
@@ -404,6 +404,8 @@ export interface LeclercDeps extends PacerDeps {
   storeField?: () => GuideTarget | null
   /** La page d'où l'on vient (`document.referrer`, DRV-755). Absente, la page ne dit pas d'où l'on vient. */
   referrer?: () => string
+  /** La page montre-t-elle sa connexion (texte et champ MONTRÉS, DRV-759) ? Absente, la page ne se reconnaît pas à ce qu'elle dit. */
+  loginText?: () => boolean
   /** La sous-étape que la page montre, le contrôle à entourer et ce qu'il faut laisser libre (DRV-757). Absente, `guideLook` retombe sur `storeField` et `loginControl`. */
   look?: (step: GuideStep) => GuideLook | null
 }
@@ -1510,7 +1512,12 @@ export class LeclercAdapter implements RetailerAdapter {
    */
   onLoginPage(): boolean {
     const { hostname, pathname } = this.deps.location
-    return LOGIN_PAGE.test(pathname) || isAccountLoginPage(hostname, pathname)
+    // Ou ce que la page MONTRE (DRV-759 : la vraie page de connexion, d'adresse inconnue, dit « Connectez-vous avec votre compte… » ; le même texte, caché, est sur l'accueil)
+    return (
+      LOGIN_PAGE.test(pathname) ||
+      isAccountLoginPage(hostname, pathname) ||
+      this.deps.loginText?.() === true
+    )
   }
 
   /**
@@ -1592,6 +1599,20 @@ function safePath(url: string): string {
   }
 }
 
+/** Une lecture mémorisée `ms` millisecondes : la carte relit la page toutes les 500 ms, une lecture de la page n'a pas à suivre. */
+function memoized(ms: number, read: () => boolean): () => boolean {
+  let at = 0
+  let value = false
+  return () => {
+    const now = Date.now()
+    if (now - at >= ms) {
+      at = now
+      value = read()
+    }
+    return value
+  }
+}
+
 /** Les dépendances du navigateur : la page courante (lue en lecture seule), son `fetch` et l'horloge réelle. */
 export function browserDeps(
   win: Window & typeof globalThis,
@@ -1613,6 +1634,7 @@ export function browserDeps(
         : step === 'login'
           ? readLoginLook(win.document, win.location, isMobileHost(win.location.hostname))
           : null),
+    loginText: memoized(1_500, () => showsLoginText(win.document)),
     referrer: () => win.document.referrer,
     pageText: () => new win.XMLSerializer().serializeToString(win.document),
     navigation: () => navigationOf(win),

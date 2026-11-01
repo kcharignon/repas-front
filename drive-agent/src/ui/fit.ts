@@ -4,6 +4,7 @@
 // contrôle que l'enseigne dit à toucher, ni un bouton d'un mur de cookies : sans place, la barre s'efface le temps qu'il faut (rien d'essentiel ne dépend d'elle : la touche Retour de
 // l'application propose d'abandonner). Que des LECTURES de la page : la position des contrôles, l'élément actif ; aucun toucher, aucune saisie, aucune requête.
 import type { GuideSub } from '../retailers/guide'
+import { answerWeight } from '../retailers/consent'
 import { consentRects, pointedRects } from './keep-clear'
 
 /** Le nom de la barre réduite, de la carte masquée faute de place, et du côté haut, dans la feuille de style de l'interface. */
@@ -117,6 +118,29 @@ export function choose(
   return first(rects) ?? (bar ? first(hard) : null)
 }
 
+/**
+ * La barre là où elle coûte le MOINS à couvrir, jamais nulle part : devant un mur de cookies la carte ne s'efface pas (DRV-759). Couvrir une réponse du mur coûte cher (sa surface
+ * × 1000 × son poids, `answerWeight` : jamais « Continuer sans accepter » tant qu'une autre place existe), tout autre contrôle sa surface seule : sans réponse à couvrir, la barre
+ * se pose sur le texte du mur. À égalité, la première place (en bas, en haut, au milieu).
+ */
+export function leastCovered(
+  measure: (spot: Spot) => Box,
+  hard: readonly (Box & { w?: number })[],
+): Spot {
+  const cost = (box: Box): number =>
+    hard.reduce((sum, rect) => {
+      const width = Math.min(box.right, rect.right) - Math.max(box.left, rect.left)
+      const height = Math.min(box.bottom, rect.bottom) - Math.max(box.top, rect.top)
+      return (
+        sum +
+        (width > 0 && height > 0 ? width * height * (rect.w === undefined ? 1 : rect.w * 1000) : 0)
+      )
+    }, 0)
+  const spots = SPOTS.filter((spot) => spot.min)
+  const costs = spots.map((spot) => cost(measure(spot)))
+  return spots[costs.indexOf(Math.min(...costs))] ?? { min: true, top: false }
+}
+
 /** Pose la carte et la garde à sa place : relue toutes les 500 ms et à chaque changement de la fenêtre ou du champ actif. */
 export function fitGuide(
   win: Window & typeof globalThis,
@@ -158,7 +182,11 @@ export function fitGuide(
       const soft: Box[] = []
       // La carte est ôtée le temps de lire la page : ce qu'elle recouvrirait elle-même ne doit pas faire croire que la page le recouvre
       card.hidden = true
-      for (const element of needs?.keep ?? []) hard.push(...seen(element, win))
+      // Devant un mur, chaque contrôle de sa zone est pesé par son libellé (un refus que la lecture ne reconnaît pas ne se couvre pas en premier)
+      for (const element of needs?.keep ?? []) {
+        const weight = needs?.sub === 'wall' ? answerWeight(element) : undefined
+        hard.push(...seen(element, win).map((box) => Object.assign(box, { w: weight })))
+      }
       for (const element of needs?.maybe ?? []) soft.push(...seen(element, win))
       if (typing !== null) hard.push(...seen(typing, win, false))
       // Sans lecture du guide de l'enseigne, le contrôle entouré se protège comme avant (avec la place de son repère)
@@ -182,7 +210,8 @@ export function fitGuide(
       // Rouverte par la personne, sans place libre : la carte pleine, en bas, c'est elle qui l'a demandée
       const spot =
         options.collapsible && (pref === 'min' || (pref === 'auto' && need))
-          ? choose(measure, rects, hard, true)
+          ? (choose(measure, rects, hard, true) ??
+            (sub === 'wall' ? leastCovered(measure, hard) : null))
           : (full ?? { min: false, top: false })
       apply(spot)
       placed = true

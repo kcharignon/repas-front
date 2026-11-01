@@ -726,6 +726,7 @@ const guide: Renderer<'guide'> = (props: GuideProps, answer, retailer) => {
     (note) => h('p', { class: 'g-note', text: note }),
   )
   const barText = h('span', { class: 'g-bar-text' })
+  const barAct = h('span', { class: 'g-bar-act' }, S.guide.show, icon('chevron', 18, 3))
   // La barre fine : l'étape et ce qu'il y a à faire, et UN geste qui rouvre la carte
   const bar = done
     ? null
@@ -737,7 +738,7 @@ const guide: Renderer<'guide'> = (props: GuideProps, answer, retailer) => {
           on: { click: () => link.ask('full') },
         },
         barText,
-        h('span', { class: 'g-bar-act' }, S.guide.show, icon('chevron', 18, 3)),
+        barAct,
       )
   /** Les mots de la sous-étape que la page montre (DRV-757), propres à l'enseigne ; sans eux, la phrase générale. Relus sans redessiner la carte. */
   let painted: string | undefined
@@ -757,6 +758,8 @@ const guide: Renderer<'guide'> = (props: GuideProps, answer, retailer) => {
     textEl.textContent = said ?? (props.look === undefined ? general : generalFor(label))
     for (const note of notes) note.hidden = said !== undefined
     barText.textContent = [stepText, own?.short ?? heading].filter(Boolean).join(' · ')
+    // Devant un mur de cookies le toucher sur la barre est ignoré (elle reste une barre) : ni « Afficher » ni flèche, rien qui promette un geste
+    barAct.hidden = sub === 'wall'
   }
   let last: Needs | null = null
   const needs =

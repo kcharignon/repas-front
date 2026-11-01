@@ -1,6 +1,6 @@
 // La lecture du mur de cookies et du contrôle entouré (DRV-753), dont la place de la carte (`fit.ts`) se sert : jamais d'écriture dans la page. Les libellés du mur et sa lecture
 // sont dans `retailers/consent.ts` (les adaptateurs d'enseigne s'en servent aussi).
-import { consentButtons, MAX_SCANNED } from '../retailers/consent'
+import { answerWeight, consentButtons, MAX_SCANNED } from '../retailers/consent'
 
 export { MAX_SCANNED }
 
@@ -9,7 +9,10 @@ const POINTER_MARGIN = 64
 
 /** Les boîtes, à l'écran, des boutons du mur de cookies que la page montre. Une lecture de la page seule, bornée (`MAX_SCANNED`, depuis la fin de la page). */
 export function consentRects(doc: Document, width: number, height: number): DOMRect[] {
-  return consentButtons(doc, width, height).map((button) => button.getBoundingClientRect())
+  // `w` : ce que coûte de couvrir cette réponse (`answerWeight`), pour la place de la carte quand il n'y en a aucune de libre
+  return consentButtons(doc, width, height).map((button) =>
+    Object.assign(button.getBoundingClientRect(), { w: answerWeight(button) }),
+  )
 }
 
 /**
