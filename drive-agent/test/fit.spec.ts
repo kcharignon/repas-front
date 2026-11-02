@@ -636,6 +636,33 @@ describe('DRV-761 : la carte ne couvre jamais ce où l’on écrit ni le bouton 
     fit.stop()
   })
 
+  it('trente champs transparents ou sans toucher, dans un calque fixe, ne chassent pas la carte pleine ; un vrai champ visible reste gardé', () => {
+    const layer = document.createElement('div')
+    document.body.appendChild(layer)
+    for (let index = 0; index < 30; index += 1) {
+      const ghost = document.createElement('input')
+      layer.appendChild(ghost)
+      ghost.getBoundingClientRect = () => rect(10 + index * 20, 30 + index * 20)
+      // Moitié transparents (`checkVisibility`), moitié sans toucher (`pointer-events`)
+      if (index % 2 === 0) ghost.checkVisibility = () => false
+      else ghost.style.pointerEvents = 'none'
+    }
+    const el = card()
+
+    const fit = fitGuide(window, el, blind)
+
+    expect(el.classList.contains('min')).toBe(false)
+    expect(el.classList.contains('top')).toBe(false)
+    fit.stop()
+
+    // Un vrai champ visible, au même endroit que la carte pleine en bas : la carte monte
+    input(600, 640)
+    const other = card()
+    const again = fitGuide(window, other, blind)
+    expect(other.classList.contains('top')).toBe(true)
+    again.stop()
+  })
+
   it('un champ caché, de taille nulle ou hors de la fenêtre ne compte pas', () => {
     input(100, 150, 'hidden')
     const gone = input(100, 150)

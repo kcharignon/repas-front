@@ -3,7 +3,7 @@
 // ensuite ; la personne peut aussi la réduire ou la rouvrir d'un toucher. Où que la carte soit (pleine ou barre, en bas ou en haut) elle ne couvre JAMAIS le champ où l'on écrit, ni un
 // contrôle que l'enseigne dit à toucher, ni un bouton d'un mur de cookies : sans place, la barre s'efface le temps qu'il faut (rien d'essentiel ne dépend d'elle : la touche Retour de
 // l'application propose d'abandonner). Que des LECTURES de la page : la position des contrôles, l'élément actif ; aucun toucher, aucune saisie, aucune requête.
-import type { GuideSub } from '../retailers/guide'
+import { isShown, type GuideSub } from '../retailers/guide'
 import { answerWeight } from '../retailers/consent'
 import { consentRects, formControls, pointedRects } from './keep-clear'
 
@@ -93,6 +93,9 @@ function seen(element: Element, win: Window, uncovered = true, form = false): DO
   const visible = rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < win.innerHeight
   if (!visible || rect.right <= 0 || rect.left >= win.innerWidth) return []
   if (form && rect.height > win.innerHeight / 2) return []
+  // Un champ que la personne ne voit ni ne touche (transparent, caché, `pointer-events: none`, souvent dans un calque) n'est pas à garder libre ; sans `checkVisibility`, on le garde
+  if (form && (!isShown(element) || win.getComputedStyle(element).pointerEvents === 'none'))
+    return []
   // Un contrôle que la page recouvre elle-même (le champ sous un mur de cookies plein écran) n'est pas à protéger : la personne ne le voit pas (sans `elementFromPoint` : on protège)
   const hit = uncovered
     ? win.document.elementFromPoint?.(rect.left + rect.width / 2, rect.top + rect.height / 2)
