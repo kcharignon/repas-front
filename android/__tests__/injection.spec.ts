@@ -27,6 +27,13 @@ const HELLO_DEBUG = '{"v":1,"type":"hello","debug":true}'
 /** Le marqueur que l'application remplace par `true` dans sa variante de débogage (AgentAsset.DEBUG_PLACEHOLDER). */
 const DEBUG_MARKER = '/*__DEBUG__*/false'
 
+/** Les rapports du test automatique envoyés à l'application (les autres messages, dont l'état d'écran `log`, n'en sont pas). */
+function selftestReports(channel: { postMessage: { mock: { calls: unknown[][] } } }): unknown[] {
+  return channel.postMessage.mock.calls
+    .map(([text]) => JSON.parse(String(text)) as { type?: string })
+    .filter((message) => message.type === 'selftest-result')
+}
+
 /** Le canal natif simulé : un EventTarget qui reçoit les messages de l'application, et un `postMessage` vers elle. */
 class NativeChannel extends EventTarget {
   readonly postMessage = vi.fn<(text: string) => void>()
@@ -472,17 +479,22 @@ describe('le fichier agent.js réel, tel que l’application l’injecte', () =>
     // Then : l'interface de l'agent s'est posée dans la page, et seul l'état du diagnostic (`log`, DRV-759) est parti vers l'application, après l'annonce
     await advance(() => document.documentElement.outerHTML !== before)
     expect(document.documentElement.outerHTML).not.toBe(before)
-    expect(channel.postMessage).toHaveBeenCalledTimes(2)
-    expect(JSON.parse(String(channel.postMessage.mock.calls[1]?.[0]))).toMatchObject({
-      v: 1,
-      type: 'log',
-    })
+    // (l'annonce, puis les lignes du diagnostic et l'état d'écran, tous deux `log`)
+    expect(channel.postMessage.mock.calls.map(([text]) => JSON.parse(String(text)).type)).toEqual([
+      'hello',
+      'log',
+      'log',
+    ])
     // Le diagnostic va au bout de ses contrôles dans ce test (il ne laisse rien au suivant) : les seules requêtes tentées visent l'hôte
     // de la page (chemins relatifs).
     await untilQuiet(() => fetchSpy.mock.calls.length)
     expect(fetchSpy).toHaveBeenCalled()
     expect(fetchSpy.mock.calls.every(([url]) => String(url).startsWith('/'))).toBe(true)
-    expect(channel.postMessage).toHaveBeenCalledTimes(2)
+    expect(channel.postMessage.mock.calls.map(([text]) => JSON.parse(String(text)).type)).toEqual([
+      'hello',
+      'log',
+      'log',
+    ])
   }, 30_000)
 })
 
@@ -656,12 +668,12 @@ describe('le test automatique, de bout en bout avec l’agent construit et un fa
 
     // When : l'application lance le test
     channel.fromApp(COMMAND)
-    await advance(() => channel.postMessage.mock.calls.length >= 2)
+    await advance(() => selftestReports(channel).length >= 1)
 
-    // Then : un seul rapport est parti, conforme au protocole
-    expect(channel.postMessage).toHaveBeenCalledTimes(2)
+    // Then : un seul rapport est parti, conforme au protocole (l'état d'écran `log` n'en est pas un)
+    expect(selftestReports(channel)).toHaveLength(1)
     expect(channel.postMessage.mock.calls[0]?.[0]).toBe(HELLO_DEBUG)
-    const message = validateSelftestResult(JSON.parse(channel.postMessage.mock.calls[1]?.[0] ?? ''))
+    const message = validateSelftestResult(selftestReports(channel)[0])
     expect(message.ok).toBe(true)
     expect(message.report).toContain('Verdict : OK')
     expect(message.report).toContain('Lot de 12 recherches')
@@ -704,9 +716,9 @@ describe('le test automatique, de bout en bout avec l’agent construit et un fa
     inject(built.code, true)
 
     channel.fromApp(COMMAND)
-    await advance(() => channel.postMessage.mock.calls.length >= 2)
+    await advance(() => selftestReports(channel).length >= 1)
 
-    const message = validateSelftestResult(JSON.parse(channel.postMessage.mock.calls[1]?.[0] ?? ''))
+    const message = validateSelftestResult(selftestReports(channel)[0])
     expect(message.ok).toBe(true)
     expect([...drive.cart]).toEqual([['5000000', 2]])
     expect(drive.hits.some((hit) => hit.body?.id === '5000000')).toBe(false)

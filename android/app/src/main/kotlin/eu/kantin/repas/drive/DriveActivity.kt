@@ -111,6 +111,10 @@ class DriveActivity : Activity() {
      * `null` sinon.
      */
     private val arrival = StoreArrival()
+    private val cardWatch = CardWatch()
+
+    /** Le titre de la page courante (jamais son contenu) : la page du code de vérification a son message (DRV-760). */
+    private var pageTitle: String? = null
 
     /** Le bandeau « Ton panier est dans l'icône en haut à droite. » : de l'arrivée de « Finaliser » à la première navigation. */
     private var basketHint = false
@@ -148,7 +152,7 @@ class DriveActivity : Activity() {
         )
         agent = AgentHost.create(repasApp.agentLoad, BuildConfig.DEBUG, site, onHello = { agentHellos++; if (delivery.hello()) sendPlan() }) { message ->
             // Les deux lignes que l'agent dit à la boîte de diagnostic (DRV-759) : du texte seul, jamais une décision
-            if (message.type == "log") return@create onAgentDiagnosticLines(message.text)
+            if (message.type == "log") return@create onAgentLog(message.text)
             if ((message.type == "result" || message.type == "setup-result") && onAgentResult(message.text)) return@create
             // La variante de débogage montre le résultat de l'essai et le rapport du test automatique.
             if (BuildConfig.DEBUG && !selftestRun.onAgentMessage(message.type, message.text)) {
@@ -367,6 +371,8 @@ class DriveActivity : Activity() {
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             loadFailed = false
             pagesStarted++
+            cardWatch.pageStarted()
+            pageTitle = null
             arrival.pageStarted(url)
             delivery.pageStarted()
             watch.pageStarted()
@@ -437,6 +443,8 @@ class DriveActivity : Activity() {
         // Une page « introuvable » du site servie avec un statut 200 (DRV-631) : seul le TITRE est lu, jamais le contenu de la page, et seulement
         // sur la page d'arrivée de « Finaliser » (avant la première navigation).
         override fun onReceivedTitle(view: WebView, title: String?) {
+            pageTitle = title
+            updateStoreBanner(view.url)
             if (arrival.titleSaysMissing(view.url, title, site)) fallBackToDriveHome(FinalizeOutcome.TITRE_INTROUVABLE)
         }
 
@@ -527,6 +535,9 @@ class DriveActivity : Activity() {
         if (!watch.canDeliver(request, webView.url, storeKnown = repasApp.storePaths.of(site).hasPath())) return delivery.failed()
         if (agent.send(request.text)) {
             watch.planSent()
+            cardWatch.planSent()
+            // Passé le délai, l'écran se relit : un bandeau de repli si rien n'est apparu
+            timers.postDelayed({ updateStoreBanner(webView.url) }, CardWatch.GRACE_MS + 200)
             updateStoreBanner(webView.url)
         } else {
             delivery.failed()
@@ -557,7 +568,7 @@ class DriveActivity : Activity() {
      * qu'il tarde ou que l'agent manque), il dit quoi faire ; pour un plan il porte « Ouvrir l'accueil du drive ». Jamais un écran muet.
      */
     private fun updateStoreBanner(url: String?) {
-        val banner = StoreBanner.of(pass.current()?.request, url, watch.trouble(url), basketHint, watch.isLoading(), storeKnown = repasApp.storePaths.of(site).hasPath())
+        val banner = StoreBanner.of(pass.current()?.request, url, watch.trouble(url), basketHint, watch.isLoading(), storeKnown = repasApp.storePaths.of(site).hasPath(), cardMissing = cardWatch.missing(), pageTitle = pageTitle)
         val text = when (banner) {
             StoreBanner.NONE -> null
             StoreBanner.SETUP -> R.string.setup_banner
@@ -568,6 +579,8 @@ class DriveActivity : Activity() {
             StoreBanner.MOBILE -> R.string.plan_banner_mobile
             StoreBanner.BASKET -> R.string.basket_banner
             StoreBanner.LOGIN -> R.string.login_page_banner
+            StoreBanner.NO_CARD -> R.string.no_card_banner
+            StoreBanner.LOGIN_CODE -> R.string.login_code_banner
         }
         if (text != null) storeBanner.text = getString(text, site.name, site.nameDe)
         bannerAction.visibility = if (banner.hasAction) View.VISIBLE else View.GONE
@@ -736,6 +749,17 @@ class DriveActivity : Activity() {
         agent.openDiagnostic()
     }
 
+    /** Un message `log` de l'agent : l'état de ses écrans (bandeau de repli, DRV-760) ou les lignes de la boîte de diagnostic. */
+    private fun onAgentLog(text: String) {
+        val shown = AgentDiagnostic.cardState(text)
+        if (shown != null) {
+            cardWatch.onAgent(shown)
+            updateStoreBanner(webView.url)
+        } else {
+            onAgentDiagnosticLines(text)
+        }
+    }
+
     private fun onAgentDiagnosticLines(text: String) {
         diagnosticAgentLines = AgentDiagnostic.agentLines(text)
         refreshDiagnostic()
@@ -754,7 +778,7 @@ class DriveActivity : Activity() {
                 request.isSetup -> "lecture du magasin"
                 else -> "plan"
             },
-            banner = StoreBanner.of(request, url, watch.trouble(url), basketHint, watch.isLoading(), storeKnown = repasApp.storePaths.of(site).hasPath()).name,
+            banner = StoreBanner.of(request, url, watch.trouble(url), basketHint, watch.isLoading(), storeKnown = repasApp.storePaths.of(site).hasPath(), cardMissing = cardWatch.missing()).name,
             agentLines = diagnosticAgentLines,
         ).joinToString("\n\n")
     }

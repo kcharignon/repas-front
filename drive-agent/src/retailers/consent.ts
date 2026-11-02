@@ -112,6 +112,12 @@ function covers(box: HTMLElement, win: Window): boolean {
   return area > 0 && (width * height) / area >= COVER
 }
 
+/** La boîte de l'élément touche la fenêtre (verticalement aussi : `isShown` ne rejette que le côté) ; un panneau hors écran n'a rien à garder libre (DRV-760). */
+function inWindow(element: HTMLElement, win: Window): boolean {
+  const { top, bottom } = element.getBoundingClientRect()
+  return bottom > 0 && top < win.innerHeight
+}
+
 /** Un contrôle, pas un conteneur : il ne couvre pas une grande part de la fenêtre et ne contient aucun autre contrôle de la zone (le plus profond, le bouton, pas la zone qui l'entoure). */
 function isControlSized(element: HTMLElement, win: Window): boolean {
   const area = win.innerWidth * win.innerHeight
@@ -151,7 +157,7 @@ export function wallLook(doc: Document): GuideLook | null {
   for (const box of boxes) {
     for (const one of box.querySelectorAll<HTMLElement>(WALL_CLICKABLE)) {
       if (keep.size >= WALL_KEPT) break
-      if (isShown(one) && isControlSized(one, win)) keep.add(one)
+      if (isShown(one) && inWindow(one, win) && isControlSized(one, win)) keep.add(one)
     }
   }
   return { sub: 'wall', target: null, keep: [...keep], maybe: [] }

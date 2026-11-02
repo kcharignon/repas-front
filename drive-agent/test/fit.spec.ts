@@ -373,6 +373,28 @@ describe('la carte posée dans la page', () => {
       },
     )
 
+    it('DRV-760 : sur la liste des magasins la barre ne s’efface pas non plus (la première carte, en bas : elle se pose au milieu ou en haut, jamais nulle part)', () => {
+      const first = answer('Magasin', 340, 410)
+      const top = answer('Autre', 8, 58)
+      const bottom = answer('Encore', 700, 750)
+      const el = wallCard()
+
+      const fit = fitGuide(window, el, {
+        ...wallOptions([first, top, bottom]),
+        needs: () => ({
+          keep: [first, top, bottom],
+          maybe: [],
+          sub: 'shop' as const,
+          target: first,
+          compact: true,
+        }),
+      })
+
+      expect(el.hidden).toBe(false)
+      expect(el.classList.contains('away')).toBe(false)
+      fit.stop()
+    })
+
     it('une zone sans réponse existe (le texte du mur, au milieu) : la barre s’y pose et ne couvre aucune réponse', () => {
       const refuse = answer('Continuer sans accepter', 10, 60)
       const accept = answer('Tout accepter', 690, 760)
@@ -384,5 +406,27 @@ describe('la carte posée dans la page', () => {
       expect(el.hidden).toBe(false)
       fit.stop()
     })
+  })
+
+  it('DRV-760 : la carte dit si elle est à l’écran (visible), vrai quand elle est posée, faux quand la barre s’efface faute de place', () => {
+    const seen: boolean[] = []
+    const field = document.createElement('input')
+    document.body.appendChild(field)
+    field.getBoundingClientRect = () => rect(700, 750)
+    const top = control(20, 40)
+    const el = card()
+    field.focus()
+
+    const fit = fitGuide(
+      window,
+      el,
+      options([top], { visible: (shown: boolean) => seen.push(shown) }),
+    )
+
+    expect(seen.at(-1)).toBe(false)
+    field.blur()
+    window.dispatchEvent(new Event('resize'))
+    expect(seen.at(-1)).toBe(true)
+    fit.stop()
   })
 })

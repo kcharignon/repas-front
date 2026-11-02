@@ -39,6 +39,8 @@ export interface FitOptions {
   pointed: () => HTMLElement | null
   /** Vrai : la carte peut se réduire en barre ; faux (la carte faite, le magasin ouvert) : seulement en bas ou en haut. */
   collapsible: boolean
+  /** Appelé après chaque pose : la carte est-elle à l'écran (vrai) ou effacée faute de place (faux) ? (DRV-760 : l'application pose un bandeau de repli quand aucune carte n'est montrée.) */
+  visible?: (shown: boolean) => void
   /** Appelé quand la carte a changé de place ou de forme, ou que le contrôle à entourer a changé : le repère se remesure. */
   changed: () => void
 }
@@ -211,10 +213,11 @@ export function fitGuide(
       const spot =
         options.collapsible && (pref === 'min' || (pref === 'auto' && need))
           ? (choose(measure, rects, hard, true) ??
-            (sub === 'wall' ? leastCovered(measure, hard) : null))
+            (sub === 'wall' || sub === 'shop' ? leastCovered(measure, hard) : null))
           : (full ?? { min: false, top: false })
       apply(spot)
       placed = true
+      options.visible?.(spot !== null)
       const target = needs?.target ?? null
       // Un autre contrôle à entourer : le repère le relit (la carte, elle, il la suit à chaque mesure)
       if (target !== lastTarget) {

@@ -625,6 +625,35 @@ describe('le guide d’une étape (DRV-751)', () => {
       expect(act()?.hidden).toBe(false)
     })
 
+    it('DRV-760 : l’interface dit si un écran est à l’écran (onVisible), pour le bandeau de repli de l’application : vrai à l’affichage, faux à la fermeture, sans répéter', () => {
+      const seen: boolean[] = []
+      ui = createUi({ mode: 'open', retailer: LECLERC, onVisible: (shown) => seen.push(shown) })
+
+      void ui.show('guide', props({ stage: 'done' }))
+      void ui.show('guide', props({ stage: 'done' }))
+      ui.close()
+
+      expect(seen).toEqual([true, false])
+    })
+
+    it('DRV-760 : le conteneur de l’agent redevient le DERNIER enfant du document quand la page en ajoute un après lui (à z-index égal, le dernier est au-dessus)', () => {
+      vi.useFakeTimers()
+      try {
+        const handle = open()
+        void handle.show('guide', props({ stage: 'done' }))
+        const later = document.createElement('div')
+        later.id = 'later'
+        document.documentElement.appendChild(later)
+
+        vi.advanceTimersByTime(600)
+
+        expect(document.documentElement.lastElementChild).toBe(handle.host)
+        later.remove()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('le mur de cookies : la carte dit d’abord d’y répondre, la personne choisit', () => {
       const handle = open()
       void handle.show(

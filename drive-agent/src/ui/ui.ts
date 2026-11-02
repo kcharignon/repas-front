@@ -22,6 +22,8 @@ export interface UiOptions {
   attachShadow?: (host: Element, init: ShadowRootInit) => ShadowRoot
   /** L'enseigne de la page : les écrans la nomment par son nom (jamais écrit en dur, DRV-705). */
   retailer: RetailerInfo
+  /** Un écran est à l'écran (vrai) ou plus aucun (faux) : dit à l'application, qui pose un bandeau de repli quand l'agent est là mais ne montre rien (DRV-760). */
+  onVisible?: (shown: boolean) => void
 }
 
 /** L'interface, et son conteneur dans la page (`null` tant qu'aucun écran n'est affiché). */
@@ -91,6 +93,12 @@ export function createUi(options: UiOptions): UiHandle {
   /** La place de la carte du guide (DRV-757) : réduite, en haut ou en bas, ou effacée quand la page a besoin de la place. */
   let fit: Fit | null = null
   let present = 0
+  let lastShown: boolean | null = null
+  const report = (shown: boolean): void => {
+    if (shown === lastShown) return
+    lastShown = shown
+    options.onVisible?.(shown)
+  }
 
   function mount() {
     if (view) return view
@@ -115,7 +123,10 @@ export function createUi(options: UiOptions): UiHandle {
     // La page peut retirer ou réécrire un conteneur étranger quand elle se redessine (un panneau qui s'ouvre) : il est remis à sa place, épinglé, sans que la carte revienne de zéro (DRV-757)
     present = win.setInterval(() => {
       if (view === null) return
-      if (!view.host.isConnected) win.document.documentElement.appendChild(view.host)
+      // Le dernier enfant du document : à z-index égal, le dernier est au-dessus (un mur de cookies ajouté après l'agent ne le recouvre pas, DRV-760)
+      if (!view.host.isConnected || view.host.nextElementSibling !== null) {
+        win.document.documentElement.appendChild(view.host)
+      }
       pin(view.host)
       setSheet(view, view.overlay.classList.contains('sheet'))
     }, 500)
@@ -168,10 +179,12 @@ export function createUi(options: UiOptions): UiHandle {
             collapsible: placing.collapsible,
             pointed: () => rendered.pointAt?.()?.element ?? null,
             changed: () => pointer?.refresh(),
+            visible: report,
           })
           const placed = fit
           placing.link.ask = (pref) => placed.ask(pref)
         }
+        if (rendered.fit === undefined) report(true)
         rendered.start?.()
         rendered.el.scrollTop = 0
         const first = rendered.focus ?? rendered.el.querySelector<HTMLElement>(FOCUSABLE)
@@ -187,6 +200,7 @@ export function createUi(options: UiOptions): UiHandle {
       fit?.stop()
       fit = null
       win.clearInterval(present)
+      report(false)
       view?.current?.dispose?.()
       view?.host.remove()
       if (view) {

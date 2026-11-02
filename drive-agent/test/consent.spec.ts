@@ -154,6 +154,45 @@ describe('un mur de cookies est là seulement devant une réponse franche', () =
     expect(look?.keep).not.toContain(lone)
   })
 
+  it('DRV-760 : un contrôle de la zone du mur dont la boîte est ENTIÈREMENT hors de la fenêtre (à droite, en bas, au-dessus) n’est jamais gardé : on ne couvre pas ce qu’on ne voit pas', () => {
+    const box = at(document.createElement('div'), 0, { width: 1024, height: 768 })
+    box.setAttribute('style', 'position:fixed;inset:0')
+    document.body.appendChild(box)
+    const accept = button('Tout accepter', 640, box)
+    const onScreen = document.createElement('a')
+    onScreen.setAttribute('role', 'button')
+    onScreen.textContent = 'Voir les partenaires'
+    box.appendChild(onScreen)
+    at(onScreen, 16, { width: 150, height: 22 })
+    const rightOf = document.createElement('a')
+    rightOf.setAttribute('role', 'button')
+    rightOf.textContent = 'À droite'
+    box.appendChild(rightOf)
+    rightOf.getBoundingClientRect = () =>
+      ({
+        top: 100,
+        bottom: 140,
+        left: 1100,
+        right: 1400,
+        width: 300,
+        height: 40,
+        x: 1100,
+        y: 100,
+        toJSON: () => ({}),
+      }) as DOMRect
+    const below = document.createElement('a')
+    below.setAttribute('role', 'button')
+    below.textContent = 'En bas'
+    box.appendChild(below)
+    at(below, 2000, { width: 150, height: 22 })
+
+    const look = wallLook(document)
+
+    expect(look?.keep).toEqual(expect.arrayContaining([accept, onScreen]))
+    expect(look?.keep).not.toContain(rightOf)
+    expect(look?.keep).not.toContain(below)
+  })
+
   it('un mur qui n’est pas dans une boîte fixe n’a que ses réponses reconnues de gardées (sa zone n’est pas lisible : limite documentée)', () => {
     const known = button('Tout accepter', 640)
     const other = button('Poursuivre sans consentir', 20)
