@@ -581,6 +581,7 @@ class DriveActivity : Activity() {
             StoreBanner.LOGIN -> R.string.login_page_banner
             StoreBanner.NO_CARD -> R.string.no_card_banner
             StoreBanner.LOGIN_CODE -> R.string.login_code_banner
+            StoreBanner.SESSION_EXPIRED -> R.string.session_expired_banner
         }
         if (text != null) storeBanner.text = getString(text, site.name, site.nameDe)
         bannerAction.visibility = if (banner.hasAction) View.VISIBLE else View.GONE
