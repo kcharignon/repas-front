@@ -1,6 +1,7 @@
 // La lecture du mur de cookies et du contrôle entouré (DRV-753), dont la place de la carte (`fit.ts`) se sert : jamais d'écriture dans la page. Les libellés du mur et sa lecture
 // sont dans `retailers/consent.ts` (les adaptateurs d'enseigne s'en servent aussi).
 import { answerWeight, consentButtons, MAX_SCANNED } from '../retailers/consent'
+import { foldLabel } from '../retailers/guide'
 
 export { MAX_SCANNED }
 
@@ -47,4 +48,31 @@ export function pointedRects(target: HTMLElement | null): DOMRect[] {
       toJSON: () => ({}),
     },
   ]
+}
+
+/** Ce où l'on écrit dans la page : champs, zones de texte, listes, zones éditables. */
+const FIELDS =
+  'input:not([type="hidden"]), textarea, select, [contenteditable]:not([contenteditable="false"])'
+const BUTTONS = 'button, input[type="submit"], input[type="button"], input[type="image"]'
+/** Le bouton qui valide un formulaire : de type « submit », ou dont le nom dit de continuer. */
+const VALIDATE =
+  /^(?:valider|continuer|suivant|envoyer|confirmer|verifier|se connecter|me connecter|connexion)$/
+
+/**
+ * Ce qu'une carte du guide ne couvre JAMAIS (DRV-761), quelle que soit l'enseigne et même si elle n'a pas reconnu la page : les champs de saisie, leurs étiquettes et le bouton qui
+ * valide le formulaire. Une lecture de la page seule, bornée ; qui les voit vraiment (à l'écran, non recouverts par la page) se juge dans `fit.ts`.
+ */
+export function formControls(doc: Document): HTMLElement[] {
+  const found: HTMLElement[] = []
+  for (const field of [...doc.querySelectorAll<HTMLElement>(FIELDS)].slice(0, MAX_SCANNED)) {
+    found.push(field, ...Array.from((field as HTMLInputElement).labels ?? []))
+  }
+  for (const button of [...doc.querySelectorAll<HTMLElement>(BUTTONS)].slice(0, MAX_SCANNED)) {
+    const type = button.getAttribute('type')
+    const name =
+      button.getAttribute('aria-label') ?? button.getAttribute('value') ?? button.textContent ?? ''
+    if (type === 'submit' || type === 'image' || VALIDATE.test(foldLabel(name.slice(0, 60))))
+      found.push(button)
+  }
+  return found
 }

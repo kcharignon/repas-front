@@ -115,6 +115,18 @@ export function foldLabel(text: string): string {
 /** Au-delà, un texte est une phrase de la page, pas le libellé d'un contrôle. */
 const MAX_LABEL = 40
 
+/**
+ * Le NOM ACCESSIBLE d'un contrôle (DRV-761) : son `aria-label`, sinon son texte, nettoyé ; `null` s'il n'en a pas ou si c'est une phrase. C'est le libellé que la carte cite : celui
+ * que la personne lit ou qu'un lecteur d'écran dit, jamais un mot écrit en dur qui peut différer de la page.
+ */
+export function accessibleName(element: Element): string | null {
+  for (const raw of [element.getAttribute('aria-label'), element.textContent]) {
+    const name = (raw ?? '').replace(/\s+/g, ' ').trim()
+    if (name !== '') return name.length <= MAX_LABEL ? name : null
+  }
+  return null
+}
+
 const CLICKABLE = 'a, button, [role="button"], input[type="button"], input[type="submit"]'
 
 /** Un élément que la page montre (une boîte à l'écran) ; en jsdom, sans mesure, tout élément compte. */
@@ -150,7 +162,7 @@ export function findControl(
     const own = labelsOf(element)
     const exact = own.find((label) => labels.has(foldLabel(label)))
     if (exact !== undefined) {
-      found.push({ element, label: exact })
+      found.push({ element, label: accessibleName(element) ?? exact })
       continue
     }
     const hint = [element.getAttribute('aria-label'), element.getAttribute('title')]

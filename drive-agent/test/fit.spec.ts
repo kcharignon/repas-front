@@ -424,7 +424,9 @@ describe('la carte posée dans la page', () => {
     )
 
     expect(seen.at(-1)).toBe(false)
+    // La saisie est finie et le champ n'est plus dans la page (DRV-761 : un champ visible reste gardé libre, même sans le focus)
     field.blur()
+    field.remove()
     window.dispatchEvent(new Event('resize'))
     expect(seen.at(-1)).toBe(true)
     fit.stop()
@@ -536,5 +538,170 @@ describe('la carte posée dans la page', () => {
       const { el } = shadowCard()
       expect(reachable(el, window)).toBe(true)
     })
+  })
+})
+
+describe('DRV-761 : la carte ne couvre jamais ce où l’on écrit ni le bouton qui valide', () => {
+  const card = () => {
+    const el = document.createElement('section')
+    document.body.appendChild(el)
+    el.getBoundingClientRect = () => {
+      const spot = placed({
+        min: el.classList.contains('min'),
+        top: el.classList.contains('top'),
+        mid: el.classList.contains('mid'),
+      })
+      return rect(spot.top, spot.bottom)
+    }
+    return el
+  }
+  const at = <T extends HTMLElement>(el: T, top: number, bottom: number): T => {
+    document.body.appendChild(el)
+    el.getBoundingClientRect = () => rect(top, bottom)
+    return el
+  }
+  const input = (top: number, bottom: number, type = 'password') => {
+    const el = document.createElement('input')
+    el.type = type
+    return at(el, top, bottom)
+  }
+  /** Un guide qui ne sait rien de la page (une page d'adresse inconnue : ni champ, ni bouton gardés). */
+  const blind = {
+    needs: () => ({ keep: [], maybe: [], sub: null, target: null, compact: false }),
+    consent: false,
+    collapsible: true,
+    pointed: () => null,
+    changed: () => undefined,
+  }
+
+  it('un champ visible, même sans le focus et même quand l’enseigne ne l’a pas gardé : la carte ne se pose pas dessus', () => {
+    // Le champ « Mot de passe » à la place où la carte pleine se posait en haut (8-268), le bas (500-760) étant pris par le bouton de validation
+    input(100, 150)
+    const submit = document.createElement('button')
+    submit.type = 'submit'
+    at(submit, 600, 640)
+    const el = card()
+
+    const fit = fitGuide(window, el, blind)
+
+    // Ni pleine en bas (le bouton), ni pleine en haut (le champ) : la barre, en bas, qui ne couvre rien
+    expect(el.classList.contains('min')).toBe(true)
+    expect(el.classList.contains('top')).toBe(false)
+    expect(el.hidden).toBe(false)
+    fit.stop()
+  })
+
+  it('l’étiquette du champ est gardée libre aussi', () => {
+    const field = input(700, 750, 'text')
+    field.id = 'mail'
+    const label = document.createElement('label')
+    label.htmlFor = 'mail'
+    at(label, 20, 40)
+    const el = card()
+
+    const fit = fitGuide(window, el, blind)
+
+    // L'étiquette en haut (20-40) et le champ en bas : la barre ne tient ni en haut ni en bas, elle se pose au milieu
+    expect(el.classList.contains('mid')).toBe(true)
+    fit.stop()
+  })
+
+  it('un bouton dont le nom dit « Se connecter » est gardé libre, sans être de type submit', () => {
+    const button = document.createElement('button')
+    button.textContent = 'Se connecter'
+    at(button, 600, 640)
+    input(100, 150)
+    const el = card()
+
+    const fit = fitGuide(window, el, blind)
+
+    expect(el.classList.contains('min')).toBe(true)
+    expect(el.classList.contains('top')).toBe(false)
+    fit.stop()
+  })
+
+  it('les cases du code reçu par e-mail, un champ de texte, une liste et une zone éditable sont des champs', () => {
+    input(20, 40, 'tel')
+    at(document.createElement('select'), 300, 330)
+    at(document.createElement('textarea'), 600, 640)
+    const area = document.createElement('div')
+    area.setAttribute('contenteditable', 'true')
+    at(area, 710, 740)
+    const el = card()
+
+    const fit = fitGuide(window, el, blind)
+
+    // Rien de libre : ni les deux places pleines, ni la barre en bas ou en haut ; le milieu (350-400) l’est
+    expect(el.classList.contains('mid')).toBe(true)
+    fit.stop()
+  })
+
+  it('un champ caché, de taille nulle ou hors de la fenêtre ne compte pas', () => {
+    input(100, 150, 'hidden')
+    const gone = input(100, 150)
+    gone.getBoundingClientRect = () => rect(0, 0)
+    input(2000, 2100)
+    const el = card()
+
+    const fit = fitGuide(window, el, blind)
+
+    expect(el.classList.contains('min')).toBe(false)
+    expect(el.classList.contains('top')).toBe(false)
+    fit.stop()
+  })
+
+  describe('ce que la page recouvre elle-même', () => {
+    afterEach(() => {
+      Reflect.deleteProperty(document, 'elementFromPoint')
+    })
+
+    it('un champ sous un grand bloc de la page (un panneau modal) n’est pas gardé : la personne ne le voit pas', () => {
+      input(100, 150)
+      const panel = at(document.createElement('div'), 0, 900)
+      document.elementFromPoint = () => panel
+      const el = card()
+
+      const fit = fitGuide(window, el, blind)
+
+      expect(el.classList.contains('min')).toBe(false)
+      expect(el.classList.contains('top')).toBe(false)
+      fit.stop()
+    })
+
+    it('un petit élément posé à côté du champ, dans le même bloc (étiquette flottante) ne le cache pas', () => {
+      const wrap = document.createElement('div')
+      document.body.appendChild(wrap)
+      const field = document.createElement('input')
+      field.type = 'password'
+      wrap.appendChild(field)
+      field.getBoundingClientRect = () => rect(500, 560)
+      const floating = document.createElement('span')
+      wrap.appendChild(floating)
+      floating.getBoundingClientRect = () => rect(510, 540)
+      document.elementFromPoint = () => floating
+      const el = card()
+
+      const fit = fitGuide(window, el, blind)
+
+      // Le champ est gardé : la carte pleine ne se pose pas en bas (500-760) et monte
+      expect(el.classList.contains('top')).toBe(true)
+      fit.stop()
+    })
+  })
+
+  it('devant un mur de cookies, seules ses réponses comptent : un champ du mur ne chasse pas la carte', () => {
+    const answer = at(document.createElement('button'), 10, 60)
+    input(100, 150, 'checkbox')
+    const el = card()
+
+    const fit = fitGuide(window, el, {
+      ...blind,
+      consent: true,
+      needs: () => ({ keep: [answer], maybe: [], sub: 'wall', target: null, compact: true }),
+    })
+
+    expect(el.hidden).toBe(false)
+    expect(el.classList.contains('away')).toBe(false)
+    fit.stop()
   })
 })

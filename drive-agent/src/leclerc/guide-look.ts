@@ -326,13 +326,15 @@ function loginSub(root: Document, crowded: boolean): GuideSub {
 
 /**
  * La connexion. Par l'ADRESSE de la page d'abord (elle ne ment pas, d'une origine à l'autre) : la création de compte (où mène « Inscription », la connexion y est un lien « Me
- * connecter »), la page de connexion (et sa fenêtre du code reçu par e-mail). Sur les pages du magasin de la version mobile : le mot « Connexion » du menu, qui
+ * connecter »), la page de connexion (et sa fenêtre du code reçu par e-mail), ou une page que son TEXTE dit être la connexion (`byText`, DRV-761 : d'adresse inconnue, elle n'était
+ * pas lue comme la connexion et ses champs n'étaient pas gardés libres). Sur les pages du magasin de la version mobile : le mot « Connexion » du menu, qui
  * réunit deux zones à toucher (« Connexion » et « / Inscription ») : on n'entoure que le mot ; menu fermé, le bouton du menu.
  */
 export function readLoginLook(
   root: Document,
   location: { hostname: string; pathname: string },
   mobilePage: boolean,
+  byText = false,
 ): GuideLook {
   const path = location.pathname.toLowerCase()
   if (/creation-compte[a-z0-9-]*\.aspx/.test(path)) {
@@ -342,7 +344,8 @@ export function readLoginLook(
   // La page de connexion : son adresse, ou toute page du compte de l'enseigne qui n'est pas le compte connecté (une page de connexion d'un chemin inconnu)
   if (
     /authentification\.aspx|\/connexion/.test(path) ||
-    isAccountLoginPage(location.hostname, path)
+    isAccountLoginPage(location.hostname, path) ||
+    byText
   ) {
     const { keep, crowded } = formControls(root)
     return { ...none(null, keep), sub: loginSub(root, crowded), crowded }
