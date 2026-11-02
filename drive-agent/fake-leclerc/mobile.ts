@@ -313,15 +313,23 @@ export function mobileAccueilPage(
     wall?: boolean | 'tall' | 'banner'
     /** Le magasin qu'on choisit (ou a choisi) est le second (DRV-755). */
     other?: boolean
+    /** Le bouton « Commencer mes courses » : normal, qui ignore un clic de programme (`button-human`) ou qui ne fait rien (`button-inert`). */
+    button?: 'button' | 'button-human' | 'button-inert'
+    /** Le chemin de `m-courses` où le bouton mène, à la place de la page du magasin (une page 404 si ce n'est pas la sienne). */
+    start?: string | undefined
   },
 ): string {
-  const target = state.other === true ? MOBILE_OTHER_PAGE_PATH : MOBILE_PAGE_PATH
+  const target = state.start ?? (state.other === true ? MOBILE_OTHER_PAGE_PATH : MOBILE_PAGE_PATH)
+  const click =
+    state.button === 'button-inert'
+      ? ''
+      : `${state.button === 'button-human' ? 'if (!event.isTrusted) return; ' : ''}location.assign('${origins.courses}${target}');`
   const body = state.chosen
     ? `<h1>Faux Leclerc Ville-Test</h1>
 <p>Retrait de vos courses en drive</p>
 <p><button id="start-shopping" type="button" class="btn">Commencer mes courses</button></p>
 <script>
-document.getElementById('start-shopping').addEventListener('click', function () { location.assign('${origins.courses}${target}'); });
+document.getElementById('start-shopping').addEventListener('click', function (event) { ${click} });
 </script>`
     : `<h1>Mes courses en ligne en drive</h1>
 <form id="search" onsubmit="return false">
