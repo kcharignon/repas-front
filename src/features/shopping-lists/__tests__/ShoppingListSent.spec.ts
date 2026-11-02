@@ -370,6 +370,27 @@ function watchUntilRouteChanges(context: Awaited<ReturnType<typeof signedIn>>, s
   }, 0)
 }
 
+/**
+ * Le chargement lent de l'écran où la navigation mène (le chunk de la route) : l'écran de départ reste affiché, avec ses données en
+ * mémoire, jusqu'à `release()` (ou `ms` millisecondes). Sans ce délai la navigation est si rapide que l'ordre « relecture avant ou
+ * après la navigation » ne se voit pas. `fail` : le chargement échoue (le réseau tombe), la navigation est rejetée.
+ */
+function slowRoute(
+  context: Awaited<ReturnType<typeof signedIn>>,
+  name: string,
+  { ms = 80, fail = false, held = false }: { ms?: number; fail?: boolean; held?: boolean } = {},
+) {
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  context.router.beforeEach(async (to) => {
+    if (to.name !== name) return
+    await (held ? gate : new Promise((resolve) => setTimeout(resolve, ms)))
+    if (fail) throw new Error('Le chargement de l’écran a échoué')
+  })
+
+  return { release }
+}
+
 describe('liste en cours : envoi au drive (page /liste)', () => {
   const openActive = async (
     handlers: Parameters<typeof stubApi>[0] = {},
@@ -689,6 +710,7 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
         path,
       )
       await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+      slowRoute(context, 'drive-send')
       const seen: string[] = []
       const watching = watchUntilRouteChanges(context, seen)
 
@@ -739,6 +761,7 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
       '/liste',
     )
     await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+    slowRoute(context, 'shopping-lists')
     const seen: string[] = []
     const watching = watchUntilRouteChanges(context, seen)
 
@@ -752,7 +775,156 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     wrapper.unmount()
   })
 
-  const tooOldSentence = 'Mets à jour l’application pour envoyer ta liste.'
+  // DRV-763 : la relecture des listes ne part qu'une fois l'écran d'arrivée atteint (sinon, la liste envoyée n'étant plus « en cours »,
+  // l'écran de départ dirait « Aucune liste en cours » pendant le chargement de l'écran d'envoi)
+  it('relit les listes après être arrivé sur l’écran d’envoi, jamais pendant la navigation', async () => {
+    const events: string[] = []
+    let sent = false
+    const { context, wrapper } = await openActive({
+      'POST /api/v1/shopping-lists/l1/send': () => {
+        sent = true
+        events.push('envoi')
+
+        return noContent()
+      },
+      'GET /api/v1/shopping-lists/active/summary': () => {
+        if (sent) events.push('relecture')
+
+        return json(
+          sent ? none : { shoppingListId: 'l1', quantityByIngredientSlug: {}, plannedRecipeIds: [] },
+        )
+      },
+      'GET /api/v1/shopping-lists/open': () => {
+        if (sent) events.push('relecture')
+
+        return json({ member: [], totalItems: 0 })
+      },
+      'GET /api/v1/shopping-lists/l1': () => {
+        if (sent) events.push('relecture')
+
+        return json(detail(sent ? 'SENT' : 'ACTIVE'))
+      },
+    })
+    await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+    slowRoute(context, 'drive-send')
+    context.router.afterEach((to) => {
+      if (to.name === 'drive-send') events.push('arrivée')
+    })
+
+    button('Envoyer au drive')?.click()
+    await vi.waitFor(() => expect(dialogButton('Envoyer au drive')).toBeDefined())
+    dialogButton('Envoyer au drive').click()
+    await vi.waitFor(() => expect(events).toContain('relecture'))
+
+    expect(events[0]).toBe('envoi')
+    expect(events[1]).toBe('arrivée')
+    wrapper.unmount()
+  })
+
+  // DRV-763 : entre la confirmation et l'arrivée sur l'écran d'envoi, l'écran de la liste est encore là, avec la liste « en cours » en mémoire
+  describe('entre la confirmation et l’écran d’envoi', () => {
+    const slowSend = () => {
+      let sent = false
+
+      return {
+        'POST /api/v1/shopping-lists/l1/send': () => {
+          sent = true
+
+          return noContent()
+        },
+        'GET /api/v1/shopping-lists/l1': () => json(detail(sent ? 'SENT' : 'ACTIVE')),
+      }
+    }
+
+    it('ne rouvre pas la confirmation et ne renvoie rien pendant le chargement de l’écran d’envoi', async () => {
+      const { context, fetchMock, wrapper } = await openActive(slowSend())
+      await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+      const loading = slowRoute(context, 'drive-send', { held: true })
+
+      button('Envoyer au drive')?.click()
+      await vi.waitFor(() => expect(dialogButton('Envoyer au drive')).toBeDefined())
+      dialogButton('Envoyer au drive').click()
+      await vi.waitFor(() => expect(requests(fetchMock, 'POST', '/send')).toHaveLength(1))
+      // L'écran d'envoi charge encore : on refuse la confirmation, puis on retouche plusieurs fois « Envoyer au drive »
+      dialogButton('Annuler')?.click()
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        button('Envoyer au drive')?.click()
+      }
+      await flushPromises()
+
+      expect(button('Envoyer au drive')?.disabled).toBe(true)
+      expect(body().querySelector('[role="dialog"]')).toBeNull()
+      expect(requests(fetchMock, 'POST', '/send')).toHaveLength(1)
+      loading.release()
+      await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-send'))
+      await flushPromises()
+      expect(requests(fetchMock, 'POST', '/send')).toHaveLength(1)
+      wrapper.unmount()
+    })
+
+    it('ne rouvre pas « Supprimer » pendant le chargement de l’écran suivant', async () => {
+      let deleted = false
+      const { context, fetchMock, wrapper } = await openActive({
+        'DELETE /api/v1/shopping-lists/l1': () => {
+          deleted = true
+
+          return noContent()
+        },
+        'GET /api/v1/shopping-lists/active/summary': () => json(none),
+        'GET /api/v1/shopping-lists/open': () =>
+          json({
+            member: deleted
+              ? []
+              : [{ id: 'l1', name: 'l1', typeId: 't1', rowCount: 2, uncheckedCount: 1, version: 7 }],
+            totalItems: deleted ? 0 : 1,
+          }),
+        'GET /api/v1/shopping-lists': () => json({ member: [], totalItems: 0 }),
+      })
+      await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+      const loading = slowRoute(context, 'shopping-lists', { held: true })
+
+      await choose('Supprimer')
+      await vi.waitFor(() => expect(dialogButton('Supprimer')).toBeDefined())
+      dialogButton('Supprimer').click()
+      await vi.waitFor(() => expect(requests(fetchMock, 'DELETE', '/l1')).toHaveLength(1))
+      dialogButton('Annuler')?.click()
+      await flushPromises()
+      body().querySelector<HTMLButtonElement>('button[aria-label="Plus d’actions"]')?.click()
+      await flushPromises()
+      menuItem('Supprimer')?.click()
+      await flushPromises()
+
+      expect(menuItem('Supprimer')?.getAttribute('aria-disabled')).toBe('true')
+      expect(body().querySelector('[role="dialog"]')).toBeNull()
+      expect(requests(fetchMock, 'DELETE', '/l1')).toHaveLength(1)
+      loading.release()
+      await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('shopping-lists'))
+      await flushPromises()
+      expect(requests(fetchMock, 'DELETE', '/l1')).toHaveLength(1)
+      wrapper.unmount()
+    })
+
+    it('ne bloque pas l’écran si l’écran d’envoi ne se charge pas : la confirmation se ferme, l’envoi se reprend', async () => {
+      const { context, wrapper } = await openActive(slowSend())
+      await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+      slowRoute(context, 'drive-send', { ms: 10, fail: true })
+      context.router.onError(() => {}) // l'erreur de navigation est attendue : elle ne doit rien changer à ce que voit la personne
+
+      button('Envoyer au drive')?.click()
+      await vi.waitFor(() => expect(dialogButton('Envoyer au drive')).toBeDefined())
+      dialogButton('Envoyer au drive').click()
+
+      // La liste est bien partie : l'écran la relit et propose de reprendre l'envoi ; aucun message ne dit que l'envoi a échoué
+      await vi.waitFor(() => expect(body().textContent).toContain('Reprendre l’envoi'))
+      expect(body().querySelector('[role="dialog"]')).toBeNull()
+      expect(useNotificationsStore().items).toEqual([])
+      expect(context.router.currentRoute.value.name).not.toBe('drive-send')
+      wrapper.unmount()
+    })
+  })
+
+  const tooOldSentence ='Mets à jour l’application pour envoyer ta liste.'
 
   /** L'envoi demandé avec une application trop ancienne : la phrase et son bouton, ni verrou ni confirmation (`beforeSentence` : ce qui se passe avant la réponse). */
   async function sendWithOldApp(app: string, beforeSentence?: () => Promise<void>) {
