@@ -57,7 +57,45 @@ function innermost(found: HTMLElement[]): HTMLElement[] {
   return found.filter((one) => !found.some((other) => other !== one && one.contains(other)))
 }
 
-/** Les contrôles sous le titre du panneau des magasins, sans les puces : le premier est celui à toucher. */
+/** Une carte de magasin est un bloc LARGE (au moins 60 % de la fenêtre) : une puce de filtre, « Afficher la carte », « Retour » ne le sont pas. */
+const CARD_WIDTH = 0.6
+/** Au plus ce nombre de blocs lus pour leur curseur par passe. */
+const MAX_BLOCKS = 400
+const BLOCKS = 'li, div, article, section, [role="listitem"], [role="option"]'
+
+/**
+ * Les cartes de magasin que la page rend cliquables sans en faire des liens (un bloc à curseur « main », DRV-760 : la recette réelle a désigné une puce de filtre, au-dessus des
+ * cartes, et la barre s'est posée sur la première carte) : les blocs larges, sous le titre, au curseur main alors que leur parent ne l'a pas (le bloc de la carte, pas ce qu'il contient).
+ */
+function pointerBlocks(root: Document, below: number): HTMLElement[] {
+  const win = root.defaultView
+  if (win === null) return []
+  const found: HTMLElement[] = []
+  const all = root.querySelectorAll<HTMLElement>(BLOCKS)
+  for (
+    let index = 0;
+    index < Math.min(all.length, MAX_BLOCKS * 4) && found.length < MAX_BLOCKS;
+    index += 1
+  ) {
+    const one = all[index]
+    if (
+      one === undefined ||
+      top(one) < below ||
+      one.getBoundingClientRect().width < win.innerWidth * CARD_WIDTH
+    )
+      continue
+    const parent = one.parentElement
+    if (
+      win.getComputedStyle(one).cursor === 'pointer' &&
+      (parent === null || win.getComputedStyle(parent).cursor !== 'pointer') &&
+      shown(one)
+    )
+      found.push(one)
+  }
+  return found
+}
+
+/** Les contrôles sous le titre du panneau des magasins, sans les puces : le premier est celui à toucher. Des cartes larges (liens ou blocs cliquables) passent avant tout autre contrôle. */
 function shopControls(root: Document): HTMLElement[] {
   const title = [...root.querySelectorAll<HTMLElement>(HEADINGS)].find(
     (one) =>
@@ -71,7 +109,17 @@ function shopControls(root: Document): HTMLElement[] {
   const found = [...root.querySelectorAll<HTMLElement>(CONTROL)].filter(
     (one) => shown(one) && top(one) >= below && !CHIP.test(textOf(one)),
   )
-  return innermost(found)
+  const width = (root.defaultView?.innerWidth ?? 0) * CARD_WIDTH
+  const cards = [
+    ...found.filter((one) => one.getBoundingClientRect().width >= width),
+    ...pointerBlocks(root, below),
+  ]
+  // Des cartes larges : la première est le contrôle à toucher (les plus extérieures : le bloc de la carte, pas son titre)
+  const list =
+    cards.length > 0
+      ? cards.filter((one) => !cards.some((other) => other !== one && other.contains(one)))
+      : innermost(found)
+  return list
     .sort(
       (a, b) => top(a) - top(b) || a.getBoundingClientRect().left - b.getBoundingClientRect().left,
     )
