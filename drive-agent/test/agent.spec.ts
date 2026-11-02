@@ -421,6 +421,28 @@ describe('la commande de diagnostic de l’application', () => {
     expect(bridge.postMessage.mock.calls.map(([text]) => JSON.parse(text).type)).toEqual(['log'])
   })
 
+  it('DRV-760 : la commande de diagnostic pendant un passage (la carte du guide est affichée) dit quand même l’état à l’application : « aucune ligne reçue » ne veut plus dire « passage en cours »', async () => {
+    // Given : un passage en cours (un écran attend la personne), donc l'agent est occupé
+    window.sessionStorage.clear()
+    window.history.replaceState(null, '', '#')
+    const { bridge, receive } = withBridge()
+    const screens = fakeUi({
+      diagnostic: () => new Promise<'close'>(() => undefined),
+      guide: () => new Promise<'stop'>(() => undefined),
+    })
+    run(window, { flow: { ui: screens.ui } })
+    receive(PLAN)
+    await vi.waitFor(() => expect(screens.screens().length).toBeGreaterThan(0))
+
+    // When
+    receive(COMMAND)
+
+    // Then : l'état est parti, que l'agent soit occupé ou non
+    await vi.waitFor(() =>
+      expect(bridge.postMessage.mock.calls.map(([text]) => JSON.parse(text).type)).toContain('log'),
+    )
+  })
+
   it('DRV-759 : dit à l’application la ligne « Session » et la « Fenêtre au premier plan », des formes seulement, pour sa boîte de diagnostic', async () => {
     // Given
     const { bridge, receive } = withBridge()
