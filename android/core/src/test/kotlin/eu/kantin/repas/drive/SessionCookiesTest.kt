@@ -131,4 +131,79 @@ class SessionCookiesTest {
         cookies.close()
         assertEquals(1, delay.cancellations)
     }
+
+    @Test
+    fun `la pause ecrit tout de suite puis en boucle tant que l'ecran est en pause`() {
+        cookies.paused()
+
+        assertEquals(listOf("flush"), events)
+        assertEquals(listOf(SessionCookies.PAUSE_PERIOD_MS), delay.requested)
+
+        repeat(3) { delay.ring() }
+
+        assertEquals("une écriture immédiate puis une par période", List(4) { "flush" }, events)
+        assertEquals("un seul rappel reste en attente à chaque tour", 1, delay.live.size)
+        assertTrue("la période n'est jamais sous 250 ms", delay.requested.all { it >= 250 })
+    }
+
+    @Test
+    fun `une seconde pause repart de zero sans multiplier les rappels`() {
+        cookies.paused()
+        cookies.paused()
+
+        assertEquals(1, delay.live.size)
+        assertEquals(1, delay.cancellations)
+        assertEquals(listOf("flush", "flush"), events)
+    }
+
+    @Test
+    fun `le retour au premier plan arrete la boucle`() {
+        cookies.paused()
+        delay.ring()
+        cookies.resumed()
+        delay.ring()
+
+        assertEquals(listOf("flush", "flush"), events)
+        assertTrue(delay.live.isEmpty())
+    }
+
+    @Test
+    fun `la destruction arrete la boucle et l'ecriture retardee`() {
+        cookies.flushSoon()
+        cookies.paused()
+        cookies.close()
+        delay.ring()
+
+        assertEquals("seule l'écriture immédiate de la pause a eu lieu", listOf("flush"), events)
+        assertTrue(delay.live.isEmpty())
+    }
+
+    @Test
+    fun `la boucle ne tourne pas sans pause`() {
+        cookies.flushSoon()
+        cookies.resumed()
+        cookies.close()
+
+        assertTrue(delay.requested.all { it == SessionCookies.SETTLE_MS })
+    }
+
+    @Test
+    fun `une pause longue ralentit la boucle sans l'arreter`() {
+        cookies.paused()
+        val fastTicks = (SessionCookies.PAUSE_FAST_MS / SessionCookies.PAUSE_PERIOD_MS).toInt()
+        repeat(fastTicks) { delay.ring() }
+
+        assertEquals(SessionCookies.PAUSE_PERIOD_MS, delay.requested.first())
+        assertEquals("passé la phase rapide, le rappel suivant est lent", SessionCookies.PAUSE_SLOW_MS, delay.requested.last())
+
+        delay.ring()
+
+        assertEquals(SessionCookies.PAUSE_SLOW_MS, delay.requested.last())
+        assertEquals(1, delay.live.size)
+        assertEquals(fastTicks + 2, events.size)
+
+        cookies.paused()
+
+        assertEquals("une nouvelle pause reprend au rythme rapide", SessionCookies.PAUSE_PERIOD_MS, delay.requested.last())
+    }
 }

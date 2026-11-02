@@ -117,7 +117,8 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         webView.onResume()
-        // Au retour au premier plan (réglages d'Android, installateur refermé, autre application), le site peut renouveler sa session : l'écriture suit, retardée.
+        // Au retour au premier plan (réglages d'Android, installateur refermé, autre application) la boucle de la pause s'arrête ; le site peut renouveler sa session : l'écriture suit, retardée.
+        cookies.resumed()
         cookies.flushSoon()
         // Un résultat arrivé pendant que l'écran du drive était devant, ou un passage interrompu par la fermeture de l'application.
         flushOutbox()
@@ -134,8 +135,9 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
-        // Les cookies de la WebView sont écrits sur le disque ici, pour que la session survive à la fermeture de l'application.
-        cookies.flushNow()
+        // Les cookies de la WebView sont écrits sur le disque ici, puis EN BOUCLE tant que l'écran est en pause : une page cachée (derrière l'installateur d'Android) continue ses minuteries et
+        // peut renouveler la session après cette écriture ; si le processus est arrêté, il faut que le dernier cookie soit déjà sur le disque (DRV-765).
+        cookies.paused()
         webView.onPause()
         super.onPause()
     }
