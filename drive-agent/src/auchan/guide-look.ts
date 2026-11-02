@@ -3,7 +3,13 @@
 // par : Code postal, ville… », une suggestion « Dardilly 69570 ») : le reste est une FORME PLAUSIBLE, lue par des indices que la page écrit à l'intention de la personne, et au moindre
 // doute la sous-étape est la plus générale.
 import { wallLook } from '../retailers/consent'
-import { foldLabel, isShown, type GuideLook, type GuideStep } from '../retailers/guide'
+import {
+  accessibleName,
+  foldLabel,
+  isShown,
+  type GuideLook,
+  type GuideStep,
+} from '../retailers/guide'
 import { chooseBarTarget, visibleLoginControl } from './page'
 
 const PANEL = '[aria-modal="true"], [role="dialog"], dialog'
@@ -20,10 +26,6 @@ const MAX_KEPT = 3
 const shown = isShown
 const textOf = (element: Element): string => foldLabel(element.textContent ?? '')
 const top = (element: Element): number => element.getBoundingClientRect().top
-const labelOf = (element: Element): string | null => {
-  const text = (element.textContent ?? '').replace(/\s+/g, ' ').trim()
-  return text !== '' && text.length <= 40 ? text : null
-}
 const look = (
   sub: GuideLook['sub'],
   target: HTMLElement | null,
@@ -31,7 +33,7 @@ const look = (
   maybe: readonly HTMLElement[] = [],
 ): GuideLook => ({
   sub,
-  target: target === null ? null : { element: target, label: labelOf(target) },
+  target: target === null ? null : { element: target, label: accessibleName(target) },
   keep,
   maybe,
 })

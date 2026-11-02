@@ -1618,6 +1618,7 @@ export function browserDeps(
   win: Window & typeof globalThis,
   primitives: WindowPrimitives = takeWindowPrimitives(win),
 ): LeclercDeps {
+  const loginText = memoized(1_500, () => showsLoginText(win.document))
   return {
     fetch: primitives.fetch,
     location: win.location,
@@ -1632,9 +1633,14 @@ export function browserDeps(
       (step === 'store'
         ? readStoreLook(win.document)
         : step === 'login'
-          ? readLoginLook(win.document, win.location, isMobileHost(win.location.hostname))
+          ? readLoginLook(
+              win.document,
+              win.location,
+              isMobileHost(win.location.hostname),
+              loginText(),
+            )
           : null),
-    loginText: memoized(1_500, () => showsLoginText(win.document)),
+    loginText,
     referrer: () => win.document.referrer,
     pageText: () => new win.XMLSerializer().serializeToString(win.document),
     navigation: () => navigationOf(win),

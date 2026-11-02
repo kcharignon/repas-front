@@ -221,6 +221,12 @@ enum class StoreBanner {
     /** La page du mot de passe demande le CODE reçu par e-mail (le titre de la page le dit, DRV-760) : « Tape le code reçu par e-mail, dans la page. » Pas de bouton. */
     LOGIN_CODE,
 
+    /**
+     * La page dit que la session du site a expiré (DRV-761 : « Vous avez été déconnecté(e) automatiquement car votre session a expiré », bouton « Retour au magasin ») : l'adresse ou
+     * le titre de la page le dit. Le message d'attente de [OPEN] y désignait un bouton « Commencer mes courses » qui n'est pas sur cette page ; celui-ci désigne celui qui y est. Pas de bouton.
+     */
+    SESSION_EXPIRED,
+
     /** Arrivée de « Finaliser sur Leclerc » (DRV-631), sans passage : « Ton panier est dans l'icône en haut à droite. » Pas de bouton ; disparaît à la première navigation. */
     BASKET,
     ;
@@ -246,6 +252,7 @@ enum class StoreBanner {
             val base = base(request, url, trouble, basketHint, loading, storeKnown)
             return when {
                 base == LOGIN && asksCode(pageTitle) -> LOGIN_CODE
+                base == OPEN && saysSessionExpired(url, pageTitle) -> SESSION_EXPIRED
                 base == NONE && cardMissing && request != null && !request.isSetup -> NO_CARD
                 else -> base
             }
@@ -254,12 +261,30 @@ enum class StoreBanner {
         /** Au-delà, le titre de la page n'est plus lu. */
         const val MAX_TITLE = 200
 
-        /** Le titre dit « code de vérification » (sans accent ni casse) : aucune valeur de champ n'est lue. */
+        /**
+         * Le titre dit « code de vérification » ou « saisissez le code » (sans accent ni casse) : aucune valeur de champ n'est lue. DRV-761 : la page du code d'Auchan écrit
+         * « Code de vérification » et « Saisissez le code à 6 chiffres envoyé à <adresse> » ; seul le titre de la page est lu (jamais son contenu), une adresse e-mail n'est jamais comparée.
+         * Si l'enseigne laisse le même titre à toutes les étapes de sa connexion, le message de [LOGIN] reste vrai pour la page du code.
+         */
         fun asksCode(title: String?): Boolean {
-            if (title == null) return false
-            // Le titre est une entrée de la page (jamais affiché) : borné AVANT toute normalisation
-            val plain = java.text.Normalizer.normalize(title.take(MAX_TITLE), java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").lowercase(java.util.Locale.ROOT)
-            return plain.contains("code de verification")
+            val plain = plain(title) ?: return false
+            return CODE_WORDS.any { plain.contains(it) }
+        }
+
+        /** L'adresse ou le titre de la page dit que la session a expiré (« session » et « expir » dans le titre, « expir » dans le chemin de l'adresse). */
+        fun saysSessionExpired(url: String?, title: String?): Boolean {
+            val words = plain(title)
+            if (words != null && words.contains("session") && words.contains("expir")) return true
+            val path = url?.takeIf { NavigationPolicy.httpsHostOf(it) != null }?.let { NavigationPolicy.pathOf(it) }?.lowercase(java.util.Locale.ROOT) ?: return false
+            return path.contains("expir")
+        }
+
+        private val CODE_WORDS = listOf("code de verification", "saisissez le code")
+
+        /** Le titre de la page sans accent ni casse, borné AVANT toute normalisation (c'est une entrée de la page, jamais affichée). */
+        private fun plain(title: String?): String? {
+            if (title == null) return null
+            return java.text.Normalizer.normalize(title.take(MAX_TITLE), java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").lowercase(java.util.Locale.ROOT)
         }
 
         private fun base(

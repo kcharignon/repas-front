@@ -149,6 +149,28 @@ class StoreBannerWithoutStorePagesTest {
         assertFalse(StoreBanner.LOGIN_CODE == StoreBanner.of(planA, "https://exemple-a.test/", pageTitle = "Code de vérification"))
     }
 
+    /**
+     * DRV-761 (recette réelle de 1.6.3) : la page du code d'Auchan écrit « Code de vérification » et « Saisissez le code à 6 chiffres envoyé à … » ; le bandeau natif gardait
+     * « Connecte-toi ». La phrase « Saisissez le code » est reconnue comme le titre, sans accent ni casse ; jamais une adresse e-mail n'est comparée.
+     */
+    @Test
+    fun `la page du code d'Auchan est reconnue par ses textes, sans accent ni casse (DRV-761)`() {
+        listOf(
+            "Code de vérification",
+            "CODE DE VÉRIFICATION - Auchan",
+            "Saisissez le code à 6 chiffres envoyé à exemple@exemple.test",
+            "saisissez le code a 6 chiffres",
+        ).forEach {
+            assertTrue(it, StoreBanner.asksCode(it))
+            assertEquals(it, StoreBanner.LOGIN_CODE, StoreBanner.of(plan, passwordPage, pageTitle = it))
+        }
+        listOf("Connexion", "Se connecter à Auchan", "Mot de passe", "", "exemple@exemple.test").forEach {
+            assertFalse(it, StoreBanner.asksCode(it))
+            assertEquals(it, StoreBanner.LOGIN, StoreBanner.of(plan, passwordPage, pageTitle = it))
+        }
+        assertFalse(StoreBanner.asksCode(null))
+    }
+
     @Test
     fun `le titre de la page est une entree de la page, borne avant d'etre lu, jamais plus de 200 caracteres (DRV-760)`() {
         val padding = "a".repeat(StoreBanner.MAX_TITLE)
