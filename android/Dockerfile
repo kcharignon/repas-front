@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Image de construction de l'application Android « Repas Drive » (DRV-311) : JDK 17, Gradle et SDK Android.
 # Rien n'y contacte un autre site que les dépôts officiels (Gradle, Google, Maven Central). `make android` et ses voisines s'en servent.
-FROM eclipse-temurin:17.0.20_8-jdk-jammy
+FROM eclipse-temurin:17.0.20.1_1-jdk-jammy
 
 ARG GRADLE_VERSION=8.14.6
 ARG GRADLE_SHA256=7988ed071b2a07900e2ec715fca15c6ab72bce6db433af301fa7fa7e9407bd24
