@@ -21,7 +21,7 @@
 <p class="note">Page locale de l'émulateur (DRV-317, DRV-314, DRV-320) : elle joue le rôle du front Repas, sans aucune donnée réelle. Elle parle à l'application par <code>window.repasNative</code>.</p>
 <ul id="facts"></ul>
 <p><a id="external" href="https://example.org/">Un lien vers un autre site</a></p>
-<p><a id="finalize" href="https://courses-test.leclercdrive.fr/magasin-000001-000001">Finaliser sur Leclerc</a></p>
+<p><a id="finalize" href="https://fd8-courses.leclercdrive.fr/magasin-000001-000001">Finaliser sur Leclerc</a></p>
 <nav>Barre du bas du front (simulée)</nav>
 <script>
 (function () {
@@ -140,6 +140,12 @@
         show('detail', 'Lignes : ' + item.detail.split(',').join(', '), true)
       } else {
         show('detail', 'Lignes : aucune', true)
+      }
+      // Le magasin que la personne a choisi à la place de celui du plan (DRV-755) : numéro, hôte et ville, que l'application livre tel quel ; en fin de relevé, après le détail
+      if (m.result && m.result.chosenStore) {
+        item.chosenStoreId = m.result.chosenStore.id
+        item.chosenStoreHost = m.result.chosenStore.host
+        item.chosenStoreLabel = m.result.chosenStore.label
       }
     } else if (m.type === 'drive.error' || m.type === 'error') {
       item.code = m.code

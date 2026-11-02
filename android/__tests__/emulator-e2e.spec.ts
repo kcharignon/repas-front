@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { PRODUCTS } from '../../drive-agent/fake-leclerc/catalog'
-import { HOME_HOST, STORE } from '../../drive-agent/fake-leclerc/server'
+import { HOME_HOST, MOBILE_PLAN_STORE, STORE } from '../../drive-agent/fake-leclerc/server'
 import { validatePlan, type PlanMessage } from '../../drive-agent/protocol'
 
 const androidDir = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -40,8 +40,8 @@ describe('les plans des scénarios de l’émulateur', () => {
     expect([...statuses].sort()).toEqual(['HAVE_AT_HOME', 'KNOWN', 'NEW', 'SKIP'])
   })
 
-  it.each(planFiles)('%s est un plan valide du protocole v1, au magasin du faux Leclerc', (file) => {
-    expect(planOf(file).store).toEqual({ ...STORE })
+  it.each(planFiles)('%s est un plan valide du protocole v1, au serveur du faux Leclerc (DRV-754)', (file) => {
+    expect(planOf(file).store).toEqual({ ...MOBILE_PLAN_STORE })
   })
 
   it.each(planFiles)('%s ne laisse aucun marqueur oublié, à part celui du passage', (file) => {
@@ -110,7 +110,7 @@ describe('les scripts de l’émulateur', () => {
     const hosts = new Set(
       ['lib.sh', 'smoke.sh', 'e2e.sh']
         .flatMap((file) => read(join(emulatorDir, file)).match(/https?:\/\/[a-z0-9.$_{}-]+/gi) ?? [])
-        .map((address) => address.replace(/^https?:\/\//i, '')),
+        .map((address) => address.replace(/^https?:\/\//i, '').replace(/\$STORE_[A-Z_]+$/, '')),
     )
     expect([...hosts].sort()).toEqual(['$FAKE_STORE_HOST', '$MOBILE_HOST', '$REPAS_HOST', '127.0.0.1', 'repas.test'])
   })
