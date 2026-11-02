@@ -95,11 +95,7 @@ node_height_dp() {
 # Les mesures de la page du drive et de l'interface de l'agent, une ligne de JSON (voir display.mjs) : par le débogage à distance de la WebView,
 # qui n'existe que dans l'APK de débogage.
 display_measures() {
-  local pid
-  pid=$(adb shell pidof "$APP" | tr -d '\r')
-  [ -n "$pid" ] || return 1
-  adb forward --remove-all > /dev/null 2>&1
-  adb forward tcp:9222 "localabstract:webview_devtools_remote_$pid" > /dev/null 2>&1 || return 1
+  devtools_forward || return 1
   emu node /opt/repas-emulator/display.mjs 2> /dev/null
 }
 json_number() { grep -o "\"$2\":[0-9.]*" <<< "$1" | head -n 1 | cut -d: -f2; } # json_number <json> <clé> : un nombre (clé unique)
@@ -156,33 +152,48 @@ dump_ui() { # une lecture de l'arbre de l'écran : le XML sur la sortie, ou le c
   grep -q '<hierarchy' <<< "$xml" || return 1
   printf '%s\n' "$xml"
 }
-# Une lecture avec le JavaScript de la page coupé (quiet.mjs) : voir le défaut jugé par a11y_idle.
-dump_ui_quiet() {
+# Le débogage à distance de la WebView (APK de DÉBOGAGE seulement) : le socket de l'application redirigé vers 127.0.0.1:9222 du conteneur, pour display.mjs, quiet.mjs, hidden-changes.mjs.
+devtools_forward() {
   local pid
   pid=$(adb shell pidof "$APP" | tr -d '\r')
   [ -n "$pid" ] || return 1
   adb forward --remove-all > /dev/null 2>&1
-  adb forward tcp:9222 "localabstract:webview_devtools_remote_$pid" > /dev/null 2>&1 || return 1
+  adb forward tcp:9222 "localabstract:webview_devtools_remote_$pid" > /dev/null 2>&1
+}
+# Une lecture avec le JavaScript de la page coupé (quiet.mjs : voir son en-tête). Si quiet.mjs échoue (aucune page http(s), débogage injoignable, programme absent du conteneur), le message
+# est dit sur la sortie d'erreur et recopié dans le rapport, jamais ignoré en silence ; le code 2 remonte si la lecture a échoué aussi.
+dump_ui_quiet() {
+  local log="${OUT:-/tmp}/.quiet.log" quiet status quiet_status
+  devtools_forward || { echo "lib.sh : débogage à distance injoignable (application arrêtée ?)" >&2; return 2; }
   emu rm -f /tmp/quiet.stop
-  emu node /opt/repas-emulator/quiet.mjs 15 > /dev/null 2>&1 &
-  local quiet=$!
+  emu node /opt/repas-emulator/quiet.mjs 15 > "$log" 2>&1 &
+  quiet=$!
   sleep 2
   dump_ui
-  local status=$?
+  status=$?
   # Rendre le JavaScript à la page tout de suite (le programme le fait en voyant ce fichier), puis attendre qu'il ait fini
   emu touch /tmp/quiet.stop
   wait "$quiet" 2> /dev/null
+  quiet_status=$?
   sleep 1 # le temps que la page retrouve son JavaScript avant un toucher
+  if [ "$quiet_status" -ne 0 ]; then
+    echo "lib.sh : la lecture JavaScript coupé a échoué (code $quiet_status) : $(tr '\n' ' ' < "$log" | cut -c1-200)" | tee -a "${REPORT:-/dev/null}" >&2
+    [ "$status" -eq 0 ] || return 2
+  fi
   return $status
 }
-# L'arbre d'accessibilité se repose-t-il ? `uiautomator dump` le demande : tant que la carte du guide est à l'écran, l'agent retire et remet l'attribut `hidden` de la carte toutes les
-# 500 ms (drive-agent/src/ui/fit.ts), l'arbre ne se repose jamais (« could not get idle state ») et un lecteur d'écran le voit disparaître et revenir deux fois par seconde.
-a11y_idle() { # trois lectures de suite sans coupure : une seule peut tomber entre deux retraits de l'attribut
-  local n
-  for n in 1 2 3; do
-    dump_ui > /dev/null || return 1
-    sleep 1
+# Combien de fois, en N secondes, l'attribut `hidden` d'un élément de l'interface de l'agent change-t-il (hidden-changes.mjs) ? « max=… element=… total=… » ; code non nul si la mesure est impossible
+# (deux essais : une connexion de débogage peut échouer isolément).
+hidden_changes() {
+  local attempt out
+  for attempt in 1 2; do
+    if devtools_forward && out=$(emu node /opt/repas-emulator/hidden-changes.mjs "$1" 2> /dev/null); then
+      echo "$out"
+      return 0
+    fi
+    sleep 2
   done
+  return 1
 }
 # Pendant 25 s après une lecture qui a dû se faire JavaScript coupé, les suivantes commencent par là (une lecture normale qui échoue coûte une dizaine de secondes). `ui` s'exécute dans
 # des sous-processus (`ui | grep`) : la mémoire est un fichier du dossier de sortie, pas une variable.
@@ -191,7 +202,11 @@ ui() { # l'arbre de l'écran en XML (uiautomator plante parfois en sortant : on 
   local attempt
   if ! quiet_wanted && dump_ui; then return 0; fi
   for attempt in 1 2; do
-    if dump_ui_quiet; then echo $(($(date +%s) + 25)) > "${OUT:-/tmp}/.ui-quiet"; return 0; fi
+    dump_ui_quiet
+    case $? in
+      0) echo $(($(date +%s) + 25)) > "${OUT:-/tmp}/.ui-quiet"; return 0 ;;
+      2) break ;; # la lecture coupée est impossible (message dit) : inutile de recommencer
+    esac
     sleep 1
   done
   rm -f "${OUT:-/tmp}/.ui-quiet"
