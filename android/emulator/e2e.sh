@@ -71,6 +71,31 @@ source android/emulator/lib.sh # les outils communs avec smoke.sh
 
 init_output android/dist/e2e
 PLANS=android/emulator/e2e
+
+# --- Quels scénarios jouer (DRV-767) ----------------------------------------------------------------------------------------------------------------
+# SCENARIOS vide : le JEU CRITIQUE, qui doit tenir en BUDGET_SECONDS de bout en bout (démarrage de l émulateur compris : `make android-e2e` pose E2E_STARTED_AT avant de construire l APK
+# et de démarrer l émulateur) ; plus long, la passe ÉCHOUE. SCENARIOS="22 3" : seulement ceux-là, dans cet ordre, sans budget. SCENARIOS=all (`make android-e2e-full`) : tous, dans l ordre
+# du fichier, sans budget. Le scénario 0 (réseau, installation, premier lancement) et le bilan sont toujours joués.
+ALL_SCENARIOS="1 1b 1c 2 3 4 5 6 7 8 8b 9 10 11 12 13 14 15 16 16b 17 18 19 21 22"
+# PROVISOIRE, NON MESURÉ (Docker est tombé pendant la mesure, DRV-767) : la liste du jeu critique reste à établir avec les durées d une passe.
+CRITICAL_SCENARIOS="1 2 4 5 22"
+BUDGET_SECONDS=300
+E2E_STARTED_AT=${E2E_STARTED_AT:-$(date +%s)}
+BUDGET_APPLIES=0
+case "${SCENARIOS:-}" in
+  "") SELECTED=$CRITICAL_SCENARIOS BUDGET_APPLIES=1 ;;
+  all) SELECTED=$ALL_SCENARIOS ;;
+  *) SELECTED=${SCENARIOS//,/ } ;;
+esac
+for id in $SELECTED; do
+  case " $ALL_SCENARIOS " in
+    *" $id "*) ;;
+    *)
+      echo "Scénario inconnu : $id (connus : $ALL_SCENARIOS)" >&2
+      exit 2
+      ;;
+  esac
+done
 CART_FULL='{"1000001":3,"1000006":1,"1000021":2}' # le panier attendu après le passage complet : farine x3, sucre x1, poivre moulu x2
 CART_KNOWN='{"1000001":3,"1000006":1}'             # celui de la phase A seule
 
@@ -107,6 +132,16 @@ polite_agent() { # jamais deux requêtes en parallèle, jamais plus vite que 800
     ko "cadence ou forme des requêtes non respectées (violations, requêtes refusées ou délai de ${gap:-?} ms) : $(fake_state | cut -c1-300)"
   fi
 }
+
+# --- Ce que les scénarios 15, 16, 16b et 17 (« Finaliser sur Leclerc ») se partagent ---------------------------------------------------------------------
+touches=0
+touch() { touches=$((touches + 1)); tap "$1"; } # une touche de l utilisateur, comptée
+HOME_PATH_CITY=$STORE_PAGE_PATH
+BASKET_PAGES_CITY="$STORE_SERVER_PATH/mobile-detail-panier.aspx"
+BASKET_PAGES_BARE="/magasin-$FAKE_STORE_ID-$FAKE_STORE_ID/mobile-detail-panier.aspx"
+BASKET_BANNER='Ton panier est dans l'
+# La forme du dernier « Finaliser » est gardée dans une préférence privée de l application (la variante de débogage se lit par run-as) ; l écriture est asynchrone.
+finalize_outcome_is() { adb shell run-as "$APP" cat shared_prefs/drive-store.xml 2> /dev/null | grep -q "name=\"finalize.leclerc\">$1<"; }
 
 # --- Les ordres que Repas (le faux) envoie à l'application ----------------------------------------------------------------------------------------
 start_plan() { # start_plan <runId> <fichier de plan> : Repas envoie drive.start avec ce plan (une seule ligne de JSON)
@@ -196,6 +231,7 @@ else
   ko "app.info n'annonce pas retailers [leclerc, auchan]"
 fi
 
+scenario_1() {
 # --- 1. Lecture du magasin ------------------------------------------------------------------------------------------------------------------
 say
 say "1. Lecture du magasin (drive.setup) : le magasin du faux Leclerc, lu par l'agent"
@@ -231,6 +267,9 @@ back_to_repas || ko "l'écran Repas n'est pas revenu"
 check "l'écran n'est plus maintenu allumé" screen_not_held
 screenshot e03-lecture-resultat
 
+}
+
+scenario_1b() {
 # --- 1b. « Se connecter » touché avant le magasin --------------------------------------------------------------------------------------------
 # Recette réelle (2026-10-19) : Leclerc exige un magasin choisi AVANT la connexion (« Avant de vous authentifier, veuillez sélectionner un Drive. »).
 # Si l'utilisateur touche « Se connecter » en premier, le bandeau le ramène au choix du magasin ; revenu à l'accueil, il retrouve le message de la
@@ -271,6 +310,9 @@ else
 fi
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
+}
+
+scenario_1c() {
 # --- 1c. Lecture du magasin à l'adresse du site mobile (DRV-741) ------------------------------------------------------------------------------
 # Un proche colle, dans la saisie à la main, l'adresse de son magasin copiée depuis Leclerc. Depuis DRV-754 c'est la page de la VERSION MOBILE (`m-courses`, sans
 # `.aspx`) qui est une page de magasin : Repas l'envoie à l'application (`drive.setup` avec `address`), elle l'ouvre à la place de l'accueil, l'agent y lit le
@@ -302,6 +344,9 @@ fi
 check "l'hôte des pages (m-courses) n'est jamais l'hôte rendu à Repas" mobile_host_never_reported
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
+}
+
+scenario_2() {
 # --- 2. Passage complet : phase A, phase B, retour ---------------------------------------------------------------------------------------
 say
 say "2. Passage complet : récapitulatif, phase A (produits connus), phase B (nouveau produit choisi), retour dans Repas"
@@ -392,6 +437,9 @@ check "l'écran n'est plus maintenu allumé une fois le passage fini" screen_not
 sleep 1
 screenshot e07-retour-repas
 
+}
+
+scenario_3() {
 # --- 3. Annuler au récapitulatif ------------------------------------------------------------------------------------------------------------
 say
 say "3. « Annuler l'envoi » au premier choix de produit : rien n'est écrit au panier, Repas reçoit « aborted » (plus de récapitulatif où annuler : DRV-648)"
@@ -410,6 +458,9 @@ check "aucune écriture du panier n'est partie" no_cart_write
 check "le panier du faux Leclerc est resté vide" cart_is '{}'
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
+}
+
+scenario_4() {
 # --- 4. Abandon par l'utilisateur en plein passage -----------------------------------------------------------------------------------------
 say
 say "4. Abandon en plein passage (retour du téléphone, « Abandonner »)"
@@ -431,6 +482,9 @@ back_to_repas || ko "l'écran Repas n'est pas revenu"
 check "l'écran n'est plus maintenu allumé" screen_not_held
 sleep 8 # le temps que la requête en vol de la page abandonnée finisse (latence de 5 s)
 
+}
+
+scenario_5() {
 # --- 5. Application tuée en plein passage, puis reprise ---------------------------------------------------------------------------------
 say
 say "5. Application tuée en plein passage, puis reprise"
@@ -474,6 +528,9 @@ check "le résultat détaille chaque ligne" \
   result_detail 'farine:ADDED:1000001:3,sucre:ADDED:1000006:1,sel:HAVE_AT_HOME::,huile:SKIPPED::,poivre:CHOSEN:1000021:2'
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
+}
+
+scenario_6() {
 # --- 6. Blocage simulé ---------------------------------------------------------------------------------------------------------------------
 say
 say "6. Blocage simulé : le faux Leclerc répond 403 à l'écriture du panier"
@@ -501,6 +558,9 @@ check "les deux lignes sont en échec « BLOCKED »" result_detail 'farine:FAILE
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 screenshot e12-blocage-retour
 
+}
+
+scenario_7() {
 # --- 7. Site changé ------------------------------------------------------------------------------------------------------------------------
 say
 say "7. Site changé : la page de recherche n'a plus les champs attendus"
@@ -521,6 +581,9 @@ fi
 check "rien n'a été mis au panier" cart_is '{}'
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
+}
+
+scenario_8() {
 # --- 8. Autre magasin que celui du plan ---------------------------------------------------------------------------------------------------------
 # DRV-755 : si la personne arrive, par le parcours que l'agent suit (l'accueil, « Commencer mes courses »), sur la page d'un AUTRE magasin que celui du plan, l'agent ne s'arrête plus
 # sur « Ce n'est pas le bon magasin » (une impasse : Repas ne dit pas quel magasin il a retenu) : une carte dit quel magasin a été ouvert et propose de l'utiliser. Rien n'est écrit, rien n'est
@@ -571,6 +634,9 @@ fi
 check "aucune écriture au panier, aucune requête de recherche" no_cart_write
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
+}
+
+scenario_8b() {
 # --- 8b. « Arrêter pour l'instant » à la carte de l'autre magasin ---------------------------------------------------------------------------------
 say
 say "8b. « Arrêter pour l'instant » à la carte de l'autre magasin : Repas reçoit « aborted » SANS magasin choisi, la liste est gardée (DRV-755)"
@@ -589,6 +655,9 @@ check "sans magasin choisi : aucun magasin n'est rendu à Repas" not_reported "\
 check "rien n'a été cherché ni mis au panier" nothing_sent
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
+}
+
+scenario_9() {
 # --- 9. Page d'ouverture refusée par une page d'erreur (404) ---------------------------------------------------------------------------------
 say
 say "9. Le site répond une page d'erreur (404) à la page d'ouverture (l'accueil de l'enseigne) : un bandeau dit quoi faire, rien n'est envoyé à la page d'erreur, « Ouvrir l'accueil du drive » recommence"
@@ -625,6 +694,9 @@ else
 fi
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
+}
+
+scenario_10() {
 # --- 10. Page d'ouverture trop lente ---------------------------------------------------------------------------------------------------------
 say
 say "10. La page d'ouverture ne répond pas dans les temps : le bandeau le dit au bout de 25 s, l'accueil du drive reste à un geste"
@@ -646,6 +718,9 @@ fake_behavior '{"homeDelayMs":0}'
 if open_home && finish_known "$RUN_SLOW"; then ok "« Ouvrir l'accueil du drive » recharge l'accueil : l'agent entre tout seul dans le magasin, le passage se termine et Repas reçoit « completed »"; else ko "le passage n'a pas abouti après « Ouvrir l'accueil du drive »"; fi
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
+}
+
+scenario_11() {
 # --- 11. Vérification demandée par le site (403) --------------------------------------------------------------------------------------------
 say
 say "11. Le site répond 403 à la page d'ouverture (le défi de l'anti-robot est servi ainsi) : la page reste visible, le bandeau dit de faire la vérification"
@@ -668,6 +743,9 @@ open_home || ko "le bouton « Ouvrir l'accueil du drive » est introuvable"
 if finish_known "$RUN_CHECK"; then ok "le défi passé (page de nouveau servie), l'agent reprend tout seul et Repas reçoit « completed »"; else ko "le passage n'a pas abouti après le défi"; fi
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
+}
+
+scenario_12() {
 # --- 12. « Commencer mes courses » mène à une page 404 ------------------------------------------------------------------------------------------
 # NON MESURÉ SUR LA VERSION MOBILE : les pages 404 de la racine de m-courses et de /magasin-N-N/ sans ville viennent de la recette réelle du 2026-10-18, relevée sur l'hôte ORDINATEUR ; m-courses est
 # une application Angular qui peut répondre 200 partout. Ce scénario prouve ce que l'application et l'agent font devant une page 404, pas ce que répond le vrai m-courses.
@@ -721,6 +799,9 @@ fi
 if finish_known "$RUN_DEAD"; then ok "le chemin retrouvé, l'agent reçoit le plan tout seul, le passage se termine et Repas reçoit « completed »"; else ko "le passage n'a pas abouti"; fi
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
+}
+
+scenario_13() {
 # --- 13. Quatre nouveaux articles : choisir le premier, passer les trois suivants ------------------------------------------------------------
 say
 say "13. Quatre nouveaux articles : « Choisir » le premier, puis « Passer ces 3 articles » (confirmation d'une ligne), rien n'est retenu pour les autres"
@@ -763,6 +844,9 @@ check "le résultat : le poivre choisi, les trois autres « pas cette fois » (n
   result_detail 'poivre:CHOSEN:1000021:2,sel:SKIPPED::,riz:SKIPPED::,huile:SKIPPED::'
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
+}
+
+scenario_14() {
 # --- 14. La quantité à vérifier : taper 4 donne 4 ------------------------------------------------------------------------------------------
 say
 say "14. Quantité à vérifier : le « 1 » prérempli est sélectionné, taper 4 donne 4 (pas 14), même après avoir touché le champ"
@@ -794,12 +878,14 @@ check "taper 4 a remplacé le « 1 » prérempli : le panier du faux Leclerc a 4
 polite_agent
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
+}
+
+scenario_15() {
 # --- 15. Deuxième envoi, tout est connu : une touche dans le drive, retour tout seul, « Finaliser sur Leclerc » dans l'application -------------
 say
 say "15. Deuxième envoi, tout est connu (DRV-625) : aucune touche dans le drive ; le résultat revient tout seul ; « Finaliser sur Leclerc » ouvre le drive DANS l'application"
 RUN_ALL=a11c0000-0000-4000-8000-000000000015
 touches=0
-touch() { touches=$((touches + 1)); tap "$1"; } # une touche de l'utilisateur, comptée
 fake_reset
 # Repas a déjà fait ses touches (« Envoyer au drive », « Confirmer », « Ouvrir le drive ») : le plan part, l'agent entre dans le magasin tout seul.
 start_plan "$RUN_ALL" plan-connu.json
@@ -816,12 +902,6 @@ check "dans le drive, AUCUNE touche pour tout l'envoi (une intention = un clic, 
 # « introuvable » quand on n'y arrive pas depuis son site.
 # Depuis DRV-754 l'accueil du magasin est la page de la version mobile (m-courses, sans .aspx) que l'application a retenue ; la page du panier est celle du SERVEUR du magasin
 # (fd<N>-courses, mobile-detail-panier.aspx), que l'application n'ouvre jamais d'elle-même.
-HOME_PATH_CITY=$STORE_PAGE_PATH
-BASKET_PAGES_CITY="$STORE_SERVER_PATH/mobile-detail-panier.aspx"
-BASKET_PAGES_BARE="/magasin-$FAKE_STORE_ID-$FAKE_STORE_ID/mobile-detail-panier.aspx"
-BASKET_BANNER='Ton panier est dans l'
-# La forme du dernier « Finaliser » est gardée dans une préférence privée de l'application (la variante de débogage se lit par run-as) ; l'écriture est asynchrone.
-finalize_outcome_is() { adb shell run-as "$APP" cat shared_prefs/drive-store.xml 2> /dev/null | grep -q "name=\"finalize.leclerc\">$1<"; }
 # Le journal du faux Leclerc repart de zéro (pour prouver qu'aucune autre page n'est demandée), le panier du deuxième envoi est remis.
 fake_reset
 emu curl -s -X POST -d '{"1000001":3,"1000006":1}' "$FAKE_CONTROL/cart" > /dev/null
@@ -852,6 +932,9 @@ wait_until 20 ui_has 'Mes produits habituels' || ko "le retour n'a pas ramené l
 adb shell input keyevent KEYCODE_BACK
 if wait_until 20 ui_has 'Faux Repas de test'; then ok "retour : l'écran Repas revient"; else ko "l'écran Repas n'est pas revenu"; fi
 
+}
+
+scenario_16() {
 # --- 16. L'accueil du magasin refusé par le site : l'accueil du drive ----------------------------------------------------------------------------
 # NON MESURÉ SUR LA VERSION MOBILE : `storeHomeStatus` sur la page `m-courses` du magasin est un défaut inventé pour le faux site (le 404 de la recette réelle était celui de l'hôte ordinateur) ; le scénario prouve le repli de l'application.
 say
@@ -875,6 +958,9 @@ screenshot e27-finaliser-page-refusee
 adb shell input keyevent KEYCODE_BACK
 wait_until 20 ui_has 'Faux Repas de test' || ko "l'écran Repas n'est pas revenu"
 
+}
+
+scenario_16b() {
 # --- 16b. Une page « introuvable » déguisée en 200 : l'accueil du drive ------------------------------------------------------------------------------
 # NON MESURÉ SUR LA VERSION MOBILE : `storeHomeTitle` (une page « introuvable » servie en 200) est un défaut inventé pour le faux site ; le scénario prouve le repli de l'application, pas une réponse du vrai `m-courses`.
 say
@@ -895,6 +981,9 @@ screenshot e27b-finaliser-titre-introuvable
 adb shell input keyevent KEYCODE_BACK
 wait_until 20 ui_has 'Faux Repas de test' || ko "l'écran Repas n'est pas revenu"
 
+}
+
+scenario_17() {
 # --- 17. Chemin du magasin inconnu : l'accueil du drive -------------------------------------------------------------------------------------------
 say
 say "17. Chemin du magasin inconnu (données de l'application effacées) : « Finaliser sur Leclerc » ouvre l'accueil du drive, avec le bandeau (DRV-631)"
@@ -918,6 +1007,9 @@ screenshot e28-finaliser-chemin-inconnu
 adb shell input keyevent KEYCODE_BACK
 wait_until 20 ui_has 'Faux Repas de test' || ko "l'écran Repas n'est pas revenu"
 
+}
+
+scenario_18() {
 # --- 18. Le site ignore le clic d'un programme ---------------------------------------------------------------------------------------------------------
 # NON MESURÉ SUR LA VERSION MOBILE : le clic de programme ignoré (`button-human`, `event.isTrusted`) a été mesuré sur le site ORDINATEUR (2026-10-19), pas sur la version mobile ; le scénario prouve ce que l'agent fait devant un bouton qui ignore son clic.
 say
@@ -943,6 +1035,9 @@ else
 fi
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
+}
+
+scenario_19() {
 # --- 19. Une seconde enseigne FICTIVE : l'isolement entre enseignes (DRV-707) --------------------------------------------------------------------------
 # L'APK de débogage connaît, en plus de Leclerc, une enseigne FICTIVE (`TestRetailers`, `*.exemple-b.test`, servie par le faux site de l'émulateur :
 # jamais une vraie enseigne). Elle sert à prouver ce que le multi-enseignes promet : l'écran d'une enseigne n'ouvre que son site, l'agent et le pont n'y
@@ -1021,6 +1116,9 @@ auchan_polite() { auchan_state | grep -q '"violations":\[\]' && ! auchan_state |
 auchan_dns_local() { ! emu grep -q "forwarded.*auchan" /sdk/site/dns.log; }
 cert_covers_auchan() { local names; names=$(emu openssl x509 -in /sdk/site/cert.pem -noout -ext subjectAltName) && grep -q "$AUCHAN_HOST" <<< "$names" && grep -q "$AUCHAN_LOGIN_HOST" <<< "$names"; }
 
+}
+
+scenario_21() {
 # --- 21. Auchan, servie par l'APK ordinaire (DRV-731, DRV-738) -------------------------------------------------------------------------------------------
 # Auchan est dans le registre que la version publiée sert (DRV-738) : l'APK ordinaire, le même que celui de tous les scénarios, la sert, sans second APK ni drapeau de
 # construction. Le scénario la joue contre le faux site d'Auchan (drive-agent/fake-auchan, DRV-717) servi en HTTPS sous www.auchan.fr, avec une page de « connexion » de
@@ -1179,6 +1277,9 @@ auchan_scenario
 check "le DNS n'a transmis aucun nom d'Auchan à Internet" auchan_dns_local
 say "   noms d'Auchan demandés au DNS : $(emu grep -o "query\[[A-Z]*\] [^ ]*auchan[^ ]*" /sdk/site/dns.log 2> /dev/null | awk '{print $2}' | sort -u | tr '\n' ' ')"
 
+}
+
+scenario_22() {
 # --- 22. La session de Repas à rotation survit à l'arrêt du processus (DRV-765) ---------------------------------------------------------------
 # Le cookie de session de Repas est à ROTATION : chaque usage en invalide l'ancien et en pose un nouveau. Si le dernier n'est pas sur le disque quand le
 # processus s'arrête (l'installation d'une mise à jour l'arrête), la WebView relit l'ancien au redémarrage : le serveur le refuse et la personne doit
@@ -1240,9 +1341,21 @@ say "22. Session de Repas à rotation : le dernier cookie survit à l'arrêt du 
 session_scenario
 # --- fin 22 ----------------------------------------------------------------------------------------------------------------------------------
 
+}
+
+# --- Les scénarios choisis, dans l ordre demandé ---------------------------------------------------------------------------------------------------
+say
+say "Scénarios joués : $SELECTED ($([ "$BUDGET_APPLIES" = 1 ] && echo "jeu critique, budget de $BUDGET_SECONDS s de bout en bout" || echo "sélection, sans budget"))"
+for id in $SELECTED; do "scenario_$id"; done
+
 # --- 20. Bilan ------------------------------------------------------------------------------------------------------------------------------
 say
 say "20. Bilan"
 fake_reset
 final_checks
-conclude "les scénarios complets"
+if [ "$BUDGET_APPLIES" = 1 ]; then
+  elapsed=$(($(date +%s) - E2E_STARTED_AT))
+  say "      durée de bout en bout (construction, émulateur et scénarios) : ${elapsed} s, budget ${BUDGET_SECONDS} s"
+  check "BUDGET : le jeu critique tient en ${BUDGET_SECONDS} s au plus de bout en bout (${elapsed} s)" [ "$elapsed" -le "$BUDGET_SECONDS" ]
+fi
+conclude "les scénarios joués ($SELECTED)"
