@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Message d'état de l'agent du drive vers l'application (protocole v1, DRV-759 et DRV-760)",
+  "description": "Jamais vers Repas. Soit des lignes de formes pour la boîte de diagnostic native (`lines`), soit l'état des écrans de l'agent (`card`) pour le bandeau de repli ; une seule des deux clés. Les validateurs de drive-agent/protocol font foi à l'exécution ; un test vérifie qu'ils donnent le même verdict que ce schéma.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["v", "type", "lines"],
+      "properties": {
+        "v": { "const": 1 },
+        "type": { "const": "log" },
+        "lines": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": { "type": "string", "minLength": 1, "maxLength": 400 }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["v", "type", "card"],
+      "properties": {
+        "v": { "const": 1 },
+        "type": { "const": "log" },
+        "card": { "type": "boolean" }
+      }
+    }
+  ]
+}

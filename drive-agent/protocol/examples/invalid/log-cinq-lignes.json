@@ -1,0 +1,5 @@
+{
+  "path": "lines",
+  "why": "Quatre lignes au plus.",
+  "message": { "v": 1, "type": "log", "lines": ["a", "b", "c", "d", "e"] }
+}

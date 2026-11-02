@@ -138,4 +138,24 @@ class StoreBannerWithoutStorePagesTest {
         assertEquals(StoreBanner.STORE_FIRST, StoreBanner.of(setupA, login))
         assertEquals(StoreBanner.NONE, StoreBanner.of(setupA, storePage))
     }
+
+    @Test
+    fun `la page du code de verification a son propre message, reconnu par le titre de la page (DRV-760)`() {
+        assertEquals(StoreBanner.LOGIN_CODE, StoreBanner.of(plan, passwordPage, pageTitle = "Code de vérification"))
+        assertEquals(StoreBanner.LOGIN_CODE, StoreBanner.of(plan, passwordPage, pageTitle = "Saisissez votre CODE de verification - Compte"))
+        assertEquals(StoreBanner.LOGIN, StoreBanner.of(plan, passwordPage, pageTitle = "Connexion"))
+        assertEquals(StoreBanner.LOGIN, StoreBanner.of(plan, passwordPage, pageTitle = null))
+        // Le titre ne change rien hors de la page du mot de passe
+        assertFalse(StoreBanner.LOGIN_CODE == StoreBanner.of(planA, "https://exemple-a.test/", pageTitle = "Code de vérification"))
+    }
+
+    @Test
+    fun `le titre de la page est une entree de la page, borne avant d'etre lu, jamais plus de 200 caracteres (DRV-760)`() {
+        val padding = "a".repeat(StoreBanner.MAX_TITLE)
+        // Dans les 200 premiers caracteres : reconnu
+        assertTrue(StoreBanner.asksCode("code de verification " + "b".repeat(100_000)))
+        // Au-dela : jamais lu, et un titre enorme ne coute rien
+        assertFalse(StoreBanner.asksCode(padding + " code de verification"))
+        assertFalse(StoreBanner.asksCode("e\u0301".repeat(500_000)))
+    }
 }

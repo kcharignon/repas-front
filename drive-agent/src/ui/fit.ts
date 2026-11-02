@@ -39,6 +39,8 @@ export interface FitOptions {
   pointed: () => HTMLElement | null
   /** Vrai : la carte peut se réduire en barre ; faux (la carte faite, le magasin ouvert) : seulement en bas ou en haut. */
   collapsible: boolean
+  /** Appelé après chaque pose : la personne voit-elle la carte (vrai) ou non (faux : effacée faute de place, recouverte par un mur en couche supérieure, hors de la fenêtre) ? (DRV-760 : l'application pose un bandeau de repli quand aucune carte n'est montrée.) */
+  visible?: (shown: boolean) => void
   /** Appelé quand la carte a changé de place ou de forme, ou que le contrôle à entourer a changé : le repère se remesure. */
   changed: () => void
 }
@@ -100,6 +102,35 @@ export function typingIn(doc: Document): HTMLElement | null {
   if (active instanceof HTMLTextAreaElement) return active
   if (active instanceof HTMLInputElement && EDITABLE.test(active.type)) return active
   return active instanceof HTMLElement && active.isContentEditable ? active : null
+}
+
+/**
+ * La personne VOIT-elle la carte (DRV-760) ? Sa boîte est dans la fenêtre ET, au centre de ce qui en est visible, le toucher tombe sur l'interface de l'agent (`elementFromPoint` rend
+ * l'hôte du Shadow DOM fermé), pas sur un mur de cookies en couche supérieure (un `<dialog>` ouvert par `showModal()` recouvre tout, quel que soit le z-index) ni sur rien (un bloc
+ * conteneur, `transform` ou `filter` sur le document, qui décale ce qui est `fixed` hors de la fenêtre). Sans `elementFromPoint` (pas de navigateur), on ne peut pas juger : vrai.
+ */
+export function reachable(card: HTMLElement, win: Window & typeof globalThis): boolean {
+  const verdict = touchVerdict(card, win)
+  return verdict === 'agent' || verdict === 'unknown'
+}
+
+/** Ce que le toucher au centre de la carte rencontre : l'agent, autre chose (un mur), rien de la fenêtre (carte hors de la fenêtre ou toucher dans le vide), ou on ne peut pas juger. */
+export type TouchVerdict = 'agent' | 'other' | 'outside' | 'unknown'
+
+export function touchVerdict(card: HTMLElement, win: Window & typeof globalThis): TouchVerdict {
+  const doc = win.document
+  if (typeof doc.elementFromPoint !== 'function') return 'unknown'
+  const rect = card.getBoundingClientRect()
+  const left = Math.max(rect.left, 0)
+  const right = Math.min(rect.right, win.innerWidth)
+  const top = Math.max(rect.top, 0)
+  const bottom = Math.min(rect.bottom, win.innerHeight)
+  if (right <= left || bottom <= top) return 'outside'
+  const hit = doc.elementFromPoint((left + right) / 2, (top + bottom) / 2)
+  const root = card.getRootNode()
+  const owner = 'host' in root ? (root.host as Element) : card
+  if (hit === null) return 'outside'
+  return hit === owner || owner.contains(hit) ? 'agent' : 'other'
 }
 
 /**
@@ -211,10 +242,11 @@ export function fitGuide(
       const spot =
         options.collapsible && (pref === 'min' || (pref === 'auto' && need))
           ? (choose(measure, rects, hard, true) ??
-            (sub === 'wall' ? leastCovered(measure, hard) : null))
+            (sub === 'wall' || sub === 'shop' ? leastCovered(measure, hard) : null))
           : (full ?? { min: false, top: false })
       apply(spot)
       placed = true
+      options.visible?.(spot !== null && reachable(card, win))
       const target = needs?.target ?? null
       // Un autre contrôle à entourer : le repère le relit (la carte, elle, il la suit à chaque mesure)
       if (target !== lastTarget) {

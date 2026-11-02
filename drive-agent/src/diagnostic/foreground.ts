@@ -2,6 +2,8 @@
 // faux site ni un essai dans Chrome le reproduisent ; la cause est INCONNUE. Ces sondes de FORME la rendent lisible dans le diagnostic : y a-t-il une boîte modale ou une fenêtre
 // flottante ouverte (couche supérieure du navigateur : elle cache tout le reste, même un conteneur au z-index maximal), un plein écran, et quels sont les cinq premiers éléments (ceux de l'agent marqués)
 // au point où se pose la carte. Lecture seule ; seulement des noms de balise, d'identifiant et de classe et un z-index, bornés et nettoyés : jamais un texte ni une valeur de la page.
+import { AGENT_Z } from '../agent-container'
+
 export interface ForegroundFacts {
   /** Le nombre d'éléments `:modal` (une `<dialog>` ouverte avec `showModal()`, un plein écran) ; `null` : le navigateur ne sait pas poser la question. */
   modal: number | null
@@ -21,8 +23,31 @@ export interface ForegroundFacts {
   }[]
 }
 
+/**
+ * La carte vue de l'application (DRV-760) : de quoi dire laquelle des hypothèses est la bonne quand « aucune carte » (un mur en couche supérieure, un écran effacé faute de place, un bloc
+ * conteneur qui décale ce qui est `fixed`, un passage bloqué avant le premier écran). Des formes seulement.
+ */
+export interface CardFacts {
+  /** Le dernier état dit à l'application (`card`) ; `null` : l'agent n'a encore rien dit. */
+  shown: boolean | null
+  /** Le nom de l'écran affiché ; `null` : aucun. */
+  screen: string | null
+  /** La boîte de l'écran (gauche, haut, largeur, hauteur, entiers, pixels de la fenêtre) ; `null` : aucun écran. */
+  box: readonly [number, number, number, number] | null
+  /** Le toucher au centre de l'écran : l'agent, autre chose, hors de la fenêtre, ou inconnu ; `null` : aucun écran. */
+  touch: 'agent' | 'other' | 'outside' | 'unknown' | null
+  /** Le conteneur de l'agent est le dernier enfant du document ; `null` : il n'est pas posé. */
+  last: boolean | null
+  /** Combien de fois il a été déplacé depuis l'ouverture. */
+  moves: number
+  /** La balise de l'élément actif du document (un nom, jamais un texte). */
+  active: string
+  /** Le dernier état du flux (`Step`) ; `null` : aucun. */
+  step: string | null
+}
+
 /** Un nom de la page réduit à des caractères sûrs, 30 au plus : un nom de balise, d'identifiant ou de classe, jamais une phrase. */
-const safe = (value: string): string => value.replace(/[^\w-]+/g, '_').slice(0, 30)
+export const safe = (value: string): string => value.replace(/[^\w-]+/g, '_').slice(0, 30)
 
 /** Combien d'éléments répondent à ce sélecteur ; `null` quand le navigateur ne le connaît pas. */
 function count(doc: Document, selector: string): number | null {
@@ -35,8 +60,6 @@ function count(doc: Document, selector: string): number | null {
 
 /** Combien d'éléments le rapport montre : les conteneurs de l'agent en prennent les premiers, le vrai panneau vient après. */
 const SHOWN = 5
-/** Les z-index des conteneurs de l'agent (l'interface, puis le repère). */
-const AGENT_Z: ReadonlySet<string> = new Set(['2147483647', '2147483646'])
 
 export function foregroundFacts(win: Window): ForegroundFacts {
   const doc = win.document

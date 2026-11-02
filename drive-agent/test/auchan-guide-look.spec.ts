@@ -270,8 +270,68 @@ describe('Auchan : le mot que la personne voit (DRV-757, suite)', () => {
     expect(nameless).toMatchObject({ sub: 'connexion', target: null })
 
     const link = add('a', 'Se connecter', 120)
-    const named = readAuchanLook(document, 'login')
-    expect(named?.target).toMatchObject({ element: link, label: 'Se connecter' })
+    // Rien ne le recouvre : un doigt le toucherait (jsdom ne mesure pas, on le dit)
+    Object.defineProperty(document, 'elementFromPoint', { value: () => link, configurable: true })
+    try {
+      const named = readAuchanLook(document, 'login')
+      expect(named?.target).toMatchObject({ element: link, label: 'Se connecter' })
+    } finally {
+      Reflect.deleteProperty(document, 'elementFromPoint')
+    }
+  })
+
+  it('DRV-760 : un « Me connecter » minuscule (sr-only) ou recouvert par la page n’est jamais cité : la carte dit « l’icône de connexion, en haut à droite » (recette de la 1.6.2)', () => {
+    const tiny = add('a', 'Me connecter', 10)
+    tiny.getBoundingClientRect = () =>
+      ({
+        top: 10,
+        bottom: 11,
+        left: 10,
+        right: 11,
+        width: 1,
+        height: 1,
+        x: 10,
+        y: 10,
+        toJSON: () => ({}),
+      }) as DOMRect
+    shownFor(add('button', '', 60))
+
+    expect(readAuchanLook(document, 'login')).toMatchObject({ sub: 'connexion', target: null })
+
+    // Un lien de bonne taille mais recouvert par un autre élément de la page : un doigt ne le toucherait pas
+    const covered = add('a', 'Se connecter', 120)
+    const cover = add('div', '', 100, document.body)
+    Object.defineProperty(document, 'elementFromPoint', { value: () => cover, configurable: true })
+    try {
+      expect(readAuchanLook(document, 'login')).toMatchObject({ sub: 'connexion', target: null })
+
+      Object.defineProperty(document, 'elementFromPoint', {
+        value: () => covered,
+        configurable: true,
+      })
+      expect(readAuchanLook(document, 'login')?.target).toMatchObject({ element: covered })
+    } finally {
+      Reflect.deleteProperty(document, 'elementFromPoint')
+    }
+  })
+
+  it('DRV-760 : un contrôle sous la barre de l’agent (le toucher y tombe sur l’interface de l’agent) n’est pas « recouvert par la page » : son libellé reste cité', () => {
+    const login = add('a', 'Se connecter', 120)
+    const agent = document.createElement('div')
+    agent.style.setProperty('z-index', '2147483647')
+    document.documentElement.appendChild(agent)
+    Object.defineProperty(document, 'elementFromPoint', { value: () => agent, configurable: true })
+    try {
+      expect(readAuchanLook(document, 'login')?.target).toMatchObject({ element: login })
+
+      // Un élément de la page qui n'est pas l'agent le recouvre vraiment
+      const page = add('div', '', 100, document.body)
+      Object.defineProperty(document, 'elementFromPoint', { value: () => page, configurable: true })
+      expect(readAuchanLook(document, 'login')).toMatchObject({ sub: 'connexion', target: null })
+    } finally {
+      Reflect.deleteProperty(document, 'elementFromPoint')
+      agent.remove()
+    }
   })
 
   it('les mots de la connexion d’Auchan : le libellé de la page, sinon « l’icône de connexion, en haut à droite »', () => {

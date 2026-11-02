@@ -57,7 +57,75 @@ function innermost(found: HTMLElement[]): HTMLElement[] {
   return found.filter((one) => !found.some((other) => other !== one && one.contains(other)))
 }
 
-/** Les contrôles sous le titre du panneau des magasins, sans les puces : le premier est celui à toucher. */
+/** Une carte de magasin est un bloc LARGE (au moins 60 % de la fenêtre) : une puce de filtre, « Afficher la carte », « Retour » ne le sont pas. */
+const CARD_WIDTH = 0.6
+/** Et pas HAUT : au-delà de 40 % de la fenêtre c'est le conteneur de la liste (le curseur est hérité), pas une carte. */
+const CARD_HEIGHT = 0.4
+/** Au plus ce nombre de blocs gardés, parmi au plus quatre fois autant d'éléments lus après le titre, par passe. */
+const MAX_BLOCKS = 400
+const BLOCKS =
+  'li, div, article, section, ul, ol, main, [role="listitem"], [role="option"], [role="list"], [role="listbox"]'
+/** `NodeFilter.SHOW_ELEMENT`. */
+const SHOW_ELEMENT = 1
+
+/**
+ * Les cartes de magasin que la page rend cliquables sans en faire des liens (un bloc à curseur « main », DRV-760 : la recette réelle a désigné une puce de filtre, au-dessus des
+ * cartes, et la barre s'est posée sur la première carte) : les blocs larges, sous le titre, au curseur main alors que leur parent ne l'a pas (le bloc de la carte, pas ce qu'il contient).
+ * Le curseur est HÉRITÉ : un `ul` ou un `main` à curseur main passerait pour l'unique carte et le cadre entourerait toute la liste. Est un conteneur (pas gardé : ses enfants à curseur main
+ * le deviennent) un bloc plus haut que 40 % de la fenêtre, ou qui a au moins deux blocs larges pour enfants ET est une liste (`ul`, `ol`, `main`, rôle de liste) ou n'a que des éléments de liste
+ * pour enfants (`li`, `article`, rôle d'élément) : une carte faite de plusieurs lignes (un `div` pour le nom, un autre pour l'adresse) reste UNE carte. Limite connue : une liste courte de `div`
+ * (moins de 40 % de la fenêtre) à curseur hérité, sans balise de liste, ne se distingue pas d'une carte de lignes ; elle reste prise pour une carte. Le parcours part du TITRE du panneau (les cartes le suivent)
+ * et non du début du document : une liste en fin de page ne tombe pas hors des premiers éléments lus.
+ */
+function pointerBlocks(root: Document, title: HTMLElement, below: number): HTMLElement[] {
+  const win = root.defaultView
+  if (win === null || root.documentElement === null) return []
+  const wide = win.innerWidth * CARD_WIDTH
+  const tall = win.innerHeight * CARD_HEIGHT
+  const found: HTMLElement[] = []
+  const containers = new Set<Element>()
+  const walker = root.createTreeWalker(root.documentElement, SHOW_ELEMENT)
+  walker.currentNode = title
+  for (let read = 0; read < MAX_BLOCKS * 4 && found.length < MAX_BLOCKS; read += 1) {
+    const one = walker.nextNode() as HTMLElement | null
+    if (one === null) break
+    if (!one.matches(BLOCKS)) continue
+    const rect = one.getBoundingClientRect()
+    if (rect.top < below || rect.width < wide) continue
+    if (win.getComputedStyle(one).cursor !== 'pointer') continue
+    const parent = one.parentElement
+    // Le parent a le curseur (il l'a donné) : seul le fils d'un conteneur déjà écarté est une carte
+    if (
+      parent !== null &&
+      win.getComputedStyle(parent).cursor === 'pointer' &&
+      !containers.has(parent)
+    )
+      continue
+    if (!shown(one)) continue
+    if (rect.height > tall || isList(one, wide)) {
+      containers.add(one)
+      continue
+    }
+    found.push(one)
+  }
+  return found
+}
+
+/** Une balise de liste, et les éléments qu'une liste porte. */
+const LIST = 'ul, ol, main, [role="list"], [role="listbox"]'
+const ITEMS = 'li, article, [role="listitem"], [role="option"]'
+
+/** `block` est une liste de cartes (pas une carte de plusieurs lignes) : au moins deux enfants directs larges, et une balise de liste ou des éléments de liste seulement. */
+function isList(block: HTMLElement, wide: number): boolean {
+  const children = [...block.children].filter(
+    (child) => child.matches(BLOCKS) && child.getBoundingClientRect().width >= wide,
+  )
+  return (
+    children.length >= 2 && (block.matches(LIST) || children.every((child) => child.matches(ITEMS)))
+  )
+}
+
+/** Les contrôles sous le titre du panneau des magasins, sans les puces : le premier est celui à toucher. Des cartes larges (liens ou blocs cliquables) passent avant tout autre contrôle. */
 function shopControls(root: Document): HTMLElement[] {
   const title = [...root.querySelectorAll<HTMLElement>(HEADINGS)].find(
     (one) =>
@@ -71,7 +139,17 @@ function shopControls(root: Document): HTMLElement[] {
   const found = [...root.querySelectorAll<HTMLElement>(CONTROL)].filter(
     (one) => shown(one) && top(one) >= below && !CHIP.test(textOf(one)),
   )
-  return innermost(found)
+  const width = (root.defaultView?.innerWidth ?? 0) * CARD_WIDTH
+  const cards = [
+    ...found.filter((one) => one.getBoundingClientRect().width >= width),
+    ...pointerBlocks(root, title, below),
+  ]
+  // Des cartes larges : la première est le contrôle à toucher (les plus extérieures : le bloc de la carte, pas son titre)
+  const list =
+    cards.length > 0
+      ? cards.filter((one) => !cards.some((other) => other !== one && other.contains(one)))
+      : innermost(found)
+  return list
     .sort(
       (a, b) => top(a) - top(b) || a.getBoundingClientRect().left - b.getBoundingClientRect().left,
     )

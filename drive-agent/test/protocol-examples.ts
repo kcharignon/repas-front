@@ -29,9 +29,9 @@ function read(folder: string, file: string): unknown {
   return JSON.parse(readFileSync(join(ROOT, 'examples', folder, file), 'utf8'))
 }
 
-export type Kind = 'plan' | 'result' | 'command' | 'selftest-result'
+export type Kind = 'plan' | 'result' | 'command' | 'selftest-result' | 'log'
 
-/** Les exemples valides dont le nom commence par le nom du genre (`plan`, `result`, `command`, `selftest-result`). */
+/** Les exemples valides dont le nom commence par le nom du genre (`plan`, `result`, `command`, `selftest-result`, `log`). */
 export function validExamples(kind: Kind): ValidExample[] {
   return names('valid')
     .filter((file) => file.startsWith(`${kind}-`))

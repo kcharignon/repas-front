@@ -19,7 +19,7 @@ import { bridgeTransport, type Bridge } from './transport/bridge'
 import { fragmentTransport } from './transport/fragment'
 import type { Transport } from './transport/transport'
 import { showSelftest, type SelftestDeps } from './selftest'
-import { createUi } from './ui'
+import { createUi, type UiHandle } from './ui'
 import { AGENT_VERSION } from './version'
 
 /**
@@ -82,7 +82,16 @@ export function run(win: Window & typeof globalThis = window, options: AgentOpti
   const entry = retailer ?? retailers[0]
   if (entry === undefined) return // aucune enseigne dans le registre : l'agent reste silencieux
   const adapter = entry.createAdapter({ win, primitives })
-  const ui = createUi({ win, attachShadow: primitives.attachShadow, retailer: entry })
+  const ui = createUi({
+    win,
+    attachShadow: primitives.attachShadow,
+    retailer: entry,
+    // Un écran est à l'écran ou non : l'application le sait (bandeau de repli quand l'agent est là mais ne montre rien, DRV-760)
+    ...(bridge && {
+      onVisible: (shown: boolean) =>
+        bridge.postMessage(stringifyJson({ v: 1, type: 'log', card: shown })),
+    }),
+  })
   const send = (message: Parameters<Transport['send']>[0]) => transport.send(message)
   const deps: FlowDeps = {
     adapter,
@@ -124,7 +133,7 @@ export function run(win: Window & typeof globalThis = window, options: AgentOpti
           message,
           diagnosticDeps,
           selftestDeps,
-          bridge && stateSender(bridge),
+          bridge && stateSender(bridge, flow, ui),
         )
       }
       void flow.start(message)
@@ -135,7 +144,7 @@ export function run(win: Window & typeof globalThis = window, options: AgentOpti
 }
 
 /** Ce que l'agent dit à l'application quand elle ouvre le diagnostic : `log`, deux lignes de formes (jamais une valeur ni une adresse), pour sa boîte de dialogue. */
-function stateSender(bridge: Bridge): (deps: DiagnosticDeps) => void {
+function stateSender(bridge: Bridge, flow: Flow, ui: UiHandle): (deps: DiagnosticDeps) => void {
   return (deps) => {
     const facts = deps.foreground?.()
     let session = 'illisible'
@@ -144,7 +153,13 @@ function stateSender(bridge: Bridge): (deps: DiagnosticDeps) => void {
     } catch {
       // la page ne se laisse pas lire
     }
-    const lines = [`Session : ${session}`, ...(facts ? [S.diagnostic.probe.foreground(facts)] : [])]
+    // La carte (DRV-760) : de quoi dire, à la prochaine recette, laquelle des hypothèses est la bonne
+    const card = S.diagnostic.probe.card(ui.probe(flow.history.at(-1) ?? null))
+    const lines = [
+      `Session : ${session}`,
+      ...(facts ? [S.diagnostic.probe.foreground(facts)] : []),
+      card,
+    ]
     bridge.postMessage(stringifyJson({ v: 1, type: 'log', lines }))
   }
 }
@@ -180,10 +195,11 @@ async function command(
     if (selftestDepsOf === null) return
     return flow.exclusive(() => showSelftest(selftestDepsOf()))
   }
+  // La boîte de diagnostic de l'application, lisible hors de la page (DRV-759) : la session lue et la fenêtre au premier plan, des formes seulement. DEVANT le passage en cours (DRV-760 :
+  // le passage occupe l'agent, et `exclusive` ignorait alors la commande en entier : « aucune ligne reçue » alors que l'agent était là) ; seul l'écran du diagnostic attend la fin du passage
+  sendState?.(depsOf())
   await flow.exclusive(async () => {
     const deps = depsOf()
-    // La boîte de diagnostic de l'application, lisible hors de la page (DRV-759) : la session lue et la fenêtre au premier plan, des formes seulement
-    sendState?.(deps)
     await showDiagnostic(deps)
     deps.ui.close()
   })

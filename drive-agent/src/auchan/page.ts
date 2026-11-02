@@ -2,6 +2,7 @@
 // et un oui/non). Règle absolue du diagnostic (comme chez Leclerc) : des FORMES, des NOMS d'une liste fermée, des NOMBRES ; jamais un libellé, une
 // adresse, un cookie (nom ou valeur) ni un identifiant. NON MESURÉ : l'élément exact de la barre (on cherche un élément dont le texte est celui de la
 // barre, quelle que soit sa balise) et le titre de la page « introuvable » au-delà d'une page vue le 2026-10-30.
+import { isAgentContainer } from '../agent-container'
 import type { CookieFacts } from '../retailers/contract'
 import { findControl, isShown, type GuideTarget } from '../retailers/guide'
 
@@ -122,12 +123,25 @@ function receivesTouch(element: HTMLElement): boolean | null {
   if (x < 0 || y < 0 || x > win.innerWidth || y > win.innerHeight) return null
   const hit = doc.elementFromPoint(x, y)
   if (hit === null) return null
+  // Sous la carte ou le repère de l'agent : la page ne le recouvre pas, on ne sait pas (un faux « recouvert » ferait taire un libellé juste)
+  if (isAgentContainer(hit)) return null
   return element.contains(hit)
 }
 
 /** Le contrôle de connexion que la page MONTRE (jamais un « Me connecter » caché d'un menu replié) ; `null` : aucun, la carte dit où chercher au lieu d'un libellé inventé. */
 export function visibleLoginControl(root: ParentNode): GuideTarget | null {
-  return findControl(root, LOGIN_LABELS, LOGIN_HINTS, isShown)
+  // Montré, de vraie taille (pas un « sr-only » d'un pixel) et jamais recouvert par la page : DRV-760, la carte citait « Me connecter » alors que le seul contrôle visible était une icône sans nom
+  return findControl(
+    root,
+    LOGIN_LABELS,
+    LOGIN_HINTS,
+    (element) => isShown(element) && sizedBox(element) && receivesTouch(element) !== false,
+  )
+}
+
+function sizedBox(element: HTMLElement): boolean {
+  const { width, height } = element.getBoundingClientRect()
+  return width >= 8 && height >= 8
 }
 
 /**

@@ -48,6 +48,7 @@ Le cœur : `android/core/src/main/kotlin/eu/kantin/repas/drive/` (le paquet n'a 
 | `NativeBridge.kt` | les règles du pont `repasNative` : origine, 64 Ko, forme du JSON, réponses |
 | `BridgeMessages.kt` | les règles du canal `repasHost` entre l'application et l'agent : origines du pont d'une enseigne, règles d'origine de la WebView (`originRules`) |
 | `DrivePlan.kt` | le plan reçu de Repas (forme, enseigne du registre, hôte de cette enseigne, bornes), la lecture du magasin et le résultat `aborted` |
+| `CardWatch.kt` | le repli quand l'agent est là mais ne montre rien (DRV-760) : le plan est parti depuis 6 s et aucun écran de l'agent n'est à l'écran, un bandeau natif dit de continuer dans la page |
 | `StoreArrival.kt` | la page d'arrivée d'un magasin ouvert directement (DRV-759) : repli sur l'accueil si le site la refuse ou la sert « introuvable » (titre lu le temps du chargement et trois secondes de plus) |
 | `AgentDiagnostic.kt` | la boîte de diagnostic native (DRV-759) : catégorie de la page sans adresse, lignes de l'agent lues comme une entrée non fiable, rapport |
 | `DrivePass.kt` | le passage (un seul à la fois, reprise sous 24 h, résultats à livrer, son port `PassStore`), le bandeau (`StoreBanner`), l'envoi du plan (`PlanDelivery`) |

@@ -10,6 +10,8 @@
     <string name="menu_open_drive">Ouvrir le drive %1$s</string>
     <string name="menu_logout_drive">Se déconnecter %2$s</string>
     <string name="menu_browser">Ouvrir dans le navigateur</string>
+    <string name="login_code_banner">Tape le code reçu par e-mail, dans la page.</string>
+    <string name="no_card_banner">Continue dans la page. Je reprends dès que c’est fait.</string>
     <string name="menu_diagnostic">Diagnostic de l’agent</string>
     <string name="menu_debug_plan">Plan d’essai (débogage)</string>
     <string name="menu_selftest">Test automatique (débogage)</string>

@@ -41,6 +41,13 @@ object AgentDiagnostic {
         return "hôte ${host.substringBefore('.').replace(NUMBERS, "<N>")} $agent ; chemin $shape, $query"
     }
 
+    /** L'état d'écran que l'agent dit (`card`, vrai ou faux) dans un message `log` ; `null` quand le message n'en porte pas ou que sa forme est autre (entrée non fiable). */
+    fun cardState(text: String): Boolean? = try {
+        JSONObject(text).opt("card") as? Boolean
+    } catch (_: JSONException) {
+        null
+    }
+
     /** Les lignes de l'agent d'un message `log` : du texte seul, nettoyé (caractères de contrôle en espaces), borné ; illisible ou d'une autre forme : rien. */
     fun agentLines(text: String): List<String> {
         val json = try {

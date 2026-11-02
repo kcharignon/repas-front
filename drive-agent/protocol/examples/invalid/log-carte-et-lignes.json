@@ -1,0 +1,5 @@
+{
+  "path": "card",
+  "why": "Une seule des deux clés : card ou lines.",
+  "message": { "v": 1, "type": "log", "card": true, "lines": ["Session : x"] }
+}

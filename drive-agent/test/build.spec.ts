@@ -182,12 +182,12 @@ describe('le vrai agent construit, avec un plan', () => {
     })
     await new Promise((resolve) => setTimeout(resolve, 20))
 
-    // Then : un conteneur de plus, que la page ne peut pas lire, et rien d'envoyé avant la fin du passage
+    // Then : un conteneur de plus, que la page ne peut pas lire, et rien d'envoyé avant la fin du passage que l'état d'écran (`log`, `card`, DRV-760)
     const host = dom.window.document.documentElement.lastElementChild as HTMLElement
     expect(host.tagName).toBe('DIV')
     expect(host.shadowRoot).toBeNull()
     expect(host.textContent).toBe('')
-    expect(sent).toEqual([])
+    expect(sent.map((text) => JSON.parse(text))).toEqual([{ v: 1, type: 'log', card: true }])
     expect(Object.getOwnPropertyNames(dom.window)).toEqual(names)
   })
 })

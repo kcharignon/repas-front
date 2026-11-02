@@ -35,6 +35,9 @@ export const LIMITS = {
   errorMessage: 200,
   /** Rapport du test automatique (en caractères, DRV-318). */
   selftestReport: 20_000,
+  /** Message `log` de l'agent vers l'application (DRV-759) : lignes de formes, et leur longueur. */
+  logLines: 4,
+  logLine: 400,
   /** Prix, en centimes (un million d'euros). */
   cents: 100_000_000,
   /** Un compteur de requêtes, d'erreurs ou de blocages d'un passage (ticket L). */
@@ -379,6 +382,14 @@ export interface CommandMessage {
   type: 'command'
   command: Command
 }
+
+/**
+ * Agent vers l'application, jamais vers Repas (DRV-759, DRV-760) : des lignes de formes pour la boîte de diagnostic native, OU l'état des écrans de l'agent (un écran est à
+ * l'écran ou non) pour le bandeau de repli. Une seule des deux clés.
+ */
+export type LogMessage =
+  | { v: typeof PROTOCOL_VERSION; type: 'log'; lines: string[] }
+  | { v: typeof PROTOCOL_VERSION; type: 'log'; card: boolean }
 
 /** Agent vers l'application (variante de débogage seulement, DRV-318) : le rapport du test automatique, en texte à copier. */
 export interface SelftestResultMessage {

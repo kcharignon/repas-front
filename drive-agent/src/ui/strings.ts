@@ -2,7 +2,7 @@
 // Le diagnostic et le test automatique sont des outils du mainteneur : exemptés du glossaire, pas du tutoiement. Gardé par src/i18n/__tests__/voice-and-glossary.spec.ts.
 import type { ErrorCode, LineStatus, Outcome } from '../../protocol'
 import { pluralOf, unitFor } from '../../protocol'
-import type { ForegroundFacts } from '../diagnostic/foreground'
+import type { CardFacts, ForegroundFacts } from '../diagnostic/foreground'
 import { own } from '../own'
 import type { RetailerNames } from '../retailers/names'
 import type { UnavailableReason, UnreachedReason } from './types'
@@ -269,6 +269,9 @@ export const S = {
       /** La fenêtre au premier plan (DRV-757, A2) : des formes seulement, jamais un texte de la page. */
       foreground: (facts: ForegroundFacts) =>
         `Fenêtre au premier plan : boîtes modales ${facts.modal ?? 'inconnu'}, fenêtres flottantes ouvertes ${facts.popovers ?? 'inconnu'}, plein écran ${facts.fullscreen ? 'oui' : 'non'} ; au point (${facts.point.x}, ${facts.point.y}) : ${facts.stack.length === 0 ? 'rien' : facts.stack.map((one) => `${one.tag}${one.id === '' ? '' : `#${one.id}`}${one.className === '' ? '' : `.${one.className}`} z=${one.zIndex}${one.agent ? ' [agent]' : ''}`).join(' > ')}`,
+      /** La carte vue de l'application (DRV-760) : des formes seulement, jamais un texte de la page. */
+      card: (facts: CardFacts) =>
+        `Carte : dernière étape du flux ${facts.step ?? 'aucune'}, écran ${facts.screen ?? 'aucun'}, dite à l’écran ${facts.shown === null ? 'jamais' : facts.shown ? 'oui' : 'non'}, boîte ${facts.box === null ? 'aucune' : facts.box.join('/')}, toucher au centre ${facts.touch === null ? 'aucun écran' : { agent: 'sur l’agent', other: 'sur autre chose', outside: 'hors de la fenêtre', unknown: 'inconnu' }[facts.touch]}, conteneur dernier du document ${facts.last === null ? 'absent' : facts.last ? 'oui' : 'non'}, déplacements ${facts.moves}, élément actif ${facts.active === '' ? 'aucun' : facts.active}`,
       /** La forme de la réponse de recherche de la version mobile : le genre du corps et des NOMS de clés, jamais une valeur. */
       searchForm: (term: string, form: string) => `Forme de la réponse de « ${term} » : ${form}`,
       where: (domain: string) =>

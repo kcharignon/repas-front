@@ -215,6 +215,12 @@ enum class StoreBanner {
      */
     LOGIN,
 
+    /** L'agent est là, le plan est parti et aucun de ses écrans n'est à l'écran ([CardWatch], DRV-760) : « Continue dans la page. » Pas de bouton ; disparaît dès qu'un écran apparaît. */
+    NO_CARD,
+
+    /** La page du mot de passe demande le CODE reçu par e-mail (le titre de la page le dit, DRV-760) : « Tape le code reçu par e-mail, dans la page. » Pas de bouton. */
+    LOGIN_CODE,
+
     /** Arrivée de « Finaliser sur Leclerc » (DRV-631), sans passage : « Ton panier est dans l'icône en haut à droite. » Pas de bouton ; disparaît à la première navigation. */
     BASKET,
     ;
@@ -232,6 +238,37 @@ enum class StoreBanner {
             loading: Boolean = false,
             /** Un magasin de l'enseigne a déjà été ouvert dans cette application ([StorePathMemory.hasPath]) : « Choisis d'abord ton magasin » serait faux sur la page de connexion d'un envoi (DRV-751). */
             storeKnown: Boolean = false,
+            /** L'agent est là, le plan est parti et aucun de ses écrans n'est à l'écran ([CardWatch.missing]) : un bandeau de repli, jamais devant un autre message (DRV-760). */
+            cardMissing: Boolean = false,
+            /** Le titre de la page (jamais son contenu) : sur la page du mot de passe, un titre qui parle du code de vérification change le message (DRV-760). */
+            pageTitle: String? = null,
+        ): StoreBanner {
+            val base = base(request, url, trouble, basketHint, loading, storeKnown)
+            return when {
+                base == LOGIN && asksCode(pageTitle) -> LOGIN_CODE
+                base == NONE && cardMissing && request != null && !request.isSetup -> NO_CARD
+                else -> base
+            }
+        }
+
+        /** Au-delà, le titre de la page n'est plus lu. */
+        const val MAX_TITLE = 200
+
+        /** Le titre dit « code de vérification » (sans accent ni casse) : aucune valeur de champ n'est lue. */
+        fun asksCode(title: String?): Boolean {
+            if (title == null) return false
+            // Le titre est une entrée de la page (jamais affiché) : borné AVANT toute normalisation
+            val plain = java.text.Normalizer.normalize(title.take(MAX_TITLE), java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").lowercase(java.util.Locale.ROOT)
+            return plain.contains("code de verification")
+        }
+
+        private fun base(
+            request: PassRequest?,
+            url: String?,
+            trouble: PageTrouble,
+            basketHint: Boolean,
+            loading: Boolean,
+            storeKnown: Boolean,
         ): StoreBanner = when {
             request == null -> if (basketHint && trouble == PageTrouble.NONE) BASKET else NONE
             trouble == PageTrouble.VERIFICATION -> VERIFICATION

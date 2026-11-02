@@ -3,7 +3,7 @@
 // `e2e/carte-guide.spec.ts`).
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { choose, fitGuide, leastCovered, typingIn } from '../src/ui/fit'
+import { choose, fitGuide, leastCovered, reachable, typingIn } from '../src/ui/fit'
 
 const box = (top: number, bottom: number, left = 0, right = 300) => ({ top, bottom, left, right })
 const rect = (top: number, bottom: number, left = 0, right = 300): DOMRect =>
@@ -373,6 +373,28 @@ describe('la carte posée dans la page', () => {
       },
     )
 
+    it('DRV-760 : sur la liste des magasins la barre ne s’efface pas non plus (la première carte, en bas : elle se pose au milieu ou en haut, jamais nulle part)', () => {
+      const first = answer('Magasin', 340, 410)
+      const top = answer('Autre', 8, 58)
+      const bottom = answer('Encore', 700, 750)
+      const el = wallCard()
+
+      const fit = fitGuide(window, el, {
+        ...wallOptions([first, top, bottom]),
+        needs: () => ({
+          keep: [first, top, bottom],
+          maybe: [],
+          sub: 'shop' as const,
+          target: first,
+          compact: true,
+        }),
+      })
+
+      expect(el.hidden).toBe(false)
+      expect(el.classList.contains('away')).toBe(false)
+      fit.stop()
+    })
+
     it('une zone sans réponse existe (le texte du mur, au milieu) : la barre s’y pose et ne couvre aucune réponse', () => {
       const refuse = answer('Continuer sans accepter', 10, 60)
       const accept = answer('Tout accepter', 690, 760)
@@ -383,6 +405,136 @@ describe('la carte posée dans la page', () => {
       expect(el.classList.contains('mid')).toBe(true)
       expect(el.hidden).toBe(false)
       fit.stop()
+    })
+  })
+
+  it('DRV-760 : la carte dit si elle est à l’écran (visible), vrai quand elle est posée, faux quand la barre s’efface faute de place', () => {
+    const seen: boolean[] = []
+    const field = document.createElement('input')
+    document.body.appendChild(field)
+    field.getBoundingClientRect = () => rect(700, 750)
+    const top = control(20, 40)
+    const el = card()
+    field.focus()
+
+    const fit = fitGuide(
+      window,
+      el,
+      options([top], { visible: (shown: boolean) => seen.push(shown) }),
+    )
+
+    expect(seen.at(-1)).toBe(false)
+    field.blur()
+    window.dispatchEvent(new Event('resize'))
+    expect(seen.at(-1)).toBe(true)
+    fit.stop()
+  })
+
+  describe('DRV-760 : la carte est « à l’écran » seulement si la personne la voit', () => {
+    /** Ce que le navigateur rend au toucher : jsdom n'a pas `elementFromPoint`, le test le donne (la preuve avec un vrai navigateur est `e2e/carte-guide-mur-couche.spec.ts`). */
+    const touching = (answer: (x: number, y: number) => Element | null) => {
+      Object.defineProperty(document, 'elementFromPoint', { value: answer, configurable: true })
+    }
+    afterEach(() => {
+      Reflect.deleteProperty(document, 'elementFromPoint')
+    })
+    /** La carte dans un Shadow DOM, comme l'interface de l'agent : le navigateur rend l'hôte pour tout ce qu'elle contient. */
+    const shadowCard = () => {
+      const host = document.createElement('div')
+      document.body.appendChild(host)
+      const root = host.attachShadow({ mode: 'open' })
+      const el = document.createElement('section')
+      root.appendChild(el)
+      el.getBoundingClientRect = () => rect(500, 760)
+      return { host, el }
+    }
+    const wall = () => {
+      const dialog = document.createElement('dialog')
+      document.body.appendChild(dialog)
+      return dialog
+    }
+
+    it('le toucher au centre tombe sur l’agent (son hôte) : vrai', () => {
+      const { host, el } = shadowCard()
+      touching(() => host)
+      const seen: boolean[] = []
+
+      const fit = fitGuide(
+        window,
+        el,
+        options([], { visible: (shown: boolean) => seen.push(shown) }),
+      )
+
+      expect(seen).toEqual([true])
+      fit.stop()
+    })
+
+    it('un mur en couche supérieure (<dialog> modal) recouvre le centre de la carte : faux, la carte reste posée', () => {
+      const { el } = shadowCard()
+      const modal = wall()
+      touching(() => modal)
+      const seen: boolean[] = []
+
+      const fit = fitGuide(
+        window,
+        el,
+        options([], { visible: (shown: boolean) => seen.push(shown) }),
+      )
+
+      expect(seen).toEqual([false])
+      expect(el.hidden).toBe(false)
+      fit.stop()
+    })
+
+    it('le mur part : la carte est de nouveau vue, l’agent le redit à la passe suivante', () => {
+      vi.useFakeTimers()
+      const { host, el } = shadowCard()
+      const modal = wall()
+      let covering = true
+      touching(() => (covering ? modal : host))
+      const seen: boolean[] = []
+
+      const fit = fitGuide(
+        window,
+        el,
+        options([], { visible: (shown: boolean) => seen.push(shown) }),
+      )
+      covering = false
+      vi.advanceTimersByTime(600)
+
+      expect(seen).toEqual([false, true])
+      fit.stop()
+    })
+
+    it('rien sous le toucher (null), ou une carte hors de la fenêtre (bloc conteneur qui la décale) : faux', () => {
+      const { host, el } = shadowCard()
+      touching(() => null)
+      expect(reachable(el, window)).toBe(false)
+      touching(() => host)
+      expect(reachable(el, window)).toBe(true)
+      el.getBoundingClientRect = () => rect(window.innerHeight + 2000, window.innerHeight + 2260)
+      expect(reachable(el, window)).toBe(false)
+      el.getBoundingClientRect = () =>
+        rect(500, 760, window.innerWidth + 10, window.innerWidth + 300)
+      expect(reachable(el, window)).toBe(false)
+    })
+
+    it('le centre jugé est celui de la partie visible de la carte', () => {
+      const { host, el } = shadowCard()
+      el.getBoundingClientRect = () => rect(window.innerHeight - 100, window.innerHeight + 300)
+      const asked: [number, number][] = []
+      touching((x, y) => {
+        asked.push([x, y])
+        return host
+      })
+
+      expect(reachable(el, window)).toBe(true)
+      expect(asked).toEqual([[150, window.innerHeight - 50]])
+    })
+
+    it('sans `elementFromPoint` (pas de navigateur) on ne peut pas juger : vrai', () => {
+      const { el } = shadowCard()
+      expect(reachable(el, window)).toBe(true)
     })
   })
 })
