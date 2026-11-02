@@ -74,6 +74,13 @@
       return document.cookie.indexOf('repas_test=1') >= 0
     })(),
   })
+  // Le cookie de session à rotation du vrai Repas (DRV-765) : au chargement, le site échange son cookie contre un jeton neuf ; le faux serveur ne fait rien
+  // tant que le test n'a pas allumé la rotation (/__rotation).
+  try {
+    fetch('/api/auth/refresh', { method: 'POST', credentials: 'same-origin' })
+  } catch (e) {
+    /* le test verra l'absence de rotation */
+  }
   show('native', 'Le pont repasNative est en place : ' + (native ? 'oui' : 'non'), !!native)
   show('url', 'Adresse : ' + location.pathname)
   if (!native) return

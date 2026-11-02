@@ -33,6 +33,10 @@ Pour tous les noms :
   POST /__www         {"mode": "test" | "fake"} : ce que sert www.leclercdrive.fr (voir plus haut) ; « test » au démarrage, e2e.sh passe en « fake »
                       et le remet en « test » en sortant, smoke.sh le remet en « test » avant de commencer
   GET  /__www         le mode courant, en JSON
+  POST /api/auth/refresh   (repas.test seulement, DRV-765) le cookie de session À ROTATION du vrai Repas, simulé : rien tant que /__rotation n'est pas allumé ;
+                      allumé, chaque appel compare le cookie `repas_refresh` reçu au dernier émis (valide s'ils sont égaux), en émet un NOUVEAU persistant (30 jours)
+                      et répond 200, ou 401 et efface le cookie si celui reçu n'est pas le dernier (comme le vrai serveur : un cookie déjà utilisé est refusé)
+  POST /__rotation    {"on": true | false} : allume ou éteint la rotation et la remet à zéro ; GET /__rotation : {"issued": n, "events": [{"received", "expected", "valid"}]}
 
 Le journal des requêtes (méthode et chemin seulement) est dans $SITE_DIR/access.log.
 """
@@ -65,6 +69,10 @@ AUCHAN_LOGIN_HOST = "compte.auchan.fr"
 FACTS_PATH = "/__facts.js"
 FACTS_TAG = ('<script src="%s"></script>' % FACTS_PATH).encode()
 state = {"www": "test"}
+# Le cookie de session à rotation du faux Repas (DRV-765) : des numéros fictifs, jamais un vrai jeton.
+ROTATION_COOKIE = "repas_refresh"
+ROTATION_PATH = "/api/auth/refresh"
+rotation = {"on": False, "issued": 0, "events": []}
 # La page de connexion de l'enseigne, hors d'un magasin (dans les deux modes) : le vrai site exige un magasin choisi AVANT la connexion et le dit
 # (« Avant de vous authentifier, veuillez sélectionner un Drive. »). Sert au scénario 1b de e2e.sh : « Se connecter » touché trop tôt.
 LOGIN_PATH = "/connexion.aspx"
@@ -196,6 +204,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, body, "application/json")
         elif path == "/__www":
             self._send(200, json.dumps({"mode": state["www"]}).encode(), "application/json")
+        elif path == "/__rotation":
+            with lock:
+                body = json.dumps({"issued": rotation["issued"], "events": rotation["events"]}).encode()
+            self._send(200, body, "application/json")
         elif path == "/__command":
             with lock:
                 command = commands.pop(0) if commands else None
@@ -210,8 +222,40 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._send(404, b"introuvable")
 
+    def _received_cookie(self):
+        """Le numéro du cookie de session à rotation que le navigateur a envoyé, ou None."""
+        for part in (self.headers.get("Cookie") or "").split(";"):
+            name, _, value = part.strip().partition("=")
+            if name == ROTATION_COOKIE and value.isdigit():
+                return int(value)
+        return None
+
+    def _rotate(self):
+        """POST /api/auth/refresh du faux Repas (DRV-765) : le cookie reçu doit être le dernier émis ; un nouveau est alors émis, sinon 401 et le cookie est effacé."""
+        with lock:
+            if not rotation["on"]:
+                return self._send(204)
+            received, expected = self._received_cookie(), rotation["issued"]
+            valid = expected == 0 or received == expected
+            rotation["events"].append({"received": received, "expected": expected, "valid": valid})
+            if valid:
+                rotation["issued"] += 1
+                cookie = "%s=%d; Max-Age=2592000; Path=/; Secure; HttpOnly; SameSite=Lax" % (ROTATION_COOKIE, rotation["issued"])
+            else:
+                cookie = "%s=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax" % ROTATION_COOKIE
+        body = b'{"ok":true}' if valid else b'{"error":"refus"}'
+        self.send_response(200 if valid else 401)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Set-Cookie", cookie)
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_POST(self):
         path = self.path.split("?", 1)[0]
+        if self._host() == REPAS_HOST and path == ROTATION_PATH:
+            return self._rotate()
         if self._is_fake_auchan(path):
             return self._relay(FAKE_AUCHAN, inject_facts=True)
         if self._is_fake_leclerc(path):
@@ -223,6 +267,16 @@ class Handler(BaseHTTPRequestHandler):
             with lock:
                 reports.clear()
                 commands.clear()
+            self._send(204)
+        elif path == "/__rotation":
+            try:
+                switch = json.loads(raw).get("on")
+            except (ValueError, AttributeError):
+                switch = None
+            if not isinstance(switch, bool):
+                return self._send(400, b"on attendu : true ou false")
+            with lock:
+                rotation.update({"on": switch, "issued": 0, "events": []})
             self._send(204)
         elif path == "/__www":
             try:

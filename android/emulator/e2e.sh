@@ -1096,6 +1096,42 @@ auchan_scenario
 check "le DNS n'a transmis aucun nom d'Auchan à Internet" auchan_dns_local
 say "   noms d'Auchan demandés au DNS : $(emu grep -o "query\[[A-Z]*\] [^ ]*auchan[^ ]*" /sdk/site/dns.log 2> /dev/null | awk '{print $2}' | sort -u | tr '\n' ' ')"
 
+# --- 22. La session de Repas à rotation survit à l'arrêt du processus (DRV-765) ---------------------------------------------------------------
+# Le cookie de session de Repas est à ROTATION : chaque usage en invalide l'ancien et en pose un nouveau. Si le dernier n'est pas sur le disque quand le
+# processus s'arrête (l'installation d'une mise à jour l'arrête), la WebView relit l'ancien au redémarrage : le serveur le refuse et la personne doit
+# retaper son mot de passe. Le faux Repas simule la rotation (POST /api/auth/refresh à chaque chargement de page, voir testsite.py) ; `am force-stop` joue
+# l'arrêt par l'installateur. Les numéros de cookie sont fictifs.
+rotation_on() { emu curl -sk -X POST -H 'Content-Type: application/json' -d "{\"on\":$1}" "https://127.0.0.1/__rotation" > /dev/null; }
+rotation_state() { emu curl -sk "https://127.0.0.1/__rotation"; }
+rotation_issued() { rotation_state | grep -q "\"issued\": $1[,}]"; } # le faux Repas a émis exactement N cookies
+rotation_all_valid() { ! rotation_state | grep -q '"valid": false'; } # chaque cookie reçu était le dernier émis
+session_scenario() {
+  rotation_on true
+  # Premier lancement : pas encore de cookie, le site en reçoit un (n° 1).
+  start_app
+  if wait_until 40 rotation_issued 1; then ok "premier lancement : le faux Repas émet le cookie de session n° 1"; else ko "le faux Repas n'a pas émis de cookie au premier lancement : $(rotation_state)"; fi
+  # Fermeture ordinaire (le téléphone est posé) : l'application passe en arrière-plan, le cookie n° 1 est écrit sur le disque.
+  sleep 3
+  adb shell input keyevent KEYCODE_HOME
+  sleep 3
+  # Deuxième lancement : le site présente le n° 1 et reçoit le n° 2 (la rotation).
+  start_app
+  if wait_until 40 rotation_issued 2; then ok "deuxième lancement : le cookie n° 1 est accepté, le faux Repas émet le n° 2"; else ko "la rotation du deuxième lancement n'a pas eu lieu : $(rotation_state)"; fi
+  # L'arrêt brutal, quelques secondes après la rotation et sans que l'application ait été mise en arrière-plan (la mise à jour installée depuis l'application).
+  sleep 6
+  adb shell am force-stop "$APP"
+  start_app
+  if wait_until 40 rotation_issued 3; then ok "troisième lancement, après l'arrêt du processus : le site est reconnu (le n° 2 est présenté, le n° 3 émis)"; else ko "après l'arrêt du processus, le site n'est plus reconnu : $(rotation_state)"; fi
+  check "chaque cookie présenté était le dernier émis (aucun refus, la session survit à l'arrêt du processus)" rotation_all_valid
+  say "      relevé du faux Repas : $(rotation_state)"
+  rotation_on false
+}
+
+say
+say "22. Session de Repas à rotation : le dernier cookie survit à l'arrêt du processus, comme pendant une mise à jour (DRV-765)"
+session_scenario
+# --- fin 22 ----------------------------------------------------------------------------------------------------------------------------------
+
 # --- 20. Bilan ------------------------------------------------------------------------------------------------------------------------------
 say
 say "20. Bilan"
