@@ -44,8 +44,17 @@ const online = useOnline()
 
 const status = useChangeListStatus()
 const rename = useRenameShoppingList()
-const remove = useDeleteShoppingList()
-const send = useSendShoppingList()
+// La navigation qui suit une suppression ou un envoi est faite par la mutation elle-même (pas par `mutate()`) : la relecture des listes
+// peut démonter cet en-tête (la liste envoyée ou supprimée était la seule en cours) avant que les rappels de `mutate()` ne partent (DRV-762)
+const remove = useDeleteShoppingList(async () => {
+  deleting.value = false
+  await router.push({ name: 'shopping-lists' })
+})
+const send = useSendShoppingList(async (listId) => {
+  sending.value = false
+  // La confirmation a donné l'intention : l'écran d'envoi ouvre le drive tout seul (`ouvrir`)
+  await router.push({ name: 'drive-send', params: { listId }, query: { ouvrir: '1' } })
+})
 const reopen = useReopenShoppingList()
 
 // L'envoi n'est proposé que dans l'application Repas (le pont natif), si la fonction est allumée, pour une liste en cours qui a des
@@ -167,31 +176,15 @@ function saveName() {
 }
 
 function confirmDelete() {
-  remove.mutate(props.list.id, {
-    onSuccess: async () => {
-      deleting.value = false
-      await router.push({ name: 'shopping-lists' })
-    },
-  })
+  remove.mutate(props.list.id)
 }
 
 function confirmSend() {
-  // L'identifiant est pris AVANT l'envoi : une fois la liste partie, l'accueil ne montre plus que les listes en cours et `props.list` devient une autre liste
-  const listId = props.list.id
+  // L'identifiant est pris AVANT l'envoi (il voyage dans les variables de la mutation) : une fois la liste partie, l'accueil ne montre plus
+  // que les listes en cours et `props.list` devient une autre liste
   send.mutate(
-    { id: listId, version: props.list.version },
-    {
-      onSuccess: async () => {
-        sending.value = false
-        // La confirmation a donné l'intention : l'écran d'envoi ouvre le drive tout seul (`ouvrir`)
-        await router.push({
-          name: 'drive-send',
-          params: { listId },
-          query: { ouvrir: '1' },
-        })
-      },
-      onError: () => (sending.value = false),
-    },
+    { id: props.list.id, version: props.list.version },
+    { onError: () => (sending.value = false) },
   )
 }
 

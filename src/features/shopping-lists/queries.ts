@@ -278,13 +278,20 @@ export function useRenameShoppingList() {
   })
 }
 
-export function useDeleteShoppingList() {
+/**
+ * Supprime une liste. `onDeleted` (la navigation qui suit) se lance dès la suppression faite, AVANT la relecture des listes : si la liste
+ * supprimée était la seule en cours, la relecture démonte l'écran qui la montrait, et un rappel passé à `mutate()` ne se lancerait pas (DRV-762).
+ */
+export function useDeleteShoppingList(onDeleted?: () => unknown) {
   const { api } = useSessionStore()
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: (id: string) =>
       unwrap(api.DELETE('/api/v1/shopping-lists/{id}', { params: { path: { id } } })),
+    onSuccess: async () => {
+      await onDeleted?.()
+    },
     onSettled: () => queryClient.invalidateQueries({ queryKey: shoppingListKeys.all }),
   })
 }
@@ -337,8 +344,15 @@ export function useActiveSummary() {
   return { ...summary, data }
 }
 
-/** Envoie une liste au drive : elle passe à `SENT` et n'est plus modifiable (sans effet si elle l'est déjà). */
-export function useSendShoppingList() {
+/**
+ * Envoie une liste au drive : elle passe à `SENT` et n'est plus modifiable (sans effet si elle l'est déjà).
+ *
+ * `onSent` (la navigation vers l'écran d'envoi) reçoit l'identifiant de la liste envoyée dès l'envoi fait, AVANT la relecture des listes :
+ * une fois partie, la liste n'est plus « en cours » et l'écran qui la montrait peut disparaître avec la relecture (DRV-762) ; un rappel
+ * passé à `mutate()` ne se lancerait alors jamais. La relecture ne commence qu'une fois la navigation faite : l'écran de la liste reste
+ * affiché jusque-là, sans « Aucune liste en cours » entre les deux.
+ */
+export function useSendShoppingList(onSent?: (id: string) => unknown) {
   const { api } = useSessionStore()
   const queryClient = useQueryClient()
 
@@ -349,6 +363,9 @@ export function useSendShoppingList() {
           params: { path: { id }, header: ifMatch(version) },
         }),
       ),
+    onSuccess: async (_data, { id }) => {
+      await onSent?.(id)
+    },
     onSettled: () => queryClient.invalidateQueries({ queryKey: shoppingListKeys.all }),
   })
 }
