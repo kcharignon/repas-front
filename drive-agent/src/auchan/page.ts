@@ -127,7 +127,18 @@ function receivesTouch(element: HTMLElement): boolean | null {
 
 /** Le contrôle de connexion que la page MONTRE (jamais un « Me connecter » caché d'un menu replié) ; `null` : aucun, la carte dit où chercher au lieu d'un libellé inventé. */
 export function visibleLoginControl(root: ParentNode): GuideTarget | null {
-  return findControl(root, LOGIN_LABELS, LOGIN_HINTS, isShown)
+  // Montré, de vraie taille (pas un « sr-only » d'un pixel) et jamais recouvert par la page : DRV-760, la carte citait « Me connecter » alors que le seul contrôle visible était une icône sans nom
+  return findControl(
+    root,
+    LOGIN_LABELS,
+    LOGIN_HINTS,
+    (element) => isShown(element) && sizedBox(element) && receivesTouch(element) !== false,
+  )
+}
+
+function sizedBox(element: HTMLElement): boolean {
+  const { width, height } = element.getBoundingClientRect()
+  return width >= 8 && height >= 8
 }
 
 /**
