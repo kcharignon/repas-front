@@ -74,6 +74,18 @@
       return document.cookie.indexOf('repas_test=1') >= 0
     })(),
   })
+  // Le cookie de session à rotation du vrai Repas (DRV-765) : au chargement, le site échange son cookie contre un jeton neuf ; le faux serveur ne fait rien
+  // tant que le test n'a pas allumé la rotation (/__rotation).
+  // Le test peut aussi demander une rotation différée (`rotate` avec `afterMs`) : un minuteur de la page, qui continue de tourner quand l'application est en arrière-plan,
+  // comme le rechargement du service worker du vrai site (DRV-765).
+  function rotate() {
+    try {
+      fetch('/api/auth/refresh', { method: 'POST', credentials: 'same-origin' })
+    } catch (e) {
+      /* le test verra l'absence de rotation */
+    }
+  }
+  rotate()
   show('native', 'Le pont repasNative est en place : ' + (native ? 'oui' : 'non'), !!native)
   show('url', 'Adresse : ' + location.pathname)
   if (!native) return
@@ -167,6 +179,8 @@
           send({ v: 1, type: 'drive.cancel', runId: command.runId || PLAN.runId })
         } else if (command.do === 'app.info') {
           send({ v: 1, type: 'app.info' })
+        } else if (command.do === 'rotate') {
+          setTimeout(rotate, command.afterMs || 0)
         } else if (command.do === 'app.menu') {
           send({ v: 1, type: 'app.menu' })
         } else if (command.do === 'raw') {

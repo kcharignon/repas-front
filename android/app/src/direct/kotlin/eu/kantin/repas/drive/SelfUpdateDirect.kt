@@ -28,7 +28,11 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Une construction de débogage ne se met jamais à jour ainsi : sa clé de signature est publique, les versions publiées ne s'installeraient pas
  * par-dessus (`supported` est faux, la page garde l'ancien comportement).
  */
-internal class DirectSelfUpdate(private val activity: Activity, private val post: (String) -> Unit) : SelfUpdate {
+internal class DirectSelfUpdate(
+    private val activity: Activity,
+    private val cookies: SessionCookies,
+    private val post: (String) -> Unit,
+) : SelfUpdate {
     override val supported: Boolean = !BuildConfig.DEBUG
 
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -190,7 +194,8 @@ internal class DirectSelfUpdate(private val activity: Activity, private val post
             // Le résultat dit si l'écran d'installation s'est refermé : le fichier est alors effacé dans tous les cas.
             .putExtra(Intent.EXTRA_RETURN_RESULT, true)
         return try {
-            activity.startActivityForResult(intent, REQUEST_INSTALL)
+            // Les cookies de Repas (la session à rotation) sont écrits sur le disque AVANT : l'installation arrête le processus, et une rotation qui suivrait ne serait pas sauvée (DRV-765).
+            cookies.beforeInstaller { activity.startActivityForResult(intent, REQUEST_INSTALL) }
             true
         } catch (_: ActivityNotFoundException) {
             false
@@ -208,4 +213,4 @@ internal class DirectSelfUpdate(private val activity: Activity, private val post
     }
 }
 
-internal fun createSelfUpdate(activity: Activity, post: (String) -> Unit): SelfUpdate = DirectSelfUpdate(activity, post)
+internal fun createSelfUpdate(activity: Activity, cookies: SessionCookies, post: (String) -> Unit): SelfUpdate = DirectSelfUpdate(activity, cookies, post)
