@@ -56,6 +56,9 @@
 #      navigation a lieu sans pont ni agent ; le « Diagnostic de l'agent » lit le magasin (hôte www, UUID) sans rien écrire, et s'arrête sur STORE_NOT_CHOSEN sans magasin
 #      choisi ; la première configuration depuis Repas (`drive.setup` sans magasin choisi, DRV-740) affiche un bandeau sans masquer la page, ne fait aucune requête, puis propose le magasin
 #      une fois choisi ; aucun nom d'Auchan n'est transmis à Internet. `build.sh` garde que la publication annonce Auchan (et n'embarque aucune enseigne éteinte).
+#  22. la session de Repas à rotation (DRV-765) : le faux Repas émet un nouveau cookie persistant à chaque chargement et refuse un cookie qui n'est pas le dernier émis ;
+#      l'application arrêtée (`am force-stop`, qui joue l'arrêt du processus mais n'est PAS le vrai installateur d'Android) relit, au lancement suivant, le DERNIER cookie : 22a, rotation du
+#      chargement de la page ; 22b, rotation faite par la page cachée PENDANT LA PAUSE (application en arrière-plan), arrêt 1 s après.
 # Les captures d'écran et le rapport texte sont dans android/dist/e2e/.
 # Code de sortie : 0 si tous les contrôles passent, 1 sinon, 3 si KVM manque.
 set -u
@@ -1095,6 +1098,67 @@ say "21. Auchan (servie par l'APK ordinaire, DRV-738) contre le faux site d'Auch
 auchan_scenario
 check "le DNS n'a transmis aucun nom d'Auchan à Internet" auchan_dns_local
 say "   noms d'Auchan demandés au DNS : $(emu grep -o "query\[[A-Z]*\] [^ ]*auchan[^ ]*" /sdk/site/dns.log 2> /dev/null | awk '{print $2}' | sort -u | tr '\n' ' ')"
+
+# --- 22. La session de Repas à rotation survit à l'arrêt du processus (DRV-765) ---------------------------------------------------------------
+# Le cookie de session de Repas est à ROTATION : chaque usage en invalide l'ancien et en pose un nouveau. Si le dernier n'est pas sur le disque quand le
+# processus s'arrête (l'installation d'une mise à jour l'arrête), la WebView relit l'ancien au redémarrage : le serveur le refuse et la personne doit
+# retaper son mot de passe. Le faux Repas simule la rotation (POST /api/auth/refresh à chaque chargement de page, voir testsite.py) ; `am force-stop` joue
+# l'arrêt du processus, MAIS ce n'est PAS le vrai installateur d'Android. Les numéros de cookie sont fictifs. Écarts connus avec le vrai serveur (ADR 0015) : le faux
+# cookie est en `Path=/` et `SameSite=Lax`, et il n'y a aucune fenêtre de grâce (un cookie déjà utilisé est refusé tout de suite). Deux cas :
+#   22a. la rotation du chargement de la page, puis l'arrêt environ 3 s après (plus que l'écriture retardée de 2 s, moins que 5 s) ;
+#   22b. la rotation arrive PENDANT LA PAUSE : l'application est en arrière-plan (HOME, comme derrière l'installateur), la page cachée continue ses minuteries et fait tourner le
+#        cookie, l'arrêt a lieu environ 1 s après la rotation vue côté serveur (seule l'écriture répétée pendant la pause peut l'avoir sauvée).
+rotation_on() { emu curl -sk -X POST -H 'Content-Type: application/json' -d "{\"on\":$1}" "https://127.0.0.1/__rotation" > /dev/null; }
+rotation_state() { emu curl -sk "https://127.0.0.1/__rotation"; }
+rotation_issued() { rotation_state | grep -q "\"issued\": $1[,}]"; } # le faux Repas a émis exactement N cookies
+rotation_events() { [ "$(rotation_state | grep -o '"received"' | wc -l)" -ge "$1" ]; } # au moins N cookies présentés au faux Repas
+rotation_all_valid() { ! rotation_state | grep -q '"valid": false'; } # chaque cookie présenté était le dernier émis
+# Attend vite (un contrôle toutes les 0,3 s) que le faux Repas ait émis N cookies : pour arrêter l'application peu de temps après. Usage : rotation_seen <N> <secondes>
+rotation_seen() {
+  local tries=$(($2 * 3)) i
+  for ((i = 0; i < tries; i++)); do
+    rotation_issued "$1" && return 0
+    sleep 0.3
+  done
+  return 1
+}
+session_scenario() {
+  rotation_on true
+  # Premier lancement : pas encore de cookie, le site en reçoit un (n° 1).
+  start_app
+  if rotation_seen 1 40; then ok "premier lancement : le faux Repas émet le cookie de session n° 1"; else ko "le faux Repas n'a pas émis de cookie au premier lancement : $(rotation_state)"; fi
+  # Fermeture ordinaire (le téléphone est posé) : l'application passe en arrière-plan, le cookie n° 1 est écrit sur le disque.
+  sleep 3
+  adb shell input keyevent KEYCODE_HOME
+  sleep 3
+  # Deuxième lancement : le site présente le n° 1 et reçoit le n° 2 (la rotation).
+  start_app
+  if rotation_seen 2 40; then ok "deuxième lancement : le cookie n° 1 est accepté, le faux Repas émet le n° 2"; else ko "la rotation du deuxième lancement n'a pas eu lieu : $(rotation_state)"; fi
+  # 22a. L'arrêt brutal, environ 3 s après la rotation et sans que l'application ait été mise en arrière-plan.
+  sleep 3
+  adb shell am force-stop "$APP"
+  start_app
+  if rotation_seen 3 40; then ok "22a. troisième lancement, après l'arrêt du processus : le site est reconnu (le n° 2 est présenté, le n° 3 émis)"; else ko "22a. après l'arrêt du processus, le site n'est plus reconnu : $(rotation_state)"; fi
+  check "22a. chaque cookie présenté était le dernier émis (la session survit à l'arrêt du processus)" rotation_all_valid
+  # 22b. La rotation pendant la pause : le n° 3 est sur le disque (arrière-plan ordinaire), puis la page cachée fait tourner le cookie 3 s plus tard.
+  sleep 3
+  adb shell input keyevent KEYCODE_HOME
+  sleep 1
+  post_command '{"do":"rotate","afterMs":3000}'
+  if rotation_seen 4 30; then ok "22b. la page cachée fait tourner le cookie pendant la pause (le n° 3 est présenté, le n° 4 émis)"; else ko "22b. la rotation de la page cachée n'a pas eu lieu : $(rotation_state)"; fi
+  sleep 1
+  adb shell am force-stop "$APP"
+  start_app
+  if wait_until 40 rotation_events 5; then ok "22b. l'application relancée présente un cookie au faux Repas"; else ko "22b. l'application relancée n'a présenté aucun cookie : $(rotation_state)"; fi
+  check "22b. le cookie relu est le dernier émis (le n° 4) : la rotation faite pendant la pause a été écrite sur le disque" rotation_all_valid
+  say "      relevé du faux Repas : $(rotation_state)"
+  rotation_on false
+}
+
+say
+say "22. Session de Repas à rotation : le dernier cookie survit à l'arrêt du processus, après le chargement (22a) et pendant la pause (22b) (DRV-765)"
+session_scenario
+# --- fin 22 ----------------------------------------------------------------------------------------------------------------------------------
 
 # --- 20. Bilan ------------------------------------------------------------------------------------------------------------------------------
 say

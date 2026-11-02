@@ -149,7 +149,7 @@ describe('l’APK téléchargé reste dans l’espace privé de l’application'
     const activity = named('MainActivity.kt').code
 
     expect(installer).toMatch(/init \{[\s\S]*storage\.purge\(\)/)
-    expect(activity).toContain('selfUpdate = createSelfUpdate(this, ::post)')
+    expect(activity).toContain('selfUpdate = createSelfUpdate(this, cookies, ::post)')
     expect(named('RepasApp.kt').code).not.toMatch(/purge|SelfUpdate/)
   })
 
@@ -211,7 +211,7 @@ describe('les deux variantes de distribution', () => {
       .map(({ where }) => where)
 
     expect(offenders).toEqual([])
-    expect(named('MainActivity.kt').code).toContain('createSelfUpdate(this, ::post)')
+    expect(named('MainActivity.kt').code).toContain('createSelfUpdate(this, cookies, ::post)')
   })
 
   it('Gradle déclare les deux variantes et la construction de publication vise la variante direct', () => {

@@ -266,6 +266,12 @@ class DriveActivity : Activity() {
         super.onPause()
     }
 
+    override fun onStop() {
+        // Encore une fois, écran entièrement caché : ce que le site a posé entre-temps est gardé (DRV-765).
+        DriveProfile.cookieManager(site, repasApp.sites).flush()
+        super.onStop()
+    }
+
     override fun onDestroy() {
         timers.removeCallbacksAndMessages(null)
         abandonDialog?.dismiss()
