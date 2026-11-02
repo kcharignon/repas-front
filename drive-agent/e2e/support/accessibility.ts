@@ -54,6 +54,9 @@ export function exposed(node: AxNode): AxNode[] {
   return [...(node.ignored ? [] : [node]), ...node.children.flatMap(exposed)]
 }
 
+/** Tous les nœuds du sous-arbre, ignorés compris, à plat. */
+export const everyNode = (node: AxNode): AxNode[] => [node, ...node.children.flatMap(everyNode)]
+
 /** « rôle : nom » de chaque nœud exposé qui a un nom, pour des messages d'échec lisibles. */
 export const outline = (node: AxNode): string[] =>
   exposed(node)

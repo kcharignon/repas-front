@@ -1,12 +1,20 @@
 // La carte de l'agent est exposée à un lecteur d'écran (DRV-764, recette réelle de 1.6.4 : « le texte de la carte n'apparaît pas toujours dans l'arbre d'accessibilité »).
-// PROUVÉ dans Chromium, par l'arbre d'accessibilité du moteur (`Accessibility.getFullAXTree`, pas celui que Playwright déduit du DOM) : le dialogue de la carte a un nom, ses textes
-// et ses boutons sont exposés avec un nom clair, rien n'est caché au lecteur (ni `aria-hidden`, ni `inert`, ni nœud ignoré), la carte annonce poliment ses changements, sur plusieurs
-// écrans (Auchan, Leclerc, devant un mur de cookies `aria-modal`, barre réduite, choix de produit). NON prouvé ici : ce que la WebView d'Android fait de cet arbre (elle le transforme en
-// vues, et ne le construit que quand un service d'accessibilité le demande) ; voir `drive-agent/README.md`, « Carte et lecteur d'écran ». Les faux sites ne sont pas les vrais.
+// PROUVÉ dans Chromium, par l'arbre d'accessibilité du moteur (`Accessibility.getFullAXTree`, pas celui que Playwright déduit du DOM) : la carte PLEINE expose son dialogue nommé, sa zone
+// de statut polie, son titre, sa phrase et ses boutons nommés ; la BARRE réduite (imposée devant un mur de cookies, ou pendant la saisie dans un champ) n'expose que le dialogue, la zone de
+// statut et le bouton de la barre : titre et phrase sont masqués (`display:none`) et ne sont plus lus, ce qui explique le texte « absent » d'un `uiautomator dump` pris à ces moments. Aucun
+// nœud du sous-arbre n'est `hidden`. Sur plusieurs écrans (Auchan, Leclerc, mur de cookies `aria-modal`, choix de produit). NON prouvé ici : ce que la WebView d'Android fait de cet arbre
+// (elle le transforme en vues, et ne le construit que quand un service d'accessibilité le demande) ; voir `drive-agent/README.md`, « Carte et lecteur d'écran ». Faux sites, pas les vrais.
 import type { Page } from '@playwright/test'
 
 import { openWithBridge, openWithFragment } from './support/agent'
-import { agentTree, exposed, outline, spoken, type AxNode } from './support/accessibility'
+import {
+  agentTree,
+  everyNode,
+  exposed,
+  outline,
+  spoken,
+  type AxNode,
+} from './support/accessibility'
 import { expect, test } from './support/fixtures'
 import { fresh, planOf, RUN_ID } from './support/plans'
 import { MOBILE_HOSTS, MOBILE_PLAN_STORE, startFakeLeclerc } from '../fake-leclerc/server'
@@ -41,12 +49,35 @@ async function tree(page: Page): Promise<AxNode> {
   return root as AxNode
 }
 
-/** Ce que doit offrir toute carte : un dialogue nommé, non ignoré, et aucun nœud de la carte « caché » au lecteur. */
+/** Ce que doit offrir toute carte : un dialogue nommé, non ignoré, et aucun nœud du sous-arbre entier « caché » au lecteur. */
 function expectReadable(root: AxNode): void {
   expect(root.ignored).toBe(false)
   expect(root.name).not.toBe('')
-  const hidden = [root, ...root.children].filter((one) => one.props.hidden === true)
+  const hidden = everyNode(root).filter((one) => one.props.hidden === true)
   expect(hidden, 'rien de la carte n’est caché au lecteur').toEqual([])
+}
+
+/** La carte PLEINE : le titre, la phrase et les boutons sont tous dans l'arbre. */
+function expectFullCard(root: AxNode): void {
+  const roles = exposed(root).map((one) => one.role)
+  expect(roles, 'le titre est exposé').toContain('heading')
+  expect(roles, 'la phrase est exposée').toContain('paragraph')
+  expect(buttons(root).length, 'les boutons sont exposés').toBeGreaterThanOrEqual(2)
+}
+
+/**
+ * La BARRE réduite (DRV-764, comportement réel et voulu : `.guide.min>:not(.g-bar){display:none}`) : seuls le dialogue, la zone de statut et le bouton de la barre sont dans l'arbre ;
+ * le titre et la phrase restent dans le DOM mais ne sont plus lus. C'est la cause la plus probable du texte « absent » d'un `uiautomator dump` devant un mur de cookies.
+ */
+function expectBarOnly(root: AxNode, bar: string): void {
+  const nodes = exposed(root)
+  expect(
+    nodes
+      .map((one) => one.role)
+      .filter((role) => role !== 'StaticText' && role !== 'InlineTextBox'),
+  ).toEqual(['dialog', 'status', 'button'])
+  expect(buttons(root).map((one) => one.name)).toEqual([bar])
+  expect(nodes.some((one) => one.role === 'heading' || one.role === 'paragraph')).toBe(false)
 }
 
 const buttons = (root: AxNode): AxNode[] => exposed(root).filter((one) => one.role === 'button')
@@ -76,6 +107,7 @@ test.describe('Auchan', () => {
       name: 'Choisis ton magasin',
     })
     expect(spoken(root)).toContain('Touche « Choisir vos courses », en haut de la page.')
+    expectFullCard(root)
     expect(buttons(root).map((one) => one.name)).toEqual([
       'Réduire',
       'Arrêter pour l’instant Ta liste est gardée, tu pourras reprendre.',
@@ -102,6 +134,8 @@ test.describe('Auchan', () => {
     expect(buttons(root).map((one) => one.name)).toEqual([
       'Il reste une étape · Réponds aux cookies',
     ])
+    expectBarOnly(root, 'Il reste une étape · Réponds aux cookies')
+    expect(spoken(root)).toBe('Il reste une étape · Réponds aux cookies')
     // Le mur de la page n'a pas retiré la carte de l'arbre, et la carte n'a pas retiré le mur : la personne lit les deux
     const cdp = await page.context().newCDPSession(page)
     await cdp.send('Accessibility.enable')
