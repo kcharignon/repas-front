@@ -637,7 +637,11 @@ class DriveActivity : Activity() {
         if (plan.site !== site) return false
         if (pass.start(plan, PassSource.DEBUG) is StartOutcome.Busy) return false
         updateKeepScreenOn()
-        return agent.send(plan.text)
+        if (!agent.send(plan.text)) return false
+        // Le plan d'essai arme le repli comme un plan de Repas (DRV-760)
+        cardWatch.planSent()
+        timers.postDelayed({ updateStoreBanner(webView.url) }, CardWatch.GRACE_MS + 200)
+        return true
     }
 
     private fun askAbandon() {
@@ -659,6 +663,8 @@ class DriveActivity : Activity() {
 
     /** Un passage de Repas rend la main à la coquille, qui livre le résultat ; un passage de débogage montre le résultat de l'agent. */
     private fun endOfPass(ended: ActivePass, resultText: String?) {
+        // Plus rien n'est attendu de l'agent : le bandeau de repli ne reste pas armé jusqu'au prochain plan (DRV-760)
+        cardWatch.passEnded()
         updateKeepScreenOn()
         if (ended.source == PassSource.DEBUG) {
             if (resultText != null) debugRun.onAgentMessage("result", resultText) else finish()

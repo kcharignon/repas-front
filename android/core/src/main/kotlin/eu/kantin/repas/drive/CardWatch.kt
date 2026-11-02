@@ -8,10 +8,17 @@ class CardWatch(private val clock: () -> Long = System::currentTimeMillis) {
     private var armedAt: Long? = null
     private var visible = false
 
-    /** Le plan est parti vers l'agent de cette page. */
+    /**
+     * Le plan est parti vers l'agent de cette page. Ce que l'agent a déjà dit de ses écrans sur cette page est gardé : il n'envoie pas `card: true` deux fois, un deuxième plan sur la même page
+     * (un nouveau passage) ne doit pas faire croire qu'aucun écran n'est là.
+     */
     fun planSent() {
         armedAt = clock()
-        visible = false
+    }
+
+    /** Le passage est fini (résultat rendu, ou abandonné) : plus rien n'est attendu de l'agent avant le prochain plan. */
+    fun passEnded() {
+        armedAt = null
     }
 
     /** Une page commence : l'agent de l'ancienne n'existe plus, rien n'est attendu de la nouvelle avant son plan. */

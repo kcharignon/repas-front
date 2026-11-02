@@ -251,10 +251,14 @@ enum class StoreBanner {
             }
         }
 
+        /** Au-delà, le titre de la page n'est plus lu. */
+        const val MAX_TITLE = 200
+
         /** Le titre dit « code de vérification » (sans accent ni casse) : aucune valeur de champ n'est lue. */
         fun asksCode(title: String?): Boolean {
             if (title == null) return false
-            val plain = java.text.Normalizer.normalize(title, java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").lowercase(java.util.Locale.ROOT)
+            // Le titre est une entrée de la page (jamais affiché) : borné AVANT toute normalisation
+            val plain = java.text.Normalizer.normalize(title.take(MAX_TITLE), java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").lowercase(java.util.Locale.ROOT)
             return plain.contains("code de verification")
         }
 

@@ -53,6 +53,34 @@ class CardWatchTest {
     }
 
     @Test
+    fun `un deuxieme plan sur la meme page ne fait pas croire qu'aucun ecran n'est la car l agent n'envoie pas card true deux fois`() {
+        watch.planSent()
+        watch.onAgent(true)
+        now += CardWatch.GRACE_MS * 2
+
+        watch.planSent()
+        now += CardWatch.GRACE_MS * 2
+
+        assertFalse(watch.missing())
+    }
+
+    @Test
+    fun `un passage fini desarme le repli, un nouveau passage dont le plan ne part pas ne montre pas le bandeau d'emblee`() {
+        watch.planSent()
+        now += CardWatch.GRACE_MS * 2
+        assertTrue(watch.missing())
+
+        watch.passEnded()
+        assertFalse(watch.missing())
+
+        // Le prochain plan le réarme, avec son propre délai
+        watch.planSent()
+        assertFalse(watch.missing())
+        now += CardWatch.GRACE_MS
+        assertTrue(watch.missing())
+    }
+
+    @Test
     fun `l'etat de l'ecran se lit dans un message log, entree non fiable`() {
         assertEquals(true, AgentDiagnostic.cardState("""{"v":1,"type":"log","card":true}"""))
         assertEquals(false, AgentDiagnostic.cardState("""{"v":1,"type":"log","card":false}"""))

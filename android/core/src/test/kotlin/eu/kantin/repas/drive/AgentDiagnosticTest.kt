@@ -2,6 +2,7 @@ package eu.kantin.repas.drive
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -47,6 +48,15 @@ class AgentDiagnosticTest {
         assertEquals(4, lines.size)
         assertEquals("Session : connecté (aucun signe)", lines[0])
         assertEquals(AgentDiagnostic.MAX_LINE, lines[2].length)
+    }
+
+    @Test
+    fun `les trois lignes de l'agent, dont la ligne Carte des formes de la carte (DRV-760), sont gardees entieres et ne sont pas un etat d'ecran`() {
+        val card = "Carte : dernière étape du flux ENTERING, écran guide, dite à l’écran non, boîte 8/852/323/50, toucher au centre sur autre chose, conteneur dernier du document oui, déplacements 1, élément actif button"
+        val text = """{"v":1,"type":"log","lines":["Session : indéterminé (aucun signe)","Fenêtre au premier plan : rien","$card"]}"""
+
+        assertEquals(listOf("Session : indéterminé (aucun signe)", "Fenêtre au premier plan : rien", card), AgentDiagnostic.agentLines(text))
+        assertNull(AgentDiagnostic.cardState(text))
     }
 
     @Test
