@@ -25,5 +25,5 @@ internal object NoSelfUpdate : SelfUpdate {
 }
 
 @Suppress("UNUSED_PARAMETER")
-internal fun createSelfUpdate(activity: Activity, post: (String) -> Unit): SelfUpdate = NoSelfUpdate
+internal fun createSelfUpdate(activity: Activity, cookies: SessionCookies, post: (String) -> Unit): SelfUpdate = NoSelfUpdate
 

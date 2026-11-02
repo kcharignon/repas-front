@@ -73,6 +73,12 @@ class MainActivity : Activity() {
      */
     private lateinit var selfUpdate: SelfUpdate
 
+    /**
+     * Quand les cookies de Repas sont écrits sur le disque (DRV-765). La session tient dans un cookie à rotation, que la WebView ne garde d'abord qu'en mémoire : si le processus
+     * s'arrête avant l'écriture (une mise à jour installée depuis l'application l'arrête), le lancement suivant relit l'ancien cookie, refusé par le serveur, et la personne se reconnecte.
+     */
+    private val cookies = SessionCookies(RepasCookieFlusher, MainThreadDelay)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Le débogage à distance de la WebView n'existe que dans la version de débogage.
@@ -97,7 +103,7 @@ class MainActivity : Activity() {
         registerBackAction()
 
         // Le démarrage de la coquille efface ce qu'une mise à jour précédente a laissé (variante hors Google Play).
-        selfUpdate = createSelfUpdate(this, ::post)
+        selfUpdate = createSelfUpdate(this, cookies, ::post)
         webView.loadUrl(navigation.entryUrl(intent?.dataString) ?: "$repasOrigin/")
     }
 
@@ -111,6 +117,8 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         webView.onResume()
+        // Au retour au premier plan (réglages d'Android, installateur refermé, autre application), le site peut renouveler sa session : l'écriture suit, retardée.
+        cookies.flushSoon()
         // Un résultat arrivé pendant que l'écran du drive était devant, ou un passage interrompu par la fermeture de l'application.
         flushOutbox()
         askResumeIfInterrupted()
@@ -127,12 +135,19 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         // Les cookies de la WebView sont écrits sur le disque ici, pour que la session survive à la fermeture de l'application.
-        CookieManager.getInstance().flush()
+        cookies.flushNow()
         webView.onPause()
         super.onPause()
     }
 
+    override fun onStop() {
+        // Encore une fois une fois l'écran entièrement caché (installateur d'Android, autre application) : une rotation de la session arrivée entre-temps est gardée.
+        cookies.flushNow()
+        super.onStop()
+    }
+
     override fun onDestroy() {
+        cookies.close()
         selfUpdate.close()
         resumeDialog?.dismiss()
         (webView.parent as? ViewGroup)?.removeView(webView)
@@ -218,6 +233,8 @@ class MainActivity : Activity() {
 
         override fun onPageFinished(view: WebView, url: String?) {
             if (!loadFailed) problems.hide()
+            // Le site renouvelle sa session en démarrant (cookie à rotation) : le nouveau cookie est écrit sur le disque peu après, un seul rappel en attente (DRV-765).
+            cookies.flushSoon()
         }
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
