@@ -420,7 +420,7 @@ for (const id of ['merge-yes', 'merge-no']) document.getElementById(id).addEvent
 <header>
 <button id="menu" type="button" aria-label="Menu" onclick="document.getElementById('menu-list').style.display = 'block'">Menu</button>
 <span>Faux Leclerc Ville-Test</span>
-<span id="cart">${items} · ${total}</span>
+<span id="cart">Panier : ${items} · ${total}</span>
 <input type="search" placeholder="Produit, marque, …" aria-label="Produit, marque, …">
 </header>
 <ul id="menu-list" style="display:none"><li><a href="/">Accueil</a></li>${menu}</ul>

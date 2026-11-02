@@ -315,13 +315,15 @@ if wait_until 70 agent_screen 'Ton panier se remplit'; then
 else
   ko "le passage de l'agent n'a pas démarré sans que l'utilisateur touche quoi que ce soit"
 fi
-# L'écran de progression ne dure que le temps de la phase A : une seule lecture de l'écran, jugée tout de suite (les contrôles plus lents viennent après)
+# L'écran de progression ne dure que le temps de la phase A : une seule lecture de l'écran, jugée tout de suite (les contrôles plus lents viennent après). Les contrôles « n'existe plus » et
+# « aucun compteur à zéro » ne sont probants que si cette lecture est bien celle de l'écran de progression : la PHRASE DE SYNTHÈSE, exigée juste après, en est le garde-fou (si la lecture tombait sur un autre écran, elle manquerait et ce
+# scénario serait rouge).
 progress=$(ui)
 on_progress() { grep -q "$1" <<< "$progress"; }
 no_progress() { ! on_progress "$1"; }
 check "NON-RÉGRESSION : l'écran « Prêt à remplir ton panier » et son bouton « Commencer » n'existent plus (une intention = un clic)" no_progress 'Prêt à remplir ton panier\|text="Commencer"'
 check "l'écran de progression porte la phrase de synthèse, la même que l'écran de l'envoi de Repas" on_progress '5 articles : 2 sont déjà choisis, 1 est à choisir sur Leclerc, 2 ne seront pas mis au panier.'
-check "récapitulatif : aucun compteur à zéro, ni « produits connus » ni « nouveaux produits »" no_progress 'produits connus\|nouveau produit\|text="0 [a-zé]'
+check "récapitulatif : aucun compteur à zéro, ni « produits connus » ni « nouveaux produits »" no_progress 'produits connus\|nouveau produit\|text="0 '
 check "le faux Leclerc a servi l'accueil de l'enseigne ($SITE_HOST/), la page de départ du plan" requested_on "$SITE_HOST" '/'
 check "NON-RÉGRESSION : jamais la racine de l'hôte du serveur du magasin ($FAKE_STORE_HOST/), page 404 du vrai site (recette réelle, application 0.1.3)" not_requested_on "$FAKE_STORE_HOST" '/'
 check "jamais l'adresse /magasin-000001-000001/ (page 404 du vrai site)" not_requested '/magasin-000001-000001/'
@@ -334,15 +336,17 @@ check "l'écran reste allumé pendant le passage" screen_held
 sleep 1
 screenshot e04-progression
 # Lisibilité : depuis DRV-754 Leclerc s'affiche par sa version MOBILE, la WebView garde l'identité d'un téléphone : la fenêtre du site fait la largeur de l'écran
-# (~411 px CSS) et l'interface de l'agent n'est pas agrandie (facteur 1, il n'y a plus de mode ordinateur à compenser) ; ses cibles tactiles mesurent toujours 44 dp au moins.
+# (~411 px CSS) et l'interface de l'agent n'est pas agrandie (facteur 1, mesuré 1 le 2026-11-02 ; seuil 1,05) ; ses cibles tactiles mesurent toujours 44 dp au moins.
+# L'AGRANDISSEMENT du mode ordinateur (facteur ≥ 1,5, constaté sur le site ordinateur) n'est plus vérifié de bout en bout dans l'émulateur : Leclerc est en version mobile, Auchan en `AS_IS`, et le
+# scénario 19 (enseigne d'essai) ne le mesure pas ; il reste couvert par les tests de l'agent (`drive-agent/test/scale.spec.ts`) et la recette sur téléphone.
 wait_until 60 ui_has 'Il te faut' || ko "la liste de choix ne s'est pas affichée"
 touch_target 'text="Annuler l’envoi"' "Annuler l’envoi"
 measures=$(display_measures)
 say "      affichage mesuré dans la WebView : ${measures:-aucune mesure}"
 factor=$(json_number "$measures" factor)
 inner=$(json_number "$measures" innerWidth)
-if [ -n "$factor" ] && [ -n "$inner" ] && at_least 500 "$inner" && at_least 1.3 "$factor"; then
-  ok "lisibilité : mode téléphone (DRV-754), la fenêtre du site de ${inner} px CSS tient sur un écran de $(json_number "$measures" screenWidth) dp et l'interface de l'agent n'est pas agrandie (facteur ${factor}, échelle de la page $(json_number "$measures" scale))"
+if [ -n "$factor" ] && [ -n "$inner" ] && at_least 500 "$inner" && at_least 1.05 "$factor"; then
+  ok "lisibilité : mode téléphone (DRV-754), la fenêtre du site de ${inner} px CSS tient sur un écran de $(json_number "$measures" screenWidth) dp et l'interface de l'agent n'est pas agrandie (facteur ${factor}, 1,05 au plus ; échelle de la page $(json_number "$measures" scale))"
 else
   ko "lisibilité : la fenêtre du site (${inner:-inconnue} px CSS) n'est pas celle d'un téléphone, ou l'interface de l'agent est agrandie (facteur ${factor:-inconnu}) : le mode ordinateur est revenu pour Leclerc ?"
 fi
@@ -536,10 +540,20 @@ else
 fi
 check "la carte propose « Choisir un autre magasin » (avec « Utiliser ce magasin » et « Arrêter pour l’instant »)" ui_has 'Choisir un autre magasin'
 check "jamais « Ce n’est pas le bon magasin » : ce n'est plus une impasse" ui_lacks 'Ce n’est pas le bon magasin'
-# RÉGRESSION DE L'AGENT (DRV-757, constatée par ce scénario le 2026-11-02, agent 0.62.x) : tant que la carte du guide est à l'écran, l'agent retire et remet l'attribut `hidden` de la carte toutes les 500 ms
-# (`drive-agent/src/ui/fit.ts`, `check()` : `card.hidden = true` pour lire la page sans la carte, puis `apply(spot)`). L'arbre d'accessibilité ne se repose jamais : `uiautomator dump` échoue (« could not get
-# idle state ») et un lecteur d'écran voit la carte disparaître et revenir deux fois par seconde. Ce contrôle reste rouge tant que l'agent n'est pas corrigé ; le reste du scénario se lit JavaScript coupé (`ui`, lib.sh).
-check "RÉGRESSION DE L'AGENT : l'arbre d'accessibilité de la carte du guide se repose (la carte ne disparaît pas et ne revient pas deux fois par seconde)" a11y_idle
+# DÉFAUT DE L'AGENT (DRV-768, constaté par ce scénario le 2026-11-02, agent 0.62.x, NON corrigé ici) : tant que la carte du guide est à l'écran, `drive-agent/src/ui/fit.ts` (`check()` toutes
+# les 500 ms : `card.hidden = true` pour lire la page sans la carte, puis `apply(spot)`) fait changer l'attribut `hidden` d'un élément de l'interface de l'agent environ 8 fois en 4 s (mesuré par le
+# protocole DOM du débogage à distance, `hidden-changes.mjs`). Établi : cette bascule, et `uiautomator dump` qui ne trouve plus l'arbre au repos tant que le JavaScript de la page tourne (« could not get
+# idle state » ; avec le JavaScript coupé il réussit). PROBABLE, non vérifié avec TalkBack : un lecteur d'écran voit la carte disparaître et revenir. Ce contrôle mesure le symptôme direct et reste ROUGE tant que l'agent
+# n'est pas corrigé ; le reste du scénario se lit JavaScript coupé (`ui`, lib.sh).
+hidden_stable() {
+  local out max
+  out=$(hidden_changes 4) || { say "      mesure impossible (hidden-changes.mjs : voir sa sortie d'erreur, débogage à distance ?)"; return 1; }
+  say "      mesuré en 4 s : $out"
+  max=${out#max=}
+  max=${max%% *}
+  [ "$max" -le 1 ] # une carte posée une fois : au plus un changement, à l'affichage
+}
+check "DÉFAUT DE L'AGENT : aucun élément de l'interface de l'agent ne voit son attribut hidden changer plus d'une fois en 4 s (la carte du guide n'est pas retirée puis remise toutes les 500 ms)" hidden_stable
 check "la page de l'autre magasin a été servie par m-courses" requested_on "$MOBILE_HOST" "$OTHER_PAGE_PATH"
 check "rien n'a été cherché ni mis au panier" nothing_sent
 check "tant que la personne ne touche rien, Repas ne reçoit rien" not_reported '"runId": "07e50000-0000-4000-8000-000000000008", "resultType"'
@@ -655,6 +669,8 @@ if finish_known "$RUN_CHECK"; then ok "le défi passé (page de nouveau servie),
 back_to_repas || ko "l'écran Repas n'est pas revenu"
 
 # --- 12. « Commencer mes courses » mène à une page 404 ------------------------------------------------------------------------------------------
+# NON MESURÉ SUR LA VERSION MOBILE : les pages 404 de la racine de m-courses et de /magasin-N-N/ sans ville viennent de la recette réelle du 2026-10-18, relevée sur l'hôte ORDINATEUR ; m-courses est
+# une application Angular qui peut répondre 200 partout. Ce scénario prouve ce que l'application et l'agent font devant une page 404, pas ce que répond le vrai m-courses.
 # Sur la version mobile, « Commencer mes courses » est un BOUTON sans adresse (un script ouvre le magasin au clic) : l'agent ne peut pas juger où il mène avant de le toucher. Il le touche UNE
 # fois ; si la page où il atterrit est une page 404 de m-courses (racine, ou /magasin-N-N/ sans ville : les pages 404 de la recette réelle), le bandeau de l'application le dit et propose
 # « Ouvrir l'accueil du drive ». À l'accueil rechargé l'agent ne recommence pas (pas de boucle) : il dit à la personne de toucher le bouton elle-même.
@@ -837,6 +853,7 @@ adb shell input keyevent KEYCODE_BACK
 if wait_until 20 ui_has 'Faux Repas de test'; then ok "retour : l'écran Repas revient"; else ko "l'écran Repas n'est pas revenu"; fi
 
 # --- 16. L'accueil du magasin refusé par le site : l'accueil du drive ----------------------------------------------------------------------------
+# NON MESURÉ SUR LA VERSION MOBILE : `storeHomeStatus` sur la page `m-courses` du magasin est un défaut inventé pour le faux site (le 404 de la recette réelle était celui de l'hôte ordinateur) ; le scénario prouve le repli de l'application.
 say
 say "16. L'accueil du magasin est refusé par le site (404) : « Finaliser sur Leclerc » se replie sur l'accueil du drive (DRV-631)"
 fake_reset
@@ -859,6 +876,7 @@ adb shell input keyevent KEYCODE_BACK
 wait_until 20 ui_has 'Faux Repas de test' || ko "l'écran Repas n'est pas revenu"
 
 # --- 16b. Une page « introuvable » déguisée en 200 : l'accueil du drive ------------------------------------------------------------------------------
+# NON MESURÉ SUR LA VERSION MOBILE : `storeHomeTitle` (une page « introuvable » servie en 200) est un défaut inventé pour le faux site ; le scénario prouve le repli de l'application, pas une réponse du vrai `m-courses`.
 say
 say "16b. L'accueil du magasin répond 200 mais son titre dit « introuvable » : « Finaliser sur Leclerc » se replie sur l'accueil du drive (DRV-631)"
 fake_reset
@@ -901,6 +919,7 @@ adb shell input keyevent KEYCODE_BACK
 wait_until 20 ui_has 'Faux Repas de test' || ko "l'écran Repas n'est pas revenu"
 
 # --- 18. Le site ignore le clic d'un programme ---------------------------------------------------------------------------------------------------------
+# NON MESURÉ SUR LA VERSION MOBILE : le clic de programme ignoré (`button-human`, `event.isTrusted`) a été mesuré sur le site ORDINATEUR (2026-10-19), pas sur la version mobile ; le scénario prouve ce que l'agent fait devant un bouton qui ignore son clic.
 say
 say "18. Le site ignore le clic d'un programme (seul un vrai toucher ouvre le magasin) : l'agent le dit, une seule tentative, puis l'utilisateur touche le bouton (DRV-629)"
 RUN_HUMAN=a11c0000-0000-4000-8000-000000000018
