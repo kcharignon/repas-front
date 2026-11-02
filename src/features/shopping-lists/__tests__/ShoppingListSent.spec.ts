@@ -791,7 +791,9 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
         if (sent) events.push('relecture')
 
         return json(
-          sent ? none : { shoppingListId: 'l1', quantityByIngredientSlug: {}, plannedRecipeIds: [] },
+          sent
+            ? none
+            : { shoppingListId: 'l1', quantityByIngredientSlug: {}, plannedRecipeIds: [] },
         )
       },
       'GET /api/v1/shopping-lists/open': () => {
@@ -876,7 +878,16 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
           json({
             member: deleted
               ? []
-              : [{ id: 'l1', name: 'l1', typeId: 't1', rowCount: 2, uncheckedCount: 1, version: 7 }],
+              : [
+                  {
+                    id: 'l1',
+                    name: 'l1',
+                    typeId: 't1',
+                    rowCount: 2,
+                    uncheckedCount: 1,
+                    version: 7,
+                  },
+                ],
             totalItems: deleted ? 0 : 1,
           }),
         'GET /api/v1/shopping-lists': () => json({ member: [], totalItems: 0 }),
@@ -924,7 +935,7 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     })
   })
 
-  const tooOldSentence ='Mets à jour l’application pour envoyer ta liste.'
+  const tooOldSentence = 'Mets à jour l’application pour envoyer ta liste.'
 
   /** L'envoi demandé avec une application trop ancienne : la phrase et son bouton, ni verrou ni confirmation (`beforeSentence` : ce qui se passe avant la réponse). */
   async function sendWithOldApp(app: string, beforeSentence?: () => Promise<void>) {
