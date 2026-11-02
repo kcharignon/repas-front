@@ -18,6 +18,7 @@ export {
   UNIT_SLUG,
 } from './pack-size'
 export { validateCommand } from './command'
+export { validateLog } from './log'
 export { validatePlan } from './plan'
 export { validateResult } from './result'
 export { validateSelftestResult } from './selftest'

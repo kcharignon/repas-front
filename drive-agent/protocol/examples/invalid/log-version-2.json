@@ -1,0 +1,5 @@
+{
+  "path": "v",
+  "why": "Le protocole est en version 1.",
+  "message": { "v": 2, "type": "log", "card": true }
+}

@@ -11,6 +11,7 @@ import {
   validateCommand,
   validatePlan,
   validateResult,
+  validateLog,
   validateSelftestResult,
 } from '../protocol'
 import { invalidExamples, validExamples } from './protocol-examples'
@@ -198,6 +199,40 @@ describe('validateCommand', () => {
 
     expect(pathOf(() => validatePlan(command))).toBe('type')
     expect(pathOf(() => validateCommand(planMessage))).not.toBe('(accepté)')
+  })
+})
+
+describe('validateLog (DRV-759, DRV-760)', () => {
+  it.each(validExamples('log'))('accepte l’exemple valide « $name »', ({ message }) => {
+    expect(validateLog(message)).toBe(message)
+  })
+
+  it.each(invalidExamples('log'))(
+    'refuse « $name » au chemin $path : $why',
+    ({ message, path }) => {
+      expect(pathOf(() => validateLog(message))).toBe(path)
+    },
+  )
+
+  it('le site refuse un message log comme un résultat, comme avant (validateResult), et ne prend pas un résultat pour un log', () => {
+    for (const { message } of validExamples('log')) {
+      // Refusé (clé inconnue ou type) : le site ne confond jamais un message d'état avec un résultat
+      expect(pathOf(() => validateResult(message))).not.toBe('(accepté)')
+      expect(pathOf(() => validateSelftestResult(message))).not.toBe('(accepté)')
+    }
+    const result = validExamples('result')[0]?.message
+    expect(pathOf(() => validateLog(result))).not.toBe('(accepté)')
+  })
+
+  it('borne les lignes à 4 de 400 caractères', () => {
+    const lines = (count: number, length = 400) => ({
+      v: 1,
+      type: 'log',
+      lines: Array.from({ length: count }, () => 'a'.repeat(length)),
+    })
+    expect(pathOf(() => validateLog(lines(LIMITS.logLines, LIMITS.logLine)))).toBe('(accepté)')
+    expect(pathOf(() => validateLog(lines(LIMITS.logLines + 1)))).toBe('lines')
+    expect(pathOf(() => validateLog(lines(1, LIMITS.logLine + 1)))).toBe('lines[0]')
   })
 })
 

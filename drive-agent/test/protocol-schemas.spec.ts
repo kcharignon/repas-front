@@ -16,6 +16,7 @@ import {
   PACKS_STATUSES,
   PLACEMENTS,
   validateCommand,
+  validateLog,
   validatePlan,
   validateResult,
   validateSelftestResult,
@@ -39,6 +40,7 @@ describe.each([
   ['result', validateResult],
   ['command', validateCommand],
   ['selftest-result', validateSelftestResult],
+  ['log', validateLog],
 ] as const)('schéma %s.schema.json', (kind, validator) => {
   const validate = ajv.compile(schema(kind))
 

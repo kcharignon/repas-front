@@ -1,0 +1,5 @@
+{
+  "path": "card",
+  "why": "card est un booléen, pas un texte.",
+  "message": { "v": 1, "type": "log", "card": "oui" }
+}

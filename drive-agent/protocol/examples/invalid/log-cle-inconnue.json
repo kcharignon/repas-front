@@ -1,0 +1,5 @@
+{
+  "path": "shown",
+  "why": "Aucune clé hors v, type, lines et card.",
+  "message": { "v": 1, "type": "log", "card": true, "shown": true }
+}
