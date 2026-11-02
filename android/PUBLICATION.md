@@ -139,6 +139,7 @@ La troisième commande demande à Google de lire le fichier comme le fera Androi
 
 - Première version : `android-v0.1.0`. Ensuite : `android-v0.1.1` (petit correctif), `android-v0.2.0` (nouveauté ou changement de l'agent), `android-v1.0.0` quand la version est jugée stable.
 - **Ne réutilise jamais un numéro déjà publié.**
+- **Avant une étiquette qui change l’agent ou le parcours du drive, on joue `make android-e2e` EN LOCAL** (l’émulateur demande KVM, la CI ne peut pas le faire) et on note le résultat dans la PR ; une étiquette n’est jamais créée par un sous-agent.
 - **Ordre quand le protocole change : le site d'abord, l'application ensuite.** Quand un message entre l'application et Repas gagne un champ (par exemple le champ `stats` du résultat, ajouté avec l'agent 0.15.0), un récepteur qui ne connaît pas ce champ **rejette tout le message**. L'application qui embarque le nouvel agent enverrait alors un résultat que l'ancien site refuse. Donc : **déploie d'abord le site** (release `vX.Y.Z` du front, approbation du déploiement, `https://kantin.eu/` qui répond), **puis seulement** pousse l'étiquette `android-vX.Y.Z` de l'application qui embarque cet agent. L'ordre inverse est sans danger : un site plus récent lit les messages d'une application plus ancienne, puisqu'un champ ajouté est facultatif. En cas de doute (l'agent a-t-il changé dans cette version ?), demande à l'assistant : la version de l'agent est dans les notes de la release et dans `drive-agent/src/version.ts`.
 
 ```bash
