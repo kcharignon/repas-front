@@ -56,6 +56,8 @@
 #      navigation a lieu sans pont ni agent ; le « Diagnostic de l'agent » lit le magasin (hôte www, UUID) sans rien écrire, et s'arrête sur STORE_NOT_CHOSEN sans magasin
 #      choisi ; la première configuration depuis Repas (`drive.setup` sans magasin choisi, DRV-740) affiche un bandeau sans masquer la page, ne fait aucune requête, puis propose le magasin
 #      une fois choisi ; aucun nom d'Auchan n'est transmis à Internet. `build.sh` garde que la publication annonce Auchan (et n'embarque aucune enseigne éteinte).
+#  22. la session de Repas à rotation (DRV-765) : le faux Repas émet un nouveau cookie persistant à chaque chargement et refuse un cookie qui n'est pas le dernier émis ;
+#      l'application arrêtée (`am force-stop`, comme par l'installation d'une mise à jour) quelques secondes après la rotation relit, au lancement suivant, le DERNIER cookie.
 # Les captures d'écran et le rapport texte sont dans android/dist/e2e/.
 # Code de sortie : 0 si tous les contrôles passent, 1 sinon, 3 si KVM manque.
 set -u

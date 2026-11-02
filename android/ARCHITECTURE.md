@@ -45,6 +45,7 @@ Le cœur : `android/core/src/main/kotlin/eu/kantin/repas/drive/` (le paquet n'a 
 | `StorePathMemory.kt` | le chemin du magasin avec sa ville, son port de stockage (`StorePathStore`) et sa mémoire par enseigne (`StorePathMemories`) |
 | `OpeningWatch.kt` | la surveillance de la page où l'envoi attend la page du magasin (`PageTrouble`) |
 | `SiteModeMigration.kt` | la migration unique d'une enseigne vers sa version mobile (DRV-757) : un drapeau, les données du site de l'enseigne d'avant effacées une seule fois (l'effacement lui-même est dans l'application) |
+| `SessionCookies.kt` | quand les cookies de Repas sont écrits sur le disque (DRV-765) : `SessionCookies` (tout de suite, retardé et réarmé, avant l'installateur) et le port `CookieFlusher` |
 | `NativeBridge.kt` | les règles du pont `repasNative` : origine, 64 Ko, forme du JSON, réponses |
 | `BridgeMessages.kt` | les règles du canal `repasHost` entre l'application et l'agent : origines du pont d'une enseigne, règles d'origine de la WebView (`originRules`) |
 | `DrivePlan.kt` | le plan reçu de Repas (forme, enseigne du registre, hôte de cette enseigne, bornes), la lecture du magasin et le résultat `aborted` |
@@ -75,7 +76,7 @@ L'application : `android/app/src/main/kotlin/eu/kantin/repas/drive/` (commun aux
 | `DesktopMode.kt` | le mode ordinateur appliqué à la WebView d'une enseigne dont le site le demande (`SiteMode.DESKTOP`, aucune enseigne servie depuis DRV-754) ; le zoom au pincement pour toutes |
 | `DriveProfile.kt` | le profil de WebView de chaque enseigne (cookies et stockage séparés de Repas et des autres enseignes) |
 | `RepasApp.kt` | l'application, son registre des enseignes servies (`sites`) ; les stockages Android (`PrefsPassStore`, `PrefsKeyValueStore`) |
-| `AndroidServices.kt` | les services de plateforme d'Android derrière les interfaces du cœur (`AndroidLinkOpener`) |
+| `AndroidServices.kt` | les services de plateforme d'Android derrière les interfaces du cœur (`AndroidLinkOpener`, `RepasCookieFlusher`, `MainThreadDelay`) |
 | `InstalledVersion.kt` | la version installée, lue dans le gestionnaire de paquets |
 | `Dialogs.kt`, `Views.kt`, `TextPanel.kt` | fenêtres, vues, écran de texte |
 | `SelfUpdate.kt` | ce que la coquille attend de la mise à jour dans l'application : une interface, réalisée par chaque variante de distribution (voir plus bas) |
@@ -84,6 +85,10 @@ L'application : `android/app/src/main/kotlin/eu/kantin/repas/drive/` (commun aux
 | `SelfUpdatePlay.kt` | (variante `play`) le remplaçant qui répond « non » à tout : `NoSelfUpdate` |
 
 Les tests suivent : `core/src/test` pour tout ce qui se joue sur la JVM seule ; `app/src/test` pour ce qui touche à Android ou à un actif de l'application (`LoadProblemTest` rapproche le classement des constantes de la WebView, `BuildOriginTest` lit `BuildConfig`, `InjectionAssetTest` lit `injection.js`, `DebugRunTest` joue le vrai `debug-plan.json`).
+
+## Les cookies de la session de Repas (DRV-765)
+
+La session de Repas tient dans un cookie de rafraîchissement **à rotation** (chaque usage en invalide l'ancien et en pose un nouveau), que la WebView ne garde d'abord qu'en mémoire : si le processus s'arrête avant que le nouveau soit écrit sur le disque (une mise à jour installée depuis l'application l'arrête quelques secondes après), le lancement suivant relit l'ancien, que le serveur refuse, et la personne doit retaper son mot de passe. La coquille écrit donc les cookies (`SessionCookies`) à chaque passage en arrière-plan (`onPause`, `onStop`), 2 secondes après la fin de chaque page (pour la rotation que le site fait en démarrant) et au retour au premier plan, et **toujours avant d'ouvrir l'installateur**, jamais après (`SessionCookiesTest`, `SessionCookiesWiringTest`, scénario 22 de `make android-e2e`). Limite connue : une rotation qui survient pendant que l'installateur d'Android est affiché ne peut plus être sauvée. Les enseignes du drive (profils isolés) écrivent leurs cookies à `onPause` et `onStop` de `DriveActivity`.
 
 ## Les services de plateforme
 
