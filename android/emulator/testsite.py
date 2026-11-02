@@ -4,18 +4,20 @@ Ils ne contiennent AUCUNE donnée réelle : des pages de test qui relèvent ce q
 
 Selon le nom demandé (en-tête Host) :
   repas.test (le faux front Repas, DRV-317)   toute adresse hors /__ : la page repaspage.html (comme un SPA)
-  courses-test.leclercdrive.fr (le faux       TOUT (hors /__) est relayé en HTTP vers le faux site Leclerc complet (Node, drive-agent/fake-leclerc, DRV-309),
-  magasin, DRV-319 partie 2)                  qui tourne dans ce conteneur sur 127.0.0.1:8099 : recherche, panier, défauts simulés, cadence jugée
-  www.leclercdrive.fr (l'accueil de           deux modes, choisis par POST /__www (voir plus bas) :
-  l'enseigne, NavigationPolicy.START_URL)       « test » (par défaut, le test de fumée) : GET / (l'accueil) et GET /magasin-… (une page de magasin,
+  m-courses.leclercdrive.fr, fd8-courses.   TOUT (hors /__) est relayé en HTTP vers le faux site Leclerc complet (Node, drive-agent/fake-leclerc, DRV-309), qui tourne
+  leclercdrive.fr, fd8-espace-client.         dans ce conteneur sur 127.0.0.1:8099 et joue la VERSION MOBILE du vrai site (DRV-754) : les pages du magasin (m-courses), son
+  leclercdrive.fr, photos-test.               serveur (recherche et panier en AJAX), le compte, les photos ; le relais dit X-Forwarded-Proto: https. (courses-test.leclercdrive.fr,
+                                              l'ancien faux magasin « ordinateur », n'est relayé que parce que testpage.html y a un lien : l'application ne le reconnaît plus.)
+  www.leclercdrive.fr (l'accueil de          deux modes, choisis par POST /__www (voir plus bas) :
+  l'enseigne, NavigationPolicy.START_URL)      « test » (par défaut, le test de fumée) : GET / (l'accueil) et GET /magasin-… (une page de magasin,
                                                 DRV-320) : la page de test testpage.html ; le reste, 404 (par exemple les recherches que tenterait
                                                 l'agent : elles n'aboutissent jamais) ;
                                               « fake » (les scénarios complets, e2e.sh) : relayé comme le faux magasin vers le faux Leclerc complet,
-                                                qui y sert l'accueil du magasin et son bouton « Commencer mes courses » (qui mène à une page de magasin
-                                                avec sa ville sur courses-test.leclercdrive.fr) ; la racine de courses-test, elle, y est une page 404
-                                                (recette réelle du 2026-10-18 : la racine de l'hôte d'un magasin est une page 404 du vrai site)
+                                                qui y sert l'accueil mobile et son bouton « Commencer mes courses » (qui mène à la page du magasin sur
+                                                m-courses.leclercdrive.fr) ; la racine de m-courses et du serveur du magasin y sont des pages 404
+                                                (recette réelle du 2026-10-18, relevée sur l'hôte ordinateur : non mesurée sur la version mobile)
                                               dans les deux modes, GET /connexion.aspx : la page de connexion hors d'un magasin, qui dit comme le vrai
-                                                site « Avant de vous authentifier, veuillez sélectionner un Drive. » (scénario 1b de e2e.sh)
+                                                site « Avant de vous authentifier, veuillez sélectionner un Drive. » (smoke ; le scénario 1b d'e2e.sh joue la connexion du faux site mobile)
   autre *.leclercdrive.fr (le faux drive)     comme www en mode « test » : GET / et GET /magasin-… : la page de test testpage.html ; le reste, 404
   *.exemple-b.test (une enseigne FICTIVE      comme www en mode « test » : GET / et GET /point-… : la page de test testpage.html ; le reste, 404 ; sert à prouver
   d'essai, DRV-707)                           l'isolement entre enseignes (profils, pont, plan refusé), jamais un vrai drive
@@ -56,6 +58,7 @@ REPAS_HOST = "repas.test"
 # qu'il vérifie lui-même : il refuse tout autre nom).
 FAKE_LECLERC = ("127.0.0.1", int(os.environ.get("FAKE_LECLERC_PORT", "8099")))
 # Le site mobile de l'enseigne (DRV-741) en fait partie : le faux Leclerc y redirige une adresse de magasin vers l'hôte du magasin, comme le vrai site en mode ordinateur.
+# (courses-test : l'ancien faux magasin « ordinateur », gardé seulement pour le lien de testpage.html, voir l'en-tête)
 FAKE_LECLERC_HOSTS = {"courses-test.leclercdrive.fr", "photos-test.leclercdrive.fr", "m-courses.leclercdrive.fr", "fd8-courses.leclercdrive.fr", "fd8-espace-client.leclercdrive.fr"}
 # L'accueil de l'enseigne (NavigationPolicy.START_URL de l'application) : relayé au faux Leclerc seulement en mode « fake » (voir l'en-tête).
 HOME_HOST = "www.leclercdrive.fr"
