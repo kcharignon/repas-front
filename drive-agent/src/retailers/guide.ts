@@ -116,13 +116,18 @@ export function foldLabel(text: string): string {
 const MAX_LABEL = 40
 
 /**
- * Le NOM ACCESSIBLE d'un contrôle (DRV-761) : son `aria-label`, sinon son texte, nettoyé ; `null` s'il n'en a pas ou si c'est une phrase. C'est le libellé que la carte cite : celui
- * que la personne lit ou qu'un lecteur d'écran dit, jamais un mot écrit en dur qui peut différer de la page.
+ * Le NOM ACCESSIBLE d'un contrôle (DRV-761, DRV-764), dans l'ordre des noms accessibles : le texte des éléments que cite son `aria-labelledby`, puis son `aria-label`, puis son
+ * texte visible, nettoyés. Chaque candidat doit être un libellé (40 caractères au plus) : un candidat vide ou trop long (une phrase) laisse la place au suivant ; `null` s'il n'en
+ * reste aucun. C'est le libellé que la carte cite : celui que la personne lit ou qu'un lecteur d'écran dit, jamais un mot écrit en dur qui peut différer de la page. Lecture
+ * seule, `textContent` uniquement ; un identifiant introuvable est ignoré.
  */
 export function accessibleName(element: Element): string | null {
-  for (const raw of [element.getAttribute('aria-label'), element.textContent]) {
+  const ids = (element.getAttribute('aria-labelledby') ?? '').split(/\s+/).filter((id) => id !== '')
+  const root = element.getRootNode() as { getElementById?: Document['getElementById'] }
+  const referenced = ids.map((id) => root.getElementById?.(id)?.textContent ?? '').join(' ')
+  for (const raw of [referenced, element.getAttribute('aria-label'), element.textContent]) {
     const name = (raw ?? '').replace(/\s+/g, ' ').trim()
-    if (name !== '') return name.length <= MAX_LABEL ? name : null
+    if (name !== '' && name.length <= MAX_LABEL) return name
   }
   return null
 }
