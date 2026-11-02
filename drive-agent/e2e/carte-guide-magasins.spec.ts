@@ -17,7 +17,16 @@ const FARINE = known('farine', 'Farine', [product(1000001, 2)])
  * `list: 'ul'` : les cartes sont les `li` d'une liste dont le CONTENEUR a le curseur main (le curseur est hérité par les cartes). `fillers` : des éléments avant le panneau, qui le repoussent
  * loin dans le document (un site chargé).
  */
-const shopsPanel = (cards: number, list: 'div' | 'ul' = 'div', fillers = 0): string => `(() => {
+const shopsPanel = (cards: number, list: 'div' | 'ul' | 'lines' = 'div', fillers = 0): string => {
+  // Une carte : un bloc (ou un `li`), « @ » est son rang. `lines` : deux blocs larges enfants (le nom, puis l'adresse), le curseur est hérité par les deux.
+  const inner =
+    list === 'lines'
+      ? '<div style="height:44px">Magasin @</div><div style="height:44px">Adresse @</div>'
+      : '<span>Magasin @</span>'
+  const tag = list === 'ul' ? 'li' : 'div'
+  const style = `${list === 'ul' ? '' : 'cursor:pointer;'}margin:8px 16px;${list === 'lines' ? '' : 'height:90px;'}border:1px solid #888`
+  const card = `<${tag} id="shop-@" style="${style}">${inner}</${tag}>`
+  return `(() => {
   for (let n = 0; n < ${fillers}; n += 1) document.body.appendChild(document.createElement('div'))
   const panel = document.createElement('div')
   panel.id = 'shops-panel'
@@ -25,14 +34,16 @@ const shopsPanel = (cards: number, list: 'div' | 'ul' = 'div', fillers = 0): str
   let html = '<h2 style="margin:0;padding:8px 16px">Choisissez votre service autour du 69720</h2>'
     + '<div style="padding:8px 16px"><button type="button" style="width:150px;height:40px">Retrait en magasin</button> <button type="button" style="width:150px;height:40px">Livraison</button></div>'
   html += '${list === 'ul' ? '<ul style="cursor:pointer;list-style:none;margin:0;padding:0">' : ''}'
+
   for (let n = 1; n <= ${cards}; n += 1) {
-    html += '${list === 'ul' ? '<li' : '<div'} id="shop-' + n + '" style="${list === 'ul' ? '' : 'cursor:pointer;'}margin:8px 16px;height:90px;border:1px solid #888"><span>Magasin ' + n + '</span>${list === 'ul' ? '</li>' : '</div>'}'
+    html += ${JSON.stringify(card)}.replace(/@/g, n)
   }
   html += '${list === 'ul' ? '</ul>' : ''}'
   html += '<button type="button" style="position:absolute;left:100px;bottom:20px;width:200px;height:40px">Afficher la carte</button>'
   panel.innerHTML = html
   document.body.appendChild(panel)
 })()`
+}
 
 test.use({ viewport: { width: 411, height: 914 } })
 
@@ -45,6 +56,10 @@ const CASES = [
   [
     'les cartes sont les li d’une liste au curseur HÉRITÉ (conteneur bas, plusieurs cartes pour enfants)',
     shopsPanel(3, 'ul'),
+  ],
+  [
+    'chaque carte est faite de deux lignes (deux blocs larges enfants, le curseur est hérité)',
+    shopsPanel(3, 'lines'),
   ],
   ['le panneau est loin dans le document (2 500 éléments avant lui)', shopsPanel(5, 'div', 2500)],
 ] as const

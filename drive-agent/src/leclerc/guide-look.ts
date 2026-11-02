@@ -71,8 +71,10 @@ const SHOW_ELEMENT = 1
 /**
  * Les cartes de magasin que la page rend cliquables sans en faire des liens (un bloc à curseur « main », DRV-760 : la recette réelle a désigné une puce de filtre, au-dessus des
  * cartes, et la barre s'est posée sur la première carte) : les blocs larges, sous le titre, au curseur main alors que leur parent ne l'a pas (le bloc de la carte, pas ce qu'il contient).
- * Le curseur est HÉRITÉ : un `ul` ou un `main` à curseur main passerait pour l'unique carte et le cadre entourerait toute la liste. Un bloc plus haut que 40 % de la fenêtre, ou qui a au
- * moins deux blocs larges pour enfants, est un conteneur : il n'est pas gardé et ses enfants à curseur main le deviennent. Le parcours part du TITRE du panneau (les cartes le suivent)
+ * Le curseur est HÉRITÉ : un `ul` ou un `main` à curseur main passerait pour l'unique carte et le cadre entourerait toute la liste. Est un conteneur (pas gardé : ses enfants à curseur main
+ * le deviennent) un bloc plus haut que 40 % de la fenêtre, ou qui a au moins deux blocs larges pour enfants ET est une liste (`ul`, `ol`, `main`, rôle de liste) ou n'a que des éléments de liste
+ * pour enfants (`li`, `article`, rôle d'élément) : une carte faite de plusieurs lignes (un `div` pour le nom, un autre pour l'adresse) reste UNE carte. Limite connue : une liste courte de `div`
+ * (moins de 40 % de la fenêtre) à curseur hérité, sans balise de liste, ne se distingue pas d'une carte de lignes ; elle reste prise pour une carte. Le parcours part du TITRE du panneau (les cartes le suivent)
  * et non du début du document : une liste en fin de page ne tombe pas hors des premiers éléments lus.
  */
 function pointerBlocks(root: Document, title: HTMLElement, below: number): HTMLElement[] {
@@ -100,7 +102,7 @@ function pointerBlocks(root: Document, title: HTMLElement, below: number): HTMLE
     )
       continue
     if (!shown(one)) continue
-    if (rect.height > tall || wideChildren(one, wide) >= 2) {
+    if (rect.height > tall || isList(one, wide)) {
       containers.add(one)
       continue
     }
@@ -109,11 +111,18 @@ function pointerBlocks(root: Document, title: HTMLElement, below: number): HTMLE
   return found
 }
 
-/** Combien d'enfants directs de `block` sont des blocs larges (une liste de cartes, pas une carte). */
-function wideChildren(block: HTMLElement, wide: number): number {
-  return [...block.children].filter(
+/** Une balise de liste, et les éléments qu'une liste porte. */
+const LIST = 'ul, ol, main, [role="list"], [role="listbox"]'
+const ITEMS = 'li, article, [role="listitem"], [role="option"]'
+
+/** `block` est une liste de cartes (pas une carte de plusieurs lignes) : au moins deux enfants directs larges, et une balise de liste ou des éléments de liste seulement. */
+function isList(block: HTMLElement, wide: number): boolean {
+  const children = [...block.children].filter(
     (child) => child.matches(BLOCKS) && child.getBoundingClientRect().width >= wide,
-  ).length
+  )
+  return (
+    children.length >= 2 && (block.matches(LIST) || children.every((child) => child.matches(ITEMS)))
+  )
 }
 
 /** Les contrôles sous le titre du panneau des magasins, sans les puces : le premier est celui à toucher. Des cartes larges (liens ou blocs cliquables) passent avant tout autre contrôle. */

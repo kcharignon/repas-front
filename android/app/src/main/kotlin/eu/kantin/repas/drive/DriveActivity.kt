@@ -665,6 +665,8 @@ class DriveActivity : Activity() {
     private fun endOfPass(ended: ActivePass, resultText: String?) {
         // Plus rien n'est attendu de l'agent : le bandeau de repli ne reste pas armé jusqu'au prochain plan (DRV-760)
         cardWatch.passEnded()
+        // Le bandeau de repli déjà affiché s'en va aussitôt (la variante de débogage reste à l'écran après le passage)
+        updateStoreBanner(webView.url)
         updateKeepScreenOn()
         if (ended.source == PassSource.DEBUG) {
             if (resultText != null) debugRun.onAgentMessage("result", resultText) else finish()
