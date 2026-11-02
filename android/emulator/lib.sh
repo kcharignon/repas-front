@@ -58,7 +58,17 @@ init_output() {
   START=$SECONDS
 }
 
-say() { echo "$*" | tee -a "$REPORT"; }
+# La durée de chaque scénario (DRV-766, pour DRV-767) : à chaque titre « N. … », la ligne « durée » du scénario qui vient de finir.
+SCENARIO_NAME=""
+SCENARIO_START=$SECONDS
+say() {
+  if [[ "$*" =~ ^[0-9]+[bc]*\.\  ]]; then
+    [ -n "$SCENARIO_NAME" ] && echo "      durée : $((SECONDS - SCENARIO_START)) s ($SCENARIO_NAME)" | tee -a "$REPORT"
+    SCENARIO_NAME=${*%%.*}
+    SCENARIO_START=$SECONDS
+  fi
+  echo "$*" | tee -a "$REPORT"
+}
 ok() { say "  OK  $*"; }
 ko() { say "  KO  $*"; FAILURES=$((FAILURES + 1)); }
 check() { # check <description> <commande…> : OK si la commande réussit
