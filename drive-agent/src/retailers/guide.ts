@@ -119,14 +119,20 @@ const MAX_LABEL = 40
  * Le NOM ACCESSIBLE d'un contrôle (DRV-761, DRV-764), dans l'ordre des noms accessibles : le texte des éléments que cite son `aria-labelledby`, puis son `aria-label`, puis son
  * texte visible, nettoyés. Chaque candidat doit être un libellé (40 caractères au plus) : un candidat vide ou trop long (une phrase) laisse la place au suivant ; `null` s'il n'en
  * reste aucun. C'est le libellé que la carte cite : celui que la personne lit ou qu'un lecteur d'écran dit, jamais un mot écrit en dur qui peut différer de la page. Lecture
- * seule, `textContent` uniquement ; un identifiant introuvable est ignoré.
+ * seule, `textContent` uniquement ; un identifiant introuvable est ignoré. La lecture des éléments cités s'arrête dès que le nom dépasse 40 caractères (il serait écarté de toute façon) : un
+ * contrôle qui en cite beaucoup, ou un énorme, ne coûte pas un `textContent` par référence. Deux choix connus : le texte d'un élément CACHÉ que le contrôle cite est repris (conforme à ARIA :
+ * la carte peut citer un libellé que la personne ne voit pas), et l'`aria-label` d'un élément cité qui n'a pas de texte n'est pas lu.
  */
 export function accessibleName(element: Element): string | null {
-  const ids = (element.getAttribute('aria-labelledby') ?? '').split(/\s+/).filter((id) => id !== '')
+  const clean = (raw: string | null): string => (raw ?? '').replace(/\s+/g, ' ').trim()
   const root = element.getRootNode() as { getElementById?: Document['getElementById'] }
-  const referenced = ids.map((id) => root.getElementById?.(id)?.textContent ?? '').join(' ')
+  let referenced = ''
+  for (const id of (element.getAttribute('aria-labelledby') ?? '').split(/\s+/)) {
+    if (referenced.length > MAX_LABEL) break
+    referenced = clean(`${referenced} ${root.getElementById?.(id)?.textContent ?? ''}`)
+  }
   for (const raw of [referenced, element.getAttribute('aria-label'), element.textContent]) {
-    const name = (raw ?? '').replace(/\s+/g, ' ').trim()
+    const name = clean(raw)
     if (name !== '' && name.length <= MAX_LABEL) return name
   }
   return null

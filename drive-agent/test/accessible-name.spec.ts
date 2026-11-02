@@ -99,4 +99,20 @@ describe('accessibleName', () => {
     button.textContent = 'Texte'
     expect(accessibleName(button)).toBe('Texte')
   })
+
+  it('arrête de lire les éléments cités dès que le nom dépasse 40 caractères', () => {
+    const el = page(
+      `<span id="a">${LONG}</span><span id="b">suite</span><button id="c" aria-labelledby="a b" aria-label="Menu">≡</button>`,
+    )
+    let reads = 0
+    const second = document.getElementById('b') as HTMLElement
+    Object.defineProperty(second, 'textContent', {
+      get() {
+        reads += 1
+        return 'suite'
+      },
+    })
+    expect(accessibleName(el)).toBe('Menu')
+    expect(reads, 'le second élément cité n’est pas lu').toBe(0)
+  })
 })
