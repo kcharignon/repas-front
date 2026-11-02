@@ -52,7 +52,7 @@ REPAS_HOST = "repas.test"
 # qu'il vérifie lui-même : il refuse tout autre nom).
 FAKE_LECLERC = ("127.0.0.1", int(os.environ.get("FAKE_LECLERC_PORT", "8099")))
 # Le site mobile de l'enseigne (DRV-741) en fait partie : le faux Leclerc y redirige une adresse de magasin vers l'hôte du magasin, comme le vrai site en mode ordinateur.
-FAKE_LECLERC_HOSTS = {"courses-test.leclercdrive.fr", "photos-test.leclercdrive.fr", "m-courses.leclercdrive.fr"}
+FAKE_LECLERC_HOSTS = {"courses-test.leclercdrive.fr", "photos-test.leclercdrive.fr", "m-courses.leclercdrive.fr", "fd8-courses.leclercdrive.fr", "fd8-espace-client.leclercdrive.fr"}
 # L'accueil de l'enseigne (NavigationPolicy.START_URL de l'application) : relayé au faux Leclerc seulement en mode « fake » (voir l'en-tête).
 HOME_HOST = "www.leclercdrive.fr"
 WWW_MODES = ("test", "fake")
@@ -146,6 +146,7 @@ class Handler(BaseHTTPRequestHandler):
         body = self.rfile.read(length) if length else None
         headers = {key: value for key, value in self.headers.items() if key.lower() not in HOP_BY_HOP}
         headers["Host"] = self.headers.get("Host", "")
+        headers["X-Forwarded-Proto"] = "https"  # les faux sites écrivent leurs liens et leur CORS en https derrière ce relais
         connection = http.client.HTTPConnection(*target, timeout=60)
         try:
             connection.request(self.command, self.path, body=body, headers=headers)

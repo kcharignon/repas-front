@@ -12,11 +12,19 @@ SERVICE=android-emulator
 APP=eu.kantin.repas.drive
 SITE_HOST=www.leclercdrive.fr
 REPAS_HOST=repas.test
-# Le faux magasin Leclerc complet (drive-agent/fake-leclerc, DRV-309) : son nom d'hôte, son numéro et l'adresse de son pilotage dans le conteneur.
-FAKE_STORE_HOST=courses-test.leclercdrive.fr
+# Le faux Leclerc complet (drive-agent/fake-leclerc, DRV-309) joue la VERSION MOBILE du vrai site (DRV-754, `behavior.mobile`) : l'accueil sur `www`, les pages du
+# magasin sur `m-courses` (sans `.aspx`), le SERVEUR du magasin `fd8-courses` (recherche et panier en AJAX, c'est l'hôte que le plan nomme) et le compte
+# `fd8-espace-client` (connexion en deux temps). Le numéro du magasin et l'adresse du pilotage dans le conteneur.
+FAKE_STORE_HOST=fd8-courses.leclercdrive.fr
 FAKE_STORE_ID=000001
-# Le site MOBILE de l'enseigne (DRV-741), servi par le faux Leclerc complet : une adresse de magasin y est redirigée vers l'hôte du magasin (+ .aspx).
 MOBILE_HOST=m-courses.leclercdrive.fr
+ACCOUNT_HOST=fd8-espace-client.leclercdrive.fr
+# Les chemins du magasin d'essai : sa page sur `m-courses` (la ville en minuscules), le chemin que le serveur écrit (la ville avec sa capitale) et l'adresse du panier (sans ville).
+STORE_PAGE_PATH=/magasin-${FAKE_STORE_ID}-${FAKE_STORE_ID}-ville-test
+STORE_SERVER_PATH=/magasin-${FAKE_STORE_ID}-${FAKE_STORE_ID}-Ville-Test
+# Le second magasin d'essai (DRV-755), que la personne choisit quand le plan est fait pour le premier.
+OTHER_STORE_ID=000002
+OTHER_PAGE_PATH=/magasin-${OTHER_STORE_ID}-${OTHER_STORE_ID}-autre-ville
 FAKE_CONTROL=http://127.0.0.1:8099/__fake
 # L'enseigne FICTIVE d'essai de l'APK de débogage (DRV-707, `TestRetailers`) : son identifiant, l'accueil et le profil de WebView que l'application lui donne. `.test` est un domaine réservé.
 RETAILER_B=exempleb
@@ -42,6 +50,7 @@ reports() { emu curl -sk "https://127.0.0.1/__reports" 2> /dev/null; }
 init_output() {
   OUT=$1
   mkdir -p "$OUT"
+  rm -f "$OUT/.ui-quiet"
   for old in "${OUT:?}"/*.png "${OUT:?}"/*.txt; do [ -e "$old" ] && rm -f "$old"; done
   REPORT="$OUT/rapport.txt"
   : > "$REPORT"
@@ -129,19 +138,54 @@ auchan_kind_seen() { auchan_state | grep -qF "\"kind\":\"$1\""; } # ... d'un de 
 # test, test de fumée) ou « fake » (l'accueil du faux Leclerc complet, scénarios complets). Usage : www_mode test|fake
 www_mode() { emu curl -sk -X POST -H 'Content-Type: application/json' -d "{\"mode\":\"$1\"}" "https://127.0.0.1/__www" > /dev/null; }
 screenshot() { adb exec-out screencap -p > "$OUT/$1.png" && say "      capture : $OUT/$1.png"; }
-ui() { # l'arbre de l'écran en XML (uiautomator plante parfois en sortant : on réessaie)
-  local attempt xml
-  for attempt in 1 2 3; do
-    adb shell rm -f /sdcard/ui.xml > /dev/null 2>&1
-    adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1
-    xml=$(adb shell cat /sdcard/ui.xml 2> /dev/null)
-    if grep -q '<hierarchy' <<< "$xml"; then
-      printf '%s\n' "$xml"
-      return 0
-    fi
+dump_ui() { # une lecture de l'arbre de l'écran : le XML sur la sortie, ou le code 1
+  local xml
+  adb shell rm -f /sdcard/ui.xml > /dev/null 2>&1
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1
+  xml=$(adb shell cat /sdcard/ui.xml 2> /dev/null)
+  grep -q '<hierarchy' <<< "$xml" || return 1
+  printf '%s\n' "$xml"
+}
+# Une lecture avec le JavaScript de la page coupé (quiet.mjs) : voir le défaut jugé par a11y_idle.
+dump_ui_quiet() {
+  local pid
+  pid=$(adb shell pidof "$APP" | tr -d '\r')
+  [ -n "$pid" ] || return 1
+  adb forward --remove-all > /dev/null 2>&1
+  adb forward tcp:9222 "localabstract:webview_devtools_remote_$pid" > /dev/null 2>&1 || return 1
+  emu rm -f /tmp/quiet.stop
+  emu node /opt/repas-emulator/quiet.mjs 15 > /dev/null 2>&1 &
+  local quiet=$!
+  sleep 2
+  dump_ui
+  local status=$?
+  # Rendre le JavaScript à la page tout de suite (le programme le fait en voyant ce fichier), puis attendre qu'il ait fini
+  emu touch /tmp/quiet.stop
+  wait "$quiet" 2> /dev/null
+  sleep 1 # le temps que la page retrouve son JavaScript avant un toucher
+  return $status
+}
+# L'arbre d'accessibilité se repose-t-il ? `uiautomator dump` le demande : tant que la carte du guide est à l'écran, l'agent retire et remet l'attribut `hidden` de la carte toutes les
+# 500 ms (drive-agent/src/ui/fit.ts), l'arbre ne se repose jamais (« could not get idle state ») et un lecteur d'écran le voit disparaître et revenir deux fois par seconde.
+a11y_idle() { # trois lectures de suite sans coupure : une seule peut tomber entre deux retraits de l'attribut
+  local n
+  for n in 1 2 3; do
+    dump_ui > /dev/null || return 1
     sleep 1
   done
-  return 1
+}
+# Pendant 25 s après une lecture qui a dû se faire JavaScript coupé, les suivantes commencent par là (une lecture normale qui échoue coûte une dizaine de secondes). `ui` s'exécute dans
+# des sous-processus (`ui | grep`) : la mémoire est un fichier du dossier de sortie, pas une variable.
+quiet_wanted() { [ -f "${OUT:-/tmp}/.ui-quiet" ] && [ "$(date +%s)" -lt "$(cat "${OUT:-/tmp}/.ui-quiet")" ]; }
+ui() { # l'arbre de l'écran en XML (uiautomator plante parfois en sortant : on réessaie ; sans repos de l'arbre, on le lit JavaScript coupé)
+  local attempt
+  if ! quiet_wanted && dump_ui; then return 0; fi
+  for attempt in 1 2; do
+    if dump_ui_quiet; then echo $(($(date +%s) + 25)) > "${OUT:-/tmp}/.ui-quiet"; return 0; fi
+    sleep 1
+  done
+  rm -f "${OUT:-/tmp}/.ui-quiet"
+  dump_ui
 }
 ui_has() { ui | grep -q "$1"; }
 ui_lacks() { ! ui_has "$1"; }
@@ -213,8 +257,9 @@ check_network() {
   local_name "$SITE_HOST" "le faux drive"
   local_name "$REPAS_HOST" "le faux Repas"
   if [ "${1:-}" = "fake-leclerc" ]; then
-    local_name "$FAKE_STORE_HOST" "le faux magasin Leclerc"
-    local_name "$MOBILE_HOST" "le faux site mobile Leclerc"
+    local_name "$FAKE_STORE_HOST" "le serveur du faux magasin Leclerc (fd8-courses)"
+    local_name "$MOBILE_HOST" "les pages du faux magasin Leclerc (m-courses, la version mobile)"
+    local_name "$ACCOUNT_HOST" "le compte du faux Leclerc (fd8-espace-client)"
     if emu curl -s -o /dev/null "$FAKE_CONTROL/state"; then
       ok "le faux site Leclerc complet (Node, drive-agent/fake-leclerc) répond dans le conteneur"
     else
