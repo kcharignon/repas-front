@@ -315,6 +315,25 @@ describe('Auchan : le mot que la personne voit (DRV-757, suite)', () => {
     }
   })
 
+  it('DRV-760 : un contrôle sous la barre de l’agent (le toucher y tombe sur l’interface de l’agent) n’est pas « recouvert par la page » : son libellé reste cité', () => {
+    const login = add('a', 'Se connecter', 120)
+    const agent = document.createElement('div')
+    agent.style.setProperty('z-index', '2147483647')
+    document.documentElement.appendChild(agent)
+    Object.defineProperty(document, 'elementFromPoint', { value: () => agent, configurable: true })
+    try {
+      expect(readAuchanLook(document, 'login')?.target).toMatchObject({ element: login })
+
+      // Un élément de la page qui n'est pas l'agent le recouvre vraiment
+      const page = add('div', '', 100, document.body)
+      Object.defineProperty(document, 'elementFromPoint', { value: () => page, configurable: true })
+      expect(readAuchanLook(document, 'login')).toMatchObject({ sub: 'connexion', target: null })
+    } finally {
+      Reflect.deleteProperty(document, 'elementFromPoint')
+      agent.remove()
+    }
+  })
+
   it('les mots de la connexion d’Auchan : le libellé de la page, sinon « l’icône de connexion, en haut à droite »', () => {
     const text = GUIDE_TEXTS.connexion
     expect(text?.text).toContain('{label}')

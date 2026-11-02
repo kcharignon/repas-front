@@ -366,6 +366,8 @@ describe('la commande de diagnostic de l’application', () => {
     .mockRejectedValue(new Error('pas de réseau dans les tests'))
   beforeEach(() => {
     vi.stubGlobal('fetch', fetchSpy)
+    // L'état d'un test précédent (le brouillon d'un passage, sessionStorage) ne doit jamais décider de celui-ci
+    window.sessionStorage.clear()
   })
 
   function withBridge() {
@@ -421,26 +423,29 @@ describe('la commande de diagnostic de l’application', () => {
     expect(bridge.postMessage.mock.calls.map(([text]) => JSON.parse(text).type)).toEqual(['log'])
   })
 
-  it('DRV-760 : la commande de diagnostic pendant un passage (la carte du guide est affichée) dit quand même l’état à l’application : « aucune ligne reçue » ne veut plus dire « passage en cours »', async () => {
-    // Given : un passage en cours (un écran attend la personne), donc l'agent est occupé
-    window.sessionStorage.clear()
-    window.history.replaceState(null, '', '#')
+  it('DRV-760 : la commande de diagnostic pendant un passage (un passage qui reste en cours, son écran de progression affiché) dit quand même l’état à l’application : « aucune ligne reçue » ne veut plus dire « passage en cours »', async () => {
+    // Given : un passage en cours (la première recherche ne rend jamais la main), donc l'agent est occupé et seul l'écran de progression est affiché
     const { bridge, receive } = withBridge()
-    const screens = fakeUi({
-      diagnostic: () => new Promise<'close'>(() => undefined),
-      guide: () => new Promise<'stop'>(() => undefined),
-    })
-    run(window, { flow: { ui: screens.ui } })
-    receive(PLAN)
-    await vi.waitFor(() => expect(screens.screens().length).toBeGreaterThan(0))
+    const screens = fakeUi({ diagnostic: () => new Promise<'close'>(() => undefined) })
+    run(window, { flow: { ui: screens.ui, adapter: stuck().adapter } })
+    receive(RUNNING)
+    await vi.waitFor(() => expect(screens.screens()).toEqual(['progress']))
+    expect(bridge.postMessage).not.toHaveBeenCalled()
 
     // When
     receive(COMMAND)
 
-    // Then : l'état est parti, que l'agent soit occupé ou non
-    await vi.waitFor(() =>
-      expect(bridge.postMessage.mock.calls.map(([text]) => JSON.parse(text).type)).toContain('log'),
-    )
+    // Then : l'état est parti, sans attendre la fin du passage, et le passage n'a pas bougé
+    await vi.waitFor(() => expect(bridge.postMessage).toHaveBeenCalledOnce())
+    const message = JSON.parse(bridge.postMessage.mock.calls[0]?.[0] ?? '{}') as {
+      type: string
+      lines: string[]
+    }
+    expect(message.type).toBe('log')
+    expect(message.lines[0]).toMatch(/^Session : /)
+    // Le dernier état du flux est dit : le passage a dépassé la validation et attend en phase A
+    expect(message.lines.at(-1)).toMatch(/^Carte : dernière étape du flux PHASE_A, /)
+    expect(screens.screens()).toEqual(['progress'])
   })
 
   it('DRV-759 : dit à l’application la ligne « Session » et la « Fenêtre au premier plan », des formes seulement, pour sa boîte de diagnostic', async () => {
@@ -461,9 +466,13 @@ describe('la commande de diagnostic de l’application', () => {
       lines: string[]
     }
     expect(message).toMatchObject({ v: 1, type: 'log' })
-    expect(message.lines).toHaveLength(2)
+    expect(message.lines).toHaveLength(3)
     expect(message.lines[0]).toMatch(/^Session : /)
     expect(message.lines[1]).toMatch(/^Fenêtre au premier plan : /)
+    // La carte (DRV-760) : des formes seulement, aucun écran n'a encore été montré
+    expect(message.lines[2]).toBe(
+      'Carte : dernière étape du flux aucune, écran aucun, dite à l’écran jamais, boîte aucune, toucher au centre aucun écran, conteneur dernier du document absent, déplacements 0, élément actif body',
+    )
   })
 
   it.each([

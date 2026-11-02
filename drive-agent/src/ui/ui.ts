@@ -1,7 +1,8 @@
 // L'interface superposée : un Shadow DOM fermé dans un conteneur plein écran, au-dessus de la page de l'enseigne.
 import type { RetailerInfo } from '../retailers/names'
 import { append, clear, h } from './dom'
-import { fitGuide, type Fit } from './fit'
+import { safe, type CardFacts } from '../diagnostic/foreground'
+import { fitGuide, reachable, touchVerdict, type Fit } from './fit'
 import { createPointer, type Pointer } from './pointer'
 import { displayLayout, measureDisplay, type DisplayLayout } from './scale'
 import { installStyles } from './sheet'
@@ -29,6 +30,16 @@ export interface UiOptions {
 /** L'interface, et son conteneur dans la page (`null` tant qu'aucun écran n'est affiché). */
 export interface UiHandle extends Ui {
   readonly host: HTMLElement | null
+  /** Ce que l'application peut lire de la carte quand « aucune carte » (DRV-760) : des formes seulement ; `step` : le dernier état du flux, donné par l'appelant. */
+  probe(step: string | null): CardFacts
+}
+
+/** Combien de fois par ouverture le conteneur est remis en dernier enfant du document. */
+const MAX_MOVES = 3
+
+/** L'interface a-t-elle le focus ? (Un Shadow DOM fermé : l'élément actif du document est son hôte.) */
+function hasFocus(win: Window, host: Element): boolean {
+  return win.document.activeElement === host
 }
 
 const FOCUSABLE = 'button:not(:disabled),input:not(:disabled),summary,[tabindex="0"]'
@@ -93,7 +104,11 @@ export function createUi(options: UiOptions): UiHandle {
   /** La place de la carte du guide (DRV-757) : réduite, en haut ou en bas, ou effacée quand la page a besoin de la place. */
   let fit: Fit | null = null
   let present = 0
+  /** Les déplacements du conteneur depuis l'ouverture (plafonnés : `MAX_MOVES`). */
+  let moves = 0
   let lastShown: boolean | null = null
+  /** L'écran affiché (pour le diagnostic de la carte). */
+  let screenName: ScreenName | null = null
   const report = (shown: boolean): void => {
     if (shown === lastShown) return
     lastShown = shown
@@ -121,14 +136,23 @@ export function createUi(options: UiOptions): UiHandle {
     win.visualViewport?.addEventListener('resize', replace)
     win.visualViewport?.addEventListener('scroll', replace)
     // La page peut retirer ou réécrire un conteneur étranger quand elle se redessine (un panneau qui s'ouvre) : il est remis à sa place, épinglé, sans que la carte revienne de zéro (DRV-757)
+    moves = 0
     present = win.setInterval(() => {
       if (view === null) return
-      // Le dernier enfant du document : à z-index égal, le dernier est au-dessus (un mur de cookies ajouté après l'agent ne le recouvre pas, DRV-760)
-      if (!view.host.isConnected || view.host.nextElementSibling !== null) {
-        win.document.documentElement.appendChild(view.host)
+      const { host } = view
+      if (!host.isConnected) {
+        // La page l'a retiré : il revient, toujours
+        win.document.documentElement.appendChild(host)
+      } else if (host.nextElementSibling !== null && moves < MAX_MOVES && !hasFocus(win, host)) {
+        // Un élément a été ajouté à <html> APRÈS l'agent (les murs posés dans <body> sont déjà avant lui) : à z-index égal le dernier est au-dessus, l'agent redevient le dernier. Au plus
+        // trois fois par ouverture et jamais s'il a le focus : un site qui remet sa couche en dernier à chaque passe ferait battre l'agent sans fin (perte de focus, animations relancées)
+        moves += 1
+        win.document.documentElement.appendChild(host)
       }
-      pin(view.host)
+      pin(host)
       setSheet(view, view.overlay.classList.contains('sheet'))
+      // Un écran sans placement (progression, résumé…) peut aussi être recouvert par un mur en couche supérieure : le repli de l'application doit le savoir
+      if (fit === null && view.current !== null) report(reachable(view.current.el, win))
     }, 500)
     return view
   }
@@ -140,6 +164,7 @@ export function createUi(options: UiOptions): UiHandle {
     },
     show<K extends ScreenName>(screen: K, props: ScreenProps<K>): Promise<ScreenAnswer<K>> {
       const shown = mount()
+      screenName = screen
       shown.current?.dispose?.()
       pointer?.clear()
       fit?.stop()
@@ -184,12 +209,35 @@ export function createUi(options: UiOptions): UiHandle {
           const placed = fit
           placing.link.ask = (pref) => placed.ask(pref)
         }
-        if (rendered.fit === undefined) report(true)
+        if (rendered.fit === undefined) report(reachable(rendered.el, win))
         rendered.start?.()
         rendered.el.scrollTop = 0
         const first = rendered.focus ?? rendered.el.querySelector<HTMLElement>(FOCUSABLE)
         first?.focus({ preventScroll: true })
       })
+    },
+    probe(step) {
+      const host = view?.host ?? null
+      const card = view?.current?.el ?? null
+      const rect = card?.getBoundingClientRect()
+      const active = win.document.activeElement
+      return {
+        shown: lastShown,
+        screen: card === null ? null : screenName,
+        box: rect
+          ? ([rect.left, rect.top, rect.width, rect.height].map(Math.round) as [
+              number,
+              number,
+              number,
+              number,
+            ])
+          : null,
+        touch: card === null ? null : touchVerdict(card, win),
+        last: host === null ? null : host.parentElement?.lastElementChild === host,
+        moves,
+        active: active === null ? '' : safe(active.tagName.toLowerCase()),
+        step,
+      }
     },
     update(patch: ProgressPatch) {
       view?.current?.update?.(patch)
@@ -200,9 +248,11 @@ export function createUi(options: UiOptions): UiHandle {
       fit?.stop()
       fit = null
       win.clearInterval(present)
-      report(false)
+      // Rien n'avait été montré (une fermeture sans écran) : rien à dire de plus, l'application n'a pas à apprendre qu'un écran « disparaît » (DRV-760)
+      if (lastShown !== null) report(false)
       view?.current?.dispose?.()
       view?.host.remove()
+      screenName = null
       if (view) {
         win.removeEventListener('resize', replace)
         win.visualViewport?.removeEventListener('resize', replace)

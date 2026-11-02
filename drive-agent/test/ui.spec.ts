@@ -636,22 +636,137 @@ describe('le guide d’une étape (DRV-751)', () => {
       expect(seen).toEqual([true, false])
     })
 
-    it('DRV-760 : le conteneur de l’agent redevient le DERNIER enfant du document quand la page en ajoute un après lui (à z-index égal, le dernier est au-dessus)', () => {
+    it('DRV-760 : le diagnostic de la carte (probe) dit des formes : écran, état dit, boîte, toucher au centre, conteneur dernier du document, déplacements, élément actif', () => {
+      const handle = open()
+      expect(handle.probe(null)).toMatchObject({
+        shown: null,
+        screen: null,
+        box: null,
+        touch: null,
+        last: null,
+        moves: 0,
+        step: null,
+      })
+
+      void handle.show('guide', props({ stage: 'done' }))
+      const facts = handle.probe('PHASE_A')
+
+      expect(facts).toMatchObject({
+        screen: 'guide',
+        shown: true,
+        last: true,
+        moves: 0,
+        step: 'PHASE_A',
+        touch: 'unknown',
+      })
+      expect(facts.box).toHaveLength(4)
+      expect(facts.active).toBe('div')
+      ui?.close()
+      expect(handle.probe(null).screen).toBeNull()
+    })
+
+    it('DRV-760 : fermer sans avoir rien montré ne dit rien à l’application (pas de card false sans card true avant)', () => {
+      const seen: boolean[] = []
+      ui = createUi({ mode: 'open', retailer: LECLERC, onVisible: (shown) => seen.push(shown) })
+
+      ui.close()
+
+      expect(seen).toEqual([])
+    })
+
+    it('DRV-760 : un écran sans placement (le résumé) recouvert par un mur en couche supérieure n’est pas « à l’écran » ; il l’est de nouveau quand le mur part', () => {
       vi.useFakeTimers()
+      let covering = true
+      const wall = document.createElement('dialog')
+      // jsdom ne mesure rien : l'écran occupe la fenêtre
+      const measured = vi
+        .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+        .mockReturnValue(new DOMRect(0, 0, 300, 600))
+      Object.defineProperty(document, 'elementFromPoint', {
+        value: () => (covering ? wall : ui?.host),
+        configurable: true,
+      })
       try {
+        const seen: boolean[] = []
+        ui = createUi({ mode: 'open', retailer: LECLERC, onVisible: (shown) => seen.push(shown) })
+
+        void ui.show('summary', SUMMARY)
+        covering = false
+        vi.advanceTimersByTime(600)
+
+        expect(seen).toEqual([false, true])
+      } finally {
+        Reflect.deleteProperty(document, 'elementFromPoint')
+        measured.mockRestore()
+        vi.useRealTimers()
+      }
+    })
+
+    describe('DRV-760 : le conteneur de l’agent redevient le DERNIER enfant du document (à z-index égal, le dernier est au-dessus)', () => {
+      const later = (id: string) => {
+        const element = document.createElement('div')
+        element.id = id
+        document.documentElement.appendChild(element)
+        return element
+      }
+      /** Sans le focus dans l'interface (la personne a touché la page) : seul cas où le conteneur peut être déplacé. */
+      const leave = () => (shadow().activeElement as HTMLElement | null)?.blur()
+      const added: Element[] = []
+      afterEach(() => {
+        vi.useRealTimers()
+        for (const element of added.splice(0)) element.remove()
+      })
+
+      it('quand la page ajoute un élément à <html> après lui', () => {
+        vi.useFakeTimers()
         const handle = open()
         void handle.show('guide', props({ stage: 'done' }))
-        const later = document.createElement('div')
-        later.id = 'later'
-        document.documentElement.appendChild(later)
+        leave()
+        added.push(later('later'))
 
         vi.advanceTimersByTime(600)
 
         expect(document.documentElement.lastElementChild).toBe(handle.host)
-        later.remove()
-      } finally {
-        vi.useRealTimers()
-      }
+      })
+
+      it('jamais tant qu’il a le focus (le retirer puis le remettre le ferait perdre)', () => {
+        vi.useFakeTimers()
+        const handle = open()
+        void handle.show('guide', props({ stage: 'done' }))
+        expect(document.activeElement).toBe(handle.host)
+        const after = later('later')
+        added.push(after)
+
+        vi.advanceTimersByTime(3000)
+
+        expect(document.documentElement.lastElementChild).toBe(after)
+      })
+
+      it('trois fois au plus par ouverture : un site qui remet sa couche en dernier à chaque passe ne fait pas battre l’agent sans fin', () => {
+        vi.useFakeTimers()
+        const handle = open()
+        void handle.show('guide', props({ stage: 'done' }))
+        leave()
+        const moved = vi.spyOn(document.documentElement, 'appendChild')
+        for (let pass = 0; pass < 12; pass += 1) {
+          added.push(later('later' + pass))
+          vi.advanceTimersByTime(500)
+        }
+
+        expect(moved.mock.calls.filter(([node]) => node === handle.host)).toHaveLength(3)
+        moved.mockRestore()
+      })
+
+      it('retiré de la page, il revient toujours (sans compter dans les trois fois)', () => {
+        vi.useFakeTimers()
+        const handle = open()
+        void handle.show('guide', props({ stage: 'done' }))
+        for (let pass = 0; pass < 5; pass += 1) {
+          handle.host?.remove()
+          vi.advanceTimersByTime(500)
+          expect(handle.host?.isConnected).toBe(true)
+        }
+      })
     })
 
     it('le mur de cookies : la carte dit d’abord d’y répondre, la personne choisit', () => {

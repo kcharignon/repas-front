@@ -2,6 +2,7 @@
 // et un oui/non). Règle absolue du diagnostic (comme chez Leclerc) : des FORMES, des NOMS d'une liste fermée, des NOMBRES ; jamais un libellé, une
 // adresse, un cookie (nom ou valeur) ni un identifiant. NON MESURÉ : l'élément exact de la barre (on cherche un élément dont le texte est celui de la
 // barre, quelle que soit sa balise) et le titre de la page « introuvable » au-delà d'une page vue le 2026-10-30.
+import { isAgentContainer } from '../agent-container'
 import type { CookieFacts } from '../retailers/contract'
 import { findControl, isShown, type GuideTarget } from '../retailers/guide'
 
@@ -122,6 +123,8 @@ function receivesTouch(element: HTMLElement): boolean | null {
   if (x < 0 || y < 0 || x > win.innerWidth || y > win.innerHeight) return null
   const hit = doc.elementFromPoint(x, y)
   if (hit === null) return null
+  // Sous la carte ou le repère de l'agent : la page ne le recouvre pas, on ne sait pas (un faux « recouvert » ferait taire un libellé juste)
+  if (isAgentContainer(hit)) return null
   return element.contains(hit)
 }
 

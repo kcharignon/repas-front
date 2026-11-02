@@ -19,7 +19,7 @@ import { bridgeTransport, type Bridge } from './transport/bridge'
 import { fragmentTransport } from './transport/fragment'
 import type { Transport } from './transport/transport'
 import { showSelftest, type SelftestDeps } from './selftest'
-import { createUi } from './ui'
+import { createUi, type UiHandle } from './ui'
 import { AGENT_VERSION } from './version'
 
 /**
@@ -133,7 +133,7 @@ export function run(win: Window & typeof globalThis = window, options: AgentOpti
           message,
           diagnosticDeps,
           selftestDeps,
-          bridge && stateSender(bridge),
+          bridge && stateSender(bridge, flow, ui),
         )
       }
       void flow.start(message)
@@ -144,7 +144,7 @@ export function run(win: Window & typeof globalThis = window, options: AgentOpti
 }
 
 /** Ce que l'agent dit à l'application quand elle ouvre le diagnostic : `log`, deux lignes de formes (jamais une valeur ni une adresse), pour sa boîte de dialogue. */
-function stateSender(bridge: Bridge): (deps: DiagnosticDeps) => void {
+function stateSender(bridge: Bridge, flow: Flow, ui: UiHandle): (deps: DiagnosticDeps) => void {
   return (deps) => {
     const facts = deps.foreground?.()
     let session = 'illisible'
@@ -153,7 +153,13 @@ function stateSender(bridge: Bridge): (deps: DiagnosticDeps) => void {
     } catch {
       // la page ne se laisse pas lire
     }
-    const lines = [`Session : ${session}`, ...(facts ? [S.diagnostic.probe.foreground(facts)] : [])]
+    // La carte (DRV-760) : de quoi dire, à la prochaine recette, laquelle des hypothèses est la bonne
+    const card = S.diagnostic.probe.card(ui.probe(flow.history.at(-1) ?? null))
+    const lines = [
+      `Session : ${session}`,
+      ...(facts ? [S.diagnostic.probe.foreground(facts)] : []),
+      card,
+    ]
     bridge.postMessage(stringifyJson({ v: 1, type: 'log', lines }))
   }
 }
