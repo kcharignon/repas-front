@@ -358,6 +358,18 @@ describe('liste envoyée au drive (page de la liste)', () => {
   })
 })
 
+/**
+ * Note ce que l'écran affiche, à chaque instant, tant que la route n'a pas changé (ici l'écran est monté sans `RouterView` : après la
+ * navigation il resterait là, ce qui n'est pas ce que la personne voit). Rend de quoi arrêter le relevé.
+ */
+function watchUntilRouteChanges(context: Awaited<ReturnType<typeof signedIn>>, seen: string[]) {
+  const from = context.router.currentRoute.value.name
+
+  return setInterval(() => {
+    if (context.router.currentRoute.value.name === from) seen.push(document.body.textContent)
+  }, 0)
+}
+
 describe('liste en cours : envoi au drive (page /liste)', () => {
   const openActive = async (
     handlers: Parameters<typeof stubApi>[0] = {},
@@ -638,6 +650,106 @@ describe('liste en cours : envoi au drive (page /liste)', () => {
     await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-send'))
 
     expect(context.router.currentRoute.value.params.listId).toBe('l1')
+  })
+
+  // DRV-762 : une seule liste en cours. Une fois envoyée, le back n'en a plus aucune « en cours » : la relecture ne doit pas faire perdre l'écran d'envoi.
+  // La liste principale reste connue de l'écran (dernière liste vue) ; la liste d'un type, seule en cours, n'est montrée que parce qu'elle est en cours
+  it.each([
+    ['principale', null, '/liste'],
+    ['d’un type, choisie par l’adresse', 't1', '/liste?liste=l1'],
+    ['d’un type, montrée faute de liste principale', 't1', '/liste'],
+  ])(
+    'ouvre l’écran d’envoi quand la liste envoyée (%s) était la seule en cours, sans jamais dire « Aucune liste en cours »',
+    async (_kind, typeId, path) => {
+      let sent = false
+      const { context, wrapper } = await openActive(
+        {
+          'POST /api/v1/shopping-lists/l1/send': () => {
+            sent = true
+
+            return noContent()
+          },
+          'GET /api/v1/shopping-lists/active/summary': () =>
+            json(
+              sent || typeId !== null
+                ? none
+                : { shoppingListId: 'l1', quantityByIngredientSlug: {}, plannedRecipeIds: [] },
+            ),
+          'GET /api/v1/shopping-lists/open': () =>
+            json({
+              member: sent
+                ? []
+                : [{ id: 'l1', name: 'l1', typeId, rowCount: 2, uncheckedCount: 1, version: 7 }],
+              totalItems: sent ? 0 : 1,
+            }),
+          'GET /api/v1/shopping-lists/l1': () => json(detail(sent ? 'SENT' : 'ACTIVE')),
+        },
+        detail('ACTIVE'),
+        true,
+        path,
+      )
+      await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+      const seen: string[] = []
+      const watching = watchUntilRouteChanges(context, seen)
+
+      button('Envoyer au drive')?.click()
+      await vi.waitFor(() => expect(dialogButton('Envoyer au drive')).toBeDefined())
+      dialogButton('Envoyer au drive').click()
+      await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('drive-send'))
+      clearInterval(watching)
+
+      expect(context.router.currentRoute.value.params.listId).toBe('l1')
+      expect(context.router.currentRoute.value.query.ouvrir).toBe('1')
+      expect(seen.some((text) => text.includes('Aucune liste en cours'))).toBe(false)
+      wrapper.unmount()
+    },
+  )
+
+  // DRV-762, même motif : la liste d'un type supprimée était la seule en cours ; la relecture démonte l'en-tête avant que « Mes listes » s'ouvre
+  it('supprimer la seule liste en cours (celle d’un type) ouvre « Mes listes », sans dire « Aucune liste en cours »', async () => {
+    let deleted = false
+    const { context, wrapper } = await openActive(
+      {
+        'DELETE /api/v1/shopping-lists/l1': () => {
+          deleted = true
+
+          return noContent()
+        },
+        'GET /api/v1/shopping-lists/active/summary': () => json(none),
+        'GET /api/v1/shopping-lists/open': () =>
+          json({
+            member: deleted
+              ? []
+              : [
+                  {
+                    id: 'l1',
+                    name: 'l1',
+                    typeId: 't1',
+                    rowCount: 2,
+                    uncheckedCount: 1,
+                    version: 7,
+                  },
+                ],
+            totalItems: deleted ? 0 : 1,
+          }),
+        'GET /api/v1/shopping-lists': () => json({ member: [], totalItems: 0 }),
+      },
+      detail('ACTIVE'),
+      true,
+      '/liste',
+    )
+    await vi.waitFor(() => expect(button('Envoyer au drive')).toBeDefined())
+    const seen: string[] = []
+    const watching = watchUntilRouteChanges(context, seen)
+
+    await choose('Supprimer')
+    await vi.waitFor(() => expect(dialogButton('Supprimer')).toBeDefined())
+    dialogButton('Supprimer').click()
+    await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('shopping-lists'))
+    clearInterval(watching)
+
+    expect(seen.some((text) => text.includes('Aucune liste en cours'))).toBe(false)
+    wrapper.unmount()
   })
 
   const tooOldSentence = 'Mets à jour l’application pour envoyer ta liste.'
