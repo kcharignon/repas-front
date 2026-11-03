@@ -182,19 +182,6 @@ dump_ui_quiet() {
   fi
   return $status
 }
-# Combien de fois, en N secondes, l'attribut `hidden` d'un élément de l'interface de l'agent change-t-il (hidden-changes.mjs) ? « max=… element=… total=… » ; code non nul si la mesure est impossible
-# (deux essais : une connexion de débogage peut échouer isolément).
-hidden_changes() {
-  local attempt out
-  for attempt in 1 2; do
-    if devtools_forward && out=$(emu node /opt/repas-emulator/hidden-changes.mjs "$1" 2> /dev/null); then
-      echo "$out"
-      return 0
-    fi
-    sleep 2
-  done
-  return 1
-}
 # Pendant 25 s après une lecture qui a dû se faire JavaScript coupé, les suivantes commencent par là (une lecture normale qui échoue coûte une dizaine de secondes). `ui` s'exécute dans
 # des sous-processus (`ui | grep`) : la mémoire est un fichier du dossier de sortie, pas une variable.
 quiet_wanted() { [ -f "${OUT:-/tmp}/.ui-quiet" ] && [ "$(date +%s)" -lt "$(cat "${OUT:-/tmp}/.ui-quiet")" ]; }

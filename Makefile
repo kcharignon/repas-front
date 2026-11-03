@@ -193,7 +193,7 @@ android-verification-metadata: $(ANDROID_AGENT) ## Rewrite android/gradle/verifi
 	@$(ANDROID_APP_RUN) ./build.sh verification-metadata
 
 ## —— Android emulator 🤖 ————————————————————————————————————————————————————
-.PHONY: android-emulator-up android-emulator-down android-emulator-status android-smoke android-e2e android-e2e-full
+.PHONY: android-emulator-up android-emulator-down android-emulator-status android-smoke android-e2e
 
 # L'émulateur Android de test (DRV-319, android/emulator/) : sans fenêtre, accéléré par KVM (/dev/kvm), SDK et AVD dans le volume Docker
 # `android-emulator-sdk` (téléchargés une seule fois). Cibles manuelles : la CI n'a pas KVM, `make check` n'y touche pas. Mode d'emploi : android/README.md.
@@ -213,15 +213,12 @@ android-smoke: ## Smoke test: build the debug APK aimed at the local fake Repas,
 	@$(MAKE) --no-print-directory android-emulator-up
 	@DOCKER_COMPOSE="$(DOCKER_COMPOSE)" ./android/emulator/smoke.sh
 
-# DRV-767 : `make android-e2e` joue le JEU CRITIQUE des scénarios sur faux sites (budget de 5 minutes de bout en bout : construction de l APK, démarrage de l émulateur et scénarios ; plus long, la passe
-# ÉCHOUE) ; `SCENARIOS="22 3"` ne joue que ceux-là ; `make android-e2e-full` les joue tous, à la main, sans budget. La recette sur téléphone avec les vrais sites fait foi (android/README.md).
+# DRV-767 : `make android-e2e` joue les scénarios que rien d'autre ne couvre, sur faux sites (budget de 5 minutes de bout en bout : construction de l APK, démarrage de l émulateur et scénarios ; plus long, la passe
+# ÉCHOUE) ; `SCENARIOS="22"` ne joue que celui-là. Les autres scénarios ont été retirés (leur logique est testée plus bas) ; la recette sur téléphone avec les vrais sites fait foi (android/README.md).
 ANDROID_E2E_RUN = export E2E_STARTED_AT=$$(date +%s) && ANDROID_REPAS_ORIGIN=https://repas.test/ ANDROID_APK_NAME=repas-drive-smoke.apk $(MAKE) --no-print-directory android && $(MAKE) --no-print-directory android-emulator-up && DOCKER_COMPOSE="$(DOCKER_COMPOSE)" ./android/emulator/e2e.sh
 
-android-e2e: ## Critical scenarios in the emulator against the fake Leclerc over HTTPS, 5 minutes at most end to end (SCENARIOS="22 3" plays only those); report and screenshots in android/dist/e2e/
+android-e2e: ## The scenarios nothing else covers, in the emulator against the fake Leclerc over HTTPS, 5 minutes at most end to end (SCENARIOS="22" plays only that one); report and screenshots in android/dist/e2e/
 	@$(ANDROID_E2E_RUN)
-
-android-e2e-full: ## EVERY scenario of the emulator suite (by hand, no time budget; an hour or more when many fail); report and screenshots in android/dist/e2e/
-	@export SCENARIOS=all && $(ANDROID_E2E_RUN)
 
 ## —— Production image 📦 ————————————————————————————————————————————————————
 .PHONY: prod prod-stop
