@@ -10,7 +10,10 @@ import { describe, expect, it } from 'vitest'
 import { LIMITS, validatePlan, type PlanMessage } from '../../drive-agent/protocol'
 
 const assets = (name: string) =>
-  readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../app/src/debug/assets', name), 'utf8')
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '../app/src/debug/assets', name),
+    'utf8',
+  )
 const template = assets('debug-plan.json')
 
 /** Ce que fait `DebugPlan.plan` en Kotlin : trois remplacements textuels. */

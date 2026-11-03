@@ -16,15 +16,21 @@ const kotlinFiles = ['core', 'app'].flatMap((module) => {
     .filter((name) => name.endsWith('.kt'))
     .map((name) => ({ name, path: join(dir, name) }))
 })
-const source = (name: string) => readFileSync(kotlinFiles.find((file) => file.name === name)?.path ?? '', 'utf8')
+const source = (name: string) =>
+  readFileSync(kotlinFiles.find((file) => file.name === name)?.path ?? '', 'utf8')
 
 describe('le lien « Finaliser sur Leclerc », des deux côtés', () => {
   it('le front ne fait que le lien du magasin, l’application ne l’ouvre que si c’est cette forme', () => {
-    const link = finalizeLink('https://fd9-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/x', true)
+    const link = finalizeLink(
+      'https://fd9-courses.leclercdrive.fr/magasin-000000-000000-Ville-Test/x',
+      true,
+    )
 
     expect(link).toBe('https://fd9-courses.leclercdrive.fr/magasin-000000-000000')
     // La forme du lien est celle de l'entrée de l'enseigne au registre (DRV-706) ; DriveEntry la lit chez l'enseigne du lien, il ne l'écrit pas.
-    expect(source('RetailerSites.kt')).toContain('frontLink = Regex("^/magasin-([0-9]{1,12})-([0-9]{1,12})$")')
+    expect(source('RetailerSites.kt')).toContain(
+      'frontLink = Regex("^/magasin-([0-9]{1,12})-([0-9]{1,12})$")',
+    )
     expect(source('DriveEntry.kt')).toContain('pages.frontLink')
   })
 
@@ -47,7 +53,9 @@ describe('le lien « Finaliser sur Leclerc », des deux côtés', () => {
     const activity = source('DriveActivity.kt')
 
     expect(activity).toContain('override fun onReceivedTitle')
-    expect(activity).not.toMatch(/evaluateJavascript|onReceivedHttpError.*getContent|loadDataWithBaseURL/)
+    expect(activity).not.toMatch(
+      /evaluateJavascript|onReceivedHttpError.*getContent|loadDataWithBaseURL/,
+    )
   })
 })
 
@@ -64,6 +72,8 @@ describe('le bandeau de l’arrivée de « Finaliser sur Leclerc »', () => {
   it('n’a pas de bouton : le bandeau du panier ne porte pas l’action « Ouvrir l’accueil du drive »', () => {
     const pass = source('DrivePass.kt')
 
-    expect(pass).toMatch(/val hasAction: Boolean get\(\) = this == PLAN \|\| this == VERIFICATION \|\| this == MOBILE/)
+    expect(pass).toMatch(
+      /val hasAction: Boolean get\(\) = this == PLAN \|\| this == VERIFICATION \|\| this == MOBILE/,
+    )
   })
 })

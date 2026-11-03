@@ -7,7 +7,11 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const androidDir = join(dirname(fileURLToPath(import.meta.url)), '..')
-const kotlin = (name: string) => readFileSync(join(androidDir, 'app', 'src', 'main', 'kotlin', 'eu', 'kantin', 'repas', 'drive', name), 'utf8')
+const kotlin = (name: string) =>
+  readFileSync(
+    join(androidDir, 'app', 'src', 'main', 'kotlin', 'eu', 'kantin', 'repas', 'drive', name),
+    'utf8',
+  )
 
 const driveActivity = kotlin('DriveActivity.kt')
 const mainActivity = kotlin('MainActivity.kt')
@@ -36,12 +40,15 @@ describe('les entrées de débogage du menu du drive', () => {
   })
 
   it('aucune autre entrée du menu du drive ne dépend de BuildConfig.DEBUG', () => {
-    const others = driveMenuLines().filter((line) => !DEBUG_ENTRIES.some((name) => mentions(line, name)))
+    const others = driveMenuLines().filter(
+      (line) => !DEBUG_ENTRIES.some((name) => mentions(line, name)),
+    )
     expect(others.filter((line) => line.includes('BuildConfig.DEBUG'))).toEqual([])
   })
 
   it('n’existent pas dans le menu de la coquille Repas', () => {
-    for (const name of [...DEBUG_ENTRIES, 'menu_diagnostic']) expect(mainActivity).not.toContain(`R.string.${name}`)
+    for (const name of [...DEBUG_ENTRIES, 'menu_diagnostic'])
+      expect(mainActivity).not.toContain(`R.string.${name}`)
   })
 })
 
@@ -66,15 +73,26 @@ describe('les menus nomment l’enseigne (DRV-707)', () => {
     const menu = mainActivity.slice(start, mainActivity.indexOf('\n    }\n', start))
 
     expect(menu).toContain('val announced = repasApp.announced.all')
-    expect(menu).toMatch(/announced\.forEach \{ site -> add\(getString\(R\.string\.menu_open_drive, site\.name, site\.nameDe\)/)
+    expect(menu).toMatch(
+      /announced\.forEach \{ site -> add\(getString\(R\.string\.menu_open_drive, site\.name, site\.nameDe\)/,
+    )
     expect(menu).toMatch(/getString\(R\.string\.menu_logout_drive, site\.name, site\.nameDe\)/)
     // l’ordre d’avant, avec une seule enseigne : réglages, ouvrir, version, se déconnecter
     const names = [...menu.matchAll(/R\.string\.(menu_\w+)/g)].map((match) => match[1])
-    expect(names).toEqual(['menu_drive_settings', 'menu_open_drive', 'menu_about', 'menu_logout_drive'])
+    expect(names).toEqual([
+      'menu_drive_settings',
+      'menu_open_drive',
+      'menu_about',
+      'menu_logout_drive',
+    ])
   })
 
   it('le menu du drive compose chaque texte avec l’enseigne de l’écran', () => {
-    expect(driveActivity).toContain('private fun text(resource: Int): String = getString(resource, site.name, site.nameDe)')
-    expect(driveActivity).toMatch(/add\(text\(R\.string\.menu_logout_drive\) to \{ confirmClearDriveData\(site, ::clearDriveData\) \}\)/)
+    expect(driveActivity).toContain(
+      'private fun text(resource: Int): String = getString(resource, site.name, site.nameDe)',
+    )
+    expect(driveActivity).toMatch(
+      /add\(text\(R\.string\.menu_logout_drive\) to \{ confirmClearDriveData\(site, ::clearDriveData\) \}\)/,
+    )
   })
 })

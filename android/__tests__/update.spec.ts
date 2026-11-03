@@ -48,7 +48,11 @@ describe('les adresses de la mise à jour sont écrites en dur, à un seul endro
 
   it('aucune connexion réseau ailleurs que dans le port HTTP de la variante hors Google Play', () => {
     const offenders = sources
-      .filter(({ code }) => /openConnection|HttpURLConnection|HttpsURLConnection|java\.net\.URL\b|OkHttp|DownloadManager/.test(code))
+      .filter(({ code }) =>
+        /openConnection|HttpURLConnection|HttpsURLConnection|java\.net\.URL\b|OkHttp|DownloadManager/.test(
+          code,
+        ),
+      )
       .map(({ where }) => where)
 
     expect(offenders).toEqual(['app/src/direct/kotlin/eu/kantin/repas/drive/UpdateServices.kt'])
@@ -70,7 +74,9 @@ describe('les adresses de la mise à jour sont écrites en dur, à un seul endro
 
     expect(fetcher).toContain('UpdateSource.isTrustedRedirect(next)')
     expect(fetcher).toContain('UpdateSource.isReleaseFile(first)')
-    const hosts = [...source.matchAll(/^\s+"([a-z.-]+\.githubusercontent\.com)",$/gm)].map((match) => match[1])
+    const hosts = [...source.matchAll(/^\s+"([a-z.-]+\.githubusercontent\.com)",$/gm)].map(
+      (match) => match[1],
+    )
     expect(hosts).toEqual([
       'release-assets.githubusercontent.com',
       'objects.githubusercontent.com',
@@ -106,11 +112,16 @@ describe('l’APK téléchargé reste dans l’espace privé de l’application'
 
   it('écrit dans files/update/ et le dit au fournisseur de fichiers, qui n’expose que ce dossier', () => {
     expect(named('UpdateServices.kt').code).toContain('DIRECTORY_NAME = "update"')
-    expect(named('SelfUpdateDirect.kt').code).toContain('File(activity.filesDir, PrivateUpdateStorage.DIRECTORY_NAME)')
+    expect(named('SelfUpdateDirect.kt').code).toContain(
+      'File(activity.filesDir, PrivateUpdateStorage.DIRECTORY_NAME)',
+    )
     const paths = read('app/src/direct/res/xml/update_file_paths.xml')
-    expect([...paths.matchAll(/<([a-z-]+-path)\b[^>]*path="([^"]*)"/g)].map((match) => [match[1], match[2]])).toEqual([
-      ['files-path', 'update/'],
-    ])
+    expect(
+      [...paths.matchAll(/<([a-z-]+-path)\b[^>]*path="([^"]*)"/g)].map((match) => [
+        match[1],
+        match[2],
+      ]),
+    ).toEqual([['files-path', 'update/']])
   })
 
   it('le fournisseur de fichiers est privé et ne donne qu’un droit de lecture à l’installateur', () => {
@@ -141,7 +152,9 @@ describe('l’APK téléchargé reste dans l’espace privé de l’application'
     const installer = named('SelfUpdateDirect.kt').code
 
     expect(installer.indexOf('flow.revalidate()')).toBeGreaterThan(0)
-    expect(installer.indexOf('flow.revalidate()')).toBeLessThan(installer.indexOf('openInstaller()'))
+    expect(installer.indexOf('flow.revalidate()')).toBeLessThan(
+      installer.indexOf('openInstaller()'),
+    )
   })
 
   it('le démarrage de la coquille (jamais du processus) efface ce qu’une mise à jour a laissé', () => {
@@ -154,13 +167,17 @@ describe('l’APK téléchargé reste dans l’espace privé de l’application'
   })
 
   it('une construction de débogage ne se met jamais à jour (sa clé est publique)', () => {
-    expect(named('SelfUpdateDirect.kt').code).toContain('override val supported: Boolean = !BuildConfig.DEBUG')
+    expect(named('SelfUpdateDirect.kt').code).toContain(
+      'override val supported: Boolean = !BuildConfig.DEBUG',
+    )
   })
 
   it('la signature d’Android n’est jamais contournée : aucune installation silencieuse, aucun réglage de signature', () => {
     const offenders = sources
       .filter(({ code }) =>
-        /PackageInstaller|INSTALL_ALLOW_TEST|INSTALL_REPLACE_EXISTING|INSTALL_ALLOW_DOWNGRADE|pm\s+install|setInstallReason|EXTRA_NOT_UNKNOWN_SOURCE|INSTALL_NON_MARKET|REQUEST_DELETE_PACKAGES|ACTION_DELETE|ACTION_UNINSTALL/.test(code),
+        /PackageInstaller|INSTALL_ALLOW_TEST|INSTALL_REPLACE_EXISTING|INSTALL_ALLOW_DOWNGRADE|pm\s+install|setInstallReason|EXTRA_NOT_UNKNOWN_SOURCE|INSTALL_NON_MARKET|REQUEST_DELETE_PACKAGES|ACTION_DELETE|ACTION_UNINSTALL/.test(
+          code,
+        ),
       )
       .map(({ where }) => where)
 
@@ -180,17 +197,26 @@ describe('l’APK téléchargé reste dans l’espace privé de l’application'
 
 describe('les deux variantes de distribution', () => {
   it('la permission d’installer n’est déclarée que dans la variante direct', () => {
-    const permissions = (text: string) => [...text.matchAll(/<uses-permission[^>]*android:name="([^"]+)"/g)].map((match) => match[1])
+    const permissions = (text: string) =>
+      [...text.matchAll(/<uses-permission[^>]*android:name="([^"]+)"/g)].map((match) => match[1])
 
-    expect(permissions(read('app/src/main/AndroidManifest.xml'))).toEqual(['android.permission.INTERNET'])
-    expect(permissions(read('app/src/direct/AndroidManifest.xml'))).toEqual(['android.permission.REQUEST_INSTALL_PACKAGES'])
+    expect(permissions(read('app/src/main/AndroidManifest.xml'))).toEqual([
+      'android.permission.INTERNET',
+    ])
+    expect(permissions(read('app/src/direct/AndroidManifest.xml'))).toEqual([
+      'android.permission.REQUEST_INSTALL_PACKAGES',
+    ])
   })
 
   it('l’APK de débogage (direct) retire la permission et le fournisseur : il ne se met jamais à jour lui-même', () => {
     const debug = read('app/src/directDebug/AndroidManifest.xml')
 
-    expect(debug).toContain('<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />')
-    expect(debug).toContain('<provider android:name="androidx.core.content.FileProvider" tools:node="remove" />')
+    expect(debug).toContain(
+      '<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />',
+    )
+    expect(debug).toContain(
+      '<provider android:name="androidx.core.content.FileProvider" tools:node="remove" />',
+    )
   })
 
   it('la variante play n’a ni manifeste, ni ressource, ni fournisseur, ni autre code que son remplaçant', () => {
@@ -207,7 +233,13 @@ describe('les deux variantes de distribution', () => {
   it('le code commun ne connaît que l’interface SelfUpdate', () => {
     const main = sources.filter(({ where }) => where.startsWith('app/src/main/'))
     const offenders = main
-      .filter(({ name, code }) => name !== 'SelfUpdate.kt' && /DirectSelfUpdate|HttpsHop|PrivateUpdateStorage|AndroidUpdatePlatform|FileProvider|REQUEST_INSTALL/.test(code))
+      .filter(
+        ({ name, code }) =>
+          name !== 'SelfUpdate.kt' &&
+          /DirectSelfUpdate|HttpsHop|PrivateUpdateStorage|AndroidUpdatePlatform|FileProvider|REQUEST_INSTALL/.test(
+            code,
+          ),
+      )
       .map(({ where }) => where)
 
     expect(offenders).toEqual([])
@@ -225,7 +257,9 @@ describe('les deux variantes de distribution', () => {
     expect(build).toContain(':app:assembleDirectDebug')
     expect(build).toContain('check_distributions')
     // L'APK publié a exactement deux permissions : Internet et l'installation de sa mise à jour
-    expect(build).toContain('android.permission.INTERNET android.permission.REQUEST_INSTALL_PACKAGES ')
+    expect(build).toContain(
+      'android.permission.INTERNET android.permission.REQUEST_INSTALL_PACKAGES ',
+    )
   })
 
   it('la publication refuse sans clé pour toutes les variantes', () => {
@@ -248,15 +282,28 @@ describe('le protocole du pont pour la mise à jour', () => {
   it('les mots de l’état sont ceux que la page lit', () => {
     const words = [...state.matchAll(/override val wire = "([A-Za-z]+)"/g)].map((match) => match[1])
 
-    expect(words).toEqual(['inconnu', 'verification', 'aJour', 'miseAJourDisponible', 'telechargement', 'pretAInstaller', 'erreur'])
+    expect(words).toEqual([
+      'inconnu',
+      'verification',
+      'aJour',
+      'miseAJourDisponible',
+      'telechargement',
+      'pretAInstaller',
+      'erreur',
+    ])
     expect(words).toEqual([...UPDATE_STATUSES])
   })
 
   it('les messages de la page sont ceux que le pont envoie, et rien d’autre n’est reconnu', () => {
-    const received = [...bridge.matchAll(/"(update\.[a-z]+)" -> NativeRequest/g)].map((match) => match[1])
+    const received = [...bridge.matchAll(/"(update\.[a-z]+)" -> NativeRequest/g)].map(
+      (match) => match[1],
+    )
 
     expect(received).toEqual(['update.status', 'update.check', 'update.start', 'update.cancel'])
-    const front = readFileSync(join(androidDir, '..', 'src/features/drive/bridge/driveBridge.ts'), 'utf8')
+    const front = readFileSync(
+      join(androidDir, '..', 'src/features/drive/bridge/driveBridge.ts'),
+      'utf8',
+    )
     for (const type of received) expect(front).toContain(`type: '${type}'`)
     expect(state).toContain('UPDATE_STATE_TYPE = "update.state"')
   })

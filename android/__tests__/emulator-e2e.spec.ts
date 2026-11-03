@@ -25,7 +25,9 @@ const COMMAND_BYTES = 16 * 1024
 const planFiles = readdirSync(plansDir).filter((file) => file.endsWith('.json'))
 
 function planOf(file: string): PlanMessage {
-  return validatePlan(JSON.parse(read(join(plansDir, file)).replaceAll('__RUN_ID__', RUN_ID))) as PlanMessage
+  return validatePlan(
+    JSON.parse(read(join(plansDir, file)).replaceAll('__RUN_ID__', RUN_ID)),
+  ) as PlanMessage
 }
 
 describe('les plans des scénarios de l’émulateur', () => {
@@ -40,33 +42,43 @@ describe('les plans des scénarios de l’émulateur', () => {
     expect([...statuses].sort()).toEqual(['HAVE_AT_HOME', 'KNOWN', 'NEW', 'SKIP'])
   })
 
-  it.each(planFiles)('%s est un plan valide du protocole v1, au serveur du faux Leclerc (DRV-754)', (file) => {
-    expect(planOf(file).store).toEqual({ ...MOBILE_PLAN_STORE })
-  })
+  it.each(planFiles)(
+    '%s est un plan valide du protocole v1, au serveur du faux Leclerc (DRV-754)',
+    (file) => {
+      expect(planOf(file).store).toEqual({ ...MOBILE_PLAN_STORE })
+    },
+  )
 
   it.each(planFiles)('%s ne laisse aucun marqueur oublié, à part celui du passage', (file) => {
     const text = read(join(plansDir, file))
     expect(text.match(/__[A-Z_]+__/g)).toEqual(['__RUN_ID__'])
   })
 
-  it.each(planFiles)('%s ne cite que des produits du catalogue du faux Leclerc, avec leur libellé', (file) => {
-    const problems = planOf(file).lines.flatMap((line) =>
-      (line.products ?? []).flatMap((product) => {
-        const found = PRODUCTS.find((candidate) => String(candidate.id) === product.id)
-        if (!found) return [`produit ${product.id} de ${line.ingredientSlug} absent du catalogue`]
-        const label = [found.label1, found.label2].filter(Boolean).join(' ')
-        return [
-          ...(product.label === label ? [] : [`libellé de ${product.id} : ${product.label} au lieu de ${label}`]),
-          ...(found.stock > 0 ? [] : [`produit ${product.id} en rupture`]),
-        ]
-      }),
-    )
-    expect(problems).toEqual([])
-  })
+  it.each(planFiles)(
+    '%s ne cite que des produits du catalogue du faux Leclerc, avec leur libellé',
+    (file) => {
+      const problems = planOf(file).lines.flatMap((line) =>
+        (line.products ?? []).flatMap((product) => {
+          const found = PRODUCTS.find((candidate) => String(candidate.id) === product.id)
+          if (!found) return [`produit ${product.id} de ${line.ingredientSlug} absent du catalogue`]
+          const label = [found.label1, found.label2].filter(Boolean).join(' ')
+          return [
+            ...(product.label === label
+              ? []
+              : [`libellé de ${product.id} : ${product.label} au lieu de ${label}`]),
+            ...(found.stock > 0 ? [] : [`produit ${product.id} en rupture`]),
+          ]
+        }),
+      )
+      expect(problems).toEqual([])
+    },
+  )
 
   it.each(planFiles)('%s tient dans une commande du faux Repas', (file) => {
     const oneLine = read(join(plansDir, file)).replace(/\n/g, '')
-    expect(new TextEncoder().encode(`{"do":"drive.start","plan":${oneLine}}`).length).toBeLessThan(COMMAND_BYTES)
+    expect(new TextEncoder().encode(`{"do":"drive.start","plan":${oneLine}}`).length).toBeLessThan(
+      COMMAND_BYTES,
+    )
   })
 
   it('sont tous joués par e2e.sh', () => {
@@ -76,18 +88,23 @@ describe('les plans des scénarios de l’émulateur', () => {
 })
 
 describe('les scripts de l’émulateur', () => {
-  it.each(['lib.sh', 'smoke.sh', 'e2e.sh', 'ctl.sh', 'entrypoint.sh'])('%s est de la syntaxe bash valide', (file) => {
-    const checked = spawnSync('bash', ['-n', join(emulatorDir, file)], { encoding: 'utf8' })
-    expect(checked.stderr).toBe('')
-    expect(checked.status).toBe(0)
-  })
+  it.each(['lib.sh', 'smoke.sh', 'e2e.sh', 'ctl.sh', 'entrypoint.sh'])(
+    '%s est de la syntaxe bash valide',
+    (file) => {
+      const checked = spawnSync('bash', ['-n', join(emulatorDir, file)], { encoding: 'utf8' })
+      expect(checked.stderr).toBe('')
+      expect(checked.status).toBe(0)
+    },
+  )
 
   it('jouent Auchan (DRV-731, DRV-738) contre le faux site d’Auchan, sur ses deux seuls hôtes de test, avec l’APK ordinaire', () => {
     const entrypoint = read(join(emulatorDir, 'entrypoint.sh'))
     const lib = read(join(emulatorDir, 'lib.sh'))
     const script = read(join(emulatorDir, 'e2e.sh'))
     const makefile = read(join(androidDir, '..', 'Makefile'))
-    expect(entrypoint).toContain('--address=/www.auchan.fr/10.0.2.2 --address=/compte.auchan.fr/10.0.2.2')
+    expect(entrypoint).toContain(
+      '--address=/www.auchan.fr/10.0.2.2 --address=/compte.auchan.fr/10.0.2.2',
+    )
     expect(entrypoint).not.toMatch(/--address=\/auchan\.fr\//)
     expect(entrypoint).toContain('DNS:www.auchan.fr,DNS:compte.auchan.fr')
     expect(lib).toContain('AUCHAN_HOST=www.auchan.fr')
@@ -97,7 +114,9 @@ describe('les scripts de l’émulateur', () => {
     expect(makefile).not.toContain('ANDROID_EXTRA_RETAILERS=auchan')
     expect(makefile).not.toContain('repas-drive-auchan.apk')
     expect(script).not.toContain('repas-drive-auchan.apk')
-    const ordinary = makefile.split('\n').filter((line) => line.includes('ANDROID_APK_NAME=repas-drive-smoke.apk'))
+    const ordinary = makefile
+      .split('\n')
+      .filter((line) => line.includes('ANDROID_APK_NAME=repas-drive-smoke.apk'))
     expect(ordinary.length).toBeGreaterThan(0)
     expect(ordinary.filter((line) => line.includes('ANDROID_EXTRA_RETAILERS'))).toEqual([])
     // L'APK ordinaire annonce Auchan et son menu la propose ; la preuve du pont sur l'hôte du mot de passe est gardée (jamais de pont sur compte).
@@ -109,10 +128,18 @@ describe('les scripts de l’émulateur', () => {
   it('ne parlent qu’à des noms de faux sites, jamais à un vrai hôte', () => {
     const hosts = new Set(
       ['lib.sh', 'smoke.sh', 'e2e.sh']
-        .flatMap((file) => read(join(emulatorDir, file)).match(/https?:\/\/[a-z0-9.$_{}-]+/gi) ?? [])
+        .flatMap(
+          (file) => read(join(emulatorDir, file)).match(/https?:\/\/[a-z0-9.$_{}-]+/gi) ?? [],
+        )
         .map((address) => address.replace(/^https?:\/\//i, '').replace(/\$STORE_[A-Z_]+$/, '')),
     )
-    expect([...hosts].sort()).toEqual(['$FAKE_STORE_HOST', '$MOBILE_HOST', '$REPAS_HOST', '127.0.0.1', 'repas.test'])
+    expect([...hosts].sort()).toEqual([
+      '$FAKE_STORE_HOST',
+      '$MOBILE_HOST',
+      '$REPAS_HOST',
+      '127.0.0.1',
+      'repas.test',
+    ])
   })
 })
 
@@ -124,14 +151,20 @@ describe('la page de départ d’un plan dans l’émulateur (recette réelle du
 
   it('est celle de l’application : l’accueil de l’enseigne (NavigationPolicy.START_URL), servi par le faux Leclerc complet sous le même nom', () => {
     // L'accueil de l'enseigne est une donnée de son entrée au registre (DRV-706) ; `NavigationPolicy.START_URL` et les pages de départ la lisent.
-    const registry = read(join(androidDir, 'core/src/main/kotlin/eu/kantin/repas/drive/RetailerSites.kt'))
-    const policy = read(join(androidDir, 'core/src/main/kotlin/eu/kantin/repas/drive/NavigationPolicy.kt'))
+    const registry = read(
+      join(androidDir, 'core/src/main/kotlin/eu/kantin/repas/drive/RetailerSites.kt'),
+    )
+    const policy = read(
+      join(androidDir, 'core/src/main/kotlin/eu/kantin/repas/drive/NavigationPolicy.kt'),
+    )
     const plan = read(join(androidDir, 'core/src/main/kotlin/eu/kantin/repas/drive/DrivePlan.kt'))
 
     expect(/startUrl = "([^"]+)"/.exec(registry)?.[1]).toBe(`https://${HOME_HOST}/`)
     expect(policy).toContain('val START_URL: String get() = legacy.startUrl')
     // La lecture du magasin (SetupRequest) et le plan (DrivePlan) : les deux pages de départ sont celle-là, jamais l'hôte du magasin du plan.
-    const starts = [...plan.matchAll(/override val startUrl: String get\(\) = (.+)/g)].map((match) => match[1])
+    const starts = [...plan.matchAll(/override val startUrl: String get\(\) = (.+)/g)].map(
+      (match) => match[1],
+    )
     // (DRV-741 : la lecture du magasin s'ouvre sur l'adresse d'un magasin que l'utilisateur a donnée, à défaut sur cet accueil)
     expect(starts).toEqual(['address ?: site.startUrl', 'site.startUrl'])
     expect(read(join(emulatorDir, 'lib.sh'))).toContain(`SITE_HOST=${HOME_HOST}`)
@@ -167,12 +200,23 @@ describe('l’application ne fait confiance à aucun faux certificat', () => {
       if (entry.isDirectory()) return entry.name === 'build' ? [] : files(path)
       return /\.(kt|kts|xml)$/.test(entry.name) ? [path] : []
     })
-  const sources = files(join(androidDir, 'app')).map((path) => ({ path: relative(androidDir, path), text: read(path) }))
+  const sources = files(join(androidDir, 'app')).map((path) => ({
+    path: relative(androidDir, path),
+    text: read(path),
+  }))
 
-  it.each(['ignore-certificate-errors', 'networkSecurityConfig', 'trust-anchors', 'handler.proceed()', 'TrustManager'])(
+  it.each([
+    'ignore-certificate-errors',
+    'networkSecurityConfig',
+    'trust-anchors',
+    'handler.proceed()',
+    'TrustManager',
+  ])(
     'n’écrit jamais « %s » (le faux certificat n’est accepté que par la WebView de l’émulateur, réglée de l’extérieur)',
     (forbidden) => {
-      expect(sources.filter(({ text }) => text.includes(forbidden)).map(({ path }) => path)).toEqual([])
+      expect(
+        sources.filter(({ text }) => text.includes(forbidden)).map(({ path }) => path),
+      ).toEqual([])
     },
   )
 

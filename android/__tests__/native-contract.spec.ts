@@ -19,7 +19,8 @@ import { parseInbound } from '../../src/features/drive/bridge/native'
 import { fakeNative } from '../../src/features/drive/bridge/__tests__/fakeNative'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const resource = (name: string) => readFileSync(join(here, '../core/src/test/resources', name), 'utf8')
+const resource = (name: string) =>
+  readFileSync(join(here, '../core/src/test/resources', name), 'utf8')
 const example = (name: string) =>
   readFileSync(join(here, '../../drive-agent/protocol/examples/valid', name), 'utf8')
 
@@ -117,7 +118,8 @@ describe('ce que l’application répond à la page', () => {
       },
     }
     const native = fakeNative((message, reply) => {
-      if (message.type === 'drive.setup') reply({ v: 1, type: 'drive.result', result: { ...setupResult, runId: message.runId } })
+      if (message.type === 'drive.setup')
+        reply({ v: 1, type: 'drive.result', result: { ...setupResult, runId: message.runId } })
     })
 
     const store = await createDriveBridge({ window: native.window }).startSetup()
@@ -130,18 +132,23 @@ describe('ce que l’application répond à la page', () => {
     expect(inbound).toMatchObject({ type: 'drive.result', result: { runId: RUN_ID } })
   })
 
-  it.each(['INVALID_PLAN', 'INVALID_SETUP', 'BUSY', 'UNAVAILABLE', 'NO_PASS'])('drive.error %s', (code) => {
-    expect(parseInbound(`{"v":1,"type":"drive.error","code":"${code}","runId":"${RUN_ID}"}`)).toEqual({
-      type: 'drive.error',
-      code,
-      runId: RUN_ID,
-    })
-    expect(parseInbound(`{"v":1,"type":"drive.error","code":"${code}"}`)).toEqual({
-      type: 'drive.error',
-      code,
-      runId: null,
-    })
-  })
+  it.each(['INVALID_PLAN', 'INVALID_SETUP', 'BUSY', 'UNAVAILABLE', 'NO_PASS'])(
+    'drive.error %s',
+    (code) => {
+      expect(
+        parseInbound(`{"v":1,"type":"drive.error","code":"${code}","runId":"${RUN_ID}"}`),
+      ).toEqual({
+        type: 'drive.error',
+        code,
+        runId: RUN_ID,
+      })
+      expect(parseInbound(`{"v":1,"type":"drive.error","code":"${code}"}`)).toEqual({
+        type: 'drive.error',
+        code,
+        runId: null,
+      })
+    },
+  )
 
   it.each(['INVALID_MESSAGE', 'UNKNOWN_TYPE'])('error %s', (code) => {
     expect(parseInbound(`{"v":1,"type":"error","code":"${code}"}`)).toEqual({ type: 'error', code })
@@ -151,7 +158,11 @@ describe('ce que l’application répond à la page', () => {
 describe('ce que la page envoie à l’application', () => {
   const memory = () => {
     let value: string | null = null
-    return { get: () => value, set: (next: string) => void (value = next), remove: () => void (value = null) }
+    return {
+      get: () => value,
+      set: (next: string) => void (value = next),
+      remove: () => void (value = null),
+    }
   }
 
   it('drive.start porte le plan du protocole tel quel', () => {

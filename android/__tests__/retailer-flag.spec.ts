@@ -44,7 +44,9 @@ describe('le drapeau de construction des enseignes éteintes', () => {
   it('est lu de l’environnement pour le débogage seulement, et refusé s’il est mal écrit', () => {
     expect(gradle).toContain('val extraRetailers = env("ANDROID_EXTRA_RETAILERS") ?: ""')
     expect(gradle).toContain('[a-z][a-z0-9]{0,19}(,[a-z][a-z0-9]{0,19})*')
-    expect(buildType('debug')).toContain('buildConfigField("String", "EXTRA_RETAILERS", "\\"$extraRetailers\\"")')
+    expect(buildType('debug')).toContain(
+      'buildConfigField("String", "EXTRA_RETAILERS", "\\"$extraRetailers\\"")',
+    )
   })
 
   it('est vide, écrit en dur, dans la publication, quoi que dise l’environnement', () => {
@@ -61,9 +63,11 @@ describe('le drapeau de construction des enseignes éteintes', () => {
     const verify = gradle.slice(start, gradle.indexOf('\n}\n', start))
 
     expect(verify).toContain('if (extraRetailers.isNotEmpty())')
-    expect(verify).toContain('Une publication n\'embarque aucune enseigne éteinte')
+    expect(verify).toContain("Une publication n'embarque aucune enseigne éteinte")
     // et la vérification précède toutes les autres, donc toute tâche de publication la subit
-    expect(verify.indexOf('extraRetailers.isNotEmpty()')).toBeLessThan(verify.indexOf('val missing'))
+    expect(verify.indexOf('extraRetailers.isNotEmpty()')).toBeLessThan(
+      verify.indexOf('val missing'),
+    )
     expect(gradle).toMatch(/\^pre\\w\*ReleaseBuild\$/)
   })
 
@@ -73,9 +77,12 @@ describe('le drapeau de construction des enseignes éteintes', () => {
     expect(buildScript).toContain('ANDROID_EXTRA_RETAILERS=exemple')
     expect(buildScript).not.toContain('ANDROID_EXTRA_RETAILERS=auchan')
     expect(buildScript).toContain(':app:preDirectReleaseBuild')
-    expect(buildScript).toContain('n\'embarque aucune enseigne éteinte')
+    expect(buildScript).toContain("n'embarque aucune enseigne éteinte")
     // verify-release lit le BuildConfig de l'APK de publication
-    const verify = buildScript.slice(buildScript.indexOf('verify_release() {'), buildScript.indexOf('release_selftest() {'))
+    const verify = buildScript.slice(
+      buildScript.indexOf('verify_release() {'),
+      buildScript.indexOf('release_selftest() {'),
+    )
     expect(verify).toContain('EXTRA_RETAILERS = "";')
     // et l'essai de la publication n'en hérite pas de l'environnement du développeur
     expect(buildScript).toContain('env -u ANDROID_VERSION_CODE -u ANDROID_EXTRA_RETAILERS')
@@ -87,29 +94,52 @@ describe('le drapeau de construction des enseignes éteintes', () => {
     expect(buildScript).toContain('RetailerSites.kt')
     expect(buildScript).toContain('AUCHAN')
     // contrôlée à la construction des deux variantes…
-    const distributions = buildScript.slice(buildScript.indexOf('check_distributions() {'), buildScript.indexOf('build_debug() {'))
+    const distributions = buildScript.slice(
+      buildScript.indexOf('check_distributions() {'),
+      buildScript.indexOf('build_debug() {'),
+    )
     expect(distributions).toContain('announces_published_retailers\n')
     // …et sur l'APK signé lui-même : l'entrée d'Auchan est dans le code compilé, navigation sur ses deux hôtes
-    const verify = buildScript.slice(buildScript.indexOf('verify_release() {'), buildScript.indexOf('release_selftest() {'))
+    const verify = buildScript.slice(
+      buildScript.indexOf('verify_release() {'),
+      buildScript.indexOf('release_selftest() {'),
+    )
     expect(verify).toContain('apk_announces_published_retailers "$apk"')
     expect(buildScript).toContain("grep -aF 'www.auchan.fr' > /dev/null")
     expect(buildScript).toContain("grep -aF 'compte.auchan.fr' > /dev/null")
   })
 
   it('le registre que build.sh lit annonce bien Auchan (le même texte que le contrôle cherche)', () => {
-    const registry = read(join(androidDir, 'core', 'src', 'main', 'kotlin', 'eu', 'kantin', 'repas', 'drive', 'RetailerSites.kt'))
+    const registry = read(
+      join(
+        androidDir,
+        'core',
+        'src',
+        'main',
+        'kotlin',
+        'eu',
+        'kantin',
+        'repas',
+        'drive',
+        'RetailerSites.kt',
+      ),
+    )
     const pattern = /^[ \t]*val DEFAULT = RetailerSites\(listOf\([^)]*\bAUCHAN\b[^)]*\)\)/m
 
     expect(registry).toMatch(pattern)
   })
 
   it('traverse Docker (compose) comme les autres variables de construction de débogage', () => {
-    expect(read(join(repoDir, 'compose.yaml'))).toMatch(/- ANDROID_APK_NAME\n(\s+#.*\n)*\s+- ANDROID_EXTRA_RETAILERS\n/)
+    expect(read(join(repoDir, 'compose.yaml'))).toMatch(
+      /- ANDROID_APK_NAME\n(\s+#.*\n)*\s+- ANDROID_EXTRA_RETAILERS\n/,
+    )
   })
 
   it('n’est posé par aucun workflow : ni la CI, ni la publication ne l’allument', () => {
     const workflows = join(repoDir, '.github', 'workflows')
-    const mentioning = readdirSync(workflows).filter((file) => read(join(workflows, file)).includes('ANDROID_EXTRA_RETAILERS'))
+    const mentioning = readdirSync(workflows).filter((file) =>
+      read(join(workflows, file)).includes('ANDROID_EXTRA_RETAILERS'),
+    )
 
     expect(mentioning).toEqual([])
   })
@@ -120,36 +150,72 @@ describe('l’application ne nomme aucune enseigne et ne passe que par le drapea
   const main = kotlin('MainActivity.kt')
 
   it('RepasApp annonce le registre que le drapeau donne, et sert ce registre plus les enseignes d’essai', () => {
-    expect(app).toContain('internal val announced: RetailerSites by lazy { RetailerSites.serving(BuildConfig.EXTRA_RETAILERS) }')
-    expect(app).toContain('if (TestRetailers.extra.isEmpty()) announced else RetailerSites(announced.all + TestRetailers.extra, legacy = announced.legacy)')
+    expect(app).toContain(
+      'internal val announced: RetailerSites by lazy { RetailerSites.serving(BuildConfig.EXTRA_RETAILERS) }',
+    )
+    expect(app).toContain(
+      'if (TestRetailers.extra.isEmpty()) announced else RetailerSites(announced.all + TestRetailers.extra, legacy = announced.legacy)',
+    )
   })
 
   it('l’annonce à Repas et le menu viennent de ce registre, jamais de la table complète ni de la liste des enseignes éteintes', () => {
     expect(main).toContain('retailers = repasApp.announced.announcedRetailers()')
     expect(main).toContain('val announced = repasApp.announced.all')
-    for (const file of allFiles(join(appSrc, 'main', 'kotlin')).concat(allFiles(join(appSrc, 'direct', 'kotlin')), allFiles(join(appSrc, 'play', 'kotlin')))) {
+    for (const file of allFiles(join(appSrc, 'main', 'kotlin')).concat(
+      allFiles(join(appSrc, 'direct', 'kotlin')),
+      allFiles(join(appSrc, 'play', 'kotlin')),
+    )) {
       const code = codeOf(read(file))
-      expect({ file, switchedOff: code.includes('SWITCHED_OFF'), registered: code.includes('REGISTERED') }).toEqual({ file, switchedOff: false, registered: false })
+      expect({
+        file,
+        switchedOff: code.includes('SWITCHED_OFF'),
+        registered: code.includes('REGISTERED'),
+      }).toEqual({ file, switchedOff: false, registered: false })
     }
   })
 
   it('aucun fichier de l’application ne nomme une enseigne éteinte (seul le registre du cœur le fait)', () => {
-    const registry = codeOf(read(join(androidDir, 'core', 'src', 'main', 'kotlin', 'eu', 'kantin', 'repas', 'drive', 'RetailerSites.kt')))
+    const registry = codeOf(
+      read(
+        join(
+          androidDir,
+          'core',
+          'src',
+          'main',
+          'kotlin',
+          'eu',
+          'kantin',
+          'repas',
+          'drive',
+          'RetailerSites.kt',
+        ),
+      ),
+    )
     // Leclerc, l’enseigne d’avant, reste nommée par les actifs de débogage (plan d’essai) : seules les enseignes éteintes sont à l’abri de toute mention.
-    const ids = [...registry.matchAll(/\bid = "([a-z][a-z0-9]*)"/g)].map((match) => match[1] as string).filter((id) => id !== 'leclerc')
+    const ids = [...registry.matchAll(/\bid = "([a-z][a-z0-9]*)"/g)]
+      .map((match) => match[1] as string)
+      .filter((id) => id !== 'leclerc')
     expect(ids).toEqual(['auchan'])
 
-    const files = allFiles(appSrc).filter((path) => /\.(kt|kts|xml|json|js)$/.test(path) && !path.includes(join('src', 'test')))
+    const files = allFiles(appSrc).filter(
+      (path) => /\.(kt|kts|xml|json|js)$/.test(path) && !path.includes(join('src', 'test')),
+    )
     for (const id of ids) {
       // Seule exception (DRV-735) : le modèle de plan d'essai de CETTE enseigne, une donnée de la variante de débogage seulement (`src/debug/assets/`) qui dit son
       // enseigne ; le même fichier dans un autre dossier (publication comprise) reste une faute.
       const planModel = join(appSrc, 'debug', 'assets', `debug-plan.${id}.json`)
-      const offenders = files.filter((path) => path !== planModel && new RegExp(id, 'i').test(codeOf(read(path))))
-      expect({ id, offenders: offenders.map((path) => path.slice(androidDir.length + 1)) }).toEqual({ id, offenders: [] })
+      const offenders = files.filter(
+        (path) => path !== planModel && new RegExp(id, 'i').test(codeOf(read(path))),
+      )
+      expect({ id, offenders: offenders.map((path) => path.slice(androidDir.length + 1)) }).toEqual(
+        { id, offenders: [] },
+      )
     }
   })
 
   it('la variante de publication ne voit aucun hôte d’Auchan dans ses sources propres (les enseignes d’essai sont vides)', () => {
-    expect(read(join(appSrc, 'release', 'kotlin', 'eu', 'kantin', 'repas', 'drive', 'TestRetailers.kt'))).toContain('val extra: List<RetailerSite> = emptyList()')
+    expect(
+      read(join(appSrc, 'release', 'kotlin', 'eu', 'kantin', 'repas', 'drive', 'TestRetailers.kt')),
+    ).toContain('val extra: List<RetailerSite> = emptyList()')
   })
 })

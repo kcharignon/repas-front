@@ -30,12 +30,16 @@ const files = kotlinFiles(coreMain)
 const registry = join(coreMain, 'eu/kantin/repas/drive/RetailerSites.kt')
 
 /** Les identifiants des enseignes inscrites (allumées ou éteintes), lus dans l’entrée de chaque enseigne du registre. */
-const retailerIds = [...codeOf(read(registry)).matchAll(/\bid = "([a-z][a-z0-9]*)"/g)].map((match) => match[1] as string)
+const retailerIds = [...codeOf(read(registry)).matchAll(/\bid = "([a-z][a-z0-9]*)"/g)].map(
+  (match) => match[1] as string,
+)
 
 describe('le registre des enseignes est le seul endroit du cœur qui nomme une enseigne', () => {
   it('regarde bien les sources du cœur, dont le registre', () => {
     expect(files.length).toBeGreaterThanOrEqual(15)
-    expect(files.map((path) => basename(path))).toEqual(expect.arrayContaining(['RetailerSites.kt', 'RetailerSite.kt', 'RetailerValue.kt']))
+    expect(files.map((path) => basename(path))).toEqual(
+      expect.arrayContaining(['RetailerSites.kt', 'RetailerSite.kt', 'RetailerValue.kt']),
+    )
   })
 
   it('inscrit Leclerc et Auchan, et aucune autre enseigne', () => {
@@ -44,9 +48,13 @@ describe('le registre des enseignes est le seul endroit du cœur qui nomme une e
 
   it('n’écrit le nom d’aucune enseigne inscrite dans le code d’un autre fichier du cœur', () => {
     for (const id of retailerIds) {
-      const offenders = files.filter((path) => basename(path) !== 'RetailerSites.kt').filter((path) => new RegExp(id, 'i').test(codeOf(read(path))))
+      const offenders = files
+        .filter((path) => basename(path) !== 'RetailerSites.kt')
+        .filter((path) => new RegExp(id, 'i').test(codeOf(read(path))))
 
-      expect({ id, offenders: offenders.map((path) => path.slice(androidDir.length + 1)) }).toEqual({ id, offenders: [] })
+      expect({ id, offenders: offenders.map((path) => path.slice(androidDir.length + 1)) }).toEqual(
+        { id, offenders: [] },
+      )
     }
   })
 
@@ -66,7 +74,10 @@ describe('le registre des enseignes est le seul endroit du cœur qui nomme une e
 
   it('fait passer Leclerc par sa version mobile (DRV-754) : plus de mode ordinateur, plus de site mobile refusé, Auchan inchangé', () => {
     const code = codeOf(read(registry))
-    const leclerc = code.slice(code.indexOf('private val LECLERC'), code.indexOf('private val AUCHAN'))
+    const leclerc = code.slice(
+      code.indexOf('private val LECLERC'),
+      code.indexOf('private val AUCHAN'),
+    )
 
     expect(leclerc).toContain('siteMode = SiteMode.MOBILE')
     expect(leclerc).not.toContain('SiteMode.DESKTOP')
@@ -75,7 +86,9 @@ describe('le registre des enseignes est le seul endroit du cœur qui nomme une e
   })
 
   it('n’écrit aucune règle d’origine à la main hors du modèle d’enseigne', () => {
-    const offenders = files.filter((path) => basename(path) !== 'RetailerSite.kt').filter((path) => /"https:\/\/\*/.test(codeOf(read(path))))
+    const offenders = files
+      .filter((path) => basename(path) !== 'RetailerSite.kt')
+      .filter((path) => /"https:\/\/\*/.test(codeOf(read(path))))
 
     expect(offenders.map((path) => path.slice(androidDir.length + 1))).toEqual([])
   })
@@ -83,28 +96,47 @@ describe('le registre des enseignes est le seul endroit du cœur qui nomme une e
 
 describe('le contrat des enseignes lu par les tests Kotlin', () => {
   it('est la copie exacte de l’exemple du back recopié pour l’agent', () => {
-    expect(read(join(coreResources, 'retailers.sample.json'))).toBe(read(join(contractDir, 'retailers.sample.json')))
+    expect(read(join(coreResources, 'retailers.sample.json'))).toBe(
+      read(join(contractDir, 'retailers.sample.json')),
+    )
   })
 
   it('liste l’enseigne d’aujourd’hui avec les champs que le cœur compare', () => {
-    const contract = JSON.parse(read(join(coreResources, 'retailers.sample.json'))) as { retailers: Record<string, unknown>[] }
+    const contract = JSON.parse(read(join(coreResources, 'retailers.sample.json'))) as {
+      retailers: Record<string, unknown>[]
+    }
     const entry = contract.retailers.find((retailer) => retailer.id === 'leclerc')
 
-    expect(entry).toMatchObject({ id: 'leclerc', name: 'Leclerc', nameDe: 'de Leclerc', storeIdSource: 'URL' })
+    expect(entry).toMatchObject({
+      id: 'leclerc',
+      name: 'Leclerc',
+      nameDe: 'de Leclerc',
+      storeIdSource: 'URL',
+    })
     expect(typeof entry?.storeAddressPattern).toBe('string')
     expect(typeof entry?.storeAddressExample).toBe('string')
   })
 
   it('liste Auchan, au magasin explicite, avec les champs que le cœur compare (DRV-728)', () => {
-    const contract = JSON.parse(read(join(coreResources, 'retailers.sample.json'))) as { retailers: Record<string, unknown>[] }
+    const contract = JSON.parse(read(join(coreResources, 'retailers.sample.json'))) as {
+      retailers: Record<string, unknown>[]
+    }
     const entry = contract.retailers.find((retailer) => retailer.id === 'auchan')
 
-    expect(entry).toMatchObject({ id: 'auchan', name: 'Auchan', nameDe: 'd’Auchan', storeIdSource: 'EXPLICIT', storeAddressExample: 'https://www.auchan.fr/' })
+    expect(entry).toMatchObject({
+      id: 'auchan',
+      name: 'Auchan',
+      nameDe: 'd’Auchan',
+      storeIdSource: 'EXPLICIT',
+      storeAddressExample: 'https://www.auchan.fr/',
+    })
     expect(typeof entry?.storeIdPattern).toBe('string')
   })
 
   it('ne liste que les enseignes inscrites dans le cœur', () => {
-    const contract = JSON.parse(read(join(coreResources, 'retailers.sample.json'))) as { retailers: { id: string }[] }
+    const contract = JSON.parse(read(join(coreResources, 'retailers.sample.json'))) as {
+      retailers: { id: string }[]
+    }
 
     expect(contract.retailers.map((retailer) => retailer.id)).toEqual(retailerIds)
   })

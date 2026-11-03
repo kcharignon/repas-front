@@ -10,7 +10,16 @@ const androidDir = join(dirname(fileURLToPath(import.meta.url)), '..')
 const repoDir = join(androidDir, '..')
 
 /** Les sorties de construction ne comptent pas : elles ne sont pas dans le dépôt (.gitignore). Chemins relatifs à android/. */
-const BUILD_OUTPUTS = new Set(['.gradle', '.kotlin', 'build', 'dist', 'app/build', 'core/build', 'buildSrc/.gradle', 'buildSrc/build'])
+const BUILD_OUTPUTS = new Set([
+  '.gradle',
+  '.kotlin',
+  'build',
+  'dist',
+  'app/build',
+  'core/build',
+  'buildSrc/.gradle',
+  'buildSrc/build',
+])
 const KEY_FILE = /\.(jks|p12|pfx|keystore|pem|key|pk8)$/i
 const SIGNING_VARIABLES = ['ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD']
 
@@ -34,24 +43,35 @@ describe('l’application Android ne garde aucun secret dans le dépôt', () => 
     expect(keys).toEqual(['debug.keystore'])
   })
 
-  it.each(['android/*.jks', 'android/*.p12', 'android/*.pfx', 'android/**/*.keystore', '!android/debug.keystore'])(
-    'fait ignorer par Git %s',
-    (pattern) => {
-      expect(read(join(repoDir, '.gitignore'))).toContain(pattern)
+  it.each([
+    'android/*.jks',
+    'android/*.p12',
+    'android/*.pfx',
+    'android/**/*.keystore',
+    '!android/debug.keystore',
+  ])('fait ignorer par Git %s', (pattern) => {
+    expect(read(join(repoDir, '.gitignore'))).toContain(pattern)
+  })
+
+  it.each(['ANDROID_KEYSTORE_FILE', ...SIGNING_VARIABLES])(
+    'lit %s dans l’environnement, jamais dans un fichier du dépôt',
+    (variable) => {
+      expect(read(join(androidDir, 'app', 'build.gradle.kts'))).toContain(`env("${variable}")`)
     },
   )
 
-  it.each(['ANDROID_KEYSTORE_FILE', ...SIGNING_VARIABLES])('lit %s dans l’environnement, jamais dans un fichier du dépôt', (variable) => {
-    expect(read(join(androidDir, 'app', 'build.gradle.kts'))).toContain(`env("${variable}")`)
-  })
-
   it('n’écrit en clair que le mot de passe, public, de la clé de débogage', () => {
     const gradle = read(join(androidDir, 'app', 'build.gradle.kts'))
-    const literalPasswords = [...gradle.matchAll(/(?:storePassword|keyPassword)\s*=\s*"([^"]*)"/g)].map((match) => match[1])
+    const literalPasswords = [
+      ...gradle.matchAll(/(?:storePassword|keyPassword)\s*=\s*"([^"]*)"/g),
+    ].map((match) => match[1])
     expect(literalPasswords).toEqual(['android', 'android'])
   })
 
-  it.each(['ANDROID_KEYSTORE_BASE64', ...SIGNING_VARIABLES])('passe %s au conteneur sans en écrire la valeur', (variable) => {
-    expect(read(join(repoDir, 'compose.yaml'))).toMatch(new RegExp(`^\\s+- ${variable}$`, 'm'))
-  })
+  it.each(['ANDROID_KEYSTORE_BASE64', ...SIGNING_VARIABLES])(
+    'passe %s au conteneur sans en écrire la valeur',
+    (variable) => {
+      expect(read(join(repoDir, 'compose.yaml'))).toMatch(new RegExp(`^\\s+- ${variable}$`, 'm'))
+    },
+  )
 })
