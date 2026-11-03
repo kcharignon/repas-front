@@ -12,6 +12,7 @@ import {
   type SetupResultMessage,
 } from '../protocol'
 import { run } from '../src/agent'
+import { RetailerError } from '../src/retailers'
 import type { DiagnosticProps } from '../src/ui'
 import { fakeAdapter, fakeUi, home, known, plan, product, skip } from './flow-helpers'
 import { runDeps, shop, standardShelves } from './selftest-helpers'
@@ -444,7 +445,8 @@ describe('la commande de diagnostic de l’application', () => {
     expect(message.type).toBe('log')
     expect(message.lines[0]).toMatch(/^Session : /)
     // Le dernier état du flux est dit : le passage a dépassé la validation et attend en phase A
-    expect(message.lines.at(-1)).toMatch(/^Carte : dernière étape du flux PHASE_A, /)
+    expect(message.lines.at(-2)).toMatch(/^Carte : dernière étape du flux PHASE_A, /)
+    expect(message.lines.at(-1)).toBe('Dernière erreur : aucune')
     expect(screens.screens()).toEqual(['progress'])
   })
 
@@ -466,13 +468,43 @@ describe('la commande de diagnostic de l’application', () => {
       lines: string[]
     }
     expect(message).toMatchObject({ v: 1, type: 'log' })
-    expect(message.lines).toHaveLength(3)
+    expect(message.lines).toHaveLength(4)
     expect(message.lines[0]).toMatch(/^Session : /)
     expect(message.lines[1]).toMatch(/^Fenêtre au premier plan : /)
     // La carte (DRV-760) : des formes seulement, aucun écran n'a encore été montré
     expect(message.lines[2]).toBe(
       'Carte : dernière étape du flux aucune, écran aucun, dite à l’écran jamais, boîte aucune, toucher au centre aucun écran, conteneur dernier du document absent, déplacements 0, élément actif body',
     )
+    // DRV-769 : la dernière erreur de l'agent, « aucune » tant qu'il n'y en a pas eu
+    expect(message.lines[3]).toBe('Dernière erreur : aucune')
+  })
+
+  it('DRV-769 : après un envoi arrêté, la ligne « Dernière erreur » dit le code et la cause, des mots fixes', async () => {
+    // Given : un envoi que le site arrête (code et cause de l'énumération fermée)
+    const { bridge, receive } = withBridge()
+    const { screens, closeDiagnostic } = diagnosticUi()
+    const adapter = fakeAdapter(
+      { '1000001': {} },
+      {
+        before: () => {
+          throw new RetailerError('CONTRACT_CHANGED', null, 'CART_NOT_JSON')
+        },
+      },
+    ).adapter
+    run(window, { flow: { ui: screens.ui, adapter } })
+    receive(RUNNING)
+    await vi.waitFor(() => expect(screens.screens()).toContain('end'))
+
+    // When
+    receive(COMMAND)
+    await vi.waitFor(() => expect(bridge.postMessage).toHaveBeenCalled())
+    closeDiagnostic()
+
+    // Then : seule la dernière ligne a changé, et elle ne dit que le code et la cause
+    const logged = bridge.postMessage.mock.calls
+      .map(([text]) => JSON.parse(text) as { type: string; lines?: string[] })
+      .find((message) => message.type === 'log' && message.lines !== undefined)
+    expect(logged?.lines?.at(-1)).toBe('Dernière erreur : CONTRACT_CHANGED (CART_NOT_JSON)')
   })
 
   it.each([

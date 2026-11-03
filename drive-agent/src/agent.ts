@@ -8,7 +8,7 @@
  * (le menu de « Repas Drive » ; le diagnostic s'ouvre aussitôt) ou, pour le favori de bureau, une adresse de page qui se termine par
  * `#repas-diagnostic` (l'écran d'accueil s'affiche, d'où l'on lance le diagnostic).
  */
-import { validateCommand, type SelftestResultMessage } from '../protocol'
+import { ERROR_CODES, validateCommand, type SelftestResultMessage } from '../protocol'
 import { showDiagnostic, type DiagnosticDeps } from './diagnostic'
 import { foregroundFacts } from './diagnostic/foreground'
 import { Flow, guidedChoice, setupHandler, type FlowDeps, type StorageLike } from './flow'
@@ -159,8 +159,20 @@ function stateSender(bridge: Bridge, flow: Flow, ui: UiHandle): (deps: Diagnosti
       `Session : ${session}`,
       ...(facts ? [S.diagnostic.probe.foreground(facts)] : []),
       card,
+      S.diagnostic.probe.lastError(knownFault(flow.lastFault)),
     ]
     bridge.postMessage(stringifyJson({ v: 1, type: 'log', lines }))
+  }
+}
+
+/** Le code d'erreur et la cause tels que l'énumération fermée les écrit (`BLOCKED`, `HTTP_404`, `CART_NOT_JSON`) ; tout autre forme n'est pas dite (DRV-769). */
+const CAUSE_SHAPE = /^[A-Z][A-Z0-9_]{0,63}$/
+
+function knownFault(fault: Flow['lastFault']): { code: string; cause: string | null } | null {
+  if (fault === null || !(ERROR_CODES as readonly string[]).includes(fault.code)) return null
+  return {
+    code: fault.code,
+    cause: fault.cause !== null && CAUSE_SHAPE.test(fault.cause) ? fault.cause : null,
   }
 }
 
