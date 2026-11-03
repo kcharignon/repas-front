@@ -1042,6 +1042,7 @@ export class Flow {
     run.state.done[slug] = line
     delete run.state.waiting[slug]
     this.touch(run)
+    this.reportProgress(run)
     run.log.push(entry)
     this.deps.ui.update({ done: Object.keys(run.state.done).length, entry })
   }
@@ -1087,6 +1088,22 @@ export class Flow {
       requests: count(run.base.requests, run.start.requests, now.requests),
       errors: count(run.base.errors, run.start.errors, now.errors),
       blocks: count(run.base.blocks, run.start.blocks, now.blocks),
+    }
+  }
+
+  /** Dit à l'application où en est le passage (DRV-769) ; une panne du canal ne gêne jamais le passage. */
+  private reportProgress(run: Run): void {
+    const { progress } = this.deps
+    if (!progress) return
+    try {
+      progress({
+        v: PROTOCOL_VERSION,
+        type: 'progress',
+        runId: run.plan.runId,
+        lines: resultLines(run.plan, run.state),
+      })
+    } catch {
+      // Sans importance : un abandon rendra seulement moins de lignes.
     }
   }
 

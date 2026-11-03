@@ -20,6 +20,6 @@ export {
 export { validateCommand } from './command'
 export { validateLog } from './log'
 export { validatePlan } from './plan'
-export { validateResult } from './result'
+export { validateProgress, validateResult } from './result'
 export { validateSelftestResult } from './selftest'
 export * from './types'

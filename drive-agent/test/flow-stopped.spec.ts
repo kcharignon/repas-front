@@ -4,7 +4,7 @@
 // Données synthétiques seulement.
 import { describe, expect, it } from 'vitest'
 
-import type { ResultLine } from '../protocol'
+import { validateProgress, type ResultLine } from '../protocol'
 import { RetailerError } from '../src/retailers'
 import { emptyState, RunStore, type PhaseB } from '../src/flow'
 import {
@@ -193,6 +193,40 @@ describe('un envoi arrêté rapporte ce qu’il a déjà fait (DRV-769)', () => 
       const result = expectConform(sent[0])
       expect(result).toMatchObject({ outcome: 'error', error: { code: 'STORE_MISMATCH' } })
       expect(outcomes(result.lines)).toEqual(['farine:ADDED'])
+    })
+  })
+
+  describe('où en est le passage, pour l’application (progress)', () => {
+    it('à chaque ligne faite, les lignes déjà faites partent vers l’application, dans l’ordre du plan ; un canal qui plante ne gêne pas le passage', async () => {
+      const seen: string[][] = []
+      let calls = 0
+      const { adapter } = fakeAdapter({ '1000001': {}, '1000002': {} })
+      const { flow, sent } = makeFlow({
+        ui: fakeUi().ui,
+        adapter,
+        progress: (message) => {
+          validateProgress(JSON.parse(JSON.stringify(message)))
+          seen.push(outcomes(message.lines))
+          calls += 1
+          if (calls === 1) throw new TypeError('canal fermé')
+        },
+      })
+
+      await flow.start(
+        plan([known('farine', [product('1000001')]), known('sucre', [product('1000002')])]),
+      )
+
+      expect(seen).toEqual([['farine:ADDED'], ['farine:ADDED', 'sucre:ADDED']])
+      expect(expectConform(sent[0]).outcome).toBe('completed')
+    })
+
+    it('sans canal (hors de l’application), rien n’est envoyé et le passage est le même', async () => {
+      const { adapter } = fakeAdapter({ '1000001': {} })
+      const { flow, sent } = makeFlow({ ui: fakeUi().ui, adapter })
+
+      await flow.start(plan([known('farine', [product('1000001')])]))
+
+      expect(expectConform(sent[0]).outcome).toBe('completed')
     })
   })
 

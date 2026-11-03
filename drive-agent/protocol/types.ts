@@ -391,6 +391,18 @@ export type LogMessage =
   | { v: typeof PROTOCOL_VERSION; type: 'log'; lines: string[] }
   | { v: typeof PROTOCOL_VERSION; type: 'log'; card: boolean }
 
+/**
+ * Agent vers l'application, jamais vers Repas (DRV-769) : où en est le passage en cours, à chaque ligne faite. Les mêmes lignes qu'un résultat (`ResultLine`, dans l'ordre du plan). L'application
+ * en garde la dernière : si la personne abandonne, le résultat `aborted` qu'elle rend à Repas porte ces lignes (l'application ne sait pas, sinon, ce qui est déjà au panier). Facultatif pour
+ * l'agent comme pour l'application : sans lui, un abandon rend zéro ligne, comme avant.
+ */
+export interface ProgressMessage {
+  v: typeof PROTOCOL_VERSION
+  type: 'progress'
+  runId: string
+  lines: ResultLine[]
+}
+
 /** Agent vers l'application (variante de débogage seulement, DRV-318) : le rapport du test automatique, en texte à copier. */
 export interface SelftestResultMessage {
   v: typeof PROTOCOL_VERSION

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   decodeMessage,
   encodeMessage,
+  validateProgress,
   validateResult,
   validateSelftestResult,
   type ResultMessage,
@@ -89,9 +90,18 @@ describe('avec le pont de l’application', () => {
     receive({ data: JSON.stringify(PLAN) })
 
     // Then
-    await vi.waitFor(() => expect(bridge.postMessage).toHaveBeenCalledOnce())
+    const sentTypes = () =>
+      bridge.postMessage.mock.calls.map(([text]) => (JSON.parse(text) as { type: string }).type)
+    await vi.waitFor(() => expect(sentTypes()).toContain('result'))
+    // DRV-769 : avant le résultat, l'application a reçu où en est le passage (les lignes faites), valide selon le protocole
+    expect(sentTypes()).toEqual(['progress', 'progress', 'result'])
+    const progress = validateProgress(JSON.parse(bridge.postMessage.mock.calls[1]?.[0] ?? ''))
+    expect(progress).toMatchObject({
+      runId: PLAN.runId,
+      lines: [{ ingredientSlug: 'sel' }, { ingredientSlug: 'huile' }],
+    })
     const result = validateResult(
-      JSON.parse(bridge.postMessage.mock.calls[0]?.[0] ?? ''),
+      JSON.parse(bridge.postMessage.mock.calls[2]?.[0] ?? ''),
     ) as ResultMessage
     expect(result).toMatchObject({
       outcome: 'completed',
@@ -557,7 +567,7 @@ describe('la commande de diagnostic de l’application', () => {
 
     // Then
     // (le premier message du pont est l'état du diagnostic, DRV-759 ; le second, celui du plan)
-    await vi.waitFor(() => expect(bridge.postMessage).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(bridge.postMessage.mock.calls.length).toBeGreaterThanOrEqual(2))
     expect(screens.screens()).toEqual(['diagnostic', 'progress'])
   })
 })

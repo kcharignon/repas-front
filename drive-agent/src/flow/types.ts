@@ -2,6 +2,7 @@
 import type {
   PlanLine,
   PlanProduct,
+  ProgressMessage,
   ResultLine,
   ResultMessage,
   SetupMessage,
@@ -105,6 +106,11 @@ export interface FlowDeps {
   /** Faux : le résultat ne saurait pas revenir à Repas (origine non écrite dans l'agent) : refus avant toute action. */
   canReturn: boolean
   phaseB?: PhaseB
+  /**
+   * Où en est le passage, à chaque ligne faite (DRV-769) : un message `progress` vers l'application, jamais vers Repas. Absent hors de l'application (le mode assisté n'a pas
+   * de pont). Un abandon par la personne rend alors à Repas les lignes déjà faites, que l'application ne peut pas connaître autrement.
+   */
+  progress?: ((message: ProgressMessage) => void) | undefined
   /** Un message `setup` (DRV-307) : l'orchestrateur le valide puis le passe ici. */
   onSetup?: (message: SetupMessage) => void | Promise<void>
   /** Une pause (ms) : l'attente du bouton « Commencer mes courses » sur l'accueil (0.39.0). Par défaut le temps réel. */

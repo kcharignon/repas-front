@@ -8,13 +8,19 @@
  * (le menu de « Repas Drive » ; le diagnostic s'ouvre aussitôt) ou, pour le favori de bureau, une adresse de page qui se termine par
  * `#repas-diagnostic` (l'écran d'accueil s'affiche, d'où l'on lance le diagnostic).
  */
-import { ERROR_CODES, validateCommand, type SelftestResultMessage } from '../protocol'
+import {
+  ERROR_CODES,
+  LIMITS,
+  validateCommand,
+  type ProgressMessage,
+  type SelftestResultMessage,
+} from '../protocol'
 import { showDiagnostic, type DiagnosticDeps } from './diagnostic'
 import { foregroundFacts } from './diagnostic/foreground'
 import { Flow, guidedChoice, setupHandler, type FlowDeps, type StorageLike } from './flow'
 import { describeSession, RETAILERS, retailerForHost, type RetailerEntry } from './retailers'
 import { S } from './ui/strings'
-import { stringifyJson, takeWindowPrimitives } from './primitives'
+import { byteLength, stringifyJson, takeWindowPrimitives } from './primitives'
 import { bridgeTransport, type Bridge } from './transport/bridge'
 import { fragmentTransport } from './transport/fragment'
 import type { Transport } from './transport/transport'
@@ -104,6 +110,13 @@ export function run(win: Window & typeof globalThis = window, options: AgentOpti
     agentVersion: AGENT_VERSION,
     canReturn: bridge !== undefined || ORIGIN_SHAPE.test(origin),
     phaseB: guidedChoice,
+    // Où en est le passage, pour l'application seule (DRV-769) : un message trop gros pour le pont n'est pas envoyé (la dernière copie reste valable)
+    ...(bridge && {
+      progress: (message: ProgressMessage) => {
+        const text = stringifyJson(message)
+        if (byteLength(text) <= LIMITS.messageBytes) bridge.postMessage(text)
+      },
+    }),
     ...options.flow,
   }
   // Le mode configuration (DRV-307) et le diagnostic (DRV-308) partagent les dépendances du passage (celles que les tests changent aussi).
