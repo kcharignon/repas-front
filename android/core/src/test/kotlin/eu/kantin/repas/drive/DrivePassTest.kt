@@ -368,4 +368,212 @@ class DrivePassTest {
         assertEquals(setup().text, restored.current()!!.request.text)
         assertEquals(setOf("plan", "startedAt"), JSONObject(store.value!!).getJSONObject("pass").keys().asSequence().toSet())
     }
+
+    // DRV-769 : un abandon rend à Repas ce que l'agent a déjà fait (message `progress`), sinon Repas n'apprend rien et l'envoi suivant remet les mêmes articles au panier.
+
+    private fun progress(vararg lines: String, id: String = runId) =
+        """{"v":1,"type":"progress","runId":"$id","lines":[${lines.joinToString(",")}]}"""
+
+    private val added = """{"ingredientSlug":"farine","outcome":"ADDED","productId":"1000001","quantity":1,"usedRank":1}"""
+    private val chosen = """{"ingredientSlug":"poivre","outcome":"CHOSEN","quantity":1,"placement":"PRIMARY","product":{"id":"555111","label":"Poivre de test"}}"""
+
+    private fun abortedLines(pass: DrivePass) = JSONObject(pass.pendingMessages().single()).getJSONObject("result").getJSONArray("lines")
+
+    @Test
+    fun `l'abandon rend a Repas les lignes que l'agent a dites faites, avec le resultat aborted`() {
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+
+        assertTrue(pass.progress(progress(added, chosen)))
+        pass.abort()
+
+        val sent = JSONObject(pass.pendingMessages().single()).getJSONObject("result")
+        assertEquals("aborted", sent.getString("outcome"))
+        assertEquals("CANCELLED", sent.getJSONObject("error").getString("code"))
+        assertEquals(listOf("farine", "poivre"), (0 until sent.getJSONArray("lines").length()).map { sent.getJSONArray("lines").getJSONObject(it).getString("ingredientSlug") })
+    }
+
+    @Test
+    fun `la derniere copie remplace la precedente`() {
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+
+        pass.progress(progress(added))
+        pass.progress(progress(added, chosen))
+        pass.abort()
+
+        assertEquals(2, abortedLines(pass).length())
+    }
+
+    @Test
+    fun `sans message de l'agent, l'abandon ne rend aucune ligne, comme avant`() {
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+
+        pass.abort()
+
+        assertEquals(0, abortedLines(pass).length())
+    }
+
+    @Test
+    fun `un message mal forme, d'un autre passage ou d'un autre genre de passage est ignore`() {
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+
+        assertFalse(pass.progress("pas du json"))
+        assertFalse(pass.progress(progress(added, id = otherRunId)))
+        assertFalse(pass.progress(progress("""{"ingredientSlug":"farine","outcome":"EN_ROUTE"}""")))
+        assertFalse(pass.progress(progress("""{"outcome":"ADDED"}""")))
+        assertFalse(pass.progress(progress("1")))
+        assertFalse(pass.progress(progress(*Array(DrivePass.MAX_PROGRESS_LINES + 1) { added })))
+        assertFalse(pass.progress(progress(added).replace("progress", "result")))
+        assertFalse(pass.progress(progress(added).replace("\"v\":1", "\"v\":2")))
+        pass.abort()
+        assertEquals(0, abortedLines(pass).length())
+
+        val debug = pass()
+        debug.start(plan(), PassSource.DEBUG)
+        assertFalse(debug.progress(progress(added)))
+        val reading = pass()
+        reading.start(setup(), PassSource.REPAS)
+        assertFalse(reading.progress(progress(added)))
+        assertFalse(pass().progress(progress(added)))
+    }
+
+    @Test
+    fun `les lignes d'un passage ne passent pas au suivant`() {
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+        pass.progress(progress(added))
+        pass.finish(result())
+        pass.delivered(1)
+
+        pass.start(plan(otherRunId), PassSource.REPAS)
+        pass.abort()
+
+        assertEquals(0, abortedLines(pass).length())
+    }
+
+    @Test
+    fun `les lignes survivent a la fin du processus et l'abandon propose a la reprise les rend aussi`() {
+        val store = MemoryStore()
+        val first = pass(store)
+        first.start(plan(), PassSource.REPAS)
+        first.progress(progress(added))
+
+        val restored = pass(store)
+        restored.abort()
+
+        assertEquals(1, abortedLines(restored).length())
+    }
+
+    @Test
+    fun `le resultat de l'agent, s'il arrive, est livre tel quel, une seule fois`() {
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+        pass.progress(progress(added))
+
+        assertNotNull(pass.finish(result()))
+        assertNull(pass.abort())
+
+        assertEquals(1, pass.pendingMessages().size)
+        assertEquals(0, JSONObject(pass.pendingMessages().single()).getJSONObject("result").getJSONArray("lines").length())
+    }
+
+    // Le contrôle de forme est celui du validateur de Repas : une copie « valide en gros » mais pas exactement conforme ferait rejeter TOUT le résultat aborted.
+
+    private val everything = """{"ingredientSlug":"poivre","outcome":"CHOSEN","quantity":2,"placement":"FALLBACK","notInCart":true,"searchQuery":"poivre noir","packSize":{"value":50,"unitSlug":"gramme"},"unavailableIds":["1000001","1000002"],"rejected":[{"id":"999111","label":"Refusé","ean":null,"content":{"value":50,"unit":"g"}}],"product":{"id":"555111","label":"Poivre de test","ean":"12345678","content":{"value":50.5,"unit":"g"},"price":{"cents":199,"perMeasure":{"cents":3980,"unit":"kg"}},"rayonId":12,"familyId":3,"offerId":"8f14e45f-ceea-467a-9575-8e6b8c0a1b2c"}}"""
+
+    @Test
+    fun `une ligne complete, avec toutes ses cles facultatives, a la forme du protocole`() {
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+
+        assertTrue(pass.progress(progress(added, everything, """{"ingredientSlug":"sel","outcome":"FAILED","error":"NETWORK"}""", """{"ingredientSlug":"huile","outcome":"UNAVAILABLE","unavailableIds":["1000003"]}""", """{"ingredientSlug":"pain","outcome":"SKIPPED"}""")))
+    }
+
+    @Test
+    fun `valide en gros, refuse par la forme stricte donc zero ligne, meme si une copie valide la precedait`() {
+        val forged = listOf(
+            """{"ingredientSlug":"farine","outcome":"ADDED"}""", // il manque ce que l'issue exige
+            """{"ingredientSlug":"farine","outcome":"ADDED","productId":"1000001","quantity":1,"usedRank":1,"evil":1}""", // une cle de trop
+            """{"ingredientSlug":"farine","outcome":"ADDED","productId":"1000001","quantity":100,"usedRank":1}""", // hors des bornes
+            """{"ingredientSlug":"farine","outcome":"ADDED","productId":"pas un identifiant","quantity":1,"usedRank":1}""",
+            """{"ingredientSlug":"Farine !","outcome":"ADDED","productId":"1000001","quantity":1,"usedRank":1}""",
+            """{"ingredientSlug":"farine","outcome":"ADDED","productId":"1000001","quantity":"1","usedRank":1}""", // un texte pour un nombre
+            """{"ingredientSlug":"farine","outcome":"ADDED","productId":"1000001","quantity":1,"usedRank":1,"price":{"cents":-1}}""",
+            """{"ingredientSlug":"poivre","outcome":"CHOSEN","quantity":1,"placement":"PRIMARY"}""", // pas de produit
+            """{"ingredientSlug":"poivre","outcome":"CHOSEN","quantity":1,"placement":"AILLEURS","product":{"id":"555111","label":"x"}}""",
+            """{"ingredientSlug":"poivre","outcome":"CHOSEN","quantity":1,"placement":"PRIMARY","notInCart":false,"product":{"id":"555111","label":"x"}}""",
+            """{"ingredientSlug":"poivre","outcome":"CHOSEN","quantity":1,"placement":"PRIMARY","product":{"id":"555111","label":"x","secret":"cookie"}}""",
+            """{"ingredientSlug":"sel","outcome":"FAILED","error":"PAS_UN_CODE"}""",
+            """{"ingredientSlug":"sel","outcome":"HAVE_AT_HOME","productId":"1000001"}""",
+            """{"ingredientSlug":"sel","outcome":"UNAVAILABLE","unavailableIds":["1000003","1000003"]}""", // doublon
+        )
+        for (line in forged) {
+            val pass = pass()
+            pass.start(plan(), PassSource.REPAS)
+            assertTrue(pass.progress(progress(added)))
+
+            assertFalse(line, pass.progress(progress(added, line)))
+            pass.abort()
+
+            assertEquals(line, 0, abortedLines(pass).length())
+        }
+    }
+
+    @Test
+    fun `drive cancel rend les lignes faites, et ne vise que le passage en cours`() {
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+        pass.progress(progress(added, chosen))
+
+        assertNull(pass.abort(otherRunId))
+        assertTrue(pass.pendingMessages().isEmpty())
+        assertNotNull(pass.abort(runId))
+
+        assertEquals(2, abortedLines(pass).length())
+    }
+
+    @Test
+    fun `une copie dont l'enveloppe depasserait 64 Ko ne part pas et l abandon redevient celui d'avant, sans ligne`() {
+        // 99 lignes de plus en plus longues, jusqu'à un message `progress` juste sous 64 Ko : avec l'enveloppe `drive.result` il le dépasserait
+        val labels = IntArray(99 * 3) { 1 }
+        fun lines() = labels.toList().chunked(3).mapIndexed { index, (a, b, c) ->
+            """{"ingredientSlug":"a$index","outcome":"CHOSEN","quantity":1,"placement":"PRIMARY","product":{"id":"555111","label":"${"x".repeat(a)}"},"rejected":[{"id":"999111","label":"${"y".repeat(b)}"},{"id":"999112","label":"${"z".repeat(c)}"}]}"""
+        }
+        fun size() = progress(*lines().toTypedArray()).toByteArray().size
+        var room = BridgeMessages.MAX_BYTES - 60 - size()
+        for (index in labels.indices) {
+            val step = minOf(254, room)
+            labels[index] += step
+            room -= step
+        }
+        val text = progress(*lines().toTypedArray())
+        assertTrue(text.toByteArray().size in (BridgeMessages.MAX_BYTES - 100)..BridgeMessages.MAX_BYTES)
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+
+        assertTrue(BridgeMessages.fitsBound(text))
+        assertTrue(pass.progress(text))
+        pass.abort()
+
+        assertEquals(0, abortedLines(pass).length())
+        assertTrue(BridgeMessages.fitsBound(pass.pendingMessages().single()))
+    }
+
+    @Test
+    fun `l'unite d'une contenance va jusqu'a 255 caracteres, comme le validateur de Repas, pas un de plus`() {
+        fun sized(length: Int) =
+            """{"ingredientSlug":"farine","outcome":"ADDED","productId":"1000001","quantity":1,"usedRank":1,"packSize":{"value":20,"unitSlug":"${"u".repeat(length)}"}}"""
+        for (length in listOf(1, 32, 33, 255)) {
+            val pass = pass()
+            pass.start(plan(), PassSource.REPAS)
+            assertTrue("$length", pass.progress(progress(sized(length))))
+        }
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+        assertFalse(pass.progress(progress(sized(256))))
+        assertFalse(pass.progress(progress(sized(0))))
+    }
 }

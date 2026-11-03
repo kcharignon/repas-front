@@ -153,6 +153,11 @@ class DriveActivity : Activity() {
         agent = AgentHost.create(repasApp.agentLoad, BuildConfig.DEBUG, site, onHello = { agentHellos++; if (delivery.hello()) sendPlan() }) { message ->
             // Les deux lignes que l'agent dit à la boîte de diagnostic (DRV-759) : du texte seul, jamais une décision
             if (message.type == "log") return@create onAgentLog(message.text)
+            // Où en est le passage (DRV-769) : gardé pour un abandon, qui rend alors à Repas les lignes déjà faites
+            if (message.type == "progress") {
+                pass.progress(message.text)
+                return@create
+            }
             if ((message.type == "result" || message.type == "setup-result") && onAgentResult(message.text)) return@create
             // La variante de débogage montre le résultat de l'essai et le rapport du test automatique.
             if (BuildConfig.DEBUG && !selftestRun.onAgentMessage(message.type, message.text)) {

@@ -32,6 +32,7 @@ import {
   OUTCOMES,
   PLACEMENTS,
   PROTOCOL_VERSION,
+  type ProgressMessage,
   type ResultMessage,
   type SetupResultMessage,
 } from './types'
@@ -148,6 +149,19 @@ function readStore(message: Scope, key: 'store' | 'chosenStore'): void {
     fail(at(store.p, 'baseUrl'))
   }
   if (store.v.label !== null) text(store, 'label')
+}
+
+/**
+ * Valide le message `progress` de l'agent vers l'application (DRV-769), jamais vers Repas : `{v, type, runId, lines}`, les lignes étant celles d'un résultat. Rend le message lui-même, typé ;
+ * lève une `ProtocolError` (`INVALID_MESSAGE`) sur le premier champ fautif.
+ */
+export function validateProgress(input: unknown): ProgressMessage {
+  const message = object(root(input), '', ['v', 'type', 'runId', 'lines'])
+  exactly(message, 'v', PROTOCOL_VERSION)
+  exactly(message, 'type', 'progress')
+  text(message, 'runId', UUID)
+  each(message, 'lines', LIMITS.lines, resultLine)
+  return input as ProgressMessage
 }
 
 /**

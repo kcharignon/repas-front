@@ -1336,6 +1336,62 @@ describe('retour du drive : les articles mis au panier sont cochés dans la list
     expect(request?.headers.get('If-Match')).toBeNull()
   })
 
+  // DRV-769 : un envoi arrêté par une ERREUR qui rapporte ses lignes garde son travail comme un envoi partiel (choix appris et coches)
+  it('un envoi arrêté en erreur qui porte ses lignes : les choix sont enregistrés et les articles au panier cochés', async () => {
+    const stopped = {
+      kind: 'result',
+      result: result({
+        outcome: 'error',
+        error: { code: 'CONTRACT_CHANGED', message: 'Le site a changé (CART_UNREADABLE)' },
+        lines: [
+          added('farine', '123456'),
+          chosen('poivre'),
+          { ingredientSlug: 'curry', outcome: 'UNAVAILABLE' },
+        ],
+      }),
+      draft: sentDraft,
+    } as DriveEvent
+    const { wrapper, fetchMock } = await open(stopped)
+    await saved(wrapper)
+    await ticked(fetchMock)
+
+    expect(await basketBodies(fetchMock)).toEqual([['farine', 'poivre']])
+    const index = calls(fetchMock).indexOf('PUT /api/v1/drive/choices')
+    const body = (await bodyOf(fetchMock, index)) as {
+      choices: { ingredientSlug: string; action: string }[]
+    }
+    expect(body.choices.map((c) => [c.ingredientSlug, c.action])).toContainEqual([
+      'poivre',
+      'ADD_PRODUCT',
+    ])
+  })
+
+  // DRV-769 : l'abandon décidé dans l'application (touche Retour puis « Abandonner », brouillon encore là) rend les lignes que l'agent a dites faites ; l'abandon depuis Repas : `useDriveReturn.spec.ts`
+  it('un envoi abandonné qui porte les lignes déjà faites (CANCELLED) : les choix sont enregistrés et les articles au panier cochés', async () => {
+    const abandoned = {
+      kind: 'result',
+      result: result({
+        outcome: 'aborted',
+        error: { code: 'CANCELLED', message: 'Envoi abandonné.' },
+        lines: [added('farine', '123456'), chosen('poivre')],
+      }),
+      draft: sentDraft,
+    } as DriveEvent
+    const { wrapper, fetchMock } = await open(abandoned)
+    await saved(wrapper)
+    await ticked(fetchMock)
+
+    expect(await basketBodies(fetchMock)).toEqual([['farine', 'poivre']])
+    const index = calls(fetchMock).indexOf('PUT /api/v1/drive/choices')
+    const body = (await bodyOf(fetchMock, index)) as {
+      choices: { ingredientSlug: string; action: string }[]
+    }
+    expect(body.choices.map((c) => [c.ingredientSlug, c.action])).toContainEqual([
+      'poivre',
+      'ADD_PRODUCT',
+    ])
+  })
+
   it('un produit choisi sans la clé notInCart est au panier (un agent d’avant la clé)', async () => {
     const { wrapper, fetchMock } = await open(sentOf([chosen('poivre')]))
     await saved(wrapper)

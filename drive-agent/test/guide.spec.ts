@@ -194,6 +194,43 @@ describe('le magasin d’abord, puis la connexion : deux étapes, l’agent cont
     expect(time.time.now - 1_000_000).toBeLessThan(GUIDE_MAX_MS)
   })
 
+  it('DRV-769 : « Arrêter pour l’instant » d’un passage repris après un rechargement rapporte les lignes déjà faites (l’état de reprise reste)', async () => {
+    const key = `${RUN_PREFIX}${RUN_ID}`
+    const storage = fakeStorage({
+      [key]: JSON.stringify({
+        v: 1,
+        runId: RUN_ID,
+        updatedAt: 1,
+        phase: 'PHASE_A',
+        done: {
+          farine: {
+            ingredientSlug: 'farine',
+            outcome: 'ADDED',
+            productId: '1000001',
+            quantity: 1,
+            usedRank: 1,
+          },
+        },
+        waiting: {},
+      }),
+    })
+    const w = world({ chosen: false, member: false })
+    const screens = fakeUi()
+    const time = clock((tick) => {
+      if (tick === 3) screens.pressGuideStop()
+    })
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage, ...time })
+
+    await flow.start(FARINE)
+
+    expect(w.writes).toEqual([])
+    expect(expectConform(sent[0])).toMatchObject({
+      outcome: 'aborted',
+      lines: [{ ingredientSlug: 'farine', outcome: 'ADDED' }],
+    })
+    expect(storage.getItem(key)).toContain('"farine"')
+  })
+
   it('15 minutes sans changement : la carte propose « Attendre encore » ; attendre encore laisse continuer, et la suite se fait toute seule', async () => {
     const w = world({ chosen: true, member: false })
     let late = 0

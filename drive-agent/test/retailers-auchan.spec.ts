@@ -59,7 +59,7 @@ describe('la page est celle d’Auchan', () => {
     Object.assign(window, { fetch: fetchSpy })
     const app = bridge()
     const screens = fakeUi({ error: () => 'return' })
-    run(window, { flow: { ui: screens.ui } })
+    run(window, { flow: { ui: screens.ui, progress: undefined } })
 
     app.send(plan([home('sel')]))
 
@@ -77,7 +77,7 @@ describe('la page est celle d’Auchan', () => {
     Object.assign(window, { fetch: fetchSpy })
     const app = bridge()
     const screens = fakeUi({ error: () => 'return' })
-    run(window, { flow: { ui: screens.ui } })
+    run(window, { flow: { ui: screens.ui, progress: undefined } })
     const { lines: _lines, type: _type, ...head } = plan([home('sel')])
 
     app.send({ ...head, type: 'setup' })
@@ -104,7 +104,7 @@ describe('la page est celle d’Auchan', () => {
     Object.assign(window, { fetch: fetchSpy })
     const app = bridge()
     const screens = fakeUi({ error: () => 'return' })
-    run(window, { flow: { ui: screens.ui } })
+    run(window, { flow: { ui: screens.ui, progress: undefined } })
 
     app.send(auchanPlan())
 
@@ -144,7 +144,7 @@ describe('la page est celle d’Auchan', () => {
     Object.assign(window, { fetch: fetchSpy })
     const app = bridge()
     const screens = fakeUi()
-    run(window, { flow: { ui: screens.ui } })
+    run(window, { flow: { ui: screens.ui, progress: undefined } })
 
     app.send(auchanPlan())
 
@@ -187,7 +187,7 @@ describe('la page est celle d’Auchan', () => {
     Object.assign(window, { fetch: fetchSpy })
     const app = bridge()
     const screens = fakeUi({ error: () => 'return' })
-    run(window, { flow: { ui: screens.ui } })
+    run(window, { flow: { ui: screens.ui, progress: undefined } })
 
     app.send(auchanPlan())
     await vi.advanceTimersByTimeAsync(0)
@@ -216,7 +216,7 @@ describe('la page est celle d’Auchan', () => {
     Object.assign(window, { fetch: fetchSpy })
     const app = bridge()
     const screens = fakeUi({ error: () => 'return' })
-    run(window, { flow: { ui: screens.ui } })
+    run(window, { flow: { ui: screens.ui, progress: undefined } })
 
     app.send(auchanPlan())
     await vi.advanceTimersByTimeAsync(0)
@@ -236,7 +236,7 @@ describe('la page est celle d’Auchan', () => {
     Object.assign(window, { fetch: journeyFetch(body) })
     const app = bridge()
     const screens = fakeUi({ error: () => 'return' })
-    run(window, { flow: { ui: screens.ui } })
+    run(window, { flow: { ui: screens.ui, progress: undefined } })
 
     app.send(auchanPlan())
 
@@ -250,7 +250,7 @@ describe('la page est celle d’Auchan', () => {
     Object.assign(window, { fetch: fetchSpy })
     const app = bridge()
     const screens = fakeUi()
-    run(window, { flow: { ui: screens.ui } })
+    run(window, { flow: { ui: screens.ui, progress: undefined } })
 
     app.send(auchanPlan())
 
@@ -272,7 +272,7 @@ describe('la page est celle d’Auchan', () => {
     Object.assign(window, { fetch: journeyFetch('<html>autre chose</html>') })
     const app = bridge()
     const screens = fakeUi({ error: () => 'return' })
-    run(window, { flow: { ui: screens.ui } })
+    run(window, { flow: { ui: screens.ui, progress: undefined } })
 
     app.send(auchanPlan())
 
@@ -290,7 +290,7 @@ describe('la configuration du magasin d’Auchan (setup)', () => {
     Object.assign(window, { fetch: journeyFetch() })
     const app = bridge()
     const screens = fakeUi({ store: () => 'save' })
-    run(window, { flow: { ui: screens.ui } })
+    run(window, { flow: { ui: screens.ui, progress: undefined } })
 
     app.send(auchanSetup())
 
@@ -313,7 +313,7 @@ describe('la configuration du magasin d’Auchan (setup)', () => {
     Object.assign(window, { fetch: journeyFetch(auchanFixture('parcours-sans-magasin.json')) })
     const app = bridge()
     const screens = fakeUi({ error: () => 'return' })
-    run(window, { flow: { ui: screens.ui } })
+    run(window, { flow: { ui: screens.ui, progress: undefined } })
 
     app.send(auchanSetup())
 
@@ -333,7 +333,7 @@ describe('la configuration du magasin d’Auchan (setup)', () => {
     Object.assign(window, { fetch: fetchSpy })
     const app = bridge()
     const screens = fakeUi({ store: () => 'save' })
-    run(window, { flow: { ui: screens.ui } })
+    run(window, { flow: { ui: screens.ui, progress: undefined } })
 
     // When : le setup arrive tout de suite à l'ouverture (l'adresse d'Auchan ne change jamais)
     app.send(auchanSetup())
@@ -363,7 +363,7 @@ describe('la configuration du magasin d’Auchan (setup)', () => {
     Object.assign(window, { fetch: journeyFetch('Service indisponible', 503) })
     const app = bridge()
     const screens = fakeUi({ error: () => 'return' })
-    run(window, { flow: { ui: screens.ui } })
+    run(window, { flow: { ui: screens.ui, progress: undefined } })
 
     app.send(auchanSetup())
 

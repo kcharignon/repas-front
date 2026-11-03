@@ -269,6 +269,11 @@ export const S = {
       /** La fenêtre au premier plan (DRV-757, A2) : des formes seulement, jamais un texte de la page. */
       foreground: (facts: ForegroundFacts) =>
         `Fenêtre au premier plan : boîtes modales ${facts.modal ?? 'inconnu'}, fenêtres flottantes ouvertes ${facts.popovers ?? 'inconnu'}, plein écran ${facts.fullscreen ? 'oui' : 'non'} ; au point (${facts.point.x}, ${facts.point.y}) : ${facts.stack.length === 0 ? 'rien' : facts.stack.map((one) => `${one.tag}${one.id === '' ? '' : `#${one.id}`}${one.className === '' ? '' : `.${one.className}`} z=${one.zIndex}${one.agent ? ' [agent]' : ''}`).join(' > ')}`,
+      /** La dernière erreur de l'agent (DRV-769) : le code et la cause, des mots fixes de l'énumération fermée, jamais une valeur du site ni un message. */
+      lastError: (fault: { code: string; cause: string | null } | null) =>
+        fault === null
+          ? 'Dernière erreur : aucune'
+          : `Dernière erreur : ${fault.code}${fault.cause === null ? '' : ` (${fault.cause})`}`,
       /** La carte vue de l'application (DRV-760) : des formes seulement, jamais un texte de la page. */
       card: (facts: CardFacts) =>
         `Carte : dernière étape du flux ${facts.step ?? 'aucune'}, écran ${facts.screen ?? 'aucun'}, dite à l’écran ${facts.shown === null ? 'jamais' : facts.shown ? 'oui' : 'non'}, boîte ${facts.box === null ? 'aucune' : facts.box.join('/')}, toucher au centre ${facts.touch === null ? 'aucun écran' : { agent: 'sur l’agent', other: 'sur autre chose', outside: 'hors de la fenêtre', unknown: 'inconnu' }[facts.touch]}, conteneur dernier du document ${facts.last === null ? 'absent' : facts.last ? 'oui' : 'non'}, déplacements ${facts.moves}, élément actif ${facts.active === '' ? 'aucun' : facts.active}`,

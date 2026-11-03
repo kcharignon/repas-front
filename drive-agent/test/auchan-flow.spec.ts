@@ -252,6 +252,42 @@ describe('un passage complet contre le faux site (phases A et B)', () => {
     expect(fake.cart()).toEqual({ [FARINE.productId]: 1 })
   })
 
+  it('DRV-769 : le site arrête l’envoi au troisième article : le résultat rapporte les deux ajouts déjà faits, le panier du faux site ne garde que ceux-là', async () => {
+    const screens = fakeUi({ chooser: choosing('Sel fin'), error: () => 'return' })
+    const adapter = setup()
+    const write = adapter.setCartQuantity.bind(adapter)
+    let writes = 0
+    // Le site répond autre chose que le panier à la troisième écriture : l'envoi s'arrête avec ce qui est déjà fait
+    adapter.setCartQuantity = (id, quantity) => {
+      writes += 1
+      if (writes === 3) fake.setCartBehavior({ read: 'site-page' })
+      return write(id, quantity)
+    }
+    const { flow, sent } = makeFlow({
+      ui: screens.ui,
+      adapter,
+      phaseB: guidedChoice,
+      retailer: 'auchan',
+    })
+    const sel: PlanLine = { ...known('sel', []), status: 'NEW', searchQuery: 'sel fin' }
+
+    await flow.start(
+      auchanPlan([
+        known('farine', [withOffer(FARINE, 3)]),
+        known('lait', [withOffer(LAIT, 2)]),
+        sel,
+      ]),
+    )
+
+    const result = expectConform(sent[0])
+    expect(result).toMatchObject({ outcome: 'error', error: { code: 'CONTRACT_CHANGED' } })
+    // Les lignes faites avant l'arrêt sont dans le résultat : Repas peut les cocher « au panier »
+    expect(
+      result.lines.slice(0, 2).map((line) => `${line.ingredientSlug}:${line.outcome}`),
+    ).toEqual(['farine:ADDED', 'lait:ADDED'])
+    expect(Object.keys(fake.cart()).sort()).toEqual([FARINE.productId, LAIT.productId].sort())
+  })
+
   it('DRV-752 : la page de connexion servie à la place du panier (200) : NOT_LOGGED_IN (LOGIN_FORM), jamais « Auchan a changé son site », rien n’est écrit', async () => {
     fake.setCartBehavior({ read: 'login-page' })
     const screens = fakeUi({ error: () => 'return' })

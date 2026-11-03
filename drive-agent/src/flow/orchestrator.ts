@@ -87,6 +87,8 @@ interface Run {
   /** Les produits à étiquette de rupture que le panier a refusés dans cet envoi : une seule tentative d'écriture chacun (DRV-635). */
   declined: Set<string>
   release: () => Promise<void>
+  /** Le résultat est parti vers Repas (ou le va tout de suite) : un incident ensuite ne rapporte pas le passage une seconde fois (DRV-769). */
+  reported: boolean
 }
 
 /** Combien d'articles traités l'écran de progression garde (un envoi entier : 100 lignes au plus). */
@@ -151,6 +153,12 @@ export class Flow {
   private busy = false
   /** Le magasin que la page montre quand ce n'est pas celui du plan (DRV-755), lu par `storeProblem`. */
   private otherStore: StoreInfo | null = null
+  /** Le passage en cours, de la confirmation à son résultat : un incident imprévu en plein passage en rapporte ce qui est fait (DRV-769). */
+  private active: Run | null = null
+  /** La dernière erreur de l'agent (code et cause d'une énumération fermée, jamais une valeur du site) : le diagnostic la dit (DRV-769). Gardée en mémoire seulement. */
+  private fault: Fault | null = null
+  /** Vrai pendant qu'un blocage fait échouer d'un coup toutes les lignes qui restent : un seul message `progress` à la fin, pas un par ligne (DRV-769). */
+  private batching = false
 
   constructor(deps: FlowDeps) {
     this.deps = deps
@@ -166,10 +174,31 @@ export class Flow {
     try {
       await this.execute(raw)
     } catch {
-      await this.showError('CONTRACT_CHANGED', null, 'EXCEPTION')
+      await this.showUnexpected()
     } finally {
+      this.active = null
       this.busy = false
     }
+  }
+
+  /** La dernière erreur de l'agent depuis le chargement de la page, ou `null` : le code et la cause, des mots fixes (DRV-769). */
+  get lastFault(): Readonly<Fault> | null {
+    return this.fault
+  }
+
+  /**
+   * Un incident imprévu (une exception qui n'a pas été traitée comme une erreur de l'adaptateur). Pendant un passage, l'écran d'erreur propose de
+   * revenir à Repas et le résultat rapporte les lignes déjà faites ; hors passage, comme avant : rien à rapporter, l'écran se ferme seulement.
+   */
+  private async showUnexpected(): Promise<void> {
+    const run = this.active
+    if (run === null || run.reported) return this.showError('CONTRACT_CHANGED', null, 'EXCEPTION')
+    // Une vraie erreur déjà notée par le passage (puis un incident en le finissant) garde son code ; sinon l'incident est la cause
+    const fault: Fault =
+      run.halted === null
+        ? { code: 'CONTRACT_CHANGED', cause: 'EXCEPTION' }
+        : { code: run.halted, cause: run.cause }
+    return this.showError(fault.code, run.plan, fault.cause, resultLines(run.plan, run.state), run)
   }
 
   /**
@@ -280,7 +309,9 @@ export class Flow {
       start: deps.adapter.stats(),
       declined: new Set(),
       release: () => Promise.resolve(),
+      reported: false,
     }
+    this.active = run
     if (proceed) {
       this.enter('CONFIRMED')
       this.runs.save(state)
@@ -399,7 +430,9 @@ export class Flow {
     const { ui, send, agentVersion } = this.deps
     this.runs.clearGuide()
     this.enter('ABORTED')
-    send(buildResult(plan, [], { outcome: 'aborted' }, agentVersion, ui.retailer))
+    // Un passage repris après un rechargement a pu faire des lignes avant : elles sont rapportées avec l'arrêt (DRV-769). L'état de reprise reste (une reprise ne refait rien)
+    const lines = this.savedLines(plan)
+    send(buildResult(plan, lines, { outcome: 'aborted' }, agentVersion, ui.retailer))
     ui.close()
     return 'stopped'
   }
@@ -837,9 +870,23 @@ export class Flow {
 
   /** Leclerc bloque les requêtes : les lignes qui restent échouent (`BLOCKED`), sans en tenter une de plus. */
   private failRemaining(run: Run, code: ErrorCode): void {
-    for (const line of run.plan.lines) {
-      if (!this.isProcessed(run, line)) this.record(run, staticOutcome(line) ?? failed(line, code))
+    this.inBatch(run, () => {
+      for (const line of run.plan.lines) {
+        if (!this.isProcessed(run, line))
+          this.record(run, staticOutcome(line) ?? failed(line, code))
+      }
+    })
+  }
+
+  /** Écrit plusieurs lignes d'un coup : l'application n'est prévenue qu'une fois, à la fin (DRV-769). */
+  private inBatch(run: Run, write: () => void): void {
+    this.batching = true
+    try {
+      write()
+    } finally {
+      this.batching = false
     }
+    this.reportProgress(run)
   }
 
   private async phaseB(run: Run, phaseB: NonNullable<FlowDeps['phaseB']>): Promise<void> {
@@ -867,7 +914,10 @@ export class Flow {
         // Leclerc bloque : les lignes qui attendaient encore un choix échouent (`BLOCKED`), comme en phase A. Pour les autres erreurs
         // elles restent « indisponibles » au résultat.
         if (run.halted === 'BLOCKED') {
-          for (const { line } of this.pending(run)) this.record(run, failed(line, run.halted))
+          const blocked = run.halted
+          this.inBatch(run, () => {
+            for (const { line } of this.pending(run)) this.record(run, failed(line, blocked))
+          })
         }
         return
       }
@@ -905,28 +955,48 @@ export class Flow {
     // Un envoi terminé sans rien à lire repart tout de suite vers Repas (DRV-625) ; l'écran de fin reste pour le reste (partiel, arrêté, erreur).
     if (hasSomethingToRead(props)) await ui.show('end', props)
     this.runs.remove(run.plan.runId)
+    run.reported = true
+    if (ending.code) this.fault = { code: ending.code, cause: ending.cause ?? null }
     send(result)
     ui.close()
   }
 
+  /**
+   * Les lignes qu'un passage de ce plan a déjà faites avant cette page (l'état de reprise de l'onglet), dans l'ordre du plan : un arrêt les rapporte comme un
+   * passage fini, pour que Repas apprenne les choix et coche ce qui est au panier (DRV-769). Rien si aucun état n'a été gardé.
+   */
+  private savedLines(plan: PlanMessage): ResultLine[] {
+    const saved = this.runs.load(plan.runId)
+    return saved === null ? [] : resultLines(plan, saved)
+  }
+
+  /**
+   * L'écran d'erreur, puis (si la personne revient à Repas) un résultat `error`. `lines` : ce que le passage a déjà fait (DRV-769) ; par défaut, ce que l'état de
+   * reprise de ce plan en a gardé. Un arrêt qui n'a rien fait rapporte une liste vide, comme avant.
+   */
   private async showError(
     code: ErrorCode,
     plan: PlanMessage | null,
     cause: RetailerCause | null = null,
+    lines: ResultLine[] | null = null,
+    run: Run | null = null,
   ): Promise<void> {
     const { ui, send, agentVersion } = this.deps
     this.runs.clearGuide()
     this.enter('ERROR')
+    this.fault = { code, cause }
     const answer = await ui.show('error', {
       code,
       canReturn: plan !== null,
       ...(cause && { cause }),
     })
     if (answer === 'return' && plan) {
+      const done = lines ?? this.savedLines(plan)
+      if (run) run.reported = true
       send(
         buildResult(
           plan,
-          [],
+          done,
           { outcome: 'error', code, ...(cause && { cause }) },
           agentVersion,
           this.deps.ui.retailer,
@@ -991,6 +1061,7 @@ export class Flow {
     run.state.done[slug] = line
     delete run.state.waiting[slug]
     this.touch(run)
+    this.reportProgress(run)
     run.log.push(entry)
     this.deps.ui.update({ done: Object.keys(run.state.done).length, entry })
   }
@@ -1036,6 +1107,22 @@ export class Flow {
       requests: count(run.base.requests, run.start.requests, now.requests),
       errors: count(run.base.errors, run.start.errors, now.errors),
       blocks: count(run.base.blocks, run.start.blocks, now.blocks),
+    }
+  }
+
+  /** Dit à l'application où en est le passage (DRV-769) ; une panne du canal ne gêne jamais le passage. */
+  private reportProgress(run: Run): void {
+    const { progress } = this.deps
+    if (!progress || this.batching) return
+    try {
+      progress({
+        v: PROTOCOL_VERSION,
+        type: 'progress',
+        runId: run.plan.runId,
+        lines: resultLines(run.plan, run.state),
+      })
+    } catch {
+      // Sans importance : un abandon rendra seulement moins de lignes.
     }
   }
 

@@ -420,11 +420,17 @@ describe('de bout en bout avec l’agent réel dans jsdom', () => {
     channel.fromApp(JSON.stringify(plan([home('sel'), skip('huile')])))
 
     // Then
-    await advance(() => channel.postMessage.mock.calls.length >= 2)
-    expect(channel.postMessage).toHaveBeenCalledTimes(2)
+    await advance(() => channel.postMessage.mock.calls.length >= 4)
+    // L'annonce, où en est le passage après chaque ligne faite (DRV-769, une fois par ligne), puis le résultat
+    expect(channel.postMessage).toHaveBeenCalledTimes(4)
     expect(channel.postMessage.mock.calls[0]?.[0]).toBe(HELLO)
+    expect(
+      channel.postMessage.mock.calls
+        .slice(1, 3)
+        .map(([text]) => (JSON.parse(text) as { type: string }).type),
+    ).toEqual(['progress', 'progress'])
     const result = validateResult(
-      JSON.parse(channel.postMessage.mock.calls[1]?.[0] ?? ''),
+      JSON.parse(channel.postMessage.mock.calls[3]?.[0] ?? ''),
     ) as ResultMessage
     expect(result).toMatchObject({ type: 'result', outcome: 'completed' })
     expect(screens.screens()).toEqual(['progress'])

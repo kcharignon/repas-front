@@ -50,6 +50,9 @@ class DrivePass(
     private var active: ActivePass? = null
     private val outbox = mutableListOf<String>()
 
+    /** Les lignes que l'agent a dites faites (message `progress`, DRV-769) pour le passage en cours : un abandon les rend à Repas. `null` : l'agent n'a encore rien dit. */
+    private var done: JSONArray? = null
+
     init {
         restore()
     }
@@ -71,8 +74,31 @@ class DrivePass(
             return if (running.request.runId == request.runId && running.source == source) StartOutcome.Resumed else StartOutcome.Busy(running.request.runId)
         }
         active = ActivePass(request, source, clock())
+        done = null
         persist()
         return StartOutcome.Started
+    }
+
+    /**
+     * Le message `progress` de l'agent (DRV-769) : où en est le passage de Repas en cours, les lignes d'un résultat. La dernière copie remplace la précédente ; elle est gardée avec
+     * le passage (une application fermée puis un abandon rendent aussi ces lignes). Un message d'un autre passage, d'une lecture du magasin, de débogage, ou mal formé est ignoré :
+     * la page de l'enseigne partage le monde JavaScript de l'agent, ce texte est une entrée non fiable. Rend vrai si la copie a été gardée.
+     */
+    fun progress(text: String): Boolean {
+        val pass = current() ?: return false
+        if (pass.source != PassSource.REPAS || pass.request.isSetup) return false
+        val message = try {
+            JSONObject(text)
+        } catch (_: JSONException) {
+            return false
+        }
+        if (message.opt("type") != "progress" || message.optInt("v", -1) != 1 || message.opt("runId") != pass.request.runId) return false
+        // La forme exacte du protocole, ou rien : une seule ligne douteuse ferait rejeter par Repas tout le résultat `aborted`. Une copie refusée efface aussi la précédente
+        // (une page qui falsifie le message n'a plus la confiance de l'application pour ce passage).
+        val lines = ProgressLines.parse(message.optJSONArray("lines"))
+        done = lines
+        persist()
+        return lines != null
     }
 
     /**
@@ -101,12 +127,21 @@ class DrivePass(
     fun abort(runId: String? = null): ActivePass? {
         val pass = current() ?: return null
         if (runId != null && runId != pass.request.runId) return null
-        close(pass, JSONObject(pass.request.abortedResult(agentVersion())))
+        val result = JSONObject(pass.request.abortedResult(agentVersion()))
+        // Ce que l'agent a déjà fait est rendu à Repas avec l'abandon : sans cela Repas n'apprend aucun choix, ne coche rien, et l'envoi suivant remet les mêmes articles au panier (DRV-769)
+        val lines = done
+        if (lines != null && lines.length() > 0 && pass.source == PassSource.REPAS && !pass.request.isSetup) {
+            result.put("lines", lines)
+            // Repas refuse un message de plus de 64 Ko, enveloppe `drive.result` comprise : trop de lignes, et l'abandon redevient celui d'avant, sans ligne
+            if (!BridgeMessages.fitsBound(NativeBridge.driveResult(result))) result.put("lines", JSONArray())
+        }
+        close(pass, result)
         return pass
     }
 
     private fun close(pass: ActivePass, result: JSONObject) {
         active = null
+        done = null
         if (pass.source == PassSource.REPAS) outbox += NativeBridge.driveResult(result)
         persist()
     }
@@ -124,7 +159,10 @@ class DrivePass(
         val json = JSONObject()
         active?.takeIf { it.source == PassSource.REPAS }?.let {
             // L'adresse d'un magasin à ouvrir (DRV-741) est gardée à côté du message : le message du protocole ne la porte pas
-            json.put("pass", JSONObject().put("plan", it.request.text).put("startedAt", it.startedAt).apply { (it.request as? SetupRequest)?.address?.let { address -> put("address", address) } })
+            json.put("pass", JSONObject().put("plan", it.request.text).put("startedAt", it.startedAt).apply {
+                (it.request as? SetupRequest)?.address?.let { address -> put("address", address) }
+                done?.let { lines -> put("done", lines) }
+            })
         }
         if (outbox.isNotEmpty()) json.put("outbox", JSONArray(outbox))
         store.save(if (json.length() == 0) null else json.toString())
@@ -141,7 +179,10 @@ class DrivePass(
                 // Une adresse gardée qui ne passe plus la vérification est oubliée : la lecture reprend à l'accueil
                 if (restored is SetupRequest && pass.has("address")) SetupRequest.of(restored.runId, restored.site, pass.optString("address")) ?: restored else restored
             }
-            if (request != null && pass.has("startedAt")) active = ActivePass(request, PassSource.REPAS, pass.optLong("startedAt"))
+            if (request != null && pass.has("startedAt")) {
+                active = ActivePass(request, PassSource.REPAS, pass.optLong("startedAt"))
+                done = ProgressLines.parse(pass.optJSONArray("done"))
+            }
         }
         saved.optJSONArray("outbox")?.let { messages ->
             for (index in 0 until messages.length()) messages.optString(index).takeIf { it.isNotEmpty() }?.let { outbox += it }
@@ -152,6 +193,9 @@ class DrivePass(
     companion object {
         /** La durée de la reprise : 24 heures. */
         const val MAX_AGE_MS = 24L * 60 * 60 * 1000
+
+        /** Un plan a 100 lignes au plus (`LIMITS.lines` du protocole). */
+        const val MAX_PROGRESS_LINES = ProgressLines.MAX_LINES
     }
 }
 

@@ -108,6 +108,40 @@ describe('un autre magasin à l’étape guidée du choix du magasin : la person
     expect(screens.closed.count).toBe(1)
   })
 
+  it('DRV-769 : avec un état de reprise (des articles déjà traités), le magasin choisi n’est pas proposé : l’erreur rapporte les lignes faites, sans magasin choisi (le protocole interdit des lignes avec lui)', async () => {
+    const storage = fakeStorage({
+      [`${RUN_PREFIX}${RUN_ID}`]: JSON.stringify({
+        v: 1,
+        runId: RUN_ID,
+        updatedAt: 1,
+        phase: 'PHASE_A',
+        done: {
+          farine: {
+            ingredientSlug: 'farine',
+            outcome: 'ADDED',
+            productId: '1000001',
+            quantity: 1,
+            usedRank: 1,
+          },
+        },
+        waiting: {},
+      }),
+    })
+    const w = world()
+    const screens = fakeUi({ error: () => 'return' })
+    const { flow, sent } = makeFlow({ ui: screens.ui, adapter: w.adapter, storage })
+
+    await flow.start(FARINE)
+
+    expect(screens.screens()).toEqual(['error'])
+    expect(expectConform(sent[0])).toMatchObject({
+      outcome: 'error',
+      error: { code: 'STORE_MISMATCH' },
+      lines: [{ ingredientSlug: 'farine', outcome: 'ADDED' }],
+    })
+    expect(sent[0]).not.toHaveProperty('chosenStore')
+  })
+
   it('une page sans nom de ville : la carte dit les derniers chiffres du numéro', async () => {
     const w = world({ city: null })
     const screens = fakeUi({ chosenStore: () => 'use' })

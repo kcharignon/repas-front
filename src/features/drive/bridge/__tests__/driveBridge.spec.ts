@@ -387,6 +387,28 @@ describe('driveBridge', () => {
       expect(events.map((event) => event.kind)).toEqual(['result'])
     })
 
+    it('DRV-769 : abandon — drive.cancel part, le brouillon est effacé, et le résultat aborted qui suit rend le brouillon d’alors (une seule fois)', () => {
+      const { bridge, events, listen, reply, sent } = setup()
+      listen()
+      const draft = bridge.startRun(plan(), 'l1')
+
+      bridge.abandon()
+      expect(sent.map((message) => message.type)).toContain('drive.cancel')
+      expect(bridge.loadDraft()).toBeNull()
+      reply({ v: 1, type: 'drive.result', result: { ...result(), outcome: 'aborted', lines: [] } })
+      reply({ v: 1, type: 'drive.result', result: { ...result(), outcome: 'aborted', lines: [] } })
+
+      expect(events).toMatchObject([{ kind: 'stale', abandoned: draft }, { kind: 'stale' }])
+      expect(events[1]).not.toHaveProperty('abandoned')
+    })
+
+    it('DRV-769 : abandon sans pont — lève comme cancel, le brouillon est quand même effacé', () => {
+      const bridge = createDriveBridge({ window: {} })
+
+      expect(() => bridge.abandon()).toThrow(DriveBridgeError)
+      expect(bridge.loadDraft()).toBeNull()
+    })
+
     it('ignore, comme un autre passage, le résultat d’un autre drive que celui du brouillon', () => {
       const { bridge, events, listen, reply } = setup()
       listen()

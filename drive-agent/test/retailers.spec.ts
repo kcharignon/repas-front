@@ -135,7 +135,7 @@ describe('le registre réel : un plan d’Auchan sur une page de Leclerc', () =>
     Object.assign(window, { fetch: fetchSpy })
     const app = bridge()
     const screens = fakeUi({ error: () => 'return' })
-    run(window, { flow: { ui: screens.ui } })
+    run(window, { flow: { ui: screens.ui, progress: undefined } })
     const auchanPlan = validExamples('plan').find(({ name }) => name === 'plan-auchan')?.message
 
     // When
@@ -158,7 +158,10 @@ describe('l’agent avec deux enseignes', () => {
     const other = entry('autre', ['autre.exemple.invalid'])
     const own = entry('leclerc', [PAGE_HOST])
     const app = bridge()
-    run(window, { retailers: [other.retailer, own.retailer], flow: { ui: fakeUi().ui } })
+    run(window, {
+      retailers: [other.retailer, own.retailer],
+      flow: { ui: fakeUi().ui, progress: undefined },
+    })
 
     // When
     app.send(PLAN)
@@ -180,7 +183,10 @@ describe('l’agent avec deux enseignes', () => {
     const own = entry('leclerc', ['leclerc.exemple.invalid'])
     const app = bridge()
     const screens = fakeUi({ error: () => 'return' })
-    run(window, { retailers: [own.retailer, other.retailer], flow: { ui: screens.ui } })
+    run(window, {
+      retailers: [own.retailer, other.retailer],
+      flow: { ui: screens.ui, progress: undefined },
+    })
 
     // When
     app.send(PLAN)
@@ -201,7 +207,7 @@ describe('l’agent avec deux enseignes', () => {
     const other = entry('autre', [PAGE_HOST])
     const app = bridge()
     const screens = fakeUi({ error: () => 'return' })
-    run(window, { retailers: [other.retailer], flow: { ui: screens.ui } })
+    run(window, { retailers: [other.retailer], flow: { ui: screens.ui, progress: undefined } })
     const { lines: _lines, type: _type, ...head } = PLAN
 
     app.send({ ...head, type: 'setup' })
@@ -217,7 +223,10 @@ describe('l’agent avec deux enseignes', () => {
     const first = entry('leclerc', ['jamais.exemple.invalid'])
     const second = entry('autre', ['jamais-non-plus.exemple.invalid'])
     const app = bridge()
-    run(window, { retailers: [first.retailer, second.retailer], flow: { ui: fakeUi().ui } })
+    run(window, {
+      retailers: [first.retailer, second.retailer],
+      flow: { ui: fakeUi().ui, progress: undefined },
+    })
 
     // When
     app.send(PLAN)
