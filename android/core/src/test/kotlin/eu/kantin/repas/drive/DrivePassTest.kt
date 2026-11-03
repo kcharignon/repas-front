@@ -368,4 +368,115 @@ class DrivePassTest {
         assertEquals(setup().text, restored.current()!!.request.text)
         assertEquals(setOf("plan", "startedAt"), JSONObject(store.value!!).getJSONObject("pass").keys().asSequence().toSet())
     }
+
+    // DRV-769 : un abandon rend à Repas ce que l'agent a déjà fait (message `progress`), sinon Repas n'apprend rien et l'envoi suivant remet les mêmes articles au panier.
+
+    private fun progress(vararg lines: String, id: String = runId) =
+        """{"v":1,"type":"progress","runId":"$id","lines":[${lines.joinToString(",")}]}"""
+
+    private val added = """{"ingredientSlug":"farine","outcome":"ADDED","productId":"1000001","quantity":1,"usedRank":1}"""
+    private val chosen = """{"ingredientSlug":"poivre","outcome":"CHOSEN","quantity":1,"placement":"PRIMARY","product":{"id":"555111","label":"Poivre de test"}}"""
+
+    private fun abortedLines(pass: DrivePass) = JSONObject(pass.pendingMessages().single()).getJSONObject("result").getJSONArray("lines")
+
+    @Test
+    fun `l'abandon rend a Repas les lignes que l'agent a dites faites, avec le resultat aborted`() {
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+
+        assertTrue(pass.progress(progress(added, chosen)))
+        pass.abort()
+
+        val sent = JSONObject(pass.pendingMessages().single()).getJSONObject("result")
+        assertEquals("aborted", sent.getString("outcome"))
+        assertEquals("CANCELLED", sent.getJSONObject("error").getString("code"))
+        assertEquals(listOf("farine", "poivre"), (0 until sent.getJSONArray("lines").length()).map { sent.getJSONArray("lines").getJSONObject(it).getString("ingredientSlug") })
+    }
+
+    @Test
+    fun `la derniere copie remplace la precedente`() {
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+
+        pass.progress(progress(added))
+        pass.progress(progress(added, chosen))
+        pass.abort()
+
+        assertEquals(2, abortedLines(pass).length())
+    }
+
+    @Test
+    fun `sans message de l'agent, l'abandon ne rend aucune ligne, comme avant`() {
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+
+        pass.abort()
+
+        assertEquals(0, abortedLines(pass).length())
+    }
+
+    @Test
+    fun `un message mal forme, d'un autre passage ou d'un autre genre de passage est ignore`() {
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+
+        assertFalse(pass.progress("pas du json"))
+        assertFalse(pass.progress(progress(added, id = otherRunId)))
+        assertFalse(pass.progress(progress("""{"ingredientSlug":"farine","outcome":"EN_ROUTE"}""")))
+        assertFalse(pass.progress(progress("""{"outcome":"ADDED"}""")))
+        assertFalse(pass.progress(progress("1")))
+        assertFalse(pass.progress(progress(*Array(DrivePass.MAX_PROGRESS_LINES + 1) { added })))
+        assertFalse(pass.progress(progress(added).replace("progress", "result")))
+        assertFalse(pass.progress(progress(added).replace("\"v\":1", "\"v\":2")))
+        pass.abort()
+        assertEquals(0, abortedLines(pass).length())
+
+        val debug = pass()
+        debug.start(plan(), PassSource.DEBUG)
+        assertFalse(debug.progress(progress(added)))
+        val reading = pass()
+        reading.start(setup(), PassSource.REPAS)
+        assertFalse(reading.progress(progress(added)))
+        assertFalse(pass().progress(progress(added)))
+    }
+
+    @Test
+    fun `les lignes d'un passage ne passent pas au suivant`() {
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+        pass.progress(progress(added))
+        pass.finish(result())
+        pass.delivered(1)
+
+        pass.start(plan(otherRunId), PassSource.REPAS)
+        pass.abort()
+
+        assertEquals(0, abortedLines(pass).length())
+    }
+
+    @Test
+    fun `les lignes survivent a la fin du processus et l'abandon propose a la reprise les rend aussi`() {
+        val store = MemoryStore()
+        val first = pass(store)
+        first.start(plan(), PassSource.REPAS)
+        first.progress(progress(added))
+
+        val restored = pass(store)
+        restored.abort()
+
+        assertEquals(1, abortedLines(restored).length())
+    }
+
+    @Test
+    fun `le resultat de l'agent, s'il arrive, est livre tel quel, une seule fois`() {
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+        pass.progress(progress(added))
+
+        assertNotNull(pass.finish(result()))
+        assertNull(pass.abort())
+
+        assertEquals(1, pass.pendingMessages().size)
+        assertEquals(0, JSONObject(pass.pendingMessages().single()).getJSONObject("result").getJSONArray("lines").length())
+    }
 }

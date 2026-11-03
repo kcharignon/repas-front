@@ -38,7 +38,7 @@ interface PassRequest {
 
     /**
      * Le résultat `aborted` du protocole v1 pour ce passage (abandon par l'utilisateur ou `drive.cancel`) : aucune ligne (l'application ne sait
-     * pas ce que l'agent a déjà mis au panier), le code `CANCELLED`. [agentVersion] : la version de l'agent embarqué.
+     * pas ce que l'agent a déjà mis au panier ; `DrivePass.abort` y ajoute celles que l'agent lui a dites, DRV-769), le code `CANCELLED`. [agentVersion] : la version de l'agent embarqué.
      */
     fun abortedResult(agentVersion: String): String
 }
