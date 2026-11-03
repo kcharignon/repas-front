@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, useTemplateRef, watch } from 'vue'
+import type { Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import type { RouteLocationRaw } from 'vue-router'
 
 import type { ShoppingList } from '@/api'
 import UiActionMenu, { type UiAction } from '@/design/UiActionMenu.vue'
@@ -44,8 +46,17 @@ const online = useOnline()
 
 const status = useChangeListStatus()
 const rename = useRenameShoppingList()
-const remove = useDeleteShoppingList()
-const send = useSendShoppingList()
+// La navigation qui suit une suppression ou un envoi est faite par la mutation elle-même (pas par `mutate()`) : la relecture des listes
+// peut démonter cet en-tête (la liste envoyée ou supprimée était la seule en cours) avant que les rappels de `mutate()` ne partent (DRV-762)
+// La confirmation reste affichée (et la mutation « en cours ») jusqu'à l'arrivée sur l'écran suivant : tant qu'il charge, l'écran de la liste
+// est encore là avec la liste « en cours » en mémoire, et rien ne doit permettre un second envoi ou une seconde suppression (DRV-763)
+const remove = useDeleteShoppingList(async () => {
+  await goThenClose(deleting, { name: 'shopping-lists' })
+})
+const send = useSendShoppingList(async (listId) => {
+  // La confirmation a donné l'intention : l'écran d'envoi ouvre le drive tout seul (`ouvrir`)
+  await goThenClose(sending, { name: 'drive-send', params: { listId }, query: { ouvrir: '1' } })
+})
 const reopen = useReopenShoppingList()
 
 // L'envoi n'est proposé que dans l'application Repas (le pont natif), si la fonction est allumée, pour une liste en cours qui a des
@@ -87,6 +98,21 @@ function configureDrive() {
   void router.push({ name: 'drive-settings', query: { magasin: 'requis', retour: 'liste' } })
 }
 
+/**
+ * Va à l'écran suivant puis ferme la confirmation, que la navigation réussisse ou non. L'action a déjà eu lieu côté serveur : un écran qui
+ * ne se charge pas ne doit ni la faire passer pour un échec, ni laisser la confirmation ouverte ; la relecture des listes montre l'état réel
+ * (liste envoyée : « Reprendre l'envoi »).
+ */
+async function goThenClose(confirmation: Ref<boolean>, to: RouteLocationRaw) {
+  try {
+    await router.push(to)
+  } catch {
+    // Le chargement de l'écran a échoué : on reste ici
+  } finally {
+    confirmation.value = false
+  }
+}
+
 const checking = ref(false)
 const updating = ref(false)
 /** Le drive que l'application ne connaît pas (DRV-710), pour le nommer dans la phrase de mise à jour ; `null` : l'application est trop ancienne tout court. */
@@ -126,7 +152,7 @@ async function appIsEnough(): Promise<boolean> {
  * magasin enregistré, cet écran nous rend la liste (`retour=liste`) et l'envoi reprend à sa confirmation (`envoyer`).
  */
 async function askToSend() {
-  if (checking.value || !(await appIsEnough())) return
+  if (checking.value || send.isPending.value || !(await appIsEnough())) return
   const data = settings.data.value
   if (data !== undefined && !needsStore(data)) sending.value = true
   else
@@ -167,31 +193,17 @@ function saveName() {
 }
 
 function confirmDelete() {
-  remove.mutate(props.list.id, {
-    onSuccess: async () => {
-      deleting.value = false
-      await router.push({ name: 'shopping-lists' })
-    },
-  })
+  if (remove.isPending.value) return
+  remove.mutate(props.list.id)
 }
 
 function confirmSend() {
-  // L'identifiant est pris AVANT l'envoi : une fois la liste partie, l'accueil ne montre plus que les listes en cours et `props.list` devient une autre liste
-  const listId = props.list.id
+  if (send.isPending.value) return
+  // L'identifiant est pris AVANT l'envoi (il voyage dans les variables de la mutation) : une fois la liste partie, l'accueil ne montre plus
+  // que les listes en cours et `props.list` devient une autre liste
   send.mutate(
-    { id: listId, version: props.list.version },
-    {
-      onSuccess: async () => {
-        sending.value = false
-        // La confirmation a donné l'intention : l'écran d'envoi ouvre le drive tout seul (`ouvrir`)
-        await router.push({
-          name: 'drive-send',
-          params: { listId },
-          query: { ouvrir: '1' },
-        })
-      },
-      onError: () => (sending.value = false),
-    },
+    { id: props.list.id, version: props.list.version },
+    { onError: () => (sending.value = false) },
   )
 }
 
@@ -231,10 +243,11 @@ const moreActions = computed<UiAction[]>(() => [
 ])
 
 const otherActions = computed<UiAction[]>(() => {
-  const remove: UiAction = {
+  const deleteAction: UiAction = {
     key: 'delete',
     label: t('common.delete'),
     tone: 'danger',
+    disabled: remove.isPending.value,
     run: () => (deleting.value = true),
   }
   if (props.list.isSent)
@@ -245,10 +258,10 @@ const otherActions = computed<UiAction[]>(() => {
         disabled: !online.value,
         run: () => (reopening.value = true),
       },
-      remove,
+      deleteAction,
     ]
   const renameAction: UiAction = { key: 'rename', label: t('shoppingList.rename'), run: openRename }
-  if (!props.list.isActive) return [renameAction, remove]
+  if (!props.list.isActive) return [renameAction, deleteAction]
 
   return [
     ...(canConfigureDrive.value
@@ -261,7 +274,7 @@ const otherActions = computed<UiAction[]>(() => {
       disabled: status.isPending.value,
       run: () => status.mutate({ id: props.list.id, action: 'pause' }),
     },
-    remove,
+    deleteAction,
   ]
 })
 
@@ -311,7 +324,7 @@ const statusLabel = (list: ShoppingList) =>
           v-else-if="canSend"
           variant="accent"
           :class="mainAction"
-          :disabled="!online || checking"
+          :disabled="!online || checking || send.isPending.value"
           @click="askToSend"
         >
           {{ t('shoppingList.send') }}

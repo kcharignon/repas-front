@@ -16,12 +16,14 @@ import {
   HOME_HOST,
   isLoopback,
   MOBILE_HOST,
+  MOBILE_HOSTS,
   OTHER_STORE_PATH,
   PAGE_PATH,
   STORE,
   startFakeLeclerc,
   type FakeLeclerc,
 } from '../fake-leclerc/server'
+import { MOBILE_PAGE_PATH } from '../fake-leclerc/mobile'
 import { FOREIGN_PHOTO_HOST, PHOTO_HOST } from '../fake-leclerc/photos'
 import { BACK_FORBIDDEN, backAcceptsLabel } from './back-label-rules'
 
@@ -1089,5 +1091,61 @@ describe('le site mobile de l’enseigne (DRV-741)', () => {
     expect(fake.requests().map((r) => [r.host, r.path, r.status])).toEqual([
       [MOBILE_HOST, PAGE_PATH, 302],
     ])
+  })
+})
+
+describe('la version mobile derrière le relais HTTPS de l’émulateur (DRV-766)', () => {
+  beforeEach(async () => {
+    await fake.close()
+    fake = await startFakeLeclerc({ hosts: MOBILE_HOSTS })
+    fake.setBehavior({ mobile: { member: true, chosen: true } })
+  })
+
+  it('écrit ses liens en https quand le relais le dit (X-Forwarded-Proto), en http sinon', async () => {
+    const behind = await call('/', { host: HOME_HOST, headers: { 'X-Forwarded-Proto': 'https' } })
+    const direct = await call('/', { host: HOME_HOST })
+
+    expect(behind.text).toContain(
+      `location.assign('https://${MOBILE_HOST}:${fake.port}${MOBILE_PAGE_PATH}')`,
+    )
+    expect(direct.text).toContain(
+      `location.assign('http://${MOBILE_HOST}:${fake.port}${MOBILE_PAGE_PATH}')`,
+    )
+  })
+
+  it('l’accueil refusé ou trop lent se comporte comme celui du site ordinateur (homeStatus, homeDelayMs)', async () => {
+    fake.setBehavior({ homeStatus: 404 })
+    expect((await call('/', { host: HOME_HOST })).status).toBe(404)
+    fake.setBehavior({ homeStatus: 403 })
+    expect((await call('/', { host: HOME_HOST })).status).toBe(403)
+    fake.setBehavior({ homeStatus: null, homeDelayMs: 300 })
+    const started = Date.now()
+    expect((await call('/', { host: HOME_HOST })).status).toBe(200)
+    expect(Date.now() - started).toBeGreaterThanOrEqual(290)
+  })
+
+  it('« Commencer mes courses » : normal, qui ignore un clic de programme (button-human), inerte (button-inert), ou qui mène ailleurs (startPath)', async () => {
+    const page = async () => (await call('/', { host: HOME_HOST })).text
+
+    expect(await page()).toContain('location.assign(')
+    fake.setBehavior({ homeForm: 'button-human' })
+    expect(await page()).toContain('if (!event.isTrusted) return;')
+    fake.setBehavior({ homeForm: 'button-inert' })
+    expect(await page()).not.toContain('location.assign(')
+    fake.setBehavior({ homeForm: 'button', startPath: '/' })
+    expect(await page()).toContain(`location.assign('http://${MOBILE_HOST}:${fake.port}/')`)
+    // Un chemin qui n’est pas fait de caractères sûrs est ignoré
+    fake.setBehavior({ startPath: "/x');alert(1);('" })
+    expect(await page()).toContain(MOBILE_PAGE_PATH)
+  })
+
+  it('la page du magasin refusée (storeHomeStatus) ou « introuvable » déguisée en 200 (storeHomeTitle)', async () => {
+    expect((await call(MOBILE_PAGE_PATH, { host: MOBILE_HOST })).status).toBe(200)
+    fake.setBehavior({ storeHomeStatus: 404 })
+    expect((await call(MOBILE_PAGE_PATH, { host: MOBILE_HOST })).status).toBe(404)
+    fake.setBehavior({ storeHomeStatus: null, storeHomeTitle: 'not-found' })
+    const disguised = await call(MOBILE_PAGE_PATH, { host: MOBILE_HOST })
+    expect(disguised.status).toBe(200)
+    expect(disguised.text).toContain('<title>Page introuvable')
   })
 })

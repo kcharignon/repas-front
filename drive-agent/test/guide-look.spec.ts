@@ -192,6 +192,22 @@ describe('la connexion', () => {
     expect(readLoginLook(document, ACCOUNT('authentification.aspx'), false).sub).toBe('form')
   })
 
+  it('DRV-761 : une page de connexion d’adresse inconnue, reconnue par son texte, garde libres ses champs et son bouton (mot de passe, « Se connecter »)', () => {
+    add('h1', 'Connexion', 20)
+    const email = add('input', '', 100, { type: 'email' })
+    const password = add('input', '', 160, { type: 'password' })
+    const human = at(add('iframe', '', 240, { title: 'hCaptcha challenge' }), 240, 100)
+    const submit = add('button', 'Se connecter', 380)
+    const unknown = where('www.leclercdrive.fr', '/une-page-inconnue.aspx')
+
+    // Sans le texte reconnu, la page d'adresse inconnue n'est pas lue comme la connexion : rien n'est gardé (le défaut mesuré)
+    expect(readLoginLook(document, unknown, false).keep).toEqual([])
+    const look = readLoginLook(document, unknown, false, true)
+
+    expect(look.sub).toBe('password')
+    expect(look.keep).toEqual([email, password, submit, human])
+  })
+
   it('une page qui n’est pas celle de la version mobile : le contrôle de connexion seul, sans sous-étape', () => {
     const login = add('a', 'Se connecter', 60)
 
