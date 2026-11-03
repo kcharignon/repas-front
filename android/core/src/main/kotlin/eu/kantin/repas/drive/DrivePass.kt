@@ -93,10 +93,12 @@ class DrivePass(
             return false
         }
         if (message.opt("type") != "progress" || message.optInt("v", -1) != 1 || message.opt("runId") != pass.request.runId) return false
-        val lines = validLines(message.optJSONArray("lines")) ?: return false
+        // La forme exacte du protocole, ou rien : une seule ligne douteuse ferait rejeter par Repas tout le résultat `aborted`. Une copie refusée efface aussi la précédente
+        // (une page qui falsifie le message n'a plus la confiance de l'application pour ce passage).
+        val lines = ProgressLines.parse(message.optJSONArray("lines"))
         done = lines
         persist()
-        return true
+        return lines != null
     }
 
     /**
@@ -128,7 +130,11 @@ class DrivePass(
         val result = JSONObject(pass.request.abortedResult(agentVersion()))
         // Ce que l'agent a déjà fait est rendu à Repas avec l'abandon : sans cela Repas n'apprend aucun choix, ne coche rien, et l'envoi suivant remet les mêmes articles au panier (DRV-769)
         val lines = done
-        if (lines != null && lines.length() > 0 && pass.source == PassSource.REPAS && !pass.request.isSetup) result.put("lines", lines)
+        if (lines != null && lines.length() > 0 && pass.source == PassSource.REPAS && !pass.request.isSetup) {
+            result.put("lines", lines)
+            // Repas refuse un message de plus de 64 Ko, enveloppe `drive.result` comprise : trop de lignes, et l'abandon redevient celui d'avant, sans ligne
+            if (!BridgeMessages.fitsBound(NativeBridge.driveResult(result))) result.put("lines", JSONArray())
+        }
         close(pass, result)
         return pass
     }
@@ -175,7 +181,7 @@ class DrivePass(
             }
             if (request != null && pass.has("startedAt")) {
                 active = ActivePass(request, PassSource.REPAS, pass.optLong("startedAt"))
-                done = validLines(pass.optJSONArray("done"))
+                done = ProgressLines.parse(pass.optJSONArray("done"))
             }
         }
         saved.optJSONArray("outbox")?.let { messages ->
@@ -189,22 +195,7 @@ class DrivePass(
         const val MAX_AGE_MS = 24L * 60 * 60 * 1000
 
         /** Un plan a 100 lignes au plus (`LIMITS.lines` du protocole). */
-        const val MAX_PROGRESS_LINES = 100
-
-        private val LINE_OUTCOMES = setOf("ADDED", "CHOSEN", "UNAVAILABLE", "HAVE_AT_HOME", "SKIPPED", "FAILED")
-
-        /**
-         * Les lignes d'un message `progress`, ou `null` si la forme n'est pas celle du protocole : au plus 100 objets, chacun avec un identifiant d'ingrédient et une issue connue. Le détail
-         * (produits, prix…) est revérifié par Repas avec le plan à son retour : ici on ne laisse passer que ce qui a la forme d'une ligne.
-         */
-        private fun validLines(lines: JSONArray?): JSONArray? {
-            if (lines == null || lines.length() > MAX_PROGRESS_LINES) return null
-            for (index in 0 until lines.length()) {
-                val line = lines.optJSONObject(index) ?: return null
-                if (line.optString("ingredientSlug").isEmpty() || line.optString("outcome") !in LINE_OUTCOMES) return null
-            }
-            return lines
-        }
+        const val MAX_PROGRESS_LINES = ProgressLines.MAX_LINES
     }
 }
 

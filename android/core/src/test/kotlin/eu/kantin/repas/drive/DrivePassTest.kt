@@ -479,4 +479,86 @@ class DrivePassTest {
         assertEquals(1, pass.pendingMessages().size)
         assertEquals(0, JSONObject(pass.pendingMessages().single()).getJSONObject("result").getJSONArray("lines").length())
     }
+
+    // Le contrôle de forme est celui du validateur de Repas : une copie « valide en gros » mais pas exactement conforme ferait rejeter TOUT le résultat aborted.
+
+    private val everything = """{"ingredientSlug":"poivre","outcome":"CHOSEN","quantity":2,"placement":"FALLBACK","notInCart":true,"searchQuery":"poivre noir","packSize":{"value":50,"unitSlug":"gramme"},"unavailableIds":["1000001","1000002"],"rejected":[{"id":"999111","label":"Refusé","ean":null,"content":{"value":50,"unit":"g"}}],"product":{"id":"555111","label":"Poivre de test","ean":"12345678","content":{"value":50.5,"unit":"g"},"price":{"cents":199,"perMeasure":{"cents":3980,"unit":"kg"}},"rayonId":12,"familyId":3,"offerId":"8f14e45f-ceea-467a-9575-8e6b8c0a1b2c"}}"""
+
+    @Test
+    fun `une ligne complete, avec toutes ses cles facultatives, a la forme du protocole`() {
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+
+        assertTrue(pass.progress(progress(added, everything, """{"ingredientSlug":"sel","outcome":"FAILED","error":"NETWORK"}""", """{"ingredientSlug":"huile","outcome":"UNAVAILABLE","unavailableIds":["1000003"]}""", """{"ingredientSlug":"pain","outcome":"SKIPPED"}""")))
+    }
+
+    @Test
+    fun `valide en gros, refuse par la forme stricte : zero ligne, meme si une copie valide la precedait`() {
+        val forged = listOf(
+            """{"ingredientSlug":"farine","outcome":"ADDED"}""", // il manque ce que l'issue exige
+            """{"ingredientSlug":"farine","outcome":"ADDED","productId":"1000001","quantity":1,"usedRank":1,"evil":1}""", // une cle de trop
+            """{"ingredientSlug":"farine","outcome":"ADDED","productId":"1000001","quantity":100,"usedRank":1}""", // hors des bornes
+            """{"ingredientSlug":"farine","outcome":"ADDED","productId":"pas un identifiant","quantity":1,"usedRank":1}""",
+            """{"ingredientSlug":"Farine !","outcome":"ADDED","productId":"1000001","quantity":1,"usedRank":1}""",
+            """{"ingredientSlug":"farine","outcome":"ADDED","productId":"1000001","quantity":"1","usedRank":1}""", // un texte pour un nombre
+            """{"ingredientSlug":"farine","outcome":"ADDED","productId":"1000001","quantity":1,"usedRank":1,"price":{"cents":-1}}""",
+            """{"ingredientSlug":"poivre","outcome":"CHOSEN","quantity":1,"placement":"PRIMARY"}""", // pas de produit
+            """{"ingredientSlug":"poivre","outcome":"CHOSEN","quantity":1,"placement":"AILLEURS","product":{"id":"555111","label":"x"}}""",
+            """{"ingredientSlug":"poivre","outcome":"CHOSEN","quantity":1,"placement":"PRIMARY","notInCart":false,"product":{"id":"555111","label":"x"}}""",
+            """{"ingredientSlug":"poivre","outcome":"CHOSEN","quantity":1,"placement":"PRIMARY","product":{"id":"555111","label":"x","secret":"cookie"}}""",
+            """{"ingredientSlug":"sel","outcome":"FAILED","error":"PAS_UN_CODE"}""",
+            """{"ingredientSlug":"sel","outcome":"HAVE_AT_HOME","productId":"1000001"}""",
+            """{"ingredientSlug":"sel","outcome":"UNAVAILABLE","unavailableIds":["1000003","1000003"]}""", // doublon
+        )
+        for (line in forged) {
+            val pass = pass()
+            pass.start(plan(), PassSource.REPAS)
+            assertTrue(pass.progress(progress(added)))
+
+            assertFalse(line, pass.progress(progress(added, line)))
+            pass.abort()
+
+            assertEquals(line, 0, abortedLines(pass).length())
+        }
+    }
+
+    @Test
+    fun `drive cancel rend les lignes faites, et ne vise que le passage en cours`() {
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+        pass.progress(progress(added, chosen))
+
+        assertNull(pass.abort(otherRunId))
+        assertTrue(pass.pendingMessages().isEmpty())
+        assertNotNull(pass.abort(runId))
+
+        assertEquals(2, abortedLines(pass).length())
+    }
+
+    @Test
+    fun `une copie dont l'enveloppe depasserait 64 Ko ne part pas : l'abandon redevient celui d'avant, sans ligne`() {
+        // 99 lignes de plus en plus longues, jusqu'à un message `progress` juste sous 64 Ko : avec l'enveloppe `drive.result` il le dépasserait
+        val labels = IntArray(99 * 3) { 1 }
+        fun lines() = labels.toList().chunked(3).mapIndexed { index, (a, b, c) ->
+            """{"ingredientSlug":"a$index","outcome":"CHOSEN","quantity":1,"placement":"PRIMARY","product":{"id":"555111","label":"${"x".repeat(a)}"},"rejected":[{"id":"999111","label":"${"y".repeat(b)}"},{"id":"999112","label":"${"z".repeat(c)}"}]}"""
+        }
+        fun size() = progress(*lines().toTypedArray()).toByteArray().size
+        var room = BridgeMessages.MAX_BYTES - 60 - size()
+        for (index in labels.indices) {
+            val step = minOf(254, room)
+            labels[index] += step
+            room -= step
+        }
+        val text = progress(*lines().toTypedArray())
+        assertTrue(text.toByteArray().size in (BridgeMessages.MAX_BYTES - 100)..BridgeMessages.MAX_BYTES)
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+
+        assertTrue(BridgeMessages.fitsBound(text))
+        assertTrue(pass.progress(text))
+        pass.abort()
+
+        assertEquals(0, abortedLines(pass).length())
+        assertTrue(BridgeMessages.fitsBound(pass.pendingMessages().single()))
+    }
 }

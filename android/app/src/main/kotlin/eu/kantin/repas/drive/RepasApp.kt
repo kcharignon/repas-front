@@ -75,8 +75,9 @@ class RepasApp : Application() {
 }
 
 /**
- * Le [PassStore] du téléphone : une préférence privée de l'application. Elle ne contient que l'identifiant et le plan du passage non terminé
- * et les résultats pas encore livrés (jamais un cookie ni un identifiant d'enseigne) ; elle est exclue des sauvegardes (`data_extraction_rules.xml`).
+ * Le [PassStore] du téléphone : une préférence privée de l'application. Elle contient le plan du passage non terminé, les lignes que l'agent a dites déjà faites
+ * (message `progress`, DRV-769 : identifiants et libellés de produits, quantités, prix ; jamais un cookie, une adresse ni un identifiant d'enseigne) et les
+ * résultats pas encore livrés ; elle est exclue des sauvegardes (`data_extraction_rules.xml`).
  */
 internal class PrefsPassStore(context: Context) : PassStore {
     private val prefs = context.getSharedPreferences("drive-pass", Context.MODE_PRIVATE)
