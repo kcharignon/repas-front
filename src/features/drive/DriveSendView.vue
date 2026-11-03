@@ -359,7 +359,8 @@ async function openDrive() {
 /** Abandonne le passage en cours : l'application est prévenue (si elle est là), le brouillon part. */
 function abandon() {
   try {
-    driveBridge.cancel()
+    // Le brouillon est effacé et gardé en mémoire : le résultat `aborted` de l'application porte les lignes déjà faites, qui sont enregistrées sans écran (DRV-769)
+    driveBridge.abandon()
   } catch {
     // Hors de l'application, ou pont indisponible : il n'y a rien à arrêter
   }

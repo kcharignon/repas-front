@@ -12,8 +12,12 @@ import type { AppUpdateState } from './update'
 export type DriveEvent =
   /** Le résultat du passage en cours (`draft` : à quelle liste il appartient). L'écran efface ensuite le brouillon (`clearDraft`). */
   | { kind: 'result'; result: DriveResult; draft: RunDraft }
-  /** Un résultat qui n'est pas celui du passage en cours (autre `runId`, brouillon expiré ou absent) : à ignorer. */
-  | { kind: 'stale'; result: DriveResult }
+  /**
+   * Un résultat qui n'est pas celui du passage en cours (autre `runId`, brouillon expiré ou absent) : à ignorer, sauf `abandoned` (DRV-769) : le passage que la
+   * personne vient d'abandonner (`abandon`), dont l'application rend les lignes déjà faites avec le résultat `aborted`. `abandoned` est le brouillon d'alors, de quoi
+   * recouper ces lignes avec le plan envoyé et les enregistrer sans écran.
+   */
+  | { kind: 'stale'; result: DriveResult; abandoned?: RunDraft }
   /** L'application a refusé un message `drive.*` (`code` : `UNAVAILABLE`…, `runId` du passage concerné s'il est connu). */
   | { kind: 'refused'; code: string; runId: string | null }
   /** L'application a envoyé une réponse du drive mal formée (`detail` : le champ fautif). */
@@ -58,6 +62,8 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
   const updateListeners = new Set<(state: AppUpdateState) => void>()
   const buffered: DriveEvent[] = []
   let listening: NativeBridge | null = null
+  /** Le passage que la personne vient d'abandonner (DRV-769), le temps que l'application rende son résultat `aborted` ; en mémoire seulement. */
+  let abandoned: RunDraft | null = null
   let infoInFlight: Promise<AppInfo> | null = null
   /** La lecture du magasin en cours (DRV-320) : un seul à la fois, en mémoire de la page. */
   let pendingSetup: {
@@ -155,6 +161,11 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
           return publish({ kind: 'result', result: inbound.result, draft })
         // Un magasin lu que personne n'attend (page rechargée) n'est pas un passage périmé : rien à montrer
         if (inbound.result.type === 'setup-result') return
+        // Le résultat du passage que la personne vient d'abandonner : le brouillon est déjà effacé, mais le résultat peut porter les lignes déjà faites (DRV-769)
+        const gone = abandoned
+        abandoned = null
+        if (gone !== null && isFromDraft(inbound.result, gone))
+          return publish({ kind: 'stale', result: inbound.result, abandoned: gone })
 
         return publish({ kind: 'stale', result: inbound.result })
       }
@@ -354,6 +365,20 @@ export function createDriveBridge(options: DriveBridgeOptions = {}) {
      */
     listen(): void {
       connect()
+    },
+
+    /**
+     * La personne abandonne le passage en cours (DRV-769) : comme `cancel`, puis le brouillon est effacé, mais retenu en mémoire pour recevoir le résultat `aborted` de
+     * l'application, qui porte les lignes que l'agent avait déjà faites (`stale` avec `abandoned`). Sans pont, lève comme `cancel` et le brouillon est quand même effacé.
+     */
+    abandon(): void {
+      const draft = drafts.load()
+      try {
+        send(requireNative(), { v: PROTOCOL_VERSION, type: 'drive.cancel' })
+        abandoned = draft
+      } finally {
+        drafts.clear()
+      }
     },
 
     /** Demande l'arrêt du passage : l'application répond par un résultat `aborted` (`onEvent`). Le brouillon reste jusque-là. */

@@ -1366,7 +1366,7 @@ describe('retour du drive : les articles mis au panier sont cochés dans la list
     ])
   })
 
-  // DRV-769 : l'abandon (touche Retour puis « Abandonner », ou « Annuler » de Repas) rend les lignes que l'agent a dites faites à l'application
+  // DRV-769 : l'abandon décidé dans l'application (touche Retour puis « Abandonner », brouillon encore là) rend les lignes que l'agent a dites faites ; l'abandon depuis Repas : `useDriveReturn.spec.ts`
   it('un envoi abandonné qui porte les lignes déjà faites (CANCELLED) : les choix sont enregistrés et les articles au panier cochés', async () => {
     const abandoned = {
       kind: 'result',
