@@ -224,6 +224,127 @@ describe('la carte posée dans la page', () => {
     fit.stop()
   })
 
+  describe('DRV-768 : la carte ne quitte jamais la page ni l’arbre d’accessibilité pendant la mesure', () => {
+    /** Tous les changements d'attributs de la carte pendant `ticks` relectures de 500 ms, la page ne bougeant pas. */
+    const attributeChanges = (el: HTMLElement, ticks: number): string[] => {
+      const seen: string[] = []
+      const observer = new MutationObserver((records) => {
+        for (const record of records)
+          seen.push(
+            `${record.attributeName}: ${record.oldValue ?? '∅'} -> ${(el.getAttribute(record.attributeName ?? '') ?? '∅').slice(0, 40)}`,
+          )
+      })
+      observer.observe(el, { attributes: true, attributeOldValue: true })
+      vi.advanceTimersByTime(500 * ticks)
+      seen.push(
+        ...observer
+          .takeRecords()
+          .map((record) => `${record.attributeName}: ${record.oldValue ?? '∅'}`),
+      )
+      observer.disconnect()
+      return seen
+    }
+
+    it('carte pleine, page immobile : six relectures, aucun changement d’attribut (surtout pas `hidden`)', () => {
+      vi.useFakeTimers()
+      const el = card()
+      const fit = fitGuide(window, el, options([control(100, 150)]))
+      expect(el.hidden).toBe(false)
+
+      expect(attributeChanges(el, 6)).toEqual([])
+      fit.stop()
+    })
+
+    it('barre réduite (le clavier est ouvert), page immobile : aucun changement d’attribut', () => {
+      vi.useFakeTimers()
+      const field = document.createElement('input')
+      field.type = 'text'
+      document.body.appendChild(field)
+      field.getBoundingClientRect = () => rect(100, 150)
+      field.focus()
+      const el = card()
+      const fit = fitGuide(window, el, options([]))
+      expect(el.classList.contains('min')).toBe(true)
+
+      expect(attributeChanges(el, 6)).toEqual([])
+      fit.stop()
+    })
+
+    it('carte effacée faute de place, page immobile : elle reste cachée, sans jamais réapparaître le temps d’une passe', () => {
+      vi.useFakeTimers()
+      const field = document.createElement('input')
+      document.body.appendChild(field)
+      field.getBoundingClientRect = () => rect(700, 750)
+      const el = card()
+      field.focus()
+      const fit = fitGuide(window, el, options([control(20, 40)]))
+      expect(el.hidden).toBe(true)
+
+      expect(attributeChanges(el, 6)).toEqual([])
+      expect(el.hidden).toBe(true)
+      fit.stop()
+    })
+
+    it('la page change vraiment : la carte bouge, une fois, puis se tient tranquille', () => {
+      vi.useFakeTimers()
+      const key = control(100, 150)
+      const el = card()
+      const fit = fitGuide(window, el, options([key]))
+      expect(el.classList.contains('top')).toBe(false)
+
+      key.getBoundingClientRect = () => rect(600, 640)
+      expect(attributeChanges(el, 1).length).toBeGreaterThan(0)
+      expect(el.classList.contains('top')).toBe(true)
+      expect(attributeChanges(el, 6)).toEqual([])
+      fit.stop()
+    })
+
+    it('la carte qui couvre un contrôle ne le fait pas croire recouvert par la page : on lit la pile sous le doigt, la carte ignorée, sans la cacher', () => {
+      const key = control(600, 640)
+      const el = card()
+      // Le navigateur rend la pile au point : la carte (en bas, 500-760) devant, le contrôle dessous
+      Object.defineProperty(document, 'elementsFromPoint', {
+        value: () => [el, key, document.body],
+        configurable: true,
+      })
+      try {
+        const hiddenAtRead: boolean[] = []
+        const read = key.getBoundingClientRect
+        key.getBoundingClientRect = () => {
+          hiddenAtRead.push(el.hasAttribute('hidden'))
+          return read.call(key)
+        }
+        const fit = fitGuide(window, el, options([key]))
+        // Le contrôle est gardé libre : la carte pleine passe en haut ; et elle n'a jamais été cachée pour le lire
+        expect(el.classList.contains('top')).toBe(true)
+        expect(hiddenAtRead.length).toBeGreaterThan(0)
+        expect(hiddenAtRead.every((hidden) => !hidden)).toBe(true)
+        fit.stop()
+      } finally {
+        Reflect.deleteProperty(document, 'elementsFromPoint')
+      }
+    })
+
+    it('un mur en couche supérieure reste vu comme tel : le contrôle qu’il recouvre n’est pas à garder libre', () => {
+      const key = control(600, 640)
+      const wall = document.createElement('div')
+      wall.getBoundingClientRect = () => rect(0, 800)
+      document.body.appendChild(wall)
+      const el = card()
+      Object.defineProperty(document, 'elementsFromPoint', {
+        value: () => [el, wall, key],
+        configurable: true,
+      })
+      try {
+        const fit = fitGuide(window, el, options([key]))
+        expect(el.classList.contains('top')).toBe(false)
+        fit.stop()
+      } finally {
+        Reflect.deleteProperty(document, 'elementsFromPoint')
+      }
+    })
+  })
+
   it('DRV-757 : un défilement ne relit pas le guide (des requêtes sur le document) : une page de 3000 éléments, 200 défilements, aucune lecture de plus et une remesure au plus tous les 200 ms', async () => {
     for (let i = 0; i < 3000; i += 1) document.body.appendChild(document.createElement('div'))
     let reads = 0
@@ -259,7 +380,8 @@ describe('la carte posée dans la page', () => {
     expect(el.classList.contains('min')).toBe(true)
     expect(el.hidden).toBe(false)
 
-    // La carte lève en pleine mesure, après que la mesure l'a déjà posée en pleine, en bas
+    // La carte lève en pleine mesure, après que la mesure l'a déjà posée en pleine, en bas (la page a bougé : sans quoi la passe n'a rien à remesurer, DRV-768)
+    field.getBoundingClientRect = () => rect(110, 160)
     let calls = 0
     el.getBoundingClientRect = () => {
       calls += 1

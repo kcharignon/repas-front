@@ -3,9 +3,11 @@
 // ensuite ; la personne peut aussi la réduire ou la rouvrir d'un toucher. Où que la carte soit (pleine ou barre, en bas ou en haut) elle ne couvre JAMAIS le champ où l'on écrit, ni un
 // contrôle que l'enseigne dit à toucher, ni un bouton d'un mur de cookies : sans place, la barre s'efface le temps qu'il faut (rien d'essentiel ne dépend d'elle : la touche Retour de
 // l'application propose d'abandonner). Que des LECTURES de la page : la position des contrôles, l'élément actif ; aucun toucher, aucune saisie, aucune requête.
+// DRV-768 : la carte n'est JAMAIS ôtée de la page pour la mesurer (un attribut `hidden` posé puis retiré deux fois par seconde la sortait de l'arbre d'accessibilité et l'y
+// remettait : TalkBack perdait sa lecture) ; on l'ignore en lisant ce qui est sous le doigt (`elementsFromPoint`), et une passe où rien n'a changé ne touche pas à la carte.
 import { isShown, type GuideSub } from '../retailers/guide'
 import { answerWeight } from '../retailers/consent'
-import { consentRects, formControls, pointedRects } from './keep-clear'
+import { consentRects, formControls, pointedRects, topmost } from './keep-clear'
 
 /** Le nom de la barre réduite, de la carte masquée faute de place, et du côté haut, dans la feuille de style de l'interface. */
 export const MIN = 'min'
@@ -88,7 +90,13 @@ const hits = (box: Box, rects: readonly Box[]): boolean =>
  * La boîte que la page montre à l'écran d'un contrôle, ou rien (caché, hors de la fenêtre). `form` (DRV-761, un champ de saisie, son étiquette, le bouton du formulaire) : un petit élément
  * posé à côté du champ, dans le même bloc (l'étiquette flottante qui le recouvre), ne le cache pas ; un grand bloc de la page, si ; un conteneur de plus de la moitié de la fenêtre n'est pas un contrôle.
  */
-function seen(element: Element, win: Window, uncovered = true, form = false): DOMRect[] {
+function seen(
+  element: Element,
+  win: Window,
+  ignore: Element,
+  uncovered = true,
+  form = false,
+): DOMRect[] {
   const rect = element.getBoundingClientRect()
   const visible = rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < win.innerHeight
   if (!visible || rect.right <= 0 || rect.left >= win.innerWidth) return []
@@ -98,7 +106,7 @@ function seen(element: Element, win: Window, uncovered = true, form = false): DO
     return []
   // Un contrôle que la page recouvre elle-même (le champ sous un mur de cookies plein écran) n'est pas à protéger : la personne ne le voit pas (sans `elementFromPoint` : on protège)
   const hit = uncovered
-    ? win.document.elementFromPoint?.(rect.left + rect.width / 2, rect.top + rect.height / 2)
+    ? topmost(win.document, rect.left + rect.width / 2, rect.top + rect.height / 2, ignore)
     : null
   if (!hit || element.contains(hit) || hit.contains(element)) return [rect]
   const near = hit.getBoundingClientRect()
@@ -107,6 +115,12 @@ function seen(element: Element, win: Window, uncovered = true, form = false): DO
     element.parentElement?.contains(hit) === true &&
     near.width * near.height <= 4 * rect.width * rect.height
   return overlay ? [rect] : []
+}
+
+/** L'élément de la page qui porte la carte : l'hôte du Shadow DOM fermé (ce que le toucher rencontre), ou la carte elle-même. */
+export function ownerOf(card: HTMLElement): Element {
+  const root = card.getRootNode()
+  return 'host' in root ? (root.host as Element) : card
 }
 
 /** La personne écrit-elle dans un champ de la page (le clavier est alors ouvert) ? */
@@ -140,8 +154,7 @@ export function touchVerdict(card: HTMLElement, win: Window & typeof globalThis)
   const bottom = Math.min(rect.bottom, win.innerHeight)
   if (right <= left || bottom <= top) return 'outside'
   const hit = doc.elementFromPoint((left + right) / 2, (top + bottom) / 2)
-  const root = card.getRootNode()
-  const owner = 'host' in root ? (root.host as Element) : card
+  const owner = ownerOf(card)
   if (hit === null) return 'outside'
   return hit === owner || owner.contains(hit) ? 'agent' : 'other'
 }
@@ -198,6 +211,8 @@ export function fitGuide(
   let started = false
   /** Ce que la dernière lecture complète du guide a rendu : un défilement ne le relit pas (il n'a changé de place que les boîtes), seule la place de la carte est refaite. */
   let latest: Needs | null = null
+  /** Ce dont dépendait la place à la dernière mesure réussie : identique à la passe suivante, la carte n'est pas touchée. */
+  let settled: string | null = null
 
   const apply = (spot: Spot | null): void => {
     card.hidden = spot === null
@@ -224,20 +239,21 @@ export function fitGuide(
       const wall = options.consent ? consentRects(doc, win.innerWidth, win.innerHeight) : []
       const hard: Box[] = [...wall]
       const soft: Box[] = []
-      // La carte est ôtée le temps de lire la page : ce qu'elle recouvrirait elle-même ne doit pas faire croire que la page le recouvre
-      card.hidden = true
+      // La carte reste dans la page pendant toute la lecture (DRV-768) : ce qu'elle recouvrirait elle-même ne doit pas faire croire que la page le recouvre, donc `seen` l'ignore
+      // dans la pile sous le doigt, sans la cacher
+      const owner = ownerOf(card)
       // Devant un mur, chaque contrôle de sa zone est pesé par son libellé (un refus que la lecture ne reconnaît pas ne se couvre pas en premier)
       for (const element of needs?.keep ?? []) {
         const weight = needs?.sub === 'wall' ? answerWeight(element) : undefined
-        hard.push(...seen(element, win).map((box) => Object.assign(box, { w: weight })))
+        hard.push(...seen(element, win, owner).map((box) => Object.assign(box, { w: weight })))
       }
-      for (const element of needs?.maybe ?? []) soft.push(...seen(element, win))
-      if (typing !== null) hard.push(...seen(typing, win, false))
+      for (const element of needs?.maybe ?? []) soft.push(...seen(element, win, owner))
+      if (typing !== null) hard.push(...seen(typing, win, owner, false))
       // Quelle que soit l'enseigne, jamais sur ce où l'on écrit ni sur le bouton qui valide (DRV-761) ; devant un mur de cookies ses réponses seules comptent
       if (needs?.sub !== 'wall')
-        for (const element of formControls(doc)) hard.push(...seen(element, win, true, true))
+        for (const element of formControls(doc)) hard.push(...seen(element, win, owner, true, true))
       // Sans lecture du guide de l'enseigne, le contrôle entouré se protège comme avant (avec la place de son repère)
-      if (needs === null && options.consent) hard.push(...pointedRects(options.pointed()))
+      if (needs === null && options.consent) hard.push(...pointedRects(options.pointed(), owner))
       const sub = needs?.sub ?? null
       // Devant un mur de cookies la carte reste une barre : un toucher sur la barre ne redonne PAS la grande carte par-dessus les réponses du mur
       if (sub === 'wall' && pref === 'full') pref = 'auto'
@@ -246,23 +262,54 @@ export function fitGuide(
         if (pref === 'full') pref = 'auto'
       }
       const rects = [...hard, ...soft]
+      // Ce dont dépend la place : la page (les boîtes à éviter, la saisie, la fenêtre), ce que la personne a demandé, et la carte elle-même (sa forme, son texte, sa boîte)
+      const keyOf = (): string => {
+        const { top, bottom, left, right } = card.getBoundingClientRect()
+        const boxes = rects
+          .map((one) =>
+            [one.top, one.bottom, one.left, one.right, (one as { w?: number }).w].join(','),
+          )
+          .join(';')
+        return [
+          pref,
+          sub,
+          typing !== null,
+          needs?.compact === true,
+          win.innerWidth,
+          win.innerHeight,
+          boxes,
+          card.hidden,
+          card.className,
+          card.textContent,
+          [top, bottom, left, right].join(','),
+        ].join('\u0001')
+      }
+      // Rien n'a changé depuis la dernière passe : la place est la même, la carte n'est pas touchée (une mesure pose la carte à chaque place candidate, et ces allers-retours
+      // d'attributs et de classes se verraient dans l'arbre d'accessibilité, deux fois par seconde)
       const measure = (spot: Spot): DOMRect => {
         apply(spot)
         return card.getBoundingClientRect()
       }
-      const full = choose(measure, rects, hard, false)
-      // La page a besoin de la place : le clavier est ouvert, ou la carte pleine couvrirait un contrôle
-      const need = typing !== null || needs?.compact === true || full === null
-      if (pref === 'full' && !need) pref = 'auto'
-      // Rouverte par la personne, sans place libre : la carte pleine, en bas, c'est elle qui l'a demandée
-      const spot =
-        options.collapsible && (pref === 'min' || (pref === 'auto' && need))
-          ? (choose(measure, rects, hard, true) ??
-            (sub === 'wall' || sub === 'shop' ? leastCovered(measure, hard) : null))
-          : (full ?? { min: false, top: false })
-      apply(spot)
+      /** Mesure les places candidates, pose la carte à la bonne : vrai si elle est montrée. */
+      const place = (): boolean => {
+        const full = choose(measure, rects, hard, false)
+        // La page a besoin de la place : le clavier est ouvert, ou la carte pleine couvrirait un contrôle
+        const need = typing !== null || needs?.compact === true || full === null
+        if (pref === 'full' && !need) pref = 'auto'
+        // Rouverte par la personne, sans place libre : la carte pleine, en bas, c'est elle qui l'a demandée
+        const spot =
+          options.collapsible && (pref === 'min' || (pref === 'auto' && need))
+            ? (choose(measure, rects, hard, true) ??
+              (sub === 'wall' || sub === 'shop' ? leastCovered(measure, hard) : null))
+            : (full ?? { min: false, top: false })
+        apply(spot)
+        return spot !== null
+      }
+      const unchanged = settled !== null && keyOf() === settled
+      const shown = unchanged ? !card.hidden : place()
       placed = true
-      options.visible?.(spot !== null && reachable(card, win))
+      options.visible?.(shown && reachable(card, win))
+      if (!unchanged) settled = keyOf()
       const target = needs?.target ?? null
       // Un autre contrôle à entourer : le repère le relit (la carte, elle, il la suit à chaque mesure)
       if (target !== lastTarget) {
@@ -271,7 +318,8 @@ export function fitGuide(
       }
       started = true
     } catch {
-      // La page ne se laisse pas lire : la carte reste où elle est.
+      // La page ne se laisse pas lire : la carte reste où elle est, et la passe suivante mesure de nouveau.
+      settled = null
     } finally {
       // Une lecture qui a levé après avoir ôté la carte la remet : la carte, avec « Arrêter pour l'instant », ne reste jamais cachée par une panne de lecture
       if (!placed) {

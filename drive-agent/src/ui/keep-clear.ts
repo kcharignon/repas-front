@@ -8,6 +8,18 @@ export { MAX_SCANNED }
 /** De quoi couvrir le cadre et le repère « Touche ici » autour du contrôle entouré, en pixels de la page. */
 const POINTER_MARGIN = 64
 
+/**
+ * Ce que la personne toucherait à ce point SANS la carte (`ignore` : l'hôte de l'interface de l'agent, que le Shadow DOM fermé rend à la place de la carte) : le premier élément de
+ * la pile qui n'est pas la carte. Une lecture seule : la carte n'est pas cachée pour cela. Sans `elementsFromPoint` (un document de test), `elementFromPoint` ; sans l'un ni l'autre, rien.
+ */
+export function topmost(doc: Document, x: number, y: number, ignore: Element): Element | null {
+  if (typeof doc.elementsFromPoint === 'function')
+    return (
+      doc.elementsFromPoint(x, y).find((one) => one !== ignore && !ignore.contains(one)) ?? null
+    )
+  return doc.elementFromPoint?.(x, y) ?? null
+}
+
 /** Les boîtes, à l'écran, des boutons du mur de cookies que la page montre. Une lecture de la page seule, bornée (`MAX_SCANNED`, depuis la fin de la page). */
 export function consentRects(doc: Document, width: number, height: number): DOMRect[] {
   // `w` : ce que coûte de couvrir cette réponse (`answerWeight`), pour la place de la carte quand il n'y en a aucune de libre
@@ -20,17 +32,20 @@ export function consentRects(doc: Document, width: number, height: number): DOMR
  * La boîte d'un contrôle entouré, agrandie du cadre et du repère « Touche ici » : ce que la carte ne doit pas cacher. Un contrôle que la personne ne voit pas (hors de
  * l'écran, ou recouvert par un autre élément, comme le champ sous un mur de cookies plein écran) n'a rien à protéger.
  */
-export function pointedRects(target: HTMLElement | null): DOMRect[] {
+export function pointedRects(target: HTMLElement | null, ignore: Element | null = null): DOMRect[] {
   if (target === null) return []
   const rect = target.getBoundingClientRect()
   if (rect.width <= 0 || rect.height <= 0) return []
   const view = target.ownerDocument.defaultView
   if (view !== null && (rect.bottom <= 0 || rect.top >= view.innerHeight)) return []
   // Sans `elementFromPoint` (un document de test) on ne sait pas : on protège, la carte reste en bas
-  const hit = target.ownerDocument.elementFromPoint?.(
-    rect.left + rect.width / 2,
-    rect.top + rect.height / 2,
-  )
+  const x = rect.left + rect.width / 2
+  const y = rect.top + rect.height / 2
+  // `ignore` : la carte de l'agent, que la lecture ne cache pas (DRV-768) et qui ne compte pas parmi ce qui recouvre le contrôle
+  const hit =
+    ignore === null
+      ? target.ownerDocument.elementFromPoint?.(x, y)
+      : topmost(target.ownerDocument, x, y, ignore)
   if (hit !== null && hit !== undefined && !target.contains(hit) && !hit.contains(target)) return []
   const top = rect.top - POINTER_MARGIN
   const bottom = rect.bottom + POINTER_MARGIN
