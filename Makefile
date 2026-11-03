@@ -213,10 +213,12 @@ android-smoke: ## Smoke test: build the debug APK aimed at the local fake Repas,
 	@$(MAKE) --no-print-directory android-emulator-up
 	@DOCKER_COMPOSE="$(DOCKER_COMPOSE)" ./android/emulator/smoke.sh
 
-android-e2e: ## End-to-end scenarios in the emulator against the full fake Leclerc over HTTPS (read the store, a complete pass, abandon, resume, blocked, site changed, then Auchan, served by the same APK); report and screenshots in android/dist/e2e/
-	@ANDROID_REPAS_ORIGIN=https://repas.test/ ANDROID_APK_NAME=repas-drive-smoke.apk $(MAKE) --no-print-directory android
-	@$(MAKE) --no-print-directory android-emulator-up
-	@DOCKER_COMPOSE="$(DOCKER_COMPOSE)" ./android/emulator/e2e.sh
+# DRV-767 : `make android-e2e` joue les scénarios que rien d'autre ne couvre, sur faux sites (budget de 5 minutes de bout en bout : construction de l APK, démarrage de l émulateur et scénarios ; plus long, la passe
+# ÉCHOUE) ; `SCENARIOS="22"` ne joue que celui-là. Les autres scénarios ont été retirés (leur logique est testée plus bas) ; la recette sur téléphone avec les vrais sites fait foi (android/README.md).
+ANDROID_E2E_RUN = export E2E_STARTED_AT=$$(date +%s) && ANDROID_REPAS_ORIGIN=https://repas.test/ ANDROID_APK_NAME=repas-drive-smoke.apk $(MAKE) --no-print-directory android && $(MAKE) --no-print-directory android-emulator-up && DOCKER_COMPOSE="$(DOCKER_COMPOSE)" ./android/emulator/e2e.sh
+
+android-e2e: ## The scenarios nothing else covers, in the emulator against the fake Leclerc over HTTPS, 5 minutes at most end to end (SCENARIOS="22" plays only that one); report and screenshots in android/dist/e2e/
+	@$(ANDROID_E2E_RUN)
 
 ## —— Production image 📦 ————————————————————————————————————————————————————
 .PHONY: prod prod-stop

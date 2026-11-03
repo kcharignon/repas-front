@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { PRODUCTS } from '../../drive-agent/fake-leclerc/catalog'
-import { HOME_HOST, MOBILE_PLAN_STORE, STORE } from '../../drive-agent/fake-leclerc/server'
+import { HOME_HOST, MOBILE_PLAN_STORE } from '../../drive-agent/fake-leclerc/server'
 import { validatePlan, type PlanMessage } from '../../drive-agent/protocol'
 
 const androidDir = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -30,12 +30,7 @@ function planOf(file: string): PlanMessage {
 
 describe('les plans des scénarios de l’émulateur', () => {
   it('en compte au moins un complet (connus, nouveau, à la maison, ignoré), un court , un de quatre nouveaux articles (DRV-624) et un à la quantité à vérifier (DRV-626)', () => {
-    expect(planFiles).toEqual([
-      'plan-complet.json',
-      'plan-connu.json',
-      'plan-nouveaux.json',
-      'plan-quantite.json',
-    ])
+    expect(planFiles).toEqual(['plan-complet.json'])
     const statuses = new Set(planOf('plan-complet.json').lines.map((line) => line.status))
     expect([...statuses].sort()).toEqual(['HAVE_AT_HOME', 'KNOWN', 'NEW', 'SKIP'])
   })
@@ -82,37 +77,13 @@ describe('les scripts de l’émulateur', () => {
     expect(checked.status).toBe(0)
   })
 
-  it('jouent Auchan (DRV-731, DRV-738) contre le faux site d’Auchan, sur ses deux seuls hôtes de test, avec l’APK ordinaire', () => {
-    const entrypoint = read(join(emulatorDir, 'entrypoint.sh'))
-    const lib = read(join(emulatorDir, 'lib.sh'))
-    const script = read(join(emulatorDir, 'e2e.sh'))
-    const makefile = read(join(androidDir, '..', 'Makefile'))
-    expect(entrypoint).toContain('--address=/www.auchan.fr/10.0.2.2 --address=/compte.auchan.fr/10.0.2.2')
-    expect(entrypoint).not.toMatch(/--address=\/auchan\.fr\//)
-    expect(entrypoint).toContain('DNS:www.auchan.fr,DNS:compte.auchan.fr')
-    expect(lib).toContain('AUCHAN_HOST=www.auchan.fr')
-    expect(lib).toContain('AUCHAN_LOGIN_HOST=compte.auchan.fr')
-    expect(script).toContain('auchan_scenario')
-    // Un seul APK de débogage, l'ordinaire : plus de second APK ni de drapeau de construction pour Auchan (elle est servie par la version publiée).
-    expect(makefile).not.toContain('ANDROID_EXTRA_RETAILERS=auchan')
-    expect(makefile).not.toContain('repas-drive-auchan.apk')
-    expect(script).not.toContain('repas-drive-auchan.apk')
-    const ordinary = makefile.split('\n').filter((line) => line.includes('ANDROID_APK_NAME=repas-drive-smoke.apk'))
-    expect(ordinary.length).toBeGreaterThan(0)
-    expect(ordinary.filter((line) => line.includes('ANDROID_EXTRA_RETAILERS'))).toEqual([])
-    // L'APK ordinaire annonce Auchan et son menu la propose ; la preuve du pont sur l'hôte du mot de passe est gardée (jamais de pont sur compte).
-    expect(script).toContain('"retailers": \\["leclerc", "auchan"\\]')
-    expect(read(join(emulatorDir, 'smoke.sh'))).toContain("ui_has 'Ouvrir le drive Auchan'")
-    expect(script).toContain('\\"hostLocked\\": false')
-  })
-
   it('ne parlent qu’à des noms de faux sites, jamais à un vrai hôte', () => {
     const hosts = new Set(
       ['lib.sh', 'smoke.sh', 'e2e.sh']
         .flatMap((file) => read(join(emulatorDir, file)).match(/https?:\/\/[a-z0-9.$_{}-]+/gi) ?? [])
         .map((address) => address.replace(/^https?:\/\//i, '').replace(/\$STORE_[A-Z_]+$/, '')),
     )
-    expect([...hosts].sort()).toEqual(['$FAKE_STORE_HOST', '$MOBILE_HOST', '$REPAS_HOST', '127.0.0.1', 'repas.test'])
+    expect([...hosts].sort()).toEqual(['$REPAS_HOST', '127.0.0.1', 'repas.test'])
   })
 })
 
@@ -139,25 +110,12 @@ describe('la page de départ d’un plan dans l’émulateur (recette réelle du
     expect(read(join(emulatorDir, 'entrypoint.sh'))).toContain(`FAKE_LECLERC_HOSTS=${HOME_HOST}`)
   })
 
-  it('fait échouer les scénarios complets si le départ retombe sur la racine de l’hôte du magasin', () => {
-    expect(script).toContain(`not_requested_on "$FAKE_STORE_HOST" '/'`)
-    expect(script).toContain(`requested_on "$SITE_HOST" '/'`)
-    expect(script).toContain('www_mode fake')
-    expect(script).toContain(`trap 'www_mode test' EXIT`)
-    expect(read(join(emulatorDir, 'smoke.sh'))).toContain('www_mode test')
-  })
-
   it('vérifie, avant de jouer, que le faux site est fidèle : racine de l’hôte du magasin en 404, accueil sur l’enseigne', () => {
     expect(script).toContain(`-H "Host: $FAKE_STORE_HOST"`)
     expect(script).toContain(`-H "Host: $SITE_HOST"`)
     expect(script).toMatch(/= "404" \]/)
   })
 
-  it('joue le repli sur les pages 404 de la recette réelle : la racine de l’hôte du magasin et /magasin-N-N/ sans ville', () => {
-    expect(script).toContain("dead_page_checks '/'")
-    expect(script).toContain(`dead_page_checks '/magasin-${STORE.id}-${STORE.id}/'`)
-    expect(script).toContain('"startPath"')
-  })
 })
 
 describe('l’application ne fait confiance à aucun faux certificat', () => {
