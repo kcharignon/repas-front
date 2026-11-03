@@ -39,6 +39,6 @@ internal interface SelfUpdate {
     fun close()
 }
 
-// Définie dans chaque variante : `createSelfUpdate(activity, post)` rend la mise à jour de la coquille (`post` envoie un message JSON à la page de
+// Définie dans chaque variante : `createSelfUpdate(activity, cookies, post)` rend la mise à jour de la coquille (`post` envoie un message JSON à la page de
 // Repas, sur le fil principal). La variante `direct` y efface aussi ce qu'une mise à jour précédente a laissé : au démarrage de la coquille
 // (jamais au démarrage du processus, que le fournisseur de fichiers peut provoquer pendant qu'Android installe).

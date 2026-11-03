@@ -57,6 +57,28 @@ class StoreBannerTest {
     }
 
     /**
+     * DRV-761 (recette réelle de 1.6.3) : la page « session expirée » n'est ni l'accueil, ni un magasin, ni la connexion : le message de [StoreBanner.OPEN] y restait et désignait un bouton
+     * « Commencer mes courses » qui n'y est pas. Quand le titre ou l'adresse de la page dit que la session a expiré, le message désigne le bouton qui y est. Sans cette preuve, rien ne change.
+     */
+    @Test
+    fun `la page de session expiree designe son bouton, pas Commencer mes courses (DRV-761)`() {
+        val expired = "https://www.leclercdrive.fr/une-page"
+        listOf("Session expirée", "Votre SESSION a expiré - Leclerc", "session expiree").forEach {
+            assertEquals(it, StoreBanner.SESSION_EXPIRED, StoreBanner.of(plan, expired, storeKnown = true, pageTitle = it))
+        }
+        assertEquals(StoreBanner.SESSION_EXPIRED, StoreBanner.of(plan, "https://www.leclercdrive.fr/Session-Expiree.aspx?x=1", storeKnown = true))
+        assertFalse(StoreBanner.SESSION_EXPIRED.hasAction)
+        // Sans preuve, l'attente habituelle ; le titre ne change rien sur l'accueil ni sur une page de magasin
+        assertEquals(StoreBanner.OPEN, StoreBanner.of(plan, expired, storeKnown = true, pageTitle = "Leclerc Drive"))
+        assertEquals(StoreBanner.OPEN, StoreBanner.of(plan, expired, storeKnown = true, pageTitle = "Une session de courses"))
+        assertEquals(StoreBanner.NONE, StoreBanner.of(plan, storePage, storeKnown = true, pageTitle = "Session expirée"))
+        assertEquals(StoreBanner.NONE, StoreBanner.of(plan, enseigne, storeKnown = true, pageTitle = "Session expirée"))
+        // Une page refusée garde son message, et un titre démesuré n'est lu que sur ses 200 premiers caractères
+        assertEquals(StoreBanner.PLAN, StoreBanner.of(plan, expired, PageTrouble.HTTP_ERROR, storeKnown = true, pageTitle = "Session expirée"))
+        assertFalse(StoreBanner.saysSessionExpired(expired, "a".repeat(StoreBanner.MAX_TITLE) + " session expiree"))
+    }
+
+    /**
      * DRV-753 (recette du 2026-11-01) : au premier usage, aucun magasin n'a jamais été ouvert dans l'application, et « Commencer mes courses » n'est pas sur le site (il
      * n'apparaît qu'une fois le magasin choisi). Le message qui le désignait mentait : il se tait, c'est la carte du guide de l'agent qui dit quoi faire. Une page refusée ou
      * une vérification gardent leur message.

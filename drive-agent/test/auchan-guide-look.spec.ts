@@ -258,6 +258,35 @@ describe('Auchan : le mot que la personne voit (DRV-757, suite)', () => {
     expect(look?.target).toMatchObject({ element: bar, label: 'Choisir mon mode de livraison' })
   })
 
+  it('DRV-761 : la carte cite le NOM ACCESSIBLE du bouton (son aria-label), pas le texte qu’il porte : « Choisir mon mode de livraison », jamais « Choisir vos courses »', () => {
+    const bar = add('button', '', 60, document.body, {
+      'aria-label': 'Choisir mon mode de livraison',
+    })
+    const inner = add('span', 'Choisir vos courses', 60, bar)
+    shownFor(bar)
+    shownFor(inner)
+
+    const look = readAuchanLook(document, 'store')
+
+    expect(look?.sub).toBe('bar')
+    expect(look?.target).toMatchObject({ element: bar, label: 'Choisir mon mode de livraison' })
+    const said = GUIDE_TEXTS.bar?.text.replace('{label}', look?.target?.label ?? '')
+    expect(said).toBe('Touche « Choisir mon mode de livraison », en haut de la page.')
+  })
+
+  it('DRV-761 : sans aria-label le nom du bouton est son texte ; les autres contrôles du panneau citent aussi leur nom accessible', () => {
+    const { box, field } = panel()
+    shownFor(box)
+    shownFor(field)
+    const choose = add('button', 'Choisir', 160, box, { 'aria-label': 'Choisir ce drive' })
+    shownFor(choose)
+
+    const look = readAuchanLook(document, 'store')
+
+    expect(look?.sub).toBe('shop')
+    expect(look?.target?.label).toBe('Choisir ce drive')
+  })
+
   it('la connexion : le contrôle de la page, montré, avec son libellé ; un « Me connecter » caché n’est jamais cité', () => {
     const hidden = add('a', 'Me connecter', 10)
     hidden.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0)

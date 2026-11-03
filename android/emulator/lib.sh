@@ -12,11 +12,19 @@ SERVICE=android-emulator
 APP=eu.kantin.repas.drive
 SITE_HOST=www.leclercdrive.fr
 REPAS_HOST=repas.test
-# Le faux magasin Leclerc complet (drive-agent/fake-leclerc, DRV-309) : son nom d'hôte, son numéro et l'adresse de son pilotage dans le conteneur.
-FAKE_STORE_HOST=courses-test.leclercdrive.fr
+# Le faux Leclerc complet (drive-agent/fake-leclerc, DRV-309) joue la VERSION MOBILE du vrai site (DRV-754, `behavior.mobile`) : l'accueil sur `www`, les pages du
+# magasin sur `m-courses` (sans `.aspx`), le SERVEUR du magasin `fd8-courses` (recherche et panier en AJAX, c'est l'hôte que le plan nomme) et le compte
+# `fd8-espace-client` (connexion en deux temps). Le numéro du magasin et l'adresse du pilotage dans le conteneur.
+FAKE_STORE_HOST=fd8-courses.leclercdrive.fr
 FAKE_STORE_ID=000001
-# Le site MOBILE de l'enseigne (DRV-741), servi par le faux Leclerc complet : une adresse de magasin y est redirigée vers l'hôte du magasin (+ .aspx).
 MOBILE_HOST=m-courses.leclercdrive.fr
+ACCOUNT_HOST=fd8-espace-client.leclercdrive.fr
+# Les chemins du magasin d'essai : sa page sur `m-courses` (la ville en minuscules), le chemin que le serveur écrit (la ville avec sa capitale) et l'adresse du panier (sans ville).
+STORE_PAGE_PATH=/magasin-${FAKE_STORE_ID}-${FAKE_STORE_ID}-ville-test
+STORE_SERVER_PATH=/magasin-${FAKE_STORE_ID}-${FAKE_STORE_ID}-Ville-Test
+# Le second magasin d'essai (DRV-755), que la personne choisit quand le plan est fait pour le premier.
+OTHER_STORE_ID=000002
+OTHER_PAGE_PATH=/magasin-${OTHER_STORE_ID}-${OTHER_STORE_ID}-autre-ville
 FAKE_CONTROL=http://127.0.0.1:8099/__fake
 # L'enseigne FICTIVE d'essai de l'APK de débogage (DRV-707, `TestRetailers`) : son identifiant, l'accueil et le profil de WebView que l'application lui donne. `.test` est un domaine réservé.
 RETAILER_B=exempleb
@@ -42,6 +50,7 @@ reports() { emu curl -sk "https://127.0.0.1/__reports" 2> /dev/null; }
 init_output() {
   OUT=$1
   mkdir -p "$OUT"
+  rm -f "$OUT/.ui-quiet"
   for old in "${OUT:?}"/*.png "${OUT:?}"/*.txt; do [ -e "$old" ] && rm -f "$old"; done
   REPORT="$OUT/rapport.txt"
   : > "$REPORT"
@@ -49,7 +58,17 @@ init_output() {
   START=$SECONDS
 }
 
-say() { echo "$*" | tee -a "$REPORT"; }
+# La durée de chaque scénario (DRV-766, pour DRV-767) : à chaque titre « N. … », la ligne « durée » du scénario qui vient de finir.
+SCENARIO_NAME=""
+SCENARIO_START=$SECONDS
+say() {
+  if [[ "$*" =~ ^[0-9]+[bc]*\.\  ]]; then
+    [ -n "$SCENARIO_NAME" ] && echo "      durée : $((SECONDS - SCENARIO_START)) s ($SCENARIO_NAME)" | tee -a "$REPORT"
+    SCENARIO_NAME=${*%%.*}
+    SCENARIO_START=$SECONDS
+  fi
+  echo "$*" | tee -a "$REPORT"
+}
 ok() { say "  OK  $*"; }
 ko() { say "  KO  $*"; FAILURES=$((FAILURES + 1)); }
 check() { # check <description> <commande…> : OK si la commande réussit
@@ -76,11 +95,7 @@ node_height_dp() {
 # Les mesures de la page du drive et de l'interface de l'agent, une ligne de JSON (voir display.mjs) : par le débogage à distance de la WebView,
 # qui n'existe que dans l'APK de débogage.
 display_measures() {
-  local pid
-  pid=$(adb shell pidof "$APP" | tr -d '\r')
-  [ -n "$pid" ] || return 1
-  adb forward --remove-all > /dev/null 2>&1
-  adb forward tcp:9222 "localabstract:webview_devtools_remote_$pid" > /dev/null 2>&1 || return 1
+  devtools_forward || return 1
   emu node /opt/repas-emulator/display.mjs 2> /dev/null
 }
 json_number() { grep -o "\"$2\":[0-9.]*" <<< "$1" | head -n 1 | cut -d: -f2; } # json_number <json> <clé> : un nombre (clé unique)
@@ -129,19 +144,73 @@ auchan_kind_seen() { auchan_state | grep -qF "\"kind\":\"$1\""; } # ... d'un de 
 # test, test de fumée) ou « fake » (l'accueil du faux Leclerc complet, scénarios complets). Usage : www_mode test|fake
 www_mode() { emu curl -sk -X POST -H 'Content-Type: application/json' -d "{\"mode\":\"$1\"}" "https://127.0.0.1/__www" > /dev/null; }
 screenshot() { adb exec-out screencap -p > "$OUT/$1.png" && say "      capture : $OUT/$1.png"; }
-ui() { # l'arbre de l'écran en XML (uiautomator plante parfois en sortant : on réessaie)
-  local attempt xml
-  for attempt in 1 2 3; do
-    adb shell rm -f /sdcard/ui.xml > /dev/null 2>&1
-    adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1
-    xml=$(adb shell cat /sdcard/ui.xml 2> /dev/null)
-    if grep -q '<hierarchy' <<< "$xml"; then
-      printf '%s\n' "$xml"
+dump_ui() { # une lecture de l'arbre de l'écran : le XML sur la sortie, ou le code 1
+  local xml
+  adb shell rm -f /sdcard/ui.xml > /dev/null 2>&1
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1
+  xml=$(adb shell cat /sdcard/ui.xml 2> /dev/null)
+  grep -q '<hierarchy' <<< "$xml" || return 1
+  printf '%s\n' "$xml"
+}
+# Le débogage à distance de la WebView (APK de DÉBOGAGE seulement) : le socket de l'application redirigé vers 127.0.0.1:9222 du conteneur, pour display.mjs, quiet.mjs, hidden-changes.mjs.
+devtools_forward() {
+  local pid
+  pid=$(adb shell pidof "$APP" | tr -d '\r')
+  [ -n "$pid" ] || return 1
+  adb forward --remove-all > /dev/null 2>&1
+  adb forward tcp:9222 "localabstract:webview_devtools_remote_$pid" > /dev/null 2>&1
+}
+# Une lecture avec le JavaScript de la page coupé (quiet.mjs : voir son en-tête). Si quiet.mjs échoue (aucune page http(s), débogage injoignable, programme absent du conteneur), le message
+# est dit sur la sortie d'erreur et recopié dans le rapport, jamais ignoré en silence ; le code 2 remonte si la lecture a échoué aussi.
+dump_ui_quiet() {
+  local log="${OUT:-/tmp}/.quiet.log" quiet status quiet_status
+  devtools_forward || { echo "lib.sh : débogage à distance injoignable (application arrêtée ?)" >&2; return 2; }
+  emu rm -f /tmp/quiet.stop
+  emu node /opt/repas-emulator/quiet.mjs 15 > "$log" 2>&1 &
+  quiet=$!
+  sleep 2
+  dump_ui
+  status=$?
+  # Rendre le JavaScript à la page tout de suite (le programme le fait en voyant ce fichier), puis attendre qu'il ait fini
+  emu touch /tmp/quiet.stop
+  wait "$quiet" 2> /dev/null
+  quiet_status=$?
+  sleep 1 # le temps que la page retrouve son JavaScript avant un toucher
+  if [ "$quiet_status" -ne 0 ]; then
+    echo "lib.sh : la lecture JavaScript coupé a échoué (code $quiet_status) : $(tr '\n' ' ' < "$log" | cut -c1-200)" | tee -a "${REPORT:-/dev/null}" >&2
+    [ "$status" -eq 0 ] || return 2
+  fi
+  return $status
+}
+# Combien de fois, en N secondes, l'attribut `hidden` d'un élément de l'interface de l'agent change-t-il (hidden-changes.mjs) ? « max=… element=… total=… » ; code non nul si la mesure est impossible
+# (deux essais : une connexion de débogage peut échouer isolément).
+hidden_changes() {
+  local attempt out
+  for attempt in 1 2; do
+    if devtools_forward && out=$(emu node /opt/repas-emulator/hidden-changes.mjs "$1" 2> /dev/null); then
+      echo "$out"
       return 0
     fi
-    sleep 1
+    sleep 2
   done
   return 1
+}
+# Pendant 25 s après une lecture qui a dû se faire JavaScript coupé, les suivantes commencent par là (une lecture normale qui échoue coûte une dizaine de secondes). `ui` s'exécute dans
+# des sous-processus (`ui | grep`) : la mémoire est un fichier du dossier de sortie, pas une variable.
+quiet_wanted() { [ -f "${OUT:-/tmp}/.ui-quiet" ] && [ "$(date +%s)" -lt "$(cat "${OUT:-/tmp}/.ui-quiet")" ]; }
+ui() { # l'arbre de l'écran en XML (uiautomator plante parfois en sortant : on réessaie ; sans repos de l'arbre, on le lit JavaScript coupé)
+  local attempt
+  if ! quiet_wanted && dump_ui; then return 0; fi
+  for attempt in 1 2; do
+    dump_ui_quiet
+    case $? in
+      0) echo $(($(date +%s) + 25)) > "${OUT:-/tmp}/.ui-quiet"; return 0 ;;
+      2) break ;; # la lecture coupée est impossible (message dit) : inutile de recommencer
+    esac
+    sleep 1
+  done
+  rm -f "${OUT:-/tmp}/.ui-quiet"
+  dump_ui
 }
 ui_has() { ui | grep -q "$1"; }
 ui_lacks() { ! ui_has "$1"; }
@@ -213,8 +282,9 @@ check_network() {
   local_name "$SITE_HOST" "le faux drive"
   local_name "$REPAS_HOST" "le faux Repas"
   if [ "${1:-}" = "fake-leclerc" ]; then
-    local_name "$FAKE_STORE_HOST" "le faux magasin Leclerc"
-    local_name "$MOBILE_HOST" "le faux site mobile Leclerc"
+    local_name "$FAKE_STORE_HOST" "le serveur du faux magasin Leclerc (fd8-courses)"
+    local_name "$MOBILE_HOST" "les pages du faux magasin Leclerc (m-courses, la version mobile)"
+    local_name "$ACCOUNT_HOST" "le compte du faux Leclerc (fd8-espace-client)"
     if emu curl -s -o /dev/null "$FAKE_CONTROL/state"; then
       ok "le faux site Leclerc complet (Node, drive-agent/fake-leclerc) répond dans le conteneur"
     else

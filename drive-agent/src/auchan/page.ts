@@ -4,7 +4,7 @@
 // barre, quelle que soit sa balise) et le titre de la page « introuvable » au-delà d'une page vue le 2026-10-30.
 import { isAgentContainer } from '../agent-container'
 import type { CookieFacts } from '../retailers/contract'
-import { findControl, isShown, type GuideTarget } from '../retailers/guide'
+import { accessibleName, findControl, isShown, type GuideTarget } from '../retailers/guide'
 
 /** Un texte comparable : sans accent, minuscules, apostrophes droites, espaces réduites. */
 export function fold(text: string): string {
@@ -73,11 +73,12 @@ export function chooseBarTarget(root: ParentNode): GuideTarget | null {
   )
   const asText: Candidate[] = innermost.map((element) => {
     const control = element.closest<HTMLElement>('a, button, [role="button"]')
-    const label = (element.textContent ?? '').replace(/\s+/g, ' ').trim()
+    const target = control !== null && control.contains(element) ? control : element
+    // DRV-761 : le libellé cité est le NOM ACCESSIBLE du contrôle entouré (son `aria-label`, sinon son texte), celui que la personne lit ou entend ; le texte de l'élément intérieur peut en différer
     return {
-      element: control !== null && control.contains(element) ? control : element,
+      element: target,
       shown: element,
-      label: label !== '' && label.length <= 40 ? label : null,
+      label: accessibleName(target) ?? accessibleName(element),
     }
   })
   // Un bouton sans texte dont le NOM ACCESSIBLE est celui de la barre (une icône) : le libellé est son nom

@@ -708,12 +708,15 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
   ): Promise<void> {
     const host = hostnameOf(req.headers.host)
     const port = portSuffixOf(req.headers.host)
+    // Derrière le relais HTTPS de l'émulateur (`android/emulator/testsite.py`, qui n'écoute que sur la boucle locale), les liens, l'origine autorisée par CORS et le
+    // bouton « Commencer mes courses » doivent être en `https` : le relais le dit par `X-Forwarded-Proto`. Sans cet en-tête (les tests Node), `http`.
+    const scheme = req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http'
     const origins: MobileOrigins = {
-      www: `http://${HOME_HOST}${port}`,
-      courses: `http://${MOBILE_HOST}${port}`,
-      server: `http://${SERVER_HOST}${port}`,
-      account: `http://${ACCOUNT_HOST}${port}`,
-      repas: `http://localhost${port}`,
+      www: `${scheme}://${HOME_HOST}${port}`,
+      courses: `${scheme}://${MOBILE_HOST}${port}`,
+      server: `${scheme}://${SERVER_HOST}${port}`,
+      account: `${scheme}://${ACCOUNT_HOST}${port}`,
+      repas: `${scheme}://localhost${port}`,
     }
     const mobile = behavior.mobile ?? {}
     const cookie = req.headers.cookie ?? ''
@@ -723,6 +726,13 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
     entry.kind = 'page'
     if (host === HOME_HOST) {
       if (path === '/' && req.method === 'GET') {
+        // Une page trop lente ou refusée (page d'erreur, défi de l'anti-robot servi en 403) : les mêmes défauts que l'accueil du site ordinateur (ticket E de l'audit du 2026-10-18)
+        if (behavior.homeDelayMs != null && behavior.homeDelayMs > 0)
+          await sleep(behavior.homeDelayMs)
+        if (behavior.homeStatus != null) {
+          entry.status = behavior.homeStatus
+          return send(res, behavior.homeStatus, errorPage(), HTML)
+        }
         entry.status = 200
         return send(
           res,
@@ -732,6 +742,16 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
             consent: has(MOBILE_CONSENT_COOKIE),
             wall: behavior.cookieWall ?? false,
             other: mobile.otherStore === true || has(MOBILE_OTHER_COOKIE),
+            // `button-human` : le bouton ignore un clic de programme (`event.isTrusted`), seul un vrai toucher ouvre le magasin ; `button-inert` : il ne fait rien
+            button:
+              behavior.homeForm === 'button-human' || behavior.homeForm === 'button-inert'
+                ? behavior.homeForm
+                : 'button',
+            // Là où mène « Commencer mes courses » : un chemin de `m-courses` (une page 404 si ce n'est pas celui du magasin), pour essayer le repli
+            start:
+              behavior.startPath != null && /^\/[\w./~-]*$/.test(behavior.startPath)
+                ? behavior.startPath
+                : undefined,
           }),
           HTML,
         )
@@ -756,15 +776,26 @@ export async function startFakeLeclerc(options: FakeOptions = {}): Promise<FakeL
         )
       }
       if (req.method === 'GET' && new RegExp(`^${MOBILE_PAGE_PATH}/?$`, 'i').test(path)) {
+        // La page du magasin refusée (`storeHomeStatus`) ou « introuvable » déguisée en 200 (`storeHomeTitle`) : ce que « Finaliser » doit savoir contourner (DRV-631)
+        if (behavior.storeHomeStatus != null) {
+          entry.status = behavior.storeHomeStatus
+          return send(res, behavior.storeHomeStatus, errorPage(), HTML)
+        }
         entry.status = 200
+        const page = mobileStorePage(origins, cart, {
+          member,
+          question: mobile.question === true && !has(MOBILE_ANSWERED_COOKIE),
+          footer: mobile.footer ?? 'normal',
+        })
         return send(
           res,
           200,
-          mobileStorePage(origins, cart, {
-            member,
-            question: mobile.question === true && !has(MOBILE_ANSWERED_COOKIE),
-            footer: mobile.footer ?? 'normal',
-          }),
+          behavior.storeHomeTitle === 'not-found'
+            ? page.replace(
+                /<title>[^<]*<\/title>/,
+                '<title>Page introuvable (faux site mobile de test)</title>',
+              )
+            : page,
           HTML,
         )
       }

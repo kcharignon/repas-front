@@ -266,6 +266,12 @@ class DriveActivity : Activity() {
         super.onPause()
     }
 
+    override fun onStop() {
+        // Encore une fois, écran entièrement caché : ce que le site a posé entre-temps est gardé (DRV-765).
+        DriveProfile.cookieManager(site, repasApp.sites).flush()
+        super.onStop()
+    }
+
     override fun onDestroy() {
         timers.removeCallbacksAndMessages(null)
         abandonDialog?.dismiss()
@@ -581,6 +587,7 @@ class DriveActivity : Activity() {
             StoreBanner.LOGIN -> R.string.login_page_banner
             StoreBanner.NO_CARD -> R.string.no_card_banner
             StoreBanner.LOGIN_CODE -> R.string.login_code_banner
+            StoreBanner.SESSION_EXPIRED -> R.string.session_expired_banner
         }
         if (text != null) storeBanner.text = getString(text, site.name, site.nameDe)
         bannerAction.visibility = if (banner.hasAction) View.VISIBLE else View.GONE

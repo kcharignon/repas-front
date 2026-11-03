@@ -3,9 +3,9 @@
 // ensuite ; la personne peut aussi la réduire ou la rouvrir d'un toucher. Où que la carte soit (pleine ou barre, en bas ou en haut) elle ne couvre JAMAIS le champ où l'on écrit, ni un
 // contrôle que l'enseigne dit à toucher, ni un bouton d'un mur de cookies : sans place, la barre s'efface le temps qu'il faut (rien d'essentiel ne dépend d'elle : la touche Retour de
 // l'application propose d'abandonner). Que des LECTURES de la page : la position des contrôles, l'élément actif ; aucun toucher, aucune saisie, aucune requête.
-import type { GuideSub } from '../retailers/guide'
+import { isShown, type GuideSub } from '../retailers/guide'
 import { answerWeight } from '../retailers/consent'
-import { consentRects, pointedRects } from './keep-clear'
+import { consentRects, formControls, pointedRects } from './keep-clear'
 
 /** Le nom de la barre réduite, de la carte masquée faute de place, et du côté haut, dans la feuille de style de l'interface. */
 export const MIN = 'min'
@@ -84,16 +84,29 @@ const hits = (box: Box, rects: readonly Box[]): boolean =>
       rect.bottom > box.top - AIR,
   )
 
-/** La boîte que la page montre à l'écran d'un contrôle, ou rien (caché, hors de la fenêtre). */
-function seen(element: Element, win: Window, uncovered = true): DOMRect[] {
+/**
+ * La boîte que la page montre à l'écran d'un contrôle, ou rien (caché, hors de la fenêtre). `form` (DRV-761, un champ de saisie, son étiquette, le bouton du formulaire) : un petit élément
+ * posé à côté du champ, dans le même bloc (l'étiquette flottante qui le recouvre), ne le cache pas ; un grand bloc de la page, si ; un conteneur de plus de la moitié de la fenêtre n'est pas un contrôle.
+ */
+function seen(element: Element, win: Window, uncovered = true, form = false): DOMRect[] {
   const rect = element.getBoundingClientRect()
   const visible = rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < win.innerHeight
   if (!visible || rect.right <= 0 || rect.left >= win.innerWidth) return []
+  if (form && rect.height > win.innerHeight / 2) return []
+  // Un champ que la personne ne voit ni ne touche (transparent, caché, `pointer-events: none`, souvent dans un calque) n'est pas à garder libre ; sans `checkVisibility`, on le garde
+  if (form && (!isShown(element) || win.getComputedStyle(element).pointerEvents === 'none'))
+    return []
   // Un contrôle que la page recouvre elle-même (le champ sous un mur de cookies plein écran) n'est pas à protéger : la personne ne le voit pas (sans `elementFromPoint` : on protège)
   const hit = uncovered
     ? win.document.elementFromPoint?.(rect.left + rect.width / 2, rect.top + rect.height / 2)
     : null
-  return hit && !element.contains(hit) && !hit.contains(element) ? [] : [rect]
+  if (!hit || element.contains(hit) || hit.contains(element)) return [rect]
+  const near = hit.getBoundingClientRect()
+  const overlay =
+    form &&
+    element.parentElement?.contains(hit) === true &&
+    near.width * near.height <= 4 * rect.width * rect.height
+  return overlay ? [rect] : []
 }
 
 /** La personne écrit-elle dans un champ de la page (le clavier est alors ouvert) ? */
@@ -220,6 +233,9 @@ export function fitGuide(
       }
       for (const element of needs?.maybe ?? []) soft.push(...seen(element, win))
       if (typing !== null) hard.push(...seen(typing, win, false))
+      // Quelle que soit l'enseigne, jamais sur ce où l'on écrit ni sur le bouton qui valide (DRV-761) ; devant un mur de cookies ses réponses seules comptent
+      if (needs?.sub !== 'wall')
+        for (const element of formControls(doc)) hard.push(...seen(element, win, true, true))
       // Sans lecture du guide de l'enseigne, le contrôle entouré se protège comme avant (avec la place de son repère)
       if (needs === null && options.consent) hard.push(...pointedRects(options.pointed()))
       const sub = needs?.sub ?? null
