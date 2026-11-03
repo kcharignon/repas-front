@@ -168,6 +168,13 @@ services:
       # Le faux site d'Auchan (DRV-717), rejoué dans l'émulateur par le scénario 21 de `make android-e2e` (DRV-731) : Node l'exécute dans le conteneur.
       - ./drive-agent/fake-auchan:/opt/fake-auchan:ro
     stop_grace_period: 30s
+    # Pas de vidage mémoire : le rendu logiciel de l'émulateur a planté deux fois le 2026-11-02 (signal 11, RenderThread), et chaque fois Docker
+    # Desktop a cessé de répondre ; WSL capture alors le vidage d'un processus de plusieurs Go (`core_pattern` vers `wsl-capture-crash`).
+    # Cause du gel non prouvée ; sans vidage, le plantage de l'émulateur ne doit plus emporter Docker.
+    ulimits:
+      core:
+        soft: 0
+        hard: 0
 
   # Image de production (statique + relais vers le back) : http://localhost:8081, pour essayer le build comme en production.
   prod:
