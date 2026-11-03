@@ -157,6 +157,8 @@ export class Flow {
   private active: Run | null = null
   /** La dernière erreur de l'agent (code et cause d'une énumération fermée, jamais une valeur du site) : le diagnostic la dit (DRV-769). Gardée en mémoire seulement. */
   private fault: Fault | null = null
+  /** Vrai pendant qu'un blocage fait échouer d'un coup toutes les lignes qui restent : un seul message `progress` à la fin, pas un par ligne (DRV-769). */
+  private batching = false
 
   constructor(deps: FlowDeps) {
     this.deps = deps
@@ -868,9 +870,23 @@ export class Flow {
 
   /** Leclerc bloque les requêtes : les lignes qui restent échouent (`BLOCKED`), sans en tenter une de plus. */
   private failRemaining(run: Run, code: ErrorCode): void {
-    for (const line of run.plan.lines) {
-      if (!this.isProcessed(run, line)) this.record(run, staticOutcome(line) ?? failed(line, code))
+    this.inBatch(run, () => {
+      for (const line of run.plan.lines) {
+        if (!this.isProcessed(run, line))
+          this.record(run, staticOutcome(line) ?? failed(line, code))
+      }
+    })
+  }
+
+  /** Écrit plusieurs lignes d'un coup : l'application n'est prévenue qu'une fois, à la fin (DRV-769). */
+  private inBatch(run: Run, write: () => void): void {
+    this.batching = true
+    try {
+      write()
+    } finally {
+      this.batching = false
     }
+    this.reportProgress(run)
   }
 
   private async phaseB(run: Run, phaseB: NonNullable<FlowDeps['phaseB']>): Promise<void> {
@@ -898,7 +914,10 @@ export class Flow {
         // Leclerc bloque : les lignes qui attendaient encore un choix échouent (`BLOCKED`), comme en phase A. Pour les autres erreurs
         // elles restent « indisponibles » au résultat.
         if (run.halted === 'BLOCKED') {
-          for (const { line } of this.pending(run)) this.record(run, failed(line, run.halted))
+          const blocked = run.halted
+          this.inBatch(run, () => {
+            for (const { line } of this.pending(run)) this.record(run, failed(line, blocked))
+          })
         }
         return
       }
@@ -1094,7 +1113,7 @@ export class Flow {
   /** Dit à l'application où en est le passage (DRV-769) ; une panne du canal ne gêne jamais le passage. */
   private reportProgress(run: Run): void {
     const { progress } = this.deps
-    if (!progress) return
+    if (!progress || this.batching) return
     try {
       progress({
         v: PROTOCOL_VERSION,

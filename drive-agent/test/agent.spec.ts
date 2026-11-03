@@ -566,8 +566,10 @@ describe('la commande de diagnostic de l’application', () => {
     receive(PLAN)
 
     // Then
-    // (le premier message du pont est l'état du diagnostic, DRV-759 ; le second, celui du plan)
-    await vi.waitFor(() => expect(bridge.postMessage.mock.calls.length).toBeGreaterThanOrEqual(2))
+    // (le premier message du pont est l'état du diagnostic, DRV-759 ; puis celui du plan : où en est le passage après chacune de ses deux lignes, DRV-769, et son résultat)
+    const types = () =>
+      bridge.postMessage.mock.calls.map(([text]) => (JSON.parse(text) as { type: string }).type)
+    await vi.waitFor(() => expect(types()).toEqual(['log', 'progress', 'progress', 'result']))
     expect(screens.screens()).toEqual(['diagnostic', 'progress'])
   })
 })

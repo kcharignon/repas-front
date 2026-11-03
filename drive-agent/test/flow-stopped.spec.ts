@@ -220,6 +220,35 @@ describe('un envoi arrêté rapporte ce qu’il a déjà fait (DRV-769)', () => 
       expect(expectConform(sent[0]).outcome).toBe('completed')
     })
 
+    it('un blocage qui fait échouer d’un coup les lignes qui restent n’envoie qu’un message, avec toutes', async () => {
+      const seen: string[][] = []
+      const { adapter } = fakeAdapter(
+        { '1000001': {}, '1000002': {}, '1000003': {}, '1000004': {} },
+        {
+          before: (call) => {
+            if (call === 'search 1000001') throw new RetailerError('BLOCKED')
+          },
+        },
+      )
+      const { flow, sent } = makeFlow({
+        ui: fakeUi().ui,
+        adapter,
+        progress: (message) => void seen.push(outcomes(message.lines)),
+      })
+
+      await flow.start(
+        plan([
+          known('farine', [product('1000001')]),
+          known('sucre', [product('1000002')]),
+          known('lait', [product('1000003')]),
+          known('riz', [product('1000004')]),
+        ]),
+      )
+
+      expect(seen).toEqual([['farine:FAILED', 'sucre:FAILED', 'lait:FAILED', 'riz:FAILED']])
+      expect(expectConform(sent[0]).outcome).toBe('partial')
+    })
+
     it('sans canal (hors de l’application), rien n’est envoyé et le passage est le même', async () => {
       const { adapter } = fakeAdapter({ '1000001': {} })
       const { flow, sent } = makeFlow({ ui: fakeUi().ui, adapter })
