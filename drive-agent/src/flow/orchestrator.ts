@@ -87,6 +87,8 @@ interface Run {
   /** Les produits à étiquette de rupture que le panier a refusés dans cet envoi : une seule tentative d'écriture chacun (DRV-635). */
   declined: Set<string>
   release: () => Promise<void>
+  /** Le résultat est parti vers Repas (ou le va tout de suite) : un incident ensuite ne rapporte pas le passage une seconde fois (DRV-769). */
+  reported: boolean
 }
 
 /** Combien d'articles traités l'écran de progression garde (un envoi entier : 100 lignes au plus). */
@@ -151,6 +153,10 @@ export class Flow {
   private busy = false
   /** Le magasin que la page montre quand ce n'est pas celui du plan (DRV-755), lu par `storeProblem`. */
   private otherStore: StoreInfo | null = null
+  /** Le passage en cours, de la confirmation à son résultat : un incident imprévu en plein passage en rapporte ce qui est fait (DRV-769). */
+  private active: Run | null = null
+  /** La dernière erreur de l'agent (code et cause d'une énumération fermée, jamais une valeur du site) : le diagnostic la dit (DRV-769). Gardée en mémoire seulement. */
+  private fault: Fault | null = null
 
   constructor(deps: FlowDeps) {
     this.deps = deps
@@ -166,10 +172,31 @@ export class Flow {
     try {
       await this.execute(raw)
     } catch {
-      await this.showError('CONTRACT_CHANGED', null, 'EXCEPTION')
+      await this.showUnexpected()
     } finally {
+      this.active = null
       this.busy = false
     }
+  }
+
+  /** La dernière erreur de l'agent depuis le chargement de la page, ou `null` : le code et la cause, des mots fixes (DRV-769). */
+  get lastFault(): Readonly<Fault> | null {
+    return this.fault
+  }
+
+  /**
+   * Un incident imprévu (une exception qui n'a pas été traitée comme une erreur de l'adaptateur). Pendant un passage, l'écran d'erreur propose de
+   * revenir à Repas et le résultat rapporte les lignes déjà faites ; hors passage, comme avant : rien à rapporter, l'écran se ferme seulement.
+   */
+  private async showUnexpected(): Promise<void> {
+    const run = this.active
+    if (run === null || run.reported) return this.showError('CONTRACT_CHANGED', null, 'EXCEPTION')
+    // Une vraie erreur déjà notée par le passage (puis un incident en le finissant) garde son code ; sinon l'incident est la cause
+    const fault: Fault =
+      run.halted === null
+        ? { code: 'CONTRACT_CHANGED', cause: 'EXCEPTION' }
+        : { code: run.halted, cause: run.cause }
+    return this.showError(fault.code, run.plan, fault.cause, resultLines(run.plan, run.state), run)
   }
 
   /**
@@ -280,7 +307,9 @@ export class Flow {
       start: deps.adapter.stats(),
       declined: new Set(),
       release: () => Promise.resolve(),
+      reported: false,
     }
+    this.active = run
     if (proceed) {
       this.enter('CONFIRMED')
       this.runs.save(state)
@@ -399,7 +428,9 @@ export class Flow {
     const { ui, send, agentVersion } = this.deps
     this.runs.clearGuide()
     this.enter('ABORTED')
-    send(buildResult(plan, [], { outcome: 'aborted' }, agentVersion, ui.retailer))
+    // Un passage repris après un rechargement a pu faire des lignes avant : elles sont rapportées avec l'arrêt (DRV-769). L'état de reprise reste (une reprise ne refait rien)
+    const lines = this.savedLines(plan)
+    send(buildResult(plan, lines, { outcome: 'aborted' }, agentVersion, ui.retailer))
     ui.close()
     return 'stopped'
   }
@@ -905,28 +936,48 @@ export class Flow {
     // Un envoi terminé sans rien à lire repart tout de suite vers Repas (DRV-625) ; l'écran de fin reste pour le reste (partiel, arrêté, erreur).
     if (hasSomethingToRead(props)) await ui.show('end', props)
     this.runs.remove(run.plan.runId)
+    run.reported = true
+    if (ending.code) this.fault = { code: ending.code, cause: ending.cause ?? null }
     send(result)
     ui.close()
   }
 
+  /**
+   * Les lignes qu'un passage de ce plan a déjà faites avant cette page (l'état de reprise de l'onglet), dans l'ordre du plan : un arrêt les rapporte comme un
+   * passage fini, pour que Repas apprenne les choix et coche ce qui est au panier (DRV-769). Rien si aucun état n'a été gardé.
+   */
+  private savedLines(plan: PlanMessage): ResultLine[] {
+    const saved = this.runs.load(plan.runId)
+    return saved === null ? [] : resultLines(plan, saved)
+  }
+
+  /**
+   * L'écran d'erreur, puis (si la personne revient à Repas) un résultat `error`. `lines` : ce que le passage a déjà fait (DRV-769) ; par défaut, ce que l'état de
+   * reprise de ce plan en a gardé. Un arrêt qui n'a rien fait rapporte une liste vide, comme avant.
+   */
   private async showError(
     code: ErrorCode,
     plan: PlanMessage | null,
     cause: RetailerCause | null = null,
+    lines: ResultLine[] | null = null,
+    run: Run | null = null,
   ): Promise<void> {
     const { ui, send, agentVersion } = this.deps
     this.runs.clearGuide()
     this.enter('ERROR')
+    this.fault = { code, cause }
     const answer = await ui.show('error', {
       code,
       canReturn: plan !== null,
       ...(cause && { cause }),
     })
     if (answer === 'return' && plan) {
+      const done = lines ?? this.savedLines(plan)
+      if (run) run.reported = true
       send(
         buildResult(
           plan,
-          [],
+          done,
           { outcome: 'error', code, ...(cause && { cause }) },
           agentVersion,
           this.deps.ui.retailer,
