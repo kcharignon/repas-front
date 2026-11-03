@@ -493,7 +493,7 @@ class DrivePassTest {
     }
 
     @Test
-    fun `valide en gros, refuse par la forme stricte : zero ligne, meme si une copie valide la precedait`() {
+    fun `valide en gros, refuse par la forme stricte donc zero ligne, meme si une copie valide la precedait`() {
         val forged = listOf(
             """{"ingredientSlug":"farine","outcome":"ADDED"}""", // il manque ce que l'issue exige
             """{"ingredientSlug":"farine","outcome":"ADDED","productId":"1000001","quantity":1,"usedRank":1,"evil":1}""", // une cle de trop
@@ -536,7 +536,7 @@ class DrivePassTest {
     }
 
     @Test
-    fun `une copie dont l'enveloppe depasserait 64 Ko ne part pas : l'abandon redevient celui d'avant, sans ligne`() {
+    fun `une copie dont l'enveloppe depasserait 64 Ko ne part pas et l abandon redevient celui d'avant, sans ligne`() {
         // 99 lignes de plus en plus longues, jusqu'à un message `progress` juste sous 64 Ko : avec l'enveloppe `drive.result` il le dépasserait
         val labels = IntArray(99 * 3) { 1 }
         fun lines() = labels.toList().chunked(3).mapIndexed { index, (a, b, c) ->
