@@ -24,16 +24,12 @@ function files(dir: string, extension: RegExp): string[] {
 
 describe('le manifeste de l’application', () => {
   it('ne demande que la permission Internet', () => {
-    const permissions = [...manifest.matchAll(/<uses-permission[^>]*android:name="([^"]+)"/g)].map(
-      (match) => match[1],
-    )
+    const permissions = [...manifest.matchAll(/<uses-permission[^>]*android:name="([^"]+)"/g)].map((match) => match[1])
     expect(permissions).toEqual(['android.permission.INTERNET'])
   })
 
   it('ouvre les liens https vers l’hôte de Repas, vérifiés (autoVerify), dans la coquille seulement', () => {
-    const filter =
-      /<intent-filter android:autoVerify="true">([\s\S]*?)<\/intent-filter>/.exec(manifest)?.[1] ??
-      ''
+    const filter = /<intent-filter android:autoVerify="true">([\s\S]*?)<\/intent-filter>/.exec(manifest)?.[1] ?? ''
     expect(filter).toContain('android.intent.action.VIEW')
     expect(filter).toContain('android.intent.category.BROWSABLE')
     expect(filter).toContain('android:scheme="https"')
@@ -44,9 +40,7 @@ describe('le manifeste de l’application', () => {
   // VOX-501 (constat du 2026-10-26) : avec un filtre sur tout l'hôte, l'application Repas avalait la page de liaison d'Alexa
   // (« https://kantin.eu/alexa/lier », ouverte par l'application Alexa) au lieu du navigateur. Seuls les liens envoyés par courriel entrent.
   describe('les liens que l’application capture (VOX-501)', () => {
-    const filter =
-      /<intent-filter android:autoVerify="true">([\s\S]*?)<\/intent-filter>/.exec(manifest)?.[1] ??
-      ''
+    const filter = /<intent-filter android:autoVerify="true">([\s\S]*?)<\/intent-filter>/.exec(manifest)?.[1] ?? ''
     const dataElements = [...filter.matchAll(/<data\b([^>]*?)\/>/g)].map((match) => match[1] ?? '')
     const hostElements = dataElements.filter((element) => element.includes('android:host='))
     const pathElements = dataElements.filter((element) => !element.includes('android:host='))
@@ -62,17 +56,13 @@ describe('le manifeste de l’application', () => {
     it('garde l’hôte sur un seul élément, et ne capture que des chemins exacts, jamais tout l’hôte', () => {
       expect(hostElements).toHaveLength(1)
       expect(hostElements[0]).toContain('android:scheme="https"')
-      expect(hostElements[0]).not.toMatch(
-        /android:(path|pathPrefix|pathPattern|pathAdvancedPattern|pathSuffix)=/,
-      )
+      expect(hostElements[0]).not.toMatch(/android:(path|pathPrefix|pathPattern|pathAdvancedPattern|pathSuffix)=/)
       // Au moins un chemin : sans lui, le filtre prend tout l'hôte
       expect(pathElements.length).toBeGreaterThan(0)
       for (const element of pathElements) {
         expect(element).toMatch(/^\s*android:path="\/[^"]+"\s*$/)
       }
-      expect(manifest).not.toMatch(
-        /android:(pathPrefix|pathPattern|pathAdvancedPattern|pathSuffix)=/,
-      )
+      expect(manifest).not.toMatch(/android:(pathPrefix|pathPattern|pathAdvancedPattern|pathSuffix)=/)
     })
 
     it('capture exactement les liens envoyés par courriel, et ils sont des routes du site', () => {
@@ -84,20 +74,7 @@ describe('le manifeste de l’application', () => {
     })
 
     it('laisse au navigateur la liaison d’Alexa et toutes les autres pages', () => {
-      for (const path of [
-        '/alexa/lier',
-        '/alexa',
-        '/alexa/lier/',
-        '/confidentialite',
-        '/connexion',
-        '/inscription',
-        '/installer',
-        '/mot-de-passe-oublie',
-        '/verification-email',
-        '/liste',
-        '/moi',
-        '/',
-      ]) {
+      for (const path of ['/alexa/lier', '/alexa', '/alexa/lier/', '/confidentialite', '/connexion', '/inscription', '/installer', '/mot-de-passe-oublie', '/verification-email', '/liste', '/moi', '/']) {
         expect(`${path} : ${captured(path)}`).toBe(`${path} : false`)
       }
       // Hors des commentaires qui expliquent la règle, le manifeste ne nomme jamais Alexa
@@ -106,18 +83,14 @@ describe('le manifeste de l’application', () => {
   })
 
   it('ne laisse lancer le drive que par la coquille', () => {
-    expect(
-      /<activity[^>]*android:name="\.DriveActivity"[^>]*android:exported="false"/s.test(manifest),
-    ).toBe(true)
+    expect(/<activity[^>]*android:name="\.DriveActivity"[^>]*android:exported="false"/s.test(manifest)).toBe(true)
   })
 
   it('masque le drive dans l’aperçu des applications récentes et les captures d’écran, sauf dans l’APK de débogage', () => {
     // Les essais de l’émulateur (captures lues avant de conclure) et la recette sur téléphone s’appuient sur les captures de l’APK de débogage.
     const drive = read(join(kotlinDir, 'eu', 'kantin', 'repas', 'drive', 'DriveActivity.kt'))
 
-    expect(drive).toContain(
-      'if (!BuildConfig.DEBUG) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)',
-    )
+    expect(drive).toContain('if (!BuildConfig.DEBUG) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)')
   })
 
   it('n’autorise pas le trafic en clair', () => {
@@ -153,9 +126,7 @@ describe('le mode d’emploi de l’application', () => {
 describe('l’origine de Repas', () => {
   it('est celle de la production dans l’APK de publication, quoi qu’on passe à la construction', () => {
     const release = /getByName\("release"\)\s*\{([\s\S]*?)\n {8}\}/.exec(buildTypes)?.[1] ?? ''
-    expect(release).toContain(
-      'buildConfigField("String", "REPAS_ORIGIN", "\\"$productionOrigin\\"")',
-    )
+    expect(release).toContain('buildConfigField("String", "REPAS_ORIGIN", "\\"$productionOrigin\\"")')
     expect(release).not.toContain('debugOrigin')
     expect(gradle).toContain('val productionOrigin = "https://kantin.eu/"')
   })
@@ -169,24 +140,15 @@ describe('l’origine de Repas', () => {
 })
 
 describe('le pont natif', () => {
-  const sources = [...files(kotlinDir, /\.kt$/), ...files(coreKotlinDir, /\.kt$/)].map((path) => ({
-    path,
-    text: read(path),
-  }))
+  const sources = [...files(kotlinDir, /\.kt$/), ...files(coreKotlinDir, /\.kt$/)].map((path) => ({ path, text: read(path) }))
 
   it('n’expose aucun objet natif aux pages (pas de addJavascriptInterface)', () => {
-    expect(
-      sources
-        .filter(({ text }) => text.includes('addJavascriptInterface('))
-        .map(({ path }) => path),
-    ).toEqual([])
+    expect(sources.filter(({ text }) => text.includes('addJavascriptInterface(')).map(({ path }) => path)).toEqual([])
   })
 
   it('est réservé à l’origine de Repas : la liste des origines autorisées n’a que celle-là', () => {
     const shell = read(join(kotlinDir, 'eu', 'kantin', 'repas', 'drive', 'MainActivity.kt'))
-    expect(shell).toContain(
-      'addWebMessageListener(view, NativeBridge.OBJECT_NAME, setOf(repasOrigin))',
-    )
+    expect(shell).toContain('addWebMessageListener(view, NativeBridge.OBJECT_NAME, setOf(repasOrigin))')
   })
 })
 

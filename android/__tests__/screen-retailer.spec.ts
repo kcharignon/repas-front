@@ -64,26 +64,18 @@ describe('les textes rendus pour Leclerc sont ceux d’avant le multi-enseignes'
   })
 
   it('about_finalize garde sa forme avec le nom de l’enseigne et le mot du dernier « Finaliser »', () => {
-    expect(rendered('about_finalize', 'Leclerc', 'OUVERTE')).toBe(
-      'Dernier « Finaliser sur Leclerc » : OUVERTE',
-    )
+    expect(rendered('about_finalize', 'Leclerc', 'OUVERTE')).toBe('Dernier « Finaliser sur Leclerc » : OUVERTE')
   })
 
   it('un texte sans trou rend le même quel que soit l’enseigne', () => {
-    expect(rendered('plan_banner_open', 'Autre', 'd’Autre')).toBe(
-      'Touche « Commencer mes courses ».',
-    )
-    expect(rendered('basket_banner', 'Autre', 'd’Autre')).toBe(
-      'Ton panier est dans l’icône en haut à droite.',
-    )
+    expect(rendered('plan_banner_open', 'Autre', 'd’Autre')).toBe('Touche « Commencer mes courses ».')
+    expect(rendered('basket_banner', 'Autre', 'd’Autre')).toBe('Ton panier est dans l’icône en haut à droite.')
   })
 
   it('une autre enseigne est nommée à la place de Leclerc, avec « d’ » devant une voyelle', () => {
     expect(rendered('menu_logout_drive', 'Auchan', 'd’Auchan')).toBe('Se déconnecter d’Auchan')
     expect(rendered('menu_open_drive', 'Auchan', 'd’Auchan')).toBe('Ouvrir le drive Auchan')
-    expect(rendered('plan_banner_verification', 'Auchan', 'd’Auchan')).toMatch(
-      /^Auchan demande une vérification/,
-    )
+    expect(rendered('plan_banner_verification', 'Auchan', 'd’Auchan')).toMatch(/^Auchan demande une vérification/)
   })
 })
 
@@ -103,22 +95,16 @@ describe('l’écran du drive est celui d’une enseigne', () => {
 
   it('ne retombe sur aucune forme sans enseigne de la politique de navigation', () => {
     // Les formes sans enseigne (`NavigationPolicy.START_URL`, `decide(url)`, `isAllowed(url)`) sont celles de l’enseigne d’avant : l’écran passe son enseigne.
-    expect(drive).not.toMatch(
-      /NavigationPolicy\.(START_URL|isAllowed|isMobileSite|isStorePage|isHomePage|isLoginPage)\b/,
-    )
+    expect(drive).not.toMatch(/NavigationPolicy\.(START_URL|isAllowed|isMobileSite|isStorePage|isHomePage|isLoginPage)\b/)
     expect(drive).not.toMatch(/NavigationPolicy\.decide\((?!site, )/)
-    const entryCalls = drive
-      .split('\n')
-      .filter((line) => /DriveEntry\.(startPage|isStoreHome|isArrivalPage)\(/.test(line))
+    const entryCalls = drive.split('\n').filter((line) => /DriveEntry\.(startPage|isStoreHome|isArrivalPage)\(/.test(line))
 
     expect(entryCalls.length).toBeGreaterThan(0)
     for (const line of entryCalls) expect(line).toContain(', site)')
   })
 
   it('choisit son enseigne à la création : le passage d’abord, puis l’extra, puis l’enseigne d’avant', () => {
-    expect(drive).toContain(
-      'site = pass.current()?.request?.site ?: repasApp.sites.forScreen(intent?.getStringExtra(EXTRA_RETAILER))',
-    )
+    expect(drive).toContain('site = pass.current()?.request?.site ?: repasApp.sites.forScreen(intent?.getStringExtra(EXTRA_RETAILER))')
     expect(drive).toContain('watch = OpeningWatch(site)')
   })
 
@@ -128,13 +114,9 @@ describe('l’écran du drive est celui d’une enseigne', () => {
     const create = drive.slice(drive.indexOf('private fun createWebView()'))
 
     expect(create.indexOf('DriveProfile.attach(')).toBeGreaterThan(-1)
-    expect(create.indexOf('DriveProfile.attach(')).toBeLessThan(
-      create.indexOf('DesktopMode.apply('),
-    )
+    expect(create.indexOf('DriveProfile.attach(')).toBeLessThan(create.indexOf('DesktopMode.apply('))
     // et la WebView est créée avant tout chargement
-    expect(drive.indexOf('webView = createWebView()')).toBeLessThan(
-      drive.indexOf('webView.loadUrl(firstUrl())'),
-    )
+    expect(drive.indexOf('webView = createWebView()')).toBeLessThan(drive.indexOf('webView.loadUrl(firstUrl())'))
   })
 
   it('pose le pont et l’injection avant le premier chargement, avec l’enseigne de l’écran', () => {
@@ -142,19 +124,13 @@ describe('l’écran du drive est celui d’une enseigne', () => {
     const create = drive.slice(drive.indexOf('private fun createWebView()'))
 
     expect(create.indexOf('agent.attach(view)')).toBeGreaterThan(-1)
-    expect(create.indexOf('agent.attach(view)')).toBeLessThan(
-      create.indexOf('view.webViewClient = DriveWebViewClient()'),
-    )
-    expect(drive.indexOf('webView = createWebView()')).toBeLessThan(
-      drive.indexOf('webView.loadUrl(firstUrl())'),
-    )
+    expect(create.indexOf('agent.attach(view)')).toBeLessThan(create.indexOf('view.webViewClient = DriveWebViewClient()'))
+    expect(drive.indexOf('webView = createWebView()')).toBeLessThan(drive.indexOf('webView.loadUrl(firstUrl())'))
   })
 
   it('ne livre le message du passage qu’aux pages de l’enseigne du passage', () => {
     expect(drive).toContain('if (request.site !== site) return delivery.failed()')
-    expect(drive).toContain(
-      'watch.canDeliver(request, webView.url, storeKnown = repasApp.storePaths.of(site).hasPath())',
-    )
+    expect(drive).toContain('watch.canDeliver(request, webView.url, storeKnown = repasApp.storePaths.of(site).hasPath())')
     expect(drive).toContain('if (plan.site !== site) return false')
   })
 
@@ -181,22 +157,7 @@ describe('le profil de WebView de chaque enseigne', () => {
   it('est nommé par le cœur, et l’enseigne d’avant garde le profil « drive »', () => {
     expect(profile).toContain('DriveProfileName.of(site, sites)')
     expect(profile).not.toMatch(/"drive"/)
-    expect(
-      read(
-        join(
-          androidDir,
-          'core',
-          'src',
-          'main',
-          'kotlin',
-          'eu',
-          'kantin',
-          'repas',
-          'drive',
-          'DriveProfileName.kt',
-        ),
-      ),
-    ).toContain('const val LEGACY = "drive"')
+    expect(read(join(androidDir, 'core', 'src', 'main', 'kotlin', 'eu', 'kantin', 'repas', 'drive', 'DriveProfileName.kt'))).toContain('const val LEGACY = "drive"')
   })
 })
 
@@ -209,9 +170,7 @@ describe('l’annonce de la coquille et ses mémoires', () => {
   })
 
   it('ne lit le pont natif qu’avec les enseignes que cette construction sert', () => {
-    expect(main).toContain(
-      'NativeBridge.screen(text, origin, isMainFrame, repasOrigin, repasApp.sites)',
-    )
+    expect(main).toContain('NativeBridge.screen(text, origin, isMainFrame, repasOrigin, repasApp.sites)')
   })
 
   it('range les mémoires du drive par enseigne dans la préférence « drive-store », sur les clés du cœur', () => {
@@ -228,12 +187,8 @@ describe('l’annonce de la coquille et ses mémoires', () => {
 })
 
 describe('les enseignes d’essai ne sont que dans la variante de débogage', () => {
-  const debug = read(
-    join(appSrc, 'debug', 'kotlin', 'eu', 'kantin', 'repas', 'drive', 'TestRetailers.kt'),
-  )
-  const release = read(
-    join(appSrc, 'release', 'kotlin', 'eu', 'kantin', 'repas', 'drive', 'TestRetailers.kt'),
-  )
+  const debug = read(join(appSrc, 'debug', 'kotlin', 'eu', 'kantin', 'repas', 'drive', 'TestRetailers.kt'))
+  const release = read(join(appSrc, 'release', 'kotlin', 'eu', 'kantin', 'repas', 'drive', 'TestRetailers.kt'))
 
   function allFiles(dir: string): string[] {
     return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -254,14 +209,7 @@ describe('les enseignes d’essai ne sont que dans la variante de débogage', ()
 
   it('aucun autre fichier de l’application ne nomme l’enseigne d’essai, sauf les tests', () => {
     const offenders = allFiles(appSrc)
-      .filter(
-        (path) =>
-          path.endsWith('.kt') &&
-          !path.includes(`${join('src', 'test')}`) &&
-          !path.endsWith(
-            join('debug', 'kotlin', 'eu', 'kantin', 'repas', 'drive', 'TestRetailers.kt'),
-          ),
-      )
+      .filter((path) => path.endsWith('.kt') && !path.includes(`${join('src', 'test')}`) && !path.endsWith(join('debug', 'kotlin', 'eu', 'kantin', 'repas', 'drive', 'TestRetailers.kt')))
       .filter((path) => /exemple-b|exempleb/.test(read(path)))
 
     expect(offenders.map((path) => path.slice(androidDir.length + 1))).toEqual([])
