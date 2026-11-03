@@ -561,4 +561,19 @@ class DrivePassTest {
         assertEquals(0, abortedLines(pass).length())
         assertTrue(BridgeMessages.fitsBound(pass.pendingMessages().single()))
     }
+
+    @Test
+    fun `l'unite d'une contenance va jusqu'a 255 caracteres, comme le validateur de Repas, pas un de plus`() {
+        fun sized(length: Int) =
+            """{"ingredientSlug":"farine","outcome":"ADDED","productId":"1000001","quantity":1,"usedRank":1,"packSize":{"value":20,"unitSlug":"${"u".repeat(length)}"}}"""
+        for (length in listOf(1, 32, 33, 255)) {
+            val pass = pass()
+            pass.start(plan(), PassSource.REPAS)
+            assertTrue("$length", pass.progress(progress(sized(length))))
+        }
+        val pass = pass()
+        pass.start(plan(), PassSource.REPAS)
+        assertFalse(pass.progress(progress(sized(256))))
+        assertFalse(pass.progress(progress(sized(0))))
+    }
 }

@@ -23,7 +23,7 @@ object ProgressLines {
     private const val MAX_OFFER_ID = 40
     private const val MIN_QUERY = 2
     private const val MAX_QUERY = 80
-    private const val MAX_UNIT_SLUG = 32
+    private const val MAX_UNIT_SLUG = 255
 
     private val SLUG = Regex("^[a-z0-9-]{1,100}$")
     private val PRODUCT_ID = Regex("^(?:[0-9]{1,12}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
