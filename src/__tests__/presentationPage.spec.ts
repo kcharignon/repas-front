@@ -21,9 +21,6 @@ const APP_ROUTES = new Set([
   '/installer',
   '/confidentialite',
 ])
-/** Les seules adresses d'un autre site que la page peut lier (un lien qu'on touche, jamais une ressource chargée). */
-const EXTERNAL_LINKS = new Set(['https://github.com/kcharignon/repas'])
-
 const clean = (text: string) => text.replace(/ /g, ' ').replace(/\s+/g, ' ').trim()
 
 /** Les blocs de texte que le visiteur lit (titres, paragraphes, questions, puces). */
@@ -75,6 +72,10 @@ describe('la voix de la page', () => {
   it('n’annonce que ce qui existe aujourd’hui (pas d’assistant vocal)', () => {
     expect(html).not.toMatch(/alexa/i)
   })
+
+  it('ne parle pas des décors de saison', () => {
+    expect(html).not.toMatch(/saison|halloween|noël|pâques|galette/i)
+  })
 })
 
 describe('la politique de contenu du site', () => {
@@ -102,9 +103,15 @@ describe('la politique de contenu du site', () => {
     expect(css).not.toMatch(/@import/)
   })
 
-  it('ne lie un autre site que par une ancre connue', () => {
-    const anchors = [...doc.querySelectorAll('a[href^="http"]')].map((a) => a.getAttribute('href'))
-    expect(anchors.filter((href) => !EXTERNAL_LINKS.has(href ?? ''))).toEqual([])
+  it('ne lie aucun autre site', () => {
+    const anchors = [...doc.querySelectorAll('a[href^="http"], a[href^="//"]')].map((a) =>
+      a.getAttribute('href'),
+    )
+    expect(anchors).toEqual([])
+  })
+
+  it('ne parle pas du code source', () => {
+    expect(html).not.toMatch(/github|code source|code ouvert|licence MIT/i)
   })
 })
 

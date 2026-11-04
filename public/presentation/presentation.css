@@ -591,41 +591,6 @@ section {
   transform: rotate(3deg);
 }
 
-/* Saisons */
-.seasons .lead {
-  margin-top: 16px;
-}
-.season-list {
-  list-style: none;
-  margin: 40px 0 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
-}
-.season {
-  display: grid;
-  justify-items: center;
-  gap: 10px;
-  text-align: center;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  padding: 20px 10px 16px;
-  font-weight: 700;
-  line-height: 1.25;
-}
-.season img {
-  width: 84px;
-  height: 84px;
-}
-.season small {
-  display: block;
-  font-weight: 500;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
 /* Confiance */
 .trust .lead {
   margin-top: 14px;
@@ -804,10 +769,14 @@ details p {
     grid-template-columns: repeat(2, 1fr);
   }
   .facts {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
-  .season-list {
-    grid-template-columns: repeat(4, 1fr);
+  .fact {
+    padding: 70px 20px 22px;
+  }
+  .fact::before {
+    left: 20px;
+    top: 22px;
   }
 }
 
@@ -837,28 +806,6 @@ details p {
   .drive__grid {
     grid-template-columns: 1.1fr 0.9fr;
     gap: 72px;
-  }
-  .season-list {
-    grid-template-columns: repeat(7, 1fr);
-    gap: 12px;
-  }
-  .season {
-    padding-inline: 6px;
-    font-size: 0.95rem;
-  }
-  .season img {
-    width: 72px;
-    height: 72px;
-  }
-  .facts {
-    grid-template-columns: repeat(4, 1fr);
-  }
-  .fact {
-    padding: 70px 20px 22px;
-  }
-  .fact::before {
-    left: 20px;
-    top: 22px;
   }
   .foot__grid {
     grid-template-columns: auto 1fr;
