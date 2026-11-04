@@ -50,9 +50,11 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,woff2,png,ico,svg}'],
         // Les illustrations de saison (ADR 0012) sont chargées à la demande : hors saison, aucun octet de décor n'est téléchargé, pas
         // même par le service worker. Elles se gardent à la première vue (ci-dessous), donc restent disponibles hors ligne ensuite.
-        globIgnores: ['**/assets/season/**'],
+        // La page de présentation (ADR 0021) est une page statique, hors de l'application : le service worker ne la garde pas et ne la remplace
+        // jamais par la coque (sinon un visiteur qui a installé l'application verrait l'écran de connexion à sa place).
+        globIgnores: ['**/assets/season/**', 'presentation/**'],
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//, /^\/images\//],
+        navigateFallbackDenylist: [/^\/api\//, /^\/images\//, /^\/presentation(\/|$)/],
         cleanupOutdatedCaches: true,
         // Une nouvelle version s'active tout de suite et prend la main sur les pages ouvertes, puis l'application se recharge
         // (`registerType: 'autoUpdate'`). Sans cela elle attendait que l'application soit fermée : le téléphone la garde ouverte
