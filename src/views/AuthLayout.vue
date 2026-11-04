@@ -3,7 +3,7 @@ import { onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
-import logo from '@/assets/logo.png'
+import RepasLogo from '@/design/RepasLogo.vue'
 import { useSeasonStore, type Season } from '@/design/season'
 import SeasonArt from '@/design/season/SeasonArt.vue'
 import { cornerOnBanner } from '@/design/season/cornerTone'
@@ -53,12 +53,10 @@ const PITCH = {
         ]"
         >{{ t('privacy.link') }}</RouterLink
       >
-      <!-- Sur téléphone le logo et le nom tiennent sur une ligne : le bouton principal du formulaire se voit sans défiler à 360 × 640 -->
-      <div class="relative flex items-center gap-3 md:block">
-        <img :src="logo" alt="" class="h-12 w-[54px] object-contain md:h-[75px] md:w-[84px]" />
-        <p class="font-display text-3xl leading-none font-bold md:mt-5 md:text-4xl">
-          {{ t('app.name') }}
-        </p>
+      <!-- Empilé par défaut ; sur téléphone la hauteur manque et le logo passe à l'horizontal : le bouton principal du formulaire se voit sans défiler à 360 × 640 (docs/logo/README.md) -->
+      <div class="relative">
+        <RepasLogo variant="horizontal" class="h-12 w-auto md:hidden" />
+        <RepasLogo variant="stack" class="hidden h-36 w-auto md:block" />
       </div>
       <p
         :class="[

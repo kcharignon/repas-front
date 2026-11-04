@@ -24,6 +24,19 @@ function mountLayout() {
   return mount(AuthLayout, { props: { title: 'Se connecter' }, global: { plugins } })
 }
 
+describe('écran de connexion, logo', () => {
+  it('montre le logo : horizontal sur téléphone, empilé dès le bureau, avec le nom de l’application', () => {
+    const wrapper = mountLayout()
+    const logos = wrapper.findAll('header svg[data-repas-logo]')
+
+    expect(logos.map((logo) => logo.attributes('data-variant'))).toEqual(['horizontal', 'stack'])
+    expect(logos.map((logo) => logo.attributes('aria-label'))).toEqual(['Repas', 'Repas'])
+    expect(logos[0]?.classes()).toContain('md:hidden')
+    expect(logos[1]?.classes()).toContain('hidden')
+    expect(logos[1]?.classes()).toContain('md:block')
+  })
+})
+
 describe('écran de connexion, thème saisonnier', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -36,7 +49,7 @@ describe('écran de connexion, thème saisonnier', () => {
 
     expect(wrapper.text()).toContain(PITCH)
     expect(wrapper.text()).not.toContain('citrouille')
-    expect(wrapper.findAll('svg')).toHaveLength(0)
+    expect(wrapper.findAll('svg:not([data-repas-logo])')).toHaveLength(0)
     expect(wrapper.get('header').classes()).toContain('bg-brand')
   })
 
@@ -49,7 +62,9 @@ describe('écran de connexion, thème saisonnier', () => {
     expect(wrapper.text()).not.toContain(PITCH)
     expect(wrapper.text()).not.toContain('bûche')
     // Le héros : décoratif, caché des lecteurs d'écran, sans événement de souris, dans le bandeau.
-    await eventually(() => expect(wrapper.find('header svg').exists()).toBe(true))
+    await eventually(() =>
+      expect(wrapper.find('header svg:not([data-repas-logo])').exists()).toBe(true),
+    )
     const hero = wrapper.get('header [aria-hidden="true"].pointer-events-none')
     expect(hero.html()).toContain('viewBox="0 0 280 220"')
     expect(hero.text()).toBe('')
@@ -62,7 +77,7 @@ describe('écran de connexion, thème saisonnier', () => {
     const wrapper = mountLayout()
 
     expect(wrapper.text()).toContain(PITCH)
-    expect(wrapper.findAll('svg')).toHaveLength(0)
+    expect(wrapper.findAll('svg:not([data-repas-logo])')).toHaveLength(0)
   })
 
   it('le lendemain de la saison (2 novembre) : la phrase du basilic', () => {
@@ -79,7 +94,9 @@ describe('écran de connexion, thème saisonnier', () => {
     expect(wrapper.text()).toContain(PITCH_NOEL)
     expect(wrapper.text()).not.toContain(PITCH)
     expect(wrapper.text()).not.toContain('citrouille')
-    await eventually(() => expect(wrapper.find('header svg').exists()).toBe(true))
+    await eventually(() =>
+      expect(wrapper.find('header svg:not([data-repas-logo])').exists()).toBe(true),
+    )
     expect(wrapper.get('header [aria-hidden="true"]').html()).not.toContain('#a5e072')
     expect(document.documentElement.dataset.season).toBe('noel')
   })
@@ -91,7 +108,9 @@ describe('écran de connexion, thème saisonnier', () => {
 
     expect(wrapper.text()).toContain(PITCH_GALETTE)
     expect(wrapper.text()).not.toContain(PITCH)
-    await eventually(() => expect(wrapper.find('header svg').exists()).toBe(true))
+    await eventually(() =>
+      expect(wrapper.find('header svg:not([data-repas-logo])').exists()).toBe(true),
+    )
     expect(wrapper.get('header [aria-hidden="true"]').html()).toContain('viewBox="0 0 280 220"')
     expect(document.documentElement.dataset.season).toBe('galette')
   })
@@ -116,7 +135,9 @@ describe('écran de connexion, thème saisonnier', () => {
 
     expect(wrapper.text()).toContain(PITCH_VALENTIN)
     expect(wrapper.text()).not.toContain(PITCH)
-    await eventually(() => expect(wrapper.find('header svg').exists()).toBe(true))
+    await eventually(() =>
+      expect(wrapper.find('header svg:not([data-repas-logo])').exists()).toBe(true),
+    )
     expect(wrapper.get('header [aria-hidden="true"]').html()).toContain('viewBox="0 0 280 220"')
     expect(document.documentElement.dataset.season).toBe('valentin')
   })
@@ -146,7 +167,9 @@ describe('écran de connexion, thème saisonnier', () => {
 
       expect(wrapper.text()).toContain(pitch)
       expect(wrapper.text()).not.toContain(PITCH)
-      await eventually(() => expect(wrapper.find('header svg').exists()).toBe(true))
+      await eventually(() =>
+        expect(wrapper.find('header svg:not([data-repas-logo])').exists()).toBe(true),
+      )
       expect(wrapper.get('header [aria-hidden="true"]').html()).toContain('viewBox="0 0 280 220"')
       expect(document.documentElement.dataset.season).toBe(season)
     },
@@ -174,7 +197,9 @@ describe('écran de connexion, thème saisonnier', () => {
 
     expect(wrapper.text()).toContain(PITCH_PAQUES)
     expect(wrapper.text()).not.toContain(PITCH)
-    await eventually(() => expect(wrapper.find('header svg').exists()).toBe(true))
+    await eventually(() =>
+      expect(wrapper.find('header svg:not([data-repas-logo])').exists()).toBe(true),
+    )
     expect(wrapper.get('header [aria-hidden="true"]').html()).toContain('viewBox="0 0 280 220"')
     expect(document.documentElement.dataset.season).toBe('paques')
   })
@@ -214,7 +239,7 @@ describe('écran de connexion, thème saisonnier', () => {
     localStorage.setItem('repas.season', 'noel')
     const wrapper = mountLayout()
     expect(wrapper.text()).toContain(PITCH)
-    expect(wrapper.findAll('svg')).toHaveLength(0)
+    expect(wrapper.findAll('svg:not([data-repas-logo])')).toHaveLength(0)
   })
 
   it('hors saison, le coin de saison reste clair-sur-bandeau seulement tant que l’écran de connexion est ouvert', () => {
@@ -230,7 +255,9 @@ describe('écran de connexion, thème saisonnier', () => {
     vi.setSystemTime(new Date(2026, 9, 27, 12))
 
     const wrapper = mountLayout()
-    await eventually(() => expect(wrapper.find('header svg').exists()).toBe(true))
+    await eventually(() =>
+      expect(wrapper.find('header svg:not([data-repas-logo])').exists()).toBe(true),
+    )
     await flushPromises()
 
     const hero = wrapper.get('header [aria-hidden="true"].pointer-events-none')

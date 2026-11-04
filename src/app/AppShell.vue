@@ -5,8 +5,8 @@ import { useI18n } from 'vue-i18n'
 import { BookOpen, LayoutGrid, ShoppingBasket, User } from 'lucide-vue-next'
 
 import OfflineBanner from '@/app/OfflineBanner.vue'
-import logo from '@/assets/logo.png'
 import { cn } from '@/design/cn'
+import RepasLogo from '@/design/RepasLogo.vue'
 import SeasonArt from '@/design/season/SeasonArt.vue'
 import { useAppUpdateStore } from '@/features/drive/appUpdateStore'
 import { useAppVersionStore } from '@/features/drive/appVersionStore'
@@ -56,11 +56,9 @@ const link =
     >
       <!-- Un motif discret dans l'angle du menu, pendant la saison (ADR 0012) -->
       <SeasonArt name="aside" class="absolute top-3 right-3 size-14 text-line" />
-      <div class="relative flex items-center gap-3 px-2 pb-5">
-        <span class="flex size-11 items-center justify-center rounded-2xl bg-brand">
-          <img :src="logo" alt="" class="h-6 w-7 object-contain" />
-        </span>
-        <span class="font-display text-2xl font-bold">{{ t('app.name') }}</span>
+      <!-- Le logo horizontal (docs/logo/README.md) : la hauteur d'un en-tête est trop courte pour l'empilé -->
+      <div class="relative px-2 pb-5">
+        <RepasLogo variant="horizontal" class="h-9 w-auto text-logo" />
       </div>
       <nav :aria-label="t('nav.label')" class="relative flex flex-col gap-1.5">
         <RouterLink
