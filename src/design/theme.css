@@ -37,6 +37,8 @@
   --star: #b87a00;
   /* Bandeau de connexion et pastille du logo (texte blanc dessus) : le même vert en clair et en sombre. */
   --brand: #1e6b4c;
+  /* Le logo (mot et dessin) sur la surface : basilic en clair, brume en sombre. Jamais redéfini par une saison : c'est l'identité de Repas (docs/logo/README.md). */
+  --logo: #1e6b4c;
   color-scheme: light;
 }
 
@@ -63,6 +65,7 @@
     --secret-soft: #173a2b;
     --on-secret-soft: #9fe0c0;
     --star: #f4b73f;
+    --logo: #eaf1ec;
     color-scheme: dark;
   }
 }
@@ -89,6 +92,7 @@
   --secret-soft: #173a2b;
   --on-secret-soft: #9fe0c0;
   --star: #f4b73f;
+  --logo: #eaf1ec;
   color-scheme: dark;
 }
 
@@ -446,6 +450,7 @@
   --color-on-secret-soft: var(--on-secret-soft);
   --color-star: var(--star);
   --color-brand: var(--brand);
+  --color-logo: var(--logo);
   --font-sans: 'Figtree Variable', system-ui, sans-serif;
   --font-display: 'Bricolage Grotesque Variable', 'Figtree Variable', system-ui, sans-serif;
 }

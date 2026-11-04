@@ -4,3 +4,5 @@ drive-agent/fixtures/leclerc
 drive-agent/fixtures/auchan
 # Exemples de contrat du back (DRV-501) : copies à l'octet près des réponses de l'API
 drive-agent/fixtures/contract/*.json
+# Géométrie du logo : générée par scripts/brand-assets.mjs, jamais à la main (docs/logo/README.md)
+src/design/logoGeometry.ts

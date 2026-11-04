@@ -85,7 +85,8 @@ test.describe('écran de connexion', () => {
     await expect(page.getByText(PITCH)).toBeVisible()
     await expect(page.locator('html')).not.toHaveAttribute('data-season', /.*/)
     await expect(banner(page)).toHaveCSS('background-color', GREEN)
-    await expect(banner(page).locator('svg')).toHaveCount(0)
+    // Le logo de Repas est un svg du bandeau, mais pas un décor de saison
+    await expect(banner(page).locator('svg:not([data-repas-logo])')).toHaveCount(0)
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#1E6B4C')
   })
 

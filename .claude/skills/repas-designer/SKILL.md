@@ -103,4 +103,4 @@ Une nouvelle saison pose sa palette ici (5 à 8 couleurs) AVANT de dessiner.
 
 ## 9. Ce que ce skill ne décide pas
 
-Le contenu et les textes de l'application (voir `repas-po`), le thème de base « Basilic & safran » (changer la marque est une décision du propriétaire), et les dates d'une saison nouvelle (à lui de les donner). Une saison nouvelle est proposée au propriétaire avant d'être construite.
+**Le logo et l'icône sont fixés** (ADR 0020 du front, `docs/logo/README.md`, 4 novembre 2026) : l'anneau-horloge et le mot « Repas » en Playfair Display Bold, empilé par défaut, horizontal sous 88 px de haut ; aucune saison ne les habille (jeton `--logo`, coche toujours en safran) ; on ne les redessine pas à la main, on passe par `scripts/brand-assets.mjs`. Le contenu et les textes de l'application (voir `repas-po`), le thème de base « Basilic & safran » (changer la marque est une décision du propriétaire), et les dates d'une saison nouvelle (à lui de les donner). Une saison nouvelle est proposée au propriétaire avant d'être construite.
