@@ -1130,7 +1130,7 @@ export interface paths {
         get?: never;
         /**
          * Retient la version de l'application installée pour l'utilisateur connecté
-         * @description Une ligne par compte et par plateforme, remplacée à chaque appel (idempotent). Seule la version est retenue, avec l'heure : aucun identifiant d'appareil, aucun modèle de téléphone. Au plus une écriture par minute et par compte : au-delà, la réponse reste `204` et rien n'est écrit. La version ne sert qu'à informer (`appUpdate` de `GET /api/v1/me`, liste des comptes de l'administration), jamais à accorder un droit.
+         * @description Une ligne par compte et par plateforme, remplacée à chaque appel (idempotent). Seule la version est retenue, avec l'heure : aucun identifiant d'appareil, aucun modèle de téléphone. Au plus une écriture par minute et par compte : au-delà, la réponse reste `204` et rien n'est écrit. Ce `PUT` n'est plus nécessaire à l'application : toute requête authentifiée de `/api/v1/*` qui porte les en-têtes `X-App-Version` (trois nombres séparés par des points) et `X-App-Platform` (`android`) retient la version après la réponse, avec le même plafond (en-têtes absents, mal formés ou inconnus : ignorés sans erreur). La version ne sert qu'à informer (`appUpdate` de `GET /api/v1/me`, liste des comptes de l'administration), jamais à accorder un droit.
          */
         put: operations["put_api_update_user_app_version"];
         post?: never;
@@ -1257,7 +1257,7 @@ export interface paths {
         };
         /** Préférences de produits de l'utilisateur connecté dans son magasin courant, par ingrédient : produits acceptés classés, produits refusés, « j'en ai toujours » */
         get: operations["get_api_list_choices"];
-        /** Mémorise un lot d'intentions de l'agent (produits choisis, refusés, « j'en ai toujours ») dans les préférences de l'utilisateur connecté. Un ancien slug (ancien commun dont l'utilisateur a reçu une copie, ingrédient fusionné) est remplacé par celui de son ingrédient actuel : aucune préférence n'est créée sous un ancien slug. La fiche d'un produit déjà connu (commune au magasin) n'est complétée que là où elle est vide : libellé, contenu et code-barres ne sont jamais réécrits ; le prix ne change que par `REFRESH_PRICE` ou par l'ajout d'un produit que l'utilisateur accepte déjà. Un `ADD_PRODUCT` peut porter la recherche qui a fait trouver le produit (`searchQuery`, mémorisée avec la préférence de cette enseigne et de ce magasin ; clé absente : gardée, `null` : effacée) ; l'intention `NOTE_SEARCH` (DRV-653) mémorise cette recherche seule, sans produit, quand le produit n'est pas mémorisé (pris pour cette fois seulement) et la contenance du produit dans l'unité de la liste (`product.packSize`, DRV-652, privée à l'utilisateur et propre à ce produit ; clé absente : gardée pour le même produit, `null` : effacée) */
+        /** Mémorise un lot d'intentions de l'agent (produits choisis, refusés, « j'en ai toujours ») dans les préférences de l'utilisateur connecté. Un ancien slug (ancien commun dont l'utilisateur a reçu une copie, ingrédient fusionné) est remplacé par celui de son ingrédient actuel : aucune préférence n'est créée sous un ancien slug. La fiche d'un produit déjà connu (commune au magasin) n'est complétée que là où elle est vide : libellé, contenu et code-barres ne sont jamais réécrits (le libellé lu par l'utilisateur est gardé pour son compte seul, sur sa ligne de produit). Le prix de la fiche, lui, est commun à tous les comptes du magasin : c'est la dernière observation d'un compte qui accepte le produit (`ADD_PRODUCT`, dès la première acceptation, ou `REFRESH_PRICE`) ; un produit refusé n'écrit jamais de prix. Un `ADD_PRODUCT` peut porter la recherche qui a fait trouver le produit (`searchQuery`, mémorisée avec la préférence de cette enseigne et de ce magasin ; clé absente : gardée, `null` : effacée) ; l'intention `NOTE_SEARCH` (DRV-653) mémorise cette recherche seule, sans produit, quand le produit n'est pas mémorisé (pris pour cette fois seulement) et la contenance du produit dans l'unité de la liste (`product.packSize`, DRV-652, privée à l'utilisateur et propre à ce produit ; clé absente : gardée pour le même produit, `null` : effacée) */
         put: operations["put_api_save_product_choices"];
         post?: never;
         delete?: never;
@@ -1910,7 +1910,7 @@ export interface components {
              */
             retailerProductId: string;
             /**
-             * @description Libellé du produit (255 caractères au plus, sans caractère de contrôle ni caractère invisible ou de format : saut de ligne, sens de lecture, largeur nulle, trait d'union conditionnel, sélecteur de variation, remplisseur, tag ; les espaces insécables sont permises)
+             * @description Libellé du produit tel que l'utilisateur l'a lu, gardé pour son compte seul (255 caractères au plus, sans caractère de contrôle ni caractère invisible ou de format : saut de ligne, sens de lecture, largeur nulle, trait d'union conditionnel, sélecteur de variation, remplisseur, tag ; les espaces insécables sont permises)
              * @default null
              * @example Farine de blé T55 Marque Repère 1 kg
              */
@@ -1927,7 +1927,7 @@ export interface components {
              */
             content: components["schemas"]["ProductContentPayload"] | null;
             /**
-             * @description Prix lu par l'agent, `null` s'il ne l'a pas lu
+             * @description Prix lu par l'agent, `null` s'il ne l'a pas lu. Pour `ADD_PRODUCT` et `REFRESH_PRICE`, il devient le prix de la fiche commune du magasin (le même pour tous les comptes) ; pour `REJECT_PRODUCT`, il est ignoré
              * @default null
              */
             price: components["schemas"]["ProductPricePayload"] | null;
