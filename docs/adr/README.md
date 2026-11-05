@@ -22,5 +22,6 @@
 | [0018](0018-premiere-lettre-des-noms-en-majuscule.md) | La première lettre d'un nom de recette ou d'ingrédient est une majuscule (`capitalizeFirst`, option `capitalize-first` du champ) | Accepted |
 | [0019](0019-pyramide-de-tests.md) | Pyramide de tests : peu de bout en bout (mise en page, contraste, clavier, hors-ligne), le reste en composant et en unitaire | Accepted |
 | [0020](0020-icone-et-logo-de-repas.md) | Icône (anneau-horloge) et logo (Playfair Display, empilé par défaut) de Repas, une seule source générée | Accepted |
+| [0021](0021-page-de-presentation-publique.md) | Page de présentation publique `/presentation` : statique, hors du service worker, rien d'un autre site | Proposed |
 
 Une décision nouvelle = un nouvel ADR (numéro suivant) dans le même commit que le code qui l'applique.
