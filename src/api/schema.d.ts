@@ -186,6 +186,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recipes/import/marmiton": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copie une recette de Marmiton dans celles de l'utilisateur connecté
+         * @description CONTRAT PROVISOIRE (ADR 0037 du back, MAR-003) : à remplacer par `npm run api:update` après la release du back. Le lien de la page est analysé strictement ; l'utilisateur ne choisit jamais l'adresse appelée. Chaque erreur porte une constante comme message (`{error:{message}}`).
+         */
+        post: operations["post_api_import_marmiton_recipe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/recipes/{id}/copy": {
         parameters: {
             query?: never;
@@ -2696,6 +2716,13 @@ export interface components {
              */
             departmentName: string;
         };
+        ImportMarmitonRecipePayload: {
+            /**
+             * @description Adresse de la page de la recette sur marmiton.org
+             * @example https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx
+             */
+            url: string;
+        };
         RecipeDTO: {
             /**
              * @description Identifiant de la recette
@@ -2726,6 +2753,11 @@ export interface components {
              * @example false
              */
             favorite: boolean;
+            /**
+             * @description Adresse de la page d'origine d'une recette copiée de Marmiton (`https://www.marmiton.org/recettes/recette_{nom}_{id}.aspx`), reprise par toutes ses copies ; `null` pour toute autre recette. Toujours écrit. CONTRAT PROVISOIRE (ADR 0037 du back, MAR-003) : à remplacer par `npm run api:update` après la release du back
+             * @example https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx
+             */
+            sourceUrl: string | null;
             /** @description Ingrédients de la recette, dans l'ordre de la recette (celui de la saisie) */
             rows: components["schemas"]["RecipeRowDTO"][];
             /**
@@ -3043,6 +3075,11 @@ export interface components {
              * @example plat
              */
             typeSlug: string;
+            /**
+             * @description Recette copiée de Marmiton (la recette neutre de l'ADR 0037). Toujours écrit. CONTRAT PROVISOIRE (MAR-003) : à remplacer par `npm run api:update` après la release du back
+             * @example false
+             */
+            fromMarmiton: boolean;
         };
         OtherPeopleRecipesDTO: {
             /** @description Les recettes de cette page, 200 au plus : sans recherche triées par catégorie (l'ordre des types) puis par nom, avec une recherche par pertinence décroissante, toutes catégories confondues */
@@ -4070,6 +4107,60 @@ export interface operations {
             };
             /** @description Corps invalide : `destination` absente, vide ou de plus de 36 caractères */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    post_api_import_marmiton_recipe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportMarmitonRecipePayload"];
+            };
+        };
+        responses: {
+            /** @description L'utilisateur avait déjà une copie de cette recette : rien n'est écrit */
+            200: {
+                headers: {
+                    /** @description URL de la copie */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Copie créée */
+            201: {
+                headers: {
+                    /** @description URL de la copie */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `MARMITON_URL_INVALID`, `MARMITON_RECIPE_NOT_FOUND`, `MARMITON_RECIPE_UNREADABLE` ou `RECIPE_LIMIT_REACHED` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `MARMITON_IMPORT_RATE_LIMITED` (avec `Retry-After`) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `MARMITON_UNAVAILABLE` */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

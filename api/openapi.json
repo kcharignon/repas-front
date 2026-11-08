@@ -413,6 +413,59 @@
                 }
             }
         },
+        "/api/v1/recipes/import/marmiton": {
+            "post": {
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Copie une recette de Marmiton dans celles de l'utilisateur connect\u00e9",
+                "description": "CONTRAT PROVISOIRE (ADR 0037 du back, MAR-003) : \u00e0 remplacer par `npm run api:update` apr\u00e8s la release du back. Le lien de la page est analys\u00e9 strictement ; l'utilisateur ne choisit jamais l'adresse appel\u00e9e. Chaque erreur porte une constante comme message (`{error:{message}}`).",
+                "operationId": "post_api_import_marmiton_recipe",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ImportMarmitonRecipePayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "L'utilisateur avait d\u00e9j\u00e0 une copie de cette recette : rien n'est \u00e9crit",
+                        "headers": {
+                            "Location": {
+                                "description": "URL de la copie",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Copie cr\u00e9\u00e9e",
+                        "headers": {
+                            "Location": {
+                                "description": "URL de la copie",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "`MARMITON_URL_INVALID`, `MARMITON_RECIPE_NOT_FOUND`, `MARMITON_RECIPE_UNREADABLE` ou `RECIPE_LIMIT_REACHED`"
+                    },
+                    "429": {
+                        "description": "`MARMITON_IMPORT_RATE_LIMITED` (avec `Retry-After`)"
+                    },
+                    "502": {
+                        "description": "`MARMITON_UNAVAILABLE`"
+                    }
+                }
+            }
+        },
         "/api/v1/recipes/{id}/copy": {
             "post": {
                 "tags": [
@@ -6542,6 +6595,19 @@
                 },
                 "type": "object"
             },
+            "ImportMarmitonRecipePayload": {
+                "required": [
+                    "url"
+                ],
+                "properties": {
+                    "url": {
+                        "description": "Adresse de la page de la recette sur marmiton.org",
+                        "type": "string",
+                        "example": "https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx"
+                    }
+                },
+                "type": "object"
+            },
             "RecipeDTO": {
                 "required": [
                     "id",
@@ -6551,6 +6617,7 @@
                     "typeName",
                     "secret",
                     "favorite",
+                    "sourceUrl",
                     "rows",
                     "version"
                 ],
@@ -6587,6 +6654,12 @@
                         "description": "Recette mise en favoris par son auteur (liste \u00ab Favoris \u00bb, `PUT /recipes/{id}/favorite`). Toujours \u00e9crit ; toujours `false` pour la recette d'un autre : le choix est celui de l'auteur",
                         "type": "boolean",
                         "example": false
+                    },
+                    "sourceUrl": {
+                        "description": "Adresse de la page d'origine d'une recette copi\u00e9e de Marmiton (`https://www.marmiton.org/recettes/recette_{nom}_{id}.aspx`), reprise par toutes ses copies ; `null` pour toute autre recette. Toujours \u00e9crit. CONTRAT PROVISOIRE (ADR 0037 du back, MAR-003) : \u00e0 remplacer par `npm run api:update` apr\u00e8s la release du back",
+                        "type": "string",
+                        "nullable": true,
+                        "example": "https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx"
                     },
                     "rows": {
                         "description": "Ingr\u00e9dients de la recette, dans l'ordre de la recette (celui de la saisie)",
@@ -7115,7 +7188,8 @@
                     "id",
                     "name",
                     "typeName",
-                    "typeSlug"
+                    "typeSlug",
+                    "fromMarmiton"
                 ],
                 "properties": {
                     "id": {
@@ -7136,6 +7210,11 @@
                         "description": "Identifiant stable du type de recette, pour grouper les recettes par cat\u00e9gorie",
                         "type": "string",
                         "example": "plat"
+                    },
+                    "fromMarmiton": {
+                        "description": "Recette copi\u00e9e de Marmiton (la recette neutre de l'ADR 0037). Toujours \u00e9crit. CONTRAT PROVISOIRE (MAR-003) : \u00e0 remplacer par `npm run api:update` apr\u00e8s la release du back",
+                        "type": "boolean",
+                        "example": false
                     }
                 },
                 "type": "object"
