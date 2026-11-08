@@ -1,4 +1,4 @@
-name: Release
+name: Front release
 
 # Publier une release GitHub (tag vX.Y.Z) construit l'image du front, la publie sur GHCR et la déploie en production.
 # L'infrastructure (compose, bordure Caddy, deploy.sh) vit dans le dépôt back : kcharignon/repas, ADR 0017.
