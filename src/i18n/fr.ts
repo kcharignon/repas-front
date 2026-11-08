@@ -415,6 +415,7 @@ export default {
     othersHelp: 'Copie une recette dans les tiennes pour la planifier et la modifier.',
     othersNone: 'Rien de nouveau à copier pour le moment.',
     othersSearch: 'Rechercher une recette des autres',
+    othersSearchInType: 'Rechercher dans cette catégorie',
     othersResults: 'Résultats de la recherche',
     othersCount: '{count} recette | {count} recettes',
     othersNoMatch: 'Aucune recette ne ressemble à « {search} ».',

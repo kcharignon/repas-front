@@ -294,15 +294,31 @@ describe('RecipesView', () => {
 describe('OtherRecipesView', () => {
   afterEach(() => vi.unstubAllGlobals())
 
+  const otherTypes = {
+    member: [{ typeSlug: 'plat', typeName: 'Plat', count: 1 }],
+    totalItems: 1,
+  }
   const others = {
     member: [{ id: 'o1', name: 'Ramen', typeName: 'Plat', typeSlug: 'plat' }],
     totalItems: 1,
   }
+  const base = {
+    ...session,
+    'GET /api/v1/recipes/other-people/types': () => json(otherTypes),
+  }
+  const mountOthers = async (path: string) => {
+    const context = await signedIn(path)
 
-  it('liste les recettes à copier, chacune avec son bouton « Copier »', async () => {
-    stubApi({ ...session, 'GET /api/v1/recipes/other-people': () => json(others) })
-    const context = await signedIn('/recettes/autres')
-    const wrapper = mount(OtherRecipesView, { global: { plugins: context.plugins } })
+    return mount(OtherRecipesView, { global: { plugins: context.plugins } })
+  }
+
+  it('liste les catégories à copier, puis les recettes de la catégorie ouverte, chacune avec son bouton « Copier »', async () => {
+    stubApi({ ...base, 'GET /api/v1/recipes/other-people': () => json(others) })
+    const wrapper = await mountOthers('/recettes/autres')
+    await vi.waitFor(() => expect(wrapper.text()).toContain('1 recette'))
+    expect(wrapper.text()).not.toContain('Ramen')
+
+    await wrapper.find('a[href="/recettes/autres?categorie=plat"]').trigger('click')
     await vi.waitFor(() => expect(wrapper.text()).toContain('Ramen'))
 
     expect(wrapper.find('button[aria-label="Copier Ramen dans mes recettes"]').text()).toBe(
@@ -313,7 +329,7 @@ describe('OtherRecipesView', () => {
   it('charge la page suivante par « Voir plus » quand le total dépasse ce qui est affiché', async () => {
     const offsets: (string | null)[] = []
     stubApi({
-      ...session,
+      ...base,
       'GET /api/v1/recipes/other-people': (request) => {
         const offset = new URL(request.url).searchParams.get('offset')
         offsets.push(offset)
@@ -325,14 +341,13 @@ describe('OtherRecipesView', () => {
                 totalItems: 2,
               }
             : {
-                member: [{ id: 'o2', name: 'Tarte', typeName: 'Dessert', typeSlug: 'dessert' }],
+                member: [{ id: 'o2', name: 'Tarte', typeName: 'Plat', typeSlug: 'plat' }],
                 totalItems: 2,
               },
         )
       },
     })
-    const context = await signedIn('/recettes/autres')
-    const wrapper = mount(OtherRecipesView, { global: { plugins: context.plugins } })
+    const wrapper = await mountOthers('/recettes/autres?categorie=plat')
     await vi.waitFor(() => expect(wrapper.text()).toContain('Ramen'))
     expect(wrapper.text()).not.toContain('Tarte')
 
@@ -347,12 +362,8 @@ describe('OtherRecipesView', () => {
   })
 
   it('ne propose pas « Voir plus » quand tout est affiché', async () => {
-    stubApi({
-      ...session,
-      'GET /api/v1/recipes/other-people': () => json(others),
-    })
-    const context = await signedIn('/recettes/autres')
-    const wrapper = mount(OtherRecipesView, { global: { plugins: context.plugins } })
+    stubApi({ ...base, 'GET /api/v1/recipes/other-people': () => json(others) })
+    const wrapper = await mountOthers('/recettes/autres?categorie=plat')
     await vi.waitFor(() => expect(wrapper.text()).toContain('Ramen'))
 
     expect(wrapper.text()).not.toContain('Voir plus')
@@ -361,10 +372,9 @@ describe('OtherRecipesView', () => {
   it("dit qu'il n'y a rien à copier", async () => {
     stubApi({
       ...session,
-      'GET /api/v1/recipes/other-people': () => json({ member: [], totalItems: 0 }),
+      'GET /api/v1/recipes/other-people/types': () => json({ member: [], totalItems: 0 }),
     })
-    const context = await signedIn('/recettes/autres')
-    const wrapper = mount(OtherRecipesView, { global: { plugins: context.plugins } })
+    const wrapper = await mountOthers('/recettes/autres')
 
     await vi.waitFor(() =>
       expect(wrapper.text()).toContain('Rien de nouveau à copier pour le moment.'),

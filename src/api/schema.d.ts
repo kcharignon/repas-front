@@ -733,6 +733,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recipes/other-people/types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Les catégories de « Recettes des autres », avec le nombre de recettes que l'utilisateur authentifié peut copier dans chacune
+         * @description Les mêmes règles que `GET /recipes/other-people` (pas les siennes, pas les secrètes d'un autre, pas les copies, pas celles qu'il a déjà copiées ; un administrateur voit toujours les recettes sans propriétaire) : `count` est exactement le `totalItems` de `GET /recipes/other-people?typeSlug=…`. Seules les catégories qui ont au moins une recette sont rendues, dans l'ordre des types de recette. Une seule requête SQL, quel que soit le nombre de catégories ou de recettes.
+         */
+        get: operations["get_api_list_other_people_recipe_types"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/recipes/other-people": {
         parameters: {
             query?: never;
@@ -1704,6 +1724,8 @@ export interface components {
             offset: number;
             /** @default null */
             q: string | null;
+            /** @default null */
+            typeSlug: string | null;
         };
         MarkIngredientsDistinctPayload: {
             /**
@@ -3200,6 +3222,29 @@ export interface components {
             sameDepartment: boolean;
             /** @description Le nom est le même (casse, accents, pluriel) ou à une faute de frappe près : le meilleur choix probable */
             veryClose: boolean;
+        };
+        OtherPeopleRecipeTypeDTO: {
+            /**
+             * @description Identifiant (slug) du type de recette ; à passer en `typeSlug` à `GET /recipes/other-people`
+             * @example plat
+             */
+            typeSlug: string;
+            /** @example plat */
+            typeName: string;
+            /**
+             * @description Le nombre de recettes que l'utilisateur peut copier dans ce type : exactement le `totalItems` de `GET /recipes/other-people?typeSlug=…`
+             * @example 12
+             */
+            count: number;
+        };
+        OtherPeopleRecipeTypesDTO: {
+            /** @description Les catégories qui ont au moins une recette à copier, dans l'ordre des types de recette */
+            member: components["schemas"]["OtherPeopleRecipeTypeDTO"][];
+            /**
+             * @description Le nombre de catégories de `member`
+             * @example 3
+             */
+            totalItems: number;
         };
         OtherPeopleRecipeDTO: {
             /**
@@ -6148,6 +6193,26 @@ export interface operations {
             };
         };
     };
+    get_api_list_other_people_recipe_types: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Catégories des recettes des autres */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OtherPeopleRecipeTypesDTO"];
+                };
+            };
+        };
+    };
     get_api_list_other_people_recipes: {
         parameters: {
             query?: {
@@ -6160,6 +6225,11 @@ export interface operations {
                  * @example carbonnara
                  */
                 q?: string;
+                /**
+                 * @description Identifiant (slug) d'une catégorie de recette, 100 caractères au plus : la page, le total et la recherche se restreignent à cette catégorie (voir `GET /recipes/other-people/types`). Absent ou vide : toutes les catégories. Une catégorie inconnue rend une page vide, jamais une erreur
+                 * @example dessert
+                 */
+                typeSlug?: string;
             };
             header?: never;
             path?: never;
@@ -6176,7 +6246,7 @@ export interface operations {
                     "application/json": components["schemas"]["OtherPeopleRecipesDTO"];
                 };
             };
-            /** @description Paramètre `limit`, `offset` ou `q` hors de ses bornes */
+            /** @description Paramètre `limit`, `offset`, `q` ou `typeSlug` hors de ses bornes */
             422: {
                 headers: {
                     [name: string]: unknown;

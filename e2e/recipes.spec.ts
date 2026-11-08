@@ -78,13 +78,15 @@ test.describe('recettes', () => {
     page,
   }) => {
     await signIn(page, '/recettes/autres')
+    // L'écran s'ouvre sur les catégories : la tuile « Plat », puis la recette
+    await page.getByRole('link', { name: /^Plat/ }).click()
     await page.getByRole('button', { name: 'Copier Pâtes carbonara dans mes recettes' }).click()
 
     await expect(page.getByText('« Pâtes carbonara » est dans tes recettes.')).toBeVisible()
     await expect(
       page.getByRole('button', { name: 'Copiée : Pâtes carbonara est dans tes recettes' }),
     ).toBeDisabled()
-    await expect(page).toHaveURL(/\/recettes\/autres$/)
+    await expect(page).toHaveURL(/\/recettes\/autres\?categorie=plat$/)
 
     // La copie est bien dans ses recettes (le back la supprime en fin de test)
     await page.goto('/recettes?type=plat')

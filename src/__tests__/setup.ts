@@ -26,6 +26,8 @@ beforeEach(() => {
   globalThis.Date = ShiftedDate
   vi.spyOn(console, 'warn')
   vi.spyOn(console, 'error')
+  // jsdom ne fait pas défiler la page (et le dit sur la console) : l'appel est seulement observable
+  if (typeof window !== 'undefined') vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
 })
 
 afterEach(async () => {
