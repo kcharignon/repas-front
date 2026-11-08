@@ -2356,6 +2356,28 @@
                 }
             }
         },
+        "/api/v1/recipes/other-people/types": {
+            "get": {
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Les cat\u00e9gories de \u00ab Recettes des autres \u00bb, avec le nombre de recettes que l'utilisateur authentifi\u00e9 peut copier dans chacune",
+                "description": "Les m\u00eames r\u00e8gles que `GET /recipes/other-people` (pas les siennes, pas les secr\u00e8tes d'un autre, pas les copies, pas celles qu'il a d\u00e9j\u00e0 copi\u00e9es ; un administrateur voit toujours les recettes sans propri\u00e9taire) : `count` est exactement le `totalItems` de `GET /recipes/other-people?typeSlug=\u2026`. Seules les cat\u00e9gories qui ont au moins une recette sont rendues, dans l'ordre des types de recette. Une seule requ\u00eate SQL, quel que soit le nombre de cat\u00e9gories ou de recettes.",
+                "operationId": "get_api_list_other_people_recipe_types",
+                "responses": {
+                    "200": {
+                        "description": "Cat\u00e9gories des recettes des autres",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OtherPeopleRecipeTypesDTO"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/recipes/other-people": {
             "get": {
                 "tags": [
@@ -2399,6 +2421,17 @@
                             "maxLength": 100
                         },
                         "example": "carbonnara"
+                    },
+                    {
+                        "name": "typeSlug",
+                        "in": "query",
+                        "description": "Identifiant (slug) d'une cat\u00e9gorie de recette, 100 caract\u00e8res au plus : la page, le total et la recherche se restreignent \u00e0 cette cat\u00e9gorie (voir `GET /recipes/other-people/types`). Absent ou vide : toutes les cat\u00e9gories. Une cat\u00e9gorie inconnue rend une page vide, jamais une erreur",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 100
+                        },
+                        "example": "dessert"
                     }
                 ],
                 "responses": {
@@ -2413,7 +2446,7 @@
                         }
                     },
                     "422": {
-                        "description": "Param\u00e8tre `limit`, `offset` ou `q` hors de ses bornes"
+                        "description": "Param\u00e8tre `limit`, `offset`, `q` ou `typeSlug` hors de ses bornes"
                     }
                 }
             }
@@ -4813,6 +4846,12 @@
                         "minimum": 0
                     },
                     "q": {
+                        "type": "string",
+                        "default": null,
+                        "maxLength": 100,
+                        "nullable": true
+                    },
+                    "typeSlug": {
                         "type": "string",
                         "default": null,
                         "maxLength": 100,
@@ -7448,6 +7487,51 @@
                     "veryClose": {
                         "description": "Le nom est le m\u00eame (casse, accents, pluriel) ou \u00e0 une faute de frappe pr\u00e8s : le meilleur choix probable",
                         "type": "boolean"
+                    }
+                },
+                "type": "object"
+            },
+            "OtherPeopleRecipeTypeDTO": {
+                "required": [
+                    "typeSlug",
+                    "typeName",
+                    "count"
+                ],
+                "properties": {
+                    "typeSlug": {
+                        "description": "Identifiant (slug) du type de recette ; \u00e0 passer en `typeSlug` \u00e0 `GET /recipes/other-people`",
+                        "type": "string",
+                        "example": "plat"
+                    },
+                    "typeName": {
+                        "type": "string",
+                        "example": "plat"
+                    },
+                    "count": {
+                        "description": "Le nombre de recettes que l'utilisateur peut copier dans ce type : exactement le `totalItems` de `GET /recipes/other-people?typeSlug=\u2026`",
+                        "type": "integer",
+                        "example": 12
+                    }
+                },
+                "type": "object"
+            },
+            "OtherPeopleRecipeTypesDTO": {
+                "required": [
+                    "member",
+                    "totalItems"
+                ],
+                "properties": {
+                    "member": {
+                        "description": "Les cat\u00e9gories qui ont au moins une recette \u00e0 copier, dans l'ordre des types de recette",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/OtherPeopleRecipeTypeDTO"
+                        }
+                    },
+                    "totalItems": {
+                        "description": "Le nombre de cat\u00e9gories de `member`",
+                        "type": "integer",
+                        "example": 3
                     }
                 },
                 "type": "object"
