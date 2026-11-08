@@ -189,3 +189,53 @@ describe('l’application ne fait confiance à aucun faux certificat', () => {
     expect(lib).toContain('--ignore-certificate-errors-spki-list=')
   })
 })
+
+// Le test de fumée (`make android-smoke`) a un faux Repas à lui (repaspage.html) dont le plan est refusé par l'application (INVALID_PLAN) quand son magasin n'est pas
+// d'une forme que le registre accepte ; la dérive de DRV-754 (hôte `www` au lieu d'un serveur `fd<N>-courses`) est restée invisible tant que personne ne jouait l'émulateur.
+// Ces gardes rejouent, sans émulateur, la règle réelle sur les fixtures du test de fumée : le validateur du protocole ET les motifs du registre Kotlin.
+describe('les fixtures du test de fumée de l’émulateur (DRV-754)', () => {
+  const registry = read(join(androidDir, 'core/src/main/kotlin/eu/kantin/repas/drive/RetailerSites.kt'))
+  const leclerc = registry.slice(registry.indexOf('private val LECLERC'), registry.indexOf('private val AUCHAN'))
+  /** Un motif Kotlin `Regex("…")` du registre de Leclerc, en expression régulière JavaScript (les `\\` du texte Kotlin deviennent `\`). */
+  const kotlinPattern = (field: string): RegExp => {
+    const source = new RegExp(`${field} = Regex\\("((?:[^"\\\\]|\\\\.)*)"`).exec(leclerc)?.[1]
+    expect(source, `${field} dans l’entrée de Leclerc`).toBeDefined()
+    return new RegExp(`^(?:${(source as string).replaceAll('\\\\', '\\')})$`)
+  }
+  const repasPage = read(join(emulatorDir, 'repaspage.html'))
+  const testPage = read(join(emulatorDir, 'testpage.html'))
+  const smoke = read(join(emulatorDir, 'smoke.sh'))
+  const planLiteral = /var PLAN = (\{[\s\S]*?\n {2}\})\n/.exec(repasPage)?.[1] ?? ''
+  const plan = new Function(`return ${planLiteral}`)() as PlanMessage
+
+  it('le plan du faux Repas est un plan valide du protocole v1', () => {
+    expect(planLiteral).not.toBe('')
+    expect(validatePlan(plan)).toEqual(plan)
+  })
+
+  it('le magasin du plan a la forme que l’application accepte (identifiant et serveur `fd<N>-courses` de Leclerc), comme au registre Kotlin', () => {
+    expect(kotlinPattern('storeIdPattern').test(plan.store.id)).toBe(true)
+    expect(kotlinPattern('storeHost').test(plan.store.host)).toBe(true)
+  })
+
+  it('la page de magasin de testpage.html est une page de magasin du registre, au même numéro et au même hôte que le plan', () => {
+    const link = /id="store" href="https:\/\/([^/"]+)(\/[^"]*)"/.exec(testPage)
+    expect(link, 'le lien « Choisir mon magasin de test »').not.toBeNull()
+    const [, host = '', path = ''] = link ?? []
+    const pageRule = /pagesOnHosts[\s\S]*?host = Regex\("fd\[0-9\]\{1,3\}-courses[\s\S]*?path = Regex\("((?:[^"\\]|\\.)*)"/.exec(leclerc)?.[1] ?? ''
+    expect(pageRule).not.toBe('')
+    expect(new RegExp(pageRule.replaceAll('\\\\', '\\'), 'i').test(path)).toBe(true)
+    expect(host).toBe(plan.store.host)
+    expect(path).toContain(`/magasin-${plan.store.id}-${plan.store.id}-`)
+    // ... et ce n'est pas un nom que le faux site relaie au faux Leclerc complet (il ne servirait pas la page de test)
+    const relayed = /FAKE_LECLERC_HOSTS = \{([^}]*)\}/.exec(read(join(emulatorDir, 'testsite.py')))?.[1] ?? ''
+    expect(relayed).not.toContain(host)
+  })
+
+  it('smoke.sh attend l’hôte et la page de ce plan, et jamais l’ancien hôte de l’accueil comme serveur du magasin', () => {
+    expect(smoke).toContain(`SMOKE_STORE_HOST=${plan.store.host}`)
+    const link = /id="store" href="https:\/\/[^/"]+(\/[^"]*)"/.exec(testPage)?.[1] ?? ''
+    expect(smoke).toContain(`'"path": "${link}"'`)
+    expect(smoke).not.toMatch(/storeHost\\": \\"\$SITE_HOST/)
+  })
+})

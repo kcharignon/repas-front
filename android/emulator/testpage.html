@@ -19,7 +19,7 @@
 <body>
 <h1>Page locale de test</h1>
 <p class="note">Faux site de l'émulateur (DRV-319, DRV-320) : aucune donnée d'enseigne. L'application doit y avoir mis son pont et son agent.</p>
-<p><a id="store" href="/magasin-123456-123456-Ville-Test/accueil.aspx">Choisir mon magasin de test</a></p>
+<p><a id="store" href="https://fd9-courses.leclercdrive.fr/magasin-123456-123456-Ville-Test/mobile-accueil.aspx">Choisir mon magasin de test</a></p>
 <p><a id="fake-leclerc" href="https://courses-test.leclercdrive.fr/magasin-000001-000001-Ville-Test/">Choisir le magasin du faux Leclerc</a></p>
 <ul id="checks"></ul>
 <script>
@@ -57,10 +57,13 @@
     hostHidden: window.repasHost === undefined,
     hostLocked: !!hostProperty && hostProperty.configurable === false && hostProperty.value === undefined,
     desktopAgent: !/Mobile/i.test(navigator.userAgent),
+    // Depuis DRV-754 Leclerc et Auchan gardent l'identité de téléphone de la WebView (version mobile du site) ; seule l'enseigne fictive d'essai est en mode ordinateur.
+    // Ce champ est écrit APRÈS desktopAgent : les relevés que e2e.sh cherche jusqu'à desktopAgent ne changent pas.
+    mobileAgent: /Mobile/i.test(navigator.userAgent),
   }
   show('hidden', 'Le pont repasHost est retiré de la page', facts.hostHidden)
   show('locked', 'La propriété repasHost ne peut plus être redéfinie', facts.hostLocked)
-  show('desktop', 'Mode ordinateur (agent utilisateur sans « Mobile »)', facts.desktopAgent)
+  show('ua', 'Agent utilisateur : ' + (facts.mobileAgent ? 'téléphone (« Mobile »)' : 'ordinateur (sans « Mobile »)'), true)
   show('agent', 'L’agent a affiché son interface', null)
   report(facts)
 

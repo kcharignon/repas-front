@@ -124,32 +124,36 @@ check "l'application n'a aucune permission de stockage ni de caméra" no_storage
 # --- 4. Passage du plan (DRV-314) --------------------------------------------------------------------------------------------------------
 say
 say "4. Passage du plan : drive.start, l'agent, drive.result, abandon, interruption et reprise"
+# Le serveur du magasin d'essai (DRV-754) : un hôte `fd<N>-courses`, le seul que le plan puisse nommer (`RetailerSite.isStoreHost`), et le seul de la version
+# mobile où une page `mobile-….aspx` est une page de magasin. Ce n'est pas `fd8` : celui-là est relayé au faux Leclerc complet (e2e.sh), la page locale de test
+# (testpage.html) est servie sur `fd9`. Le plan du faux Repas (repaspage.html) et le lien de testpage.html portent le même nom.
+SMOKE_STORE_HOST=fd9-courses.leclercdrive.fr
 RUN_A=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
 RUN_B=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
 RUN_C=cccccccc-cccc-4ccc-8ccc-cccccccccccc
 RUN_D=dddddddd-dddd-4ddd-8ddd-dddddddddddd
 RUN_E=eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee
 start_pass() { post_command "{\"do\":\"drive.start\",\"runId\":\"$1\"}"; }
-# Le drive s'ouvre sur l'accueil de l'enseigne (www, la page locale de test ici ; le plan du faux Repas a aussi cet hôte) : l'utilisateur ouvre
-# son magasin lui-même (constat de la recette réelle).
+# Le drive s'ouvre sur l'accueil de l'enseigne (www, la page locale de test ici) : l'agent y pose sa carte « Choisis ton magasin » (étape 1 sur 2, DRV-751) et
+# l'utilisateur ouvre son magasin lui-même (constat de la recette réelle). Le magasin du plan est un serveur `fd<N>-courses` (DRV-754), jamais l'accueil.
 open_home() { # open_home <runId> : drive.start, puis le drive s'ouvre sur l'accueil de l'enseigne, avec le message qui dit d'ouvrir son magasin
   reset_reports
   start_pass "$1"
-  wait_until 40 has_report '"hostname": "www.leclercdrive.fr", "path": "/"' && wait_until 20 ui_has 'Commencer mes courses'
+  wait_until 40 has_report '"hostname": "www.leclercdrive.fr", "path": "/"' && wait_until 20 ui_has 'Choisis ton magasin'
 }
-open_store() { tap 'text="Choisir mon magasin de test"' && wait_until 30 has_report '"path": "/magasin-123456-123456-Ville-Test/accueil.aspx"'; } # l'utilisateur touche son magasin : la page du magasin se charge, le plan part vers l'agent
+open_store() { tap 'text="Choisir mon magasin de test"' && wait_until 30 has_report '"path": "/magasin-123456-123456-Ville-Test/mobile-accueil.aspx"'; } # l'utilisateur touche son magasin : la page du magasin se charge, le plan part vers l'agent
 open_pass() { # open_pass <runId> : drive.start, l'accueil, le magasin ouvert, le plan reçu par l'agent
   open_home "$1" && open_store
 }
 
 say "   a. Jusqu'au résultat de l'agent"
 if open_home "$RUN_A"; then
-  ok "drive.start ouvre le drive sur l'accueil de l'enseigne (la page de départ d'un plan), avec le message « Commencer mes courses »"
+  ok "drive.start ouvre le drive sur l'accueil de l'enseigne (la page de départ d'un plan), avec la carte « Choisis ton magasin » de l'agent"
 else
-  ko "drive.start n'a pas ouvert l'accueil du drive avec son message"
+  ko "drive.start n'a pas ouvert l'accueil du drive avec la carte « Choisis ton magasin »"
 fi
 check "le drive ne s'est jamais ouvert sur /magasin-123456-123456/ (page 404 du vrai site)" not_reported '"path": "/magasin-123456-123456/"'
-check "tant que l'utilisateur n'a pas ouvert son magasin, l'agent n'affiche pas encore le récapitulatif du plan" ui_lacks 'Prêt à remplir ton panier'
+check "tant que l'utilisateur n'a pas ouvert son magasin, l'agent ne parle pas encore de connexion (Leclerc veut le magasin avant la connexion)" ui_lacks 'Connecte-toi'
 screenshot 03a-accueil-du-drive
 if open_store; then
   ok "l'utilisateur touche son magasin (lien touché) : la page du magasin se charge"
@@ -157,15 +161,16 @@ else
   ko "le plan n'est pas arrivé à l'agent une fois le magasin ouvert"
 fi
 check "le magasin ouvert est une page de magasin avec sa ville (/magasin-123456-123456-Ville-Test/…)" \
-  has_report '"path": "/magasin-123456-123456-Ville-Test/accueil.aspx"'
+  has_report '"path": "/magasin-123456-123456-Ville-Test/mobile-accueil.aspx"'
 check "l'écran reste allumé pendant le passage" screen_held
 if wait_until 20 has_report '"kind": "agent-ui", "mounted": true'; then ok "l'agent a monté son interface (après le chargement de la page)"; else ko "l'agent n'a pas monté son interface"; fi
-if wait_until 15 ui_has 'Prêt à remplir ton panier'; then ok "l'agent affiche son récapitulatif, sans que l'utilisateur ait à naviguer"; else ko "l'agent n'a pas affiché son récapitulatif"; fi
+# La page de test n'a ni compte ni session : sur une page de magasin l'agent demande de se connecter et ne va pas plus loin (il n'y a plus de récapitulatif, DRV-648).
+if wait_until 15 ui_has 'Connecte-toi'; then ok "sur la page du magasin, sans session, l'agent demande de se connecter (« Connecte-toi »), sans que l'utilisateur ait à naviguer"; else ko "l'agent n'a pas demandé de se connecter"; fi
 sleep 2
 screenshot 03-passage-agent
-if tap 'text="Annuler"' && tap 'text="Revenir à ma liste dans Repas"'; then ok "« Annuler » puis « Revenir à ma liste dans Repas » touchés dans l'interface de l'agent"; else ko "les boutons de l'agent sont introuvables"; fi
+if tap 'text="Arrêter pour l’instant[^"]*"'; then ok "« Arrêter pour l'instant » touché dans l'interface de l'agent"; else ko "le bouton « Arrêter pour l'instant » de l'agent est introuvable"; fi
 if wait_until 20 result_report "$RUN_A" aborted; then
-  ok "Repas reçoit drive.result : le résultat de l'agent, du même runId (issue « aborted » : l'utilisateur a annulé au récapitulatif)"
+  ok "Repas reçoit drive.result : le résultat de l'agent, du même runId (issue « aborted » : l'utilisateur a arrêté avant de se connecter)"
 else
   ko "Repas n'a pas reçu drive.result"
 fi
@@ -205,7 +210,7 @@ if wait_until 15 has_report_count "\"type\": \"drive.error\", \"code\": \"BUSY\"
 else
   ko "la lecture du magasin pendant un passage n'a pas reçu BUSY"
 fi
-if tap 'text="Reprendre"' && wait_until 40 ui_has 'Commencer mes courses' && tap 'text="Choisir mon magasin de test"' && wait_until 40 has_report_count '"path": "/magasin-123456-123456-Ville-Test/accueil.aspx"' 2 && wait_until 20 has_report_count '"kind": "agent-ui", "mounted": true' 4; then
+if tap 'text="Reprendre"' && wait_until 40 ui_has 'Choisis ton magasin' && tap 'text="Choisir mon magasin de test"' && wait_until 40 has_report_count '"path": "/magasin-123456-123456-Ville-Test/mobile-accueil.aspx"' 2 && wait_until 20 has_report_count '"kind": "agent-ui", "mounted": true' 4; then
   ok "« Reprendre » rouvre le drive sur l'accueil ; une fois le magasin ouvert, le plan est renvoyé à l'agent, qui monte son interface sur chaque page"
 else
   ko "« Reprendre » n'a pas renvoyé le plan"
@@ -237,7 +242,7 @@ RUN_F=ffffffff-ffff-4fff-8fff-ffffffffffff
 RUN_G=99999999-9999-4999-8999-999999999999
 start_setup() { post_command "{\"do\":\"drive.setup\",\"runId\":\"$1\"}"; }
 store_report() { # store_report <runId> : Repas a reçu le magasin lu pour cette lecture (identifiant et hôte du faux site)
-  reports | grep -q "\"runId\": \"$1\", \"resultType\": \"setup-result\", \"lines\": -1, \"hasStore\": true, \"storeId\": \"123456\", \"storeHost\": \"$SITE_HOST\""
+  reports | grep -q "\"runId\": \"$1\", \"resultType\": \"setup-result\", \"lines\": -1, \"hasStore\": true, \"storeId\": \"123456\", \"storeHost\": \"$SMOKE_STORE_HOST\""
 }
 no_setup_yet() { ! has_report '"kind": "agent-ui", "mounted": true'; }
 
@@ -296,7 +301,8 @@ open_drive() {
 }
 if open_drive; then ok "« Ouvrir le drive Leclerc » ouvre l'écran du drive, qui a chargé la page locale"; else ko "l'écran du drive ne s'est pas ouvert"; fi
 loaded=$(reports)
-for fact in '"topFrame": true' '"hostHidden": true' '"hostLocked": true' '"desktopAgent": true'; do
+# Leclerc passe par la version mobile de son site (DRV-754) : la WebView du drive garde son identité de téléphone (« Mobile »), plus de mode ordinateur imposé.
+for fact in '"topFrame": true' '"hostHidden": true' '"hostLocked": true' '"desktopAgent": false' '"mobileAgent": true'; do
   if grep -q "$fact" <<< "$loaded"; then ok "relevé du drive : $fact"; else ko "relevé du drive manquant : $fact"; fi
 done
 sleep 2
@@ -350,6 +356,9 @@ else
 fi
 sleep 3
 screenshot 09-diagnostic-agent
+# La boîte native du diagnostic s'ouvre toujours (DRV-759) et dit ce que l'application sait de l'agent ; « OK » la ferme (sinon elle reste devant l'écran du drive).
+if wait_until 10 ui_has 'Agent annoncé : 1 fois'; then ok "la boîte « Diagnostic de l'agent » dit que l'agent s'est annoncé (1 fois) sur la page de test"; else ko "la boîte de diagnostic n'a pas relevé l'agent"; fi
+if tap 'text="OK"' && wait_until 10 ui_lacks 'Agent annoncé'; then ok "« OK » ferme la boîte de diagnostic"; else ko "la boîte de diagnostic est restée ouverte"; fi
 
 # --- 7. Test automatique : aller-retour complet --------------------------------------------------------------------------------------
 say
