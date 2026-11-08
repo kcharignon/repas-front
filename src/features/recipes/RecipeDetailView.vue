@@ -29,6 +29,7 @@ import {
 } from '@/features/ingredients/departmentMarkers'
 import type { EquationValue } from '@/features/ingredients/equationMath'
 import OwnConversionSheet from '@/features/ingredients/OwnConversionSheet.vue'
+import { countsFor } from '@/features/ingredients/partsText'
 import { useUnits } from '@/features/ingredients/queries'
 import { useSessionStore } from '@/session/session'
 import { formatQuantity } from '@/features/shopping-lists/format'
@@ -354,6 +355,10 @@ function confirmDelete() {
                   class="text-sm text-muted"
                   >{{ row.departmentName }}</span
                 >
+                <!-- Une partie d'un ingrédient (SUB-007) : une mention discrète, pas une alerte -->
+                <span v-if="row.partOfName" data-testid="row-part-of" class="text-sm text-muted">{{
+                  t('recipes.partMention', { counts: countsFor(row.partOfName) })
+                }}</span>
               </span>
               <span class="text-sm font-semibold text-muted">{{
                 formatQuantity(row.quantity, row.unitSymbol)

@@ -95,6 +95,10 @@ Passer par `useCopyRecipeAction` (`src/features/recipes/`) : la copie ne navigue
 
 Voir `CLAUDE.md` (« Version commune… », MAR-005) : `useRecipeStance` pour savoir à qui est une fiche, `findOwnCopy` pour la copie de l'administrateur, `useDeleteRecipe(true)` quand l'écran dit lui-même ses refus. Mot à l'écran : « version commune ».
 
+### 4.7 Découper un ingrédient en parties (SUB-007)
+
+Rien à recopier : `IngredientPartsSection.vue` (fiche d'un entier à soi), `PartSheet.vue` / `PartRatioSheet.vue`, `partsText.ts` (toutes les phrases accordées : « 1 œuf = 1 jaune d'œuf », `countsIn`, `countsFor`, `parseRatio`), `shopping-lists/includes.ts` (« Comprend … »). Règles : le parent envoyé est toujours la fiche ouverte ; les champs `parts`, `partOf`, `partOf*`, `includes` se lisent comme facultatifs ; « partie » et « découper », jamais « sous-ingrédient » ni « parent » ; un refus du back a sa phrase dans `partCodes` (`failures.ts`) ; une carte-bouton dont le texte est visible ne change pas son nom accessible par `aria-label` (axe `label-content-name-mismatch` : ajouter un `sr-only` à la suite du texte visible).
+
 ## 5. Definition of Done
 
 - [ ] `make check` vert (lint, format, `api-check`, types, tests) ; `make quality` avant la PR ; seuil de couverture non abaissé

@@ -268,3 +268,21 @@ describe('messageForFailure', () => {
     vi.useRealTimers()
   })
 })
+
+describe('messageForFailure : le découpage d’un ingrédient en parties (SUB-007)', () => {
+  it.each([
+    [422, 'INGREDIENT_PART_OF_ITSELF', 'Un ingrédient ne peut pas être sa propre partie.'],
+    [422, 'INGREDIENT_PART_CHAIN', 'Une partie n’a pas de parties. Choisis un ingrédient entier.'],
+    [422, 'INGREDIENT_PART_LIMIT_REACHED', 'Tu as déjà dix parties pour cet ingrédient.'],
+    [
+      409,
+      'INGREDIENT_PART_IN_LIST',
+      'Cet ingrédient est dans une liste en cours. Termine la liste, puis recommence.',
+    ],
+    [422, 'INGREDIENT_PART_RATIO_INVALID', 'Mets un nombre plus grand que zéro.'],
+    // Le corps de la requête met le champ devant le code
+    [422, 'ratio: INGREDIENT_PART_RATIO_INVALID', 'Mets un nombre plus grand que zéro.'],
+  ])('%i %s : une phrase, jamais le code', (status, code, expected) => {
+    expect(messageForFailure(new ApiError(status, code))).toBe(expected)
+  })
+})

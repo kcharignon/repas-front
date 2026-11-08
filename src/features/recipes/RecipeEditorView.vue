@@ -112,14 +112,22 @@ const options = computed(() => {
   const members = [...listed, ...missing.values()]
   const ambiguous = namesInSeveralDepartments(members, (option) => option)
 
-  return members.map((option) => ({
-    value: option.slug,
-    label: option.name,
-    icon: iconOf(option.departmentSlug),
-    ...(isAmbiguousName(ambiguous, option.name) && option.departmentName
-      ? { hint: option.departmentName }
-      : {}),
-  }))
+  return members.map((option) => {
+    // Sous le nom : son rayon quand ce nom existe dans deux rayons, et de quoi il est une partie (SUB-007)
+    const hint = [
+      isAmbiguousName(ambiguous, option.name) && option.departmentName ? option.departmentName : '',
+      option.partOfName ? t('ingredients.parts.partOf', { name: option.partOfName }) : '',
+    ]
+      .filter((part) => part !== '')
+      .join(' · ')
+
+    return {
+      value: option.slug,
+      label: option.name,
+      icon: iconOf(option.departmentSlug),
+      ...(hint !== '' ? { hint } : {}),
+    }
+  })
 })
 
 const errors = computed(() => {

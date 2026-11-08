@@ -239,6 +239,42 @@ export default {
       canConvert: 'La recette peut se convertir en {unit}.',
       missing: 'Il manque une conversion entre {cooking} et {purchase}.',
     },
+    // Découper un ingrédient en parties (SUB-007, ADR 0038 du back) : « Jaune d'œuf » est une partie d'« Œuf ». À l'écran on dit « partie »
+    // et « découper », pas autre chose
+    parts: {
+      title: 'Ses parties',
+      empty:
+        'Un œuf, c’est un jaune et un blanc. Ajoute les parties de « {name} » : elles comptent dans ta liste.',
+      add: 'Ajouter une partie',
+      change: 'Changer le nombre',
+      detachNamed: 'Ne plus faire de « {name} » une partie',
+      detached: '« {name} » n’est plus une partie.',
+      sheetTitle: 'Ajouter une partie',
+      search: 'Chercher un ingrédient à toi',
+      choices: 'Tes ingrédients',
+      noMatch: 'Aucun ingrédient ne ressemble à « {search} ».',
+      newPart: 'Nouvelle partie',
+      newName: 'Nom de la partie',
+      how: 'Combien dans {one} ?',
+      submit: 'Ajouter',
+      notLinked: '« {name} » est créé, mais ce n’est pas encore une partie.',
+      partOf: 'Partie de : {name}',
+      // Une partie ajoutée à la main (recherche des rayons) compte dans son entier : « Ça fait 3 œufs dans ta liste. »
+      added: 'C’est ajouté. Ça fait {count} {name} dans ta liste.',
+      addedTo: 'C’est ajouté à {counts}.',
+      partOfHelp: 'Ça ne s’achète pas tout seul : ça compte dans {counts}.',
+      unpart: 'Ne plus en faire une partie',
+      errors: {
+        choice: 'Choisis un ingrédient, ou crée une nouvelle partie.',
+        name: 'Donne un nom à la partie.',
+        number: 'Mets un nombre plus grand que zéro.',
+        // Les refus du back (INGREDIENT_PART_*) : le code n'est jamais montré
+        ofItself: 'Un ingrédient ne peut pas être sa propre partie.',
+        chain: 'Une partie n’a pas de parties. Choisis un ingrédient entier.',
+        limit: 'Tu as déjà dix parties pour cet ingrédient.',
+        inList: 'Cet ingrédient est dans une liste en cours. Termine la liste, puis recommence.',
+      },
+    },
     // Ingrédients à régler : pas de conversion entre l'unité des recettes et celle du magasin
     toFix: {
       title: 'Ingrédients à régler',
@@ -324,6 +360,11 @@ export default {
         USED_BY_ANOTHER_USER: 'Quelqu’un d’autre utilise « {name} ». Rien n’a changé.',
         IN_SENT_LIST:
           'Une liste envoyée au drive utilise l’un des deux. Rouvre-la ou termine-la, puis fusionne.',
+        // Un ingrédient découpé en parties (SUB-004 du back) : trois phrases, ce qui est sauf, ce qu'il reste à faire
+        PART_CONFLICT:
+          'Leurs parties ne vont pas ensemble. Rien n’a changé. Retire les parties de l’un des deux, puis fusionne.',
+        PART_IN_LIST:
+          'Une liste en cours contient l’un des deux avec ses parties. Rien n’a changé. Termine la liste, puis fusionne.',
       },
       blockedOther: 'Ces deux ingrédients ne peuvent pas être fusionnés. Rien n’a changé.',
     },
@@ -357,6 +398,8 @@ export default {
     toFix: '{count} à régler',
     toFixHint: 'Va au premier ingrédient à régler',
     cannotConvert: 'Je ne sais pas convertir en {unit}',
+    // La ligne d'une recette qui est une partie d'un ingrédient (« 2 jaunes d'œuf ») : elle compte pour des œufs dans la liste
+    partMention: 'compte pour {counts}',
     fix: 'Régler',
     fixNamed: 'Régler la conversion de {name}',
     blockedHint: 'Règle d’abord les ingrédients signalés.',
@@ -479,6 +522,8 @@ export default {
     sentBadge: 'Envoyée',
     sentOn: 'Envoyée au drive le {date}',
     sentHelp: 'Cette liste est envoyée au drive : elle n’est plus modifiable.',
+    // Ce que la ligne d'un ingrédient découpé contient (« Œuf 5 » : « Comprend 2 jaunes d'œuf et 2 blancs d'œuf. »)
+    includes: 'Comprend {list}.',
     // DRV-747 : plus aucun article non coché, l'envoi n'a plus rien à prendre
     allChecked: 'Tout est coché : il n’y a plus rien à envoyer au drive.',
     resumeSend: 'Reprendre l’envoi',

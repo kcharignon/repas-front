@@ -151,6 +151,111 @@ describe('DepartmentsView : recherche', () => {
       .filter((url) => url.pathname === '/api/v1/ingredients/search')
       .map((url) => url.searchParams.get('q'))
 
+  it('dit de quoi un ingrédient trouvé est une partie (SUB-007), et rien pour les autres', async () => {
+    const { wrapper } = await search({
+      'GET /api/v1/ingredients/search': () =>
+        json({
+          member: [
+            { ...found.member[0], partOfSlug: null, partOfName: null },
+            { ...found.member[1], partOfSlug: 'oeuf', partOfName: 'Œuf' },
+          ],
+          totalItems: 2,
+        }),
+    })
+
+    await type(wrapper, 'tom')
+    await vi.waitFor(() => expect(wrapper.text()).toContain('sauce tomate'))
+
+    const lines = wrapper.findAll('li')
+    expect(lines[0]?.text()).not.toContain('Partie de')
+    expect(lines[1]?.text()).toContain('Partie de : Œuf')
+  })
+
+  describe('une partie ajoutée à la main (SUB-007)', () => {
+    const oeuf = {
+      slug: 'oeuf',
+      name: 'Œuf',
+      purchaseUnitSymbol: '',
+      canEdit: true,
+      departmentSlug: 'legumes',
+      departmentName: 'Fruits et légumes',
+      departmentImage: 'images/legumes.png',
+      partOfSlug: null,
+      partOfName: null,
+    }
+    const jaune = {
+      ...oeuf,
+      slug: 'jaune',
+      name: "Jaune d'œuf",
+      partOfSlug: 'oeuf',
+      partOfName: 'Œuf',
+    }
+    const searching = async (members: unknown[], totals: { value: Record<string, number> }) => {
+      const { wrapper, fetchMock } = await search({
+        'GET /api/v1/ingredients/search': () =>
+          json({ member: members, totalItems: members.length }),
+        'GET /api/v1/shopping-lists/active/summary': () => json(summary(totals.value)),
+        'POST /api/v1/shopping-lists/active/ingredients/jaune/increase': () => {
+          totals.value = { oeuf: 3 }
+
+          return new Response(null, { status: 204 })
+        },
+      })
+      await type(wrapper, 'oeuf')
+      await vi.waitFor(() => expect(wrapper.text()).toContain("Jaune d'œuf"))
+
+      return { wrapper, fetchMock }
+    }
+    const lineOf = (wrapper: ReturnType<typeof mount>, name: string) =>
+      wrapper.findAll('li').find((item) => item.text().includes(name))
+
+    it('ne garde que le « + » : ni « − » ni compteur à 0, qui laisseraient croire que rien ne s’est passé', async () => {
+      const { wrapper } = await searching([oeuf, jaune], { value: { oeuf: 2 } })
+
+      const part = lineOf(wrapper, "Jaune d'œuf")
+      expect(part?.find('button[aria-label^="Un de plus"]').exists()).toBe(true)
+      expect(part?.find('button[aria-label^="Un de moins"]').exists()).toBe(false)
+      expect(part?.find('[aria-live="polite"]').exists()).toBe(false)
+      // L'entier garde son compteur et ses deux boutons
+      const whole = lineOf(wrapper, 'Œuf')
+      expect(whole?.find('button[aria-label^="Un de moins"]').exists()).toBe(true)
+      expect(whole?.find('[aria-live="polite"]').text()).toBe('2')
+    })
+
+    it('ajoute 1 à la partie, puis dit le total de son entier lu dans la liste relue', async () => {
+      const totals = { value: { oeuf: 2 } as Record<string, number> }
+      const { wrapper, fetchMock } = await searching([oeuf, jaune], totals)
+
+      await lineOf(wrapper, "Jaune d'œuf")
+        ?.find('button[aria-label^="Un de plus"]')
+        .trigger('click')
+      await vi.waitFor(() =>
+        expect(useNotificationsStore().items.map((item) => item.text)).toEqual([
+          'C’est ajouté. Ça fait 3 œufs dans ta liste.',
+        ]),
+      )
+
+      expect(calls(fetchMock)).toContain(
+        'POST /api/v1/shopping-lists/active/ingredients/jaune/increase',
+      )
+    })
+
+    it('ne devine pas un total qu’il ne connaît pas : il nomme seulement l’entier', async () => {
+      const totals = { value: { oeuf: 2 } as Record<string, number> }
+      // L'entier n'est pas dans les résultats : son unité n'est pas connue
+      const { wrapper } = await searching([jaune], totals)
+
+      await lineOf(wrapper, "Jaune d'œuf")
+        ?.find('button[aria-label^="Un de plus"]')
+        .trigger('click')
+      await vi.waitFor(() =>
+        expect(useNotificationsStore().items.map((item) => item.text)).toEqual([
+          'C’est ajouté à tes œufs.',
+        ]),
+      )
+    })
+  })
+
   it("montre les ingrédients trouvés dans l'ordre du back, avec l'icône et le nom de leur rayon", async () => {
     const { wrapper } = await search()
 

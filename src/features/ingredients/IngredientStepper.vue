@@ -11,6 +11,11 @@ defineProps<{
   unitSymbol: string
   /** Un changement est en cours : les boutons attendent. */
   busy: boolean
+  /**
+   * Seulement « + » : une partie d'un ingrédient (SUB-007) n'est jamais une ligne de la liste, elle se plie dans son entier. Son ajout
+   * à la main compte dans l'entier ; ni quantité à elle à montrer (elle resterait à 0) ni « − » (le retrait se fait sur l'entier).
+   */
+  plusOnly?: boolean
 }>()
 
 defineEmits<{ less: []; more: [] }>()
@@ -24,6 +29,7 @@ const stepClass =
 <template>
   <span class="inline-flex items-center rounded-2xl border-[1.5px] border-line">
     <button
+      v-if="!plusOnly"
       type="button"
       :aria-label="t('ingredients.less', { name })"
       :disabled="quantity <= 0 || busy"
@@ -32,7 +38,7 @@ const stepClass =
     >
       <Minus class="size-5" aria-hidden="true" />
     </button>
-    <span class="min-w-14 text-center text-base font-bold" aria-live="polite">{{
+    <span v-if="!plusOnly" class="min-w-14 text-center text-base font-bold" aria-live="polite">{{
       formatQuantity(quantity, unitSymbol)
     }}</span>
     <button

@@ -149,3 +149,45 @@ describe('ShoppingListView : le rayon des lignes', () => {
     expect(box.element.closest('label')?.querySelector('[data-department-marker]')).not.toBeNull()
   })
 })
+
+describe('ShoppingListView : ce que la ligne d’un ingrédient découpé contient (SUB-007)', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  const included = (name: string, quantity: number) => ({ name, quantity, unitSymbol: '' })
+
+  it('dit « Comprend 2 jaunes d’œuf et 2 blancs d’œuf. » sous « Œuf 5 », et rien sous les autres lignes', async () => {
+    const wrapper = await open(
+      listWith([
+        {
+          slug: 'cremerie',
+          name: 'Crémerie',
+          rows: [
+            {
+              ...row('r1', 'Œuf'),
+              quantity: 5,
+              unitSymbol: '',
+              includes: [included("Jaune d'œuf", 2), included("Blanc d'œuf", 2)],
+            },
+            { ...row('r2', 'Beurre'), includes: [] },
+          ],
+        },
+      ]),
+    )
+
+    const egg = lineOf(wrapper, 'Œuf')
+    expect(egg?.find('[data-testid="row-includes"]').text()).toBe(
+      "Comprend 2 jaunes d'œuf et 2 blancs d'œuf.",
+    )
+    expect(egg?.text()).toContain('5')
+    expect(lineOf(wrapper, 'Beurre')?.find('[data-testid="row-includes"]').exists()).toBe(false)
+  })
+
+  it('ne change rien quand le back ne dit pas « includes » (un compte sans partie, un back plus ancien)', async () => {
+    const wrapper = await open(
+      listWith([{ slug: 'legumes', name: 'Fruits et légumes', rows: [row('r1', 'Courgette')] }]),
+    )
+
+    expect(wrapper.find('[data-testid="row-includes"]').exists()).toBe(false)
+    expect(lineOf(wrapper, 'Courgette')?.text()).toBe('Courgette2 kg')
+  })
+})

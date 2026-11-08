@@ -128,3 +128,35 @@ describe('RecipeEditorView : le rayon de l’ingrédient choisi', () => {
     expect(wrapper.find('[data-department-marker]').exists()).toBe(false)
   })
 })
+
+describe('RecipeEditorView : une partie d’un ingrédient (SUB-007)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    document.body.innerHTML = ''
+  })
+
+  it('dit de quoi l’ingrédient choisi est une partie, avec son rayon quand son nom existe dans deux rayons', async () => {
+    const wrapper = await edit(
+      [
+        {
+          ...ingredient('jaune', "Jaune d'œuf", 'legumes', 'Fruits et légumes'),
+          partOfName: 'Œuf',
+        },
+        { ...ingredient('pois-a', 'Petits pois', 'surgele', 'Surgelés'), partOfName: 'Pois' },
+        ingredient('pois-b', 'Petits pois', 'legumes', 'Fruits et légumes'),
+        ingredient('oignon', 'Oignon', 'legumes', 'Fruits et légumes'),
+      ],
+      [
+        rowOf('jaune', "Jaune d'œuf"),
+        rowOf('pois-a', 'Petits pois'),
+        rowOf('pois-b', 'Petits pois'),
+        rowOf('oignon', 'Oignon'),
+      ],
+    )
+
+    expect(caption(wrapper, 0)?.text()).toBe('Partie de : Œuf')
+    expect(caption(wrapper, 1)?.text()).toBe('Surgelés · Partie de : Pois')
+    expect(caption(wrapper, 2)?.text()).toBe('Fruits et légumes')
+    expect(caption(wrapper, 3)?.exists()).toBe(false)
+  })
+})

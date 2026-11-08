@@ -722,6 +722,64 @@ describe("l'ingrédient de base (ING-015)", () => {
   })
 })
 
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Découper un ingrédient en parties (SUB-007)
+//
+// À l'écran on dit « partie » et « découper » : jamais « sous-ingrédient » ni « parent » (ADR 0038 du back, décision 1). Les textes du
+// groupe, ceux de la ligne de liste et de la ligne de recette, et les trois phrases de refus de la fusion sont lus : tutoiement (déjà
+// vérifié sur tout `fr.ts`), aucun avertissement, 15 mots au plus par phrase.
+
+const PARTS_KEYS = [
+  'ingredients.parts.',
+  'shoppingList.includes',
+  'recipes.partMention',
+  'ingredients.merge.blocked.PART_',
+] as const
+
+describe('découper un ingrédient en parties (SUB-007)', () => {
+  const lues = sources.web.filter((entry) =>
+    PARTS_KEYS.some((key) => entry.where.includes(` ${key}`)),
+  )
+
+  it('lit tous les textes des parties', () => {
+    expect(lues.length).toBeGreaterThan(25)
+  })
+
+  it('ne dit ni « sous-ingrédient » ni « parent »', () => {
+    const interdits = lues.filter((entry) =>
+      /sous-ingr|(?<![\p{L}])parents?(?![\p{L}])/iu.test(entry.text),
+    )
+    expect(interdits.map((entry) => entry.where)).toEqual([])
+  })
+
+  it('ne dit aucun avertissement ni rassurance de trop', () => {
+    expect(lues.flatMap((entry) => warnings(entry.where, entry.text))).toEqual([])
+  })
+
+  it('tient chaque phrase en 15 mots au plus', () => {
+    const trop = lues.flatMap((entry) =>
+      entry.text
+        // Les mots entre accolades sont des noms ou des listes, ils ne comptent pas
+        .replace(/\{[^}]+\}/g, 'x')
+        .split(/(?<=[.!?…])\s+/)
+        .filter((sentence) => sentence.trim().split(/\s+/).length > 15)
+        .map((sentence) => `${entry.where} : « ${sentence} »`),
+    )
+    expect(trop).toEqual([])
+  })
+
+  it('dit les refus du back en une à trois phrases', () => {
+    const refus = lues.filter(
+      (entry) => entry.where.includes('parts.errors.') || entry.where.includes('blocked.PART_'),
+    )
+    expect(refus.length).toBe(9)
+    const longs = refus
+      .filter((entry) => entry.text.split(/(?<=[.!?…])\s+/).length > 3)
+      .map((entry) => entry.where)
+    expect(longs).toEqual([])
+  })
+})
+
 describe('le nom d’une enseigne est un paramètre (DRV-708)', () => {
   const texts = webEntries()
 

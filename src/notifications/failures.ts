@@ -53,6 +53,21 @@ const conversionCodes = new Map([
   ['CONVERSION_REQUIRED_BY_INGREDIENT', 'errors.conversionRequired'],
 ])
 
+/**
+ * Le découpage d'un ingrédient en parties (SUB-007, ADR 0038 du back) : chaque refus a sa phrase, quel que soit le statut (le 409 d'une liste
+ * en cours n'est pas « une autre modification en cours »). Le corps de la requête préfixe le code du nombre (`ratio: INGREDIENT_PART_RATIO_INVALID`).
+ */
+const partCodes = new Map([
+  ['INGREDIENT_PART_OF_ITSELF', 'ingredients.parts.errors.ofItself'],
+  ['INGREDIENT_PART_CHAIN', 'ingredients.parts.errors.chain'],
+  ['INGREDIENT_PART_LIMIT_REACHED', 'ingredients.parts.errors.limit'],
+  ['INGREDIENT_PART_IN_LIST', 'ingredients.parts.errors.inList'],
+  ['INGREDIENT_PART_RATIO_INVALID', 'ingredients.parts.errors.number'],
+])
+
+/** Le code d'un refus, sans le champ que le corps de la requête met devant (`ratio: CODE`). */
+const bareCode = (message: string) => message.replace(/^\w+:\s+/, '')
+
 /** Les plafonds et les bornes des recettes, ingrédients, listes et conversions (422) : chacun dit sa limite, au lieu du code brut. */
 const limitCodes = new Map([
   ['RECIPE_LIMIT_REACHED', 'limits.recipeLimitReached'],
@@ -118,6 +133,7 @@ export function messageForFailure(error: unknown): string {
     conversionCodes.get(error.message) ??
     listTypeCodes.get(error.message) ??
     marmitonCodes.get(error.message) ??
+    partCodes.get(bareCode(error.message)) ??
     limitCodes.get(error.message)
   if (code !== undefined) return t(code)
 

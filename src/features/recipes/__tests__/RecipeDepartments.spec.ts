@@ -155,3 +155,25 @@ describe('RecipeDetailView : le rayon des ingrédients', () => {
     expect(wrapper.find('[data-department-marker]').exists()).toBe(false)
   })
 })
+
+describe('RecipeDetailView : une ligne qui est une partie d’un ingrédient (SUB-007)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    document.body.innerHTML = ''
+  })
+
+  it('dit discrètement qu’elle compte pour des œufs, sans alerte, et rien sur les autres lignes', async () => {
+    const wrapper = await open([
+      { ...row('jaune', "Jaune d'œuf", 'legumes', 'Fruits et légumes'), partOfName: 'Œuf' },
+      { ...row('creme', 'Crème', 'legumes', 'Fruits et légumes'), partOfName: 'Crème fraîche' },
+      { ...row('oignon', 'Oignon', 'legumes', 'Fruits et légumes'), partOfName: null },
+    ])
+
+    const mentions = wrapper.findAll('li').map((line) => line.find('[data-testid="row-part-of"]'))
+    expect(mentions[0]?.text()).toBe('compte pour des œufs')
+    // Un nom dont on n'est pas sûr du pluriel est cité tel quel
+    expect(mentions[1]?.text()).toBe('compte pour « Crème fraîche »')
+    expect(mentions[2]?.exists()).toBe(false)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+  })
+})

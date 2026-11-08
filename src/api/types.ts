@@ -18,6 +18,11 @@ export type Ingredient = Schemas['IngredientDTO']
 export type IngredientOption = Schemas['IngredientOptionDTO']
 export type IngredientPayload = Schemas['IngredientPayload']
 
+// Ingrédients découpés en parties (SUB-007, ADR 0038 du back) : « Jaune d'œuf » est une partie d'« Œuf »
+export type IngredientPart = Schemas['IngredientPartDTO']
+export type IngredientPartOf = Schemas['IngredientPartOfDTO']
+export type ShoppingListRowInclude = Schemas['ShoppingListRowIncludeDTO']
+
 // Ingrédients : doublons possibles et fusion (ING-005, ING-006, ING-007)
 export type DuplicatePair = Schemas['DuplicateIngredientDTO']
 export type DuplicateSide = Schemas['DuplicateIngredientSideDTO']
