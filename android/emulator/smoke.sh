@@ -96,6 +96,31 @@ if reports | grep -q '"hostname": "example.org"'; then ko "la coquille a chargé
 adb shell am start -n "$APP/.MainActivity" > /dev/null
 sleep 2
 
+# --- 3b. Le sélecteur de fichiers (bloc d'image de l'administrateur) ----------------------------------------------------------------------
+say
+say "3b. Le sélecteur de fichiers : choisir une image, annuler, rouvrir (aucune permission demandée)"
+# Une vraie image PNG de 70 octets dans le téléphone ; la page du faux Repas a le même champ que ImageField.vue (un bouton qui touche un champ caché).
+emu sh -c 'printf "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" | base64 -d > /tmp/pixel.png'
+adb push /tmp/pixel.png /sdcard/Download/pixel.png > /dev/null
+adb shell "am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Download/pixel.png" > /dev/null
+picker_open() { ui_has 'com.google.android.providers.media.module'; }
+reset_reports
+if tap 'text="Envoyer une image"' && wait_until 15 picker_open; then ok "« Envoyer une image » ouvre le sélecteur du système"; else ko "le sélecteur du système ne s'est pas ouvert"; fi
+screenshot 03b-selecteur
+if tap 'content-desc="Cancel"'; then ok "annuler touché dans le sélecteur"; else ko "le bouton d'annulation du sélecteur est introuvable"; fi
+if wait_until 10 has_report '"kind": "file", "state": "cancelled"'; then ok "annuler rend « aucun fichier » à la page (le champ n'est pas bloqué)"; else ko "la page n'a pas reçu l'annulation"; fi
+if tap 'text="Envoyer une image"' && wait_until 15 picker_open; then ok "après l'annulation, le bouton ouvre de nouveau le sélecteur"; else ko "le bouton est resté bloqué après l'annulation"; fi
+if tap 'resource-id="com.google.android.providers.media.module:id/icon_thumbnail"'; then ok "image touchée dans le sélecteur"; else ko "aucune image dans le sélecteur"; fi
+if wait_until 15 has_report '"kind": "file", "state": "chosen", "type": "image/png", "size": 70, "read": 70, "png": true'; then
+  ok "la page reçoit l'image choisie et la lit en entier (70 octets, signature PNG), sans autorisation de lecture du stockage"
+else
+  ko "la page n'a pas reçu l'image choisie"
+fi
+check "le champ de la page dit « Image prête »" ui_has 'Image prête'
+screenshot 03c-image-prete
+no_storage_permission() { ! adb shell dumpsys package "$APP" | grep -E 'READ_EXTERNAL_STORAGE|READ_MEDIA|CAMERA' | grep -q 'granted=true'; }
+check "l'application n'a aucune permission de stockage ni de caméra" no_storage_permission
+
 # --- 4. Passage du plan (DRV-314) --------------------------------------------------------------------------------------------------------
 say
 say "4. Passage du plan : drive.start, l'agent, drive.result, abandon, interruption et reprise"
