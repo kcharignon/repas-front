@@ -20,6 +20,8 @@ export const recipeKeys = {
   favorites: ['recipes', 'favorites'] as const,
   others: (search: string) => ['recipes', 'others', search] as const,
   detail: (id: string) => ['recipes', 'detail', id] as const,
+  /** La copie que l'administrateur a faite d'une version commune (MAR-005) */
+  ownCopy: (commonId: string) => ['recipes', 'own-copy', commonId] as const,
 }
 
 export function useRecipeTypes() {
@@ -203,11 +205,16 @@ export function useImportMarmitonRecipe() {
   })
 }
 
-export function useDeleteRecipe() {
+/**
+ * Supprime une recette. `silent` : l'écran dit lui-même chaque refus (la suppression de la version commune d'une recette Marmiton,
+ * MAR-005, où un 409 ouvre sa propre fenêtre) au lieu du message commun des écritures.
+ */
+export function useDeleteRecipe(silent = false) {
   const { api } = useSessionStore()
   const queryClient = useQueryClient()
 
   return useMutation({
+    meta: { silent },
     mutationFn: ({ id }: { id: string }) =>
       unwrap(api.DELETE('/api/v1/recipes/{id}', { params: { path: { id } } })),
     onSettled: () => queryClient.invalidateQueries({ queryKey: recipeKeys.all }),

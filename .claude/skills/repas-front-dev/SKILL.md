@@ -91,6 +91,10 @@ Utiliser `<UiTextInput capitalize-first …/>` (ADR 0018) : la première lettre 
 
 Passer par `useCopyRecipeAction` (`src/features/recipes/`) : la copie ne navigue pas, un message confirme, le bouton de la recette passe à « Copiée » (`copiedRecipes`, en mémoire, vidé par `forgetAccountData`). Sur la fiche, le jeu d'actions dépend de la propriété déduite de SES recettes (`mine | other | unknown`) : jamais d'action tant qu'elle est inconnue, « Copier » seul pour un autre, `PlanButton`/Modifier/Supprimer pour soi (ADR 0017, amendement du 2026-10-30).
 
+### 4.6 La version commune d'une recette Marmiton
+
+Voir `CLAUDE.md` (« Version commune… », MAR-005) : `useRecipeStance` pour savoir à qui est une fiche, `findOwnCopy` pour la copie de l'administrateur, `useDeleteRecipe(true)` quand l'écran dit lui-même ses refus. Mot à l'écran : « version commune ».
+
 ## 5. Definition of Done
 
 - [ ] `make check` vert (lint, format, `api-check`, types, tests) ; `make quality` avant la PR ; seuil de couverture non abaissé
