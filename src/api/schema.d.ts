@@ -186,26 +186,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/recipes/import/marmiton": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Copie une recette de Marmiton dans celles de l'utilisateur connecté
-         * @description CONTRAT PROVISOIRE (ADR 0037 du back, MAR-003) : à remplacer par `npm run api:update` après la release du back. Le lien de la page est analysé strictement ; l'utilisateur ne choisit jamais l'adresse appelée. Chaque erreur porte une constante comme message (`{error:{message}}`).
-         */
-        post: operations["post_api_import_marmiton_recipe"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/recipes/{id}/copy": {
         parameters: {
             query?: never;
@@ -653,6 +633,26 @@ export interface paths {
          */
         put: operations["put_api_update_unit"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recipes/import/marmiton": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copie une recette Marmiton chez l'utilisateur connecté, à partir du lien de sa page
+         * @description Seul l'identifiant de la recette est retenu du lien (`MarmitonUrl`) : la page lue est celle que l'application reconstruit, jamais l'adresse reçue. Si la recette n'a jamais été importée, sa page est lue une fois et une recette NEUTRE est créée pour tous (sans propriétaire, ordinaire, visible dans « Recettes des autres », qu'aucun compte ne modifie, administrateur compris) ; si elle existe déjà, Marmiton n'est pas appelé. L'utilisateur reçoit SA copie de la neutre, par le même rapprochement d'ingrédients que `POST /recipes/{id}/copy`, modifiable, avec le lien d'origine (`sourceUrl` de `GET /recipes/{id}`). Une ligne dont l'unité ne se convertit pas en l'unité d'achat n'empêche pas la copie : la fiche dit `convertible: false`. S'il a déjà une copie de cette recette, elle lui est rendue (`200`), rien n'est écrit.
+         */
+        post: operations["post_api_import_marmiton_recipe"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1653,6 +1653,14 @@ export interface components {
         };
         GetMergePreviewRequestQuery: {
             into: string;
+        };
+        ImportMarmitonRecipePayload: {
+            /**
+             * @description Le lien de la recette Marmiton collé par la personne (la page de la recette, par exemple `https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx`). Seul l'identifiant de la recette est retenu : l'adresse lue est reconstruite, jamais celle-ci. 2 000 caractères au plus (`422` sinon)
+             * @default null
+             * @example https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx
+             */
+            url: string | null;
         };
         ListAvailableIngredientsRequestQuery: {
             /** @default null */
@@ -2716,13 +2724,6 @@ export interface components {
              */
             departmentName: string;
         };
-        ImportMarmitonRecipePayload: {
-            /**
-             * @description Adresse de la page de la recette sur marmiton.org
-             * @example https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx
-             */
-            url: string;
-        };
         RecipeDTO: {
             /**
              * @description Identifiant de la recette
@@ -2753,11 +2754,6 @@ export interface components {
              * @example false
              */
             favorite: boolean;
-            /**
-             * @description Adresse de la page d'origine d'une recette copiée de Marmiton (`https://www.marmiton.org/recettes/recette_{nom}_{id}.aspx`), reprise par toutes ses copies ; `null` pour toute autre recette. Toujours écrit. CONTRAT PROVISOIRE (ADR 0037 du back, MAR-003) : à remplacer par `npm run api:update` après la release du back
-             * @example https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx
-             */
-            sourceUrl: string | null;
             /** @description Ingrédients de la recette, dans l'ordre de la recette (celui de la saisie) */
             rows: components["schemas"]["RecipeRowDTO"][];
             /**
@@ -2765,6 +2761,11 @@ export interface components {
              * @example 3
              */
             version: number;
+            /**
+             * @description L'adresse de la page Marmiton dont la recette vient (ADR 0037 décision 10), reprise par chacune de ses copies, copies de copies comprises ; `null` pour toute autre recette. Toujours écrit. Le front en fait un bouton « Voir sur Marmiton » (texte et icône de lien externe, ouvert dans un nouvel onglet avec `rel="noopener noreferrer"`) seulement pour une adresse de la forme `https://www.marmiton.org/recettes/recette_{nom}_{id}.aspx`. Jamais écrite par un corps de requête
+             * @example https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx
+             */
+            sourceUrl?: string | null;
         };
         RecipeTypeDTO: {
             /**
@@ -3076,7 +3077,7 @@ export interface components {
              */
             typeSlug: string;
             /**
-             * @description Recette copiée de Marmiton (la recette neutre de l'ADR 0037). Toujours écrit. CONTRAT PROVISOIRE (MAR-003) : à remplacer par `npm run api:update` après la release du back
+             * @description Vrai pour une recette Marmiton neutre (ADR 0037 décision 11) : sans propriétaire, visible de tous, qu'on ne fait que copier ; le front en tire la pastille « Marmiton ». Toujours écrit
              * @example false
              */
             fromMarmiton: boolean;
@@ -4107,60 +4108,6 @@ export interface operations {
             };
             /** @description Corps invalide : `destination` absente, vide ou de plus de 36 caractères */
             422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    post_api_import_marmiton_recipe: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ImportMarmitonRecipePayload"];
-            };
-        };
-        responses: {
-            /** @description L'utilisateur avait déjà une copie de cette recette : rien n'est écrit */
-            200: {
-                headers: {
-                    /** @description URL de la copie */
-                    Location?: string;
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Copie créée */
-            201: {
-                headers: {
-                    /** @description URL de la copie */
-                    Location?: string;
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description `MARMITON_URL_INVALID`, `MARMITON_RECIPE_NOT_FOUND`, `MARMITON_RECIPE_UNREADABLE` ou `RECIPE_LIMIT_REACHED` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description `MARMITON_IMPORT_RATE_LIMITED` (avec `Retry-After`) */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description `MARMITON_UNAVAILABLE` */
-            502: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5847,6 +5794,62 @@ export interface operations {
             };
             /** @description Corps de la requête invalide (dont une dimension sans facteur de base ou l'inverse, ou un facteur qui n'est pas strictement positif) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    post_api_import_marmiton_recipe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportMarmitonRecipePayload"];
+            };
+        };
+        responses: {
+            /** @description L'utilisateur avait déjà une copie de cette recette Marmiton : la sienne est rendue, rien n'est écrit */
+            200: {
+                headers: {
+                    /** @description URL de la copie existante */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Copie créée */
+            201: {
+                headers: {
+                    /** @description URL de la copie (`GET /api/v1/recipes/{id}`) */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide (`url` n'est pas un texte de 2 000 caractères au plus), `MARMITON_URL_INVALID` (ce n'est pas l'adresse d'une recette Marmiton), `MARMITON_RECIPE_NOT_FOUND` (Marmiton ne connaît pas cet identifiant : 404 ou 410), `MARMITON_RECIPE_UNREADABLE` (la page n'a pas de recette lisible : aucun bloc recette, aucune ligne d'ingrédient lisible, nom vide) ou `RECIPE_LIMIT_REACHED` (le compte a déjà 2 000 recettes, copies comprises). Rien n'est écrit */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plafond de lectures de pages atteint pour cet utilisateur (20 par heure ; une copie d'une recette déjà connue n'en consomme pas) : message `MARMITON_IMPORT_RATE_LIMITED`, aucune page lue, rien n'est écrit ; patienter au moins le délai de `Retry-After`. Les écritures de l'API (`repas_write`, 300 par minute) répondent `WRITE_RATE_LIMITED` de la même façon */
+            429: {
+                headers: {
+                    /** @description Délai d'attente en secondes */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `MARMITON_UNAVAILABLE` : Marmiton n'a pas répondu comme il faut (délai dépassé, 5xx, refus du serveur, redirection hors de Marmiton) ; on ne distingue pas un blocage d'une panne. Rien n'est écrit */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

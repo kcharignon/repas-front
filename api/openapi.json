@@ -413,59 +413,6 @@
                 }
             }
         },
-        "/api/v1/recipes/import/marmiton": {
-            "post": {
-                "tags": [
-                    "Recipes"
-                ],
-                "summary": "Copie une recette de Marmiton dans celles de l'utilisateur connect\u00e9",
-                "description": "CONTRAT PROVISOIRE (ADR 0037 du back, MAR-003) : \u00e0 remplacer par `npm run api:update` apr\u00e8s la release du back. Le lien de la page est analys\u00e9 strictement ; l'utilisateur ne choisit jamais l'adresse appel\u00e9e. Chaque erreur porte une constante comme message (`{error:{message}}`).",
-                "operationId": "post_api_import_marmiton_recipe",
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/ImportMarmitonRecipePayload"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "L'utilisateur avait d\u00e9j\u00e0 une copie de cette recette : rien n'est \u00e9crit",
-                        "headers": {
-                            "Location": {
-                                "description": "URL de la copie",
-                                "schema": {
-                                    "type": "string"
-                                }
-                            }
-                        }
-                    },
-                    "201": {
-                        "description": "Copie cr\u00e9\u00e9e",
-                        "headers": {
-                            "Location": {
-                                "description": "URL de la copie",
-                                "schema": {
-                                    "type": "string"
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "`MARMITON_URL_INVALID`, `MARMITON_RECIPE_NOT_FOUND`, `MARMITON_RECIPE_UNREADABLE` ou `RECIPE_LIMIT_REACHED`"
-                    },
-                    "429": {
-                        "description": "`MARMITON_IMPORT_RATE_LIMITED` (avec `Retry-After`)"
-                    },
-                    "502": {
-                        "description": "`MARMITON_UNAVAILABLE`"
-                    }
-                }
-            }
-        },
         "/api/v1/recipes/{id}/copy": {
             "post": {
                 "tags": [
@@ -2154,6 +2101,67 @@
                     },
                     "422": {
                         "description": "Corps de la requ\u00eate invalide (dont une dimension sans facteur de base ou l'inverse, ou un facteur qui n'est pas strictement positif)"
+                    }
+                }
+            }
+        },
+        "/api/v1/recipes/import/marmiton": {
+            "post": {
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Copie une recette Marmiton chez l'utilisateur connect\u00e9, \u00e0 partir du lien de sa page",
+                "description": "Seul l'identifiant de la recette est retenu du lien (`MarmitonUrl`) : la page lue est celle que l'application reconstruit, jamais l'adresse re\u00e7ue. Si la recette n'a jamais \u00e9t\u00e9 import\u00e9e, sa page est lue une fois et une recette NEUTRE est cr\u00e9\u00e9e pour tous (sans propri\u00e9taire, ordinaire, visible dans \u00ab Recettes des autres \u00bb, qu'aucun compte ne modifie, administrateur compris) ; si elle existe d\u00e9j\u00e0, Marmiton n'est pas appel\u00e9. L'utilisateur re\u00e7oit SA copie de la neutre, par le m\u00eame rapprochement d'ingr\u00e9dients que `POST /recipes/{id}/copy`, modifiable, avec le lien d'origine (`sourceUrl` de `GET /recipes/{id}`). Une ligne dont l'unit\u00e9 ne se convertit pas en l'unit\u00e9 d'achat n'emp\u00eache pas la copie : la fiche dit `convertible: false`. S'il a d\u00e9j\u00e0 une copie de cette recette, elle lui est rendue (`200`), rien n'est \u00e9crit.",
+                "operationId": "post_api_import_marmiton_recipe",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ImportMarmitonRecipePayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Copie cr\u00e9\u00e9e",
+                        "headers": {
+                            "Location": {
+                                "description": "URL de la copie (`GET /api/v1/recipes/{id}`)",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "L'utilisateur avait d\u00e9j\u00e0 une copie de cette recette Marmiton : la sienne est rendue, rien n'est \u00e9crit",
+                        "headers": {
+                            "Location": {
+                                "description": "URL de la copie existante",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Corps invalide (`url` n'est pas un texte de 2 000 caract\u00e8res au plus), `MARMITON_URL_INVALID` (ce n'est pas l'adresse d'une recette Marmiton), `MARMITON_RECIPE_NOT_FOUND` (Marmiton ne conna\u00eet pas cet identifiant : 404 ou 410), `MARMITON_RECIPE_UNREADABLE` (la page n'a pas de recette lisible : aucun bloc recette, aucune ligne d'ingr\u00e9dient lisible, nom vide) ou `RECIPE_LIMIT_REACHED` (le compte a d\u00e9j\u00e0 2 000 recettes, copies comprises). Rien n'est \u00e9crit"
+                    },
+                    "429": {
+                        "description": "Plafond de lectures de pages atteint pour cet utilisateur (20 par heure ; une copie d'une recette d\u00e9j\u00e0 connue n'en consomme pas) : message `MARMITON_IMPORT_RATE_LIMITED`, aucune page lue, rien n'est \u00e9crit ; patienter au moins le d\u00e9lai de `Retry-After`. Les \u00e9critures de l'API (`repas_write`, 300 par minute) r\u00e9pondent `WRITE_RATE_LIMITED` de la m\u00eame fa\u00e7on",
+                        "headers": {
+                            "Retry-After": {
+                                "description": "D\u00e9lai d'attente en secondes",
+                                "schema": {
+                                    "type": "integer"
+                                }
+                            }
+                        }
+                    },
+                    "502": {
+                        "description": "`MARMITON_UNAVAILABLE` : Marmiton n'a pas r\u00e9pondu comme il faut (d\u00e9lai d\u00e9pass\u00e9, 5xx, refus du serveur, redirection hors de Marmiton) ; on ne distingue pas un blocage d'une panne. Rien n'est \u00e9crit"
                     }
                 }
             }
@@ -4678,6 +4686,19 @@
                 },
                 "type": "object"
             },
+            "ImportMarmitonRecipePayload": {
+                "properties": {
+                    "url": {
+                        "description": "Le lien de la recette Marmiton coll\u00e9 par la personne (la page de la recette, par exemple `https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx`). Seul l'identifiant de la recette est retenu : l'adresse lue est reconstruite, jamais celle-ci. 2 000 caract\u00e8res au plus (`422` sinon)",
+                        "type": "string",
+                        "default": null,
+                        "maxLength": 2000,
+                        "example": "https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
             "ListAvailableIngredientsRequestQuery": {
                 "properties": {
                     "q": {
@@ -6595,19 +6616,6 @@
                 },
                 "type": "object"
             },
-            "ImportMarmitonRecipePayload": {
-                "required": [
-                    "url"
-                ],
-                "properties": {
-                    "url": {
-                        "description": "Adresse de la page de la recette sur marmiton.org",
-                        "type": "string",
-                        "example": "https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx"
-                    }
-                },
-                "type": "object"
-            },
             "RecipeDTO": {
                 "required": [
                     "id",
@@ -6617,7 +6625,6 @@
                     "typeName",
                     "secret",
                     "favorite",
-                    "sourceUrl",
                     "rows",
                     "version"
                 ],
@@ -6655,12 +6662,6 @@
                         "type": "boolean",
                         "example": false
                     },
-                    "sourceUrl": {
-                        "description": "Adresse de la page d'origine d'une recette copi\u00e9e de Marmiton (`https://www.marmiton.org/recettes/recette_{nom}_{id}.aspx`), reprise par toutes ses copies ; `null` pour toute autre recette. Toujours \u00e9crit. CONTRAT PROVISOIRE (ADR 0037 du back, MAR-003) : \u00e0 remplacer par `npm run api:update` apr\u00e8s la release du back",
-                        "type": "string",
-                        "nullable": true,
-                        "example": "https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx"
-                    },
                     "rows": {
                         "description": "Ingr\u00e9dients de la recette, dans l'ordre de la recette (celui de la saisie)",
                         "type": "array",
@@ -6672,6 +6673,12 @@
                         "description": "Version de la recette, aussi renvoy\u00e9e dans l'en-t\u00eate `ETag` : \u00e0 renvoyer dans `If-Match` pour modifier ou supprimer sans \u00e9craser le travail d'un autre",
                         "type": "integer",
                         "example": 3
+                    },
+                    "sourceUrl": {
+                        "description": "L'adresse de la page Marmiton dont la recette vient (ADR 0037 d\u00e9cision 10), reprise par chacune de ses copies, copies de copies comprises ; `null` pour toute autre recette. Toujours \u00e9crit. Le front en fait un bouton \u00ab Voir sur Marmiton \u00bb (texte et ic\u00f4ne de lien externe, ouvert dans un nouvel onglet avec `rel=\"noopener noreferrer\"`) seulement pour une adresse de la forme `https://www.marmiton.org/recettes/recette_{nom}_{id}.aspx`. Jamais \u00e9crite par un corps de requ\u00eate",
+                        "type": "string",
+                        "example": "https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx",
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -7212,7 +7219,7 @@
                         "example": "plat"
                     },
                     "fromMarmiton": {
-                        "description": "Recette copi\u00e9e de Marmiton (la recette neutre de l'ADR 0037). Toujours \u00e9crit. CONTRAT PROVISOIRE (MAR-003) : \u00e0 remplacer par `npm run api:update` apr\u00e8s la release du back",
+                        "description": "Vrai pour une recette Marmiton neutre (ADR 0037 d\u00e9cision 11) : sans propri\u00e9taire, visible de tous, qu'on ne fait que copier ; le front en tire la pastille \u00ab Marmiton \u00bb. Toujours \u00e9crit",
                         "type": "boolean",
                         "example": false
                     }
