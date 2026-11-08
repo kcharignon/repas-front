@@ -1470,7 +1470,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "Supprime un ingr\u00e9dient de l'utilisateur, avec ses conversions (seul son propri\u00e9taire le supprime, un administrateur compris)",
+                "summary": "Supprime un ingr\u00e9dient de l'utilisateur, avec ses conversions (seul son propri\u00e9taire le supprime, un administrateur compris). Supprimer un ingr\u00e9dient d\u00e9coup\u00e9 en parties d\u00e9tache ses parties : elles redeviennent des ingr\u00e9dients ordinaires",
                 "operationId": "delete_api_remove_ingredient",
                 "parameters": [
                     {
@@ -1493,7 +1493,7 @@
                         "description": "Ingr\u00e9dient inconnu"
                     },
                     "409": {
-                        "description": "Ingr\u00e9dient pr\u00e9sent dans une recette ou une liste de courses"
+                        "description": "Ingr\u00e9dient pr\u00e9sent dans une recette ou une liste de courses (y compris le registre des parties d'une liste non termin\u00e9e, en partie ou en parent)"
                     }
                 }
             }
@@ -2512,7 +2512,7 @@
                 "tags": [
                     "Ingredients"
                 ],
-                "summary": "Fusionne deux ingr\u00e9dients de l'utilisateur : celui de l'URL dispara\u00eet, `into` est gard\u00e9. Ses recettes, ses listes de courses et ses choix du drive qui utilisaient le premier utilisent le second, qui r\u00e9cup\u00e8re aussi les conversions du premier qui lui manquent (les siennes gagnent en cas de conflit) ; les anciens slugs restent r\u00e9solus. Les deux ingr\u00e9dients doivent \u00eatre \u00e0 l'utilisateur, m\u00eame pour un administrateur. Rejou\u00e9e apr\u00e8s un succ\u00e8s, elle r\u00e9pond 204 sans rien faire. Aper\u00e7u sans \u00e9criture : `GET \u2026/merge-preview`",
+                "summary": "Fusionne deux ingr\u00e9dients de l'utilisateur : celui de l'URL dispara\u00eet, `into` est gard\u00e9. Ses recettes, ses listes de courses et ses choix du drive qui utilisaient le premier utilisent le second, qui r\u00e9cup\u00e8re aussi les conversions du premier qui lui manquent (les siennes gagnent en cas de conflit) ; les anciens slugs restent r\u00e9solus. Le d\u00e9coupage en parties suit : le gard\u00e9 h\u00e9rite du lien du premier s'il n'en a pas, et les parties du premier deviennent les siennes. Les deux ingr\u00e9dients doivent \u00eatre \u00e0 l'utilisateur, m\u00eame pour un administrateur. Rejou\u00e9e apr\u00e8s un succ\u00e8s, elle r\u00e9pond 204 sans rien faire. Aper\u00e7u sans \u00e9criture : `GET \u2026/merge-preview`",
                 "operationId": "post_api_merge_ingredients",
                 "parameters": [
                     {
@@ -2542,10 +2542,10 @@
                         "description": "Un des deux ingr\u00e9dients est inconnu ou appartient \u00e0 un autre utilisateur (m\u00eame pour un administrateur), ou l'ingr\u00e9dient de l'URL n'existe plus et n'a pas \u00e9t\u00e9 fusionn\u00e9 dans `into`"
                     },
                     "409": {
-                        "description": "`INGREDIENT_IN_SENT_LIST` : une liste envoy\u00e9e au drive utilise l'un des deux (la rouvrir ou la terminer d'abord) ; `INGREDIENT_USED_BY_ANOTHER_USER` : une ligne d'un autre utilisateur utilise l'ingr\u00e9dient de l'URL (donn\u00e9e h\u00e9rit\u00e9e) ; `INGREDIENT_MERGE_CONFLICT` : une \u00e9criture concurrente a pos\u00e9 une r\u00e9f\u00e9rence sur l'ingr\u00e9dient de l'URL, rien n'a chang\u00e9, r\u00e9essayer"
+                        "description": "`INGREDIENT_IN_SENT_LIST` : une liste envoy\u00e9e au drive utilise l'un des deux (la rouvrir ou la terminer d'abord) ; `INGREDIENT_USED_BY_ANOTHER_USER` : une ligne d'un autre utilisateur utilise l'ingr\u00e9dient de l'URL (donn\u00e9e h\u00e9rit\u00e9e) ; `MERGE_PART_IN_LIST` : le registre des parties d'une liste non termin\u00e9e nomme l'un des deux, ou le gard\u00e9 serait une partie alors qu'une liste non termin\u00e9e porte une ligne de l'un des deux (terminer la liste d'abord) ; `INGREDIENT_MERGE_CONFLICT` : une \u00e9criture concurrente a pos\u00e9 une r\u00e9f\u00e9rence sur l'ingr\u00e9dient de l'URL, rien n'a chang\u00e9, r\u00e9essayer"
                     },
                     "422": {
-                        "description": "Corps invalide ; `CANNOT_MERGE_INTO_ITSELF` : les deux ingr\u00e9dients sont le m\u00eame ; `CANNOT_MERGE_COMMON_INGREDIENT` : n'est plus renvoy\u00e9 (il n'y a plus d'ingr\u00e9dient commun), gard\u00e9 pour les clients existants ; `MERGE_UNIT_MISSING` : une unit\u00e9 de l'ingr\u00e9dient de l'URL ne se convertit pas dans l'unit\u00e9 d'achat de `into`, m\u00eame apr\u00e8s avoir r\u00e9cup\u00e9r\u00e9 les conversions de l'ingr\u00e9dient de l'URL, rien n'a chang\u00e9"
+                        "description": "Corps invalide ; `CANNOT_MERGE_INTO_ITSELF` : les deux ingr\u00e9dients sont le m\u00eame ; `CANNOT_MERGE_COMMON_INGREDIENT` : n'est plus renvoy\u00e9 (il n'y a plus d'ingr\u00e9dient commun), gard\u00e9 pour les clients existants ; `MERGE_PART_CONFLICT` : la fusion casserait un d\u00e9coupage en parties (deux parents diff\u00e9rents, l'un parent de l'autre, une partie qui aurait des parties, plus de dix parties, ou un lien qui ne se transporte pas d'une unit\u00e9 \u00e0 l'autre), rien n'a chang\u00e9 ; `MERGE_UNIT_MISSING` : une unit\u00e9 de l'ingr\u00e9dient de l'URL ne se convertit pas dans l'unit\u00e9 d'achat de `into`, m\u00eame apr\u00e8s avoir r\u00e9cup\u00e9r\u00e9 les conversions de l'ingr\u00e9dient de l'URL, rien n'a chang\u00e9"
                     }
                 }
             }
@@ -6700,13 +6700,15 @@
                         }
                     },
                     "blockedBy": {
-                        "description": "Pourquoi la fusion serait refus\u00e9e (le premier cas dans l'ordre de la liste), null si elle est possible. SAME_INGREDIENT : les deux ingr\u00e9dients sont le m\u00eame. COMMON_INGREDIENT : n'est plus rendu (il n'y a plus d'ingr\u00e9dient commun), d\u00e9clar\u00e9 pour les clients existants. USED_BY_ANOTHER_USER : une ligne d'un autre utilisateur utilise l'ingr\u00e9dient absorb\u00e9. IN_SENT_LIST : une liste envoy\u00e9e au drive utilise l'un des deux. UNIT_MISSING : voir missingUnits",
+                        "description": "Pourquoi la fusion serait refus\u00e9e (le premier cas dans l'ordre de la liste), null si elle est possible. SAME_INGREDIENT : les deux ingr\u00e9dients sont le m\u00eame. COMMON_INGREDIENT : n'est plus rendu (il n'y a plus d'ingr\u00e9dient commun), d\u00e9clar\u00e9 pour les clients existants. USED_BY_ANOTHER_USER : une ligne d'un autre utilisateur utilise l'ingr\u00e9dient absorb\u00e9. IN_SENT_LIST : une liste envoy\u00e9e au drive utilise l'un des deux. PART_CONFLICT : la fusion casserait un d\u00e9coupage en parties (les deux sont des parties de deux parents diff\u00e9rents, l'un est le parent de l'autre, le r\u00e9sultat serait \u00e0 la fois une partie et un parent, il aurait plus de dix parties, ou le lien ou les parties de l'absorb\u00e9 ne se transportent pas d'une unit\u00e9 \u00e0 l'autre) ; l'utilisateur le l\u00e8ve en recollant des parties. PART_IN_LIST : le registre des parties d'une liste non termin\u00e9e nomme l'un des deux, ou le gard\u00e9 serait une partie alors qu'une liste non termin\u00e9e porte une ligne de l'un des deux ; l'utilisateur le l\u00e8ve en terminant la liste. UNIT_MISSING : voir missingUnits",
                         "type": "string",
                         "enum": [
                             "SAME_INGREDIENT",
                             "COMMON_INGREDIENT",
                             "USED_BY_ANOTHER_USER",
                             "IN_SENT_LIST",
+                            "PART_CONFLICT",
+                            "PART_IN_LIST",
                             "UNIT_MISSING"
                         ],
                         "nullable": true
@@ -6829,7 +6831,8 @@
                     "favorite",
                     "rows",
                     "version",
-                    "canEdit"
+                    "canEdit",
+                    "ownerless"
                 ],
                 "properties": {
                     "id": {
@@ -6893,6 +6896,17 @@
                         "description": "Vrai si l'utilisateur modifie (`PUT /recipes/{id}`) cette recette : la sienne, ou n'importe quelle recette qu'il lit s'il est administrateur - dont une recette SANS PROPRI\u00c9TAIRE (la neutre d'une recette Marmiton, que lui seul modifie et supprime). Faux pour la recette d'un autre. Toujours \u00e9crit, calcul\u00e9 sans requ\u00eate de plus",
                         "type": "boolean",
                         "example": true
+                    },
+                    "ownerless": {
+                        "description": "Vrai si la recette est SANS PROPRI\u00c9TAIRE (la \u00ab version commune \u00bb : la neutre d'une recette Marmiton, dont l'auteur est un identifiant r\u00e9serv\u00e9 qui n'est pas un compte). Le front n'a plus \u00e0 le deviner. Toujours \u00e9crit, lu dans la m\u00eame instruction",
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "copyId": {
+                        "description": "Quand la recette lue est SANS PROPRI\u00c9TAIRE : l'identifiant de la copie de L'UTILISATEUR QUI LIT (la plus ancienne s'il en a plusieurs), m\u00eame renomm\u00e9e, d'un autre type ou secr\u00e8te (c'est la sienne) ; `null` s'il n'en a pas, et toujours `null` pour une recette ordinaire. Toujours \u00e9crit, lu dans la m\u00eame instruction",
+                        "type": "string",
+                        "example": "3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34",
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -7476,6 +7490,13 @@
                         "description": "Vrai si l'utilisateur a d\u00e9j\u00e0 une copie de cette recette. Seul un administrateur re\u00e7oit une recette sans propri\u00e9taire d\u00e9j\u00e0 copi\u00e9e (il la modifie ou la supprime) : pour lui, le front ne propose pas \u00ab Copier \u00bb en double. Toujours \u00e9crit ; toujours `false` pour un autre utilisateur, dont la liste ne contient que ce qu'il n'a pas copi\u00e9",
                         "type": "boolean",
                         "example": false
+                    },
+                    "copyId": {
+                        "description": "L'identifiant de la copie de l'administrateur (la plus ancienne s'il en a plusieurs), m\u00eame renomm\u00e9e ou d'un autre type ; `null` s'il n'en a pas. `alreadyCopied` est vrai si et seulement si `copyId` n'est pas `null`. Toujours \u00e9crit ; toujours `null` pour un autre utilisateur",
+                        "type": "string",
+                        "default": null,
+                        "example": null,
+                        "nullable": true
                     }
                 },
                 "type": "object"
