@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { hasFailed } from '@/api/query'
@@ -14,6 +14,7 @@ import UiImage from '@/design/UiImage.vue'
 import { messageForFailure } from '@/notifications/failures'
 import AdminFormDialog from './AdminFormDialog.vue'
 import AdminPage from './AdminPage.vue'
+import ImageField from './ImageField.vue'
 import { useSaveDepartment } from './queries'
 import { useResourceDialog } from './useResourceDialog'
 
@@ -27,7 +28,13 @@ const items = computed(() => departments.data.value?.member ?? [])
 const ICONS: DepartmentIcon[] = ['snowflake', 'can']
 const iconOf = (department: { icon?: string | null }) => department.icon ?? ''
 
+// Un envoi d'image en cours : « Enregistrer » attend, sinon le formulaire garderait l'ancienne image
+const imageBusy = ref(false)
 const dialog = useResourceDialog(() => ({ name: '', image: '', icon: '' }))
+// Fenêtre fermée en plein envoi : le bloc disparaît sans prévenir, l'attente ne doit pas rester
+watch(dialog.open, (open) => {
+  if (!open) imageBusy.value = false
+})
 // L'icône que le rayon avait à l'ouverture de la fenêtre : on n'envoie `icon` que si elle a changé (absente, elle reste intacte côté back)
 const originalIcon = ref('')
 const errors = computed(() => ({
@@ -52,6 +59,7 @@ function edit(department: { slug: string; name: string; image: string; icon?: st
 }
 
 function submit() {
+  if (imageBusy.value) return
   dialog.submitted.value = true
   dialog.error.value = null
   if (errors.value.name || errors.value.image) return
@@ -109,7 +117,7 @@ function submit() {
   <AdminFormDialog
     v-model:open="dialog.open.value"
     :title="dialog.editing.value ? t('admin.editDepartment') : t('admin.newDepartment')"
-    :pending="save.isPending.value"
+    :pending="save.isPending.value || imageBusy"
     :error="dialog.error.value"
     @submit="submit"
   >
@@ -122,20 +130,13 @@ function submit() {
         :invalid="invalid"
       />
     </UiField>
-    <UiField
-      :label="t('admin.image')"
-      :hint="t('admin.imageHint')"
+    <ImageField
+      v-model="dialog.form.image"
+      v-model:busy="imageBusy"
+      :name="dialog.form.name"
+      :unnamed="t('admin.image.unnamedDepartment')"
       :error="errors.image"
-      v-slot="{ id, describedby, invalid }"
-    >
-      <UiTextInput
-        :id="id"
-        v-model="dialog.form.image"
-        autocomplete="off"
-        :aria-describedby="describedby"
-        :invalid="invalid"
-      />
-    </UiField>
+    />
     <UiField :label="t('admin.icon')" :hint="t('admin.iconHint')" v-slot="{ id, describedby }">
       <UiSelect :id="id" v-model="dialog.form.icon" :aria-describedby="describedby">
         <option value="">{{ t('admin.iconNone') }}</option>

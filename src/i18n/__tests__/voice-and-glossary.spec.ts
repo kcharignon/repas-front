@@ -869,3 +869,67 @@ describe('« Mes drives » et « Mon drive habituel » (DRV-709)', () => {
     expect(trop).toEqual([])
   })
 })
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// L'image d'un rayon ou d'un type de recette (écrans d'administration) : trois phrases au plus par refus, 15 mots par phrase, jamais un code
+// du back, ni un mot technique. Le nom d'un format (PNG, WebP, SVG) n'est dit que là où l'on choisit le fichier.
+describe('les textes du bloc d’image', () => {
+  const entries = (): { where: string; text: string }[] => {
+    const out: { where: string; text: string }[] = []
+    flatten((fr.admin as Record<string, unknown>).image, 'admin.image', out)
+    out.push({ where: 'admin.errors.image', text: fr.admin.errors.image })
+    return out
+  }
+  /** Les textes qui enfreignent la règle, avec leur clé : une liste vide est la réussite. */
+  const offenders = (broken: (entry: { where: string; text: string }) => boolean) =>
+    entries()
+      .filter(broken)
+      .map(({ where, text }) => `${where} : « ${text} »`)
+
+  it('lit bien les textes du bloc', () => {
+    expect(entries().length).toBeGreaterThan(20)
+  })
+
+  it('ne dit jamais une phrase de plus de 15 mots, ni plus de trois phrases', () => {
+    const sentencesOf = (text: string) =>
+      text.split(/(?<=[.!?…])\s+/).filter((sentence) => sentence !== '')
+
+    expect(
+      offenders(
+        ({ text }) =>
+          sentencesOf(text).length > 3 ||
+          sentencesOf(text).some((sentence) => sentence.split(/\s+/).length > 15),
+      ),
+    ).toEqual([])
+  })
+
+  it('ne montre ni code du serveur, ni mot technique', () => {
+    const technical =
+      /IMAGE_|HTTP|\b[45]\d\d\b|octets?|\bMio\b|upload|télécharg|serveur|\bAPI\b|erreur|exception|requête|multipart|\bURL\b/iu
+
+    // L'indice du champ du lien (`https://…`) n'est pas une phrase
+    expect(
+      offenders(
+        ({ where, text }) => where !== 'admin.image.linkPlaceholder' && technical.test(text),
+      ),
+    ).toEqual([])
+  })
+
+  it('ne nomme les formats que pour dire lesquels sont acceptés, et jamais le JPEG', () => {
+    const allowed = ['admin.image.hint', 'admin.image.errors.notAnImage']
+
+    expect(
+      offenders(({ where, text }) =>
+        allowed.includes(where)
+          ? !/PNG, (un )?WebP (ou|et) (un )?SVG/u.test(text) || /JPE?G/iu.test(text)
+          : /\b(PNG|WebP|SVG|JPE?G)\b/iu.test(text),
+      ),
+    ).toEqual([])
+  })
+
+  it('tutoie', () => {
+    expect(
+      entries().flatMap(({ where, text }) => violations(where, text, { glossary: false })),
+    ).toEqual([])
+  })
+})

@@ -957,6 +957,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/images/from-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Télécharge l'image d'un lien direct, la garde et rend le chemin à mettre dans le champ `image` d'un rayon ou d'un type de recette (administrateur)
+         * @description Le serveur télécharge lui-même l'image. Le lien doit être en `https`, sur un nom de domaine public (ni adresse IP, ni nom local) et le port 443. Le nom est résolu par le serveur et TOUTES ses adresses doivent être publiques (ni privée, ni locale, ni métadonnées d'un nuage) ; le serveur se connecte à l'adresse vérifiée ; trois redirections au plus, chacune jugée comme le premier lien ; 10 secondes en tout ; la réponse doit être d'un type `image/*` et de 3 Mio au plus. L'image reçoit ensuite EXACTEMENT le même traitement qu'un fichier de `POST /api/v1/images` (type reconnu par le contenu, jamais par l'extension du lien ni par le `Content-Type` : PNG ou WebP ré-encodé dans son format à 512 px au plus avec sa transparence, SVG assaini par liste blanche, JPEG refusé ; nommée par son empreinte). Plafond : 30 téléchargements par heure et par administrateur, en plus du plafond d'écriture. Aucun lien, aucune adresse ni aucun contenu téléchargé n'est renvoyé ni journalisé dans une erreur.
+         */
+        post: operations["post_api_store_image_from_url"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/shopping-list-rows/{id}/tick": {
         parameters: {
             query?: never;
@@ -1005,6 +1025,26 @@ export interface paths {
          */
         put: operations["put_api_update_meal_serving"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Envoie une image en fichier et rend le chemin à mettre dans le champ `image` d'un rayon ou d'un type de recette (administrateur)
+         * @description Corps `multipart/form-data`, champ `file`. Seul le CONTENU compte (ni le nom du fichier, ni son extension, ni le type annoncé par le client) : PNG, WebP ou SVG, 3 Mio au plus. Le JPEG est refusé (il ne gère pas la transparence). Un PNG ou un WebP (8 000 px de côté et 12 millions de pixels au plus) est décodé puis ré-encodé DANS SON FORMAT (aucune métadonnée n'est gardée, la transparence l'est) et ramené à 512 px de côté au plus (proportions gardées, jamais agrandi). Un SVG n'est JAMAIS gardé tel quel : il est assaini par une liste blanche d'éléments et d'attributs (jamais de script, d'image, de ressource distante ni de gestionnaire d'événement ; un DOCTYPE simple est ignoré, un DOCTYPE avec sous-ensemble interne, une entité ou une feuille de style distante sont refusés ; 10 000 éléments et 32 niveaux au plus) puis ré-écrit depuis l'arbre assaini. Le fichier est nommé par l'empreinte SHA-256 du résultat et son extension (`.png`, `.webp`, `.svg`) : la même image rend toujours le même chemin, sans rien écrire de plus. Il est servi sous `/images/uploads/…` (un SVG avec `Content-Type: image/svg+xml`, `nosniff` et une politique `default-src 'none'; style-src 'unsafe-inline'; sandbox`). Les contrats des rayons et des types de recette ne changent pas : `image` reste une chaîne `images/…`. Un ancien fichier remplacé n'est pas supprimé.
+         */
+        post: operations["post_api_upload_image"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1759,6 +1799,14 @@ export interface components {
              * @example 1
              */
             ratio: number;
+        };
+        StoreImageFromUrlPayload: {
+            /**
+             * @description Le lien direct de l'image (`https://…`, un nom de domaine public, le port 443). 2 000 caractères au plus (`422` sinon)
+             * @default null
+             * @example https://exemple.org/images/surgeles.png
+             */
+            url: string | null;
         };
         UpdateServingMealPayload: {
             /**
@@ -6771,6 +6819,86 @@ export interface operations {
             };
         };
     };
+    post_api_store_image_from_url: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreImageFromUrlPayload"];
+            };
+        };
+        responses: {
+            /** @description Image gardée. `path` se met tel quel dans le champ `image` d'un rayon ou d'un type de recette */
+            201: {
+                headers: {
+                    /** @description Adresse de l'image, servie par le back (`/images/uploads/{empreinte}.png|webp|svg`) */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example images/uploads/3f5a0d1c9b7e4a2f8c6d1e0b9a8f7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b.png */
+                        path?: string;
+                    };
+                };
+            };
+            /** @description Non authentifié */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Réservé aux administrateurs */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `IMAGE_TOO_LARGE` : plus de 3 Mio, des dimensions trop grandes ou un SVG trop complexe. Rien n'est écrit */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide (`url` n'est pas un texte de 2 000 caractères au plus), `IMAGE_URL_REFUSED` (lien refusé : pas en https, adresse locale ou privée, redirection refusée ou trop nombreuse), `IMAGE_NOT_AN_IMAGE` (la réponse n'est pas une image lisible) ou `IMAGE_UNSUPPORTED` (pas PNG, WebP ni SVG : JPEG, GIF…, ou un SVG refusé). Rien n'est écrit */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plafond de téléchargements atteint (30 par heure) : message `IMAGE_DOWNLOAD_RATE_LIMITED`, rien n'est téléchargé ; patienter au moins le délai de `Retry-After`. Les écritures de l'API (`repas_write`, 300 par minute) répondent `WRITE_RATE_LIMITED` de la même façon */
+            429: {
+                headers: {
+                    /** @description Délai d'attente en secondes */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `IMAGE_PROCESSING_FAILED` ou `IMAGE_STORAGE_FAILED` : une panne du serveur */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `IMAGE_DOWNLOAD_FAILED` : le site du lien n'a pas répondu comme il faut (nom introuvable, délai dépassé, erreur réseau ou TLS, statut autre que 200). Rien n'est écrit */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     post_api_tick_shopping_list_row: {
         parameters: {
             query?: never;
@@ -6908,6 +7036,76 @@ export interface operations {
             };
             /** @description Corps de la requête invalide */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    post_api_upload_image: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description L'image : PNG, WebP ou SVG, 3 Mio au plus
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Image gardée. `path` se met tel quel dans le champ `image` d'un rayon ou d'un type de recette */
+            201: {
+                headers: {
+                    /** @description Adresse de l'image, servie par le back (`/images/uploads/{empreinte}.png|webp|svg`) */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example images/uploads/3f5a0d1c9b7e4a2f8c6d1e0b9a8f7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b.png */
+                        path?: string;
+                    };
+                };
+            };
+            /** @description Non authentifié */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Réservé aux administrateurs */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `IMAGE_TOO_LARGE` : plus de 3 Mio, des dimensions trop grandes ou un SVG trop complexe (la bordure refuse aussi, sans corps JSON, un envoi bien plus gros). Rien n'est écrit */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `IMAGE_FILE_MISSING` (pas de champ `file`, ou envoi interrompu), `IMAGE_NOT_AN_IMAGE` (ce n'est pas une image lisible) ou `IMAGE_UNSUPPORTED` (pas PNG, WebP ni SVG : JPEG, GIF…, ou un SVG refusé : DOCTYPE avec sous-ensemble interne, entité déclarée, feuille de style distante, racine qui n'est pas un SVG, rien d'exploitable une fois assaini). Rien n'est écrit */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `IMAGE_PROCESSING_FAILED` (le serveur n'a pas pu transformer l'image) ou `IMAGE_STORAGE_FAILED` (le disque n'a pas pu la garder) */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

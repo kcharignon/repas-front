@@ -101,6 +101,10 @@ Voir `CLAUDE.md` (« Version commune… », MAR-005) : `useRecipeStance` pour sa
 
 Rien à recopier : `IngredientPartsSection.vue` (fiche d'un entier à soi), `PartSheet.vue` / `PartRatioSheet.vue`, `partsText.ts` (toutes les phrases accordées : « 1 œuf = 1 jaune d'œuf », `countsIn`, `countsFor`, `parseRatio`), `shopping-lists/includes.ts` (« Comprend … »). Règles : le parent envoyé est toujours la fiche ouverte ; les champs `parts`, `partOf`, `partOf*`, `includes` se lisent comme facultatifs ; « partie » et « découper », jamais « sous-ingrédient » ni « parent » ; un refus du back a sa phrase dans `partCodes` (`failures.ts`) ; une carte-bouton dont le texte est visible ne change pas son nom accessible par `aria-label` (axe `label-content-name-mismatch` : ajouter un `sr-only` à la suite du texte visible).
 
+### 4.8 L'image d'un rayon ou d'un type de recette
+
+Rien à recopier : `src/features/admin/ImageField.vue` (le bloc, `v-model` = chemin `images/uploads/…`), `imageFailures.ts` (un code du back = une phrase `admin.image.errors.*`), `queries.ts` (`useUploadImage` en `FormData` par `bodySerializer`, `useStoreImageFromUrl`). Règles : PNG, WebP, SVG, 3 Mo, **jamais de JPEG**, refusé tout de suite côté client par le type MIME ; l'image actuelle ne change que si l'envoi réussit ; image obligatoire (« Ajoute une image. ») ; formulaire non enregistrable pendant un envoi ; **jamais `v-html`** pour un SVG, toujours `UiImage`. Un nouvel écran qui porte une image réutilise le bloc et lui passe `v-model:busy` (désactive « Enregistrer » et ignore `submit`). Limite : la coquille Android n'ouvre pas encore le sélecteur de fichiers (voir CLAUDE.md). Un test de composant qui envoie un fichier prend le `File` et le `FormData` de Node (voir `ImageField.spec.ts`).
+
 ## 5. Definition of Done
 
 - [ ] `make check` vert (lint, format, `api-check`, types, tests) ; `make quality` avant la PR ; seuil de couverture non abaissé

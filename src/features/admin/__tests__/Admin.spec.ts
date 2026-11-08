@@ -1,3 +1,4 @@
+import { File as NodeFile } from 'node:buffer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -165,6 +166,31 @@ const body = async (fetchMock: ReturnType<typeof stubApi>, method: string, suffi
     .map(([call]) => call as Request)
     .find((request) => request.method === method && request.url.endsWith(suffix))
     ?.json()
+
+// Envoyer une image dans le formulaire ouvert : le fichier choisi part au serveur, qui rend le chemin à garder.
+// (jsdom a ses propres File et FormData, que le Request de Node ne sait pas lire : le test prend ceux de Node.)
+beforeEach(async () => {
+  const sample = await new Response('a=b', {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  }).formData()
+  vi.stubGlobal('FormData', sample.constructor)
+})
+const uploaded = (path: string) => ({
+  'POST /api/v1/images': () =>
+    new Response(JSON.stringify({ path }), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json', Location: `/${path}` },
+    }),
+})
+const sendImage = async () => {
+  const input = document.body.querySelector<HTMLInputElement>('[data-testid="image-file"]')!
+  const file = new NodeFile([new Uint8Array([137, 80, 78, 71])], 'pomme.png', {
+    type: 'image/png',
+  }) as unknown as File
+  Object.defineProperty(input, 'files', { value: [file], configurable: true })
+  input.dispatchEvent(new Event('change'))
+  await flushPromises()
+}
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -432,6 +458,7 @@ describe('unités', () => {
 describe('rayons', () => {
   it('crée un rayon avec son image et modifie un rayon', async () => {
     const { wrapper, fetchMock } = await open(DepartmentsAdminView, {
+      ...uploaded('images/uploads/frais.png'),
       'POST /api/v1/departments': () =>
         new Response(null, { status: 201, headers: { Location: '/api/v1/departments/frais' } }),
       'PUT /api/v1/departments/legumes': () => new Response(null, { status: 204 }),
@@ -441,13 +468,21 @@ describe('rayons', () => {
     button('Nouveau rayon')?.click()
     await vi.waitFor(() => expect(field('Nom')).not.toBeNull())
     await submitDialog()
-    expect(document.body.textContent).toContain('Indique une image.')
+    expect(document.body.querySelector('[role="group"] [role="alert"]')?.textContent).toBe(
+      'Ajoute une image.',
+    )
     type(field('Nom'), 'Frais')
-    type(field('Image'), 'images/frais.png')
+    await sendImage()
+    expect(document.body.textContent).toContain('Image prête. Enregistre pour la garder.')
+    expect(document.body.querySelector('[role="group"] [role="alert"]')).toBeNull()
+    // Le nom tapé est celui de l'aperçu
+    expect(document.body.querySelector('[data-testid="image-preview"]')?.textContent).toContain(
+      'Frais',
+    )
     await submitDialog()
     expect(await body(fetchMock, 'POST', '/departments')).toEqual({
       name: 'Frais',
-      image: 'images/frais.png',
+      image: 'images/uploads/frais.png',
     })
 
     button('Modifier Légumes')?.click()
@@ -457,6 +492,58 @@ describe('rayons', () => {
     expect(await body(fetchMock, 'PUT', '/departments/legumes')).toEqual({
       name: 'Fruits et légumes',
       image: 'images/legumes.png',
+    })
+  })
+})
+
+describe('rayons : le bloc d’image', () => {
+  it('retirer l’image ramène à l’état vide et « Enregistrer » répond « Ajoute une image. » sans rien envoyer', async () => {
+    const { wrapper, fetchMock } = await open(DepartmentsAdminView, {
+      'PUT /api/v1/departments/legumes': () => new Response(null, { status: 204 }),
+    })
+    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(1))
+
+    button('Modifier Légumes')?.click()
+    await vi.waitFor(() => expect(field('Nom').value).toBe('Légumes'))
+    expect(
+      document.body.querySelector('[data-testid="image-preview"] img')?.getAttribute('src'),
+    ).toBe('/images/legumes.png')
+    button('Retirer l’image')?.click()
+    await submitDialog()
+
+    expect(document.body.querySelector('[role="group"] [role="alert"]')?.textContent).toBe(
+      'Ajoute une image.',
+    )
+    expect(await body(fetchMock, 'PUT', '/departments/legumes')).toBeUndefined()
+  })
+
+  it('pendant l’envoi, « Enregistrer » attend : le rayon ne part pas avec l’ancienne image', async () => {
+    let release: (response: Response) => void = () => {}
+    const { wrapper, fetchMock } = await open(DepartmentsAdminView, {
+      'POST /api/v1/images': () => new Promise<Response>((resolve) => (release = resolve)),
+      'PUT /api/v1/departments/legumes': () => new Response(null, { status: 204 }),
+    })
+    await vi.waitFor(() => expect(wrapper.findAll('li')).toHaveLength(1))
+    button('Modifier Légumes')?.click()
+    await vi.waitFor(() => expect(field('Nom').value).toBe('Légumes'))
+
+    await sendImage()
+    expect((button('Enregistrer') as HTMLButtonElement).disabled).toBe(true)
+    await submitDialog()
+    expect(await body(fetchMock, 'PUT', '/departments/legumes')).toBeUndefined()
+
+    release(
+      new Response(JSON.stringify({ path: 'images/uploads/neuve.png' }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    await flushPromises()
+    expect((button('Enregistrer') as HTMLButtonElement).disabled).toBe(false)
+    await submitDialog()
+    expect(await body(fetchMock, 'PUT', '/departments/legumes')).toEqual({
+      name: 'Légumes',
+      image: 'images/uploads/neuve.png',
     })
   })
 })
@@ -554,19 +641,19 @@ describe('rayons : l’icône (ING-017)', () => {
   })
 
   it('crée un rayon avec une icône, ou sans (rien d’envoyé)', async () => {
-    const { fetchMock } = await show()
+    const { fetchMock } = await show(uploaded('images/uploads/frais.png'))
 
     button('Nouveau rayon')?.click()
     await vi.waitFor(() => expect(field('Nom')).not.toBeNull())
     expect((field('Icône') as HTMLSelectElement).value).toBe('')
     type(field('Nom'), 'Frais')
-    type(field('Image'), 'images/frais.png')
+    await sendImage()
     type(field('Icône'), 'snowflake')
     await submitDialog()
 
     expect(await body(fetchMock, 'POST', '/departments')).toEqual({
       name: 'Frais',
-      image: 'images/frais.png',
+      image: 'images/uploads/frais.png',
       icon: 'snowflake',
     })
   })
@@ -592,6 +679,7 @@ describe('rayons : l’icône (ING-017)', () => {
 describe('types de recette', () => {
   it("crée un type avec son ordre d'affichage et modifie un type", async () => {
     const { wrapper, fetchMock } = await open(RecipeTypesAdminView, {
+      ...uploaded('images/uploads/boisson.webp'),
       'POST /api/v1/recipe-types': () =>
         new Response(null, { status: 201, headers: { Location: '/api/v1/recipe-types/boisson' } }),
       'PUT /api/v1/recipe-types/plat': () => new Response(null, { status: 204 }),
@@ -603,13 +691,16 @@ describe('types de recette', () => {
     await vi.waitFor(() => expect(field('Nom')).not.toBeNull())
     await submitDialog()
     expect(document.body.textContent).toContain('Indique un ordre.')
+    expect(document.body.querySelector('[role="group"] [role="alert"]')?.textContent).toBe(
+      'Ajoute une image.',
+    )
     type(field('Nom'), 'Boisson')
-    type(field('Image'), 'images/boisson.png')
+    await sendImage()
     type(field("Ordre d'affichage"), '5')
     await submitDialog()
     expect(await body(fetchMock, 'POST', '/recipe-types')).toEqual({
       name: 'Boisson',
-      image: 'images/boisson.png',
+      image: 'images/uploads/boisson.webp',
       order: 5,
     })
 
