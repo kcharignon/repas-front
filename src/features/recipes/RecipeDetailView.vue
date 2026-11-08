@@ -8,6 +8,7 @@ import {
   Copy,
   ExternalLink,
   Layers,
+  Link,
   Trash2,
   TriangleAlert,
 } from 'lucide-vue-next'
@@ -35,8 +36,11 @@ import { useSessionStore } from '@/session/session'
 import { formatQuantity } from '@/features/shopping-lists/format'
 import FavoriteButton from './FavoriteButton.vue'
 import PlanButton from './PlanButton.vue'
+import RecipeUsedInSheet from './RecipeUsedInSheet.vue'
+import RecipeWithSection from './RecipeWithSection.vue'
 import SecretBadge from './SecretBadge.vue'
-import { useDeleteRecipe } from './queries'
+import { needsFix, usedInNames } from './componentsText'
+import { useDeleteRecipe, useRecipeUsages } from './queries'
 import { useCopyRecipeAction } from './useCopyRecipeAction'
 import { useRecipeStance } from './useRecipeStance'
 
@@ -45,7 +49,8 @@ const route = useRoute()
 const router = useRouter()
 
 const session = useSessionStore()
-const removeOwn = useDeleteRecipe()
+// Un refus de supprimer sa recette (planifiée, ou utilisée par une autre recette) est dit par l'écran, pas par le message commun des écritures
+const removeOwn = useDeleteRecipe(true)
 // La version commune dit elle-même ses refus (409 : sa propre fenêtre)
 const removeCommon = useDeleteRecipe(true)
 
@@ -66,7 +71,7 @@ const commonOriginalId = computed(() => {
 
   return data.originalId ?? null
 })
-const copying = useCopyRecipeAction()
+const copying = useCopyRecipeAction({ inline: true })
 const deleting = ref(false)
 // La version commune est encore dans une liste de courses : rien n'est supprimé, on le dit (409)
 const stillInLists = ref(false)
@@ -77,7 +82,21 @@ const stillInLists = ref(false)
 const toFix = computed<RecipeRow[]>(() =>
   isMine.value ? (recipe.data.value?.rows ?? []).filter((row) => row.convertible === false) : [],
 )
-const blocked = computed(() => toFix.value.length > 0)
+// Les recettes que celle-ci utilise (COMP-006) : un ingrédient de l'une d'elles qui ne se convertit pas empêche aussi de planifier. Un back qui
+// ne rend pas la clé : aucune recette utilisée.
+const components = computed(() => recipe.data.value?.components ?? [])
+const componentToFix = computed(() => isMine.value && components.value.some(needsFix))
+const blocked = computed(() => toFix.value.length > 0 || componentToFix.value)
+
+// Les recettes de l'auteur qui utilisent celle-ci : la note sous les boutons, et le refus de la supprimer. Demandé pour SA recette seulement,
+// jamais pour celle d'un autre.
+const usages = useRecipeUsages(
+  () => String(route.params.id),
+  () => isMine.value,
+)
+const usedIn = computed(() => usages.data.value?.member ?? [])
+const seeingUsages = ref(false)
+const cannotDelete = ref(false)
 
 // Le repère du rayon devant chaque ingrédient, et son rayon sous le nom quand ce nom existe dans deux rayons de la recette (ING-017)
 const { iconOf, anyIcon } = useDepartmentIcons()
@@ -161,7 +180,15 @@ function confirmDelete() {
       },
       onError: (error) => {
         deleting.value = false
-        if (!isCommon.value) notifyDeleteFailure(error, t('recipes.inUse'))
+        if (
+          !isCommon.value &&
+          error instanceof ApiError &&
+          error.message === 'RECIPE_USED_AS_COMPONENT'
+        ) {
+          // Le refus nomme les recettes à retirer : la liste est relue (elle a pu changer depuis l'ouverture de la fiche)
+          void usages.refetch()
+          cannotDelete.value = true
+        } else if (!isCommon.value) notifyDeleteFailure(error, t('recipes.inUse'))
         else if (error instanceof ApiError && error.status === 409) stillInLists.value = true
         else notifyFailure(error)
       },
@@ -320,7 +347,39 @@ function confirmDelete() {
         {{ t('recipes.blockedHint') }}
       </p>
 
-      <section>
+      <!-- La copie d'une recette composée dépasserait le plafond : rien n'a été copié -->
+      <p
+        v-if="copying.failure.value"
+        role="alert"
+        class="-mt-1 rounded-xl bg-danger-soft px-4 py-3 text-[15px] font-semibold text-on-danger-soft"
+      >
+        {{ copying.failure.value }}
+      </p>
+
+      <!-- Cette recette sert dans d'autres : une note discrète sous les boutons -->
+      <div
+        v-if="usedIn.length > 0"
+        data-used-in-note
+        class="flex items-start gap-3 rounded-2xl bg-soft px-3.5 py-3"
+      >
+        <Link class="mt-0.5 size-[22px] shrink-0 text-primary" aria-hidden="true" />
+        <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+          <p class="text-[15px]">
+            {{
+              t('recipes.usedIn.note', { names: usedInNames(usedIn.map((recipe) => recipe.name)) })
+            }}
+          </p>
+          <button
+            type="button"
+            class="min-h-11 cursor-pointer self-start text-[15px] font-bold text-primary underline focus-visible:outline-2 focus-visible:outline-primary"
+            @click="seeingUsages = true"
+          >
+            {{ t('recipes.usedIn.see') }}
+          </button>
+        </div>
+      </div>
+
+      <section v-if="recipe.data.value.rows.length > 0 || components.length === 0">
         <div class="mb-2 flex items-center justify-between gap-3">
           <h2 class="font-display text-2xl font-bold">{{ t('recipes.ingredients') }}</h2>
           <button
@@ -386,6 +445,8 @@ function confirmDelete() {
         </ul>
       </section>
 
+      <RecipeWithSection v-if="components.length > 0" :components="components" :can-fix="isMine" />
+
       <!-- Sa copie d'une recette Marmiton : l'administrateur remonte à la version commune, celle que copient les autres -->
       <RouterLink
         v-if="commonOriginalId !== null"
@@ -437,6 +498,9 @@ function confirmDelete() {
         :pending="remove.isPending.value"
         @confirm="confirmDelete"
       />
+
+      <RecipeUsedInSheet v-model:open="seeingUsages" :recipes="usedIn" />
+      <RecipeUsedInSheet v-model:open="cannotDelete" refusal :recipes="usedIn" />
 
       <UiDialog
         v-model:open="stillInLists"

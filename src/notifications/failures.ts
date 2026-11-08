@@ -65,6 +65,27 @@ const partCodes = new Map([
   ['INGREDIENT_PART_RATIO_INVALID', 'ingredients.parts.errors.number'],
 ])
 
+/**
+ * Les recettes utilisées dans une autre (COMP-006, ADR 0040 du back) : chaque refus a sa phrase, quel que soit le statut (le 409 d'une recette
+ * qui sert ailleurs n'est pas « une autre modification en cours »). `RECIPE_COMPONENT_SELF` et `_OWNERLESS` ne sont jamais montrés : l'éditeur
+ * ne les laisse pas arriver, le texte général les couvre.
+ */
+const recipeComponentCodes = new Map([
+  ['RECIPE_USED_AS_COMPONENT', 'recipes.componentErrors.used'],
+  ['RECIPE_COMPONENT_CHAIN', 'recipes.componentErrors.chain'],
+  ['RECIPE_COMPONENT_SECRET', 'recipes.componentErrors.secret'],
+  ['RECIPE_SECRET_USED_BY_PUBLIC', 'recipes.componentErrors.secretUsed'],
+  ['RECIPE_COMPONENT_LIMIT_REACHED', 'recipes.componentErrors.limit'],
+  ['RECIPE_COMPONENT_MULTIPLIER_INVALID', 'recipes.componentErrors.multiplier'],
+  ['RECIPE_EMPTY', 'recipes.componentErrors.empty'],
+  ['RECIPE_COMPONENT_DUPLICATE', 'recipes.componentErrors.duplicate'],
+  ['RECIPE_COMPONENT_SELF', 'errors.generic'],
+  ['RECIPE_COMPONENT_OWNERLESS', 'errors.generic'],
+])
+
+/** Un code du back pour les recettes utilisées dans une autre. */
+export const isRecipeComponentCode = (message: string): boolean => recipeComponentCodes.has(message)
+
 /** Le code d'un refus, sans le champ que le corps de la requête met devant (`ratio: CODE`). */
 const bareCode = (message: string) => message.replace(/^\w+:\s+/, '')
 
@@ -134,6 +155,7 @@ export function messageForFailure(error: unknown): string {
     listTypeCodes.get(error.message) ??
     marmitonCodes.get(error.message) ??
     partCodes.get(bareCode(error.message)) ??
+    recipeComponentCodes.get(error.message) ??
     limitCodes.get(error.message)
   if (code !== undefined) return t(code)
 

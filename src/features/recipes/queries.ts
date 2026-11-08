@@ -22,6 +22,11 @@ export const recipeKeys = {
   /** Les catégories qui ont au moins une recette à copier, avec leur nombre (les tuiles de « Recettes des autres ») */
   otherTypes: ['recipes', 'other-types'] as const,
   detail: (id: string) => ['recipes', 'detail', id] as const,
+  /** Les recettes de l'auteur qui utilisent celle-ci (COMP-006) */
+  usedIn: (id: string) => ['recipes', 'used-in', id] as const,
+  /** Les recettes qu'une recette peut utiliser (le choix de l'éditeur) */
+  usable: (forRecipeId: string, secret: boolean, search: string) =>
+    ['recipes', 'usable', forRecipeId, secret, search] as const,
   /** La copie que l'administrateur a faite d'une version commune (MAR-005) */
 }
 
@@ -147,6 +152,60 @@ export function useRecipe(id: () => string) {
 }
 
 /**
+ * Les recettes de son auteur qui utilisent celle-ci (COMP-006, ADR 0040 du back, décision 23) : la note de sa fiche et la fenêtre d'une
+ * suppression refusée. Réservé à l'auteur (`enabled`) : jamais demandé pour la recette d'un autre. Un back qui ne connaît pas la route
+ * répond une erreur : l'écran ne montre alors rien.
+ */
+export function useRecipeUsages(id: () => string, enabled: () => boolean = () => true) {
+  const { api } = useSessionStore()
+
+  return useQuery({
+    queryKey: computed(() => recipeKeys.usedIn(id())),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/recipes/{id}/used-in', { params: { path: { id: id() } } })),
+    enabled: computed(enabled),
+    retry: false,
+  })
+}
+
+/**
+ * Les recettes que l'éditeur propose comme recette utilisée (COMP-006, décision 22) : celles de l'auteur de `forRecipeId` (de l'utilisateur
+ * pour une recette qu'on crée), sans elle-même ni recette qui a déjà ses propres recettes utilisées, les secrètes seulement quand la
+ * recette écrite l'est (`secret`). Sans `q` triées par nom, avec `q` par pertinence. Relue à chaque ouverture de la feuille (`enabled`).
+ */
+export function useUsableRecipes(
+  forRecipeId: () => string | null,
+  secret: () => boolean,
+  search: () => string,
+  enabled: () => boolean,
+) {
+  const { api } = useSessionStore()
+
+  return useQuery({
+    queryKey: computed(() => recipeKeys.usable(forRecipeId() ?? '', secret(), search().trim())),
+    queryFn: ({ queryKey, signal }) => {
+      const [, , forId, isSecret, q] = queryKey
+
+      return unwrap(
+        api.GET('/api/v1/recipes/usable', {
+          params: {
+            query: {
+              ...(forId !== '' ? { forRecipeId: forId } : {}),
+              ...(isSecret ? { secret: true } : {}),
+              ...(q !== '' ? { q } : {}),
+            },
+          },
+          signal,
+        }),
+      )
+    },
+    enabled: computed(enabled),
+    staleTime: 0,
+    placeholderData: (previous) => previous,
+  })
+}
+
+/**
  * Met une recette en favoris ou l'en retire (l'auteur seul, 403 sinon). L'étoile de la fiche bascule tout de suite et revient en arrière si
  * le back refuse ; la relecture qui suit confirme (la version de la recette a changé, la liste « Favoris » aussi).
  */
@@ -181,6 +240,8 @@ export function useCopyRecipe() {
   const queryClient = useQueryClient()
 
   return useMutation({
+    // Le refus est dit par l'action de copie (le plafond de recettes a son propre texte)
+    meta: { silent: true },
     mutationFn: async (id: string): Promise<string | null> => {
       const { response, error } = await api.POST('/api/v1/recipes/{id}/copy', {
         params: { path: { id } },
@@ -356,6 +417,11 @@ export interface RecipeForm {
   /** Recette secrète (REC-002) : absent = on n'envoie rien (création : publique ; modification : inchangée). */
   secret?: boolean
   rows: { ingredientSlug: string; unitSlug: string; quantity: number }[]
+  /**
+   * Les recettes utilisées (COMP-006), dans l'ordre où elles s'affichent. **Absent = inchangé** (le back ne touche pas à celles de la recette) ;
+   * `[]` = toutes retirées. Jamais envoyé par un écran qui n'a pas touché à la section d'une recette qui n'en avait pas.
+   */
+  components?: { recipeId: string; multiplier: number }[]
 }
 
 /**
@@ -379,8 +445,10 @@ export function useSaveRecipe() {
     }): Promise<string> => {
       // Le nom part toujours avec sa majuscule, quel que soit le chemin qui a rempli le formulaire (le back la met aussi)
       // `secret` absent : le back ne l'attend pas (création : publique) ou le laisse inchangé ; le contrat généré le rend obligatoire
+      // `components` de même : absent = inchangé côté back
       const sent = { ...form, name: capitalizeFirst(form.name.trim()) } as typeof form & {
         secret: boolean | null
+        components: { recipeId: string; multiplier: number }[] | null
       }
       if (id === null) {
         const { response, error } = await api.POST('/api/v1/recipes', { body: sent })

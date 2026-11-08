@@ -285,7 +285,7 @@ describe('RecipeEditorView', () => {
 
       await submit(wrapper)
 
-      expect(wrapper.text()).toContain('Ajoute au moins un ingrédient.')
+      expect(wrapper.text()).toContain('Ajoute au moins un ingrédient ou une recette.')
     })
 
     it('propose le premier type par défaut', async () => {
