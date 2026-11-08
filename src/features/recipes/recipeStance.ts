@@ -14,31 +14,19 @@ export interface StanceInput {
   /** Les identifiants de SES recettes du même type, `undefined` tant que la liste n'est pas lue. */
   mineIds: readonly string[] | undefined
   id: string
-  /** L'adresse Marmiton de la fiche, déjà jugée par `marmitonSourceUrl` (`null` : aucune). */
-  sourceUrl: string | null
-  originalId: string | null | undefined
+  /** `ownerless` de la fiche : vrai si c'est la version commune (sans propriétaire). Absent d'un back plus ancien. */
+  ownerless: boolean | undefined
 }
 
 /**
  * Pour un utilisateur ordinaire `canEdit` suffit (vrai : la sienne ; faux : celle d'un autre), sans attendre la liste de ses recettes.
- * Pour l'administrateur il est vrai pour toute recette lue : la liste de SES recettes dit si elle est la sienne. Parmi les autres, la version
- * commune est celle d'une recette Marmiton (`sourceUrl`) qui n'est la copie d'aucune autre (`originalId` nul) : la fiche ne dit pas plus.
- * Un back qui ne rend pas `canEdit` : la liste seule, comme avant.
+ * Pour l'administrateur il est vrai pour toute recette lue : `ownerless` du back dit que c'est la version commune, sinon la liste de SES
+ * recettes dit si elle est la sienne. Un back qui ne rend pas `canEdit` : la liste seule, comme avant.
  */
 export function stanceOf(input: StanceInput): RecipeStance {
   if (!input.isAdmin && input.canEdit !== undefined) return input.canEdit ? 'mine' : 'other'
+  if (input.isAdmin && input.canEdit === true && input.ownerless === true) return 'common'
   if (input.mineIds === undefined) return 'unknown'
-  if (input.mineIds.includes(input.id)) return 'mine'
 
-  return input.isAdmin &&
-    input.canEdit === true &&
-    input.sourceUrl !== null &&
-    input.originalId === null
-    ? 'common'
-    : 'other'
-}
-
-/** Même nom à la casse et aux espaces près : sert à retrouver parmi ses recettes la copie d'une recette. */
-export function sameName(a: string, b: string): boolean {
-  return a.trim().toLocaleLowerCase('fr') === b.trim().toLocaleLowerCase('fr')
+  return input.mineIds.includes(input.id) ? 'mine' : 'other'
 }

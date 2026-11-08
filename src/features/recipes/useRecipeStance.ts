@@ -26,8 +26,7 @@ export function useRecipeStance(id: () => string) {
       canEdit: data.canEdit,
       mineIds: mine.data.value?.member?.map((candidate) => candidate.id),
       id: data.id,
-      sourceUrl: sourceUrl.value,
-      originalId: data.originalId,
+      ownerless: data.ownerless,
     })
   })
 
@@ -35,6 +34,8 @@ export function useRecipeStance(id: () => string) {
     recipe,
     mine,
     sourceUrl,
+    /** L'identifiant de SA copie de la version commune (`null` : il n'en a pas). */
+    copyId: computed(() => recipe.data.value?.copyId ?? null),
     ownership,
     isMine: computed(() => ownership.value === 'mine'),
     isCommon: computed(() => ownership.value === 'common'),

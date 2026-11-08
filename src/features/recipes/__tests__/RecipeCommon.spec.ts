@@ -42,6 +42,8 @@ const common = {
   favorite: false,
   sourceUrl: LINK,
   originalId: null,
+  ownerless: true,
+  copyId: null,
   canEdit: true,
   rows: [row('jaune-reserve', 'Jaune d’œuf', 4), row('farine-reservee', 'Farine', 250, 'epicerie')],
 }
@@ -51,6 +53,8 @@ const copy = {
   id: 'm1',
   version: 1,
   originalId: 'c1',
+  ownerless: false,
+  copyId: null,
   rows: [row('jaune-admin', 'Jaune d’œuf', 4)],
 }
 
@@ -103,6 +107,7 @@ describe('« Recettes des autres » vu par l’administrateur', () => {
     typeSlug: 'dessert',
     fromMarmiton: true,
     alreadyCopied,
+    copyId: alreadyCopied ? 'm1' : null,
   })
   const ordinary = {
     id: 'o1',
@@ -111,6 +116,7 @@ describe('« Recettes des autres » vu par l’administrateur', () => {
     typeSlug: 'plat',
     fromMarmiton: false,
     alreadyCopied: false,
+    copyId: null,
   }
   const open = (member: Record<string, unknown>[], user: unknown = admin, more = {}) =>
     mountView(OtherRecipesView, '/recettes/autres', {
@@ -168,48 +174,28 @@ describe('« Recettes des autres » vu par l’administrateur', () => {
     expect(wrapper.find('[data-common-help]').exists()).toBe(false)
   })
 
-  it('« Ma copie » ouvre SA copie : retrouvée parmi ses recettes du type et confirmée par son original', async () => {
-    const { wrapper, context, fetchMock } = await open(
-      [marmiton('c1', 'Tarte au citron meringuée', true)],
-      admin,
-      {
-        'GET /api/v1/recipe-types/dessert/recipes': () =>
-          json({
-            member: [
-              { id: 'm0', name: 'Tarte au citron meringuée', secret: false },
-              { id: 'm1', name: 'Tarte au citron meringuée', secret: false },
-            ],
-            totalItems: 2,
-          }),
-        // Une homonyme qui n'est pas la copie de la commune, puis la bonne
-        'GET /api/v1/recipes/m0': () => json({ ...copy, id: 'm0', originalId: null }),
-        'GET /api/v1/recipes/m1': () => json(copy),
-      },
-    )
+  it('« Ma copie » ouvre SA copie par copyId, même renommée ou d’un autre type : aucune recherche', async () => {
+    const { wrapper, context, fetchMock } = await open([
+      { ...marmiton('c1', 'Tarte au citron meringuée', true), copyId: 'm9' },
+    ])
     await vi.waitFor(() => expect(wrapper.find('[data-open-copy]').exists()).toBe(true))
 
     await wrapper.find('[data-open-copy]').trigger('click')
     await flushPromises()
 
     expect(context.router.currentRoute.value.name).toBe('recipe')
-    expect(context.router.currentRoute.value.params.id).toBe('m1')
-    expect(calls(fetchMock)).toContain('GET /api/v1/recipes/m0')
+    expect(context.router.currentRoute.value.params.id).toBe('m9')
+    expect(calls(fetchMock).filter((call) => call.includes('/recipe-types/'))).toEqual([])
   })
 
-  it('copie introuvable (renommée, changée de type) : la version commune s’ouvre', async () => {
-    const { wrapper, context } = await open(
-      [marmiton('c1', 'Tarte au citron meringuée', true)],
-      admin,
-      {
-        'GET /api/v1/recipe-types/dessert/recipes': () => json({ member: [], totalItems: 0 }),
-      },
-    )
-    await vi.waitFor(() => expect(wrapper.find('[data-open-copy]').exists()).toBe(true))
+  it('sans copyId (back plus ancien) : pas de « Ma copie », « Copier » comme avant', async () => {
+    const { wrapper } = await open([
+      { ...marmiton('c1', 'Tarte', true), copyId: undefined, alreadyCopied: false },
+    ])
+    await vi.waitFor(() => expect(wrapper.find('li').exists()).toBe(true))
 
-    await wrapper.find('[data-open-copy]').trigger('click')
-    await flushPromises()
-
-    expect(context.router.currentRoute.value.params.id).toBe('c1')
+    expect(wrapper.find('[data-open-copy]').exists()).toBe(false)
+    expect(wrapper.find('li button').text()).toBe('Copier')
   })
 
   describe('un utilisateur ordinaire : rien ne change', () => {
@@ -307,21 +293,15 @@ describe('la fiche de la version commune, lue par l’administrateur', () => {
   })
 
   describe('quand l’administrateur a déjà sa copie', () => {
-    it('« Ta copie » remplace « Copier » et mène à sa copie', async () => {
-      const { wrapper } = await mountView(RecipeDetailView, '/recettes/c1', {
-        ...handlers({
-          'GET /api/v1/recipe-types/dessert/recipes': () =>
-            json({
-              member: [{ id: 'm1', name: 'Tarte au citron meringuée', secret: false }],
-              totalItems: 1,
-            }),
-          'GET /api/v1/recipes/m1': () => json(copy),
-        }),
+    it('« Ta copie » remplace « Copier » et mène à copyId, même renommée ou d’un autre type', async () => {
+      const { wrapper, fetchMock } = await mountView(RecipeDetailView, '/recettes/c1', {
+        ...handlers({ 'GET /api/v1/recipes/c1': () => json({ ...common, copyId: 'm9' }) }),
       })
       await vi.waitFor(() => expect(buttons(wrapper)).toContain('Ta copie'))
 
       expect(buttons(wrapper)).not.toContain('Copier')
-      expect(wrapper.find('a[href="/recettes/m1"]').text()).toBe('Ta copie')
+      expect(wrapper.find('a[href="/recettes/m9"]').text()).toBe('Ta copie')
+      expect(calls(fetchMock)).not.toContain('GET /api/v1/recipes/m9')
     })
   })
 
@@ -473,6 +453,7 @@ describe('les autres fiches ne changent pas', () => {
     typeSlug: 'plat',
     typeName: 'Plat',
     sourceUrl: null,
+    ownerless: false,
     rows: [row('courgette', 'Courgette', 600)],
   }
   const open = async (recipe: Record<string, unknown>, user: unknown, mineIds: string[]) => {
@@ -500,7 +481,7 @@ describe('les autres fiches ne changent pas', () => {
   it('un utilisateur ordinaire ne voit que Copier sur celle d’un autre (canEdit faux), même version Marmiton', async () => {
     for (const recipe of [
       { ...plain, canEdit: false },
-      { ...plain, canEdit: false, sourceUrl: LINK, originalId: null },
+      { ...plain, canEdit: false, sourceUrl: LINK, originalId: null, ownerless: true },
     ]) {
       const { wrapper } = await open(recipe, me, [])
 
@@ -518,6 +499,7 @@ describe('les autres fiches ne changent pas', () => {
     const legacy: Record<string, unknown> = { ...plain }
     delete legacy.canEdit
     delete legacy.originalId
+    delete legacy.ownerless
     const { wrapper } = await open(legacy, me, ['r1'])
 
     expect(buttons(wrapper)).toEqual(expect.arrayContaining(['Modifier', 'Supprimer']))
@@ -530,6 +512,29 @@ describe('les autres fiches ne changent pas', () => {
     expect(buttons(wrapper)).not.toContain('Modifier')
     expect(wrapper.find('[data-common-banner]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Supprimer cette recette')
+  })
+
+  it('un utilisateur ordinaire qui a copié la version commune : « Ta copie » mène à copyId', async () => {
+    const { wrapper } = await open(
+      { ...plain, canEdit: false, sourceUrl: LINK, ownerless: true, copyId: 'm9' },
+      me,
+      [],
+    )
+
+    expect(buttons(wrapper)).toContain('Ta copie')
+    expect(buttons(wrapper)).not.toContain('Copier')
+    expect(wrapper.find('a[href="/recettes/m9"]').exists()).toBe(true)
+  })
+
+  it('la copie d’une copie Marmiton (original non commun) : jamais la version commune, Copier', async () => {
+    const { wrapper } = await open(
+      { ...plain, canEdit: true, sourceUrl: LINK, originalId: 'm1', ownerless: false },
+      admin,
+      [],
+    )
+
+    expect(wrapper.find('[data-common-banner]').exists()).toBe(false)
+    expect(buttons(wrapper)).toContain('Copier')
   })
 
   it('l’administrateur sur la copie Marmiton ordinaire d’un autre : pas non plus la version commune', async () => {
@@ -639,7 +644,14 @@ describe('l’éditeur de la version commune', () => {
   })
 
   it('une recette ordinaire garde son éditeur : interrupteur “secrète”, pas de ligne ni de message en plus', async () => {
-    const own = { ...common, id: 'r1', originalId: null, sourceUrl: null, canEdit: true }
+    const own = {
+      ...common,
+      id: 'r1',
+      originalId: null,
+      sourceUrl: null,
+      ownerless: false,
+      canEdit: true,
+    }
     const { wrapper, context } = await mountView(RecipeEditorView, '/recettes/r1/modifier', {
       ...handlers({
         'GET /api/v1/recipes/r1': () => json(own),

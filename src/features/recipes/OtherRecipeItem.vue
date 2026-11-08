@@ -1,14 +1,11 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { ref } from 'vue'
-import { useQueryClient } from '@tanstack/vue-query'
 import { RouterLink, useRouter } from 'vue-router'
 import { Check, Copy } from 'lucide-vue-next'
 
 import UiButton from '@/design/UiButton.vue'
 import { useSessionStore } from '@/session/session'
 import MarmitonBadge from './MarmitonBadge.vue'
-import { findOwnCopy } from './ownCopy'
 import { capitalized, type OtherRecipe } from './otherRecipeGroups'
 
 /**
@@ -25,19 +22,16 @@ defineEmits<{ copy: [recipe: OtherRecipe] }>()
 
 const { t } = useI18n()
 const session = useSessionStore()
-const queryClient = useQueryClient()
 const router = useRouter()
 
-// L'administrateur voit la version commune d'une recette Marmiton même quand il l'a déjà copiée (MAR-005) : « Ma copie » mène à SA copie.
-// Le back ne dit pas laquelle ; on la retrouve parmi ses recettes. Introuvable (renommée, changée de type) : la version commune s'ouvre,
-// d'où il peut la copier de nouveau.
-const haveCopy = () => session.isAdmin && props.recipe.alreadyCopied === true
-const opening = ref(false)
-async function openCopy() {
-  opening.value = true
-  const id = await findOwnCopy(queryClient, session.api, props.recipe).catch(() => null)
-  opening.value = false
-  await router.push({ name: 'recipe', params: { id: id ?? props.recipe.id } })
+// L'administrateur voit la version commune d'une recette Marmiton même quand il l'a déjà copiée (MAR-005) : « Ma copie » ouvre SA copie,
+// que le back désigne (`copyId`), même renommée ou d'un autre type.
+const copyId = () =>
+  session.isAdmin && typeof props.recipe.copyId === 'string' ? props.recipe.copyId : null
+const haveCopy = () => copyId() !== null
+function openCopy() {
+  const id = copyId()
+  if (id !== null) void router.push({ name: 'recipe', params: { id } })
 }
 </script>
 
@@ -67,7 +61,6 @@ async function openCopy() {
       data-open-copy
       class="min-h-11 shrink-0 cursor-pointer rounded-lg px-3 font-bold text-primary underline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-60"
       :aria-label="t('recipes.common.myCopyNamed', { name: recipe.name })"
-      :disabled="opening"
       @click="openCopy"
     >
       {{ t('recipes.common.myCopy') }}

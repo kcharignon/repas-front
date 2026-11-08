@@ -21,7 +21,6 @@ export const recipeKeys = {
   others: (search: string) => ['recipes', 'others', search] as const,
   detail: (id: string) => ['recipes', 'detail', id] as const,
   /** La copie que l'administrateur a faite d'une version commune (MAR-005) */
-  ownCopy: (commonId: string) => ['recipes', 'own-copy', commonId] as const,
 }
 
 export function useRecipeTypes() {

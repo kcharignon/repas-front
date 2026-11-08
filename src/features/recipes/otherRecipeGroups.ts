@@ -8,6 +8,8 @@ export interface OtherRecipe {
   fromMarmiton?: boolean
   /** Seul l'administrateur le reçoit à vrai : il a déjà sa copie de cette version commune (MAR-005), « Ma copie » remplace « Copier ». */
   alreadyCopied?: boolean
+  /** L'identifiant de cette copie (vrai ssi `alreadyCopied`), même renommée ou d'un autre type : « Ma copie » l'ouvre. */
+  copyId?: string | null
 }
 
 export interface OtherRecipeGroup {
