@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { Check, Copy } from 'lucide-vue-next'
 
 import UiButton from '@/design/UiButton.vue'
+import MarmitonBadge from './MarmitonBadge.vue'
 import { capitalized, type OtherRecipe } from './otherRecipeGroups'
 
 /**
@@ -26,6 +27,7 @@ const { t } = useI18n()
     >
       <span class="text-lg font-bold [overflow-wrap:anywhere]">{{ recipe.name }}</span>
       <span v-if="showType" class="text-sm text-muted">{{ capitalized(recipe.typeName) }}</span>
+      <MarmitonBadge v-if="recipe.fromMarmiton === true" class="mt-1" />
     </RouterLink>
     <UiButton
       v-if="copied"

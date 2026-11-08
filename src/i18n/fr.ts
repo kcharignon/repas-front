@@ -337,6 +337,8 @@ export default {
     title: 'Recettes',
     others: 'Recettes des autres',
     secretBadge: 'Secrète',
+    // La pastille d'une recette de Marmiton dans « Recettes des autres » (MAR-004)
+    marmitonBadge: 'Marmiton',
     // Le type « Favoris » : il n'existe pas côté back, la liste l'ajoute en première position quand une recette est en favoris
     favorites: 'Favoris',
     favoriteAdd: 'Mettre {name} en favoris',
@@ -379,10 +381,32 @@ export default {
     copied: 'Copiée',
     copiedNamed: 'Copiée : {name} est dans tes recettes',
     copiedToast: '« {name} » est dans tes recettes.',
+    // Le lien d'origine d'une recette copiée de Marmiton (MAR-004) : un texte et une icône, jamais le logo du site
+    viewOnMarmiton: 'Voir sur Marmiton',
+  },
+  // « Nouvelle recette » ne fait que choisir : écrire la sienne ou copier celle de Marmiton (deux parcours distincts)
+  recipeNew: {
+    question: 'Comment veux-tu ajouter ta recette ?',
+    writeTitle: 'Écrire ma recette',
+    writeHint: 'Tu choisis le nom et les ingrédients.',
+    marmitonTitle: 'Copier depuis Marmiton',
+    marmitonHint: 'Tu colles un lien, je m’occupe du reste.',
+  },
+  // Copier une recette de Marmiton depuis « Nouvelle recette » (MAR-004, ADR 0037 du back) : coller le lien, une touche
+  marmiton: {
+    title: 'Copier depuis Marmiton',
+    help: 'Colle le lien de la recette Marmiton, je la copie dans tes recettes.',
+    field: 'Lien de la recette',
+    placeholder: 'https://www.marmiton.org/recettes/…',
+    copy: 'Copier la recette',
+    copying: 'Je copie la recette…',
+    wait: 'Ça prend quelques secondes.',
+    empty: 'Colle le lien d’une recette Marmiton.',
   },
   editor: {
     newTitle: 'Nouvelle recette',
     editTitle: 'Modifier la recette',
+    writeTitle: 'Écrire ma recette',
     backToRecipe: 'Retour à la recette',
     name: 'Nom de la recette',
     serving: 'Nombre de personnes',
@@ -753,6 +777,17 @@ export default {
     // `PASSWORD_RATE_LIMITED` (429) : trop de mots de passe actuels refusés, `{wait}` vaut au moins une minute
     passwordRateLimited:
       'Trop de mots de passe actuels incorrects. Rien n’a été changé. Patiente {wait}, puis réessaie.',
+    // La copie d'une recette Marmiton (MAR-004) : ce qui s'est passé, ce qui est sauf, une action ; jamais le code
+    marmitonUrlInvalid:
+      'Ce lien n’est pas une recette Marmiton. Rien n’a été copié. Colle le lien d’une recette de marmiton.org.',
+    marmitonNotFound:
+      'Marmiton ne trouve pas cette recette. Rien n’a été copié. Vérifie le lien et réessaie.',
+    marmitonUnreadable:
+      'Je n’arrive pas à lire cette recette. Rien n’a été copié. Tu peux l’écrire toi-même.',
+    marmitonUnavailable:
+      'Marmiton ne répond pas pour le moment. Rien n’a été copié. Réessaie dans un instant.',
+    marmitonRateLimited:
+      'Tu as copié beaucoup de recettes. Rien n’a été perdu. Réessaie dans quelques minutes.',
     driveStoreInvalid:
       'Cette adresse n’est pas celle d’un magasin {retailer} Drive : vérifie-la, elle ressemble à {storeExample}.',
   },

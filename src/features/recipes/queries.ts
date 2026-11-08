@@ -160,6 +160,49 @@ export function useCopyRecipe() {
   })
 }
 
+/** Délai du client pour la copie d'une recette Marmiton (MAR-004) : le back lit la page de Marmiton (8 s au plus), au-delà on dit que Marmiton ne répond pas. */
+export const MARMITON_IMPORT_TIMEOUT_MS = 20_000
+
+/**
+ * Copie une recette de Marmiton dans celles de l'utilisateur (ADR 0037 du back) : `201` (copie créée) comme `200` (déjà là) rendent la copie
+ * dans `Location`. Le nom est lu tout de suite (la fiche s'ouvre sur cette lecture, déjà en mémoire) pour le message ; sans lui, `name` est `null`.
+ * Le refus est dit sous le champ par l'écran, pas par un message : `silent`.
+ */
+export function useImportMarmitonRecipe() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    meta: { silent: true },
+    mutationFn: async (url: string): Promise<{ id: string; name: string | null }> => {
+      let result: { response: Response; error?: unknown }
+      try {
+        result = await api.POST('/api/v1/recipes/import/marmiton', {
+          body: { url },
+          signal: AbortSignal.timeout(MARMITON_IMPORT_TIMEOUT_MS),
+        })
+      } catch (cause) {
+        throw ApiError.network(cause)
+      }
+      const { response, error } = result
+      if (!response.ok) throw ApiError.fromResponse(response, error)
+      const id = response.headers.get('Location')?.split('/').pop()
+      if (id === undefined || id === '') throw new ApiError(response.status, 'MISSING_LOCATION')
+
+      // Les listes de recettes se relisent, puis la copie : la fiche qui s'ouvre la trouve déjà lue
+      void queryClient.invalidateQueries({ queryKey: recipeKeys.all })
+      const recipe = await queryClient
+        .fetchQuery({
+          queryKey: recipeKeys.detail(id),
+          queryFn: () => unwrap(api.GET('/api/v1/recipes/{id}', { params: { path: { id } } })),
+        })
+        .catch(() => null)
+
+      return { id, name: recipe?.name ?? null }
+    },
+  })
+}
+
 export function useDeleteRecipe() {
   const { api } = useSessionStore()
   const queryClient = useQueryClient()
