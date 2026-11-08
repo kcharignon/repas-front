@@ -1594,7 +1594,7 @@
                     "Recipes"
                 ],
                 "summary": "Remplace une recette de l'utilisateur : nom, personnes, type et lignes (les lignes absentes du corps sont supprim\u00e9es). Un ancien slug est remplac\u00e9 par celui de l'ingr\u00e9dient actuel de l'auteur, comme \u00e0 la cr\u00e9ation",
-                "description": "Le champ facultatif `secret` rend la recette secr\u00e8te (seul son auteur la voit) ou de nouveau visible : absent ou `null`, il reste inchang\u00e9. Seul l'auteur le change. Les copies d\u00e9j\u00e0 faites par d'autres restent \u00e0 eux.",
+                "description": "Le champ facultatif `secret` rend la recette secr\u00e8te (seul son auteur la voit) ou de nouveau visible : absent ou `null`, il reste inchang\u00e9. Seul l'auteur le change. Les copies d\u00e9j\u00e0 faites par d'autres restent \u00e0 eux. Une recette SANS PROPRI\u00c9TAIRE (la recette Marmiton neutre : `GET /recipes/other-people`, `fromMarmiton`) n'est modifi\u00e9e que par un administrateur, directement, pour corriger un import rat\u00e9 avant que d'autres la copient : les slugs d'ingr\u00e9dients re\u00e7us sont ceux de l'administrateur (ses alias), traduits en ingr\u00e9dients du propri\u00e9taire r\u00e9serv\u00e9 (un ingr\u00e9dient r\u00e9serv\u00e9 d\u00e9j\u00e0 sur une ligne reste tel quel ; un r\u00e9serv\u00e9 de m\u00eame origine ou de m\u00eame nom est r\u00e9utilis\u00e9, sinon celui de l'administrateur est copi\u00e9 avec ses conversions propres) ; son tag Marmiton et son lien d'origine ne changent pas, sa version augmente, les copies d\u00e9j\u00e0 faites ne changent pas, et elle ne devient jamais secr\u00e8te.",
                 "operationId": "put_api_update_recipe",
                 "parameters": [
                     {
@@ -1624,7 +1624,7 @@
                         "description": "Recette modifi\u00e9e"
                     },
                     "403": {
-                        "description": "La recette appartient \u00e0 un autre utilisateur (la recette secr\u00e8te d'un autre, que son auteur seul voit, est inconnue pour tous, administrateur compris : `404`). `RECIPE_SECRET_FORBIDDEN` : un administrateur qui modifie la recette ordinaire d'un autre envoie un `secret` diff\u00e9rent de l'actuel, rien n'est \u00e9crit"
+                        "description": "La recette appartient \u00e0 un autre utilisateur, ou n'a pas de propri\u00e9taire (recette Marmiton neutre) et l'utilisateur n'est pas administrateur (la recette secr\u00e8te d'un autre, que son auteur seul voit, est inconnue pour tous, administrateur compris : `404`). `RECIPE_SECRET_FORBIDDEN` : un administrateur qui modifie la recette d'un autre (ou sans propri\u00e9taire) envoie un `secret` diff\u00e9rent de l'actuel, rien n'est \u00e9crit"
                     },
                     "404": {
                         "description": "Recette, type, ingr\u00e9dient ou unit\u00e9 inconnu (un ingr\u00e9dient personnalis\u00e9 d'un autre utilisateur l'est aussi)"
@@ -1642,6 +1642,7 @@
                     "Recipes"
                 ],
                 "summary": "Supprime une recette de l'utilisateur, avec ses lignes",
+                "description": "Une recette SANS PROPRI\u00c9TAIRE (la recette Marmiton neutre) n'est supprim\u00e9e que par un administrateur, pour repartir d'un import rat\u00e9 : son tag Marmiton est lib\u00e9r\u00e9 (un nouvel import de la m\u00eame page recr\u00e9e une neutre neuve, la page est relue), les copies d\u00e9j\u00e0 faites restent \u00e0 leurs auteurs, telles quelles, avec leur lien d'origine. Elle ne se supprime pas tant qu'elle est dans une liste de courses (`409`).",
                 "operationId": "delete_api_remove_recipe",
                 "parameters": [
                     {
@@ -1661,7 +1662,7 @@
                         "description": "Recette supprim\u00e9e"
                     },
                     "403": {
-                        "description": "La recette appartient \u00e0 un autre utilisateur (la recette secr\u00e8te d'un autre est inconnue pour tous, administrateur compris : `404`)"
+                        "description": "La recette appartient \u00e0 un autre utilisateur, ou n'a pas de propri\u00e9taire (recette Marmiton neutre) et l'utilisateur n'est pas administrateur (la recette secr\u00e8te d'un autre est inconnue pour tous, administrateur compris : `404`)"
                     },
                     "404": {
                         "description": "Recette inconnue"
@@ -2361,7 +2362,7 @@
                     "Recipes"
                 ],
                 "summary": "Recettes (non secr\u00e8tes) des autres utilisateurs que l'utilisateur authentifi\u00e9 n'a pas encore copi\u00e9es : tri\u00e9es par cat\u00e9gorie, ou cherch\u00e9es par nom du plus pertinent au moins pertinent",
-                "description": "Une recette secr\u00e8te (`secret`, ADR 0033) n'y est jamais : ni dans `member`, ni dans `totalItems`, ni dans la recherche. Sans `q`, les recettes sont tri\u00e9es par cat\u00e9gorie (l'ordre des types de recette), puis par nom, puis par identifiant. Avec `q`, seules les recettes dont le nom correspond sont rendues, du plus pertinent au moins pertinent (Jaro-Winkler, ADR 0019), \u00e0 pertinence \u00e9gale par nom puis par identifiant, toutes cat\u00e9gories confondues ; chaque recette porte sa cat\u00e9gorie (`typeSlug`, `typeName`). 200 recettes au plus par r\u00e9ponse (`totalItems` donne le vrai nombre). Sans autre param\u00e8tre, la premi\u00e8re page de 200 : `limit` et `offset` facultatifs lisent la suite.",
+                "description": "Une recette secr\u00e8te (`secret`, ADR 0033) n'y est jamais : ni dans `member`, ni dans `totalItems`, ni dans la recherche. Sans `q`, les recettes sont tri\u00e9es par cat\u00e9gorie (l'ordre des types de recette), puis par nom, puis par identifiant. Avec `q`, seules les recettes dont le nom correspond sont rendues, du plus pertinent au moins pertinent (Jaro-Winkler, ADR 0019), \u00e0 pertinence \u00e9gale par nom puis par identifiant, toutes cat\u00e9gories confondues ; chaque recette porte sa cat\u00e9gorie (`typeSlug`, `typeName`). 200 recettes au plus par r\u00e9ponse (`totalItems` donne le vrai nombre). Sans autre param\u00e8tre, la premi\u00e8re page de 200 : `limit` et `offset` facultatifs lisent la suite. Un administrateur y voit TOUJOURS les recettes sans propri\u00e9taire (`fromMarmiton`), m\u00eame celles qu'il a d\u00e9j\u00e0 copi\u00e9es (`alreadyCopied`), pour les corriger ou les supprimer ; la page, le total et la recherche des autres utilisateurs ne changent pas.",
                 "operationId": "get_api_list_other_people_recipes",
                 "parameters": [
                     {
@@ -2665,6 +2666,82 @@
                     },
                     "412": {
                         "description": "La version de la liste principale n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture (ignor\u00e9 pour les listes d'un type)"
+                    }
+                }
+            }
+        },
+        "/api/v1/ingredients/{slug}/parent": {
+            "put": {
+                "tags": [
+                    "Ingredients"
+                ],
+                "summary": "D\u00e9coupe un ingr\u00e9dient : il devient une PARTIE d'un autre (\u00ab Jaune d'\u0153uf \u00bb est une partie d'\u00ab \u0152uf \u00bb), ou change de parent ou de ratio",
+                "description": "Seul le propri\u00e9taire de l'ingr\u00e9dient le d\u00e9coupe, un administrateur compris (`403` pour l'ingr\u00e9dient d'un autre) ; le parent est \u00e0 l'utilisateur lui aussi, sinon il est inconnu (`404`). Une partie reste un ingr\u00e9dient ordinaire (recettes, conversions) mais n'est jamais une ligne de la liste de courses : elle se plie dans son parent. Un seul parent, profondeur 1 : un parent n'est pas une partie et une partie n'a pas de partie ; dix parties au plus par parent. Idempotent : refaire le m\u00eame appel, ou ne changer que le ratio, n'est jamais refus\u00e9. Rien n'est \u00e9crit sur un refus. Les listes en cours ne sont pas recalcul\u00e9es.",
+                "operationId": "put_api_set_ingredient_parent",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SetIngredientParentPayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Ingr\u00e9dient d\u00e9coup\u00e9 (ou d\u00e9j\u00e0 d\u00e9coup\u00e9 ainsi)"
+                    },
+                    "403": {
+                        "description": "L'ingr\u00e9dient appartient \u00e0 un autre utilisateur (un administrateur n'a pas de passe-droit)"
+                    },
+                    "404": {
+                        "description": "Ingr\u00e9dient inconnu, ou parent inconnu ou \u00e0 un autre utilisateur"
+                    },
+                    "409": {
+                        "description": "L'ingr\u00e9dient a une ligne dans une liste de courses non termin\u00e9e (`INGREDIENT_PART_IN_LIST`) : une partie n'est jamais une ligne de liste ; seulement quand le parent change"
+                    },
+                    "422": {
+                        "description": "Corps invalide, ou un cas m\u00e9tier : un ingr\u00e9dient n'est pas sa propre partie (`INGREDIENT_PART_OF_ITSELF`) ; le parent est d\u00e9j\u00e0 une partie ou l'ingr\u00e9dient a d\u00e9j\u00e0 des parties (`INGREDIENT_PART_CHAIN`) ; le parent a d\u00e9j\u00e0 dix parties (`INGREDIENT_PART_LIMIT_REACHED`) ; le ratio n'est pas un nombre de 0,000001 \u00e0 1 000 000 (`INGREDIENT_PART_RATIO_INVALID`, pr\u00e9c\u00e9d\u00e9 de `ratio: ` quand c'est le corps qui le refuse)"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Ingredients"
+                ],
+                "summary": "Recolle une partie : l'ingr\u00e9dient redevient un ingr\u00e9dient ordinaire (sans parent ni ratio)",
+                "description": "Seul le propri\u00e9taire de l'ingr\u00e9dient le recolle, un administrateur compris (`403` pour l'ingr\u00e9dient d'un autre). Idempotent : un ingr\u00e9dient qui n'est pas une partie r\u00e9pond `204` sans rien changer. Toujours permis, m\u00eame quand une liste de courses contient l'ingr\u00e9dient.",
+                "operationId": "delete_api_remove_ingredient_parent",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "L'ingr\u00e9dient est ordinaire (il l'\u00e9tait d\u00e9j\u00e0, ou il vient de l'\u00eatre)"
+                    },
+                    "403": {
+                        "description": "L'ingr\u00e9dient appartient \u00e0 un autre utilisateur (un administrateur n'a pas de passe-droit)"
+                    },
+                    "404": {
+                        "description": "Ingr\u00e9dient inconnu"
                     }
                 }
             }
@@ -4786,6 +4863,28 @@
                 },
                 "type": "object"
             },
+            "SetIngredientParentPayload": {
+                "required": [
+                    "parent",
+                    "ratio"
+                ],
+                "properties": {
+                    "parent": {
+                        "description": "Slug du parent : l'ingr\u00e9dient dont l'ingr\u00e9dient de l'URL fait partie. \u00c0 l'utilisateur lui aussi (le parent d'un autre est inconnu), et lui-m\u00eame n'est pas une partie",
+                        "type": "string",
+                        "maxLength": 255,
+                        "example": "oeuf-0a1b2c3d"
+                    },
+                    "ratio": {
+                        "description": "Combien d'unit\u00e9s par d\u00e9faut de la partie font UNE unit\u00e9 de recette du parent (1 \u0153uf = 1 jaune : 1 ; une gousse de vanille = 2 demi-gousses : 2), de 0,000001 \u00e0 1 000 000",
+                        "type": "number",
+                        "maximum": 1000000,
+                        "minimum": 1.0e-6,
+                        "example": 1
+                    }
+                },
+                "type": "object"
+            },
             "UpdateServingMealPayload": {
                 "required": [
                     "serving"
@@ -5779,6 +5878,18 @@
                         "description": "Chemin ou URL de l'image du rayon de l'ingr\u00e9dient",
                         "type": "string",
                         "example": "images/department/cremerie.png"
+                    },
+                    "partOfSlug": {
+                        "description": "Identifiant du parent quand l'ingr\u00e9dient est une PARTIE d'un autre (ADR 0038 : \u00ab Jaune d'\u0153uf \u00bb pour \u00ab \u0152uf \u00bb), `null` pour un ingr\u00e9dient ordinaire. Cl\u00e9 toujours \u00e9crite",
+                        "type": "string",
+                        "example": "oeuf-0a1b2c3d",
+                        "nullable": true
+                    },
+                    "partOfName": {
+                        "description": "Nom du parent quand l'ingr\u00e9dient est une PARTIE d'un autre, `null` pour un ingr\u00e9dient ordinaire. Cl\u00e9 toujours \u00e9crite",
+                        "type": "string",
+                        "example": "\u0152uf",
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -5914,6 +6025,18 @@
                         "description": "Nom du rayon de l'ingr\u00e9dient",
                         "type": "string",
                         "example": "Surgel\u00e9"
+                    },
+                    "partOfSlug": {
+                        "description": "Identifiant du parent quand l'ingr\u00e9dient est une PARTIE d'un autre (ADR 0038 : \u00ab Jaune d'\u0153uf \u00bb pour \u00ab \u0152uf \u00bb), `null` pour un ingr\u00e9dient ordinaire. Cl\u00e9 toujours \u00e9crite",
+                        "type": "string",
+                        "example": "oeuf-0a1b2c3d",
+                        "nullable": true
+                    },
+                    "partOfName": {
+                        "description": "Nom du parent quand l'ingr\u00e9dient est une PARTIE d'un autre, `null` pour un ingr\u00e9dient ordinaire. Cl\u00e9 toujours \u00e9crite",
+                        "type": "string",
+                        "example": "\u0152uf",
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -6287,6 +6410,62 @@
                 },
                 "type": "object"
             },
+            "IngredientPartDTO": {
+                "required": [
+                    "slug",
+                    "name",
+                    "ratio",
+                    "unitName"
+                ],
+                "properties": {
+                    "slug": {
+                        "description": "Identifiant de la partie (slug)",
+                        "type": "string",
+                        "example": "jaune-d-oeuf-0a1b2c3d"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Jaune d'\u0153uf"
+                    },
+                    "ratio": {
+                        "description": "Combien d'unit\u00e9s par d\u00e9faut de la partie font UNE unit\u00e9 de recette du parent (1 \u0153uf = 1 jaune : 1)",
+                        "type": "number",
+                        "format": "float",
+                        "example": 1
+                    },
+                    "unitName": {
+                        "description": "Nom de l'unit\u00e9 d'achat de la partie (celle dont parle le ratio)",
+                        "type": "string",
+                        "example": "unit\u00e9"
+                    }
+                },
+                "type": "object"
+            },
+            "IngredientPartOfDTO": {
+                "required": [
+                    "slug",
+                    "name",
+                    "ratio"
+                ],
+                "properties": {
+                    "slug": {
+                        "description": "Identifiant du parent (slug)",
+                        "type": "string",
+                        "example": "oeuf-0a1b2c3d"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "\u0152uf"
+                    },
+                    "ratio": {
+                        "description": "Combien d'unit\u00e9s par d\u00e9faut de cette partie font UNE unit\u00e9 de recette du parent (1 \u0153uf = 1 jaune : 1)",
+                        "type": "number",
+                        "format": "float",
+                        "example": 1
+                    }
+                },
+                "type": "object"
+            },
             "IngredientDTO": {
                 "required": [
                     "slug",
@@ -6305,7 +6484,8 @@
                     "listCount",
                     "isBase",
                     "canSetBase",
-                    "listDestination"
+                    "listDestination",
+                    "parts"
                 ],
                 "properties": {
                     "slug": {
@@ -6394,6 +6574,22 @@
                     },
                     "listDestination": {
                         "$ref": "#/components/schemas/ListDestinationDTO"
+                    },
+                    "parts": {
+                        "description": "Les PARTIES de l'ingr\u00e9dient (ADR 0038 : \u00ab Jaune d'\u0153uf \u00bb et \u00ab Blanc d'\u0153uf \u00bb pour \u00ab \u0152uf \u00bb), tri\u00e9es par nom puis identifiant ; `[]` pour un ingr\u00e9dient sans partie. Cl\u00e9 toujours \u00e9crite. Une partie n'est jamais une ligne de la liste de courses : elle se plie dans son parent",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/IngredientPartDTO"
+                        }
+                    },
+                    "partOf": {
+                        "description": "Le parent de l'ingr\u00e9dient quand c'est une PARTIE d'un autre ; `null` pour un ingr\u00e9dient ordinaire. Cl\u00e9 toujours \u00e9crite",
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/IngredientPartOfDTO"
+                            }
+                        ]
                     }
                 },
                 "type": "object"
@@ -6612,6 +6808,12 @@
                         "description": "Nom du rayon de l'ingr\u00e9dient",
                         "type": "string",
                         "example": "Surgel\u00e9"
+                    },
+                    "partOfName": {
+                        "description": "Nom du parent quand l'ingr\u00e9dient de la ligne est une PARTIE d'un autre (ADR 0038 : \u00ab \u0152uf \u00bb pour \u00ab Jaune d'\u0153uf \u00bb), `null` pour un ingr\u00e9dient ordinaire. Cl\u00e9 toujours \u00e9crite",
+                        "type": "string",
+                        "example": "\u0152uf",
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -6626,7 +6828,8 @@
                     "secret",
                     "favorite",
                     "rows",
-                    "version"
+                    "version",
+                    "canEdit"
                 ],
                 "properties": {
                     "id": {
@@ -6679,6 +6882,17 @@
                         "type": "string",
                         "example": "https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx",
                         "nullable": true
+                    },
+                    "originalId": {
+                        "description": "L'identifiant de la recette dont celle-ci est la copie, si cette recette existe encore et que l'utilisateur la voit ; `null` pour une recette originale, ou dont l'original a \u00e9t\u00e9 supprim\u00e9 (ou est devenu secret). Toujours \u00e9crit : le front en tire un lien vers l'original",
+                        "type": "string",
+                        "example": "3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34",
+                        "nullable": true
+                    },
+                    "canEdit": {
+                        "description": "Vrai si l'utilisateur modifie (`PUT /recipes/{id}`) cette recette : la sienne, ou n'importe quelle recette qu'il lit s'il est administrateur - dont une recette SANS PROPRI\u00c9TAIRE (la neutre d'une recette Marmiton, que lui seul modifie et supprime). Faux pour la recette d'un autre. Toujours \u00e9crit, calcul\u00e9 sans requ\u00eate de plus",
+                        "type": "boolean",
+                        "example": true
                     }
                 },
                 "type": "object"
@@ -6713,6 +6927,32 @@
                 },
                 "type": "object"
             },
+            "ShoppingListRowIncludeDTO": {
+                "required": [
+                    "name",
+                    "quantity",
+                    "unitSymbol"
+                ],
+                "properties": {
+                    "name": {
+                        "description": "Nom de la partie",
+                        "type": "string",
+                        "example": "Jaune d'\u0153uf"
+                    },
+                    "quantity": {
+                        "description": "Quantit\u00e9 de la partie dans la liste, dans l'unit\u00e9 d'achat de la partie",
+                        "type": "number",
+                        "format": "float",
+                        "example": 2
+                    },
+                    "unitSymbol": {
+                        "description": "Symbole de l'unit\u00e9 d'achat de la partie (peut \u00eatre vide)",
+                        "type": "string",
+                        "example": ""
+                    }
+                },
+                "type": "object"
+            },
             "ShoppingListRowDTO": {
                 "required": [
                     "id",
@@ -6723,7 +6963,8 @@
                     "ingredientSlug",
                     "unitSlug",
                     "departmentSlug",
-                    "departmentName"
+                    "departmentName",
+                    "includes"
                 ],
                 "properties": {
                     "id": {
@@ -6769,6 +7010,13 @@
                         "description": "Nom du rayon de l'ingr\u00e9dient",
                         "type": "string",
                         "example": "Surgel\u00e9"
+                    },
+                    "includes": {
+                        "description": "Les parties d'ingr\u00e9dient que cette ligne contient (ADR 0038) : \u00ab Comprend 2 jaunes d'\u0153uf et 2 blancs d'\u0153uf \u00bb pour une ligne \u00ab \u0152uf 5 \u00bb. Tri\u00e9es par nom, `[]` quand la ligne ne contient aucune partie (cl\u00e9 toujours \u00e9crite)",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ShoppingListRowIncludeDTO"
+                        }
                     }
                 },
                 "type": "object"
@@ -7196,7 +7444,8 @@
                     "name",
                     "typeName",
                     "typeSlug",
-                    "fromMarmiton"
+                    "fromMarmiton",
+                    "alreadyCopied"
                 ],
                 "properties": {
                     "id": {
@@ -7220,6 +7469,11 @@
                     },
                     "fromMarmiton": {
                         "description": "Vrai pour une recette Marmiton neutre (ADR 0037 d\u00e9cision 11) : sans propri\u00e9taire, visible de tous, qu'on ne fait que copier ; le front en tire la pastille \u00ab Marmiton \u00bb. Toujours \u00e9crit",
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "alreadyCopied": {
+                        "description": "Vrai si l'utilisateur a d\u00e9j\u00e0 une copie de cette recette. Seul un administrateur re\u00e7oit une recette sans propri\u00e9taire d\u00e9j\u00e0 copi\u00e9e (il la modifie ou la supprime) : pour lui, le front ne propose pas \u00ab Copier \u00bb en double. Toujours \u00e9crit ; toujours `false` pour un autre utilisateur, dont la liste ne contient que ce qu'il n'a pas copi\u00e9",
                         "type": "boolean",
                         "example": false
                     }

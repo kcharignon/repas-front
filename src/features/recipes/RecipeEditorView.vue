@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { Plus } from 'lucide-vue-next'
+import { Layers, Plus } from 'lucide-vue-next'
 
 import { hasFailed } from '@/api/query'
 import UiButton from '@/design/UiButton.vue'
@@ -15,10 +15,12 @@ import UiField from '@/design/UiField.vue'
 import UiSelect from '@/design/UiSelect.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
 import { messageForFailure } from '@/notifications/failures'
+import { useNotificationsStore } from '@/notifications/store'
 import RecipeRowEditor from './RecipeRowEditor.vue'
 import SecretRecipeSwitch from './SecretRecipeSwitch.vue'
 import type { EditableRow } from './RecipeRowEditor.vue'
-import { useIngredientOptions, useRecipe, useRecipeTypes, useSaveRecipe } from './queries'
+import { useIngredientOptions, useRecipeTypes, useSaveRecipe } from './queries'
+import { useRecipeStance } from './useRecipeStance'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -30,7 +32,9 @@ const editing = computed(() => recipeId.value !== null)
 
 const types = useRecipeTypes()
 const ingredients = useIngredientOptions()
-const existing = useRecipe(() => recipeId.value ?? '')
+// La recette à modifier, et si c'est la version commune d'une recette Marmiton, que seul l'administrateur corrige (MAR-005) : ni
+// interrupteur « secrète » (elle n'a pas d'auteur), une ligne le dit en tête, et un message confirme l'enregistrement.
+const { recipe: existing, ownership, isCommon } = useRecipeStance(() => recipeId.value ?? '')
 const save = useSaveRecipe()
 
 let nextKey = 1
@@ -91,7 +95,21 @@ watch(
 // seulement quand ce nom existe dans deux rayons (ING-017). Un ancien back (ni rayon ni icône) : des options sans repère.
 const { iconOf } = useDepartmentIcons()
 const options = computed(() => {
-  const members = ingredients.data.value?.member ?? []
+  const listed = ingredients.data.value?.member ?? []
+  // Les ingrédients d'une version commune appartiennent à un propriétaire réservé et ne sont dans la liste de personne : le nom de chaque
+  // ligne existante vient alors de la ligne elle-même (nom et rayon), sinon le champ resterait vide. Renvoyé tel quel, le slug est gardé.
+  const known = new Set(listed.map((option) => option.slug))
+  const missing = new Map<string, (typeof listed)[number]>()
+  for (const row of existing.data.value?.rows ?? []) {
+    if (known.has(row.ingredientSlug) || missing.has(row.ingredientSlug)) continue
+    missing.set(row.ingredientSlug, {
+      slug: row.ingredientSlug,
+      name: row.ingredientName,
+      departmentSlug: row.departmentSlug,
+      departmentName: row.departmentName,
+    })
+  }
+  const members = [...listed, ...missing.values()]
   const ambiguous = namesInSeveralDepartments(members, (option) => option)
 
   return members.map((option) => ({
@@ -153,7 +171,7 @@ function submit() {
         typeSlug: form.typeSlug,
         // Création : la clé ne part que pour une recette secrète (absente = publique) ; modification : la valeur choisie, si le back la connaît
         ...(editing.value
-          ? secretKnown.value
+          ? secretKnown.value && !isCommon.value
             ? { secret: form.secret }
             : {}
           : form.secret
@@ -167,7 +185,11 @@ function submit() {
       },
     },
     {
-      onSuccess: (id) => router.push({ name: 'recipe', params: { id } }),
+      onSuccess: (id) => {
+        if (isCommon.value) useNotificationsStore().push('success', t('recipes.common.saved'))
+
+        return router.push({ name: 'recipe', params: { id } })
+      },
       onError: (error) => {
         failure.value = messageForFailure(error)
       },
@@ -187,6 +209,10 @@ function submit() {
     <h1 class="font-display text-3xl leading-tight font-bold md:text-4xl">
       {{ editing ? t('editor.editTitle') : t('editor.writeTitle') }}
     </h1>
+
+    <p v-if="isCommon" data-common-note class="-mt-2 flex items-center gap-2 text-sm text-muted">
+      <Layers class="size-4.5 shrink-0" aria-hidden="true" />{{ t('recipes.common.editing') }}
+    </p>
 
     <p v-if="editing && existing.isPending.value" class="text-muted" role="status">
       {{ t('common.loading') }}
@@ -245,7 +271,10 @@ function submit() {
         </UiField>
       </section>
 
-      <SecretRecipeSwitch v-if="!editing || secretKnown" v-model="form.secret" />
+      <SecretRecipeSwitch
+        v-if="!editing || (secretKnown && ownership !== 'common')"
+        v-model="form.secret"
+      />
 
       <section class="flex flex-col gap-3">
         <h2 class="font-display text-2xl font-bold">{{ t('recipes.ingredients') }}</h2>

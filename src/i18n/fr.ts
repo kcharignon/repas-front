@@ -383,6 +383,27 @@ export default {
     copiedToast: '« {name} » est dans tes recettes.',
     // Le lien d'origine d'une recette copiée de Marmiton (MAR-004) : un texte et une icône, jamais le logo du site
     viewOnMarmiton: 'Voir sur Marmiton',
+    // La version commune d'une recette Marmiton (MAR-005, ADR 0037 du back) : l'administrateur la corrige ou la supprime, les autres la copient
+    common: {
+      title: 'Version commune',
+      help: 'Les prochains qui la copient auront ta version. Les copies déjà faites ne changent pas.',
+      othersHelp: 'Les recettes Marmiton sont communes. Touche-en une pour la corriger.',
+      haveCopy: 'Tu as déjà ta copie',
+      myCopy: 'Ma copie',
+      myCopyNamed: 'Ouvrir ma copie de {name}',
+      yourCopy: 'Ta copie',
+      open: 'Ouvrir la version commune',
+      openHint: 'Celle que copient les autres.',
+      editing: 'Tu modifies la version commune.',
+      saved: 'La recette Marmiton est à jour.',
+      delete: 'Supprimer cette recette',
+      deleteTitle: 'Supprimer la recette Marmiton ?',
+      deleteHelp:
+        'Elle disparaît de « Recettes des autres ». Les copies déjà faites restent à leurs auteurs.',
+      cannotDeleteTitle: 'Suppression impossible',
+      cannotDelete:
+        'Des listes de courses utilisent encore cette recette. Rien n’a été supprimé. Réessaie quand ces listes seront terminées.',
+    },
   },
   // « Nouvelle recette » ne fait que choisir : écrire la sienne ou copier celle de Marmiton (deux parcours distincts)
   recipeNew: {

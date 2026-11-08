@@ -538,11 +538,14 @@ export interface paths {
         get: operations["get_api_get_recipe"];
         /**
          * Remplace une recette de l'utilisateur : nom, personnes, type et lignes (les lignes absentes du corps sont supprimées). Un ancien slug est remplacé par celui de l'ingrédient actuel de l'auteur, comme à la création
-         * @description Le champ facultatif `secret` rend la recette secrète (seul son auteur la voit) ou de nouveau visible : absent ou `null`, il reste inchangé. Seul l'auteur le change. Les copies déjà faites par d'autres restent à eux.
+         * @description Le champ facultatif `secret` rend la recette secrète (seul son auteur la voit) ou de nouveau visible : absent ou `null`, il reste inchangé. Seul l'auteur le change. Les copies déjà faites par d'autres restent à eux. Une recette SANS PROPRIÉTAIRE (la recette Marmiton neutre : `GET /recipes/other-people`, `fromMarmiton`) n'est modifiée que par un administrateur, directement, pour corriger un import raté avant que d'autres la copient : les slugs d'ingrédients reçus sont ceux de l'administrateur (ses alias), traduits en ingrédients du propriétaire réservé (un ingrédient réservé déjà sur une ligne reste tel quel ; un réservé de même origine ou de même nom est réutilisé, sinon celui de l'administrateur est copié avec ses conversions propres) ; son tag Marmiton et son lien d'origine ne changent pas, sa version augmente, les copies déjà faites ne changent pas, et elle ne devient jamais secrète.
          */
         put: operations["put_api_update_recipe"];
         post?: never;
-        /** Supprime une recette de l'utilisateur, avec ses lignes */
+        /**
+         * Supprime une recette de l'utilisateur, avec ses lignes
+         * @description Une recette SANS PROPRIÉTAIRE (la recette Marmiton neutre) n'est supprimée que par un administrateur, pour repartir d'un import raté : son tag Marmiton est libéré (un nouvel import de la même page recrée une neutre neuve, la page est relue), les copies déjà faites restent à leurs auteurs, telles quelles, avec leur lien d'origine. Elle ne se supprime pas tant qu'elle est dans une liste de courses (`409`).
+         */
         delete: operations["delete_api_remove_recipe"];
         options?: never;
         head?: never;
@@ -739,7 +742,7 @@ export interface paths {
         };
         /**
          * Recettes (non secrètes) des autres utilisateurs que l'utilisateur authentifié n'a pas encore copiées : triées par catégorie, ou cherchées par nom du plus pertinent au moins pertinent
-         * @description Une recette secrète (`secret`, ADR 0033) n'y est jamais : ni dans `member`, ni dans `totalItems`, ni dans la recherche. Sans `q`, les recettes sont triées par catégorie (l'ordre des types de recette), puis par nom, puis par identifiant. Avec `q`, seules les recettes dont le nom correspond sont rendues, du plus pertinent au moins pertinent (Jaro-Winkler, ADR 0019), à pertinence égale par nom puis par identifiant, toutes catégories confondues ; chaque recette porte sa catégorie (`typeSlug`, `typeName`). 200 recettes au plus par réponse (`totalItems` donne le vrai nombre). Sans autre paramètre, la première page de 200 : `limit` et `offset` facultatifs lisent la suite.
+         * @description Une recette secrète (`secret`, ADR 0033) n'y est jamais : ni dans `member`, ni dans `totalItems`, ni dans la recherche. Sans `q`, les recettes sont triées par catégorie (l'ordre des types de recette), puis par nom, puis par identifiant. Avec `q`, seules les recettes dont le nom correspond sont rendues, du plus pertinent au moins pertinent (Jaro-Winkler, ADR 0019), à pertinence égale par nom puis par identifiant, toutes catégories confondues ; chaque recette porte sa catégorie (`typeSlug`, `typeName`). 200 recettes au plus par réponse (`totalItems` donne le vrai nombre). Sans autre paramètre, la première page de 200 : `limit` et `offset` facultatifs lisent la suite. Un administrateur y voit TOUJOURS les recettes sans propriétaire (`fromMarmiton`), même celles qu'il a déjà copiées (`alreadyCopied`), pour les corriger ou les supprimer ; la page, le total et la recherche des autres utilisateurs ne changent pas.
          */
         get: operations["get_api_list_other_people_recipes"];
         put?: never;
@@ -837,6 +840,30 @@ export interface paths {
          * @description Quand la recette a été planifiée dans plusieurs listes (ADR 0036), le retrait agit sur TOUT le groupe de repas, en une transaction, et chaque liste ne perd que les lignes que son repas y avait posées. Si une liste du groupe est envoyée au drive, tout est refusé (409 `SHOPPING_LIST_SENT`) et rien n'est écrit.
          */
         delete: operations["delete_api_unplan_recipe"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingredients/{slug}/parent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Découpe un ingrédient : il devient une PARTIE d'un autre (« Jaune d'œuf » est une partie d'« Œuf »), ou change de parent ou de ratio
+         * @description Seul le propriétaire de l'ingrédient le découpe, un administrateur compris (`403` pour l'ingrédient d'un autre) ; le parent est à l'utilisateur lui aussi, sinon il est inconnu (`404`). Une partie reste un ingrédient ordinaire (recettes, conversions) mais n'est jamais une ligne de la liste de courses : elle se plie dans son parent. Un seul parent, profondeur 1 : un parent n'est pas une partie et une partie n'a pas de partie ; dix parties au plus par parent. Idempotent : refaire le même appel, ou ne changer que le ratio, n'est jamais refusé. Rien n'est écrit sur un refus. Les listes en cours ne sont pas recalculées.
+         */
+        put: operations["put_api_set_ingredient_parent"];
+        post?: never;
+        /**
+         * Recolle une partie : l'ingrédient redevient un ingrédient ordinaire (sans parent ni ratio)
+         * @description Seul le propriétaire de l'ingrédient le recolle, un administrateur compris (`403` pour l'ingrédient d'un autre). Idempotent : un ingrédient qui n'est pas une partie répond `204` sans rien changer. Toujours permis, même quand une liste de courses contient l'ingrédient.
+         */
+        delete: operations["delete_api_remove_ingredient_parent"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1699,6 +1726,18 @@ export interface components {
              */
             transferTo: string;
         };
+        SetIngredientParentPayload: {
+            /**
+             * @description Slug du parent : l'ingrédient dont l'ingrédient de l'URL fait partie. À l'utilisateur lui aussi (le parent d'un autre est inconnu), et lui-même n'est pas une partie
+             * @example oeuf-0a1b2c3d
+             */
+            parent: string;
+            /**
+             * @description Combien d'unités par défaut de la partie font UNE unité de recette du parent (1 œuf = 1 jaune : 1 ; une gousse de vanille = 2 demi-gousses : 2), de 0,000001 à 1 000 000
+             * @example 1
+             */
+            ratio: number;
+        };
         UpdateServingMealPayload: {
             /**
              * @description Nombre de personnes du repas, de 1 à 100
@@ -2205,6 +2244,16 @@ export interface components {
              * @example images/department/cremerie.png
              */
             departmentImage: string;
+            /**
+             * @description Identifiant du parent quand l'ingrédient est une PARTIE d'un autre (ADR 0038 : « Jaune d'œuf » pour « Œuf »), `null` pour un ingrédient ordinaire. Clé toujours écrite
+             * @example oeuf-0a1b2c3d
+             */
+            partOfSlug?: string | null;
+            /**
+             * @description Nom du parent quand l'ingrédient est une PARTIE d'un autre, `null` pour un ingrédient ordinaire. Clé toujours écrite
+             * @example Œuf
+             */
+            partOfName?: string | null;
         };
         ConversionDTO: {
             /**
@@ -2291,6 +2340,16 @@ export interface components {
              * @example Surgelé
              */
             departmentName: string;
+            /**
+             * @description Identifiant du parent quand l'ingrédient est une PARTIE d'un autre (ADR 0038 : « Jaune d'œuf » pour « Œuf »), `null` pour un ingrédient ordinaire. Clé toujours écrite
+             * @example oeuf-0a1b2c3d
+             */
+            partOfSlug?: string | null;
+            /**
+             * @description Nom du parent quand l'ingrédient est une PARTIE d'un autre, `null` pour un ingrédient ordinaire. Clé toujours écrite
+             * @example Œuf
+             */
+            partOfName?: string | null;
         };
         IngredientConversionDTO: {
             /**
@@ -2520,6 +2579,41 @@ export interface components {
             /** @description Nom du type de liste choisi ; `null` hors du mode `TYPE`. Clé toujours écrite */
             typeName?: string | null;
         };
+        IngredientPartDTO: {
+            /**
+             * @description Identifiant de la partie (slug)
+             * @example jaune-d-oeuf-0a1b2c3d
+             */
+            slug: string;
+            /** @example Jaune d'œuf */
+            name: string;
+            /**
+             * Format: float
+             * @description Combien d'unités par défaut de la partie font UNE unité de recette du parent (1 œuf = 1 jaune : 1)
+             * @example 1
+             */
+            ratio: number;
+            /**
+             * @description Nom de l'unité d'achat de la partie (celle dont parle le ratio)
+             * @example unité
+             */
+            unitName: string;
+        };
+        IngredientPartOfDTO: {
+            /**
+             * @description Identifiant du parent (slug)
+             * @example oeuf-0a1b2c3d
+             */
+            slug: string;
+            /** @example Œuf */
+            name: string;
+            /**
+             * Format: float
+             * @description Combien d'unités par défaut de cette partie font UNE unité de recette du parent (1 œuf = 1 jaune : 1)
+             * @example 1
+             */
+            ratio: number;
+        };
         IngredientDTO: {
             /**
              * @description Identifiant de l'ingrédient (slug)
@@ -2586,6 +2680,10 @@ export interface components {
             /** @description Le lecteur peut poser le marqueur « de base » sur cet ingrédient : il est le propriétaire du catalogue et l'ingrédient est à lui. Toujours écrit, jamais `null` : le front s'appuie sur ce champ, pas sur le rôle administrateur */
             canSetBase: boolean;
             listDestination: components["schemas"]["ListDestinationDTO"];
+            /** @description Les PARTIES de l'ingrédient (ADR 0038 : « Jaune d'œuf » et « Blanc d'œuf » pour « Œuf »), triées par nom puis identifiant ; `[]` pour un ingrédient sans partie. Clé toujours écrite. Une partie n'est jamais une ligne de la liste de courses : elle se plie dans son parent */
+            parts: components["schemas"]["IngredientPartDTO"][];
+            /** @description Le parent de l'ingrédient quand c'est une PARTIE d'un autre ; `null` pour un ingrédient ordinaire. Clé toujours écrite */
+            partOf?: components["schemas"]["IngredientPartOfDTO"] | null;
         };
         MergeIngredientDTO: {
             /**
@@ -2723,6 +2821,11 @@ export interface components {
              * @example Surgelé
              */
             departmentName: string;
+            /**
+             * @description Nom du parent quand l'ingrédient de la ligne est une PARTIE d'un autre (ADR 0038 : « Œuf » pour « Jaune d'œuf »), `null` pour un ingrédient ordinaire. Clé toujours écrite
+             * @example Œuf
+             */
+            partOfName?: string | null;
         };
         RecipeDTO: {
             /**
@@ -2766,6 +2869,16 @@ export interface components {
              * @example https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx
              */
             sourceUrl?: string | null;
+            /**
+             * @description L'identifiant de la recette dont celle-ci est la copie, si cette recette existe encore et que l'utilisateur la voit ; `null` pour une recette originale, ou dont l'original a été supprimé (ou est devenu secret). Toujours écrit : le front en tire un lien vers l'original
+             * @example 3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34
+             */
+            originalId?: string | null;
+            /**
+             * @description Vrai si l'utilisateur modifie (`PUT /recipes/{id}`) cette recette : la sienne, ou n'importe quelle recette qu'il lit s'il est administrateur - dont une recette SANS PROPRIÉTAIRE (la neutre d'une recette Marmiton, que lui seul modifie et supprime). Faux pour la recette d'un autre. Toujours écrit, calculé sans requête de plus
+             * @example true
+             */
+            canEdit: boolean;
         };
         RecipeTypeDTO: {
             /**
@@ -2785,6 +2898,24 @@ export interface components {
              * @example 2
              */
             order: number;
+        };
+        ShoppingListRowIncludeDTO: {
+            /**
+             * @description Nom de la partie
+             * @example Jaune d'œuf
+             */
+            name: string;
+            /**
+             * Format: float
+             * @description Quantité de la partie dans la liste, dans l'unité d'achat de la partie
+             * @example 2
+             */
+            quantity: number;
+            /**
+             * @description Symbole de l'unité d'achat de la partie (peut être vide)
+             * @example
+             */
+            unitSymbol: string;
         };
         ShoppingListRowDTO: {
             /**
@@ -2827,6 +2958,8 @@ export interface components {
              * @example Surgelé
              */
             departmentName: string;
+            /** @description Les parties d'ingrédient que cette ligne contient (ADR 0038) : « Comprend 2 jaunes d'œuf et 2 blancs d'œuf » pour une ligne « Œuf 5 ». Triées par nom, `[]` quand la ligne ne contient aucune partie (clé toujours écrite) */
+            includes: components["schemas"]["ShoppingListRowIncludeDTO"][];
         };
         ShoppingListDepartmentDTO: {
             /**
@@ -3081,6 +3214,11 @@ export interface components {
              * @example false
              */
             fromMarmiton: boolean;
+            /**
+             * @description Vrai si l'utilisateur a déjà une copie de cette recette. Seul un administrateur reçoit une recette sans propriétaire déjà copiée (il la modifie ou la supprime) : pour lui, le front ne propose pas « Copier » en double. Toujours écrit ; toujours `false` pour un autre utilisateur, dont la liste ne contient que ce qu'il n'a pas copié
+             * @example false
+             */
+            alreadyCopied: boolean;
         };
         OtherPeopleRecipesDTO: {
             /** @description Les recettes de cette page, 200 au plus : sans recherche triées par catégorie (l'ordre des types) puis par nom, avec une recherche par pertinence décroissante, toutes catégories confondues */
@@ -5276,7 +5414,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La recette appartient à un autre utilisateur (la recette secrète d'un autre, que son auteur seul voit, est inconnue pour tous, administrateur compris : `404`). `RECIPE_SECRET_FORBIDDEN` : un administrateur qui modifie la recette ordinaire d'un autre envoie un `secret` différent de l'actuel, rien n'est écrit */
+            /** @description La recette appartient à un autre utilisateur, ou n'a pas de propriétaire (recette Marmiton neutre) et l'utilisateur n'est pas administrateur (la recette secrète d'un autre, que son auteur seul voit, est inconnue pour tous, administrateur compris : `404`). `RECIPE_SECRET_FORBIDDEN` : un administrateur qui modifie la recette d'un autre (ou sans propriétaire) envoie un `secret` différent de l'actuel, rien n'est écrit */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5327,7 +5465,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La recette appartient à un autre utilisateur (la recette secrète d'un autre est inconnue pour tous, administrateur compris : `404`) */
+            /** @description La recette appartient à un autre utilisateur, ou n'a pas de propriétaire (recette Marmiton neutre) et l'utilisateur n'est pas administrateur (la recette secrète d'un autre est inconnue pour tous, administrateur compris : `404`) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6274,6 +6412,92 @@ export interface operations {
             };
             /** @description La version de la liste principale n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture (ignoré pour les listes d'un type) */
             412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    put_api_set_ingredient_parent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetIngredientParentPayload"];
+            };
+        };
+        responses: {
+            /** @description Ingrédient découpé (ou déjà découpé ainsi) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description L'ingrédient appartient à un autre utilisateur (un administrateur n'a pas de passe-droit) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ingrédient inconnu, ou parent inconnu ou à un autre utilisateur */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description L'ingrédient a une ligne dans une liste de courses non terminée (`INGREDIENT_PART_IN_LIST`) : une partie n'est jamais une ligne de liste ; seulement quand le parent change */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Corps invalide, ou un cas métier : un ingrédient n'est pas sa propre partie (`INGREDIENT_PART_OF_ITSELF`) ; le parent est déjà une partie ou l'ingrédient a déjà des parties (`INGREDIENT_PART_CHAIN`) ; le parent a déjà dix parties (`INGREDIENT_PART_LIMIT_REACHED`) ; le ratio n'est pas un nombre de 0,000001 à 1 000 000 (`INGREDIENT_PART_RATIO_INVALID`, précédé de `ratio: ` quand c'est le corps qui le refuse) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_api_remove_ingredient_parent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description L'ingrédient est ordinaire (il l'était déjà, ou il vient de l'être) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description L'ingrédient appartient à un autre utilisateur (un administrateur n'a pas de passe-droit) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ingrédient inconnu */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

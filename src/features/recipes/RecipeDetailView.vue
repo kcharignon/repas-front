@@ -2,15 +2,24 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { Check, Copy, ExternalLink, TriangleAlert } from 'lucide-vue-next'
+import {
+  Check,
+  ChevronRight,
+  Copy,
+  ExternalLink,
+  Layers,
+  Trash2,
+  TriangleAlert,
+} from 'lucide-vue-next'
 
 import { hasFailed } from '@/api/query'
 import { ApiError } from '@/api'
 import type { RecipeRow } from '@/api'
-import { notifyDeleteFailure } from '@/notifications/failures'
+import { notifyDeleteFailure, notifyFailure } from '@/notifications/failures'
 import DepartmentMarker from '@/design/DepartmentMarker.vue'
 import UiButton from '@/design/UiButton.vue'
 import UiConfirmDialog from '@/design/UiConfirmDialog.vue'
+import UiDialog from '@/design/UiDialog.vue'
 import UiLinkButton from '@/design/UiLinkButton.vue'
 import SeasonArt from '@/design/season/SeasonArt.vue'
 import {
@@ -21,40 +30,56 @@ import {
 import type { EquationValue } from '@/features/ingredients/equationMath'
 import OwnConversionSheet from '@/features/ingredients/OwnConversionSheet.vue'
 import { useUnits } from '@/features/ingredients/queries'
+import { useSessionStore } from '@/session/session'
 import { formatQuantity } from '@/features/shopping-lists/format'
 import FavoriteButton from './FavoriteButton.vue'
-import { marmitonSourceUrl } from './marmitonSourceUrl'
 import PlanButton from './PlanButton.vue'
 import SecretBadge from './SecretBadge.vue'
-import { useDeleteRecipe, useRecipe, useRecipesByType } from './queries'
+import { useOwnCopy } from './ownCopy'
+import { useDeleteRecipe } from './queries'
 import { useCopyRecipeAction } from './useCopyRecipeAction'
+import { useRecipeStance } from './useRecipeStance'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-const recipe = useRecipe(() => String(route.params.id))
-const mine = useRecipesByType(() => recipe.data.value?.typeSlug ?? null)
-const remove = useDeleteRecipe()
+const session = useSessionStore()
+const removeOwn = useDeleteRecipe()
+// La version commune dit elle-même ses refus (409 : sa propre fenêtre)
+const removeCommon = useDeleteRecipe(true)
 
-// Le détail d'une recette est lisible par tous, mais le contrat ne dit pas à qui elle est : on le déduit de la liste de SES recettes
-// du même type. Tant qu'elle n'est pas lue (ou en erreur) on ne sait pas : `unknown`, et la zone des actions reste vide (réservée,
-// sans saut de mise en page) au lieu de proposer un jeu d'actions qui changerait aussitôt.
+// Le détail d'une recette est lisible par tous : `useRecipeStance` dit à qui elle est (`canEdit` du back, et pour l'administrateur la liste de
+// SES recettes du même type). Tant que ce n'est pas su, `unknown` : la zone des actions reste vide (réservée, sans saut de mise en page)
+// au lieu de proposer un jeu d'actions qui changerait aussitôt.
 //  - `mine` : Ajouter à la liste, Modifier, Supprimer (le back refuse de toute façon les écritures d'un autre : 403) ;
-//  - `other` : « Copier » seulement. Pas d'ajout à la liste : on copie d'abord, puis on planifie sa propre recette.
-type Ownership = 'mine' | 'other' | 'unknown'
-const ownership = computed<Ownership>(() => {
-  const members = mine.data.value?.member
-  if (members === undefined) return 'unknown'
+//  - `other` : « Copier » seulement. Pas d'ajout à la liste : on copie d'abord, puis on planifie sa propre recette ;
+//  - `common` (administrateur seul) : la version commune d'une recette Marmiton, sans propriétaire : Modifier, Copier, Supprimer (MAR-005).
+const { recipe, sourceUrl, ownership, isMine, isCommon } = useRecipeStance(() =>
+  String(route.params.id),
+)
+// Sa copie de la version commune, pour « Ta copie » à la place de « Copier » (undefined : pas encore su)
+const ownCopy = useOwnCopy(() =>
+  isCommon.value && recipe.data.value
+    ? {
+        id: recipe.data.value.id,
+        name: recipe.data.value.name,
+        typeSlug: recipe.data.value.typeSlug,
+      }
+    : null,
+)
+// Sa copie d'une recette Marmiton : l'administrateur peut remonter à l'original, celui que copient les autres (MAR-005)
+const commonOriginalId = computed(() => {
+  const data = recipe.data.value
+  if (!session.isAdmin || !isMine.value || data === undefined || sourceUrl.value === null)
+    return null
 
-  return members.some((candidate) => candidate.id === route.params.id) ? 'mine' : 'other'
+  return data.originalId ?? null
 })
-const isMine = computed(() => ownership.value === 'mine')
-// Le lien d'origine d'une recette copiée de Marmiton : lu de la réponse, rendu seulement s'il a la forme d'une adresse de recette de
-// Marmiton (jamais composé ici ; un back qui ne connaît pas encore `sourceUrl` n'en rend pas)
-const sourceUrl = computed(() => marmitonSourceUrl(recipe.data.value?.sourceUrl))
 const copying = useCopyRecipeAction()
 const deleting = ref(false)
+// La version commune est encore dans une liste de courses : rien n'est supprimé, on le dit (409)
+const stillInLists = ref(false)
 
 // Un ingrédient que le back ne sait pas convertir dans son unité d'achat (`convertible` faux) : repéré sur sa ligne, et réglé ici par
 // l'auteur de la recette (les ingrédients sont les siens). Pour la recette d'un autre, rien : ce ne sont pas ses ingrédients, et une
@@ -132,17 +157,23 @@ watch(
   },
 )
 
+const remove = computed(() => (isCommon.value ? removeCommon : removeOwn))
+
 function confirmDelete() {
-  remove.mutate(
+  remove.value.mutate(
     { id: String(route.params.id) },
     {
       onSuccess: async () => {
         deleting.value = false
-        await router.push({ name: 'recipes', query: { type: recipe.data.value?.typeSlug } })
+        await (isCommon.value
+          ? router.push({ name: 'recipes-others' })
+          : router.push({ name: 'recipes', query: { type: recipe.data.value?.typeSlug } }))
       },
       onError: (error) => {
         deleting.value = false
-        notifyDeleteFailure(error, t('recipes.inUse'))
+        if (!isCommon.value) notifyDeleteFailure(error, t('recipes.inUse'))
+        else if (error instanceof ApiError && error.status === 409) stillInLists.value = true
+        else notifyFailure(error)
       },
     },
   )
@@ -153,10 +184,10 @@ function confirmDelete() {
   <main class="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-6">
     <!-- Venu de « Recettes des autres » par le nom : le lien de retour y ramène -->
     <RouterLink
-      :to="{ name: ownership === 'other' ? 'recipes-others' : 'recipes' }"
+      :to="{ name: ownership === 'other' || isCommon ? 'recipes-others' : 'recipes' }"
       class="self-start font-bold text-primary underline"
     >
-      {{ ownership === 'other' ? t('recipes.othersTitle') : t('recipes.title') }}
+      {{ ownership === 'other' || isCommon ? t('recipes.othersTitle') : t('recipes.title') }}
     </RouterLink>
 
     <template v-if="recipe.data.value">
@@ -199,6 +230,19 @@ function confirmDelete() {
         />
       </div>
 
+      <!-- La version commune : ce que l'administrateur change est ce que les prochains copieront -->
+      <section
+        v-if="isCommon"
+        data-common-banner
+        aria-labelledby="common-title"
+        class="flex flex-col gap-1.5 rounded-2xl bg-secret-soft px-4 py-3.5 text-on-secret-soft"
+      >
+        <h2 id="common-title" class="flex items-center gap-2 font-bold">
+          <Layers class="size-5" aria-hidden="true" />{{ t('recipes.common.title') }}
+        </h2>
+        <p>{{ t('recipes.common.help') }}</p>
+      </section>
+
       <!-- La place des actions est réservée même quand on ne sait pas encore à qui est la recette -->
       <div class="flex min-h-11 flex-wrap gap-2" :aria-busy="ownership === 'unknown'">
         <template v-if="ownership === 'mine'">
@@ -215,6 +259,41 @@ function confirmDelete() {
             {{ t('recipes.edit') }}
           </UiLinkButton>
           <UiButton variant="ghost" @click="deleting = true">{{ t('common.delete') }}</UiButton>
+        </template>
+        <template v-else-if="isCommon">
+          <UiLinkButton
+            variant="primary"
+            :to="{ name: 'recipe-edit', params: { id: recipe.data.value.id } }"
+          >
+            {{ t('recipes.edit') }}
+          </UiLinkButton>
+          <template v-if="!ownCopy.isPending.value">
+            <UiLinkButton
+              v-if="typeof ownCopy.data.value === 'string'"
+              variant="secondary"
+              :to="{ name: 'recipe', params: { id: ownCopy.data.value } }"
+            >
+              {{ t('recipes.common.yourCopy') }}
+            </UiLinkButton>
+            <UiButton
+              v-else-if="copying.isCopied(recipe.data.value.id)"
+              variant="ghost"
+              class="bg-soft text-primary disabled:opacity-100"
+              :aria-label="t('recipes.copiedNamed', { name: recipe.data.value.name })"
+              disabled
+            >
+              <Check class="size-5" aria-hidden="true" />{{ t('recipes.copied') }}
+            </UiButton>
+            <UiButton
+              v-else
+              variant="secondary"
+              :aria-label="t('recipes.copyNamed', { name: recipe.data.value.name })"
+              :disabled="copying.pending.value"
+              @click="copying.copy(recipe.data.value)"
+            >
+              <Copy class="size-5" aria-hidden="true" />{{ t('recipes.copy') }}
+            </UiButton>
+          </template>
         </template>
         <template v-else-if="ownership === 'other'">
           <UiButton
@@ -308,6 +387,35 @@ function confirmDelete() {
         </ul>
       </section>
 
+      <!-- Sa copie d'une recette Marmiton : l'administrateur remonte à la version commune, celle que copient les autres -->
+      <RouterLink
+        v-if="commonOriginalId !== null"
+        data-common-link
+        :to="{ name: 'recipe', params: { id: commonOriginalId } }"
+        class="flex min-h-16 items-center gap-3 rounded-2xl bg-secret-soft px-3.5 py-2.5 text-on-secret-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      >
+        <span
+          class="flex size-10 shrink-0 items-center justify-center rounded-full bg-surface text-primary"
+          ><Layers class="size-5.5" aria-hidden="true"
+        /></span>
+        <span class="min-w-0 flex-1">
+          <span class="block font-bold">{{ t('recipes.common.open') }}</span>
+          <span class="block text-sm">{{ t('recipes.common.openHint') }}</span>
+        </span>
+        <ChevronRight class="size-5.5 shrink-0" aria-hidden="true" />
+      </RouterLink>
+
+      <!-- Tout en bas, loin de « Modifier » : une suppression ne se fait pas par erreur -->
+      <div v-if="isCommon" class="mt-4 flex">
+        <UiButton
+          variant="ghost"
+          class="min-h-12 flex-1 border-[1.5px] border-danger text-danger hover:bg-danger-soft"
+          @click="deleting = true"
+        >
+          <Trash2 class="size-5" aria-hidden="true" />{{ t('recipes.common.delete') }}
+        </UiButton>
+      </div>
+
       <OwnConversionSheet
         v-if="isMine"
         v-model:open="fixing.open"
@@ -320,12 +428,28 @@ function confirmDelete() {
 
       <UiConfirmDialog
         v-model:open="deleting"
-        :title="t('recipes.deleteTitle')"
-        :description="t('recipes.deleteHelp', { name: recipe.data.value.name })"
+        :title="isCommon ? t('recipes.common.deleteTitle') : t('recipes.deleteTitle')"
+        :description="
+          isCommon
+            ? t('recipes.common.deleteHelp')
+            : t('recipes.deleteHelp', { name: recipe.data.value.name })
+        "
         :confirm-label="t('common.delete')"
         :pending="remove.isPending.value"
         @confirm="confirmDelete"
       />
+
+      <UiDialog
+        v-model:open="stillInLists"
+        :title="t('recipes.common.cannotDeleteTitle')"
+        :description="t('recipes.common.cannotDelete')"
+      >
+        <div class="flex justify-end">
+          <UiButton size="lg" class="w-full" @click="stillInLists = false">{{
+            t('common.close')
+          }}</UiButton>
+        </div>
+      </UiDialog>
     </template>
 
     <p

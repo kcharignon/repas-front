@@ -6,6 +6,8 @@ export interface OtherRecipe {
   typeSlug: string
   /** Recette copiée de Marmiton : la pastille « Marmiton ». Un back qui ne le rend pas encore : pas de pastille. */
   fromMarmiton?: boolean
+  /** Seul l'administrateur le reçoit à vrai : il a déjà sa copie de cette version commune (MAR-005), « Ma copie » remplace « Copier ». */
+  alreadyCopied?: boolean
 }
 
 export interface OtherRecipeGroup {
