@@ -786,7 +786,7 @@
                     "Recipes"
                 ],
                 "summary": "Cr\u00e9e une recette de l'utilisateur connect\u00e9. Un ancien slug (ancien commun dont l'utilisateur a re\u00e7u une copie, ingr\u00e9dient fusionn\u00e9) est remplac\u00e9 par celui de son ingr\u00e9dient actuel ; l'ingr\u00e9dient d'un autre utilisateur est inconnu",
-                "description": "Le champ facultatif `secret` rend la recette secr\u00e8te : seul son auteur la voit (elle n'est pas dans \u00ab Recettes des autres \u00bb). Absent, la recette est visible de tous.",
+                "description": "Le champ facultatif `secret` rend la recette secr\u00e8te : seul son auteur la voit (elle n'est pas dans \u00ab Recettes des autres \u00bb). Absent, la recette est visible de tous. Le champ facultatif `components` donne \u00e0 la recette des recettes \u00e0 elle (la p\u00e2te sabl\u00e9e de la tarte), voir le corps. Une recette contient au moins une ligne ou une recette utilis\u00e9e.",
                 "operationId": "post_api_create_recipe",
                 "requestBody": {
                     "required": true,
@@ -811,10 +811,13 @@
                         }
                     },
                     "404": {
-                        "description": "Type de recette, ingr\u00e9dient ou unit\u00e9 inconnu (un ingr\u00e9dient personnalis\u00e9 d'un autre utilisateur l'est aussi)"
+                        "description": "Type de recette, ingr\u00e9dient, unit\u00e9 ou recette utilis\u00e9e inconnu (un ingr\u00e9dient personnalis\u00e9 d'un autre utilisateur l'est aussi ; une recette utilis\u00e9e d'un autre utilisateur, ou sa recette secr\u00e8te, aussi)"
+                    },
+                    "409": {
+                        "description": "`RECIPE_COMPONENT_SECRET` : une recette secr\u00e8te est utilis\u00e9e par une recette qui ne l'est pas"
                     },
                     "422": {
-                        "description": "Corps de la requ\u00eate invalide (`secret` n'est pas un bool\u00e9en JSON)"
+                        "description": "Corps de la requ\u00eate invalide (`secret` n'est pas un bool\u00e9en JSON, un composant est mal form\u00e9) ou r\u00e8gle des recettes utilis\u00e9es : `RECIPE_EMPTY` (ni ligne ni recette utilis\u00e9e), `RECIPE_COMPONENT_SELF`, `_DUPLICATE`, `_MULTIPLIER_INVALID`, `_LIMIT_REACHED`, `_CHAIN`"
                     }
                 }
             }
@@ -1593,8 +1596,8 @@
                 "tags": [
                     "Recipes"
                 ],
-                "summary": "Remplace une recette de l'utilisateur : nom, personnes, type et lignes (les lignes absentes du corps sont supprim\u00e9es). Un ancien slug est remplac\u00e9 par celui de l'ingr\u00e9dient actuel de l'auteur, comme \u00e0 la cr\u00e9ation",
-                "description": "Le champ facultatif `secret` rend la recette secr\u00e8te (seul son auteur la voit) ou de nouveau visible : absent ou `null`, il reste inchang\u00e9. Seul l'auteur le change. Les copies d\u00e9j\u00e0 faites par d'autres restent \u00e0 eux. Une recette SANS PROPRI\u00c9TAIRE (la recette Marmiton neutre : `GET /recipes/other-people`, `fromMarmiton`) n'est modifi\u00e9e que par un administrateur, directement, pour corriger un import rat\u00e9 avant que d'autres la copient : les slugs d'ingr\u00e9dients re\u00e7us sont ceux de l'administrateur (ses alias), traduits en ingr\u00e9dients du propri\u00e9taire r\u00e9serv\u00e9 (un ingr\u00e9dient r\u00e9serv\u00e9 d\u00e9j\u00e0 sur une ligne reste tel quel ; un r\u00e9serv\u00e9 de m\u00eame origine ou de m\u00eame nom est r\u00e9utilis\u00e9, sinon celui de l'administrateur est copi\u00e9 avec ses conversions propres) ; son tag Marmiton et son lien d'origine ne changent pas, sa version augmente, les copies d\u00e9j\u00e0 faites ne changent pas, et elle ne devient jamais secr\u00e8te.",
+                "summary": "Remplace une recette de l'utilisateur : nom, personnes, type, lignes (les lignes absentes du corps sont supprim\u00e9es) et, si le corps les donne, recettes utilis\u00e9es. Un ancien slug est remplac\u00e9 par celui de l'ingr\u00e9dient actuel de l'auteur, comme \u00e0 la cr\u00e9ation",
+                "description": "Le champ facultatif `secret` rend la recette secr\u00e8te (seul son auteur la voit) ou de nouveau visible : absent ou `null`, il reste inchang\u00e9. Seul l'auteur le change. Les copies d\u00e9j\u00e0 faites par d'autres restent \u00e0 eux. Une recette SANS PROPRI\u00c9TAIRE (la recette Marmiton neutre : `GET /recipes/other-people`, `fromMarmiton`) n'est modifi\u00e9e que par un administrateur, directement, pour corriger un import rat\u00e9 avant que d'autres la copient : les slugs d'ingr\u00e9dients re\u00e7us sont ceux de l'administrateur (ses alias), traduits en ingr\u00e9dients du propri\u00e9taire r\u00e9serv\u00e9 (un ingr\u00e9dient r\u00e9serv\u00e9 d\u00e9j\u00e0 sur une ligne reste tel quel ; un r\u00e9serv\u00e9 de m\u00eame origine ou de m\u00eame nom est r\u00e9utilis\u00e9, sinon celui de l'administrateur est copi\u00e9 avec ses conversions propres) ; son tag Marmiton et son lien d'origine ne changent pas, sa version augmente, les copies d\u00e9j\u00e0 faites ne changent pas, et elle ne devient jamais secr\u00e8te. Le champ facultatif `components` remplace les recettes que la recette utilise : absent ou `null`, elles restent ce qu'elles \u00e9taient (un ancien client qui renvoie `rows` seul n'en efface jamais) ; `[]` les retire toutes ; sinon remplacement complet (voir le corps). Une recette sans propri\u00e9taire n'en re\u00e7oit jamais (`422` `RECIPE_COMPONENT_OWNERLESS`). Une recette contient au moins une ligne ou une recette utilis\u00e9e (`422` `RECIPE_EMPTY`). Rendre secr\u00e8te une recette qu'une recette ordinaire utilise est refus\u00e9 (`409` `RECIPE_SECRET_USED_BY_PUBLIC`), comme rendre visible une recette qui en utilise une secr\u00e8te (`409` `RECIPE_COMPONENT_SECRET`).",
                 "operationId": "put_api_update_recipe",
                 "parameters": [
                     {
@@ -1627,10 +1630,13 @@
                         "description": "La recette appartient \u00e0 un autre utilisateur, ou n'a pas de propri\u00e9taire (recette Marmiton neutre) et l'utilisateur n'est pas administrateur (la recette secr\u00e8te d'un autre, que son auteur seul voit, est inconnue pour tous, administrateur compris : `404`). `RECIPE_SECRET_FORBIDDEN` : un administrateur qui modifie la recette d'un autre (ou sans propri\u00e9taire) envoie un `secret` diff\u00e9rent de l'actuel, rien n'est \u00e9crit"
                     },
                     "404": {
-                        "description": "Recette, type, ingr\u00e9dient ou unit\u00e9 inconnu (un ingr\u00e9dient personnalis\u00e9 d'un autre utilisateur l'est aussi)"
+                        "description": "Recette, type, ingr\u00e9dient, unit\u00e9 ou recette utilis\u00e9e inconnu (un ingr\u00e9dient personnalis\u00e9 d'un autre utilisateur l'est aussi ; une recette utilis\u00e9e d'un autre auteur que la recette, ou sa recette secr\u00e8te pour qui n'est pas l'auteur, administrateur compris, aussi)"
+                    },
+                    "409": {
+                        "description": "`RECIPE_COMPONENT_SECRET` (une recette secr\u00e8te est utilis\u00e9e par une recette qui ne l'est pas, ou on rend visible une recette qui en utilise une) ou `RECIPE_SECRET_USED_BY_PUBLIC` (on rend secr\u00e8te une recette qu'une recette ordinaire utilise) ; ou une autre requ\u00eate a enregistr\u00e9 la recette entre-temps. Rien n'est \u00e9crit"
                     },
                     "422": {
-                        "description": "Corps de la requ\u00eate invalide (`secret` n'est pas un bool\u00e9en JSON)"
+                        "description": "Corps de la requ\u00eate invalide (`secret` n'est pas un bool\u00e9en JSON, un composant est mal form\u00e9) ou r\u00e8gle des recettes utilis\u00e9es : `RECIPE_EMPTY`, `RECIPE_COMPONENT_SELF`, `_DUPLICATE`, `_MULTIPLIER_INVALID`, `_LIMIT_REACHED`, `_CHAIN`, `_OWNERLESS`"
                     },
                     "412": {
                         "description": "La version de la recette n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
@@ -1641,7 +1647,7 @@
                 "tags": [
                     "Recipes"
                 ],
-                "summary": "Supprime une recette de l'utilisateur, avec ses lignes",
+                "summary": "Supprime une recette de l'utilisateur, avec ses lignes (et le lien vers les recettes qu'elle utilise)",
                 "description": "Une recette SANS PROPRI\u00c9TAIRE (la recette Marmiton neutre) n'est supprim\u00e9e que par un administrateur, pour repartir d'un import rat\u00e9 : son tag Marmiton est lib\u00e9r\u00e9 (un nouvel import de la m\u00eame page recr\u00e9e une neutre neuve, la page est relue), les copies d\u00e9j\u00e0 faites restent \u00e0 leurs auteurs, telles quelles, avec leur lien d'origine. Elle ne se supprime pas tant qu'elle est dans une liste de courses (`409`).",
                 "operationId": "delete_api_remove_recipe",
                 "parameters": [
@@ -1668,7 +1674,7 @@
                         "description": "Recette inconnue"
                     },
                     "409": {
-                        "description": "La recette est pr\u00e9sente dans une liste de courses"
+                        "description": "La recette est pr\u00e9sente dans une liste de courses, ou une autre recette l'utilise (`RECIPE_USED_AS_COMPONENT` : il faut d'abord la retirer des recettes qui l'utilisent, `GET /recipes/{id}/used-in` dit lesquelles). Supprimer une recette qui en utilise d'autres efface le lien, jamais les recettes utilis\u00e9es"
                     },
                     "412": {
                         "description": "La version de la recette n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
@@ -2451,6 +2457,45 @@
                 }
             }
         },
+        "/api/v1/recipes/{id}/used-in": {
+            "get": {
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Les recettes de son auteur qui utilisent cette recette",
+                "description": "Dit pourquoi une recette ne se supprime pas (`409` `RECIPE_USED_AS_COMPONENT`) et alimente la note de sa fiche (ADR 0040 d\u00e9cision 23). Tri\u00e9es par nom puis par identifiant. Une recette secr\u00e8te n'est montr\u00e9e qu'\u00e0 son auteur.",
+                "operationId": "get_api_list_recipe_usages",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "pattern": "[0-9a-fA-F-]{36}"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Recettes qui utilisent celle-ci (vide quand aucune ne le fait)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RecipeUsagesDTO"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "La recette appartient \u00e0 un autre utilisateur (ou n'a pas de propri\u00e9taire) et l'utilisateur n'est pas administrateur"
+                    },
+                    "404": {
+                        "description": "Recette inconnue, ou secr\u00e8te et d'un autre (administrateur compris)"
+                    }
+                }
+            }
+        },
         "/api/v1/recipe-types/{slug}/recipes": {
             "get": {
                 "tags": [
@@ -2496,6 +2541,70 @@
                     },
                     "404": {
                         "description": "Type de recette inconnu"
+                    }
+                }
+            }
+        },
+        "/api/v1/recipes/usable": {
+            "get": {
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Les recettes qu'un \u00e9diteur peut proposer comme recette utilis\u00e9e par une recette (celles de son auteur, sans composants, ordinaires si la recette l'est)",
+                "description": "Pour l'\u00e9diteur de recette (ADR 0040). Les recettes de l'auteur de `forRecipeId` (de l'utilisateur sans lui) qui n'ont PAS de composants (profondeur 1) et ne sont pas la recette elle-m\u00eame. Ordinaires par d\u00e9faut ; avec `secret=true` (la recette \u00e9crite est secr\u00e8te, ou va le devenir) les recettes secr\u00e8tes de l'utilisateur sont propos\u00e9es aussi, \u00e0 son auteur seul : jamais une recette secr\u00e8te d'un autre, administrateur compris. Tri\u00e9es par nom puis par identifiant, ou par pertinence avec `q`. 200 recettes au plus (`totalItems` donne le vrai nombre). `canHaveComponents` est faux quand `forRecipeId` est lui-m\u00eame utilis\u00e9 par une autre recette (ou n'a pas de propri\u00e9taire) : le front masque alors la section.",
+                "operationId": "get_api_list_usable_recipes",
+                "parameters": [
+                    {
+                        "name": "forRecipeId",
+                        "in": "query",
+                        "description": "Identifiant de la recette qu'on modifie (36 caract\u00e8res au plus) : les recettes propos\u00e9es sont celles de son auteur, jamais elle-m\u00eame. Il faut avoir le droit de la modifier (`403` sinon, `404` si elle est inconnue ou secr\u00e8te d'un autre). Absent : la recette qu'on cr\u00e9e, donc les recettes de l'utilisateur",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 36
+                        }
+                    },
+                    {
+                        "name": "secret",
+                        "in": "query",
+                        "description": "La recette \u00e9crite est (ou va devenir) secr\u00e8te : ses recettes secr\u00e8tes sont alors propos\u00e9es aussi, \u00e0 son auteur seul. Faux par d\u00e9faut",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "default": false
+                        }
+                    },
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "description": "Texte cherch\u00e9 dans le nom des recettes, 100 caract\u00e8res au plus ; ni la casse ni les accents ne comptent et une faute de frappe est tol\u00e9r\u00e9e. Absent ou vide : pas de recherche. Un texte sans lettre ni chiffre ne trouve rien (liste vide)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 100
+                        },
+                        "example": "pate sablee"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Recettes proposables",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UsableRecipesDTO"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "`forRecipeId` est la recette ordinaire d'un autre utilisateur (ou une recette sans propri\u00e9taire) et l'utilisateur n'est pas administrateur"
+                    },
+                    "404": {
+                        "description": "`forRecipeId` est inconnu, ou la recette secr\u00e8te d'un autre (administrateur compris)"
+                    },
+                    "422": {
+                        "description": "Param\u00e8tre `forRecipeId`, `secret` ou `q` hors de ses bornes"
                     }
                 }
             }
@@ -4776,6 +4885,28 @@
                 },
                 "type": "object"
             },
+            "RecipeComponentPayload": {
+                "required": [
+                    "recipeId",
+                    "multiplier"
+                ],
+                "properties": {
+                    "recipeId": {
+                        "description": "Identifiant de la recette utilis\u00e9e : une recette du M\u00caME auteur que la recette \u00e9crite (celle d'un autre compte, ou une recette secr\u00e8te d'un autre, est inconnue : `404`)",
+                        "type": "string",
+                        "maxLength": 36,
+                        "example": "0b1f5f0e-7a5c-4c7e-9f4b-2c1d0a9b8e77"
+                    },
+                    "multiplier": {
+                        "description": "Combien de fois la recette utilis\u00e9e, TELLE QU'ELLE EST \u00c9CRITE (quel que soit son nombre de personnes) : de 0,01 \u00e0 100. Une p\u00e2te \u00e9crite pour 6 avec 250 g de farine, utilis\u00e9e 2 fois, apporte 500 g de farine \u00e0 la recette pour ses personnes d'\u00e9criture",
+                        "type": "number",
+                        "maximum": 100,
+                        "minimum": 0.01,
+                        "example": 2
+                    }
+                },
+                "type": "object"
+            },
             "RecipePayload": {
                 "required": [
                     "name",
@@ -4803,19 +4934,29 @@
                         "example": "plat"
                     },
                     "rows": {
-                        "description": "Lignes de la recette, de une \u00e0 cent",
+                        "description": "Lignes (ingr\u00e9dients) de la recette, de z\u00e9ro \u00e0 cent. Z\u00e9ro ligne n'est permis que si la recette utilise au moins une autre recette (`components`) : sinon `422` `RECIPE_EMPTY`. Ce sont les seules lignes PROPRES de la recette (jamais celles de ses recettes utilis\u00e9es, que `GET /recipes/{id}` rend dans `components`)",
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/RecipeRowPayload"
                         },
                         "maxItems": 100,
-                        "minItems": 1
+                        "minItems": 0
                     },
                     "secret": {
                         "description": "Recette secr\u00e8te : seul l'auteur la voit, elle n'est pas dans \u00ab Recettes des autres \u00bb et personne d'autre ne la lit ni ne la copie (un administrateur non plus). Facultatif : absent ou `null`, il reste inchang\u00e9 (`PUT`) ou faux (`POST`) ; un ancien client ne le remet donc jamais \u00e0 z\u00e9ro. Un bool\u00e9en JSON, rien d'autre (`422` sinon). Seul l'auteur le change : un administrateur qui modifie la recette ordinaire d'un autre et envoie `true` re\u00e7oit `403` `RECIPE_SECRET_FORBIDDEN` (la secr\u00e8te d'un autre lui est inconnue : `404`). Les copies d\u00e9j\u00e0 faites par d'autres restent \u00e0 eux",
                         "type": "boolean",
                         "default": null,
                         "example": false,
+                        "nullable": true
+                    },
+                    "components": {
+                        "description": "Les recettes que cette recette UTILISE (ADR 0040), jusqu'\u00e0 10, dans l'ordre o\u00f9 elles s'affichent (l'ordre du tableau est la position). Facultatif : **absent ou `null` = inchang\u00e9** (un ancien client qui renvoie `rows` seul n'efface jamais un composant ; \u00e0 la cr\u00e9ation, aucune) ; **`[]` = tout retirer** ; sinon remplacement complet. Chaque recette utilis\u00e9e est une recette du M\u00caME auteur que la recette \u00e9crite, sans composant elle-m\u00eame (profondeur 1), et ordinaire si la recette l'est (une recette secr\u00e8te peut utiliser les deux). Refus : `404` recette utilis\u00e9e inconnue, d'un autre auteur ou secr\u00e8te d'un autre (administrateur compris) ; `422` `RECIPE_COMPONENT_SELF`, `RECIPE_COMPONENT_DUPLICATE`, `RECIPE_COMPONENT_MULTIPLIER_INVALID`, `RECIPE_COMPONENT_LIMIT_REACHED` (plus de 10), `RECIPE_COMPONENT_CHAIN` (la recette est d\u00e9j\u00e0 utilis\u00e9e par une autre, ou une recette utilis\u00e9e a ses propres composants), `RECIPE_COMPONENT_OWNERLESS` (une recette sans propri\u00e9taire n'en re\u00e7oit jamais), `RECIPE_EMPTY` ; `409` `RECIPE_COMPONENT_SECRET` (composant secret pour une recette ordinaire). Rien n'est \u00e9crit sur un refus",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RecipeComponentPayload"
+                        },
+                        "default": null,
+                        "maxItems": 10,
                         "nullable": true
                     }
                 },
@@ -4998,6 +5139,27 @@
                         "nullable": true
                     },
                     "typeSlug": {
+                        "type": "string",
+                        "default": null,
+                        "maxLength": 100,
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "ListUsableRecipesRequestQuery": {
+                "properties": {
+                    "forRecipeId": {
+                        "type": "string",
+                        "default": null,
+                        "maxLength": 36,
+                        "nullable": true
+                    },
+                    "secret": {
+                        "type": "boolean",
+                        "default": false
+                    },
+                    "q": {
                         "type": "string",
                         "default": null,
                         "maxLength": 100,
@@ -7024,6 +7186,58 @@
                 },
                 "type": "object"
             },
+            "RecipeComponentDTO": {
+                "required": [
+                    "recipeId",
+                    "name",
+                    "serving",
+                    "multiplier",
+                    "secret",
+                    "convertible",
+                    "rows"
+                ],
+                "properties": {
+                    "recipeId": {
+                        "description": "Identifiant de la recette utilis\u00e9e",
+                        "type": "string",
+                        "example": "3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34"
+                    },
+                    "name": {
+                        "description": "Nom de la recette utilis\u00e9e",
+                        "type": "string",
+                        "example": "P\u00e2te sabl\u00e9e"
+                    },
+                    "serving": {
+                        "description": "Nombre de personnes de la recette utilis\u00e9e, pour lequel ses lignes sont \u00e9crites. Ne sert qu'\u00e0 l'affichage : le multiplicateur ne d\u00e9pend pas de lui",
+                        "type": "integer",
+                        "example": 6
+                    },
+                    "multiplier": {
+                        "description": "Combien de fois la recette utilis\u00e9e, TELLE QU'ELLE EST \u00c9CRITE (de 0,01 \u00e0 100). Une p\u00e2te \u00e9crite pour 6 avec 250 g de farine, utilis\u00e9e 2 fois, apporte 500 g de farine \u00e0 la recette lue pour son nombre de personnes ; le nombre de personnes de la recette lue met le tout \u00e0 l'\u00e9chelle",
+                        "type": "number",
+                        "format": "float",
+                        "example": 2
+                    },
+                    "secret": {
+                        "description": "La recette utilis\u00e9e est secr\u00e8te. Toujours \u00e9crit ; une recette ordinaire n'utilise que des recettes ordinaires, donc faux pour la recette d'un autre",
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "convertible": {
+                        "description": "Toutes les lignes de la recette utilis\u00e9e se convertissent en l'unit\u00e9 d'achat de leur ingr\u00e9dient (comme `convertible` d'une ligne) ; faux : la recette lue ne peut pas \u00eatre planifi\u00e9e tant qu'une conversion manque",
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "rows": {
+                        "description": "Les lignes de la recette utilis\u00e9e, dans l'ordre de cette recette, TELLES QU'ELLES SONT \u00c9CRITES (pour son nombre de personnes, jamais multipli\u00e9es par le multiplicateur)",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RecipeRowDTO"
+                        }
+                    }
+                },
+                "type": "object"
+            },
             "RecipeDTO": {
                 "required": [
                     "id",
@@ -7034,6 +7248,7 @@
                     "secret",
                     "favorite",
                     "rows",
+                    "components",
                     "version",
                     "canEdit",
                     "ownerless"
@@ -7077,6 +7292,13 @@
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/RecipeRowDTO"
+                        }
+                    },
+                    "components": {
+                        "description": "Les recettes que cette recette UTILISE (ADR 0040 : \u00ab P\u00e2te sabl\u00e9e, 2 fois \u00bb), dans l'ordre de leur position, chacune avec ses lignes telles qu'elles sont \u00e9crites. `[]` pour une recette sans composant. Toujours \u00e9crit, y compris pour la recette d'un autre (son d\u00e9tail avant de la copier). `rows` reste les seules lignes PROPRES de la recette : jamais aplaties, car un client qui les renvoie au `PUT` les dupliquerait. Une recette utilis\u00e9e supprim\u00e9e ou illisible pour le lecteur est absente de la liste",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RecipeComponentDTO"
                         }
                     },
                     "version": {
@@ -7767,6 +7989,96 @@
                         "description": "Le nombre r\u00e9el de recettes des autres (ou de correspondances, avec une recherche), toutes pages confondues ; peut d\u00e9passer le nombre de `member`",
                         "type": "integer",
                         "example": 12
+                    }
+                },
+                "type": "object"
+            },
+            "RecipeUsagesDTO": {
+                "required": [
+                    "member",
+                    "totalItems"
+                ],
+                "properties": {
+                    "member": {
+                        "description": "Les recettes DE L'AUTEUR qui utilisent cette recette, tri\u00e9es par nom puis par identifiant. Une recette secr\u00e8te n'est montr\u00e9e qu'\u00e0 son auteur",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RecipeSummaryDTO"
+                        }
+                    },
+                    "totalItems": {
+                        "description": "Le nombre de recettes de `member`",
+                        "type": "integer",
+                        "example": 2
+                    }
+                },
+                "type": "object"
+            },
+            "UsableRecipeDTO": {
+                "required": [
+                    "id",
+                    "name",
+                    "serving",
+                    "typeSlug",
+                    "typeName",
+                    "secret"
+                ],
+                "properties": {
+                    "id": {
+                        "description": "Identifiant de la recette",
+                        "type": "string",
+                        "example": "3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "P\u00e2te sabl\u00e9e"
+                    },
+                    "serving": {
+                        "description": "Nombre de personnes pour lequel la recette est \u00e9crite (il ne sert qu'\u00e0 l'affichage : le nombre de fois qu'elle est utilis\u00e9e ne d\u00e9pend pas de lui)",
+                        "type": "integer",
+                        "example": 6
+                    },
+                    "typeSlug": {
+                        "description": "Identifiant stable du type de la recette",
+                        "type": "string",
+                        "example": "dessert"
+                    },
+                    "typeName": {
+                        "description": "Nom du type de la recette",
+                        "type": "string",
+                        "example": "Dessert"
+                    },
+                    "secret": {
+                        "description": "Recette secr\u00e8te. Toujours \u00e9crit ; vrai seulement quand la recette \u00e9crite l'est aussi (`secret=true`) et que l'utilisateur est son auteur",
+                        "type": "boolean",
+                        "example": false
+                    }
+                },
+                "type": "object"
+            },
+            "UsableRecipesDTO": {
+                "required": [
+                    "member",
+                    "totalItems",
+                    "canHaveComponents"
+                ],
+                "properties": {
+                    "member": {
+                        "description": "Les recettes propos\u00e9es, 200 au plus : sans `q` tri\u00e9es par nom puis par identifiant, avec `q` par pertinence d\u00e9croissante (ADR 0019). Ni la recette elle-m\u00eame, ni une recette qui a d\u00e9j\u00e0 ses propres composants (profondeur 1)",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/UsableRecipeDTO"
+                        }
+                    },
+                    "totalItems": {
+                        "description": "Le nombre r\u00e9el de recettes proposables (ou de correspondances avec `q`) ; peut d\u00e9passer le nombre de `member`",
+                        "type": "integer",
+                        "example": 12
+                    },
+                    "canHaveComponents": {
+                        "description": "Faux quand la recette \u00e9crite (`forRecipeId`) est elle-m\u00eame utilis\u00e9e par une autre recette, ou n'a pas de propri\u00e9taire : elle ne peut pas avoir de recette utilis\u00e9e (profondeur 1), le front masque alors la section. Toujours \u00e9crit ; vrai sans `forRecipeId`",
+                        "type": "boolean",
+                        "example": true
                     }
                 },
                 "type": "object"
