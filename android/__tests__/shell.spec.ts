@@ -155,10 +155,24 @@ describe('le pont natif', () => {
 describe('les fichiers que le front envoie', () => {
   // La coquille ne demande aucune permission ni n'implémente `onShowFileChooser` : si le front se met à envoyer des fichiers ou des photos,
   // il faut ajouter le sélecteur de fichiers de la WebView (et la permission qu'il demande) avant de livrer.
-  it('n’existent pas : le front n’a aucun champ de fichier', () => {
+  // Une seule exception, pour l'administrateur : le bloc d'image des rayons et des types de recette (`ImageField.vue`, ADR 0039 du back). Tant que la coquille
+  // n'implémente pas `onShowFileChooser`, son bouton « Envoyer une image » ne fait rien DANS l'application (dans un navigateur il marche) ; « Coller un lien »
+  // marche partout. Le jour où la coquille sait ouvrir le sélecteur de fichiers, cette exception disparaît avec ce test.
+  const ADMIN_IMAGE_BLOCK = 'ImageField.vue'
+
+  it('n’existent pas : le front n’a aucun champ de fichier, hors le bloc d’image de l’administrateur', () => {
+    const withFileInput = files(srcDir, /\.(vue|ts)$/)
+      .filter((path) => !path.includes('__tests__'))
+      .filter((path) => !path.endsWith(ADMIN_IMAGE_BLOCK))
+      .filter((path) => /type=["']file["']|showOpenFilePicker/.test(read(path)))
+    expect(withFileInput).toEqual([])
+  })
+
+  it('n’a qu’une exception, et elle existe encore', () => {
     const withFileInput = files(srcDir, /\.(vue|ts)$/)
       .filter((path) => !path.includes('__tests__'))
       .filter((path) => /type=["']file["']|showOpenFilePicker/.test(read(path)))
-    expect(withFileInput).toEqual([])
+      .map((path) => path.slice(path.lastIndexOf('/') + 1))
+    expect(withFileInput).toEqual([ADMIN_IMAGE_BLOCK])
   })
 })

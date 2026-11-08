@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Trash2 } from 'lucide-vue-next'
 
@@ -13,6 +13,7 @@ import { messageForFailure } from '@/notifications/failures'
 import { useNotificationsStore } from '@/notifications/store'
 import AdminFormDialog from './AdminFormDialog.vue'
 import AdminPage from './AdminPage.vue'
+import ImageField from './ImageField.vue'
 import RecipeTypeDeleteDialog from './RecipeTypeDeleteDialog.vue'
 import { useRemoveRecipeType, useSaveRecipeType } from './queries'
 import { useResourceDialog } from './useResourceDialog'
@@ -25,7 +26,13 @@ const remove = useRemoveRecipeType()
 const notifications = useNotificationsStore()
 const items = computed(() => types.data.value?.member ?? [])
 
+// Un envoi d'image en cours : « Enregistrer » attend, sinon le formulaire garderait l'ancienne image
+const imageBusy = ref(false)
 const dialog = useResourceDialog(() => ({ name: '', image: '', order: '' as string | number }))
+// Fenêtre fermée en plein envoi : le bloc disparaît sans prévenir, l'attente ne doit pas rester
+watch(dialog.open, (open) => {
+  if (!open) imageBusy.value = false
+})
 const errors = computed(() => ({
   name:
     dialog.submitted.value && dialog.form.name.trim() === '' ? t('admin.errors.name') : undefined,
@@ -64,6 +71,7 @@ function confirmDelete(transferTo: string) {
 }
 
 function submit() {
+  if (imageBusy.value) return
   dialog.submitted.value = true
   dialog.error.value = null
   if (errors.value.name || errors.value.image || errors.value.order) return
@@ -136,7 +144,7 @@ function submit() {
   <AdminFormDialog
     v-model:open="dialog.open.value"
     :title="dialog.editing.value ? t('admin.editRecipeType') : t('admin.newRecipeType')"
-    :pending="save.isPending.value"
+    :pending="save.isPending.value || imageBusy"
     :error="dialog.error.value"
     @submit="submit"
   >
@@ -149,20 +157,13 @@ function submit() {
         :invalid="invalid"
       />
     </UiField>
-    <UiField
-      :label="t('admin.image')"
-      :hint="t('admin.imageHint')"
+    <ImageField
+      v-model="dialog.form.image"
+      v-model:busy="imageBusy"
+      :name="dialog.form.name"
+      :unnamed="t('admin.image.unnamedRecipeType')"
       :error="errors.image"
-      v-slot="{ id, describedby, invalid }"
-    >
-      <UiTextInput
-        :id="id"
-        v-model="dialog.form.image"
-        autocomplete="off"
-        :aria-describedby="describedby"
-        :invalid="invalid"
-      />
-    </UiField>
+    />
     <UiField
       :label="t('admin.order')"
       :hint="t('admin.orderHint')"

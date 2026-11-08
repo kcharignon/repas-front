@@ -194,3 +194,44 @@ export function useDeleteUser() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: adminKeys.users }),
   })
 }
+
+/**
+ * Envoie une image (fichier) : le back la vérifie, la ramène à 512 px, l'assainit si c'est un SVG et rend le chemin à mettre tel quel dans
+ * le champ `image` d'un rayon ou d'un type de recette. Rien n'est lié à un rayon avant « Enregistrer ». Le corps est un `FormData` (champ `file`).
+ */
+export function useUploadImage() {
+  const { api } = useSessionStore()
+
+  return useMutation({
+    meta: { silent: true },
+    mutationFn: async (file: File): Promise<string> => {
+      const data = await unwrap(
+        api.POST('/api/v1/images', {
+          body: { file: file as unknown as string },
+          bodySerializer: () => {
+            const form = new FormData()
+            form.append('file', file)
+
+            return form
+          },
+        }),
+      )
+
+      return data.path ?? ''
+    },
+  })
+}
+
+/** Le serveur télécharge l'image d'un lien direct (https, adresse publique) et rend le même chemin qu'un envoi de fichier. */
+export function useStoreImageFromUrl() {
+  const { api } = useSessionStore()
+
+  return useMutation({
+    meta: { silent: true },
+    mutationFn: async (url: string): Promise<string> => {
+      const data = await unwrap(api.POST('/api/v1/images/from-url', { body: { url } }))
+
+      return data.path ?? ''
+    },
+  })
+}

@@ -80,8 +80,43 @@ export default {
     baseFactorHint:
       'Combien d’unités de base (gramme, millilitre, pièce) vaut cette unité : 1000 pour le kilo, 1 pour le gramme ou pour un conditionnement.',
     unitMeasure: '{dimension}, × {factor}',
-    image: 'Image',
-    imageHint: 'Adresse de l’image, par exemple images/department/fruits.png.',
+    // L'image d'un rayon ou d'un type de recette : on l'envoie (fichier) ou on colle un lien que le serveur télécharge (ADR 0039 du back)
+    image: {
+      label: 'Image',
+      hint: 'PNG, WebP ou SVG, 3 Mo au plus.',
+      preview: 'Image actuelle de {name}',
+      previewNone: 'Pas d’image',
+      // Le nom sous l'aperçu tant que l'administrateur n'a pas encore donné de nom
+      unnamedDepartment: 'Rayon',
+      unnamedRecipeType: 'Type',
+      upload: 'Envoyer une image',
+      replace: 'Envoyer une autre image',
+      pasteLink: 'Coller un lien',
+      linkLabel: 'Lien de l’image',
+      linkPlaceholder: 'https://…',
+      useLink: 'Utiliser ce lien',
+      remove: 'Retirer l’image',
+      sending: 'Envoi de l’image…',
+      fetching: 'Je récupère l’image…',
+      ready: 'Image prête. Enregistre pour la garder.',
+      // Chaque refus tient en trois phrases : ce qui s'est passé, ce qui est sauf, quoi faire. Jamais le code du back.
+      errors: {
+        tooLarge:
+          'Cette image est trop lourde. Ton image actuelle n’a pas changé. Choisis-en une de 3 Mo au plus.',
+        notAnImage:
+          'Ce format n’est pas accepté. Ton image actuelle n’a pas changé. Choisis un PNG, un WebP ou un SVG.',
+        linkRefused:
+          'Ce lien n’est pas accepté. Ton image actuelle n’a pas changé. Colle le lien d’une image publique.',
+        downloadFailed:
+          'Je n’ai pas pu récupérer l’image. Ton image actuelle n’a pas changé. Vérifie le lien et réessaie.',
+        offline:
+          'Pas de connexion. Ton image actuelle n’a pas changé. Réessaie quand le réseau revient.',
+        rateLimited:
+          'Trop d’envois pour le moment. Ton image actuelle n’a pas changé. Réessaie un peu plus tard.',
+        sendFailed:
+          'L’envoi n’a pas marché. Ton image actuelle n’a pas changé. Réessaie dans un instant.',
+      },
+    },
     // L'icône d'un rayon (ING-016) : elle se pose devant les ingrédients du rayon pour les distinguer de ceux d'un autre rayon
     icon: 'Icône',
     iconHint: 'Elle s’affiche devant les ingrédients de ce rayon.',
@@ -170,7 +205,7 @@ export default {
     appOutdated: 'À mettre à jour',
     errors: {
       name: 'Donne un nom.',
-      image: 'Indique une image.',
+      image: 'Ajoute une image.',
       order: 'Indique un ordre.',
       baseFactor: 'Entre un nombre supérieur à zéro, ou laisse vide.',
       protectedAccount: 'Ce compte est protégé : il reste actif et ne se supprime pas.',
