@@ -21,6 +21,8 @@
 <p class="note">Page locale de l'émulateur (DRV-317, DRV-314, DRV-320) : elle joue le rôle du front Repas, sans aucune donnée réelle. Elle parle à l'application par <code>window.repasNative</code>.</p>
 <ul id="facts"></ul>
 <p><a id="external" href="https://example.org/">Un lien vers un autre site</a></p>
+<p><button id="pick" type="button" style="font: inherit; padding: 8px 14px">Envoyer une image</button>
+  <input id="file" type="file" accept="image/png,image/webp,image/svg+xml" hidden></p>
 <p><a id="finalize" href="https://fd8-courses.leclercdrive.fr/magasin-000001-000001">Finaliser sur Leclerc</a></p>
 <nav>Barre du bas du front (simulée)</nav>
 <script>
@@ -58,6 +60,25 @@
       /* le test verra l'absence de relevé */
     }
   }
+
+  // Le champ de fichier comme celui du bloc d'image de l'administrateur (ImageField.vue) : un bouton qui touche un <input type="file"> caché. La page
+  // rend compte de ce que la coquille lui donne : un fichier lisible (nom, taille, octets lus) ou rien (annulation, refus).
+  var fileInput = document.getElementById('file')
+  document.getElementById('pick').addEventListener('click', function () { fileInput.click() })
+  fileInput.addEventListener('change', function () {
+    var file = fileInput.files && fileInput.files[0]
+    if (!file) return report({ kind: 'file', state: 'none' })
+    var reader = new FileReader()
+    reader.onload = function () {
+      var bytes = new Uint8Array(reader.result)
+      show('file', 'Image prête : ' + file.name + ' (' + file.size + ' octets)', true)
+      report({ kind: 'file', state: 'chosen', type: file.type, size: file.size, read: bytes.length, png: bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 })
+    }
+    reader.onerror = function () { report({ kind: 'file', state: 'unreadable' }) }
+    reader.readAsArrayBuffer(file)
+  })
+  fileInput.addEventListener('cancel', function () { show('file', 'Aucune image choisie', undefined); report({ kind: 'file', state: 'cancelled' }) })
+  fileInput.addEventListener('click', function () { fileInput.value = '' })
 
   var native = window.repasNative
   report({

@@ -2,9 +2,11 @@ package eu.kantin.repas.drive
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
+import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
@@ -15,6 +17,7 @@ import android.webkit.CookieManager
 import android.webkit.ConsoleMessage
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -40,6 +43,7 @@ import androidx.webkit.WebViewFeature
  * - **Données** : cookies (dont celui de rafraîchissement du jeton, `HttpOnly`), stockage du site et service worker restent dans le profil
  *   par défaut de la WebView. Chaque enseigne du drive a le sien ([DriveProfile]) : la WebView de Repas ne reçoit ni l'agent d'une enseigne ni ses cookies.
  * - **Pont natif** : `window.repasNative`, réservé à l'origine de Repas ([NativeBridge]). Aucun `addJavascriptInterface`.
+ * - **Sélecteur de fichiers** : le seul champ de fichier du front est l'image d'un rayon ou d'un type de recette (administrateur), voir [ShellChromeClient].
  * - **Passage du plan (DRV-314)** : `drive.start` ouvre [DriveActivity] sur le magasin du plan ; le résultat revient ici, d'où `drive.result`
  *   est posté à la page (mis en file, et gardé par [DrivePass], si la page s'est rechargée entre-temps). Un passage interrompu (application
  *   fermée ou tuée, moins de 24 h) se reprend ou s'abandonne à la réouverture.
@@ -64,6 +68,9 @@ class MainActivity : Activity() {
     private var startsSinceMessage = 0
     private var loadFailed = false
     private var resumeDialog: AlertDialog? = null
+
+    /** La demande de fichier de la page, en attente du choix de l'utilisateur : une seule à la fois, toujours rendue à la page (un fichier, ou `null`). */
+    private val fileChoice = PendingFileChoice<ValueCallback<Array<Uri>>>()
 
     private val repasApp get() = application as RepasApp
 
@@ -131,6 +138,7 @@ class MainActivity : Activity() {
     @Suppress("OVERRIDE_DEPRECATION", "DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (fileChoice.owns(requestCode)) return onFileChosen(requestCode, resultCode, data)
         selfUpdate.onInstallerResult(requestCode, resultCode)
     }
 
@@ -152,6 +160,8 @@ class MainActivity : Activity() {
         cookies.close()
         selfUpdate.close()
         resumeDialog?.dismiss()
+        // Une demande de fichier sans réponse bloquerait le champ de la page : on la ferme avant de détruire la WebView.
+        closeFileChoice()
         (webView.parent as? ViewGroup)?.removeView(webView)
         webView.destroy()
         super.onDestroy()
@@ -263,10 +273,61 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Aucune permission d'Android n'est demandée (ni fichiers, ni position, ni caméra) : le front n'envoie ni fichier ni photo. */
     private inner class ShellChromeClient : WebChromeClient() {
         // Rien de ce que dit la page n'est écrit dans le journal du téléphone.
         override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean = true
+
+        /**
+         * Le champ de fichier de la page : le bloc d'image de l'administrateur (PNG, WebP, SVG). Aucune permission : c'est le sélecteur du système qui lit
+         * le fichier et en accorde la lecture, et la page ne reçoit que l'adresse choisie. Toujours `true`, et le rappel reçoit TOUJOURS une réponse
+         * (un fichier, ou `null`), sinon le champ reste bloqué.
+         */
+        override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
+            // Seule la page de Repas peut demander un fichier (un cadre d'un autre site, qui peut charger, ne le peut pas).
+            val plan = if (navigation.decide(view.url) == Decision.ALLOW) FileChooserRules.plan(params.acceptTypes?.toList(), params.mode) else FileChooserPlan.Refuse
+            if (plan !is FileChooserPlan.Pick) {
+                callback.onReceiveValue(null)
+                return true
+            }
+            // Une seconde demande pendant un choix en cours annule la première : son sélecteur est fermé, sa page reçoit « aucun fichier ».
+            val started = fileChoice.begin(callback)
+            started.replaced?.let { previous ->
+                started.replacedRequestCode?.let(::finishActivity)
+                previous.onReceiveValue(null)
+            }
+            try {
+                startActivityForResult(pickerIntent(plan.mimeTypes), started.requestCode)
+            } catch (_: ActivityNotFoundException) {
+                closeFileChoice()
+            } catch (_: SecurityException) {
+                closeFileChoice()
+            }
+            return true
+        }
+    }
+
+    /** Le sélecteur du système (`ACTION_GET_CONTENT`, aucune permission) : un seul fichier, ouvrable, des seuls types permis. */
+    private fun pickerIntent(mimeTypes: List<String>): Intent {
+        val pick = Intent(Intent.ACTION_GET_CONTENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = mimeTypes.singleOrNull() ?: "*/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes.toTypedArray())
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)
+        }
+        return Intent.createChooser(pick, null)
+    }
+
+    /** Le sélecteur s'est refermé : un fichier choisi, ou rien (annulé, refusé, ou résultat qu'on ne croit pas). La page a toujours une réponse. */
+    private fun onFileChosen(requestCode: Int, resultCode: Int, data: Intent?) {
+        val callback = fileChoice.take(requestCode) ?: return
+        val uris = if (resultCode == RESULT_OK) WebChromeClient.FileChooserParams.parseResult(resultCode, data)?.map { it.toString() } else null
+        val chosen = FileChooserRules.choice(uris, packageName)
+        callback.onReceiveValue(chosen?.let { arrayOf(Uri.parse(it)) })
+    }
+
+    /** Rend « aucun fichier » à la page si une demande attend encore. */
+    private fun closeFileChoice() {
+        fileChoice.abandon()?.onReceiveValue(null)
     }
 
     // ---------------------------------------------------------------------------------------------------------------

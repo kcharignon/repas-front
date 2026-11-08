@@ -153,12 +153,14 @@ describe('le pont natif', () => {
 })
 
 describe('les fichiers que le front envoie', () => {
-  // La coquille ne demande aucune permission ni n'implémente `onShowFileChooser` : si le front se met à envoyer des fichiers ou des photos,
-  // il faut ajouter le sélecteur de fichiers de la WebView (et la permission qu'il demande) avant de livrer.
-  // Une seule exception, pour l'administrateur : le bloc d'image des rayons et des types de recette (`ImageField.vue`, ADR 0039 du back). Tant que la coquille
-  // n'implémente pas `onShowFileChooser`, son bouton « Envoyer une image » ne fait rien DANS l'application (dans un navigateur il marche) ; « Coller un lien »
-  // marche partout. Le jour où la coquille sait ouvrir le sélecteur de fichiers, cette exception disparaît avec ce test.
+  // Le seul champ de fichier du front est le bloc d'image de l'administrateur (`ImageField.vue`, ADR 0039 du back : rayons et types de recette). La
+  // coquille ouvre pour lui le sélecteur du système (`onShowFileChooser`, sans aucune permission). Un autre champ de fichier dans `src/` doit être
+  // pensé avec la coquille (types permis dans `FileChooserRules`) avant de livrer : ce test échoue pour qu'on s'en occupe.
   const ADMIN_IMAGE_BLOCK = 'ImageField.vue'
+  const shell = read(join(kotlinDir, 'eu', 'kantin', 'repas', 'drive', 'MainActivity.kt'))
+  const drive = read(join(kotlinDir, 'eu', 'kantin', 'repas', 'drive', 'DriveActivity.kt'))
+  const chooser = read(join(coreKotlinDir, 'eu', 'kantin', 'repas', 'drive', 'FileChooser.kt'))
+  const imageField = read(join(srcDir, 'features', 'admin', ADMIN_IMAGE_BLOCK))
 
   it('n’existent pas : le front n’a aucun champ de fichier, hors le bloc d’image de l’administrateur', () => {
     const withFileInput = files(srcDir, /\.(vue|ts)$/)
@@ -174,5 +176,46 @@ describe('les fichiers que le front envoie', () => {
       .filter((path) => /type=["']file["']|showOpenFilePicker/.test(read(path)))
       .map((path) => path.slice(path.lastIndexOf('/') + 1))
     expect(withFileInput).toEqual([ADMIN_IMAGE_BLOCK])
+  })
+
+  it('la coquille ouvre le sélecteur de fichiers pour ce champ, et le drive ne le fait jamais', () => {
+    expect(shell).toContain('override fun onShowFileChooser(')
+    expect(drive).not.toContain('onShowFileChooser')
+    expect(drive).not.toContain('ACTION_GET_CONTENT')
+  })
+
+  it('le sélecteur n’ajoute ni permission ni élargissement des accès de la WebView', () => {
+    const permissions = [...manifest.matchAll(/<uses-permission[^>]*android:name="([^"]+)"/g)].map(
+      (match) => match[1],
+    )
+    expect(permissions).toEqual(['android.permission.INTERNET'])
+    expect(shell).toContain('allowFileAccess = false')
+    expect(shell).toContain('allowContentAccess = false')
+    // Ni stockage, ni caméra, ni sélecteur de photos qui demanderait une autorisation : le sélecteur du système lit le fichier lui-même.
+    for (const text of [shell, chooser]) {
+      expect(text).not.toMatch(
+        /READ_EXTERNAL_STORAGE|READ_MEDIA|CAMERA|ACTION_IMAGE_CAPTURE|MANAGE_EXTERNAL_STORAGE|requestPermissions/,
+      )
+    }
+    expect(shell).toContain('Intent.ACTION_GET_CONTENT')
+    expect(shell).toContain('Intent.EXTRA_ALLOW_MULTIPLE, false')
+  })
+
+  it('ne rend à la page que ce que l’utilisateur a choisi, et toujours une réponse', () => {
+    // La page reçoit l'adresse validée par le cœur (`content://`, jamais `file://`), ou `null`.
+    expect(shell).toContain('FileChooserRules.choice(uris, packageName)')
+    expect(shell).toContain('FileChooserRules.plan(')
+    // Refus, annulation, panne d'ouverture, second appel et destruction de l'écran répondent tous au rappel.
+    expect(shell).toContain('callback.onReceiveValue(null)')
+    expect(shell).toContain('previous.onReceiveValue(null)')
+    expect(shell).toContain('closeFileChoice()')
+    expect(shell).toMatch(/override fun onDestroy\(\)[\s\S]*?closeFileChoice\(\)/)
+  })
+
+  it('le cœur n’autorise que les formats que le champ de l’administrateur accepte', () => {
+    const accept = /accept="([^"]+)"/.exec(imageField)?.[1] ?? ''
+    expect(accept).not.toBe('')
+    const allowed = /ALLOWED_TYPES: List<String> = listOf\(([^)]*)\)/.exec(chooser)?.[1] ?? ''
+    expect([...allowed.matchAll(/"([^"]+)"/g)].map((match) => match[1])).toEqual(accept.split(','))
   })
 })

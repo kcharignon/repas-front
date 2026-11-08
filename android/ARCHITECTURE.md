@@ -60,6 +60,7 @@ Le cœur : `android/core/src/main/kotlin/eu/kantin/repas/drive/` (le paquet n'a 
 | `DebugPlan.kt`, `ResultReport.kt`, `SelftestReport.kt` | (débogage) le plan d'essai (un modèle de données par enseigne, `RetailerSite.debugPlanFile`, DRV-735), le rapport du résultat, le rapport du test automatique |
 | `IdentityProvider.kt` | le service de plateforme « obtenir un jeton d'identité » (AUTH-011) : `IdentityProvider`, `IdentityResult`, `IdentityError`, `Cancellation` |
 | `LinkOpener.kt` | le service de plateforme « ouvrir une page web dans le navigateur du système » |
+| `FileChooser.kt` | le sélecteur de fichiers de la coquille, sans Android : `FileChooserRules` (les seuls types permis, ceux du bloc d'image de l'administrateur : PNG, WebP, SVG ; un seul fichier ; le résultat du sélecteur n'est cru que s'il est une adresse `content://` d'un autre paquet), `FileChooserPlan`, et `PendingFileChoice` (une demande à la fois, numéro de demande, la précédente est rendue pour être fermée, chaque demande est toujours rendue à la page) |
 | `UpdateSource.kt` | la mise à jour de l'application (DRV-639) : les SEULES adresses qu'elle contacte (écrites en dur), les hôtes de redirection permis, les bornes de taille |
 | `ReleaseInfo.kt` | `version.json` lu avec méfiance (quatre champs, code cohérent avec le nom) et la règle « strictement plus récent » |
 | `UpdateState.kt` | l'état de la mise à jour (`inconnu`, `aJour`, `miseAJourDisponible`, `telechargement`, `pretAInstaller`, `erreur`), ses codes d'erreur et le message `update.state` |
@@ -70,7 +71,7 @@ L'application : `android/app/src/main/kotlin/eu/kantin/repas/drive/` (commun aux
 
 | Fichier | Ce qu'il porte |
 |---|---|
-| `MainActivity.kt` | la coquille Repas : WebView, pont `repasNative`, liens entrants, menu |
+| `MainActivity.kt` | la coquille Repas : WebView, pont `repasNative`, liens entrants, menu, sélecteur de fichiers (`onShowFileChooser`, `ACTION_GET_CONTENT`, aucune permission : le bloc d'image de l'administrateur) |
 | `DriveActivity.kt` | le drive d'UNE enseigne, second écran (DRV-707) : WebView (en mode ordinateur seulement si le site d'une enseigne le demande : aucune enseigne servie depuis DRV-754), agent injecté, profil, mémoires et textes de cette enseigne |
 | `AgentHost.kt` | la colle `androidx.webkit` : injection de l'agent, canal `repasHost`, avec les origines de l'enseigne de l'écran seulement |
 | `DesktopMode.kt` | le mode ordinateur appliqué à la WebView d'une enseigne dont le site le demande (`SiteMode.DESKTOP`, aucune enseigne servie depuis DRV-754) ; le zoom au pincement pour toutes |
