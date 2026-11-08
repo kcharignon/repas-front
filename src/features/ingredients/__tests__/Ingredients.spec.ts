@@ -131,6 +131,46 @@ describe('DepartmentsView', () => {
   })
 })
 
+describe('DepartmentsView : rayons vides', () => {
+  const withCounts = (counts: Array<number | undefined>) => ({
+    member: counts.map((ingredientCount, index) => ({
+      slug: `rayon-${index}`,
+      name: `Rayon ${index}`,
+      image: 'images/x.png',
+      ...(ingredientCount === undefined ? {} : { ingredientCount }),
+    })),
+    totalItems: counts.length,
+  })
+  const links = async (counts: Array<number | undefined>) => {
+    const { context } = await open('/rayons', {
+      'GET /api/v1/departments': () => json(withCounts(counts)),
+    })
+    const wrapper = mount(DepartmentsView, { global: { plugins: context.plugins } })
+    await vi.waitFor(() => expect(wrapper.find('[role="status"]').exists()).toBe(false))
+    await flushPromises()
+    return wrapper
+  }
+
+  it('cache un rayon à 0 et montre un rayon à N', async () => {
+    const wrapper = await links([0, 3])
+
+    expect(wrapper.findAll('li a').map((l) => l.attributes('href'))).toEqual(['/rayons/rayon-1'])
+  })
+
+  it('montre un rayon dont le compte est absent (back plus ancien)', async () => {
+    const wrapper = await links([undefined, 0])
+
+    expect(wrapper.findAll('li a').map((l) => l.attributes('href'))).toEqual(['/rayons/rayon-0'])
+  })
+
+  it('dit une phrase d’état vide quand tous les rayons sont à 0', async () => {
+    const wrapper = await links([0, 0])
+
+    expect(wrapper.findAll('li')).toHaveLength(0)
+    expect(wrapper.text()).toContain('Tes rayons apparaissent dès que tu ajoutes un ingrédient.')
+  })
+})
+
 describe('DepartmentsView : recherche', () => {
   const search = async (handlers: Parameters<typeof stubApi>[0] = {}) => {
     const { context, fetchMock } = await open('/rayons', {

@@ -216,6 +216,7 @@ export default {
     title: 'Rayons',
     help: 'Ajoute des ingrédients à ta liste de courses, rayon par rayon.',
     none: 'Aucun rayon pour le moment.',
+    noneYet: 'Tes rayons apparaissent dès que tu ajoutes un ingrédient.',
     search: 'Rechercher un ingrédient',
     results: "Résultats de la recherche d'ingrédient",
     count: '{count} résultat | {count} résultats',

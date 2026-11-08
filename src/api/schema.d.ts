@@ -233,7 +233,7 @@ export interface paths {
         };
         /**
          * Liste des rayons, triés par slug
-         * @description Les rayons sont des données globales ; seul `listTypeId` est propre à l'utilisateur connecté : le type de liste de courses auquel il a rattaché le rayon (ADR 0036), `null` pour un rayon sans type.
+         * @description Les rayons sont des données globales ; seuls `listTypeId` et `ingredientCount` sont propres à l'utilisateur connecté : le type de liste de courses auquel il a rattaché le rayon (ADR 0036), `null` pour un rayon sans type, et le nombre d'ingrédients qu'il a dans le rayon (0 si aucun ; la liste rend toujours tous les rayons).
          */
         get: operations["get_api_list_departments"];
         put?: never;
@@ -2391,6 +2391,11 @@ export interface components {
             icon?: string | null;
             /** @description Identifiant du type de liste de courses auquel l'utilisateur connecté a rattaché ce rayon (ADR 0036), `null` quand le rayon n'a pas de type (ses produits vont dans la liste principale) ; propre à son compte. Clé toujours écrite */
             listTypeId?: string | null;
+            /**
+             * @description Nombre d'ingrédients que l'utilisateur connecté voit dans ce rayon (≥ 0), exactement ceux de `GET /departments/{slug}/ingredients` : les siens seulement (jamais ceux d'un autre compte, administrateur compris), sous-ingrédients (parties) compris. Le front s'en sert pour cacher les rayons vides de l'écran des rayons ; la liste rend toujours TOUS les rayons. Clé toujours écrite
+             * @example 12
+             */
+            ingredientCount: number;
         };
         IngredientOptionDTO: {
             /**

@@ -22,7 +22,10 @@ import { useDebounced } from './useDebounced'
 const { t } = useI18n()
 
 const departments = useDepartments()
-const items = computed(() => departments.data.value?.member ?? [])
+const all = computed(() => departments.data.value?.member ?? [])
+// Un rayon sans aucun ingrédient de l'utilisateur n'est pas montré ici (seulement ici : les autres écrans voient tous les rayons).
+// Un back qui ne rend pas encore le compte laisse le rayon affiché.
+const items = computed(() => all.value.filter((d) => (d.ingredientCount ?? 1) > 0))
 
 // Les résultats remplacent les rayons dès la frappe ; la requête, elle, attend une pause pour ne pas partir à chaque lettre
 const search = ref('')
@@ -100,7 +103,9 @@ const duplicateLabel = computed(() =>
         {{ t('common.loading') }}
       </p>
       <SeasonEmpty v-else-if="items.length === 0" name="empty-recipes">
-        <p class="text-muted">{{ t('departments.none') }}</p>
+        <p class="text-muted">
+          {{ all.length === 0 ? t('departments.none') : t('departments.noneYet') }}
+        </p>
       </SeasonEmpty>
 
       <ul v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
