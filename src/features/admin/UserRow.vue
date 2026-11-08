@@ -157,9 +157,6 @@ const pill = 'inline-flex items-center whitespace-nowrap rounded-full px-3 py-0.
         <span class="xl:sr-only">{{ t('admin.appLabel') }}</span>
         {{ ' ' }}{{ user.appVersion ?? t('admin.appVersionUnknown') }}
       </span>
-      <span v-if="user.appOutdated" :class="[pill, 'border border-line text-ink']">
-        {{ t('admin.appOutdated') }}
-      </span>
     </p>
 
     <div :class="['flex items-center justify-end gap-2 xl:row-start-1', 'xl:col-start-6']">
