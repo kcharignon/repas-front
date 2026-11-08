@@ -35,7 +35,6 @@ import { formatQuantity } from '@/features/shopping-lists/format'
 import FavoriteButton from './FavoriteButton.vue'
 import PlanButton from './PlanButton.vue'
 import SecretBadge from './SecretBadge.vue'
-import { useOwnCopy } from './ownCopy'
 import { useDeleteRecipe } from './queries'
 import { useCopyRecipeAction } from './useCopyRecipeAction'
 import { useRecipeStance } from './useRecipeStance'
@@ -55,18 +54,8 @@ const removeCommon = useDeleteRecipe(true)
 //  - `mine` : Ajouter à la liste, Modifier, Supprimer (le back refuse de toute façon les écritures d'un autre : 403) ;
 //  - `other` : « Copier » seulement. Pas d'ajout à la liste : on copie d'abord, puis on planifie sa propre recette ;
 //  - `common` (administrateur seul) : la version commune d'une recette Marmiton, sans propriétaire : Modifier, Copier, Supprimer (MAR-005).
-const { recipe, sourceUrl, ownership, isMine, isCommon } = useRecipeStance(() =>
+const { recipe, sourceUrl, copyId, ownership, isMine, isCommon } = useRecipeStance(() =>
   String(route.params.id),
-)
-// Sa copie de la version commune, pour « Ta copie » à la place de « Copier » (undefined : pas encore su)
-const ownCopy = useOwnCopy(() =>
-  isCommon.value && recipe.data.value
-    ? {
-        id: recipe.data.value.id,
-        name: recipe.data.value.name,
-        typeSlug: recipe.data.value.typeSlug,
-      }
-    : null,
 )
 // Sa copie d'une recette Marmiton : l'administrateur peut remonter à l'original, celui que copient les autres (MAR-005)
 const commonOriginalId = computed(() => {
@@ -267,37 +256,42 @@ function confirmDelete() {
           >
             {{ t('recipes.edit') }}
           </UiLinkButton>
-          <template v-if="!ownCopy.isPending.value">
-            <UiLinkButton
-              v-if="typeof ownCopy.data.value === 'string'"
-              variant="secondary"
-              :to="{ name: 'recipe', params: { id: ownCopy.data.value } }"
-            >
-              {{ t('recipes.common.yourCopy') }}
-            </UiLinkButton>
-            <UiButton
-              v-else-if="copying.isCopied(recipe.data.value.id)"
-              variant="ghost"
-              class="bg-soft text-primary disabled:opacity-100"
-              :aria-label="t('recipes.copiedNamed', { name: recipe.data.value.name })"
-              disabled
-            >
-              <Check class="size-5" aria-hidden="true" />{{ t('recipes.copied') }}
-            </UiButton>
-            <UiButton
-              v-else
-              variant="secondary"
-              :aria-label="t('recipes.copyNamed', { name: recipe.data.value.name })"
-              :disabled="copying.pending.value"
-              @click="copying.copy(recipe.data.value)"
-            >
-              <Copy class="size-5" aria-hidden="true" />{{ t('recipes.copy') }}
-            </UiButton>
-          </template>
+          <UiLinkButton
+            v-if="copyId !== null"
+            variant="secondary"
+            :to="{ name: 'recipe', params: { id: copyId } }"
+          >
+            {{ t('recipes.common.yourCopy') }}
+          </UiLinkButton>
+          <UiButton
+            v-else-if="copying.isCopied(recipe.data.value.id)"
+            variant="ghost"
+            class="bg-soft text-primary disabled:opacity-100"
+            :aria-label="t('recipes.copiedNamed', { name: recipe.data.value.name })"
+            disabled
+          >
+            <Check class="size-5" aria-hidden="true" />{{ t('recipes.copied') }}
+          </UiButton>
+          <UiButton
+            v-else
+            variant="secondary"
+            :aria-label="t('recipes.copyNamed', { name: recipe.data.value.name })"
+            :disabled="copying.pending.value"
+            @click="copying.copy(recipe.data.value)"
+          >
+            <Copy class="size-5" aria-hidden="true" />{{ t('recipes.copy') }}
+          </UiButton>
         </template>
         <template v-else-if="ownership === 'other'">
+          <UiLinkButton
+            v-if="copyId !== null"
+            variant="secondary"
+            :to="{ name: 'recipe', params: { id: copyId } }"
+          >
+            {{ t('recipes.common.yourCopy') }}
+          </UiLinkButton>
           <UiButton
-            v-if="copying.isCopied(recipe.data.value.id)"
+            v-else-if="copying.isCopied(recipe.data.value.id)"
             variant="ghost"
             class="bg-soft text-primary disabled:opacity-100"
             :aria-label="t('recipes.copiedNamed', { name: recipe.data.value.name })"

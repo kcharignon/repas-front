@@ -31,6 +31,8 @@ const common = {
   favorite: false,
   sourceUrl: LINK,
   originalId: null,
+  ownerless: true,
+  copyId: 'm1',
   canEdit: true,
   rows: [row('farine-reservee', 'Farine', 250), row('sucre-reserve', 'Sucre semoule', 70)],
 }
@@ -68,13 +70,21 @@ test('la version commune : « Ma copie », la fiche, l’éditeur et une suppres
               typeSlug: 'dessert',
               fromMarmiton: true,
               alreadyCopied: true,
+              copyId: 'm1',
             },
           ],
           totalItems: 1,
         })
       if (key === 'GET /api/v1/recipes/c1') return reply(common)
       if (key === 'GET /api/v1/recipes/m1')
-        return reply({ ...common, id: 'm1', originalId: 'c1', version: 1 })
+        return reply({
+          ...common,
+          id: 'm1',
+          originalId: 'c1',
+          ownerless: false,
+          copyId: null,
+          version: 1,
+        })
       if (key === 'GET /api/v1/recipe-types/dessert/recipes')
         return reply({ member: [{ id: 'm1', name: common.name, secret: false }], totalItems: 1 })
       if (key === 'GET /api/v1/ingredients') return reply({ member: [], totalItems: 0 })
