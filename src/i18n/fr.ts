@@ -202,7 +202,6 @@ export default {
     ownAccountHint: 'C’est ton compte',
     pendingHint:
       'Un compte activé ici peut être sans mot de passe. La personne en choisit un avec « Mot de passe oublié ? ».',
-    appOutdated: 'À mettre à jour',
     errors: {
       name: 'Donne un nom.',
       image: 'Ajoute une image.',

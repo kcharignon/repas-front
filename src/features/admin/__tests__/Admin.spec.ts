@@ -1041,11 +1041,11 @@ describe('utilisateurs', () => {
     expect(rowOf(wrapper, 'attente@repas.fr').find('time').exists()).toBe(false)
   })
 
-  it('montre la version de l’application de chacun, « inconnue » sinon, et qui est à mettre à jour (DRV-637)', async () => {
+  it('montre la version de l’application de chacun, « inconnue » sinon, sans pastille « à mettre à jour » (DRV-637)', async () => {
     const { wrapper } = await ready()
 
     expect(textOf(rowOf(wrapper, 'admin@repas.fr'))).toContain('Application 0.1.8')
-    expect(rowOf(wrapper, 'admin@repas.fr').text()).toContain('À mettre à jour')
+    expect(rowOf(wrapper, 'admin@repas.fr').text()).not.toContain('À mettre à jour')
     expect(textOf(rowOf(wrapper, 'gone@repas.fr'))).toContain('Application inconnue')
     expect(rowOf(wrapper, 'gone@repas.fr').text()).not.toContain('À mettre à jour')
   })
