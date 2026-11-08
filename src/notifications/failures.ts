@@ -31,6 +31,15 @@ const driveCodes = new Map([
   ['INGREDIENT_NAME_ALREADY_USED', 'errors.ingredientNameUsed'],
 ])
 
+/** La copie d'une recette de Marmiton (MAR-004, ADR 0037 du back) : chaque refus du back a sa phrase, quel que soit le statut. */
+const marmitonCodes = new Map([
+  ['MARMITON_URL_INVALID', 'errors.marmitonUrlInvalid'],
+  ['MARMITON_RECIPE_NOT_FOUND', 'errors.marmitonNotFound'],
+  ['MARMITON_RECIPE_UNREADABLE', 'errors.marmitonUnreadable'],
+  ['MARMITON_UNAVAILABLE', 'errors.marmitonUnavailable'],
+  ['MARMITON_IMPORT_RATE_LIMITED', 'errors.marmitonRateLimited'],
+])
+
 /** Les types de liste de courses (ADR 0036) : un 409 de nom pris n'est pas « une autre modification en cours », un 422 de nom dit ce qui ne va pas. */
 const listTypeCodes = new Map([
   ['LIST_TYPE_NAME_ALREADY_USED', 'errors.listTypeNameUsed'],
@@ -108,6 +117,7 @@ export function messageForFailure(error: unknown): string {
     driveCodes.get(error.message) ??
     conversionCodes.get(error.message) ??
     listTypeCodes.get(error.message) ??
+    marmitonCodes.get(error.message) ??
     limitCodes.get(error.message)
   if (code !== undefined) return t(code)
 
@@ -134,6 +144,23 @@ export function messageForFailure(error: unknown): string {
     default:
       return t('errors.generic')
   }
+}
+
+/**
+ * Le texte d'un échec de la copie d'une recette Marmiton, dit sous le champ du lien. Le réseau coupé, le délai dépassé et un 502 disent la
+ * même chose (« Marmiton ne répond pas ») ; tout 429 est le plafond de copies. Le reste suit `messageForFailure` (plafond de recettes, texte
+ * générique pour un message inconnu).
+ */
+export function messageForMarmitonFailure(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 0 || error.status === 502) return t('errors.marmitonUnavailable')
+    if (error.status === 429) return t('errors.marmitonRateLimited')
+    // Un 422 de texte inconnu est dit tel quel par `messageForFailure` (message libre du back) : ici ce serait un code, jamais montré
+    if (error.status === 422 && !marmitonCodes.has(error.message) && !limitCodes.has(error.message))
+      return t('errors.generic')
+  }
+
+  return messageForFailure(error)
 }
 
 /** 412 et 409 disent que la ressource a changé ailleurs, `DRIVE_DISABLED` que le drive vient d'être coupé : l'écran doit se relire. */

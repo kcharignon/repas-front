@@ -149,7 +149,17 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'recettes/nouvelle',
         name: 'recipe-new',
+        component: () => import('@/features/recipes/RecipeNewChoiceView.vue'),
+      },
+      {
+        path: 'recettes/nouvelle/ecrire',
+        name: 'recipe-new-write',
         component: () => import('@/features/recipes/RecipeEditorView.vue'),
+      },
+      {
+        path: 'recettes/nouvelle/marmiton',
+        name: 'recipe-new-marmiton',
+        component: () => import('@/features/recipes/MarmitonImportView.vue'),
       },
       {
         path: 'recettes/autres',

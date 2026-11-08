@@ -253,7 +253,7 @@ describe('RecipeEditorView', () => {
 
   describe('création', () => {
     it('propose tous les types, même ceux sans recette', async () => {
-      const { wrapper } = await open('/recettes/nouvelle', {
+      const { wrapper } = await open('/recettes/nouvelle/ecrire', {
         'GET /api/v1/recipe-types': () =>
           json({
             member: types.member.map((type) => ({ ...type, recipeCount: 0 })),
@@ -266,7 +266,7 @@ describe('RecipeEditorView', () => {
     })
 
     it('refuse un formulaire incomplet en disant quoi corriger, sans appeler le back', async () => {
-      const { wrapper, fetchMock } = await open('/recettes/nouvelle')
+      const { wrapper, fetchMock } = await open('/recettes/nouvelle/ecrire')
       await vi.waitFor(() => expect(wrapper.find('select').exists()).toBe(true))
 
       await submit(wrapper)
@@ -279,7 +279,7 @@ describe('RecipeEditorView', () => {
     })
 
     it('demande au moins une ligne', async () => {
-      const { wrapper } = await open('/recettes/nouvelle')
+      const { wrapper } = await open('/recettes/nouvelle/ecrire')
       await vi.waitFor(() => expect(wrapper.find('select').exists()).toBe(true))
       await wrapper.find('button[aria-label="Retirer l\'ingrédient 1"]').trigger('click')
 
@@ -289,7 +289,7 @@ describe('RecipeEditorView', () => {
     })
 
     it('propose le premier type par défaut', async () => {
-      const { wrapper } = await open('/recettes/nouvelle')
+      const { wrapper } = await open('/recettes/nouvelle/ecrire')
 
       await vi.waitFor(() =>
         expect((wrapper.find('select').element as HTMLSelectElement).value).toBe('entree'),
@@ -297,7 +297,7 @@ describe('RecipeEditorView', () => {
     })
 
     it('met le nom tapé en majuscule dès la première lettre', async () => {
-      const { wrapper } = await open('/recettes/nouvelle')
+      const { wrapper } = await open('/recettes/nouvelle/ecrire')
       await vi.waitFor(() => expect(wrapper.find('select').exists()).toBe(true))
 
       await nameInput(wrapper).setValue('pâtes carbonara')

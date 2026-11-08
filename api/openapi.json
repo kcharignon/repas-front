@@ -2105,6 +2105,67 @@
                 }
             }
         },
+        "/api/v1/recipes/import/marmiton": {
+            "post": {
+                "tags": [
+                    "Recipes"
+                ],
+                "summary": "Copie une recette Marmiton chez l'utilisateur connect\u00e9, \u00e0 partir du lien de sa page",
+                "description": "Seul l'identifiant de la recette est retenu du lien (`MarmitonUrl`) : la page lue est celle que l'application reconstruit, jamais l'adresse re\u00e7ue. Si la recette n'a jamais \u00e9t\u00e9 import\u00e9e, sa page est lue une fois et une recette NEUTRE est cr\u00e9\u00e9e pour tous (sans propri\u00e9taire, ordinaire, visible dans \u00ab Recettes des autres \u00bb, qu'aucun compte ne modifie, administrateur compris) ; si elle existe d\u00e9j\u00e0, Marmiton n'est pas appel\u00e9. L'utilisateur re\u00e7oit SA copie de la neutre, par le m\u00eame rapprochement d'ingr\u00e9dients que `POST /recipes/{id}/copy`, modifiable, avec le lien d'origine (`sourceUrl` de `GET /recipes/{id}`). Une ligne dont l'unit\u00e9 ne se convertit pas en l'unit\u00e9 d'achat n'emp\u00eache pas la copie : la fiche dit `convertible: false`. S'il a d\u00e9j\u00e0 une copie de cette recette, elle lui est rendue (`200`), rien n'est \u00e9crit.",
+                "operationId": "post_api_import_marmiton_recipe",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ImportMarmitonRecipePayload"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Copie cr\u00e9\u00e9e",
+                        "headers": {
+                            "Location": {
+                                "description": "URL de la copie (`GET /api/v1/recipes/{id}`)",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "L'utilisateur avait d\u00e9j\u00e0 une copie de cette recette Marmiton : la sienne est rendue, rien n'est \u00e9crit",
+                        "headers": {
+                            "Location": {
+                                "description": "URL de la copie existante",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Corps invalide (`url` n'est pas un texte de 2 000 caract\u00e8res au plus), `MARMITON_URL_INVALID` (ce n'est pas l'adresse d'une recette Marmiton), `MARMITON_RECIPE_NOT_FOUND` (Marmiton ne conna\u00eet pas cet identifiant : 404 ou 410), `MARMITON_RECIPE_UNREADABLE` (la page n'a pas de recette lisible : aucun bloc recette, aucune ligne d'ingr\u00e9dient lisible, nom vide) ou `RECIPE_LIMIT_REACHED` (le compte a d\u00e9j\u00e0 2 000 recettes, copies comprises). Rien n'est \u00e9crit"
+                    },
+                    "429": {
+                        "description": "Plafond de lectures de pages atteint pour cet utilisateur (20 par heure ; une copie d'une recette d\u00e9j\u00e0 connue n'en consomme pas) : message `MARMITON_IMPORT_RATE_LIMITED`, aucune page lue, rien n'est \u00e9crit ; patienter au moins le d\u00e9lai de `Retry-After`. Les \u00e9critures de l'API (`repas_write`, 300 par minute) r\u00e9pondent `WRITE_RATE_LIMITED` de la m\u00eame fa\u00e7on",
+                        "headers": {
+                            "Retry-After": {
+                                "description": "D\u00e9lai d'attente en secondes",
+                                "schema": {
+                                    "type": "integer"
+                                }
+                            }
+                        }
+                    },
+                    "502": {
+                        "description": "`MARMITON_UNAVAILABLE` : Marmiton n'a pas r\u00e9pondu comme il faut (d\u00e9lai d\u00e9pass\u00e9, 5xx, refus du serveur, redirection hors de Marmiton) ; on ne distingue pas un blocage d'une panne. Rien n'est \u00e9crit"
+                    }
+                }
+            }
+        },
         "/api/v1/ingredients/{slug}/units": {
             "get": {
                 "tags": [
@@ -4625,6 +4686,19 @@
                 },
                 "type": "object"
             },
+            "ImportMarmitonRecipePayload": {
+                "properties": {
+                    "url": {
+                        "description": "Le lien de la recette Marmiton coll\u00e9 par la personne (la page de la recette, par exemple `https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx`). Seul l'identifiant de la recette est retenu : l'adresse lue est reconstruite, jamais celle-ci. 2 000 caract\u00e8res au plus (`422` sinon)",
+                        "type": "string",
+                        "default": null,
+                        "maxLength": 2000,
+                        "example": "https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
             "ListAvailableIngredientsRequestQuery": {
                 "properties": {
                     "q": {
@@ -6599,6 +6673,12 @@
                         "description": "Version de la recette, aussi renvoy\u00e9e dans l'en-t\u00eate `ETag` : \u00e0 renvoyer dans `If-Match` pour modifier ou supprimer sans \u00e9craser le travail d'un autre",
                         "type": "integer",
                         "example": 3
+                    },
+                    "sourceUrl": {
+                        "description": "L'adresse de la page Marmiton dont la recette vient (ADR 0037 d\u00e9cision 10), reprise par chacune de ses copies, copies de copies comprises ; `null` pour toute autre recette. Toujours \u00e9crit. Le front en fait un bouton \u00ab Voir sur Marmiton \u00bb (texte et ic\u00f4ne de lien externe, ouvert dans un nouvel onglet avec `rel=\"noopener noreferrer\"`) seulement pour une adresse de la forme `https://www.marmiton.org/recettes/recette_{nom}_{id}.aspx`. Jamais \u00e9crite par un corps de requ\u00eate",
+                        "type": "string",
+                        "example": "https://www.marmiton.org/recettes/recette_tarte-au-citron-meringuee_22082.aspx",
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -7115,7 +7195,8 @@
                     "id",
                     "name",
                     "typeName",
-                    "typeSlug"
+                    "typeSlug",
+                    "fromMarmiton"
                 ],
                 "properties": {
                     "id": {
@@ -7136,6 +7217,11 @@
                         "description": "Identifiant stable du type de recette, pour grouper les recettes par cat\u00e9gorie",
                         "type": "string",
                         "example": "plat"
+                    },
+                    "fromMarmiton": {
+                        "description": "Vrai pour une recette Marmiton neutre (ADR 0037 d\u00e9cision 11) : sans propri\u00e9taire, visible de tous, qu'on ne fait que copier ; le front en tire la pastille \u00ab Marmiton \u00bb. Toujours \u00e9crit",
+                        "type": "boolean",
+                        "example": false
                     }
                 },
                 "type": "object"

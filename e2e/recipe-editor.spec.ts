@@ -38,7 +38,7 @@ test.describe('éditeur de recette', () => {
   })
 
   test('créer, modifier puis supprimer une recette', async ({ page }) => {
-    await signIn(page, '/recettes/nouvelle')
+    await signIn(page, '/recettes/nouvelle/ecrire')
     await page.getByLabel('Nom de la recette').fill(prefix)
     await page.getByLabel('Nombre de personnes').fill('2')
 
@@ -65,19 +65,19 @@ test.describe('éditeur de recette', () => {
   })
 
   test('un formulaire incomplet dit quoi corriger', async ({ page }) => {
-    await signIn(page, '/recettes/nouvelle')
+    await signIn(page, '/recettes/nouvelle/ecrire')
     await page.getByRole('button', { name: 'Enregistrer' }).click()
 
     await expect(page.getByText('Donne un nom à la recette.')).toBeVisible()
     await expect(page.getByText('Choisis un ingrédient.')).toBeVisible()
-    await expect(page).toHaveURL(/\/recettes\/nouvelle$/)
+    await expect(page).toHaveURL(/\/recettes\/nouvelle\/ecrire$/)
   })
 
   for (const colorScheme of ['light', 'dark'] as const) {
     test(`l'éditeur est accessible (WCAG AA), thème ${colorScheme}`, async ({ page }) => {
       await page.emulateMedia({ colorScheme })
-      await signIn(page, '/recettes/nouvelle')
-      await expect(page.getByRole('heading', { level: 1, name: 'Nouvelle recette' })).toBeVisible()
+      await signIn(page, '/recettes/nouvelle/ecrire')
+      await expect(page.getByRole('heading', { level: 1, name: 'Écrire ma recette' })).toBeVisible()
       await page.getByRole('button', { name: 'Enregistrer' }).click()
       await expect(page.getByText('Donne un nom à la recette.')).toBeVisible()
 

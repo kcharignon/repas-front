@@ -85,7 +85,7 @@ describe('recette secrète', () => {
       vi.waitFor(() => expect(wrapper.find('li input[type="number"]').exists()).toBe(true))
 
     it('est éteint par défaut à la création, avec son libellé, son aide et un cadenas décoratif', async () => {
-      const { wrapper } = await openEditor('/recettes/nouvelle')
+      const { wrapper } = await openEditor('/recettes/nouvelle/ecrire')
       await vi.waitFor(() => expect(wrapper.find('select').exists()).toBe(true))
 
       const toggle = switchOf(wrapper)
@@ -117,7 +117,7 @@ describe('recette secrète', () => {
         await flushPromises()
       }
 
-      const off = await openEditor('/recettes/nouvelle', post)
+      const off = await openEditor('/recettes/nouvelle/ecrire', post)
       await vi.waitFor(() => expect(off.wrapper.find('select').exists()).toBe(true))
       await fill(off.wrapper)
       await off.wrapper.find('form').trigger('submit')
@@ -125,7 +125,7 @@ describe('recette secrète', () => {
       expect(await sentRequests(off.fetchMock, 'POST')[0]?.json()).not.toHaveProperty('secret')
       off.wrapper.unmount()
 
-      const on = await openEditor('/recettes/nouvelle', post)
+      const on = await openEditor('/recettes/nouvelle/ecrire', post)
       await vi.waitFor(() => expect(on.wrapper.find('select').exists()).toBe(true))
       await fill(on.wrapper)
       await switchOf(on.wrapper).setValue(true)

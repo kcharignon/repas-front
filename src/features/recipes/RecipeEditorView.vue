@@ -24,7 +24,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-// Création (`/recettes/nouvelle`) ou modification (`/recettes/:id/modifier`) : le même formulaire.
+// Création (`/recettes/nouvelle/ecrire`, après le choix de `/recettes/nouvelle`) ou modification (`/recettes/:id/modifier`) : le même formulaire.
 const recipeId = computed(() => (typeof route.params.id === 'string' ? route.params.id : null))
 const editing = computed(() => recipeId.value !== null)
 
@@ -179,13 +179,13 @@ function submit() {
 <template>
   <main class="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-6">
     <RouterLink
-      :to="editing ? { name: 'recipe', params: { id: recipeId ?? '' } } : { name: 'recipes' }"
+      :to="editing ? { name: 'recipe', params: { id: recipeId ?? '' } } : { name: 'recipe-new' }"
       class="self-start font-bold text-primary underline"
     >
-      {{ editing ? t('editor.backToRecipe') : t('recipes.title') }}
+      {{ editing ? t('editor.backToRecipe') : t('recipes.new') }}
     </RouterLink>
     <h1 class="font-display text-3xl leading-tight font-bold md:text-4xl">
-      {{ editing ? t('editor.editTitle') : t('editor.newTitle') }}
+      {{ editing ? t('editor.editTitle') : t('editor.writeTitle') }}
     </h1>
 
     <p v-if="editing && existing.isPending.value" class="text-muted" role="status">

@@ -82,7 +82,7 @@ test('créer une recette : le nom tapé en minuscules passe en majuscule, et la 
   page,
 }) => {
   const back = await fakeBack(page)
-  await page.goto('/recettes/nouvelle')
+  await page.goto('/recettes/nouvelle/ecrire')
   const name = page.getByLabel('Nom de la recette')
 
   await name.pressSequentially('pâtes carbonara')

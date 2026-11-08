@@ -2,7 +2,7 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { Check, Copy, TriangleAlert } from 'lucide-vue-next'
+import { Check, Copy, ExternalLink, TriangleAlert } from 'lucide-vue-next'
 
 import { hasFailed } from '@/api/query'
 import { ApiError } from '@/api'
@@ -23,6 +23,7 @@ import OwnConversionSheet from '@/features/ingredients/OwnConversionSheet.vue'
 import { useUnits } from '@/features/ingredients/queries'
 import { formatQuantity } from '@/features/shopping-lists/format'
 import FavoriteButton from './FavoriteButton.vue'
+import { marmitonSourceUrl } from './marmitonSourceUrl'
 import PlanButton from './PlanButton.vue'
 import SecretBadge from './SecretBadge.vue'
 import { useDeleteRecipe, useRecipe, useRecipesByType } from './queries'
@@ -49,6 +50,9 @@ const ownership = computed<Ownership>(() => {
   return members.some((candidate) => candidate.id === route.params.id) ? 'mine' : 'other'
 })
 const isMine = computed(() => ownership.value === 'mine')
+// Le lien d'origine d'une recette copiée de Marmiton : lu de la réponse, rendu seulement s'il a la forme d'une adresse de recette de
+// Marmiton (jamais composé ici ; un back qui ne connaît pas encore `sourceUrl` n'en rend pas)
+const sourceUrl = computed(() => marmitonSourceUrl(recipe.data.value?.sourceUrl))
 const copying = useCopyRecipeAction()
 const deleting = ref(false)
 
@@ -176,6 +180,14 @@ function confirmDelete() {
               )
             }}
           </p>
+          <a
+            v-if="sourceUrl !== null"
+            :href="sourceUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="mt-1 inline-flex min-h-11 cursor-pointer items-center gap-2 self-start rounded-xl border-[1.5px] border-primary px-4 text-[15px] font-bold text-primary transition-colors hover:bg-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >{{ t('recipes.viewOnMarmiton') }}<ExternalLink class="size-4.5" aria-hidden="true"
+          /></a>
         </header>
         <!-- Le choix de l'auteur : l'étoile n'est proposée que sur ses propres recettes -->
         <FavoriteButton

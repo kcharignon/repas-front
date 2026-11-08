@@ -94,7 +94,7 @@ async function open(handlers: Handlers = {}) {
   localStorage.setItem('repas.session', '1')
   const context = appContext()
   await useSessionStore().restore()
-  await context.router.push('/recettes/nouvelle')
+  await context.router.push('/recettes/nouvelle/ecrire')
   const wrapper = mount(RecipeEditorView, {
     attachTo: document.body,
     global: { plugins: context.plugins },

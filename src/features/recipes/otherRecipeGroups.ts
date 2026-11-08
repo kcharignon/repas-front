@@ -4,6 +4,8 @@ export interface OtherRecipe {
   name: string
   typeName: string
   typeSlug: string
+  /** Recette copiée de Marmiton : la pastille « Marmiton ». Un back qui ne le rend pas encore : pas de pastille. */
+  fromMarmiton?: boolean
 }
 
 export interface OtherRecipeGroup {
