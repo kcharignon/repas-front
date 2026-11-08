@@ -384,6 +384,8 @@ describe('copier une recette de Marmiton', () => {
       const dessert = { typeName: 'dessert', typeSlug: 'dessert' }
       stubApi({
         ...backend,
+        'GET /api/v1/recipes/other-people/types': () =>
+          json({ member: [{ typeSlug: 'dessert', typeName: 'dessert', count: 3 }], totalItems: 1 }),
         'GET /api/v1/recipes/other-people': () =>
           json({
             member: [
@@ -397,7 +399,7 @@ describe('copier une recette de Marmiton', () => {
       localStorage.setItem('repas.session', '1')
       const context = appContext()
       await useSessionStore().restore()
-      await context.router.push('/recettes/autres')
+      await context.router.push('/recettes/autres?categorie=dessert')
       const wrapper = mount(OtherRecipesView, { global: { plugins: context.plugins } })
 
       await vi.waitFor(() => expect(wrapper.findAll('li').length).toBe(3))

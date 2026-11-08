@@ -91,6 +91,8 @@ Utiliser `<UiTextInput capitalize-first …/>` (ADR 0018) : la première lettre 
 
 Passer par `useCopyRecipeAction` (`src/features/recipes/`) : la copie ne navigue pas, un message confirme, le bouton de la recette passe à « Copiée » (`copiedRecipes`, en mémoire, vidé par `forgetAccountData`). Sur la fiche, le jeu d'actions dépend de la propriété déduite de SES recettes (`mine | other | unknown`) : jamais d'action tant qu'elle est inconnue, « Copier » seul pour un autre, `PlanButton`/Modifier/Supprimer pour soi (ADR 0017, amendement du 2026-10-30).
 
+Recette courte : « Recettes des autres » est des tuiles par catégorie (`OtherRecipeTypeTiles.vue`, celle des rayons) puis la liste d'une catégorie (`?categorie=<slug>`, `push`, jamais la recherche dans l'adresse). Les comptes viennent de `useOtherPeopleTypes`, les images de `useRecipeTypes` (jointure par `typeSlug`), les recettes de `useOtherPeopleRecipes(search, typeSlug, enabled)` (30 par page, rien de demandé sur les tuiles seules). Un texte cherché ne vaut que dans la portée où il a été tapé ; une catégorie ouverte le reste après avoir copié sa dernière recette. Tout test qui monte l'écran répond aux routes `other-people/types` et `recipe-types` ; détail dans `CLAUDE.md`.
+
 ### 4.6 La version commune d'une recette Marmiton
 
 Voir `CLAUDE.md` (« Version commune… », MAR-005) : `useRecipeStance` pour savoir à qui est une fiche, `findOwnCopy` pour la copie de l'administrateur, `useDeleteRecipe(true)` quand l'écran dit lui-même ses refus. Mot à l'écran : « version commune ».

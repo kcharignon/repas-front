@@ -18,7 +18,9 @@ export const recipeKeys = {
   types: ['recipes', 'types'] as const,
   byType: (slug: string) => ['recipes', 'type', slug] as const,
   favorites: ['recipes', 'favorites'] as const,
-  others: (search: string) => ['recipes', 'others', search] as const,
+  others: (search: string, typeSlug: string) => ['recipes', 'others', search, typeSlug] as const,
+  /** Les catégories qui ont au moins une recette à copier, avec leur nombre (les tuiles de « Recettes des autres ») */
+  otherTypes: ['recipes', 'other-types'] as const,
   detail: (id: string) => ['recipes', 'detail', id] as const,
   /** La copie que l'administrateur a faite d'une version commune (MAR-005) */
 }
@@ -62,13 +64,35 @@ export function useFavoriteRecipes() {
 /** Longueur minimale d'une recherche de recette des autres : en dessous, la liste n'est pas filtrée (comme la recherche d'ingrédients). */
 export const MIN_OTHERS_SEARCH_LENGTH = 2
 
+/** Les recettes des autres se lisent par pages de 30 : « Voir plus » demande la suivante. */
+export const OTHERS_PAGE_SIZE = 30
+
 /**
- * Les recettes des autres utilisateurs que celui-ci n'a pas encore copiées, par pages de 200 au plus (`offset`) : `totalItems`
- * est le vrai nombre, la page suivante se charge à la demande. Sans recherche, le back les trie par catégorie ; avec `search`
- * (2 caractères au moins, sinon elle est ignorée), il rend les correspondances par pertinence, toutes catégories confondues.
- * Pendant qu'une recherche s'affine, les résultats de la précédente restent affichés (jamais ceux de la liste par catégories).
+ * Les catégories qui ont au moins une recette à copier, avec leur nombre, dans l'ordre du produit (une requête côté back) : les tuiles
+ * de « Recettes des autres ». Une catégorie sans recette n'y est pas.
  */
-export function useOtherPeopleRecipes(search: () => string = () => '') {
+export function useOtherPeopleTypes() {
+  const { api } = useSessionStore()
+
+  return useQuery({
+    queryKey: recipeKeys.otherTypes,
+    queryFn: () => unwrap(api.GET('/api/v1/recipes/other-people/types')),
+  })
+}
+
+/**
+ * Les recettes des autres utilisateurs que celui-ci n'a pas encore copiées, par pages de 30 (`offset`) : `totalItems` est le vrai
+ * nombre, la page suivante se charge à la demande. `typeSlug` restreint page, total et recherche à une catégorie ; sans lui, toutes
+ * catégories confondues. Avec `search` (2 caractères au moins, sinon elle est ignorée), le back rend les correspondances par
+ * pertinence ; sans recherche il trie par catégorie puis par nom. Pendant qu'une recherche s'affine, les résultats de la précédente
+ * (de la même catégorie) restent affichés, jamais ceux de la liste sans recherche. `enabled` : rien n'est demandé tant que l'écran
+ * montre les tuiles.
+ */
+export function useOtherPeopleRecipes(
+  search: () => string = () => '',
+  typeSlug: () => string | null = () => null,
+  enabled: () => boolean = () => true,
+) {
   const { api } = useSessionStore()
   const term = () => {
     const trimmed = search().trim()
@@ -77,16 +101,23 @@ export function useOtherPeopleRecipes(search: () => string = () => '') {
   }
 
   return useInfiniteQuery({
-    queryKey: computed(() => recipeKeys.others(term())),
+    queryKey: computed(() => recipeKeys.others(term(), typeSlug() ?? '')),
     initialPageParam: 0,
+    enabled: computed(enabled),
     queryFn: ({ queryKey, pageParam, signal }) => {
-      // La recherche de la clé, pas celle d'aujourd'hui : « Voir plus » continue la liste qu'il a sous les yeux
+      // La recherche et la catégorie de la clé, pas celles d'aujourd'hui : « Voir plus » continue la liste qu'il a sous les yeux
       const q = queryKey[2]
+      const category = queryKey[3]
 
       return unwrap(
         api.GET('/api/v1/recipes/other-people', {
           params: {
-            query: { ...(q !== '' ? { q } : {}), ...(pageParam > 0 ? { offset: pageParam } : {}) },
+            query: {
+              ...(q !== '' ? { q } : {}),
+              ...(category !== '' ? { typeSlug: category } : {}),
+              limit: OTHERS_PAGE_SIZE,
+              ...(pageParam > 0 ? { offset: pageParam } : {}),
+            },
           },
           signal,
         }),
@@ -98,7 +129,11 @@ export function useOtherPeopleRecipes(search: () => string = () => '') {
       return lastPage.member.length > 0 && loaded < lastPage.totalItems ? loaded : undefined
     },
     placeholderData: (previous, previousQuery) =>
-      term() !== '' && previousQuery?.queryKey[2] !== '' ? previous : undefined,
+      term() !== '' &&
+      previousQuery?.queryKey[2] !== '' &&
+      previousQuery?.queryKey[3] === (typeSlug() ?? '')
+        ? previous
+        : undefined,
   })
 }
 

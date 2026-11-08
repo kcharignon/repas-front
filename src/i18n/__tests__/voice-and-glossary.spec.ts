@@ -780,6 +780,45 @@ describe('découper un ingrédient en parties (SUB-007)', () => {
   })
 })
 
+// ---------------------------------------------------------------------------------------------------------------------------------
+// « Recettes des autres » en tuiles par catégorie
+//
+// Les textes de l'écran (titre, phrase, deux champs de recherche, compte des tuiles, états) : tutoiement (déjà vérifié sur tout `fr.ts`),
+// aucun avertissement, 15 mots au plus par phrase. La portée du champ se dit sans phrase d'avertissement : « Rechercher dans cette catégorie ».
+
+describe('recettes des autres par catégorie', () => {
+  const lues = sources.web.filter((entry) => entry.where.includes(' recipes.others'))
+
+  it('lit tous les textes de l’écran, dont le champ de recherche d’une catégorie', () => {
+    expect(lues.length).toBeGreaterThanOrEqual(10)
+    expect(lues.find((entry) => entry.where.endsWith('recipes.othersSearchInType'))?.text).toBe(
+      'Rechercher dans cette catégorie',
+    )
+  })
+
+  it('ne dit aucun avertissement ni rassurance de trop', () => {
+    expect(lues.flatMap((entry) => warnings(entry.where, entry.text))).toEqual([])
+  })
+
+  it('tient chaque phrase en 15 mots au plus', () => {
+    const trop = lues.flatMap((entry) =>
+      entry.text
+        .replace(/\{[^}]+\}/g, 'x')
+        .split(/(?<=[.!?…])\s+/)
+        .filter((sentence) => sentence.trim().split(/\s+/).length > 15)
+        .map((sentence) => `${entry.where} : « ${sentence} »`),
+    )
+    expect(trop).toEqual([])
+  })
+
+  it('dit « catégorie », jamais « type » ni « filtre » à l’écran', () => {
+    const interdits = lues.filter((entry) =>
+      /(?<![\p{L}])(?:types?|filtres?)(?![\p{L}])/iu.test(entry.text),
+    )
+    expect(interdits.map((entry) => entry.where)).toEqual([])
+  })
+})
+
 describe('le nom d’une enseigne est un paramètre (DRV-708)', () => {
   const texts = webEntries()
 

@@ -22,6 +22,12 @@ Constat de l'utilisateur : après « Copier », l'écran ouvrait la copie, dont 
 7. **Copier reste sur la liste.** Plus de navigation vers la copie : un message (« « {nom} » est dans tes recettes. », par les notifications) et le bouton de cette recette qui passe à « Copiée » (grisé, coche) pour la visite, pour éviter une seconde copie par erreur. L'état est en mémoire de la page (`copiedRecipes`), vidé à l'ouverture de la liste et avec la session. Le back ne rend plus une recette copiée à la relecture : la liste la garde à sa place pour la visite (`keepCopied`), jusqu'à une autre recherche. Un refus du back garde « Copier » et le message d'erreur habituel.
 8. **La fiche d'une recette d'un autre n'a que « Copier »** (même logique, on reste sur la fiche) : ni ajout à la liste, ni Modifier, ni Supprimer ; le lien de retour mène à « Recettes des autres ». La propriété est déduite de la liste de SES recettes du même type (le contrat de la fiche n'a pas d'indicateur) : `mine | other | unknown`, et tant qu'elle est inconnue aucune action n'est affichée (la place est réservée). La fiche d'une recette à soi est inchangée.
 
+## Amendement du 2026-11-08 : des tuiles par catégorie
+
+Constat du propriétaire : la liste infinie des recettes des autres est beaucoup trop longue.
+
+9. **L'écran s'ouvre sur des tuiles par catégorie** (celles des rayons, avec le nombre de recettes), pas sur les sections : une tuile ouvre `/recettes/autres?categorie=<slug>` (liste de la catégorie, 30 par page), le champ de l'accueil cherche partout, celui d'une catégorie dans cette catégorie seule. Les sections par catégorie (décision 1) disparaissent ; la recherche par pertinence (décision 2) et « Copier » (décisions 7 et 8) ne changent pas. Détail et règles : `CLAUDE.md`.
+
 ## Conséquences
 
 - Aucune logique de tri ni de pertinence dans le front ; un changement d'ordre des catégories ou du classement reste côté back.

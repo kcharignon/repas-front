@@ -97,7 +97,13 @@ afterEach(() => {
 })
 
 describe('« Recettes des autres » vu par l’administrateur', () => {
+  // L'écran s'ouvre sur une catégorie (tuile « Dessert ») : la liste de ses recettes est ce que le back rend, tel quel
   const others = (member: Record<string, unknown>[]) => ({
+    'GET /api/v1/recipes/other-people/types': () =>
+      json({
+        member: [{ typeSlug: 'dessert', typeName: 'Dessert', count: member.length }],
+        totalItems: 1,
+      }),
     'GET /api/v1/recipes/other-people': () => json({ member, totalItems: member.length }),
   })
   const marmiton = (id: string, name: string, alreadyCopied: boolean) => ({
@@ -119,7 +125,7 @@ describe('« Recettes des autres » vu par l’administrateur', () => {
     copyId: null,
   }
   const open = (member: Record<string, unknown>[], user: unknown = admin, more = {}) =>
-    mountView(OtherRecipesView, '/recettes/autres', {
+    mountView(OtherRecipesView, '/recettes/autres?categorie=dessert', {
       'GET /api/v1/me': () => json(user),
       ...others(member),
       ...more,
@@ -142,6 +148,24 @@ describe('« Recettes des autres » vu par l’administrateur', () => {
     expect(link.classes().join(' ')).not.toMatch(/border-/)
     // La fiche de la version commune reste ouvrable par le nom
     expect(item.find('a').attributes('href')).toBe('/recettes/c1')
+  })
+
+  it('l’administrateur passe par la tuile de la catégorie, puis voit « Ma copie » : le même écran que les autres', async () => {
+    const { wrapper } = await mountView(OtherRecipesView, '/recettes/autres', {
+      'GET /api/v1/me': () => json(admin),
+      ...others([marmiton('c1', 'Tarte au citron meringuée', true)]),
+    })
+    await vi.waitFor(() =>
+      expect(wrapper.find('ul[aria-label="Types de recette"]').exists()).toBe(true),
+    )
+    expect(wrapper.find('ul[aria-label="Types de recette"]').text()).toContain('1 recette')
+    expect(wrapper.find('[data-open-copy]').exists()).toBe(false)
+
+    await wrapper.find('a[href="/recettes/autres?categorie=dessert"]').trigger('click')
+
+    await vi.waitFor(() => expect(wrapper.find('[data-open-copy]').text()).toBe('Ma copie'))
+    expect(wrapper.find('h1').text()).toBe('Dessert')
+    expect(wrapper.find('[data-have-copy]').text()).toBe('Tu as déjà ta copie')
   })
 
   it('une version commune pas encore copiée garde la pastille et « Copier »', async () => {
