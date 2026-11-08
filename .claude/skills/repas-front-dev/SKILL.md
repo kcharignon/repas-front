@@ -105,6 +105,10 @@ Rien à recopier : `IngredientPartsSection.vue` (fiche d'un entier à soi), `Par
 
 Rien à recopier : `src/features/admin/ImageField.vue` (le bloc, `v-model` = chemin `images/uploads/…`), `imageFailures.ts` (un code du back = une phrase `admin.image.errors.*`), `queries.ts` (`useUploadImage` en `FormData` par `bodySerializer`, `useStoreImageFromUrl`). Règles : PNG, WebP, SVG, 3 Mo, **jamais de JPEG**, refusé tout de suite côté client par le type MIME ; l'image actuelle ne change que si l'envoi réussit ; image obligatoire (« Ajoute une image. ») ; formulaire non enregistrable pendant un envoi ; **jamais `v-html`** pour un SVG, toujours `UiImage`. Un nouvel écran qui porte une image réutilise le bloc et lui passe `v-model:busy` (désactive « Enregistrer » et ignore `submit`). Limite : la coquille Android n'ouvre pas encore le sélecteur de fichiers (voir CLAUDE.md). Un test de composant qui envoie un fichier prend le `File` et le `FormData` de Node (voir `ImageField.spec.ts`).
 
+### 4.9 Les recettes utilisées dans une autre recette (COMP-006)
+
+Rien à recopier : `RecipeComponentsSection.vue` + `RecipeComponentRow.vue` + `UsableRecipesSheet.vue` (éditeur), `RecipeWithSection.vue` + `RecipeUsedInSheet.vue` (fiche), `componentsText.ts` (nombre de fois et phrases, pur), `editableComponents.ts`. Règles : `components` n'est envoyé que si la section a été touchée ou si la recette en avait (`[]` pour tout retirer, jamais l'omettre à ce moment-là) ; les champs se lisent comme facultatifs (`?? []`) ; chaque code du back a sa phrase dans `recipes.componentErrors` ; « fois » à l'écran, jamais « sous-recette », « composant », « parent » ni « partie » ; une lecture « sert dans » seulement pour SA recette ; la copie dit les noms (`copiedMessage`). Tests : `RecipeComponents.spec.ts`, `componentsText.spec.ts`, e2e `recipe-components.spec.ts` (2 tests).
+
 ## 5. Definition of Done
 
 - [ ] `make check` vert (lint, format, `api-check`, types, tests) ; `make quality` avant la PR ; seuil de couverture non abaissé

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Layers, Plus } from 'lucide-vue-next'
 
+import { ApiError } from '@/api'
 import { hasFailed } from '@/api/query'
 import UiButton from '@/design/UiButton.vue'
 import {
@@ -16,10 +17,15 @@ import UiSelect from '@/design/UiSelect.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
 import { messageForFailure } from '@/notifications/failures'
 import { useNotificationsStore } from '@/notifications/store'
+import RecipeComponentsSection from './RecipeComponentsSection.vue'
 import RecipeRowEditor from './RecipeRowEditor.vue'
+import RecipeUsedInSheet from './RecipeUsedInSheet.vue'
 import SecretRecipeSwitch from './SecretRecipeSwitch.vue'
+import type { EditableComponent } from './RecipeComponentRow.vue'
 import type { EditableRow } from './RecipeRowEditor.vue'
-import { useIngredientOptions, useRecipeTypes, useSaveRecipe } from './queries'
+import { parseTimes } from './componentsText'
+import { fromRecipeComponent, toPayload } from './editableComponents'
+import { useIngredientOptions, useRecipeTypes, useRecipeUsages, useSaveRecipe } from './queries'
 import { useRecipeStance } from './useRecipeStance'
 
 const { t } = useI18n()
@@ -36,6 +42,17 @@ const ingredients = useIngredientOptions()
 // interrupteur « secrète » (elle n'a pas d'auteur), une ligne le dit en tête, et un message confirme l'enregistrement.
 const { recipe: existing, ownership, isCommon } = useRecipeStance(() => recipeId.value ?? '')
 const save = useSaveRecipe()
+// Les recettes dans lesquelles celle qu'on modifie est déjà utilisée : elle ne peut alors pas en utiliser d'autres (profondeur 1), la section est
+// remplacée par une phrase. Lu seulement pour une recette qu'on modifie, jamais pour la version commune (sans propriétaire) ; une lecture qui
+// échoue ne cache rien (le back refusera, avec son texte).
+const usages = useRecipeUsages(
+  () => recipeId.value ?? '',
+  () => editing.value && existing.data.value !== undefined && !isCommon.value,
+)
+const servedIn = computed(() => (usages.data.value?.member ?? []).map((recipe) => recipe.name))
+const sectionShown = computed(
+  () => !isCommon.value && (!editing.value || usages.status.value !== 'pending'),
+)
 
 let nextKey = 1
 const blankRow = (): EditableRow => ({
@@ -51,6 +68,8 @@ const form = reactive({
   typeSlug: '',
   secret: false,
   rows: [blankRow()],
+  // Les recettes utilisées (COMP-006) : vides tant que la section n'est pas touchée
+  components: [] as EditableComponent[],
 })
 // Un back qui ne connaît pas encore `secret` ne le rend pas : à la modification on n'affiche pas l'interrupteur (il ne dirait pas
 // vrai) et on n'envoie pas la clé. À la création il est toujours là : un ancien back ignore la clé inconnue.
@@ -58,6 +77,12 @@ const secretKnown = ref(true)
 const version = ref<number | null>(null)
 const submitted = ref(false)
 const failure = ref<string | null>(null)
+// Ce que l'utilisateur peut faire tout de suite d'un refus de recettes utilisées : rendre la recette secrète, ou voir lesquelles l'utilisent
+const failureAction = ref<'makeSecret' | 'seeWhich' | null>(null)
+const seeWhich = ref(false)
+// Les recettes utilisées : envoyées seulement si la section a été touchée ou si la recette en avait (absent = inchangé côté back)
+const componentsTouched = ref(false)
+const hadComponents = ref(false)
 
 // La recette à modifier remplit le formulaire une seule fois (le travail en cours n'est pas écrasé par une relecture).
 let loaded = false
@@ -77,6 +102,9 @@ watch(
       unitSlug: row.unitSlug,
       quantity: row.quantity,
     }))
+    // Un back qui ne connaît pas encore les recettes utilisées ne rend pas la clé : aucune, et rien n'est envoyé
+    form.components = (recipe.components ?? []).map(fromRecipeComponent)
+    hadComponents.value = form.components.length > 0
     version.value = recipe.version
   },
   { immediate: true },
@@ -137,7 +165,14 @@ const errors = computed(() => {
   return {
     name: form.name.trim() === '' ? t('editor.errors.name') : undefined,
     serving: Number(form.serving) >= 1 ? undefined : t('editor.errors.serving'),
-    rowsEmpty: form.rows.length === 0 ? t('editor.errors.noRow') : undefined,
+    rowsEmpty:
+      form.rows.length === 0 && form.components.length === 0
+        ? t(
+            sectionShown.value && servedIn.value.length === 0
+              ? 'editor.errors.noRowOrRecipe'
+              : 'editor.errors.noRow',
+          )
+        : undefined,
     rows: form.rows.map((row) => ({
       ingredient: row.ingredientSlug === '' ? t('editor.errors.ingredient') : undefined,
       quantity: Number(row.quantity) > 0 ? undefined : t('editor.errors.quantity'),
@@ -150,10 +185,11 @@ const valid = computed(
   () =>
     form.name.trim() !== '' &&
     Number(form.serving) >= 1 &&
-    form.rows.length > 0 &&
+    (form.rows.length > 0 || form.components.length > 0) &&
     form.rows.every(
       (row) => row.ingredientSlug !== '' && row.unitSlug !== '' && Number(row.quantity) > 0,
-    ),
+    ) &&
+    form.components.every((component) => parseTimes(component.times) !== null),
 )
 
 function addRow() {
@@ -164,10 +200,61 @@ function removeRow(key: number) {
   form.rows = form.rows.filter((row) => row.key !== key)
 }
 
+// Une recette utilisée ajoutée à une recette qui n'a que la ligne vide du départ : cette ligne s'en va toute seule
+function componentsChanged() {
+  componentsTouched.value = true
+  failure.value = null
+  failureAction.value = null
+  const [only] = form.rows
+  if (
+    form.components.length > 0 &&
+    form.rows.length === 1 &&
+    only !== undefined &&
+    only.ingredientSlug === '' &&
+    only.unitSlug === '' &&
+    only.quantity === ''
+  )
+    form.rows = []
+}
+
+// Le refus du back dit ce qui ne va pas ; selon le cas, un bouton le règle (une recette utilisée introuvable est le seul 404 qu'on explique ici)
+function explain(error: unknown): string {
+  failureAction.value = null
+  if (error instanceof ApiError) {
+    if (error.message === 'RECIPE_COMPONENT_SECRET') failureAction.value = 'makeSecret'
+    if (error.message === 'RECIPE_SECRET_USED_BY_PUBLIC') {
+      // La recette reste visible : l'interrupteur revient où il était
+      failureAction.value = 'seeWhich'
+      form.secret = false
+    }
+    if (
+      error.status === 404 &&
+      form.components.some((component) => error.message.includes(component.recipeId))
+    )
+      return t('recipes.componentErrors.gone')
+  }
+
+  return messageForFailure(error)
+}
+
+function makeSecret() {
+  form.secret = true
+  failure.value = null
+  failureAction.value = null
+}
+
 function submit() {
   submitted.value = true
   failure.value = null
+  failureAction.value = null
   if (!valid.value) return
+
+  const components =
+    sectionShown.value &&
+    servedIn.value.length === 0 &&
+    (componentsTouched.value || hadComponents.value)
+      ? toPayload(form.components)
+      : null
 
   save.mutate(
     {
@@ -190,6 +277,8 @@ function submit() {
           unitSlug: row.unitSlug,
           quantity: Number(row.quantity),
         })),
+        // Absent = inchangé : la clé ne part que si la section a été touchée, ou si la recette avait des recettes utilisées (alors `[]` les retire toutes)
+        ...(components !== null ? { components } : {}),
       },
     },
     {
@@ -199,7 +288,7 @@ function submit() {
         return router.push({ name: 'recipe', params: { id } })
       },
       onError: (error) => {
-        failure.value = messageForFailure(error)
+        failure.value = explain(error)
       },
     },
   )
@@ -309,13 +398,39 @@ function submit() {
         </div>
       </section>
 
-      <p
+      <RecipeComponentsSection
+        v-if="sectionShown"
+        v-model="form.components"
+        :for-recipe-id="recipeId"
+        :secret="form.secret"
+        :submitted="submitted"
+        :served-in="servedIn"
+        @change="componentsChanged"
+      />
+
+      <div
         v-if="failure"
         role="alert"
-        class="rounded-xl bg-danger-soft px-4 py-3 text-sm font-semibold text-on-danger-soft"
+        class="flex flex-col gap-2.5 rounded-xl bg-danger-soft px-4 py-3 text-[15px] font-semibold text-on-danger-soft"
       >
-        {{ failure }}
-      </p>
+        <p>{{ failure }}</p>
+        <UiButton
+          v-if="failureAction === 'makeSecret'"
+          type="button"
+          variant="secondary"
+          class="self-start border-on-danger-soft bg-surface text-on-danger-soft"
+          @click="makeSecret"
+          >{{ t('editor.makeSecret') }}</UiButton
+        >
+        <UiButton
+          v-else-if="failureAction === 'seeWhich'"
+          type="button"
+          variant="secondary"
+          class="self-start border-on-danger-soft bg-surface text-on-danger-soft"
+          @click="seeWhich = true"
+          >{{ t('recipes.usedIn.see') }}</UiButton
+        >
+      </div>
 
       <div class="flex flex-wrap justify-end gap-2">
         <UiButton
@@ -333,5 +448,7 @@ function submit() {
         }}</UiButton>
       </div>
     </form>
+
+    <RecipeUsedInSheet v-model:open="seeWhich" :recipes="usages.data.value?.member ?? []" />
   </main>
 </template>

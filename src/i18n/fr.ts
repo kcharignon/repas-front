@@ -460,6 +460,73 @@ export default {
     copied: 'Copiée',
     copiedNamed: 'Copiée : {name} est dans tes recettes',
     copiedToast: '« {name} » est dans tes recettes.',
+    // Copier une recette qui en utilise d'autres (COMP-006) : le message dit tout ce qui est copié ; au-delà de trois recettes, le nombre
+    copiedWith: {
+      few: '{names} sont dans tes recettes.',
+      many: '{name} et {count} autres recettes sont dans tes recettes.',
+    },
+    // Les recettes utilisées dans une autre (COMP-006, ADR 0040 du back, maquette COMP-005) : jamais « sous-recette », « composant » ni « parent »
+    components: {
+      title: 'Recettes utilisées',
+      help: '1 fois = la recette comme elle est écrite.',
+      empty: 'Ta pâte, ta sauce : ajoute une de tes recettes, elle compte dans celle-ci.',
+      add: 'Ajouter une de mes recettes',
+      fullTitle: 'Tu as déjà dix recettes utilisées ici.',
+      fullHint: 'Retires-en une.',
+      times: 'fois',
+      and: 'et',
+      less: 'Moins de fois pour {name}',
+      more: 'Plus de fois pour {name}',
+      timesField: 'Nombre de fois pour {name}',
+      remove: 'Retirer',
+      removeNamed: 'Retirer {name}',
+      helpTimes: 'Tu prends {times} fois les quantités de {name}.',
+      helpHalf: 'Tu prends la moitié des quantités de {name}.',
+      invalid: 'Mets un nombre entre 0,01 et 100.',
+      open: 'Ouvrir {name}',
+      missingConversion: 'Il manque une conversion pour {ingredient} dans {name}.',
+      servesElsewhere: 'Cette recette sert dans {names}. Elle ne peut pas en utiliser d’autres.',
+    },
+    // Les refus du back (COMP-006) : chacun a son texte en trois phrases au plus, jamais le code. Hors du groupe `errors` : « ingrédient » est le bon mot ici
+    componentErrors: {
+      used: 'Cette recette sert dans d’autres recettes. Rien n’a été supprimé. Retire-la d’abord de chacune.',
+      chain:
+        'Une recette utilisée ne peut pas en utiliser d’autres. Rien n’est perdu. Choisis une recette simple.',
+      secret:
+        'Une recette visible de tous ne peut pas utiliser une recette secrète. Rien n’est perdu. Rends celle-ci secrète, ou retire la recette secrète.',
+      secretUsed:
+        'Cette recette sert dans une recette visible de tous. Elle reste visible. Rends d’abord secrète la recette qui l’utilise.',
+      limit: 'Tu as déjà dix recettes utilisées ici. Retires-en une.',
+      multiplier: 'Mets un nombre entre 0,01 et 100.',
+      empty: 'Ajoute au moins un ingrédient ou une recette.',
+      duplicate: 'Cette recette est déjà utilisée ici. Change plutôt le nombre de fois.',
+      gone: 'Une recette utilisée n’existe plus. Rien n’est perdu. Retire-la, puis enregistre à nouveau.',
+      copyLimit:
+        'Cette copie dépasserait ta limite de 2 000 recettes. Rien n’a été copié. Supprime des recettes dont tu n’as plus besoin.',
+    },
+    // La feuille « Choisis une de tes recettes »
+    pick: {
+      title: 'Choisis une de tes recettes',
+      all: 'Tous',
+      none: 'Tu n’as pas d’autre recette à utiliser.',
+      noneHint: 'Écris d’abord une autre recette, elle sera ici.',
+    },
+    // La section « Avec » de la fiche : une carte par recette utilisée
+    with: {
+      title: 'Avec',
+      times: '{times} fois',
+      ingredients: '{count} ingrédient | {count} ingrédients',
+      show: 'Voir les ingrédients de {name}',
+      hide: 'Cacher les ingrédients de {name}',
+    },
+    // La fiche d'une recette qui sert dans d'autres : la note, la feuille « Voir lesquelles » et le refus de la supprimer
+    usedIn: {
+      note: 'Cette recette sert dans {names}. Les listes déjà faites ne changent pas.',
+      see: 'Voir lesquelles',
+      title: 'Cette recette sert dans',
+      others: '{count} autre | {count} autres',
+      deleteTitle: 'Suppression impossible',
+    },
     // Le lien d'origine d'une recette copiée de Marmiton (MAR-004) : un texte et une icône, jamais le logo du site
     viewOnMarmiton: 'Voir sur Marmiton',
     // La version commune d'une recette Marmiton (MAR-005, ADR 0037 du back) : l'administrateur la corrige ou la supprime, les autres la copient
@@ -522,11 +589,13 @@ export default {
     // Créer l'ingrédient qu'on cherchait sans quitter la recette (ING-017)
     noIngredientNamed: 'Aucun ingrédient ne s’appelle « {name} ».',
     createIngredient: 'Créer « {name} »',
+    makeSecret: 'Rendre cette recette secrète',
     unit: 'Unité',
     errors: {
       name: 'Donne un nom à la recette.',
       serving: 'Au moins une personne.',
       noRow: 'Ajoute au moins un ingrédient.',
+      noRowOrRecipe: 'Ajoute au moins un ingrédient ou une recette.',
       ingredient: 'Choisis un ingrédient.',
       quantity: 'Entre une quantité supérieure à zéro.',
       unit: 'Choisis une unité.',

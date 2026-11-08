@@ -933,3 +933,69 @@ describe('les textes du bloc d’image', () => {
     ).toEqual([])
   })
 })
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Les recettes utilisées dans une autre recette (COMP-006)
+//
+// À l'écran on dit « recette utilisée » et « fois » : jamais « sous-recette », « composant » ni « parent », et jamais « partie » pour une
+// recette (le mot est pris par les ingrédients découpés, SUB-007). Les textes du groupe sont lus : tutoiement (déjà vérifié sur tout
+// `fr.ts`), aucun avertissement, 15 mots au plus par phrase, et chaque refus du back en trois phrases au plus, jamais le code.
+
+const COMPONENT_KEYS = [
+  'recipes.components.',
+  'recipes.componentErrors.',
+  'recipes.pick.',
+  'recipes.with.',
+  'recipes.usedIn.',
+  'recipes.copiedWith.',
+  'editor.makeSecret',
+  'editor.errors.noRowOrRecipe',
+] as const
+
+describe('les recettes utilisées dans une autre recette (COMP-006)', () => {
+  const lues = sources.web.filter((entry) =>
+    COMPONENT_KEYS.some((key) => entry.where.includes(` ${key}`)),
+  )
+
+  it('lit tous les textes du groupe', () => {
+    expect(lues.length).toBeGreaterThan(45)
+  })
+
+  it('ne dit ni « sous-recette », ni « composant », ni « parent », ni « partie »', () => {
+    const interdits = lues.filter((entry) =>
+      /sous-recette|composants?|(?<![\p{L}])parents?(?![\p{L}])|(?<![\p{L}])parties?(?![\p{L}])/iu.test(
+        entry.text,
+      ),
+    )
+    expect(interdits.map((entry) => entry.where)).toEqual([])
+  })
+
+  it('ne dit jamais « × » : le mot est « fois »', () => {
+    expect(lues.filter((entry) => /[×✕]/u.test(entry.text)).map((entry) => entry.where)).toEqual([])
+  })
+
+  it('ne dit aucun avertissement ni rassurance de trop', () => {
+    expect(lues.flatMap((entry) => warnings(entry.where, entry.text))).toEqual([])
+  })
+
+  it('tient chaque phrase en 15 mots au plus', () => {
+    const trop = lues.flatMap((entry) =>
+      entry.text
+        .replace(/\{[^}]+\}/g, 'x')
+        .split(/(?<=[.!?…])\s+/)
+        .filter((sentence) => sentence.trim().split(/\s+/).length > 15)
+        .map((sentence) => `${entry.where} : « ${sentence} »`),
+    )
+    expect(trop).toEqual([])
+  })
+
+  it('dit les refus du back en trois phrases au plus, sans le code', () => {
+    const refus = lues.filter((entry) => entry.where.includes(' recipes.componentErrors.'))
+    expect(refus.length).toBe(10)
+    const longs = refus
+      .filter((entry) => entry.text.split(/(?<=[.!?…])\s+/).length > 3)
+      .map((entry) => entry.where)
+    expect(longs).toEqual([])
+    expect(refus.filter((entry) => /[A-Z]{3,}_[A-Z_]+/.test(entry.text))).toEqual([])
+  })
+})
