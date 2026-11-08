@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
@@ -8,8 +8,13 @@ import DepartmentMarker from '@/design/DepartmentMarker.vue'
 import LoadError from '@/design/LoadError.vue'
 import SeasonEmpty from '@/design/season/SeasonEmpty.vue'
 import UiImage from '@/design/UiImage.vue'
+import { lowerFirst } from '@/design/lowerFirst'
+import { useNotificationsStore } from '@/notifications/store'
 import { useActiveSummary } from '@/features/shopping-lists/queries'
 import { useDepartmentIcons } from './departmentMarkers'
+import { countsIn } from './partsText'
+import { unitLabel } from './equationMath'
+import { formatQuantity } from '@/features/shopping-lists/format'
 import IngredientStepper from './IngredientStepper.vue'
 import { useChangeIngredientQuantity, useSearchIngredients } from './queries'
 
@@ -28,6 +33,39 @@ const { iconOf, anyIcon } = useDepartmentIcons()
 const markers = computed(() => anyIcon(items.value.map((ingredient) => ingredient.departmentSlug)))
 const hasActiveList = computed(() => summary.data.value?.shoppingListId != null)
 const quantityOf = (slug: string) => summary.data.value?.quantityByIngredientSlug[slug] ?? 0
+
+type Found = (typeof items.value)[number]
+const notifications = useNotificationsStore()
+
+/**
+ * Ajouter une PARTIE à la main (SUB-007) ajoute au total de son entier : le back ne répond rien (204), le total se lit dans le résumé de
+ * la liste que l'ajout vient de relire (aucun appel de plus). Il se dit seulement pour un entier compté à l'unité (« 3 œufs ») : l'unité
+ * d'un autre entier n'est pas connue ici, la phrase ne cite alors que son nom (« C'est ajouté à tes œufs. »), sans inventer de nombre.
+ */
+function addPart(part: Found) {
+  const wholeSlug = part.partOfSlug ?? ''
+  const wholeName = part.partOfName ?? ''
+  change.mutate(
+    { slug: part.slug, delta: 1, hasActiveList: hasActiveList.value },
+    {
+      onSuccess: async () => {
+        await nextTick()
+        const total = summary.data.value?.quantityByIngredientSlug[wholeSlug]
+        const whole = items.value.find((candidate) => candidate.slug === wholeSlug)
+        const counted = whole !== undefined && whole.purchaseUnitSymbol === ''
+        notifications.push(
+          'success',
+          typeof total === 'number' && total > 0 && counted
+            ? t('ingredients.parts.added', {
+                count: formatQuantity(total, ''),
+                name: unitLabel(lowerFirst(wholeName), total),
+              })
+            : t('ingredients.parts.addedTo', { counts: countsIn(wholeName) }),
+        )
+      },
+    },
+  )
+}
 </script>
 
 <template>
@@ -81,8 +119,13 @@ const quantityOf = (slug: string) => summary.data.value?.quantityByIngredientSlu
             :quantity="quantityOf(ingredient.slug)"
             :unit-symbol="ingredient.purchaseUnitSymbol"
             :busy="change.isPending.value"
+            :plus-only="Boolean(ingredient.partOfSlug)"
             @less="change.mutate({ slug: ingredient.slug, delta: -1, hasActiveList })"
-            @more="change.mutate({ slug: ingredient.slug, delta: 1, hasActiveList })"
+            @more="
+              ingredient.partOfSlug
+                ? addPart(ingredient)
+                : change.mutate({ slug: ingredient.slug, delta: 1, hasActiveList })
+            "
           />
         </li>
       </ul>

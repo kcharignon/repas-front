@@ -259,6 +259,9 @@ export default {
       submit: 'Ajouter',
       notLinked: '« {name} » est créé, mais ce n’est pas encore une partie.',
       partOf: 'Partie de : {name}',
+      // Une partie ajoutée à la main (recherche des rayons) compte dans son entier : « Ça fait 3 œufs dans ta liste. »
+      added: 'C’est ajouté. Ça fait {count} {name} dans ta liste.',
+      addedTo: 'C’est ajouté à {counts}.',
       partOfHelp: 'Ça ne s’achète pas tout seul : ça compte dans {counts}.',
       unpart: 'Ne plus en faire une partie',
       errors: {
