@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Link2 } from 'lucide-vue-next'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { hasFailed } from '@/api/query'
@@ -11,11 +12,13 @@ import UiSelect from '@/design/UiSelect.vue'
 import UiSwitch from '@/design/UiSwitch.vue'
 import UiTextInput from '@/design/UiTextInput.vue'
 import { messageForFailure, notifyDeleteFailure } from '@/notifications/failures'
+import { useNotificationsStore } from '@/notifications/store'
 import { useListTypes, useSetProductDestination } from '@/features/list-types/queries'
 import { useIngredientOptions } from '@/features/recipes/queries'
 import { useSessionStore } from '@/session/session'
 import ConversionEquation from './ConversionEquation.vue'
 import IngredientListField from './IngredientListField.vue'
+import IngredientPartsSection from './IngredientPartsSection.vue'
 import { choiceOf } from './listChoice'
 import IngredientConversionsSection from './IngredientConversionsSection.vue'
 import MergeConfirmSheet from './MergeConfirmSheet.vue'
@@ -30,11 +33,13 @@ import {
 } from './equationMath'
 import { usageText } from './mergeText'
 import { nameUsedMessage, sameNameElsewhere } from './nameUsed'
+import { countsIn } from './partsText'
 import {
   useDeleteIngredient,
   useDepartments,
   useIngredient,
   useIngredientConversions,
+  useRemoveIngredientParent,
   useSaveIngredient,
   useUnits,
 } from './queries'
@@ -59,8 +64,14 @@ const remove = useDeleteIngredient()
 const listTypes = useListTypes(() => editing.value)
 const types = computed(() => listTypes.data.value?.member ?? [])
 const typeIds = computed(() => types.value.map((type) => type.id))
+// Une partie suit la liste de son ingrédient entier (SUB-007) : pas de réglage du produit à part
+const partOf = computed(() => existing.data.value?.partOf ?? null)
 const showList = computed(
-  () => editing.value && existing.data.value !== undefined && types.value.length > 0,
+  () =>
+    editing.value &&
+    existing.data.value !== undefined &&
+    types.value.length > 0 &&
+    partOf.value === null,
 )
 const setDestination = useSetProductDestination()
 
@@ -326,6 +337,33 @@ const canMerge = computed(() => {
     ingredient.creatorId === userId
   )
 })
+
+// Découper en parties (SUB-007) : un ingrédient ENTIER à soi (profondeur 1 : une partie n'a pas de parties). Le parent envoyé au back est
+// toujours cet ingrédient, jamais celui d'un autre compte.
+const canHaveParts = computed(
+  () => canMerge.value && existing.data.value?.canEdit === true && partOf.value === null,
+)
+const heading = ref<HTMLElement | null>(null)
+const detach = useRemoveIngredientParent()
+const notifications = useNotificationsStore()
+const partFailure = ref<string | null>(null)
+
+// Recoller la partie : la fiche redevient celle d'un ingrédient ordinaire, le bouton disparaît avec le bandeau, le focus va au titre
+function unpart() {
+  partFailure.value = null
+  detach.mutate(
+    { slug: slug.value ?? '' },
+    {
+      onSuccess: () => {
+        notifications.push('success', t('ingredients.parts.detached', { name: form.name }))
+        void nextTick(() => heading.value?.focus())
+      },
+      onError: (error) => {
+        partFailure.value = messageForFailure(error)
+      },
+    },
+  )
+}
 const usage = computed(() => {
   const ingredient = existing.data.value
   const text = ingredient === undefined ? '' : usageText(t, ingredient)
@@ -360,9 +398,29 @@ const back = computed(() =>
     <RouterLink :to="back" class="self-start font-bold text-primary underline">{{
       t('departments.title')
     }}</RouterLink>
-    <h1 class="font-display text-3xl leading-tight font-bold md:text-4xl">
+    <h1
+      ref="heading"
+      tabindex="-1"
+      class="font-display text-3xl leading-tight font-bold focus:outline-none md:text-4xl"
+    >
       {{ editing ? t('ingredients.editTitle') : t('ingredients.newTitle') }}
     </h1>
+
+    <!-- Une partie (SUB-007) : de quoi elle fait partie, et pourquoi elle ne se trouve pas toute seule dans la liste -->
+    <div v-if="partOf" class="flex flex-col gap-3" data-testid="part-of">
+      <RouterLink
+        :to="{ name: 'ingredient-edit', params: { slug: partOf.slug } }"
+        class="flex min-h-14 items-center gap-3 rounded-2xl bg-secret-soft px-3.5 py-2 font-bold text-on-secret-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      >
+        <Link2 class="size-5 shrink-0" aria-hidden="true" />
+        <span class="min-w-0 flex-1 [overflow-wrap:anywhere]">{{
+          t('ingredients.parts.partOf', { name: partOf.name })
+        }}</span>
+      </RouterLink>
+      <p class="text-base">
+        {{ t('ingredients.parts.partOfHelp', { counts: countsIn(partOf.name) }) }}
+      </p>
+    </div>
 
     <p v-if="editing && existing.isPending.value" class="text-muted" role="status">
       {{ t('common.loading') }}
@@ -496,6 +554,29 @@ const back = computed(() =>
         </div>
       </div>
     </form>
+
+    <div v-if="partOf" class="flex flex-col gap-2">
+      <p
+        v-if="partFailure"
+        role="alert"
+        class="rounded-xl bg-danger-soft px-4 py-3 text-sm font-semibold text-on-danger-soft"
+      >
+        {{ partFailure }}
+      </p>
+      <UiButton
+        variant="secondary"
+        class="min-h-12"
+        :disabled="detach.isPending.value"
+        @click="unpart"
+        >{{ t('ingredients.parts.unpart') }}</UiButton
+      >
+    </div>
+
+    <!-- Ses parties (SUB-007) : les écritures sont immédiates, elles ne passent pas par « Enregistrer » -->
+    <IngredientPartsSection
+      v-if="canHaveParts && existing.data.value"
+      :ingredient="existing.data.value"
+    />
 
     <!-- Les conversions propres de l'ingrédient (planche L1) : seulement pour celui qui peut le modifier -->
     <IngredientConversionsSection

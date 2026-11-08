@@ -151,6 +151,26 @@ describe('DepartmentsView : recherche', () => {
       .filter((url) => url.pathname === '/api/v1/ingredients/search')
       .map((url) => url.searchParams.get('q'))
 
+  it('dit de quoi un ingrédient trouvé est une partie (SUB-007), et rien pour les autres', async () => {
+    const { wrapper } = await search({
+      'GET /api/v1/ingredients/search': () =>
+        json({
+          member: [
+            { ...found.member[0], partOfSlug: null, partOfName: null },
+            { ...found.member[1], partOfSlug: 'oeuf', partOfName: 'Œuf' },
+          ],
+          totalItems: 2,
+        }),
+    })
+
+    await type(wrapper, 'tom')
+    await vi.waitFor(() => expect(wrapper.text()).toContain('sauce tomate'))
+
+    const lines = wrapper.findAll('li')
+    expect(lines[0]?.text()).not.toContain('Partie de')
+    expect(lines[1]?.text()).toContain('Partie de : Œuf')
+  })
+
   it("montre les ingrédients trouvés dans l'ordre du back, avec l'icône et le nom de leur rayon", async () => {
     const { wrapper } = await search()
 

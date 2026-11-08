@@ -339,6 +339,14 @@ describe('MergeConfirmSheet', () => {
       ['COMMON_INGREDIENT', 'Un ingrédient commun ne se fusionne pas. Rien n’a changé.'],
       ['USED_BY_ANOTHER_USER', 'Quelqu’un d’autre utilise « Tomates ». Rien n’a changé.'],
       [
+        'PART_CONFLICT',
+        'Leurs parties ne vont pas ensemble. Rien n’a changé. Retire les parties de l’un des deux, puis fusionne.',
+      ],
+      [
+        'PART_IN_LIST',
+        'Une liste en cours contient l’un des deux avec ses parties. Rien n’a changé. Termine la liste, puis fusionne.',
+      ],
+      [
         'UN_REFUS_DE_DEMAIN',
         'Ces deux ingrédients ne peuvent pas être fusionnés. Rien n’a changé.',
       ],
@@ -503,6 +511,36 @@ describe('MergeConfirmSheet', () => {
       expect(text()).toContain('Une liste envoyée au drive utilise l’un des deux.')
       expect(sheet()?.querySelector('[role="alert"]')).toBeNull()
     })
+
+    it.each([
+      [422, 'MERGE_PART_CONFLICT', 'PART_CONFLICT', 'Leurs parties ne vont pas ensemble.'],
+      [409, 'MERGE_PART_IN_LIST', 'PART_IN_LIST', 'Une liste en cours contient l’un des deux'],
+    ])(
+      'un refus %i %s de l’écriture se lit dans l’aperçu relu, jamais en code (SUB-007)',
+      async (status, code, blockedBy, sentence) => {
+        let reads = 0
+        await merging(
+          () => json({ error: { message: code } }, { status }),
+          () =>
+            json(
+              ++reads === 1
+                ? preview()
+                : preview({ blockedBy: blockedBy as MergePreview['blockedBy'], canMerge: false }),
+            ),
+        )
+        await ready()
+
+        ;(labelled('Fusionner') as HTMLElement).click()
+
+        await vi.waitFor(() =>
+          expect(sheet()?.querySelector('[data-testid="merge-blocked"]')?.textContent).toContain(
+            sentence,
+          ),
+        )
+        expect(sheet()?.querySelector('[role="alert"]')).toBeNull()
+        expect(text()).not.toContain('MERGE_PART')
+      },
+    )
 
     it('dit un échec inattendu en trois phrases et laisse réessayer', async () => {
       await merging(() => json({ error: { message: 'x' } }, { status: 500 }))

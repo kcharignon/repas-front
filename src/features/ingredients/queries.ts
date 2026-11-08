@@ -155,6 +155,51 @@ export function useDeleteIngredientConversion() {
   })
 }
 
+/**
+ * Ce que change le découpage d'un ingrédient en parties (SUB-007) : la fiche de la partie et celle de son parent, la liste des
+ * ingrédients (le sous-titre « Partie de : … »), la recherche, les rayons, et les recettes (la mention de chaque ligne). Les listes de
+ * courses ne sont pas recalculées par le back : elles gardent ce qu'elles contiennent.
+ */
+function invalidatePartReaders(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: ingredientKeys.all })
+  void queryClient.invalidateQueries({ queryKey: ingredientKeys.departments })
+  void queryClient.invalidateQueries({ queryKey: recipeKeys.all })
+}
+
+/**
+ * Fait de `slug` une partie de `parent` (ou change son parent, ou son nombre). `parent` est toujours l'ingrédient de la fiche ouverte,
+ * donc à l'utilisateur : le front n'envoie jamais le parent d'un autre. Les refus du back (404, 409, 422) vont à l'appelant.
+ */
+export function useSetIngredientParent() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    meta: { silent: true },
+    mutationFn: ({ slug, parent, ratio }: { slug: string; parent: string; ratio: number }) =>
+      unwrap(
+        api.PUT('/api/v1/ingredients/{slug}/parent', {
+          params: { path: { slug } },
+          body: { parent, ratio },
+        }),
+      ),
+    onSettled: () => invalidatePartReaders(queryClient),
+  })
+}
+
+/** Recolle une partie : l'ingrédient redevient ordinaire. Toujours permis, même quand une liste en cours le contient. */
+export function useRemoveIngredientParent() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    meta: { silent: true },
+    mutationFn: ({ slug }: { slug: string }) =>
+      unwrap(api.DELETE('/api/v1/ingredients/{slug}/parent', { params: { path: { slug } } })),
+    onSettled: () => invalidatePartReaders(queryClient),
+  })
+}
+
 /** Les unités ; `enabled` laisse un écran qui n'en a besoin que parfois ne les lire qu'à ce moment-là (la liste est gardée cinq minutes). */
 export function useUnits(enabled: () => boolean = () => true) {
   const { api } = useSessionStore()

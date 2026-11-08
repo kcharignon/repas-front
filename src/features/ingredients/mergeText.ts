@@ -149,6 +149,8 @@ export const KNOWN_BLOCKS = [
   'COMMON_INGREDIENT',
   'USED_BY_ANOTHER_USER',
   'IN_SENT_LIST',
+  'PART_CONFLICT',
+  'PART_IN_LIST',
   'UNIT_MISSING',
 ] as const
 

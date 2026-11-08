@@ -71,6 +71,10 @@ const quantityOf = (slug: string) => summary.data.value?.quantityByIngredientSlu
             >
             <span v-else class="block font-medium">{{ ingredient.name }}</span>
             <span class="block text-sm text-muted">{{ ingredient.departmentName }}</span>
+            <!-- Une partie d'un autre ingrédient (SUB-007) : de quoi elle fait partie -->
+            <span v-if="ingredient.partOfName" class="block text-sm text-muted">{{
+              t('ingredients.parts.partOf', { name: ingredient.partOfName })
+            }}</span>
           </span>
           <IngredientStepper
             :name="ingredient.name"

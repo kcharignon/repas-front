@@ -18,6 +18,7 @@ import {
   useDepartmentIcons,
 } from '@/features/ingredients/departmentMarkers'
 import { formatQuantity } from './format'
+import { includesText } from './includes'
 import { useChangeServing, useMealVersion, useToggleRow, useUnplanRecipe } from './queries'
 
 const props = defineProps<{ list: ShoppingList; startingNew?: boolean }>()
@@ -127,7 +128,12 @@ const stepClass =
                   (checked) => toggle.mutate({ rowId: row.id, checked: checked === true })
                 "
               >
-                <span class="flex items-baseline justify-between gap-3">
+                <span
+                  :class="[
+                    'flex items-baseline justify-between gap-3',
+                    includesText(row.includes) !== '' && 'py-2',
+                  ]"
+                >
                   <span class="flex min-w-0 items-center gap-3">
                     <DepartmentMarker :icon="iconOf(row.departmentSlug)" :reserve="markers" />
                     <span class="flex min-w-0 flex-col">
@@ -136,6 +142,15 @@ const stepClass =
                         v-if="isAmbiguousName(ambiguous, row.ingredientName) && row.departmentName"
                         class="text-sm font-normal text-muted"
                         >{{ row.departmentName }}</span
+                      >
+                      <!-- Ce que la ligne contient en parties (SUB-007) : « Œuf 5 » comprend 2 jaunes et 2 blancs ; rien sans partie -->
+                      <span
+                        v-if="includesText(row.includes) !== ''"
+                        data-testid="row-includes"
+                        class="text-sm font-normal text-muted"
+                        >{{
+                          t('shoppingList.includes', { list: includesText(row.includes) })
+                        }}</span
                       >
                     </span>
                   </span>
