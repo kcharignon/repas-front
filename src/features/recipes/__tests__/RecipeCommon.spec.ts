@@ -155,23 +155,12 @@ describe('« Recettes des autres » vu par l’administrateur', () => {
     expect(item.find('button').text()).toBe('Copier')
   })
 
-  it('la phrase d’aide est en tête de liste, tant qu’il y a une recette Marmiton', async () => {
+  it('aucune phrase d’aide sur les versions communes, même pour l’administrateur', async () => {
     const { wrapper } = await open([marmiton('c1', 'Tarte', true), ordinary])
     await vi.waitFor(() => expect(wrapper.find('li').exists()).toBe(true))
 
-    expect(wrapper.find('[data-common-help]').text()).toBe(
-      'Les recettes Marmiton sont communes. Touche-en une pour la corriger.',
-    )
-    // Après le titre et sa phrase, avant la recherche et la liste
-    const order = Array.from(wrapper.element.querySelectorAll('h1, [data-common-help], ul'))
-    expect((order[1] as Element | undefined)?.hasAttribute('data-common-help')).toBe(true)
-  })
-
-  it('sans recette Marmiton, pas de phrase d’aide', async () => {
-    const { wrapper } = await open([ordinary])
-    await vi.waitFor(() => expect(wrapper.find('li').exists()).toBe(true))
-
     expect(wrapper.find('[data-common-help]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Touche-en une pour la corriger')
   })
 
   it('« Ma copie » ouvre SA copie par copyId, même renommée ou d’un autre type : aucune recherche', async () => {

@@ -1,5 +1,5 @@
 // La version commune d'une recette Marmiton, corrigée ou supprimée par l'administrateur (MAR-005, ADR 0037 du back) : le seul parcours de bout
-// en bout, sans back ni compte (l'API est simulée par `page.route`). « Recettes des autres » (phrase d'aide, « Ma copie »), la fiche, l'éditeur
+// en bout, sans back ni compte (l'API est simulée par `page.route`). « Recettes des autres » (« Ma copie »), la fiche, l'éditeur
 // (le nom des lignes dont l'ingrédient n'est dans la liste de personne) et le refus d'une suppression (409). Au téléphone (Pixel 7), chaque écran
 // dans les DEUX thèmes de la même visite (axe WCAG AA, contraste compris). Le détail est dans `RecipeCommon.spec.ts` (jsdom).
 import { expect, test } from './support/test'
@@ -98,7 +98,7 @@ test('la version commune : « Ma copie », la fiche, l’éditeur et une suppres
   )
 
   await page.goto('/recettes/autres')
-  await expect(page.getByText('Les recettes Marmiton sont communes.')).toBeVisible()
+  await expect(page.getByText('Les recettes Marmiton sont communes.')).toHaveCount(0)
   await expect(page.getByText('Tu as déjà ta copie')).toBeVisible()
   const mine = page.getByRole('button', { name: /Ouvrir ma copie/ })
   expect((await mine.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44)
