@@ -2,14 +2,12 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { Pencil } from 'lucide-vue-next'
 
 import LoadError from '@/design/LoadError.vue'
 import SeasonEmpty from '@/design/season/SeasonEmpty.vue'
 import UiButton from '@/design/UiButton.vue'
 import UiSearchField from '@/design/UiSearchField.vue'
 import { useDebounced } from '@/features/ingredients/useDebounced'
-import { useSessionStore } from '@/session/session'
 import OtherRecipeItem from './OtherRecipeItem.vue'
 import { useCopiedRecipesStore } from './copiedRecipes'
 import {
@@ -23,7 +21,6 @@ import { MIN_OTHERS_SEARCH_LENGTH, useOtherPeopleRecipes } from './queries'
 import { useCopyRecipeAction } from './useCopyRecipeAction'
 
 const { t } = useI18n()
-const session = useSessionStore()
 
 // La requête attend une pause dans la frappe (comme la recherche d'ingrédients) ; effacer le champ revient tout de suite à la liste.
 const search = ref('')
@@ -43,10 +40,6 @@ const fetched = computed(() => others.data.value?.pages.flatMap((page) => page.m
 const items = computed(() => keepCopied(fetched.value, pins.value))
 // Sans recherche, le back range les recettes par catégorie : une section par catégorie. Avec une recherche, l'ordre est la pertinence.
 const groups = computed(() => (isSearching.value ? [] : groupByType(items.value)))
-// L'administrateur corrige les versions communes des recettes Marmiton (MAR-005) : une phrase le dit, tant qu'il y en a dans la liste
-const showCommonHelp = computed(
-  () => session.isAdmin && items.value.some((recipe) => recipe.fromMarmiton === true),
-)
 const total = computed(() => others.data.value?.pages[0]?.totalItems ?? 0)
 
 // Une relecture ratée garde ce qui est affiché ; mais les résultats d'une autre recherche ne remplacent pas une erreur
@@ -83,16 +76,6 @@ function copyRecipe(recipe: OtherRecipe) {
       </h1>
       <p class="mt-1 text-muted">{{ t('recipes.othersHelp') }}</p>
     </header>
-
-    <p
-      v-if="showCommonHelp"
-      data-common-help
-      class="flex items-start gap-2.5 rounded-2xl bg-secret-soft px-3.5 py-3 text-on-secret-soft"
-    >
-      <Pencil class="mt-0.5 size-5 shrink-0" aria-hidden="true" />{{
-        t('recipes.common.othersHelp')
-      }}
-    </p>
 
     <UiSearchField
       v-if="!nothingToSearch"

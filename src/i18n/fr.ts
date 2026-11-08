@@ -430,7 +430,6 @@ export default {
     common: {
       title: 'Version commune',
       help: 'Les prochains qui la copient auront ta version. Les copies déjà faites ne changent pas.',
-      othersHelp: 'Les recettes Marmiton sont communes. Touche-en une pour la corriger.',
       haveCopy: 'Tu as déjà ta copie',
       myCopy: 'Ma copie',
       myCopyNamed: 'Ouvrir ma copie de {name}',
