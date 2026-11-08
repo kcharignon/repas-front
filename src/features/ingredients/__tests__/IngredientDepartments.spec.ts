@@ -157,6 +157,22 @@ describe('IngredientEditorView : le même nom dans deux rayons', () => {
   const info = (wrapper: Awaited<ReturnType<typeof edit>>['wrapper']) =>
     wrapper.find('[data-testid="name-elsewhere"]')
 
+  it('propose aussi les rayons sans ingrédient (le filtre des rayons vides est local à l’écran des rayons)', async () => {
+    const { wrapper } = await edit('/ingredients/nouveau?rayon=legumes', {
+      'GET /api/v1/departments': () =>
+        json({
+          member: departments.member.map((d) => ({ ...d, ingredientCount: 0 })),
+          totalItems: 3,
+        }),
+    })
+
+    const options = wrapper
+      .findAll('select')[0]
+      ?.findAll('option')
+      .map((o) => o.attributes('value'))
+    expect(options).toEqual(expect.arrayContaining(['surgele', 'conserve', 'legumes']))
+  })
+
   it('dit, sans bloquer, que le nom existe dans un autre rayon', async () => {
     const { wrapper } = await edit('/ingredients/nouveau?rayon=legumes')
 

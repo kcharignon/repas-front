@@ -533,7 +533,7 @@
                     "Departments"
                 ],
                 "summary": "Liste des rayons, tri\u00e9s par slug",
-                "description": "Les rayons sont des donn\u00e9es globales ; seul `listTypeId` est propre \u00e0 l'utilisateur connect\u00e9 : le type de liste de courses auquel il a rattach\u00e9 le rayon (ADR 0036), `null` pour un rayon sans type.",
+                "description": "Les rayons sont des donn\u00e9es globales ; seuls `listTypeId` et `ingredientCount` sont propres \u00e0 l'utilisateur connect\u00e9 : le type de liste de courses auquel il a rattach\u00e9 le rayon (ADR 0036), `null` pour un rayon sans type, et le nombre d'ingr\u00e9dients qu'il a dans le rayon (0 si aucun ; la liste rend toujours tous les rayons).",
                 "operationId": "get_api_list_departments",
                 "responses": {
                     "200": {
@@ -6166,7 +6166,8 @@
                 "required": [
                     "slug",
                     "name",
-                    "image"
+                    "image",
+                    "ingredientCount"
                 ],
                 "properties": {
                     "slug": {
@@ -6193,6 +6194,11 @@
                         "description": "Identifiant du type de liste de courses auquel l'utilisateur connect\u00e9 a rattach\u00e9 ce rayon (ADR 0036), `null` quand le rayon n'a pas de type (ses produits vont dans la liste principale) ; propre \u00e0 son compte. Cl\u00e9 toujours \u00e9crite",
                         "type": "string",
                         "nullable": true
+                    },
+                    "ingredientCount": {
+                        "description": "Nombre d'ingr\u00e9dients que l'utilisateur connect\u00e9 voit dans ce rayon (\u2265 0), exactement ceux de `GET /departments/{slug}/ingredients` : les siens seulement (jamais ceux d'un autre compte, administrateur compris), sous-ingr\u00e9dients (parties) compris. Le front s'en sert pour cacher les rayons vides de l'\u00e9cran des rayons ; la liste rend toujours TOUS les rayons. Cl\u00e9 toujours \u00e9crite",
+                        "type": "integer",
+                        "example": 12
                     }
                 },
                 "type": "object"
