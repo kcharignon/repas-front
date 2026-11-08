@@ -503,7 +503,7 @@ export interface paths {
          */
         put: operations["put_api_update_ingredient"];
         post?: never;
-        /** Supprime un ingrédient de l'utilisateur, avec ses conversions (seul son propriétaire le supprime, un administrateur compris) */
+        /** Supprime un ingrédient de l'utilisateur, avec ses conversions (seul son propriétaire le supprime, un administrateur compris). Supprimer un ingrédient découpé en parties détache ses parties : elles redeviennent des ingrédients ordinaires */
         delete: operations["delete_api_remove_ingredient"];
         options?: never;
         head?: never;
@@ -796,7 +796,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Fusionne deux ingrédients de l'utilisateur : celui de l'URL disparaît, `into` est gardé. Ses recettes, ses listes de courses et ses choix du drive qui utilisaient le premier utilisent le second, qui récupère aussi les conversions du premier qui lui manquent (les siennes gagnent en cas de conflit) ; les anciens slugs restent résolus. Les deux ingrédients doivent être à l'utilisateur, même pour un administrateur. Rejouée après un succès, elle répond 204 sans rien faire. Aperçu sans écriture : `GET …/merge-preview` */
+        /** Fusionne deux ingrédients de l'utilisateur : celui de l'URL disparaît, `into` est gardé. Ses recettes, ses listes de courses et ses choix du drive qui utilisaient le premier utilisent le second, qui récupère aussi les conversions du premier qui lui manquent (les siennes gagnent en cas de conflit) ; les anciens slugs restent résolus. Le découpage en parties suit : le gardé hérite du lien du premier s'il n'en a pas, et les parties du premier deviennent les siennes. Les deux ingrédients doivent être à l'utilisateur, même pour un administrateur. Rejouée après un succès, elle répond 204 sans rien faire. Aperçu sans écriture : `GET …/merge-preview` */
         post: operations["post_api_merge_ingredients"];
         delete?: never;
         options?: never;
@@ -2740,10 +2740,10 @@ export interface components {
             /** @description Les unités de l'ingrédient absorbé que l'ingrédient gardé ne sait pas convertir en son unité d'achat, MÊME APRÈS avoir récupéré les conversions de l'absorbé (recoveredConversionCount) : une vraie impossibilité ; vide si rien ne manque. Renseignée même quand un autre refus passe avant */
             missingUnits: components["schemas"]["MergeUnitDTO"][];
             /**
-             * @description Pourquoi la fusion serait refusée (le premier cas dans l'ordre de la liste), null si elle est possible. SAME_INGREDIENT : les deux ingrédients sont le même. COMMON_INGREDIENT : n'est plus rendu (il n'y a plus d'ingrédient commun), déclaré pour les clients existants. USED_BY_ANOTHER_USER : une ligne d'un autre utilisateur utilise l'ingrédient absorbé. IN_SENT_LIST : une liste envoyée au drive utilise l'un des deux. UNIT_MISSING : voir missingUnits
+             * @description Pourquoi la fusion serait refusée (le premier cas dans l'ordre de la liste), null si elle est possible. SAME_INGREDIENT : les deux ingrédients sont le même. COMMON_INGREDIENT : n'est plus rendu (il n'y a plus d'ingrédient commun), déclaré pour les clients existants. USED_BY_ANOTHER_USER : une ligne d'un autre utilisateur utilise l'ingrédient absorbé. IN_SENT_LIST : une liste envoyée au drive utilise l'un des deux. PART_CONFLICT : la fusion casserait un découpage en parties (les deux sont des parties de deux parents différents, l'un est le parent de l'autre, le résultat serait à la fois une partie et un parent, il aurait plus de dix parties, ou le lien ou les parties de l'absorbé ne se transportent pas d'une unité à l'autre) ; l'utilisateur le lève en recollant des parties. PART_IN_LIST : le registre des parties d'une liste non terminée nomme l'un des deux, ou le gardé serait une partie alors qu'une liste non terminée porte une ligne de l'un des deux ; l'utilisateur le lève en terminant la liste. UNIT_MISSING : voir missingUnits
              * @enum {string|null}
              */
-            blockedBy?: "SAME_INGREDIENT" | "COMMON_INGREDIENT" | "USED_BY_ANOTHER_USER" | "IN_SENT_LIST" | "UNIT_MISSING" | null;
+            blockedBy?: "SAME_INGREDIENT" | "COMMON_INGREDIENT" | "USED_BY_ANOTHER_USER" | "IN_SENT_LIST" | "PART_CONFLICT" | "PART_IN_LIST" | "UNIT_MISSING" | null;
             /** @description La fusion est possible : blockedBy est null */
             canMerge: boolean;
             /**
@@ -2879,6 +2879,16 @@ export interface components {
              * @example true
              */
             canEdit: boolean;
+            /**
+             * @description Vrai si la recette est SANS PROPRIÉTAIRE (la « version commune » : la neutre d'une recette Marmiton, dont l'auteur est un identifiant réservé qui n'est pas un compte). Le front n'a plus à le deviner. Toujours écrit, lu dans la même instruction
+             * @example false
+             */
+            ownerless: boolean;
+            /**
+             * @description Quand la recette lue est SANS PROPRIÉTAIRE : l'identifiant de la copie de L'UTILISATEUR QUI LIT (la plus ancienne s'il en a plusieurs), même renommée, d'un autre type ou secrète (c'est la sienne) ; `null` s'il n'en a pas, et toujours `null` pour une recette ordinaire. Toujours écrit, lu dans la même instruction
+             * @example 3f1c2a7e-8d41-4c62-9b0a-5e7d2f6a1b34
+             */
+            copyId?: string | null;
         };
         RecipeTypeDTO: {
             /**
@@ -3219,6 +3229,12 @@ export interface components {
              * @example false
              */
             alreadyCopied: boolean;
+            /**
+             * @description L'identifiant de la copie de l'administrateur (la plus ancienne s'il en a plusieurs), même renommée ou d'un autre type ; `null` s'il n'en a pas. `alreadyCopied` est vrai si et seulement si `copyId` n'est pas `null`. Toujours écrit ; toujours `null` pour un autre utilisateur
+             * @default null
+             * @example null
+             */
+            copyId: string | null;
         };
         OtherPeopleRecipesDTO: {
             /** @description Les recettes de cette page, 200 au plus : sans recherche triées par catégorie (l'ordre des types) puis par nom, avec une recherche par pertinence décroissante, toutes catégories confondues */
@@ -5307,7 +5323,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Ingrédient présent dans une recette ou une liste de courses */
+            /** @description Ingrédient présent dans une recette ou une liste de courses (y compris le registre des parties d'une liste non terminée, en partie ou en parent) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6270,14 +6286,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description `INGREDIENT_IN_SENT_LIST` : une liste envoyée au drive utilise l'un des deux (la rouvrir ou la terminer d'abord) ; `INGREDIENT_USED_BY_ANOTHER_USER` : une ligne d'un autre utilisateur utilise l'ingrédient de l'URL (donnée héritée) ; `INGREDIENT_MERGE_CONFLICT` : une écriture concurrente a posé une référence sur l'ingrédient de l'URL, rien n'a changé, réessayer */
+            /** @description `INGREDIENT_IN_SENT_LIST` : une liste envoyée au drive utilise l'un des deux (la rouvrir ou la terminer d'abord) ; `INGREDIENT_USED_BY_ANOTHER_USER` : une ligne d'un autre utilisateur utilise l'ingrédient de l'URL (donnée héritée) ; `MERGE_PART_IN_LIST` : le registre des parties d'une liste non terminée nomme l'un des deux, ou le gardé serait une partie alors qu'une liste non terminée porte une ligne de l'un des deux (terminer la liste d'abord) ; `INGREDIENT_MERGE_CONFLICT` : une écriture concurrente a posé une référence sur l'ingrédient de l'URL, rien n'a changé, réessayer */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Corps invalide ; `CANNOT_MERGE_INTO_ITSELF` : les deux ingrédients sont le même ; `CANNOT_MERGE_COMMON_INGREDIENT` : n'est plus renvoyé (il n'y a plus d'ingrédient commun), gardé pour les clients existants ; `MERGE_UNIT_MISSING` : une unité de l'ingrédient de l'URL ne se convertit pas dans l'unité d'achat de `into`, même après avoir récupéré les conversions de l'ingrédient de l'URL, rien n'a changé */
+            /** @description Corps invalide ; `CANNOT_MERGE_INTO_ITSELF` : les deux ingrédients sont le même ; `CANNOT_MERGE_COMMON_INGREDIENT` : n'est plus renvoyé (il n'y a plus d'ingrédient commun), gardé pour les clients existants ; `MERGE_PART_CONFLICT` : la fusion casserait un découpage en parties (deux parents différents, l'un parent de l'autre, une partie qui aurait des parties, plus de dix parties, ou un lien qui ne se transporte pas d'une unité à l'autre), rien n'a changé ; `MERGE_UNIT_MISSING` : une unité de l'ingrédient de l'URL ne se convertit pas dans l'unité d'achat de `into`, même après avoir récupéré les conversions de l'ingrédient de l'URL, rien n'a changé */
             422: {
                 headers: {
                     [name: string]: unknown;
