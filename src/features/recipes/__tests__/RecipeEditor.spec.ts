@@ -230,6 +230,33 @@ describe('RecipeEditorView', () => {
       expect(context.router.currentRoute.value.name).toBe('recipe-edit')
     })
 
+    it('ramène le bandeau de refus à l’écran', async () => {
+      const { wrapper } = await edit({
+        'PUT /api/v1/recipes/r1': () => json({ error: { message: 'non' } }, { status: 422 }),
+      })
+
+      await submit(wrapper)
+      await vi.waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1))
+
+      expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({
+        block: 'center',
+        behavior: 'smooth',
+      })
+      const scroll = vi.mocked(Element.prototype.scrollIntoView)
+      expect(scroll.mock.contexts[0]).toBe(wrapper.find('[role="alert"]').element)
+    })
+
+    it('ne fait défiler nulle part quand l’enregistrement réussit', async () => {
+      const { wrapper, context } = await edit({
+        'PUT /api/v1/recipes/r1': () => new Response(null, { status: 204 }),
+      })
+
+      await submit(wrapper)
+      await vi.waitFor(() => expect(context.router.currentRoute.value.name).toBe('recipe'))
+
+      expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled()
+    })
+
     it('dit que la recette a changé ailleurs (412)', async () => {
       const { wrapper } = await edit({
         'PUT /api/v1/recipes/r1': () => json({ error: { message: 'outdated' } }, { status: 412 }),
