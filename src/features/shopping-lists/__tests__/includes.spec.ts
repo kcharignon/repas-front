@@ -28,6 +28,21 @@ describe('ce que la ligne d’un ingrédient découpé contient', () => {
     expect(includesText([part('Orange', 200, 'g')])).toBe("200 g d'orange")
   })
 
+  it('met au pluriel le premier mot d’un nom à complément, le dernier sinon', () => {
+    expect(includesText([part("Jaune d'œuf", 3)])).toBe("3 jaunes d'œuf")
+    expect(includesText([part("Blanc d'œuf", 2)])).toBe("2 blancs d'œuf")
+    expect(includesText([part("Gousse d'ail", 2)])).toBe("2 gousses d'ail")
+    expect(includesText([part('Pomme', 2)])).toBe('2 pommes')
+    expect(includesText([part('Pomme de terre', 2)])).toBe('2 pommes de terre')
+    expect(includesText([part('Crème fraîche', 2)])).toBe('2 crème fraîches')
+    expect(includesText([part('Jaune d œuf', 2)])).toBe('2 jaunes d œuf')
+  })
+
+  it('ne met rien au pluriel sous deux, même à 0,5', () => {
+    expect(includesText([part("Jaune d'œuf", 0.5)])).toBe("0,5 jaune d'œuf")
+    expect(includesText([part('Pomme de terre', 1)])).toBe('1 pomme de terre')
+  })
+
   it('ne dit rien sans partie, ni pour un back qui n’envoie pas la clé', () => {
     expect(includesText([])).toBe('')
     expect(includesText(undefined)).toBe('')

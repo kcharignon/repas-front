@@ -230,8 +230,13 @@ describe('DepartmentsView : recherche', () => {
       partOfSlug: 'oeuf',
       partOfName: 'Œuf',
     }
-    const searching = async (members: unknown[], totals: { value: Record<string, number> }) => {
+    const searching = async (
+      members: unknown[],
+      totals: { value: Record<string, number> },
+      extra: Parameters<typeof stubApi>[0] = {},
+    ) => {
       const { wrapper, fetchMock } = await search({
+        ...extra,
         'GET /api/v1/ingredients/search': () =>
           json({ member: members, totalItems: members.length }),
         'GET /api/v1/shopping-lists/active/summary': () => json(summary(totals.value)),
@@ -280,10 +285,30 @@ describe('DepartmentsView : recherche', () => {
       )
     })
 
-    it('ne devine pas un total qu’il ne connaît pas : il nomme seulement l’entier', async () => {
+    it('dit le total même si l’entier n’est pas dans les résultats : sa fiche donne son unité', async () => {
       const totals = { value: { oeuf: 2 } as Record<string, number> }
-      // L'entier n'est pas dans les résultats : son unité n'est pas connue
-      const { wrapper } = await searching([jaune], totals)
+      const { wrapper, fetchMock } = await searching([jaune], totals, {
+        'GET /api/v1/ingredients/oeuf': () =>
+          json({ slug: 'oeuf', name: 'Œuf', purchaseUnitSymbol: '', purchaseUnitName: 'unité' }),
+      })
+
+      await lineOf(wrapper, "Jaune d'œuf")
+        ?.find('button[aria-label^="Un de plus"]')
+        .trigger('click')
+      await vi.waitFor(() =>
+        expect(useNotificationsStore().items.map((item) => item.text)).toEqual([
+          'C’est ajouté. Ça fait 3 œufs dans ta liste.',
+        ]),
+      )
+      expect(calls(fetchMock)).toContain('GET /api/v1/ingredients/oeuf')
+    })
+
+    it('ne devine pas un total qu’il ne connaît pas : si la fiche ne se lit pas, il nomme seulement l’entier', async () => {
+      const totals = { value: { oeuf: 2 } as Record<string, number> }
+      // L'entier n'est pas dans les résultats et sa fiche répond une erreur
+      const { wrapper } = await searching([jaune], totals, {
+        'GET /api/v1/ingredients/oeuf': () => json({ error: { message: 'non' } }, { status: 500 }),
+      })
 
       await lineOf(wrapper, "Jaune d'œuf")
         ?.find('button[aria-label^="Un de plus"]')
@@ -470,6 +495,42 @@ describe('DepartmentView', () => {
     const { wrapper } = await show()
 
     expect(wrapper.text()).not.toContain('de base')
+  })
+
+  it('ne garde que le « + » pour une partie d’un autre ingrédient, jamais « − 0 + »', async () => {
+    const { wrapper } = await show({
+      'GET /api/v1/ingredients': () =>
+        json({
+          member: [
+            {
+              slug: 'courgette',
+              name: 'courgette',
+              departmentSlug: 'legumes',
+              departmentName: 'Fruits et légumes',
+            },
+            {
+              slug: 'ma-sauce',
+              name: 'ma sauce',
+              departmentSlug: 'legumes',
+              departmentName: 'Fruits et légumes',
+              partOfSlug: 'courgette',
+              partOfName: 'courgette',
+            },
+          ],
+          totalItems: 2,
+        }),
+    })
+    await vi.waitFor(() =>
+      expect(wrapper.findAll('li')[1]?.find('button[aria-label^="Un de moins"]').exists()).toBe(
+        false,
+      ),
+    )
+
+    const lines = wrapper.findAll('li')
+    expect(lines[0]?.find('button[aria-label^="Un de moins"]').exists()).toBe(true)
+    expect(lines[1]?.find('button[aria-label^="Un de plus"]').exists()).toBe(true)
+    expect(lines[1]?.find('button[aria-label^="Un de moins"]').exists()).toBe(false)
+    expect(lines[1]?.find('[aria-live="polite"]').exists()).toBe(false)
   })
 
   it('ajoute un et retire un', async () => {

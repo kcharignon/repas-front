@@ -22,7 +22,7 @@ export interface EquationValue {
 export type EquationProblem = 'sameUnit' | 'noUnit' | 'left' | 'right' | null
 
 // Un nom qui contient une préposition (cuillère à soupe, boîte de conserve) s'accorde sur son premier mot
-const COMPOUND = /^(\S+)(\s+(?:(?:à|de|du|des|au|aux|en)\s|d['’]).*)$/i
+const COMPOUND = /^(\S+)(\s+(?:(?:à|de|du|des|au|aux|en|d)\s|d['’]).*)$/i
 
 function pluralWord(word: string): string {
   if (/[sxz]$/i.test(word)) return word
