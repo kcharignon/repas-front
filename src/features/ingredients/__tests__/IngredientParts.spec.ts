@@ -166,7 +166,7 @@ describe('Ses parties : la fiche d’un ingrédient entier', () => {
     await open()
 
     expect(section()?.textContent).toContain(
-      'Un œuf, c’est un jaune et un blanc. Ajoute les parties de « Œuf » : elles comptent dans ta liste.',
+      'Ajoute les parties de « Œuf » : elles comptent dans ton total. Par exemple, un œuf se découpe en jaune et en blanc.',
     )
     expect(cards()).toEqual([])
     expect(addButton()).toBeDefined()
