@@ -96,7 +96,7 @@ Tout le reste est repris à l'identique ou mieux ; ces deux écarts sont à tran
 
 | Twig | Front | À décider |
 |---|---|---|
-| Quantités de la liste arrondies à l'**entier supérieur** (`round(0, 'ceil')`), une décimale dans la page d'un rayon | quantité exacte, deux décimales au plus (« 1,6 kg ») : c'est la maquette validée | garder, ou arrondir à l'entier supérieur à l'affichage (un seul endroit : `formatQuantity`, `src/features/shopping-lists/format.ts`) |
+| Quantités de la liste arrondies à l'**entier supérieur** (`round(0, 'ceil')`), une décimale dans la page d'un rayon | quantité exacte, deux décimales au plus (« 1,6 kg ») : c'est la maquette validée | **Réglé le 2026-11-09** (demande du propriétaire : « 0,4 plaquette de beurre » n'avait pas de sens) : le back lit désormais toute quantité de liste arrondie à l'entier supérieur (détail, ligne seule, résumé) et garde l'exacte ; l'écran n'arrondit rien. La liste a aussi « + » et « − » par ligne (`POST /shopping-list-rows/{id}/increase\|decrease`), sans passer par les rayons |
 | « Se souvenir de moi » : sans la case, la session s'arrête à la fermeture du navigateur (`always_remember_me: false`) | pas de case : le cookie de rafraîchissement dure toujours 30 jours glissants (ADR back 0015) | sur un poste partagé on ne peut pas refuser d'être retenu ; l'ajout demande le back (cookie de session et famille de jetons non persistante), donc une PR back que l'humain merge |
 
 ## Mesures (image de production, `make lighthouse`)
