@@ -91,6 +91,7 @@ const quantityOf = (ingredientSlug: string) =>
           :quantity="quantityOf(ingredient.slug)"
           :unit-symbol="ingredient.purchaseUnitSymbol"
           :busy="change.isPending.value"
+          :plus-only="Boolean(ingredient.partOfSlug)"
           @less="change.mutate({ slug: ingredient.slug, delta: -1, hasActiveList })"
           @more="change.mutate({ slug: ingredient.slug, delta: 1, hasActiveList })"
         />
