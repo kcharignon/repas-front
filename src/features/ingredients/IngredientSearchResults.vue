@@ -12,11 +12,11 @@ import { lowerFirst } from '@/design/lowerFirst'
 import { useNotificationsStore } from '@/notifications/store'
 import { useActiveSummary } from '@/features/shopping-lists/queries'
 import { useDepartmentIcons } from './departmentMarkers'
-import { countsIn } from './partsText'
+import { countsIn, isCountUnit } from './partsText'
 import { unitLabel } from './equationMath'
 import { formatQuantity } from '@/features/shopping-lists/format'
 import IngredientStepper from './IngredientStepper.vue'
-import { useChangeIngredientQuantity, useSearchIngredients } from './queries'
+import { useChangeIngredientQuantity, useIngredientReader, useSearchIngredients } from './queries'
 
 /** Résultats d'une recherche d'ingrédient : le plus pertinent d'abord, avec l'icône de son rayon et de quoi l'ajouter à la liste. */
 const props = defineProps<{ search: string }>()
@@ -36,11 +36,25 @@ const quantityOf = (slug: string) => summary.data.value?.quantityByIngredientSlu
 
 type Found = (typeof items.value)[number]
 const notifications = useNotificationsStore()
+const readIngredient = useIngredientReader()
+
+/** L'entier se compte-t-il à l'unité ? Ses résultats le disent, sinon sa fiche ; une lecture qui échoue : on ne sait pas. */
+async function isCounted(wholeSlug: string): Promise<boolean> {
+  const whole = items.value.find((candidate) => candidate.slug === wholeSlug)
+  if (whole !== undefined) return whole.purchaseUnitSymbol === ''
+  try {
+    const fiche = await readIngredient(wholeSlug)
+
+    return fiche.purchaseUnitSymbol === '' && isCountUnit(fiche.purchaseUnitName)
+  } catch {
+    return false
+  }
+}
 
 /**
  * Ajouter une PARTIE à la main (SUB-007) ajoute au total de son entier : le back ne répond rien (204), le total se lit dans le résumé de
  * la liste que l'ajout vient de relire (aucun appel de plus). Il se dit seulement pour un entier compté à l'unité (« 3 œufs ») : l'unité
- * d'un autre entier n'est pas connue ici, la phrase ne cite alors que son nom (« C'est ajouté à tes œufs. »), sans inventer de nombre.
+ * d'un entier se lit dans les résultats, sinon dans sa fiche ; si la lecture échoue, la phrase ne cite que son nom (« C'est ajouté à tes œufs. »), sans inventer de nombre.
  */
 function addPart(part: Found) {
   const wholeSlug = part.partOfSlug ?? ''
@@ -50,9 +64,8 @@ function addPart(part: Found) {
     {
       onSuccess: async () => {
         await nextTick()
+        const counted = await isCounted(wholeSlug)
         const total = summary.data.value?.quantityByIngredientSlug[wholeSlug]
-        const whole = items.value.find((candidate) => candidate.slug === wholeSlug)
-        const counted = whole !== undefined && whole.purchaseUnitSymbol === ''
         notifications.push(
           'success',
           typeof total === 'number' && total > 0 && counted

@@ -483,3 +483,16 @@ export function useMarkDistinct() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ingredientKeys.duplicates }),
   })
 }
+
+/** Lit la fiche d'un ingrédient à la demande (en cache si elle a déjà été lue) : de quoi connaître son unité d'achat sans l'avoir dans une liste. */
+export function useIngredientReader() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return (slug: string) =>
+    queryClient.fetchQuery({
+      queryKey: ingredientKeys.detail(slug),
+      queryFn: () => unwrap(api.GET('/api/v1/ingredients/{slug}', { params: { path: { slug } } })),
+      staleTime: 60_000,
+    })
+}
