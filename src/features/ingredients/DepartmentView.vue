@@ -6,6 +6,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { hasFailed } from '@/api/query'
 import DepartmentMarker from '@/design/DepartmentMarker.vue'
 import UiLinkButton from '@/design/UiLinkButton.vue'
+import { useIngredientOptions } from '@/features/recipes/queries'
 import { useActiveSummary } from '@/features/shopping-lists/queries'
 import { useDepartmentIcons } from './departmentMarkers'
 import IngredientStepper from './IngredientStepper.vue'
@@ -19,6 +20,16 @@ const departments = useDepartments()
 const ingredients = useDepartmentIngredients(() => slug.value)
 const summary = useActiveSummary()
 const change = useChangeIngredientQuantity()
+// La liste du rayon ne dit pas qu'un ingrédient est une partie : la liste des ingrédients de l'utilisateur (déjà en cache dans l'éditeur) le dit
+const options = useIngredientOptions()
+const partSlugs = computed(
+  () =>
+    new Set(
+      (options.data.value?.member ?? [])
+        .filter((option) => Boolean(option.partOfSlug))
+        .map((option) => option.slug),
+    ),
+)
 
 const department = computed(() =>
   departments.data.value?.member?.find((candidate) => candidate.slug === slug.value),
@@ -91,6 +102,7 @@ const quantityOf = (ingredientSlug: string) =>
           :quantity="quantityOf(ingredient.slug)"
           :unit-symbol="ingredient.purchaseUnitSymbol"
           :busy="change.isPending.value"
+          :plus-only="partSlugs.has(ingredient.slug)"
           @less="change.mutate({ slug: ingredient.slug, delta: -1, hasActiveList })"
           @more="change.mutate({ slug: ingredient.slug, delta: 1, hasActiveList })"
         />
