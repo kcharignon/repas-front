@@ -12,7 +12,9 @@ defineProps<{ invalid?: boolean }>()
 
 // La classe de l'appelant passe par cn : elle l'emporte sur celle du select (pr-8 contre pr-10)
 const attrs = useAttrs()
-const rest = computed(() => Object.fromEntries(Object.entries(attrs).filter(([name]) => name !== 'class')))
+const rest = computed(() =>
+  Object.fromEntries(Object.entries(attrs).filter(([name]) => name !== 'class')),
+)
 </script>
 
 <template>
