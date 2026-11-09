@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Layers, Plus } from 'lucide-vue-next'
@@ -243,6 +243,15 @@ function makeSecret() {
   failureAction.value = null
 }
 
+// Le bandeau s'affiche sous le bouton : au téléphone il peut tomber sous la barre du bas, on le ramène à l'écran
+// (role="alert" l'annonce déjà : pas de focus en plus)
+const failureBox = ref<HTMLElement | null>(null)
+async function showFailure() {
+  await nextTick()
+  const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  failureBox.value?.scrollIntoView({ block: 'center', behavior: calm ? 'auto' : 'smooth' })
+}
+
 function submit() {
   submitted.value = true
   failure.value = null
@@ -289,6 +298,7 @@ function submit() {
       },
       onError: (error) => {
         failure.value = explain(error)
+        void showFailure()
       },
     },
   )
@@ -410,6 +420,7 @@ function submit() {
 
       <div
         v-if="failure"
+        ref="failureBox"
         role="alert"
         class="flex flex-col gap-2.5 rounded-xl bg-danger-soft px-4 py-3 text-[15px] font-semibold text-on-danger-soft"
       >

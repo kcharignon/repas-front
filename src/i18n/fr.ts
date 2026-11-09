@@ -279,7 +279,7 @@ export default {
     parts: {
       title: 'Ses parties',
       empty:
-        'Un œuf, c’est un jaune et un blanc. Ajoute les parties de « {name} » : elles comptent dans ta liste.',
+        'Ajoute les parties de « {name} » : elles comptent dans ton total. Par exemple, un œuf se découpe en jaune et en blanc.',
       add: 'Ajouter une partie',
       change: 'Changer le nombre',
       detachNamed: 'Ne plus faire de « {name} » une partie',
