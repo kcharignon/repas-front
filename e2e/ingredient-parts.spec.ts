@@ -211,7 +211,7 @@ test('découper l’œuf en parties : la fiche, la feuille « Ajouter une partie
   await page.goto('/ingredients/oeuf/modifier')
   const section = page.getByRole('region', { name: 'Ses parties' })
   await expect(section).toBeVisible()
-  await expect(section).toContainText('Un œuf, c’est un jaune et un blanc.')
+  await expect(section).toContainText('elles comptent dans ton total.')
   const add = section.getByRole('button', { name: 'Ajouter une partie' })
   await add.scrollIntoViewIfNeeded()
   await expectTouchTarget(add, 'Ajouter une partie')
