@@ -28,6 +28,8 @@ beforeEach(() => {
   vi.spyOn(console, 'error')
   // jsdom ne fait pas défiler la page (et le dit sur la console) : l'appel est seulement observable
   if (typeof window !== 'undefined') vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+  // jsdom n'a pas `scrollIntoView` : un simple espion, pour observer qu'on ramène un élément à l'écran
+  if (typeof Element !== 'undefined') Element.prototype.scrollIntoView = vi.fn<() => void>()
 })
 
 afterEach(async () => {
