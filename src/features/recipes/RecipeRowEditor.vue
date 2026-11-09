@@ -149,7 +149,7 @@ watch(unitList, (list) => {
       </p>
     </div>
     <div class="flex flex-1 gap-2">
-      <div class="flex flex-1 flex-col gap-1">
+      <div class="flex w-22 shrink-0 flex-col gap-1 md:w-auto md:flex-1">
         <UiTextInput
           v-model="quantity"
           type="number"
@@ -163,9 +163,11 @@ watch(unitList, (list) => {
           {{ errors.quantity }}
         </p>
       </div>
-      <div class="flex flex-1 flex-col gap-1">
+      <!-- Sur téléphone le nom entier de l'unité (« Cuillère à café ») passe avant la largeur de la quantité -->
+      <div class="flex min-w-0 flex-1 flex-col gap-1">
         <UiSelect
           v-model="unitSlug"
+          class="pr-8 pl-3 md:pr-10 md:pl-3.5"
           :aria-label="t('editor.unitN', { n: index + 1 })"
           :invalid="Boolean(errors.unit)"
         >
