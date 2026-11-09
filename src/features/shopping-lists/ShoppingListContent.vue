@@ -17,9 +17,16 @@ import {
   namesInSeveralDepartments,
   useDepartmentIcons,
 } from '@/features/ingredients/departmentMarkers'
+import IngredientStepper from '@/features/ingredients/IngredientStepper.vue'
 import { formatQuantity } from './format'
 import { includesText } from './includes'
-import { useChangeServing, useMealVersion, useToggleRow, useUnplanRecipe } from './queries'
+import {
+  useChangeRowQuantity,
+  useChangeServing,
+  useMealVersion,
+  useToggleRow,
+  useUnplanRecipe,
+} from './queries'
 
 const props = defineProps<{ list: ShoppingList; startingNew?: boolean }>()
 const emit = defineEmits<{ startNew: [] }>()
@@ -27,6 +34,9 @@ const emit = defineEmits<{ startNew: [] }>()
 const { t } = useI18n()
 
 const toggle = useToggleRow(() => props.list.id)
+const changeQuantity = useChangeRowQuantity()
+/** Un de plus ou de moins se fait sur une liste en cours, pour une ligne qui n'est pas encore au panier (cochée : on n'y touche plus). */
+const canChangeQuantity = (row: { checked: boolean }) => props.list.isActive && !row.checked
 const changeServing = useChangeServing()
 const unplan = useUnplanRecipe()
 // La liste d'un type n'envoie pas sa version (le back ne contrôle que celle de la liste principale d'un repas réparti)
@@ -120,45 +130,61 @@ const stepClass =
           <ul
             class="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface px-4"
           >
-            <li v-for="row in department.rows" :key="row.id">
-              <UiCheckbox
-                :model-value="row.checked"
-                :disabled="list.isSent"
-                @update:model-value="
-                  (checked) => toggle.mutate({ rowId: row.id, checked: checked === true })
-                "
-              >
-                <span
-                  :class="[
-                    'flex items-baseline justify-between gap-3',
-                    includesText(row.includes) !== '' && 'py-2',
-                  ]"
+            <li v-for="row in department.rows" :key="row.id" class="flex items-center gap-2">
+              <div class="min-w-0 flex-1">
+                <UiCheckbox
+                  :model-value="row.checked"
+                  :disabled="list.isSent"
+                  @update:model-value="
+                    (checked) => toggle.mutate({ rowId: row.id, checked: checked === true })
+                  "
                 >
-                  <span class="flex min-w-0 items-center gap-3">
-                    <DepartmentMarker :icon="iconOf(row.departmentSlug)" :reserve="markers" />
-                    <span class="flex min-w-0 flex-col">
-                      <span>{{ row.ingredientName }}</span>
-                      <span
-                        v-if="isAmbiguousName(ambiguous, row.ingredientName) && row.departmentName"
-                        class="text-sm font-normal text-muted"
-                        >{{ row.departmentName }}</span
-                      >
-                      <!-- Ce que la ligne contient en parties (SUB-007) : « Œuf 5 » comprend 2 jaunes et 2 blancs ; rien sans partie -->
-                      <span
-                        v-if="includesText(row.includes) !== ''"
-                        data-testid="row-includes"
-                        class="text-sm font-normal text-muted"
-                        >{{
-                          t('shoppingList.includes', { list: includesText(row.includes) })
-                        }}</span
-                      >
+                  <span
+                    :class="[
+                      'flex items-baseline justify-between gap-3',
+                      includesText(row.includes) !== '' && 'py-2',
+                    ]"
+                  >
+                    <span class="flex min-w-0 items-center gap-3">
+                      <DepartmentMarker :icon="iconOf(row.departmentSlug)" :reserve="markers" />
+                      <span class="flex min-w-0 flex-col">
+                        <span>{{ row.ingredientName }}</span>
+                        <span
+                          v-if="
+                            isAmbiguousName(ambiguous, row.ingredientName) && row.departmentName
+                          "
+                          class="text-sm font-normal text-muted"
+                          >{{ row.departmentName }}</span
+                        >
+                        <!-- Ce que la ligne contient en parties (SUB-007) : « Œuf 5 » comprend 2 jaunes et 2 blancs ; rien sans partie -->
+                        <span
+                          v-if="includesText(row.includes) !== ''"
+                          data-testid="row-includes"
+                          class="text-sm font-normal text-muted"
+                          >{{
+                            t('shoppingList.includes', { list: includesText(row.includes) })
+                          }}</span
+                        >
+                      </span>
                     </span>
+                    <span
+                      v-if="!canChangeQuantity(row)"
+                      class="text-sm font-semibold text-muted no-underline"
+                      >{{ formatQuantity(row.quantity, row.unitSymbol) }}</span
+                    >
                   </span>
-                  <span class="text-sm font-semibold text-muted no-underline">{{
-                    formatQuantity(row.quantity, row.unitSymbol)
-                  }}</span>
-                </span>
-              </UiCheckbox>
+                </UiCheckbox>
+              </div>
+              <!-- « + » et « − » sur la ligne, sans passer par les rayons : la quantité à acheter est celle du stepper -->
+              <IngredientStepper
+                v-if="canChangeQuantity(row)"
+                :name="row.ingredientName"
+                :quantity="row.quantity"
+                :unit-symbol="row.unitSymbol"
+                :busy="changeQuantity.isPending.value"
+                @less="changeQuantity.mutate({ rowId: row.id, delta: -1 })"
+                @more="changeQuantity.mutate({ rowId: row.id, delta: 1 })"
+              />
             </li>
           </ul>
         </section>

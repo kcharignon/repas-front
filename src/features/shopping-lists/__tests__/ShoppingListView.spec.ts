@@ -151,6 +151,56 @@ describe('ShoppingListView', () => {
     expect(calls(fetchMock)).toContain('POST /api/v1/shopping-list-rows/r2/uncheck')
   })
 
+  it('un de plus et un de moins sur une ligne, sans passer par les rayons', async () => {
+    const fetchMock = backWith({
+      'POST /api/v1/shopping-list-rows/r1/increase': () => new Response(null, { status: 204 }),
+      'POST /api/v1/shopping-list-rows/r1/decrease': () => new Response(null, { status: 204 }),
+    })
+    const wrapper = await mountList()
+
+    // La quantité à acheter est celle du stepper, plus une seconde fois dans la ligne
+    expect(wrapper.find('[aria-label="Un de plus : Courgettes"]').exists()).toBe(true)
+    expect(wrapper.text().match(/Courgettes/g)).toHaveLength(1)
+
+    await wrapper.find('[aria-label="Un de plus : Courgettes"]').trigger('click')
+    await flushPromises()
+    await wrapper.find('[aria-label="Un de moins : Courgettes"]').trigger('click')
+    await flushPromises()
+
+    expect(calls(fetchMock)).toContain('POST /api/v1/shopping-list-rows/r1/increase')
+    expect(calls(fetchMock)).toContain('POST /api/v1/shopping-list-rows/r1/decrease')
+    // Rien n'est calculé ici : la liste est relue (le back arrondit au supérieur)
+    expect(
+      calls(fetchMock).filter((call) => call === 'GET /api/v1/shopping-lists/list-1').length,
+    ).toBeGreaterThan(2)
+    // Un clic sur le stepper ne coche pas la ligne
+    expect(calls(fetchMock)).not.toContain('POST /api/v1/shopping-list-rows/r1/tick')
+  })
+
+  it('pas de « + » ni de « − » sur une ligne déjà au panier', async () => {
+    backWith()
+
+    const wrapper = await mountList()
+
+    expect(wrapper.find('[aria-label="Un de plus : Poulet"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="Un de moins : Poulet"]').exists()).toBe(false)
+  })
+
+  it('pas de « + » ni de « − » sur une liste envoyée au drive', async () => {
+    backWith({}, {
+      ...detail(),
+      status: 'SENT',
+      isActive: false,
+      isSent: true,
+      sentAt: '2026-10-14T12:00:00+02:00',
+    } as ReturnType<typeof detail>)
+
+    const wrapper = await mountList()
+
+    expect(wrapper.find('[aria-label="Un de plus : Courgettes"]').exists()).toBe(false)
+    expect(wrapper.text().replace(/\s/g, ' ')).toContain('4')
+  })
+
   it('remet la ligne dans son état quand le back refuse', async () => {
     const fetchMock = backWith({
       'POST /api/v1/shopping-list-rows/r1/tick': () =>
