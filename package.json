@@ -47,7 +47,7 @@
     "pinia": "^4.0.3",
     "reka-ui": "^2.11.0",
     "tailwind-merge": "^3.7.0",
-    "tailwindcss": "^4.3.3",
+    "tailwindcss": "^4.3.4",
     "vue": "^3.5.42",
     "vue-i18n": "^11.4.16",
     "vue-router": "^5.3.1"
