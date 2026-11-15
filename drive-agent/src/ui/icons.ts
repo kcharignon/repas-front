@@ -2,9 +2,9 @@
 // décoratifs (`aria-hidden`) : l'information passe par le texte. Tracés de la maquette, `viewBox` 24 × 24.
 import type { IconName } from './entries'
 
-// L'espace de noms des SVG n'est pas une adresse qu'on charge ; il s'écrit en morceaux pour que le test de construction (« aucune adresse absolue »)
-// continue de ne tolérer que les adresses bâties sur l'hôte de la page.
-const SVG = ['http:', '', 'www.w3.org', '2000', 'svg'].join('/')
+// L'espace de noms des SVG n'est pas une adresse qu'on charge : c'est un identifiant que `createElementNS` exige. Le test de construction
+// (« aucune adresse absolue ») le tolère, lui seul, à l'identique.
+const SVG = 'http://www.w3.org/2000/svg'
 
 type Shape = readonly [tag: 'path' | 'circle' | 'rect', attrs: Readonly<Record<string, string>>]
 

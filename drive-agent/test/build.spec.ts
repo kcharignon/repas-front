@@ -99,11 +99,13 @@ describe('un seul fichier, sans dépendance ni code distant', () => {
       // L'en-tête `X-Requested-With: XMLHttpRequest` du panier de l'enseigne (DRV-303) est un texte, pas l'API XMLHttpRequest.
       const withoutHeader = code.replace(/"X-Requested-With":`XMLHttpRequest`/g, '')
       expect(withoutHeader).not.toMatch(/XMLHttpRequest|WebSocket|EventSource|sendBeacon/)
-      // Aucune adresse absolue, sauf l'adresse de base du magasin bâtie sur l'hôte de la page (`https://${hôte}`, DRV-303) et la base
-      // fictive qui sert à analyser un chemin (une par adaptateur qui lit l'adresse d'une réponse).
+      // Aucune adresse absolue, sauf l'adresse de base du magasin bâtie sur l'hôte de la page (`https://${hôte}`, DRV-303), la base
+      // fictive qui sert à analyser un chemin (une par adaptateur qui lit l'adresse d'une réponse) et l'espace de noms des SVG, un
+      // identifiant que `createElementNS` exige et que personne ne charge : il n'est toléré qu'à l'identique, aucune autre adresse de w3.org.
       const withoutPageHost = code
         .replace(/https:\/\/\$\{[^}]*\}/g, '')
         .replaceAll('https://x.invalid', '')
+        .replaceAll('http://www.w3.org/2000/svg', '')
       expect(withoutPageHost).not.toMatch(/https?:\/\//)
     }
   })
