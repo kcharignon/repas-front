@@ -78,7 +78,8 @@ function boxOf(element: HTMLElement, word: string | undefined): DOMRect {
   return element.getBoundingClientRect()
 }
 
-const SVG = ['http:', '', 'www.w3.org', '2000', 'svg'].join('/')
+// L'espace de noms des SVG (un identifiant, jamais chargé), toléré à l'identique par le test de construction.
+const SVG = 'http://www.w3.org/2000/svg'
 
 function arrow(): Element {
   const svg = document.createElementNS(SVG, 'svg')
