@@ -2,7 +2,7 @@
 # Image de l'émulateur Android de test (DRV-319) : les outils seulement. Le SDK, l'émulateur, l'image système et l'AVD sont téléchargés au
 # premier lancement dans le volume Docker `android-emulator-sdk` (monté sur /sdk), puis réutilisés : rien n'est à refaire ensuite.
 # Aucun site d'enseigne n'est contacté : le seul accès à Internet sert à télécharger le SDK chez Google (dl.google.com).
-FROM eclipse-temurin:17.0.20_8-jdk-jammy
+FROM eclipse-temurin:17.0.21_9-jdk-jammy
 
 # Mêmes outils en ligne de commande que l'image de construction (android/Dockerfile), même empreinte.
 ARG CMDLINE_TOOLS=16111833
