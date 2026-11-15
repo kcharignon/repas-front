@@ -10,8 +10,8 @@ import {
   ComboboxTrigger,
   ComboboxViewport,
 } from 'reka-ui'
-import { computed } from 'vue'
-import { Check, ChevronDown } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { Check, ChevronDown, Plus } from 'lucide-vue-next'
 
 import { cn } from './cn'
 import DepartmentMarker from './DepartmentMarker.vue'
@@ -33,7 +33,13 @@ const props = defineProps<{
   invalid?: boolean
   /** Rien à lister : l'appelant montre lui-même l'issue (ajouter l'ingrédient), la liste ne s'ouvre pas. */
   hideEmpty?: boolean
+  /** L'appelant a déjà filtré et classé `options` (recherche souple) : la liste ne refiltre pas ce qui est tapé. */
+  ignoreFilter?: boolean
+  /** Une dernière ligne « créer » sous les choix (jamais un choix de plus : elle ne change pas la valeur) ; absente, rien n'est proposé. */
+  createLabel?: string
 }>()
+
+const emit = defineEmits<{ create: [] }>()
 
 const model = defineModel<string>({ default: '' })
 /** Le texte du champ (ce qui est tapé, ou le nom de l'option choisie) : l'appelant peut proposer d'ajouter ce qu'aucune option ne porte. */
@@ -42,12 +48,21 @@ const searchTerm = defineModel<string>('searchTerm', { default: '' })
 // Au moins une option a son repère : celles qui n'en ont pas gardent la place, les noms restent alignés
 const anyIcon = computed(() => props.options.some((option) => option.icon != null))
 
+// La ligne « créer » est une vraie ligne de la liste (flèches, Entrée, doigt) mais n'est pas un choix : la valeur ne bouge pas, la liste se referme
+const CREATE_VALUE = '__create__'
+const open = ref(false)
+function onCreate(event: Event) {
+  event.preventDefault()
+  open.value = false
+  emit('create')
+}
+
 const labelOf = (value: string) =>
   props.options.find((option) => option.value === value)?.label ?? ''
 </script>
 
 <template>
-  <ComboboxRoot v-model="model" class="relative">
+  <ComboboxRoot v-model="model" v-model:open="open" :ignore-filter="ignoreFilter" class="relative">
     <ComboboxAnchor
       :class="
         cn(
@@ -98,6 +113,17 @@ const labelOf = (value: string) =>
               </span>
             </span>
             <Check v-if="option.value === model" class="size-4 text-primary" aria-hidden="true" />
+          </ComboboxItem>
+          <ComboboxItem
+            v-if="createLabel"
+            :value="CREATE_VALUE"
+            :text-value="createLabel"
+            data-testid="create-ingredient-option"
+            class="mt-1 flex min-h-12 cursor-pointer items-center gap-2 rounded-lg border-t border-line px-3 text-base font-semibold text-primary data-[highlighted]:bg-soft"
+            @select="onCreate"
+          >
+            <Plus class="size-5" aria-hidden="true" />
+            <span>{{ createLabel }}</span>
           </ComboboxItem>
         </ComboboxViewport>
       </ComboboxContent>
